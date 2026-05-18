@@ -6501,7 +6501,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 0,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -6509,7 +6509,7 @@
           "Type": "uint64",
           "Doc": "microalgos",
           "Bytes": 1,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -6517,7 +6517,7 @@
           "Type": "[]byte",
           "Doc": "Any data up to 1024 bytes",
           "Bytes": 5,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -6525,7 +6525,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 7,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -6533,7 +6533,7 @@
           "Type": "uint64",
           "Doc": "microalgos",
           "Bytes": 8,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -6541,7 +6541,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 9,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -6549,7 +6549,7 @@
           "Type": "[32]byte",
           "Doc": "32 byte address",
           "Bytes": 10,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -6557,7 +6557,7 @@
           "Type": "[32]byte",
           "Doc": "32 byte address",
           "Bytes": 11,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -6565,7 +6565,7 @@
           "Type": "uint64",
           "Doc": "The first round that the participation key is valid.",
           "Bytes": 12,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -6573,7 +6573,7 @@
           "Type": "uint64",
           "Doc": "The last round that the participation key is valid.",
           "Bytes": 13,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -6581,7 +6581,7 @@
           "Type": "uint64",
           "Doc": "Dilution for the 2-level participation key",
           "Bytes": 14,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -6589,7 +6589,7 @@
           "Type": "[]byte",
           "Doc": "Transaction type as bytes",
           "Bytes": 15,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -6597,7 +6597,7 @@
           "Type": "uint64",
           "Doc": "Transaction type as integer",
           "Bytes": 16,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -6605,7 +6605,7 @@
           "Type": "uint64",
           "Doc": "Asset ID",
           "Bytes": 17,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -6613,7 +6613,7 @@
           "Type": "uint64",
           "Doc": "value in Asset's units",
           "Bytes": 18,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -6621,7 +6621,7 @@
           "Type": "address",
           "Doc": "32 byte address. Source of assets if Sender is the Asset's Clawback address.",
           "Bytes": 19,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -6629,7 +6629,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 20,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -6637,7 +6637,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 21,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -6645,7 +6645,7 @@
           "Type": "uint64",
           "Doc": "ApplicationID from ApplicationCall transaction",
           "Bytes": 24,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -6653,7 +6653,7 @@
           "Type": "uint64",
           "Doc": "ApplicationCall transaction on completion action",
           "Bytes": 25,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -6661,7 +6661,7 @@
           "Type": "[]byte",
           "Doc": "Arguments passed to the application in the ApplicationCall transaction",
           "Bytes": 26,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -6669,7 +6669,7 @@
           "Type": "address",
           "Doc": "Accounts listed in the ApplicationCall transaction",
           "Bytes": 28,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -6677,7 +6677,7 @@
           "Type": "[]byte",
           "Doc": "Approval program",
           "Bytes": 30,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -6685,7 +6685,7 @@
           "Type": "[]byte",
           "Doc": "Clear state program",
           "Bytes": 31,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -6693,7 +6693,7 @@
           "Type": "address",
           "Doc": "32 byte Sender's new AuthAddr",
           "Bytes": 32,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -6701,7 +6701,7 @@
           "Type": "uint64",
           "Doc": "Asset ID in asset config transaction",
           "Bytes": 33,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -6709,7 +6709,7 @@
           "Type": "uint64",
           "Doc": "Total number of units of this asset created",
           "Bytes": 34,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -6717,7 +6717,7 @@
           "Type": "uint64",
           "Doc": "Number of digits to display after the decimal place when displaying the asset",
           "Bytes": 35,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -6725,7 +6725,7 @@
           "Type": "bool",
           "Doc": "Whether the asset's slots are frozen by default or not, 0 or 1",
           "Bytes": 36,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -6733,7 +6733,7 @@
           "Type": "[]byte",
           "Doc": "Unit name of the asset",
           "Bytes": 37,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -6741,7 +6741,7 @@
           "Type": "[]byte",
           "Doc": "The asset name",
           "Bytes": 38,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -6749,7 +6749,7 @@
           "Type": "[]byte",
           "Doc": "URL",
           "Bytes": 39,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -6757,7 +6757,7 @@
           "Type": "[32]byte",
           "Doc": "32 byte commitment to unspecified asset metadata",
           "Bytes": 40,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -6765,7 +6765,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 41,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -6773,7 +6773,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 42,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -6781,7 +6781,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 43,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -6789,7 +6789,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 44,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -6797,7 +6797,7 @@
           "Type": "uint64",
           "Doc": "Asset ID being frozen or un-frozen",
           "Bytes": 45,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -6805,7 +6805,7 @@
           "Type": "address",
           "Doc": "32 byte address of the account whose asset slot is being frozen or un-frozen",
           "Bytes": 46,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -6813,7 +6813,7 @@
           "Type": "bool",
           "Doc": "The new frozen value, 0 or 1",
           "Bytes": 47,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -6821,7 +6821,7 @@
           "Type": "uint64",
           "Doc": "Foreign Assets listed in the ApplicationCall transaction",
           "Bytes": 48,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 3
         },
         {
@@ -6829,7 +6829,7 @@
           "Type": "uint64",
           "Doc": "Foreign Apps listed in the ApplicationCall transaction",
           "Bytes": 50,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 3
         },
         {
@@ -6837,7 +6837,7 @@
           "Type": "uint64",
           "Doc": "Number of global state integers in ApplicationCall",
           "Bytes": 52,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 3
         },
         {
@@ -6845,7 +6845,7 @@
           "Type": "uint64",
           "Doc": "Number of global state byteslices in ApplicationCall",
           "Bytes": 53,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 3
         },
         {
@@ -6853,7 +6853,7 @@
           "Type": "uint64",
           "Doc": "Number of local state integers in ApplicationCall",
           "Bytes": 54,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 3
         },
         {
@@ -6861,7 +6861,7 @@
           "Type": "uint64",
           "Doc": "Number of local state byteslices in ApplicationCall",
           "Bytes": 55,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 3
         },
         {
@@ -6869,7 +6869,7 @@
           "Type": "uint64",
           "Doc": "Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program.",
           "Bytes": 56,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 4
         },
         {
@@ -6877,7 +6877,7 @@
           "Type": "bool",
           "Doc": "Marks an account nonparticipating for rewards",
           "Bytes": 57,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 5
         },
         {
@@ -6885,7 +6885,7 @@
           "Type": "[64]byte",
           "Doc": "State proof public key",
           "Bytes": 63,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 6
         },
         {
@@ -6893,7 +6893,7 @@
           "Type": "[]byte",
           "Doc": "Approval Program as an array of pages",
           "Bytes": 64,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 7
         },
         {
@@ -6901,7 +6901,7 @@
           "Type": "[]byte",
           "Doc": "ClearState Program as an array of pages",
           "Bytes": 66,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 7
         },
         {
@@ -6909,7 +6909,7 @@
           "Type": "uint64",
           "Doc": "Application version for which the txn must reject",
           "Bytes": 68,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 12
         }
       ],
@@ -7098,7 +7098,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 0,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7106,7 +7106,7 @@
           "Type": "uint64",
           "Doc": "microalgos",
           "Bytes": 1,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7114,7 +7114,7 @@
           "Type": "uint64",
           "Doc": "round number",
           "Bytes": 2,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7122,7 +7122,7 @@
           "Type": "uint64",
           "Doc": "UNIX timestamp of block before txn.FirstValid. Fails if negative",
           "Bytes": 3,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 7
         },
         {
@@ -7130,7 +7130,7 @@
           "Type": "uint64",
           "Doc": "round number",
           "Bytes": 4,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7138,7 +7138,7 @@
           "Type": "[]byte",
           "Doc": "Any data up to 1024 bytes",
           "Bytes": 5,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7146,7 +7146,7 @@
           "Type": "[32]byte",
           "Doc": "32 byte lease value",
           "Bytes": 6,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7154,7 +7154,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 7,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7162,7 +7162,7 @@
           "Type": "uint64",
           "Doc": "microalgos",
           "Bytes": 8,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7170,7 +7170,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 9,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7178,7 +7178,7 @@
           "Type": "[32]byte",
           "Doc": "32 byte address",
           "Bytes": 10,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7186,7 +7186,7 @@
           "Type": "[32]byte",
           "Doc": "32 byte address",
           "Bytes": 11,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7194,7 +7194,7 @@
           "Type": "uint64",
           "Doc": "The first round that the participation key is valid.",
           "Bytes": 12,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7202,7 +7202,7 @@
           "Type": "uint64",
           "Doc": "The last round that the participation key is valid.",
           "Bytes": 13,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7210,7 +7210,7 @@
           "Type": "uint64",
           "Doc": "Dilution for the 2-level participation key",
           "Bytes": 14,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7218,7 +7218,7 @@
           "Type": "[]byte",
           "Doc": "Transaction type as bytes",
           "Bytes": 15,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7226,7 +7226,7 @@
           "Type": "uint64",
           "Doc": "Transaction type as integer",
           "Bytes": 16,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7234,7 +7234,7 @@
           "Type": "uint64",
           "Doc": "Asset ID",
           "Bytes": 17,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7242,7 +7242,7 @@
           "Type": "uint64",
           "Doc": "value in Asset's units",
           "Bytes": 18,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7250,7 +7250,7 @@
           "Type": "address",
           "Doc": "32 byte address. Source of assets if Sender is the Asset's Clawback address.",
           "Bytes": 19,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7258,7 +7258,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 20,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7266,7 +7266,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 21,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7274,7 +7274,7 @@
           "Type": "uint64",
           "Doc": "Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1",
           "Bytes": 22,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7282,7 +7282,7 @@
           "Type": "[32]byte",
           "Doc": "The computed ID for this transaction. 32 bytes.",
           "Bytes": 23,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7290,7 +7290,7 @@
           "Type": "uint64",
           "Doc": "ApplicationID from ApplicationCall transaction",
           "Bytes": 24,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -7298,7 +7298,7 @@
           "Type": "uint64",
           "Doc": "ApplicationCall transaction on completion action",
           "Bytes": 25,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -7306,7 +7306,7 @@
           "Type": "[]byte",
           "Doc": "Arguments passed to the application in the ApplicationCall transaction",
           "Bytes": 26,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -7314,7 +7314,7 @@
           "Type": "uint64",
           "Doc": "Number of ApplicationArgs",
           "Bytes": 27,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -7322,7 +7322,7 @@
           "Type": "address",
           "Doc": "Accounts listed in the ApplicationCall transaction",
           "Bytes": 28,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -7330,7 +7330,7 @@
           "Type": "uint64",
           "Doc": "Number of Accounts",
           "Bytes": 29,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -7338,7 +7338,7 @@
           "Type": "[]byte",
           "Doc": "Approval program",
           "Bytes": 30,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -7346,7 +7346,7 @@
           "Type": "[]byte",
           "Doc": "Clear state program",
           "Bytes": 31,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -7354,7 +7354,7 @@
           "Type": "address",
           "Doc": "32 byte Sender's new AuthAddr",
           "Bytes": 32,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -7362,7 +7362,7 @@
           "Type": "uint64",
           "Doc": "Asset ID in asset config transaction",
           "Bytes": 33,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -7370,7 +7370,7 @@
           "Type": "uint64",
           "Doc": "Total number of units of this asset created",
           "Bytes": 34,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -7378,7 +7378,7 @@
           "Type": "uint64",
           "Doc": "Number of digits to display after the decimal place when displaying the asset",
           "Bytes": 35,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -7386,7 +7386,7 @@
           "Type": "bool",
           "Doc": "Whether the asset's slots are frozen by default or not, 0 or 1",
           "Bytes": 36,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -7394,7 +7394,7 @@
           "Type": "[]byte",
           "Doc": "Unit name of the asset",
           "Bytes": 37,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -7402,7 +7402,7 @@
           "Type": "[]byte",
           "Doc": "The asset name",
           "Bytes": 38,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -7410,7 +7410,7 @@
           "Type": "[]byte",
           "Doc": "URL",
           "Bytes": 39,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -7418,7 +7418,7 @@
           "Type": "[32]byte",
           "Doc": "32 byte commitment to unspecified asset metadata",
           "Bytes": 40,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -7426,7 +7426,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 41,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -7434,7 +7434,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 42,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -7442,7 +7442,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 43,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -7450,7 +7450,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 44,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -7458,7 +7458,7 @@
           "Type": "uint64",
           "Doc": "Asset ID being frozen or un-frozen",
           "Bytes": 45,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -7466,7 +7466,7 @@
           "Type": "address",
           "Doc": "32 byte address of the account whose asset slot is being frozen or un-frozen",
           "Bytes": 46,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -7474,7 +7474,7 @@
           "Type": "bool",
           "Doc": "The new frozen value, 0 or 1",
           "Bytes": 47,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -7482,7 +7482,7 @@
           "Type": "uint64",
           "Doc": "Foreign Assets listed in the ApplicationCall transaction",
           "Bytes": 48,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 3
         },
         {
@@ -7490,7 +7490,7 @@
           "Type": "uint64",
           "Doc": "Number of Assets",
           "Bytes": 49,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 3
         },
         {
@@ -7498,7 +7498,7 @@
           "Type": "uint64",
           "Doc": "Foreign Apps listed in the ApplicationCall transaction",
           "Bytes": 50,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 3
         },
         {
@@ -7506,7 +7506,7 @@
           "Type": "uint64",
           "Doc": "Number of Applications",
           "Bytes": 51,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 3
         },
         {
@@ -7514,7 +7514,7 @@
           "Type": "uint64",
           "Doc": "Number of global state integers in ApplicationCall",
           "Bytes": 52,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 3
         },
         {
@@ -7522,7 +7522,7 @@
           "Type": "uint64",
           "Doc": "Number of global state byteslices in ApplicationCall",
           "Bytes": 53,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 3
         },
         {
@@ -7530,7 +7530,7 @@
           "Type": "uint64",
           "Doc": "Number of local state integers in ApplicationCall",
           "Bytes": 54,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 3
         },
         {
@@ -7538,7 +7538,7 @@
           "Type": "uint64",
           "Doc": "Number of local state byteslices in ApplicationCall",
           "Bytes": 55,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 3
         },
         {
@@ -7546,7 +7546,7 @@
           "Type": "uint64",
           "Doc": "Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program.",
           "Bytes": 56,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 4
         },
         {
@@ -7554,7 +7554,7 @@
           "Type": "bool",
           "Doc": "Marks an account nonparticipating for rewards",
           "Bytes": 57,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 5
         },
         {
@@ -7602,7 +7602,7 @@
           "Type": "[64]byte",
           "Doc": "State proof public key",
           "Bytes": 63,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 6
         },
         {
@@ -7610,7 +7610,7 @@
           "Type": "[]byte",
           "Doc": "Approval Program as an array of pages",
           "Bytes": 64,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 7
         },
         {
@@ -7618,7 +7618,7 @@
           "Type": "uint64",
           "Doc": "Number of Approval Program pages",
           "Bytes": 65,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 7
         },
         {
@@ -7626,7 +7626,7 @@
           "Type": "[]byte",
           "Doc": "ClearState Program as an array of pages",
           "Bytes": 66,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 7
         },
         {
@@ -7634,7 +7634,7 @@
           "Type": "uint64",
           "Doc": "Number of ClearState Program pages",
           "Bytes": 67,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 7
         },
         {
@@ -7642,7 +7642,7 @@
           "Type": "uint64",
           "Doc": "Application version for which the txn must reject",
           "Bytes": 68,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 12
         }
       ],
@@ -7693,7 +7693,7 @@
           "Type": "[]byte",
           "Doc": "Arguments passed to the application in the ApplicationCall transaction",
           "Bytes": 26,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -7701,7 +7701,7 @@
           "Type": "address",
           "Doc": "Accounts listed in the ApplicationCall transaction",
           "Bytes": 28,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -7709,7 +7709,7 @@
           "Type": "uint64",
           "Doc": "Foreign Assets listed in the ApplicationCall transaction",
           "Bytes": 48,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 3
         },
         {
@@ -7717,7 +7717,7 @@
           "Type": "uint64",
           "Doc": "Foreign Apps listed in the ApplicationCall transaction",
           "Bytes": 50,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 3
         },
         {
@@ -7733,7 +7733,7 @@
           "Type": "[]byte",
           "Doc": "Approval Program as an array of pages",
           "Bytes": 64,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 7
         },
         {
@@ -7741,7 +7741,7 @@
           "Type": "[]byte",
           "Doc": "ClearState Program as an array of pages",
           "Bytes": 66,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 7
         }
       ],
@@ -7934,7 +7934,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 0,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7942,7 +7942,7 @@
           "Type": "uint64",
           "Doc": "microalgos",
           "Bytes": 1,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7950,7 +7950,7 @@
           "Type": "uint64",
           "Doc": "round number",
           "Bytes": 2,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7958,7 +7958,7 @@
           "Type": "uint64",
           "Doc": "UNIX timestamp of block before txn.FirstValid. Fails if negative",
           "Bytes": 3,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 7
         },
         {
@@ -7966,7 +7966,7 @@
           "Type": "uint64",
           "Doc": "round number",
           "Bytes": 4,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7974,7 +7974,7 @@
           "Type": "[]byte",
           "Doc": "Any data up to 1024 bytes",
           "Bytes": 5,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7982,7 +7982,7 @@
           "Type": "[32]byte",
           "Doc": "32 byte lease value",
           "Bytes": 6,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7990,7 +7990,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 7,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -7998,7 +7998,7 @@
           "Type": "uint64",
           "Doc": "microalgos",
           "Bytes": 8,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -8006,7 +8006,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 9,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -8014,7 +8014,7 @@
           "Type": "[32]byte",
           "Doc": "32 byte address",
           "Bytes": 10,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -8022,7 +8022,7 @@
           "Type": "[32]byte",
           "Doc": "32 byte address",
           "Bytes": 11,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -8030,7 +8030,7 @@
           "Type": "uint64",
           "Doc": "The first round that the participation key is valid.",
           "Bytes": 12,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -8038,7 +8038,7 @@
           "Type": "uint64",
           "Doc": "The last round that the participation key is valid.",
           "Bytes": 13,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -8046,7 +8046,7 @@
           "Type": "uint64",
           "Doc": "Dilution for the 2-level participation key",
           "Bytes": 14,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -8054,7 +8054,7 @@
           "Type": "[]byte",
           "Doc": "Transaction type as bytes",
           "Bytes": 15,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -8062,7 +8062,7 @@
           "Type": "uint64",
           "Doc": "Transaction type as integer",
           "Bytes": 16,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -8070,7 +8070,7 @@
           "Type": "uint64",
           "Doc": "Asset ID",
           "Bytes": 17,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -8078,7 +8078,7 @@
           "Type": "uint64",
           "Doc": "value in Asset's units",
           "Bytes": 18,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -8086,7 +8086,7 @@
           "Type": "address",
           "Doc": "32 byte address. Source of assets if Sender is the Asset's Clawback address.",
           "Bytes": 19,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -8094,7 +8094,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 20,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -8102,7 +8102,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 21,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -8110,7 +8110,7 @@
           "Type": "uint64",
           "Doc": "Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1",
           "Bytes": 22,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -8118,7 +8118,7 @@
           "Type": "[32]byte",
           "Doc": "The computed ID for this transaction. 32 bytes.",
           "Bytes": 23,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 0
         },
         {
@@ -8126,7 +8126,7 @@
           "Type": "uint64",
           "Doc": "ApplicationID from ApplicationCall transaction",
           "Bytes": 24,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -8134,7 +8134,7 @@
           "Type": "uint64",
           "Doc": "ApplicationCall transaction on completion action",
           "Bytes": 25,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -8142,7 +8142,7 @@
           "Type": "[]byte",
           "Doc": "Arguments passed to the application in the ApplicationCall transaction",
           "Bytes": 26,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -8150,7 +8150,7 @@
           "Type": "uint64",
           "Doc": "Number of ApplicationArgs",
           "Bytes": 27,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -8158,7 +8158,7 @@
           "Type": "address",
           "Doc": "Accounts listed in the ApplicationCall transaction",
           "Bytes": 28,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -8166,7 +8166,7 @@
           "Type": "uint64",
           "Doc": "Number of Accounts",
           "Bytes": 29,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -8174,7 +8174,7 @@
           "Type": "[]byte",
           "Doc": "Approval program",
           "Bytes": 30,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -8182,7 +8182,7 @@
           "Type": "[]byte",
           "Doc": "Clear state program",
           "Bytes": 31,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -8190,7 +8190,7 @@
           "Type": "address",
           "Doc": "32 byte Sender's new AuthAddr",
           "Bytes": 32,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -8198,7 +8198,7 @@
           "Type": "uint64",
           "Doc": "Asset ID in asset config transaction",
           "Bytes": 33,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -8206,7 +8206,7 @@
           "Type": "uint64",
           "Doc": "Total number of units of this asset created",
           "Bytes": 34,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -8214,7 +8214,7 @@
           "Type": "uint64",
           "Doc": "Number of digits to display after the decimal place when displaying the asset",
           "Bytes": 35,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -8222,7 +8222,7 @@
           "Type": "bool",
           "Doc": "Whether the asset's slots are frozen by default or not, 0 or 1",
           "Bytes": 36,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -8230,7 +8230,7 @@
           "Type": "[]byte",
           "Doc": "Unit name of the asset",
           "Bytes": 37,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -8238,7 +8238,7 @@
           "Type": "[]byte",
           "Doc": "The asset name",
           "Bytes": 38,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -8246,7 +8246,7 @@
           "Type": "[]byte",
           "Doc": "URL",
           "Bytes": 39,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -8254,7 +8254,7 @@
           "Type": "[32]byte",
           "Doc": "32 byte commitment to unspecified asset metadata",
           "Bytes": 40,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -8262,7 +8262,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 41,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -8270,7 +8270,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 42,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -8278,7 +8278,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 43,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -8286,7 +8286,7 @@
           "Type": "address",
           "Doc": "32 byte address",
           "Bytes": 44,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -8294,7 +8294,7 @@
           "Type": "uint64",
           "Doc": "Asset ID being frozen or un-frozen",
           "Bytes": 45,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -8302,7 +8302,7 @@
           "Type": "address",
           "Doc": "32 byte address of the account whose asset slot is being frozen or un-frozen",
           "Bytes": 46,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -8310,7 +8310,7 @@
           "Type": "bool",
           "Doc": "The new frozen value, 0 or 1",
           "Bytes": 47,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -8318,7 +8318,7 @@
           "Type": "uint64",
           "Doc": "Foreign Assets listed in the ApplicationCall transaction",
           "Bytes": 48,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 3
         },
         {
@@ -8326,7 +8326,7 @@
           "Type": "uint64",
           "Doc": "Number of Assets",
           "Bytes": 49,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 3
         },
         {
@@ -8334,7 +8334,7 @@
           "Type": "uint64",
           "Doc": "Foreign Apps listed in the ApplicationCall transaction",
           "Bytes": 50,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 3
         },
         {
@@ -8342,7 +8342,7 @@
           "Type": "uint64",
           "Doc": "Number of Applications",
           "Bytes": 51,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 3
         },
         {
@@ -8350,7 +8350,7 @@
           "Type": "uint64",
           "Doc": "Number of global state integers in ApplicationCall",
           "Bytes": 52,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 3
         },
         {
@@ -8358,7 +8358,7 @@
           "Type": "uint64",
           "Doc": "Number of global state byteslices in ApplicationCall",
           "Bytes": 53,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 3
         },
         {
@@ -8366,7 +8366,7 @@
           "Type": "uint64",
           "Doc": "Number of local state integers in ApplicationCall",
           "Bytes": 54,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 3
         },
         {
@@ -8374,7 +8374,7 @@
           "Type": "uint64",
           "Doc": "Number of local state byteslices in ApplicationCall",
           "Bytes": 55,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 3
         },
         {
@@ -8382,7 +8382,7 @@
           "Type": "uint64",
           "Doc": "Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program.",
           "Bytes": 56,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 4
         },
         {
@@ -8390,7 +8390,7 @@
           "Type": "bool",
           "Doc": "Marks an account nonparticipating for rewards",
           "Bytes": 57,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 5
         },
         {
@@ -8438,7 +8438,7 @@
           "Type": "[64]byte",
           "Doc": "State proof public key",
           "Bytes": 63,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 6
         },
         {
@@ -8446,7 +8446,7 @@
           "Type": "[]byte",
           "Doc": "Approval Program as an array of pages",
           "Bytes": 64,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 7
         },
         {
@@ -8454,7 +8454,7 @@
           "Type": "uint64",
           "Doc": "Number of Approval Program pages",
           "Bytes": 65,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 7
         },
         {
@@ -8462,7 +8462,7 @@
           "Type": "[]byte",
           "Doc": "ClearState Program as an array of pages",
           "Bytes": 66,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 7
         },
         {
@@ -8470,7 +8470,7 @@
           "Type": "uint64",
           "Doc": "Number of ClearState Program pages",
           "Bytes": 67,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 7
         },
         {
@@ -8478,7 +8478,7 @@
           "Type": "uint64",
           "Doc": "Application version for which the txn must reject",
           "Bytes": 68,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 12
         }
       ],
@@ -8534,7 +8534,7 @@
           "Type": "[]byte",
           "Doc": "Arguments passed to the application in the ApplicationCall transaction",
           "Bytes": 26,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -8542,7 +8542,7 @@
           "Type": "address",
           "Doc": "Accounts listed in the ApplicationCall transaction",
           "Bytes": 28,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -8550,7 +8550,7 @@
           "Type": "uint64",
           "Doc": "Foreign Assets listed in the ApplicationCall transaction",
           "Bytes": 48,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 3
         },
         {
@@ -8558,7 +8558,7 @@
           "Type": "uint64",
           "Doc": "Foreign Apps listed in the ApplicationCall transaction",
           "Bytes": 50,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 3
         },
         {
@@ -8574,7 +8574,7 @@
           "Type": "[]byte",
           "Doc": "Approval Program as an array of pages",
           "Bytes": 64,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 7
         },
         {
@@ -8582,7 +8582,7 @@
           "Type": "[]byte",
           "Doc": "ClearState Program as an array of pages",
           "Bytes": 66,
-          "Modes": 3,
+          "Modes": 2,
           "Version": 7
         }
       ],

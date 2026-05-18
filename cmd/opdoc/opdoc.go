@@ -385,71 +385,79 @@ func typeStrings(types logic.StackTypes) []string {
 	return out
 }
 
-func fieldsAndTypes(group logic.FieldGroup, version uint64) ([]string, []string, []argDetail) {
+func fieldsAndTypes(group logic.FieldGroup, version uint64, modes logic.RunMode) ([]string, []string, []argDetail) {
 	// reminder: group.Names can be "sparse" See: logic.TxnaFields
 	fields := make([]string, 0, len(group.Names))
 	types := make([]logic.StackType, 0, len(group.Names))
 	details := make([]argDetail, 0, len(group.Names))
 
 	for _, name := range group.Names {
-		if spec, ok := group.SpecByName(name); ok && spec.Version() <= version {
-			fields = append(fields, name)
-			types = append(types, spec.Type())
-
-			details = append(details, argDetail{
-				Name:    name,
-				Type:    spec.Type().String(),
-				Doc:     spec.Note(),
-				Bytes:   int(spec.Field()),
-				Modes:   spec.Modes(),
-				Version: spec.Version(),
-			})
+		spec, ok := group.SpecByName(name)
+		if !ok {
+			continue
 		}
+		argVersion := spec.Version()
+		argMode := modes & spec.Modes()
+		if version < argVersion || argMode == 0 {
+			continue
+		}
+
+		fields = append(fields, name)
+		types = append(types, spec.Type())
+
+		details = append(details, argDetail{
+			Name:    name,
+			Type:    spec.Type().String(),
+			Doc:     spec.Note(),
+			Bytes:   int(spec.Field()),
+			Modes:   argMode,
+			Version: argVersion,
+		})
 	}
 	return fields, typeStrings(types), details
 }
 
-func argEnums(name string, version uint64) ([]string, []string, []argDetail) {
+func argEnums(op *logic.OpSpec, version uint64) ([]string, []string, []argDetail) {
 	// reminder: this needs to be manually updated every time
 	// a new opcode is added with an associated FieldGroup
 	// it'd be nice to have this auto-update
-	switch name {
+	switch op.Name {
 	case "txn", "gtxn", "gtxns", "itxn", "gitxn":
-		return fieldsAndTypes(logic.TxnFields, version)
+		return fieldsAndTypes(logic.TxnFields, version, op.Modes)
 	case "itxn_field":
 		// itxn_field does not *return* a type depending on its immediate. It *takes* it.
 		// but until a consumer cares, ArgEnumTypes will be overloaded for that meaning.
-		return fieldsAndTypes(logic.ItxnSettableFields, version)
+		return fieldsAndTypes(logic.ItxnSettableFields, version, op.Modes)
 	case "global":
-		return fieldsAndTypes(logic.GlobalFields, version)
+		return fieldsAndTypes(logic.GlobalFields, version, op.Modes)
 	case "txna", "gtxna", "gtxnsa", "txnas", "gtxnas", "gtxnsas", "itxna", "gitxna":
-		return fieldsAndTypes(logic.TxnArrayFields, version)
+		return fieldsAndTypes(logic.TxnArrayFields, version, op.Modes)
 	case "asset_holding_get":
-		return fieldsAndTypes(logic.AssetHoldingFields, version)
+		return fieldsAndTypes(logic.AssetHoldingFields, version, op.Modes)
 	case "asset_params_get":
-		return fieldsAndTypes(logic.AssetParamsFields, version)
+		return fieldsAndTypes(logic.AssetParamsFields, version, op.Modes)
 	case "app_params_get":
-		return fieldsAndTypes(logic.AppParamsFields, version)
+		return fieldsAndTypes(logic.AppParamsFields, version, op.Modes)
 	case "acct_params_get":
-		return fieldsAndTypes(logic.AcctParamsFields, version)
+		return fieldsAndTypes(logic.AcctParamsFields, version, op.Modes)
 	case "block":
-		return fieldsAndTypes(logic.BlockFields, version)
+		return fieldsAndTypes(logic.BlockFields, version, op.Modes)
 	case "json_ref":
-		return fieldsAndTypes(logic.JSONRefTypes, version)
+		return fieldsAndTypes(logic.JSONRefTypes, version, op.Modes)
 	case "base64_decode":
-		return fieldsAndTypes(logic.Base64Encodings, version)
+		return fieldsAndTypes(logic.Base64Encodings, version, op.Modes)
 	case "vrf_verify":
-		return fieldsAndTypes(logic.VrfStandards, version)
+		return fieldsAndTypes(logic.VrfStandards, version, op.Modes)
 	case "ecdsa_pk_recover", "ecdsa_verify", "ecdsa_pk_decompress":
-		return fieldsAndTypes(logic.EcdsaCurves, version)
+		return fieldsAndTypes(logic.EcdsaCurves, version, op.Modes)
 	case "ec_add", "ec_scalar_mul", "ec_pairing_check", "ec_multi_scalar_mul", "ec_subgroup_check", "ec_map_to":
-		return fieldsAndTypes(logic.EcGroups, version)
+		return fieldsAndTypes(logic.EcGroups, version, op.Modes)
 	case "voter_params_get":
-		return fieldsAndTypes(logic.VoterParamsFields, version)
+		return fieldsAndTypes(logic.VoterParamsFields, version, op.Modes)
 	case "mimc":
-		return fieldsAndTypes(logic.MimcConfigs, version)
+		return fieldsAndTypes(logic.MimcConfigs, version, op.Modes)
 	case "poseidon2":
-		return fieldsAndTypes(logic.Poseidon2Configs, version)
+		return fieldsAndTypes(logic.Poseidon2Configs, version, op.Modes)
 	default:
 		return nil, nil, nil
 	}
@@ -465,7 +473,7 @@ func buildLanguageSpec(opGroups map[string][]string, namedTypes []namedType, ver
 		records[i].Returns = typeStrings(spec.Return.Types)
 		records[i].Size = spec.OpDetails.Size
 		records[i].DocCost = spec.DocCost(version)
-		records[i].ArgEnum, records[i].ArgEnumTypes, records[i].ArgDetails = argEnums(spec.Name, version)
+		records[i].ArgEnum, records[i].ArgEnumTypes, records[i].ArgDetails = argEnums(&spec, version)
 		desc := logic.OpDescOf(spec.Name)
 		records[i].Doc = desc.Short
 		records[i].DocExtra = desc.Extra
