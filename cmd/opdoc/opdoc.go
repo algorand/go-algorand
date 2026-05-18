@@ -316,7 +316,7 @@ type argDetail struct {
 	Type    string
 	Doc     string
 	Bytes   int
-	Modes   logic.RunMode
+	Modes   logic.RunMode `json:",omitzero"` // Zero means "same as the opcode"
 	Version uint64
 }
 
@@ -400,6 +400,10 @@ func fieldsAndTypes(group logic.FieldGroup, version uint64, modes logic.RunMode)
 		argMode := modes & spec.Modes()
 		if version < argVersion || argMode == 0 {
 			continue
+		}
+
+		if argMode == modes {
+			argMode = 0
 		}
 
 		fields = append(fields, name)
