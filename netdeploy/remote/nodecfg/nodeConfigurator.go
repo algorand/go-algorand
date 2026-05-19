@@ -235,7 +235,9 @@ func (nc *nodeConfigurator) registerDNSRecords() (err error) {
 	}
 
 	fmt.Fprintf(os.Stdout, "...... Adding DNS Record '%s' -> '%s' .\n", networkHostName, nc.dnsName)
-	cloudflareDNS.SetDNSRecord(context.Background(), recordType, networkHostName, nc.dnsName, nc.dnsTTL, priority, proxied)
+	if err = cloudflareDNS.SetDNSRecord(context.Background(), recordType, networkHostName, nc.dnsName, nc.dnsTTL, priority, proxied); err != nil {
+		return fmt.Errorf("error setting %s record %s -> %s: %w", recordType, networkHostName, nc.dnsName, err)
+	}
 
 	for _, entry := range nc.relayEndpoints {
 		port, parseErr := strconv.ParseInt(strings.Split(entry.port, ":")[1], 10, 64)
