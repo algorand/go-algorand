@@ -157,8 +157,7 @@ func parseCreateDNSRecordResponse(response *http.Response) (*CreateDNSRecordResp
 // clampTTL clamps the input ttl value to the accepted range of 60 - 2147483647 or 1 ( automatic ).
 // Per Cloudflare, Automatic resolves to 300s. The documented per-plan minimum is 60s on
 // Free/Pro/Business and 30s on Enterprise; this helper enforces a 60s floor so the resulting
-// value is accepted by every plan tier. Enterprise callers that genuinely need 30s should
-// bypass this helper.
+// value is accepted by every plan tier. This function ensures success by setting a universal minimum.
 // see documentation at https://developers.cloudflare.com/dns/manage-dns-records/reference/ttl/
 func clampTTL(ttl uint) uint {
 	if ttl <= AutomaticTTL {
