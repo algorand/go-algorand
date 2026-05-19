@@ -54,7 +54,7 @@ func init() {
 
 	applyCmd.Flags().BoolVarP(&disableDNS, "disable-dns", "N", false, "disable setting DNS entries")
 
-	applyCmd.Flags().UintVar(&applyDNSTTL, "ttl", 60, "TTL (seconds) for created DNS records; pass 1 to use Cloudflare's Automatic TTL (~300s)")
+	applyCmd.Flags().UintVar(&applyDNSTTL, "ttl", 60, "TTL (seconds) for created DNS records; pass 0 or 1 to use Cloudflare's Automatic TTL (~300s); values 2-59 are clamped to 60 seconds")
 }
 
 var applyCmd = &cobra.Command{
