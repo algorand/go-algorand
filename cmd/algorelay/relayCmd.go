@@ -39,6 +39,7 @@ var (
 	defaultPortArg  uint16
 	dnsBootstrapArg string // e.g. mainnet or testnet
 	recordIDArg     int64
+	ttlArg          uint
 
 	cfToken string
 )
@@ -88,6 +89,7 @@ func init() {
 	updateCmd.MarkFlagRequired("defaultport")
 	updateCmd.Flags().StringVarP(&dnsBootstrapArg, "dnsbootstrap", "b", "", "Bootstrap name for SRV records (eg mainnet)")
 	updateCmd.MarkFlagRequired("dnsbootstrap")
+	updateCmd.Flags().UintVar(&ttlArg, "ttl", 60, "TTL (seconds) for created DNS/SRV records; pass 1 to use Cloudflare's Automatic TTL (~300s)")
 }
 
 func loadRelays(file string) []eb.Relay {
@@ -612,7 +614,7 @@ func addDNSRecord(from string, to string, cfZoneID string) error {
 	} else {
 		recordType = "CNAME"
 	}
-	return cloudflareDNS.SetDNSRecord(context.Background(), recordType, from, to, cloudflare.AutomaticTTL, priority, proxied)
+	return cloudflareDNS.SetDNSRecord(context.Background(), recordType, from, to, ttlArg, priority, proxied)
 }
 
 func addSRVRecord(srvNetwork string, target string, port uint16, serviceShortName string, cfZoneID string) error {
@@ -621,7 +623,7 @@ func addSRVRecord(srvNetwork string, target string, port uint16, serviceShortNam
 	const priority = 1
 	const weight = 1
 
-	return cloudflareDNS.SetSRVRecord(context.Background(), srvNetwork, target, cloudflare.AutomaticTTL, priority, uint(port), serviceShortName, "_tcp", weight)
+	return cloudflareDNS.SetSRVRecord(context.Background(), srvNetwork, target, ttlArg, priority, uint(port), serviceShortName, "_tcp", weight)
 }
 
 func clearSRVRecord(srvNetwork string, target string, serviceShortName string, cfZoneID string) error {

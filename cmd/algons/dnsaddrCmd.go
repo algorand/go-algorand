@@ -33,6 +33,7 @@ var (
 	secure        bool
 	cmdMultiaddrs []string
 	nodeSize      int
+	dnsaddrTTL    uint
 )
 
 func init() {
@@ -46,6 +47,7 @@ func init() {
 	dnsaddrTreeCreateCmd.Flags().StringArrayVarP(&cmdMultiaddrs, "multiaddrs", "m", []string{}, "multiaddrs to add")
 	dnsaddrTreeCreateCmd.Flags().StringVarP(&dnsaddrDomain, "domain", "d", "", "Top level domain")
 	dnsaddrTreeCreateCmd.Flags().IntVarP(&nodeSize, "node-size", "n", 50, "Number of multiaddrs entries per TXT record")
+	dnsaddrTreeCreateCmd.Flags().UintVar(&dnsaddrTTL, "ttl", 60, "TTL (seconds) for created TXT records; pass 1 to use Cloudflare's Automatic TTL (~300s)")
 	dnsaddrTreeCreateCmd.MarkFlagRequired("domain")
 	dnsaddrTreeCreateCmd.MarkFlagRequired("multiaddrs")
 
@@ -159,7 +161,7 @@ var dnsaddrTreeCreateCmd = &cobra.Command{
 				if len(dnsaddrsTo) > 0 {
 					newDnsaddr := fmt.Sprintf("dnsaddr=/dnsaddr/%s", dnsaddrsTo[len(dnsaddrsTo)-1])
 					fmt.Printf("writing %s => %s\n", from, newDnsaddr)
-					err := doAddTXT(from, newDnsaddr)
+					err := doAddTXT(from, newDnsaddr, dnsaddrTTL)
 					if err != nil {
 						fmt.Printf("failed writing dnsaddr entry %s: %s\n", newDnsaddr, err)
 						os.Exit(1)
@@ -169,7 +171,7 @@ var dnsaddrTreeCreateCmd = &cobra.Command{
 				}
 				newDnsaddr := fmt.Sprintf("dnsaddr=%s", cmdMultiaddrs[len(cmdMultiaddrs)-1])
 				fmt.Printf("writing %s => %s\n", from, newDnsaddr)
-				err := doAddTXT(from, newDnsaddr)
+				err := doAddTXT(from, newDnsaddr, dnsaddrTTL)
 				if err != nil {
 					fmt.Printf("failed writing dns entry %s\n", err)
 					os.Exit(1)
