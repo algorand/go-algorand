@@ -89,7 +89,7 @@ func init() {
 	updateCmd.MarkFlagRequired("defaultport")
 	updateCmd.Flags().StringVarP(&dnsBootstrapArg, "dnsbootstrap", "b", "", "Bootstrap name for SRV records (eg mainnet)")
 	updateCmd.MarkFlagRequired("dnsbootstrap")
-	updateCmd.Flags().UintVar(&ttlArg, "ttl", 60, "TTL (seconds) for created DNS/SRV records; pass 1 to use Cloudflare's Automatic TTL (~300s)")
+	updateCmd.Flags().UintVar(&ttlArg, "ttl", 60, "TTL (seconds) for created DNS/SRV records; pass 1 to use Cloudflare's Automatic TTL (~300s); values 2-59 are clamped to 60 seconds")
 }
 
 func loadRelays(file string) []eb.Relay {

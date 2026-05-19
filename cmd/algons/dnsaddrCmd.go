@@ -47,7 +47,7 @@ func init() {
 	dnsaddrTreeCreateCmd.Flags().StringArrayVarP(&cmdMultiaddrs, "multiaddrs", "m", []string{}, "multiaddrs to add")
 	dnsaddrTreeCreateCmd.Flags().StringVarP(&dnsaddrDomain, "domain", "d", "", "Top level domain")
 	dnsaddrTreeCreateCmd.Flags().IntVarP(&nodeSize, "node-size", "n", 50, "Number of multiaddrs entries per TXT record")
-	dnsaddrTreeCreateCmd.Flags().UintVar(&dnsaddrTTL, "ttl", 60, "TTL (seconds) for created TXT records; pass 1 to use Cloudflare's Automatic TTL (~300s)")
+	dnsaddrTreeCreateCmd.Flags().UintVar(&dnsaddrTTL, "ttl", 60, "TTL (seconds) for created TXT records; pass 1 to use Cloudflare's Automatic TTL (~300s); values 2-59 are clamped to 60 seconds")
 	dnsaddrTreeCreateCmd.MarkFlagRequired("domain")
 	dnsaddrTreeCreateCmd.MarkFlagRequired("multiaddrs")
 
