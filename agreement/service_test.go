@@ -637,7 +637,7 @@ func generatePseudoRandomVRF(keynum int) *crypto.VRFSecrets {
 	}
 }
 
-func createTestAccountsAndBalances(t *testing.T, numNodes int, rootSeed []byte) (accounts []account.Participation, balances map[basics.Address]basics.AccountData) {
+func createTestAccountsAndBalances(tb testing.TB, numNodes int, rootSeed []byte) (accounts []account.Participation, balances map[basics.Address]basics.AccountData) {
 	off := int(rand.Uint32() >> 2) // prevent name collision from running tests more than once
 
 	// system state setup: keygen, stake initialization
@@ -650,11 +650,11 @@ func createTestAccountsAndBalances(t *testing.T, numNodes int, rootSeed []byte) 
 		var rootAddress basics.Address
 		// add new account rootAddress to db
 		{
-			rootAccess, err := db.MakeAccessor(t.Name()+"root"+strconv.Itoa(i+off), false, true)
-			require.NoError(t, err)
+			rootAccess, err := db.MakeAccessor(tb.Name()+"root"+strconv.Itoa(i+off), false, true)
+			require.NoError(tb, err)
 			seed = sha256.Sum256(seed[:]) // rehash every node to get different root addresses
 			root, err := account.ImportRoot(rootAccess, seed)
-			require.NoError(t, err)
+			require.NoError(tb, err)
 			rootAddress = root.Address()
 		}
 
