@@ -25,6 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
@@ -282,11 +283,74 @@ func (n asyncPseudonode) makePseudonodeVerifier(voteVerifier *AsyncVoteVerifier)
 	return pv
 }
 
+// filterProposers returns the subset of accounts that are selected as proposers
+// for the given round and period, determined by verifying their VRF credentials
+// against committee membership. This check uses only ledger state — no block
+// assembly is required — allowing callers to skip the expensive AssembleBlock
+// call when no accounts are elected.
+func (n asyncPseudonode) filterProposers(round basics.Round, period period, accounts []account.ParticipationRecordForRound) []account.ParticipationRecordForRound {
+	cparams, err := n.ledger.ConsensusParams(ParamsRound(round))
+	if err != nil {
+		n.log.Warnf("pseudonode.filterProposers: could not get consensus params for round %d: %v", round, err)
+		return nil
+	}
+
+	balanceRound := BalanceRound(round, cparams)
+	seedRnd := seedRound(round, cparams)
+
+	// Fetch shared values once; all accounts in a round use the same seed and total money.
+	seed, err := n.ledger.Seed(seedRnd)
+	if err != nil {
+		n.log.Warnf("pseudonode.filterProposers: could not get seed for round %d: %v", seedRnd, err)
+		return nil
+	}
+
+	total, err := n.ledger.Circulation(balanceRound, round)
+	if err != nil {
+		n.log.Warnf("pseudonode.filterProposers: could not get circulation for round %d: %v", balanceRound, err)
+		return nil
+	}
+
+	sel := selector{Seed: seed, Round: round, Period: period, Step: propose}
+
+	// Pre-allocate with capacity to avoid reallocation during append.
+	selected := make([]account.ParticipationRecordForRound, 0, len(accounts))
+
+	// Create membership template with shared fields; only Record varies per account.
+	m := committee.Membership{
+		Selector:   sel,
+		TotalMoney: total,
+	}
+
+	for _, acc := range accounts {
+		record, err := n.ledger.LookupAgreement(balanceRound, acc.Account)
+		if err != nil {
+			n.log.Warnf("pseudonode.filterProposers: could not look up account %v: %v", acc.Account, err)
+			continue
+		}
+
+		m.Record = committee.BalanceRecord{OnlineAccountData: record, Addr: acc.Account}
+
+		cred := committee.MakeCredential(&acc.VRF.SK, m.Selector)
+		if _, err = cred.Verify(cparams, m); err == nil {
+			selected = append(selected, acc)
+		}
+	}
+	return selected
+}
+
 // makeProposals creates a slice of block proposals for the given round and period.
 func (n asyncPseudonode) makeProposals(round basics.Round, period period, accounts []account.ParticipationRecordForRound) ([]proposal, []unauthenticatedVote) {
-	addresses := make([]basics.Address, len(accounts))
-	for i := range accounts {
-		addresses[i] = accounts[i].Account
+	// Check credential eligibility before the expensive block assembly.
+	// Only accounts selected as proposers proceed to block generation.
+	selectedAccounts := n.filterProposers(round, period, accounts)
+	if len(selectedAccounts) == 0 {
+		return nil, nil
+	}
+
+	addresses := make([]basics.Address, len(selectedAccounts))
+	for i := range selectedAccounts {
+		addresses[i] = selectedAccounts[i].Account
 	}
 	ve, err := n.factory.AssembleBlock(round, addresses)
 	if err != nil {
@@ -296,9 +360,9 @@ func (n asyncPseudonode) makeProposals(round basics.Round, period period, accoun
 		return nil, nil
 	}
 
-	votes := make([]unauthenticatedVote, 0, len(accounts))
-	proposals := make([]proposal, 0, len(accounts))
-	for _, acc := range accounts {
+	votes := make([]unauthenticatedVote, 0, len(selectedAccounts))
+	proposals := make([]proposal, 0, len(selectedAccounts))
+	for _, acc := range selectedAccounts {
 		payload, proposal, pErr := proposalForBlock(acc.Account, acc.VRF, ve, period, n.ledger)
 		if pErr != nil {
 			n.log.Errorf("pseudonode.makeProposals: could not create proposal for block (address %v): %v", acc.Account, pErr)
