@@ -110,6 +110,21 @@ var incomingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_in
 var outgoingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_outgoing_peers", Description: "Number of active outgoing peers."})
 
 var networkP2PGossipSubRejectMessage = metrics.NewTagCounter(metrics.NetworkP2PGossipSubRejectMessage.Name, metrics.NetworkP2PGossipSubRejectMessage.Description)
+
+// Per-(reason, topic) breakdown of pubsub rejections. Used to tell whether the
+// aggregate gs_reject_{full,throttled} pressure is dominated by a single topic
+// (e.g. TX bursts crowding out PP/AV) or distributed across topics. Tag layout:
+// "<reason>_<topic>" — e.g. "full_algotx01", "throttled_algopp01". "unk" topic
+// is used if pubsub delivers a Reject for a message without a topic.
+var networkP2PGossipSubRejectMessageByTopic = metrics.NewTagCounter(
+	"algod_network_p2p_gs_reject_by_topic_{TAG}",
+	"Number of pubsub messages rejected, by reason and topic; tag layout: <reason>_<topic>",
+	"full_algotx01", "full_algoav01", "full_algopp01", "full_algovb01", "full_unk",
+	"throttled_algotx01", "throttled_algoav01", "throttled_algopp01", "throttled_algovb01", "throttled_unk",
+	"failed_algotx01", "failed_algoav01", "failed_algopp01", "failed_algovb01", "failed_unk",
+	"ignored_algotx01", "ignored_algoav01", "ignored_algopp01", "ignored_algovb01", "ignored_unk",
+	"other_algotx01", "other_algoav01", "other_algopp01", "other_algovb01", "other_unk",
+)
 var networkP2PGossipSubDuplicateMessage = metrics.MakeCounter(metrics.NetworkP2PGossipSubDuplicateMessage)
 var networkP2PGossipSubDeliverMessage = metrics.MakeCounter(metrics.NetworkP2PGossipSubDeliverMessage)
 var networkP2PGossipSubUndeliverableMessage = metrics.MakeCounter(metrics.NetworkP2PGossipSubUndeliverableMessage)
@@ -190,18 +205,30 @@ func (t pubsubMetricsTracer) DeliverMessage(msg *pubsub.Message) {
 func (t pubsubMetricsTracer) RejectMessage(msg *pubsub.Message, reason string) {
 	// TagCounter cannot handle tags with spaces so pubsub.Reject* cannot be used directly.
 	// Since Go's strings are immutable, char replacement is a new allocation so that stick to string literals.
+	var reasonTag string
 	switch reason {
 	case pubsub.RejectValidationThrottled:
-		networkP2PGossipSubRejectMessage.Add("throttled", 1)
+		reasonTag = "throttled"
 	case pubsub.RejectValidationQueueFull:
-		networkP2PGossipSubRejectMessage.Add("full", 1)
+		reasonTag = "full"
 	case pubsub.RejectValidationFailed:
-		networkP2PGossipSubRejectMessage.Add("failed", 1)
+		reasonTag = "failed"
 	case pubsub.RejectValidationIgnored:
-		networkP2PGossipSubRejectMessage.Add("ignored", 1)
+		reasonTag = "ignored"
 	default:
-		networkP2PGossipSubRejectMessage.Add("other", 1)
+		reasonTag = "other"
 	}
+	networkP2PGossipSubRejectMessage.Add(reasonTag, 1)
+
+	// Per-topic breakdown so we can tell which topic the rejection pressure is on.
+	topic := "unk"
+	if msg != nil && msg.Topic != nil {
+		switch *msg.Topic {
+		case p2p.TXTopicName, p2p.AVTopicName, p2p.PPTopicName, p2p.VBTopicName:
+			topic = *msg.Topic
+		}
+	}
+	networkP2PGossipSubRejectMessageByTopic.Add(reasonTag+"_"+topic, 1)
 }
 
 // DuplicateMessage is invoked when a duplicate message is dropped.
