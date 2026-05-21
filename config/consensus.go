@@ -1497,7 +1497,7 @@ func initConsensusProtocols() {
 	vFuture.MaxAbsoluteTxnNoteBytes = 4096   // same as largest AVM value
 	vFuture.MaxAbsoluteExtraProgramPages = 7 // Allow larger programs with extra fees
 	vFuture.MaxAbsoluteTotalArgLen = 16384   // We _could_ make this as high as 16*4k
-	vFuture.PerByteTxnSurcharge = 100        // This is 1.000100 times minfee
+	vFuture.PerByteTxnSurcharge = 100        // Each charged byte adds 0.000100 of min fee
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
