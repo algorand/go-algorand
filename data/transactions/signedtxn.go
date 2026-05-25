@@ -36,6 +36,7 @@ type SignedTxn struct {
 	Sig      crypto.Signature   `codec:"sig"`
 	Msig     crypto.MultisigSig `codec:"msig"`
 	Lsig     LogicSig           `codec:"lsig"`
+	F1Sig    Falcon1024Sig      `codec:"f1"`
 	Txn      Transaction        `codec:"txn"`
 	AuthAddr basics.Address     `codec:"sgnr"`
 }
