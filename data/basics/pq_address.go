@@ -68,9 +68,10 @@ func pqAddress(scheme pqSignatureScheme, salt PQAddressSalt, pk []byte) (Address
 	return addr, !crypto.IsEdwards25519Point(addr[:])
 }
 
-// Falcon1024Address derives an address from a Deterministic Falcon-1024 public
-// key and public salt. The boolean is false when the derived address decodes as
-// an Edwards25519 point and therefore is invalid for PQ account use.
-func Falcon1024Address(pk crypto.FalconPublicKey, salt PQAddressSalt) (Address, bool) {
+// Falcon1024Address derives an address controlled by a Deterministic Falcon-1024
+// signature from a public salt and a Falcon-1024 public key. The boolean is false
+// when the derived address decodes as an Edwards25519 point and therefore is invalid
+// for PQ account use.
+func Falcon1024Address(salt PQAddressSalt, pk crypto.FalconPublicKey) (Address, bool) {
 	return pqAddress(falcon1024DeterministicScheme(), salt, pk[:])
 }
