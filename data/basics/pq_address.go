@@ -44,3 +44,7 @@ func pqAddress(scheme pqSignatureScheme, salt PQAddressSalt, pk []byte) (Address
 	addr := Address(crypto.HashObj(pqAddressPreimage{scheme, salt, pk}))
 	return addr, !crypto.IsEdwards25519Point(addr[:])
 }
+
+func Falcon1024Address(pk crypto.FalconPublicKey, salt PQAddressSalt) (Address, bool) {
+	return pqAddress(falcon1024DeterministicScheme, salt, pk[:])
+}
