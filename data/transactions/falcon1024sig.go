@@ -24,6 +24,14 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
+var (
+	ErrFalcon1024SigBlank              = errors.New("f1 signature is blank")
+	ErrFalcon1024SigEmpty              = errors.New("f1 signature is empty")
+	ErrFalcon1024SigInvalidAuthorizer  = errors.New("f1 salt and public key derive an invalid PQ address")
+	ErrFalcon1024SigAuthorizerMismatch = errors.New("f1 authorizer mismatch")
+	ErrFalcon1024SigVerificationFailed = errors.New("f1 signature verification failed")
+)
+
 type Falcon1024Sig struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -50,25 +58,25 @@ func (f Falcon1024Sig) AuthorizerAddress() (basics.Address, bool) {
 // unsigned transaction.
 func (f Falcon1024Sig) Verify(txn Transaction, authorizer basics.Address) error {
 	if f.Blank() {
-		return errors.New("f1 signature is blank")
+		return ErrFalcon1024SigBlank
 	}
 
 	if len(f.Signature) == 0 {
-		return errors.New("f1 signature is empty")
+		return ErrFalcon1024SigEmpty
 	}
 
 	f1Authorizer, ok := f.AuthorizerAddress()
 	if !ok {
-		return errors.New("f1 salt and public key derive an invalid PQ address")
+		return ErrFalcon1024SigInvalidAuthorizer
 	}
 
 	if f1Authorizer != authorizer {
-		return fmt.Errorf("f1 authorizer mismatch: derived %s, expected %s", f1Authorizer, authorizer)
+		return fmt.Errorf("%w: derived %s, expected %s", ErrFalcon1024SigAuthorizerMismatch, f1Authorizer, authorizer)
 	}
 
 	fv := crypto.FalconVerifier{PublicKey: f.PublicKey}
 	if err := fv.Verify(txn, f.Signature); err != nil {
-		return fmt.Errorf("f1 signature verification failed: %w", err)
+		return fmt.Errorf("%w: %w", ErrFalcon1024SigVerificationFailed, err)
 	}
 
 	return nil
