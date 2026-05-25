@@ -21,33 +21,40 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// Post-quantum signature schemes
-type pqSignatureScheme string
+const (
+	pqAddressSchemeSize = 2
+	pqAddressSaltSize   = 1
+)
 
-const falcon1024DeterministicScheme pqSignatureScheme = "f1"
+// Post-quantum signature scheme fixed-width tags.
+type pqSignatureScheme [pqAddressSchemeSize]byte
 
-// PQAddressSalt selects an address for a post-quantum public key when deriving a
-// 32-byte address; it is public and included in the address derivation.
+func falcon1024DeterministicScheme() pqSignatureScheme {
+	return pqSignatureScheme{'f', '1'}
+}
+
+// PQAddressSalt is a fixed-width salt that selects an address for a post-quantum
+// public key when deriving a 32-byte address; it is public and included in the
+// address derivation.
 type PQAddressSalt byte
 
-const pqAddressSaltSize = 1
-
 // pqAddressPreimage is the Hashable payload used to derive a native post-quantum
-// account address from a pqSignatureScheme, an explicit public PQAddressSalt, and
-// a public key. Its ToBeHashed method defines the consensus byte layout.
+// account address from a fixed-width pqSignatureScheme, an explicit fixed-width
+// public PQAddressSalt, and a public key. Its ToBeHashed method defines the consensus
+// byte layout.
 type pqAddressPreimage struct {
 	scheme pqSignatureScheme
 	salt   PQAddressSalt
 	pk     []byte
 }
 
-// ToBeHashed returns the fixed, preimage for post-quantum address derivation:
-// H(protocol.PostQuantumAddress || scheme || salt || pk). The scheme byte string
-// and public salt are part of the address identity, so the same public key may
-// derive multiple pqAddress.
+// ToBeHashed returns the preimage for post-quantum address derivation:
+// H(protocol.PostQuantumAddress || scheme[2] || salt[1] || pk). The fixed-width
+// scheme tag and public salt are part of the address identity, so the same
+// public key may derive multiple PQ addresses.
 func (pq pqAddressPreimage) ToBeHashed() (protocol.HashID, []byte) {
-	payload := make([]byte, 0, len(pq.scheme)+pqAddressSaltSize+len(pq.pk))
-	payload = append(payload, string(pq.scheme)...)
+	payload := make([]byte, 0, pqAddressSchemeSize+pqAddressSaltSize+len(pq.pk))
+	payload = append(payload, pq.scheme[:]...)
 	payload = append(payload, byte(pq.salt))
 	payload = append(payload, pq.pk...)
 	return protocol.PostQuantumAddress, payload
@@ -65,5 +72,5 @@ func pqAddress(scheme pqSignatureScheme, salt PQAddressSalt, pk []byte) (Address
 // key and public salt. The boolean is false when the derived address decodes as
 // an Edwards25519 point and therefore is invalid for PQ account use.
 func Falcon1024Address(pk crypto.FalconPublicKey, salt PQAddressSalt) (Address, bool) {
-	return pqAddress(falcon1024DeterministicScheme, salt, pk[:])
+	return pqAddress(falcon1024DeterministicScheme(), salt, pk[:])
 }
