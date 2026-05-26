@@ -40,7 +40,11 @@ type Falcon1024Sig struct {
 	Signature   crypto.FalconSignature `codec:"sig"`
 }
 
-func (f Falcon1024Sig) Blank() bool {
+func (f *Falcon1024Sig) Blank() bool {
+	if f == nil {
+		return true
+	}
+
 	var emptyPK crypto.FalconPublicKey
 
 	return f.PublicKey == emptyPK &&
@@ -48,15 +52,18 @@ func (f Falcon1024Sig) Blank() bool {
 		len(f.Signature) == 0
 }
 
-func (f Falcon1024Sig) AuthorizerAddress() (basics.Address, bool) {
-	return basics.Falcon1024Address(f.AddressSalt, f.PublicKey)
+func (f *Falcon1024Sig) AuthorizerAddress() (basics.Address, bool) {
+	if f == nil {
+		return basics.Address{}, false
+	}
+	return basics.Falcon1024Address(f.AddressSalt, &f.PublicKey)
 }
 
 // Verify validates that f is an inline f1 authorization proof for txn and authorizer.
 // It derives the authorizer address from the carried address salt and Falcon-1024
 // public key, then verifies the Deterministic Falcon-1024 signature over the
 // unsigned transaction.
-func (f Falcon1024Sig) Verify(txn Transaction, authorizer basics.Address) error {
+func (f *Falcon1024Sig) Verify(txn Transaction, authorizer basics.Address) error {
 	if f.Blank() {
 		return ErrFalcon1024SigBlank
 	}
