@@ -250,6 +250,9 @@ type ConsensusParams struct {
 	// SupportRekeying indicates support for account rekeying (the RekeyTo and AuthAddr fields)
 	SupportRekeying bool
 
+	// SupportFalcon1024Auth indicates support for f1 Deterministic Falcon-1024 transaction authorization.
+	SupportFalcon1024Auth bool
+
 	// EnforceAuthAddrSenderDiff requires that AuthAddr must be empty or different from Sender
 	EnforceAuthAddrSenderDiff bool
 
@@ -1493,6 +1496,7 @@ func initConsensusProtocols() {
 	vFuture.AppSizeUpdates = true
 	vFuture.AllowZeroLocalAppRef = true
 	vFuture.EnforceAuthAddrSenderDiff = true
+	vFuture.SupportFalcon1024Auth = true
 	vFuture.LoadTracking = true
 	vFuture.MaxAbsoluteTxnNoteBytes = 4096   // same as largest AVM value
 	vFuture.MaxAbsoluteExtraProgramPages = 7 // Allow larger programs with extra fees
