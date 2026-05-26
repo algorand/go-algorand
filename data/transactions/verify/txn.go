@@ -81,9 +81,10 @@ type GroupContext struct {
 }
 
 var errTxnSigHasNoSig = errors.New("signedtxn has no sig")
-var errTxnSigNotWellFormed = errors.New("signedtxn should only have one of Sig or Msig or LogicSig")
+var errTxnSigNotWellFormed = errors.New("signedtxn should only have one of Sig, Msig, LogicSig, or Falcon1024Sig")
 var errRekeyingNotSupported = errors.New("nonempty AuthAddr but rekeying is not supported")
 var errAuthAddrEqualsSender = errors.New("AuthAddr must be different from Sender")
+var errFalcon1024AuthNotSupported = errors.New("f1 Falcon-1024 transaction authorization is not supported")
 var errUnknownSignature = errors.New("has one mystery sig. WAT?")
 
 // TxGroupErrorReason is reason code for ErrTxGroupError
@@ -243,6 +244,7 @@ const regularSig sigOrTxnType = 1
 const multiSig sigOrTxnType = 2
 const logicSig sigOrTxnType = 3
 const stateProofTxn sigOrTxnType = 4
+const falcon1024Sig sigOrTxnType = 5
 
 // checkTxnSigTypeCounts checks the number of signature types and reports an error in case of a violation
 func checkTxnSigTypeCounts(s *transactions.SignedTxn, groupIndex int) (sigType sigOrTxnType, err *TxGroupError) {
@@ -258,6 +260,10 @@ func checkTxnSigTypeCounts(s *transactions.SignedTxn, groupIndex int) (sigType s
 	if !s.Lsig.Blank() {
 		numSigCategories++
 		sigType = logicSig
+	}
+	if !s.F1Sig.Blank() {
+		numSigCategories++
+		sigType = falcon1024Sig
 	}
 	if numSigCategories == 0 {
 		// Special case: special sender address can issue special transaction
@@ -309,6 +315,15 @@ func stxnCoreChecks(gi int, groupCtx *GroupContext, batchVerifier crypto.BatchVe
 	case logicSig:
 		if err := logicSigVerify(gi, groupCtx); err != nil {
 			return &TxGroupError{err: err, GroupIndex: gi, Reason: TxGroupErrorReasonLogicSigFailed}
+		}
+		return nil
+
+	case falcon1024Sig:
+		if !groupCtx.consensusParams.SupportFalcon1024Auth {
+			return &TxGroupError{err: errFalcon1024AuthNotSupported, GroupIndex: gi, Reason: TxGroupErrorReasonGeneric}
+		}
+		if err := s.F1Sig.Verify(s.Txn, s.Authorizer()); err != nil {
+			return &TxGroupError{err: fmt.Errorf("falcon1024 signature validation failed: %w", err), GroupIndex: gi, Reason: TxGroupErrorReasonSigNotWellFormed}
 		}
 		return nil
 
