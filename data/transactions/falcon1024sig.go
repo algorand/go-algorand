@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 
@@ -50,6 +51,17 @@ func (f *Falcon1024Sig) Blank() bool {
 	return f.PublicKey == emptyPK &&
 		f.AddressSalt == 0 &&
 		len(f.Signature) == 0
+}
+
+// Equal compares two Falcon1024Sig values, treating nil and blank proofs as equivalent.
+func (f *Falcon1024Sig) Equal(other *Falcon1024Sig) bool {
+	if f == nil || other == nil {
+		return f.Blank() && other.Blank()
+	}
+
+	return f.PublicKey == other.PublicKey &&
+		f.AddressSalt == other.AddressSalt &&
+		bytes.Equal(f.Signature, other.Signature)
 }
 
 func (f *Falcon1024Sig) AuthorizerAddress() (basics.Address, bool) {
