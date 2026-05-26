@@ -109,6 +109,18 @@ func (s SignedTxn) Authorizer() basics.Address {
 	return s.AuthAddr
 }
 
+// FeeFactor is the factor by which the base transaction fee is multiplied. Some
+// transactions are free, others might cost more because they use extra
+// expensive features (e.g., large Note fields, large app programs, quantum
+// sigs).  It is expressed as a fixed-point integer with 6 digits of
+// precision. So 1e6 is a normal base fee transaction.
+func (s SignedTxn) FeeFactor(config config.ConsensusParams) basics.Micros {
+	factor := s.Txn.feeFactor(config)
+	// There are currently no signature fee contributions.
+	// factor = basics.AddSaturate(factor, s.signatureFeeContribution())
+	return factor
+}
+
 // AssembleSignedTxn assembles a multisig-signed transaction from a transaction an optional sig, and an optional multisig.
 // No signature checking is done -- for example, this might only be a partial multisig
 // TODO: is this method used anywhere, or is it safe to remove?
@@ -166,7 +178,7 @@ func SummarizeFees(txgroup []SignedTxnWithAD, proto config.ConsensusParams) (usa
 	// to do it (by adjusting the KeyReg's FeeFactor() is more difficult because
 	// the 2A fee is not defined in units of MinFee().
 	for _, txad := range txgroup {
-		usage = basics.AddSaturate(usage, txad.SignedTxn.Txn.FeeFactor(proto))
+		usage = basics.AddSaturate(usage, txad.SignedTxn.FeeFactor(proto))
 		paid = paid.AddSaturate(txad.SignedTxn.Txn.Fee)
 	}
 	return usage, paid

@@ -207,7 +207,7 @@ func (tx *Txn) FillDefaults(params config.ConsensusParams) {
 	}
 	// Do the fee last, so the FeeFactor is accurate.
 	if tx.Fee == nil {
-		f := tx.Txn().FeeFactor(params)
+		f := transactions.SignedTxn{Txn: tx.Txn()}.FeeFactor(params)
 		tx.Fee, _ = params.MinFee().MulMicrosCeil(f)
 	}
 }

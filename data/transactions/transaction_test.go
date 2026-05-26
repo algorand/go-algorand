@@ -331,7 +331,7 @@ func TestFeeFactor_BigNotes(t *testing.T) {
 				},
 			}
 
-			factor := tx.FeeFactor(tt.proto)
+			factor := tx.feeFactor(tt.proto)
 			assert.Equal(t, tt.expectedFactor, factor, "FeeFactor mismatch for note size %d", tt.noteSize)
 		})
 	}
@@ -358,7 +358,7 @@ func TestFeeFactor_StateProofAndHeartbeat(t *testing.T) {
 			Note:       make([]byte, 2048), // Large note
 		},
 	}
-	assert.Equal(t, basics.Micros(0), stateProofTx.FeeFactor(vFuture), "StateProof should be free")
+	assert.Equal(t, basics.Micros(0), stateProofTx.feeFactor(vFuture), "StateProof should be free")
 
 	// Singleton heartbeat (no group) should be free. Again, having a note is
 	// not allowed in a free heartbeat, but that is checked elsewhere.
@@ -371,7 +371,7 @@ func TestFeeFactor_StateProofAndHeartbeat(t *testing.T) {
 			Note:       make([]byte, 2048), // Large note
 		},
 	}
-	assert.Equal(t, basics.Micros(0), singletonHeartbeat.FeeFactor(vFuture), "Singleton heartbeat should be free")
+	assert.Equal(t, basics.Micros(0), singletonHeartbeat.feeFactor(vFuture), "Singleton heartbeat should be free")
 
 	// Grouped heartbeat should have normal fee
 	groupedHeartbeat := Transaction{
@@ -384,7 +384,7 @@ func TestFeeFactor_StateProofAndHeartbeat(t *testing.T) {
 			Group:      crypto.Digest{1}, // Has a group
 		},
 	}
-	assert.Equal(t, basics.Micros(1e6), groupedHeartbeat.FeeFactor(vFuture), "Grouped heartbeat should have base fee")
+	assert.Equal(t, basics.Micros(1e6), groupedHeartbeat.feeFactor(vFuture), "Grouped heartbeat should have base fee")
 
 	// Grouped heartbeat with big note should have the extra charge for it
 	groupedHeartbeatBigNote := Transaction{
@@ -397,7 +397,7 @@ func TestFeeFactor_StateProofAndHeartbeat(t *testing.T) {
 			Group:      crypto.Digest{1}, // Has a group
 		},
 	}
-	assert.Equal(t, basics.Micros(1_010_000), groupedHeartbeatBigNote.FeeFactor(vFuture), "Grouped heartbeat should have extra fee")
+	assert.Equal(t, basics.Micros(1_010_000), groupedHeartbeatBigNote.feeFactor(vFuture), "Grouped heartbeat should have extra fee")
 }
 
 // TestWellFormed_BigNotes tests Note size validation with MaxAbsoluteTxnNoteBytes
@@ -720,8 +720,8 @@ func TestFeeFactor_BigPrograms(t *testing.T) {
 				return make([]byte, size)
 			})
 
-			factor := tx.FeeFactor(tt.proto)
-			assert.Equal(t, tt.expectedFactor, factor, "FeeFactor mismatch for approval=%d, clear=%d", tt.approvalSize, tt.clearSize)
+			factor := tx.feeFactor(tt.proto)
+			assert.Equal(t, tt.expectedFactor, factor, "feeFactor mismatch for approval=%d, clear=%d", tt.approvalSize, tt.clearSize)
 		})
 	}
 }
