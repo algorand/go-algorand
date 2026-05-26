@@ -39,6 +39,7 @@ import (
 	"fmt"
 	"unsafe"
 
+	"filippo.io/edwards25519"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/metrics"
 )
@@ -110,6 +111,20 @@ type PrivateKey ed25519PrivateKey
 
 // PublicKey is an exported ed25519PublicKey
 type PublicKey ed25519PublicKey
+
+// TODO: This will be replaced by a unique address rejection-sampling predicate
+// 	used for LSig salting, Algod API, etc.
+
+// IsEdwards25519Point reports whether encoded decompresses to an Edwards25519
+// curve point. It accepts the broad compressed-point encoding set accepted by
+// filippo.io/edwards25519, including non-canonical encodings, and does not check
+// membership in the prime-order subgroup. It should not be used as an Ed25519
+// public-key validity check. Note that this predicate differs from libsodium's
+// crypto_core_ed25519_is_valid_point, which also requires main-subgroup membership.
+func IsEdwards25519Point(encoded []byte) bool {
+	_, err := new(edwards25519.Point).SetBytes(encoded)
+	return err == nil
+}
 
 func ed25519GenerateKey() (public ed25519PublicKey, secret ed25519PrivateKey) {
 	var seed ed25519Seed
