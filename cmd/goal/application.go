@@ -77,6 +77,8 @@ var (
 	appStrBoxes    []string // parse these as we do app args, with optional number and comma in front
 	appStrAccounts []string
 
+	appEmptyRefs uint64
+
 	// for these, an omitted addr is the sender. an omitted app is the called app.
 	appStrHoldings []string // format: asset+addr OR asset ex: 5245+XQJEJECPWUOXSKMIC5TCSARPVGHQJIIOKHO7WTKEPPLJMKG3D7VWWID66E
 	appStrLocals   []string // format: app+addr OR app OR addr
@@ -112,6 +114,7 @@ func init() {
 	appCmd.PersistentFlags().StringSliceVar(&appStrAccounts, "app-account", nil, "Accounts that may be accessed from application logic")
 	appCmd.PersistentFlags().StringSliceVar(&appStrHoldings, "holding", nil, "A Holding that may be accessed from application logic. An asset-id followed by a plus sign and an address")
 	appCmd.PersistentFlags().StringSliceVar(&appStrLocals, "local", nil, "A Local State that may be accessed from application logic. An optional app-id and a plus sign, followed by an address. Zero or omitted app-id indicates the local state for app being called.")
+	appCmd.PersistentFlags().Uint64Var(&appEmptyRefs, "empty-refs", 0, "Number of empty references to add for additional I/O budget. With --access, these are empty access-list refs; otherwise, empty box refs.")
 	appCmd.PersistentFlags().BoolVar(&appUseAccess, "access", false, "Put references into the transaction's access list, instead of foreign arrays.")
 
 	appCmd.PersistentFlags().StringVar(&approvalProgFile, "approval-prog", "", "(Uncompiled) TEAL assembly program filename for approving/rejecting transactions")
@@ -228,6 +231,7 @@ type appCallInputs struct {
 	Boxes         []boxRef            `codec:"boxes"`
 	Holdings      []holdingRef        `codec:"holdings"`
 	Locals        []localRef          `codec:"locals"`
+	EmptyRefs     uint64              `codec:"emptyrefs"`
 	UseAccess     bool                `codec:"access"`
 	Args          []apps.AppCallBytes `codec:"args"`
 }
@@ -361,6 +365,7 @@ func parseAppInputs(inputs appCallInputs) ([][]byte, libgoal.RefBundle) {
 		Accounts:  util.Map(inputs.Accounts, cliAddress),
 		Apps:      util.Map(inputs.ForeignApps, func(idx uint64) basics.AppIndex { return basics.AppIndex(idx) }),
 		Assets:    util.Map(inputs.ForeignAssets, func(idx uint64) basics.AssetIndex { return basics.AssetIndex(idx) }),
+		EmptyRefs: inputs.EmptyRefs,
 
 		Locals:   locals,
 		Holdings: holdings,
@@ -406,10 +411,11 @@ func getAppInputsFromCLI() appCallInputs {
 		ForeignAssets: util.Map(foreignAssets, func(s string) uint64 {
 			return parseUInt64(s, "asset id", "foreign-asset")
 		}),
-		Boxes:    util.Map(appStrBoxes, parseBoxRef),
-		Holdings: util.Map(appStrHoldings, parseHoldingRef),
-		Locals:   util.Map(appStrLocals, parseLocalRef),
-		Args:     encodedArgs,
+		Boxes:     util.Map(appStrBoxes, parseBoxRef),
+		Holdings:  util.Map(appStrHoldings, parseHoldingRef),
+		Locals:    util.Map(appStrLocals, parseLocalRef),
+		EmptyRefs: appEmptyRefs,
+		Args:      encodedArgs,
 	}
 }
 
