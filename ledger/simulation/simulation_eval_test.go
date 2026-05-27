@@ -232,6 +232,9 @@ func TestPayTxn(t *testing.T) {
 							Txns: []simulation.TxnResult{{}},
 						},
 					},
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowUnnamedResources: true,
+					},
 				},
 			}
 		})
