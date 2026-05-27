@@ -1684,6 +1684,18 @@ type TealCompileParams struct {
 	Sourcemap *bool `form:"sourcemap,omitempty" json:"sourcemap,omitempty"`
 }
 
+// RawTransactionParams defines parameters for RawTransaction.
+type RawTransactionParams struct {
+	// DangerouslySkipLogicsigCurveCheck Bypass the check that rejects TEAL v13 or later LogicSig transactions whose program hash is an Edwards25519 curve point. This is unsafe and should only be used if you understand the risks and know what you are doing.
+	DangerouslySkipLogicsigCurveCheck *bool `form:"dangerously-skip-logicsig-curve-check,omitempty" json:"dangerously-skip-logicsig-curve-check,omitempty"`
+}
+
+// RawTransactionAsyncParams defines parameters for RawTransactionAsync.
+type RawTransactionAsyncParams struct {
+	// DangerouslySkipLogicsigCurveCheck Bypass the check that rejects TEAL v13 or later LogicSig transactions whose program hash is an Edwards25519 curve point. This is unsafe and should only be used if you understand the risks and know what you are doing.
+	DangerouslySkipLogicsigCurveCheck *bool `form:"dangerously-skip-logicsig-curve-check,omitempty" json:"dangerously-skip-logicsig-curve-check,omitempty"`
+}
+
 // GetPendingTransactionsParams defines parameters for GetPendingTransactions.
 type GetPendingTransactionsParams struct {
 	// Max Truncated number of transactions to display. If max=0, returns all pending txns.

@@ -839,17 +839,17 @@ func TestAssemblerIntcblockSalt(t *testing.T) {
 	// automatic intcblock gets extended, and manual intcblock is left unchanged
 	// while a trailing salt is appended.
 	t.Run("trailing intcblock", func(t *testing.T) {
-		source := fmt.Sprintf("#pragma version %d\npushint 12", assemblerSaltVersion)
+		source := fmt.Sprintf("#pragma version %d\npushint 12", LogicSigOffCurveVersion)
 		normalProgram := assembleProgramWithoutAutomaticSalt(t, source, assemblerNoVersion)
-		require.True(t, programHashIsEdwardsPoint(normalProgram))
+		require.True(t, ProgramHashIsEdwards25519Point(normalProgram))
 
 		ops := testProg(t, source, assemblerNoVersion)
 		require.True(t, bytes.HasPrefix(ops.Program, normalProgram))
 		require.Len(t, ops.Program, len(normalProgram)+3)
-		require.Equal(t, OpsByName[assemblerSaltVersion]["intcblock"].Opcode, ops.Program[len(normalProgram)])
+		require.Equal(t, OpsByName[LogicSigOffCurveVersion]["intcblock"].Opcode, ops.Program[len(normalProgram)])
 		require.Equal(t, byte(1), ops.Program[len(normalProgram)+1])
 		require.Equal(t, byte(0), ops.Program[len(normalProgram)+2])
-		require.False(t, programHashIsEdwardsPoint(ops.Program))
+		require.False(t, ProgramHashIsEdwards25519Point(ops.Program))
 	})
 
 	t.Run("automatic intcblock", func(t *testing.T) {
@@ -858,34 +858,34 @@ int 1
 bnz done
 bytecblock 0x01234576 0xababcdcd 0xf000baad
 done:
-int 1`, assemblerSaltVersion)
+int 1`, LogicSigOffCurveVersion)
 		normalProgram := assembleProgramWithoutAutomaticSalt(t, source, assemblerNoVersion)
-		require.True(t, programHashIsEdwardsPoint(normalProgram))
+		require.True(t, ProgramHashIsEdwards25519Point(normalProgram))
 
 		ops := testProg(t, source, assemblerNoVersion)
 		require.Zero(t, trailingIntcSaltLen(t, source, assemblerNoVersion, ops.Program))
 		require.Equal(t, []byte{
-			byte(assemblerSaltVersion),
-			OpsByName[assemblerSaltVersion]["intcblock"].Opcode,
+			byte(LogicSigOffCurveVersion),
+			OpsByName[LogicSigOffCurveVersion]["intcblock"].Opcode,
 			2,
 			1,
 			2,
 		}, ops.Program[:5])
-		require.False(t, programHashIsEdwardsPoint(ops.Program))
+		require.False(t, ProgramHashIsEdwards25519Point(ops.Program))
 	})
 
 	t.Run("manual intcblock", func(t *testing.T) {
-		source := fmt.Sprintf("#pragma version %d\nintcblock 0\nintc_0", assemblerSaltVersion)
+		source := fmt.Sprintf("#pragma version %d\nintcblock 0\nintc_0", LogicSigOffCurveVersion)
 		normalProgram := assembleProgramWithoutAutomaticSalt(t, source, assemblerNoVersion)
-		require.True(t, programHashIsEdwardsPoint(normalProgram))
+		require.True(t, ProgramHashIsEdwards25519Point(normalProgram))
 
 		ops := testProg(t, source, assemblerNoVersion)
 		require.True(t, bytes.HasPrefix(ops.Program, normalProgram))
 		require.Len(t, ops.Program, len(normalProgram)+3)
-		require.Equal(t, OpsByName[assemblerSaltVersion]["intcblock"].Opcode, ops.Program[len(normalProgram)])
+		require.Equal(t, OpsByName[LogicSigOffCurveVersion]["intcblock"].Opcode, ops.Program[len(normalProgram)])
 		require.Equal(t, byte(1), ops.Program[len(normalProgram)+1])
 		require.Equal(t, byte(2), ops.Program[len(normalProgram)+2])
-		require.False(t, programHashIsEdwardsPoint(ops.Program))
+		require.False(t, ProgramHashIsEdwards25519Point(ops.Program))
 	})
 }
 

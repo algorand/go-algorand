@@ -24,6 +24,10 @@ import (
 // Program is byte code to be interpreted for validating transactions.
 type Program []byte
 
+// LogicSigOffCurveVersion is the first AVM version where LogicSig programs
+// assembled by this package are expected to hash to an off-curve address.
+const LogicSigOffCurveVersion = 13
+
 // ToBeHashed implements crypto.Hashable
 func (lsl Program) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Program, []byte(lsl)
@@ -45,4 +49,12 @@ func (mp MultisigProgram) ToBeHashed() (protocol.HashID, []byte) {
 func HashProgram(program []byte) crypto.Digest {
 	pb := Program(program)
 	return crypto.HashObj(pb)
+}
+
+// ProgramHashIsEdwards25519Point reports whether the LogicSig address derived
+// from program decodes as a canonical Edwards25519 curve point. If it does not,
+// those address bytes cannot be an Ed25519 public key.
+func ProgramHashIsEdwards25519Point(program []byte) bool {
+	hash := HashProgram(program)
+	return crypto.IsEdwards25519Point(hash[:])
 }

@@ -1146,9 +1146,31 @@ func decodeTxGroup(body io.Reader, maxTxGroupSize int) ([]transactions.SignedTxn
 	return txgroup, nil
 }
 
+const dangerouslySkipLogicSigCurveCheckParam = "dangerously-skip-logicsig-curve-check"
+
+func skipLogicSigCurveCheck(skip *bool) bool {
+	return skip != nil && *skip
+}
+
+func rejectOnCurveLogicSigPrograms(txgroup []transactions.SignedTxn) error {
+	for i, stxn := range txgroup {
+		if len(stxn.Lsig.Logic) == 0 {
+			continue
+		}
+		version, _, err := transactions.ProgramVersion(stxn.Lsig.Logic)
+		if err != nil || version < logic.LogicSigOffCurveVersion || version > logic.LogicVersion {
+			continue
+		}
+		if logic.ProgramHashIsEdwards25519Point(stxn.Lsig.Logic) {
+			return fmt.Errorf("transaction %d: TEAL v%d LogicSig program hash is an Edwards25519 point and should not be used; set %s=true to submit anyway if you understand the risks and know what you are doing", i, version, dangerouslySkipLogicSigCurveCheckParam)
+		}
+	}
+	return nil
+}
+
 // RawTransaction broadcasts a raw transaction to the network.
 // (POST /v2/transactions)
-func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
+func (v2 *Handlers) RawTransaction(ctx echo.Context, params model.RawTransactionParams) error {
 	stat, err := v2.Node.Status()
 	if err != nil {
 		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
@@ -1164,6 +1186,12 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
+	if !skipLogicSigCurveCheck(params.DangerouslySkipLogicsigCurveCheck) {
+		if err = rejectOnCurveLogicSigPrograms(txgroup); err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+	}
+
 	err = v2.Node.BroadcastSignedTxGroup(txgroup)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
@@ -1176,7 +1204,7 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 
 // RawTransactionAsync broadcasts a raw transaction to the network without ensuring it is accepted by transaction pool.
 // (POST /v2/transactions/async)
-func (v2 *Handlers) RawTransactionAsync(ctx echo.Context) error {
+func (v2 *Handlers) RawTransactionAsync(ctx echo.Context, params model.RawTransactionAsyncParams) error {
 	if !v2.Node.Config().EnableExperimentalAPI {
 		return ctx.String(http.StatusNotFound, "/transactions/async was not enabled in the configuration file by setting the EnableExperimentalAPI to true")
 	}
@@ -1186,6 +1214,11 @@ func (v2 *Handlers) RawTransactionAsync(ctx echo.Context) error {
 	txgroup, err := decodeTxGroup(ctx.Request().Body, bounds.MaxTxGroupSize)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	if !skipLogicSigCurveCheck(params.DangerouslySkipLogicsigCurveCheck) {
+		if err = rejectOnCurveLogicSigPrograms(txgroup); err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
 	}
 	err = v2.Node.AsyncBroadcastSignedTxGroup(txgroup)
 	if err != nil {

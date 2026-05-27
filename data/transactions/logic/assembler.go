@@ -36,7 +36,6 @@ import (
 
 	"github.com/algorand/avm-abi/abi"
 
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -2219,18 +2218,9 @@ func (ops *OpStream) parseText(text string) error {
 	return nil
 }
 
-// assemblerSaltVersion is the version at which we start adding salt to stateless programs
-// that would otherwise have an on-curve address.
-const assemblerSaltVersion = 13
-
 // assemblerSaltSearchLimit is the number of salt candidates we can try to fit in the one-byte varint range.
 // The chance of all candidates hashing on-curve is 2^-128 under the random-hash model.
 const assemblerSaltSearchLimit = 128
-
-func programHashIsEdwardsPoint(program []byte) bool {
-	hash := HashProgram(program)
-	return crypto.IsEdwards25519Point(hash[:])
-}
 
 // finalizeProgram constructs final program bytes. For v13+ stateless programs
 // that would hash on-curve, it adds salt to make the hash off-curve. If the
@@ -2238,7 +2228,7 @@ func programHashIsEdwardsPoint(program []byte) bool {
 // adds a trailing intcblock at the end of the program.
 func (ops *OpStream) finalizeProgram() ([]byte, int, *sourceError) {
 	program, prefixLen := ops.prependCBlocks()
-	if ops.Version < assemblerSaltVersion || ops.HasStatefulOps || !programHashIsEdwardsPoint(program) {
+	if ops.Version < LogicSigOffCurveVersion || ops.HasStatefulOps || !ProgramHashIsEdwards25519Point(program) {
 		return program, prefixLen, nil
 	}
 
@@ -2260,7 +2250,7 @@ func (ops *OpStream) finalizeProgramWithAutoIntcSalt() ([]byte, int, *sourceErro
 	for saltValue := range uint64(assemblerSaltSearchLimit) {
 		ops.intc[originalLen] = saltValue
 		program, prefixLen := ops.prependCBlocks()
-		if !programHashIsEdwardsPoint(program) {
+		if !ProgramHashIsEdwards25519Point(program) {
 			return program, prefixLen, nil
 		}
 	}
@@ -2274,7 +2264,7 @@ func (ops *OpStream) finalizeProgramWithTrailingIntcSalt(program []byte, prefixL
 
 	for saltValue := range uint64(assemblerSaltSearchLimit) {
 		candidate[saltOffset] = byte(saltValue)
-		if !programHashIsEdwardsPoint(candidate) {
+		if !ProgramHashIsEdwards25519Point(candidate) {
 			return candidate, prefixLen, nil
 		}
 	}
