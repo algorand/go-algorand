@@ -102,7 +102,7 @@ def sdkize(input, prefix=""):
     input = re.sub("^\\s*//msgp:(allocbound|sort|ignore).*\n", '', input, flags=re.MULTILINE)
 
     # protocol.ConsensusVersion and protocolConsensusVxx constants are
-    # the only things that stays in the protocol package. So we "hide"
+    # the only things that stay in the protocol package. So we "hide"
     # them from the replacements below, then switch it back
     input = input.replace("protocol.ConsensusV", "protocolConsensusV")
     input = input.replace("protocol.ConsensusFuture", "protocolConsensusFuture")

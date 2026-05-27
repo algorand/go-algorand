@@ -221,7 +221,8 @@ func TestPayTxn(t *testing.T) {
 
 			return simulationTestCase{
 				input: simulation.Request{
-					TxnGroups: [][]transactions.SignedTxn{{txn}},
+					TxnGroups:             [][]transactions.SignedTxn{{txn}},
+					AllowUnnamedResources: true, // exercises i/o quota handline, though irrelevant here
 				},
 				expected: simulation.Result{
 					Version:   simulation.ResultLatestVersion,

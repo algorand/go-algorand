@@ -135,7 +135,7 @@ func init() {
 	createAppCmd.Flags().StringVar(&appCreator, "creator", "", "Account to create the application")
 	createAppCmd.Flags().StringVar(&onCompletion, "on-completion", "NoOp", "OnCompletion action for application transaction")
 	extraPagesDoc := fmt.Sprintf("Additional space for large app programs. A maximum of %d extra pages is allowed. A page is %d bytes.",
-		currentProtocol.MaxAbsoluteExtraProgramPages, currentProtocol.MaxAppTotalProgramLen)
+		currentProtocol.MaxAbsoluteExtraProgramPages, currentProtocol.MaxAppProgramLen)
 	createAppCmd.Flags().Uint32Var(&extraPages, "extra-pages", 0, extraPagesDoc)
 
 	updateAppCmd.Flags().Uint64Var(&globalSchemaUints, "global-ints", 0, "Maximum number of integer values that may be stored in the global key/value store.")

@@ -415,6 +415,12 @@ func (ep *EvalParams) SetIOBudget(ioBudget uint64) {
 
 // DirtyByteCount returns the number of bytes that count against write budget.
 func (ep *EvalParams) DirtyByteCount() uint64 {
+	// I/O write quota is checked after every transaction, so no app calls may have
+	// occurred (which is when available is populated). In that case, there are
+	// also no dirty bytes.
+	if ep.available == nil {
+		return 0
+	}
 	return ep.available.dirtyBytes
 }
 
