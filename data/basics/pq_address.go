@@ -38,8 +38,22 @@ const (
 	pqAddressSaltSize = 1
 )
 
-// Post-quantum signature scheme fixed-width tags.
-type pqSignatureScheme [pqAddressSchemeSize]byte
+// PQScheme is a 2-bytes ASCII identifier of a post-quantum account authorization scheme.
+// Conventionally: the first bytes is the PQ-DSA family, the second byte is a version
+// or variant identifier.
+type PQScheme [pqSchemeSize]byte
+
+// Supported post-quantum signature schemes:
+// - f1: Deterministic Falcon-1024 account authorization.
+func PQSchemeFalcon1024() PQScheme {
+	return PQScheme{'f', '1'}
+}
+
+// IsSupported reports whether this scheme is supported. Note: currently only "f1"
+// is supported, but this method is intended to be updated as new schemes are added.
+func (s PQScheme) IsSupported() bool {
+	return s == PQSchemeFalcon1024()
+}
 
 func falcon1024DeterministicScheme() pqSignatureScheme {
 	return pqSignatureScheme{'f', '1'}
