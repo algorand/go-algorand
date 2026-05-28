@@ -126,7 +126,10 @@ func MakeSimulator(ledger *data.Ledger, developerAPI bool) *Simulator {
 }
 
 func txnHasNoSignature(txn transactions.SignedTxn) bool {
-	return txn.Sig.Blank() && txn.Msig.Blank() && txn.Lsig.Blank()
+	if !txn.Sig.Blank() || !txn.Msig.Blank() || !txn.Lsig.Blank() {
+		return false
+	}
+	return txn.PQSig.Blank() || len(txn.PQSig.Signature) == 0
 }
 
 // A randomly generated private key. The actual value does not matter, as long as this is a valid
