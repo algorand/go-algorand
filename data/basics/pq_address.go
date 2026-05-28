@@ -17,8 +17,17 @@
 package basics
 
 import (
+	"errors"
+	"fmt"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
+)
+
+var (
+	ErrPQSchemeNotSupported     = errors.New("pq signature scheme not supported")
+	errPQPublicKeySize          = errors.New("pq public key size invalid")
+	errNoCanonicalPQAddressSalt = errors.New("no canonical salt exists for this public key and scheme")
 )
 
 const (
