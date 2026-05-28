@@ -72,7 +72,7 @@ func (s PQScheme) ValidatePublicKey(publicKey []byte) error {
 // PQAddressSalt is a 1-byte salt that selects an address for a post-quantum
 // public key when deriving a 32-byte address; it is public and included in the
 // address derivation.
-type PQAddressSalt byte
+type PQAddressSalt uint8
 
 // pqAddressPreimage is the Hashable payload used to derive a native post-quantum
 // account address from a fixed-width pqSignatureScheme, an explicit fixed-width
