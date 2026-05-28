@@ -96,21 +96,7 @@ func (pq pqAddressPreimage) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.PostQuantumAddress, payload
 }
 
-// pqAddress returns the address derived from a pqAddressPreimage and true if it
-// does not decode to any Edwards25519 point according to the broader predicate
-// expressed by crypto.IsEdwards25519Point, false otherwise.
-func pqAddress(scheme pqSignatureScheme, salt PQAddressSalt, pk []byte) (Address, bool) {
-	addr := Address(crypto.HashObj(pqAddressPreimage{scheme, salt, pk}))
-	return addr, !crypto.IsEdwards25519Point(addr[:])
-}
-
-// Falcon1024Address derives an address controlled by a Deterministic Falcon-1024
-// signature from a public salt and a Falcon-1024 public key. The boolean is false
-// when the public key is nil or the derived address decodes as an Edwards25519
-// point and therefore is invalid for PQ account use.
-func Falcon1024Address(salt PQAddressSalt, pk *crypto.FalconPublicKey) (Address, bool) {
-	if pk == nil {
-		return Address{}, false
-	}
-	return pqAddress(falcon1024DeterministicScheme(), salt, pk[:])
+// PQAddress returns the address derived from a pqAddressPreimage.
+func PQAddress(scheme PQScheme, salt PQAddressSalt, pk []byte) Address {
+	return Address(crypto.HashObj(pqAddressPreimage{scheme, salt, pk}))
 }
