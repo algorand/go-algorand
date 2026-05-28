@@ -250,9 +250,6 @@ type ConsensusParams struct {
 	// SupportRekeying indicates support for account rekeying (the RekeyTo and AuthAddr fields)
 	SupportRekeying bool
 
-	// SupportFalcon1024Auth indicates support for f1 Deterministic Falcon-1024 transaction authorization.
-	SupportFalcon1024Auth bool
-
 	// EnforceAuthAddrSenderDiff requires that AuthAddr must be empty or different from Sender
 	EnforceAuthAddrSenderDiff bool
 
@@ -604,6 +601,9 @@ type ConsensusParams struct {
 	// basic Max sizes (they use up to "Absolute" Maxes. It is expressed in
 	// fraction of a basic min fee.
 	PerByteTxnSurcharge basics.Micros
+
+	// EnablePQAuth enables native post-quantum transaction authorization.
+	EnablePQAuth bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -1496,7 +1496,7 @@ func initConsensusProtocols() {
 	vFuture.AppSizeUpdates = true
 	vFuture.AllowZeroLocalAppRef = true
 	vFuture.EnforceAuthAddrSenderDiff = true
-	vFuture.SupportFalcon1024Auth = true
+	vFuture.EnablePQAuth = true
 	vFuture.LoadTracking = true
 	vFuture.MaxAbsoluteTxnNoteBytes = 4096   // same as largest AVM value
 	vFuture.MaxAbsoluteExtraProgramPages = 7 // Allow larger programs with extra fees
