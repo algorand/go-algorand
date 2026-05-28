@@ -75,18 +75,18 @@ func (s PQScheme) ValidatePublicKey(publicKey []byte) error {
 type PQAddressSalt uint8
 
 // pqAddressPreimage is the Hashable payload used to derive a native post-quantum
-// account address from a fixed-width pqSignatureScheme, an explicit fixed-width
-// public PQAddressSalt, and a public key. Its ToBeHashed method defines the consensus
+// account address from a fixed-width PQScheme, an explicit fixed-width public
+// PQAddressSalt, and a public key. Its ToBeHashed method defines the consensus
 // byte layout.
 type pqAddressPreimage struct {
-	scheme pqSignatureScheme
+	scheme PQScheme
 	salt   PQAddressSalt
 	pk     []byte
 }
 
-// ToBeHashed returns the preimage for post-quantum address derivation:
-// H(protocol.PostQuantumAddress || scheme[2] || salt[1] || pk). The fixed-width
-// scheme tag and public salt are part of the address identity, so the same
+// ToBeHashed returns the preimage for post-quantum address hash derivation:
+// (protocol.PostQuantumAddress || PQScheme || PQAddressSalt || pk).
+// The scheme tag and public salt are part of the address identity, so the same
 // public key may derive multiple PQ addresses.
 func (pq pqAddressPreimage) ToBeHashed() (protocol.HashID, []byte) {
 	payload := make([]byte, 0, pqAddressSchemeSize+pqAddressSaltSize+len(pq.pk))
