@@ -114,10 +114,10 @@ func (p *PQSig) Falcon1024Signature() (crypto.FalconSignature, error) {
 	return p.Signature, nil
 }
 
-// Verify validates that f is an inline f1 authorization proof for txn and authorizer.
-// It derives the authorizer address from the carried address salt and Falcon-1024
-// public key, then verifies the Deterministic Falcon-1024 signature over the
-// unsigned transaction.
+// Verify validates that p is a post-quantum authorization proof for txn and
+// authorizer. It verifies that the carried scheme is supported; then it validates
+// the authorizer address from the carried scheme, address salt, and public key and
+// verifies the scheme-specific signature over the unsigned transaction.
 func (p *PQSig) Verify(txn Transaction, authorizer basics.Address) error {
 	// Scheme-independent verification
 	if p.Blank() {
