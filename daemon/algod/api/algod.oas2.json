@@ -1194,8 +1194,8 @@
             }
           },
           {
-            "description": "Bypass the check that rejects TEAL v13 or later LogicSig transactions whose program hash is an Edwards25519 curve point. This is unsafe and should only be used if you understand the risks and know what you are doing.",
-            "name": "dangerously-skip-logicsig-curve-check",
+            "description": "Bypass address curve checks, including the check that rejects TEAL v13 or later LogicSig transactions whose program hash is an Edwards25519 curve point. This is unsafe and should only be used if you understand the risks and know what you are doing.",
+            "name": "dangerously-skip-address-curve-check",
             "in": "query",
             "type": "boolean"
           }
@@ -1253,8 +1253,8 @@
             }
           },
           {
-            "description": "Bypass the check that rejects TEAL v13 or later LogicSig transactions whose program hash is an Edwards25519 curve point. This is unsafe and should only be used if you understand the risks and know what you are doing.",
-            "name": "dangerously-skip-logicsig-curve-check",
+            "description": "Bypass address curve checks, including the check that rejects TEAL v13 or later LogicSig transactions whose program hash is an Edwards25519 curve point. This is unsafe and should only be used if you understand the risks and know what you are doing.",
+            "name": "dangerously-skip-address-curve-check",
             "in": "query",
             "type": "boolean"
           }

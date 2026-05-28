@@ -1686,14 +1686,14 @@ type TealCompileParams struct {
 
 // RawTransactionParams defines parameters for RawTransaction.
 type RawTransactionParams struct {
-	// DangerouslySkipLogicsigCurveCheck Bypass the check that rejects TEAL v13 or later LogicSig transactions whose program hash is an Edwards25519 curve point. This is unsafe and should only be used if you understand the risks and know what you are doing.
-	DangerouslySkipLogicsigCurveCheck *bool `form:"dangerously-skip-logicsig-curve-check,omitempty" json:"dangerously-skip-logicsig-curve-check,omitempty"`
+	// DangerouslySkipAddressCurveCheck Bypass address curve checks, including the check that rejects TEAL v13 or later LogicSig transactions whose program hash is an Edwards25519 curve point. This is unsafe and should only be used if you understand the risks and know what you are doing.
+	DangerouslySkipAddressCurveCheck *bool `form:"dangerously-skip-address-curve-check,omitempty" json:"dangerously-skip-address-curve-check,omitempty"`
 }
 
 // RawTransactionAsyncParams defines parameters for RawTransactionAsync.
 type RawTransactionAsyncParams struct {
-	// DangerouslySkipLogicsigCurveCheck Bypass the check that rejects TEAL v13 or later LogicSig transactions whose program hash is an Edwards25519 curve point. This is unsafe and should only be used if you understand the risks and know what you are doing.
-	DangerouslySkipLogicsigCurveCheck *bool `form:"dangerously-skip-logicsig-curve-check,omitempty" json:"dangerously-skip-logicsig-curve-check,omitempty"`
+	// DangerouslySkipAddressCurveCheck Bypass address curve checks, including the check that rejects TEAL v13 or later LogicSig transactions whose program hash is an Edwards25519 curve point. This is unsafe and should only be used if you understand the risks and know what you are doing.
+	DangerouslySkipAddressCurveCheck *bool `form:"dangerously-skip-address-curve-check,omitempty" json:"dangerously-skip-address-curve-check,omitempty"`
 }
 
 // GetPendingTransactionsParams defines parameters for GetPendingTransactions.
