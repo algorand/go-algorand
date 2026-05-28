@@ -24,6 +24,9 @@ const (
 	// FalconSeedSize Represents the size in bytes of the random bytes used to generate Falcon keys
 	FalconSeedSize = 48
 
+	// FalconPublicKeySize represents the size in bytes of a Falcon public key.
+	FalconPublicKeySize = cfalcon.PublicKeySize
+
 	// FalconMaxSignatureSize Represents the max possible size in bytes of a falcon signature
 	FalconMaxSignatureSize = cfalcon.CTSignatureSize
 )
