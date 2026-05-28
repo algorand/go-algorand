@@ -31,8 +31,11 @@ var (
 )
 
 const (
-	pqAddressSchemeSize = 2
-	pqAddressSaltSize   = 1
+	// pqSchemeSize is the consensus byte length of a post-quantum signature scheme tag.
+	pqSchemeSize = 2
+
+	// pqAddressSaltSize is the consensus byte length of a post-quantum address salt.
+	pqAddressSaltSize = 1
 )
 
 // Post-quantum signature scheme fixed-width tags.
