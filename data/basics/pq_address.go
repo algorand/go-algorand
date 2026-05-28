@@ -100,3 +100,23 @@ func (pq pqAddressPreimage) ToBeHashed() (protocol.HashID, []byte) {
 func PQAddress(scheme PQScheme, salt PQAddressSalt, pk []byte) Address {
 	return Address(crypto.HashObj(pqAddressPreimage{scheme, salt, pk}))
 }
+
+// CanonicalPQAddressSalt returns the lowest salt whose derived address for a PQScheme's
+// public key complies with the crypto.IsEdwards25519Point rejection-sampling predicate.
+func CanonicalPQAddressSalt(scheme PQScheme, publicKey []byte) (PQAddressSalt, Address, error) {
+	err := scheme.ValidatePublicKey(publicKey)
+	if err != nil {
+		return 0, Address{}, err
+	}
+
+	// Rejection-sampling in [0, 255] because PQAddressSalt is uint8. If no valid
+	// salt is found within this range, the publicKey has no PQ address for the given
+	// PQScheme; the vanishingly small probability of this happening is ~2^(-256).
+	for salt := 0; salt <= 255; salt++ {
+		addr := PQAddress(scheme, PQAddressSalt(salt), publicKey)
+		if !crypto.IsEdwards25519Point(addr[:]) {
+			return PQAddressSalt(salt), addr, nil
+		}
+	}
+	return 0, Address{}, errNoCanonicalPQAddressSalt
+}
