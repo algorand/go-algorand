@@ -152,6 +152,16 @@ import (
 //       |-----> MsgIsZero
 //       |-----> PQAddressSaltMaxSize()
 //
+// PQScheme
+//     |-----> (*) MarshalMsg
+//     |-----> (*) CanMarshalMsg
+//     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalMsgWithState
+//     |-----> (*) CanUnmarshalMsg
+//     |-----> (*) Msgsize
+//     |-----> (*) MsgIsZero
+//     |-----> PQSchemeMaxSize()
+//
 // Participant
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
@@ -254,16 +264,6 @@ import (
 //
 // crypto.Digest
 //       |-----> crypto.DigestMaxSize()
-//
-// pqSignatureScheme
-//         |-----> (*) MarshalMsg
-//         |-----> (*) CanMarshalMsg
-//         |-----> (*) UnmarshalMsg
-//         |-----> (*) UnmarshalMsgWithState
-//         |-----> (*) CanUnmarshalMsg
-//         |-----> (*) Msgsize
-//         |-----> (*) MsgIsZero
-//         |-----> PqSignatureSchemeMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -4898,7 +4898,7 @@ func MicrosMaxSize() (s int) {
 // MarshalMsg implements msgp.Marshaler
 func (z PQAddressSalt) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendByte(o, byte(z))
+	o = msgp.AppendUint8(o, uint8(z))
 	return
 }
 
@@ -4918,8 +4918,8 @@ func (z *PQAddressSalt) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState
 	}
 	st.AllowableDepth--
 	{
-		var zb0001 byte
-		zb0001, bts, err = msgp.ReadByteBytes(bts)
+		var zb0001 uint8
+		zb0001, bts, err = msgp.ReadUint8Bytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -4940,7 +4940,7 @@ func (_ *PQAddressSalt) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z PQAddressSalt) Msgsize() (s int) {
-	s = msgp.ByteSize
+	s = msgp.Uint8Size
 	return
 }
 
@@ -4951,7 +4951,61 @@ func (z PQAddressSalt) MsgIsZero() bool {
 
 // PQAddressSaltMaxSize returns a maximum valid message size for this message type
 func PQAddressSaltMaxSize() (s int) {
-	s = msgp.ByteSize
+	s = msgp.Uint8Size
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *PQScheme) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendBytes(o, (*z)[:])
+	return
+}
+
+func (_ *PQScheme) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*PQScheme)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *PQScheme) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	o = bts
+	return
+}
+
+func (z *PQScheme) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *PQScheme) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*PQScheme)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *PQScheme) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize + (pqSchemeSize * (msgp.ByteSize))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *PQScheme) MsgIsZero() bool {
+	return (*z) == (PQScheme{})
+}
+
+// PQSchemeMaxSize returns a maximum valid message size for this message type
+func PQSchemeMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((pqSchemeSize) * (msgp.ByteSize))
 	return
 }
 
@@ -6449,59 +6503,5 @@ func (z *ValueDelta) MsgIsZero() bool {
 // ValueDeltaMaxSize returns a maximum valid message size for this message type
 func ValueDeltaMaxSize() (s int) {
 	s = 1 + 3 + msgp.Uint64Size + 3 + msgp.StringPrefixSize + bounds.MaxAppBytesValueLen + 3 + msgp.Uint64Size
-	return
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z *pqSignatureScheme) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, (*z)[:])
-	return
-}
-
-func (_ *pqSignatureScheme) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*pqSignatureScheme)
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *pqSignatureScheme) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
-	if st.AllowableDepth == 0 {
-		err = msgp.ErrMaxDepthExceeded{}
-		return
-	}
-	st.AllowableDepth--
-	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	o = bts
-	return
-}
-
-func (z *pqSignatureScheme) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
-}
-func (_ *pqSignatureScheme) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*pqSignatureScheme)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *pqSignatureScheme) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (pqAddressSchemeSize * (msgp.ByteSize))
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z *pqSignatureScheme) MsgIsZero() bool {
-	return (*z) == (pqSignatureScheme{})
-}
-
-// PqSignatureSchemeMaxSize returns a maximum valid message size for this message type
-func PqSignatureSchemeMaxSize() (s int) {
-	// Calculating size of array: z
-	s = msgp.ArrayHeaderSize + ((pqAddressSchemeSize) * (msgp.ByteSize))
 	return
 }
