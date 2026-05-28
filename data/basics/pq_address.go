@@ -55,11 +55,21 @@ func (s PQScheme) IsSupported() bool {
 	return s == PQSchemeFalcon1024()
 }
 
-func falcon1024DeterministicScheme() pqSignatureScheme {
-	return pqSignatureScheme{'f', '1'}
+// ValidatePublicKey checks that the given public key is valid for the given scheme.
+func (s PQScheme) ValidatePublicKey(publicKey []byte) error {
+	switch s {
+	case PQSchemeFalcon1024():
+		if len(publicKey) != crypto.FalconPublicKeySize {
+			return fmt.Errorf("%w: got %d, want %d", errPQPublicKeySize, len(publicKey), crypto.FalconPublicKeySize)
+		}
+		return nil
+
+	default:
+		return ErrPQSchemeNotSupported
+	}
 }
 
-// PQAddressSalt is a fixed-width salt that selects an address for a post-quantum
+// PQAddressSalt is a 1-byte salt that selects an address for a post-quantum
 // public key when deriving a 32-byte address; it is public and included in the
 // address derivation.
 type PQAddressSalt byte
