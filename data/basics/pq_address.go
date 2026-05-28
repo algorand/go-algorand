@@ -89,7 +89,7 @@ type pqAddressPreimage struct {
 // The scheme tag and public salt are part of the address identity, so the same
 // public key may derive multiple PQ addresses.
 func (pq pqAddressPreimage) ToBeHashed() (protocol.HashID, []byte) {
-	payload := make([]byte, 0, pqAddressSchemeSize+pqAddressSaltSize+len(pq.pk))
+	payload := make([]byte, 0, pqSchemeSize+pqAddressSaltSize+len(pq.pk))
 	payload = append(payload, pq.scheme[:]...)
 	payload = append(payload, byte(pq.salt))
 	payload = append(payload, pq.pk...)
