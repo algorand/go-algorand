@@ -392,6 +392,10 @@ type pendingTransactionsParams struct {
 	Format string `url:"format"`
 }
 
+type rawTransactionParams struct {
+	DangerouslySkipAddressCurveCheck bool `url:"dangerously-skip-address-curve-check,omitempty"`
+}
+
 // GetPendingTransactions asks algod for a snapshot of current pending txns on the node, bounded by maxTxns.
 // If maxTxns = 0, fetches as many transactions as possible.
 func (client RestClient) GetPendingTransactions(maxTxns uint64) (response model.PendingTransactionsResponse, err error) {
@@ -637,6 +641,11 @@ func (client RestClient) SendRawTransactionAsync(txn transactions.SignedTxn) (re
 
 // SendRawTransactionGroup gets a SignedTxn group and broadcasts it to the network
 func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTxn) error {
+	return client.SendRawTransactionGroupWithParams(txgroup, false)
+}
+
+// SendRawTransactionGroupWithParams gets a SignedTxn group and broadcasts it to the network
+func (client RestClient) SendRawTransactionGroupWithParams(txgroup []transactions.SignedTxn, dangerouslySkipAddressCurveCheck bool) error {
 	// response is not terribly useful: it's the txid of the first transaction,
 	// which can be computed by the client anyway..
 	var enc []byte
@@ -644,8 +653,13 @@ func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTx
 		enc = append(enc, protocol.Encode(&tx)...)
 	}
 
+	var params interface{}
+	if dangerouslySkipAddressCurveCheck {
+		params = rawTransactionParams{DangerouslySkipAddressCurveCheck: true}
+	}
+
 	var response model.PostTransactionsResponse
-	return client.post(&response, "/v2/transactions", nil, enc, false)
+	return client.post(&response, "/v2/transactions", params, enc, false)
 }
 
 // Block gets the block info for the given round
