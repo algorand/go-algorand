@@ -98,6 +98,7 @@ func TestPQAddressKnownAnswers(t *testing.T) {
 			addr := PQAddress(PQSchemeFalcon1024(), tc.salt, publicKey)
 			require.Equal(t, tc.expectedAddress, addr.String())
 			require.False(t, crypto.IsEdwards25519Point(addr[:]))
+			require.True(t, IsPQAddressCompliant(addr))
 
 			addrAgain := PQAddress(PQSchemeFalcon1024(), tc.salt, publicKey)
 			require.Equal(t, addr, addrAgain)
@@ -114,11 +115,11 @@ func TestCanonicalPQAddressSalt(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, PQAddressSalt(1), salt)
 	require.Equal(t, "4X6LFIO4F7WZFXM24J567HAXW4FHXWKGVGPNCA4SMPPAYMZYSHYTB6XXC4", addr.String())
-	require.False(t, crypto.IsEdwards25519Point(addr[:]))
+	require.True(t, IsPQAddressCompliant(addr))
 
 	for lowerSalt := 0; lowerSalt < int(salt); lowerSalt++ {
 		lowerAddr := PQAddress(PQSchemeFalcon1024(), PQAddressSalt(lowerSalt), publicKey)
-		require.True(t, crypto.IsEdwards25519Point(lowerAddr[:]))
+		require.False(t, IsPQAddressCompliant(lowerAddr))
 	}
 }
 

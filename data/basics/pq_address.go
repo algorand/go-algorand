@@ -94,6 +94,12 @@ func PQAddress(scheme PQScheme, salt PQAddressSalt, pk []byte) Address {
 	return Address(crypto.HashObj(pqAddressPreimage{scheme, salt, pk}))
 }
 
+// IsPQAddressCompliant returns true when addr is eligible for native post-quantum
+// account authorization.
+func IsPQAddressCompliant(addr Address) bool {
+	return !crypto.IsEdwards25519Point(addr[:])
+}
+
 // CanonicalPQAddressSalt returns the lowest salt whose derived address for a PQScheme's
 // public key complies with the crypto.IsEdwards25519Point rejection-sampling predicate.
 func CanonicalPQAddressSalt(scheme PQScheme, publicKey []byte) (PQAddressSalt, Address, error) {
@@ -107,7 +113,7 @@ func CanonicalPQAddressSalt(scheme PQScheme, publicKey []byte) (PQAddressSalt, A
 	// PQScheme; the vanishingly small probability of this happening is ~2^(-256).
 	for salt := 0; salt <= 255; salt++ {
 		addr := PQAddress(scheme, PQAddressSalt(salt), publicKey)
-		if !crypto.IsEdwards25519Point(addr[:]) {
+		if IsPQAddressCompliant(addr) {
 			return PQAddressSalt(salt), addr, nil
 		}
 	}
