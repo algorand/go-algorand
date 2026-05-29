@@ -124,10 +124,6 @@ func (p *PQSig) Verify(txn Transaction, authorizer basics.Address) error {
 		return errPQSigBlank
 	}
 
-	if !p.Scheme.IsSupported() {
-		return basics.ErrPQSchemeNotSupported
-	}
-
 	if len(p.Signature) == 0 {
 		return errPQSigEmpty
 	}
