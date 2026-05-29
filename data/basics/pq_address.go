@@ -24,7 +24,9 @@ import (
 )
 
 var (
-	ErrPQSchemeNotSupported     = errors.New("pq signature scheme not supported")
+	// ErrPQSchemeNotSupported is returned when a PQScheme is not supported.
+	ErrPQSchemeNotSupported = errors.New("pq signature scheme not supported")
+
 	errNoCanonicalPQAddressSalt = errors.New("no canonical salt exists for this public key and scheme")
 )
 
@@ -42,7 +44,8 @@ const (
 type PQScheme [pqSchemeSize]byte
 
 // Supported post-quantum signature schemes:
-// - f1: Deterministic Falcon-1024 account authorization.
+
+// PQSchemeFalcon1024 - f1: Deterministic Falcon-1024
 func PQSchemeFalcon1024() PQScheme {
 	return PQScheme{'f', '1'}
 }

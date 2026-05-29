@@ -40,6 +40,7 @@ import (
 	"unsafe"
 
 	"filippo.io/edwards25519"
+
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/metrics"
 )
