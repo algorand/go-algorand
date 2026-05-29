@@ -602,8 +602,9 @@ type ConsensusParams struct {
 	// fraction of a basic min fee.
 	PerByteTxnSurcharge basics.Micros
 
-	// EnablePQAuth enables native post-quantum transaction authorization.
-	EnablePQAuth bool
+	// EnablePQSchemeFalcon1024 enables native Deterministic Falcon-1024 transaction
+	// authorization.
+	EnablePQSchemeFalcon1024 bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -1496,7 +1497,7 @@ func initConsensusProtocols() {
 	vFuture.AppSizeUpdates = true
 	vFuture.AllowZeroLocalAppRef = true
 	vFuture.EnforceAuthAddrSenderDiff = true
-	vFuture.EnablePQAuth = true
+	vFuture.EnablePQSchemeFalcon1024 = true
 	vFuture.LoadTracking = true
 	vFuture.MaxAbsoluteTxnNoteBytes = 4096   // same as largest AVM value
 	vFuture.MaxAbsoluteExtraProgramPages = 7 // Allow larger programs with extra fees
