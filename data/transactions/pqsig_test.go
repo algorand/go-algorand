@@ -44,7 +44,7 @@ func makePQSigTestFixture(t *testing.T, firstSeedByte byte) pqSigTestFixture {
 	require.NoError(t, err)
 
 	publicKey := append([]byte(nil), signer.PublicKey[:]...)
-	salt, authorizer, err := basics.CanonicalPQAddressSalt(basics.PQSchemeFalcon1024(), publicKey)
+	salt, authorizer, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
 	require.NoError(t, err)
 
 	txn := Transaction{
@@ -69,7 +69,7 @@ func makePQSigTestFixture(t *testing.T, firstSeedByte byte) pqSigTestFixture {
 		txn:        txn,
 		authorizer: authorizer,
 		pqSig: PQSig{
-			Scheme:    basics.PQSchemeFalcon1024(),
+			Scheme:    protocol.PQSchemeFalcon1024,
 			Salt:      salt,
 			PublicKey: publicKey,
 			Signature: signature,
@@ -86,7 +86,7 @@ func TestPQSigBlank(t *testing.T) {
 	require.True(t, (&PQSig{Salt: 0}).Blank())
 
 	require.False(t, (&PQSig{Salt: 1}).Blank())
-	require.False(t, (&PQSig{Scheme: basics.PQSchemeFalcon1024()}).Blank())
+	require.False(t, (&PQSig{Scheme: protocol.PQSchemeFalcon1024}).Blank())
 	require.False(t, (&PQSig{PublicKey: []byte{1}}).Blank())
 	require.False(t, (&PQSig{Signature: []byte{1}}).Blank())
 }
@@ -102,7 +102,7 @@ func TestPQSigEqual(t *testing.T) {
 	require.True(t, fixture.pqSig.Equal(&same))
 
 	changedScheme := fixture.pqSig
-	changedScheme.Scheme = basics.PQScheme{'x', '1'}
+	changedScheme.Scheme = protocol.PQScheme("x1")
 	require.False(t, fixture.pqSig.Equal(&changedScheme))
 
 	changedSalt := fixture.pqSig
@@ -205,7 +205,7 @@ func TestPQSigVerifyRejectsUnsupportedScheme(t *testing.T) {
 	fixture := makePQSigTestFixture(t, 0)
 
 	pqSig := fixture.pqSig
-	pqSig.Scheme = basics.PQScheme{'x', '1'}
+	pqSig.Scheme = protocol.PQScheme("x1")
 	pqSig.Signature = []byte{1}
 
 	require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, pqSig.AuthorizerAddress()), basics.ErrPQSchemeNotSupported)

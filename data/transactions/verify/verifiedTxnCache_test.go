@@ -151,7 +151,7 @@ func TestGetUnverifiedTransactionGroupsPQSigProofChanges(t *testing.T) {
 		{
 			name: "scheme",
 			mutate: func(stxn *transactions.SignedTxn) {
-				stxn.PQSig.Scheme[0] ^= 1
+				stxn.PQSig.Scheme = protocol.PQScheme("x1")
 			},
 		},
 	}

@@ -31,29 +31,14 @@ var (
 )
 
 const (
-	// pqSchemeSize is the consensus byte length of a post-quantum signature scheme tag.
-	pqSchemeSize = 2
-
 	// pqAddressSaltSize is the consensus byte length of a post-quantum address salt.
 	pqAddressSaltSize = 1
 )
 
-// PQScheme is a 2-bytes ASCII identifier of a post-quantum account authorization scheme.
-// Conventionally: the first bytes is the PQ-DSA family, the second byte is a version
-// or variant identifier.
-type PQScheme [pqSchemeSize]byte
-
-// Supported post-quantum signature schemes:
-
-// PQSchemeFalcon1024 - f1: Deterministic Falcon-1024
-func PQSchemeFalcon1024() PQScheme {
-	return PQScheme{'f', '1'}
-}
-
-// ValidatePublicKey checks that the given public key is valid for the given scheme.
-func (s PQScheme) ValidatePublicKey(publicKey []byte) error {
+// ValidatePQPublicKey checks that the given public key is valid for the given scheme.
+func ValidatePQPublicKey(s protocol.PQScheme, publicKey []byte) error {
 	switch s {
-	case PQSchemeFalcon1024():
+	case protocol.PQSchemeFalcon1024:
 		_, err := crypto.FalconPublicKeyFromBytes(publicKey)
 		return err
 
@@ -72,7 +57,7 @@ type PQAddressSalt uint8
 // PQAddressSalt, and a public key. Its ToBeHashed method defines the consensus
 // byte layout.
 type pqAddressPreimage struct {
-	scheme PQScheme
+	scheme protocol.PQScheme
 	salt   PQAddressSalt
 	pk     []byte
 }
@@ -82,15 +67,15 @@ type pqAddressPreimage struct {
 // The scheme tag and public salt are part of the address identity, so the same
 // public key may derive multiple PQ addresses.
 func (pq pqAddressPreimage) ToBeHashed() (protocol.HashID, []byte) {
-	payload := make([]byte, 0, pqSchemeSize+pqAddressSaltSize+len(pq.pk))
-	payload = append(payload, pq.scheme[:]...)
+	payload := make([]byte, 0, protocol.PQSchemeSize+pqAddressSaltSize+len(pq.pk))
+	payload = append(payload, string(pq.scheme)...)
 	payload = append(payload, byte(pq.salt))
 	payload = append(payload, pq.pk...)
 	return protocol.PostQuantumAddress, payload
 }
 
 // PQAddress returns the address derived from a pqAddressPreimage.
-func PQAddress(scheme PQScheme, salt PQAddressSalt, pk []byte) Address {
+func PQAddress(scheme protocol.PQScheme, salt PQAddressSalt, pk []byte) Address {
 	return Address(crypto.HashObj(pqAddressPreimage{scheme, salt, pk}))
 }
 
@@ -102,8 +87,8 @@ func IsPQAddressCompliant(addr Address) bool {
 
 // CanonicalPQAddressSalt returns the lowest salt whose derived address for a PQScheme's
 // public key complies with the crypto.IsEdwards25519Point rejection-sampling predicate.
-func CanonicalPQAddressSalt(scheme PQScheme, publicKey []byte) (PQAddressSalt, Address, error) {
-	err := scheme.ValidatePublicKey(publicKey)
+func CanonicalPQAddressSalt(scheme protocol.PQScheme, publicKey []byte) (PQAddressSalt, Address, error) {
+	err := ValidatePQPublicKey(scheme, publicKey)
 	if err != nil {
 		return 0, Address{}, err
 	}

@@ -34,23 +34,17 @@ func falconPublicKeyForPQAddressTest(t *testing.T, firstSeedByte byte) []byte {
 	return append([]byte(nil), signer.PublicKey[:]...)
 }
 
-func TestPQSchemeFalcon1024(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	require.Equal(t, PQScheme{'f', '1'}, PQSchemeFalcon1024())
-}
-
 func TestPQSchemeValidatePublicKey(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	publicKey := falconPublicKeyForPQAddressTest(t, 0)
 
-	require.NoError(t, PQSchemeFalcon1024().ValidatePublicKey(publicKey))
+	require.NoError(t, ValidatePQPublicKey(protocol.PQSchemeFalcon1024, publicKey))
 
-	err := PQSchemeFalcon1024().ValidatePublicKey(publicKey[:len(publicKey)-1])
+	err := ValidatePQPublicKey(protocol.PQSchemeFalcon1024, publicKey[:len(publicKey)-1])
 	require.Error(t, err)
 
-	err = PQScheme{'x', '1'}.ValidatePublicKey(publicKey)
+	err = ValidatePQPublicKey(protocol.PQScheme("x1"), publicKey)
 	require.ErrorIs(t, err, ErrPQSchemeNotSupported)
 }
 
@@ -58,7 +52,7 @@ func TestPQAddressPreimage(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	preimage := pqAddressPreimage{
-		scheme: PQScheme{'f', '1'},
+		scheme: protocol.PQSchemeFalcon1024,
 		salt:   PQAddressSalt(0x7f),
 		pk:     []byte{0xab, 0xcd, 0xef},
 	}
@@ -95,12 +89,12 @@ func TestPQAddressKnownAnswers(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			publicKey := falconPublicKeyForPQAddressTest(t, tc.firstSeedByte)
 
-			addr := PQAddress(PQSchemeFalcon1024(), tc.salt, publicKey)
+			addr := PQAddress(protocol.PQSchemeFalcon1024, tc.salt, publicKey)
 			require.Equal(t, tc.expectedAddress, addr.String())
 			require.False(t, crypto.IsEdwards25519Point(addr[:]))
 			require.True(t, IsPQAddressCompliant(addr))
 
-			addrAgain := PQAddress(PQSchemeFalcon1024(), tc.salt, publicKey)
+			addrAgain := PQAddress(protocol.PQSchemeFalcon1024, tc.salt, publicKey)
 			require.Equal(t, addr, addrAgain)
 		})
 	}
@@ -111,14 +105,14 @@ func TestCanonicalPQAddressSalt(t *testing.T) {
 
 	publicKey := falconPublicKeyForPQAddressTest(t, 1)
 
-	salt, addr, err := CanonicalPQAddressSalt(PQSchemeFalcon1024(), publicKey)
+	salt, addr, err := CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
 	require.NoError(t, err)
 	require.Equal(t, PQAddressSalt(1), salt)
 	require.Equal(t, "4X6LFIO4F7WZFXM24J567HAXW4FHXWKGVGPNCA4SMPPAYMZYSHYTB6XXC4", addr.String())
 	require.True(t, IsPQAddressCompliant(addr))
 
 	for lowerSalt := 0; lowerSalt < int(salt); lowerSalt++ {
-		lowerAddr := PQAddress(PQSchemeFalcon1024(), PQAddressSalt(lowerSalt), publicKey)
+		lowerAddr := PQAddress(protocol.PQSchemeFalcon1024, PQAddressSalt(lowerSalt), publicKey)
 		require.False(t, IsPQAddressCompliant(lowerAddr))
 	}
 }
@@ -128,9 +122,9 @@ func TestCanonicalPQAddressSaltRejectsInvalidInputs(t *testing.T) {
 
 	publicKey := falconPublicKeyForPQAddressTest(t, 0)
 
-	_, _, err := CanonicalPQAddressSalt(PQSchemeFalcon1024(), publicKey[:len(publicKey)-1])
+	_, _, err := CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey[:len(publicKey)-1])
 	require.Error(t, err)
 
-	_, _, err = CanonicalPQAddressSalt(PQScheme{'x', '1'}, publicKey)
+	_, _, err = CanonicalPQAddressSalt(protocol.PQScheme("x1"), publicKey)
 	require.ErrorIs(t, err, ErrPQSchemeNotSupported)
 }

@@ -24,6 +24,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 var (
@@ -49,7 +50,7 @@ const (
 type PQSig struct {
 	_struct struct{} `codec:",omitempty"`
 
-	Scheme    basics.PQScheme      `codec:"sch"`
+	Scheme    protocol.PQScheme    `codec:"sch"`
 	Salt      basics.PQAddressSalt `codec:"slt"`
 	PublicKey []byte               `codec:"pk,allocbound=PQMaxPublicKeySize"`
 	Signature []byte               `codec:"sig,allocbound=PQMaxSignatureSize"`
@@ -61,7 +62,7 @@ func (p *PQSig) Blank() bool {
 		return true
 	}
 
-	var zeroScheme basics.PQScheme
+	var zeroScheme protocol.PQScheme
 	var zeroSalt basics.PQAddressSalt
 
 	return p.Scheme == zeroScheme &&
@@ -104,7 +105,7 @@ func (p *PQSig) Verify(proto config.ConsensusParams, txn Transaction, authorizer
 
 	// Scheme-specific verification
 	switch p.Scheme {
-	case basics.PQSchemeFalcon1024():
+	case protocol.PQSchemeFalcon1024:
 		if !proto.EnablePQSchemeFalcon1024 {
 			return errPQSigSchemeNotEnabled
 		}

@@ -104,7 +104,7 @@ func makePQSignedTxn(t *testing.T, firstSeedByte byte) transactions.SignedTxn {
 	require.NoError(t, err)
 
 	publicKey := append([]byte(nil), signer.PublicKey[:]...)
-	salt, authorizer, err := basics.CanonicalPQAddressSalt(basics.PQSchemeFalcon1024(), publicKey)
+	salt, authorizer, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
 	require.NoError(t, err)
 
 	var receiver basics.Address
@@ -117,7 +117,7 @@ func makePQSignedTxn(t *testing.T, firstSeedByte byte) transactions.SignedTxn {
 	return transactions.SignedTxn{
 		Txn: txn,
 		PQSig: transactions.PQSig{
-			Scheme:    basics.PQSchemeFalcon1024(),
+			Scheme:    protocol.PQSchemeFalcon1024,
 			Salt:      salt,
 			PublicKey: publicKey,
 			Signature: append([]byte(nil), signature...),
