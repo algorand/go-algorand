@@ -152,16 +152,6 @@ import (
 //       |-----> MsgIsZero
 //       |-----> PQAddressSaltMaxSize()
 //
-// PQScheme
-//     |-----> (*) MarshalMsg
-//     |-----> (*) CanMarshalMsg
-//     |-----> (*) UnmarshalMsg
-//     |-----> (*) UnmarshalMsgWithState
-//     |-----> (*) CanUnmarshalMsg
-//     |-----> (*) Msgsize
-//     |-----> (*) MsgIsZero
-//     |-----> PQSchemeMaxSize()
-//
 // Participant
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
@@ -4952,60 +4942,6 @@ func (z PQAddressSalt) MsgIsZero() bool {
 // PQAddressSaltMaxSize returns a maximum valid message size for this message type
 func PQAddressSaltMaxSize() (s int) {
 	s = msgp.Uint8Size
-	return
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z *PQScheme) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, (*z)[:])
-	return
-}
-
-func (_ *PQScheme) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*PQScheme)
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *PQScheme) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
-	if st.AllowableDepth == 0 {
-		err = msgp.ErrMaxDepthExceeded{}
-		return
-	}
-	st.AllowableDepth--
-	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	o = bts
-	return
-}
-
-func (z *PQScheme) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
-}
-func (_ *PQScheme) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*PQScheme)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *PQScheme) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (pqSchemeSize * (msgp.ByteSize))
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z *PQScheme) MsgIsZero() bool {
-	return (*z) == (PQScheme{})
-}
-
-// PQSchemeMaxSize returns a maximum valid message size for this message type
-func PQSchemeMaxSize() (s int) {
-	// Calculating size of array: z
-	s = msgp.ArrayHeaderSize + ((pqSchemeSize) * (msgp.ByteSize))
 	return
 }
 

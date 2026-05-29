@@ -4407,7 +4407,7 @@ func (z *PQSig) MsgIsZero() bool {
 
 // PQSigMaxSize returns a maximum valid message size for this message type
 func PQSigMaxSize() (s int) {
-	s = 1 + 4 + basics.PQSchemeMaxSize() + 4 + basics.PQAddressSaltMaxSize() + 3 + msgp.BytesPrefixSize + PQMaxPublicKeySize + 4 + msgp.BytesPrefixSize + PQMaxSignatureSize
+	s = 1 + 4 + protocol.PQSchemeMaxSize() + 4 + basics.PQAddressSaltMaxSize() + 3 + msgp.BytesPrefixSize + PQMaxPublicKeySize + 4 + msgp.BytesPrefixSize + PQMaxSignatureSize
 	return
 }
 

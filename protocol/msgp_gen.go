@@ -49,6 +49,16 @@ import (
 //     |-----> MsgIsZero
 //     |-----> NetworkIDMaxSize()
 //
+// PQScheme
+//     |-----> MarshalMsg
+//     |-----> CanMarshalMsg
+//     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalMsgWithState
+//     |-----> (*) CanUnmarshalMsg
+//     |-----> Msgsize
+//     |-----> MsgIsZero
+//     |-----> PQSchemeMaxSize()
+//
 // StateProofType
 //        |-----> MarshalMsg
 //        |-----> CanMarshalMsg
@@ -325,6 +335,76 @@ func (z NetworkID) MsgIsZero() bool {
 // NetworkIDMaxSize returns a maximum valid message size for this message type
 func NetworkIDMaxSize() (s int) {
 	panic("Unable to determine max size: String type string(z) is unbounded")
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z PQScheme) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendString(o, string(z))
+	return
+}
+
+func (_ PQScheme) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(PQScheme)
+	if !ok {
+		_, ok = (z).(*PQScheme)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *PQScheme) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	{
+		var zb0001 string
+		var zb0002 int
+		zb0002, err = msgp.ReadBytesBytesHeader(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > PQSchemeSize {
+			err = msgp.ErrOverflow(uint64(zb0002), uint64(PQSchemeSize))
+			return
+		}
+		zb0001, bts, err = msgp.ReadStringBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = PQScheme(zb0001)
+	}
+	o = bts
+	return
+}
+
+func (z *PQScheme) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *PQScheme) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*PQScheme)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z PQScheme) Msgsize() (s int) {
+	s = msgp.StringPrefixSize + len(string(z))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z PQScheme) MsgIsZero() bool {
+	return z == ""
+}
+
+// PQSchemeMaxSize returns a maximum valid message size for this message type
+func PQSchemeMaxSize() (s int) {
+	s = msgp.StringPrefixSize + PQSchemeSize
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
