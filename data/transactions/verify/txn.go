@@ -84,7 +84,6 @@ var errTxnSigHasNoSig = errors.New("signedtxn has no sig")
 var errTxnSigNotWellFormed = errors.New("signedtxn should only have one of Sig, MSig, LogicSig, or PQSig")
 var errRekeyingNotSupported = errors.New("nonempty AuthAddr but rekeying is not supported")
 var errAuthAddrEqualsSender = errors.New("AuthAddr must be different from Sender")
-var errPQAuthNotEnabled = errors.New("PQ transaction authorization not enabled")
 var errUnknownSignature = errors.New("has one mystery sig. WAT?")
 
 // TxGroupErrorReason is reason code for ErrTxGroupError
@@ -319,10 +318,7 @@ func stxnCoreChecks(gi int, groupCtx *GroupContext, batchVerifier crypto.BatchVe
 		return nil
 
 	case pqSig:
-		if !groupCtx.consensusParams.EnablePQAuth {
-			return &TxGroupError{err: errPQAuthNotEnabled, GroupIndex: gi, Reason: TxGroupErrorReasonGeneric}
-		}
-		if err := s.PQSig.Verify(s.Txn, s.Authorizer()); err != nil {
+		if err := s.PQSig.Verify(groupCtx.consensusParams, s.Txn, s.Authorizer()); err != nil {
 			return &TxGroupError{err: fmt.Errorf("pq signature validation failed: %w", err), GroupIndex: gi, Reason: TxGroupErrorReasonSigNotWellFormed}
 		}
 		return nil

@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 )
@@ -30,6 +31,7 @@ var (
 	errPQSigBlank              = errors.New("pq signature is blank")
 	errPQSigEmpty              = errors.New("pq signature is empty")
 	errPQSigAuthorizerMismatch = errors.New("pq signature authorizer mismatch")
+	errPQSigSchemeNotEnabled   = errors.New("pq signature scheme not enabled")
 
 	// Scheme-specific errors
 	errFalcon1024SigInvalid = errors.New("invalid deterministic falcon-1024 signature")
@@ -86,10 +88,11 @@ func (p *PQSig) AuthorizerAddress() basics.Address {
 }
 
 // Verify validates that p is a post-quantum authorization proof for txn and
-// authorizer. It verifies that the carried scheme is supported; then it validates
-// the authorizer address from the carried scheme, address salt, and public key and
-// verifies the scheme-specific signature over the unsigned transaction.
-func (p *PQSig) Verify(txn Transaction, authorizer basics.Address) error {
+// authorizer under proto. It verifies that the carried scheme is supported by
+// the consensus parameters; then it validates the authorizer address from the
+// carried scheme, address salt, and public key and verifies the scheme-specific
+// signature over the unsigned transaction.
+func (p *PQSig) Verify(proto config.ConsensusParams, txn Transaction, authorizer basics.Address) error {
 	// Scheme-independent verification
 	if p.Blank() {
 		return errPQSigBlank
@@ -99,14 +102,18 @@ func (p *PQSig) Verify(txn Transaction, authorizer basics.Address) error {
 		return errPQSigEmpty
 	}
 
-	pqAuthorizer := p.AuthorizerAddress()
-	if pqAuthorizer != authorizer {
-		return fmt.Errorf("%w: derived %s, expected %s", errPQSigAuthorizerMismatch, pqAuthorizer, authorizer)
-	}
-
 	// Scheme-specific verification
 	switch p.Scheme {
 	case basics.PQSchemeFalcon1024():
+		if !proto.EnablePQSchemeFalcon1024 {
+			return errPQSigSchemeNotEnabled
+		}
+
+		pqAuthorizer := p.AuthorizerAddress()
+		if pqAuthorizer != authorizer {
+			return fmt.Errorf("%w: derived %s, expected %s", errPQSigAuthorizerMismatch, pqAuthorizer, authorizer)
+		}
+
 		pk, err := crypto.FalconPublicKeyFromBytes(p.PublicKey)
 		if err != nil {
 			return err
