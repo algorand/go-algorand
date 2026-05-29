@@ -105,6 +105,70 @@ func TestGetUnverifiedTransactionGroups50(t *testing.T) {
 	require.Equal(t, len(expectedUnverifiedGroups), len(unverifiedGroups))
 }
 
+func TestGetUnverifiedTransactionGroupsPQSigProofChanges(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	cache := MakeVerifiedTransactionCache(10)
+	dummyLedger := DummyLedgerForSignature{}
+
+	stxn := makePQSignedTxn(t, 20)
+	group := []transactions.SignedTxn{stxn}
+	_, err := TxnGroup(group, &blkHdr, cache, &dummyLedger)
+	require.NoError(t, err)
+
+	unverifiedGroups := cache.GetUnverifiedTransactionGroups([][]transactions.SignedTxn{group}, spec, blkHdr.CurrentProtocol)
+	require.Empty(t, unverifiedGroups)
+
+	clone := func(stxn transactions.SignedTxn) transactions.SignedTxn {
+		stxn.PQSig.PublicKey = append([]byte(nil), stxn.PQSig.PublicKey...)
+		stxn.PQSig.Signature = append([]byte(nil), stxn.PQSig.Signature...)
+		return stxn
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*transactions.SignedTxn)
+	}{
+		{
+			name: "signature",
+			mutate: func(stxn *transactions.SignedTxn) {
+				stxn.PQSig.Signature[0] ^= 1
+			},
+		},
+		{
+			name: "public-key",
+			mutate: func(stxn *transactions.SignedTxn) {
+				stxn.PQSig.PublicKey[0] ^= 1
+			},
+		},
+		{
+			name: "salt",
+			mutate: func(stxn *transactions.SignedTxn) {
+				stxn.PQSig.Salt ^= 1
+			},
+		},
+		{
+			name: "scheme",
+			mutate: func(stxn *transactions.SignedTxn) {
+				stxn.PQSig.Scheme[0] ^= 1
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			mutated := clone(stxn)
+			test.mutate(&mutated)
+			require.Equal(t, stxn.ID(), mutated.ID())
+
+			unverifiedGroups := cache.GetUnverifiedTransactionGroups([][]transactions.SignedTxn{{mutated}}, spec, blkHdr.CurrentProtocol)
+			require.Len(t, unverifiedGroups, 1)
+			require.Equal(t, []transactions.SignedTxn{mutated}, unverifiedGroups[0])
+		})
+	}
+}
+
 func BenchmarkGetUnverifiedTransactionGroups50(b *testing.B) {
 	if b.N < 20000 {
 		b.N = 20000
