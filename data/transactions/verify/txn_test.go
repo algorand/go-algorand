@@ -784,14 +784,14 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "should only have one of Sig or Msig or LogicSig")
+	require.Contains(t, err.Error(), errTxnSigNotWellFormed.Error())
 	txnGroups[0][0].Msig.Subsigs = nil
 
 	///// Sig + logic
 	txnGroups[0][0].Lsig.Logic = op.Program
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "should only have one of Sig or Msig or LogicSig")
+	require.Contains(t, err.Error(), errTxnSigNotWellFormed.Error())
 	txnGroups[0][0].Lsig.Logic = []byte{}
 
 	///// MultiSig + logic
@@ -804,7 +804,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "should only have one of Sig or Msig or LogicSig")
+	require.Contains(t, err.Error(), errTxnSigNotWellFormed.Error())
 	txnGroups[0][0].Lsig.Logic = []byte{}
 	txnGroups[0][0].Sig = tmpSig
 	txnGroups[0][0].Msig.Subsigs = nil
