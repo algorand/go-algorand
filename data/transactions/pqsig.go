@@ -29,7 +29,6 @@ var (
 	// Scheme-independent errors
 	errPQSigBlank              = errors.New("pq signature is blank")
 	errPQSigEmpty              = errors.New("pq signature is empty")
-	errPQSignatureSize         = errors.New("pq signature has invalid size")
 	errPQSigAuthorizerMismatch = errors.New("pq signature authorizer mismatch")
 
 	// Scheme-specific errors
@@ -86,34 +85,6 @@ func (p *PQSig) AuthorizerAddress() basics.Address {
 	return basics.PQAddress(p.Scheme, p.Salt, p.PublicKey)
 }
 
-// Falcon1024PublicKey returns the Falcon-1024 public key carried by PQSig.
-func (p *PQSig) Falcon1024PublicKey() (crypto.FalconPublicKey, error) {
-	if p.Scheme != basics.PQSchemeFalcon1024() {
-		return crypto.FalconPublicKey{}, fmt.Errorf("%w: got %s, want %s", basics.ErrPQSchemeNotSupported, p.Scheme, basics.PQSchemeFalcon1024())
-	}
-
-	err := p.Scheme.ValidatePublicKey(p.PublicKey)
-	if err != nil {
-		return crypto.FalconPublicKey{}, err
-	}
-
-	var pk crypto.FalconPublicKey
-	copy(pk[:], p.PublicKey)
-	return pk, nil
-}
-
-// Falcon1024Signature returns the Deterministic Falcon-1024 signature carried by PQSig.
-func (p *PQSig) Falcon1024Signature() (crypto.FalconSignature, error) {
-	if p.Scheme != basics.PQSchemeFalcon1024() {
-		return crypto.FalconSignature{}, fmt.Errorf("%w: got %s, want %s", basics.ErrPQSchemeNotSupported, p.Scheme, basics.PQSchemeFalcon1024())
-	}
-
-	if len(p.Signature) == 0 || len(p.Signature) > crypto.FalconMaxSignatureSize {
-		return nil, fmt.Errorf("%w: got %d, want 1..%d", errPQSignatureSize, len(p.Signature), crypto.FalconMaxSignatureSize)
-	}
-	return p.Signature, nil
-}
-
 // Verify validates that p is a post-quantum authorization proof for txn and
 // authorizer. It verifies that the carried scheme is supported; then it validates
 // the authorizer address from the carried scheme, address salt, and public key and
@@ -136,12 +107,12 @@ func (p *PQSig) Verify(txn Transaction, authorizer basics.Address) error {
 	// Scheme-specific verification
 	switch p.Scheme {
 	case basics.PQSchemeFalcon1024():
-		pk, err := p.Falcon1024PublicKey()
+		pk, err := crypto.FalconPublicKeyFromBytes(p.PublicKey)
 		if err != nil {
 			return err
 		}
 
-		sig, err := p.Falcon1024Signature()
+		sig, err := crypto.FalconSignatureFromBytes(p.Signature)
 		if err != nil {
 			return err
 		}
@@ -153,8 +124,6 @@ func (p *PQSig) Verify(txn Transaction, authorizer basics.Address) error {
 		return nil
 
 	default:
-		// Defensive: this should only be reachable if IsSupported is updated
-		// without adding the corresponding verification implementation here.
 		return basics.ErrPQSchemeNotSupported
 	}
 }

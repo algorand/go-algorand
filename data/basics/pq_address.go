@@ -18,7 +18,6 @@ package basics
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
@@ -26,7 +25,6 @@ import (
 
 var (
 	ErrPQSchemeNotSupported     = errors.New("pq signature scheme not supported")
-	errPQPublicKeySize          = errors.New("pq public key size invalid")
 	errNoCanonicalPQAddressSalt = errors.New("no canonical salt exists for this public key and scheme")
 )
 
@@ -53,10 +51,8 @@ func PQSchemeFalcon1024() PQScheme {
 func (s PQScheme) ValidatePublicKey(publicKey []byte) error {
 	switch s {
 	case PQSchemeFalcon1024():
-		if len(publicKey) != crypto.FalconPublicKeySize {
-			return fmt.Errorf("%w: got %d, want %d", errPQPublicKeySize, len(publicKey), crypto.FalconPublicKeySize)
-		}
-		return nil
+		_, err := crypto.FalconPublicKeyFromBytes(publicKey)
+		return err
 
 	default:
 		return ErrPQSchemeNotSupported
