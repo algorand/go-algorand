@@ -49,12 +49,6 @@ func PQSchemeFalcon1024() PQScheme {
 	return PQScheme{'f', '1'}
 }
 
-// IsSupported reports whether this scheme is supported. Note: currently only "f1"
-// is supported, but this method is intended to be updated as new schemes are added.
-func (s PQScheme) IsSupported() bool {
-	return s == PQSchemeFalcon1024()
-}
-
 // ValidatePublicKey checks that the given public key is valid for the given scheme.
 func (s PQScheme) ValidatePublicKey(publicKey []byte) error {
 	switch s {
