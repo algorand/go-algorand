@@ -167,23 +167,31 @@ func MinA(a, b MicroAlgos) MicroAlgos {
 	return b
 }
 
-// Muldiv computes a*b/c.  The overflow flag indicates that the result was 2^64
-// or greater. `c` is not generic, because most call sites use a constant. Making
-// `c` generic forced casting it to uint64, as Go makes it an int.
-func Muldiv[A ~uint64, B ~uint64](a A, b B, c uint64) (A, bool) {
+// muldiv computes a*b/c. It returns (quotient, remainder, overflow). The
+// overflow flag indicates that the result was 2^64 or greater.
+func muldiv[A ~uint64, B ~uint64](a A, b B, c uint64) (A, A, bool) {
 	hi, lo := bits.Mul64(uint64(a), uint64(b))
 	if c <= hi {
 		// It would often be useful if we returned math.MaxUint64 in case of
 		// overflow, but before changing it, we need to inspect current users
 		// carefully.
-		return 0, true
+		return 0, 0, true
 	}
-	quo, _ := bits.Div64(hi, lo, c)
-	return A(quo), false
+	quo, rem := bits.Div64(hi, lo, c)
+	return A(quo), A(rem), false
 }
 
-// Mul2div computes a*b*c/d. On overflow, the returned A is saturated.
-func Mul2div[A ~uint64, B ~uint64, C ~uint64](a A, b B, c C, d uint64) (A, bool) {
+// Muldiv computes a*b/c.  The overflow flag indicates that the result was 2^64
+// or greater. `c` is not generic, because most call sites use a constant. Making
+// `c` generic forced casting it to uint64, as Go makes it an int.
+func Muldiv[A ~uint64, B ~uint64](a A, b B, c uint64) (A, bool) {
+	quo, _, overflow := muldiv(a, b, c)
+	return quo, overflow
+}
+
+// Mul2div computes a*b*c/d. It returns (quotient, remainder, overflow). On
+// overflow, the returned quotient is saturated and remainder is 0.
+func Mul2div[A ~uint64, B ~uint64, C ~uint64](a A, b B, c C, d uint64) (A, A, bool) {
 	/*
 	    A     Y   X0     XY
 	  x B   x C  x C    x C
@@ -194,19 +202,21 @@ func Mul2div[A ~uint64, B ~uint64, C ~uint64](a A, b B, c C, d uint64) (A, bool)
 	X, Y := bits.Mul64(uint64(a), uint64(b))
 	J, K := bits.Mul64(Y, uint64(c))
 	L, M := bits.Mul64(X, uint64(c))
-	if L > 0 {
-		return math.MaxUint64, true
+	if L > 0 { // L is the third "digit", no divisor will get us down to one "digit"
+		return math.MaxUint64, 0, true
 	}
 
 	JplusM := AddSaturate(J, M) // "J" + "M"
+
 	// This test ensures the division won't overflow AND that there's no carry
-	// into the "L" part (since `JplusM` is MaxUint64 in that case)
+	// into the "L" part (since `JplusM` is MaxUint64 in that case). Dividing by
+	// d can't get us down to one "digit".
 	if d <= JplusM {
-		return math.MaxUint64, true
+		return math.MaxUint64, 0, true
 	}
 
-	quo, _ := bits.Div64(JplusM, K, d)
-	return A(quo), false
+	quo, rem := bits.Div64(JplusM, K, d)
+	return A(quo), A(rem), false
 }
 
 // MulMicros multiplies a MicroAlgos amount by a Micros amount. It saturates AND
@@ -219,16 +229,51 @@ func (a MicroAlgos) MulMicros(m Micros) (MicroAlgos, bool) {
 	return MicroAlgos{Raw: res}, overflowed
 }
 
+// MulMicrosCeil multiplies a MicroAlgos amount by a Micros amount and rounds
+// up to the next microAlgo whenever the exact result is fractional. It
+// saturates and reports overflow.
+func (a MicroAlgos) MulMicrosCeil(m Micros) (MicroAlgos, bool) {
+	quo, rem, overflowed := muldiv(a.Raw, m, 1e6)
+	if overflowed {
+		return MicroAlgos{Raw: math.MaxUint64}, true
+	}
+	if rem != 0 {
+		if quo == math.MaxUint64 {
+			return MicroAlgos{Raw: math.MaxUint64}, true
+		}
+		quo++
+	}
+	return MicroAlgos{Raw: quo}, false
+}
+
 // Mul2Micros multiplies a MicroAlgos amount by two Micros amounts. It exists so
 // that more precision is preserved.  If MulMicros were used to multiply
 // 0.001001*1.5*2, we would have 0.001501*2 = 0.003002. But the correct answer
 // is 0.003003.
 func (a MicroAlgos) Mul2Micros(m1 Micros, m2 Micros) (MicroAlgos, bool) {
-	res, overflowed := Mul2div(a.Raw, m1, m2, 1e12)
+	res, _, overflowed := Mul2div(a.Raw, m1, m2, 1e12)
 	if overflowed {
 		res = math.MaxUint64
 	}
 	return MicroAlgos{Raw: res}, overflowed
+}
+
+// Mul2MicrosCeil multiplies a MicroAlgos amount by two Micros amounts and
+// rounds up to the next microAlgo whenever the exact result is fractional. It
+// saturates and reports overflow.
+func (a MicroAlgos) Mul2MicrosCeil(m1 Micros, m2 Micros) (MicroAlgos, bool) {
+	res, rem, overflowed := Mul2div(a.Raw, m1, m2, 1e12)
+	if overflowed {
+		return MicroAlgos{Raw: math.MaxUint64}, true
+	}
+	if rem != 0 {
+		if res == math.MaxUint64 {
+			return MicroAlgos{Raw: math.MaxUint64}, true
+		}
+		res++
+	}
+
+	return MicroAlgos{Raw: res}, false
 }
 
 // DivCeil provides `math.Ceil` semantics using integer division.  The technique

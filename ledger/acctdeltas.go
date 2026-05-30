@@ -96,8 +96,8 @@ type compactOnlineAccountDeltas struct {
 const MaxEncodedBaseAccountDataSize = 350
 
 // MaxEncodedBaseResourceDataSize is a rough estimate for the worst-case scenario we're going to have of the base resource data serialized.
-// this number is verified by the TestEncodedBaseResourceSize function.
-const MaxEncodedBaseResourceDataSize = 20000
+// this number is verified by the TestEncodedBaseResourceSize function. It is dominated by program size.
+const MaxEncodedBaseResourceDataSize = 30000
 
 // prepareNormalizedBalancesV5 converts an array of encodedBalanceRecordV5 into an equal size array of normalizedAccountBalances.
 func prepareNormalizedBalancesV5(bals []encoded.BalanceRecordV5, rewardUnit uint64) (normalizedAccountBalances []trackerdb.NormalizedAccountBalance, err error) {
