@@ -154,14 +154,17 @@ func parseCreateDNSRecordResponse(response *http.Response) (*CreateDNSRecordResp
 	return &parsedReponse, nil
 }
 
-// clampTTL clamps the input ttl value to the accepted range of 120 - 2147483647 or 1 ( automatic )
-// see documentation at https://api.cloudflare.com/#dns-records-for-a-zone-create-dns-record
+// clampTTL clamps the input ttl value to the accepted range of 60 - 2147483647 or 1 ( automatic ).
+// Per Cloudflare, Automatic resolves to 300s. The documented per-plan minimum is 60s on
+// Free/Pro/Business and 30s on Enterprise; this helper enforces a 60s floor so the resulting
+// value is accepted by every plan tier. This function ensures success by setting a universal minimum.
+// see documentation at https://developers.cloudflare.com/dns/manage-dns-records/reference/ttl/
 func clampTTL(ttl uint) uint {
 	if ttl <= AutomaticTTL {
 		ttl = AutomaticTTL // automatic.
 	}
-	if ttl > AutomaticTTL && ttl < 120 {
-		ttl = 120
+	if ttl > AutomaticTTL && ttl < 60 {
+		ttl = 60
 	}
 	if ttl > 2147483647 {
 		ttl = 2147483647

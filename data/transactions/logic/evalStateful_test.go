@@ -3334,6 +3334,8 @@ func TestReturnTypes(t *testing.T) {
 
 		// mimc requires an input size multiple of 32 bytes.
 		"mimc": ": byte 0x0000000000000000000000000000000000000000000000000000000000000001; mimc BN254Mp110",
+		// poseidon2 requires an input size multiple of 32 bytes.
+		"poseidon2": ": byte 0x0000000000000000000000000000000000000000000000000000000000000001; poseidon2 BN254t2",
 	}
 
 	/* Make sure the specialCmd tests the opcode in question */

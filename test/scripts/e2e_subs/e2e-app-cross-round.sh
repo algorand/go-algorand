@@ -1,6 +1,8 @@
 #!/bin/bash
 
-date '+app-cross-round-test start %Y%m%d_%H%M%S'
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
 
 set -e
 set -x

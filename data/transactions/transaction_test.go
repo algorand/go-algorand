@@ -331,7 +331,7 @@ func TestFeeFactor_BigNotes(t *testing.T) {
 				},
 			}
 
-			factor := tx.FeeFactor(tt.proto)
+			factor := tx.feeFactor(tt.proto)
 			assert.Equal(t, tt.expectedFactor, factor, "FeeFactor mismatch for note size %d", tt.noteSize)
 		})
 	}
@@ -358,7 +358,7 @@ func TestFeeFactor_StateProofAndHeartbeat(t *testing.T) {
 			Note:       make([]byte, 2048), // Large note
 		},
 	}
-	assert.Equal(t, basics.Micros(0), stateProofTx.FeeFactor(vFuture), "StateProof should be free")
+	assert.Equal(t, basics.Micros(0), stateProofTx.feeFactor(vFuture), "StateProof should be free")
 
 	// Singleton heartbeat (no group) should be free. Again, having a note is
 	// not allowed in a free heartbeat, but that is checked elsewhere.
@@ -371,7 +371,7 @@ func TestFeeFactor_StateProofAndHeartbeat(t *testing.T) {
 			Note:       make([]byte, 2048), // Large note
 		},
 	}
-	assert.Equal(t, basics.Micros(0), singletonHeartbeat.FeeFactor(vFuture), "Singleton heartbeat should be free")
+	assert.Equal(t, basics.Micros(0), singletonHeartbeat.feeFactor(vFuture), "Singleton heartbeat should be free")
 
 	// Grouped heartbeat should have normal fee
 	groupedHeartbeat := Transaction{
@@ -384,7 +384,7 @@ func TestFeeFactor_StateProofAndHeartbeat(t *testing.T) {
 			Group:      crypto.Digest{1}, // Has a group
 		},
 	}
-	assert.Equal(t, basics.Micros(1e6), groupedHeartbeat.FeeFactor(vFuture), "Grouped heartbeat should have base fee")
+	assert.Equal(t, basics.Micros(1e6), groupedHeartbeat.feeFactor(vFuture), "Grouped heartbeat should have base fee")
 
 	// Grouped heartbeat with big note should have the extra charge for it
 	groupedHeartbeatBigNote := Transaction{
@@ -397,7 +397,7 @@ func TestFeeFactor_StateProofAndHeartbeat(t *testing.T) {
 			Group:      crypto.Digest{1}, // Has a group
 		},
 	}
-	assert.Equal(t, basics.Micros(1_010_000), groupedHeartbeatBigNote.FeeFactor(vFuture), "Grouped heartbeat should have extra fee")
+	assert.Equal(t, basics.Micros(1_010_000), groupedHeartbeatBigNote.feeFactor(vFuture), "Grouped heartbeat should have extra fee")
 }
 
 // TestWellFormed_BigNotes tests Note size validation with MaxAbsoluteTxnNoteBytes
@@ -416,64 +416,55 @@ func TestWellFormed_BigNotes(t *testing.T) {
 	}
 
 	tests := []struct {
-		name        string
-		proto       config.ConsensusParams
-		noteSize    int
-		shouldError bool
-		errorMsg    string
+		name     string
+		proto    config.ConsensusParams
+		noteSize int
+		errorMsg string
 	}{
 		// v41: MaxAbsoluteTxnNoteBytes = MaxTxnNoteBytes = 1024
 		{
-			name:        "v41: note at limit (1024 bytes) - pass",
-			proto:       v41,
-			noteSize:    1024,
-			shouldError: false,
+			name:     "v41: note at limit (1024 bytes) - pass",
+			proto:    v41,
+			noteSize: 1024,
 		},
 		{
-			name:        "v41: note over limit (1025 bytes) - fail",
-			proto:       v41,
-			noteSize:    1025,
-			shouldError: true,
-			errorMsg:    "transaction note too big: 1025 > 1024",
+			name:     "v41: note over limit (1025 bytes) - fail",
+			proto:    v41,
+			noteSize: 1025,
+			errorMsg: "transaction note too big: 1025 > 1024",
 		},
 		{
-			name:        "v41: large note (2048 bytes) - fail",
-			proto:       v41,
-			noteSize:    2048,
-			shouldError: true,
-			errorMsg:    "transaction note too big: 2048 > 1024",
+			name:     "v41: large note (2048 bytes) - fail",
+			proto:    v41,
+			noteSize: 2048,
+			errorMsg: "transaction note too big: 2048 > 1024",
 		},
 		// vFuture: MaxAbsoluteTxnNoteBytes = 4096, allows larger notes
 		{
-			name:        "vFuture: note at standard limit (1024 bytes) - pass",
-			proto:       vFuture,
-			noteSize:    1024,
-			shouldError: false,
+			name:     "vFuture: note at standard limit (1024 bytes) - pass",
+			proto:    vFuture,
+			noteSize: 1024,
 		},
 		{
-			name:        "vFuture: note over standard limit (1025 bytes) - pass",
-			proto:       vFuture,
-			noteSize:    1025,
-			shouldError: false,
+			name:     "vFuture: note over standard limit (1025 bytes) - pass",
+			proto:    vFuture,
+			noteSize: 1025,
 		},
 		{
-			name:        "vFuture: large note (2048 bytes) - pass",
-			proto:       vFuture,
-			noteSize:    2048,
-			shouldError: false,
+			name:     "vFuture: large note (2048 bytes) - pass",
+			proto:    vFuture,
+			noteSize: 2048,
 		},
 		{
-			name:        "vFuture: note at absolute limit (4096 bytes) - pass",
-			proto:       vFuture,
-			noteSize:    4096,
-			shouldError: false,
+			name:     "vFuture: note at absolute limit (4096 bytes) - pass",
+			proto:    vFuture,
+			noteSize: 4096,
 		},
 		{
-			name:        "vFuture: note over absolute limit (4097 bytes) - fail",
-			proto:       vFuture,
-			noteSize:    4097,
-			shouldError: true,
-			errorMsg:    "transaction note too big: 4097 > 4096",
+			name:     "vFuture: note over absolute limit (4097 bytes) - fail",
+			proto:    vFuture,
+			noteSize: 4097,
+			errorMsg: "transaction note too big: 4097 > 4096",
 		},
 	}
 
@@ -495,9 +486,8 @@ func TestWellFormed_BigNotes(t *testing.T) {
 			}
 
 			err := tx.WellFormed(spec, tt.proto)
-			if tt.shouldError {
-				require.Error(t, err, "Expected error for note size %d", tt.noteSize)
-				assert.Contains(t, err.Error(), tt.errorMsg, "Error message mismatch")
+			if tt.errorMsg != "" {
+				require.ErrorContains(t, err, tt.errorMsg)
 			} else {
 				require.NoError(t, err, "Unexpected error for note size %d", tt.noteSize)
 			}
@@ -655,10 +645,19 @@ func TestFeeFactor_BigPrograms(t *testing.T) {
 			proto:          vFuture,
 			approvalSize:   4096,
 			clearSize:      4096,
+			appArgSizes:    []int{1024, 1024}, // existing limit
 			expectedFactor: 1e6,
 		},
 		{
-			name:           "vFuture: 1 extra byte (8193 total)",
+			name:           "vFuture: 1 extra arg byte",
+			proto:          vFuture,
+			approvalSize:   4096,
+			clearSize:      4096,
+			appArgSizes:    []int{1020, 1020, 9},
+			expectedFactor: 1e6 + 100,
+		},
+		{
+			name:           "vFuture: 1 extra program byte (8193 total)",
 			proto:          vFuture,
 			approvalSize:   4096,
 			clearSize:      4097,
@@ -721,8 +720,8 @@ func TestFeeFactor_BigPrograms(t *testing.T) {
 				return make([]byte, size)
 			})
 
-			factor := tx.FeeFactor(tt.proto)
-			assert.Equal(t, tt.expectedFactor, factor, "FeeFactor mismatch for approval=%d, clear=%d", tt.approvalSize, tt.clearSize)
+			factor := tx.feeFactor(tt.proto)
+			assert.Equal(t, tt.expectedFactor, factor, "feeFactor mismatch for approval=%d, clear=%d", tt.approvalSize, tt.clearSize)
 		})
 	}
 }
@@ -748,7 +747,6 @@ func TestWellFormed_BigPrograms(t *testing.T) {
 		approvalSize int
 		clearSize    int
 		extraPages   uint32
-		shouldError  bool
 		errorMsg     string
 	}{
 		// v41: MaxAbsoluteExtraProgramPages = 3
@@ -758,7 +756,6 @@ func TestWellFormed_BigPrograms(t *testing.T) {
 			approvalSize: 8190,
 			clearSize:    2, // Two bytes: version 6, return
 			extraPages:   3,
-			shouldError:  false,
 		},
 		{
 			name:         "v41: exceeds extra pages limit",
@@ -766,7 +763,6 @@ func TestWellFormed_BigPrograms(t *testing.T) {
 			approvalSize: 8190,
 			clearSize:    2,
 			extraPages:   4,
-			shouldError:  true,
 			errorMsg:     "tx.ExtraProgramPages exceeds MaxAbsoluteExtraProgramPages = 3",
 		},
 		// vFuture: MaxAbsoluteExtraProgramPages = 7
@@ -776,7 +772,6 @@ func TestWellFormed_BigPrograms(t *testing.T) {
 			approvalSize: 16382,
 			clearSize:    2,
 			extraPages:   7,
-			shouldError:  false,
 		},
 		{
 			name:         "vFuture: exceeds extra pages limit",
@@ -784,7 +779,6 @@ func TestWellFormed_BigPrograms(t *testing.T) {
 			approvalSize: 16382,
 			clearSize:    2,
 			extraPages:   8,
-			shouldError:  true,
 			errorMsg:     "tx.ExtraProgramPages exceeds MaxAbsoluteExtraProgramPages = 7",
 		},
 		{
@@ -793,7 +787,6 @@ func TestWellFormed_BigPrograms(t *testing.T) {
 			approvalSize: 8192,
 			clearSize:    8193,
 			extraPages:   7,
-			shouldError:  true,
 			errorMsg:     "app programs too long",
 		},
 	}
@@ -833,9 +826,8 @@ func TestWellFormed_BigPrograms(t *testing.T) {
 			}
 
 			err := tx.WellFormed(spec, tt.proto)
-			if tt.shouldError {
-				require.Error(t, err, "Expected error for %s", tt.name)
-				assert.Contains(t, err.Error(), tt.errorMsg, "Error message mismatch")
+			if tt.errorMsg != "" {
+				require.ErrorContains(t, err, tt.errorMsg)
 			} else {
 				require.NoError(t, err, "Unexpected error for %s", tt.name)
 			}

@@ -221,7 +221,8 @@ func TestPayTxn(t *testing.T) {
 
 			return simulationTestCase{
 				input: simulation.Request{
-					TxnGroups: [][]transactions.SignedTxn{{txn}},
+					TxnGroups:             [][]transactions.SignedTxn{{txn}},
+					AllowUnnamedResources: true, // exercises i/o quota handline, though irrelevant here
 				},
 				expected: simulation.Result{
 					Version:   simulation.ResultLatestVersion,
@@ -230,6 +231,9 @@ func TestPayTxn(t *testing.T) {
 						{
 							Txns: []simulation.TxnResult{{}},
 						},
+					},
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowUnnamedResources: true,
 					},
 				},
 			}
@@ -8276,14 +8280,13 @@ int 1`, version),
 func assembleSizedPassingProgram(t testing.TB, version uint64, size int) []byte {
 	t.Helper()
 
-	const overhead = 6 // version byte + "b end" + "end: int 1"
+	const overhead = 4 // version byte + "pushint 1" + "return"
 	require.GreaterOrEqual(t, size, overhead)
 
 	var source strings.Builder
 	fmt.Fprintf(&source, "#pragma version %d\n", version)
-	source.WriteString("b end\n")
+	source.WriteString("pushint 1; return\n")
 	source.WriteString(strings.Repeat("err\n", size-overhead))
-	source.WriteString("end: int 1")
 
 	ops, err := logic.AssembleString(source.String())
 	require.NoError(t, err)

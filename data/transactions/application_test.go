@@ -542,7 +542,7 @@ func TestWellFormedErrors(t *testing.T) {
 				ClearStateProgram: []byte("Xjunk"),
 			},
 			cv:            cv27,
-			expectedError: "approval program too long. max len 1024 bytes",
+			expectedError: "approval program too long. (1025 > 1024)",
 		},
 		{
 			ac: ApplicationCallTxnFields{
@@ -557,7 +557,7 @@ func TestWellFormedErrors(t *testing.T) {
 				ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
 				ClearStateProgram: []byte(strings.Repeat("X", 1025)),
 			},
-			expectedError: "app programs too long. max total len 2048 bytes",
+			expectedError: "app programs too long. (1025 + 1025 > 2048)",
 		},
 		{
 			ac: ApplicationCallTxnFields{
@@ -769,7 +769,7 @@ func TestWellFormedErrors(t *testing.T) {
 				GlobalStateSchema: basics.StateSchema{NumByteSlice: 1},
 				OnCompletion:      UpdateApplicationOC,
 			},
-			expectedError: "app programs too long. max total len 2048 bytes",
+			expectedError: "app programs too long. (1025 + 1025 > 2048)",
 		},
 		{
 			ac: ApplicationCallTxnFields{
@@ -790,7 +790,7 @@ func TestWellFormedErrors(t *testing.T) {
 				// Now we update epp, but not big enough for programs in txn
 				OnCompletion: UpdateApplicationOC,
 			},
-			expectedError: "app programs too long. max total len 4096 bytes",
+			expectedError: "app programs too long. (2048 + 2049 > 4096)",
 		},
 		{
 			ac: ApplicationCallTxnFields{

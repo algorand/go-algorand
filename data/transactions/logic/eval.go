@@ -415,6 +415,12 @@ func (ep *EvalParams) SetIOBudget(ioBudget uint64) {
 
 // DirtyByteCount returns the number of bytes that count against write budget.
 func (ep *EvalParams) DirtyByteCount() uint64 {
+	// I/O write quota is checked after every transaction, so no app calls may have
+	// occurred (which is when available is populated). In that case, there are
+	// also no dirty bytes.
+	if ep.available == nil {
+		return 0
+	}
 	return ep.available.dirtyBytes
 }
 
@@ -513,15 +519,6 @@ func (ep *EvalParams) computeAvailability() *resources {
 	return available
 }
 
-func largeProgramExtraBytes(proto *config.ConsensusParams, approval, clear []byte) uint64 {
-	basicAppProgramLimit := proto.MaxAppTotalProgramLen * (1 + proto.MaxExtraAppProgramPages)
-	programSize := len(approval) + len(clear)
-	if programSize <= basicAppProgramLimit {
-		return 0
-	}
-	return uint64(programSize - basicAppProgramLimit)
-}
-
 func (cx *EvalContext) considerBudgetProgramWrites() error {
 	creating := cx.txn.Txn.ApplicationID == 0
 	updating := cx.txn.Txn.OnCompletion == transactions.UpdateApplicationOC
@@ -537,7 +534,8 @@ func (cx *EvalContext) considerBudgetProgramWrites() error {
 	oldSize := cx.available.updateBytes[cx.appID]
 	cx.available.dirtyBytes = basics.SubSaturate(cx.available.dirtyBytes, oldSize)
 
-	newSize := largeProgramExtraBytes(cx.Proto, cx.txn.Txn.ApprovalProgram, cx.txn.Txn.ClearStateProgram)
+	newSize := uint64(transactions.LargeProgramExtraBytes(*cx.Proto,
+		len(cx.txn.Txn.ApprovalProgram)+len(cx.txn.Txn.ClearStateProgram)))
 	cx.available.dirtyBytes = basics.AddSaturate(cx.available.dirtyBytes, newSize)
 	cx.available.updateBytes[cx.appID] = newSize
 
@@ -557,7 +555,7 @@ func (cx *EvalContext) considerBudgetProgramWrites() error {
 func feeCredit(txgroup []transactions.SignedTxnWithAD, proto config.ConsensusParams) basics.MicroAlgos {
 	usage, feesPaid := transactions.SummarizeFees(txgroup, proto)
 	feeNeeded, _ := proto.MinFee().MulMicrosCeil(usage)
-	return feesPaid.SubSaturate(feeNeeded) // If MulMicros saturates, this is 0
+	return feesPaid.SubSaturate(feeNeeded) // If MulMicrosCeil saturates, this is 0
 }
 
 // NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
@@ -1223,7 +1221,9 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 			if err != nil {
 				continue // There may be an app reference that doesn't exist
 			}
-			bytesRead = basics.AddSaturate(bytesRead, largeProgramExtraBytes(cx.Proto, params.ApprovalProgram, params.ClearStateProgram))
+			extra := transactions.LargeProgramExtraBytes(*cx.Proto,
+				len(params.ApprovalProgram)+len(params.ClearStateProgram))
+			bytesRead = basics.AddSaturate(bytesRead, uint64(extra))
 		}
 
 		// Then count the total size of available boxes
@@ -1628,7 +1628,7 @@ func (cx *EvalContext) step() error {
 
 	deets := &spec.OpDetails
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
-		return fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
+		return fmt.Errorf("program ends without immediate value(s)")
 	}
 
 	// It's something like a 5-10% overhead on our simplest instructions to make
@@ -1761,7 +1761,7 @@ func (cx *EvalContext) checkStep() (int, error) {
 	}
 	deets := spec.OpDetails
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
-		return 0, fmt.Errorf("%s program ends short of immediate values", spec.Name)
+		return 0, fmt.Errorf("program ends without immediate value(s)")
 	}
 	opcost := deets.Cost(cx.program, cx.pc, blankStack)
 	if opcost <= 0 {
@@ -2765,7 +2765,101 @@ func checkSwitch(cx *EvalContext) error {
 	return nil
 }
 
+func branchTargetVarint(cx *EvalContext) (target int, instrSize int, err error) {
+	offset, bytesRead := binary.Varint(cx.program[cx.pc+1:])
+	if bytesRead <= 0 {
+		if bytesRead == 0 {
+			return 0, 0, fmt.Errorf("program ends without branch target")
+		}
+		return 0, 0, fmt.Errorf("branch offset varint overflows int64")
+	}
+	instrSize = 1 + bytesRead
+	// Negative offsets are back-jumps measured from the start of the
+	// instruction; non-negative offsets are forward-jumps from the end.
+	if offset < 0 {
+		target = cx.pc + int(offset)
+	} else {
+		target = cx.pc + instrSize + int(offset)
+	}
+	if target > len(cx.program) || target < 0 {
+		return 0, 0, fmt.Errorf("branch target %d outside of program", target)
+	}
+	return target, instrSize, nil
+}
+
+func checkBranchVarint(cx *EvalContext) error {
+	target, instrSize, err := branchTargetVarint(cx)
+	if err != nil {
+		return err
+	}
+	if target < cx.pc {
+		if ok := cx.instructionStarts[target]; !ok {
+			return fmt.Errorf("back branch target %d is not an aligned instruction", target)
+		}
+	}
+	cx.branchTargets[target] = true
+	cx.nextpc = cx.pc + instrSize
+	return nil
+}
+
 func opBnz(cx *EvalContext) error {
+	last := len(cx.Stack) - 1
+	isNonZero := cx.Stack[last].Uint != 0
+	cx.Stack = cx.Stack[:last]
+	target, instrSize, err := branchTargetVarint(cx)
+	if err != nil {
+		return err
+	}
+	if isNonZero {
+		cx.nextpc = target
+	} else {
+		cx.nextpc = cx.pc + instrSize
+	}
+	return nil
+}
+
+func opBz(cx *EvalContext) error {
+	last := len(cx.Stack) - 1
+	isZero := cx.Stack[last].Uint == 0
+	cx.Stack = cx.Stack[:last]
+	target, instrSize, err := branchTargetVarint(cx)
+	if err != nil {
+		return err
+	}
+	if isZero {
+		cx.nextpc = target
+	} else {
+		cx.nextpc = cx.pc + instrSize
+	}
+	return nil
+}
+
+func opB(cx *EvalContext) error {
+	target, _, err := branchTargetVarint(cx)
+	if err != nil {
+		return err
+	}
+	cx.nextpc = target
+	return nil
+}
+
+func opCallSub(cx *EvalContext) error {
+	target, instrSize, err := branchTargetVarint(cx)
+	if err != nil {
+		return err
+	}
+	cx.callstack = append(cx.callstack, frame{
+		retpc:  cx.pc + instrSize,
+		height: len(cx.Stack),
+	})
+	cx.nextpc = target
+	if cx.nextpc < len(cx.program) && cx.program[cx.nextpc] == protoByte {
+		cx.fromCallsub = true
+	}
+	return nil
+}
+
+func opBnz2B(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	cx.nextpc = cx.pc + 3
 	isNonZero := cx.Stack[last].Uint != 0
@@ -2780,7 +2874,7 @@ func opBnz(cx *EvalContext) error {
 	return nil
 }
 
-func opBz(cx *EvalContext) error {
+func opBz2B(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	cx.nextpc = cx.pc + 3
 	isZero := cx.Stack[last].Uint == 0
@@ -2795,7 +2889,7 @@ func opBz(cx *EvalContext) error {
 	return nil
 }
 
-func opB(cx *EvalContext) error {
+func opB2B(cx *EvalContext) error {
 	target, err := branchTarget(cx)
 	if err != nil {
 		return err
@@ -2860,12 +2954,12 @@ func opMatch(cx *EvalContext) error {
 
 const protoByte = 0x8a
 
-func opCallSub(cx *EvalContext) error {
+func opCallSub2B(cx *EvalContext) error {
 	cx.callstack = append(cx.callstack, frame{
 		retpc:  cx.pc + 3, // retpc is pc _after_ the callsub
 		height: len(cx.Stack),
 	})
-	err := opB(cx)
+	err := opB2B(cx)
 
 	/* We only set fromCallSub if we know we're jumping to a proto. In opProto,
 	   we confirm we came directly from callsub by checking (and resetting) the
@@ -5662,7 +5756,7 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 			if cx.FeeCredit != nil {
 				groupFee = groupFee.SubSaturate(*cx.FeeCredit)
 			}
-			return fmt.Errorf("group fee %s too small (needs %s) %#v", groupPaid, groupFee, cx.subtxns)
+			return fmt.Errorf("group fee %s too small (needs %s more) %#v", groupPaid, groupFee, cx.subtxns)
 		}
 		*cx.FeeCredit = cx.FeeCredit.SubSaturate(shortfall)
 	} else {

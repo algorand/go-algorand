@@ -218,7 +218,7 @@ func (m Micros) Mul(m2 Micros) (Micros, bool) {
 
 // MulInt multiplies Micros by an integer. The integer is not treated as a
 // Micros value "in disguise" it's an actual integer, so we get our answer by
-// simple muliplication without the usual division by 1e6 required when both
+// simple multiplication without the usual division by 1e6 required when both
 // operands are Micros. It saturates and reports overflow/underflow (for
 // negative ints)
 func (m Micros) MulInt(i int) (Micros, bool) {

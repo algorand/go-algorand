@@ -182,12 +182,13 @@ func (tx Transaction) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Transaction, protocol.Encode(&tx)
 }
 
-// FeeFactor is the factor by which the base transaction fee is multiplied. Some
-// transactions are free, others might cost more because they use extra expensive
-// features (e.g., large Note fields, large app programs).  It is expressed as
-// a fixed-point integer with 6 digits of precision. So 1e6 is a normal base fee
-// transaction.
-func (tx Transaction) FeeFactor(proto config.ConsensusParams) basics.Micros {
+// feeFactor is the factor by which the base transaction fee is multiplied. Some
+// transactions are free, others might cost more because they use extra
+// expensive features (e.g., large Note fields, large app programs).  It is
+// expressed as a fixed-point integer with 6 digits of precision. So 1e6 is a
+// normal base fee transaction.  It is not exported because one should surely
+// use SignedTxn's version, which would include any surcharges for signatures.
+func (tx Transaction) feeFactor(proto config.ConsensusParams) basics.Micros {
 	factor := basics.Micros(1e6)
 	factor = basics.AddSaturate(factor, tx.Header.FeeContribution(proto))
 	switch tx.Type {

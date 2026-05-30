@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/avm-abi/apps"
 
 	"github.com/algorand/go-algorand/cmd/util/datadir"
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	apiclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/data/basics"
@@ -92,6 +93,13 @@ var (
 )
 
 func init() {
+	// Doc strings can describe limits. We'll use the current protocol to
+	// describe those limits, though it's possible goal will be talking to a
+	// network on a different level of the protocol (especially in our own tests
+	// against vFuture). So we generally don't enforce these limits in goal, we
+	// let the network complain.  But we want nice docs.
+	currentProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
+
 	appCmd.AddCommand(createAppCmd)
 	appCmd.AddCommand(deleteAppCmd)
 	appCmd.AddCommand(updateAppCmd)
@@ -126,11 +134,13 @@ func init() {
 	createAppCmd.Flags().Uint64Var(&localSchemaByteSlices, "local-byteslices", 0, "Maximum number of byte slices that may be stored in local (per-account) key/value stores for this app. Immutable.")
 	createAppCmd.Flags().StringVar(&appCreator, "creator", "", "Account to create the application")
 	createAppCmd.Flags().StringVar(&onCompletion, "on-completion", "NoOp", "OnCompletion action for application transaction")
-	createAppCmd.Flags().Uint32Var(&extraPages, "extra-pages", 0, "Additional program space for supporting larger AVM bytecode program. A maximum of 3 extra pages is allowed. A page is 1024 bytes.")
+	extraPagesDoc := fmt.Sprintf("Additional space for large app programs. A maximum of %d extra pages is allowed. A page is %d bytes.",
+		currentProtocol.MaxAbsoluteExtraProgramPages, currentProtocol.MaxAppProgramLen)
+	createAppCmd.Flags().Uint32Var(&extraPages, "extra-pages", 0, extraPagesDoc)
 
 	updateAppCmd.Flags().Uint64Var(&globalSchemaUints, "global-ints", 0, "Maximum number of integer values that may be stored in the global key/value store.")
 	updateAppCmd.Flags().Uint64Var(&globalSchemaByteSlices, "global-byteslices", 0, "Maximum number of byte slices that may be stored in the global key/value store.")
-	updateAppCmd.Flags().Uint32Var(&extraPages, "extra-pages", 0, "Additional program space for supporting larger AVM program. A maximum of 3 extra pages is allowed. A page is 1024 bytes.")
+	updateAppCmd.Flags().Uint32Var(&extraPages, "extra-pages", 0, extraPagesDoc)
 
 	callAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to call app from")
 	optInAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to opt in")
@@ -150,7 +160,7 @@ func init() {
 	methodAppCmd.Flags().Uint64Var(&globalSchemaByteSlices, "global-byteslices", 0, "Maximum number of byte slices that may be stored in the global key/value store. Valid when passed with --create or when updating.")
 	methodAppCmd.Flags().Uint64Var(&localSchemaUints, "local-ints", 0, "Maximum number of integer values that may be stored in local (per-account) key/value stores for this app. Immutable, only valid when passed with --create.")
 	methodAppCmd.Flags().Uint64Var(&localSchemaByteSlices, "local-byteslices", 0, "Maximum number of byte slices that may be stored in local (per-account) key/value stores for this app. Immutable, only valid when passed with --create.")
-	methodAppCmd.Flags().Uint32Var(&extraPages, "extra-pages", 0, "Additional program space for supporting larger AVM bytecode program. A maximum of 3 extra pages is allowed. A page is 1024 bytes. Valid when passed with --create or when updating.")
+	methodAppCmd.Flags().Uint32Var(&extraPages, "extra-pages", 0, extraPagesDoc+" Valid when passed with --create or when updating.")
 
 	// Can't use PersistentFlags on the root because for some reason marking
 	// a root command as required with MarkPersistentFlagRequired isn't

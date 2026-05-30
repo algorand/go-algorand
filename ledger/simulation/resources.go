@@ -318,7 +318,7 @@ func (a *ResourceTracker) ioSurplus(amount int64, bytesPerBoxRef uint64) bool {
 		return false
 	}
 	emptyRefs := int(emptyRefsU64)
-	if emptyRefs >= a.MaxBoxes-a.boxCount() || emptyRefs >= a.MaxTotalRefs-a.refCount() {
+	if emptyRefs > a.MaxBoxes-a.boxCount() || emptyRefs > a.MaxTotalRefs-a.refCount() {
 		return false
 	}
 	a.NumEmptyBoxRefs += emptyRefs
@@ -631,8 +631,8 @@ func (a *groupResourceTracker) addAppReadBudget(aid basics.AppIndex, ep *logic.E
 	if err != nil {
 		return func() {}, true
 	}
-	readBytes := largeAppReadBudget(ep.Proto, params)
-	if readBytes == 0 {
+	extraReadBytes := transactions.LargeProgramExtraBytes(*ep.Proto, len(params.ApprovalProgram)+len(params.ClearStateProgram))
+	if extraReadBytes == 0 {
 		return func() {}, true
 	}
 
@@ -640,7 +640,7 @@ func (a *groupResourceTracker) addAppReadBudget(aid basics.AppIndex, ep *logic.E
 	if a.globalResources.appReadBudget == nil {
 		a.globalResources.appReadBudget = make(map[basics.AppIndex]uint64)
 	}
-	a.globalResources.appReadBudget[aid] = readBytes
+	a.globalResources.appReadBudget[aid] = uint64(extraReadBytes)
 	rollback := func() {
 		delete(a.globalResources.appReadBudget, aid)
 		if len(a.globalResources.appReadBudget) == 0 {
@@ -654,15 +654,6 @@ func (a *groupResourceTracker) addAppReadBudget(aid basics.AppIndex, ep *logic.E
 		return func() {}, false
 	}
 	return rollback, true
-}
-
-func largeAppReadBudget(proto *config.ConsensusParams, params basics.AppParams) uint64 {
-	basicAppProgramLimit := proto.MaxAppTotalProgramLen * (1 + proto.MaxExtraAppProgramPages)
-	programSize := len(params.ApprovalProgram) + len(params.ClearStateProgram)
-	if programSize <= basicAppProgramLimit {
-		return 0
-	}
-	return uint64(programSize - basicAppProgramLimit)
 }
 
 func (a *groupResourceTracker) hasBox(app basics.AppIndex, name string) bool {
