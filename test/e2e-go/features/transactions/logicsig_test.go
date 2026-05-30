@@ -125,7 +125,9 @@ func testLogicSize(t *testing.T, tealOK, tealTooLong []byte,
 	a.NoError(err)
 
 	err = client.BroadcastTransactionGroup([]transactions.SignedTxn{stxn1Fail, stxn2Fail})
-	if cp.EnableLogicSigSizePooling {
+	if cp.EnableLogicSigProgramSizePricing {
+		a.ErrorContains(err, "fees is less than")
+	} else if cp.EnableLogicSigSizePooling {
 		a.ErrorContains(err, "more than the available pool")
 	} else {
 		a.ErrorContains(err, "LogicSig too long")

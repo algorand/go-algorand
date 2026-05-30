@@ -50,6 +50,31 @@ import (
 var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 var testSinkAddr = basics.Address{0x2c, 0x2a, 0x6c, 0xe9, 0xa9, 0xa7, 0xc2, 0x8c, 0x22, 0x95, 0xfd, 0x32, 0x4f, 0x77, 0xa5, 0x4, 0x8b, 0x42, 0xc2, 0xb7, 0xa8, 0x54, 0x84, 0xb6, 0x80, 0xb1, 0xe1, 0x3d, 0x59, 0x9b, 0xeb, 0x36}
 
+func TestCheckGroupFeesBigLogicSigProgram(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	freeSize := int(proto.LogicSigMaxSize)
+
+	stxn := transactions.SignedTxn{
+		Txn: transactions.Transaction{
+			Header: transactions.Header{
+				Fee: basics.MicroAlgos{Raw: proto.MinTxnFee},
+			},
+		},
+		Lsig: transactions.LogicSig{
+			Logic: make([]byte, freeSize+1),
+		},
+	}
+
+	usage, paid := transactions.SummarizeFees([]transactions.SignedTxnWithAD{{SignedTxn: stxn}}, proto)
+	require.Error(t, CheckGroupFees(paid, usage, proto.MinFee()))
+
+	stxn.Txn.Fee.Raw = proto.MinTxnFee + 1
+	usage, paid = transactions.SummarizeFees([]transactions.SignedTxnWithAD{{SignedTxn: stxn}}, proto)
+	require.NoError(t, CheckGroupFees(paid, usage, proto.MinFee()))
+}
+
 func TestBlockEvaluatorFeeSink(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

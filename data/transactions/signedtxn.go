@@ -168,6 +168,35 @@ func WrapSignedTxnsWithAD(txgroup []SignedTxn) []SignedTxnWithAD {
 	return txgroupad
 }
 
+// logicSigProgramFeeContribution accounts for priced LogicSig program bytes.
+// This cannot live in Transaction.FeeFactor: the LogicSig is carried by
+// SignedTxn, outside the committed Transaction, and the priced byte count can
+// depend on group-level LogicSig size pooling. LogicSig args are intentionally
+// ignored here because they can be supplied or padded independently of the
+// LogicSig program signer.
+func logicSigProgramFeeContribution(txgroup []SignedTxnWithAD, proto config.ConsensusParams) basics.Micros {
+	if !proto.EnableLogicSigProgramSizePricing {
+		return 0
+	}
+
+	extraProgramBytes := 0
+	if proto.EnableLogicSigSizePooling {
+		programBytes := 0
+		for _, txad := range txgroup {
+			programBytes += len(txad.SignedTxn.Lsig.Logic)
+		}
+		freeProgramBytes := len(txgroup) * int(proto.LogicSigMaxSize)
+		extraProgramBytes = max(0, programBytes-freeProgramBytes)
+	} else {
+		for _, txad := range txgroup {
+			extraProgramBytes += max(0, len(txad.SignedTxn.Lsig.Logic)-int(proto.LogicSigMaxSize))
+		}
+	}
+
+	surcharge, _ := proto.PerByteTxnSurcharge.MulInt(extraProgramBytes)
+	return surcharge
+}
+
 // SummarizeFees takes a group and returns the required fee usage and the total
 // amount paid. The returned `usage` expresses how many basic transaction fees
 // must be paid by the group.
@@ -181,5 +210,6 @@ func SummarizeFees(txgroup []SignedTxnWithAD, proto config.ConsensusParams) (usa
 		usage = basics.AddSaturate(usage, txad.SignedTxn.FeeFactor(proto))
 		paid = paid.AddSaturate(txad.SignedTxn.Txn.Fee)
 	}
+	usage = basics.AddSaturate(usage, logicSigProgramFeeContribution(txgroup, proto))
 	return usage, paid
 }
