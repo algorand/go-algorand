@@ -195,7 +195,7 @@ func TestSimulateTransaction(t *testing.T) {
 	stat, err := testClient.Status()
 	a.NoError(err)
 	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
-	usage := uint64(stxn.Txn.FeeFactor(proto))
+	usage := uint64(stxn.FeeFactor(proto))
 	feesPaid := stxn.Txn.Fee.Raw
 	expectedResult := v2.PreEncodedSimulateResponse{
 		Version:       2,
@@ -399,12 +399,12 @@ func TestSimulateWithOptionalSignatures(t *testing.T) {
 	txn, err := testClient.ConstructPayment(senderAddress, senderAddress, 0, 1, nil, "", [32]byte{}, 0, 0)
 	a.NoError(err)
 
+	unsignedStxn := transactions.SignedTxn{Txn: txn} // no signature, but but be SignedTxn type
+
 	simulateRequest := v2.PreEncodedSimulateRequest{
-		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
-			{
-				Txns: []transactions.SignedTxn{{Txn: txn}}, // no signature
-			},
-		},
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{{
+			Txns: []transactions.SignedTxn{unsignedStxn},
+		}},
 		AllowEmptySignatures: true,
 	}
 	result, err := testClient.SimulateTransactions(simulateRequest)
@@ -414,7 +414,7 @@ func TestSimulateWithOptionalSignatures(t *testing.T) {
 	stat, err := testClient.Status()
 	a.NoError(err)
 	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
-	usage := uint64(txn.FeeFactor(proto))
+	usage := uint64(unsignedStxn.FeeFactor(proto))
 	feesPaid := txn.Fee.Raw
 	expectedResult := v2.PreEncodedSimulateResponse{
 		Version:       2,
@@ -550,7 +550,7 @@ int 1`
 	stat, err := testClient.Status()
 	a.NoError(err)
 	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
-	usage := uint64(appCallTxnSigned.Txn.FeeFactor(proto))
+	usage := uint64(appCallTxnSigned.FeeFactor(proto))
 	feesPaid := appCallTxnSigned.Txn.Fee.Raw
 
 	expectedResult := v2.PreEncodedSimulateResponse{
@@ -682,7 +682,7 @@ int 1`
 	stat, err := testClient.Status()
 	a.NoError(err)
 	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
-	usage := uint64(appCallTxnSigned.Txn.FeeFactor(proto))
+	usage := uint64(appCallTxnSigned.FeeFactor(proto))
 	feesPaid := appCallTxnSigned.Txn.Fee.Raw
 
 	expectedResult := v2.PreEncodedSimulateResponse{
@@ -2716,7 +2716,7 @@ int 1
 	stat, err := testClient.Status()
 	a.NoError(err)
 	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
-	usage := uint64(stxn.Txn.FeeFactor(proto))
+	usage := uint64(stxn.FeeFactor(proto))
 	feesPaid := stxn.Txn.Fee.Raw
 
 	expectedResult := v2.PreEncodedSimulateResponse{
@@ -2774,6 +2774,7 @@ func TestSimulateWithFixSigners(t *testing.T) {
 
 	rekeyTxn, err := testClient.ConstructPayment(senderAddress, senderAddress, 0, 1, nil, "", [32]byte{}, 0, 0)
 	a.NoError(err)
+	rekeyStxn := transactions.SignedTxn{Txn: rekeyTxn} // not actually signed
 
 	var authAddr basics.Address
 	crypto.RandBytes(authAddr[:])
@@ -2781,6 +2782,7 @@ func TestSimulateWithFixSigners(t *testing.T) {
 
 	txn, err := testClient.ConstructPayment(senderAddress, senderAddress, 0, 1, nil, "", [32]byte{}, 0, 0)
 	a.NoError(err)
+	stxn := transactions.SignedTxn{Txn: txn} // not actually signed
 
 	gid, err := testClient.GroupID([]transactions.Transaction{rekeyTxn, txn})
 	a.NoError(err)
@@ -2789,11 +2791,9 @@ func TestSimulateWithFixSigners(t *testing.T) {
 	txn.Group = gid
 
 	simulateRequest := v2.PreEncodedSimulateRequest{
-		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
-			{
-				Txns: []transactions.SignedTxn{{Txn: rekeyTxn}, {Txn: txn}},
-			},
-		},
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{{
+			Txns: []transactions.SignedTxn{rekeyStxn, stxn},
+		}},
 		AllowEmptySignatures: true,
 		FixSigners:           true,
 	}
@@ -2806,9 +2806,9 @@ func TestSimulateWithFixSigners(t *testing.T) {
 	stat, err := testClient.Status()
 	a.NoError(err)
 	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
-	rekeyUsage := uint64(rekeyTxn.FeeFactor(proto))
+	rekeyUsage := uint64(rekeyStxn.FeeFactor(proto))
 	rekeyFeesPaid := rekeyTxn.Fee.Raw
-	txnUsage := uint64(txn.FeeFactor(proto))
+	txnUsage := uint64(stxn.FeeFactor(proto))
 	txnFeesPaid := txn.Fee.Raw
 	totalUsage := rekeyUsage + txnUsage
 	totalFeesPaid := rekeyFeesPaid + txnFeesPaid
@@ -2823,16 +2823,12 @@ func TestSimulateWithFixSigners(t *testing.T) {
 				GroupFeesPaid: &totalFeesPaid,
 				Txns: []v2.PreEncodedSimulateTxnResult{
 					{
-						Txn: v2.PreEncodedTxInfo{
-							Txn: transactions.SignedTxn{Txn: rekeyTxn},
-						},
+						Txn:      v2.PreEncodedTxInfo{Txn: rekeyStxn},
 						Usage:    &rekeyUsage,
 						FeesPaid: &rekeyFeesPaid,
 					},
 					{
-						Txn: v2.PreEncodedTxInfo{
-							Txn: transactions.SignedTxn{Txn: txn},
-						},
+						Txn:         v2.PreEncodedTxInfo{Txn: stxn},
 						FixedSigner: &authAddrStr,
 						Usage:       &txnUsage,
 						FeesPaid:    &txnFeesPaid,
