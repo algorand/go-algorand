@@ -857,7 +857,7 @@ func goValuesToAvmValues(goValues ...interface{}) *[]model.AvmValue {
 				Uint: valToNil(&converted),
 			}
 		default:
-			panic("unexpected type inferred from interface{}")
+			panic("unexpected type inferred from any")
 		}
 	}
 	return &modelValues

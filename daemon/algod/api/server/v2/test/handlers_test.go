@@ -113,7 +113,7 @@ func omitEmpty[T comparable](val T) *T {
 }
 
 func simulateFeeStats(tx v2.PreEncodedTxInfo, proto config.ConsensusParams) (usage uint64, feesPaid uint64) {
-	usage = uint64(tx.Txn.Txn.FeeFactor(proto))
+	usage = uint64(tx.Txn.FeeFactor(proto))
 	feesPaid = tx.Txn.Txn.Fee.Raw
 	if tx.Inners == nil {
 		return usage, feesPaid

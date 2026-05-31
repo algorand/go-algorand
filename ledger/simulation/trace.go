@@ -157,7 +157,7 @@ type Result struct {
 }
 
 func summarizeTxnFeeUsage(txn transactions.SignedTxnWithAD, proto config.ConsensusParams) (usage basics.Micros, feesPaid basics.MicroAlgos) {
-	usage = txn.Txn.FeeFactor(proto)
+	usage = txn.SignedTxn.FeeFactor(proto)
 	feesPaid = txn.Txn.Fee
 	for _, inner := range txn.ApplyData.EvalDelta.InnerTxns {
 		innerUsage, innerFeesPaid := summarizeTxnFeeUsage(inner, proto)
