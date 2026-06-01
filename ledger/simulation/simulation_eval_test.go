@@ -17,6 +17,7 @@
 package simulation_test
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -238,6 +239,42 @@ func TestPayTxn(t *testing.T) {
 					},
 					EvalOverrides: simulation.ResultEvalOverrides{
 						AllowUnnamedResources: true,
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("big txn", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			sender := env.Accounts[0]
+			receiver := env.Accounts[1]
+
+			txn := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   sender.Addr,
+				Receiver: receiver.Addr,
+				Amount:   1_000_000,
+				Note:     bytes.Repeat([]byte{1}, 1025), // make the txn big enough to require more than the minimum fee
+			}).Txn().Sign(sender.Sk)
+
+			require.EqualValues(t, 1001, txn.Txn.Fee.Raw, "big note should have increased the fee")
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups: [][]transactions.SignedTxn{{txn}},
+				},
+				expected: simulation.Result{
+					Version:       simulation.ResultLatestVersion,
+					LastRound:     env.TxnInfo.LatestRound(),
+					TotalUsage:    1e6 + 100,
+					TotalFeesPaid: txn.Txn.Fee,
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							Txns:          []simulation.TxnResult{{Usage: 1e6 + 100, FeesPaid: txn.Txn.Fee}},
+							GroupUsage:    1e6 + 100,
+							GroupFeesPaid: txn.Txn.Fee,
+						},
 					},
 				},
 			}
@@ -520,7 +557,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 	sender2 := env.Accounts[1]
 	sender2Balance := env.Accounts[1].AcctData.MicroAlgos
 
-	// Send money back and forth
+	// Send money both ways. Of course, ledger will not change since this is simulated.
 	txn1 := env.TxnInfo.NewTxn(txntest.Txn{
 		Type:     protocol.PaymentTx,
 		Sender:   sender1.Addr,
@@ -531,7 +568,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 		Type:     protocol.PaymentTx,
 		Sender:   sender2.Addr,
 		Receiver: sender1.Addr,
-		Amount:   0,
+		Amount:   10,
 	})
 
 	request := simulation.Request{

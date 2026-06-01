@@ -596,9 +596,9 @@ type ConsensusParams struct {
 	LoadTracking bool
 
 	// PerByteTxnSurcharge specifies the fee surcharge per byte for transactions
-	// with large notes, app args, programs, or other fields that can beyond the
-	// basic Max sizes (they allow up to the "Absolute" Maxes). It is expressed
-	// in fraction of a basic min fee.
+	// with large notes, app args, programs, or other fields that can go beyond
+	// the basic Max sizes (they allow up to the "Absolute" Maxes). It is
+	// expressed in fraction of a basic min fee.
 	PerByteTxnSurcharge basics.Micros
 }
 

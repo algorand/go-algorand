@@ -104,17 +104,28 @@ func TestSimulateTxnTracerDevMode(t *testing.T) {
 	a.Equal(result.LastRound, currentAfterAfterSimulate)
 
 	closingAmount := senderBalance - txn.Fee.Raw - txn.Amount.Raw
+	stat, err := testClient.Status()
+	a.NoError(err)
+	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
+	usage := uint64(stxn.FeeFactor(proto))
+	feesPaid := stxn.Txn.Fee.Raw
 	expectedResult := v2.PreEncodedSimulateResponse{
-		Version:   2,
-		LastRound: result.LastRound, // checked above
+		Version:       2,
+		LastRound:     result.LastRound, // checked above
+		TotalUsage:    &usage,
+		TotalFeesPaid: &feesPaid,
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
+				GroupUsage:    &usage,
+				GroupFeesPaid: &feesPaid,
 				Txns: []v2.PreEncodedSimulateTxnResult{
 					{
 						Txn: v2.PreEncodedTxInfo{
 							Txn:           stxn,
 							ClosingAmount: &closingAmount,
 						},
+						Usage:    &usage,
+						FeesPaid: &feesPaid,
 					},
 				},
 			},
@@ -399,7 +410,7 @@ func TestSimulateWithOptionalSignatures(t *testing.T) {
 	txn, err := testClient.ConstructPayment(senderAddress, senderAddress, 0, 1, nil, "", [32]byte{}, 0, 0)
 	a.NoError(err)
 
-	unsignedStxn := transactions.SignedTxn{Txn: txn} // no signature, but but be SignedTxn type
+	unsignedStxn := transactions.SignedTxn{Txn: txn} // no signature, but must be SignedTxn type
 
 	simulateRequest := v2.PreEncodedSimulateRequest{
 		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{{
@@ -474,7 +485,7 @@ int 0
 ==
 bnz final
 `
-	for i := 0; i < 17; i++ {
+	for range 17 {
 		prog += `byte "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 log
 `
@@ -541,7 +552,7 @@ int 1`
 	a.NoError(err)
 
 	var logs [][]byte
-	for i := 0; i < 17; i++ {
+	for range 17 {
 		logs = append(logs, []byte("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
 	}
 
@@ -813,7 +824,7 @@ main_l6:
 int 1
 return`
 
-func goValuesToAvmValues(goValues ...interface{}) *[]model.AvmValue {
+func goValuesToAvmValues(goValues ...any) *[]model.AvmValue {
 	if len(goValues) == 0 {
 		return nil
 	}
@@ -2032,7 +2043,7 @@ end:
 	a.Nil(resp.TxnGroups[0].FailureMessage)
 	a.Len(resp.TxnGroups[0].Txns, 3)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		a.NotNil(resp.TxnGroups[0].Txns[i].TransactionTrace.ApprovalProgramHash)
 		a.Equal(approvalHash.ToSlice(), *resp.TxnGroups[0].Txns[i].TransactionTrace.ApprovalProgramHash)
 	}
@@ -2774,7 +2785,6 @@ func TestSimulateWithFixSigners(t *testing.T) {
 
 	rekeyTxn, err := testClient.ConstructPayment(senderAddress, senderAddress, 0, 1, nil, "", [32]byte{}, 0, 0)
 	a.NoError(err)
-	rekeyStxn := transactions.SignedTxn{Txn: rekeyTxn} // not actually signed
 
 	var authAddr basics.Address
 	crypto.RandBytes(authAddr[:])
@@ -2782,13 +2792,17 @@ func TestSimulateWithFixSigners(t *testing.T) {
 
 	txn, err := testClient.ConstructPayment(senderAddress, senderAddress, 0, 1, nil, "", [32]byte{}, 0, 0)
 	a.NoError(err)
-	stxn := transactions.SignedTxn{Txn: txn} // not actually signed
 
 	gid, err := testClient.GroupID([]transactions.Transaction{rekeyTxn, txn})
 	a.NoError(err)
 
 	rekeyTxn.Group = gid
 	txn.Group = gid
+
+	// Snapshot after RekeyTo and Group are set, so the submitted (and expected)
+	// SignedTxns carry the group id and rekey.
+	rekeyStxn := transactions.SignedTxn{Txn: rekeyTxn} // not actually signed
+	stxn := transactions.SignedTxn{Txn: txn}           // not actually signed
 
 	simulateRequest := v2.PreEncodedSimulateRequest{
 		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{{
