@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/assert"
 )
 
 func randID() OneTimeSignatureIdentifier {
@@ -185,7 +186,7 @@ func BenchmarkOneTimeSigBatchVerification(b *testing.B) {
 			// verify them
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				v.Verify(ids[i], msg, sigs[i])
+				assert.True(b, v.Verify(ids[i], msg, sigs[i]), "BAD: valid signature not valid")
 			}
 		})
 	}
