@@ -19,25 +19,17 @@ package v2
 import (
 	"fmt"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/protocol"
 )
 
-func validatePQSignatureForAPI(stxn transactions.SignedTxn, proto config.ConsensusParams) error {
+func validatePQSignatureForAPI(stxn transactions.SignedTxn) error {
 	if stxn.PQSig.Blank() {
 		return nil
 	}
 
-	switch stxn.PQSig.Scheme {
-	case protocol.PQSchemeFalcon1024:
-		if !proto.EnablePQSchemeFalcon1024 {
-			return fmt.Errorf("pq signature scheme not enabled")
-		}
-	default:
-		return basics.ErrPQSchemeNotSupported
-	}
+	// TODO: should the API reject if !proto.EnablePQSchemeFalcon1024? This would
+	//  fail consensus anyway
 
 	if err := basics.ValidatePQPublicKey(stxn.PQSig.Scheme, stxn.PQSig.PublicKey); err != nil {
 		return fmt.Errorf("pq signature public key invalid: %w", err)
@@ -51,10 +43,10 @@ func validatePQSignatureForAPI(stxn transactions.SignedTxn, proto config.Consens
 	return nil
 }
 
-func validatePQSignaturesForAPI(txgroups [][]transactions.SignedTxn, proto config.ConsensusParams) error {
+func validatePQSignaturesForAPI(txgroups [][]transactions.SignedTxn) error {
 	for groupIdx, txgroup := range txgroups {
 		for txnIdx, stxn := range txgroup {
-			if err := validatePQSignatureForAPI(stxn, proto); err != nil {
+			if err := validatePQSignatureForAPI(stxn); err != nil {
 				return fmt.Errorf("transaction group %d transaction %d: %w", groupIdx, txnIdx, err)
 			}
 		}
