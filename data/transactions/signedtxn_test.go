@@ -21,7 +21,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -84,6 +86,40 @@ func TestSignedTxnInBlockHash(t *testing.T) {
 	var stib SignedTxnInBlock
 	crypto.RandBytes(stib.Txn.Sender[:])
 	require.Equal(t, crypto.HashObj(&stib), stib.Hash())
+}
+
+func TestSignedTxnFeeFactorPQSignatureContribution(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	fixture := makePQSigTestFixture(t, 0)
+
+	baseTxn := SignedTxn{Txn: fixture.txn}
+	regularSigned := baseTxn
+	regularSigned.Sig[0] = 1
+	msigSigned := baseTxn
+	msigSigned.Msig = crypto.MultisigSig{Version: 1}
+	lsigSigned := baseTxn
+	lsigSigned.Lsig = LogicSig{Logic: []byte{1}}
+	unknownPQSigned := baseTxn
+	unknownPQSigned.PQSig = PQSig{Scheme: protocol.PQScheme("x1")}
+	pqSigned := SignedTxn{Txn: fixture.txn, PQSig: fixture.pqSig}
+	pqAndRegularSigned := pqSigned
+	pqAndRegularSigned.Sig[0] = 1
+
+	for _, stxn := range []SignedTxn{baseTxn, regularSigned, msigSigned, lsigSigned, unknownPQSigned} {
+		require.Equal(t, basics.Micros(1e6), stxn.FeeFactor(proto))
+	}
+	require.Equal(t, basics.Micros(3e6), pqSigned.FeeFactor(proto))
+	require.Equal(t, basics.Micros(3e6), pqAndRegularSigned.FeeFactor(proto))
+
+	higherCostProto := proto
+	higherCostProto.PQSchemeFalcon1024FeeContribution = 4e6
+	require.Equal(t, basics.Micros(5e6), pqSigned.FeeFactor(higherCostProto))
+
+	requiredFee, overflow := proto.MinFee().MulMicrosCeil(pqSigned.FeeFactor(proto))
+	require.False(t, overflow)
+	require.Equal(t, proto.MinFee().Raw*3, requiredFee.Raw)
 }
 
 //TODO: test multisig
