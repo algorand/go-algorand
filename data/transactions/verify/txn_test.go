@@ -98,14 +98,7 @@ func keypair() *crypto.SignatureSecrets {
 func makePQSignedTxn(t *testing.T, firstSeedByte byte) transactions.SignedTxn {
 	t.Helper()
 
-	var seed crypto.FalconSeed
-	seed[0] = firstSeedByte
-	signer, err := crypto.GenerateFalconSigner(seed)
-	require.NoError(t, err)
-
-	publicKey := append([]byte(nil), signer.PublicKey[:]...)
-	salt, authorizer, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
-	require.NoError(t, err)
+	signer, authorizer, pqSig := makePQSigFields(t, firstSeedByte)
 
 	var receiver basics.Address
 	receiver[0] = 1
@@ -113,15 +106,53 @@ func makePQSignedTxn(t *testing.T, firstSeedByte byte) transactions.SignedTxn {
 
 	signature, err := signer.Sign(txn)
 	require.NoError(t, err)
+	pqSig.Signature = append([]byte(nil), signature...)
 
 	return transactions.SignedTxn{
-		Txn: txn,
-		PQSig: transactions.PQSig{
-			Scheme:    protocol.PQSchemeFalcon1024,
-			Salt:      salt,
-			PublicKey: publicKey,
-			Signature: append([]byte(nil), signature...),
-		},
+		Txn:   txn,
+		PQSig: pqSig,
+	}
+}
+
+func makeFalconSigner(t *testing.T, firstSeedByte byte) crypto.FalconSigner {
+	t.Helper()
+
+	var seed crypto.FalconSeed
+	seed[0] = firstSeedByte
+	signer, err := crypto.GenerateFalconSigner(seed)
+	require.NoError(t, err)
+
+	return signer
+}
+
+func makePQSigForTxn(t *testing.T, firstSeedByte byte, txn *transactions.Transaction) (basics.Address, transactions.PQSig) {
+	t.Helper()
+
+	signer, authorizer, pqSig := makePQSigFields(t, firstSeedByte)
+
+	var signature []byte
+	var err error
+	if txn != nil {
+		signature, err = signer.Sign(*txn)
+		require.NoError(t, err)
+	}
+	pqSig.Signature = append([]byte(nil), signature...)
+
+	return authorizer, pqSig
+}
+
+func makePQSigFields(t *testing.T, firstSeedByte byte) (crypto.FalconSigner, basics.Address, transactions.PQSig) {
+	t.Helper()
+
+	signer := makeFalconSigner(t, firstSeedByte)
+	publicKey := append([]byte(nil), signer.PublicKey[:]...)
+	salt, authorizer, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
+	require.NoError(t, err)
+
+	return signer, authorizer, transactions.PQSig{
+		Scheme:    protocol.PQSchemeFalcon1024,
+		Salt:      salt,
+		PublicKey: publicKey,
 	}
 }
 
@@ -336,6 +367,53 @@ func TestTxnValidationPQSig(t *testing.T) {
 	requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
 	require.Contains(t, err.Error(), "pq signature validation failed")
 	require.Contains(t, err.Error(), "pq signature scheme not enabled")
+}
+
+func TestTxnValidationPQSigWithAuthAddr(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	_, addrs, _ := generateAccounts(3)
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	dummyLedger := DummyLedgerForSignature{}
+
+	txn := createPayTransaction(config.Consensus[protocol.ConsensusFuture].MinTxnFee, 40, 60, 1, addrs[0], addrs[1])
+	pqAuthorizer, pqSig := makePQSigForTxn(t, 8, &txn)
+
+	stxn := transactions.SignedTxn{
+		Txn:      txn,
+		AuthAddr: pqAuthorizer,
+		PQSig:    pqSig,
+	}
+
+	_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+	require.NoError(t, err)
+
+	stxn.AuthAddr = basics.Address{}
+	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+	require.Error(t, err)
+	requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
+	require.Contains(t, err.Error(), "pq signature authorizer mismatch")
+}
+
+func TestTxnValidationEd25519SigWithPQSenderAuthAddr(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	secrets, addrs, _ := generateAccounts(2)
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	dummyLedger := DummyLedgerForSignature{}
+
+	pqSender, _ := makePQSigForTxn(t, 9, nil)
+	txn := createPayTransaction(config.Consensus[protocol.ConsensusFuture].MinTxnFee, 40, 60, 1, pqSender, addrs[1])
+
+	stxn := txn.Sign(secrets[0])
+	require.Equal(t, addrs[0], stxn.AuthAddr)
+
+	_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+	require.NoError(t, err)
+
+	stxn.AuthAddr = basics.Address{}
+	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+	require.Error(t, err)
 }
 
 func TestTxnValidationPQSigEncodeDecode(t *testing.T) {

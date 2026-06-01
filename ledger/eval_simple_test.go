@@ -1426,6 +1426,134 @@ func TestRekeying(t *testing.T) {
 	// TODO: More tests
 }
 
+type pqRekeyTestAccount struct {
+	signer    crypto.FalconSigner
+	address   basics.Address
+	salt      basics.PQAddressSalt
+	publicKey []byte
+}
+
+func makePQRekeyTestAccount(t *testing.T, firstSeedByte byte) pqRekeyTestAccount {
+	t.Helper()
+
+	var seed crypto.FalconSeed
+	seed[0] = firstSeedByte
+	signer, err := crypto.GenerateFalconSigner(seed)
+	require.NoError(t, err)
+
+	publicKey := append([]byte(nil), signer.PublicKey[:]...)
+	salt, address, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
+	require.NoError(t, err)
+
+	return pqRekeyTestAccount{
+		signer:    signer,
+		address:   address,
+		salt:      salt,
+		publicKey: publicKey,
+	}
+}
+
+func signPQRekeyTestTxn(t *testing.T, acct pqRekeyTestAccount, txn transactions.Transaction, authAddr basics.Address) transactions.SignedTxn {
+	t.Helper()
+
+	signature, err := acct.signer.Sign(txn)
+	require.NoError(t, err)
+
+	return transactions.SignedTxn{
+		Txn:      txn,
+		AuthAddr: authAddr,
+		PQSig: transactions.PQSig{
+			Scheme:    protocol.PQSchemeFalcon1024,
+			Salt:      acct.salt,
+			PublicKey: append([]byte(nil), acct.publicKey...),
+			Signature: append([]byte(nil), signature...),
+		},
+	}
+}
+
+func TestPQRekeyedAddressAuthorization(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genesisInitState, addrs, keys := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	require.True(t, proto.EnablePQSchemeFalcon1024)
+	pqFee, overflow := proto.MinFee().MulMicrosCeil(basics.Micros(1e6) + proto.PQSchemeFalcon1024FeeContribution)
+	require.False(t, overflow)
+
+	pqAcct := makePQRekeyTestAccount(t, 0)
+	genesisInitState.Accounts[pqAcct.address] = basics.AccountData{
+		MicroAlgos: basics.MicroAlgos{Raw: 10_000_000},
+		Status:     basics.Offline,
+	}
+
+	l, err := OpenLedger(logging.TestingLog(t), t.Name(), true, genesisInitState, config.GetDefaultLocal())
+	require.NoError(t, err)
+	defer l.Close()
+
+	nextRound := l.Latest() + basics.Round(1)
+	genHash := l.GenesisHash()
+
+	makePayTxn := func(sender, receiver basics.Address, fee basics.MicroAlgos, rekeyTo basics.Address, uniq uint8) transactions.Transaction {
+		return transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      sender,
+				Fee:         fee,
+				FirstValid:  nextRound,
+				LastValid:   nextRound,
+				GenesisHash: genHash,
+				RekeyTo:     rekeyTo,
+				Note:        []byte{uniq},
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: receiver,
+				Amount:   basics.MicroAlgos{Raw: 1},
+			},
+		}
+	}
+
+	tryBlock := func(stxns []transactions.SignedTxn) error {
+		genesisHdr, err := l.BlockHdr(basics.Round(0))
+		require.NoError(t, err)
+		newBlock := bookkeeping.MakeBlock(genesisHdr)
+		eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
+		require.NoError(t, err)
+
+		for _, stxn := range stxns {
+			err = eval.TransactionGroup(stxn.WithAD())
+			if err != nil {
+				return err
+			}
+		}
+		unfinishedBlock, err := eval.GenerateBlock(nil)
+		if err != nil {
+			return err
+		}
+		fb := unfinishedBlock.FinishBlock(committee.Seed{0x01}, basics.Address{0x01}, false)
+
+		backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+		defer backlogPool.Shutdown()
+		_, err = l.Validate(context.Background(), fb, backlogPool)
+		return err
+	}
+
+	edRekeyToPQ := makePayTxn(addrs[0], addrs[0], minFee, pqAcct.address, 1).Sign(keys[0])
+	edSpendByPQTxn := makePayTxn(addrs[0], addrs[1], pqFee, basics.Address{}, 2)
+	edSpendByPQ := signPQRekeyTestTxn(t, pqAcct, edSpendByPQTxn, pqAcct.address)
+
+	require.NoError(t, tryBlock([]transactions.SignedTxn{edRekeyToPQ, edSpendByPQ}))
+	require.ErrorContains(t, tryBlock([]transactions.SignedTxn{edSpendByPQ}), "should have been authorized by")
+
+	pqRekeyToEdTxn := makePayTxn(pqAcct.address, addrs[1], pqFee, addrs[2], 3)
+	pqRekeyToEd := signPQRekeyTestTxn(t, pqAcct, pqRekeyToEdTxn, basics.Address{})
+	pqSpendByEd := makePayTxn(pqAcct.address, addrs[1], minFee, basics.Address{}, 4).Sign(keys[2])
+
+	require.NoError(t, tryBlock([]transactions.SignedTxn{pqRekeyToEd, pqSpendByEd}))
+	require.ErrorContains(t, tryBlock([]transactions.SignedTxn{pqSpendByEd}), "should have been authorized by")
+}
+
 func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalProgram string, consensusVersion protocol.ConsensusVersion) error {
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	cfg := config.GetDefaultLocal()
