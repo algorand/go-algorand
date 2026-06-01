@@ -119,14 +119,15 @@
         "x-go-type": "basics.Round"
       },
       "sig-type": {
-        "description": "SigType filters just results using the specified type of signature:\n* sig - Standard\n* msig - MultiSig\n* lsig - LogicSig",
+        "description": "SigType filters just results using the specified type of signature:\n* sig - Standard\n* msig - MultiSig\n* lsig - LogicSig\n* pq - Post-quantum",
         "in": "query",
         "name": "sig-type",
         "schema": {
           "enum": [
             "sig",
             "msig",
-            "lsig"
+            "lsig",
+            "pq"
           ],
           "type": "string"
         }
