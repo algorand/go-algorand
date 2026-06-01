@@ -129,6 +129,11 @@ func txnHasNoSignature(txn transactions.SignedTxn) bool {
 	return txn.Sig.Blank() && txn.Msig.Blank() && txn.Lsig.Blank() && txn.PQSig.Blank()
 }
 
+func txnHasPlaceholderPQSignature(txn transactions.SignedTxn) bool {
+	return txn.Sig.Blank() && txn.Msig.Blank() && txn.Lsig.Blank() &&
+		!txn.PQSig.Blank() && len(txn.PQSig.Signature) == 0
+}
+
 // A randomly generated private key. The actual value does not matter, as long as this is a valid
 // private key.
 var proxySigner = crypto.PrivateKey{
@@ -164,7 +169,7 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 		if stxn.Txn.Type == protocol.StateProofTx {
 			return errors.New("cannot simulate StateProof transactions")
 		}
-		if overrides.AllowEmptySignatures && txnHasNoSignature(stxn) {
+		if overrides.AllowEmptySignatures && (txnHasNoSignature(stxn) || txnHasPlaceholderPQSignature(stxn)) {
 			// Replace the signed txn with one signed by the proxySigner. At evaluation this would
 			// raise an error, since the proxySigner's public key likely does not have authority
 			// over the sender's account. However, this will pass validation, since the signature
