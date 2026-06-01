@@ -605,6 +605,11 @@ type ConsensusParams struct {
 	// EnablePQSchemeFalcon1024 enables native Deterministic Falcon-1024 transaction
 	// authorization.
 	EnablePQSchemeFalcon1024 bool
+
+	// PQSchemeFalcon1024FeeContribution specifies the additional fee factor
+	// charged for transactions authorized with Deterministic Falcon-1024. It is
+	// expressed in fraction of a basic min fee.
+	PQSchemeFalcon1024FeeContribution basics.Micros
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -1498,6 +1503,7 @@ func initConsensusProtocols() {
 	vFuture.AllowZeroLocalAppRef = true
 	vFuture.EnforceAuthAddrSenderDiff = true
 	vFuture.EnablePQSchemeFalcon1024 = true
+	vFuture.PQSchemeFalcon1024FeeContribution = 2e6
 	vFuture.LoadTracking = true
 	vFuture.MaxAbsoluteTxnNoteBytes = 4096   // same as largest AVM value
 	vFuture.MaxAbsoluteExtraProgramPages = 7 // Allow larger programs with extra fees
