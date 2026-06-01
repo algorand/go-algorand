@@ -54,6 +54,10 @@ func TestConsensusParams(t *testing.T) {
 		if params.MaxAbsoluteTotalArgLen < params.MaxAppTotalArgLen {
 			t.Errorf("Protocol %s: MaxAbsoluteTotalArgLen is smaller than MaxAppTotalArgLen", proto)
 		}
+
+		if params.EnablePQSchemeFalcon1024 && params.PQSchemeFalcon1024FeeContribution == 0 {
+			t.Errorf("Protocol %s: EnablePQSchemeFalcon1024 with zero PQSchemeFalcon1024FeeContribution", proto)
+		}
 	}
 }
 
