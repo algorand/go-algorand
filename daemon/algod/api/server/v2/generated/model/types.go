@@ -37,6 +37,7 @@ const (
 const (
 	SigTypeLsig SigType = "lsig"
 	SigTypeMsig SigType = "msig"
+	SigTypePq   SigType = "pq"
 	SigTypeSig  SigType = "sig"
 )
 
