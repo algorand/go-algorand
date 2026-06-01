@@ -111,6 +111,26 @@ func (s SignedTxn) Authorizer() basics.Address {
 	return s.AuthAddr
 }
 
+// signatureFeeContribution dispatches the fee contribution of the signature type.
+func (s SignedTxn) signatureFeeContribution(proto config.ConsensusParams) basics.Micros {
+	switch {
+	case !s.PQSig.Blank():
+		return s.pqSignatureFeeContribution(proto)
+	default:
+		return 0
+	}
+}
+
+// pqSignatureFeeContribution dispatches the fee contribution of the post-quantum signature scheme.
+func (s SignedTxn) pqSignatureFeeContribution(proto config.ConsensusParams) basics.Micros {
+	switch s.PQSig.Scheme {
+	case protocol.PQSchemeFalcon1024:
+		return proto.PQSchemeFalcon1024FeeContribution
+	default:
+		return 0
+	}
+}
+
 // FeeFactor is the factor by which the base transaction fee is multiplied. Some
 // transactions are free, others might cost more because they use extra
 // expensive features (e.g., large Note fields, large app programs, quantum
@@ -118,8 +138,7 @@ func (s SignedTxn) Authorizer() basics.Address {
 // precision. So 1e6 is a normal base fee transaction.
 func (s SignedTxn) FeeFactor(proto config.ConsensusParams) basics.Micros {
 	factor := s.Txn.feeFactor(proto)
-	// There are currently no signature fee contributions.
-	// factor = basics.AddSaturate(factor, s.signatureFeeContribution())
+	factor = basics.AddSaturate(factor, s.signatureFeeContribution(proto))
 	return factor
 }
 
