@@ -720,6 +720,27 @@ type EvalContext struct {
 	version uint64
 	Scratch scratchSpace
 
+	// creatorAddr caches the creator of appID, looked up lazily by
+	// getCreatorAddress (a zero value means "not yet looked up"). Besides
+	// backing the `global CreatorAddress` op, it is used to decide family
+	// membership (same creator) while walking the caller chain for family-box
+	// reentrancy checks.
+	creatorAddr basics.Address
+
+	// touchedFamilyShared records that this frame has read or written a
+	// family-shared box (one owned by a same-creator app with FamilyBoxAccess
+	// set). It marks the frame as holding a stable-state assumption that a
+	// family-member re-entry via a foreign app must not silently violate. See
+	// checkFamilyReentrancy.
+	touchedFamilyShared bool
+
+	// familyReentrancyChecked records that checkFamilyReentrancy has already
+	// passed for this frame. Its result is invariant for the frame's lifetime
+	// (ancestors are suspended, so neither the stack shape nor their touch marks
+	// can change), and a failing check aborts evaluation, so once it passes
+	// there is no need to walk the caller chain again.
+	familyReentrancyChecked bool
+
 	subtxns []transactions.SignedTxnWithAD // place to build for itxn_submit
 	cost    int                            // cost incurred so far
 	logSize int                            // total log size so far
@@ -3907,12 +3928,19 @@ func (ep *EvalParams) GetApplicationAddress(app basics.AppIndex) basics.Address 
 	return appAddr
 }
 
-func (cx *EvalContext) getCreatorAddress() ([]byte, error) {
-	_, creator, err := cx.Ledger.AppParams(cx.appID)
-	if err != nil {
-		return nil, fmt.Errorf("No params for current app")
+// getCreatorAddress returns the creator of the current app, caching the result
+// on the context. A zero creatorAddr means "not yet looked up"; on-chain apps
+// always have a non-zero creator, so the only cost of the sentinel is
+// re-looking-up the zero-creator apps that appear in tests.
+func (cx *EvalContext) getCreatorAddress() (basics.Address, error) {
+	if cx.creatorAddr.IsZero() {
+		_, creator, err := cx.Ledger.AppParams(cx.appID)
+		if err != nil {
+			return basics.Address{}, fmt.Errorf("No params for current app")
+		}
+		cx.creatorAddr = creator
 	}
-	return creator[:], nil
+	return cx.creatorAddr, nil
 }
 
 var zeroAddress basics.Address
@@ -3941,7 +3969,9 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 		addr := cx.GetApplicationAddress(cx.appID)
 		sv.Bytes = addr[:]
 	case CreatorAddress:
-		sv.Bytes, err = cx.getCreatorAddress()
+		var creator basics.Address
+		creator, err = cx.getCreatorAddress()
+		sv.Bytes = creator[:]
 	case GroupID:
 		sv.Bytes = cx.txn.Txn.Group[:]
 	case OpcodeBudget:

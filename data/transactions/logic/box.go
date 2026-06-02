@@ -39,38 +39,80 @@ const (
 	BoxResizeOperation
 )
 
-// checkBoxPermission verifies that the current app may perform operation on
-// another app's box. Reads require ForeignBoxReads or FamilyBoxAccess (with the
-// same creator); writes require FamilyBoxAccess and the same creator.
-func (cx *EvalContext) checkBoxPermission(appID basics.AppIndex, operation BoxOperation) error {
-	params, targetCreator, err := cx.Ledger.AppParams(appID)
+// checkBoxPermission verifies that the current app may perform operation on the
+// box owned by ownerAppID, and reports whether the box is family-shared from
+// cx's perspective (owned by a same-creator app that has opted into
+// FamilyBoxAccess). An app may always access its own boxes, which are
+// family-shared exactly when it has opted into FamilyBoxAccess. For another
+// app's box, reads require ForeignBoxReads or FamilyBoxAccess (with the same
+// creator); writes require FamilyBoxAccess and the same creator.
+func (cx *EvalContext) checkBoxPermission(ownerAppID basics.AppIndex, operation BoxOperation) (familyShared bool, err error) {
+	params, ownerCreator, err := cx.Ledger.AppParams(ownerAppID)
 	if err != nil {
-		return err
+		return false, err
 	}
 
-	// Resolve whether the calling app shares a creator with the target app,
-	// but only pay the cost of the lookup when FamilyBoxAccess is set.
-	sameCreator := false
+	// An app may always access its own boxes.
+	if ownerAppID == cx.appID {
+		return params.FamilyBoxAccess, nil
+	}
+
+	// Resolve whether the calling app shares a creator with the owner, but only
+	// pay the cost of the lookup when FamilyBoxAccess is set.
+	inFamily := false
 	if params.FamilyBoxAccess {
-		_, callerCreator, err := cx.Ledger.AppParams(cx.appID)
+		callerCreator, err := cx.getCreatorAddress()
 		if err != nil {
-			return err
+			return false, err
 		}
-		sameCreator = callerCreator == targetCreator
+		inFamily = callerCreator == ownerCreator
 	}
 
 	isRead := operation == BoxReadOperation
 	switch {
 	case isRead && params.ForeignBoxReads:
 		// any app with a box reference may read
-	case sameCreator:
-		// same-creator apps may read and write (FamilyBoxAccess already confirmed above)
+	case inFamily:
+		// inFamily only set to true if FamilyBoxAccess
 	default:
 		if isRead {
-			return fmt.Errorf("app %d does not permit foreign reads of its boxes", appID)
+			return false, fmt.Errorf("app %d does not permit foreign reads of its boxes", ownerAppID)
 		}
-		return fmt.Errorf("app %d does not permit foreign writes to its boxes", appID)
+		return false, fmt.Errorf("app %d does not permit foreign writes to its boxes", ownerAppID)
 	}
+	return inFamily, nil
+}
+
+// checkFamilyReentrancy guards a family-relevant write by cx. It fails when a
+// foreign app (one outside cx's family) separates cx from an ancestor in cx's
+// family that has touched family-shared state. Allowing the write would let cx
+// clobber state the ancestor is relying on across its inner call -- the
+// family-scoped analog of the per-app reentrancy ban. The check fires only at
+// the write, so foreign apps remain free to call into family members for
+// read-only queries. The walk is bounded by the inner-call depth (8).
+func (cx *EvalContext) checkFamilyReentrancy() error {
+	if cx.familyReentrancyChecked {
+		return nil
+	}
+	myCreator, err := cx.getCreatorAddress()
+	if err != nil {
+		return err
+	}
+	seenForeign := false
+	for f := cx.caller; f != nil; f = f.caller {
+		fCreator, err := f.getCreatorAddress()
+		if err != nil {
+			return err
+		}
+		if fCreator != myCreator {
+			seenForeign = true
+			continue
+		}
+		if seenForeign && f.touchedFamilyShared {
+			return fmt.Errorf("app %d may not write family-shared box: app %d is relying on family state across a foreign call", cx.appID, f.appID)
+		}
+	}
+	cx.familyReentrancyChecked = true
 	return nil
 }
 
@@ -113,10 +155,26 @@ func (cx *EvalContext) availableAppBox(appID basics.AppIndex, name string, opera
 		return nil, false, fmt.Errorf("invalid Box reference %#x", name)
 	}
 
-	if appID != cx.appID {
-		if err := cx.checkBoxPermission(appID, operation); err != nil {
-			return nil, false, err
+	// familyShared is true when this box behaves like family-shared state: owned
+	// by a same-creator app that has opted into FamilyBoxAccess. checkBoxPermission
+	// authorizes the access (always allowed for our own boxes) and reports this.
+	familyShared, err := cx.checkBoxPermission(appID, operation)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// Family-shared boxes behave like globals shared across the family, so they
+	// need a family-scoped reentrancy guard. On a write, reject it if a foreign
+	// app on the call stack separates cx from a family member that has already
+	// touched family-shared state. Either way, record that cx has now touched
+	// such state, so a later re-entry into another family member can be caught.
+	if familyShared {
+		if operation != BoxReadOperation {
+			if err := cx.checkFamilyReentrancy(); err != nil {
+				return nil, false, err
+			}
 		}
+		cx.touchedFamilyShared = true
 	}
 
 	// If the box is in cx.available, GetBox() is cheap. It will go (at most) to
