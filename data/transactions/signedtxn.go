@@ -20,6 +20,7 @@ import (
 	"crypto/sha256"
 	"errors"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
@@ -108,6 +109,18 @@ func (s SignedTxn) Authorizer() basics.Address {
 	return s.AuthAddr
 }
 
+// FeeFactor is the factor by which the base transaction fee is multiplied. Some
+// transactions are free, others might cost more because they use extra
+// expensive features (e.g., large Note fields, large app programs, quantum
+// sigs).  It is expressed as a fixed-point integer with 6 digits of
+// precision. So 1e6 is a normal base fee transaction.
+func (s SignedTxn) FeeFactor(proto config.ConsensusParams) basics.Micros {
+	factor := s.Txn.feeFactor(proto)
+	// There are currently no signature fee contributions.
+	// factor = basics.AddSaturate(factor, s.signatureFeeContribution())
+	return factor
+}
+
 // AssembleSignedTxn assembles a multisig-signed transaction from a transaction an optional sig, and an optional multisig.
 // No signature checking is done -- for example, this might only be a partial multisig
 // TODO: is this method used anywhere, or is it safe to remove?
@@ -155,17 +168,17 @@ func WrapSignedTxnsWithAD(txgroup []SignedTxn) []SignedTxnWithAD {
 	return txgroupad
 }
 
-// SummarizeFees takes a group and returns required fees, the total amount paid,
-// and the tip promised. The returned `usage` expresses how many basic
-// transaction fees must be paid by the group.
-func SummarizeFees(txgroup []SignedTxnWithAD) (usage basics.Micros, paid basics.MicroAlgos) {
+// SummarizeFees takes a group and returns the required fee usage and the total
+// amount paid. The returned `usage` expresses how many basic transaction fees
+// must be paid by the group.
+func SummarizeFees(txgroup []SignedTxnWithAD, proto config.ConsensusParams) (usage basics.Micros, paid basics.MicroAlgos) {
 	// TODO: We want to prevent the 2A fee paid to become incentive eligible
 	// from being reused for inners. Since that is expressed as a fixed fee, the
 	// best way to do it might be to not count it in `paid`.  The "obvious" way
 	// to do it (by adjusting the KeyReg's FeeFactor() is more difficult because
 	// the 2A fee is not defined in units of MinFee().
 	for _, txad := range txgroup {
-		usage = basics.AddSaturate(usage, txad.SignedTxn.Txn.FeeFactor())
+		usage = basics.AddSaturate(usage, txad.SignedTxn.FeeFactor(proto))
 		paid = paid.AddSaturate(txad.SignedTxn.Txn.Fee)
 	}
 	return usage, paid

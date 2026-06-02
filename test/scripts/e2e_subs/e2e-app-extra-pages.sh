@@ -55,17 +55,17 @@ generate_teal "$BIG_APPR_PROG" 4 4098 1 "int 0\nbalance\npop\n"
 
 # App create fails. Approval program too long
 RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${BIG_TEAL_FILE}" --clear-prog "${BIG_TEAL_FILE}" --global-byteslices 1 2>&1 || true)
-EXPERROR="approval program too long. max len 2048 bytes"
+EXPERROR="approval program too long"
 if [[ $RES != *"${EXPERROR}"* ]]; then
-    date "+${scriptname} FAIL the application creation should fail %Y%m%d_%H%M%S"
+    date "+${scriptname} FAIL the big approval creation should fail %Y%m%d_%H%M%S"
     false
 fi
 
 # App create fails. Clear state program too long
 RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${SMALL_TEAL_FILE}" --clear-prog "${BIG_TEAL_FILE}" --global-byteslices 1 2>&1 || true)
-EXPERROR="clear state program too long. max len 2048 bytes"
+EXPERROR="clear state program too long"
 if [[ $RES != *"${EXPERROR}"* ]]; then
-    date "+${scriptname} FAIL the application creation should fail %Y%m%d_%H%M%S"
+    date "+${scriptname} FAIL the big clearstate creation should fail %Y%m%d_%H%M%S"
     false
 fi
 
@@ -73,7 +73,7 @@ fi
 RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${BIG_TEAL_FILE}" --clear-prog "${BIG_TEAL_FILE}" --extra-pages 3 --global-byteslices 1 2>&1 || true)
 EXPERROR="pc=705 static cost budget of 700 exceeded"
 if [[ $RES != *"${EXPERROR}"* ]]; then
-    date "+${scriptname} FAIL the application creation should fail %Y%m%d_%H%M%S"
+    date "+${scriptname} FAIL the static over budget creation should fail %Y%m%d_%H%M%S"
     false
 fi
 
@@ -81,7 +81,7 @@ fi
 RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${BIG_TEAL_V4_FILE}" --clear-prog "${BIG_TEAL_V4_FILE}" --extra-pages 3 --global-byteslices 1 2>&1 || true)
 EXPERROR="pc=704 dynamic cost budget exceeded, executing intc_0: local program cost was 700"
 if [[ $RES != *"${EXPERROR}"* ]]; then
-    date "+${scriptname} FAIL the application creation should fail %Y%m%d_%H%M%S"
+    date "+${scriptname} FAIL the dynamic over budget application creation should fail %Y%m%d_%H%M%S"
     false
 fi
 
@@ -131,3 +131,5 @@ if [[ $RES != *"${VERSION1}"* ]]; then
     date "+${scriptname} FAIL the Program version is not 1 after update %Y%m%d_%H%M%S"
     false
 fi
+
+date "+${scriptname} OK %Y%m%d_%H%M%S"

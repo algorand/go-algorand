@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/avm-abi/apps"
 
 	"github.com/algorand/go-algorand/cmd/util/datadir"
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	apiclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/data/basics"
@@ -77,6 +78,8 @@ var (
 	appStrBoxes    []string // parse these as we do app args, with optional number and comma in front
 	appStrAccounts []string
 
+	appEmptyRefs uint64
+
 	// for these, an omitted addr is the sender. an omitted app is the called app.
 	appStrHoldings []string // format: asset+addr OR asset ex: 5245+XQJEJECPWUOXSKMIC5TCSARPVGHQJIIOKHO7WTKEPPLJMKG3D7VWWID66E
 	appStrLocals   []string // format: app+addr OR app OR addr
@@ -92,6 +95,13 @@ var (
 )
 
 func init() {
+	// Doc strings can describe limits. We'll use the current protocol to
+	// describe those limits, though it's possible goal will be talking to a
+	// network on a different level of the protocol (especially in our own tests
+	// against vFuture). So we generally don't enforce these limits in goal, we
+	// let the network complain.  But we want nice docs.
+	currentProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
+
 	appCmd.AddCommand(createAppCmd)
 	appCmd.AddCommand(deleteAppCmd)
 	appCmd.AddCommand(updateAppCmd)
@@ -112,6 +122,7 @@ func init() {
 	appCmd.PersistentFlags().StringSliceVar(&appStrAccounts, "app-account", nil, "Accounts that may be accessed from application logic")
 	appCmd.PersistentFlags().StringSliceVar(&appStrHoldings, "holding", nil, "A Holding that may be accessed from application logic. An asset-id followed by a plus sign and an address")
 	appCmd.PersistentFlags().StringSliceVar(&appStrLocals, "local", nil, "A Local State that may be accessed from application logic. An optional app-id and a plus sign, followed by an address. Zero or omitted app-id indicates the local state for app being called.")
+	appCmd.PersistentFlags().Uint64Var(&appEmptyRefs, "empty-refs", 0, "Number of empty references to add for additional I/O budget. With --access, these are empty access-list refs; otherwise, empty box refs.")
 	appCmd.PersistentFlags().BoolVar(&appUseAccess, "access", false, "Put references into the transaction's access list, instead of foreign arrays.")
 
 	appCmd.PersistentFlags().StringVar(&approvalProgFile, "approval-prog", "", "(Uncompiled) TEAL assembly program filename for approving/rejecting transactions")
@@ -126,11 +137,13 @@ func init() {
 	createAppCmd.Flags().Uint64Var(&localSchemaByteSlices, "local-byteslices", 0, "Maximum number of byte slices that may be stored in local (per-account) key/value stores for this app. Immutable.")
 	createAppCmd.Flags().StringVar(&appCreator, "creator", "", "Account to create the application")
 	createAppCmd.Flags().StringVar(&onCompletion, "on-completion", "NoOp", "OnCompletion action for application transaction")
-	createAppCmd.Flags().Uint32Var(&extraPages, "extra-pages", 0, "Additional program space for supporting larger AVM bytecode program. A maximum of 3 extra pages is allowed. A page is 1024 bytes.")
+	extraPagesDoc := fmt.Sprintf("Additional space for large app programs. A maximum of %d extra pages is allowed. A page is %d bytes.",
+		currentProtocol.MaxAbsoluteExtraProgramPages, currentProtocol.MaxAppProgramLen)
+	createAppCmd.Flags().Uint32Var(&extraPages, "extra-pages", 0, extraPagesDoc)
 
 	updateAppCmd.Flags().Uint64Var(&globalSchemaUints, "global-ints", 0, "Maximum number of integer values that may be stored in the global key/value store.")
 	updateAppCmd.Flags().Uint64Var(&globalSchemaByteSlices, "global-byteslices", 0, "Maximum number of byte slices that may be stored in the global key/value store.")
-	updateAppCmd.Flags().Uint32Var(&extraPages, "extra-pages", 0, "Additional program space for supporting larger AVM program. A maximum of 3 extra pages is allowed. A page is 1024 bytes.")
+	updateAppCmd.Flags().Uint32Var(&extraPages, "extra-pages", 0, extraPagesDoc)
 
 	callAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to call app from")
 	optInAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to opt in")
@@ -150,7 +163,7 @@ func init() {
 	methodAppCmd.Flags().Uint64Var(&globalSchemaByteSlices, "global-byteslices", 0, "Maximum number of byte slices that may be stored in the global key/value store. Valid when passed with --create or when updating.")
 	methodAppCmd.Flags().Uint64Var(&localSchemaUints, "local-ints", 0, "Maximum number of integer values that may be stored in local (per-account) key/value stores for this app. Immutable, only valid when passed with --create.")
 	methodAppCmd.Flags().Uint64Var(&localSchemaByteSlices, "local-byteslices", 0, "Maximum number of byte slices that may be stored in local (per-account) key/value stores for this app. Immutable, only valid when passed with --create.")
-	methodAppCmd.Flags().Uint32Var(&extraPages, "extra-pages", 0, "Additional program space for supporting larger AVM bytecode program. A maximum of 3 extra pages is allowed. A page is 1024 bytes. Valid when passed with --create or when updating.")
+	methodAppCmd.Flags().Uint32Var(&extraPages, "extra-pages", 0, extraPagesDoc+" Valid when passed with --create or when updating.")
 
 	// Can't use PersistentFlags on the root because for some reason marking
 	// a root command as required with MarkPersistentFlagRequired isn't
@@ -228,6 +241,7 @@ type appCallInputs struct {
 	Boxes         []boxRef            `codec:"boxes"`
 	Holdings      []holdingRef        `codec:"holdings"`
 	Locals        []localRef          `codec:"locals"`
+	EmptyRefs     uint64              `codec:"emptyrefs"`
 	UseAccess     bool                `codec:"access"`
 	Args          []apps.AppCallBytes `codec:"args"`
 }
@@ -361,6 +375,7 @@ func parseAppInputs(inputs appCallInputs) ([][]byte, libgoal.RefBundle) {
 		Accounts:  util.Map(inputs.Accounts, cliAddress),
 		Apps:      util.Map(inputs.ForeignApps, func(idx uint64) basics.AppIndex { return basics.AppIndex(idx) }),
 		Assets:    util.Map(inputs.ForeignAssets, func(idx uint64) basics.AssetIndex { return basics.AssetIndex(idx) }),
+		EmptyRefs: inputs.EmptyRefs,
 
 		Locals:   locals,
 		Holdings: holdings,
@@ -406,10 +421,11 @@ func getAppInputsFromCLI() appCallInputs {
 		ForeignAssets: util.Map(foreignAssets, func(s string) uint64 {
 			return parseUInt64(s, "asset id", "foreign-asset")
 		}),
-		Boxes:    util.Map(appStrBoxes, parseBoxRef),
-		Holdings: util.Map(appStrHoldings, parseHoldingRef),
-		Locals:   util.Map(appStrLocals, parseLocalRef),
-		Args:     encodedArgs,
+		Boxes:     util.Map(appStrBoxes, parseBoxRef),
+		Holdings:  util.Map(appStrHoldings, parseHoldingRef),
+		Locals:    util.Map(appStrLocals, parseLocalRef),
+		EmptyRefs: appEmptyRefs,
+		Args:      encodedArgs,
 	}
 }
 

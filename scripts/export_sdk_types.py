@@ -96,19 +96,19 @@ def replace_between(filename, content, start_pattern, stop_pattern=None):
 
 SDK="../go-algorand-sdk/"
 
-def sdkize(input):
+def sdkize(input, prefix=""):
     # allocbounds are not used by the SDK. It's confusing to leave them in.
     input = re.sub(",(allocbound|maxtotalbytes)=.*\"", '"', input)
     input = re.sub("^\\s*//msgp:(allocbound|sort|ignore).*\n", '', input, flags=re.MULTILINE)
 
     # protocol.ConsensusVersion and protocolConsensusVxx constants are
-    # the only things that stays in the protocol package. So we "hide"
+    # the only things that stay in the protocol package. So we "hide"
     # them from the replacements below, then switch it back
     input = input.replace("protocol.ConsensusV", "protocolConsensusV")
     input = input.replace("protocol.ConsensusFuture", "protocolConsensusFuture")
 
     # All types are in the same package in the SDK
-    input = re.sub(r'(basics|crypto|committee|transactions|protocol)\.\b', r'', input)
+    input = re.sub(r'(basics|crypto|committee|transactions|protocol)\.\b', prefix, input)
 
     # and go back...
     input = input.replace("protocolConsensusV", "protocol.ConsensusV")
@@ -138,8 +138,8 @@ def export(src, dst, start, stop=None):
     replace_between(SDK+dst, x, start, stop)
     subprocess.run(["gofmt", "-w", SDK+dst])
 
-def export_type(name, src, dst, comment=True):
-    export_thing("type {thing} ", name, src, dst, comment=comment)
+def export_type(name, src, dst, comment=True, package=""):
+    export_thing("type {thing} ", name, src, dst, comment=comment, package=package)
 
 def export_var(name, src, dst, comment=True):
     export_thing("var {thing} ", name, src, dst, comment=comment)
@@ -147,7 +147,7 @@ def export_var(name, src, dst, comment=True):
 def export_func(name, src, dst, comment=True):
     export_thing("func {thing}(", name, src, dst, comment=comment)
 
-def export_thing(pattern, name, src, dst, comment=True):
+def export_thing(pattern, name, src, dst, comment=True, package=""):
     start = pattern.format(thing=name)
 
     with open(src, 'r', encoding='utf-8') as f:
@@ -157,7 +157,7 @@ def export_thing(pattern, name, src, dst, comment=True):
     if line == "":
         raise ValueError(f"Unable to find {name} in {src}")
     src_stop = "\n}\n" if line.endswith("{") else "\n"
-    x = sdkize(_extract_body(src_content, start, src_stop))
+    x = sdkize(_extract_body(src_content, start, src_stop), package)
     if comment:
         # Only strip //msgp: directives from comments, not fully sdkize
         # because of renaming like ApplicationCallTxnFields -> ApplicationFields
@@ -219,11 +219,11 @@ if __name__ == "__main__":
 
     src = "config/consensus.go"
     dst = "protocol/config/consensus.go"
-    export_type("ConsensusParams", src, dst)
-    export_type("ProposerPayoutRules", src, dst)
-    export_type("BonusPlan", src, dst)
-    export_type("PaysetCommitType", src, dst)
-    export_type("ConsensusProtocols", src, dst)
+    export_type("ConsensusParams", src, dst, package="types.")
+    export_type("ProposerPayoutRules", src, dst, package="types.")
+    export_type("BonusPlan", src, dst, package="types.")
+    export_type("PaysetCommitType", src, dst, package="types.")
+    export_type("ConsensusProtocols", src, dst, package="types.")
     export_var("Consensus", src, dst)
     export_func("initConsensusProtocols", src, dst)
     export_func("(cp ConsensusProtocols) DeepCopy", src, dst)
