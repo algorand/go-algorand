@@ -17,7 +17,6 @@
 package crypto
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -141,8 +140,36 @@ func testOneTimeSignVerifyNewStyle(t *testing.T, c *OneTimeSignatureSecrets, c2 
 }
 
 func BenchmarkOneTimeSigBatchVerification(b *testing.B) {
-	for _, enabled := range []bool{false, true} {
-		b.Run(fmt.Sprintf("batch=%v", enabled), func(b *testing.B) {
+	// A OneTimeSignature carries 3 ed25519 sigs (PK2Sig, PK1Sig, Sig). Compare
+	// the configured BatchVerifier factories on the 3-sig OneTimeSig batch:
+	//   - libsodium with useSingle=true (loops over libsodium single-verify;
+	//     the historical vote path before PR #3759)
+	//   - libsodium with useSingle=false (calls into the libsodium fork's
+	//     batch.c batch routine)
+	//   - ed25519consensus (pure-Go batch verifier)
+	libsodiumWith := func(useSingle bool) func(int) BatchVerifier {
+		return func(hint int) BatchVerifier {
+			bv := makeLibsodiumBatchVerifier(hint)
+			bv.(*cgoBatchVerifier).useSingle = useSingle
+			return bv
+		}
+	}
+
+	cases := []struct {
+		name    string
+		factory func(int) BatchVerifier
+	}{
+		{"libsodium_singles", libsodiumWith(true)},
+		{"libsodium_batch", libsodiumWith(false)},
+		{"ed25519consensus_batch", makeEd25519ConsensusBatchVerifier},
+	}
+
+	origFactory := ed25519BatchVerifierFactory
+	defer func() { ed25519BatchVerifierFactory = origFactory }()
+
+	for _, tc := range cases {
+		b.Run(tc.name, func(b *testing.B) {
+			ed25519BatchVerifierFactory = tc.factory
 			// generate a bunch of signatures
 			c := GenerateOneTimeSignatureSecrets(0, 1000)
 			sigs := make([]OneTimeSignature, b.N)
@@ -158,7 +185,9 @@ func BenchmarkOneTimeSigBatchVerification(b *testing.B) {
 			// verify them
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				v.Verify(ids[i], msg, sigs[i])
+				if !v.Verify(ids[i], msg, sigs[i]) {
+					b.Error("BAD: valid signature not valid")
+				}
 			}
 		})
 	}
