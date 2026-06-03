@@ -1132,7 +1132,7 @@ func makePQSigWithAddressCompliance(t *testing.T, compliant bool) (crypto.Falcon
 		for salt := 0; salt <= 255; salt++ {
 			pqSalt := basics.PQAddressSalt(salt)
 			authorizer := basics.PQAddress(protocol.PQSchemeFalcon1024, pqSalt, publicKey)
-			if basics.IsPQAddressCompliant(authorizer) != compliant {
+			if authorizer.IsPQCompliant() != compliant {
 				continue
 			}
 

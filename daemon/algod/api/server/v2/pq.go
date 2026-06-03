@@ -36,7 +36,7 @@ func validatePQSignatureForAPI(stxn transactions.SignedTxn) error {
 	}
 
 	authorizer := stxn.PQSig.AuthorizerAddress()
-	if !basics.IsPQAddressCompliant(authorizer) {
+	if !authorizer.IsPQCompliant() {
 		return fmt.Errorf("pq signature authorizer address %s is not compliant", authorizer)
 	}
 
