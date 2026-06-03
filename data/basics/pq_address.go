@@ -18,6 +18,7 @@ package basics
 
 import (
 	"errors"
+	"math"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
@@ -91,7 +92,7 @@ func CanonicalPQAddressSalt(scheme protocol.PQScheme, publicKey []byte) (PQAddre
 	// Rejection-sampling in [0, 255] because PQAddressSalt is uint8. If no valid
 	// salt is found within this range, the publicKey has no PQ address for the given
 	// PQScheme; the vanishingly small probability of this happening is ~2^(-256).
-	for salt := 0; salt <= 255; salt++ {
+	for salt := 0; salt <= math.MaxUint8; salt++ {
 		addr := PQAddress(scheme, PQAddressSalt(salt), publicKey)
 		if addr.IsPQCompliant() {
 			return PQAddressSalt(salt), addr, nil

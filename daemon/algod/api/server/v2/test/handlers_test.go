@@ -1122,14 +1122,14 @@ func enableDeveloperAPI() postTransactionOpt {
 func makePQSigWithAddressCompliance(t *testing.T, compliant bool) (crypto.FalconSigner, basics.Address, transactions.PQSig) {
 	t.Helper()
 
-	for seedByte := 0; seedByte <= 255; seedByte++ {
+	for seedByte := 0; seedByte <= math.MaxUint8; seedByte++ {
 		var seed crypto.FalconSeed
 		seed[0] = byte(seedByte)
 		signer, err := crypto.GenerateFalconSigner(seed)
 		require.NoError(t, err)
 
 		publicKey := append([]byte(nil), signer.PublicKey[:]...)
-		for salt := 0; salt <= 255; salt++ {
+		for salt := 0; salt <= math.MaxUint8; salt++ {
 			pqSalt := basics.PQAddressSalt(salt)
 			authorizer := basics.PQAddress(protocol.PQSchemeFalcon1024, pqSalt, publicKey)
 			if authorizer.IsPQCompliant() != compliant {
