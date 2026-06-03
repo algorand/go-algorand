@@ -74,7 +74,8 @@ func (pq pqAddressPreimage) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.PostQuantumAddress, payload
 }
 
-// PQAddress returns the address derived from a pqAddressPreimage.
+// PQAddress returns the address derived from a PQ signature scheme, an explicit
+// salt, and a scheme-canonical public key.
 func PQAddress(scheme protocol.PQScheme, salt PQAddressSalt, pk []byte) Address {
 	return Address(crypto.HashObj(pqAddressPreimage{scheme, salt, pk}))
 }
