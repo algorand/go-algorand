@@ -19,7 +19,6 @@ package v2
 import (
 	"fmt"
 
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 )
 
@@ -30,10 +29,6 @@ func validatePQSignatureForAPI(stxn transactions.SignedTxn) error {
 
 	// TODO: should the API reject if !proto.EnablePQSchemeFalcon1024? This would
 	//  fail consensus anyway
-
-	if err := basics.ValidatePQPublicKey(stxn.PQSig.Scheme, stxn.PQSig.PublicKey); err != nil {
-		return fmt.Errorf("pq signature public key invalid: %w", err)
-	}
 
 	authorizer := stxn.PQSig.AuthorizerAddress()
 	if !authorizer.IsPQCompliant() {
