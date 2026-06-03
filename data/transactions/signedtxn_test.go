@@ -110,12 +110,9 @@ func TestSignedTxnFeeFactorPQSignatureContribution(t *testing.T) {
 	for _, stxn := range []SignedTxn{baseTxn, regularSigned, msigSigned, lsigSigned, unknownPQSigned} {
 		require.Equal(t, basics.Micros(1e6), stxn.FeeFactor(proto))
 	}
+	require.Equal(t, basics.Micros(2e6), PQSchemeFalcon1024FeeContribution)
 	require.Equal(t, basics.Micros(3e6), pqSigned.FeeFactor(proto))
 	require.Equal(t, basics.Micros(3e6), pqAndRegularSigned.FeeFactor(proto))
-
-	higherCostProto := proto
-	higherCostProto.PQSchemeFalcon1024FeeContribution = 4e6
-	require.Equal(t, basics.Micros(5e6), pqSigned.FeeFactor(higherCostProto))
 
 	requiredFee, overflow := proto.MinFee().MulMicrosCeil(pqSigned.FeeFactor(proto))
 	require.False(t, overflow)

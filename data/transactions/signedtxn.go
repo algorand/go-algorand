@@ -112,20 +112,20 @@ func (s SignedTxn) Authorizer() basics.Address {
 }
 
 // signatureFeeContribution dispatches the fee contribution of the signature type.
-func (s SignedTxn) signatureFeeContribution(proto config.ConsensusParams) basics.Micros {
+func (s SignedTxn) signatureFeeContribution() basics.Micros {
 	switch {
 	case !s.PQSig.Blank():
-		return s.pqSignatureFeeContribution(proto)
+		return s.pqSignatureFeeContribution()
 	default:
 		return 0
 	}
 }
 
 // pqSignatureFeeContribution dispatches the fee contribution of the post-quantum signature scheme.
-func (s SignedTxn) pqSignatureFeeContribution(proto config.ConsensusParams) basics.Micros {
+func (s SignedTxn) pqSignatureFeeContribution() basics.Micros {
 	switch s.PQSig.Scheme {
 	case protocol.PQSchemeFalcon1024:
-		return proto.PQSchemeFalcon1024FeeContribution
+		return PQSchemeFalcon1024FeeContribution
 	default:
 		return 0
 	}
@@ -138,7 +138,7 @@ func (s SignedTxn) pqSignatureFeeContribution(proto config.ConsensusParams) basi
 // precision. So 1e6 is a normal base fee transaction.
 func (s SignedTxn) FeeFactor(proto config.ConsensusParams) basics.Micros {
 	factor := s.Txn.feeFactor(proto)
-	factor = basics.AddSaturate(factor, s.signatureFeeContribution(proto))
+	factor = basics.AddSaturate(factor, s.signatureFeeContribution())
 	return factor
 }
 

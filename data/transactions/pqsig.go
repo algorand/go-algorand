@@ -44,6 +44,11 @@ const (
 
 	// PQMaxSignatureSize bounds PQ signatures before scheme dispatch.
 	PQMaxSignatureSize = crypto.FalconMaxSignatureSize
+
+	// PQSchemeFalcon1024FeeContribution is the additional fee factor charged
+	// for transactions authorized with Deterministic Falcon-1024. It is
+	// expressed in fraction of a basic min fee.
+	PQSchemeFalcon1024FeeContribution basics.Micros = 2e6
 )
 
 // PQSig is a post-quantum transaction authorization proof.
