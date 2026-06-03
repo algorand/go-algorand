@@ -43,12 +43,10 @@ func validatePQSignatureForAPI(stxn transactions.SignedTxn) error {
 	return nil
 }
 
-func validatePQSignaturesForAPI(txgroups [][]transactions.SignedTxn) error {
-	for groupIdx, txgroup := range txgroups {
-		for txnIdx, stxn := range txgroup {
-			if err := validatePQSignatureForAPI(stxn); err != nil {
-				return fmt.Errorf("transaction group %d transaction %d: %w", groupIdx, txnIdx, err)
-			}
+func validatePQSignaturesForAPI(txgroup []transactions.SignedTxn) error {
+	for txnIdx, stxn := range txgroup {
+		if err := validatePQSignatureForAPI(stxn); err != nil {
+			return fmt.Errorf("transaction %d: %w", txnIdx, err)
 		}
 	}
 	return nil
