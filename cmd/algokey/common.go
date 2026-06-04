@@ -68,6 +68,10 @@ func loadKeyfile(keyfile string) crypto.Seed {
 		fmt.Fprintf(os.Stderr, "Cannot read key seed from %s: %v\n", keyfile, err)
 		os.Exit(1)
 	}
+	if isPQKeyMaterial(seedbytes) {
+		fmt.Fprintf(os.Stderr, "Cannot read Ed25519 key seed from post-quantum key file %s\n", keyfile)
+		os.Exit(1)
+	}
 
 	var seed crypto.Seed
 	copy(seed[:], seedbytes)
