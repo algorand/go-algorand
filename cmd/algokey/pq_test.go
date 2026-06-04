@@ -17,10 +17,10 @@
 package main
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -36,6 +36,8 @@ type countingRNG struct {
 	calls int
 	bytes int
 }
+
+var pqSignGlobalsMu sync.Mutex
 
 func (rng *countingRNG) RandBytes(buf []byte) {
 	rng.calls++
@@ -82,6 +84,8 @@ func pqTestTxn(sender basics.Address) transactions.SignedTxn {
 }
 
 func TestPQGenerateUsesFalconSeedEntropy(t *testing.T) {
+	t.Parallel()
+
 	rng := &countingRNG{}
 
 	material, err := generateFalcon1024Key(rng)
@@ -94,6 +98,8 @@ func TestPQGenerateUsesFalconSeedEntropy(t *testing.T) {
 }
 
 func TestPQPrivateKeyFileRoundTripAndPermissions(t *testing.T) {
+	t.Parallel()
+
 	material := pqTestMaterial(t, 0)
 	keyfile := filepath.Join(t.TempDir(), "account.pq")
 
@@ -111,10 +117,12 @@ func TestPQPrivateKeyFileRoundTripAndPermissions(t *testing.T) {
 	require.Equal(t, material.canonicalSalt, decoded.canonicalSalt)
 	require.Equal(t, material.canonicalAddress, decoded.canonicalAddress)
 
-	require.Error(t, writePQPrivateKeyFile(keyfile, material))
+	require.ErrorIs(t, writePQPrivateKeyFile(keyfile, material), os.ErrExist)
 }
 
 func TestPQKeyFilesDoNotPersistSaltOrAddress(t *testing.T) {
+	t.Parallel()
+
 	material := pqTestMaterial(t, 1)
 	changed := material
 	changed.canonicalSalt++
@@ -125,6 +133,8 @@ func TestPQKeyFilesDoNotPersistSaltOrAddress(t *testing.T) {
 }
 
 func TestPQKeyFileRejectsMalformedInputs(t *testing.T) {
+	t.Parallel()
+
 	material := pqTestMaterial(t, 0)
 
 	var edSeed crypto.Seed
@@ -151,6 +161,8 @@ func TestPQKeyFileRejectsMalformedInputs(t *testing.T) {
 }
 
 func TestPQArmorRoundTrip(t *testing.T) {
+	t.Parallel()
+
 	material := pqTestMaterial(t, 0)
 	keyData := encodePQPrivateKeyFileBytes(material)
 
@@ -173,6 +185,8 @@ func TestPQArmorRoundTrip(t *testing.T) {
 }
 
 func TestPQPublicAddressSaltHandling(t *testing.T) {
+	t.Parallel()
+
 	material := pqTestMaterial(t, 1)
 	require.Equal(t, basics.PQAddressSalt(1), material.canonicalSalt)
 
@@ -192,6 +206,8 @@ func TestPQPublicAddressSaltHandling(t *testing.T) {
 }
 
 func TestPQSignProducesVerifiablePQEnvelope(t *testing.T) {
+	t.Parallel()
+
 	material := pqTestMaterial(t, 0)
 	tempDir := t.TempDir()
 	keyfile := filepath.Join(tempDir, "account.pq")
@@ -224,10 +240,12 @@ func TestPQSignProducesVerifiablePQEnvelope(t *testing.T) {
 
 	changed := signed
 	changed.Txn.Note = []byte("changed")
-	require.Error(t, changed.PQSig.Verify(config.Consensus[protocol.ConsensusFuture], changed.Txn, changed.Authorizer()))
+	require.ErrorContains(t, changed.PQSig.Verify(config.Consensus[protocol.ConsensusFuture], changed.Txn, changed.Authorizer()), "invalid deterministic falcon-1024 signature")
 }
 
 func TestPQSignSetsAndClearsAuthAddr(t *testing.T) {
+	t.Parallel()
+
 	material := pqTestMaterial(t, 0)
 	tempDir := t.TempDir()
 	keyfile := filepath.Join(tempDir, "account.pq")
@@ -265,6 +283,8 @@ func TestPQSignSetsAndClearsAuthAddr(t *testing.T) {
 }
 
 func TestPQSignRejectsMixedSignaturesUnlessOverwrite(t *testing.T) {
+	t.Parallel()
+
 	material := pqTestMaterial(t, 0)
 	tempDir := t.TempDir()
 	keyfile := filepath.Join(tempDir, "account.pq")
@@ -293,6 +313,8 @@ func TestPQSignRejectsMixedSignaturesUnlessOverwrite(t *testing.T) {
 }
 
 func TestPQSignRejectsNonCompliantSalt(t *testing.T) {
+	t.Parallel()
+
 	material := pqTestMaterial(t, 1)
 	require.Equal(t, basics.PQAddressSalt(1), material.canonicalSalt)
 
@@ -311,6 +333,8 @@ func TestPQSignRejectsNonCompliantSalt(t *testing.T) {
 }
 
 func TestPQMaterialDetection(t *testing.T) {
+	t.Parallel()
+
 	material := pqTestMaterial(t, 0)
 	require.True(t, isPQKeyMaterial(encodePQPrivateKeyFileBytes(material)))
 	require.True(t, isPQKeyMaterial(encodePQPublicKeyFileBytes(material)))
@@ -323,6 +347,7 @@ func TestPQMaterialDetection(t *testing.T) {
 func withPQSignGlobals(t *testing.T, keyfile, txfile, outfile, salt string, overwrite bool, f func()) {
 	t.Helper()
 
+	pqSignGlobalsMu.Lock()
 	oldKeyfile := pqSignKeyfile
 	oldTxfile := pqSignTxfile
 	oldOutfile := pqSignOutfile
@@ -334,6 +359,7 @@ func withPQSignGlobals(t *testing.T, keyfile, txfile, outfile, salt string, over
 		pqSignOutfile = oldOutfile
 		pqSignSalt = oldSalt
 		pqSignOverwrite = oldOverwrite
+		pqSignGlobalsMu.Unlock()
 	}()
 
 	pqSignKeyfile = keyfile
@@ -345,6 +371,8 @@ func withPQSignGlobals(t *testing.T, keyfile, txfile, outfile, salt string, over
 }
 
 func TestPQDecodeArmorRejectsMnemonic(t *testing.T) {
+	t.Parallel()
+
 	_, _, err := decodeArmoredPQPrivateKey("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about")
-	require.True(t, errors.Is(err, errPQArmorMalformed))
+	require.ErrorIs(t, err, errPQArmorMalformed)
 }

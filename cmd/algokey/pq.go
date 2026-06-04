@@ -245,8 +245,7 @@ func runPQGenerate() error {
 		}
 	}
 
-	printPQKeyInfo(os.Stdout, material.scheme, material.publicKey, material.canonicalSalt, material.canonicalAddress, true)
-	return nil
+	return printPQKeyInfo(os.Stdout, material.scheme, material.publicKey, material.canonicalSalt, material.canonicalAddress, true)
 }
 
 func runPQInfo() error {
@@ -259,8 +258,7 @@ func runPQInfo() error {
 	if err != nil {
 		return err
 	}
-	printPQKeyInfo(os.Stdout, material.scheme, material.publicKey, salt, addr, compliant)
-	return nil
+	return printPQKeyInfo(os.Stdout, material.scheme, material.publicKey, salt, addr, compliant)
 }
 
 func runPQAddress() error {
@@ -281,8 +279,7 @@ func runPQAddress() error {
 	if err != nil {
 		return err
 	}
-	printPQKeyInfo(os.Stdout, publicMaterial.scheme, publicMaterial.publicKey, salt, addr, compliant)
-	return nil
+	return printPQKeyInfo(os.Stdout, publicMaterial.scheme, publicMaterial.publicKey, salt, addr, compliant)
 }
 
 func runPQExport() error {
@@ -361,9 +358,9 @@ func runPQSign() error {
 			clearSignedTxnSignatures(&stxn)
 		}
 
-		signature, err := spec.signTxn(material.privateKey, stxn.Txn)
-		if err != nil {
-			return fmt.Errorf("cannot sign transaction: %w", err)
+		signature, signErr := spec.signTxn(material.privateKey, stxn.Txn)
+		if signErr != nil {
+			return fmt.Errorf("cannot sign transaction: %w", signErr)
 		}
 
 		stxn.PQSig = transactions.PQSig{
@@ -748,12 +745,16 @@ func clearSignedTxnSignatures(stxn *transactions.SignedTxn) {
 	stxn.PQSig = transactions.PQSig{}
 }
 
-func printPQKeyInfo(w io.Writer, scheme protocol.PQScheme, publicKey []byte, salt basics.PQAddressSalt, addr basics.Address, compliant bool) {
-	fmt.Fprintf(w, "PQ scheme: %s\n", scheme)
-	fmt.Fprintf(w, "PQ public key: %s\n", base64.StdEncoding.EncodeToString(publicKey))
-	fmt.Fprintf(w, "PQ address salt: %d\n", salt)
-	fmt.Fprintf(w, "PQ address: %s\n", addr)
-	fmt.Fprintf(w, "PQ address compliant: %t\n", compliant)
+func printPQKeyInfo(w io.Writer, scheme protocol.PQScheme, publicKey []byte, salt basics.PQAddressSalt, addr basics.Address, compliant bool) error {
+	_, err := io.WriteString(w, fmt.Sprintf(
+		"PQ scheme: %s\nPQ public key: %s\nPQ address salt: %d\nPQ address: %s\nPQ address compliant: %t\n",
+		scheme,
+		base64.StdEncoding.EncodeToString(publicKey),
+		salt,
+		addr,
+		compliant,
+	))
+	return err
 }
 
 func writeNewFile(filename string, data []byte, perm os.FileMode) error {
