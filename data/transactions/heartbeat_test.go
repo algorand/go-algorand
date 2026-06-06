@@ -58,6 +58,16 @@ func TestWellFormedHeartbeatErrors(t *testing.T) {
 			expectedError: fmt.Errorf("heartbeat transaction not supported"),
 		},
 		{
+			// A "hb" txn with the hb field omitted decodes to a nil
+			// *HeartbeatTxnFields. WellFormed must reject it, not panic.
+			tx: Transaction{
+				Type:   protocol.HeartbeatTx,
+				Header: okHeader,
+			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("heartbeat transaction has no heartbeat fields"),
+		},
+		{
 			tx: Transaction{
 				Type:   protocol.HeartbeatTx,
 				Header: okHeader,

@@ -348,7 +348,7 @@ func (tx Transaction) MatchAddress(addr basics.Address) bool {
 			return true
 		}
 	case protocol.HeartbeatTx:
-		if addr == tx.HeartbeatTxnFields.HbAddress {
+		if tx.HeartbeatTxnFields != nil && addr == tx.HeartbeatTxnFields.HbAddress {
 			return true
 		}
 	}
@@ -423,6 +423,13 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	case protocol.HeartbeatTx:
 		if !proto.Heartbeat {
 			return fmt.Errorf("heartbeat transaction not supported")
+		}
+
+		// HeartbeatTxnFields is a pointer; a "hb" transaction whose hb field was
+		// omitted decodes to a nil pointer. Reject it here rather than
+		// dereferencing nil (wellFormed has a value receiver) and panicking.
+		if tx.HeartbeatTxnFields == nil {
+			return errors.New("heartbeat transaction has no heartbeat fields")
 		}
 
 		err := tx.HeartbeatTxnFields.wellFormed(tx.Header, proto)
