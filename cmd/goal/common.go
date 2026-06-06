@@ -44,6 +44,7 @@ var (
 	fee                uint64
 	outFilename        string
 	sign               bool
+	allowRekey         bool
 	noteBase64         string
 	noteText           string
 	lease              string
@@ -54,6 +55,10 @@ var (
 )
 
 var dumpForDryrunFormat cmdutil.CobraStringValue = *cmdutil.MakeCobraStringValue("json", []string{"msgp"})
+
+func addAllowRekeyFlag(cmd *cobra.Command) {
+	cmd.Flags().BoolVar(&allowRekey, "allow-rekey", false, "Acknowledge and allow a transaction that changes an account's spending authority")
+}
 
 func addTxnFlags(cmd *cobra.Command) {
 	cmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")
@@ -71,6 +76,7 @@ func addTxnFlags(cmd *cobra.Command) {
 	cmd.Flags().StringSliceVar(&dumpForDryrunAccts, "dryrun-accounts", nil, "additional accounts to include into dryrun request obj")
 	cmd.Flags().StringVarP(&signerAddress, "signer", "S", "", "Address of key to sign with, if different from transaction \"from\" address due to rekeying")
 	cmd.Flags().StringVar(&rekeyToAddress, "rekey-to", "", "Rekey account to the given spending key/address. (Future transactions from this account will need to be signed with the new key.)")
+	addAllowRekeyFlag(cmd)
 }
 
 func parseRekey(rekeyToAddress string) basics.Address {

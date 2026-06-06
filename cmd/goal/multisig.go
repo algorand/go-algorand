@@ -49,6 +49,7 @@ func init() {
 	addSigCmd.Flags().StringVarP(&txFilename, "tx", "t", "", "Partially-signed transaction file to add signature to")
 	addSigCmd.Flags().StringVarP(&addr, "address", "a", "", "Address of the key to sign with")
 	addSigCmd.Flags().BoolVarP(&noSig, "no-sig", "n", false, "Fill in the transaction's multisig field with public keys and threshold information, but don't produce a signature")
+	addAllowRekeyFlag(addSigCmd)
 	addSigCmd.MarkFlagRequired("tx")
 
 	signProgramCmd.Flags().StringVarP(&programSource, "program", "p", "", "Program source to be compiled and signed")
@@ -92,6 +93,9 @@ var addSigCmd = &cobra.Command{
 			reportErrorf(addrNoSigError)
 		} else if addr != "" && noSig {
 			reportErrorf(addrNoSigError)
+		}
+		if !noSig {
+			ensureSafeToSign(decodeTxnsFromFile(txFilename), txFilename)
 		}
 
 		dataDir := datadir.EnsureSingleDataDir()

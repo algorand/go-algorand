@@ -18,14 +18,12 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -40,6 +38,7 @@ func init() {
 	signCmd.Flags().StringVarP(&signTxfile, "txfile", "t", "", "Transaction input filename")
 	signCmd.MarkFlagRequired("txfile")
 	signCmd.Flags().StringVarP(&signOutfile, "outfile", "o", "", "Transaction output filename")
+	addAllowRekeyFlag(signCmd)
 	signCmd.MarkFlagRequired("outfile")
 }
 
@@ -57,19 +56,18 @@ var signCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		var outBytes []byte
-		dec := protocol.NewMsgpDecoderBytes(txdata)
-		for {
-			var stxn transactions.SignedTxn
-			err = dec.Decode(&stxn)
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Cannot decode transaction: %v\n", err)
-				os.Exit(1)
-			}
+		txns, err := decodeSignedTxns(txdata)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Cannot decode transaction: %v\n", err)
+			os.Exit(1)
+		}
+		if err = validateSafeToSign(txns, signTxfile); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 
+		var outBytes []byte
+		for _, stxn := range txns {
 			stxn.Sig = key.Sign(stxn.Txn)
 			if stxn.Txn.Sender != basics.Address(key.SignatureVerifier) {
 				stxn.AuthAddr = basics.Address(key.SignatureVerifier)

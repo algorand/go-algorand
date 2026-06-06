@@ -28,31 +28,8 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestParseRekey(t *testing.T) {
+func TestValidateSafeToSignRequiresAllowRekey(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	// Test empty address
-	require.Equal(t, basics.Address{}, parseRekey(""))
-
-	// Test valid address
-	validAddrStr := "5ZHAMU2BLPLFEE2VFFBVWMKRIZKUBSPUUWT3YIOWSP7VWFRJIT4XF3VYNI"
-	validAddr, err := basics.UnmarshalChecksumAddress(validAddrStr)
-	require.NoError(t, err)
-	require.Equal(t, validAddr, parseRekey(validAddrStr))
-
-	// Test invalid address (should panic because reportErrorf calls exit(1) which panics in tests)
-	require.Panics(t, func() {
-		parseRekey("INVALID_ADDRESS")
-	})
-}
-
-func TestParseRekeyWithSafety(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	validAddrStr := "5ZHAMU2BLPLFEE2VFFBVWMKRIZKUBSPUUWT3YIOWSP7VWFRJIT4XF3VYNI"
-	validAddr, err := basics.UnmarshalChecksumAddress(validAddrStr)
-	require.NoError(t, err)
 
 	originalAllowRekey := allowRekey
 	defer func() {
@@ -60,12 +37,27 @@ func TestParseRekeyWithSafety(t *testing.T) {
 	}()
 
 	allowRekey = false
-	require.Panics(t, func() {
-		parseRekeyWithSafety(validAddrStr)
-	})
+	err := validateSafeToSign([]transactions.SignedTxn{{
+		Txn: transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:  basics.Address{1},
+				RekeyTo: basics.Address{2},
+			},
+		},
+	}}, "test.txn")
+	require.ErrorContains(t, err, "--allow-rekey")
 
 	allowRekey = true
-	require.Equal(t, validAddr, parseRekeyWithSafety(validAddrStr))
+	require.NoError(t, validateSafeToSign([]transactions.SignedTxn{{
+		Txn: transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:  basics.Address{1},
+				RekeyTo: basics.Address{2},
+			},
+		},
+	}}, "test.txn"))
 }
 
 func TestScanForRekeyDetectsAssetOptInGroup(t *testing.T) {
@@ -105,39 +97,4 @@ func TestScanForRekeyDetectsAssetOptInGroup(t *testing.T) {
 
 	require.Len(t, report.Rekeys, 1)
 	require.True(t, report.HasAssetOptInAndRekey)
-}
-
-func TestEnsureSafeToSignRequiresAllowRekey(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	originalAllowRekey := allowRekey
-	defer func() {
-		allowRekey = originalAllowRekey
-	}()
-
-	allowRekey = false
-	require.Panics(t, func() {
-		ensureSafeToSign([]transactions.SignedTxn{{
-			Txn: transactions.Transaction{
-				Type: protocol.PaymentTx,
-				Header: transactions.Header{
-					Sender:  basics.Address{1},
-					RekeyTo: basics.Address{2},
-				},
-			},
-		}}, "test.txn")
-	})
-
-	allowRekey = true
-	require.NotPanics(t, func() {
-		ensureSafeToSign([]transactions.SignedTxn{{
-			Txn: transactions.Transaction{
-				Type: protocol.PaymentTx,
-				Header: transactions.Header{
-					Sender:  basics.Address{1},
-					RekeyTo: basics.Address{2},
-				},
-			},
-		}}, "test.txn")
-	})
 }

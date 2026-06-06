@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -47,6 +46,7 @@ func init() {
 	multisigCmd.Flags().StringVarP(&multisigTxfile, "txfile", "t", "", "Transaction input filename")
 	multisigCmd.MarkFlagRequired("txfile")
 	multisigCmd.Flags().StringVarP(&multisigOutfile, "outfile", "o", "", "Transaction output filename")
+	addAllowRekeyFlag(multisigCmd)
 	multisigCmd.MarkFlagRequired("outfile")
 
 	appendAuthAddrCmd.Flags().StringVarP(&msigParams, "params", "p", "", "Multisig pre image parameters - [threshold] [Address 1] [Address 2] ...")
@@ -71,19 +71,18 @@ var multisigCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		var outBytes []byte
-		dec := protocol.NewMsgpDecoderBytes(txdata)
-		for {
-			var stxn transactions.SignedTxn
-			err = dec.Decode(&stxn)
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Cannot decode transaction: %v\n", err)
-				os.Exit(1)
-			}
+		txns, err := decodeSignedTxns(txdata)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Cannot decode transaction: %v\n", err)
+			os.Exit(1)
+		}
+		if err = validateSafeToSign(txns, multisigTxfile); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 
+		var outBytes []byte
+		for _, stxn := range txns {
 			ver, thresh, pks := stxn.Msig.Preimage()
 			addr, err1 := crypto.MultisigAddrGen(ver, thresh, pks)
 			if err1 != nil {

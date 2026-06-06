@@ -513,7 +513,7 @@ var createAppCmd = &cobra.Command{
 		}
 
 		// Fill in rekey, note and lease
-		tx.RekeyTo = parseRekey(rekeyToAddress)
+		tx.RekeyTo = parseRekeyWithSafety(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -594,7 +594,7 @@ var updateAppCmd = &cobra.Command{
 		tx.ExtraProgramPages = extraPages
 
 		// Fill in rekey, note and lease
-		tx.RekeyTo = parseRekey(rekeyToAddress)
+		tx.RekeyTo = parseRekeyWithSafety(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -665,7 +665,7 @@ var optInAppCmd = &cobra.Command{
 		}
 
 		// Fill in rekey, note and lease
-		tx.RekeyTo = parseRekey(rekeyToAddress)
+		tx.RekeyTo = parseRekeyWithSafety(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -736,7 +736,7 @@ var closeOutAppCmd = &cobra.Command{
 		}
 
 		// Fill in rekey, note and lease
-		tx.RekeyTo = parseRekey(rekeyToAddress)
+		tx.RekeyTo = parseRekeyWithSafety(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -807,7 +807,7 @@ var clearAppCmd = &cobra.Command{
 		}
 
 		// Fill in rekey, note and lease
-		tx.RekeyTo = parseRekey(rekeyToAddress)
+		tx.RekeyTo = parseRekeyWithSafety(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -877,7 +877,7 @@ var callAppCmd = &cobra.Command{
 		}
 
 		// Fill in rekey, note and lease
-		tx.RekeyTo = parseRekey(rekeyToAddress)
+		tx.RekeyTo = parseRekeyWithSafety(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -948,7 +948,7 @@ var deleteAppCmd = &cobra.Command{
 		}
 
 		// Fill in rekey, note and lease
-		tx.RekeyTo = parseRekey(rekeyToAddress)
+		tx.RekeyTo = parseRekeyWithSafety(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -1453,7 +1453,7 @@ var methodAppCmd = &cobra.Command{
 		}
 
 		// Fill in rekey, note and lease
-		appCallTxn.RekeyTo = parseRekey(rekeyToAddress)
+		appCallTxn.RekeyTo = parseRekeyWithSafety(rekeyToAddress)
 		appCallTxn.Note = parseNoteField(cmd)
 		appCallTxn.Lease = parseLease(cmd)
 
@@ -1489,9 +1489,21 @@ var methodAppCmd = &cobra.Command{
 			}
 		}
 
+		shouldSign := sign || outFilename == ""
+		if shouldSign {
+			previewSignedTxnGroup := make([]transactions.SignedTxn, len(txnGroup))
+			for i, unsignedTxn := range txnGroup {
+				previewSignedTxnGroup[i] = transactions.SignedTxn{Txn: unsignedTxn}
+				if i < len(txnArgs) {
+					previewSignedTxnGroup[i].Lsig = txnArgs[i].Lsig
+					previewSignedTxnGroup[i].AuthAddr = txnArgs[i].AuthAddr
+				}
+			}
+			ensureSafeToSign(previewSignedTxnGroup, "ABI method transaction group")
+		}
+
 		// Sign transactions
 		var signedTxnGroup []transactions.SignedTxn
-		shouldSign := sign || outFilename == ""
 		for i, unsignedTxn := range txnGroup {
 			txnFromArgs := transactions.SignedTxn{}
 			if i < len(txnArgs) {

@@ -177,6 +177,7 @@ func init() {
 	changeOnlineCmd.Flags().StringVarP(&statusChangeTxFile, "txfile", "t", "", "Write status change transaction to this file")
 	changeOnlineCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	changeOnlineCmd.Flags().StringVar(&rekeyToAddress, "rekey-to", "", "Rekey account to the given spending key/address. (Future transactions from this account will need to be signed with the new key.)")
+	addAllowRekeyFlag(changeOnlineCmd)
 
 	// addParticipationKey flags
 	addParticipationKeyCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account to associate with the generated partkey")
@@ -211,6 +212,7 @@ func init() {
 	renewParticipationKeyCmd.Flags().Uint64VarP(&keyDilution, "keyDilution", "", 0, "Key dilution for two-level participation keys")
 	renewParticipationKeyCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	renewParticipationKeyCmd.Flags().StringVar(&rekeyToAddress, "rekey-to", "", "Rekey account to the given spending key/address. (Future transactions from this account will need to be signed with the new key.)")
+	addAllowRekeyFlag(renewParticipationKeyCmd)
 
 	// renewAllParticipationKeyCmd
 	renewAllParticipationKeyCmd.Flags().Uint64VarP(&transactionFee, "fee", "f", 0, "The Fee to set on the status change transactions (defaults to suggested fee)")
@@ -219,6 +221,7 @@ func init() {
 	renewAllParticipationKeyCmd.Flags().Uint64VarP(&keyDilution, "keyDilution", "", 0, "Key dilution for two-level participation keys")
 	renewAllParticipationKeyCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	renewAllParticipationKeyCmd.Flags().StringVar(&rekeyToAddress, "rekey-to", "", "Rekey account to the given spending key/address. (Future transactions from this account will need to be signed with the new key.)")
+	addAllowRekeyFlag(renewAllParticipationKeyCmd)
 
 	// markNonparticipatingCmd flags
 	markNonparticipatingCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to change")
@@ -231,6 +234,7 @@ func init() {
 	markNonparticipatingCmd.Flags().StringVarP(&statusChangeTxFile, "txfile", "t", "", "Write status change transaction to this file, rather than posting to network")
 	markNonparticipatingCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	markNonparticipatingCmd.Flags().StringVar(&rekeyToAddress, "rekey-to", "", "Rekey account to the given spending key/address. (Future transactions from this account will need to be signed with the new key.)")
+	addAllowRekeyFlag(markNonparticipatingCmd)
 
 	dumpCmd.Flags().StringVarP(&dumpOutFile, "outfile", "o", "", "Save balance record to specified output file")
 	dumpCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to retrieve balance (required)")
@@ -1044,7 +1048,7 @@ func changeAccountOnlineStatus(
 		return err
 	}
 
-	utx.RekeyTo = parseRekey(rekeyToAddress)
+	utx.RekeyTo = parseRekeyWithSafety(rekeyToAddress)
 
 	if txFile != "" {
 		return writeTxnToFile(client, false, dataDir, wallet, utx, txFile)
@@ -1622,7 +1626,7 @@ var markNonparticipatingCmd = &cobra.Command{
 			reportErrorf(errorConstructingTX, err)
 		}
 
-		utx.RekeyTo = parseRekey(rekeyToAddress)
+		utx.RekeyTo = parseRekeyWithSafety(rekeyToAddress)
 
 		if statusChangeTxFile != "" {
 			err = writeTxnToFile(client, false, dataDir, walletName, utx, statusChangeTxFile)

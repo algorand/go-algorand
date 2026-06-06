@@ -131,6 +131,7 @@ func init() {
 	signCmd.Flags().StringVarP(&logicSigFile, "logic-sig", "L", "", "LogicSig to apply to transaction")
 	signCmd.Flags().StringSliceVar(&argB64Strings, "argb64", nil, "Base64 encoded args to pass to transaction logic")
 	signCmd.Flags().StringVarP(&protoVersion, "proto", "P", "", "Consensus protocol version id string")
+	addAllowRekeyFlag(signCmd)
 	signCmd.MarkFlagRequired("infile")
 	signCmd.MarkFlagRequired("outfile")
 
@@ -425,7 +426,7 @@ var sendCmd = &cobra.Command{
 
 		// If rekeying, parse that address
 		// (we don't use accountList.getAddressByName because this address likely doesn't correspond to an account)
-		payment.RekeyTo = parseRekey(rekeyToAddress)
+		payment.RekeyTo = parseRekeyWithSafety(rekeyToAddress)
 
 		// ConstructPayment fills in the suggested fee when fee=0. But if the user actually used --fee=0 on the
 		// commandline, we ought to do what they asked (especially now that zero or low fees make sense in
@@ -817,6 +818,7 @@ var signCmd = &cobra.Command{
 		txnGroups := make(map[crypto.Digest][]*transactions.SignedTxn)
 		var groupsOrder []crypto.Digest
 		txnIndex := make(map[*transactions.SignedTxn]int)
+		var decodedTxns []transactions.SignedTxn
 		count := 0
 		for {
 			uncheckedTxn := new(transactions.SignedTxn)
@@ -841,8 +843,11 @@ var signCmd = &cobra.Command{
 			}
 			txnGroups[group] = append(txnGroups[group], uncheckedTxn)
 			txnIndex[uncheckedTxn] = count
+			decodedTxns = append(decodedTxns, *uncheckedTxn)
 			count++
 		}
+
+		ensureSafeToSign(decodedTxns, txFilename)
 
 		consensusVersion, _ := getProto(protoVersion)
 		contextHdr := bookkeeping.BlockHeader{
