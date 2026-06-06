@@ -108,9 +108,8 @@ func (r *resources) fill(tx *transactions.Transaction, ep *EvalParams) {
 		r.fillAssetFreeze(&tx.Header, &tx.AssetFreezeTxnFields)
 	case protocol.ApplicationCallTx:
 		r.fillApplicationCall(ep, &tx.Header, &tx.ApplicationCallTxnFields)
-	case protocol.StateProofTx:
-		// state proof txns add nothing to availability (they can't even appear
-		// in a group with an appl. but still.)
+	case protocol.StateProofTx, protocol.HeartbeatTx:
+		// state proof and heartbeat txns add nothing to availability
 	default:
 		panic(tx.Type)
 	}

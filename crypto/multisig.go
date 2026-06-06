@@ -36,9 +36,9 @@ type MultisigSubsig struct {
 type MultisigSig struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Version   uint8            `codec:"v"`
-	Threshold uint8            `codec:"thr"`
-	Subsigs   []MultisigSubsig `codec:"subsig,allocbound=maxMultisig"`
+	Version   uint8            `codec:"v,required"`
+	Threshold uint8            `codec:"thr,required"`
+	Subsigs   []MultisigSubsig `codec:"subsig,allocbound=maxMultisig,required"`
 }
 
 // MultisigPreimageFromPKs makes an empty MultisigSig for a given preimage. It should be renamed.

@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -30,9 +31,9 @@ func TestEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	secrets := keypair()
-	zeroPayment := Transaction{Type: protocol.PaymentTx}
-	zeroKeyReg := Transaction{Type: protocol.KeyRegistrationTx}
-	require.NotEqual(t, zeroPayment.ID(), zeroKeyReg.ID(), "Empty payment and empty key reg have the same Txid -- domain separation is broken")
+	zeroPayment := Transaction{Type: protocol.PaymentTx, Header: Header{Sender: basics.Address{0x01}}}
+	zeroKeyReg := Transaction{Type: protocol.KeyRegistrationTx, Header: Header{Sender: basics.Address{0x01}}}
+	require.NotEqual(t, zeroPayment.ID(), zeroKeyReg.ID(), "payment and key reg have the same Txid -- domain separation is broken")
 
 	stxn1 := zeroPayment.Sign(secrets)
 	stxn2 := zeroKeyReg.Sign(secrets)

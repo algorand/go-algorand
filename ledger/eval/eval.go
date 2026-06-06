@@ -1330,7 +1330,11 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *r
 		err = apply.StateProof(tx.StateProofTxnFields, tx.Header.FirstValid, cow, eval.validate)
 
 	case protocol.HeartbeatTx:
-		err = apply.Heartbeat(*tx.HeartbeatTxnFields, tx.Header, cow, cow, cow.Round())
+		if tx.HeartbeatTxnFields == nil {
+			err = fmt.Errorf("heartbeat txn has no heartbeat fields")
+		} else {
+			err = apply.Heartbeat(*tx.HeartbeatTxnFields, tx.Header, cow, cow, cow.Round())
+		}
 
 	default:
 		err = fmt.Errorf("unknown transaction type %v", tx.Type)
