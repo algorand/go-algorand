@@ -373,9 +373,9 @@ func (r *resources) fillApplicationCallForeign(ep *EvalParams, hdr *transactions
 		}
 		var app basics.AppIndex
 		if br.Index > 0 {
-			// Bounds check will already have been done by
-			// WellFormed. For testing purposes, it's better to panic
-			// now than after returning a nil.
+			if br.Index > uint64(len(tx.ForeignApps)) {
+				continue
+			}
 			app = tx.ForeignApps[br.Index-1] // shift for the 0=current convention
 		}
 		r.shareBox(basics.BoxRef{App: app, Name: string(br.Name)}, tx.ApplicationID)

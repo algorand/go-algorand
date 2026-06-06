@@ -27,6 +27,7 @@ import (
 var (
 	errMissingHeartbeatFields       = errors.New("heartbeat transaction is missing its heartbeat fields")
 	errHeartbeatInResourceGroup     = errors.New("heartbeat transaction may not be grouped with an application call or asset creation")
+	errMalformedApplicationBoxIndex = errors.New("application transaction box index exceeds foreign apps")
 	errMalformedStateProofSignature = errors.New("state proof reveal has an empty or too-short signature")
 	errMalformedStateProofProof     = errors.New("state proof reveal has an invalid Merkle proof depth")
 )
@@ -53,6 +54,18 @@ func checkStateProofReveals(sp *stateproof.StateProof) error {
 	return nil
 }
 
+func checkApplicationCallBoxes(tx *Transaction) error {
+	if tx.Access != nil {
+		return nil
+	}
+	for i := range tx.Boxes {
+		if tx.Boxes[i].Index > uint64(len(tx.ForeignApps)) {
+			return errMalformedApplicationBoxIndex
+		}
+	}
+	return nil
+}
+
 func checkTxnGroup(n int, txn func(i int) *Transaction) error {
 	heartbeat, availTrigger := false, false
 	for i := 0; i < n; i++ {
@@ -65,6 +78,11 @@ func checkTxnGroup(n int, txn func(i int) *Transaction) error {
 			}
 		case protocol.StateProofTx:
 			if err := checkStateProofReveals(&tx.StateProof); err != nil {
+				return err
+			}
+		case protocol.ApplicationCallTx:
+			availTrigger = true
+			if err := checkApplicationCallBoxes(tx); err != nil {
 				return err
 			}
 		default:
