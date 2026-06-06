@@ -108,9 +108,8 @@ func (r *resources) fill(tx *transactions.Transaction, ep *EvalParams) {
 		r.fillAssetFreeze(&tx.Header, &tx.AssetFreezeTxnFields)
 	case protocol.ApplicationCallTx:
 		r.fillApplicationCall(ep, &tx.Header, &tx.ApplicationCallTxnFields)
-	case protocol.StateProofTx:
-		// state proof txns add nothing to availability (they can't even appear
-		// in a group with an appl. but still.)
+	case protocol.StateProofTx, protocol.HeartbeatTx:
+		// state proof and heartbeat txns add nothing to availability
 	default:
 		panic(tx.Type)
 	}
@@ -374,9 +373,9 @@ func (r *resources) fillApplicationCallForeign(ep *EvalParams, hdr *transactions
 		}
 		var app basics.AppIndex
 		if br.Index > 0 {
-			// Bounds check will already have been done by
-			// WellFormed. For testing purposes, it's better to panic
-			// now than after returning a nil.
+			if br.Index > uint64(len(tx.ForeignApps)) {
+				continue
+			}
 			app = tx.ForeignApps[br.Index-1] // shift for the 0=current convention
 		}
 		r.shareBox(basics.BoxRef{App: app, Name: string(br.Name)}, tx.ApplicationID)

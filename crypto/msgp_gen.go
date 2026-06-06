@@ -3,6 +3,7 @@
 package crypto
 
 import (
+	"errors"
 	_ "runtime/cgo"
 	_ "unsafe"
 
@@ -1653,6 +1654,27 @@ func (z *MultisigSig) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 					return
 				}
 			}
+		}
+	}
+	if (*z).Version == 0 {
+		err = errors.New("missing required field: v")
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+	}
+	if (*z).Threshold == 0 {
+		err = errors.New("missing required field: thr")
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+	}
+	if len((*z).Subsigs) == 0 {
+		err = errors.New("missing required field: subsig")
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
 		}
 	}
 	o = bts

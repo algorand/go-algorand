@@ -213,6 +213,10 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 		return nil, err
 	}
 
+	if err := transactions.CheckTxnGroup(stxs); err != nil {
+		return nil, &TxGroupError{err: err, GroupIndex: -1, Reason: TxGroupErrorReasonNotWellFormed}
+	}
+
 	lSigPooledSize := 0
 	for i, stxn := range stxs {
 		prepErr := txnBatchPrep(i, groupCtx, verifier)

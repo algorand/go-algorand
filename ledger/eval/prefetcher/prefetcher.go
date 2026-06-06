@@ -435,10 +435,11 @@ func (p *paysetPrefetcher) prefetch(ctx context.Context) {
 			case protocol.StateProofTx:
 			case protocol.KeyRegistrationTx: // No extra accounts besides the sender
 			case protocol.HeartbeatTx:
-				queue = queue.addAccountTask(&stxn.Txn.HbAddress, task, accountTasks)
+				if stxn.Txn.HeartbeatTxnFields != nil {
+					queue = queue.addAccountTask(&stxn.Txn.HbAddress, task, accountTasks)
+				}
 			}
 
-			// If you add new addresses here, also add them in getTxnAddresses().
 			if !stxn.Txn.Sender.IsZero() {
 				queue = queue.addAccountTask(&stxn.Txn.Sender, task, accountTasks)
 			}

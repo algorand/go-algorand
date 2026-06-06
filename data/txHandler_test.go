@@ -217,6 +217,7 @@ func makeRandomTransactions(num int) ([]transactions.SignedTxn, []byte) {
 			Sig:      sig,
 			AuthAddr: addr,
 			Txn: transactions.Transaction{
+				Type: protocol.PaymentTx,
 				Header: transactions.Header{
 					Sender: addr,
 					Fee:    basics.MicroAlgos{Raw: crypto.RandUint64()},
