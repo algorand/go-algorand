@@ -72,8 +72,12 @@ func init() {
 }
 
 func verifyTxnGroup(stxs []transactions.SignedTxn, contextHdr *bookkeeping.BlockHeader) error {
-	_, err := txnGroup(stxs, contextHdr, nil, nil, nil)
-	return err
+	batchVerifier := crypto.MakeBatchVerifier()
+
+	if _, err := txnGroupBatchPrep(stxs, contextHdr, nil, batchVerifier, nil); err != nil {
+		return err
+	}
+	return batchVerifier.Verify()
 }
 
 type DummyLedgerForSignature struct {
@@ -353,15 +357,18 @@ func TestSignedPayment(t *testing.T) {
 	payments, stxns, secrets, addrs := generateTestObjects(1, 1, 0, 0)
 	payment, stxn, secret, addr := payments[0], stxns[0], secrets[0], addrs[0]
 
-	require.NoError(t, payment.WellFormed(spec, proto), "generateTestObjects generated an invalid payment")
-	require.NoError(t, verifyTxnGroup(stxns, blockHeader), "generateTestObjects generated a bad signedtxn")
+	groupCtx, err := PrepareGroupContext(stxns, blockHeader, nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, transactions.SignedTxnGroupWellFormed([]transactions.SignedTxn{{Txn: payment}}, spec, proto), "generateTestObjects generated an invalid payment")
+	require.NoError(t, verifyTxnGroup(groupCtx.signedGroupTxns, blockHeader), "generateTestObjects generated a bad signedtxn")
 
 	stxn2 := payment.Sign(secret)
 	require.Equal(t, stxn2.Sig, stxn.Sig, "got two different signatures for the same transaction (our signing function is deterministic)")
 
 	stxn2.MessUpSigForTesting()
 	require.Equal(t, stxn.ID(), stxn2.ID(), "changing sig caused txid to change")
-	require.Error(t, verifyTxnGroup([]transactions.SignedTxn{stxn2}, blockHeader), "verify succeeded with bad sig")
+	groupCtx.signedGroupTxns[0] = stxn2
+	require.Error(t, verifyTxnGroup(groupCtx.signedGroupTxns, blockHeader), "verify succeeded with bad sig")
 
 	require.True(t, crypto.SignatureVerifier(addr).Verify(payment, stxn.Sig), "signature on the transaction is not the signature of the hash of the transaction under the spender's key")
 }
@@ -371,8 +378,14 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 
 	_, signed, _, _ := generateTestObjects(100, 50, 0, 0)
 
+	if err := verifyTxnGroup(signed, blockHeader); err != nil {
+		t.Errorf("signed transaction did not verify: %v", err)
+	}
+
 	for _, txn := range signed {
-		if verifyTxnGroup([]transactions.SignedTxn{txn}, blockHeader) != nil {
+		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{txn}, blockHeader, nil, nil)
+		require.NoError(t, err)
+		if verifyTxnGroup(groupCtx.signedGroupTxns, blockHeader) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
 		}
 
@@ -978,15 +991,21 @@ func TestTxnValidationEmptySig(t *testing.T) {
 
 	_, signed, _, _ := generateTestObjects(100, 50, 0, 0)
 
+	if err := verifyTxnGroup(signed, blockHeader); err != nil {
+		t.Errorf("signed transaction did not verify: %v", err)
+	}
+
 	for _, txn := range signed {
-		if verifyTxnGroup([]transactions.SignedTxn{txn}, blockHeader) != nil {
+		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{txn}, blockHeader, nil, nil)
+		require.NoError(t, err)
+		if verifyTxnGroup(groupCtx.signedGroupTxns, blockHeader) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
 		}
 
-		txn.Sig = crypto.Signature{}
-		txn.Msig = crypto.MultisigSig{}
-		txn.Lsig = transactions.LogicSig{}
-		if verifyTxnGroup([]transactions.SignedTxn{txn}, blockHeader) == nil {
+		groupCtx.signedGroupTxns[0].Sig = crypto.Signature{}
+		groupCtx.signedGroupTxns[0].Msig = crypto.MultisigSig{}
+		groupCtx.signedGroupTxns[0].Lsig = transactions.LogicSig{}
+		if verifyTxnGroup(groupCtx.signedGroupTxns, blockHeader) == nil {
 			t.Errorf("transaction %#v verified without sig", txn)
 		}
 	}
