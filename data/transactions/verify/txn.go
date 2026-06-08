@@ -243,10 +243,14 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 	if err != nil {
 		return nil, err
 	}
-	for i := range stxs {
-		if err := stxs[i].Txn.WellFormed(groupCtx.specAddrs, groupCtx.consensusParams); err != nil {
-			return nil, fmt.Errorf("transaction %+v invalid : %w", stxs[i], &TxGroupError{err: err, GroupIndex: i, Reason: TxGroupErrorReasonNotWellFormed})
+
+	err = transactions.SignedTxnGroupWellFormed(stxs, groupCtx.specAddrs, groupCtx.consensusParams)
+	if err != nil {
+		var err0 *transactions.TxnNotWellFormedError
+		if !errors.As(err, &err0) {
+			return nil, err
 		}
+		return nil, fmt.Errorf("transaction %+v invalid : %w", err0.SignedTxn(), &TxGroupError{err: err0.Err(), GroupIndex: err0.GroupIndex(), Reason: TxGroupErrorReasonNotWellFormed})
 	}
 
 	if err := transactions.CheckTxnGroup(stxs, groupCtx.consensusParams.AllowGroupedHeartbeats); err != nil {
