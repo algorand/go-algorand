@@ -6443,6 +6443,7 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 	if isGroup {
 		parent = cx.currentTxID()
 	}
+
 	for itx := range cx.subtxns {
 		// The goal is to follow the same invariants used by the transaction
 		// pool. Namely that any transaction that makes it to Perform (which is
@@ -6456,7 +6457,9 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 		if txnErr != nil {
 			return txnErr
 		}
+	}
 
+	for itx := range cx.subtxns {
 		var calledVersion uint64
 
 		// Disallow reentrancy, limit inner app call depth, and do version checks
