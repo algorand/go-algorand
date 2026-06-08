@@ -27,6 +27,7 @@ import (
 var (
 	errMissingHeartbeatFields       = errors.New("heartbeat transaction is missing its heartbeat fields")
 	errHeartbeatInResourceGroup     = errors.New("heartbeat transaction may not be grouped with an application call or asset creation")
+	errMalformedTxType              = errors.New("transaction has an unknown type")
 	errMalformedApplicationBoxIndex = errors.New("application transaction box index exceeds foreign apps")
 	errMalformedStateProofSignature = errors.New("state proof reveal has an empty or too-short signature")
 	errMalformedStateProofProof     = errors.New("state proof reveal has an invalid Merkle proof depth")
@@ -85,10 +86,12 @@ func checkTxnGroup(n int, txn func(i int) *Transaction) error {
 			if err := checkApplicationCallBoxes(tx); err != nil {
 				return err
 			}
-		default:
+		case protocol.PaymentTx, protocol.KeyRegistrationTx, protocol.AssetConfigTx, protocol.AssetTransferTx, protocol.AssetFreezeTx:
 			if triggersResourceAvailability(tx) {
 				availTrigger = true
 			}
+		default:
+			return errMalformedTxType
 		}
 	}
 	if heartbeat && availTrigger {

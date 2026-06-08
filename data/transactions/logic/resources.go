@@ -111,7 +111,7 @@ func (r *resources) fill(tx *transactions.Transaction, ep *EvalParams) {
 	case protocol.StateProofTx, protocol.HeartbeatTx:
 		// state proof and heartbeat txns add nothing to availability
 	default:
-		panic(tx.Type)
+		// An unknown transaction type adds nothing to availability.
 	}
 }
 
