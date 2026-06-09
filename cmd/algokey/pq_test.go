@@ -20,7 +20,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -31,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-deadlock"
 )
 
 type countingRNG struct {
@@ -38,7 +38,7 @@ type countingRNG struct {
 	bytes int
 }
 
-var pqSignGlobalsMu sync.Mutex
+var pqSignGlobalsMu deadlock.Mutex
 
 func (rng *countingRNG) RandBytes(buf []byte) {
 	rng.calls++
