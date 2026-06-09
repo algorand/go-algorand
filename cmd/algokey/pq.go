@@ -120,6 +120,14 @@ var (
 	pqSignOverwrite bool
 )
 
+type pqSignOptions struct {
+	keyfile   string
+	txfile    string
+	outfile   string
+	salt      string
+	overwrite bool
+}
+
 var pqCmd = &cobra.Command{
 	Use:   "pq",
 	Short: "Manage post-quantum account keys",
@@ -194,35 +202,41 @@ func init() {
 	pqGenerateCmd.Flags().StringVar(&pqGenerateScheme, "scheme", pqGenerateScheme, "Post-quantum signature scheme")
 	pqGenerateCmd.Flags().StringVar(&pqGenerateKeyfile, "keyfile", "", "Private key filename")
 	pqGenerateCmd.Flags().StringVar(&pqGeneratePubkeyfile, "pubkeyfile", "", "Public key filename")
-	pqGenerateCmd.MarkFlagRequired("keyfile")
+	mustMarkFlagRequired(pqGenerateCmd, "keyfile")
 
 	pqInfoCmd.Flags().StringVar(&pqInfoKeyfile, "keyfile", "", "Private key filename")
 	pqInfoCmd.Flags().StringVar(&pqInfoSalt, "salt", pqInfoSalt, "Address salt: canonical or 0..255")
-	pqInfoCmd.MarkFlagRequired("keyfile")
+	mustMarkFlagRequired(pqInfoCmd, "keyfile")
 
 	pqAddressCmd.Flags().StringVar(&pqAddressPubkeyfile, "pubkeyfile", "", "Public key filename")
 	pqAddressCmd.Flags().StringVar(&pqAddressScheme, "scheme", pqAddressScheme, "Post-quantum signature scheme")
 	pqAddressCmd.Flags().StringVar(&pqAddressSalt, "salt", pqAddressSalt, "Address salt: canonical or 0..255")
-	pqAddressCmd.MarkFlagRequired("pubkeyfile")
+	mustMarkFlagRequired(pqAddressCmd, "pubkeyfile")
 
 	pqExportCmd.Flags().StringVar(&pqExportKeyfile, "keyfile", "", "Private key filename")
 	pqExportCmd.Flags().StringVar(&pqExportOutfile, "outfile", "", "Armored private key output filename")
-	pqExportCmd.MarkFlagRequired("keyfile")
-	pqExportCmd.MarkFlagRequired("outfile")
+	mustMarkFlagRequired(pqExportCmd, "keyfile")
+	mustMarkFlagRequired(pqExportCmd, "outfile")
 
 	pqImportCmd.Flags().StringVar(&pqImportInfile, "infile", "", "Armored private key input filename")
 	pqImportCmd.Flags().StringVar(&pqImportKeyfile, "keyfile", "", "Private key filename")
-	pqImportCmd.MarkFlagRequired("infile")
-	pqImportCmd.MarkFlagRequired("keyfile")
+	mustMarkFlagRequired(pqImportCmd, "infile")
+	mustMarkFlagRequired(pqImportCmd, "keyfile")
 
 	pqSignCmd.Flags().StringVar(&pqSignKeyfile, "keyfile", "", "Private key filename")
 	pqSignCmd.Flags().StringVar(&pqSignTxfile, "txfile", "", "Transaction input filename")
 	pqSignCmd.Flags().StringVar(&pqSignOutfile, "outfile", "", "Transaction output filename")
 	pqSignCmd.Flags().StringVar(&pqSignSalt, "salt", pqSignSalt, "Address salt: canonical or 0..255")
 	pqSignCmd.Flags().BoolVar(&pqSignOverwrite, "overwrite", false, "Overwrite any existing signature category")
-	pqSignCmd.MarkFlagRequired("keyfile")
-	pqSignCmd.MarkFlagRequired("txfile")
-	pqSignCmd.MarkFlagRequired("outfile")
+	mustMarkFlagRequired(pqSignCmd, "keyfile")
+	mustMarkFlagRequired(pqSignCmd, "txfile")
+	mustMarkFlagRequired(pqSignCmd, "outfile")
+}
+
+func mustMarkFlagRequired(cmd *cobra.Command, flagName string) {
+	if err := cmd.MarkFlagRequired(flagName); err != nil {
+		panic(fmt.Sprintf("failed to mark %s flag %q required: %v", cmd.CommandPath(), flagName, err))
+	}
 }
 
 func runPQGenerate() error {
@@ -316,7 +330,17 @@ func runPQImport() error {
 }
 
 func runPQSign() error {
-	material, err := readPQPrivateKeyFile(pqSignKeyfile)
+	return runPQSignWithOptions(pqSignOptions{
+		keyfile:   pqSignKeyfile,
+		txfile:    pqSignTxfile,
+		outfile:   pqSignOutfile,
+		salt:      pqSignSalt,
+		overwrite: pqSignOverwrite,
+	})
+}
+
+func runPQSignWithOptions(opts pqSignOptions) error {
+	material, err := readPQPrivateKeyFile(opts.keyfile)
 	if err != nil {
 		return err
 	}
@@ -326,7 +350,7 @@ func runPQSign() error {
 		return err
 	}
 
-	salt, authorizer, _, compliant, err := resolvePQSalt(material.scheme, material.publicKey, pqSignSalt)
+	salt, authorizer, _, compliant, err := resolvePQSalt(material.scheme, material.publicKey, opts.salt)
 	if err != nil {
 		return err
 	}
@@ -334,9 +358,9 @@ func runPQSign() error {
 		return fmt.Errorf("%w: derived address %s for salt %d", errPQSaltNotCompliant, authorizer, salt)
 	}
 
-	txdata, err := readFile(pqSignTxfile)
+	txdata, err := readFile(opts.txfile)
 	if err != nil {
-		return fmt.Errorf("cannot read transactions from %s: %w", pqSignTxfile, err)
+		return fmt.Errorf("cannot read transactions from %s: %w", opts.txfile, err)
 	}
 
 	var outBytes []byte
@@ -352,7 +376,7 @@ func runPQSign() error {
 		}
 
 		if signedTxnHasSignature(&stxn) {
-			if !pqSignOverwrite {
+			if !opts.overwrite {
 				return errPQTxnAlreadySigned
 			}
 			clearSignedTxnSignatures(&stxn)
@@ -378,8 +402,8 @@ func runPQSign() error {
 		outBytes = append(outBytes, protocol.Encode(&stxn)...)
 	}
 
-	if err = writeFile(pqSignOutfile, outBytes, 0600); err != nil {
-		return fmt.Errorf("cannot write signed transactions to %s: %w", pqSignOutfile, err)
+	if err = writeFile(opts.outfile, outBytes, 0600); err != nil {
+		return fmt.Errorf("cannot write signed transactions to %s: %w", opts.outfile, err)
 	}
 	return nil
 }
@@ -778,7 +802,7 @@ func writeNewFile(filename string, data []byte, perm os.FileMode) error {
 
 func exitOnError(err error) {
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }

@@ -30,15 +30,12 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/go-deadlock"
 )
 
 type countingRNG struct {
 	calls int
 	bytes int
 }
-
-var pqSignGlobalsMu deadlock.Mutex
 
 func (rng *countingRNG) RandBytes(buf []byte) {
 	rng.calls++
@@ -226,9 +223,12 @@ func TestPQSignProducesVerifiablePQEnvelope(t *testing.T) {
 	stxn := pqTestTxn(material.canonicalAddress)
 	require.NoError(t, os.WriteFile(txfile, protocol.Encode(&stxn), 0600))
 
-	withPQSignGlobals(t, keyfile, txfile, outfile, "canonical", false, func() {
-		require.NoError(t, runPQSign())
-	})
+	require.NoError(t, runPQSignWithOptions(pqSignOptions{
+		keyfile: keyfile,
+		txfile:  txfile,
+		outfile: outfile,
+		salt:    "canonical",
+	}))
 
 	signedBytes, err := os.ReadFile(outfile)
 	require.NoError(t, err)
@@ -265,9 +265,12 @@ func TestPQSignSetsAndClearsAuthAddr(t *testing.T) {
 	txfile := filepath.Join(tempDir, "rekey.msgp")
 	outfile := filepath.Join(tempDir, "rekey-signed.msgp")
 	require.NoError(t, os.WriteFile(txfile, protocol.Encode(&transactions.SignedTxn{Txn: pqTestTxn(sender).Txn}), 0600))
-	withPQSignGlobals(t, keyfile, txfile, outfile, "canonical", false, func() {
-		require.NoError(t, runPQSign())
-	})
+	require.NoError(t, runPQSignWithOptions(pqSignOptions{
+		keyfile: keyfile,
+		txfile:  txfile,
+		outfile: outfile,
+		salt:    "canonical",
+	}))
 	var signed transactions.SignedTxn
 	data, err := os.ReadFile(outfile)
 	require.NoError(t, err)
@@ -281,9 +284,12 @@ func TestPQSignSetsAndClearsAuthAddr(t *testing.T) {
 	stxn := pqTestTxn(material.canonicalAddress)
 	stxn.AuthAddr = stale
 	require.NoError(t, os.WriteFile(txfile, protocol.Encode(&stxn), 0600))
-	withPQSignGlobals(t, keyfile, txfile, outfile, "canonical", false, func() {
-		require.NoError(t, runPQSign())
-	})
+	require.NoError(t, runPQSignWithOptions(pqSignOptions{
+		keyfile: keyfile,
+		txfile:  txfile,
+		outfile: outfile,
+		salt:    "canonical",
+	}))
 	data, err = os.ReadFile(outfile)
 	require.NoError(t, err)
 	var staleSigned transactions.SignedTxn
@@ -306,14 +312,21 @@ func TestPQSignRejectsMixedSignaturesUnlessOverwrite(t *testing.T) {
 	stxn.Sig[0] = 1
 	require.NoError(t, os.WriteFile(txfile, protocol.Encode(&stxn), 0600))
 
-	withPQSignGlobals(t, keyfile, txfile, outfile, "canonical", false, func() {
-		err := runPQSign()
-		require.ErrorIs(t, err, errPQTxnAlreadySigned)
+	err := runPQSignWithOptions(pqSignOptions{
+		keyfile: keyfile,
+		txfile:  txfile,
+		outfile: outfile,
+		salt:    "canonical",
 	})
+	require.ErrorIs(t, err, errPQTxnAlreadySigned)
 
-	withPQSignGlobals(t, keyfile, txfile, outfile, "canonical", true, func() {
-		require.NoError(t, runPQSign())
-	})
+	require.NoError(t, runPQSignWithOptions(pqSignOptions{
+		keyfile:   keyfile,
+		txfile:    txfile,
+		outfile:   outfile,
+		salt:      "canonical",
+		overwrite: true,
+	}))
 	data, err := os.ReadFile(outfile)
 	require.NoError(t, err)
 	var signed transactions.SignedTxn
@@ -337,10 +350,13 @@ func TestPQSignRejectsNonCompliantSalt(t *testing.T) {
 	stxn := pqTestTxn(material.canonicalAddress)
 	require.NoError(t, os.WriteFile(txfile, protocol.Encode(&stxn), 0600))
 
-	withPQSignGlobals(t, keyfile, txfile, outfile, "0", false, func() {
-		err := runPQSign()
-		require.ErrorIs(t, err, errPQSaltNotCompliant)
+	err := runPQSignWithOptions(pqSignOptions{
+		keyfile: keyfile,
+		txfile:  txfile,
+		outfile: outfile,
+		salt:    "0",
 	})
+	require.ErrorIs(t, err, errPQSaltNotCompliant)
 }
 
 func TestPQMaterialDetection(t *testing.T) {
@@ -354,32 +370,6 @@ func TestPQMaterialDetection(t *testing.T) {
 
 	var edSeed crypto.Seed
 	require.False(t, isPQKeyMaterial(edSeed[:]))
-}
-
-func withPQSignGlobals(t *testing.T, keyfile, txfile, outfile, salt string, overwrite bool, f func()) {
-	t.Helper()
-
-	pqSignGlobalsMu.Lock()
-	oldKeyfile := pqSignKeyfile
-	oldTxfile := pqSignTxfile
-	oldOutfile := pqSignOutfile
-	oldSalt := pqSignSalt
-	oldOverwrite := pqSignOverwrite
-	defer func() {
-		pqSignKeyfile = oldKeyfile
-		pqSignTxfile = oldTxfile
-		pqSignOutfile = oldOutfile
-		pqSignSalt = oldSalt
-		pqSignOverwrite = oldOverwrite
-		pqSignGlobalsMu.Unlock()
-	}()
-
-	pqSignKeyfile = keyfile
-	pqSignTxfile = txfile
-	pqSignOutfile = outfile
-	pqSignSalt = salt
-	pqSignOverwrite = overwrite
-	f()
 }
 
 func TestPQDecodeArmorRejectsMnemonic(t *testing.T) {
