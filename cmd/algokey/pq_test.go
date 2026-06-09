@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type countingRNG struct {
@@ -84,6 +85,7 @@ func pqTestTxn(sender basics.Address) transactions.SignedTxn {
 }
 
 func TestPQGenerateUsesFalconSeedEntropy(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	rng := &countingRNG{}
@@ -98,6 +100,7 @@ func TestPQGenerateUsesFalconSeedEntropy(t *testing.T) {
 }
 
 func TestPQPrivateKeyFileRoundTripAndPermissions(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	material := pqTestMaterial(t, 0)
@@ -121,6 +124,7 @@ func TestPQPrivateKeyFileRoundTripAndPermissions(t *testing.T) {
 }
 
 func TestPQKeyFilesDoNotPersistSaltOrAddress(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	material := pqTestMaterial(t, 1)
@@ -133,6 +137,7 @@ func TestPQKeyFilesDoNotPersistSaltOrAddress(t *testing.T) {
 }
 
 func TestPQKeyFileRejectsMalformedInputs(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	material := pqTestMaterial(t, 0)
@@ -161,6 +166,7 @@ func TestPQKeyFileRejectsMalformedInputs(t *testing.T) {
 }
 
 func TestPQArmorRoundTrip(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	material := pqTestMaterial(t, 0)
@@ -185,6 +191,7 @@ func TestPQArmorRoundTrip(t *testing.T) {
 }
 
 func TestPQPublicAddressSaltHandling(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	material := pqTestMaterial(t, 1)
@@ -206,6 +213,7 @@ func TestPQPublicAddressSaltHandling(t *testing.T) {
 }
 
 func TestPQSignProducesVerifiablePQEnvelope(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	material := pqTestMaterial(t, 0)
@@ -244,6 +252,7 @@ func TestPQSignProducesVerifiablePQEnvelope(t *testing.T) {
 }
 
 func TestPQSignSetsAndClearsAuthAddr(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	material := pqTestMaterial(t, 0)
@@ -283,6 +292,7 @@ func TestPQSignSetsAndClearsAuthAddr(t *testing.T) {
 }
 
 func TestPQSignRejectsMixedSignaturesUnlessOverwrite(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	material := pqTestMaterial(t, 0)
@@ -313,6 +323,7 @@ func TestPQSignRejectsMixedSignaturesUnlessOverwrite(t *testing.T) {
 }
 
 func TestPQSignRejectsNonCompliantSalt(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	material := pqTestMaterial(t, 1)
@@ -333,6 +344,7 @@ func TestPQSignRejectsNonCompliantSalt(t *testing.T) {
 }
 
 func TestPQMaterialDetection(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	material := pqTestMaterial(t, 0)
@@ -371,6 +383,7 @@ func withPQSignGlobals(t *testing.T, keyfile, txfile, outfile, salt string, over
 }
 
 func TestPQDecodeArmorRejectsMnemonic(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	_, _, err := decodeArmoredPQPrivateKey("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about")
