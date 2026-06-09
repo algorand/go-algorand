@@ -29,7 +29,6 @@ var ErrNoSpace = errors.New("block does not have space for transaction")
 
 // Verify each custom error type implements the error interface, and declare which are pointer/value receivers.
 var (
-	_ error = (*TxnNotWellFormedError)(nil)
 	_ error = (*OverspendError)(nil)
 	_ error = (*MinBalanceError)(nil)
 	_ error = (*AssetBalanceError)(nil)
@@ -42,15 +41,6 @@ var (
 	_ error = EvalPanicError{}
 	_ error = (*TxGroupMalformedError)(nil)
 )
-
-// TxnNotWellFormedError indicates a transaction was not well-formed when evaluated by the BlockEvaluator
-//
-//msgp:ignore TxnNotWellFormedError
-type TxnNotWellFormedError string
-
-func (err *TxnNotWellFormedError) Error() string {
-	return string(*err)
-}
 
 // OverspendError indicates a transaction attempted to spend more than available funds.
 type OverspendError struct {

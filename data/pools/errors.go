@@ -22,6 +22,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -192,7 +193,7 @@ func ClassifyTxPoolError(err error) string {
 		return TxPoolErrTagGroupID
 	}
 
-	var notWellErr *ledgercore.TxnNotWellFormedError
+	var notWellErr *transactions.TxnNotWellFormedError
 	if errors.As(err, &notWellErr) {
 		return TxPoolErrTagNotWell
 	}

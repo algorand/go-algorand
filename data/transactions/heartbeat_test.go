@@ -269,7 +269,7 @@ func TestWellFormedHeartbeatErrors(t *testing.T) {
 		},
 	}
 	for _, usecase := range usecases {
-		err := usecase.tx.WellFormed(SpecialAddresses{}, usecase.proto)
+		err := usecase.tx.wellFormed(SpecialAddresses{}, usecase.proto)
 		assert.Equal(t, usecase.expectedError, err)
 	}
 }

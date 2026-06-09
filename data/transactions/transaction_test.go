@@ -198,7 +198,7 @@ func TestHeaderWellFormed(t *testing.T) {
 			copy := correctTxn
 			fn(&correctTxn)
 			defer func() { correctTxn = copy }()
-			err := correctTxn.WellFormed(sp, p)
+			err := correctTxn.wellFormed(sp, p)
 			a.NoError(err, msg)
 		}
 	}
@@ -211,7 +211,7 @@ func TestHeaderWellFormed(t *testing.T) {
 			copy := correctTxn
 			fn(&correctTxn)
 			defer func() { correctTxn = copy }()
-			err := correctTxn.WellFormed(sp, p)
+			err := correctTxn.wellFormed(sp, p)
 			a.ErrorContains(err, msg)
 		}
 	}
@@ -511,7 +511,7 @@ func TestWellFormed_BigNotes(t *testing.T) {
 				},
 			}
 
-			err := tx.WellFormed(spec, tt.proto)
+			err := tx.wellFormed(spec, tt.proto)
 			if tt.errorMsg != "" {
 				require.ErrorContains(t, err, tt.errorMsg)
 			} else {
@@ -1035,7 +1035,7 @@ func TestWellFormed_BigPrograms(t *testing.T) {
 				},
 			}
 
-			err := tx.WellFormed(spec, tt.proto)
+			err := tx.wellFormed(spec, tt.proto)
 			if tt.errorMsg != "" {
 				require.ErrorContains(t, err, tt.errorMsg)
 			} else {
