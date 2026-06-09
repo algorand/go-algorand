@@ -431,7 +431,8 @@ func TestBoxRW(t *testing.T) {
 		dl.txn(call.Args("create", "yy"), fmt.Sprintf("invalid Box reference %#x", "yy"))
 		withBr := call.Args("create", "yy")
 		withBr.Boxes = append(withBr.Boxes, transactions.BoxRef{Index: 1, Name: []byte("yy")})
-		require.Error(dl.t, withBr.Txn().WellFormed(transactions.SpecialAddresses{}, dl.generator.GenesisProto()))
+		err := transactions.SignedTxnGroupWellFormed([]transactions.SignedTxn{{Txn: withBr.Txn()}}, transactions.SpecialAddresses{}, dl.generator.GenesisProto())
+		require.Error(dl.t, err)
 		withBr.Boxes[1].Index = 0
 		dl.txn(withBr)
 	})
@@ -656,7 +657,8 @@ func TestBoxInners(t *testing.T) {
 
 		// This isn't right: Index should be index into ForeignApps
 		call.Boxes = []transactions.BoxRef{{Index: uint64(boxID), Name: []byte("x")}}
-		require.Error(t, call.Txn().WellFormed(transactions.SpecialAddresses{}, dl.generator.genesisProto))
+		err := transactions.SignedTxnGroupWellFormed([]transactions.SignedTxn{{Txn: call.Txn()}}, transactions.SpecialAddresses{}, dl.generator.genesisProto)
+		require.Error(t, err)
 
 		call.Boxes = []transactions.BoxRef{{Index: 1, Name: []byte("x")}}
 		if ver < boxQuotaBumpVersion {

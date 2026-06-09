@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -261,6 +262,69 @@ func TestLogicSigSaltedKeySigFee(t *testing.T) {
 
 	surcharge, _ := proto.PerByteTxnSurcharge.MulInt(overBy)
 	require.Equal(t, basics.AddSaturate(basics.Micros(1e6), surcharge), lsUsage)
+}
+
+// BenchmarkWellFormed compares calling Transaction.WellFormed directly in a
+// loop against the generic SignedTxnGroupWellFormed over []SignedTxn.
+func BenchmarkWellFormed(b *testing.B) {
+	proto := config.Consensus[protocol.ConsensusFuture]
+	spec := SpecialAddresses{
+		FeeSink:     basics.Address{0x01},
+		RewardsPool: basics.Address{0x02},
+	}
+
+	tx := Transaction{
+		Type: protocol.PaymentTx,
+		Header: Header{
+			Sender:      [32]byte{0x10},
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+			FirstValid:  basics.Round(100),
+			LastValid:   basics.Round(1000),
+			GenesisHash: crypto.Digest{0x01},
+		},
+		PaymentTxnFields: PaymentTxnFields{
+			Receiver: [32]byte{0x12},
+			Amount:   basics.MicroAlgos{Raw: 50},
+		},
+	}
+	require.NoError(b, tx.wellFormed(spec, proto)) // sanity check
+
+	// groupSizes exercised by the group benchmarks.
+	var groupSizes = []int{1, 4, 16}
+
+	for _, n := range groupSizes {
+		// Transaction.WellFormed called directly over n distinct transactions,
+		// so the access pattern (striding across a slice) matches the group
+		// benchmark below rather than reusing a single cache-hot transaction.
+		txns := make([]Transaction, n)
+		for i := range txns {
+			txns[i] = tx
+		}
+		b.Run(fmt.Sprintf("Txn.WellFormed/n=%d", n), func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				for j := 0; j < n; j++ {
+					if err := txns[j].wellFormed(spec, proto); err != nil {
+						b.Fatal(err)
+					}
+				}
+			}
+		})
+
+		// SignedTxnGroupWellFormed over []SignedTxnWithAD.
+		stxnsAD := make([]SignedTxnWithAD, n)
+		for i := range stxnsAD {
+			stxnsAD[i].Txn = tx
+		}
+		b.Run(fmt.Sprintf("StxnWellFormed/n=%d", n), func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				if err := SignedTxnGroupWellFormed(stxnsAD, spec, proto); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
 }
 
 //TODO: test multisig

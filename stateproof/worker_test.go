@@ -1340,7 +1340,8 @@ func TestProverGeneratesValidStateProofTXN(t *testing.T) {
 	tx, err := s.waitOnTxnWithTimeout(time.Second * 5)
 	require.NoError(t, err)
 
-	a.NoError(tx.Txn.WellFormed(transactions.SpecialAddresses{}, proto))
+	err = transactions.SignedTxnGroupWellFormed([]transactions.SignedTxn{tx}, transactions.SpecialAddresses{}, proto)
+	a.NoError(err)
 }
 
 // TestForwardNotFromThisNodeSecondHalf tests that relays forward

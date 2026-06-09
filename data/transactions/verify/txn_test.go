@@ -373,6 +373,26 @@ func TestSignedPayment(t *testing.T) {
 	require.True(t, crypto.SignatureVerifier(addr).Verify(payment, stxn.Sig), "signature on the transaction is not the signature of the hash of the transaction under the spender's key")
 }
 
+// TestTxnGroupBatchPrepNotWellFormed checks that a not-well-formed transaction in a
+// group is reported as a TxGroupError carrying the failing transaction's group
+// index, the NotWellFormed reason, and the underlying cause.
+func TestTxnGroupBatchPrepNotWellFormed(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	_, stxns, _, _ := generateTestObjects(2, 2, 0, 0)
+	// make the second transaction fail WellFormed checks
+	stxns[1].Txn.LastValid = stxns[1].Txn.FirstValid - 1
+
+	_, err := txnGroupBatchPrep(stxns, blockHeader, nil, crypto.MakeBatchVerifier(), nil)
+	require.Error(t, err)
+
+	var groupErr *TxGroupError
+	require.ErrorAs(t, err, &groupErr)
+	require.Equal(t, TxGroupErrorReasonNotWellFormed, groupErr.Reason)
+	require.Equal(t, 1, groupErr.GroupIndex)
+	require.ErrorContains(t, err, "transaction invalid range")
+}
+
 func TestTxnValidationEncodeDecode(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

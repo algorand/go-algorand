@@ -102,13 +102,15 @@ func TestPaymentValidation(t *testing.T) {
 		// Check malformed transactions
 		largeWindow := txn
 		largeWindow.LastValid += basics.Round(current.MaxTxnLife)
-		if largeWindow.WellFormed(spec, current) == nil {
+		err := transactions.SignedTxnGroupWellFormed([]transactions.SignedTxn{{Txn: largeWindow}}, spec, current)
+		if err == nil {
 			t.Errorf("transaction with large window %#v verified incorrectly", largeWindow)
 		}
 
 		badWindow := txn
 		badWindow.LastValid = badWindow.FirstValid - 1
-		if badWindow.WellFormed(spec, current) == nil {
+		err = transactions.SignedTxnGroupWellFormed([]transactions.SignedTxn{{Txn: badWindow}}, spec, current)
+		if err == nil {
 			t.Errorf("transaction with bad window %#v verified incorrectly", badWindow)
 		}
 	}
@@ -133,7 +135,8 @@ func TestPaymentSelfClose(t *testing.T) {
 			CloseRemainderTo: self,
 		},
 	}
-	require.Error(t, tx.WellFormed(spec, config.Consensus[protocol.ConsensusCurrentVersion]))
+	err := transactions.SignedTxnGroupWellFormed([]transactions.SignedTxn{{Txn: tx}}, spec, config.Consensus[protocol.ConsensusCurrentVersion])
+	require.Error(t, err)
 }
 
 func generateTestPays(numTxs int) []transactions.Transaction {
