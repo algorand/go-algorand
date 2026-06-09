@@ -301,6 +301,7 @@ func (err *TxnNotWellFormedError) Error() string {
 	return fmt.Sprintf("transaction %v: malformed: %v", err.stxn.ID(), err.err)
 }
 
+// Err returns the underlying error that caused the transaction to be not well-formed.
 func (err *TxnNotWellFormedError) Err() error {
 	return err.err
 }
@@ -326,6 +327,7 @@ func (err *TxnNotWellFormedError) SignedTxn() SignedTxn {
 	return err.stxn
 }
 
+// GroupIndex returns the index of the offending transaction in its group.
 func (err *TxnNotWellFormedError) GroupIndex() int {
 	return err.gi
 }
