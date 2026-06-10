@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -249,6 +250,7 @@ func runPQGenerate() error {
 	if err != nil {
 		return fmt.Errorf("cannot generate %s key: %w", spec.displayName, err)
 	}
+	defer wipePQKeyMaterial(&material)
 
 	if err = writePQPrivateKeyFile(pqGenerateKeyfile, material); err != nil {
 		return err
@@ -267,6 +269,7 @@ func runPQInfo() error {
 	if err != nil {
 		return err
 	}
+	defer wipePQKeyMaterial(&material)
 
 	salt, addr, _, compliant, err := resolvePQSalt(material.scheme, material.publicKey, pqInfoSalt)
 	if err != nil {
@@ -301,9 +304,12 @@ func runPQExport() error {
 	if err != nil {
 		return err
 	}
+	defer zeroBytes(data)
+	defer wipePQKeyMaterial(&material)
 
-	armor := armorPQPrivateKey(material.scheme, data)
-	if err = writeFile(pqExportOutfile, []byte(armor), 0600); err != nil {
+	armor := armorPQPrivateKeyBytes(material.scheme, data)
+	defer zeroBytes(armor)
+	if err = writeFile(pqExportOutfile, armor, 0600); err != nil {
 		return fmt.Errorf("cannot write armored private key to %s: %w", pqExportOutfile, err)
 	}
 	return nil
@@ -314,14 +320,13 @@ func runPQImport() error {
 	if err != nil {
 		return fmt.Errorf("cannot read armored private key from %s: %w", pqImportInfile, err)
 	}
+	defer zeroBytes(armor)
 
 	data, _, err := decodeArmoredPQPrivateKey(string(armor))
 	if err != nil {
 		return err
 	}
-	if _, err = decodePQPrivateKeyFileBytes(data); err != nil {
-		return err
-	}
+	defer zeroBytes(data)
 
 	if err = writeNewFile(pqImportKeyfile, data, 0600); err != nil {
 		return fmt.Errorf("cannot write private key to %s: %w", pqImportKeyfile, err)
@@ -344,6 +349,7 @@ func runPQSignWithOptions(opts pqSignOptions) error {
 	if err != nil {
 		return err
 	}
+	defer wipePQKeyMaterial(&material)
 
 	spec, err := specForPQScheme(material.scheme)
 	if err != nil {
@@ -429,6 +435,7 @@ func generateFalcon1024Key(rng crypto.RNG) (pqKeyMaterial, error) {
 	if err != nil {
 		return pqKeyMaterial{}, err
 	}
+	defer zeroBytes(signer.PrivateKey[:])
 
 	publicKey := append([]byte(nil), signer.PublicKey[:]...)
 	privateKey := append([]byte(nil), signer.PrivateKey[:]...)
@@ -452,8 +459,10 @@ func signFalcon1024Txn(privateKey []byte, txn transactions.Transaction) ([]byte,
 	if err != nil {
 		return nil, err
 	}
+	defer zeroBytes(sk[:])
 
 	signer := crypto.FalconSigner{PrivateKey: sk}
+	defer zeroBytes(signer.PrivateKey[:])
 	sig, err := signer.Sign(txn)
 	if err != nil {
 		return nil, err
@@ -470,11 +479,13 @@ func validateFalcon1024KeyPair(publicKey []byte, privateKey []byte) error {
 	if err != nil {
 		return err
 	}
+	defer zeroBytes(sk[:])
 
 	signer := crypto.FalconSigner{
 		PublicKey:  pk,
 		PrivateKey: sk,
 	}
+	defer zeroBytes(signer.PrivateKey[:])
 	challenge := []byte("algokey-pq-keyfile-self-check")
 	sig, err := signer.SignBytes(challenge)
 	if err != nil {
@@ -504,6 +515,7 @@ func falconPrivateKeySize() int {
 
 func writePQPrivateKeyFile(filename string, material pqKeyMaterial) error {
 	data := encodePQPrivateKeyFileBytes(material)
+	defer zeroBytes(data)
 	if err := writeNewFile(filename, data, 0600); err != nil {
 		return fmt.Errorf("cannot write private key to %s: %w", filename, err)
 	}
@@ -519,8 +531,12 @@ func writePQPublicKeyFile(filename string, material pqKeyMaterial) error {
 }
 
 func readPQPrivateKeyFile(filename string) (pqKeyMaterial, error) {
-	_, material, err := readPQPrivateKeyFileData(filename)
-	return material, err
+	data, material, err := readPQPrivateKeyFileData(filename)
+	if err != nil {
+		return pqKeyMaterial{}, err
+	}
+	zeroBytes(data)
+	return material, nil
 }
 
 func readPQPrivateKeyFileData(filename string) ([]byte, pqKeyMaterial, error) {
@@ -530,6 +546,7 @@ func readPQPrivateKeyFileData(filename string) ([]byte, pqKeyMaterial, error) {
 	}
 	material, err := decodePQPrivateKeyFileBytes(data)
 	if err != nil {
+		zeroBytes(data)
 		return nil, pqKeyMaterial{}, err
 	}
 	return data, material, nil
@@ -544,10 +561,12 @@ func readPQPublicKeyFile(filename string) (pqKeyMaterial, error) {
 }
 
 func encodePQPrivateKeyFileBytes(material pqKeyMaterial) []byte {
+	privateKey := append([]byte(nil), material.privateKey...)
+	defer zeroBytes(privateKey)
 	payload := pqPrivateKeyPayload{
 		Scheme:     material.scheme,
 		PublicKey:  append([]byte(nil), material.publicKey...),
-		PrivateKey: append([]byte(nil), material.privateKey...),
+		PrivateKey: privateKey,
 	}
 	return encodePQPayload(pqPrivateKeyMagic, payload)
 }
@@ -562,6 +581,7 @@ func encodePQPublicKeyFileBytes(material pqKeyMaterial) []byte {
 
 func encodePQPayload(magic string, payload interface{}) []byte {
 	encoded := protocol.EncodeReflect(payload)
+	defer zeroBytes(encoded)
 	out := make([]byte, 0, len(magic)+1+len(encoded))
 	out = append(out, magic...)
 	out = append(out, '\n')
@@ -572,8 +592,10 @@ func encodePQPayload(magic string, payload interface{}) []byte {
 func decodePQPrivateKeyFileBytes(data []byte) (pqKeyMaterial, error) {
 	var payload pqPrivateKeyPayload
 	if err := decodePQPayload(data, pqPrivateKeyMagic, &payload); err != nil {
+		zeroBytes(payload.PrivateKey)
 		return pqKeyMaterial{}, err
 	}
+	defer zeroBytes(payload.PrivateKey)
 	return materialFromPrivatePayload(payload)
 }
 
@@ -615,6 +637,7 @@ func materialFromPrivatePayload(payload pqPrivateKeyPayload) (pqKeyMaterial, err
 	material.privateKey = append([]byte(nil), payload.PrivateKey...)
 	if spec.validateKeyPair != nil {
 		if err = spec.validateKeyPair(material.publicKey, material.privateKey); err != nil {
+			wipePQKeyMaterial(&material)
 			return pqKeyMaterial{}, err
 		}
 	}
@@ -675,26 +698,35 @@ func resolvePQSalt(scheme protocol.PQScheme, publicKey []byte, saltValue string)
 }
 
 func armorPQPrivateKey(scheme protocol.PQScheme, data []byte) string {
-	var b strings.Builder
-	b.WriteString(pqArmorBegin)
-	b.WriteByte('\n')
-	b.WriteString("Scheme: ")
-	b.WriteString(string(scheme))
-	b.WriteByte('\n')
-	b.WriteString(pqArmorEncoding)
-	b.WriteString("\n\n")
+	armor := armorPQPrivateKeyBytes(scheme, data)
+	defer zeroBytes(armor)
+	return string(armor)
+}
 
-	encoded := base64.StdEncoding.EncodeToString(data)
-	for len(encoded) > pqArmorLineLen {
-		b.WriteString(encoded[:pqArmorLineLen])
-		b.WriteByte('\n')
-		encoded = encoded[pqArmorLineLen:]
+func armorPQPrivateKeyBytes(scheme protocol.PQScheme, data []byte) []byte {
+	var out []byte
+	out = append(out, pqArmorBegin...)
+	out = append(out, '\n')
+	out = append(out, "Scheme: "...)
+	out = append(out, string(scheme)...)
+	out = append(out, '\n')
+	out = append(out, pqArmorEncoding...)
+	out = append(out, "\n\n"...)
+
+	encoded := make([]byte, base64.StdEncoding.EncodedLen(len(data)))
+	defer zeroBytes(encoded)
+	base64.StdEncoding.Encode(encoded, data)
+	remaining := encoded
+	for len(remaining) > pqArmorLineLen {
+		out = append(out, remaining[:pqArmorLineLen]...)
+		out = append(out, '\n')
+		remaining = remaining[pqArmorLineLen:]
 	}
-	b.WriteString(encoded)
-	b.WriteByte('\n')
-	b.WriteString(pqArmorEnd)
-	b.WriteByte('\n')
-	return b.String()
+	out = append(out, remaining...)
+	out = append(out, '\n')
+	out = append(out, pqArmorEnd...)
+	out = append(out, '\n')
+	return out
 }
 
 func decodeArmoredPQPrivateKey(armor string) ([]byte, protocol.PQScheme, error) {
@@ -750,9 +782,12 @@ func decodeArmoredPQPrivateKey(armor string) ([]byte, protocol.PQScheme, error) 
 
 	material, err := decodePQPrivateKeyFileBytes(data)
 	if err != nil {
+		zeroBytes(data)
 		return nil, "", err
 	}
+	defer wipePQKeyMaterial(&material)
 	if material.scheme != scheme {
+		zeroBytes(data)
 		return nil, "", fmt.Errorf("%w: armor scheme is %q, payload scheme is %q", errPQKeyMalformed, scheme, material.scheme)
 	}
 	return data, scheme, nil
@@ -817,4 +852,10 @@ func zeroBytes(data []byte) {
 	for i := range data {
 		data[i] = 0
 	}
+	runtime.KeepAlive(data)
+}
+
+func wipePQKeyMaterial(material *pqKeyMaterial) {
+	zeroBytes(material.privateKey)
+	material.privateKey = nil
 }
