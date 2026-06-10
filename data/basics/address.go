@@ -110,7 +110,7 @@ func (addr Address) IsZero() bool {
 	return addr == Address{}
 }
 
-// IsPQCompliant cheks if an address is eligible for native post-quantum account
+// IsPQCompliant checks if an address is eligible for native post-quantum account
 // authorization.
 func (addr Address) IsPQCompliant() bool {
 	return !crypto.IsEdwards25519Point(addr[:])

@@ -248,7 +248,7 @@ func TestPQSignProducesVerifiablePQEnvelope(t *testing.T) {
 
 	changed := signed
 	changed.Txn.Note = []byte("changed")
-	require.ErrorContains(t, changed.PQSig.Verify(config.Consensus[protocol.ConsensusFuture], changed.Txn, changed.Authorizer()), "invalid deterministic falcon-1024 signature")
+	require.ErrorContains(t, changed.PQSig.Verify(config.Consensus[protocol.ConsensusFuture], changed.Txn, changed.Authorizer()), "invalid falcon-1024 signature")
 }
 
 func TestPQSignSetsAndClearsAuthAddr(t *testing.T) {

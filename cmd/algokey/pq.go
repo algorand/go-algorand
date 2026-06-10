@@ -87,7 +87,7 @@ type pqPublicKeyPayload struct {
 var pqSchemeSpecs = map[protocol.PQScheme]pqSchemeSpec{
 	protocol.PQSchemeFalcon1024: {
 		scheme:          protocol.PQSchemeFalcon1024,
-		displayName:     "Deterministic Falcon-1024",
+		displayName:     "Falcon-1024",
 		publicKeySize:   crypto.FalconPublicKeySize,
 		privateKeySize:  falconPrivateKeySize(),
 		generate:        generateFalcon1024Key,

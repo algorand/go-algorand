@@ -602,8 +602,8 @@ type ConsensusParams struct {
 	// fraction of a basic min fee.
 	PerByteTxnSurcharge basics.Micros
 
-	// EnablePQSchemeFalcon1024 enables native Deterministic Falcon-1024 transaction
-	// authorization.
+	// EnablePQSchemeFalcon1024 enables native Falcon-1024 transaction
+	// authorization for the f1 PQ scheme.
 	EnablePQSchemeFalcon1024 bool
 }
 

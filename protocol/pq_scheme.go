@@ -28,6 +28,8 @@ type PQScheme string
 
 // Supported post-quantum signature schemes.
 const (
-	// PQSchemeFalcon1024 - f1: Deterministic Falcon-1024.
+	// PQSchemeFalcon1024 - f1: Falcon-1024 using a deterministic signing profile.
+	// Deterministic nonce derivation is signer-side only; consensus verifies
+	// signature validity, not how signer nonce material was derived.
 	PQSchemeFalcon1024 PQScheme = "f1"
 )
