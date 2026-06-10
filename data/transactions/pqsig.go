@@ -47,7 +47,8 @@ const (
 
 	// PQSchemeFalcon1024FeeContribution is the additional fee factor charged
 	// for transactions authorized with the f1 Falcon-1024 PQ scheme. It is
-	// expressed in fraction of a basic min fee.
+	// expressed as a fixed-point multiple of the basic min fee, with 1e6 meaning
+	// one basic min fee.
 	PQSchemeFalcon1024FeeContribution basics.Micros = 2e6
 )
 
