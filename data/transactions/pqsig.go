@@ -109,16 +109,18 @@ func (p *PQSig) Verify(proto config.ConsensusParams, txn Transaction, authorizer
 		return errPQSigEmpty
 	}
 
+	// Authorizer check is required regardless of the scheme, although the PQ address
+	// is scheme-specific.
+	pqAuthorizer := p.AuthorizerAddress()
+	if pqAuthorizer != authorizer {
+		return fmt.Errorf("%w: derived %s, expected %s", errPQSigAuthorizerMismatch, pqAuthorizer, authorizer)
+	}
+
 	// Scheme-specific verification
 	switch p.Scheme {
 	case protocol.PQSchemeFalcon1024:
 		if !proto.EnablePQSchemeFalcon1024 {
 			return errPQSigSchemeNotEnabled
-		}
-
-		pqAuthorizer := p.AuthorizerAddress()
-		if pqAuthorizer != authorizer {
-			return fmt.Errorf("%w: derived %s, expected %s", errPQSigAuthorizerMismatch, pqAuthorizer, authorizer)
 		}
 
 		pk, err := crypto.FalconPublicKeyFromBytes(p.PublicKey)
