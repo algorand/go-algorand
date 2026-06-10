@@ -383,7 +383,8 @@ func TestTxnGroupBatchPrepNotWellFormed(t *testing.T) {
 	// make the second transaction fail WellFormed checks
 	stxns[1].Txn.LastValid = stxns[1].Txn.FirstValid - 1
 
-	_, err := txnGroupBatchPrep(stxns, blockHeader, nil, crypto.MakeBatchVerifier(), nil)
+	batchVerifier := crypto.MakeBatchVerifier()
+	_, err := txnGroupBatchPrep(stxns, blockHeader, nil, batchVerifier, nil)
 	require.Error(t, err)
 
 	var groupErr *TxGroupError
@@ -391,6 +392,13 @@ func TestTxnGroupBatchPrepNotWellFormed(t *testing.T) {
 	require.Equal(t, TxGroupErrorReasonNotWellFormed, groupErr.Reason)
 	require.Equal(t, 1, groupErr.GroupIndex)
 	require.ErrorContains(t, err, "transaction invalid range")
+
+	// The group-wide well-formedness check runs before any signature is
+	// enqueued, so a group with a malformed transaction must contribute no
+	// signatures to the shared batch verifier. Otherwise the leftover
+	// "orphan" slots would be misattributed to the next group in
+	// postProcessVerifiedJobs' result mapping.
+	require.Zero(t, batchVerifier.GetNumberOfEnqueuedSignatures())
 }
 
 func TestTxnValidationEncodeDecode(t *testing.T) {
