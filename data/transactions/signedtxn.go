@@ -138,6 +138,12 @@ func (s SignedTxn) pqSignatureFeeContribution() basics.Micros {
 // precision. So 1e6 is a normal base fee transaction.
 func (s SignedTxn) FeeFactor(proto config.ConsensusParams) basics.Micros {
 	factor := s.Txn.feeFactor(proto)
+	if s.Txn.Type == protocol.HeartbeatTx && s.Txn.Group.IsZero() {
+		// The dynamic heartbeat checks decide whether a zero-fee singleton
+		// heartbeat is allowed, and challenged accounts may self-heartbeat
+		// without paying signature surcharges.
+		return factor
+	}
 	factor = basics.AddSaturate(factor, s.signatureFeeContribution())
 	return factor
 }

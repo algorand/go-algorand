@@ -106,6 +106,12 @@ func TestSignedTxnFeeFactorPQSignatureContribution(t *testing.T) {
 	pqSigned := SignedTxn{Txn: fixture.txn, PQSig: fixture.pqSig}
 	pqAndRegularSigned := pqSigned
 	pqAndRegularSigned.Sig[0] = 1
+	pqSingletonHeartbeat := pqSigned
+	pqSingletonHeartbeat.Txn.Type = protocol.HeartbeatTx
+	pqSingletonHeartbeat.Txn.HeartbeatTxnFields = &HeartbeatTxnFields{}
+	pqSingletonHeartbeat.Txn.PaymentTxnFields = PaymentTxnFields{}
+	pqGroupedHeartbeat := pqSingletonHeartbeat
+	pqGroupedHeartbeat.Txn.Group = crypto.Digest{1}
 
 	for _, stxn := range []SignedTxn{baseTxn, regularSigned, msigSigned, lsigSigned, unknownPQSigned} {
 		require.Equal(t, basics.Micros(1e6), stxn.FeeFactor(proto))
@@ -113,6 +119,8 @@ func TestSignedTxnFeeFactorPQSignatureContribution(t *testing.T) {
 	require.Equal(t, basics.Micros(2e6), PQSchemeFalcon1024FeeContribution)
 	require.Equal(t, basics.Micros(3e6), pqSigned.FeeFactor(proto))
 	require.Equal(t, basics.Micros(3e6), pqAndRegularSigned.FeeFactor(proto))
+	require.Equal(t, basics.Micros(0), pqSingletonHeartbeat.FeeFactor(proto))
+	require.Equal(t, basics.Micros(3e6), pqGroupedHeartbeat.FeeFactor(proto))
 
 	requiredFee, overflow := proto.MinFee().MulMicrosCeil(pqSigned.FeeFactor(proto))
 	require.False(t, overflow)

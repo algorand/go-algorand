@@ -1554,6 +1554,101 @@ func TestPQRekeyedAddressAuthorization(t *testing.T) {
 	require.ErrorContains(t, tryBlock([]transactions.SignedTxn{pqSpendByEd}), "should have been authorized by")
 }
 
+func TestPQChallengedAccountCanSelfHeartbeatForZeroFee(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	require.True(t, proto.EnablePQSchemeFalcon1024)
+	require.True(t, proto.Heartbeat)
+	require.True(t, proto.Payouts.Enabled)
+	require.NotZero(t, proto.Payouts.ChallengeInterval)
+	require.NotZero(t, proto.Payouts.ChallengeGracePeriod)
+
+	const keyDilution = 777
+	otss := crypto.GenerateOneTimeSignatureSecrets(1, 10)
+	pqAcct := makePQRekeyTestAccount(t, 1)
+
+	genBalances, _, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
+		cfg.OnlineCount = 5
+	})
+	genBalances.Balances[pqAcct.address] = basics.AccountData{
+		MicroAlgos:        basics.MicroAlgos{Raw: 100_000_000},
+		Status:            basics.Online,
+		VoteID:            otss.OneTimeSignatureVerifier,
+		SelectionID:       crypto.VRFVerifier{1},
+		StateProofID:      merklesignature.Commitment{1},
+		VoteFirstValid:    0,
+		VoteLastValid:     1_000_000,
+		VoteKeyDilution:   keyDilution,
+		IncentiveEligible: true,
+	}
+
+	seedAndProp := pqAcct.address
+	seedAndProp[31] ^= 1
+	require.NotEqual(t, pqAcct.address, seedAndProp)
+	genBalances.Balances[seedAndProp] = basics.AccountData{
+		MicroAlgos:        basics.MicroAlgos{Raw: 100_000_000},
+		Status:            basics.Online,
+		VoteID:            crypto.OneTimeSignatureVerifier{1},
+		SelectionID:       crypto.VRFVerifier{1},
+		StateProofID:      merklesignature.Commitment{1},
+		VoteFirstValid:    0,
+		VoteLastValid:     1_000_000,
+		VoteKeyDilution:   1,
+		IncentiveEligible: true,
+	}
+
+	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, config.GetDefaultLocal())
+	defer dl.Close()
+
+	challengeRound := basics.Round(proto.Payouts.ChallengeInterval)
+	for vb := dl.fullBlock(); vb.Block().Round() < challengeRound-1; vb = dl.fullBlock() {
+		// Advance to the round before the challenge.
+	}
+	dl.beginBlock()
+	dl.endBlock(seedAndProp)
+
+	heartbeatRound := challengeRound + basics.Round(proto.Payouts.ChallengeGracePeriod)/2 + 1
+	for vb := dl.fullBlock(); vb.Block().Round() < heartbeatRound-1; vb = dl.fullBlock() {
+		// Advance into the risky challenge period, before suspension is active.
+	}
+
+	lastHdr, err := dl.generator.BlockHdr(dl.generator.Latest())
+	require.NoError(t, err)
+	eval := dl.beginBlock()
+	require.Equal(t, heartbeatRound, eval.Round())
+
+	lastValid := eval.Round() + 10
+	id := basics.OneTimeIDForRound(lastValid, keyDilution)
+	txn := transactions.Transaction{
+		Type: protocol.HeartbeatTx,
+		Header: transactions.Header{
+			Sender:      pqAcct.address,
+			FirstValid:  lastHdr.Round,
+			LastValid:   lastValid,
+			GenesisHash: dl.generator.GenesisHash(),
+		},
+		HeartbeatTxnFields: &transactions.HeartbeatTxnFields{
+			HbAddress:     pqAcct.address,
+			HbProof:       otss.Sign(id, lastHdr.Seed).ToHeartbeatProof(),
+			HbSeed:        lastHdr.Seed,
+			HbVoteID:      otss.OneTimeSignatureVerifier,
+			HbKeyDilution: keyDilution,
+		},
+	}
+	stxn := signPQRekeyTestTxn(t, pqAcct, txn, basics.Address{})
+	txgroup := []transactions.SignedTxn{stxn}
+
+	require.NoError(t, eval.TestTransactionGroup(txgroup))
+	require.NoError(t, eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup)...))
+	vb := dl.endBlock()
+	require.Equal(t, heartbeatRound, vb.Block().Round())
+
+	after := lookup(t, dl.generator, pqAcct.address)
+	require.Equal(t, heartbeatRound, after.LastHeartbeat)
+}
+
 func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalProgram string, consensusVersion protocol.ConsensusVersion) error {
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	cfg := config.GetDefaultLocal()
