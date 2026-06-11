@@ -123,12 +123,13 @@ func (s SignedTxn) signatureFeeContribution() basics.Micros {
 
 // pqSignatureFeeContribution dispatches the fee contribution of the post-quantum signature scheme.
 func (s SignedTxn) pqSignatureFeeContribution() basics.Micros {
-	switch s.PQSig.Scheme {
-	case protocol.PQSchemeFalcon1024:
-		return PQSchemeFalcon1024FeeContribution
-	default:
+	scheme, ok := basics.LookupPQScheme(s.PQSig.Scheme)
+	if !ok {
+		// If the scheme is unknown, returning a zero-fee contribution is safe because
+		// the transaction will be rejected.
 		return 0
 	}
+	return scheme.FeeContribution
 }
 
 // FeeFactor is the factor by which the base transaction fee is multiplied. Some

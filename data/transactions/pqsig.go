@@ -22,7 +22,6 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -106,29 +105,14 @@ func (p *PQSig) Verify(proto config.ConsensusParams, txn Transaction, authorizer
 	}
 
 	// Scheme-specific verification
-	switch p.Scheme {
-	case protocol.PQSchemeFalcon1024:
-		if !proto.EnablePQSchemeFalcon1024 {
-			return errPQSigSchemeNotEnabled
-		}
-
-		pk, err := crypto.FalconPublicKeyFromBytes(p.PublicKey)
-		if err != nil {
-			return err
-		}
-
-		sig, err := crypto.FalconSignatureFromBytes(p.Signature)
-		if err != nil {
-			return err
-		}
-
-		fv := crypto.FalconVerifier{PublicKey: pk}
-		if err := fv.Verify(txn, sig); err != nil {
-			return fmt.Errorf("%w: %w", errFalcon1024SigInvalid, err)
-		}
-		return nil
-
-	default:
+	scheme, ok := basics.LookupPQScheme(p.Scheme)
+	if !ok {
 		return basics.ErrPQSchemeNotSupported
 	}
+
+	if !scheme.Enabled(proto) {
+		return basics.ErrPQSchemeNotEnabled
+	}
+
+	return scheme.Verify(txn, p.PublicKey, p.Signature)
 }
