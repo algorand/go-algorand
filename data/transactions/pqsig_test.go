@@ -161,7 +161,7 @@ func TestPQSigVerifyAcceptsSignatureOverTxnID(t *testing.T) {
 	require.False(t, bytes.Equal(txidSignature, rawTxnSignature))
 
 	pqSig.Signature = rawTxnSignature
-	require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer), errFalcon1024SigInvalid)
+	require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer), basics.ErrPQFalcon1024SigInvalid)
 }
 
 func TestPQSigVerifyChecksConsensusParams(t *testing.T) {
@@ -173,7 +173,7 @@ func TestPQSigVerifyChecksConsensusParams(t *testing.T) {
 
 	disabledProto := fixture.proto
 	disabledProto.EnablePQSchemeFalcon1024 = false
-	require.ErrorIs(t, fixture.pqSig.Verify(disabledProto, fixture.txn, fixture.authorizer), errPQSigSchemeNotEnabled)
+	require.ErrorIs(t, fixture.pqSig.Verify(disabledProto, fixture.txn, fixture.authorizer), basics.ErrPQSchemeNotEnabled)
 }
 
 func TestPQSigVerifyRejectsBlank(t *testing.T) {
@@ -246,7 +246,7 @@ func TestPQSigVerifyRejectsMalformedSignature(t *testing.T) {
 
 	err := pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer)
 	require.Error(t, err)
-	require.NotErrorIs(t, err, errFalcon1024SigInvalid)
+	require.NotErrorIs(t, err, basics.ErrPQFalcon1024SigInvalid)
 }
 
 func TestPQSigVerifyRejectsChangedTransaction(t *testing.T) {
@@ -257,7 +257,7 @@ func TestPQSigVerifyRejectsChangedTransaction(t *testing.T) {
 	txn := fixture.txn
 	txn.Note = []byte("changed")
 
-	require.ErrorIs(t, fixture.pqSig.Verify(fixture.proto, txn, fixture.authorizer), errFalcon1024SigInvalid)
+	require.ErrorIs(t, fixture.pqSig.Verify(fixture.proto, txn, fixture.authorizer), basics.ErrPQFalcon1024SigInvalid)
 }
 
 func TestPQSigVerifyRejectsChangedSignature(t *testing.T) {
@@ -269,5 +269,5 @@ func TestPQSigVerifyRejectsChangedSignature(t *testing.T) {
 	pqSig.Signature = append([]byte(nil), pqSig.Signature...)
 	pqSig.Signature[len(pqSig.Signature)-1] ^= 1
 
-	require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer), errFalcon1024SigInvalid)
+	require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer), basics.ErrPQFalcon1024SigInvalid)
 }
