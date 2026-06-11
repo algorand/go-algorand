@@ -1,0 +1,158 @@
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
+package basics
+
+import (
+	"errors"
+	"fmt"
+
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/protocol"
+)
+
+var (
+	// ErrPQSchemeNotSupported is returned when a PQScheme is not supported.
+	ErrPQSchemeNotSupported = errors.New("pq signature scheme not supported")
+
+	// ErrPQSchemeNotEnabled is returned when a PQScheme is not enabled under the protocol.
+	ErrPQSchemeNotEnabled = errors.New("pq signature scheme not enabled")
+
+	// ErrPQFalcon1024SigInvalid is returned when Falcon-1024 signature verification fails.
+	ErrPQFalcon1024SigInvalid = errors.New("invalid falcon-1024 signature")
+)
+
+// PQSchemeSpec.FeeContribution is the additional fee factor charged for transactions
+//
+//	authorized with a post-quantum scheme. It is expressed as a fixed-point multiple
+//	of the basic min fee, with 1e6 meaning one basic min fee.
+const (
+	PQSchemeFalcon512FeeContribution  Micros = 1e6
+	PQSchemeFalcon1024FeeContribution        = PQSchemeFalcon512FeeContribution + 1e6
+)
+
+// PQSchemeConsensusParams is the consensus-parameter surface needed by PQ scheme gates.
+type PQSchemeConsensusParams interface {
+	PQSchemeEnabled(protocol.PQScheme) bool
+}
+
+// PQSchemeSpec describes the consensus-relevant behavior for one PQ signature scheme.
+//
+//msgp:ignore PQSchemeSpec
+type PQSchemeSpec struct {
+	Enabled           func(PQSchemeConsensusParams) bool
+	PublicKeySize     uint64
+	PrivateKeySize    uint64
+	SignatureSize     uint64
+	FeeContribution   Micros
+	ValidatePublicKey func([]byte) error
+	Verify            func(crypto.Hashable, []byte, []byte) error
+}
+
+var pqSchemeSpecs = map[protocol.PQScheme]PQSchemeSpec{
+	protocol.PQSchemeFalcon1024: {
+		Enabled:           pqSchemeEnabled(protocol.PQSchemeFalcon1024),
+		PublicKeySize:     crypto.FalconPublicKeySize,
+		PrivateKeySize:    crypto.FalconPrivateKeySize,
+		SignatureSize:     crypto.FalconMaxSignatureSize,
+		FeeContribution:   PQSchemeFalcon1024FeeContribution,
+		ValidatePublicKey: validateFalcon1024PublicKey,
+		Verify:            verifyFalcon1024,
+	},
+	// protocol.PQSchemeFalcon512: {
+	// 	Enabled:           pqSchemeEnabled(protocol.PQSchemeFalcon512),
+	// 	PublicKeySize:     crypto.Falcon512PublicKeySize,
+	// 	PrivateKeySize:    crypto.Falcon512PrivateKeySize,
+	// 	SignatureSize:     crypto.Falcon512MaxSignatureSize,
+	// 	FeeContribution:   PQSchemeFalcon512FeeContribution,
+	// 	ValidatePublicKey: validateFalcon512PublicKey,
+	// 	Verify:            verifyFalcon512,
+	// },
+}
+
+// LookupPQScheme returns the scheme description for s.
+func LookupPQScheme(s protocol.PQScheme) (PQSchemeSpec, bool) {
+	scheme, ok := pqSchemeSpecs[s]
+	return scheme, ok
+}
+
+// ValidatePQPublicKey checks that a public key is valid for the scheme.
+func ValidatePQPublicKey(s protocol.PQScheme, publicKey []byte) error {
+	scheme, ok := LookupPQScheme(s)
+	if !ok {
+		return ErrPQSchemeNotSupported
+	}
+	return scheme.ValidatePublicKey(publicKey)
+}
+
+// MaxPQPublicKeySize returns the largest public key size supported PQ schemes.
+func MaxPQPublicKeySize() uint64 {
+	var maxSize uint64
+	for _, scheme := range pqSchemeSpecs {
+		if scheme.PublicKeySize > maxSize {
+			maxSize = scheme.PublicKeySize
+		}
+	}
+	return maxSize
+}
+
+// MaxPQSignatureSize returns the largest signature size supported PQ schemes.
+func MaxPQSignatureSize() uint64 {
+	var maxSize uint64
+	for _, scheme := range pqSchemeSpecs {
+		if scheme.SignatureSize > maxSize {
+			maxSize = scheme.SignatureSize
+		}
+	}
+	return maxSize
+}
+
+func pqSchemeEnabled(s protocol.PQScheme) func(PQSchemeConsensusParams) bool {
+	return func(params PQSchemeConsensusParams) bool {
+		return params.PQSchemeEnabled(s)
+	}
+}
+
+// Falcon-1024 helpers
+
+func validateFalcon1024PublicKey(publicKey []byte) error {
+	_, err := crypto.FalconPublicKeyFromBytes(publicKey)
+	return err
+}
+
+func verifyFalcon1024(message crypto.Hashable, publicKey []byte, signature []byte) error {
+	pk, err := crypto.FalconPublicKeyFromBytes(publicKey)
+	if err != nil {
+		return err
+	}
+
+	sig, err := crypto.FalconSignatureFromBytes(signature)
+	if err != nil {
+		return err
+	}
+
+	fv := crypto.FalconVerifier{PublicKey: pk}
+	if err := fv.Verify(message, sig); err != nil {
+		return fmt.Errorf("%w: %w", ErrPQFalcon1024SigInvalid, err)
+	}
+	return nil
+}
+
+// Falcon-512 helpers
+
+// TODO: func validateFalcon512PublicKey(publicKey []byte) error {...}
+
+// TODO: func verifyFalcon512(message crypto.Hashable, publicKey []byte, signature []byte) error {...}
