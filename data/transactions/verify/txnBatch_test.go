@@ -905,6 +905,89 @@ func TestSigVerifier(t *testing.T) {
 	require.Error(t, err)
 }
 
+// TestProcessBatchRecoversPanic verifies the recover wrapping ProcessBatch, the live gossip
+// signature-verification worker: a panic must fail the batch rather than crash the worker,
+// reporting results only for jobs that did not already get one.
+func TestProcessBatchRecoversPanic(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// A panic before any result is delivered: every job must be reported as failed. A
+	// NewBlockWatcher holding a nil header is a deterministic trigger: it makes group
+	// preparation panic dereferencing contextHdr.CurrentProtocol.
+	t.Run("PanicBeforeAnyResult", func(t *testing.T) {
+		t.Parallel()
+		nbw := &NewBlockWatcher{}
+		nbw.blkHeader.Store((*bookkeeping.BlockHeader)(nil))
+
+		resultChan := make(chan *VerificationResult, 1)
+		tbp := &txnSigBatchProcessor{
+			TxnGroupBatchSigVerifier: TxnGroupBatchSigVerifier{
+				cache:  MakeVerifiedTransactionCache(50),
+				nbw:    nbw,
+				ledger: &DummyLedgerForSignature{},
+			},
+			resultChan:  resultChan,
+			droppedChan: make(chan *UnverifiedTxnSigJob, 1),
+		}
+
+		group := []transactions.SignedTxn{{Txn: transactions.Transaction{Type: protocol.PaymentTx}}}
+		job := &UnverifiedTxnSigJob{TxnGroup: group}
+
+		// A leaked panic would fail the test; ProcessBatch must report the batch as failed instead.
+		tbp.ProcessBatch([]execpool.InputJob{job})
+
+		// The panicking batch was reported as failed rather than crashing the worker.
+		select {
+		case res := <-resultChan:
+			require.ErrorContains(t, res.Err, "panic while verifying transaction batch")
+			require.Equal(t, group, res.TxnGroup)
+		default:
+			t.Fatal("expected a failed verification result for the panicking batch")
+		}
+	})
+
+	// A panic after results were already delivered: the recovery must not re-report those jobs.
+	// Two unsigned txns fail prep and are reported immediately; the empty sig batch then panics
+	// in cache.AddPayset (deliberately nil, standing in for any post-delivery panic).
+	t.Run("PanicAfterResultsDelivered", func(t *testing.T) {
+		t.Parallel()
+		blkHdr := createDummyBlockHeader()
+		resultChan := make(chan *VerificationResult, 4) // room to observe duplicates if the recovery were wrong
+		droppedChan := make(chan *UnverifiedTxnSigJob, 4)
+		tbp := &txnSigBatchProcessor{
+			TxnGroupBatchSigVerifier: TxnGroupBatchSigVerifier{
+				cache:  nil, // nil cache: AddPayset is the deterministic panic trigger
+				nbw:    MakeNewBlockWatcher(blkHdr),
+				ledger: &DummyLedgerForSignature{},
+			},
+			resultChan:  resultChan,
+			droppedChan: droppedChan,
+		}
+
+		jobs := []execpool.InputJob{
+			&UnverifiedTxnSigJob{TxnGroup: []transactions.SignedTxn{{Txn: transactions.Transaction{
+				Type: protocol.PaymentTx, Header: transactions.Header{Sender: basics.Address{1}}}}}},
+			&UnverifiedTxnSigJob{TxnGroup: []transactions.SignedTxn{{Txn: transactions.Transaction{
+				Type: protocol.PaymentTx, Header: transactions.Header{Sender: basics.Address{2}}}}}},
+		}
+
+		// A leaked panic would fail the test; ProcessBatch must recover and report instead.
+		tbp.ProcessBatch(jobs)
+
+		// Exactly one result per job: the two preparation failures delivered before the
+		// panic, and nothing re-reported by the recovery.
+		require.Len(t, resultChan, len(jobs))
+		for i := 0; i < len(jobs); i++ {
+			res := <-resultChan
+			require.Error(t, res.Err)
+			require.NotContains(t, res.Err.Error(), "panic",
+				"already-delivered results must not be re-reported by the panic recovery")
+		}
+		require.Empty(t, droppedChan)
+	})
+}
+
 // TestProcessBatchSkippedGroupDoesNotMisattributeSigs checks that a group which fails signature prep
 // partway (after one of its transactions already staged a signature) doesn't affect verification of
 // the other groups in the batch. A bad group sits between two good ones; both good groups must verify.

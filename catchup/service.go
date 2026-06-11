@@ -107,7 +107,8 @@ type Service struct {
 	// the overhead of starting prematurely (before this node is caught-up and can validate messages for example).
 	InitialSyncDone              chan struct{}
 	initialSyncNotified          atomic.Uint32
-	protocolErrorLogged          bool
+	protocolErrorOnce            sync.Once
+	evalPanicErrorOnce           sync.Once
 	unmatchedPendingCertificates <-chan PendingUnmatchedCertificate
 	// This channel signals periodSync to attempt catchup immediately. This allows us to start fetching rounds from
 	// the network as soon as disableSyncRound is modified.
@@ -117,6 +118,14 @@ type Service struct {
 	// unsupportedRoundMonitor goroutine, after detecting
 	// an unsupported block.
 	onceUnsupportedRound sync.Once
+}
+
+// logEvalPanicOnce logs a recovered, deterministic eval panic on a cert-authenticated block at most
+// once for the life of the Service. sync.Once is safe across the concurrent fetchAndWrite goroutines.
+func (s *Service) logEvalPanicOnce(r basics.Round, err error) {
+	s.evalPanicErrorOnce.Do(func() {
+		logging.Base().Errorf("fetchAndWrite(%d): block evaluation panicked, catchup cannot advance past this round: %v", r, err)
+	})
 }
 
 // A BlockAuthenticator authenticates blocks given a certificate.
@@ -266,6 +275,7 @@ const errNoBlockForRoundThreshold = 5
 //   - If we couldn't fetch the block (e.g. if there are no peers available, or we've reached the catchupRetryLimit)
 //   - If the block is already in the ledger (e.g. if agreement service has already written it)
 //   - If the retrieval of the previous block was unsuccessful
+//   - If block evaluation panicked and was recovered (an unrecoverable defect; see ledgercore.EvalPanicError)
 func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCompleteChan chan struct{}, lookbackComplete chan struct{}, peerSelector peerSelector) bool {
 	// If sync-ing this round is not intended, don't fetch it
 	if dontSyncRound := s.GetDisableSyncRound(); dontSyncRound != 0 && r >= basics.Round(dontSyncRound) {
@@ -436,6 +446,13 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 						s.log.Infof("fetchAndWrite(%d): after fetching the block, it is already in the ledger. The catchup is complete", r)
 						return false
 					}
+					var evalPanicErr ledgercore.EvalPanicError
+					if errors.As(err, &evalPanicErr) {
+						// Validating the cert-authenticated block panicked; same unrecoverable
+						// handling as the ledger-write error switch below.
+						s.logEvalPanicOnce(r, err)
+						return false
+					}
 					s.log.Warnf("fetchAndWrite(%d): failed to validate block : %v", r, err)
 					return false
 				}
@@ -448,6 +465,7 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 				var errNonSequentialBlockEval ledgercore.ErrNonSequentialBlockEval
 				var blockInLedgerError ledgercore.BlockInLedgerError
 				var protocolErr protocol.Error
+				var evalPanicErr ledgercore.EvalPanicError
 				switch {
 				case errors.As(err, &errNonSequentialBlockEval):
 					s.log.Infof("fetchAndWrite(%d): no need to re-evaluate historical block", r)
@@ -458,10 +476,15 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 					s.log.Infof("fetchAndWrite(%d): after fetching the block, it is already in the ledger. The catchup is complete", r)
 					return false
 				case errors.As(err, &protocolErr):
-					if !s.protocolErrorLogged {
+					s.protocolErrorOnce.Do(func() {
 						logging.Base().Errorf("fetchAndWrite(%d): unrecoverable protocol error detected: %v", r, err)
-						s.protocolErrorLogged = true
-					}
+					})
+				case errors.As(err, &evalPanicErr):
+					// Block evaluation panicked and was recovered. The block is cert-authenticated,
+					// so re-fetching from any peer yields the same block and panics again. Log the
+					// diagnosis once and give up this sync attempt; periodicSync retries on its
+					// normal stuck-ledger cadence, and the ledger logs the panic on each attempt.
+					s.logEvalPanicOnce(r, err)
 				default:
 					s.log.Errorf("fetchAndWrite(%d): ledger write failed: %v", r, err)
 				}

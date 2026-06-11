@@ -1567,3 +1567,17 @@ func testAuthAddrSenderDiff(t *testing.T, consensusVer protocol.ConsensusVersion
 	err = verifyTxnGroup([]transactions.SignedTxn{stxn}, &blockHeader)
 	require.NoError(t, err, "AuthAddr != Sender should pass verification (legitimate rekeying)")
 }
+
+func TestTxnGroupRecoversPanic(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// A non-empty group is required so PrepareGroupContext does not return early before the
+	// contextHdr dereference.
+	group := []transactions.SignedTxn{{Txn: transactions.Transaction{Type: protocol.PaymentTx}}}
+
+	// A nil BlockHeader makes group preparation panic; TxnGroup must recover it into an error
+	groupCtx, err := TxnGroup(group, nil, nil, &DummyLedgerForSignature{})
+	require.Nil(t, groupCtx)
+	require.ErrorContains(t, err, "panic while verifying transaction group")
+}

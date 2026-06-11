@@ -28,6 +28,8 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -185,6 +187,14 @@ func TxnGroupWithTracer(stxs []transactions.SignedTxn, contextHdr *bookkeeping.B
 }
 
 func txnGroup(stxs []transactions.SignedTxn, contextHdr *bookkeeping.BlockHeader, cache VerifiedTransactionCache, ledger logic.LedgerForSignature, evalTracer logic.EvalTracer) (groupCtx *GroupContext, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			logging.Base().Errorf("recovered from panic verifying transaction group: %v", r)
+			groupCtx = nil
+			err = fmt.Errorf("panic while verifying transaction group: %v", r)
+		}
+	}()
+
 	batchVerifier := crypto.MakeBatchVerifier()
 
 	if groupCtx, err = txnGroupBatchPrep(stxs, contextHdr, ledger, batchVerifier, evalTracer); err != nil {
@@ -485,7 +495,14 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 			return tasksCtx.Err()
 		case worksets <- struct{}{}:
 			if len(nextWorkset) > 0 {
-				err1 := verificationPool.EnqueueBacklog(ctx, func(arg interface{}) interface{} {
+				err1 := verificationPool.EnqueueBacklog(ctx, func(arg interface{}) (ret interface{}) {
+					defer func() {
+						if r := recover(); r != nil {
+							logging.Base().Errorf("recovered from panic verifying transaction groups: %v", r)
+							ret = ledgercore.EvalPanicError{Round: blkHeader.Round, Cause: fmt.Sprintf("verifying transaction groups: %v", r)}
+						}
+					}()
+
 					var grpErr error
 					// check if we've canceled the request while this was in the queue.
 					if tasksCtx.Err() != nil {

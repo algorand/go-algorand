@@ -671,6 +671,11 @@ type BlockEvaluator struct {
 
 	blockGenerated bool // prevent repeated GenerateBlock calls
 
+	// corruptedState is set when a panic is recovered mid-commit: commitToParent cannot be
+	// rolled back, so eval.state may hold a half-applied group. Once set,
+	// TestTransactionGroup/TransactionGroup/GenerateBlock refuse and the caller must discard it.
+	corruptedState bool
+
 	l LedgerForEvaluator
 
 	maxTxnBytesPerBlock int
@@ -914,7 +919,19 @@ func (eval *BlockEvaluator) ResetTxnBytes() {
 // the block evaluator, or modify the block evaluator state in any other visible
 // way. TestTransactionGroup is _not_ called on groups during block validation,
 // so TransactionGroup() must repeat all checks.
-func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTxn) error {
+func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTxn) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			logging.Base().Errorf("recovered from panic testing transaction group for round %d: %v", eval.Round(), r)
+			err = ledgercore.EvalPanicError{Round: eval.Round(), Cause: fmt.Sprintf("%v", r)}
+		}
+	}()
+
+	// Refuse to test against the half-applied state left by a prior mid-commit panic.
+	if eval.corruptedState {
+		return ledgercore.ErrEvaluatorCorruptedState
+	}
+
 	// Nothing to do if there are no transactions.
 	if len(txgroup) == 0 {
 		return nil
@@ -928,16 +945,16 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 	}
 
 	for _, txn := range txgroup {
-		err := txn.Txn.WellFormed(eval.specials, eval.proto)
-		if err != nil {
-			txnErr := ledgercore.TxnNotWellFormedError(fmt.Sprintf("transaction %v: malformed: %v", txn.ID(), err))
+		wfErr := txn.Txn.WellFormed(eval.specials, eval.proto)
+		if wfErr != nil {
+			txnErr := ledgercore.TxnNotWellFormedError(fmt.Sprintf("transaction %v: malformed: %v", txn.ID(), wfErr))
 			return &txnErr
 		}
 	}
 
 	var group transactions.TxGroup
 	for gi, txn := range txgroup {
-		err := eval.testTransaction(txn)
+		err = eval.testTransaction(txn)
 		if err != nil {
 			return err
 		}
@@ -1033,6 +1050,24 @@ func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn) error {
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
 func (eval *BlockEvaluator) TransactionGroup(txgroup ...transactions.SignedTxnWithAD) (err error) {
+	committing := false
+	defer func() {
+		if r := recover(); r != nil {
+			logging.Base().Errorf("recovered from panic evaluating transaction group for round %d: %v", eval.Round(), r)
+			err = ledgercore.EvalPanicError{Round: eval.Round(), Cause: fmt.Sprintf("%v", r)}
+			if committing {
+				// eval.state may hold a half-applied group that can't be rolled back; mark
+				// the evaluator unusable.
+				eval.corruptedState = true
+			}
+		}
+	}()
+
+	// Refuse to evaluate against the half-applied state left by a prior mid-commit panic.
+	if eval.corruptedState {
+		return ledgercore.ErrEvaluatorCorruptedState
+	}
+
 	// Nothing to do if there are no transactions.
 	if len(txgroup) == 0 {
 		return nil
@@ -1144,6 +1179,11 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup ...transactions.SignedTxnWi
 		return err
 	}
 
+	// committing is set before the first mutation that outlives this call (the Payset append)
+	// and stays set: from here on -- including the deferred tracer hook, which runs after a
+	// successful commit and can itself panic in cow.deltas() -- a recovered panic marks the
+	// evaluator corrupt instead of cleanly rejecting the group.
+	committing = true
 	eval.block.Payset = append(eval.block.Payset, txibs...)
 	eval.blockTxBytes += groupTxBytes
 	cow.commitToParent()
@@ -2025,6 +2065,11 @@ func (eval *BlockEvaluator) GenerateBlock(participating []basics.Address) (*ledg
 		return nil, fmt.Errorf("GenerateBlock already called on this BlockEvaluator")
 	}
 
+	// Refuse to generate a block from the half-applied state left by a mid-commit panic.
+	if eval.corruptedState {
+		return nil, ledgercore.ErrEvaluatorCorruptedState
+	}
+
 	err := eval.endOfBlock(participating...)
 	if err != nil {
 		return nil, err
@@ -2072,6 +2117,13 @@ type evalTxValidator struct {
 
 func (validator *evalTxValidator) run() {
 	defer close(validator.done)
+	defer func() {
+		if r := recover(); r != nil {
+			logging.Base().Errorf("recovered from panic verifying transaction groups for round %d: %v", validator.block.Round(), r)
+			// done is buffered (cap 1) and run()'s normal sends each precede a return, so this send never blocks; it runs before the close above
+			validator.done <- ledgercore.EvalPanicError{Round: validator.block.Round(), Cause: fmt.Sprintf("verifying transaction groups: %v", r)}
+		}
+	}()
 	specialAddresses := transactions.SpecialAddresses{
 		FeeSink:     validator.block.BlockHeader.FeeSink,
 		RewardsPool: validator.block.BlockHeader.RewardsPool,
@@ -2105,7 +2157,15 @@ func (validator *evalTxValidator) run() {
 // Validate: Eval(ctx, l, blk, true, txcache, executionPool)
 // AddBlock: Eval(context.Background(), l, blk, false, txcache, nil)
 // tracker:  Eval(context.Background(), l, blk, false, txcache, nil)
-func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool, tracer logic.EvalTracer) (ledgercore.StateDelta, error) {
+func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool, tracer logic.EvalTracer) (deltas ledgercore.StateDelta, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			logging.Base().Errorf("recovered from panic evaluating block for round %d: %v", blk.Round(), r)
+			deltas = ledgercore.StateDelta{}
+			err = ledgercore.EvalPanicError{Round: blk.Round(), Cause: fmt.Sprintf("%v", r)}
+		}
+	}()
+
 	// flush the pending writes in the cache to make everything read so far available during eval
 	l.FlushCaches()
 
