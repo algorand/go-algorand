@@ -413,11 +413,20 @@ func runPQImport() error {
 	}
 	defer zeroBytes(armor)
 
-	data, _, err := decodeArmoredPQPrivateKey(string(armor))
+	data, armorScheme, err := decodeArmoredPQPrivateKey(armor)
 	if err != nil {
 		return err
 	}
 	defer zeroBytes(data)
+
+	material, err := decodePQPrivateKeyFileBytes(data)
+	if err != nil {
+		return err
+	}
+	defer wipePQKeyMaterial(&material)
+	if material.scheme != armorScheme {
+		return fmt.Errorf("%w: armor scheme is %q, payload scheme is %q", errPQKeyMalformed, armorScheme, material.scheme)
+	}
 
 	if err = writeNewFile(pqImportKeyfile, data, 0600); err != nil {
 		return fmt.Errorf("cannot write private key to %s: %w", pqImportKeyfile, err)
@@ -730,56 +739,61 @@ func armorPQPrivateKeyBytes(scheme protocol.PQScheme, data []byte) []byte {
 	return out
 }
 
-func decodeArmoredPQPrivateKey(armor string) ([]byte, protocol.PQScheme, error) {
-	lines := strings.Split(strings.ReplaceAll(armor, "\r\n", "\n"), "\n")
-	if len(lines) < 6 || strings.TrimSpace(lines[0]) != pqArmorBegin {
+func decodeArmoredPQPrivateKey(armor []byte) ([]byte, protocol.PQScheme, error) {
+	lines := bytes.Split(armor, []byte{'\n'})
+	if len(lines) < 6 || !bytes.Equal(bytes.TrimSpace(lines[0]), []byte(pqArmorBegin)) {
 		return nil, "", errPQArmorMalformed
 	}
 
-	schemeLine := strings.TrimSpace(lines[1])
-	if !strings.HasPrefix(schemeLine, "Scheme: ") {
+	schemePrefix := []byte("Scheme: ")
+	schemeLine := bytes.TrimSpace(lines[1])
+	if !bytes.HasPrefix(schemeLine, schemePrefix) {
 		return nil, "", errPQArmorMalformed
 	}
-	scheme := protocol.PQScheme(strings.TrimSpace(strings.TrimPrefix(schemeLine, "Scheme: ")))
+	scheme := protocol.PQScheme(string(bytes.TrimSpace(bytes.TrimPrefix(schemeLine, schemePrefix))))
 	if _, err := lookupPQScheme(scheme); err != nil {
 		return nil, "", err
 	}
 
-	if strings.TrimSpace(lines[2]) != pqArmorEncoding {
+	if !bytes.Equal(bytes.TrimSpace(lines[2]), []byte(pqArmorEncoding)) {
 		return nil, "", errPQArmorMalformed
 	}
-	if strings.TrimSpace(lines[3]) != "" {
+	if len(bytes.TrimSpace(lines[3])) != 0 {
 		return nil, "", errPQArmorMalformed
 	}
 
-	var encoded strings.Builder
+	encoded := make([]byte, 0, len(armor))
+	defer zeroBytes(encoded)
 	foundEnd := false
 	endIndex := -1
 	for i, line := range lines[4:] {
-		line = strings.TrimSpace(line)
-		if line == "" {
+		line = bytes.TrimSpace(line)
+		if len(line) == 0 {
 			continue
 		}
-		if line == pqArmorEnd {
+		if bytes.Equal(line, []byte(pqArmorEnd)) {
 			foundEnd = true
 			endIndex = i + 4
 			break
 		}
-		encoded.WriteString(line)
+		encoded = append(encoded, line...)
 	}
 	if !foundEnd {
 		return nil, "", errPQArmorMalformed
 	}
 	for _, line := range lines[endIndex+1:] {
-		if strings.TrimSpace(line) != "" {
+		if len(bytes.TrimSpace(line)) != 0 {
 			return nil, "", errPQArmorMalformed
 		}
 	}
 
-	data, err := base64.StdEncoding.DecodeString(encoded.String())
+	decoded := make([]byte, base64.StdEncoding.DecodedLen(len(encoded)))
+	n, err := base64.StdEncoding.Decode(decoded, encoded)
 	if err != nil {
+		zeroBytes(decoded)
 		return nil, "", fmt.Errorf("%w: %w", errPQArmorMalformed, err)
 	}
+	data := decoded[:n]
 
 	material, err := decodePQPrivateKeyFileBytes(data)
 	if err != nil {

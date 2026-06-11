@@ -201,16 +201,46 @@ func TestPQArmorRoundTrip(t *testing.T) {
 	require.Contains(t, armor, pqArmorEncoding)
 	require.NotContains(t, armor, "Version:")
 
-	decoded, scheme, err := decodeArmoredPQPrivateKey(armor)
+	decoded, scheme, err := decodeArmoredPQPrivateKey([]byte(armor))
 	require.NoError(t, err)
 	require.Equal(t, protocol.PQSchemeFalcon1024, scheme)
 	require.Equal(t, keyData, decoded)
 
-	_, _, err = decodeArmoredPQPrivateKey(strings.Replace(armor, "Scheme: f1", "Scheme: zz", 1))
+	_, _, err = decodeArmoredPQPrivateKey([]byte(strings.Replace(armor, "Scheme: f1", "Scheme: zz", 1)))
 	require.ErrorIs(t, err, basics.ErrPQSchemeNotSupported)
 
-	_, _, err = decodeArmoredPQPrivateKey("not an armored key")
+	_, _, err = decodeArmoredPQPrivateKey([]byte("not an armored key"))
 	require.ErrorIs(t, err, errPQArmorMalformed)
+}
+
+func TestPQImportRejectsArmoredMalformedPayload(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	material := pqTestMaterial(t, 0)
+	payload := pqPrivateKeyPayload{
+		Scheme:     material.scheme,
+		PublicKey:  material.publicKey,
+		PrivateKey: material.privateKey[:len(material.privateKey)-1],
+	}
+	badData := encodePQPayload(pqPrivateKeyMagic, payload)
+	defer zeroBytes(badData)
+	armor := armorPQPrivateKeyBytes(material.scheme, badData)
+	defer zeroBytes(armor)
+
+	tempDir := t.TempDir()
+	oldImportInfile, oldImportKeyfile := pqImportInfile, pqImportKeyfile
+	defer func() {
+		pqImportInfile, pqImportKeyfile = oldImportInfile, oldImportKeyfile
+	}()
+	pqImportInfile = filepath.Join(tempDir, "bad.pq")
+	pqImportKeyfile = filepath.Join(tempDir, "imported.pq")
+	require.NoError(t, os.WriteFile(pqImportInfile, armor, 0600))
+
+	err := runPQImport()
+	require.ErrorIs(t, err, errPQKeyMalformed)
+
+	_, statErr := os.Stat(pqImportKeyfile)
+	require.ErrorIs(t, statErr, os.ErrNotExist)
 }
 
 func TestPQPublicAddressSaltHandling(t *testing.T) {
@@ -402,6 +432,6 @@ func TestPQDecodeArmorRejectsMnemonic(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	_, _, err := decodeArmoredPQPrivateKey("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about")
+	_, _, err := decodeArmoredPQPrivateKey([]byte("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"))
 	require.ErrorIs(t, err, errPQArmorMalformed)
 }
