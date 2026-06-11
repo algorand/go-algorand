@@ -39,8 +39,8 @@ var (
 // authorized with a post-quantum scheme. It is expressed as a fixed-point multiple
 // of the basic min fee, with 1e6 meaning one basic min fee.
 const (
-	PQSchemeFalcon512FeeContribution  = 1e6 // Should be less than PQSchemeFalcon1024FeeContribution
-	PQSchemeFalcon1024FeeContribution = 2e6
+	PQSchemeFalcon512FeeContribution  Micros = 1e6 // should stay below the Falcon-1024 contribution
+	PQSchemeFalcon1024FeeContribution Micros = 2e6
 )
 
 // PQSchemeConsensusParams is the consensus-parameter surface needed by PQ scheme gates.
