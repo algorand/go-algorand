@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"sync/atomic"
 
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -74,15 +75,31 @@ func (nbw *NewBlockWatcher) getBlockHeader() (bh *bookkeeping.BlockHeader) {
 	return nbw.blkHeader.Load().(*bookkeeping.BlockHeader)
 }
 
+// stagedSig holds the arguments of one buffered EnqueueSignature call.
+type stagedSig struct {
+	sigVerifier crypto.SignatureVerifier
+	message     crypto.Hashable
+	sig         crypto.Signature
+}
+
+// batchLoad assembles a batch of signature-verification jobs: txnGroupBatchPrep stages each group's
+// signatures via EnqueueSignature, and the caller commitGroup()s a fully-prepared group or drops it.
 type batchLoad struct {
+	verifier crypto.BatchVerifier // created and written only by batchLoad, so committed sigs stay in sync with messagesForTxn
+	staged   []stagedSig          // current group's signatures, reused across groups (reset, not realloc)
+
+	// one entry per committed group, indexed alike
 	txnGroups      [][]transactions.SignedTxn
 	groupCtxs      []*GroupContext
 	backlogMessage []interface{}
-	messagesForTxn []int
+	messagesForTxn []int // running total of committed sigs; group i owns slots [messagesForTxn[i-1], messagesForTxn[i])
 }
 
 func makeBatchLoad(l int) (bl *batchLoad) {
 	return &batchLoad{
+		verifier: crypto.MakeBatchVerifier(),
+		// covers one sig per txn in a max-size group; multisig groups may grow it
+		staged:         make([]stagedSig, 0, bounds.MaxTxGroupSize),
 		txnGroups:      make([][]transactions.SignedTxn, 0, l),
 		groupCtxs:      make([]*GroupContext, 0, l),
 		backlogMessage: make([]interface{}, 0, l),
@@ -90,12 +107,26 @@ func makeBatchLoad(l int) (bl *batchLoad) {
 	}
 }
 
-func (bl *batchLoad) addLoad(txngrp []transactions.SignedTxn, gctx *GroupContext, backlogMsg interface{}, numBatchableSigs int) {
+// EnqueueSignature implements crypto.BatchEnqueuer by staging a signature for the current group
+// rather than adding it to the shared verifier immediately.
+func (bl *batchLoad) EnqueueSignature(sigVerifier crypto.SignatureVerifier, message crypto.Hashable, sig crypto.Signature) {
+	bl.staged = append(bl.staged, stagedSig{sigVerifier, message, sig})
+}
+
+// resetGroup discards the current group's staged signatures (e.g. a group that failed checks)
+func (bl *batchLoad) resetGroup() { bl.staged = bl.staged[:0] }
+
+// commitGroup flushes the staged signatures into the shared verifier and records the group so its
+// result can be recovered after verification. Called only if checking the group succeeded.
+func (bl *batchLoad) commitGroup(txngrp []transactions.SignedTxn, gctx *GroupContext, backlogMsg interface{}) {
+	for i := range bl.staged {
+		bl.verifier.EnqueueSignature(bl.staged[i].sigVerifier, bl.staged[i].message, bl.staged[i].sig)
+	}
+	bl.staged = bl.staged[:0]
 	bl.txnGroups = append(bl.txnGroups, txngrp)
 	bl.groupCtxs = append(bl.groupCtxs, gctx)
 	bl.backlogMessage = append(bl.backlogMessage, backlogMsg)
-	bl.messagesForTxn = append(bl.messagesForTxn, numBatchableSigs)
-
+	bl.messagesForTxn = append(bl.messagesForTxn, bl.verifier.GetNumberOfEnqueuedSignatures())
 }
 
 // TxnGroupBatchSigVerifier provides Verify method to synchronously verify a group of transactions
@@ -192,30 +223,31 @@ func (sv *TxnGroupBatchSigVerifier) Verify(stxs []transactions.SignedTxn) error 
 }
 
 func (tbp *txnSigBatchProcessor) ProcessBatch(txns []execpool.InputJob) {
-	batchVerifier, ctx := tbp.preProcessUnverifiedTxns(txns)
-	failed, err := batchVerifier.VerifyWithFeedback()
+	bl := tbp.preProcessUnverifiedTxns(txns)
+	failed, err := bl.verifier.VerifyWithFeedback()
 	// this error can only be crypto.ErrBatchHasFailedSigs
-	tbp.postProcessVerifiedJobs(ctx, failed, err)
+	tbp.postProcessVerifiedJobs(bl, failed, err)
 }
 
-func (tbp *txnSigBatchProcessor) preProcessUnverifiedTxns(uTxns []execpool.InputJob) (batchVerifier crypto.BatchVerifier, ctx interface{}) {
-	batchVerifier = crypto.MakeBatchVerifier()
+func (tbp *txnSigBatchProcessor) preProcessUnverifiedTxns(uTxns []execpool.InputJob) *batchLoad {
 	bl := makeBatchLoad(len(uTxns))
 	// TODO: separate operations here, and get the sig verification inside the LogicSig to the batch here
 	blockHeader := tbp.nbw.getBlockHeader()
 
 	for i := range uTxns {
 		ut := uTxns[i].(*UnverifiedTxnSigJob)
-		groupCtx, err := txnGroupBatchPrep(ut.TxnGroup, blockHeader, tbp.ledger, batchVerifier, nil)
+		// txnGroupBatchPrep stages this group's signatures into bl as it walks the group.
+		groupCtx, err := txnGroupBatchPrep(ut.TxnGroup, blockHeader, tbp.ledger, bl, nil)
 		if err != nil {
-			// verification failed, no need to add the sig to the batch, report the error
+			// the group failed checks partway; discard any sigs it already staged and report the error
+			bl.resetGroup()
 			tbp.sendResult(ut.TxnGroup, ut.BacklogMessage, err)
 			continue
 		}
-		totalBatchCount := batchVerifier.GetNumberOfEnqueuedSignatures()
-		bl.addLoad(ut.TxnGroup, groupCtx, ut.BacklogMessage, totalBatchCount)
+		// commit the group's staged signatures and record it
+		bl.commitGroup(ut.TxnGroup, groupCtx, ut.BacklogMessage)
 	}
-	return batchVerifier, bl
+	return bl
 }
 
 // GetNumberOfBatchableItems returns the number of batchable signatures in the txn group
@@ -252,8 +284,7 @@ func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn, groupIndex int) 
 	}
 }
 
-func (tbp *txnSigBatchProcessor) postProcessVerifiedJobs(ctx interface{}, failed []bool, err error) {
-	bl := ctx.(*batchLoad)
+func (tbp *txnSigBatchProcessor) postProcessVerifiedJobs(bl *batchLoad, failed []bool, err error) {
 	if err == nil { // success, all signatures verified
 		for i := range bl.txnGroups {
 			tbp.sendResult(bl.txnGroups[i], bl.backlogMessage[i], nil)
