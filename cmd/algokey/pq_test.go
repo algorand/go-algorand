@@ -96,6 +96,32 @@ func TestPQGenerateUsesFalconSeedEntropy(t *testing.T) {
 	require.NoError(t, validateFalcon1024KeyPair(material.publicKey, material.privateKey))
 }
 
+func TestPQSchemeLookupsSplitSharedMetadataAndLocalOps(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	registrySpec, ok := basics.LookupPQScheme(protocol.PQSchemeFalcon1024)
+	require.True(t, ok)
+	spec, err := lookupPQScheme(protocol.PQSchemeFalcon1024)
+	require.NoError(t, err)
+	require.Equal(t, registrySpec.PublicKeySize, spec.PublicKeySize)
+	require.Equal(t, registrySpec.PrivateKeySize, spec.PrivateKeySize)
+	require.Equal(t, registrySpec.SignatureSize, spec.SignatureSize)
+
+	ops, err := opsForPQScheme(protocol.PQSchemeFalcon1024)
+	require.NoError(t, err)
+	require.Equal(t, "Falcon-1024", ops.displayName)
+	require.NotNil(t, ops.generate)
+	require.NotNil(t, ops.signTxn)
+	require.NotNil(t, ops.validateKeyPair)
+
+	unsupportedScheme := protocol.PQScheme("zz")
+	_, err = lookupPQScheme(unsupportedScheme)
+	require.ErrorIs(t, err, basics.ErrPQSchemeNotSupported)
+	_, err = opsForPQScheme(unsupportedScheme)
+	require.ErrorIs(t, err, basics.ErrPQSchemeNotSupported)
+}
+
 func TestPQPrivateKeyFileRoundTripAndPermissions(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -144,12 +170,12 @@ func TestPQKeyFileRejectsMalformedInputs(t *testing.T) {
 	require.ErrorIs(t, err, errPQKeyWrongType)
 
 	payload := pqPrivateKeyPayload{
-		Scheme:     protocol.PQScheme("f2"),
+		Scheme:     protocol.PQScheme("zz"),
 		PublicKey:  material.publicKey,
 		PrivateKey: material.privateKey,
 	}
 	_, err = decodePQPrivateKeyFileBytes(encodePQPayload(pqPrivateKeyMagic, payload))
-	require.ErrorIs(t, err, errPQKeyUnsupported)
+	require.ErrorIs(t, err, basics.ErrPQSchemeNotSupported)
 
 	payload.Scheme = protocol.PQSchemeFalcon1024
 	payload.PublicKey = payload.PublicKey[:len(payload.PublicKey)-1]
@@ -180,8 +206,8 @@ func TestPQArmorRoundTrip(t *testing.T) {
 	require.Equal(t, protocol.PQSchemeFalcon1024, scheme)
 	require.Equal(t, keyData, decoded)
 
-	_, _, err = decodeArmoredPQPrivateKey(strings.Replace(armor, "Scheme: f1", "Scheme: f2", 1))
-	require.ErrorIs(t, err, errPQKeyUnsupported)
+	_, _, err = decodeArmoredPQPrivateKey(strings.Replace(armor, "Scheme: f1", "Scheme: zz", 1))
+	require.ErrorIs(t, err, basics.ErrPQSchemeNotSupported)
 
 	_, _, err = decodeArmoredPQPrivateKey("not an armored key")
 	require.ErrorIs(t, err, errPQArmorMalformed)
