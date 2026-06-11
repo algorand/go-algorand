@@ -24,29 +24,12 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-var (
-	// ErrPQSchemeNotSupported is returned when a PQScheme is not supported.
-	ErrPQSchemeNotSupported = errors.New("pq signature scheme not supported")
-
-	errNoCanonicalPQAddressSalt = errors.New("no canonical salt exists for this public key and scheme")
-)
+var errNoCanonicalPQAddressSalt = errors.New("no canonical salt exists for this public key and scheme")
 
 const (
 	// pqAddressSaltSize is the consensus byte length of a post-quantum address salt.
 	pqAddressSaltSize = 1
 )
-
-// ValidatePQPublicKey checks that the given public key is valid for the given scheme.
-func ValidatePQPublicKey(s protocol.PQScheme, publicKey []byte) error {
-	switch s {
-	case protocol.PQSchemeFalcon1024:
-		_, err := crypto.FalconPublicKeyFromBytes(publicKey)
-		return err
-
-	default:
-		return ErrPQSchemeNotSupported
-	}
-}
 
 // PQAddressSalt is a 1-byte salt that selects an address for a post-quantum
 // public key when deriving a 32-byte address; it is public and included in the
