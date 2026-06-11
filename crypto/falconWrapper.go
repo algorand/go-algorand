@@ -35,15 +35,18 @@ const (
 	// FalconPublicKeySize represents the size in bytes of a Falcon public key.
 	FalconPublicKeySize = cfalcon.PublicKeySize
 
+	// FalconPrivateKeySize represents the size in bytes of a Falcon private key.
+	FalconPrivateKeySize = cfalcon.PrivateKeySize
+
 	// FalconMaxSignatureSize Represents the max possible size in bytes of a falcon signature
 	FalconMaxSignatureSize = cfalcon.CTSignatureSize
 )
 
 type (
 	// FalconPublicKey is a wrapper for cfalcon.PublicKeySizey (used for packing)
-	FalconPublicKey [cfalcon.PublicKeySize]byte
+	FalconPublicKey [FalconPublicKeySize]byte
 	// FalconPrivateKey is a wrapper for cfalcon.PrivateKeySize (used for packing)
-	FalconPrivateKey [cfalcon.PrivateKeySize]byte
+	FalconPrivateKey [FalconPrivateKeySize]byte
 	// FalconSeed represents the seed which is being used to generate Falcon keys
 	FalconSeed [FalconSeedSize]byte
 	// FalconSignature represents a Falcon signature in a compressed-form
