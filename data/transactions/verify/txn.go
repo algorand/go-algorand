@@ -159,7 +159,7 @@ func (g *GroupContext) Equal(other *GroupContext) bool {
 
 // txnBatchPrep verifies a SignedTxn having no obviously inconsistent data.
 // Block-assembly time checks of LogicSig and accounting rules may still block the txn.
-// It is the caller responsibility to call batchVerifier.Verify().
+// It is the caller responsibility to call txn.WellFormed() and batchVerifier.Verify().
 func txnBatchPrep(gi int, groupCtx *GroupContext, verifier crypto.BatchVerifier) *TxGroupError {
 	s := &groupCtx.signedGroupTxns[gi]
 	if !groupCtx.consensusParams.SupportRekeying && !s.AuthAddr.IsZero() {
@@ -168,10 +168,6 @@ func txnBatchPrep(gi int, groupCtx *GroupContext, verifier crypto.BatchVerifier)
 
 	if groupCtx.consensusParams.EnforceAuthAddrSenderDiff && !s.AuthAddr.IsZero() && s.AuthAddr == s.Txn.Sender {
 		return &TxGroupError{err: errAuthAddrEqualsSender, GroupIndex: gi, Reason: TxGroupErrorReasonGeneric}
-	}
-
-	if err := s.Txn.WellFormed(groupCtx.specAddrs, groupCtx.consensusParams); err != nil {
-		return &TxGroupError{err: err, GroupIndex: gi, Reason: TxGroupErrorReasonNotWellFormed}
 	}
 
 	return stxnCoreChecks(gi, groupCtx, verifier)
@@ -211,6 +207,11 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 	groupCtx, err := PrepareGroupContext(stxs, contextHdr, ledger, evalTracer)
 	if err != nil {
 		return nil, err
+	}
+	for i := range stxs {
+		if err := stxs[i].Txn.WellFormed(groupCtx.specAddrs, groupCtx.consensusParams); err != nil {
+			return nil, fmt.Errorf("transaction %+v invalid : %w", stxs[i], &TxGroupError{err: err, GroupIndex: i, Reason: TxGroupErrorReasonNotWellFormed})
+		}
 	}
 
 	if err := transactions.CheckTxnGroup(stxs); err != nil {

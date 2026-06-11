@@ -927,6 +927,14 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 		}
 	}
 
+	for _, txn := range txgroup {
+		err := txn.Txn.WellFormed(eval.specials, eval.proto)
+		if err != nil {
+			txnErr := ledgercore.TxnNotWellFormedError(fmt.Sprintf("transaction %v: malformed: %v", txn.ID(), err))
+			return &txnErr
+		}
+	}
+
 	var group transactions.TxGroup
 	for gi, txn := range txgroup {
 		err := eval.testTransaction(txn)
@@ -1001,7 +1009,7 @@ func CheckGroupFees(feesPaid basics.MicroAlgos, usage basics.Micros, minFee basi
 	return nil
 }
 
-// testTransaction performs basic duplicate detection and well-formedness checks
+// testTransaction performs basic duplicate detection and expired checks
 // on a single transaction, but does not actually add the transaction to the block
 // evaluator, or modify the block evaluator state in any other visible way.
 func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn) error {
@@ -1009,12 +1017,6 @@ func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn) error {
 	err := eval.block.Alive(txn.Txn.Header)
 	if err != nil {
 		return err
-	}
-
-	err = txn.Txn.WellFormed(eval.specials, eval.proto)
-	if err != nil {
-		txnErr := ledgercore.TxnNotWellFormedError(fmt.Sprintf("transaction %v: malformed: %v", txn.ID(), err))
-		return &txnErr
 	}
 
 	// Transaction already in the ledger?
@@ -1062,6 +1064,17 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup ...transactions.SignedTxnWi
 	txibs := make([]transactions.SignedTxnInBlock, 0, len(txgroup))
 	var groupTxBytes int
 	var group transactions.TxGroup
+
+	if eval.validate {
+		for _, txad := range txgroup {
+			err = txad.Txn.WellFormed(eval.specials, eval.proto)
+			if err != nil {
+				err0 := ledgercore.TxnNotWellFormedError(fmt.Sprintf("transaction %v: malformed: %v", txad.ID(), err))
+				return &err0
+			}
+		}
+	}
+
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
@@ -1069,7 +1082,7 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup ...transactions.SignedTxnWi
 			eval.Tracer.BeforeTxn(evalParams, gi)
 		}
 
-		err := eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cow, &txib)
+		err = eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cow, &txib)
 
 		if eval.Tracer != nil {
 			eval.Tracer.AfterTxn(evalParams, gi, txib.ApplyData, err)
@@ -1198,12 +1211,6 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 		err = eval.block.Alive(txn.Txn.Header)
 		if err != nil {
 			return err
-		}
-
-		err = txn.Txn.WellFormed(eval.specials, eval.proto)
-		if err != nil {
-			txnErr := ledgercore.TxnNotWellFormedError(fmt.Sprintf("transaction %v: malformed: %v", txn.ID(), err))
-			return &txnErr
 		}
 
 		// Transaction already in the ledger?
