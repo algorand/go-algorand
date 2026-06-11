@@ -48,7 +48,7 @@ type PQSchemeConsensusParams interface {
 	PQSchemeEnabled(protocol.PQScheme) bool
 }
 
-// PQSchemeSpec describes the consensus-relevant behavior for one PQ signature scheme.
+// PQSchemeSpec describes the behavior for one PQ signature scheme.
 //
 //msgp:ignore PQSchemeSpec
 type PQSchemeSpec struct {
@@ -61,6 +61,12 @@ type PQSchemeSpec struct {
 	Verify            func(crypto.Hashable, []byte, []byte) error
 }
 
+// pqSchemeSpecs is the registry for supported PQ signature schemes.
+// To add a scheme:
+// - Add the protocol.PQScheme tag,
+// - Add the consensus flag and config.ConsensusParams.PQSchemeEnabled case,
+// - Add the registry entry here,
+// - Add the signing/private-key ops in cmd/algokey's pqSchemeOpsByScheme.
 var pqSchemeSpecs = map[protocol.PQScheme]PQSchemeSpec{
 	protocol.PQSchemeFalcon1024: {
 		Enabled:           pqSchemeEnabled(protocol.PQSchemeFalcon1024),
