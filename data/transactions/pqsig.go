@@ -28,28 +28,17 @@ import (
 )
 
 var (
-	// Scheme-independent errors
 	errPQSigBlank              = errors.New("pq signature is blank")
 	errPQSigEmpty              = errors.New("pq signature is empty")
 	errPQSigAuthorizerMismatch = errors.New("pq signature authorizer mismatch")
-	errPQSigSchemeNotEnabled   = errors.New("pq signature scheme not enabled")
-
-	// Scheme-specific errors
-	errFalcon1024SigInvalid = errors.New("invalid falcon-1024 signature")
 )
 
-const (
+var (
 	// PQMaxPublicKeySize bounds PQ public keys before scheme dispatch.
-	PQMaxPublicKeySize = crypto.FalconPublicKeySize
+	PQMaxPublicKeySize = int(basics.MaxPQPublicKeySize())
 
 	// PQMaxSignatureSize bounds PQ signatures before scheme dispatch.
-	PQMaxSignatureSize = crypto.FalconMaxSignatureSize
-
-	// PQSchemeFalcon1024FeeContribution is the additional fee factor charged
-	// for transactions authorized with the f1 Falcon-1024 PQ scheme. It is
-	// expressed as a fixed-point multiple of the basic min fee, with 1e6 meaning
-	// one basic min fee.
-	PQSchemeFalcon1024FeeContribution basics.Micros = 2e6
+	PQMaxSignatureSize = int(basics.MaxPQSignatureSize())
 )
 
 // PQSig is a post-quantum transaction authorization proof.
