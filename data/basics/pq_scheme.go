@@ -83,6 +83,39 @@ var pqSchemeSpecs = map[protocol.PQScheme]PQSchemeSpec{
 	// },
 }
 
+func init() {
+	if err := validatePQSchemeSpecs(pqSchemeSpecs); err != nil {
+		panic(err)
+	}
+}
+
+func validatePQSchemeSpecs(specs map[protocol.PQScheme]PQSchemeSpec) error {
+	for scheme, spec := range specs {
+		if spec.Enabled == nil {
+			return fmt.Errorf("pq scheme %q has nil Enabled", scheme)
+		}
+		if spec.ValidatePublicKey == nil {
+			return fmt.Errorf("pq scheme %q has nil ValidatePublicKey", scheme)
+		}
+		if spec.Verify == nil {
+			return fmt.Errorf("pq scheme %q has nil Verify", scheme)
+		}
+		if spec.PublicKeySize == 0 {
+			return fmt.Errorf("pq scheme %q has zero public key size", scheme)
+		}
+		if spec.PrivateKeySize == 0 {
+			return fmt.Errorf("pq scheme %q has zero private key size", scheme)
+		}
+		if spec.SignatureSize == 0 {
+			return fmt.Errorf("pq scheme %q has zero signature size", scheme)
+		}
+		if spec.FeeContribution == 0 {
+			return fmt.Errorf("pq scheme %q has zero fee contribution", scheme)
+		}
+	}
+	return nil
+}
+
 // LookupPQScheme returns the scheme description for s.
 func LookupPQScheme(s protocol.PQScheme) (PQSchemeSpec, bool) {
 	scheme, ok := pqSchemeSpecs[s]
