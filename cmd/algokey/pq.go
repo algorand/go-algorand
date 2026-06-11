@@ -413,20 +413,11 @@ func runPQImport() error {
 	}
 	defer zeroBytes(armor)
 
-	data, armorScheme, err := decodeArmoredPQPrivateKey(armor)
+	data, _, err := decodeArmoredPQPrivateKey(armor)
 	if err != nil {
 		return err
 	}
 	defer zeroBytes(data)
-
-	material, err := decodePQPrivateKeyFileBytes(data)
-	if err != nil {
-		return err
-	}
-	defer wipePQKeyMaterial(&material)
-	if material.scheme != armorScheme {
-		return fmt.Errorf("%w: armor scheme is %q, payload scheme is %q", errPQKeyMalformed, armorScheme, material.scheme)
-	}
 
 	if err = writeNewFile(pqImportKeyfile, data, 0600); err != nil {
 		return fmt.Errorf("cannot write private key to %s: %w", pqImportKeyfile, err)
@@ -763,7 +754,7 @@ func decodeArmoredPQPrivateKey(armor []byte) ([]byte, protocol.PQScheme, error) 
 	}
 
 	encoded := make([]byte, 0, len(armor))
-	defer zeroBytes(encoded)
+	defer func() { zeroBytes(encoded) }()
 	foundEnd := false
 	endIndex := -1
 	for i, line := range lines[4:] {
