@@ -46,6 +46,95 @@ func makePQSchemeTestSigner(t *testing.T, firstSeedByte byte) crypto.FalconSigne
 	return signer
 }
 
+func TestPQSchemeRegistryComplete(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	require.NotEmpty(t, pqSchemeSpecs)
+	require.NoError(t, validatePQSchemeSpecs(pqSchemeSpecs))
+
+	for scheme, spec := range pqSchemeSpecs {
+		require.NotNil(t, spec.Enabled, "scheme %q", scheme)
+		require.NotNil(t, spec.ValidatePublicKey, "scheme %q", scheme)
+		require.NotNil(t, spec.Verify, "scheme %q", scheme)
+		require.NotZero(t, spec.PublicKeySize, "scheme %q", scheme)
+		require.NotZero(t, spec.PrivateKeySize, "scheme %q", scheme)
+		require.NotZero(t, spec.SignatureSize, "scheme %q", scheme)
+		require.NotZero(t, spec.FeeContribution, "scheme %q", scheme)
+
+		lookup, ok := LookupPQScheme(scheme)
+		require.True(t, ok, "scheme %q", scheme)
+		require.Equal(t, spec.PublicKeySize, lookup.PublicKeySize, "scheme %q", scheme)
+		require.Equal(t, spec.PrivateKeySize, lookup.PrivateKeySize, "scheme %q", scheme)
+		require.Equal(t, spec.SignatureSize, lookup.SignatureSize, "scheme %q", scheme)
+		require.Equal(t, spec.FeeContribution, lookup.FeeContribution, "scheme %q", scheme)
+	}
+}
+
+func TestValidatePQSchemeSpecsRejectsIncompleteEntries(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	completeSpec := pqSchemeSpecs[protocol.PQSchemeFalcon1024]
+	testCases := []struct {
+		name   string
+		mutate func(*PQSchemeSpec)
+	}{
+		{
+			name: "nil enabled",
+			mutate: func(spec *PQSchemeSpec) {
+				spec.Enabled = nil
+			},
+		},
+		{
+			name: "nil validate public key",
+			mutate: func(spec *PQSchemeSpec) {
+				spec.ValidatePublicKey = nil
+			},
+		},
+		{
+			name: "nil verify",
+			mutate: func(spec *PQSchemeSpec) {
+				spec.Verify = nil
+			},
+		},
+		{
+			name: "zero public key size",
+			mutate: func(spec *PQSchemeSpec) {
+				spec.PublicKeySize = 0
+			},
+		},
+		{
+			name: "zero private key size",
+			mutate: func(spec *PQSchemeSpec) {
+				spec.PrivateKeySize = 0
+			},
+		},
+		{
+			name: "zero signature size",
+			mutate: func(spec *PQSchemeSpec) {
+				spec.SignatureSize = 0
+			},
+		},
+		{
+			name: "zero fee contribution",
+			mutate: func(spec *PQSchemeSpec) {
+				spec.FeeContribution = 0
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			spec := completeSpec
+			tc.mutate(&spec)
+
+			err := validatePQSchemeSpecs(map[protocol.PQScheme]PQSchemeSpec{
+				protocol.PQSchemeFalcon512: spec,
+			})
+			require.Error(t, err)
+		})
+	}
+}
+
 func TestLookupPQSchemeFalcon1024(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
