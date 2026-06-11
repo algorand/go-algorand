@@ -6,7 +6,6 @@ import (
 	_ "runtime/cgo"
 	_ "unsafe"
 
-	cfalcon "github.com/algorand/falcon"
 	"github.com/algorand/msgp/msgp"
 )
 
@@ -464,7 +463,7 @@ func (_ *FalconPrivateKey) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *FalconPrivateKey) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (cfalcon.PrivateKeySize * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + (FalconPrivateKeySize * (msgp.ByteSize))
 	return
 }
 
@@ -476,7 +475,7 @@ func (z *FalconPrivateKey) MsgIsZero() bool {
 // FalconPrivateKeyMaxSize returns a maximum valid message size for this message type
 func FalconPrivateKeyMaxSize() (s int) {
 	// Calculating size of array: z
-	s = msgp.ArrayHeaderSize + ((cfalcon.PrivateKeySize) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((FalconPrivateKeySize) * (msgp.ByteSize))
 	return
 }
 
@@ -518,7 +517,7 @@ func (_ *FalconPublicKey) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *FalconPublicKey) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (cfalcon.PublicKeySize * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + (FalconPublicKeySize * (msgp.ByteSize))
 	return
 }
 
@@ -530,7 +529,7 @@ func (z *FalconPublicKey) MsgIsZero() bool {
 // FalconPublicKeyMaxSize returns a maximum valid message size for this message type
 func FalconPublicKeyMaxSize() (s int) {
 	// Calculating size of array: z
-	s = msgp.ArrayHeaderSize + ((cfalcon.PublicKeySize) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((FalconPublicKeySize) * (msgp.ByteSize))
 	return
 }
 
@@ -786,7 +785,7 @@ func (_ *FalconSigner) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *FalconSigner) Msgsize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + (cfalcon.PublicKeySize * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (cfalcon.PrivateKeySize * (msgp.ByteSize))
+	s = 1 + 3 + msgp.ArrayHeaderSize + (FalconPublicKeySize * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (FalconPrivateKeySize * (msgp.ByteSize))
 	return
 }
 
@@ -799,10 +798,10 @@ func (z *FalconSigner) MsgIsZero() bool {
 func FalconSignerMaxSize() (s int) {
 	s = 1 + 3
 	// Calculating size of array: z.PublicKey
-	s += msgp.ArrayHeaderSize + ((cfalcon.PublicKeySize) * (msgp.ByteSize))
+	s += msgp.ArrayHeaderSize + ((FalconPublicKeySize) * (msgp.ByteSize))
 	s += 3
 	// Calculating size of array: z.PrivateKey
-	s += msgp.ArrayHeaderSize + ((cfalcon.PrivateKeySize) * (msgp.ByteSize))
+	s += msgp.ArrayHeaderSize + ((FalconPrivateKeySize) * (msgp.ByteSize))
 	return
 }
 
@@ -911,7 +910,7 @@ func (_ *FalconVerifier) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *FalconVerifier) Msgsize() (s int) {
-	s = 1 + 2 + msgp.ArrayHeaderSize + (cfalcon.PublicKeySize * (msgp.ByteSize))
+	s = 1 + 2 + msgp.ArrayHeaderSize + (FalconPublicKeySize * (msgp.ByteSize))
 	return
 }
 
@@ -924,7 +923,7 @@ func (z *FalconVerifier) MsgIsZero() bool {
 func FalconVerifierMaxSize() (s int) {
 	s = 1 + 2
 	// Calculating size of array: z.PublicKey
-	s += msgp.ArrayHeaderSize + ((cfalcon.PublicKeySize) * (msgp.ByteSize))
+	s += msgp.ArrayHeaderSize + ((FalconPublicKeySize) * (msgp.ByteSize))
 	return
 }
 
