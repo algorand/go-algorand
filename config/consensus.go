@@ -696,6 +696,17 @@ func (proto ConsensusParams) MinFee() basics.MicroAlgos {
 	return basics.MicroAlgos{Raw: proto.MinTxnFee}
 }
 
+// PQSchemeEnabled returns whether a post-quantum signature scheme is enabled
+// under these consensus parameters.
+func (proto ConsensusParams) PQSchemeEnabled(scheme protocol.PQScheme) bool {
+	switch scheme {
+	case protocol.PQSchemeFalcon1024:
+		return proto.EnablePQSchemeFalcon1024
+	default:
+		return false
+	}
+}
+
 // EffectiveKeyDilution returns the key dilution for this account,
 // returning the default key dilution if not explicitly specified.
 func (proto ConsensusParams) EffectiveKeyDilution(kd uint64) uint64 {
