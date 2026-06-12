@@ -105,12 +105,12 @@ func TestPQSchemeLookupsSplitSharedMetadataAndLocalOps(t *testing.T) {
 	spec, err := lookupPQScheme(protocol.PQSchemeFalcon1024)
 	require.NoError(t, err)
 	require.Equal(t, registrySpec.PublicKeySize, spec.PublicKeySize)
-	require.Equal(t, registrySpec.PrivateKeySize, spec.PrivateKeySize)
 	require.Equal(t, registrySpec.SignatureSize, spec.SignatureSize)
 
 	ops, err := opsForPQScheme(protocol.PQSchemeFalcon1024)
 	require.NoError(t, err)
 	require.Equal(t, "Falcon-1024", ops.displayName)
+	require.Equal(t, uint64(crypto.FalconPrivateKeySize), ops.privateKeySize)
 	require.NotNil(t, ops.generate)
 	require.NotNil(t, ops.signTxn)
 	require.NotNil(t, ops.validateKeyPair)
@@ -120,6 +120,29 @@ func TestPQSchemeLookupsSplitSharedMetadataAndLocalOps(t *testing.T) {
 	require.ErrorIs(t, err, basics.ErrPQSchemeNotSupported)
 	_, err = opsForPQScheme(unsupportedScheme)
 	require.ErrorIs(t, err, basics.ErrPQSchemeNotSupported)
+}
+
+func TestPQSchemeRegistriesConsistent(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Every algokey tooling scheme must be backed by the consensus registry,
+	// and its ops entry must be complete.
+	for scheme, ops := range pqSchemeOpsByScheme {
+		_, ok := basics.LookupPQScheme(scheme)
+		require.True(t, ok, "algokey scheme %q missing from basics registry", scheme)
+		require.NotEmpty(t, ops.displayName, "scheme %q", scheme)
+		require.NotZero(t, ops.privateKeySize, "scheme %q", scheme)
+		require.NotNil(t, ops.generate, "scheme %q", scheme)
+		require.NotNil(t, ops.signTxn, "scheme %q", scheme)
+		require.NotNil(t, ops.validateKeyPair, "scheme %q", scheme)
+	}
+
+	// Every consensus registry scheme must have signing/private-key tooling.
+	for _, scheme := range basics.SupportedPQSchemes() {
+		_, ok := pqSchemeOpsByScheme[scheme]
+		require.True(t, ok, "basics scheme %q missing from algokey ops registry", scheme)
+	}
 }
 
 func TestPQPrivateKeyFileRoundTripAndPermissions(t *testing.T) {
@@ -195,7 +218,7 @@ func TestPQArmorRoundTrip(t *testing.T) {
 	material := pqTestMaterial(t, 0)
 	keyData := encodePQPrivateKeyFileBytes(material)
 
-	armor := armorPQPrivateKey(material.scheme, keyData)
+	armor := string(armorPQPrivateKeyBytes(material.scheme, keyData))
 	require.Contains(t, armor, pqArmorBegin)
 	require.Contains(t, armor, "Scheme: f1")
 	require.Contains(t, armor, pqArmorEncoding)
@@ -250,19 +273,20 @@ func TestPQPublicAddressSaltHandling(t *testing.T) {
 	material := pqTestMaterial(t, 1)
 	require.Equal(t, basics.PQAddressSalt(1), material.canonicalSalt)
 
-	salt, addr, canonical, compliant, err := resolvePQSalt(material.scheme, material.publicKey, "canonical")
+	salt, addr, err := resolvePQSalt(material.scheme, material.publicKey, "canonical")
 	require.NoError(t, err)
-	require.True(t, canonical)
-	require.True(t, compliant)
 	require.Equal(t, material.canonicalSalt, salt)
 	require.Equal(t, material.canonicalAddress, addr)
+	require.True(t, addr.IsPQCompliant())
 
-	salt, addr, canonical, compliant, err = resolvePQSalt(material.scheme, material.publicKey, "0")
+	salt, addr, err = resolvePQSalt(material.scheme, material.publicKey, "0")
 	require.NoError(t, err)
-	require.False(t, canonical)
-	require.False(t, compliant)
 	require.Equal(t, basics.PQAddressSalt(0), salt)
 	require.Equal(t, basics.PQAddress(material.scheme, salt, material.publicKey), addr)
+	require.False(t, addr.IsPQCompliant())
+
+	_, _, err = resolvePQSalt(material.scheme, material.publicKey, "256")
+	require.ErrorContains(t, err, "invalid pq salt")
 }
 
 func TestPQSignProducesVerifiablePQEnvelope(t *testing.T) {
@@ -422,7 +446,7 @@ func TestPQMaterialDetection(t *testing.T) {
 	material := pqTestMaterial(t, 0)
 	require.True(t, isPQKeyMaterial(encodePQPrivateKeyFileBytes(material)))
 	require.True(t, isPQKeyMaterial(encodePQPublicKeyFileBytes(material)))
-	require.True(t, isPQKeyMaterial([]byte(armorPQPrivateKey(material.scheme, encodePQPrivateKeyFileBytes(material)))))
+	require.True(t, isPQKeyMaterial(armorPQPrivateKeyBytes(material.scheme, encodePQPrivateKeyFileBytes(material))))
 
 	var edSeed crypto.Seed
 	require.False(t, isPQKeyMaterial(edSeed[:]))
