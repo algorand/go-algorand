@@ -17,6 +17,8 @@
 package basics
 
 import (
+	"maps"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -57,17 +59,18 @@ func TestPQSchemeRegistryComplete(t *testing.T) {
 		require.NotNil(t, spec.ValidatePublicKey, "scheme %q", scheme)
 		require.NotNil(t, spec.Verify, "scheme %q", scheme)
 		require.NotZero(t, spec.PublicKeySize, "scheme %q", scheme)
-		require.NotZero(t, spec.PrivateKeySize, "scheme %q", scheme)
 		require.NotZero(t, spec.SignatureSize, "scheme %q", scheme)
 		require.NotZero(t, spec.FeeContribution, "scheme %q", scheme)
 
 		lookup, ok := LookupPQScheme(scheme)
 		require.True(t, ok, "scheme %q", scheme)
 		require.Equal(t, spec.PublicKeySize, lookup.PublicKeySize, "scheme %q", scheme)
-		require.Equal(t, spec.PrivateKeySize, lookup.PrivateKeySize, "scheme %q", scheme)
 		require.Equal(t, spec.SignatureSize, lookup.SignatureSize, "scheme %q", scheme)
 		require.Equal(t, spec.FeeContribution, lookup.FeeContribution, "scheme %q", scheme)
 	}
+
+	require.ElementsMatch(t, slices.Collect(maps.Keys(pqSchemeSpecs)), SupportedPQSchemes())
+	require.True(t, slices.IsSorted(SupportedPQSchemes()))
 }
 
 func TestValidatePQSchemeSpecsRejectsIncompleteEntries(t *testing.T) {
@@ -103,12 +106,6 @@ func TestValidatePQSchemeSpecsRejectsIncompleteEntries(t *testing.T) {
 			},
 		},
 		{
-			name: "zero private key size",
-			mutate: func(spec *PQSchemeSpec) {
-				spec.PrivateKeySize = 0
-			},
-		},
-		{
 			name: "zero signature size",
 			mutate: func(spec *PQSchemeSpec) {
 				spec.SignatureSize = 0
@@ -141,7 +138,6 @@ func TestLookupPQSchemeFalcon1024(t *testing.T) {
 	spec, ok := LookupPQScheme(protocol.PQSchemeFalcon1024)
 	require.True(t, ok)
 	require.Equal(t, uint64(crypto.FalconPublicKeySize), spec.PublicKeySize)
-	require.Equal(t, uint64(crypto.FalconPrivateKeySize), spec.PrivateKeySize)
 	require.Equal(t, uint64(crypto.FalconMaxSignatureSize), spec.SignatureSize)
 	require.Equal(t, PQSchemeFalcon1024FeeContribution, spec.FeeContribution)
 	require.NotNil(t, spec.Enabled)
