@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/algorand/msgp/msgp"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -75,6 +76,32 @@ func makePQSigTestFixture(t *testing.T, firstSeedByte byte) pqSigTestFixture {
 			Signature: signature,
 		},
 	}
+}
+
+func TestPQDecodeBoundsFeedSignedTxnMaxSize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	require.Equal(t, int(basics.MaxPQPublicKeySize()), PQMaxPublicKeySize)
+	require.Equal(t, int(basics.MaxPQSignatureSize()), PQMaxSignatureSize)
+
+	expectedPQSigMaxSize := 1 +
+		4 + protocol.PQSchemeMaxSize() +
+		4 + basics.PQAddressSaltMaxSize() +
+		3 + msgp.BytesPrefixSize + PQMaxPublicKeySize +
+		4 + msgp.BytesPrefixSize + PQMaxSignatureSize
+	require.Equal(t, expectedPQSigMaxSize, PQSigMaxSize())
+
+	// PQSigMaxSize is part of the network-facing SignedTxn bound. Adding a larger
+	// PQ scheme to the basics registry intentionally increases PQMax* and therefore
+	// SignedTxnMaxSize, even before that scheme is enabled by consensus.
+	expectedSignedTxnMaxSize := 1 +
+		4 + crypto.SignatureMaxSize() +
+		5 + crypto.MultisigSigMaxSize() +
+		5 + LogicSigMaxSize() +
+		3 + expectedPQSigMaxSize +
+		4 + TransactionMaxSize() +
+		5 + basics.AddressMaxSize()
+	require.Equal(t, expectedSignedTxnMaxSize, SignedTxnMaxSize())
 }
 
 func TestPQSigBlank(t *testing.T) {
