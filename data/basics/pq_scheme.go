@@ -70,7 +70,6 @@ var pqSchemeSpecs = map[protocol.PQScheme]PQSchemeSpec{
 	protocol.PQSchemeFalcon1024: {
 		Enabled:           pqSchemeEnabled(protocol.PQSchemeFalcon1024),
 		PublicKeySize:     crypto.FalconPublicKeySize,
-		PrivateKeySize:    crypto.FalconPrivateKeySize,
 		SignatureSize:     crypto.FalconMaxSignatureSize,
 		FeeContribution:   PQSchemeFalcon1024FeeContribution,
 		ValidatePublicKey: validateFalcon1024PublicKey,
@@ -79,7 +78,6 @@ var pqSchemeSpecs = map[protocol.PQScheme]PQSchemeSpec{
 	// protocol.PQSchemeFalcon512: {
 	// 	Enabled:           pqSchemeEnabled(protocol.PQSchemeFalcon512),
 	// 	PublicKeySize:     crypto.Falcon512PublicKeySize,
-	// 	PrivateKeySize:    crypto.Falcon512PrivateKeySize,
 	// 	SignatureSize:     crypto.Falcon512MaxSignatureSize,
 	// 	FeeContribution:   PQSchemeFalcon512FeeContribution,
 	// 	ValidatePublicKey: validateFalcon512PublicKey,
@@ -106,9 +104,6 @@ func validatePQSchemeSpecs(specs map[protocol.PQScheme]PQSchemeSpec) error {
 		}
 		if spec.PublicKeySize == 0 {
 			return fmt.Errorf("pq scheme %q has zero public key size", scheme)
-		}
-		if spec.PrivateKeySize == 0 {
-			return fmt.Errorf("pq scheme %q has zero private key size", scheme)
 		}
 		if spec.SignatureSize == 0 {
 			return fmt.Errorf("pq scheme %q has zero signature size", scheme)
