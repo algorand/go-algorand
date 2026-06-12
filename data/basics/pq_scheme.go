@@ -39,6 +39,8 @@ var (
 // PQSchemeSpec.FeeContribution is the additional fee factor charged for transactions
 // authorized with a post-quantum scheme. It is expressed as a fixed-point multiple
 // of the basic min fee, with 1e6 meaning one basic min fee.
+//
+// Once a PQ scheme activates, repricing must use a new constant and a new consensus gate.
 const (
 	PQSchemeFalcon512FeeContribution  Micros = 1e6 // should stay below the Falcon-1024 contribution
 	PQSchemeFalcon1024FeeContribution Micros = 2e6
