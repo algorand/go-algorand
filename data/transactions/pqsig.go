@@ -32,6 +32,11 @@ var (
 	errPQSigAuthorizerMismatch = errors.New("pq signature authorizer mismatch")
 )
 
+// PQMaxPublicKeySize and PQMaxSignatureSize bound PQ public keys and signatures
+// before scheme dispatch. They are derived at package initialization from the
+// basics PQ scheme registry and must not be mutated: they serve as msgp
+// allocation bounds, so the largest registry entry sets the SignedTxn wire
+// bound for every node, even before any scheme is enabled by consensus.
 var (
 	// PQMaxPublicKeySize bounds PQ public keys before scheme dispatch.
 	PQMaxPublicKeySize = int(basics.MaxPQPublicKeySize())
@@ -83,7 +88,9 @@ func (p *PQSig) AuthorizerAddress() basics.Address {
 }
 
 // validateEnvelope validates the stateless consensus-relevant PQ authorization
-// envelope, excluding the signature bytes.
+// envelope, excluding the signature bytes. It returns the scheme spec so that
+// Verify can dispatch the scheme-specific signature check without a second
+// registry lookup.
 func (p *PQSig) validateEnvelope(proto config.ConsensusParams, authorizer basics.Address) (basics.PQSchemeSpec, error) {
 	if p.Blank() {
 		return basics.PQSchemeSpec{}, errPQSigBlank
@@ -110,10 +117,12 @@ func (p *PQSig) validateEnvelope(proto config.ConsensusParams, authorizer basics
 	return scheme, nil
 }
 
-// ValidateEnvelope validates a non-blank stateless consensus-relevant PQ
-// authorization envelope. It excludes the signature bytes and any API admission
-// policy; callers that require a real authorization proof should also require a
-// non-empty signature or call Verify.
+// ValidateEnvelope validates the stateless consensus-relevant PQ authorization
+// envelope: the proof is not blank, the carried scheme is known and enabled
+// under proto, the public key is well-formed for that scheme, and the derived
+// PQ address matches authorizer. It does NOT verify the signature bytes (and
+// applies no API admission policy); callers that require a real authorization
+// proof must also require a non-empty Signature or call Verify.
 func (p *PQSig) ValidateEnvelope(proto config.ConsensusParams, authorizer basics.Address) error {
 	_, err := p.validateEnvelope(proto, authorizer)
 	return err
