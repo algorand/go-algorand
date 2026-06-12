@@ -20,8 +20,9 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/algorand/msgp/msgp"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/msgp/msgp"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
