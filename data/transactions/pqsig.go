@@ -35,8 +35,10 @@ var (
 // PQMaxPublicKeySize and PQMaxSignatureSize bound PQ public keys and signatures
 // before scheme dispatch. They are derived at package initialization from the
 // basics PQ scheme registry and must not be mutated: they serve as msgp
-// allocation bounds, so the largest registry entry sets the SignedTxn wire
-// bound for every node, even before any scheme is enabled by consensus.
+// allocation bounds, so adding a larger registry entry is a network-facing
+// decode-bound change that grows PQSigMaxSize, SignedTxnMaxSize, and the
+// SignedTxn wire bound for every node, even before that scheme is enabled by
+// consensus.
 var (
 	// PQMaxPublicKeySize bounds PQ public keys before scheme dispatch.
 	PQMaxPublicKeySize = int(basics.MaxPQPublicKeySize())
