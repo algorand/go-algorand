@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
@@ -167,17 +168,21 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 	// is indistinguishable from an escrow LogicSig, so we would need to decide on another way of
 	// denoting that a LogicSig's delegation signature is omitted, e.g. by setting all the bits of
 	// the signature.
+	proto, protoKnown := config.Consensus[hdr.CurrentProtocol]
 	txnsToVerify := make([]transactions.SignedTxn, len(txgroup))
 	for i, stxnad := range txgroup {
 		stxn := stxnad.SignedTxn
 		if stxn.Txn.Type == protocol.StateProofTx {
 			return errors.New("cannot simulate StateProof transactions")
 		}
-		if overrides.AllowEmptySignatures && (txnHasNoSignature(stxn) || txnHasPlaceholderPQSignature(stxn)) {
+		if overrides.AllowEmptySignatures && txnHasNoSignature(stxn) {
 			// Replace the signed txn with one signed by the proxySigner. At evaluation this would
 			// raise an error, since the proxySigner's public key likely does not have authority
 			// over the sender's account. However, this will pass validation, since the signature
 			// itself is valid.
+			txnsToVerify[i] = stxn.Txn.Sign(proxySignerSecrets)
+		} else if overrides.AllowEmptySignatures && txnHasPlaceholderPQSignature(stxn) && protoKnown &&
+			stxn.PQSig.ValidateEnvelope(proto, stxn.Authorizer()) == nil {
 			txnsToVerify[i] = stxn.Txn.Sign(proxySignerSecrets)
 		} else {
 			txnsToVerify[i] = stxn
@@ -233,7 +238,7 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxnWithAD, tr
 			stxn := &txgroup[i].SignedTxn
 			sender := stxn.Txn.Sender
 
-			if authAddr, ok := staticRekeys[sender]; ok && txnHasNoSignature(*stxn) {
+			if authAddr, ok := staticRekeys[sender]; ok && txnNeedsSyntheticSignature(*stxn) {
 				// If there is a static rekey for the sender set the auth addr to that address
 				stxn.AuthAddr = authAddr
 				if stxn.AuthAddr == sender {
@@ -241,7 +246,7 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxnWithAD, tr
 				}
 			} else {
 				// Otherwise lookup the sender's account and set the txn auth addr to the account's auth addr
-				if txnHasNoSignature(*stxn) {
+				if txnNeedsSyntheticSignature(*stxn) {
 					var data ledgercore.AccountData
 					data, _, _, err = s.ledger.LookupAccount(s.ledger.start, sender)
 					if err != nil {
