@@ -82,36 +82,55 @@ func (p *PQSig) AuthorizerAddress() basics.Address {
 	return basics.PQAddress(p.Scheme, p.Salt, p.PublicKey)
 }
 
+// validateEnvelope validates the stateless consensus-relevant PQ authorization
+// envelope, excluding the signature bytes.
+func (p *PQSig) validateEnvelope(proto config.ConsensusParams, authorizer basics.Address) (basics.PQSchemeSpec, error) {
+	if p.Blank() {
+		return basics.PQSchemeSpec{}, errPQSigBlank
+	}
+
+	scheme, ok := basics.LookupPQScheme(p.Scheme)
+	if !ok {
+		return basics.PQSchemeSpec{}, basics.ErrPQSchemeNotSupported
+	}
+
+	if !scheme.Enabled(proto) {
+		return basics.PQSchemeSpec{}, basics.ErrPQSchemeNotEnabled
+	}
+
+	if err := scheme.ValidatePublicKey(p.PublicKey); err != nil {
+		return basics.PQSchemeSpec{}, err
+	}
+
+	pqAuthorizer := p.AuthorizerAddress()
+	if pqAuthorizer != authorizer {
+		return basics.PQSchemeSpec{}, fmt.Errorf("%w: derived %s, expected %s", errPQSigAuthorizerMismatch, pqAuthorizer, authorizer)
+	}
+
+	return scheme, nil
+}
+
+// ValidateEnvelope validates a non-blank stateless consensus-relevant PQ
+// authorization envelope. It excludes the signature bytes and any API admission
+// policy; callers that require a real authorization proof should also require a
+// non-empty signature or call Verify.
+func (p *PQSig) ValidateEnvelope(proto config.ConsensusParams, authorizer basics.Address) error {
+	_, err := p.validateEnvelope(proto, authorizer)
+	return err
+}
+
 // Verify validates that p is a post-quantum authorization proof for txn and
 // authorizer under proto. It verifies that the carried scheme is supported by
-// the consensus parameters; then it validates the authorizer address from the
-// carried scheme, address salt, and public key and verifies the scheme-specific
-// signature over the unsigned transaction.
+// the consensus parameters; then it validates the authorization envelope and
+// verifies the scheme-specific signature over the unsigned transaction.
 func (p *PQSig) Verify(proto config.ConsensusParams, txn Transaction, authorizer basics.Address) error {
-	// Scheme-independent verification
-	if p.Blank() {
-		return errPQSigBlank
+	scheme, err := p.validateEnvelope(proto, authorizer)
+	if err != nil {
+		return err
 	}
 
 	if len(p.Signature) == 0 {
 		return errPQSigEmpty
-	}
-
-	// Authorizer check is required regardless of the scheme, although the PQ address
-	// is scheme-specific.
-	pqAuthorizer := p.AuthorizerAddress()
-	if pqAuthorizer != authorizer {
-		return fmt.Errorf("%w: derived %s, expected %s", errPQSigAuthorizerMismatch, pqAuthorizer, authorizer)
-	}
-
-	// Scheme-specific verification
-	scheme, ok := basics.LookupPQScheme(p.Scheme)
-	if !ok {
-		return basics.ErrPQSchemeNotSupported
-	}
-
-	if !scheme.Enabled(proto) {
-		return basics.ErrPQSchemeNotEnabled
 	}
 
 	return scheme.Verify(txn, p.PublicKey, p.Signature)
