@@ -37,7 +37,7 @@
       "get": {
         "tags": ["public", "common"],
         "produces": ["application/json"],
-        "scheme": ["http"],
+        "schemes": ["http"],
         "summary": "Returns OK if healthy and fully caught up.",
         "operationId": "GetReady",
         "responses": {
