@@ -238,6 +238,7 @@ func TestPQArmorRoundTrip(t *testing.T) {
 
 func TestPQImportRejectsArmoredMalformedPayload(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	material := pqTestMaterial(t, 0)
 	payload := pqPrivateKeyPayload{
@@ -251,18 +252,17 @@ func TestPQImportRejectsArmoredMalformedPayload(t *testing.T) {
 	defer zeroBytes(armor)
 
 	tempDir := t.TempDir()
-	oldImportInfile, oldImportKeyfile := pqImportInfile, pqImportKeyfile
-	defer func() {
-		pqImportInfile, pqImportKeyfile = oldImportInfile, oldImportKeyfile
-	}()
-	pqImportInfile = filepath.Join(tempDir, "bad.pq")
-	pqImportKeyfile = filepath.Join(tempDir, "imported.pq")
-	require.NoError(t, os.WriteFile(pqImportInfile, armor, 0600))
+	importInfile := filepath.Join(tempDir, "bad.pq")
+	importKeyfile := filepath.Join(tempDir, "imported.pq")
+	require.NoError(t, os.WriteFile(importInfile, armor, 0600))
 
-	err := runPQImport()
+	err := runPQImportWithOptions(pqImportOptions{
+		infile:  importInfile,
+		keyfile: importKeyfile,
+	})
 	require.ErrorIs(t, err, errPQKeyMalformed)
 
-	_, statErr := os.Stat(pqImportKeyfile)
+	_, statErr := os.Stat(importKeyfile)
 	require.ErrorIs(t, statErr, os.ErrNotExist)
 }
 

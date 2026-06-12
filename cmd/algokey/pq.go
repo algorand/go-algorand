@@ -66,6 +66,11 @@ type pqSignOptions struct {
 	overwrite bool
 }
 
+type pqImportOptions struct {
+	infile  string
+	keyfile string
+}
+
 var pqCmd = &cobra.Command{
 	Use:   "pq",
 	Short: "Manage post-quantum account keys",
@@ -253,9 +258,16 @@ func runPQExport() error {
 }
 
 func runPQImport() error {
-	armor, err := readFile(pqImportInfile)
+	return runPQImportWithOptions(pqImportOptions{
+		infile:  pqImportInfile,
+		keyfile: pqImportKeyfile,
+	})
+}
+
+func runPQImportWithOptions(opts pqImportOptions) error {
+	armor, err := readFile(opts.infile)
 	if err != nil {
-		return fmt.Errorf("cannot read armored private key from %s: %w", pqImportInfile, err)
+		return fmt.Errorf("cannot read armored private key from %s: %w", opts.infile, err)
 	}
 	defer zeroBytes(armor)
 
@@ -265,8 +277,8 @@ func runPQImport() error {
 	}
 	defer zeroBytes(data)
 
-	if err = writeNewFile(pqImportKeyfile, data, 0600); err != nil {
-		return fmt.Errorf("cannot write private key to %s: %w", pqImportKeyfile, err)
+	if err = writeNewFile(opts.keyfile, data, 0600); err != nil {
+		return fmt.Errorf("cannot write private key to %s: %w", opts.keyfile, err)
 	}
 	return nil
 }
