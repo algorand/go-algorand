@@ -54,7 +54,6 @@ type PQSchemeConsensusParams interface {
 type PQSchemeSpec struct {
 	Enabled           func(PQSchemeConsensusParams) bool
 	PublicKeySize     uint64
-	PrivateKeySize    uint64
 	SignatureSize     uint64
 	FeeContribution   Micros
 	ValidatePublicKey func([]byte) error
