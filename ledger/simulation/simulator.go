@@ -134,6 +134,10 @@ func txnHasPlaceholderPQSignature(txn transactions.SignedTxn) bool {
 		!txn.PQSig.Blank() && len(txn.PQSig.Signature) == 0
 }
 
+func txnNeedsSyntheticSignature(txn transactions.SignedTxn) bool {
+	return txnHasNoSignature(txn) || txnHasPlaceholderPQSignature(txn)
+}
+
 // A randomly generated private key. The actual value does not matter, as long as this is a valid
 // private key.
 var proxySigner = crypto.PrivateKey{
