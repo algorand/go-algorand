@@ -1454,6 +1454,37 @@ func TestPostSimulateTransactionPlaceholderPQSignatureValidation(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
 	require.Contains(t, rec.Body.String(), "transaction group 0: transaction 0: falcon public key size invalid")
+
+	_, fixablePQAuthorizer, fixablePQSig := makePQSigWithAddressCompliance(t, true)
+	minFee := config.Consensus[hdr.CurrentProtocol].MinTxnFee
+	rekeyTxn := txnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   roots[0].Address(),
+		Receiver: roots[0].Address(),
+		RekeyTo:  fixablePQAuthorizer,
+		Fee:      minFee,
+	})
+	pqTxn := txnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   roots[0].Address(),
+		Receiver: roots[0].Address(),
+		Fee:      minFee * 3,
+	})
+	fixableGroup := txntest.Group(&rekeyTxn, &pqTxn)
+	fixableGroup[1].AuthAddr = roots[1].Address()
+	fixableGroup[1].PQSig = fixablePQSig
+	request = v2.PreEncodedSimulateRequest{
+		TxnGroups:            []v2.PreEncodedSimulateRequestTransactionGroup{{Txns: fixableGroup}},
+		AllowEmptySignatures: true,
+		FixSigners:           true,
+	}
+	req = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(protocol.EncodeReflect(&request)))
+	rec = httptest.NewRecorder()
+	c = echo.New().NewContext(req, rec)
+
+	err = handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: &format})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 }
 
 func TestPostSimulateTransactionPQAuthorizerComplianceReportsGroup(t *testing.T) {
