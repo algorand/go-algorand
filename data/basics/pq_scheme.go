@@ -19,6 +19,7 @@ package basics
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
@@ -119,6 +120,17 @@ func validatePQSchemeSpecs(specs map[protocol.PQScheme]PQSchemeSpec) error {
 func LookupPQScheme(s protocol.PQScheme) (PQSchemeSpec, bool) {
 	scheme, ok := pqSchemeSpecs[s]
 	return scheme, ok
+}
+
+// SupportedPQSchemes returns the scheme tags in the PQ scheme registry, sorted
+// for deterministic iteration.
+func SupportedPQSchemes() []protocol.PQScheme {
+	schemes := make([]protocol.PQScheme, 0, len(pqSchemeSpecs))
+	for scheme := range pqSchemeSpecs {
+		schemes = append(schemes, scheme)
+	}
+	slices.Sort(schemes)
+	return schemes
 }
 
 // ValidatePQPublicKey checks that a public key is valid for the scheme.
