@@ -2463,7 +2463,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	})
 }
 
-func goValuesToTealValues(goValues ...interface{}) []basics.TealValue {
+func goValuesToTealValues(goValues ...any) []basics.TealValue {
 	if len(goValues) == 0 {
 		return nil
 	}

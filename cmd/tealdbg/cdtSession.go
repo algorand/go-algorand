@@ -106,8 +106,8 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 	notifications := s.notifications
 
 	cdtRespCh := make(chan cdt.ChromeResponse, 128)
-	cdtEventCh := make(chan interface{}, 128)
-	cdtUpdatedCh := make(chan interface{}, 1)
+	cdtEventCh := make(chan any, 128)
+	cdtUpdatedCh := make(chan any, 1)
 
 	closed := make(chan struct{})
 	registered := make(chan struct{})
@@ -273,11 +273,11 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 type cmdResult struct {
-	Result interface{} `json:"result"`
+	Result any `json:"result"`
 }
 
-func (s *cdtSession) handleCdtRequest(req *cdt.ChromeRequest, state *cdtState) (response cdt.ChromeResponse, events []interface{}, err error) {
-	empty := make(map[string]interface{})
+func (s *cdtSession) handleCdtRequest(req *cdt.ChromeRequest, state *cdtState) (response cdt.ChromeResponse, events []any, err error) {
+	empty := make(map[string]any)
 	switch req.Method {
 	case "Debugger.enable":
 		evCtxCreated := s.makeContextCreatedEvent()
@@ -296,7 +296,7 @@ func (s *cdtSession) handleCdtRequest(req *cdt.ChromeRequest, state *cdtState) (
 		isolateID["id"] = s.uuid
 		response = cdt.ChromeResponse{ID: req.ID, Result: isolateID}
 	case "Debugger.getScriptSource":
-		p := req.Params.(map[string]interface{})
+		p := req.Params.(map[string]any)
 		_, ok := p["scriptId"]
 		source := make(map[string]string)
 		if !ok {
@@ -306,7 +306,7 @@ func (s *cdtSession) handleCdtRequest(req *cdt.ChromeRequest, state *cdtState) (
 		source["scriptSource"] = state.disassembly
 		response = cdt.ChromeResponse{ID: req.ID, Result: source}
 	case "Debugger.setPauseOnExceptions":
-		p := req.Params.(map[string]interface{})
+		p := req.Params.(map[string]any)
 		stateRaw, ok := p["state"]
 		enable := false
 		if ok {
@@ -317,7 +317,7 @@ func (s *cdtSession) handleCdtRequest(req *cdt.ChromeRequest, state *cdtState) (
 		state.pauseOnError.SetTo(enable)
 		response = cdt.ChromeResponse{ID: req.ID, Result: empty}
 	case "Runtime.evaluate":
-		p := req.Params.(map[string]interface{})
+		p := req.Params.(map[string]any)
 		exprRaw, ok := p["expression"]
 		if !ok {
 			err = fmt.Errorf("evaluate failed: no expression")
@@ -332,7 +332,7 @@ func (s *cdtSession) handleCdtRequest(req *cdt.ChromeRequest, state *cdtState) (
 			response = cdt.ChromeResponse{ID: req.ID, Result: cmdResult{}}
 		}
 	case "Runtime.callFunctionOn":
-		p := req.Params.(map[string]interface{})
+		p := req.Params.(map[string]any)
 		objIDRaw, ok := p["objectId"]
 		if !ok {
 			err = fmt.Errorf("callFunctionOn failed: no objectId")
@@ -350,7 +350,7 @@ func (s *cdtSession) handleCdtRequest(req *cdt.ChromeRequest, state *cdtState) (
 			err = fmt.Errorf("callFunctionOn failed: no arguments")
 			return
 		}
-		args := argsRaw.([]interface{})
+		args := argsRaw.([]any)
 		if strings.HasPrefix(funcDecl, "function packRanges") {
 			ranges := state.packRanges(objID, args)
 			response = cdt.ChromeResponse{ID: req.ID, Result: cmdResult{ranges}}
@@ -361,7 +361,7 @@ func (s *cdtSession) handleCdtRequest(req *cdt.ChromeRequest, state *cdtState) (
 			response = cdt.ChromeResponse{ID: req.ID, Result: cmdResult{}}
 		}
 	case "Runtime.getProperties":
-		p := req.Params.(map[string]interface{})
+		p := req.Params.(map[string]any)
 		objIDRaw, ok := p["objectId"]
 		if !ok {
 			err = fmt.Errorf("getProperties failed: no objectId")
@@ -394,7 +394,7 @@ func (s *cdtSession) handleCdtRequest(req *cdt.ChromeRequest, state *cdtState) (
 
 		response = cdt.ChromeResponse{ID: req.ID, Result: cmdResult{desc}}
 	case "Debugger.setBreakpointsActive":
-		p := req.Params.(map[string]interface{})
+		p := req.Params.(map[string]any)
 		activeRaw, ok := p["active"]
 		active := false
 		if ok {
@@ -406,8 +406,8 @@ func (s *cdtSession) handleCdtRequest(req *cdt.ChromeRequest, state *cdtState) (
 
 		response = cdt.ChromeResponse{ID: req.ID, Result: empty}
 	case "Debugger.getPossibleBreakpoints":
-		p := req.Params.(map[string]interface{})
-		var start, end map[string]interface{}
+		p := req.Params.(map[string]any)
+		var start, end map[string]any
 		var startLine, endLine int
 		var scriptID string
 		if _, ok := p["start"]; !ok {
@@ -415,17 +415,17 @@ func (s *cdtSession) handleCdtRequest(req *cdt.ChromeRequest, state *cdtState) (
 			return
 		}
 
-		start = p["start"].(map[string]interface{})
+		start = p["start"].(map[string]any)
 		startLine = int(start["lineNumber"].(float64))
 		scriptID = start["scriptId"].(string)
 		if _, ok := p["end"]; ok {
-			end = p["end"].(map[string]interface{})
+			end = p["end"].(map[string]any)
 			endLine = int(end["lineNumber"].(float64))
 		} else {
 			endLine = startLine
 		}
 
-		result := make(map[string]interface{})
+		result := make(map[string]any)
 		locs := make([]cdt.DebuggerLocation, 0, endLine-startLine+1)
 		for ln := startLine; ln <= endLine; ln++ {
 			locs = append(locs, cdt.DebuggerLocation{ScriptID: scriptID, LineNumber: ln})
@@ -433,7 +433,7 @@ func (s *cdtSession) handleCdtRequest(req *cdt.ChromeRequest, state *cdtState) (
 		result["locations"] = locs
 		response = cdt.ChromeResponse{ID: req.ID, Result: result}
 	case "Debugger.removeBreakpoint":
-		p := req.Params.(map[string]interface{})
+		p := req.Params.(map[string]any)
 		var bpLine int
 		bpLine, err = strconv.Atoi(p["breakpointId"].(string))
 		if err != nil {
@@ -445,14 +445,14 @@ func (s *cdtSession) handleCdtRequest(req *cdt.ChromeRequest, state *cdtState) (
 		}
 		response = cdt.ChromeResponse{ID: req.ID, Result: empty}
 	case "Debugger.setBreakpointByUrl":
-		p := req.Params.(map[string]interface{})
+		p := req.Params.(map[string]any)
 		bpLine := int(p["lineNumber"].(float64))
 		err = s.debugger.SetBreakpoint(bpLine)
 		if err != nil {
 			return
 		}
 
-		result := make(map[string]interface{})
+		result := make(map[string]any)
 		result["breakpointId"] = strconv.Itoa(bpLine)
 		result["locations"] = []cdt.DebuggerLocation{
 			{ScriptID: s.scriptID, LineNumber: bpLine},
@@ -502,7 +502,7 @@ func (s *cdtSession) handleCdtRequest(req *cdt.ChromeRequest, state *cdtState) (
 	return
 }
 
-func (s *cdtSession) computeEvent(state *cdtState) (event interface{}) {
+func (s *cdtSession) computeEvent(state *cdtState) (event any) {
 	if state.completed.IsSet() {
 		if state.pauseOnCompleted.IsSet() {
 			event = s.makeDebuggerPausedEvent(state)
@@ -622,7 +622,7 @@ func (s *cdtSession) makeDebuggerPausedEvent(state *cdtState) cdt.DebuggerPaused
 
 	if lastError := state.err.Load(); len(lastError) != 0 {
 		evPaused.Params.Reason = "exception"
-		evPaused.Params.Data = map[string]interface{}{
+		evPaused.Params.Data = map[string]any{
 			"type":        "object",
 			"className":   "Error",
 			"description": lastError,
@@ -636,7 +636,7 @@ func (s *cdtSession) makeDebuggerPausedEvent(state *cdtState) cdt.DebuggerPaused
 func (s *cdtSession) makeContextCreatedEvent() cdt.RuntimeExecutionContextCreatedEvent {
 	// {"method":"Runtime.executionContextCreated","params":{"context":{"id":1,"origin":"","name":"node[47576]","auxData":{"isDefault":true}}}}
 
-	aux := make(map[string]interface{})
+	aux := make(map[string]any)
 	aux["isDefault"] = true
 	evCtxCreated := cdt.RuntimeExecutionContextCreatedEvent{
 		Method: "Runtime.executionContextCreated",
@@ -645,7 +645,7 @@ func (s *cdtSession) makeContextCreatedEvent() cdt.RuntimeExecutionContextCreate
 				ID:      s.contextID,
 				Origin:  "",
 				Name:    "TEAL program",
-				AuxData: map[string]interface{}{"isDefault": true},
+				AuxData: map[string]any{"isDefault": true},
 			},
 		},
 	}

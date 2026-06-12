@@ -238,7 +238,7 @@ func (r *appRateLimiter) len() int {
 }
 
 var appKeyPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return &appKeyBuf{
 			// max bounds.MaxTxGroupSize apps per txgroup, each app has up to MaxAppTxnForeignApps extra foreign apps
 			// at moment of writing bounds.MaxTxGroupSize = 16, bounds.MaxAppTxnForeignApps = 8

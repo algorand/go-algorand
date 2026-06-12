@@ -260,7 +260,7 @@ func (c *txSaltedCache) DeleteByKey(d crypto.Digest) {
 }
 
 var saltedPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		// 2 x MaxAvailableAppProgramLen that covers
 		// max approve + clear state programs with max args for app create txn.
 		// other transactions are much smaller.

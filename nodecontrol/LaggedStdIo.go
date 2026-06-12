@@ -89,7 +89,7 @@ func (s *LaggedStdIo) SetLinePrefix(linePrefix string) {
 
 // NewLaggedStdIo creates a new instance of the LaggedStdIo.
 // allowed stdio are limited to os.Stdin, os.Stdout and os.Stderr
-func NewLaggedStdIo(stdio interface{}, linePrefix string) *LaggedStdIo {
+func NewLaggedStdIo(stdio any, linePrefix string) *LaggedStdIo {
 	lio := &LaggedStdIo{}
 	lio.LinePrefix.Store(linePrefix)
 	switch stdio {

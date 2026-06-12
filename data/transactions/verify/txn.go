@@ -461,7 +461,7 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 
 	// prepare up to 16 concurrent worksets.
 	worksets := make(chan struct{}, concurrentWorksets)
-	worksDoneCh := make(chan interface{}, concurrentWorksets)
+	worksDoneCh := make(chan any, concurrentWorksets)
 	processing := 0
 
 	tasksCtx, cancelTasksCtx := context.WithCancel(ctx)
@@ -479,7 +479,7 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 			return tasksCtx.Err()
 		case worksets <- struct{}{}:
 			if len(nextWorkset) > 0 {
-				err1 := verificationPool.EnqueueBacklog(ctx, func(arg interface{}) interface{} {
+				err1 := verificationPool.EnqueueBacklog(ctx, func(arg any) any {
 					var grpErr error
 					// check if we've canceled the request while this was in the queue.
 					if tasksCtx.Err() != nil {

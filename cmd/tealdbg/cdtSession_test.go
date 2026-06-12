@@ -59,7 +59,7 @@ func TestCdtSessionProto11Common(t *testing.T) {
 	require.Contains(t, result, "id")
 
 	req.Method = "Debugger.setPauseOnExceptions"
-	req.Params = map[string]interface{}{"state": "enable"}
+	req.Params = map[string]any{"state": "enable"}
 	resp, events, err = s.handleCdtRequest(&req, &state)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(events))
@@ -68,7 +68,7 @@ func TestCdtSessionProto11Common(t *testing.T) {
 	require.True(t, state.pauseOnError.IsSet())
 
 	req.Method = "Debugger.setPauseOnExceptions"
-	req.Params = map[string]interface{}{"state": "none"}
+	req.Params = map[string]any{"state": "none"}
 	resp, events, err = s.handleCdtRequest(&req, &state)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(events))
@@ -78,7 +78,7 @@ func TestCdtSessionProto11Common(t *testing.T) {
 
 	state.disassembly = "int 1\n"
 	req.Method = "Debugger.getScriptSource"
-	req.Params = map[string]interface{}{"scriptId": "any"}
+	req.Params = map[string]any{"scriptId": "any"}
 	resp, events, err = s.handleCdtRequest(&req, &state)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(events))
@@ -89,7 +89,7 @@ func TestCdtSessionProto11Common(t *testing.T) {
 	require.Equal(t, result["scriptSource"], state.disassembly)
 
 	req.Method = "Debugger.getScriptSource"
-	req.Params = map[string]interface{}{}
+	req.Params = map[string]any{}
 	resp, events, err = s.handleCdtRequest(&req, &state)
 	require.Error(t, err)
 	require.Equal(t, 0, len(events))
@@ -111,7 +111,7 @@ func TestCdtSessionProto11Breakpoints(t *testing.T) {
 	state := cdtState{}
 
 	req.Method = "Debugger.setBreakpointsActive"
-	req.Params = map[string]interface{}{"active": true}
+	req.Params = map[string]any{"active": true}
 	resp, events, err := s.handleCdtRequest(&req, &state)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(events))
@@ -120,7 +120,7 @@ func TestCdtSessionProto11Breakpoints(t *testing.T) {
 	require.True(t, dbg.bpActive)
 
 	req.Method = "Debugger.setBreakpointsActive"
-	req.Params = map[string]interface{}{"active": "none"}
+	req.Params = map[string]any{"active": "none"}
 	resp, events, err = s.handleCdtRequest(&req, &state)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(events))
@@ -129,7 +129,7 @@ func TestCdtSessionProto11Breakpoints(t *testing.T) {
 	require.False(t, dbg.bpActive)
 
 	req.Method = "Debugger.removeBreakpoint"
-	req.Params = map[string]interface{}{"breakpointId": "1"}
+	req.Params = map[string]any{"breakpointId": "1"}
 	resp, events, err = s.handleCdtRequest(&req, &state)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(events))
@@ -137,7 +137,7 @@ func TestCdtSessionProto11Breakpoints(t *testing.T) {
 	require.Empty(t, resp.Result)
 
 	req.Method = "Debugger.removeBreakpoint"
-	req.Params = map[string]interface{}{"breakpointId": "test"}
+	req.Params = map[string]any{"breakpointId": "test"}
 	resp, events, err = s.handleCdtRequest(&req, &state)
 	require.Error(t, err)
 	require.Equal(t, 0, len(events))
@@ -145,24 +145,24 @@ func TestCdtSessionProto11Breakpoints(t *testing.T) {
 	require.Empty(t, resp.Result)
 
 	req.Method = "Debugger.setBreakpointByUrl"
-	req.Params = map[string]interface{}{"lineNumber": 1.}
+	req.Params = map[string]any{"lineNumber": 1.}
 	resp, events, err = s.handleCdtRequest(&req, &state)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(events))
 	require.Equal(t, rid, resp.ID)
 	require.NotEmpty(t, resp.Result)
-	result := resp.Result.(map[string]interface{})
+	result := resp.Result.(map[string]any)
 	require.Contains(t, result, "breakpointId")
 	require.Contains(t, result, "locations")
 	require.Equal(t, "1", result["breakpointId"].(string))
 
 	req.Method = "Debugger.getPossibleBreakpoints"
-	req.Params = map[string]interface{}{
-		"start": map[string]interface{}{
+	req.Params = map[string]any{
+		"start": map[string]any{
 			"lineNumber": 1.0,
 			"scriptId":   "test",
 		},
-		"end": map[string]interface{}{
+		"end": map[string]any{
 			"lineNumber": 2.0,
 		},
 	}
@@ -171,12 +171,12 @@ func TestCdtSessionProto11Breakpoints(t *testing.T) {
 	require.Equal(t, 0, len(events))
 	require.Equal(t, rid, resp.ID)
 	require.NotEmpty(t, resp.Result)
-	result = resp.Result.(map[string]interface{})
+	result = resp.Result.(map[string]any)
 	require.Contains(t, result, "locations")
 	require.Equal(t, 2, len(result["locations"].([]cdt.DebuggerLocation)))
 
 	req.Method = "Debugger.getPossibleBreakpoints"
-	req.Params = map[string]interface{}{}
+	req.Params = map[string]any{}
 	resp, events, err = s.handleCdtRequest(&req, &state)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(events))
@@ -280,7 +280,7 @@ func TestCdtSessionProto11Evaluate(t *testing.T) {
 	state := cdtState{}
 
 	req.Method = "Runtime.evaluate"
-	req.Params = map[string]interface{}{"expression": "navigator.userAgent"}
+	req.Params = map[string]any{"expression": "navigator.userAgent"}
 	resp, events, err := s.handleCdtRequest(&req, &state)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(events))
@@ -292,14 +292,14 @@ func TestCdtSessionProto11Evaluate(t *testing.T) {
 	require.True(t, ok)
 
 	// any other exprs than "navigator.userAgent" not supported in this proto 1.1 implementation
-	req.Params = map[string]interface{}{"expression": "test"}
+	req.Params = map[string]any{"expression": "test"}
 	resp, events, err = s.handleCdtRequest(&req, &state)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(events))
 	require.Equal(t, rid, resp.ID)
 	require.Empty(t, resp.Result)
 
-	req.Params = map[string]interface{}{}
+	req.Params = map[string]any{}
 	resp, events, err = s.handleCdtRequest(&req, &state)
 	require.Error(t, err)
 	require.Equal(t, 0, len(events))
@@ -321,34 +321,34 @@ func TestCdtSessionProto11CallOnFunc(t *testing.T) {
 	state := cdtState{}
 
 	req.Method = "Runtime.callFunctionOn"
-	req.Params = map[string]interface{}{}
+	req.Params = map[string]any{}
 	resp, events, err := s.handleCdtRequest(&req, &state)
 	require.Error(t, err)
 
-	req.Params = map[string]interface{}{"objectId": ""}
+	req.Params = map[string]any{"objectId": ""}
 	resp, events, err = s.handleCdtRequest(&req, &state)
 	require.Error(t, err)
 
-	req.Params = map[string]interface{}{"objectId": "", "functionDeclaration": ""}
+	req.Params = map[string]any{"objectId": "", "functionDeclaration": ""}
 	resp, events, err = s.handleCdtRequest(&req, &state)
 	require.Error(t, err)
 
-	req.Params = map[string]interface{}{"objectId": "", "functionDeclaration": "", "arguments": []interface{}{}}
+	req.Params = map[string]any{"objectId": "", "functionDeclaration": "", "arguments": []any{}}
 	resp, events, err = s.handleCdtRequest(&req, &state)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(events))
 	require.Equal(t, rid, resp.ID)
 	require.Empty(t, resp.Result)
 
-	req.Params = map[string]interface{}{
+	req.Params = map[string]any{
 		"objectId":            "",
 		"functionDeclaration": "function packRanges",
-		"arguments": []interface{}{
-			map[string]interface{}{"value": 1.},
-			map[string]interface{}{"value": 2.},
-			map[string]interface{}{"value": 3.},
-			map[string]interface{}{"value": 4.},
-			map[string]interface{}{"value": 5.},
+		"arguments": []any{
+			map[string]any{"value": 1.},
+			map[string]any{"value": 2.},
+			map[string]any{"value": 3.},
+			map[string]any{"value": 4.},
+			map[string]any{"value": 5.},
 		}}
 	resp, events, err = s.handleCdtRequest(&req, &state)
 	require.NoError(t, err)
@@ -361,11 +361,11 @@ func TestCdtSessionProto11CallOnFunc(t *testing.T) {
 	_, ok = result.Result.(cdt.RuntimeCallPackRangesObject)
 	require.True(t, ok)
 
-	req.Params = map[string]interface{}{
+	req.Params = map[string]any{
 		"objectId":            stackObjID,
 		"functionDeclaration": "function buildObjectFragment",
-		"arguments": []interface{}{
-			map[string]interface{}{"value": 1.},
+		"arguments": []any{
+			map[string]any{"value": 1.},
 		}}
 	resp, events, err = s.handleCdtRequest(&req, &state)
 	require.NoError(t, err)
@@ -378,13 +378,13 @@ func TestCdtSessionProto11CallOnFunc(t *testing.T) {
 	_, ok = result.Result.(cdt.RuntimeRemoteObject)
 	require.True(t, ok)
 
-	req.Params = map[string]interface{}{
+	req.Params = map[string]any{
 		"objectId":            stackObjID,
 		"functionDeclaration": "function buildArrayFragment",
-		"arguments": []interface{}{
-			map[string]interface{}{"value": 1.},
-			map[string]interface{}{"value": 2.},
-			map[string]interface{}{"value": 3.},
+		"arguments": []any{
+			map[string]any{"value": 1.},
+			map[string]any{"value": 2.},
+			map[string]any{"value": 3.},
 		}}
 	resp, events, err = s.handleCdtRequest(&req, &state)
 	require.NoError(t, err)
@@ -412,15 +412,15 @@ func TestCdtSessionProto11GetProps(t *testing.T) {
 	state := cdtState{}
 
 	req.Method = "Runtime.getProperties"
-	req.Params = map[string]interface{}{}
+	req.Params = map[string]any{}
 	resp, events, err := s.handleCdtRequest(&req, &state)
 	require.Error(t, err)
 
-	req.Params = map[string]interface{}{"objectId": "", "generatePreview": true}
+	req.Params = map[string]any{"objectId": "", "generatePreview": true}
 	resp, events, err = s.handleCdtRequest(&req, &state)
 	require.Error(t, err)
 
-	req.Params = map[string]interface{}{"objectId": globalScopeObjID, "generatePreview": true}
+	req.Params = map[string]any{"objectId": globalScopeObjID, "generatePreview": true}
 	s.verbose = true
 	resp, events, err = s.handleCdtRequest(&req, &state)
 	require.NoError(t, err)
@@ -584,12 +584,12 @@ func TestCdtSessionGetObjects(t *testing.T) {
 	state.line.Store(1)
 
 	req.Method = "Runtime.getProperties"
-	req.Params = map[string]interface{}{}
+	req.Params = map[string]any{}
 	resp, events, err := s.handleCdtRequest(&req, &state)
 	require.Error(t, err)
 
 	for k := range objectDescMap {
-		req.Params = map[string]interface{}{"objectId": k, "generatePreview": true}
+		req.Params = map[string]any{"objectId": k, "generatePreview": true}
 		resp, events, err = s.handleCdtRequest(&req, &state)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(events))
@@ -613,7 +613,7 @@ func TestCdtSessionGetObjects(t *testing.T) {
 		encodeInnerTxnID([]int{0, 1}),
 	}
 	for _, k := range objIDs {
-		req.Params = map[string]interface{}{"objectId": k, "generatePreview": true}
+		req.Params = map[string]any{"objectId": k, "generatePreview": true}
 		resp, events, err = s.handleCdtRequest(&req, &state)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(events))

@@ -36,7 +36,7 @@ import (
 // Implements UnverifiedSigJob
 type UnverifiedTxnSigJob struct {
 	TxnGroup       []transactions.SignedTxn
-	BacklogMessage interface{}
+	BacklogMessage any
 }
 
 // VerificationResult is the result of the txn group verification
@@ -44,7 +44,7 @@ type UnverifiedTxnSigJob struct {
 // initially passed to the stream verifier
 type VerificationResult struct {
 	TxnGroup       []transactions.SignedTxn
-	BacklogMessage interface{}
+	BacklogMessage any
 	Err            error
 }
 
@@ -77,7 +77,7 @@ func (nbw *NewBlockWatcher) getBlockHeader() (bh *bookkeeping.BlockHeader) {
 type batchLoad struct {
 	txnGroups      [][]transactions.SignedTxn
 	groupCtxs      []*GroupContext
-	backlogMessage []interface{}
+	backlogMessage []any
 	messagesForTxn []int
 }
 
@@ -85,12 +85,12 @@ func makeBatchLoad(l int) (bl *batchLoad) {
 	return &batchLoad{
 		txnGroups:      make([][]transactions.SignedTxn, 0, l),
 		groupCtxs:      make([]*GroupContext, 0, l),
-		backlogMessage: make([]interface{}, 0, l),
+		backlogMessage: make([]any, 0, l),
 		messagesForTxn: make([]int, 0, l),
 	}
 }
 
-func (bl *batchLoad) addLoad(txngrp []transactions.SignedTxn, gctx *GroupContext, backlogMsg interface{}, numBatchableSigs int) {
+func (bl *batchLoad) addLoad(txngrp []transactions.SignedTxn, gctx *GroupContext, backlogMsg any, numBatchableSigs int) {
 	bl.txnGroups = append(bl.txnGroups, txngrp)
 	bl.groupCtxs = append(bl.groupCtxs, gctx)
 	bl.backlogMessage = append(bl.backlogMessage, backlogMsg)
@@ -134,7 +134,7 @@ func (tbp txnSigBatchProcessor) GetErredUnprocessed(ue execpool.InputJob, err er
 	tbp.sendResult(uelt.TxnGroup, uelt.BacklogMessage, err)
 }
 
-func (tbp txnSigBatchProcessor) sendResult(veTxnGroup []transactions.SignedTxn, veBacklogMessage interface{}, err error) {
+func (tbp txnSigBatchProcessor) sendResult(veTxnGroup []transactions.SignedTxn, veBacklogMessage any, err error) {
 	// send the txn result out the pipe
 	select {
 	case tbp.resultChan <- &VerificationResult{
@@ -198,7 +198,7 @@ func (tbp *txnSigBatchProcessor) ProcessBatch(txns []execpool.InputJob) {
 	tbp.postProcessVerifiedJobs(ctx, failed, err)
 }
 
-func (tbp *txnSigBatchProcessor) preProcessUnverifiedTxns(uTxns []execpool.InputJob) (batchVerifier crypto.BatchVerifier, ctx interface{}) {
+func (tbp *txnSigBatchProcessor) preProcessUnverifiedTxns(uTxns []execpool.InputJob) (batchVerifier crypto.BatchVerifier, ctx any) {
 	batchVerifier = crypto.MakeBatchVerifier()
 	bl := makeBatchLoad(len(uTxns))
 	// TODO: separate operations here, and get the sig verification inside the LogicSig to the batch here
@@ -252,7 +252,7 @@ func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn, groupIndex int) 
 	}
 }
 
-func (tbp *txnSigBatchProcessor) postProcessVerifiedJobs(ctx interface{}, failed []bool, err error) {
+func (tbp *txnSigBatchProcessor) postProcessVerifiedJobs(ctx any, failed []bool, err error) {
 	bl := ctx.(*batchLoad)
 	if err == nil { // success, all signatures verified
 		for i := range bl.txnGroups {

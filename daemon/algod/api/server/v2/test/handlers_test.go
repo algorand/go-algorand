@@ -310,7 +310,7 @@ func TestGetBlock(t *testing.T) {
 type blockResponseTest struct {
 	Block bookkeeping.Block `codec:"block"`
 
-	Cert *map[string]interface{} `codec:"cert,omitempty"`
+	Cert *map[string]any `codec:"cert,omitempty"`
 }
 
 func getBlockHeaderTest(t *testing.T, blockNum basics.Round, format string, expectedCode int, headerOnly *bool) {
@@ -2535,7 +2535,7 @@ func TestDeltasForTxnGroup(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(roundResponse.Deltas))
 	require.Equal(t, []string{txn1.ID().String()}, roundResponse.Deltas[0].Ids)
-	hdr, ok := roundResponse.Deltas[0].Delta["Hdr"].(map[string]interface{})
+	hdr, ok := roundResponse.Deltas[0].Delta["Hdr"].(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, delta1.Hdr.Round, basics.Round(hdr["rnd"].(float64)))
 
@@ -2562,7 +2562,7 @@ func TestDeltasForTxnGroup(t *testing.T) {
 	var groupResponse model.LedgerStateDeltaForTransactionGroupResponse
 	err = json.Unmarshal(rec.Body.Bytes(), &groupResponse)
 	require.NoError(t, err)
-	groupHdr, ok := groupResponse["Hdr"].(map[string]interface{})
+	groupHdr, ok := groupResponse["Hdr"].(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, delta2.Hdr.Round, basics.Round(groupHdr["rnd"].(float64)))
 
@@ -2577,7 +2577,7 @@ func TestDeltasForTxnGroup(t *testing.T) {
 	err = json.Unmarshal(rec.Body.Bytes(), &groupResponse)
 	require.NoError(t, err)
 	require.NotNil(t, groupResponse["KvMods"])
-	groupHdr, ok = groupResponse["Hdr"].(map[string]interface{})
+	groupHdr, ok = groupResponse["Hdr"].(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, delta2.Hdr.Round, basics.Round(groupHdr["rnd"].(float64)))
 

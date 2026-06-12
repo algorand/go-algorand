@@ -22,15 +22,15 @@ package cdt
 
 // ChromeResponse is default response object, contains the id and a result if applicable.
 type ChromeResponse struct {
-	ID     int64       `json:"id"`
-	Result interface{} `json:"result"`
+	ID     int64 `json:"id"`
+	Result any   `json:"result"`
 }
 
 // ChromeRequest is default no-arg request
 type ChromeRequest struct {
-	ID     int64       `json:"id"`
-	Method string      `json:"method"`
-	Params interface{} `json:"params,omitempty"`
+	ID     int64  `json:"id"`
+	Method string `json:"method"`
+	Params any    `json:"params,omitempty"`
 }
 
 // TabDescription represents information shown by CDT at chrome://inspect/ tab
@@ -71,10 +71,10 @@ type RuntimeStackTrace struct {
 
 // RuntimeExecutionContextDescription type
 type RuntimeExecutionContextDescription struct {
-	ID      int                    `json:"id"`                // Unique id of the execution context. It can be used to specify in which execution context script evaluation should be performed.
-	Origin  string                 `json:"origin"`            // Execution context origin.
-	Name    string                 `json:"name"`              // Human readable name describing given context.
-	AuxData map[string]interface{} `json:"auxData,omitempty"` // Embedder-specific auxiliary data.
+	ID      int            `json:"id"`                // Unique id of the execution context. It can be used to specify in which execution context script evaluation should be performed.
+	Origin  string         `json:"origin"`            // Execution context origin.
+	Name    string         `json:"name"`              // Human readable name describing given context.
+	AuxData map[string]any `json:"auxData,omitempty"` // Embedder-specific auxiliary data.
 }
 
 // RuntimeExecutionContextCreatedParams type
@@ -104,7 +104,7 @@ type RuntimeRemoteObject struct {
 	Type                string                `json:"type"`                          // Object type.
 	Subtype             string                `json:"subtype,omitempty"`             // Object subtype hint. Specified for `object` type values only.
 	ClassName           string                `json:"className,omitempty"`           // Object class (constructor) name. Specified for `object` type values only.
-	Value               interface{}           `json:"value,omitempty"`               // Remote object value in case of primitive values or JSON values (if it was requested).
+	Value               any                   `json:"value,omitempty"`               // Remote object value in case of primitive values or JSON values (if it was requested).
 	UnserializableValue string                `json:"unserializableValue,omitempty"` // Primitive value which can not be JSON-stringified does not have `value`, but gets this property.
 	Description         string                `json:"description,omitempty"`         // String representation of the object.
 	ObjectID            string                `json:"objectId,omitempty"`            // Unique object identifier (for non-primitive values).
@@ -159,9 +159,9 @@ type RuntimePropertyDescriptor struct {
 
 // RuntimeCallArgument represents function call argument. Either remote object id `objectId`, primitive `value`, unserializable primitive value or neither of (for undefined) them should be specified.
 type RuntimeCallArgument struct {
-	Value               interface{} `json:"value,omitempty"`               // Primitive value or serializable javascript object.
-	UnserializableValue string      `json:"unserializableValue,omitempty"` // Primitive value which can not be JSON-stringified.
-	ObjectID            string      `json:"objectId,omitempty"`            // Remote object handle.
+	Value               any    `json:"value,omitempty"`               // Primitive value or serializable javascript object.
+	UnserializableValue string `json:"unserializableValue,omitempty"` // Primitive value which can not be JSON-stringified.
+	ObjectID            string `json:"objectId,omitempty"`            // Remote object handle.
 }
 
 // RuntimeCallPackRangesObject is packRanges response object
@@ -177,21 +177,21 @@ type RuntimeCallPackRangesRange struct {
 
 // DebuggerScriptParsedParams type
 type DebuggerScriptParsedParams struct {
-	ScriptID                string                 `json:"scriptId"`                          // Identifier of the script parsed.
-	URL                     string                 `json:"url"`                               // URL or name of the script parsed (if any).
-	StartLine               int                    `json:"startLine"`                         // Line offset of the script within the resource with given URL (for script tags).
-	StartColumn             int                    `json:"startColumn"`                       // Column offset of the script within the resource with given URL.
-	EndLine                 int                    `json:"endLine"`                           // Last line of the script.
-	EndColumn               int                    `json:"endColumn"`                         // Length of the last line of the script.
-	ExecutionContextID      int                    `json:"executionContextId"`                // Specifies script creation context.
-	Hash                    string                 `json:"hash"`                              // Content hash of the script.
-	ExecutionContextAuxData map[string]interface{} `json:"executionContextAuxData,omitempty"` // Embedder-specific auxiliary data.
-	IsLiveEdit              bool                   `json:"isLiveEdit,omitempty"`              // True, if this script is generated as a result of the live edit operation.
-	SourceMapURL            string                 `json:"sourceMapURL,omitempty"`            // URL of source map associated with script (if any).
-	HasSourceURL            bool                   `json:"hasSourceURL,omitempty"`            // True, if this script has sourceURL.
-	IsModule                bool                   `json:"isModule,omitempty"`                // True, if this script is ES6 module.
-	Length                  int                    `json:"length,omitempty"`                  // This script length.
-	StackTrace              RuntimeStackTrace      `json:"stackTrace,omitempty"`              // JavaScript top stack frame of where the script parsed event was triggered if available.
+	ScriptID                string            `json:"scriptId"`                          // Identifier of the script parsed.
+	URL                     string            `json:"url"`                               // URL or name of the script parsed (if any).
+	StartLine               int               `json:"startLine"`                         // Line offset of the script within the resource with given URL (for script tags).
+	StartColumn             int               `json:"startColumn"`                       // Column offset of the script within the resource with given URL.
+	EndLine                 int               `json:"endLine"`                           // Last line of the script.
+	EndColumn               int               `json:"endColumn"`                         // Length of the last line of the script.
+	ExecutionContextID      int               `json:"executionContextId"`                // Specifies script creation context.
+	Hash                    string            `json:"hash"`                              // Content hash of the script.
+	ExecutionContextAuxData map[string]any    `json:"executionContextAuxData,omitempty"` // Embedder-specific auxiliary data.
+	IsLiveEdit              bool              `json:"isLiveEdit,omitempty"`              // True, if this script is generated as a result of the live edit operation.
+	SourceMapURL            string            `json:"sourceMapURL,omitempty"`            // URL of source map associated with script (if any).
+	HasSourceURL            bool              `json:"hasSourceURL,omitempty"`            // True, if this script has sourceURL.
+	IsModule                bool              `json:"isModule,omitempty"`                // True, if this script is ES6 module.
+	Length                  int               `json:"length,omitempty"`                  // This script length.
+	StackTrace              RuntimeStackTrace `json:"stackTrace,omitempty"`              // JavaScript top stack frame of where the script parsed event was triggered if available.
 }
 
 // DebuggerScriptParsedEvent type
@@ -238,13 +238,13 @@ type DebuggerScope struct {
 
 // DebuggerPausedParams type
 type DebuggerPausedParams struct {
-	CallFrames            []DebuggerCallFrame    `json:"callFrames"`                      // Call stack the virtual machine stopped on.
-	Reason                string                 `json:"reason"`                          // Pause reason.
-	Data                  map[string]interface{} `json:"data,omitempty"`                  // Object containing break-specific auxiliary properties.
-	HitBreakpoints        []string               `json:"hitBreakpoints"`                  // Hit breakpoints IDs
-	AsyncStackTrace       *RuntimeStackTrace     `json:"asyncStackTrace,omitempty"`       // Async stack trace, if any.
-	AsyncStackTraceID     *RuntimeStackTraceID   `json:"asyncStackTraceId,omitempty"`     // Async stack trace, if any.
-	AsyncCallStackTraceID *RuntimeStackTraceID   `json:"asyncCallStackTraceId,omitempty"` // Just scheduled async call will have this stack trace as parent stack during async execution. This field is available only after `Debugger.stepInto` call with `breakOnAsynCall` flag.
+	CallFrames            []DebuggerCallFrame  `json:"callFrames"`                      // Call stack the virtual machine stopped on.
+	Reason                string               `json:"reason"`                          // Pause reason.
+	Data                  map[string]any       `json:"data,omitempty"`                  // Object containing break-specific auxiliary properties.
+	HitBreakpoints        []string             `json:"hitBreakpoints"`                  // Hit breakpoints IDs
+	AsyncStackTrace       *RuntimeStackTrace   `json:"asyncStackTrace,omitempty"`       // Async stack trace, if any.
+	AsyncStackTraceID     *RuntimeStackTraceID `json:"asyncStackTraceId,omitempty"`     // Async stack trace, if any.
+	AsyncCallStackTraceID *RuntimeStackTraceID `json:"asyncCallStackTraceId,omitempty"` // Just scheduled async call will have this stack trace as parent stack during async execution. This field is available only after `Debugger.stepInto` call with `breakOnAsynCall` flag.
 }
 
 // DebuggerPausedEvent is fired when the virtual machine stopped on breakpoint or exception or any other stop criteria.

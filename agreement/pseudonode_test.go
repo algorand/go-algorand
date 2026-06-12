@@ -461,7 +461,7 @@ type substrServiceLogger struct {
 	instancesFound []int
 }
 
-func (ssl *substrServiceLogger) Infof(s string, args ...interface{}) {
+func (ssl *substrServiceLogger) Infof(s string, args ...any) {
 	for i, str := range ssl.lookupStrings {
 		if strings.Contains(s, str) {
 			ssl.instancesFound[i]++

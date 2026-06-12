@@ -1147,7 +1147,7 @@ func (c *Client) Catchup(catchpointLabel string, min uint64) (model.CatchpointSt
 const defaultAppIdx = 1380011588
 
 // MakeDryrunStateBytes function creates DryrunRequest data structure in serialized form according to the format
-func MakeDryrunStateBytes(client Client, txnOrStxn interface{}, otherTxns []transactions.SignedTxn, otherAccts []basics.Address, proto string, format string) (result []byte, err error) {
+func MakeDryrunStateBytes(client Client, txnOrStxn any, otherTxns []transactions.SignedTxn, otherAccts []basics.Address, proto string, format string) (result []byte, err error) {
 	switch format {
 	case "json":
 		var gdr model.DryrunRequest
@@ -1169,7 +1169,7 @@ func MakeDryrunStateBytes(client Client, txnOrStxn interface{}, otherTxns []tran
 }
 
 // MakeDryrunState function creates v2.DryrunRequest data structure
-func MakeDryrunState(client Client, txnOrStxn interface{}, otherTxns []transactions.SignedTxn, otherAccts []basics.Address, proto string) (dr v2.DryrunRequest, err error) {
+func MakeDryrunState(client Client, txnOrStxn any, otherTxns []transactions.SignedTxn, otherAccts []basics.Address, proto string) (dr v2.DryrunRequest, err error) {
 	gdr, err := MakeDryrunStateGenerated(client, txnOrStxn, otherTxns, otherAccts, proto)
 	if err != nil {
 		return
@@ -1178,7 +1178,7 @@ func MakeDryrunState(client Client, txnOrStxn interface{}, otherTxns []transacti
 }
 
 // MakeDryrunStateGenerated function creates model.DryrunRequest data structure
-func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, otherTxns []transactions.SignedTxn, otherAccts []basics.Address, proto string) (dr model.DryrunRequest, err error) {
+func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice any, otherTxns []transactions.SignedTxn, otherAccts []basics.Address, proto string) (dr model.DryrunRequest, err error) {
 	var txns []transactions.SignedTxn
 	if txnOrStxnOrSlice != nil {
 		switch txnType := txnOrStxnOrSlice.(type) {

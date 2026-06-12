@@ -145,7 +145,7 @@ func TestAccount(t *testing.T) {
 	verifyCreatedApp(0, appIdx1, appParams1)
 	verifyCreatedApp(1, appIdx2, appParams2)
 
-	makeTKV := func(k string, v interface{}) model.TealKeyValue {
+	makeTKV := func(k string, v any) model.TealKeyValue {
 		value := model.TealValue{}
 		switch v.(type) {
 		case int:

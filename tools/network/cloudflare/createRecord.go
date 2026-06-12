@@ -115,26 +115,26 @@ func createSRVRecordRequest(zoneID string, authToken string, name string, servic
 // CreateDNSRecordResponse is the JSON response for a DNS create request
 type CreateDNSRecordResponse struct {
 	Success  bool                  `json:"success"`
-	Errors   []interface{}         `json:"errors"`
-	Messages []interface{}         `json:"messages"`
+	Errors   []any                 `json:"errors"`
+	Messages []any                 `json:"messages"`
 	Result   CreateDNSRecordResult `json:"result"`
 }
 
 // CreateDNSRecordResult is the result of the response for the DNS create request
 type CreateDNSRecordResult struct {
-	ID         string      `json:"id"`
-	Type       string      `json:"type"`
-	Name       string      `json:"name"`
-	Content    string      `json:"content"`
-	Proxiable  bool        `json:"proxiable"`
-	Proxied    bool        `json:"proxied"`
-	TTL        uint        `json:"ttl"`
-	Locked     bool        `json:"locked"`
-	ZoneID     string      `json:"zone_id"`
-	ZoneName   string      `json:"zone_name"`
-	CreatedOn  string      `json:"created_on"`
-	ModifiedOn string      `json:"modified_on"`
-	Data       interface{} `json:"data"`
+	ID         string `json:"id"`
+	Type       string `json:"type"`
+	Name       string `json:"name"`
+	Content    string `json:"content"`
+	Proxiable  bool   `json:"proxiable"`
+	Proxied    bool   `json:"proxied"`
+	TTL        uint   `json:"ttl"`
+	Locked     bool   `json:"locked"`
+	ZoneID     string `json:"zone_id"`
+	ZoneName   string `json:"zone_name"`
+	CreatedOn  string `json:"created_on"`
+	ModifiedOn string `json:"modified_on"`
+	Data       any    `json:"data"`
 }
 
 // parseCreateDNSRecordResponse parses the response that was received as a result of a ListDNSRecordRequest
