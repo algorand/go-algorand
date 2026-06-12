@@ -44,7 +44,7 @@ GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
 GOTAGSLIST += ${GOTAGSCUSTOM}
 
 GOTESTCOMMAND := go tool -modfile=tool.mod gotestsum --format pkgname --jsonfile testresults.json --
-GOLINTCOMMAND := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.7.1 -c .golangci.yml
+GOLINTCOMMAND := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.8.0 -c .golangci.yml
 
 ifeq ($(OS_TYPE), darwin)
 # M1 Mac--homebrew install location in /opt/homebrew
