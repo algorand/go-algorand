@@ -86,6 +86,9 @@ linters:
       require-specific: true
       # require comments like "//nolint:errcheck // Explanation of why we are ignoring linter here..."
       require-explanation: true
+    revive:
+      rules:
+        - name: use-any # disabled by default
     staticcheck:
       checks:
         - all
