@@ -21,26 +21,12 @@ import (
 	"os"
 )
 
-func reportInfoln(args ...any) {
-	fmt.Println(args...)
-}
-
 func reportInfof(format string, args ...any) {
 	fmt.Printf(format+"\n", args...)
 }
 
-func reportWarnln(args ...any) {
-	fmt.Print("Warning: ")
-	fmt.Println(args...)
-}
-
 func reportWarnf(format string, args ...any) {
 	fmt.Printf("Warning: "+format+"\n", args...)
-}
-
-func reportErrorln(args ...any) {
-	fmt.Fprintln(os.Stderr, args...)
-	os.Exit(1)
 }
 
 func reportErrorf(format string, args ...any) {
