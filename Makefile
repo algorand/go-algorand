@@ -107,7 +107,7 @@ fix: build
 	$(GOBIN)/algofix */
 
 modernize:
-	GOTOOLCHAIN=auto go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@v0.39.0 -any=false -bloop=false -rangeint=false -fmtappendf=false -waitgroup=false -stringsbuilder=false -omitzero=false -fix ./...
+	GOTOOLCHAIN=auto go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@v0.46.0 -v -atomictypes=false -rangeint=false -waitgroupgo=false -slicesbackward=false -stringsbuilder=false -omitzero=false -stringscut=false -fix ./...
 
 lint:
 	$(GOLINTCOMMAND) run
