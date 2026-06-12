@@ -43,7 +43,7 @@ const (
 )
 
 type (
-	// FalconPublicKey is a wrapper for cfalcon.PublicKeySizey (used for packing)
+	// FalconPublicKey is a wrapper for cfalcon.PublicKeySize (used for packing)
 	FalconPublicKey [FalconPublicKeySize]byte
 	// FalconPrivateKey is a wrapper for cfalcon.PrivateKeySize (used for packing)
 	FalconPrivateKey [FalconPrivateKeySize]byte
