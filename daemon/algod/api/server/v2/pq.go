@@ -24,13 +24,20 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 )
 
-func validatePQSignatureForAPI(proto config.ConsensusParams, stxn transactions.SignedTxn, allowEmptySignature bool) error {
+func pqSignatureHasPlaceholder(stxn transactions.SignedTxn) bool {
+	return stxn.Sig.Blank() && stxn.Msig.Blank() && stxn.Lsig.Blank() &&
+		!stxn.PQSig.Blank() && len(stxn.PQSig.Signature) == 0
+}
+
+func validatePQSignatureForAPI(proto config.ConsensusParams, stxn transactions.SignedTxn, allowEmptySignature bool, deferPlaceholderEnvelope bool) error {
 	if stxn.PQSig.Blank() {
 		return nil
 	}
 
-	if err := stxn.PQSig.ValidateEnvelope(proto, stxn.Authorizer()); err != nil {
-		return err
+	if !(deferPlaceholderEnvelope && allowEmptySignature && pqSignatureHasPlaceholder(stxn)) {
+		if err := stxn.PQSig.ValidateEnvelope(proto, stxn.Authorizer()); err != nil {
+			return err
+		}
 	}
 
 	if len(stxn.PQSig.Signature) == 0 && !allowEmptySignature {
@@ -45,9 +52,9 @@ func validatePQSignatureForAPI(proto config.ConsensusParams, stxn transactions.S
 	return nil
 }
 
-func validatePQSignaturesForAPI(proto config.ConsensusParams, txgroup []transactions.SignedTxn, allowEmptySignature bool) error {
+func validatePQSignaturesForAPI(proto config.ConsensusParams, txgroup []transactions.SignedTxn, allowEmptySignature bool, deferPlaceholderEnvelope bool) error {
 	for txnIdx, stxn := range txgroup {
-		if err := validatePQSignatureForAPI(proto, stxn, allowEmptySignature); err != nil {
+		if err := validatePQSignatureForAPI(proto, stxn, allowEmptySignature, deferPlaceholderEnvelope); err != nil {
 			return fmt.Errorf("transaction %d: %w", txnIdx, err)
 		}
 	}
