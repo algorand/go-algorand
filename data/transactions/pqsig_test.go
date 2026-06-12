@@ -135,6 +135,37 @@ func TestPQSigAuthorizerAddress(t *testing.T) {
 	require.Equal(t, basics.PQAddress(fixture.pqSig.Scheme, fixture.pqSig.Salt, fixture.pqSig.PublicKey), fixture.pqSig.AuthorizerAddress())
 }
 
+func TestPQSigValidateEnvelope(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	fixture := makePQSigTestFixture(t, 0)
+
+	require.NoError(t, fixture.pqSig.ValidateEnvelope(fixture.proto, fixture.authorizer))
+
+	noSignature := fixture.pqSig
+	noSignature.Signature = nil
+	require.NoError(t, noSignature.ValidateEnvelope(fixture.proto, fixture.authorizer))
+
+	disabledProto := fixture.proto
+	disabledProto.EnablePQSchemeFalcon1024 = false
+	require.ErrorIs(t, fixture.pqSig.ValidateEnvelope(disabledProto, fixture.authorizer), basics.ErrPQSchemeNotEnabled)
+
+	unknownScheme := fixture.pqSig
+	unknownScheme.Scheme = protocol.PQScheme("x1")
+	require.ErrorIs(t, unknownScheme.ValidateEnvelope(fixture.proto, unknownScheme.AuthorizerAddress()), basics.ErrPQSchemeNotSupported)
+
+	malformedPublicKey := fixture.pqSig
+	malformedPublicKey.PublicKey = malformedPublicKey.PublicKey[:len(malformedPublicKey.PublicKey)-1]
+	require.ErrorContains(t, malformedPublicKey.ValidateEnvelope(fixture.proto, malformedPublicKey.AuthorizerAddress()), "falcon public key size invalid")
+
+	var wrongAuthorizer basics.Address
+	wrongAuthorizer[0] = 1
+	require.ErrorIs(t, fixture.pqSig.ValidateEnvelope(fixture.proto, wrongAuthorizer), errPQSigAuthorizerMismatch)
+
+	var nilPQSig *PQSig
+	require.ErrorIs(t, nilPQSig.ValidateEnvelope(fixture.proto, fixture.authorizer), errPQSigBlank)
+}
+
 func TestPQSigVerify(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
