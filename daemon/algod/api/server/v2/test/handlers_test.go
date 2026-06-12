@@ -1244,6 +1244,37 @@ func TestPostTransactionPQAuthorizerCompliance(t *testing.T) {
 		t.Parallel()
 		test(t, makePQSignedTxnWithAddressCompliance(t, false), futureStatus, http.StatusBadRequest, "transaction 0: pq signature authorizer address")
 	})
+	t.Run("empty-signature", func(t *testing.T) {
+		t.Parallel()
+		stxn := makePQSignedTxnWithAddressCompliance(t, true)
+		stxn.PQSig.Signature = nil
+		test(t, stxn, futureStatus, http.StatusBadRequest, "transaction 0: pq signature is empty")
+	})
+	t.Run("authorizer-mismatch", func(t *testing.T) {
+		t.Parallel()
+		stxn := makePQSignedTxnWithAddressCompliance(t, true)
+		stxn.Txn.Sender[0] ^= 1
+		test(t, stxn, futureStatus, http.StatusBadRequest, "transaction 0: pq signature authorizer mismatch")
+	})
+	t.Run("malformed-public-key", func(t *testing.T) {
+		t.Parallel()
+		stxn := makePQSignedTxnWithAddressCompliance(t, true)
+		stxn.PQSig.PublicKey = stxn.PQSig.PublicKey[:len(stxn.PQSig.PublicKey)-1]
+		test(t, stxn, futureStatus, http.StatusBadRequest, "transaction 0: falcon public key size invalid")
+	})
+	t.Run("unsupported-scheme", func(t *testing.T) {
+		t.Parallel()
+		stxn := makePQSignedTxnWithAddressCompliance(t, true)
+		stxn.PQSig.Scheme = protocol.PQScheme("x1")
+		test(t, stxn, futureStatus, http.StatusBadRequest, "transaction 0: pq signature scheme not supported")
+	})
+	t.Run("disabled-scheme", func(t *testing.T) {
+		t.Parallel()
+		disabledStatus := futureStatus
+		disabledStatus.LastVersion = protocol.ConsensusV41
+		stxn := makePQSignedTxnWithAddressCompliance(t, true)
+		test(t, stxn, disabledStatus, http.StatusBadRequest, "transaction 0: pq signature scheme not enabled")
+	})
 }
 
 func TestPostTransactionAsync(t *testing.T) {
@@ -1338,7 +1369,7 @@ func copyInnerTxnGroupIDs(t *testing.T, dst, src *v2.PreEncodedTxInfo) {
 	}
 }
 
-func TestPostSimulateTransactionAcceptsPlaceholderPQSignature(t *testing.T) {
+func TestPostSimulateTransactionPlaceholderPQSignatureValidation(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -1400,6 +1431,29 @@ func TestPostSimulateTransactionAcceptsPlaceholderPQSignature(t *testing.T) {
 	require.Equal(t, pqSig.Scheme, actualPQSig.Scheme)
 	require.Equal(t, pqSig.Salt, actualPQSig.Salt)
 	require.Equal(t, pqSig.PublicKey, actualPQSig.PublicKey)
+
+	request.AllowEmptySignatures = false
+	req = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(protocol.EncodeReflect(&request)))
+	rec = httptest.NewRecorder()
+	c = echo.New().NewContext(req, rec)
+
+	err = handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: &format})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+	require.Contains(t, rec.Body.String(), "transaction group 0: transaction 0: pq signature is empty")
+
+	malformedStxn := stxn
+	malformedStxn.PQSig.PublicKey = malformedStxn.PQSig.PublicKey[:len(malformedStxn.PQSig.PublicKey)-1]
+	request.TxnGroups[0].Txns[0] = malformedStxn
+	request.AllowEmptySignatures = true
+	req = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(protocol.EncodeReflect(&request)))
+	rec = httptest.NewRecorder()
+	c = echo.New().NewContext(req, rec)
+
+	err = handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: &format})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+	require.Contains(t, rec.Body.String(), "transaction group 0: transaction 0: falcon public key size invalid")
 }
 
 func TestPostSimulateTransactionPQAuthorizerComplianceReportsGroup(t *testing.T) {

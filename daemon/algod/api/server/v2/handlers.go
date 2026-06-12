@@ -42,7 +42,6 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/catchup"
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
@@ -1163,7 +1162,7 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
-	if err = validatePQSignaturesForAPI(txgroup); err != nil {
+	if err = validatePQSignaturesForAPI(proto, txgroup, false); err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
@@ -1186,11 +1185,17 @@ func (v2 *Handlers) RawTransactionAsync(ctx echo.Context) error {
 	if !v2.Node.Config().EnableDeveloperAPI {
 		return ctx.String(http.StatusNotFound, "/transactions/async was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
 	}
-	txgroup, err := decodeTxGroup(ctx.Request().Body, bounds.MaxTxGroupSize)
+	stat, err := v2.Node.Status()
+	if err != nil {
+		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
+	}
+	proto := config.Consensus[stat.LastVersion]
+
+	txgroup, err := decodeTxGroup(ctx.Request().Body, proto.MaxTxGroupSize)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
-	if err = validatePQSignaturesForAPI(txgroup); err != nil {
+	if err = validatePQSignaturesForAPI(proto, txgroup, false); err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 	err = v2.Node.AsyncBroadcastSignedTxGroup(txgroup)
@@ -1467,7 +1472,7 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 		}
 	}
 	for groupIdx, txgroup := range simulateRequest.TxnGroups {
-		if err = validatePQSignaturesForAPI(txgroup.Txns); err != nil {
+		if err = validatePQSignaturesForAPI(proto, txgroup.Txns, simulateRequest.AllowEmptySignatures); err != nil {
 			err = fmt.Errorf("transaction group %d: %w", groupIdx, err)
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}

@@ -17,18 +17,25 @@
 package v2
 
 import (
+	"errors"
 	"fmt"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/transactions"
 )
 
-func validatePQSignatureForAPI(stxn transactions.SignedTxn) error {
+func validatePQSignatureForAPI(proto config.ConsensusParams, stxn transactions.SignedTxn, allowEmptySignature bool) error {
 	if stxn.PQSig.Blank() {
 		return nil
 	}
 
-	// TODO: should the API reject if !proto.EnablePQSchemeFalcon1024? This would
-	//  fail consensus anyway
+	if err := stxn.PQSig.ValidateEnvelope(proto, stxn.Authorizer()); err != nil {
+		return err
+	}
+
+	if len(stxn.PQSig.Signature) == 0 && !allowEmptySignature {
+		return errors.New("pq signature is empty")
+	}
 
 	authorizer := stxn.PQSig.AuthorizerAddress()
 	if !authorizer.IsPQCompliant() {
@@ -38,9 +45,9 @@ func validatePQSignatureForAPI(stxn transactions.SignedTxn) error {
 	return nil
 }
 
-func validatePQSignaturesForAPI(txgroup []transactions.SignedTxn) error {
+func validatePQSignaturesForAPI(proto config.ConsensusParams, txgroup []transactions.SignedTxn, allowEmptySignature bool) error {
 	for txnIdx, stxn := range txgroup {
-		if err := validatePQSignatureForAPI(stxn); err != nil {
+		if err := validatePQSignatureForAPI(proto, stxn, allowEmptySignature); err != nil {
 			return fmt.Errorf("transaction %d: %w", txnIdx, err)
 		}
 	}
