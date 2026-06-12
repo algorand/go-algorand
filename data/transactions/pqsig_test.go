@@ -162,6 +162,12 @@ func TestPQSigValidateEnvelope(t *testing.T) {
 	wrongAuthorizer[0] = 1
 	require.ErrorIs(t, fixture.pqSig.ValidateEnvelope(fixture.proto, wrongAuthorizer), errPQSigAuthorizerMismatch)
 
+	corruptSignature := fixture.pqSig
+	corruptSignature.Signature = append([]byte(nil), corruptSignature.Signature...)
+	corruptSignature.Signature[0] ^= 1
+	require.NoError(t, corruptSignature.ValidateEnvelope(fixture.proto, fixture.authorizer))
+	require.Error(t, corruptSignature.Verify(fixture.proto, fixture.txn, fixture.authorizer))
+
 	var nilPQSig *PQSig
 	require.ErrorIs(t, nilPQSig.ValidateEnvelope(fixture.proto, fixture.authorizer), errPQSigBlank)
 }
