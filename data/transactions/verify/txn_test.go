@@ -427,7 +427,7 @@ func TestTxnValidationPQSigEncodeDecode(t *testing.T) {
 	var decoded transactions.SignedTxn
 	require.NoError(t, protocol.Decode(encoded, &decoded))
 	require.Equal(t, stxn.Txn, decoded.Txn)
-	require.True(t, stxn.PQSig.Equal(&decoded.PQSig))
+	require.True(t, stxn.PQSig.Equal(decoded.PQSig))
 
 	_, err := TxnGroup([]transactions.SignedTxn{decoded}, &blkHdr, nil, &dummyLedger)
 	require.NoError(t, err)

@@ -140,15 +140,13 @@ func TestEnabledPQSchemesFitDecodeBounds(t *testing.T) {
 func TestPQSigBlank(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var nilPQSig *PQSig
-	require.True(t, nilPQSig.Blank())
-	require.True(t, (&PQSig{}).Blank())
-	require.True(t, (&PQSig{Salt: 0}).Blank())
+	require.True(t, (PQSig{}).Blank())
+	require.True(t, (PQSig{Salt: 0}).Blank())
 
-	require.False(t, (&PQSig{Salt: 1}).Blank())
-	require.False(t, (&PQSig{Scheme: protocol.PQSchemeFalcon1024}).Blank())
-	require.False(t, (&PQSig{PublicKey: []byte{1}}).Blank())
-	require.False(t, (&PQSig{Signature: []byte{1}}).Blank())
+	require.False(t, (PQSig{Salt: 1}).Blank())
+	require.False(t, (PQSig{Scheme: protocol.PQSchemeFalcon1024}).Blank())
+	require.False(t, (PQSig{PublicKey: []byte{1}}).Blank())
+	require.False(t, (PQSig{Signature: []byte{1}}).Blank())
 }
 
 func TestPQSigEqual(t *testing.T) {
@@ -159,31 +157,29 @@ func TestPQSigEqual(t *testing.T) {
 	same.PublicKey = slices.Clone(same.PublicKey)
 	same.Signature = slices.Clone(same.Signature)
 
-	require.True(t, fixture.pqSig.Equal(&same))
+	require.True(t, fixture.pqSig.Equal(same))
 
 	changedScheme := fixture.pqSig
 	changedScheme.Scheme = protocol.PQScheme("x1")
-	require.False(t, fixture.pqSig.Equal(&changedScheme))
+	require.False(t, fixture.pqSig.Equal(changedScheme))
 
 	changedSalt := fixture.pqSig
 	changedSalt.Salt++
-	require.False(t, fixture.pqSig.Equal(&changedSalt))
+	require.False(t, fixture.pqSig.Equal(changedSalt))
 
 	changedPublicKey := fixture.pqSig
 	changedPublicKey.PublicKey = slices.Clone(changedPublicKey.PublicKey)
 	changedPublicKey.PublicKey[0] ^= 1
-	require.False(t, fixture.pqSig.Equal(&changedPublicKey))
+	require.False(t, fixture.pqSig.Equal(changedPublicKey))
 
 	changedSignature := fixture.pqSig
 	changedSignature.Signature = slices.Clone(changedSignature.Signature)
 	changedSignature.Signature[0] ^= 1
-	require.False(t, fixture.pqSig.Equal(&changedSignature))
+	require.False(t, fixture.pqSig.Equal(changedSignature))
 
-	var nilPQSig *PQSig
 	blank := PQSig{}
-	require.True(t, nilPQSig.Equal(&blank))
-	require.True(t, blank.Equal(nil))
-	require.False(t, nilPQSig.Equal(&fixture.pqSig))
+	require.True(t, blank.Equal(PQSig{}))
+	require.False(t, blank.Equal(fixture.pqSig))
 }
 
 func TestPQSigAuthorizerAddress(t *testing.T) {
@@ -228,7 +224,7 @@ func TestPQSigValidateEnvelope(t *testing.T) {
 	require.NoError(t, corruptSignature.ValidateEnvelope(fixture.proto, fixture.authorizer))
 	require.Error(t, corruptSignature.Verify(fixture.proto, fixture.txn, fixture.authorizer))
 
-	require.ErrorIs(t, (*PQSig).ValidateEnvelope(nil, fixture.proto, fixture.authorizer), errPQSigBlank)
+	require.ErrorIs(t, (PQSig{}).ValidateEnvelope(fixture.proto, fixture.authorizer), errPQSigBlank)
 }
 
 func TestPQSigVerify(t *testing.T) {
@@ -277,10 +273,7 @@ func TestPQSigVerifyRejectsBlank(t *testing.T) {
 
 	fixture := makePQSigTestFixture(t, 0)
 
-	require.ErrorIs(t, (*PQSig).Verify(nil, fixture.proto, fixture.txn, fixture.authorizer), errPQSigBlank)
-
-	var blank PQSig
-	require.ErrorIs(t, blank.Verify(fixture.proto, fixture.txn, fixture.authorizer), errPQSigBlank)
+	require.ErrorIs(t, (PQSig{}).Verify(fixture.proto, fixture.txn, fixture.authorizer), errPQSigBlank)
 }
 
 func TestPQSigVerifyRejectsEmptySignature(t *testing.T) {

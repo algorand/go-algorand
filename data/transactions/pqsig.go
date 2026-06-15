@@ -57,11 +57,7 @@ type PQSig struct {
 }
 
 // Blank returns true if the PQ authorization envelope is absent.
-func (p *PQSig) Blank() bool {
-	if p == nil {
-		return true
-	}
-
+func (p PQSig) Blank() bool {
 	var zeroScheme protocol.PQScheme
 	var zeroSalt basics.PQAddressSalt
 
@@ -71,12 +67,8 @@ func (p *PQSig) Blank() bool {
 		len(p.Signature) == 0
 }
 
-// Equal compares two PQSig values, treating nil and blank proofs as equivalent.
-func (p *PQSig) Equal(other *PQSig) bool {
-	if p == nil || other == nil {
-		return p.Blank() && other.Blank()
-	}
-
+// Equal compares two PQSig values.
+func (p PQSig) Equal(other PQSig) bool {
 	return p.Scheme == other.Scheme &&
 		p.Salt == other.Salt &&
 		bytes.Equal(p.PublicKey, other.PublicKey) &&
@@ -84,7 +76,7 @@ func (p *PQSig) Equal(other *PQSig) bool {
 }
 
 // AuthorizerAddress returns the authorizer address for the PQSig.
-func (p *PQSig) AuthorizerAddress() basics.Address {
+func (p PQSig) AuthorizerAddress() basics.Address {
 	return basics.PQAddress(p.Scheme, p.Salt, p.PublicKey)
 }
 
@@ -92,7 +84,7 @@ func (p *PQSig) AuthorizerAddress() basics.Address {
 // envelope, excluding the signature bytes. It returns the scheme spec so that
 // Verify can dispatch the scheme-specific signature check without a second
 // registry lookup.
-func (p *PQSig) validateEnvelope(proto config.ConsensusParams, authorizer basics.Address) (basics.PQSchemeSpec, error) {
+func (p PQSig) validateEnvelope(proto config.ConsensusParams, authorizer basics.Address) (basics.PQSchemeSpec, error) {
 	if p.Blank() {
 		return basics.PQSchemeSpec{}, errPQSigBlank
 	}
@@ -124,7 +116,7 @@ func (p *PQSig) validateEnvelope(proto config.ConsensusParams, authorizer basics
 // PQ address matches authorizer. It does NOT verify the signature bytes (and
 // applies no API admission policy); callers that require a real authorization
 // proof must also require a non-empty Signature or call Verify.
-func (p *PQSig) ValidateEnvelope(proto config.ConsensusParams, authorizer basics.Address) error {
+func (p PQSig) ValidateEnvelope(proto config.ConsensusParams, authorizer basics.Address) error {
 	_, err := p.validateEnvelope(proto, authorizer)
 	return err
 }
@@ -133,7 +125,7 @@ func (p *PQSig) ValidateEnvelope(proto config.ConsensusParams, authorizer basics
 // authorizer under proto. It verifies that the carried scheme is supported by
 // the consensus parameters; then it validates the authorization envelope and
 // verifies the scheme-specific signature over the unsigned transaction.
-func (p *PQSig) Verify(proto config.ConsensusParams, txn Transaction, authorizer basics.Address) error {
+func (p PQSig) Verify(proto config.ConsensusParams, txn Transaction, authorizer basics.Address) error {
 	scheme, err := p.validateEnvelope(proto, authorizer)
 	if err != nil {
 		return err

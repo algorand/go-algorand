@@ -159,7 +159,7 @@ func (v *verifiedTransactionCache) GetUnverifiedTransactionGroups(txnGroups [][]
 			if cachedTxn.Sig != txn.Sig ||
 				!cachedTxn.Msig.Equal(txn.Msig) ||
 				!cachedTxn.Lsig.Equal(&txn.Lsig) ||
-				!cachedTxn.PQSig.Equal(&txn.PQSig) ||
+				!cachedTxn.PQSig.Equal(txn.PQSig) ||
 				cachedTxn.AuthAddr != txn.AuthAddr {
 				break
 			}
