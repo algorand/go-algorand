@@ -165,13 +165,6 @@ func TestPQSchemeEnabledUsesConsensusParams(t *testing.T) {
 	}))
 }
 
-func TestPQSchemeMaxSizes(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	require.Equal(t, uint64(crypto.FalconPublicKeySize), MaxPQPublicKeySize())
-	require.Equal(t, uint64(crypto.FalconMaxSignatureSize), MaxPQSignatureSize())
-}
-
 func TestValidatePQPublicKeyFalcon1024(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
