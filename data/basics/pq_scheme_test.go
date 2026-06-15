@@ -165,20 +165,23 @@ func TestPQSchemeEnabledUsesConsensusParams(t *testing.T) {
 	}))
 }
 
-func TestValidatePQPublicKeyFalcon1024(t *testing.T) {
+func TestPQSchemeValidatePublicKeyFalcon1024(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	signer := makePQSchemeTestSigner(t, 0)
 	publicKey := signer.PublicKey[:]
 
-	require.NoError(t, ValidatePQPublicKey(protocol.PQSchemeFalcon1024, publicKey))
+	spec, ok := LookupPQScheme(protocol.PQSchemeFalcon1024)
+	require.True(t, ok)
 
-	err := ValidatePQPublicKey(protocol.PQSchemeFalcon1024, publicKey[:len(publicKey)-1])
+	require.NoError(t, spec.ValidatePublicKey(publicKey))
+
+	err := spec.ValidatePublicKey(publicKey[:len(publicKey)-1])
 	require.Error(t, err)
 	require.NotErrorIs(t, err, ErrPQSchemeNotSupported)
 
-	err = ValidatePQPublicKey(protocol.PQScheme("x1"), publicKey)
-	require.ErrorIs(t, err, ErrPQSchemeNotSupported)
+	_, ok = LookupPQScheme(protocol.PQScheme("x1"))
+	require.False(t, ok)
 }
 
 func TestPQSchemeVerifyFalcon1024(t *testing.T) {
