@@ -65,10 +65,13 @@ type PQSchemeSpec struct {
 
 // pqSchemeSpecs is the registry for supported PQ signature schemes.
 // To add a scheme:
-// - Add the protocol.PQScheme tag,
-// - Add the consensus flag and config.ConsensusParams.PQSchemeEnabled case,
-// - Add the registry entry here,
-// - Add the signing/private-key ops in cmd/algokey's pqSchemeOpsByScheme.
+//   - Add the protocol.PQScheme tag,
+//   - Add the consensus flag and config.ConsensusParams.PQSchemeEnabled case,
+//   - Add the registry entry here,
+//   - If the scheme exceeds data/transactions.PQMaxPublicKeySize or
+//     data/transactions.PQMaxSignatureSize, intentionally bump those wire bounds
+//     and regenerate msgp code,
+//   - Add the signing/private-key ops in cmd/algokey's pqSchemeOpsByScheme.
 var pqSchemeSpecs = map[protocol.PQScheme]PQSchemeSpec{
 	protocol.PQSchemeFalcon1024: {
 		Enabled:           pqSchemeEnabled(protocol.PQSchemeFalcon1024),
@@ -142,28 +145,6 @@ func ValidatePQPublicKey(s protocol.PQScheme, publicKey []byte) error {
 		return ErrPQSchemeNotSupported
 	}
 	return scheme.ValidatePublicKey(publicKey)
-}
-
-// MaxPQPublicKeySize returns the largest public key size supported PQ schemes.
-func MaxPQPublicKeySize() uint64 {
-	var maxSize uint64
-	for _, scheme := range pqSchemeSpecs {
-		if scheme.PublicKeySize > maxSize {
-			maxSize = scheme.PublicKeySize
-		}
-	}
-	return maxSize
-}
-
-// MaxPQSignatureSize returns the largest signature size supported PQ schemes.
-func MaxPQSignatureSize() uint64 {
-	var maxSize uint64
-	for _, scheme := range pqSchemeSpecs {
-		if scheme.SignatureSize > maxSize {
-			maxSize = scheme.SignatureSize
-		}
-	}
-	return maxSize
 }
 
 func pqSchemeEnabled(s protocol.PQScheme) func(PQSchemeConsensusParams) bool {

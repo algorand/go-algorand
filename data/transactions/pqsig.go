@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -32,19 +33,17 @@ var (
 	errPQSigAuthorizerMismatch = errors.New("pq signature authorizer mismatch")
 )
 
-// PQMaxPublicKeySize and PQMaxSignatureSize bound PQ public keys and signatures
-// before scheme dispatch. They are derived at package initialization from the
-// basics PQ scheme registry and must not be mutated: they serve as msgp
-// allocation bounds, so adding a larger registry entry is a network-facing
-// decode-bound change that grows PQSigMaxSize, SignedTxnMaxSize, and the
-// SignedTxn wire bound for every node, even before that scheme is enabled by
-// consensus.
-var (
+// PQMaxPublicKeySize and PQMaxSignatureSize are explicit wire/decode bounds
+// for PQ public keys and signatures before scheme dispatch. They feed msgp
+// allocation bounds and therefore PQSigMaxSize, SignedTxnMaxSize, and the
+// SignedTxn wire bound. Enabling a larger PQ scheme requires intentionally
+// bumping these constants and regenerating msgp code.
+const (
 	// PQMaxPublicKeySize bounds PQ public keys before scheme dispatch.
-	PQMaxPublicKeySize = int(basics.MaxPQPublicKeySize())
+	PQMaxPublicKeySize = crypto.FalconPublicKeySize
 
 	// PQMaxSignatureSize bounds PQ signatures before scheme dispatch.
-	PQMaxSignatureSize = int(basics.MaxPQSignatureSize())
+	PQMaxSignatureSize = crypto.FalconMaxSignatureSize
 )
 
 // PQSig is a post-quantum transaction authorization proof.
