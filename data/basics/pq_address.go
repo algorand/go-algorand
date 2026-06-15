@@ -18,13 +18,17 @@ package basics
 
 import (
 	"errors"
+	"fmt"
 	"math"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 )
 
-var errNoCanonicalPQAddressSalt = errors.New("no canonical salt exists for this public key and scheme")
+var (
+	errNoCanonicalPQAddressSalt = errors.New("no canonical salt exists for this public key and scheme")
+	errPQSchemeLength           = errors.New("pq scheme length invalid")
+)
 
 const (
 	// pqAddressSaltSize is the consensus byte length of a post-quantum address salt.
@@ -64,12 +68,12 @@ func PQAddress(scheme protocol.PQScheme, salt PQAddressSalt, pk []byte) Address 
 	return Address(crypto.HashObj(pqAddressPreimage{scheme, salt, pk}))
 }
 
-// CanonicalPQAddressSalt returns the lowest salt whose derived address for a PQScheme's
-// public key complies with the crypto.IsEdwards25519Point rejection-sampling predicate.
+// CanonicalPQAddressSalt returns the lowest salt whose derived address for a
+// PQScheme/public-key pair complies with the crypto.IsEdwards25519Point
+// rejection-sampling predicate.
 func CanonicalPQAddressSalt(scheme protocol.PQScheme, publicKey []byte) (PQAddressSalt, Address, error) {
-	err := ValidatePQPublicKey(scheme, publicKey)
-	if err != nil {
-		return 0, Address{}, err
+	if len(scheme) != protocol.PQSchemeSize {
+		return 0, Address{}, fmt.Errorf("%w: got %d, want %d", errPQSchemeLength, len(scheme), protocol.PQSchemeSize)
 	}
 
 	// If no valid salt is found rejection-sampling within this range, the publicKey
