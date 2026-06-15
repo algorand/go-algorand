@@ -138,15 +138,6 @@ func SupportedPQSchemes() []protocol.PQScheme {
 	return schemes
 }
 
-// ValidatePQPublicKey checks that a public key is valid for the scheme.
-func ValidatePQPublicKey(s protocol.PQScheme, publicKey []byte) error {
-	scheme, ok := LookupPQScheme(s)
-	if !ok {
-		return ErrPQSchemeNotSupported
-	}
-	return scheme.ValidatePublicKey(publicKey)
-}
-
 func pqSchemeEnabled(s protocol.PQScheme) func(PQSchemeConsensusParams) bool {
 	return func(params PQSchemeConsensusParams) bool {
 		return params.PQSchemeEnabled(s)
