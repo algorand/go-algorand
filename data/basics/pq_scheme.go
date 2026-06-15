@@ -68,10 +68,10 @@ type PQSchemeSpec struct {
 //   - Add the protocol.PQScheme tag,
 //   - Add the consensus flag and config.ConsensusParams.PQSchemeEnabled case,
 //   - Add the registry entry here,
+//   - Add the signing/private-key ops in cmd/algokey's pqSchemeOpsByScheme.
 //   - If the scheme exceeds data/transactions.PQMaxPublicKeySize or
 //     data/transactions.PQMaxSignatureSize, intentionally bump those wire bounds
 //     and regenerate msgp code,
-//   - Add the signing/private-key ops in cmd/algokey's pqSchemeOpsByScheme.
 var pqSchemeSpecs = map[protocol.PQScheme]PQSchemeSpec{
 	protocol.PQSchemeFalcon1024: {
 		Enabled:           pqSchemeEnabled(protocol.PQSchemeFalcon1024),
