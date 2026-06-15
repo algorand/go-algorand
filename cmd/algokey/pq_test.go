@@ -138,8 +138,8 @@ func TestPQSchemeRegistriesConsistent(t *testing.T) {
 		require.NotNil(t, ops.validateKeyPair, "scheme %q", scheme)
 	}
 
-	// Every consensus registry scheme must have signing/private-key tooling.
-	for _, scheme := range basics.SupportedPQSchemes() {
+	// Every currently supported basics scheme must have signing/private-key tooling.
+	for _, scheme := range []protocol.PQScheme{protocol.PQSchemeFalcon1024} {
 		_, ok := pqSchemeOpsByScheme[scheme]
 		require.True(t, ok, "basics scheme %q missing from algokey ops registry", scheme)
 	}

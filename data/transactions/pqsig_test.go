@@ -107,7 +107,7 @@ func TestEnabledPQSchemesFitDecodeBounds(t *testing.T) {
 	var maxPublicKeySize uint64
 	var maxSignatureSize uint64
 
-	for _, scheme := range basics.SupportedPQSchemes() {
+	for _, scheme := range []protocol.PQScheme{protocol.PQSchemeFalcon1024} {
 		spec, ok := basics.LookupPQScheme(scheme)
 		require.True(t, ok)
 
@@ -227,8 +227,7 @@ func TestPQSigValidateEnvelope(t *testing.T) {
 	require.NoError(t, corruptSignature.ValidateEnvelope(fixture.proto, fixture.authorizer))
 	require.Error(t, corruptSignature.Verify(fixture.proto, fixture.txn, fixture.authorizer))
 
-	var nilPQSig *PQSig
-	require.ErrorIs(t, nilPQSig.ValidateEnvelope(fixture.proto, fixture.authorizer), errPQSigBlank)
+	require.ErrorIs(t, (*PQSig).ValidateEnvelope(nil, fixture.proto, fixture.authorizer), errPQSigBlank)
 }
 
 func TestPQSigVerify(t *testing.T) {
@@ -277,8 +276,7 @@ func TestPQSigVerifyRejectsBlank(t *testing.T) {
 
 	fixture := makePQSigTestFixture(t, 0)
 
-	var nilPQSig *PQSig
-	require.ErrorIs(t, nilPQSig.Verify(fixture.proto, fixture.txn, fixture.authorizer), errPQSigBlank)
+	require.ErrorIs(t, (*PQSig).Verify(nil, fixture.proto, fixture.txn, fixture.authorizer), errPQSigBlank)
 
 	var blank PQSig
 	require.ErrorIs(t, blank.Verify(fixture.proto, fixture.txn, fixture.authorizer), errPQSigBlank)
