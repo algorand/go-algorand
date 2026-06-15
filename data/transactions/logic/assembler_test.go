@@ -854,11 +854,13 @@ func TestAssemblerIntcblockSalt(t *testing.T) {
 
 	t.Run("automatic intcblock", func(t *testing.T) {
 		source := fmt.Sprintf(`#pragma version %d
-int 1
-bnz done
-bytecblock 0x01234576 0xababcdcd 0xf000baad
-done:
-int 1`, LogicSigOffCurveVersion)
+	int 1
+	bnz done
+	bytecblock 0x01234576 0xababcdcd 0xf000baad
+	pushint 1
+	pop
+	done:
+	int 1`, LogicSigOffCurveVersion)
 		normalProgram := assembleProgramWithoutAutomaticSalt(t, source, assemblerNoVersion)
 		require.True(t, ProgramHashIsEdwards25519Point(normalProgram))
 
@@ -869,7 +871,7 @@ int 1`, LogicSigOffCurveVersion)
 			OpsByName[LogicSigOffCurveVersion]["intcblock"].Opcode,
 			2,
 			1,
-			2,
+			0,
 		}, ops.Program[:5])
 		require.False(t, ProgramHashIsEdwards25519Point(ops.Program))
 	})
