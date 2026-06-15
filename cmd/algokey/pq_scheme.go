@@ -19,6 +19,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -77,8 +78,8 @@ func generateFalcon1024Key(rng crypto.RNG) (pqKeyMaterial, error) {
 	}
 	defer zeroBytes(signer.PrivateKey[:])
 
-	publicKey := append([]byte(nil), signer.PublicKey[:]...)
-	privateKey := append([]byte(nil), signer.PrivateKey[:]...)
+	publicKey := slices.Clone(signer.PublicKey[:])
+	privateKey := slices.Clone(signer.PrivateKey[:])
 	salt, addr, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
 	if err != nil {
 		zeroBytes(privateKey)
@@ -116,7 +117,7 @@ func signFalcon1024Txn(privateKey []byte, txn transactions.Transaction) ([]byte,
 	if err != nil {
 		return nil, err
 	}
-	return append([]byte(nil), sig...), nil
+	return slices.Clone(sig), nil
 }
 
 func validateFalcon1024KeyPair(publicKey []byte, privateKey []byte) error {

@@ -17,6 +17,7 @@
 package basics
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -31,7 +32,7 @@ func falconPublicKeyForPQAddressTest(t *testing.T, firstSeedByte byte) []byte {
 	seed[0] = firstSeedByte
 	signer, err := crypto.GenerateFalconSigner(seed)
 	require.NoError(t, err)
-	return append([]byte(nil), signer.PublicKey[:]...)
+	return slices.Clone(signer.PublicKey[:])
 }
 
 func TestPQAddressPreimage(t *testing.T) {

@@ -17,6 +17,7 @@
 package verify
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -121,8 +122,8 @@ func TestGetUnverifiedTransactionGroupsPQSigProofChanges(t *testing.T) {
 	require.Empty(t, unverifiedGroups)
 
 	clone := func(stxn transactions.SignedTxn) transactions.SignedTxn {
-		stxn.PQSig.PublicKey = append([]byte(nil), stxn.PQSig.PublicKey...)
-		stxn.PQSig.Signature = append([]byte(nil), stxn.PQSig.Signature...)
+		stxn.PQSig.PublicKey = slices.Clone(stxn.PQSig.PublicKey)
+		stxn.PQSig.Signature = slices.Clone(stxn.PQSig.Signature)
 		return stxn
 	}
 

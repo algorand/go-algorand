@@ -6381,7 +6381,7 @@ func makePlaceholderPQSigForSimulation(t *testing.T, seedByte byte) (basics.Addr
 	signer, err := crypto.GenerateFalconSigner(seed)
 	require.NoError(t, err)
 
-	publicKey := append([]byte(nil), signer.PublicKey[:]...)
+	publicKey := slices.Clone(signer.PublicKey[:])
 	salt, authorizer, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
 	require.NoError(t, err)
 

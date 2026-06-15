@@ -1128,7 +1128,7 @@ func makePQSigWithAddressCompliance(t *testing.T, compliant bool) (crypto.Falcon
 		signer, err := crypto.GenerateFalconSigner(seed)
 		require.NoError(t, err)
 
-		publicKey := append([]byte(nil), signer.PublicKey[:]...)
+		publicKey := slices.Clone(signer.PublicKey[:])
 		for salt := 0; salt <= math.MaxUint8; salt++ {
 			pqSalt := basics.PQAddressSalt(salt)
 			authorizer := basics.PQAddress(protocol.PQSchemeFalcon1024, pqSalt, publicKey)
@@ -1168,7 +1168,7 @@ func makePQSignedTxnWithAddressCompliance(t *testing.T, compliant bool) transact
 
 	signature, err := signer.Sign(txn)
 	require.NoError(t, err)
-	pqSig.Signature = append([]byte(nil), signature...)
+	pqSig.Signature = slices.Clone(signature)
 
 	return transactions.SignedTxn{
 		Txn:   txn,

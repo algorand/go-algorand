@@ -19,6 +19,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -53,8 +54,8 @@ func pqTestMaterial(t *testing.T, firstSeedByte byte) pqKeyMaterial {
 	signer, err := crypto.GenerateFalconSigner(seed)
 	require.NoError(t, err)
 
-	publicKey := append([]byte(nil), signer.PublicKey[:]...)
-	privateKey := append([]byte(nil), signer.PrivateKey[:]...)
+	publicKey := slices.Clone(signer.PublicKey[:])
+	privateKey := slices.Clone(signer.PrivateKey[:])
 	salt, addr, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
 	require.NoError(t, err)
 

@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -115,11 +116,11 @@ func readPQPublicKeyFile(filename string) (pqKeyMaterial, error) {
 }
 
 func encodePQPrivateKeyFileBytes(material pqKeyMaterial) []byte {
-	privateKey := append([]byte(nil), material.privateKey...)
+	privateKey := slices.Clone(material.privateKey)
 	defer zeroBytes(privateKey)
 	payload := pqPrivateKeyPayload{
 		Scheme:     material.scheme,
-		PublicKey:  append([]byte(nil), material.publicKey...),
+		PublicKey:  slices.Clone(material.publicKey),
 		PrivateKey: privateKey,
 	}
 	return encodePQPayload(pqPrivateKeyMagic, payload)
@@ -128,7 +129,7 @@ func encodePQPrivateKeyFileBytes(material pqKeyMaterial) []byte {
 func encodePQPublicKeyFileBytes(material pqKeyMaterial) []byte {
 	payload := pqPublicKeyPayload{
 		Scheme:    material.scheme,
-		PublicKey: append([]byte(nil), material.publicKey...),
+		PublicKey: slices.Clone(material.publicKey),
 	}
 	return encodePQPayload(pqPublicKeyMagic, payload)
 }
@@ -188,7 +189,7 @@ func materialFromPrivatePayload(payload pqPrivateKeyPayload) (pqKeyMaterial, err
 	if uint64(len(payload.PrivateKey)) != ops.privateKeySize {
 		return pqKeyMaterial{}, fmt.Errorf("%w: got private key size %d, want %d", errPQKeyMalformed, len(payload.PrivateKey), ops.privateKeySize)
 	}
-	material.privateKey = append([]byte(nil), payload.PrivateKey...)
+	material.privateKey = slices.Clone(payload.PrivateKey)
 	if ops.validateKeyPair != nil {
 		if err = ops.validateKeyPair(material.publicKey, material.privateKey); err != nil {
 			wipePQKeyMaterial(&material)
@@ -220,7 +221,7 @@ func materialFromPublicFields(scheme protocol.PQScheme, publicKey []byte) (pqKey
 
 	return pqKeyMaterial{
 		scheme:           scheme,
-		publicKey:        append([]byte(nil), publicKey...),
+		publicKey:        slices.Clone(publicKey),
 		canonicalSalt:    canonicalSalt,
 		canonicalAddress: canonicalAddress,
 	}, nil

@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/rand"
+	"slices"
 	"testing"
 	"time"
 
@@ -106,7 +107,7 @@ func makePQSignedTxn(t *testing.T, firstSeedByte byte) transactions.SignedTxn {
 
 	signature, err := signer.Sign(txn)
 	require.NoError(t, err)
-	pqSig.Signature = append([]byte(nil), signature...)
+	pqSig.Signature = slices.Clone(signature)
 
 	return transactions.SignedTxn{
 		Txn:   txn,
@@ -136,7 +137,7 @@ func makePQSigForTxn(t *testing.T, firstSeedByte byte, txn *transactions.Transac
 		signature, err = signer.Sign(*txn)
 		require.NoError(t, err)
 	}
-	pqSig.Signature = append([]byte(nil), signature...)
+	pqSig.Signature = slices.Clone(signature)
 
 	return authorizer, pqSig
 }
@@ -145,7 +146,7 @@ func makePQSigFields(t *testing.T, firstSeedByte byte) (crypto.FalconSigner, bas
 	t.Helper()
 
 	signer := makeFalconSigner(t, firstSeedByte)
-	publicKey := append([]byte(nil), signer.PublicKey[:]...)
+	publicKey := slices.Clone(signer.PublicKey[:])
 	salt, authorizer, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
 	require.NoError(t, err)
 
@@ -440,7 +441,7 @@ func TestTxnValidationPQSigRejectsMalformedProof(t *testing.T) {
 
 	t.Run("public-key", func(t *testing.T) {
 		stxn := makePQSignedTxn(t, 2)
-		stxn.PQSig.PublicKey = append([]byte(nil), stxn.PQSig.PublicKey[:len(stxn.PQSig.PublicKey)-1]...)
+		stxn.PQSig.PublicKey = slices.Clone(stxn.PQSig.PublicKey[:len(stxn.PQSig.PublicKey)-1])
 		stxn.Txn.Sender = stxn.PQSig.AuthorizerAddress()
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)

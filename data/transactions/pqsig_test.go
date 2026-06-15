@@ -18,6 +18,7 @@ package transactions
 
 import (
 	"bytes"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -45,7 +46,7 @@ func makePQSigTestFixture(t *testing.T, firstSeedByte byte) pqSigTestFixture {
 	signer, err := crypto.GenerateFalconSigner(seed)
 	require.NoError(t, err)
 
-	publicKey := append([]byte(nil), signer.PublicKey[:]...)
+	publicKey := slices.Clone(signer.PublicKey[:])
 	salt, authorizer, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
 	require.NoError(t, err)
 
@@ -155,8 +156,8 @@ func TestPQSigEqual(t *testing.T) {
 
 	fixture := makePQSigTestFixture(t, 0)
 	same := fixture.pqSig
-	same.PublicKey = append([]byte(nil), same.PublicKey...)
-	same.Signature = append([]byte(nil), same.Signature...)
+	same.PublicKey = slices.Clone(same.PublicKey)
+	same.Signature = slices.Clone(same.Signature)
 
 	require.True(t, fixture.pqSig.Equal(&same))
 
@@ -169,12 +170,12 @@ func TestPQSigEqual(t *testing.T) {
 	require.False(t, fixture.pqSig.Equal(&changedSalt))
 
 	changedPublicKey := fixture.pqSig
-	changedPublicKey.PublicKey = append([]byte(nil), changedPublicKey.PublicKey...)
+	changedPublicKey.PublicKey = slices.Clone(changedPublicKey.PublicKey)
 	changedPublicKey.PublicKey[0] ^= 1
 	require.False(t, fixture.pqSig.Equal(&changedPublicKey))
 
 	changedSignature := fixture.pqSig
-	changedSignature.Signature = append([]byte(nil), changedSignature.Signature...)
+	changedSignature.Signature = slices.Clone(changedSignature.Signature)
 	changedSignature.Signature[0] ^= 1
 	require.False(t, fixture.pqSig.Equal(&changedSignature))
 
@@ -222,7 +223,7 @@ func TestPQSigValidateEnvelope(t *testing.T) {
 	require.ErrorIs(t, fixture.pqSig.ValidateEnvelope(fixture.proto, wrongAuthorizer), errPQSigAuthorizerMismatch)
 
 	corruptSignature := fixture.pqSig
-	corruptSignature.Signature = append([]byte(nil), corruptSignature.Signature...)
+	corruptSignature.Signature = slices.Clone(corruptSignature.Signature)
 	corruptSignature.Signature[0] ^= 1
 	require.NoError(t, corruptSignature.ValidateEnvelope(fixture.proto, fixture.authorizer))
 	require.Error(t, corruptSignature.Verify(fixture.proto, fixture.txn, fixture.authorizer))
@@ -360,7 +361,7 @@ func TestPQSigVerifyRejectsChangedSignature(t *testing.T) {
 	fixture := makePQSigTestFixture(t, 0)
 
 	pqSig := fixture.pqSig
-	pqSig.Signature = append([]byte(nil), pqSig.Signature...)
+	pqSig.Signature = slices.Clone(pqSig.Signature)
 	pqSig.Signature[len(pqSig.Signature)-1] ^= 1
 
 	require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer), basics.ErrPQFalcon1024SigInvalid)

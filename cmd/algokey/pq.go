@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -345,7 +346,7 @@ func runPQSignWithOptions(opts pqSignOptions) error {
 		stxn.PQSig = transactions.PQSig{
 			Scheme:    material.scheme,
 			Salt:      salt,
-			PublicKey: append([]byte(nil), material.publicKey...),
+			PublicKey: slices.Clone(material.publicKey),
 			Signature: signature,
 		}
 		if stxn.Txn.Sender != authorizer {

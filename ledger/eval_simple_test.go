@@ -1441,7 +1441,7 @@ func makePQRekeyTestAccount(t *testing.T, firstSeedByte byte) pqRekeyTestAccount
 	signer, err := crypto.GenerateFalconSigner(seed)
 	require.NoError(t, err)
 
-	publicKey := append([]byte(nil), signer.PublicKey[:]...)
+	publicKey := slices.Clone(signer.PublicKey[:])
 	salt, address, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
 	require.NoError(t, err)
 
@@ -1465,8 +1465,8 @@ func signPQRekeyTestTxn(t *testing.T, acct pqRekeyTestAccount, txn transactions.
 		PQSig: transactions.PQSig{
 			Scheme:    protocol.PQSchemeFalcon1024,
 			Salt:      acct.salt,
-			PublicKey: append([]byte(nil), acct.publicKey...),
-			Signature: append([]byte(nil), signature...),
+			PublicKey: slices.Clone(acct.publicKey),
+			Signature: slices.Clone(signature),
 		},
 	}
 }
