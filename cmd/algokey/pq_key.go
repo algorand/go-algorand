@@ -231,6 +231,14 @@ func materialFromPublicFields(scheme protocol.PQScheme, publicKey []byte) (pqKey
 // canonical salt always derives a compliant address; for an explicit salt,
 // callers decide how to treat non-compliant addresses via addr.IsPQCompliant().
 func resolvePQSalt(scheme protocol.PQScheme, publicKey []byte, saltValue string) (basics.PQAddressSalt, basics.Address, error) {
+	spec, err := lookupPQScheme(scheme)
+	if err != nil {
+		return 0, basics.Address{}, err
+	}
+	if err = spec.ValidatePublicKey(publicKey); err != nil {
+		return 0, basics.Address{}, err
+	}
+
 	if saltValue == "" || strings.EqualFold(saltValue, "canonical") {
 		return basics.CanonicalPQAddressSalt(scheme, publicKey)
 	}
@@ -238,13 +246,6 @@ func resolvePQSalt(scheme protocol.PQScheme, publicKey []byte, saltValue string)
 	n, err := strconv.ParseUint(saltValue, 10, 8)
 	if err != nil {
 		return 0, basics.Address{}, fmt.Errorf("invalid pq salt %q: use canonical or 0..255", saltValue)
-	}
-	spec, err := lookupPQScheme(scheme)
-	if err != nil {
-		return 0, basics.Address{}, err
-	}
-	if err = spec.ValidatePublicKey(publicKey); err != nil {
-		return 0, basics.Address{}, err
 	}
 	salt := basics.PQAddressSalt(n)
 	return salt, basics.PQAddress(scheme, salt, publicKey), nil
