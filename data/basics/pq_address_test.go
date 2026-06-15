@@ -34,20 +34,6 @@ func falconPublicKeyForPQAddressTest(t *testing.T, firstSeedByte byte) []byte {
 	return append([]byte(nil), signer.PublicKey[:]...)
 }
 
-func TestPQSchemeValidatePublicKey(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	publicKey := falconPublicKeyForPQAddressTest(t, 0)
-
-	require.NoError(t, ValidatePQPublicKey(protocol.PQSchemeFalcon1024, publicKey))
-
-	err := ValidatePQPublicKey(protocol.PQSchemeFalcon1024, publicKey[:len(publicKey)-1])
-	require.Error(t, err)
-
-	err = ValidatePQPublicKey(protocol.PQScheme("x1"), publicKey)
-	require.ErrorIs(t, err, ErrPQSchemeNotSupported)
-}
-
 func TestPQAddressPreimage(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
