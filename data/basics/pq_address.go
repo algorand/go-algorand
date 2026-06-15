@@ -72,9 +72,9 @@ func CanonicalPQAddressSalt(scheme protocol.PQScheme, publicKey []byte) (PQAddre
 		return 0, Address{}, err
 	}
 
-	// Rejection-sampling in [0, 255] because PQAddressSalt is uint8. If no valid
-	// salt is found within this range, the publicKey has no PQ address for the given
-	// PQScheme; the vanishingly small probability of this happening is ~2^(-256).
+	// If no valid salt is found rejection-sampling within this range, the publicKey
+	// has no PQ address for the given PQScheme; the vanishingly small probability
+	// of this happening is ~2^(-256).
 	for salt := 0; salt <= math.MaxUint8; salt++ {
 		addr := PQAddress(scheme, PQAddressSalt(salt), publicKey)
 		if addr.IsPQCompliant() {
