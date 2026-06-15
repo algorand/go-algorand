@@ -60,6 +60,7 @@ const (
 	PaysetFlat                       HashID = "PF"
 	Payload                          HashID = "PL"
 	PostQuantumAddress               HashID = "PQA"
+	PostQuantumKey                   HashID = "PQK"
 	Program                          HashID = "Program"
 	ProgramData                      HashID = "ProgData"
 	ProposerSeed                     HashID = "PS"
