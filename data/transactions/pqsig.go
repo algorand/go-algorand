@@ -102,7 +102,7 @@ func (p *PQSig) validateEnvelope(proto config.ConsensusParams, authorizer basics
 		return basics.PQSchemeSpec{}, basics.ErrPQSchemeNotSupported
 	}
 
-	if !scheme.Enabled(proto) {
+	if !proto.PQSchemeEnabled(p.Scheme) {
 		return basics.PQSchemeSpec{}, basics.ErrPQSchemeNotEnabled
 	}
 

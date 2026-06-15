@@ -112,7 +112,7 @@ func TestEnabledPQSchemesFitDecodeBounds(t *testing.T) {
 		require.True(t, ok)
 
 		for protoVersion, proto := range config.Consensus {
-			if !spec.Enabled(proto) {
+			if !proto.PQSchemeEnabled(scheme) {
 				continue
 			}
 

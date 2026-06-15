@@ -28,12 +28,6 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-type pqSchemeTestParams map[protocol.PQScheme]bool
-
-func (params pqSchemeTestParams) PQSchemeEnabled(scheme protocol.PQScheme) bool {
-	return params[scheme]
-}
-
 type pqSchemeTestMessage []byte
 
 func (message pqSchemeTestMessage) ToBeHashed() (protocol.HashID, []byte) {
@@ -60,7 +54,6 @@ func TestPQSchemeRegistryComplete(t *testing.T) {
 	require.NotEmpty(t, pqSchemeSpecs)
 
 	for scheme, spec := range pqSchemeSpecs {
-		require.NotNil(t, spec.Enabled, "scheme %q", scheme)
 		require.NotNil(t, spec.ValidatePublicKey, "scheme %q", scheme)
 		require.NotNil(t, spec.Verify, "scheme %q", scheme)
 		require.NotZero(t, spec.PublicKeySize, "scheme %q", scheme)
@@ -87,29 +80,11 @@ func TestLookupPQSchemeFalcon1024(t *testing.T) {
 	require.Equal(t, uint64(crypto.FalconPublicKeySize), spec.PublicKeySize)
 	require.Equal(t, uint64(crypto.FalconMaxSignatureSize), spec.SignatureSize)
 	require.Equal(t, PQSchemeFalcon1024FeeContribution, spec.FeeContribution)
-	require.NotNil(t, spec.Enabled)
 	require.NotNil(t, spec.ValidatePublicKey)
 	require.NotNil(t, spec.Verify)
 
 	_, ok = LookupPQScheme(protocol.PQScheme("x1"))
 	require.False(t, ok)
-}
-
-func TestPQSchemeEnabledUsesConsensusParams(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	spec, ok := LookupPQScheme(protocol.PQSchemeFalcon1024)
-	require.True(t, ok)
-
-	require.True(t, spec.Enabled(pqSchemeTestParams{
-		protocol.PQSchemeFalcon1024: true,
-	}))
-	require.False(t, spec.Enabled(pqSchemeTestParams{
-		protocol.PQSchemeFalcon1024: false,
-	}))
-	require.False(t, spec.Enabled(pqSchemeTestParams{
-		protocol.PQSchemeFalcon512: true,
-	}))
 }
 
 func TestPQSchemeValidatePublicKeyFalcon1024(t *testing.T) {

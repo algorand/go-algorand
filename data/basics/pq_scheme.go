@@ -45,16 +45,10 @@ const (
 	PQSchemeFalcon1024FeeContribution Micros = 2e6
 )
 
-// PQSchemeConsensusParams is the consensus-parameter surface needed by PQ scheme gates.
-type PQSchemeConsensusParams interface {
-	PQSchemeEnabled(protocol.PQScheme) bool
-}
-
 // PQSchemeSpec describes the behavior for one PQ signature scheme.
 //
 //msgp:ignore PQSchemeSpec
 type PQSchemeSpec struct {
-	Enabled           func(PQSchemeConsensusParams) bool
 	PublicKeySize     uint64
 	SignatureSize     uint64
 	FeeContribution   Micros
@@ -73,7 +67,6 @@ type PQSchemeSpec struct {
 //     and regenerate msgp code,
 var pqSchemeSpecs = map[protocol.PQScheme]PQSchemeSpec{
 	protocol.PQSchemeFalcon1024: {
-		Enabled:           pqSchemeEnabled(protocol.PQSchemeFalcon1024),
 		PublicKeySize:     crypto.FalconPublicKeySize,
 		SignatureSize:     crypto.FalconMaxSignatureSize,
 		FeeContribution:   PQSchemeFalcon1024FeeContribution,
@@ -81,7 +74,6 @@ var pqSchemeSpecs = map[protocol.PQScheme]PQSchemeSpec{
 		Verify:            verifyFalcon1024,
 	},
 	// protocol.PQSchemeFalcon512: {
-	// 	Enabled:           pqSchemeEnabled(protocol.PQSchemeFalcon512),
 	// 	PublicKeySize:     crypto.Falcon512PublicKeySize,
 	// 	SignatureSize:     crypto.Falcon512MaxSignatureSize,
 	// 	FeeContribution:   PQSchemeFalcon512FeeContribution,
@@ -94,12 +86,6 @@ var pqSchemeSpecs = map[protocol.PQScheme]PQSchemeSpec{
 func LookupPQScheme(s protocol.PQScheme) (PQSchemeSpec, bool) {
 	scheme, ok := pqSchemeSpecs[s]
 	return scheme, ok
-}
-
-func pqSchemeEnabled(s protocol.PQScheme) func(PQSchemeConsensusParams) bool {
-	return func(params PQSchemeConsensusParams) bool {
-		return params.PQSchemeEnabled(s)
-	}
 }
 
 // Falcon-1024 helpers
