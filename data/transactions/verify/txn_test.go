@@ -363,10 +363,9 @@ func TestTxnValidationPQSig(t *testing.T) {
 	require.False(t, config.Consensus[disabledBlkHdr.CurrentProtocol].EnablePQSchemeFalcon1024)
 
 	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &disabledBlkHdr, nil, &dummyLedger)
-	require.Error(t, err)
+	require.ErrorContains(t, err, "pq signature validation failed")
 	requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
-	require.Contains(t, err.Error(), "pq signature validation failed")
-	require.Contains(t, err.Error(), "pq signature scheme not enabled")
+	require.ErrorContains(t, err, "pq signature scheme not enabled")
 }
 
 func TestTxnValidationPQSigWithAuthAddr(t *testing.T) {
@@ -390,9 +389,8 @@ func TestTxnValidationPQSigWithAuthAddr(t *testing.T) {
 
 	stxn.AuthAddr = basics.Address{}
 	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-	require.Error(t, err)
 	requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
-	require.Contains(t, err.Error(), "pq signature authorizer mismatch")
+	require.ErrorContains(t, err, "pq signature authorizer mismatch")
 }
 
 func TestTxnValidationEd25519SigWithPQSenderAuthAddr(t *testing.T) {
@@ -446,9 +444,8 @@ func TestTxnValidationPQSigRejectsMalformedProof(t *testing.T) {
 		stxn.Txn.Sender = stxn.PQSig.AuthorizerAddress()
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-		require.Error(t, err)
 		requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
-		require.Contains(t, err.Error(), "pq signature validation failed")
+		require.ErrorContains(t, err, "pq signature validation failed")
 	})
 
 	t.Run("signature", func(t *testing.T) {
@@ -456,9 +453,8 @@ func TestTxnValidationPQSigRejectsMalformedProof(t *testing.T) {
 		stxn.PQSig.Signature = make([]byte, transactions.PQMaxSignatureSize+1)
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-		require.Error(t, err)
 		requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
-		require.Contains(t, err.Error(), "pq signature validation failed")
+		require.ErrorContains(t, err, "pq signature validation failed")
 	})
 }
 
@@ -965,15 +961,13 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Sig: crypto.Signature{0x2},
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), errTxnSigNotWellFormed.Error())
+	require.ErrorContains(t, err, errTxnSigNotWellFormed.Error())
 	txnGroups[0][0].Msig.Subsigs = nil
 
 	///// Sig + logic
 	txnGroups[0][0].Lsig.Logic = op.Program
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), errTxnSigNotWellFormed.Error())
+	require.ErrorContains(t, err, errTxnSigNotWellFormed.Error())
 	txnGroups[0][0].Lsig.Logic = []byte{}
 
 	///// MultiSig + logic
@@ -985,8 +979,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Sig: crypto.Signature{0x2},
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), errTxnSigNotWellFormed.Error())
+	require.ErrorContains(t, err, errTxnSigNotWellFormed.Error())
 	txnGroups[0][0].Lsig.Logic = []byte{}
 	txnGroups[0][0].Sig = tmpSig
 	txnGroups[0][0].Msig.Subsigs = nil
