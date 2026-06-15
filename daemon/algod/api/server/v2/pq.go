@@ -32,6 +32,27 @@ var errPQSigEmptyAPI = errors.New("pq signature is empty") // matches the consen
 // understands placeholder proofs, and both require the authorizer address to
 // be PQ compliant, which consensus deliberately does not enforce.
 
+// pqSignatureHasPlaceholder reports whether stxn carries a placeholder PQSig:
+// a non-blank PQ envelope with empty signature bytes and no other signature
+// category set.
+func pqSignatureHasPlaceholder(stxn transactions.SignedTxn) bool {
+	return stxn.Sig.Blank() && stxn.Msig.Blank() && stxn.Lsig.Blank() &&
+		!stxn.PQSig.Blank() && len(stxn.PQSig.Signature) == 0
+}
+
+// validatePQAuthorizerCompliance is the API-only admission check that the
+// PQSig-derived authorizer address is PQ compliant. Consensus accepts any
+// salt whose derived address matches the authorizer; the API boundary insists
+// on compliant addresses so that accounts created through algod retain the
+// post-quantum guarantee.
+func validatePQAuthorizerCompliance(stxn transactions.SignedTxn) error {
+	authorizer := stxn.PQSig.AuthorizerAddress()
+	if !authorizer.IsPQCompliant() {
+		return fmt.Errorf("pq signature authorizer address %s is not compliant", authorizer)
+	}
+	return nil
+}
+
 // validatePQSignaturesForSubmit enforces the strict PQ admission policy for
 // transaction submission: every non-blank PQSig must be a structurally
 // complete proof (valid envelope, non-empty signature) with a PQ-compliant
@@ -94,25 +115,4 @@ func validatePQSignatureForSimulate(proto config.ConsensusParams, stxn transacti
 		}
 	}
 	return validatePQAuthorizerCompliance(stxn)
-}
-
-// pqSignatureHasPlaceholder reports whether stxn carries a placeholder PQSig:
-// a non-blank PQ envelope with empty signature bytes and no other signature
-// category set.
-func pqSignatureHasPlaceholder(stxn transactions.SignedTxn) bool {
-	return stxn.Sig.Blank() && stxn.Msig.Blank() && stxn.Lsig.Blank() &&
-		!stxn.PQSig.Blank() && len(stxn.PQSig.Signature) == 0
-}
-
-// validatePQAuthorizerCompliance is the API-only admission check that the
-// PQSig-derived authorizer address is PQ compliant. Consensus accepts any
-// salt whose derived address matches the authorizer; the API boundary insists
-// on compliant addresses so that accounts created through algod retain the
-// post-quantum guarantee.
-func validatePQAuthorizerCompliance(stxn transactions.SignedTxn) error {
-	authorizer := stxn.PQSig.AuthorizerAddress()
-	if !authorizer.IsPQCompliant() {
-		return fmt.Errorf("pq signature authorizer address %s is not compliant", authorizer)
-	}
-	return nil
 }
