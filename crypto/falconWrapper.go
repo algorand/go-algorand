@@ -81,9 +81,16 @@ type FalconSigner struct {
 	PrivateKey FalconPrivateKey `codec:"sk"`
 }
 
-// GenerateFalconSigner Generates a Falcon Signer.
+// GenerateFalconSigner generates a Falcon signer from the fixed-size Falcon
+// seed type.
 func GenerateFalconSigner(seed FalconSeed) (FalconSigner, error) {
-	pk, sk, err := cfalcon.GenerateKey(seed[:])
+	return GenerateFalconSignerFromSeed(seed[:])
+}
+
+// GenerateFalconSignerFromSeed generates a Falcon signer from caller-derived
+// seed bytes. Callers are responsible for domain separation before passing seed.
+func GenerateFalconSignerFromSeed(seed []byte) (FalconSigner, error) {
+	pk, sk, err := cfalcon.GenerateKey(seed)
 	return FalconSigner{
 		PublicKey:  FalconPublicKey(pk),
 		PrivateKey: FalconPrivateKey(sk),
