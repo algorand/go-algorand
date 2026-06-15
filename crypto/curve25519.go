@@ -113,12 +113,13 @@ type PrivateKey ed25519PrivateKey
 // PublicKey is an exported ed25519PublicKey
 type PublicKey ed25519PublicKey
 
-// IsEdwards25519Point reports whether encoded is a canonical encoding of an
-// Edwards25519 curve point. It does not check membership in the prime-order
-// subgroup and should not be used as an Ed25519 public-key validity check.
-// Note that this predicate differs from libsodium's
-// crypto_core_ed25519_is_valid_point, which also requires main-subgroup
-// membership.
+// IsEdwards25519Point reports whether encoded can be decoded as an
+// Edwards25519 curve point. This follows edwards25519.Point.SetBytes decoding,
+// which accepts some non-canonical encodings of curve points. It does not
+// check membership in the prime-order subgroup and should not be used as a
+// strict Ed25519 public-key validity check. Note that this predicate differs
+// from libsodium's crypto_core_ed25519_is_valid_point, which also requires
+// main-subgroup membership.
 func IsEdwards25519Point(encoded []byte) bool {
 	_, err := new(edwards25519.Point).SetBytes(encoded)
 	return err == nil
