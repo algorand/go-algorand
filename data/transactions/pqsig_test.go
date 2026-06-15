@@ -82,9 +82,6 @@ func makePQSigTestFixture(t *testing.T, firstSeedByte byte) pqSigTestFixture {
 func TestPQDecodeBoundsFeedSignedTxnMaxSize(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	require.Equal(t, int(basics.MaxPQPublicKeySize()), PQMaxPublicKeySize)
-	require.Equal(t, int(basics.MaxPQSignatureSize()), PQMaxSignatureSize)
-
 	expectedPQSigMaxSize := 1 +
 		4 + protocol.PQSchemeMaxSize() +
 		4 + basics.PQAddressSaltMaxSize() +
@@ -92,9 +89,8 @@ func TestPQDecodeBoundsFeedSignedTxnMaxSize(t *testing.T) {
 		4 + msgp.BytesPrefixSize + PQMaxSignatureSize
 	require.Equal(t, expectedPQSigMaxSize, PQSigMaxSize())
 
-	// PQSigMaxSize is part of the network-facing SignedTxn bound. Adding a larger
-	// PQ scheme to the basics registry intentionally increases PQMax* and therefore
-	// SignedTxnMaxSize, even before that scheme is enabled by consensus.
+	// PQSigMaxSize is part of the network-facing SignedTxn bound. Bumping
+	// PQMax* intentionally increases PQSigMaxSize and therefore SignedTxnMaxSize.
 	expectedSignedTxnMaxSize := 1 +
 		4 + crypto.SignatureMaxSize() +
 		5 + crypto.MultisigSigMaxSize() +
@@ -103,6 +99,41 @@ func TestPQDecodeBoundsFeedSignedTxnMaxSize(t *testing.T) {
 		4 + TransactionMaxSize() +
 		5 + basics.AddressMaxSize()
 	require.Equal(t, expectedSignedTxnMaxSize, SignedTxnMaxSize())
+}
+
+func TestEnabledPQSchemesFitDecodeBounds(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var maxPublicKeySize uint64
+	var maxSignatureSize uint64
+
+	for _, scheme := range basics.SupportedPQSchemes() {
+		spec, ok := basics.LookupPQScheme(scheme)
+		require.True(t, ok)
+
+		for protoVersion, proto := range config.Consensus {
+			if !spec.Enabled(proto) {
+				continue
+			}
+
+			require.LessOrEqualf(t, spec.PublicKeySize, uint64(PQMaxPublicKeySize),
+				"scheme %q is enabled by %s", scheme, protoVersion)
+			require.LessOrEqualf(t, spec.SignatureSize, uint64(PQMaxSignatureSize),
+				"scheme %q is enabled by %s", scheme, protoVersion)
+
+			if spec.PublicKeySize > maxPublicKeySize {
+				maxPublicKeySize = spec.PublicKeySize
+			}
+			if spec.SignatureSize > maxSignatureSize {
+				maxSignatureSize = spec.SignatureSize
+			}
+		}
+	}
+
+	require.NotZero(t, maxPublicKeySize)
+	require.NotZero(t, maxSignatureSize)
+	require.Equal(t, uint64(PQMaxPublicKeySize), maxPublicKeySize)
+	require.Equal(t, uint64(PQMaxSignatureSize), maxSignatureSize)
 }
 
 func TestPQSigBlank(t *testing.T) {
