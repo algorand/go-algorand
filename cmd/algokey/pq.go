@@ -46,11 +46,12 @@ var (
 	pqAddressScheme     = string(protocol.PQSchemeFalcon1024)
 	pqAddressSalt       = "canonical"
 
-	pqExportKeyfile string
-	pqExportOutfile string
+	pqExportKeyfile      string
+	pqExportMnemonicFile string
 
-	pqImportInfile  string
-	pqImportKeyfile string
+	pqImportMnemonicFile string
+	pqImportKeyfile      string
+	pqImportScheme       = string(protocol.PQSchemeFalcon1024)
 
 	pqSignKeyfile   string
 	pqSignTxfile    string
@@ -65,11 +66,6 @@ type pqSignOptions struct {
 	outfile   string
 	salt      string
 	overwrite bool
-}
-
-type pqImportOptions struct {
-	infile  string
-	keyfile string
 }
 
 var pqCmd = &cobra.Command{
@@ -110,7 +106,7 @@ var pqAddressCmd = &cobra.Command{
 
 var pqExportCmd = &cobra.Command{
 	Use:   "export",
-	Short: "Export a post-quantum private key in armored form",
+	Short: "Export a post-quantum private key mnemonic to a file",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, _ []string) {
 		exitOnError(runPQExport())
@@ -119,7 +115,7 @@ var pqExportCmd = &cobra.Command{
 
 var pqImportCmd = &cobra.Command{
 	Use:   "import",
-	Short: "Import an armored post-quantum private key",
+	Short: "Import a post-quantum private key from a mnemonic file",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, _ []string) {
 		exitOnError(runPQImport())
@@ -158,13 +154,14 @@ func init() {
 	mustMarkFlagRequired(pqAddressCmd, "pubkeyfile")
 
 	pqExportCmd.Flags().StringVar(&pqExportKeyfile, "keyfile", "", "Private key filename")
-	pqExportCmd.Flags().StringVar(&pqExportOutfile, "outfile", "", "Armored private key output filename")
+	pqExportCmd.Flags().StringVar(&pqExportMnemonicFile, "mnemonic-file", "", "Mnemonic output filename")
 	mustMarkFlagRequired(pqExportCmd, "keyfile")
-	mustMarkFlagRequired(pqExportCmd, "outfile")
+	mustMarkFlagRequired(pqExportCmd, "mnemonic-file")
 
-	pqImportCmd.Flags().StringVar(&pqImportInfile, "infile", "", "Armored private key input filename")
+	pqImportCmd.Flags().StringVar(&pqImportMnemonicFile, "mnemonic-file", "", "Mnemonic input filename")
 	pqImportCmd.Flags().StringVar(&pqImportKeyfile, "keyfile", "", "Private key filename")
-	mustMarkFlagRequired(pqImportCmd, "infile")
+	pqImportCmd.Flags().StringVar(&pqImportScheme, "scheme", pqImportScheme, "Post-quantum signature scheme")
+	mustMarkFlagRequired(pqImportCmd, "mnemonic-file")
 	mustMarkFlagRequired(pqImportCmd, "keyfile")
 
 	pqSignCmd.Flags().StringVar(&pqSignKeyfile, "keyfile", "", "Private key filename")
@@ -184,41 +181,36 @@ func mustMarkFlagRequired(cmd *cobra.Command, flagName string) {
 }
 
 func runPQGenerate() error {
-	ops, err := opsForPQScheme(protocol.PQScheme(pqGenerateScheme))
+	root, err := generatePQRoot(protocol.PQScheme(pqGenerateScheme), crypto.SystemRNG)
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot generate PQ key: %w", err)
 	}
+	defer wipePQRootMaterial(&root)
 
-	material, err := ops.generate(crypto.SystemRNG)
-	if err != nil {
-		return fmt.Errorf("cannot generate %s key: %w", ops.displayName, err)
-	}
-	defer wipePQKeyMaterial(&material)
-
-	if err = writePQPrivateKeyFile(pqGenerateKeyfile, material); err != nil {
+	if err = writePQRootKeyFile(pqGenerateKeyfile, root); err != nil {
 		return err
 	}
 	if pqGeneratePubkeyfile != "" {
-		if err = writePQPublicKeyFile(pqGeneratePubkeyfile, material); err != nil {
+		if err = writePQPublicKeyFile(pqGeneratePubkeyfile, root.public); err != nil {
 			return err
 		}
 	}
 
-	return printPQKeyInfo(os.Stdout, material.scheme, material.publicKey, material.canonicalSalt, material.canonicalAddress)
+	return printPQKeyInfo(os.Stdout, root.public)
 }
 
 func runPQInfo() error {
-	material, err := readPQPrivateKeyFile(pqInfoKeyfile)
+	root, err := readPQRootKeyFile(pqInfoKeyfile)
 	if err != nil {
 		return err
 	}
-	defer wipePQKeyMaterial(&material)
+	defer wipePQRootMaterial(&root)
 
-	salt, addr, err := resolvePQSalt(material.scheme, material.publicKey, pqInfoSalt)
+	public, err := resolvePQSalt(root.public, pqInfoSalt)
 	if err != nil {
 		return err
 	}
-	return printPQKeyInfo(os.Stdout, material.scheme, material.publicKey, salt, addr)
+	return printPQKeyInfo(os.Stdout, public)
 }
 
 func runPQAddress() error {
@@ -235,53 +227,51 @@ func runPQAddress() error {
 		return fmt.Errorf("%w: public key file scheme is %q, requested %q", errPQKeyWrongType, publicMaterial.scheme, scheme)
 	}
 
-	salt, addr, err := resolvePQSalt(publicMaterial.scheme, publicMaterial.publicKey, pqAddressSalt)
+	public, err := resolvePQSalt(publicMaterial, pqAddressSalt)
 	if err != nil {
 		return err
 	}
-	return printPQKeyInfo(os.Stdout, publicMaterial.scheme, publicMaterial.publicKey, salt, addr)
+	return printPQKeyInfo(os.Stdout, public)
 }
 
 func runPQExport() error {
-	data, material, err := readPQPrivateKeyFileData(pqExportKeyfile)
+	return runPQExportWithOptions(pqExportKeyfile, pqExportMnemonicFile)
+}
+
+func runPQExportWithOptions(keyfile, mnemonicFile string) error {
+	root, err := readPQRootKeyFile(keyfile)
 	if err != nil {
 		return err
 	}
-	defer zeroBytes(data)
-	defer wipePQKeyMaterial(&material)
+	defer wipePQRootMaterial(&root)
 
-	armor := armorPQPrivateKeyBytes(material.scheme, data)
-	defer zeroBytes(armor)
-	if err = writeFile(pqExportOutfile, armor, 0600); err != nil {
-		return fmt.Errorf("cannot write armored private key to %s: %w", pqExportOutfile, err)
+	if err = writeMnemonicFile(mnemonicFile, root.entropy); err != nil {
+		return fmt.Errorf("cannot write mnemonic to %s: %w", mnemonicFile, err)
 	}
-	return nil
+	return printPQKeyInfo(os.Stdout, root.public)
 }
 
 func runPQImport() error {
-	return runPQImportWithOptions(pqImportOptions{
-		infile:  pqImportInfile,
-		keyfile: pqImportKeyfile,
-	})
+	return runPQImportWithOptions(pqImportMnemonicFile, pqImportKeyfile, protocol.PQScheme(pqImportScheme))
 }
 
-func runPQImportWithOptions(opts pqImportOptions) error {
-	armor, err := readFile(opts.infile)
+func runPQImportWithOptions(mnemonicFile, keyfile string, scheme protocol.PQScheme) error {
+	entropy, err := readMnemonicFile(mnemonicFile)
 	if err != nil {
-		return fmt.Errorf("cannot read armored private key from %s: %w", opts.infile, err)
+		return fmt.Errorf("cannot read mnemonic from %s: %w", mnemonicFile, err)
 	}
-	defer zeroBytes(armor)
+	defer zeroBytes(entropy[:])
 
-	data, _, err := decodeArmoredPQPrivateKey(armor)
+	root, err := rootMaterialFromEntropy(scheme, entropy)
 	if err != nil {
 		return err
 	}
-	defer zeroBytes(data)
+	defer wipePQRootMaterial(&root)
 
-	if err = writeNewFile(opts.keyfile, data, 0600); err != nil {
-		return fmt.Errorf("cannot write private key to %s: %w", opts.keyfile, err)
+	if err = writePQRootKeyFile(keyfile, root); err != nil {
+		return fmt.Errorf("cannot write private key to %s: %w", keyfile, err)
 	}
-	return nil
+	return printPQKeyInfo(os.Stdout, root.public)
 }
 
 func runPQSign() error {
@@ -295,23 +285,29 @@ func runPQSign() error {
 }
 
 func runPQSignWithOptions(opts pqSignOptions) error {
-	material, err := readPQPrivateKeyFile(opts.keyfile)
+	root, err := readPQRootKeyFile(opts.keyfile)
 	if err != nil {
 		return err
 	}
-	defer wipePQKeyMaterial(&material)
+	defer wipePQRootMaterial(&root)
 
-	ops, err := opsForPQScheme(material.scheme)
+	ops, err := opsForPQScheme(root.scheme)
 	if err != nil {
 		return err
 	}
 
-	salt, authorizer, err := resolvePQSalt(material.scheme, material.publicKey, opts.salt)
+	signing, err := derivePQSigningMaterialFromEntropy(root.scheme, root.entropy[:])
 	if err != nil {
 		return err
 	}
-	if !authorizer.IsPQCompliant() {
-		return fmt.Errorf("%w: derived address %s for salt %d", errPQSaltNotCompliant, authorizer, salt)
+	defer wipePQSigningMaterial(&signing)
+
+	public, err := resolvePQSalt(signing.public, opts.salt)
+	if err != nil {
+		return err
+	}
+	if !public.addr.IsPQCompliant() {
+		return fmt.Errorf("%w: derived address %s for salt %d", errPQSaltNotCompliant, public.addr, public.salt)
 	}
 
 	txdata, err := readFile(opts.txfile)
@@ -338,19 +334,19 @@ func runPQSignWithOptions(opts pqSignOptions) error {
 			clearSignedTxnSignatures(&stxn)
 		}
 
-		signature, signErr := ops.signTxn(material.privateKey, stxn.Txn)
+		signature, signErr := ops.signTxn(signing.private, stxn.Txn)
 		if signErr != nil {
 			return fmt.Errorf("cannot sign transaction: %w", signErr)
 		}
 
 		stxn.PQSig = transactions.PQSig{
-			Scheme:    material.scheme,
-			Salt:      salt,
-			PublicKey: slices.Clone(material.publicKey),
+			Scheme:    public.scheme,
+			Salt:      public.salt,
+			PublicKey: slices.Clone(public.pk),
 			Signature: signature,
 		}
-		if stxn.Txn.Sender != authorizer {
-			stxn.AuthAddr = authorizer
+		if stxn.Txn.Sender != public.addr {
+			stxn.AuthAddr = public.addr
 		} else {
 			stxn.AuthAddr = basics.Address{}
 		}
@@ -375,14 +371,14 @@ func clearSignedTxnSignatures(stxn *transactions.SignedTxn) {
 	stxn.PQSig = transactions.PQSig{}
 }
 
-func printPQKeyInfo(w io.Writer, scheme protocol.PQScheme, publicKey []byte, salt basics.PQAddressSalt, addr basics.Address) error {
+func printPQKeyInfo(w io.Writer, public pqPublicMaterial) error {
 	_, err := io.WriteString(w, fmt.Sprintf(
 		"PQ scheme: %s\nPQ public key: %s\nPQ address salt: %d\nPQ address: %s\nPQ address compliant: %t\n",
-		scheme,
-		base64.StdEncoding.EncodeToString(publicKey),
-		salt,
-		addr,
-		addr.IsPQCompliant(),
+		public.scheme,
+		base64.StdEncoding.EncodeToString(public.pk),
+		public.salt,
+		public.addr,
+		public.addr.IsPQCompliant(),
 	))
 	return err
 }

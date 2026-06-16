@@ -17,7 +17,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 
@@ -27,27 +26,21 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-var errPQPrivateKeyMismatch = errors.New("pq public/private key pair mismatch")
+const pqKeyEntropySize = crypto.DigestSize
 
 // pqSchemeOps holds the signing-side, private-key operations for one PQ
 // scheme. The consensus-relevant scheme behavior (public key validation,
 // signature verification, sizes, fees) lives in the basics PQ scheme registry;
 // see basics.LookupPQScheme.
 type pqSchemeOps struct {
-	displayName     string
-	privateKeySize  uint64
-	generate        func(crypto.RNG) (pqKeyMaterial, error)
-	signTxn         func([]byte, transactions.Transaction) ([]byte, error)
-	validateKeyPair func([]byte, []byte) error
+	deriveSigning func([]byte) (pqSigningMaterial, error)
+	signTxn       func([]byte, transactions.Transaction) ([]byte, error)
 }
 
 var pqSchemeOpsByScheme = map[protocol.PQScheme]pqSchemeOps{
 	protocol.PQSchemeFalcon1024: {
-		displayName:     "Falcon-1024",
-		privateKeySize:  crypto.FalconPrivateKeySize,
-		generate:        generateFalcon1024Key,
-		signTxn:         signFalcon1024Txn,
-		validateKeyPair: validateFalcon1024KeyPair,
+		deriveSigning: deriveFalcon1024SigningMaterial,
+		signTxn:       signFalcon1024Txn,
 	},
 }
 
@@ -67,31 +60,83 @@ func opsForPQScheme(scheme protocol.PQScheme) (pqSchemeOps, error) {
 	return ops, nil
 }
 
-func generateFalcon1024Key(rng crypto.RNG) (pqKeyMaterial, error) {
-	var seed crypto.FalconSeed
-	rng.RandBytes(seed[:])
+func generatePQRoot(scheme protocol.PQScheme, rng crypto.RNG) (pqRootMaterial, error) {
+	var entropy crypto.Seed
+	rng.RandBytes(entropy[:])
+	defer zeroBytes(entropy[:])
+
+	return rootMaterialFromEntropy(scheme, entropy)
+}
+
+func rootMaterialFromEntropy(scheme protocol.PQScheme, entropy crypto.Seed) (pqRootMaterial, error) {
+	defer zeroBytes(entropy[:])
+
+	signing, err := derivePQSigningMaterialFromEntropy(scheme, entropy[:])
+	if err != nil {
+		return pqRootMaterial{}, err
+	}
+	defer wipePQSigningMaterial(&signing)
+
+	return pqRootMaterial{
+		scheme:  scheme,
+		entropy: entropy,
+		public:  signing.public,
+	}, nil
+}
+
+func derivePQSigningMaterialFromEntropy(scheme protocol.PQScheme, entropy []byte) (pqSigningMaterial, error) {
+	ops, err := opsForPQScheme(scheme)
+	if err != nil {
+		return pqSigningMaterial{}, err
+	}
+
+	seed, err := derivePQKeySeed(scheme, entropy)
+	if err != nil {
+		return pqSigningMaterial{}, err
+	}
 	defer zeroBytes(seed[:])
 
-	signer, err := crypto.GenerateFalconSigner(seed)
+	return ops.deriveSigning(seed[:])
+}
+
+// derivePQKeySeed maps mnemonic-sized entropy to a scheme-specific PQ keygen
+// seed: SHA512_256(PQK || scheme[2] || entropy[32]).
+func derivePQKeySeed(scheme protocol.PQScheme, entropy []byte) (crypto.Digest, error) {
+	if len(scheme) != protocol.PQSchemeSize {
+		return crypto.Digest{}, fmt.Errorf("%w: got scheme size %d, want %d", errPQKeyDerivation, len(scheme), protocol.PQSchemeSize)
+	}
+	if len(entropy) != pqKeyEntropySize {
+		return crypto.Digest{}, fmt.Errorf("%w: got entropy size %d, want %d", errPQKeyDerivation, len(entropy), pqKeyEntropySize)
+	}
+
+	input := make([]byte, 0, len(protocol.PostQuantumKey)+protocol.PQSchemeSize+len(entropy))
+	defer zeroBytes(input)
+	input = append(input, string(protocol.PostQuantumKey)...)
+	input = append(input, string(scheme)...)
+	input = append(input, entropy...)
+
+	return crypto.Hash(input), nil
+}
+
+func deriveFalcon1024SigningMaterial(seed []byte) (pqSigningMaterial, error) {
+	signer, err := crypto.GenerateFalconSignerFromVarLenSeed(seed)
 	if err != nil {
-		return pqKeyMaterial{}, err
+		return pqSigningMaterial{}, err
 	}
 	defer zeroBytes(signer.PrivateKey[:])
 
 	publicKey := slices.Clone(signer.PublicKey[:])
 	privateKey := slices.Clone(signer.PrivateKey[:])
-	salt, addr, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
+	public, err := canonicalPublicMaterialFromKey(protocol.PQSchemeFalcon1024, publicKey)
 	if err != nil {
 		zeroBytes(privateKey)
-		return pqKeyMaterial{}, err
+		return pqSigningMaterial{}, err
 	}
+	zeroBytes(publicKey)
 
-	return pqKeyMaterial{
-		scheme:           protocol.PQSchemeFalcon1024,
-		publicKey:        publicKey,
-		privateKey:       privateKey,
-		canonicalSalt:    salt,
-		canonicalAddress: addr,
+	return pqSigningMaterial{
+		public:  public,
+		private: privateKey,
 	}, nil
 }
 
@@ -118,33 +163,4 @@ func signFalcon1024Txn(privateKey []byte, txn transactions.Transaction) ([]byte,
 		return nil, err
 	}
 	return slices.Clone(sig), nil
-}
-
-func validateFalcon1024KeyPair(publicKey []byte, privateKey []byte) error {
-	pk, err := crypto.FalconPublicKeyFromBytes(publicKey)
-	if err != nil {
-		return err
-	}
-	sk, err := falconPrivateKeyFromBytes(privateKey)
-	if err != nil {
-		return err
-	}
-	defer zeroBytes(sk[:])
-
-	signer := crypto.FalconSigner{
-		PublicKey:  pk,
-		PrivateKey: sk,
-	}
-	defer zeroBytes(signer.PrivateKey[:])
-	challenge := []byte("algokey-pq-keyfile-self-check")
-	sig, err := signer.SignBytes(challenge)
-	if err != nil {
-		return err
-	}
-
-	verifier := crypto.FalconVerifier{PublicKey: pk}
-	if err = verifier.VerifyBytes(challenge, sig); err != nil {
-		return fmt.Errorf("%w: %w", errPQPrivateKeyMismatch, err)
-	}
-	return nil
 }
