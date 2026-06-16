@@ -110,10 +110,10 @@ func derivePQKeySeed(scheme protocol.PQScheme, entropy []byte) (crypto.Digest, e
 	}
 
 	input := make([]byte, 0, len(protocol.PostQuantumKey)+protocol.PQSchemeSize+len(entropy))
-	defer zeroBytes(input)
 	input = append(input, string(protocol.PostQuantumKey)...)
 	input = append(input, string(scheme)...)
 	input = append(input, entropy...)
+	defer zeroBytes(input)
 
 	return crypto.Hash(input), nil
 }
