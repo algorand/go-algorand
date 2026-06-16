@@ -3,7 +3,6 @@
 package transactions
 
 import (
-	"errors"
 	"sort"
 
 	"github.com/algorand/msgp/msgp"
@@ -3029,13 +3028,6 @@ func (z *Header) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []
 			}
 		}
 	}
-	if (*z).Sender.MsgIsZero() {
-		err = errors.New("missing required field: snd")
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-	}
 	o = bts
 	return
 }
@@ -5604,13 +5596,6 @@ func (z *SignedTxn) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o
 			}
 		}
 	}
-	if (*z).Txn.MsgIsZero() {
-		err = errors.New("missing required field: txn")
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-	}
 	o = bts
 	return
 }
@@ -6076,13 +6061,6 @@ func (z *SignedTxnInBlock) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSt
 			}
 		}
 	}
-	if (*z).SignedTxnWithAD.SignedTxn.Txn.MsgIsZero() {
-		err = errors.New("missing required field: txn")
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-	}
 	o = bts
 	return
 }
@@ -6500,13 +6478,6 @@ func (z *SignedTxnWithAD) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSta
 					return
 				}
 			}
-		}
-	}
-	if (*z).SignedTxn.Txn.MsgIsZero() {
-		err = errors.New("missing required field: txn")
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
 		}
 	}
 	o = bts
@@ -8495,20 +8466,6 @@ func (z *Transaction) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 					return
 				}
 			}
-		}
-	}
-	if (*z).Type.MsgIsZero() {
-		err = errors.New("missing required field: type")
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-	}
-	if (*z).Header.Sender.MsgIsZero() {
-		err = errors.New("missing required field: snd")
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
 		}
 	}
 	o = bts

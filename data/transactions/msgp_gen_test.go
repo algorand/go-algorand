@@ -438,10 +438,11 @@ func TestMarshalUnmarshalHeader(t *testing.T) {
 	v := Header{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
-	// The zero value omits its required field(s), so UnmarshalMsg is expected to
-	// reject it; only MarshalMsg and Skip are exercised against a zero value.
-	if err == nil {
-		t.Errorf("expected a missing-required-field error decoding a zero Header")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
 	}
 
 	left, err = msgp.Skip(bts)
@@ -485,9 +486,10 @@ func BenchmarkUnmarshalHeader(b *testing.B) {
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		// The zero value fails the required-field check; ignore the error so the
-		// benchmark still measures the decoding work.
-		_, _ = v.UnmarshalMsg(bts)
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -1036,10 +1038,11 @@ func TestMarshalUnmarshalSignedTxn(t *testing.T) {
 	v := SignedTxn{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
-	// The zero value omits its required field(s), so UnmarshalMsg is expected to
-	// reject it; only MarshalMsg and Skip are exercised against a zero value.
-	if err == nil {
-		t.Errorf("expected a missing-required-field error decoding a zero SignedTxn")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
 	}
 
 	left, err = msgp.Skip(bts)
@@ -1083,9 +1086,10 @@ func BenchmarkUnmarshalSignedTxn(b *testing.B) {
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		// The zero value fails the required-field check; ignore the error so the
-		// benchmark still measures the decoding work.
-		_, _ = v.UnmarshalMsg(bts)
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -1094,10 +1098,11 @@ func TestMarshalUnmarshalSignedTxnInBlock(t *testing.T) {
 	v := SignedTxnInBlock{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
-	// The zero value omits its required field(s), so UnmarshalMsg is expected to
-	// reject it; only MarshalMsg and Skip are exercised against a zero value.
-	if err == nil {
-		t.Errorf("expected a missing-required-field error decoding a zero SignedTxnInBlock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
 	}
 
 	left, err = msgp.Skip(bts)
@@ -1141,9 +1146,10 @@ func BenchmarkUnmarshalSignedTxnInBlock(b *testing.B) {
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		// The zero value fails the required-field check; ignore the error so the
-		// benchmark still measures the decoding work.
-		_, _ = v.UnmarshalMsg(bts)
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -1152,10 +1158,11 @@ func TestMarshalUnmarshalSignedTxnWithAD(t *testing.T) {
 	v := SignedTxnWithAD{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
-	// The zero value omits its required field(s), so UnmarshalMsg is expected to
-	// reject it; only MarshalMsg and Skip are exercised against a zero value.
-	if err == nil {
-		t.Errorf("expected a missing-required-field error decoding a zero SignedTxnWithAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
 	}
 
 	left, err = msgp.Skip(bts)
@@ -1199,9 +1206,10 @@ func BenchmarkUnmarshalSignedTxnWithAD(b *testing.B) {
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		// The zero value fails the required-field check; ignore the error so the
-		// benchmark still measures the decoding work.
-		_, _ = v.UnmarshalMsg(bts)
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -1270,10 +1278,11 @@ func TestMarshalUnmarshalTransaction(t *testing.T) {
 	v := Transaction{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
-	// The zero value omits its required field(s), so UnmarshalMsg is expected to
-	// reject it; only MarshalMsg and Skip are exercised against a zero value.
-	if err == nil {
-		t.Errorf("expected a missing-required-field error decoding a zero Transaction")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
 	}
 
 	left, err = msgp.Skip(bts)
@@ -1317,9 +1326,10 @@ func BenchmarkUnmarshalTransaction(b *testing.B) {
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		// The zero value fails the required-field check; ignore the error so the
-		// benchmark still measures the decoding work.
-		_, _ = v.UnmarshalMsg(bts)
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 

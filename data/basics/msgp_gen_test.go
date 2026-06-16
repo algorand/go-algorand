@@ -378,10 +378,11 @@ func TestMarshalUnmarshalParticipant(t *testing.T) {
 	v := Participant{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
-	// The zero value omits its required field(s), so UnmarshalMsg is expected to
-	// reject it; only MarshalMsg and Skip are exercised against a zero value.
-	if err == nil {
-		t.Errorf("expected a missing-required-field error decoding a zero Participant")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
 	}
 
 	left, err = msgp.Skip(bts)
@@ -425,9 +426,10 @@ func BenchmarkUnmarshalParticipant(b *testing.B) {
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		// The zero value fails the required-field check; ignore the error so the
-		// benchmark still measures the decoding work.
-		_, _ = v.UnmarshalMsg(bts)
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 

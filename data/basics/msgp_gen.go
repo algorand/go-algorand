@@ -3,7 +3,6 @@
 package basics
 
 import (
-	"errors"
 	"sort"
 
 	"github.com/algorand/msgp/msgp"
@@ -5058,13 +5057,6 @@ func (z *Participant) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 					return
 				}
 			}
-		}
-	}
-	if (*z).PK.MsgIsZero() {
-		err = errors.New("missing required field: p")
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
 		}
 	}
 	o = bts
