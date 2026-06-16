@@ -119,28 +119,6 @@ func mnemonicFromSeed(seed crypto.Seed) (string, error) {
 	return passphrase.KeyToMnemonic(seed[:])
 }
 
-func readMnemonicFile(filename string) (crypto.Seed, error) {
-	if filename == stdinFileNameValue {
-		return crypto.Seed{}, fmt.Errorf("refusing to read mnemonic from stdin")
-	}
-	data, err := readFile(filename)
-	if err != nil {
-		return crypto.Seed{}, err
-	}
-	defer zeroBytes(data)
-	return seedFromMnemonic(string(data))
-}
-
-func writeMnemonicFile(filename string, seed crypto.Seed) error {
-	mnemonic, err := mnemonicFromSeed(seed)
-	if err != nil {
-		return err
-	}
-	data := []byte(mnemonic + "\n")
-	defer zeroBytes(data)
-	return writeNewFile(filename, data, 0600)
-}
-
 // writeFile is a wrapper of os.WriteFile which considers the special
 // case of stdout filename
 func writeFile(filename string, data []byte, perm os.FileMode) error {
