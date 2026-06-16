@@ -47,7 +47,7 @@ type (
 	FalconPublicKey [FalconPublicKeySize]byte
 	// FalconPrivateKey is a wrapper for cfalcon.PrivateKeySize (used for packing)
 	FalconPrivateKey [FalconPrivateKeySize]byte
-	// FalconSeed represents the seed which is being used to generate Falcon keys
+	// FalconSeed represents the fixed-length seed used by default Falcon keygen.
 	FalconSeed [FalconSeedSize]byte
 	// FalconSignature represents a Falcon signature in a compressed-form
 	//msgp:allocbound FalconSignature FalconMaxSignatureSize
@@ -84,12 +84,13 @@ type FalconSigner struct {
 // GenerateFalconSigner generates a Falcon signer from the fixed-size Falcon
 // seed type.
 func GenerateFalconSigner(seed FalconSeed) (FalconSigner, error) {
-	return GenerateFalconSignerFromSeed(seed[:])
+	return GenerateFalconSignerFromVarLenSeed(seed[:])
 }
 
-// GenerateFalconSignerFromSeed generates a Falcon signer from caller-derived
-// seed bytes. Callers are responsible for domain separation before passing seed.
-func GenerateFalconSignerFromSeed(seed []byte) (FalconSigner, error) {
+// GenerateFalconSignerFromVarLenSeed generates a Falcon signer from caller-derived
+// variable length seed bytes. Callers are responsible for domain separation before
+// passing seed.
+func GenerateFalconSignerFromVarLenSeed(seed []byte) (FalconSigner, error) {
 	pk, sk, err := cfalcon.GenerateKey(seed)
 	return FalconSigner{
 		PublicKey:  FalconPublicKey(pk),
