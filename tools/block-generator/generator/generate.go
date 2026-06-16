@@ -826,10 +826,12 @@ func (g *generator) recordData(id TxTypeID, start time.Time) {
 
 func signTxn(transaction txn.Transaction) txn.SignedTxn {
 	stxn := txn.SignedTxn{
-		Msig:     crypto.MultisigSig{},
-		Lsig:     txn.LogicSig{},
-		Txn:      transaction,
-		AuthAddr: basics.Address{},
+		SignatureFields: txn.SignatureFields{
+			Msig:     crypto.MultisigSig{},
+			Lsig:     txn.LogicSig{},
+			AuthAddr: basics.Address{},
+		},
+		Txn: transaction,
 	}
 
 	addSignature(&stxn)

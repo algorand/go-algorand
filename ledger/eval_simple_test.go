@@ -1362,7 +1362,7 @@ func TestRekeying(t *testing.T) {
 			},
 		}
 		sig := signer.Sign(txn)
-		return transactions.SignedTxn{Txn: txn, Sig: sig, AuthAddr: authaddr}
+		return transactions.SignedTxn{Txn: txn, SignatureFields: transactions.SignatureFields{Sig: sig, AuthAddr: authaddr}}
 	}
 
 	tryBlock := func(stxns []transactions.SignedTxn) error {

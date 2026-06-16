@@ -101,7 +101,7 @@ func testLogicSize(t *testing.T, tealOK, tealTooLong []byte,
 	a.NoError(err)
 
 	txn1Success.Group = gidSuccess
-	stxn1Success := transactions.SignedTxn{Txn: txn1Success, Lsig: lsigOK}
+	stxn1Success := transactions.SignedTxn{Txn: txn1Success, SignatureFields: transactions.SignatureFields{Lsig: lsigOK}}
 
 	txn2Success.Group = gidSuccess
 	stxn2Success, err := client.SignTransactionWithWallet(walletHandler, nil, txn2Success)
@@ -115,7 +115,7 @@ func testLogicSize(t *testing.T, tealOK, tealTooLong []byte,
 	a.NoError(err)
 
 	txn1Fail.Group = gidFail
-	stxn1Fail := transactions.SignedTxn{Txn: txn1Fail, Lsig: lsigTooLong}
+	stxn1Fail := transactions.SignedTxn{Txn: txn1Fail, SignatureFields: transactions.SignatureFields{Lsig: lsigTooLong}}
 
 	txn2Fail.Group = gidFail
 	stxn2Fail, err := client.SignTransactionWithWallet(walletHandler, nil, txn2Fail)

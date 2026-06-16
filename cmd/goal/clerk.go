@@ -455,8 +455,10 @@ var sendCmd = &cobra.Command{
 			}
 			proto := protocol.ConsensusVersion(params.ConsensusVersion)
 			uncheckedTxn := transactions.SignedTxn{
-				Txn:  payment,
-				Lsig: lsig,
+				Txn: payment,
+				SignatureFields: transactions.SignatureFields{
+					Lsig: lsig,
+				},
 			}
 			blockHeader := bookkeeping.BlockHeader{
 				UpgradeState: bookkeeping.UpgradeState{
@@ -474,11 +476,13 @@ var sendCmd = &cobra.Command{
 		} else if program != nil {
 			stx = transactions.SignedTxn{
 				Txn: payment,
-				Lsig: transactions.LogicSig{
-					Logic: program,
-					Args:  programArgs,
+				SignatureFields: transactions.SignatureFields{
+					Lsig: transactions.LogicSig{
+						Logic: program,
+						Args:  programArgs,
+					},
+					AuthAddr: authAddr,
 				},
-				AuthAddr: authAddr,
 			}
 		} else {
 			signTx := sign || (outFilename == "")

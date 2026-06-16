@@ -124,7 +124,9 @@ func createHeartbeatTxn(fv basics.Round, t *testing.T) transactions.SignedTxn {
 	}
 
 	hb := transactions.SignedTxn{
-		Sig: secrets[0].Sign(txn),
+		SignatureFields: transactions.SignatureFields{
+			Sig: secrets[0].Sign(txn),
+		},
 		Txn: txn,
 	}
 	return hb
@@ -562,15 +564,19 @@ pushint 1`,
 
 			txgroup := []transactions.SignedTxn{
 				{
-					Lsig: transactions.LogicSig{
-						Logic: program1Bytes,
+					SignatureFields: transactions.SignatureFields{
+						Lsig: transactions.LogicSig{
+							Logic: program1Bytes,
+						},
 					},
 					Txn: lsigPay.Txn(),
 				},
 				normalSigAppCall.Txn().Sign(account),
 				{
-					Lsig: transactions.LogicSig{
-						Logic: program2Bytes,
+					SignatureFields: transactions.SignatureFields{
+						Lsig: transactions.LogicSig{
+							Logic: program2Bytes,
+						},
 					},
 					Txn: lsigAppCall.Txn(),
 				},

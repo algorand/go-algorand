@@ -206,8 +206,10 @@ func TestDryrunLogicSig(t *testing.T) {
 
 	dr.Txns = []transactions.SignedTxn{
 		{
-			Lsig: transactions.LogicSig{
-				Logic: unB64("AiABASI="),
+			SignatureFields: transactions.SignatureFields{
+				Lsig: transactions.LogicSig{
+					Logic: unB64("AiABASI="),
+				},
 			},
 		},
 		// it doesn't actually care about any txn content

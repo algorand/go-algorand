@@ -33,10 +33,17 @@ import (
 type SignedTxn struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
+	SignatureFields
+	Txn Transaction `codec:"txn"`
+}
+
+// SignatureFields contain the different type of signatures
+type SignatureFields struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	Sig      crypto.Signature   `codec:"sig"`
 	Msig     crypto.MultisigSig `codec:"msig"`
 	Lsig     LogicSig           `codec:"lsig"`
-	Txn      Transaction        `codec:"txn"`
 	AuthAddr basics.Address     `codec:"sgnr"`
 }
 
@@ -129,9 +136,11 @@ func AssembleSignedTxn(txn Transaction, sig crypto.Signature, msig crypto.Multis
 		return SignedTxn{}, errors.New("signed txn can only have one of sig or msig")
 	}
 	s := SignedTxn{
-		Txn:  txn,
-		Sig:  sig,
-		Msig: msig,
+		Txn: txn,
+		SignatureFields: SignatureFields{
+			Sig:  sig,
+			Msig: msig,
+		},
 	}
 	return s, nil
 }

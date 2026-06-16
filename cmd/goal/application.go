@@ -1516,9 +1516,11 @@ var methodAppCmd = &cobra.Command{
 
 			if !txnFromArgs.Lsig.Blank() {
 				signedTxnGroup = append(signedTxnGroup, transactions.SignedTxn{
-					Lsig:     txnFromArgs.Lsig,
-					AuthAddr: txnFromArgs.AuthAddr,
-					Txn:      unsignedTxn,
+					SignatureFields: transactions.SignatureFields{
+						Lsig:     txnFromArgs.Lsig,
+						AuthAddr: txnFromArgs.AuthAddr,
+					},
+					Txn: unsignedTxn,
 				})
 				continue
 			}

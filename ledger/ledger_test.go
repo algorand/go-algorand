@@ -65,7 +65,9 @@ func sign(secrets map[basics.Address]*crypto.SignatureSecrets, t transactions.Tr
 	}
 	return transactions.SignedTxn{
 		Txn: t,
-		Sig: sig,
+		SignatureFields: transactions.SignatureFields{
+			Sig: sig,
+		},
 	}
 }
 

@@ -251,7 +251,7 @@ func payTo(bc *benchConfig, from, to basics.Address, amt uint64) {
 
 func createAssetForAcct(bc *benchConfig, acct basics.Address) (aidx basics.AssetIndex) {
 	tx := createAssetTransaction(bc.txnCount, bc.round, acct)
-	stxn := transactions.SignedTxn{Txn: tx, Sig: crypto.Signature{1}}
+	stxn := transactions.SignedTxn{Txn: tx, SignatureFields: transactions.SignatureFields{Sig: crypto.Signature{1}}}
 	aIdx := basics.AssetIndex(addTransaction(bc, stxn))
 	if len(bc.acctToAst[acct]) == 0 {
 		bc.acctToAst[acct] = make(map[basics.AssetIndex]uint64)
@@ -264,7 +264,7 @@ func createAssetForAcct(bc *benchConfig, acct basics.Address) (aidx basics.Asset
 func createAppForAcct(bc *benchConfig, acct basics.Address) (appIdx basics.AppIndex) {
 	tx, err := makeAppTransaction(bc.txnCount, bc.round, acct)
 	require.NoError(bc.b, err)
-	stxn := transactions.SignedTxn{Txn: tx, Sig: crypto.Signature{1}}
+	stxn := transactions.SignedTxn{Txn: tx, SignatureFields: transactions.SignatureFields{Sig: crypto.Signature{1}}}
 	appIdx = basics.AppIndex(addTransaction(bc, stxn))
 	if len(bc.acctToApp[acct]) == 0 {
 		bc.acctToApp[acct] = make(map[basics.AppIndex]struct{})
