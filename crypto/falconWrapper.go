@@ -90,11 +90,12 @@ func GenerateFalconSigner(seed FalconSeed) (FalconSigner, error) {
 
 // GenerateFalconSignerFromVarLenSeed generates a Falcon signer from caller-derived
 // variable length seed bytes. Callers are responsible for domain separation before
-// passing seed. The seed must carry at least DigestSize bytes of entropy; a
-// shorter (or empty) seed is rejected so it cannot yield a fixed, public keypair.
+// passing seed. The seed must carry at least a full Seed of entropy (len(Seed{})
+// bytes); a shorter (or empty) seed is rejected so it cannot yield a fixed,
+// public keypair.
 func GenerateFalconSignerFromVarLenSeed(seed []byte) (FalconSigner, error) {
-	if len(seed) < DigestSize {
-		return FalconSigner{}, fmt.Errorf("%w: got %d, want >= %d", errFalconSeedTooShort, len(seed), DigestSize)
+	if len(seed) < len(Seed{}) {
+		return FalconSigner{}, fmt.Errorf("%w: got %d, want >= %d", errFalconSeedTooShort, len(seed), len(Seed{}))
 	}
 	pk, sk, err := cfalcon.GenerateKey(seed)
 	return FalconSigner{
