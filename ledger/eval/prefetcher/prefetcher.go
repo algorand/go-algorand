@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
 )
@@ -267,11 +268,31 @@ func (pq *preloaderTaskQueue) addKvTask(app basics.AppIndex, name []byte, wt *gr
 	return pq
 }
 
+// emitColdResults sends a cache-less, error-bearing result for every group from index "from"
+// onward, so prefetch still delivers one result per group when it aborts before preloading.
+func (p *paysetPrefetcher) emitColdResults(from int, err error) int {
+	for ; from < len(p.txnGroups); from++ {
+		p.outChan <- LoadedTransactionGroup{TxnGroup: p.txnGroups[from], Err: err}
+	}
+	return from
+}
+
 // prefetch would process the input transaction groups by analyzing each of the transaction groups and building
 // an execution queue that would allow us to fetch all the dependencies for the input transaction groups in order
 // and output these onto a channel.
 func (p *paysetPrefetcher) prefetch(ctx context.Context) {
 	defer close(p.outChan)
+
+	emitted := 0
+	defer func() {
+		if r := recover(); r != nil {
+			// p.rnd is the lookup round (blk.Round()-1); log p.rnd+1 so this matches the evaluated
+			// round in the sibling recover logs.
+			logging.Base().Errorf("recovered from panic prefetching resources for round %d: %v", p.rnd+1, r)
+			emitted = p.emitColdResults(emitted, fmt.Errorf("panic while prefetching resources for round %d: %v", p.rnd+1, r))
+		}
+	}()
+
 	accountTasks := make(map[basics.Address]*preloaderTask)
 	resourceTasks := make(map[accountCreatableKey]*preloaderTask)
 	kvTasks := make(map[string]*preloaderTask)
@@ -435,10 +456,11 @@ func (p *paysetPrefetcher) prefetch(ctx context.Context) {
 			case protocol.StateProofTx:
 			case protocol.KeyRegistrationTx: // No extra accounts besides the sender
 			case protocol.HeartbeatTx:
-				queue = queue.addAccountTask(&stxn.Txn.HbAddress, task, accountTasks)
+				if stxn.Txn.HeartbeatTxnFields != nil {
+					queue = queue.addAccountTask(&stxn.Txn.HbAddress, task, accountTasks)
+				}
 			}
 
-			// If you add new addresses here, also add them in getTxnAddresses().
 			if !stxn.Txn.Sender.IsZero() {
 				queue = queue.addAccountTask(&stxn.Txn.Sender, task, accountTasks)
 			}
@@ -541,6 +563,7 @@ func (p *paysetPrefetcher) prefetch(ctx context.Context) {
 				Resources: groupsReady[next].resources,
 				KVs:       groupsReady[next].kvs,
 			}
+			emitted++
 		}
 		// if we get to this point, it means that we have no more groups to process.
 		break

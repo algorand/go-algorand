@@ -39,7 +39,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ["ubuntu-24.04"]
+        platform: ["${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}"]
         partition_id: [0, 1, 2, 3, 4, 5] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
@@ -110,7 +110,7 @@ jobs:
           flags: ${{ inputs.full_coverage && 'full_coverage' || '' }}
           fail_ci_if_error: false
       - name: Upload test results to Codecov
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && !github.event.repository.private }}
         uses: codecov/test-results-action@v1
         with:
           file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_test/${{ matrix.partition_id }}/results.xml
@@ -121,7 +121,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ["ubuntu-24.04"]
+        platform: ["${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}"]
         partition_id: [0, 1, 2, 3, 4] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
@@ -164,7 +164,7 @@ jobs:
           path: ~/test_results
           retention-days: 7
       - name: Upload test results to Codecov
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && !github.event.repository.private }}
         uses: codecov/test-results-action@v1
         with:
           file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_integration/${{ matrix.partition_id }}/results.xml
@@ -175,7 +175,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ["ubuntu-24.04"]
+        platform: ["${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}"]
         partition_id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
@@ -220,7 +220,7 @@ jobs:
           path: ~/test_results
           retention-days: 7
       - name: Upload test results to Codecov
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && !github.event.repository.private }}
         uses: codecov/test-results-action@v1
         with:
           file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_e2e_expect/${{ matrix.partition_id }}/results.xml
@@ -231,7 +231,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ["ubuntu-24.04"]
+        platform: ["${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}"]
         testsuite: ["parallel", "vdir-serial"]
     runs-on: ${{ matrix.platform }}
     env:
@@ -279,7 +279,7 @@ jobs:
       fail-fast: false
       matrix:
         test_type: ["test", "integration", "e2e_expect", "e2e_subs"]
-        platform: ["ubuntu-24.04"]
+        platform: ["${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}"]
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -309,7 +309,7 @@ jobs:
   report:
     needs: [test, integration, e2e_expect, e2e_subs]
     if: always()
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}
     steps:
       - uses: actions/download-artifact@v4
         with:

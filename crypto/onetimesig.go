@@ -97,14 +97,14 @@ func (ots OneTimeSignature) ToHeartbeatProof() HeartbeatProof {
 	}
 }
 
-// BatchPrep enqueues the necessary checks into the batch.  The caller must call
-// batchVerifier.verify() to verify it.
-func (hbp HeartbeatProof) BatchPrep(voteID OneTimeSignatureVerifier, id OneTimeSignatureIdentifier, msg Hashable, batchVerifier BatchVerifier) {
+// BatchPrep enqueues the necessary checks into the batch.  The signatures are
+// only enqueued; they are checked when the underlying batch is verified.
+func (hbp HeartbeatProof) BatchPrep(voteID OneTimeSignatureVerifier, id OneTimeSignatureIdentifier, msg Hashable, batch BatchEnqueuer) {
 	offsetID := OneTimeSignatureSubkeyOffsetID{SubKeyPK: hbp.PK, Batch: id.Batch, Offset: id.Offset}
 	batchID := OneTimeSignatureSubkeyBatchID{SubKeyPK: hbp.PK2, Batch: id.Batch}
-	batchVerifier.EnqueueSignature(PublicKey(voteID), batchID, Signature(hbp.PK2Sig))
-	batchVerifier.EnqueueSignature(PublicKey(batchID.SubKeyPK), offsetID, Signature(hbp.PK1Sig))
-	batchVerifier.EnqueueSignature(PublicKey(offsetID.SubKeyPK), msg, Signature(hbp.Sig))
+	batch.EnqueueSignature(PublicKey(voteID), batchID, Signature(hbp.PK2Sig))
+	batch.EnqueueSignature(PublicKey(batchID.SubKeyPK), offsetID, Signature(hbp.PK1Sig))
+	batch.EnqueueSignature(PublicKey(offsetID.SubKeyPK), msg, Signature(hbp.Sig))
 
 }
 

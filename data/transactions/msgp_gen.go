@@ -3,6 +3,7 @@
 package transactions
 
 import (
+	"errors"
 	"sort"
 
 	"github.com/algorand/msgp/msgp"
@@ -632,8 +633,8 @@ func (z *ApplicationCallTxnFields) UnmarshalMsgWithState(bts []byte, st msgp.Unm
 				err = msgp.WrapError(err, "struct-from-array", "Access")
 				return
 			}
-			if zb0018 > encodedMaxAccess {
-				err = msgp.ErrOverflow(uint64(zb0018), uint64(encodedMaxAccess))
+			if zb0018 > bounds.MaxAppAccess {
+				err = msgp.ErrOverflow(uint64(zb0018), uint64(bounds.MaxAppAccess))
 				err = msgp.WrapError(err, "struct-from-array", "Access")
 				return
 			}
@@ -988,8 +989,8 @@ func (z *ApplicationCallTxnFields) UnmarshalMsgWithState(bts []byte, st msgp.Unm
 					err = msgp.WrapError(err, "Access")
 					return
 				}
-				if zb0037 > encodedMaxAccess {
-					err = msgp.ErrOverflow(uint64(zb0037), uint64(encodedMaxAccess))
+				if zb0037 > bounds.MaxAppAccess {
+					err = msgp.ErrOverflow(uint64(zb0037), uint64(bounds.MaxAppAccess))
 					err = msgp.WrapError(err, "Access")
 					return
 				}
@@ -1245,7 +1246,7 @@ func ApplicationCallTxnFieldsMaxSize() (s int) {
 	s += msgp.ArrayHeaderSize + ((encodedMaxForeignApps) * (basics.AppIndexMaxSize()))
 	s += 3
 	// Calculating size of slice: z.Access
-	s += msgp.ArrayHeaderSize + ((encodedMaxAccess) * (ResourceRefMaxSize()))
+	s += msgp.ArrayHeaderSize + ((bounds.MaxAppAccess) * (ResourceRefMaxSize()))
 	s += 5
 	// Calculating size of slice: z.Boxes
 	s += msgp.ArrayHeaderSize + ((encodedMaxBoxes) * (BoxRefMaxSize()))
@@ -3016,6 +3017,13 @@ func (z *Header) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []
 					return
 				}
 			}
+		}
+	}
+	if (*z).Sender.MsgIsZero() {
+		err = errors.New("missing required field: snd")
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
 		}
 	}
 	o = bts
@@ -5334,6 +5342,13 @@ func (z *SignedTxn) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o
 			}
 		}
 	}
+	if (*z).Txn.MsgIsZero() {
+		err = errors.New("missing required field: txn")
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+	}
 	o = bts
 	return
 }
@@ -5776,6 +5791,13 @@ func (z *SignedTxnInBlock) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSt
 			}
 		}
 	}
+	if (*z).SignedTxnWithAD.SignedTxn.Txn.MsgIsZero() {
+		err = errors.New("missing required field: txn")
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+	}
 	o = bts
 	return
 }
@@ -6170,6 +6192,13 @@ func (z *SignedTxnWithAD) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSta
 					return
 				}
 			}
+		}
+	}
+	if (*z).SignedTxn.Txn.MsgIsZero() {
+		err = errors.New("missing required field: txn")
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
 		}
 	}
 	o = bts
@@ -7325,8 +7354,8 @@ func (z *Transaction) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 				err = msgp.WrapError(err, "struct-from-array", "Access")
 				return
 			}
-			if zb0021 > encodedMaxAccess {
-				err = msgp.ErrOverflow(uint64(zb0021), uint64(encodedMaxAccess))
+			if zb0021 > bounds.MaxAppAccess {
+				err = msgp.ErrOverflow(uint64(zb0021), uint64(bounds.MaxAppAccess))
 				err = msgp.WrapError(err, "struct-from-array", "Access")
 				return
 			}
@@ -7930,8 +7959,8 @@ func (z *Transaction) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 					err = msgp.WrapError(err, "Access")
 					return
 				}
-				if zb0042 > encodedMaxAccess {
-					err = msgp.ErrOverflow(uint64(zb0042), uint64(encodedMaxAccess))
+				if zb0042 > bounds.MaxAppAccess {
+					err = msgp.ErrOverflow(uint64(zb0042), uint64(bounds.MaxAppAccess))
 					err = msgp.WrapError(err, "Access")
 					return
 				}
@@ -8160,6 +8189,20 @@ func (z *Transaction) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 			}
 		}
 	}
+	if (*z).Type.MsgIsZero() {
+		err = errors.New("missing required field: type")
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+	}
+	if (*z).Header.Sender.MsgIsZero() {
+		err = errors.New("missing required field: snd")
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+	}
 	o = bts
 	return
 }
@@ -8230,7 +8273,7 @@ func TransactionMaxSize() (s int) {
 	s += msgp.ArrayHeaderSize + ((encodedMaxForeignApps) * (basics.AppIndexMaxSize()))
 	s += 3
 	// Calculating size of slice: z.ApplicationCallTxnFields.Access
-	s += msgp.ArrayHeaderSize + ((encodedMaxAccess) * (ResourceRefMaxSize()))
+	s += msgp.ArrayHeaderSize + ((bounds.MaxAppAccess) * (ResourceRefMaxSize()))
 	s += 5
 	// Calculating size of slice: z.ApplicationCallTxnFields.Boxes
 	s += msgp.ArrayHeaderSize + ((encodedMaxBoxes) * (BoxRefMaxSize()))
