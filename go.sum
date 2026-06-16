@@ -56,8 +56,8 @@ github.com/algorand/go-sumhash v0.1.0 h1:b/QRhyLuF//vOcicBIxBXYW8bERNoeLxieht/dU
 github.com/algorand/go-sumhash v0.1.0/go.mod h1:OOe7jdDWUhLkuP1XytkK5gnLu9entAviN5DfDZh6XAc=
 github.com/algorand/graphtrace v0.1.0 h1:QemP1iT0W56SExD0NfiU6rsG34/v0Je6bg5UZnptEUM=
 github.com/algorand/graphtrace v0.1.0/go.mod h1:HscLQrzBdH1BH+5oehs3ICd8SYcXvnSL9BjfTu8WHCc=
-github.com/algorand/msgp v1.1.61 h1:IDSCGKLIi60n6j0lHDu37GTsCo9anw49Rq4PTwsDQsQ=
-github.com/algorand/msgp v1.1.61/go.mod h1:j9sEjNKkS12H0Yhwov/3MfzhM60n3iyr81Ymzv49pu8=
+github.com/algorand/msgp v1.1.63 h1:BK7Ghzq6hvZ1QivZ2p1TDEQDrU8oJ+1oY66yb+1ezXw=
+github.com/algorand/msgp v1.1.63/go.mod h1:j9sEjNKkS12H0Yhwov/3MfzhM60n3iyr81Ymzv49pu8=
 github.com/algorand/sortition v1.0.0 h1:PJiZtdSTBm4nArQrZXBnhlljHXhuyAXRJBqVWowQu3E=
 github.com/algorand/sortition v1.0.0/go.mod h1:23CZwAbTWPv0bBsq+Php/2J6Y/iXDyzlfcZyepeY5Fo=
 github.com/algorand/websocket v1.4.6 h1:I0kV4EYwatuUrKtNiwzYYgojgwh6pksDmlqntKG2Woc=
