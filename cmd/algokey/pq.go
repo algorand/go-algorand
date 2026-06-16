@@ -283,22 +283,16 @@ func runPQSign() error {
 }
 
 func runPQSignWithOptions(opts pqSignOptions) error {
-	root, err := readPQRootKeyFile(opts.keyfile)
-	if err != nil {
-		return err
-	}
-	defer wipePQRootMaterial(&root)
-
-	ops, err := opsForPQScheme(root.scheme)
-	if err != nil {
-		return err
-	}
-
-	signing, err := derivePQSigningMaterialFromEntropy(root.scheme, root.entropy[:])
+	signing, err := readPQSigningMaterial(opts.keyfile)
 	if err != nil {
 		return err
 	}
 	defer wipePQSigningMaterial(&signing)
+
+	ops, err := opsForPQScheme(signing.public.scheme)
+	if err != nil {
+		return err
+	}
 
 	public, err := resolvePQSalt(signing.public, opts.salt)
 	if err != nil {
