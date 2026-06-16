@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
+	"strings"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/passphrase"
@@ -51,14 +53,11 @@ func loadKeyfileOrMnemonic(keyfile string, mnemonic string) crypto.Seed {
 }
 
 func loadMnemonic(mnemonic string) crypto.Seed {
-	seedbytes, err := passphrase.MnemonicToKey(mnemonic)
+	seed, err := seedFromMnemonic(mnemonic)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot recover key seed from mnemonic: %v\n", err)
 		os.Exit(1)
 	}
-
-	var seed crypto.Seed
-	copy(seed[:], seedbytes)
 	return seed
 }
 
@@ -96,12 +95,50 @@ func writePublicKey(pubkeyfile string, checksummed string) {
 }
 
 func computeMnemonic(seed crypto.Seed) string {
-	mnemonic, err := passphrase.KeyToMnemonic(seed[:])
+	mnemonic, err := mnemonicFromSeed(seed)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot generate key mnemonic: %v\n", err)
 		os.Exit(1)
 	}
 	return mnemonic
+}
+
+func seedFromMnemonic(mnemonic string) (crypto.Seed, error) {
+	seedBytes, err := passphrase.MnemonicToKey(strings.TrimSpace(mnemonic))
+	if err != nil {
+		return crypto.Seed{}, err
+	}
+	defer zeroBytes(seedBytes)
+
+	var seed crypto.Seed
+	copy(seed[:], seedBytes)
+	return seed, nil
+}
+
+func mnemonicFromSeed(seed crypto.Seed) (string, error) {
+	return passphrase.KeyToMnemonic(seed[:])
+}
+
+func readMnemonicFile(filename string) (crypto.Seed, error) {
+	if filename == stdinFileNameValue {
+		return crypto.Seed{}, fmt.Errorf("refusing to read mnemonic from stdin")
+	}
+	data, err := readFile(filename)
+	if err != nil {
+		return crypto.Seed{}, err
+	}
+	defer zeroBytes(data)
+	return seedFromMnemonic(string(data))
+}
+
+func writeMnemonicFile(filename string, seed crypto.Seed) error {
+	mnemonic, err := mnemonicFromSeed(seed)
+	if err != nil {
+		return err
+	}
+	data := []byte(mnemonic + "\n")
+	defer zeroBytes(data)
+	return writeNewFile(filename, data, 0600)
 }
 
 // writeFile is a wrapper of os.WriteFile which considers the special
@@ -125,4 +162,30 @@ func readFile(filename string) ([]byte, error) {
 		return io.ReadAll(os.Stdin)
 	}
 	return os.ReadFile(filename)
+}
+
+func writeNewFile(filename string, data []byte, perm os.FileMode) error {
+	if filename == stdoutFilenameValue {
+		return fmt.Errorf("refusing to write file to stdout")
+	}
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm)
+	if err != nil {
+		return err
+	}
+	n, writeErr := f.Write(data)
+	closeErr := f.Close()
+	if writeErr != nil {
+		return writeErr
+	}
+	if n != len(data) {
+		return io.ErrShortWrite
+	}
+	return closeErr
+}
+
+func zeroBytes(data []byte) {
+	for i := range data {
+		data[i] = 0
+	}
+	runtime.KeepAlive(data)
 }
