@@ -70,7 +70,7 @@ func PQAddress(scheme protocol.PQScheme, salt PQAddressSalt, pk []byte) Address 
 
 // CanonicalPQAddressSalt returns the lowest salt whose derived address for a
 // PQScheme/public-key pair complies with the crypto.IsEdwards25519Point
-// rejection-sampling predicate.
+// rejection-sampling predicate (ascending 0..255 scan order).
 func CanonicalPQAddressSalt(scheme protocol.PQScheme, publicKey []byte) (PQAddressSalt, Address, error) {
 	if len(scheme) != protocol.PQSchemeSize {
 		return 0, Address{}, fmt.Errorf("%w: got %d, want %d", errPQSchemeLength, len(scheme), protocol.PQSchemeSize)
