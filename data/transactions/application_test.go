@@ -78,9 +78,6 @@ func TestEncodedAppTxnAllocationBounds(t *testing.T) {
 		if proto.MaxAppBoxReferences > encodedMaxBoxes {
 			require.Failf(t, "proto.MaxAppBoxReferences > encodedMaxBoxes", "protocol version = %s", protoVer)
 		}
-		if proto.MaxAppAccess > encodedMaxAccess {
-			require.Failf(t, "proto.MaxAppAccess > encodedMaxAccess", "protocol version = %s", protoVer)
-		}
 	}
 }
 

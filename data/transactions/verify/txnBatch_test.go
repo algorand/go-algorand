@@ -904,3 +904,212 @@ func TestSigVerifier(t *testing.T) {
 	err = verifier.Verify(txnGroup)
 	require.Error(t, err)
 }
+
+// TestProcessBatchRecoversPanic verifies the recover wrapping ProcessBatch, the live gossip
+// signature-verification worker: a panic must fail the batch rather than crash the worker,
+// reporting results only for jobs that did not already get one.
+func TestProcessBatchRecoversPanic(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// A panic before any result is delivered: every job must be reported as failed. A
+	// NewBlockWatcher holding a nil header is a deterministic trigger: it makes group
+	// preparation panic dereferencing contextHdr.CurrentProtocol.
+	t.Run("PanicBeforeAnyResult", func(t *testing.T) {
+		t.Parallel()
+		nbw := &NewBlockWatcher{}
+		nbw.blkHeader.Store((*bookkeeping.BlockHeader)(nil))
+
+		resultChan := make(chan *VerificationResult, 1)
+		tbp := &txnSigBatchProcessor{
+			TxnGroupBatchSigVerifier: TxnGroupBatchSigVerifier{
+				cache:  MakeVerifiedTransactionCache(50),
+				nbw:    nbw,
+				ledger: &DummyLedgerForSignature{},
+			},
+			resultChan:  resultChan,
+			droppedChan: make(chan *UnverifiedTxnSigJob, 1),
+		}
+
+		group := []transactions.SignedTxn{{Txn: transactions.Transaction{Type: protocol.PaymentTx}}}
+		job := &UnverifiedTxnSigJob{TxnGroup: group}
+
+		// A leaked panic would fail the test; ProcessBatch must report the batch as failed instead.
+		tbp.ProcessBatch([]execpool.InputJob{job})
+
+		// The panicking batch was reported as failed rather than crashing the worker.
+		select {
+		case res := <-resultChan:
+			require.ErrorContains(t, res.Err, "panic while verifying transaction batch")
+			require.Equal(t, group, res.TxnGroup)
+		default:
+			t.Fatal("expected a failed verification result for the panicking batch")
+		}
+	})
+
+	// A panic after results were already delivered: the recovery must not re-report those jobs.
+	// Two unsigned txns fail prep and are reported immediately; the empty sig batch then panics
+	// in cache.AddPayset (deliberately nil, standing in for any post-delivery panic).
+	t.Run("PanicAfterResultsDelivered", func(t *testing.T) {
+		t.Parallel()
+		blkHdr := createDummyBlockHeader()
+		resultChan := make(chan *VerificationResult, 4) // room to observe duplicates if the recovery were wrong
+		droppedChan := make(chan *UnverifiedTxnSigJob, 4)
+		tbp := &txnSigBatchProcessor{
+			TxnGroupBatchSigVerifier: TxnGroupBatchSigVerifier{
+				cache:  nil, // nil cache: AddPayset is the deterministic panic trigger
+				nbw:    MakeNewBlockWatcher(blkHdr),
+				ledger: &DummyLedgerForSignature{},
+			},
+			resultChan:  resultChan,
+			droppedChan: droppedChan,
+		}
+
+		jobs := []execpool.InputJob{
+			&UnverifiedTxnSigJob{TxnGroup: []transactions.SignedTxn{{Txn: transactions.Transaction{
+				Type: protocol.PaymentTx, Header: transactions.Header{Sender: basics.Address{1}}}}}},
+			&UnverifiedTxnSigJob{TxnGroup: []transactions.SignedTxn{{Txn: transactions.Transaction{
+				Type: protocol.PaymentTx, Header: transactions.Header{Sender: basics.Address{2}}}}}},
+		}
+
+		// A leaked panic would fail the test; ProcessBatch must recover and report instead.
+		tbp.ProcessBatch(jobs)
+
+		// Exactly one result per job: the two preparation failures delivered before the
+		// panic, and nothing re-reported by the recovery.
+		require.Len(t, resultChan, len(jobs))
+		for i := 0; i < len(jobs); i++ {
+			res := <-resultChan
+			require.Error(t, res.Err)
+			require.NotContains(t, res.Err.Error(), "panic",
+				"already-delivered results must not be re-reported by the panic recovery")
+		}
+		require.Empty(t, droppedChan)
+	})
+}
+
+// TestProcessBatchSkippedGroupDoesNotMisattributeSigs checks that a group which fails signature prep
+// partway (after one of its transactions already staged a signature) doesn't affect verification of
+// the other groups in the batch. A bad group sits between two good ones; both good groups must verify.
+// Two failure flavors are covered: an unsigned txn (rejected at the processor's contract level) and a
+// malformed multisig, which passes both the stream's sig-presence pre-screen and the group-level
+// WellFormed checks (neither inspects msig contents) and so is the shape that reaches ProcessBatch
+// in production.
+func TestProcessBatchSkippedGroupDoesNotMisattributeSigs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cases := []struct {
+		name string
+		// makeBad builds the two bad-group members from txs[1]/txs[2]; group stamping happens after,
+		// which invalidates any signature made here.
+		makeBad  func(txs []transactions.Transaction, signed []transactions.SignedTxn) []transactions.SignedTxn
+		checkErr func(t *testing.T, err error)
+		// reachable: the group passes GetNumberOfBatchableItems, the stream's pre-screen, so it can
+		// reach ProcessBatch in production rather than only via a direct call.
+		reachable bool
+	}{
+		{
+			name: "unsigned txn",
+			makeBad: func(txs []transactions.Transaction, signed []transactions.SignedTxn) []transactions.SignedTxn {
+				// txn[0]'s sig predates the group stamp, so it is present but invalid; txn[1] is
+				// unsigned, so prep rejects the group after staging txn[0]'s sig.
+				return []transactions.SignedTxn{signed[1], {Txn: txs[2]}}
+			},
+			checkErr: func(t *testing.T, err error) {
+				require.ErrorIs(t, err, errTxnSigHasNoSig)
+			},
+			reachable: false,
+		},
+		{
+			name: "malformed msig",
+			makeBad: func(txs []transactions.Transaction, signed []transactions.SignedTxn) []transactions.SignedTxn {
+				// txn[1] swaps its ed25519 sig for a multisig with an unsupported version. The
+				// group passes the sig-presence pre-screen and the group-level WellFormed checks
+				// (neither inspects msig contents), then MultisigBatchPrep rejects it after
+				// txn[0]'s sig was staged.
+				bad := []transactions.SignedTxn{signed[1], signed[2]}
+				bad[1].Msig = crypto.MultisigSig{
+					Version:   2, // unsupported version
+					Threshold: 1,
+					Subsigs: []crypto.MultisigSubsig{
+						{Key: crypto.PublicKey(bad[1].Txn.Sender), Sig: bad[1].Sig},
+					},
+				}
+				bad[1].Sig = crypto.Signature{}
+				return bad
+			},
+			checkErr: func(t *testing.T, err error) {
+				var tge *TxGroupError
+				require.ErrorAs(t, err, &tge)
+				require.Equal(t, TxGroupErrorReasonMsigNotWellFormed, tge.Reason)
+			},
+			reachable: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// signed[0] and signed[3] are good single-txn groups; txs[1] and txs[2] form the bad group.
+			txs, signed, _, _ := generateTestObjects(4, 4, 0, 0)
+			goodFirst := []transactions.SignedTxn{signed[0]}
+			goodLast := []transactions.SignedTxn{signed[3]}
+
+			bad := tc.makeBad(txs, signed)
+			var txGroup transactions.TxGroup
+			for i := range bad {
+				txGroup.TxGroupHashes = append(txGroup.TxGroupHashes, crypto.HashObj(bad[i].Txn))
+			}
+			groupHash := crypto.HashObj(txGroup)
+			for i := range bad {
+				bad[i].Txn.Group = groupHash
+			}
+
+			batchable, err := UnverifiedTxnSigJob{TxnGroup: bad}.GetNumberOfBatchableItems()
+			if tc.reachable {
+				require.NoError(t, err)
+				require.EqualValues(t, 2, batchable)
+			} else {
+				require.ErrorIs(t, err, errTxnSigHasNoSig)
+			}
+
+			// The scenario depends on the bad group staging txn[0]'s sig before being rejected on
+			// txn[1]; pin that ordering with a direct prep call so a future reordering of checks
+			// cannot silently make this test vacuous.
+			blkHdr := createDummyBlockHeader()
+			pin := crypto.MakeBatchVerifier()
+			_, prepErr := txnGroupBatchPrep(bad, &blkHdr, &DummyLedgerForSignature{}, pin, nil)
+			tc.checkErr(t, prepErr)
+			require.Equal(t, 1, pin.GetNumberOfEnqueuedSignatures(), "bad group must stage a sig before rejection")
+
+			cache := MakeVerifiedTransactionCache(1000)
+			resultChan := make(chan *VerificationResult, 3)
+			droppedChan := make(chan *UnverifiedTxnSigJob, 3)
+			tbp, err := MakeSigVerifyJobProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
+			require.NoError(t, err)
+
+			// A good group before and after the bad one, so both sides are checked.
+			tbp.ProcessBatch([]execpool.InputJob{
+				&UnverifiedTxnSigJob{TxnGroup: goodFirst, BacklogMessage: "good-first"},
+				&UnverifiedTxnSigJob{TxnGroup: bad, BacklogMessage: "bad"},
+				&UnverifiedTxnSigJob{TxnGroup: goodLast, BacklogMessage: "good-last"},
+			})
+
+			require.Empty(t, droppedChan, "every group should have produced a result on resultChan")
+			results := make(map[string]error, 3)
+			for i := 0; i < 3; i++ {
+				select {
+				case r := <-resultChan:
+					results[r.BacklogMessage.(string)] = r.Err
+				default:
+					require.FailNow(t, "missing result", "got %d of 3 results", len(results))
+				}
+			}
+
+			// The bad group is rejected; both good groups verify despite the bad group's invalid
+			// signature having been staged in the same batch.
+			tc.checkErr(t, results["bad"])
+			require.NoError(t, results["good-first"], "good-first should verify")
+			require.NoError(t, results["good-last"], "good-last should verify")
+		})
+	}
+}
