@@ -3,6 +3,7 @@
 package stateproof
 
 import (
+	"errors"
 	"sort"
 
 	"github.com/algorand/msgp/msgp"
@@ -1093,6 +1094,13 @@ func (z *Reveal) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []
 					return
 				}
 			}
+		}
+	}
+	if (*z).Part.MsgIsZero() {
+		err = errors.New("missing required field: p")
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
 		}
 	}
 	o = bts

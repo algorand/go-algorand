@@ -132,6 +132,15 @@ func parseStructTags(structTag string) map[string]string {
 	return tagsMap
 }
 
+func isRequiredField(structTag string) bool {
+	for opt := range strings.SplitSeq(reflect.StructTag(structTag).Get("codec"), ",") {
+		if opt == "required" {
+			return true
+		}
+	}
+	return false
+}
+
 var printWarningOnce deadlock.Mutex
 var warningMessages map[string]bool
 
@@ -323,9 +332,15 @@ func randomizeValue(v reflect.Value, depth int, datapath string, tag string, rem
 			}
 			v.SetUint(num)
 		}
+		if isRequiredField(tag) && v.Uint() == 0 {
+			v.SetUint(1)
+		}
 		*remainingChanges--
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		v.SetInt(int64(rand.Uint64()))
+		if isRequiredField(tag) && v.Int() == 0 {
+			v.SetInt(1)
+		}
 		*remainingChanges--
 	case reflect.String:
 		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag, cfg)
@@ -400,6 +415,9 @@ func randomizeValue(v reflect.Value, depth int, datapath string, tag string, rem
 			*remainingChanges--
 		}
 	case reflect.Slice:
+		if elem := v.Type().Elem(); elem.Kind() == reflect.Struct && seenTypes[elem] {
+			return nil
+		}
 		// we don't want to allocate a slice with size of 0. This is because decoding and encoding this slice
 		// will result in nil and not slice of size 0
 		maxLen := 31

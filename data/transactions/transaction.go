@@ -54,7 +54,7 @@ type SpecialAddresses struct {
 type Header struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Sender      basics.Address    `codec:"snd"`
+	Sender      basics.Address    `codec:"snd,required"`
 	Fee         basics.MicroAlgos `codec:"fee"`
 	FirstValid  basics.Round      `codec:"fv"`
 	LastValid   basics.Round      `codec:"lv"`
@@ -86,7 +86,7 @@ type Transaction struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// Type of transaction
-	Type protocol.TxType `codec:"type"`
+	Type protocol.TxType `codec:"type,required"`
 
 	// Common fields for all types of transactions
 	Header
@@ -348,7 +348,7 @@ func (tx Transaction) MatchAddress(addr basics.Address) bool {
 			return true
 		}
 	case protocol.HeartbeatTx:
-		if addr == tx.HeartbeatTxnFields.HbAddress {
+		if tx.HeartbeatTxnFields != nil && addr == tx.HeartbeatTxnFields.HbAddress {
 			return true
 		}
 	}
@@ -423,6 +423,9 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	case protocol.HeartbeatTx:
 		if !proto.Heartbeat {
 			return fmt.Errorf("heartbeat transaction not supported")
+		}
+		if tx.HeartbeatTxnFields == nil {
+			return fmt.Errorf("heartbeat transaction has no heartbeat fields")
 		}
 
 		err := tx.HeartbeatTxnFields.wellFormed(tx.Header, proto)

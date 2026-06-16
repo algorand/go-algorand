@@ -38,7 +38,7 @@ type SignedTxn struct {
 	Lsig  LogicSig           `codec:"lsig"`
 	PQSig PQSig              `codec:"pq"`
 
-	Txn      Transaction    `codec:"txn"`
+	Txn      Transaction    `codec:"txn,required"`
 	AuthAddr basics.Address `codec:"sgnr"`
 }
 

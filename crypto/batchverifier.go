@@ -45,9 +45,14 @@ import (
 	"unsafe"
 )
 
-// BatchVerifier enqueues signatures to be validated in batch.
-type BatchVerifier interface {
+// BatchEnqueuer enqueues signatures to be validated in a batch.
+type BatchEnqueuer interface {
 	EnqueueSignature(sigVerifier SignatureVerifier, message Hashable, sig Signature)
+}
+
+// BatchVerifier enqueues and validates signatures in a batch.
+type BatchVerifier interface {
+	BatchEnqueuer
 	GetNumberOfEnqueuedSignatures() int
 	Verify() error
 	VerifyWithFeedback() (failed []bool, err error)
