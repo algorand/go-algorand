@@ -51,7 +51,6 @@ var (
 
 	pqImportMnemonicFile string
 	pqImportKeyfile      string
-	pqImportScheme       = string(protocol.PQSchemeFalcon1024)
 
 	pqSignKeyfile   string
 	pqSignTxfile    string
@@ -160,7 +159,6 @@ func init() {
 
 	pqImportCmd.Flags().StringVar(&pqImportMnemonicFile, "mnemonic-file", "", "Mnemonic input filename")
 	pqImportCmd.Flags().StringVar(&pqImportKeyfile, "keyfile", "", "Private key filename")
-	pqImportCmd.Flags().StringVar(&pqImportScheme, "scheme", pqImportScheme, "Post-quantum signature scheme")
 	mustMarkFlagRequired(pqImportCmd, "mnemonic-file")
 	mustMarkFlagRequired(pqImportCmd, "keyfile")
 
@@ -245,18 +243,18 @@ func runPQExportWithOptions(keyfile, mnemonicFile string) error {
 	}
 	defer wipePQRootMaterial(&root)
 
-	if err = writeMnemonicFile(mnemonicFile, root.entropy); err != nil {
+	if err = writePQMnemonicFile(mnemonicFile, root.scheme, root.entropy); err != nil {
 		return fmt.Errorf("cannot write mnemonic to %s: %w", mnemonicFile, err)
 	}
 	return printPQKeyInfo(os.Stdout, root.public)
 }
 
 func runPQImport() error {
-	return runPQImportWithOptions(pqImportMnemonicFile, pqImportKeyfile, protocol.PQScheme(pqImportScheme))
+	return runPQImportWithOptions(pqImportMnemonicFile, pqImportKeyfile)
 }
 
-func runPQImportWithOptions(mnemonicFile, keyfile string, scheme protocol.PQScheme) error {
-	entropy, err := readMnemonicFile(mnemonicFile)
+func runPQImportWithOptions(mnemonicFile, keyfile string) error {
+	scheme, entropy, err := readPQMnemonicFile(mnemonicFile)
 	if err != nil {
 		return fmt.Errorf("cannot read mnemonic from %s: %w", mnemonicFile, err)
 	}

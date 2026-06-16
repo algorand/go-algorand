@@ -30,8 +30,9 @@ import (
 )
 
 const (
-	pqPrivateKeyMagic = "ALGOKEY-PQ-PRIVATE"
-	pqPublicKeyMagic  = "ALGOKEY-PQ-PUBLIC"
+	pqPrivateKeyMagic      = "ALGOKEY-PQ-PRIVATE"
+	pqPublicKeyMagic       = "ALGOKEY-PQ-PUBLIC"
+	pqMnemonicSchemeHeader = "Scheme:"
 )
 
 var (
@@ -239,6 +240,46 @@ func resolvePQSalt(public pqPublicMaterial, saltValue string) (pqPublicMaterial,
 	}
 	salt := basics.PQAddressSalt(n)
 	return publicMaterialFromFields(public.scheme, salt, public.pk)
+}
+
+// writePQMnemonicFile writes a self-describing mnemonic file: a "Scheme: <tag>"
+// header line followed by the 25-word phrase encoding the root entropy.
+func writePQMnemonicFile(filename string, scheme protocol.PQScheme, entropy crypto.Seed) error {
+	mnemonic, err := mnemonicFromSeed(entropy)
+	if err != nil {
+		return err
+	}
+	data := []byte(fmt.Sprintf("%s %s\n%s\n", pqMnemonicSchemeHeader, scheme, mnemonic))
+	defer zeroBytes(data)
+	return writeNewFile(filename, data, 0600)
+}
+
+// readPQMnemonicFile reads a file written by writePQMnemonicFile and returns the
+// recorded scheme and the entropy recovered from the phrase.
+func readPQMnemonicFile(filename string) (protocol.PQScheme, crypto.Seed, error) {
+	if filename == stdinFileNameValue {
+		return "", crypto.Seed{}, fmt.Errorf("refusing to read mnemonic from stdin")
+	}
+	data, err := readFile(filename)
+	if err != nil {
+		return "", crypto.Seed{}, err
+	}
+	defer zeroBytes(data)
+
+	header, mnemonic, ok := strings.Cut(string(data), "\n")
+	if !ok {
+		return "", crypto.Seed{}, fmt.Errorf("%w: missing %q header", errPQKeyMalformed, pqMnemonicSchemeHeader)
+	}
+	tag, ok := strings.CutPrefix(strings.TrimSpace(header), pqMnemonicSchemeHeader)
+	if !ok {
+		return "", crypto.Seed{}, fmt.Errorf("%w: missing %q header", errPQKeyMalformed, pqMnemonicSchemeHeader)
+	}
+
+	seed, err := seedFromMnemonic(mnemonic)
+	if err != nil {
+		return "", crypto.Seed{}, err
+	}
+	return protocol.PQScheme(strings.TrimSpace(tag)), seed, nil
 }
 
 func isPQKeyMaterial(data []byte) bool {
