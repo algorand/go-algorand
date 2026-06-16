@@ -769,7 +769,7 @@ main_l6:
 int 1
 return`
 
-func goValuesToAvmValues(goValues ...interface{}) *[]model.AvmValue {
+func goValuesToAvmValues(goValues ...any) *[]model.AvmValue {
 	if len(goValues) == 0 {
 		return nil
 	}

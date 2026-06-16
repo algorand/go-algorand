@@ -88,7 +88,7 @@ func RandomizeObjectWithMaxCollectionLen(n int) RandomizeObjectOption {
 }
 
 // RandomizeObject returns a random object of the same type as template
-func RandomizeObject(template interface{}, opts ...RandomizeObjectOption) (interface{}, error) {
+func RandomizeObject(template any, opts ...RandomizeObjectOption) (any, error) {
 	cfg := randomizeObjectCfg{}
 	for _, opt := range opts {
 		opt(&cfg)
@@ -104,7 +104,7 @@ func RandomizeObject(template interface{}, opts ...RandomizeObjectOption) (inter
 }
 
 // RandomizeObjectField returns a random object of the same type as template where a single field was modified.
-func RandomizeObjectField(template interface{}, opts ...RandomizeObjectOption) (interface{}, error) {
+func RandomizeObjectField(template any, opts ...RandomizeObjectOption) (any, error) {
 	cfg := randomizeObjectCfg{}
 	for _, opt := range opts {
 		opt(&cfg)

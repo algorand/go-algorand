@@ -48,7 +48,7 @@ func (c *wsClient) Connect(url string) error {
 	return nil
 }
 
-func (c *wsClient) SendJSON(data interface{}) error {
+func (c *wsClient) SendJSON(data any) error {
 	return c.conn.WriteJSON(data)
 }
 

@@ -268,7 +268,7 @@ func getCodecHandle(formatPtr *string) (codec.Handle, string, error) {
 	}
 }
 
-func encode(handle codec.Handle, obj interface{}) ([]byte, error) {
+func encode(handle codec.Handle, obj any) ([]byte, error) {
 	var output []byte
 	enc := codec.NewEncoderBytes(&output, handle)
 
@@ -279,7 +279,7 @@ func encode(handle codec.Handle, obj interface{}) ([]byte, error) {
 	return output, nil
 }
 
-func decode(handle codec.Handle, data []byte, v interface{}) error {
+func decode(handle codec.Handle, data []byte, v any) error {
 	enc := codec.NewDecoderBytes(data, handle)
 
 	err := enc.Decode(v)

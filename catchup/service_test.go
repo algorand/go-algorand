@@ -169,10 +169,10 @@ func TestServiceFetchBlocksSameRange(t *testing.T) {
 
 type periodicSyncLogger struct {
 	logging.Logger
-	WarnfCallback func(string, ...interface{})
+	WarnfCallback func(string, ...any)
 }
 
-func (cl *periodicSyncLogger) Warnf(s string, args ...interface{}) {
+func (cl *periodicSyncLogger) Warnf(s string, args ...any) {
 	// filter out few non-interesting warnings.
 	switch s {
 	case "fetchAndWrite(%v): lookback block doesn't exist, cannot authenticate new block":
@@ -189,7 +189,7 @@ type periodicSyncDebugLogger struct {
 	debugMsgs      atomic.Uint32
 }
 
-func (cl *periodicSyncDebugLogger) Debugf(s string, args ...interface{}) {
+func (cl *periodicSyncDebugLogger) Debugf(s string, args ...any) {
 	// save debug messages for later inspection.
 	if len(cl.debugMsgFilter) > 0 {
 		for _, filter := range cl.debugMsgFilter {

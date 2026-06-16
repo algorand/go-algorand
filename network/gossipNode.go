@@ -26,7 +26,7 @@ import (
 )
 
 // Peer opaque interface for referring to a neighbor in the network
-type Peer interface{}
+type Peer any
 
 // DisconnectablePeer is a Peer with a long-living connection to a network that can be disconnected
 type DisconnectablePeer interface {

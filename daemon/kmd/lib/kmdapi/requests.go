@@ -23,7 +23,7 @@ import (
 // APIV1Request is the interface that all API V1 requests must satisfy
 //
 // swagger:ignore
-type APIV1Request interface{} // we need to tell swagger to ignore due to bug (go-swagger/issues/1436)
+type APIV1Request any // we need to tell swagger to ignore due to bug (go-swagger/issues/1436)
 
 // VersionsRequest is the request for `GET /versions`
 //

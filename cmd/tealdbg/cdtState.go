@@ -182,16 +182,16 @@ func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []cdt.R
 	return maker(s, preview), nil
 }
 
-func convertCallArgs(argsRaw []interface{}) (args []cdt.RuntimeCallArgument) {
+func convertCallArgs(argsRaw []any) (args []cdt.RuntimeCallArgument) {
 	for _, item := range argsRaw {
-		argRaw := item.(map[string]interface{})
+		argRaw := item.(map[string]any)
 		value := argRaw["value"]
 		args = append(args, cdt.RuntimeCallArgument{Value: value})
 	}
 	return
 }
 
-func (s *cdtState) packRanges(objID string, argsRaw []interface{}) (result cdt.RuntimeCallPackRangesObject) {
+func (s *cdtState) packRanges(objID string, argsRaw []any) (result cdt.RuntimeCallPackRangesObject) {
 	if len(argsRaw) < 5 {
 		return
 	}
@@ -239,7 +239,7 @@ func (s *cdtState) packRanges(objID string, argsRaw []interface{}) (result cdt.R
 	return
 }
 
-func (s *cdtState) buildFragment(objID string, argsRaw []interface{}) cdt.RuntimeRemoteObject {
+func (s *cdtState) buildFragment(objID string, argsRaw []any) cdt.RuntimeRemoteObject {
 	var source []basics.TealValue
 	switch objID {
 	case stackObjID:
