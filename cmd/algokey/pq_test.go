@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -308,12 +309,13 @@ func TestPQMnemonicExportImportRoundTrip(t *testing.T) {
 	require.NoError(t, writePQRootKeyFile(keyfile, root))
 
 	require.NoError(t, runPQExportWithOptions(keyfile, mnemonicFile))
-	exportedEntropy, err := readMnemonicFile(mnemonicFile)
+	exportedScheme, exportedEntropy, err := readPQMnemonicFile(mnemonicFile)
 	require.NoError(t, err)
 	defer zeroBytes(exportedEntropy[:])
+	require.Equal(t, root.scheme, exportedScheme)
 	require.Equal(t, root.entropy, exportedEntropy)
 
-	require.NoError(t, runPQImportWithOptions(mnemonicFile, importedKeyfile, protocol.PQSchemeFalcon1024))
+	require.NoError(t, runPQImportWithOptions(mnemonicFile, importedKeyfile))
 	imported, err := readPQRootKeyFile(importedKeyfile)
 	require.NoError(t, err)
 	defer wipePQRootMaterial(&imported)
@@ -328,11 +330,38 @@ func TestPQImportRejectsMalformedMnemonicFile(t *testing.T) {
 	tempDir := t.TempDir()
 	mnemonicFile := filepath.Join(tempDir, "bad.mnemonic")
 	importedKeyfile := filepath.Join(tempDir, "imported.pq")
-	require.NoError(t, os.WriteFile(mnemonicFile, []byte("not a valid mnemonic\n"), 0600))
+	require.NoError(t, os.WriteFile(mnemonicFile, []byte("Scheme: f1\nnot a valid mnemonic\n"), 0600))
 
-	err := runPQImportWithOptions(mnemonicFile, importedKeyfile, protocol.PQSchemeFalcon1024)
+	err := runPQImportWithOptions(mnemonicFile, importedKeyfile)
 	require.Error(t, err)
 
+	_, statErr := os.Stat(importedKeyfile)
+	require.ErrorIs(t, statErr, os.ErrNotExist)
+}
+
+func TestPQMnemonicFileRecordsSchemeAndRejectsUnknown(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	root := pqTestRoot(t, 5)
+	defer wipePQRootMaterial(&root)
+
+	tempDir := t.TempDir()
+	mnemonicFile := filepath.Join(tempDir, "account.mnemonic")
+	require.NoError(t, writePQMnemonicFile(mnemonicFile, root.scheme, root.entropy))
+
+	// The exported file records the scheme so it travels with the phrase.
+	contents, err := os.ReadFile(mnemonicFile)
+	require.NoError(t, err)
+	require.Contains(t, string(contents), "Scheme: "+string(protocol.PQSchemeFalcon1024))
+
+	// An unknown scheme in the header is rejected, never silently deriving a
+	// different key.
+	badFile := filepath.Join(tempDir, "bad.mnemonic")
+	badContents := strings.Replace(string(contents), "Scheme: f1", "Scheme: zz", 1)
+	require.NoError(t, os.WriteFile(badFile, []byte(badContents), 0600))
+	importedKeyfile := filepath.Join(tempDir, "imported.pq")
+	require.ErrorIs(t, runPQImportWithOptions(badFile, importedKeyfile), basics.ErrPQSchemeNotSupported)
 	_, statErr := os.Stat(importedKeyfile)
 	require.ErrorIs(t, statErr, os.ErrNotExist)
 }
