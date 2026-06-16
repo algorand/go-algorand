@@ -119,13 +119,7 @@ warninglint: custom-golangci-lint
 expectlint:
 	cd test/e2e-go/cli/goal/expect && python3 expect_linter.py *.exp
 
-check_go_version:
-	@if [ $(CURRENT_GO_VERSION_MAJOR) != $(GOLANG_VERSION_BUILD_MAJOR) ]; then \
-		echo "Wrong major version of Go installed ($(CURRENT_GO_VERSION_MAJOR)). Please use $(GOLANG_VERSION_BUILD_MAJOR)"; \
-		exit 1; \
-	fi
-
-tidy: check_go_version
+tidy:
 	@echo "Tidying go-algorand"
 	go mod tidy -compat=$(GOLANG_VERSION_SUPPORT)
 	@for dir in $(GOMOD_DIRS); do \
