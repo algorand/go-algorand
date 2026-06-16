@@ -523,6 +523,8 @@ type RefBundle struct {
 	Apps     []basics.AppIndex
 	Locals   []basics.LocalRef
 	Boxes    []basics.BoxRef
+
+	EmptyRefs uint64
 }
 
 // MakeUnsignedAppCreateTx makes a transaction for creating an application
@@ -662,6 +664,10 @@ func attachAccessList(tx *transactions.Transaction, refs RefBundle) {
 			Name:  []byte(br.Name),
 		}})
 	}
+
+	for i := uint64(0); i < refs.EmptyRefs; i++ {
+		tx.Access = append(tx.Access, transactions.ResourceRef{})
+	}
 }
 
 // maybeAppend looks for something in a slice. If found, it returns its index. If
@@ -714,6 +720,10 @@ func attachForeignRefs(tx *transactions.Transaction, refs RefBundle) {
 			Index: uint64(index),
 			Name:  []byte(br.Name),
 		})
+	}
+
+	for i := uint64(0); i < refs.EmptyRefs; i++ {
+		tx.Boxes = append(tx.Boxes, transactions.BoxRef{})
 	}
 }
 
