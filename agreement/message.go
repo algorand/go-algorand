@@ -17,6 +17,7 @@
 package agreement
 
 import (
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -98,4 +99,8 @@ func decodeProposal(data []byte) (interface{}, error) {
 		Vote:     p.PriorVote,
 		Proposal: p.unauthenticatedProposal,
 	}, nil
+}
+
+func proposalCarriesInvalidTxn(up unauthenticatedProposal) bool {
+	return transactions.CheckPayset(up.Block.Payset) != nil
 }

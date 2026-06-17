@@ -22,7 +22,7 @@ require (
 	github.com/DataDog/zstd v1.5.7 // indirect
 	github.com/algorand/falcon v0.1.0 // indirect
 	github.com/algorand/go-sumhash v0.1.0 // indirect
-	github.com/algorand/msgp v1.1.61 // indirect
+	github.com/algorand/msgp v1.1.63 // indirect
 	github.com/algorand/sortition v1.0.0 // indirect
 	github.com/algorand/websocket v1.4.6 // indirect
 	github.com/aws/aws-sdk-go v1.34.0 // indirect
