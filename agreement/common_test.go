@@ -327,7 +327,7 @@ func (l *testLedger) LookupAgreement(r basics.Round, a basics.Address) (basics.O
 
 	if r >= l.nextRound {
 		err := fmt.Errorf("Lookup called on future round: %v >= %v! (this is probably a bug)", r, l.nextRound)
-		panic(err)
+		return basics.OnlineAccountData{}, err
 	}
 
 	if l.maxNumBlocks != 0 && r+round(l.maxNumBlocks) < l.nextRound {
