@@ -86,6 +86,7 @@ const foreignBoxVersion = 13 // app_params_set, foreign app box access
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version, and fixup TestAssemble() in assembler_test.go.
 const sumhashVersion = 14
+const edwardsVersion = 14 // ED25519 group for ec_add, ec_scalar_mul, ec_multi_scalar_mul, ec_subgroup_check
 
 // LogicSigOffCurveVersion is the first AVM version where LogicSig programs
 // assembled by this package are expected to hash to an off-curve address.
@@ -797,15 +798,17 @@ var OpSpecs = []OpSpec{
 	{0xe0, "ec_add", opEcAdd, proto("bb:b"), pairingVersion,
 		costByField("g", &EcGroups, []int{
 			BN254g1: 125, BN254g2: 170,
-			BLS12_381g1: 205, BLS12_381g2: 290})},
+			BLS12_381g1: 205, BLS12_381g2: 290,
+			ED25519: 350})}, // uncompressed points: one output inversion dominates; scaled from BN254g1 timings
 
 	{0xe1, "ec_scalar_mul", opEcScalarMul, proto("bb:b"), pairingVersion,
 		costByField("g", &EcGroups, []int{
 			BN254g1: 1810, BN254g2: 3430,
-			BLS12_381g1: 2950, BLS12_381g2: 6530})},
+			BLS12_381g1: 2950, BLS12_381g2: 6530,
+			ED25519: 1750})}, // scaled from BN254g1 scalar_mul timings
 
 	{0xe2, "ec_pairing_check", opEcPairingCheck, proto("bb:T"), pairingVersion,
-		costByFieldAndLength("g", &EcGroups, []linearCost{
+		costByFieldAndLength("g", &ecPairingGroups, []linearCost{
 			BN254g1: {
 				baseCost:  8000,
 				chunkCost: 7_400,
@@ -825,7 +828,8 @@ var OpSpecs = []OpSpec{
 				baseCost:  13_000,
 				chunkCost: 10_000,
 				chunkSize: bls12381g2Size,
-			}})},
+			},
+			ED25519: {baseCost: 1}})}, // unreachable placeholder: ED25519 rejected at assembly
 
 	{0xe3, "ec_multi_scalar_mul", opEcMultiScalarMul, proto("bb:b"), pairingVersion,
 		costByFieldAndLength("g", &EcGroups, []linearCost{
@@ -848,16 +852,23 @@ var OpSpecs = []OpSpec{
 				baseCost:  14_850,
 				chunkCost: 485,
 				chunkSize: scalarSize,
+			},
+			ED25519: { // scaled from BN254g1 scalar_mul timings (filippo MultiScalarMult)
+				baseCost:  1_200,
+				chunkCost: 650,
+				chunkSize: scalarSize,
 			}})},
 
 	{0xe4, "ec_subgroup_check", opEcSubgroupCheck, proto("b:T"), pairingVersion,
 		costByField("g", &EcGroups, []int{
 			BN254g1: 20, BN254g2: 3_100, // g1 subgroup is nearly a no-op
-			BLS12_381g1: 1_850, BLS12_381g2: 2_340})},
+			BLS12_381g1: 1_850, BLS12_381g2: 2_340,
+			ED25519: 1_650})}, // ~one scalar mul ([L]P), not cheap like g1; scaled from BN254g1 scalar_mul timings
 	{0xe5, "ec_map_to", opEcMapTo, proto("b:b"), pairingVersion,
-		costByField("g", &EcGroups, []int{
+		costByField("g", &ecPairingGroups, []int{
 			BN254g1: 630, BN254g2: 3_300,
-			BLS12_381g1: 1_950, BLS12_381g2: 8_150})},
+			BLS12_381g1: 1_950, BLS12_381g2: 8_150,
+			ED25519: 1})}, // unreachable placeholder: ED25519 rejected at assembly
 	{0xe6, "mimc", opMimc, proto("b:b{32}"), mimcVersion, costByFieldAndLength("c", &MimcConfigs, []linearCost{
 		BN254Mp110: {
 			baseCost:  10,

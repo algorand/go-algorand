@@ -1807,17 +1807,18 @@ Boxes are of constant length. If D < len(E), then len(E)-D bytes will be removed
 - Bytecode: 0xe0 {uint8}
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - for curve points A and B, return the curve point A + B
-- **Cost**: BN254g1=125; BN254g2=170; BLS12_381g1=205; BLS12_381g2=290
+- **Cost**: BN254g1=125; BN254g2=170; BLS12_381g1=205; BLS12_381g2=290; ED25519=350
 - Availability: v10
 
 ### EC Groups
 
-| INDEX | NAME | NOTES |
-| :-: | :------ | :--------- |
-| 0 | BN254g1 | G1 of the BN254 curve. Points encoded as 32 byte X following by 32 byte Y |
-| 1 | BN254g2 | G2 of the BN254 curve. Points encoded as 64 byte X following by 64 byte Y |
-| 2 | BLS12_381g1 | G1 of the BLS 12-381 curve. Points encoded as 48 byte X following by 48 byte Y |
-| 3 | BLS12_381g2 | G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y |
+| INDEX | NAME | IN | NOTES |
+| :-: | :------ |:-:| :--------- |
+| 0 | BN254g1 |      | G1 of the BN254 curve. Points encoded as 32 byte X following by 32 byte Y |
+| 1 | BN254g2 |      | G2 of the BN254 curve. Points encoded as 64 byte X following by 64 byte Y |
+| 2 | BLS12_381g1 |      | G1 of the BLS 12-381 curve. Points encoded as 48 byte X following by 48 byte Y |
+| 3 | BLS12_381g2 |      | G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y |
+| 4 | ED25519 | v13  | The Edwards25519 (ed25519) curve. Points encoded as 32 byte X followed by 32 byte Y. Not valid for ec_pairing_check or ec_map_to. |
 
 A and B are curve points in affine representation: field element X concatenated with field element Y. Field element `Z` is encoded as follows.
 For the base field elements (Fp), `Z` is encoded as a big-endian number and must be lower than the field modulus.
@@ -1836,7 +1837,7 @@ Does _not_ check if A and B are in the main prime-order subgroup.
 - Bytecode: 0xe1 {uint8}
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - for curve point A and scalar B, return the curve point BA, the point A multiplied by the scalar B.
-- **Cost**: BN254g1=1810; BN254g2=3430; BLS12_381g1=2950; BLS12_381g2=6530
+- **Cost**: BN254g1=1810; BN254g2=3430; BLS12_381g1=2950; BLS12_381g2=6530; ED25519=1750
 - Availability: v10
 
 A is a curve point encoded and checked as described in `ec_add`. Scalar B is interpreted as a big-endian unsigned integer. Fails if B exceeds 32 bytes.
@@ -1858,7 +1859,7 @@ A and B are concatenated points, encoded and checked as described in `ec_add`. A
 - Bytecode: 0xe3 {uint8}
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - for curve points A and scalars B, return curve point B0A0 + B1A1 + B2A2 + ... + BnAn
-- **Cost**: BN254g1=3600 + 90 per 32 bytes of B; BN254g2=7200 + 270 per 32 bytes of B; BLS12_381g1=6500 + 95 per 32 bytes of B; BLS12_381g2=14850 + 485 per 32 bytes of B
+- **Cost**: BN254g1=3600 + 90 per 32 bytes of B; BN254g2=7200 + 270 per 32 bytes of B; BLS12_381g1=6500 + 95 per 32 bytes of B; BLS12_381g2=14850 + 485 per 32 bytes of B; ED25519=1200 + 650 per 32 bytes of B
 - Availability: v10
 
 A is a list of concatenated points, encoded and checked as described in `ec_add`. B is a list of concatenated scalars which, unlike ec_scalar_mul, must all be exactly 32 bytes long.
@@ -1870,7 +1871,7 @@ The name `ec_multi_scalar_mul` was chosen to reflect common usage, but a more co
 - Bytecode: 0xe4 {uint8}
 - Stack: ..., A: []byte &rarr; ..., bool
 - 1 if A is in the main prime-order subgroup of G (including the point at infinity) else 0. Program fails if A is not in G at all.
-- **Cost**: BN254g1=20; BN254g2=3100; BLS12_381g1=1850; BLS12_381g2=2340
+- **Cost**: BN254g1=20; BN254g2=3100; BLS12_381g1=1850; BLS12_381g2=2340; ED25519=1650
 - Availability: v10
 
 ## ec_map_to

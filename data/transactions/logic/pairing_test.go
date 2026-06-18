@@ -24,6 +24,7 @@ import (
 	"strings"
 	"testing"
 
+	"filippo.io/edwards25519"
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
 	bls12381fp "github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
 	bls12381fr "github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
@@ -831,7 +832,7 @@ func TestFieldCosts(t *testing.T) { //nolint:paralleltest // manipulates opcode 
 		Name:      "xxx",
 		op:        opPop,
 		Proto:     proto("a:"),
-		OpDetails: costByField("f", &EcGroups, []int{10, 20, 30, 33}),
+		OpDetails: costByField("f", &EcGroups, []int{10, 20, 30, 33, 40}),
 	}
 
 	withOpcode(t, LogicVersion, xxx, func(opcode byte) {
@@ -872,6 +873,10 @@ func TestLinearFieldCost(t *testing.T) { //nolint:paralleltest // manipulates op
 			baseCost:  1,
 			chunkCost: 1,
 			chunkSize: 1,
+		}, {
+			baseCost:  1,
+			chunkCost: 1,
+			chunkSize: 1,
 		}}),
 	}
 
@@ -891,4 +896,200 @@ func TestLinearFieldCost(t *testing.T) { //nolint:paralleltest // manipulates op
 		testApp(t, "int 10; bzero; xxx BN254g2; global OpcodeBudget; int 690; ==", nil)
 		testApp(t, "int 11; bzero; xxx BN254g2; global OpcodeBudget; int 688; ==", nil)
 	})
+}
+
+// ed25519 test helpers. Points use the uncompressed 64-byte encoding (32 byte
+// big-endian X then Y), matching the on-stack form consumed by the opcodes.
+
+func ed25519Identity() []byte { return ed25519PointToBytes(edwards25519.NewIdentityPoint()) }
+
+func ed25519RandomScalar() *edwards25519.Scalar {
+	var b [64]byte
+	_, err := rand.Read(b[:])
+	if err != nil {
+		panic(err)
+	}
+	s, err := new(edwards25519.Scalar).SetUniformBytes(b[:])
+	if err != nil {
+		panic(err)
+	}
+	return s
+}
+
+// ed25519RandomPoint returns a random prime-order (torsion-free) point, since
+// it is a multiple of the base point.
+func ed25519RandomPoint() []byte {
+	return ed25519PointToBytes(new(edwards25519.Point).ScalarBaseMult(ed25519RandomScalar()))
+}
+
+// ed25519Torsion is a canonical point of order 8 (a generator of the small
+// subgroup), uncompressed. It is on the curve but not in the prime-order
+// subgroup. The literal is the well-known compressed encoding, decompressed
+// here once into the uncompressed on-stack form.
+var ed25519Torsion = func() []byte {
+	compressed, _ := hex.DecodeString("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a")
+	p, err := new(edwards25519.Point).SetBytes(compressed)
+	if err != nil {
+		panic(err)
+	}
+	return ed25519PointToBytes(p)
+}()
+
+func TestEd25519Add(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	p := ed25519RandomPoint()
+	q := ed25519RandomPoint()
+	id := ed25519Identity()
+	add := "ec_add ED25519;"
+
+	pt := tealBytes(p)
+	qt := tealBytes(q)
+	idt := tealBytes(id)
+
+	// P + identity == P, and identity + P == P
+	testAccepts(t, pt+idt+add+pt+"==", edwardsVersion)
+	testAccepts(t, idt+pt+add+pt+"==", edwardsVersion)
+
+	// P + (-P) == identity
+	var negP edwards25519.Point
+	pp, err := bytesToEd25519Point(p)
+	require.NoError(t, err)
+	negP.Negate(pp)
+	testAccepts(t, pt+tealBytes(ed25519PointToBytes(&negP))+add+idt+"==", edwardsVersion)
+
+	// commutative: P + Q == Q + P
+	testAccepts(t, pt+qt+add+qt+pt+add+"==", edwardsVersion)
+
+	// matches a direct filippo computation
+	qq, err := bytesToEd25519Point(q)
+	require.NoError(t, err)
+	sum := new(edwards25519.Point).Add(pp, qq)
+	testAccepts(t, pt+qt+add+tealBytes(ed25519PointToBytes(sum))+"==", edwardsVersion)
+
+	// bad lengths
+	testPanics(t, pt+"int 63; bzero;"+add+"len", edwardsVersion, "bad ed25519 point length")
+	testPanics(t, "int 65; bzero;"+pt+add+"len", edwardsVersion, "bad ed25519 point length")
+}
+
+func TestEd25519ScalarMul(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	p := ed25519RandomPoint()
+	pt := tealBytes(p)
+	idt := tealBytes(ed25519Identity())
+	mul := "ec_scalar_mul ED25519;"
+
+	// 0 * P == identity
+	testAccepts(t, pt+"int 0; itob;"+mul+idt+"==", edwardsVersion)
+	// 1 * P == P
+	testAccepts(t, pt+"int 1; itob;"+mul+pt+"==", edwardsVersion)
+	// L * P == identity (scalar reduces to 0 mod the group order)
+	testAccepts(t, pt+tealBytes(ed25519Order.Bytes())+mul+idt+"==", edwardsVersion)
+	// (L+1) * P == P
+	lp1 := new(big.Int).Add(ed25519Order, big.NewInt(1))
+	testAccepts(t, pt+tealBytes(lp1.Bytes())+mul+pt+"==", edwardsVersion)
+
+	// matches a direct filippo computation for a random scalar
+	k := ed25519RandomScalar()
+	pp, err := bytesToEd25519Point(p)
+	require.NoError(t, err)
+	prod := new(edwards25519.Point).ScalarMult(k, pp)
+	// k.Bytes() is little-endian; the opcode wants big-endian, so reverse.
+	kbe := reversed(k.Bytes())
+	testAccepts(t, pt+tealBytes(kbe)+mul+tealBytes(ed25519PointToBytes(prod))+"==", edwardsVersion)
+
+	// scalar too long
+	testPanics(t, pt+"int 33; bzero;"+mul+"len", edwardsVersion, "scalar len is 33")
+}
+
+func reversed(b []byte) []byte {
+	out := make([]byte, len(b))
+	for i := range b {
+		out[len(b)-1-i] = b[i]
+	}
+	return out
+}
+
+func TestEd25519MultiScalarMul(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	p := ed25519RandomPoint()
+	q := ed25519RandomPoint()
+	pt := tealBytes(p)
+	multiexp := "ec_multi_scalar_mul ED25519;"
+	mul := "ec_scalar_mul ED25519;"
+	add := "ec_add ED25519;"
+
+	// single point, scalar 0 -> identity
+	testAccepts(t, pt+"int 32; bzero;"+multiexp+tealBytes(ed25519Identity())+"==", edwardsVersion)
+	// single point, scalar 1 -> P
+	testAccepts(t, pt+"int 32; bzero; int 1; itob; b|;"+multiexp+pt+"==", edwardsVersion)
+
+	// [P, Q] . [1, 1] == P + Q
+	one := "int 32; bzero; int 1; itob; b|;"
+	points := tealBytes(append(append([]byte{}, p...), q...))
+	scalars := one + one + "concat;"
+	testAccepts(t, points+scalars+multiexp+pt+tealBytes(q)+add+"==", edwardsVersion)
+
+	// [P, Q] . [2, 3] == 2P + 3Q
+	twoThree := "byte 0x" + hex.EncodeToString(leftPad(big.NewInt(2).Bytes(), 32)) +
+		"; byte 0x" + hex.EncodeToString(leftPad(big.NewInt(3).Bytes(), 32)) + "; concat;"
+	expected := pt + "byte 0x02;" + mul + tealBytes(q) + "byte 0x03;" + mul + add
+	testAccepts(t, points+twoThree+multiexp+expected+"==", edwardsVersion)
+}
+
+func leftPad(b []byte, n int) []byte {
+	if len(b) >= n {
+		return b
+	}
+	out := make([]byte, n)
+	copy(out[n-len(b):], b)
+	return out
+}
+
+func TestEd25519SubgroupCheck(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	check := "ec_subgroup_check ED25519"
+
+	// a random prime-order point is torsion-free
+	testAccepts(t, tealBytes(ed25519RandomPoint())+check, edwardsVersion)
+	// the identity is in the prime-order subgroup
+	testAccepts(t, tealBytes(ed25519Identity())+check, edwardsVersion)
+
+	// a pure torsion point (order 8) is not
+	require.NotEmpty(t, ed25519Torsion)
+	tp, err := bytesToEd25519Point(ed25519Torsion) // sanity: decodes as uncompressed
+	require.NoError(t, err)
+	testRejects(t, tealBytes(ed25519Torsion)+check, edwardsVersion)
+
+	// prime-order point plus torsion is not torsion-free
+	rp, err := bytesToEd25519Point(ed25519RandomPoint())
+	require.NoError(t, err)
+	mixed := new(edwards25519.Point).Add(rp, tp)
+	testRejects(t, tealBytes(ed25519PointToBytes(mixed))+check, edwardsVersion)
+}
+
+func TestEd25519Versioning(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// ED25519 was introduced in v13; earlier versions reject it at assembly.
+	testProg(t, "byte 0x00; byte 0x00; ec_add ED25519", edwardsVersion-1,
+		exp(1, "ec_add ED25519 field was introduced in v13. Missed #pragma version?"))
+	testProg(t, "byte 0x00; byte 0x00; ec_add ED25519", edwardsVersion) // ok at v13
+
+	// ED25519 is not valid for the pairing-only opcodes, at any version.
+	testProg(t, "byte 0x00; byte 0x00; ec_pairing_check ED25519", edwardsVersion,
+		exp(1, "ec_pairing_check unknown field: \"ED25519\""))
+	testProg(t, "byte 0x00; ec_map_to ED25519", edwardsVersion,
+		exp(1, "ec_map_to unknown field: \"ED25519\""))
+
+	// but it is valid for ec_subgroup_check
+	testProg(t, "byte 0x00; ec_subgroup_check ED25519", edwardsVersion)
 }

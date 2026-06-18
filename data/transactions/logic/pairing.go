@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"filippo.io/edwards25519"
+	edfield "filippo.io/edwards25519/field"
 	"github.com/consensys/gnark-crypto/ecc"
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
 	bls12381fp "github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
@@ -64,6 +66,8 @@ func opEcAdd(cx *EvalContext) error {
 		res, err = bls12381G1Add(a, b)
 	case BLS12_381g2:
 		res, err = bls12381G2Add(a, b)
+	case ED25519:
+		res, err = ed25519Add(a, b)
 	default:
 		err = fmt.Errorf("invalid ec_add group %s", group)
 	}
@@ -103,6 +107,8 @@ func opEcScalarMul(cx *EvalContext) error {
 		res, err = bls12381G1ScalarMul(aBytes, k)
 	case BLS12_381g2:
 		res, err = bls12381G2ScalarMul(aBytes, k)
+	case ED25519:
+		res, err = ed25519ScalarMul(aBytes, k)
 	default:
 		err = fmt.Errorf("invalid ec_scalar_mul group %s", group)
 	}
@@ -176,6 +182,8 @@ func opEcMultiScalarMul(cx *EvalContext) error {
 		res, err = bls12381G1MultiMul(pointBytes, scalarBytes)
 	case BLS12_381g2:
 		res, err = bls12381G2MultiMul(pointBytes, scalarBytes)
+	case ED25519:
+		res, err = ed25519MultiMul(pointBytes, scalarBytes)
 	default:
 		err = fmt.Errorf("invalid ec_multi_scalar_mul group %s", group)
 	}
@@ -208,8 +216,10 @@ func opEcSubgroupCheck(cx *EvalContext) error {
 		ok, err = bls12381G1SubgroupCheck(pointBytes)
 	case BLS12_381g2:
 		ok, err = bls12381G2SubgroupCheck(pointBytes)
+	case ED25519:
+		ok, err = ed25519SubgroupCheck(pointBytes)
 	default:
-		err = fmt.Errorf("invalid ec_pairing_check group %s", group)
+		err = fmt.Errorf("invalid ec_subgroup_check group %s", group)
 	}
 
 	cx.Stack[last] = boolToSV(ok)
@@ -257,6 +267,9 @@ const (
 	bn254g1Size  = 2 * bn254fpSize
 	bn254fp2Size = 2 * bn254fpSize
 	bn254g2Size  = 2 * bn254fp2Size
+
+	ed25519fpSize    = 32
+	ed25519PointSize = 2 * ed25519fpSize // uncompressed affine: 32 byte X then 32 byte Y, big-endian
 
 	scalarSize = 32
 )
@@ -895,4 +908,168 @@ func bn254G2SubgroupCheck(pointBytes []byte) (bool, error) {
 		return false, err
 	}
 	return point.IsInSubGroup(), nil
+}
+
+// ed25519Order is the prime order L of the ed25519 main subgroup,
+// 2^252 + 27742317777372353535851937790883648493.
+var ed25519Order, _ = new(big.Int).SetString("7237005577332262213973186563042994240857116359379907606001950938285454250989", 10)
+
+// ed25519OrderMinusOne is L-1 as a canonical scalar. Used by the subgroup check
+// to compute [L]P as [L-1]P + P, since edwards25519.Scalar cannot represent L
+// itself (it would reduce to 0).
+var ed25519OrderMinusOne = func() *edwards25519.Scalar {
+	s, err := bigIntToEd25519Scalar(new(big.Int).Sub(ed25519Order, big.NewInt(1)))
+	if err != nil {
+		panic(err) // L-1 is canonical by construction
+	}
+	return s
+}()
+
+// ed25519FieldModulus is p = 2^255 - 19, the ed25519 base field order.
+var ed25519FieldModulus = new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 255), big.NewInt(19))
+
+// reverse32 returns a new slice with the bytes of a (32-byte) coordinate
+// reversed, converting between the big-endian on-stack encoding (shared with
+// the other ec_ groups) and edwards25519/field's little-endian encoding.
+func reverse32(b []byte) []byte {
+	out := make([]byte, len(b))
+	for i := range b {
+		out[len(b)-1-i] = b[i]
+	}
+	return out
+}
+
+// bytesToEd25519Field decodes a 32-byte big-endian field element, rejecting
+// non-canonical encodings (>= p) as the other ec_ groups do.
+func bytesToEd25519Field(b []byte) (*edfield.Element, error) {
+	if big := new(big.Int).SetBytes(b); big.Cmp(ed25519FieldModulus) >= 0 {
+		return nil, fmt.Errorf("ed25519 coordinate %s larger than modulus", big.String())
+	}
+	return new(edfield.Element).SetBytes(reverse32(b)) // length already curve-checked by caller
+}
+
+// bytesToEd25519Point decodes an uncompressed point: 32 byte big-endian X
+// followed by 32 byte big-endian Y, validating that it is on the curve. Like
+// the other ec_ groups, points are kept uncompressed so that chained
+// operations avoid a per-op decompression (square root).
+func bytesToEd25519Point(b []byte) (*edwards25519.Point, error) {
+	if len(b) != ed25519PointSize {
+		return nil, fmt.Errorf("bad ed25519 point length %d. Expected %d", len(b), ed25519PointSize)
+	}
+	x, err := bytesToEd25519Field(b[:ed25519fpSize])
+	if err != nil {
+		return nil, err
+	}
+	y, err := bytesToEd25519Field(b[ed25519fpSize:])
+	if err != nil {
+		return nil, err
+	}
+	// Extended coordinates with Z=1, so T = x*y. SetExtendedCoordinates checks
+	// both the curve equation and the T relation.
+	t := new(edfield.Element).Multiply(x, y)
+	point, err := new(edwards25519.Point).SetExtendedCoordinates(x, y, new(edfield.Element).One(), t)
+	if err != nil {
+		return nil, fmt.Errorf("invalid ed25519 point: %w", err)
+	}
+	return point, nil
+}
+
+// ed25519PointToBytes encodes a point as uncompressed 32 byte big-endian X
+// followed by 32 byte big-endian Y. The single field inversion to recover
+// affine coordinates is the only unavoidable per-op cost, matching the gnark
+// curves.
+func ed25519PointToBytes(point *edwards25519.Point) []byte {
+	bigX, bigY, bigZ, _ := point.ExtendedCoordinates()
+	zInv := new(edfield.Element).Invert(bigZ)
+	var x, y edfield.Element
+	x.Multiply(bigX, zInv)
+	y.Multiply(bigY, zInv)
+	out := make([]byte, ed25519PointSize)
+	copy(out[:ed25519fpSize], reverse32(x.Bytes()))
+	copy(out[ed25519fpSize:], reverse32(y.Bytes()))
+	return out
+}
+
+// bigIntToEd25519Scalar reduces a big-endian integer (the on-stack scalar
+// convention shared by all ec_ opcodes) modulo L and returns it as a canonical
+// edwards25519.Scalar.
+func bigIntToEd25519Scalar(k *big.Int) (*edwards25519.Scalar, error) {
+	be := new(big.Int).Mod(k, ed25519Order).Bytes() // 0 <= r < L, big-endian, <= 32 bytes
+	var le [32]byte
+	for i := range be {
+		le[len(be)-1-i] = be[i] // reverse to little-endian, leaving high bytes zero
+	}
+	return new(edwards25519.Scalar).SetCanonicalBytes(le[:])
+}
+
+func ed25519Add(aBytes, bBytes []byte) ([]byte, error) {
+	a, err := bytesToEd25519Point(aBytes)
+	if err != nil {
+		return nil, err
+	}
+	b, err := bytesToEd25519Point(bBytes)
+	if err != nil {
+		return nil, err
+	}
+	var res edwards25519.Point
+	res.Add(a, b)
+	return ed25519PointToBytes(&res), nil
+}
+
+func ed25519ScalarMul(aBytes []byte, k *big.Int) ([]byte, error) {
+	a, err := bytesToEd25519Point(aBytes)
+	if err != nil {
+		return nil, err
+	}
+	s, err := bigIntToEd25519Scalar(k)
+	if err != nil {
+		return nil, err
+	}
+	var res edwards25519.Point
+	res.ScalarMult(s, a)
+	return ed25519PointToBytes(&res), nil
+}
+
+func ed25519MultiMul(pointBytes, scalarBytes []byte) ([]byte, error) {
+	if len(pointBytes)%ed25519PointSize != 0 {
+		return nil, fmt.Errorf("bad ed25519 points length %d, not a multiple of %d", len(pointBytes), ed25519PointSize)
+	}
+	n := len(pointBytes) / ed25519PointSize
+	if len(scalarBytes) != scalarSize*n {
+		return nil, fmt.Errorf("bad scalars length %d. Expected %d", len(scalarBytes), scalarSize*n)
+	}
+	if n == 0 {
+		return ed25519PointToBytes(edwards25519.NewIdentityPoint()), nil // empty sum is the identity
+	}
+	points := make([]*edwards25519.Point, n)
+	scalars := make([]*edwards25519.Scalar, n)
+	for i := range points {
+		var err error
+		points[i], err = bytesToEd25519Point(pointBytes[i*ed25519PointSize : (i+1)*ed25519PointSize])
+		if err != nil {
+			return nil, err
+		}
+		k := new(big.Int).SetBytes(scalarBytes[i*scalarSize : (i+1)*scalarSize])
+		scalars[i], err = bigIntToEd25519Scalar(k)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var res edwards25519.Point
+	res.MultiScalarMult(scalars, points)
+	return ed25519PointToBytes(&res), nil
+}
+
+// ed25519SubgroupCheck reports whether the point is in the prime-order
+// subgroup, i.e. it is torsion-free. P is torsion-free iff [L]P is the
+// identity, computed here as [L-1]P + P.
+func ed25519SubgroupCheck(pointBytes []byte) (bool, error) {
+	point, err := bytesToEd25519Point(pointBytes)
+	if err != nil {
+		return false, err
+	}
+	var lp edwards25519.Point
+	lp.ScalarMult(ed25519OrderMinusOne, point)
+	lp.Add(&lp, point)
+	return lp.Equal(edwards25519.NewIdentityPoint()) == 1, nil
 }

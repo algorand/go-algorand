@@ -9020,7 +9020,8 @@
         "BN254g1",
         "BN254g2",
         "BLS12_381g1",
-        "BLS12_381g2"
+        "BLS12_381g2",
+        "ED25519"
       ],
       "ArgDetails": [
         {
@@ -9046,9 +9047,15 @@
           "Doc": "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y",
           "ByteEncoding": 3,
           "Version": 10
+        },
+        {
+          "Name": "ED25519",
+          "Doc": "The Edwards25519 (ed25519) curve. Points encoded as 32 byte X followed by 32 byte Y. Not valid for ec_pairing_check or ec_map_to.",
+          "ByteEncoding": 4,
+          "Version": 13
         }
       ],
-      "DocCost": "BN254g1=125; BN254g2=170; BLS12_381g1=205; BLS12_381g2=290",
+      "DocCost": "BN254g1=125; BN254g2=170; BLS12_381g1=205; BLS12_381g2=290; ED25519=350",
       "Doc": "for curve points A and B, return the curve point A + B",
       "DocExtra": "A and B are curve points in affine representation: field element X concatenated with field element Y. Field element `Z` is encoded as follows.\nFor the base field elements (Fp), `Z` is encoded as a big-endian number and must be lower than the field modulus.\nFor the quadratic field extension (Fp2), `Z` is encoded as the concatenation of the individual encoding of the coefficients. For an Fp2 element of the form `Z = Z0 + Z1 i`, where `i` is a formal quadratic non-residue, the encoding of Z is the concatenation of the encoding of `Z0` and `Z1` in this order. (`Z0` and `Z1` must be less than the field modulus).\n\nThe point at infinity is encoded as `(X,Y) = (0,0)`.\nGroups G1 and G2 are denoted additively.\n\nFails if A or B is not in G.\nA and/or B are allowed to be the point at infinity.\nDoes _not_ check if A and B are in the main prime-order subgroup.",
       "ImmediateNote": [
@@ -9080,7 +9087,8 @@
         "BN254g1",
         "BN254g2",
         "BLS12_381g1",
-        "BLS12_381g2"
+        "BLS12_381g2",
+        "ED25519"
       ],
       "ArgDetails": [
         {
@@ -9106,9 +9114,15 @@
           "Doc": "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y",
           "ByteEncoding": 3,
           "Version": 10
+        },
+        {
+          "Name": "ED25519",
+          "Doc": "The Edwards25519 (ed25519) curve. Points encoded as 32 byte X followed by 32 byte Y. Not valid for ec_pairing_check or ec_map_to.",
+          "ByteEncoding": 4,
+          "Version": 13
         }
       ],
-      "DocCost": "BN254g1=1810; BN254g2=3430; BLS12_381g1=2950; BLS12_381g2=6530",
+      "DocCost": "BN254g1=1810; BN254g2=3430; BLS12_381g1=2950; BLS12_381g2=6530; ED25519=1750",
       "Doc": "for curve point A and scalar B, return the curve point BA, the point A multiplied by the scalar B.",
       "DocExtra": "A is a curve point encoded and checked as described in `ec_add`. Scalar B is interpreted as a big-endian unsigned integer. Fails if B exceeds 32 bytes.",
       "ImmediateNote": [
@@ -9140,7 +9154,8 @@
         "BN254g1",
         "BN254g2",
         "BLS12_381g1",
-        "BLS12_381g2"
+        "BLS12_381g2",
+        "ED25519"
       ],
       "ArgDetails": [
         {
@@ -9166,6 +9181,12 @@
           "Doc": "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y",
           "ByteEncoding": 3,
           "Version": 10
+        },
+        {
+          "Name": "ED25519",
+          "Doc": "The Edwards25519 (ed25519) curve. Points encoded as 32 byte X followed by 32 byte Y. Not valid for ec_pairing_check or ec_map_to.",
+          "ByteEncoding": 4,
+          "Version": 13
         }
       ],
       "DocCost": "BN254g1=8000 + 7400 per 64 bytes of B; BN254g2=8000 + 7400 per 128 bytes of B; BLS12_381g1=13000 + 10000 per 96 bytes of B; BLS12_381g2=13000 + 10000 per 192 bytes of B",
@@ -9200,7 +9221,8 @@
         "BN254g1",
         "BN254g2",
         "BLS12_381g1",
-        "BLS12_381g2"
+        "BLS12_381g2",
+        "ED25519"
       ],
       "ArgDetails": [
         {
@@ -9226,9 +9248,15 @@
           "Doc": "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y",
           "ByteEncoding": 3,
           "Version": 10
+        },
+        {
+          "Name": "ED25519",
+          "Doc": "The Edwards25519 (ed25519) curve. Points encoded as 32 byte X followed by 32 byte Y. Not valid for ec_pairing_check or ec_map_to.",
+          "ByteEncoding": 4,
+          "Version": 13
         }
       ],
-      "DocCost": "BN254g1=3600 + 90 per 32 bytes of B; BN254g2=7200 + 270 per 32 bytes of B; BLS12_381g1=6500 + 95 per 32 bytes of B; BLS12_381g2=14850 + 485 per 32 bytes of B",
+      "DocCost": "BN254g1=3600 + 90 per 32 bytes of B; BN254g2=7200 + 270 per 32 bytes of B; BLS12_381g1=6500 + 95 per 32 bytes of B; BLS12_381g2=14850 + 485 per 32 bytes of B; ED25519=1200 + 650 per 32 bytes of B",
       "Doc": "for curve points A and scalars B, return curve point B0A0 + B1A1 + B2A2 + ... + BnAn",
       "DocExtra": "A is a list of concatenated points, encoded and checked as described in `ec_add`. B is a list of concatenated scalars which, unlike ec_scalar_mul, must all be exactly 32 bytes long.\nThe name `ec_multi_scalar_mul` was chosen to reflect common usage, but a more consistent name would be `ec_multi_scalar_mul`. AVM values are limited to 4096 bytes, so `ec_multi_scalar_mul` is limited by the size of the points in the group being operated upon.",
       "ImmediateNote": [
@@ -9259,7 +9287,8 @@
         "BN254g1",
         "BN254g2",
         "BLS12_381g1",
-        "BLS12_381g2"
+        "BLS12_381g2",
+        "ED25519"
       ],
       "ArgDetails": [
         {
@@ -9285,9 +9314,15 @@
           "Doc": "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y",
           "ByteEncoding": 3,
           "Version": 10
+        },
+        {
+          "Name": "ED25519",
+          "Doc": "The Edwards25519 (ed25519) curve. Points encoded as 32 byte X followed by 32 byte Y. Not valid for ec_pairing_check or ec_map_to.",
+          "ByteEncoding": 4,
+          "Version": 13
         }
       ],
-      "DocCost": "BN254g1=20; BN254g2=3100; BLS12_381g1=1850; BLS12_381g2=2340",
+      "DocCost": "BN254g1=20; BN254g2=3100; BLS12_381g1=1850; BLS12_381g2=2340; ED25519=1650",
       "Doc": "1 if A is in the main prime-order subgroup of G (including the point at infinity) else 0. Program fails if A is not in G at all.",
       "ImmediateNote": [
         {
@@ -9317,7 +9352,8 @@
         "BN254g1",
         "BN254g2",
         "BLS12_381g1",
-        "BLS12_381g2"
+        "BLS12_381g2",
+        "ED25519"
       ],
       "ArgDetails": [
         {
@@ -9343,6 +9379,12 @@
           "Doc": "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y",
           "ByteEncoding": 3,
           "Version": 10
+        },
+        {
+          "Name": "ED25519",
+          "Doc": "The Edwards25519 (ed25519) curve. Points encoded as 32 byte X followed by 32 byte Y. Not valid for ec_pairing_check or ec_map_to.",
+          "ByteEncoding": 4,
+          "Version": 13
         }
       ],
       "DocCost": "BN254g1=630; BN254g2=3300; BLS12_381g1=1950; BLS12_381g2=8150",
