@@ -55,12 +55,6 @@ const (
 	// can contain. Its value is verified against consensus parameters in
 	// TestEncodedAppTxnAllocationBounds
 	encodedMaxBoxes = 32
-
-	// encodedMaxAccess sets the allocation bound for the maximum number of
-	// references in Access that a transaction decoded off of the wire can
-	// contain. Its value is verified against consensus parameters in
-	// TestEncodedAppTxnAllocationBounds
-	encodedMaxAccess = 64
 )
 
 // OnCompletion is an enum representing some layer 1 side effect that an
@@ -141,7 +135,7 @@ type ApplicationCallTxnFields struct {
 	// "cross-product" resources (holdings and locals) must be explicitly
 	// listed, as well as app accounts, even the app account of the called app!
 	// Transactions using Access may not use the other lists.
-	Access []ResourceRef `codec:"al,allocbound=encodedMaxAccess"`
+	Access []ResourceRef `codec:"al,allocbound=bounds.MaxAppAccess"`
 
 	// Boxes are the boxes that can be accessed by this transaction (and others
 	// in the same group). The Index in the BoxRef is the slot of ForeignApps

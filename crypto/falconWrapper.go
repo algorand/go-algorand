@@ -115,6 +115,9 @@ func NewFalconSigner() (*FalconSigner, error) {
 
 // GetFixedLengthHashableRepresentation returns a serialized version of the signature
 func (s FalconSignature) GetFixedLengthHashableRepresentation() ([]byte, error) {
+	if len(s) < 2 {
+		return nil, errInvalidNumberOfSignature
+	}
 	compressedSignature := cfalcon.CompressedSignature(s)
 	ctSignature, err := compressedSignature.ConvertToCT()
 	return ctSignature[:], err

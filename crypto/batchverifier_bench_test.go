@@ -61,10 +61,11 @@ func BenchmarkBatchVerifierImpls(b *testing.B) {
 	}
 
 	b.Log("running with", b.N, "iterations using", len(msgs), "batches of", batchSize, "signatures")
-	runImpl := func(b *testing.B, bv BatchVerifier,
+	runImpl := func(b *testing.B, makeBV func() BatchVerifier,
 		msgs [][]Hashable, pks [][]SignatureVerifier, sigs [][]Signature) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
+			bv := makeBV()
 			batchIdx := i % numBatches
 			for j := range msgs[batchIdx] {
 				bv.EnqueueSignature(pks[batchIdx][j], msgs[batchIdx][j], sigs[batchIdx][j])
@@ -74,18 +75,21 @@ func BenchmarkBatchVerifierImpls(b *testing.B) {
 	}
 
 	b.Run("libsodium_single", func(b *testing.B) {
-		bv := makeLibsodiumBatchVerifier(batchSize)
-		bv.(*cgoBatchVerifier).useSingle = true
-		runImpl(b, bv, msgs, pks, sigs)
+		runImpl(b, func() BatchVerifier {
+			bv := makeLibsodiumBatchVerifier(batchSize)
+			bv.(*cgoBatchVerifier).useSingle = true
+			return bv
+		}, msgs, pks, sigs)
 	})
 	b.Run("libsodium_batch", func(b *testing.B) {
-		bv := makeLibsodiumBatchVerifier(batchSize)
-		bv.(*cgoBatchVerifier).useSingle = false
-		runImpl(b, bv, msgs, pks, sigs)
+		runImpl(b, func() BatchVerifier {
+			bv := makeLibsodiumBatchVerifier(batchSize)
+			bv.(*cgoBatchVerifier).useSingle = false
+			return bv
+		}, msgs, pks, sigs)
 	})
 	b.Run("ed25519consensus", func(b *testing.B) {
-		bv := makeEd25519ConsensusBatchVerifier(batchSize)
-		runImpl(b, bv, msgs, pks, sigs)
+		runImpl(b, func() BatchVerifier { return makeEd25519ConsensusBatchVerifier(batchSize) }, msgs, pks, sigs)
 	})
 }
 
