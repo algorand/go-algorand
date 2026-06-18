@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,8 +20,9 @@ import (
 	"container/heap"
 	"encoding/json"
 
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-deadlock"
+
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // Simulate a 2 way mirror where messages are passed through and also reflected back to sender with a delay

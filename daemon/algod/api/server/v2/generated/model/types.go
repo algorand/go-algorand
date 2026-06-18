@@ -53,14 +53,21 @@ const (
 
 // Defines values for AccountInformationParamsExclude.
 const (
-	AccountInformationParamsExcludeAll  AccountInformationParamsExclude = "all"
-	AccountInformationParamsExcludeNone AccountInformationParamsExclude = "none"
+	AccountInformationParamsExcludeAll                 AccountInformationParamsExclude = "all"
+	AccountInformationParamsExcludeCreatedAppsParams   AccountInformationParamsExclude = "created-apps-params"
+	AccountInformationParamsExcludeCreatedAssetsParams AccountInformationParamsExclude = "created-assets-params"
+	AccountInformationParamsExcludeNone                AccountInformationParamsExclude = "none"
 )
 
 // Defines values for AccountInformationParamsFormat.
 const (
 	AccountInformationParamsFormatJson    AccountInformationParamsFormat = "json"
 	AccountInformationParamsFormatMsgpack AccountInformationParamsFormat = "msgpack"
+)
+
+// Defines values for AccountApplicationsInformationParamsInclude.
+const (
+	AccountApplicationsInformationParamsIncludeParams AccountApplicationsInformationParamsInclude = "params"
 )
 
 // Defines values for AccountApplicationInformationParamsFormat.
@@ -79,6 +86,11 @@ const (
 const (
 	GetPendingTransactionsByAddressParamsFormatJson    GetPendingTransactionsByAddressParamsFormat = "json"
 	GetPendingTransactionsByAddressParamsFormatMsgpack GetPendingTransactionsByAddressParamsFormat = "msgpack"
+)
+
+// Defines values for GetApplicationBoxesParamsInclude.
+const (
+	GetApplicationBoxesParamsIncludeValues GetApplicationBoxesParamsInclude = "values"
 )
 
 // Defines values for GetBlockParamsFormat.
@@ -244,6 +256,24 @@ type Account struct {
 // * lsig
 type AccountSigType string
 
+// AccountApplicationResource AccountApplicationResource describes the account's application resource (local state and params if the account is the creator) for a specific application ID.
+type AccountApplicationResource struct {
+	// AppLocalState Stores local state associated with an application.
+	AppLocalState *ApplicationLocalState `json:"app-local-state,omitempty"`
+
+	// CreatedAtRound Round when the account opted into or created the application.
+	CreatedAtRound *basics.Round `json:"created-at-round,omitempty"`
+
+	// Deleted Whether the application has been deleted.
+	Deleted *bool `json:"deleted,omitempty"`
+
+	// Id The application ID.
+	Id basics.AppIndex `json:"id"`
+
+	// Params Stores the global information associated with an application.
+	Params *ApplicationParams `json:"params,omitempty"`
+}
+
 // AccountAssetHolding AccountAssetHolding describes the account's asset holding and asset parameters (if either exist) for a specific asset ID.
 type AccountAssetHolding struct {
 	// AssetHolding Describes an asset held by an account.
@@ -308,7 +338,7 @@ type Application struct {
 	Id basics.AppIndex `json:"id"`
 
 	// Params Stores the global information associated with an application.
-	Params ApplicationParams `json:"params"`
+	Params *ApplicationParams `json:"params,omitempty"`
 }
 
 // ApplicationInitialStates An application's initial global/local/box states that were accessed during simulation.
@@ -424,7 +454,7 @@ type Asset struct {
 	//
 	// Definition:
 	// data/transactions/asset.go : AssetParams
-	Params AssetParams `json:"params"`
+	Params *AssetParams `json:"params,omitempty"`
 }
 
 // AssetHolding Describes an asset held by an account.
@@ -540,6 +570,9 @@ type Box struct {
 type BoxDescriptor struct {
 	// Name Base64 encoded box name
 	Name []byte `json:"name"`
+
+	// Value Base64 encoded box value. Present only when the `values` query parameter is set to true.
+	Value *[]byte `json:"value,omitempty"`
 }
 
 // BoxReference References a box of an application.
@@ -1087,6 +1120,9 @@ type Catchpoint = string
 // Format defines model for format.
 type Format string
 
+// Include defines model for include.
+type Include = []string
+
 // Limit defines model for limit.
 type Limit = uint64
 
@@ -1115,6 +1151,17 @@ type AccountApplicationResponse struct {
 
 	// CreatedApp Stores the global information associated with an application.
 	CreatedApp *ApplicationParams `json:"created-app,omitempty"`
+
+	// Round The round for which this information is relevant.
+	Round basics.Round `json:"round"`
+}
+
+// AccountApplicationsInformationResponse defines model for AccountApplicationsInformationResponse.
+type AccountApplicationsInformationResponse struct {
+	ApplicationResources *[]AccountApplicationResource `json:"application-resources,omitempty"`
+
+	// NextToken Used for pagination, when making another request provide this token with the next parameter. The next token is the next application ID to use as the pagination cursor.
+	NextToken *string `json:"next-token,omitempty"`
 
 	// Round The round for which this information is relevant.
 	Round basics.Round `json:"round"`
@@ -1195,6 +1242,12 @@ type BoxResponse = Box
 // BoxesResponse defines model for BoxesResponse.
 type BoxesResponse struct {
 	Boxes []BoxDescriptor `json:"boxes"`
+
+	// NextToken Used for pagination, when making another request provide this token with the next parameter. The next token is the box name to use as the pagination cursor, encoded in the goal app call arg form.
+	NextToken *string `json:"next-token,omitempty"`
+
+	// Round The round for which this information is relevant.
+	Round *basics.Round `json:"round,omitempty"`
 }
 
 // CatchpointAbortResponse An catchpoint abort response.
@@ -1397,8 +1450,11 @@ type SupplyResponse struct {
 	// CurrentRound Round
 	CurrentRound basics.Round `json:"current_round"`
 
-	// OnlineMoney OnlineMoney
+	// OnlineMoney Total stake held by accounts with status Online at current_round, including those whose participation keys have expired but have not yet been marked offline.
 	OnlineMoney uint64 `json:"online-money"`
+
+	// OnlineStake Online stake used by agreement to vote for current_round, excluding accounts whose participation keys have expired.
+	OnlineStake uint64 `json:"online-stake"`
 
 	// TotalMoney TotalMoney
 	TotalMoney uint64 `json:"total-money"`
@@ -1431,8 +1487,7 @@ type TransactionParametersResponse struct {
 	// LastRound LastRound indicates the last round seen
 	LastRound basics.Round `json:"last-round"`
 
-	// MinFee The minimum transaction fee (not per byte) required for the
-	// txn to validate for the current network protocol.
+	// MinFee The minimum transaction fee (not per byte) required for the txn to validate for the current network protocol.
 	MinFee uint64 `json:"min-fee"`
 }
 
@@ -1444,8 +1499,8 @@ type VersionsResponse = Version
 
 // AccountInformationParams defines parameters for AccountInformation.
 type AccountInformationParams struct {
-	// Exclude When set to `all` will exclude asset holdings, application local state, created asset parameters, any created application parameters. Defaults to `none`.
-	Exclude *AccountInformationParamsExclude `form:"exclude,omitempty" json:"exclude,omitempty"`
+	// Exclude Exclude additional items from the account. Use `all` to exclude asset holdings, application local state, created asset parameters, and created application parameters. Use `created-apps-params` to exclude only the parameters of created applications (returns only application IDs). Use `created-assets-params` to exclude only the parameters of created assets (returns only asset IDs). Multiple values can be comma-separated (e.g., `created-apps-params,created-assets-params`). Note: `all` and `none` cannot be combined with other values. Defaults to `none`.
+	Exclude *[]AccountInformationParamsExclude `form:"exclude,omitempty" json:"exclude,omitempty"`
 
 	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *AccountInformationParamsFormat `form:"format,omitempty" json:"format,omitempty"`
@@ -1456,6 +1511,21 @@ type AccountInformationParamsExclude string
 
 // AccountInformationParamsFormat defines parameters for AccountInformation.
 type AccountInformationParamsFormat string
+
+// AccountApplicationsInformationParams defines parameters for AccountApplicationsInformation.
+type AccountApplicationsInformationParams struct {
+	// Limit Maximum number of results to return.
+	Limit *uint64 `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Next The next page of results. Use the next token provided by the previous results.
+	Next *string `form:"next,omitempty" json:"next,omitempty"`
+
+	// Include Include additional items in the response. Use `params` to include full application parameters (global state, schema, etc.). Multiple values can be comma-separated. Defaults to returning only application IDs and local state.
+	Include *[]AccountApplicationsInformationParamsInclude `form:"include,omitempty" json:"include,omitempty"`
+}
+
+// AccountApplicationsInformationParamsInclude defines parameters for AccountApplicationsInformation.
+type AccountApplicationsInformationParamsInclude string
 
 // AccountApplicationInformationParams defines parameters for AccountApplicationInformation.
 type AccountApplicationInformationParams struct {
@@ -1506,7 +1576,25 @@ type GetApplicationBoxByNameParams struct {
 type GetApplicationBoxesParams struct {
 	// Max Max number of box names to return. If max is not set, or max == 0, returns all box-names.
 	Max *uint64 `form:"max,omitempty" json:"max,omitempty"`
+
+	// Limit Maximum number of boxes to return per page.
+	Limit *uint64 `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Next A box name, in the goal app call arg form 'encoding:value', representing the earliest box name to include in results. Use the next-token from a previous response.
+	Next *string `form:"next,omitempty" json:"next,omitempty"`
+
+	// Prefix A box name prefix, in the goal app call arg form 'encoding:value', to filter results by. Only boxes whose names start with this prefix will be returned.
+	Prefix *string `form:"prefix,omitempty" json:"prefix,omitempty"`
+
+	// Include Include additional items in the response. Use `values` to include box values. Multiple values can be comma-separated.
+	Include *[]GetApplicationBoxesParamsInclude `form:"include,omitempty" json:"include,omitempty"`
+
+	// Round Return box data from the given round. The round must be within the node's available range.
+	Round *basics.Round `form:"round,omitempty" json:"round,omitempty"`
 }
+
+// GetApplicationBoxesParamsInclude defines parameters for GetApplicationBoxes.
+type GetApplicationBoxesParamsInclude string
 
 // GetBlockParams defines parameters for GetBlock.
 type GetBlockParams struct {

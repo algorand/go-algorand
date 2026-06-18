@@ -4,7 +4,9 @@
 # Based on https://github.com/algorand/smart-contracts/tree/master/devrel/dexapp
 #
 
-date '+dex.sh start %Y%m%d_%H%M%S'
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
 
 set -ex
 set -o pipefail
@@ -41,7 +43,7 @@ ${gcmd} app call --app-id "$APPID" --from "$ACCT_ACTOR" --app-arg "str:open" --a
 # Ensure the key is in place
 VALUE=$(${gcmd} app read --app-id "$APPID" --from "$ACCT_ACTOR" --local | jq --arg key "$ORDER" '.[$key].ui')
 if [ "$VALUE" -ne 1 ]; then
-    date "+dex FAIL wanted value 1 but got ${VALUE} %Y%m%d_%H%M%S"
+    date "+${scriptname} FAIL wanted value 1 but got ${VALUE} %Y%m%d_%H%M%S"
     false
 fi
 
@@ -51,7 +53,7 @@ ${gcmd} app call --app-id "$APPID" --from "$ACCT_ACTOR" --app-arg "str:close" --
 # Ensure the key is deleted
 VALUE=$(${gcmd} app read --app-id "$APPID" --from "$ACCT_ACTOR" --local | jq --arg key "$ORDER" '.[$key].ui')
 if [ "$VALUE" != "null" ]; then
-    date "+dex FAIL wanted empty/null value but got ${VALUE} %Y%m%d_%H%M%S"
+    date "+${scriptname} FAIL wanted empty/null value but got ${VALUE} %Y%m%d_%H%M%S"
     false
 fi
 

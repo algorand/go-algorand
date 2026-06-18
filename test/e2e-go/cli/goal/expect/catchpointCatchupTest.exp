@@ -180,7 +180,7 @@ if { [catch {
     ::AlgorandGoal::StartNode $TEST_ROOT_DIR/Node False $WEBPROXY_LISTEN_ADDRESS
 
     # once the node is started we can clear the ::GLOBAL_TEST_ALGO_DIR, so that shutdown would be done as a network.
-    set ::GLOBAL_TEST_ALGO_DIR ""
+    unset ::GLOBAL_TEST_ALGO_DIR
 
     ::AlgorandGoal::WaitForRound $CATCHPOINT_ROUND $TEST_ROOT_DIR/Node
 

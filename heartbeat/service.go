@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -161,10 +161,11 @@ func (s *Service) loop() {
 	}
 }
 
-// acceptingByteCode is the byte code to a logic signature that will accept anything (except rekeying).
+// acceptingByteCode is the byte code to a logic signature that will accept anything (except rekeying)
+// and whose address does not decompress to a valid Ed25519 point (trailing intcblock).
 var acceptingByteCode = logic.MustAssemble(`
 #pragma version 11
-txn RekeyTo; global ZeroAddress; ==
+txn RekeyTo; global ZeroAddress; ==; intcblock 2;
 `)
 var acceptingSender = basics.Address(logic.HashProgram(acceptingByteCode))
 

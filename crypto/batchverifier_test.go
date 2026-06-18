@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -80,7 +80,7 @@ func testBatchVerifierSingle(t *testing.T, makeBV func(int) BatchVerifier) {
 	// break the signature:
 	sig[0] = sig[0] + 1
 	bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
-	require.Error(t, bv.Verify())
+	require.ErrorIs(t, bv.Verify(), ErrBatchHasFailedSigs)
 }
 
 func TestBatchVerifierBulk(t *testing.T) {
@@ -147,7 +147,7 @@ func testBatchVerifierWithInvalidSignature(t *testing.T, makeBV func(int) BatchV
 	sig[0] = sig[0] + 1
 	bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
 
-	require.Error(t, bv.Verify())
+	require.ErrorIs(t, bv.Verify(), ErrBatchHasFailedSigs)
 }
 
 func BenchmarkBatchVerifier(b *testing.B) {

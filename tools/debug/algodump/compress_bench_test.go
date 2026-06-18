@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,10 +32,11 @@ import (
 	"testing"
 
 	"github.com/DataDog/zstd"
-	"github.com/algorand/go-algorand/network/vpack"
-	"github.com/algorand/go-algorand/protocol"
 	kzstd "github.com/klauspost/compress/zstd"
 	"github.com/valyala/gozstd"
+
+	"github.com/algorand/go-algorand/network/vpack"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // testCorpus holds all the test data loaded from message files

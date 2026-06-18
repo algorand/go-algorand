@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -55,7 +55,9 @@ type HeartbeatTxnFields struct {
 // wellFormed performs some stateless checks on the Heartbeat transaction
 func (hb HeartbeatTxnFields) wellFormed(header Header, proto config.ConsensusParams) error {
 	// If this is a free/cheap heartbeat, it must be very simple.
-	if header.Fee.Raw < proto.MinTxnFee && header.Group.IsZero() {
+	factor := basics.AddSaturate(header.FeeContribution(proto), 1e6)
+	requiredFee, _ := proto.MinFee().MulMicrosCeil(factor) // MulMicrosCeil saturates
+	if header.Fee.LessThan(requiredFee) && header.Group.IsZero() {
 		kind := "free"
 		if header.Fee.Raw > 0 {
 			kind = "cheap"

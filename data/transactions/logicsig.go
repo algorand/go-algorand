@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package transactions
 import (
 	"bytes"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 )
 
@@ -26,9 +27,7 @@ import (
 const EvalMaxArgs = 255
 
 // MaxLogicSigArgSize is the maximum size of an argument to an LSig
-// We use 4096 to match the maximum size of a TEAL value
-// (as defined in `const maxStringSize` in package logic)
-const MaxLogicSigArgSize = 4096
+const MaxLogicSigArgSize = config.MaxAVMBytesSize
 
 // LogicSig contains logic for validating a transaction.
 // LogicSig is signed by an account, allowing delegation of operations.

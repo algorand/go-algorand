@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -36,6 +36,7 @@ import (
 var (
 	addFromName    string
 	addToAddress   string
+	addTTL         uint
 	deleteNetwork  string
 	listNetwork    string
 	recordType     string
@@ -60,6 +61,7 @@ func init() {
 	addCmd.MarkFlagRequired("from")
 	addCmd.Flags().StringVarP(&addToAddress, "to", "t", "", "To address to map new DNS entry to")
 	addCmd.MarkFlagRequired("to")
+	addCmd.Flags().UintVar(&addTTL, "ttl", 60, "TTL (seconds) for the DNS record; pass 1 to use Cloudflare's Automatic TTL (~300s)")
 
 	deleteCmd.Flags().StringVarP(&deleteNetwork, "network", "n", "", "Network name for records to delete")
 	deleteCmd.Flags().BoolVarP(&noPrompt, "no-prompt", "y", false, "No prompting for records deletion")
@@ -151,7 +153,7 @@ var addCmd = &cobra.Command{
 	Example: "algons dns add -f a.test.algodev.network -t r1.algodev.network\n" +
 		"algons dns add -f a.test.algodev.network -t 192.168.100.10",
 	Run: func(cmd *cobra.Command, args []string) {
-		err := doAddDNS(addFromName, addToAddress)
+		err := doAddDNS(addFromName, addToAddress, addTTL)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error adding DNS entry: %v\n", err)
 			os.Exit(1)
@@ -181,7 +183,7 @@ var exportCmd = &cobra.Command{
 	},
 }
 
-func doAddTXT(from string, to string) error {
+func doAddTXT(from string, to string, ttl uint) error {
 	cfZoneID, cfToken, err := getClouldflareCredentials()
 	if err != nil {
 		return fmt.Errorf("error getting DNS credentials: %v", err)
@@ -191,10 +193,10 @@ func doAddTXT(from string, to string) error {
 
 	const priority = 1
 	const proxied = false
-	return cloudflareDNS.CreateDNSRecord(context.Background(), "TXT", from, to, cloudflare.AutomaticTTL, priority, proxied)
+	return cloudflareDNS.CreateDNSRecord(context.Background(), "TXT", from, to, ttl, priority, proxied)
 }
 
-func doAddDNS(from string, to string) (err error) {
+func doAddDNS(from string, to string, ttl uint) (err error) {
 	cfZoneID, cfToken, err := getClouldflareCredentials()
 	if err != nil {
 		return fmt.Errorf("error getting DNS credentials: %v", err)
@@ -215,7 +217,7 @@ func doAddDNS(from string, to string) (err error) {
 	} else {
 		recordType = "CNAME"
 	}
-	err = cloudflareDNS.SetDNSRecord(context.Background(), recordType, from, to, cloudflare.AutomaticTTL, priority, proxied)
+	err = cloudflareDNS.SetDNSRecord(context.Background(), recordType, from, to, ttl, priority, proxied)
 
 	return
 }

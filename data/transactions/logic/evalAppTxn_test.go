@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,6 +24,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -31,8 +33,6 @@ import (
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-
-	"github.com/stretchr/testify/require"
 )
 
 func TestInnerTypesV5(t *testing.T) {
@@ -134,10 +134,12 @@ func TestFieldLimits(t *testing.T) {
 	ep, _, _ := MakeSampleEnv()
 
 	intProgram := "itxn_begin; int %v; itxn_field %s; int 1"
-	goodInt := func(field string, value interface{}) {
+	goodInt := func(field string, value any) {
+		t.Helper()
 		TestApp(t, fmt.Sprintf(intProgram, value, field), ep)
 	}
-	badInt := func(field string, value interface{}) {
+	badInt := func(field string, value any) {
+		t.Helper()
 		// error messages are different for different fields, just use a space
 		// to indicate there should be an error, it will surely match any error.
 		TestApp(t, NoTrack(fmt.Sprintf(intProgram, value, field)), ep, " ")
@@ -192,7 +194,7 @@ func TestFieldLimits(t *testing.T) {
 	testInt("LocalNumByteSlice", int(ep.Proto.MaxLocalSchemaEntries))
 	testInt("GlobalNumUint", int(ep.Proto.MaxGlobalSchemaEntries))
 	testInt("GlobalNumByteSlice", int(ep.Proto.MaxGlobalSchemaEntries))
-	testInt("ExtraProgramPages", int(ep.Proto.MaxExtraAppProgramPages))
+	testInt("ExtraProgramPages", int(ep.Proto.MaxAbsoluteExtraProgramPages))
 }
 
 func appAddr(id int) basics.Address {
@@ -217,6 +219,7 @@ func TestAppPay(t *testing.T) {
 	// v5 added inners
 	TestLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
 		test := func(source string, problem ...string) {
+			t.Helper()
 			TestApp(t, source, ep, problem...)
 		}
 		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
@@ -226,16 +229,17 @@ func TestAppPay(t *testing.T) {
 			"insufficient balance")
 		ledger.NewAccount(appAddr(888), 1000000)
 
-		// You might NewExpect this to fail because of min balance issue
-		// (receiving account only gets 100 microalgos).  It does not fail at
-		// this level, instead, we must be certain that the existing min
-		// balance check in eval.transaction() properly notices and fails
-		// the transaction later.  This fits with the model that we check
-		// min balances once at the end of each "top-level" transaction.
+		// You might expect this to fail because of min balance issue (receiving
+		// account only gets 100 microalgos).  It does not fail at this level,
+		// instead, we must be certain that the existing min balance check in
+		// eval.transaction() properly notices and fails the transaction later.
+		// This fits with the model that we check min balances once at the end
+		// of each "top-level" transaction.
 		test("global CurrentApplicationAddress; txn Accounts 1; int 100" + pay)
 
-		// 100 of 1000000 spent, plus MinTxnFee in our fake protocol is 1001
-		test("global CurrentApplicationAddress; balance; int 998899; ==")
+		// 100 of 1000000 spent, plus MinTxnFee in our test protocol is 1001
+		const leftOver = 1000000 - 100 - (1001 - 401) // 401 fee credit
+		test("global CurrentApplicationAddress; balance; int " + strconv.Itoa(leftOver) + "; ==")
 		test("txn Receiver; balance; int 100; ==")
 
 		close := `
@@ -247,8 +251,9 @@ func TestAppPay(t *testing.T) {
 `
 		test(close)
 		test("global CurrentApplicationAddress; balance; !")
-		// Receiver got most of the algos (except 1001 for fee)
-		test("txn Receiver; balance; int 997998; ==")
+		// Receiver got most of the algos (except 1001-401 for fee)
+		const transferred = leftOver - 600
+		test("txn Receiver; balance; int " + strconv.Itoa(100+transferred) + "; ==")
 	})
 }
 
@@ -423,9 +428,10 @@ func TestDefaultSender(t *testing.T) {
 		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 		tx.Accounts = append(tx.Accounts, appAddr(888))
 		TestApp(t, "txn Accounts 1; int 100"+pay, ep, "insufficient balance")
-		ledger.NewAccount(appAddr(888), 1000000)
+		ledger.NewAccount(appAddr(888), 1_000_000)
 		TestApp(t, "txn Accounts 1; int 100"+pay+"int 1", ep)
-		TestApp(t, "global CurrentApplicationAddress; balance; int 998899; ==", ep)
+		left := 1_000_000 - 100 - int(ep.Proto.MinTxnFee) + 401
+		TestApp(t, "global CurrentApplicationAddress; balance; int "+strconv.Itoa(left)+"; ==", ep)
 	})
 }
 
@@ -999,7 +1005,8 @@ func TestFieldSetting(t *testing.T) {
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 10*MakeTestProto().MinTxnFee)
 	TestApp(t, "itxn_begin; int 500; bzero; itxn_field Note; int 1", ep)
-	TestApp(t, "itxn_begin; int 501; bzero; itxn_field Note; int 1", ep,
+	TestApp(t, "itxn_begin; int 540; bzero; itxn_field Note; int 1", ep) // above basic, under absolute
+	TestApp(t, "itxn_begin; int 551; bzero; itxn_field Note; int 1", ep,
 		"Note may not exceed")
 
 	TestApp(t, "itxn_begin; int 32; bzero; itxn_field VotePK; int 1", ep)
@@ -1041,11 +1048,12 @@ func TestInnerGroup(t *testing.T) {
 	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
-	ep.FeeCredit = nil // default sample env starts at 401
+	// default sample env starts with 401 fee credit (1337+1066-2*1001)
 
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	// Need both fees and both payments
-	ledger.NewAccount(appAddr(888), 999+2*MakeTestProto().MinTxnFee)
+	// Need both fees and both payments, 999<1000
+	minFee := MakeTestProto().MinTxnFee
+	ledger.NewAccount(appAddr(888), 999+2*minFee-401) // 401 is fee credit
 	pay := `
 int pay;    itxn_field TypeEnum;
 int 500;    itxn_field Amount;
@@ -1055,8 +1063,31 @@ txn Sender; itxn_field Receiver;
 		"insufficient balance")
 
 	// NewAccount overwrites the existing balance
-	ledger.NewAccount(appAddr(888), 1000+2*MakeTestProto().MinTxnFee)
+	ledger.NewAccount(appAddr(888), 1000+2*minFee-401)
 	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+"itxn_submit; int 1", ep)
+
+	// Show that inner notes can cause increased fees (values are from the test proto!)
+	//   Note size 500 works fine, no increased fee
+	ledger.NewAccount(appAddr(888), 1000+2*minFee-401) // replenish
+	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+"int 500; bzero; itxn_field Note; itxn_submit; int 1", ep)
+	// Note size 540 increases fee by 1.040_000 factor. But the first problem is
+	// that the default fee population mechanism can't know about the big Note,
+	// so it tries to populate for 2 basic transactions, which is 2002-401=1601.
+	// The "need" is 1.642 because one of the transaction's costs goes from 1001
+	// to ceil(1001*1.040) = 1042.
+	ledger.NewAccount(appAddr(888), 1000+2*minFee-401) // replenish
+	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+
+		"int 540; bzero; itxn_field Note; itxn_submit; int 1", ep,
+		"group fee 1.601mA too small (needs 1.642mA more)")
+	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+
+		"int 540; bzero; itxn_field Note; int 1041; itxn_field Fee; itxn_submit; int 1", ep,
+		"group fee 1.641mA too small (needs 1.642mA more)")
+	ledger.NewAccount(appAddr(888), 1000+2*minFee-401+41) // replenish
+	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+
+		"int 540; bzero; itxn_field Note; int 1042; itxn_field Fee; itxn_submit; int 1", ep)
+
+	// Show some failures
+	ledger.NewAccount(appAddr(888), 1000+2*minFee-401) // replenish
 	TestApp(t, "itxn_begin; itxn_begin"+pay+"itxn_next"+pay+"itxn_submit; int 1", ep,
 		"itxn_begin without itxn_submit")
 	TestApp(t, "itxn_next"+pay+"itxn_next"+pay+"itxn_submit; int 1", ep,
@@ -1068,7 +1099,6 @@ func TestInnerFeePooling(t *testing.T) {
 	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
-	ep.FeeCredit = nil // default sample env starts at 401
 
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 50_000)
@@ -1077,13 +1107,13 @@ int pay;    itxn_field TypeEnum;
 int 500;    itxn_field Amount;
 txn Sender; itxn_field Receiver;
 `
-	// Force the first fee to 3, but the second will default to 2*fee-3 = 2002-3
+	// Force the first fee to 3, so the second will be high to "catchup" (recall we start with 401uA credit)
 	TestApp(t, "itxn_begin"+
 		pay+
 		"int 3; itxn_field Fee;"+
 		"itxn_next"+
 		pay+
-		"itxn_submit; itxn Fee; int 1999; ==", ep)
+		"itxn_submit; itxn Fee; int 1598; ==", ep) // 2*1001-3-401=1598
 
 	// Same as first, but force the second too low
 	TestApp(t, "itxn_begin"+
@@ -1091,36 +1121,35 @@ txn Sender; itxn_field Receiver;
 		"int 3; itxn_field Fee;"+
 		"itxn_next"+
 		pay+
-		"int 1998; itxn_field Fee;"+
-		"itxn_submit; int 1", ep, "fee too small")
+		"int 1597; itxn_field Fee;"+
+		"itxn_submit; int 1", ep, "group fee 1.600mA too small")
 
 	// Overpay in first itxn, the second will default to less
 	TestApp(t, "itxn_begin"+
 		pay+
-		"int 2000; itxn_field Fee;"+
+		"int 1500; itxn_field Fee;"+
 		"itxn_next"+
 		pay+
-		"itxn_submit; itxn Fee; int 2; ==", ep)
+		"itxn_submit; itxn Fee; int 101; ==", ep) // 2*1001-1500-401=101
 
-	// Same first, but force the second too low
+	// Same, but force the second too low
 	TestApp(t, "itxn_begin"+
 		pay+
-		"int 2000; itxn_field Fee;"+
+		"int 1500; itxn_field Fee;"+
 		"itxn_next"+
 		pay+
 		"int 1; itxn_field Fee;"+
-		"itxn_submit; itxn Fee; int 1", ep, "fee too small")
+		"itxn_submit; itxn Fee; int 100", ep, "group fee 1.501mA too small")
 
-	// Test that overpay in first inner group is available in second inner group
-	// also ensure only exactly the _right_ amount of credit is available.
+	// since FeeCredit != nil, ep is reset, leaving 401uA in Surplus
 	TestApp(t, "itxn_begin"+
 		pay+
-		"int 2002; itxn_field Fee;"+ // double pay
+		"int 1601; itxn_field Fee;"+ // 600 mAlgo extra pay
 		"itxn_next"+
 		pay+
 		"int 1001; itxn_field Fee;"+ // regular pay
 		"itxn_submit;"+
-		// At beginning of second group, we should have 1 minfee of credit
+		// At beginning of second group, we should have 1001uA credit available
 		"itxn_begin"+
 		pay+
 		"int 0; itxn_field Fee;"+ // free, due to credit
@@ -1162,10 +1191,12 @@ func TestApplCreation(t *testing.T) {
 	TestApp(t, p+"int DeleteApplication; itxn_field OnCompletion"+s, ep)
 
 	TestApp(t, p+"int 800; bzero; itxn_field ApplicationArgs"+s, ep)
-	TestApp(t, p+"int 801; bzero; itxn_field ApplicationArgs", ep,
+	// 2000 is now ok because of MaxAbsoluteAppTotalArgLen
+	TestApp(t, p+"int 2000; bzero; itxn_field ApplicationArgs"+s, ep)
+	TestApp(t, p+"int 2001; bzero; itxn_field ApplicationArgs"+s, ep,
 		"length too long")
-	TestApp(t, p+"int 401; bzero; dup; itxn_field ApplicationArgs; itxn_field ApplicationArgs", ep,
-		"length too long")
+	TestApp(t, p+"int 401; bzero; dup; itxn_field ApplicationArgs; itxn_field ApplicationArgs"+s, ep)
+	TestApp(t, p+"int 1001; bzero; dup; itxn_field ApplicationArgs; itxn_field ApplicationArgs"+s, ep, "length too long")
 
 	TestApp(t, p+strings.Repeat("byte 0x11; itxn_field ApplicationArgs;", 12)+s, ep)
 	TestApp(t, p+strings.Repeat("byte 0x11; itxn_field ApplicationArgs;", 13)+s, ep,
@@ -1194,12 +1225,15 @@ func TestApplCreation(t *testing.T) {
 	TestApp(t, p+strings.Repeat("int 621; itxn_field Assets;", 7)+s, ep,
 		"too many foreign assets")
 
-	TestApp(t, p+"int 2700; bzero; itxn_field ApprovalProgram"+s, ep)
-	TestApp(t, p+"int 2701; bzero; itxn_field ApprovalProgram"+s, ep,
-		"may not exceed 2700")
-	TestApp(t, p+"int 2700; bzero; itxn_field ClearStateProgram"+s, ep)
-	TestApp(t, p+"int 2701; bzero; itxn_field ClearStateProgram"+s, ep,
-		"may not exceed 2700")
+	TestApp(t, p+"int 2400; bzero; itxn_field ApprovalProgram"+s, ep)
+	// ok now, b/c of MaxAbsoluteExtraProgramPages
+	TestApp(t, p+"int 2401; bzero; itxn_field ApprovalProgram"+s, ep)
+	TestApp(t, p+"int 4001; bzero; itxn_field ApprovalProgram"+s, ep,
+		"may not exceed 4000")
+	TestApp(t, p+"int 2400; bzero; itxn_field ClearStateProgram"+s, ep)
+	TestApp(t, p+"int 2401; bzero; itxn_field ClearStateProgram"+s, ep)
+	TestApp(t, p+"int 4001; bzero; itxn_field ClearStateProgram"+s, ep,
+		"may not exceed 4000")
 
 	TestApp(t, p+"int 30; itxn_field GlobalNumUint"+s, ep)
 	TestApp(t, p+"int 31; itxn_field GlobalNumUint"+s, ep, "31 is larger than max=30")
@@ -1213,7 +1247,9 @@ func TestApplCreation(t *testing.T) {
 	TestApp(t, p+"int 14; itxn_field LocalNumByteSlice"+s, ep, "14 is larger than max=13")
 
 	TestApp(t, p+"int 2; itxn_field ExtraProgramPages"+s, ep)
-	TestApp(t, p+"int 3; itxn_field ExtraProgramPages"+s, ep, "3 is larger than max=2")
+	// ok now, b/c of MaxAbsoluteExtraProgramPages
+	TestApp(t, p+"int 3; itxn_field ExtraProgramPages"+s, ep)
+	TestApp(t, p+"int 5; itxn_field ExtraProgramPages"+s, ep, "5 is larger than max=4")
 }
 
 // TestBigApplCreation focues on testing the new fields that allow constructing big programs.
@@ -1238,13 +1274,13 @@ func TestBigApplCreation(t *testing.T) {
 			basic := "itxn_field " + pgm + "Program"
 			pages := "itxn_field " + pgm + "ProgramPages"
 			TestApp(t, p+`int 1000; bzero; `+pages+`
-                  int 1000; bzero; `+pages+`
-                  int 700; bzero; `+pages+`
+                  int 2000; bzero; `+pages+`
+                  int 200; bzero; `+pages+`
                  `+s, ep)
 			TestApp(t, p+`int 1000; bzero; `+pages+`
-                  int 1000; bzero; `+pages+`
-                  int 701; bzero; `+pages+`
-                 `+s, ep, "may not exceed 2700")
+                  int 2000; bzero; `+pages+`
+                  int 2001; bzero; `+pages+`
+                 `+s, ep, "may not exceed 4000")
 
 			// Test the basic ApprovalProgram field resets
 			TestApp(t, p+`int 1000; bzero; `+pages+`
@@ -1257,14 +1293,16 @@ func TestBigApplCreation(t *testing.T) {
                   int 100; bzero; `+basic+`
                   int 1000; bzero; `+pages+`
                   int 1000; bzero; `+pages+`
-                  int 600; bzero; `+pages+`
+                  int 1000; bzero; `+pages+`
+                  int 900; bzero; `+pages+`
                  `+s, ep)
 			TestApp(t, p+`int 1000; bzero; `+pages+`
                   int 100; bzero; `+basic+`
                   int 1000; bzero; `+pages+`
                   int 1000; bzero; `+pages+`
-                  int 601; bzero; `+pages+`
-                 `+s, ep, "may not exceed 2700")
+                  int 1000; bzero; `+pages+`
+                  int 901; bzero; `+pages+`
+                 `+s, ep, "may not exceed 4000")
 		})
 	}
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package crypto
 
 import (
 	"bytes"
+	"crypto/ed25519"
 	"testing"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -89,15 +90,42 @@ func BenchmarkSignVerify(b *testing.B) {
 }
 
 func BenchmarkSign(b *testing.B) {
+	b.Run("libsodium", func(b *testing.B) {
+		benchmarkSign(b, func(sk ed25519PrivateKey, msg []byte) Signature {
+			return Signature(ed25519Sign(sk, msg))
+		})
+	})
+	b.Run("ed25519stdlib", func(b *testing.B) {
+		benchmarkSign(b, func(sk ed25519PrivateKey, msg []byte) Signature {
+			return Signature(ed25519.Sign(ed25519.PrivateKey(sk[:]), msg))
+		})
+	})
+}
+
+func benchmarkSign(b *testing.B, sign func(ed25519PrivateKey, []byte) Signature) {
 	c := makeCurve25519Secret()
 	s := randString()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_ = c.Sign(s)
+		_ = sign(c.SK, HashRep(s))
 	}
 }
+
 func BenchmarkVerify25519(b *testing.B) {
+	b.Run("libsodium", func(b *testing.B) {
+		benchmarkVerify25519(b, func(pk SignatureVerifier, msg []byte, sig Signature) bool {
+			return ed25519Verify(ed25519PublicKey(pk), msg, ed25519Signature(sig))
+		})
+	})
+	b.Run("ed25519consensus", func(b *testing.B) {
+		benchmarkVerify25519(b, func(pk SignatureVerifier, msg []byte, sig Signature) bool {
+			return ed25519ConsensusVerifySingle(pk, msg, sig)
+		})
+	})
+}
+
+func benchmarkVerify25519(b *testing.B, verify func(SignatureVerifier, []byte, Signature) bool) {
 	c := makeCurve25519Secret()
 	strs := make([]TestingHashable, b.N)
 	sigs := make([]Signature, b.N)
@@ -108,6 +136,8 @@ func BenchmarkVerify25519(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_ = c.Verify(strs[i], sigs[i])
+		if !verify(c.SignatureVerifier, HashRep(strs[i]), sigs[i]) {
+			b.Error("BAD: valid signature not valid")
+		}
 	}
 }

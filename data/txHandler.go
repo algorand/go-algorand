@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,6 +25,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
@@ -38,7 +40,6 @@ import (
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
-	"github.com/algorand/go-deadlock"
 )
 
 var transactionMessagesHandled = metrics.MakeCounter(metrics.TransactionMessagesHandled)
@@ -386,8 +387,6 @@ func (handler *TxHandler) postProcessReportErrors(err error) {
 		switch txGroupErr.Reason {
 		case verify.TxGroupErrorReasonNotWellFormed:
 			transactionMessagesTxnNotWellFormed.Inc(nil)
-		case verify.TxGroupErrorReasonInvalidFee:
-			transactionMessagesTxGroupInvalidFee.Inc(nil)
 		case verify.TxGroupErrorReasonHasNoSig:
 			fallthrough
 		case verify.TxGroupErrorReasonSigNotWellFormed:

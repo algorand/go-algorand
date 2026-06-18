@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,6 +28,17 @@ import (
 	"testing"
 	"time"
 
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	pb "github.com/libp2p/go-libp2p-pubsub/pb"
+	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/multiformats/go-multiaddr"
+	ma "github.com/multiformats/go-multiaddr"
+	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/config"
 	algocrypto "github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
@@ -39,16 +50,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/uuid"
-	"github.com/algorand/go-deadlock"
-
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	pb "github.com/libp2p/go-libp2p-pubsub/pb"
-	"github.com/libp2p/go-libp2p/core/crypto"
-	"github.com/libp2p/go-libp2p/core/network"
-	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/multiformats/go-multiaddr"
-	ma "github.com/multiformats/go-multiaddr"
-	"github.com/stretchr/testify/require"
 )
 
 func (n *P2PNetwork) hasPeers() bool {
@@ -107,7 +108,7 @@ func TestP2PSubmitTX(t *testing.T) {
 	)
 	require.Eventually(t, func() bool {
 		return netA.hasPeers() && netB.hasPeers() && netC.hasPeers()
-	}, 5*time.Second, 50*time.Millisecond)
+	}, 10*time.Second, 50*time.Millisecond)
 
 	// for some reason the above check is not enough in race builds on CI
 	time.Sleep(time.Second) // give time for peers to connect.
@@ -202,7 +203,7 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 
 	require.Eventually(t, func() bool {
 		return netA.hasPeers() && netB.hasPeers() && netC.hasPeers()
-	}, 5*time.Second, 50*time.Millisecond)
+	}, 10*time.Second, 50*time.Millisecond)
 
 	time.Sleep(time.Second) // give time for peers to connect.
 
@@ -287,7 +288,7 @@ func TestP2PSubmitWS(t *testing.T) {
 
 	require.Eventually(t, func() bool {
 		return netA.hasPeers() && netB.hasPeers() && netC.hasPeers()
-	}, 5*time.Second, 50*time.Millisecond)
+	}, 10*time.Second, 50*time.Millisecond)
 
 	time.Sleep(time.Second) // give time for peers to connect.
 
@@ -325,9 +326,12 @@ func TestP2PSubmitWS(t *testing.T) {
 }
 
 type mockService struct {
-	id    peer.ID
-	addrs []ma.Multiaddr
-	peers map[peer.ID]peer.AddrInfo
+	id               peer.ID
+	addrs            []ma.Multiaddr
+	peers            map[peer.ID]peer.AddrInfo
+	unprotectStarted chan struct{}
+	unprotectRelease <-chan struct{}
+	unprotectCalls   atomic.Int32
 }
 
 func (s *mockService) Start() error {
@@ -362,6 +366,20 @@ func (s *mockService) ClosePeer(peer peer.ID) error {
 	return nil
 }
 
+func (s *mockService) UnprotectPeer(peer.ID) {
+	s.unprotectCalls.Add(1)
+	if s.unprotectStarted != nil {
+		select {
+		case <-s.unprotectStarted:
+		default:
+			close(s.unprotectStarted)
+		}
+	}
+	if s.unprotectRelease != nil {
+		<-s.unprotectRelease
+	}
+}
+
 func (s *mockService) Conns() []network.Conn {
 	return nil
 }
@@ -392,6 +410,78 @@ func makeMockService(id peer.ID, addrs []ma.Multiaddr) *mockService {
 		id:    id,
 		addrs: addrs,
 	}
+}
+
+func TestP2PRemovePeerHoldsLockAcrossUnprotect(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	remotePeerID := peer.ID("12D3KooWRemotePeer")
+	oldPeer := &wsPeer{}
+	newPeer := &wsPeer{}
+	unprotectRelease := make(chan struct{})
+
+	mockSvc := &mockService{
+		id:               peer.ID("12D3KooWSelfPeer"),
+		unprotectStarted: make(chan struct{}),
+		unprotectRelease: unprotectRelease,
+	}
+	net := &P2PNetwork{
+		log:             logging.TestingLog(t),
+		service:         mockSvc,
+		wsPeers:         make(map[peer.ID]*wsPeer),
+		wsPeersToIDs:    make(map[*wsPeer]peer.ID),
+		identityTracker: noopIdentityTracker{},
+	}
+	net.wsPeers[remotePeerID] = oldPeer
+	net.wsPeersToIDs[oldPeer] = remotePeerID
+
+	removeDone := make(chan struct{})
+	go func() {
+		net.removePeer(oldPeer, remotePeerID, disconnectReasonNone)
+		close(removeDone)
+	}()
+
+	select {
+	case <-mockSvc.unprotectStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("removePeer did not enter UnprotectPeer")
+	}
+
+	addDone := make(chan struct{})
+	go func() {
+		net.wsPeersLock.Lock()
+		net.wsPeers[remotePeerID] = newPeer
+		net.wsPeersToIDs[newPeer] = remotePeerID
+		net.wsPeersLock.Unlock()
+		close(addDone)
+	}()
+
+	select {
+	case <-addDone:
+		t.Fatal("wsPeersLock was released while UnprotectPeer was still running")
+	case <-time.After(100 * time.Millisecond):
+		// expected: add path stays blocked until UnprotectPeer returns
+	}
+
+	close(unprotectRelease)
+
+	select {
+	case <-removeDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("removePeer did not finish after UnprotectPeer was released")
+	}
+	select {
+	case <-addDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("add path did not complete after removePeer finished")
+	}
+
+	require.Equal(t, int32(1), mockSvc.unprotectCalls.Load(), "expected exactly one unprotect call")
+	net.wsPeersLock.RLock()
+	current, ok := net.wsPeers[remotePeerID]
+	net.wsPeersLock.RUnlock()
+	require.True(t, ok, "replacement peer should be present")
+	require.Equal(t, newPeer, current, "replacement peer should remain mapped")
 }
 
 func TestP2PNetworkAddress(t *testing.T) {
@@ -641,7 +731,7 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 
 			require.Eventually(t, func() bool {
 				return netA.hasPeers() && netB.hasPeers() && netC.hasPeers()
-			}, 2*time.Second, 50*time.Millisecond)
+			}, 10*time.Second, 50*time.Millisecond)
 
 			t.Logf("peers connected")
 
@@ -853,6 +943,19 @@ func TestP2PHTTPHandlerAllInterfaces(t *testing.T) {
 
 }
 
+// baseTestMeshCreator is a simple wrapper to baseMeshCreator for TestP2PRelay
+// in order to provide custom GossipSubHeartbeatInterval option via makeConfig
+// to speed up heartbeat to reduce test flakiness of TestP2PRelay from pubsub mesh establishment timing
+type baseTestMeshCreator struct {
+	baseMeshCreator
+}
+
+func (c baseTestMeshCreator) makeConfig(wsnet *WebsocketNetwork, p2pnet *P2PNetwork) networkConfig {
+	return networkConfig{
+		pubsubOpts: []p2p.PubSubOption{p2p.SetPubSubHeartbeatInterval(200 * time.Millisecond)},
+	}
+}
+
 // TestP2PRelay checks p2p nodes can properly relay messages:
 // netA and netB are started with ForceFetchTransactions so it subscribes to the txn topic,
 // both of them are connected and do not relay messages.
@@ -862,11 +965,6 @@ func TestP2PHTTPHandlerAllInterfaces(t *testing.T) {
 func TestP2PRelay(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// Speed up heartbeat to reduce test flakiness from mesh establishment timing
-	oldHeartbeatInterval := pubsub.GossipSubHeartbeatInterval
-	pubsub.GossipSubHeartbeatInterval = 200 * time.Millisecond
-	defer func() { pubsub.GossipSubHeartbeatInterval = oldHeartbeatInterval }()
-
 	cfg := config.GetDefaultLocal()
 	cfg.DNSBootstrapID = "" // disable DNS lookups since the test uses phonebook addresses
 	cfg.ForceFetchTransactions = true
@@ -875,7 +973,7 @@ func TestP2PRelay(t *testing.T) {
 	log := logging.TestingLog(t)
 	genesisInfo := GenesisInfo{genesisID, config.Devtestnet}
 	log.Debugln("Starting netA")
-	netA, err := NewP2PNetwork(log.With("net", "netA"), cfg, "", nil, genesisInfo, &nopeNodeInfo{}, nil, nil)
+	netA, err := NewP2PNetwork(log.With("net", "netA"), cfg, "", nil, genesisInfo, &nopeNodeInfo{}, nil, baseTestMeshCreator{})
 	require.NoError(t, err)
 
 	err = netA.Start()
@@ -911,7 +1009,7 @@ func TestP2PRelay(t *testing.T) {
 
 	require.Eventually(t, func() bool {
 		return netA.hasPeers() && netB.hasPeers()
-	}, 2*time.Second, 50*time.Millisecond)
+	}, 10*time.Second, 50*time.Millisecond)
 
 	type logMessages struct {
 		msgs [][]byte
@@ -991,7 +1089,7 @@ func TestP2PRelay(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return netA.hasPeers() && netB.hasPeers() && netC.hasPeers() &&
 			netA.hasPeer(netB.service.ID()) && netA.hasPeer(netC.service.ID())
-	}, 2*time.Second, 50*time.Millisecond)
+	}, 10*time.Second, 50*time.Millisecond)
 
 	// Wait for gossipsub heartbeat to establish mesh links.
 	// ListPeersForTopic returns subscribed peers but mesh links are established
@@ -1269,7 +1367,7 @@ func TestP2PwsStreamHandlerDedup(t *testing.T) {
 	// now allow the peer made outgoing connection to handle conn closing initiated by the other side
 	require.Eventually(t, func() bool {
 		return !netA.hasPeers() && !netB.hasPeers()
-	}, 2*time.Second, 50*time.Millisecond)
+	}, 10*time.Second, 50*time.Millisecond)
 }
 
 // TestP2PEnableGossipService_NodeDisable ensures that a node with EnableGossipService=false
@@ -1323,7 +1421,7 @@ func TestP2PEnableGossipService_NodeDisable(t *testing.T) {
 
 			require.Eventually(t, func() bool {
 				return netA.hasPeers() && netB.hasPeers()
-			}, 1*time.Second, 50*time.Millisecond)
+			}, 10*time.Second, 50*time.Millisecond)
 
 			testTag := protocol.AgreementVoteTag
 

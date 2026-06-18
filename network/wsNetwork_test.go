@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -40,20 +40,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/internal/rapidgen"
-	"github.com/algorand/go-algorand/network/phonebook"
-	"pgregory.net/rapid"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"pgregory.net/rapid"
 
 	"github.com/algorand/go-deadlock"
 	"github.com/algorand/websocket"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/internal/rapidgen"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util"
@@ -285,6 +284,20 @@ func TestWebsocketNetworkStartStop(t *testing.T) {
 	netA.Stop()
 }
 
+func TestWebsocketNetworkStartZeroIncomingDoesNotListen(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t)
+	netA.config.IncomingConnectionsLimit = 0
+
+	require.NoError(t, netA.Start())
+	defer netA.Stop()
+
+	require.Nil(t, netA.listener)
+	_, connected := netA.Address()
+	require.False(t, connected)
+}
+
 func waitReady(t testing.TB, wn *WebsocketNetwork, timeout <-chan time.Time) bool {
 	select {
 	case <-wn.Ready():
@@ -341,6 +354,7 @@ func setupWebsocketNetworkABwithLogger(t *testing.T, countTarget int, log loggin
 	readyTimeout := time.NewTimer(5 * time.Second)
 	waitReady(t, netA, readyTimeout.C)
 	t.Log("a ready")
+	readyTimeout.Reset(5 * time.Second)
 	waitReady(t, netB, readyTimeout.C)
 	t.Log("b ready")
 
@@ -1424,6 +1438,13 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 			return len(netA.GetPeers(PeersConnectedOut)) == 1
 		}, time.Second, 50*time.Millisecond)
 	}
+
+	// netB is the server for this connection, so it registers the inbound
+	// peer asynchronously -- wait for it before asserting.
+	assert.Eventually(t, func() bool {
+		return len(netB.GetPeers(PeersConnectedIn)) == 1
+	}, time.Second, 50*time.Millisecond)
+
 	// just one A->B connection
 	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
@@ -1581,6 +1602,12 @@ func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
 			return len(netA.GetPeers(PeersConnectedOut)) == 1
 		}, time.Second, 50*time.Millisecond)
 	}
+
+	// netB is the server -- wait for inbound peer registration.
+	assert.Eventually(t, func() bool {
+		return len(netB.GetPeers(PeersConnectedIn)) == 1
+	}, time.Second, 50*time.Millisecond)
+
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
 
@@ -1646,6 +1673,13 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 			return len(netA.GetPeers(PeersConnectedOut)) == 1
 		}, time.Second, 50*time.Millisecond)
 	}
+
+	// netB is the server for this connection, so it registers the inbound
+	// peer asynchronously -- wait for it before asserting.
+	assert.Eventually(t, func() bool {
+		return len(netB.GetPeers(PeersConnectedIn)) == 1
+	}, time.Second, 50*time.Millisecond)
+
 	// single A->B connection
 	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
@@ -1665,6 +1699,13 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 			return len(netB.GetPeers(PeersConnectedOut)) == 1
 		}, time.Second, 50*time.Millisecond)
 	}
+
+	// netA is the server for this connection, so it registers the inbound
+	// peer asynchronously -- wait for it before asserting.
+	assert.Eventually(t, func() bool {
+		return len(netA.GetPeers(PeersConnectedIn)) == 1
+	}, time.Second, 50*time.Millisecond)
+
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
@@ -1718,6 +1759,12 @@ func TestPeeringIncorrectDeduplicationName(t *testing.T) {
 			return len(netA.GetPeers(PeersConnectedOut)) == 1
 		}, time.Second, 50*time.Millisecond)
 	}
+
+	// netB is the server -- wait for inbound peer registration.
+	assert.Eventually(t, func() bool {
+		return len(netB.GetPeers(PeersConnectedIn)) == 1
+	}, time.Second, 50*time.Millisecond)
+
 	// single A->B connection
 	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
@@ -1739,6 +1786,12 @@ func TestPeeringIncorrectDeduplicationName(t *testing.T) {
 	// let the tryConnect go forward
 	assert.Eventually(t, func() bool {
 		return len(netB.GetPeers(PeersConnectedOut)) == 1
+	}, time.Second, 50*time.Millisecond)
+
+	// netA is the server for this connection, so it receives the identity
+	// verification message asynchronously over WebSocket -- wait for it.
+	assert.Eventually(t, func() bool {
+		return netA.identityTracker.(*mockIdentityTracker).getSetCount() == 1
 	}, time.Second, 50*time.Millisecond)
 
 	// confirm that at this point the identityTracker was called once per network
@@ -1905,8 +1958,20 @@ func TestPeeringWithBadIdentityChallenge(t *testing.T) {
 		if _, ok := netA.tryConnectReserveAddr(addrB); ok {
 			netA.wg.Add(1)
 			netA.tryConnect(addrB, gossipB)
-			// let the tryConnect go forward
-			time.Sleep(250 * time.Millisecond)
+			if tc.totalOutA > 0 {
+				assert.Eventually(t, func() bool {
+					return len(netA.GetPeers(PeersConnectedOut)) == tc.totalOutA
+				}, time.Second, 50*time.Millisecond)
+			}
+			if tc.totalInB > 0 {
+				assert.Eventually(t, func() bool {
+					return len(netB.GetPeers(PeersConnectedIn)) == tc.totalInB
+				}, time.Second, 50*time.Millisecond)
+			}
+			if tc.totalOutA == 0 {
+				// No connection expected -- brief wait to confirm it doesn't happen.
+				time.Sleep(250 * time.Millisecond)
+			}
 		}
 		assert.Equal(t, tc.totalInA, len(netA.GetPeers(PeersConnectedIn)))
 		assert.Equal(t, tc.totalOutA, len(netA.GetPeers(PeersConnectedOut)))
@@ -4135,6 +4200,7 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 	netA.wg.Add(1)
 	netA.tryConnect(addrC, gossipC)
 	require.Eventually(t, func() bool { return netA.NumPeers() == 1 }, 500*time.Millisecond, 25*time.Millisecond)
+	require.Eventually(t, func() bool { return netC.NumPeers() == 1 }, 500*time.Millisecond, 25*time.Millisecond)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	topics := Topics{
@@ -4735,7 +4801,7 @@ func TestWebsocketNetworkHTTPClient(t *testing.T) {
 	require.Equal(t, http.StatusPreconditionFailed, resp.StatusCode) // not enough ws peer headers
 
 	_, err = netB.GetHTTPClient("invalid")
-	require.Error(t, err)
+	require.ErrorContains(t, err, `could not parse a host from url`)
 }
 
 // TestPeerComparisonInBroadcast tests that the peer comparison in the broadcast function works as expected

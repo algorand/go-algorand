@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,10 +24,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/algorand/go-algorand/data/basics"
-
 	// import postgres driver
 	_ "github.com/lib/pq"
+
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 // ErrorNotInitialized is returned when the database is not initialized.

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -51,6 +52,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/simulation"
@@ -82,6 +84,22 @@ const MaxAssetResults = 1000
 // /v2/accounts/{address}/assets endpoint
 const DefaultAssetResults = uint64(1000)
 
+// MaxApplicationResults sets a size limit for the number of applications returned in a single request to the
+// /v2/accounts/{address}/applications endpoint when includeParams=true
+const MaxApplicationResults = 1000
+
+// MaxApplicationResultsWithoutParams sets a higher limit when params are excluded, since responses are ~100x smaller
+const MaxApplicationResultsWithoutParams = MaxApplicationResults * 100
+
+// DefaultApplicationResults sets a default size limit for the number of applications returned in a single request to the
+// /v2/accounts/{address}/applications endpoint
+const DefaultApplicationResults = uint64(1000)
+
+// maxBoxFetchBytes is the hard cap on total bytes fetched by paginated box
+// listing responses. The server enforces this limit internally on every
+// paginated request.  Actual response bytes will be larger due to base64/json overhead.
+const maxBoxFetchBytes = 1_000_000
+
 const (
 	errInvalidLimit      = "limit parameter must be a positive integer"
 	errUnableToParseNext = "unable to parse next token"
@@ -106,13 +124,16 @@ type LedgerForAPI interface {
 	LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error)
 	LookupKv(round basics.Round, key string) ([]byte, error)
 	LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error)
+	LookupKvPairsByPrefix(round basics.Round, keyPrefix string, cursor string, limit uint64, maxBytes uint64, includeValues bool) ([]ledgercore.KvPairResult, basics.Round, bool, error)
 	ConsensusParams(r basics.Round) (config.ConsensusParams, error)
 	Latest() basics.Round
 	LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error)
 	LookupAssets(addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, basics.Round, error)
 	LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error)
+	LookupApplications(addr basics.Address, appIDGT basics.AppIndex, limit uint64, includeParams bool) ([]ledgercore.AppResourceWithIDs, basics.Round, error)
 	BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error)
 	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
+	OnlineCirculation(rnd basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error)
 	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
 	Wait(r basics.Round) chan struct{}
 	WaitWithCancel(r basics.Round) (chan struct{}, func())
@@ -416,13 +437,36 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address basics.Address,
 	}
 
 	// should we skip fetching apps and assets?
-	if params.Exclude != nil {
-		switch *params.Exclude {
-		case "all":
-			return v2.basicAccountInformation(ctx, address, handle, contentType)
-		case "none", "":
-		default:
-			return badRequest(ctx, err, errFailedToParseExclude, v2.Log)
+	var excludeCreatedAppsParams bool
+	var excludeCreatedAssetsParams bool
+	if params.Exclude != nil && len(*params.Exclude) > 0 {
+		excludeValues := *params.Exclude
+
+		// Handle special cases that must be alone
+		if len(excludeValues) == 1 {
+			val := strings.TrimSpace(string(excludeValues[0]))
+			if val == "all" {
+				return v2.basicAccountInformation(ctx, address, handle, contentType)
+			}
+			if val == "none" || val == "" {
+				// Default behavior - include everything
+				excludeValues = nil
+			}
+		}
+
+		// Parse exclusions
+		for _, excludeVal := range excludeValues {
+			val := strings.TrimSpace(string(excludeVal))
+			switch val {
+			case "created-apps-params":
+				excludeCreatedAppsParams = true
+			case "created-assets-params":
+				excludeCreatedAssetsParams = true
+			case "all", "none":
+				return badRequest(ctx, fmt.Errorf("'%s' cannot be combined with other exclude values", val), errFailedToParseExclude, v2.Log)
+			default:
+				return badRequest(ctx, fmt.Errorf("invalid exclude value: %s", val), errFailedToParseExclude, v2.Log)
+			}
 		}
 	}
 
@@ -470,7 +514,10 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address basics.Address,
 		return internalError(ctx, err, fmt.Sprintf("could not retrieve consensus information for last round (%d)", lastRound), v2.Log)
 	}
 
-	account, err := AccountDataToAccount(address.String(), &record, lastRound, &consensus, amountWithoutPendingRewards)
+	account, err := AccountDataToAccount(address.String(), &record, lastRound, &consensus, amountWithoutPendingRewards, AccountDataToAccountOptions{
+		ExcludeCreatedAppsParams:   excludeCreatedAppsParams,
+		ExcludeCreatedAssetsParams: excludeCreatedAssetsParams,
+	})
 	if err != nil {
 		return internalError(ctx, err, errInternalFailure, v2.Log)
 	}
@@ -586,7 +633,7 @@ func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address basics.Add
 
 	if record.AssetParams != nil {
 		asset := AssetParamsToAsset(address.String(), assetID, record.AssetParams)
-		response.CreatedAsset = &asset.Params
+		response.CreatedAsset = asset.Params
 	}
 
 	if record.AssetHolding != nil {
@@ -634,7 +681,7 @@ func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address basi
 
 	if record.AppParams != nil {
 		app := AppParamsToApplication(address.String(), applicationID, record.AppParams)
-		response.CreatedApp = &app.Params
+		response.CreatedApp = app.Params
 	}
 
 	if record.AppLocalState != nil {
@@ -939,7 +986,20 @@ func (v2 *Handlers) GetTransactionProof(ctx echo.Context, round basics.Round, tx
 func (v2 *Handlers) GetSupply(ctx echo.Context) error {
 	latest, totals, err := v2.Node.LedgerForAPI().LatestTotals()
 	if err != nil {
-		err = fmt.Errorf("GetSupply(): round %d, failed: %v", latest, err)
+		err = fmt.Errorf("GetSupply(): round %d, LatestTotals failed: %v", latest, err)
+		return internalError(ctx, err, errInternalFailure, v2.Log)
+	}
+
+	params, err := v2.Node.LedgerForAPI().ConsensusParams(latest)
+	if err != nil {
+		err = fmt.Errorf("GetSupply(): round %d, ConsensusParams failed: %v", latest, err)
+		return internalError(ctx, err, errInternalFailure, v2.Log)
+	}
+
+	brnd := agreement.BalanceRound(latest, params)
+	onlineCirculation, err := v2.Node.LedgerForAPI().OnlineCirculation(brnd, latest)
+	if err != nil {
+		err = fmt.Errorf("GetSupply(): round %d, OnlineCirculation failed: %v", latest, err)
 		return internalError(ctx, err, errInternalFailure, v2.Log)
 	}
 
@@ -947,6 +1007,7 @@ func (v2 *Handlers) GetSupply(ctx echo.Context) error {
 		CurrentRound: latest,
 		TotalMoney:   totals.Participating().Raw,
 		OnlineMoney:  totals.Online.Money.Raw,
+		OnlineStake:  onlineCirculation.Raw,
 	}
 
 	return ctx.JSON(http.StatusOK, supply)
@@ -1136,10 +1197,6 @@ func (v2 *Handlers) RawTransactionAsync(ctx echo.Context) error {
 // AccountAssetsInformation looks up an account's asset holdings.
 // (GET /v2/accounts/{address}/assets)
 func (v2 *Handlers) AccountAssetsInformation(ctx echo.Context, address basics.Address, params model.AccountAssetsInformationParams) error {
-	if !v2.Node.Config().EnableExperimentalAPI {
-		return ctx.String(http.StatusNotFound, "/v2/accounts/{address}/assets was not enabled in the configuration file by setting the EnableExperimentalAPI to true")
-	}
-
 	var assetGreaterThan uint64 = 0
 	if params.Next != nil {
 		agt, err0 := strconv.ParseUint(*params.Next, 10, 64)
@@ -1207,13 +1264,111 @@ func (v2 *Handlers) AccountAssetsInformation(ctx echo.Context, address basics.Ad
 
 		if !record.Creator.IsZero() {
 			asset := AssetParamsToAsset(record.Creator.String(), record.AssetID, record.AssetParams)
-			aah.AssetParams = &asset.Params
+			aah.AssetParams = asset.Params
 		}
 
 		assetHoldings = append(assetHoldings, aah)
 	}
 
 	response.AssetHoldings = &assetHoldings
+
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// AccountApplicationsInformation returns application resources for a specific address.
+func (v2 *Handlers) AccountApplicationsInformation(ctx echo.Context, address basics.Address, params model.AccountApplicationsInformationParams) error {
+	var appGreaterThan uint64 = 0
+	if params.Next != nil {
+		agt, err0 := strconv.ParseUint(*params.Next, 10, 64)
+		if err0 != nil {
+			return badRequest(ctx, err0, fmt.Sprintf("%s: %v", errUnableToParseNext, err0), v2.Log)
+		}
+		appGreaterThan = agt
+	}
+
+	// Determine includeParams first, as it affects limit validation
+	includeParams := false
+	if params.Include != nil {
+		if slices.Contains(*params.Include, model.AccountApplicationsInformationParamsIncludeParams) {
+			includeParams = true
+		}
+	}
+
+	// Choose appropriate max limit based on whether params are included
+	// When params are excluded, responses are ~100x smaller, so we can return more results
+	maxLimit := uint64(MaxApplicationResults)
+	if !includeParams {
+		maxLimit = uint64(MaxApplicationResultsWithoutParams)
+	}
+
+	if params.Limit != nil {
+		if *params.Limit <= 0 {
+			return badRequest(ctx, errors.New(errInvalidLimit), errInvalidLimit, v2.Log)
+		}
+
+		if *params.Limit > maxLimit {
+			limitErrMsg := fmt.Sprintf("limit %d exceeds max applications single batch limit %d", *params.Limit, maxLimit)
+			return badRequest(ctx, errors.New(limitErrMsg), limitErrMsg, v2.Log)
+		}
+	} else {
+		// default limit
+		l := DefaultApplicationResults
+		params.Limit = &l
+	}
+
+	ledger := v2.Node.LedgerForAPI()
+
+	// Logic
+	// 1. Get the account's application resources subject to limits
+	// 2. Handle empty response
+	// 3. Prepare JSON response
+
+	// We intentionally request one more than the limit to determine if there are more applications.
+	records, lookupRound, err := ledger.LookupApplications(address, basics.AppIndex(appGreaterThan), *params.Limit+1, includeParams)
+
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	// prepare JSON response
+	response := model.AccountApplicationsInformationResponse{Round: lookupRound}
+
+	// If the total count is greater than the limit, we set the next token to the last application ID being returned
+	if uint64(len(records)) > *params.Limit {
+		// we do not include the last record in the response
+		records = records[:*params.Limit]
+		nextTk := strconv.FormatUint(uint64(records[len(records)-1].AppID), 10)
+		response.NextToken = &nextTk
+	}
+
+	applicationResources := make([]model.AccountApplicationResource, 0, len(records))
+
+	for _, record := range records {
+		aah := model.AccountApplicationResource{
+			Id: record.AppID,
+		}
+
+		if !record.Creator.IsZero() {
+			// App exists - don't set Deleted field (omit from JSON)
+			if includeParams && record.AppParams != nil {
+				app := AppParamsToApplication(record.Creator.String(), record.AppID, record.AppParams)
+				aah.Params = app.Params
+			}
+		} else {
+			// App deleted - set Deleted=true (only include when true)
+			deleted := true
+			aah.Deleted = &deleted
+		}
+
+		if record.AppLocalState != nil {
+			appLocalState := AppLocalState(*record.AppLocalState, record.AppID)
+			aah.AppLocalState = &appLocalState
+		}
+
+		applicationResources = append(applicationResources, aah)
+	}
+
+	response.ApplicationResources = &applicationResources
 
 	return ctx.JSON(http.StatusOK, response)
 }
@@ -1731,10 +1886,103 @@ func applicationBoxesMaxKeys(requestedMax uint64, algodMax uint64) uint64 {
 // GetApplicationBoxes returns the boxes of an application
 // (GET /v2/applications/{application-id}/boxes)
 func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID basics.AppIndex, params model.GetApplicationBoxesParams) error {
-	ledger := v2.Node.LedgerForAPI()
-	lastRound := ledger.Latest()
+	lgr := v2.Node.LedgerForAPI()
+	lastRound := lgr.Latest()
 	keyPrefix := apps.MakeBoxKey(uint64(applicationID), "")
 
+	// Determine query round: use caller-specified round or latest.
+	queryRound := lastRound
+	if params.Round != nil {
+		queryRound = *params.Round
+		if queryRound > lastRound {
+			return badRequest(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)
+		}
+	}
+
+	limit := nilToZero(params.Limit)
+	includeValues := params.Include != nil && slices.Contains(*params.Include, model.GetApplicationBoxesParamsIncludeValues)
+
+	// When no pagination-related params are provided, preserve current behavior.
+	if limit == 0 && params.Next == nil && !includeValues && (params.Prefix == nil || *params.Prefix == "") && params.Round == nil {
+		return v2.getApplicationBoxesLegacy(ctx, lgr, queryRound, applicationID, keyPrefix, params)
+	}
+
+	// Cap limit to the server's MaxAPIBoxPerApplication configuration.
+	algodMax := v2.Node.Config().MaxAPIBoxPerApplication
+	if algodMax > 0 && (limit == 0 || limit > algodMax) {
+		limit = algodMax
+	}
+
+	// Parse cursor from next token.
+	var cursor string
+	if params.Next != nil && *params.Next != "" {
+		nextBytes, err := apps.NewAppCallBytes(*params.Next)
+		if err != nil {
+			return badRequest(ctx, err, "invalid next token: "+err.Error(), v2.Log)
+		}
+		nextRaw, err := nextBytes.Raw()
+		if err != nil {
+			return badRequest(ctx, err, "invalid next token: "+err.Error(), v2.Log)
+		}
+		cursor = apps.MakeBoxKey(uint64(applicationID), string(nextRaw))
+	}
+
+	// Parse prefix filter.
+	fullKeyPrefix := keyPrefix
+	if params.Prefix != nil && *params.Prefix != "" {
+		prefixBytes, err := apps.NewAppCallBytes(*params.Prefix)
+		if err != nil {
+			return badRequest(ctx, err, "invalid prefix: "+err.Error(), v2.Log)
+		}
+		prefixRaw, err := prefixBytes.Raw()
+		if err != nil {
+			return badRequest(ctx, err, "invalid prefix: "+err.Error(), v2.Log)
+		}
+		fullKeyPrefix = apps.MakeBoxKey(uint64(applicationID), string(prefixRaw))
+	}
+
+	// We can't use the "limit+1" trick here because the request may be limited by
+	// byte size, not lack of more results.
+	results, rnd, moreData, err := lgr.LookupKvPairsByPrefix(queryRound, fullKeyPrefix, cursor, limit, maxBoxFetchBytes, includeValues)
+	if err != nil {
+		var roundOffErr *ledger.RoundOffsetError
+		if errors.As(err, &roundOffErr) {
+			return badRequest(ctx, err, errRoundTooOld, v2.Log)
+		}
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	prefixLen := len(keyPrefix)
+
+	// Set next-token when more data exists.
+	var nextToken *string
+	if moreData && len(results) > 0 {
+		lastBoxName := []byte(results[len(results)-1].Key[prefixLen:])
+		token := encodeBoxNameAsAppCallBytes(lastBoxName)
+		nextToken = &token
+	}
+
+	responseBoxes := make([]model.BoxDescriptor, len(results))
+	for i, kv := range results {
+		boxName := []byte(kv.Key[prefixLen:])
+		desc := model.BoxDescriptor{Name: boxName}
+		if includeValues {
+			val := kv.Value
+			desc.Value = &val
+		}
+		responseBoxes[i] = desc
+	}
+
+	response := model.BoxesResponse{
+		Boxes:     responseBoxes,
+		NextToken: nextToken,
+		Round:     &rnd,
+	}
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// getApplicationBoxesLegacy preserves the original unpaginated behavior.
+func (v2 *Handlers) getApplicationBoxesLegacy(ctx echo.Context, ledger LedgerForAPI, lastRound basics.Round, applicationID basics.AppIndex, keyPrefix string, params model.GetApplicationBoxesParams) error {
 	requestedMax, algodMax := nilToZero(params.Max), v2.Node.Config().MaxAPIBoxPerApplication
 	max := applicationBoxesMaxKeys(requestedMax, algodMax)
 
@@ -1769,6 +2017,11 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID basics.A
 	}
 	response := model.BoxesResponse{Boxes: responseBoxes}
 	return ctx.JSON(http.StatusOK, response)
+}
+
+// encodeBoxNameAsAppCallBytes encodes a raw box name as a b64:-prefixed app call arg string.
+func encodeBoxNameAsAppCallBytes(name []byte) string {
+	return "b64:" + base64.StdEncoding.EncodeToString(name)
 }
 
 // GetApplicationBoxByName returns the value of an application's box

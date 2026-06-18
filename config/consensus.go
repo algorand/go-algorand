@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -61,8 +61,16 @@ type ConsensusParams struct {
 	// in a block must not exceed MaxTxnBytesPerBlock.
 	MaxTxnBytesPerBlock int
 
-	// MaxTxnBytesPerBlock is the maximum size of a transaction's Note field.
+	// MaxTxnNoteBytes is the maximum size of a transaction's Note field in
+	// a "basic transaction".  Larger notes require extra fees.
 	MaxTxnNoteBytes int
+
+	// MaxAbsoluteTxnNoteBytes is the absolute maximum size of a transaction's
+	// Note field, even with extra fees paid. Provides DoS protection. When set
+	// equal to MaxTxnNoteBytes, effectively disables large notes. When set
+	// higher, allows notes up to this size with appropriate fees (1000
+	// FeeFactor units per byte over MaxTxnNoteBytes).
+	MaxAbsoluteTxnNoteBytes int
 
 	// MaxTxnLife is how long a transaction can be live for:
 	// the maximum difference between LastValid and FirstValid.
@@ -101,11 +109,6 @@ type ConsensusParams struct {
 	// A minimum fee is necessary to prevent DoS. In some sense this is
 	// a way of making the spender subsidize the cost of storing this transaction.
 	MinTxnFee uint64
-
-	// EnableFeePooling specifies that the sum of the fees in a
-	// group must exceed one MinTxnFee per Txn, rather than check that
-	// each Txn has a MinFee.
-	EnableFeePooling bool
 
 	// EnableAppCostPooling specifies that the sum of fees for application calls
 	// in a group is checked against the sum of the budget for application calls,
@@ -256,8 +259,12 @@ type ConsensusParams struct {
 	// max number of ApplicationArgs for an ApplicationCall transaction
 	MaxAppArgs int
 
-	// max sum([len(arg) for arg in txn.ApplicationArgs])
+	// max sum([len(arg) for arg in txn.ApplicationArgs]) w/o paying extra
 	MaxAppTotalArgLen int
+
+	// MaxAbsoluteTotalArgLen is the absolute maximum length of app args,
+	// with anything longer than MaxAppTotalArgLen costing extra
+	MaxAbsoluteTotalArgLen int
 
 	// maximum byte len of application approval program or clear state
 	// When MaxExtraAppProgramPages > 0, this is the size of those pages.
@@ -271,6 +278,10 @@ type ConsensusParams struct {
 
 	// extra length for application program in pages. A page is MaxAppProgramLen bytes
 	MaxExtraAppProgramPages int
+
+	// MaxAbsoluteExtraProgramPages is the absolute maximum number of extra pages allowed,
+	// even with extra fees paid. Provides DoS protection.
+	MaxAbsoluteExtraProgramPages int
 
 	// maximum number of accounts in the ApplicationCall Accounts field.
 	// this determines, in part, the maximum number of balance records
@@ -580,6 +591,16 @@ type ConsensusParams struct {
 	// specify the current app. This parameter can be removed and assumed true
 	// after the first consensus release in which it is set true.
 	AllowZeroLocalAppRef bool
+
+	// LoadTracking enables header values that track Load that grows/shrinks
+	// when blocks are more/less than half full.
+	LoadTracking bool
+
+	// PerByteTxnSurcharge specifies the fee surcharge per byte for transactions
+	// with large notes, app args, programs, or other fields that can beyond the
+	// basic Max sizes (they use up to "Absolute" Maxes. It is expressed in
+	// fraction of a basic min fee.
+	PerByteTxnSurcharge basics.Micros
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -666,6 +687,11 @@ type BonusPlan struct {
 	DecayInterval uint64
 }
 
+// MinFee simply returns the MinTxnFee as a basics.MicroAlgos
+func (proto ConsensusParams) MinFee() basics.MicroAlgos {
+	return basics.MicroAlgos{Raw: proto.MinTxnFee}
+}
+
 // EffectiveKeyDilution returns the key dilution for this account,
 // returning the default key dilution if not explicitly specified.
 func (proto ConsensusParams) EffectiveKeyDilution(kd uint64) uint64 {
@@ -738,12 +764,12 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxAppProgramLen, &bounds.MaxEvalDeltaAccounts)
 	checkSetMax(p.MaxAppProgramLen, &bounds.MaxAppProgramLen)
 	checkSetMax((int(p.LogicSigMaxSize) * p.MaxTxGroupSize), &bounds.MaxLogicSigMaxSize)
-	checkSetMax(p.MaxTxnNoteBytes, &bounds.MaxTxnNoteBytes)
+	checkSetMax(p.MaxAbsoluteTxnNoteBytes, &bounds.MaxTxnNoteBytes)
 	checkSetMax(p.MaxTxGroupSize, &bounds.MaxTxGroupSize)
 	// MaxBytesKeyValueLen is max of MaxAppKeyLen and MaxAppBytesValueLen
 	checkSetMax(p.MaxAppKeyLen, &bounds.MaxBytesKeyValueLen)
 	checkSetMax(p.MaxAppBytesValueLen, &bounds.MaxBytesKeyValueLen)
-	checkSetMax(p.MaxExtraAppProgramPages, &bounds.MaxExtraAppProgramLen)
+	checkSetMax(p.MaxAbsoluteExtraProgramPages, &bounds.MaxExtraAppProgramLen)
 	// MaxAvailableAppProgramLen is the max of supported app program size
 	bounds.MaxAvailableAppProgramLen = bounds.MaxAppProgramLen * (1 + bounds.MaxExtraAppProgramLen)
 	// There is no consensus parameter for MaxLogCalls and MaxAppProgramLen as an approximation
@@ -755,7 +781,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 
 	// These bounds are exported to make them available to the msgp generator for calculating
 	// maximum valid message size for each message going across the wire.
-	checkSetMax(p.MaxAppTotalArgLen, &bounds.MaxAppTotalArgLen)
+	checkSetMax(p.MaxAbsoluteTotalArgLen, &bounds.MaxAppTotalArgLen)
 	checkSetMax(p.MaxAssetNameBytes, &bounds.MaxAssetNameBytes)
 	checkSetMax(p.MaxAssetUnitNameBytes, &bounds.MaxAssetUnitNameBytes)
 	checkSetMax(p.MaxAssetURLBytes, &bounds.MaxAssetURLBytes)
@@ -819,12 +845,13 @@ func initConsensusProtocols() {
 		DefaultUpgradeWaitRounds: 10000,
 		MaxVersionStringLen:      64,
 
-		MinBalance:          10000,
-		MinTxnFee:           1000,
-		MaxTxnLife:          1000,
-		MaxTxnNoteBytes:     1024,
-		MaxTxnBytesPerBlock: 1000000,
-		DefaultKeyDilution:  10000,
+		MinBalance:              10000,
+		MinTxnFee:               1000,
+		MaxTxnLife:              1000,
+		MaxTxnNoteBytes:         1024,
+		MaxAbsoluteTxnNoteBytes: 1024,
+		MaxTxnBytesPerBlock:     1000000,
+		DefaultKeyDilution:      10000,
 
 		MaxTimestampIncrement: 25,
 
@@ -1068,6 +1095,7 @@ func initConsensusProtocols() {
 
 	v24.MaxAppArgs = 16
 	v24.MaxAppTotalArgLen = 2048
+	v24.MaxAbsoluteTotalArgLen = 2048
 	v24.MaxAppProgramLen = 1024
 	v24.MaxAppTotalProgramLen = 2048 // No effect until v28, when MaxAppProgramLen increased
 	v24.MaxAppKeyLen = 64
@@ -1170,6 +1198,7 @@ func initConsensusProtocols() {
 	v28.LogicSigVersion = 4
 	// Enable support for larger app program size
 	v28.MaxExtraAppProgramPages = 3
+	v28.MaxAbsoluteExtraProgramPages = 3
 	v28.MaxAppProgramLen = 2048
 	// Increase asset URL length to allow for IPFS URLs
 	v28.MaxAssetURLBytes = 96
@@ -1185,7 +1214,6 @@ func initConsensusProtocols() {
 	// "reachability" between accounts and creatables, so we
 	// retain 4 x 4 as worst case.
 
-	v28.EnableFeePooling = true
 	v28.EnableKeyregCoherencyCheck = true
 
 	Consensus[protocol.ConsensusV28] = v28
@@ -1462,10 +1490,14 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 13 // When moving this to a release, put a new higher LogicSigVersion here
-
 	vFuture.AppSizeUpdates = true
 	vFuture.AllowZeroLocalAppRef = true
 	vFuture.EnforceAuthAddrSenderDiff = true
+	vFuture.LoadTracking = true
+	vFuture.MaxAbsoluteTxnNoteBytes = 4096   // same as largest AVM value
+	vFuture.MaxAbsoluteExtraProgramPages = 7 // Allow larger programs with extra fees
+	vFuture.MaxAbsoluteTotalArgLen = 16384   // We _could_ make this as high as 16*4k
+	vFuture.PerByteTxnSurcharge = 100        // Each charged byte adds 0.000100 of min fee
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
@@ -1513,6 +1545,13 @@ var Protocol = Global{
 	SmallLambda: 2000 * time.Millisecond,
 	BigLambda:   15000 * time.Millisecond,
 }
+
+// MaxAVMBytesSize is the longest allowable AVM byteslice value It is not
+// consensus values because it has never been changed (and would be very, very
+// hard to change!).  No point in carrying it around in ConsensusParams.  But it
+// does appear in various places around the system now, we put it here for
+// accessibility.
+const MaxAVMBytesSize = 4096 // Just to match largest AVM size
 
 func init() {
 	Consensus = make(ConsensusProtocols)

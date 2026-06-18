@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,13 +17,13 @@
 package main
 
 import (
+	"fmt"
 	"log"
-
-	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/protocol"
 
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // ddrFromParams converts serialized DryrunRequest to v2.DryrunRequest
@@ -69,8 +69,12 @@ func balanceRecordsFromDdr(ddr *v2.DryrunRequest) (records []basics.BalanceRecor
 			return
 		}
 		// deserialize app params and update account data
+		if a.Params == nil {
+			err = fmt.Errorf("application %d has no params", a.Id)
+			return
+		}
 		var params basics.AppParams
-		params, err = v2.ApplicationParamsToAppParams(&a.Params)
+		params, err = v2.ApplicationParamsToAppParams(a.Params)
 		if err != nil {
 			return
 		}

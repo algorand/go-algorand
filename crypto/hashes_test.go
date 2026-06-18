@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,9 +19,9 @@ package crypto
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
-
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestHashFactoryCreatingNewHashes(t *testing.T) {
@@ -68,7 +68,7 @@ func TestEmptyHash(t *testing.T) {
 	var msg [4]byte
 	len, err := hash.Write(msg[:])
 	a.Equal(0, len)
-	a.Error(err)
+	a.ErrorIs(err, errUnknownHash)
 
 	a.Equal(0, hash.BlockSize())
 	var emptySlice []byte

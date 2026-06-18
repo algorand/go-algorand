@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,14 +20,15 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestWellFormedHeartbeatErrors(t *testing.T) {
@@ -193,6 +194,28 @@ func TestWellFormedHeartbeatErrors(t *testing.T) {
 			},
 			proto:         futureProto,
 			expectedError: fmt.Errorf("tx.RekeyTo is set in free heartbeat"),
+		},
+		{
+			tx: Transaction{
+				Type: protocol.HeartbeatTx,
+				Header: Header{
+					Sender:     addr1,
+					LastValid:  105,
+					FirstValid: 100,
+					Note:       make([]byte, 1025),   // Big notes are legal now
+					Fee:        futureProto.MinFee(), // But they need a bigger fee
+				},
+				HeartbeatTxnFields: &HeartbeatTxnFields{
+					HbProof: crypto.HeartbeatProof{
+						Sig: [64]byte{0x01},
+					},
+					HbSeed:        committee.Seed{0x02},
+					HbVoteID:      crypto.OneTimeSignatureVerifier{0x03},
+					HbKeyDilution: 10,
+				},
+			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.Note is set in cheap heartbeat"),
 		},
 	}
 	for _, usecase := range usecases {
