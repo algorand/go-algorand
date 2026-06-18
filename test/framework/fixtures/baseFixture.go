@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/algorand/go-algorand/config"
@@ -51,8 +52,9 @@ func getTestDir() string {
 // goInstallBinDir reports where `go install` (and thus `make install`) places
 // binaries, asking `go env` rather than trusting an exported $GOPATH. This
 // mirrors the GOBIN/GOPATH resolution in the Makefile so a plain `go test`
-// finds algod without requiring NODEBINDIR or an exported GOPATH.
-func goInstallBinDir() string {
+// finds algod without requiring NODEBINDIR or an exported GOPATH. The result
+// is cached, since every fixture initialize() would otherwise re-run `go env`.
+var goInstallBinDir = sync.OnceValue(func() string {
 	if out, err := exec.Command("go", "env", "GOBIN").Output(); err == nil {
 		if dir := strings.TrimSpace(string(out)); dir != "" {
 			return dir
@@ -68,7 +70,7 @@ func goInstallBinDir() string {
 		return ""
 	}
 	return filepath.Join(gopath[0], "bin")
-}
+})
 
 func (f *baseFixture) initialize(instance Fixture) {
 	f.instance = instance
