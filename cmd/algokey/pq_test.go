@@ -396,6 +396,7 @@ func TestPQExportRequiresMnemonicDestination(t *testing.T) {
 
 func TestPQCommandFlagShorthands(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	require.Equal(t, "S", pqGenerateCmd.Flags().Lookup("scheme").Shorthand)
 	require.Equal(t, "f", pqGenerateCmd.Flags().Lookup("keyfile").Shorthand)
