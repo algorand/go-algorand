@@ -17,6 +17,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -308,14 +309,14 @@ func TestPQMnemonicExportImportRoundTrip(t *testing.T) {
 	importedKeyfile := filepath.Join(tempDir, "imported.pq")
 	require.NoError(t, writePQRootKeyFile(keyfile, root))
 
-	require.NoError(t, runPQExportWithOptions(keyfile, mnemonicFile))
+	require.NoError(t, runPQExportWithOptions(keyfile, mnemonicFile, false))
 	exportedScheme, exportedEntropy, err := readPQMnemonicFile(mnemonicFile)
 	require.NoError(t, err)
 	defer zeroBytes(exportedEntropy[:])
 	require.Equal(t, root.scheme, exportedScheme)
 	require.Equal(t, root.entropy, exportedEntropy)
 
-	require.NoError(t, runPQImportWithOptions(mnemonicFile, importedKeyfile))
+	require.NoError(t, runPQImportWithOptions(mnemonicFile, importedKeyfile, false))
 	imported, err := readPQRootKeyFile(importedKeyfile)
 	require.NoError(t, err)
 	defer wipePQRootMaterial(&imported)
@@ -332,7 +333,7 @@ func TestPQImportRejectsMalformedMnemonicFile(t *testing.T) {
 	importedKeyfile := filepath.Join(tempDir, "imported.pq")
 	require.NoError(t, os.WriteFile(mnemonicFile, []byte("Scheme: f1\nnot a valid mnemonic\n"), 0600))
 
-	err := runPQImportWithOptions(mnemonicFile, importedKeyfile)
+	err := runPQImportWithOptions(mnemonicFile, importedKeyfile, false)
 	require.Error(t, err)
 
 	_, statErr := os.Stat(importedKeyfile)
@@ -361,9 +362,65 @@ func TestPQMnemonicFileRecordsSchemeAndRejectsUnknown(t *testing.T) {
 	badContents := strings.Replace(string(contents), "Scheme: f1", "Scheme: zz", 1)
 	require.NoError(t, os.WriteFile(badFile, []byte(badContents), 0600))
 	importedKeyfile := filepath.Join(tempDir, "imported.pq")
-	require.ErrorIs(t, runPQImportWithOptions(badFile, importedKeyfile), basics.ErrPQSchemeNotSupported)
+	require.ErrorIs(t, runPQImportWithOptions(badFile, importedKeyfile, false), basics.ErrPQSchemeNotSupported)
 	_, statErr := os.Stat(importedKeyfile)
 	require.ErrorIs(t, statErr, os.ErrNotExist)
+}
+
+func TestPQPrintMnemonic(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	root := pqTestRoot(t, 6)
+	defer wipePQRootMaterial(&root)
+	mnemonic, err := mnemonicFromSeed(root.entropy)
+	require.NoError(t, err)
+
+	var out bytes.Buffer
+	require.NoError(t, printPQMnemonic(&out, root.entropy))
+	require.Equal(t, "PQ private key mnemonic: "+mnemonic+"\n", out.String())
+}
+
+func TestPQExportRequiresMnemonicDestination(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	root := pqTestRoot(t, 7)
+	defer wipePQRootMaterial(&root)
+	keyfile := filepath.Join(t.TempDir(), "account.pq")
+	require.NoError(t, writePQRootKeyFile(keyfile, root))
+
+	err := runPQExportWithOptions(keyfile, "", false)
+	require.ErrorContains(t, err, "--mnemonic-file or --display-mnemonic")
+}
+
+func TestPQCommandFlagShorthands(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	require.Equal(t, "S", pqGenerateCmd.Flags().Lookup("scheme").Shorthand)
+	require.Equal(t, "f", pqGenerateCmd.Flags().Lookup("keyfile").Shorthand)
+	require.Equal(t, "p", pqGenerateCmd.Flags().Lookup("pubkeyfile").Shorthand)
+	require.Empty(t, pqGenerateCmd.Flags().Lookup("display-mnemonic").Shorthand)
+
+	require.Equal(t, "f", pqInfoCmd.Flags().Lookup("keyfile").Shorthand)
+	require.Equal(t, "s", pqInfoCmd.Flags().Lookup("salt").Shorthand)
+
+	require.Equal(t, "p", pqAddressCmd.Flags().Lookup("pubkeyfile").Shorthand)
+	require.Equal(t, "S", pqAddressCmd.Flags().Lookup("scheme").Shorthand)
+	require.Equal(t, "s", pqAddressCmd.Flags().Lookup("salt").Shorthand)
+
+	require.Equal(t, "f", pqExportCmd.Flags().Lookup("keyfile").Shorthand)
+	require.Equal(t, "m", pqExportCmd.Flags().Lookup("mnemonic-file").Shorthand)
+	require.Empty(t, pqExportCmd.Flags().Lookup("display-mnemonic").Shorthand)
+
+	require.Equal(t, "m", pqImportCmd.Flags().Lookup("mnemonic-file").Shorthand)
+	require.Equal(t, "f", pqImportCmd.Flags().Lookup("keyfile").Shorthand)
+	require.Empty(t, pqImportCmd.Flags().Lookup("display-mnemonic").Shorthand)
+
+	require.Equal(t, "k", pqSignCmd.Flags().Lookup("keyfile").Shorthand)
+	require.Equal(t, "t", pqSignCmd.Flags().Lookup("txfile").Shorthand)
+	require.Equal(t, "o", pqSignCmd.Flags().Lookup("outfile").Shorthand)
+	require.Equal(t, "s", pqSignCmd.Flags().Lookup("salt").Shorthand)
 }
 
 func TestPQPublicAddressSaltHandling(t *testing.T) {

@@ -35,9 +35,10 @@ import (
 var errPQTxnAlreadySigned = errors.New("transaction already has a signature")
 
 var (
-	pqGenerateScheme     = string(protocol.PQSchemeFalcon1024)
-	pqGenerateKeyfile    string
-	pqGeneratePubkeyfile string
+	pqGenerateScheme          = string(protocol.PQSchemeFalcon1024)
+	pqGenerateKeyfile         string
+	pqGeneratePubkeyfile      string
+	pqGenerateDisplayMnemonic bool
 
 	pqInfoKeyfile string
 	pqInfoSalt    = "canonical"
@@ -46,11 +47,13 @@ var (
 	pqAddressScheme     = string(protocol.PQSchemeFalcon1024)
 	pqAddressSalt       = "canonical"
 
-	pqExportKeyfile      string
-	pqExportMnemonicFile string
+	pqExportKeyfile         string
+	pqExportMnemonicFile    string
+	pqExportDisplayMnemonic bool
 
-	pqImportMnemonicFile string
-	pqImportKeyfile      string
+	pqImportMnemonicFile    string
+	pqImportKeyfile         string
+	pqImportDisplayMnemonic bool
 
 	pqSignKeyfile   string
 	pqSignTxfile    string
@@ -138,34 +141,36 @@ func init() {
 	pqCmd.AddCommand(pqImportCmd)
 	pqCmd.AddCommand(pqSignCmd)
 
-	pqGenerateCmd.Flags().StringVar(&pqGenerateScheme, "scheme", pqGenerateScheme, "Post-quantum signature scheme")
-	pqGenerateCmd.Flags().StringVar(&pqGenerateKeyfile, "keyfile", "", "Private key filename")
-	pqGenerateCmd.Flags().StringVar(&pqGeneratePubkeyfile, "pubkeyfile", "", "Public key filename")
+	pqGenerateCmd.Flags().StringVarP(&pqGenerateScheme, "scheme", "S", pqGenerateScheme, "Post-quantum signature scheme")
+	pqGenerateCmd.Flags().StringVarP(&pqGenerateKeyfile, "keyfile", "f", "", "Private key filename")
+	pqGenerateCmd.Flags().StringVarP(&pqGeneratePubkeyfile, "pubkeyfile", "p", "", "Public key filename")
+	pqGenerateCmd.Flags().BoolVar(&pqGenerateDisplayMnemonic, "display-mnemonic", false, "Display the private key mnemonic")
 	mustMarkFlagRequired(pqGenerateCmd, "keyfile")
 
-	pqInfoCmd.Flags().StringVar(&pqInfoKeyfile, "keyfile", "", "Private key filename")
-	pqInfoCmd.Flags().StringVar(&pqInfoSalt, "salt", pqInfoSalt, "Address salt: canonical or 0..255")
+	pqInfoCmd.Flags().StringVarP(&pqInfoKeyfile, "keyfile", "f", "", "Private key filename")
+	pqInfoCmd.Flags().StringVarP(&pqInfoSalt, "salt", "s", pqInfoSalt, "Address salt: canonical or 0..255")
 	mustMarkFlagRequired(pqInfoCmd, "keyfile")
 
-	pqAddressCmd.Flags().StringVar(&pqAddressPubkeyfile, "pubkeyfile", "", "Public key filename")
-	pqAddressCmd.Flags().StringVar(&pqAddressScheme, "scheme", pqAddressScheme, "Post-quantum signature scheme")
-	pqAddressCmd.Flags().StringVar(&pqAddressSalt, "salt", pqAddressSalt, "Address salt: canonical or 0..255")
+	pqAddressCmd.Flags().StringVarP(&pqAddressPubkeyfile, "pubkeyfile", "p", "", "Public key filename")
+	pqAddressCmd.Flags().StringVarP(&pqAddressScheme, "scheme", "S", pqAddressScheme, "Post-quantum signature scheme")
+	pqAddressCmd.Flags().StringVarP(&pqAddressSalt, "salt", "s", pqAddressSalt, "Address salt: canonical or 0..255")
 	mustMarkFlagRequired(pqAddressCmd, "pubkeyfile")
 
-	pqExportCmd.Flags().StringVar(&pqExportKeyfile, "keyfile", "", "Private key filename")
-	pqExportCmd.Flags().StringVar(&pqExportMnemonicFile, "mnemonic-file", "", "Mnemonic output filename")
+	pqExportCmd.Flags().StringVarP(&pqExportKeyfile, "keyfile", "f", "", "Private key filename")
+	pqExportCmd.Flags().StringVarP(&pqExportMnemonicFile, "mnemonic-file", "m", "", "Mnemonic output filename")
+	pqExportCmd.Flags().BoolVar(&pqExportDisplayMnemonic, "display-mnemonic", false, "Display the private key mnemonic")
 	mustMarkFlagRequired(pqExportCmd, "keyfile")
-	mustMarkFlagRequired(pqExportCmd, "mnemonic-file")
 
-	pqImportCmd.Flags().StringVar(&pqImportMnemonicFile, "mnemonic-file", "", "Mnemonic input filename")
-	pqImportCmd.Flags().StringVar(&pqImportKeyfile, "keyfile", "", "Private key filename")
+	pqImportCmd.Flags().StringVarP(&pqImportMnemonicFile, "mnemonic-file", "m", "", "Mnemonic input filename")
+	pqImportCmd.Flags().StringVarP(&pqImportKeyfile, "keyfile", "f", "", "Private key filename")
+	pqImportCmd.Flags().BoolVar(&pqImportDisplayMnemonic, "display-mnemonic", false, "Display the private key mnemonic")
 	mustMarkFlagRequired(pqImportCmd, "mnemonic-file")
 	mustMarkFlagRequired(pqImportCmd, "keyfile")
 
-	pqSignCmd.Flags().StringVar(&pqSignKeyfile, "keyfile", "", "Private key filename")
-	pqSignCmd.Flags().StringVar(&pqSignTxfile, "txfile", "", "Transaction input filename")
-	pqSignCmd.Flags().StringVar(&pqSignOutfile, "outfile", "", "Transaction output filename")
-	pqSignCmd.Flags().StringVar(&pqSignSalt, "salt", pqSignSalt, "Address salt: canonical or 0..255")
+	pqSignCmd.Flags().StringVarP(&pqSignKeyfile, "keyfile", "k", "", "Private key filename")
+	pqSignCmd.Flags().StringVarP(&pqSignTxfile, "txfile", "t", "", "Transaction input filename")
+	pqSignCmd.Flags().StringVarP(&pqSignOutfile, "outfile", "o", "", "Transaction output filename")
+	pqSignCmd.Flags().StringVarP(&pqSignSalt, "salt", "s", pqSignSalt, "Address salt: canonical or 0..255")
 	pqSignCmd.Flags().BoolVar(&pqSignOverwrite, "overwrite", false, "Overwrite any existing signature category")
 	mustMarkFlagRequired(pqSignCmd, "keyfile")
 	mustMarkFlagRequired(pqSignCmd, "txfile")
@@ -190,6 +195,11 @@ func runPQGenerate() error {
 	}
 	if pqGeneratePubkeyfile != "" {
 		if err = writePQPublicKeyFile(pqGeneratePubkeyfile, root.public); err != nil {
+			return err
+		}
+	}
+	if pqGenerateDisplayMnemonic {
+		if err = printPQMnemonic(os.Stdout, root.entropy); err != nil {
 			return err
 		}
 	}
@@ -233,27 +243,37 @@ func runPQAddress() error {
 }
 
 func runPQExport() error {
-	return runPQExportWithOptions(pqExportKeyfile, pqExportMnemonicFile)
+	return runPQExportWithOptions(pqExportKeyfile, pqExportMnemonicFile, pqExportDisplayMnemonic)
 }
 
-func runPQExportWithOptions(keyfile, mnemonicFile string) error {
+func runPQExportWithOptions(keyfile, mnemonicFile string, displayMnemonic bool) error {
+	if mnemonicFile == "" && !displayMnemonic {
+		return fmt.Errorf("must specify --mnemonic-file or --display-mnemonic")
+	}
 	root, err := readPQRootKeyFile(keyfile)
 	if err != nil {
 		return err
 	}
 	defer wipePQRootMaterial(&root)
 
-	if err = writePQMnemonicFile(mnemonicFile, root.scheme, root.entropy); err != nil {
-		return fmt.Errorf("cannot write mnemonic to %s: %w", mnemonicFile, err)
+	if mnemonicFile != "" {
+		if err = writePQMnemonicFile(mnemonicFile, root.scheme, root.entropy); err != nil {
+			return fmt.Errorf("cannot write mnemonic to %s: %w", mnemonicFile, err)
+		}
+	}
+	if displayMnemonic {
+		if err = printPQMnemonic(os.Stdout, root.entropy); err != nil {
+			return err
+		}
 	}
 	return printPQKeyInfo(os.Stdout, root.public)
 }
 
 func runPQImport() error {
-	return runPQImportWithOptions(pqImportMnemonicFile, pqImportKeyfile)
+	return runPQImportWithOptions(pqImportMnemonicFile, pqImportKeyfile, pqImportDisplayMnemonic)
 }
 
-func runPQImportWithOptions(mnemonicFile, keyfile string) error {
+func runPQImportWithOptions(mnemonicFile, keyfile string, displayMnemonic bool) error {
 	scheme, entropy, err := readPQMnemonicFile(mnemonicFile)
 	if err != nil {
 		return fmt.Errorf("cannot read mnemonic from %s: %w", mnemonicFile, err)
@@ -268,6 +288,11 @@ func runPQImportWithOptions(mnemonicFile, keyfile string) error {
 
 	if err = writePQRootKeyFile(keyfile, root); err != nil {
 		return fmt.Errorf("cannot write private key to %s: %w", keyfile, err)
+	}
+	if displayMnemonic {
+		if err = printPQMnemonic(os.Stdout, entropy); err != nil {
+			return err
+		}
 	}
 	return printPQKeyInfo(os.Stdout, root.public)
 }
@@ -366,6 +391,15 @@ func clearSignedTxnSignatures(stxn *transactions.SignedTxn) {
 	stxn.Msig = crypto.MultisigSig{}
 	stxn.Lsig = transactions.LogicSig{}
 	stxn.PQSig = transactions.PQSig{}
+}
+
+func printPQMnemonic(w io.Writer, entropy crypto.Seed) error {
+	mnemonic, err := mnemonicFromSeed(entropy)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(w, "PQ private key mnemonic: %s\n", mnemonic)
+	return err
 }
 
 func printPQKeyInfo(w io.Writer, public pqPublicMaterial) error {
