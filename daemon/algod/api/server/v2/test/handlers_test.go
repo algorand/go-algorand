@@ -1153,18 +1153,18 @@ func TestPostTransaction(t *testing.T) {
 	postTransactionTest(t, 0, 200, "RawTransaction")
 }
 
+const pushIntOp byte = 0x81 // TEAL pushint opcode
+
 func onCurveLogicSigProgram(t *testing.T) []byte {
 	t.Helper()
-
-	program := []byte{logic.LogicSigOffCurveVersion, logic.OpsByName[logic.LogicSigOffCurveVersion]["pushint"].Opcode, 12}
+	program := []byte{logic.LogicSigOffCurveVersion, pushIntOp, 12}
 	require.True(t, logic.ProgramHashIsEdwards25519Point(program))
 	return program
 }
 
 func legacyOnCurveLogicSigProgram(t *testing.T) []byte {
 	t.Helper()
-
-	program := []byte{12, logic.OpsByName[12]["pushint"].Opcode, 1}
+	program := []byte{12, pushIntOp, 1}
 	require.True(t, logic.ProgramHashIsEdwards25519Point(program))
 	return program
 }

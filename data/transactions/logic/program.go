@@ -24,10 +24,6 @@ import (
 // Program is byte code to be interpreted for validating transactions.
 type Program []byte
 
-// LogicSigOffCurveVersion is the first AVM version where LogicSig programs
-// assembled by this package are expected to hash to an off-curve address.
-const LogicSigOffCurveVersion = 13
-
 // ToBeHashed implements crypto.Hashable
 func (lsl Program) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Program, []byte(lsl)
