@@ -429,6 +429,31 @@ func TestPQSignProducesVerifiablePQEnvelope(t *testing.T) {
 	require.ErrorContains(t, changed.PQSig.Verify(config.Consensus[protocol.ConsensusFuture], changed.Txn, changed.Authorizer()), "invalid falcon-1024 signature")
 }
 
+func TestPQSignRejectsEmptyInputFile(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	root := pqTestRoot(t, 0)
+	defer wipePQRootMaterial(&root)
+	tempDir := t.TempDir()
+	keyfile := filepath.Join(tempDir, "account.pq")
+	txfile := filepath.Join(tempDir, "empty.msgp")
+	outfile := filepath.Join(tempDir, "signed.msgp")
+	require.NoError(t, writePQRootKeyFile(keyfile, root))
+	require.NoError(t, os.WriteFile(txfile, nil, 0600))
+
+	err := runPQSignWithOptions(pqSignOptions{
+		keyfile: keyfile,
+		txfile:  txfile,
+		outfile: outfile,
+		salt:    "canonical",
+	})
+	require.ErrorContains(t, err, "no transactions found")
+
+	_, statErr := os.Stat(outfile)
+	require.ErrorIs(t, statErr, os.ErrNotExist)
+}
+
 func TestPQSignSetsAndClearsAuthAddr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

@@ -42,7 +42,7 @@ func TestPQSchemes(t *testing.T) {
 	for _, value := range values {
 		require.Len(t, value, PQSchemeSize, "PQScheme %q must be exactly %d bytes", value, PQSchemeSize)
 		for i := 0; i < len(value); i++ {
-			require.LessOrEqual(t, value[i], byte(0x7f), "PQScheme %q must be ASCII", value)
+			require.Truef(t, value[i] >= 0x20 && value[i] < 0x7f, "PQScheme %q must be printable ASCII", value)
 		}
 
 		_, ok := seen[value]

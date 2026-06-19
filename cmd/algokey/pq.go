@@ -308,6 +308,7 @@ func runPQSignWithOptions(opts pqSignOptions) error {
 	}
 
 	var outBytes []byte
+	decodedTxns := 0
 	dec := protocol.NewMsgpDecoderBytes(txdata)
 	for {
 		var stxn transactions.SignedTxn
@@ -318,6 +319,7 @@ func runPQSignWithOptions(opts pqSignOptions) error {
 		if err != nil {
 			return fmt.Errorf("cannot decode transaction: %w", err)
 		}
+		decodedTxns++
 
 		if signedTxnHasSignature(&stxn) {
 			if !opts.overwrite {
@@ -346,6 +348,9 @@ func runPQSignWithOptions(opts pqSignOptions) error {
 		outBytes = append(outBytes, protocol.Encode(&stxn)...)
 	}
 
+	if decodedTxns == 0 {
+		return fmt.Errorf("no transactions found in %s", opts.txfile)
+	}
 	if err = writeFile(opts.outfile, outBytes, 0600); err != nil {
 		return fmt.Errorf("cannot write signed transactions to %s: %w", opts.outfile, err)
 	}

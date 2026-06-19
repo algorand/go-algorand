@@ -57,18 +57,49 @@ func TestPQAddressKnownAnswers(t *testing.T) {
 		firstSeedByte   byte
 		salt            PQAddressSalt
 		expectedAddress string
+		compliant       bool
 	}{
 		{
 			name:            "zero salt",
 			firstSeedByte:   0,
 			salt:            0,
 			expectedAddress: "7ZQ6VZDWW5NECRV3XMW6L7YX743PFC55IEVS4X3GDHIW4NBMYLYTJT4VTA",
+			compliant:       true,
 		},
 		{
 			name:            "nonzero salt",
 			firstSeedByte:   1,
 			salt:            1,
 			expectedAddress: "4X6LFIO4F7WZFXM24J567HAXW4FHXWKGVGPNCA4SMPPAYMZYSHYTB6XXC4",
+			compliant:       true,
+		},
+		{
+			name:            "max salt",
+			firstSeedByte:   0,
+			salt:            255,
+			expectedAddress: "PFVGXUXMOHPMNTUMR67BYBUYCUCLD4ZSFRPCJOGI7BUGCX5CL47TZKFFWA",
+			compliant:       true,
+		},
+		{
+			name:            "different seed",
+			firstSeedByte:   2,
+			salt:            2,
+			expectedAddress: "2K52PWFN2AWITVDB2QHWBQ6ZW4VMJK2LVFQMDFYG2Y32NDH37GHTYFQG2Y",
+			compliant:       true,
+		},
+		{
+			name:            "max seed and salt",
+			firstSeedByte:   255,
+			salt:            255,
+			expectedAddress: "SVR2WW4Y3SUONROBQUBQX5T2R6IQQAINOHMDAADUPI4JCWR4XYELDRUZDU",
+			compliant:       true,
+		},
+		{
+			name:            "non-compliant on-curve address",
+			firstSeedByte:   1,
+			salt:            0,
+			expectedAddress: "RJANW5CPBRBB3QK5XBPA3YWCFV2VQLD3HWV4KFMPMBJ7XFN2BPLKGU35KA",
+			compliant:       false,
 		},
 	}
 
@@ -78,8 +109,8 @@ func TestPQAddressKnownAnswers(t *testing.T) {
 
 			addr := PQAddress(protocol.PQSchemeFalcon1024, tc.salt, publicKey)
 			require.Equal(t, tc.expectedAddress, addr.String())
-			require.False(t, crypto.IsEdwards25519Point(addr[:]))
-			require.True(t, addr.IsPQCompliant())
+			require.Equal(t, tc.compliant, addr.IsPQCompliant())
+			require.Equal(t, !tc.compliant, crypto.IsEdwards25519Point(addr[:]))
 
 			addrAgain := PQAddress(protocol.PQSchemeFalcon1024, tc.salt, publicKey)
 			require.Equal(t, addr, addrAgain)

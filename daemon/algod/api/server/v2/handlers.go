@@ -1162,7 +1162,7 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
-	if err = validatePQSignaturesForSubmit(proto, txgroup); err != nil {
+	if err = enforcePQSubmitPolicy(proto, txgroup); err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
@@ -1195,7 +1195,7 @@ func (v2 *Handlers) RawTransactionAsync(ctx echo.Context) error {
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
-	if err = validatePQSignaturesForSubmit(proto, txgroup); err != nil {
+	if err = enforcePQSubmitPolicy(proto, txgroup); err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 	err = v2.Node.AsyncBroadcastSignedTxGroup(txgroup)
@@ -1472,7 +1472,7 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 		}
 	}
 	for groupIdx, txgroup := range simulateRequest.TxnGroups {
-		if err = validatePQSignaturesForSimulate(proto, txgroup.Txns, simulateRequest.AllowEmptySignatures, simulateRequest.FixSigners); err != nil {
+		if err = enforcePQSimulatePolicy(proto, txgroup.Txns, simulateRequest.AllowEmptySignatures, simulateRequest.FixSigners); err != nil {
 			err = fmt.Errorf("transaction group %d: %w", groupIdx, err)
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}

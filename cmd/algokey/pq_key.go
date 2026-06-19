@@ -30,8 +30,8 @@ import (
 )
 
 const (
-	pqPrivateKeyMagic      = "ALGOKEY-PQ-PRIVATE"
-	pqPublicKeyMagic       = "ALGOKEY-PQ-PUBLIC"
+	pqPrivateKeyMagic      = "ALGO-PQ-PRIVATE"
+	pqPublicKeyMagic       = "ALGO-PQ-PUBLIC"
 	pqMnemonicSchemeHeader = "Scheme:"
 )
 

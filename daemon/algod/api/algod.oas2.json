@@ -4300,7 +4300,7 @@
     "sig-type": {
       "enum": ["sig", "msig", "lsig", "pq"],
       "type": "string",
-      "description": "SigType filters just results using the specified type of signature:\n* sig - Standard\n* msig - MultiSig\n* lsig - LogicSig\n* pq - Post-quantum",
+      "description": "SigType filters just results using the specified type of signature:\n* sig - Standard\n* msig - MultiSig\n* lsig - LogicSig\n* pq - Post-Quantum",
       "name": "sig-type",
       "in": "query"
     },
