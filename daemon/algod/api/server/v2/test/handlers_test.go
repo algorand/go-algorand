@@ -708,7 +708,7 @@ func TestGetSupply(t *testing.T) {
 	handler, c, rec, _, _, _ := setupTestForMethodGetWithMockLedger(t, mockLedger, rootkeys, stxns, cannedStatusReportGolden, false, shutdown, releasefunc)
 	defer releasefunc()
 	insertRounds(a, handler, 375)
-	err := handler.GetSupply(c)
+	err := handler.GetSupply(c, model.GetSupplyParams{})
 	require.NoError(t, err)
 	require.Equal(t, 200, rec.Code)
 	var supplyResponse model.SupplyResponse
