@@ -765,6 +765,7 @@ func TestDebugFromTxn(t *testing.T) {
 	// make transaction group: app call + sample payment
 	appTxn := transactions.SignedTxn{
 		Txn: transactions.Transaction{
+			Type: protocol.PaymentTx,
 			Header: transactions.Header{
 				Sender: sender,
 			},
@@ -995,6 +996,7 @@ func TestLocalBalanceAdapter(t *testing.T) {
 	// make transaction group: app call + sample payment
 	appTxn := transactions.SignedTxn{
 		Txn: transactions.Transaction{
+			Type: protocol.ApplicationCallTx,
 			Header: transactions.Header{
 				Sender: sender,
 			},
@@ -1088,6 +1090,7 @@ func TestLocalBalanceAdapterIndexer(t *testing.T) {
 	// make transaction group: app call + sample payment
 	appTxn := transactions.SignedTxn{
 		Txn: transactions.Transaction{
+			Type: protocol.ApplicationCallTx,
 			Header: transactions.Header{
 				Sender: sender,
 			},

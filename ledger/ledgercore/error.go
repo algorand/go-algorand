@@ -39,6 +39,7 @@ var (
 	_ error = BlockInLedgerError{}
 	_ error = ErrNoEntry{}
 	_ error = ErrNonSequentialBlockEval{}
+	_ error = EvalPanicError{}
 	_ error = (*TxGroupMalformedError)(nil)
 )
 
@@ -159,6 +160,22 @@ type ErrNonSequentialBlockEval struct {
 // Error satisfies builtin interface `error`
 func (err ErrNonSequentialBlockEval) Error() string {
 	return fmt.Sprintf("block evaluation for round %d requires sequential evaluation while the latest round is %d", err.EvaluatorRound, err.LatestRound)
+}
+
+// ErrEvaluatorCorruptedState is returned by a BlockEvaluator refusing further work after a
+// recovered panic left its state half-applied. The refused group was not at fault.
+var ErrEvaluatorCorruptedState = errors.New("block evaluator state was corrupted by a previously recovered panic")
+
+// EvalPanicError is returned when evaluation panicked and was recovered: a typically
+// deterministic defect, so retrying callers back off. Cause is the recovered value's string.
+type EvalPanicError struct {
+	Round basics.Round
+	Cause string
+}
+
+// Error satisfies builtin interface `error`
+func (err EvalPanicError) Error() string {
+	return fmt.Sprintf("panic while evaluating block for round %d: %s", err.Round, err.Cause)
 }
 
 // TxGroupMalformedErrorReasonCode is a reason code for TxGroupMalformed
