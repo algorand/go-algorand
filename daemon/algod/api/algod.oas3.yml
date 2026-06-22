@@ -2559,7 +2559,7 @@
             "x-go-type": "uint64"
           },
           "group-usage": {
-            "description": "Total fee usage of the transaction group and all of its descendant inner transaction groups, in millionths of a basic transaction fee unit.",
+            "description": "Fee usage for the transaction group, including all descendant inner transactions, in millionths of a basic transaction fee unit.",
             "type": "integer",
             "x-go-type": "basics.Micros"
           },
@@ -2610,7 +2610,7 @@
             "$ref": "#/components/schemas/SimulateUnnamedResourcesAccessed"
           },
           "usage": {
-            "description": "Total fee usage of this transaction and all of its descendant inner transactions, in millionths of a basic transaction fee unit.",
+            "description": "Fee usage for this transaction and all of its descendant inner transactions, in millionths of a basic transaction fee unit.",
             "type": "integer",
             "x-go-type": "basics.Micros"
           }

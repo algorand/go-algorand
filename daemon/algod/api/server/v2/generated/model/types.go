@@ -898,7 +898,7 @@ type SimulateTransactionGroupResult struct {
 	// GroupFeesPaid Total fees paid by the transaction group and all of its descendant inner transaction groups.
 	GroupFeesPaid *uint64 `json:"group-fees-paid,omitempty"`
 
-	// GroupUsage Total fee usage of the transaction group and all of its descendant inner transaction groups, in millionths of a basic transaction fee unit.
+	// GroupUsage Fee usage for the transaction group, including all descendant inner transactions, in millionths of a basic transaction fee unit.
 	GroupUsage *basics.Micros `json:"group-usage,omitempty"`
 
 	// TxnResults Simulation result for individual transactions
@@ -931,7 +931,7 @@ type SimulateTransactionResult struct {
 	// UnnamedResourcesAccessed These are resources that were accessed by this group that would normally have caused failure, but were allowed in simulation. Depending on where this object is in the response, the unnamed resources it contains may or may not qualify for group resource sharing. If this is a field in SimulateTransactionGroupResult, the resources do qualify, but if this is a field in SimulateTransactionResult, they do not qualify. In order to make this group valid for actual submission, resources that qualify for group sharing can be made available by any transaction of the group; otherwise, resources must be placed in the same transaction which accessed them.
 	UnnamedResourcesAccessed *SimulateUnnamedResourcesAccessed `json:"unnamed-resources-accessed,omitempty"`
 
-	// Usage Total fee usage of this transaction and all of its descendant inner transactions, in millionths of a basic transaction fee unit.
+	// Usage Fee usage for this transaction and all of its descendant inner transactions, in millionths of a basic transaction fee unit.
 	Usage *basics.Micros `json:"usage,omitempty"`
 }
 
