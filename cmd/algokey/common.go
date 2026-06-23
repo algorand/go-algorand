@@ -108,7 +108,6 @@ func seedFromMnemonic(mnemonic string) (crypto.Seed, error) {
 	if err != nil {
 		return crypto.Seed{}, err
 	}
-	defer zeroBytes(seedBytes)
 
 	var seed crypto.Seed
 	copy(seed[:], seedBytes)
