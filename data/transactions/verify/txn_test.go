@@ -103,7 +103,7 @@ func makePQSignedTxn(t *testing.T, firstSeedByte byte) transactions.SignedTxn {
 
 	signature, err := signer.Sign(txn)
 	require.NoError(t, err)
-	pqSig.Signature = slices.Clone(signature)
+	pqSig.Signature = signature
 
 	return transactions.SignedTxn{
 		Txn:   txn,
@@ -133,7 +133,7 @@ func makePQSigForTxn(t *testing.T, firstSeedByte byte, txn *transactions.Transac
 		signature, err = signer.Sign(*txn)
 		require.NoError(t, err)
 	}
-	pqSig.Signature = slices.Clone(signature)
+	pqSig.Signature = signature
 
 	return authorizer, pqSig
 }
@@ -142,7 +142,7 @@ func makePQSigFields(t *testing.T, firstSeedByte byte) (crypto.FalconSigner, bas
 	t.Helper()
 
 	signer := makeFalconSigner(t, firstSeedByte)
-	publicKey := slices.Clone(signer.PublicKey[:])
+	publicKey := signer.PublicKey[:]
 	salt, authorizer, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
 	require.NoError(t, err)
 
@@ -1653,7 +1653,7 @@ func testLogicSigMultisigValidation(t *testing.T, consensusVer protocol.Consensu
 		// Test with both fields - should fail
 		stxn.Lsig = transactions.LogicSig{Logic: program, Msig: msig, LMsig: msig}
 		err = verifyLogicSig(t, stxn)
-		require.ErrorContains(t, err, "LogicSig should only have one of Sig, Msig, or LMsig but has more than one")
+		require.ErrorContains(t, err, "LogicSig should have only one type of delegation signature")
 	})
 }
 
@@ -1729,7 +1729,7 @@ func TestLogicSigMsigBothFlags(t *testing.T) {
 	// Test with both fields - should fail
 	stxn.Lsig = transactions.LogicSig{Logic: program, Msig: msig, LMsig: lmsig}
 	err = verifyLogicSig()
-	require.ErrorContains(t, err, "LogicSig should only have one of Sig, Msig, or LMsig but has more than one")
+	require.ErrorContains(t, err, "LogicSig should have only one type of delegation signature")
 }
 
 func TestAuthAddrSenderDiff(t *testing.T) {

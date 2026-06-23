@@ -83,7 +83,7 @@ type GroupContext struct {
 }
 
 var errTxnSigHasNoSig = errors.New("signedtxn has no sig")
-var errTxnSigNotWellFormed = errors.New("signedtxn should only have one of Sig, MSig, LogicSig, or PQSig")
+var errTxnSigNotWellFormed = errors.New("signedtxn should have only one type of signature")
 var errRekeyingNotSupported = errors.New("nonempty AuthAddr but rekeying is not supported")
 var errAuthAddrEqualsSender = errors.New("AuthAddr must be different from Sender")
 var errUnknownSignature = errors.New("has one mystery sig. WAT?")
@@ -415,7 +415,7 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batch crypto.B
 		return errors.New("LogicNot signed and not a Logic-only account")
 	}
 	if numSigs > 1 {
-		return errors.New("LogicSig should only have one of Sig, Msig, or LMsig but has more than one")
+		return errors.New("LogicSig should have only one type of delegation signature")
 	}
 
 	if !hasMsig && !hasLMsig {
