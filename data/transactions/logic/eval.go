@@ -4017,6 +4017,12 @@ func opGloadImpl(cx *EvalContext, gi int, scratchIdx byte, opName string) (stack
 		return none, fmt.Errorf("%s can't get future scratch space from txn with index %d", opName, gi)
 	}
 
+	// An app call that never executed its program leaves pastScratch[gi] nil even
+	// though its Type is still appl (e.g., a ClearState against a deleted app).
+	if cx.pastScratch[gi] == nil {
+		return none, fmt.Errorf("%s lookup of txn %d that did not run a program", opName, gi)
+	}
+
 	return cx.pastScratch[gi][scratchIdx], nil
 }
 

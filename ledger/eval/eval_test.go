@@ -194,6 +194,196 @@ ok:
 	return eval, addrs[0], err
 }
 
+// panicAtTracer panics from a single, configurable EvalTracer hook, letting a test drive a panic
+// into BlockEvaluator.TransactionGroup at a chosen point: BeforeTxnGroup runs before the loop and
+// AfterTxn after a transaction has mutated the cow (both before the child cow is committed), while
+// the deferred AfterTxnGroup hook runs after cow.commitToParent, inside the committing window.
+type panicAtTracer struct {
+	logic.NullEvalTracer
+	panicIn string
+}
+
+func (pt panicAtTracer) BeforeTxnGroup(*logic.EvalParams) {
+	if pt.panicIn == "BeforeTxnGroup" {
+		panic("simulated panic before committing transaction group")
+	}
+}
+
+func (pt panicAtTracer) AfterTxn(*logic.EvalParams, int, transactions.ApplyData, error) {
+	if pt.panicIn == "AfterTxn" {
+		panic("simulated panic while applying transaction group")
+	}
+}
+
+func (pt panicAtTracer) AfterTxnGroup(*logic.EvalParams, *ledgercore.StateDelta, error) {
+	if pt.panicIn == "AfterTxnGroup" {
+		panic("simulated panic after committing transaction group")
+	}
+}
+
+// TestTransactionGroupRecoversPanic drives real panics through BlockEvaluator.TransactionGroup
+// before cow.commitToParent and asserts the recover contract: the panic becomes an EvalPanicError,
+// block state is untouched (the child cow is discarded), and the same evaluator still accepts a
+// later group. The AfterTxn case panics after the cow was mutated, exercising the rollback.
+func TestTransactionGroupRecoversPanic(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genesisInitState, addrs, keys := ledgertesting.Genesis(10)
+
+	for _, panicIn := range []string{"BeforeTxnGroup", "AfterTxn"} {
+		t.Run(panicIn, func(t *testing.T) {
+			l := newTestLedger(t, bookkeeping.GenesisBalances{
+				Balances:    genesisInitState.Accounts,
+				FeeSink:     testSinkAddr,
+				RewardsPool: testPoolAddr,
+			})
+			blkHeader, err := l.BlockHdr(basics.Round(0))
+			require.NoError(t, err)
+			newBlock := bookkeeping.MakeBlock(blkHeader)
+			eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
+			require.NoError(t, err)
+			eval.validate = true // so blockTxBytes accounting runs
+
+			// pay builds a valid payment from addrs[0]; amount varies the txid so the two groups
+			// applied in this subtest are not rejected as duplicates of each other.
+			pay := func(amount uint64) transactions.SignedTxnWithAD {
+				txn := transactions.Transaction{
+					Type: protocol.PaymentTx,
+					Header: transactions.Header{
+						Sender:      addrs[0],
+						Fee:         basics.MicroAlgos{Raw: eval.proto.MinTxnFee},
+						FirstValid:  newBlock.Round(),
+						LastValid:   newBlock.Round(),
+						GenesisHash: l.GenesisHash(),
+					},
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver: addrs[1],
+						Amount:   basics.MicroAlgos{Raw: amount},
+					},
+				}
+				return txn.Sign(keys[0]).WithAD()
+			}
+
+			paysetBefore := len(eval.block.Payset)
+			bytesBefore := eval.blockTxBytes
+
+			// The panic became an EvalPanicError and the group rolled back: the child cow was
+			// discarded and block bookkeeping is exactly as it was on entry.
+			eval.Tracer = panicAtTracer{panicIn: panicIn}
+			err = eval.TransactionGroup(pay(100_000))
+			var panicErr ledgercore.EvalPanicError
+			require.ErrorAs(t, err, &panicErr)
+			require.Equal(t, eval.Round(), panicErr.Round)
+			require.Len(t, eval.block.Payset, paysetBefore)
+			require.Equal(t, bytesBefore, eval.blockTxBytes)
+
+			// The evaluator is not poisoned: a subsequent (distinct) group still applies and commits.
+			eval.Tracer = nil
+			require.NoError(t, eval.TransactionGroup(pay(100_001)))
+			require.Len(t, eval.block.Payset, paysetBefore+1)
+			require.Greater(t, eval.blockTxBytes, bytesBefore)
+		})
+	}
+}
+
+// TestTransactionGroupCorruptedStateRefusesWork verifies the mid-commit fail-safe: commitToParent
+// cannot be rolled back, so a panic recovered inside the committing window must corrupt-mark the
+// evaluator, which then refuses further groups and GenerateBlock (the pool reuses one evaluator per
+// round). The panic is driven through the deferred AfterTxnGroup tracer hook, which runs after
+// cow.commitToParent, so this exercises the recover's real corrupt-marking branch and pins the
+// placement of the committing flag; TestTransactionGroupRecoversPanic covers that a panic *before*
+// the commit leaves the marker unset and the evaluator reusable.
+func TestTransactionGroupCorruptedStateRefusesWork(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genesisInitState, addrs, keys := ledgertesting.Genesis(10)
+	l := newTestLedger(t, bookkeeping.GenesisBalances{
+		Balances:    genesisInitState.Accounts,
+		FeeSink:     testSinkAddr,
+		RewardsPool: testPoolAddr,
+	})
+	blkHeader, err := l.BlockHdr(basics.Round(0))
+	require.NoError(t, err)
+	newBlock := bookkeeping.MakeBlock(blkHeader)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
+	require.NoError(t, err)
+	eval.validate = true
+
+	// pay builds a valid payment from addrs[0]; amount varies the txid so the groups applied here
+	// are not rejected as duplicates of each other.
+	pay := func(amount uint64) transactions.SignedTxnWithAD {
+		txn := transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      addrs[0],
+				Fee:         basics.MicroAlgos{Raw: eval.proto.MinTxnFee},
+				FirstValid:  newBlock.Round(),
+				LastValid:   newBlock.Round(),
+				GenesisHash: l.GenesisHash(),
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: addrs[1],
+				Amount:   basics.MicroAlgos{Raw: amount},
+			},
+		}
+		return txn.Sign(keys[0]).WithAD()
+	}
+
+	// Apply one valid group so the evaluator holds committed state.
+	require.NoError(t, eval.TransactionGroup(pay(100_000)))
+
+	// Panic inside the committing window: the deferred AfterTxnGroup hook runs after
+	// cow.commitToParent, so the group lands in the block and the recover must corrupt-mark the
+	// evaluator rather than report a clean rejection.
+	eval.Tracer = panicAtTracer{panicIn: "AfterTxnGroup"}
+	err = eval.TransactionGroup(pay(100_001))
+	var corruptErr ledgercore.EvalPanicError
+	require.ErrorAs(t, err, &corruptErr)
+	require.Equal(t, eval.Round(), corruptErr.Round)
+	require.Len(t, eval.block.Payset, 2) // the group committed before the deferred hook panicked
+	paysetAfter := len(eval.block.Payset)
+
+	// Every entry point the pool reuses the evaluator through must now fail fast with the
+	// corrupted-state sentinel (the check returns before any further state is touched), which
+	// distinguishes refused innocent groups from the EvalPanicError the offender received.
+	eval.Tracer = nil
+	stxn := pay(100_002)
+	require.ErrorIs(t, eval.TestTransactionGroup([]transactions.SignedTxn{stxn.SignedTxn}), ledgercore.ErrEvaluatorCorruptedState)
+	require.ErrorIs(t, eval.TransactionGroup(stxn), ledgercore.ErrEvaluatorCorruptedState)
+	require.Len(t, eval.block.Payset, paysetAfter) // the refused group left no trace
+
+	vb, err := eval.GenerateBlock(nil)
+	require.ErrorIs(t, err, ledgercore.ErrEvaluatorCorruptedState)
+	require.Nil(t, vb)
+}
+
+// panicFlushLedger panics in FlushCaches, the first call Eval makes.
+type panicFlushLedger struct{ *evalTestLedger }
+
+func (panicFlushLedger) FlushCaches() { panic("simulated panic flushing caches") }
+
+func TestEvalRecoversPanic(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genesisInitState, _, _ := ledgertesting.Genesis(10)
+	l := newTestLedger(t, bookkeeping.GenesisBalances{
+		Balances:    genesisInitState.Accounts,
+		FeeSink:     testSinkAddr,
+		RewardsPool: testPoolAddr,
+	})
+	blkHeader, err := l.BlockHdr(basics.Round(0))
+	require.NoError(t, err)
+	newBlock := bookkeeping.MakeBlock(blkHeader)
+
+	_, err = Eval(context.Background(), panicFlushLedger{l}, newBlock, false, nil, nil, nil)
+	var panicErr ledgercore.EvalPanicError
+	require.ErrorAs(t, err, &panicErr)
+	require.Equal(t, newBlock.Round(), panicErr.Round)
+}
+
 // TestEvalAppStateCountsWithTxnGroup ensures txns in a group can't violate app state schema limits
 // the test ensures that
 // commitToParent -> applyChild copies child's cow state usage counts into parent

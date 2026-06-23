@@ -60,13 +60,9 @@ var spec = transactions.SpecialAddresses{
 	RewardsPool: poolAddr,
 }
 
-func verifyTxn(gi int, groupCtx *GroupContext) error {
-	batchVerifier := crypto.MakeBatchVerifier()
-
-	if err := txnBatchPrep(gi, groupCtx, batchVerifier); err != nil {
-		return err
-	}
-	return batchVerifier.Verify()
+func verifyTxnGroup(stxs []transactions.SignedTxn, contextHdr *bookkeeping.BlockHeader) error {
+	_, err := txnGroup(stxs, contextHdr, nil, nil, nil)
+	return err
 }
 
 type DummyLedgerForSignature struct {
@@ -244,18 +240,15 @@ func TestSignedPayment(t *testing.T) {
 	payments, stxns, secrets, addrs := generateTestObjects(1, 1, 0, 0)
 	payment, stxn, secret, addr := payments[0], stxns[0], secrets[0], addrs[0]
 
-	groupCtx, err := PrepareGroupContext(stxns, blockHeader, nil, nil)
-	require.NoError(t, err)
 	require.NoError(t, payment.WellFormed(spec, proto), "generateTestObjects generated an invalid payment")
-	require.NoError(t, verifyTxn(0, groupCtx), "generateTestObjects generated a bad signedtxn")
+	require.NoError(t, verifyTxnGroup(stxns, blockHeader), "generateTestObjects generated a bad signedtxn")
 
 	stxn2 := payment.Sign(secret)
 	require.Equal(t, stxn2.Sig, stxn.Sig, "got two different signatures for the same transaction (our signing function is deterministic)")
 
 	stxn2.MessUpSigForTesting()
 	require.Equal(t, stxn.ID(), stxn2.ID(), "changing sig caused txid to change")
-	groupCtx.signedGroupTxns[0] = stxn2
-	require.Error(t, verifyTxn(0, groupCtx), "verify succeeded with bad sig")
+	require.Error(t, verifyTxnGroup([]transactions.SignedTxn{stxn2}, blockHeader), "verify succeeded with bad sig")
 
 	require.True(t, crypto.SignatureVerifier(addr).Verify(payment, stxn.Sig), "signature on the transaction is not the signature of the hash of the transaction under the spender's key")
 }
@@ -266,15 +259,14 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 	_, signed, _, _ := generateTestObjects(100, 50, 0, 0)
 
 	for _, txn := range signed {
-		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{txn}, blockHeader, nil, nil)
-		require.NoError(t, err)
-		if verifyTxn(0, groupCtx) != nil {
+		if verifyTxnGroup([]transactions.SignedTxn{txn}, blockHeader) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
 		}
 
 		x := protocol.Encode(&txn)
-		protocol.Decode(x, &groupCtx.signedGroupTxns[0])
-		if verifyTxn(0, groupCtx) != nil {
+		decoded := transactions.SignedTxn{}
+		protocol.Decode(x, &decoded)
+		if verifyTxnGroup([]transactions.SignedTxn{decoded}, blockHeader) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
 		}
 	}
@@ -286,16 +278,14 @@ func TestTxnValidationEmptySig(t *testing.T) {
 	_, signed, _, _ := generateTestObjects(100, 50, 0, 0)
 
 	for _, txn := range signed {
-		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{txn}, blockHeader, nil, nil)
-		require.NoError(t, err)
-		if verifyTxn(0, groupCtx) != nil {
+		if verifyTxnGroup([]transactions.SignedTxn{txn}, blockHeader) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
 		}
 
-		groupCtx.signedGroupTxns[0].Sig = crypto.Signature{}
-		groupCtx.signedGroupTxns[0].Msig = crypto.MultisigSig{}
-		groupCtx.signedGroupTxns[0].Lsig = transactions.LogicSig{}
-		if verifyTxn(0, groupCtx) == nil {
+		txn.Sig = crypto.Signature{}
+		txn.Msig = crypto.MultisigSig{}
+		txn.Lsig = transactions.LogicSig{}
+		if verifyTxnGroup([]transactions.SignedTxn{txn}, blockHeader) == nil {
 			t.Errorf("transaction %#v verified without sig", txn)
 		}
 	}
@@ -328,17 +318,13 @@ func TestTxnValidationStateProof(t *testing.T) {
 		},
 	}
 
-	groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{stxn}, blockHeader, nil, nil)
-	require.NoError(t, err)
-
-	err = verifyTxn(0, groupCtx)
+	err := verifyTxnGroup([]transactions.SignedTxn{stxn}, blockHeader)
 	require.NoError(t, err, "state proof txn %#v did not verify", stxn)
 
 	stxn2 := stxn
 	stxn2.Txn.Type = protocol.PaymentTx
 	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
-	groupCtx.signedGroupTxns[0] = stxn2
-	err = verifyTxn(0, groupCtx)
+	err = verifyTxnGroup([]transactions.SignedTxn{stxn2}, blockHeader)
 	require.Error(t, err, "payment txn %#v verified from StateProofSender", stxn2)
 
 	secret := keypair()
@@ -346,33 +332,28 @@ func TestTxnValidationStateProof(t *testing.T) {
 	stxn2.Txn.Header.Sender = basics.Address(secret.SignatureVerifier)
 	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
 	stxn2 = stxn2.Txn.Sign(secret)
-	groupCtx.signedGroupTxns[0] = stxn2
-	err = verifyTxn(0, groupCtx)
+	err = verifyTxnGroup([]transactions.SignedTxn{stxn2}, blockHeader)
 	require.Error(t, err, "state proof txn %#v verified from non-StateProofSender", stxn2)
 
 	// state proof txns are not allowed to have non-zero values for many fields
 	stxn2 = stxn
 	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
-	groupCtx.signedGroupTxns[0] = stxn2
-	err = verifyTxn(0, groupCtx)
+	err = verifyTxnGroup([]transactions.SignedTxn{stxn2}, blockHeader)
 	require.Error(t, err, "state proof txn %#v verified", stxn2)
 
 	stxn2 = stxn
 	stxn2.Txn.Header.Note = []byte{'A'}
-	groupCtx.signedGroupTxns[0] = stxn2
-	err = verifyTxn(0, groupCtx)
+	err = verifyTxnGroup([]transactions.SignedTxn{stxn2}, blockHeader)
 	require.Error(t, err, "state proof txn %#v verified", stxn2)
 
 	stxn2 = stxn
 	stxn2.Txn.Lease[0] = 1
-	groupCtx.signedGroupTxns[0] = stxn2
-	err = verifyTxn(0, groupCtx)
+	err = verifyTxnGroup([]transactions.SignedTxn{stxn2}, blockHeader)
 	require.Error(t, err, "state proof txn %#v verified", stxn2)
 
 	stxn2 = stxn
 	stxn2.Txn.RekeyTo = basics.Address(secret.SignatureVerifier)
-	groupCtx.signedGroupTxns[0] = stxn2
-	err = verifyTxn(0, groupCtx)
+	err = verifyTxnGroup([]transactions.SignedTxn{stxn2}, blockHeader)
 	require.Error(t, err, "state proof txn %#v verified", stxn2)
 }
 
@@ -388,9 +369,7 @@ func TestDecodeNil(t *testing.T) {
 	err := protocol.Decode(nilEncoding, &st)
 	if err == nil {
 		// This used to panic when run on a zero value of SignedTxn.
-		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{st}, blockHeader, nil, nil)
-		require.NoError(t, err)
-		verifyTxn(0, groupCtx)
+		verifyTxnGroup([]transactions.SignedTxn{st}, blockHeader)
 	}
 }
 
@@ -1264,12 +1243,8 @@ func BenchmarkTxn(b *testing.B) {
 
 	b.ResetTimer()
 	for _, txnGroup := range txnGroups {
-		groupCtx, err := PrepareGroupContext(txnGroup, &blk.BlockHeader, nil, nil)
+		err := verifyTxnGroup(txnGroup, &blk.BlockHeader)
 		require.NoError(b, err)
-		for i := range txnGroup {
-			err := verifyTxn(i, groupCtx)
-			require.NoError(b, err)
-		}
 	}
 	b.StopTimer()
 }
@@ -1689,9 +1664,7 @@ func testAuthAddrSenderDiff(t *testing.T, consensusVer protocol.ConsensusVersion
 	tx1 := makeTxn()
 	stxn := tx1.Sign(secrets[0])
 	stxn.AuthAddr = sender
-	groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{stxn}, &blockHeader, nil, nil)
-	require.NoError(t, err)
-	err = verifyTxn(0, groupCtx)
+	err := verifyTxnGroup([]transactions.SignedTxn{stxn}, &blockHeader)
 	if enforceEnabled {
 		require.ErrorContains(t, err, "AuthAddr must be different from Sender",
 			"AuthAddr == Sender should be rejected when enforcement is enabled")
@@ -1704,9 +1677,7 @@ func testAuthAddrSenderDiff(t *testing.T, consensusVer protocol.ConsensusVersion
 	tx2 := makeTxn()
 	stxn = tx2.Sign(secrets[0])
 	stxn.AuthAddr = basics.Address{}
-	groupCtx, err = PrepareGroupContext([]transactions.SignedTxn{stxn}, &blockHeader, nil, nil)
-	require.NoError(t, err)
-	err = verifyTxn(0, groupCtx)
+	err = verifyTxnGroup([]transactions.SignedTxn{stxn}, &blockHeader)
 	require.NoError(t, err, "empty AuthAddr should always be allowed")
 
 	// Test 3: AuthAddr != Sender should pass the check (legitimate rekeying case)
@@ -1714,8 +1685,20 @@ func testAuthAddrSenderDiff(t *testing.T, consensusVer protocol.ConsensusVersion
 	tx3 := makeTxn()
 	stxn = tx3.Sign(secrets[1]) // Sign with secrets[1] which corresponds to otherAddr
 	stxn.AuthAddr = otherAddr
-	groupCtx, err = PrepareGroupContext([]transactions.SignedTxn{stxn}, &blockHeader, nil, nil)
-	require.NoError(t, err)
-	err = verifyTxn(0, groupCtx)
+	err = verifyTxnGroup([]transactions.SignedTxn{stxn}, &blockHeader)
 	require.NoError(t, err, "AuthAddr != Sender should pass verification (legitimate rekeying)")
+}
+
+func TestTxnGroupRecoversPanic(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// A non-empty group is required so PrepareGroupContext does not return early before the
+	// contextHdr dereference.
+	group := []transactions.SignedTxn{{Txn: transactions.Transaction{Type: protocol.PaymentTx}}}
+
+	// A nil BlockHeader makes group preparation panic; TxnGroup must recover it into an error
+	groupCtx, err := TxnGroup(group, nil, nil, &DummyLedgerForSignature{})
+	require.Nil(t, groupCtx)
+	require.ErrorContains(t, err, "panic while verifying transaction group")
 }
