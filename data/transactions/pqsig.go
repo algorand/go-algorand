@@ -98,10 +98,6 @@ func (p PQSig) validateEnvelope(proto config.ConsensusParams, authorizer basics.
 		return basics.PQSchemeSpec{}, basics.ErrPQSchemeNotEnabled
 	}
 
-	if err := scheme.ValidatePublicKey(p.PublicKey); err != nil {
-		return basics.PQSchemeSpec{}, err
-	}
-
 	pqAuthorizer := p.AuthorizerAddress()
 	if pqAuthorizer != authorizer {
 		return basics.PQSchemeSpec{}, fmt.Errorf("%w: derived %s, expected %s", errPQSigAuthorizerMismatch, pqAuthorizer, authorizer)
@@ -112,10 +108,10 @@ func (p PQSig) validateEnvelope(proto config.ConsensusParams, authorizer basics.
 
 // ValidateEnvelope validates the stateless consensus-relevant PQ authorization
 // envelope: the proof is not blank, the carried scheme is known and enabled
-// under proto, the public key is well-formed for that scheme, and the derived
-// PQ address matches authorizer. It does NOT verify the signature bytes (and
-// applies no API admission policy); callers that require a real authorization
-// proof must also require a non-empty Signature or call Verify.
+// under proto, and the derived PQ address matches authorizer. It does NOT
+// verify the public key or signature bytes (and applies no API admission
+// policy); callers that require a real authorization proof must also require
+// a non-empty Signature or call Verify.
 func (p PQSig) ValidateEnvelope(proto config.ConsensusParams, authorizer basics.Address) error {
 	_, err := p.validateEnvelope(proto, authorizer)
 	return err

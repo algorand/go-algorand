@@ -102,47 +102,6 @@ func TestVerificationBytes(t *testing.T) {
 	a.Equal(verifyingRawKey, key.PublicKey[:])
 }
 
-func TestFalconPublicKeyFromBytes(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
-
-	var seed FalconSeed
-	SystemRNG.RandBytes(seed[:])
-	key, err := GenerateFalconSigner(seed)
-	a.NoError(err)
-
-	pk, err := FalconPublicKeyFromBytes(key.PublicKey[:])
-	a.NoError(err)
-	a.Equal(key.PublicKey, pk)
-
-	_, err = FalconPublicKeyFromBytes(key.PublicKey[:FalconPublicKeySize-1])
-	a.ErrorIs(err, errFalconPublicKeySize)
-}
-
-func TestFalconSignatureFromBytes(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
-
-	var seed FalconSeed
-	SystemRNG.RandBytes(seed[:])
-	key, err := GenerateFalconSigner(seed)
-	a.NoError(err)
-
-	msg := []byte("E quindi uscimmo a riveder le stelle")
-	sig, err := key.SignBytes(msg)
-	a.NoError(err)
-
-	parsedSig, err := FalconSignatureFromBytes(sig)
-	a.NoError(err)
-	a.Equal(sig, parsedSig)
-
-	_, err = FalconSignatureFromBytes(nil)
-	a.ErrorIs(err, errFalconSignatureSize)
-
-	_, err = FalconSignatureFromBytes(make([]byte, FalconMaxSignatureSize+1))
-	a.ErrorIs(err, errFalconSignatureSize)
-}
-
 func TestFalconsFormatConversion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)

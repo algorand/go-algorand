@@ -49,11 +49,10 @@ const (
 //
 //msgp:ignore PQSchemeSpec
 type PQSchemeSpec struct {
-	PublicKeySize     uint64
-	SignatureSize     uint64
-	FeeContribution   Micros
-	ValidatePublicKey func([]byte) error
-	Verify            func(crypto.Hashable, []byte, []byte) error
+	PublicKeySize   uint64
+	SignatureSize   uint64
+	FeeContribution Micros
+	Verify          func(crypto.Hashable, []byte, []byte) error
 }
 
 // pqSchemeSpecs is the registry for supported PQ signature schemes.
@@ -67,18 +66,16 @@ type PQSchemeSpec struct {
 //     and regenerate msgp code,
 var pqSchemeSpecs = map[protocol.PQScheme]PQSchemeSpec{
 	protocol.PQSchemeFalcon1024: {
-		PublicKeySize:     crypto.FalconPublicKeySize,
-		SignatureSize:     crypto.FalconMaxSignatureSize,
-		FeeContribution:   PQSchemeFalcon1024FeeContribution,
-		ValidatePublicKey: validateFalcon1024PublicKey,
-		Verify:            verifyFalcon1024,
+		PublicKeySize:   crypto.FalconPublicKeySize,
+		SignatureSize:   crypto.FalconMaxSignatureSize,
+		FeeContribution: PQSchemeFalcon1024FeeContribution,
+		Verify:          verifyFalcon1024,
 	},
 	// protocol.PQSchemeFalcon512: {
-	// 	PublicKeySize:     crypto.Falcon512PublicKeySize,
-	// 	SignatureSize:     crypto.Falcon512MaxSignatureSize,
-	// 	FeeContribution:   PQSchemeFalcon512FeeContribution,
-	// 	ValidatePublicKey: validateFalcon512PublicKey,
-	// 	Verify:            verifyFalcon512,
+	// 	PublicKeySize:   crypto.Falcon512PublicKeySize,
+	// 	SignatureSize:   crypto.Falcon512MaxSignatureSize,
+	// 	FeeContribution: PQSchemeFalcon512FeeContribution,
+	// 	Verify:          verifyFalcon512,
 	// },
 }
 
@@ -90,31 +87,16 @@ func LookupPQScheme(s protocol.PQScheme) (PQSchemeSpec, bool) {
 
 // Falcon-1024 helpers
 
-func validateFalcon1024PublicKey(publicKey []byte) error {
-	_, err := crypto.FalconPublicKeyFromBytes(publicKey)
-	return err
-}
-
 func verifyFalcon1024(message crypto.Hashable, publicKey []byte, signature []byte) error {
-	pk, err := crypto.FalconPublicKeyFromBytes(publicKey)
-	if err != nil {
-		return err
-	}
-
-	sig, err := crypto.FalconSignatureFromBytes(signature)
-	if err != nil {
-		return err
-	}
-
+	var pk crypto.FalconPublicKey
+	copy(pk[:], publicKey)
 	fv := crypto.FalconVerifier{PublicKey: pk}
-	if err := fv.Verify(message, sig); err != nil {
+	if err := fv.Verify(message, crypto.FalconSignature(signature)); err != nil {
 		return fmt.Errorf("%w: %w", ErrPQFalcon1024SigInvalid, err)
 	}
 	return nil
 }
 
 // Falcon-512 helpers
-
-// TODO: func validateFalcon512PublicKey(publicKey []byte) error {...}
 
 // TODO: func verifyFalcon512(message crypto.Hashable, publicKey []byte, signature []byte) error {...}

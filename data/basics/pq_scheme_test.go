@@ -54,7 +54,6 @@ func TestPQSchemeRegistryComplete(t *testing.T) {
 	require.NotEmpty(t, pqSchemeSpecs)
 
 	for scheme, spec := range pqSchemeSpecs {
-		require.NotNil(t, spec.ValidatePublicKey, "scheme %q", scheme)
 		require.NotNil(t, spec.Verify, "scheme %q", scheme)
 		require.NotZero(t, spec.PublicKeySize, "scheme %q", scheme)
 		require.NotZero(t, spec.SignatureSize, "scheme %q", scheme)
@@ -80,27 +79,7 @@ func TestLookupPQSchemeFalcon1024(t *testing.T) {
 	require.Equal(t, uint64(crypto.FalconPublicKeySize), spec.PublicKeySize)
 	require.Equal(t, uint64(crypto.FalconMaxSignatureSize), spec.SignatureSize)
 	require.Equal(t, PQSchemeFalcon1024FeeContribution, spec.FeeContribution)
-	require.NotNil(t, spec.ValidatePublicKey)
 	require.NotNil(t, spec.Verify)
-
-	_, ok = LookupPQScheme(protocol.PQScheme("x1"))
-	require.False(t, ok)
-}
-
-func TestPQSchemeValidatePublicKeyFalcon1024(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	signer := makePQSchemeTestSigner(t, 0)
-	publicKey := signer.PublicKey[:]
-
-	spec, ok := LookupPQScheme(protocol.PQSchemeFalcon1024)
-	require.True(t, ok)
-
-	require.NoError(t, spec.ValidatePublicKey(publicKey))
-
-	err := spec.ValidatePublicKey(publicKey[:len(publicKey)-1])
-	require.Error(t, err)
-	require.NotErrorIs(t, err, ErrPQSchemeNotSupported)
 
 	_, ok = LookupPQScheme(protocol.PQScheme("x1"))
 	require.False(t, ok)
@@ -132,16 +111,13 @@ func TestPQSchemeVerifyFalcon1024RejectsMalformedInputs(t *testing.T) {
 	require.True(t, ok)
 
 	err = spec.Verify(message, signer.PublicKey[:len(signer.PublicKey)-1], signature)
-	require.Error(t, err)
-	require.NotErrorIs(t, err, ErrPQFalcon1024SigInvalid)
+	require.ErrorIs(t, err, ErrPQFalcon1024SigInvalid)
 
 	err = spec.Verify(message, signer.PublicKey[:], nil)
-	require.Error(t, err)
-	require.NotErrorIs(t, err, ErrPQFalcon1024SigInvalid)
+	require.ErrorIs(t, err, ErrPQFalcon1024SigInvalid)
 
 	err = spec.Verify(message, signer.PublicKey[:], make([]byte, crypto.FalconMaxSignatureSize+1))
-	require.Error(t, err)
-	require.NotErrorIs(t, err, ErrPQFalcon1024SigInvalid)
+	require.ErrorIs(t, err, ErrPQFalcon1024SigInvalid)
 }
 
 func TestPQSchemeVerifyFalcon1024RejectsInvalidSignature(t *testing.T) {

@@ -212,7 +212,8 @@ func TestPQSigValidateEnvelope(t *testing.T) {
 
 	malformedPublicKey := fixture.pqSig
 	malformedPublicKey.PublicKey = malformedPublicKey.PublicKey[:len(malformedPublicKey.PublicKey)-1]
-	require.ErrorContains(t, malformedPublicKey.ValidateEnvelope(fixture.proto, malformedPublicKey.AuthorizerAddress()), "falcon public key size invalid")
+	require.NoError(t, malformedPublicKey.ValidateEnvelope(fixture.proto, malformedPublicKey.AuthorizerAddress()))
+	require.ErrorIs(t, malformedPublicKey.Verify(fixture.proto, fixture.txn, malformedPublicKey.AuthorizerAddress()), basics.ErrPQFalcon1024SigInvalid)
 
 	var wrongAuthorizer basics.Address
 	wrongAuthorizer[0] = 1
@@ -333,8 +334,7 @@ func TestPQSigVerifyRejectsMalformedSignature(t *testing.T) {
 	pqSig.Signature = make([]byte, crypto.FalconMaxSignatureSize+1)
 
 	err := pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer)
-	require.Error(t, err)
-	require.NotErrorIs(t, err, basics.ErrPQFalcon1024SigInvalid)
+	require.ErrorIs(t, err, basics.ErrPQFalcon1024SigInvalid)
 }
 
 func TestPQSigVerifyRejectsChangedTransaction(t *testing.T) {

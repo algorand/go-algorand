@@ -24,9 +24,7 @@ import (
 )
 
 var (
-	errFalconPublicKeySize = errors.New("falcon public key size invalid")
-	errFalconSignatureSize = errors.New("falcon signature size invalid")
-	errFalconSeedTooShort  = errors.New("falcon seed too short")
+	errFalconSeedTooShort = errors.New("falcon seed too short")
 )
 
 const (
@@ -54,25 +52,6 @@ type (
 	//msgp:allocbound FalconSignature FalconMaxSignatureSize
 	FalconSignature []byte
 )
-
-// FalconPublicKeyFromBytes constructs a Falcon public key from its byte representation.
-func FalconPublicKeyFromBytes(publicKey []byte) (FalconPublicKey, error) {
-	if len(publicKey) != FalconPublicKeySize {
-		return FalconPublicKey{}, fmt.Errorf("%w: got %d, want %d", errFalconPublicKeySize, len(publicKey), FalconPublicKeySize)
-	}
-
-	var pk FalconPublicKey
-	copy(pk[:], publicKey)
-	return pk, nil
-}
-
-// FalconSignatureFromBytes constructs a Falcon signature from its byte representation.
-func FalconSignatureFromBytes(signature []byte) (FalconSignature, error) {
-	if len(signature) == 0 || len(signature) > FalconMaxSignatureSize {
-		return nil, fmt.Errorf("%w: got %d, want 1..%d", errFalconSignatureSize, len(signature), FalconMaxSignatureSize)
-	}
-	return signature, nil
-}
 
 // FalconSigner is the implementation of Signer for the Falcon signature scheme.
 type FalconSigner struct {

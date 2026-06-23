@@ -233,9 +233,6 @@ func publicMaterialFromFields(scheme protocol.PQScheme, salt basics.PQAddressSal
 	if uint64(len(publicKey)) != spec.PublicKeySize {
 		return pqPublicMaterial{}, fmt.Errorf("%w: got public key size %d, want %d", errPQKeyMalformed, len(publicKey), spec.PublicKeySize)
 	}
-	if err = spec.ValidatePublicKey(publicKey); err != nil {
-		return pqPublicMaterial{}, err
-	}
 
 	addr := basics.PQAddress(scheme, salt, publicKey)
 	return pqPublicMaterial{
