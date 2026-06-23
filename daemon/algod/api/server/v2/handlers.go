@@ -1389,6 +1389,8 @@ type PreEncodedSimulateTxnResult struct {
 	Txn                      PreEncodedTxInfo                        `codec:"txn-result"`
 	AppBudgetConsumed        *int                                    `codec:"app-budget-consumed,omitempty"`
 	LogicSigBudgetConsumed   *int                                    `codec:"logic-sig-budget-consumed,omitempty"`
+	Usage                    *uint64                                 `codec:"usage,omitempty"`
+	FeesPaid                 *uint64                                 `codec:"fees-paid,omitempty"`
 	TransactionTrace         *model.SimulationTransactionExecTrace   `codec:"exec-trace,omitempty"`
 	UnnamedResourcesAccessed *model.SimulateUnnamedResourcesAccessed `codec:"unnamed-resources-accessed,omitempty"`
 	FixedSigner              *string                                 `codec:"fixed-signer,omitempty"`
@@ -1398,6 +1400,8 @@ type PreEncodedSimulateTxnResult struct {
 type PreEncodedSimulateTxnGroupResult struct {
 	AppBudgetAdded           *int                                    `codec:"app-budget-added,omitempty"`
 	AppBudgetConsumed        *int                                    `codec:"app-budget-consumed,omitempty"`
+	GroupUsage               *uint64                                 `codec:"group-usage,omitempty"`
+	GroupFeesPaid            *uint64                                 `codec:"group-fees-paid,omitempty"`
 	FailedAt                 *[]int                                  `codec:"failed-at,omitempty"`
 	FailureMessage           *string                                 `codec:"failure-message,omitempty"`
 	UnnamedResourcesAccessed *model.SimulateUnnamedResourcesAccessed `codec:"unnamed-resources-accessed,omitempty"`
@@ -1409,6 +1413,8 @@ type PreEncodedSimulateResponse struct {
 	Version         uint64                             `codec:"version"`
 	LastRound       basics.Round                       `codec:"last-round"`
 	TxnGroups       []PreEncodedSimulateTxnGroupResult `codec:"txn-groups"`
+	TotalUsage      *uint64                            `codec:"total-usage,omitempty"`
+	TotalFeesPaid   *uint64                            `codec:"total-fees-paid,omitempty"`
 	EvalOverrides   *model.SimulationEvalOverrides     `codec:"eval-overrides,omitempty"`
 	ExecTraceConfig simulation.ExecTraceConfig         `codec:"exec-trace-config,omitempty"`
 	InitialStates   *model.SimulateInitialStates       `codec:"initial-states,omitempty"`

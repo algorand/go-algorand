@@ -112,6 +112,20 @@ func omitEmpty[T comparable](val T) *T {
 	return &val
 }
 
+func simulateFeeStats(tx v2.PreEncodedTxInfo, proto config.ConsensusParams) (usage uint64, feesPaid uint64) {
+	usage = uint64(tx.Txn.FeeFactor(proto))
+	feesPaid = tx.Txn.Txn.Fee.Raw
+	if tx.Inners == nil {
+		return usage, feesPaid
+	}
+	for _, inner := range *tx.Inners {
+		innerUsage, innerFeesPaid := simulateFeeStats(inner, proto)
+		usage += innerUsage
+		feesPaid += innerFeesPaid
+	}
+	return usage, feesPaid
+}
+
 func TestSimpleMockBuilding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1717,22 +1731,37 @@ int 1`,
 					for i := range scenario.TxnAppBudgetConsumed {
 						txnAppBudgetUsed = append(txnAppBudgetUsed, omitEmpty(scenario.TxnAppBudgetConsumed[i]))
 					}
+					proto := config.Consensus[cannedStatusReportGolden.LastVersion]
+					txn0 := makePendingTxnResponse(t, stxns[0].WithAD())
+					txn0Usage, txn0FeesPaid := simulateFeeStats(txn0, proto)
+					txn1 := makePendingTxnResponse(t, stxns[1].WithAD(scenario.ExpectedSimulationAD))
+					txn1Usage, txn1FeesPaid := simulateFeeStats(txn1, proto)
+					groupUsage := txn0Usage + txn1Usage
+					groupFeesPaid := txn0FeesPaid + txn1FeesPaid
 					expectedBody := v2.PreEncodedSimulateResponse{
-						Version: 2,
+						Version:       2,
+						TotalUsage:    omitEmpty(groupUsage),
+						TotalFeesPaid: omitEmpty(groupFeesPaid),
 						TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 							{
 								AppBudgetAdded:    appBudgetAdded,
 								AppBudgetConsumed: appBudgetConsumed,
 								FailedAt:          expectedFailedAt,
+								GroupUsage:        omitEmpty(groupUsage),
+								GroupFeesPaid:     omitEmpty(groupFeesPaid),
 								Txns: []v2.PreEncodedSimulateTxnResult{
 									{
 										// expect no ApplyData info
-										Txn:               makePendingTxnResponse(t, stxns[0].WithAD()),
+										Txn:               txn0,
 										AppBudgetConsumed: txnAppBudgetUsed[0],
+										Usage:             omitEmpty(txn0Usage),
+										FeesPaid:          omitEmpty(txn0FeesPaid),
 									},
 									{
-										Txn:               makePendingTxnResponse(t, stxns[1].WithAD(scenario.ExpectedSimulationAD)),
+										Txn:               txn1,
 										AppBudgetConsumed: txnAppBudgetUsed[1],
+										Usage:             omitEmpty(txn1Usage),
+										FeesPaid:          omitEmpty(txn1FeesPaid),
 									},
 								},
 							},
