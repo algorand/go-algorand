@@ -1686,13 +1686,13 @@ type TealCompileParams struct {
 
 // RawTransactionParams defines parameters for RawTransaction.
 type RawTransactionParams struct {
-	// DangerouslySkipAddressCurveCheck Bypass address curve checks, including the check that rejects TEAL v13 or later LogicSig transactions whose program hash is an Edwards25519 curve point. This is unsafe and should only be used if you understand the risks and know what you are doing.
+	// DangerouslySkipAddressCurveCheck Bypass address curve checks, including the check that rejects TEAL v13 or later LogicSig transactions whose program hash is an Edwards25519 curve point. This allows transactions to be created for addresses that are at risk of quantum attack and should only be used if you understand the risks and know what you are doing.
 	DangerouslySkipAddressCurveCheck *bool `form:"dangerously-skip-address-curve-check,omitempty" json:"dangerously-skip-address-curve-check,omitempty"`
 }
 
 // RawTransactionAsyncParams defines parameters for RawTransactionAsync.
 type RawTransactionAsyncParams struct {
-	// DangerouslySkipAddressCurveCheck Bypass address curve checks, including the check that rejects TEAL v13 or later LogicSig transactions whose program hash is an Edwards25519 curve point. This is unsafe and should only be used if you understand the risks and know what you are doing.
+	// DangerouslySkipAddressCurveCheck Bypass address curve checks, including the check that rejects TEAL v13 or later LogicSig transactions whose program hash is an Edwards25519 curve point. This allows transactions to be created for addresses that are at risk of quantum attack and should only be used if you understand the risks and know what you are doing.
 	DangerouslySkipAddressCurveCheck *bool `form:"dangerously-skip-address-curve-check,omitempty" json:"dangerously-skip-address-curve-check,omitempty"`
 }
 

@@ -8280,6 +8280,7 @@ int 1`, version),
 func assembleSizedPassingProgram(t testing.TB, version uint64, size int) []byte {
 	t.Helper()
 
+	// the unreachable "app_global_get" at the end is used to avoid autosalt insertion
 	const overhead = 5 // version byte + "pushint 1" + "return" + unreachable "app_global_get"
 	require.GreaterOrEqual(t, size, overhead)
 

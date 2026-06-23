@@ -7387,7 +7387,7 @@
         "operationId": "RawTransaction",
         "parameters": [
           {
-            "description": "Bypass address curve checks, including the check that rejects TEAL v13 or later LogicSig transactions whose program hash is an Edwards25519 curve point. This is unsafe and should only be used if you understand the risks and know what you are doing.",
+            "description": "Bypass address curve checks, including the check that rejects TEAL v13 or later LogicSig transactions whose program hash is an Edwards25519 curve point. This allows transactions to be created for addresses that are at risk of quantum attack and should only be used if you understand the risks and know what you are doing.",
             "in": "query",
             "name": "dangerously-skip-address-curve-check",
             "schema": {
@@ -7485,7 +7485,7 @@
         "operationId": "RawTransactionAsync",
         "parameters": [
           {
-            "description": "Bypass address curve checks, including the check that rejects TEAL v13 or later LogicSig transactions whose program hash is an Edwards25519 curve point. This is unsafe and should only be used if you understand the risks and know what you are doing.",
+            "description": "Bypass address curve checks, including the check that rejects TEAL v13 or later LogicSig transactions whose program hash is an Edwards25519 curve point. This allows transactions to be created for addresses that are at risk of quantum attack and should only be used if you understand the risks and know what you are doing.",
             "in": "query",
             "name": "dangerously-skip-address-curve-check",
             "schema": {

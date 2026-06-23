@@ -76,6 +76,7 @@ func TestCurve25519SignVerify(t *testing.T) {
 
 func TestIsEdwards25519Point(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	decodeHex := func(s string) []byte {
 		b, err := hex.DecodeString(s)

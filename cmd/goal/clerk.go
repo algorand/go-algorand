@@ -46,30 +46,35 @@ import (
 )
 
 var (
-	toAddress                        string
-	account                          string
-	amount                           uint64
-	txFilename                       string
-	rejectsFilename                  string
-	closeToAddress                   string
+	account        string
+	amount         uint64
+	toAddress      string
+	closeToAddress string
+
+	txFilename         string
+	rejectsFilename    string
+	requestFilename    string
+	requestOutFilename string
+
+	programSource string
+	progByteFile  string
+	logicSigFile  string
+	argB64Strings []string
+	msigParams    string
+
 	dangerouslySkipAddressCurveCheck bool
-	noProgramOutput                  bool
-	writeSourceMap                   bool
-	signProgram                      bool
-	programSource                    string
-	argB64Strings                    []string
-	disassemble                      bool
-	verbose                          bool
-	progByteFile                     string
-	msigParams                       string
-	logicSigFile                     string
-	timeStamp                        int64
-	protoVersion                     string
-	signerAddress                    string
-	rawOutput                        bool
-	requestFilename                  string
-	requestOutFilename               string
-	inspectTxid                      bool
+
+	noProgramOutput bool
+	writeSourceMap  bool
+	signProgram     bool
+	disassemble     bool
+	verbose         bool
+	rawOutput       bool
+	inspectTxid     bool
+
+	timeStamp     int64
+	protoVersion  string
+	signerAddress string
 
 	simulateStartRound            basics.Round
 	simulateAllowEmptySignatures  bool

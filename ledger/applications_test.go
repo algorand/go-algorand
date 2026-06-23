@@ -1768,14 +1768,15 @@ func TestExtraPagesUpdate(t *testing.T) {
 func assembleLargePassingProgram(t testing.TB, version uint64, size int) []byte {
 	t.Helper()
 
-	const overhead = 6 // version byte + "b end" + "end: int 1"
-	require.Greater(t, size, overhead)
+	// the unreachable "app_global_get" is used to avoid autosalt insertion
+	const overhead = 7 // version byte + "b end" + unreachable "app_global_get" + "end: int 1"
+	require.GreaterOrEqual(t, size, overhead)
 
 	var source strings.Builder
 	fmt.Fprintf(&source, "#pragma version %d\n", version)
 	source.WriteString("b end\n")
 	source.WriteString("app_global_get\n")
-	source.WriteString(strings.Repeat("err\n", size-overhead-1))
+	source.WriteString(strings.Repeat("err\n", size-overhead))
 	source.WriteString("end: int 1")
 
 	ops, err := logic.AssembleString(source.String())
