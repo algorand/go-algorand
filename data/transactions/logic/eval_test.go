@@ -2998,6 +2998,20 @@ func TestGload(t *testing.T) {
 	}
 }
 
+// TestGloadNoProgram covers gload reading a sibling app-call txn that never ran a program.
+func TestGloadNoProgram(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	appcall := transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.ApplicationCallTx}}
+	ep := defaultAppParams(appcall, appcall)
+	// Evaluate gi=1 while gi=0's program was never run, so pastScratch[0] is nil.
+	cx := &EvalContext{EvalParams: ep, groupIndex: 1}
+
+	_, err := opGloadImpl(cx, 0, 0, "gload")
+	require.ErrorContains(t, err, "gload lookup of txn 0 that did not run a program")
+}
+
 // TestGloads tests gloads and gloadss
 func TestGloads(t *testing.T) {
 	partitiontest.PartitionTest(t)

@@ -99,6 +99,10 @@ const AssembleBlockEvalOld = "eval-old"
 // AssembleBlockAbandon represents the block generation being abandoned since it won't be needed.
 const AssembleBlockAbandon = "block-abandon"
 
+// AssembleBlockGenerationError represents an empty block being assembled because the pending
+// evaluator could not generate one.
+const AssembleBlockGenerationError = "generation-error"
+
 const assembleBlockMetricsIdentifier Metric = "AssembleBlock"
 
 // AssembleBlockMetrics is the set of metrics captured when we compute AssembleBlock
