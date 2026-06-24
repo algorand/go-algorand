@@ -68,8 +68,7 @@ type ConsensusParams struct {
 	// MaxAbsoluteTxnNoteBytes is the absolute maximum size of a transaction's
 	// Note field, even with extra fees paid. Provides DoS protection. When set
 	// equal to MaxTxnNoteBytes, effectively disables large notes. When set
-	// higher, allows notes up to this size with appropriate fees (1000
-	// FeeFactor units per byte over MaxTxnNoteBytes).
+	// higher, allows notes up to this size with appropriate fees.
 	MaxAbsoluteTxnNoteBytes int
 
 	// MaxTxnLife is how long a transaction can be live for:
@@ -597,9 +596,9 @@ type ConsensusParams struct {
 	LoadTracking bool
 
 	// PerByteTxnSurcharge specifies the fee surcharge per byte for transactions
-	// with large notes, app args, programs, or other fields that can beyond the
-	// basic Max sizes (they use up to "Absolute" Maxes. It is expressed in
-	// fraction of a basic min fee.
+	// with large notes, app args, programs, or other fields that can go beyond
+	// the basic Max sizes (they allow up to the "Absolute" Maxes). It is
+	// expressed in fraction of a basic min fee.
 	PerByteTxnSurcharge basics.Micros
 }
 
