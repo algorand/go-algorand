@@ -181,9 +181,17 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 			// over the sender's account. However, this will pass validation, since the signature
 			// itself is valid.
 			txnsToVerify[i] = stxn.Txn.Sign(proxySignerSecrets)
-		} else if overrides.AllowEmptySignatures && txnHasPlaceholderPQSignature(stxn) && protoKnown &&
-			stxn.PQSig.ValidateEnvelope(proto, stxn.Authorizer()) == nil {
-			txnsToVerify[i] = stxn.Txn.Sign(proxySignerSecrets)
+		} else if overrides.AllowEmptySignatures && txnHasPlaceholderPQSignature(stxn) && protoKnown {
+			placeholderErr := stxn.PQSig.ValidateScheme(proto)
+			if len(stxn.PQSig.PublicKey) != 0 {
+				// Full placeholders carry a public key, so keep the authorizer match.
+				placeholderErr = stxn.PQSig.ValidateEnvelope(proto, stxn.Authorizer())
+			}
+			if placeholderErr == nil {
+				txnsToVerify[i] = stxn.Txn.Sign(proxySignerSecrets)
+			} else {
+				txnsToVerify[i] = stxn
+			}
 		} else {
 			txnsToVerify[i] = stxn
 		}

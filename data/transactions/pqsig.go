@@ -80,11 +80,7 @@ func (p PQSig) AuthorizerAddress() basics.Address {
 	return basics.PQAddress(p.Scheme, p.Salt, p.PublicKey)
 }
 
-// validateEnvelope validates the stateless consensus-relevant PQ authorization
-// envelope, excluding the signature bytes. It returns the scheme spec so that
-// Verify can dispatch the scheme-specific signature check without a second
-// registry lookup.
-func (p PQSig) validateEnvelope(proto config.ConsensusParams, authorizer basics.Address) (basics.PQSchemeSpec, error) {
+func (p PQSig) validateScheme(proto config.ConsensusParams) (basics.PQSchemeSpec, error) {
 	if p.Blank() {
 		return basics.PQSchemeSpec{}, errPQSigBlank
 	}
@@ -96,6 +92,26 @@ func (p PQSig) validateEnvelope(proto config.ConsensusParams, authorizer basics.
 
 	if !proto.PQSchemeEnabled(p.Scheme) {
 		return basics.PQSchemeSpec{}, basics.ErrPQSchemeNotEnabled
+	}
+
+	return scheme, nil
+}
+
+// ValidateScheme validates that the PQSig carries a known scheme enabled under
+// proto. It does not validate public-key-derived authorizers or signature bytes.
+func (p PQSig) ValidateScheme(proto config.ConsensusParams) error {
+	_, err := p.validateScheme(proto)
+	return err
+}
+
+// validateEnvelope validates the stateless consensus-relevant PQ authorization
+// envelope, excluding the signature bytes. It returns the scheme spec so that
+// Verify can dispatch the scheme-specific signature check without a second
+// registry lookup.
+func (p PQSig) validateEnvelope(proto config.ConsensusParams, authorizer basics.Address) (basics.PQSchemeSpec, error) {
+	scheme, err := p.validateScheme(proto)
+	if err != nil {
+		return basics.PQSchemeSpec{}, err
 	}
 
 	pqAuthorizer := p.AuthorizerAddress()

@@ -6747,7 +6747,7 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 					TxnGroups:            [][]transactions.SignedTxn{{stxn}},
 					AllowEmptySignatures: true,
 				},
-				expectedError: "falcon public key size invalid",
+				expectedError: "overspend",
 				expected: simulation.Result{
 					Version:   simulation.ResultLatestVersion,
 					LastRound: env.TxnInfo.LatestRound(),
@@ -6756,10 +6756,14 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 					},
 					TxnGroups: []simulation.TxnGroupResult{
 						{
-							FailedAt: simulation.TxnPath{0},
-							Txns:     []simulation.TxnResult{{}},
+							FailedAt:      simulation.TxnPath{0},
+							Txns:          []simulation.TxnResult{{Usage: 3e6, FeesPaid: stxn.Txn.Fee}},
+							GroupUsage:    3e6,
+							GroupFeesPaid: stxn.Txn.Fee,
 						},
 					},
+					TotalUsage:    3e6,
+					TotalFeesPaid: stxn.Txn.Fee,
 				},
 			}
 		})
@@ -6792,10 +6796,14 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 					},
 					TxnGroups: []simulation.TxnGroupResult{
 						{
-							FailedAt: simulation.TxnPath{0},
-							Txns:     []simulation.TxnResult{{}},
+							FailedAt:      simulation.TxnPath{0},
+							Txns:          []simulation.TxnResult{{Usage: 3e6, FeesPaid: stxn.Txn.Fee}},
+							GroupUsage:    3e6,
+							GroupFeesPaid: stxn.Txn.Fee,
 						},
 					},
+					TotalUsage:    3e6,
+					TotalFeesPaid: stxn.Txn.Fee,
 				},
 			}
 		})
@@ -6823,11 +6831,54 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 					TxnGroups: []simulation.TxnGroupResult{
 						{
 							Txns: []simulation.TxnResult{
-								{},
-								{FixedSigner: pqAuthorizer},
+								{Usage: 1e6, FeesPaid: txgroup[0].Txn.Fee},
+								{Usage: 3e6, FeesPaid: txgroup[1].Txn.Fee, FixedSigner: pqAuthorizer},
 							},
+							GroupUsage:    4e6,
+							GroupFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
 						},
 					},
+					TotalUsage:    4e6,
+					TotalFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
+				},
+			}
+		})
+	})
+
+	t.Run("scheme-only placeholder pays PQ surcharge", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			minFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
+			sender := env.Accounts[0]
+			txn := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   sender.Addr,
+				Receiver: sender.Addr,
+				Fee:      minFee * 3,
+			})
+			stxn := txn.SignedTxn()
+			stxn.PQSig = transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024}
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{{stxn}},
+					AllowEmptySignatures: true,
+				},
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							Txns:          []simulation.TxnResult{{Usage: 3e6, FeesPaid: stxn.Txn.Fee}},
+							GroupUsage:    3e6,
+							GroupFeesPaid: stxn.Txn.Fee,
+						},
+					},
+					TotalUsage:    3e6,
+					TotalFeesPaid: stxn.Txn.Fee,
 				},
 			}
 		})
@@ -6857,11 +6908,15 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 						{
 							FailedAt: simulation.TxnPath{1},
 							Txns: []simulation.TxnResult{
-								{},
-								{FixedSigner: pqAuthorizer},
+								{Usage: 1e6, FeesPaid: txgroup[0].Txn.Fee},
+								{Usage: 3e6, FeesPaid: txgroup[1].Txn.Fee, FixedSigner: pqAuthorizer},
 							},
+							GroupUsage:    4e6,
+							GroupFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
 						},
 					},
+					TotalUsage:    4e6,
+					TotalFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
 				},
 			}
 		})

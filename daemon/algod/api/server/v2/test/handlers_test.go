@@ -1274,7 +1274,7 @@ func TestPostTransactionPQAuthorizerCompliance(t *testing.T) {
 		t.Parallel()
 		stxn := makePQSignedTxnWithAddressCompliance(t, true)
 		stxn.PQSig.PublicKey = stxn.PQSig.PublicKey[:len(stxn.PQSig.PublicKey)-1]
-		test(t, stxn, futureStatus, http.StatusBadRequest, "transaction 0: falcon public key size invalid")
+		test(t, stxn, futureStatus, http.StatusBadRequest, "transaction 0: pq signature authorizer mismatch")
 	})
 	t.Run("unsupported-scheme", func(t *testing.T) {
 		t.Parallel()
@@ -1404,6 +1404,7 @@ func TestPostSimulateTransactionPlaceholderPQSignatureValidation(t *testing.T) {
 	hdr, err := mockLedger.BlockHdr(mockLedger.Latest())
 	require.NoError(t, err)
 	txnInfo := simulationtesting.TxnInfo{LatestHeader: hdr}
+	minFee := config.Consensus[hdr.CurrentProtocol].MinTxnFee
 
 	_, pqAuthorizer, pqSig := makePQSigWithAddressCompliance(t, true)
 	txn := txnInfo.NewTxn(txntest.Txn{
@@ -1446,6 +1447,35 @@ func TestPostSimulateTransactionPlaceholderPQSignatureValidation(t *testing.T) {
 	require.Equal(t, pqSig.Salt, actualPQSig.Salt)
 	require.Equal(t, pqSig.PublicKey, actualPQSig.PublicKey)
 
+	schemeOnlyTxn := txnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   roots[0].Address(),
+		Receiver: roots[0].Address(),
+		Fee:      minFee * 3,
+	}).SignedTxn()
+	schemeOnlyTxn.PQSig = transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024}
+	request.TxnGroups[0].Txns[0] = schemeOnlyTxn
+	request.AllowEmptySignatures = true
+	req = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(protocol.EncodeReflect(&request)))
+	rec = httptest.NewRecorder()
+	c = echo.New().NewContext(req, rec)
+
+	err = handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: &format})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	response = v2.PreEncodedSimulateResponse{}
+	decoder = codec.NewDecoderBytes(rec.Body.Bytes(), protocol.JSONStrictHandle)
+	err = decoder.Decode(&response)
+	require.NoError(t, err)
+	require.Len(t, response.TxnGroups, 1)
+	require.Len(t, response.TxnGroups[0].Txns, 1)
+	actualPQSig = response.TxnGroups[0].Txns[0].Txn.Txn.PQSig
+	require.Equal(t, protocol.PQSchemeFalcon1024, actualPQSig.Scheme)
+	require.Empty(t, actualPQSig.PublicKey)
+	require.Empty(t, actualPQSig.Signature)
+
+	request.TxnGroups[0].Txns[0] = stxn
 	request.AllowEmptySignatures = false
 	req = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(protocol.EncodeReflect(&request)))
 	rec = httptest.NewRecorder()
@@ -1467,10 +1497,9 @@ func TestPostSimulateTransactionPlaceholderPQSignatureValidation(t *testing.T) {
 	err = handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: &format})
 	require.NoError(t, err)
 	require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
-	require.Contains(t, rec.Body.String(), "transaction group 0: transaction 0: falcon public key size invalid")
+	require.Contains(t, rec.Body.String(), "transaction group 0: transaction 0: pq signature authorizer mismatch")
 
 	_, fixablePQAuthorizer, fixablePQSig := makePQSigWithAddressCompliance(t, true)
-	minFee := config.Consensus[hdr.CurrentProtocol].MinTxnFee
 	rekeyTxn := txnInfo.NewTxn(txntest.Txn{
 		Type:     protocol.PaymentTx,
 		Sender:   roots[0].Address(),

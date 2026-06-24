@@ -27,8 +27,9 @@ import (
 // The PQ admission policies below layer API-only checks on top of the shared
 // transactions.PQSig envelope validation: the submit path requires a complete
 // proof (valid envelope, non-empty signature), the simulate path additionally
-// understands placeholder proofs, and both require the authorizer address to
-// be PQ compliant, which consensus deliberately does not enforce.
+// understands placeholder proofs, and every path except scheme-only
+// placeholders requires the authorizer address to be PQ compliant, which
+// consensus deliberately does not enforce.
 
 // isPlaceholderPQSig reports whether stxn carries a placeholder PQSig:
 // a non-blank PQ envelope with empty signature bytes and no other signature
@@ -81,12 +82,16 @@ func checkPQSubmitPolicy(proto config.ConsensusParams, stxn transactions.SignedT
 // enforcePQSimulatePolicy enforces the PQ admission policy for
 // simulation. allowEmptySignatures and fixSigners mirror the simulate request
 // fields:
-//   - allowEmptySignatures permits a placeholder PQSig (an envelope with empty
-//     signature bytes); the simulator substitutes a proxy signature.
+//   - allowEmptySignatures permits placeholder PQSigs with empty signature
+//     bytes; the simulator substitutes a proxy signature. A full placeholder
+//     carries a public key and must match its authorizer unless fixSigners is
+//     rewriting it. A scheme-only placeholder carries no public key and only
+//     prices the PQ surcharge.
 //   - fixSigners defers placeholder envelope validation to the simulator: the
 //     derived-authorizer check cannot pass before the simulator rewrites
 //     AuthAddr, after which it re-validates the envelope. The compliance check
-//     still runs here because it does not depend on the authorizer match.
+//     still runs for full placeholders because it does not depend on the
+//     authorizer match.
 //
 // Without allowEmptySignatures, the simulate policy is the submit policy (a
 // fixSigners-only request is rejected later by the simulator, which requires
@@ -106,6 +111,9 @@ func checkPQSimulatePolicy(proto config.ConsensusParams, stxn transactions.Signe
 	}
 	if !allowEmptySignatures {
 		return checkPQSubmitPolicy(proto, stxn)
+	}
+	if isPlaceholderPQSig(stxn) && len(stxn.PQSig.PublicKey) == 0 {
+		return stxn.PQSig.ValidateScheme(proto)
 	}
 	if !(fixSigners && isPlaceholderPQSig(stxn)) {
 		if err := stxn.PQSig.ValidateEnvelope(proto, stxn.Authorizer()); err != nil {

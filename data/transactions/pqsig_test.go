@@ -196,6 +196,11 @@ func TestPQSigValidateEnvelope(t *testing.T) {
 
 	fixture := makePQSigTestFixture(t, 0)
 
+	require.NoError(t, fixture.pqSig.ValidateScheme(fixture.proto))
+
+	schemeOnly := PQSig{Scheme: protocol.PQSchemeFalcon1024}
+	require.NoError(t, schemeOnly.ValidateScheme(fixture.proto))
+
 	require.NoError(t, fixture.pqSig.ValidateEnvelope(fixture.proto, fixture.authorizer))
 
 	noSignature := fixture.pqSig
@@ -204,10 +209,12 @@ func TestPQSigValidateEnvelope(t *testing.T) {
 
 	disabledProto := fixture.proto
 	disabledProto.EnablePQSchemeFalcon1024 = false
+	require.ErrorIs(t, fixture.pqSig.ValidateScheme(disabledProto), basics.ErrPQSchemeNotEnabled)
 	require.ErrorIs(t, fixture.pqSig.ValidateEnvelope(disabledProto, fixture.authorizer), basics.ErrPQSchemeNotEnabled)
 
 	unknownScheme := fixture.pqSig
 	unknownScheme.Scheme = protocol.PQScheme("x1")
+	require.ErrorIs(t, unknownScheme.ValidateScheme(fixture.proto), basics.ErrPQSchemeNotSupported)
 	require.ErrorIs(t, unknownScheme.ValidateEnvelope(fixture.proto, unknownScheme.AuthorizerAddress()), basics.ErrPQSchemeNotSupported)
 
 	malformedPublicKey := fixture.pqSig
@@ -226,6 +233,7 @@ func TestPQSigValidateEnvelope(t *testing.T) {
 	require.Error(t, corruptSignature.Verify(fixture.proto, fixture.txn, fixture.authorizer))
 
 	require.ErrorIs(t, (PQSig{}).ValidateEnvelope(fixture.proto, fixture.authorizer), errPQSigBlank)
+	require.ErrorIs(t, (PQSig{}).ValidateScheme(fixture.proto), errPQSigBlank)
 }
 
 func TestPQSigVerify(t *testing.T) {
