@@ -28,6 +28,8 @@ func TestPQSchemeSize(t *testing.T) {
 	t.Parallel()
 	partitiontest.PartitionTest(t)
 
+	// PQSchemeSize is consensus-visible through PQ address preimages and the
+	// PQScheme msgp allocbound, so keep it deliberately pinned.
 	require.Equal(t, 2, PQSchemeSize)
 }
 

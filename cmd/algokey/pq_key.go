@@ -219,9 +219,6 @@ func canonicalPublicMaterialFromKey(scheme protocol.PQScheme, publicKey []byte) 
 	if err != nil {
 		return pqPublicMaterial{}, err
 	}
-	if !public.addr.IsPQCompliant() {
-		return pqPublicMaterial{}, fmt.Errorf("%w: canonical address %s", errPQSaltNotCompliant, public.addr)
-	}
 	return public, nil
 }
 

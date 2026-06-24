@@ -106,10 +106,18 @@ func TestSignedTxnFeeFactorPQSignatureContribution(t *testing.T) {
 	pqSigned := SignedTxn{Txn: fixture.txn, PQSig: fixture.pqSig}
 	pqAndRegularSigned := pqSigned
 	pqAndRegularSigned.Sig[0] = 1
+	regularSingletonHeartbeat := regularSigned
+	regularSingletonHeartbeat.Txn.Type = protocol.HeartbeatTx
+	regularSingletonHeartbeat.Txn.HeartbeatTxnFields = &HeartbeatTxnFields{}
+	regularSingletonHeartbeat.Txn.PaymentTxnFields = PaymentTxnFields{}
 	pqSingletonHeartbeat := pqSigned
 	pqSingletonHeartbeat.Txn.Type = protocol.HeartbeatTx
 	pqSingletonHeartbeat.Txn.HeartbeatTxnFields = &HeartbeatTxnFields{}
 	pqSingletonHeartbeat.Txn.PaymentTxnFields = PaymentTxnFields{}
+	mixedSingletonHeartbeat := pqAndRegularSigned
+	mixedSingletonHeartbeat.Txn.Type = protocol.HeartbeatTx
+	mixedSingletonHeartbeat.Txn.HeartbeatTxnFields = &HeartbeatTxnFields{}
+	mixedSingletonHeartbeat.Txn.PaymentTxnFields = PaymentTxnFields{}
 	pqPaidSingletonHeartbeat := pqSingletonHeartbeat
 	pqPaidSingletonHeartbeat.Txn.Fee = proto.MinFee()
 	pqGroupedHeartbeat := pqSingletonHeartbeat
@@ -122,7 +130,9 @@ func TestSignedTxnFeeFactorPQSignatureContribution(t *testing.T) {
 	require.Equal(t, basics.Micros(1e6), unknownPQSigned.FeeFactor(proto))
 	require.Equal(t, basics.Micros(3e6), pqSigned.FeeFactor(proto))
 	require.Equal(t, basics.Micros(3e6), pqAndRegularSigned.FeeFactor(proto))
+	require.Equal(t, basics.Micros(0), regularSingletonHeartbeat.FeeFactor(proto))
 	require.Equal(t, basics.Micros(0), pqSingletonHeartbeat.FeeFactor(proto))
+	require.Equal(t, basics.Micros(0), mixedSingletonHeartbeat.FeeFactor(proto))
 	require.Equal(t, basics.Micros(2e6), pqPaidSingletonHeartbeat.FeeFactor(proto))
 	require.Equal(t, basics.Micros(3e6), pqGroupedHeartbeat.FeeFactor(proto))
 
