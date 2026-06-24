@@ -22,6 +22,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/simulation"
 )
 
 // The PQ admission policies below layer API-only checks on top of the shared
@@ -30,14 +31,6 @@ import (
 // understands placeholder proofs, and every path except scheme-only
 // placeholders requires the authorizer address to be PQ compliant, which
 // consensus deliberately does not enforce.
-
-// isPlaceholderPQSig reports whether stxn carries a placeholder PQSig:
-// a non-blank PQ envelope with empty signature bytes and no other signature
-// category set.
-func isPlaceholderPQSig(stxn transactions.SignedTxn) bool {
-	return stxn.Sig.Blank() && stxn.Msig.Blank() && stxn.Lsig.Blank() &&
-		!stxn.PQSig.Blank() && len(stxn.PQSig.Signature) == 0
-}
 
 // requirePQAuthorizerCompliant is the API-only admission check that the
 // PQSig-derived authorizer address is PQ compliant. Consensus accepts any
@@ -112,10 +105,10 @@ func checkPQSimulatePolicy(proto config.ConsensusParams, stxn transactions.Signe
 	if !allowEmptySignatures {
 		return checkPQSubmitPolicy(proto, stxn)
 	}
-	if isPlaceholderPQSig(stxn) && len(stxn.PQSig.PublicKey) == 0 {
+	if simulation.IsPlaceholderPQSig(stxn) && len(stxn.PQSig.PublicKey) == 0 {
 		return stxn.PQSig.ValidateScheme(proto)
 	}
-	if !(fixSigners && isPlaceholderPQSig(stxn)) {
+	if !(fixSigners && simulation.IsPlaceholderPQSig(stxn)) {
 		if err := stxn.PQSig.ValidateEnvelope(proto, stxn.Authorizer()); err != nil {
 			return err
 		}

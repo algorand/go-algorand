@@ -130,13 +130,16 @@ func txnHasNoSignature(txn transactions.SignedTxn) bool {
 	return txn.Sig.Blank() && txn.Msig.Blank() && txn.Lsig.Blank() && txn.PQSig.Blank()
 }
 
-func txnHasPlaceholderPQSignature(txn transactions.SignedTxn) bool {
+// IsPlaceholderPQSig reports whether txn carries a placeholder PQSig:
+// a non-blank PQ envelope with empty signature bytes and no other signature
+// category set.
+func IsPlaceholderPQSig(txn transactions.SignedTxn) bool {
 	return txn.Sig.Blank() && txn.Msig.Blank() && txn.Lsig.Blank() &&
 		!txn.PQSig.Blank() && len(txn.PQSig.Signature) == 0
 }
 
 func txnNeedsSyntheticSignature(txn transactions.SignedTxn) bool {
-	return txnHasNoSignature(txn) || txnHasPlaceholderPQSignature(txn)
+	return txnHasNoSignature(txn) || IsPlaceholderPQSig(txn)
 }
 
 // A randomly generated private key. The actual value does not matter, as long as this is a valid
@@ -181,7 +184,7 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 			// over the sender's account. However, this will pass validation, since the signature
 			// itself is valid.
 			txnsToVerify[i] = stxn.Txn.Sign(proxySignerSecrets)
-		} else if overrides.AllowEmptySignatures && txnHasPlaceholderPQSignature(stxn) && protoKnown {
+		} else if overrides.AllowEmptySignatures && IsPlaceholderPQSig(stxn) && protoKnown {
 			placeholderErr := stxn.PQSig.ValidateScheme(proto)
 			if len(stxn.PQSig.PublicKey) != 0 {
 				// Full placeholders carry a public key, so keep the authorizer match.
