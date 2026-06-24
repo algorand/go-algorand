@@ -396,6 +396,13 @@ type rawTransactionParams struct {
 	DangerouslySkipAddressCurveCheck bool `url:"dangerously-skip-address-curve-check,omitempty"`
 }
 
+func rawTransactionQueryParams(dangerouslySkipAddressCurveCheck bool) interface{} {
+	if dangerouslySkipAddressCurveCheck {
+		return rawTransactionParams{DangerouslySkipAddressCurveCheck: true}
+	}
+	return nil
+}
+
 // GetPendingTransactions asks algod for a snapshot of current pending txns on the node, bounded by maxTxns.
 // If maxTxns = 0, fetches as many transactions as possible.
 func (client RestClient) GetPendingTransactions(maxTxns uint64) (response model.PendingTransactionsResponse, err error) {
@@ -629,14 +636,24 @@ func (client RestClient) SuggestedParams() (response model.TransactionParameters
 
 // SendRawTransaction gets a SignedTxn and broadcasts it to the network
 func (client RestClient) SendRawTransaction(txn transactions.SignedTxn) (response model.PostTransactionsResponse, err error) {
-	err = client.post(&response, "/v2/transactions", nil, protocol.Encode(&txn), false)
-	return
+	return client.SendRawTransactionWithParams(txn, false)
+}
+
+// SendRawTransactionWithParams gets a SignedTxn and broadcasts it to the network
+func (client RestClient) SendRawTransactionWithParams(txn transactions.SignedTxn, dangerouslySkipAddressCurveCheck bool) (response model.PostTransactionsResponse, err error) {
+	err = client.post(&response, "/v2/transactions", rawTransactionQueryParams(dangerouslySkipAddressCurveCheck), protocol.Encode(&txn), false)
+	return response, err
 }
 
 // SendRawTransactionAsync gets a SignedTxn and broadcasts it to the network
 func (client RestClient) SendRawTransactionAsync(txn transactions.SignedTxn) (response model.PostTransactionsResponse, err error) {
-	err = client.post(&response, "/v2/transactions/async", nil, protocol.Encode(&txn), true)
-	return
+	return client.SendRawTransactionAsyncWithParams(txn, false)
+}
+
+// SendRawTransactionAsyncWithParams gets a SignedTxn and broadcasts it to the network
+func (client RestClient) SendRawTransactionAsyncWithParams(txn transactions.SignedTxn, dangerouslySkipAddressCurveCheck bool) (response model.PostTransactionsResponse, err error) {
+	err = client.post(&response, "/v2/transactions/async", rawTransactionQueryParams(dangerouslySkipAddressCurveCheck), protocol.Encode(&txn), true)
+	return response, err
 }
 
 // SendRawTransactionGroup gets a SignedTxn group and broadcasts it to the network
@@ -653,13 +670,8 @@ func (client RestClient) SendRawTransactionGroupWithParams(txgroup []transaction
 		enc = append(enc, protocol.Encode(&tx)...)
 	}
 
-	var params interface{}
-	if dangerouslySkipAddressCurveCheck {
-		params = rawTransactionParams{DangerouslySkipAddressCurveCheck: true}
-	}
-
 	var response model.PostTransactionsResponse
-	return client.post(&response, "/v2/transactions", params, enc, false)
+	return client.post(&response, "/v2/transactions", rawTransactionQueryParams(dangerouslySkipAddressCurveCheck), enc, false)
 }
 
 // Block gets the block info for the given round
