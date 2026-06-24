@@ -213,7 +213,7 @@ func TestPQSigValidateEnvelope(t *testing.T) {
 	malformedPublicKey := fixture.pqSig
 	malformedPublicKey.PublicKey = malformedPublicKey.PublicKey[:len(malformedPublicKey.PublicKey)-1]
 	require.NoError(t, malformedPublicKey.ValidateEnvelope(fixture.proto, malformedPublicKey.AuthorizerAddress()))
-	require.ErrorIs(t, malformedPublicKey.Verify(fixture.proto, fixture.txn, malformedPublicKey.AuthorizerAddress()), basics.ErrPQFalcon1024SigInvalid)
+	require.ErrorIs(t, malformedPublicKey.Verify(fixture.proto, fixture.txn, malformedPublicKey.AuthorizerAddress()), crypto.ErrPQFalcon1024SigInvalid)
 
 	var wrongAuthorizer basics.Address
 	wrongAuthorizer[0] = 1
@@ -254,7 +254,7 @@ func TestPQSigVerifyAcceptsSignatureOverTxnID(t *testing.T) {
 	require.False(t, bytes.Equal(txidSignature, rawTxnSignature))
 
 	pqSig.Signature = rawTxnSignature
-	require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer), basics.ErrPQFalcon1024SigInvalid)
+	require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer), crypto.ErrPQFalcon1024SigInvalid)
 }
 
 func TestPQSigVerifyChecksConsensusParams(t *testing.T) {
@@ -334,7 +334,7 @@ func TestPQSigVerifyRejectsMalformedSignature(t *testing.T) {
 	pqSig.Signature = make([]byte, crypto.FalconMaxSignatureSize+1)
 
 	err := pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer)
-	require.ErrorIs(t, err, basics.ErrPQFalcon1024SigInvalid)
+	require.ErrorIs(t, err, crypto.ErrPQFalcon1024SigInvalid)
 }
 
 func TestPQSigVerifyRejectsChangedTransaction(t *testing.T) {
@@ -345,7 +345,7 @@ func TestPQSigVerifyRejectsChangedTransaction(t *testing.T) {
 	txn := fixture.txn
 	txn.Note = []byte("changed")
 
-	require.ErrorIs(t, fixture.pqSig.Verify(fixture.proto, txn, fixture.authorizer), basics.ErrPQFalcon1024SigInvalid)
+	require.ErrorIs(t, fixture.pqSig.Verify(fixture.proto, txn, fixture.authorizer), crypto.ErrPQFalcon1024SigInvalid)
 }
 
 func TestPQSigVerifyRejectsChangedSignature(t *testing.T) {
@@ -357,5 +357,5 @@ func TestPQSigVerifyRejectsChangedSignature(t *testing.T) {
 	pqSig.Signature = slices.Clone(pqSig.Signature)
 	pqSig.Signature[len(pqSig.Signature)-1] ^= 1
 
-	require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer), basics.ErrPQFalcon1024SigInvalid)
+	require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer), crypto.ErrPQFalcon1024SigInvalid)
 }

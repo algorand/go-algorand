@@ -111,13 +111,13 @@ func TestPQSchemeVerifyFalcon1024RejectsMalformedInputs(t *testing.T) {
 	require.True(t, ok)
 
 	err = spec.Verify(message, signer.PublicKey[:len(signer.PublicKey)-1], signature)
-	require.ErrorIs(t, err, ErrPQFalcon1024SigInvalid)
+	require.ErrorIs(t, err, crypto.ErrPQFalcon1024SigInvalid)
 
 	err = spec.Verify(message, signer.PublicKey[:], nil)
-	require.ErrorIs(t, err, ErrPQFalcon1024SigInvalid)
+	require.ErrorIs(t, err, crypto.ErrPQFalcon1024SigInvalid)
 
 	err = spec.Verify(message, signer.PublicKey[:], make([]byte, crypto.FalconMaxSignatureSize+1))
-	require.ErrorIs(t, err, ErrPQFalcon1024SigInvalid)
+	require.ErrorIs(t, err, crypto.ErrPQFalcon1024SigInvalid)
 }
 
 func TestPQSchemeVerifyFalcon1024RejectsInvalidSignature(t *testing.T) {
@@ -132,5 +132,5 @@ func TestPQSchemeVerifyFalcon1024RejectsInvalidSignature(t *testing.T) {
 	require.True(t, ok)
 
 	err = spec.Verify(pqSchemeTestMessage("different message"), signer.PublicKey[:], signature)
-	require.ErrorIs(t, err, ErrPQFalcon1024SigInvalid)
+	require.ErrorIs(t, err, crypto.ErrPQFalcon1024SigInvalid)
 }

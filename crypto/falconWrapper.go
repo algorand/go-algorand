@@ -24,6 +24,9 @@ import (
 )
 
 var (
+	// ErrPQFalcon1024SigInvalid is returned when Falcon-1024 signature verification fails.
+	ErrPQFalcon1024SigInvalid = errors.New("invalid falcon-1024 signature")
+
 	errFalconSeedTooShort = errors.New("falcon seed too short")
 )
 
@@ -121,6 +124,17 @@ func (d *FalconVerifier) VerifyBytes(data []byte, sig FalconSignature) error {
 	// assume that the signature given is in a compress form
 	falconSig := cfalcon.CompressedSignature(sig)
 	return (*cfalcon.PublicKey)(&d.PublicKey).Verify(falconSig, data)
+}
+
+// VerifyFalcon1024 verifies a Falcon-1024 signature over message.
+func VerifyFalcon1024(message Hashable, publicKey []byte, signature []byte) error {
+	var pk FalconPublicKey
+	copy(pk[:], publicKey)
+	fv := FalconVerifier{PublicKey: pk}
+	if err := fv.Verify(message, FalconSignature(signature)); err != nil {
+		return fmt.Errorf("%w: %w", ErrPQFalcon1024SigInvalid, err)
+	}
+	return nil
 }
 
 // GetFixedLengthHashableRepresentation is used to fetch a plain serialized version of the public data (without the use of the msgpack).

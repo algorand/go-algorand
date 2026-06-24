@@ -18,7 +18,6 @@ package basics
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
@@ -30,9 +29,6 @@ var (
 
 	// ErrPQSchemeNotEnabled is returned when a PQScheme is not enabled under the protocol.
 	ErrPQSchemeNotEnabled = errors.New("pq signature scheme not enabled")
-
-	// ErrPQFalcon1024SigInvalid is returned when Falcon-1024 signature verification fails.
-	ErrPQFalcon1024SigInvalid = errors.New("invalid falcon-1024 signature")
 )
 
 // PQSchemeSpec.FeeContribution is the additional fee factor charged for transactions
@@ -69,13 +65,13 @@ var pqSchemeSpecs = map[protocol.PQScheme]PQSchemeSpec{
 		PublicKeySize:   crypto.FalconPublicKeySize,
 		SignatureSize:   crypto.FalconMaxSignatureSize,
 		FeeContribution: PQSchemeFalcon1024FeeContribution,
-		Verify:          verifyFalcon1024,
+		Verify:          crypto.VerifyFalcon1024,
 	},
 	// protocol.PQSchemeFalcon512: {
 	// 	PublicKeySize:   crypto.Falcon512PublicKeySize,
 	// 	SignatureSize:   crypto.Falcon512MaxSignatureSize,
 	// 	FeeContribution: PQSchemeFalcon512FeeContribution,
-	// 	Verify:          verifyFalcon512,
+	// 	Verify:          crypto.VerifyFalcon512,
 	// },
 }
 
@@ -84,19 +80,3 @@ func LookupPQScheme(s protocol.PQScheme) (PQSchemeSpec, bool) {
 	scheme, ok := pqSchemeSpecs[s]
 	return scheme, ok
 }
-
-// Falcon-1024 helpers
-
-func verifyFalcon1024(message crypto.Hashable, publicKey []byte, signature []byte) error {
-	var pk crypto.FalconPublicKey
-	copy(pk[:], publicKey)
-	fv := crypto.FalconVerifier{PublicKey: pk}
-	if err := fv.Verify(message, crypto.FalconSignature(signature)); err != nil {
-		return fmt.Errorf("%w: %w", ErrPQFalcon1024SigInvalid, err)
-	}
-	return nil
-}
-
-// Falcon-512 helpers
-
-// TODO: func verifyFalcon512(message crypto.Hashable, publicKey []byte, signature []byte) error {...}
