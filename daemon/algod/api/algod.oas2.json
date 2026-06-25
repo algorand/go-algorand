@@ -3803,11 +3803,6 @@
           "type": "integer",
           "x-go-type": "uint64"
         },
-        "usage": {
-          "description": "Fee usage for this transaction and all of its descendant inner transactions, in millionths of a basic transaction fee unit.",
-          "type": "integer",
-          "x-go-type": "basics.Micros"
-        },
         "logic-sig-budget-consumed": {
           "description": "Budget used during execution of a logic sig transaction.",
           "type": "integer"

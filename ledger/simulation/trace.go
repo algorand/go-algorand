@@ -37,7 +37,6 @@ type TxnResult struct {
 	Txn                    transactions.SignedTxnWithAD
 	AppBudgetConsumed      int
 	LogicSigBudgetConsumed int
-	Usage                  basics.Micros
 	FeesPaid               basics.MicroAlgos
 	Trace                  *TransactionTrace
 
@@ -173,7 +172,10 @@ func populateFeeUsage(result *Result, proto config.ConsensusParams) {
 
 		for ti := range group.Txns {
 			usage, feesPaid := summarizeTxnFeeUsage(group.Txns[ti].Txn, proto)
-			group.Txns[ti].Usage = usage
+			// Per-transaction usage is intentionally not reported: fees pool across
+			// the group and round up once for the whole tree, so usage is only
+			// actionable at the group level. FeesPaid is just a factual report of
+			// what the transaction (and its inners) actually paid.
 			group.Txns[ti].FeesPaid = feesPaid
 			groupUsage = basics.AddSaturate(groupUsage, usage)
 			groupFeesPaid = groupFeesPaid.AddSaturate(feesPaid)

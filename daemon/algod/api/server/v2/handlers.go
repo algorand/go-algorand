@@ -1378,7 +1378,6 @@ type PreEncodedSimulateTxnResult struct {
 	Txn                      PreEncodedTxInfo                        `codec:"txn-result"`
 	AppBudgetConsumed        *int                                    `codec:"app-budget-consumed,omitempty"`
 	LogicSigBudgetConsumed   *int                                    `codec:"logic-sig-budget-consumed,omitempty"`
-	Usage                    *uint64                                 `codec:"usage,omitempty"`
 	FeesPaid                 *uint64                                 `codec:"fees-paid,omitempty"`
 	TransactionTrace         *model.SimulationTransactionExecTrace   `codec:"exec-trace,omitempty"`
 	UnnamedResourcesAccessed *model.SimulateUnnamedResourcesAccessed `codec:"unnamed-resources-accessed,omitempty"`

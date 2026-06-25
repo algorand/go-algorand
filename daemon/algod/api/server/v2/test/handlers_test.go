@@ -1470,13 +1470,11 @@ int 1`,
 										// expect no ApplyData info
 										Txn:               txn0,
 										AppBudgetConsumed: txnAppBudgetUsed[0],
-										Usage:             omitEmpty(txn0Usage),
 										FeesPaid:          omitEmpty(txn0FeesPaid),
 									},
 									{
 										Txn:               txn1,
 										AppBudgetConsumed: txnAppBudgetUsed[1],
-										Usage:             omitEmpty(txn1Usage),
 										FeesPaid:          omitEmpty(txn1FeesPaid),
 									},
 								},

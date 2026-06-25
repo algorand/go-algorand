@@ -122,7 +122,6 @@ func TestSimulateTxnTracerDevMode(t *testing.T) {
 							Txn:           stxn,
 							ClosingAmount: &closingAmount,
 						},
-						Usage:    &usage,
 						FeesPaid: &feesPaid,
 					},
 				},
@@ -219,7 +218,6 @@ func TestSimulateTransaction(t *testing.T) {
 							Txn:           stxn,
 							ClosingAmount: &closingAmount,
 						},
-						Usage:    &usage,
 						FeesPaid: &feesPaid,
 					},
 				},
@@ -435,7 +433,6 @@ func TestSimulateWithOptionalSignatures(t *testing.T) {
 						Txn: v2.PreEncodedTxInfo{
 							Txn: transactions.SignedTxn{Txn: txn},
 						},
-						Usage:    &usage,
 						FeesPaid: &feesPaid,
 					},
 				},
@@ -576,7 +573,6 @@ int 1`
 							Logs: &logs,
 						},
 						AppBudgetConsumed: &budgetUsed,
-						Usage:             &usage,
 						FeesPaid:          &feesPaid,
 					},
 				},
@@ -700,7 +696,6 @@ int 1`
 					{
 						Txn:               v2.PreEncodedTxInfo{Txn: appCallTxnSigned},
 						AppBudgetConsumed: &budgetUsed,
-						Usage:             &usage,
 						FeesPaid:          &feesPaid,
 					},
 				},
@@ -2734,7 +2729,6 @@ int 1
 					{
 						Txn:               v2.PreEncodedTxInfo{Txn: stxn},
 						AppBudgetConsumed: &budgetUsed,
-						Usage:             &usage,
 						FeesPaid:          &feesPaid,
 					},
 				},
@@ -2824,13 +2818,11 @@ func TestSimulateWithFixSigners(t *testing.T) {
 				Txns: []v2.PreEncodedSimulateTxnResult{
 					{
 						Txn:      v2.PreEncodedTxInfo{Txn: rekeyStxn},
-						Usage:    &rekeyUsage,
 						FeesPaid: &rekeyFeesPaid,
 					},
 					{
 						Txn:         v2.PreEncodedTxInfo{Txn: stxn},
 						FixedSigner: &authAddrStr,
-						Usage:       &txnUsage,
 						FeesPaid:    &txnFeesPaid,
 					},
 				},
