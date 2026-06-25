@@ -1227,7 +1227,7 @@ func TestPostTransactionLogicSigCurveCheck(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, http.StatusBadRequest, rec.Code)
 		require.Contains(t, rec.Body.String(), "TEAL v13 LogicSig program hash is an Edwards25519 point")
-		require.Contains(t, rec.Body.String(), "dangerously-skip-address-curve-check")
+		require.Contains(t, rec.Body.String(), "skip-pq-address-check")
 	})
 
 	t.Run("accepts on curve legacy logicsig", func(t *testing.T) {
@@ -1246,7 +1246,7 @@ func TestPostTransactionLogicSigCurveCheck(t *testing.T) {
 		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, logicSigTxnPrep(program), config.GetDefaultLocal())
 		defer releasefunc()
 
-		err := handler.RawTransaction(c, model.RawTransactionParams{DangerouslySkipAddressCurveCheck: &skip})
+		err := handler.RawTransaction(c, model.RawTransactionParams{SkipPqAddressCheck: &skip})
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, rec.Code)
 	})
@@ -1309,7 +1309,7 @@ func TestPostTransactionAsyncLogicSigCurveCheck(t *testing.T) {
 		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, logicSigTxnPrep(program), cfg)
 		defer releasefunc()
 
-		err := handler.RawTransactionAsync(c, model.RawTransactionAsyncParams{DangerouslySkipAddressCurveCheck: &skip})
+		err := handler.RawTransactionAsync(c, model.RawTransactionAsyncParams{SkipPqAddressCheck: &skip})
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, rec.Code)
 	})

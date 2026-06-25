@@ -1146,9 +1146,9 @@ func decodeTxGroup(body io.Reader, maxTxGroupSize int) ([]transactions.SignedTxn
 	return txgroup, nil
 }
 
-const dangerouslySkipAddressCurveCheckParam = "dangerously-skip-address-curve-check"
+const skipPqAddressCheckParam = "skip-pq-address-check"
 
-func skipAddressCurveCheck(skip *bool) bool {
+func shouldSkipPqAddressCheck(skip *bool) bool {
 	return skip != nil && *skip
 }
 
@@ -1169,7 +1169,7 @@ func rejectOnCurveLogicSigPrograms(txgroup []transactions.SignedTxn) error {
 			continue
 		}
 		if isEscrowLogicSig(stxn) && logic.ProgramHashIsEdwards25519Point(stxn.Lsig.Logic) {
-			return fmt.Errorf("transaction %d: TEAL v%d LogicSig program hash is an Edwards25519 point and should not be used; set %s=true to submit anyway if you understand the risks and know what you are doing", i, version, dangerouslySkipAddressCurveCheckParam)
+			return fmt.Errorf("transaction %d: TEAL v%d LogicSig program hash is an Edwards25519 point and should not be used; set %s=true to submit anyway if you understand the risks and know what you are doing", i, version, skipPqAddressCheckParam)
 		}
 	}
 	return nil
@@ -1193,7 +1193,7 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context, params model.RawTransaction
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
-	if !skipAddressCurveCheck(params.DangerouslySkipAddressCurveCheck) {
+	if !shouldSkipPqAddressCheck(params.SkipPqAddressCheck) {
 		if err = rejectOnCurveLogicSigPrograms(txgroup); err != nil {
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
@@ -1222,7 +1222,7 @@ func (v2 *Handlers) RawTransactionAsync(ctx echo.Context, params model.RawTransa
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
-	if !skipAddressCurveCheck(params.DangerouslySkipAddressCurveCheck) {
+	if !shouldSkipPqAddressCheck(params.SkipPqAddressCheck) {
 		if err = rejectOnCurveLogicSigPrograms(txgroup); err != nil {
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}

@@ -193,12 +193,12 @@ func (c *Client) BroadcastTransactionGroup(txgroup []transactions.SignedTxn) err
 }
 
 // BroadcastTransactionGroupWithParams broadcasts a signed transaction group to the network using algod.
-func (c *Client) BroadcastTransactionGroupWithParams(txgroup []transactions.SignedTxn, dangerouslySkipAddressCurveCheck bool) error {
+func (c *Client) BroadcastTransactionGroupWithParams(txgroup []transactions.SignedTxn, skipPqAddressCheck bool) error {
 	algod, err := c.ensureAlgodClient()
 	if err != nil {
 		return err
 	}
-	return algod.SendRawTransactionGroupWithParams(txgroup, dangerouslySkipAddressCurveCheck)
+	return algod.SendRawTransactionGroupWithParams(txgroup, skipPqAddressCheck)
 }
 
 // SignAndBroadcastTransaction signs the unsigned transaction with keys from the default wallet, and broadcasts it

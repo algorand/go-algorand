@@ -393,12 +393,12 @@ type pendingTransactionsParams struct {
 }
 
 type rawTransactionParams struct {
-	DangerouslySkipAddressCurveCheck bool `url:"dangerously-skip-address-curve-check,omitempty"`
+	SkipPqAddressCheck bool `url:"skip-pq-address-check,omitempty"`
 }
 
-func rawTransactionQueryParams(dangerouslySkipAddressCurveCheck bool) interface{} {
-	if dangerouslySkipAddressCurveCheck {
-		return rawTransactionParams{DangerouslySkipAddressCurveCheck: true}
+func rawTransactionQueryParams(skipPqAddressCheck bool) interface{} {
+	if skipPqAddressCheck {
+		return rawTransactionParams{SkipPqAddressCheck: true}
 	}
 	return nil
 }
@@ -640,8 +640,8 @@ func (client RestClient) SendRawTransaction(txn transactions.SignedTxn) (respons
 }
 
 // SendRawTransactionWithParams gets a SignedTxn and broadcasts it to the network
-func (client RestClient) SendRawTransactionWithParams(txn transactions.SignedTxn, dangerouslySkipAddressCurveCheck bool) (response model.PostTransactionsResponse, err error) {
-	err = client.post(&response, "/v2/transactions", rawTransactionQueryParams(dangerouslySkipAddressCurveCheck), protocol.Encode(&txn), false)
+func (client RestClient) SendRawTransactionWithParams(txn transactions.SignedTxn, skipPqAddressCheck bool) (response model.PostTransactionsResponse, err error) {
+	err = client.post(&response, "/v2/transactions", rawTransactionQueryParams(skipPqAddressCheck), protocol.Encode(&txn), false)
 	return response, err
 }
 
@@ -651,8 +651,8 @@ func (client RestClient) SendRawTransactionAsync(txn transactions.SignedTxn) (re
 }
 
 // SendRawTransactionAsyncWithParams gets a SignedTxn and broadcasts it to the network
-func (client RestClient) SendRawTransactionAsyncWithParams(txn transactions.SignedTxn, dangerouslySkipAddressCurveCheck bool) (response model.PostTransactionsResponse, err error) {
-	err = client.post(&response, "/v2/transactions/async", rawTransactionQueryParams(dangerouslySkipAddressCurveCheck), protocol.Encode(&txn), true)
+func (client RestClient) SendRawTransactionAsyncWithParams(txn transactions.SignedTxn, skipPqAddressCheck bool) (response model.PostTransactionsResponse, err error) {
+	err = client.post(&response, "/v2/transactions/async", rawTransactionQueryParams(skipPqAddressCheck), protocol.Encode(&txn), true)
 	return response, err
 }
 
@@ -662,7 +662,7 @@ func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTx
 }
 
 // SendRawTransactionGroupWithParams gets a SignedTxn group and broadcasts it to the network
-func (client RestClient) SendRawTransactionGroupWithParams(txgroup []transactions.SignedTxn, dangerouslySkipAddressCurveCheck bool) error {
+func (client RestClient) SendRawTransactionGroupWithParams(txgroup []transactions.SignedTxn, skipPqAddressCheck bool) error {
 	// response is not terribly useful: it's the txid of the first transaction,
 	// which can be computed by the client anyway..
 	var enc []byte
@@ -671,7 +671,7 @@ func (client RestClient) SendRawTransactionGroupWithParams(txgroup []transaction
 	}
 
 	var response model.PostTransactionsResponse
-	return client.post(&response, "/v2/transactions", rawTransactionQueryParams(dangerouslySkipAddressCurveCheck), enc, false)
+	return client.post(&response, "/v2/transactions", rawTransactionQueryParams(skipPqAddressCheck), enc, false)
 }
 
 // Block gets the block info for the given round
