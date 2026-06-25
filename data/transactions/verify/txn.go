@@ -261,8 +261,8 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 			lSigMaxSizePool := len(stxs) * int(groupCtx.consensusParams.LogicSigMaxSize)
 			if lSigArgsSize > lSigMaxSizePool {
 				errorMsg := fmt.Errorf(
-					"txgroup had %d bytes of LogicSig args with args above %d bytes, more than the available size pool of %d bytes",
-					lSigArgsSize, groupCtx.consensusParams.MaxLogicSigArgsSize, lSigMaxSizePool,
+					"txgroup had %d bytes of LogicSig args, more than the available size pool of %d bytes (per-LogicSig allowance is %d)",
+					lSigArgsSize, lSigMaxSizePool, groupCtx.consensusParams.MaxLogicSigArgsSize,
 				)
 				return nil, &TxGroupError{err: errorMsg, GroupIndex: -1, Reason: TxGroupErrorReasonNotWellFormed}
 			}

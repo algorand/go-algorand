@@ -1332,7 +1332,7 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 		args := [][]byte{make([]byte, int(vFuture.MaxLogicSigArgsSize)+1)}
 
 		err := verifyGroup(protocol.ConsensusFuture, []transactions.SignedTxn{makeTxn(program, args)})
-		require.ErrorContains(t, err, "args above")
+		require.ErrorContains(t, err, "more than the available size pool")
 	})
 
 	t.Run("vFuture: LogicSig args above allowance can use size pooling", func(t *testing.T) {
