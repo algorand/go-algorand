@@ -17,6 +17,7 @@
 package v2
 
 import (
+	"encoding/base64"
 	"fmt"
 	"testing"
 
@@ -144,6 +145,10 @@ func TestAccount(t *testing.T) {
 	require.Equal(t, 2, len(*conv.CreatedApps))
 	verifyCreatedApp(0, appIdx1, appParams1)
 	verifyCreatedApp(1, appIdx2, appParams2)
+
+	b64 := func(s string) string {
+		return base64.StdEncoding.EncodeToString([]byte(s))
+	}
 
 	makeTKV := func(k string, v interface{}) model.TealKeyValue {
 		value := model.TealValue{}

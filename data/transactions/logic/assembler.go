@@ -3193,6 +3193,13 @@ func guessByteFormat(bytes []byte) string {
 	return "0x" + hex.EncodeToString(bytes)
 }
 
+// PCOffset stores the mapping from a program counter value to an offset in the
+// disassembly of the bytecode
+type PCOffset struct {
+	PC     int `codec:"pc"`
+	Offset int `codec:"offset"`
+}
+
 type disInfo struct {
 	pcOffset       []PCOffset
 	hasStatefulOps bool

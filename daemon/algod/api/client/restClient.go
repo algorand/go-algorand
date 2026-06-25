@@ -54,7 +54,6 @@ const (
 var rawRequestPaths = map[string]bool{
 	"/v2/transactions":          true,
 	"/v2/transactions/async":    true,
-	"/v2/teal/dryrun":           true,
 	"/v2/teal/compile":          true,
 	"/v2/participation":         true,
 	"/v2/transactions/simulate": true,
@@ -786,14 +785,6 @@ func (client RestClient) doGetWithQuery(ctx context.Context, path string, queryA
 		return
 	}
 	result = string(bytes)
-	return
-}
-
-// RawDryrun gets the raw DryrunResponse associated with the passed address
-func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
-	var blob Blob
-	err = client.submitForm(&blob, "/v2/teal/dryrun", nil, data, "POST", false /* encodeJSON */, false /* decodeJSON */, false)
-	response = blob
 	return
 }
 

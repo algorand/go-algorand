@@ -603,72 +603,6 @@ type DebugSettingsProf struct {
 	MutexRate *uint64 `json:"mutex-rate,omitempty"`
 }
 
-// DryrunRequest Request data type for dryrun endpoint. Given the Transactions and simulated ledger state upload, run TEAL scripts and return debugging information.
-type DryrunRequest struct {
-	Accounts []Account     `json:"accounts"`
-	Apps     []Application `json:"apps"`
-
-	// LatestTimestamp LatestTimestamp is available to some TEAL scripts. Defaults to the latest confirmed timestamp this algod is attached to.
-	LatestTimestamp int64 `json:"latest-timestamp"`
-
-	// ProtocolVersion ProtocolVersion specifies a specific version string to operate under, otherwise whatever the current protocol of the network this algod is running in.
-	ProtocolVersion string `json:"protocol-version"`
-
-	// Round Round is available to some TEAL scripts. Defaults to the current round on the network this algod is attached to.
-	Round   basics.Round      `json:"round"`
-	Sources []DryrunSource    `json:"sources"`
-	Txns    []json.RawMessage `json:"txns"`
-}
-
-// DryrunSource DryrunSource is TEAL source text that gets uploaded, compiled, and inserted into transactions or application state.
-type DryrunSource struct {
-	AppIndex basics.AppIndex `json:"app-index"`
-
-	// FieldName FieldName is what kind of sources this is. If lsig then it goes into the transactions[this.TxnIndex].LogicSig. If approv or clearp it goes into the Approval Program or Clear State Program of application[this.AppIndex].
-	FieldName string `json:"field-name"`
-	Source    string `json:"source"`
-	TxnIndex  int    `json:"txn-index"`
-}
-
-// DryrunState Stores the TEAL eval step data
-type DryrunState struct {
-	// Error Evaluation error if any
-	Error *string `json:"error,omitempty"`
-
-	// Line Line number
-	Line int `json:"line"`
-
-	// Pc Program counter
-	Pc      int          `json:"pc"`
-	Scratch *[]TealValue `json:"scratch,omitempty"`
-	Stack   []TealValue  `json:"stack"`
-}
-
-// DryrunTxnResult DryrunTxnResult contains any LogicSig or ApplicationCall program debug information and state updates from a dryrun.
-type DryrunTxnResult struct {
-	AppCallMessages *[]string      `json:"app-call-messages,omitempty"`
-	AppCallTrace    *[]DryrunState `json:"app-call-trace,omitempty"`
-
-	// BudgetAdded Budget added during execution of app call transaction.
-	BudgetAdded *int `json:"budget-added,omitempty"`
-
-	// BudgetConsumed Budget consumed during execution of app call transaction.
-	BudgetConsumed *int `json:"budget-consumed,omitempty"`
-
-	// Disassembly Disassembled program line by line.
-	Disassembly []string `json:"disassembly"`
-
-	// GlobalDelta Application state delta.
-	GlobalDelta *StateDelta          `json:"global-delta,omitempty"`
-	LocalDeltas *[]AccountStateDelta `json:"local-deltas,omitempty"`
-
-	// LogicSigDisassembly Disassembled lsig program line by line.
-	LogicSigDisassembly *[]string      `json:"logic-sig-disassembly,omitempty"`
-	LogicSigMessages    *[]string      `json:"logic-sig-messages,omitempty"`
-	LogicSigTrace       *[]DryrunState `json:"logic-sig-trace,omitempty"`
-	Logs                *[][]byte      `json:"logs,omitempty"`
-}
-
 // ErrorResponse An error response with optional data field.
 type ErrorResponse struct {
 	Data    *map[string]interface{} `json:"data,omitempty"`
@@ -1295,15 +1229,6 @@ type DisassembleResponse struct {
 	Result string `json:"result"`
 }
 
-// DryrunResponse defines model for DryrunResponse.
-type DryrunResponse struct {
-	Error string `json:"error"`
-
-	// ProtocolVersion Protocol version is the protocol version Dryrun was operated under.
-	ProtocolVersion string            `json:"protocol-version"`
-	Txns            []DryrunTxnResult `json:"txns"`
-}
-
 // GetBlockTimeStampOffsetResponse defines model for GetBlockTimeStampOffsetResponse.
 type GetBlockTimeStampOffsetResponse struct {
 	// Offset Timestamp offset in seconds.
@@ -1734,9 +1659,6 @@ type SimulateTransactionParamsFormat string
 
 // TealCompileTextRequestBody defines body for TealCompile for text/plain ContentType.
 type TealCompileTextRequestBody = TealCompileTextBody
-
-// TealDryrunJSONRequestBody defines body for TealDryrun for application/json ContentType.
-type TealDryrunJSONRequestBody = DryrunRequest
 
 // SimulateTransactionJSONRequestBody defines body for SimulateTransaction for application/json ContentType.
 type SimulateTransactionJSONRequestBody = SimulateRequest

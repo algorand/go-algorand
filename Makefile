@@ -311,7 +311,7 @@ build-e2e: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a
 	@mkdir -p $(GOBIN)-race
 	# Build regular binaries (kmd, algod, goal) and race binaries in parallel
 	$(GO_INSTALL) -trimpath $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./cmd/kmd ./cmd/algod ./cmd/goal & \
-	GOBIN=$(GOBIN)-race go install -trimpath $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" ./cmd/goal ./cmd/algod ./cmd/algoh ./cmd/tealdbg ./cmd/msgpacktool ./cmd/algokey ./cmd/pingpong ./tools/teal/algotmpl ./test/e2e-go/cli/tealdbg/cdtmock & \
+	GOBIN=$(GOBIN)-race go install -trimpath $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" ./cmd/goal ./cmd/algod ./cmd/algoh ./cmd/msgpacktool ./cmd/algokey ./cmd/pingpong ./tools/teal/algotmpl & \
 	wait
 	cp $(GOBIN)/kmd $(GOBIN)-race
 
