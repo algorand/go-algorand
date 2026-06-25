@@ -1203,6 +1203,17 @@ func logicSigTxnPrep(program []byte) func(transactions.SignedTxn) []byte {
 	}
 }
 
+func delegatedLogicSigTxnPrep(program []byte) func(transactions.SignedTxn) []byte {
+	return func(stxn transactions.SignedTxn) []byte {
+		var sig crypto.Signature
+		sig[0] = 1
+		stxn.Sig = crypto.Signature{}
+		stxn.Msig = crypto.MultisigSig{}
+		stxn.Lsig = transactions.LogicSig{Logic: program, Sig: sig}
+		return protocol.Encode(&stxn)
+	}
+}
+
 func TestPostTransactionLogicSigCurveCheck(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1236,6 +1247,16 @@ func TestPostTransactionLogicSigCurveCheck(t *testing.T) {
 		defer releasefunc()
 
 		err := handler.RawTransaction(c, model.RawTransactionParams{DangerouslySkipAddressCurveCheck: &skip})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, rec.Code)
+	})
+
+	t.Run("accepts delegated on curve logicsig", func(t *testing.T) {
+		program := onCurveLogicSigProgram(t)
+		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, delegatedLogicSigTxnPrep(program), config.GetDefaultLocal())
+		defer releasefunc()
+
+		err := handler.RawTransaction(c, model.RawTransactionParams{})
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, rec.Code)
 	})

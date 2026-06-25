@@ -1152,6 +1152,13 @@ func skipAddressCurveCheck(skip *bool) bool {
 	return skip != nil && *skip
 }
 
+func isEscrowLogicSig(stxn transactions.SignedTxn) bool {
+	return stxn.Lsig.Sig.Blank() &&
+		stxn.Lsig.Msig.Blank() &&
+		stxn.Lsig.LMsig.Blank() &&
+		stxn.Authorizer() == basics.Address(logic.HashProgram(stxn.Lsig.Logic))
+}
+
 func rejectOnCurveLogicSigPrograms(txgroup []transactions.SignedTxn) error {
 	for i, stxn := range txgroup {
 		if len(stxn.Lsig.Logic) == 0 {
@@ -1161,7 +1168,7 @@ func rejectOnCurveLogicSigPrograms(txgroup []transactions.SignedTxn) error {
 		if err != nil || version < logic.LogicSigOffCurveVersion || version > logic.LogicVersion {
 			continue
 		}
-		if logic.ProgramHashIsEdwards25519Point(stxn.Lsig.Logic) {
+		if isEscrowLogicSig(stxn) && logic.ProgramHashIsEdwards25519Point(stxn.Lsig.Logic) {
 			return fmt.Errorf("transaction %d: TEAL v%d LogicSig program hash is an Edwards25519 point and should not be used; set %s=true to submit anyway if you understand the risks and know what you are doing", i, version, dangerouslySkipAddressCurveCheckParam)
 		}
 	}
