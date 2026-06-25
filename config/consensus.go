@@ -119,15 +119,6 @@ type ConsensusParams struct {
 	// group. The total available is len(group) * LogicSigMaxCost
 	EnableLogicSigCostPooling bool
 
-	// EnableLogicSigSizePooling specifies LogicSig sizes are pooled across a
-	// group. The total available is len(group) * LogicSigMaxSize
-	EnableLogicSigSizePooling bool
-
-	// EnableLogicSigProgramSizePricing allows a single LogicSig program to
-	// exceed LogicSigMaxSize by paying a per-byte surcharge, avoiding the need
-	// for size pooling.
-	EnableLogicSigProgramSizePricing bool
-
 	// RewardUnit specifies the number of MicroAlgos corresponding to one reward
 	// unit.
 	//
@@ -240,18 +231,16 @@ type ConsensusParams struct {
 	// 0 for no support, otherwise highest version supported
 	LogicSigVersion uint64
 
-	// len(LogicSig.Logic) + len(LogicSig.Args[*]) must be less than this,
-	// unless size pooling or size pricing is enabled.
+	// LogicSigMaxSize is the legacy LogicSig size unit used to compute group
+	// size pools and free program-byte allowance.
 	LogicSigMaxSize uint64
 
-	// MaxAbsoluteLogicSigProgramSize is the absolute maximum size of a
-	// LogicSig program when size pricing is enabled.
-	// Program bytes not covered by the per-txn or pooled LogicSigMaxSize
-	// allowance require extra fees.
+	// MaxAbsoluteLogicSigProgramSize is the absolute maximum size of a LogicSig
+	// program.
 	MaxAbsoluteLogicSigProgramSize uint64
 
 	// MaxLogicSigArgsSize is the maximum total size of the arguments to a
-	// single LogicSig without requiring LogicSig size pooling.
+	// single LogicSig without requiring the group's LogicSig size pool.
 	MaxLogicSigArgsSize uint64
 
 	// sum of estimated op cost must be less than this
@@ -1030,6 +1019,8 @@ func initConsensusProtocols() {
 	v18.Asset = true
 	v18.LogicSigVersion = 1
 	v18.LogicSigMaxSize = 1000
+	v18.MaxLogicSigArgsSize = 1000
+	v18.MaxAbsoluteLogicSigProgramSize = 1000
 	v18.LogicSigMaxCost = 20000
 	v18.LogicSigMsig = true
 	v18.MaxAssetsPerAccount = 1000
@@ -1451,8 +1442,7 @@ func initConsensusProtocols() {
 	v40.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	v40.LogicSigVersion = 11
-
-	v40.EnableLogicSigSizePooling = true
+	v40.MaxAbsoluteLogicSigProgramSize = 16000
 
 	v40.Payouts.Enabled = true
 	v40.Payouts.Percent = 50
@@ -1514,10 +1504,7 @@ func initConsensusProtocols() {
 	vFuture.MaxAbsoluteTxnNoteBytes = 4096   // same as largest AVM value
 	vFuture.MaxAbsoluteExtraProgramPages = 7 // Allow larger programs with extra fees
 	vFuture.MaxAbsoluteTotalArgLen = 16384   // We _could_ make this as high as 16*4k
-	vFuture.EnableLogicSigProgramSizePricing = true
-	vFuture.MaxLogicSigArgsSize = 1000
-	vFuture.MaxAbsoluteLogicSigProgramSize = 16000
-	vFuture.PerByteTxnSurcharge = 100 // Each charged byte adds 0.000100 of min fee
+	vFuture.PerByteTxnSurcharge = 100        // Each charged byte adds 0.000100 of min fee
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

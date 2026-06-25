@@ -241,52 +241,43 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 		}
 		lSigPooledSize += stxn.Lsig.Len()
 		lSigArgsSize += stxn.Lsig.ArgsLen()
-		if groupCtx.consensusParams.EnableLogicSigProgramSizePricing &&
-			uint64(stxn.Lsig.ArgsLen()) > groupCtx.consensusParams.MaxLogicSigArgsSize {
+		if uint64(stxn.Lsig.ArgsLen()) > groupCtx.consensusParams.MaxLogicSigArgsSize {
 			lSigArgsNeedSizePooling = true
 		}
 	}
-	if groupCtx.consensusParams.EnableLogicSigProgramSizePricing {
-		// LogicSig args are unpriced. Each LogicSig may carry up to MaxLogicSigArgsSize
-		// without using the group's size pool. Larger args are allowed only when the
-		// current group's LogicSig size pool covers the group's total args.
-		if lSigArgsNeedSizePooling {
-			if !groupCtx.consensusParams.EnableLogicSigSizePooling {
-				errorMsg := fmt.Errorf(
-					"LogicSig args above %d bytes require LogicSig size pooling",
-					groupCtx.consensusParams.MaxLogicSigArgsSize,
-				)
-				return nil, &TxGroupError{err: errorMsg, GroupIndex: -1, Reason: TxGroupErrorReasonNotWellFormed}
-			}
-			lSigMaxSizePool := len(stxs) * int(groupCtx.consensusParams.LogicSigMaxSize)
-			if lSigArgsSize > lSigMaxSizePool {
-				errorMsg := fmt.Errorf(
-					"txgroup had %d bytes of LogicSig args, more than the available size pool of %d bytes (per-LogicSig allowance is %d)",
-					lSigArgsSize, lSigMaxSizePool, groupCtx.consensusParams.MaxLogicSigArgsSize,
-				)
-				return nil, &TxGroupError{err: errorMsg, GroupIndex: -1, Reason: TxGroupErrorReasonNotWellFormed}
-			}
-		}
-		// This is redundant when MaxLogicSigArgsSize == LogicSigMaxSize, but
-		// keeps the aggregate args bound if a future protocol raises the
-		// per-LogicSig args allowance above one legacy size unit.
-		lSigMaxArgsSize := groupCtx.consensusParams.MaxTxGroupSize * int(groupCtx.consensusParams.LogicSigMaxSize)
-		if lSigArgsSize > lSigMaxArgsSize {
+	lSigMaxSizePool := len(stxs) * int(groupCtx.consensusParams.LogicSigMaxSize)
+	// Protocols without a per-byte surcharge cannot pay for LogicSig bytes
+	// above the ordinary group pool. Keep those protocols on the legacy total
+	// LogicSig size check.
+	if groupCtx.consensusParams.PerByteTxnSurcharge == 0 && lSigPooledSize > lSigMaxSizePool {
+		errorMsg := fmt.Errorf(
+			"txgroup had %d bytes of LogicSigs, more than the available pool of %d bytes",
+			lSigPooledSize, lSigMaxSizePool,
+		)
+		return nil, &TxGroupError{err: errorMsg, GroupIndex: -1, Reason: TxGroupErrorReasonNotWellFormed}
+	}
+	// LogicSig args are unpriced. Each LogicSig may carry up to MaxLogicSigArgsSize
+	// without using the group's size pool. Larger args are allowed only when the
+	// current group's LogicSig size pool covers the group's total args.
+	if lSigArgsNeedSizePooling {
+		if lSigArgsSize > lSigMaxSizePool {
 			errorMsg := fmt.Errorf(
-				"txgroup had %d bytes of LogicSig args, more than the available pool of %d bytes",
-				lSigArgsSize, lSigMaxArgsSize,
+				"txgroup had %d bytes of LogicSig args, more than the available size pool of %d bytes (per-LogicSig allowance is %d)",
+				lSigArgsSize, lSigMaxSizePool, groupCtx.consensusParams.MaxLogicSigArgsSize,
 			)
 			return nil, &TxGroupError{err: errorMsg, GroupIndex: -1, Reason: TxGroupErrorReasonNotWellFormed}
 		}
-	} else if groupCtx.consensusParams.EnableLogicSigSizePooling {
-		lSigMaxPooledSize := len(stxs) * int(groupCtx.consensusParams.LogicSigMaxSize)
-		if lSigPooledSize > lSigMaxPooledSize {
-			errorMsg := fmt.Errorf(
-				"txgroup had %d bytes of LogicSigs, more than the available pool of %d bytes",
-				lSigPooledSize, lSigMaxPooledSize,
-			)
-			return nil, &TxGroupError{err: errorMsg, GroupIndex: -1, Reason: TxGroupErrorReasonNotWellFormed}
-		}
+	}
+	// This is redundant when MaxLogicSigArgsSize == LogicSigMaxSize, but
+	// keeps the aggregate args bound if a future protocol raises the
+	// per-LogicSig args allowance above one legacy size unit.
+	lSigMaxArgsSize := groupCtx.consensusParams.MaxTxGroupSize * int(groupCtx.consensusParams.LogicSigMaxSize)
+	if lSigArgsSize > lSigMaxArgsSize {
+		errorMsg := fmt.Errorf(
+			"txgroup had %d bytes of LogicSig args, more than the available pool of %d bytes",
+			lSigArgsSize, lSigMaxArgsSize,
+		)
+		return nil, &TxGroupError{err: errorMsg, GroupIndex: -1, Reason: TxGroupErrorReasonNotWellFormed}
 	}
 
 	return groupCtx, nil
@@ -403,17 +394,10 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batch crypto.B
 	if len(lsig.Logic) == 0 {
 		return errors.New("LogicSig.Logic empty")
 	}
-	if groupCtx.consensusParams.EnableLogicSigProgramSizePricing {
-		// This absolute program cap is per LogicSig. Args and pooling checks
-		// need the whole group and are handled in txnGroupBatchPrep.
-		if uint64(len(lsig.Logic)) > groupCtx.consensusParams.MaxAbsoluteLogicSigProgramSize {
-			return fmt.Errorf("LogicSig.Logic too long. max size is %d bytes", groupCtx.consensusParams.MaxAbsoluteLogicSigProgramSize)
-		}
-	}
-	if !groupCtx.consensusParams.EnableLogicSigSizePooling &&
-		!groupCtx.consensusParams.EnableLogicSigProgramSizePricing &&
-		uint64(lsig.Len()) > groupCtx.consensusParams.LogicSigMaxSize {
-		return errors.New("LogicSig too long")
+	// This absolute program cap is per LogicSig. Args and pooling checks need
+	// the whole group and are handled in txnGroupBatchPrep.
+	if uint64(len(lsig.Logic)) > groupCtx.consensusParams.MaxAbsoluteLogicSigProgramSize {
+		return fmt.Errorf("LogicSig.Logic too long. max size is %d bytes", groupCtx.consensusParams.MaxAbsoluteLogicSigProgramSize)
 	}
 	version, vlen := binary.Uvarint(lsig.Logic)
 	if vlen <= 0 {

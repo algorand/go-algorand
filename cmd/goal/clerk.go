@@ -1179,14 +1179,19 @@ var dryrunCmd = &cobra.Command{
 		}
 
 		lSigPooledSize := 0
+		lSigArgsSize := 0
+		lSigArgsNeedSizePooling := false
 		for i, txn := range stxns {
 			if txn.Lsig.Blank() {
 				continue
 			}
-			lsigLen := txn.Lsig.Len()
-			lSigPooledSize += lsigLen
-			if !params.EnableLogicSigSizePooling && uint64(lsigLen) > params.LogicSigMaxSize {
-				reportErrorf("program size too large: %d > %d", len(txn.Lsig.Logic), params.LogicSigMaxSize)
+			lSigPooledSize += txn.Lsig.Len()
+			lSigArgsSize += txn.Lsig.ArgsLen()
+			if uint64(txn.Lsig.ArgsLen()) > params.MaxLogicSigArgsSize {
+				lSigArgsNeedSizePooling = true
+			}
+			if params.LogicSigVersion != 0 && uint64(len(txn.Lsig.Logic)) > params.MaxAbsoluteLogicSigProgramSize {
+				reportErrorf("program size too large: %d > %d", len(txn.Lsig.Logic), params.MaxAbsoluteLogicSigProgramSize)
 			}
 			ep := logic.NewSigEvalParams(stxns, &params, logic.NoHeaderLedger{})
 
@@ -1208,8 +1213,15 @@ var dryrunCmd = &cobra.Command{
 			}
 		}
 		lSigMaxPooledSize := len(stxns) * int(params.LogicSigMaxSize)
-		if params.EnableLogicSigSizePooling && lSigPooledSize > lSigMaxPooledSize {
+		if params.PerByteTxnSurcharge == 0 && lSigPooledSize > lSigMaxPooledSize {
 			reportErrorf("total lsigs size too large: %d > %d", lSigPooledSize, lSigMaxPooledSize)
+		}
+		if lSigArgsNeedSizePooling && lSigArgsSize > lSigMaxPooledSize {
+			reportErrorf("total lsig args size too large: %d > %d", lSigArgsSize, lSigMaxPooledSize)
+		}
+		lSigMaxArgsSize := params.MaxTxGroupSize * int(params.LogicSigMaxSize)
+		if lSigArgsSize > lSigMaxArgsSize {
+			reportErrorf("total lsig args size too large: %d > %d", lSigArgsSize, lSigMaxArgsSize)
 		}
 
 	},

@@ -171,27 +171,16 @@ func WrapSignedTxnsWithAD(txgroup []SignedTxn) []SignedTxnWithAD {
 // logicSigProgramFeeContribution accounts for priced LogicSig program bytes.
 // This cannot live in Transaction.FeeFactor: the LogicSig is carried by
 // SignedTxn, outside the committed Transaction, and the priced byte count can
-// depend on group-level LogicSig size pooling. LogicSig args are intentionally
-// ignored here because they can be supplied or padded independently of the
-// LogicSig program signer.
+// depend on the group-level LogicSig size allowance. LogicSig args are
+// intentionally ignored here because they can be supplied or padded
+// independently of the LogicSig program signer.
 func logicSigProgramFeeContribution(txgroup []SignedTxnWithAD, proto config.ConsensusParams) basics.Micros {
-	if !proto.EnableLogicSigProgramSizePricing {
-		return 0
+	programBytes := 0
+	for _, txad := range txgroup {
+		programBytes += len(txad.SignedTxn.Lsig.Logic)
 	}
-
-	extraProgramBytes := 0
-	if proto.EnableLogicSigSizePooling {
-		programBytes := 0
-		for _, txad := range txgroup {
-			programBytes += len(txad.SignedTxn.Lsig.Logic)
-		}
-		freeProgramBytes := len(txgroup) * int(proto.LogicSigMaxSize)
-		extraProgramBytes = max(0, programBytes-freeProgramBytes)
-	} else {
-		for _, txad := range txgroup {
-			extraProgramBytes += max(0, len(txad.SignedTxn.Lsig.Logic)-int(proto.LogicSigMaxSize))
-		}
-	}
+	freeProgramBytes := len(txgroup) * int(proto.LogicSigMaxSize)
+	extraProgramBytes := max(0, programBytes-freeProgramBytes)
 
 	surcharge, _ := proto.PerByteTxnSurcharge.MulInt(extraProgramBytes)
 	return surcharge

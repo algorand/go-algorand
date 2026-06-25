@@ -613,8 +613,6 @@ func TestLogicSigProgramFeeContribution(t *testing.T) {
 
 	v41 := config.Consensus[protocol.ConsensusV41]
 	vFuture := config.Consensus[protocol.ConsensusFuture]
-	vFutureNoSizePooling := vFuture
-	vFutureNoSizePooling.EnableLogicSigSizePooling = false
 
 	freeSize := int(vFuture.LogicSigMaxSize)
 	surchargeForBytes := func(bytes int) basics.Micros {
@@ -631,7 +629,7 @@ func TestLogicSigProgramFeeContribution(t *testing.T) {
 		expectedContribution basics.Micros
 	}{
 		{
-			name:                 "v41: pooled oversized LogicSig program has no surcharge before feature is enabled",
+			name:                 "v41: oversized LogicSig program has no surcharge before per-byte fee is set",
 			proto:                v41,
 			logicSizes:           []int{freeSize + 500, 0},
 			expectedContribution: 0,
@@ -678,19 +676,6 @@ func TestLogicSigProgramFeeContribution(t *testing.T) {
 			proto:                vFuture,
 			logicSizes:           []int{freeSize + 500, 0},
 			argSizes:             []int{300, 300},
-			expectedContribution: 0,
-		},
-		{
-			name:                 "vFuture: without size pooling, program surcharge is per transaction",
-			proto:                vFutureNoSizePooling,
-			logicSizes:           []int{freeSize + 500, 0},
-			expectedContribution: surchargeForBytes(500),
-		},
-		{
-			name:                 "vFuture: without size pooling, args do not reduce per txn free program allowance",
-			proto:                vFutureNoSizePooling,
-			logicSizes:           []int{freeSize},
-			argSizes:             []int{500},
 			expectedContribution: 0,
 		},
 	}

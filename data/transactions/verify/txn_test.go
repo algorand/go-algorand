@@ -675,8 +675,8 @@ func TestLsigSize(t *testing.T) {
 	// From consensus version 18, we have lsigs with a maximum size of 1000 bytes.
 	// We need to use pragma 1 for teal in v18
 	pragma := uint(1)
-	consensusVersionPreSizePooling := protocol.ConsensusV18
-	consensusVersionPostSizePooling := protocol.ConsensusV41
+	consensusVersionLegacy := protocol.ConsensusV18
+	consensusVersionPooled := protocol.ConsensusV41
 	consensusVersionBigLogicSig := protocol.ConsensusFuture
 	maxBigLogicSigSize := uint(config.Consensus[consensusVersionBigLogicSig].MaxAbsoluteLogicSigProgramSize)
 
@@ -687,10 +687,10 @@ func TestLsigSize(t *testing.T) {
 		lsigSize         uint
 		success          bool
 	}{
-		{consensusVersionPreSizePooling, 1000, true},
-		{consensusVersionPreSizePooling, 1001, false},
-		{consensusVersionPostSizePooling, 2000, true},
-		{consensusVersionPostSizePooling, 2001, false},
+		{consensusVersionLegacy, 1000, true},
+		{consensusVersionLegacy, 1001, false},
+		{consensusVersionPooled, 2000, true},
+		{consensusVersionPooled, 2001, false},
 		{consensusVersionBigLogicSig, maxBigLogicSigSize, true},
 		{consensusVersionBigLogicSig, maxBigLogicSigSize + 1, false},
 	}
@@ -1262,6 +1262,7 @@ func TestLogicSigMultisigValidation(t *testing.T) {
 func TestBigLogicSigProgramSize(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	v18 := config.Consensus[protocol.ConsensusV18]
 	v41 := config.Consensus[protocol.ConsensusV41]
 	vFuture := config.Consensus[protocol.ConsensusFuture]
 
@@ -1299,10 +1300,25 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 		return err
 	}
 
-	t.Run("v41: singleton still limited by legacy size pool", func(t *testing.T) {
+	t.Run("v18: singleton still limited by legacy program cap", func(t *testing.T) {
+		program := makeProgram(v18, int(v18.LogicSigMaxSize)+1)
+		err := verifyGroup(protocol.ConsensusV18, []transactions.SignedTxn{makeTxn(program, nil)})
+		require.ErrorContains(t, err, "LogicSig.Logic too long")
+	})
+
+	t.Run("v41: singleton cannot exceed current pool without pricing", func(t *testing.T) {
 		program := makeProgram(v41, int(v41.LogicSigMaxSize)+1)
 		err := verifyGroup(protocol.ConsensusV41, []transactions.SignedTxn{makeTxn(program, nil)})
 		require.ErrorContains(t, err, "more than the available pool")
+	})
+
+	t.Run("v41: ordinary size pooling is still allowed", func(t *testing.T) {
+		program := makeProgram(v41, int(v41.LogicSigMaxSize)+1)
+		err := verifyGroup(protocol.ConsensusV41, []transactions.SignedTxn{
+			makeTxnForReceiver(program, nil, basics.Address{1}),
+			makeTxnForReceiver(makeProgram(v41, 0), nil, basics.Address{2}),
+		})
+		require.NoError(t, err)
 	})
 
 	t.Run("vFuture: singleton can use more than one legacy size unit", func(t *testing.T) {

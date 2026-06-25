@@ -54,12 +54,12 @@ func TestConsensusParams(t *testing.T) {
 		if params.MaxAbsoluteTotalArgLen < params.MaxAppTotalArgLen {
 			t.Errorf("Protocol %s: MaxAbsoluteTotalArgLen is smaller than MaxAppTotalArgLen", proto)
 		}
-		if params.EnableLogicSigProgramSizePricing {
-			if params.MaxAbsoluteLogicSigProgramSize <= params.LogicSigMaxSize {
-				t.Errorf("Protocol %s: EnableLogicSigProgramSizePricing expects MaxAbsoluteLogicSigProgramSize to exceed LogicSigMaxSize", proto)
+		if params.LogicSigVersion != 0 {
+			if params.MaxAbsoluteLogicSigProgramSize < params.LogicSigMaxSize {
+				t.Errorf("Protocol %s: MaxAbsoluteLogicSigProgramSize is smaller than LogicSigMaxSize", proto)
 			}
 			if params.MaxLogicSigArgsSize == 0 {
-				t.Errorf("Protocol %s: EnableLogicSigProgramSizePricing requires MaxLogicSigArgsSize", proto)
+				t.Errorf("Protocol %s: LogicSig requires MaxLogicSigArgsSize", proto)
 			}
 			if params.MaxLogicSigArgsSize < params.LogicSigMaxSize {
 				t.Errorf("Protocol %s: MaxLogicSigArgsSize is smaller than LogicSigMaxSize", proto)
