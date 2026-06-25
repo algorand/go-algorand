@@ -25,7 +25,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -42,7 +41,6 @@ import (
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util"
 )
 
 var (
@@ -58,14 +56,11 @@ var (
 	programSource      string
 	argB64Strings      []string
 	disassemble        bool
-	verbose            bool
 	progByteFile       string
 	msigParams         string
 	logicSigFile       string
-	timeStamp          int64
 	protoVersion       string
 	signerAddress      string
-	rawOutput          bool
 	requestFilename    string
 	requestOutFilename string
 	inspectTxid        bool
@@ -92,8 +87,6 @@ func init() {
 	clerkCmd.AddCommand(groupCmd)
 	clerkCmd.AddCommand(splitCmd)
 	clerkCmd.AddCommand(compileCmd)
-	clerkCmd.AddCommand(dryrunCmd)
-	clerkCmd.AddCommand(dryrunRemoteCmd)
 	clerkCmd.AddCommand(simulateCmd)
 
 	// Wallet to be used for the clerk operation
@@ -150,19 +143,6 @@ func init() {
 	compileCmd.Flags().BoolVarP(&signProgram, "sign", "s", false, "Sign program, output is a binary signed LogicSig record")
 	compileCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename to write program bytes or signed LogicSig to")
 	compileCmd.Flags().StringVarP(&account, "account", "a", "", "Account address to sign the program (If not specified, uses default account)")
-
-	dryrunCmd.Flags().StringVarP(&txFilename, "txfile", "t", "", "Transaction or transaction-group to test")
-	dryrunCmd.Flags().StringVarP(&protoVersion, "proto", "P", "", "Consensus protocol version id string")
-	dryrunCmd.Flags().BoolVar(&dumpForDryrun, "dryrun-dump", false, "Dump in dryrun format acceptable by dryrun REST api instead of running")
-	dryrunCmd.Flags().Var(&dumpForDryrunFormat, "dryrun-dump-format", "Dryrun dump format: "+dumpForDryrunFormat.AllowedString())
-	dryrunCmd.Flags().StringSliceVar(&dumpForDryrunAccts, "dryrun-accounts", nil, "Additional accounts to include into dryrun request obj")
-	dryrunCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename for writing dryrun state object")
-	dryrunCmd.MarkFlagRequired("txfile")
-
-	dryrunRemoteCmd.Flags().StringVarP(&txFilename, "dryrun-state", "D", "", "Dryrun request object to run")
-	dryrunRemoteCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Print more info")
-	dryrunRemoteCmd.Flags().BoolVarP(&rawOutput, "raw", "r", false, "Output raw response from algod")
-	dryrunRemoteCmd.MarkFlagRequired("dryrun-state")
 
 	simulateCmd.Flags().StringVarP(&txFilename, "txfile", "t", "", "Transaction or transaction-group to test. Mutually exclusive with --request")
 	simulateCmd.Flags().StringVar(&requestFilename, "request", "", "Simulate request object to run. Mutually exclusive with --txfile")
@@ -552,11 +532,7 @@ var sendCmd = &cobra.Command{
 				}
 			}
 		} else {
-			if dumpForDryrun {
-				err = writeDryrunReqToFile(client, stx, outFilename)
-			} else {
-				err = writeFile(outFilename, protocol.Encode(&stx), 0600)
-			}
+			err = writeFile(outFilename, protocol.Encode(&stx), 0600)
 			if err != nil {
 				reportErrorln(err)
 			}
@@ -1147,141 +1123,6 @@ var compileCmd = &cobra.Command{
 				pd := logic.HashProgram(program)
 				addr := basics.Address(pd)
 				fmt.Printf("%s: %s\n", fname, addr.String())
-			}
-		}
-	},
-}
-
-var dryrunCmd = &cobra.Command{
-	Use:   "dryrun",
-	Short: "Test a program offline",
-	Long:  "Test a TEAL program offline under various conditions and verbosity.",
-	Run: func(cmd *cobra.Command, args []string) {
-		reportWarnf("goal clerk dryrun is deprecated and will be removed soon. Please speak up if the feature matters to you.")
-		time.Sleep(3 * time.Second)
-		stxns := decodeTxnsFromFile(txFilename)
-		proto, params := getProto(protoVersion)
-		if dumpForDryrun {
-			// Write dryrun data to file
-			dataDir := datadir.EnsureSingleDataDir()
-			client := ensureFullClient(dataDir)
-			accts := util.Map(dumpForDryrunAccts, cliAddress)
-			data, err := libgoal.MakeDryrunStateBytes(client, nil, stxns, accts, string(proto), dumpForDryrunFormat.String())
-			if err != nil {
-				reportErrorln(err)
-			}
-			writeFile(outFilename, data, 0600)
-			return
-		}
-
-		if timeStamp <= 0 {
-			timeStamp = time.Now().Unix()
-		}
-
-		lSigPooledSize := 0
-		for i, txn := range stxns {
-			if txn.Lsig.Blank() {
-				continue
-			}
-			lsigLen := txn.Lsig.Len()
-			lSigPooledSize += lsigLen
-			if !params.EnableLogicSigSizePooling && uint64(lsigLen) > params.LogicSigMaxSize {
-				reportErrorf("program size too large: %d > %d", len(txn.Lsig.Logic), params.LogicSigMaxSize)
-			}
-			ep := logic.NewSigEvalParams(stxns, &params, logic.NoHeaderLedger{})
-
-			err := logic.CheckSignature(i, ep)
-			if err != nil {
-				reportErrorf("program failed Check: %s", err)
-			}
-			ep.Trace = &strings.Builder{}
-			pass, err := logic.EvalSignature(i, ep)
-			// TODO: optionally include `inspect` output here?
-			fmt.Fprintf(os.Stdout, "tx[%d] trace:\n%s\n", i, ep.Trace.String())
-			if pass {
-				fmt.Fprintf(os.Stdout, " - pass -\n")
-			} else {
-				fmt.Fprintf(os.Stdout, "REJECT\n")
-			}
-			if err != nil {
-				fmt.Fprintf(os.Stdout, "ERROR: %s\n", err.Error())
-			}
-		}
-		lSigMaxPooledSize := len(stxns) * int(params.LogicSigMaxSize)
-		if params.EnableLogicSigSizePooling && lSigPooledSize > lSigMaxPooledSize {
-			reportErrorf("total lsigs size too large: %d > %d", lSigPooledSize, lSigMaxPooledSize)
-		}
-
-	},
-}
-
-var dryrunRemoteCmd = &cobra.Command{
-	Use:   "dryrun-remote",
-	Short: "Test a program with algod's dryrun REST endpoint",
-	Long:  "Test a TEAL program with algod's dryrun REST endpoint under various conditions and verbosity.",
-	Run: func(cmd *cobra.Command, args []string) {
-		reportWarnf("goal clerk dryrun-remote is deprecated and will be removed soon. Please speak up if the feature matters to you.")
-		time.Sleep(3 * time.Second)
-		data, err := readFile(txFilename)
-		if err != nil {
-			reportErrorf(fileReadError, txFilename, err)
-		}
-
-		dataDir := datadir.EnsureSingleDataDir()
-		client := ensureFullClient(dataDir)
-		resp, err := client.Dryrun(data)
-		if err != nil {
-			reportErrorf("dryrun-remote: %s", err.Error())
-		}
-		if rawOutput {
-			fmt.Fprint(os.Stdout, string(protocol.EncodeJSON(&resp)))
-			return
-		}
-
-		stackToString := func(stack []model.TealValue) string {
-			result := make([]string, len(stack))
-			for i, sv := range stack {
-				if sv.Type == uint64(basics.TealBytesType) {
-					result[i] = heuristicFormatStr(sv.Bytes)
-				} else {
-					result[i] = fmt.Sprintf("%d", sv.Uint)
-				}
-			}
-			return strings.Join(result, " ")
-		}
-		if len(resp.Txns) > 0 {
-			for i, txnResult := range resp.Txns {
-				var msgs []string
-				var trace []model.DryrunState
-				if txnResult.AppCallMessages != nil && len(*txnResult.AppCallMessages) > 0 {
-					msgs = *txnResult.AppCallMessages
-					if txnResult.AppCallTrace != nil {
-						trace = *txnResult.AppCallTrace
-					}
-				} else if txnResult.LogicSigMessages != nil && len(*txnResult.LogicSigMessages) > 0 {
-					msgs = *txnResult.LogicSigMessages
-					if txnResult.LogicSigTrace != nil {
-						trace = *txnResult.LogicSigTrace
-					}
-				}
-				if txnResult.BudgetConsumed != nil {
-					fmt.Fprintf(os.Stdout, "tx[%d] budget consumed: %d\n", i, *txnResult.BudgetConsumed)
-				}
-				if txnResult.BudgetAdded != nil {
-					fmt.Fprintf(os.Stdout, "tx[%d] budget added: %d\n", i, *txnResult.BudgetAdded)
-				}
-
-				fmt.Fprintf(os.Stdout, "tx[%d] messages:\n", i)
-				for _, msg := range msgs {
-					fmt.Fprintf(os.Stdout, "%s\n", msg)
-				}
-				if verbose && len(trace) > 0 {
-					fmt.Fprintf(os.Stdout, "tx[%d] trace:\n", i)
-					for _, item := range trace {
-						fmt.Fprintf(os.Stdout, "%4d (%04x): %s [%s]\n",
-							item.Line, item.Pc, txnResult.Disassembly[item.Line-1], stackToString(item.Stack))
-					}
-				}
 			}
 		}
 	},
