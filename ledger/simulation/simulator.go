@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
@@ -208,13 +209,8 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, group []transactions.Si
 	return &vb, nil
 }
 
-func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxnWithAD, tracer logic.EvalTracer, overrides ResultEvalOverrides) (*ledgercore.ValidatedBlock, error) {
-	prevBlockHdr, err := s.ledger.BlockHdr(s.ledger.start)
-	if err != nil {
-		return nil, err
-	}
-	nextBlock := bookkeeping.MakeBlock(prevBlockHdr)
-	hdr := nextBlock.BlockHeader
+func (s Simulator) simulateWithTracer(hdr bookkeeping.BlockHeader, txgroup []transactions.SignedTxnWithAD, tracer logic.EvalTracer, overrides ResultEvalOverrides) (*ledgercore.ValidatedBlock, error) {
+	var err error
 
 	if overrides.FixSigners {
 		// Map of rekeys for senders in the group
@@ -304,6 +300,12 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 		}
 	}
 
+	prevBlockHdr, err := s.ledger.BlockHdr(s.ledger.start)
+	if err != nil {
+		return Result{}, err
+	}
+	nextBlock := bookkeeping.MakeBlock(prevBlockHdr)
+
 	group := transactions.WrapSignedTxnsWithAD(simulateRequest.TxnGroups[0])
 
 	simulatorTracer, err := makeEvalTracer(s.ledger.start, group, simulateRequest, s.developerAPI)
@@ -311,7 +313,7 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 		return Result{}, err
 	}
 
-	block, err := s.simulateWithTracer(group, simulatorTracer, simulatorTracer.result.EvalOverrides)
+	block, err := s.simulateWithTracer(nextBlock.BlockHeader, group, simulatorTracer, simulatorTracer.result.EvalOverrides)
 	if err != nil {
 		var verifyError *verify.TxGroupError
 		switch {
@@ -330,6 +332,8 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 			return Result{}, err
 		}
 	}
+
+	populateFeeUsage(simulatorTracer.result, config.Consensus[nextBlock.CurrentProtocol])
 
 	if simulatorTracer.result.TxnGroups[0].UnnamedResourcesAccessed != nil {
 		// Remove private fields for easier test comparison

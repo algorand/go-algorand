@@ -883,6 +883,16 @@
                   "type": "integer",
                   "x-go-type": "basics.Round"
                 },
+                "total-fees-paid": {
+                  "description": "Total fees paid across all top-level transaction groups and their descendants.",
+                  "type": "integer",
+                  "x-go-type": "uint64"
+                },
+                "total-usage": {
+                  "description": "Total fee usage across all top-level transaction groups and their descendants, in millionths of a basic transaction fee unit.",
+                  "type": "integer",
+                  "x-go-type": "basics.Micros"
+                },
                 "txn-groups": {
                   "description": "A result object for each transaction group that was simulated.",
                   "items": {
@@ -2551,6 +2561,16 @@
             "description": "If present, indicates that the transaction group failed and specifies why that happened",
             "type": "string"
           },
+          "group-fees-paid": {
+            "description": "Total fees paid by the transaction group and all of its descendant inner transaction groups.",
+            "type": "integer",
+            "x-go-type": "uint64"
+          },
+          "group-usage": {
+            "description": "Fee usage for the transaction group, including all descendant inner transactions, in millionths of a basic transaction fee unit.",
+            "type": "integer",
+            "x-go-type": "basics.Micros"
+          },
           "txn-results": {
             "description": "Simulation result for individual transactions",
             "items": {
@@ -2577,6 +2597,11 @@
           "exec-trace": {
             "$ref": "#/components/schemas/SimulationTransactionExecTrace"
           },
+          "fees-paid": {
+            "description": "Total fees paid by this transaction and all of its descendant inner transactions.",
+            "type": "integer",
+            "x-go-type": "uint64"
+          },
           "fixed-signer": {
             "description": "The account that needed to sign this transaction when no signature was provided and the provided signer was incorrect.",
             "type": "string",
@@ -2591,6 +2616,11 @@
           },
           "unnamed-resources-accessed": {
             "$ref": "#/components/schemas/SimulateUnnamedResourcesAccessed"
+          },
+          "usage": {
+            "description": "Fee usage for this transaction and all of its descendant inner transactions, in millionths of a basic transaction fee unit.",
+            "type": "integer",
+            "x-go-type": "basics.Micros"
           }
         },
         "required": [
@@ -7945,6 +7975,16 @@
                       "type": "integer",
                       "x-go-type": "basics.Round"
                     },
+                    "total-fees-paid": {
+                      "description": "Total fees paid across all top-level transaction groups and their descendants.",
+                      "type": "integer",
+                      "x-go-type": "uint64"
+                    },
+                    "total-usage": {
+                      "description": "Total fee usage across all top-level transaction groups and their descendants, in millionths of a basic transaction fee unit.",
+                      "type": "integer",
+                      "x-go-type": "basics.Micros"
+                    },
                     "txn-groups": {
                       "description": "A result object for each transaction group that was simulated.",
                       "items": {
@@ -7982,6 +8022,16 @@
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
                       "type": "integer",
                       "x-go-type": "basics.Round"
+                    },
+                    "total-fees-paid": {
+                      "description": "Total fees paid across all top-level transaction groups and their descendants.",
+                      "type": "integer",
+                      "x-go-type": "uint64"
+                    },
+                    "total-usage": {
+                      "description": "Total fee usage across all top-level transaction groups and their descendants, in millionths of a basic transaction fee unit.",
+                      "type": "integer",
+                      "x-go-type": "basics.Micros"
                     },
                     "txn-groups": {
                       "description": "A result object for each transaction group that was simulated.",

@@ -203,7 +203,6 @@ func (tx *Txn) FillDefaults(params config.ConsensusParams) {
 				tx.Boxes = slices.Repeat([]transactions.BoxRef{{}}, extraPages-params.MaxExtraAppProgramPages)
 			}
 		}
-
 	}
 	// Do the fee last, so the FeeFactor is accurate.
 	if tx.Fee == nil {

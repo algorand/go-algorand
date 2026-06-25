@@ -1248,7 +1248,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		}
 		cx.ioBudget = basics.MulSaturate(bumps, cx.Proto.BytesPerBoxReference)
 
-		used := uint64(0)
+		bytesRead := uint64(0)
 
 		// First count the extra reading required for any large programs that are available.
 		for appID := range cx.available.sharedApps {
@@ -1258,7 +1258,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 			}
 			extra := transactions.LargeProgramExtraBytes(*cx.Proto,
 				len(params.ApprovalProgram)+len(params.ClearStateProgram))
-			used = basics.AddSaturate(used, uint64(extra))
+			bytesRead = basics.AddSaturate(bytesRead, uint64(extra))
 		}
 
 		// Then count the total size of available boxes
@@ -1278,12 +1278,12 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 			size := uint64(len(box))
 			cx.available.boxes[br] = false
 
-			used = basics.AddSaturate(used, size)
+			bytesRead = basics.AddSaturate(bytesRead, size)
 		}
 
-		surplus, overflow := basics.ODiff(cx.ioBudget, used)
+		surplus, overflow := basics.ODiff(cx.ioBudget, bytesRead)
 		if overflow || (surplus < 0 && cx.UnnamedResources == nil) {
-			err := fmt.Errorf("read budget exceeded (%d > %d)", used, cx.ioBudget)
+			err := fmt.Errorf("read budget exceeded (%d > %d)", bytesRead, cx.ioBudget)
 			if !cx.Proto.EnableBareBudgetError {
 				// We return an EvalError here because we used to do
 				// that. It is wrong, and means that there could be a
