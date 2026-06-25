@@ -381,77 +381,111 @@ func TestMul2divOverflow(t *testing.T) {
 	testOverflowMaxUint64(2, math.MaxUint64, (1<<63)+2, 4)
 }
 
-func TestMulMicrosCeil(t *testing.T) {
+func TestFeeForUsage(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	r, o := MicroAlgos{Raw: 1000}.MulMicrosCeil(Micros(1e6 + 1000))
-	require.False(t, o)
-	require.Equal(t, MicroAlgos{Raw: 1001}, r) // 1000 * 1.001 is _exactly_ 1001 microalgos
+	minFee := MicroAlgos{Raw: 1000}
 
-	r, o = MicroAlgos{Raw: 1000}.MulMicrosCeil(Micros(1e6 + 1001))
+	// With no starting residue, FeeForUsage is just a ceiling. An exact result
+	// (1000 * 1.001 = 1001 microalgos exactly) leaves the residue untouched.
+	fee, residue, o := minFee.FeeForUsage(Micros(1e6+1000), 1e6, 0)
 	require.False(t, o)
-	require.Equal(t, MicroAlgos{Raw: 1002}, r) // 1000 * 1.001001 rounds up to 1002 microalgos
+	require.Equal(t, MicroAlgos{Raw: 1001}, fee)
+	require.EqualValues(t, 0, residue)
 
-	r, o = MicroAlgos{Raw: 0}.MulMicrosCeil(Micros(1e6 + 1001))
+	// 1000 * (1e6+1001) / 1e6 = 1001.001 rounds up to 1002, and the leftover
+	// residue is the complement of the 0.001 fraction (1e9 over 1e12).
+	fee, residue, o = minFee.FeeForUsage(Micros(1e6+1001), 1e6, 0)
 	require.False(t, o)
-	require.Equal(t, MicroAlgos{Raw: 0}, r)
+	require.Equal(t, MicroAlgos{Raw: 1002}, fee)
+	require.EqualValues(t, feeResidueScale-1e9, residue)
 
-	r, o = MicroAlgos{Raw: 1e6}.MulMicrosCeil(0)
+	// Feeding that residue into a second charge whose fraction it covers avoids a
+	// second round-up. 1000 * (1e6+1) / 1e6 = 1000.001; fraction 0.001 (1e9 over
+	// 1e12) < residue 0.999, so charge floor 1000 and shrink the residue.
+	fee, residue2, o := minFee.FeeForUsage(Micros(1e6+1), 1e6, residue)
 	require.False(t, o)
-	require.Equal(t, MicroAlgos{Raw: 0}, r)
+	require.Equal(t, MicroAlgos{Raw: 1000}, fee)
+	require.EqualValues(t, residue-1e9, residue2)
 
-	r, o = MicroAlgos{Raw: math.MaxUint64 - 10}.MulMicrosCeil(1e6 + 15)
+	// A zero base or zero usage yields a zero fee and no residue.
+	fee, residue, o = MicroAlgos{Raw: 0}.FeeForUsage(Micros(1e6+1001), 1e6, 0)
+	require.False(t, o)
+	require.Equal(t, MicroAlgos{Raw: 0}, fee)
+	require.EqualValues(t, 0, residue)
+
+	fee, residue, o = minFee.FeeForUsage(0, 1e6, 0)
+	require.False(t, o)
+	require.Equal(t, MicroAlgos{Raw: 0}, fee)
+	require.EqualValues(t, 0, residue)
+
+	// A round-up that would carry the result past MaxUint64 is reported as overflow.
+	fee, _, o = MicroAlgos{Raw: math.MaxUint32}.FeeForUsage(Micros(math.MaxUint32), Micros(1.00000001e12), 0)
 	require.True(t, o)
-	require.Equal(t, MicroAlgos{Raw: math.MaxUint64}, r)
+	require.Equal(t, MicroAlgos{Raw: math.MaxUint64}, fee)
 }
 
-func TestMul2MicrosCeil(t *testing.T) {
+// TestFeeForUsagePrecise verifies the central guarantee: charging a sequence of
+// groups while threading the residue costs exactly a single ceiling of the
+// aggregate exact fee, no matter how the usage is split across groups.
+func TestFeeForUsagePrecise(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	r, o := MicroAlgos{Raw: 1000}.Mul2MicrosCeil(Micros(1e6+1000), Micros(1e6))
-	require.False(t, o)
-	require.Equal(t, MicroAlgos{Raw: 1001}, r) // 1001 exactly
+	scale := big.NewInt(feeResidueScale)
 
-	r, o = MicroAlgos{Raw: 1000}.Mul2MicrosCeil(Micros(1e6+1001), Micros(1e6))
-	require.False(t, o)
-	require.Equal(t, MicroAlgos{Raw: 1002}, r) // 1001.001 rounds up
+	check := func(minFee uint64, groups [][2]uint64) {
+		fee := MicroAlgos{Raw: minFee}
+		exactNum := big.NewInt(0) // Σ minFee*usage*multiplier, over feeResidueScale
+		var charged uint64
+		residue := uint64(0)
+		for _, g := range groups {
+			usage, mult := g[0], g[1]
+			f, newResidue, o := fee.FeeForUsage(Micros(usage), Micros(mult), residue)
+			require.False(t, o)
+			require.Less(t, newResidue, uint64(feeResidueScale)) // residue stays in range
+			charged += f.Raw
+			residue = newResidue
 
-	// Double the last factor, but notice we don't get double the previous
-	// result because we carry out the two multiplies with enough precision to
-	// allow us to round up only once.
-	r, o = MicroAlgos{Raw: 1000}.Mul2MicrosCeil(Micros(1e6+1001), Micros(2e6))
-	require.False(t, o)
-	require.Equal(t, MicroAlgos{Raw: 2003}, r) // 2002.002
+			term := new(big.Int).Mul(big.NewInt(int64(minFee)), big.NewInt(int64(usage)))
+			term.Mul(term, big.NewInt(int64(mult)))
+			exactNum.Add(exactNum, term)
+		}
+		// ceil(exactNum / scale) == the total we actually charged.
+		want := new(big.Int).Add(exactNum, new(big.Int).Sub(scale, big.NewInt(1)))
+		want.Div(want, scale)
+		require.Equal(t, want.Uint64(), charged,
+			"minFee=%d groups=%v: charged %d, want ceil of exact", minFee, groups, charged)
+	}
 
-	// ZEROS
-	r, o = MicroAlgos{Raw: 0}.Mul2MicrosCeil(Micros(1e6+1001), Micros(1e6))
-	require.False(t, o)
-	require.Equal(t, MicroAlgos{Raw: 0}, r)
+	// A handful of hand-picked splits, including the worked example from the plan
+	// (1010.5 then 2002.3 should total ceil(3012.8)=3013, not 1011+2003).
+	check(1000, [][2]uint64{{1010500, 1e6}, {2002300, 1e6}})
+	check(1000, [][2]uint64{{1e6 + 1, 1e6}, {1e6 + 1, 1e6}, {1e6 + 1, 1e6}})
+	check(773, [][2]uint64{{333333, 1e6}, {333333, 1e6}, {333334, 1e6}})
 
-	r, o = MicroAlgos{Raw: 1000}.Mul2MicrosCeil(Micros(0), Micros(1e6))
-	require.False(t, o)
-	require.Equal(t, MicroAlgos{Raw: 0}, r)
-
-	r, o = MicroAlgos{Raw: 1000}.Mul2MicrosCeil(Micros(1e6+1001), Micros(0))
-	require.False(t, o)
-	require.Equal(t, MicroAlgos{Raw: 0}, r)
-
-	// Overflow - we end up dividing by 1e12 in Mul2MicrosCeil, if we multiply
-	// two MaxUint32s, we are _very_ close to MaxUint64, so a third multiplicand
-	// that's a bit over 1e12, will round up and overflow. Exactly 1e12 won't.
-	r, o = MicroAlgos{Raw: math.MaxUint32}.Mul2MicrosCeil(Micros(math.MaxUint32), Micros(1e12))
-	require.False(t, o)
-	require.Equal(t, MicroAlgos{Raw: math.MaxUint32 * math.MaxUint32}, r)
-
-	// same, rearranged
-	r, o = MicroAlgos{Raw: 1e12}.Mul2MicrosCeil(Micros(math.MaxUint32), Micros(math.MaxUint32))
-	require.False(t, o)
-	require.Equal(t, MicroAlgos{Raw: math.MaxUint32 * math.MaxUint32}, r)
-
-	// now overflow
-	r, o = MicroAlgos{Raw: math.MaxUint32}.Mul2MicrosCeil(Micros(math.MaxUint32), Micros(1.00000001e12))
-	require.True(t, o)
-	require.Equal(t, MicroAlgos{Raw: math.MaxUint64}, r)
+	// Many random splits with varied multipliers; deterministic via a fixed seed.
+	gen := newSplitGen(1)
+	for trial := 0; trial < 500; trial++ {
+		n := 1 + gen.intn(8)
+		groups := make([][2]uint64, n)
+		for i := range groups {
+			groups[i] = [2]uint64{1 + gen.uint64n(5_000_000), 1 + gen.uint64n(2_000_000)}
+		}
+		check(1+gen.uint64n(10000), groups)
+	}
 }
+
+// splitGen is a tiny deterministic PRNG so the property test is reproducible
+// without depending on math/rand's global stream.
+type splitGen struct{ state uint64 }
+
+func newSplitGen(seed uint64) *splitGen { return &splitGen{state: seed*2862933555777941757 + 1} }
+
+func (g *splitGen) next() uint64 {
+	g.state = g.state*6364136223846793005 + 1442695040888963407
+	return g.state
+}
+func (g *splitGen) uint64n(n uint64) uint64 { return g.next() % n }
+func (g *splitGen) intn(n int) int          { return int(g.next() % uint64(n)) }

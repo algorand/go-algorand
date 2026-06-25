@@ -110,10 +110,8 @@ func TestSimulateTxnTracerDevMode(t *testing.T) {
 	usage := uint64(stxn.FeeFactor(proto))
 	feesPaid := stxn.Txn.Fee.Raw
 	expectedResult := v2.PreEncodedSimulateResponse{
-		Version:       2,
-		LastRound:     result.LastRound, // checked above
-		TotalUsage:    &usage,
-		TotalFeesPaid: &feesPaid,
+		Version:   2,
+		LastRound: result.LastRound, // checked above
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
 				GroupUsage:    &usage,
@@ -209,10 +207,8 @@ func TestSimulateTransaction(t *testing.T) {
 	usage := uint64(stxn.FeeFactor(proto))
 	feesPaid := stxn.Txn.Fee.Raw
 	expectedResult := v2.PreEncodedSimulateResponse{
-		Version:       2,
-		LastRound:     result.LastRound, // checked above
-		TotalUsage:    &usage,
-		TotalFeesPaid: &feesPaid,
+		Version:   2,
+		LastRound: result.LastRound, // checked above
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
 				GroupUsage:    &usage,
@@ -428,10 +424,8 @@ func TestSimulateWithOptionalSignatures(t *testing.T) {
 	usage := uint64(unsignedStxn.FeeFactor(proto))
 	feesPaid := txn.Fee.Raw
 	expectedResult := v2.PreEncodedSimulateResponse{
-		Version:       2,
-		LastRound:     result.LastRound,
-		TotalUsage:    &usage,
-		TotalFeesPaid: &feesPaid,
+		Version:   2,
+		LastRound: result.LastRound,
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
 				GroupUsage:    &usage,
@@ -565,10 +559,8 @@ int 1`
 	feesPaid := appCallTxnSigned.Txn.Fee.Raw
 
 	expectedResult := v2.PreEncodedSimulateResponse{
-		Version:       2,
-		LastRound:     resp.LastRound,
-		TotalUsage:    &usage,
-		TotalFeesPaid: &feesPaid,
+		Version:   2,
+		LastRound: resp.LastRound,
 		EvalOverrides: &model.SimulationEvalOverrides{
 			MaxLogSize:  &maxLogSize,
 			MaxLogCalls: &maxLogCalls,
@@ -699,8 +691,6 @@ int 1`
 	expectedResult := v2.PreEncodedSimulateResponse{
 		Version:       2,
 		LastRound:     resp.LastRound,
-		TotalUsage:    &usage,
-		TotalFeesPaid: &feesPaid,
 		EvalOverrides: &model.SimulationEvalOverrides{ExtraOpcodeBudget: &extraBudget},
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
@@ -2731,10 +2721,8 @@ int 1
 	feesPaid := stxn.Txn.Fee.Raw
 
 	expectedResult := v2.PreEncodedSimulateResponse{
-		Version:       2,
-		LastRound:     resp.LastRound,
-		TotalUsage:    &usage,
-		TotalFeesPaid: &feesPaid,
+		Version:   2,
+		LastRound: resp.LastRound,
 		EvalOverrides: &model.SimulationEvalOverrides{
 			AllowUnnamedResources: &allowUnnamedResources,
 		},
@@ -2827,10 +2815,8 @@ func TestSimulateWithFixSigners(t *testing.T) {
 	totalUsage := rekeyUsage + txnUsage
 	totalFeesPaid := rekeyFeesPaid + txnFeesPaid
 	expectedResult := v2.PreEncodedSimulateResponse{
-		Version:       2,
-		LastRound:     result.LastRound,
-		TotalUsage:    &totalUsage,
-		TotalFeesPaid: &totalFeesPaid,
+		Version:   2,
+		LastRound: result.LastRound,
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
 				GroupUsage:    &totalUsage,

@@ -56,7 +56,9 @@ type HeartbeatTxnFields struct {
 func (hb HeartbeatTxnFields) wellFormed(header Header, proto config.ConsensusParams) error {
 	// If this is a free/cheap heartbeat, it must be very simple.
 	factor := basics.AddSaturate(header.FeeContribution(proto), 1e6)
-	requiredFee, _ := proto.MinFee().MulMicrosCeil(factor) // MulMicrosCeil saturates
+	// Fee a normal (non-cheap) heartbeat owes, computed the same way as a
+	// top-level group: no cost multiplier (1e6), no prior residue. FeeForUsage saturates.
+	requiredFee, _, _ := proto.MinFee().FeeForUsage(factor, 1e6, 0)
 	if header.Fee.LessThan(requiredFee) && header.Group.IsZero() {
 		kind := "free"
 		if header.Fee.Raw > 0 {

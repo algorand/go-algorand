@@ -1457,9 +1457,7 @@ int 1`,
 					groupUsage := txn0Usage + txn1Usage
 					groupFeesPaid := txn0FeesPaid + txn1FeesPaid
 					expectedBody := v2.PreEncodedSimulateResponse{
-						Version:       2,
-						TotalUsage:    omitEmpty(groupUsage),
-						TotalFeesPaid: omitEmpty(groupFeesPaid),
+						Version: 2,
 						TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 							{
 								AppBudgetAdded:    appBudgetAdded,

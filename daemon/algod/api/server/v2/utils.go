@@ -607,8 +607,6 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 		Version:         result.Version,
 		LastRound:       result.LastRound,
 		TxnGroups:       util.Map(result.TxnGroups, convertTxnGroupResult),
-		TotalUsage:      omitEmpty(uint64(result.TotalUsage)),
-		TotalFeesPaid:   omitEmpty(result.TotalFeesPaid.Raw),
 		EvalOverrides:   evalOverrides,
 		ExecTraceConfig: result.TraceConfig,
 		InitialStates:   convertSimulateInitialStates(result.InitialStates),

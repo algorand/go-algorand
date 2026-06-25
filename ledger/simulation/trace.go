@@ -148,8 +148,6 @@ type Result struct {
 	Version       uint64
 	LastRound     basics.Round
 	TxnGroups     []TxnGroupResult // this is a list so that supporting multiple in the future is not breaking
-	TotalUsage    basics.Micros
-	TotalFeesPaid basics.MicroAlgos
 	EvalOverrides ResultEvalOverrides
 	Block         *ledgercore.ValidatedBlock
 	TraceConfig   ExecTraceConfig
@@ -168,9 +166,6 @@ func summarizeTxnFeeUsage(txn transactions.SignedTxnWithAD, proto config.Consens
 }
 
 func populateFeeUsage(result *Result, proto config.ConsensusParams) {
-	var totalUsage basics.Micros
-	var totalFeesPaid basics.MicroAlgos
-
 	for gi := range result.TxnGroups {
 		group := &result.TxnGroups[gi]
 		var groupUsage basics.Micros
@@ -186,12 +181,7 @@ func populateFeeUsage(result *Result, proto config.ConsensusParams) {
 
 		group.GroupUsage = groupUsage
 		group.GroupFeesPaid = groupFeesPaid
-		totalUsage = basics.AddSaturate(totalUsage, groupUsage)
-		totalFeesPaid = totalFeesPaid.AddSaturate(groupFeesPaid)
 	}
-
-	result.TotalUsage = totalUsage
-	result.TotalFeesPaid = totalFeesPaid
 }
 
 // ReturnTrace reads from Result object and decides if simulation returns PC.

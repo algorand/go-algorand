@@ -227,7 +227,7 @@ func (ep *EvalParams) reset() {
 		}
 	case ModeApp:
 		if ep.FeeCredit != nil {
-			*ep.FeeCredit = feeCredit(ep.TxnGroup, *ep.Proto)
+			*ep.FeeCredit, ep.feeResidue = feeCredit(ep.TxnGroup, *ep.Proto)
 		}
 
 		if ep.Proto.EnableAppCostPooling {

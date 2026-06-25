@@ -221,59 +221,43 @@ func Mul2div[A ~uint64, B ~uint64, C ~uint64](a A, b B, c C, d uint64) (A, A, bo
 
 // MulMicros multiplies a MicroAlgos amount by a Micros amount. It saturates AND
 // reports overflow.
-func (a MicroAlgos) MulMicros(m Micros) (MicroAlgos, bool) {
-	res, overflowed := Muldiv(a.Raw, m, 1e6)
+func (base MicroAlgos) MulMicros(m Micros) (MicroAlgos, bool) {
+	res, overflowed := Muldiv(base.Raw, m, 1e6)
 	if overflowed {
 		res = math.MaxUint64
 	}
 	return MicroAlgos{Raw: res}, overflowed
 }
 
-// MulMicrosCeil multiplies a MicroAlgos amount by a Micros amount and rounds
-// up to the next microAlgo whenever the exact result is fractional. It
-// saturates and reports overflow.
-func (a MicroAlgos) MulMicrosCeil(m Micros) (MicroAlgos, bool) {
-	quo, rem, overflowed := muldiv(a.Raw, m, 1e6)
-	if overflowed {
-		return MicroAlgos{Raw: math.MaxUint64}, true
-	}
-	if rem != 0 {
-		if quo == math.MaxUint64 {
-			return MicroAlgos{Raw: math.MaxUint64}, true
-		}
-		quo++
-	}
-	return MicroAlgos{Raw: quo}, false
-}
+// feeResidueScale is the denominator of a feeResidue: residues are fractional
+// microAlgos held to 1e-12 precision, so they always live in [0, feeResidueScale).
+// It matches the divisor Mul2div uses below, so the two-factor multiply's
+// remainder is already expressed at this scale.
+const feeResidueScale = 1e12
 
-// Mul2Micros multiplies a MicroAlgos amount by two Micros amounts. It exists so
-// that more precision is preserved.  If MulMicros were used to multiply
-// 0.001001*1.5*2, we would have 0.001501*2 = 0.003002. But the correct answer
-// is 0.003003.
-func (a MicroAlgos) Mul2Micros(m1 Micros, m2 Micros) (MicroAlgos, bool) {
-	res, _, overflowed := Mul2div(a.Raw, m1, m2, 1e12)
+// FeeForUsage returns the fee to charge for `usage` scaled by `multiplier`,
+// given the running `residue` (fractional microAlgos over feeResidueScale
+// already paid by earlier round-ups). It returns the fee and the updated
+// residue. Because it only rounds up when the residue cannot absorb the
+// fraction, fees charged across a sequence of (possibly nested) groups round up
+// just once in aggregate. It saturates and reports overflow.
+func (base MicroAlgos) FeeForUsage(usage, multiplier Micros, residue uint64) (fee MicroAlgos, newResidue uint64, overflow bool) {
+	quo, rem, overflowed := Mul2div(base.Raw, usage, multiplier, feeResidueScale)
 	if overflowed {
-		res = math.MaxUint64
+		return MicroAlgos{Raw: math.MaxUint64}, residue, true
 	}
-	return MicroAlgos{Raw: res}, overflowed
-}
-
-// Mul2MicrosCeil multiplies a MicroAlgos amount by two Micros amounts and
-// rounds up to the next microAlgo whenever the exact result is fractional. It
-// saturates and reports overflow.
-func (a MicroAlgos) Mul2MicrosCeil(m1 Micros, m2 Micros) (MicroAlgos, bool) {
-	res, rem, overflowed := Mul2div(a.Raw, m1, m2, 1e12)
-	if overflowed {
-		return MicroAlgos{Raw: math.MaxUint64}, true
+	// A round-up that would carry quo past MaxUint64 is itself an overflow.
+	if quo == math.MaxUint64 && rem > residue {
+		return MicroAlgos{Raw: quo}, residue, true
 	}
-	if rem != 0 {
-		if res == math.MaxUint64 {
-			return MicroAlgos{Raw: math.MaxUint64}, true
-		}
-		res++
+	if rem == 0 {
+		return MicroAlgos{Raw: quo}, residue, false // exact; residue untouched
 	}
-
-	return MicroAlgos{Raw: res}, false
+	if rem <= residue {
+		return MicroAlgos{Raw: quo}, residue - rem, false // prior round-up already paid for this fraction
+	}
+	// Must round up. The overpayment becomes the residue available to later charges.
+	return MicroAlgos{Raw: quo + 1}, feeResidueScale - (rem - residue), false
 }
 
 // DivCeil provides `math.Ceil` semantics using integer division.  The technique
