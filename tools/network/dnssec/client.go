@@ -75,7 +75,9 @@ func (r *dnsClient) query(ctx context.Context, name string, qtype uint16) (resp 
 	msg := new(dns.Msg)
 	msg.RecursionDesired = true
 	msg.SetQuestion(name, qtype)
-	msg.SetEdns0(4096, true) // high enough value prevents truncation and retries with TCP
+	// Conservative EDNS0 UDP buffer (DNS Flag Day 2020): larger sizes invite
+	// fragmented responses that get dropped, defeating the truncation/TCP retry.
+	msg.SetEdns0(1232, true)
 
 	for _, server := range r.servers {
 		resp, err := r.transport.queryServer(ctx, server, msg, r.readTimeout)
