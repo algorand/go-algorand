@@ -8677,12 +8677,14 @@ int 1`, version),
 func assembleSizedPassingProgram(t testing.TB, version uint64, size int) []byte {
 	t.Helper()
 
-	const overhead = 4 // version byte + "pushint 1" + "return"
+	// the unreachable "app_global_get" at the end is used to avoid autosalt insertion
+	const overhead = 5 // version byte + "pushint 1" + "return" + unreachable "app_global_get"
 	require.GreaterOrEqual(t, size, overhead)
 
 	var source strings.Builder
 	fmt.Fprintf(&source, "#pragma version %d\n", version)
 	source.WriteString("pushint 1; return\n")
+	source.WriteString("app_global_get\n")
 	source.WriteString(strings.Repeat("err\n", size-overhead))
 
 	ops, err := logic.AssembleString(source.String())

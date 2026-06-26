@@ -35,6 +35,10 @@ const (
 	bigVersion = 42
 )
 
+func bigAppProgram(repeats int) string {
+	return "b stateful\napp_global_get\nstateful:\n" + strings.Repeat("pushint 1; return;\n", repeats-1)
+}
+
 // TestBigAppCreate tests that big apps can be made if appropriate fees are paid
 func TestBigAppCreate(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -53,7 +57,7 @@ func TestBigAppCreate(t *testing.T) {
 			Fee:             proto.MinFee(),
 			Type:            "appl",
 			Sender:          addrs[0],
-			ApprovalProgram: strings.Repeat("pushint 1; return;\n", 1300),
+			ApprovalProgram: bigAppProgram(1300),
 		})
 
 		// But now an extra fee is required, because 1400*3*2=8400 > 8196
@@ -61,14 +65,14 @@ func TestBigAppCreate(t *testing.T) {
 			Fee:             proto.MinFee(),
 			Type:            "appl",
 			Sender:          addrs[0],
-			ApprovalProgram: strings.Repeat("pushint 1; return;\n", 1400),
+			ApprovalProgram: bigAppProgram(1400),
 		}, "txgroup with 1mA fees is less than")
 
 		stib := dl.txn(&txntest.Txn{
 			Fee:             1_050, // ~200 bytes over limit, so about 1.02mA needed
 			Type:            "appl",
 			Sender:          addrs[0],
-			ApprovalProgram: strings.Repeat("pushint 1; return;\n", 1400),
+			ApprovalProgram: bigAppProgram(1400),
 		})
 		// extra program pages gets populated for us. have a look see.
 		require.EqualValues(t, 4, stib.Txn.ExtraProgramPages)
@@ -78,7 +82,7 @@ func TestBigAppCreate(t *testing.T) {
 		vb := dl.fullBlock(&txntest.Txn{
 			Type:            "appl",
 			Sender:          addrs[0],
-			ApprovalProgram: strings.Repeat("pushint 1; return;\n", 1400),
+			ApprovalProgram: bigAppProgram(1400),
 		})
 		require.EqualValues(t, 1_021, vb.Block().Payset[0].Txn.Fee.Raw)
 	})
@@ -98,7 +102,7 @@ func TestBigAppCall(t *testing.T) {
 		// proto := config.Consensus[cv]
 
 		// createApp takes care of figuring out and setting the fee, extra pages, and write budget
-		bigID := dl.createApp(addrs[0], strings.Repeat("pushint 1; return;\n", 1400))
+		bigID := dl.createApp(addrs[0], bigAppProgram(1400))
 
 		call := txntest.Txn{
 			Type:          "appl",
@@ -119,7 +123,7 @@ func TestBigAppCall(t *testing.T) {
 		// Even bigger, this will take two box refs
 
 		// createApp takes care of figuring out and setting the fee and extra pages
-		biggerID := dl.createApp(addrs[0], strings.Repeat("pushint 1; return;\n", 2000))
+		biggerID := dl.createApp(addrs[0], bigAppProgram(2000))
 
 		call = txntest.Txn{
 			Type:          "appl",
