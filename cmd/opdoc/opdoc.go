@@ -58,16 +58,21 @@ func opImmediateNoteSyntaxMarkdown(name string, oids []logic.OpImmediateDetails)
 	return fmt.Sprintf("`%s %s` where %s", name, strings.Join(argNames, " "), strings.Join(argDocs, ", "))
 }
 
-func opImmediateNoteEncoding(opcode byte, oids []logic.OpImmediateDetails) string {
+func opImmediateNoteEncoding(op *logic.OpSpec, oids []logic.OpImmediateDetails) string {
+	prefix := fmt.Sprintf("0x%02x", op.Opcode)
+	if op.SubOpcode != 0 {
+		// multi-byte opcode: the sub-opcode byte follows the prefix byte
+		prefix += fmt.Sprintf(" 0x%02x", op.SubOpcode)
+	}
 	if len(oids) == 0 {
-		return fmt.Sprintf("0x%02x", opcode)
+		return prefix
 	}
 
 	notes := make([]string, len(oids))
 	for idx, oid := range oids {
 		notes[idx] = oid.Encoding
 	}
-	return fmt.Sprintf("0x%02x {%s}", opcode, strings.Join(notes, "}, {"))
+	return fmt.Sprintf("%s {%s}", prefix, strings.Join(notes, "}, {"))
 }
 
 func opGroupMarkdownTable(names []string, out io.Writer, version uint64) {
@@ -226,7 +231,7 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bo
 		syntax = fmt.Sprintf("- Syntax: %s\n", opSyntax)
 	}
 
-	encoding := fmt.Sprintf("- Bytecode: %s", opImmediateNoteEncoding(op.Opcode, deets))
+	encoding := fmt.Sprintf("- Bytecode: %s", opImmediateNoteEncoding(op, deets))
 
 	stackEffects := stackMarkdown(op)
 
@@ -289,9 +294,28 @@ Opcodes have a cost of 1 unless otherwise specified.
 	return nil
 }
 
+// opcodeBytes is the bytecode that introduces an op: a single prefix byte for
+// ordinary opcodes, or [prefix, sub-opcode] for a member of a multi-byte
+// family. It marshals as a bare number in the single-byte case to preserve the
+// historical langspec format, and as an array otherwise.
+type opcodeBytes []byte
+
+// MarshalJSON renders a single-byte opcode as a number and a multi-byte opcode
+// as an array of numbers (e.g. 212 vs [212, 1]).
+func (o opcodeBytes) MarshalJSON() ([]byte, error) {
+	if len(o) == 1 {
+		return json.Marshal(o[0])
+	}
+	ints := make([]int, len(o))
+	for i, b := range o {
+		ints[i] = int(b)
+	}
+	return json.Marshal(ints)
+}
+
 // OpRecord is a consolidated record of things about an Op
 type OpRecord struct {
-	Opcode  byte
+	Opcode  opcodeBytes
 	Name    string
 	Args    []string `json:",omitempty"`
 	Returns []string `json:",omitempty"`
@@ -429,7 +453,11 @@ func buildLanguageSpec(opGroups map[string][]string, namedTypes []namedType, ver
 	opSpecs := logic.OpcodesByVersion(version)
 	records := make([]OpRecord, len(opSpecs))
 	for i, spec := range opSpecs {
-		records[i].Opcode = spec.Opcode
+		if spec.SubOpcode != 0 {
+			records[i].Opcode = opcodeBytes{spec.Opcode, spec.SubOpcode}
+		} else {
+			records[i].Opcode = opcodeBytes{spec.Opcode}
+		}
 		records[i].Name = spec.Name
 		records[i].Args = typeStrings(spec.Arg.Types)
 		records[i].Returns = typeStrings(spec.Return.Types)

@@ -881,44 +881,41 @@ var OpSpecs = []OpSpec{
 // OpcodesByVersion returns list of opcodes available in a specific version of TEAL
 // by copying v1 opcodes to v2, and then on to v3 to create a full list
 func OpcodesByVersion(version uint64) []OpSpec {
-	// for updated opcodes use the lowest version opcode was introduced in
-	maxOpcode := 0
-	for i := 0; i < len(OpSpecs); i++ {
-		if int(OpSpecs[i].Opcode) > maxOpcode {
-			maxOpcode = int(OpSpecs[i].Opcode)
-		}
-	}
-	updated := make([]int, maxOpcode+1)
-	for idx := range OpSpecs {
-		op := OpSpecs[idx].Opcode
-		cv := updated[op]
-		if cv == 0 {
-			cv = int(OpSpecs[idx].Version)
-		} else {
-			if int(OpSpecs[idx].Version) < cv {
-				cv = int(OpSpecs[idx].Version)
-			}
-		}
-		updated[op] = cv
+	// A multi-byte opcode shares its prefix Opcode byte with its siblings, so
+	// the combined prefix+sub-opcode identifies a distinct instruction.
+	// Single-byte opcodes have SubOpcode 0, so this collapses to the bare byte.
+	key := func(spec OpSpec) uint16 {
+		return uint16(spec.Opcode)<<8 | uint16(spec.SubOpcode)
 	}
 
-	subv := make(map[byte]OpSpec)
+	// for updated opcodes use the lowest version opcode was introduced in
+	updated := make(map[uint16]int)
+	for idx := range OpSpecs {
+		k := key(OpSpecs[idx])
+		cv, ok := updated[k]
+		if !ok || int(OpSpecs[idx].Version) < cv {
+			cv = int(OpSpecs[idx].Version)
+		}
+		updated[k] = cv
+	}
+
+	subv := make(map[uint16]OpSpec)
 	for idx := range OpSpecs {
 		if OpSpecs[idx].Version <= version {
-			op := OpSpecs[idx].Opcode
-			subv[op] = OpSpecs[idx]
+			k := key(OpSpecs[idx])
+			subv[k] = OpSpecs[idx]
 			// if the opcode was updated then assume backward compatibility
 			// and set version to minimum available
-			if updated[op] < int(OpSpecs[idx].Version) {
+			if updated[k] < int(OpSpecs[idx].Version) {
 				copy := OpSpecs[idx]
-				copy.Version = uint64(updated[op])
-				subv[op] = copy
+				copy.Version = uint64(updated[k])
+				subv[k] = copy
 			}
 		}
 	}
 	values := maps.Values(subv)
 	return slices.SortedFunc(values, func(a, b OpSpec) int {
-		return cmp.Compare(a.Opcode, b.Opcode)
+		return cmp.Compare(key(a), key(b))
 	})
 }
 

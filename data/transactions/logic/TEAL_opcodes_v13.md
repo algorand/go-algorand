@@ -1722,9 +1722,81 @@ Boxes are of constant length. If C < len(D), then len(D)-C bytes will be removed
 - Availability: v10
 - Mode: Application
 
+## app_box_create
+
+- Bytecode: 0xd4 0x01
+- Stack: ..., A: boxName, B: uint64, C: uint64 &rarr; ..., bool
+- create a box named A, of length B, for app C. Fail if the name A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1
+- Availability: v13
+- Mode: Application
+
+Newly created boxes are filled with 0 bytes. `app_box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `app_box_create`.
+
+## app_box_extract
+
+- Bytecode: 0xd4 0x02
+- Stack: ..., A: boxName, B: uint64, C: uint64, D: uint64 &rarr; ..., []byte
+- read C bytes from box A of app D, starting at offset B. Fail if box A does not exist, or the byte range is outside A's size.
+- Availability: v13
+- Mode: Application
+
+## app_box_replace
+
+- Bytecode: 0xd4 0x03
+- Stack: ..., A: boxName, B: uint64, C: []byte, D: uint64 &rarr; ...
+- write byte-array C into box A of app D, starting at offset B. Fail if box A does not exist, or the byte range is outside A's size.
+- Availability: v13
+- Mode: Application
+
+## app_box_del
+
+- Bytecode: 0xd4 0x04
+- Stack: ..., A: boxName, B: uint64 &rarr; ..., bool
+- delete box named A of app B if it exists. Return 1 if A existed, 0 otherwise
+- Availability: v13
+- Mode: Application
+
+## app_box_len
+
+- Bytecode: 0xd4 0x05
+- Stack: ..., A: boxName, B: uint64 &rarr; ..., X: uint64, Y: bool
+- X is the length of box A of app B if A exists, else 0. Y is 1 if A exists, else 0.
+- Availability: v13
+- Mode: Application
+
+## app_box_get
+
+- Bytecode: 0xd4 0x06
+- Stack: ..., A: boxName, B: uint64 &rarr; ..., X: []byte, Y: bool
+- X is the contents of box A of app B if A exists, else ''. Y is 1 if A exists, else 0.
+- Availability: v13
+- Mode: Application
+
+For boxes that exceed 4,096 bytes, consider `app_box_create`, `app_box_extract`, and `app_box_replace`
+
+## app_box_put
+
+- Bytecode: 0xd4 0x07
+- Stack: ..., A: boxName, B: []byte, C: uint64 &rarr; ...
+- replaces the contents of box A of app C with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist
+- Availability: v13
+- Mode: Application
+
+For boxes that exceed 4,096 bytes, consider `app_box_create`, `app_box_extract`, and `app_box_replace`
+
+## app_box_splice
+
+- Bytecode: 0xd4 0x08
+- Stack: ..., A: boxName, B: uint64, C: uint64, D: []byte, E: uint64 &rarr; ...
+- set box A of app E to contain its previous bytes up to index B, followed by D, followed by the original bytes of A that began at index B+C.
+- Availability: v13
+- Mode: Application
+
+Boxes are of constant length. If C < len(D), then len(D)-C bytes will be removed from the end. If C > len(D), zero bytes will be appended to the end to reach the box length.
+
 ## app_box_resize
 
-- Bytecode: 0xd4
+- Bytecode: 0xd4 0x09
 - Stack: ..., A: boxName, B: uint64, C: uint64 &rarr; ...
 - change the size of box named A of app C to be of length B, adding zero bytes to end or removing bytes from the end, as needed. Fail if the name A is empty, A is not an existing box, or B exceeds 32,768.
 - Availability: v13
