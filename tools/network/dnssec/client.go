@@ -52,14 +52,26 @@ type qsi struct {
 
 // queryServer performs DNS query against provided server with respect of both context and timeout restrictions.
 // If UDP fails then retries with TCP client
-func (t qsi) queryServer(ctx context.Context, server ResolverAddress, msg *dns.Msg, timeout time.Duration) (resp *dns.Msg, err error) {
+func (t qsi) queryServer(ctx context.Context, server ResolverAddress, msg *dns.Msg, timeout time.Duration) (*dns.Msg, error) {
+	var lastErr error
 	for _, netType := range []string{"udp", "tcp"} {
-		if resp, _, err = (&dns.Client{Net: netType, ReadTimeout: timeout}).ExchangeContext(ctx, msg, string(server)); err != nil {
-			return nil, err
+		// Timeout bounds dial+write+read; without it dial/write use miekg's 2s default.
+		resp, _, err := (&dns.Client{Net: netType, Timeout: timeout}).ExchangeContext(ctx, msg, string(server))
+		if err != nil {
+			// Fall through to TCP on a UDP error too (dropped response, or UDP/53
+			// filtered); only a finished context is fatal.
+			if ctx.Err() != nil {
+				return nil, err
+			}
+			lastErr = err
+			continue
 		}
 		if !resp.Truncated {
-			return
+			return resp, nil
 		}
+	}
+	if lastErr != nil {
+		return nil, lastErr
 	}
 	var name string
 	if len(msg.Question) > 0 {
