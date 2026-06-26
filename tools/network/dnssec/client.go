@@ -18,6 +18,7 @@ package dnssec
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -91,12 +92,18 @@ func (r *dnsClient) query(ctx context.Context, name string, qtype uint16) (resp 
 	// fragmented responses that get dropped, defeating the truncation/TCP retry.
 	msg.SetEdns0(1232, true)
 
+	var errs []error
 	for _, server := range r.servers {
-		resp, err := r.transport.queryServer(ctx, server, msg, r.readTimeout)
+		resp, err = r.transport.queryServer(ctx, server, msg, r.readTimeout)
 		if err != nil {
+			// Keep each server's error so the eventual failure explains itself.
+			errs = append(errs, fmt.Errorf("%s: %w", server, err))
 			continue
 		}
-		return resp, err
+		return resp, nil
+	}
+	if len(errs) > 0 {
+		return nil, fmt.Errorf("no answer for (%s, %d) from DNS servers %v: %w", name, qtype, r.servers, errors.Join(errs...))
 	}
 	return nil, fmt.Errorf("no answer for (%s, %d) from DNS servers %v", name, qtype, r.servers)
 }
