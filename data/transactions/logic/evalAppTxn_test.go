@@ -1160,6 +1160,79 @@ txn Sender; itxn_field Receiver;
 
 }
 
+// fracPay builds an inner payment whose 501-byte Note is one byte over
+// MaxTxnNoteBytes(500). With PerByteTxnSurcharge=1000 (0.001 fee/byte) and
+// MinTxnFee=1001, its exact fee is 1001*1.001 = 1002.001 microAlgos, so a single
+// such group must round up to 1003.
+const fracPay = `
+int pay;    itxn_field TypeEnum;
+int 5;      itxn_field Amount;
+txn Sender; itxn_field Receiver;
+int 501; bzero; itxn_field Note;
+`
+
+// TestPreciseInnerFees confirms that the fractional remainder one inner group
+// rounds up is carried to the next, so two identical fractional groups together
+// cost a single round-up rather than two.
+func TestPreciseInnerFees(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, tx, ledger := MakeSampleEnv()
+	// The sample group overpays by 401uA. Drop the second txn's fee so the group
+	// pays exactly its 2002uA requirement, leaving no credit to mask the per-group
+	// fee boundary we are probing.
+	ep.TxnGroup[1].Txn.Fee = basics.MicroAlgos{Raw: 665} // 1337 + 665 = 2002
+	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+	ledger.NewAccount(appAddr(888), 5_000_000)
+
+	// The first fractional group has no residue to draw on, so it must round up:
+	// 1002 is rejected, 1003 succeeds.
+	TestApp(t, "itxn_begin"+fracPay+"int 1002; itxn_field Fee; itxn_submit; int 1", ep,
+		"too small")
+	TestApp(t, "itxn_begin"+fracPay+"int 1003; itxn_field Fee; itxn_submit; int 1", ep)
+
+	// After a first identical group rounds up (paying its exact 1003), the banked
+	// 0.999uA lets a second, identical group pay only the floor 1002 -- but not
+	// 1001. Two groups thus cost 2005 = ceil(2*1002.001), not 2*1003.
+	TestApp(t, "itxn_begin"+fracPay+"int 1003; itxn_field Fee; itxn_submit;"+
+		"itxn_begin"+fracPay+"int 1001; itxn_field Fee; itxn_submit; int 1", ep,
+		"too small")
+	TestApp(t, "itxn_begin"+fracPay+"int 1003; itxn_field Fee; itxn_submit;"+
+		"itxn_begin"+fracPay+"int 1002; itxn_field Fee; itxn_submit; int 1", ep)
+}
+
+// TestPreciseInnerFeesNested confirms the fee residue propagates back up out of a
+// nested inner group, so it cannot be double-spent by a sibling subtree. App 222
+// submits one fractional group (paying 0, drawing on pooled credit). The
+// top-level app calls 222 twice; the residue produced inside the first call must
+// reach the second call's fractional group.
+func TestPreciseInnerFeesNested(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, tx, ledger := MakeSampleEnv()
+	ep.TxnGroup[1].Txn.Fee = basics.MicroAlgos{Raw: 665} // zero top-level credit
+
+	inner := TestProg(t, "itxn_begin"+fracPay+"int 0; itxn_field Fee; itxn_submit; int 1",
+		AssemblerMaxVersion)
+	ledger.NewApp(tx.Receiver, 222, basics.AppParams{ApprovalProgram: inner.Program})
+	ledger.NewAccount(appAddr(222), 5_000_000)
+	ledger.NewAccount(appAddr(888), 5_000_000) // the running app sends the outer app-calls
+	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
+
+	// Each outer app-call costs 1001 (usage 1.0) and overpays to fund the
+	// fractional group app 222 runs (1003 for the first, 1002 for the second once
+	// the first's round-up is banked and flows back up). Total: 1001+1003 +
+	// 1001+1002 = 4007. One microAlgo short fails in the deeper group.
+	callC := func(fee int) string {
+		return fmt.Sprintf("itxn_begin; int appl; itxn_field TypeEnum;"+
+			" int 222; itxn_field ApplicationID; int %d; itxn_field Fee; itxn_submit;", fee)
+	}
+	TestApp(t, callC(2004)+callC(2002)+"int 1", ep, "too small") // 4006: one short
+	TestApp(t, callC(2004)+callC(2003)+"int 1", ep)              // 4007: exact precise total
+}
+
 // TestApplCreation is only determining what appl transactions can be
 // constructed not what can be submitted, so it tests what "bad" fields cause
 // immediate failures.
