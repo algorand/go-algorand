@@ -392,6 +392,17 @@ type pendingTransactionsParams struct {
 	Format string `url:"format"`
 }
 
+type rawTransactionParams struct {
+	SkipPqAddressCheck bool `url:"skip-pq-address-check,omitempty"`
+}
+
+func rawTransactionQueryParams(skipPqAddressCheck bool) interface{} {
+	if skipPqAddressCheck {
+		return rawTransactionParams{SkipPqAddressCheck: true}
+	}
+	return nil
+}
+
 // GetPendingTransactions asks algod for a snapshot of current pending txns on the node, bounded by maxTxns.
 // If maxTxns = 0, fetches as many transactions as possible.
 func (client RestClient) GetPendingTransactions(maxTxns uint64) (response model.PendingTransactionsResponse, err error) {
@@ -625,18 +636,33 @@ func (client RestClient) SuggestedParams() (response model.TransactionParameters
 
 // SendRawTransaction gets a SignedTxn and broadcasts it to the network
 func (client RestClient) SendRawTransaction(txn transactions.SignedTxn) (response model.PostTransactionsResponse, err error) {
-	err = client.post(&response, "/v2/transactions", nil, protocol.Encode(&txn), false)
-	return
+	return client.SendRawTransactionWithParams(txn, false)
+}
+
+// SendRawTransactionWithParams gets a SignedTxn and broadcasts it to the network
+func (client RestClient) SendRawTransactionWithParams(txn transactions.SignedTxn, skipPqAddressCheck bool) (response model.PostTransactionsResponse, err error) {
+	err = client.post(&response, "/v2/transactions", rawTransactionQueryParams(skipPqAddressCheck), protocol.Encode(&txn), false)
+	return response, err
 }
 
 // SendRawTransactionAsync gets a SignedTxn and broadcasts it to the network
 func (client RestClient) SendRawTransactionAsync(txn transactions.SignedTxn) (response model.PostTransactionsResponse, err error) {
-	err = client.post(&response, "/v2/transactions/async", nil, protocol.Encode(&txn), true)
-	return
+	return client.SendRawTransactionAsyncWithParams(txn, false)
+}
+
+// SendRawTransactionAsyncWithParams gets a SignedTxn and broadcasts it to the network
+func (client RestClient) SendRawTransactionAsyncWithParams(txn transactions.SignedTxn, skipPqAddressCheck bool) (response model.PostTransactionsResponse, err error) {
+	err = client.post(&response, "/v2/transactions/async", rawTransactionQueryParams(skipPqAddressCheck), protocol.Encode(&txn), true)
+	return response, err
 }
 
 // SendRawTransactionGroup gets a SignedTxn group and broadcasts it to the network
 func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTxn) error {
+	return client.SendRawTransactionGroupWithParams(txgroup, false)
+}
+
+// SendRawTransactionGroupWithParams gets a SignedTxn group and broadcasts it to the network
+func (client RestClient) SendRawTransactionGroupWithParams(txgroup []transactions.SignedTxn, skipPqAddressCheck bool) error {
 	// response is not terribly useful: it's the txid of the first transaction,
 	// which can be computed by the client anyway..
 	var enc []byte
@@ -645,7 +671,7 @@ func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTx
 	}
 
 	var response model.PostTransactionsResponse
-	return client.post(&response, "/v2/transactions", nil, enc, false)
+	return client.post(&response, "/v2/transactions", rawTransactionQueryParams(skipPqAddressCheck), enc, false)
 }
 
 // Block gets the block info for the given round

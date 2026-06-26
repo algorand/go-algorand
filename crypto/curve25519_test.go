@@ -19,6 +19,7 @@ package crypto
 import (
 	"bytes"
 	"crypto/ed25519"
+	"encoding/hex"
 	"testing"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -71,6 +72,77 @@ func TestGenerateSignatureSecrets(t *testing.T) {
 func TestCurve25519SignVerify(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	signVerify(t, makeCurve25519Secret(), makeCurve25519Secret())
+}
+
+func TestIsEdwards25519Point(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	decodeHex := func(s string) []byte {
+		b, err := hex.DecodeString(s)
+		if err != nil {
+			t.Fatalf("invalid test vector %q: %v", s, err)
+		}
+		return b
+	}
+
+	// These vectors document the LogicSig rejection-sampling predicate. It is
+	// broader than strict Ed25519 public-key validation.
+	testCases := []struct {
+		name  string
+		input []byte
+		valid bool
+	}{
+		{
+			name:  "basepoint",
+			input: decodeHex("5866666666666666666666666666666666666666666666666666666666666666"),
+			valid: true,
+		},
+		{
+			name:  "identity small-order point",
+			input: decodeHex("0100000000000000000000000000000000000000000000000000000000000000"),
+			valid: true,
+		},
+		{
+			name:  "identity with non-canonical sign bit",
+			input: decodeHex("0100000000000000000000000000000000000000000000000000000000000080"),
+			valid: true,
+		},
+		{
+			name:  "non-canonical y equals p",
+			input: decodeHex("edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f"),
+			valid: true,
+		},
+		{
+			name:  "invalid y equals p plus 2",
+			input: decodeHex("efffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f"),
+			valid: false,
+		},
+		{
+			name:  "empty input",
+			input: nil,
+			valid: false,
+		},
+		{
+			name:  "short input",
+			input: make([]byte, 31),
+			valid: false,
+		},
+		{
+			name:  "long input",
+			input: make([]byte, 33),
+			valid: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := IsEdwards25519Point(tc.input)
+			if got != tc.valid {
+				t.Fatalf("IsEdwards25519Point() = %t, expected %t", got, tc.valid)
+			}
+		})
+	}
 }
 
 func TestVRFProveVerify(t *testing.T) {
