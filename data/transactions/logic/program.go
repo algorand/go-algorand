@@ -46,3 +46,11 @@ func HashProgram(program []byte) crypto.Digest {
 	pb := Program(program)
 	return crypto.HashObj(pb)
 }
+
+// ProgramHashIsEdwards25519Point reports whether the LogicSig address derived
+// from program decodes as a canonical Edwards25519 curve point. If it does not,
+// those address bytes cannot be an Ed25519 public key.
+func ProgramHashIsEdwards25519Point(program []byte) bool {
+	hash := HashProgram(program)
+	return crypto.IsEdwards25519Point(hash[:])
+}
