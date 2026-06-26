@@ -7416,6 +7416,16 @@
     "/v2/transactions": {
       "post": {
         "operationId": "RawTransaction",
+        "parameters": [
+          {
+            "description": "Skip post-quantum address checks, including the check that rejects TEAL v13 or later LogicSig escrow addresses whose program hash is an Edwards25519 curve point. This should only be used if you understand the risks and know what you are doing.",
+            "in": "query",
+            "name": "skip-pq-address-check",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/x-binary": {
@@ -7504,6 +7514,16 @@
     "/v2/transactions/async": {
       "post": {
         "operationId": "RawTransactionAsync",
+        "parameters": [
+          {
+            "description": "Skip post-quantum address checks, including the check that rejects TEAL v13 or later LogicSig escrow addresses whose program hash is an Edwards25519 curve point. This should only be used if you understand the risks and know what you are doing.",
+            "in": "query",
+            "name": "skip-pq-address-check",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/x-binary": {

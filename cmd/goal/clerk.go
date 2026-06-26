@@ -46,29 +46,35 @@ import (
 )
 
 var (
-	toAddress          string
-	account            string
-	amount             uint64
+	account        string
+	amount         uint64
+	toAddress      string
+	closeToAddress string
+
 	txFilename         string
 	rejectsFilename    string
-	closeToAddress     string
-	noProgramOutput    bool
-	writeSourceMap     bool
-	signProgram        bool
-	programSource      string
-	argB64Strings      []string
-	disassemble        bool
-	verbose            bool
-	progByteFile       string
-	msigParams         string
-	logicSigFile       string
-	timeStamp          int64
-	protoVersion       string
-	signerAddress      string
-	rawOutput          bool
 	requestFilename    string
 	requestOutFilename string
-	inspectTxid        bool
+
+	programSource string
+	progByteFile  string
+	logicSigFile  string
+	argB64Strings []string
+	msigParams    string
+
+	skipPqAddressCheck bool
+
+	noProgramOutput bool
+	writeSourceMap  bool
+	signProgram     bool
+	disassemble     bool
+	verbose         bool
+	rawOutput       bool
+	inspectTxid     bool
+
+	timeStamp     int64
+	protoVersion  string
+	signerAddress string
 
 	simulateStartRound            basics.Round
 	simulateAllowEmptySignatures  bool
@@ -122,6 +128,7 @@ func init() {
 	rawsendCmd.Flags().StringVarP(&txFilename, "filename", "f", "", "Filename of file containing raw transactions")
 	rawsendCmd.Flags().StringVarP(&rejectsFilename, "rejects", "r", "", "Filename for writing rejects to (default is txFilename.rej)")
 	rawsendCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transactions to commit")
+	rawsendCmd.Flags().BoolVar(&skipPqAddressCheck, "skip-pq-address-check", false, "Skip post-quantum address checks for submitted transactions. This should only be used if you understand the risks.")
 	rawsendCmd.MarkFlagRequired("filename")
 
 	signCmd.Flags().StringVarP(&txFilename, "infile", "i", "", "Partially-signed transaction file to add signature to")
@@ -609,7 +616,7 @@ var rawsendCmd = &cobra.Command{
 		pendingTxns := make(map[transactions.Txid]string)
 		for _, txgroup := range txgroups {
 			// Broadcast the transaction
-			err1 := client.BroadcastTransactionGroup(txgroup)
+			err1 := client.BroadcastTransactionGroupWithParams(txgroup, skipPqAddressCheck)
 			if err1 != nil {
 				for _, txn := range txgroup {
 					txnErrors[txn.ID()] = err1.Error()
