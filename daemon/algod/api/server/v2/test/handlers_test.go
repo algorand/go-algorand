@@ -1600,9 +1600,7 @@ int 1`,
 					groupUsage := txn0Usage + txn1Usage
 					groupFeesPaid := txn0FeesPaid + txn1FeesPaid
 					expectedBody := v2.PreEncodedSimulateResponse{
-						Version:       2,
-						TotalUsage:    omitEmpty(groupUsage),
-						TotalFeesPaid: omitEmpty(groupFeesPaid),
+						Version: 2,
 						TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 							{
 								AppBudgetAdded:    appBudgetAdded,
@@ -1615,13 +1613,11 @@ int 1`,
 										// expect no ApplyData info
 										Txn:               txn0,
 										AppBudgetConsumed: txnAppBudgetUsed[0],
-										Usage:             omitEmpty(txn0Usage),
 										FeesPaid:          omitEmpty(txn0FeesPaid),
 									},
 									{
 										Txn:               txn1,
 										AppBudgetConsumed: txnAppBudgetUsed[1],
-										Usage:             omitEmpty(txn1Usage),
 										FeesPaid:          omitEmpty(txn1FeesPaid),
 									},
 								},

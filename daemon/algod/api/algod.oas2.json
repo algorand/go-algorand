@@ -3815,11 +3815,6 @@
           "type": "integer",
           "x-go-type": "uint64"
         },
-        "usage": {
-          "description": "Fee usage for this transaction and all of its descendant inner transactions, in millionths of a basic transaction fee unit.",
-          "type": "integer",
-          "x-go-type": "basics.Micros"
-        },
         "logic-sig-budget-consumed": {
           "description": "Budget used during execution of a logic sig transaction.",
           "type": "integer"
@@ -4830,16 +4825,6 @@
             "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
             "type": "integer",
             "x-go-type": "basics.Round"
-          },
-          "total-fees-paid": {
-            "description": "Total fees paid across all top-level transaction groups and their descendants.",
-            "type": "integer",
-            "x-go-type": "uint64"
-          },
-          "total-usage": {
-            "description": "Total fee usage across all top-level transaction groups and their descendants, in millionths of a basic transaction fee unit.",
-            "type": "integer",
-            "x-go-type": "basics.Micros"
           },
           "txn-groups": {
             "description": "A result object for each transaction group that was simulated.",
