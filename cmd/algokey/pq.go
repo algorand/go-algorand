@@ -35,7 +35,7 @@ import (
 var errPQTxnAlreadySigned = errors.New("transaction already has a signature")
 
 var (
-	pqGenerateScheme          = string(protocol.PQSchemeFalcon1024)
+	pqGenerateScheme          = protocol.PQSchemeFalcon1024.String()
 	pqGenerateKeyfile         string
 	pqGeneratePubkeyfile      string
 	pqGenerateDisplayMnemonic bool
@@ -44,7 +44,7 @@ var (
 	pqInfoSalt    = "canonical"
 
 	pqAddressPubkeyfile string
-	pqAddressScheme     = string(protocol.PQSchemeFalcon1024)
+	pqAddressScheme     = protocol.PQSchemeFalcon1024.String()
 	pqAddressSalt       = "canonical"
 
 	pqExportKeyfile         string
@@ -184,11 +184,14 @@ func mustMarkFlagRequired(cmd *cobra.Command, flagName string) {
 }
 
 func runPQGenerate() error {
-	root, err := generatePQRoot(protocol.PQScheme(pqGenerateScheme), crypto.SystemRNG)
+	scheme, err := parsePQScheme(pqGenerateScheme)
 	if err != nil {
 		return fmt.Errorf("cannot generate PQ key: %w", err)
 	}
-	defer wipePQRootMaterial(&root)
+	root, err := generatePQRoot(scheme, crypto.SystemRNG)
+	if err != nil {
+		return fmt.Errorf("cannot generate PQ key: %w", err)
+	}
 
 	if err = writePQRootKeyFile(pqGenerateKeyfile, root); err != nil {
 		return err
@@ -212,7 +215,6 @@ func runPQInfo() error {
 	if err != nil {
 		return err
 	}
-	defer wipePQRootMaterial(&root)
 
 	public, err := resolvePQSalt(root.public, pqInfoSalt)
 	if err != nil {
@@ -227,9 +229,12 @@ func runPQAddress() error {
 		return err
 	}
 
-	scheme := protocol.PQScheme(pqAddressScheme)
-	if _, err = lookupPQScheme(scheme); err != nil {
+	scheme, err := parsePQScheme(pqAddressScheme)
+	if err != nil {
 		return err
+	}
+	if _, ok := basics.LookupPQScheme(scheme); !ok {
+		return fmt.Errorf("%w: %q", basics.ErrPQSchemeNotSupported, scheme)
 	}
 	if publicMaterial.scheme != scheme {
 		return fmt.Errorf("%w: public key file scheme is %q, requested %q", errPQKeyWrongType, publicMaterial.scheme, scheme)
@@ -254,7 +259,6 @@ func runPQExportWithOptions(keyfile, mnemonicFile string, displayMnemonic bool) 
 	if err != nil {
 		return err
 	}
-	defer wipePQRootMaterial(&root)
 
 	if mnemonicFile != "" {
 		if err = writePQMnemonicFile(mnemonicFile, root.scheme, root.entropy); err != nil {
@@ -278,13 +282,11 @@ func runPQImportWithOptions(mnemonicFile, keyfile string, displayMnemonic bool) 
 	if err != nil {
 		return fmt.Errorf("cannot read mnemonic from %s: %w", mnemonicFile, err)
 	}
-	defer zeroBytes(entropy[:])
 
 	root, err := rootMaterialFromEntropy(scheme, entropy)
 	if err != nil {
 		return err
 	}
-	defer wipePQRootMaterial(&root)
 
 	if err = writePQRootKeyFile(keyfile, root); err != nil {
 		return fmt.Errorf("cannot write private key to %s: %w", keyfile, err)
@@ -312,11 +314,10 @@ func runPQSignWithOptions(opts pqSignOptions) error {
 	if err != nil {
 		return err
 	}
-	defer wipePQSigningMaterial(&signing)
 
-	ops, err := opsForPQScheme(signing.public.scheme)
-	if err != nil {
-		return err
+	ops, ok := pqSchemeOpsByScheme[signing.public.scheme]
+	if !ok {
+		return fmt.Errorf("%w: %q", basics.ErrPQSchemeNotSupported, signing.public.scheme)
 	}
 
 	public, err := resolvePQSalt(signing.public, opts.salt)

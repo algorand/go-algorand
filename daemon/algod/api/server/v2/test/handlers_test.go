@@ -1286,7 +1286,7 @@ func TestPostTransactionPQAuthorizerCompliance(t *testing.T) {
 	t.Run("unsupported-scheme", func(t *testing.T) {
 		t.Parallel()
 		stxn := makePQSignedTxnWithAddressCompliance(t, true)
-		stxn.PQSig.Scheme = protocol.PQScheme("x1")
+		stxn.PQSig.Scheme = protocol.PQScheme{'x', '1'}
 		test(t, stxn, futureStatus, http.StatusBadRequest, "transaction 0: pq signature scheme not supported")
 	})
 	t.Run("disabled-scheme", func(t *testing.T) {

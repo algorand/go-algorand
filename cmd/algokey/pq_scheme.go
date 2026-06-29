@@ -44,38 +44,27 @@ var pqSchemeOpsByScheme = map[protocol.PQScheme]pqSchemeOps{
 	},
 }
 
-func lookupPQScheme(scheme protocol.PQScheme) (basics.PQSchemeSpec, error) {
-	spec, ok := basics.LookupPQScheme(scheme)
-	if !ok {
-		return basics.PQSchemeSpec{}, fmt.Errorf("%w: %q", basics.ErrPQSchemeNotSupported, scheme)
+func parsePQScheme(value string) (protocol.PQScheme, error) {
+	var scheme protocol.PQScheme
+	if len(value) != len(scheme) {
+		return protocol.PQScheme{}, fmt.Errorf("%w: %q", basics.ErrPQSchemeNotSupported, value)
 	}
-	return spec, nil
-}
-
-func opsForPQScheme(scheme protocol.PQScheme) (pqSchemeOps, error) {
-	ops, ok := pqSchemeOpsByScheme[scheme]
-	if !ok {
-		return pqSchemeOps{}, fmt.Errorf("%w: %q", basics.ErrPQSchemeNotSupported, scheme)
-	}
-	return ops, nil
+	copy(scheme[:], value)
+	return scheme, nil
 }
 
 func generatePQRoot(scheme protocol.PQScheme, rng crypto.RNG) (pqRootMaterial, error) {
 	var entropy crypto.Seed
 	rng.RandBytes(entropy[:])
-	defer zeroBytes(entropy[:])
 
 	return rootMaterialFromEntropy(scheme, entropy)
 }
 
 func rootMaterialFromEntropy(scheme protocol.PQScheme, entropy crypto.Seed) (pqRootMaterial, error) {
-	defer zeroBytes(entropy[:])
-
 	signing, err := derivePQSigningMaterialFromEntropy(scheme, entropy[:])
 	if err != nil {
 		return pqRootMaterial{}, err
 	}
-	defer wipePQSigningMaterial(&signing)
 
 	return pqRootMaterial{
 		scheme:  scheme,
@@ -85,16 +74,15 @@ func rootMaterialFromEntropy(scheme protocol.PQScheme, entropy crypto.Seed) (pqR
 }
 
 func derivePQSigningMaterialFromEntropy(scheme protocol.PQScheme, entropy []byte) (pqSigningMaterial, error) {
-	ops, err := opsForPQScheme(scheme)
-	if err != nil {
-		return pqSigningMaterial{}, err
+	ops, ok := pqSchemeOpsByScheme[scheme]
+	if !ok {
+		return pqSigningMaterial{}, fmt.Errorf("%w: %q", basics.ErrPQSchemeNotSupported, scheme)
 	}
 
 	seed, err := derivePQKeySeed(scheme, entropy)
 	if err != nil {
 		return pqSigningMaterial{}, err
 	}
-	defer zeroBytes(seed[:])
 
 	return ops.deriveSigning(seed[:])
 }
@@ -102,18 +90,14 @@ func derivePQSigningMaterialFromEntropy(scheme protocol.PQScheme, entropy []byte
 // derivePQKeySeed maps mnemonic-sized entropy to a scheme-specific PQ keygen
 // seed: SHA512_256(PQK || scheme[2] || entropy[32]).
 func derivePQKeySeed(scheme protocol.PQScheme, entropy []byte) (crypto.Digest, error) {
-	if len(scheme) != protocol.PQSchemeSize {
-		return crypto.Digest{}, fmt.Errorf("%w: got scheme size %d, want %d", errPQKeyDerivation, len(scheme), protocol.PQSchemeSize)
-	}
 	if len(entropy) != pqKeyEntropySize {
 		return crypto.Digest{}, fmt.Errorf("%w: got entropy size %d, want %d", errPQKeyDerivation, len(entropy), pqKeyEntropySize)
 	}
 
-	input := make([]byte, 0, len(protocol.PostQuantumKey)+protocol.PQSchemeSize+len(entropy))
+	input := make([]byte, 0, len(protocol.PostQuantumKey)+len(scheme)+len(entropy))
 	input = append(input, string(protocol.PostQuantumKey)...)
-	input = append(input, string(scheme)...)
+	input = append(input, scheme[:]...)
 	input = append(input, entropy...)
-	defer zeroBytes(input)
 
 	return crypto.Hash(input), nil
 }
@@ -123,16 +107,13 @@ func deriveFalcon1024SigningMaterial(seed []byte) (pqSigningMaterial, error) {
 	if err != nil {
 		return pqSigningMaterial{}, err
 	}
-	defer zeroBytes(signer.PrivateKey[:])
 
 	publicKey := slices.Clone(signer.PublicKey[:])
 	privateKey := slices.Clone(signer.PrivateKey[:])
 	public, err := canonicalPublicMaterialFromKey(protocol.PQSchemeFalcon1024, publicKey)
 	if err != nil {
-		zeroBytes(privateKey)
 		return pqSigningMaterial{}, err
 	}
-	zeroBytes(publicKey)
 
 	return pqSigningMaterial{
 		public:  public,
@@ -154,10 +135,8 @@ func signFalcon1024Txn(privateKey []byte, txn transactions.Transaction) ([]byte,
 	if err != nil {
 		return nil, err
 	}
-	defer zeroBytes(sk[:])
 
 	signer := crypto.FalconSigner{PrivateKey: sk}
-	defer zeroBytes(signer.PrivateKey[:])
 	sig, err := signer.Sign(txn)
 	if err != nil {
 		return nil, err

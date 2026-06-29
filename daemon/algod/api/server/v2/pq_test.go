@@ -46,7 +46,7 @@ func TestCheckPQSimulatePolicySchemeOnlyPlaceholder(t *testing.T) {
 	require.NoError(t, checkPQSimulatePolicy(proto, stxn, true, true))
 
 	unknownScheme := stxn
-	unknownScheme.PQSig.Scheme = protocol.PQScheme("x1")
+	unknownScheme.PQSig.Scheme = protocol.PQScheme{'x', '1'}
 	require.ErrorIs(t, checkPQSimulatePolicy(proto, unknownScheme, true, false), basics.ErrPQSchemeNotSupported)
 
 	disabledProto := proto

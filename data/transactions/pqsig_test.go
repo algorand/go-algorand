@@ -160,7 +160,7 @@ func TestPQSigEqual(t *testing.T) {
 	require.True(t, fixture.pqSig.Equal(same))
 
 	changedScheme := fixture.pqSig
-	changedScheme.Scheme = protocol.PQScheme("x1")
+	changedScheme.Scheme = protocol.PQScheme{'x', '1'}
 	require.False(t, fixture.pqSig.Equal(changedScheme))
 
 	changedSalt := fixture.pqSig
@@ -213,7 +213,7 @@ func TestPQSigValidateEnvelope(t *testing.T) {
 	require.ErrorIs(t, fixture.pqSig.ValidateEnvelope(disabledProto, fixture.authorizer), basics.ErrPQSchemeNotEnabled)
 
 	unknownScheme := fixture.pqSig
-	unknownScheme.Scheme = protocol.PQScheme("x1")
+	unknownScheme.Scheme = protocol.PQScheme{'x', '1'}
 	require.ErrorIs(t, unknownScheme.ValidateScheme(fixture.proto), basics.ErrPQSchemeNotSupported)
 	require.ErrorIs(t, unknownScheme.ValidateEnvelope(fixture.proto, unknownScheme.AuthorizerAddress()), basics.ErrPQSchemeNotSupported)
 
@@ -302,7 +302,7 @@ func TestPQSigVerifyRejectsUnsupportedScheme(t *testing.T) {
 	fixture := makePQSigTestFixture(t, 0)
 
 	pqSig := fixture.pqSig
-	pqSig.Scheme = protocol.PQScheme("x1")
+	pqSig.Scheme = protocol.PQScheme{'x', '1'}
 	pqSig.Signature = []byte{1}
 
 	require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, pqSig.AuthorizerAddress()), basics.ErrPQSchemeNotSupported)

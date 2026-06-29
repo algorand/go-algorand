@@ -139,7 +139,7 @@ func TestCanonicalPQAddressSaltDoesNotRequireRegisteredSchemeOrValidatedKey(t *t
 	partitiontest.PartitionTest(t)
 
 	publicKey := []byte{0xab, 0xcd, 0xef}
-	scheme := protocol.PQScheme("x1")
+	scheme := protocol.PQScheme{'x', '1'}
 
 	salt, addr, err := CanonicalPQAddressSalt(scheme, publicKey)
 	require.NoError(t, err)
@@ -149,16 +149,5 @@ func TestCanonicalPQAddressSaltDoesNotRequireRegisteredSchemeOrValidatedKey(t *t
 	for lowerSalt := 0; lowerSalt < int(salt); lowerSalt++ {
 		lowerAddr := PQAddress(scheme, PQAddressSalt(lowerSalt), publicKey)
 		require.False(t, lowerAddr.IsPQCompliant())
-	}
-}
-
-func TestCanonicalPQAddressSaltRejectsInvalidSchemeLength(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	publicKey := falconPublicKeyForPQAddressTest(t, 0)
-
-	for _, scheme := range []protocol.PQScheme{"", "x", "xyz"} {
-		_, _, err := CanonicalPQAddressSalt(scheme, publicKey)
-		require.ErrorIs(t, err, errPQSchemeLength)
 	}
 }

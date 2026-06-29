@@ -16,25 +16,26 @@
 
 package protocol
 
-// PQSchemeSize is the consensus byte length of a post-quantum signature scheme tag.
-const PQSchemeSize = 2
-
 // PQScheme is a 2-byte ASCII identifier of a post-quantum account authorization scheme.
-// Conventionally, the first byte is the PQ-DSA family and the second byte is a version
+// Conventionally, the first byte is the PQ-DSA family, and the second byte is a version
 // or variant identifier.
-type PQScheme string
+//
+//msgp:test ignore PQScheme
+type PQScheme [2]byte
 
-//msgp:allocbound PQScheme PQSchemeSize
+func (s PQScheme) String() string {
+	return string(s[:])
+}
 
 // Supported post-quantum signature schemes.
-const (
+var (
 	// PQSchemeFalcon1024 - f1: Falcon-1024 using a deterministic signing profile.
 	// Deterministic nonce derivation is signer-side only; consensus verifies
 	// signature validity, not how signer nonce material was derived.
-	PQSchemeFalcon1024 PQScheme = "f1"
+	PQSchemeFalcon1024 = PQScheme{'f', '1'}
 
 	// PQSchemeFalcon512 - f2: Falcon-512 using a deterministic signing profile.
 	// Deterministic nonce derivation is signer-side only; consensus verifies
 	// signature validity, not how signer nonce material was derived.
-	PQSchemeFalcon512 PQScheme = "f2" // reserved, not used
+	PQSchemeFalcon512 = PQScheme{'f', '2'} // reserved, not used
 )

@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"runtime"
 	"strings"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -159,11 +158,4 @@ func writeNewFile(filename string, data []byte, perm os.FileMode) error {
 		return writeErr
 	}
 	return closeErr
-}
-
-func zeroBytes(data []byte) {
-	for i := range data {
-		data[i] = 0
-	}
-	runtime.KeepAlive(data)
 }

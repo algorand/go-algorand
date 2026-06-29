@@ -18,7 +18,6 @@ package basics
 
 import (
 	"errors"
-	"fmt"
 	"math"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -27,12 +26,6 @@ import (
 
 var (
 	errNoCanonicalPQAddressSalt = errors.New("no canonical salt exists for this public key and scheme")
-	errPQSchemeLength           = errors.New("pq scheme length invalid")
-)
-
-const (
-	// pqAddressSaltSize is the consensus byte length of a post-quantum address salt.
-	pqAddressSaltSize = 1
 )
 
 // PQAddressSalt is a 1-byte salt that selects an address for a post-quantum
@@ -55,8 +48,8 @@ type pqAddressPreimage struct {
 // The scheme tag and public salt are part of the address identity, so the same
 // public key may derive multiple PQ addresses.
 func (pq pqAddressPreimage) ToBeHashed() (protocol.HashID, []byte) {
-	payload := make([]byte, 0, protocol.PQSchemeSize+pqAddressSaltSize+len(pq.pk))
-	payload = append(payload, string(pq.scheme)...)
+	payload := make([]byte, 0, len(pq.scheme)+1+len(pq.pk))
+	payload = append(payload, pq.scheme[:]...)
 	payload = append(payload, byte(pq.salt))
 	payload = append(payload, pq.pk...)
 	return protocol.PostQuantumAddress, payload
@@ -72,10 +65,6 @@ func PQAddress(scheme protocol.PQScheme, salt PQAddressSalt, pk []byte) Address 
 // PQScheme/public-key pair complies with the crypto.IsEdwards25519Point
 // rejection-sampling predicate (ascending 0..255 scan order).
 func CanonicalPQAddressSalt(scheme protocol.PQScheme, publicKey []byte) (PQAddressSalt, Address, error) {
-	if len(scheme) != protocol.PQSchemeSize {
-		return 0, Address{}, fmt.Errorf("%w: got %d, want %d", errPQSchemeLength, len(scheme), protocol.PQSchemeSize)
-	}
-
 	// If no valid salt is found rejection-sampling within this range, the publicKey
 	// has no PQ address for the given PQScheme; the vanishingly small probability
 	// of this happening is ~2^(-256).

@@ -102,7 +102,7 @@ func TestSignedTxnFeeFactorPQSignatureContribution(t *testing.T) {
 	lsigSigned := baseTxn
 	lsigSigned.Lsig = LogicSig{Logic: []byte{1}}
 	unknownPQSigned := baseTxn
-	unknownPQSigned.PQSig = PQSig{Scheme: protocol.PQScheme("x1")}
+	unknownPQSigned.PQSig = PQSig{Scheme: protocol.PQScheme{'x', '1'}}
 	pqSigned := SignedTxn{Txn: fixture.txn, PQSig: fixture.pqSig}
 	pqAndRegularSigned := pqSigned
 	pqAndRegularSigned.Sig[0] = 1

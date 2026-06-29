@@ -17,6 +17,7 @@
 package basics
 
 import (
+	"bytes"
 	"maps"
 	"slices"
 	"testing"
@@ -36,7 +37,9 @@ func (message pqSchemeTestMessage) ToBeHashed() (protocol.HashID, []byte) {
 
 func supportedPQSchemes() []protocol.PQScheme {
 	schemes := slices.Collect(maps.Keys(pqSchemeSpecs))
-	slices.Sort(schemes)
+	slices.SortFunc(schemes, func(a, b protocol.PQScheme) int {
+		return bytes.Compare(a[:], b[:])
+	})
 	return schemes
 }
 
@@ -68,7 +71,9 @@ func TestPQSchemeRegistryComplete(t *testing.T) {
 
 	schemes := supportedPQSchemes()
 	require.ElementsMatch(t, slices.Collect(maps.Keys(pqSchemeSpecs)), schemes)
-	require.True(t, slices.IsSorted(schemes))
+	require.True(t, slices.IsSortedFunc(schemes, func(a, b protocol.PQScheme) int {
+		return bytes.Compare(a[:], b[:])
+	}))
 }
 
 func TestLookupPQSchemeFalcon1024(t *testing.T) {
@@ -81,7 +86,7 @@ func TestLookupPQSchemeFalcon1024(t *testing.T) {
 	require.Equal(t, PQSchemeFalcon1024FeeContribution, spec.FeeContribution)
 	require.NotNil(t, spec.Verify)
 
-	_, ok = LookupPQScheme(protocol.PQScheme("x1"))
+	_, ok = LookupPQScheme(protocol.PQScheme{'x', '1'})
 	require.False(t, ok)
 }
 

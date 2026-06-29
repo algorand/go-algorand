@@ -24,38 +24,23 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestPQSchemeSize(t *testing.T) {
-	t.Parallel()
-	partitiontest.PartitionTest(t)
-
-	// PQSchemeSize is consensus-visible through PQ address preimages and the
-	// PQScheme msgp allocbound, so keep it deliberately pinned.
-	require.Equal(t, 2, PQSchemeSize)
-}
-
 func TestPQSchemes(t *testing.T) {
 	t.Parallel()
 	partitiontest.PartitionTest(t)
 
-	values := getConstValues(t, "pq_scheme.go", "PQScheme", false)
-	require.NotEmpty(t, values)
+	schemes := []PQScheme{
+		PQSchemeFalcon1024,
+		PQSchemeFalcon512,
+	}
 
-	seen := make(map[string]struct{}, len(values))
-	for _, value := range values {
-		require.Len(t, value, PQSchemeSize, "PQScheme %q must be exactly %d bytes", value, PQSchemeSize)
-		for i := 0; i < len(value); i++ {
-			require.Truef(t, value[i] >= 0x20 && value[i] < 0x7f, "PQScheme %q must be printable ASCII", value)
+	seen := make(map[PQScheme]struct{}, len(schemes))
+	for _, scheme := range schemes {
+		for _, b := range scheme {
+			require.Truef(t, b >= 0x20 && b < 0x7f, "PQScheme %q must be printable ASCII", scheme)
 		}
 
-		_, ok := seen[value]
-		require.False(t, ok, "PQScheme %q is repeated", value)
-		seen[value] = struct{}{}
+		_, ok := seen[scheme]
+		require.False(t, ok, "PQScheme %q is repeated", scheme)
+		seen[scheme] = struct{}{}
 	}
-}
-
-func TestPQSchemeFalcon1024(t *testing.T) {
-	t.Parallel()
-	partitiontest.PartitionTest(t)
-
-	require.Equal(t, PQScheme("f1"), PQSchemeFalcon1024)
 }
