@@ -6623,13 +6623,11 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 					TxnGroups: []simulation.TxnGroupResult{
 						{
 							FailedAt:      simulation.TxnPath{0},
-							Txns:          []simulation.TxnResult{{Usage: 3e6, FeesPaid: stxn.Txn.Fee}},
+							Txns:          []simulation.TxnResult{{FeesPaid: stxn.Txn.Fee}},
 							GroupUsage:    3e6,
 							GroupFeesPaid: stxn.Txn.Fee,
 						},
 					},
-					TotalUsage:    3e6,
-					TotalFeesPaid: stxn.Txn.Fee,
 				},
 			}
 		})
@@ -6663,13 +6661,11 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 					TxnGroups: []simulation.TxnGroupResult{
 						{
 							FailedAt:      simulation.TxnPath{0},
-							Txns:          []simulation.TxnResult{{Usage: 3e6, FeesPaid: stxn.Txn.Fee}},
+							Txns:          []simulation.TxnResult{{FeesPaid: stxn.Txn.Fee}},
 							GroupUsage:    3e6,
 							GroupFeesPaid: stxn.Txn.Fee,
 						},
 					},
-					TotalUsage:    3e6,
-					TotalFeesPaid: stxn.Txn.Fee,
 				},
 			}
 		})
@@ -6697,15 +6693,13 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 					TxnGroups: []simulation.TxnGroupResult{
 						{
 							Txns: []simulation.TxnResult{
-								{Usage: 1e6, FeesPaid: txgroup[0].Txn.Fee},
-								{Usage: 3e6, FeesPaid: txgroup[1].Txn.Fee, FixedSigner: pqAuthorizer},
+								{FeesPaid: txgroup[0].Txn.Fee},
+								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: pqAuthorizer},
 							},
 							GroupUsage:    4e6,
 							GroupFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
 						},
 					},
-					TotalUsage:    4e6,
-					TotalFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
 				},
 			}
 		})
@@ -6738,13 +6732,11 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 					},
 					TxnGroups: []simulation.TxnGroupResult{
 						{
-							Txns:          []simulation.TxnResult{{Usage: 3e6, FeesPaid: stxn.Txn.Fee}},
+							Txns:          []simulation.TxnResult{{FeesPaid: stxn.Txn.Fee}},
 							GroupUsage:    3e6,
 							GroupFeesPaid: stxn.Txn.Fee,
 						},
 					},
-					TotalUsage:    3e6,
-					TotalFeesPaid: stxn.Txn.Fee,
 				},
 			}
 		})
@@ -6774,15 +6766,13 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 						{
 							FailedAt: simulation.TxnPath{1},
 							Txns: []simulation.TxnResult{
-								{Usage: 1e6, FeesPaid: txgroup[0].Txn.Fee},
-								{Usage: 3e6, FeesPaid: txgroup[1].Txn.Fee, FixedSigner: pqAuthorizer},
+								{FeesPaid: txgroup[0].Txn.Fee},
+								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: pqAuthorizer},
 							},
 							GroupUsage:    4e6,
 							GroupFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
 						},
 					},
-					TotalUsage:    4e6,
-					TotalFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
 				},
 			}
 		})

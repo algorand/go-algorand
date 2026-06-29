@@ -1479,7 +1479,7 @@ func TestPQRekeyedAddressAuthorization(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusFuture]
 	require.True(t, proto.EnablePQSchemeFalcon1024)
-	pqFee, overflow := proto.MinFee().MulMicrosCeil(basics.Micros(1e6) + basics.PQSchemeFalcon1024FeeContribution)
+	pqFee, _, overflow := proto.MinFee().FeeForUsage(basics.Micros(1e6)+basics.PQSchemeFalcon1024FeeContribution, 1e6, 0)
 	require.False(t, overflow)
 
 	pqAcct := makePQRekeyTestAccount(t, 0)
