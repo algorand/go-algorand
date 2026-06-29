@@ -32,6 +32,7 @@ type FieldSpec interface {
 	Type() StackType
 	OpVersion() uint64
 	Note() string
+	Modes() RunMode
 	Version() uint64
 }
 
@@ -278,6 +279,13 @@ func (fs txnFieldSpec) Note() string {
 		note = addExtra(note, "Application mode only")
 	}
 	return note
+}
+
+func (fs txnFieldSpec) Modes() RunMode {
+	if fs.effects {
+		return ModeApp
+	}
+	return modeAny
 }
 
 var txnFieldSpecs = [...]txnFieldSpec{
@@ -618,6 +626,10 @@ func (fs globalFieldSpec) Note() string {
 	return note
 }
 
+func (fs globalFieldSpec) Modes() RunMode {
+	return fs.mode
+}
+
 var globalFieldSpecs = [...]globalFieldSpec{
 	// version 0 is the same as v1 (initial release)
 	{MinTxnFee, StackUint64, modeAny, 0, "microalgos"},
@@ -718,6 +730,9 @@ func (fs ecdsaCurveSpec) Version() uint64 {
 func (fs ecdsaCurveSpec) Note() string {
 	return fs.doc
 }
+func (fs ecdsaCurveSpec) Modes() RunMode {
+	return modeAny
+}
 
 var ecdsaCurveSpecs = [...]ecdsaCurveSpec{
 	{Secp256k1, 5, "secp256k1 curve, used in Bitcoin"},
@@ -784,6 +799,9 @@ func (fs ecGroupSpec) Version() uint64 {
 func (fs ecGroupSpec) Note() string {
 	return fs.doc
 }
+func (fs ecGroupSpec) Modes() RunMode {
+	return modeAny
+}
 
 var ecGroupSpecs = [...]ecGroupSpec{
 	{BN254g1, "G1 of the BN254 curve. Points encoded as 32 byte X following by 32 byte Y"},
@@ -848,6 +866,9 @@ func (fs mimcConfigSpec) Version() uint64 {
 func (fs mimcConfigSpec) Note() string {
 	return fs.doc
 }
+func (fs mimcConfigSpec) Modes() RunMode {
+	return modeAny
+}
 
 var mimcConfigSpecs = [...]mimcConfigSpec{
 	{BN254Mp110, "MiMC configuration for the BN254 curve with Miyaguchi-Preneel mode, 110 rounds, exponent 5, seed \"seed\""},
@@ -909,6 +930,9 @@ func (fs poseidon2ConfigSpec) Version() uint64 {
 }
 func (fs poseidon2ConfigSpec) Note() string {
 	return fs.doc
+}
+func (fs poseidon2ConfigSpec) Modes() RunMode {
+	return modeAny
 }
 
 var poseidon2ConfigSpecs = [...]poseidon2ConfigSpec{
@@ -989,6 +1013,9 @@ func (fs base64EncodingSpec) Note() string {
 	note := "" // no doc list?
 	return note
 }
+func (fs base64EncodingSpec) Modes() RunMode {
+	return modeAny
+}
 
 func (s base64EncodingSpecMap) get(name string) (FieldSpec, bool) {
 	fs, ok := s[name]
@@ -1055,6 +1082,9 @@ func (fs jsonRefSpec) Version() uint64 {
 func (fs jsonRefSpec) Note() string {
 	note := "" // no doc list?
 	return note
+}
+func (fs jsonRefSpec) Modes() RunMode {
+	return modeAny
 }
 
 func (s jsonRefSpecMap) get(name string) (FieldSpec, bool) {
@@ -1124,6 +1154,10 @@ func (fs vrfStandardSpec) Version() uint64 {
 func (fs vrfStandardSpec) Note() string {
 	note := "" // no doc list?
 	return note
+}
+
+func (fs vrfStandardSpec) Modes() RunMode {
+	return modeAny
 }
 
 func (s vrfStandardSpecMap) SpecByName(name string) FieldSpec {
@@ -1238,6 +1272,10 @@ func (fs blockFieldSpec) Note() string {
 	return ""
 }
 
+func (fs blockFieldSpec) Modes() RunMode {
+	return modeAny
+}
+
 func (s blockFieldSpecMap) SpecByName(name string) FieldSpec {
 	return s[name]
 }
@@ -1283,6 +1321,9 @@ func (fs assetHoldingFieldSpec) Version() uint64 {
 }
 func (fs assetHoldingFieldSpec) Note() string {
 	return fs.doc
+}
+func (fs assetHoldingFieldSpec) Modes() RunMode {
+	return ModeApp
 }
 
 var assetHoldingFieldSpecs = [...]assetHoldingFieldSpec{
@@ -1369,6 +1410,9 @@ func (fs assetParamsFieldSpec) Version() uint64 {
 }
 func (fs assetParamsFieldSpec) Note() string {
 	return fs.doc
+}
+func (fs assetParamsFieldSpec) Modes() RunMode {
+	return ModeApp
 }
 
 var assetParamsFieldSpecs = [...]assetParamsFieldSpec{
@@ -1466,6 +1510,9 @@ func (fs appParamsFieldSpec) Version() uint64 {
 }
 func (fs appParamsFieldSpec) Note() string {
 	return fs.doc
+}
+func (fs appParamsFieldSpec) Modes() RunMode {
+	return ModeApp
 }
 
 var appParamsFieldSpecs = [...]appParamsFieldSpec{
@@ -1575,6 +1622,9 @@ func (fs acctParamsFieldSpec) Version() uint64 {
 func (fs acctParamsFieldSpec) Note() string {
 	return fs.doc
 }
+func (fs acctParamsFieldSpec) Modes() RunMode {
+	return ModeApp
+}
 
 var acctParamsFieldSpecs = [...]acctParamsFieldSpec{
 	{AcctBalance, StackUint64, 6, "Account balance in microalgos"},
@@ -1661,6 +1711,9 @@ func (fs voterParamsFieldSpec) Version() uint64 {
 }
 func (fs voterParamsFieldSpec) Note() string {
 	return fs.doc
+}
+func (fs voterParamsFieldSpec) Modes() RunMode {
+	return ModeApp
 }
 
 var voterParamsFieldSpecs = [...]voterParamsFieldSpec{
