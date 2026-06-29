@@ -3220,10 +3220,11 @@
             "style": "form"
           },
           {
-            "description": "Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned.",
+            "description": "Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned. Historical lookups require exclude=all; full account information including resources is only supported for the latest round.",
             "in": "query",
             "name": "round",
             "schema": {
+              "format": "uint64",
               "minimum": 0,
               "type": "integer",
               "x-go-type": "basics.Round"
@@ -3475,6 +3476,7 @@
             "in": "query",
             "name": "round",
             "schema": {
+              "format": "uint64",
               "minimum": 0,
               "type": "integer",
               "x-go-type": "basics.Round"
@@ -3742,6 +3744,7 @@
             "in": "query",
             "name": "round",
             "schema": {
+              "format": "uint64",
               "minimum": 0,
               "type": "integer",
               "x-go-type": "basics.Round"
@@ -4056,6 +4059,7 @@
             "in": "query",
             "name": "round",
             "schema": {
+              "format": "uint64",
               "minimum": 0,
               "type": "integer",
               "x-go-type": "basics.Round"
@@ -4392,6 +4396,7 @@
             "in": "query",
             "name": "round",
             "schema": {
+              "format": "uint64",
               "minimum": 0,
               "type": "integer",
               "x-go-type": "basics.Round"
@@ -5857,6 +5862,7 @@
             "in": "query",
             "name": "round",
             "schema": {
+              "format": "uint64",
               "minimum": 0,
               "type": "integer",
               "x-go-type": "basics.Round"

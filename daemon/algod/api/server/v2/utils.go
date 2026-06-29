@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
@@ -255,6 +256,16 @@ func getOptionalRound(round *basics.Round) basics.Round {
 		return 0
 	}
 	return *round
+}
+
+// roundLookupError maps a ledger lookup error to an HTTP response: 400 for a round
+// outside the available history (*ledger.RoundOffsetError), 500 otherwise.
+func roundLookupError(ctx echo.Context, err error, log logging.Logger) error {
+	var roundOffErr *ledger.RoundOffsetError
+	if errors.As(err, &roundOffErr) {
+		return badRequest(ctx, err, errRoundTooOld, log)
+	}
+	return internalError(ctx, err, errFailedLookingUpLedger, log)
 }
 
 // getCodecHandle converts a format string into the encoder + content type

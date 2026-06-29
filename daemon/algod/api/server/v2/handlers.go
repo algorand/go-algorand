@@ -124,7 +124,6 @@ type LedgerForAPI interface {
 	LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error)
 	LookupKv(round basics.Round, key string) ([]byte, error)
 	LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error)
-	LookupFullAccount(optionalRound basics.Round, addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error)
 	LookupKvPairsByPrefix(round basics.Round, keyPrefix string, cursor string, limit uint64, maxBytes uint64, includeValues bool) ([]ledgercore.KvPairResult, basics.Round, bool, error)
 	ConsensusParams(r basics.Round) (config.ConsensusParams, error)
 	Latest() basics.Round
@@ -140,6 +139,7 @@ type LedgerForAPI interface {
 	Wait(r basics.Round) chan struct{}
 	WaitWithCancel(r basics.Round) (chan struct{}, func())
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
+	GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 	EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte, err error)
 	Block(rnd basics.Round) (blk bookkeeping.Block, err error)
 	TxnsFrom(id basics.Address, r basics.Round) ([]transactions.Transaction, error)
@@ -439,6 +439,9 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address basics.Address,
 	}
 
 	optionalRound := getOptionalRound(params.Round)
+	if optionalRound != 0 && optionalRound > v2.Node.LedgerForAPI().Latest() {
+		return badRequest(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)
+	}
 
 	// should we skip fetching apps and assets?
 	var excludeCreatedAppsParams bool
@@ -474,17 +477,20 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address basics.Address,
 		}
 	}
 
+	// Historical lookups with resources are not supported because the ledger does not
+	// expose a way to enumerate an account's resources at a non-latest round. Callers
+	// requesting historical account info must use exclude=all (handled above).
+	if optionalRound != 0 {
+		return badRequest(ctx, errors.New(errHistoricalAccountInfoRequiresExclude), errHistoricalAccountInfoRequiresExclude, v2.Log)
+	}
+
 	myLedger := v2.Node.LedgerForAPI()
 
 	// count total # of resources, if max limit is set
 	if maxResults := v2.Node.Config().MaxAPIResourcesPerAccount; maxResults != 0 {
-		lookupRound := optionalRound
-		if lookupRound == 0 {
-			lookupRound = myLedger.Latest()
-		}
-		record, _, _, lookupErr := myLedger.LookupAccount(lookupRound, address)
+		record, _, _, lookupErr := myLedger.LookupAccount(myLedger.Latest(), address)
 		if lookupErr != nil {
-			return internalError(ctx, lookupErr, errFailedLookingUpLedger, v2.Log)
+			return roundLookupError(ctx, lookupErr, v2.Log)
 		}
 		totalResults := record.TotalAssets + record.TotalAssetParams + record.TotalAppLocalStates + record.TotalAppParams
 		if totalResults > maxResults {
@@ -503,16 +509,9 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address basics.Address,
 		}
 	}
 
-	var record basics.AccountData
-	var lastRound basics.Round
-	var amountWithoutPendingRewards basics.MicroAlgos
-	if optionalRound == 0 {
-		record, lastRound, amountWithoutPendingRewards, err = myLedger.LookupLatest(address)
-	} else {
-		record, lastRound, amountWithoutPendingRewards, err = myLedger.LookupFullAccount(optionalRound, address)
-	}
+	record, lastRound, amountWithoutPendingRewards, err := myLedger.LookupLatest(address)
 	if err != nil {
-		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		return roundLookupError(ctx, err, v2.Log)
 	}
 
 	// check against configured total limit on assets/apps
@@ -549,7 +548,7 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 	}
 	record, lastRound, amountWithoutPendingRewards, err := myLedger.LookupAccount(optionalRound, addr)
 	if err != nil {
-		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		return roundLookupError(ctx, err, v2.Log)
 	}
 
 	if handle == protocol.CodecHandle {
@@ -629,13 +628,16 @@ func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address basics.Add
 
 	ledger := v2.Node.LedgerForAPI()
 
+	if lastRound != 0 && lastRound > ledger.Latest() {
+		return badRequest(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)
+	}
 	if lastRound == 0 {
 		lastRound = ledger.Latest()
 	}
 
 	record, err := ledger.LookupAsset(lastRound, address, assetID)
 	if err != nil {
-		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		return roundLookupError(ctx, err, v2.Log)
 	}
 
 	if record.AssetParams == nil && record.AssetHolding == nil {
@@ -682,13 +684,16 @@ func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address basi
 
 	ledger := v2.Node.LedgerForAPI()
 
+	if lastRound != 0 && lastRound > ledger.Latest() {
+		return badRequest(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)
+	}
 	if lastRound == 0 {
 		lastRound = ledger.Latest()
 	}
 
 	record, err := ledger.LookupApplication(lastRound, address, applicationID)
 	if err != nil {
-		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		return roundLookupError(ctx, err, v2.Log)
 	}
 
 	if record.AppParams == nil && record.AppLocalState == nil {
@@ -1013,6 +1018,9 @@ func (v2 *Handlers) GetTransactionProof(ctx echo.Context, round basics.Round, tx
 // (GET /v2/ledger/supply)
 func (v2 *Handlers) GetSupply(ctx echo.Context, params model.GetSupplyParams) error {
 	latest := getOptionalRound(params.Round)
+	if latest != 0 && latest > v2.Node.LedgerForAPI().Latest() {
+		return badRequest(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)
+	}
 	var totals ledgercore.AccountTotals
 	var err error
 	if latest == 0 {
@@ -1021,8 +1029,8 @@ func (v2 *Handlers) GetSupply(ctx echo.Context, params model.GetSupplyParams) er
 		totals, err = v2.Node.LedgerForAPI().Totals(latest)
 	}
 	if err != nil {
-		err = fmt.Errorf("GetSupply(): round %d, LatestTotals failed: %v", latest, err)
-		return internalError(ctx, err, errInternalFailure, v2.Log)
+		err = fmt.Errorf("GetSupply(): round %d, LatestTotals failed: %w", latest, err)
+		return roundLookupError(ctx, err, v2.Log)
 	}
 
 	consensus, err := v2.Node.LedgerForAPI().ConsensusParams(latest)
@@ -1879,23 +1887,26 @@ func (v2 *Handlers) GetPendingTransactions(ctx echo.Context, params model.GetPen
 // (GET /v2/applications/{application-id})
 func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID basics.AppIndex, params model.GetApplicationByIDParams) error {
 	ledger := v2.Node.LedgerForAPI()
-	creator, ok, err := ledger.GetCreator(basics.CreatableIndex(applicationID), basics.AppCreatable)
+
+	lastRound := getOptionalRound(params.Round)
+	if lastRound != 0 && lastRound > ledger.Latest() {
+		return badRequest(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)
+	}
+	if lastRound == 0 {
+		lastRound = ledger.Latest()
+	}
+
+	creator, ok, err := ledger.GetCreatorForRound(lastRound, basics.CreatableIndex(applicationID), basics.AppCreatable)
 	if err != nil {
-		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		return roundLookupError(ctx, err, v2.Log)
 	}
 	if !ok {
 		return notFound(ctx, errors.New(errAppDoesNotExist), errAppDoesNotExist, v2.Log)
 	}
 
-	lastRound := getOptionalRound(params.Round)
-
-	if lastRound == 0 {
-		lastRound = ledger.Latest()
-	}
-
 	record, err := ledger.LookupApplication(lastRound, creator, applicationID)
 	if err != nil {
-		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		return roundLookupError(ctx, err, v2.Log)
 	}
 
 	if record.AppParams == nil {
@@ -2099,23 +2110,26 @@ func (v2 *Handlers) GetApplicationBoxByName(ctx echo.Context, applicationID basi
 // (GET /v2/assets/{asset-id})
 func (v2 *Handlers) GetAssetByID(ctx echo.Context, assetID basics.AssetIndex, params model.GetAssetByIDParams) error {
 	ledger := v2.Node.LedgerForAPI()
-	creator, ok, err := ledger.GetCreator(basics.CreatableIndex(assetID), basics.AssetCreatable)
+
+	lastRound := getOptionalRound(params.Round)
+	if lastRound != 0 && lastRound > ledger.Latest() {
+		return badRequest(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)
+	}
+	if lastRound == 0 {
+		lastRound = ledger.Latest()
+	}
+
+	creator, ok, err := ledger.GetCreatorForRound(lastRound, basics.CreatableIndex(assetID), basics.AssetCreatable)
 	if err != nil {
-		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		return roundLookupError(ctx, err, v2.Log)
 	}
 	if !ok {
 		return notFound(ctx, errors.New(errAssetDoesNotExist), errAssetDoesNotExist, v2.Log)
 	}
 
-	lastRound := getOptionalRound(params.Round)
-
-	if lastRound == 0 {
-		lastRound = ledger.Latest()
-	}
-
 	record, err := ledger.LookupAsset(lastRound, creator, assetID)
 	if err != nil {
-		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		return roundLookupError(ctx, err, v2.Log)
 	}
 
 	if record.AssetParams == nil {

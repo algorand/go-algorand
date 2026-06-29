@@ -1005,7 +1005,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 // The rewards are added to the AccountData before returning.
 // Note that the function doesn't update the account with the rewards,
 // even while it does return the AccountData which represent the "rewarded" account data.
-func (au *accountUpdates) lookupLatest(optionalRound basics.Round, addr basics.Address) (data basics.AccountData, rnd basics.Round, withoutRewards basics.MicroAlgos, err error) {
+func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.AccountData, rnd basics.Round, withoutRewards basics.MicroAlgos, err error) {
 	au.accountsMu.RLock()
 	needUnlock := true
 	defer func() {
@@ -1086,11 +1086,7 @@ func (au *accountUpdates) lookupLatest(optionalRound basics.Round, addr basics.A
 	for {
 		currentDbRound := au.cachedDBRound
 		currentDeltaLen := len(au.deltas)
-		if optionalRound == 0 {
-			rnd = au.latest()
-		} else {
-			rnd = optionalRound
-		}
+		rnd = au.latest()
 		offset, err = au.roundOffset(rnd)
 		if err != nil {
 			return

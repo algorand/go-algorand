@@ -1502,7 +1502,7 @@ type AccountInformationParams struct {
 	// Exclude Exclude additional items from the account. Use `all` to exclude asset holdings, application local state, created asset parameters, and created application parameters. Use `created-apps-params` to exclude only the parameters of created applications (returns only application IDs). Use `created-assets-params` to exclude only the parameters of created assets (returns only asset IDs). Multiple values can be comma-separated (e.g., `created-apps-params,created-assets-params`). Note: `all` and `none` cannot be combined with other values. Defaults to `none`.
 	Exclude *[]AccountInformationParamsExclude `form:"exclude,omitempty" json:"exclude,omitempty"`
 
-	// Round Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned.
+	// Round Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned. Historical lookups require exclude=all; full account information including resources is only supported for the latest round.
 	Round *basics.Round `form:"round,omitempty" json:"round,omitempty"`
 
 	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.

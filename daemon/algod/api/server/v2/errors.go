@@ -49,5 +49,6 @@ var (
 	errRESTPayloadZeroLength                   = "payload was of zero length"
 	errRoundGreaterThanTheLatest               = "given round is greater than the latest round"
 	errRoundTooOld                             = "given round is no longer available; use a more recent round"
+	errHistoricalAccountInfoRequiresExclude    = "historical account information including resources is not supported; use exclude=all to get account totals only"
 	errFailedRetrievingTracer                  = "failed retrieving the expected tracer from ledger"
 )

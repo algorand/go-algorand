@@ -70,6 +70,9 @@ func (l *mockLedger) GetStateDeltaForRound(rnd basics.Round) (ledgercore.StateDe
 }
 
 func (l *mockLedger) LookupAccount(round basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, basics.MicroAlgos, error) {
+	if l.minRound > 0 && round < l.minRound {
+		return ledgercore.AccountData{}, 0, basics.MicroAlgos{}, &ledger.RoundOffsetError{}
+	}
 	ad, ok := l.accounts[addr]
 	if !ok { // return empty / not found
 		return ledgercore.AccountData{}, l.latest, basics.MicroAlgos{Raw: 0}, nil
@@ -82,13 +85,6 @@ func (l *mockLedger) LookupLatest(addr basics.Address) (basics.AccountData, basi
 		return basics.AccountData{}, l.latest, basics.MicroAlgos{Raw: 0}, nil
 	}
 	return ad, l.latest, basics.MicroAlgos{Raw: 0}, nil
-}
-
-func (l *mockLedger) LookupFullAccount(optionalRound basics.Round, addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error) {
-	if optionalRound != l.latest {
-		panic("not implemented")
-	}
-	return l.LookupLatest(addr)
 }
 
 func (l *mockLedger) LookupKv(round basics.Round, key string) ([]byte, error) {
@@ -141,6 +137,9 @@ func (l *mockLedger) ConsensusParams(r basics.Round) (config.ConsensusParams, er
 func (l *mockLedger) Latest() basics.Round { return l.latest }
 
 func (l *mockLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ar ledgercore.AssetResource, err error) {
+	if l.minRound > 0 && rnd < l.minRound {
+		return ledgercore.AssetResource{}, &ledger.RoundOffsetError{}
+	}
 	ad, ok := l.accounts[addr]
 	if !ok {
 		return ledgercore.AssetResource{}, nil
@@ -181,6 +180,9 @@ func (l *mockLedger) LookupAssets(addr basics.Address, assetIDGT basics.AssetInd
 }
 
 func (l *mockLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ar ledgercore.AppResource, err error) {
+	if l.minRound > 0 && rnd < l.minRound {
+		return ledgercore.AppResource{}, &ledger.RoundOffsetError{}
+	}
 	ad, ok := l.accounts[addr]
 	if !ok {
 		return ledgercore.AppResource{}, nil
@@ -253,13 +255,16 @@ func (l *mockLedger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert ag
 	panic("not implemented")
 }
 func (l *mockLedger) LatestTotals() (rnd basics.Round, at ledgercore.AccountTotals, err error) {
-	panic("not implemented")
+	return l.latest, ledgercore.AccountTotals{}, nil
 }
 func (l *mockLedger) Totals(rnd basics.Round) (ledgercore.AccountTotals, error) {
-	panic("not implemented")
+	if l.minRound > 0 && rnd < l.minRound {
+		return ledgercore.AccountTotals{}, &ledger.RoundOffsetError{}
+	}
+	return ledgercore.AccountTotals{}, nil
 }
 func (l *mockLedger) OnlineCirculation(rnd, voteRnd basics.Round) (basics.MicroAlgos, error) {
-	panic("not implemented")
+	return basics.MicroAlgos{}, nil
 }
 func (l *mockLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
 	blk, err := l.Block(rnd)
@@ -276,6 +281,24 @@ func (l *mockLedger) WaitWithCancel(r basics.Round) (chan struct{}, func()) {
 }
 func (l *mockLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (c basics.Address, ok bool, err error) {
 	panic("not implemented")
+}
+func (l *mockLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (c basics.Address, ok bool, err error) {
+	if l.minRound > 0 && rnd < l.minRound {
+		return basics.Address{}, false, &ledger.RoundOffsetError{}
+	}
+	for addr, ad := range l.accounts {
+		switch ctype {
+		case basics.AssetCreatable:
+			if _, found := ad.AssetParams[basics.AssetIndex(cidx)]; found {
+				return addr, true, nil
+			}
+		case basics.AppCreatable:
+			if _, found := ad.AppParams[basics.AppIndex(cidx)]; found {
+				return addr, true, nil
+			}
+		}
+	}
+	return basics.Address{}, false, nil
 }
 func (l *mockLedger) EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte, err error) {
 	panic("not implemented")
@@ -1415,5 +1438,218 @@ func TestGetApplicationBoxesPagination(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 400, rec.Code)
 		assert.Contains(t, rec.Body.String(), "no longer available")
+	})
+}
+
+// TestHandlersOptionalRound exercises the optional `round` query parameter on the
+// six lookup endpoints that accept it. It covers: round=0 (latest), a specific
+// historical round, a future round (must 400), and a round below available history
+// (must 400). It is parameterized over endpoints so future handlers can be added
+// without copying the harness.
+func TestHandlersOptionalRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const (
+		latest   = basics.Round(100)
+		minRound = basics.Round(50)
+		assetID  = basics.AssetIndex(7)
+		appID    = basics.AppIndex(11)
+	)
+	creator := ledgertesting.RandomAddress()
+	otherAddr := ledgertesting.RandomAddress()
+
+	setup := func() (v2.Handlers, *mockLedger) {
+		ml := &mockLedger{
+			accounts: make(map[basics.Address]basics.AccountData),
+			latest:   latest,
+			minRound: minRound,
+		}
+		ml.accounts[creator] = basics.AccountData{
+			MicroAlgos:  basics.MicroAlgos{Raw: 1_000_000},
+			AssetParams: map[basics.AssetIndex]basics.AssetParams{assetID: {Total: 1000, UnitName: "u", AssetName: "n"}},
+			Assets:      map[basics.AssetIndex]basics.AssetHolding{assetID: {Amount: 1000}},
+			AppParams:   map[basics.AppIndex]basics.AppParams{appID: {ApprovalProgram: []byte{0x06}, ClearStateProgram: []byte{0x06}}},
+		}
+		ml.accounts[otherAddr] = basics.AccountData{
+			MicroAlgos: basics.MicroAlgos{Raw: 100},
+		}
+		mockNode := makeMockNode(ml, t.Name(), nil, cannedStatusReportGolden, false)
+		dummyShutdownChan := make(chan struct{})
+		h := v2.Handlers{
+			Node:     mockNode,
+			Log:      logging.Base(),
+			Shutdown: dummyShutdownChan,
+		}
+		return h, ml
+	}
+
+	cases := []struct {
+		name string
+		// invoke calls the handler under test with the given round (nil means omit).
+		invoke func(h v2.Handlers, ctx echo.Context, round *basics.Round) error
+	}{
+		{
+			name: "AccountAssetInformation",
+			invoke: func(h v2.Handlers, ctx echo.Context, round *basics.Round) error {
+				return h.AccountAssetInformation(ctx, creator, assetID, model.AccountAssetInformationParams{Round: round})
+			},
+		},
+		{
+			name: "AccountApplicationInformation",
+			invoke: func(h v2.Handlers, ctx echo.Context, round *basics.Round) error {
+				return h.AccountApplicationInformation(ctx, creator, appID, model.AccountApplicationInformationParams{Round: round})
+			},
+		},
+		{
+			name: "GetSupply",
+			invoke: func(h v2.Handlers, ctx echo.Context, round *basics.Round) error {
+				return h.GetSupply(ctx, model.GetSupplyParams{Round: round})
+			},
+		},
+		{
+			name: "GetApplicationByID",
+			invoke: func(h v2.Handlers, ctx echo.Context, round *basics.Round) error {
+				return h.GetApplicationByID(ctx, appID, model.GetApplicationByIDParams{Round: round})
+			},
+		},
+		{
+			name: "GetAssetByID",
+			invoke: func(h v2.Handlers, ctx echo.Context, round *basics.Round) error {
+				return h.GetAssetByID(ctx, assetID, model.GetAssetByIDParams{Round: round})
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Run("OmittedReturnsLatest", func(t *testing.T) {
+				h, _ := setup()
+				ctx, rec := newReq(t)
+				require.NoError(t, tc.invoke(h, ctx, nil))
+				assert.Equal(t, 200, rec.Code, rec.Body.String())
+			})
+
+			t.Run("ZeroReturnsLatest", func(t *testing.T) {
+				h, _ := setup()
+				ctx, rec := newReq(t)
+				zero := basics.Round(0)
+				require.NoError(t, tc.invoke(h, ctx, &zero))
+				assert.Equal(t, 200, rec.Code, rec.Body.String())
+			})
+
+			t.Run("HistoricalRoundInRange", func(t *testing.T) {
+				h, _ := setup()
+				ctx, rec := newReq(t)
+				r := basics.Round(75)
+				require.NoError(t, tc.invoke(h, ctx, &r))
+				assert.Equal(t, 200, rec.Code, rec.Body.String())
+			})
+
+			t.Run("FutureRoundRejected", func(t *testing.T) {
+				h, _ := setup()
+				ctx, rec := newReq(t)
+				r := latest + 1
+				require.NoError(t, tc.invoke(h, ctx, &r))
+				assert.Equal(t, 400, rec.Code)
+				assert.Contains(t, rec.Body.String(), "greater than the latest")
+			})
+
+			t.Run("TooOldRoundRejected", func(t *testing.T) {
+				h, _ := setup()
+				ctx, rec := newReq(t)
+				r := minRound - 1
+				require.NoError(t, tc.invoke(h, ctx, &r))
+				assert.Equal(t, 400, rec.Code)
+				assert.Contains(t, rec.Body.String(), "no longer available")
+			})
+		})
+	}
+}
+
+// TestAccountInformationOptionalRound covers the AccountInformation-specific
+// round behavior: historical rounds are only supported with exclude=all (because
+// the ledger does not expose historical resource enumeration), so requesting a
+// non-zero round without exclude=all must return a 400.
+func TestAccountInformationOptionalRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const (
+		latest   = basics.Round(100)
+		minRound = basics.Round(50)
+	)
+	addr := ledgertesting.RandomAddress()
+
+	setup := func() v2.Handlers {
+		ml := &mockLedger{
+			accounts: map[basics.Address]basics.AccountData{
+				addr: {MicroAlgos: basics.MicroAlgos{Raw: 1_000_000}},
+			},
+			latest:   latest,
+			minRound: minRound,
+		}
+		mockNode := makeMockNode(ml, t.Name(), nil, cannedStatusReportGolden, false)
+		dummyShutdownChan := make(chan struct{})
+		return v2.Handlers{
+			Node:     mockNode,
+			Log:      logging.Base(),
+			Shutdown: dummyShutdownChan,
+		}
+	}
+
+	excludeAll := []model.AccountInformationParamsExclude{"all"}
+	excludeNone := []model.AccountInformationParamsExclude{"none"}
+
+	t.Run("FutureRoundRejected", func(t *testing.T) {
+		h := setup()
+		ctx, rec := newReq(t)
+		r := latest + 1
+		require.NoError(t, h.AccountInformation(ctx, addr, model.AccountInformationParams{Round: &r}))
+		assert.Equal(t, 400, rec.Code)
+		assert.Contains(t, rec.Body.String(), "greater than the latest")
+	})
+
+	t.Run("HistoricalWithoutExcludeAllRejected", func(t *testing.T) {
+		h := setup()
+		ctx, rec := newReq(t)
+		r := basics.Round(75)
+		require.NoError(t, h.AccountInformation(ctx, addr, model.AccountInformationParams{Round: &r}))
+		assert.Equal(t, 400, rec.Code)
+		assert.Contains(t, rec.Body.String(), "exclude=all")
+	})
+
+	t.Run("HistoricalWithExcludeNoneRejected", func(t *testing.T) {
+		// exclude=none is functionally equivalent to no exclude; historical is still unsupported.
+		h := setup()
+		ctx, rec := newReq(t)
+		r := basics.Round(75)
+		require.NoError(t, h.AccountInformation(ctx, addr, model.AccountInformationParams{Round: &r, Exclude: &excludeNone}))
+		assert.Equal(t, 400, rec.Code)
+		assert.Contains(t, rec.Body.String(), "exclude=all")
+	})
+
+	t.Run("HistoricalWithExcludeAllOK", func(t *testing.T) {
+		h := setup()
+		ctx, rec := newReq(t)
+		r := basics.Round(75)
+		require.NoError(t, h.AccountInformation(ctx, addr, model.AccountInformationParams{Round: &r, Exclude: &excludeAll}))
+		assert.Equal(t, 200, rec.Code, rec.Body.String())
+	})
+
+	t.Run("ExcludeAllTooOldRejected", func(t *testing.T) {
+		h := setup()
+		ctx, rec := newReq(t)
+		r := minRound - 1
+		require.NoError(t, h.AccountInformation(ctx, addr, model.AccountInformationParams{Round: &r, Exclude: &excludeAll}))
+		assert.Equal(t, 400, rec.Code)
+		assert.Contains(t, rec.Body.String(), "no longer available")
+	})
+
+	t.Run("ZeroRoundOK", func(t *testing.T) {
+		h := setup()
+		ctx, rec := newReq(t)
+		zero := basics.Round(0)
+		require.NoError(t, h.AccountInformation(ctx, addr, model.AccountInformationParams{Round: &zero}))
+		assert.Equal(t, 200, rec.Code, rec.Body.String())
 	})
 }

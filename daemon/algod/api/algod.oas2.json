@@ -202,9 +202,10 @@
           },
           {
             "type": "integer",
+            "format": "uint64",
             "x-go-type": "basics.Round",
             "minimum": 0,
-            "description": "Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned.",
+            "description": "Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned. Historical lookups require exclude=all; full account information including resources is only supported for the latest round.",
             "name": "round",
             "in": "query"
           },
@@ -257,6 +258,7 @@
           },
           {
             "type": "integer",
+            "format": "uint64",
             "x-go-type": "basics.Round",
             "minimum": 0,
             "description": "Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned.",
@@ -409,6 +411,7 @@
           },
           {
             "type": "integer",
+            "format": "uint64",
             "x-go-type": "basics.Round",
             "minimum": 0,
             "description": "Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned.",
@@ -766,6 +769,7 @@
         "parameters": [
           {
             "type": "integer",
+            "format": "uint64",
             "x-go-type": "basics.Round",
             "minimum": 0,
             "description": "Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned.",
@@ -1796,6 +1800,7 @@
           },
           {
             "type": "integer",
+            "format": "uint64",
             "x-go-type": "basics.Round",
             "minimum": 0,
             "description": "Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned.",
@@ -1994,6 +1999,7 @@
           },
           {
             "type": "integer",
+            "format": "uint64",
             "x-go-type": "basics.Round",
             "minimum": 0,
             "description": "Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned.",
