@@ -38,7 +38,9 @@ func Heartbeat(hb transactions.HeartbeatTxnFields, header transactions.Header, b
 	proto := balances.ConsensusParams()
 	headerFactor := basics.AddSaturate(header.FeeContribution(proto), 1e6)
 
-	requiredFee, _ := proto.MinFee().MulMicrosCeil(headerFactor) // MulMicrosCeil saturates
+	// Fee a normal (non-cheap) heartbeat owes, computed the same way as a
+	// top-level group: no cost multiplier (1e6), no prior residue. FeeForUsage saturates.
+	requiredFee, _, _ := proto.MinFee().FeeForUsage(headerFactor, 1e6, 0)
 	if header.Fee.LessThan(requiredFee) && header.Group.IsZero() {
 		kind := "free"
 		if !header.Fee.IsZero() {
