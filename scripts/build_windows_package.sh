@@ -77,16 +77,8 @@ for bin in "${node_bins[@]}" "${devtools_bins[@]}"; do
     cp "${src}" "${PKG_ROOT}/"
 done
 
-# node_exporter ships from a prebuilt tarball that extracts without a suffix;
-# rename it so it is executable on Windows.
-if [ -f "${GOBIN}/node_exporter.exe" ]; then
-    cp "${GOBIN}/node_exporter.exe" "${PKG_ROOT}/node_exporter.exe"
-elif [ -f "${GOBIN}/node_exporter" ]; then
-    cp "${GOBIN}/node_exporter" "${PKG_ROOT}/node_exporter.exe"
-else
-    echo "Error: node_exporter not found in ${GOBIN}"
-    exit 1
-fi
+# node_exporter is intentionally omitted: the upstream Windows build is an empty
+# stub, so it is not built (see Makefile) or shipped on Windows.
 
 # License and config example.
 cp "${REPO_DIR}/COPYING" "${PKG_ROOT}/"
