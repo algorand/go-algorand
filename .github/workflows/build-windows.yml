@@ -11,33 +11,17 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
-      - name: Install msys2
-        uses: msys2/setup-msys2@v2
-        with:
-          update: true
-          path-type: inherit
       - name: Check out code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Set up Go
-        uses: ./.github/actions/setup-go
-      - name: Restore libsodium from cache
-        id: cache-libsodium
-        uses: actions/cache@v4
-        with:
-          path: crypto/libs
-          key: libsodium-fork-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('crypto/libsodium-fork/**') }}
+      - name: Setup Windows build environment
+        uses: ./.github/actions/setup-windows-build
       - name: Build
         run: |
           export ALGORAND_DEADLOCK=enable
           export SKIP_GO_INSTALLATION=True
           scripts/travis/build_test.sh
-      # - name: Upload artifact to Github
-      #   uses: actions/upload-artifact@v2
-      #   with:
-      #     if-no-files-found: error
-      #     path: $(git ls-files -o | grep -v crypto/libs | grep -v crypto/copies | grep -v crypto/libsodium-fork | grep -v crypto/lib/ | grep -v ^gen/ | grep -v swagger.json.validated | tr "\n" ":")
       - name: Slack Notification
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

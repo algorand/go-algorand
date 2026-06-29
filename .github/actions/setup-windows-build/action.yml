@@ -1,0 +1,21 @@
+name: 'Setup Windows Build Environment'
+description: 'Set up msys2, Go, and libsodium for native Windows builds'
+runs:
+  using: 'composite'
+  steps:
+    - name: Install msys2
+      uses: msys2/setup-msys2@v2
+      with:
+        update: true
+        path-type: inherit
+    - name: Set up Go
+      uses: ./.github/actions/setup-go
+    - name: Restore libsodium from cache
+      id: cache-libsodium
+      uses: actions/cache@v4
+      with:
+        path: crypto/libs
+        key: libsodium-fork-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('crypto/libsodium-fork/**') }}
+    - name: Build libsodium
+      shell: msys2 {0}
+      run: make libsodium
