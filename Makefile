@@ -320,7 +320,14 @@ rebuild_kmd_swagger:
 build: buildsrc buildsrc-special
 
 
-buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN
+# node_exporter ships only as an empty stub on Windows, and its extraction recipe
+# assumes a Unix-style GOBIN path; skip it there.
+NODE_EXPORTER_DEP := node_exporter
+ifeq ($(OS_TYPE),windows)
+NODE_EXPORTER_DEP :=
+endif
+
+buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a $(NODE_EXPORTER_DEP) NONGO_BIN
 	$(GO_INSTALL) -trimpath $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
 buildsrc-special:
