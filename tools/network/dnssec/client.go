@@ -25,6 +25,11 @@ import (
 	"github.com/miekg/dns"
 )
 
+// ednsUDPBufferSize is the EDNS0 UDP payload size advertised to DNS servers. Per DNS Flag
+// Day 2020, 1232 bytes keeps responses below the common path MTU to avoid IP fragmentation;
+// larger responses come back truncated (or are dropped) and are retried over TCP by queryServer.
+const ednsUDPBufferSize = 1232
+
 // Querier provides a method for getting RRSet and RRSig from DNSSEC-aware server
 type Querier interface {
 	QueryRRSet(ctx context.Context, domain string, qtype uint16) ([]dns.RR, []dns.RRSIG, error)
@@ -88,9 +93,7 @@ func (r *dnsClient) query(ctx context.Context, name string, qtype uint16) (resp 
 	msg := new(dns.Msg)
 	msg.RecursionDesired = true
 	msg.SetQuestion(name, qtype)
-	// Conservative EDNS0 UDP buffer (DNS Flag Day 2020): larger sizes invite
-	// fragmented responses that get dropped, defeating the truncation/TCP retry.
-	msg.SetEdns0(1232, true)
+	msg.SetEdns0(ednsUDPBufferSize, true)
 
 	var errs []error
 	for _, server := range r.servers {

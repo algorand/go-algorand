@@ -182,7 +182,7 @@ func TestQueryAdvertisesReducedEDNSBuffer(t *testing.T) {
 	c := &dnsClient{servers: []ResolverAddress{ResolverAddress(addr)}, readTimeout: 2 * time.Second, transport: qsi{}}
 	_, err := c.query(context.Background(), "example.com", dns.TypeA)
 	a.NoError(err)
-	a.Equal(uint32(1232), got.Load())
+	a.Equal(uint32(ednsUDPBufferSize), got.Load())
 }
 
 // When every server attempt errors, the failure surfaces the underlying cause.
