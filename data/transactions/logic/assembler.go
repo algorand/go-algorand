@@ -2252,6 +2252,9 @@ func (ops *OpStream) finalizeProgram() ([]byte, int, *sourceError) {
 
 func (ops *OpStream) shouldAutoSalt(program []byte) bool {
 	if ops.autoSalt == autoSaltOff {
+		if !ops.HasStatefulOps && ProgramHashIsEdwards25519Point(program) {
+			ops.warn(ops.autoSaltToken, "#pragma autosalt false leaves program hash on curve")
+		}
 		return false
 	}
 	if ops.autoSalt == autoSaltOn {
@@ -2260,10 +2263,11 @@ func (ops *OpStream) shouldAutoSalt(program []byte) bool {
 		}
 		return ProgramHashIsEdwards25519Point(program)
 	}
-	if ops.HasStatefulOps {
-		return false
-	}
-	return ops.Version >= LogicSigOffCurveVersion && ProgramHashIsEdwards25519Point(program)
+	return defaultAutoSaltApplies(ops.Version, ops.HasStatefulOps, program)
+}
+
+func defaultAutoSaltApplies(version uint64, hasStatefulOps bool, program []byte) bool {
+	return version >= LogicSigOffCurveVersion && !hasStatefulOps && ProgramHashIsEdwards25519Point(program)
 }
 
 // TODO: should ops.intc reflect the salted intcblock that ends up
@@ -3402,7 +3406,7 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 func finalizeDisassemblyWithPragmas(version uint64, program []byte, body string, ds *disInfo) string {
 	header := strings.Builder{}
 	fmt.Fprintf(&header, "#pragma version %d\n", version)
-	if version >= LogicSigOffCurveVersion && !ds.hasStatefulOps && ProgramHashIsEdwards25519Point(program) {
+	if defaultAutoSaltApplies(version, ds.hasStatefulOps, program) {
 		fmt.Fprintf(&header, "#pragma autosalt false\n")
 	}
 	headerLen := header.Len()

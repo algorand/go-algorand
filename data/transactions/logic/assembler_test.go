@@ -898,6 +898,10 @@ const onCurveStatelessAutosaltTrueV12Source = `#pragma version 12
 #pragma autosalt true
 pushint 1`
 
+const onCurveStatelessAutosaltFalseV12Source = `#pragma version 12
+#pragma autosalt false
+pushint 1`
+
 const onCurveStatelessAutosaltFalseV13Source = `#pragma version 13
 #pragma autosalt false
 pushint 12`
@@ -916,10 +920,18 @@ app_global_get
 pop
 pushint 1`
 
+const onCurveStatefulAutosaltFalseV13Source = `#pragma version 13
+#pragma autosalt false
+byte 0x01
+app_global_get
+pop
+pushint 0`
+
 func TestPragmaAutosalt(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	const statefulAutosaltWarning = "#pragma autosalt true used with stateful opcodes"
+	const onCurveLogicSigWarning = "#pragma autosalt false leaves program hash on curve"
 
 	tests := []struct {
 		name                         string
@@ -942,10 +954,18 @@ func TestPragmaAutosalt(t *testing.T) {
 			wantSaltAdded:              true,
 		},
 		{
+			name:                       "false warns older versions on curve logicsig",
+			source:                     onCurveStatelessAutosaltFalseV12Source,
+			wantUnsaltedProgramOnCurve: true,
+			wantSaltAdded:              false,
+			wantWarning:                onCurveLogicSigWarning,
+		},
+		{
 			name:                         "false opts v13 out",
 			source:                       onCurveStatelessAutosaltFalseV13Source,
 			wantUnsaltedProgramOnCurve:   true,
 			wantSaltAdded:                false,
+			wantWarning:                  onCurveLogicSigWarning,
 			wantDisassemblyAutosaltFalse: true,
 		},
 		{
@@ -960,6 +980,12 @@ func TestPragmaAutosalt(t *testing.T) {
 			source:        offCurveStatefulAutosaltTrueV13Source,
 			wantSaltAdded: false,
 			wantWarning:   statefulAutosaltWarning,
+		},
+		{
+			name:                       "false does not warn on stateful program",
+			source:                     onCurveStatefulAutosaltFalseV13Source,
+			wantUnsaltedProgramOnCurve: true,
+			wantSaltAdded:              false,
 		},
 	}
 
