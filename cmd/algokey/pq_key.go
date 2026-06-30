@@ -248,14 +248,14 @@ func resolvePQSalt(public pqPublicMaterial, saltValue string) (pqPublicMaterial,
 	return publicMaterialFromFields(public.scheme, salt, public.pk)
 }
 
-// writePQMnemonicFile writes a self-describing mnemonic file: a "Scheme: <tag>"
+// writePQMnemonicFile writes a self-describing mnemonic file: a "Scheme: <scheme>"
 // header line followed by the 25-word phrase encoding the root entropy.
 func writePQMnemonicFile(filename string, scheme protocol.PQScheme, entropy crypto.Seed) error {
 	mnemonic, err := mnemonicFromSeed(entropy)
 	if err != nil {
 		return err
 	}
-	data := []byte(fmt.Sprintf("%s %s\n%s\n", pqMnemonicSchemeHeader, scheme, mnemonic))
+	data := []byte(fmt.Sprintf("%s %s\n%s\n", pqMnemonicSchemeHeader, formatPQScheme(scheme), mnemonic))
 	return writeNewFile(filename, data, 0600)
 }
 

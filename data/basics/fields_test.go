@@ -66,7 +66,6 @@ func TestBlockFields(t *testing.T) {
 		reflectionhelpers.TypePath{}.AddField("BlockHeader").AddField("UpgradeState").AddField("CurrentProtocol"),
 		reflectionhelpers.TypePath{}.AddField("BlockHeader").AddField("UpgradeState").AddField("NextProtocol"),
 		reflectionhelpers.TypePath{}.AddField("BlockHeader").AddField("UpgradeVote").AddField("UpgradePropose"),
-		reflectionhelpers.TypePath{}.AddField("Payset").AddValue().AddField("SignedTxnWithAD").AddField("SignedTxn").AddField("PQSig").AddField("Scheme"),
 		reflectionhelpers.TypePath{}.AddField("Payset").AddValue().AddField("SignedTxnWithAD").AddField("SignedTxn").AddField("Txn").AddField("Type"),
 		reflectionhelpers.TypePath{}.AddField("Payset").AddValue().AddField("SignedTxnWithAD").AddField("SignedTxn").AddField("Txn").AddField("Header").AddField("GenesisID"),
 		reflectionhelpers.TypePath{}.AddField("Payset").AddValue().AddField("SignedTxnWithAD").AddField("SignedTxn").AddField("Txn").AddField("AssetConfigTxnFields").AddField("AssetParams").AddField("UnitName"),

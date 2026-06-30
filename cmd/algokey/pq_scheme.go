@@ -19,6 +19,7 @@ package main
 import (
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -27,6 +28,7 @@ import (
 )
 
 const pqKeyEntropySize = crypto.DigestSize
+const pqSchemeFalcon1024Name = "falcon-1024"
 
 // pqSchemeOps holds the signing-side, private-key operations for one PQ
 // scheme. The consensus-relevant scheme behavior (public key validation,
@@ -45,12 +47,24 @@ var pqSchemeOpsByScheme = map[protocol.PQScheme]pqSchemeOps{
 }
 
 func parsePQScheme(value string) (protocol.PQScheme, error) {
+	value = strings.TrimSpace(value)
+	if strings.EqualFold(value, pqSchemeFalcon1024Name) {
+		return protocol.PQSchemeFalcon1024, nil
+	}
+
 	var scheme protocol.PQScheme
 	if len(value) != len(scheme) {
 		return protocol.PQScheme{}, fmt.Errorf("%w: %q", basics.ErrPQSchemeNotSupported, value)
 	}
 	copy(scheme[:], value)
 	return scheme, nil
+}
+
+func formatPQScheme(scheme protocol.PQScheme) string {
+	if scheme == protocol.PQSchemeFalcon1024 {
+		return pqSchemeFalcon1024Name
+	}
+	return scheme.String()
 }
 
 func generatePQRoot(scheme protocol.PQScheme, rng crypto.RNG) (pqRootMaterial, error) {

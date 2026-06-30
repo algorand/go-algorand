@@ -162,6 +162,19 @@ func TestPQSchemeRegistriesConsistent(t *testing.T) {
 	}
 }
 
+func TestParsePQSchemeAcceptsLongName(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	scheme, err := parsePQScheme("falcon-1024")
+	require.NoError(t, err)
+	require.Equal(t, protocol.PQSchemeFalcon1024, scheme)
+
+	scheme, err = parsePQScheme("f1")
+	require.NoError(t, err)
+	require.Equal(t, protocol.PQSchemeFalcon1024, scheme)
+}
+
 func TestPQPrivateRootFileStoresOnlySchemeAndEntropy(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -315,12 +328,12 @@ func TestPQMnemonicFileRecordsSchemeAndRejectsUnknown(t *testing.T) {
 	// The exported file records the scheme so it travels with the phrase.
 	contents, err := os.ReadFile(mnemonicFile)
 	require.NoError(t, err)
-	require.Contains(t, string(contents), "Scheme: "+protocol.PQSchemeFalcon1024.String())
+	require.Contains(t, string(contents), "Scheme: falcon-1024")
 
 	// An unknown scheme in the header is rejected, never silently deriving a
 	// different key.
 	badFile := filepath.Join(tempDir, "bad.mnemonic")
-	badContents := strings.Replace(string(contents), "Scheme: f1", "Scheme: zz", 1)
+	badContents := strings.Replace(string(contents), "Scheme: falcon-1024", "Scheme: zz", 1)
 	require.NoError(t, os.WriteFile(badFile, []byte(badContents), 0600))
 	importedKeyfile := filepath.Join(tempDir, "imported.pq")
 	require.ErrorIs(t, runPQImportWithOptions(badFile, importedKeyfile, false), basics.ErrPQSchemeNotSupported)
@@ -378,6 +391,7 @@ func TestPQCommandFlagShorthands(t *testing.T) {
 	require.Empty(t, pqImportCmd.Flags().Lookup("display-mnemonic").Shorthand)
 
 	require.Equal(t, "k", pqSignCmd.Flags().Lookup("keyfile").Shorthand)
+	require.Equal(t, "m", pqSignCmd.Flags().Lookup("mnemonic").Shorthand)
 	require.Equal(t, "t", pqSignCmd.Flags().Lookup("txfile").Shorthand)
 	require.Equal(t, "o", pqSignCmd.Flags().Lookup("outfile").Shorthand)
 	require.Equal(t, "s", pqSignCmd.Flags().Lookup("salt").Shorthand)
@@ -442,6 +456,35 @@ func TestPQSignProducesVerifiablePQEnvelope(t *testing.T) {
 	changed := signed
 	changed.Txn.Note = []byte("changed")
 	require.ErrorContains(t, changed.PQSig.Verify(config.Consensus[protocol.ConsensusFuture], changed.Txn, changed.Authorizer()), "invalid falcon-1024 signature")
+}
+
+func TestPQSignAcceptsMnemonic(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	root := pqTestRoot(t, 0)
+	mnemonic, err := mnemonicFromSeed(root.entropy)
+	require.NoError(t, err)
+
+	tempDir := t.TempDir()
+	txfile := filepath.Join(tempDir, "txn.msgp")
+	outfile := filepath.Join(tempDir, "signed.msgp")
+	stxn := pqTestTxn(root.public.addr)
+	require.NoError(t, os.WriteFile(txfile, protocol.Encode(&stxn), 0600))
+
+	require.NoError(t, runPQSignWithOptions(pqSignOptions{
+		mnemonic: mnemonic,
+		txfile:   txfile,
+		outfile:  outfile,
+		salt:     "canonical",
+	}))
+
+	signedBytes, err := os.ReadFile(outfile)
+	require.NoError(t, err)
+	var signed transactions.SignedTxn
+	require.NoError(t, protocol.Decode(signedBytes, &signed))
+	require.Equal(t, root.public.pk, signed.PQSig.PublicKey)
+	require.NoError(t, signed.PQSig.Verify(config.Consensus[protocol.ConsensusFuture], signed.Txn, signed.Authorizer()))
 }
 
 func TestPQSignRejectsEmptyInputFile(t *testing.T) {

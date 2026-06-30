@@ -1182,7 +1182,7 @@ func makePQSignedTxnWithAddressCompliance(t *testing.T, compliant bool) transact
 
 	signature, err := signer.Sign(txn)
 	require.NoError(t, err)
-	pqSig.Signature = slices.Clone(signature)
+	pqSig.Signature = signature
 
 	return transactions.SignedTxn{
 		Txn:   txn,
