@@ -852,10 +852,14 @@ func (m *mockedLedger) LookupAgreement(basics.Round, basics.Address) (basics.Onl
 }
 
 func (m *mockedLedger) IsWritingCatchpointDataFile() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.writingCatchpoint
 }
 
 func (m *mockedLedger) IsBehindCommittingDeltas() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.behindDeltas
 }
 

@@ -241,7 +241,7 @@ var (
 	errCatchupNoPeer            = errors.New("no peer available to fetch from")
 	errCatchupWritingCatchpoint = errors.New("stopping to write catchpoint file")
 	errCatchupBehindDeltas      = errors.New("stopping: ledger behind committing deltas")
-	errCatchupStopping          = errors.New("catchup service stopping or round unsupported")
+	errCatchupStopping          = errors.New("catchup service stopping")
 )
 
 // function scope to make a bunch of defer statements better
@@ -280,12 +280,13 @@ func (s *Service) innerFetch(ctx context.Context, r basics.Round, peer network.P
 const errNoBlockForRoundThreshold = 5
 
 // fetchAndWrite fetches a block, checks the cert, and writes it to the ledger. Cert checking and ledger writing both wait for the ledger to advance if necessary.
-// Returns false if we should stop trying to catch up.  This may occur for several reasons:
-//   - If the context is canceled (e.g. if the node is shutting down)
-//   - If we couldn't fetch the block (e.g. if there are no peers available, or we've reached the catchupRetryLimit)
-//   - If the block is already in the ledger (e.g. if agreement service has already written it)
-//   - If the retrieval of the previous block was unsuccessful
-//   - If block evaluation panicked and was recovered (an unrecoverable defect; see ledgercore.EvalPanicError)
+// It returns nil when catchup should continue: the block was written, or a historical block was already present and needed no re-evaluation.
+// It returns a non-nil exit reason when catchup should stop for this round. This may occur for several reasons:
+//   - The context was canceled (e.g. the node is shutting down): the context error.
+//   - The block could not be fetched, e.g. no peers are available or we reached catchupRetryLimit: errCatchupNoPeer, errFetchNoBlock, or errFetchRetryLimit.
+//   - The block is already in the ledger (e.g. agreement service wrote it first), so catchup is complete: errLedgerAlreadyHasBlock.
+//   - Block evaluation panicked and was recovered (an unrecoverable defect; see ledgercore.EvalPanicError).
+//   - The block failed validation, or the ledger write otherwise failed: a wrapped error describing the failure.
 func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCompleteChan chan struct{}, lookbackComplete chan struct{}, peerSelector peerSelector) error {
 	// If sync-ing this round is not intended, don't fetch it
 	if dontSyncRound := s.GetDisableSyncRound(); dontSyncRound != 0 && r >= basics.Round(dontSyncRound) {
@@ -328,7 +329,7 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 				}
 			}
 			if lastErr != nil {
-				return fmt.Errorf("%w: last error %v", errFetchRetryLimit, lastErr)
+				return fmt.Errorf("%w: last error %w", errFetchRetryLimit, lastErr)
 			}
 			return errFetchRetryLimit
 		}
@@ -336,7 +337,7 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 		psp, getPeerErr := peerSelector.getNextPeer()
 		if getPeerErr != nil {
 			s.log.Debugf("fetchAndWrite(%d): was unable to obtain a peer to retrieve the block from: %v", r, getPeerErr)
-			return fmt.Errorf("fetchAndWrite(%d): no peer available: %w", r, getPeerErr)
+			return fmt.Errorf("fetchAndWrite(%d): %w: %w", r, errCatchupNoPeer, getPeerErr)
 		}
 		peer := psp.Peer
 		s.log.Debugf("fetchAndWrite(%d): got %s peer: %s", r, psp.peerClass, peerAddress(peer))
@@ -534,7 +535,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) error {
 	ps := createPeerSelector(s.net)
 	if _, err := ps.getNextPeer(); err != nil {
 		s.log.Debugf("pipelinedFetch: was unable to obtain a peer to retrieve the block from: %v", err)
-		return fmt.Errorf("%w: %v", errCatchupNoPeer, err)
+		return fmt.Errorf("%w: %w", errCatchupNoPeer, err)
 	}
 
 	// Create a new context for canceling the pipeline if some block
@@ -620,7 +621,9 @@ func (s *Service) pipelinedFetch(seedLookback uint64) error {
 
 		case <-s.ctx.Done():
 			s.log.Debugf("pipelinedFetch: Aborted (firstRound=%d, nextRound=%d)", firstRound, nextRound)
-			return errCatchupStopping
+			// Wrap ctx.Err() so the specific cause (cancellation vs deadline) is
+			// preserved alongside the errCatchupStopping category in the exit log.
+			return fmt.Errorf("%w: %w", errCatchupStopping, s.ctx.Err())
 		}
 	}
 }
@@ -770,6 +773,9 @@ func (s *Service) sync() {
 		Time:       elapsedTime,
 		InitSync:   initSync,
 	})
+	// exitReason is informational. The common, healthy terminus of a catchup span is the
+	// leading-edge fetch finding no block once we reach the tip (errFetchNoBlock /
+	// errFetchRetryLimit), so a fetch-stall reason here is expected and does not indicate a fault.
 	s.log.Infof("Catchup Service: finished catching up, now at round %v (previously %v). Total time catching up %v (exit: %v).", s.ledger.LastRound(), pr, elapsedTime, exitReason)
 }
 
