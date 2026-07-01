@@ -132,7 +132,9 @@ func txnHasNoSignature(txn transactions.SignedTxn) bool {
 
 // IsPlaceholderPQSig reports whether txn carries a placeholder PQSig:
 // a non-blank PQ envelope with empty signature bytes and no other signature
-// category set.
+// category set. There are two placeholders forms:
+// - Scheme-only placeholder: Scheme set, PublicKey empty, Signature empty, for fee surcharge calculation
+// - Full placeholder: Scheme, Salt, and PublicKey set, Signature empty, for authorizer address derivation
 func IsPlaceholderPQSig(txn transactions.SignedTxn) bool {
 	return txn.Sig.Blank() && txn.Msig.Blank() && txn.Lsig.Blank() &&
 		!txn.PQSig.Blank() && len(txn.PQSig.Signature) == 0
@@ -186,8 +188,7 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 			txnsToVerify[i] = stxn.Txn.Sign(proxySignerSecrets)
 		} else if overrides.AllowEmptySignatures && IsPlaceholderPQSig(stxn) && protoKnown {
 			placeholderErr := stxn.PQSig.ValidateScheme(proto)
-			if len(stxn.PQSig.PublicKey) != 0 {
-				// Full placeholders carry a public key, so keep the authorizer match.
+			if len(stxn.PQSig.PublicKey) != 0 && !overrides.FixSigners {
 				placeholderErr = stxn.PQSig.ValidateEnvelope(proto, stxn.Authorizer())
 			}
 			if placeholderErr == nil {
@@ -206,6 +207,20 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 		err = InvalidRequestError{SimulatorError{err}}
 	}
 	return err
+}
+
+func validateFixedPlaceholderPQEnvelopes(proto config.ConsensusParams, txgroup []transactions.SignedTxnWithAD) (int, error) {
+	for i, stxnad := range txgroup {
+		stxn := stxnad.SignedTxn
+		// Scheme-only placeholders only price the fee surcharge; full placeholders also need the authorizer check.
+		if !IsPlaceholderPQSig(stxn) || len(stxn.PQSig.PublicKey) == 0 {
+			continue
+		}
+		if err := stxn.PQSig.ValidateEnvelope(proto, stxn.Authorizer()); err != nil {
+			return i, fmt.Errorf("pq signature validation failed: %w", err)
+		}
+	}
+	return -1, nil
 }
 
 func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, group []transactions.SignedTxnWithAD, tracer logic.EvalTracer) (*ledgercore.ValidatedBlock, error) {
@@ -296,7 +311,22 @@ func (s Simulator) simulateWithTracer(hdr bookkeeping.BlockHeader, txgroup []tra
 	}
 
 	vb, err := s.evaluate(hdr, txgroup, tracer)
-	return vb, err
+	if err != nil {
+		return vb, err
+	}
+	// Full PQ placeholders need the final AuthAddr after FixSigners has run through evaluation.
+	if overrides.AllowEmptySignatures && overrides.FixSigners {
+		if proto, ok := config.Consensus[hdr.CurrentProtocol]; ok {
+			idx, err := validateFixedPlaceholderPQEnvelopes(proto, txgroup)
+			if err != nil {
+				if evalTracer, ok := tracer.(*evalTracer); ok {
+					evalTracer.failedAt = TxnPath{idx}
+				}
+				return nil, EvalFailureError{SimulatorError{err}}
+			}
+		}
+	}
+	return vb, nil
 }
 
 // Simulate simulates a transaction group using the simulator. Will error if the transaction group is not well-formed.

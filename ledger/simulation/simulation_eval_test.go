@@ -6590,6 +6590,36 @@ func makePlaceholderPQFixSignersGroup(t *testing.T, env simulationtesting.Enviro
 	return txgroup, pqAuthorizer
 }
 
+func makeAppThenPlaceholderPQFixSignersGroup(t *testing.T, env *simulationtesting.Environment, pqAuthorizer basics.Address, pqSig transactions.PQSig) []transactions.SignedTxn {
+	t.Helper()
+
+	sender := env.Accounts[0]
+	appCaller := env.Accounts[1]
+	appID := env.CreateApp(appCaller.Addr, simulationtesting.AppParams{
+		ApprovalProgram:   "#pragma version 2\nint 1",
+		ClearStateProgram: "#pragma version 2\nint 1",
+	})
+	env.Rekey(sender.Addr, pqAuthorizer)
+
+	minFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
+	appCall := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        appCaller.Addr,
+		ApplicationID: appID,
+		Fee:           minFee,
+	})
+	pqPay := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Addr,
+		Receiver: sender.Addr,
+		Fee:      minFee * 3,
+	})
+	txgroup := txntest.Group(&appCall, &pqPay)
+	txgroup[0] = txgroup[0].Txn.Sign(appCaller.Sk)
+	txgroup[1].PQSig = pqSig
+	return txgroup
+}
+
 func TestPlaceholderPQSignatures(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -6703,6 +6733,65 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 				},
 			}
 		})
+	})
+
+	t.Run("FixSigners validates full placeholder after app signer fix", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			pqAuthorizer, pqSig := makePlaceholderPQSigForSimulation(t, 3)
+			txgroup := makeAppThenPlaceholderPQFixSignersGroup(t, &env, pqAuthorizer, pqSig)
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{txgroup},
+					AllowEmptySignatures: true,
+					FixSigners:           true,
+				},
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+						FixSigners:           true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							Txns: []simulation.TxnResult{
+								{
+									AppBudgetConsumed: ignoreAppBudgetConsumed,
+									FeesPaid:          txgroup[0].Txn.Fee,
+								},
+								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: pqAuthorizer},
+							},
+							AppBudgetAdded:    700,
+							AppBudgetConsumed: ignoreAppBudgetConsumed,
+							GroupUsage:        4e6,
+							GroupFeesPaid:     basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
+						},
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("FixSigners rejects full placeholder mismatch after app signer fix", func(t *testing.T) {
+		t.Parallel()
+		env := simulationtesting.PrepareSimulatorTest(t)
+		defer env.Close()
+
+		pqAuthorizer, pqSig := makePlaceholderPQSigForSimulation(t, 4)
+		pqSig.Salt ^= 1
+		txgroup := makeAppThenPlaceholderPQFixSignersGroup(t, &env, pqAuthorizer, pqSig)
+
+		result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+			TxnGroups:            [][]transactions.SignedTxn{txgroup},
+			AllowEmptySignatures: true,
+			FixSigners:           true,
+		})
+		require.NoError(t, err)
+		require.Contains(t, result.TxnGroups[0].FailureMessage, "pq signature authorizer mismatch")
+		require.Equal(t, simulation.TxnPath{1}, result.TxnGroups[0].FailedAt)
+		require.Nil(t, result.Block)
 	})
 
 	t.Run("scheme-only placeholder pays PQ surcharge", func(t *testing.T) {
