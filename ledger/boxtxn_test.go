@@ -927,11 +927,18 @@ func testNewAppBoxCreate(t *testing.T, requestedTealVersion int) {
 //	route: "viaX" calls Applications 1 (a foreign app) forwarding Applications 2,3
 //	       "direct" calls Applications 2 forwarding Applications 3
 //
-// A separate ["optin"] invocation opts A into FamilyBoxAccess and creates "b".
+// A separate ["optin"] invocation opts A into FamilyBoxAccess and creates "b",
+// and ["optout"] turns both box-sharing flags back off.
 var familyInitiator = main(`
-  txn ApplicationArgs 0; byte "optin"; ==; bz nosetup
+  txn ApplicationArgs 0; byte "optin"; ==; bz notoptin
     int 1; app_params_set AppFamilyBoxAccess
     byte "b"; int 4; box_create; assert
+    b done
+  notoptin:
+
+  txn ApplicationArgs 0; byte "optout"; ==; bz nosetup
+    int 0; app_params_set AppFamilyBoxAccess
+    int 0; app_params_set AppForeignBoxReads
     b done
   nosetup:
 
@@ -971,13 +978,13 @@ var familyForeign = main(`
   itxn_submit
 `)
 
-// familyWriter (app C) writes box "b" owned by Applications 1 (app A).
-var familyWriter = main(`
+// crossWriter (app C) writes box "b" owned by Applications 1 (app A).
+var crossWriter = main(`
   byte "b"; int 0; byte "CC"; txn Applications 1; app_box_replace
 `)
 
-// familyReader (app C) reads box "b" owned by Applications 1 (app A).
-var familyReader = main(`
+// crossReader (app C) reads box "b" owned by Applications 1 (app A).
+var crossReader = main(`
   byte "b"; txn Applications 1; app_box_get; assert; pop
 `)
 
@@ -998,8 +1005,8 @@ func TestFamilyBoxReentrancy(t *testing.T) {
 
 		a := dl.fundedApp(addrs[0], 1_000_000, familyInitiator) // family, box owner
 		x := dl.fundedApp(addrs[1], 1_000_000, familyForeign)   // foreign (different creator)
-		cw := dl.fundedApp(addrs[0], 1_000_000, familyWriter)   // family, writes A's box
-		cr := dl.fundedApp(addrs[0], 1_000_000, familyReader)   // family, reads A's box
+		cw := dl.fundedApp(addrs[0], 1_000_000, crossWriter)    // family, writes A's box
+		cr := dl.fundedApp(addrs[0], 1_000_000, crossReader)    // family, reads A's box
 
 		// A opts into FamilyBoxAccess and creates its box "b".
 		dl.txn(&txntest.Txn{
@@ -1044,6 +1051,114 @@ func TestFamilyBoxReentrancy(t *testing.T) {
 		// Intra-family (no foreign frame): A writes, A->C directly, C writes A's
 		// box. Allowed: the family is co-designed and trusts itself.
 		dl.txn(call("write", "direct", cw))
+	})
+}
+
+// flagBoxOwner (app A) creates its box "b" and opts into the box-sharing flag
+// named by ApplicationArgs 0: "foreign" sets ForeignBoxReads, "family" sets
+// FamilyBoxAccess, anything else leaves both off.
+var flagBoxOwner = main(`
+  byte "b"; int 4; box_create; pop
+  txn ApplicationArgs 0; byte "foreign"; ==; bz tryfamily
+    int 1; app_params_set AppForeignBoxReads
+    b done
+ tryfamily:
+  txn ApplicationArgs 0; byte "family"; ==; bz tryoptout
+    int 1; app_params_set AppFamilyBoxAccess
+ tryoptout:
+  txn ApplicationArgs 0; byte "optout"; ==; bz done
+    int 0; app_params_set AppForeignBoxReads
+    int 0; app_params_set AppFamilyBoxAccess
+ done:
+`)
+
+// TestForeignBoxAccess checks the cross-creator permission gating in
+// authorizeBoxAccess. It reuses familyReader/familyWriter, which read/write box
+// "b" owned by Applications 1.
+func TestForeignBoxAccess(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// addrs[0] creates the box owners; addrs[1] creates the callers, so the
+	// callers are outside the owners' family (a different creator).
+	ledgertesting.TestConsensusRange(t, familyBoxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		// Advance the creatable counter so app ids aren't tiny.
+		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
+		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
+
+		// One owner per flag configuration, all created by addrs[0].
+		noFlags := dl.fundedApp(addrs[0], 1_000_000, flagBoxOwner)
+		foreign := dl.fundedApp(addrs[0], 1_000_000, flagBoxOwner)
+		family := dl.fundedApp(addrs[0], 1_000_000, flagBoxOwner)
+
+		// Callers created by addrs[1] -- a different creator, so foreign to the owners.
+		reader := dl.fundedApp(addrs[1], 1_000_000, crossReader)
+		writer := dl.fundedApp(addrs[1], 1_000_000, crossWriter)
+		readerInFamily := dl.fundedApp(addrs[0], 1_000_000, crossReader)
+		writerInFamily := dl.fundedApp(addrs[0], 1_000_000, crossWriter)
+
+		// setup makes an owner create box "b" and opt into the named flag.
+		setup := func(owner basics.AppIndex, flag string) *txntest.Txn {
+			return &txntest.Txn{
+				Type:            "appl",
+				Sender:          addrs[0],
+				ApplicationID:   owner,
+				Boxes:           []transactions.BoxRef{{Name: []byte("b")}},
+				ApplicationArgs: [][]byte{[]byte(flag)},
+			}
+		}
+		dl.txn(setup(noFlags, "none"))
+		dl.txn(setup(foreign, "foreign"))
+		dl.txn(setup(family, "family"))
+
+		// access invokes a caller against owner's box "b" (Applications 1 == owner,
+		// box ref index 1 == owner).
+		access := func(caller, owner basics.AppIndex) *txntest.Txn {
+			return &txntest.Txn{
+				Type:          "appl",
+				Sender:        addrs[1],
+				ApplicationID: caller,
+				ForeignApps:   []basics.AppIndex{owner},
+				Boxes:         []transactions.BoxRef{{Index: 1, Name: []byte("b")}},
+			}
+		}
+
+		const noRead = "does not permit foreign reads"
+		const noWrite = "does not permit foreign writes"
+
+		// No flags: a foreign app (whether in family or not) may not read or write the box.
+		dl.txn(access(reader, noFlags), noRead)
+		dl.txn(access(writer, noFlags), noWrite)
+		dl.txn(access(readerInFamily, noFlags), noRead)
+		dl.txn(access(writerInFamily, noFlags), noWrite)
+
+		// ForeignBoxReads: a foreign app may read but not write, again, no regard for family
+		dl.txn(access(reader, foreign))
+		dl.txn(access(writer, foreign), noWrite)
+		dl.txn(access(readerInFamily, foreign))
+		dl.txn(access(writerInFamily, foreign), noWrite)
+
+		// FamilyBoxAccess with a different creator confers nothing: the caller
+		// is not in the family, so a foreign write is still denied. Infamily
+		// can read and write.
+		dl.txn(access(reader, family), noRead)
+		dl.txn(access(writer, family), noWrite)
+		dl.txn(access(readerInFamily, family))
+		dl.txn(access(writerInFamily, family))
+
+		// optout turns off both flags
+		dl.txn(setup(foreign, "optout"))
+		dl.txn(setup(family, "optout"))
+
+		// Everything that was allowed isn't anymore
+		dl.txn(access(reader, foreign), noRead)
+		dl.txn(access(readerInFamily, foreign), noRead)
+		dl.txn(access(readerInFamily, family), noRead)
+		dl.txn(access(writerInFamily, family), noWrite)
 	})
 }
 
