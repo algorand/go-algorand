@@ -1048,7 +1048,7 @@ params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return:
 | 9 | AppVersion | uint64 | v12  | Version of the app, incremented each time the approval or clear program changes |
 | 10 | AppSizeSponsor | address | v13  | If non-zero, this account is responsible for the app's extra pages and global state balance requirement |
 | 11 | AppForeignBoxReads | bool | v13  | This app's boxes may be read by any app |
-| 12 | AppFamilyBoxAccess | bool | v13  | This app's boxes may be read and written by any app with the same creator |
+| 12 | AppFamilyBoxAccess | bool | v13  | This app's boxes may be read and written by any app (existing or future) with the same creator |
 
 params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag (1 if the application existed and 0 otherwise), value.
 

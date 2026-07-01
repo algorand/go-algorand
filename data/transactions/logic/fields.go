@@ -1487,7 +1487,7 @@ var appParamsFieldSpecs = [...]appParamsFieldSpec{
 	{AppVersion, StackUint64, 12, 0, "Version of the app, incremented each time the approval or clear program changes"},
 	{AppSizeSponsor, StackAddress, 13, 0, "If non-zero, this account is responsible for the app's extra pages and global state balance requirement"},
 	{AppForeignBoxReads, StackBoolean, foreignBoxVersion, foreignBoxVersion, "This app's boxes may be read by any app"},
-	{AppFamilyBoxAccess, StackBoolean, foreignBoxVersion, foreignBoxVersion, "This app's boxes may be read and written by any app with the same creator"},
+	{AppFamilyBoxAccess, StackBoolean, foreignBoxVersion, foreignBoxVersion, "This app's boxes may be read and written by any app (existing or future) with the same creator"},
 }
 
 func appParamsFieldSpecByField(f AppParamsField) (appParamsFieldSpec, bool) {

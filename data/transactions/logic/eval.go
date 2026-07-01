@@ -1700,13 +1700,13 @@ func (cx *EvalContext) step() error {
 	if opcost <= 0 {
 		opcost = deets.Cost(cx.program, cx.pc, cx.Stack)
 		if opcost <= 0 {
-			return fmt.Errorf("%3d %s returned 0 cost", cx.pc, spec.Name)
+			return fmt.Errorf("%s returned 0 cost", spec.Name)
 		}
 	}
 
 	if opcost > cx.remainingBudget() {
-		return fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s: local program cost was %d",
-			cx.pc, spec.Name, cx.cost)
+		return fmt.Errorf("dynamic cost budget exceeded, executing %s: local program cost was %d",
+			spec.Name, cx.cost)
 	}
 
 	cx.cost += opcost

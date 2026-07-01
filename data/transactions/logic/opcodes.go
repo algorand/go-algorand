@@ -203,6 +203,9 @@ func (d *OpDetails) Cost(program []byte, pc int, stack []stackValue) int {
 	if cost != 0 {
 		return cost
 	}
+	if d.SubOpcode != 0 { // Look for immediates after SubOpcode
+		pc++
+	}
 	for i := range d.Immediates {
 		if d.Immediates[i].fieldCosts != nil {
 			lc := d.Immediates[i].fieldCosts[program[pc+1+i]]
@@ -294,19 +297,20 @@ func (d OpDetails) trust() OpDetails {
 }
 
 // subOp marks an OpSpec as belonging to a multi-byte opcode family. The
-// OpSpec.Opcode field is the prefix byte; n is the second byte. Size is set
-// to 2 (prefix + sub-opcode) with no further immediates; chain .immediates()
-// to add more.
+// OpSpec.Opcode field is the prefix byte; n is the second byte. Size is set to
+// 2 (prefix + sub-opcode) with no further immediates; If a multibyte opcode
+// ever requires immediates, ensure the resulting opcode's Size is set to
+// account for both the subop and the immediates.
 func subOp(n byte) OpDetails {
 	d := detDefault()
+	d.Size++
 	d.SubOpcode = n
-	d.Size = 2
 	return d
 }
 
 func immKinded(kind immKind, names ...string) OpDetails {
 	d := detDefault()
-	d.Size = len(names) + 1
+	d.Size += len(names)
 	d.Immediates = make([]immediate, len(names))
 	for i, name := range names {
 		d.Immediates[i] = imm(name, kind)
