@@ -122,8 +122,8 @@ func TestGetUnverifiedTransactionGroupsPQSigProofChanges(t *testing.T) {
 	require.Empty(t, unverifiedGroups)
 
 	clone := func(stxn transactions.SignedTxn) transactions.SignedTxn {
-		stxn.PQSig.PublicKey = slices.Clone(stxn.PQSig.PublicKey)
-		stxn.PQSig.Signature = slices.Clone(stxn.PQSig.Signature)
+		stxn.PQsig.PublicKey = slices.Clone(stxn.PQsig.PublicKey)
+		stxn.PQsig.Signature = slices.Clone(stxn.PQsig.Signature)
 		return stxn
 	}
 
@@ -134,25 +134,25 @@ func TestGetUnverifiedTransactionGroupsPQSigProofChanges(t *testing.T) {
 		{
 			name: "signature",
 			mutate: func(stxn *transactions.SignedTxn) {
-				stxn.PQSig.Signature[0] ^= 1
+				stxn.PQsig.Signature[0] ^= 1
 			},
 		},
 		{
 			name: "public-key",
 			mutate: func(stxn *transactions.SignedTxn) {
-				stxn.PQSig.PublicKey[0] ^= 1
+				stxn.PQsig.PublicKey[0] ^= 1
 			},
 		},
 		{
 			name: "salt",
 			mutate: func(stxn *transactions.SignedTxn) {
-				stxn.PQSig.Salt ^= 1
+				stxn.PQsig.Salt ^= 1
 			},
 		},
 		{
 			name: "scheme",
 			mutate: func(stxn *transactions.SignedTxn) {
-				stxn.PQSig.Scheme = protocol.PQScheme{'x', '1'}
+				stxn.PQsig.Scheme = protocol.PQScheme{'x', '1'}
 			},
 		},
 	}

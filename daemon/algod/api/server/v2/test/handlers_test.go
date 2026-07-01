@@ -1186,7 +1186,7 @@ func makePQSignedTxnWithAddressCompliance(t *testing.T, compliant bool) transact
 
 	return transactions.SignedTxn{
 		Txn:   txn,
-		PQSig: pqSig,
+		PQsig: pqSig,
 	}
 }
 
@@ -1268,7 +1268,7 @@ func TestPostTransactionPQAuthorizerCompliance(t *testing.T) {
 	t.Run("empty-signature", func(t *testing.T) {
 		t.Parallel()
 		stxn := makePQSignedTxnWithAddressCompliance(t, true)
-		stxn.PQSig.Signature = nil
+		stxn.PQsig.Signature = nil
 		test(t, stxn, futureStatus, http.StatusBadRequest, "transaction 0: pq signature is empty")
 	})
 	t.Run("authorizer-mismatch", func(t *testing.T) {
@@ -1280,13 +1280,13 @@ func TestPostTransactionPQAuthorizerCompliance(t *testing.T) {
 	t.Run("malformed-public-key", func(t *testing.T) {
 		t.Parallel()
 		stxn := makePQSignedTxnWithAddressCompliance(t, true)
-		stxn.PQSig.PublicKey = stxn.PQSig.PublicKey[:len(stxn.PQSig.PublicKey)-1]
+		stxn.PQsig.PublicKey = stxn.PQsig.PublicKey[:len(stxn.PQsig.PublicKey)-1]
 		test(t, stxn, futureStatus, http.StatusBadRequest, "transaction 0: pq signature authorizer mismatch")
 	})
 	t.Run("unsupported-scheme", func(t *testing.T) {
 		t.Parallel()
 		stxn := makePQSignedTxnWithAddressCompliance(t, true)
-		stxn.PQSig.Scheme = protocol.PQScheme{'x', '1'}
+		stxn.PQsig.Scheme = protocol.PQScheme{'x', '1'}
 		test(t, stxn, futureStatus, http.StatusBadRequest, "transaction 0: pq signature scheme not supported")
 	})
 	t.Run("disabled-scheme", func(t *testing.T) {
@@ -1559,7 +1559,7 @@ func TestPostSimulateTransactionPlaceholderPQSignatureValidation(t *testing.T) {
 	stxn := transactions.SignedTxn{
 		Txn:      txn,
 		AuthAddr: pqAuthorizer,
-		PQSig:    pqSig,
+		PQsig:    pqSig,
 	}
 
 	request := v2.PreEncodedSimulateRequest{
@@ -1583,7 +1583,7 @@ func TestPostSimulateTransactionPlaceholderPQSignatureValidation(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, response.TxnGroups, 1)
 	require.Len(t, response.TxnGroups[0].Txns, 1)
-	actualPQSig := response.TxnGroups[0].Txns[0].Txn.Txn.PQSig
+	actualPQSig := response.TxnGroups[0].Txns[0].Txn.Txn.PQsig
 	require.False(t, actualPQSig.Blank())
 	require.Empty(t, actualPQSig.Signature)
 	require.Equal(t, pqSig.Scheme, actualPQSig.Scheme)
@@ -1596,7 +1596,7 @@ func TestPostSimulateTransactionPlaceholderPQSignatureValidation(t *testing.T) {
 		Receiver: roots[0].Address(),
 		Fee:      minFee * 3,
 	}).SignedTxn()
-	schemeOnlyTxn.PQSig = transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024}
+	schemeOnlyTxn.PQsig = transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024}
 	request.TxnGroups[0].Txns[0] = schemeOnlyTxn
 	request.AllowEmptySignatures = true
 	req = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(protocol.EncodeReflect(&request)))
@@ -1613,7 +1613,7 @@ func TestPostSimulateTransactionPlaceholderPQSignatureValidation(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, response.TxnGroups, 1)
 	require.Len(t, response.TxnGroups[0].Txns, 1)
-	actualPQSig = response.TxnGroups[0].Txns[0].Txn.Txn.PQSig
+	actualPQSig = response.TxnGroups[0].Txns[0].Txn.Txn.PQsig
 	require.Equal(t, protocol.PQSchemeFalcon1024, actualPQSig.Scheme)
 	require.Empty(t, actualPQSig.PublicKey)
 	require.Empty(t, actualPQSig.Signature)
@@ -1630,7 +1630,7 @@ func TestPostSimulateTransactionPlaceholderPQSignatureValidation(t *testing.T) {
 	require.Contains(t, rec.Body.String(), "transaction group 0: transaction 0: pq signature is empty")
 
 	malformedStxn := stxn
-	malformedStxn.PQSig.PublicKey = malformedStxn.PQSig.PublicKey[:len(malformedStxn.PQSig.PublicKey)-1]
+	malformedStxn.PQsig.PublicKey = malformedStxn.PQsig.PublicKey[:len(malformedStxn.PQsig.PublicKey)-1]
 	request.TxnGroups[0].Txns[0] = malformedStxn
 	request.AllowEmptySignatures = true
 	req = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(protocol.EncodeReflect(&request)))
@@ -1658,7 +1658,7 @@ func TestPostSimulateTransactionPlaceholderPQSignatureValidation(t *testing.T) {
 	})
 	fixableGroup := txntest.Group(&rekeyTxn, &pqTxn)
 	fixableGroup[1].AuthAddr = roots[1].Address()
-	fixableGroup[1].PQSig = fixablePQSig
+	fixableGroup[1].PQsig = fixablePQSig
 	request = v2.PreEncodedSimulateRequest{
 		TxnGroups:            []v2.PreEncodedSimulateRequestTransactionGroup{{Txns: fixableGroup}},
 		AllowEmptySignatures: true,

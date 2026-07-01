@@ -36,7 +36,7 @@ type SignedTxn struct {
 	Sig   crypto.Signature   `codec:"sig"`
 	Msig  crypto.MultisigSig `codec:"msig"`
 	Lsig  LogicSig           `codec:"lsig"`
-	PQSig PQSig              `codec:"pq"`
+	PQsig PQSig              `codec:"pqsig"`
 
 	Txn      Transaction    `codec:"txn,required"`
 	AuthAddr basics.Address `codec:"sgnr"`
@@ -114,7 +114,7 @@ func (s SignedTxn) Authorizer() basics.Address {
 // signatureFeeContribution dispatches the fee contribution of the signature type.
 func (s SignedTxn) signatureFeeContribution() basics.Micros {
 	switch {
-	case !s.PQSig.Blank():
+	case !s.PQsig.Blank():
 		return s.pqSignatureFeeContribution()
 	default:
 		return 0
@@ -123,7 +123,7 @@ func (s SignedTxn) signatureFeeContribution() basics.Micros {
 
 // pqSignatureFeeContribution dispatches the fee contribution of the post-quantum signature scheme.
 func (s SignedTxn) pqSignatureFeeContribution() basics.Micros {
-	scheme, ok := basics.LookupPQScheme(s.PQSig.Scheme)
+	scheme, ok := basics.LookupPQScheme(s.PQsig.Scheme)
 	if !ok {
 		// If the scheme is unknown, returning a zero-fee contribution is safe because
 		// the transaction will be rejected.

@@ -107,7 +107,7 @@ func makePQSignedTxn(t *testing.T, firstSeedByte byte) transactions.SignedTxn {
 
 	return transactions.SignedTxn{
 		Txn:   txn,
-		PQSig: pqSig,
+		PQsig: pqSig,
 	}
 }
 
@@ -374,7 +374,7 @@ func TestTxnValidationPQSigWithAuthAddr(t *testing.T) {
 	stxn := transactions.SignedTxn{
 		Txn:      txn,
 		AuthAddr: pqAuthorizer,
-		PQSig:    pqSig,
+		PQsig:    pqSig,
 	}
 
 	_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
@@ -419,7 +419,7 @@ func TestTxnValidationPQSigEncodeDecode(t *testing.T) {
 	var decoded transactions.SignedTxn
 	require.NoError(t, protocol.Decode(encoded, &decoded))
 	require.Equal(t, stxn.Txn, decoded.Txn)
-	require.True(t, stxn.PQSig.Equal(decoded.PQSig))
+	require.True(t, stxn.PQsig.Equal(decoded.PQsig))
 
 	_, err := TxnGroup([]transactions.SignedTxn{decoded}, &blkHdr, nil, &dummyLedger)
 	require.NoError(t, err)
@@ -433,8 +433,8 @@ func TestTxnValidationPQSigRejectsMalformedProof(t *testing.T) {
 
 	t.Run("public-key", func(t *testing.T) {
 		stxn := makePQSignedTxn(t, 2)
-		stxn.PQSig.PublicKey = slices.Clone(stxn.PQSig.PublicKey[:len(stxn.PQSig.PublicKey)-1])
-		stxn.Txn.Sender = stxn.PQSig.AuthorizerAddress()
+		stxn.PQsig.PublicKey = slices.Clone(stxn.PQsig.PublicKey[:len(stxn.PQsig.PublicKey)-1])
+		stxn.Txn.Sender = stxn.PQsig.AuthorizerAddress()
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 		requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
@@ -443,7 +443,7 @@ func TestTxnValidationPQSigRejectsMalformedProof(t *testing.T) {
 
 	t.Run("signature", func(t *testing.T) {
 		stxn := makePQSignedTxn(t, 3)
-		stxn.PQSig.Signature = make([]byte, transactions.PQMaxSignatureSize+1)
+		stxn.PQsig.Signature = make([]byte, transactions.PQMaxSignatureSize+1)
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 		requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
@@ -1014,7 +1014,7 @@ func TestTxnGroupPQSigMixedSignatures(t *testing.T) {
 
 	t.Run("empty-pq-no-other-signature", func(t *testing.T) {
 		stxn := makePQSignedTxn(t, 4)
-		stxn.PQSig = transactions.PQSig{}
+		stxn.PQsig = transactions.PQSig{}
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 		require.ErrorIs(t, err, errTxnSigHasNoSig)

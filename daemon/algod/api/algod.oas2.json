@@ -4325,9 +4325,9 @@
       "required": true
     },
     "sig-type": {
-      "enum": ["sig", "msig", "lsig", "pq"],
+      "enum": ["sig", "msig", "lsig", "pqsig"],
       "type": "string",
-      "description": "SigType filters just results using the specified type of signature:\n* sig - Standard\n* msig - MultiSig\n* lsig - LogicSig\n* pq - Post-Quantum",
+      "description": "SigType filters just results using the specified type of signature:\n* sig - Standard\n* msig - MultiSig\n* lsig - LogicSig\n* pqsig - Post-Quantum",
       "name": "sig-type",
       "in": "query"
     },

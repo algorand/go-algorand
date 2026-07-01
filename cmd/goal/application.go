@@ -1166,7 +1166,7 @@ func populateMethodCallTxnArgs(types []string, values []string) ([]transactions.
 			return nil, fmt.Errorf(txDecodeError, txFilename, err)
 		}
 
-		if !txn.Sig.Blank() || !txn.Msig.Blank() || !txn.PQSig.Blank() {
+		if !txn.Sig.Blank() || !txn.Msig.Blank() || !txn.PQsig.Blank() {
 			return nil, fmt.Errorf("Transaction from %s has already been signed", txFilename)
 		}
 

@@ -6585,7 +6585,7 @@ func makePlaceholderPQFixSignersGroup(t *testing.T, env simulationtesting.Enviro
 	txgroup := txntest.Group(&rekey, &pqPay)
 	txgroup[0] = txgroup[0].Txn.Sign(sender.Sk)
 	txgroup[1].AuthAddr = sender.Addr
-	txgroup[1].PQSig = pqSig
+	txgroup[1].PQsig = pqSig
 
 	return txgroup, pqAuthorizer
 }
@@ -6616,7 +6616,7 @@ func makeAppThenPlaceholderPQFixSignersGroup(t *testing.T, env *simulationtestin
 	})
 	txgroup := txntest.Group(&appCall, &pqPay)
 	txgroup[0] = txgroup[0].Txn.Sign(appCaller.Sk)
-	txgroup[1].PQSig = pqSig
+	txgroup[1].PQsig = pqSig
 	return txgroup
 }
 
@@ -6636,7 +6636,7 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 				Receiver: authorizer,
 			})
 			stxn := txn.SignedTxn()
-			stxn.PQSig = pqSig
+			stxn.PQsig = pqSig
 
 			return simulationTestCase{
 				input: simulation.Request{
@@ -6674,7 +6674,7 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 				Receiver: authorizer,
 			})
 			stxn := txn.SignedTxn()
-			stxn.PQSig = pqSig
+			stxn.PQsig = pqSig
 
 			return simulationTestCase{
 				input: simulation.Request{
@@ -6806,7 +6806,7 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 				Fee:      minFee * 3,
 			})
 			stxn := txn.SignedTxn()
-			stxn.PQSig = transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024}
+			stxn.PQsig = transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024}
 
 			return simulationTestCase{
 				input: simulation.Request{

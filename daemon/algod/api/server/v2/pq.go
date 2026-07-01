@@ -38,7 +38,7 @@ import (
 // on compliant addresses so that accounts created through algod retain the
 // post-quantum guarantee.
 func requirePQAuthorizerCompliant(stxn transactions.SignedTxn) error {
-	authorizer := stxn.PQSig.AuthorizerAddress()
+	authorizer := stxn.PQsig.AuthorizerAddress()
 	if !authorizer.IsPQCompliant() {
 		return fmt.Errorf("pq signature authorizer address %s is not compliant", authorizer)
 	}
@@ -60,13 +60,13 @@ func enforcePQSubmitPolicy(proto config.ConsensusParams, txgroup []transactions.
 }
 
 func checkPQSubmitPolicy(proto config.ConsensusParams, stxn transactions.SignedTxn) error {
-	if stxn.PQSig.Blank() {
+	if stxn.PQsig.Blank() {
 		return nil
 	}
-	if err := stxn.PQSig.ValidateEnvelope(proto, stxn.Authorizer()); err != nil {
+	if err := stxn.PQsig.ValidateEnvelope(proto, stxn.Authorizer()); err != nil {
 		return err
 	}
-	if len(stxn.PQSig.Signature) == 0 {
+	if len(stxn.PQsig.Signature) == 0 {
 		return errors.New("pq signature is empty") // matches the consensus rejection text
 	}
 	return requirePQAuthorizerCompliant(stxn)
@@ -99,17 +99,17 @@ func enforcePQSimulatePolicy(proto config.ConsensusParams, txgroup []transaction
 }
 
 func checkPQSimulatePolicy(proto config.ConsensusParams, stxn transactions.SignedTxn, allowEmptySignatures bool, fixSigners bool) error {
-	if stxn.PQSig.Blank() {
+	if stxn.PQsig.Blank() {
 		return nil
 	}
 	if !allowEmptySignatures {
 		return checkPQSubmitPolicy(proto, stxn)
 	}
-	if simulation.IsPlaceholderPQSig(stxn) && len(stxn.PQSig.PublicKey) == 0 {
-		return stxn.PQSig.ValidateScheme(proto)
+	if simulation.IsPlaceholderPQSig(stxn) && len(stxn.PQsig.PublicKey) == 0 {
+		return stxn.PQsig.ValidateScheme(proto)
 	}
 	if !(fixSigners && simulation.IsPlaceholderPQSig(stxn)) {
-		if err := stxn.PQSig.ValidateEnvelope(proto, stxn.Authorizer()); err != nil {
+		if err := stxn.PQsig.ValidateEnvelope(proto, stxn.Authorizer()); err != nil {
 			return err
 		}
 	}

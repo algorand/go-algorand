@@ -276,7 +276,7 @@ func checkTxnSigTypeCounts(s *transactions.SignedTxn, groupIndex int) (sigType s
 		numSigCategories++
 		sigType = logicSig
 	}
-	if !s.PQSig.Blank() {
+	if !s.PQsig.Blank() {
 		numSigCategories++
 		sigType = pqSig
 	}
@@ -334,7 +334,7 @@ func stxnCoreChecks(gi int, groupCtx *GroupContext, batch crypto.BatchEnqueuer) 
 		return nil
 
 	case pqSig:
-		if err := s.PQSig.Verify(groupCtx.consensusParams, s.Txn, s.Authorizer()); err != nil {
+		if err := s.PQsig.Verify(groupCtx.consensusParams, s.Txn, s.Authorizer()); err != nil {
 			return &TxGroupError{err: fmt.Errorf("pq signature validation failed: %w", err), GroupIndex: gi, Reason: TxGroupErrorReasonSigNotWellFormed}
 		}
 		return nil

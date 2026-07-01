@@ -445,17 +445,17 @@ func TestPQSignProducesVerifiablePQEnvelope(t *testing.T) {
 	require.True(t, signed.Sig.Blank())
 	require.True(t, signed.Msig.Blank())
 	require.True(t, signed.Lsig.Blank())
-	require.False(t, signed.PQSig.Blank())
+	require.False(t, signed.PQsig.Blank())
 	require.True(t, signed.AuthAddr.IsZero())
 	require.Equal(t, root.public.addr, signed.Authorizer())
-	require.Equal(t, root.public.scheme, signed.PQSig.Scheme)
-	require.Equal(t, root.public.salt, signed.PQSig.Salt)
-	require.Equal(t, root.public.pk, signed.PQSig.PublicKey)
-	require.NoError(t, signed.PQSig.Verify(config.Consensus[protocol.ConsensusFuture], signed.Txn, signed.Authorizer()))
+	require.Equal(t, root.public.scheme, signed.PQsig.Scheme)
+	require.Equal(t, root.public.salt, signed.PQsig.Salt)
+	require.Equal(t, root.public.pk, signed.PQsig.PublicKey)
+	require.NoError(t, signed.PQsig.Verify(config.Consensus[protocol.ConsensusFuture], signed.Txn, signed.Authorizer()))
 
 	changed := signed
 	changed.Txn.Note = []byte("changed")
-	require.ErrorContains(t, changed.PQSig.Verify(config.Consensus[protocol.ConsensusFuture], changed.Txn, changed.Authorizer()), "invalid falcon-1024 signature")
+	require.ErrorContains(t, changed.PQsig.Verify(config.Consensus[protocol.ConsensusFuture], changed.Txn, changed.Authorizer()), "invalid falcon-1024 signature")
 }
 
 func TestPQSignAcceptsMnemonic(t *testing.T) {
@@ -483,8 +483,8 @@ func TestPQSignAcceptsMnemonic(t *testing.T) {
 	require.NoError(t, err)
 	var signed transactions.SignedTxn
 	require.NoError(t, protocol.Decode(signedBytes, &signed))
-	require.Equal(t, root.public.pk, signed.PQSig.PublicKey)
-	require.NoError(t, signed.PQSig.Verify(config.Consensus[protocol.ConsensusFuture], signed.Txn, signed.Authorizer()))
+	require.Equal(t, root.public.pk, signed.PQsig.PublicKey)
+	require.NoError(t, signed.PQsig.Verify(config.Consensus[protocol.ConsensusFuture], signed.Txn, signed.Authorizer()))
 }
 
 func TestPQSignRejectsEmptyInputFile(t *testing.T) {
@@ -592,7 +592,7 @@ func TestPQSignRejectsMixedSignaturesUnlessOverwrite(t *testing.T) {
 	var signed transactions.SignedTxn
 	require.NoError(t, protocol.Decode(data, &signed))
 	require.True(t, signed.Sig.Blank())
-	require.False(t, signed.PQSig.Blank())
+	require.False(t, signed.PQsig.Blank())
 }
 
 func TestPQSignRejectsNonCompliantSalt(t *testing.T) {

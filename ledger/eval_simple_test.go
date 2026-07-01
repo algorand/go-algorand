@@ -1462,7 +1462,7 @@ func signPQRekeyTestTxn(t *testing.T, acct pqRekeyTestAccount, txn transactions.
 	return transactions.SignedTxn{
 		Txn:      txn,
 		AuthAddr: authAddr,
-		PQSig: transactions.PQSig{
+		PQsig: transactions.PQSig{
 			Scheme:    protocol.PQSchemeFalcon1024,
 			Salt:      acct.salt,
 			PublicKey: acct.publicKey,

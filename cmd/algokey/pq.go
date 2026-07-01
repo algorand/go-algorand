@@ -377,7 +377,7 @@ func runPQSignWithOptions(opts pqSignOptions) error {
 			return fmt.Errorf("cannot sign transaction: %w", signErr)
 		}
 
-		stxn.PQSig = transactions.PQSig{
+		stxn.PQsig = transactions.PQSig{
 			Scheme:    public.scheme,
 			Salt:      public.salt,
 			PublicKey: slices.Clone(public.pk),
@@ -402,14 +402,14 @@ func runPQSignWithOptions(opts pqSignOptions) error {
 }
 
 func signedTxnHasSignature(stxn *transactions.SignedTxn) bool {
-	return !stxn.Sig.Blank() || !stxn.Msig.Blank() || !stxn.Lsig.Blank() || !stxn.PQSig.Blank()
+	return !stxn.Sig.Blank() || !stxn.Msig.Blank() || !stxn.Lsig.Blank() || !stxn.PQsig.Blank()
 }
 
 func clearSignedTxnSignatures(stxn *transactions.SignedTxn) {
 	stxn.Sig = crypto.Signature{}
 	stxn.Msig = crypto.MultisigSig{}
 	stxn.Lsig = transactions.LogicSig{}
-	stxn.PQSig = transactions.PQSig{}
+	stxn.PQsig = transactions.PQSig{}
 }
 
 func printPQMnemonic(w io.Writer, entropy crypto.Seed) error {

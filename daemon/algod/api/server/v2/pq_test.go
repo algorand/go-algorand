@@ -39,14 +39,14 @@ func TestCheckPQSimulatePolicySchemeOnlyPlaceholder(t *testing.T) {
 		Txn: transactions.Transaction{
 			Type: protocol.PaymentTx,
 		},
-		PQSig: transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024},
+		PQsig: transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024},
 	}
 
 	require.NoError(t, checkPQSimulatePolicy(proto, stxn, true, false))
 	require.NoError(t, checkPQSimulatePolicy(proto, stxn, true, true))
 
 	unknownScheme := stxn
-	unknownScheme.PQSig.Scheme = protocol.PQScheme{'x', '1'}
+	unknownScheme.PQsig.Scheme = protocol.PQScheme{'x', '1'}
 	require.ErrorIs(t, checkPQSimulatePolicy(proto, unknownScheme, true, false), basics.ErrPQSchemeNotSupported)
 
 	disabledProto := proto
@@ -63,7 +63,7 @@ func TestCheckPQSimulatePolicyRejectsMismatchedFullPlaceholder(t *testing.T) {
 		Txn: transactions.Transaction{
 			Type: protocol.PaymentTx,
 		},
-		PQSig: transactions.PQSig{
+		PQsig: transactions.PQSig{
 			Scheme:    protocol.PQSchemeFalcon1024,
 			PublicKey: []byte{1},
 		},

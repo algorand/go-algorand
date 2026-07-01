@@ -127,7 +127,7 @@ func MakeSimulator(ledger *data.Ledger, developerAPI bool) *Simulator {
 }
 
 func txnHasNoSignature(txn transactions.SignedTxn) bool {
-	return txn.Sig.Blank() && txn.Msig.Blank() && txn.Lsig.Blank() && txn.PQSig.Blank()
+	return txn.Sig.Blank() && txn.Msig.Blank() && txn.Lsig.Blank() && txn.PQsig.Blank()
 }
 
 // IsPlaceholderPQSig reports whether txn carries a placeholder PQSig:
@@ -137,7 +137,7 @@ func txnHasNoSignature(txn transactions.SignedTxn) bool {
 // - Full placeholder: Scheme, Salt, and PublicKey set, Signature empty, for authorizer address derivation
 func IsPlaceholderPQSig(txn transactions.SignedTxn) bool {
 	return txn.Sig.Blank() && txn.Msig.Blank() && txn.Lsig.Blank() &&
-		!txn.PQSig.Blank() && len(txn.PQSig.Signature) == 0
+		!txn.PQsig.Blank() && len(txn.PQsig.Signature) == 0
 }
 
 func txnNeedsSyntheticSignature(txn transactions.SignedTxn) bool {
@@ -187,9 +187,9 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 			// itself is valid.
 			txnsToVerify[i] = stxn.Txn.Sign(proxySignerSecrets)
 		} else if overrides.AllowEmptySignatures && IsPlaceholderPQSig(stxn) && protoKnown {
-			placeholderErr := stxn.PQSig.ValidateScheme(proto)
-			if len(stxn.PQSig.PublicKey) != 0 && !overrides.FixSigners {
-				placeholderErr = stxn.PQSig.ValidateEnvelope(proto, stxn.Authorizer())
+			placeholderErr := stxn.PQsig.ValidateScheme(proto)
+			if len(stxn.PQsig.PublicKey) != 0 && !overrides.FixSigners {
+				placeholderErr = stxn.PQsig.ValidateEnvelope(proto, stxn.Authorizer())
 			}
 			if placeholderErr == nil {
 				txnsToVerify[i] = stxn.Txn.Sign(proxySignerSecrets)
@@ -213,10 +213,10 @@ func validateFixedPlaceholderPQEnvelopes(proto config.ConsensusParams, txgroup [
 	for i, stxnad := range txgroup {
 		stxn := stxnad.SignedTxn
 		// Scheme-only placeholders only price the fee surcharge; full placeholders also need the authorizer check.
-		if !IsPlaceholderPQSig(stxn) || len(stxn.PQSig.PublicKey) == 0 {
+		if !IsPlaceholderPQSig(stxn) || len(stxn.PQsig.PublicKey) == 0 {
 			continue
 		}
-		if err := stxn.PQSig.ValidateEnvelope(proto, stxn.Authorizer()); err != nil {
+		if err := stxn.PQsig.ValidateEnvelope(proto, stxn.Authorizer()); err != nil {
 			return i, fmt.Errorf("pq signature validation failed: %w", err)
 		}
 	}
