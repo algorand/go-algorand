@@ -67,15 +67,15 @@ type FalconSigner struct {
 // GenerateFalconSigner generates a Falcon signer from the fixed-size Falcon
 // seed type.
 func GenerateFalconSigner(seed FalconSeed) (FalconSigner, error) {
-	return GenerateFalconSignerFromVarLenSeed(seed[:])
+	return GenerateFalconSignerFromBytes(seed[:])
 }
 
-// GenerateFalconSignerFromVarLenSeed generates a Falcon signer from caller-derived
+// GenerateFalconSignerFromBytes generates a Falcon signer from caller-derived
 // variable length seed bytes. Callers are responsible for domain separation before
 // passing seed. The seed must carry at least a full Seed of entropy (len(Seed{})
 // bytes); a shorter (or empty) seed is rejected so it cannot yield a fixed,
 // public keypair.
-func GenerateFalconSignerFromVarLenSeed(seed []byte) (FalconSigner, error) {
+func GenerateFalconSignerFromBytes(seed []byte) (FalconSigner, error) {
 	if len(seed) < len(Seed{}) {
 		return FalconSigner{}, fmt.Errorf("%w: got %d, want >= %d", errFalconSeedTooShort, len(seed), len(Seed{}))
 	}
@@ -128,9 +128,8 @@ func (d *FalconVerifier) VerifyBytes(data []byte, sig FalconSignature) error {
 
 // VerifyFalcon1024 verifies a Falcon-1024 signature over message.
 func VerifyFalcon1024(message Hashable, publicKey []byte, signature []byte) error {
-	var pk FalconPublicKey
-	copy(pk[:], publicKey)
-	fv := FalconVerifier{PublicKey: pk}
+	var fv FalconVerifier
+	copy(fv.PublicKey[:], publicKey)
 	if err := fv.Verify(message, FalconSignature(signature)); err != nil {
 		return fmt.Errorf("%w: %w", ErrPQFalcon1024SigInvalid, err)
 	}

@@ -31,11 +31,11 @@ func TestGenerateFalconSignerRejectsShortSeed(t *testing.T) {
 	a := require.New(t)
 
 	for _, n := range []int{0, len(Seed{}) - 1} {
-		_, err := GenerateFalconSignerFromVarLenSeed(make([]byte, n))
+		_, err := GenerateFalconSignerFromBytes(make([]byte, n))
 		a.ErrorIs(err, errFalconSeedTooShort)
 	}
 
-	_, err := GenerateFalconSignerFromVarLenSeed(make([]byte, len(Seed{})))
+	_, err := GenerateFalconSignerFromBytes(make([]byte, len(Seed{})))
 	a.NoError(err)
 }
 

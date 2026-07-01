@@ -117,7 +117,7 @@ func derivePQKeySeed(scheme protocol.PQScheme, entropy []byte) (crypto.Digest, e
 }
 
 func deriveFalcon1024SigningMaterial(seed []byte) (pqSigningMaterial, error) {
-	signer, err := crypto.GenerateFalconSignerFromVarLenSeed(seed)
+	signer, err := crypto.GenerateFalconSignerFromBytes(seed)
 	if err != nil {
 		return pqSigningMaterial{}, err
 	}
