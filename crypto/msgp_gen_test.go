@@ -1031,6 +1031,126 @@ func BenchmarkUnmarshalOneTimeSignatureVerifier(b *testing.B) {
 	}
 }
 
+func TestMarshalUnmarshalPQPrivateKeyPayload(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := PQPrivateKeyPayload{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingPQPrivateKeyPayload(t *testing.T) {
+	protocol.RunEncodingTest(t, &PQPrivateKeyPayload{})
+}
+
+func BenchmarkMarshalMsgPQPrivateKeyPayload(b *testing.B) {
+	v := PQPrivateKeyPayload{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgPQPrivateKeyPayload(b *testing.B) {
+	v := PQPrivateKeyPayload{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalPQPrivateKeyPayload(b *testing.B) {
+	v := PQPrivateKeyPayload{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestMarshalUnmarshalPQPublicKeyPayload(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := PQPublicKeyPayload{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingPQPublicKeyPayload(t *testing.T) {
+	protocol.RunEncodingTest(t, &PQPublicKeyPayload{})
+}
+
+func BenchmarkMarshalMsgPQPublicKeyPayload(b *testing.B) {
+	v := PQPublicKeyPayload{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgPQPublicKeyPayload(b *testing.B) {
+	v := PQPublicKeyPayload{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalPQPublicKeyPayload(b *testing.B) {
+	v := PQPublicKeyPayload{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func TestMarshalUnmarshalPrivateKey(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	v := PrivateKey{}

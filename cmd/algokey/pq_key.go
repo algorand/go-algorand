@@ -24,6 +24,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/algorand/msgp/msgp"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
@@ -58,17 +60,6 @@ type pqRootMaterial struct {
 	scheme  protocol.PQScheme
 	entropy crypto.Seed
 	public  pqPublicMaterial
-}
-
-type pqPrivateKeyPayload struct {
-	Scheme  protocol.PQScheme `codec:"scheme"`
-	Entropy []byte            `codec:"entropy"`
-}
-
-type pqPublicKeyPayload struct {
-	Scheme    protocol.PQScheme    `codec:"scheme"`
-	Salt      basics.PQAddressSalt `codec:"salt"`
-	PublicKey []byte               `codec:"public-key"`
 }
 
 func writePQRootKeyFile(filename string, root pqRootMaterial) error {
@@ -124,24 +115,24 @@ func readPQPublicKeyFile(filename string) (pqPublicMaterial, error) {
 
 func encodePQPrivateKeyFileBytes(root pqRootMaterial) []byte {
 	entropy := slices.Clone(root.entropy[:])
-	payload := pqPrivateKeyPayload{
+	payload := crypto.PQPrivateKeyPayload{
 		Scheme:  root.scheme,
 		Entropy: entropy,
 	}
-	return encodePQPayload(pqPrivateKeyMagic, payload)
+	return encodePQPayload(pqPrivateKeyMagic, &payload)
 }
 
 func encodePQPublicKeyFileBytes(public pqPublicMaterial) []byte {
-	payload := pqPublicKeyPayload{
+	payload := crypto.PQPublicKeyPayload{
 		Scheme:    public.scheme,
-		Salt:      public.salt,
+		Salt:      uint8(public.salt),
 		PublicKey: slices.Clone(public.pk),
 	}
-	return encodePQPayload(pqPublicKeyMagic, payload)
+	return encodePQPayload(pqPublicKeyMagic, &payload)
 }
 
-func encodePQPayload(magic string, payload interface{}) []byte {
-	encoded := protocol.EncodeReflect(payload)
+func encodePQPayload(magic string, payload msgp.Marshaler) []byte {
+	encoded := protocol.Encode(payload)
 	out := make([]byte, 0, len(magic)+1+len(encoded))
 	out = append(out, magic...)
 	out = append(out, '\n')
@@ -152,7 +143,7 @@ func encodePQPayload(magic string, payload interface{}) []byte {
 // decodePQPrivateKeyEntropy parses the stored {scheme, entropy} from a private
 // key file without deriving the (expensive) key material.
 func decodePQPrivateKeyEntropy(data []byte) (protocol.PQScheme, crypto.Seed, error) {
-	var payload pqPrivateKeyPayload
+	var payload crypto.PQPrivateKeyPayload
 	if err := decodePQPayload(data, pqPrivateKeyMagic, &payload); err != nil {
 		return protocol.PQScheme{}, crypto.Seed{}, err
 	}
@@ -173,11 +164,11 @@ func decodePQPrivateKeyFileBytes(data []byte) (pqRootMaterial, error) {
 }
 
 func decodePQPublicKeyFileBytes(data []byte) (pqPublicMaterial, error) {
-	var payload pqPublicKeyPayload
+	var payload crypto.PQPublicKeyPayload
 	if err := decodePQPayload(data, pqPublicKeyMagic, &payload); err != nil {
 		return pqPublicMaterial{}, err
 	}
-	public, err := publicMaterialFromFields(payload.Scheme, payload.Salt, payload.PublicKey)
+	public, err := publicMaterialFromFields(payload.Scheme, basics.PQAddressSalt(payload.Salt), payload.PublicKey)
 	if err != nil {
 		return pqPublicMaterial{}, err
 	}
@@ -187,7 +178,7 @@ func decodePQPublicKeyFileBytes(data []byte) (pqPublicMaterial, error) {
 	return public, nil
 }
 
-func decodePQPayload(data []byte, magic string, payload interface{}) error {
+func decodePQPayload(data []byte, magic string, payload msgp.Unmarshaler) error {
 	prefix := []byte(magic + "\n")
 	if !bytes.HasPrefix(data, prefix) {
 		return fmt.Errorf("%w: missing %s magic", errPQKeyWrongType, magic)
@@ -195,7 +186,7 @@ func decodePQPayload(data []byte, magic string, payload interface{}) error {
 	if len(data) == len(prefix) {
 		return errPQKeyMalformed
 	}
-	if err := protocol.DecodeReflect(data[len(prefix):], payload); err != nil {
+	if err := protocol.Decode(data[len(prefix):], payload); err != nil {
 		return fmt.Errorf("%w: %w", errPQKeyMalformed, err)
 	}
 	return nil

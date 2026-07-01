@@ -192,7 +192,7 @@ func TestPQPrivateRootFileStoresOnlySchemeAndEntropy(t *testing.T) {
 	require.NoError(t, err)
 	require.Less(t, len(data), crypto.FalconPrivateKeySize)
 
-	var payload pqPrivateKeyPayload
+	var payload crypto.PQPrivateKeyPayload
 	require.NoError(t, decodePQPayload(data, pqPrivateKeyMagic, &payload))
 	require.Equal(t, root.scheme, payload.Scheme)
 	require.Equal(t, root.entropy[:], payload.Entropy)
@@ -247,30 +247,30 @@ func TestPQKeyFileRejectsMalformedInputs(t *testing.T) {
 	_, err := decodePQPrivateKeyFileBytes(edSeed[:])
 	require.ErrorIs(t, err, errPQKeyWrongType)
 
-	privatePayload := pqPrivateKeyPayload{
+	privatePayload := crypto.PQPrivateKeyPayload{
 		Scheme:  protocol.PQScheme{'z', 'z'},
 		Entropy: root.entropy[:],
 	}
-	_, err = decodePQPrivateKeyFileBytes(encodePQPayload(pqPrivateKeyMagic, privatePayload))
+	_, err = decodePQPrivateKeyFileBytes(encodePQPayload(pqPrivateKeyMagic, &privatePayload))
 	require.ErrorIs(t, err, basics.ErrPQSchemeNotSupported)
 
 	privatePayload.Scheme = protocol.PQSchemeFalcon1024
 	privatePayload.Entropy = privatePayload.Entropy[:len(privatePayload.Entropy)-1]
-	_, err = decodePQPrivateKeyFileBytes(encodePQPayload(pqPrivateKeyMagic, privatePayload))
+	_, err = decodePQPrivateKeyFileBytes(encodePQPayload(pqPrivateKeyMagic, &privatePayload))
 	require.ErrorIs(t, err, errPQKeyMalformed)
 
-	publicPayload := pqPublicKeyPayload{
+	publicPayload := crypto.PQPublicKeyPayload{
 		Scheme:    root.public.scheme,
-		Salt:      root.public.salt,
+		Salt:      uint8(root.public.salt),
 		PublicKey: root.public.pk[:len(root.public.pk)-1],
 	}
-	_, err = decodePQPublicKeyFileBytes(encodePQPayload(pqPublicKeyMagic, publicPayload))
+	_, err = decodePQPublicKeyFileBytes(encodePQPayload(pqPublicKeyMagic, &publicPayload))
 	require.ErrorIs(t, err, errPQKeyMalformed)
 
 	nonCompliant := nonCompliantPQPublic(t, root.public)
 	publicPayload.PublicKey = root.public.pk
-	publicPayload.Salt = nonCompliant.salt
-	_, err = decodePQPublicKeyFileBytes(encodePQPayload(pqPublicKeyMagic, publicPayload))
+	publicPayload.Salt = uint8(nonCompliant.salt)
+	_, err = decodePQPublicKeyFileBytes(encodePQPayload(pqPublicKeyMagic, &publicPayload))
 	require.ErrorIs(t, err, errPQSaltNotCompliant)
 }
 
