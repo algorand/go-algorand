@@ -1135,7 +1135,7 @@ func asmAppParamsSet(ops *OpStream, spec *OpSpec, mnemonic token, args []token) 
 		return args[0].errorf("%s %#v is not settable.", spec.Name, args[0].str)
 	}
 	if fs.setVersion > ops.Version {
-		return args[0].errorf("%s %s field was introduced in v%d. Missed #pragma version?", spec.Name, args[0].str, fs.setVersion)
+		return args[0].errorf("%s %s field is settable in v%d. Missed #pragma version?", spec.Name, args[0].str, fs.setVersion)
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(fs.Field())

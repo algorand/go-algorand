@@ -5281,7 +5281,7 @@ func opAppParamsSet(cx *EvalContext) error {
 
 	paramField := AppParamsField(cx.program[cx.pc+1])
 	fs, ok := appParamsFieldSpecByField(paramField)
-	if !ok || fs.version > cx.version {
+	if !ok || fs.setVersion == 0 || fs.setVersion > cx.version {
 		return fmt.Errorf("invalid app_params_set field %d", paramField)
 	}
 

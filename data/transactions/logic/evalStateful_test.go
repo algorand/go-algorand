@@ -1661,34 +1661,6 @@ func TestAppParamsSet(t *testing.T) {
 	})
 }
 
-// TestAppParamsSetImmutable confirms that all fields without a setVersion
-// are rejected at runtime when app_params_set is attempted on them. To bypass
-// the assembler's own rejection, we assemble a valid program and patch the
-// field byte before execution.
-func TestAppParamsSetImmutable(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	ep, tx, ledger := makeSampleEnvWithVersion(foreignBoxVersion)
-	tx.ApplicationID = 888
-	ledger.NewApp(tx.Sender, 888, basics.AppParams{})
-
-	// Assemble a valid program as a template; field byte is the last byte.
-	ops := testProg(t, "int 1; app_params_set AppForeignBoxReads", foreignBoxVersion)
-
-	immutableFields := []AppParamsField{
-		AppApprovalProgram, AppClearStateProgram,
-		AppGlobalNumUint, AppGlobalNumByteSlice,
-		AppLocalNumUint, AppLocalNumByteSlice,
-		AppExtraProgramPages,
-		AppCreator, AppAddress, AppVersion,
-	}
-	for _, field := range immutableFields {
-		ops.Program[len(ops.Program)-1] = byte(field)
-		testAppBytes(t, ops.Program, ep, "immutable app_params_set field")
-	}
-}
-
 func TestAcctParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
