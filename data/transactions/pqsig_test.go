@@ -90,7 +90,7 @@ func TestPQDecodeBoundsFeedSignedTxnMaxSize(t *testing.T) {
 		4 + msgp.BytesPrefixSize + PQMaxSignatureSize
 	require.Equal(t, expectedPQSigMaxSize, PQSigMaxSize())
 
-	// PQSigMaxSize is part of the network-facing SignedTxn bound. Bumping
+	// PQSigMaxSize is part of the network-facing SignedTxn bound. Growing
 	// PQMax* intentionally increases PQSigMaxSize and therefore SignedTxnMaxSize.
 	expectedSignedTxnMaxSize := 1 +
 		4 + crypto.SignatureMaxSize() +
@@ -102,39 +102,11 @@ func TestPQDecodeBoundsFeedSignedTxnMaxSize(t *testing.T) {
 	require.Equal(t, expectedSignedTxnMaxSize, SignedTxnMaxSize())
 }
 
-func TestEnabledPQSchemesFitDecodeBounds(t *testing.T) {
+func TestPQDecodeBoundsDeriveFromRegistry(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var maxPublicKeySize uint64
-	var maxSignatureSize uint64
-
-	for _, scheme := range []protocol.PQScheme{protocol.PQSchemeFalcon1024} {
-		spec, ok := basics.LookupPQScheme(scheme)
-		require.True(t, ok)
-
-		for protoVersion, proto := range config.Consensus {
-			if !proto.PQSchemeEnabled(scheme) {
-				continue
-			}
-
-			require.LessOrEqualf(t, spec.PublicKeySize, uint64(PQMaxPublicKeySize),
-				"scheme %q is enabled by %s", scheme, protoVersion)
-			require.LessOrEqualf(t, spec.SignatureSize, uint64(PQMaxSignatureSize),
-				"scheme %q is enabled by %s", scheme, protoVersion)
-
-			if spec.PublicKeySize > maxPublicKeySize {
-				maxPublicKeySize = spec.PublicKeySize
-			}
-			if spec.SignatureSize > maxSignatureSize {
-				maxSignatureSize = spec.SignatureSize
-			}
-		}
-	}
-
-	require.NotZero(t, maxPublicKeySize)
-	require.NotZero(t, maxSignatureSize)
-	require.Equal(t, uint64(PQMaxPublicKeySize), maxPublicKeySize)
-	require.Equal(t, uint64(PQMaxSignatureSize), maxSignatureSize)
+	require.Equal(t, int(basics.MaxPQPublicKeySize()), PQMaxPublicKeySize)
+	require.Equal(t, int(basics.MaxPQSignatureSize()), PQMaxSignatureSize)
 }
 
 func TestPQSigBlank(t *testing.T) {

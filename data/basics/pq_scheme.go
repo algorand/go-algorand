@@ -57,9 +57,8 @@ type PQSchemeSpec struct {
 //   - Add the consensus flag and config.ConsensusParams.PQSchemeEnabled case,
 //   - Add the registry entry here,
 //   - Add the signing/private-key ops in cmd/algokey's pqSchemeOpsByScheme.
-//   - If the scheme exceeds data/transactions.PQMaxPublicKeySize or
-//     data/transactions.PQMaxSignatureSize, intentionally bump those wire bounds
-//     and regenerate msgp code,
+//   - If the scheme changes MaxPQPublicKeySize or MaxPQSignatureSize,
+//     regenerate msgp code.
 var pqSchemeSpecs = map[protocol.PQScheme]PQSchemeSpec{
 	protocol.PQSchemeFalcon1024: {
 		PublicKeySize:   crypto.FalconPublicKeySize,
@@ -79,4 +78,22 @@ var pqSchemeSpecs = map[protocol.PQScheme]PQSchemeSpec{
 func LookupPQScheme(s protocol.PQScheme) (PQSchemeSpec, bool) {
 	scheme, ok := pqSchemeSpecs[s]
 	return scheme, ok
+}
+
+// MaxPQPublicKeySize returns the largest public-key size in the PQ scheme registry.
+func MaxPQPublicKeySize() uint64 {
+	var m uint64
+	for _, scheme := range pqSchemeSpecs {
+		m = max(m, scheme.PublicKeySize)
+	}
+	return m
+}
+
+// MaxPQSignatureSize returns the largest signature size in the PQ scheme registry.
+func MaxPQSignatureSize() uint64 {
+	var m uint64
+	for _, scheme := range pqSchemeSpecs {
+		m = max(m, scheme.SignatureSize)
+	}
+	return m
 }

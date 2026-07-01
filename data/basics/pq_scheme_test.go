@@ -76,6 +76,20 @@ func TestPQSchemeRegistryComplete(t *testing.T) {
 	}))
 }
 
+func TestPQSchemeMaxSizes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var maxPublicKeySize uint64
+	var maxSignatureSize uint64
+	for _, spec := range pqSchemeSpecs {
+		maxPublicKeySize = max(maxPublicKeySize, spec.PublicKeySize)
+		maxSignatureSize = max(maxSignatureSize, spec.SignatureSize)
+	}
+
+	require.Equal(t, maxPublicKeySize, MaxPQPublicKeySize())
+	require.Equal(t, maxSignatureSize, MaxPQSignatureSize())
+}
+
 func TestLookupPQSchemeFalcon1024(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
