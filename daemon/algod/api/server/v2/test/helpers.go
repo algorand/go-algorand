@@ -94,7 +94,6 @@ type mockNode struct {
 	id              account.ParticipationID
 	keys            account.StateProofKeys
 	status          node.StatusReport
-	statusCalls     int
 	devmode         bool
 	timestampOffset *int64
 	PartKeyBinary   []byte
@@ -155,7 +154,6 @@ func (m *mockNode) LedgerForAPI() v2.LedgerForAPI {
 	return m.ledger
 }
 func (m *mockNode) Status() (node.StatusReport, error) {
-	m.statusCalls++
 	return m.status, nil
 }
 func (m *mockNode) GenesisID() string {

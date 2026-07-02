@@ -126,39 +126,29 @@ func MakeSimulator(ledger *data.Ledger, developerAPI bool) *Simulator {
 	}
 }
 
-// IsPlaceholderPQSig reports whether txn carries a placeholder PQSig:
+// isPlaceholderPQSig reports whether txn carries a placeholder PQSig:
 // a non-blank PQ envelope with empty signature bytes and no other signature
 // category set. There are two placeholders forms:
 // - Scheme-only placeholder: Scheme set, PublicKey empty, Signature empty, for fee surcharge calculation
 // - Full placeholder: Scheme, Salt, and PublicKey set, Signature empty, for authorizer address derivation
-func IsPlaceholderPQSig(txn transactions.SignedTxn) bool {
+func isPlaceholderPQSig(txn transactions.SignedTxn) bool {
 	return txn.Sig.Blank() && txn.Msig.Blank() && txn.Lsig.Blank() &&
 		!txn.PQsig.Blank() && len(txn.PQsig.Signature) == 0
 }
 
-// IsSchemeOnlyPlaceholderPQSig reports whether txn carries only a PQ scheme placeholder.
-func IsSchemeOnlyPlaceholderPQSig(txn transactions.SignedTxn) bool {
-	return IsPlaceholderPQSig(txn) && len(txn.PQsig.PublicKey) == 0
+func isSchemeOnlyPlaceholderPQSig(txn transactions.SignedTxn) bool {
+	return isPlaceholderPQSig(txn) && len(txn.PQsig.PublicKey) == 0
 }
 
-// IsFullPlaceholderPQSig reports whether txn carries a placeholder with public key material.
-func IsFullPlaceholderPQSig(txn transactions.SignedTxn) bool {
-	return IsPlaceholderPQSig(txn) && len(txn.PQsig.PublicKey) != 0
-}
-
-// ValidatePlaceholderPQSig validates the parts of a placeholder PQSig that are known before evaluation.
-func ValidatePlaceholderPQSig(proto config.ConsensusParams, txn transactions.SignedTxn, fixSigners bool) error {
-	if !IsPlaceholderPQSig(txn) {
-		return nil
-	}
-	if IsSchemeOnlyPlaceholderPQSig(txn) || fixSigners {
+func validatePlaceholderPQSig(proto config.ConsensusParams, txn transactions.SignedTxn, fixSigners bool) error {
+	if isSchemeOnlyPlaceholderPQSig(txn) || fixSigners {
 		return txn.PQsig.ValidateScheme(proto)
 	}
 	return txn.PQsig.ValidateEnvelope(proto, txn.Authorizer())
 }
 
 func txnNeedsSyntheticSignature(txn transactions.SignedTxn) bool {
-	return !txn.HasSignature() || IsPlaceholderPQSig(txn)
+	return !txn.HasSignature() || isPlaceholderPQSig(txn)
 }
 
 // A randomly generated private key. The actual value does not matter, as long as this is a valid
@@ -190,7 +180,7 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 	// is indistinguishable from an escrow LogicSig, so we would need to decide on another way of
 	// denoting that a LogicSig's delegation signature is omitted, e.g. by setting all the bits of
 	// the signature.
-	proto, protoKnown := config.Consensus[hdr.CurrentProtocol]
+	proto := config.Consensus[hdr.CurrentProtocol]
 	txnsToVerify := make([]transactions.SignedTxn, len(txgroup))
 	for i, stxnad := range txgroup {
 		stxn := stxnad.SignedTxn
@@ -203,8 +193,8 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 			// over the sender's account. However, this will pass validation, since the signature
 			// itself is valid.
 			txnsToVerify[i] = stxn.Txn.Sign(proxySignerSecrets)
-		} else if overrides.AllowEmptySignatures && IsPlaceholderPQSig(stxn) && protoKnown {
-			placeholderErr := ValidatePlaceholderPQSig(proto, stxn, overrides.FixSigners)
+		} else if overrides.AllowEmptySignatures && isPlaceholderPQSig(stxn) {
+			placeholderErr := validatePlaceholderPQSig(proto, stxn, overrides.FixSigners)
 			if placeholderErr == nil {
 				txnsToVerify[i] = stxn.Txn.Sign(proxySignerSecrets)
 			} else {
@@ -226,7 +216,7 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 func validateFixedPlaceholderPQEnvelopes(proto config.ConsensusParams, txgroup []transactions.SignedTxnWithAD) (int, error) {
 	for i, stxnad := range txgroup {
 		stxn := stxnad.SignedTxn
-		if !IsFullPlaceholderPQSig(stxn) {
+		if !isPlaceholderPQSig(stxn) || len(stxn.PQsig.PublicKey) == 0 {
 			continue
 		}
 		if err := stxn.PQsig.ValidateEnvelope(proto, stxn.Authorizer()); err != nil {

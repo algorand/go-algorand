@@ -1192,7 +1192,7 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context, params model.RawTransaction
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
-	if err = enforcePQSubmitPolicy(proto, txgroup); err != nil {
+	if err = enforcePQAuthorizerCompliance(txgroup); err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
@@ -1226,15 +1226,8 @@ func (v2 *Handlers) RawTransactionAsync(ctx echo.Context, params model.RawTransa
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
-	if txgroupHasPQSig(txgroup) {
-		stat, statusErr := v2.Node.Status()
-		if statusErr != nil {
-			return internalError(ctx, statusErr, errFailedRetrievingNodeStatus, v2.Log)
-		}
-		proto := config.Consensus[stat.LastVersion]
-		if err = enforcePQSubmitPolicy(proto, txgroup); err != nil {
-			return badRequest(ctx, err, err.Error(), v2.Log)
-		}
+	if err = enforcePQAuthorizerCompliance(txgroup); err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 	if !shouldSkipPqAddressCheck(params.SkipPqAddressCheck) {
 		if err = rejectOnCurveLogicSigPrograms(txgroup); err != nil {
@@ -1518,7 +1511,7 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 		}
 	}
 	for groupIdx, txgroup := range simulateRequest.TxnGroups {
-		if err = enforcePQSimulatePolicy(proto, txgroup.Txns, simulateRequest.AllowEmptySignatures, simulateRequest.FixSigners); err != nil {
+		if err = enforcePQAuthorizerCompliance(txgroup.Txns); err != nil {
 			err = fmt.Errorf("transaction group %d: %w", groupIdx, err)
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
