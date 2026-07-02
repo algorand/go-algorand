@@ -36,9 +36,9 @@ func TestLogicSigSizeBeforePooling(t *testing.T) {
 	// From consensus version 18, we have lsigs with a maximum size of 1000 bytes.
 	// We need to use pragma 1 for teal in v18
 	pragma := uint(1)
-	tealOK, err := txntest.GenerateProgramOfSize(1000, pragma)
+	tealOK, err := txntest.GenerateUnsaltedProgramOfSize(1000, pragma)
 	a.NoError(err)
-	tealTooLong, err := txntest.GenerateProgramOfSize(1001, pragma)
+	tealTooLong, err := txntest.GenerateUnsaltedProgramOfSize(1001, pragma)
 	a.NoError(err)
 
 	testLogicSize(t, tealOK, tealTooLong, filepath.Join("nettemplates", "TwoNodes50EachV18.json"))
@@ -50,9 +50,9 @@ func TestLogicSigSizeAfterPooling(t *testing.T) {
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	pragma := uint(1)
-	tealOK, err := txntest.GenerateProgramOfSize(2000, pragma)
+	tealOK, err := txntest.GenerateUnsaltedProgramOfSize(2000, pragma)
 	a.NoError(err)
-	tealTooLong, err := txntest.GenerateProgramOfSize(2001, pragma)
+	tealTooLong, err := txntest.GenerateUnsaltedProgramOfSize(2001, pragma)
 	a.NoError(err)
 
 	// TODO: Update this when lsig pooling graduates from vFuture
