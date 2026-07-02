@@ -239,6 +239,22 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 			prepErr.err = fmt.Errorf("transaction %+v invalid : %w", stxn, prepErr.err)
 			return nil, prepErr
 		}
+		if stxn.Lsig.Blank() {
+			switch groupCtx.consensusParams.OrphanLogicSigArgsTreatment() {
+			case config.OrphanLogicSigArgsIgnore:
+				continue
+			case config.OrphanLogicSigArgsReject:
+				if stxn.Lsig.ArgsLen() > 0 {
+					return nil, &TxGroupError{
+						err:        errors.New("LogicSig args without LogicSig program"),
+						GroupIndex: i,
+						Reason:     TxGroupErrorReasonNotWellFormed,
+					}
+				}
+			case config.OrphanLogicSigArgsUsePool:
+				// Count below.
+			}
+		}
 		lSigPooledSize += stxn.Lsig.Len()
 		lSigArgsSize += stxn.Lsig.ArgsLen()
 		if uint64(stxn.Lsig.ArgsLen()) > groupCtx.consensusParams.MaxLogicSigArgsSize {
@@ -249,7 +265,7 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 	// Protocols without a per-byte surcharge cannot pay for LogicSig bytes
 	// above the ordinary group pool. Keep those protocols on the legacy total
 	// LogicSig size check.
-	if groupCtx.consensusParams.PerByteTxnSurcharge == 0 && lSigPooledSize > lSigMaxSizePool {
+	if !groupCtx.consensusParams.TxnSizePricingEnabled() && lSigPooledSize > lSigMaxSizePool {
 		errorMsg := fmt.Errorf(
 			"txgroup had %d bytes of LogicSigs, more than the available pool of %d bytes",
 			lSigPooledSize, lSigMaxSizePool,

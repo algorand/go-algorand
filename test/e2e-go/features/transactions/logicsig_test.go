@@ -125,7 +125,7 @@ func testLogicSize(t *testing.T, tealOK, tealTooLong []byte,
 	a.NoError(err)
 
 	err = client.BroadcastTransactionGroup([]transactions.SignedTxn{stxn1Fail, stxn2Fail})
-	if cp.PerByteTxnSurcharge != 0 {
+	if cp.TxnSizePricingEnabled() {
 		a.ErrorContains(err, "fees is less than")
 	} else {
 		a.ErrorContains(err, "LogicSig.Logic too long")

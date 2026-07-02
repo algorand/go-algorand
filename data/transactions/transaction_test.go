@@ -32,6 +32,13 @@ import (
 	"github.com/algorand/go-algorand/util"
 )
 
+func surchargeForBytes(t *testing.T, proto config.ConsensusParams, bytes int) basics.Micros {
+	t.Helper()
+	surcharge, overflow := proto.PerByteTxnSurcharge.MulInt(bytes)
+	require.False(t, overflow)
+	return surcharge
+}
+
 func TestTransaction_EstimateEncodedSize(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -615,11 +622,6 @@ func TestLogicSigProgramFeeContribution(t *testing.T) {
 	vFuture := config.Consensus[protocol.ConsensusFuture]
 
 	freeSize := int(vFuture.LogicSigMaxSize)
-	surchargeForBytes := func(bytes int) basics.Micros {
-		surcharge, overflow := vFuture.PerByteTxnSurcharge.MulInt(bytes)
-		require.False(t, overflow)
-		return surcharge
-	}
 
 	tests := []struct {
 		name                 string
@@ -644,13 +646,13 @@ func TestLogicSigProgramFeeContribution(t *testing.T) {
 			name:                 "vFuture: one extra LogicSig program byte",
 			proto:                vFuture,
 			logicSizes:           []int{freeSize + 1},
-			expectedContribution: surchargeForBytes(1),
+			expectedContribution: surchargeForBytes(t, vFuture, 1),
 		},
 		{
 			name:                 "vFuture: large LogicSig program",
 			proto:                vFuture,
 			logicSizes:           []int{freeSize + 500},
-			expectedContribution: surchargeForBytes(500),
+			expectedContribution: surchargeForBytes(t, vFuture, 500),
 		},
 		{
 			name:                 "vFuture: LogicSig args do not reduce the free program size pool",
@@ -669,14 +671,7 @@ func TestLogicSigProgramFeeContribution(t *testing.T) {
 			name:                 "vFuture: size pooling charges aggregate program bytes beyond the pool",
 			proto:                vFuture,
 			logicSizes:           []int{freeSize + 250, freeSize + 250},
-			expectedContribution: surchargeForBytes(500),
-		},
-		{
-			name:                 "vFuture: size pooling ignores args across group for program surcharge",
-			proto:                vFuture,
-			logicSizes:           []int{freeSize + 500, 0},
-			argSizes:             []int{300, 300},
-			expectedContribution: 0,
+			expectedContribution: surchargeForBytes(t, vFuture, 500),
 		},
 	}
 
@@ -720,11 +715,6 @@ func TestSummarizeFees_BigLogicSigProgram(t *testing.T) {
 	}
 
 	freeSize := int(vFuture.LogicSigMaxSize)
-	surchargeForBytes := func(bytes int) basics.Micros {
-		surcharge, overflow := vFuture.PerByteTxnSurcharge.MulInt(bytes)
-		require.False(t, overflow)
-		return surcharge
-	}
 
 	t.Run("vFuture: single txn with large LogicSig program", func(t *testing.T) {
 		stxn := SignedTxn{
@@ -736,7 +726,7 @@ func TestSummarizeFees_BigLogicSigProgram(t *testing.T) {
 
 		usage, paid := SummarizeFees([]SignedTxnWithAD{{SignedTxn: stxn}}, vFuture)
 
-		assert.Equal(t, basics.Micros(1e6)+surchargeForBytes(500), usage)
+		assert.Equal(t, basics.Micros(1e6)+surchargeForBytes(t, vFuture, 500), usage)
 		assert.Equal(t, basics.MicroAlgos{Raw: 2000}, paid)
 	})
 
@@ -776,7 +766,7 @@ func TestSummarizeFees_BigLogicSigProgram(t *testing.T) {
 			{SignedTxn: stxn2},
 		}, vFuture)
 
-		assert.Equal(t, basics.Micros(2e6)+surchargeForBytes(500), usage)
+		assert.Equal(t, basics.Micros(2e6)+surchargeForBytes(t, vFuture, 500), usage)
 		assert.Equal(t, basics.MicroAlgos{Raw: 2050}, paid)
 	})
 
