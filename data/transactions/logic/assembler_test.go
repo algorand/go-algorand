@@ -891,6 +891,130 @@ func TestAssemblerIntcblockSalt(t *testing.T) {
 	})
 }
 
+const onCurveStatelessV12Source = `#pragma version 12
+pushint 1`
+
+const onCurveStatelessAutosaltTrueV12Source = `#pragma version 12
+#pragma autosalt true
+pushint 1`
+
+const onCurveStatelessAutosaltFalseV12Source = `#pragma version 12
+#pragma autosalt false
+pushint 1`
+
+const onCurveStatelessAutosaltFalseV13Source = `#pragma version 13
+#pragma autosalt false
+pushint 12`
+
+const onCurveStatefulAutosaltTrueV13Source = `#pragma version 13
+#pragma autosalt true
+byte 0x01
+app_global_get
+pop
+pushint 0`
+
+const offCurveStatefulAutosaltTrueV13Source = `#pragma version 13
+#pragma autosalt true
+byte 0x01
+app_global_get
+pop
+pushint 1`
+
+const onCurveStatefulAutosaltFalseV13Source = `#pragma version 13
+#pragma autosalt false
+byte 0x01
+app_global_get
+pop
+pushint 0`
+
+func TestPragmaAutosalt(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const statefulAutosaltWarning = "#pragma autosalt true used with stateful opcodes"
+	const onCurveLogicSigWarning = "#pragma autosalt false leaves program hash on curve"
+
+	tests := []struct {
+		name                         string
+		source                       string
+		wantUnsaltedProgramOnCurve   bool
+		wantSaltAdded                bool
+		wantWarning                  string
+		wantDisassemblyAutosaltFalse bool
+	}{
+		{
+			name:                       "default v12 does not autosalt",
+			source:                     onCurveStatelessV12Source,
+			wantUnsaltedProgramOnCurve: true,
+			wantSaltAdded:              false,
+		},
+		{
+			name:                       "true opts older versions in",
+			source:                     onCurveStatelessAutosaltTrueV12Source,
+			wantUnsaltedProgramOnCurve: true,
+			wantSaltAdded:              true,
+		},
+		{
+			name:                       "false warns older versions on curve logicsig",
+			source:                     onCurveStatelessAutosaltFalseV12Source,
+			wantUnsaltedProgramOnCurve: true,
+			wantSaltAdded:              false,
+			wantWarning:                onCurveLogicSigWarning,
+		},
+		{
+			name:                         "false opts v13 out",
+			source:                       onCurveStatelessAutosaltFalseV13Source,
+			wantUnsaltedProgramOnCurve:   true,
+			wantSaltAdded:                false,
+			wantWarning:                  onCurveLogicSigWarning,
+			wantDisassemblyAutosaltFalse: true,
+		},
+		{
+			name:                       "true salts stateful program with warning",
+			source:                     onCurveStatefulAutosaltTrueV13Source,
+			wantUnsaltedProgramOnCurve: true,
+			wantSaltAdded:              true,
+			wantWarning:                statefulAutosaltWarning,
+		},
+		{
+			name:          "true warns stateful program even when already off curve",
+			source:        offCurveStatefulAutosaltTrueV13Source,
+			wantSaltAdded: false,
+			wantWarning:   statefulAutosaltWarning,
+		},
+		{
+			name:                       "false does not warn on stateful program",
+			source:                     onCurveStatefulAutosaltFalseV13Source,
+			wantUnsaltedProgramOnCurve: true,
+			wantSaltAdded:              false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			unsaltedProgram := assembleProgramWithoutAutomaticSalt(t, test.source, assemblerNoVersion)
+			require.Equal(t, test.wantUnsaltedProgramOnCurve, ProgramHashIsEdwards25519Point(unsaltedProgram))
+
+			ops := testProg(t, test.source, assemblerNoVersion)
+			saltAdded := !bytes.Equal(unsaltedProgram, ops.Program)
+			require.Equal(t, test.wantSaltAdded, saltAdded)
+			require.Equal(t, test.wantUnsaltedProgramOnCurve && !saltAdded, ProgramHashIsEdwards25519Point(ops.Program))
+
+			if test.wantWarning == "" {
+				require.Empty(t, ops.Warnings)
+			} else {
+				require.Len(t, ops.Warnings, 1)
+				require.ErrorContains(t, ops.Warnings[0], test.wantWarning)
+			}
+
+			if test.wantDisassemblyAutosaltFalse {
+				dis, err := Disassemble(ops.Program)
+				require.NoError(t, err)
+				require.Contains(t, dis, "#pragma autosalt false\n")
+			}
+		})
+	}
+}
+
 func testLine(t *testing.T, line string, ver uint64, expected string, col ...int) {
 	t.Helper()
 	// By embedding the source line between two other lines, the
@@ -2800,12 +2924,27 @@ func TestPragmas(t *testing.T) {
 	testProg(t, "#pragma typetrack false blah", assemblerNoVersion,
 		exp(1, "unexpected extra tokens: blah"))
 
+	testProg(t, "#pragma autosalt", assemblerNoVersion,
+		exp(1, "no autosalt value"))
+
+	testProg(t, "#pragma autosalt blah", assemblerNoVersion,
+		exp(1, `bad #pragma autosalt: "blah"`))
+
+	testProg(t, "#pragma autosalt false blah", assemblerNoVersion,
+		exp(1, "unexpected extra tokens: blah"))
+
+	testProg(t, "\nint 1\n#pragma autosalt false", assemblerNoVersion,
+		exp(3, "#pragma autosalt is only allowed before instructions"))
+
 	// Currently pragmas don't treat semicolons as newlines. It would probably
 	// be nice to fix this.
 	testProg(t, "#pragma version 5; int 1", assemblerNoVersion,
 		exp(1, "unexpected extra tokens: ; int 1"))
 
 	testProg(t, "#pragma typetrack false; int 1", assemblerNoVersion,
+		exp(1, "unexpected extra tokens: ; int 1"))
+
+	testProg(t, "#pragma autosalt false; int 1", assemblerNoVersion,
 		exp(1, "unexpected extra tokens: ; int 1"))
 }
 
