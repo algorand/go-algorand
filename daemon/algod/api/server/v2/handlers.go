@@ -1194,6 +1194,9 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context, params model.RawTransaction
 	}
 
 	if !shouldSkipPqAddressCheck(params.SkipPqAddressCheck) {
+		if err = enforcePQAuthorizerCompliance(txgroup); err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
 		if err = rejectOnCurveLogicSigPrograms(txgroup); err != nil {
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
@@ -1218,11 +1221,15 @@ func (v2 *Handlers) RawTransactionAsync(ctx echo.Context, params model.RawTransa
 	if !v2.Node.Config().EnableDeveloperAPI {
 		return ctx.String(http.StatusNotFound, "/transactions/async was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
 	}
+
 	txgroup, err := decodeTxGroup(ctx.Request().Body, bounds.MaxTxGroupSize)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 	if !shouldSkipPqAddressCheck(params.SkipPqAddressCheck) {
+		if err = enforcePQAuthorizerCompliance(txgroup); err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
 		if err = rejectOnCurveLogicSigPrograms(txgroup); err != nil {
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
@@ -1500,6 +1507,12 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 		}
 		if len(txgroup.Txns) > proto.MaxTxGroupSize {
 			err = fmt.Errorf("transaction group size %d exceeds protocol max %d", len(txgroup.Txns), proto.MaxTxGroupSize)
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+	}
+	for groupIdx, txgroup := range simulateRequest.TxnGroups {
+		if err = enforcePQAuthorizerCompliance(txgroup.Txns); err != nil {
+			err = fmt.Errorf("transaction group %d: %w", groupIdx, err)
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
 	}

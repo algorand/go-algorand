@@ -33,11 +33,13 @@ import (
 type SignedTxn struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Sig      crypto.Signature   `codec:"sig"`
-	Msig     crypto.MultisigSig `codec:"msig"`
-	Lsig     LogicSig           `codec:"lsig"`
-	Txn      Transaction        `codec:"txn,required"`
-	AuthAddr basics.Address     `codec:"sgnr"`
+	Sig   crypto.Signature   `codec:"sig"`
+	Msig  crypto.MultisigSig `codec:"msig"`
+	Lsig  LogicSig           `codec:"lsig"`
+	PQsig PQSig              `codec:"pqsig"`
+
+	Txn      Transaction    `codec:"txn,required"`
+	AuthAddr basics.Address `codec:"sgnr"`
 }
 
 // SignedTxnInBlock is how a signed transaction is encoded in a block.
@@ -109,6 +111,30 @@ func (s SignedTxn) Authorizer() basics.Address {
 	return s.AuthAddr
 }
 
+// HasSignature reports whether any signature category is present.
+func (s SignedTxn) HasSignature() bool {
+	return !s.Sig.Blank() || !s.Msig.Blank() || !s.Lsig.Blank() || !s.PQsig.Blank()
+}
+
+// signatureFeeContribution dispatches the fee contribution of the signature type.
+func (s SignedTxn) signatureFeeContribution() basics.Micros {
+	if !s.PQsig.Blank() {
+		return s.pqSignatureFeeContribution()
+	}
+	return 0
+}
+
+// pqSignatureFeeContribution dispatches the fee contribution of the post-quantum signature scheme.
+func (s SignedTxn) pqSignatureFeeContribution() basics.Micros {
+	scheme, ok := basics.LookupPQScheme(s.PQsig.Scheme)
+	if !ok {
+		// If the scheme is unknown, returning a zero-fee contribution is safe because
+		// the transaction will be rejected.
+		return 0
+	}
+	return scheme.FeeContribution
+}
+
 // FeeFactor is the factor by which the base transaction fee is multiplied. Some
 // transactions are free, others might cost more because they use extra
 // expensive features (e.g., large Note fields, large app programs, quantum
@@ -116,8 +142,15 @@ func (s SignedTxn) Authorizer() basics.Address {
 // precision. So 1e6 is a normal base fee transaction.
 func (s SignedTxn) FeeFactor(proto config.ConsensusParams) basics.Micros {
 	factor := s.Txn.feeFactor(proto)
-	// There are currently no signature fee contributions.
-	// factor = basics.AddSaturate(factor, s.signatureFeeContribution())
+	if s.Txn.Type == protocol.HeartbeatTx && s.Txn.Group.IsZero() && s.Txn.Fee.IsZero() {
+		// The dynamic heartbeat checks decide whether a zero-fee singleton
+		// heartbeat is allowed, and challenged accounts may self-heartbeat
+		// without paying signature surcharges. A nonzero-fee PQ singleton
+		// heartbeat still pays the PQ signature surcharge to avoid underpricing
+		// the larger signature and verification cost.
+		return factor
+	}
+	factor = basics.AddSaturate(factor, s.signatureFeeContribution())
 	return factor
 }
 

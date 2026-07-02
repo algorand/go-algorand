@@ -600,6 +600,10 @@ type ConsensusParams struct {
 	// the basic Max sizes (they allow up to the "Absolute" Maxes). It is
 	// expressed in fraction of a basic min fee.
 	PerByteTxnSurcharge basics.Micros
+
+	// EnablePQSchemeFalcon1024 enables native Falcon-1024 transaction
+	// authorization for the f1 PQ scheme.
+	EnablePQSchemeFalcon1024 bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -689,6 +693,17 @@ type BonusPlan struct {
 // MinFee simply returns the MinTxnFee as a basics.MicroAlgos
 func (proto ConsensusParams) MinFee() basics.MicroAlgos {
 	return basics.MicroAlgos{Raw: proto.MinTxnFee}
+}
+
+// PQSchemeEnabled returns whether a post-quantum signature scheme is enabled
+// under these consensus parameters.
+func (proto ConsensusParams) PQSchemeEnabled(scheme protocol.PQScheme) bool {
+	switch scheme {
+	case protocol.PQSchemeFalcon1024:
+		return proto.EnablePQSchemeFalcon1024
+	default:
+		return false
+	}
 }
 
 // EffectiveKeyDilution returns the key dilution for this account,
@@ -1492,6 +1507,7 @@ func initConsensusProtocols() {
 	vFuture.AppSizeUpdates = true
 	vFuture.AllowZeroLocalAppRef = true
 	vFuture.EnforceAuthAddrSenderDiff = true
+	vFuture.EnablePQSchemeFalcon1024 = true
 	vFuture.LoadTracking = true
 	vFuture.MaxAbsoluteTxnNoteBytes = 4096   // same as largest AVM value
 	vFuture.MaxAbsoluteExtraProgramPages = 7 // Allow larger programs with extra fees

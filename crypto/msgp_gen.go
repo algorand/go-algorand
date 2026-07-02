@@ -7,8 +7,9 @@ import (
 	_ "runtime/cgo"
 	_ "unsafe"
 
-	cfalcon "github.com/algorand/falcon"
 	"github.com/algorand/msgp/msgp"
+
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // The following msgp objects are implemented in this file:
@@ -211,6 +212,26 @@ import (
 //             |-----> (*) Msgsize
 //             |-----> (*) MsgIsZero
 //             |-----> OneTimeSignatureVerifierMaxSize()
+//
+// PQPrivateKeyPayload
+//          |-----> (*) MarshalMsg
+//          |-----> (*) CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) UnmarshalMsgWithState
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> (*) Msgsize
+//          |-----> (*) MsgIsZero
+//          |-----> PQPrivateKeyPayloadMaxSize()
+//
+// PQPublicKeyPayload
+//          |-----> (*) MarshalMsg
+//          |-----> (*) CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) UnmarshalMsgWithState
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> (*) Msgsize
+//          |-----> (*) MsgIsZero
+//          |-----> PQPublicKeyPayloadMaxSize()
 //
 // PrivateKey
 //      |-----> (*) MarshalMsg
@@ -465,7 +486,7 @@ func (_ *FalconPrivateKey) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *FalconPrivateKey) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (cfalcon.PrivateKeySize * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + (FalconPrivateKeySize * (msgp.ByteSize))
 	return
 }
 
@@ -477,7 +498,7 @@ func (z *FalconPrivateKey) MsgIsZero() bool {
 // FalconPrivateKeyMaxSize returns a maximum valid message size for this message type
 func FalconPrivateKeyMaxSize() (s int) {
 	// Calculating size of array: z
-	s = msgp.ArrayHeaderSize + ((cfalcon.PrivateKeySize) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((FalconPrivateKeySize) * (msgp.ByteSize))
 	return
 }
 
@@ -519,7 +540,7 @@ func (_ *FalconPublicKey) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *FalconPublicKey) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (cfalcon.PublicKeySize * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + (FalconPublicKeySize * (msgp.ByteSize))
 	return
 }
 
@@ -531,7 +552,7 @@ func (z *FalconPublicKey) MsgIsZero() bool {
 // FalconPublicKeyMaxSize returns a maximum valid message size for this message type
 func FalconPublicKeyMaxSize() (s int) {
 	// Calculating size of array: z
-	s = msgp.ArrayHeaderSize + ((cfalcon.PublicKeySize) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((FalconPublicKeySize) * (msgp.ByteSize))
 	return
 }
 
@@ -787,7 +808,7 @@ func (_ *FalconSigner) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *FalconSigner) Msgsize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + (cfalcon.PublicKeySize * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (cfalcon.PrivateKeySize * (msgp.ByteSize))
+	s = 1 + 3 + msgp.ArrayHeaderSize + (FalconPublicKeySize * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (FalconPrivateKeySize * (msgp.ByteSize))
 	return
 }
 
@@ -800,10 +821,10 @@ func (z *FalconSigner) MsgIsZero() bool {
 func FalconSignerMaxSize() (s int) {
 	s = 1 + 3
 	// Calculating size of array: z.PublicKey
-	s += msgp.ArrayHeaderSize + ((cfalcon.PublicKeySize) * (msgp.ByteSize))
+	s += msgp.ArrayHeaderSize + ((FalconPublicKeySize) * (msgp.ByteSize))
 	s += 3
 	// Calculating size of array: z.PrivateKey
-	s += msgp.ArrayHeaderSize + ((cfalcon.PrivateKeySize) * (msgp.ByteSize))
+	s += msgp.ArrayHeaderSize + ((FalconPrivateKeySize) * (msgp.ByteSize))
 	return
 }
 
@@ -912,7 +933,7 @@ func (_ *FalconVerifier) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *FalconVerifier) Msgsize() (s int) {
-	s = 1 + 2 + msgp.ArrayHeaderSize + (cfalcon.PublicKeySize * (msgp.ByteSize))
+	s = 1 + 2 + msgp.ArrayHeaderSize + (FalconPublicKeySize * (msgp.ByteSize))
 	return
 }
 
@@ -925,7 +946,7 @@ func (z *FalconVerifier) MsgIsZero() bool {
 func FalconVerifierMaxSize() (s int) {
 	s = 1 + 2
 	// Calculating size of array: z.PublicKey
-	s += msgp.ArrayHeaderSize + ((cfalcon.PublicKeySize) * (msgp.ByteSize))
+	s += msgp.ArrayHeaderSize + ((FalconPublicKeySize) * (msgp.ByteSize))
 	return
 }
 
@@ -3089,6 +3110,313 @@ func (z *OneTimeSignatureVerifier) MsgIsZero() bool {
 func OneTimeSignatureVerifierMaxSize() (s int) {
 	// Calculating size of array: z
 	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *PQPrivateKeyPayload) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 2
+	// string "entropy"
+	o = append(o, 0x82, 0xa7, 0x65, 0x6e, 0x74, 0x72, 0x6f, 0x70, 0x79)
+	o = msgp.AppendBytes(o, (*z).Entropy)
+	// string "scheme"
+	o = append(o, 0xa6, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x65)
+	o = (*z).Scheme.MarshalMsg(o)
+	return
+}
+
+func (_ *PQPrivateKeyPayload) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*PQPrivateKeyPayload)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *PQPrivateKeyPayload) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Scheme.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Scheme")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			var zb0003 int
+			zb0003, err = msgp.ReadBytesBytesHeader(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Entropy")
+				return
+			}
+			if zb0003 > DigestSize {
+				err = msgp.ErrOverflow(uint64(zb0003), uint64(DigestSize))
+				return
+			}
+			(*z).Entropy, bts, err = msgp.ReadBytesBytes(bts, (*z).Entropy)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Entropy")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = PQPrivateKeyPayload{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "scheme":
+				bts, err = (*z).Scheme.UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "Scheme")
+					return
+				}
+			case "entropy":
+				var zb0004 int
+				zb0004, err = msgp.ReadBytesBytesHeader(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Entropy")
+					return
+				}
+				if zb0004 > DigestSize {
+					err = msgp.ErrOverflow(uint64(zb0004), uint64(DigestSize))
+					return
+				}
+				(*z).Entropy, bts, err = msgp.ReadBytesBytes(bts, (*z).Entropy)
+				if err != nil {
+					err = msgp.WrapError(err, "Entropy")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (z *PQPrivateKeyPayload) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *PQPrivateKeyPayload) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*PQPrivateKeyPayload)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *PQPrivateKeyPayload) Msgsize() (s int) {
+	s = 1 + 7 + (*z).Scheme.Msgsize() + 8 + msgp.BytesPrefixSize + len((*z).Entropy)
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *PQPrivateKeyPayload) MsgIsZero() bool {
+	return ((*z).Scheme.MsgIsZero()) && (len((*z).Entropy) == 0)
+}
+
+// PQPrivateKeyPayloadMaxSize returns a maximum valid message size for this message type
+func PQPrivateKeyPayloadMaxSize() (s int) {
+	s = 1 + 7 + protocol.PQSchemeMaxSize() + 8 + msgp.BytesPrefixSize + DigestSize
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *PQPublicKeyPayload) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 3
+	// string "public-key"
+	o = append(o, 0x83, 0xaa, 0x70, 0x75, 0x62, 0x6c, 0x69, 0x63, 0x2d, 0x6b, 0x65, 0x79)
+	o = msgp.AppendBytes(o, (*z).PublicKey)
+	// string "salt"
+	o = append(o, 0xa4, 0x73, 0x61, 0x6c, 0x74)
+	o = msgp.AppendUint8(o, (*z).Salt)
+	// string "scheme"
+	o = append(o, 0xa6, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x65)
+	o = (*z).Scheme.MarshalMsg(o)
+	return
+}
+
+func (_ *PQPublicKeyPayload) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*PQPublicKeyPayload)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *PQPublicKeyPayload) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Scheme.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Scheme")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).Salt, bts, err = msgp.ReadUint8Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Salt")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			var zb0003 int
+			zb0003, err = msgp.ReadBytesBytesHeader(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "PublicKey")
+				return
+			}
+			if zb0003 > FalconPublicKeySize {
+				err = msgp.ErrOverflow(uint64(zb0003), uint64(FalconPublicKeySize))
+				return
+			}
+			(*z).PublicKey, bts, err = msgp.ReadBytesBytes(bts, (*z).PublicKey)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "PublicKey")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = PQPublicKeyPayload{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "scheme":
+				bts, err = (*z).Scheme.UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "Scheme")
+					return
+				}
+			case "salt":
+				(*z).Salt, bts, err = msgp.ReadUint8Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Salt")
+					return
+				}
+			case "public-key":
+				var zb0004 int
+				zb0004, err = msgp.ReadBytesBytesHeader(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "PublicKey")
+					return
+				}
+				if zb0004 > FalconPublicKeySize {
+					err = msgp.ErrOverflow(uint64(zb0004), uint64(FalconPublicKeySize))
+					return
+				}
+				(*z).PublicKey, bts, err = msgp.ReadBytesBytes(bts, (*z).PublicKey)
+				if err != nil {
+					err = msgp.WrapError(err, "PublicKey")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (z *PQPublicKeyPayload) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *PQPublicKeyPayload) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*PQPublicKeyPayload)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *PQPublicKeyPayload) Msgsize() (s int) {
+	s = 1 + 7 + (*z).Scheme.Msgsize() + 5 + msgp.Uint8Size + 11 + msgp.BytesPrefixSize + len((*z).PublicKey)
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *PQPublicKeyPayload) MsgIsZero() bool {
+	return ((*z).Scheme.MsgIsZero()) && ((*z).Salt == 0) && (len((*z).PublicKey) == 0)
+}
+
+// PQPublicKeyPayloadMaxSize returns a maximum valid message size for this message type
+func PQPublicKeyPayloadMaxSize() (s int) {
+	s = 1 + 7 + protocol.PQSchemeMaxSize() + 5 + msgp.Uint8Size + 11 + msgp.BytesPrefixSize + FalconPublicKeySize
 	return
 }
 

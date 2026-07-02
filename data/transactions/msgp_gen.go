@@ -159,6 +159,16 @@ import (
 //       |-----> MsgIsZero
 //       |-----> OnCompletionMaxSize()
 //
+// PQSig
+//   |-----> (*) MarshalMsg
+//   |-----> (*) CanMarshalMsg
+//   |-----> (*) UnmarshalMsg
+//   |-----> (*) UnmarshalMsgWithState
+//   |-----> (*) CanUnmarshalMsg
+//   |-----> (*) Msgsize
+//   |-----> (*) MsgIsZero
+//   |-----> PQSigMaxSize()
+//
 // PaymentTxnFields
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
@@ -4181,6 +4191,235 @@ func OnCompletionMaxSize() (s int) {
 }
 
 // MarshalMsg implements msgp.Marshaler
+func (z *PQSig) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(4)
+	var zb0001Mask uint8 /* 5 bits */
+	if len((*z).PublicKey) == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).Scheme.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if len((*z).Signature) == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	if (*z).Salt.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x10
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "pk"
+			o = append(o, 0xa2, 0x70, 0x6b)
+			o = msgp.AppendBytes(o, (*z).PublicKey)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "sch"
+			o = append(o, 0xa3, 0x73, 0x63, 0x68)
+			o = (*z).Scheme.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "sig"
+			o = append(o, 0xa3, 0x73, 0x69, 0x67)
+			o = msgp.AppendBytes(o, (*z).Signature)
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not empty
+			// string "slt"
+			o = append(o, 0xa3, 0x73, 0x6c, 0x74)
+			o = (*z).Salt.MarshalMsg(o)
+		}
+	}
+	return
+}
+
+func (_ *PQSig) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*PQSig)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *PQSig) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Scheme.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Scheme")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Salt.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Salt")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			var zb0003 int
+			zb0003, err = msgp.ReadBytesBytesHeader(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "PublicKey")
+				return
+			}
+			if zb0003 > PQMaxPublicKeySize {
+				err = msgp.ErrOverflow(uint64(zb0003), uint64(PQMaxPublicKeySize))
+				return
+			}
+			(*z).PublicKey, bts, err = msgp.ReadBytesBytes(bts, (*z).PublicKey)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "PublicKey")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			var zb0004 int
+			zb0004, err = msgp.ReadBytesBytesHeader(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Signature")
+				return
+			}
+			if zb0004 > PQMaxSignatureSize {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(PQMaxSignatureSize))
+				return
+			}
+			(*z).Signature, bts, err = msgp.ReadBytesBytes(bts, (*z).Signature)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Signature")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = PQSig{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "sch":
+				bts, err = (*z).Scheme.UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "Scheme")
+					return
+				}
+			case "slt":
+				bts, err = (*z).Salt.UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "Salt")
+					return
+				}
+			case "pk":
+				var zb0005 int
+				zb0005, err = msgp.ReadBytesBytesHeader(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "PublicKey")
+					return
+				}
+				if zb0005 > PQMaxPublicKeySize {
+					err = msgp.ErrOverflow(uint64(zb0005), uint64(PQMaxPublicKeySize))
+					return
+				}
+				(*z).PublicKey, bts, err = msgp.ReadBytesBytes(bts, (*z).PublicKey)
+				if err != nil {
+					err = msgp.WrapError(err, "PublicKey")
+					return
+				}
+			case "sig":
+				var zb0006 int
+				zb0006, err = msgp.ReadBytesBytesHeader(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Signature")
+					return
+				}
+				if zb0006 > PQMaxSignatureSize {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(PQMaxSignatureSize))
+					return
+				}
+				(*z).Signature, bts, err = msgp.ReadBytesBytes(bts, (*z).Signature)
+				if err != nil {
+					err = msgp.WrapError(err, "Signature")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (z *PQSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *PQSig) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*PQSig)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *PQSig) Msgsize() (s int) {
+	s = 1 + 4 + (*z).Scheme.Msgsize() + 4 + (*z).Salt.Msgsize() + 3 + msgp.BytesPrefixSize + len((*z).PublicKey) + 4 + msgp.BytesPrefixSize + len((*z).Signature)
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *PQSig) MsgIsZero() bool {
+	return ((*z).Scheme.MsgIsZero()) && ((*z).Salt.MsgIsZero()) && (len((*z).PublicKey) == 0) && (len((*z).Signature) == 0)
+}
+
+// PQSigMaxSize returns a maximum valid message size for this message type
+func PQSigMaxSize() (s int) {
+	s = 1 + 4 + protocol.PQSchemeMaxSize() + 4 + basics.PQAddressSaltMaxSize() + 3 + msgp.BytesPrefixSize + PQMaxPublicKeySize + 4 + msgp.BytesPrefixSize + PQMaxSignatureSize
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
 func (z *PaymentTxnFields) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
@@ -5163,8 +5402,8 @@ func ResourceRefMaxSize() (s int) {
 func (z *SignedTxn) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(5)
-	var zb0001Mask uint8 /* 6 bits */
+	zb0001Len := uint32(6)
+	var zb0001Mask uint8 /* 7 bits */
 	if (*z).Lsig.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
@@ -5173,17 +5412,21 @@ func (z *SignedTxn) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if (*z).AuthAddr.MsgIsZero() {
+	if (*z).PQsig.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if (*z).Sig.MsgIsZero() {
+	if (*z).AuthAddr.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
-	if (*z).Txn.MsgIsZero() {
+	if (*z).Sig.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x20
+	}
+	if (*z).Txn.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x40
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -5199,16 +5442,21 @@ func (z *SignedTxn) MarshalMsg(b []byte) (o []byte) {
 			o = (*z).Msig.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "pqsig"
+			o = append(o, 0xa5, 0x70, 0x71, 0x73, 0x69, 0x67)
+			o = (*z).PQsig.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not empty
 			// string "sgnr"
 			o = append(o, 0xa4, 0x73, 0x67, 0x6e, 0x72)
 			o = (*z).AuthAddr.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x10) == 0 { // if not empty
+		if (zb0001Mask & 0x20) == 0 { // if not empty
 			// string "sig"
 			o = append(o, 0xa3, 0x73, 0x69, 0x67)
 			o = (*z).Sig.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x20) == 0 { // if not empty
+		if (zb0001Mask & 0x40) == 0 { // if not empty
 			// string "txn"
 			o = append(o, 0xa3, 0x74, 0x78, 0x6e)
 			o = (*z).Txn.MarshalMsg(o)
@@ -5261,6 +5509,14 @@ func (z *SignedTxn) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o
 			bts, err = (*z).Lsig.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Lsig")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).PQsig.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "PQsig")
 				return
 			}
 		}
@@ -5321,6 +5577,12 @@ func (z *SignedTxn) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o
 					err = msgp.WrapError(err, "Lsig")
 					return
 				}
+			case "pqsig":
+				bts, err = (*z).PQsig.UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "PQsig")
+					return
+				}
 			case "txn":
 				bts, err = (*z).Txn.UnmarshalMsgWithState(bts, st)
 				if err != nil {
@@ -5363,18 +5625,18 @@ func (_ *SignedTxn) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *SignedTxn) Msgsize() (s int) {
-	s = 1 + 4 + (*z).Sig.Msgsize() + 5 + (*z).Msig.Msgsize() + 5 + (*z).Lsig.Msgsize() + 4 + (*z).Txn.Msgsize() + 5 + (*z).AuthAddr.Msgsize()
+	s = 1 + 4 + (*z).Sig.Msgsize() + 5 + (*z).Msig.Msgsize() + 5 + (*z).Lsig.Msgsize() + 6 + (*z).PQsig.Msgsize() + 4 + (*z).Txn.Msgsize() + 5 + (*z).AuthAddr.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *SignedTxn) MsgIsZero() bool {
-	return ((*z).Sig.MsgIsZero()) && ((*z).Msig.MsgIsZero()) && ((*z).Lsig.MsgIsZero()) && ((*z).Txn.MsgIsZero()) && ((*z).AuthAddr.MsgIsZero())
+	return ((*z).Sig.MsgIsZero()) && ((*z).Msig.MsgIsZero()) && ((*z).Lsig.MsgIsZero()) && ((*z).PQsig.MsgIsZero()) && ((*z).Txn.MsgIsZero()) && ((*z).AuthAddr.MsgIsZero())
 }
 
 // SignedTxnMaxSize returns a maximum valid message size for this message type
 func SignedTxnMaxSize() (s int) {
-	s = 1 + 4 + crypto.SignatureMaxSize() + 5 + crypto.MultisigSigMaxSize() + 5 + LogicSigMaxSize() + 4 + TransactionMaxSize() + 5 + basics.AddressMaxSize()
+	s = 1 + 4 + crypto.SignatureMaxSize() + 5 + crypto.MultisigSigMaxSize() + 5 + LogicSigMaxSize() + 6 + PQSigMaxSize() + 4 + TransactionMaxSize() + 5 + basics.AddressMaxSize()
 	return
 }
 
@@ -5382,8 +5644,8 @@ func SignedTxnMaxSize() (s int) {
 func (z *SignedTxnInBlock) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(15)
-	var zb0001Mask uint32 /* 19 bits */
+	zb0001Len := uint32(16)
+	var zb0001Mask uint32 /* 20 bits */
 	if (*z).SignedTxnWithAD.ApplyData.AssetClosingAmount == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x10
@@ -5420,32 +5682,36 @@ func (z *SignedTxnInBlock) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x1000
 	}
-	if (*z).SignedTxnWithAD.ApplyData.CloseRewards.MsgIsZero() {
+	if (*z).SignedTxnWithAD.SignedTxn.PQsig.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2000
 	}
-	if (*z).SignedTxnWithAD.ApplyData.ReceiverRewards.MsgIsZero() {
+	if (*z).SignedTxnWithAD.ApplyData.CloseRewards.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4000
 	}
-	if (*z).SignedTxnWithAD.ApplyData.SenderRewards.MsgIsZero() {
+	if (*z).SignedTxnWithAD.ApplyData.ReceiverRewards.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x8000
 	}
-	if (*z).SignedTxnWithAD.SignedTxn.AuthAddr.MsgIsZero() {
+	if (*z).SignedTxnWithAD.ApplyData.SenderRewards.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x10000
 	}
-	if (*z).SignedTxnWithAD.SignedTxn.Sig.MsgIsZero() {
+	if (*z).SignedTxnWithAD.SignedTxn.AuthAddr.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x20000
 	}
-	if (*z).SignedTxnWithAD.SignedTxn.Txn.MsgIsZero() {
+	if (*z).SignedTxnWithAD.SignedTxn.Sig.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x40000
 	}
+	if (*z).SignedTxnWithAD.SignedTxn.Txn.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x80000
+	}
 	// variable map header, size zb0001Len
-	o = append(o, 0x80|uint8(zb0001Len))
+	o = msgp.AppendMapHeader(o, zb0001Len)
 	if zb0001Len != 0 {
 		if (zb0001Mask & 0x10) == 0 { // if not empty
 			// string "aca"
@@ -5493,31 +5759,36 @@ func (z *SignedTxnInBlock) MarshalMsg(b []byte) (o []byte) {
 			o = (*z).SignedTxnWithAD.SignedTxn.Msig.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x2000) == 0 { // if not empty
+			// string "pqsig"
+			o = append(o, 0xa5, 0x70, 0x71, 0x73, 0x69, 0x67)
+			o = (*z).SignedTxnWithAD.SignedTxn.PQsig.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x4000) == 0 { // if not empty
 			// string "rc"
 			o = append(o, 0xa2, 0x72, 0x63)
 			o = (*z).SignedTxnWithAD.ApplyData.CloseRewards.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x4000) == 0 { // if not empty
+		if (zb0001Mask & 0x8000) == 0 { // if not empty
 			// string "rr"
 			o = append(o, 0xa2, 0x72, 0x72)
 			o = (*z).SignedTxnWithAD.ApplyData.ReceiverRewards.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x8000) == 0 { // if not empty
+		if (zb0001Mask & 0x10000) == 0 { // if not empty
 			// string "rs"
 			o = append(o, 0xa2, 0x72, 0x73)
 			o = (*z).SignedTxnWithAD.ApplyData.SenderRewards.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x10000) == 0 { // if not empty
+		if (zb0001Mask & 0x20000) == 0 { // if not empty
 			// string "sgnr"
 			o = append(o, 0xa4, 0x73, 0x67, 0x6e, 0x72)
 			o = (*z).SignedTxnWithAD.SignedTxn.AuthAddr.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x20000) == 0 { // if not empty
+		if (zb0001Mask & 0x40000) == 0 { // if not empty
 			// string "sig"
 			o = append(o, 0xa3, 0x73, 0x69, 0x67)
 			o = (*z).SignedTxnWithAD.SignedTxn.Sig.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x40000) == 0 { // if not empty
+		if (zb0001Mask & 0x80000) == 0 { // if not empty
 			// string "txn"
 			o = append(o, 0xa3, 0x74, 0x78, 0x6e)
 			o = (*z).SignedTxnWithAD.SignedTxn.Txn.MarshalMsg(o)
@@ -5570,6 +5841,14 @@ func (z *SignedTxnInBlock) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSt
 			bts, err = (*z).SignedTxnWithAD.SignedTxn.Lsig.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Lsig")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).SignedTxnWithAD.SignedTxn.PQsig.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "PQsig")
 				return
 			}
 		}
@@ -5710,6 +5989,12 @@ func (z *SignedTxnInBlock) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSt
 					err = msgp.WrapError(err, "Lsig")
 					return
 				}
+			case "pqsig":
+				bts, err = (*z).SignedTxnWithAD.SignedTxn.PQsig.UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "PQsig")
+					return
+				}
 			case "txn":
 				bts, err = (*z).SignedTxnWithAD.SignedTxn.Txn.UnmarshalMsgWithState(bts, st)
 				if err != nil {
@@ -5812,18 +6097,18 @@ func (_ *SignedTxnInBlock) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *SignedTxnInBlock) Msgsize() (s int) {
-	s = 1 + 4 + (*z).SignedTxnWithAD.SignedTxn.Sig.Msgsize() + 5 + (*z).SignedTxnWithAD.SignedTxn.Msig.Msgsize() + 5 + (*z).SignedTxnWithAD.SignedTxn.Lsig.Msgsize() + 4 + (*z).SignedTxnWithAD.SignedTxn.Txn.Msgsize() + 5 + (*z).SignedTxnWithAD.SignedTxn.AuthAddr.Msgsize() + 3 + (*z).SignedTxnWithAD.ApplyData.ClosingAmount.Msgsize() + 4 + msgp.Uint64Size + 3 + (*z).SignedTxnWithAD.ApplyData.SenderRewards.Msgsize() + 3 + (*z).SignedTxnWithAD.ApplyData.ReceiverRewards.Msgsize() + 3 + (*z).SignedTxnWithAD.ApplyData.CloseRewards.Msgsize() + 3 + (*z).SignedTxnWithAD.ApplyData.EvalDelta.Msgsize() + 5 + (*z).SignedTxnWithAD.ApplyData.ConfigAsset.Msgsize() + 5 + (*z).SignedTxnWithAD.ApplyData.ApplicationID.Msgsize() + 4 + msgp.BoolSize + 4 + msgp.BoolSize
+	s = 3 + 4 + (*z).SignedTxnWithAD.SignedTxn.Sig.Msgsize() + 5 + (*z).SignedTxnWithAD.SignedTxn.Msig.Msgsize() + 5 + (*z).SignedTxnWithAD.SignedTxn.Lsig.Msgsize() + 6 + (*z).SignedTxnWithAD.SignedTxn.PQsig.Msgsize() + 4 + (*z).SignedTxnWithAD.SignedTxn.Txn.Msgsize() + 5 + (*z).SignedTxnWithAD.SignedTxn.AuthAddr.Msgsize() + 3 + (*z).SignedTxnWithAD.ApplyData.ClosingAmount.Msgsize() + 4 + msgp.Uint64Size + 3 + (*z).SignedTxnWithAD.ApplyData.SenderRewards.Msgsize() + 3 + (*z).SignedTxnWithAD.ApplyData.ReceiverRewards.Msgsize() + 3 + (*z).SignedTxnWithAD.ApplyData.CloseRewards.Msgsize() + 3 + (*z).SignedTxnWithAD.ApplyData.EvalDelta.Msgsize() + 5 + (*z).SignedTxnWithAD.ApplyData.ConfigAsset.Msgsize() + 5 + (*z).SignedTxnWithAD.ApplyData.ApplicationID.Msgsize() + 4 + msgp.BoolSize + 4 + msgp.BoolSize
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *SignedTxnInBlock) MsgIsZero() bool {
-	return ((*z).SignedTxnWithAD.SignedTxn.Sig.MsgIsZero()) && ((*z).SignedTxnWithAD.SignedTxn.Msig.MsgIsZero()) && ((*z).SignedTxnWithAD.SignedTxn.Lsig.MsgIsZero()) && ((*z).SignedTxnWithAD.SignedTxn.Txn.MsgIsZero()) && ((*z).SignedTxnWithAD.SignedTxn.AuthAddr.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.ClosingAmount.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.AssetClosingAmount == 0) && ((*z).SignedTxnWithAD.ApplyData.SenderRewards.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.ReceiverRewards.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.CloseRewards.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.EvalDelta.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.ConfigAsset.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.ApplicationID.MsgIsZero()) && ((*z).HasGenesisID == false) && ((*z).HasGenesisHash == false)
+	return ((*z).SignedTxnWithAD.SignedTxn.Sig.MsgIsZero()) && ((*z).SignedTxnWithAD.SignedTxn.Msig.MsgIsZero()) && ((*z).SignedTxnWithAD.SignedTxn.Lsig.MsgIsZero()) && ((*z).SignedTxnWithAD.SignedTxn.PQsig.MsgIsZero()) && ((*z).SignedTxnWithAD.SignedTxn.Txn.MsgIsZero()) && ((*z).SignedTxnWithAD.SignedTxn.AuthAddr.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.ClosingAmount.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.AssetClosingAmount == 0) && ((*z).SignedTxnWithAD.ApplyData.SenderRewards.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.ReceiverRewards.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.CloseRewards.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.EvalDelta.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.ConfigAsset.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.ApplicationID.MsgIsZero()) && ((*z).HasGenesisID == false) && ((*z).HasGenesisHash == false)
 }
 
 // SignedTxnInBlockMaxSize returns a maximum valid message size for this message type
 func SignedTxnInBlockMaxSize() (s int) {
-	s = 1 + 4 + crypto.SignatureMaxSize() + 5 + crypto.MultisigSigMaxSize() + 5 + LogicSigMaxSize() + 4 + TransactionMaxSize() + 5 + basics.AddressMaxSize() + 3 + basics.MicroAlgosMaxSize() + 4 + msgp.Uint64Size + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + EvalDeltaMaxSize() + 5 + basics.AssetIndexMaxSize() + 5 + basics.AppIndexMaxSize() + 4 + msgp.BoolSize + 4 + msgp.BoolSize
+	s = 3 + 4 + crypto.SignatureMaxSize() + 5 + crypto.MultisigSigMaxSize() + 5 + LogicSigMaxSize() + 6 + PQSigMaxSize() + 4 + TransactionMaxSize() + 5 + basics.AddressMaxSize() + 3 + basics.MicroAlgosMaxSize() + 4 + msgp.Uint64Size + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + EvalDeltaMaxSize() + 5 + basics.AssetIndexMaxSize() + 5 + basics.AppIndexMaxSize() + 4 + msgp.BoolSize + 4 + msgp.BoolSize
 	return
 }
 
@@ -5831,8 +6116,8 @@ func SignedTxnInBlockMaxSize() (s int) {
 func (z *SignedTxnWithAD) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(13)
-	var zb0001Mask uint16 /* 16 bits */
+	zb0001Len := uint32(14)
+	var zb0001Mask uint32 /* 17 bits */
 	if (*z).ApplyData.AssetClosingAmount == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x8
@@ -5861,29 +6146,33 @@ func (z *SignedTxnWithAD) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x200
 	}
-	if (*z).ApplyData.CloseRewards.MsgIsZero() {
+	if (*z).SignedTxn.PQsig.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x400
 	}
-	if (*z).ApplyData.ReceiverRewards.MsgIsZero() {
+	if (*z).ApplyData.CloseRewards.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x800
 	}
-	if (*z).ApplyData.SenderRewards.MsgIsZero() {
+	if (*z).ApplyData.ReceiverRewards.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x1000
 	}
-	if (*z).SignedTxn.AuthAddr.MsgIsZero() {
+	if (*z).ApplyData.SenderRewards.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2000
 	}
-	if (*z).SignedTxn.Sig.MsgIsZero() {
+	if (*z).SignedTxn.AuthAddr.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4000
 	}
-	if (*z).SignedTxn.Txn.MsgIsZero() {
+	if (*z).SignedTxn.Sig.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x8000
+	}
+	if (*z).SignedTxn.Txn.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x10000
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -5924,31 +6213,36 @@ func (z *SignedTxnWithAD) MarshalMsg(b []byte) (o []byte) {
 			o = (*z).SignedTxn.Msig.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x400) == 0 { // if not empty
+			// string "pqsig"
+			o = append(o, 0xa5, 0x70, 0x71, 0x73, 0x69, 0x67)
+			o = (*z).SignedTxn.PQsig.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x800) == 0 { // if not empty
 			// string "rc"
 			o = append(o, 0xa2, 0x72, 0x63)
 			o = (*z).ApplyData.CloseRewards.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x800) == 0 { // if not empty
+		if (zb0001Mask & 0x1000) == 0 { // if not empty
 			// string "rr"
 			o = append(o, 0xa2, 0x72, 0x72)
 			o = (*z).ApplyData.ReceiverRewards.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x1000) == 0 { // if not empty
+		if (zb0001Mask & 0x2000) == 0 { // if not empty
 			// string "rs"
 			o = append(o, 0xa2, 0x72, 0x73)
 			o = (*z).ApplyData.SenderRewards.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x2000) == 0 { // if not empty
+		if (zb0001Mask & 0x4000) == 0 { // if not empty
 			// string "sgnr"
 			o = append(o, 0xa4, 0x73, 0x67, 0x6e, 0x72)
 			o = (*z).SignedTxn.AuthAddr.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x4000) == 0 { // if not empty
+		if (zb0001Mask & 0x8000) == 0 { // if not empty
 			// string "sig"
 			o = append(o, 0xa3, 0x73, 0x69, 0x67)
 			o = (*z).SignedTxn.Sig.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x8000) == 0 { // if not empty
+		if (zb0001Mask & 0x10000) == 0 { // if not empty
 			// string "txn"
 			o = append(o, 0xa3, 0x74, 0x78, 0x6e)
 			o = (*z).SignedTxn.Txn.MarshalMsg(o)
@@ -6001,6 +6295,14 @@ func (z *SignedTxnWithAD) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSta
 			bts, err = (*z).SignedTxn.Lsig.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Lsig")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).SignedTxn.PQsig.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "PQsig")
 				return
 			}
 		}
@@ -6125,6 +6427,12 @@ func (z *SignedTxnWithAD) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSta
 					err = msgp.WrapError(err, "Lsig")
 					return
 				}
+			case "pqsig":
+				bts, err = (*z).SignedTxn.PQsig.UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "PQsig")
+					return
+				}
 			case "txn":
 				bts, err = (*z).SignedTxn.Txn.UnmarshalMsgWithState(bts, st)
 				if err != nil {
@@ -6215,18 +6523,18 @@ func (_ *SignedTxnWithAD) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *SignedTxnWithAD) Msgsize() (s int) {
-	s = 1 + 4 + (*z).SignedTxn.Sig.Msgsize() + 5 + (*z).SignedTxn.Msig.Msgsize() + 5 + (*z).SignedTxn.Lsig.Msgsize() + 4 + (*z).SignedTxn.Txn.Msgsize() + 5 + (*z).SignedTxn.AuthAddr.Msgsize() + 3 + (*z).ApplyData.ClosingAmount.Msgsize() + 4 + msgp.Uint64Size + 3 + (*z).ApplyData.SenderRewards.Msgsize() + 3 + (*z).ApplyData.ReceiverRewards.Msgsize() + 3 + (*z).ApplyData.CloseRewards.Msgsize() + 3 + (*z).ApplyData.EvalDelta.Msgsize() + 5 + (*z).ApplyData.ConfigAsset.Msgsize() + 5 + (*z).ApplyData.ApplicationID.Msgsize()
+	s = 1 + 4 + (*z).SignedTxn.Sig.Msgsize() + 5 + (*z).SignedTxn.Msig.Msgsize() + 5 + (*z).SignedTxn.Lsig.Msgsize() + 6 + (*z).SignedTxn.PQsig.Msgsize() + 4 + (*z).SignedTxn.Txn.Msgsize() + 5 + (*z).SignedTxn.AuthAddr.Msgsize() + 3 + (*z).ApplyData.ClosingAmount.Msgsize() + 4 + msgp.Uint64Size + 3 + (*z).ApplyData.SenderRewards.Msgsize() + 3 + (*z).ApplyData.ReceiverRewards.Msgsize() + 3 + (*z).ApplyData.CloseRewards.Msgsize() + 3 + (*z).ApplyData.EvalDelta.Msgsize() + 5 + (*z).ApplyData.ConfigAsset.Msgsize() + 5 + (*z).ApplyData.ApplicationID.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *SignedTxnWithAD) MsgIsZero() bool {
-	return ((*z).SignedTxn.Sig.MsgIsZero()) && ((*z).SignedTxn.Msig.MsgIsZero()) && ((*z).SignedTxn.Lsig.MsgIsZero()) && ((*z).SignedTxn.Txn.MsgIsZero()) && ((*z).SignedTxn.AuthAddr.MsgIsZero()) && ((*z).ApplyData.ClosingAmount.MsgIsZero()) && ((*z).ApplyData.AssetClosingAmount == 0) && ((*z).ApplyData.SenderRewards.MsgIsZero()) && ((*z).ApplyData.ReceiverRewards.MsgIsZero()) && ((*z).ApplyData.CloseRewards.MsgIsZero()) && ((*z).ApplyData.EvalDelta.MsgIsZero()) && ((*z).ApplyData.ConfigAsset.MsgIsZero()) && ((*z).ApplyData.ApplicationID.MsgIsZero())
+	return ((*z).SignedTxn.Sig.MsgIsZero()) && ((*z).SignedTxn.Msig.MsgIsZero()) && ((*z).SignedTxn.Lsig.MsgIsZero()) && ((*z).SignedTxn.PQsig.MsgIsZero()) && ((*z).SignedTxn.Txn.MsgIsZero()) && ((*z).SignedTxn.AuthAddr.MsgIsZero()) && ((*z).ApplyData.ClosingAmount.MsgIsZero()) && ((*z).ApplyData.AssetClosingAmount == 0) && ((*z).ApplyData.SenderRewards.MsgIsZero()) && ((*z).ApplyData.ReceiverRewards.MsgIsZero()) && ((*z).ApplyData.CloseRewards.MsgIsZero()) && ((*z).ApplyData.EvalDelta.MsgIsZero()) && ((*z).ApplyData.ConfigAsset.MsgIsZero()) && ((*z).ApplyData.ApplicationID.MsgIsZero())
 }
 
 // SignedTxnWithADMaxSize returns a maximum valid message size for this message type
 func SignedTxnWithADMaxSize() (s int) {
-	s = 1 + 4 + crypto.SignatureMaxSize() + 5 + crypto.MultisigSigMaxSize() + 5 + LogicSigMaxSize() + 4 + TransactionMaxSize() + 5 + basics.AddressMaxSize() + 3 + basics.MicroAlgosMaxSize() + 4 + msgp.Uint64Size + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + EvalDeltaMaxSize() + 5 + basics.AssetIndexMaxSize() + 5 + basics.AppIndexMaxSize()
+	s = 1 + 4 + crypto.SignatureMaxSize() + 5 + crypto.MultisigSigMaxSize() + 5 + LogicSigMaxSize() + 6 + PQSigMaxSize() + 4 + TransactionMaxSize() + 5 + basics.AddressMaxSize() + 3 + basics.MicroAlgosMaxSize() + 4 + msgp.Uint64Size + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + EvalDeltaMaxSize() + 5 + basics.AssetIndexMaxSize() + 5 + basics.AppIndexMaxSize()
 	return
 }
 

@@ -53,8 +53,8 @@ github.com/algorand/go-deadlock v0.2.5 h1:Kn3WJMn9+wK1pqJrr2+1/y3Z8p1dcftpr2Mbbl
 github.com/algorand/go-deadlock v0.2.5/go.mod h1:z0g1kdYBhezsHoEKqYf5dVnP9dGMwOOqqxUSTCk2Oks=
 github.com/algorand/go-sumhash v0.1.0 h1:b/QRhyLuF//vOcicBIxBXYW8bERNoeLxieht/dUYpVg=
 github.com/algorand/go-sumhash v0.1.0/go.mod h1:OOe7jdDWUhLkuP1XytkK5gnLu9entAviN5DfDZh6XAc=
-github.com/algorand/msgp v1.1.61 h1:IDSCGKLIi60n6j0lHDu37GTsCo9anw49Rq4PTwsDQsQ=
-github.com/algorand/msgp v1.1.61/go.mod h1:j9sEjNKkS12H0Yhwov/3MfzhM60n3iyr81Ymzv49pu8=
+github.com/algorand/msgp v1.1.63 h1:BK7Ghzq6hvZ1QivZ2p1TDEQDrU8oJ+1oY66yb+1ezXw=
+github.com/algorand/msgp v1.1.63/go.mod h1:j9sEjNKkS12H0Yhwov/3MfzhM60n3iyr81Ymzv49pu8=
 github.com/algorand/sortition v1.0.0 h1:PJiZtdSTBm4nArQrZXBnhlljHXhuyAXRJBqVWowQu3E=
 github.com/algorand/sortition v1.0.0/go.mod h1:23CZwAbTWPv0bBsq+Php/2J6Y/iXDyzlfcZyepeY5Fo=
 github.com/algorand/websocket v1.4.6 h1:I0kV4EYwatuUrKtNiwzYYgojgwh6pksDmlqntKG2Woc=

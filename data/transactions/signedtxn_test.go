@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
@@ -85,6 +86,59 @@ func TestSignedTxnInBlockHash(t *testing.T) {
 	var stib SignedTxnInBlock
 	crypto.RandBytes(stib.Txn.Sender[:])
 	require.Equal(t, crypto.HashObj(&stib), stib.Hash())
+}
+
+func TestSignedTxnFeeFactorPQSignatureContribution(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	fixture := makePQSigTestFixture(t, 0)
+
+	baseTxn := SignedTxn{Txn: fixture.txn}
+	regularSigned := baseTxn
+	regularSigned.Sig[0] = 1
+	msigSigned := baseTxn
+	msigSigned.Msig = crypto.MultisigSig{Version: 1}
+	lsigSigned := baseTxn
+	lsigSigned.Lsig = LogicSig{Logic: []byte{1}}
+	unknownPQSigned := baseTxn
+	unknownPQSigned.PQsig = PQSig{Scheme: protocol.PQScheme{'x', '1'}}
+	pqSigned := SignedTxn{Txn: fixture.txn, PQsig: fixture.pqSig}
+	pqAndRegularSigned := pqSigned
+	pqAndRegularSigned.Sig[0] = 1
+	regularSingletonHeartbeat := regularSigned
+	regularSingletonHeartbeat.Txn.Type = protocol.HeartbeatTx
+	regularSingletonHeartbeat.Txn.HeartbeatTxnFields = &HeartbeatTxnFields{}
+	regularSingletonHeartbeat.Txn.PaymentTxnFields = PaymentTxnFields{}
+	pqSingletonHeartbeat := pqSigned
+	pqSingletonHeartbeat.Txn.Type = protocol.HeartbeatTx
+	pqSingletonHeartbeat.Txn.HeartbeatTxnFields = &HeartbeatTxnFields{}
+	pqSingletonHeartbeat.Txn.PaymentTxnFields = PaymentTxnFields{}
+	mixedSingletonHeartbeat := pqAndRegularSigned
+	mixedSingletonHeartbeat.Txn.Type = protocol.HeartbeatTx
+	mixedSingletonHeartbeat.Txn.HeartbeatTxnFields = &HeartbeatTxnFields{}
+	mixedSingletonHeartbeat.Txn.PaymentTxnFields = PaymentTxnFields{}
+	pqPaidSingletonHeartbeat := pqSingletonHeartbeat
+	pqPaidSingletonHeartbeat.Txn.Fee = proto.MinFee()
+	pqGroupedHeartbeat := pqSingletonHeartbeat
+	pqGroupedHeartbeat.Txn.Group = crypto.Digest{1}
+
+	for _, stxn := range []SignedTxn{baseTxn, regularSigned, msigSigned, lsigSigned} {
+		require.Equal(t, basics.Micros(1e6), stxn.FeeFactor(proto))
+	}
+	require.Equal(t, basics.Micros(2e6), basics.PQSchemeFalcon1024FeeContribution)
+	require.Equal(t, basics.Micros(1e6), unknownPQSigned.FeeFactor(proto))
+	require.Equal(t, basics.Micros(3e6), pqSigned.FeeFactor(proto))
+	require.Equal(t, basics.Micros(3e6), pqAndRegularSigned.FeeFactor(proto))
+	require.Equal(t, basics.Micros(0), regularSingletonHeartbeat.FeeFactor(proto))
+	require.Equal(t, basics.Micros(0), pqSingletonHeartbeat.FeeFactor(proto))
+	require.Equal(t, basics.Micros(0), mixedSingletonHeartbeat.FeeFactor(proto))
+	require.Equal(t, basics.Micros(2e6), pqPaidSingletonHeartbeat.FeeFactor(proto))
+	require.Equal(t, basics.Micros(3e6), pqGroupedHeartbeat.FeeFactor(proto))
+
+	requiredFee, _, overflow := proto.MinFee().FeeForUsage(pqSigned.FeeFactor(proto), 1e6, 0)
+	require.False(t, overflow)
+	require.Equal(t, proto.MinFee().Raw*3, requiredFee.Raw)
 }
 
 //TODO: test multisig

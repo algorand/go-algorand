@@ -543,7 +543,7 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, pass bool, evalErr
 			}
 
 			// Fix the current auth addr if this txn doesn't have a signature
-			if txnHasNoSignature(stxn.SignedTxn) {
+			if txnNeedsSyntheticSignature(stxn.SignedTxn) {
 				stxn.AuthAddr = knownAuthAddrs[sender]
 				if stxn.AuthAddr == sender {
 					stxn.AuthAddr = basics.Address{}

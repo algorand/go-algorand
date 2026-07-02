@@ -1133,6 +1133,63 @@ func enableDeveloperAPI() postTransactionOpt {
 	}
 }
 
+func makePQSigWithAddressCompliance(t *testing.T, compliant bool) (crypto.FalconSigner, basics.Address, transactions.PQSig) {
+	t.Helper()
+
+	for seedByte := 0; seedByte <= math.MaxUint8; seedByte++ {
+		var seed crypto.FalconSeed
+		seed[0] = byte(seedByte)
+		signer, err := crypto.GenerateFalconSigner(seed)
+		require.NoError(t, err)
+
+		publicKey := slices.Clone(signer.PublicKey[:])
+		for salt := 0; salt <= math.MaxUint8; salt++ {
+			pqSalt := basics.PQAddressSalt(salt)
+			authorizer := basics.PQAddress(protocol.PQSchemeFalcon1024, pqSalt, publicKey)
+			if authorizer.IsPQCompliant() != compliant {
+				continue
+			}
+
+			return signer, authorizer, transactions.PQSig{
+				Scheme:    protocol.PQSchemeFalcon1024,
+				Salt:      pqSalt,
+				PublicKey: publicKey,
+			}
+		}
+	}
+
+	require.FailNow(t, "unable to find PQ authorizer with requested compliance")
+	return crypto.FalconSigner{}, basics.Address{}, transactions.PQSig{}
+}
+
+func makePQSignedTxnWithAddressCompliance(t *testing.T, compliant bool) transactions.SignedTxn {
+	t.Helper()
+
+	signer, authorizer, pqSig := makePQSigWithAddressCompliance(t, compliant)
+	txn := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      authorizer,
+			Fee:         config.Consensus[protocol.ConsensusFuture].MinFee(),
+			FirstValid:  0,
+			LastValid:   100,
+			GenesisHash: genesisHash,
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: authorizer,
+		},
+	}
+
+	signature, err := signer.Sign(txn)
+	require.NoError(t, err)
+	pqSig.Signature = signature
+
+	return transactions.SignedTxn{
+		Txn:   txn,
+		PQsig: pqSig,
+	}
+}
+
 func postTransactionTest(t *testing.T, txnToUse int, expectedCode int, method string, opts ...postTransactionOpt) {
 	cfg := config.GetDefaultLocal()
 	for _, opt := range opts {
@@ -1165,6 +1222,54 @@ func TestPostTransaction(t *testing.T) {
 
 	postTransactionTest(t, -1, 400, "RawTransaction")
 	postTransactionTest(t, 0, 200, "RawTransaction")
+}
+
+func TestPostTransactionPQAuthorizerCompliance(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	futureStatus := cannedStatusReportGolden
+	futureStatus.LastVersion = protocol.ConsensusFuture
+
+	test := func(t *testing.T, stxn transactions.SignedTxn, status node.StatusReport, params model.RawTransactionParams, expectedCode int, expectedBody string) {
+		t.Helper()
+
+		mockLedger, _, _, _, releasefunc := testingenv(t, 1, 0, true)
+		defer releasefunc()
+
+		mockNode := makeMockNode(mockLedger, t.Name(), nil, status, false)
+		handler := v2.Handlers{
+			Node:     mockNode,
+			Log:      logging.Base(),
+			Shutdown: make(chan struct{}),
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(protocol.Encode(&stxn)))
+		rec := httptest.NewRecorder()
+		c := echo.New().NewContext(req, rec)
+
+		err := handler.RawTransaction(c, params)
+		require.NoError(t, err)
+		require.Equal(t, expectedCode, rec.Code, rec.Body.String())
+		if expectedBody != "" {
+			require.Contains(t, rec.Body.String(), expectedBody)
+			require.NotContains(t, rec.Body.String(), "transaction group 0")
+		}
+	}
+
+	t.Run("compliant", func(t *testing.T) {
+		t.Parallel()
+		test(t, makePQSignedTxnWithAddressCompliance(t, true), futureStatus, model.RawTransactionParams{}, http.StatusOK, "")
+	})
+	t.Run("not-compliant", func(t *testing.T) {
+		t.Parallel()
+		test(t, makePQSignedTxnWithAddressCompliance(t, false), futureStatus, model.RawTransactionParams{}, http.StatusBadRequest, "transaction 0: pq signature authorizer address")
+	})
+	t.Run("not-compliant with skip flag", func(t *testing.T) {
+		t.Parallel()
+		skip := true
+		test(t, makePQSignedTxnWithAddressCompliance(t, false), futureStatus, model.RawTransactionParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
+	})
 }
 
 const pushIntOp byte = 0x81 // TEAL pushint opcode
@@ -1284,6 +1389,42 @@ func TestPostTransactionAsync(t *testing.T) {
 	postTransactionTest(t, 0, 200, "RawTransactionAsync", enableExperimentalAPI(), enableDeveloperAPI())
 }
 
+func TestPostTransactionAsyncPQAuthorizerCompliance(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.EnableExperimentalAPI = true
+	cfg.EnableDeveloperAPI = true
+
+	test := func(t *testing.T, params model.RawTransactionAsyncParams, expectedCode int, expectedBody string) {
+		t.Helper()
+
+		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, func(transactions.SignedTxn) []byte {
+			stxn := makePQSignedTxnWithAddressCompliance(t, false)
+			return protocol.Encode(&stxn)
+		}, cfg)
+		defer releasefunc()
+
+		err := handler.RawTransactionAsync(c, params)
+		require.NoError(t, err)
+		require.Equal(t, expectedCode, rec.Code)
+		if expectedBody != "" {
+			require.Contains(t, rec.Body.String(), expectedBody)
+		}
+	}
+
+	t.Run("not-compliant", func(t *testing.T) {
+		t.Parallel()
+		test(t, model.RawTransactionAsyncParams{}, http.StatusBadRequest, "transaction 0: pq signature authorizer address")
+	})
+	t.Run("not-compliant with skip flag", func(t *testing.T) {
+		t.Parallel()
+		skip := true
+		test(t, model.RawTransactionAsyncParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
+	})
+}
+
 func TestPostTransactionAsyncLogicSigCurveCheck(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1393,6 +1534,196 @@ func copyInnerTxnGroupIDs(t *testing.T, dst, src *v2.PreEncodedTxInfo) {
 		srcInner := &(*src.Inners)[innerIndex]
 		copyInnerTxnGroupIDs(t, dstInner, srcInner)
 	}
+}
+
+func TestPostSimulateTransactionPlaceholderPQSignatureValidation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	numAccounts := 2
+	offlineAccounts := true
+	mockLedger, roots, _, _, releasefunc := testingenv(t, numAccounts, 0, offlineAccounts)
+	defer releasefunc()
+
+	status := cannedStatusReportGolden
+	status.LastVersion = protocol.ConsensusFuture
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, status, false)
+	handler := v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: make(chan struct{}),
+	}
+
+	hdr, err := mockLedger.BlockHdr(mockLedger.Latest())
+	require.NoError(t, err)
+	txnInfo := simulationtesting.TxnInfo{LatestHeader: hdr}
+	minFee := config.Consensus[hdr.CurrentProtocol].MinTxnFee
+
+	_, pqAuthorizer, pqSig := makePQSigWithAddressCompliance(t, true)
+	txn := txnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   roots[0].Address(),
+		Receiver: roots[0].Address(),
+		Amount:   0,
+	}).Txn()
+	stxn := transactions.SignedTxn{
+		Txn:      txn,
+		AuthAddr: pqAuthorizer,
+		PQsig:    pqSig,
+	}
+
+	request := v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{Txns: []transactions.SignedTxn{stxn}},
+		},
+		AllowEmptySignatures: true,
+	}
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(protocol.EncodeReflect(&request)))
+	rec := httptest.NewRecorder()
+	c := echo.New().NewContext(req, rec)
+
+	format := model.SimulateTransactionParamsFormatJson
+	err = handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: &format})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var response v2.PreEncodedSimulateResponse
+	decoder := codec.NewDecoderBytes(rec.Body.Bytes(), protocol.JSONStrictHandle)
+	err = decoder.Decode(&response)
+	require.NoError(t, err)
+	require.Len(t, response.TxnGroups, 1)
+	require.Len(t, response.TxnGroups[0].Txns, 1)
+	actualPQSig := response.TxnGroups[0].Txns[0].Txn.Txn.PQsig
+	require.False(t, actualPQSig.Blank())
+	require.Empty(t, actualPQSig.Signature)
+	require.Equal(t, pqSig.Scheme, actualPQSig.Scheme)
+	require.Equal(t, pqSig.Salt, actualPQSig.Salt)
+	require.Equal(t, pqSig.PublicKey, actualPQSig.PublicKey)
+
+	schemeOnlyTxn := txnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   roots[0].Address(),
+		Receiver: roots[0].Address(),
+		Fee:      minFee * 3,
+	}).SignedTxn()
+	schemeOnlyTxn.PQsig = transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024}
+	request.TxnGroups[0].Txns[0] = schemeOnlyTxn
+	request.AllowEmptySignatures = true
+	req = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(protocol.EncodeReflect(&request)))
+	rec = httptest.NewRecorder()
+	c = echo.New().NewContext(req, rec)
+
+	err = handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: &format})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	response = v2.PreEncodedSimulateResponse{}
+	decoder = codec.NewDecoderBytes(rec.Body.Bytes(), protocol.JSONStrictHandle)
+	err = decoder.Decode(&response)
+	require.NoError(t, err)
+	require.Len(t, response.TxnGroups, 1)
+	require.Len(t, response.TxnGroups[0].Txns, 1)
+	actualPQSig = response.TxnGroups[0].Txns[0].Txn.Txn.PQsig
+	require.Equal(t, protocol.PQSchemeFalcon1024, actualPQSig.Scheme)
+	require.Empty(t, actualPQSig.PublicKey)
+	require.Empty(t, actualPQSig.Signature)
+
+	request.TxnGroups[0].Txns[0] = stxn
+	request.AllowEmptySignatures = false
+	req = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(protocol.EncodeReflect(&request)))
+	rec = httptest.NewRecorder()
+	c = echo.New().NewContext(req, rec)
+
+	err = handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: &format})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	response = v2.PreEncodedSimulateResponse{}
+	decoder = codec.NewDecoderBytes(rec.Body.Bytes(), protocol.JSONStrictHandle)
+	err = decoder.Decode(&response)
+	require.NoError(t, err)
+	require.NotNil(t, response.TxnGroups[0].FailureMessage)
+	require.Contains(t, *response.TxnGroups[0].FailureMessage, "pq signature is empty")
+
+	mismatchedStxn := stxn
+	mismatchedStxn.AuthAddr = roots[1].Address()
+	request.TxnGroups[0].Txns[0] = mismatchedStxn
+	request.AllowEmptySignatures = true
+	req = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(protocol.EncodeReflect(&request)))
+	rec = httptest.NewRecorder()
+	c = echo.New().NewContext(req, rec)
+
+	err = handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: &format})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	response = v2.PreEncodedSimulateResponse{}
+	decoder = codec.NewDecoderBytes(rec.Body.Bytes(), protocol.JSONStrictHandle)
+	err = decoder.Decode(&response)
+	require.NoError(t, err)
+	require.NotNil(t, response.TxnGroups[0].FailureMessage)
+	require.Contains(t, *response.TxnGroups[0].FailureMessage, "pq signature authorizer mismatch")
+
+	_, fixablePQAuthorizer, fixablePQSig := makePQSigWithAddressCompliance(t, true)
+	rekeyTxn := txnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   roots[0].Address(),
+		Receiver: roots[0].Address(),
+		RekeyTo:  fixablePQAuthorizer,
+		Fee:      minFee,
+	})
+	pqTxn := txnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   roots[0].Address(),
+		Receiver: roots[0].Address(),
+		Fee:      minFee * 3,
+	})
+	fixableGroup := txntest.Group(&rekeyTxn, &pqTxn)
+	fixableGroup[1].AuthAddr = roots[1].Address()
+	fixableGroup[1].PQsig = fixablePQSig
+	request = v2.PreEncodedSimulateRequest{
+		TxnGroups:            []v2.PreEncodedSimulateRequestTransactionGroup{{Txns: fixableGroup}},
+		AllowEmptySignatures: true,
+		FixSigners:           true,
+	}
+	req = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(protocol.EncodeReflect(&request)))
+	rec = httptest.NewRecorder()
+	c = echo.New().NewContext(req, rec)
+
+	err = handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: &format})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+}
+
+func TestPostSimulateTransactionPQAuthorizerComplianceReportsGroup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	mockLedger, _, _, _, releasefunc := testingenv(t, 1, 0, true)
+	defer releasefunc()
+
+	status := cannedStatusReportGolden
+	status.LastVersion = protocol.ConsensusFuture
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, status, false)
+	handler := v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: make(chan struct{}),
+	}
+
+	request := v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{Txns: []transactions.SignedTxn{makePQSignedTxnWithAddressCompliance(t, true)}},
+			{Txns: []transactions.SignedTxn{makePQSignedTxnWithAddressCompliance(t, false)}},
+		},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(protocol.EncodeReflect(&request)))
+	rec := httptest.NewRecorder()
+	c := echo.New().NewContext(req, rec)
+
+	format := model.SimulateTransactionParamsFormatJson
+	err := handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: &format})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+	require.Contains(t, rec.Body.String(), "transaction group 1: transaction 0: pq signature authorizer address")
 }
 
 func assertSimulationResultsEqual(t *testing.T, expectedError string, expected, actual v2.PreEncodedSimulateResponse) {

@@ -288,3 +288,8 @@ if __name__ == "__main__":
     export_type("AppParams", "data/basics/userBalance.go", "statedelta")
     export_type("TealKeyValue", "data/basics/teal.go", "statedelta")
     export_type("TealValue", "data/basics/teal.go", "statedelta")
+
+    # Post-quantum scheme and signature types
+    export_type("PQScheme", "protocol/pq_scheme.go", "transaction")
+    export_type("PQAddressSalt", "data/basics/pq_address.go", "transaction")
+    export_type("PQSig", "data/transactions/pqsig.go", "transaction")

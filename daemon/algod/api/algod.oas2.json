@@ -37,7 +37,7 @@
       "get": {
         "tags": ["public", "common"],
         "produces": ["application/json"],
-        "scheme": ["http"],
+        "schemes": ["http"],
         "summary": "Returns OK if healthy and fully caught up.",
         "operationId": "GetReady",
         "responses": {
@@ -1194,7 +1194,7 @@
             }
           },
           {
-            "description": "Skip post-quantum address checks, including the check that rejects TEAL v13 or later LogicSig escrow addresses whose program hash is an Edwards25519 curve point. This should only be used if you understand the risks and know what you are doing.",
+            "description": "Skip post-quantum address checks, including the check that rejects PQ authorizer and LogicSig escrow (TEAL v13 or later) whose address is an Edwards25519 curve point. This should only be used if you understand the risks and know what you are doing.",
             "name": "skip-pq-address-check",
             "in": "query",
             "type": "boolean"
@@ -1253,7 +1253,7 @@
             }
           },
           {
-            "description": "Skip post-quantum address checks, including the check that rejects TEAL v13 or later LogicSig escrow addresses whose program hash is an Edwards25519 curve point. This should only be used if you understand the risks and know what you are doing.",
+            "description": "Skip post-quantum address checks, including the check that rejects PQ authorizer and LogicSig escrow (TEAL v13 or later) whose address is an Edwards25519 curve point. This should only be used if you understand the risks and know what you are doing.",
             "name": "skip-pq-address-check",
             "in": "query",
             "type": "boolean"
@@ -4325,9 +4325,9 @@
       "required": true
     },
     "sig-type": {
-      "enum": ["sig", "msig", "lsig"],
+      "enum": ["sig", "msig", "lsig", "pqsig"],
       "type": "string",
-      "description": "SigType filters just results using the specified type of signature:\n* sig - Standard\n* msig - MultiSig\n* lsig - LogicSig",
+      "description": "SigType filters just results using the specified type of signature:\n* sig - Standard\n* msig - MultiSig\n* lsig - LogicSig\n* pqsig - Post-Quantum",
       "name": "sig-type",
       "in": "query"
     },
