@@ -39,12 +39,111 @@ const (
 	BoxResizeOperation
 )
 
-func (cx *EvalContext) availableBox(name string, operation BoxOperation, createSize uint64) ([]byte, bool, error) {
+// authorizeBoxAccess verifies that the current app may perform operation on the
+// box owned by ownerAppID, and applies the family-shared reentrancy guard when
+// the box behaves like family-shared state. An app may always access its own
+// boxes. For another app's box, reads require ForeignBoxReads or FamilyBoxAccess
+// (with the same creator); writes require FamilyBoxAccess and the same creator.
+func (cx *EvalContext) authorizeBoxAccess(ownerAppID basics.AppIndex, operation BoxOperation) error {
+	params, ownerCreator, err := cx.Ledger.AppParams(ownerAppID)
+	if err != nil {
+		return err
+	}
+
+	// familyShared is true when the box behaves like family-shared state: owned
+	// by a same-creator app that has opted into FamilyBoxAccess.
+	var familyShared bool
+	if ownerAppID == cx.appID {
+		// An app may always access its own boxes.
+		familyShared = params.FamilyBoxAccess
+	} else {
+		// Resolve whether the calling app shares a creator with the owner, but
+		// only pay the cost of the lookup when FamilyBoxAccess is set.
+		inFamily := false
+		if params.FamilyBoxAccess {
+			callerCreator, err := cx.getCreatorAddress()
+			if err != nil {
+				return err
+			}
+			inFamily = callerCreator == ownerCreator
+		}
+
+		isRead := operation == BoxReadOperation
+		switch {
+		case isRead && params.ForeignBoxReads:
+			// any app with a box reference may read
+		case inFamily:
+			// inFamily only set to true if FamilyBoxAccess
+		default:
+			if isRead {
+				return fmt.Errorf("app %d does not permit foreign reads of its boxes", ownerAppID)
+			}
+			return fmt.Errorf("app %d does not permit foreign writes to its boxes", ownerAppID)
+		}
+		familyShared = inFamily
+	}
+
+	if !familyShared {
+		return nil
+	}
+
+	// Family-shared boxes behave like globals shared across the family, so they
+	// need a family-scoped reentrancy guard. On a write, reject it if a foreign
+	// app on the call stack separates cx from a family member that has already
+	// touched family-shared state. Either way, record that cx has now touched
+	// such state, so a later re-entry into another family member can be caught.
+	if operation != BoxReadOperation {
+		if err := cx.checkFamilyReentrancy(); err != nil {
+			return err
+		}
+	}
+	cx.touchedFamilyShared = true
+	return nil
+}
+
+// checkFamilyReentrancy guards a family-relevant write by cx. It fails when a
+// foreign app (one outside cx's family) separates cx from an ancestor in cx's
+// family that has touched family-shared state. Allowing the write would let cx
+// clobber state the ancestor is relying on across its inner call -- the
+// family-scoped analog of the per-app reentrancy ban. The check fires only at
+// the write, so foreign apps remain free to call into family members for
+// read-only queries. The walk is bounded by the inner-call depth (8).
+func (cx *EvalContext) checkFamilyReentrancy() error {
+	if cx.familyReentrancyChecked {
+		return nil
+	}
+	myCreator, err := cx.getCreatorAddress()
+	if err != nil {
+		return err
+	}
+	seenForeign := false
+	for f := cx.caller; f != nil; f = f.caller {
+		fCreator, err := f.getCreatorAddress()
+		if err != nil {
+			return err
+		}
+		if fCreator != myCreator {
+			seenForeign = true
+			continue
+		}
+		if seenForeign && f.touchedFamilyShared {
+			return fmt.Errorf("app %d may not write family-shared box: app %d is relying on family state across a foreign call", cx.appID, f.appID)
+		}
+	}
+	cx.familyReentrancyChecked = true
+	return nil
+}
+
+// availableAppBox is like availableBox but accesses a box owned by appID rather
+// than the current app. It enforces the ForeignBoxReads/FamilyBoxAccess permission
+// checks in addition to the standard box-reference availability and write-budget checks.
+// An app may always use app_box_* on its own boxes without a permission check.
+func (cx *EvalContext) availableAppBox(appID basics.AppIndex, name string, operation BoxOperation, createSize uint64) ([]byte, bool, error) {
 	if cx.txn.Txn.OnCompletion == transactions.ClearStateOC {
 		return nil, false, fmt.Errorf("boxes may not be accessed from ClearState program")
 	}
 
-	dirty, ok := cx.available.boxes[basics.BoxRef{App: cx.appID, Name: name}]
+	dirty, ok := cx.available.boxes[basics.BoxRef{App: appID, Name: name}]
 
 	newAppAccess := false
 	// maybe allow it (and account for it) if a newly created app is accessing a
@@ -53,7 +152,7 @@ func (cx *EvalContext) availableBox(name string, operation BoxOperation, createS
 	// each spare (empty) box ref. that way, we can't end up needing to write
 	// many separate newly created boxes.
 	if !ok {
-		if _, newAppAccess = cx.available.createdApps[cx.appID]; newAppAccess {
+		if _, newAppAccess = cx.available.createdApps[appID]; newAppAccess {
 			if cx.available.unnamedAccess > 0 {
 				ok = true                    // allow it
 				cx.available.unnamedAccess-- // account for it
@@ -68,10 +167,16 @@ func (cx *EvalContext) availableBox(name string, operation BoxOperation, createS
 	}
 
 	if !ok && cx.UnnamedResources != nil {
-		ok = cx.UnnamedResources.AvailableBox(cx.appID, name, newAppAccess, createSize)
+		ok = cx.UnnamedResources.AvailableBox(appID, name, newAppAccess, createSize)
 	}
 	if !ok {
 		return nil, false, fmt.Errorf("invalid Box reference %#x", name)
+	}
+
+	// Authorize the access (always allowed for our own boxes) and, for
+	// family-shared boxes, apply the family-scoped reentrancy guard.
+	if err := cx.authorizeBoxAccess(appID, operation); err != nil {
+		return nil, false, err
 	}
 
 	// If the box is in cx.available, GetBox() is cheap. It will go (at most) to
@@ -80,7 +185,7 @@ func (cx *EvalContext) availableBox(name string, operation BoxOperation, createS
 	content, exists := []byte(nil), false
 	if !newAppAccess {
 		var getErr error
-		content, exists, getErr = cx.Ledger.GetBox(cx.appID, name)
+		content, exists, getErr = cx.Ledger.GetBox(appID, name)
 		if getErr != nil {
 			return nil, false, getErr
 		}
@@ -101,7 +206,7 @@ func (cx *EvalContext) availableBox(name string, operation BoxOperation, createS
 			// performs the length match check itself.
 			return content, exists, nil
 		}
-		fallthrough // If it doesn't exist, a create is like write
+		fallthrough
 	case BoxWriteOperation:
 		if operation != BoxCreateOperation {
 			verb = "writing"
@@ -130,7 +235,7 @@ func (cx *EvalContext) availableBox(name string, operation BoxOperation, createS
 	case BoxReadOperation:
 		/* nothing to do */
 	}
-	cx.available.boxes[basics.BoxRef{App: cx.appID, Name: name}] = dirty
+	cx.available.boxes[basics.BoxRef{App: appID, Name: name}] = dirty
 
 	if cx.available.dirtyBytes > cx.ioBudget {
 		return nil, false, fmt.Errorf("write budget exceeded (%d > %d) while %s box %#x",
@@ -156,7 +261,7 @@ func lengthChecks(cx *EvalContext, name string, size uint64) error {
 	return nil
 }
 
-func opBoxCreate(cx *EvalContext) error {
+func boxCreateImpl(cx *EvalContext, appID basics.AppIndex) error {
 	last := len(cx.Stack) - 1 // size
 	prev := last - 1          // name
 
@@ -167,24 +272,34 @@ func opBoxCreate(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-	_, exists, err := cx.availableBox(name, BoxCreateOperation, size)
+	_, exists, err := cx.availableAppBox(appID, name, BoxCreateOperation, size)
 	if err != nil {
 		return err
 	}
 	if !exists {
-		appAddr := cx.GetApplicationAddress(cx.appID)
-		err = cx.Ledger.NewBox(cx.appID, name, make([]byte, size), appAddr)
+		appAddr := cx.GetApplicationAddress(appID)
+		err = cx.Ledger.NewBox(appID, name, make([]byte, size), appAddr)
 		if err != nil {
 			return err
 		}
 	}
-
 	cx.Stack[prev] = boolToSV(!exists)
 	cx.Stack = cx.Stack[:last]
 	return err
 }
 
-func opBoxExtract(cx *EvalContext) error {
+func opBoxCreate(cx *EvalContext) error {
+	return boxCreateImpl(cx, cx.appID)
+}
+
+func opAppBoxCreate(cx *EvalContext) error {
+	last := len(cx.Stack) - 1 // appID
+	appID := basics.AppIndex(cx.Stack[last].Uint)
+	cx.Stack = cx.Stack[:last]
+	return boxCreateImpl(cx, appID)
+}
+
+func boxExtractImpl(cx *EvalContext, appID basics.AppIndex) error {
 	last := len(cx.Stack) - 1 // length
 	prev := last - 1          // start
 	pprev := prev - 1         // name
@@ -197,21 +312,31 @@ func opBoxExtract(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-	contents, exists, err := cx.availableBox(name, BoxReadOperation, 0)
+	contents, exists, err := cx.availableAppBox(appID, name, BoxReadOperation, 0)
 	if err != nil {
 		return err
 	}
 	if !exists {
 		return fmt.Errorf("no such box %#x", name)
 	}
-
 	bytes, err := extractCarefully(contents, start, length)
 	cx.Stack[pprev].Bytes = bytes
 	cx.Stack = cx.Stack[:prev]
 	return err
 }
 
-func opBoxReplace(cx *EvalContext) error {
+func opBoxExtract(cx *EvalContext) error {
+	return boxExtractImpl(cx, cx.appID)
+}
+
+func opAppBoxExtract(cx *EvalContext) error {
+	last := len(cx.Stack) - 1 // appID
+	appID := basics.AppIndex(cx.Stack[last].Uint)
+	cx.Stack = cx.Stack[:last]
+	return boxExtractImpl(cx, appID)
+}
+
+func boxReplaceImpl(cx *EvalContext, appID basics.AppIndex) error {
 	last := len(cx.Stack) - 1 // replacement
 	prev := last - 1          // start
 	pprev := prev - 1         // name
@@ -224,24 +349,33 @@ func opBoxReplace(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-
-	contents, exists, err := cx.availableBox(name, BoxWriteOperation, 0 /* size is already known */)
+	contents, exists, err := cx.availableAppBox(appID, name, BoxWriteOperation, 0 /* size is already known */)
 	if err != nil {
 		return err
 	}
 	if !exists {
 		return fmt.Errorf("no such box %#x", name)
 	}
-
 	bytes, err := replaceCarefully(contents, replacement, start)
 	if err != nil {
 		return err
 	}
 	cx.Stack = cx.Stack[:pprev]
-	return cx.Ledger.SetBox(cx.appID, name, bytes)
+	return cx.Ledger.SetBox(appID, name, bytes)
 }
 
-func opBoxSplice(cx *EvalContext) error {
+func opBoxReplace(cx *EvalContext) error {
+	return boxReplaceImpl(cx, cx.appID)
+}
+
+func opAppBoxReplace(cx *EvalContext) error {
+	last := len(cx.Stack) - 1 // appID
+	appID := basics.AppIndex(cx.Stack[last].Uint)
+	cx.Stack = cx.Stack[:last]
+	return boxReplaceImpl(cx, appID)
+}
+
+func boxSpliceImpl(cx *EvalContext, appID basics.AppIndex) error {
 	last := len(cx.Stack) - 1 // replacement
 	replacement := cx.Stack[last].Bytes
 	length := cx.Stack[last-1].Uint
@@ -252,24 +386,33 @@ func opBoxSplice(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-
-	contents, exists, err := cx.availableBox(name, BoxWriteOperation, 0 /* size is already known */)
+	contents, exists, err := cx.availableAppBox(appID, name, BoxWriteOperation, 0 /* size is already known */)
 	if err != nil {
 		return err
 	}
 	if !exists {
 		return fmt.Errorf("no such box %#x", name)
 	}
-
 	bytes, err := spliceCarefully(contents, replacement, start, length)
 	if err != nil {
 		return err
 	}
 	cx.Stack = cx.Stack[:last-3]
-	return cx.Ledger.SetBox(cx.appID, name, bytes)
+	return cx.Ledger.SetBox(appID, name, bytes)
 }
 
-func opBoxDel(cx *EvalContext) error {
+func opBoxSplice(cx *EvalContext) error {
+	return boxSpliceImpl(cx, cx.appID)
+}
+
+func opAppBoxSplice(cx *EvalContext) error {
+	last := len(cx.Stack) - 1 // appID
+	appID := basics.AppIndex(cx.Stack[last].Uint)
+	cx.Stack = cx.Stack[:last]
+	return boxSpliceImpl(cx, appID)
+}
+
+func boxDelImpl(cx *EvalContext, appID basics.AppIndex) error {
 	last := len(cx.Stack) - 1 // name
 	name := string(cx.Stack[last].Bytes)
 
@@ -277,13 +420,13 @@ func opBoxDel(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-	_, exists, err := cx.availableBox(name, BoxDeleteOperation, 0)
+	_, exists, err := cx.availableAppBox(appID, name, BoxDeleteOperation, 0)
 	if err != nil {
 		return err
 	}
 	if exists {
-		appAddr := cx.GetApplicationAddress(cx.appID)
-		_, err := cx.Ledger.DelBox(cx.appID, name, appAddr)
+		appAddr := cx.GetApplicationAddress(appID)
+		_, err := cx.Ledger.DelBox(appID, name, appAddr)
 		if err != nil {
 			return err
 		}
@@ -292,7 +435,18 @@ func opBoxDel(cx *EvalContext) error {
 	return nil
 }
 
-func opBoxResize(cx *EvalContext) error {
+func opBoxDel(cx *EvalContext) error {
+	return boxDelImpl(cx, cx.appID)
+}
+
+func opAppBoxDel(cx *EvalContext) error {
+	last := len(cx.Stack) - 1 // appID
+	appID := basics.AppIndex(cx.Stack[last].Uint)
+	cx.Stack = cx.Stack[:last]
+	return boxDelImpl(cx, appID)
+}
+
+func boxResizeImpl(cx *EvalContext, appID basics.AppIndex) error {
 	last := len(cx.Stack) - 1 // size
 	prev := last - 1          // name
 
@@ -303,17 +457,15 @@ func opBoxResize(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-
-	contents, exists, err := cx.availableBox(name, BoxResizeOperation, size)
+	contents, exists, err := cx.availableAppBox(appID, name, BoxResizeOperation, size)
 	if err != nil {
 		return err
 	}
-
 	if !exists {
 		return fmt.Errorf("no such box %#x", name)
 	}
-	appAddr := cx.GetApplicationAddress(cx.appID)
-	_, err = cx.Ledger.DelBox(cx.appID, name, appAddr)
+	appAddr := cx.GetApplicationAddress(appID)
+	_, err = cx.Ledger.DelBox(appID, name, appAddr)
 	if err != nil {
 		return err
 	}
@@ -324,17 +476,22 @@ func opBoxResize(cx *EvalContext) error {
 	} else {
 		resized = contents[:size]
 	}
-	err = cx.Ledger.NewBox(cx.appID, name, resized, appAddr)
-	if err != nil {
-		return err
-	}
-
 	cx.Stack = cx.Stack[:prev]
-	return err
-
+	return cx.Ledger.NewBox(appID, name, resized, appAddr)
 }
 
-func opBoxLen(cx *EvalContext) error {
+func opBoxResize(cx *EvalContext) error {
+	return boxResizeImpl(cx, cx.appID)
+}
+
+func opAppBoxResize(cx *EvalContext) error {
+	last := len(cx.Stack) - 1 // appID
+	appID := basics.AppIndex(cx.Stack[last].Uint)
+	cx.Stack = cx.Stack[:last]
+	return boxResizeImpl(cx, appID)
+}
+
+func boxLenImpl(cx *EvalContext, appID basics.AppIndex) error {
 	last := len(cx.Stack) - 1 // name
 	name := string(cx.Stack[last].Bytes)
 
@@ -342,17 +499,27 @@ func opBoxLen(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-	contents, exists, err := cx.availableBox(name, BoxReadOperation, 0)
+	contents, exists, err := cx.availableAppBox(appID, name, BoxReadOperation, 0)
 	if err != nil {
 		return err
 	}
-
 	cx.Stack[last] = stackValue{Uint: uint64(len(contents))}
 	cx.Stack = append(cx.Stack, boolToSV(exists))
 	return nil
 }
 
-func opBoxGet(cx *EvalContext) error {
+func opBoxLen(cx *EvalContext) error {
+	return boxLenImpl(cx, cx.appID)
+}
+
+func opAppBoxLen(cx *EvalContext) error {
+	last := len(cx.Stack) - 1 // appID
+	appID := basics.AppIndex(cx.Stack[last].Uint)
+	cx.Stack = cx.Stack[:last]
+	return boxLenImpl(cx, appID)
+}
+
+func boxGetImpl(cx *EvalContext, appID basics.AppIndex) error {
 	last := len(cx.Stack) - 1 // name
 	name := string(cx.Stack[last].Bytes)
 
@@ -360,7 +527,7 @@ func opBoxGet(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-	contents, exists, err := cx.availableBox(name, BoxReadOperation, 0)
+	contents, exists, err := cx.availableAppBox(appID, name, BoxReadOperation, 0)
 	if err != nil {
 		return err
 	}
@@ -372,7 +539,18 @@ func opBoxGet(cx *EvalContext) error {
 	return nil
 }
 
-func opBoxPut(cx *EvalContext) error {
+func opBoxGet(cx *EvalContext) error {
+	return boxGetImpl(cx, cx.appID)
+}
+
+func opAppBoxGet(cx *EvalContext) error {
+	last := len(cx.Stack) - 1 // appID
+	appID := basics.AppIndex(cx.Stack[last].Uint)
+	cx.Stack = cx.Stack[:last]
+	return boxGetImpl(cx, appID)
+}
+
+func boxPutImpl(cx *EvalContext, appID basics.AppIndex) error {
 	last := len(cx.Stack) - 1 // value
 	prev := last - 1          // name
 
@@ -385,7 +563,7 @@ func opBoxPut(cx *EvalContext) error {
 	}
 
 	// This boxWrite usage requires the size, because the box may not exist.
-	contents, exists, err := cx.availableBox(name, BoxWriteOperation, uint64(len(value)))
+	contents, exists, err := cx.availableAppBox(appID, name, BoxWriteOperation, uint64(len(value)))
 	if err != nil {
 		return err
 	}
@@ -397,12 +575,23 @@ func opBoxPut(cx *EvalContext) error {
 		if len(contents) != len(value) {
 			return fmt.Errorf("attempt to box_put wrong size %d != %d", len(contents), len(value))
 		}
-		return cx.Ledger.SetBox(cx.appID, name, value)
+		return cx.Ledger.SetBox(appID, name, value)
 	}
 
 	/* The box did not exist, so create it. */
-	appAddr := cx.GetApplicationAddress(cx.appID)
-	return cx.Ledger.NewBox(cx.appID, name, value, appAddr)
+	appAddr := cx.GetApplicationAddress(appID)
+	return cx.Ledger.NewBox(appID, name, value, appAddr)
+}
+
+func opBoxPut(cx *EvalContext) error {
+	return boxPutImpl(cx, cx.appID)
+}
+
+func opAppBoxPut(cx *EvalContext) error {
+	last := len(cx.Stack) - 1 // appID
+	appID := basics.AppIndex(cx.Stack[last].Uint)
+	cx.Stack = cx.Stack[:last]
+	return boxPutImpl(cx, appID)
 }
 
 // spliceCarefully is used to make a NEW byteslice copy of original, with

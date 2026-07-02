@@ -3322,6 +3322,26 @@ int 1
 	}
 }
 
+func TestEvalBadSubOp(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	for v := uint64(foreignBoxVersion); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			ops := testProg(t, `byte 0xaabbcc; int 1; app_box_len`, v)
+			// cut last byte, leaving only the app_box_len initial opcode, no subop
+			testLogicBytes(t, ops.Program[:len(ops.Program)-1], nil,
+				"missing sub-opcode", "missing sub-opcode")
+			ops.Program[len(ops.Program)-1] = 0x00
+			testLogicBytes(t, ops.Program, nil,
+				"illegal opcode", "illegal opcode")
+			ops.Program[len(ops.Program)-1] = 0x55 // way too big
+			testLogicBytes(t, ops.Program, nil,
+				"illegal opcode", "illegal opcode")
+		})
+	}
+}
+
 func TestShortProgramTrue(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
