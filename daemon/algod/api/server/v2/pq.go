@@ -59,6 +59,15 @@ func enforcePQSubmitPolicy(proto config.ConsensusParams, txgroup []transactions.
 	return nil
 }
 
+func txgroupHasPQSig(txgroup []transactions.SignedTxn) bool {
+	for _, stxn := range txgroup {
+		if !stxn.PQsig.Blank() {
+			return true
+		}
+	}
+	return false
+}
+
 func checkPQSubmitPolicy(proto config.ConsensusParams, stxn transactions.SignedTxn) error {
 	if stxn.PQsig.Blank() {
 		return nil

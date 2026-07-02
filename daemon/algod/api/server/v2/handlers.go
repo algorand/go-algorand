@@ -42,6 +42,7 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/catchup"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
@@ -1220,18 +1221,20 @@ func (v2 *Handlers) RawTransactionAsync(ctx echo.Context, params model.RawTransa
 	if !v2.Node.Config().EnableDeveloperAPI {
 		return ctx.String(http.StatusNotFound, "/transactions/async was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
 	}
-	stat, err := v2.Node.Status()
-	if err != nil {
-		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
-	}
-	proto := config.Consensus[stat.LastVersion]
 
-	txgroup, err := decodeTxGroup(ctx.Request().Body, proto.MaxTxGroupSize)
+	txgroup, err := decodeTxGroup(ctx.Request().Body, bounds.MaxTxGroupSize)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
-	if err = enforcePQSubmitPolicy(proto, txgroup); err != nil {
-		return badRequest(ctx, err, err.Error(), v2.Log)
+	if txgroupHasPQSig(txgroup) {
+		stat, statusErr := v2.Node.Status()
+		if statusErr != nil {
+			return internalError(ctx, statusErr, errFailedRetrievingNodeStatus, v2.Log)
+		}
+		proto := config.Consensus[stat.LastVersion]
+		if err = enforcePQSubmitPolicy(proto, txgroup); err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
 	}
 	if !shouldSkipPqAddressCheck(params.SkipPqAddressCheck) {
 		if err = rejectOnCurveLogicSigPrograms(txgroup); err != nil {

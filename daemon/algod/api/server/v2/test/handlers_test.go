@@ -1415,6 +1415,47 @@ func TestPostTransactionAsync(t *testing.T) {
 	postTransactionTest(t, 0, 200, "RawTransactionAsync", enableExperimentalAPI(), enableDeveloperAPI())
 }
 
+func TestPostTransactionAsyncStatusLookup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.EnableExperimentalAPI = true
+	cfg.EnableDeveloperAPI = true
+
+	t.Run("skips status for non-pq group", func(t *testing.T) {
+		t.Parallel()
+
+		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, func(stxn transactions.SignedTxn) []byte {
+			return protocol.Encode(&stxn)
+		}, cfg)
+		defer releasefunc()
+
+		mockNode := handler.Node.(*mockNode)
+		err := handler.RawTransactionAsync(c, model.RawTransactionAsyncParams{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, 0, mockNode.statusCalls)
+	})
+
+	t.Run("loads status for pq group", func(t *testing.T) {
+		t.Parallel()
+
+		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, func(transactions.SignedTxn) []byte {
+			stxn := makePQSignedTxnWithAddressCompliance(t, true)
+			return protocol.Encode(&stxn)
+		}, cfg)
+		defer releasefunc()
+
+		mockNode := handler.Node.(*mockNode)
+		mockNode.status.LastVersion = protocol.ConsensusFuture
+		err := handler.RawTransactionAsync(c, model.RawTransactionAsyncParams{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, 1, mockNode.statusCalls)
+	})
+}
+
 func TestPostTransactionAsyncLogicSigCurveCheck(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

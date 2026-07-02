@@ -113,12 +113,10 @@ func (s SignedTxn) Authorizer() basics.Address {
 
 // signatureFeeContribution dispatches the fee contribution of the signature type.
 func (s SignedTxn) signatureFeeContribution() basics.Micros {
-	switch {
-	case !s.PQsig.Blank():
+	if !s.PQsig.Blank() {
 		return s.pqSignatureFeeContribution()
-	default:
-		return 0
 	}
+	return 0
 }
 
 // pqSignatureFeeContribution dispatches the fee contribution of the post-quantum signature scheme.

@@ -392,6 +392,7 @@ func TestPQCommandFlagShorthands(t *testing.T) {
 
 	require.Equal(t, "k", pqSignCmd.Flags().Lookup("keyfile").Shorthand)
 	require.Equal(t, "m", pqSignCmd.Flags().Lookup("mnemonic").Shorthand)
+	require.Equal(t, "S", pqSignCmd.Flags().Lookup("scheme").Shorthand)
 	require.Equal(t, "t", pqSignCmd.Flags().Lookup("txfile").Shorthand)
 	require.Equal(t, "o", pqSignCmd.Flags().Lookup("outfile").Shorthand)
 	require.Equal(t, "s", pqSignCmd.Flags().Lookup("salt").Shorthand)
@@ -474,6 +475,7 @@ func TestPQSignAcceptsMnemonic(t *testing.T) {
 
 	require.NoError(t, runPQSignWithOptions(pqSignOptions{
 		mnemonic: mnemonic,
+		scheme:   "f1",
 		txfile:   txfile,
 		outfile:  outfile,
 		salt:     "canonical",
@@ -485,6 +487,24 @@ func TestPQSignAcceptsMnemonic(t *testing.T) {
 	require.NoError(t, protocol.Decode(signedBytes, &signed))
 	require.Equal(t, root.public.pk, signed.PQsig.PublicKey)
 	require.NoError(t, signed.PQsig.Verify(config.Consensus[protocol.ConsensusFuture], signed.Txn, signed.Authorizer()))
+}
+
+func TestPQSignRejectsUnsupportedMnemonicScheme(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	root := pqTestRoot(t, 0)
+	mnemonic, err := mnemonicFromSeed(root.entropy)
+	require.NoError(t, err)
+
+	err = runPQSignWithOptions(pqSignOptions{
+		mnemonic: mnemonic,
+		scheme:   "zz",
+		txfile:   "unsigned.msgp",
+		outfile:  "signed.msgp",
+		salt:     "canonical",
+	})
+	require.ErrorIs(t, err, basics.ErrPQSchemeNotSupported)
 }
 
 func TestPQSignRejectsEmptyInputFile(t *testing.T) {

@@ -151,9 +151,5 @@ func signFalcon1024Txn(privateKey []byte, txn transactions.Transaction) ([]byte,
 	}
 
 	signer := crypto.FalconSigner{PrivateKey: sk}
-	sig, err := signer.Sign(txn)
-	if err != nil {
-		return nil, err
-	}
-	return slices.Clone(sig), nil
+	return signer.Sign(txn)
 }

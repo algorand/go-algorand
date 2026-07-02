@@ -57,6 +57,7 @@ var (
 
 	pqSignKeyfile   string
 	pqSignMnemonic  string
+	pqSignScheme    = pqSchemeFalcon1024Name
 	pqSignTxfile    string
 	pqSignOutfile   string
 	pqSignSalt      = "canonical"
@@ -66,6 +67,7 @@ var (
 type pqSignOptions struct {
 	keyfile   string
 	mnemonic  string
+	scheme    string
 	txfile    string
 	outfile   string
 	salt      string
@@ -171,6 +173,7 @@ func init() {
 
 	pqSignCmd.Flags().StringVarP(&pqSignKeyfile, "keyfile", "k", "", "Private key filename")
 	pqSignCmd.Flags().StringVarP(&pqSignMnemonic, "mnemonic", "m", "", "Private key mnemonic")
+	pqSignCmd.Flags().StringVarP(&pqSignScheme, "scheme", "S", pqSignScheme, "Post-quantum signature scheme: falcon-1024 (f1); used with --mnemonic")
 	pqSignCmd.Flags().StringVarP(&pqSignTxfile, "txfile", "t", "", "Transaction input filename")
 	pqSignCmd.Flags().StringVarP(&pqSignOutfile, "outfile", "o", "", "Transaction output filename")
 	pqSignCmd.Flags().StringVarP(&pqSignSalt, "salt", "s", pqSignSalt, "Address salt: canonical or 0..255")
@@ -305,6 +308,7 @@ func runPQSign() error {
 	return runPQSignWithOptions(pqSignOptions{
 		keyfile:   pqSignKeyfile,
 		mnemonic:  pqSignMnemonic,
+		scheme:    pqSignScheme,
 		txfile:    pqSignTxfile,
 		outfile:   pqSignOutfile,
 		salt:      pqSignSalt,
@@ -323,7 +327,14 @@ func runPQSignWithOptions(opts pqSignOptions) error {
 		if seedErr != nil {
 			return fmt.Errorf("cannot recover PQ key entropy from mnemonic: %w", seedErr)
 		}
-		signing, err = derivePQSigningMaterialFromEntropy(protocol.PQSchemeFalcon1024, entropy[:])
+		scheme := protocol.PQSchemeFalcon1024
+		if opts.scheme != "" {
+			scheme, err = parsePQScheme(opts.scheme)
+			if err != nil {
+				return err
+			}
+		}
+		signing, err = derivePQSigningMaterialFromEntropy(scheme, entropy[:])
 	case opts.keyfile != "":
 		signing, err = readPQSigningMaterial(opts.keyfile)
 	default:
