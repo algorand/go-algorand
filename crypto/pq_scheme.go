@@ -35,6 +35,13 @@ type PQVerifier interface {
 	Verify(message Hashable, publicKey, signature []byte) error
 }
 
+// pqSizedScheme is the crypto-internal view of a scheme used to derive the wire
+// bounds; it deliberately does not appear in the public PQVerifier interface.
+type pqSizedScheme interface {
+	PublicKeySize() uint64
+	SignatureSize() uint64
+}
+
 // LookupPQScheme returns the verifier for a PQ scheme tag.
 //
 // To add a scheme:
@@ -53,27 +60,20 @@ func LookupPQScheme(s protocol.PQScheme) (PQVerifier, bool) {
 	return nil, false
 }
 
-// falcon1024 is the PQVerifier for the Falcon-1024 (f1) scheme.
+// falcon1024 is the Falcon-1024 (f1) scheme. Verify is its public PQVerifier
+// behavior; PublicKeySize/SignatureSize are crypto-internal and feed the derived
+// MaxPQ*Size wire bounds (and tests).
 type falcon1024 struct{}
 
 func (falcon1024) Verify(message Hashable, publicKey, signature []byte) error {
 	return VerifyFalcon1024(message, publicKey, signature)
 }
-
-// PublicKeySize and SignatureSize are not part of the PQVerifier interface;
-// they exist only to derive the MaxPQ*Size wire bounds (and for tests).
 func (falcon1024) PublicKeySize() uint64 { return FalconPublicKeySize }
 func (falcon1024) SignatureSize() uint64 { return FalconMaxSignatureSize }
 
-// pqSizedScheme is the crypto-internal view of a scheme used to derive the wire
-// bounds; it deliberately does not appear in the public PQVerifier interface.
-type pqSizedScheme interface {
-	PublicKeySize() uint64
-	SignatureSize() uint64
-}
-
 // pqSizedSchemes enumerates every supported scheme and must stay in sync with
-// LookupPQScheme. It backs the derived MaxPQ*Size bounds below.
+// LookupPQScheme (asserted by TestPQSchemesInSync). It backs the derived
+// MaxPQ*Size bounds below.
 var pqSizedSchemes = []pqSizedScheme{
 	falcon1024{},
 }

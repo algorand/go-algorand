@@ -82,7 +82,7 @@ func (p PQSig) validateScheme(proto config.ConsensusParams) (crypto.PQVerifier, 
 		return nil, errPQSigBlank
 	}
 
-	scheme, ok := crypto.LookupPQScheme(p.Scheme)
+	verifier, ok := crypto.LookupPQScheme(p.Scheme)
 	if !ok {
 		return nil, crypto.ErrPQSchemeNotSupported
 	}
@@ -91,7 +91,7 @@ func (p PQSig) validateScheme(proto config.ConsensusParams) (crypto.PQVerifier, 
 		return nil, crypto.ErrPQSchemeNotEnabled
 	}
 
-	return scheme, nil
+	return verifier, nil
 }
 
 // ValidateScheme validates that the PQSig carries a known scheme enabled under
@@ -102,11 +102,11 @@ func (p PQSig) ValidateScheme(proto config.ConsensusParams) error {
 }
 
 // validateEnvelope validates the stateless consensus-relevant PQ authorization
-// envelope, excluding the signature bytes. It returns the scheme spec so that
+// envelope, excluding the signature bytes. It returns the scheme verifier so that
 // Verify can dispatch the scheme-specific signature check without a second
 // registry lookup.
 func (p PQSig) validateEnvelope(proto config.ConsensusParams, authorizer basics.Address) (crypto.PQVerifier, error) {
-	scheme, err := p.validateScheme(proto)
+	verifier, err := p.validateScheme(proto)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ func (p PQSig) validateEnvelope(proto config.ConsensusParams, authorizer basics.
 		return nil, fmt.Errorf("%w: derived %s, expected %s", errPQSigAuthorizerMismatch, pqAuthorizer, authorizer)
 	}
 
-	return scheme, nil
+	return verifier, nil
 }
 
 // ValidateEnvelope validates the stateless consensus-relevant PQ authorization
@@ -135,7 +135,7 @@ func (p PQSig) ValidateEnvelope(proto config.ConsensusParams, authorizer basics.
 // the consensus parameters; then it validates the authorization envelope and
 // verifies the scheme-specific signature over the unsigned transaction.
 func (p PQSig) Verify(proto config.ConsensusParams, txn Transaction, authorizer basics.Address) error {
-	scheme, err := p.validateEnvelope(proto, authorizer)
+	verifier, err := p.validateEnvelope(proto, authorizer)
 	if err != nil {
 		return err
 	}
@@ -144,5 +144,5 @@ func (p PQSig) Verify(proto config.ConsensusParams, txn Transaction, authorizer 
 		return errPQSigEmpty
 	}
 
-	return scheme.Verify(txn, p.PublicKey, p.Signature)
+	return verifier.Verify(txn, p.PublicKey, p.Signature)
 }
