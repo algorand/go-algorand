@@ -128,6 +128,13 @@ func (d *FalconVerifier) VerifyBytes(data []byte, sig FalconSignature) error {
 
 // VerifyFalcon1024 verifies a Falcon-1024 signature over message.
 func VerifyFalcon1024(message Hashable, publicKey []byte, signature []byte) error {
+	if len(publicKey) != FalconPublicKeySize {
+		return fmt.Errorf("%w: public key size %d, want %d", ErrPQFalcon1024SigInvalid, len(publicKey), FalconPublicKeySize)
+	}
+	if len(signature) == 0 || len(signature) > FalconMaxSignatureSize {
+		return fmt.Errorf("%w: signature size %d, want 1..%d", ErrPQFalcon1024SigInvalid, len(signature), FalconMaxSignatureSize)
+	}
+
 	var fv FalconVerifier
 	copy(fv.PublicKey[:], publicKey)
 	if err := fv.Verify(message, FalconSignature(signature)); err != nil {

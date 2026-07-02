@@ -96,7 +96,7 @@ func TestPQDecodeBoundsFeedSignedTxnMaxSize(t *testing.T) {
 		4 + crypto.SignatureMaxSize() +
 		5 + crypto.MultisigSigMaxSize() +
 		5 + LogicSigMaxSize() +
-		3 + expectedPQSigMaxSize +
+		6 + expectedPQSigMaxSize +
 		4 + TransactionMaxSize() +
 		5 + basics.AddressMaxSize()
 	require.Equal(t, expectedSignedTxnMaxSize, SignedTxnMaxSize())

@@ -57,6 +57,7 @@ type PQSchemeSpec struct {
 //   - Add the consensus flag and config.ConsensusParams.PQSchemeEnabled case,
 //   - Add the registry entry here,
 //   - Add the signing/private-key ops in cmd/algokey's pqSchemeOpsByScheme.
+//   - Ensure the scheme Verify primitive validates its own key and signature sizes.
 //   - If the scheme changes MaxPQPublicKeySize or MaxPQSignatureSize,
 //     regenerate msgp code.
 var pqSchemeSpecs = map[protocol.PQScheme]PQSchemeSpec{

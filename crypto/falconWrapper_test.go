@@ -75,6 +75,59 @@ func TestSignAndVerifyFalconHashable(t *testing.T) {
 	a.NoError(err)
 }
 
+func TestVerifyFalcon1024RejectsMalformedInputs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	msg := TestingHashable{data: []byte("verify falcon-1024 malformed inputs")}
+	var seed FalconSeed
+	seed[0] = 1
+	signer, err := GenerateFalconSigner(seed)
+	require.NoError(t, err)
+
+	signature, err := signer.Sign(msg)
+	require.NoError(t, err)
+
+	longPublicKey := append([]byte{}, signer.PublicKey[:]...)
+	longPublicKey = append(longPublicKey, 0)
+
+	tests := []struct {
+		name      string
+		publicKey []byte
+		signature []byte
+	}{
+		{
+			name:      "short public key",
+			publicKey: signer.PublicKey[:len(signer.PublicKey)-1],
+			signature: signature,
+		},
+		{
+			name:      "long public key",
+			publicKey: longPublicKey,
+			signature: signature,
+		},
+		{
+			name:      "empty signature",
+			publicKey: signer.PublicKey[:],
+			signature: nil,
+		},
+		{
+			name:      "oversized signature",
+			publicKey: signer.PublicKey[:],
+			signature: make([]byte, FalconMaxSignatureSize+1),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := VerifyFalcon1024(msg, test.publicKey, test.signature)
+			require.ErrorIs(t, err, ErrPQFalcon1024SigInvalid)
+		})
+	}
+}
+
 func TestFalconCanHandleNilSignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
