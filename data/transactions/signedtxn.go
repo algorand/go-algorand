@@ -117,22 +117,13 @@ func (s SignedTxn) HasSignature() bool {
 }
 
 // signatureFeeContribution dispatches the fee contribution of the signature type.
-func (s SignedTxn) signatureFeeContribution() basics.Micros {
+// An unknown PQ scheme contributes zero, which is safe because the transaction
+// will be rejected during verification.
+func (s SignedTxn) signatureFeeContribution(proto config.ConsensusParams) basics.Micros {
 	if !s.PQsig.Blank() {
-		return s.pqSignatureFeeContribution()
+		return proto.PQSchemeFeeContribution(s.PQsig.Scheme)
 	}
 	return 0
-}
-
-// pqSignatureFeeContribution dispatches the fee contribution of the post-quantum signature scheme.
-func (s SignedTxn) pqSignatureFeeContribution() basics.Micros {
-	scheme, ok := basics.LookupPQScheme(s.PQsig.Scheme)
-	if !ok {
-		// If the scheme is unknown, returning a zero-fee contribution is safe because
-		// the transaction will be rejected.
-		return 0
-	}
-	return scheme.FeeContribution
 }
 
 // FeeFactor is the factor by which the base transaction fee is multiplied. Some
@@ -150,7 +141,7 @@ func (s SignedTxn) FeeFactor(proto config.ConsensusParams) basics.Micros {
 		// the larger signature and verification cost.
 		return factor
 	}
-	factor = basics.AddSaturate(factor, s.signatureFeeContribution())
+	factor = basics.AddSaturate(factor, s.signatureFeeContribution(proto))
 	return factor
 }
 

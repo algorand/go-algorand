@@ -238,8 +238,8 @@ func runPQAddress() error {
 	if err != nil {
 		return err
 	}
-	if _, ok := basics.LookupPQScheme(scheme); !ok {
-		return fmt.Errorf("%w: %q", basics.ErrPQSchemeNotSupported, scheme)
+	if _, ok := crypto.LookupPQScheme(scheme); !ok {
+		return fmt.Errorf("%w: %q", crypto.ErrPQSchemeNotSupported, scheme)
 	}
 	if publicMaterial.scheme != scheme {
 		return fmt.Errorf("%w: public key file scheme is %q, requested %q", errPQKeyWrongType, publicMaterial.scheme, scheme)
@@ -346,7 +346,7 @@ func runPQSignWithOptions(opts pqSignOptions) error {
 
 	ops, ok := pqSchemeOpsByScheme[signing.public.scheme]
 	if !ok {
-		return fmt.Errorf("%w: %q", basics.ErrPQSchemeNotSupported, signing.public.scheme)
+		return fmt.Errorf("%w: %q", crypto.ErrPQSchemeNotSupported, signing.public.scheme)
 	}
 
 	public, err := resolvePQSalt(signing.public, opts.salt)

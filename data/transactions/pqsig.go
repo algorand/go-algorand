@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -32,14 +33,14 @@ var (
 	errPQSigAuthorizerMismatch = errors.New("pq signature authorizer mismatch")
 )
 
-// PQMaxPublicKeySize and PQMaxSignatureSize are derived wire/decode bounds for
-// PQ public keys and signatures before scheme dispatch. They feed msgp
-// allocation bounds and therefore PQSigMaxSize, SignedTxnMaxSize, and the
-// SignedTxn wire bound. Adding a larger registry entry grows those bounds and
-// requires regenerating msgp code, even before the scheme is consensus-enabled.
-var (
-	PQMaxPublicKeySize = int(basics.MaxPQPublicKeySize())
-	PQMaxSignatureSize = int(basics.MaxPQSignatureSize())
+// PQMaxPublicKeySize and PQMaxSignatureSize are the wire/decode bounds for PQ
+// public keys and signatures before scheme dispatch. They feed msgp allocation
+// bounds and therefore PQSigMaxSize, SignedTxnMaxSize, and the SignedTxn wire
+// bound, so they must bound the largest supported scheme. Adding a larger scheme
+// means bumping these (and regenerating msgp code) even before it is enabled.
+const (
+	PQMaxPublicKeySize = crypto.FalconPublicKeySize
+	PQMaxSignatureSize = crypto.FalconMaxSignatureSize
 )
 
 // PQSig is a post-quantum transaction authorization proof.
@@ -76,18 +77,18 @@ func (p PQSig) AuthorizerAddress() basics.Address {
 	return basics.PQAddress(p.Scheme, p.Salt, p.PublicKey)
 }
 
-func (p PQSig) validateScheme(proto config.ConsensusParams) (basics.PQSchemeSpec, error) {
+func (p PQSig) validateScheme(proto config.ConsensusParams) (crypto.PQVerifier, error) {
 	if p.Blank() {
-		return basics.PQSchemeSpec{}, errPQSigBlank
+		return nil, errPQSigBlank
 	}
 
-	scheme, ok := basics.LookupPQScheme(p.Scheme)
+	scheme, ok := crypto.LookupPQScheme(p.Scheme)
 	if !ok {
-		return basics.PQSchemeSpec{}, basics.ErrPQSchemeNotSupported
+		return nil, crypto.ErrPQSchemeNotSupported
 	}
 
 	if !proto.PQSchemeEnabled(p.Scheme) {
-		return basics.PQSchemeSpec{}, basics.ErrPQSchemeNotEnabled
+		return nil, crypto.ErrPQSchemeNotEnabled
 	}
 
 	return scheme, nil
@@ -104,15 +105,15 @@ func (p PQSig) ValidateScheme(proto config.ConsensusParams) error {
 // envelope, excluding the signature bytes. It returns the scheme spec so that
 // Verify can dispatch the scheme-specific signature check without a second
 // registry lookup.
-func (p PQSig) validateEnvelope(proto config.ConsensusParams, authorizer basics.Address) (basics.PQSchemeSpec, error) {
+func (p PQSig) validateEnvelope(proto config.ConsensusParams, authorizer basics.Address) (crypto.PQVerifier, error) {
 	scheme, err := p.validateScheme(proto)
 	if err != nil {
-		return basics.PQSchemeSpec{}, err
+		return nil, err
 	}
 
 	pqAuthorizer := p.AuthorizerAddress()
 	if pqAuthorizer != authorizer {
-		return basics.PQSchemeSpec{}, fmt.Errorf("%w: derived %s, expected %s", errPQSigAuthorizerMismatch, pqAuthorizer, authorizer)
+		return nil, fmt.Errorf("%w: derived %s, expected %s", errPQSigAuthorizerMismatch, pqAuthorizer, authorizer)
 	}
 
 	return scheme, nil
