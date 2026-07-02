@@ -127,7 +127,7 @@ func MakeSimulator(ledger *data.Ledger, developerAPI bool) *Simulator {
 }
 
 func txnHasNoSignature(txn transactions.SignedTxn) bool {
-	return txn.Sig.Blank() && txn.Msig.Blank() && txn.Lsig.Blank() && txn.PQsig.Blank()
+	return !txn.HasSignature()
 }
 
 // IsPlaceholderPQSig reports whether txn carries a placeholder PQSig:

@@ -111,6 +111,11 @@ func (s SignedTxn) Authorizer() basics.Address {
 	return s.AuthAddr
 }
 
+// HasSignature reports whether any signature category is present.
+func (s SignedTxn) HasSignature() bool {
+	return !s.Sig.Blank() || !s.Msig.Blank() || !s.Lsig.Blank() || !s.PQsig.Blank()
+}
+
 // signatureFeeContribution dispatches the fee contribution of the signature type.
 func (s SignedTxn) signatureFeeContribution() basics.Micros {
 	if !s.PQsig.Blank() {

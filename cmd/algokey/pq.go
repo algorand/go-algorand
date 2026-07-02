@@ -376,7 +376,7 @@ func runPQSignWithOptions(opts pqSignOptions) error {
 		}
 		decodedTxns++
 
-		if signedTxnHasSignature(&stxn) {
+		if stxn.HasSignature() {
 			if !opts.overwrite {
 				return errPQTxnAlreadySigned
 			}
@@ -410,10 +410,6 @@ func runPQSignWithOptions(opts pqSignOptions) error {
 		return fmt.Errorf("cannot write signed transactions to %s: %w", opts.outfile, err)
 	}
 	return nil
-}
-
-func signedTxnHasSignature(stxn *transactions.SignedTxn) bool {
-	return !stxn.Sig.Blank() || !stxn.Msig.Blank() || !stxn.Lsig.Blank() || !stxn.PQsig.Blank()
 }
 
 func clearSignedTxnSignatures(stxn *transactions.SignedTxn) {
