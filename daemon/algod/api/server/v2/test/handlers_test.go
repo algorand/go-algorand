@@ -1231,7 +1231,7 @@ func TestPostTransactionPQAuthorizerCompliance(t *testing.T) {
 	futureStatus := cannedStatusReportGolden
 	futureStatus.LastVersion = protocol.ConsensusFuture
 
-	test := func(t *testing.T, stxn transactions.SignedTxn, status node.StatusReport, expectedCode int, expectedBody string) {
+	test := func(t *testing.T, stxn transactions.SignedTxn, status node.StatusReport, params model.RawTransactionParams, expectedCode int, expectedBody string) {
 		t.Helper()
 
 		mockLedger, _, _, _, releasefunc := testingenv(t, 1, 0, true)
@@ -1248,7 +1248,7 @@ func TestPostTransactionPQAuthorizerCompliance(t *testing.T) {
 		rec := httptest.NewRecorder()
 		c := echo.New().NewContext(req, rec)
 
-		err := handler.RawTransaction(c, model.RawTransactionParams{})
+		err := handler.RawTransaction(c, params)
 		require.NoError(t, err)
 		require.Equal(t, expectedCode, rec.Code, rec.Body.String())
 		if expectedBody != "" {
@@ -1259,11 +1259,16 @@ func TestPostTransactionPQAuthorizerCompliance(t *testing.T) {
 
 	t.Run("compliant", func(t *testing.T) {
 		t.Parallel()
-		test(t, makePQSignedTxnWithAddressCompliance(t, true), futureStatus, http.StatusOK, "")
+		test(t, makePQSignedTxnWithAddressCompliance(t, true), futureStatus, model.RawTransactionParams{}, http.StatusOK, "")
 	})
 	t.Run("not-compliant", func(t *testing.T) {
 		t.Parallel()
-		test(t, makePQSignedTxnWithAddressCompliance(t, false), futureStatus, http.StatusBadRequest, "transaction 0: pq signature authorizer address")
+		test(t, makePQSignedTxnWithAddressCompliance(t, false), futureStatus, model.RawTransactionParams{}, http.StatusBadRequest, "transaction 0: pq signature authorizer address")
+	})
+	t.Run("not-compliant with skip flag", func(t *testing.T) {
+		t.Parallel()
+		skip := true
+		test(t, makePQSignedTxnWithAddressCompliance(t, false), futureStatus, model.RawTransactionParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
 	})
 }
 
@@ -1392,16 +1397,32 @@ func TestPostTransactionAsyncPQAuthorizerCompliance(t *testing.T) {
 	cfg.EnableExperimentalAPI = true
 	cfg.EnableDeveloperAPI = true
 
-	handler, c, rec, releasefunc := prepareTransactionTest(t, 0, func(transactions.SignedTxn) []byte {
-		stxn := makePQSignedTxnWithAddressCompliance(t, false)
-		return protocol.Encode(&stxn)
-	}, cfg)
-	defer releasefunc()
+	test := func(t *testing.T, params model.RawTransactionAsyncParams, expectedCode int, expectedBody string) {
+		t.Helper()
 
-	err := handler.RawTransactionAsync(c, model.RawTransactionAsyncParams{})
-	require.NoError(t, err)
-	require.Equal(t, http.StatusBadRequest, rec.Code)
-	require.Contains(t, rec.Body.String(), "transaction 0: pq signature authorizer address")
+		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, func(transactions.SignedTxn) []byte {
+			stxn := makePQSignedTxnWithAddressCompliance(t, false)
+			return protocol.Encode(&stxn)
+		}, cfg)
+		defer releasefunc()
+
+		err := handler.RawTransactionAsync(c, params)
+		require.NoError(t, err)
+		require.Equal(t, expectedCode, rec.Code)
+		if expectedBody != "" {
+			require.Contains(t, rec.Body.String(), expectedBody)
+		}
+	}
+
+	t.Run("not-compliant", func(t *testing.T) {
+		t.Parallel()
+		test(t, model.RawTransactionAsyncParams{}, http.StatusBadRequest, "transaction 0: pq signature authorizer address")
+	})
+	t.Run("not-compliant with skip flag", func(t *testing.T) {
+		t.Parallel()
+		skip := true
+		test(t, model.RawTransactionAsyncParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
+	})
 }
 
 func TestPostTransactionAsyncLogicSigCurveCheck(t *testing.T) {

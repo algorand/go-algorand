@@ -1192,11 +1192,11 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context, params model.RawTransaction
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
-	if err = enforcePQAuthorizerCompliance(txgroup); err != nil {
-		return badRequest(ctx, err, err.Error(), v2.Log)
-	}
 
 	if !shouldSkipPqAddressCheck(params.SkipPqAddressCheck) {
+		if err = enforcePQAuthorizerCompliance(txgroup); err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
 		if err = rejectOnCurveLogicSigPrograms(txgroup); err != nil {
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
@@ -1226,10 +1226,10 @@ func (v2 *Handlers) RawTransactionAsync(ctx echo.Context, params model.RawTransa
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
-	if err = enforcePQAuthorizerCompliance(txgroup); err != nil {
-		return badRequest(ctx, err, err.Error(), v2.Log)
-	}
 	if !shouldSkipPqAddressCheck(params.SkipPqAddressCheck) {
+		if err = enforcePQAuthorizerCompliance(txgroup); err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
 		if err = rejectOnCurveLogicSigPrograms(txgroup); err != nil {
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
