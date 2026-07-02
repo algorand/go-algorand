@@ -33,14 +33,14 @@ var (
 	errPQSigAuthorizerMismatch = errors.New("pq signature authorizer mismatch")
 )
 
-// PQMaxPublicKeySize and PQMaxSignatureSize are the wire/decode bounds for PQ
-// public keys and signatures before scheme dispatch. They feed msgp allocation
-// bounds and therefore PQSigMaxSize, SignedTxnMaxSize, and the SignedTxn wire
-// bound, so they must bound the largest supported scheme. Adding a larger scheme
-// means bumping these (and regenerating msgp code) even before it is enabled.
-const (
-	PQMaxPublicKeySize = crypto.FalconPublicKeySize
-	PQMaxSignatureSize = crypto.FalconMaxSignatureSize
+// PQMaxPublicKeySize and PQMaxSignatureSize are derived wire/decode bounds for
+// PQ public keys and signatures before scheme dispatch. They feed msgp
+// allocation bounds and therefore PQSigMaxSize, SignedTxnMaxSize, and the
+// SignedTxn wire bound. Adding a larger registry entry grows those bounds and
+// requires regenerating msgp code, even before the scheme is consensus-enabled.
+var (
+	PQMaxPublicKeySize = int(crypto.MaxPQPublicKeySize())
+	PQMaxSignatureSize = int(crypto.MaxPQSignatureSize())
 )
 
 // PQSig is a post-quantum transaction authorization proof.

@@ -31,11 +31,19 @@ func TestLookupPQScheme(t *testing.T) {
 
 	v, ok := LookupPQScheme(protocol.PQSchemeFalcon1024)
 	require.True(t, ok)
-	require.Equal(t, uint64(FalconPublicKeySize), v.PublicKeySize())
-	require.Equal(t, uint64(FalconMaxSignatureSize), v.SignatureSize())
+	require.NotNil(t, v)
 
 	_, ok = LookupPQScheme(protocol.PQScheme{'x', '1'})
 	require.False(t, ok)
+}
+
+// TestMaxPQSizes checks the derived wire bounds cover the supported schemes.
+func TestMaxPQSizes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	require.Equal(t, uint64(FalconPublicKeySize), MaxPQPublicKeySize())
+	require.Equal(t, uint64(FalconMaxSignatureSize), MaxPQSignatureSize())
 }
 
 // TestPQVerifierFalcon1024RoundTrip exercises the interface wiring; the

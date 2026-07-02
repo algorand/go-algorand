@@ -206,12 +206,12 @@ func canonicalPublicMaterialFromKey(scheme protocol.PQScheme, publicKey []byte) 
 }
 
 func publicMaterialFromFields(scheme protocol.PQScheme, salt basics.PQAddressSalt, publicKey []byte) (pqPublicMaterial, error) {
-	spec, ok := crypto.LookupPQScheme(scheme)
+	ops, ok := pqSchemeOpsByScheme[scheme]
 	if !ok {
 		return pqPublicMaterial{}, fmt.Errorf("%w: %q", crypto.ErrPQSchemeNotSupported, scheme)
 	}
-	if uint64(len(publicKey)) != spec.PublicKeySize() {
-		return pqPublicMaterial{}, fmt.Errorf("%w: got public key size %d, want %d", errPQKeyMalformed, len(publicKey), spec.PublicKeySize())
+	if uint64(len(publicKey)) != ops.publicKeySize() {
+		return pqPublicMaterial{}, fmt.Errorf("%w: got public key size %d, want %d", errPQKeyMalformed, len(publicKey), ops.publicKeySize())
 	}
 
 	addr := basics.PQAddress(scheme, salt, publicKey)

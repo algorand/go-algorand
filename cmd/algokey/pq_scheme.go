@@ -36,6 +36,7 @@ const pqSchemeFalcon1024Name = "falcon-1024"
 type pqSchemeOps interface {
 	deriveSigning(seed []byte) (pqSigningMaterial, error)
 	signTxn(privateKey []byte, txn transactions.Transaction) ([]byte, error)
+	publicKeySize() uint64
 }
 
 var pqSchemeOpsByScheme = map[protocol.PQScheme]pqSchemeOps{
@@ -141,6 +142,8 @@ func falconPrivateKeyFromBytes(privateKey []byte) (crypto.FalconPrivateKey, erro
 	copy(sk[:], privateKey)
 	return sk, nil
 }
+
+func (falcon1024Ops) publicKeySize() uint64 { return crypto.FalconPublicKeySize }
 
 func (falcon1024Ops) signTxn(privateKey []byte, txn transactions.Transaction) ([]byte, error) {
 	sk, err := falconPrivateKeyFromBytes(privateKey)
