@@ -140,6 +140,27 @@ func IsPlaceholderPQSig(txn transactions.SignedTxn) bool {
 		!txn.PQsig.Blank() && len(txn.PQsig.Signature) == 0
 }
 
+// IsSchemeOnlyPlaceholderPQSig reports whether txn carries only a PQ scheme placeholder.
+func IsSchemeOnlyPlaceholderPQSig(txn transactions.SignedTxn) bool {
+	return IsPlaceholderPQSig(txn) && len(txn.PQsig.PublicKey) == 0
+}
+
+// IsFullPlaceholderPQSig reports whether txn carries a placeholder with public key material.
+func IsFullPlaceholderPQSig(txn transactions.SignedTxn) bool {
+	return IsPlaceholderPQSig(txn) && len(txn.PQsig.PublicKey) != 0
+}
+
+// ValidatePlaceholderPQSig validates the parts of a placeholder PQSig that are known before evaluation.
+func ValidatePlaceholderPQSig(proto config.ConsensusParams, txn transactions.SignedTxn, fixSigners bool) error {
+	if !IsPlaceholderPQSig(txn) {
+		return nil
+	}
+	if IsSchemeOnlyPlaceholderPQSig(txn) || fixSigners {
+		return txn.PQsig.ValidateScheme(proto)
+	}
+	return txn.PQsig.ValidateEnvelope(proto, txn.Authorizer())
+}
+
 func txnNeedsSyntheticSignature(txn transactions.SignedTxn) bool {
 	return txnHasNoSignature(txn) || IsPlaceholderPQSig(txn)
 }
@@ -187,10 +208,7 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 			// itself is valid.
 			txnsToVerify[i] = stxn.Txn.Sign(proxySignerSecrets)
 		} else if overrides.AllowEmptySignatures && IsPlaceholderPQSig(stxn) && protoKnown {
-			placeholderErr := stxn.PQsig.ValidateScheme(proto)
-			if len(stxn.PQsig.PublicKey) != 0 && !overrides.FixSigners {
-				placeholderErr = stxn.PQsig.ValidateEnvelope(proto, stxn.Authorizer())
-			}
+			placeholderErr := ValidatePlaceholderPQSig(proto, stxn, overrides.FixSigners)
 			if placeholderErr == nil {
 				txnsToVerify[i] = stxn.Txn.Sign(proxySignerSecrets)
 			} else {
@@ -212,8 +230,7 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 func validateFixedPlaceholderPQEnvelopes(proto config.ConsensusParams, txgroup []transactions.SignedTxnWithAD) (int, error) {
 	for i, stxnad := range txgroup {
 		stxn := stxnad.SignedTxn
-		// Scheme-only placeholders only price the fee surcharge; full placeholders also need the authorizer check.
-		if !IsPlaceholderPQSig(stxn) || len(stxn.PQsig.PublicKey) == 0 {
+		if !IsFullPlaceholderPQSig(stxn) {
 			continue
 		}
 		if err := stxn.PQsig.ValidateEnvelope(proto, stxn.Authorizer()); err != nil {

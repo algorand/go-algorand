@@ -114,10 +114,14 @@ func checkPQSimulatePolicy(proto config.ConsensusParams, stxn transactions.Signe
 	if !allowEmptySignatures {
 		return checkPQSubmitPolicy(proto, stxn)
 	}
-	if simulation.IsPlaceholderPQSig(stxn) && len(stxn.PQsig.PublicKey) == 0 {
-		return stxn.PQsig.ValidateScheme(proto)
-	}
-	if !(fixSigners && simulation.IsPlaceholderPQSig(stxn)) {
+	if simulation.IsPlaceholderPQSig(stxn) {
+		if err := simulation.ValidatePlaceholderPQSig(proto, stxn, fixSigners); err != nil {
+			return err
+		}
+		if simulation.IsSchemeOnlyPlaceholderPQSig(stxn) {
+			return nil
+		}
+	} else {
 		if err := stxn.PQsig.ValidateEnvelope(proto, stxn.Authorizer()); err != nil {
 			return err
 		}
