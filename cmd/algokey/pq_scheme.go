@@ -34,17 +34,16 @@ const pqSchemeFalcon1024Name = "falcon-1024"
 // scheme. The consensus-relevant scheme behavior (public key validation,
 // signature verification, sizes, fees) lives in the basics PQ scheme registry;
 // see basics.LookupPQScheme.
-type pqSchemeOps struct {
-	deriveSigning func([]byte) (pqSigningMaterial, error)
-	signTxn       func([]byte, transactions.Transaction) ([]byte, error)
+type pqSchemeOps interface {
+	deriveSigning(seed []byte) (pqSigningMaterial, error)
+	signTxn(privateKey []byte, txn transactions.Transaction) ([]byte, error)
 }
 
 var pqSchemeOpsByScheme = map[protocol.PQScheme]pqSchemeOps{
-	protocol.PQSchemeFalcon1024: {
-		deriveSigning: deriveFalcon1024SigningMaterial,
-		signTxn:       signFalcon1024Txn,
-	},
+	protocol.PQSchemeFalcon1024: falcon1024Ops{},
 }
+
+type falcon1024Ops struct{}
 
 func parsePQScheme(value string) (protocol.PQScheme, error) {
 	value = strings.TrimSpace(value)
@@ -116,7 +115,7 @@ func derivePQKeySeed(scheme protocol.PQScheme, entropy []byte) (crypto.Digest, e
 	return crypto.Hash(input), nil
 }
 
-func deriveFalcon1024SigningMaterial(seed []byte) (pqSigningMaterial, error) {
+func (falcon1024Ops) deriveSigning(seed []byte) (pqSigningMaterial, error) {
 	signer, err := crypto.GenerateFalconSignerFromBytes(seed)
 	if err != nil {
 		return pqSigningMaterial{}, err
@@ -144,7 +143,7 @@ func falconPrivateKeyFromBytes(privateKey []byte) (crypto.FalconPrivateKey, erro
 	return sk, nil
 }
 
-func signFalcon1024Txn(privateKey []byte, txn transactions.Transaction) ([]byte, error) {
+func (falcon1024Ops) signTxn(privateKey []byte, txn transactions.Transaction) ([]byte, error) {
 	sk, err := falconPrivateKeyFromBytes(privateKey)
 	if err != nil {
 		return nil, err

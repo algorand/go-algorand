@@ -149,11 +149,9 @@ func TestPQSchemeRegistriesConsistent(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	for scheme, ops := range pqSchemeOpsByScheme {
+	for scheme := range pqSchemeOpsByScheme {
 		_, ok := basics.LookupPQScheme(scheme)
 		require.True(t, ok, "algokey scheme %q missing from basics registry", scheme)
-		require.NotNil(t, ops.deriveSigning, "scheme %q", scheme)
-		require.NotNil(t, ops.signTxn, "scheme %q", scheme)
 	}
 
 	for _, scheme := range []protocol.PQScheme{protocol.PQSchemeFalcon1024} {
