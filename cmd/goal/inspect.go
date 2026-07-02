@@ -36,6 +36,7 @@ type inspectSignedTxn struct {
 	Sig      crypto.Signature         `codec:"sig"`
 	Msig     inspectMultisigSig       `codec:"msig"`
 	Lsig     inspectLogicSig          `codec:"lsig"`
+	PQsig    transactions.PQSig       `codec:"pqsig"`
 	Txn      transactions.Transaction `codec:"txn"`
 	AuthAddr basics.Address           `codec:"sgnr"`
 }
@@ -120,6 +121,7 @@ func stxnToInspect(stxn transactions.SignedTxn) inspectSignedTxn {
 		Sig:      stxn.Sig,
 		Msig:     msigToInspect(stxn.Msig),
 		Lsig:     lsigToInspect(stxn.Lsig),
+		PQsig:    stxn.PQsig,
 		AuthAddr: stxn.AuthAddr,
 	}
 }
@@ -130,6 +132,7 @@ func stxnFromInspect(sti inspectSignedTxn) transactions.SignedTxn {
 		Sig:      sti.Sig,
 		Msig:     msigFromInspect(sti.Msig),
 		Lsig:     lsigFromInspect(sti.Lsig),
+		PQsig:    sti.PQsig,
 		AuthAddr: sti.AuthAddr,
 	}
 }
