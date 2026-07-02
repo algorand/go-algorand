@@ -1312,6 +1312,14 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 		require.ErrorContains(t, err, "more than the available pool")
 	})
 
+	t.Run("v41: singleton program and args share the current pool", func(t *testing.T) {
+		program := makeProgram(v41, int(v41.LogicSigMaxSize))
+		err := verifyGroup(protocol.ConsensusV41, []transactions.SignedTxn{
+			makeTxn(program, [][]byte{make([]byte, int(v41.LogicSigMaxSize))}),
+		})
+		require.ErrorContains(t, err, "more than the available pool")
+	})
+
 	t.Run("v41: ordinary size pooling is still allowed", func(t *testing.T) {
 		program := makeProgram(v41, int(v41.LogicSigMaxSize)+1)
 		err := verifyGroup(protocol.ConsensusV41, []transactions.SignedTxn{
