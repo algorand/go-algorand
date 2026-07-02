@@ -759,13 +759,13 @@ var OpSpecs = []OpSpec{
 	{0xb8, "gitxna", opGitxna, proto(":a"), 6, immediates("t", "f", "i").field("f", &TxnArrayFields).only(ModeApp)},
 
 	// Unlimited Global Storage - Boxes
-	{0xb9, "box_create", opBoxCreate, proto("Ni:T").appStateExplain(opBoxCreateStateChange), boxVersion, only(ModeApp)},
-	{0xba, "box_extract", opBoxExtract, proto("Nii:b").appStateExplain(opBoxExtractStateChange), boxVersion, only(ModeApp)},
-	{0xbb, "box_replace", opBoxReplace, proto("Nib:").appStateExplain(opBoxReplaceStateChange), boxVersion, only(ModeApp)},
-	{0xbc, "box_del", opBoxDel, proto("N:T").appStateExplain(opBoxDelStateChange), boxVersion, only(ModeApp)},
-	{0xbd, "box_len", opBoxLen, proto("N:iT").appStateExplain(opBoxGetStateChange), boxVersion, only(ModeApp)},
-	{0xbe, "box_get", opBoxGet, proto("N:bT").appStateExplain(opBoxGetStateChange), boxVersion, only(ModeApp)},
-	{0xbf, "box_put", opBoxPut, proto("Nb:").appStateExplain(opBoxPutStateChange), boxVersion, only(ModeApp)},
+	{0xb9, "box_create", opBoxCreate, proto("Ni:T").appBoxExplain(AppStateWrite, false), boxVersion, only(ModeApp)},
+	{0xba, "box_extract", opBoxExtract, proto("Nii:b").appBoxExplain(AppStateRead, false), boxVersion, only(ModeApp)},
+	{0xbb, "box_replace", opBoxReplace, proto("Nib:").appBoxExplain(AppStateWrite, false), boxVersion, only(ModeApp)},
+	{0xbc, "box_del", opBoxDel, proto("N:T").appBoxExplain(AppStateDelete, false), boxVersion, only(ModeApp)},
+	{0xbd, "box_len", opBoxLen, proto("N:iT").appBoxExplain(AppStateRead, false), boxVersion, only(ModeApp)},
+	{0xbe, "box_get", opBoxGet, proto("N:bT").appBoxExplain(AppStateRead, false), boxVersion, only(ModeApp)},
+	{0xbf, "box_put", opBoxPut, proto("Nb:").appBoxExplain(AppStateWrite, false), boxVersion, only(ModeApp)},
 
 	// Dynamic indexing
 	{0xc0, "txnas", opTxnas, proto("i:a"), 5, field("f", &TxnArrayFields)},
@@ -779,20 +779,20 @@ var OpSpecs = []OpSpec{
 	// randomness support
 	{0xd0, "vrf_verify", opVrfVerify, proto("bb{80}b{32}:b{64}T"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
 	{0xd1, "block", opBlock, proto("i:a"), randomnessVersion, field("f", &BlockFields)},
-	{0xd2, "box_splice", opBoxSplice, proto("Niib:").appStateExplain(opBoxSpliceStateChange), spliceVersion, only(ModeApp)},
-	{0xd3, "box_resize", opBoxResize, proto("Ni:").appStateExplain(opBoxResizeStateChange), spliceVersion, only(ModeApp)},
+	{0xd2, "box_splice", opBoxSplice, proto("Niib:").appBoxExplain(AppStateWrite, false), spliceVersion, only(ModeApp)},
+	{0xd3, "box_resize", opBoxResize, proto("Ni:").appBoxExplain(AppStateWrite, false), spliceVersion, only(ModeApp)},
 
 	// foreign app box access: all share prefix 0xd4, sub-opcode selects the operation.
 	// Reads are allowed by ForeignBoxReads; writes require FamilyBoxAccess and the same creator.
-	{0xd4, "app_box_create", opAppBoxCreate, proto("Nii:T").appStateExplain(opAppBoxCreateStateChange), foreignBoxVersion, subOp(0x01).only(ModeApp)},
-	{0xd4, "app_box_extract", opAppBoxExtract, proto("Niii:b").appStateExplain(opAppBoxExtractStateChange), foreignBoxVersion, subOp(0x02).only(ModeApp)},
-	{0xd4, "app_box_replace", opAppBoxReplace, proto("Nibi:").appStateExplain(opAppBoxReplaceStateChange), foreignBoxVersion, subOp(0x03).only(ModeApp)},
-	{0xd4, "app_box_del", opAppBoxDel, proto("Ni:T").appStateExplain(opAppBoxDelStateChange), foreignBoxVersion, subOp(0x04).only(ModeApp)},
-	{0xd4, "app_box_len", opAppBoxLen, proto("Ni:iT").appStateExplain(opAppBoxGetStateChange), foreignBoxVersion, subOp(0x05).only(ModeApp)},
-	{0xd4, "app_box_get", opAppBoxGet, proto("Ni:bT").appStateExplain(opAppBoxGetStateChange), foreignBoxVersion, subOp(0x06).only(ModeApp)},
-	{0xd4, "app_box_put", opAppBoxPut, proto("Nbi:").appStateExplain(opAppBoxPutStateChange), foreignBoxVersion, subOp(0x07).only(ModeApp)},
-	{0xd4, "app_box_splice", opAppBoxSplice, proto("Niibi:").appStateExplain(opAppBoxSpliceStateChange), foreignBoxVersion, subOp(0x08).only(ModeApp)},
-	{0xd4, "app_box_resize", opAppBoxResize, proto("Nii:").appStateExplain(opAppBoxResizeStateChange), foreignBoxVersion, subOp(0x09).only(ModeApp)},
+	{0xd4, "app_box_create", opAppBoxCreate, proto("Nii:T").appBoxExplain(AppStateWrite, true), foreignBoxVersion, subOp(0x01).only(ModeApp)},
+	{0xd4, "app_box_extract", opAppBoxExtract, proto("Niii:b").appBoxExplain(AppStateRead, true), foreignBoxVersion, subOp(0x02).only(ModeApp)},
+	{0xd4, "app_box_replace", opAppBoxReplace, proto("Nibi:").appBoxExplain(AppStateWrite, true), foreignBoxVersion, subOp(0x03).only(ModeApp)},
+	{0xd4, "app_box_del", opAppBoxDel, proto("Ni:T").appBoxExplain(AppStateDelete, true), foreignBoxVersion, subOp(0x04).only(ModeApp)},
+	{0xd4, "app_box_len", opAppBoxLen, proto("Ni:iT").appBoxExplain(AppStateRead, true), foreignBoxVersion, subOp(0x05).only(ModeApp)},
+	{0xd4, "app_box_get", opAppBoxGet, proto("Ni:bT").appBoxExplain(AppStateRead, true), foreignBoxVersion, subOp(0x06).only(ModeApp)},
+	{0xd4, "app_box_put", opAppBoxPut, proto("Nbi:").appBoxExplain(AppStateWrite, true), foreignBoxVersion, subOp(0x07).only(ModeApp)},
+	{0xd4, "app_box_splice", opAppBoxSplice, proto("Niibi:").appBoxExplain(AppStateWrite, true), foreignBoxVersion, subOp(0x08).only(ModeApp)},
+	{0xd4, "app_box_resize", opAppBoxResize, proto("Nii:").appBoxExplain(AppStateWrite, true), foreignBoxVersion, subOp(0x09).only(ModeApp)},
 
 	{0xe0, "ec_add", opEcAdd, proto("bb:b"), pairingVersion,
 		costByField("g", &EcGroups, []int{

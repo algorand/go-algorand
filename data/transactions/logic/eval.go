@@ -5293,10 +5293,8 @@ func opAppParamsSet(cx *EvalContext) error {
 
 	switch fs.field {
 	case AppForeignBoxReads:
-		fmt.Printf("fbr %d\n", arg)
 		return cx.Ledger.SetForeignBoxReads(cx.appID, arg != 0)
 	case AppFamilyBoxAccess:
-		fmt.Printf("fba %d\n", arg)
 		return cx.Ledger.SetFamilyBoxAccess(cx.appID, arg != 0)
 	default:
 		return fmt.Errorf("immutable app_params_set field %s", fs.field)

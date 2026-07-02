@@ -5443,6 +5443,116 @@ func TestAppInitialBoxStatesAboutBoxPut(t *testing.T) {
 	})
 }
 
+// TestForeignAppBoxStateChangeTrace exercises the foreign-app box opcodes
+// (app_box_*), which manipulate a box belonging to an app other than the one
+// executing. It confirms that both the exec-trace StateChanges and the reported
+// InitialStates are attributed to the foreign box owner rather than the running
+// app. That attribution is the distinguishing behavior of appBoxExplain's
+// foreign path, which reads the target app from the top of the stack instead of
+// using cx.appID -- a path the non-foreign box_* tests never cover, since there
+// the reported app is always the executing one.
+func TestForeignAppBoxStateChangeTrace(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	// Both apps share creator, putting them in the same family so the writer may
+	// write the owner's box once the owner opts into FamilyBoxAccess.
+	creator := env.Accounts[0]
+
+	// owner (app in Applications 1) creates box "b" holding "IIII" and opts into
+	// FamilyBoxAccess so a same-creator family member may write its boxes.
+	owner := env.CreateApp(creator.Addr, simulationtesting.AppParams{
+		ApprovalProgram: `#pragma version 13
+txn ApplicationID
+bz end
+byte "b"
+byte "IIII"
+box_put
+int 1
+app_params_set AppFamilyBoxAccess
+end:
+int 1`,
+		ClearStateProgram: `#pragma version 13
+int 1`,
+	})
+
+	// writer replaces the whole contents of box "b" owned by the app in
+	// Applications 1 (the owner) with "WWWW".
+	writer := env.CreateApp(creator.Addr, simulationtesting.AppParams{
+		ApprovalProgram: `#pragma version 13
+txn ApplicationID
+bz end
+byte "b"
+byte "WWWW"
+txn Applications 1
+app_box_put
+end:
+int 1`,
+		ClearStateProgram: `#pragma version 13
+int 1`,
+	})
+
+	// Fund the owner so it can carry box "b"'s minimum balance, then run it once
+	// to create the box and opt into family box access.
+	env.TransferAlgos(env.Accounts[1].Addr, owner.Address(), 1_000_000)
+	env.Txn(env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        creator.Addr,
+		ApplicationID: owner,
+		Boxes:         []transactions.BoxRef{{Name: []byte("b")}},
+	}).SignedTxn())
+
+	// Simulate a top-level call to the writer that touches the owner's box.
+	callTxn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        creator.Addr,
+		ApplicationID: writer,
+		ForeignApps:   []basics.AppIndex{owner},
+		Boxes:         []transactions.BoxRef{{Index: 1, Name: []byte("b")}},
+	}).Txn().Sign(creator.Sk)
+
+	result, err := simulation.MakeSimulator(env.Ledger, true).Simulate(simulation.Request{
+		TxnGroups: [][]transactions.SignedTxn{{callTxn}},
+		TraceConfig: simulation.ExecTraceConfig{
+			Enable: true,
+			State:  true,
+		},
+	})
+	require.NoError(t, err)
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+
+	// The write's state change must be attributed to the foreign owner (not the
+	// writer), keyed by the correct box name, with the post-write value.
+	var stateChanges []simulation.StateOperation
+	for _, unit := range result.TxnGroups[0].Txns[0].Trace.ApprovalProgramTrace {
+		stateChanges = append(stateChanges, unit.StateChanges...)
+	}
+	require.Equal(t, []simulation.StateOperation{
+		{
+			AppStateOp: logic.AppStateWrite,
+			AppState:   logic.BoxState,
+			AppID:      owner,
+			Key:        "b",
+			NewValue: basics.TealValue{
+				Type:  basics.TealBytesType,
+				Bytes: "WWWW",
+			},
+		},
+	}, stateChanges)
+
+	// The pre-simulation box value is recorded under the owner, and the writer
+	// contributes no box initial state of its own.
+	require.Contains(t, result.InitialStates.AllAppsInitialStates, owner)
+	require.Equal(t, basics.TealValue{
+		Type:  basics.TealBytesType,
+		Bytes: "IIII",
+	}, result.InitialStates.AllAppsInitialStates[owner].AppBoxes["b"])
+	require.NotContains(t, result.InitialStates.AllAppsInitialStates, writer)
+}
+
 type GlobalInitialStatesTestCase struct {
 	prepareInstruction  [][][]byte
 	txnsArgs            [][][]byte
