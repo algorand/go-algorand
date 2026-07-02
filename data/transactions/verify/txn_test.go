@@ -695,7 +695,7 @@ func TestLsigSize(t *testing.T) {
 	for _, test := range testCases {
 		blkHdr.UpgradeState.CurrentProtocol = test.consensusVersion
 
-		lsig, err := txntest.GenerateProgramOfSize(test.lsigSize, pragma)
+		lsig, err := txntest.GenerateUnsaltedProgramOfSize(test.lsigSize, pragma)
 		require.NoError(t, err)
 
 		lsigPay := txntest.Txn{
