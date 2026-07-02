@@ -33,7 +33,7 @@ var (
 	errPQSigAuthorizerMismatch = errors.New("pq signature authorizer mismatch")
 )
 
-// PQMaxPublicKeySize and PQMaxSignatureSize are derived wire/decode bounds for
+// pqMaxPublicKeySize and pqMaxSignatureSize are derived wire/decode bounds for
 // PQ public keys and signatures before scheme dispatch. They feed msgp
 // allocation bounds and therefore PQSigMaxSize, SignedTxnMaxSize, and the
 // SignedTxn wire bound. Adding a larger registry entry grows those bounds and
