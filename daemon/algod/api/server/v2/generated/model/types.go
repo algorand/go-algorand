@@ -895,6 +895,12 @@ type SimulateTransactionGroupResult struct {
 	// FailureMessage If present, indicates that the transaction group failed and specifies why that happened
 	FailureMessage *string `json:"failure-message,omitempty"`
 
+	// GroupFeesPaid Total fees paid by the transaction group and all of its descendant inner transaction groups.
+	GroupFeesPaid *uint64 `json:"group-fees-paid,omitempty"`
+
+	// GroupUsage Fee usage for the transaction group, including all descendant inner transactions, in millionths of a basic transaction fee unit.
+	GroupUsage *basics.Micros `json:"group-usage,omitempty"`
+
 	// TxnResults Simulation result for individual transactions
 	TxnResults []SimulateTransactionResult `json:"txn-results"`
 
@@ -909,6 +915,9 @@ type SimulateTransactionResult struct {
 
 	// ExecTrace The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.
 	ExecTrace *SimulationTransactionExecTrace `json:"exec-trace,omitempty"`
+
+	// FeesPaid Total fees paid by this transaction and all of its descendant inner transactions.
+	FeesPaid *uint64 `json:"fees-paid,omitempty"`
 
 	// FixedSigner The account that needed to sign this transaction when no signature was provided and the provided signer was incorrect.
 	FixedSigner *string `json:"fixed-signer,omitempty"`
@@ -1682,6 +1691,18 @@ type TealCompileTextBody = openapi_types.File
 type TealCompileParams struct {
 	// Sourcemap When set to `true`, returns the source map of the program as a JSON. Defaults to `false`.
 	Sourcemap *bool `form:"sourcemap,omitempty" json:"sourcemap,omitempty"`
+}
+
+// RawTransactionParams defines parameters for RawTransaction.
+type RawTransactionParams struct {
+	// SkipPqAddressCheck Skip post-quantum address checks, including the check that rejects TEAL v13 or later LogicSig escrow addresses whose program hash is an Edwards25519 curve point. This should only be used if you understand the risks and know what you are doing.
+	SkipPqAddressCheck *bool `form:"skip-pq-address-check,omitempty" json:"skip-pq-address-check,omitempty"`
+}
+
+// RawTransactionAsyncParams defines parameters for RawTransactionAsync.
+type RawTransactionAsyncParams struct {
+	// SkipPqAddressCheck Skip post-quantum address checks, including the check that rejects TEAL v13 or later LogicSig escrow addresses whose program hash is an Edwards25519 curve point. This should only be used if you understand the risks and know what you are doing.
+	SkipPqAddressCheck *bool `form:"skip-pq-address-check,omitempty" json:"skip-pq-address-check,omitempty"`
 }
 
 // GetPendingTransactionsParams defines parameters for GetPendingTransactions.

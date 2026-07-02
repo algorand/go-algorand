@@ -33,23 +33,23 @@ type MicroAlgos struct {
 }
 
 // String returns a human-readable representation of MicroAlgos
-func (a MicroAlgos) String() string {
-	if a.Raw == 0 {
+func (base MicroAlgos) String() string {
+	if base.Raw == 0 {
 		return "0.0A"
 	}
-	if a.Raw < 1_000 {
-		return fmt.Sprintf("%duA", a.Raw)
+	if base.Raw < 1_000 {
+		return fmt.Sprintf("%duA", base.Raw)
 	}
-	if a.Raw < 1_000_000 {
-		millis := a.Raw / 1_000
-		fraction := a.Raw % 1_000
+	if base.Raw < 1_000_000 {
+		millis := base.Raw / 1_000
+		fraction := base.Raw % 1_000
 		if fraction == 0 {
 			return fmt.Sprintf("%dmA", millis)
 		}
 		return fmt.Sprintf("%d.%03dmA", millis, fraction)
 	}
-	whole := a.Raw / 1_000_000
-	fraction := a.Raw % 1_000_000
+	whole := base.Raw / 1_000_000
+	fraction := base.Raw % 1_000_000
 	if fraction == 0 {
 		return fmt.Sprintf("%dA", whole)
 	}
@@ -57,38 +57,38 @@ func (a MicroAlgos) String() string {
 }
 
 // AddSaturate adds MicroAlgos, and won't rollover.
-func (a MicroAlgos) AddSaturate(b MicroAlgos) MicroAlgos {
-	return MicroAlgos{Raw: AddSaturate(a.Raw, b.Raw)}
+func (base MicroAlgos) AddSaturate(b MicroAlgos) MicroAlgos {
+	return MicroAlgos{Raw: AddSaturate(base.Raw, b.Raw)}
 }
 
 // SubSaturate subtracts MicroAlgos, and won't rollover.
-func (a MicroAlgos) SubSaturate(b MicroAlgos) MicroAlgos {
-	return MicroAlgos{Raw: SubSaturate(a.Raw, b.Raw)}
+func (base MicroAlgos) SubSaturate(b MicroAlgos) MicroAlgos {
+	return MicroAlgos{Raw: SubSaturate(base.Raw, b.Raw)}
 }
 
 // LessThan implements arithmetic comparison for MicroAlgos
-func (a MicroAlgos) LessThan(b MicroAlgos) bool {
-	return a.Raw < b.Raw
+func (base MicroAlgos) LessThan(b MicroAlgos) bool {
+	return base.Raw < b.Raw
 }
 
 // GreaterThan implements arithmetic comparison for MicroAlgos
-func (a MicroAlgos) GreaterThan(b MicroAlgos) bool {
-	return a.Raw > b.Raw
+func (base MicroAlgos) GreaterThan(b MicroAlgos) bool {
+	return base.Raw > b.Raw
 }
 
 // IsZero implements arithmetic comparison for MicroAlgos
-func (a MicroAlgos) IsZero() bool {
-	return a.Raw == 0
+func (base MicroAlgos) IsZero() bool {
+	return base.Raw == 0
 }
 
 // ToUint64 converts the amount of algos to uint64
-func (a MicroAlgos) ToUint64() uint64 {
-	return a.Raw
+func (base MicroAlgos) ToUint64() uint64 {
+	return base.Raw
 }
 
 // RewardUnits returns the number of reward units in some number of algos
-func (a MicroAlgos) RewardUnits(unitSize uint64) uint64 {
-	return a.Raw / unitSize
+func (base MicroAlgos) RewardUnits(unitSize uint64) uint64 {
+	return base.Raw / unitSize
 }
 
 // We generate our own encoders and decoders for MicroAlgos
@@ -97,13 +97,13 @@ func (a MicroAlgos) RewardUnits(unitSize uint64) uint64 {
 //msgp:ignore MicroAlgos
 
 // CodecEncodeSelf implements codec.Selfer to encode MicroAlgos as a simple int
-func (a MicroAlgos) CodecEncodeSelf(enc *codec.Encoder) {
-	enc.MustEncode(a.Raw)
+func (base MicroAlgos) CodecEncodeSelf(enc *codec.Encoder) {
+	enc.MustEncode(base.Raw)
 }
 
 // CodecDecodeSelf implements codec.Selfer to decode MicroAlgos as a simple int
-func (a *MicroAlgos) CodecDecodeSelf(dec *codec.Decoder) {
-	dec.MustDecode(&a.Raw)
+func (base *MicroAlgos) CodecDecodeSelf(dec *codec.Decoder) {
+	dec.MustDecode(&base.Raw)
 }
 
 // CanMarshalMsg implements msgp.Marshaler
@@ -113,9 +113,9 @@ func (MicroAlgos) CanMarshalMsg(z interface{}) bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (a MicroAlgos) MarshalMsg(b []byte) (o []byte) {
+func (base MicroAlgos) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, msgp.Uint64Size)
-	o = msgp.AppendUint64(o, a.Raw)
+	o = msgp.AppendUint64(o, base.Raw)
 	return
 }
 
@@ -126,27 +126,27 @@ func (*MicroAlgos) CanUnmarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (a *MicroAlgos) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	return a.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+func (base *MicroAlgos) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return base.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
 }
 
 // UnmarshalMsgWithState implements msgp.Unmarshaler
-func (a *MicroAlgos) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+func (base *MicroAlgos) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
 	if st.AllowableDepth == 0 {
 		return nil, msgp.ErrMaxDepthExceeded{}
 	}
-	a.Raw, o, err = msgp.ReadUint64Bytes(bts)
+	base.Raw, o, err = msgp.ReadUint64Bytes(bts)
 	return
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (a MicroAlgos) Msgsize() (s int) {
+func (base MicroAlgos) Msgsize() (s int) {
 	return msgp.Uint64Size
 }
 
 // MsgIsZero returns whether this is a zero value
-func (a MicroAlgos) MsgIsZero() bool {
-	return a.Raw == 0
+func (base MicroAlgos) MsgIsZero() bool {
+	return base.Raw == 0
 }
 
 // MicroAlgosMaxSize returns maximum possible msgp encoded size of MicroAlgos in bytes.

@@ -112,6 +112,20 @@ func omitEmpty[T comparable](val T) *T {
 	return &val
 }
 
+func simulateFeeStats(tx v2.PreEncodedTxInfo, proto config.ConsensusParams) (usage uint64, feesPaid uint64) {
+	usage = uint64(tx.Txn.FeeFactor(proto))
+	feesPaid = tx.Txn.Txn.Fee.Raw
+	if tx.Inners == nil {
+		return usage, feesPaid
+	}
+	for _, inner := range *tx.Inners {
+		innerUsage, innerFeesPaid := simulateFeeStats(inner, proto)
+		usage += innerUsage
+		feesPaid += innerFeesPaid
+	}
+	return usage, feesPaid
+}
+
 func TestSimpleMockBuilding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1130,7 +1144,14 @@ func postTransactionTest(t *testing.T, txnToUse int, expectedCode int, method st
 	}
 	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, txnPrep, cfg)
 	defer releasefunc()
-	results := reflect.ValueOf(&handler).MethodByName(method).Call([]reflect.Value{reflect.ValueOf(c)})
+	args := []reflect.Value{reflect.ValueOf(c)}
+	switch method {
+	case "RawTransaction":
+		args = append(args, reflect.ValueOf(model.RawTransactionParams{}))
+	case "RawTransactionAsync":
+		args = append(args, reflect.ValueOf(model.RawTransactionAsyncParams{}))
+	}
+	results := reflect.ValueOf(&handler).MethodByName(method).Call(args)
 	require.Equal(t, 1, len(results))
 	// if the method returns nil, the cast would fail so use type assertion test
 	err, _ := results[0].Interface().(error)
@@ -1146,6 +1167,111 @@ func TestPostTransaction(t *testing.T) {
 	postTransactionTest(t, 0, 200, "RawTransaction")
 }
 
+const pushIntOp byte = 0x81 // TEAL pushint opcode
+
+func onCurveLogicSigProgram(t *testing.T) []byte {
+	t.Helper()
+	program := []byte{logic.LogicSigOffCurveVersion, pushIntOp, 12}
+	require.True(t, logic.ProgramHashIsEdwards25519Point(program))
+	return program
+}
+
+func legacyOnCurveLogicSigProgram(t *testing.T) []byte {
+	t.Helper()
+	program := []byte{12, pushIntOp, 1}
+	require.True(t, logic.ProgramHashIsEdwards25519Point(program))
+	return program
+}
+
+func offCurveLogicSigProgram(t *testing.T) []byte {
+	t.Helper()
+
+	ops, err := logic.AssembleStringWithVersion("#pragma version 13\npushint 12", logic.LogicSigOffCurveVersion)
+	require.NoError(t, err)
+	require.False(t, logic.ProgramHashIsEdwards25519Point(ops.Program))
+	return ops.Program
+}
+
+func logicSigTxnPrep(program []byte) func(transactions.SignedTxn) []byte {
+	return func(stxn transactions.SignedTxn) []byte {
+		programHash := logic.HashProgram(program)
+		stxn.Sig = crypto.Signature{}
+		stxn.Msig = crypto.MultisigSig{}
+		stxn.Lsig = transactions.LogicSig{Logic: program}
+		stxn.Txn.Sender = basics.Address(programHash)
+		return protocol.Encode(&stxn)
+	}
+}
+
+func delegatedLogicSigTxnPrep(program []byte) func(transactions.SignedTxn) []byte {
+	return func(stxn transactions.SignedTxn) []byte {
+		var sig crypto.Signature
+		sig[0] = 1
+		stxn.Sig = crypto.Signature{}
+		stxn.Msig = crypto.MultisigSig{}
+		stxn.Lsig = transactions.LogicSig{Logic: program, Sig: sig}
+		return protocol.Encode(&stxn)
+	}
+}
+
+func TestPostTransactionLogicSigCurveCheck(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	t.Run("rejects on curve logicsig", func(t *testing.T) {
+		program := onCurveLogicSigProgram(t)
+		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, logicSigTxnPrep(program), config.GetDefaultLocal())
+		defer releasefunc()
+
+		err := handler.RawTransaction(c, model.RawTransactionParams{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		require.Contains(t, rec.Body.String(), "TEAL v13 LogicSig program hash is an Edwards25519 point")
+		require.Contains(t, rec.Body.String(), "skip-pq-address-check")
+	})
+
+	t.Run("accepts on curve legacy logicsig", func(t *testing.T) {
+		program := legacyOnCurveLogicSigProgram(t)
+		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, logicSigTxnPrep(program), config.GetDefaultLocal())
+		defer releasefunc()
+
+		err := handler.RawTransaction(c, model.RawTransactionParams{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, rec.Code)
+	})
+
+	t.Run("accepts on curve logicsig with skip flag", func(t *testing.T) {
+		program := onCurveLogicSigProgram(t)
+		skip := true
+		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, logicSigTxnPrep(program), config.GetDefaultLocal())
+		defer releasefunc()
+
+		err := handler.RawTransaction(c, model.RawTransactionParams{SkipPqAddressCheck: &skip})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, rec.Code)
+	})
+
+	t.Run("accepts delegated on curve logicsig", func(t *testing.T) {
+		program := onCurveLogicSigProgram(t)
+		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, delegatedLogicSigTxnPrep(program), config.GetDefaultLocal())
+		defer releasefunc()
+
+		err := handler.RawTransaction(c, model.RawTransactionParams{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, rec.Code)
+	})
+
+	t.Run("accepts off curve logicsig", func(t *testing.T) {
+		program := offCurveLogicSigProgram(t)
+		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, logicSigTxnPrep(program), config.GetDefaultLocal())
+		defer releasefunc()
+
+		err := handler.RawTransaction(c, model.RawTransactionParams{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, rec.Code)
+	})
+}
+
 func TestPostTransactionAsync(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1156,6 +1282,37 @@ func TestPostTransactionAsync(t *testing.T) {
 	postTransactionTest(t, -1, 404, "RawTransactionAsync", enableExperimentalAPI())
 	postTransactionTest(t, -1, 400, "RawTransactionAsync", enableExperimentalAPI(), enableDeveloperAPI())
 	postTransactionTest(t, 0, 200, "RawTransactionAsync", enableExperimentalAPI(), enableDeveloperAPI())
+}
+
+func TestPostTransactionAsyncLogicSigCurveCheck(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.EnableExperimentalAPI = true
+	cfg.EnableDeveloperAPI = true
+
+	t.Run("rejects on curve logicsig", func(t *testing.T) {
+		program := onCurveLogicSigProgram(t)
+		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, logicSigTxnPrep(program), cfg)
+		defer releasefunc()
+
+		err := handler.RawTransactionAsync(c, model.RawTransactionAsyncParams{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		require.Contains(t, rec.Body.String(), "TEAL v13 LogicSig program hash is an Edwards25519 point")
+	})
+
+	t.Run("accepts on curve logicsig with skip flag", func(t *testing.T) {
+		program := onCurveLogicSigProgram(t)
+		skip := true
+		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, logicSigTxnPrep(program), cfg)
+		defer releasefunc()
+
+		err := handler.RawTransactionAsync(c, model.RawTransactionAsyncParams{SkipPqAddressCheck: &skip})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, rec.Code)
+	})
 }
 
 func simulateTransactionTest(t *testing.T, txnToUse int, format string, expectedCode int) {
@@ -1435,6 +1592,13 @@ int 1`,
 					for i := range scenario.TxnAppBudgetConsumed {
 						txnAppBudgetUsed = append(txnAppBudgetUsed, omitEmpty(scenario.TxnAppBudgetConsumed[i]))
 					}
+					proto := config.Consensus[cannedStatusReportGolden.LastVersion]
+					txn0 := makePendingTxnResponse(t, stxns[0].WithAD())
+					txn0Usage, txn0FeesPaid := simulateFeeStats(txn0, proto)
+					txn1 := makePendingTxnResponse(t, stxns[1].WithAD(scenario.ExpectedSimulationAD))
+					txn1Usage, txn1FeesPaid := simulateFeeStats(txn1, proto)
+					groupUsage := txn0Usage + txn1Usage
+					groupFeesPaid := txn0FeesPaid + txn1FeesPaid
 					expectedBody := v2.PreEncodedSimulateResponse{
 						Version: 2,
 						TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
@@ -1442,15 +1606,19 @@ int 1`,
 								AppBudgetAdded:    appBudgetAdded,
 								AppBudgetConsumed: appBudgetConsumed,
 								FailedAt:          expectedFailedAt,
+								GroupUsage:        omitEmpty(groupUsage),
+								GroupFeesPaid:     omitEmpty(groupFeesPaid),
 								Txns: []v2.PreEncodedSimulateTxnResult{
 									{
 										// expect no ApplyData info
-										Txn:               makePendingTxnResponse(t, stxns[0].WithAD()),
+										Txn:               txn0,
 										AppBudgetConsumed: txnAppBudgetUsed[0],
+										FeesPaid:          omitEmpty(txn0FeesPaid),
 									},
 									{
-										Txn:               makePendingTxnResponse(t, stxns[1].WithAD(scenario.ExpectedSimulationAD)),
+										Txn:               txn1,
 										AppBudgetConsumed: txnAppBudgetUsed[1],
+										FeesPaid:          omitEmpty(txn1FeesPaid),
 									},
 								},
 							},

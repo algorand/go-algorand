@@ -341,6 +341,17 @@ type EvalParams struct {
 	// tracking for some finicky backward compatibility tests.
 	FeeCredit *basics.MicroAlgos
 
+	// feeResidue is the fractional microAlgo (held to 1e-12 precision,
+	// i.e. over basics.feeResidueScale) that the group's fee charges have
+	// rounded up so far but not yet consumed. Carrying it from one group's
+	// charge to the next lets the whole tree of top-level and inner groups
+	// round up only once in aggregate, rather than (potentially) once per
+	// group.  Unlike FeeCredit, it is a value, not a shared pointer: inner
+	// EvalParams inherit it by copy (NewInnerEvalParams) and opItxnSubmit
+	// copies the final value back after evaluating an inner group, so siblings
+	// can't double-spend the same residue.
+	feeResidue uint64
+
 	Specials *transactions.SpecialAddresses
 
 	// CostMultiplier is applied to all inner costs. Only intended to be set for
@@ -473,9 +484,10 @@ func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Cons
 	var pooledApplicationBudget *int
 	var pooledAllowedInners *int
 	var credit *basics.MicroAlgos
+	var residue uint64
 	if apps > 0 { // none of these allocations needed if no apps
 		credit = new(basics.MicroAlgos)
-		*credit = feeCredit(txgroup, *proto)
+		*credit, residue = feeCredit(txgroup, *proto)
 
 		if proto.EnableAppCostPooling {
 			pooledApplicationBudget = new(int)
@@ -495,6 +507,7 @@ func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Cons
 		Specials:                specials,
 		minAvmVersion:           computeMinAvmVersion(txgroup),
 		FeeCredit:               credit,
+		feeResidue:              residue,
 		CostMultiplier:          1e6,
 		PooledApplicationBudget: pooledApplicationBudget,
 		pooledAllowedInners:     pooledAllowedInners,
@@ -550,12 +563,15 @@ func (cx *EvalContext) considerBudgetProgramWrites() error {
 	return nil
 }
 
-// feeCredit returns the extra fee supplied in this top-level txgroup compared
-// to required fees. feeCredit should not be used on inner groups.
-func feeCredit(txgroup []transactions.SignedTxnWithAD, proto config.ConsensusParams) basics.MicroAlgos {
+// feeCredit returns the extra fee supplied in this top-level txgroup compared to
+// required fees, plus the fractional residue left by rounding that required fee
+// up. The residue seeds EvalParams.feeResidue so that inner groups round up only
+// once in aggregate with the top-level group. feeCredit should not be used on
+// inner groups.
+func feeCredit(txgroup []transactions.SignedTxnWithAD, proto config.ConsensusParams) (credit basics.MicroAlgos, residue uint64) {
 	usage, feesPaid := transactions.SummarizeFees(txgroup, proto)
-	feeNeeded, _ := proto.MinFee().MulMicrosCeil(usage)
-	return feesPaid.SubSaturate(feeNeeded) // If MulMicrosCeil saturates, this is 0
+	feeNeeded, residue, _ := proto.MinFee().FeeForUsage(usage, 1e6, 0)
+	return feesPaid.SubSaturate(feeNeeded), residue // If FeeForUsage saturates, credit is 0
 }
 
 // NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
@@ -586,6 +602,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		Tracer:                  caller.Tracer,
 		minAvmVersion:           minAvmVersion,
 		FeeCredit:               caller.FeeCredit,
+		feeResidue:              caller.feeResidue,
 		Specials:                caller.Specials,
 		CostMultiplier:          caller.CostMultiplier,
 		PooledApplicationBudget: caller.PooledApplicationBudget,
@@ -1213,7 +1230,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		}
 		cx.ioBudget = basics.MulSaturate(bumps, cx.Proto.BytesPerBoxReference)
 
-		used := uint64(0)
+		bytesRead := uint64(0)
 
 		// First count the extra reading required for any large programs that are available.
 		for appID := range cx.available.sharedApps {
@@ -1223,7 +1240,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 			}
 			extra := transactions.LargeProgramExtraBytes(*cx.Proto,
 				len(params.ApprovalProgram)+len(params.ClearStateProgram))
-			used = basics.AddSaturate(used, uint64(extra))
+			bytesRead = basics.AddSaturate(bytesRead, uint64(extra))
 		}
 
 		// Then count the total size of available boxes
@@ -1243,12 +1260,12 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 			size := uint64(len(box))
 			cx.available.boxes[br] = false
 
-			used = basics.AddSaturate(used, size)
+			bytesRead = basics.AddSaturate(bytesRead, size)
 		}
 
-		surplus, overflow := basics.ODiff(cx.ioBudget, used)
+		surplus, overflow := basics.ODiff(cx.ioBudget, bytesRead)
 		if overflow || (surplus < 0 && cx.UnnamedResources == nil) {
-			err := fmt.Errorf("read budget exceeded (%d > %d)", used, cx.ioBudget)
+			err := fmt.Errorf("read budget exceeded (%d > %d)", bytesRead, cx.ioBudget)
 			if !cx.Proto.EnableBareBudgetError {
 				// We return an EvalError here because we used to do
 				// that. It is wrong, and means that there could be a
@@ -5336,7 +5353,9 @@ func addInnerTxn(cx *EvalContext) error {
 	// Check fees in the existing group first. Allows fee pooling in inner groups.
 	usage, groupPaid := transactions.SummarizeFees(cx.subtxns, *cx.Proto)
 	usage = basics.AddSaturate(usage, 1e6) // +1e6 because we're adding a txn
-	groupFee, o := cx.Proto.MinFee().Mul2MicrosCeil(usage, cx.EvalParams.CostMultiplier)
+	// Populating a default fee must not consume the residue: this txn might never
+	// be submitted, or its fee might be changed. itxn_submit does the real charge.
+	groupFee, _, o := cx.Proto.MinFee().FeeForUsage(usage, cx.EvalParams.CostMultiplier, cx.feeResidue)
 	if o {
 		return errors.New("inner group fee saturation")
 	}
@@ -5751,10 +5770,13 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 
 	// Check fees across the group first. Allows fee pooling in inner groups.
 	usage, groupPaid := transactions.SummarizeFees(cx.subtxns, *cx.Proto)
-	groupFee, o := cx.Proto.MinFee().Mul2MicrosCeil(usage, cx.EvalParams.CostMultiplier)
+	// Charge against the running residue so this group rounds up only if the
+	// fractions accumulated from earlier groups can't absorb it.
+	groupFee, residue, o := cx.Proto.MinFee().FeeForUsage(usage, cx.EvalParams.CostMultiplier, cx.feeResidue)
 	if o {
 		return errors.New("inner group fee saturation")
 	}
+	cx.feeResidue = residue
 	if groupPaid.LessThan(groupFee) {
 		// See if the FeeCredit is enough to cover the shortfall
 		shortfall := groupFee.SubSaturate(groupPaid)
@@ -5926,6 +5948,11 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 		// RecordAD has some further responsibilities.
 		ep.RecordAD(i, ep.TxnGroup[i].ApplyData)
 	}
+	// ep inherited a copy of cx.feeResidue and updated it while charging its own
+	// (deeper) inner groups. Copy it back so later sibling groups see the residue
+	// those deeper groups consumed, rather than re-spending it.
+	cx.feeResidue = ep.feeResidue
+
 	cx.txn.EvalDelta.InnerTxns = append(cx.txn.EvalDelta.InnerTxns, ep.TxnGroup...)
 	cx.subtxns = nil
 	// must clear the inner txid cache, otherwise prior inner txids will be returned for this group

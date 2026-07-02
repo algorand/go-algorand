@@ -227,7 +227,7 @@ func (ep *EvalParams) reset() {
 		}
 	case ModeApp:
 		if ep.FeeCredit != nil {
-			*ep.FeeCredit = feeCredit(ep.TxnGroup, *ep.Proto)
+			*ep.FeeCredit, ep.feeResidue = feeCredit(ep.TxnGroup, *ep.Proto)
 		}
 
 		if ep.Proto.EnableAppCostPooling {
@@ -2284,6 +2284,18 @@ func testLogicFull(t *testing.T, program []byte, gi int, ep *EvalParams, problem
 
 func testLogics(t *testing.T, programs []string, txgroup []transactions.SignedTxn, opt protoOpt, expected ...expect) error {
 	t.Helper()
+	return testLogicsWithAssembler(t, programs, txgroup, opt, func(t testing.TB, program string, version uint64) []byte {
+		return testProg(t, program, version).Program
+	}, expected...)
+}
+
+func testLogicsWithoutAutomaticSalt(t *testing.T, programs []string, txgroup []transactions.SignedTxn, opt protoOpt, expected ...expect) error {
+	t.Helper()
+	return testLogicsWithAssembler(t, programs, txgroup, opt, assembleProgramWithoutAutomaticSalt, expected...)
+}
+
+func testLogicsWithAssembler(t *testing.T, programs []string, txgroup []transactions.SignedTxn, opt protoOpt, assemble func(testing.TB, string, uint64) []byte, expected ...expect) error {
+	t.Helper()
 	proto := makeTestProto(opt)
 
 	if txgroup == nil {
@@ -2294,8 +2306,7 @@ func testLogics(t *testing.T, programs []string, txgroup []transactions.SignedTx
 	// Place the logicsig code first, so NewSigEvalParams calcs budget
 	for i, program := range programs {
 		if program != "" {
-			code := testProg(t, program, proto.LogicSigVersion).Program
-			txgroup[i].Lsig.Logic = code
+			txgroup[i].Lsig.Logic = assemble(t, program, proto.LogicSigVersion)
 		}
 	}
 	ep := NewSigEvalParams(txgroup, proto, &NoHeaderLedger{})
@@ -3174,13 +3185,13 @@ int %d
 `, budget-1, budget-5)
 	}
 	b := testLogicBudget
-	testLogic(t, source(b), LogicVersion, nil)
+	testLogicBytes(t, assembleProgramWithoutAutomaticSalt(t, source(b), LogicVersion), nil)
 
-	testLogics(t, []string{source(2 * b), source(2*b - 7)}, nil, nil)
+	testLogicsWithoutAutomaticSalt(t, []string{source(2 * b), source(2*b - 7)}, nil, nil)
 
-	testLogics(t, []string{source(3 * b), source(3*b - 7), ""}, nil, nil)
+	testLogicsWithoutAutomaticSalt(t, []string{source(3 * b), source(3*b - 7), ""}, nil, nil)
 
-	testLogics(t, []string{source(b), source(b)}, nil,
+	testLogicsWithoutAutomaticSalt(t, []string{source(b), source(b)}, nil,
 		func(p *config.ConsensusParams) { p.EnableLogicSigCostPooling = false })
 }
 
@@ -3283,8 +3294,10 @@ func TestShortSimple(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, `int 8; store 7`, v)
-			testLogicBytes(t, ops.Program[:len(ops.Program)-1], nil,
+			source := `int 8; store 7`
+			ops := testProg(t, source, v)
+			end := programEndBeforeTrailingIntcSalt(t, source, v, ops.Program)
+			testLogicBytes(t, ops.Program[:end-1], nil,
 				"program ends without immediate value(s)",
 				"program ends without immediate value(s)")
 		})
@@ -3509,11 +3522,13 @@ func TestMisalignedBranch(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, `int 1
+			source := `int 1
 bnz done
 bytecblock 0x01234576 0xababcdcd 0xf000baad
 done:
-int 1`, v)
+int 1`
+			ops := testProg(t, source, v)
+			ops.Program = assembleProgramWithoutAutomaticSalt(t, source, v)
 			//t.Log(hex.EncodeToString(program))
 			offsetHex := "0011"
 			if v >= varintBranchVersion {
@@ -3523,8 +3538,7 @@ int 1`, v)
 			canonicalProgramString := mutateProgVersion(v, "012001012240"+offsetHex+"2603040123457604ababcdcd04f000baad22")
 			canonicalProgramBytes, err := hex.DecodeString(canonicalProgramString)
 			require.NoError(t, err)
-			require.Equal(t, ops.Program, canonicalProgramBytes)
-
+			require.Equal(t, canonicalProgramBytes, ops.Program)
 			if v >= varintBranchVersion {
 				// offset=3 as 1-byte varint: zigzag(3)=6=0x06; target lands in middle of bytecblock
 				ops.Program[6] = 0x06
@@ -3559,11 +3573,13 @@ func TestBranchTooFar(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, `int 1
+			source := `int 1
 bnz done
 bytecblock 0x01234576 0xababcdcd 0xf000baad
 done:
-int 1`, v)
+int 1`
+			ops := testProg(t, source, v)
+			ops.Program = assembleProgramWithoutAutomaticSalt(t, source, v)
 			//t.Log(hex.EncodeToString(ops.Program))
 			offsetHex := "0011"
 			if v >= varintBranchVersion {
@@ -3573,7 +3589,7 @@ int 1`, v)
 			canonicalProgramString := mutateProgVersion(v, "012001012240"+offsetHex+"2603040123457604ababcdcd04f000baad22")
 			canonicalProgramBytes, err := hex.DecodeString(canonicalProgramString)
 			require.NoError(t, err)
-			require.Equal(t, ops.Program, canonicalProgramBytes)
+			require.Equal(t, canonicalProgramBytes, ops.Program)
 			if v >= varintBranchVersion {
 				// 0x7e = 1-byte varint encoding jump +63, outside the program
 				ops.Program[6] = 0x7e
@@ -3591,11 +3607,13 @@ func TestBranchTooLarge(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, `int 1
+			source := `int 1
 bnz done
 bytecblock 0x01234576 0xababcdcd 0xf000baad
 done:
-int 1`, v)
+int 1`
+			ops := testProg(t, source, v)
+			ops.Program = assembleProgramWithoutAutomaticSalt(t, source, v)
 			//t.Log(hex.EncodeToString(ops.Program))
 			// (br)anch byte, offset bytes (big-endian int16 pre-v13, varint v13+)
 			// offset +17 as big-endian: 00 11; as 1-byte varint: 22 (zigzag(17)=34=0x22)
@@ -3606,7 +3624,7 @@ int 1`, v)
 			canonicalProgramString := mutateProgVersion(v, "012001012240"+offsetHex+"2603040123457604ababcdcd04f000baad22")
 			canonicalProgramBytes, err := hex.DecodeString(canonicalProgramString)
 			require.NoError(t, err)
-			require.Equal(t, ops.Program, canonicalProgramBytes)
+			require.Equal(t, canonicalProgramBytes, ops.Program)
 			ops.Program[6] = 0x70 // clobber hi byte of branch offset
 			testLogicBytes(t, ops.Program, nil, "outside", "outside")
 		})
@@ -5320,10 +5338,16 @@ func TestPcDetails(t *testing.T) {
 			require.False(t, pass)
 			require.NotNil(t, cx) // cx comes back nil if we couldn't even run
 
-			assert.Equal(t, test.pc, cx.pc, ep.Trace.String())
+			expectedPC := test.pc
+			// Empty details mean the failure is at EOF, so a trailing salt suffix
+			// moves the expected PC. Failures at concrete opcodes are unchanged.
+			if test.det == "" {
+				expectedPC += trailingIntcSaltLen(t, test.source, LogicVersion, ops.Program)
+			}
+			assert.Equal(t, expectedPC, cx.pc, ep.Trace.String())
 
 			pc, det := cx.pcDetails()
-			assert.Equal(t, test.pc, pc)
+			assert.Equal(t, expectedPC, pc)
 			assert.Equal(t, test.det, det)
 		})
 	}

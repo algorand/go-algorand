@@ -87,6 +87,10 @@ const sumhashVersion = 13
 
 const poseidon2Version = 13
 
+// LogicSigOffCurveVersion is the first AVM version where LogicSig programs
+// assembled by this package are expected to hash to an off-curve address.
+const LogicSigOffCurveVersion = 13
+
 // Unlimited Global Storage opcodes
 const boxVersion = 8 // box_*
 

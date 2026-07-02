@@ -203,12 +203,12 @@ func (tx *Txn) FillDefaults(params config.ConsensusParams) {
 				tx.Boxes = slices.Repeat([]transactions.BoxRef{{}}, extraPages-params.MaxExtraAppProgramPages)
 			}
 		}
-
 	}
-	// Do the fee last, so the FeeFactor is accurate.
+	// Do the fee last, so the FeeFactor is accurate. Compute it the same way as a
+	// top-level group: no cost multiplier (1e6), no prior residue.
 	if tx.Fee == nil {
 		f := transactions.SignedTxn{Txn: tx.Txn()}.FeeFactor(params)
-		tx.Fee, _ = params.MinFee().MulMicrosCeil(f)
+		tx.Fee, _, _ = params.MinFee().FeeForUsage(f, 1e6, 0)
 	}
 }
 

@@ -17,6 +17,7 @@
 package simulation_test
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -229,11 +230,47 @@ func TestPayTxn(t *testing.T) {
 					LastRound: env.TxnInfo.LatestRound(),
 					TxnGroups: []simulation.TxnGroupResult{
 						{
-							Txns: []simulation.TxnResult{{}},
+							Txns:          []simulation.TxnResult{{FeesPaid: txn.Txn.Fee}},
+							GroupUsage:    1e6,
+							GroupFeesPaid: txn.Txn.Fee,
 						},
 					},
 					EvalOverrides: simulation.ResultEvalOverrides{
 						AllowUnnamedResources: true,
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("big txn", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			sender := env.Accounts[0]
+			receiver := env.Accounts[1]
+
+			txn := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   sender.Addr,
+				Receiver: receiver.Addr,
+				Amount:   1_000_000,
+				Note:     bytes.Repeat([]byte{1}, 1025), // make the txn big enough to require more than the minimum fee
+			}).Txn().Sign(sender.Sk)
+
+			require.EqualValues(t, 1001, txn.Txn.Fee.Raw, "big note should have increased the fee")
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups: [][]transactions.SignedTxn{{txn}},
+				},
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							Txns:          []simulation.TxnResult{{FeesPaid: txn.Txn.Fee}},
+							GroupUsage:    1e6 + 100,
+							GroupFeesPaid: txn.Txn.Fee,
+						},
 					},
 				},
 			}
@@ -268,8 +305,11 @@ func TestPayTxn(t *testing.T) {
 					LastRound: env.TxnInfo.LatestRound(),
 					TxnGroups: []simulation.TxnGroupResult{
 						{
+							GroupUsage:    1e6,
+							GroupFeesPaid: txn.Txn.Fee,
 							Txns: []simulation.TxnResult{
 								{
+									FeesPaid: txn.Txn.Fee,
 									Txn: transactions.SignedTxnWithAD{
 										ApplyData: transactions.ApplyData{
 											ClosingAmount: basics.MicroAlgos{Raw: expectedClosingAmount},
@@ -308,8 +348,10 @@ func TestPayTxn(t *testing.T) {
 					LastRound: env.TxnInfo.LatestRound(),
 					TxnGroups: []simulation.TxnGroupResult{
 						{
-							Txns:     []simulation.TxnResult{{}},
-							FailedAt: simulation.TxnPath{0},
+							Txns:          []simulation.TxnResult{{FeesPaid: txn.Txn.Fee}},
+							GroupUsage:    1e6,
+							GroupFeesPaid: txn.Txn.Fee,
+							FailedAt:      simulation.TxnPath{0},
 						},
 					},
 				},
@@ -405,8 +447,10 @@ func TestWrongAuthorizerTxn(t *testing.T) {
 						LastRound: env.TxnInfo.LatestRound(),
 						TxnGroups: []simulation.TxnGroupResult{
 							{
-								Txns:     []simulation.TxnResult{{}},
-								FailedAt: simulation.TxnPath{0},
+								Txns:          []simulation.TxnResult{{FeesPaid: txn.Txn.Fee}},
+								FailedAt:      simulation.TxnPath{0},
+								GroupUsage:    1e6,
+								GroupFeesPaid: txn.Txn.Fee,
 							},
 						},
 						EvalOverrides: simulation.ResultEvalOverrides{
@@ -457,9 +501,11 @@ func TestRekey(t *testing.T) {
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
-							{},
-							{},
+							{FeesPaid: stxn1.Txn.Fee},
+							{FeesPaid: stxn2.Txn.Fee},
 						},
+						GroupUsage:    2e6,
+						GroupFeesPaid: stxn1.Txn.Fee.AddSaturate(stxn2.Txn.Fee),
 					},
 				},
 			},
@@ -498,7 +544,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 	sender2 := env.Accounts[1]
 	sender2Balance := env.Accounts[1].AcctData.MicroAlgos
 
-	// Send money back and forth
+	// Send money both ways. Of course, ledger will not change since this is simulated.
 	txn1 := env.TxnInfo.NewTxn(txntest.Txn{
 		Type:     protocol.PaymentTx,
 		Sender:   sender1.Addr,
@@ -509,7 +555,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 		Type:     protocol.PaymentTx,
 		Sender:   sender2.Addr,
 		Receiver: sender1.Addr,
-		Amount:   0,
+		Amount:   10,
 	})
 
 	request := simulation.Request{
@@ -661,18 +707,21 @@ int 1`,
 						TxnGroups: []simulation.TxnGroupResult{
 							{
 								Txns: []simulation.TxnResult{
-									{},
+									{FeesPaid: signedPayTxn.Txn.Fee},
 									{
 										Txn: transactions.SignedTxnWithAD{
 											ApplyData: expectedAppCallAD,
 										},
 										AppBudgetConsumed:      AppBudgetConsumed,
 										LogicSigBudgetConsumed: testCase.cost,
+										FeesPaid:               signedAppCallTxn.Txn.Fee,
 									},
 								},
 								FailedAt:          expectedFailedAt,
 								AppBudgetAdded:    AppBudgetAdded,
 								AppBudgetConsumed: AppBudgetConsumed,
+								GroupUsage:        2e6,
+								GroupFeesPaid:     basics.MicroAlgos{Raw: 2 * signedPayTxn.Txn.Fee.Raw},
 							},
 						},
 					},
@@ -743,6 +792,7 @@ int 0
 									},
 								},
 								AppBudgetConsumed: 5,
+								FeesPaid:          signedCreateTxn.Txn.Fee,
 							},
 							{
 								Txn: transactions.SignedTxnWithAD{
@@ -753,10 +803,13 @@ int 0
 									},
 								},
 								AppBudgetConsumed: 6,
+								FeesPaid:          signedCallTxn.Txn.Fee,
 							},
 						},
 						AppBudgetAdded:    1400,
 						AppBudgetConsumed: 11,
+						GroupUsage:        2e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 2 * signedCreateTxn.Txn.Fee.Raw},
 					},
 				},
 			},
@@ -807,11 +860,14 @@ int 0
 									},
 								},
 								AppBudgetConsumed: 3,
+								FeesPaid:          signedCreateTxn.Txn.Fee,
 							},
 						},
 						FailedAt:          simulation.TxnPath{0},
 						AppBudgetAdded:    700,
 						AppBudgetConsumed: 3,
+						GroupUsage:        1e6,
+						GroupFeesPaid:     signedCreateTxn.Txn.Fee,
 					},
 				},
 			},
@@ -862,11 +918,14 @@ int 0
 									},
 								},
 								AppBudgetConsumed: 3,
+								FeesPaid:          signedCreateTxn.Txn.Fee,
 							},
 						},
 						FailedAt:          simulation.TxnPath{0},
 						AppBudgetAdded:    700,
 						AppBudgetConsumed: 3,
+						GroupUsage:        1e6,
+						GroupFeesPaid:     signedCreateTxn.Txn.Fee,
 					},
 				},
 			},
@@ -946,6 +1005,7 @@ func TestClearStateRejection(t *testing.T) {
 							{
 								// No EvalDelta changes because the clear state failed
 								AppBudgetConsumed: 16,
+								FeesPaid:          signedClearStateTxn.Txn.Fee,
 							},
 							{
 								Txn: transactions.SignedTxnWithAD{
@@ -961,10 +1021,13 @@ func TestClearStateRejection(t *testing.T) {
 									},
 								},
 								AppBudgetConsumed: 16,
+								FeesPaid:          signedOtherAppCall.Txn.Fee,
 							},
 						},
 						AppBudgetAdded:    1400,
 						AppBudgetConsumed: 32,
+						GroupUsage:        2e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 2 * signedClearStateTxn.Txn.Fee.Raw},
 					},
 				},
 			},
@@ -1020,6 +1083,7 @@ func TestClearStateError(t *testing.T) {
 							{
 								// No EvalDelta changes because the clear state failed
 								AppBudgetConsumed: 14,
+								FeesPaid:          signedClearStateTxn.Txn.Fee,
 							},
 							{
 								Txn: transactions.SignedTxnWithAD{
@@ -1035,10 +1099,13 @@ func TestClearStateError(t *testing.T) {
 									},
 								},
 								AppBudgetConsumed: 16,
+								FeesPaid:          signedOtherAppCall.Txn.Fee,
 							},
 						},
 						AppBudgetAdded:    1400,
 						AppBudgetConsumed: 30,
+						GroupUsage:        2e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 2 * signedClearStateTxn.Txn.Fee.Raw},
 					},
 				},
 			},
@@ -1095,6 +1162,7 @@ func TestErrorAfterClearStateError(t *testing.T) {
 							{
 								// No EvalDelta changes because the clear state failed
 								AppBudgetConsumed: 14,
+								FeesPaid:          signedClearStateTxn.Txn.Fee,
 							},
 							{
 								Txn: transactions.SignedTxnWithAD{
@@ -1110,11 +1178,14 @@ func TestErrorAfterClearStateError(t *testing.T) {
 									},
 								},
 								AppBudgetConsumed: 16,
+								FeesPaid:          signedOtherAppCall.Txn.Fee,
 							},
 						},
 						AppBudgetAdded:    1400,
 						AppBudgetConsumed: 30,
 						FailedAt:          simulation.TxnPath{1},
+						GroupUsage:        2e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 2 * signedClearStateTxn.Txn.Fee.Raw},
 					},
 				},
 			},
@@ -1182,14 +1253,18 @@ int 0
 									},
 								},
 								AppBudgetConsumed: 4,
+								FeesPaid:          signedCreateTxn.Txn.Fee,
 							},
 							{
 								AppBudgetConsumed: 1396,
+								FeesPaid:          signedExpensiveTxn.Txn.Fee,
 							},
 						},
 						FailedAt:          simulation.TxnPath{1},
 						AppBudgetAdded:    1400,
 						AppBudgetConsumed: 1400,
+						GroupUsage:        2e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 2 * signedCreateTxn.Txn.Fee.Raw},
 					},
 				},
 			},
@@ -1253,13 +1328,17 @@ func TestAppCallWithExtraBudget(t *testing.T) {
 									},
 								},
 								AppBudgetConsumed: 4,
+								FeesPaid:          signedCreateTxn.Txn.Fee,
 							},
 							{
 								AppBudgetConsumed: 1404,
+								FeesPaid:          signedExpensiveTxn.Txn.Fee,
 							},
 						},
 						AppBudgetAdded:    1500,
 						AppBudgetConsumed: 1408,
+						GroupUsage:        2e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 2 * signedCreateTxn.Txn.Fee.Raw},
 					},
 				},
 				EvalOverrides: simulation.ResultEvalOverrides{ExtraOpcodeBudget: extraOpcodeBudget},
@@ -1347,6 +1426,7 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 									},
 								},
 								AppBudgetConsumed: 4,
+								FeesPaid:          signedCreateTxn.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: firstTrace,
 									ApprovalProgramHash:  approvalHash,
@@ -1354,6 +1434,7 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 							},
 							{
 								AppBudgetConsumed: 1404,
+								FeesPaid:          signedExpensiveTxn.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: secondTrace,
 									ApprovalProgramHash:  approvalHash,
@@ -1362,6 +1443,8 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 						},
 						AppBudgetAdded:    1500,
 						AppBudgetConsumed: 1408,
+						GroupUsage:        2e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 2 * signedCreateTxn.Txn.Fee.Raw},
 					},
 				},
 				EvalOverrides: simulation.ResultEvalOverrides{ExtraOpcodeBudget: extraOpcodeBudget},
@@ -1431,14 +1514,18 @@ func TestAppCallWithExtraBudgetOverBudget(t *testing.T) {
 									},
 								},
 								AppBudgetConsumed: 4,
+								FeesPaid:          signedCreateTxn.Txn.Fee,
 							},
 							{
 								AppBudgetConsumed: 1401,
+								FeesPaid:          signedExpensiveTxn.Txn.Fee,
 							},
 						},
 						FailedAt:          simulation.TxnPath{1},
 						AppBudgetAdded:    1405,
 						AppBudgetConsumed: 1405,
+						GroupUsage:        2e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 2 * signedCreateTxn.Txn.Fee.Raw},
 					},
 				},
 				EvalOverrides: simulation.ResultEvalOverrides{ExtraOpcodeBudget: extraBudget},
@@ -1556,18 +1643,21 @@ int 1`,
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
-							{},
+							{FeesPaid: signedPayTxn.Txn.Fee},
 							{
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: expectedAppCallAD,
 								},
 								AppBudgetConsumed:      0,
 								LogicSigBudgetConsumed: 39998,
+								FeesPaid:               signedAppCallTxn.Txn.Fee,
 							},
 						},
 						FailedAt:          expectedFailedAt,
 						AppBudgetAdded:    0,
 						AppBudgetConsumed: 0,
+						GroupUsage:        2e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 2 * signedPayTxn.Txn.Fee.Raw},
 					},
 				},
 			},
@@ -1633,7 +1723,7 @@ int 1`,
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
-							{},
+							{FeesPaid: signedFundTxn.Txn.Fee},
 							{
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
@@ -1650,10 +1740,13 @@ int 1`,
 									},
 								},
 								AppBudgetConsumed: 701,
+								FeesPaid:          basics.MicroAlgos{Raw: 2 * signedAppCall.Txn.Fee.Raw},
 							},
 						},
 						AppBudgetAdded:    1400,
 						AppBudgetConsumed: 701,
+						GroupUsage:        3e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 3 * signedFundTxn.Txn.Fee.Raw},
 					},
 				},
 			},
@@ -1789,8 +1882,10 @@ func TestInvalidTxGroup(t *testing.T) {
 				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
-						FailedAt: simulation.TxnPath{0},
-						Txns:     []simulation.TxnResult{{}},
+						FailedAt:      simulation.TxnPath{0},
+						Txns:          []simulation.TxnResult{{FeesPaid: txn.Txn.Fee}},
+						GroupUsage:    1e6,
+						GroupFeesPaid: txn.Txn.Fee,
 					},
 				},
 			},
@@ -1846,7 +1941,7 @@ int 1`
 
 		expectedMaxLogCalls, expectedMaxLogSize := 2048, 65536
 		expectedLog := make([]string, LogTimes)
-		for i := 0; i < LogTimes; i++ {
+		for i := range LogTimes {
 			expectedLog[i] = LogLongLine
 		}
 		return simulationTestCase{
@@ -1861,6 +1956,8 @@ int 1`
 				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
+						GroupUsage:    2e6,
+						GroupFeesPaid: basics.MicroAlgos{Raw: 2 * signedCreateTxn.Txn.Fee.Raw},
 						Txns: []simulation.TxnResult{
 							{
 								Txn: transactions.SignedTxnWithAD{
@@ -1869,6 +1966,7 @@ int 1`
 									},
 								},
 								AppBudgetConsumed: 6,
+								FeesPaid:          signedCreateTxn.Txn.Fee,
 							},
 							{
 								Txn: transactions.SignedTxnWithAD{
@@ -1879,6 +1977,7 @@ int 1`
 									},
 								},
 								AppBudgetConsumed: 86,
+								FeesPaid:          signedCallsABunchLogs.Txn.Fee,
 							},
 						},
 						AppBudgetAdded:    1400,
@@ -1939,7 +2038,7 @@ int 1`
 		expectedMaxLogCalls, expectedMaxLogSize := 2048, 65536
 		actualLogTimes := 65536 / len(LogLongLine)
 		expectedLog := make([]string, actualLogTimes)
-		for i := 0; i < actualLogTimes; i++ {
+		for i := range actualLogTimes {
 			expectedLog[i] = LogLongLine
 		}
 		return simulationTestCase{
@@ -1954,9 +2053,12 @@ int 1`
 				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
-						FailedAt: simulation.TxnPath{1},
+						FailedAt:      simulation.TxnPath{1},
+						GroupUsage:    2e6,
+						GroupFeesPaid: signedCreateTxn.Txn.Fee.AddSaturate(signedCallsABunchLogs.Txn.Fee),
 						Txns: []simulation.TxnResult{
 							{
+								FeesPaid: signedCreateTxn.Txn.Fee,
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
 										ApplicationID: futureAppID,
@@ -1965,6 +2067,7 @@ int 1`
 								AppBudgetConsumed: 6,
 							},
 							{
+								FeesPaid: signedCallsABunchLogs.Txn.Fee,
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
 										EvalDelta: transactions.EvalDelta{
@@ -2149,7 +2252,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 			Sender:          sender.Addr,
 			ApplicationID:   futureAppID,
 			ApplicationArgs: [][]byte{{byte(MaxDepth)}},
-			Fee:             MinFee * uint64(MaxDepth*5+2),
+			Fee:             MinFee * uint64(MaxDepth*5+1),
 		})
 
 		txntest.Group(&createTxn, &paymentTxn, &callsMaxDepth)
@@ -2353,6 +2456,9 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
+						GroupUsage:    13e6,
+						GroupFeesPaid: basics.MicroAlgos{Raw: 13 * signedPaymentTxn.Txn.Fee.Raw},
+
 						Txns: []simulation.TxnResult{
 							{
 								Txn: transactions.SignedTxnWithAD{
@@ -2363,11 +2469,14 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 									ApprovalProgramTrace: creationOpcodeTrace,
 									ApprovalProgramHash:  approvalDigest,
 								},
+								FeesPaid: signedCreateTxn.Txn.Fee,
 							},
 							{
-								Trace: &simulation.TransactionTrace{},
+								Trace:    &simulation.TransactionTrace{},
+								FeesPaid: signedPaymentTxn.Txn.Fee,
 							},
 							{
+								FeesPaid: basics.MicroAlgos{Raw: 11 * signedPaymentTxn.Txn.Fee.Raw},
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
 										ApplicationID: 0,
@@ -2463,7 +2572,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	})
 }
 
-func goValuesToTealValues(goValues ...interface{}) []basics.TealValue {
+func goValuesToTealValues(goValues ...any) []basics.TealValue {
 	if len(goValues) == 0 {
 		return nil
 	}
@@ -2509,7 +2618,7 @@ func goValuesToTealValues(goValues ...interface{}) []basics.TealValue {
 				Uint: convertedValue,
 			}
 		default:
-			panic("unexpected type inferred from interface{}")
+			panic("unexpected type inferred from any")
 		}
 	}
 	return modelValues
@@ -2578,11 +2687,15 @@ byte "hello"; log; int 1`,
 				},
 				TxnGroups: []simulation.TxnGroupResult{
 					{
+						GroupUsage:    2e6,
+						GroupFeesPaid: signedPayTxn.Txn.Fee.AddSaturate(signedAppCallTxn.Txn.Fee),
 						Txns: []simulation.TxnResult{
 							{
-								Trace: &simulation.TransactionTrace{},
+								FeesPaid: signedPayTxn.Txn.Fee,
+								Trace:    &simulation.TransactionTrace{},
 							},
 							{
+								FeesPaid: signedAppCallTxn.Txn.Fee,
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
 										ApplicationID: 1002,
@@ -2717,10 +2830,15 @@ byte "hello"; log; int 1`,
 				},
 				TxnGroups: []simulation.TxnGroupResult{
 					{
-						FailedAt: simulation.TxnPath{1},
+						FailedAt:      simulation.TxnPath{1},
+						GroupUsage:    2e6,
+						GroupFeesPaid: signedPayTxn.Txn.Fee.AddSaturate(signedAppCallTxn.Txn.Fee),
 						Txns: []simulation.TxnResult{
-							{},
 							{
+								FeesPaid: signedPayTxn.Txn.Fee,
+							},
+							{
+								FeesPaid: signedAppCallTxn.Txn.Fee,
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{},
 								},
@@ -2841,7 +2959,8 @@ byte "hello"; log; int 0`,
 						FailedAt: simulation.TxnPath{1},
 						Txns: []simulation.TxnResult{
 							{
-								Trace: &simulation.TransactionTrace{},
+								Trace:    &simulation.TransactionTrace{},
+								FeesPaid: signedPayTxn.Txn.Fee,
 							},
 							{
 								Txn: transactions.SignedTxnWithAD{
@@ -2852,6 +2971,7 @@ byte "hello"; log; int 0`,
 								},
 								AppBudgetConsumed:      3,
 								LogicSigBudgetConsumed: 266,
+								FeesPaid:               signedAppCallTxn.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 										{PC: 1},
@@ -2875,6 +2995,8 @@ byte "hello"; log; int 0`,
 						},
 						AppBudgetAdded:    700,
 						AppBudgetConsumed: 3,
+						GroupUsage:        2e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 2 * signedPayTxn.Txn.Fee.Raw},
 					},
 				},
 			},
@@ -3000,6 +3122,7 @@ int 1`,
 									},
 								},
 								AppBudgetConsumed: 5,
+								FeesPaid:          signedCreate.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 										{
@@ -3027,7 +3150,8 @@ int 1`,
 								},
 							},
 							{
-								Trace: &simulation.TransactionTrace{},
+								Trace:    &simulation.TransactionTrace{},
+								FeesPaid: signedPay.Txn.Fee,
 							},
 							{
 								Txn: transactions.SignedTxnWithAD{
@@ -3040,6 +3164,7 @@ int 1`,
 									},
 								},
 								AppBudgetConsumed: 39,
+								FeesPaid:          signedAppCall.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 										{
@@ -3266,6 +3391,8 @@ int 1`,
 						},
 						AppBudgetAdded:    1400,
 						AppBudgetConsumed: 44,
+						GroupUsage:        3e6,
+						GroupFeesPaid:     signedCreate.Txn.Fee.AddSaturate(signedPay.Txn.Fee.AddSaturate(signedAppCall.Txn.Fee)),
 					},
 				},
 			},
@@ -3462,6 +3589,7 @@ int 1`,
 									},
 								},
 								AppBudgetConsumed: 3,
+								FeesPaid:          signedCreate.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 										{
@@ -3491,11 +3619,13 @@ int 1`,
 							},
 							// Payment
 							{
-								Trace: &simulation.TransactionTrace{},
+								Trace:    &simulation.TransactionTrace{},
+								FeesPaid: signedPay.Txn.Fee,
 							},
 							// BoxCreation
 							{
 								AppBudgetConsumed: 15,
+								FeesPaid:          signedCreateBox.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: boxStateChangeTraceTemplate("create",
 										simulation.OpcodeTraceUnit{
@@ -3562,6 +3692,7 @@ int 1`,
 							// BoxWrite
 							{
 								AppBudgetConsumed: 13,
+								FeesPaid:          signedWriteBox.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: boxStateChangeTraceTemplate("write",
 										simulation.OpcodeTraceUnit{
@@ -3613,6 +3744,7 @@ int 1`,
 							// BoxDelete
 							{
 								AppBudgetConsumed: 13,
+								FeesPaid:          signedDelBox.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: boxStateChangeTraceTemplate("delete",
 										simulation.OpcodeTraceUnit{
@@ -3656,6 +3788,8 @@ int 1`,
 						},
 						AppBudgetAdded:    2800,
 						AppBudgetConsumed: 44,
+						GroupUsage:        5e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 5 * signedCreate.Txn.Fee.Raw},
 					},
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
@@ -3780,6 +3914,7 @@ int 1`,
 							// Optin
 							{
 								AppBudgetConsumed: 8,
+								FeesPaid:          signedOptin.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 										{
@@ -3862,6 +3997,7 @@ int 1`,
 									},
 								},
 								AppBudgetConsumed: 19,
+								FeesPaid:          signedGlobalStateCall.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 										{
@@ -4044,6 +4180,7 @@ int 1`,
 									},
 								},
 								AppBudgetConsumed: 21,
+								FeesPaid:          signedLocalStateCall.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 										{
@@ -4227,6 +4364,8 @@ int 1`,
 						},
 						AppBudgetAdded:    2100,
 						AppBudgetConsumed: 48,
+						GroupUsage:        3e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 3 * signedOptin.Txn.Fee.Raw},
 					},
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
@@ -4420,6 +4559,7 @@ app_local_put
 								Txns: []simulation.TxnResult{
 									{
 										AppBudgetConsumed: 8,
+										FeesPaid:          signedClearStateTxn.Txn.Fee,
 										Trace: &simulation.TransactionTrace{
 											ClearStateProgramTrace:  clearStateProgramTrace,
 											ClearStateProgramHash:   progHash,
@@ -4430,6 +4570,8 @@ app_local_put
 								},
 								AppBudgetAdded:    700,
 								AppBudgetConsumed: 8,
+								GroupUsage:        1e6,
+								GroupFeesPaid:     signedClearStateTxn.Txn.Fee,
 							},
 						},
 						InitialStates: &simulation.ResourcesInitialStates{
@@ -4539,6 +4681,7 @@ int 1`,
 									},
 								},
 								AppBudgetConsumed: 3,
+								FeesPaid:          signedCreate.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 										{
@@ -4581,6 +4724,7 @@ int 1`,
 									},
 								},
 								AppBudgetConsumed: 5,
+								FeesPaid:          signedGlobalStateCall.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 										{
@@ -4633,6 +4777,8 @@ int 1`,
 						},
 						AppBudgetAdded:    1400,
 						AppBudgetConsumed: 8,
+						GroupUsage:        2e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 2 * signedCreate.Txn.Fee.Raw},
 					},
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
@@ -4838,6 +4984,7 @@ int 1`,
 		txnResults := make([]simulation.TxnResult, len(testcase.boxOpsForSimulate))
 		for i, boxOp := range testcase.boxOpsForSimulate {
 			txnResults[i] = boxOpToSimResult(boxOp)
+			txnResults[i].FeesPaid = signedTxns[i].Txn.Fee
 		}
 		totalConsumed := 0
 		for _, txnResult := range txnResults {
@@ -4885,6 +5032,8 @@ int 1`,
 						Txns:              txnResults,
 						AppBudgetAdded:    700 * len(txnResults),
 						AppBudgetConsumed: totalConsumed,
+						GroupUsage:        basics.Micros(len(txnResults) * 1e6),
+						GroupFeesPaid:     basics.MicroAlgos{Raw: uint64(len(txnResults)) * signedTxns[0].Txn.Fee.Raw},
 					},
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
@@ -5185,6 +5334,7 @@ int 1
 		txnResults := make([]simulation.TxnResult, len(testcase.boxOpsForSimulate))
 		for i, boxOp := range testcase.boxOpsForSimulate {
 			txnResults[i] = boxOpToSimResult(boxOp)
+			txnResults[i].FeesPaid = signedTxns[i].Txn.Fee
 		}
 		totalConsumed := 0
 		for _, txnResult := range txnResults {
@@ -5232,6 +5382,8 @@ int 1
 						Txns:              txnResults,
 						AppBudgetAdded:    700 * len(txnResults),
 						AppBudgetConsumed: totalConsumed,
+						GroupUsage:        basics.Micros(len(txnResults) * 1e6),
+						GroupFeesPaid:     basics.MicroAlgos{Raw: uint64(len(txnResults)) * signedTxns[0].Txn.Fee.Raw},
 					},
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
@@ -5467,6 +5619,7 @@ int 1`,
 		txnResults := make([]simulation.TxnResult, len(testcase.txnsArgs))
 		for i, txnArgs := range testcase.txnsArgs {
 			txnResults[i] = txnArgsToResult(txnArgs)
+			txnResults[i].FeesPaid = signedTxns[i].Txn.Fee
 		}
 
 		prepareKeys := make(util.Set[string])
@@ -5512,6 +5665,8 @@ int 1`,
 						Txns:              txnResults,
 						AppBudgetAdded:    700 * len(txnResults),
 						AppBudgetConsumed: totalConsumed,
+						GroupUsage:        basics.Micros(len(txnResults) * 1e6),
+						GroupFeesPaid:     basics.MicroAlgos{Raw: uint64(len(txnResults)) * signedTxns[0].Txn.Fee.Raw},
 					},
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
@@ -5826,6 +5981,7 @@ int 1`,
 		txnResults := make([]simulation.TxnResult, len(testcase.simulateInstructions))
 		for i, txnArgs := range testcase.simulateInstructions {
 			txnResults[i] = txnArgsToResult(txnArgs)
+			txnResults[i].FeesPaid = signedTxns[i].Txn.Fee
 		}
 
 		prepareInitialStates := make(map[basics.Address]util.Set[string])
@@ -5884,6 +6040,8 @@ int 1`,
 						Txns:              txnResults,
 						AppBudgetAdded:    700 * len(txnResults),
 						AppBudgetConsumed: totalConsumed,
+						GroupUsage:        basics.Micros(len(txnResults) * 1e6),
+						GroupFeesPaid:     basics.MicroAlgos{Raw: uint64(len(txnResults)) * signedTxns[0].Txn.Fee.Raw},
 					},
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
@@ -6162,6 +6320,9 @@ int 1`,
 				},
 			},
 		}
+		for i := range txnResults {
+			txnResults[i].FeesPaid = signedTxns[i].Txn.Fee
+		}
 
 		totalConsumed := 0
 		for _, txnResult := range txnResults {
@@ -6191,6 +6352,8 @@ int 1`,
 						Txns:              txnResults,
 						AppBudgetAdded:    700 * len(txnResults),
 						AppBudgetConsumed: totalConsumed,
+						GroupUsage:        basics.Micros(len(txnResults) * 1e6),
+						GroupFeesPaid:     basics.MicroAlgos{Raw: uint64(len(txnResults)) * signedTxns[0].Txn.Fee.Raw},
 					},
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
@@ -6307,17 +6470,22 @@ int 1`,
 									},
 								},
 								AppBudgetConsumed: 4,
+								FeesPaid:          signedCreateTxn.Txn.Fee,
 							},
 							{
 								AppBudgetConsumed: 10,
+								FeesPaid:          signedCheckStartingBalanceTxn.Txn.Fee,
 							},
-							{},
+							{FeesPaid: signedPaymentTxn.Txn.Fee},
 							{
 								AppBudgetConsumed: 10,
+								FeesPaid:          signedCheckEndingBalanceTxn.Txn.Fee,
 							},
 						},
 						AppBudgetAdded:    2100,
 						AppBudgetConsumed: 24,
+						GroupUsage:        4e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 4 * signedCreateTxn.Txn.Fee.Raw},
 					},
 				},
 			},
@@ -6360,7 +6528,9 @@ func TestOptionalSignatures(t *testing.T) {
 						LastRound: env.TxnInfo.LatestRound(),
 						TxnGroups: []simulation.TxnGroupResult{
 							{
-								Txns: []simulation.TxnResult{{}},
+								Txns:          []simulation.TxnResult{{FeesPaid: stxn.Txn.Fee}},
+								GroupUsage:    1e6,
+								GroupFeesPaid: stxn.Txn.Fee,
 							},
 						},
 						EvalOverrides: simulation.ResultEvalOverrides{
@@ -6445,14 +6615,18 @@ func TestPartialMissingSignatures(t *testing.T) {
 				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
+						GroupUsage:    2e6,
+						GroupFeesPaid: basics.MicroAlgos{Raw: 2 * signedTxn1.Txn.Fee.Raw},
 						Txns: []simulation.TxnResult{
 							{
+								FeesPaid: signedTxn1.Txn.Fee,
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
 										ConfigAsset: 1001,
 									},
 								},
 							}, {
+								FeesPaid: signedTxn2.Txn.Fee,
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
 										ConfigAsset: 1002,
@@ -6516,9 +6690,13 @@ func TestPooledFeesAcrossSignedAndUnsigned(t *testing.T) {
 				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
-						Txns: []simulation.TxnResult{
-							{}, {},
-						},
+						Txns: []simulation.TxnResult{{
+							FeesPaid: signedPay1.Txn.Fee,
+						}, {
+							FeesPaid: signedPay2.Txn.Fee,
+						}},
+						GroupUsage:    2e6,
+						GroupFeesPaid: signedPay1.Txn.Fee.AddSaturate(signedPay2.Txn.Fee),
 					},
 				},
 				EvalOverrides: simulation.ResultEvalOverrides{
@@ -6626,10 +6804,17 @@ int 1`,
 				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
+						GroupUsage:    5 * 1e6,
+						GroupFeesPaid: basics.MicroAlgos{Raw: 5 * txgroup[0].Txn.Fee.Raw},
 						Txns: []simulation.TxnResult{
-							{},
-							{},
 							{
+								FeesPaid: txgroup[0].Txn.Fee,
+							},
+							{
+								FeesPaid: txgroup[1].Txn.Fee,
+							},
+							{
+								FeesPaid: basics.MicroAlgos{Raw: 3 * txgroup[2].Txn.Fee.Raw}, // top-level + two inners
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
 										ApplicationID: futureOuterAppID,
@@ -6728,9 +6913,14 @@ int 1`,
 				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
+						GroupUsage:    4e6,
+						GroupFeesPaid: basics.MicroAlgos{Raw: 4 * txgroup[0].Txn.Fee.Raw},
 						Txns: []simulation.TxnResult{
-							{},
 							{
+								FeesPaid: txgroup[0].Txn.Fee,
+							},
+							{
+								FeesPaid: basics.MicroAlgos{Raw: 3 * txgroup[1].Txn.Fee.Raw}, // The app pays 2 more
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
 										ApplicationID: futureAppID,
@@ -6826,9 +7016,14 @@ int 1`,
 				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
+						GroupUsage:    4e6,
+						GroupFeesPaid: basics.MicroAlgos{Raw: 4 * txgroup[0].Txn.Fee.Raw},
 						Txns: []simulation.TxnResult{
-							{},
 							{
+								FeesPaid: txgroup[0].Txn.Fee,
+							},
+							{
+								FeesPaid: basics.MicroAlgos{Raw: 3 * txgroup[0].Txn.Fee.Raw},
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
 										ApplicationID: futureAppID,
@@ -6900,6 +7095,17 @@ func TestMockTracerScenarios(t *testing.T) {
 					// The mocktracer scenario txn is second in our group, so add 1 to the top-level index
 					expectedFailedAt[0]++
 				}
+				// Each top-level and inner txn contributes one fee unit (1e6 micros) of usage. The
+				// group is the pay txn plus the app call and all of its inners.
+				var countTxnAndInners func(ad transactions.ApplyData) int
+				countTxnAndInners = func(ad transactions.ApplyData) int {
+					count := 1
+					for _, inner := range ad.EvalDelta.InnerTxns {
+						count += countTxnAndInners(inner.ApplyData)
+					}
+					return count
+				}
+				groupTxnCount := 1 + countTxnAndInners(scenario.ExpectedSimulationAD)
 				expected := simulation.Result{
 					Version:   simulation.ResultLatestVersion,
 					LastRound: env.TxnInfo.LatestRound(),
@@ -6908,15 +7114,19 @@ func TestMockTracerScenarios(t *testing.T) {
 							AppBudgetAdded:    scenario.AppBudgetAdded,
 							AppBudgetConsumed: scenario.AppBudgetConsumed,
 							FailedAt:          expectedFailedAt,
+							GroupUsage:        basics.Micros(groupTxnCount * 1e6),
+							GroupFeesPaid:     basics.MicroAlgos{Raw: uint64(groupTxnCount) * signedPayTxn.Txn.Fee.Raw},
 							Txns: []simulation.TxnResult{
 								{
 									AppBudgetConsumed: scenario.TxnAppBudgetConsumed[0],
+									FeesPaid:          signedPayTxn.Txn.Fee,
 								},
 								{
 									Txn: transactions.SignedTxnWithAD{
 										ApplyData: scenario.ExpectedSimulationAD,
 									},
 									AppBudgetConsumed: scenario.TxnAppBudgetConsumed[1],
+									FeesPaid:          basics.MicroAlgos{Raw: uint64(groupTxnCount-1) * signedAppCallTxn.Txn.Fee.Raw},
 								},
 							},
 						},
@@ -7169,8 +7379,11 @@ func TestUnnamedResources(t *testing.T) {
 						LastRound: env.TxnInfo.LatestRound(),
 						TxnGroups: []simulation.TxnGroupResult{
 							{
+								GroupUsage:    1e6 + basics.Micros(innerCount*1e6),
+								GroupFeesPaid: basics.MicroAlgos{Raw: uint64(innerCount+1) * stxn.Txn.Fee.Raw},
 								Txns: []simulation.TxnResult{
 									{
+										FeesPaid: basics.MicroAlgos{Raw: uint64(innerCount+1) * stxn.Txn.Fee.Raw},
 										Txn: transactions.SignedTxnWithAD{
 											ApplyData: transactions.ApplyData{
 												EvalDelta: transactions.EvalDelta{
@@ -7329,12 +7542,15 @@ int 1
 										},
 										AppBudgetConsumed:        ignoreAppBudgetConsumed,
 										UnnamedResourcesAccessed: expectedUnnamedResourceTxnAssignment,
+										FeesPaid:                 stxn.Txn.Fee,
 									},
 								},
 								FailedAt:                 expectedFailedAt,
 								AppBudgetAdded:           700,
 								AppBudgetConsumed:        ignoreAppBudgetConsumed,
 								UnnamedResourcesAccessed: expectedUnnamedResourceAssignment,
+								GroupUsage:               1e6,
+								GroupFeesPaid:            stxn.Txn.Fee,
 							},
 						},
 						EvalOverrides: simulation.ResultEvalOverrides{
@@ -7494,8 +7710,11 @@ int 1
 						LastRound: env.TxnInfo.LatestRound(),
 						TxnGroups: []simulation.TxnGroupResult{
 							{
+								GroupUsage:    3e6,
+								GroupFeesPaid: basics.MicroAlgos{Raw: 3 * assetCreateStxn.Txn.Fee.Raw},
 								Txns: []simulation.TxnResult{
 									{
+										FeesPaid: assetCreateStxn.Txn.Fee,
 										Txn: transactions.SignedTxnWithAD{
 											ApplyData: transactions.ApplyData{
 												ConfigAsset: basics.AssetIndex(testAppID) + 1,
@@ -7503,6 +7722,7 @@ int 1
 										},
 									},
 									{
+										FeesPaid: appCreateStxn.Txn.Fee,
 										Txn: transactions.SignedTxnWithAD{
 											ApplyData: transactions.ApplyData{
 												ApplicationID: testAppID + 2,
@@ -7511,6 +7731,7 @@ int 1
 										AppBudgetConsumed: ignoreAppBudgetConsumed,
 									},
 									{
+										FeesPaid:          appCallStxn.Txn.Fee,
 										AppBudgetConsumed: ignoreAppBudgetConsumed,
 									},
 								},
@@ -7687,6 +7908,7 @@ func testUnnamedBoxOperations(t *testing.T, env simulationtesting.Environment, a
 	expectedTxnResults := make([]simulation.TxnResult, len(stxns))
 	for i := range expectedTxnResults {
 		expectedTxnResults[i].AppBudgetConsumed = ignoreAppBudgetConsumed
+		expectedTxnResults[i].FeesPaid = stxns[i].Txn.Fee
 		if i < len(boxOps) && boxOps[i].duringCreate {
 			// 1007 here is because of the number of transactions we used to
 			// setup the env.  See explanation in: TestUnnamedResourcesBoxIOBudget
@@ -7738,6 +7960,8 @@ func testUnnamedBoxOperations(t *testing.T, env simulationtesting.Environment, a
 					AppBudgetConsumed:        ignoreAppBudgetConsumed,
 					UnnamedResourcesAccessed: expectedUnnamedResources,
 					FailedAt:                 failedAt,
+					GroupUsage:               basics.Micros(len(stxns) * 1e6),
+					GroupFeesPaid:            basics.MicroAlgos{Raw: uint64(len(stxns)) * stxns[0].Txn.Fee.Raw},
 				},
 			},
 			EvalOverrides: simulation.ResultEvalOverrides{
@@ -8280,12 +8504,14 @@ int 1`, version),
 func assembleSizedPassingProgram(t testing.TB, version uint64, size int) []byte {
 	t.Helper()
 
-	const overhead = 4 // version byte + "pushint 1" + "return"
+	// the unreachable "app_global_get" at the end is used to avoid autosalt insertion
+	const overhead = 5 // version byte + "pushint 1" + "return" + unreachable "app_global_get"
 	require.GreaterOrEqual(t, size, overhead)
 
 	var source strings.Builder
 	fmt.Fprintf(&source, "#pragma version %d\n", version)
 	source.WriteString("pushint 1; return\n")
+	source.WriteString("app_global_get\n")
 	source.WriteString(strings.Repeat("err\n", size-overhead))
 
 	ops, err := logic.AssembleString(source.String())
@@ -8782,6 +9008,7 @@ func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, 
 	expectedTxnResults := make([]simulation.TxnResult, len(stxns))
 	for i := range expectedTxnResults {
 		expectedTxnResults[i].AppBudgetConsumed = ignoreAppBudgetConsumed
+		expectedTxnResults[i].FeesPaid = stxns[i].Txn.Fee
 	}
 
 	var failedAt simulation.TxnPath
@@ -8870,6 +9097,8 @@ func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, 
 					AppBudgetConsumed:        ignoreAppBudgetConsumed,
 					UnnamedResourcesAccessed: expectedGroupResources,
 					FailedAt:                 failedAt,
+					GroupUsage:               basics.Micros(len(stxns) * 1e6),
+					GroupFeesPaid:            basics.MicroAlgos{Raw: uint64(len(stxns)) * stxns[0].Txn.Fee.Raw},
 				},
 			},
 			EvalOverrides: simulation.ResultEvalOverrides{
@@ -8998,7 +9227,7 @@ func TestUnnamedResourcesLimits(t *testing.T) {
 				numResourceTypes++ // boxes
 			}
 			var atLimit unnamedResourceArguments
-			for i := 0; i < proto.MaxAppTotalTxnReferences; i++ {
+			for i := range proto.MaxAppTotalTxnReferences {
 				switch i % numResourceTypes {
 				case 0:
 					atLimit = atLimit.addAccounts(otherAccounts[i/numResourceTypes])
@@ -9347,9 +9576,11 @@ func TestFixSigners(t *testing.T) {
 	// Convenience function for getting the expected app call result. This is a function instead of
 	// a variable because it's used by multiple tests, and the expected result is modified with the
 	// input transactions before comparison by each test.
-	expectedAppCallResultFn := func() simulation.TxnResult {
+	expectedAppCallResultFn := func(appCallFee basics.MicroAlgos) simulation.TxnResult {
 		return simulation.TxnResult{
 			AppBudgetConsumed: ignoreAppBudgetConsumed,
+			// One top-level app call plus three inner transactions.
+			FeesPaid: basics.MicroAlgos{Raw: 4 * appCallFee.Raw},
 			Txn: transactions.SignedTxnWithAD{
 				ApplyData: transactions.ApplyData{
 					EvalDelta: transactions.EvalDelta{
@@ -9394,19 +9625,23 @@ func TestFixSigners(t *testing.T) {
 					TxnGroups: []simulation.TxnGroupResult{
 						{
 							Txns: []simulation.TxnResult{
-								{}, // pay0
+								{FeesPaid: inputs.txgroup[0].Txn.Fee}, // pay0
 								{ // pay1
 									FixedSigner: inputs.other.Addr,
+									FeesPaid:    inputs.txgroup[1].Txn.Fee,
 								},
 								// appCall
-								expectedAppCallResultFn(),
+								expectedAppCallResultFn(inputs.txgroup[2].Txn.Fee),
 								{ // pay2
 									FixedSigner: inputs.innerRekeyAddr,
+									FeesPaid:    inputs.txgroup[3].Txn.Fee,
 								},
-								{}, // pay3
+								{FeesPaid: inputs.txgroup[4].Txn.Fee}, // pay3
 							},
 							AppBudgetConsumed: ignoreAppBudgetConsumed,
 							AppBudgetAdded:    2800,
+							GroupUsage:        8e6,
+							GroupFeesPaid:     basics.MicroAlgos{Raw: 8 * inputs.txgroup[0].Txn.Fee.Raw},
 						},
 					},
 				},
@@ -9441,16 +9676,18 @@ func TestFixSigners(t *testing.T) {
 						{
 							FailedAt: simulation.TxnPath{1},
 							Txns: []simulation.TxnResult{
-								{}, // pay0
-								{}, // pay1, does NOT contain FixedSigner
-								{}, // appCall
-								{}, // pay2
-								{}, // pay3
+								{FeesPaid: inputs.txgroup[0].Txn.Fee}, // pay0
+								{FeesPaid: inputs.txgroup[1].Txn.Fee}, // pay1, does NOT contain FixedSigner
+								{FeesPaid: inputs.txgroup[2].Txn.Fee}, // appCall
+								{FeesPaid: inputs.txgroup[3].Txn.Fee}, // pay2
+								{FeesPaid: inputs.txgroup[4].Txn.Fee}, // pay3
 							},
 							AppBudgetConsumed: 0,
 							// This is here even though we don't make it to the app call because
 							// pooled app budget is determined before the group is evaluated.
 							AppBudgetAdded: 700,
+							GroupUsage:     5e6,
+							GroupFeesPaid:  basics.MicroAlgos{Raw: 5 * inputs.txgroup[0].Txn.Fee.Raw},
 						},
 					},
 				},
@@ -9485,17 +9722,20 @@ func TestFixSigners(t *testing.T) {
 						{
 							FailedAt: simulation.TxnPath{3},
 							Txns: []simulation.TxnResult{
-								{}, // pay0
+								{FeesPaid: inputs.txgroup[0].Txn.Fee}, // pay0
 								{ // pay1
 									FixedSigner: inputs.other.Addr,
+									FeesPaid:    inputs.txgroup[1].Txn.Fee,
 								},
 								// appCall
-								expectedAppCallResultFn(),
-								{}, // pay2, does NOT contained FixedSigner
-								{}, // pay3
+								expectedAppCallResultFn(inputs.txgroup[2].Txn.Fee),
+								{FeesPaid: inputs.txgroup[3].Txn.Fee}, // pay2, does NOT contained FixedSigner
+								{FeesPaid: inputs.txgroup[4].Txn.Fee}, // pay3
 							},
 							AppBudgetConsumed: ignoreAppBudgetConsumed,
 							AppBudgetAdded:    2800,
+							GroupUsage:        8e6,
+							GroupFeesPaid:     basics.MicroAlgos{Raw: 8 * inputs.txgroup[0].Txn.Fee.Raw},
 						},
 					},
 				},
@@ -9562,14 +9802,17 @@ func TestFixSigners(t *testing.T) {
 					TxnGroups: []simulation.TxnGroupResult{
 						{
 							Txns: []simulation.TxnResult{
-								{}, // noBalPay1
+								{FeesPaid: txgroup[0].Txn.Fee}, // noBalPay1
 								{ // appCall
 									AppBudgetConsumed: ignoreAppBudgetConsumed,
+									FeesPaid:          txgroup[1].Txn.Fee,
 								},
-								{}, // noBalPay2
+								{FeesPaid: txgroup[2].Txn.Fee}, // noBalPay2
 							},
 							AppBudgetAdded:    700,
 							AppBudgetConsumed: ignoreAppBudgetConsumed,
+							GroupUsage:        3e6,
+							GroupFeesPaid:     txgroup[0].Txn.Fee.AddSaturate(txgroup[1].Txn.Fee).AddSaturate(txgroup[2].Txn.Fee),
 						},
 					},
 				},
@@ -9629,16 +9872,21 @@ func TestFixSigners(t *testing.T) {
 							Txns: []simulation.TxnResult{
 								{ // pay1
 									FixedSigner: acct1.Addr,
+									FeesPaid:    txgroup[0].Txn.Fee,
 								},
 								{ // appCall
 									AppBudgetConsumed: ignoreAppBudgetConsumed,
+									FeesPaid:          txgroup[1].Txn.Fee,
 								},
 								{ // pay2
 									FixedSigner: acct1.Addr,
+									FeesPaid:    txgroup[2].Txn.Fee,
 								},
 							},
 							AppBudgetAdded:    700,
 							AppBudgetConsumed: ignoreAppBudgetConsumed,
+							GroupUsage:        3e6,
+							GroupFeesPaid:     basics.MicroAlgos{Raw: 3 * txgroup[0].Txn.Fee.Raw},
 						},
 					},
 				},
