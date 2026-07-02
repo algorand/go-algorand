@@ -39,8 +39,8 @@ var (
 // SignedTxn wire bound. Adding a larger registry entry grows those bounds and
 // requires regenerating msgp code, even before the scheme is consensus-enabled.
 var (
-	PQMaxPublicKeySize = int(crypto.MaxPQPublicKeySize())
-	PQMaxSignatureSize = int(crypto.MaxPQSignatureSize())
+	pqMaxPublicKeySize = int(crypto.MaxPQPublicKeySize())
+	pqMaxSignatureSize = int(crypto.MaxPQSignatureSize())
 )
 
 // PQSig is a post-quantum transaction authorization proof.
@@ -49,8 +49,8 @@ type PQSig struct {
 
 	Scheme    protocol.PQScheme    `codec:"sch"`
 	Salt      basics.PQAddressSalt `codec:"slt"`
-	PublicKey []byte               `codec:"pk,allocbound=PQMaxPublicKeySize"`
-	Signature []byte               `codec:"sig,allocbound=PQMaxSignatureSize"`
+	PublicKey []byte               `codec:"pk,allocbound=pqMaxPublicKeySize"`
+	Signature []byte               `codec:"sig,allocbound=pqMaxSignatureSize"`
 }
 
 // Blank returns true if the PQ authorization envelope is absent.
