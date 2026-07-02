@@ -139,23 +139,3 @@ func readFile(filename string) ([]byte, error) {
 	}
 	return os.ReadFile(filename)
 }
-
-// writeNewFile writes data to a new path, refusing stdout and existing files.
-// It is used for key material where stdout display should be an explicit
-// command option. The permission bits are POSIX permissions; on Windows the
-// default file ACL applies.
-func writeNewFile(filename string, data []byte, perm os.FileMode) error {
-	if filename == stdoutFilenameValue {
-		return fmt.Errorf("refusing to write file to stdout")
-	}
-	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm)
-	if err != nil {
-		return err
-	}
-	_, writeErr := f.Write(data)
-	closeErr := f.Close()
-	if writeErr != nil {
-		return writeErr
-	}
-	return closeErr
-}

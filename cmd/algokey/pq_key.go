@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -64,7 +65,7 @@ type pqRootMaterial struct {
 
 func writePQRootKeyFile(filename string, root pqRootMaterial) error {
 	data := encodePQPrivateKeyFileBytes(root)
-	if err := writeNewFile(filename, data, 0600); err != nil {
+	if err := os.WriteFile(filename, data, 0600); err != nil {
 		return fmt.Errorf("cannot write private key to %s: %w", filename, err)
 	}
 	return nil
@@ -72,7 +73,7 @@ func writePQRootKeyFile(filename string, root pqRootMaterial) error {
 
 func writePQPublicKeyFile(filename string, public pqPublicMaterial) error {
 	data := encodePQPublicKeyFileBytes(public)
-	if err := writeNewFile(filename, data, 0666); err != nil {
+	if err := os.WriteFile(filename, data, 0666); err != nil {
 		return fmt.Errorf("cannot write public key to %s: %w", filename, err)
 	}
 	return nil
@@ -247,7 +248,7 @@ func writePQMnemonicFile(filename string, scheme protocol.PQScheme, entropy cryp
 		return err
 	}
 	data := []byte(fmt.Sprintf("%s %s\n%s\n", pqMnemonicSchemeHeader, formatPQScheme(scheme), mnemonic))
-	return writeNewFile(filename, data, 0600)
+	return os.WriteFile(filename, data, 0600)
 }
 
 // readPQMnemonicFile reads a file written by writePQMnemonicFile and returns the

@@ -200,8 +200,6 @@ func TestPQPrivateRootFileStoresOnlySchemeAndEntropy(t *testing.T) {
 	require.Equal(t, root.scheme, decoded.scheme)
 	require.Equal(t, root.entropy, decoded.entropy)
 	requirePQPublicEqual(t, root.public, decoded.public)
-
-	require.ErrorIs(t, writePQRootKeyFile(keyfile, root), os.ErrExist)
 }
 
 func TestPQPrivateRootFileDoesNotPersistPublicMaterial(t *testing.T) {
