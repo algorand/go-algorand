@@ -52,14 +52,19 @@ func (lsig *LogicSig) Blank() bool {
 	return len(lsig.Logic) == 0
 }
 
-// Len returns the length of Logic plus the length of the Args
-// This is limited by config.ConsensusParams.LogicSigMaxSize
+// Len returns the total byte length of a logicSig program and arguments
 func (lsig *LogicSig) Len() int {
 	lsiglen := len(lsig.Logic)
+	return lsiglen + lsig.ArgsLen()
+}
+
+// ArgsLen returns the total byte length of the LogicSig arguments
+func (lsig *LogicSig) ArgsLen() int {
+	argsLen := 0
 	for _, arg := range lsig.Args {
-		lsiglen += len(arg)
+		argsLen += len(arg)
 	}
-	return lsiglen
+	return argsLen
 }
 
 // Equal returns true if both LogicSig are equivalent.

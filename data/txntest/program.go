@@ -22,30 +22,36 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
-// GenerateProgramOfSize return a TEAL bytecode of `size` bytes which always succeeds.
+// GenerateUnsaltedProgramOfSize returns a TEAL bytecode of `size` bytes which always succeeds.
 // `size` must be at least 9 bytes
-func GenerateProgramOfSize(size uint, pragma uint) ([]byte, error) {
+// TODO: Replace with the helper from unmerged PR #6653 once this branch is rebased.
+func GenerateUnsaltedProgramOfSize(size uint, pragma uint) ([]byte, error) {
 	if size < 9 {
 		return nil, fmt.Errorf("size must be at least 9 bytes; got %d", size)
 	}
-	ls := fmt.Sprintf("#pragma version %d\n", pragma)
+	if pragma == 0 || pragma > logic.LogicVersion {
+		return nil, fmt.Errorf("unsupported logic version %d", pragma)
+	}
+	// Build bytecode directly so automatic off-curve salting in the assembler
+	// cannot change the requested size.
+	ops := logic.OpsByName[pragma]
+	intcblock := ops["intcblock"].Opcode
+	intc0 := ops["intc_0"].Opcode
+	pop := ops["pop"].Opcode
+
+	program := []byte{byte(pragma)}
 	if size%2 == 0 {
-		ls += "int 10\npop\nint 1\npop\n"
+		program = append(program, intcblock, 2, 1, 1)
 	} else {
-		ls += "int 1\npop\nint 1\npop\n"
+		program = append(program, intcblock, 1, 1)
 	}
-	for i := uint(11); i <= size; i += 2 {
-		ls = ls + "int 1\npop\n"
+	for uint(len(program))+1 < size {
+		program = append(program, intc0, pop)
 	}
-	ls = ls + "int 1"
-	code, err := logic.AssembleString(ls)
-	if err != nil {
-		return nil, err
-	}
-	// panic if the function is not working as expected and needs to be updated
-	if len(code.Program) != int(size) {
+	program = append(program, intc0)
+	if uint(len(program)) != size {
 		panic(fmt.Sprintf("wanted to create a program of size %d but got a program of size %d",
-			size, len(code.Program)))
+			size, len(program)))
 	}
-	return code.Program, nil
+	return program, nil
 }

@@ -36,9 +36,9 @@ func TestLogicSigSizeBeforePooling(t *testing.T) {
 	// From consensus version 18, we have lsigs with a maximum size of 1000 bytes.
 	// We need to use pragma 1 for teal in v18
 	pragma := uint(1)
-	tealOK, err := txntest.GenerateProgramOfSize(1000, pragma)
+	tealOK, err := txntest.GenerateUnsaltedProgramOfSize(1000, pragma)
 	a.NoError(err)
-	tealTooLong, err := txntest.GenerateProgramOfSize(1001, pragma)
+	tealTooLong, err := txntest.GenerateUnsaltedProgramOfSize(1001, pragma)
 	a.NoError(err)
 
 	testLogicSize(t, tealOK, tealTooLong, filepath.Join("nettemplates", "TwoNodes50EachV18.json"))
@@ -50,9 +50,9 @@ func TestLogicSigSizeAfterPooling(t *testing.T) {
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	pragma := uint(1)
-	tealOK, err := txntest.GenerateProgramOfSize(2000, pragma)
+	tealOK, err := txntest.GenerateUnsaltedProgramOfSize(2000, pragma)
 	a.NoError(err)
-	tealTooLong, err := txntest.GenerateProgramOfSize(2001, pragma)
+	tealTooLong, err := txntest.GenerateUnsaltedProgramOfSize(2001, pragma)
 	a.NoError(err)
 
 	// TODO: Update this when lsig pooling graduates from vFuture
@@ -125,10 +125,10 @@ func testLogicSize(t *testing.T, tealOK, tealTooLong []byte,
 	a.NoError(err)
 
 	err = client.BroadcastTransactionGroup([]transactions.SignedTxn{stxn1Fail, stxn2Fail})
-	if cp.EnableLogicSigSizePooling {
-		a.ErrorContains(err, "more than the available pool")
+	if cp.TxnSizePricingEnabled() {
+		a.ErrorContains(err, "fees is less than")
 	} else {
-		a.ErrorContains(err, "LogicSig too long")
+		a.ErrorContains(err, "LogicSig.Logic too long")
 	}
 
 	// wait for the second transaction in the successful group to confirm
