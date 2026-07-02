@@ -126,10 +126,6 @@ func MakeSimulator(ledger *data.Ledger, developerAPI bool) *Simulator {
 	}
 }
 
-func txnHasNoSignature(txn transactions.SignedTxn) bool {
-	return !txn.HasSignature()
-}
-
 // IsPlaceholderPQSig reports whether txn carries a placeholder PQSig:
 // a non-blank PQ envelope with empty signature bytes and no other signature
 // category set. There are two placeholders forms:
@@ -162,7 +158,7 @@ func ValidatePlaceholderPQSig(proto config.ConsensusParams, txn transactions.Sig
 }
 
 func txnNeedsSyntheticSignature(txn transactions.SignedTxn) bool {
-	return txnHasNoSignature(txn) || IsPlaceholderPQSig(txn)
+	return !txn.HasSignature() || IsPlaceholderPQSig(txn)
 }
 
 // A randomly generated private key. The actual value does not matter, as long as this is a valid
@@ -201,7 +197,7 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 		if stxn.Txn.Type == protocol.StateProofTx {
 			return errors.New("cannot simulate StateProof transactions")
 		}
-		if overrides.AllowEmptySignatures && txnHasNoSignature(stxn) {
+		if overrides.AllowEmptySignatures && !stxn.HasSignature() {
 			// Replace the signed txn with one signed by the proxySigner. At evaluation this would
 			// raise an error, since the proxySigner's public key likely does not have authority
 			// over the sender's account. However, this will pass validation, since the signature
