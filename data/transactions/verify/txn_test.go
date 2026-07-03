@@ -153,6 +153,26 @@ func makePQSigFields(t *testing.T, firstSeedByte byte) (crypto.FalconSigner, bas
 	}
 }
 
+func makePQDelegatedLogicSigTxn(t *testing.T, firstSeedByte byte) transactions.SignedTxn {
+	t.Helper()
+
+	signer, authorizer, pqSig := makePQSigFields(t, firstSeedByte)
+	ops, err := logic.AssembleStringWithVersion("int 1", 1)
+	require.NoError(t, err)
+
+	signature, err := signer.Sign(logic.PQDelegatedProgram{Addr: authorizer, Program: ops.Program})
+	require.NoError(t, err)
+	pqSig.Signature = signature
+
+	return transactions.SignedTxn{
+		Txn: createPayTransaction(config.Consensus[protocol.ConsensusFuture].MinTxnFee, 40, 60, 1, authorizer, basics.Address{1}),
+		Lsig: transactions.LogicSig{
+			Logic: ops.Program,
+			PQsig: pqSig,
+		},
+	}
+}
+
 func requireTxGroupErrorReason(t *testing.T, err error, reason TxGroupErrorReason) {
 	t.Helper()
 
@@ -448,6 +468,107 @@ func TestTxnValidationPQSigRejectsMalformedProof(t *testing.T) {
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 		requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
 		require.ErrorContains(t, err, "pq signature validation failed")
+	})
+}
+
+func TestTxnValidationPQDelegatedLogicSig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	dummyLedger := DummyLedgerForSignature{}
+
+	stxn := makePQDelegatedLogicSigTxn(t, 10)
+	_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+	require.NoError(t, err)
+
+	stxn = makePQDelegatedLogicSigTxn(t, 11)
+	_, addrs, _ := generateAccounts(1)
+	stxn.Txn.Sender = addrs[0]
+	stxn.AuthAddr = stxn.Lsig.PQsig.AuthorizerAddress()
+	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+	require.NoError(t, err)
+}
+
+func TestTxnValidationPQDelegatedLogicSigRejectsInvalidProof(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	disabledBlkHdr := createDummyBlockHeader(protocol.ConsensusV41)
+	dummyLedger := DummyLedgerForSignature{}
+
+	requireLogicPQSigError := func(t *testing.T, err error, contains string) {
+		t.Helper()
+		requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
+		require.ErrorContains(t, err, "pq delegated logic signature validation failed")
+		require.ErrorContains(t, err, contains)
+	}
+
+	t.Run("wrong-authorizer", func(t *testing.T) {
+		stxn := makePQDelegatedLogicSigTxn(t, 12)
+		stxn.Txn.Sender = basics.Address{2}
+
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		requireLogicPQSigError(t, err, "pq signature authorizer mismatch")
+	})
+
+	t.Run("wrong-program", func(t *testing.T) {
+		stxn := makePQDelegatedLogicSigTxn(t, 13)
+		ops, err := logic.AssembleStringWithVersion("int 2", 1)
+		require.NoError(t, err)
+		stxn.Lsig.Logic = ops.Program
+
+		_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		requireLogicPQSigError(t, err, "invalid falcon-1024 signature")
+	})
+
+	t.Run("wrong-signature", func(t *testing.T) {
+		stxn := makePQDelegatedLogicSigTxn(t, 14)
+		stxn.Lsig.PQsig.Signature[0] ^= 1
+
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		requireLogicPQSigError(t, err, "invalid falcon-1024 signature")
+	})
+
+	t.Run("malformed-public-key", func(t *testing.T) {
+		stxn := makePQDelegatedLogicSigTxn(t, 15)
+		stxn.Lsig.PQsig.PublicKey = slices.Clone(stxn.Lsig.PQsig.PublicKey[:len(stxn.Lsig.PQsig.PublicKey)-1])
+
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		requireLogicPQSigError(t, err, "pq signature authorizer mismatch")
+	})
+
+	t.Run("empty-signature", func(t *testing.T) {
+		stxn := makePQDelegatedLogicSigTxn(t, 16)
+		stxn.Lsig.PQsig.Signature = nil
+
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		requireLogicPQSigError(t, err, "pq signature is empty")
+	})
+
+	t.Run("malformed-signature", func(t *testing.T) {
+		stxn := makePQDelegatedLogicSigTxn(t, 17)
+		stxn.Lsig.PQsig.Signature = make([]byte, crypto.MaxPQSignatureSize+1)
+
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		requireLogicPQSigError(t, err, "invalid falcon-1024 signature")
+	})
+
+	t.Run("disabled-scheme", func(t *testing.T) {
+		stxn := makePQDelegatedLogicSigTxn(t, 18)
+
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &disabledBlkHdr, nil, &dummyLedger)
+		requireLogicPQSigError(t, err, "pq signature scheme not enabled")
+	})
+
+	t.Run("replay-different-salt", func(t *testing.T) {
+		stxn := makePQDelegatedLogicSigTxn(t, 19)
+		originalAuthorizer := stxn.Lsig.PQsig.AuthorizerAddress()
+		stxn.Lsig.PQsig.Salt++
+		stxn.Txn.Sender = stxn.Lsig.PQsig.AuthorizerAddress()
+		require.NotEqual(t, originalAuthorizer, stxn.Txn.Sender)
+
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		requireLogicPQSigError(t, err, "invalid falcon-1024 signature")
 	})
 }
 
@@ -1007,6 +1128,39 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
 	require.ErrorContains(t, err, "should have only one type of delegation signature")
+	txnGroups[0][0].Lsig.Msig.Subsigs = nil
+	txnGroups[0][0].Lsig.LMsig.Subsigs = nil
+
+	/////  logic with sig and PQsig
+	txnGroups[0][0].Lsig.Sig = tmpSig
+	txnGroups[0][0].Lsig.PQsig = transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024}
+	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "should have only one type of delegation signature")
+	txnGroups[0][0].Lsig.Sig = crypto.Signature{}
+
+	/////  logic with Msig and PQsig
+	txnGroups[0][0].Lsig.Msig.Subsigs = make([]crypto.MultisigSubsig, 1)
+	txnGroups[0][0].Lsig.Msig.Subsigs[0] = crypto.MultisigSubsig{
+		Key: crypto.PublicKey{0x1},
+		Sig: crypto.Signature{0x2},
+	}
+	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "should have only one type of delegation signature")
+	txnGroups[0][0].Lsig.Msig.Subsigs = nil
+
+	/////  logic with LMsig and PQsig
+	txnGroups[0][0].Lsig.LMsig.Subsigs = make([]crypto.MultisigSubsig, 1)
+	txnGroups[0][0].Lsig.LMsig.Subsigs[0] = crypto.MultisigSubsig{
+		Key: crypto.PublicKey{0x1},
+		Sig: crypto.Signature{0x2},
+	}
+	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "should have only one type of delegation signature")
+	txnGroups[0][0].Lsig.LMsig.Subsigs = nil
+
+	/////  logic with PQsig only is classified as a LogicSig authorization proof
+	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "pq delegated logic signature validation failed")
 
 }
 
@@ -1057,6 +1211,26 @@ func TestTxnGroupPQSigMixedSignatures(t *testing.T) {
 		require.ErrorIs(t, err, errTxnSigNotWellFormed)
 		requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
 	})
+}
+
+func TestTxnGroupLogicOnlyAccountRemainsUnchanged(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	ops, err := logic.AssembleString("int 1")
+	require.NoError(t, err)
+
+	sender := basics.Address(logic.HashProgram(ops.Program))
+	stxn := transactions.SignedTxn{
+		Txn: createPayTransaction(config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee, 40, 60, 1, sender, basics.Address{1}),
+		Lsig: transactions.LogicSig{
+			Logic: ops.Program,
+			PQsig: transactions.PQSig{},
+		},
+	}
+
+	blkHdr := createDummyBlockHeader()
+	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &DummyLedgerForSignature{})
+	require.NoError(t, err)
 }
 
 func generateTransactionGroups(maxGroupSize int, signedTxns []transactions.SignedTxn,
@@ -1592,6 +1766,7 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 			{name: "sig", lsig: transactions.LogicSig{Sig: lsigSig}},
 			{name: "msig", lsig: transactions.LogicSig{Msig: crypto.MultisigSig{Version: 1}}},
 			{name: "lmsig", lsig: transactions.LogicSig{LMsig: crypto.MultisigSig{Version: 1}}},
+			{name: "pqsig", lsig: transactions.LogicSig{PQsig: transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024}}},
 		}
 
 		for _, test := range tests {
