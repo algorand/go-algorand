@@ -57,7 +57,6 @@ type pqSigningMaterial struct {
 }
 
 type pqRootMaterial struct {
-	scheme  protocol.PQScheme
 	entropy crypto.Seed
 	public  pqPublicMaterial
 }
@@ -83,12 +82,7 @@ func readPQRootKeyFile(filename string) (pqRootMaterial, error) {
 	if err != nil {
 		return pqRootMaterial{}, fmt.Errorf("cannot read private key from %s: %w", filename, err)
 	}
-
-	root, err := decodePQPrivateKeyFileBytes(data)
-	if err != nil {
-		return pqRootMaterial{}, err
-	}
-	return root, nil
+	return decodePQPrivateKeyFileBytes(data)
 }
 
 func readPQSigningMaterial(filename string) (pqSigningMaterial, error) {
@@ -114,10 +108,9 @@ func readPQPublicKeyFile(filename string) (pqPublicMaterial, error) {
 }
 
 func encodePQPrivateKeyFileBytes(root pqRootMaterial) []byte {
-	entropy := slices.Clone(root.entropy[:])
 	payload := crypto.PQPrivateKeyPayload{
-		Scheme:  root.scheme,
-		Entropy: entropy,
+		Scheme:  root.public.scheme,
+		Entropy: root.entropy[:],
 	}
 	return encodePQPayload(pqPrivateKeyMagic, &payload)
 }
@@ -126,18 +119,13 @@ func encodePQPublicKeyFileBytes(public pqPublicMaterial) []byte {
 	payload := crypto.PQPublicKeyPayload{
 		Scheme:    public.scheme,
 		Salt:      uint8(public.salt),
-		PublicKey: slices.Clone(public.pk),
+		PublicKey: public.pk,
 	}
 	return encodePQPayload(pqPublicKeyMagic, &payload)
 }
 
 func encodePQPayload(magic string, payload msgp.Marshaler) []byte {
-	encoded := protocol.Encode(payload)
-	out := make([]byte, 0, len(magic)+1+len(encoded))
-	out = append(out, magic...)
-	out = append(out, '\n')
-	out = append(out, encoded...)
-	return out
+	return append([]byte(magic+"\n"), protocol.Encode(payload)...)
 }
 
 // decodePQPrivateKeyEntropy parses the stored {scheme, entropy} from a private
@@ -179,14 +167,14 @@ func decodePQPublicKeyFileBytes(data []byte) (pqPublicMaterial, error) {
 }
 
 func decodePQPayload(data []byte, magic string, payload msgp.Unmarshaler) error {
-	prefix := []byte(magic + "\n")
-	if !bytes.HasPrefix(data, prefix) {
+	payloadBytes, ok := bytes.CutPrefix(data, []byte(magic+"\n"))
+	if !ok {
 		return fmt.Errorf("%w: missing %s magic", errPQKeyWrongType, magic)
 	}
-	if len(data) == len(prefix) {
+	if len(payloadBytes) == 0 {
 		return errPQKeyMalformed
 	}
-	if err := protocol.Decode(data[len(prefix):], payload); err != nil {
+	if err := protocol.Decode(payloadBytes, payload); err != nil {
 		return fmt.Errorf("%w: %w", errPQKeyMalformed, err)
 	}
 	return nil
@@ -197,11 +185,7 @@ func canonicalPublicMaterialFromKey(scheme protocol.PQScheme, publicKey []byte) 
 	if err != nil {
 		return pqPublicMaterial{}, err
 	}
-	public, err := publicMaterialFromFields(scheme, salt, publicKey)
-	if err != nil {
-		return pqPublicMaterial{}, err
-	}
-	return public, nil
+	return publicMaterialFromFields(scheme, salt, publicKey)
 }
 
 func publicMaterialFromFields(scheme protocol.PQScheme, salt basics.PQAddressSalt, publicKey []byte) (pqPublicMaterial, error) {
@@ -235,12 +219,9 @@ func resolvePQSalt(public pqPublicMaterial, saltValue string) (pqPublicMaterial,
 	if err != nil {
 		return pqPublicMaterial{}, fmt.Errorf("invalid pq salt %q: use canonical or 0..255", saltValue)
 	}
-	salt := basics.PQAddressSalt(n)
-	return publicMaterialFromFields(public.scheme, salt, public.pk)
+	return publicMaterialFromFields(public.scheme, basics.PQAddressSalt(n), public.pk)
 }
 
-// writePQMnemonicFile writes a self-describing mnemonic file: a "Scheme: <scheme>"
-// header line followed by the 25-word phrase encoding the root entropy.
 func writePQMnemonicFile(filename string, scheme protocol.PQScheme, entropy crypto.Seed) error {
 	mnemonic, err := mnemonicFromSeed(entropy)
 	if err != nil {
@@ -250,8 +231,6 @@ func writePQMnemonicFile(filename string, scheme protocol.PQScheme, entropy cryp
 	return os.WriteFile(filename, data, 0600)
 }
 
-// readPQMnemonicFile reads a file written by writePQMnemonicFile and returns the
-// recorded scheme and the entropy recovered from the phrase.
 func readPQMnemonicFile(filename string) (protocol.PQScheme, crypto.Seed, error) {
 	if filename == stdinFileNameValue {
 		return protocol.PQScheme{}, crypto.Seed{}, fmt.Errorf("refusing to read mnemonic from stdin")

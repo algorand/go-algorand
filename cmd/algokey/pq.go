@@ -266,7 +266,7 @@ func runPQExportWithOptions(keyfile, mnemonicFile string, displayMnemonic bool) 
 	}
 
 	if mnemonicFile != "" {
-		if err = writePQMnemonicFile(mnemonicFile, root.scheme, root.entropy); err != nil {
+		if err = writePQMnemonicFile(mnemonicFile, root.public.scheme, root.entropy); err != nil {
 			return fmt.Errorf("cannot write mnemonic to %s: %w", mnemonicFile, err)
 		}
 	}

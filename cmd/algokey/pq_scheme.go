@@ -80,7 +80,6 @@ func rootMaterialFromEntropy(scheme protocol.PQScheme, entropy crypto.Seed) (pqR
 	}
 
 	return pqRootMaterial{
-		scheme:  scheme,
 		entropy: entropy,
 		public:  signing.public,
 	}, nil

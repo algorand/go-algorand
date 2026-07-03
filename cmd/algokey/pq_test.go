@@ -124,11 +124,11 @@ func TestPQGenerateUsesMnemonicSizedEntropy(t *testing.T) {
 
 	require.Equal(t, 1, rng.calls)
 	require.Equal(t, pqKeyEntropySize, rng.bytes)
-	require.Equal(t, protocol.PQSchemeFalcon1024, root.scheme)
+	require.Equal(t, protocol.PQSchemeFalcon1024, root.public.scheme)
 	require.Equal(t, crypto.Seed{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32}, root.entropy)
 	require.True(t, root.public.addr.IsPQCompliant())
 
-	signing, err := derivePQSigningMaterialFromEntropy(root.scheme, root.entropy)
+	signing, err := derivePQSigningMaterialFromEntropy(root.public.scheme, root.entropy)
 	require.NoError(t, err)
 	requirePQPublicEqual(t, root.public, signing.public)
 
@@ -186,12 +186,12 @@ func TestPQPrivateRootFileStoresOnlySchemeAndEntropy(t *testing.T) {
 
 	var payload crypto.PQPrivateKeyPayload
 	require.NoError(t, decodePQPayload(data, pqPrivateKeyMagic, &payload))
-	require.Equal(t, root.scheme, payload.Scheme)
+	require.Equal(t, root.public.scheme, payload.Scheme)
 	require.Equal(t, root.entropy[:], payload.Entropy)
 
 	decoded, err := readPQRootKeyFile(keyfile)
 	require.NoError(t, err)
-	require.Equal(t, root.scheme, decoded.scheme)
+	require.Equal(t, root.public.scheme, decoded.public.scheme)
 	require.Equal(t, root.entropy, decoded.entropy)
 	requirePQPublicEqual(t, root.public, decoded.public)
 }
@@ -279,7 +279,7 @@ func TestPQMnemonicExportImportRoundTrip(t *testing.T) {
 	require.NoError(t, runPQExportWithOptions(keyfile, mnemonicFile, false))
 	exportedScheme, exportedEntropy, err := readPQMnemonicFile(mnemonicFile)
 	require.NoError(t, err)
-	require.Equal(t, root.scheme, exportedScheme)
+	require.Equal(t, root.public.scheme, exportedScheme)
 	require.Equal(t, root.entropy, exportedEntropy)
 
 	require.NoError(t, runPQImportWithOptions(mnemonicFile, importedKeyfile, false))
@@ -313,7 +313,7 @@ func TestPQMnemonicFileRecordsSchemeAndRejectsUnknown(t *testing.T) {
 
 	tempDir := t.TempDir()
 	mnemonicFile := filepath.Join(tempDir, "account.mnemonic")
-	require.NoError(t, writePQMnemonicFile(mnemonicFile, root.scheme, root.entropy))
+	require.NoError(t, writePQMnemonicFile(mnemonicFile, root.public.scheme, root.entropy))
 
 	// The exported file records the scheme so it travels with the phrase.
 	contents, err := os.ReadFile(mnemonicFile)
