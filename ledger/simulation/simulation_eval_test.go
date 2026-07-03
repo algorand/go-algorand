@@ -6845,6 +6845,170 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 		})
 	})
 
+	t.Run("delegated placeholder", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			sender := env.Accounts[0]
+			authorizer, pqSig := makePlaceholderPQSigForSimulation(t, 3)
+			ops, err := logic.AssembleStringWithVersion("int 1", 2)
+			require.NoError(t, err)
+			minFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
+
+			rekey := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   sender.Addr,
+				Receiver: sender.Addr,
+				RekeyTo:  authorizer,
+				Fee:      minFee,
+			})
+			delegatedPay := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   sender.Addr,
+				Receiver: sender.Addr,
+				Fee:      minFee * 3,
+			})
+			txgroup := txntest.Group(&rekey, &delegatedPay)
+			txgroup[0] = txgroup[0].Txn.Sign(sender.Sk)
+			txgroup[1].AuthAddr = sender.Addr
+			txgroup[1].Lsig = transactions.LogicSig{
+				Logic: ops.Program,
+				PQsig: pqSig,
+			}
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{txgroup},
+					AllowEmptySignatures: true,
+					FixSigners:           true,
+				},
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+						FixSigners:           true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							Txns: []simulation.TxnResult{
+								{FeesPaid: txgroup[0].Txn.Fee},
+								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: authorizer, LogicSigBudgetConsumed: 2},
+							},
+							GroupUsage:    4e6,
+							GroupFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
+						},
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("delegated placeholder rejecting program", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			sender := env.Accounts[0]
+			authorizer, pqSig := makePlaceholderPQSigForSimulation(t, 4)
+			ops, err := logic.AssembleStringWithVersion("int 0", 2)
+			require.NoError(t, err)
+			minFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
+
+			rekey := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   sender.Addr,
+				Receiver: sender.Addr,
+				RekeyTo:  authorizer,
+				Fee:      minFee,
+			})
+			delegatedPay := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   sender.Addr,
+				Receiver: sender.Addr,
+				Fee:      minFee * 3,
+			})
+			txgroup := txntest.Group(&rekey, &delegatedPay)
+			txgroup[0] = txgroup[0].Txn.Sign(sender.Sk)
+			txgroup[1].AuthAddr = sender.Addr
+			txgroup[1].Lsig = transactions.LogicSig{
+				Logic: ops.Program,
+				PQsig: pqSig,
+			}
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{txgroup},
+					AllowEmptySignatures: true,
+					FixSigners:           true,
+				},
+				// The placeholder delegated program is actually evaluated, so a
+				// rejecting program fails simulation exactly as consensus would.
+				expectedError: "rejected by logic",
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+						FixSigners:           true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							Txns: []simulation.TxnResult{
+								{FeesPaid: txgroup[0].Txn.Fee},
+								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: authorizer, LogicSigBudgetConsumed: 2},
+							},
+							FailedAt:      simulation.TxnPath{1},
+							GroupUsage:    4e6,
+							GroupFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
+						},
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("FixSigners rejects delegated full placeholder mismatch", func(t *testing.T) {
+		t.Parallel()
+		env := simulationtesting.PrepareSimulatorTest(t)
+		defer env.Close()
+
+		sender := env.Accounts[0]
+		authorizer, pqSig := makePlaceholderPQSigForSimulation(t, 5)
+		pqSig.Salt ^= 1
+		ops, err := logic.AssembleStringWithVersion("int 1", 2)
+		require.NoError(t, err)
+		minFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
+
+		rekey := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: sender.Addr,
+			RekeyTo:  authorizer,
+			Fee:      minFee,
+		})
+		delegatedPay := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: sender.Addr,
+			Fee:      minFee * 3,
+		})
+		txgroup := txntest.Group(&rekey, &delegatedPay)
+		txgroup[0] = txgroup[0].Txn.Sign(sender.Sk)
+		txgroup[1].AuthAddr = sender.Addr
+		txgroup[1].Lsig = transactions.LogicSig{
+			Logic: ops.Program,
+			PQsig: pqSig,
+		}
+
+		result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+			TxnGroups:            [][]transactions.SignedTxn{txgroup},
+			AllowEmptySignatures: true,
+			FixSigners:           true,
+		})
+		require.NoError(t, err)
+		require.Contains(t, result.TxnGroups[0].FailureMessage, "pq signature authorizer mismatch")
+		require.Equal(t, simulation.TxnPath{1}, result.TxnGroups[0].FailedAt)
+		require.Nil(t, result.Block)
+	})
+
 	t.Run("FixSigners validates full placeholder after app signer fix", func(t *testing.T) {
 		t.Parallel()
 		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {

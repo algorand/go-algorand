@@ -1154,6 +1154,7 @@ func isEscrowLogicSig(stxn transactions.SignedTxn) bool {
 	return stxn.Lsig.Sig.Blank() &&
 		stxn.Lsig.Msig.Blank() &&
 		stxn.Lsig.LMsig.Blank() &&
+		stxn.Lsig.PQsig.Blank() &&
 		stxn.Authorizer() == basics.Address(logic.HashProgram(stxn.Lsig.Logic))
 }
 
@@ -1175,10 +1176,14 @@ func rejectOnCurveLogicSigPrograms(txgroup []transactions.SignedTxn) error {
 
 func enforcePQAuthorizerCompliance(txgroup []transactions.SignedTxn) error {
 	for txnIdx, stxn := range txgroup {
-		if stxn.PQsig.Blank() || len(stxn.PQsig.PublicKey) == 0 {
+		pqSig := stxn.PQsig
+		if pqSig.Blank() && stxn.Lsig.HasProgram() {
+			pqSig = stxn.Lsig.PQsig
+		}
+		if pqSig.Blank() || len(pqSig.PublicKey) == 0 {
 			continue
 		}
-		authorizer := stxn.PQsig.AuthorizerAddress()
+		authorizer := pqSig.AuthorizerAddress()
 		if !authorizer.IsPQCompliant() {
 			return fmt.Errorf("transaction %d: pq signature authorizer address %s is an Edwards25519 curve point (non PQ-compliant)", txnIdx, authorizer)
 		}
