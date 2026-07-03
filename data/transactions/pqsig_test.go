@@ -86,8 +86,8 @@ func TestPQDecodeBoundsFeedSignedTxnMaxSize(t *testing.T) {
 	expectedPQSigMaxSize := 1 +
 		4 + protocol.PQSchemeMaxSize() +
 		4 + basics.PQAddressSaltMaxSize() +
-		3 + msgp.BytesPrefixSize + pqMaxPublicKeySize +
-		4 + msgp.BytesPrefixSize + pqMaxSignatureSize
+		3 + msgp.BytesPrefixSize + crypto.MaxPQPublicKeySize +
+		4 + msgp.BytesPrefixSize + crypto.MaxPQSignatureSize
 	require.Equal(t, expectedPQSigMaxSize, PQSigMaxSize())
 
 	// PQSigMaxSize is part of the network-facing SignedTxn bound. Growing

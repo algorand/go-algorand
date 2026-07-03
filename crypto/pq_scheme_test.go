@@ -37,32 +37,21 @@ func TestLookupPQScheme(t *testing.T) {
 	require.False(t, ok)
 }
 
-// TestMaxPQSizes checks the derived wire bounds cover the supported schemes.
-func TestMaxPQSizes(t *testing.T) {
+// TestPQBoundsCoverFalcon1024 guards against MaxPQ*Size being smaller than a
+// real Falcon-1024 public key or signature.
+func TestPQBoundsCoverFalcon1024(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	require.Equal(t, uint64(FalconPublicKeySize), MaxPQPublicKeySize())
-	require.Equal(t, uint64(FalconMaxSignatureSize), MaxPQSignatureSize())
-}
+	var seed FalconSeed
+	seed[0] = 1
+	signer, err := GenerateFalconSigner(seed)
+	require.NoError(t, err)
+	require.LessOrEqual(t, uint64(len(signer.PublicKey)), uint64(MaxPQPublicKeySize))
 
-// TestPQSchemesInSync asserts LookupPQScheme and pqSizedSchemes cover the same
-// set of schemes, so the derived wire bounds can't silently miss a scheme.
-// Keep allPQSchemeTags updated when adding a scheme.
-func TestPQSchemesInSync(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	allPQSchemeTags := []protocol.PQScheme{protocol.PQSchemeFalcon1024}
-	require.Len(t, pqSizedSchemes, len(allPQSchemeTags),
-		"pqSizedSchemes is out of sync with LookupPQScheme")
-	for _, tag := range allPQSchemeTags {
-		v, ok := LookupPQScheme(tag)
-		require.Truef(t, ok, "LookupPQScheme does not resolve %q", tag)
-		sized, ok := v.(pqSizedScheme)
-		require.Truef(t, ok, "verifier for %q is not a pqSizedScheme", tag)
-		require.Containsf(t, pqSizedSchemes, sized, "%q is missing from pqSizedSchemes", tag)
-	}
+	sig, err := signer.Sign(TestingHashable{data: []byte("pq bounds")})
+	require.NoError(t, err)
+	require.LessOrEqual(t, uint64(len(sig)), uint64(MaxPQSignatureSize))
 }
 
 // TestPQVerifierFalcon1024RoundTrip exercises the interface wiring; the

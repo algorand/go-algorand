@@ -35,12 +35,15 @@ type PQVerifier interface {
 	Verify(message Hashable, publicKey, signature []byte) error
 }
 
-// pqSizedScheme is the crypto-internal view of a scheme used to derive the wire
-// bounds; it deliberately does not appear in the public PQVerifier interface.
-type pqSizedScheme interface {
-	PublicKeySize() uint64
-	SignatureSize() uint64
-}
+// MaxPQPublicKeySize and MaxPQSignatureSize are the largest public-key and
+// signature sizes over all supported PQ schemes; they are the PQ wire/decode
+// bounds (used for msgp allocbounds). Adding a scheme with a larger key or
+// signature means growing these; TestPQBoundsCoverFalcon1024 guards against
+// undersizing the current schemes.
+const (
+	MaxPQPublicKeySize = FalconPublicKeySize
+	MaxPQSignatureSize = FalconMaxSignatureSize
+)
 
 // LookupPQScheme returns the verifier for a PQ scheme tag.
 //
@@ -49,7 +52,7 @@ type pqSizedScheme interface {
 //   - add a case here returning its PQVerifier,
 //   - add its config.ConsensusParams.PQSchemeEnabled case and PQSchemeFeeContribution,
 //   - add the signing/private-key ops in cmd/algokey,
-//   - add it to pqSizedSchemes so the derived wire bounds (MaxPQ*Size) cover it.
+//   - grow MaxPQPublicKeySize/MaxPQSignatureSize if its key or signature is larger.
 func LookupPQScheme(s protocol.PQScheme) (PQVerifier, bool) {
 	switch s {
 	case protocol.PQSchemeFalcon1024:
@@ -60,38 +63,9 @@ func LookupPQScheme(s protocol.PQScheme) (PQVerifier, bool) {
 	return nil, false
 }
 
-// falcon1024 is the Falcon-1024 (f1) scheme. Verify is its public PQVerifier
-// behavior; PublicKeySize/SignatureSize are crypto-internal and feed the derived
-// MaxPQ*Size wire bounds (and tests).
+// falcon1024 is the Falcon-1024 (f1) scheme.
 type falcon1024 struct{}
 
 func (falcon1024) Verify(message Hashable, publicKey, signature []byte) error {
 	return VerifyFalcon1024(message, publicKey, signature)
-}
-func (falcon1024) PublicKeySize() uint64 { return FalconPublicKeySize }
-func (falcon1024) SignatureSize() uint64 { return FalconMaxSignatureSize }
-
-// pqSizedSchemes enumerates every supported scheme and must stay in sync with
-// LookupPQScheme (asserted by TestPQSchemesInSync). It backs the derived
-// MaxPQ*Size bounds below.
-var pqSizedSchemes = []pqSizedScheme{
-	falcon1024{},
-}
-
-// MaxPQPublicKeySize returns the largest public-key size over all supported PQ schemes.
-func MaxPQPublicKeySize() uint64 {
-	var m uint64
-	for _, s := range pqSizedSchemes {
-		m = max(m, s.PublicKeySize())
-	}
-	return m
-}
-
-// MaxPQSignatureSize returns the largest signature size over all supported PQ schemes.
-func MaxPQSignatureSize() uint64 {
-	var m uint64
-	for _, s := range pqSizedSchemes {
-		m = max(m, s.SignatureSize())
-	}
-	return m
 }

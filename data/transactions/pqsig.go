@@ -33,24 +33,18 @@ var (
 	errPQSigAuthorizerMismatch = errors.New("pq signature authorizer mismatch")
 )
 
-// pqMaxPublicKeySize and pqMaxSignatureSize are derived wire/decode bounds for
-// PQ public keys and signatures before scheme dispatch. They feed msgp
-// allocation bounds and therefore PQSigMaxSize, SignedTxnMaxSize, and the
-// SignedTxn wire bound. Adding a larger registry entry grows those bounds and
-// requires regenerating msgp code, even before the scheme is consensus-enabled.
-var (
-	pqMaxPublicKeySize = int(crypto.MaxPQPublicKeySize())
-	pqMaxSignatureSize = int(crypto.MaxPQSignatureSize())
-)
-
-// PQSig is a post-quantum transaction authorization proof.
+// PQSig is a post-quantum transaction authorization proof. Its public key and
+// signature are wire/decode-bounded by crypto.MaxPQPublicKeySize and
+// crypto.MaxPQSignatureSize (the largest sizes over all supported PQ schemes),
+// which feed msgp allocation bounds and therefore PQSigMaxSize, SignedTxnMaxSize,
+// and the SignedTxn wire bound.
 type PQSig struct {
 	_struct struct{} `codec:",omitempty"`
 
 	Scheme    protocol.PQScheme    `codec:"sch"`
 	Salt      basics.PQAddressSalt `codec:"slt"`
-	PublicKey []byte               `codec:"pk,allocbound=pqMaxPublicKeySize"`
-	Signature []byte               `codec:"sig,allocbound=pqMaxSignatureSize"`
+	PublicKey []byte               `codec:"pk,allocbound=crypto.MaxPQPublicKeySize"`
+	Signature []byte               `codec:"sig,allocbound=crypto.MaxPQSignatureSize"`
 }
 
 // Blank returns true if the PQ authorization envelope is absent.
