@@ -334,7 +334,7 @@ func runPQSignWithOptions(opts pqSignOptions) error {
 				return err
 			}
 		}
-		signing, err = derivePQSigningMaterialFromEntropy(scheme, entropy[:])
+		signing, err = derivePQSigningMaterialFromEntropy(scheme, entropy)
 	case opts.keyfile != "":
 		signing, err = readPQSigningMaterial(opts.keyfile)
 	default:

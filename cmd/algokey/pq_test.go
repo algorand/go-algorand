@@ -102,8 +102,7 @@ func TestPQKeySeedDerivationUsesDomainSchemeAndEntropy(t *testing.T) {
 		entropy[i] = byte(i)
 	}
 
-	seed, err := derivePQKeySeed(protocol.PQSchemeFalcon1024, entropy[:])
-	require.NoError(t, err)
+	seed := derivePQKeySeed(protocol.PQSchemeFalcon1024, entropy)
 
 	preimage := make([]byte, 0, len(protocol.PostQuantumKey)+len(protocol.PQSchemeFalcon1024)+len(entropy))
 	preimage = append(preimage, string(protocol.PostQuantumKey)...)
@@ -111,12 +110,8 @@ func TestPQKeySeedDerivationUsesDomainSchemeAndEntropy(t *testing.T) {
 	preimage = append(preimage, entropy[:]...)
 	require.Equal(t, crypto.Hash(preimage), seed)
 
-	otherSchemeSeed, err := derivePQKeySeed(protocol.PQSchemeFalcon512, entropy[:])
-	require.NoError(t, err)
+	otherSchemeSeed := derivePQKeySeed(protocol.PQSchemeFalcon512, entropy)
 	require.NotEqual(t, seed, otherSchemeSeed)
-
-	_, err = derivePQKeySeed(protocol.PQSchemeFalcon1024, entropy[:len(entropy)-1])
-	require.ErrorIs(t, err, errPQKeyDerivation)
 }
 
 func TestPQGenerateUsesMnemonicSizedEntropy(t *testing.T) {
@@ -133,12 +128,11 @@ func TestPQGenerateUsesMnemonicSizedEntropy(t *testing.T) {
 	require.Equal(t, crypto.Seed{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32}, root.entropy)
 	require.True(t, root.public.addr.IsPQCompliant())
 
-	signing, err := derivePQSigningMaterialFromEntropy(root.scheme, root.entropy[:])
+	signing, err := derivePQSigningMaterialFromEntropy(root.scheme, root.entropy)
 	require.NoError(t, err)
 	requirePQPublicEqual(t, root.public, signing.public)
 
-	seed, err := derivePQKeySeed(protocol.PQSchemeFalcon1024, root.entropy[:])
-	require.NoError(t, err)
+	seed := derivePQKeySeed(protocol.PQSchemeFalcon1024, root.entropy)
 	signer, err := crypto.GenerateFalconSignerFromBytes(seed[:])
 	require.NoError(t, err)
 	require.Equal(t, signer.PublicKey[:], root.public.pk)

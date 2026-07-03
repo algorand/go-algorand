@@ -41,7 +41,6 @@ const (
 var (
 	errPQKeyWrongType     = errors.New("pq key file has the wrong type")
 	errPQKeyMalformed     = errors.New("pq key file is malformed")
-	errPQKeyDerivation    = errors.New("pq key derivation input is malformed")
 	errPQSaltNotCompliant = errors.New("pq address salt is not compliant")
 )
 
@@ -103,7 +102,7 @@ func readPQSigningMaterial(filename string) (pqSigningMaterial, error) {
 		return pqSigningMaterial{}, err
 	}
 
-	return derivePQSigningMaterialFromEntropy(scheme, entropy[:])
+	return derivePQSigningMaterialFromEntropy(scheme, entropy)
 }
 
 func readPQPublicKeyFile(filename string) (pqPublicMaterial, error) {

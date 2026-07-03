@@ -74,7 +74,7 @@ func generatePQRoot(scheme protocol.PQScheme, rng crypto.RNG) (pqRootMaterial, e
 }
 
 func rootMaterialFromEntropy(scheme protocol.PQScheme, entropy crypto.Seed) (pqRootMaterial, error) {
-	signing, err := derivePQSigningMaterialFromEntropy(scheme, entropy[:])
+	signing, err := derivePQSigningMaterialFromEntropy(scheme, entropy)
 	if err != nil {
 		return pqRootMaterial{}, err
 	}
@@ -86,33 +86,25 @@ func rootMaterialFromEntropy(scheme protocol.PQScheme, entropy crypto.Seed) (pqR
 	}, nil
 }
 
-func derivePQSigningMaterialFromEntropy(scheme protocol.PQScheme, entropy []byte) (pqSigningMaterial, error) {
+func derivePQSigningMaterialFromEntropy(scheme protocol.PQScheme, entropy crypto.Seed) (pqSigningMaterial, error) {
 	ops, ok := pqSchemeOpsByScheme[scheme]
 	if !ok {
 		return pqSigningMaterial{}, fmt.Errorf("%w: %q", crypto.ErrPQSchemeNotSupported, scheme)
 	}
 
-	seed, err := derivePQKeySeed(scheme, entropy)
-	if err != nil {
-		return pqSigningMaterial{}, err
-	}
-
+	seed := derivePQKeySeed(scheme, entropy)
 	return ops.deriveSigning(seed[:])
 }
 
 // derivePQKeySeed maps mnemonic-sized entropy to a scheme-specific PQ keygen
 // seed: SHA512_256(PQK || scheme[2] || entropy[32]).
-func derivePQKeySeed(scheme protocol.PQScheme, entropy []byte) (crypto.Digest, error) {
-	if len(entropy) != pqKeyEntropySize {
-		return crypto.Digest{}, fmt.Errorf("%w: got entropy size %d, want %d", errPQKeyDerivation, len(entropy), pqKeyEntropySize)
-	}
-
+func derivePQKeySeed(scheme protocol.PQScheme, entropy crypto.Seed) crypto.Digest {
 	input := make([]byte, 0, len(protocol.PostQuantumKey)+len(scheme)+len(entropy))
 	input = append(input, string(protocol.PostQuantumKey)...)
 	input = append(input, scheme[:]...)
-	input = append(input, entropy...)
+	input = append(input, entropy[:]...)
 
-	return crypto.Hash(input), nil
+	return crypto.Hash(input)
 }
 
 func (falcon1024Ops) deriveSigning(seed []byte) (pqSigningMaterial, error) {
