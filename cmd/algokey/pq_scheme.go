@@ -126,22 +126,14 @@ func (falcon1024Ops) deriveSigning(seed []byte) (pqSigningMaterial, error) {
 	}, nil
 }
 
-func falconPrivateKeyFromBytes(privateKey []byte) (crypto.FalconPrivateKey, error) {
-	var sk crypto.FalconPrivateKey
-	if len(privateKey) != len(sk) {
-		return crypto.FalconPrivateKey{}, fmt.Errorf("%w: got private key size %d, want %d", errPQKeyMalformed, len(privateKey), len(sk))
-	}
-	copy(sk[:], privateKey)
-	return sk, nil
-}
-
 func (falcon1024Ops) publicKeySize() uint64 { return crypto.FalconPublicKeySize }
 
 func (falcon1024Ops) signTxn(privateKey []byte, txn transactions.Transaction) ([]byte, error) {
-	sk, err := falconPrivateKeyFromBytes(privateKey)
-	if err != nil {
-		return nil, err
+	var sk crypto.FalconPrivateKey
+	if len(privateKey) != len(sk) {
+		return nil, fmt.Errorf("%w: got private key size %d, want %d", errPQKeyMalformed, len(privateKey), len(sk))
 	}
+	copy(sk[:], privateKey)
 
 	signer := crypto.FalconSigner{PrivateKey: sk}
 	return signer.Sign(txn)
