@@ -49,8 +49,14 @@ ${gcmd} clerk send -a 6666 -f "${PQADDRESS}" -t "${ACCOUNT}" --fee 3000 -o enoug
 algokey pq sign -t enough.tx -k pq.sk -o enough-signed.tx
 ${gcmd} clerk rawsend -f enough-signed.tx
 
+## Show that a delegated LogicSig signed by the PQ account can authorize a txn
+echo "int 1" > pq-true.teal
+${gcmd} clerk compile pq-true.teal -o pq-true.tok
+algokey pq sign-program -k pq.sk -p pq-true.tok -o pq-true.lsig
+${gcmd} clerk send -a 7777 -f "${PQADDRESS}" -t "${ACCOUNT}" --fee 3000 -L pq-true.lsig
+
 BALANCE=$(${gcmd} account balance -a "${PQADDRESS}" | awk '{ print $1 }')
-EXPECT=$((10000000 - 6666 - 3000))
+EXPECT=$((10000000 - 6666 - 3000 - 7777 - 3000))
 if [ "$BALANCE" -ne "$EXPECT" ]; then
     date "+${scriptname} FAIL wanted balance=${EXPECT} but got ${BALANCE} %Y%m%d_%H%M%S"
     false
