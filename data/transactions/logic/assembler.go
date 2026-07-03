@@ -3318,6 +3318,8 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 		if err != nil {
 			return
 		}
+		// cx.GetOpSpec would be nice here, but we don't have a cx, we have the
+		// various pieces: version, program, dis.pc all available but separate.
 		op := opsByOpcode[version][program[dis.pc]]
 		if op.SubOps != nil && dis.pc+1 < len(program) {
 			sub := program[dis.pc+1]

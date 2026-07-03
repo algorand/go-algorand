@@ -3334,10 +3334,10 @@ func TestEvalBadSubOp(t *testing.T) {
 				"missing sub-opcode", "missing sub-opcode")
 			ops.Program[len(ops.Program)-1] = 0x00
 			testLogicBytes(t, ops.Program, nil,
-				"illegal opcode", "illegal opcode")
+				"improper sub-opcode 0x00", "improper sub-opcode 0x00")
 			ops.Program[len(ops.Program)-1] = 0x55 // way too big
 			testLogicBytes(t, ops.Program, nil,
-				"illegal opcode", "illegal opcode")
+				"improper sub-opcode 0x55", "improper sub-opcode 0x55")
 		})
 	}
 }

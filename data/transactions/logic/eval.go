@@ -793,16 +793,37 @@ func (cx *EvalContext) ProgramVersion() uint64 {
 // PC returns the program counter of the current application being evaluated
 func (cx *EvalContext) PC() int { return cx.pc }
 
-// GetOpSpec queries for the OpSpec w.r.t. current program byte(s).
-func (cx *EvalContext) GetOpSpec() OpSpec {
-	spec := opsByOpcode[cx.version][cx.program[cx.pc]]
+// GetOpSpec returns the OpSpec for the current program position. It always
+// returns a non-nil pointer to an OpSpec, even if the opcode is invalid. If the
+// opcode is invalid, the returned OpSpec will have op == nil. This unusual
+// interface allows code that knows it is looking at a valid program (anything
+// after check()) to avoid dealing with errors while other code handle the error
+// with getOpSpecError while this function stays inlined.
+func (cx *EvalContext) GetOpSpec() *OpSpec {
+	spec := &opsByOpcode[cx.version][cx.program[cx.pc]]
 	if spec.SubOps != nil && cx.pc+1 < len(cx.program) {
 		sub := cx.program[cx.pc+1]
 		if int(sub) < len(spec.SubOps) && spec.SubOps[sub].op != nil {
-			return spec.SubOps[sub]
+			return &spec.SubOps[sub]
 		}
 	}
 	return spec
+}
+
+// getOpSpecError returns an error describing the problem with the current
+// opcode. It is kept out of GetOpSpec, and called only on the error path (when
+// the returned spec has op == nil), so that GetOpSpec stays cheap enough to
+// inline into the hot step()/checkStep() loops.
+func (cx *EvalContext) getOpSpecError(spec *OpSpec) error {
+	opcode := cx.program[cx.pc]
+	if spec.SubOps != nil {
+		if cx.pc+1 >= len(cx.program) {
+			return fmt.Errorf("prefix opcode 0x%02x missing sub-opcode", opcode)
+		}
+		return fmt.Errorf("prefix opcode 0x%02x with improper sub-opcode 0x%02x",
+			opcode, cx.program[cx.pc+1])
+	}
+	return fmt.Errorf("illegal opcode 0x%02x", opcode)
 }
 
 // GetProgram queries for the current program
@@ -1656,22 +1677,9 @@ func (cx *EvalContext) remainingInners() int {
 }
 
 func (cx *EvalContext) step() error {
-	opcode := cx.program[cx.pc]
-	spec := &opsByOpcode[cx.version][opcode]
-
-	if spec.SubOps != nil {
-		if cx.pc+1 >= len(cx.program) {
-			return fmt.Errorf("%3d prefix opcode 0x%02x missing sub-opcode", cx.pc, opcode)
-		}
-		sub := cx.program[cx.pc+1]
-		if int(sub) < len(spec.SubOps) {
-			spec = &spec.SubOps[sub]
-		}
-	}
-
-	// this check also ensures versioning: v2 opcodes are not in opsByOpcode[1] array
+	spec := cx.GetOpSpec()
 	if spec.op == nil {
-		return fmt.Errorf("%3d illegal opcode 0x%02x", cx.pc, opcode)
+		return cx.getOpSpecError(spec)
 	}
 	if (cx.runMode & spec.Modes) == 0 {
 		return fmt.Errorf("%s not allowed in current mode", spec.Name)
@@ -1811,23 +1819,11 @@ func (cx *EvalContext) step() error {
 // unacceptable. TestLinearOpcodes ensures.
 var blankStack = make([]stackValue, 5)
 
-func (cx *EvalContext) checkStep() (int, error) {
+func (cx *EvalContext) checkStep() (cost int, err error) {
 	cx.instructionStarts[cx.pc] = true
-	opcode := cx.program[cx.pc]
-	spec := &opsByOpcode[cx.version][opcode]
-
-	if spec.SubOps != nil {
-		if cx.pc+1 >= len(cx.program) {
-			return 0, fmt.Errorf("prefix opcode 0x%02x missing sub-opcode", opcode)
-		}
-		sub := cx.program[cx.pc+1]
-		if int(sub) < len(spec.SubOps) {
-			spec = &spec.SubOps[sub]
-		}
-	}
-
+	spec := cx.GetOpSpec()
 	if spec.op == nil {
-		return 0, fmt.Errorf("illegal opcode 0x%02x", opcode)
+		return 0, cx.getOpSpecError(spec)
 	}
 	if (cx.runMode & spec.Modes) == 0 {
 		return 0, fmt.Errorf("%s not allowed in current mode", spec.Name)
@@ -1836,14 +1832,13 @@ func (cx *EvalContext) checkStep() (int, error) {
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
 		return 0, fmt.Errorf("program ends without immediate value(s)")
 	}
-	opcost := deets.Cost(cx.program, cx.pc, blankStack)
-	if opcost <= 0 {
+	cost = deets.Cost(cx.program, cx.pc, blankStack)
+	if cost <= 0 {
 		return 0, fmt.Errorf("%s reported non-positive cost", spec.Name)
 	}
 	prevpc := cx.pc
 	if deets.check != nil {
-		err := deets.check(cx)
-		if err != nil {
+		if err = deets.check(cx); err != nil {
 			return 0, err
 		}
 		if cx.nextpc != 0 {
@@ -1863,7 +1858,7 @@ func (cx *EvalContext) checkStep() (int, error) {
 			return 0, fmt.Errorf("branch target %d is not an aligned instruction", pc)
 		}
 	}
-	return opcost, nil
+	return cost, nil
 }
 
 func (cx *EvalContext) ensureStackCap(targetCap int) {
