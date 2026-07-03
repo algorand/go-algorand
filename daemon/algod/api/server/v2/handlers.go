@@ -1175,6 +1175,19 @@ func rejectOnCurveLogicSigPrograms(txgroup []transactions.SignedTxn) error {
 	return nil
 }
 
+func enforcePQAuthorizerCompliance(txgroup []transactions.SignedTxn) error {
+	for txnIdx, stxn := range txgroup {
+		if stxn.PQsig.Blank() || len(stxn.PQsig.PublicKey) == 0 {
+			continue
+		}
+		authorizer := stxn.PQsig.AuthorizerAddress()
+		if !authorizer.IsPQCompliant() {
+			return fmt.Errorf("transaction %d: pq signature authorizer address %s is not compliant", txnIdx, authorizer)
+		}
+	}
+	return nil
+}
+
 // RawTransaction broadcasts a raw transaction to the network.
 // (POST /v2/transactions)
 func (v2 *Handlers) RawTransaction(ctx echo.Context, params model.RawTransactionParams) error {
