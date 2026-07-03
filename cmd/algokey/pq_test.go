@@ -150,8 +150,8 @@ func TestPQSchemeRegistriesConsistent(t *testing.T) {
 	t.Parallel()
 
 	for scheme := range pqSchemeOpsByScheme {
-		_, ok := basics.LookupPQScheme(scheme)
-		require.True(t, ok, "algokey scheme %q missing from basics registry", scheme)
+		_, ok := crypto.LookupPQScheme(scheme)
+		require.True(t, ok, "algokey scheme %q missing from crypto registry", scheme)
 	}
 
 	for _, scheme := range []protocol.PQScheme{protocol.PQSchemeFalcon1024} {
@@ -248,7 +248,7 @@ func TestPQKeyFileRejectsMalformedInputs(t *testing.T) {
 		Entropy: root.entropy[:],
 	}
 	_, err = decodePQPrivateKeyFileBytes(encodePQPayload(pqPrivateKeyMagic, &privatePayload))
-	require.ErrorIs(t, err, basics.ErrPQSchemeNotSupported)
+	require.ErrorIs(t, err, crypto.ErrPQSchemeNotSupported)
 
 	privatePayload.Scheme = protocol.PQSchemeFalcon1024
 	privatePayload.Entropy = privatePayload.Entropy[:len(privatePayload.Entropy)-1]
@@ -332,7 +332,7 @@ func TestPQMnemonicFileRecordsSchemeAndRejectsUnknown(t *testing.T) {
 	badContents := strings.Replace(string(contents), "Scheme: falcon-1024", "Scheme: zz", 1)
 	require.NoError(t, os.WriteFile(badFile, []byte(badContents), 0600))
 	importedKeyfile := filepath.Join(tempDir, "imported.pq")
-	require.ErrorIs(t, runPQImportWithOptions(badFile, importedKeyfile, false), basics.ErrPQSchemeNotSupported)
+	require.ErrorIs(t, runPQImportWithOptions(badFile, importedKeyfile, false), crypto.ErrPQSchemeNotSupported)
 	_, statErr := os.Stat(importedKeyfile)
 	require.ErrorIs(t, statErr, os.ErrNotExist)
 }
@@ -500,7 +500,7 @@ func TestPQSignRejectsUnsupportedMnemonicScheme(t *testing.T) {
 		outfile:  "signed.msgp",
 		salt:     "canonical",
 	})
-	require.ErrorIs(t, err, basics.ErrPQSchemeNotSupported)
+	require.ErrorIs(t, err, crypto.ErrPQSchemeNotSupported)
 }
 
 func TestPQSignRejectsEmptyInputFile(t *testing.T) {

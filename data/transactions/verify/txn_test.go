@@ -443,7 +443,7 @@ func TestTxnValidationPQSigRejectsMalformedProof(t *testing.T) {
 
 	t.Run("signature", func(t *testing.T) {
 		stxn := makePQSignedTxn(t, 3)
-		stxn.PQsig.Signature = make([]byte, transactions.PQMaxSignatureSize+1)
+		stxn.PQsig.Signature = make([]byte, crypto.MaxPQSignatureSize+1)
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 		requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)

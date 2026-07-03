@@ -4286,8 +4286,8 @@ func (z *PQSig) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []b
 				err = msgp.WrapError(err, "struct-from-array", "PublicKey")
 				return
 			}
-			if zb0003 > PQMaxPublicKeySize {
-				err = msgp.ErrOverflow(uint64(zb0003), uint64(PQMaxPublicKeySize))
+			if zb0003 > crypto.MaxPQPublicKeySize {
+				err = msgp.ErrOverflow(uint64(zb0003), uint64(crypto.MaxPQPublicKeySize))
 				return
 			}
 			(*z).PublicKey, bts, err = msgp.ReadBytesBytes(bts, (*z).PublicKey)
@@ -4304,8 +4304,8 @@ func (z *PQSig) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []b
 				err = msgp.WrapError(err, "struct-from-array", "Signature")
 				return
 			}
-			if zb0004 > PQMaxSignatureSize {
-				err = msgp.ErrOverflow(uint64(zb0004), uint64(PQMaxSignatureSize))
+			if zb0004 > crypto.MaxPQSignatureSize {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(crypto.MaxPQSignatureSize))
 				return
 			}
 			(*z).Signature, bts, err = msgp.ReadBytesBytes(bts, (*z).Signature)
@@ -4356,8 +4356,8 @@ func (z *PQSig) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []b
 					err = msgp.WrapError(err, "PublicKey")
 					return
 				}
-				if zb0005 > PQMaxPublicKeySize {
-					err = msgp.ErrOverflow(uint64(zb0005), uint64(PQMaxPublicKeySize))
+				if zb0005 > crypto.MaxPQPublicKeySize {
+					err = msgp.ErrOverflow(uint64(zb0005), uint64(crypto.MaxPQPublicKeySize))
 					return
 				}
 				(*z).PublicKey, bts, err = msgp.ReadBytesBytes(bts, (*z).PublicKey)
@@ -4372,8 +4372,8 @@ func (z *PQSig) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []b
 					err = msgp.WrapError(err, "Signature")
 					return
 				}
-				if zb0006 > PQMaxSignatureSize {
-					err = msgp.ErrOverflow(uint64(zb0006), uint64(PQMaxSignatureSize))
+				if zb0006 > crypto.MaxPQSignatureSize {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(crypto.MaxPQSignatureSize))
 					return
 				}
 				(*z).Signature, bts, err = msgp.ReadBytesBytes(bts, (*z).Signature)
@@ -4415,7 +4415,7 @@ func (z *PQSig) MsgIsZero() bool {
 
 // PQSigMaxSize returns a maximum valid message size for this message type
 func PQSigMaxSize() (s int) {
-	s = 1 + 4 + protocol.PQSchemeMaxSize() + 4 + basics.PQAddressSaltMaxSize() + 3 + msgp.BytesPrefixSize + PQMaxPublicKeySize + 4 + msgp.BytesPrefixSize + PQMaxSignatureSize
+	s = 1 + 4 + protocol.PQSchemeMaxSize() + 4 + basics.PQAddressSaltMaxSize() + 3 + msgp.BytesPrefixSize + crypto.MaxPQPublicKeySize + 4 + msgp.BytesPrefixSize + crypto.MaxPQSignatureSize
 	return
 }
 

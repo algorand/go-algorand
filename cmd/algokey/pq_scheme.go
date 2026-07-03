@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -31,12 +30,13 @@ const pqKeyEntropySize = crypto.DigestSize
 const pqSchemeFalcon1024Name = "falcon-1024"
 
 // pqSchemeOps holds the signing-side, private-key operations for one PQ
-// scheme. The consensus-relevant scheme behavior (public key validation,
-// signature verification, sizes, fees) lives in the basics PQ scheme registry;
-// see basics.LookupPQScheme.
+// scheme. The consensus-relevant scheme behavior (signature verification,
+// sizes) lives in crypto.LookupPQScheme, and fee policy in
+// config.ConsensusParams.PQSchemeFeeContribution.
 type pqSchemeOps interface {
 	deriveSigning(seed []byte) (pqSigningMaterial, error)
 	signTxn(privateKey []byte, txn transactions.Transaction) ([]byte, error)
+	publicKeySize() uint64
 }
 
 var pqSchemeOpsByScheme = map[protocol.PQScheme]pqSchemeOps{
@@ -53,7 +53,7 @@ func parsePQScheme(value string) (protocol.PQScheme, error) {
 
 	var scheme protocol.PQScheme
 	if len(value) != len(scheme) {
-		return protocol.PQScheme{}, fmt.Errorf("%w: %q", basics.ErrPQSchemeNotSupported, value)
+		return protocol.PQScheme{}, fmt.Errorf("%w: %q", crypto.ErrPQSchemeNotSupported, value)
 	}
 	copy(scheme[:], value)
 	return scheme, nil
@@ -89,7 +89,7 @@ func rootMaterialFromEntropy(scheme protocol.PQScheme, entropy crypto.Seed) (pqR
 func derivePQSigningMaterialFromEntropy(scheme protocol.PQScheme, entropy []byte) (pqSigningMaterial, error) {
 	ops, ok := pqSchemeOpsByScheme[scheme]
 	if !ok {
-		return pqSigningMaterial{}, fmt.Errorf("%w: %q", basics.ErrPQSchemeNotSupported, scheme)
+		return pqSigningMaterial{}, fmt.Errorf("%w: %q", crypto.ErrPQSchemeNotSupported, scheme)
 	}
 
 	seed, err := derivePQKeySeed(scheme, entropy)
@@ -142,6 +142,8 @@ func falconPrivateKeyFromBytes(privateKey []byte) (crypto.FalconPrivateKey, erro
 	copy(sk[:], privateKey)
 	return sk, nil
 }
+
+func (falcon1024Ops) publicKeySize() uint64 { return crypto.FalconPublicKeySize }
 
 func (falcon1024Ops) signTxn(privateKey []byte, txn transactions.Transaction) ([]byte, error) {
 	sk, err := falconPrivateKeyFromBytes(privateKey)

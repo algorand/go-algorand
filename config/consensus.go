@@ -706,6 +706,21 @@ func (proto ConsensusParams) PQSchemeEnabled(scheme protocol.PQScheme) bool {
 	}
 }
 
+// PQSchemeFeeContribution is the additional fee factor charged for a transaction
+// authorized with the given PQ scheme, as a fixed-point multiple of the basic
+// min fee (1e6 == one basic min fee). Making it a method (rather than exported
+// constants) leaves room to vary it by proto later without changing call sites.
+func (proto ConsensusParams) PQSchemeFeeContribution(scheme protocol.PQScheme) basics.Micros {
+	switch scheme {
+	case protocol.PQSchemeFalcon1024:
+		return 2e6
+	case protocol.PQSchemeFalcon512:
+		return 1e6 // kept below the Falcon-1024 contribution
+	default:
+		return 0
+	}
+}
+
 // EffectiveKeyDilution returns the key dilution for this account,
 // returning the default key dilution if not explicitly specified.
 func (proto ConsensusParams) EffectiveKeyDilution(kd uint64) uint64 {

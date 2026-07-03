@@ -86,8 +86,8 @@ func TestPQDecodeBoundsFeedSignedTxnMaxSize(t *testing.T) {
 	expectedPQSigMaxSize := 1 +
 		4 + protocol.PQSchemeMaxSize() +
 		4 + basics.PQAddressSaltMaxSize() +
-		3 + msgp.BytesPrefixSize + PQMaxPublicKeySize +
-		4 + msgp.BytesPrefixSize + PQMaxSignatureSize
+		3 + msgp.BytesPrefixSize + crypto.MaxPQPublicKeySize +
+		4 + msgp.BytesPrefixSize + crypto.MaxPQSignatureSize
 	require.Equal(t, expectedPQSigMaxSize, PQSigMaxSize())
 
 	// PQSigMaxSize is part of the network-facing SignedTxn bound. Growing
@@ -100,13 +100,6 @@ func TestPQDecodeBoundsFeedSignedTxnMaxSize(t *testing.T) {
 		4 + TransactionMaxSize() +
 		5 + basics.AddressMaxSize()
 	require.Equal(t, expectedSignedTxnMaxSize, SignedTxnMaxSize())
-}
-
-func TestPQDecodeBoundsDeriveFromRegistry(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	require.Equal(t, int(basics.MaxPQPublicKeySize()), PQMaxPublicKeySize)
-	require.Equal(t, int(basics.MaxPQSignatureSize()), PQMaxSignatureSize)
 }
 
 func TestPQSigBlank(t *testing.T) {
@@ -181,13 +174,13 @@ func TestPQSigValidateEnvelope(t *testing.T) {
 
 	disabledProto := fixture.proto
 	disabledProto.EnablePQSchemeFalcon1024 = false
-	require.ErrorIs(t, fixture.pqSig.ValidateScheme(disabledProto), basics.ErrPQSchemeNotEnabled)
-	require.ErrorIs(t, fixture.pqSig.ValidateEnvelope(disabledProto, fixture.authorizer), basics.ErrPQSchemeNotEnabled)
+	require.ErrorIs(t, fixture.pqSig.ValidateScheme(disabledProto), crypto.ErrPQSchemeNotEnabled)
+	require.ErrorIs(t, fixture.pqSig.ValidateEnvelope(disabledProto, fixture.authorizer), crypto.ErrPQSchemeNotEnabled)
 
 	unknownScheme := fixture.pqSig
 	unknownScheme.Scheme = protocol.PQScheme{'x', '1'}
-	require.ErrorIs(t, unknownScheme.ValidateScheme(fixture.proto), basics.ErrPQSchemeNotSupported)
-	require.ErrorIs(t, unknownScheme.ValidateEnvelope(fixture.proto, unknownScheme.AuthorizerAddress()), basics.ErrPQSchemeNotSupported)
+	require.ErrorIs(t, unknownScheme.ValidateScheme(fixture.proto), crypto.ErrPQSchemeNotSupported)
+	require.ErrorIs(t, unknownScheme.ValidateEnvelope(fixture.proto, unknownScheme.AuthorizerAddress()), crypto.ErrPQSchemeNotSupported)
 
 	malformedPublicKey := fixture.pqSig
 	malformedPublicKey.PublicKey = malformedPublicKey.PublicKey[:len(malformedPublicKey.PublicKey)-1]
@@ -246,7 +239,7 @@ func TestPQSigVerifyChecksConsensusParams(t *testing.T) {
 
 	disabledProto := fixture.proto
 	disabledProto.EnablePQSchemeFalcon1024 = false
-	require.ErrorIs(t, fixture.pqSig.Verify(disabledProto, fixture.txn, fixture.authorizer), basics.ErrPQSchemeNotEnabled)
+	require.ErrorIs(t, fixture.pqSig.Verify(disabledProto, fixture.txn, fixture.authorizer), crypto.ErrPQSchemeNotEnabled)
 }
 
 func TestPQSigVerifyRejectsBlank(t *testing.T) {
@@ -277,7 +270,7 @@ func TestPQSigVerifyRejectsUnsupportedScheme(t *testing.T) {
 	pqSig.Scheme = protocol.PQScheme{'x', '1'}
 	pqSig.Signature = []byte{1}
 
-	require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, pqSig.AuthorizerAddress()), basics.ErrPQSchemeNotSupported)
+	require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, pqSig.AuthorizerAddress()), crypto.ErrPQSchemeNotSupported)
 }
 
 func TestPQSigVerifyRejectsAuthorizerMismatch(t *testing.T) {
