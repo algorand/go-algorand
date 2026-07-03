@@ -32,5 +32,5 @@ type PQPublicKeyPayload struct {
 
 	Scheme    protocol.PQScheme `codec:"scheme"`
 	Salt      uint8             `codec:"salt"`
-	PublicKey []byte            `codec:"public-key,allocbound=FalconPublicKeySize"`
+	PublicKey []byte            `codec:"public-key,allocbound=MaxPQPublicKeySize"`
 }

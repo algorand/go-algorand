@@ -3321,8 +3321,8 @@ func (z *PQPublicKeyPayload) UnmarshalMsgWithState(bts []byte, st msgp.Unmarshal
 				err = msgp.WrapError(err, "struct-from-array", "PublicKey")
 				return
 			}
-			if zb0003 > FalconPublicKeySize {
-				err = msgp.ErrOverflow(uint64(zb0003), uint64(FalconPublicKeySize))
+			if zb0003 > MaxPQPublicKeySize {
+				err = msgp.ErrOverflow(uint64(zb0003), uint64(MaxPQPublicKeySize))
 				return
 			}
 			(*z).PublicKey, bts, err = msgp.ReadBytesBytes(bts, (*z).PublicKey)
@@ -3373,8 +3373,8 @@ func (z *PQPublicKeyPayload) UnmarshalMsgWithState(bts []byte, st msgp.Unmarshal
 					err = msgp.WrapError(err, "PublicKey")
 					return
 				}
-				if zb0004 > FalconPublicKeySize {
-					err = msgp.ErrOverflow(uint64(zb0004), uint64(FalconPublicKeySize))
+				if zb0004 > MaxPQPublicKeySize {
+					err = msgp.ErrOverflow(uint64(zb0004), uint64(MaxPQPublicKeySize))
 					return
 				}
 				(*z).PublicKey, bts, err = msgp.ReadBytesBytes(bts, (*z).PublicKey)
@@ -3416,7 +3416,7 @@ func (z *PQPublicKeyPayload) MsgIsZero() bool {
 
 // PQPublicKeyPayloadMaxSize returns a maximum valid message size for this message type
 func PQPublicKeyPayloadMaxSize() (s int) {
-	s = 1 + 7 + protocol.PQSchemeMaxSize() + 5 + msgp.Uint8Size + 11 + msgp.BytesPrefixSize + FalconPublicKeySize
+	s = 1 + 7 + protocol.PQSchemeMaxSize() + 5 + msgp.Uint8Size + 11 + msgp.BytesPrefixSize + MaxPQPublicKeySize
 	return
 }
 
