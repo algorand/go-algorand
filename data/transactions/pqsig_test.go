@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/msgp/msgp"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
@@ -89,6 +90,15 @@ func TestPQDecodeBoundsFeedSignedTxnMaxSize(t *testing.T) {
 		3 + msgp.BytesPrefixSize + crypto.MaxPQPublicKeySize +
 		4 + msgp.BytesPrefixSize + crypto.MaxPQSignatureSize
 	require.Equal(t, expectedPQSigMaxSize, PQSigMaxSize())
+
+	expectedLogicSigMaxSize := 1 +
+		4 + msgp.ArrayHeaderSize + bounds.MaxLogicSigMaxSize +
+		2 + msgp.BytesPrefixSize + bounds.MaxLogicSigMaxSize +
+		6 + crypto.MultisigSigMaxSize() +
+		5 + crypto.MultisigSigMaxSize() +
+		6 + expectedPQSigMaxSize +
+		4 + crypto.SignatureMaxSize()
+	require.Equal(t, expectedLogicSigMaxSize, LogicSigMaxSize())
 
 	// PQSigMaxSize is part of the network-facing SignedTxn bound. Growing
 	// PQMax* intentionally increases PQSigMaxSize and therefore SignedTxnMaxSize.

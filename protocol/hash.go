@@ -61,6 +61,7 @@ const (
 	Payload                          HashID = "PL"
 	PostQuantumAddress               HashID = "PQA"
 	PostQuantumKey                   HashID = "PQK"
+	PostQuantumDelegatedProgram      HashID = "PQProgram"
 	Program                          HashID = "Program"
 	ProgramData                      HashID = "ProgData"
 	ProposerSeed                     HashID = "PS"
