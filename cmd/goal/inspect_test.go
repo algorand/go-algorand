@@ -103,4 +103,26 @@ func TestInspect(t *testing.T) {
 	}
 	_, err = inspectTxn(pqSigned)
 	require.NoError(t, err)
+
+	var delegated transactions.SignedTxn
+	delegated.Txn.Type = protocol.PaymentTx
+	crypto.RandBytes(delegated.Txn.Sender[:])
+	delegated.Lsig.Logic = []byte{1}
+	delegated.Lsig.LMsig.Version = uint8(crypto.RandUint64())
+	delegated.Lsig.LMsig.Threshold = uint8(crypto.RandUint64())
+	delegated.Lsig.LMsig.Subsigs = make([]crypto.MultisigSubsig, 1)
+	crypto.RandBytes(delegated.Lsig.LMsig.Subsigs[0].Key[:])
+	crypto.RandBytes(delegated.Lsig.LMsig.Subsigs[0].Sig[:])
+	delegated.Lsig.PQsig = transactions.PQSig{
+		Scheme:    protocol.PQSchemeFalcon1024,
+		Salt:      2,
+		PublicKey: []byte{7, 8, 9},
+		Signature: []byte{10, 11, 12},
+	}
+	sti, err := inspectTxn(delegated)
+	require.NoError(t, err)
+	encoded := string(protocol.EncodeJSON(sti))
+	require.Contains(t, encoded, `"lmsig"`)
+	require.Contains(t, encoded, `"pqsig"`)
+	require.Contains(t, encoded, `"sch": "ZjE="`)
 }
