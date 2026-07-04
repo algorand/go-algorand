@@ -814,14 +814,14 @@ func (cx *EvalContext) GetOpSpec() *OpSpec {
 // opcode. It is kept out of GetOpSpec, and called only on the error path (when
 // the returned spec has op == nil), so that GetOpSpec stays cheap enough to
 // inline into the hot step()/checkStep() loops.
-func (cx *EvalContext) getOpSpecError(spec *OpSpec) error {
-	opcode := cx.program[cx.pc]
+func getOpSpecError(spec *OpSpec, program []byte, pc int) error {
+	opcode := program[pc]
 	if spec.SubOps != nil {
-		if cx.pc+1 >= len(cx.program) {
+		if pc+1 >= len(program) {
 			return fmt.Errorf("prefix opcode 0x%02x missing sub-opcode", opcode)
 		}
 		return fmt.Errorf("prefix opcode 0x%02x with improper sub-opcode 0x%02x",
-			opcode, cx.program[cx.pc+1])
+			opcode, program[pc+1])
 	}
 	return fmt.Errorf("illegal opcode 0x%02x", opcode)
 }
@@ -1679,7 +1679,7 @@ func (cx *EvalContext) remainingInners() int {
 func (cx *EvalContext) step() error {
 	spec := cx.GetOpSpec()
 	if spec.op == nil {
-		return cx.getOpSpecError(spec)
+		return getOpSpecError(spec, cx.program, cx.pc)
 	}
 	if (cx.runMode & spec.Modes) == 0 {
 		return fmt.Errorf("%s not allowed in current mode", spec.Name)
@@ -1823,7 +1823,7 @@ func (cx *EvalContext) checkStep() (cost int, err error) {
 	cx.instructionStarts[cx.pc] = true
 	spec := cx.GetOpSpec()
 	if spec.op == nil {
-		return 0, cx.getOpSpecError(spec)
+		return 0, getOpSpecError(spec, cx.program, cx.pc)
 	}
 	if (cx.runMode & spec.Modes) == 0 {
 		return 0, fmt.Errorf("%s not allowed in current mode", spec.Name)

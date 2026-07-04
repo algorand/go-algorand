@@ -2148,7 +2148,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 			ops.Program[0] = 0x01 // version
 			ops.Program[1] = 0xFF // first opcode
 			dis, err = Disassemble(ops.Program)
-			require.ErrorContains(t, err, "invalid opcode", dis)
+			require.ErrorContains(t, err, "illegal opcode 0xff", dis)
 
 			source = "int 0; int 0\nasset_holding_get AssetFrozen"
 			ops = testProg(t, source, v)
@@ -4106,10 +4106,10 @@ func TestDisassembleBadMultiOp(t *testing.T) {
 	t.Parallel()
 
 	_, err := Disassemble([]byte{foreignBoxVersion, 0xd4})
-	require.ErrorContains(t, err, "invalid opcode d4")
+	require.ErrorContains(t, err, "0xd4 missing sub-opcode")
 
 	_, err = Disassemble([]byte{foreignBoxVersion, 0xd4, 0x00})
-	require.ErrorContains(t, err, "invalid opcode d4")
+	require.ErrorContains(t, err, "0xd4 with improper sub-opcode")
 
 	dis, err := Disassemble([]byte{foreignBoxVersion, 0xd4, 0x01})
 	require.NoError(t, err)

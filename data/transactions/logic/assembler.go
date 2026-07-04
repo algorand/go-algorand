@@ -3323,7 +3323,7 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 		op := opsByOpcode[version][program[dis.pc]]
 		if op.SubOps != nil && dis.pc+1 < len(program) {
 			sub := program[dis.pc+1]
-			if int(sub) < len(op.SubOps) {
+			if int(sub) < len(op.SubOps) && op.SubOps[sub].op != nil {
 				op = op.SubOps[sub]
 			}
 		}
@@ -3332,11 +3332,10 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 		}
 		if op.Name == "" {
 			ds.pcOffset = append(ds.pcOffset, PCOffset{dis.pc, out.Len()})
-			msg := fmt.Sprintf("invalid opcode %02x at pc=%d", program[dis.pc], dis.pc)
-			out.WriteString(msg)
+			err = getOpSpecError(&op, program, dis.pc)
+			out.WriteString(err.Error())
 			out.WriteRune('\n')
 			text = out.String()
-			err = errors.New(msg)
 			return
 		}
 

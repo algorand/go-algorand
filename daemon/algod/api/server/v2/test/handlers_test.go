@@ -1973,7 +1973,7 @@ func TestTealDisassemble(t *testing.T) {
 
 	// Test bad program.
 	badProgram := []byte{1, 99}
-	tealDisassembleTest(t, badProgram, 400, "invalid opcode", true)
+	tealDisassembleTest(t, badProgram, 400, "illegal opcode", true)
 
 	// Create a program with MaxTealSourceBytes+1 bytes
 	// This should fail inside the handler when reading the bytes from the request body.
