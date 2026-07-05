@@ -288,15 +288,24 @@ func boxCreateImpl(cx *EvalContext, appID basics.AppIndex) error {
 	return err
 }
 
+// popDeepAppID removes the target app id that a foreign box opcode carries as
+// its deepest (first) argument, below `depth` other operands, and returns it.
+// Removing it leaves a stack identical to the non-foreign variant, letting the
+// shared boxXxxImpl helpers (which index from the top of the stack) run unchanged.
+func popDeepAppID(cx *EvalContext, depth int) basics.AppIndex {
+	deep := len(cx.Stack) - 1 - depth
+	appID := basics.AppIndex(cx.Stack[deep].Uint)
+	copy(cx.Stack[deep:], cx.Stack[deep+1:])
+	cx.Stack = cx.Stack[:len(cx.Stack)-1]
+	return appID
+}
+
 func opBoxCreate(cx *EvalContext) error {
 	return boxCreateImpl(cx, cx.appID)
 }
 
 func opAppBoxCreate(cx *EvalContext) error {
-	last := len(cx.Stack) - 1 // appID
-	appID := basics.AppIndex(cx.Stack[last].Uint)
-	cx.Stack = cx.Stack[:last]
-	return boxCreateImpl(cx, appID)
+	return boxCreateImpl(cx, popDeepAppID(cx, 2)) // name, size
 }
 
 func boxExtractImpl(cx *EvalContext, appID basics.AppIndex) error {
@@ -330,10 +339,7 @@ func opBoxExtract(cx *EvalContext) error {
 }
 
 func opAppBoxExtract(cx *EvalContext) error {
-	last := len(cx.Stack) - 1 // appID
-	appID := basics.AppIndex(cx.Stack[last].Uint)
-	cx.Stack = cx.Stack[:last]
-	return boxExtractImpl(cx, appID)
+	return boxExtractImpl(cx, popDeepAppID(cx, 3)) // name, start, length
 }
 
 func boxReplaceImpl(cx *EvalContext, appID basics.AppIndex) error {
@@ -369,10 +375,7 @@ func opBoxReplace(cx *EvalContext) error {
 }
 
 func opAppBoxReplace(cx *EvalContext) error {
-	last := len(cx.Stack) - 1 // appID
-	appID := basics.AppIndex(cx.Stack[last].Uint)
-	cx.Stack = cx.Stack[:last]
-	return boxReplaceImpl(cx, appID)
+	return boxReplaceImpl(cx, popDeepAppID(cx, 3)) // name, start, replacement
 }
 
 func boxSpliceImpl(cx *EvalContext, appID basics.AppIndex) error {
@@ -406,10 +409,7 @@ func opBoxSplice(cx *EvalContext) error {
 }
 
 func opAppBoxSplice(cx *EvalContext) error {
-	last := len(cx.Stack) - 1 // appID
-	appID := basics.AppIndex(cx.Stack[last].Uint)
-	cx.Stack = cx.Stack[:last]
-	return boxSpliceImpl(cx, appID)
+	return boxSpliceImpl(cx, popDeepAppID(cx, 4)) // name, start, length, replacement
 }
 
 func boxDelImpl(cx *EvalContext, appID basics.AppIndex) error {
@@ -440,10 +440,7 @@ func opBoxDel(cx *EvalContext) error {
 }
 
 func opAppBoxDel(cx *EvalContext) error {
-	last := len(cx.Stack) - 1 // appID
-	appID := basics.AppIndex(cx.Stack[last].Uint)
-	cx.Stack = cx.Stack[:last]
-	return boxDelImpl(cx, appID)
+	return boxDelImpl(cx, popDeepAppID(cx, 1)) // name
 }
 
 func boxResizeImpl(cx *EvalContext, appID basics.AppIndex) error {
@@ -485,10 +482,7 @@ func opBoxResize(cx *EvalContext) error {
 }
 
 func opAppBoxResize(cx *EvalContext) error {
-	last := len(cx.Stack) - 1 // appID
-	appID := basics.AppIndex(cx.Stack[last].Uint)
-	cx.Stack = cx.Stack[:last]
-	return boxResizeImpl(cx, appID)
+	return boxResizeImpl(cx, popDeepAppID(cx, 2)) // name, size
 }
 
 func boxLenImpl(cx *EvalContext, appID basics.AppIndex) error {
@@ -513,10 +507,7 @@ func opBoxLen(cx *EvalContext) error {
 }
 
 func opAppBoxLen(cx *EvalContext) error {
-	last := len(cx.Stack) - 1 // appID
-	appID := basics.AppIndex(cx.Stack[last].Uint)
-	cx.Stack = cx.Stack[:last]
-	return boxLenImpl(cx, appID)
+	return boxLenImpl(cx, popDeepAppID(cx, 1)) // name
 }
 
 func boxGetImpl(cx *EvalContext, appID basics.AppIndex) error {
@@ -544,10 +535,7 @@ func opBoxGet(cx *EvalContext) error {
 }
 
 func opAppBoxGet(cx *EvalContext) error {
-	last := len(cx.Stack) - 1 // appID
-	appID := basics.AppIndex(cx.Stack[last].Uint)
-	cx.Stack = cx.Stack[:last]
-	return boxGetImpl(cx, appID)
+	return boxGetImpl(cx, popDeepAppID(cx, 1)) // name
 }
 
 func boxPutImpl(cx *EvalContext, appID basics.AppIndex) error {
@@ -588,10 +576,7 @@ func opBoxPut(cx *EvalContext) error {
 }
 
 func opAppBoxPut(cx *EvalContext) error {
-	last := len(cx.Stack) - 1 // appID
-	appID := basics.AppIndex(cx.Stack[last].Uint)
-	cx.Stack = cx.Stack[:last]
-	return boxPutImpl(cx, appID)
+	return boxPutImpl(cx, popDeepAppID(cx, 2)) // name, value
 }
 
 // spliceCarefully is used to make a NEW byteslice copy of original, with

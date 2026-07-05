@@ -3368,16 +3368,16 @@ func TestReturnTypes(t *testing.T) {
 		"box_create": "int 9; +; box_create",                 // make the size match the 10 in CreateBox
 		"box_put":    "byte 0x010203040506; concat; box_put", // make the 4 byte arg into a 10
 
-		// app_box_* need explicit app ID (300 = current app) and matching box name/size; appID is last
-		"app_box_create":  ": byte 0x33; int 10; int 300; app_box_create",
-		"app_box_extract": ": byte 0x33; int 0; int 4; int 300; app_box_extract",
-		"app_box_replace": ": byte 0x33; int 0; byte 0x01020304; int 300; app_box_replace",
-		"app_box_del":     ": byte 0x33; int 300; app_box_del",
-		"app_box_len":     ": byte 0x33; int 300; app_box_len",
-		"app_box_get":     ": byte 0x33; int 300; app_box_get",
-		"app_box_put":     ": byte 0x33; byte 0x01020304050607080910; int 300; app_box_put",
-		"app_box_splice":  ": byte 0x33; int 0; int 4; byte 0x01020304; int 300; app_box_splice",
-		"app_box_resize":  ": byte 0x33; int 5; int 300; app_box_resize",
+		// app_box_* need explicit app ID (300 = current app) and matching box name/size; appID is first (deepest)
+		"app_box_create":  ": int 300; byte 0x33; int 10; app_box_create",
+		"app_box_extract": ": int 300; byte 0x33; int 0; int 4; app_box_extract",
+		"app_box_replace": ": int 300; byte 0x33; int 0; byte 0x01020304; app_box_replace",
+		"app_box_del":     ": int 300; byte 0x33; app_box_del",
+		"app_box_len":     ": int 300; byte 0x33; app_box_len",
+		"app_box_get":     ": int 300; byte 0x33; app_box_get",
+		"app_box_put":     ": int 300; byte 0x33; byte 0x01020304050607080910; app_box_put",
+		"app_box_splice":  ": int 300; byte 0x33; int 0; int 4; byte 0x01020304; app_box_splice",
+		"app_box_resize":  ": int 300; byte 0x33; int 5; app_box_resize",
 
 		// mimc requires an input size multiple of 32 bytes.
 		"mimc": ": byte 0x0000000000000000000000000000000000000000000000000000000000000001; mimc BN254Mp110",

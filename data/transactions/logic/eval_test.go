@@ -3328,7 +3328,7 @@ func TestEvalBadSubOp(t *testing.T) {
 	t.Parallel()
 	for v := uint64(foreignBoxVersion); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, `byte 0xaabbcc; int 1; app_box_len`, v)
+			ops := testProg(t, `int 1; byte 0xaabbcc; app_box_len`, v)
 			// cut last byte, leaving only the app_box_len initial opcode, no subop
 			testLogicBytes(t, ops.Program[:len(ops.Program)-1], nil,
 				"missing sub-opcode", "missing sub-opcode")

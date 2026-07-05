@@ -170,17 +170,18 @@ func opMatchStackChange(cx *EvalContext) (deletions, additions int) {
 
 // appBoxExplain registers a stateChangeExplain for a box opcode. A box opcode's
 // effect on app state is fully described by the state operation (read/write/
-// delete) and whether it targets a foreign app. In every box opcode the box name
-// is the deepest operand, so it sits at the bottom of the opcode's arguments no
-// matter what else the opcode pops. The foreign (app_box_*) variants take the
-// target app as their top (last) argument; non-foreign variants operate on
-// cx.appID.
+// delete) and whether it targets a foreign app. The foreign (app_box_*) variants
+// take the target app as their deepest (first) argument, so the box name sits
+// just above it; non-foreign variants operate on cx.appID and the box name is the
+// deepest operand.
 func (p Proto) appBoxExplain(op AppStateOpEnum, foreign bool) Proto {
 	return p.appStateExplain(func(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
-		name := len(cx.Stack) - len(cx.GetOpSpec().Arg.Types)
+		base := len(cx.Stack) - len(cx.GetOpSpec().Arg.Types)
 		appID := cx.appID
+		name := base
 		if foreign {
-			appID = basics.AppIndex(cx.Stack[len(cx.Stack)-1].Uint)
+			appID = basics.AppIndex(cx.Stack[base].Uint) // deepest arg
+			name = base + 1                              // just above appID
 		}
 		return BoxState, op, appID, basics.Address{}, string(cx.Stack[name].Bytes)
 	})

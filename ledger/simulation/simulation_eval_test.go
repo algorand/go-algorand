@@ -5485,9 +5485,9 @@ int 1`,
 		ApprovalProgram: `#pragma version 13
 txn ApplicationID
 bz end
+txn Applications 1
 byte "b"
 byte "WWWW"
-txn Applications 1
 app_box_put
 end:
 int 1`,

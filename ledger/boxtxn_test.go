@@ -980,12 +980,12 @@ var familyForeign = main(`
 
 // crossWriter (app C) writes box "b" owned by Applications 1 (app A).
 var crossWriter = main(`
-  byte "b"; int 0; byte "CC"; txn Applications 1; app_box_replace
+  txn Applications 1; byte "b"; int 0; byte "CC"; app_box_replace
 `)
 
 // crossReader (app C) reads box "b" owned by Applications 1 (app A).
 var crossReader = main(`
-  byte "b"; txn Applications 1; app_box_get; assert; pop
+  txn Applications 1; byte "b"; app_box_get; assert; pop
 `)
 
 func TestFamilyBoxReentrancy(t *testing.T) {
@@ -1168,15 +1168,15 @@ func TestForeignBoxAccess(t *testing.T) {
 // "del" takes just the name.
 var familyBoxMBRApp = main(`
   txn ApplicationArgs 0; byte "create"; ==; bz tryresize
-    txn ApplicationArgs 1; txn ApplicationArgs 2; btoi; txn Applications 1; app_box_create; assert
+    txn Applications 1; txn ApplicationArgs 1; txn ApplicationArgs 2; btoi; app_box_create; assert
     b done
   tryresize:
   txn ApplicationArgs 0; byte "resize"; ==; bz trydel
-    txn ApplicationArgs 1; txn ApplicationArgs 2; btoi; txn Applications 1; app_box_resize
+    txn Applications 1; txn ApplicationArgs 1; txn ApplicationArgs 2; btoi; app_box_resize
     b done
   trydel:
   txn ApplicationArgs 0; byte "del"; ==; bz done
-    txn ApplicationArgs 1; txn Applications 1; app_box_del; assert
+    txn Applications 1; txn ApplicationArgs 1; app_box_del; assert
   done:
 `)
 
