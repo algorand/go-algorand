@@ -1127,8 +1127,8 @@ func TestForeignBoxAccess(t *testing.T) {
 			}
 		}
 
-		const noRead = "does not permit foreign reads"
-		const noWrite = "does not permit foreign writes"
+		const noRead = "may not read"
+		const noWrite = "may not write"
 
 		// No flags: a foreign app (whether in family or not) may not read or write the box.
 		dl.txn(access(reader, noFlags), noRead)

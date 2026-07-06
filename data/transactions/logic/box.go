@@ -45,7 +45,7 @@ const (
 // boxes. For another app's box, reads require ForeignBoxReads or FamilyBoxAccess
 // (with the same creator); writes require FamilyBoxAccess and the same creator.
 func (cx *EvalContext) authorizeBoxAccess(ownerAppID basics.AppIndex, operation BoxOperation) error {
-	params, ownerCreator, err := cx.Ledger.AppParams(ownerAppID)
+	ownerParams, ownerCreator, err := cx.Ledger.AppParams(ownerAppID)
 	if err != nil {
 		return err
 	}
@@ -55,12 +55,12 @@ func (cx *EvalContext) authorizeBoxAccess(ownerAppID basics.AppIndex, operation 
 	var familyShared bool
 	if ownerAppID == cx.appID {
 		// An app may always access its own boxes.
-		familyShared = params.FamilyBoxAccess
+		familyShared = ownerParams.FamilyBoxAccess
 	} else {
 		// Resolve whether the calling app shares a creator with the owner, but
 		// only pay the cost of the lookup when FamilyBoxAccess is set.
 		inFamily := false
-		if params.FamilyBoxAccess {
+		if ownerParams.FamilyBoxAccess {
 			callerCreator, err := cx.getCreatorAddress()
 			if err != nil {
 				return err
@@ -70,15 +70,31 @@ func (cx *EvalContext) authorizeBoxAccess(ownerAppID basics.AppIndex, operation 
 
 		isRead := operation == BoxReadOperation
 		switch {
-		case isRead && params.ForeignBoxReads:
+		case isRead && ownerParams.ForeignBoxReads:
 			// any app with a box reference may read
 		case inFamily:
 			// inFamily only set to true if FamilyBoxAccess
 		default:
-			if isRead {
-				return fmt.Errorf("app %d does not permit foreign reads of its boxes", ownerAppID)
+			/* We have a denied operation. For better errors, resolve `inFamily`
+			   now, even if we need the call we skipped above. */
+			if !ownerParams.FamilyBoxAccess {
+				callerCreator, err := cx.getCreatorAddress()
+				if err != nil {
+					return err
+				}
+				inFamily = callerCreator == ownerCreator
 			}
-			return fmt.Errorf("app %d does not permit foreign writes to its boxes", ownerAppID)
+
+			op := "write"
+			if isRead {
+				op = "read"
+			}
+			caller := "foreign"
+			if inFamily {
+				caller = "family"
+			}
+			return fmt.Errorf("%s app %d may not %s box of %d",
+				caller, cx.appID, op, ownerAppID)
 		}
 		familyShared = inFamily
 	}
