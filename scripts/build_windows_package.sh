@@ -64,7 +64,10 @@ mkdir -p "${PKG_ROOT}"
 
 echo "Staging Windows package ${PKG_NAME} from ${GOBIN}"
 
-# Go binaries get a .exe suffix on Windows.
+# Go binaries get a .exe suffix on Windows. They live under bin/ to mirror the
+# node_* tarball layout on Linux/macOS (bin/, data/, genesis/).
+BIN_DIR="${PKG_ROOT}/bin"
+mkdir -p "${BIN_DIR}"
 node_bins=(algod algocfg algoh algokey algotmpl diagcfg goal kmd)
 devtools_bins=(algons carpenter coroner dispenser msgpacktool netgoal nodecfg pingpong loadgenerator dsign catchpointdump block-generator tealdbg)
 
@@ -74,7 +77,7 @@ for bin in "${node_bins[@]}" "${devtools_bins[@]}"; do
         echo "Error: expected binary not found: ${src}"
         exit 1
     fi
-    cp "${src}" "${PKG_ROOT}/"
+    cp "${src}" "${BIN_DIR}/"
 done
 
 # node_exporter is intentionally omitted: the upstream Windows build is an empty
