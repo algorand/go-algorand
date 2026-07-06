@@ -432,6 +432,10 @@ func argEnums(name string, version uint64) ([]string, []string) {
 		return fieldsAndTypes(logic.AssetParamsFields, version)
 	case "app_params_get":
 		return fieldsAndTypes(logic.AppParamsFields, version)
+	case "app_params_set":
+		// app_params_set does not *return* a type depending on its immediate. It
+		// *takes* it, like itxn_field. ArgEnumTypes is overloaded for that meaning.
+		return fieldsAndTypes(logic.AppParamsSettableFields, version)
 	case "acct_params_get":
 		return fieldsAndTypes(logic.AcctParamsFields, version)
 	case "block":

@@ -423,11 +423,37 @@ func txnaFieldNames() []string {
 	return names
 }
 
+// itxnSettableFieldSpec views a txn field through itxn_field's lens: Version()
+// reports when the field became *settable* (itxVersion) rather than gettable, so
+// doc generation gates and presents fields by the version they can actually be
+// set. This mirrors appParamsSetFieldSpec for app_params_set.
+type itxnSettableFieldSpec struct {
+	txnFieldSpec
+}
+
+func (fs itxnSettableFieldSpec) OpVersion() uint64 {
+	return 5 // itxn_field's introduction
+}
+
+func (fs itxnSettableFieldSpec) Version() uint64 {
+	return fs.itxVersion
+}
+
+// itxnSettableNameSpecMap yields the settable view of a txn field, by name.
+type itxnSettableNameSpecMap map[string]itxnSettableFieldSpec
+
+func (s itxnSettableNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+var itxnSettableFieldSpecByName = make(itxnSettableNameSpecMap, len(TxnFieldNames))
+
 // ItxnSettableFields collects info for itxn_field opcode
 var ItxnSettableFields = FieldGroup{
 	"itxn_field", "",
 	itxnSettableFieldNames(),
-	txnFieldSpecByName,
+	itxnSettableFieldSpecByName,
 }
 
 // itxnSettableFieldNames are txn field names that can be set by
@@ -1514,6 +1540,57 @@ var AppParamsFields = FieldGroup{
 	appParamsFieldSpecByName,
 }
 
+// appParamsSetFieldSpec views an app params field through app_params_set's lens:
+// Version() reports when the field became *settable* rather than gettable, and
+// OpVersion() is app_params_set's own introduction. This lets doc generation
+// present the settable fields and their versions, the way ItxnSettableFields
+// does for itxn_field.
+type appParamsSetFieldSpec struct {
+	appParamsFieldSpec
+}
+
+func (fs appParamsSetFieldSpec) OpVersion() uint64 {
+	return foreignBoxVersion
+}
+
+func (fs appParamsSetFieldSpec) Version() uint64 {
+	return fs.setVersion
+}
+
+// appParamsSetNameSpecMap yields the settable view of a field, by name.
+type appParamsSetNameSpecMap map[string]appParamsSetFieldSpec
+
+func (s appParamsSetNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+var appParamsSetFieldSpecByName = make(appParamsSetNameSpecMap, len(appParamsFieldNames))
+
+// AppParamsSettableFields describes the fields app_params_set can set. Like
+// itxn_field's ItxnSettableFields, its Names are "sparse": only settable fields
+// are named, so non-settable ones are hidden from docs and disassembly.
+var AppParamsSettableFields = FieldGroup{
+	"app_params_set", "Fields",
+	appParamsSettableFieldNames(),
+	appParamsSetFieldSpecByName,
+}
+
+// appParamsSettableFieldNames are the app params field names that can be set by
+// app_params_set. Return value is a "sparse" slice: settable fields appear at
+// their usual index, non-settable slots are set to "".
+func appParamsSettableFieldNames() []string {
+	names := make([]string, len(appParamsFieldSpecs))
+	for i, fs := range appParamsFieldSpecs {
+		if fs.setVersion == 0 {
+			names[i] = ""
+		} else {
+			names[i] = fs.field.String()
+		}
+	}
+	return names
+}
+
 // AcctParamsField is an enum for `acct_params_get` opcode
 type AcctParamsField int
 
@@ -1711,6 +1788,7 @@ func init() {
 		equal(int(s.field), i)
 		TxnFieldNames[s.field] = s.field.String()
 		txnFieldSpecByName[s.field.String()] = s
+		itxnSettableFieldSpecByName[s.field.String()] = itxnSettableFieldSpec{s}
 	}
 
 	equal(len(globalFieldSpecs), len(GlobalFieldNames))
@@ -1795,6 +1873,7 @@ func init() {
 		equal(int(s.field), i)
 		appParamsFieldNames[i] = s.field.String()
 		appParamsFieldSpecByName[s.field.String()] = s
+		appParamsSetFieldSpecByName[s.field.String()] = appParamsSetFieldSpec{s}
 	}
 
 	equal(len(acctParamsFieldSpecs), len(acctParamsFieldNames))

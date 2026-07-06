@@ -989,6 +989,35 @@ func TestAssembleTxna(t *testing.T) {
 	testLine(t, "itxn_field Accounts 0", 5, "itxn_field expects 1 ...")
 }
 
+func TestAsmAppParamsSet(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// The settable fields assemble cleanly.
+	testProg(t, "int 1; app_params_set AppForeignBoxReads", AssemblerMaxVersion)
+	testProg(t, "int 1; app_params_set AppFamilyBoxAccess", AssemblerMaxVersion)
+
+	// Fields that app_params_get can read, but which are not settable, are
+	// rejected as such (they are known fields, just read-only).
+	for _, field := range []string{
+		"AppApprovalProgram", "AppClearStateProgram", "AppGlobalNumUint",
+		"AppExtraProgramPages", "AppCreator", "AppAddress", "AppVersion",
+		"AppSizeSponsor",
+	} {
+		testLine(t, "app_params_set "+field, AssemblerMaxVersion,
+			"app_params_set \""+field+"\" is not settable.")
+	}
+
+	// A name that is no field at all is reported as unknown, not unsettable.
+	testLine(t, "app_params_set NoSuchField", AssemblerMaxVersion,
+		"app_params_set unknown field: \"NoSuchField\"")
+
+	// Wrong number of immediates.
+	testLine(t, "app_params_set", AssemblerMaxVersion, "app_params_set expects 1 immediate argument")
+	testLine(t, "app_params_set AppForeignBoxReads 1", AssemblerMaxVersion,
+		"app_params_set expects 1 immediate argument")
+}
+
 func TestAssembleGlobal(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

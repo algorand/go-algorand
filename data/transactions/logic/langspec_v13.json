@@ -2974,6 +2974,14 @@
         "uint64"
       ],
       "Size": 2,
+      "ArgEnum": [
+        "AppForeignBoxReads",
+        "AppFamilyBoxAccess"
+      ],
+      "ArgEnumTypes": [
+        "bool",
+        "bool"
+      ],
       "DocCost": "1",
       "Doc": "set field F of the current app to A",
       "ImmediateNote": [
@@ -2981,7 +2989,7 @@
           "Comment": "app params field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "app_params Fields"
+          "Reference": "app_params_set Fields"
         }
       ],
       "IntroducedVersion": 13,

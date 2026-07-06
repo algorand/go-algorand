@@ -1107,12 +1107,19 @@ params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag 
 
 ## app_params_set
 
-- Syntax: `app_params_set F` where F: [app_params Fields](#app_params-fields)
+- Syntax: `app_params_set F` where F: [app_params_set Fields](#app_params_set-fields)
 - Bytecode: 0x76 {uint8}
 - Stack: ..., A: uint64 &rarr; ...
 - set field F of the current app to A
 - Availability: v13
 - Mode: Application
+
+### app_params_set Fields
+
+| INDEX | NAME | TYPE | NOTES |
+| :-: | :------ |:--:| :--------- |
+| 11 | AppForeignBoxReads | bool | This app's boxes may be read by any app |
+| 12 | AppFamilyBoxAccess | bool | This app's boxes may be read and written by any app (existing or future) with the same creator |
 
 ## min_balance
 
