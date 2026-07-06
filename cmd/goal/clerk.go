@@ -71,7 +71,6 @@ var (
 	rawOutput       bool
 	inspectTxid     bool
 
-	timeStamp     int64
 	protoVersion  string
 	signerAddress string
 
