@@ -160,7 +160,7 @@ func TestAccount(t *testing.T) {
 			value.Bytes = b64(v.(string))
 			value.Type = uint64(basics.TealBytesType)
 		default:
-			panic(fmt.Sprintf("Unknown teal type %v", t))
+			panic(fmt.Sprintf("Unknown teal type for %v", v))
 		}
 		return model.TealKeyValue{
 			Key:   b64(k),
