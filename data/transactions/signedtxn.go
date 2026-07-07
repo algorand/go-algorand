@@ -180,9 +180,7 @@ func logicSigProgramFeeContribution(txgroup []SignedTxnWithAD, proto config.Cons
 		programBytes += len(txad.SignedTxn.Lsig.Logic)
 	}
 	freeProgramBytes := len(txgroup) * int(proto.LogicSigMaxSize)
-	extraProgramBytes := max(0, programBytes-freeProgramBytes)
-
-	surcharge, _ := proto.PerByteTxnSurcharge.MulInt(extraProgramBytes)
+	surcharge, _ := proto.PerByteTxnSurcharge.MulInt(programBytes - freeProgramBytes)
 	return surcharge
 }
 
