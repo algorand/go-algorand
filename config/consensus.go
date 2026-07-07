@@ -702,32 +702,6 @@ func (proto ConsensusParams) TxnSizePricingEnabled() bool {
 	return proto.PerByteTxnSurcharge != 0
 }
 
-// OrphanLogicSigArgsTreatment describes how consensus handles Lsig.Args when
-// Lsig.Logic is empty. Such args were ignored before LogicSig size pooling,
-// counted in the LogicSig size pool after pooling, and rejected once
-// transaction size pricing is enabled.
-type OrphanLogicSigArgsTreatment int
-
-// OrphanLogicSigArgsTreatment values.
-const (
-	OrphanLogicSigArgsIgnore OrphanLogicSigArgsTreatment = iota
-	OrphanLogicSigArgsUsePool
-	OrphanLogicSigArgsReject
-)
-
-// OrphanLogicSigArgsTreatment returns the consensus handling for args on a
-// blank LogicSig.
-func (proto ConsensusParams) OrphanLogicSigArgsTreatment() OrphanLogicSigArgsTreatment {
-	switch {
-	case proto.TxnSizePricingEnabled():
-		return OrphanLogicSigArgsReject
-	case proto.MaxAbsoluteLogicSigProgramSize > proto.LogicSigMaxSize:
-		return OrphanLogicSigArgsUsePool
-	default:
-		return OrphanLogicSigArgsIgnore
-	}
-}
-
 // EffectiveKeyDilution returns the key dilution for this account,
 // returning the default key dilution if not explicitly specified.
 func (proto ConsensusParams) EffectiveKeyDilution(kd uint64) uint64 {
