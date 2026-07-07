@@ -1361,6 +1361,29 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		fmt.Fprintf(cx.Trace, "--- exit  %d accept=%t\n", aid, pass)
 	}
 
+	// A family-shared touch by this frame counts as a touch by its caller when
+	// they share a creator: the caller delegated the mutation to us and relies on
+	// that shared state across its own later calls, exactly as if it had touched
+	// the box itself. Fold the mark into the caller as the frame completes -- like
+	// feeResidue after an inner group -- so it chains one hop per return to every
+	// contiguous family ancestor, and survives this frame's return so a later
+	// A->foreign->family re-entry is still caught. No success guard is needed: a
+	// failing frame aborts the whole group, and ClearState (which continues past
+	// rejection) can't touch boxes, so touchedFamilyShared is never set there.
+	if cx.caller != nil && cx.touchedFamilyShared {
+		mine, cerr := cx.getCreatorAddress()
+		if cerr != nil {
+			return false, &cx, cerr
+		}
+		theirs, cerr := cx.caller.getCreatorAddress()
+		if cerr != nil {
+			return false, &cx, cerr
+		}
+		if mine == theirs {
+			cx.caller.touchedFamilyShared = true
+		}
+	}
+
 	return pass, &cx, err
 }
 

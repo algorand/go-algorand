@@ -113,6 +113,10 @@ func (cx *EvalContext) authorizeBoxAccess(ownerAppID basics.AppIndex, operation 
 			return err
 		}
 	}
+	// A same-creator caller that delegated this access to cx is relying on the
+	// shared state just as if it had touched the box itself, so the mark is
+	// pushed up to such callers as cx completes (see EvalContract). That lets it
+	// survive cx's return and chain to every contiguous family ancestor.
 	cx.touchedFamilyShared = true
 	return nil
 }

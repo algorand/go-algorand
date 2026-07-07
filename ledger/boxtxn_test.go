@@ -926,6 +926,10 @@ func testNewAppBoxCreate(t *testing.T, requestedTealVersion int) {
 //	touch: "write" replaces in the box, "read" reads it, else leaves it untouched
 //	route: "viaX" calls Applications 1 (a foreign app) forwarding Applications 2,3
 //	       "direct" calls Applications 2 forwarding Applications 3
+//	       "delegate" first calls Applications 2 directly (a family member, which
+//	                  touches the shared box on A's behalf), then does the "viaX"
+//	                  call, modeling A delegating its touch to a family member
+//	                  before re-entering the family through a foreign app
 //
 // A separate ["optin"] invocation opts A into FamilyBoxAccess and creates "b",
 // and ["optout"] turns both box-sharing flags back off.
@@ -959,10 +963,27 @@ var familyInitiator = main(`
     itxn_submit
     b done
   trydirect:
-  txn ApplicationArgs 1; byte "direct"; ==; bz done
+  txn ApplicationArgs 1; byte "direct"; ==; bz trydelegate
     itxn_begin
     int appl; itxn_field TypeEnum
     txn Applications 2; itxn_field ApplicationID
+    txn Applications 3; itxn_field Applications
+    itxn_submit
+    b done
+  trydelegate:
+  txn ApplicationArgs 1; byte "delegate"; ==; bz done
+    // Delegate the touch to a family member (Applications 2), which writes A's
+    // shared box and returns, leaving A relying on that state.
+    itxn_begin
+    int appl; itxn_field TypeEnum
+    txn Applications 2; itxn_field ApplicationID
+    txn Applications 3; itxn_field Applications
+    itxn_submit
+    // Now re-enter the family through the foreign app, as in "viaX".
+    itxn_begin
+    int appl; itxn_field TypeEnum
+    txn Applications 1; itxn_field ApplicationID
+    txn Applications 2; itxn_field Applications
     txn Applications 3; itxn_field Applications
     itxn_submit
   done:
@@ -1051,6 +1072,13 @@ func TestFamilyBoxReentrancy(t *testing.T) {
 		// Intra-family (no foreign frame): A writes, A->C directly, C writes A's
 		// box. Allowed: the family is co-designed and trusts itself.
 		dl.txn(call("write", "direct", cw))
+
+		// Delegated touch then write across a foreign app: A never touches its box
+		// directly, but calls family member C which writes it, then A->X->C writes
+		// again. Blocked: C's write on A's behalf leaves A relying on family state,
+		// so the mark must survive C's return to catch the re-entry. This is the
+		// case that a per-frame-only touch mark would miss.
+		dl.txn(call("none", "delegate", cw), reentry)
 	})
 }
 
