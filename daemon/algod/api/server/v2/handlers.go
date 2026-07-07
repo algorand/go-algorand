@@ -1521,13 +1521,6 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
 	}
-	for groupIdx, txgroup := range simulateRequest.TxnGroups {
-		if err = enforcePQAuthorizerCompliance(txgroup.Txns); err != nil {
-			err = fmt.Errorf("transaction group %d: %w", groupIdx, err)
-			return badRequest(ctx, err, err.Error(), v2.Log)
-		}
-	}
-
 	// Simulate transaction
 	simulationResult, err := v2.Node.Simulate(convertSimulationRequest(simulateRequest))
 	if err != nil {

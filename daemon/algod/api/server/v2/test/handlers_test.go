@@ -1693,39 +1693,6 @@ func TestPostSimulateTransactionPlaceholderPQSignatureValidation(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 }
 
-func TestPostSimulateTransactionPQAuthorizerComplianceReportsGroup(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	mockLedger, _, _, _, releasefunc := testingenv(t, 1, 0, true)
-	defer releasefunc()
-
-	status := cannedStatusReportGolden
-	status.LastVersion = protocol.ConsensusFuture
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, status, false)
-	handler := v2.Handlers{
-		Node:     mockNode,
-		Log:      logging.Base(),
-		Shutdown: make(chan struct{}),
-	}
-
-	request := v2.PreEncodedSimulateRequest{
-		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
-			{Txns: []transactions.SignedTxn{makePQSignedTxnWithAddressCompliance(t, true)}},
-			{Txns: []transactions.SignedTxn{makePQSignedTxnWithAddressCompliance(t, false)}},
-		},
-	}
-	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(protocol.EncodeReflect(&request)))
-	rec := httptest.NewRecorder()
-	c := echo.New().NewContext(req, rec)
-
-	format := model.SimulateTransactionParamsFormatJson
-	err := handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: &format})
-	require.NoError(t, err)
-	require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
-	require.Contains(t, rec.Body.String(), "transaction group 1: transaction 0: pq signature authorizer address")
-}
-
 func assertSimulationResultsEqual(t *testing.T, expectedError string, expected, actual v2.PreEncodedSimulateResponse) {
 	t.Helper()
 
