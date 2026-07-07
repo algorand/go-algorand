@@ -34,11 +34,9 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util"
 )
 
 var log = logging.Base()
@@ -517,18 +515,6 @@ func writeFile(filename string, data []byte, perm os.FileMode) error {
 		return nil
 	}
 	return os.WriteFile(filename, data, perm)
-}
-
-// writeDryrunReqToFile creates dryrun request object and writes to a file
-func writeDryrunReqToFile(client libgoal.Client, txnOrStxn interface{}, outFilename string) (err error) {
-	proto, _ := getProto(protoVersion)
-	accts := util.Map(dumpForDryrunAccts, cliAddress)
-	data, err := libgoal.MakeDryrunStateBytes(client, txnOrStxn, []transactions.SignedTxn{}, accts, string(proto), dumpForDryrunFormat.String())
-	if err != nil {
-		reportErrorln(err)
-	}
-	err = writeFile(outFilename, data, 0600)
-	return
 }
 
 // readFile is a wrapper of os.ReadFile which considers the

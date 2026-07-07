@@ -1767,7 +1767,7 @@ func (cx *EvalContext) step() error {
 		// we don't want to worry about the dissassembly
 		// routines mucking about in the execution context
 		// (changing the pc, for example) and this gives a big
-		// improvement of dryrun readability
+		// improvement in readability
 		dstate := &disassembleState{program: cx.program, pc: cx.pc, numericTargets: true, intc: cx.intc, bytec: cx.bytec}
 		sourceLine, inner := disassemble(dstate, spec)
 		if inner != nil {
