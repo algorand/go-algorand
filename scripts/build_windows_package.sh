@@ -7,7 +7,7 @@
 # sysctl tuning and the shell-based auto-updater, none of which function on
 # Windows, and it copies Go binaries without the .exe suffix Windows produces.
 # Here we ship just what is useful on Windows: the Go binaries (.exe),
-# node_exporter, the genesis files and the config example.
+# the genesis files and the config example.
 #
 # Syntax:   build_windows_package.sh <output_dir>
 #
