@@ -71,10 +71,8 @@ import (
 // in the source TEAL. We have some indication that real TEAL programs with comments are about 20 times bigger than the bytecode they produce, and we may soon allow 16,000 byte logicsigs, implying a maximum of 320kb. Let's call it half a meg for a little room to spare.
 const MaxTealSourceBytes = 512 * 1024
 
-// MaxTealDryrunBytes sets a size limit for dryrun requests
-// With the ability to hold unlimited assets DryrunRequests can
-// become quite large, so we allow up to 1MB
-const MaxTealDryrunBytes = 1_000_000
+// MaxSimulateBytes sets a size limit for simulate requests
+const MaxSimulateBytes = 1_000_000
 
 // MaxAssetResults sets a size limit for the number of assets returned in a single request to the
 // /v2/accounts/{address}/assets endpoint
@@ -1497,7 +1495,7 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 	proto := config.Consensus[stat.LastVersion]
 
 	requestBuffer := new(bytes.Buffer)
-	requestBodyReader := http.MaxBytesReader(nil, ctx.Request().Body, MaxTealDryrunBytes)
+	requestBodyReader := http.MaxBytesReader(nil, ctx.Request().Body, MaxSimulateBytes)
 	_, err = requestBuffer.ReadFrom(requestBodyReader)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
@@ -1554,74 +1552,6 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 	}
 
 	return ctx.Blob(http.StatusOK, contentType, responseData)
-}
-
-// TealDryrun takes transactions and additional simulated ledger state and returns debugging information.
-// (POST /v2/teal/dryrun)
-func (v2 *Handlers) TealDryrun(ctx echo.Context) error {
-	if !v2.Node.Config().EnableDeveloperAPI {
-		return ctx.String(http.StatusNotFound, "/teal/dryrun was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
-	}
-	req := ctx.Request()
-	buf := new(bytes.Buffer)
-	req.Body = http.MaxBytesReader(nil, req.Body, MaxTealDryrunBytes)
-	_, err := buf.ReadFrom(ctx.Request().Body)
-	if err != nil {
-		return badRequest(ctx, err, err.Error(), v2.Log)
-	}
-	data := buf.Bytes()
-
-	var dr DryrunRequest
-	var gdr model.DryrunRequest
-	err = decode(protocol.JSONStrictHandle, data, &gdr)
-	if err == nil {
-		dr, err = DryrunRequestFromGenerated(&gdr)
-		if err != nil {
-			return badRequest(ctx, err, err.Error(), v2.Log)
-		}
-	} else {
-		err = decode(protocol.CodecHandle, data, &dr)
-		if err != nil {
-			return badRequest(ctx, err, err.Error(), v2.Log)
-		}
-	}
-
-	// fetch previous block header just once to prevent racing with network
-	var hdr bookkeeping.BlockHeader
-	if dr.ProtocolVersion == "" || dr.Round == 0 || dr.LatestTimestamp == 0 {
-		actualLedger := v2.Node.LedgerForAPI()
-		hdr, err = actualLedger.BlockHdr(actualLedger.Latest())
-		if err != nil {
-			return internalError(ctx, err, "current block error", v2.Log)
-		}
-	}
-
-	var response model.DryrunResponse
-
-	var protocolVersion protocol.ConsensusVersion
-	if dr.ProtocolVersion != "" {
-		var ok bool
-		_, ok = config.Consensus[protocol.ConsensusVersion(dr.ProtocolVersion)]
-		if !ok {
-			return badRequest(ctx, nil, "unsupported protocol version", v2.Log)
-		}
-		protocolVersion = protocol.ConsensusVersion(dr.ProtocolVersion)
-	} else {
-		protocolVersion = hdr.CurrentProtocol
-	}
-	dr.ProtocolVersion = string(protocolVersion)
-
-	if dr.Round == 0 {
-		dr.Round = hdr.Round + 1
-	}
-
-	if dr.LatestTimestamp == 0 {
-		dr.LatestTimestamp = hdr.TimeStamp
-	}
-
-	doDryrunRequest(&dr, &response)
-	response.ProtocolVersion = string(protocolVersion)
-	return ctx.JSON(http.StatusOK, response)
 }
 
 // UnsetSyncRound removes the sync round restriction from the ledger.

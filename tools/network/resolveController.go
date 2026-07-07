@@ -62,12 +62,15 @@ func (c *ResolveController) SystemResolver() ResolverIf {
 	return net.DefaultResolver
 }
 
-// FallbackResolver returns a resolver that uses fallback DNS address
+// FallbackResolver returns a resolver that uses the fallback DNS address. If that address
+// cannot be resolved to an IP (e.g. a misconfigured FallbackDNSResolverAddress), it returns
+// the default resolver instead of an unusable one; the non-secure path previously
+// dereferenced a nil *net.IPAddr and panicked.
 func (c *ResolveController) FallbackResolver() ResolverIf {
-	var dnsIPAddr *net.IPAddr
-	var err error
-	if dnsIPAddr, err = net.ResolveIPAddr("ip", c.fallback); err != nil {
-		c.log.Debugf("resolving fallback '%s' failed with %s", c.fallback, err.Error())
+	dnsIPAddr, err := net.ResolveIPAddr("ip", c.fallback)
+	if err != nil || dnsIPAddr == nil {
+		c.log.Warnf("resolving fallback DNS address '%s' failed (%v); using default resolver instead", c.fallback, err)
+		return c.DefaultResolver()
 	}
 
 	if c.secure {
