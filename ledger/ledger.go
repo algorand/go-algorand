@@ -33,7 +33,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
-	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/blockdb"
@@ -1019,11 +1018,6 @@ func (l *Ledger) IsBehindCommittingDeltas() bool {
 
 // DebuggerLedger defines the minimal set of method required for creating a debug balances.
 type DebuggerLedger = eval.LedgerForCowBase
-
-// MakeDebugBalances creates a ledger suitable for dryrun and debugger
-func MakeDebugBalances(l DebuggerLedger, round basics.Round, proto protocol.ConsensusVersion, prevTimestamp int64) apply.Balances {
-	return eval.MakeDebugBalances(l, round, proto, prevTimestamp)
-}
 
 var ledgerInitblocksdbCount = metrics.NewCounter("ledger_initblocksdb_count", "calls")
 var ledgerInitblocksdbMicros = metrics.NewCounter("ledger_initblocksdb_micros", "µs spent")

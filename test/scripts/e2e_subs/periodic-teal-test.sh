@@ -31,8 +31,6 @@ ACCOUNT_PERIODIC=$(${gcmd} clerk compile ${TEMPDIR}/periodic.teal -o ${TEMPDIR}/
 
 ROUND=5
 DUR_ROUND=$((${ROUND} + 2))
-${gcmd} clerk send -a 100000 -t ${ACCOUNTB} --from-program ${TEMPDIR}/periodic.teal --firstvalid ${ROUND} --lastvalid ${DUR_ROUND} -x ${LEASE} -o ${TEMPDIR}/a.tx
-${gcmd} clerk dryrun -t ${TEMPDIR}/a.tx
 
 ${gcmd} clerk send -a 1000000000 -f ${ACCOUNT} -t ${ACCOUNT_PERIODIC}
 
@@ -63,8 +61,6 @@ fi
 
 ROUND=25
 DUR_ROUND=$((${ROUND} + 2))
-${gcmd} clerk send -a 0 -t ${ZERO_ADDRESS} -c ${ACCOUNTB} --from-program ${TEMPDIR}/periodic.teal --firstvalid ${ROUND} --lastvalid ${DUR_ROUND} -x ${LEASE} -o ${TEMPDIR}/a.tx
-${gcmd} clerk dryrun -t ${TEMPDIR}/a.tx
 
 trycount=0
 sendcount=0
