@@ -244,50 +244,29 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 	return groupCtx, nil
 }
 
-type orphanLogicSigArgsTreatment int
-
-const (
-	orphanLogicSigArgsIgnore orphanLogicSigArgsTreatment = iota
-	orphanLogicSigArgsUsePool
-	orphanLogicSigArgsReject
-)
-
-// orphanLogicSigArgsTreatmentForConsensus preserves the historical handling of
-// args attached to blank LogicSigs: ignored before LogicSig size pooling,
-// counted once pooling exists, rejected after transaction size pricing.
-func orphanLogicSigArgsTreatmentForConsensus(proto config.ConsensusParams) orphanLogicSigArgsTreatment {
-	switch {
-	case proto.TxnSizePricingEnabled():
-		return orphanLogicSigArgsReject
-	case proto.MaxAbsoluteLogicSigProgramSize > proto.LogicSigMaxSize:
-		return orphanLogicSigArgsUsePool
-	default:
-		return orphanLogicSigArgsIgnore
-	}
-}
-
-// logicSigGroupSizeCheck checks group-level LogicSig size limits.
+// logicSigGroupSizeCheck checks group-level LogicSig size limits and the
+// handling of args attached to blank LogicSigs: ignored before LogicSig size
+// pooling, counted in the size pool once pooling exists, rejected after
+// transaction size pricing.
 func logicSigGroupSizeCheck(stxs []transactions.SignedTxn, groupCtx *GroupContext) *TxGroupError {
 	lSigPooledSize := 0
 	lSigArgsSize := 0
 	lSigArgsNeedSizePooling := false
-	orphanArgsTreatment := orphanLogicSigArgsTreatmentForConsensus(groupCtx.consensusParams)
+
+	rejectOrphanLSigArgs := groupCtx.consensusParams.TxnSizePricingEnabled()
+	poolOrphanLSigArgs := groupCtx.consensusParams.MaxAbsoluteLogicSigProgramSize > groupCtx.consensusParams.LogicSigMaxSize
 
 	for i, stxn := range stxs {
 		if stxn.Lsig.Blank() {
-			switch orphanArgsTreatment {
-			case orphanLogicSigArgsReject:
-				if stxn.Lsig.ArgsLen() > 0 {
-					return &TxGroupError{
-						err:        errors.New("LogicSig args without LogicSig program"),
-						GroupIndex: i,
-						Reason:     TxGroupErrorReasonNotWellFormed,
-					}
+			if stxn.Lsig.ArgsLen() > 0 && rejectOrphanLSigArgs {
+				return &TxGroupError{
+					err:        errors.New("LogicSig args without LogicSig program"),
+					GroupIndex: i,
+					Reason:     TxGroupErrorReasonNotWellFormed,
 				}
-			case orphanLogicSigArgsIgnore:
+			}
+			if !poolOrphanLSigArgs {
 				continue
-			case orphanLogicSigArgsUsePool:
-				// Count below.
 			}
 		}
 
