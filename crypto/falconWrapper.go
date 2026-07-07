@@ -132,7 +132,7 @@ func VerifyFalcon1024(message Hashable, publicKey []byte, signature []byte) erro
 		return fmt.Errorf("%w: public key size %d, want %d", ErrPQFalcon1024SigInvalid, len(publicKey), FalconPublicKeySize)
 	}
 	if len(signature) == 0 || len(signature) > FalconMaxSignatureSize {
-		return fmt.Errorf("%w: signature size %d, want 1..%d", ErrPQFalcon1024SigInvalid, len(signature), FalconMaxSignatureSize)
+		return fmt.Errorf("%w: signature size %d is empty or exceeds maximum %d", ErrPQFalcon1024SigInvalid, len(signature), FalconMaxSignatureSize)
 	}
 
 	var fv FalconVerifier
