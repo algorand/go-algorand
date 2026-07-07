@@ -30,12 +30,8 @@ func (s PQScheme) String() string {
 // Supported post-quantum signature schemes.
 var (
 	// PQSchemeFalcon1024 - f1: Falcon-1024 using a deterministic signing profile.
-	// Deterministic nonce derivation is signer-side only; consensus verifies
-	// signature validity, not how signer nonce material was derived.
 	PQSchemeFalcon1024 = PQScheme{'f', '1'}
 
 	// PQSchemeFalcon512 - f2: Falcon-512 using a deterministic signing profile.
-	// Deterministic nonce derivation is signer-side only; consensus verifies
-	// signature validity, not how signer nonce material was derived.
 	PQSchemeFalcon512 = PQScheme{'f', '2'} // reserved, not used
 )
