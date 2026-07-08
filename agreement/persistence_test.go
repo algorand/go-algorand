@@ -204,6 +204,22 @@ func randomizeDiskState() (rr rootRouter, p player) {
 	return
 }
 
+// persistedTestActions covers every concrete action type so encoding tests
+// exercise the msgp and reflection codecs on each of them.
+func persistedTestActions() []action {
+	return []action{
+		noopAction{},
+		networkAction{T: broadcast, Tag: protocol.AgreementVoteTag, UnauthenticatedVotes: []unauthenticatedVote{{}, {}}},
+		networkAction{T: disconnect, Err: makeSerErrStr("test disconnect")},
+		cryptoAction{T: verifyVote, Round: 100, Period: 2, Step: soft, TaskIndex: 7, Pinned: true},
+		ensureAction{Certificate: Certificate{Round: 100}},
+		stageDigestAction{Certificate: Certificate{Round: 101, Period: 3}},
+		rezeroAction{Round: 102},
+		pseudonodeAction{T: attest, Round: 103, Period: 1, Step: cert},
+		checkpointAction{Round: 104, Period: 2, Step: cert, Err: makeSerErrStr("test checkpoint")},
+	}
+}
+
 func TestRandomizedEncodingFullDiskState(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	iterations := 1000
@@ -213,18 +229,20 @@ func TestRandomizedEncodingFullDiskState(t *testing.T) {
 
 	for i := 0; i < iterations; i++ {
 		router, player := randomizeDiskState()
-		a := []action{}
+		a := persistedTestActions()
 		clock := timers.MakeMonotonicClock[TimeoutType](time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
 		log := makeServiceLogger(logging.Base())
 		e1 := encode(clock, router, player, a, true)
 		e2 := encode(clock, router, player, a, false)
 		require.Equalf(t, e1, e2, "msgp and go-codec encodings differ: len(msgp)=%v, len(reflect)=%v", len(e1), len(e2))
-		_, rr1, p1, _, err1 := decode(e1, clock, log, true)
-		_, rr2, p2, _, err2 := decode(e1, clock, log, false)
+		_, rr1, p1, a1, err1 := decode(e1, clock, log, true)
+		_, rr2, p2, a2, err2 := decode(e1, clock, log, false)
 		require.NoErrorf(t, err1, "reflect decoding failed")
 		require.NoErrorf(t, err2, "msgp decoding failed")
 		require.Equalf(t, rr1, rr2, "rootRouters decoded differently")
 		require.Equalf(t, p1, p2, "players decoded differently")
+		require.Equalf(t, a, a1, "reflect-decoded actions differ from the originals")
+		require.Equalf(t, a, a2, "msgp-decoded actions differ from the originals")
 	}
 
 }

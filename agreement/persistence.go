@@ -82,9 +82,11 @@ func encode(t timers.Clock[TimeoutType], rr rootRouter, p player, a []action, re
 	s.Actions = make([][]byte, len(a))
 	for i, act := range a {
 		s.ActionTypes[i] = act.t()
-
-		// still use reflection for actions since action is an interface and we can't define marshaller methods on it
-		s.Actions[i] = protocol.EncodeReflect(act)
+		if reflect {
+			s.Actions[i] = protocol.EncodeReflect(act)
+		} else {
+			s.Actions[i] = encodeAction(act)
+		}
 	}
 	if reflect {
 		raw = protocol.EncodeReflect(s)
@@ -278,11 +280,27 @@ func decode(raw []byte, t0 timers.Clock[TimeoutType], log serviceLogger, reflect
 	}
 
 	for i := range s.Actions {
-		act := zeroAction(s.ActionTypes[i])
-		// always use reflection for actions since action is an interface and we can't define unmarshaller methods on it
-		err = protocol.DecodeReflect(s.Actions[i], &act)
-		if err != nil {
-			return
+		var act action
+		if reflect {
+			act = zeroAction(s.ActionTypes[i])
+			err = protocol.DecodeReflect(s.Actions[i], &act)
+			if err != nil {
+				return
+			}
+		} else {
+			act, err = decodeAction(s.ActionTypes[i], s.Actions[i])
+			if err != nil {
+				// fall back to reflection to read crash state written by a
+				// release that still encoded actions with go-codec
+				log.Warnf("decode (agreement): failed to decode action %d using msgp (len = %v): %v. Trying reflection", i, len(s.Actions[i]), err)
+				ract := zeroAction(s.ActionTypes[i])
+				err = protocol.DecodeReflect(s.Actions[i], &ract)
+				if err != nil {
+					log.Errorf("decode (agreement): failed to decode action %d using either reflection or msgp: %v", i, err)
+					return
+				}
+				act = ract
+			}
 		}
 		a2 = append(a2, act)
 	}
