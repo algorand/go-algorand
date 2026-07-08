@@ -120,7 +120,7 @@ TOOLS_ROOT=${PKG_ROOT}/tools
 
 echo "Staging tools package files"
 
-bin_files=("algons" "carpenter" "coroner" "dispenser" "msgpacktool" "netgoal" "nodecfg" "pingpong" "loadgenerator" "COPYING" "dsign" "catchpointdump" "block-generator" "tealdbg")
+bin_files=("algons" "carpenter" "coroner" "dispenser" "msgpacktool" "netgoal" "nodecfg" "pingpong" "loadgenerator" "COPYING" "dsign" "catchpointdump" "block-generator")
 mkdir -p ${TOOLS_ROOT}
 for bin in "${bin_files[@]}"; do
     cp ${GOBIN}/${bin} ${TOOLS_ROOT}

@@ -28,7 +28,7 @@ mkdir -p "$PKG_ROOT/usr/bin"
 
 # NOTE: keep in sync with `./installer/rpm/algorand.spec`.
 if [[ "$PKG_NAME" =~ devtools ]]; then
-    BIN_FILES=("carpenter" "msgpacktool" "tealdbg")
+    BIN_FILES=("carpenter" "msgpacktool")
     UNATTENDED_UPGRADES_FILE="53algorand-devtools-upgrades"
     OUTPUT_DEB="$OUTDIR/algorand-devtools_${CHANNEL}_${OS_TYPE}-${ARCH}_${VER}.deb"
     REQUIRED_ALGORAND_PKG=$("./scripts/compute_package_name.sh" "$CHANNEL")

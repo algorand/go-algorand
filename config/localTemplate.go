@@ -430,7 +430,7 @@ type Local struct {
 	// CatchupBlockDownloadRetryAttempts controls the number of attempts the block fetcher would make before giving up on a provided catchpoint.
 	CatchupBlockDownloadRetryAttempts int `version[9]:"1000"`
 
-	// EnableDeveloperAPI enables teal/compile and teal/dryrun API endpoints.
+	// EnableDeveloperAPI enables teal/compile API endpoint.
 	// This functionality is disabled by default.
 	EnableDeveloperAPI bool `version[9]:"false"`
 
