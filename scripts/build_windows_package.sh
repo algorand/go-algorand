@@ -39,7 +39,9 @@ if [ -z "${VERSION}" ]; then
     VERSION=$(./scripts/compute_build_number.sh -f)
 fi
 
-# Resolve GOBIN the same way build_package.sh does.
+# Resolve GOBIN following build_package.sh's logic, extended to also treat MSYS
+# like MINGW: on Windows we use $HOME/go rather than `go env GOPATH`, whose
+# backslash path breaks in shell/make contexts.
 UNAME=$(uname)
 if [[ "${UNAME}" == *"MINGW"* ]] || [[ "${UNAME}" == *"MSYS"* ]]; then
     GOPATH1=$HOME/go
