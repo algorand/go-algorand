@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -207,7 +206,7 @@ func publicMaterialFromFields(scheme protocol.PQScheme, salt basics.PQAddressSal
 	return pqPublicMaterial{
 		Scheme:    scheme,
 		Salt:      salt,
-		PublicKey: slices.Clone(publicKey),
+		PublicKey: publicKey,
 	}, nil
 }
 
