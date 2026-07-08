@@ -350,7 +350,7 @@ forloop:
 			require.NoError(t, err)
 			require.NotEqual(t, 0, len(bodyData))
 			var blkCert PreEncodedBlockCert
-			err = protocol.DecodeReflect(bodyData, &blkCert)
+			err = protocol.Decode(bodyData, &blkCert)
 			require.NoError(t, err)
 			err = protocol.Decode(blkCert.Block, &blk)
 			require.NoError(t, err)
