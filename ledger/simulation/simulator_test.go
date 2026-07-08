@@ -38,6 +38,21 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+func TestTxnHasNoSignatureLogicSigContent(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	nonblankSig := crypto.Signature{}
+	nonblankSig[0] = 1
+
+	require.True(t, txnHasNoSignature(transactions.SignedTxn{}))
+	require.False(t, txnHasNoSignature(transactions.SignedTxn{
+		Lsig: transactions.LogicSig{Args: [][]byte{{1}}},
+	}))
+	require.False(t, txnHasNoSignature(transactions.SignedTxn{
+		Lsig: transactions.LogicSig{Sig: nonblankSig},
+	}))
+}
+
 // We want to be careful that the Algod ledger does not move on to another round
 // so we confirm here that all ledger methods which implicitly access the current round
 // are overridden within the `simulatorLedger`.

@@ -47,9 +47,15 @@ type LogicSig struct {
 	Args [][]byte `codec:"arg,allocbound=EvalMaxArgs,allocbound=MaxLogicSigArgSize,maxtotalbytes=bounds.MaxLogicSigMaxSize"`
 }
 
-// Blank returns true if there is no content in this LogicSig
+// Blank returns true if the LogicSig is entirely empty.
 func (lsig *LogicSig) Blank() bool {
-	return len(lsig.Logic) == 0
+	return len(lsig.Logic) == 0 && len(lsig.Args) == 0 &&
+		lsig.Sig.Blank() && lsig.Msig.Blank() && lsig.LMsig.Blank()
+}
+
+// HasProgram returns true if the LogicSig carries a program.
+func (lsig *LogicSig) HasProgram() bool {
+	return len(lsig.Logic) != 0
 }
 
 // Len returns the total byte length of a logicSig program and arguments

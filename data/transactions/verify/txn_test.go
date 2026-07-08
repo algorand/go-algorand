@@ -1299,7 +1299,7 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 		_, err := TxnGroup(group, &blkHdr, nil, &DummyLedgerForSignature{})
 		return err
 	}
-	makeSignedTxnWithOrphanArgs := func(proto config.ConsensusParams, args [][]byte) transactions.SignedTxn {
+	makeSignedTxnWithOrphanLsig := func(proto config.ConsensusParams, lsig transactions.LogicSig) transactions.SignedTxn {
 		secrets := keypair()
 		sender := basics.Address(secrets.SignatureVerifier)
 		txn := txntest.Txn{
@@ -1310,12 +1310,13 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 			Amount:   uint64(1000),
 		}.Txn()
 		return transactions.SignedTxn{
-			Txn: txn,
-			Sig: secrets.Sign(txn),
-			Lsig: transactions.LogicSig{
-				Args: args,
-			},
+			Txn:  txn,
+			Sig:  secrets.Sign(txn),
+			Lsig: lsig,
 		}
+	}
+	makeSignedTxnWithOrphanArgs := func(proto config.ConsensusParams, args [][]byte) transactions.SignedTxn {
+		return makeSignedTxnWithOrphanLsig(proto, transactions.LogicSig{Args: args})
 	}
 
 	t.Run("v18: singleton still limited by legacy size pool", func(t *testing.T) {
@@ -1342,7 +1343,37 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 		stxn := makeSignedTxnWithOrphanArgs(vFuture, [][]byte{make([]byte, int(vFuture.LogicSigMaxSize))})
 
 		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{stxn})
-		require.ErrorContains(t, err, "LogicSig args without LogicSig program")
+		require.ErrorContains(t, err, "LogicSig fields without LogicSig program")
+	})
+
+	t.Run("orphan LogicSig delegation signature on signed txn", func(t *testing.T) {
+		lsigSig := crypto.Signature{}
+		lsigSig[0] = 1
+
+		tests := []struct {
+			name string
+			lsig transactions.LogicSig
+		}{
+			{name: "sig", lsig: transactions.LogicSig{Sig: lsigSig}},
+			{name: "msig", lsig: transactions.LogicSig{Msig: crypto.MultisigSig{Version: 1}}},
+			{name: "lmsig", lsig: transactions.LogicSig{LMsig: crypto.MultisigSig{Version: 1}}},
+		}
+
+		for _, test := range tests {
+			t.Run(test.name, func(t *testing.T) {
+				stxn := makeSignedTxnWithOrphanLsig(v18, test.lsig)
+				err := verifyGroupForProtocol(protocol.ConsensusV18, []transactions.SignedTxn{stxn})
+				require.NoError(t, err)
+
+				stxn = makeSignedTxnWithOrphanLsig(v41, test.lsig)
+				err = verifyGroupForProtocol(protocol.ConsensusV41, []transactions.SignedTxn{stxn})
+				require.NoError(t, err)
+
+				stxn = makeSignedTxnWithOrphanLsig(vFuture, test.lsig)
+				err = verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{stxn})
+				require.ErrorContains(t, err, "LogicSig fields without LogicSig program")
+			})
+		}
 	})
 
 	t.Run("v41: singleton cannot exceed current pool without pricing", func(t *testing.T) {

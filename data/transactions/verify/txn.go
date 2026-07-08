@@ -246,23 +246,23 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 }
 
 // logicSigGroupSizeCheck checks group-level LogicSig size limits and the
-// handling of args attached to blank LogicSigs: ignored before LogicSig size
-// pooling, counted in the size pool once pooling exists, rejected after
-// transaction size pricing.
+// handling of content attached to program-less LogicSigs: ignored before
+// LogicSig size pooling, args counted in the size pool once pooling exists, and
+// any content rejected after transaction size pricing.
 func logicSigGroupSizeCheck(stxs []transactions.SignedTxn, groupCtx *GroupContext) *TxGroupError {
 	lSigPooledSize := 0
 	lSigArgsSize := 0
 	lSigArgsNeedSizePooling := false
 
-	rejectOrphanLSigArgs := groupCtx.consensusParams.TxnSizePricingEnabled()
+	rejectOrphanLSigContent := groupCtx.consensusParams.TxnSizePricingEnabled()
 	poolOrphanLSigArgs := groupCtx.consensusParams.MaxAbsoluteLogicSigProgramSize > groupCtx.consensusParams.LogicSigMaxSize
 
 	for i := range stxs {
 		lsig := &stxs[i].Lsig
-		if lsig.Blank() {
-			if lsig.ArgsLen() > 0 && rejectOrphanLSigArgs {
+		if !lsig.HasProgram() {
+			if !lsig.Blank() && rejectOrphanLSigContent {
 				return &TxGroupError{
-					err:        errors.New("LogicSig args without LogicSig program"),
+					err:        errors.New("LogicSig fields without LogicSig program"),
 					GroupIndex: i,
 					Reason:     TxGroupErrorReasonNotWellFormed,
 				}
@@ -322,7 +322,7 @@ func checkTxnSigTypeCounts(s *transactions.SignedTxn, groupIndex int) (sigType s
 		numSigCategories++
 		sigType = multiSig
 	}
-	if !s.Lsig.Blank() {
+	if s.Lsig.HasProgram() {
 		numSigCategories++
 		sigType = logicSig
 	}
@@ -412,7 +412,7 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batch crypto.B
 	txn := &groupCtx.signedGroupTxns[gi]
 	lsig := txn.Lsig
 
-	if len(lsig.Logic) == 0 {
+	if !lsig.HasProgram() {
 		return errors.New("LogicSig.Logic empty")
 	}
 	// This absolute program cap is per LogicSig. Args and pooling checks need
