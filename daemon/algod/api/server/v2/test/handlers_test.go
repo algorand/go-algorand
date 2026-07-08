@@ -1559,138 +1559,118 @@ func TestPostSimulateTransactionPlaceholderPQSignatureValidation(t *testing.T) {
 	txnInfo := simulationtesting.TxnInfo{LatestHeader: hdr}
 	minFee := config.Consensus[hdr.CurrentProtocol].MinTxnFee
 
+	simulate := func(t *testing.T, request v2.PreEncodedSimulateRequest) v2.PreEncodedSimulateResponse {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(protocol.EncodeReflect(&request)))
+		rec := httptest.NewRecorder()
+		c := echo.New().NewContext(req, rec)
+		format := model.SimulateTransactionParamsFormatJson
+		require.NoError(t, handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: &format}))
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+		var response v2.PreEncodedSimulateResponse
+		decoder := codec.NewDecoderBytes(rec.Body.Bytes(), protocol.JSONStrictHandle)
+		require.NoError(t, decoder.Decode(&response))
+		require.Len(t, response.TxnGroups, 1)
+		return response
+	}
+
 	_, pqAuthorizer, pqSig := makePQSigWithAddressCompliance(t, true)
-	txn := txnInfo.NewTxn(txntest.Txn{
-		Type:     protocol.PaymentTx,
-		Sender:   roots[0].Address(),
-		Receiver: roots[0].Address(),
-		Amount:   0,
-	}).Txn()
-	stxn := transactions.SignedTxn{
-		Txn:      txn,
+	// AuthAddr must match the PQsig-derived address to pass placeholder envelope
+	// admission. The sender is not rekeyed to it, so evaluation still fails.
+	placeholderStxn := transactions.SignedTxn{
+		Txn: txnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   roots[0].Address(),
+			Receiver: roots[0].Address(),
+			Amount:   0,
+		}).Txn(),
 		AuthAddr: pqAuthorizer,
 		PQsig:    pqSig,
 	}
 
-	request := v2.PreEncodedSimulateRequest{
-		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
-			{Txns: []transactions.SignedTxn{stxn}},
-		},
-		AllowEmptySignatures: true,
-	}
-	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(protocol.EncodeReflect(&request)))
-	rec := httptest.NewRecorder()
-	c := echo.New().NewContext(req, rec)
-
-	format := model.SimulateTransactionParamsFormatJson
-	err = handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: &format})
-	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-
-	var response v2.PreEncodedSimulateResponse
-	decoder := codec.NewDecoderBytes(rec.Body.Bytes(), protocol.JSONStrictHandle)
-	err = decoder.Decode(&response)
-	require.NoError(t, err)
-	require.Len(t, response.TxnGroups, 1)
-	require.Len(t, response.TxnGroups[0].Txns, 1)
-	actualPQSig := response.TxnGroups[0].Txns[0].Txn.Txn.PQsig
-	require.False(t, actualPQSig.Blank())
-	require.Empty(t, actualPQSig.Signature)
-	require.Equal(t, pqSig.Scheme, actualPQSig.Scheme)
-	require.Equal(t, pqSig.Salt, actualPQSig.Salt)
-	require.Equal(t, pqSig.PublicKey, actualPQSig.PublicKey)
-
-	schemeOnlyTxn := txnInfo.NewTxn(txntest.Txn{
-		Type:     protocol.PaymentTx,
-		Sender:   roots[0].Address(),
-		Receiver: roots[0].Address(),
-		Fee:      minFee * 3,
-	}).SignedTxn()
-	schemeOnlyTxn.PQsig = transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024}
-	request.TxnGroups[0].Txns[0] = schemeOnlyTxn
-	request.AllowEmptySignatures = true
-	req = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(protocol.EncodeReflect(&request)))
-	rec = httptest.NewRecorder()
-	c = echo.New().NewContext(req, rec)
-
-	err = handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: &format})
-	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-
-	response = v2.PreEncodedSimulateResponse{}
-	decoder = codec.NewDecoderBytes(rec.Body.Bytes(), protocol.JSONStrictHandle)
-	err = decoder.Decode(&response)
-	require.NoError(t, err)
-	require.Len(t, response.TxnGroups, 1)
-	require.Len(t, response.TxnGroups[0].Txns, 1)
-	actualPQSig = response.TxnGroups[0].Txns[0].Txn.Txn.PQsig
-	require.Equal(t, protocol.PQSchemeFalcon1024, actualPQSig.Scheme)
-	require.Empty(t, actualPQSig.PublicKey)
-	require.Empty(t, actualPQSig.Signature)
-
-	request.TxnGroups[0].Txns[0] = stxn
-	request.AllowEmptySignatures = false
-	req = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(protocol.EncodeReflect(&request)))
-	rec = httptest.NewRecorder()
-	c = echo.New().NewContext(req, rec)
-
-	err = handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: &format})
-	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	response = v2.PreEncodedSimulateResponse{}
-	decoder = codec.NewDecoderBytes(rec.Body.Bytes(), protocol.JSONStrictHandle)
-	err = decoder.Decode(&response)
-	require.NoError(t, err)
-	require.NotNil(t, response.TxnGroups[0].FailureMessage)
-	require.Contains(t, *response.TxnGroups[0].FailureMessage, "pq signature is empty")
-
-	mismatchedStxn := stxn
-	mismatchedStxn.AuthAddr = roots[1].Address()
-	request.TxnGroups[0].Txns[0] = mismatchedStxn
-	request.AllowEmptySignatures = true
-	req = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(protocol.EncodeReflect(&request)))
-	rec = httptest.NewRecorder()
-	c = echo.New().NewContext(req, rec)
-
-	err = handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: &format})
-	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	response = v2.PreEncodedSimulateResponse{}
-	decoder = codec.NewDecoderBytes(rec.Body.Bytes(), protocol.JSONStrictHandle)
-	err = decoder.Decode(&response)
-	require.NoError(t, err)
-	require.NotNil(t, response.TxnGroups[0].FailureMessage)
-	require.Contains(t, *response.TxnGroups[0].FailureMessage, "pq signature authorizer mismatch")
-
-	_, fixablePQAuthorizer, fixablePQSig := makePQSigWithAddressCompliance(t, true)
-	rekeyTxn := txnInfo.NewTxn(txntest.Txn{
-		Type:     protocol.PaymentTx,
-		Sender:   roots[0].Address(),
-		Receiver: roots[0].Address(),
-		RekeyTo:  fixablePQAuthorizer,
-		Fee:      minFee,
+	t.Run("placeholder passes admission and echoes envelope", func(t *testing.T) {
+		response := simulate(t, v2.PreEncodedSimulateRequest{
+			TxnGroups:            []v2.PreEncodedSimulateRequestTransactionGroup{{Txns: []transactions.SignedTxn{placeholderStxn}}},
+			AllowEmptySignatures: true,
+		})
+		require.NotNil(t, response.TxnGroups[0].FailureMessage)
+		require.Contains(t, *response.TxnGroups[0].FailureMessage, "should have been authorized by")
+		require.Len(t, response.TxnGroups[0].Txns, 1)
+		actualPQSig := response.TxnGroups[0].Txns[0].Txn.Txn.PQsig
+		require.False(t, actualPQSig.Blank())
+		require.Empty(t, actualPQSig.Signature)
+		require.Equal(t, pqSig.Scheme, actualPQSig.Scheme)
+		require.Equal(t, pqSig.Salt, actualPQSig.Salt)
+		require.Equal(t, pqSig.PublicKey, actualPQSig.PublicKey)
 	})
-	pqTxn := txnInfo.NewTxn(txntest.Txn{
-		Type:     protocol.PaymentTx,
-		Sender:   roots[0].Address(),
-		Receiver: roots[0].Address(),
-		Fee:      minFee * 3,
-	})
-	fixableGroup := txntest.Group(&rekeyTxn, &pqTxn)
-	fixableGroup[1].AuthAddr = roots[1].Address()
-	fixableGroup[1].PQsig = fixablePQSig
-	request = v2.PreEncodedSimulateRequest{
-		TxnGroups:            []v2.PreEncodedSimulateRequestTransactionGroup{{Txns: fixableGroup}},
-		AllowEmptySignatures: true,
-		FixSigners:           true,
-	}
-	req = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(protocol.EncodeReflect(&request)))
-	rec = httptest.NewRecorder()
-	c = echo.New().NewContext(req, rec)
 
-	err = handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: &format})
-	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	t.Run("scheme-only placeholder simulates successfully", func(t *testing.T) {
+		stxn := txnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   roots[0].Address(),
+			Receiver: roots[0].Address(),
+			Fee:      minFee * 3,
+		}).SignedTxn()
+		stxn.PQsig = transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024}
+		response := simulate(t, v2.PreEncodedSimulateRequest{
+			TxnGroups:            []v2.PreEncodedSimulateRequestTransactionGroup{{Txns: []transactions.SignedTxn{stxn}}},
+			AllowEmptySignatures: true,
+		})
+		require.Nil(t, response.TxnGroups[0].FailureMessage)
+		require.Len(t, response.TxnGroups[0].Txns, 1)
+		actualPQSig := response.TxnGroups[0].Txns[0].Txn.Txn.PQsig
+		require.Equal(t, protocol.PQSchemeFalcon1024, actualPQSig.Scheme)
+		require.Empty(t, actualPQSig.PublicKey)
+		require.Empty(t, actualPQSig.Signature)
+	})
+
+	t.Run("empty signature rejected without AllowEmptySignatures", func(t *testing.T) {
+		response := simulate(t, v2.PreEncodedSimulateRequest{
+			TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{{Txns: []transactions.SignedTxn{placeholderStxn}}},
+		})
+		require.NotNil(t, response.TxnGroups[0].FailureMessage)
+		require.Contains(t, *response.TxnGroups[0].FailureMessage, "pq signature is empty")
+	})
+
+	t.Run("authorizer mismatch rejected", func(t *testing.T) {
+		mismatchedStxn := placeholderStxn
+		mismatchedStxn.AuthAddr = roots[1].Address()
+		response := simulate(t, v2.PreEncodedSimulateRequest{
+			TxnGroups:            []v2.PreEncodedSimulateRequestTransactionGroup{{Txns: []transactions.SignedTxn{mismatchedStxn}}},
+			AllowEmptySignatures: true,
+		})
+		require.NotNil(t, response.TxnGroups[0].FailureMessage)
+		require.Contains(t, *response.TxnGroups[0].FailureMessage, "pq signature authorizer mismatch")
+	})
+
+	t.Run("FixSigners resolves the placeholder signer", func(t *testing.T) {
+		_, fixablePQAuthorizer, fixablePQSig := makePQSigWithAddressCompliance(t, true)
+		rekeyTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   roots[0].Address(),
+			Receiver: roots[0].Address(),
+			RekeyTo:  fixablePQAuthorizer,
+			Fee:      minFee,
+		})
+		pqTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   roots[0].Address(),
+			Receiver: roots[0].Address(),
+			Fee:      minFee * 3,
+		})
+		fixableGroup := txntest.Group(&rekeyTxn, &pqTxn)
+		fixableGroup[1].AuthAddr = roots[1].Address()
+		fixableGroup[1].PQsig = fixablePQSig
+		response := simulate(t, v2.PreEncodedSimulateRequest{
+			TxnGroups:            []v2.PreEncodedSimulateRequestTransactionGroup{{Txns: fixableGroup}},
+			AllowEmptySignatures: true,
+			FixSigners:           true,
+		})
+		require.Nil(t, response.TxnGroups[0].FailureMessage)
+		require.NotNil(t, response.TxnGroups[0].Txns[1].FixedSigner)
+		require.Equal(t, fixablePQAuthorizer.String(), *response.TxnGroups[0].Txns[1].FixedSigner)
+	})
 }
 
 func assertSimulationResultsEqual(t *testing.T, expectedError string, expected, actual v2.PreEncodedSimulateResponse) {
