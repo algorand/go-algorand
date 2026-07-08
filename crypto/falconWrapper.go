@@ -26,13 +26,11 @@ import (
 var (
 	// ErrPQFalcon1024SigInvalid is returned when Falcon-1024 signature verification fails.
 	ErrPQFalcon1024SigInvalid = errors.New("invalid falcon-1024 signature")
-
-	errFalconSeedTooShort = errors.New("falcon seed too short")
 )
 
 const (
 	// FalconSeedSize Represents the size in bytes of the random bytes used to generate Falcon keys
-	FalconSeedSize = 48
+	FalconSeedSize = 32
 
 	// FalconPublicKeySize represents the size in bytes of a Falcon public key.
 	FalconPublicKeySize = cfalcon.PublicKeySize
@@ -50,6 +48,7 @@ type (
 	// FalconPrivateKey is a wrapper for cfalcon.PrivateKeySize (used for packing)
 	FalconPrivateKey [FalconPrivateKeySize]byte
 	// FalconSeed represents the fixed-length seed used by default Falcon keygen.
+	//msgp:ignore FalconSeed
 	FalconSeed [FalconSeedSize]byte
 	// FalconSignature represents a Falcon signature in a compressed-form
 	//msgp:allocbound FalconSignature FalconMaxSignatureSize
@@ -67,19 +66,7 @@ type FalconSigner struct {
 // GenerateFalconSigner generates a Falcon signer from the fixed-size Falcon
 // seed type.
 func GenerateFalconSigner(seed FalconSeed) (FalconSigner, error) {
-	return GenerateFalconSignerFromBytes(seed[:])
-}
-
-// GenerateFalconSignerFromBytes generates a Falcon signer from caller-derived
-// variable length seed bytes. Callers are responsible for domain separation before
-// passing seed. The seed must carry at least a full Seed of entropy (len(Seed{})
-// bytes); a shorter (or empty) seed is rejected so it cannot yield a fixed,
-// public keypair.
-func GenerateFalconSignerFromBytes(seed []byte) (FalconSigner, error) {
-	if len(seed) < len(Seed{}) {
-		return FalconSigner{}, fmt.Errorf("%w: got %d, want >= %d", errFalconSeedTooShort, len(seed), len(Seed{}))
-	}
-	pk, sk, err := cfalcon.GenerateKey(seed)
+	pk, sk, err := cfalcon.GenerateKey(seed[:])
 	return FalconSigner{
 		PublicKey:  FalconPublicKey(pk),
 		PrivateKey: FalconPrivateKey(sk),

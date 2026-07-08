@@ -34,7 +34,7 @@ const pqSchemeFalcon1024Name = "falcon-1024"
 // sizes) lives in crypto.LookupPQScheme, and fee policy in
 // config.ConsensusParams.PQSchemeFeeContribution.
 type pqSchemeOps interface {
-	deriveSigning(seed []byte) (pqSigningMaterial, error)
+	deriveSigning(seed crypto.Digest) (pqSigningMaterial, error)
 	signTxn(privateKey []byte, txn transactions.Transaction) ([]byte, error)
 	publicKeySize() uint64
 }
@@ -92,7 +92,7 @@ func derivePQSigningMaterialFromEntropy(scheme protocol.PQScheme, entropy crypto
 	}
 
 	seed := derivePQKeySeed(scheme, entropy)
-	return ops.deriveSigning(seed[:])
+	return ops.deriveSigning(seed)
 }
 
 // derivePQKeySeed maps mnemonic-sized entropy to a scheme-specific PQ keygen
@@ -106,8 +106,8 @@ func derivePQKeySeed(scheme protocol.PQScheme, entropy crypto.Seed) crypto.Diges
 	return crypto.Hash(input)
 }
 
-func (falcon1024Ops) deriveSigning(seed []byte) (pqSigningMaterial, error) {
-	signer, err := crypto.GenerateFalconSignerFromBytes(seed)
+func (falcon1024Ops) deriveSigning(seed crypto.Digest) (pqSigningMaterial, error) {
+	signer, err := crypto.GenerateFalconSigner(crypto.FalconSeed(seed))
 	if err != nil {
 		return pqSigningMaterial{}, err
 	}

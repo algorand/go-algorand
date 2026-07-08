@@ -39,7 +39,7 @@ var (
 // which feed msgp allocation bounds and therefore PQSigMaxSize, SignedTxnMaxSize,
 // and the SignedTxn wire bound.
 type PQSig struct {
-	_struct struct{} `codec:",omitempty"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Scheme    protocol.PQScheme    `codec:"sch"`
 	Salt      basics.PQAddressSalt `codec:"slt"`
