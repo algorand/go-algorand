@@ -58,12 +58,6 @@ func TestConsensusParams(t *testing.T) {
 			if params.MaxAbsoluteLogicSigProgramSize < params.LogicSigMaxSize {
 				t.Errorf("Protocol %s: MaxAbsoluteLogicSigProgramSize is smaller than LogicSigMaxSize", proto)
 			}
-			if params.MaxLogicSigArgsSize < params.LogicSigMaxSize {
-				t.Errorf("Protocol %s: MaxLogicSigArgsSize is smaller than LogicSigMaxSize", proto)
-			}
-			if params.MaxLogicSigArgsSize > uint64(params.MaxTxGroupSize)*params.LogicSigMaxSize {
-				t.Errorf("Protocol %s: MaxLogicSigArgsSize exceeds the group LogicSig size pool", proto)
-			}
 		}
 	}
 }

@@ -1384,7 +1384,7 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 
 	t.Run("vFuture: singleton LogicSig args can exceed legacy size unit", func(t *testing.T) {
 		program := makeProgram(vFuture, 0)
-		args := [][]byte{make([]byte, int(vFuture.MaxLogicSigArgsSize))}
+		args := [][]byte{make([]byte, int(vFuture.LogicSigMaxSize))}
 
 		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{makeTxn(program, args)})
 		require.NoError(t, err)
@@ -1392,7 +1392,7 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 
 	t.Run("vFuture: singleton LogicSig args above allowance require size pooling", func(t *testing.T) {
 		program := makeProgram(vFuture, 0)
-		args := [][]byte{make([]byte, int(vFuture.MaxLogicSigArgsSize)+1)}
+		args := [][]byte{make([]byte, int(vFuture.LogicSigMaxSize)+1)}
 
 		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{makeTxn(program, args)})
 		require.ErrorContains(t, err, "more than the available size pool")
@@ -1400,7 +1400,7 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 
 	t.Run("vFuture: LogicSig args above allowance can use size pooling", func(t *testing.T) {
 		program := makeProgram(vFuture, 0)
-		args := [][]byte{make([]byte, int(vFuture.MaxLogicSigArgsSize)+1)}
+		args := [][]byte{make([]byte, int(vFuture.LogicSigMaxSize)+1)}
 
 		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{
 			makeTxnForReceiver(program, args, basics.Address{1}),

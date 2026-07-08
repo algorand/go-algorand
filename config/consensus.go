@@ -230,17 +230,14 @@ type ConsensusParams struct {
 	// 0 for no support, otherwise highest version supported
 	LogicSigVersion uint64
 
-	// LogicSigMaxSize is the legacy LogicSig size unit used to compute group
-	// size pools and free program-byte allowance.
+	// LogicSigMaxSize is the legacy LogicSig size unit used for the per-LogicSig
+	// args allowance and to compute group size pools and free program-byte
+	// allowance.
 	LogicSigMaxSize uint64
 
 	// MaxAbsoluteLogicSigProgramSize is the absolute maximum size of a LogicSig
 	// program.
 	MaxAbsoluteLogicSigProgramSize uint64
-
-	// MaxLogicSigArgsSize is the maximum total size of the arguments to a
-	// single LogicSig without requiring the group's LogicSig size pool.
-	MaxLogicSigArgsSize uint64
 
 	// sum of estimated op cost must be less than this
 	LogicSigMaxCost uint64
@@ -1024,7 +1021,6 @@ func initConsensusProtocols() {
 	v18.Asset = true
 	v18.LogicSigVersion = 1
 	v18.LogicSigMaxSize = 1000
-	v18.MaxLogicSigArgsSize = 1000
 	v18.MaxAbsoluteLogicSigProgramSize = 1000
 	v18.LogicSigMaxCost = 20000
 	v18.LogicSigMsig = true
