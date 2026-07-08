@@ -24,7 +24,7 @@ description: |
   Algorand development tools.
   This package provides development and debugging tools for the Algorand blockchain.
 
-# Require the main algorand package at the same version
+# Require the main algorand package at the same or newer version
 # Note: top-level uses Debian syntax; RPM syntax is in overrides.rpm.depends
 depends:
   - ${PKG_NAME} (>= ${VERSION})
