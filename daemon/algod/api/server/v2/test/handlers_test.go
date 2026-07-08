@@ -1136,30 +1136,34 @@ func enableDeveloperAPI() postTransactionOpt {
 func makePQSigWithAddressCompliance(t *testing.T, compliant bool) (crypto.FalconSigner, basics.Address, transactions.PQSig) {
 	t.Helper()
 
-	for seedByte := 0; seedByte <= math.MaxUint8; seedByte++ {
-		var seed crypto.FalconSeed
-		seed[0] = byte(seedByte)
-		signer, err := crypto.GenerateFalconSigner(seed)
+	var seed crypto.FalconSeed
+	signer, err := crypto.GenerateFalconSigner(seed)
+	require.NoError(t, err)
+	publicKey := slices.Clone(signer.PublicKey[:])
+
+	var salt basics.PQAddressSalt
+	var authorizer basics.Address
+	if compliant {
+		salt, authorizer, err = basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
 		require.NoError(t, err)
-
-		publicKey := slices.Clone(signer.PublicKey[:])
-		for salt := 0; salt <= math.MaxUint8; salt++ {
-			pqSalt := basics.PQAddressSalt(salt)
-			authorizer := basics.PQAddress(protocol.PQSchemeFalcon1024, pqSalt, publicKey)
-			if authorizer.IsPQCompliant() != compliant {
-				continue
-			}
-
-			return signer, authorizer, transactions.PQSig{
-				Scheme:    protocol.PQSchemeFalcon1024,
-				Salt:      pqSalt,
-				PublicKey: publicKey,
+	} else {
+		found := false
+		for s := 0; s <= math.MaxUint8; s++ {
+			salt = basics.PQAddressSalt(s)
+			authorizer = basics.PQAddress(protocol.PQSchemeFalcon1024, salt, publicKey)
+			if !authorizer.IsPQCompliant() {
+				found = true
+				break
 			}
 		}
+		require.True(t, found, "unable to find non-compliant PQ address salt")
 	}
 
-	require.FailNow(t, "unable to find PQ authorizer with requested compliance")
-	return crypto.FalconSigner{}, basics.Address{}, transactions.PQSig{}
+	return signer, authorizer, transactions.PQSig{
+		Scheme:    protocol.PQSchemeFalcon1024,
+		Salt:      salt,
+		PublicKey: publicKey,
+	}
 }
 
 func makePQSignedTxnWithAddressCompliance(t *testing.T, compliant bool) transactions.SignedTxn {
