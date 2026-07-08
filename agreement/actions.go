@@ -21,10 +21,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/algorand/msgp/msgp"
+
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/msgp/msgp"
 )
 
 //go:generate go tool -modfile=../tool.mod stringer -type=actionType
