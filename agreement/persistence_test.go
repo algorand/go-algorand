@@ -42,11 +42,11 @@ func TestAgreementSerialization(t *testing.T) {
 	router := makeRootRouter(status)
 	a := []action{checkpointAction{}, disconnectAction(messageEvent{}, nil)}
 
-	encodedBytes := encode(clock, router, status, a, false)
+	encodedBytes := encode(clock, router, status, a)
 
 	t0 := timers.MakeMonotonicClock[TimeoutType](time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC))
 	log := makeServiceLogger(logging.Base())
-	clock2, router2, status2, a2, err := decode(encodedBytes, t0, log, false)
+	clock2, router2, status2, a2, err := decode(encodedBytes, t0, log)
 	require.NoError(t, err)
 	require.Equalf(t, clock, clock2, "Clock wasn't serialized/deserialized correctly")
 	require.Equalf(t, router, router2, "Router wasn't serialized/deserialized correctly")
@@ -59,10 +59,10 @@ func TestAgreementSerialization(t *testing.T) {
 	router3 := makeRootRouter(status3)
 	a3 := []action{checkpointAction{}, disconnectAction(messageEvent{}, nil)}
 
-	encodedBytes2 := encode(clock3, router3, status3, a3, false)
+	encodedBytes2 := encode(clock3, router3, status3, a3)
 
 	t1 := timers.MakeMonotonicClock[TimeoutType](time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC))
-	clock4, router4, status4, a4, err := decode(encodedBytes2, t1, log, false)
+	clock4, router4, status4, a4, err := decode(encodedBytes2, t1, log)
 	require.NoError(t, err)
 	require.Equalf(t, clock, clock4, "Clock wasn't serialized/deserialized correctly")
 	require.Equalf(t, status, status4, "Status wasn't serialized/deserialized correctly")
@@ -81,7 +81,7 @@ func BenchmarkAgreementSerialization(b *testing.B) {
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		encode(clock, router, status, a, false)
+		encode(clock, router, status, a)
 	}
 }
 
@@ -94,12 +94,12 @@ func BenchmarkAgreementDeserialization(b *testing.B) {
 	router := makeRootRouter(status)
 	a := []action{}
 
-	encodedBytes := encode(clock, router, status, a, false)
+	encodedBytes := encode(clock, router, status, a)
 	t0 := timers.MakeMonotonicClock[TimeoutType](time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC))
 	log := makeServiceLogger(logging.Base())
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		decode(encodedBytes, t0, log, false)
+		decode(encodedBytes, t0, log)
 	}
 }
 
@@ -220,6 +220,36 @@ func persistedTestActions() []action {
 	}
 }
 
+// encodeDiskStateReflect replicates the retired go-codec reflection encoder
+// for crash state, so tests keep proving that the msgp encoder produces the
+// exact bytes every past release wrote to the crash database.
+func encodeDiskStateReflect(t timers.Clock[TimeoutType], rr rootRouter, p player, a []action) []byte {
+	var s diskState
+
+	children := make(map[round]*roundRouter)
+	for rnd, rndRouter := range rr.Children {
+		if rnd >= p.Round {
+			children[rnd] = rndRouter
+		}
+	}
+	if len(children) == 0 {
+		rr.Children = nil
+	} else {
+		rr.Children = children
+	}
+
+	s.Router = protocol.EncodeReflect(rr)
+	s.Player = protocol.EncodeReflect(p)
+	s.Clock = t.Encode()
+	s.ActionTypes = make([]actionType, len(a))
+	s.Actions = make([][]byte, len(a))
+	for i, act := range a {
+		s.ActionTypes[i] = act.t()
+		s.Actions[i] = protocol.EncodeReflect(act)
+	}
+	return protocol.EncodeReflect(s)
+}
+
 func TestRandomizedEncodingFullDiskState(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	iterations := 1000
@@ -232,17 +262,15 @@ func TestRandomizedEncodingFullDiskState(t *testing.T) {
 		a := persistedTestActions()
 		clock := timers.MakeMonotonicClock[TimeoutType](time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
 		log := makeServiceLogger(logging.Base())
-		e1 := encode(clock, router, player, a, true)
-		e2 := encode(clock, router, player, a, false)
-		require.Equalf(t, e1, e2, "msgp and go-codec encodings differ: len(msgp)=%v, len(reflect)=%v", len(e1), len(e2))
-		_, rr1, p1, a1, err1 := decode(e1, clock, log, true)
-		_, rr2, p2, a2, err2 := decode(e1, clock, log, false)
-		require.NoErrorf(t, err1, "reflect decoding failed")
-		require.NoErrorf(t, err2, "msgp decoding failed")
-		require.Equalf(t, rr1, rr2, "rootRouters decoded differently")
-		require.Equalf(t, p1, p2, "players decoded differently")
-		require.Equalf(t, a, a1, "reflect-decoded actions differ from the originals")
-		require.Equalf(t, a, a2, "msgp-decoded actions differ from the originals")
+		e1 := encodeDiskStateReflect(clock, router, player, a)
+		e2 := encode(clock, router, player, a)
+		require.Equalf(t, e1, e2, "msgp and go-codec encodings differ: len(reflect)=%v, len(msgp)=%v", len(e1), len(e2))
+		_, rr2, p2, a2, err := decode(e1, clock, log)
+		require.NoErrorf(t, err, "decoding failed")
+		require.Equalf(t, a, a2, "decoded actions differ from the originals")
+		// the decoded state must re-encode to the same canonical bytes
+		e3 := encode(clock, rr2, p2, a2)
+		require.Equalf(t, e1, e3, "re-encoding of decoded state differs")
 	}
 
 }
@@ -253,18 +281,12 @@ func TestCredentialHistoryAllocated(t *testing.T) {
 	a := []action{}
 	clock := timers.MakeMonotonicClock[TimeoutType](time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
 	log := makeServiceLogger(logging.Base())
-	e1 := encode(clock, router, player, a, true)
-	e2 := encode(clock, router, player, a, false)
-	require.Equalf(t, e1, e2, "msgp and go-codec encodings differ: len(msgp)=%v, len(reflect)=%v", len(e1), len(e2))
-	_, _, p1, _, err1 := decode(e1, clock, log, true)
-	_, _, p2, _, err2 := decode(e1, clock, log, false)
-	require.NoErrorf(t, err1, "reflect decoding failed")
-	require.NoErrorf(t, err2, "msgp decoding failed")
+	e1 := encode(clock, router, player, a)
+	_, _, p2, _, err := decode(e1, clock, log)
+	require.NoErrorf(t, err, "decoding failed")
 
-	require.Len(t, p1.lowestCredentialArrivals.history, dynamicFilterCredentialArrivalHistory)
 	require.Len(t, p2.lowestCredentialArrivals.history, dynamicFilterCredentialArrivalHistory)
 	emptyHistory := makeCredentialArrivalHistory(dynamicFilterCredentialArrivalHistory)
-	require.Equalf(t, p1.lowestCredentialArrivals, emptyHistory, "credential arrival history isn't empty")
 	require.Equalf(t, p2.lowestCredentialArrivals, emptyHistory, "credential arrival history isn't empty")
 }
 
@@ -274,7 +296,7 @@ func BenchmarkRandomizedEncode(b *testing.B) {
 	a := []action{}
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		encode(clock, router, player, a, false)
+		encode(clock, router, player, a)
 	}
 }
 
@@ -282,11 +304,11 @@ func BenchmarkRandomizedDecode(b *testing.B) {
 	clock := timers.MakeMonotonicClock[TimeoutType](time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
 	router, player := randomizeDiskState()
 	a := []action{}
-	ds := encode(clock, router, player, a, false)
+	ds := encode(clock, router, player, a)
 	log := makeServiceLogger(logging.Base())
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		decode(ds, clock, log, false)
+		decode(ds, clock, log)
 	}
 }
 
@@ -324,7 +346,7 @@ func TestDecodeErrs(t *testing.T) {
 		}
 		uds := diskState{UnexpectedDiskField: 5}
 		udse := protocol.EncodeReflect(uds)
-		_, _, _, _, err := decode(udse, clock, log, false)
+		_, _, _, _, err := decode(udse, clock, log)
 		require.ErrorContains(t, err, "UnexpectedDiskField")
 
 	}
@@ -338,7 +360,7 @@ func TestDecodeErrs(t *testing.T) {
 		pe := protocol.EncodeReflect(p)
 		ds := diskState{Player: pe, Router: re, Clock: ce}
 		dse := protocol.EncodeReflect(ds)
-		_, _, _, _, err := decode(dse, clock, log, false)
+		_, _, _, _, err := decode(dse, clock, log)
 		require.ErrorContains(t, err, "UnexpectedPlayerField")
 	}
 
@@ -351,7 +373,7 @@ func TestDecodeErrs(t *testing.T) {
 		re := protocol.EncodeReflect(router)
 		ds := diskState{Player: pe, Router: re, Clock: ce}
 		dse := protocol.EncodeReflect(ds)
-		_, _, _, _, err := decode(dse, clock, log, false)
+		_, _, _, _, err := decode(dse, clock, log)
 		require.ErrorContains(t, err, "UnexpectedRouterField")
 	}
 }
