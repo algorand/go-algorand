@@ -55,24 +55,71 @@ func TestCheckGroupFeesBigLogicSigProgram(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusFuture]
 	freeSize := int(proto.LogicSigMaxSize)
+	program := make([]byte, freeSize+1)
+	sender := basics.Address(logic.HashProgram(program))
 
-	stxn := transactions.SignedTxn{
-		Txn: transactions.Transaction{
-			Header: transactions.Header{
-				Fee: basics.MicroAlgos{Raw: proto.MinTxnFee},
-			},
+	tests := []struct {
+		name    string
+		fee     uint64
+		wantErr bool
+	}{
+		{
+			name:    "underpaid",
+			fee:     proto.MinTxnFee,
+			wantErr: true,
 		},
-		Lsig: transactions.LogicSig{
-			Logic: make([]byte, freeSize+1),
+		{
+			name: "paid",
+			fee:  proto.MinTxnFee + 1,
 		},
 	}
 
-	usage, paid := transactions.SummarizeFees([]transactions.SignedTxnWithAD{{SignedTxn: stxn}}, proto)
-	require.Error(t, CheckGroupFees(paid, usage, proto.MinFee()))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			genesisInitState, addrs, _ := ledgertesting.Genesis(10)
+			genesisInitState.Accounts[sender] = basics.AccountData{
+				MicroAlgos: basics.MicroAlgos{Raw: 1_000_000_000},
+				Status:     basics.Offline,
+			}
 
-	stxn.Txn.Fee.Raw = proto.MinTxnFee + 1
-	usage, paid = transactions.SummarizeFees([]transactions.SignedTxnWithAD{{SignedTxn: stxn}}, proto)
-	require.NoError(t, CheckGroupFees(paid, usage, proto.MinFee()))
+			l := newTestLedger(t, bookkeeping.GenesisBalances{
+				Balances:    genesisInitState.Accounts,
+				FeeSink:     testSinkAddr,
+				RewardsPool: testPoolAddr,
+			})
+			genesisBlockHeader, err := l.BlockHdr(basics.Round(0))
+			require.NoError(t, err)
+			newBlock := bookkeeping.MakeBlock(genesisBlockHeader)
+			eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
+			require.NoError(t, err)
+
+			stxn := transactions.SignedTxn{
+				Txn: transactions.Transaction{
+					Type: protocol.PaymentTx,
+					Header: transactions.Header{
+						Sender:      sender,
+						Fee:         basics.MicroAlgos{Raw: tt.fee},
+						FirstValid:  newBlock.Round(),
+						LastValid:   newBlock.Round(),
+						GenesisHash: l.GenesisHash(),
+					},
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver: addrs[0],
+					},
+				},
+				Lsig: transactions.LogicSig{
+					Logic: program,
+				},
+			}
+
+			err = eval.TransactionGroup(stxn.WithAD())
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
 }
 
 func TestBlockEvaluatorFeeSink(t *testing.T) {

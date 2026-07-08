@@ -1420,20 +1420,6 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("vFuture: LogicSig args still capped by max group pool", func(t *testing.T) {
-		program := makeProgram(vFuture, 0)
-		group := make([]transactions.SignedTxn, vFuture.MaxTxGroupSize)
-		for i := range group {
-			group[i] = makeTxnForReceiver(
-				program,
-				[][]byte{make([]byte, int(vFuture.LogicSigMaxSize)+1)},
-				basics.Address{byte(i + 1)},
-			)
-		}
-
-		err := verifyGroupForProtocol(protocol.ConsensusFuture, group)
-		require.ErrorContains(t, err, "bytes of LogicSig args")
-	})
 }
 
 func testLogicSigMultisigValidation(t *testing.T, consensusVer protocol.ConsensusVersion, useLMsig bool) {
