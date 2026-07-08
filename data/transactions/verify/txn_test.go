@@ -1318,10 +1318,10 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 		}
 	}
 
-	t.Run("v18: singleton still limited by legacy program cap", func(t *testing.T) {
+	t.Run("v18: singleton still limited by legacy size pool", func(t *testing.T) {
 		program := makeProgram(v18, int(v18.LogicSigMaxSize)+1)
 		err := verifyGroupForProtocol(protocol.ConsensusV18, []transactions.SignedTxn{makeTxn(program, nil)})
-		require.ErrorContains(t, err, "LogicSig.Logic too long")
+		require.ErrorContains(t, err, "more than the available pool")
 	})
 
 	t.Run("v18: orphan LogicSig args on signed txn are ignored", func(t *testing.T) {

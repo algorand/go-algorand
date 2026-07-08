@@ -169,8 +169,10 @@ func populateFeeUsage(result *Result, proto config.ConsensusParams) {
 		group := &result.TxnGroups[gi]
 		var groupUsage basics.Micros
 		var groupFeesPaid basics.MicroAlgos
+		txgroup := make([]transactions.SignedTxnWithAD, len(group.Txns))
 
 		for ti := range group.Txns {
+			txgroup[ti] = group.Txns[ti].Txn
 			usage, feesPaid := summarizeTxnFeeUsage(group.Txns[ti].Txn, proto)
 			// Per-transaction usage is intentionally not reported: fees pool across
 			// the group and round up once for the whole tree, so usage is only
@@ -180,6 +182,9 @@ func populateFeeUsage(result *Result, proto config.ConsensusParams) {
 			groupUsage = basics.AddSaturate(groupUsage, usage)
 			groupFeesPaid = groupFeesPaid.AddSaturate(feesPaid)
 		}
+		// LogicSig program bytes are priced against the group pool, so add that
+		// contribution after summing per-transaction fee factors.
+		groupUsage = basics.AddSaturate(groupUsage, transactions.LogicSigProgramFeeContribution(txgroup, proto))
 
 		group.GroupUsage = groupUsage
 		group.GroupFeesPaid = groupFeesPaid
