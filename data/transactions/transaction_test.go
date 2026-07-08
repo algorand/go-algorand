@@ -685,7 +685,7 @@ func TestLogicSigProgramFeeContribution(t *testing.T) {
 				}
 			}
 
-			assert.Equal(t, tt.expectedContribution, LogicSigProgramFeeContribution(txgroup, tt.proto))
+			assert.Equal(t, tt.expectedContribution, logicSigProgramFeeContribution(txgroup, tt.proto))
 		})
 	}
 }
