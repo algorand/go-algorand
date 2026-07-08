@@ -29,7 +29,9 @@ var (
 )
 
 const (
-	// FalconSeedSize Represents the size in bytes of the random bytes used to generate Falcon keys
+	// FalconSeedSize is the size in bytes of a Falcon keygen seed: 32 bytes
+	// (256-bit entropy). The previous value of 48 was inherited from falcon.c's
+	// SHAKE256 explicit-seed.
 	FalconSeedSize = 32
 
 	// FalconPublicKeySize represents the size in bytes of a Falcon public key.
