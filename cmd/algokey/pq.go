@@ -240,8 +240,8 @@ func runPQAddress() error {
 	if _, ok := crypto.LookupPQScheme(scheme); !ok {
 		return fmt.Errorf("%w: %q", crypto.ErrPQSchemeNotSupported, scheme)
 	}
-	if publicMaterial.scheme != scheme {
-		return fmt.Errorf("%w: public key file scheme is %q, requested %q", errPQKeyWrongType, publicMaterial.scheme, scheme)
+	if publicMaterial.Scheme != scheme {
+		return fmt.Errorf("%w: public key file scheme is %q, requested %q", errPQKeyWrongType, publicMaterial.Scheme, scheme)
 	}
 
 	public, err := resolvePQSalt(publicMaterial, pqAddressSalt)
@@ -265,7 +265,7 @@ func runPQExportWithOptions(keyfile, mnemonicFile string, displayMnemonic bool) 
 	}
 
 	if mnemonicFile != "" {
-		if err = writePQMnemonicFile(mnemonicFile, root.public.scheme, root.entropy); err != nil {
+		if err = writePQMnemonicFile(mnemonicFile, root.public.Scheme, root.entropy); err != nil {
 			return fmt.Errorf("cannot write mnemonic to %s: %w", mnemonicFile, err)
 		}
 	}
@@ -343,17 +343,17 @@ func runPQSignWithOptions(opts pqSignOptions) error {
 		return err
 	}
 
-	ops, ok := pqSchemeOpsByScheme[signing.public.scheme]
+	ops, ok := pqSchemeOpsByScheme[signing.public.Scheme]
 	if !ok {
-		return fmt.Errorf("%w: %q", crypto.ErrPQSchemeNotSupported, signing.public.scheme)
+		return fmt.Errorf("%w: %q", crypto.ErrPQSchemeNotSupported, signing.public.Scheme)
 	}
 
 	public, err := resolvePQSalt(signing.public, opts.salt)
 	if err != nil {
 		return err
 	}
-	if !public.addr.IsPQCompliant() {
-		return fmt.Errorf("%w: derived address %s for salt %d", errPQSaltNotCompliant, public.addr, public.salt)
+	if !public.address().IsPQCompliant() {
+		return fmt.Errorf("%w: derived address %s for salt %d", errPQSaltNotCompliant, public.address(), public.Salt)
 	}
 
 	txdata, err := readFile(opts.txfile)
@@ -379,7 +379,7 @@ func runPQSignWithOptions(opts pqSignOptions) error {
 			if !opts.overwrite {
 				return errPQTxnAlreadySigned
 			}
-			clearSignedTxnSignatures(&stxn)
+			clearSignedTxnAuthorization(&stxn)
 		}
 
 		signature, signErr := ops.signTxn(signing.private, stxn.Txn)
@@ -388,15 +388,13 @@ func runPQSignWithOptions(opts pqSignOptions) error {
 		}
 
 		stxn.PQsig = transactions.PQSig{
-			Scheme:    public.scheme,
-			Salt:      public.salt,
-			PublicKey: public.pk,
+			Scheme:    public.Scheme,
+			Salt:      public.Salt,
+			PublicKey: public.PublicKey,
 			Signature: signature,
 		}
-		if stxn.Txn.Sender != public.addr {
-			stxn.AuthAddr = public.addr
-		} else {
-			stxn.AuthAddr = basics.Address{}
+		if stxn.Txn.Sender != public.address() {
+			stxn.AuthAddr = public.address()
 		}
 
 		outBytes = append(outBytes, protocol.Encode(&stxn)...)
@@ -411,11 +409,12 @@ func runPQSignWithOptions(opts pqSignOptions) error {
 	return nil
 }
 
-func clearSignedTxnSignatures(stxn *transactions.SignedTxn) {
+func clearSignedTxnAuthorization(stxn *transactions.SignedTxn) {
 	stxn.Sig = crypto.Signature{}
 	stxn.Msig = crypto.MultisigSig{}
 	stxn.Lsig = transactions.LogicSig{}
 	stxn.PQsig = transactions.PQSig{}
+	stxn.AuthAddr = basics.Address{}
 }
 
 func printPQMnemonic(w io.Writer, entropy crypto.Seed) error {
@@ -430,11 +429,11 @@ func printPQMnemonic(w io.Writer, entropy crypto.Seed) error {
 func printPQKeyInfo(w io.Writer, public pqPublicMaterial) error {
 	_, err := io.WriteString(w, fmt.Sprintf(
 		"PQ scheme: %s\nPQ public key: %s\nPQ address salt: %d\nPQ address: %s\nPQ address compliant: %t\n",
-		formatPQScheme(public.scheme),
-		base64.StdEncoding.EncodeToString(public.pk),
-		public.salt,
-		public.addr,
-		public.addr.IsPQCompliant(),
+		formatPQScheme(public.Scheme),
+		base64.StdEncoding.EncodeToString(public.PublicKey),
+		public.Salt,
+		public.address(),
+		public.address().IsPQCompliant(),
 	))
 	return err
 }

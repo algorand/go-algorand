@@ -118,10 +118,8 @@ func VerifyFalcon1024(message Hashable, publicKey []byte, signature []byte) erro
 	if len(publicKey) != FalconPublicKeySize {
 		return fmt.Errorf("%w: public key size %d, want %d", ErrPQFalcon1024SigInvalid, len(publicKey), FalconPublicKeySize)
 	}
-	if len(signature) == 0 || len(signature) > FalconMaxSignatureSize {
-		return fmt.Errorf("%w: signature size %d is empty or exceeds maximum %d", ErrPQFalcon1024SigInvalid, len(signature), FalconMaxSignatureSize)
-	}
-
+	// No signature size checks needed: cfalcon rejects empty, undersized, and
+	// oversized signatures itself before doing any work.
 	var fv FalconVerifier
 	copy(fv.PublicKey[:], publicKey)
 	if err := fv.Verify(message, FalconSignature(signature)); err != nil {

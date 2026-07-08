@@ -44,11 +44,27 @@ var (
 	errPQSaltNotCompliant = errors.New("pq address salt is not compliant")
 )
 
+// pqPublicMaterial is a PQ public key with its address salt. It is also the
+// msgp payload stored after the PQ public-key magic prefix.
 type pqPublicMaterial struct {
-	scheme protocol.PQScheme
-	salt   basics.PQAddressSalt
-	pk     []byte
-	addr   basics.Address
+	_struct struct{} `codec:""`
+
+	Scheme    protocol.PQScheme    `codec:"scheme"`
+	Salt      basics.PQAddressSalt `codec:"salt"`
+	PublicKey []byte               `codec:"public-key,allocbound=crypto.MaxPQPublicKeySize"`
+}
+
+func (m pqPublicMaterial) address() basics.Address {
+	return basics.PQAddress(m.Scheme, m.Salt, m.PublicKey)
+}
+
+// pqPrivateKeyPayload is the msgp payload stored after the PQ private-key
+// magic prefix.
+type pqPrivateKeyPayload struct {
+	_struct struct{} `codec:""`
+
+	Scheme  protocol.PQScheme `codec:"scheme"`
+	Entropy []byte            `codec:"entropy,allocbound=crypto.DigestSize"`
 }
 
 type pqSigningMaterial struct {
@@ -70,7 +86,7 @@ func writePQRootKeyFile(filename string, root pqRootMaterial) error {
 }
 
 func writePQPublicKeyFile(filename string, public pqPublicMaterial) error {
-	data := encodePQPublicKeyFileBytes(public)
+	data := encodePQPayload(pqPublicKeyMagic, &public)
 	if err := os.WriteFile(filename, data, 0666); err != nil {
 		return fmt.Errorf("cannot write public key to %s: %w", filename, err)
 	}
@@ -108,20 +124,11 @@ func readPQPublicKeyFile(filename string) (pqPublicMaterial, error) {
 }
 
 func encodePQPrivateKeyFileBytes(root pqRootMaterial) []byte {
-	payload := crypto.PQPrivateKeyPayload{
-		Scheme:  root.public.scheme,
+	payload := pqPrivateKeyPayload{
+		Scheme:  root.public.Scheme,
 		Entropy: root.entropy[:],
 	}
 	return encodePQPayload(pqPrivateKeyMagic, &payload)
-}
-
-func encodePQPublicKeyFileBytes(public pqPublicMaterial) []byte {
-	payload := crypto.PQPublicKeyPayload{
-		Scheme:    public.scheme,
-		Salt:      uint8(public.salt),
-		PublicKey: public.pk,
-	}
-	return encodePQPayload(pqPublicKeyMagic, &payload)
 }
 
 func encodePQPayload(magic string, payload msgp.Marshaler) []byte {
@@ -131,7 +138,7 @@ func encodePQPayload(magic string, payload msgp.Marshaler) []byte {
 // decodePQPrivateKeyEntropy parses the stored {scheme, entropy} from a private
 // key file without deriving the (expensive) key material.
 func decodePQPrivateKeyEntropy(data []byte) (protocol.PQScheme, crypto.Seed, error) {
-	var payload crypto.PQPrivateKeyPayload
+	var payload pqPrivateKeyPayload
 	if err := decodePQPayload(data, pqPrivateKeyMagic, &payload); err != nil {
 		return protocol.PQScheme{}, crypto.Seed{}, err
 	}
@@ -152,16 +159,16 @@ func decodePQPrivateKeyFileBytes(data []byte) (pqRootMaterial, error) {
 }
 
 func decodePQPublicKeyFileBytes(data []byte) (pqPublicMaterial, error) {
-	var payload crypto.PQPublicKeyPayload
+	var payload pqPublicMaterial
 	if err := decodePQPayload(data, pqPublicKeyMagic, &payload); err != nil {
 		return pqPublicMaterial{}, err
 	}
-	public, err := publicMaterialFromFields(payload.Scheme, basics.PQAddressSalt(payload.Salt), payload.PublicKey)
+	public, err := publicMaterialFromFields(payload.Scheme, payload.Salt, payload.PublicKey)
 	if err != nil {
 		return pqPublicMaterial{}, err
 	}
-	if !public.addr.IsPQCompliant() {
-		return pqPublicMaterial{}, fmt.Errorf("%w: public key file address %s", errPQSaltNotCompliant, public.addr)
+	if !public.address().IsPQCompliant() {
+		return pqPublicMaterial{}, fmt.Errorf("%w: public key file address %s", errPQSaltNotCompliant, public.address())
 	}
 	return public, nil
 }
@@ -197,12 +204,10 @@ func publicMaterialFromFields(scheme protocol.PQScheme, salt basics.PQAddressSal
 		return pqPublicMaterial{}, fmt.Errorf("%w: got public key size %d, want %d", errPQKeyMalformed, len(publicKey), ops.publicKeySize())
 	}
 
-	addr := basics.PQAddress(scheme, salt, publicKey)
 	return pqPublicMaterial{
-		scheme: scheme,
-		salt:   salt,
-		pk:     slices.Clone(publicKey),
-		addr:   addr,
+		Scheme:    scheme,
+		Salt:      salt,
+		PublicKey: slices.Clone(publicKey),
 	}, nil
 }
 
@@ -212,14 +217,14 @@ func publicMaterialFromFields(scheme protocol.PQScheme, salt basics.PQAddressSal
 // non-compliant addresses via public.addr.IsPQCompliant().
 func resolvePQSalt(public pqPublicMaterial, saltValue string) (pqPublicMaterial, error) {
 	if saltValue == "" || strings.EqualFold(saltValue, "canonical") {
-		return canonicalPublicMaterialFromKey(public.scheme, public.pk)
+		return canonicalPublicMaterialFromKey(public.Scheme, public.PublicKey)
 	}
 
 	n, err := strconv.ParseUint(saltValue, 10, 8)
 	if err != nil {
 		return pqPublicMaterial{}, fmt.Errorf("invalid pq salt %q: use canonical or 0..255", saltValue)
 	}
-	return publicMaterialFromFields(public.scheme, basics.PQAddressSalt(n), public.pk)
+	return publicMaterialFromFields(public.Scheme, basics.PQAddressSalt(n), public.PublicKey)
 }
 
 func writePQMnemonicFile(filename string, scheme protocol.PQScheme, entropy crypto.Seed) error {
