@@ -108,10 +108,6 @@ type networkAction struct {
 	UnauthenticatedBundle unauthenticatedBundle
 	CompoundMessage       compoundMessage
 
-	// UnauthenticatedVotes is a concatenation of per-step vote dumps, so no
-	// single consensus bound applies; these bytes come only from the local
-	// crash database, so decoding is unbounded like the reflection codec it
-	// replaced.
 	UnauthenticatedVotes []unauthenticatedVote `codec:",allocbound=-"`
 
 	Err *serializableError
@@ -538,10 +534,7 @@ func zeroAction(t actionType) action {
 	}
 }
 
-// encodeAction serializes an action using its generated msgp marshaler. The
-// type switch is unavoidable: action is an interface, so the concrete type
-// must be recovered before its pointer methods are available. Keep the cases
-// in sync with decodeAction.
+// encodeAction serializes an action using its generated msgp marshaler.
 func encodeAction(a action) []byte {
 	switch v := a.(type) {
 	case noopAction:
@@ -567,9 +560,6 @@ func encodeAction(a action) []byte {
 }
 
 // unmarshalAction decodes data into a fresh value of concrete action type T.
-// The PT constraint binds T to its pointer type, which is where the generated
-// msgp unmarshaler lives, so listing a type here only compiles if the type is
-// covered by msgp code generation.
 func unmarshalAction[T action, PT interface {
 	*T
 	msgp.Unmarshaler
