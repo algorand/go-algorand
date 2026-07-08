@@ -22,7 +22,10 @@ runs:
       # cygpath -m rewrites it with forward slashes (e.g. D:/a/.../go/bin), which
       # both Go and the shell accept. Persisted for all later steps in the job.
       shell: msys2 {0}
-      run: echo "GOBIN=$(cygpath -m "$(go env GOPATH)")/bin" >> "$GITHUB_ENV"
+      run: |
+        gopath=$(go env GOPATH)
+        gobin="$(cygpath -m "$gopath")/bin"
+        echo "GOBIN=$gobin" >> "$GITHUB_ENV"
     - name: Build libsodium
       shell: msys2 {0}
       run: make libsodium
