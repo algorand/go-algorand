@@ -43,16 +43,6 @@ import (
 //        |-----> (*) MsgIsZero
 //        |-----> FalconPublicKeyMaxSize()
 //
-// FalconSeed
-//      |-----> (*) MarshalMsg
-//      |-----> (*) CanMarshalMsg
-//      |-----> (*) UnmarshalMsg
-//      |-----> (*) UnmarshalMsgWithState
-//      |-----> (*) CanUnmarshalMsg
-//      |-----> (*) Msgsize
-//      |-----> (*) MsgIsZero
-//      |-----> FalconSeedMaxSize()
-//
 // FalconSignature
 //        |-----> MarshalMsg
 //        |-----> CanMarshalMsg
@@ -553,60 +543,6 @@ func (z *FalconPublicKey) MsgIsZero() bool {
 func FalconPublicKeyMaxSize() (s int) {
 	// Calculating size of array: z
 	s = msgp.ArrayHeaderSize + ((FalconPublicKeySize) * (msgp.ByteSize))
-	return
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z *FalconSeed) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, (*z)[:])
-	return
-}
-
-func (_ *FalconSeed) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*FalconSeed)
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *FalconSeed) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
-	if st.AllowableDepth == 0 {
-		err = msgp.ErrMaxDepthExceeded{}
-		return
-	}
-	st.AllowableDepth--
-	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	o = bts
-	return
-}
-
-func (z *FalconSeed) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
-}
-func (_ *FalconSeed) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*FalconSeed)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *FalconSeed) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (FalconSeedSize * (msgp.ByteSize))
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z *FalconSeed) MsgIsZero() bool {
-	return (*z) == (FalconSeed{})
-}
-
-// FalconSeedMaxSize returns a maximum valid message size for this message type
-func FalconSeedMaxSize() (s int) {
-	// Calculating size of array: z
-	s = msgp.ArrayHeaderSize + ((FalconSeedSize) * (msgp.ByteSize))
 	return
 }
 

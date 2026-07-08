@@ -26,19 +26,6 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestGenerateFalconSignerRejectsShortSeed(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
-
-	for _, n := range []int{0, len(Seed{}) - 1} {
-		_, err := GenerateFalconSignerFromBytes(make([]byte, n))
-		a.ErrorIs(err, errFalconSeedTooShort)
-	}
-
-	_, err := GenerateFalconSignerFromBytes(make([]byte, len(Seed{})))
-	a.NoError(err)
-}
-
 func TestSignAndVerifyFalcon(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)

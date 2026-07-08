@@ -133,7 +133,7 @@ func TestPQGenerateUsesMnemonicSizedEntropy(t *testing.T) {
 	requirePQPublicEqual(t, root.public, signing.public)
 
 	seed := derivePQKeySeed(protocol.PQSchemeFalcon1024, root.entropy)
-	signer, err := crypto.GenerateFalconSignerFromBytes(seed[:])
+	signer, err := crypto.GenerateFalconSigner(crypto.FalconSeed(seed))
 	require.NoError(t, err)
 	require.Equal(t, signer.PublicKey[:], root.public.pk)
 	require.Equal(t, signer.PrivateKey[:], signing.private)
