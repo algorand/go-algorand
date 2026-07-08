@@ -158,8 +158,6 @@ contents:
     type: dir
     file_info:
       mode: 0775
-      owner: algorand
-      group: algorand
 
   # Debian copyright file (deb only, generated at build time)
   - src: .github/packaging/generated/copyright
