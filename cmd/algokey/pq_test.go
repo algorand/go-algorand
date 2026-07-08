@@ -119,6 +119,7 @@ func TestPQGenerateUsesMnemonicSizedEntropy(t *testing.T) {
 	require.Equal(t, protocol.PQSchemeFalcon1024, root.public.Scheme)
 	require.Equal(t, crypto.Seed{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32}, root.entropy)
 	require.True(t, root.public.address().IsPQCompliant())
+	require.Equal(t, "ZEJ4BLG3XWAUUZQGCEDJLYIC6D2NCWHRSX5DJMDPE54PXXR7G3PCQTARXU", root.public.address().String())
 
 	signing, err := derivePQSigningMaterialFromEntropy(root.public.Scheme, root.entropy)
 	require.NoError(t, err)

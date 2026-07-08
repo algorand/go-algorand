@@ -61,44 +61,44 @@ func TestPQAddressKnownAnswers(t *testing.T) {
 	}{
 		{
 			name:            "zero salt",
-			firstSeedByte:   0,
+			firstSeedByte:   3,
 			salt:            0,
-			expectedAddress: "7ZQ6VZDWW5NECRV3XMW6L7YX743PFC55IEVS4X3GDHIW4NBMYLYTJT4VTA",
+			expectedAddress: "KJGJA2DTCQH6LT2I2OH2YO5GIIBFC6JHX5O6UPA5ZZ5ZURFT3LHKMTRCEM",
 			compliant:       true,
 		},
 		{
 			name:            "nonzero salt",
 			firstSeedByte:   1,
 			salt:            1,
-			expectedAddress: "4X6LFIO4F7WZFXM24J567HAXW4FHXWKGVGPNCA4SMPPAYMZYSHYTB6XXC4",
+			expectedAddress: "GYBWVYVQIQF6CO7BUMG4UQ66DQYHASFOCA2P7PBYOIPKGWUZIBX4KA3TP4",
 			compliant:       true,
 		},
 		{
 			name:            "max salt",
 			firstSeedByte:   0,
 			salt:            255,
-			expectedAddress: "PFVGXUXMOHPMNTUMR67BYBUYCUCLD4ZSFRPCJOGI7BUGCX5CL47TZKFFWA",
+			expectedAddress: "YJFADDEP6Z3WAWY6ZMLN6MF4T4NK3BXKCVLPCYB6C4SQHE76LLQSZ5JG7Q",
 			compliant:       true,
 		},
 		{
 			name:            "different seed",
 			firstSeedByte:   2,
 			salt:            2,
-			expectedAddress: "2K52PWFN2AWITVDB2QHWBQ6ZW4VMJK2LVFQMDFYG2Y32NDH37GHTYFQG2Y",
+			expectedAddress: "II4DO6IIP3EAEQMWJEOLOUU3VBRVCH3WF4MX6UCRUD36DOQJ3YSHA2DV5A",
 			compliant:       true,
 		},
 		{
 			name:            "max seed and salt",
 			firstSeedByte:   255,
 			salt:            255,
-			expectedAddress: "SVR2WW4Y3SUONROBQUBQX5T2R6IQQAINOHMDAADUPI4JCWR4XYELDRUZDU",
+			expectedAddress: "3JXWI6BYYEO6WO6M7TC4SOZAZUWAD4RQO5GJ2ED6MYIEVVLOVJOETMGG4A",
 			compliant:       true,
 		},
 		{
 			name:            "non-compliant on-curve address",
 			firstSeedByte:   1,
 			salt:            0,
-			expectedAddress: "RJANW5CPBRBB3QK5XBPA3YWCFV2VQLD3HWV4KFMPMBJ7XFN2BPLKGU35KA",
+			expectedAddress: "FLX4VRWXQ65HD5G5BI2EPHJWMERHA2EBBQ7XMTZLATXH4XEOWPQSIYVIF4",
 			compliant:       false,
 		},
 	}
@@ -126,7 +126,7 @@ func TestCanonicalPQAddressSalt(t *testing.T) {
 	salt, addr, err := CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
 	require.NoError(t, err)
 	require.Equal(t, PQAddressSalt(1), salt)
-	require.Equal(t, "4X6LFIO4F7WZFXM24J567HAXW4FHXWKGVGPNCA4SMPPAYMZYSHYTB6XXC4", addr.String())
+	require.Equal(t, "GYBWVYVQIQF6CO7BUMG4UQ66DQYHASFOCA2P7PBYOIPKGWUZIBX4KA3TP4", addr.String())
 	require.True(t, addr.IsPQCompliant())
 
 	for lowerSalt := 0; lowerSalt < int(salt); lowerSalt++ {
