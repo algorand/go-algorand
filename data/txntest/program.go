@@ -23,35 +23,29 @@ import (
 )
 
 // GenerateUnsaltedProgramOfSize returns a TEAL bytecode of `size` bytes which always succeeds.
-// `size` must be at least 9 bytes
-// TODO: Replace with the helper from unmerged PR #6653 once this branch is rebased.
+// `size` must be at least 5 bytes.
 func GenerateUnsaltedProgramOfSize(size uint, pragma uint) ([]byte, error) {
-	if size < 9 {
-		return nil, fmt.Errorf("size must be at least 9 bytes; got %d", size)
+	if size < 5 {
+		return nil, fmt.Errorf("size must be at least 5 bytes; got %d", size)
 	}
-	if pragma == 0 || pragma > logic.LogicVersion {
-		return nil, fmt.Errorf("unsupported logic version %d", pragma)
-	}
-	// Build bytecode directly so automatic off-curve salting in the assembler
-	// cannot change the requested size.
-	ops := logic.OpsByName[pragma]
-	intcblock := ops["intcblock"].Opcode
-	intc0 := ops["intc_0"].Opcode
-	pop := ops["pop"].Opcode
-
-	program := []byte{byte(pragma)}
+	ls := fmt.Sprintf("#pragma version %d\n#pragma autosalt false\n", pragma)
 	if size%2 == 0 {
-		program = append(program, intcblock, 2, 1, 1)
+		ls += "intcblock 1 1\n"
 	} else {
-		program = append(program, intcblock, 1, 1)
+		ls += "intcblock 1\n"
 	}
-	for uint(len(program))+1 < size {
-		program = append(program, intc0, pop)
+	for i := uint(7); i <= size; i += 2 {
+		ls += "intc_0\npop\n"
 	}
-	program = append(program, intc0)
-	if uint(len(program)) != size {
+	ls += "intc_0"
+	code, err := logic.AssembleString(ls)
+	if err != nil {
+		return nil, err
+	}
+	// panic if the function is not working as expected and needs to be updated
+	if len(code.Program) != int(size) {
 		panic(fmt.Sprintf("wanted to create a program of size %d but got a program of size %d",
-			size, len(program)))
+			size, len(code.Program)))
 	}
-	return program, nil
+	return code.Program, nil
 }

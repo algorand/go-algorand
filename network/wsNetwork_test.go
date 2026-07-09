@@ -1537,13 +1537,18 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 		return len(netA.GetPeers(PeersConnectedOut)) == 2
 	}, time.Second, 50*time.Millisecond)
 
+	// let netC's addPeer to add the inbound connection
+	assert.Eventually(t, func() bool {
+		return len(netC.GetPeers(PeersConnectedIn)) == 1
+	}, time.Second, 50*time.Millisecond)
+
 	// A->B and A->C both open
 	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 2, len(netA.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 0, len(netB.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netC.GetPeers(PeersConnectedIn)))
-	assert.Equal(t, 0, len(netB.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 0, len(netC.GetPeers(PeersConnectedOut)))
 
 	// confirm identity map was added to for both hosts
 	assert.Equal(t, 3, netA.identityTracker.(*mockIdentityTracker).getSetCount())
