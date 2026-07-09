@@ -37,6 +37,7 @@ type pqSchemeOps interface {
 	deriveSigning(seed crypto.Digest) (pqSigningMaterial, error)
 	signTxn(privateKey []byte, txn transactions.Transaction) ([]byte, error)
 	publicKeySize() uint64
+	privateKeySize() uint64
 }
 
 var pqSchemeOpsByScheme = map[protocol.PQScheme]pqSchemeOps{
@@ -119,6 +120,8 @@ func (falcon1024Ops) deriveSigning(seed crypto.Digest) (pqSigningMaterial, error
 }
 
 func (falcon1024Ops) publicKeySize() uint64 { return crypto.FalconPublicKeySize }
+
+func (falcon1024Ops) privateKeySize() uint64 { return crypto.FalconPrivateKeySize }
 
 func (falcon1024Ops) signTxn(privateKey []byte, txn transactions.Transaction) ([]byte, error) {
 	var sk crypto.FalconPrivateKey

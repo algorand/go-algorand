@@ -31,8 +31,7 @@ var (
 	errPQSaltNotCompliant = errors.New("pq address salt is not compliant")
 )
 
-// pqPublicMaterial is a PQ public key with its address salt. It is also the
-// msgp payload of a public key file.
+// pqPublicMaterial is a PQ public key with its address salt.
 type pqPublicMaterial struct {
 	_struct struct{} `codec:""`
 
@@ -53,6 +52,9 @@ func (m pqPublicMaterial) validate() error {
 	if uint64(len(m.PublicKey)) != ops.publicKeySize() {
 		return fmt.Errorf("%w: got public key size %d, want %d", errPQKeyMalformed, len(m.PublicKey), ops.publicKeySize())
 	}
+	if !m.address().IsPQCompliant() {
+		return fmt.Errorf("%w: address %s", errPQSaltNotCompliant, m.address())
+	}
 	return nil
 }
 
@@ -66,16 +68,20 @@ type pqSigningMaterial struct {
 	PrivateKey []byte           `codec:"private-key"`
 }
 
-func writePQPrivateKeyFile(filename string, signing pqSigningMaterial) error {
-	if err := os.WriteFile(filename, protocol.Encode(&signing), 0600); err != nil {
-		return fmt.Errorf("cannot write private key to %s: %w", filename, err)
+func (m pqSigningMaterial) validate() error {
+	if err := m.Public.validate(); err != nil {
+		return err
+	}
+	ops := pqSchemeOpsByScheme[m.Public.Scheme]
+	if uint64(len(m.PrivateKey)) != ops.privateKeySize() {
+		return fmt.Errorf("%w: got private key size %d, want %d", errPQKeyMalformed, len(m.PrivateKey), ops.privateKeySize())
 	}
 	return nil
 }
 
-func writePQPublicKeyFile(filename string, public pqPublicMaterial) error {
-	if err := os.WriteFile(filename, protocol.Encode(&public), 0666); err != nil {
-		return fmt.Errorf("cannot write public key to %s: %w", filename, err)
+func writePQPrivateKeyFile(filename string, signing pqSigningMaterial) error {
+	if err := os.WriteFile(filename, protocol.Encode(&signing), 0600); err != nil {
+		return fmt.Errorf("cannot write private key to %s: %w", filename, err)
 	}
 	return nil
 }
@@ -93,36 +99,8 @@ func decodePQPrivateKeyFileBytes(data []byte) (pqSigningMaterial, error) {
 	if err := protocol.Decode(data, &signing); err != nil {
 		return pqSigningMaterial{}, fmt.Errorf("%w: %w", errPQKeyMalformed, err)
 	}
-	if err := signing.Public.validate(); err != nil {
+	if err := signing.validate(); err != nil {
 		return pqSigningMaterial{}, err
 	}
 	return signing, nil
-}
-
-// readPQKeyFilePublic reads the public material from either a private or a
-// public key file. The two payloads' field sets are disjoint and decoding
-// rejects unknown fields, so at most one decode succeeds.
-func readPQKeyFilePublic(filename string) (pqPublicMaterial, error) {
-	data, err := readFile(filename)
-	if err != nil {
-		return pqPublicMaterial{}, fmt.Errorf("cannot read key file from %s: %w", filename, err)
-	}
-	if signing, err := decodePQPrivateKeyFileBytes(data); err == nil {
-		return signing.Public, nil
-	}
-	return decodePQPublicKeyFileBytes(data)
-}
-
-func decodePQPublicKeyFileBytes(data []byte) (pqPublicMaterial, error) {
-	var public pqPublicMaterial
-	if err := protocol.Decode(data, &public); err != nil {
-		return pqPublicMaterial{}, fmt.Errorf("%w: %w", errPQKeyMalformed, err)
-	}
-	if err := public.validate(); err != nil {
-		return pqPublicMaterial{}, err
-	}
-	if !public.address().IsPQCompliant() {
-		return pqPublicMaterial{}, fmt.Errorf("%w: public key file address %s", errPQSaltNotCompliant, public.address())
-	}
-	return public, nil
 }

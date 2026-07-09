@@ -34,9 +34,8 @@ import (
 var errPQTxnAlreadySigned = errors.New("transaction already has a signature")
 
 var (
-	pqGenerateScheme     = pqSchemeFalcon1024Name
-	pqGenerateKeyfile    string
-	pqGeneratePubkeyfile string
+	pqGenerateScheme  = pqSchemeFalcon1024Name
+	pqGenerateKeyfile string
 
 	pqInfoKeyfile string
 
@@ -114,10 +113,9 @@ func init() {
 
 	pqGenerateCmd.Flags().StringVarP(&pqGenerateScheme, "scheme", "S", pqGenerateScheme, "Post-quantum signature scheme: falcon-1024 (f1)")
 	pqGenerateCmd.Flags().StringVarP(&pqGenerateKeyfile, "keyfile", "f", "", "Private key filename")
-	pqGenerateCmd.Flags().StringVarP(&pqGeneratePubkeyfile, "pubkeyfile", "p", "", "Public key filename")
 	mustMarkFlagRequired(pqGenerateCmd, "keyfile")
 
-	pqInfoCmd.Flags().StringVarP(&pqInfoKeyfile, "keyfile", "f", "", "Key filename (private or public)")
+	pqInfoCmd.Flags().StringVarP(&pqInfoKeyfile, "keyfile", "f", "", "Private key filename")
 	mustMarkFlagRequired(pqInfoCmd, "keyfile")
 
 	pqImportCmd.Flags().StringVarP(&pqImportMnemonic, "mnemonic", "m", "", "Private key mnemonic")
@@ -155,11 +153,6 @@ func runPQGenerate() error {
 	if err = writePQPrivateKeyFile(pqGenerateKeyfile, signing); err != nil {
 		return err
 	}
-	if pqGeneratePubkeyfile != "" {
-		if err = writePQPublicKeyFile(pqGeneratePubkeyfile, signing.Public); err != nil {
-			return err
-		}
-	}
 	if err = printPQMnemonic(os.Stdout, entropy); err != nil {
 		return err
 	}
@@ -168,11 +161,11 @@ func runPQGenerate() error {
 }
 
 func runPQInfo() error {
-	public, err := readPQKeyFilePublic(pqInfoKeyfile)
+	signing, err := readPQSigningMaterial(pqInfoKeyfile)
 	if err != nil {
 		return err
 	}
-	return printPQKeyInfo(os.Stdout, public)
+	return printPQKeyInfo(os.Stdout, signing.Public)
 }
 
 func runPQImport() error {
@@ -195,9 +188,6 @@ func runPQImportWithOptions(mnemonic, schemeName, keyfile string) error {
 	}
 
 	if err = writePQPrivateKeyFile(keyfile, signing); err != nil {
-		return err
-	}
-	if err = printPQMnemonic(os.Stdout, entropy); err != nil {
 		return err
 	}
 	return printPQKeyInfo(os.Stdout, signing.Public)
@@ -248,9 +238,6 @@ func runPQSignWithOptions(opts pqSignOptions) error {
 	}
 
 	public := signing.Public
-	if !public.address().IsPQCompliant() {
-		return fmt.Errorf("%w: derived address %s for salt %d", errPQSaltNotCompliant, public.address(), public.Salt)
-	}
 
 	txdata, err := readFile(opts.txfile)
 	if err != nil {
@@ -324,12 +311,11 @@ func printPQMnemonic(w io.Writer, entropy crypto.Seed) error {
 
 func printPQKeyInfo(w io.Writer, public pqPublicMaterial) error {
 	_, err := io.WriteString(w, fmt.Sprintf(
-		"PQ scheme: %s\nPQ public key: %s\nPQ address salt: %d\nPQ address: %s\nPQ address compliant: %t\n",
+		"PQ scheme: %s\nPQ public key: %s\nPQ address salt: %d\nPQ address: %s\n",
 		formatPQScheme(public.Scheme),
 		base64.StdEncoding.EncodeToString(public.PublicKey),
 		public.Salt,
 		public.address(),
-		public.address().IsPQCompliant(),
 	))
 	return err
 }
