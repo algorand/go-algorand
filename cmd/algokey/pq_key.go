@@ -32,9 +32,8 @@ import (
 )
 
 const (
-	pqPrivateKeyMagic      = "ALGO-PQ-PRIVATE"
-	pqPublicKeyMagic       = "ALGO-PQ-PUBLIC"
-	pqMnemonicSchemeHeader = "Scheme:"
+	pqPrivateKeyMagic = "ALGO-PQ-PRIVATE"
+	pqPublicKeyMagic  = "ALGO-PQ-PUBLIC"
 )
 
 var (
@@ -184,35 +183,6 @@ func resolvePQSalt(public pqPublicMaterial, saltValue string) (pqPublicMaterial,
 		return pqPublicMaterial{}, fmt.Errorf("invalid pq salt %q: use canonical or 0..255", saltValue)
 	}
 	return publicMaterialFromFields(public.Scheme, basics.PQAddressSalt(n), public.PublicKey)
-}
-
-func readPQMnemonicFile(filename string) (protocol.PQScheme, crypto.Seed, error) {
-	if filename == stdinFileNameValue {
-		return protocol.PQScheme{}, crypto.Seed{}, fmt.Errorf("refusing to read mnemonic from stdin")
-	}
-	data, err := readFile(filename)
-	if err != nil {
-		return protocol.PQScheme{}, crypto.Seed{}, err
-	}
-
-	header, mnemonic, ok := bytes.Cut(data, []byte{'\n'})
-	if !ok {
-		return protocol.PQScheme{}, crypto.Seed{}, fmt.Errorf("%w: missing %q header", errPQKeyMalformed, pqMnemonicSchemeHeader)
-	}
-	tag, ok := bytes.CutPrefix(bytes.TrimSpace(header), []byte(pqMnemonicSchemeHeader))
-	if !ok {
-		return protocol.PQScheme{}, crypto.Seed{}, fmt.Errorf("%w: missing %q header", errPQKeyMalformed, pqMnemonicSchemeHeader)
-	}
-
-	seed, err := seedFromMnemonic(string(bytes.TrimSpace(mnemonic)))
-	if err != nil {
-		return protocol.PQScheme{}, crypto.Seed{}, err
-	}
-	scheme, err := parsePQScheme(string(bytes.TrimSpace(tag)))
-	if err != nil {
-		return protocol.PQScheme{}, crypto.Seed{}, err
-	}
-	return scheme, seed, nil
 }
 
 func isPQKeyMaterial(data []byte) bool {

@@ -45,8 +45,9 @@ var (
 	pqAddressScheme     = pqSchemeFalcon1024Name
 	pqAddressSalt       = "canonical"
 
-	pqImportMnemonicFile string
-	pqImportKeyfile      string
+	pqImportMnemonic string
+	pqImportScheme   = pqSchemeFalcon1024Name
+	pqImportKeyfile  string
 
 	pqSignKeyfile   string
 	pqSignMnemonic  string
@@ -105,7 +106,7 @@ var pqAddressCmd = &cobra.Command{
 
 var pqImportCmd = &cobra.Command{
 	Use:   "import",
-	Short: "Import a post-quantum private key from a mnemonic file",
+	Short: "Import a post-quantum private key from a mnemonic",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, _ []string) {
 		exitOnError(runPQImport())
@@ -142,9 +143,10 @@ func init() {
 	pqAddressCmd.Flags().StringVarP(&pqAddressSalt, "salt", "s", pqAddressSalt, "Address salt: canonical or 0..255")
 	mustMarkFlagRequired(pqAddressCmd, "pubkeyfile")
 
-	pqImportCmd.Flags().StringVarP(&pqImportMnemonicFile, "mnemonic-file", "m", "", "Mnemonic input filename")
+	pqImportCmd.Flags().StringVarP(&pqImportMnemonic, "mnemonic", "m", "", "Private key mnemonic")
+	pqImportCmd.Flags().StringVarP(&pqImportScheme, "scheme", "S", pqImportScheme, "Post-quantum signature scheme: falcon-1024 (f1)")
 	pqImportCmd.Flags().StringVarP(&pqImportKeyfile, "keyfile", "f", "", "Private key filename")
-	mustMarkFlagRequired(pqImportCmd, "mnemonic-file")
+	mustMarkFlagRequired(pqImportCmd, "mnemonic")
 	mustMarkFlagRequired(pqImportCmd, "keyfile")
 
 	pqSignCmd.Flags().StringVarP(&pqSignKeyfile, "keyfile", "k", "", "Private key filename")
@@ -227,13 +229,17 @@ func runPQAddress() error {
 }
 
 func runPQImport() error {
-	return runPQImportWithOptions(pqImportMnemonicFile, pqImportKeyfile)
+	return runPQImportWithOptions(pqImportMnemonic, pqImportScheme, pqImportKeyfile)
 }
 
-func runPQImportWithOptions(mnemonicFile, keyfile string) error {
-	scheme, entropy, err := readPQMnemonicFile(mnemonicFile)
+func runPQImportWithOptions(mnemonic, schemeName, keyfile string) error {
+	entropy, err := seedFromMnemonic(mnemonic)
 	if err != nil {
-		return fmt.Errorf("cannot read mnemonic from %s: %w", mnemonicFile, err)
+		return fmt.Errorf("cannot recover PQ key entropy from mnemonic: %w", err)
+	}
+	scheme, err := parsePQScheme(schemeName)
+	if err != nil {
+		return err
 	}
 
 	signing, err := derivePQSigningMaterialFromEntropy(scheme, entropy)

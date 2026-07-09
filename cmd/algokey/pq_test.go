@@ -261,34 +261,26 @@ func TestPQMnemonicImport(t *testing.T) {
 	mnemonic, err := mnemonicFromSeed(entropy)
 	require.NoError(t, err)
 
-	tempDir := t.TempDir()
-	mnemonicFile := filepath.Join(tempDir, "account.mnemonic")
-	importedKeyfile := filepath.Join(tempDir, "imported.pq")
-	require.NoError(t, os.WriteFile(mnemonicFile, []byte("Scheme: falcon-1024\n"+mnemonic+"\n"), 0600))
-
-	require.NoError(t, runPQImportWithOptions(mnemonicFile, importedKeyfile))
+	importedKeyfile := filepath.Join(t.TempDir(), "imported.pq")
+	require.NoError(t, runPQImportWithOptions(mnemonic, "falcon-1024", importedKeyfile))
 	imported, err := readPQSigningMaterial(importedKeyfile)
 	require.NoError(t, err)
 	require.Equal(t, signing, imported)
 }
 
-func TestPQImportRejectsMalformedMnemonicFile(t *testing.T) {
+func TestPQImportRejectsMalformedMnemonic(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	tempDir := t.TempDir()
-	mnemonicFile := filepath.Join(tempDir, "bad.mnemonic")
-	importedKeyfile := filepath.Join(tempDir, "imported.pq")
-	require.NoError(t, os.WriteFile(mnemonicFile, []byte("Scheme: f1\nnot a valid mnemonic\n"), 0600))
-
-	err := runPQImportWithOptions(mnemonicFile, importedKeyfile)
+	importedKeyfile := filepath.Join(t.TempDir(), "imported.pq")
+	err := runPQImportWithOptions("not a valid mnemonic", "falcon-1024", importedKeyfile)
 	require.Error(t, err)
 
 	_, statErr := os.Stat(importedKeyfile)
 	require.ErrorIs(t, statErr, os.ErrNotExist)
 }
 
-func TestPQMnemonicFileRejectsUnknownScheme(t *testing.T) {
+func TestPQImportRejectsUnknownScheme(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -297,13 +289,9 @@ func TestPQMnemonicFileRejectsUnknownScheme(t *testing.T) {
 	mnemonic, err := mnemonicFromSeed(entropy)
 	require.NoError(t, err)
 
-	// An unknown scheme in the header is rejected, never silently deriving a
-	// different key.
-	tempDir := t.TempDir()
-	badFile := filepath.Join(tempDir, "bad.mnemonic")
-	require.NoError(t, os.WriteFile(badFile, []byte("Scheme: zz\n"+mnemonic+"\n"), 0600))
-	importedKeyfile := filepath.Join(tempDir, "imported.pq")
-	require.ErrorIs(t, runPQImportWithOptions(badFile, importedKeyfile), crypto.ErrPQSchemeNotSupported)
+	// An unknown scheme is rejected, never silently deriving a different key.
+	importedKeyfile := filepath.Join(t.TempDir(), "imported.pq")
+	require.ErrorIs(t, runPQImportWithOptions(mnemonic, "zz", importedKeyfile), crypto.ErrPQSchemeNotSupported)
 	_, statErr := os.Stat(importedKeyfile)
 	require.ErrorIs(t, statErr, os.ErrNotExist)
 }
@@ -337,7 +325,8 @@ func TestPQCommandFlagShorthands(t *testing.T) {
 	require.Equal(t, "S", pqAddressCmd.Flags().Lookup("scheme").Shorthand)
 	require.Equal(t, "s", pqAddressCmd.Flags().Lookup("salt").Shorthand)
 
-	require.Equal(t, "m", pqImportCmd.Flags().Lookup("mnemonic-file").Shorthand)
+	require.Equal(t, "m", pqImportCmd.Flags().Lookup("mnemonic").Shorthand)
+	require.Equal(t, "S", pqImportCmd.Flags().Lookup("scheme").Shorthand)
 	require.Equal(t, "f", pqImportCmd.Flags().Lookup("keyfile").Shorthand)
 
 	require.Equal(t, "k", pqSignCmd.Flags().Lookup("keyfile").Shorthand)
