@@ -21,7 +21,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -47,15 +46,15 @@ func (rng *countingRNG) RandBytes(buf []byte) {
 	}
 }
 
-func pqTestRoot(t *testing.T, firstEntropyByte byte) pqRootMaterial {
+func pqTestSigning(t *testing.T, firstEntropyByte byte) pqSigningMaterial {
 	t.Helper()
 
 	var entropy crypto.Seed
 	entropy[0] = firstEntropyByte
 
-	root, err := rootMaterialFromEntropy(protocol.PQSchemeFalcon1024, entropy)
+	signing, err := derivePQSigningMaterialFromEntropy(protocol.PQSchemeFalcon1024, entropy)
 	require.NoError(t, err)
-	return root
+	return signing
 }
 
 func pqTestTxn(sender basics.Address) transactions.SignedTxn {
@@ -111,25 +110,21 @@ func TestPQGenerateUsesMnemonicSizedEntropy(t *testing.T) {
 	t.Parallel()
 
 	rng := &countingRNG{}
-	root, err := generatePQRoot(protocol.PQSchemeFalcon1024, rng)
+	entropy, signing, err := generatePQSigningMaterial(protocol.PQSchemeFalcon1024, rng)
 	require.NoError(t, err)
 
 	require.Equal(t, 1, rng.calls)
-	require.Equal(t, pqKeyEntropySize, rng.bytes)
-	require.Equal(t, protocol.PQSchemeFalcon1024, root.public.Scheme)
-	require.Equal(t, crypto.Seed{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32}, root.entropy)
-	require.True(t, root.public.address().IsPQCompliant())
-	require.Equal(t, "ZEJ4BLG3XWAUUZQGCEDJLYIC6D2NCWHRSX5DJMDPE54PXXR7G3PCQTARXU", root.public.address().String())
+	require.Equal(t, len(crypto.Seed{}), rng.bytes)
+	require.Equal(t, protocol.PQSchemeFalcon1024, signing.Public.Scheme)
+	require.Equal(t, crypto.Seed{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32}, entropy)
+	require.True(t, signing.Public.address().IsPQCompliant())
+	require.Equal(t, "ZEJ4BLG3XWAUUZQGCEDJLYIC6D2NCWHRSX5DJMDPE54PXXR7G3PCQTARXU", signing.Public.address().String())
 
-	signing, err := derivePQSigningMaterialFromEntropy(root.public.Scheme, root.entropy)
-	require.NoError(t, err)
-	require.Equal(t, root.public, signing.public)
-
-	seed := derivePQKeySeed(protocol.PQSchemeFalcon1024, root.entropy)
+	seed := derivePQKeySeed(protocol.PQSchemeFalcon1024, entropy)
 	signer, err := crypto.GenerateFalconSigner(crypto.FalconSeed(seed))
 	require.NoError(t, err)
-	require.Equal(t, signer.PublicKey[:], root.public.PublicKey)
-	require.Equal(t, signer.PrivateKey[:], signing.private)
+	require.Equal(t, signer.PublicKey[:], signing.Public.PublicKey)
+	require.Equal(t, signer.PrivateKey[:], signing.PrivateKey)
 }
 
 func TestPQSchemeRegistriesConsistent(t *testing.T) {
@@ -160,124 +155,109 @@ func TestParsePQSchemeAcceptsLongName(t *testing.T) {
 	require.Equal(t, protocol.PQSchemeFalcon1024, scheme)
 }
 
-func TestPQPrivateRootFileStoresOnlySchemeAndEntropy(t *testing.T) {
+func TestPQPrivateKeyFileStoresKeysNotEntropy(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	root := pqTestRoot(t, 0)
+	var entropy crypto.Seed
+	for i := range entropy {
+		entropy[i] = byte(i + 1)
+	}
+	signing, err := derivePQSigningMaterialFromEntropy(protocol.PQSchemeFalcon1024, entropy)
+	require.NoError(t, err)
 	keyfile := filepath.Join(t.TempDir(), "account.pq")
 
-	require.NoError(t, writePQRootKeyFile(keyfile, root))
+	require.NoError(t, writePQPrivateKeyFile(keyfile, signing))
 
 	info, err := os.Stat(keyfile)
 	require.NoError(t, err)
 	require.Equal(t, os.FileMode(0600), info.Mode().Perm())
 
+	// The file holds the scheme's keys — never the mnemonic entropy or the
+	// derived keygen seed, which would compromise keys of other schemes.
 	data, err := os.ReadFile(keyfile)
 	require.NoError(t, err)
-	require.Less(t, len(data), crypto.FalconPrivateKeySize)
+	require.False(t, bytes.Contains(data, entropy[:]))
+	seed := derivePQKeySeed(protocol.PQSchemeFalcon1024, entropy)
+	require.False(t, bytes.Contains(data, seed[:]))
 
-	var payload pqPrivateKeyPayload
-	require.NoError(t, decodePQPayload(data, pqPrivateKeyMagic, &payload))
-	require.Equal(t, root.public.Scheme, payload.Scheme)
-	require.Equal(t, root.entropy[:], payload.Entropy)
-
-	decoded, err := readPQRootKeyFile(keyfile)
+	decoded, err := readPQSigningMaterial(keyfile)
 	require.NoError(t, err)
-	require.Equal(t, root.entropy, decoded.entropy)
-	require.Equal(t, root.public, decoded.public)
-}
-
-func TestPQPrivateRootFileDoesNotPersistPublicMaterial(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	root := pqTestRoot(t, 1)
-	changed := root
-	changed.public.Salt++
-	changed.public.PublicKey = append([]byte(nil), root.public.PublicKey...)
-	changed.public.PublicKey[0] ^= 1
-
-	require.Equal(t, encodePQPrivateKeyFileBytes(root), encodePQPrivateKeyFileBytes(changed))
+	require.Equal(t, signing, decoded)
 }
 
 func TestPQPublicKeyFileRoundTrip(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	root := pqTestRoot(t, 2)
+	signing := pqTestSigning(t, 2)
 	pubkeyfile := filepath.Join(t.TempDir(), "account.pub.pq")
 
-	require.NoError(t, writePQPublicKeyFile(pubkeyfile, root.public))
+	require.NoError(t, writePQPublicKeyFile(pubkeyfile, signing.Public))
 	decoded, err := readPQPublicKeyFile(pubkeyfile)
 	require.NoError(t, err)
-	require.Equal(t, root.public, decoded)
+	require.Equal(t, signing.Public, decoded)
 
-	changed := root.public
+	changed := signing.Public
 	changed.Salt++
-	require.NotEqual(t, encodePQPayload(pqPublicKeyMagic, &root.public), encodePQPayload(pqPublicKeyMagic, &changed))
+	require.NotEqual(t, encodePQPayload(pqPublicKeyMagic, &signing.Public), encodePQPayload(pqPublicKeyMagic, &changed))
 }
 
 func TestPQKeyFileRejectsMalformedInputs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	root := pqTestRoot(t, 0)
+	signing := pqTestSigning(t, 0)
 
 	var edSeed crypto.Seed
 	_, err := decodePQPrivateKeyFileBytes(edSeed[:])
 	require.ErrorIs(t, err, errPQKeyWrongType)
 
-	privatePayload := pqPrivateKeyPayload{
-		Scheme:  protocol.PQScheme{'z', 'z'},
-		Entropy: root.entropy[:],
-	}
-	_, err = decodePQPrivateKeyFileBytes(encodePQPayload(pqPrivateKeyMagic, &privatePayload))
+	badScheme := signing
+	badScheme.Public.Scheme = protocol.PQScheme{'z', 'z'}
+	_, err = decodePQPrivateKeyFileBytes(encodePQPayload(pqPrivateKeyMagic, &badScheme))
 	require.ErrorIs(t, err, crypto.ErrPQSchemeNotSupported)
 
-	privatePayload.Scheme = protocol.PQSchemeFalcon1024
-	privatePayload.Entropy = privatePayload.Entropy[:len(privatePayload.Entropy)-1]
-	_, err = decodePQPrivateKeyFileBytes(encodePQPayload(pqPrivateKeyMagic, &privatePayload))
+	badKey := signing
+	badKey.Public.PublicKey = signing.Public.PublicKey[:len(signing.Public.PublicKey)-1]
+	_, err = decodePQPrivateKeyFileBytes(encodePQPayload(pqPrivateKeyMagic, &badKey))
 	require.ErrorIs(t, err, errPQKeyMalformed)
 
 	publicPayload := pqPublicMaterial{
-		Scheme:    root.public.Scheme,
-		Salt:      root.public.Salt,
-		PublicKey: root.public.PublicKey[:len(root.public.PublicKey)-1],
+		Scheme:    signing.Public.Scheme,
+		Salt:      signing.Public.Salt,
+		PublicKey: signing.Public.PublicKey[:len(signing.Public.PublicKey)-1],
 	}
 	_, err = decodePQPublicKeyFileBytes(encodePQPayload(pqPublicKeyMagic, &publicPayload))
 	require.ErrorIs(t, err, errPQKeyMalformed)
 
-	nonCompliant := nonCompliantPQPublic(t, root.public)
-	publicPayload.PublicKey = root.public.PublicKey
+	nonCompliant := nonCompliantPQPublic(t, signing.Public)
+	publicPayload.PublicKey = signing.Public.PublicKey
 	publicPayload.Salt = nonCompliant.Salt
 	_, err = decodePQPublicKeyFileBytes(encodePQPayload(pqPublicKeyMagic, &publicPayload))
 	require.ErrorIs(t, err, errPQSaltNotCompliant)
 }
 
-func TestPQMnemonicExportImportRoundTrip(t *testing.T) {
+func TestPQMnemonicImport(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	root := pqTestRoot(t, 3)
+	var entropy crypto.Seed
+	entropy[0] = 3
+	signing, err := derivePQSigningMaterialFromEntropy(protocol.PQSchemeFalcon1024, entropy)
+	require.NoError(t, err)
+	mnemonic, err := mnemonicFromSeed(entropy)
+	require.NoError(t, err)
 
 	tempDir := t.TempDir()
-	keyfile := filepath.Join(tempDir, "account.pq")
 	mnemonicFile := filepath.Join(tempDir, "account.mnemonic")
 	importedKeyfile := filepath.Join(tempDir, "imported.pq")
-	require.NoError(t, writePQRootKeyFile(keyfile, root))
-
-	require.NoError(t, runPQExportWithOptions(keyfile, mnemonicFile, false))
-	exportedScheme, exportedEntropy, err := readPQMnemonicFile(mnemonicFile)
-	require.NoError(t, err)
-	require.Equal(t, root.public.Scheme, exportedScheme)
-	require.Equal(t, root.entropy, exportedEntropy)
+	require.NoError(t, os.WriteFile(mnemonicFile, []byte("Scheme: falcon-1024\n"+mnemonic+"\n"), 0600))
 
 	require.NoError(t, runPQImportWithOptions(mnemonicFile, importedKeyfile, false))
-	imported, err := readPQRootKeyFile(importedKeyfile)
+	imported, err := readPQSigningMaterial(importedKeyfile)
 	require.NoError(t, err)
-	require.Equal(t, root.entropy, imported.entropy)
-	require.Equal(t, root.public, imported.public)
+	require.Equal(t, signing, imported)
 }
 
 func TestPQImportRejectsMalformedMnemonicFile(t *testing.T) {
@@ -296,26 +276,20 @@ func TestPQImportRejectsMalformedMnemonicFile(t *testing.T) {
 	require.ErrorIs(t, statErr, os.ErrNotExist)
 }
 
-func TestPQMnemonicFileRecordsSchemeAndRejectsUnknown(t *testing.T) {
+func TestPQMnemonicFileRejectsUnknownScheme(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	root := pqTestRoot(t, 5)
-
-	tempDir := t.TempDir()
-	mnemonicFile := filepath.Join(tempDir, "account.mnemonic")
-	require.NoError(t, writePQMnemonicFile(mnemonicFile, root.public.Scheme, root.entropy))
-
-	// The exported file records the scheme so it travels with the phrase.
-	contents, err := os.ReadFile(mnemonicFile)
+	var entropy crypto.Seed
+	entropy[0] = 5
+	mnemonic, err := mnemonicFromSeed(entropy)
 	require.NoError(t, err)
-	require.Contains(t, string(contents), "Scheme: falcon-1024")
 
 	// An unknown scheme in the header is rejected, never silently deriving a
 	// different key.
+	tempDir := t.TempDir()
 	badFile := filepath.Join(tempDir, "bad.mnemonic")
-	badContents := strings.Replace(string(contents), "Scheme: falcon-1024", "Scheme: zz", 1)
-	require.NoError(t, os.WriteFile(badFile, []byte(badContents), 0600))
+	require.NoError(t, os.WriteFile(badFile, []byte("Scheme: zz\n"+mnemonic+"\n"), 0600))
 	importedKeyfile := filepath.Join(tempDir, "imported.pq")
 	require.ErrorIs(t, runPQImportWithOptions(badFile, importedKeyfile, false), crypto.ErrPQSchemeNotSupported)
 	_, statErr := os.Stat(importedKeyfile)
@@ -326,25 +300,14 @@ func TestPQPrintMnemonic(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	root := pqTestRoot(t, 6)
-	mnemonic, err := mnemonicFromSeed(root.entropy)
+	var entropy crypto.Seed
+	entropy[0] = 6
+	mnemonic, err := mnemonicFromSeed(entropy)
 	require.NoError(t, err)
 
 	var out bytes.Buffer
-	require.NoError(t, printPQMnemonic(&out, root.entropy))
-	require.Equal(t, "PQ private key mnemonic: "+mnemonic+"\n", out.String())
-}
-
-func TestPQExportRequiresMnemonicDestination(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	root := pqTestRoot(t, 7)
-	keyfile := filepath.Join(t.TempDir(), "account.pq")
-	require.NoError(t, writePQRootKeyFile(keyfile, root))
-
-	err := runPQExportWithOptions(keyfile, "", false)
-	require.ErrorContains(t, err, "--mnemonic-file or --display-mnemonic")
+	require.NoError(t, printPQMnemonic(&out, entropy))
+	require.Equal(t, "PQ private key mnemonic: "+mnemonic+"\nWrite these words down: they cannot be recovered from the key file.\n", out.String())
 }
 
 func TestPQCommandFlagShorthands(t *testing.T) {
@@ -363,10 +326,6 @@ func TestPQCommandFlagShorthands(t *testing.T) {
 	require.Equal(t, "S", pqAddressCmd.Flags().Lookup("scheme").Shorthand)
 	require.Equal(t, "s", pqAddressCmd.Flags().Lookup("salt").Shorthand)
 
-	require.Equal(t, "f", pqExportCmd.Flags().Lookup("keyfile").Shorthand)
-	require.Equal(t, "m", pqExportCmd.Flags().Lookup("mnemonic-file").Shorthand)
-	require.Empty(t, pqExportCmd.Flags().Lookup("display-mnemonic").Shorthand)
-
 	require.Equal(t, "m", pqImportCmd.Flags().Lookup("mnemonic-file").Shorthand)
 	require.Equal(t, "f", pqImportCmd.Flags().Lookup("keyfile").Shorthand)
 	require.Empty(t, pqImportCmd.Flags().Lookup("display-mnemonic").Shorthand)
@@ -383,18 +342,18 @@ func TestPQPublicAddressSaltHandling(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	root := pqTestRoot(t, 1)
+	signing := pqTestSigning(t, 1)
 
-	canonical, err := resolvePQSalt(root.public, "canonical")
+	canonical, err := resolvePQSalt(signing.Public, "canonical")
 	require.NoError(t, err)
-	require.Equal(t, root.public, canonical)
+	require.Equal(t, signing.Public, canonical)
 	require.True(t, canonical.address().IsPQCompliant())
 
-	nonCompliant := nonCompliantPQPublic(t, root.public)
-	require.Equal(t, basics.PQAddress(root.public.Scheme, nonCompliant.Salt, root.public.PublicKey), nonCompliant.address())
+	nonCompliant := nonCompliantPQPublic(t, signing.Public)
+	require.Equal(t, basics.PQAddress(signing.Public.Scheme, nonCompliant.Salt, signing.Public.PublicKey), nonCompliant.address())
 	require.False(t, nonCompliant.address().IsPQCompliant())
 
-	_, err = resolvePQSalt(root.public, "256")
+	_, err = resolvePQSalt(signing.Public, "256")
 	require.ErrorContains(t, err, "invalid pq salt")
 }
 
@@ -402,14 +361,14 @@ func TestPQSignProducesVerifiablePQEnvelope(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	root := pqTestRoot(t, 0)
+	signing := pqTestSigning(t, 0)
 	tempDir := t.TempDir()
 	keyfile := filepath.Join(tempDir, "account.pq")
 	txfile := filepath.Join(tempDir, "txn.msgp")
 	outfile := filepath.Join(tempDir, "signed.msgp")
-	require.NoError(t, writePQRootKeyFile(keyfile, root))
+	require.NoError(t, writePQPrivateKeyFile(keyfile, signing))
 
-	stxn := pqTestTxn(root.public.address())
+	stxn := pqTestTxn(signing.Public.address())
 	require.NoError(t, os.WriteFile(txfile, protocol.Encode(&stxn), 0600))
 
 	require.NoError(t, runPQSignWithOptions(pqSignOptions{
@@ -429,10 +388,10 @@ func TestPQSignProducesVerifiablePQEnvelope(t *testing.T) {
 	require.True(t, signed.Lsig.Blank())
 	require.False(t, signed.PQsig.Blank())
 	require.True(t, signed.AuthAddr.IsZero())
-	require.Equal(t, root.public.address(), signed.Authorizer())
-	require.Equal(t, root.public.Scheme, signed.PQsig.Scheme)
-	require.Equal(t, root.public.Salt, signed.PQsig.Salt)
-	require.Equal(t, root.public.PublicKey, signed.PQsig.PublicKey)
+	require.Equal(t, signing.Public.address(), signed.Authorizer())
+	require.Equal(t, signing.Public.Scheme, signed.PQsig.Scheme)
+	require.Equal(t, signing.Public.Salt, signed.PQsig.Salt)
+	require.Equal(t, signing.Public.PublicKey, signed.PQsig.PublicKey)
 	require.NoError(t, signed.PQsig.Verify(config.Consensus[protocol.ConsensusFuture], signed.Txn, signed.Authorizer()))
 
 	changed := signed
@@ -444,14 +403,15 @@ func TestPQSignAcceptsMnemonic(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	root := pqTestRoot(t, 0)
-	mnemonic, err := mnemonicFromSeed(root.entropy)
+	signing := pqTestSigning(t, 0)
+	var entropy crypto.Seed
+	mnemonic, err := mnemonicFromSeed(entropy)
 	require.NoError(t, err)
 
 	tempDir := t.TempDir()
 	txfile := filepath.Join(tempDir, "txn.msgp")
 	outfile := filepath.Join(tempDir, "signed.msgp")
-	stxn := pqTestTxn(root.public.address())
+	stxn := pqTestTxn(signing.Public.address())
 	require.NoError(t, os.WriteFile(txfile, protocol.Encode(&stxn), 0600))
 
 	require.NoError(t, runPQSignWithOptions(pqSignOptions{
@@ -466,7 +426,7 @@ func TestPQSignAcceptsMnemonic(t *testing.T) {
 	require.NoError(t, err)
 	var signed transactions.SignedTxn
 	require.NoError(t, protocol.Decode(signedBytes, &signed))
-	require.Equal(t, root.public.PublicKey, signed.PQsig.PublicKey)
+	require.Equal(t, signing.Public.PublicKey, signed.PQsig.PublicKey)
 	require.NoError(t, signed.PQsig.Verify(config.Consensus[protocol.ConsensusFuture], signed.Txn, signed.Authorizer()))
 }
 
@@ -474,8 +434,8 @@ func TestPQSignRejectsUnsupportedMnemonicScheme(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	root := pqTestRoot(t, 0)
-	mnemonic, err := mnemonicFromSeed(root.entropy)
+	var entropy crypto.Seed
+	mnemonic, err := mnemonicFromSeed(entropy)
 	require.NoError(t, err)
 
 	err = runPQSignWithOptions(pqSignOptions{
@@ -492,12 +452,12 @@ func TestPQSignRejectsEmptyInputFile(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	root := pqTestRoot(t, 0)
+	signing := pqTestSigning(t, 0)
 	tempDir := t.TempDir()
 	keyfile := filepath.Join(tempDir, "account.pq")
 	txfile := filepath.Join(tempDir, "empty.msgp")
 	outfile := filepath.Join(tempDir, "signed.msgp")
-	require.NoError(t, writePQRootKeyFile(keyfile, root))
+	require.NoError(t, writePQPrivateKeyFile(keyfile, signing))
 	require.NoError(t, os.WriteFile(txfile, nil, 0600))
 
 	err := runPQSignWithOptions(pqSignOptions{
@@ -516,10 +476,10 @@ func TestPQSignSetsAndClearsAuthAddr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	root := pqTestRoot(t, 0)
+	signing := pqTestSigning(t, 0)
 	tempDir := t.TempDir()
 	keyfile := filepath.Join(tempDir, "account.pq")
-	require.NoError(t, writePQRootKeyFile(keyfile, root))
+	require.NoError(t, writePQPrivateKeyFile(keyfile, signing))
 
 	var sender basics.Address
 	sender[0] = 9
@@ -536,13 +496,13 @@ func TestPQSignSetsAndClearsAuthAddr(t *testing.T) {
 	data, err := os.ReadFile(outfile)
 	require.NoError(t, err)
 	require.NoError(t, protocol.Decode(data, &signed))
-	require.Equal(t, root.public.address(), signed.AuthAddr)
+	require.Equal(t, signing.Public.address(), signed.AuthAddr)
 
 	var stale basics.Address
 	stale[0] = 10
 	txfile = filepath.Join(tempDir, "stale.msgp")
 	outfile = filepath.Join(tempDir, "stale-signed.msgp")
-	stxn := pqTestTxn(root.public.address())
+	stxn := pqTestTxn(signing.Public.address())
 	stxn.AuthAddr = stale
 	require.NoError(t, os.WriteFile(txfile, protocol.Encode(&stxn), 0600))
 	require.NoError(t, runPQSignWithOptions(pqSignOptions{
@@ -578,14 +538,14 @@ func TestPQSignRejectsMixedSignaturesUnlessOverwrite(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	root := pqTestRoot(t, 0)
+	signing := pqTestSigning(t, 0)
 	tempDir := t.TempDir()
 	keyfile := filepath.Join(tempDir, "account.pq")
 	txfile := filepath.Join(tempDir, "txn.msgp")
 	outfile := filepath.Join(tempDir, "signed.msgp")
-	require.NoError(t, writePQRootKeyFile(keyfile, root))
+	require.NoError(t, writePQPrivateKeyFile(keyfile, signing))
 
-	stxn := pqTestTxn(root.public.address())
+	stxn := pqTestTxn(signing.Public.address())
 	stxn.Sig[0] = 1
 	require.NoError(t, os.WriteFile(txfile, protocol.Encode(&stxn), 0600))
 
@@ -616,15 +576,15 @@ func TestPQSignRejectsNonCompliantSalt(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	root := pqTestRoot(t, 1)
-	nonCompliant := nonCompliantPQPublic(t, root.public)
+	signing := pqTestSigning(t, 1)
+	nonCompliant := nonCompliantPQPublic(t, signing.Public)
 
 	tempDir := t.TempDir()
 	keyfile := filepath.Join(tempDir, "account.pq")
 	txfile := filepath.Join(tempDir, "txn.msgp")
 	outfile := filepath.Join(tempDir, "signed.msgp")
-	require.NoError(t, writePQRootKeyFile(keyfile, root))
-	stxn := pqTestTxn(root.public.address())
+	require.NoError(t, writePQPrivateKeyFile(keyfile, signing))
+	stxn := pqTestTxn(signing.Public.address())
 	require.NoError(t, os.WriteFile(txfile, protocol.Encode(&stxn), 0600))
 
 	err := runPQSignWithOptions(pqSignOptions{
@@ -640,9 +600,9 @@ func TestPQMaterialDetection(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	root := pqTestRoot(t, 0)
-	require.True(t, isPQKeyMaterial(encodePQPrivateKeyFileBytes(root)))
-	require.True(t, isPQKeyMaterial(encodePQPayload(pqPublicKeyMagic, &root.public)))
+	signing := pqTestSigning(t, 0)
+	require.True(t, isPQKeyMaterial(encodePQPayload(pqPrivateKeyMagic, &signing)))
+	require.True(t, isPQKeyMaterial(encodePQPayload(pqPublicKeyMagic, &signing.Public)))
 
 	var edSeed crypto.Seed
 	require.False(t, isPQKeyMaterial(edSeed[:]))

@@ -13,66 +13,6 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestMarshalUnmarshalpqPrivateKeyPayload(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	v := pqPrivateKeyPayload{}
-	bts := v.MarshalMsg(nil)
-	left, err := v.UnmarshalMsg(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
-	}
-
-	left, err = msgp.Skip(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
-	}
-}
-
-func TestRandomizedEncodingpqPrivateKeyPayload(t *testing.T) {
-	protocol.RunEncodingTest(t, &pqPrivateKeyPayload{})
-}
-
-func BenchmarkMarshalMsgpqPrivateKeyPayload(b *testing.B) {
-	v := pqPrivateKeyPayload{}
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		v.MarshalMsg(nil)
-	}
-}
-
-func BenchmarkAppendMsgpqPrivateKeyPayload(b *testing.B) {
-	v := pqPrivateKeyPayload{}
-	bts := make([]byte, 0, v.Msgsize())
-	bts = v.MarshalMsg(bts[0:0])
-	b.SetBytes(int64(len(bts)))
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		bts = v.MarshalMsg(bts[0:0])
-	}
-}
-
-func BenchmarkUnmarshalpqPrivateKeyPayload(b *testing.B) {
-	v := pqPrivateKeyPayload{}
-	bts := v.MarshalMsg(nil)
-	b.ReportAllocs()
-	b.SetBytes(int64(len(bts)))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := v.UnmarshalMsg(bts)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
 func TestMarshalUnmarshalpqPublicMaterial(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	v := pqPublicMaterial{}
@@ -121,6 +61,66 @@ func BenchmarkAppendMsgpqPublicMaterial(b *testing.B) {
 
 func BenchmarkUnmarshalpqPublicMaterial(b *testing.B) {
 	v := pqPublicMaterial{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestMarshalUnmarshalpqSigningMaterial(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := pqSigningMaterial{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingpqSigningMaterial(t *testing.T) {
+	protocol.RunEncodingTest(t, &pqSigningMaterial{})
+}
+
+func BenchmarkMarshalMsgpqSigningMaterial(b *testing.B) {
+	v := pqSigningMaterial{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgpqSigningMaterial(b *testing.B) {
+	v := pqSigningMaterial{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalpqSigningMaterial(b *testing.B) {
+	v := pqSigningMaterial{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))

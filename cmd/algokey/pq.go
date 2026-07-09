@@ -46,10 +46,6 @@ var (
 	pqAddressScheme     = pqSchemeFalcon1024Name
 	pqAddressSalt       = "canonical"
 
-	pqExportKeyfile         string
-	pqExportMnemonicFile    string
-	pqExportDisplayMnemonic bool
-
 	pqImportMnemonicFile    string
 	pqImportKeyfile         string
 	pqImportDisplayMnemonic bool
@@ -109,15 +105,6 @@ var pqAddressCmd = &cobra.Command{
 	},
 }
 
-var pqExportCmd = &cobra.Command{
-	Use:   "export",
-	Short: "Export a post-quantum private key mnemonic to a file",
-	Args:  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, _ []string) {
-		exitOnError(runPQExport())
-	},
-}
-
 var pqImportCmd = &cobra.Command{
 	Use:   "import",
 	Short: "Import a post-quantum private key from a mnemonic file",
@@ -140,7 +127,6 @@ func init() {
 	pqCmd.AddCommand(pqGenerateCmd)
 	pqCmd.AddCommand(pqInfoCmd)
 	pqCmd.AddCommand(pqAddressCmd)
-	pqCmd.AddCommand(pqExportCmd)
 	pqCmd.AddCommand(pqImportCmd)
 	pqCmd.AddCommand(pqSignCmd)
 
@@ -158,11 +144,6 @@ func init() {
 	pqAddressCmd.Flags().StringVarP(&pqAddressScheme, "scheme", "S", pqAddressScheme, "Post-quantum signature scheme: falcon-1024 (f1)")
 	pqAddressCmd.Flags().StringVarP(&pqAddressSalt, "salt", "s", pqAddressSalt, "Address salt: canonical or 0..255")
 	mustMarkFlagRequired(pqAddressCmd, "pubkeyfile")
-
-	pqExportCmd.Flags().StringVarP(&pqExportKeyfile, "keyfile", "f", "", "Private key filename")
-	pqExportCmd.Flags().StringVarP(&pqExportMnemonicFile, "mnemonic-file", "m", "", "Mnemonic output filename")
-	pqExportCmd.Flags().BoolVar(&pqExportDisplayMnemonic, "display-mnemonic", false, "Display the private key mnemonic")
-	mustMarkFlagRequired(pqExportCmd, "keyfile")
 
 	pqImportCmd.Flags().StringVarP(&pqImportMnemonicFile, "mnemonic-file", "m", "", "Mnemonic input filename")
 	pqImportCmd.Flags().StringVarP(&pqImportKeyfile, "keyfile", "f", "", "Private key filename")
@@ -192,35 +173,35 @@ func runPQGenerate() error {
 	if err != nil {
 		return fmt.Errorf("cannot generate PQ key: %w", err)
 	}
-	root, err := generatePQRoot(scheme, crypto.SystemRNG)
+	entropy, signing, err := generatePQSigningMaterial(scheme, crypto.SystemRNG)
 	if err != nil {
 		return fmt.Errorf("cannot generate PQ key: %w", err)
 	}
 
-	if err = writePQRootKeyFile(pqGenerateKeyfile, root); err != nil {
+	if err = writePQPrivateKeyFile(pqGenerateKeyfile, signing); err != nil {
 		return err
 	}
 	if pqGeneratePubkeyfile != "" {
-		if err = writePQPublicKeyFile(pqGeneratePubkeyfile, root.public); err != nil {
+		if err = writePQPublicKeyFile(pqGeneratePubkeyfile, signing.Public); err != nil {
 			return err
 		}
 	}
 	if pqGenerateDisplayMnemonic {
-		if err = printPQMnemonic(os.Stdout, root.entropy); err != nil {
+		if err = printPQMnemonic(os.Stdout, entropy); err != nil {
 			return err
 		}
 	}
 
-	return printPQKeyInfo(os.Stdout, root.public)
+	return printPQKeyInfo(os.Stdout, signing.Public)
 }
 
 func runPQInfo() error {
-	root, err := readPQRootKeyFile(pqInfoKeyfile)
+	signing, err := readPQSigningMaterial(pqInfoKeyfile)
 	if err != nil {
 		return err
 	}
 
-	public, err := resolvePQSalt(root.public, pqInfoSalt)
+	public, err := resolvePQSalt(signing.Public, pqInfoSalt)
 	if err != nil {
 		return err
 	}
@@ -251,32 +232,6 @@ func runPQAddress() error {
 	return printPQKeyInfo(os.Stdout, public)
 }
 
-func runPQExport() error {
-	return runPQExportWithOptions(pqExportKeyfile, pqExportMnemonicFile, pqExportDisplayMnemonic)
-}
-
-func runPQExportWithOptions(keyfile, mnemonicFile string, displayMnemonic bool) error {
-	if mnemonicFile == "" && !displayMnemonic {
-		return fmt.Errorf("must specify --mnemonic-file or --display-mnemonic")
-	}
-	root, err := readPQRootKeyFile(keyfile)
-	if err != nil {
-		return err
-	}
-
-	if mnemonicFile != "" {
-		if err = writePQMnemonicFile(mnemonicFile, root.public.Scheme, root.entropy); err != nil {
-			return fmt.Errorf("cannot write mnemonic to %s: %w", mnemonicFile, err)
-		}
-	}
-	if displayMnemonic {
-		if err = printPQMnemonic(os.Stdout, root.entropy); err != nil {
-			return err
-		}
-	}
-	return printPQKeyInfo(os.Stdout, root.public)
-}
-
 func runPQImport() error {
 	return runPQImportWithOptions(pqImportMnemonicFile, pqImportKeyfile, pqImportDisplayMnemonic)
 }
@@ -287,20 +242,20 @@ func runPQImportWithOptions(mnemonicFile, keyfile string, displayMnemonic bool) 
 		return fmt.Errorf("cannot read mnemonic from %s: %w", mnemonicFile, err)
 	}
 
-	root, err := rootMaterialFromEntropy(scheme, entropy)
+	signing, err := derivePQSigningMaterialFromEntropy(scheme, entropy)
 	if err != nil {
 		return err
 	}
 
-	if err = writePQRootKeyFile(keyfile, root); err != nil {
-		return fmt.Errorf("cannot write private key to %s: %w", keyfile, err)
+	if err = writePQPrivateKeyFile(keyfile, signing); err != nil {
+		return err
 	}
 	if displayMnemonic {
 		if err = printPQMnemonic(os.Stdout, entropy); err != nil {
 			return err
 		}
 	}
-	return printPQKeyInfo(os.Stdout, root.public)
+	return printPQKeyInfo(os.Stdout, signing.Public)
 }
 
 func runPQSign() error {
@@ -343,12 +298,12 @@ func runPQSignWithOptions(opts pqSignOptions) error {
 		return err
 	}
 
-	ops, ok := pqSchemeOpsByScheme[signing.public.Scheme]
+	ops, ok := pqSchemeOpsByScheme[signing.Public.Scheme]
 	if !ok {
-		return fmt.Errorf("%w: %q", crypto.ErrPQSchemeNotSupported, signing.public.Scheme)
+		return fmt.Errorf("%w: %q", crypto.ErrPQSchemeNotSupported, signing.Public.Scheme)
 	}
 
-	public, err := resolvePQSalt(signing.public, opts.salt)
+	public, err := resolvePQSalt(signing.Public, opts.salt)
 	if err != nil {
 		return err
 	}
@@ -382,7 +337,7 @@ func runPQSignWithOptions(opts pqSignOptions) error {
 			clearSignedTxnAuthorization(&stxn)
 		}
 
-		signature, signErr := ops.signTxn(signing.private, stxn.Txn)
+		signature, signErr := ops.signTxn(signing.PrivateKey, stxn.Txn)
 		if signErr != nil {
 			return fmt.Errorf("cannot sign transaction: %w", signErr)
 		}
@@ -422,7 +377,7 @@ func printPQMnemonic(w io.Writer, entropy crypto.Seed) error {
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(w, "PQ private key mnemonic: %s\n", mnemonic)
+	_, err = fmt.Fprintf(w, "PQ private key mnemonic: %s\nWrite these words down: they cannot be recovered from the key file.\n", mnemonic)
 	return err
 }
 

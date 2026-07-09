@@ -57,27 +57,19 @@ func (m pqPublicMaterial) address() basics.Address {
 	return basics.PQAddress(m.Scheme, m.Salt, m.PublicKey)
 }
 
-// pqPrivateKeyPayload is the msgp payload stored after the PQ private-key
-// magic prefix.
-type pqPrivateKeyPayload struct {
+// pqSigningMaterial is a PQ private key with its public envelope. It is also
+// the msgp payload stored after the PQ private-key magic prefix: key files
+// hold the scheme's working keys, never the mnemonic entropy they were
+// derived from.
+type pqSigningMaterial struct {
 	_struct struct{} `codec:""`
 
-	Scheme  protocol.PQScheme `codec:"scheme"`
-	Entropy []byte            `codec:"entropy,allocbound=crypto.DigestSize"`
+	Public     pqPublicMaterial `codec:"public"`
+	PrivateKey []byte           `codec:"private-key,allocbound=crypto.FalconPrivateKeySize"`
 }
 
-type pqSigningMaterial struct {
-	public  pqPublicMaterial
-	private []byte
-}
-
-type pqRootMaterial struct {
-	entropy crypto.Seed
-	public  pqPublicMaterial
-}
-
-func writePQRootKeyFile(filename string, root pqRootMaterial) error {
-	data := encodePQPrivateKeyFileBytes(root)
+func writePQPrivateKeyFile(filename string, signing pqSigningMaterial) error {
+	data := encodePQPayload(pqPrivateKeyMagic, &signing)
 	if err := os.WriteFile(filename, data, 0600); err != nil {
 		return fmt.Errorf("cannot write private key to %s: %w", filename, err)
 	}
@@ -92,26 +84,25 @@ func writePQPublicKeyFile(filename string, public pqPublicMaterial) error {
 	return nil
 }
 
-func readPQRootKeyFile(filename string) (pqRootMaterial, error) {
-	data, err := readFile(filename)
-	if err != nil {
-		return pqRootMaterial{}, fmt.Errorf("cannot read private key from %s: %w", filename, err)
-	}
-	return decodePQPrivateKeyFileBytes(data)
-}
-
 func readPQSigningMaterial(filename string) (pqSigningMaterial, error) {
 	data, err := readFile(filename)
 	if err != nil {
 		return pqSigningMaterial{}, fmt.Errorf("cannot read private key from %s: %w", filename, err)
 	}
+	return decodePQPrivateKeyFileBytes(data)
+}
 
-	scheme, entropy, err := decodePQPrivateKeyEntropy(data)
+func decodePQPrivateKeyFileBytes(data []byte) (pqSigningMaterial, error) {
+	var signing pqSigningMaterial
+	if err := decodePQPayload(data, pqPrivateKeyMagic, &signing); err != nil {
+		return pqSigningMaterial{}, err
+	}
+	public, err := publicMaterialFromFields(signing.Public.Scheme, signing.Public.Salt, signing.Public.PublicKey)
 	if err != nil {
 		return pqSigningMaterial{}, err
 	}
-
-	return derivePQSigningMaterialFromEntropy(scheme, entropy)
+	signing.Public = public
+	return signing, nil
 }
 
 func readPQPublicKeyFile(filename string) (pqPublicMaterial, error) {
@@ -122,39 +113,8 @@ func readPQPublicKeyFile(filename string) (pqPublicMaterial, error) {
 	return decodePQPublicKeyFileBytes(data)
 }
 
-func encodePQPrivateKeyFileBytes(root pqRootMaterial) []byte {
-	payload := pqPrivateKeyPayload{
-		Scheme:  root.public.Scheme,
-		Entropy: root.entropy[:],
-	}
-	return encodePQPayload(pqPrivateKeyMagic, &payload)
-}
-
 func encodePQPayload(magic string, payload msgp.Marshaler) []byte {
 	return append([]byte(magic+"\n"), protocol.Encode(payload)...)
-}
-
-// decodePQPrivateKeyEntropy parses the stored {scheme, entropy} from a private
-// key file without deriving the (expensive) key material.
-func decodePQPrivateKeyEntropy(data []byte) (protocol.PQScheme, crypto.Seed, error) {
-	var payload pqPrivateKeyPayload
-	if err := decodePQPayload(data, pqPrivateKeyMagic, &payload); err != nil {
-		return protocol.PQScheme{}, crypto.Seed{}, err
-	}
-	if len(payload.Entropy) != pqKeyEntropySize {
-		return protocol.PQScheme{}, crypto.Seed{}, fmt.Errorf("%w: got entropy size %d, want %d", errPQKeyMalformed, len(payload.Entropy), pqKeyEntropySize)
-	}
-	var entropy crypto.Seed
-	copy(entropy[:], payload.Entropy)
-	return payload.Scheme, entropy, nil
-}
-
-func decodePQPrivateKeyFileBytes(data []byte) (pqRootMaterial, error) {
-	scheme, entropy, err := decodePQPrivateKeyEntropy(data)
-	if err != nil {
-		return pqRootMaterial{}, err
-	}
-	return rootMaterialFromEntropy(scheme, entropy)
 }
 
 func decodePQPublicKeyFileBytes(data []byte) (pqPublicMaterial, error) {
@@ -224,15 +184,6 @@ func resolvePQSalt(public pqPublicMaterial, saltValue string) (pqPublicMaterial,
 		return pqPublicMaterial{}, fmt.Errorf("invalid pq salt %q: use canonical or 0..255", saltValue)
 	}
 	return publicMaterialFromFields(public.Scheme, basics.PQAddressSalt(n), public.PublicKey)
-}
-
-func writePQMnemonicFile(filename string, scheme protocol.PQScheme, entropy crypto.Seed) error {
-	mnemonic, err := mnemonicFromSeed(entropy)
-	if err != nil {
-		return err
-	}
-	data := []byte(fmt.Sprintf("%s %s\n%s\n", pqMnemonicSchemeHeader, formatPQScheme(scheme), mnemonic))
-	return os.WriteFile(filename, data, 0600)
 }
 
 func readPQMnemonicFile(filename string) (protocol.PQScheme, crypto.Seed, error) {

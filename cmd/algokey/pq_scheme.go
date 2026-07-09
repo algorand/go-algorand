@@ -26,7 +26,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-const pqKeyEntropySize = crypto.DigestSize
 const pqSchemeFalcon1024Name = "falcon-1024"
 
 // pqSchemeOps holds the signing-side, private-key operations for one PQ
@@ -66,23 +65,12 @@ func formatPQScheme(scheme protocol.PQScheme) string {
 	return scheme.String()
 }
 
-func generatePQRoot(scheme protocol.PQScheme, rng crypto.RNG) (pqRootMaterial, error) {
+func generatePQSigningMaterial(scheme protocol.PQScheme, rng crypto.RNG) (crypto.Seed, pqSigningMaterial, error) {
 	var entropy crypto.Seed
 	rng.RandBytes(entropy[:])
 
-	return rootMaterialFromEntropy(scheme, entropy)
-}
-
-func rootMaterialFromEntropy(scheme protocol.PQScheme, entropy crypto.Seed) (pqRootMaterial, error) {
 	signing, err := derivePQSigningMaterialFromEntropy(scheme, entropy)
-	if err != nil {
-		return pqRootMaterial{}, err
-	}
-
-	return pqRootMaterial{
-		entropy: entropy,
-		public:  signing.public,
-	}, nil
+	return entropy, signing, err
 }
 
 func derivePQSigningMaterialFromEntropy(scheme protocol.PQScheme, entropy crypto.Seed) (pqSigningMaterial, error) {
@@ -120,8 +108,8 @@ func (falcon1024Ops) deriveSigning(seed crypto.Digest) (pqSigningMaterial, error
 	}
 
 	return pqSigningMaterial{
-		public:  public,
-		private: privateKey,
+		Public:     public,
+		PrivateKey: privateKey,
 	}, nil
 }
 
