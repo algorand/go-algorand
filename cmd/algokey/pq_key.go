@@ -17,31 +17,22 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
-
-	"github.com/algorand/msgp/msgp"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
 
-const (
-	pqPrivateKeyMagic = "ALGO-PQ-PRIVATE"
-	pqPublicKeyMagic  = "ALGO-PQ-PUBLIC"
-)
-
 var (
-	errPQKeyWrongType     = errors.New("pq key file has the wrong type")
 	errPQKeyMalformed     = errors.New("pq key file is malformed")
 	errPQSaltNotCompliant = errors.New("pq address salt is not compliant")
 )
 
 // pqPublicMaterial is a PQ public key with its address salt. It is also the
-// msgp payload stored after the PQ public-key magic prefix.
+// msgp payload of a public key file.
 type pqPublicMaterial struct {
 	_struct struct{} `codec:""`
 
@@ -66,9 +57,8 @@ func (m pqPublicMaterial) validate() error {
 }
 
 // pqSigningMaterial is a PQ private key with its public envelope. It is also
-// the msgp payload stored after the PQ private-key magic prefix: key files
-// hold the scheme's working keys, never the mnemonic entropy they were
-// derived from.
+// the msgp payload of a private key file: key files hold the scheme's working
+// keys, never the mnemonic entropy they were derived from.
 type pqSigningMaterial struct {
 	_struct struct{} `codec:""`
 
@@ -77,16 +67,14 @@ type pqSigningMaterial struct {
 }
 
 func writePQPrivateKeyFile(filename string, signing pqSigningMaterial) error {
-	data := encodePQPayload(pqPrivateKeyMagic, &signing)
-	if err := os.WriteFile(filename, data, 0600); err != nil {
+	if err := os.WriteFile(filename, protocol.Encode(&signing), 0600); err != nil {
 		return fmt.Errorf("cannot write private key to %s: %w", filename, err)
 	}
 	return nil
 }
 
 func writePQPublicKeyFile(filename string, public pqPublicMaterial) error {
-	data := encodePQPayload(pqPublicKeyMagic, &public)
-	if err := os.WriteFile(filename, data, 0666); err != nil {
+	if err := os.WriteFile(filename, protocol.Encode(&public), 0666); err != nil {
 		return fmt.Errorf("cannot write public key to %s: %w", filename, err)
 	}
 	return nil
@@ -102,8 +90,8 @@ func readPQSigningMaterial(filename string) (pqSigningMaterial, error) {
 
 func decodePQPrivateKeyFileBytes(data []byte) (pqSigningMaterial, error) {
 	var signing pqSigningMaterial
-	if err := decodePQPayload(data, pqPrivateKeyMagic, &signing); err != nil {
-		return pqSigningMaterial{}, err
+	if err := protocol.Decode(data, &signing); err != nil {
+		return pqSigningMaterial{}, fmt.Errorf("%w: %w", errPQKeyMalformed, err)
 	}
 	if err := signing.Public.validate(); err != nil {
 		return pqSigningMaterial{}, err
@@ -112,30 +100,23 @@ func decodePQPrivateKeyFileBytes(data []byte) (pqSigningMaterial, error) {
 }
 
 // readPQKeyFilePublic reads the public material from either a private or a
-// public key file.
+// public key file. The two payloads' field sets are disjoint and decoding
+// rejects unknown fields, so at most one decode succeeds.
 func readPQKeyFilePublic(filename string) (pqPublicMaterial, error) {
 	data, err := readFile(filename)
 	if err != nil {
 		return pqPublicMaterial{}, fmt.Errorf("cannot read key file from %s: %w", filename, err)
 	}
-	if bytes.HasPrefix(data, []byte(pqPublicKeyMagic+"\n")) {
-		return decodePQPublicKeyFileBytes(data)
+	if signing, err := decodePQPrivateKeyFileBytes(data); err == nil {
+		return signing.Public, nil
 	}
-	signing, err := decodePQPrivateKeyFileBytes(data)
-	if err != nil {
-		return pqPublicMaterial{}, err
-	}
-	return signing.Public, nil
-}
-
-func encodePQPayload(magic string, payload msgp.Marshaler) []byte {
-	return append([]byte(magic+"\n"), protocol.Encode(payload)...)
+	return decodePQPublicKeyFileBytes(data)
 }
 
 func decodePQPublicKeyFileBytes(data []byte) (pqPublicMaterial, error) {
 	var public pqPublicMaterial
-	if err := decodePQPayload(data, pqPublicKeyMagic, &public); err != nil {
-		return pqPublicMaterial{}, err
+	if err := protocol.Decode(data, &public); err != nil {
+		return pqPublicMaterial{}, fmt.Errorf("%w: %w", errPQKeyMalformed, err)
 	}
 	if err := public.validate(); err != nil {
 		return pqPublicMaterial{}, err
@@ -144,23 +125,4 @@ func decodePQPublicKeyFileBytes(data []byte) (pqPublicMaterial, error) {
 		return pqPublicMaterial{}, fmt.Errorf("%w: public key file address %s", errPQSaltNotCompliant, public.address())
 	}
 	return public, nil
-}
-
-func decodePQPayload(data []byte, magic string, payload msgp.Unmarshaler) error {
-	payloadBytes, ok := bytes.CutPrefix(data, []byte(magic+"\n"))
-	if !ok {
-		return fmt.Errorf("%w: missing %s magic", errPQKeyWrongType, magic)
-	}
-	if len(payloadBytes) == 0 {
-		return errPQKeyMalformed
-	}
-	if err := protocol.Decode(payloadBytes, payload); err != nil {
-		return fmt.Errorf("%w: %w", errPQKeyMalformed, err)
-	}
-	return nil
-}
-
-func isPQKeyMaterial(data []byte) bool {
-	return bytes.HasPrefix(data, []byte(pqPrivateKeyMagic+"\n")) ||
-		bytes.HasPrefix(data, []byte(pqPublicKeyMagic+"\n"))
 }

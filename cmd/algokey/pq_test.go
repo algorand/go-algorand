@@ -216,7 +216,7 @@ func TestPQPublicKeyFileRoundTrip(t *testing.T) {
 
 	changed := signing.Public
 	changed.Salt++
-	require.NotEqual(t, encodePQPayload(pqPublicKeyMagic, &signing.Public), encodePQPayload(pqPublicKeyMagic, &changed))
+	require.NotEqual(t, protocol.Encode(&signing.Public), protocol.Encode(&changed))
 }
 
 func TestPQKeyFileRejectsMalformedInputs(t *testing.T) {
@@ -227,16 +227,16 @@ func TestPQKeyFileRejectsMalformedInputs(t *testing.T) {
 
 	var edSeed crypto.Seed
 	_, err := decodePQPrivateKeyFileBytes(edSeed[:])
-	require.ErrorIs(t, err, errPQKeyWrongType)
+	require.ErrorIs(t, err, errPQKeyMalformed)
 
 	badScheme := signing
 	badScheme.Public.Scheme = protocol.PQScheme{'z', 'z'}
-	_, err = decodePQPrivateKeyFileBytes(encodePQPayload(pqPrivateKeyMagic, &badScheme))
+	_, err = decodePQPrivateKeyFileBytes(protocol.Encode(&badScheme))
 	require.ErrorIs(t, err, crypto.ErrPQSchemeNotSupported)
 
 	badKey := signing
 	badKey.Public.PublicKey = signing.Public.PublicKey[:len(signing.Public.PublicKey)-1]
-	_, err = decodePQPrivateKeyFileBytes(encodePQPayload(pqPrivateKeyMagic, &badKey))
+	_, err = decodePQPrivateKeyFileBytes(protocol.Encode(&badKey))
 	require.ErrorIs(t, err, errPQKeyMalformed)
 
 	publicPayload := pqPublicMaterial{
@@ -244,13 +244,13 @@ func TestPQKeyFileRejectsMalformedInputs(t *testing.T) {
 		Salt:      signing.Public.Salt,
 		PublicKey: signing.Public.PublicKey[:len(signing.Public.PublicKey)-1],
 	}
-	_, err = decodePQPublicKeyFileBytes(encodePQPayload(pqPublicKeyMagic, &publicPayload))
+	_, err = decodePQPublicKeyFileBytes(protocol.Encode(&publicPayload))
 	require.ErrorIs(t, err, errPQKeyMalformed)
 
 	nonCompliant := nonCompliantPQPublic(t, signing.Public)
 	publicPayload.PublicKey = signing.Public.PublicKey
 	publicPayload.Salt = nonCompliant.Salt
-	_, err = decodePQPublicKeyFileBytes(encodePQPayload(pqPublicKeyMagic, &publicPayload))
+	_, err = decodePQPublicKeyFileBytes(protocol.Encode(&publicPayload))
 	require.ErrorIs(t, err, errPQSaltNotCompliant)
 }
 
@@ -565,16 +565,18 @@ func TestPQSignRejectsNonCompliantSalt(t *testing.T) {
 	require.ErrorIs(t, err, errPQSaltNotCompliant)
 }
 
-func TestPQMaterialDetection(t *testing.T) {
+func TestPQKeyFileKindsAreDisjoint(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	signing := pqTestSigning(t, 0)
-	require.True(t, isPQKeyMaterial(encodePQPayload(pqPrivateKeyMagic, &signing)))
-	require.True(t, isPQKeyMaterial(encodePQPayload(pqPublicKeyMagic, &signing.Public)))
 
-	var edSeed crypto.Seed
-	require.False(t, isPQKeyMaterial(edSeed[:]))
+	// Decoding a file as the wrong kind fails (field sets are disjoint and
+	// decoding rejects unknown fields); readPQKeyFilePublic relies on this.
+	_, err := decodePQPrivateKeyFileBytes(protocol.Encode(&signing.Public))
+	require.ErrorIs(t, err, errPQKeyMalformed)
+	_, err = decodePQPublicKeyFileBytes(protocol.Encode(&signing))
+	require.ErrorIs(t, err, errPQKeyMalformed)
 }
 
 func TestPQDecodePrivateKeyRejectsMnemonic(t *testing.T) {
@@ -582,5 +584,5 @@ func TestPQDecodePrivateKeyRejectsMnemonic(t *testing.T) {
 	t.Parallel()
 
 	_, err := decodePQPrivateKeyFileBytes([]byte("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"))
-	require.ErrorIs(t, err, errPQKeyWrongType)
+	require.ErrorIs(t, err, errPQKeyMalformed)
 }
