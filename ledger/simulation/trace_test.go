@@ -32,38 +32,69 @@ func TestPopulateFeeUsageIncludesBigLogicSigProgram(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-	extraProgramBytes := 10
 	fee := basics.MicroAlgos{Raw: proto.MinTxnFee}
 
-	result := Result{
-		TxnGroups: []TxnGroupResult{
-			{
-				Txns: []TxnResult{
-					{
-						Txn: transactions.SignedTxnWithAD{
-							SignedTxn: transactions.SignedTxn{
-								Txn: transactions.Transaction{
-									Type: protocol.PaymentTx,
-									Header: transactions.Header{
-										Fee: fee,
-									},
-								},
-								Lsig: transactions.LogicSig{
-									Logic: make([]byte, int(proto.LogicSigMaxSize)+extraProgramBytes),
-								},
-							},
+	makeTxnResult := func(programSize int) TxnResult {
+		return TxnResult{
+			Txn: transactions.SignedTxnWithAD{
+				SignedTxn: transactions.SignedTxn{
+					Txn: transactions.Transaction{
+						Type: protocol.PaymentTx,
+						Header: transactions.Header{
+							Fee: fee,
 						},
+					},
+					Lsig: transactions.LogicSig{
+						Logic: make([]byte, programSize),
 					},
 				},
 			},
+		}
+	}
+
+	surcharge, overflow := proto.PerByteTxnSurcharge.MulInt(10)
+	require.False(t, overflow)
+
+	tests := []struct {
+		name          string
+		txns          []TxnResult
+		expectedUsage basics.Micros
+	}{
+		{
+			name: "singleton big LogicSig program increases group usage",
+			txns: []TxnResult{
+				makeTxnResult(int(proto.LogicSigMaxSize) + 10),
+			},
+			expectedUsage: basics.AddSaturate(basics.Micros(1e6), surcharge),
+		},
+		{
+			name: "group pool covers big LogicSig program",
+			txns: []TxnResult{
+				makeTxnResult(int(proto.LogicSigMaxSize) + 500),
+				makeTxnResult(0),
+			},
+			expectedUsage: basics.Micros(2e6),
 		},
 	}
 
-	populateFeeUsage(&result, proto)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := Result{
+				TxnGroups: []TxnGroupResult{
+					{
+						Txns: test.txns,
+					},
+				},
+			}
 
-	surcharge, overflow := proto.PerByteTxnSurcharge.MulInt(extraProgramBytes)
-	require.False(t, overflow)
-	require.Equal(t, basics.AddSaturate(basics.Micros(1e6), surcharge), result.TxnGroups[0].GroupUsage)
-	require.Equal(t, fee, result.TxnGroups[0].GroupFeesPaid)
-	require.Equal(t, fee, result.TxnGroups[0].Txns[0].FeesPaid)
+			populateFeeUsage(&result, proto)
+
+			expectedFeesPaid := basics.MicroAlgos{Raw: uint64(len(test.txns)) * fee.Raw}
+			require.Equal(t, test.expectedUsage, result.TxnGroups[0].GroupUsage)
+			require.Equal(t, expectedFeesPaid, result.TxnGroups[0].GroupFeesPaid)
+			for i := range test.txns {
+				require.Equal(t, fee, result.TxnGroups[0].Txns[i].FeesPaid)
+			}
+		})
+	}
 }

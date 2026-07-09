@@ -633,7 +633,7 @@ func TestLogicSigProgramFeeContribution(t *testing.T) {
 		{
 			name:                 "v41: oversized LogicSig program has no surcharge before per-byte fee is set",
 			proto:                v41,
-			logicSizes:           []int{freeSize + 500, 0},
+			logicSizes:           []int{freeSize + 500},
 			expectedContribution: 0,
 		},
 		{
@@ -660,6 +660,13 @@ func TestLogicSigProgramFeeContribution(t *testing.T) {
 			logicSizes:           []int{freeSize},
 			argSizes:             []int{500},
 			expectedContribution: 0,
+		},
+		{
+			name:                 "vFuture: LogicSig args do not affect charged program bytes",
+			proto:                vFuture,
+			logicSizes:           []int{freeSize + 100},
+			argSizes:             []int{500},
+			expectedContribution: surchargeForBytes(t, vFuture, 100),
 		},
 		{
 			name:                 "vFuture: size pooling covers large LogicSig program",
@@ -750,7 +757,7 @@ func TestSummarizeFees_BigLogicSigProgram(t *testing.T) {
 		assert.Equal(t, basics.MicroAlgos{Raw: 2050}, paid)
 	})
 
-	t.Run("vFuture: group fee pooling pays LogicSig surcharge beyond size pool", func(t *testing.T) {
+	t.Run("vFuture: LogicSig program bytes beyond size pool increase usage", func(t *testing.T) {
 		stxn1 := SignedTxn{
 			Txn: makeTxn(1000),
 			Lsig: LogicSig{

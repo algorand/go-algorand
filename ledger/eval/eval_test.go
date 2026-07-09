@@ -55,29 +55,44 @@ func TestCheckGroupFeesBigLogicSigProgram(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusFuture]
 	freeSize := int(proto.LogicSigMaxSize)
-	program := make([]byte, freeSize+1)
-	sender := basics.Address(logic.HashProgram(program))
 
 	tests := []struct {
-		name    string
-		fee     uint64
-		wantErr bool
+		name        string
+		programSize int
+		fees        []uint64
+		wantErr     bool
 	}{
 		{
-			name:    "underpaid",
-			fee:     proto.MinTxnFee,
-			wantErr: true,
+			name:        "singleton underpaid",
+			programSize: freeSize + 1,
+			fees:        []uint64{proto.MinTxnFee},
+			wantErr:     true,
 		},
 		{
-			name: "paid",
-			fee:  proto.MinTxnFee + 1,
+			name:        "singleton paid",
+			programSize: freeSize + 1,
+			fees:        []uint64{proto.MinTxnFee + 1},
+		},
+		{
+			name:        "pooled surcharge underpaid",
+			programSize: 2*freeSize + 1,
+			fees:        []uint64{proto.MinTxnFee, proto.MinTxnFee},
+			wantErr:     true,
+		},
+		{
+			name:        "pooled surcharge paid by another group member",
+			programSize: 2*freeSize + 1,
+			fees:        []uint64{proto.MinTxnFee, proto.MinTxnFee + 1},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			program := make([]byte, tt.programSize)
+			logicSigSender := basics.Address(logic.HashProgram(program))
+
 			genesisInitState, addrs, _ := ledgertesting.Genesis(10)
-			genesisInitState.Accounts[sender] = basics.AccountData{
+			genesisInitState.Accounts[logicSigSender] = basics.AccountData{
 				MicroAlgos: basics.MicroAlgos{Raw: 1_000_000_000},
 				Status:     basics.Offline,
 			}
@@ -93,12 +108,12 @@ func TestCheckGroupFeesBigLogicSigProgram(t *testing.T) {
 			eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
 			require.NoError(t, err)
 
-			stxn := transactions.SignedTxn{
+			txns := []transactions.SignedTxn{{
 				Txn: transactions.Transaction{
 					Type: protocol.PaymentTx,
 					Header: transactions.Header{
-						Sender:      sender,
-						Fee:         basics.MicroAlgos{Raw: tt.fee},
+						Sender:      logicSigSender,
+						Fee:         basics.MicroAlgos{Raw: tt.fees[0]},
 						FirstValid:  newBlock.Round(),
 						LastValid:   newBlock.Round(),
 						GenesisHash: l.GenesisHash(),
@@ -110,11 +125,45 @@ func TestCheckGroupFeesBigLogicSigProgram(t *testing.T) {
 				Lsig: transactions.LogicSig{
 					Logic: program,
 				},
+			}}
+
+			for i, fee := range tt.fees[1:] {
+				txns = append(txns, transactions.SignedTxn{
+					Txn: transactions.Transaction{
+						Type: protocol.PaymentTx,
+						Header: transactions.Header{
+							Sender:      addrs[i],
+							Fee:         basics.MicroAlgos{Raw: fee},
+							FirstValid:  newBlock.Round(),
+							LastValid:   newBlock.Round(),
+							GenesisHash: l.GenesisHash(),
+						},
+						PaymentTxnFields: transactions.PaymentTxnFields{
+							Receiver: addrs[i+1],
+						},
+					},
+				})
 			}
 
-			err = eval.TransactionGroup(stxn.WithAD())
+			if len(txns) > 1 {
+				var group transactions.TxGroup
+				for _, stxn := range txns {
+					txn := stxn.Txn
+					txn.Group = crypto.Digest{}
+					group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(txn.ID()))
+				}
+				groupID := crypto.HashObj(group)
+				for i := range txns {
+					txns[i].Txn.Group = groupID
+				}
+			}
+
+			err = eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txns)...)
 			if tt.wantErr {
-				require.Error(t, err)
+				require.ErrorContains(t, err, "fees is less than")
+				var groupErr *ledgercore.TxGroupMalformedError
+				require.ErrorAs(t, err, &groupErr)
+				require.Equal(t, ledgercore.TxGroupErrorReasonInvalidFee, groupErr.Reason)
 				return
 			}
 			require.NoError(t, err)
