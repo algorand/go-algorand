@@ -65,7 +65,7 @@ type pqSigningMaterial struct {
 	_struct struct{} `codec:""`
 
 	Public     pqPublicMaterial `codec:"public"`
-	PrivateKey []byte           `codec:"private-key,allocbound=crypto.FalconPrivateKeySize"`
+	PrivateKey []byte           `codec:"private-key,allocbound=maxPQPrivateKeySize"`
 }
 
 func writePQPrivateKeyFile(filename string, signing pqSigningMaterial) error {

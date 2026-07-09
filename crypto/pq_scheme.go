@@ -52,7 +52,8 @@ const (
 //   - add a case here returning its PQVerifier,
 //   - add its config.ConsensusParams.PQSchemeEnabled case and PQSchemeFeeContribution,
 //   - add the signing/private-key ops in cmd/algokey,
-//   - grow MaxPQPublicKeySize/MaxPQSignatureSize if its key or signature is larger.
+//   - grow MaxPQPublicKeySize/MaxPQSignatureSize if its public key or signature is larger,
+//   - grow maxPQPrivateKeySize in cmd/algokey if its private key is larger.
 func LookupPQScheme(s protocol.PQScheme) (PQVerifier, bool) {
 	switch s {
 	case protocol.PQSchemeFalcon1024:

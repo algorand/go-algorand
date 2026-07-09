@@ -246,8 +246,8 @@ func (z *pqSigningMaterial) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalS
 				err = msgp.WrapError(err, "struct-from-array", "PrivateKey")
 				return
 			}
-			if zb0003 > crypto.FalconPrivateKeySize {
-				err = msgp.ErrOverflow(uint64(zb0003), uint64(crypto.FalconPrivateKeySize))
+			if zb0003 > maxPQPrivateKeySize {
+				err = msgp.ErrOverflow(uint64(zb0003), uint64(maxPQPrivateKeySize))
 				return
 			}
 			(*z).PrivateKey, bts, err = msgp.ReadBytesBytes(bts, (*z).PrivateKey)
@@ -292,8 +292,8 @@ func (z *pqSigningMaterial) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalS
 					err = msgp.WrapError(err, "PrivateKey")
 					return
 				}
-				if zb0004 > crypto.FalconPrivateKeySize {
-					err = msgp.ErrOverflow(uint64(zb0004), uint64(crypto.FalconPrivateKeySize))
+				if zb0004 > maxPQPrivateKeySize {
+					err = msgp.ErrOverflow(uint64(zb0004), uint64(maxPQPrivateKeySize))
 					return
 				}
 				(*z).PrivateKey, bts, err = msgp.ReadBytesBytes(bts, (*z).PrivateKey)
@@ -335,6 +335,6 @@ func (z *pqSigningMaterial) MsgIsZero() bool {
 
 // PqSigningMaterialMaxSize returns a maximum valid message size for this message type
 func PqSigningMaterialMaxSize() (s int) {
-	s = 1 + 7 + PqPublicMaterialMaxSize() + 12 + msgp.BytesPrefixSize + crypto.FalconPrivateKeySize
+	s = 1 + 7 + PqPublicMaterialMaxSize() + 12 + msgp.BytesPrefixSize + maxPQPrivateKeySize
 	return
 }
