@@ -141,14 +141,13 @@ func TestPQSchemeRegistriesConsistent(t *testing.T) {
 	}
 }
 
-func TestPQSchemeKeysFitBounds(t *testing.T) {
+func TestPQSchemePublicKeySize(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	for scheme, ops := range pqSchemeOpsByScheme {
 		signing, err := ops.deriveSigning(crypto.Digest{})
 		require.NoError(t, err)
-		require.LessOrEqual(t, len(signing.PrivateKey), maxPQPrivateKeySize, "scheme %q", scheme)
 		require.Equal(t, ops.publicKeySize(), uint64(len(signing.Public.PublicKey)), "scheme %q", scheme)
 	}
 }

@@ -43,10 +43,6 @@ var pqSchemeOpsByScheme = map[protocol.PQScheme]pqSchemeOps{
 	protocol.PQSchemeFalcon1024: falcon1024Ops{},
 }
 
-// maxPQPrivateKeySize is the largest private-key size over all supported PQ
-// schemes; it bounds private key file decode.
-const maxPQPrivateKeySize = crypto.FalconPrivateKeySize
-
 type falcon1024Ops struct{}
 
 func parsePQScheme(value string) (protocol.PQScheme, error) {

@@ -5,7 +5,6 @@ package main
 import (
 	"github.com/algorand/msgp/msgp"
 
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -89,16 +88,6 @@ func (z *pqPublicMaterial) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSt
 		}
 		if zb0001 > 0 {
 			zb0001--
-			var zb0003 int
-			zb0003, err = msgp.ReadBytesBytesHeader(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PublicKey")
-				return
-			}
-			if zb0003 > crypto.MaxPQPublicKeySize {
-				err = msgp.ErrOverflow(uint64(zb0003), uint64(crypto.MaxPQPublicKeySize))
-				return
-			}
 			(*z).PublicKey, bts, err = msgp.ReadBytesBytes(bts, (*z).PublicKey)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "PublicKey")
@@ -141,16 +130,6 @@ func (z *pqPublicMaterial) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSt
 					return
 				}
 			case "public-key":
-				var zb0004 int
-				zb0004, err = msgp.ReadBytesBytesHeader(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "PublicKey")
-					return
-				}
-				if zb0004 > crypto.MaxPQPublicKeySize {
-					err = msgp.ErrOverflow(uint64(zb0004), uint64(crypto.MaxPQPublicKeySize))
-					return
-				}
 				(*z).PublicKey, bts, err = msgp.ReadBytesBytes(bts, (*z).PublicKey)
 				if err != nil {
 					err = msgp.WrapError(err, "PublicKey")
@@ -190,8 +169,8 @@ func (z *pqPublicMaterial) MsgIsZero() bool {
 
 // PqPublicMaterialMaxSize returns a maximum valid message size for this message type
 func PqPublicMaterialMaxSize() (s int) {
-	s = 1 + 7 + protocol.PQSchemeMaxSize() + 5 + basics.PQAddressSaltMaxSize() + 11 + msgp.BytesPrefixSize + crypto.MaxPQPublicKeySize
-	return
+	s = 1 + 7 + protocol.PQSchemeMaxSize() + 5 + basics.PQAddressSaltMaxSize() + 11
+	panic("Unable to determine max size: Byteslice type z.PublicKey is unbounded")
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -240,16 +219,6 @@ func (z *pqSigningMaterial) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalS
 		}
 		if zb0001 > 0 {
 			zb0001--
-			var zb0003 int
-			zb0003, err = msgp.ReadBytesBytesHeader(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PrivateKey")
-				return
-			}
-			if zb0003 > maxPQPrivateKeySize {
-				err = msgp.ErrOverflow(uint64(zb0003), uint64(maxPQPrivateKeySize))
-				return
-			}
 			(*z).PrivateKey, bts, err = msgp.ReadBytesBytes(bts, (*z).PrivateKey)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "PrivateKey")
@@ -286,16 +255,6 @@ func (z *pqSigningMaterial) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalS
 					return
 				}
 			case "private-key":
-				var zb0004 int
-				zb0004, err = msgp.ReadBytesBytesHeader(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "PrivateKey")
-					return
-				}
-				if zb0004 > maxPQPrivateKeySize {
-					err = msgp.ErrOverflow(uint64(zb0004), uint64(maxPQPrivateKeySize))
-					return
-				}
 				(*z).PrivateKey, bts, err = msgp.ReadBytesBytes(bts, (*z).PrivateKey)
 				if err != nil {
 					err = msgp.WrapError(err, "PrivateKey")
@@ -335,6 +294,6 @@ func (z *pqSigningMaterial) MsgIsZero() bool {
 
 // PqSigningMaterialMaxSize returns a maximum valid message size for this message type
 func PqSigningMaterialMaxSize() (s int) {
-	s = 1 + 7 + PqPublicMaterialMaxSize() + 12 + msgp.BytesPrefixSize + maxPQPrivateKeySize
-	return
+	s = 1 + 7 + PqPublicMaterialMaxSize() + 12
+	panic("Unable to determine max size: Byteslice type z.PrivateKey is unbounded")
 }

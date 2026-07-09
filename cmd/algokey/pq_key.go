@@ -38,7 +38,7 @@ type pqPublicMaterial struct {
 
 	Scheme    protocol.PQScheme    `codec:"scheme"`
 	Salt      basics.PQAddressSalt `codec:"salt"`
-	PublicKey []byte               `codec:"public-key,allocbound=crypto.MaxPQPublicKeySize"`
+	PublicKey []byte               `codec:"public-key"`
 }
 
 func (m pqPublicMaterial) address() basics.Address {
@@ -63,7 +63,7 @@ type pqSigningMaterial struct {
 	_struct struct{} `codec:""`
 
 	Public     pqPublicMaterial `codec:"public"`
-	PrivateKey []byte           `codec:"private-key,allocbound=maxPQPrivateKeySize"`
+	PrivateKey []byte           `codec:"private-key"`
 }
 
 func writePQPrivateKeyFile(filename string, signing pqSigningMaterial) error {
