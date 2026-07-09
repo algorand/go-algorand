@@ -67,8 +67,8 @@ func loadKeyfile(keyfile string) crypto.Seed {
 		os.Exit(1)
 	}
 	var seed crypto.Seed
-	if len(seedbytes) > len(seed) {
-		fmt.Fprintf(os.Stderr, "Key file %s is %d bytes, not a %d-byte Ed25519 seed\n", keyfile, len(seedbytes), len(seed))
+	if len(seedbytes) != len(seed) {
+		fmt.Fprintf(os.Stderr, "Key file %s is %d bytes, expected a %d-byte Ed25519 seed\n", keyfile, len(seedbytes), len(seed))
 		os.Exit(1)
 	}
 	copy(seed[:], seedbytes)
