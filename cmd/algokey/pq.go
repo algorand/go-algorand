@@ -39,11 +39,6 @@ var (
 	pqGeneratePubkeyfile string
 
 	pqInfoKeyfile string
-	pqInfoSalt    = "canonical"
-
-	pqAddressPubkeyfile string
-	pqAddressScheme     = pqSchemeFalcon1024Name
-	pqAddressSalt       = "canonical"
 
 	pqImportMnemonic string
 	pqImportScheme   = pqSchemeFalcon1024Name
@@ -54,7 +49,6 @@ var (
 	pqSignScheme    = pqSchemeFalcon1024Name
 	pqSignTxfile    string
 	pqSignOutfile   string
-	pqSignSalt      = "canonical"
 	pqSignOverwrite bool
 )
 
@@ -64,7 +58,6 @@ type pqSignOptions struct {
 	scheme    string
 	txfile    string
 	outfile   string
-	salt      string
 	overwrite bool
 }
 
@@ -95,15 +88,6 @@ var pqInfoCmd = &cobra.Command{
 	},
 }
 
-var pqAddressCmd = &cobra.Command{
-	Use:   "address",
-	Short: "Derive a post-quantum address from a public key file",
-	Args:  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, _ []string) {
-		exitOnError(runPQAddress())
-	},
-}
-
 var pqImportCmd = &cobra.Command{
 	Use:   "import",
 	Short: "Import a post-quantum private key from a mnemonic",
@@ -125,7 +109,6 @@ var pqSignCmd = &cobra.Command{
 func init() {
 	pqCmd.AddCommand(pqGenerateCmd)
 	pqCmd.AddCommand(pqInfoCmd)
-	pqCmd.AddCommand(pqAddressCmd)
 	pqCmd.AddCommand(pqImportCmd)
 	pqCmd.AddCommand(pqSignCmd)
 
@@ -134,14 +117,8 @@ func init() {
 	pqGenerateCmd.Flags().StringVarP(&pqGeneratePubkeyfile, "pubkeyfile", "p", "", "Public key filename")
 	mustMarkFlagRequired(pqGenerateCmd, "keyfile")
 
-	pqInfoCmd.Flags().StringVarP(&pqInfoKeyfile, "keyfile", "f", "", "Private key filename")
-	pqInfoCmd.Flags().StringVarP(&pqInfoSalt, "salt", "s", pqInfoSalt, "Address salt: canonical or 0..255")
+	pqInfoCmd.Flags().StringVarP(&pqInfoKeyfile, "keyfile", "f", "", "Key filename (private or public)")
 	mustMarkFlagRequired(pqInfoCmd, "keyfile")
-
-	pqAddressCmd.Flags().StringVarP(&pqAddressPubkeyfile, "pubkeyfile", "p", "", "Public key filename")
-	pqAddressCmd.Flags().StringVarP(&pqAddressScheme, "scheme", "S", pqAddressScheme, "Post-quantum signature scheme: falcon-1024 (f1)")
-	pqAddressCmd.Flags().StringVarP(&pqAddressSalt, "salt", "s", pqAddressSalt, "Address salt: canonical or 0..255")
-	mustMarkFlagRequired(pqAddressCmd, "pubkeyfile")
 
 	pqImportCmd.Flags().StringVarP(&pqImportMnemonic, "mnemonic", "m", "", "Private key mnemonic")
 	pqImportCmd.Flags().StringVarP(&pqImportScheme, "scheme", "S", pqImportScheme, "Post-quantum signature scheme: falcon-1024 (f1)")
@@ -154,7 +131,6 @@ func init() {
 	pqSignCmd.Flags().StringVarP(&pqSignScheme, "scheme", "S", pqSignScheme, "Post-quantum signature scheme: falcon-1024 (f1); used with --mnemonic")
 	pqSignCmd.Flags().StringVarP(&pqSignTxfile, "txfile", "t", "", "Transaction input filename")
 	pqSignCmd.Flags().StringVarP(&pqSignOutfile, "outfile", "o", "", "Transaction output filename")
-	pqSignCmd.Flags().StringVarP(&pqSignSalt, "salt", "s", pqSignSalt, "Address salt: canonical or 0..255")
 	pqSignCmd.Flags().BoolVar(&pqSignOverwrite, "overwrite", false, "Overwrite any existing signature category")
 	mustMarkFlagRequired(pqSignCmd, "txfile")
 	mustMarkFlagRequired(pqSignCmd, "outfile")
@@ -192,36 +168,7 @@ func runPQGenerate() error {
 }
 
 func runPQInfo() error {
-	signing, err := readPQSigningMaterial(pqInfoKeyfile)
-	if err != nil {
-		return err
-	}
-
-	public, err := resolvePQSalt(signing.Public, pqInfoSalt)
-	if err != nil {
-		return err
-	}
-	return printPQKeyInfo(os.Stdout, public)
-}
-
-func runPQAddress() error {
-	publicMaterial, err := readPQPublicKeyFile(pqAddressPubkeyfile)
-	if err != nil {
-		return err
-	}
-
-	scheme, err := parsePQScheme(pqAddressScheme)
-	if err != nil {
-		return err
-	}
-	if _, ok := crypto.LookupPQScheme(scheme); !ok {
-		return fmt.Errorf("%w: %q", crypto.ErrPQSchemeNotSupported, scheme)
-	}
-	if publicMaterial.Scheme != scheme {
-		return fmt.Errorf("%w: public key file scheme is %q, requested %q", errPQKeyWrongType, publicMaterial.Scheme, scheme)
-	}
-
-	public, err := resolvePQSalt(publicMaterial, pqAddressSalt)
+	public, err := readPQKeyFilePublic(pqInfoKeyfile)
 	if err != nil {
 		return err
 	}
@@ -263,7 +210,6 @@ func runPQSign() error {
 		scheme:    pqSignScheme,
 		txfile:    pqSignTxfile,
 		outfile:   pqSignOutfile,
-		salt:      pqSignSalt,
 		overwrite: pqSignOverwrite,
 	})
 }
@@ -301,10 +247,7 @@ func runPQSignWithOptions(opts pqSignOptions) error {
 		return fmt.Errorf("%w: %q", crypto.ErrPQSchemeNotSupported, signing.Public.Scheme)
 	}
 
-	public, err := resolvePQSalt(signing.Public, opts.salt)
-	if err != nil {
-		return err
-	}
+	public := signing.Public
 	if !public.address().IsPQCompliant() {
 		return fmt.Errorf("%w: derived address %s for salt %d", errPQSaltNotCompliant, public.address(), public.Salt)
 	}

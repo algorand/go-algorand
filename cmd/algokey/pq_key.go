@@ -21,8 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strconv"
-	"strings"
 
 	"github.com/algorand/msgp/msgp"
 
@@ -54,6 +52,17 @@ type pqPublicMaterial struct {
 
 func (m pqPublicMaterial) address() basics.Address {
 	return basics.PQAddress(m.Scheme, m.Salt, m.PublicKey)
+}
+
+func (m pqPublicMaterial) validate() error {
+	ops, ok := pqSchemeOpsByScheme[m.Scheme]
+	if !ok {
+		return fmt.Errorf("%w: %q", crypto.ErrPQSchemeNotSupported, m.Scheme)
+	}
+	if uint64(len(m.PublicKey)) != ops.publicKeySize() {
+		return fmt.Errorf("%w: got public key size %d, want %d", errPQKeyMalformed, len(m.PublicKey), ops.publicKeySize())
+	}
+	return nil
 }
 
 // pqSigningMaterial is a PQ private key with its public envelope. It is also
@@ -96,20 +105,27 @@ func decodePQPrivateKeyFileBytes(data []byte) (pqSigningMaterial, error) {
 	if err := decodePQPayload(data, pqPrivateKeyMagic, &signing); err != nil {
 		return pqSigningMaterial{}, err
 	}
-	public, err := publicMaterialFromFields(signing.Public.Scheme, signing.Public.Salt, signing.Public.PublicKey)
-	if err != nil {
+	if err := signing.Public.validate(); err != nil {
 		return pqSigningMaterial{}, err
 	}
-	signing.Public = public
 	return signing, nil
 }
 
-func readPQPublicKeyFile(filename string) (pqPublicMaterial, error) {
+// readPQKeyFilePublic reads the public material from either a private or a
+// public key file.
+func readPQKeyFilePublic(filename string) (pqPublicMaterial, error) {
 	data, err := readFile(filename)
 	if err != nil {
-		return pqPublicMaterial{}, fmt.Errorf("cannot read public key from %s: %w", filename, err)
+		return pqPublicMaterial{}, fmt.Errorf("cannot read key file from %s: %w", filename, err)
 	}
-	return decodePQPublicKeyFileBytes(data)
+	if bytes.HasPrefix(data, []byte(pqPublicKeyMagic+"\n")) {
+		return decodePQPublicKeyFileBytes(data)
+	}
+	signing, err := decodePQPrivateKeyFileBytes(data)
+	if err != nil {
+		return pqPublicMaterial{}, err
+	}
+	return signing.Public, nil
 }
 
 func encodePQPayload(magic string, payload msgp.Marshaler) []byte {
@@ -117,12 +133,11 @@ func encodePQPayload(magic string, payload msgp.Marshaler) []byte {
 }
 
 func decodePQPublicKeyFileBytes(data []byte) (pqPublicMaterial, error) {
-	var payload pqPublicMaterial
-	if err := decodePQPayload(data, pqPublicKeyMagic, &payload); err != nil {
+	var public pqPublicMaterial
+	if err := decodePQPayload(data, pqPublicKeyMagic, &public); err != nil {
 		return pqPublicMaterial{}, err
 	}
-	public, err := publicMaterialFromFields(payload.Scheme, payload.Salt, payload.PublicKey)
-	if err != nil {
+	if err := public.validate(); err != nil {
 		return pqPublicMaterial{}, err
 	}
 	if !public.address().IsPQCompliant() {
@@ -143,46 +158,6 @@ func decodePQPayload(data []byte, magic string, payload msgp.Unmarshaler) error 
 		return fmt.Errorf("%w: %w", errPQKeyMalformed, err)
 	}
 	return nil
-}
-
-func canonicalPublicMaterialFromKey(scheme protocol.PQScheme, publicKey []byte) (pqPublicMaterial, error) {
-	salt, _, err := basics.CanonicalPQAddressSalt(scheme, publicKey)
-	if err != nil {
-		return pqPublicMaterial{}, err
-	}
-	return publicMaterialFromFields(scheme, salt, publicKey)
-}
-
-func publicMaterialFromFields(scheme protocol.PQScheme, salt basics.PQAddressSalt, publicKey []byte) (pqPublicMaterial, error) {
-	ops, ok := pqSchemeOpsByScheme[scheme]
-	if !ok {
-		return pqPublicMaterial{}, fmt.Errorf("%w: %q", crypto.ErrPQSchemeNotSupported, scheme)
-	}
-	if uint64(len(publicKey)) != ops.publicKeySize() {
-		return pqPublicMaterial{}, fmt.Errorf("%w: got public key size %d, want %d", errPQKeyMalformed, len(publicKey), ops.publicKeySize())
-	}
-
-	return pqPublicMaterial{
-		Scheme:    scheme,
-		Salt:      salt,
-		PublicKey: publicKey,
-	}, nil
-}
-
-// resolvePQSalt resolves saltValue ("canonical", or a decimal in 0..255) to a
-// public material for the same scheme and public key. The canonical salt always
-// derives a compliant address; for an explicit salt, callers decide how to treat
-// non-compliant addresses via public.addr.IsPQCompliant().
-func resolvePQSalt(public pqPublicMaterial, saltValue string) (pqPublicMaterial, error) {
-	if saltValue == "" || strings.EqualFold(saltValue, "canonical") {
-		return canonicalPublicMaterialFromKey(public.Scheme, public.PublicKey)
-	}
-
-	n, err := strconv.ParseUint(saltValue, 10, 8)
-	if err != nil {
-		return pqPublicMaterial{}, fmt.Errorf("invalid pq salt %q: use canonical or 0..255", saltValue)
-	}
-	return publicMaterialFromFields(public.Scheme, basics.PQAddressSalt(n), public.PublicKey)
 }
 
 func isPQKeyMaterial(data []byte) bool {

@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
-	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -74,8 +73,8 @@ func pqTestTxn(sender basics.Address) transactions.SignedTxn {
 func nonCompliantPQPublic(t *testing.T, public pqPublicMaterial) pqPublicMaterial {
 	t.Helper()
 	for i := 0; i <= 255; i++ {
-		candidate, err := resolvePQSalt(public, strconv.Itoa(i))
-		require.NoError(t, err)
+		candidate := public
+		candidate.Salt = basics.PQAddressSalt(i)
 		if !candidate.address().IsPQCompliant() {
 			return candidate
 		}
@@ -196,6 +195,11 @@ func TestPQPrivateKeyFileStoresKeysNotEntropy(t *testing.T) {
 	decoded, err := readPQSigningMaterial(keyfile)
 	require.NoError(t, err)
 	require.Equal(t, signing, decoded)
+
+	// info-style reads accept the private file too.
+	public, err := readPQKeyFilePublic(keyfile)
+	require.NoError(t, err)
+	require.Equal(t, signing.Public, public)
 }
 
 func TestPQPublicKeyFileRoundTrip(t *testing.T) {
@@ -206,7 +210,7 @@ func TestPQPublicKeyFileRoundTrip(t *testing.T) {
 	pubkeyfile := filepath.Join(t.TempDir(), "account.pub.pq")
 
 	require.NoError(t, writePQPublicKeyFile(pubkeyfile, signing.Public))
-	decoded, err := readPQPublicKeyFile(pubkeyfile)
+	decoded, err := readPQKeyFilePublic(pubkeyfile)
 	require.NoError(t, err)
 	require.Equal(t, signing.Public, decoded)
 
@@ -319,11 +323,6 @@ func TestPQCommandFlagShorthands(t *testing.T) {
 	require.Equal(t, "p", pqGenerateCmd.Flags().Lookup("pubkeyfile").Shorthand)
 
 	require.Equal(t, "f", pqInfoCmd.Flags().Lookup("keyfile").Shorthand)
-	require.Equal(t, "s", pqInfoCmd.Flags().Lookup("salt").Shorthand)
-
-	require.Equal(t, "p", pqAddressCmd.Flags().Lookup("pubkeyfile").Shorthand)
-	require.Equal(t, "S", pqAddressCmd.Flags().Lookup("scheme").Shorthand)
-	require.Equal(t, "s", pqAddressCmd.Flags().Lookup("salt").Shorthand)
 
 	require.Equal(t, "m", pqImportCmd.Flags().Lookup("mnemonic").Shorthand)
 	require.Equal(t, "S", pqImportCmd.Flags().Lookup("scheme").Shorthand)
@@ -334,26 +333,6 @@ func TestPQCommandFlagShorthands(t *testing.T) {
 	require.Equal(t, "S", pqSignCmd.Flags().Lookup("scheme").Shorthand)
 	require.Equal(t, "t", pqSignCmd.Flags().Lookup("txfile").Shorthand)
 	require.Equal(t, "o", pqSignCmd.Flags().Lookup("outfile").Shorthand)
-	require.Equal(t, "s", pqSignCmd.Flags().Lookup("salt").Shorthand)
-}
-
-func TestPQPublicAddressSaltHandling(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	signing := pqTestSigning(t, 1)
-
-	canonical, err := resolvePQSalt(signing.Public, "canonical")
-	require.NoError(t, err)
-	require.Equal(t, signing.Public, canonical)
-	require.True(t, canonical.address().IsPQCompliant())
-
-	nonCompliant := nonCompliantPQPublic(t, signing.Public)
-	require.Equal(t, basics.PQAddress(signing.Public.Scheme, nonCompliant.Salt, signing.Public.PublicKey), nonCompliant.address())
-	require.False(t, nonCompliant.address().IsPQCompliant())
-
-	_, err = resolvePQSalt(signing.Public, "256")
-	require.ErrorContains(t, err, "invalid pq salt")
 }
 
 func TestPQSignProducesVerifiablePQEnvelope(t *testing.T) {
@@ -374,7 +353,6 @@ func TestPQSignProducesVerifiablePQEnvelope(t *testing.T) {
 		keyfile: keyfile,
 		txfile:  txfile,
 		outfile: outfile,
-		salt:    "canonical",
 	}))
 
 	signedBytes, err := os.ReadFile(outfile)
@@ -418,7 +396,6 @@ func TestPQSignAcceptsMnemonic(t *testing.T) {
 		scheme:   "f1",
 		txfile:   txfile,
 		outfile:  outfile,
-		salt:     "canonical",
 	}))
 
 	signedBytes, err := os.ReadFile(outfile)
@@ -442,7 +419,6 @@ func TestPQSignRejectsUnsupportedMnemonicScheme(t *testing.T) {
 		scheme:   "zz",
 		txfile:   "unsigned.msgp",
 		outfile:  "signed.msgp",
-		salt:     "canonical",
 	})
 	require.ErrorIs(t, err, crypto.ErrPQSchemeNotSupported)
 }
@@ -463,7 +439,6 @@ func TestPQSignRejectsEmptyInputFile(t *testing.T) {
 		keyfile: keyfile,
 		txfile:  txfile,
 		outfile: outfile,
-		salt:    "canonical",
 	})
 	require.ErrorContains(t, err, "no transactions found")
 
@@ -489,7 +464,6 @@ func TestPQSignSetsAndClearsAuthAddr(t *testing.T) {
 		keyfile: keyfile,
 		txfile:  txfile,
 		outfile: outfile,
-		salt:    "canonical",
 	}))
 	var signed transactions.SignedTxn
 	data, err := os.ReadFile(outfile)
@@ -508,7 +482,6 @@ func TestPQSignSetsAndClearsAuthAddr(t *testing.T) {
 		keyfile: keyfile,
 		txfile:  txfile,
 		outfile: outfile,
-		salt:    "canonical",
 	}))
 	data, err = os.ReadFile(outfile)
 	require.NoError(t, err)
@@ -522,7 +495,6 @@ func TestPQSignSetsAndClearsAuthAddr(t *testing.T) {
 		keyfile:   keyfile,
 		txfile:    outfile,
 		outfile:   resignedOutfile,
-		salt:      "canonical",
 		overwrite: true,
 	}))
 	data, err = os.ReadFile(resignedOutfile)
@@ -552,7 +524,6 @@ func TestPQSignRejectsMixedSignaturesUnlessOverwrite(t *testing.T) {
 		keyfile: keyfile,
 		txfile:  txfile,
 		outfile: outfile,
-		salt:    "canonical",
 	})
 	require.ErrorIs(t, err, errPQTxnAlreadySigned)
 
@@ -560,7 +531,6 @@ func TestPQSignRejectsMixedSignaturesUnlessOverwrite(t *testing.T) {
 		keyfile:   keyfile,
 		txfile:    txfile,
 		outfile:   outfile,
-		salt:      "canonical",
 		overwrite: true,
 	}))
 	data, err := os.ReadFile(outfile)
@@ -575,8 +545,9 @@ func TestPQSignRejectsNonCompliantSalt(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
+	// A key file tampered with a non-compliant salt is refused at sign.
 	signing := pqTestSigning(t, 1)
-	nonCompliant := nonCompliantPQPublic(t, signing.Public)
+	signing.Public = nonCompliantPQPublic(t, signing.Public)
 
 	tempDir := t.TempDir()
 	keyfile := filepath.Join(tempDir, "account.pq")
@@ -590,7 +561,6 @@ func TestPQSignRejectsNonCompliantSalt(t *testing.T) {
 		keyfile: keyfile,
 		txfile:  txfile,
 		outfile: outfile,
-		salt:    strconv.Itoa(int(nonCompliant.Salt)),
 	})
 	require.ErrorIs(t, err, errPQSaltNotCompliant)
 }

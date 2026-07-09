@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -106,13 +107,17 @@ func (falcon1024Ops) deriveSigning(seed crypto.Digest) (pqSigningMaterial, error
 
 	publicKey := slices.Clone(signer.PublicKey[:])
 	privateKey := slices.Clone(signer.PrivateKey[:])
-	public, err := canonicalPublicMaterialFromKey(protocol.PQSchemeFalcon1024, publicKey)
+	salt, _, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
 	if err != nil {
 		return pqSigningMaterial{}, err
 	}
 
 	return pqSigningMaterial{
-		Public:     public,
+		Public: pqPublicMaterial{
+			Scheme:    protocol.PQSchemeFalcon1024,
+			Salt:      salt,
+			PublicKey: publicKey,
+		},
 		PrivateKey: privateKey,
 	}, nil
 }
