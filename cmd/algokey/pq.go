@@ -34,10 +34,9 @@ import (
 var errPQTxnAlreadySigned = errors.New("transaction already has a signature")
 
 var (
-	pqGenerateScheme          = pqSchemeFalcon1024Name
-	pqGenerateKeyfile         string
-	pqGeneratePubkeyfile      string
-	pqGenerateDisplayMnemonic bool
+	pqGenerateScheme     = pqSchemeFalcon1024Name
+	pqGenerateKeyfile    string
+	pqGeneratePubkeyfile string
 
 	pqInfoKeyfile string
 	pqInfoSalt    = "canonical"
@@ -46,9 +45,8 @@ var (
 	pqAddressScheme     = pqSchemeFalcon1024Name
 	pqAddressSalt       = "canonical"
 
-	pqImportMnemonicFile    string
-	pqImportKeyfile         string
-	pqImportDisplayMnemonic bool
+	pqImportMnemonicFile string
+	pqImportKeyfile      string
 
 	pqSignKeyfile   string
 	pqSignMnemonic  string
@@ -133,7 +131,6 @@ func init() {
 	pqGenerateCmd.Flags().StringVarP(&pqGenerateScheme, "scheme", "S", pqGenerateScheme, "Post-quantum signature scheme: falcon-1024 (f1)")
 	pqGenerateCmd.Flags().StringVarP(&pqGenerateKeyfile, "keyfile", "f", "", "Private key filename")
 	pqGenerateCmd.Flags().StringVarP(&pqGeneratePubkeyfile, "pubkeyfile", "p", "", "Public key filename")
-	pqGenerateCmd.Flags().BoolVar(&pqGenerateDisplayMnemonic, "display-mnemonic", false, "Display the private key mnemonic")
 	mustMarkFlagRequired(pqGenerateCmd, "keyfile")
 
 	pqInfoCmd.Flags().StringVarP(&pqInfoKeyfile, "keyfile", "f", "", "Private key filename")
@@ -147,7 +144,6 @@ func init() {
 
 	pqImportCmd.Flags().StringVarP(&pqImportMnemonicFile, "mnemonic-file", "m", "", "Mnemonic input filename")
 	pqImportCmd.Flags().StringVarP(&pqImportKeyfile, "keyfile", "f", "", "Private key filename")
-	pqImportCmd.Flags().BoolVar(&pqImportDisplayMnemonic, "display-mnemonic", false, "Display the private key mnemonic")
 	mustMarkFlagRequired(pqImportCmd, "mnemonic-file")
 	mustMarkFlagRequired(pqImportCmd, "keyfile")
 
@@ -186,10 +182,8 @@ func runPQGenerate() error {
 			return err
 		}
 	}
-	if pqGenerateDisplayMnemonic {
-		if err = printPQMnemonic(os.Stdout, entropy); err != nil {
-			return err
-		}
+	if err = printPQMnemonic(os.Stdout, entropy); err != nil {
+		return err
 	}
 
 	return printPQKeyInfo(os.Stdout, signing.Public)
@@ -233,10 +227,10 @@ func runPQAddress() error {
 }
 
 func runPQImport() error {
-	return runPQImportWithOptions(pqImportMnemonicFile, pqImportKeyfile, pqImportDisplayMnemonic)
+	return runPQImportWithOptions(pqImportMnemonicFile, pqImportKeyfile)
 }
 
-func runPQImportWithOptions(mnemonicFile, keyfile string, displayMnemonic bool) error {
+func runPQImportWithOptions(mnemonicFile, keyfile string) error {
 	scheme, entropy, err := readPQMnemonicFile(mnemonicFile)
 	if err != nil {
 		return fmt.Errorf("cannot read mnemonic from %s: %w", mnemonicFile, err)
@@ -250,10 +244,8 @@ func runPQImportWithOptions(mnemonicFile, keyfile string, displayMnemonic bool) 
 	if err = writePQPrivateKeyFile(keyfile, signing); err != nil {
 		return err
 	}
-	if displayMnemonic {
-		if err = printPQMnemonic(os.Stdout, entropy); err != nil {
-			return err
-		}
+	if err = printPQMnemonic(os.Stdout, entropy); err != nil {
+		return err
 	}
 	return printPQKeyInfo(os.Stdout, signing.Public)
 }

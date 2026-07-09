@@ -266,7 +266,7 @@ func TestPQMnemonicImport(t *testing.T) {
 	importedKeyfile := filepath.Join(tempDir, "imported.pq")
 	require.NoError(t, os.WriteFile(mnemonicFile, []byte("Scheme: falcon-1024\n"+mnemonic+"\n"), 0600))
 
-	require.NoError(t, runPQImportWithOptions(mnemonicFile, importedKeyfile, false))
+	require.NoError(t, runPQImportWithOptions(mnemonicFile, importedKeyfile))
 	imported, err := readPQSigningMaterial(importedKeyfile)
 	require.NoError(t, err)
 	require.Equal(t, signing, imported)
@@ -281,7 +281,7 @@ func TestPQImportRejectsMalformedMnemonicFile(t *testing.T) {
 	importedKeyfile := filepath.Join(tempDir, "imported.pq")
 	require.NoError(t, os.WriteFile(mnemonicFile, []byte("Scheme: f1\nnot a valid mnemonic\n"), 0600))
 
-	err := runPQImportWithOptions(mnemonicFile, importedKeyfile, false)
+	err := runPQImportWithOptions(mnemonicFile, importedKeyfile)
 	require.Error(t, err)
 
 	_, statErr := os.Stat(importedKeyfile)
@@ -303,7 +303,7 @@ func TestPQMnemonicFileRejectsUnknownScheme(t *testing.T) {
 	badFile := filepath.Join(tempDir, "bad.mnemonic")
 	require.NoError(t, os.WriteFile(badFile, []byte("Scheme: zz\n"+mnemonic+"\n"), 0600))
 	importedKeyfile := filepath.Join(tempDir, "imported.pq")
-	require.ErrorIs(t, runPQImportWithOptions(badFile, importedKeyfile, false), crypto.ErrPQSchemeNotSupported)
+	require.ErrorIs(t, runPQImportWithOptions(badFile, importedKeyfile), crypto.ErrPQSchemeNotSupported)
 	_, statErr := os.Stat(importedKeyfile)
 	require.ErrorIs(t, statErr, os.ErrNotExist)
 }
@@ -329,7 +329,6 @@ func TestPQCommandFlagShorthands(t *testing.T) {
 	require.Equal(t, "S", pqGenerateCmd.Flags().Lookup("scheme").Shorthand)
 	require.Equal(t, "f", pqGenerateCmd.Flags().Lookup("keyfile").Shorthand)
 	require.Equal(t, "p", pqGenerateCmd.Flags().Lookup("pubkeyfile").Shorthand)
-	require.Empty(t, pqGenerateCmd.Flags().Lookup("display-mnemonic").Shorthand)
 
 	require.Equal(t, "f", pqInfoCmd.Flags().Lookup("keyfile").Shorthand)
 	require.Equal(t, "s", pqInfoCmd.Flags().Lookup("salt").Shorthand)
@@ -340,7 +339,6 @@ func TestPQCommandFlagShorthands(t *testing.T) {
 
 	require.Equal(t, "m", pqImportCmd.Flags().Lookup("mnemonic-file").Shorthand)
 	require.Equal(t, "f", pqImportCmd.Flags().Lookup("keyfile").Shorthand)
-	require.Empty(t, pqImportCmd.Flags().Lookup("display-mnemonic").Shorthand)
 
 	require.Equal(t, "k", pqSignCmd.Flags().Lookup("keyfile").Shorthand)
 	require.Equal(t, "m", pqSignCmd.Flags().Lookup("mnemonic").Shorthand)
