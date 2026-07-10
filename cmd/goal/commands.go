@@ -432,7 +432,7 @@ func ensurePassword() []byte {
 	return password
 }
 
-func reportInfoln(args ...interface{}) {
+func reportInfoln(args ...any) {
 	for line := range strings.SplitSeq(fmt.Sprint(args...), "\n") {
 		printable, line := unicodePrintable(line)
 		if !printable {
@@ -442,13 +442,13 @@ func reportInfoln(args ...interface{}) {
 	}
 }
 
-func reportInfof(format string, args ...interface{}) {
+func reportInfof(format string, args ...any) {
 	reportInfoln(fmt.Sprintf(format, args...))
 }
 
 // reportWarnRawln prints a warning message to stderr. Only use this function if that warning
 // message already indicates that it's a warning. Otherwise, use reportWarnln
-func reportWarnRawln(args ...interface{}) {
+func reportWarnRawln(args ...any) {
 	for line := range strings.SplitSeq(fmt.Sprint(args...), "\n") {
 		printable, line := unicodePrintable(line)
 		if !printable {
@@ -461,23 +461,23 @@ func reportWarnRawln(args ...interface{}) {
 
 // reportWarnRawf prints a warning message to stderr. Only use this function if that warning message
 // already indicates that it's a warning. Otherwise, use reportWarnf
-func reportWarnRawf(format string, args ...interface{}) {
+func reportWarnRawf(format string, args ...any) {
 	reportWarnRawln(fmt.Sprintf(format, args...))
 }
 
 // reportWarnln prints a warning message to stderr. The message will be prefixed with "Warning: ".
 // If you don't want this prefix, use reportWarnRawln
-func reportWarnln(args ...interface{}) {
+func reportWarnln(args ...any) {
 	reportWarnRawf("Warning: %s", fmt.Sprint(args...))
 }
 
 // reportWarnf prints a warning message to stderr. The message will be prefixed with "Warning: ". If
 // you don't want this prefix, use reportWarnRawf
-func reportWarnf(format string, args ...interface{}) {
+func reportWarnf(format string, args ...any) {
 	reportWarnln(fmt.Sprintf(format, args...))
 }
 
-func reportErrorln(args ...interface{}) {
+func reportErrorln(args ...any) {
 	outStr := fmt.Sprint(args...)
 	for line := range strings.SplitSeq(outStr, "\n") {
 		printable, line := unicodePrintable(line)
@@ -489,7 +489,7 @@ func reportErrorln(args ...interface{}) {
 	exit(1)
 }
 
-func reportErrorf(format string, args ...interface{}) {
+func reportErrorf(format string, args ...any) {
 	reportErrorln(fmt.Sprintf(format, args...))
 }
 

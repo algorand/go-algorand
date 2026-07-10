@@ -273,7 +273,7 @@ type wsPeer struct {
 
 	// clientDataStore is a generic key/value store used to store client-side data entries associated with a particular peer.
 	// Locked by clientDataStoreMu.
-	clientDataStore map[string]interface{}
+	clientDataStore map[string]any
 
 	// clientDataStoreMu synchronizes access to clientDataStore
 	clientDataStoreMu deadlock.Mutex
@@ -454,7 +454,7 @@ func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 	wp.lastPacketTime.Store(time.Now().UnixNano())
 	wp.responseChannels = make(map[uint64]chan *Response)
 	wp.sendMessageTag = defaultSendMessageTags
-	wp.clientDataStore = make(map[string]interface{})
+	wp.clientDataStore = make(map[string]any)
 
 	// processed is a channel that messageHandlerThread writes to
 	// when it's done with one of our messages, so that we can queue
@@ -1096,13 +1096,13 @@ func (wp *wsPeer) getAndRemoveResponseChannel(key uint64) (respChan chan *Respon
 	return
 }
 
-func (wp *wsPeer) getPeerData(key string) interface{} {
+func (wp *wsPeer) getPeerData(key string) any {
 	wp.clientDataStoreMu.Lock()
 	defer wp.clientDataStoreMu.Unlock()
 	return wp.clientDataStore[key]
 }
 
-func (wp *wsPeer) setPeerData(key string, value interface{}) {
+func (wp *wsPeer) setPeerData(key string, value any) {
 	wp.clientDataStoreMu.Lock()
 	defer wp.clientDataStoreMu.Unlock()
 	if value == nil {

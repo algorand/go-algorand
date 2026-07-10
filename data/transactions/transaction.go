@@ -233,7 +233,7 @@ func txAllocSize() int {
 // txEncodingPool holds temporary byte slice buffers used for encoding transaction messages.
 // Note, it prepends protocol.Transaction tag to the buffer economizing on subsequent append ops.
 var txEncodingPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		size := txAllocSize() + len(protocol.Transaction)
 		buf := make([]byte, len(protocol.Transaction), size)
 		copy(buf, []byte(protocol.Transaction))

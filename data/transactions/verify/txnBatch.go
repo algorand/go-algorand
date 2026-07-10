@@ -38,7 +38,7 @@ import (
 // Implements UnverifiedSigJob
 type UnverifiedTxnSigJob struct {
 	TxnGroup       []transactions.SignedTxn
-	BacklogMessage interface{}
+	BacklogMessage any
 }
 
 // VerificationResult is the result of the txn group verification
@@ -46,7 +46,7 @@ type UnverifiedTxnSigJob struct {
 // initially passed to the stream verifier
 type VerificationResult struct {
 	TxnGroup       []transactions.SignedTxn
-	BacklogMessage interface{}
+	BacklogMessage any
 	Err            error
 }
 
@@ -92,7 +92,7 @@ type batchLoad struct {
 	// one entry per committed group, indexed alike
 	txnGroups      [][]transactions.SignedTxn
 	groupCtxs      []*GroupContext
-	backlogMessage []interface{}
+	backlogMessage []any
 	messagesForTxn []int // running total of committed sigs; group i owns slots [messagesForTxn[i-1], messagesForTxn[i])
 	// origJobIdx maps each entry to its ProcessBatch input index, to record result delivery per job.
 	origJobIdx []int
@@ -105,7 +105,7 @@ func makeBatchLoad(l int) (bl *batchLoad) {
 		staged:         make([]stagedSig, 0, bounds.MaxTxGroupSize),
 		txnGroups:      make([][]transactions.SignedTxn, 0, l),
 		groupCtxs:      make([]*GroupContext, 0, l),
-		backlogMessage: make([]interface{}, 0, l),
+		backlogMessage: make([]any, 0, l),
 		messagesForTxn: make([]int, 0, l),
 		origJobIdx:     make([]int, 0, l),
 	}
@@ -122,7 +122,7 @@ func (bl *batchLoad) resetGroup() { bl.staged = bl.staged[:0] }
 
 // commitGroup flushes the staged signatures into the shared verifier and records the group so its
 // result can be recovered after verification. Called only if checking the group succeeded.
-func (bl *batchLoad) commitGroup(txngrp []transactions.SignedTxn, gctx *GroupContext, backlogMsg interface{}, origJobIdx int) {
+func (bl *batchLoad) commitGroup(txngrp []transactions.SignedTxn, gctx *GroupContext, backlogMsg any, origJobIdx int) {
 	for i := range bl.staged {
 		bl.verifier.EnqueueSignature(bl.staged[i].sigVerifier, bl.staged[i].message, bl.staged[i].sig)
 	}
@@ -170,7 +170,7 @@ func (tbp txnSigBatchProcessor) GetErredUnprocessed(ue execpool.InputJob, err er
 	tbp.sendResult(uelt.TxnGroup, uelt.BacklogMessage, err)
 }
 
-func (tbp txnSigBatchProcessor) sendResult(veTxnGroup []transactions.SignedTxn, veBacklogMessage interface{}, err error) {
+func (tbp txnSigBatchProcessor) sendResult(veTxnGroup []transactions.SignedTxn, veBacklogMessage any, err error) {
 	// send the txn result out the pipe
 	select {
 	case tbp.resultChan <- &VerificationResult{

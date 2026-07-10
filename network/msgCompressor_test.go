@@ -101,11 +101,11 @@ func TestZstdCompressMsg(t *testing.T) {
 
 type converterTestLogger struct {
 	logging.Logger
-	WarnfCallback func(string, ...interface{})
+	WarnfCallback func(string, ...any)
 	warnMsgCount  int
 }
 
-func (cl *converterTestLogger) Warnf(s string, args ...interface{}) {
+func (cl *converterTestLogger) Warnf(s string, args ...any) {
 	cl.warnMsgCount++
 }
 
