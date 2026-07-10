@@ -103,7 +103,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 1,
@@ -120,7 +121,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 2,
@@ -137,7 +139,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 3,
@@ -154,7 +157,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 4,
@@ -174,7 +178,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 1
     },
     {
       "Opcode": 8,
@@ -193,7 +198,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 9,
@@ -211,7 +217,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 10,
@@ -230,7 +237,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 11,
@@ -249,7 +257,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 12,
@@ -267,7 +276,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 13,
@@ -285,7 +295,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 14,
@@ -303,7 +314,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 15,
@@ -321,7 +333,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 16,
@@ -339,7 +352,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 17,
@@ -357,7 +371,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 18,
@@ -375,7 +390,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 19,
@@ -393,7 +409,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 20,
@@ -410,7 +427,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 21,
@@ -427,7 +445,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 22,
@@ -444,7 +463,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 23,
@@ -462,7 +482,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 24,
@@ -480,7 +501,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 25,
@@ -498,7 +520,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 26,
@@ -516,7 +539,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 27,
@@ -534,7 +558,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 28,
@@ -551,7 +576,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 29,
@@ -570,7 +596,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 32,
@@ -589,7 +616,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 33,
@@ -610,7 +638,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 34,
@@ -624,7 +653,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 35,
@@ -638,7 +668,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 36,
@@ -652,7 +683,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 37,
@@ -666,7 +698,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 38,
@@ -685,7 +718,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 39,
@@ -706,7 +740,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 40,
@@ -720,7 +755,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 41,
@@ -734,7 +770,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 42,
@@ -748,7 +785,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 43,
@@ -762,7 +800,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 44,
@@ -783,7 +822,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 1
     },
     {
       "Opcode": 45,
@@ -797,7 +837,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 1
     },
     {
       "Opcode": 46,
@@ -811,7 +852,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 1
     },
     {
       "Opcode": 47,
@@ -825,7 +867,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 1
     },
     {
       "Opcode": 48,
@@ -839,7 +882,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 1
     },
     {
       "Opcode": 49,
@@ -898,6 +942,169 @@
         "uint64",
         "[32]byte"
       ],
+      "ArgDetails": [
+        {
+          "Name": "Sender",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "Bytes": 0,
+          "Version": 0
+        },
+        {
+          "Name": "Fee",
+          "Type": "uint64",
+          "Doc": "microalgos",
+          "Bytes": 1,
+          "Version": 0
+        },
+        {
+          "Name": "FirstValid",
+          "Type": "uint64",
+          "Doc": "round number",
+          "Bytes": 2,
+          "Version": 0
+        },
+        {
+          "Name": "LastValid",
+          "Type": "uint64",
+          "Doc": "round number",
+          "Bytes": 4,
+          "Version": 0
+        },
+        {
+          "Name": "Note",
+          "Type": "[]byte",
+          "Doc": "Any data up to 1024 bytes",
+          "Bytes": 5,
+          "Version": 0
+        },
+        {
+          "Name": "Lease",
+          "Type": "[32]byte",
+          "Doc": "32 byte lease value",
+          "Bytes": 6,
+          "Version": 0
+        },
+        {
+          "Name": "Receiver",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "Bytes": 7,
+          "Version": 0
+        },
+        {
+          "Name": "Amount",
+          "Type": "uint64",
+          "Doc": "microalgos",
+          "Bytes": 8,
+          "Version": 0
+        },
+        {
+          "Name": "CloseRemainderTo",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "Bytes": 9,
+          "Version": 0
+        },
+        {
+          "Name": "VotePK",
+          "Type": "[32]byte",
+          "Doc": "32 byte address",
+          "Bytes": 10,
+          "Version": 0
+        },
+        {
+          "Name": "SelectionPK",
+          "Type": "[32]byte",
+          "Doc": "32 byte address",
+          "Bytes": 11,
+          "Version": 0
+        },
+        {
+          "Name": "VoteFirst",
+          "Type": "uint64",
+          "Doc": "The first round that the participation key is valid.",
+          "Bytes": 12,
+          "Version": 0
+        },
+        {
+          "Name": "VoteLast",
+          "Type": "uint64",
+          "Doc": "The last round that the participation key is valid.",
+          "Bytes": 13,
+          "Version": 0
+        },
+        {
+          "Name": "VoteKeyDilution",
+          "Type": "uint64",
+          "Doc": "Dilution for the 2-level participation key",
+          "Bytes": 14,
+          "Version": 0
+        },
+        {
+          "Name": "Type",
+          "Type": "[]byte",
+          "Doc": "Transaction type as bytes",
+          "Bytes": 15,
+          "Version": 0
+        },
+        {
+          "Name": "TypeEnum",
+          "Type": "uint64",
+          "Doc": "Transaction type as integer",
+          "Bytes": 16,
+          "Version": 0
+        },
+        {
+          "Name": "XferAsset",
+          "Type": "uint64",
+          "Doc": "Asset ID",
+          "Bytes": 17,
+          "Version": 0
+        },
+        {
+          "Name": "AssetAmount",
+          "Type": "uint64",
+          "Doc": "value in Asset's units",
+          "Bytes": 18,
+          "Version": 0
+        },
+        {
+          "Name": "AssetSender",
+          "Type": "address",
+          "Doc": "32 byte address. Source of assets if Sender is the Asset's Clawback address.",
+          "Bytes": 19,
+          "Version": 0
+        },
+        {
+          "Name": "AssetReceiver",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "Bytes": 20,
+          "Version": 0
+        },
+        {
+          "Name": "AssetCloseTo",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "Bytes": 21,
+          "Version": 0
+        },
+        {
+          "Name": "GroupIndex",
+          "Type": "uint64",
+          "Doc": "Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1",
+          "Bytes": 22,
+          "Version": 0
+        },
+        {
+          "Name": "TxID",
+          "Type": "[32]byte",
+          "Doc": "The computed ID for this transaction. 32 bytes.",
+          "Bytes": 23,
+          "Version": 0
+        }
+      ],
       "DocCost": "1",
       "Doc": "field F of current transaction",
       "ImmediateNote": [
@@ -911,7 +1118,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 50,
@@ -934,6 +1142,43 @@
         "address",
         "uint64"
       ],
+      "ArgDetails": [
+        {
+          "Name": "MinTxnFee",
+          "Type": "uint64",
+          "Doc": "microalgos",
+          "Bytes": 0,
+          "Version": 0
+        },
+        {
+          "Name": "MinBalance",
+          "Type": "uint64",
+          "Doc": "microalgos",
+          "Bytes": 1,
+          "Version": 0
+        },
+        {
+          "Name": "MaxTxnLife",
+          "Type": "uint64",
+          "Doc": "rounds",
+          "Bytes": 2,
+          "Version": 0
+        },
+        {
+          "Name": "ZeroAddress",
+          "Type": "address",
+          "Doc": "32 byte address of all zero bytes",
+          "Bytes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "GroupSize",
+          "Type": "uint64",
+          "Doc": "Number of transactions in this atomic transaction group. At least 1",
+          "Bytes": 4,
+          "Version": 0
+        }
+      ],
       "DocCost": "1",
       "Doc": "global field F",
       "ImmediateNote": [
@@ -947,7 +1192,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 51,
@@ -1006,6 +1252,169 @@
         "uint64",
         "[32]byte"
       ],
+      "ArgDetails": [
+        {
+          "Name": "Sender",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "Bytes": 0,
+          "Version": 0
+        },
+        {
+          "Name": "Fee",
+          "Type": "uint64",
+          "Doc": "microalgos",
+          "Bytes": 1,
+          "Version": 0
+        },
+        {
+          "Name": "FirstValid",
+          "Type": "uint64",
+          "Doc": "round number",
+          "Bytes": 2,
+          "Version": 0
+        },
+        {
+          "Name": "LastValid",
+          "Type": "uint64",
+          "Doc": "round number",
+          "Bytes": 4,
+          "Version": 0
+        },
+        {
+          "Name": "Note",
+          "Type": "[]byte",
+          "Doc": "Any data up to 1024 bytes",
+          "Bytes": 5,
+          "Version": 0
+        },
+        {
+          "Name": "Lease",
+          "Type": "[32]byte",
+          "Doc": "32 byte lease value",
+          "Bytes": 6,
+          "Version": 0
+        },
+        {
+          "Name": "Receiver",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "Bytes": 7,
+          "Version": 0
+        },
+        {
+          "Name": "Amount",
+          "Type": "uint64",
+          "Doc": "microalgos",
+          "Bytes": 8,
+          "Version": 0
+        },
+        {
+          "Name": "CloseRemainderTo",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "Bytes": 9,
+          "Version": 0
+        },
+        {
+          "Name": "VotePK",
+          "Type": "[32]byte",
+          "Doc": "32 byte address",
+          "Bytes": 10,
+          "Version": 0
+        },
+        {
+          "Name": "SelectionPK",
+          "Type": "[32]byte",
+          "Doc": "32 byte address",
+          "Bytes": 11,
+          "Version": 0
+        },
+        {
+          "Name": "VoteFirst",
+          "Type": "uint64",
+          "Doc": "The first round that the participation key is valid.",
+          "Bytes": 12,
+          "Version": 0
+        },
+        {
+          "Name": "VoteLast",
+          "Type": "uint64",
+          "Doc": "The last round that the participation key is valid.",
+          "Bytes": 13,
+          "Version": 0
+        },
+        {
+          "Name": "VoteKeyDilution",
+          "Type": "uint64",
+          "Doc": "Dilution for the 2-level participation key",
+          "Bytes": 14,
+          "Version": 0
+        },
+        {
+          "Name": "Type",
+          "Type": "[]byte",
+          "Doc": "Transaction type as bytes",
+          "Bytes": 15,
+          "Version": 0
+        },
+        {
+          "Name": "TypeEnum",
+          "Type": "uint64",
+          "Doc": "Transaction type as integer",
+          "Bytes": 16,
+          "Version": 0
+        },
+        {
+          "Name": "XferAsset",
+          "Type": "uint64",
+          "Doc": "Asset ID",
+          "Bytes": 17,
+          "Version": 0
+        },
+        {
+          "Name": "AssetAmount",
+          "Type": "uint64",
+          "Doc": "value in Asset's units",
+          "Bytes": 18,
+          "Version": 0
+        },
+        {
+          "Name": "AssetSender",
+          "Type": "address",
+          "Doc": "32 byte address. Source of assets if Sender is the Asset's Clawback address.",
+          "Bytes": 19,
+          "Version": 0
+        },
+        {
+          "Name": "AssetReceiver",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "Bytes": 20,
+          "Version": 0
+        },
+        {
+          "Name": "AssetCloseTo",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "Bytes": 21,
+          "Version": 0
+        },
+        {
+          "Name": "GroupIndex",
+          "Type": "uint64",
+          "Doc": "Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1",
+          "Bytes": 22,
+          "Version": 0
+        },
+        {
+          "Name": "TxID",
+          "Type": "[32]byte",
+          "Doc": "The computed ID for this transaction. 32 bytes.",
+          "Bytes": 23,
+          "Version": 0
+        }
+      ],
       "DocCost": "1",
       "Doc": "field F of the Tth transaction in the current group",
       "DocExtra": "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`.",
@@ -1025,7 +1434,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 52,
@@ -1046,7 +1456,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 53,
@@ -1067,7 +1478,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 64,
@@ -1089,7 +1501,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 72,
@@ -1103,7 +1516,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 73,
@@ -1121,7 +1535,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     }
   ]
 }
