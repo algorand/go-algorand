@@ -136,15 +136,11 @@ func isPlaceholderPQSig(txn transactions.SignedTxn) bool {
 		!txn.PQsig.Blank() && len(txn.PQsig.Signature) == 0
 }
 
-func isSchemeOnlyPlaceholderPQSig(txn transactions.SignedTxn) bool {
-	return isPlaceholderPQSig(txn) && len(txn.PQsig.PublicKey) == 0
-}
-
-func validatePlaceholderPQSig(proto config.ConsensusParams, txn transactions.SignedTxn, fixSigners bool) error {
-	if isSchemeOnlyPlaceholderPQSig(txn) || fixSigners {
-		return txn.PQsig.ValidateScheme(proto)
+func validatePlaceholderPQSig(proto config.ConsensusParams, pqSig transactions.PQSig, authorizer basics.Address, fixSigners bool) error {
+	if len(pqSig.PublicKey) == 0 || fixSigners {
+		return pqSig.ValidateScheme(proto)
 	}
-	return txn.PQsig.ValidateEnvelope(proto, txn.Authorizer())
+	return pqSig.ValidateEnvelope(proto, authorizer)
 }
 
 // isPlaceholderDelegatedPQSig reports whether txn carries a placeholder PQSig
@@ -156,13 +152,6 @@ func isPlaceholderDelegatedPQSig(txn transactions.SignedTxn) bool {
 		txn.Lsig.HasProgram() && txn.Lsig.Sig.Blank() &&
 		txn.Lsig.Msig.Blank() && txn.Lsig.LMsig.Blank() &&
 		!txn.Lsig.PQsig.Blank() && len(txn.Lsig.PQsig.Signature) == 0
-}
-
-func validatePlaceholderDelegatedPQSig(proto config.ConsensusParams, txn transactions.SignedTxn, fixSigners bool) error {
-	if len(txn.Lsig.PQsig.PublicKey) == 0 || fixSigners {
-		return txn.Lsig.PQsig.ValidateScheme(proto)
-	}
-	return txn.Lsig.PQsig.ValidateEnvelope(proto, txn.Authorizer())
 }
 
 func txnNeedsSyntheticSignature(txn transactions.SignedTxn) bool {
@@ -212,14 +201,14 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 			// itself is valid.
 			txnsToVerify[i] = stxn.Txn.Sign(proxySignerSecrets)
 		} else if overrides.AllowEmptySignatures && isPlaceholderPQSig(stxn) {
-			placeholderErr := validatePlaceholderPQSig(proto, stxn, overrides.FixSigners)
+			placeholderErr := validatePlaceholderPQSig(proto, stxn.PQsig, stxn.Authorizer(), overrides.FixSigners)
 			if placeholderErr == nil {
 				txnsToVerify[i] = stxn.Txn.Sign(proxySignerSecrets)
 			} else {
 				txnsToVerify[i] = stxn
 			}
 		} else if overrides.AllowEmptySignatures && isPlaceholderDelegatedPQSig(stxn) {
-			if validatePlaceholderDelegatedPQSig(proto, stxn, overrides.FixSigners) == nil {
+			if validatePlaceholderPQSig(proto, stxn.Lsig.PQsig, stxn.Authorizer(), overrides.FixSigners) == nil {
 				// A delegated LogicSig carries a program that must still be
 				// evaluated and traced, so unlike the no-signature cases we
 				// cannot swap in a proxy-signed bare transaction. Keep the
@@ -251,12 +240,12 @@ func validateFixedPlaceholderPQEnvelopes(proto config.ConsensusParams, txgroup [
 	for i, stxnad := range txgroup {
 		stxn := stxnad.SignedTxn
 		if isPlaceholderPQSig(stxn) && len(stxn.PQsig.PublicKey) != 0 {
-			if err := stxn.PQsig.ValidateEnvelope(proto, stxn.Authorizer()); err != nil {
+			if err := validatePlaceholderPQSig(proto, stxn.PQsig, stxn.Authorizer(), false); err != nil {
 				return i, fmt.Errorf("pq signature validation failed: %w", err)
 			}
 		}
 		if isPlaceholderDelegatedPQSig(stxn) && len(stxn.Lsig.PQsig.PublicKey) != 0 {
-			if err := stxn.Lsig.PQsig.ValidateEnvelope(proto, stxn.Authorizer()); err != nil {
+			if err := validatePlaceholderPQSig(proto, stxn.Lsig.PQsig, stxn.Authorizer(), false); err != nil {
 				return i, fmt.Errorf("pq delegated logic signature validation failed: %w", err)
 			}
 		}
