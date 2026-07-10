@@ -172,7 +172,7 @@ func optSigParams(opt protoOpt, txns ...transactions.SignedTxn) *EvalParams {
 	}
 	// Make it non-Blank so NewSigEval does not short-circuit (but try to avoid
 	// manipulating txns if they were actually supplied with other sigs.)
-	if txns[0].Sig.Blank() && txns[0].Msig.Blank() && txns[0].Lsig.Blank() {
+	if txns[0].Sig.Blank() && txns[0].Msig.Blank() && !txns[0].Lsig.HasProgram() {
 		txns[0].Lsig.Logic = []byte{LogicVersion + 1} // make sure it fails if used
 	}
 

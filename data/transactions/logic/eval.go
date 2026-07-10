@@ -448,7 +448,7 @@ func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.Sign
 func NewSigEvalParams(txgroup []transactions.SignedTxn, proto *config.ConsensusParams, ls LedgerForSignature) *EvalParams {
 	lsigs := 0
 	for _, tx := range txgroup {
-		if !tx.Lsig.Blank() {
+		if tx.Lsig.HasProgram() {
 			lsigs++
 		}
 	}
