@@ -1186,7 +1186,7 @@ func legacyOnCurveLogicSigProgram(t *testing.T) []byte {
 func offCurveLogicSigProgram(t *testing.T) []byte {
 	t.Helper()
 
-	ops, err := logic.AssembleStringWithVersion("#pragma version 13\npushint 12", logic.LogicSigOffCurveVersion)
+	ops, err := logic.AssembleStringWithVersion("pushint 12", logic.LogicSigOffCurveVersion)
 	require.NoError(t, err)
 	require.False(t, logic.ProgramHashIsEdwards25519Point(ops.Program))
 	return ops.Program

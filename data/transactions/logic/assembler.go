@@ -268,12 +268,22 @@ type OpStream struct {
 	OffsetToSource map[int]SourceLocation
 
 	HasStatefulOps bool
+	autoSalt       autoSaltMode
+	autoSaltToken  token
 
 	// Need new copy for each opstream
 	versionedPseudoOps map[string]map[int]OpSpec
 
 	macros map[string][]token
 }
+
+type autoSaltMode int
+
+const (
+	autoSaltDefault autoSaltMode = iota
+	autoSaltOn
+	autoSaltOff
+)
 
 // newOpStream constructs OpStream instances ready to invoke assemble. A new
 // OpStream must be used for each call to assemble().
@@ -2245,12 +2255,14 @@ func (ops *OpStream) parseText(text string) error {
 const assemblerSaltSearchLimit = 128
 
 // finalizeProgram constructs final program bytes. For v13+ stateless programs
-// that would hash on-curve, it adds salt to make the hash off-curve. If the
-// program has an automatic intcblock, it appends the salt there; otherwise it
-// adds a trailing intcblock at the end of the program.
+// that would hash on-curve, it adds salt to make the hash off-curve. The
+// #pragma autosalt directive can force this behavior on for older versions, or
+// disable it for v13+ programs. If the program has an automatic intcblock, it
+// appends the salt there; otherwise it adds a trailing intcblock at the end of
+// the program.
 func (ops *OpStream) finalizeProgram() ([]byte, int, *sourceError) {
 	program, prefixLen := ops.prependCBlocks()
-	if ops.Version < LogicSigOffCurveVersion || ops.HasStatefulOps || !ProgramHashIsEdwards25519Point(program) {
+	if !ops.shouldAutoSalt(program) {
 		return program, prefixLen, nil
 	}
 
@@ -2258,6 +2270,26 @@ func (ops *OpStream) finalizeProgram() ([]byte, int, *sourceError) {
 		return ops.finalizeProgramWithAutoIntcSalt()
 	}
 	return ops.finalizeProgramWithTrailingIntcSalt(program, prefixLen)
+}
+
+func (ops *OpStream) shouldAutoSalt(program []byte) bool {
+	if ops.autoSalt == autoSaltOff {
+		if !ops.HasStatefulOps && ProgramHashIsEdwards25519Point(program) {
+			ops.warn(ops.autoSaltToken, "#pragma autosalt false leaves program hash on curve")
+		}
+		return false
+	}
+	if ops.autoSalt == autoSaltOn {
+		if ops.HasStatefulOps {
+			ops.warn(ops.autoSaltToken, "#pragma autosalt true used with stateful opcodes")
+		}
+		return ProgramHashIsEdwards25519Point(program)
+	}
+	return defaultAutoSaltApplies(ops.Version, ops.HasStatefulOps, program)
+}
+
+func defaultAutoSaltApplies(version uint64, hasStatefulOps bool, program []byte) bool {
+	return version >= LogicSigOffCurveVersion && !hasStatefulOps && ProgramHashIsEdwards25519Point(program)
 }
 
 // TODO: should ops.intc reflect the salted intcblock that ends up
@@ -2471,6 +2503,29 @@ func pragma(ops *OpStream, tokens []token) *sourceError {
 			ops.known.reset()
 		}
 		ops.typeTracking = on
+
+		return nil
+	case "autosalt":
+		if len(tokens) < 3 {
+			return tokens[1].errorf("no autosalt value")
+		}
+		if len(tokens) > 3 {
+			return tokens[3].errorf("unexpected extra tokens:%s", reJoin("", tokens[3:]))
+		}
+		if ops.pending.Len() > 0 {
+			return tokens[0].errorf("#pragma autosalt is only allowed before instructions")
+		}
+		value := tokens[2].str
+		on, err := strconv.ParseBool(value)
+		if err != nil {
+			return tokens[2].errorf("bad #pragma autosalt: %#v", value)
+		}
+		if on {
+			ops.autoSalt = autoSaltOn
+		} else {
+			ops.autoSalt = autoSaltOff
+		}
+		ops.autoSaltToken = tokens[0]
 
 		return nil
 	default:
@@ -3305,20 +3360,19 @@ type disInfo struct {
 // disassembly. If the labels names are known, they may be passed in.
 // When doing so, labels for all jump targets must be provided.
 func disassembleInstrumented(program []byte, labels map[int]string) (text string, ds disInfo, err error) {
-	out := strings.Builder{}
-	dis := disassembleState{program: program, out: &out, pendingLabels: labels}
+	body := strings.Builder{}
+	dis := disassembleState{program: program, out: &body, pendingLabels: labels}
 	version, vlen := binary.Uvarint(program)
 	if vlen <= 0 {
 		fmt.Fprintf(dis.out, "// invalid version\n")
-		text = out.String()
+		text = body.String()
 		return
 	}
 	if version > LogicVersion {
 		fmt.Fprintf(dis.out, "// unsupported version %d\n", version)
-		text = out.String()
+		text = body.String()
 		return
 	}
-	fmt.Fprintf(dis.out, "#pragma version %d\n", version)
 	dis.pc = vlen
 	for dis.pc < len(program) {
 		err = dis.outputLabelIfNeeded()
@@ -3338,11 +3392,12 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 			ds.hasStatefulOps = true
 		}
 		if op.Name == "" {
-			ds.pcOffset = append(ds.pcOffset, PCOffset{dis.pc, out.Len()})
+			ds.pcOffset = append(ds.pcOffset, PCOffset{dis.pc, body.Len()})
+			msg := fmt.Sprintf("invalid opcode %02x at pc=%d", program[dis.pc], dis.pc)
 			err = getOpSpecError(&op, program, dis.pc)
-			out.WriteString(err.Error())
-			out.WriteRune('\n')
-			text = out.String()
+			body.WriteString(msg)
+			body.WriteRune('\n')
+			text = finalizeDisassemblyWithPragmas(version, program, body.String(), &ds)
 			return
 		}
 
@@ -3360,7 +3415,7 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 		}
 
 		// ds.pcOffset tracks where in the output each opcode maps to assembly
-		ds.pcOffset = append(ds.pcOffset, PCOffset{dis.pc, out.Len()})
+		ds.pcOffset = append(ds.pcOffset, PCOffset{dis.pc, body.Len()})
 
 		// Actually do the disassembly
 		var instruction string
@@ -3368,16 +3423,14 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 		if err != nil {
 			return
 		}
-		out.WriteString(instruction)
-		out.WriteRune('\n')
+		body.WriteString(instruction)
+		body.WriteRune('\n')
 		dis.pc = dis.nextpc
 	}
 	err = dis.outputLabelIfNeeded()
 	if err != nil {
 		return
 	}
-
-	text = out.String()
 
 	if dis.rerun {
 		if labels != nil {
@@ -3386,7 +3439,22 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 		}
 		return disassembleInstrumented(program, dis.pendingLabels)
 	}
+	text = finalizeDisassemblyWithPragmas(version, program, body.String(), &ds)
 	return
+}
+
+func finalizeDisassemblyWithPragmas(version uint64, program []byte, body string, ds *disInfo) string {
+	header := strings.Builder{}
+	fmt.Fprintf(&header, "#pragma version %d\n", version)
+	if defaultAutoSaltApplies(version, ds.hasStatefulOps, program) {
+		fmt.Fprintf(&header, "#pragma autosalt false\n")
+	}
+	headerLen := header.Len()
+	for i := range ds.pcOffset {
+		ds.pcOffset[i].Offset += headerLen
+	}
+	header.WriteString(body)
+	return header.String()
 }
 
 // Disassemble produces a text form of program bytes.

@@ -6678,6 +6678,32 @@ func TestOptionalSignaturesIncorrect(t *testing.T) {
 	require.ErrorContains(t, err, "one signature didn't pass")
 }
 
+func TestOptionalSignaturesProgramlessLogicSigContent(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+	s := simulation.MakeSimulator(env.Ledger, false)
+	sender := env.Accounts[0]
+
+	stxn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Addr,
+		Receiver: sender.Addr,
+		Amount:   0,
+	}).SignedTxn()
+	stxn.Lsig.Args = [][]byte{{1}}
+
+	result, err := s.Simulate(simulation.Request{
+		TxnGroups:            [][]transactions.SignedTxn{{stxn}},
+		AllowEmptySignatures: true,
+	})
+	require.NoError(t, err)
+	require.Len(t, result.TxnGroups, 1)
+	require.Contains(t, result.TxnGroups[0].FailureMessage, "LogicSig fields without LogicSig program")
+}
+
 // TestPartialMissingSignatures tests that a group of transactions with some signatures missing is
 // handled properly when AllowEmptySignatures is enabled.
 func TestPartialMissingSignatures(t *testing.T) {
