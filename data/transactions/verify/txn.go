@@ -446,7 +446,6 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batch crypto.B
 
 	hasMsig := false
 	hasLMsig := false
-	hasPQSig := false
 	numSigs := 0
 	if !lsig.Sig.Blank() {
 		numSigs++
@@ -460,7 +459,6 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batch crypto.B
 		numSigs++
 	}
 	if !lsig.PQsig.Blank() {
-		hasPQSig = true
 		numSigs++
 	}
 	if numSigs == 0 {
@@ -475,7 +473,7 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batch crypto.B
 	if numSigs > 1 {
 		return errors.New("LogicSig should have only one type of delegation signature")
 	}
-	if hasPQSig {
+	if !lsig.PQsig.Blank() {
 		program := logic.PQDelegatedProgram{Addr: txn.Authorizer(), Program: lsig.Logic}
 		if err := lsig.PQsig.VerifyHashable(groupCtx.consensusParams, program, txn.Authorizer()); err != nil {
 			return fmt.Errorf("pq delegated logic signature validation failed: %w", err)
