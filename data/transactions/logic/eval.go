@@ -274,6 +274,11 @@ type LedgerForLogic interface {
 
 	Perform(gi int, ep *EvalParams) error
 	Counter() uint64
+
+	// SetForeignBoxReads sets the ForeignBoxReads flag on the given app's params.
+	SetForeignBoxReads(appID basics.AppIndex, enable bool) error
+	// SetFamilyBoxAccess sets the FamilyBoxAccess flag on the given app's params.
+	SetFamilyBoxAccess(appID basics.AppIndex, enable bool) error
 }
 
 // UnnamedResourcePolicy is an interface that defines the policy for allowing unnamed resources.
@@ -340,6 +345,17 @@ type EvalParams struct {
 	// much. FeeCredit is never nil on chain, but we need to turn off credit
 	// tracking for some finicky backward compatibility tests.
 	FeeCredit *basics.MicroAlgos
+
+	// feeResidue is the fractional microAlgo (held to 1e-12 precision,
+	// i.e. over basics.feeResidueScale) that the group's fee charges have
+	// rounded up so far but not yet consumed. Carrying it from one group's
+	// charge to the next lets the whole tree of top-level and inner groups
+	// round up only once in aggregate, rather than (potentially) once per
+	// group.  Unlike FeeCredit, it is a value, not a shared pointer: inner
+	// EvalParams inherit it by copy (NewInnerEvalParams) and opItxnSubmit
+	// copies the final value back after evaluating an inner group, so siblings
+	// can't double-spend the same residue.
+	feeResidue uint64
 
 	Specials *transactions.SpecialAddresses
 
@@ -437,7 +453,7 @@ func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.Sign
 func NewSigEvalParams(txgroup []transactions.SignedTxn, proto *config.ConsensusParams, ls LedgerForSignature) *EvalParams {
 	lsigs := 0
 	for _, tx := range txgroup {
-		if !tx.Lsig.Blank() {
+		if tx.Lsig.HasProgram() {
 			lsigs++
 		}
 	}
@@ -473,9 +489,10 @@ func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Cons
 	var pooledApplicationBudget *int
 	var pooledAllowedInners *int
 	var credit *basics.MicroAlgos
+	var residue uint64
 	if apps > 0 { // none of these allocations needed if no apps
 		credit = new(basics.MicroAlgos)
-		*credit = feeCredit(txgroup, *proto)
+		*credit, residue = feeCredit(txgroup, *proto)
 
 		if proto.EnableAppCostPooling {
 			pooledApplicationBudget = new(int)
@@ -495,6 +512,7 @@ func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Cons
 		Specials:                specials,
 		minAvmVersion:           computeMinAvmVersion(txgroup),
 		FeeCredit:               credit,
+		feeResidue:              residue,
 		CostMultiplier:          1e6,
 		PooledApplicationBudget: pooledApplicationBudget,
 		pooledAllowedInners:     pooledAllowedInners,
@@ -550,12 +568,15 @@ func (cx *EvalContext) considerBudgetProgramWrites() error {
 	return nil
 }
 
-// feeCredit returns the extra fee supplied in this top-level txgroup compared
-// to required fees. feeCredit should not be used on inner groups.
-func feeCredit(txgroup []transactions.SignedTxnWithAD, proto config.ConsensusParams) basics.MicroAlgos {
+// feeCredit returns the extra fee supplied in this top-level txgroup compared to
+// required fees, plus the fractional residue left by rounding that required fee
+// up. The residue seeds EvalParams.feeResidue so that inner groups round up only
+// once in aggregate with the top-level group. feeCredit should not be used on
+// inner groups.
+func feeCredit(txgroup []transactions.SignedTxnWithAD, proto config.ConsensusParams) (credit basics.MicroAlgos, residue uint64) {
 	usage, feesPaid := transactions.SummarizeFees(txgroup, proto)
-	feeNeeded, _ := proto.MinFee().MulMicrosCeil(usage)
-	return feesPaid.SubSaturate(feeNeeded) // If MulMicrosCeil saturates, this is 0
+	feeNeeded, residue, _ := proto.MinFee().FeeForUsage(usage, 1e6, 0)
+	return feesPaid.SubSaturate(feeNeeded), residue // If FeeForUsage saturates, credit is 0
 }
 
 // NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
@@ -586,6 +607,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		Tracer:                  caller.Tracer,
 		minAvmVersion:           minAvmVersion,
 		FeeCredit:               caller.FeeCredit,
+		feeResidue:              caller.feeResidue,
 		Specials:                caller.Specials,
 		CostMultiplier:          caller.CostMultiplier,
 		PooledApplicationBudget: caller.PooledApplicationBudget,
@@ -715,6 +737,27 @@ type EvalContext struct {
 	version uint64
 	Scratch scratchSpace
 
+	// creatorAddr caches the creator of appID, looked up lazily by
+	// getCreatorAddress (a zero value means "not yet looked up"). Besides
+	// backing the `global CreatorAddress` op, it is used to decide family
+	// membership (same creator) while walking the caller chain for family-box
+	// reentrancy checks.
+	creatorAddr basics.Address
+
+	// touchedFamilyShared records that this frame has read or written a
+	// family-shared box (one owned by a same-creator app with FamilyBoxAccess
+	// set). It marks the frame as holding a stable-state assumption that a
+	// family-member re-entry via a foreign app must not silently violate. See
+	// checkFamilyReentrancy.
+	touchedFamilyShared bool
+
+	// familyReentrancyChecked records that checkFamilyReentrancy has already
+	// passed for this frame. Its result is invariant for the frame's lifetime
+	// (ancestors are suspended, so neither the stack shape nor their touch marks
+	// can change), and a failing check aborts evaluation, so once it passes
+	// there is no need to walk the caller chain again.
+	familyReentrancyChecked bool
+
 	subtxns []transactions.SignedTxnWithAD // place to build for itxn_submit
 	cost    int                            // cost incurred so far
 	logSize int                            // total log size so far
@@ -750,8 +793,38 @@ func (cx *EvalContext) ProgramVersion() uint64 {
 // PC returns the program counter of the current application being evaluated
 func (cx *EvalContext) PC() int { return cx.pc }
 
-// GetOpSpec queries for the OpSpec w.r.t. current program byte.
-func (cx *EvalContext) GetOpSpec() OpSpec { return opsByOpcode[cx.version][cx.program[cx.pc]] }
+// GetOpSpec returns the OpSpec for the current program position. It always
+// returns a non-nil pointer to an OpSpec, even if the opcode is invalid. If the
+// opcode is invalid, the returned OpSpec will have op == nil. This unusual
+// interface allows code that knows it is looking at a valid program (anything
+// after check()) to avoid dealing with errors while other code handle the error
+// with getOpSpecError while this function stays inlined.
+func (cx *EvalContext) GetOpSpec() *OpSpec {
+	spec := &opsByOpcode[cx.version][cx.program[cx.pc]]
+	if spec.SubOps != nil && cx.pc+1 < len(cx.program) {
+		sub := cx.program[cx.pc+1]
+		if int(sub) < len(spec.SubOps) && spec.SubOps[sub].op != nil {
+			return &spec.SubOps[sub]
+		}
+	}
+	return spec
+}
+
+// getOpSpecError returns an error describing the problem with the current
+// opcode. It is kept out of GetOpSpec, and called only on the error path (when
+// the returned spec has op == nil), so that GetOpSpec stays cheap enough to
+// inline into the hot step()/checkStep() loops.
+func getOpSpecError(spec *OpSpec, program []byte, pc int) error {
+	opcode := program[pc]
+	if spec.SubOps != nil {
+		if pc+1 >= len(program) {
+			return fmt.Errorf("prefix opcode 0x%02x missing sub-opcode", opcode)
+		}
+		return fmt.Errorf("prefix opcode 0x%02x with improper sub-opcode 0x%02x",
+			opcode, program[pc+1])
+	}
+	return fmt.Errorf("illegal opcode 0x%02x", opcode)
+}
 
 // GetProgram queries for the current program
 func (cx *EvalContext) GetProgram() []byte { return cx.program }
@@ -1213,7 +1286,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		}
 		cx.ioBudget = basics.MulSaturate(bumps, cx.Proto.BytesPerBoxReference)
 
-		used := uint64(0)
+		bytesRead := uint64(0)
 
 		// First count the extra reading required for any large programs that are available.
 		for appID := range cx.available.sharedApps {
@@ -1223,7 +1296,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 			}
 			extra := transactions.LargeProgramExtraBytes(*cx.Proto,
 				len(params.ApprovalProgram)+len(params.ClearStateProgram))
-			used = basics.AddSaturate(used, uint64(extra))
+			bytesRead = basics.AddSaturate(bytesRead, uint64(extra))
 		}
 
 		// Then count the total size of available boxes
@@ -1243,12 +1316,12 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 			size := uint64(len(box))
 			cx.available.boxes[br] = false
 
-			used = basics.AddSaturate(used, size)
+			bytesRead = basics.AddSaturate(bytesRead, size)
 		}
 
-		surplus, overflow := basics.ODiff(cx.ioBudget, used)
+		surplus, overflow := basics.ODiff(cx.ioBudget, bytesRead)
 		if overflow || (surplus < 0 && cx.UnnamedResources == nil) {
-			err := fmt.Errorf("read budget exceeded (%d > %d)", used, cx.ioBudget)
+			err := fmt.Errorf("read budget exceeded (%d > %d)", bytesRead, cx.ioBudget)
 			if !cx.Proto.EnableBareBudgetError {
 				// We return an EvalError here because we used to do
 				// that. It is wrong, and means that there could be a
@@ -1286,6 +1359,29 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 
 	if cx.Trace != nil && cx.caller != nil {
 		fmt.Fprintf(cx.Trace, "--- exit  %d accept=%t\n", aid, pass)
+	}
+
+	// A family-shared touch by this frame counts as a touch by its caller when
+	// they share a creator: the caller delegated the mutation to us and relies on
+	// that shared state across its own later calls, exactly as if it had touched
+	// the box itself. Fold the mark into the caller as the frame completes -- like
+	// feeResidue after an inner group -- so it chains one hop per return to every
+	// contiguous family ancestor, and survives this frame's return so a later
+	// A->foreign->family re-entry is still caught. No success guard is needed: a
+	// failing frame aborts the whole group, and ClearState (which continues past
+	// rejection) can't touch boxes, so touchedFamilyShared is never set there.
+	if cx.caller != nil && cx.touchedFamilyShared {
+		mine, cerr := cx.getCreatorAddress()
+		if cerr != nil {
+			return false, &cx, cerr
+		}
+		theirs, cerr := cx.caller.getCreatorAddress()
+		if cerr != nil {
+			return false, &cx, cerr
+		}
+		if mine == theirs {
+			cx.caller.touchedFamilyShared = true
+		}
 	}
 
 	return pass, &cx, err
@@ -1604,12 +1700,9 @@ func (cx *EvalContext) remainingInners() int {
 }
 
 func (cx *EvalContext) step() error {
-	opcode := cx.program[cx.pc]
-	spec := &opsByOpcode[cx.version][opcode]
-
-	// this check also ensures versioning: v2 opcodes are not in opsByOpcode[1] array
+	spec := cx.GetOpSpec()
 	if spec.op == nil {
-		return fmt.Errorf("%3d illegal opcode 0x%02x", cx.pc, opcode)
+		return getOpSpecError(spec, cx.program, cx.pc)
 	}
 	if (cx.runMode & spec.Modes) == 0 {
 		return fmt.Errorf("%s not allowed in current mode", spec.Name)
@@ -1638,13 +1731,13 @@ func (cx *EvalContext) step() error {
 	if opcost <= 0 {
 		opcost = deets.Cost(cx.program, cx.pc, cx.Stack)
 		if opcost <= 0 {
-			return fmt.Errorf("%3d %s returned 0 cost", cx.pc, spec.Name)
+			return fmt.Errorf("%s returned 0 cost", spec.Name)
 		}
 	}
 
 	if opcost > cx.remainingBudget() {
-		return fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s: local program cost was %d",
-			cx.pc, spec.Name, cx.cost)
+		return fmt.Errorf("dynamic cost budget exceeded, executing %s: local program cost was %d",
+			spec.Name, cx.cost)
 	}
 
 	cx.cost += opcost
@@ -1697,7 +1790,7 @@ func (cx *EvalContext) step() error {
 		// we don't want to worry about the dissassembly
 		// routines mucking about in the execution context
 		// (changing the pc, for example) and this gives a big
-		// improvement of dryrun readability
+		// improvement in readability
 		dstate := &disassembleState{program: cx.program, pc: cx.pc, numericTargets: true, intc: cx.intc, bytec: cx.bytec}
 		sourceLine, inner := disassemble(dstate, spec)
 		if inner != nil {
@@ -1749,12 +1842,11 @@ func (cx *EvalContext) step() error {
 // unacceptable. TestLinearOpcodes ensures.
 var blankStack = make([]stackValue, 5)
 
-func (cx *EvalContext) checkStep() (int, error) {
+func (cx *EvalContext) checkStep() (cost int, err error) {
 	cx.instructionStarts[cx.pc] = true
-	opcode := cx.program[cx.pc]
-	spec := &opsByOpcode[cx.version][opcode]
+	spec := cx.GetOpSpec()
 	if spec.op == nil {
-		return 0, fmt.Errorf("illegal opcode 0x%02x", opcode)
+		return 0, getOpSpecError(spec, cx.program, cx.pc)
 	}
 	if (cx.runMode & spec.Modes) == 0 {
 		return 0, fmt.Errorf("%s not allowed in current mode", spec.Name)
@@ -1763,14 +1855,13 @@ func (cx *EvalContext) checkStep() (int, error) {
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
 		return 0, fmt.Errorf("program ends without immediate value(s)")
 	}
-	opcost := deets.Cost(cx.program, cx.pc, blankStack)
-	if opcost <= 0 {
+	cost = deets.Cost(cx.program, cx.pc, blankStack)
+	if cost <= 0 {
 		return 0, fmt.Errorf("%s reported non-positive cost", spec.Name)
 	}
 	prevpc := cx.pc
 	if deets.check != nil {
-		err := deets.check(cx)
-		if err != nil {
+		if err = deets.check(cx); err != nil {
 			return 0, err
 		}
 		if cx.nextpc != 0 {
@@ -1790,7 +1881,7 @@ func (cx *EvalContext) checkStep() (int, error) {
 			return 0, fmt.Errorf("branch target %d is not an aligned instruction", pc)
 		}
 	}
-	return opcost, nil
+	return cost, nil
 }
 
 func (cx *EvalContext) ensureStackCap(targetCap int) {
@@ -3138,6 +3229,14 @@ func (cx *EvalContext) appParamsToValue(params *basics.AppParams, fs appParamsFi
 		sv.Uint = params.Version
 	case AppSizeSponsor:
 		sv.Bytes = params.SizeSponsor[:]
+	case AppForeignBoxReads:
+		if params.ForeignBoxReads {
+			sv.Uint = 1
+		}
+	case AppFamilyBoxAccess:
+		if params.FamilyBoxAccess {
+			sv.Uint = 1
+		}
 	default:
 		// The pseudo fields AppCreator and AppAddress are handled before this method
 		return sv, fmt.Errorf("invalid app_params_get field %d", fs.field)
@@ -3864,12 +3963,19 @@ func (ep *EvalParams) GetApplicationAddress(app basics.AppIndex) basics.Address 
 	return appAddr
 }
 
-func (cx *EvalContext) getCreatorAddress() ([]byte, error) {
-	_, creator, err := cx.Ledger.AppParams(cx.appID)
-	if err != nil {
-		return nil, fmt.Errorf("No params for current app")
+// getCreatorAddress returns the creator of the current app, caching the result
+// on the context. A zero creatorAddr means "not yet looked up"; on-chain apps
+// always have a non-zero creator, so the only cost of the sentinel is
+// re-looking-up the zero-creator apps that appear in tests.
+func (cx *EvalContext) getCreatorAddress() (basics.Address, error) {
+	if cx.creatorAddr.IsZero() {
+		_, creator, err := cx.Ledger.AppParams(cx.appID)
+		if err != nil {
+			return basics.Address{}, fmt.Errorf("No params for current app")
+		}
+		cx.creatorAddr = creator
 	}
-	return creator[:], nil
+	return cx.creatorAddr, nil
 }
 
 var zeroAddress basics.Address
@@ -3898,7 +4004,9 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 		addr := cx.GetApplicationAddress(cx.appID)
 		sv.Bytes = addr[:]
 	case CreatorAddress:
-		sv.Bytes, err = cx.getCreatorAddress()
+		var creator basics.Address
+		creator, err = cx.getCreatorAddress()
+		sv.Bytes = creator[:]
 	case GroupID:
 		sv.Bytes = cx.txn.Txn.Group[:]
 	case OpcodeBudget:
@@ -4015,6 +4123,12 @@ func opGloadImpl(cx *EvalContext, gi int, scratchIdx byte, opName string) (stack
 	}
 	if gi > cx.groupIndex {
 		return none, fmt.Errorf("%s can't get future scratch space from txn with index %d", opName, gi)
+	}
+
+	// An app call that never executed its program leaves pastScratch[gi] nil even
+	// though its Type is still appl (e.g., a ClearState against a deleted app).
+	if cx.pastScratch[gi] == nil {
+		return none, fmt.Errorf("%s lookup of txn %d that did not run a program", opName, gi)
 	}
 
 	return cx.pastScratch[gi][scratchIdx], nil
@@ -5180,6 +5294,31 @@ func opAppParamsGet(cx *EvalContext) error {
 	return nil
 }
 
+func opAppParamsSet(cx *EvalContext) error {
+	last := len(cx.Stack) - 1 // value
+
+	paramField := AppParamsField(cx.program[cx.pc+1])
+	fs, ok := appParamsFieldSpecByField(paramField)
+	if !ok || fs.setVersion == 0 || fs.setVersion > cx.version {
+		return fmt.Errorf("invalid app_params_set field %d", paramField)
+	}
+
+	arg, err := cx.Stack[last].uint()
+	if err != nil {
+		return err
+	}
+	cx.Stack = cx.Stack[:last]
+
+	switch fs.field {
+	case AppForeignBoxReads:
+		return cx.Ledger.SetForeignBoxReads(cx.appID, arg != 0)
+	case AppFamilyBoxAccess:
+		return cx.Ledger.SetFamilyBoxAccess(cx.appID, arg != 0)
+	default:
+		return fmt.Errorf("immutable app_params_set field %s", fs.field)
+	}
+}
+
 func opAcctParamsGet(cx *EvalContext) error {
 	last := len(cx.Stack) - 1 // acct
 
@@ -5330,7 +5469,9 @@ func addInnerTxn(cx *EvalContext) error {
 	// Check fees in the existing group first. Allows fee pooling in inner groups.
 	usage, groupPaid := transactions.SummarizeFees(cx.subtxns, *cx.Proto)
 	usage = basics.AddSaturate(usage, 1e6) // +1e6 because we're adding a txn
-	groupFee, o := cx.Proto.MinFee().Mul2MicrosCeil(usage, cx.EvalParams.CostMultiplier)
+	// Populating a default fee must not consume the residue: this txn might never
+	// be submitted, or its fee might be changed. itxn_submit does the real charge.
+	groupFee, _, o := cx.Proto.MinFee().FeeForUsage(usage, cx.EvalParams.CostMultiplier, cx.feeResidue)
 	if o {
 		return errors.New("inner group fee saturation")
 	}
@@ -5745,10 +5886,13 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 
 	// Check fees across the group first. Allows fee pooling in inner groups.
 	usage, groupPaid := transactions.SummarizeFees(cx.subtxns, *cx.Proto)
-	groupFee, o := cx.Proto.MinFee().Mul2MicrosCeil(usage, cx.EvalParams.CostMultiplier)
+	// Charge against the running residue so this group rounds up only if the
+	// fractions accumulated from earlier groups can't absorb it.
+	groupFee, residue, o := cx.Proto.MinFee().FeeForUsage(usage, cx.EvalParams.CostMultiplier, cx.feeResidue)
 	if o {
 		return errors.New("inner group fee saturation")
 	}
+	cx.feeResidue = residue
 	if groupPaid.LessThan(groupFee) {
 		// See if the FeeCredit is enough to cover the shortfall
 		shortfall := groupFee.SubSaturate(groupPaid)
@@ -5920,6 +6064,11 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 		// RecordAD has some further responsibilities.
 		ep.RecordAD(i, ep.TxnGroup[i].ApplyData)
 	}
+	// ep inherited a copy of cx.feeResidue and updated it while charging its own
+	// (deeper) inner groups. Copy it back so later sibling groups see the residue
+	// those deeper groups consumed, rather than re-spending it.
+	cx.feeResidue = ep.feeResidue
+
 	cx.txn.EvalDelta.InnerTxns = append(cx.txn.EvalDelta.InnerTxns, ep.TxnGroup...)
 	cx.subtxns = nil
 	// must clear the inner txid cache, otherwise prior inner txids will be returned for this group

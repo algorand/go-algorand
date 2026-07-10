@@ -90,4 +90,17 @@ func TestInspect(t *testing.T) {
 	crypto.RandBytes(full.Txn.CloseRemainderTo[:])
 	_, err = inspectTxn(full)
 	require.NoError(t, err)
+
+	var pqSigned transactions.SignedTxn
+	pqSigned.Txn.Type = protocol.PaymentTx
+	crypto.RandBytes(pqSigned.Txn.Sender[:])
+	crypto.RandBytes(pqSigned.Txn.Receiver[:])
+	pqSigned.PQsig = transactions.PQSig{
+		Scheme:    protocol.PQSchemeFalcon1024,
+		Salt:      7,
+		PublicKey: []byte{1, 2, 3},
+		Signature: []byte{4, 5, 6},
+	}
+	_, err = inspectTxn(pqSigned)
+	require.NoError(t, err)
 }

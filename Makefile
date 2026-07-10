@@ -26,8 +26,6 @@ GOLANG_VERSION_BUILD       := $(firstword $(GOLANG_VERSIONS))
 GOLANG_VERSION_BUILD_MAJOR := $(shell echo $(GOLANG_VERSION_BUILD) | cut -d'.' -f1,2)
 GOLANG_VERSION_MIN         := $(lastword $(GOLANG_VERSIONS))
 GOLANG_VERSION_SUPPORT     := $(shell echo $(GOLANG_VERSION_MIN) | cut -d'.' -f1,2)
-CURRENT_GO_VERSION         := $(shell go version | cut -d " " -f 3 | tr -d 'go')
-CURRENT_GO_VERSION_MAJOR   := $(shell echo $(CURRENT_GO_VERSION) | cut -d'.' -f1,2)
 
 # If build number already set, use it - to ensure same build number across multiple platforms being built
 BUILDNUMBER      ?= $(shell ./scripts/compute_build_number.sh)
@@ -92,7 +90,7 @@ ALGOD_API_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd d
 
 GOMOD_DIRS := ./tools/block-generator ./tools/x-repo-types
 
-MSGP_GENERATE	:= ./protocol ./protocol/test ./crypto ./crypto/merklearray ./crypto/merklesignature ./crypto/stateproof ./data/basics ./data/transactions ./data/stateproofmsg ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./network ./node ./ledger ./ledger/ledgercore ./ledger/store/trackerdb ./ledger/store/trackerdb/generickv ./ledger/encoded ./stateproof ./data/account ./daemon/algod/api/spec/v2
+MSGP_GENERATE	:= ./protocol ./protocol/test ./crypto ./crypto/merklearray ./crypto/merklesignature ./crypto/stateproof ./data/basics ./data/transactions ./data/stateproofmsg ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./network ./node ./ledger ./ledger/ledgercore ./ledger/store/trackerdb ./ledger/store/trackerdb/generickv ./ledger/encoded ./stateproof ./data/account ./daemon/algod/api/spec/v2 ./cmd/algokey
 
 default: build
 
@@ -119,13 +117,7 @@ warninglint: custom-golangci-lint
 expectlint:
 	cd test/e2e-go/cli/goal/expect && python3 expect_linter.py *.exp
 
-check_go_version:
-	@if [ $(CURRENT_GO_VERSION_MAJOR) != $(GOLANG_VERSION_BUILD_MAJOR) ]; then \
-		echo "Wrong major version of Go installed ($(CURRENT_GO_VERSION_MAJOR)). Please use $(GOLANG_VERSION_BUILD_MAJOR)"; \
-		exit 1; \
-	fi
-
-tidy: check_go_version
+tidy:
 	@echo "Tidying go-algorand"
 	go mod tidy -compat=$(GOLANG_VERSION_SUPPORT)
 	@for dir in $(GOMOD_DIRS); do \
@@ -166,7 +158,7 @@ api:
 logic:
 	$(MAKE) -C data/transactions/logic
 
-MSGP := go run github.com/algorand/msgp@v1.1.62
+MSGP := go run github.com/algorand/msgp@v1.1.63
 %/msgp_gen.go: ALWAYS
 		@set +e; \
 		printf "$(MSGP) $(@D)..."; \
@@ -319,7 +311,7 @@ build-e2e: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a
 	@mkdir -p $(GOBIN)-race
 	# Build regular binaries (kmd, algod, goal) and race binaries in parallel
 	$(GO_INSTALL) -trimpath $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./cmd/kmd ./cmd/algod ./cmd/goal & \
-	GOBIN=$(GOBIN)-race go install -trimpath $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" ./cmd/goal ./cmd/algod ./cmd/algoh ./cmd/tealdbg ./cmd/msgpacktool ./cmd/algokey ./cmd/pingpong ./tools/teal/algotmpl ./test/e2e-go/cli/tealdbg/cdtmock & \
+	GOBIN=$(GOBIN)-race go install -trimpath $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" ./cmd/goal ./cmd/algod ./cmd/algoh ./cmd/msgpacktool ./cmd/algokey ./cmd/pingpong ./tools/teal/algotmpl & \
 	wait
 	cp $(GOBIN)/kmd $(GOBIN)-race
 

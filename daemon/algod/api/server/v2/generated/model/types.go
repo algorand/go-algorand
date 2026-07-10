@@ -35,9 +35,10 @@ const (
 
 // Defines values for SigType.
 const (
-	SigTypeLsig SigType = "lsig"
-	SigTypeMsig SigType = "msig"
-	SigTypeSig  SigType = "sig"
+	SigTypeLsig  SigType = "lsig"
+	SigTypeMsig  SigType = "msig"
+	SigTypePqsig SigType = "pqsig"
+	SigTypeSig   SigType = "sig"
 )
 
 // Defines values for TxType.
@@ -400,6 +401,12 @@ type ApplicationParams struct {
 	// ExtraProgramPages \[epp\] the amount of extra program pages available to this app.
 	ExtraProgramPages *uint64 `json:"extra-program-pages,omitempty"`
 
+	// FamilyBoxAccess \[fba\] if true, apps with the same creator may read and write this app's boxes
+	FamilyBoxAccess *bool `json:"family-box-access,omitempty"`
+
+	// ForeignBoxReads \[fbr\] if true, any app may read this app's boxes
+	ForeignBoxReads *bool `json:"foreign-box-reads,omitempty"`
+
 	// GlobalState Represents a key-value store for use in an application.
 	GlobalState *TealKeyValueStore `json:"global-state,omitempty"`
 
@@ -601,72 +608,6 @@ type DebugSettingsProf struct {
 
 	// MutexRate The rate of mutex events. On average 1/rate events are reported. To turn off profiling entirely, pass rate 0
 	MutexRate *uint64 `json:"mutex-rate,omitempty"`
-}
-
-// DryrunRequest Request data type for dryrun endpoint. Given the Transactions and simulated ledger state upload, run TEAL scripts and return debugging information.
-type DryrunRequest struct {
-	Accounts []Account     `json:"accounts"`
-	Apps     []Application `json:"apps"`
-
-	// LatestTimestamp LatestTimestamp is available to some TEAL scripts. Defaults to the latest confirmed timestamp this algod is attached to.
-	LatestTimestamp int64 `json:"latest-timestamp"`
-
-	// ProtocolVersion ProtocolVersion specifies a specific version string to operate under, otherwise whatever the current protocol of the network this algod is running in.
-	ProtocolVersion string `json:"protocol-version"`
-
-	// Round Round is available to some TEAL scripts. Defaults to the current round on the network this algod is attached to.
-	Round   basics.Round      `json:"round"`
-	Sources []DryrunSource    `json:"sources"`
-	Txns    []json.RawMessage `json:"txns"`
-}
-
-// DryrunSource DryrunSource is TEAL source text that gets uploaded, compiled, and inserted into transactions or application state.
-type DryrunSource struct {
-	AppIndex basics.AppIndex `json:"app-index"`
-
-	// FieldName FieldName is what kind of sources this is. If lsig then it goes into the transactions[this.TxnIndex].LogicSig. If approv or clearp it goes into the Approval Program or Clear State Program of application[this.AppIndex].
-	FieldName string `json:"field-name"`
-	Source    string `json:"source"`
-	TxnIndex  int    `json:"txn-index"`
-}
-
-// DryrunState Stores the TEAL eval step data
-type DryrunState struct {
-	// Error Evaluation error if any
-	Error *string `json:"error,omitempty"`
-
-	// Line Line number
-	Line int `json:"line"`
-
-	// Pc Program counter
-	Pc      int          `json:"pc"`
-	Scratch *[]TealValue `json:"scratch,omitempty"`
-	Stack   []TealValue  `json:"stack"`
-}
-
-// DryrunTxnResult DryrunTxnResult contains any LogicSig or ApplicationCall program debug information and state updates from a dryrun.
-type DryrunTxnResult struct {
-	AppCallMessages *[]string      `json:"app-call-messages,omitempty"`
-	AppCallTrace    *[]DryrunState `json:"app-call-trace,omitempty"`
-
-	// BudgetAdded Budget added during execution of app call transaction.
-	BudgetAdded *int `json:"budget-added,omitempty"`
-
-	// BudgetConsumed Budget consumed during execution of app call transaction.
-	BudgetConsumed *int `json:"budget-consumed,omitempty"`
-
-	// Disassembly Disassembled program line by line.
-	Disassembly []string `json:"disassembly"`
-
-	// GlobalDelta Application state delta.
-	GlobalDelta *StateDelta          `json:"global-delta,omitempty"`
-	LocalDeltas *[]AccountStateDelta `json:"local-deltas,omitempty"`
-
-	// LogicSigDisassembly Disassembled lsig program line by line.
-	LogicSigDisassembly *[]string      `json:"logic-sig-disassembly,omitempty"`
-	LogicSigMessages    *[]string      `json:"logic-sig-messages,omitempty"`
-	LogicSigTrace       *[]DryrunState `json:"logic-sig-trace,omitempty"`
-	Logs                *[][]byte      `json:"logs,omitempty"`
 }
 
 // ErrorResponse An error response with optional data field.
@@ -895,6 +836,12 @@ type SimulateTransactionGroupResult struct {
 	// FailureMessage If present, indicates that the transaction group failed and specifies why that happened
 	FailureMessage *string `json:"failure-message,omitempty"`
 
+	// GroupFeesPaid Total fees paid by the transaction group and all of its descendant inner transaction groups.
+	GroupFeesPaid *uint64 `json:"group-fees-paid,omitempty"`
+
+	// GroupUsage Fee usage for the transaction group, including all descendant inner transactions, in millionths of a basic transaction fee unit.
+	GroupUsage *basics.Micros `json:"group-usage,omitempty"`
+
 	// TxnResults Simulation result for individual transactions
 	TxnResults []SimulateTransactionResult `json:"txn-results"`
 
@@ -909,6 +856,9 @@ type SimulateTransactionResult struct {
 
 	// ExecTrace The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.
 	ExecTrace *SimulationTransactionExecTrace `json:"exec-trace,omitempty"`
+
+	// FeesPaid Total fees paid by this transaction and all of its descendant inner transactions.
+	FeesPaid *uint64 `json:"fees-paid,omitempty"`
 
 	// FixedSigner The account that needed to sign this transaction when no signature was provided and the provided signer was incorrect.
 	FixedSigner *string `json:"fixed-signer,omitempty"`
@@ -1281,15 +1231,6 @@ type DebugSettingsProfResponse = DebugSettingsProf
 type DisassembleResponse struct {
 	// Result disassembled Teal code
 	Result string `json:"result"`
-}
-
-// DryrunResponse defines model for DryrunResponse.
-type DryrunResponse struct {
-	Error string `json:"error"`
-
-	// ProtocolVersion Protocol version is the protocol version Dryrun was operated under.
-	ProtocolVersion string            `json:"protocol-version"`
-	Txns            []DryrunTxnResult `json:"txns"`
 }
 
 // GetBlockTimeStampOffsetResponse defines model for GetBlockTimeStampOffsetResponse.
@@ -1684,6 +1625,18 @@ type TealCompileParams struct {
 	Sourcemap *bool `form:"sourcemap,omitempty" json:"sourcemap,omitempty"`
 }
 
+// RawTransactionParams defines parameters for RawTransaction.
+type RawTransactionParams struct {
+	// SkipPqAddressCheck Skip post-quantum address checks, including the check that rejects PQ authorizer and LogicSig escrow (TEAL v13 or later) whose address is an Edwards25519 curve point. This should only be used if you understand the risks and know what you are doing.
+	SkipPqAddressCheck *bool `form:"skip-pq-address-check,omitempty" json:"skip-pq-address-check,omitempty"`
+}
+
+// RawTransactionAsyncParams defines parameters for RawTransactionAsync.
+type RawTransactionAsyncParams struct {
+	// SkipPqAddressCheck Skip post-quantum address checks, including the check that rejects PQ authorizer and LogicSig escrow (TEAL v13 or later) whose address is an Edwards25519 curve point. This should only be used if you understand the risks and know what you are doing.
+	SkipPqAddressCheck *bool `form:"skip-pq-address-check,omitempty" json:"skip-pq-address-check,omitempty"`
+}
+
 // GetPendingTransactionsParams defines parameters for GetPendingTransactions.
 type GetPendingTransactionsParams struct {
 	// Max Truncated number of transactions to display. If max=0, returns all pending txns.
@@ -1716,9 +1669,6 @@ type SimulateTransactionParamsFormat string
 
 // TealCompileTextRequestBody defines body for TealCompile for text/plain ContentType.
 type TealCompileTextRequestBody = TealCompileTextBody
-
-// TealDryrunJSONRequestBody defines body for TealDryrun for application/json ContentType.
-type TealDryrunJSONRequestBody = DryrunRequest
 
 // SimulateTransactionJSONRequestBody defines body for SimulateTransaction for application/json ContentType.
 type SimulateTransactionJSONRequestBody = SimulateRequest

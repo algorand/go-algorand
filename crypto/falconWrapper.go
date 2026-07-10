@@ -17,23 +17,40 @@
 package crypto
 
 import (
+	"errors"
+	"fmt"
+
 	cfalcon "github.com/algorand/falcon"
 )
 
+var (
+	// ErrPQFalcon1024SigInvalid is returned when Falcon-1024 signature verification fails.
+	ErrPQFalcon1024SigInvalid = errors.New("invalid falcon-1024 signature")
+)
+
 const (
-	// FalconSeedSize Represents the size in bytes of the random bytes used to generate Falcon keys
-	FalconSeedSize = 48
+	// FalconSeedSize is the size in bytes of a Falcon keygen seed: 32 bytes
+	// (256-bit entropy). The previous value of 48 was inherited from falcon.c's
+	// SHAKE256 explicit-seed.
+	FalconSeedSize = 32
+
+	// FalconPublicKeySize represents the size in bytes of a Falcon public key.
+	FalconPublicKeySize = cfalcon.PublicKeySize
+
+	// FalconPrivateKeySize represents the size in bytes of a Falcon private key.
+	FalconPrivateKeySize = cfalcon.PrivateKeySize
 
 	// FalconMaxSignatureSize Represents the max possible size in bytes of a falcon signature
 	FalconMaxSignatureSize = cfalcon.CTSignatureSize
 )
 
 type (
-	// FalconPublicKey is a wrapper for cfalcon.PublicKeySizey (used for packing)
-	FalconPublicKey [cfalcon.PublicKeySize]byte
+	// FalconPublicKey is a wrapper for cfalcon.PublicKeySize (used for packing)
+	FalconPublicKey [FalconPublicKeySize]byte
 	// FalconPrivateKey is a wrapper for cfalcon.PrivateKeySize (used for packing)
-	FalconPrivateKey [cfalcon.PrivateKeySize]byte
-	// FalconSeed represents the seed which is being used to generate Falcon keys
+	FalconPrivateKey [FalconPrivateKeySize]byte
+	// FalconSeed represents the fixed-length seed used by default Falcon keygen.
+	//msgp:ignore FalconSeed
 	FalconSeed [FalconSeedSize]byte
 	// FalconSignature represents a Falcon signature in a compressed-form
 	//msgp:allocbound FalconSignature FalconMaxSignatureSize
@@ -48,7 +65,8 @@ type FalconSigner struct {
 	PrivateKey FalconPrivateKey `codec:"sk"`
 }
 
-// GenerateFalconSigner Generates a Falcon Signer.
+// GenerateFalconSigner generates a Falcon signer from the fixed-size Falcon
+// seed type.
 func GenerateFalconSigner(seed FalconSeed) (FalconSigner, error) {
 	pk, sk, err := cfalcon.GenerateKey(seed[:])
 	return FalconSigner{
@@ -97,6 +115,21 @@ func (d *FalconVerifier) VerifyBytes(data []byte, sig FalconSignature) error {
 	return (*cfalcon.PublicKey)(&d.PublicKey).Verify(falconSig, data)
 }
 
+// VerifyFalcon1024 verifies a Falcon-1024 signature over message.
+func VerifyFalcon1024(message Hashable, publicKey []byte, signature []byte) error {
+	if len(publicKey) != FalconPublicKeySize {
+		return fmt.Errorf("%w: public key size %d, want %d", ErrPQFalcon1024SigInvalid, len(publicKey), FalconPublicKeySize)
+	}
+	// No signature size checks needed: cfalcon rejects empty, undersized, and
+	// oversized signatures itself before doing any work.
+	var fv FalconVerifier
+	copy(fv.PublicKey[:], publicKey)
+	if err := fv.Verify(message, FalconSignature(signature)); err != nil {
+		return fmt.Errorf("%w: %w", ErrPQFalcon1024SigInvalid, err)
+	}
+	return nil
+}
+
 // GetFixedLengthHashableRepresentation is used to fetch a plain serialized version of the public data (without the use of the msgpack).
 func (d *FalconVerifier) GetFixedLengthHashableRepresentation() []byte {
 	return d.PublicKey[:]
@@ -115,6 +148,9 @@ func NewFalconSigner() (*FalconSigner, error) {
 
 // GetFixedLengthHashableRepresentation returns a serialized version of the signature
 func (s FalconSignature) GetFixedLengthHashableRepresentation() ([]byte, error) {
+	if len(s) < 2 {
+		return nil, errInvalidNumberOfSignature
+	}
 	compressedSignature := cfalcon.CompressedSignature(s)
 	ctSignature, err := compressedSignature.ConvertToCT()
 	return ctSignature[:], err

@@ -1659,7 +1659,7 @@ func (wn *WebsocketNetwork) updatePhonebookAddresses(relayAddrs []string, archiv
 		wn.log.Debugf("got %d relay dns addrs, %#v", len(relayAddrs), relayAddrs[:min(5, len(relayAddrs))])
 		wn.phonebook.ReplacePeerList(relayAddrs, string(wn.genesisInfo.NetworkID), phonebook.RelayRole)
 	} else {
-		wn.log.Infof("got no relay DNS addrs for network %s", wn.genesisInfo.NetworkID)
+		wn.log.Warnf("got no relay DNS addrs for network %s; the node may be unable to find peers and sync", wn.genesisInfo.NetworkID)
 	}
 	if len(archiveAddrs) > 0 {
 		wn.phonebook.ReplacePeerList(archiveAddrs, string(wn.genesisInfo.NetworkID), phonebook.ArchivalRole)
@@ -1858,19 +1858,15 @@ func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) (relaysAddresses []
 	var err error
 	relaysAddresses, err = wn.resolveSRVRecords(wn.ctx, "algobootstrap", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
 	if err != nil {
-		// only log this warning on testnet or devnet
-		if wn.genesisInfo.NetworkID == config.Devnet || wn.genesisInfo.NetworkID == config.Testnet {
-			wn.log.Warnf("Cannot lookup algobootstrap SRV record for %s: %v", dnsBootstrap, err)
-		}
+		// Log on all networks: with no relays resolved the node may be unable to find peers.
+		wn.log.Warnf("Cannot lookup algobootstrap SRV record for %s: %v", dnsBootstrap, err)
 		relaysAddresses = nil
 	}
 
 	archivalAddresses, err = wn.resolveSRVRecords(wn.ctx, "archive", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
 	if err != nil {
-		// only log this warning on testnet or devnet
-		if wn.genesisInfo.NetworkID == config.Devnet || wn.genesisInfo.NetworkID == config.Testnet {
-			wn.log.Warnf("Cannot lookup archive SRV record for %s: %v", dnsBootstrap, err)
-		}
+		// Archival peers are optional for most nodes, so this is informational.
+		wn.log.Infof("Cannot lookup archive SRV record for %s: %v", dnsBootstrap, err)
 		archivalAddresses = nil
 	}
 	return

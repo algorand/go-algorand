@@ -38,6 +38,21 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+func TestTxnNeedsSyntheticSignatureLogicSigContent(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	nonblankSig := crypto.Signature{}
+	nonblankSig[0] = 1
+
+	require.True(t, txnNeedsSyntheticSignature(transactions.SignedTxn{}))
+	require.False(t, txnNeedsSyntheticSignature(transactions.SignedTxn{
+		Lsig: transactions.LogicSig{Args: [][]byte{{1}}},
+	}))
+	require.False(t, txnNeedsSyntheticSignature(transactions.SignedTxn{
+		Lsig: transactions.LogicSig{Sig: nonblankSig},
+	}))
+}
+
 // We want to be careful that the Algod ledger does not move on to another round
 // so we confirm here that all ledger methods which implicitly access the current round
 // are overridden within the `simulatorLedger`.
@@ -136,7 +151,10 @@ int 1`,
 
 	mockTracer := &mocktracer.Tracer{}
 	s.ledger.start = s.ledger.Ledger.Latest() // Set starting round for simulation
-	block, err := s.simulateWithTracer(transactions.WrapSignedTxnsWithAD(txgroup), mockTracer, ResultEvalOverrides{})
+	prevBlockHdr, err := s.ledger.BlockHdr(s.ledger.start)
+	require.NoError(t, err)
+	nextBlock := bookkeeping.MakeBlock(prevBlockHdr)
+	block, err := s.simulateWithTracer(nextBlock.BlockHeader, transactions.WrapSignedTxnsWithAD(txgroup), mockTracer, ResultEvalOverrides{})
 	require.NoError(t, err)
 
 	evalBlock := block.Block()

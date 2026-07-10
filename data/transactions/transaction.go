@@ -54,7 +54,7 @@ type SpecialAddresses struct {
 type Header struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Sender      basics.Address    `codec:"snd"`
+	Sender      basics.Address    `codec:"snd,required"`
 	Fee         basics.MicroAlgos `codec:"fee"`
 	FirstValid  basics.Round      `codec:"fv"`
 	LastValid   basics.Round      `codec:"lv"`
@@ -86,7 +86,7 @@ type Transaction struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// Type of transaction
-	Type protocol.TxType `codec:"type"`
+	Type protocol.TxType `codec:"type,required"`
 
 	// Common fields for all types of transactions
 	Header
@@ -182,6 +182,10 @@ func (tx Transaction) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Transaction, protocol.Encode(&tx)
 }
 
+func (tx Transaction) isSingletonHeartbeat() bool {
+	return tx.Type == protocol.HeartbeatTx && tx.Group.IsZero()
+}
+
 // feeFactor is the factor by which the base transaction fee is multiplied. Some
 // transactions are free, others might cost more because they use extra
 // expensive features (e.g., large Note fields, large app programs).  It is
@@ -195,7 +199,7 @@ func (tx Transaction) feeFactor(proto config.ConsensusParams) basics.Micros {
 	case protocol.StateProofTx:
 		return 0
 	case protocol.HeartbeatTx:
-		if tx.Group.IsZero() {
+		if tx.isSingletonHeartbeat() {
 			// Not every such heartbeat is free. We confirm a
 			// low/no fee singleton heartbeat is legal in heartbeat's
 			// wellFormed() and in apply/heartbeat.go (for the dynamic check for
@@ -348,7 +352,7 @@ func (tx Transaction) MatchAddress(addr basics.Address) bool {
 			return true
 		}
 	case protocol.HeartbeatTx:
-		if addr == tx.HeartbeatTxnFields.HbAddress {
+		if tx.HeartbeatTxnFields != nil && addr == tx.HeartbeatTxnFields.HbAddress {
 			return true
 		}
 	}
@@ -423,6 +427,9 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	case protocol.HeartbeatTx:
 		if !proto.Heartbeat {
 			return fmt.Errorf("heartbeat transaction not supported")
+		}
+		if tx.HeartbeatTxnFields == nil {
+			return fmt.Errorf("heartbeat transaction has no heartbeat fields")
 		}
 
 		err := tx.HeartbeatTxnFields.wellFormed(tx.Header, proto)

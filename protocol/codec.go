@@ -73,7 +73,11 @@ func init() {
 	JSONStrictHandle.Indent = JSONHandle.Indent
 	JSONStrictHandle.HTMLCharsAsIs = JSONHandle.HTMLCharsAsIs
 	JSONStrictHandle.MapKeyAsString = true
+
+	msgp.DefaultUnmarshalState.AllowableDepth = maxMsgpDecodeDepth
 }
+
+const maxMsgpDecodeDepth = 255
 
 type codecBytes struct {
 	enc *codec.Encoder

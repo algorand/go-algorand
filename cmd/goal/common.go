@@ -19,7 +19,6 @@ package main
 import (
 	"github.com/spf13/cobra"
 
-	cmdutil "github.com/algorand/go-algorand/cmd/util"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -41,19 +40,15 @@ var lastValid basics.Round
 var numValidRounds basics.Round // also used in account and asset
 
 var (
-	fee                uint64
-	outFilename        string
-	sign               bool
-	noteBase64         string
-	noteText           string
-	lease              string
-	noWaitAfterSend    bool
-	dumpForDryrun      bool
-	dumpForDryrunAccts []string
-	rekeyToAddress     string
+	fee             uint64
+	outFilename     string
+	sign            bool
+	noteBase64      string
+	noteText        string
+	lease           string
+	noWaitAfterSend bool
+	rekeyToAddress  string
 )
-
-var dumpForDryrunFormat cmdutil.CobraStringValue = *cmdutil.MakeCobraStringValue("json", []string{"msgp"})
 
 func addTxnFlags(cmd *cobra.Command) {
 	cmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")
@@ -66,9 +61,6 @@ func addTxnFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&noteText, "note", "n", "", "Note text (ignored if --noteb64 used also)")
 	cmd.Flags().StringVarP(&lease, "lease", "x", "", "Lease value (base64, optional): no transaction may also acquire this lease until lastvalid")
 	cmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
-	cmd.Flags().BoolVar(&dumpForDryrun, "dryrun-dump", false, "Dump in dryrun format acceptable by dryrun REST api")
-	cmd.Flags().Var(&dumpForDryrunFormat, "dryrun-dump-format", "Dryrun dump format: "+dumpForDryrunFormat.AllowedString())
-	cmd.Flags().StringSliceVar(&dumpForDryrunAccts, "dryrun-accounts", nil, "additional accounts to include into dryrun request obj")
 	cmd.Flags().StringVarP(&signerAddress, "signer", "S", "", "Address of key to sign with, if different from transaction \"from\" address due to rekeying")
 	cmd.Flags().StringVar(&rekeyToAddress, "rekey-to", "", "Rekey account to the given spending key/address. (Future transactions from this account will need to be signed with the new key.)")
 }

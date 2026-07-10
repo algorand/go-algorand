@@ -140,7 +140,6 @@ cat ${TEMPDIR}/gx-0.stx ${TEMPDIR}/gx-1.stx > ${TEMPDIR}/group.stx
 
 ${gcmd} account balance -a $ACCOUNT; ${gcmd} account balance -a $ACCOUNT_ALGO_TRADER; ${gcmd} account balance -a $ACCOUNT_ASSET_TRADER
 
-${gcmd} clerk dryrun -t ${TEMPDIR}/group.stx
 ${gcmd} clerk rawsend -f ${TEMPDIR}/group.stx
 
 date "+${scriptname} OK %Y%m%d_%H%M%S"

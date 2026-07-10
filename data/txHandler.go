@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
@@ -429,7 +430,7 @@ func (handler *TxHandler) postProcessCheckedTxn(wi *txBacklogMsg) {
 		if handler.appLimiter != nil && !wi.rawmsg.Outgoing && wi.rawmsg.Sender != nil {
 			var tde *bookkeeping.TxnDeadError
 			// explicitly avoid penalizing for TxDeadError since another node can be out of sync
-			if !errors.As(err, &tde) {
+			if !errors.As(err, &tde) && !errors.Is(err, ledgercore.ErrEvaluatorCorruptedState) {
 				handler.appLimiter.penalizeEvalError(
 					wi.unverifiedTxGroup, wi.rawmsg.Sender.RoutingAddr(),
 				)
