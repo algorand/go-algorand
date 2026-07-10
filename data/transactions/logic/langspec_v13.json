@@ -1147,7 +1147,8 @@
         "StateProofPK",
         "NumApprovalProgramPages",
         "NumClearStateProgramPages",
-        "RejectVersion"
+        "RejectVersion",
+        "LogicSigArgsBudget"
       ],
       "ArgEnumTypes": [
         "address",
@@ -1209,6 +1210,7 @@
         "uint64",
         "[]byte",
         "[64]byte",
+        "uint64",
         "uint64",
         "uint64",
         "uint64"
@@ -1953,7 +1955,8 @@
         "StateProofPK",
         "NumApprovalProgramPages",
         "NumClearStateProgramPages",
-        "RejectVersion"
+        "RejectVersion",
+        "LogicSigArgsBudget"
       ],
       "ArgEnumTypes": [
         "address",
@@ -2015,6 +2018,7 @@
         "uint64",
         "[]byte",
         "[64]byte",
+        "uint64",
         "uint64",
         "uint64",
         "uint64"
@@ -2775,7 +2779,8 @@
         "StateProofPK",
         "NumApprovalProgramPages",
         "NumClearStateProgramPages",
-        "RejectVersion"
+        "RejectVersion",
+        "LogicSigArgsBudget"
       ],
       "ArgEnumTypes": [
         "address",
@@ -2837,6 +2842,7 @@
         "uint64",
         "[]byte",
         "[64]byte",
+        "uint64",
         "uint64",
         "uint64",
         "uint64"
@@ -6461,7 +6467,8 @@
         "StateProofPK",
         "NumApprovalProgramPages",
         "NumClearStateProgramPages",
-        "RejectVersion"
+        "RejectVersion",
+        "LogicSigArgsBudget"
       ],
       "ArgEnumTypes": [
         "address",
@@ -6523,6 +6530,7 @@
         "uint64",
         "[]byte",
         "[64]byte",
+        "uint64",
         "uint64",
         "uint64",
         "uint64"
@@ -7135,7 +7143,8 @@
         "StateProofPK",
         "NumApprovalProgramPages",
         "NumClearStateProgramPages",
-        "RejectVersion"
+        "RejectVersion",
+        "LogicSigArgsBudget"
       ],
       "ArgEnumTypes": [
         "address",
@@ -7197,6 +7206,7 @@
         "uint64",
         "[]byte",
         "[64]byte",
+        "uint64",
         "uint64",
         "uint64",
         "uint64"

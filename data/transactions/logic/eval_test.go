@@ -431,11 +431,19 @@ func TestTxnFieldToTealValue(t *testing.T) {
 		require.Equal(t, value, tealValue.Uint)
 	}
 
+	field = LogicSigArgsBudget
+	value := uint64(4096)
+	txn.LogicSigArgsBudget = value
+	tealValue, err := TxnFieldToTealValue(&txn, groupIndex, field, 0, false)
+	require.NoError(t, err)
+	require.Equal(t, basics.TealUintType, tealValue.Type)
+	require.Equal(t, value, tealValue.Uint)
+
 	// check arrayFieldIdx is ignored for non-arrays
 	field = FirstValid
-	value := uint64(1)
+	value = uint64(1)
 	txn.FirstValid = basics.Round(value)
-	tealValue, err := TxnFieldToTealValue(&txn, groupIndex, field, 10, false)
+	tealValue, err = TxnFieldToTealValue(&txn, groupIndex, field, 10, false)
 	require.NoError(t, err)
 	require.Equal(t, basics.TealUintType, tealValue.Type)
 	require.Equal(t, value, tealValue.Uint)
@@ -1936,7 +1944,9 @@ txn RejectVersion
 
 const testTxnProgramTextV13 = testTxnProgramTextV12 + `
 assert
-int 1`
+txn LogicSigArgsBudget
+!
+`
 
 // v14 adds no new txn fields.
 const testTxnProgramTextV14 = testTxnProgramTextV13
