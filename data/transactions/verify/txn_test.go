@@ -454,7 +454,7 @@ func TestTxnValidationPQSigRejectsMalformedProof(t *testing.T) {
 	t.Run("public-key", func(t *testing.T) {
 		stxn := makePQSignedTxn(t, 2)
 		stxn.PQsig.PublicKey = slices.Clone(stxn.PQsig.PublicKey[:len(stxn.PQsig.PublicKey)-1])
-		stxn.Txn.Sender = stxn.PQsig.AuthorizerAddress()
+		stxn.Txn.Sender = stxn.PQsig.Address()
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 		requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
@@ -484,7 +484,7 @@ func TestTxnValidationPQDelegatedLogicSig(t *testing.T) {
 	stxn = makePQDelegatedLogicSigTxn(t, 11)
 	_, addrs, _ := generateAccounts(1)
 	stxn.Txn.Sender = addrs[0]
-	stxn.AuthAddr = stxn.Lsig.PQsig.AuthorizerAddress()
+	stxn.AuthAddr = stxn.Lsig.PQsig.Address()
 	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 	require.NoError(t, err)
 }
@@ -562,9 +562,9 @@ func TestTxnValidationPQDelegatedLogicSigRejectsInvalidProof(t *testing.T) {
 
 	t.Run("replay-different-salt", func(t *testing.T) {
 		stxn := makePQDelegatedLogicSigTxn(t, 19)
-		originalAuthorizer := stxn.Lsig.PQsig.AuthorizerAddress()
+		originalAuthorizer := stxn.Lsig.PQsig.Address()
 		stxn.Lsig.PQsig.Salt++
-		stxn.Txn.Sender = stxn.Lsig.PQsig.AuthorizerAddress()
+		stxn.Txn.Sender = stxn.Lsig.PQsig.Address()
 		require.NotEqual(t, originalAuthorizer, stxn.Txn.Sender)
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)

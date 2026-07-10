@@ -66,8 +66,8 @@ func (p PQSig) Equal(other PQSig) bool {
 		bytes.Equal(p.Signature, other.Signature)
 }
 
-// AuthorizerAddress returns the authorizer address for the PQSig.
-func (p PQSig) AuthorizerAddress() basics.Address {
+// Address returns the authorizer address for the PQSig.
+func (p PQSig) Address() basics.Address {
 	return basics.PQAddress(p.Scheme, p.Salt, p.PublicKey)
 }
 
@@ -105,7 +105,7 @@ func (p PQSig) validateEnvelope(proto config.ConsensusParams, authorizer basics.
 		return nil, err
 	}
 
-	pqAuthorizer := p.AuthorizerAddress()
+	pqAuthorizer := p.Address()
 	if pqAuthorizer != authorizer {
 		return nil, fmt.Errorf("%w: derived %s, expected %s", errPQSigAuthorizerMismatch, pqAuthorizer, authorizer)
 	}

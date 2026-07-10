@@ -162,8 +162,8 @@ func TestPQSigAuthorizerAddress(t *testing.T) {
 
 	fixture := makePQSigTestFixture(t, 0)
 
-	require.Equal(t, fixture.authorizer, fixture.pqSig.AuthorizerAddress())
-	require.Equal(t, basics.PQAddress(fixture.pqSig.Scheme, fixture.pqSig.Salt, fixture.pqSig.PublicKey), fixture.pqSig.AuthorizerAddress())
+	require.Equal(t, fixture.authorizer, fixture.pqSig.Address())
+	require.Equal(t, basics.PQAddress(fixture.pqSig.Scheme, fixture.pqSig.Salt, fixture.pqSig.PublicKey), fixture.pqSig.Address())
 }
 
 func TestPQSigValidateEnvelope(t *testing.T) {
@@ -190,12 +190,12 @@ func TestPQSigValidateEnvelope(t *testing.T) {
 	unknownScheme := fixture.pqSig
 	unknownScheme.Scheme = protocol.PQScheme{'x', '1'}
 	require.ErrorIs(t, unknownScheme.ValidateScheme(fixture.proto), crypto.ErrPQSchemeNotSupported)
-	require.ErrorIs(t, unknownScheme.ValidateEnvelope(fixture.proto, unknownScheme.AuthorizerAddress()), crypto.ErrPQSchemeNotSupported)
+	require.ErrorIs(t, unknownScheme.ValidateEnvelope(fixture.proto, unknownScheme.Address()), crypto.ErrPQSchemeNotSupported)
 
 	malformedPublicKey := fixture.pqSig
 	malformedPublicKey.PublicKey = malformedPublicKey.PublicKey[:len(malformedPublicKey.PublicKey)-1]
-	require.NoError(t, malformedPublicKey.ValidateEnvelope(fixture.proto, malformedPublicKey.AuthorizerAddress()))
-	require.ErrorIs(t, malformedPublicKey.Verify(fixture.proto, fixture.txn, malformedPublicKey.AuthorizerAddress()), crypto.ErrPQFalcon1024SigInvalid)
+	require.NoError(t, malformedPublicKey.ValidateEnvelope(fixture.proto, malformedPublicKey.Address()))
+	require.ErrorIs(t, malformedPublicKey.Verify(fixture.proto, fixture.txn, malformedPublicKey.Address()), crypto.ErrPQFalcon1024SigInvalid)
 
 	var wrongAuthorizer basics.Address
 	wrongAuthorizer[0] = 1
@@ -280,7 +280,7 @@ func TestPQSigVerifyRejectsUnsupportedScheme(t *testing.T) {
 	pqSig.Scheme = protocol.PQScheme{'x', '1'}
 	pqSig.Signature = []byte{1}
 
-	require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, pqSig.AuthorizerAddress()), crypto.ErrPQSchemeNotSupported)
+	require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, pqSig.Address()), crypto.ErrPQSchemeNotSupported)
 }
 
 func TestPQSigVerifyRejectsAuthorizerMismatch(t *testing.T) {
@@ -303,7 +303,7 @@ func TestPQSigVerifyRejectsMalformedPublicKey(t *testing.T) {
 	pqSig := fixture.pqSig
 	pqSig.PublicKey = pqSig.PublicKey[:len(pqSig.PublicKey)-1]
 
-	err := pqSig.Verify(fixture.proto, fixture.txn, pqSig.AuthorizerAddress())
+	err := pqSig.Verify(fixture.proto, fixture.txn, pqSig.Address())
 	require.Error(t, err)
 	require.NotErrorIs(t, err, errPQSigAuthorizerMismatch)
 }

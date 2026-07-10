@@ -1183,7 +1183,7 @@ func enforcePQAuthorizerCompliance(txgroup []transactions.SignedTxn) error {
 		if pqSig.Blank() || len(pqSig.PublicKey) == 0 {
 			continue
 		}
-		authorizer := pqSig.AuthorizerAddress()
+		authorizer := pqSig.Address()
 		if !authorizer.IsPQCompliant() {
 			return fmt.Errorf("transaction %d: pq signature authorizer address %s is an Edwards25519 curve point (non PQ-compliant)", txnIdx, authorizer)
 		}

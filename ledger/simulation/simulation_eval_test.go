@@ -6739,7 +6739,7 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 			_, pqSig := makePlaceholderPQSigForSimulation(t, 1)
 			pqSig.PublicKey = pqSig.PublicKey[:len(pqSig.PublicKey)-1]
-			authorizer := pqSig.AuthorizerAddress()
+			authorizer := pqSig.Address()
 			txn := env.TxnInfo.NewTxn(txntest.Txn{
 				Type:     protocol.PaymentTx,
 				Sender:   authorizer,
