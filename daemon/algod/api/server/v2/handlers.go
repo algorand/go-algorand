@@ -1173,6 +1173,19 @@ func rejectOnCurveLogicSigPrograms(txgroup []transactions.SignedTxn) error {
 	return nil
 }
 
+func enforcePQAuthorizerCompliance(txgroup []transactions.SignedTxn) error {
+	for txnIdx, stxn := range txgroup {
+		if stxn.PQsig.Blank() || len(stxn.PQsig.PublicKey) == 0 {
+			continue
+		}
+		authorizer := stxn.PQsig.AuthorizerAddress()
+		if !authorizer.IsPQCompliant() {
+			return fmt.Errorf("transaction %d: pq signature authorizer address %s is an Edwards25519 curve point (non PQ-compliant)", txnIdx, authorizer)
+		}
+	}
+	return nil
+}
+
 // RawTransaction broadcasts a raw transaction to the network.
 // (POST /v2/transactions)
 func (v2 *Handlers) RawTransaction(ctx echo.Context, params model.RawTransactionParams) error {
@@ -1192,6 +1205,9 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context, params model.RawTransaction
 	}
 
 	if !shouldSkipPqAddressCheck(params.SkipPqAddressCheck) {
+		if err = enforcePQAuthorizerCompliance(txgroup); err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
 		if err = rejectOnCurveLogicSigPrograms(txgroup); err != nil {
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
@@ -1216,11 +1232,15 @@ func (v2 *Handlers) RawTransactionAsync(ctx echo.Context, params model.RawTransa
 	if !v2.Node.Config().EnableDeveloperAPI {
 		return ctx.String(http.StatusNotFound, "/transactions/async was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
 	}
+
 	txgroup, err := decodeTxGroup(ctx.Request().Body, bounds.MaxTxGroupSize)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 	if !shouldSkipPqAddressCheck(params.SkipPqAddressCheck) {
+		if err = enforcePQAuthorizerCompliance(txgroup); err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
 		if err = rejectOnCurveLogicSigPrograms(txgroup); err != nil {
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
@@ -1501,7 +1521,6 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
 	}
-
 	// Simulate transaction
 	simulationResult, err := v2.Node.Simulate(convertSimulationRequest(simulateRequest))
 	if err != nil {

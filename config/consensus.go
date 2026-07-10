@@ -602,6 +602,10 @@ type ConsensusParams struct {
 	// the basic Max sizes (they allow up to the "Absolute" Maxes). It is
 	// expressed in fraction of a basic min fee.
 	PerByteTxnSurcharge basics.Micros
+
+	// EnablePQSchemeFalcon1024 enables native Falcon-1024 transaction
+	// authorization for the f1 PQ scheme.
+	EnablePQSchemeFalcon1024 bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -691,6 +695,32 @@ type BonusPlan struct {
 // MinFee simply returns the MinTxnFee as a basics.MicroAlgos
 func (proto ConsensusParams) MinFee() basics.MicroAlgos {
 	return basics.MicroAlgos{Raw: proto.MinTxnFee}
+}
+
+// PQSchemeEnabled returns whether a post-quantum signature scheme is enabled
+// under these consensus parameters.
+func (proto ConsensusParams) PQSchemeEnabled(scheme protocol.PQScheme) bool {
+	switch scheme {
+	case protocol.PQSchemeFalcon1024:
+		return proto.EnablePQSchemeFalcon1024
+	default:
+		return false
+	}
+}
+
+// PQSchemeFeeContribution is the additional fee factor charged for a transaction
+// authorized with the given PQ scheme, as a fixed-point multiple of the basic
+// min fee (1e6 == one basic min fee). Making it a method (rather than exported
+// constants) leaves room to vary it by proto later without changing call sites.
+func (proto ConsensusParams) PQSchemeFeeContribution(scheme protocol.PQScheme) basics.Micros {
+	switch scheme {
+	case protocol.PQSchemeFalcon1024:
+		return 2e6
+	case protocol.PQSchemeFalcon512:
+		return 1e6 // kept below the Falcon-1024 contribution
+	default:
+		return 0
+	}
 }
 
 // TxnSizePricingEnabled reports whether transactions can exceed size limits by
@@ -1501,6 +1531,7 @@ func initConsensusProtocols() {
 	vFuture.AppSizeUpdates = true
 	vFuture.AllowZeroLocalAppRef = true
 	vFuture.EnforceAuthAddrSenderDiff = true
+	vFuture.EnablePQSchemeFalcon1024 = true
 	vFuture.LoadTracking = true
 	vFuture.MaxAbsoluteTxnNoteBytes = 4096   // same as largest AVM value
 	vFuture.MaxAbsoluteExtraProgramPages = 7 // Allow larger programs with extra fees

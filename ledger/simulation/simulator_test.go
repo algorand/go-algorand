@@ -38,17 +38,17 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestTxnHasNoSignatureLogicSigContent(t *testing.T) {
+func TestTxnNeedsSyntheticSignatureLogicSigContent(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	nonblankSig := crypto.Signature{}
 	nonblankSig[0] = 1
 
-	require.True(t, txnHasNoSignature(transactions.SignedTxn{}))
-	require.False(t, txnHasNoSignature(transactions.SignedTxn{
+	require.True(t, txnNeedsSyntheticSignature(transactions.SignedTxn{}))
+	require.False(t, txnNeedsSyntheticSignature(transactions.SignedTxn{
 		Lsig: transactions.LogicSig{Args: [][]byte{{1}}},
 	}))
-	require.False(t, txnHasNoSignature(transactions.SignedTxn{
+	require.False(t, txnNeedsSyntheticSignature(transactions.SignedTxn{
 		Lsig: transactions.LogicSig{Sig: nonblankSig},
 	}))
 }

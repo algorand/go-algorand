@@ -83,7 +83,7 @@ type GroupContext struct {
 }
 
 var errTxnSigHasNoSig = errors.New("signedtxn has no sig")
-var errTxnSigNotWellFormed = errors.New("signedtxn should only have one of Sig or Msig or LogicSig")
+var errTxnSigNotWellFormed = errors.New("signedtxn should have only one type of signature")
 var errRekeyingNotSupported = errors.New("nonempty AuthAddr but rekeying is not supported")
 var errAuthAddrEqualsSender = errors.New("AuthAddr must be different from Sender")
 var errUnknownSignature = errors.New("has one mystery sig. WAT?")
@@ -310,6 +310,7 @@ const regularSig sigOrTxnType = 1
 const multiSig sigOrTxnType = 2
 const logicSig sigOrTxnType = 3
 const stateProofTxn sigOrTxnType = 4
+const pqSig sigOrTxnType = 5
 
 // checkTxnSigTypeCounts checks the number of signature types and reports an error in case of a violation
 func checkTxnSigTypeCounts(s *transactions.SignedTxn, groupIndex int) (sigType sigOrTxnType, err *TxGroupError) {
@@ -325,6 +326,10 @@ func checkTxnSigTypeCounts(s *transactions.SignedTxn, groupIndex int) (sigType s
 	if s.Lsig.HasProgram() {
 		numSigCategories++
 		sigType = logicSig
+	}
+	if !s.PQsig.Blank() {
+		numSigCategories++
+		sigType = pqSig
 	}
 	if numSigCategories == 0 {
 		// Special case: special sender address can issue special transaction
@@ -376,6 +381,12 @@ func stxnCoreChecks(gi int, groupCtx *GroupContext, batch crypto.BatchEnqueuer) 
 	case logicSig:
 		if err := logicSigVerify(gi, groupCtx); err != nil {
 			return &TxGroupError{err: err, GroupIndex: gi, Reason: TxGroupErrorReasonLogicSigFailed}
+		}
+		return nil
+
+	case pqSig:
+		if err := s.PQsig.Verify(groupCtx.consensusParams, s.Txn, s.Authorizer()); err != nil {
+			return &TxGroupError{err: fmt.Errorf("pq signature validation failed: %w", err), GroupIndex: gi, Reason: TxGroupErrorReasonSigNotWellFormed}
 		}
 		return nil
 
@@ -457,7 +468,7 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batch crypto.B
 		return errors.New("LogicNot signed and not a Logic-only account")
 	}
 	if numSigs > 1 {
-		return errors.New("LogicSig should only have one of Sig, Msig, or LMsig but has more than one")
+		return errors.New("LogicSig should have only one type of delegation signature")
 	}
 
 	if !hasMsig && !hasLMsig {

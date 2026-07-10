@@ -1128,7 +1128,8 @@ var infoAppCmd = &cobra.Command{
 
 // populateMethodCallTxnArgs parses and loads transactions from the files indicated by the values
 // slice. An error will occur if the transaction does not match the expected type, it has a nonzero
-// group ID, or if it is signed by a normal signature or Msig signature (but not Lsig signature)
+// group ID, or if it is signed by a normal signature, Msig signature, or PQ signature (but not
+// Lsig signature)
 func populateMethodCallTxnArgs(types []string, values []string) ([]transactions.SignedTxn, error) {
 	loadedTxns := make([]transactions.SignedTxn, len(values))
 
@@ -1144,7 +1145,7 @@ func populateMethodCallTxnArgs(types []string, values []string) ([]transactions.
 			return nil, fmt.Errorf(txDecodeError, txFilename, err)
 		}
 
-		if !txn.Sig.Blank() || !txn.Msig.Blank() {
+		if !txn.Sig.Blank() || !txn.Msig.Blank() || !txn.PQsig.Blank() {
 			return nil, fmt.Errorf("Transaction from %s has already been signed", txFilename)
 		}
 

@@ -182,6 +182,10 @@ func (tx Transaction) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Transaction, protocol.Encode(&tx)
 }
 
+func (tx Transaction) isSingletonHeartbeat() bool {
+	return tx.Type == protocol.HeartbeatTx && tx.Group.IsZero()
+}
+
 // feeFactor is the factor by which the base transaction fee is multiplied. Some
 // transactions are free, others might cost more because they use extra
 // expensive features (e.g., large Note fields, large app programs).  It is
@@ -195,7 +199,7 @@ func (tx Transaction) feeFactor(proto config.ConsensusParams) basics.Micros {
 	case protocol.StateProofTx:
 		return 0
 	case protocol.HeartbeatTx:
-		if tx.Group.IsZero() {
+		if tx.isSingletonHeartbeat() {
 			// Not every such heartbeat is free. We confirm a
 			// low/no fee singleton heartbeat is legal in heartbeat's
 			// wellFormed() and in apply/heartbeat.go (for the dynamic check for

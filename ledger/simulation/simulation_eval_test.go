@@ -6653,6 +6653,331 @@ func TestOptionalSignatures(t *testing.T) {
 	}
 }
 
+func makePlaceholderPQSigForSimulation(t *testing.T, seedByte byte) (basics.Address, transactions.PQSig) {
+	t.Helper()
+
+	var seed crypto.FalconSeed
+	seed[0] = seedByte
+	signer, err := crypto.GenerateFalconSigner(seed)
+	require.NoError(t, err)
+
+	publicKey := slices.Clone(signer.PublicKey[:])
+	salt, authorizer, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
+	require.NoError(t, err)
+
+	return authorizer, transactions.PQSig{
+		Scheme:    protocol.PQSchemeFalcon1024,
+		Salt:      salt,
+		PublicKey: publicKey,
+	}
+}
+
+func makePlaceholderPQFixSignersGroup(t *testing.T, env simulationtesting.Environment, placeholderFee uint64) ([]transactions.SignedTxn, basics.Address) {
+	t.Helper()
+
+	sender := env.Accounts[0]
+	pqAuthorizer, pqSig := makePlaceholderPQSigForSimulation(t, 0)
+	minFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
+
+	rekey := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Addr,
+		Receiver: sender.Addr,
+		RekeyTo:  pqAuthorizer,
+		Fee:      minFee,
+	})
+	pqPay := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Addr,
+		Receiver: sender.Addr,
+		Fee:      placeholderFee,
+	})
+	txgroup := txntest.Group(&rekey, &pqPay)
+	txgroup[0] = txgroup[0].Txn.Sign(sender.Sk)
+	txgroup[1].AuthAddr = sender.Addr
+	txgroup[1].PQsig = pqSig
+
+	return txgroup, pqAuthorizer
+}
+
+func makeAppThenPlaceholderPQFixSignersGroup(t *testing.T, env *simulationtesting.Environment, pqAuthorizer basics.Address, pqSig transactions.PQSig) []transactions.SignedTxn {
+	t.Helper()
+
+	sender := env.Accounts[0]
+	appCaller := env.Accounts[1]
+	appID := env.CreateApp(appCaller.Addr, simulationtesting.AppParams{
+		ApprovalProgram:   "#pragma version 2\nint 1",
+		ClearStateProgram: "#pragma version 2\nint 1",
+	})
+	env.Rekey(sender.Addr, pqAuthorizer)
+
+	minFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
+	appCall := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        appCaller.Addr,
+		ApplicationID: appID,
+		Fee:           minFee,
+	})
+	pqPay := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Addr,
+		Receiver: sender.Addr,
+		Fee:      minFee * 3,
+	})
+	txgroup := txntest.Group(&appCall, &pqPay)
+	txgroup[0] = txgroup[0].Txn.Sign(appCaller.Sk)
+	txgroup[1].PQsig = pqSig
+	return txgroup
+}
+
+func TestPlaceholderPQSignatures(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	t.Run("invalid public key", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			_, pqSig := makePlaceholderPQSigForSimulation(t, 1)
+			pqSig.PublicKey = pqSig.PublicKey[:len(pqSig.PublicKey)-1]
+			authorizer := pqSig.AuthorizerAddress()
+			txn := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   authorizer,
+				Receiver: authorizer,
+			})
+			stxn := txn.SignedTxn()
+			stxn.PQsig = pqSig
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{{stxn}},
+					AllowEmptySignatures: true,
+				},
+				expectedError: "overspend",
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							FailedAt:      simulation.TxnPath{0},
+							Txns:          []simulation.TxnResult{{FeesPaid: stxn.Txn.Fee}},
+							GroupUsage:    3e6,
+							GroupFeesPaid: stxn.Txn.Fee,
+						},
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("wrong salt", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			authorizer, pqSig := makePlaceholderPQSigForSimulation(t, 2)
+			pqSig.Salt ^= 1
+			txn := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   authorizer,
+				Receiver: authorizer,
+			})
+			stxn := txn.SignedTxn()
+			stxn.PQsig = pqSig
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{{stxn}},
+					AllowEmptySignatures: true,
+				},
+				expectedError: "pq signature authorizer mismatch",
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							FailedAt:      simulation.TxnPath{0},
+							Txns:          []simulation.TxnResult{{FeesPaid: stxn.Txn.Fee}},
+							GroupUsage:    3e6,
+							GroupFeesPaid: stxn.Txn.Fee,
+						},
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("FixSigners fixes placeholder AuthAddr", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			minFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
+			txgroup, pqAuthorizer := makePlaceholderPQFixSignersGroup(t, env, minFee*3)
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{txgroup},
+					AllowEmptySignatures: true,
+					FixSigners:           true,
+				},
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+						FixSigners:           true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							Txns: []simulation.TxnResult{
+								{FeesPaid: txgroup[0].Txn.Fee},
+								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: pqAuthorizer},
+							},
+							GroupUsage:    4e6,
+							GroupFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
+						},
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("FixSigners validates full placeholder after app signer fix", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			pqAuthorizer, pqSig := makePlaceholderPQSigForSimulation(t, 3)
+			txgroup := makeAppThenPlaceholderPQFixSignersGroup(t, &env, pqAuthorizer, pqSig)
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{txgroup},
+					AllowEmptySignatures: true,
+					FixSigners:           true,
+				},
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+						FixSigners:           true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							Txns: []simulation.TxnResult{
+								{
+									AppBudgetConsumed: ignoreAppBudgetConsumed,
+									FeesPaid:          txgroup[0].Txn.Fee,
+								},
+								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: pqAuthorizer},
+							},
+							AppBudgetAdded:    700,
+							AppBudgetConsumed: ignoreAppBudgetConsumed,
+							GroupUsage:        4e6,
+							GroupFeesPaid:     basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
+						},
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("FixSigners rejects full placeholder mismatch after app signer fix", func(t *testing.T) {
+		t.Parallel()
+		env := simulationtesting.PrepareSimulatorTest(t)
+		defer env.Close()
+
+		pqAuthorizer, pqSig := makePlaceholderPQSigForSimulation(t, 4)
+		pqSig.Salt ^= 1
+		txgroup := makeAppThenPlaceholderPQFixSignersGroup(t, &env, pqAuthorizer, pqSig)
+
+		result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+			TxnGroups:            [][]transactions.SignedTxn{txgroup},
+			AllowEmptySignatures: true,
+			FixSigners:           true,
+		})
+		require.NoError(t, err)
+		require.Contains(t, result.TxnGroups[0].FailureMessage, "pq signature authorizer mismatch")
+		require.Equal(t, simulation.TxnPath{1}, result.TxnGroups[0].FailedAt)
+		require.Nil(t, result.Block)
+	})
+
+	t.Run("scheme-only placeholder pays PQ surcharge", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			minFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
+			sender := env.Accounts[0]
+			txn := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   sender.Addr,
+				Receiver: sender.Addr,
+				Fee:      minFee * 3,
+			})
+			stxn := txn.SignedTxn()
+			stxn.PQsig = transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024}
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{{stxn}},
+					AllowEmptySignatures: true,
+				},
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							Txns:          []simulation.TxnResult{{FeesPaid: stxn.Txn.Fee}},
+							GroupUsage:    3e6,
+							GroupFeesPaid: stxn.Txn.Fee,
+						},
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("placeholder pays PQ surcharge", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			minFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
+			txgroup, pqAuthorizer := makePlaceholderPQFixSignersGroup(t, env, minFee)
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{txgroup},
+					AllowEmptySignatures: true,
+					FixSigners:           true,
+				},
+				expectedError: "usage=4.000000",
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+						FixSigners:           true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							FailedAt: simulation.TxnPath{1},
+							Txns: []simulation.TxnResult{
+								{FeesPaid: txgroup[0].Txn.Fee},
+								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: pqAuthorizer},
+							},
+							GroupUsage:    4e6,
+							GroupFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
+						},
+					},
+				},
+			}
+		})
+	})
+}
+
 // TestOptionalSignaturesIncorrect tests that an incorrect signature still fails when
 // AllowEmptySignatures is enabled.
 func TestOptionalSignaturesIncorrect(t *testing.T) {
