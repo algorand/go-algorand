@@ -1159,7 +1159,7 @@ func isEscrowLogicSig(stxn transactions.SignedTxn) bool {
 
 func rejectOnCurveLogicSigPrograms(txgroup []transactions.SignedTxn) error {
 	for i, stxn := range txgroup {
-		if len(stxn.Lsig.Logic) == 0 {
+		if !stxn.Lsig.HasProgram() {
 			continue
 		}
 		version, _, err := transactions.ProgramVersion(stxn.Lsig.Logic)

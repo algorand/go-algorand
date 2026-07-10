@@ -1295,7 +1295,7 @@ func legacyOnCurveLogicSigProgram(t *testing.T) []byte {
 func offCurveLogicSigProgram(t *testing.T) []byte {
 	t.Helper()
 
-	ops, err := logic.AssembleStringWithVersion("#pragma version 13\npushint 12", logic.LogicSigOffCurveVersion)
+	ops, err := logic.AssembleStringWithVersion("pushint 12", logic.LogicSigOffCurveVersion)
 	require.NoError(t, err)
 	require.False(t, logic.ProgramHashIsEdwards25519Point(ops.Program))
 	return ops.Program
@@ -2255,7 +2255,7 @@ func TestTealDisassemble(t *testing.T) {
 
 	// Test bad program.
 	badProgram := []byte{1, 99}
-	tealDisassembleTest(t, badProgram, 400, "invalid opcode", true)
+	tealDisassembleTest(t, badProgram, 400, "illegal opcode", true)
 
 	// Create a program with MaxTealSourceBytes+1 bytes
 	// This should fail inside the handler when reading the bytes from the request body.

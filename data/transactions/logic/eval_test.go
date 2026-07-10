@@ -172,7 +172,7 @@ func optSigParams(opt protoOpt, txns ...transactions.SignedTxn) *EvalParams {
 	}
 	// Make it non-Blank so NewSigEval does not short-circuit (but try to avoid
 	// manipulating txns if they were actually supplied with other sigs.)
-	if txns[0].Sig.Blank() && txns[0].Msig.Blank() && txns[0].Lsig.Blank() {
+	if txns[0].Sig.Blank() && txns[0].Msig.Blank() && !txns[0].Lsig.HasProgram() {
 		txns[0].Lsig.Logic = []byte{LogicVersion + 1} // make sure it fails if used
 	}
 
@@ -3318,6 +3318,26 @@ int 1
 			// cut two last bytes - intc_1 and last byte of bnz
 			testLogicBytes(t, ops.Program[:len(ops.Program)-2], nil,
 				"program ends without", "program ends without")
+		})
+	}
+}
+
+func TestEvalBadSubOp(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	for v := uint64(foreignBoxVersion); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			ops := testProg(t, `int 1; byte 0xaabbcc; app_box_len`, v)
+			// cut last byte, leaving only the app_box_len initial opcode, no subop
+			testLogicBytes(t, ops.Program[:len(ops.Program)-1], nil,
+				"missing sub-opcode", "missing sub-opcode")
+			ops.Program[len(ops.Program)-1] = 0x00
+			testLogicBytes(t, ops.Program, nil,
+				"improper sub-opcode 0x00", "improper sub-opcode 0x00")
+			ops.Program[len(ops.Program)-1] = 0x55 // way too big
+			testLogicBytes(t, ops.Program, nil,
+				"improper sub-opcode 0x55", "improper sub-opcode 0x55")
 		})
 	}
 }
