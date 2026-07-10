@@ -370,6 +370,9 @@ func runPQSignProgramWithOptions(opts pqSignProgramOptions) error {
 	if err != nil {
 		return fmt.Errorf("cannot read program from %s: %w", opts.program, err)
 	}
+	if len(program) == 0 {
+		return errors.New("program is empty")
+	}
 	pqsig, err := signPQHashable(pqctx, logic.PQDelegatedProgram{Addr: pqctx.signing.Public.address(), Program: program})
 	if err != nil {
 		return fmt.Errorf("cannot sign program: %w", err)

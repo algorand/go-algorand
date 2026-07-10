@@ -658,3 +658,22 @@ func TestPQSignProgramRejectsMixedKeySources(t *testing.T) {
 	})
 	require.ErrorContains(t, err, "cannot specify both --keyfile and --mnemonic")
 }
+
+func TestPQSignProgramRejectsEmptyInputFile(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	signing := pqTestSigning(t, 0)
+	tempDir := t.TempDir()
+	keyfile := filepath.Join(tempDir, "account.pq")
+	programFile := filepath.Join(tempDir, "empty.tok")
+	require.NoError(t, writePQPrivateKeyFile(keyfile, signing))
+	require.NoError(t, os.WriteFile(programFile, nil, 0600))
+
+	err := runPQSignProgramWithOptions(pqSignProgramOptions{
+		keyfile: keyfile,
+		program: programFile,
+		outfile: filepath.Join(tempDir, "empty.lsig"),
+	})
+	require.ErrorContains(t, err, "program is empty")
+}
