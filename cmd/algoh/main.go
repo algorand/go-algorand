@@ -408,7 +408,7 @@ func captureErrorLogs(algohConfig algoh.HostConfig, errorOutput stdCollector, ou
 	}
 }
 
-func reportErrorf(format string, args ...interface{}) {
+func reportErrorf(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, format, args...)
 	logging.Base().Warnf(format, args...)
 }

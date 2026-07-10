@@ -216,7 +216,7 @@ type elasticClientLogger struct {
 }
 
 // Printf tunnel the log string into the log file.
-func (el elasticClientLogger) Printf(format string, v ...interface{}) {
+func (el elasticClientLogger) Printf(format string, v ...any) {
 	switch el.level {
 	case logrus.DebugLevel:
 		el.logger.Debugf(format, v...)

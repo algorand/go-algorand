@@ -1111,7 +1111,7 @@ func filterNoneTypes(sts StackTypes) StackTypes {
 
 // panicError wraps a recover() catching a panic()
 type panicError struct {
-	PanicValue interface{}
+	PanicValue any
 	StackTrace string
 }
 
@@ -6246,7 +6246,7 @@ func isPrimitiveJSON(jsonText []byte) (bool, error) {
 
 func parseJSON(jsonText []byte) (map[string]json.RawMessage, error) {
 	// parse JSON with Algorand's standard JSON library
-	var parsed map[interface{}]json.RawMessage
+	var parsed map[any]json.RawMessage
 	err := protocol.DecodeJSON(jsonText, &parsed)
 
 	if err != nil {

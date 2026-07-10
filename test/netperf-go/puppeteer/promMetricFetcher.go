@@ -67,8 +67,8 @@ func (r *promMetricFetcher) getMetric(query string) (results []promValueResult, 
 		return
 	}
 
-	var resultsMap map[string]interface{}
-	pathMap := make(map[string]interface{})
+	var resultsMap map[string]any
+	pathMap := make(map[string]any)
 	err = json.Unmarshal(bytes, &resultsMap)
 	if err != nil {
 		return
@@ -115,13 +115,13 @@ func (r *promMetricFetcher) getMetric(query string) (results []promValueResult, 
 	return results, nil
 }
 
-func (r *promMetricFetcher) parseMap(path string, aMap map[string]interface{}, pathMap map[string]interface{}) {
+func (r *promMetricFetcher) parseMap(path string, aMap map[string]any, pathMap map[string]any) {
 	for key, val := range aMap {
 		switch concreteVal := val.(type) {
-		case map[string]interface{}:
-			r.parseMap(path+"/"+key, val.(map[string]interface{}), pathMap)
-		case []interface{}:
-			r.parseArray(path+"/"+key, val.([]interface{}), pathMap)
+		case map[string]any:
+			r.parseMap(path+"/"+key, val.(map[string]any), pathMap)
+		case []any:
+			r.parseArray(path+"/"+key, val.([]any), pathMap)
 		default:
 			//fmt.Println(path+"/"+key, ":", concreteVal)
 			pathMap[path+"/"+key] = concreteVal
@@ -129,13 +129,13 @@ func (r *promMetricFetcher) parseMap(path string, aMap map[string]interface{}, p
 	}
 }
 
-func (r *promMetricFetcher) parseArray(path string, anArray []interface{}, pathMap map[string]interface{}) {
+func (r *promMetricFetcher) parseArray(path string, anArray []any, pathMap map[string]any) {
 	for i, val := range anArray {
 		switch concreteVal := val.(type) {
-		case map[string]interface{}:
-			r.parseMap(fmt.Sprintf("%s[%d]", path, i), val.(map[string]interface{}), pathMap)
-		case []interface{}:
-			r.parseArray(fmt.Sprintf("%s[%d]", path, i), val.([]interface{}), pathMap)
+		case map[string]any:
+			r.parseMap(fmt.Sprintf("%s[%d]", path, i), val.(map[string]any), pathMap)
+		case []any:
+			r.parseArray(fmt.Sprintf("%s[%d]", path, i), val.([]any), pathMap)
 		default:
 			//fmt.Println(fmt.Sprintf("%s[%d]", path, i), concreteVal)
 			pathMap[fmt.Sprintf("%s[%d]", path, i)] = concreteVal

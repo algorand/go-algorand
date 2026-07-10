@@ -803,19 +803,19 @@ func onlineAccountsDeleteByRowIDs(e db.Executable, rowids []int64, table string)
 	return
 }
 
-func rowidsToChunkedArgs(rowids []int64) [][]interface{} {
+func rowidsToChunkedArgs(rowids []int64) [][]any {
 	const sqliteMaxVariableNumber = 999
 
 	numChunks := len(rowids)/sqliteMaxVariableNumber + 1
 	if len(rowids)%sqliteMaxVariableNumber == 0 {
 		numChunks--
 	}
-	chunks := make([][]interface{}, numChunks)
+	chunks := make([][]any, numChunks)
 	if numChunks == 1 {
 		// optimize memory consumption for the most common case
-		chunks[0] = make([]interface{}, len(rowids))
+		chunks[0] = make([]any, len(rowids))
 		for i, rowid := range rowids {
-			chunks[0][i] = interface{}(rowid)
+			chunks[0][i] = any(rowid)
 		}
 	} else {
 		for i := 0; i < numChunks; i++ {
@@ -823,11 +823,11 @@ func rowidsToChunkedArgs(rowids []int64) [][]interface{} {
 			if i == numChunks-1 {
 				chunkSize = len(rowids) - (numChunks-1)*sqliteMaxVariableNumber
 			}
-			chunks[i] = make([]interface{}, chunkSize)
+			chunks[i] = make([]any, chunkSize)
 		}
 		for i, rowid := range rowids {
 			chunkIndex := i / sqliteMaxVariableNumber
-			chunks[chunkIndex][i%sqliteMaxVariableNumber] = interface{}(rowid)
+			chunks[chunkIndex][i%sqliteMaxVariableNumber] = any(rowid)
 		}
 	}
 	return chunks

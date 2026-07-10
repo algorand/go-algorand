@@ -104,34 +104,34 @@ func main() {
 	}
 }
 
-func reportInfoln(args ...interface{}) {
+func reportInfoln(args ...any) {
 	fmt.Println(args...)
 	// log.Infoln(args...)
 }
 
-func reportInfof(format string, args ...interface{}) {
+func reportInfof(format string, args ...any) {
 	fmt.Printf(format+"\n", args...)
 	// log.Infof(format, args...)
 }
 
-func reportWarnln(args ...interface{}) {
+func reportWarnln(args ...any) {
 	fmt.Print("Warning: ")
 	fmt.Println(args...)
 	// log.Warnln(args...)
 }
 
-func reportWarnf(format string, args ...interface{}) {
+func reportWarnf(format string, args ...any) {
 	fmt.Printf("Warning: "+format+"\n", args...)
 	// log.Warnf(format, args...)
 }
 
-func reportErrorln(args ...interface{}) {
+func reportErrorln(args ...any) {
 	fmt.Fprintln(os.Stderr, args...)
 	// log.Warnln(args...)
 	os.Exit(1)
 }
 
-func reportErrorf(format string, args ...interface{}) {
+func reportErrorf(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
 	// log.Warnf(format, args...)
 	os.Exit(1)

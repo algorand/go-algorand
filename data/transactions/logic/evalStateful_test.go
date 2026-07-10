@@ -2890,48 +2890,48 @@ int 1
 
 type unnamedResourcePolicyEvent struct {
 	eventType string
-	args      []interface{}
+	args      []any
 }
 
 func availableAccountEvent(addr basics.Address) unnamedResourcePolicyEvent {
 	return unnamedResourcePolicyEvent{
 		eventType: "AvailableAccount",
-		args:      []interface{}{addr},
+		args:      []any{addr},
 	}
 }
 
 func availableAssetEvent(aid basics.AssetIndex) unnamedResourcePolicyEvent {
 	return unnamedResourcePolicyEvent{
 		eventType: "AvailableAsset",
-		args:      []interface{}{aid},
+		args:      []any{aid},
 	}
 }
 
 func availableAppEvent(aid basics.AppIndex) unnamedResourcePolicyEvent {
 	return unnamedResourcePolicyEvent{
 		eventType: "AvailableApp",
-		args:      []interface{}{aid},
+		args:      []any{aid},
 	}
 }
 
 func allowsHoldingEvent(addr basics.Address, aid basics.AssetIndex) unnamedResourcePolicyEvent {
 	return unnamedResourcePolicyEvent{
 		eventType: "AllowsHolding",
-		args:      []interface{}{addr, aid},
+		args:      []any{addr, aid},
 	}
 }
 
 func allowsLocalEvent(addr basics.Address, aid basics.AppIndex) unnamedResourcePolicyEvent {
 	return unnamedResourcePolicyEvent{
 		eventType: "AllowsLocal",
-		args:      []interface{}{addr, aid},
+		args:      []any{addr, aid},
 	}
 }
 
 func availableBoxEvent(app basics.AppIndex, name string, newApp bool, createSize uint64) unnamedResourcePolicyEvent {
 	return unnamedResourcePolicyEvent{
 		eventType: "AvailableBox",
-		args:      []interface{}{app, name, newApp, createSize},
+		args:      []any{app, name, newApp, createSize},
 	}
 }
 
