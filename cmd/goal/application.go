@@ -1486,7 +1486,7 @@ var methodAppCmd = &cobra.Command{
 				txnFromArgs = txnArgs[i]
 			}
 
-			if txnFromArgs.Lsig.HasProgram() {
+			if !txnFromArgs.Lsig.Blank() {
 				signedTxnGroup = append(signedTxnGroup, transactions.SignedTxn{
 					Lsig:     txnFromArgs.Lsig,
 					AuthAddr: txnFromArgs.AuthAddr,
