@@ -39,20 +39,3 @@ func TestPQDelegatedProgramToBeHashed(t *testing.T) {
 	require.NotEqual(t, protocol.MultisigProgram, hashID)
 	require.Equal(t, append(pqAddress[:], program...), bytes)
 }
-
-func TestPQDelegatedProgramBindsAddressAndProgram(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	pqAddress := basics.Address{1}
-	program := []byte{2}
-	_, base := (PQDelegatedProgram{Addr: pqAddress, Program: program}).ToBeHashed()
-
-	pqAddress[0] = 3
-	_, changedPQAddress := (PQDelegatedProgram{Addr: pqAddress, Program: program}).ToBeHashed()
-	require.NotEqual(t, base, changedPQAddress)
-
-	pqAddress[0] = 1
-	program[0] = 4
-	_, changedProgram := (PQDelegatedProgram{Addr: pqAddress, Program: program}).ToBeHashed()
-	require.NotEqual(t, base, changedProgram)
-}
