@@ -2052,6 +2052,7 @@ global PayoutsPercent
 global PayoutsMinBalance
 global PayoutsMaxBalance
 txn RejectVersion
+txn LogicSigArgsBudget
 pushint 1
 block BlkBranch512
 pushint 1

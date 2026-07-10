@@ -134,6 +134,92 @@ func TestWellFormedHeartbeatErrors(t *testing.T) {
 			tx: Transaction{
 				Type: protocol.HeartbeatTx,
 				Header: Header{
+					Sender:             addr1,
+					LastValid:          105,
+					FirstValid:         100,
+					LogicSigArgsBudget: futureProto.LogicSigMaxSize,
+				},
+				HeartbeatTxnFields: &HeartbeatTxnFields{
+					HbProof: crypto.HeartbeatProof{
+						Sig: [64]byte{0x01},
+					},
+					HbSeed:        committee.Seed{0x02},
+					HbVoteID:      crypto.OneTimeSignatureVerifier{0x03},
+					HbKeyDilution: 10,
+				},
+			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.LogicSigArgsBudget is set in free heartbeat"),
+		},
+		{
+			tx: Transaction{
+				Type: protocol.HeartbeatTx,
+				Header: Header{
+					Sender:             addr1,
+					Fee:                basics.MicroAlgos{Raw: 100},
+					LastValid:          105,
+					FirstValid:         100,
+					LogicSigArgsBudget: futureProto.LogicSigMaxSize,
+				},
+				HeartbeatTxnFields: &HeartbeatTxnFields{
+					HbProof: crypto.HeartbeatProof{
+						Sig: [64]byte{0x01},
+					},
+					HbSeed:        committee.Seed{0x02},
+					HbVoteID:      crypto.OneTimeSignatureVerifier{0x03},
+					HbKeyDilution: 10,
+				},
+			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.LogicSigArgsBudget is set in cheap heartbeat"),
+		},
+		{
+			tx: Transaction{
+				Type: protocol.HeartbeatTx,
+				Header: Header{
+					Sender:             addr1,
+					Fee:                futureProto.MinFee(),
+					LastValid:          105,
+					FirstValid:         100,
+					LogicSigArgsBudget: futureProto.LogicSigMaxSize,
+				},
+				HeartbeatTxnFields: &HeartbeatTxnFields{
+					HbProof: crypto.HeartbeatProof{
+						Sig: [64]byte{0x01},
+					},
+					HbSeed:        committee.Seed{0x02},
+					HbVoteID:      crypto.OneTimeSignatureVerifier{0x03},
+					HbKeyDilution: 10,
+				},
+			},
+			proto: futureProto,
+		},
+		{
+			tx: Transaction{
+				Type: protocol.HeartbeatTx,
+				Header: Header{
+					Sender:             addr1,
+					Fee:                futureProto.MinFee(),
+					LastValid:          105,
+					FirstValid:         100,
+					Group:              crypto.Digest{0x01},
+					LogicSigArgsBudget: futureProto.LogicSigMaxSize,
+				},
+				HeartbeatTxnFields: &HeartbeatTxnFields{
+					HbProof: crypto.HeartbeatProof{
+						Sig: [64]byte{0x01},
+					},
+					HbSeed:        committee.Seed{0x02},
+					HbVoteID:      crypto.OneTimeSignatureVerifier{0x03},
+					HbKeyDilution: 10,
+				},
+			},
+			proto: futureProto,
+		},
+		{
+			tx: Transaction{
+				Type: protocol.HeartbeatTx,
+				Header: Header{
 					Sender:     addr1,
 					Fee:        basics.MicroAlgos{Raw: 100},
 					LastValid:  105,

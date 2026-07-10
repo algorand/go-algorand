@@ -1059,7 +1059,8 @@
         "NumApprovalProgramPages",
         "ClearStateProgramPages",
         "NumClearStateProgramPages",
-        "RejectVersion"
+        "RejectVersion",
+        "LogicSigArgsBudget"
       ],
       "ArgEnumTypes": [
         "address",
@@ -1129,6 +1130,7 @@
         "[]byte",
         "uint64",
         "[]byte",
+        "uint64",
         "uint64",
         "uint64"
       ],
@@ -1295,7 +1297,8 @@
         "NumApprovalProgramPages",
         "ClearStateProgramPages",
         "NumClearStateProgramPages",
-        "RejectVersion"
+        "RejectVersion",
+        "LogicSigArgsBudget"
       ],
       "ArgEnumTypes": [
         "address",
@@ -1365,6 +1368,7 @@
         "[]byte",
         "uint64",
         "[]byte",
+        "uint64",
         "uint64",
         "uint64"
       ],
@@ -1605,7 +1609,8 @@
         "NumApprovalProgramPages",
         "ClearStateProgramPages",
         "NumClearStateProgramPages",
-        "RejectVersion"
+        "RejectVersion",
+        "LogicSigArgsBudget"
       ],
       "ArgEnumTypes": [
         "address",
@@ -1675,6 +1680,7 @@
         "[]byte",
         "uint64",
         "[]byte",
+        "uint64",
         "uint64",
         "uint64"
       ],
@@ -3970,7 +3976,8 @@
         "NumApprovalProgramPages",
         "ClearStateProgramPages",
         "NumClearStateProgramPages",
-        "RejectVersion"
+        "RejectVersion",
+        "LogicSigArgsBudget"
       ],
       "ArgEnumTypes": [
         "address",
@@ -4040,6 +4047,7 @@
         "[]byte",
         "uint64",
         "[]byte",
+        "uint64",
         "uint64",
         "uint64"
       ],
@@ -4191,7 +4199,8 @@
         "NumApprovalProgramPages",
         "ClearStateProgramPages",
         "NumClearStateProgramPages",
-        "RejectVersion"
+        "RejectVersion",
+        "LogicSigArgsBudget"
       ],
       "ArgEnumTypes": [
         "address",
@@ -4261,6 +4270,7 @@
         "[]byte",
         "uint64",
         "[]byte",
+        "uint64",
         "uint64",
         "uint64"
       ],

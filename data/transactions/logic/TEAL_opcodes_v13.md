@@ -431,6 +431,7 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 | 65 | NumApprovalProgramPages | uint64 | v7  | Number of Approval Program pages |
 | 67 | NumClearStateProgramPages | uint64 | v7  | Number of ClearState Program pages |
 | 68 | RejectVersion | uint64 | v12  | Application version for which the txn must reject |
+| 69 | LogicSigArgsBudget | uint64 | v13  | Maximum total LogicSig argument bytes allowed by this transaction |
 
 ## global
 

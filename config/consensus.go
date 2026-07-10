@@ -239,6 +239,11 @@ type ConsensusParams struct {
 	// program.
 	MaxAbsoluteLogicSigProgramSize uint64
 
+	// MaxAbsoluteLogicSigArgsSize is the absolute maximum total size of the
+	// arguments carried by one LogicSig when a transaction declares an args
+	// budget. A zero value means args budgets are not supported.
+	MaxAbsoluteLogicSigArgsSize uint64
+
 	// sum of estimated op cost must be less than this
 	LogicSigMaxCost uint64
 
@@ -772,6 +777,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxAppProgramLen, &bounds.MaxAppProgramLen)
 	checkSetMax((int(p.LogicSigMaxSize) * p.MaxTxGroupSize), &bounds.MaxLogicSigMaxSize)
 	checkSetMax(int(p.MaxAbsoluteLogicSigProgramSize), &bounds.MaxLogicSigMaxSize)
+	checkSetMax(int(p.MaxAbsoluteLogicSigArgsSize), &bounds.MaxLogicSigMaxSize)
 	checkSetMax(p.MaxAbsoluteTxnNoteBytes, &bounds.MaxTxnNoteBytes)
 	checkSetMax(p.MaxTxGroupSize, &bounds.MaxTxGroupSize)
 	// MaxBytesKeyValueLen is max of MaxAppKeyLen and MaxAppBytesValueLen
@@ -1506,6 +1512,8 @@ func initConsensusProtocols() {
 	vFuture.MaxAbsoluteExtraProgramPages = 7 // Allow larger programs with extra fees
 	vFuture.MaxAbsoluteTotalArgLen = 16384   // We _could_ make this as high as 16*4k
 	vFuture.PerByteTxnSurcharge = 100        // Each charged byte adds 0.000100 of min fee
+
+	vFuture.MaxAbsoluteLogicSigArgsSize = 16000 // LogicSigMaxSize * MaxTxGroupSize
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
