@@ -32,10 +32,10 @@ import (
 type eventsDetailsLogger struct {
 	logging.Logger
 	eventIdentifier telemetryspec.Event
-	eventReceived   chan interface{}
+	eventReceived   chan any
 }
 
-func (dl eventsDetailsLogger) EventWithDetails(category telemetryspec.Category, identifier telemetryspec.Event, details interface{}) {
+func (dl eventsDetailsLogger) EventWithDetails(category telemetryspec.Category, identifier telemetryspec.Event, details any) {
 	if category == telemetryspec.Network && identifier == dl.eventIdentifier {
 		dl.eventReceived <- details
 
@@ -47,7 +47,7 @@ func TestRequestLogger(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	log := logging.TestingLog(t)
-	dl := eventsDetailsLogger{Logger: log, eventReceived: make(chan interface{}, 1), eventIdentifier: telemetryspec.HTTPRequestEvent}
+	dl := eventsDetailsLogger{Logger: log, eventReceived: make(chan any, 1), eventIdentifier: telemetryspec.HTTPRequestEvent}
 	log.SetLevel(logging.Level(defaultConfig.BaseLoggerDebugLevel))
 	netA := &WebsocketNetwork{
 		log:       dl,

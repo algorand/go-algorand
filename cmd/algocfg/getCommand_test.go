@@ -31,7 +31,7 @@ func TestPrint(t *testing.T) {
 	t.Parallel()
 
 	testcases := []struct {
-		Input    interface{}
+		Input    any
 		expected string
 	}{
 		{

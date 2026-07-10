@@ -600,7 +600,7 @@ type mismatchingDirectroyPermissionsLog struct {
 	t *testing.T
 }
 
-func (m mismatchingDirectroyPermissionsLog) Errorf(fmts string, args ...interface{}) {
+func (m mismatchingDirectroyPermissionsLog) Errorf(fmts string, args ...any) {
 	fmtStr := fmt.Sprintf(fmts, args...)
 	require.Contains(m.t, fmtStr, "Unable to create genesis directory")
 }

@@ -93,7 +93,7 @@ func DomainOf(maxLength, maxElementLength int, domainSuffix string, dontMatch []
 
 var tldGenerator = rapid.SampledFrom(tlds)
 
-func assertf(ok bool, format string, args ...interface{}) {
+func assertf(ok bool, format string, args ...any) {
 	if !ok {
 		panic(fmt.Sprintf(format, args...))
 	}

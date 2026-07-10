@@ -190,7 +190,7 @@ func TestEncodeJSON(t *testing.T) {
 	require.True(t, reflect.DeepEqual(v, nsv))
 	require.True(t, reflect.DeepEqual(v, sv))
 
-	decodeJSONStrict := func(b []byte, objptr interface{}) error {
+	decodeJSONStrict := func(b []byte, objptr any) error {
 		dec := codec.NewDecoderBytes(b, JSONStrictHandle)
 		return dec.Decode(objptr)
 	}

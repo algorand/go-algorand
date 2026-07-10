@@ -541,7 +541,7 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 
 	// prepare up to 16 concurrent worksets.
 	worksets := make(chan struct{}, concurrentWorksets)
-	worksDoneCh := make(chan interface{}, concurrentWorksets)
+	worksDoneCh := make(chan any, concurrentWorksets)
 	processing := 0
 
 	tasksCtx, cancelTasksCtx := context.WithCancel(ctx)
@@ -559,7 +559,7 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 			return tasksCtx.Err()
 		case worksets <- struct{}{}:
 			if len(nextWorkset) > 0 {
-				err1 := verificationPool.EnqueueBacklog(ctx, func(arg interface{}) (ret interface{}) {
+				err1 := verificationPool.EnqueueBacklog(ctx, func(arg any) (ret any) {
 					defer func() {
 						if r := recover(); r != nil {
 							logging.Base().Errorf("recovered from panic verifying transaction groups: %v", r)
