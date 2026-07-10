@@ -337,10 +337,11 @@ func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *e
 }
 
 func (o *OpcodeTraceUnit) appendStateOperations(cx *logic.EvalContext) {
-	if cx.GetOpSpec().AppStateExplain == nil {
+	spec := cx.GetOpSpec()
+	if spec.AppStateExplain == nil {
 		return
 	}
-	appState, stateOp, appID, acctAddr, stateKey := cx.GetOpSpec().AppStateExplain(cx)
+	appState, stateOp, appID, acctAddr, stateKey := spec.AppStateExplain(cx)
 	// If the operation is not write or delete, return without
 	if stateOp == logic.AppStateRead {
 		return

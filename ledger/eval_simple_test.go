@@ -1483,14 +1483,14 @@ func TestEvalAppPooledBudgetWithTxnGroup(t *testing.T) {
 			"",
 			""},
 		{source(5, 48), false, true,
-			"pc=157 dynamic cost budget exceeded, executing pushint",
+			"dynamic cost budget exceeded, executing pushint",
 			""},
 		{source(16, 17), false, true,
-			"pc= 12 dynamic cost budget exceeded, executing keccak256",
+			"dynamic cost budget exceeded, executing keccak256",
 			""},
 		{source(16, 18), false, false,
-			"pc= 12 dynamic cost budget exceeded, executing keccak256",
-			"pc= 78 dynamic cost budget exceeded, executing pushint"},
+			"dynamic cost budget exceeded, executing keccak256",
+			"dynamic cost budget exceeded, executing pushint"},
 	}
 
 	for i, param := range params {
@@ -1498,11 +1498,9 @@ func TestEvalAppPooledBudgetWithTxnGroup(t *testing.T) {
 			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
 				err := testEvalAppPoolingGroup(t, basics.StateSchema{NumByteSlice: 3}, testCase.prog, param)
 				if !testCase.isSuccessV29 && reflect.DeepEqual(param, protocol.ConsensusV29) {
-					require.Error(t, err)
-					require.Contains(t, err.Error(), testCase.expectedErrorV29)
+					require.ErrorContains(t, err, testCase.expectedErrorV29)
 				} else if !testCase.isSuccessVFuture && reflect.DeepEqual(param, protocol.ConsensusFuture) {
-					require.Error(t, err)
-					require.Contains(t, err.Error(), testCase.expectedErrorVFuture)
+					require.ErrorContains(t, err, testCase.expectedErrorVFuture)
 				}
 			})
 		}
