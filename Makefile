@@ -158,7 +158,7 @@ api:
 logic:
 	$(MAKE) -C data/transactions/logic
 
-MSGP := go run github.com/algorand/msgp@v1.1.63
+MSGP := go run github.com/algorand/msgp@v1.1.64
 %/msgp_gen.go: ALWAYS
 		@set +e; \
 		printf "$(MSGP) $(@D)..."; \
