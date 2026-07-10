@@ -91,9 +91,25 @@ func convertToInt(val string) int {
 	return int(value)
 }
 
+// getVersionMajor returns the major version, using the override if set via ldflags.
+func getVersionMajor() int {
+	if VersionMajorOverride != "" {
+		return convertToInt(VersionMajorOverride)
+	}
+	return VersionMajor
+}
+
+// getVersionMinor returns the minor version, using the override if set via ldflags.
+func getVersionMinor() int {
+	if VersionMinorOverride != "" {
+		return convertToInt(VersionMinorOverride)
+	}
+	return VersionMinor
+}
+
 var currentVersion = Version{
-	Major:       VersionMajor,
-	Minor:       VersionMinor,
+	Major:       getVersionMajor(),
+	Minor:       getVersionMinor(),
 	BuildNumber: convertToInt(BuildNumber), // set using -ldflags
 	Suffix:      "",
 	CommitHash:  CommitHash,
