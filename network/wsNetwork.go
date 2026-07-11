@@ -2227,7 +2227,7 @@ func (wn *WebsocketNetwork) tryConnect(netAddr, gossipAddr string) {
 }
 
 // GetPeerData returns the peer data associated with a particular key.
-func (wn *WebsocketNetwork) GetPeerData(peer Peer, key string) interface{} {
+func (wn *WebsocketNetwork) GetPeerData(peer Peer, key string) any {
 	switch p := peer.(type) {
 	case *wsPeer:
 		return p.getPeerData(key)
@@ -2237,7 +2237,7 @@ func (wn *WebsocketNetwork) GetPeerData(peer Peer, key string) interface{} {
 }
 
 // SetPeerData sets the peer data associated with a particular key.
-func (wn *WebsocketNetwork) SetPeerData(peer Peer, key string, value interface{}) {
+func (wn *WebsocketNetwork) SetPeerData(peer Peer, key string, value any) {
 	switch p := peer.(type) {
 	case *wsPeer:
 		p.setPeerData(key, value)

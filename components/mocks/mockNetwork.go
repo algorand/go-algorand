@@ -68,7 +68,7 @@ func (network *MockNetwork) DisconnectPeers() {
 }
 
 // RegisterRPCName - unused function
-func (network *MockNetwork) RegisterRPCName(name string, rcvr interface{}) {
+func (network *MockNetwork) RegisterRPCName(name string, rcvr any) {
 }
 
 // GetPeers - unused function

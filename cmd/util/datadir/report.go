@@ -23,17 +23,17 @@ import (
 	"os"
 )
 
-func reportInfof(format string, args ...interface{}) {
+func reportInfof(format string, args ...any) {
 	fmt.Printf(format+"\n", args...)
 }
 
-func reportErrorln(args ...interface{}) {
+func reportErrorln(args ...any) {
 	fmt.Fprintln(os.Stderr, args...)
 	os.Exit(1)
 }
 
 // TODO: Replace all report functions with the higher grade ones from cmd/algo
 
-func reportErrorf(format string, args ...interface{}) {
+func reportErrorf(format string, args ...any) {
 	reportErrorln(fmt.Sprintf(format, args...))
 }

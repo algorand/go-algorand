@@ -3568,7 +3568,7 @@ func testWebsocketDisconnection(t *testing.T, disconnectFunc func(wn *WebsocketN
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
 	netA.config.EnablePingHandler = false
-	dlNetA := eventsDetailsLogger{Logger: logging.TestingLog(t), eventReceived: make(chan interface{}, 1), eventIdentifier: telemetryspec.DisconnectPeerEvent}
+	dlNetA := eventsDetailsLogger{Logger: logging.TestingLog(t), eventReceived: make(chan any, 1), eventIdentifier: telemetryspec.DisconnectPeerEvent}
 	netA.log = dlNetA
 
 	netA.Start()
@@ -3576,7 +3576,7 @@ func testWebsocketDisconnection(t *testing.T, disconnectFunc func(wn *WebsocketN
 	netB := makeTestWebsocketNode(t)
 	netB.config.GossipFanout = 1
 	netB.config.EnablePingHandler = false
-	dlNetB := eventsDetailsLogger{Logger: logging.TestingLog(t), eventReceived: make(chan interface{}, 1), eventIdentifier: telemetryspec.DisconnectPeerEvent}
+	dlNetB := eventsDetailsLogger{Logger: logging.TestingLog(t), eventReceived: make(chan any, 1), eventIdentifier: telemetryspec.DisconnectPeerEvent}
 	netB.log = dlNetB
 
 	addrA, postListen := netA.Address()
@@ -3690,23 +3690,23 @@ func TestASCIIFiltering(t *testing.T) {
 
 type callbackLogger struct {
 	logging.Logger
-	InfoCallback  func(...interface{})
-	InfofCallback func(string, ...interface{})
-	WarnCallback  func(...interface{})
-	WarnfCallback func(string, ...interface{})
+	InfoCallback  func(...any)
+	InfofCallback func(string, ...any)
+	WarnCallback  func(...any)
+	WarnfCallback func(string, ...any)
 }
 
-func (cl callbackLogger) Info(args ...interface{}) {
+func (cl callbackLogger) Info(args ...any) {
 	cl.InfoCallback(args...)
 }
-func (cl callbackLogger) Infof(s string, args ...interface{}) {
+func (cl callbackLogger) Infof(s string, args ...any) {
 	cl.InfofCallback(s, args...)
 }
 
-func (cl callbackLogger) Warn(args ...interface{}) {
+func (cl callbackLogger) Warn(args ...any) {
 	cl.WarnCallback(args...)
 }
-func (cl callbackLogger) Warnf(s string, args ...interface{}) {
+func (cl callbackLogger) Warnf(s string, args ...any) {
 	cl.WarnfCallback(s, args...)
 }
 
@@ -3719,19 +3719,19 @@ func TestMaliciousCheckServerResponseVariables(t *testing.T) {
 	wn.randomID = "random-id1"
 	wn.log = callbackLogger{
 		Logger: wn.log,
-		InfoCallback: func(args ...interface{}) {
+		InfoCallback: func(args ...any) {
 			s := fmt.Sprint(args...)
 			require.NotContains(t, s, "א")
 		},
-		InfofCallback: func(s string, args ...interface{}) {
+		InfofCallback: func(s string, args ...any) {
 			s = fmt.Sprintf(s, args...)
 			require.NotContains(t, s, "א")
 		},
-		WarnCallback: func(args ...interface{}) {
+		WarnCallback: func(args ...any) {
 			s := fmt.Sprint(args...)
 			require.NotContains(t, s, "א")
 		},
-		WarnfCallback: func(s string, args ...interface{}) {
+		WarnfCallback: func(s string, args ...any) {
 			s = fmt.Sprintf(s, args...)
 			require.NotContains(t, s, "א")
 		},

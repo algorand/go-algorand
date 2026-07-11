@@ -274,6 +274,11 @@ type LedgerForLogic interface {
 
 	Perform(gi int, ep *EvalParams) error
 	Counter() uint64
+
+	// SetForeignBoxReads sets the ForeignBoxReads flag on the given app's params.
+	SetForeignBoxReads(appID basics.AppIndex, enable bool) error
+	// SetFamilyBoxAccess sets the FamilyBoxAccess flag on the given app's params.
+	SetFamilyBoxAccess(appID basics.AppIndex, enable bool) error
 }
 
 // UnnamedResourcePolicy is an interface that defines the policy for allowing unnamed resources.
@@ -448,7 +453,7 @@ func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.Sign
 func NewSigEvalParams(txgroup []transactions.SignedTxn, proto *config.ConsensusParams, ls LedgerForSignature) *EvalParams {
 	lsigs := 0
 	for _, tx := range txgroup {
-		if !tx.Lsig.Blank() {
+		if tx.Lsig.HasProgram() {
 			lsigs++
 		}
 	}
@@ -732,6 +737,27 @@ type EvalContext struct {
 	version uint64
 	Scratch scratchSpace
 
+	// creatorAddr caches the creator of appID, looked up lazily by
+	// getCreatorAddress (a zero value means "not yet looked up"). Besides
+	// backing the `global CreatorAddress` op, it is used to decide family
+	// membership (same creator) while walking the caller chain for family-box
+	// reentrancy checks.
+	creatorAddr basics.Address
+
+	// touchedFamilyShared records that this frame has read or written a
+	// family-shared box (one owned by a same-creator app with FamilyBoxAccess
+	// set). It marks the frame as holding a stable-state assumption that a
+	// family-member re-entry via a foreign app must not silently violate. See
+	// checkFamilyReentrancy.
+	touchedFamilyShared bool
+
+	// familyReentrancyChecked records that checkFamilyReentrancy has already
+	// passed for this frame. Its result is invariant for the frame's lifetime
+	// (ancestors are suspended, so neither the stack shape nor their touch marks
+	// can change), and a failing check aborts evaluation, so once it passes
+	// there is no need to walk the caller chain again.
+	familyReentrancyChecked bool
+
 	subtxns []transactions.SignedTxnWithAD // place to build for itxn_submit
 	cost    int                            // cost incurred so far
 	logSize int                            // total log size so far
@@ -767,8 +793,38 @@ func (cx *EvalContext) ProgramVersion() uint64 {
 // PC returns the program counter of the current application being evaluated
 func (cx *EvalContext) PC() int { return cx.pc }
 
-// GetOpSpec queries for the OpSpec w.r.t. current program byte.
-func (cx *EvalContext) GetOpSpec() OpSpec { return opsByOpcode[cx.version][cx.program[cx.pc]] }
+// GetOpSpec returns the OpSpec for the current program position. It always
+// returns a non-nil pointer to an OpSpec, even if the opcode is invalid. If the
+// opcode is invalid, the returned OpSpec will have op == nil. This unusual
+// interface allows code that knows it is looking at a valid program (anything
+// after check()) to avoid dealing with errors while other code handle the error
+// with getOpSpecError while this function stays inlined.
+func (cx *EvalContext) GetOpSpec() *OpSpec {
+	spec := &opsByOpcode[cx.version][cx.program[cx.pc]]
+	if spec.SubOps != nil && cx.pc+1 < len(cx.program) {
+		sub := cx.program[cx.pc+1]
+		if int(sub) < len(spec.SubOps) && spec.SubOps[sub].op != nil {
+			return &spec.SubOps[sub]
+		}
+	}
+	return spec
+}
+
+// getOpSpecError returns an error describing the problem with the current
+// opcode. It is kept out of GetOpSpec, and called only on the error path (when
+// the returned spec has op == nil), so that GetOpSpec stays cheap enough to
+// inline into the hot step()/checkStep() loops.
+func getOpSpecError(spec *OpSpec, program []byte, pc int) error {
+	opcode := program[pc]
+	if spec.SubOps != nil {
+		if pc+1 >= len(program) {
+			return fmt.Errorf("prefix opcode 0x%02x missing sub-opcode", opcode)
+		}
+		return fmt.Errorf("prefix opcode 0x%02x with improper sub-opcode 0x%02x",
+			opcode, program[pc+1])
+	}
+	return fmt.Errorf("illegal opcode 0x%02x", opcode)
+}
 
 // GetProgram queries for the current program
 func (cx *EvalContext) GetProgram() []byte { return cx.program }
@@ -1055,7 +1111,7 @@ func filterNoneTypes(sts StackTypes) StackTypes {
 
 // panicError wraps a recover() catching a panic()
 type panicError struct {
-	PanicValue interface{}
+	PanicValue any
 	StackTrace string
 }
 
@@ -1303,6 +1359,29 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 
 	if cx.Trace != nil && cx.caller != nil {
 		fmt.Fprintf(cx.Trace, "--- exit  %d accept=%t\n", aid, pass)
+	}
+
+	// A family-shared touch by this frame counts as a touch by its caller when
+	// they share a creator: the caller delegated the mutation to us and relies on
+	// that shared state across its own later calls, exactly as if it had touched
+	// the box itself. Fold the mark into the caller as the frame completes -- like
+	// feeResidue after an inner group -- so it chains one hop per return to every
+	// contiguous family ancestor, and survives this frame's return so a later
+	// A->foreign->family re-entry is still caught. No success guard is needed: a
+	// failing frame aborts the whole group, and ClearState (which continues past
+	// rejection) can't touch boxes, so touchedFamilyShared is never set there.
+	if cx.caller != nil && cx.touchedFamilyShared {
+		mine, cerr := cx.getCreatorAddress()
+		if cerr != nil {
+			return false, &cx, cerr
+		}
+		theirs, cerr := cx.caller.getCreatorAddress()
+		if cerr != nil {
+			return false, &cx, cerr
+		}
+		if mine == theirs {
+			cx.caller.touchedFamilyShared = true
+		}
 	}
 
 	return pass, &cx, err
@@ -1621,12 +1700,9 @@ func (cx *EvalContext) remainingInners() int {
 }
 
 func (cx *EvalContext) step() error {
-	opcode := cx.program[cx.pc]
-	spec := &opsByOpcode[cx.version][opcode]
-
-	// this check also ensures versioning: v2 opcodes are not in opsByOpcode[1] array
+	spec := cx.GetOpSpec()
 	if spec.op == nil {
-		return fmt.Errorf("%3d illegal opcode 0x%02x", cx.pc, opcode)
+		return getOpSpecError(spec, cx.program, cx.pc)
 	}
 	if (cx.runMode & spec.Modes) == 0 {
 		return fmt.Errorf("%s not allowed in current mode", spec.Name)
@@ -1655,13 +1731,13 @@ func (cx *EvalContext) step() error {
 	if opcost <= 0 {
 		opcost = deets.Cost(cx.program, cx.pc, cx.Stack)
 		if opcost <= 0 {
-			return fmt.Errorf("%3d %s returned 0 cost", cx.pc, spec.Name)
+			return fmt.Errorf("%s returned 0 cost", spec.Name)
 		}
 	}
 
 	if opcost > cx.remainingBudget() {
-		return fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s: local program cost was %d",
-			cx.pc, spec.Name, cx.cost)
+		return fmt.Errorf("dynamic cost budget exceeded, executing %s: local program cost was %d",
+			spec.Name, cx.cost)
 	}
 
 	cx.cost += opcost
@@ -1766,12 +1842,11 @@ func (cx *EvalContext) step() error {
 // unacceptable. TestLinearOpcodes ensures.
 var blankStack = make([]stackValue, 5)
 
-func (cx *EvalContext) checkStep() (int, error) {
+func (cx *EvalContext) checkStep() (cost int, err error) {
 	cx.instructionStarts[cx.pc] = true
-	opcode := cx.program[cx.pc]
-	spec := &opsByOpcode[cx.version][opcode]
+	spec := cx.GetOpSpec()
 	if spec.op == nil {
-		return 0, fmt.Errorf("illegal opcode 0x%02x", opcode)
+		return 0, getOpSpecError(spec, cx.program, cx.pc)
 	}
 	if (cx.runMode & spec.Modes) == 0 {
 		return 0, fmt.Errorf("%s not allowed in current mode", spec.Name)
@@ -1780,14 +1855,13 @@ func (cx *EvalContext) checkStep() (int, error) {
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
 		return 0, fmt.Errorf("program ends without immediate value(s)")
 	}
-	opcost := deets.Cost(cx.program, cx.pc, blankStack)
-	if opcost <= 0 {
+	cost = deets.Cost(cx.program, cx.pc, blankStack)
+	if cost <= 0 {
 		return 0, fmt.Errorf("%s reported non-positive cost", spec.Name)
 	}
 	prevpc := cx.pc
 	if deets.check != nil {
-		err := deets.check(cx)
-		if err != nil {
+		if err = deets.check(cx); err != nil {
 			return 0, err
 		}
 		if cx.nextpc != 0 {
@@ -1807,7 +1881,7 @@ func (cx *EvalContext) checkStep() (int, error) {
 			return 0, fmt.Errorf("branch target %d is not an aligned instruction", pc)
 		}
 	}
-	return opcost, nil
+	return cost, nil
 }
 
 func (cx *EvalContext) ensureStackCap(targetCap int) {
@@ -3155,6 +3229,14 @@ func (cx *EvalContext) appParamsToValue(params *basics.AppParams, fs appParamsFi
 		sv.Uint = params.Version
 	case AppSizeSponsor:
 		sv.Bytes = params.SizeSponsor[:]
+	case AppForeignBoxReads:
+		if params.ForeignBoxReads {
+			sv.Uint = 1
+		}
+	case AppFamilyBoxAccess:
+		if params.FamilyBoxAccess {
+			sv.Uint = 1
+		}
 	default:
 		// The pseudo fields AppCreator and AppAddress are handled before this method
 		return sv, fmt.Errorf("invalid app_params_get field %d", fs.field)
@@ -3881,12 +3963,19 @@ func (ep *EvalParams) GetApplicationAddress(app basics.AppIndex) basics.Address 
 	return appAddr
 }
 
-func (cx *EvalContext) getCreatorAddress() ([]byte, error) {
-	_, creator, err := cx.Ledger.AppParams(cx.appID)
-	if err != nil {
-		return nil, fmt.Errorf("No params for current app")
+// getCreatorAddress returns the creator of the current app, caching the result
+// on the context. A zero creatorAddr means "not yet looked up"; on-chain apps
+// always have a non-zero creator, so the only cost of the sentinel is
+// re-looking-up the zero-creator apps that appear in tests.
+func (cx *EvalContext) getCreatorAddress() (basics.Address, error) {
+	if cx.creatorAddr.IsZero() {
+		_, creator, err := cx.Ledger.AppParams(cx.appID)
+		if err != nil {
+			return basics.Address{}, fmt.Errorf("No params for current app")
+		}
+		cx.creatorAddr = creator
 	}
-	return creator[:], nil
+	return cx.creatorAddr, nil
 }
 
 var zeroAddress basics.Address
@@ -3915,7 +4004,9 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 		addr := cx.GetApplicationAddress(cx.appID)
 		sv.Bytes = addr[:]
 	case CreatorAddress:
-		sv.Bytes, err = cx.getCreatorAddress()
+		var creator basics.Address
+		creator, err = cx.getCreatorAddress()
+		sv.Bytes = creator[:]
 	case GroupID:
 		sv.Bytes = cx.txn.Txn.Group[:]
 	case OpcodeBudget:
@@ -5203,6 +5294,31 @@ func opAppParamsGet(cx *EvalContext) error {
 	return nil
 }
 
+func opAppParamsSet(cx *EvalContext) error {
+	last := len(cx.Stack) - 1 // value
+
+	paramField := AppParamsField(cx.program[cx.pc+1])
+	fs, ok := appParamsFieldSpecByField(paramField)
+	if !ok || fs.setVersion == 0 || fs.setVersion > cx.version {
+		return fmt.Errorf("invalid app_params_set field %d", paramField)
+	}
+
+	arg, err := cx.Stack[last].uint()
+	if err != nil {
+		return err
+	}
+	cx.Stack = cx.Stack[:last]
+
+	switch fs.field {
+	case AppForeignBoxReads:
+		return cx.Ledger.SetForeignBoxReads(cx.appID, arg != 0)
+	case AppFamilyBoxAccess:
+		return cx.Ledger.SetFamilyBoxAccess(cx.appID, arg != 0)
+	default:
+		return fmt.Errorf("immutable app_params_set field %s", fs.field)
+	}
+}
+
 func opAcctParamsGet(cx *EvalContext) error {
 	last := len(cx.Stack) - 1 // acct
 
@@ -6130,7 +6246,7 @@ func isPrimitiveJSON(jsonText []byte) (bool, error) {
 
 func parseJSON(jsonText []byte) (map[string]json.RawMessage, error) {
 	// parse JSON with Algorand's standard JSON library
-	var parsed map[interface{}]json.RawMessage
+	var parsed map[any]json.RawMessage
 	err := protocol.DecodeJSON(jsonText, &parsed)
 
 	if err != nil {

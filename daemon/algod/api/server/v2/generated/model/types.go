@@ -35,9 +35,10 @@ const (
 
 // Defines values for SigType.
 const (
-	SigTypeLsig SigType = "lsig"
-	SigTypeMsig SigType = "msig"
-	SigTypeSig  SigType = "sig"
+	SigTypeLsig  SigType = "lsig"
+	SigTypeMsig  SigType = "msig"
+	SigTypePqsig SigType = "pqsig"
+	SigTypeSig   SigType = "sig"
 )
 
 // Defines values for TxType.
@@ -399,6 +400,12 @@ type ApplicationParams struct {
 
 	// ExtraProgramPages \[epp\] the amount of extra program pages available to this app.
 	ExtraProgramPages *uint64 `json:"extra-program-pages,omitempty"`
+
+	// FamilyBoxAccess \[fba\] if true, apps with the same creator may read and write this app's boxes
+	FamilyBoxAccess *bool `json:"family-box-access,omitempty"`
+
+	// ForeignBoxReads \[fbr\] if true, any app may read this app's boxes
+	ForeignBoxReads *bool `json:"foreign-box-reads,omitempty"`
 
 	// GlobalState Represents a key-value store for use in an application.
 	GlobalState *TealKeyValueStore `json:"global-state,omitempty"`
@@ -1620,13 +1627,13 @@ type TealCompileParams struct {
 
 // RawTransactionParams defines parameters for RawTransaction.
 type RawTransactionParams struct {
-	// SkipPqAddressCheck Skip post-quantum address checks, including the check that rejects TEAL v13 or later LogicSig escrow addresses whose program hash is an Edwards25519 curve point. This should only be used if you understand the risks and know what you are doing.
+	// SkipPqAddressCheck Skip post-quantum address checks, including the check that rejects PQ authorizer and LogicSig escrow (TEAL v13 or later) whose address is an Edwards25519 curve point. This should only be used if you understand the risks and know what you are doing.
 	SkipPqAddressCheck *bool `form:"skip-pq-address-check,omitempty" json:"skip-pq-address-check,omitempty"`
 }
 
 // RawTransactionAsyncParams defines parameters for RawTransactionAsync.
 type RawTransactionAsyncParams struct {
-	// SkipPqAddressCheck Skip post-quantum address checks, including the check that rejects TEAL v13 or later LogicSig escrow addresses whose program hash is an Edwards25519 curve point. This should only be used if you understand the risks and know what you are doing.
+	// SkipPqAddressCheck Skip post-quantum address checks, including the check that rejects PQ authorizer and LogicSig escrow (TEAL v13 or later) whose address is an Edwards25519 curve point. This should only be used if you understand the risks and know what you are doing.
 	SkipPqAddressCheck *bool `form:"skip-pq-address-check,omitempty" json:"skip-pq-address-check,omitempty"`
 }
 

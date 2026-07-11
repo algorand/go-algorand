@@ -54,13 +54,13 @@ func main() {
 	}
 }
 
-func reportErrorf(format string, args ...interface{}) {
+func reportErrorf(format string, args ...any) {
 	fmt.Printf(format+"\n", args...)
 	// log.Warnf(format, args...)
 	os.Exit(1)
 }
 
-func reportInfof(format string, args ...interface{}) {
+func reportInfof(format string, args ...any) {
 	fmt.Printf(format+"\n", args...)
 	// log.Infof(format, args...)
 }

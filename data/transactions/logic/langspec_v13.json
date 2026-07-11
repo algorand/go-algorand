@@ -2832,7 +2832,9 @@
         "AppCreator",
         "AppAddress",
         "AppVersion",
-        "AppSizeSponsor"
+        "AppSizeSponsor",
+        "AppForeignBoxReads",
+        "AppFamilyBoxAccess"
       ],
       "ArgEnumTypes": [
         "[]byte",
@@ -2845,7 +2847,9 @@
         "address",
         "address",
         "uint64",
-        "address"
+        "address",
+        "bool",
+        "bool"
       ],
       "DocCost": "1",
       "Doc": "X is field F from app A. Y is 1 if A exists, else 0",
@@ -2961,6 +2965,36 @@
       "IntroducedVersion": 11,
       "Groups": [
         "Block Access"
+      ]
+    },
+    {
+      "Opcode": 118,
+      "Name": "app_params_set",
+      "Args": [
+        "uint64"
+      ],
+      "Size": 2,
+      "ArgEnum": [
+        "AppForeignBoxReads",
+        "AppFamilyBoxAccess"
+      ],
+      "ArgEnumTypes": [
+        "bool",
+        "bool"
+      ],
+      "DocCost": "1",
+      "Doc": "set field F of the current app to A",
+      "ImmediateNote": [
+        {
+          "Comment": "app params field index",
+          "Encoding": "uint8",
+          "Name": "F",
+          "Reference": "app_params_set Fields"
+        }
+      ],
+      "IntroducedVersion": 13,
+      "Groups": [
+        "Application Access"
       ]
     },
     {
@@ -4801,6 +4835,199 @@
       "DocCost": "1",
       "Doc": "change the size of box named A to be of length B, adding zero bytes to end or removing bytes from the end, as needed. Fail if the name A is empty, A is not an existing box, or B exceeds 32,768.",
       "IntroducedVersion": 10,
+      "Groups": [
+        "Box Access"
+      ]
+    },
+    {
+      "Opcode": [
+        212,
+        1
+      ],
+      "Name": "app_box_create",
+      "Args": [
+        "uint64",
+        "boxName",
+        "uint64"
+      ],
+      "Returns": [
+        "bool"
+      ],
+      "Size": 2,
+      "DocCost": "1",
+      "Doc": "create a box named B, of length C, for app A. Fail if the name B is empty or C exceeds 32,768. Returns 0 if B already existed, else 1",
+      "DocExtra": "Newly created boxes are filled with 0 bytes. `app_box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `app_box_create`.",
+      "IntroducedVersion": 13,
+      "Groups": [
+        "Box Access"
+      ]
+    },
+    {
+      "Opcode": [
+        212,
+        2
+      ],
+      "Name": "app_box_extract",
+      "Args": [
+        "uint64",
+        "boxName",
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "[]byte"
+      ],
+      "Size": 2,
+      "DocCost": "1",
+      "Doc": "read D bytes from box B of app A, starting at offset C. Fail if box B does not exist, or the byte range is outside B's size.",
+      "IntroducedVersion": 13,
+      "Groups": [
+        "Box Access"
+      ]
+    },
+    {
+      "Opcode": [
+        212,
+        3
+      ],
+      "Name": "app_box_replace",
+      "Args": [
+        "uint64",
+        "boxName",
+        "uint64",
+        "[]byte"
+      ],
+      "Size": 2,
+      "DocCost": "1",
+      "Doc": "write byte-array D into box B of app A, starting at offset C. Fail if box B does not exist, or the byte range is outside B's size.",
+      "IntroducedVersion": 13,
+      "Groups": [
+        "Box Access"
+      ]
+    },
+    {
+      "Opcode": [
+        212,
+        4
+      ],
+      "Name": "app_box_del",
+      "Args": [
+        "uint64",
+        "boxName"
+      ],
+      "Returns": [
+        "bool"
+      ],
+      "Size": 2,
+      "DocCost": "1",
+      "Doc": "delete box named B of app A if it exists. Return 1 if B existed, 0 otherwise",
+      "IntroducedVersion": 13,
+      "Groups": [
+        "Box Access"
+      ]
+    },
+    {
+      "Opcode": [
+        212,
+        5
+      ],
+      "Name": "app_box_len",
+      "Args": [
+        "uint64",
+        "boxName"
+      ],
+      "Returns": [
+        "uint64",
+        "bool"
+      ],
+      "Size": 2,
+      "DocCost": "1",
+      "Doc": "X is the length of box B of app A if B exists, else 0. Y is 1 if B exists, else 0.",
+      "IntroducedVersion": 13,
+      "Groups": [
+        "Box Access"
+      ]
+    },
+    {
+      "Opcode": [
+        212,
+        6
+      ],
+      "Name": "app_box_get",
+      "Args": [
+        "uint64",
+        "boxName"
+      ],
+      "Returns": [
+        "[]byte",
+        "bool"
+      ],
+      "Size": 2,
+      "DocCost": "1",
+      "Doc": "X is the contents of box B of app A if B exists, else ''. Y is 1 if B exists, else 0.",
+      "DocExtra": "For boxes that exceed 4,096 bytes, consider `app_box_create`, `app_box_extract`, and `app_box_replace`",
+      "IntroducedVersion": 13,
+      "Groups": [
+        "Box Access"
+      ]
+    },
+    {
+      "Opcode": [
+        212,
+        7
+      ],
+      "Name": "app_box_put",
+      "Args": [
+        "uint64",
+        "boxName",
+        "[]byte"
+      ],
+      "Size": 2,
+      "DocCost": "1",
+      "Doc": "replaces the contents of box B of app A with byte-array C. Fails if B exists and len(C) != len(box B). Creates B if it does not exist",
+      "DocExtra": "For boxes that exceed 4,096 bytes, consider `app_box_create`, `app_box_extract`, and `app_box_replace`",
+      "IntroducedVersion": 13,
+      "Groups": [
+        "Box Access"
+      ]
+    },
+    {
+      "Opcode": [
+        212,
+        8
+      ],
+      "Name": "app_box_splice",
+      "Args": [
+        "uint64",
+        "boxName",
+        "uint64",
+        "uint64",
+        "[]byte"
+      ],
+      "Size": 2,
+      "DocCost": "1",
+      "Doc": "set box B of app A to contain its previous bytes up to index C, followed by E, followed by the original bytes of B that began at index C+D.",
+      "DocExtra": "Boxes are of constant length. If D \u003c len(E), then len(E)-D bytes will be removed from the end. If D \u003e len(E), zero bytes will be appended to the end to reach the box length.",
+      "IntroducedVersion": 13,
+      "Groups": [
+        "Box Access"
+      ]
+    },
+    {
+      "Opcode": [
+        212,
+        9
+      ],
+      "Name": "app_box_resize",
+      "Args": [
+        "uint64",
+        "boxName",
+        "uint64"
+      ],
+      "Size": 2,
+      "DocCost": "1",
+      "Doc": "change the size of box named B of app A to be of length C, adding zero bytes to end or removing bytes from the end, as needed. Fail if the name B is empty, B is not an existing box, or C exceeds 32,768.",
+      "IntroducedVersion": 13,
       "Groups": [
         "Box Access"
       ]

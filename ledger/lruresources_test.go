@@ -177,11 +177,11 @@ func TestLRUResourcesPendingWrites(t *testing.T) {
 
 type lruResourcesTestLogger struct {
 	logging.Logger
-	WarnfCallback func(string, ...interface{})
+	WarnfCallback func(string, ...any)
 	warnMsgCount  int
 }
 
-func (cl *lruResourcesTestLogger) Infof(s string, args ...interface{}) {
+func (cl *lruResourcesTestLogger) Infof(s string, args ...any) {
 	if strings.Contains(s, "exceed the warning threshold of") {
 		cl.warnMsgCount++
 	}

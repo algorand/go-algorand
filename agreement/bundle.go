@@ -153,7 +153,7 @@ func (b unauthenticatedBundle) verifyAsync(ctx context.Context, l LedgerReader, 
 	}
 
 	// termFmtErrorFn is like termErrorFn but runs fmt.Errorf on its input.
-	termFmtErrorFn := func(format string, a ...interface{}) func() (bundle, error) {
+	termFmtErrorFn := func(format string, a ...any) func() (bundle, error) {
 		return func() (bundle, error) {
 			return bundle{}, fmt.Errorf(format, a...)
 		}

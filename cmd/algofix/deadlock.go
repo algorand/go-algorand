@@ -41,7 +41,7 @@ func deadlock(f *ast.File) bool {
 
 	var provisionalRewrites []*ast.SelectorExpr
 
-	walk(f, func(n interface{}) {
+	walk(f, func(n any) {
 		if f, ok := n.(*ast.Field); ok {
 			if f.Tag != nil {
 				if strings.Contains(f.Tag.Value, `algofix:"allow sync.Mutex"`) {

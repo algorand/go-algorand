@@ -150,7 +150,7 @@ func TestAccount(t *testing.T) {
 		return base64.StdEncoding.EncodeToString([]byte(s))
 	}
 
-	makeTKV := func(k string, v interface{}) model.TealKeyValue {
+	makeTKV := func(k string, v any) model.TealKeyValue {
 		value := model.TealValue{}
 		switch v.(type) {
 		case int:

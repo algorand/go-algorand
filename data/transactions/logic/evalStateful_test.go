@@ -1626,6 +1626,41 @@ func TestAppParams(t *testing.T) {
 	})
 }
 
+// TestAppParamsSet verifies that app_params_set correctly updates the
+// ForeignBoxReads and FamilyBoxAccess flags on the current app, and that
+// app_params_get reflects the updated values.
+func TestAppParamsSet(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testLogicRange(t, foreignBoxVersion, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		// Pin the app ID in the transaction so testApp doesn't re-create the app
+		// with blank params on each call.
+		tx.ApplicationID = 888
+		ledger.NewApp(tx.Sender, 888, basics.AppParams{})
+
+		// ForeignBoxReads and FamilyBoxAccess default to false (0)
+		testApp(t, "int 888; app_params_get AppForeignBoxReads; assert; int 0; ==", ep)
+		testApp(t, "int 888; app_params_get AppFamilyBoxAccess; assert; int 0; ==", ep)
+
+		// Set and verify ForeignBoxReads; app_params_set leaves an empty stack so push 1
+		testApp(t, "int 1; app_params_set AppForeignBoxReads; int 1", ep)
+		testApp(t, "int 888; app_params_get AppForeignBoxReads; assert; int 1; ==", ep)
+		testApp(t, "int 0; app_params_set AppForeignBoxReads; int 1", ep)
+		testApp(t, "int 888; app_params_get AppForeignBoxReads; assert; int 0; ==", ep)
+		testApp(t, "int 100; app_params_set AppForeignBoxReads; int 1", ep) // Non-zero just becomes 1
+		testApp(t, "int 888; app_params_get AppForeignBoxReads; assert; int 1; ==", ep)
+
+		// Set and verify FamilyBoxAccess
+		testApp(t, "int 1; app_params_set AppFamilyBoxAccess; int 1", ep)
+		testApp(t, "int 888; app_params_get AppFamilyBoxAccess; assert; int 1; ==", ep)
+		testApp(t, "int 0; app_params_set AppFamilyBoxAccess; int 1", ep)
+		testApp(t, "int 888; app_params_get AppFamilyBoxAccess; assert; int 0; ==", ep)
+		testApp(t, "int 111; app_params_set AppFamilyBoxAccess; int 1", ep) // non-zero just becomes 1
+		testApp(t, "int 888; app_params_get AppFamilyBoxAccess; assert; int 1; ==", ep)
+	})
+}
+
 func TestAcctParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -2855,48 +2890,48 @@ int 1
 
 type unnamedResourcePolicyEvent struct {
 	eventType string
-	args      []interface{}
+	args      []any
 }
 
 func availableAccountEvent(addr basics.Address) unnamedResourcePolicyEvent {
 	return unnamedResourcePolicyEvent{
 		eventType: "AvailableAccount",
-		args:      []interface{}{addr},
+		args:      []any{addr},
 	}
 }
 
 func availableAssetEvent(aid basics.AssetIndex) unnamedResourcePolicyEvent {
 	return unnamedResourcePolicyEvent{
 		eventType: "AvailableAsset",
-		args:      []interface{}{aid},
+		args:      []any{aid},
 	}
 }
 
 func availableAppEvent(aid basics.AppIndex) unnamedResourcePolicyEvent {
 	return unnamedResourcePolicyEvent{
 		eventType: "AvailableApp",
-		args:      []interface{}{aid},
+		args:      []any{aid},
 	}
 }
 
 func allowsHoldingEvent(addr basics.Address, aid basics.AssetIndex) unnamedResourcePolicyEvent {
 	return unnamedResourcePolicyEvent{
 		eventType: "AllowsHolding",
-		args:      []interface{}{addr, aid},
+		args:      []any{addr, aid},
 	}
 }
 
 func allowsLocalEvent(addr basics.Address, aid basics.AppIndex) unnamedResourcePolicyEvent {
 	return unnamedResourcePolicyEvent{
 		eventType: "AllowsLocal",
-		args:      []interface{}{addr, aid},
+		args:      []any{addr, aid},
 	}
 }
 
 func availableBoxEvent(app basics.AppIndex, name string, newApp bool, createSize uint64) unnamedResourcePolicyEvent {
 	return unnamedResourcePolicyEvent{
 		eventType: "AvailableBox",
-		args:      []interface{}{app, name, newApp, createSize},
+		args:      []any{app, name, newApp, createSize},
 	}
 }
 
@@ -3313,6 +3348,7 @@ func TestReturnTypes(t *testing.T) {
 		"asset_params_get":  ": int 400; asset_params_get AssetUnitName",
 		"asset_holding_get": ": txn Sender; int 400; asset_holding_get AssetBalance",
 		"app_params_get":    "app_params_get AppGlobalNumUint",
+		"app_params_set":    "app_params_set AppForeignBoxReads",
 
 		"itxn_field":  "itxn_begin; itxn_field TypeEnum",
 		"itxn_next":   "itxn_begin; int pay; itxn_field TypeEnum; itxn_next",
@@ -3331,6 +3367,17 @@ func TestReturnTypes(t *testing.T) {
 
 		"box_create": "int 9; +; box_create",                 // make the size match the 10 in CreateBox
 		"box_put":    "byte 0x010203040506; concat; box_put", // make the 4 byte arg into a 10
+
+		// app_box_* need explicit app ID (300 = current app) and matching box name/size; appID is first (deepest)
+		"app_box_create":  ": int 300; byte 0x33; int 10; app_box_create",
+		"app_box_extract": ": int 300; byte 0x33; int 0; int 4; app_box_extract",
+		"app_box_replace": ": int 300; byte 0x33; int 0; byte 0x01020304; app_box_replace",
+		"app_box_del":     ": int 300; byte 0x33; app_box_del",
+		"app_box_len":     ": int 300; byte 0x33; app_box_len",
+		"app_box_get":     ": int 300; byte 0x33; app_box_get",
+		"app_box_put":     ": int 300; byte 0x33; byte 0x01020304050607080910; app_box_put",
+		"app_box_splice":  ": int 300; byte 0x33; int 0; int 4; byte 0x01020304; app_box_splice",
+		"app_box_resize":  ": int 300; byte 0x33; int 5; app_box_resize",
 
 		// mimc requires an input size multiple of 32 bytes.
 		"mimc": ": byte 0x0000000000000000000000000000000000000000000000000000000000000001; mimc BN254Mp110",
@@ -3782,7 +3829,7 @@ func TestPooledAppCallsVerifyOp(t *testing.T) {
 	call := transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.ApplicationCallTx}}
 	// Simulate test with 2 grouped txn
 	testApps(t, []string{source, ""}, []transactions.SignedTxn{call, call}, nil, ledger,
-		exp(0, "pc=107 dynamic cost budget exceeded, executing ed25519verify: local program cost was 5"))
+		exp(0, "dynamic cost budget exceeded, executing ed25519verify: local program cost was 5"))
 
 	// Simulate test with 3 grouped txn
 	testApps(t, []string{source, "", ""}, []transactions.SignedTxn{call, call, call}, nil, ledger)

@@ -63,7 +63,7 @@ func keypair() *crypto.SignatureSecrets {
 }
 
 type TestingT interface {
-	Errorf(format string, args ...interface{})
+	Errorf(format string, args ...any)
 	FailNow()
 	Name() string
 }
