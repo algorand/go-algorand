@@ -475,7 +475,7 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batch crypto.B
 	}
 	if !lsig.PQsig.Blank() {
 		program := logic.PQDelegatedProgram{Addr: txn.Authorizer(), Program: lsig.Logic}
-		if err := lsig.PQsig.VerifyHashable(groupCtx.consensusParams, program, txn.Authorizer()); err != nil {
+		if err := lsig.PQsig.Verify(groupCtx.consensusParams, program, txn.Authorizer()); err != nil {
 			return fmt.Errorf("pq delegated logic signature validation failed: %w", err)
 		}
 		return nil

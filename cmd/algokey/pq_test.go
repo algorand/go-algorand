@@ -592,7 +592,7 @@ func TestPQSignProgramProducesVerifiableDelegatedLogicSig(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusFuture]
 	payload := logic.PQDelegatedProgram{Addr: signing.Public.address(), Program: lsig.Logic}
-	require.NoError(t, lsig.PQsig.VerifyHashable(proto, payload, signing.Public.address()))
+	require.NoError(t, lsig.PQsig.Verify(proto, payload, signing.Public.address()))
 
 	hdr := bookkeeping.BlockHeader{UpgradeState: bookkeeping.UpgradeState{CurrentProtocol: protocol.ConsensusFuture}}
 	stxn := pqTestTxn(signing.Public.address())
@@ -635,7 +635,7 @@ func TestPQSignProgramAcceptsMnemonic(t *testing.T) {
 	require.NoError(t, protocol.Decode(lsigBytes, &lsig))
 	require.Equal(t, signing.Public.PublicKey, lsig.PQsig.PublicKey)
 	payload := logic.PQDelegatedProgram{Addr: signing.Public.address(), Program: lsig.Logic}
-	require.NoError(t, lsig.PQsig.VerifyHashable(config.Consensus[protocol.ConsensusFuture], payload, signing.Public.address()))
+	require.NoError(t, lsig.PQsig.Verify(config.Consensus[protocol.ConsensusFuture], payload, signing.Public.address()))
 }
 
 func TestPQSignProgramRejectsMixedKeySources(t *testing.T) {
