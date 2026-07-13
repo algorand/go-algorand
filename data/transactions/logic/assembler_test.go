@@ -473,8 +473,21 @@ const v11Nonsense = v10Nonsense + incentiveNonsense + mimcNonsense
 
 const v12Nonsense = v11Nonsense + fvNonsense
 
-const v13Nonsense = v12Nonsense + sumhashNonsense + sha512Nonsense + poseidon2Nonsense
+const v13Nonsense = v12Nonsense + sumhashNonsense + sha512Nonsense + poseidon2Nonsense + foreignBoxNonsense
 
+const foreignBoxNonsense = `
+pushint 1
+app_params_set AppForeignBoxReads
+app_box_create
+app_box_extract
+app_box_replace
+app_box_del
+app_box_len
+app_box_get
+app_box_put
+app_box_splice
+app_box_resize
+`
 const v6Compiled = "2004010002b7a60c26050242420c68656c6c6f20776f726c6421070123456789abcd208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292b0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f2310231123122313231418191a1b1c28171615400003290349483403350222231d4a484848482b50512a632223524100034200004322602261222704634848222862482864286548482228246628226723286828692322700048482371004848361c0037001a0031183119311b311d311e311f312023221e312131223123312431253126312731283129312a312b312c312d312e312f447825225314225427042455220824564c4d4b0222382124391c0081e80780046a6f686e2281d00f23241f880003420001892224902291922494249593a0a1a2a3a4a5a6a7a8a9aaabacadae24af3a00003b003c003d816472064e014f012a57000823810858235b235a2359b03139330039b1b200b322c01a23c1001a2323c21a23c3233e233f8120af06002a494905002a49490700b400b53a03b6b7043cb8033a0c2349c42a9631007300810881088120978101c53a8101c6003a"
 
 const randomnessCompiled = "81ffff03d101d000"
@@ -505,6 +518,7 @@ const v12Compiled = v11Compiled + fvCompiled
 const sumhashCompiled = "8002012386"
 const sha512Compiled = "8002012387"
 const poseidon2Compiled = "802011223344556677889900aabbccddeeff11223344556677889900aabbccddeeffe700"
+const foreignBoxCompiled = "8101760bd401d402d403d404d405d406d407d408d409"
 
 // v13BaseCompiled is the v12 nonsense reassembled at version 13. It is not a
 // simple bytecode-level transform of v12Compiled because v13 encodes branch
@@ -512,7 +526,8 @@ const poseidon2Compiled = "802011223344556677889900aabbccddeeff11223344556677889
 // the assembler shrinks short jumps via findBranchSizes. TestV13BaseFromV12
 // confirms that a disassemble/pragma-bump/reassemble roundtrip reproduces it.
 const v13BaseCompiled = "2004010002b7a60c26050242420c68656c6c6f20776f726c6421070123456789abcd208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292b0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f2310231123122313231418191a1b1c281716154006290349483403350222231d4a484848482b50512a63222352410442004322602261222704634848222862482864286548482228246628226723286828692322700048482371004848361c0037001a0031183119311b311d311e311f312023221e312131223123312431253126312731283129312a312b312c312d312e312f447825225314225427042455220824564c4d4b0222382124391c0081e80780046a6f686e2281d00f23241f88044202892224902291922494249593a0a1a2a3a4a5a6a7a8a9aaabacadae24af3a00003b003c003d816472064e014f012a57000823810858235b235a2359b03139330039b1b200b322c01a23c1001a2323c21a23c3233e233f8120af06002a494905002a49490700b400b53a03b6b7043cb8033a0c2349c42a9631007300810881088120978101c53a8101c6003a5e005f018120af060180070123456789abcd4949050198800301234549498481ffff03d101d000800243218001775c0280018881015d81018d02fff800008101438a01028bff240b8c0089810246014704450983030102018e02fff500008203013101320131b9babbbcbdbfbe800301234549e00049e10349e200e303e402e501d2d3757401802011223344556677889900aabbccddeeff11223344556677889900aabbccddeeffe6018002abcd494985"
-const v13Compiled = v13BaseCompiled + sumhashCompiled + sha512Compiled + poseidon2Compiled
+
+const v13Compiled = v13BaseCompiled + sumhashCompiled + sha512Compiled + poseidon2Compiled + foreignBoxCompiled
 
 var nonsense = map[uint64]string{
 	1:  v1Nonsense,
@@ -1096,6 +1111,35 @@ func TestAssembleTxna(t *testing.T) {
 	testLine(t, "itxn_field", 5, "itxn_field expects 1 ...")
 	testLine(t, "itxn_field ABC", 5, "itxn_field unknown field: \"ABC\"")
 	testLine(t, "itxn_field Accounts 0", 5, "itxn_field expects 1 ...")
+}
+
+func TestAsmAppParamsSet(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// The settable fields assemble cleanly.
+	testProg(t, "int 1; app_params_set AppForeignBoxReads", AssemblerMaxVersion)
+	testProg(t, "int 1; app_params_set AppFamilyBoxAccess", AssemblerMaxVersion)
+
+	// Fields that app_params_get can read, but which are not settable, are
+	// rejected as such (they are known fields, just read-only).
+	for _, field := range []string{
+		"AppApprovalProgram", "AppClearStateProgram", "AppGlobalNumUint",
+		"AppExtraProgramPages", "AppCreator", "AppAddress", "AppVersion",
+		"AppSizeSponsor",
+	} {
+		testLine(t, "app_params_set "+field, AssemblerMaxVersion,
+			"app_params_set \""+field+"\" is not settable.")
+	}
+
+	// A name that is no field at all is reported as unknown, not unsettable.
+	testLine(t, "app_params_set NoSuchField", AssemblerMaxVersion,
+		"app_params_set unknown field: \"NoSuchField\"")
+
+	// Wrong number of immediates.
+	testLine(t, "app_params_set", AssemblerMaxVersion, "app_params_set expects 1 immediate argument")
+	testLine(t, "app_params_set AppForeignBoxReads 1", AssemblerMaxVersion,
+		"app_params_set expects 1 immediate argument")
 }
 
 func TestAssembleGlobal(t *testing.T) {
@@ -2258,58 +2302,49 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 			ops.Program[0] = 0x01 // version
 			ops.Program[1] = 0xFF // first opcode
 			dis, err = Disassemble(ops.Program)
-			require.Error(t, err, dis)
-			require.Contains(t, err.Error(), "invalid opcode")
+			require.ErrorContains(t, err, "illegal opcode 0xff", dis)
 
 			source = "int 0; int 0\nasset_holding_get AssetFrozen"
 			ops = testProg(t, source, v)
 			end = programEndBeforeTrailingIntcSalt(t, source, v, ops.Program)
 			ops.Program[end-1] = 0x50 // holding field
 			dis, err = Disassemble(ops.Program)
-			require.Error(t, err, dis)
-			require.Contains(t, err.Error(), "invalid immediate f for")
+			require.ErrorContains(t, err, "invalid immediate f for", dis)
 
 			source = "int 0\nasset_params_get AssetTotal"
 			ops = testProg(t, source, v)
 			end = programEndBeforeTrailingIntcSalt(t, source, v, ops.Program)
 			ops.Program[end-1] = 0x50 // params field
 			dis, err = Disassemble(ops.Program)
-			require.Error(t, err, dis)
-			require.Contains(t, err.Error(), "invalid immediate f for")
+			require.ErrorContains(t, err, "invalid immediate f for", dis)
 
 			source = "int 0\nasset_params_get AssetTotal"
 			ops = testProg(t, source, v)
 			end = programEndBeforeTrailingIntcSalt(t, source, v, ops.Program)
 			dis, err = Disassemble(ops.Program[0 : end-1])
-			require.Error(t, err, dis)
-			require.Contains(t, err.Error(), "program end while reading immediate f for")
+			require.ErrorContains(t, err, "program end while reading immediate f for", dis)
 
 			source = "gtxna 0 Accounts 0"
 			ops = testProg(t, source, v)
 			end = programEndBeforeTrailingIntcSalt(t, source, v, ops.Program)
 			dis, err = Disassemble(ops.Program[0 : end-1])
-			require.Error(t, err, dis)
-			require.Contains(t, err.Error(), "program end while reading immediate i for gtxna")
+			require.ErrorContains(t, err, "program end while reading immediate i for gtxna", dis)
 			dis, err = Disassemble(ops.Program[0 : end-2])
-			require.Error(t, err, dis)
-			require.Contains(t, err.Error(), "program end while reading immediate f for gtxna")
+			require.ErrorContains(t, err, "program end while reading immediate f for gtxna", dis)
 			dis, err = Disassemble(ops.Program[0 : end-3])
-			require.Error(t, err, dis)
-			require.Contains(t, err.Error(), "program end while reading immediate t for gtxna")
+			require.ErrorContains(t, err, "program end while reading immediate t for gtxna", dis)
 
 			source = "txna Accounts 0"
 			ops = testProg(t, source, v)
 			end = programEndBeforeTrailingIntcSalt(t, source, v, ops.Program)
 			dis, err = Disassemble(ops.Program[0 : end-1])
-			require.Error(t, err, dis)
-			require.Contains(t, err.Error(), "program end while reading immediate i for txna")
+			require.ErrorContains(t, err, "program end while reading immediate i for txna", dis)
 
 			source = "byte 0x4141\nsubstring 0 1"
 			ops = testProg(t, source, v)
 			end = programEndBeforeTrailingIntcSalt(t, source, v, ops.Program)
 			dis, err = Disassemble(ops.Program[0 : end-1])
-			require.Error(t, err, dis)
-			require.Contains(t, err.Error(), "program end while reading immediate e for substring")
+			require.ErrorContains(t, err, "program end while reading immediate e for substring", dis)
 		})
 	}
 }
@@ -4232,6 +4267,22 @@ func TestDisassembleBadBranch(t *testing.T) {
 		dis, err = Disassemble([]byte{2, br, 0x00, 0x01, 0x00})
 		require.NoError(t, err)
 	}
+}
+
+// TestDisassembleBadMultiOp ensures a clean error when a multiop stops short
+func TestDisassembleBadMultiOp(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	_, err := Disassemble([]byte{foreignBoxVersion, 0xd4})
+	require.ErrorContains(t, err, "0xd4 missing sub-opcode")
+
+	_, err = Disassemble([]byte{foreignBoxVersion, 0xd4, 0x00})
+	require.ErrorContains(t, err, "0xd4 with improper sub-opcode")
+
+	dis, err := Disassemble([]byte{foreignBoxVersion, 0xd4, 0x01})
+	require.NoError(t, err)
+	require.Contains(t, dis, "app_box_create")
 }
 
 // TestDisassembleBadSwitch ensures a clean error when a switch ends early

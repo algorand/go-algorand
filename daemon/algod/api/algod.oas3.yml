@@ -119,14 +119,15 @@
         "x-go-type": "basics.Round"
       },
       "sig-type": {
-        "description": "SigType filters just results using the specified type of signature:\n* sig - Standard\n* msig - MultiSig\n* lsig - LogicSig",
+        "description": "SigType filters just results using the specified type of signature:\n* sig - Standard\n* msig - MultiSig\n* lsig - LogicSig\n* pqsig - Post-Quantum",
         "in": "query",
         "name": "sig-type",
         "schema": {
           "enum": [
             "sig",
             "msig",
-            "lsig"
+            "lsig",
+            "pqsig"
           ],
           "type": "string"
         }
@@ -1448,6 +1449,14 @@
             "description": "\\[epp\\] the amount of extra program pages available to this app.",
             "format": "uint64",
             "type": "integer"
+          },
+          "family-box-access": {
+            "description": "\\[fba\\] if true, apps with the same creator may read and write this app's boxes",
+            "type": "boolean"
+          },
+          "foreign-box-reads": {
+            "description": "\\[fbr\\] if true, any app may read this app's boxes",
+            "type": "boolean"
           },
           "global-state": {
             "$ref": "#/components/schemas/TealKeyValueStore"
@@ -7082,7 +7091,7 @@
         "operationId": "RawTransaction",
         "parameters": [
           {
-            "description": "Skip post-quantum address checks, including the check that rejects TEAL v13 or later LogicSig escrow addresses whose program hash is an Edwards25519 curve point. This should only be used if you understand the risks and know what you are doing.",
+            "description": "Skip post-quantum address checks, including the check that rejects PQ authorizer and LogicSig escrow (TEAL v13 or later) whose address is an Edwards25519 curve point. This should only be used if you understand the risks and know what you are doing.",
             "in": "query",
             "name": "skip-pq-address-check",
             "schema": {
@@ -7180,7 +7189,7 @@
         "operationId": "RawTransactionAsync",
         "parameters": [
           {
-            "description": "Skip post-quantum address checks, including the check that rejects TEAL v13 or later LogicSig escrow addresses whose program hash is an Edwards25519 curve point. This should only be used if you understand the risks and know what you are doing.",
+            "description": "Skip post-quantum address checks, including the check that rejects PQ authorizer and LogicSig escrow (TEAL v13 or later) whose address is an Edwards25519 curve point. This should only be used if you understand the risks and know what you are doing.",
             "in": "query",
             "name": "skip-pq-address-check",
             "schema": {

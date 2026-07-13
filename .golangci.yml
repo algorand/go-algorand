@@ -86,6 +86,20 @@ linters:
       require-specific: true
       # require comments like "//nolint:errcheck // Explanation of why we are ignoring linter here..."
       require-explanation: true
+    revive:
+      enable-default-rules: true
+      rules:
+        - name: use-any # enabled (disabled by default)
+        - name: dot-imports # dot imports OK for tests
+          exclude: ["**/*_test.go"]
+        - name: unused-parameter
+          disabled: true
+        - name: var-declaration
+          disabled: true
+        - name: empty-block
+          disabled: true
+        - name: superfluous-else
+          disabled: true
     staticcheck:
       checks:
         - all
@@ -133,30 +147,17 @@ linters:
       - linters: errcheck
         text: Error return value of .((os\.)?std(out|err)\..*|.*Close|.*Flush|os\.Remove(All)?|.*print(f|ln)?|os\.(Un)?Setenv). is not checked
       - linters: revive
-        path: _test\.go
-        text: 'dot-imports: should not use dot imports' # dot imports OK for tests
-      - linters: revive
         text: 'var-naming: avoid meaningless package names' # util package is OK
       - linters: revive
         text: 'var-naming: avoid package names that conflict with Go standard library package names' # e.g. crypto package
       - linters: unused
         text: 'field _struct is unused' # we use _struct field tags for msgp/json encoding settings
       - linters: revive
-        text: '^unused-parameter: parameter'
-      - linters: revive
         text: '^package-comments: should have a package comment'
       - linters: revive
         text: '^unexported-return: exported func .* returns unexported type .*, which can be annoying'
       - linters: revive
         text: '^redefines-builtin-id: redefinition of the built-in (func|type)'
-      - linters: revive
-        text: '^var-declaration: should omit type .* from declaration of var .*; it will be inferred from the right-hand side'
-      - linters: revive
-        text: '^var-declaration: should drop .* from declaration of var .*; it is the zero value'
-      - linters: revive
-        text: '^empty-block: this block is empty, you can remove it'
-      - linters: revive
-        text: '^superfluous-else: if block ends with .* so drop this else and outdent its block'
       - linters: forbidigo
         path-except: ^(crypto|network)/
 

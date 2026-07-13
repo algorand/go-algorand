@@ -30,7 +30,7 @@ type expiredExecPool struct {
 	execpool.ExecutionPool
 }
 
-func (fp *expiredExecPool) EnqueueBacklog(enqueueCtx context.Context, t execpool.ExecFunc, arg interface{}, out chan interface{}) error {
+func (fp *expiredExecPool) EnqueueBacklog(enqueueCtx context.Context, t execpool.ExecFunc, arg any, out chan any) error {
 	// generate an error, to see if we correctly report that on the verifyVote() call.
 	return context.Canceled
 }

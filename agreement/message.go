@@ -59,12 +59,12 @@ type compoundMessage struct {
 
 // streamTokenizer is a function that returns an object of some type after
 // deserializing from some stream.
-type streamTokenizer func([]byte) (interface{}, error)
+type streamTokenizer func([]byte) (any, error)
 
 // decodeVote reads a vote from the given stream.
 //
 // It returns an error on failure.
-func decodeVote(data []byte) (interface{}, error) {
+func decodeVote(data []byte) (any, error) {
 	var uv unauthenticatedVote
 	err := protocol.Decode(data, &uv)
 	if err != nil {
@@ -76,7 +76,7 @@ func decodeVote(data []byte) (interface{}, error) {
 // decodeBundle reads a bundle from the given stream.
 //
 // It returns an error on failure.
-func decodeBundle(data []byte) (interface{}, error) {
+func decodeBundle(data []byte) (any, error) {
 	var b unauthenticatedBundle
 	err := protocol.Decode(data, &b)
 	if err != nil {
@@ -88,7 +88,7 @@ func decodeBundle(data []byte) (interface{}, error) {
 // decodeProposal reads a proposal from the given stream.
 //
 // It returns an error on failure.
-func decodeProposal(data []byte) (interface{}, error) {
+func decodeProposal(data []byte) (any, error) {
 	var p transmittedPayload
 	err := protocol.Decode(data, &p)
 	if err != nil {

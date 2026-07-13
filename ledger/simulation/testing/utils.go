@@ -149,8 +149,8 @@ func (env *Environment) CreateAsset(creator basics.Address, params basics.AssetP
 // AppParams mirrors basics.AppParams, but allows the approval and clear state programs to have the
 // same values that txntest.Txn accepts
 type AppParams struct {
-	ApprovalProgram   interface{}
-	ClearStateProgram interface{}
+	ApprovalProgram   any
+	ClearStateProgram any
 	GlobalState       basics.TealKeyValue
 	LocalStateSchema  basics.StateSchema
 	GlobalStateSchema basics.StateSchema

@@ -42,7 +42,7 @@ GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
 GOTAGSLIST += ${GOTAGSCUSTOM}
 
 GOTESTCOMMAND := go tool -modfile=tool.mod gotestsum --format pkgname --jsonfile testresults.json --
-GOLINTCOMMAND := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.7.1 -c .golangci.yml
+GOLINTCOMMAND := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.8.0 -c .golangci.yml
 
 ifeq ($(OS_TYPE), darwin)
 # M1 Mac--homebrew install location in /opt/homebrew
@@ -90,7 +90,7 @@ ALGOD_API_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd d
 
 GOMOD_DIRS := ./tools/block-generator ./tools/x-repo-types
 
-MSGP_GENERATE	:= ./protocol ./protocol/test ./crypto ./crypto/merklearray ./crypto/merklesignature ./crypto/stateproof ./data/basics ./data/transactions ./data/stateproofmsg ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./network ./node ./ledger ./ledger/ledgercore ./ledger/store/trackerdb ./ledger/store/trackerdb/generickv ./ledger/encoded ./stateproof ./data/account ./daemon/algod/api/spec/v2
+MSGP_GENERATE	:= ./protocol ./protocol/test ./crypto ./crypto/merklearray ./crypto/merklesignature ./crypto/stateproof ./data/basics ./data/transactions ./data/stateproofmsg ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./network ./node ./ledger ./ledger/ledgercore ./ledger/store/trackerdb ./ledger/store/trackerdb/generickv ./ledger/encoded ./stateproof ./data/account ./daemon/algod/api/spec/v2 ./cmd/algokey
 
 default: build
 
@@ -105,7 +105,7 @@ fix: build
 	$(GOBIN)/algofix */
 
 modernize:
-	GOTOOLCHAIN=auto go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@v0.39.0 -any=false -bloop=false -rangeint=false -fmtappendf=false -waitgroup=false -stringsbuilder=false -omitzero=false -fix ./...
+	GOTOOLCHAIN=auto go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@v0.46.0 -v -atomictypes=false -rangeint=false -waitgroupgo=false -slicesbackward=false -stringsbuilder=false -omitzero=false -stringscut=false -fix ./...
 
 lint:
 	$(GOLINTCOMMAND) run
@@ -158,7 +158,7 @@ api:
 logic:
 	$(MAKE) -C data/transactions/logic
 
-MSGP := go run github.com/algorand/msgp@v1.1.63
+MSGP := go run github.com/algorand/msgp@v1.1.64
 %/msgp_gen.go: ALWAYS
 		@set +e; \
 		printf "$(MSGP) $(@D)..."; \

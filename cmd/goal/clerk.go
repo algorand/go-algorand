@@ -916,7 +916,7 @@ var groupCmd = &cobra.Command{
 				reportErrorf("Transaction #%d with ID of %s is already part of a group.", transactionIdx, stxn.ID().String())
 			}
 
-			if (!stxn.Sig.Blank()) || (!stxn.Msig.Blank()) {
+			if !stxn.Sig.Blank() || !stxn.Msig.Blank() || !stxn.PQsig.Blank() {
 				reportErrorf("Transaction #%d with ID of %s is already signed", transactionIdx, stxn.ID().String())
 			}
 

@@ -56,12 +56,12 @@ func (h *onlineTopHeap) Swap(i, j int) {
 }
 
 // Push implements heap.Interface
-func (h *onlineTopHeap) Push(x interface{}) {
+func (h *onlineTopHeap) Push(x any) {
 	h.accts = append(h.accts, x.(*ledgercore.OnlineAccount))
 }
 
 // Pop implements heap.Interface
-func (h *onlineTopHeap) Pop() interface{} {
+func (h *onlineTopHeap) Pop() any {
 	res := h.accts[len(h.accts)-1]
 	h.accts[len(h.accts)-1] = nil
 	h.accts = h.accts[:len(h.accts)-1]

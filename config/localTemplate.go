@@ -889,8 +889,8 @@ func (cfg *Local) ResolveLogPaths(rootDir string) (liveLog, archive string) {
 }
 
 type logger interface {
-	Infof(format string, args ...interface{})
-	Warnf(format string, args ...interface{})
+	Infof(format string, args ...any)
+	Warnf(format string, args ...any)
 }
 
 // EnsureAndResolveGenesisDirs will resolve the supplied config paths to absolute paths, and will create the genesis directories of each

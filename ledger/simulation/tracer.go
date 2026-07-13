@@ -337,10 +337,11 @@ func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *e
 }
 
 func (o *OpcodeTraceUnit) appendStateOperations(cx *logic.EvalContext) {
-	if cx.GetOpSpec().AppStateExplain == nil {
+	spec := cx.GetOpSpec()
+	if spec.AppStateExplain == nil {
 		return
 	}
-	appState, stateOp, appID, acctAddr, stateKey := cx.GetOpSpec().AppStateExplain(cx)
+	appState, stateOp, appID, acctAddr, stateKey := spec.AppStateExplain(cx)
 	// If the operation is not write or delete, return without
 	if stateOp == logic.AppStateRead {
 		return
@@ -543,7 +544,7 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, pass bool, evalErr
 			}
 
 			// Fix the current auth addr if this txn doesn't have a signature
-			if txnHasNoSignature(stxn.SignedTxn) {
+			if txnNeedsSyntheticSignature(stxn.SignedTxn) {
 				stxn.AuthAddr = knownAuthAddrs[sender]
 				if stxn.AuthAddr == sender {
 					stxn.AuthAddr = basics.Address{}

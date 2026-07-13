@@ -67,10 +67,10 @@ type labelReference struct {
 
 type constReference interface {
 	// get the referenced value
-	getValue() interface{}
+	getValue() any
 
 	// check if the referenced value equals other. Other must be the same type
-	valueEquals(other interface{}) bool
+	valueEquals(other any) bool
 
 	// get the index into ops.pending where the opcode for this reference is located
 	getPosition() int
@@ -89,11 +89,11 @@ type intReference struct {
 	position int
 }
 
-func (ref intReference) getValue() interface{} {
+func (ref intReference) getValue() any {
 	return ref.value
 }
 
-func (ref intReference) valueEquals(other interface{}) bool {
+func (ref intReference) valueEquals(other any) bool {
 	return ref.value == other.(uint64)
 }
 
@@ -158,11 +158,11 @@ type byteReference struct {
 	position int
 }
 
-func (ref byteReference) getValue() interface{} {
+func (ref byteReference) getValue() any {
 	return ref.value
 }
 
-func (ref byteReference) valueEquals(other interface{}) bool {
+func (ref byteReference) valueEquals(other any) bool {
 	return bytes.Equal(ref.value, other.([]byte))
 }
 
@@ -1133,6 +1133,25 @@ func asmItxnField(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *so
 	return nil
 }
 
+func asmAppParamsSet(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
+	if err := ops.checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
+		return err
+	}
+	fs, ok := appParamsFieldSpecByName[args[0].str]
+	if !ok {
+		return args[0].errorf("%s unknown field: %#v", spec.Name, args[0].str)
+	}
+	if fs.setVersion == 0 {
+		return args[0].errorf("%s %#v is not settable.", spec.Name, args[0].str)
+	}
+	if fs.setVersion > ops.Version {
+		return args[0].errorf("%s %s field is settable in v%d. Missed #pragma version?", spec.Name, args[0].str, fs.setVersion)
+	}
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(fs.Field())
+	return nil
+}
+
 type asmFunc func(*OpStream, *OpSpec, token, []token) *sourceError
 
 func (ops *OpStream) checkArgCount(name string, mnemonic token, args []token, expected int) *sourceError {
@@ -1161,6 +1180,9 @@ func asmDefault(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sour
 		return err
 	}
 	ops.pending.WriteByte(spec.Opcode)
+	if spec.SubOpcode != 0 {
+		ops.pending.WriteByte(spec.SubOpcode)
+	}
 	for i, imm := range spec.OpDetails.Immediates {
 		var correctImmediates []string
 		var numImmediatesWithField []int
@@ -1883,7 +1905,7 @@ func (se sourceError) Unwrap() error {
 	return se.Err
 }
 
-func sourceErrorf(location SourceLocation, format string, a ...interface{}) *sourceError {
+func sourceErrorf(location SourceLocation, format string, a ...any) *sourceError {
 	return &sourceError{location.Line, location.Column, fmt.Errorf(format, a...)}
 }
 
@@ -1897,11 +1919,11 @@ func (t token) error(err error) *sourceError {
 	return &sourceError{t.line, t.col, err}
 }
 
-func (t token) errorf(format string, args ...interface{}) *sourceError {
+func (t token) errorf(format string, args ...any) *sourceError {
 	return t.error(fmt.Errorf(format, args...))
 }
 
-func (t token) errorAfterf(format string, args ...interface{}) *sourceError {
+func (t token) errorAfterf(format string, args ...any) *sourceError {
 	return &sourceError{t.line, t.col + len(t.str), fmt.Errorf(format, args...)}
 }
 
@@ -1995,14 +2017,14 @@ func tokensFromLine(sourceLine string, lineno int) []token {
 	return tokens
 }
 
-func (ops *OpStream) trace(format string, args ...interface{}) {
+func (ops *OpStream) trace(format string, args ...any) {
 	if ops.Trace == nil {
 		return
 	}
 	fmt.Fprintf(ops.Trace, format, args...)
 }
 
-func (ops *OpStream) typeErrorf(opcode token, format string, args ...interface{}) {
+func (ops *OpStream) typeErrorf(opcode token, format string, args ...any) {
 	if ops.typeTracking {
 		ops.record(opcode.errorf(format, args...))
 	}
@@ -2702,7 +2724,7 @@ func (ops *OpStream) optimizeIntcBlock() *sourceError {
 		return nil
 	}
 
-	constBlock := make([]interface{}, len(ops.intc))
+	constBlock := make([]any, len(ops.intc))
 	for i, value := range ops.intc {
 		constBlock[i] = value
 	}
@@ -2745,7 +2767,7 @@ func (ops *OpStream) optimizeBytecBlock() *sourceError {
 		return nil
 	}
 
-	constBlock := make([]interface{}, len(ops.bytec))
+	constBlock := make([]any, len(ops.bytec))
 	for i, value := range ops.bytec {
 		constBlock[i] = value
 	}
@@ -2779,9 +2801,9 @@ func (ops *OpStream) optimizeBytecBlock() *sourceError {
 // the first 4 constant can use a special opcode to save space. Additionally,
 // any constants with a reference of 1 are taken out of the constant block and
 // instead referenced with an immediate op.
-func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []interface{}) (optimizedConstBlock []interface{}, err *sourceError) {
+func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []any) (optimizedConstBlock []any, err *sourceError) {
 	type constFrequency struct {
-		value interface{}
+		value any
 		freq  int
 	}
 
@@ -2851,7 +2873,7 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 	})
 	ops.applyEdits(edits)
 
-	optimizedConstBlock = make([]interface{}, 0)
+	optimizedConstBlock = make([]any, 0)
 	for _, f := range freqs {
 		if f.freq == 1 {
 			break
@@ -2915,7 +2937,7 @@ func (ops *OpStream) record(se *sourceError) {
 	ops.Errors = append(ops.Errors, *se)
 }
 
-func (ops *OpStream) warn(t token, format string, a ...interface{}) {
+func (ops *OpStream) warn(t token, format string, a ...any) {
 	warning := sourceError{t.line, t.col, fmt.Errorf(format, a...)}
 	ops.Warnings = append(ops.Warnings, warning)
 }
@@ -3026,6 +3048,9 @@ func (dis *disassembleState) outputLabelIfNeeded() (err error) {
 func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 	out := spec.Name
 	pc := dis.pc + 1
+	if spec.SubOpcode != 0 {
+		pc++ // skip the sub-opcode byte; immediates follow
+	}
 	for _, imm := range spec.OpDetails.Immediates {
 		out += " "
 		switch imm.kind {
@@ -3354,17 +3379,25 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 		if err != nil {
 			return
 		}
+		// cx.GetOpSpec would be nice here, but we don't have a cx, we have the
+		// various pieces: version, program, dis.pc all available but separate.
 		op := opsByOpcode[version][program[dis.pc]]
+		if op.SubOps != nil && dis.pc+1 < len(program) {
+			sub := program[dis.pc+1]
+			if int(sub) < len(op.SubOps) && op.SubOps[sub].op != nil {
+				op = op.SubOps[sub]
+			}
+		}
 		if op.Modes == ModeApp {
 			ds.hasStatefulOps = true
 		}
 		if op.Name == "" {
 			ds.pcOffset = append(ds.pcOffset, PCOffset{dis.pc, body.Len()})
 			msg := fmt.Sprintf("invalid opcode %02x at pc=%d", program[dis.pc], dis.pc)
+			err = getOpSpecError(&op, program, dis.pc)
 			body.WriteString(msg)
 			body.WriteRune('\n')
 			text = finalizeDisassemblyWithPragmas(version, program, body.String(), &ds)
-			err = errors.New(msg)
 			return
 		}
 

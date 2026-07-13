@@ -39,7 +39,7 @@ TestSetJSONFormatter - Tests that the output results in JSON Format
 */
 
 func isJSON(s string) bool {
-	var js map[string]interface{}
+	var js map[string]any
 	return json.Unmarshal([]byte(s), &js) == nil
 
 }
