@@ -3072,27 +3072,31 @@ func HeaderMaxSize() (s int) {
 func (z *HeartbeatTxnFields) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(5)
-	var zb0001Mask uint8 /* 6 bits */
+	zb0001Len := uint32(6)
+	var zb0001Mask uint8 /* 7 bits */
 	if (*z).HbAddress.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if (*z).HbKeyDilution == 0 {
+	if (*z).HbChallengeDiscount == false {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if (*z).HbProof.MsgIsZero() {
+	if (*z).HbKeyDilution == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if (*z).HbSeed.MsgIsZero() {
+	if (*z).HbProof.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
-	if (*z).HbVoteID.MsgIsZero() {
+	if (*z).HbSeed.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x20
+	}
+	if (*z).HbVoteID.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x40
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -3103,21 +3107,26 @@ func (z *HeartbeatTxnFields) MarshalMsg(b []byte) (o []byte) {
 			o = (*z).HbAddress.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "c"
+			o = append(o, 0xa1, 0x63)
+			o = msgp.AppendBool(o, (*z).HbChallengeDiscount)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "kd"
 			o = append(o, 0xa2, 0x6b, 0x64)
 			o = msgp.AppendUint64(o, (*z).HbKeyDilution)
 		}
-		if (zb0001Mask & 0x8) == 0 { // if not empty
+		if (zb0001Mask & 0x10) == 0 { // if not empty
 			// string "prf"
 			o = append(o, 0xa3, 0x70, 0x72, 0x66)
 			o = (*z).HbProof.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x10) == 0 { // if not empty
+		if (zb0001Mask & 0x20) == 0 { // if not empty
 			// string "sd"
 			o = append(o, 0xa2, 0x73, 0x64)
 			o = (*z).HbSeed.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x20) == 0 { // if not empty
+		if (zb0001Mask & 0x40) == 0 { // if not empty
 			// string "vid"
 			o = append(o, 0xa3, 0x76, 0x69, 0x64)
 			o = (*z).HbVoteID.MarshalMsg(o)
@@ -3190,6 +3199,14 @@ func (z *HeartbeatTxnFields) UnmarshalMsgWithState(bts []byte, st msgp.Unmarshal
 			}
 		}
 		if zb0001 > 0 {
+			zb0001--
+			(*z).HbChallengeDiscount, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "HbChallengeDiscount")
+				return
+			}
+		}
+		if zb0001 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0001)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -3242,6 +3259,12 @@ func (z *HeartbeatTxnFields) UnmarshalMsgWithState(bts []byte, st msgp.Unmarshal
 					err = msgp.WrapError(err, "HbKeyDilution")
 					return
 				}
+			case "c":
+				(*z).HbChallengeDiscount, bts, err = msgp.ReadBoolBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "HbChallengeDiscount")
+					return
+				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -3265,18 +3288,18 @@ func (_ *HeartbeatTxnFields) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *HeartbeatTxnFields) Msgsize() (s int) {
-	s = 1 + 2 + (*z).HbAddress.Msgsize() + 4 + (*z).HbProof.Msgsize() + 3 + (*z).HbSeed.Msgsize() + 4 + (*z).HbVoteID.Msgsize() + 3 + msgp.Uint64Size
+	s = 1 + 2 + (*z).HbAddress.Msgsize() + 4 + (*z).HbProof.Msgsize() + 3 + (*z).HbSeed.Msgsize() + 4 + (*z).HbVoteID.Msgsize() + 3 + msgp.Uint64Size + 2 + msgp.BoolSize
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *HeartbeatTxnFields) MsgIsZero() bool {
-	return ((*z).HbAddress.MsgIsZero()) && ((*z).HbProof.MsgIsZero()) && ((*z).HbSeed.MsgIsZero()) && ((*z).HbVoteID.MsgIsZero()) && ((*z).HbKeyDilution == 0)
+	return ((*z).HbAddress.MsgIsZero()) && ((*z).HbProof.MsgIsZero()) && ((*z).HbSeed.MsgIsZero()) && ((*z).HbVoteID.MsgIsZero()) && ((*z).HbKeyDilution == 0) && ((*z).HbChallengeDiscount == false)
 }
 
 // HeartbeatTxnFieldsMaxSize returns a maximum valid message size for this message type
 func HeartbeatTxnFieldsMaxSize() (s int) {
-	s = 1 + 2 + basics.AddressMaxSize() + 4 + crypto.HeartbeatProofMaxSize() + 3 + committee.SeedMaxSize() + 4 + crypto.OneTimeSignatureVerifierMaxSize() + 3 + msgp.Uint64Size
+	s = 1 + 2 + basics.AddressMaxSize() + 4 + crypto.HeartbeatProofMaxSize() + 3 + committee.SeedMaxSize() + 4 + crypto.OneTimeSignatureVerifierMaxSize() + 3 + msgp.Uint64Size + 2 + msgp.BoolSize
 	return
 }
 

@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -1554,7 +1555,7 @@ func TestPQRekeyedAddressAuthorization(t *testing.T) {
 	require.ErrorContains(t, tryBlock([]transactions.SignedTxn{pqSpendByEd}), "should have been authorized by")
 }
 
-func TestPQChallengedAccountCanSelfHeartbeatForZeroFee(t *testing.T) {
+func TestPQChallengedAccountCanHeartbeatForZeroFee(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -1619,25 +1620,36 @@ func TestPQChallengedAccountCanSelfHeartbeatForZeroFee(t *testing.T) {
 	eval := dl.beginBlock()
 	require.Equal(t, heartbeatRound, eval.Round())
 
+	// A PQ account never pays for a PQ signature on its heartbeat. A heartbeat's
+	// sender is irrelevant to what it proves (onlineness is proven by HbProof,
+	// signed with the account's participation key), so it is sent by the same
+	// ordinary accepting logicsig everyone uses. That sender carries no PQ
+	// surcharge, and the challenge discount covers the base fee, so the account
+	// stays online for free despite authorizing spends with an expensive PQ key.
+	acceptingProgram := logic.MustAssemble(`#pragma version 11
+int 1`)
+	sender := basics.Address(logic.HashProgram(acceptingProgram))
+
 	lastValid := eval.Round() + 10
 	id := basics.OneTimeIDForRound(lastValid, keyDilution)
 	txn := transactions.Transaction{
 		Type: protocol.HeartbeatTx,
 		Header: transactions.Header{
-			Sender:      pqAcct.address,
+			Sender:      sender,
 			FirstValid:  lastHdr.Round,
 			LastValid:   lastValid,
 			GenesisHash: dl.generator.GenesisHash(),
 		},
 		HeartbeatTxnFields: &transactions.HeartbeatTxnFields{
-			HbAddress:     pqAcct.address,
-			HbProof:       otss.Sign(id, lastHdr.Seed).ToHeartbeatProof(),
-			HbSeed:        lastHdr.Seed,
-			HbVoteID:      otss.OneTimeSignatureVerifier,
-			HbKeyDilution: keyDilution,
+			HbAddress:           pqAcct.address,
+			HbProof:             otss.Sign(id, lastHdr.Seed).ToHeartbeatProof(),
+			HbSeed:              lastHdr.Seed,
+			HbVoteID:            otss.OneTimeSignatureVerifier,
+			HbKeyDilution:       keyDilution,
+			HbChallengeDiscount: true,
 		},
 	}
-	stxn := signPQRekeyTestTxn(t, pqAcct, txn, basics.Address{})
+	stxn := transactions.SignedTxn{Txn: txn, Lsig: transactions.LogicSig{Logic: acceptingProgram}}
 	txgroup := []transactions.SignedTxn{stxn}
 
 	require.NoError(t, eval.TestTransactionGroup(txgroup))

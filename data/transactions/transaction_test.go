@@ -367,20 +367,31 @@ func TestFeeFactor_StateProofAndHeartbeat(t *testing.T) {
 	}
 	assert.Equal(t, basics.Micros(0), stateProofTx.feeFactor(vFuture), "StateProof should be free")
 
-	// Singleton heartbeat (no group) should be free. Again, having a note is
-	// not allowed in a free heartbeat, but that is checked elsewhere.
+	// With the explicit-discount rule a plain heartbeat pays the normal fee whether or not
+	// it is a singleton; only a challenged heartbeat is discounted.
 	singletonHeartbeat := Transaction{
 		Type: protocol.HeartbeatTx,
 		Header: Header{
 			Sender:     addr,
 			FirstValid: 100,
 			LastValid:  200,
-			Note:       make([]byte, 2048), // Large note
 		},
+		HeartbeatTxnFields: &HeartbeatTxnFields{},
 	}
-	assert.Equal(t, basics.Micros(0), singletonHeartbeat.feeFactor(vFuture), "Singleton heartbeat should be free")
+	assert.Equal(t, basics.Micros(1e6), singletonHeartbeat.feeFactor(vFuture), "plain singleton heartbeat pays base fee")
 
-	// Grouped heartbeat should have normal fee
+	// A challenged heartbeat owes one less min fee. WellFormed forbids extras
+	// (like a Note) on it, so the base fee is all there is, and it drops to 0.
+	challengedHeartbeat := singletonHeartbeat
+	challengedHeartbeat.HeartbeatTxnFields = &HeartbeatTxnFields{HbChallengeDiscount: true}
+	assert.Zero(t, challengedHeartbeat.feeFactor(vFuture))
+
+	// The discount applies inside a group too.
+	challengedGrouped := challengedHeartbeat
+	challengedGrouped.Group = crypto.Digest{1}
+	assert.Zero(t, challengedGrouped.feeFactor(vFuture))
+
+	// Grouped (non-challenged) heartbeat should have normal fee
 	groupedHeartbeat := Transaction{
 		Type: protocol.HeartbeatTx,
 		Header: Header{
@@ -390,21 +401,29 @@ func TestFeeFactor_StateProofAndHeartbeat(t *testing.T) {
 			Note:       make([]byte, 1024),
 			Group:      crypto.Digest{1}, // Has a group
 		},
+		HeartbeatTxnFields: &HeartbeatTxnFields{},
 	}
 	assert.Equal(t, basics.Micros(1e6), groupedHeartbeat.feeFactor(vFuture), "Grouped heartbeat should have base fee")
 
 	// Grouped heartbeat with big note should have the extra charge for it
-	groupedHeartbeatBigNote := Transaction{
+	groupedHeartbeatBigNote := groupedHeartbeat
+	groupedHeartbeatBigNote.Note = make([]byte, 1124)
+	assert.Equal(t, basics.Micros(1_010_000), groupedHeartbeatBigNote.feeFactor(vFuture), "Grouped heartbeat should have extra fee")
+
+	// before the explicit-discount rule, any singleton heartbeat is free, even
+	// with a big note. (though it will fail at wellFormed and apply time)
+	v41 := config.Consensus[protocol.ConsensusV41]
+	oldSingletonHeartbeat := Transaction{
 		Type: protocol.HeartbeatTx,
 		Header: Header{
 			Sender:     addr,
 			FirstValid: 100,
 			LastValid:  200,
-			Note:       make([]byte, 1124),
-			Group:      crypto.Digest{1}, // Has a group
+			Note:       make([]byte, 2048), // Large note
 		},
+		HeartbeatTxnFields: &HeartbeatTxnFields{},
 	}
-	assert.Equal(t, basics.Micros(1_010_000), groupedHeartbeatBigNote.feeFactor(vFuture), "Grouped heartbeat should have extra fee")
+	assert.Zero(t, oldSingletonHeartbeat.feeFactor(v41))
 }
 
 // TestWellFormed_BigNotes tests Note size validation with MaxAbsoluteTxnNoteBytes
