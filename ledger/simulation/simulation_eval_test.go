@@ -523,6 +523,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 	require.Len(t, result.TxnGroups, 1)
 	require.Len(t, result.TxnGroups[0].Txns, 2)
 	require.Contains(t, result.TxnGroups[0].FailureMessage, "had zero Group but was submitted in a group of 2")
+	require.Equal(t, simulation.TxnPath{0}, result.TxnGroups[0].FailedAt)
 
 	// Add group parameter and sign again
 	txntest.Group(&txn1, &txn2)
