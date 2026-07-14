@@ -134,12 +134,22 @@ var pqSignProgramCmd = &cobra.Command{
 	},
 }
 
+var pqCheckAddressCmd = &cobra.Command{
+	Use:   "check-address ADDRESS",
+	Short: "Check that an address is eligible for post-quantum authorization",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		exitOnError(runPQCheckAddress(args[0]))
+	},
+}
+
 func init() {
 	pqCmd.AddCommand(pqGenerateCmd)
 	pqCmd.AddCommand(pqInfoCmd)
 	pqCmd.AddCommand(pqImportCmd)
 	pqCmd.AddCommand(pqSignCmd)
 	pqCmd.AddCommand(pqSignProgramCmd)
+	pqCmd.AddCommand(pqCheckAddressCmd)
 
 	pqGenerateCmd.Flags().StringVarP(&pqGenerateScheme, "scheme", "S", pqGenerateScheme, "Post-quantum signature scheme: falcon-1024 (f1)")
 	pqGenerateCmd.Flags().StringVarP(&pqGenerateKeyfile, "keyfile", "f", "", "Private key filename")
@@ -385,6 +395,18 @@ func runPQSignProgramWithOptions(opts pqSignProgramOptions) error {
 	if err = writeFile(opts.outfile, protocol.Encode(&lsig), 0600); err != nil {
 		return fmt.Errorf("cannot write LogicSig to %s: %w", opts.outfile, err)
 	}
+	return nil
+}
+
+func runPQCheckAddress(address string) error {
+	addr, err := basics.UnmarshalChecksumAddress(address)
+	if err != nil {
+		return fmt.Errorf("cannot parse address: %w", err)
+	}
+	if !addr.IsPQCompliant() {
+		return fmt.Errorf("address %s is not PQ compliant", addr)
+	}
+	fmt.Printf("address %s is PQ compliant\n", addr)
 	return nil
 }
 

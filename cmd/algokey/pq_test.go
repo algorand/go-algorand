@@ -677,3 +677,17 @@ func TestPQSignProgramRejectsEmptyInputFile(t *testing.T) {
 	})
 	require.ErrorContains(t, err, "program is empty")
 }
+
+func TestPQCheckAddress(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	signing := pqTestSigning(t, 0)
+	require.NoError(t, runPQCheckAddress(signing.Public.address().String()))
+
+	var seed crypto.Seed
+	onCurve := basics.Address(crypto.GenerateSignatureSecrets(seed).SignatureVerifier)
+	require.ErrorContains(t, runPQCheckAddress(onCurve.String()), "not PQ compliant")
+
+	require.ErrorContains(t, runPQCheckAddress("not-an-address"), "cannot parse address")
+}
