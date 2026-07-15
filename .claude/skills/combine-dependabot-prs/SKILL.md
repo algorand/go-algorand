@@ -105,7 +105,8 @@ Choose three reviewers at random from the fixed pool `nullun cce
 algorandskiy cusma giuliop`:
 
 ```bash
-REVIEWERS=$(printf '%s\n' nullun cce algorandskiy cusma giuliop | sort -R | head -3 | paste -sd, -)
+ME=$(gh api user -q .login)
+REVIEWERS=$(printf '%s\n' jannotti nullun cce algorandskiy cusma giuliop | grep -ivFx "$ME" | sort -R | head -3 | paste -sd, -)
 echo "Requesting review from: $REVIEWERS"
 ```
 
@@ -117,7 +118,7 @@ branch), tagged `enhancement`, with the three random reviewers:
 ```bash
 gh pr create \
   --repo algorand/go-algorand \
-  --head jannotti:dependabot-<DATE> \
+  --head dependabot-<DATE> \
   --base master \
   --title "build: dependabot-<DATE>" \
   --body "..." \

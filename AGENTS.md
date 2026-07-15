@@ -182,9 +182,9 @@ Their corresponding `Ledger`-level wrappers in `ledger/ledger.go` (`LookupAssets
   consensus parameters, or changes to existing parameters will require
   an update to the specification. Changes for new opcodes can usually
   be handled by running `make logic`.
-- ../go-algorand-sdk Contains the Go language SDK to access `algod`
+- ../go-algorand-sdk contains the Go language SDK to access `algod`
   and `indexer`, as well as utilities such as transaction creation and
   signing. New REST endpoints and new transaction fields and types
   will often require updates here. ./scripts/export_sdk_types.py is
-  useful for preparing changes to accomodate changes to go-algorand
+  useful for preparing changes to accommodate changes to go-algorand
   types.

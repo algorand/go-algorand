@@ -35,7 +35,7 @@ under discussion.
 
 2. Find everywhere it gates behavior, separating the two layers:
    ```bash
-   grep -rn "proto.<PARAM>\|\.<PARAM>" --include=*.go | grep -v _test.go
+   grep -rn "\.<PARAM>" --include=*.go | grep -v _test.go
    ```
    - **Stateless validation** (`wellFormed`, `data/transactions/...`): what
      transactions/fields become newly legal or newly rejected.
