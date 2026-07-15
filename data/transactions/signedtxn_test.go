@@ -133,7 +133,7 @@ func TestSignedTxnFeeFactorPQSignatureContribution(t *testing.T) {
 	require.Equal(t, basics.Micros(0), regularSingletonHeartbeat.FeeFactor(proto))
 	require.Equal(t, basics.Micros(0), pqSingletonHeartbeat.FeeFactor(proto))
 	require.Equal(t, basics.Micros(0), mixedSingletonHeartbeat.FeeFactor(proto))
-	require.Equal(t, basics.Micros(2e6), pqPaidSingletonHeartbeat.FeeFactor(proto))
+	require.Equal(t, basics.Micros(3e6), pqPaidSingletonHeartbeat.FeeFactor(proto))
 	require.Equal(t, basics.Micros(3e6), pqGroupedHeartbeat.FeeFactor(proto))
 
 	requiredFee, _, overflow := proto.MinFee().FeeForUsage(pqSigned.FeeFactor(proto), 1e6, 0)

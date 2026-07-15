@@ -1566,6 +1566,17 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	t.Run("v18: LogicSig args cannot exceed pre-pooling absolute limit", func(t *testing.T) {
+		program := makeProgram(v18, 0)
+		args := makeArgs(int(v18.MaxAbsoluteLogicSigArgsSize) + 1)
+
+		err := verifyGroupForProtocol(protocol.ConsensusV18, []transactions.SignedTxn{
+			makeLogicSigTxnForReceiver(program, args, basics.Address{1}),
+			makeLogicSigTxnForReceiver(program, nil, basics.Address{2}),
+		})
+		require.ErrorContains(t, err, "exceeds absolute maximum")
+	})
+
 	t.Run("v41: orphan LogicSig args on signed txn use the current pool", func(t *testing.T) {
 		stxn := makeSignedTxnWithOrphanArgs(v41, [][]byte{make([]byte, int(v41.LogicSigMaxSize)+500)})
 
@@ -1643,6 +1654,17 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	t.Run("v41: args can exceed the pre-pooling absolute limit", func(t *testing.T) {
+		program := makeProgram(v41, 0)
+		args := makeArgs(int(v41.LogicSigMaxSize) + 1)
+
+		err := verifyGroupForProtocol(protocol.ConsensusV41, []transactions.SignedTxn{
+			makeLogicSigTxnForReceiver(program, args, basics.Address{1}),
+			makeLogicSigTxnForReceiver(program, nil, basics.Address{2}),
+		})
+		require.NoError(t, err)
+	})
+
 	t.Run("vFuture: singleton can use more than one legacy size unit", func(t *testing.T) {
 		program := makeProgram(vFuture, int(vFuture.LogicSigMaxSize)+1)
 		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{makeLogicSigTxn(program, nil)})
@@ -1665,146 +1687,104 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("vFuture: singleton LogicSig args above allowance require size pooling", func(t *testing.T) {
+	t.Run("vFuture: singleton LogicSig args above allowance need no declared maximum", func(t *testing.T) {
 		program := makeProgram(vFuture, 0)
 		args := [][]byte{make([]byte, int(vFuture.LogicSigMaxSize)+1)}
 
 		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{makeLogicSigTxn(program, args)})
-		require.ErrorContains(t, err, "more than the available size pool")
-	})
-
-	t.Run("vFuture: LogicSig args above allowance can use size pooling", func(t *testing.T) {
-		program := makeProgram(vFuture, 0)
-		args := [][]byte{make([]byte, int(vFuture.LogicSigMaxSize)+1)}
-
-		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{
-			makeLogicSigTxnForReceiver(program, args, basics.Address{1}),
-			makeLogicSigTxnForReceiver(program, nil, basics.Address{2}),
-			makeLogicSigTxnForReceiver(program, nil, basics.Address{3}),
-		})
 		require.NoError(t, err)
 	})
 
-	t.Run("vFuture: LogicSig args pool counts args from every LogicSig", func(t *testing.T) {
+	t.Run("vFuture: zero maximum defaults to absolute limit", func(t *testing.T) {
 		program := makeProgram(vFuture, 0)
+		args := makeArgs(int(vFuture.MaxAbsoluteLogicSigArgsSize))
 
-		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{
-			makeLogicSigTxnForReceiver(program, [][]byte{make([]byte, int(vFuture.LogicSigMaxSize))}, basics.Address{1}),
-			makeLogicSigTxnForReceiver(program, [][]byte{make([]byte, int(vFuture.LogicSigMaxSize)+1)}, basics.Address{2}),
-		})
-		require.ErrorContains(t, err, "more than the available size pool")
+		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{makeLogicSigTxn(program, args)})
+		require.NoError(t, err)
 	})
 
-	t.Run("vFuture: LogicSig args above allowance can use declared budget", func(t *testing.T) {
+	t.Run("vFuture: LogicSig args above allowance can use declared maximum", func(t *testing.T) {
 		program := makeProgram(vFuture, 0)
 		args := makeArgs(int(vFuture.LogicSigMaxSize) + 1)
 		stxn := makeLogicSigTxn(program, args)
-		stxn.Txn.LogicSigArgsBudget = uint64(stxn.Lsig.ArgsLen())
+		stxn.Txn.MaxLogicSigArgsTotalSize = uint64(stxn.Lsig.ArgsLen())
 
 		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{stxn})
 		require.NoError(t, err)
 	})
 
-	t.Run("vFuture: v12 LogicSig can use args budget", func(t *testing.T) {
+	t.Run("vFuture: v12 LogicSig can use maximum args size", func(t *testing.T) {
 		program, err := txntest.GenerateUnsaltedProgramOfSize(5, 12)
 		require.NoError(t, err)
 		args := makeArgs(int(vFuture.LogicSigMaxSize) + 1)
 		stxn := makeLogicSigTxn(program, args)
-		stxn.Txn.LogicSigArgsBudget = uint64(stxn.Lsig.ArgsLen())
+		stxn.Txn.MaxLogicSigArgsTotalSize = uint64(stxn.Lsig.ArgsLen())
 
 		err = verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{stxn})
 		require.NoError(t, err)
 	})
 
-	t.Run("vFuture: budgeted args do not consume the zero-budget args pool", func(t *testing.T) {
-		program := makeProgram(vFuture, 0)
-		unbudgetedArgsSize := 2 * int(vFuture.LogicSigMaxSize)
-		unbudgetedStxn := makeLogicSigTxnForReceiver(
-			program,
-			makeArgs(unbudgetedArgsSize),
-			basics.Address{1},
-		)
-		budgetedStxn := makeLogicSigTxnForReceiver(
-			program,
-			makeArgs(int(vFuture.LogicSigMaxSize)),
-			basics.Address{2},
-		)
-		budgetedStxn.Txn.LogicSigArgsBudget = uint64(budgetedStxn.Lsig.ArgsLen())
-
-		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{unbudgetedStxn, budgetedStxn})
-		require.NoError(t, err)
-	})
-
-	t.Run("vFuture: zero-budget args remain limited in group with budgeted args", func(t *testing.T) {
-		program := makeProgram(vFuture, 0)
-		unbudgetedStxn := makeLogicSigTxnForReceiver(
-			program,
-			makeArgs(2*int(vFuture.LogicSigMaxSize)+1),
-			basics.Address{1},
-		)
-		budgetedStxn := makeLogicSigTxnForReceiver(
-			program,
-			makeArgs(int(vFuture.LogicSigMaxSize)),
-			basics.Address{2},
-		)
-		budgetedStxn.Txn.LogicSigArgsBudget = uint64(budgetedStxn.Lsig.ArgsLen())
-
-		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{unbudgetedStxn, budgetedStxn})
-		require.ErrorContains(t, err, "more than the available size pool")
-	})
-
-	t.Run("vFuture: LogicSig args cannot exceed declared budget", func(t *testing.T) {
+	t.Run("vFuture: LogicSig args cannot exceed declared maximum", func(t *testing.T) {
 		program := makeProgram(vFuture, 0)
 		args := makeArgs(int(vFuture.LogicSigMaxSize) + 2)
 		stxn := makeLogicSigTxn(program, args)
-		stxn.Txn.LogicSigArgsBudget = uint64(stxn.Lsig.ArgsLen() - 1)
+		stxn.Txn.MaxLogicSigArgsTotalSize = uint64(stxn.Lsig.ArgsLen() - 1)
 
 		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{stxn})
-		require.ErrorContains(t, err, "exceeds declared budget")
+		require.ErrorContains(t, err, "exceeds declared maximum")
 	})
 
-	t.Run("vFuture: LogicSig args budget below allowance is invalid", func(t *testing.T) {
+	t.Run("vFuture: LogicSig args cannot exceed absolute maximum without declared maximum", func(t *testing.T) {
 		program := makeProgram(vFuture, 0)
-		stxn := makeLogicSigTxn(program, nil)
-		stxn.Txn.LogicSigArgsBudget = vFuture.LogicSigMaxSize - 1
+		args := makeArgs(int(vFuture.MaxAbsoluteLogicSigArgsSize) + 1)
+		stxn := makeLogicSigTxn(program, args)
 
 		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{stxn})
-		require.ErrorContains(t, err, "below LogicSigMaxSize")
+		require.ErrorContains(t, err, "exceeds absolute maximum")
 	})
 
-	t.Run("vFuture: LogicSig args budget cannot exceed absolute limit", func(t *testing.T) {
+	t.Run("vFuture: one-byte maximum is valid", func(t *testing.T) {
+		program := makeProgram(vFuture, 0)
+		stxn := makeLogicSigTxn(program, makeArgs(1))
+		stxn.Txn.MaxLogicSigArgsTotalSize = 1
+
+		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{stxn})
+		require.NoError(t, err)
+	})
+
+	t.Run("vFuture: maximum LogicSig args size cannot exceed absolute limit", func(t *testing.T) {
 		program := makeProgram(vFuture, 0)
 		stxn := makeLogicSigTxn(program, nil)
-		stxn.Txn.LogicSigArgsBudget = vFuture.MaxAbsoluteLogicSigArgsSize + 1
+		stxn.Txn.MaxLogicSigArgsTotalSize = vFuture.MaxAbsoluteLogicSigArgsSize + 1
 
 		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{stxn})
 		require.ErrorContains(t, err, "exceeds MaxAbsoluteLogicSigArgsSize")
 	})
 
-	t.Run("vFuture: LogicSig args budget is rejected on non-LogicSig transaction", func(t *testing.T) {
+	t.Run("vFuture: maximum LogicSig args size is rejected on non-LogicSig transaction", func(t *testing.T) {
 		stxn := makeSignedTxn(vFuture)
-		stxn.Txn.LogicSigArgsBudget = vFuture.LogicSigMaxSize
+		stxn.Txn.MaxLogicSigArgsTotalSize = vFuture.LogicSigMaxSize
 
 		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{stxn})
 		require.ErrorContains(t, err, "only valid on LogicSig")
 	})
 
-	t.Run("v41: LogicSig args budget is unsupported", func(t *testing.T) {
+	t.Run("v41: maximum LogicSig args size is unsupported", func(t *testing.T) {
 		program := makeProgram(v41, 0)
 		stxn := makeLogicSigTxn(program, nil)
-		stxn.Txn.LogicSigArgsBudget = vFuture.LogicSigMaxSize
+		stxn.Txn.MaxLogicSigArgsTotalSize = vFuture.LogicSigMaxSize
 
 		err := verifyGroupForProtocol(protocol.ConsensusV41, []transactions.SignedTxn{stxn})
-		require.ErrorContains(t, err, "LogicSigArgsBudget is not supported")
+		require.ErrorContains(t, err, "MaxLogicSigArgsTotalSize is not supported")
 	})
 
-	t.Run("vFuture: budgeted LogicSig args have no explicit group cap", func(t *testing.T) {
+	t.Run("vFuture: size-limited LogicSig args have no explicit group cap", func(t *testing.T) {
 		program := makeProgram(vFuture, 0)
 		argsSize := int(vFuture.MaxAbsoluteLogicSigArgsSize)
 		stxn1 := makeLogicSigTxnForReceiver(program, makeArgs(argsSize), basics.Address{1})
-		stxn1.Txn.LogicSigArgsBudget = uint64(argsSize)
+		stxn1.Txn.MaxLogicSigArgsTotalSize = uint64(argsSize)
 		stxn2 := makeLogicSigTxnForReceiver(program, makeArgs(argsSize), basics.Address{2})
-		stxn2.Txn.LogicSigArgsBudget = uint64(argsSize)
+		stxn2.Txn.MaxLogicSigArgsTotalSize = uint64(argsSize)
 
 		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{stxn1, stxn2})
 		require.NoError(t, err)

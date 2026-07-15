@@ -227,8 +227,8 @@ const (
 	// RejectVersion uint64
 	RejectVersion
 
-	// LogicSigArgsBudget uint64
-	LogicSigArgsBudget
+	// MaxLogicSigArgsTotalSize uint64
+	MaxLogicSigArgsTotalSize
 
 	invalidTxnField // compile-time constant for number of fields
 )
@@ -371,7 +371,7 @@ var txnFieldSpecs = [...]txnFieldSpec{
 	{NumClearStateProgramPages, StackUint64, false, 7, 0, false, "Number of ClearState Program pages"},
 
 	{RejectVersion, StackUint64, false, 12, 12, false, "Application version for which the txn must reject"},
-	{LogicSigArgsBudget, StackUint64, false, logicSigArgsBudgetVersion, 0, false, "Maximum total LogicSig argument bytes allowed by this transaction"},
+	{MaxLogicSigArgsTotalSize, StackUint64, false, maxLogicSigArgsTotalSizeVersion, 0, false, "Maximum total LogicSig argument bytes allowed by this transaction"},
 }
 
 // TxnFields contains info on the arguments to the txn* family of opcodes

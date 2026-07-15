@@ -57,11 +57,12 @@ func TestCheckGroupFeesBigLogicSigSizes(t *testing.T) {
 	freeSize := int(proto.LogicSigMaxSize)
 
 	tests := []struct {
-		name        string
-		programSize int
-		argsSize    int
-		fees        []uint64
-		wantErr     bool
+		name             string
+		programSize      int
+		argsSize         int
+		maxArgsTotalSize uint64
+		fees             []uint64
+		wantErr          bool
 	}{
 		{
 			name:        "program singleton underpaid",
@@ -86,14 +87,29 @@ func TestCheckGroupFeesBigLogicSigSizes(t *testing.T) {
 			fees:        []uint64{proto.MinTxnFee, proto.MinTxnFee + 1},
 		},
 		{
-			name:        "args singleton underpaid",
+			name:             "declared args maximum singleton underpaid",
+			programSize:      freeSize,
+			argsSize:         freeSize + 1,
+			maxArgsTotalSize: uint64(freeSize + 1),
+			fees:             []uint64{proto.MinTxnFee},
+			wantErr:          true,
+		},
+		{
+			name:             "declared args maximum singleton paid",
+			programSize:      freeSize,
+			argsSize:         freeSize + 1,
+			maxArgsTotalSize: uint64(freeSize + 1),
+			fees:             []uint64{proto.MinTxnFee + 1},
+		},
+		{
+			name:        "zero args maximum singleton underpaid",
 			programSize: freeSize,
 			argsSize:    freeSize + 1,
 			fees:        []uint64{proto.MinTxnFee},
 			wantErr:     true,
 		},
 		{
-			name:        "args singleton paid",
+			name:        "zero args maximum singleton paid",
 			programSize: freeSize,
 			argsSize:    freeSize + 1,
 			fees:        []uint64{proto.MinTxnFee + 1},
@@ -130,12 +146,12 @@ func TestCheckGroupFeesBigLogicSigSizes(t *testing.T) {
 				Txn: transactions.Transaction{
 					Type: protocol.PaymentTx,
 					Header: transactions.Header{
-						Sender:             logicSigSender,
-						Fee:                basics.MicroAlgos{Raw: tt.fees[0]},
-						FirstValid:         newBlock.Round(),
-						LastValid:          newBlock.Round(),
-						GenesisHash:        l.GenesisHash(),
-						LogicSigArgsBudget: uint64(tt.argsSize),
+						Sender:                   logicSigSender,
+						Fee:                      basics.MicroAlgos{Raw: tt.fees[0]},
+						FirstValid:               newBlock.Round(),
+						LastValid:                newBlock.Round(),
+						GenesisHash:              l.GenesisHash(),
+						MaxLogicSigArgsTotalSize: tt.maxArgsTotalSize,
 					},
 					PaymentTxnFields: transactions.PaymentTxnFields{
 						Receiver: addrs[0],
@@ -191,7 +207,7 @@ func TestCheckGroupFeesBigLogicSigSizes(t *testing.T) {
 	}
 }
 
-func TestCheckGroupFeesBudgetedSingletonHeartbeat(t *testing.T) {
+func TestCheckGroupFeesSingletonHeartbeatWithLargeArgs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
@@ -202,26 +218,34 @@ func TestCheckGroupFeesBudgetedSingletonHeartbeat(t *testing.T) {
 		args = append(args, make([]byte, argSize))
 		remaining -= argSize
 	}
-	heartbeat := transactions.SignedTxn{
-		Txn: transactions.Transaction{
-			Type: protocol.HeartbeatTx,
-			Header: transactions.Header{
-				Fee:                basics.MicroAlgos{Raw: 2499},
-				LogicSigArgsBudget: uint64(argsSize),
-			},
-		},
-		Lsig: transactions.LogicSig{
-			Args: args,
-		},
+	for _, maxArgsTotalSize := range []uint64{0, uint64(argsSize)} {
+		name := "zero maximum"
+		if maxArgsTotalSize != 0 {
+			name = "declared maximum"
+		}
+		t.Run(name, func(t *testing.T) {
+			heartbeat := transactions.SignedTxn{
+				Txn: transactions.Transaction{
+					Type: protocol.HeartbeatTx,
+					Header: transactions.Header{
+						Fee:                      basics.MicroAlgos{Raw: 2499},
+						MaxLogicSigArgsTotalSize: maxArgsTotalSize,
+					},
+				},
+				Lsig: transactions.LogicSig{
+					Args: args,
+				},
+			}
+
+			usage, paid := transactions.SummarizeFees([]transactions.SignedTxnWithAD{{SignedTxn: heartbeat}}, proto)
+			require.Equal(t, basics.Micros(2_500_000), usage)
+			require.Error(t, CheckGroupFees(paid, usage, proto.MinFee()))
+
+			heartbeat.Txn.Fee.Raw = 2500
+			usage, paid = transactions.SummarizeFees([]transactions.SignedTxnWithAD{{SignedTxn: heartbeat}}, proto)
+			require.NoError(t, CheckGroupFees(paid, usage, proto.MinFee()))
+		})
 	}
-
-	usage, paid := transactions.SummarizeFees([]transactions.SignedTxnWithAD{{SignedTxn: heartbeat}}, proto)
-	require.Equal(t, basics.Micros(2_500_000), usage)
-	require.Error(t, CheckGroupFees(paid, usage, proto.MinFee()))
-
-	heartbeat.Txn.Fee.Raw = 2500
-	usage, paid = transactions.SummarizeFees([]transactions.SignedTxnWithAD{{SignedTxn: heartbeat}}, proto)
-	require.NoError(t, CheckGroupFees(paid, usage, proto.MinFee()))
 }
 
 func TestBlockEvaluatorFeeSink(t *testing.T) {

@@ -114,8 +114,8 @@ func TestPopulateFeeUsageIncludesBigLogicSigArgs(t *testing.T) {
 							SignedTxn: transactions.SignedTxn{
 								Txn: transactions.Transaction{
 									Header: transactions.Header{
-										Fee:                fee,
-										LogicSigArgsBudget: uint64(argsSize + 100),
+										Fee:                      fee,
+										MaxLogicSigArgsTotalSize: uint64(argsSize + 100),
 									},
 								},
 								Lsig: transactions.LogicSig{

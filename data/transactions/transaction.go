@@ -80,9 +80,9 @@ type Header struct {
 	// membership of a multisig account, etc.
 	RekeyTo basics.Address `codec:"rekey"`
 
-	// LogicSigArgsBudget, if nonzero, declares the maximum total LogicSig
+	// MaxLogicSigArgsTotalSize, if nonzero, declares the maximum total LogicSig
 	// argument bytes this transaction can carry.
-	LogicSigArgsBudget uint64 `codec:"lsigab"`
+	MaxLogicSigArgsTotalSize uint64 `codec:"lsigam"`
 }
 
 // Transaction describes a transaction that can appear in a block.
@@ -203,15 +203,16 @@ func (tx Transaction) feeFactor(proto config.ConsensusParams) basics.Micros {
 	case protocol.StateProofTx:
 		return 0
 	case protocol.HeartbeatTx:
-		if tx.isSingletonHeartbeat() && tx.LogicSigArgsBudget == 0 {
-			// Not every such heartbeat is free. We confirm a
-			// low/no fee singleton heartbeat is legal in heartbeat's
-			// wellFormed() and in apply/heartbeat.go (for the dynamic check for
-			// challenge).
-			return 0
+		if tx.isSingletonHeartbeat() {
+			requiredFee, _, _ := proto.MinFee().FeeForUsage(factor, 1e6, 0)
+			if tx.Fee.LessThan(requiredFee) {
+				// Low/no fee singleton heartbeats are checked in wellFormed() and
+				// apply/heartbeat.go (for the dynamic challenge check).
+				return 0
+			}
 		}
-		// Budgeted singletons fall through so their base fee is added to the
-		// group-level LogicSig args surcharge.
+		// Normally paid singletons fall through so their base fee is added to
+		// any group-level LogicSig args surcharge.
 	case protocol.ApplicationCallTx:
 		factor = basics.AddSaturate(factor, tx.ApplicationCallTxnFields.feeContribution(proto))
 	default:
@@ -495,15 +496,12 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	if len(tx.Note) > proto.MaxAbsoluteTxnNoteBytes {
 		return fmt.Errorf("transaction note too big: %d > %d", len(tx.Note), proto.MaxAbsoluteTxnNoteBytes)
 	}
-	if tx.LogicSigArgsBudget != 0 {
-		if !proto.TxnSizePricingEnabled() || proto.MaxAbsoluteLogicSigArgsSize == 0 {
-			return errors.New("tx.LogicSigArgsBudget is not supported")
+	if tx.MaxLogicSigArgsTotalSize != 0 {
+		if !proto.TxnSizePricingEnabled() {
+			return errors.New("tx.MaxLogicSigArgsTotalSize is not supported")
 		}
-		if tx.LogicSigArgsBudget < proto.LogicSigMaxSize {
-			return fmt.Errorf("tx.LogicSigArgsBudget below LogicSigMaxSize: %d < %d", tx.LogicSigArgsBudget, proto.LogicSigMaxSize)
-		}
-		if tx.LogicSigArgsBudget > proto.MaxAbsoluteLogicSigArgsSize {
-			return fmt.Errorf("tx.LogicSigArgsBudget exceeds MaxAbsoluteLogicSigArgsSize: %d > %d", tx.LogicSigArgsBudget, proto.MaxAbsoluteLogicSigArgsSize)
+		if tx.MaxLogicSigArgsTotalSize > proto.MaxAbsoluteLogicSigArgsSize {
+			return fmt.Errorf("tx.MaxLogicSigArgsTotalSize exceeds MaxAbsoluteLogicSigArgsSize: %d > %d", tx.MaxLogicSigArgsTotalSize, proto.MaxAbsoluteLogicSigArgsSize)
 		}
 	}
 	if tx.Sender == spec.RewardsPool {

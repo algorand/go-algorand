@@ -328,9 +328,9 @@ func TestTxnFieldToTealValue(t *testing.T) {
 		require.Equal(t, value, tealValue.Uint)
 	}
 
-	field = LogicSigArgsBudget
+	field = MaxLogicSigArgsTotalSize
 	value := uint64(4096)
-	txn.LogicSigArgsBudget = value
+	txn.MaxLogicSigArgsTotalSize = value
 	tealValue, err := TxnFieldToTealValue(&txn, groupIndex, field, 0, false)
 	require.NoError(t, err)
 	require.Equal(t, basics.TealUintType, tealValue.Type)
@@ -1836,7 +1836,7 @@ txn RejectVersion
 
 const testTxnProgramTextV13 = testTxnProgramTextV12 + `
 assert
-txn LogicSigArgsBudget
+txn MaxLogicSigArgsTotalSize
 !
 `
 

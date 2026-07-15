@@ -3437,8 +3437,8 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		sv.Uint = uint64(txn.OnCompletion)
 	case RejectVersion:
 		sv.Uint = txn.RejectVersion
-	case LogicSigArgsBudget:
-		sv.Uint = txn.LogicSigArgsBudget
+	case MaxLogicSigArgsTotalSize:
+		sv.Uint = txn.MaxLogicSigArgsTotalSize
 
 	case ApplicationArgs:
 		if arrayFieldIdx >= uint64(len(txn.ApplicationArgs)) {

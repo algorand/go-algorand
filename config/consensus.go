@@ -240,8 +240,7 @@ type ConsensusParams struct {
 	MaxAbsoluteLogicSigProgramSize uint64
 
 	// MaxAbsoluteLogicSigArgsSize is the absolute maximum total size of the
-	// arguments carried by one LogicSig when a transaction declares an args
-	// budget. A zero value means args budgets are not supported.
+	// arguments carried by one LogicSig.
 	MaxAbsoluteLogicSigArgsSize uint64
 
 	// sum of estimated op cost must be less than this
@@ -1058,6 +1057,7 @@ func initConsensusProtocols() {
 	v18.LogicSigVersion = 1
 	v18.LogicSigMaxSize = 1000
 	v18.MaxAbsoluteLogicSigProgramSize = 1000
+	v18.MaxAbsoluteLogicSigArgsSize = 1000
 	v18.LogicSigMaxCost = 20000
 	v18.LogicSigMsig = true
 	v18.MaxAssetsPerAccount = 1000
@@ -1480,6 +1480,7 @@ func initConsensusProtocols() {
 
 	v40.LogicSigVersion = 11
 	v40.MaxAbsoluteLogicSigProgramSize = 16000
+	v40.MaxAbsoluteLogicSigArgsSize = 16000
 
 	v40.Payouts.Enabled = true
 	v40.Payouts.Percent = 50
@@ -1543,8 +1544,6 @@ func initConsensusProtocols() {
 	vFuture.MaxAbsoluteExtraProgramPages = 7 // Allow larger programs with extra fees
 	vFuture.MaxAbsoluteTotalArgLen = 16384   // We _could_ make this as high as 16*4k
 	vFuture.PerByteTxnSurcharge = 100        // Each charged byte adds 0.000100 of min fee
-
-	vFuture.MaxAbsoluteLogicSigArgsSize = 16000 // LogicSigMaxSize * MaxTxGroupSize
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

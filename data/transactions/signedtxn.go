@@ -207,7 +207,7 @@ func logicSigProgramFeeContribution(txgroup []SignedTxnWithAD, proto config.Cons
 // logicSigArgsFeeContribution accounts for all LogicSig args bytes beyond the
 // group allowance.
 func logicSigArgsFeeContribution(txgroup []SignedTxnWithAD, proto config.ConsensusParams) basics.Micros {
-	if proto.MaxAbsoluteLogicSigArgsSize == 0 {
+	if !proto.TxnSizePricingEnabled() {
 		return 0
 	}
 

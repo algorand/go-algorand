@@ -41,17 +41,17 @@ import (
 type Txn struct {
 	Type protocol.TxType
 
-	Sender             basics.Address
-	Fee                any // basics.MicroAlgos, uint64, int, or nil
-	FirstValid         basics.Round
-	LastValid          basics.Round
-	Note               any // []byte or string
-	GenesisID          string
-	GenesisHash        crypto.Digest
-	Group              crypto.Digest
-	Lease              [32]byte
-	RekeyTo            basics.Address
-	LogicSigArgsBudget uint64
+	Sender                   basics.Address
+	Fee                      any // basics.MicroAlgos, uint64, int, or nil
+	FirstValid               basics.Round
+	LastValid                basics.Round
+	Note                     any // []byte or string
+	GenesisID                string
+	GenesisHash              crypto.Digest
+	Group                    crypto.Digest
+	Lease                    [32]byte
+	RekeyTo                  basics.Address
+	MaxLogicSigArgsTotalSize uint64
 
 	VotePK           crypto.OneTimeSignatureVerifier
 	SelectionPK      crypto.VRFVerifier
@@ -286,17 +286,17 @@ func (tx Txn) Txn() transactions.Transaction {
 	return transactions.Transaction{
 		Type: tx.Type,
 		Header: transactions.Header{
-			Sender:             tx.Sender,
-			Fee:                tx.Fee.(basics.MicroAlgos),
-			FirstValid:         tx.FirstValid,
-			LastValid:          tx.LastValid,
-			Note:               tx.Note.([]byte),
-			GenesisID:          tx.GenesisID,
-			GenesisHash:        tx.GenesisHash,
-			Group:              tx.Group,
-			Lease:              tx.Lease,
-			RekeyTo:            tx.RekeyTo,
-			LogicSigArgsBudget: tx.LogicSigArgsBudget,
+			Sender:                   tx.Sender,
+			Fee:                      tx.Fee.(basics.MicroAlgos),
+			FirstValid:               tx.FirstValid,
+			LastValid:                tx.LastValid,
+			Note:                     tx.Note.([]byte),
+			GenesisID:                tx.GenesisID,
+			GenesisHash:              tx.GenesisHash,
+			Group:                    tx.Group,
+			Lease:                    tx.Lease,
+			RekeyTo:                  tx.RekeyTo,
+			MaxLogicSigArgsTotalSize: tx.MaxLogicSigArgsTotalSize,
 		},
 		KeyregTxnFields: transactions.KeyregTxnFields{
 			VotePK:           tx.VotePK,

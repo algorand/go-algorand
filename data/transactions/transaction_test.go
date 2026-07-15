@@ -380,10 +380,15 @@ func TestFeeFactor_StateProofAndHeartbeat(t *testing.T) {
 	}
 	assert.Equal(t, basics.Micros(0), singletonHeartbeat.feeFactor(vFuture), "Singleton heartbeat should be free")
 
-	budgetedSingletonHeartbeat := singletonHeartbeat
-	budgetedSingletonHeartbeat.Note = nil
-	budgetedSingletonHeartbeat.LogicSigArgsBudget = vFuture.LogicSigMaxSize
-	assert.Equal(t, basics.Micros(1e6), budgetedSingletonHeartbeat.feeFactor(vFuture), "Budgeted singleton heartbeat should have base fee")
+	limitedSingletonHeartbeat := singletonHeartbeat
+	limitedSingletonHeartbeat.Note = nil
+	limitedSingletonHeartbeat.Fee = vFuture.MinFee()
+	limitedSingletonHeartbeat.MaxLogicSigArgsTotalSize = vFuture.LogicSigMaxSize
+	assert.Equal(t, basics.Micros(1e6), limitedSingletonHeartbeat.feeFactor(vFuture), "Size-limited singleton heartbeat should have base fee")
+
+	paidSingletonHeartbeat := limitedSingletonHeartbeat
+	paidSingletonHeartbeat.MaxLogicSigArgsTotalSize = 0
+	assert.Equal(t, basics.Micros(1e6), paidSingletonHeartbeat.feeFactor(vFuture), "Normally paid singleton heartbeat should have base fee")
 
 	// Grouped heartbeat should have normal fee
 	groupedHeartbeat := Transaction{
@@ -713,63 +718,70 @@ func TestLogicSigArgsFeeContribution(t *testing.T) {
 		name                 string
 		proto                config.ConsensusParams
 		argSizes             []int
-		budgets              []uint64
+		maxArgsSizes         []uint64
 		expectedContribution basics.Micros
 	}{
 		{
-			name:                 "v41: unsupported budget has no fee contribution",
+			name:                 "v41: unsupported maximum has no fee contribution",
 			proto:                v41,
 			argSizes:             []int{freeSize + 1},
-			budgets:              []uint64{uint64(freeSize + 1)},
+			maxArgsSizes:         []uint64{uint64(freeSize + 1)},
 			expectedContribution: 0,
 		},
 		{
-			name:                 "vFuture: zero-budget args at group allowance",
+			name:                 "vFuture: zero maximum args at group allowance",
 			proto:                vFuture,
 			argSizes:             []int{freeSize},
-			budgets:              []uint64{0},
+			maxArgsSizes:         []uint64{0},
 			expectedContribution: 0,
 		},
 		{
-			name:                 "vFuture: budgeted args at free allowance",
+			name:                 "vFuture: size-limited args at free allowance",
 			proto:                vFuture,
 			argSizes:             []int{freeSize},
-			budgets:              []uint64{uint64(freeSize)},
+			maxArgsSizes:         []uint64{uint64(freeSize)},
 			expectedContribution: 0,
 		},
 		{
-			name:                 "vFuture: budgeted args use unused group allowance",
+			name:                 "vFuture: size-limited args use unused group allowance",
 			proto:                vFuture,
 			argSizes:             []int{freeSize + 500, 0},
-			budgets:              []uint64{uint64(freeSize + 500), 0},
+			maxArgsSizes:         []uint64{uint64(freeSize + 500), 0},
 			expectedContribution: 0,
 		},
 		{
 			name:                 "vFuture: all args share group allowance",
 			proto:                vFuture,
 			argSizes:             []int{freeSize + 500, freeSize},
-			budgets:              []uint64{uint64(freeSize + 500), 0},
+			maxArgsSizes:         []uint64{uint64(freeSize + 500), 0},
 			expectedContribution: surchargeForBytes(t, vFuture, 500),
 		},
 		{
-			name:                 "vFuture: one extra budgeted args byte",
+			name:                 "vFuture: one extra size-limited args byte",
 			proto:                vFuture,
 			argSizes:             []int{freeSize + 1},
-			budgets:              []uint64{uint64(freeSize + 1)},
+			maxArgsSizes:         []uint64{uint64(freeSize + 1)},
 			expectedContribution: surchargeForBytes(t, vFuture, 1),
 		},
 		{
-			name:                 "vFuture: fee uses actual args, not unused budget",
+			name:                 "vFuture: one extra zero-maximum args byte",
+			proto:                vFuture,
+			argSizes:             []int{freeSize + 1},
+			maxArgsSizes:         []uint64{0},
+			expectedContribution: surchargeForBytes(t, vFuture, 1),
+		},
+		{
+			name:                 "vFuture: fee uses actual args, not unused maximum",
 			proto:                vFuture,
 			argSizes:             []int{freeSize + 5},
-			budgets:              []uint64{uint64(freeSize + 500)},
+			maxArgsSizes:         []uint64{uint64(freeSize + 500)},
 			expectedContribution: surchargeForBytes(t, vFuture, 5),
 		},
 		{
-			name:                 "vFuture: multiple budgeted args add together",
+			name:                 "vFuture: multiple size-limited args add together",
 			proto:                vFuture,
 			argSizes:             []int{freeSize + 3, freeSize + 4},
-			budgets:              []uint64{uint64(freeSize + 3), uint64(freeSize + 4)},
+			maxArgsSizes:         []uint64{uint64(freeSize + 3), uint64(freeSize + 4)},
 			expectedContribution: surchargeForBytes(t, vFuture, 7),
 		},
 	}
@@ -779,7 +791,7 @@ func TestLogicSigArgsFeeContribution(t *testing.T) {
 			txgroup := make([]SignedTxnWithAD, len(tt.argSizes))
 			for i, argSize := range tt.argSizes {
 				txgroup[i].SignedTxn.Lsig.Args = [][]byte{make([]byte, argSize)}
-				txgroup[i].SignedTxn.Txn.LogicSigArgsBudget = tt.budgets[i]
+				txgroup[i].SignedTxn.Txn.MaxLogicSigArgsTotalSize = tt.maxArgsSizes[i]
 			}
 
 			assert.Equal(t, tt.expectedContribution, logicSigArgsFeeContribution(txgroup, tt.proto))
@@ -896,7 +908,7 @@ func TestSummarizeFees_BigLogicSigSizes(t *testing.T) {
 				Args:  [][]byte{make([]byte, freeSize+200)},
 			},
 		}
-		stxn.Txn.LogicSigArgsBudget = uint64(freeSize + 200)
+		stxn.Txn.MaxLogicSigArgsTotalSize = uint64(freeSize + 200)
 
 		usage, paid := SummarizeFees([]SignedTxnWithAD{{SignedTxn: stxn}}, vFuture)
 

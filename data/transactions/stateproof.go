@@ -41,7 +41,7 @@ var errNoteMustBeEmptyInStateproofTxn = errors.New("note must be empty in state-
 var errGroupMustBeZeroInStateproofTxn = errors.New("group must be zero in state-proof transaction")
 var errRekeyToMustBeZeroInStateproofTxn = errors.New("rekey must be zero in state-proof transaction")
 var errLeaseMustBeZeroInStateproofTxn = errors.New("lease must be zero in state-proof transaction")
-var errLogicSigArgsBudgetMustBeZeroInStateproofTxn = errors.New("logic sig args budget must be zero in state-proof transaction")
+var errMaxLogicSigArgsTotalSizeMustBeZeroInStateproofTxn = errors.New("MaxLogicSigArgsTotalSize must be zero in state-proof transaction")
 
 // wellFormed performs stateless checks on the StateProof transaction
 func (sp StateProofTxnFields) wellFormed(header Header) error {
@@ -67,8 +67,8 @@ func (sp StateProofTxnFields) wellFormed(header Header) error {
 	if header.Lease != [32]byte{} {
 		return errLeaseMustBeZeroInStateproofTxn
 	}
-	if header.LogicSigArgsBudget != 0 {
-		return errLogicSigArgsBudgetMustBeZeroInStateproofTxn
+	if header.MaxLogicSigArgsTotalSize != 0 {
+		return errMaxLogicSigArgsTotalSizeMustBeZeroInStateproofTxn
 	}
 	return nil
 }

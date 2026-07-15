@@ -1060,7 +1060,7 @@
         "ClearStateProgramPages",
         "NumClearStateProgramPages",
         "RejectVersion",
-        "LogicSigArgsBudget"
+        "MaxLogicSigArgsTotalSize"
       ],
       "ArgEnumTypes": [
         "address",
@@ -1298,7 +1298,7 @@
         "ClearStateProgramPages",
         "NumClearStateProgramPages",
         "RejectVersion",
-        "LogicSigArgsBudget"
+        "MaxLogicSigArgsTotalSize"
       ],
       "ArgEnumTypes": [
         "address",
@@ -1610,7 +1610,7 @@
         "ClearStateProgramPages",
         "NumClearStateProgramPages",
         "RejectVersion",
-        "LogicSigArgsBudget"
+        "MaxLogicSigArgsTotalSize"
       ],
       "ArgEnumTypes": [
         "address",
@@ -4011,7 +4011,7 @@
         "ClearStateProgramPages",
         "NumClearStateProgramPages",
         "RejectVersion",
-        "LogicSigArgsBudget"
+        "MaxLogicSigArgsTotalSize"
       ],
       "ArgEnumTypes": [
         "address",
@@ -4234,7 +4234,7 @@
         "ClearStateProgramPages",
         "NumClearStateProgramPages",
         "RejectVersion",
-        "LogicSigArgsBudget"
+        "MaxLogicSigArgsTotalSize"
       ],
       "ArgEnumTypes": [
         "address",

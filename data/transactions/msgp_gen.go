@@ -2717,7 +2717,7 @@ func (z *Header) MarshalMsg(b []byte) (o []byte) {
 		zb0002Len--
 		zb0002Mask |= 0x20
 	}
-	if (*z).LogicSigArgsBudget == 0 {
+	if (*z).MaxLogicSigArgsTotalSize == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x40
 	}
@@ -2770,9 +2770,9 @@ func (z *Header) MarshalMsg(b []byte) (o []byte) {
 			o = (*z).Group.MarshalMsg(o)
 		}
 		if (zb0002Mask & 0x40) == 0 { // if not empty
-			// string "lsigab"
-			o = append(o, 0xa6, 0x6c, 0x73, 0x69, 0x67, 0x61, 0x62)
-			o = msgp.AppendUint64(o, (*z).LogicSigArgsBudget)
+			// string "lsigam"
+			o = append(o, 0xa6, 0x6c, 0x73, 0x69, 0x67, 0x61, 0x6d)
+			o = msgp.AppendUint64(o, (*z).MaxLogicSigArgsTotalSize)
 		}
 		if (zb0002Mask & 0x80) == 0 { // if not empty
 			// string "lv"
@@ -2928,9 +2928,9 @@ func (z *Header) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []
 		}
 		if zb0002 > 0 {
 			zb0002--
-			(*z).LogicSigArgsBudget, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).MaxLogicSigArgsTotalSize, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "LogicSigArgsBudget")
+				err = msgp.WrapError(err, "struct-from-array", "MaxLogicSigArgsTotalSize")
 				return
 			}
 		}
@@ -3037,10 +3037,10 @@ func (z *Header) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []
 					err = msgp.WrapError(err, "RekeyTo")
 					return
 				}
-			case "lsigab":
-				(*z).LogicSigArgsBudget, bts, err = msgp.ReadUint64Bytes(bts)
+			case "lsigam":
+				(*z).MaxLogicSigArgsTotalSize, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "LogicSigArgsBudget")
+					err = msgp.WrapError(err, "MaxLogicSigArgsTotalSize")
 					return
 				}
 			default:
@@ -3079,7 +3079,7 @@ func (z *Header) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *Header) MsgIsZero() bool {
-	return ((*z).Sender.MsgIsZero()) && ((*z).Fee.MsgIsZero()) && ((*z).FirstValid.MsgIsZero()) && ((*z).LastValid.MsgIsZero()) && (len((*z).Note) == 0) && ((*z).GenesisID == "") && ((*z).GenesisHash.MsgIsZero()) && ((*z).Group.MsgIsZero()) && ((*z).Lease == ([32]byte{})) && ((*z).RekeyTo.MsgIsZero()) && ((*z).LogicSigArgsBudget == 0)
+	return ((*z).Sender.MsgIsZero()) && ((*z).Fee.MsgIsZero()) && ((*z).FirstValid.MsgIsZero()) && ((*z).LastValid.MsgIsZero()) && (len((*z).Note) == 0) && ((*z).GenesisID == "") && ((*z).GenesisHash.MsgIsZero()) && ((*z).Group.MsgIsZero()) && ((*z).Lease == ([32]byte{})) && ((*z).RekeyTo.MsgIsZero()) && ((*z).MaxLogicSigArgsTotalSize == 0)
 }
 
 // HeaderMaxSize returns a maximum valid message size for this message type
@@ -6857,7 +6857,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte) {
 		zb0008Len--
 		zb0008Mask |= 0x8000000000
 	}
-	if (*z).Header.LogicSigArgsBudget == 0 {
+	if (*z).Header.MaxLogicSigArgsTotalSize == 0 {
 		zb0008Len--
 		zb0008Mask |= 0x10000000000
 	}
@@ -7160,9 +7160,9 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte) {
 			}
 		}
 		if (zb0008Mask & 0x10000000000) == 0 { // if not empty
-			// string "lsigab"
-			o = append(o, 0xa6, 0x6c, 0x73, 0x69, 0x67, 0x61, 0x62)
-			o = msgp.AppendUint64(o, (*z).Header.LogicSigArgsBudget)
+			// string "lsigam"
+			o = append(o, 0xa6, 0x6c, 0x73, 0x69, 0x67, 0x61, 0x6d)
+			o = msgp.AppendUint64(o, (*z).Header.MaxLogicSigArgsTotalSize)
 		}
 		if (zb0008Mask & 0x20000000000) == 0 { // if not empty
 			// string "lv"
@@ -7391,9 +7391,9 @@ func (z *Transaction) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 		}
 		if zb0008 > 0 {
 			zb0008--
-			(*z).Header.LogicSigArgsBudget, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).Header.MaxLogicSigArgsTotalSize, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "LogicSigArgsBudget")
+				err = msgp.WrapError(err, "struct-from-array", "MaxLogicSigArgsTotalSize")
 				return
 			}
 		}
@@ -8055,10 +8055,10 @@ func (z *Transaction) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 					err = msgp.WrapError(err, "RekeyTo")
 					return
 				}
-			case "lsigab":
-				(*z).Header.LogicSigArgsBudget, bts, err = msgp.ReadUint64Bytes(bts)
+			case "lsigam":
+				(*z).Header.MaxLogicSigArgsTotalSize, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "LogicSigArgsBudget")
+					err = msgp.WrapError(err, "MaxLogicSigArgsTotalSize")
 					return
 				}
 			case "votekey":
@@ -8606,7 +8606,7 @@ func (z *Transaction) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *Transaction) MsgIsZero() bool {
-	return ((*z).Type.MsgIsZero()) && ((*z).Header.Sender.MsgIsZero()) && ((*z).Header.Fee.MsgIsZero()) && ((*z).Header.FirstValid.MsgIsZero()) && ((*z).Header.LastValid.MsgIsZero()) && (len((*z).Header.Note) == 0) && ((*z).Header.GenesisID == "") && ((*z).Header.GenesisHash.MsgIsZero()) && ((*z).Header.Group.MsgIsZero()) && ((*z).Header.Lease == ([32]byte{})) && ((*z).Header.RekeyTo.MsgIsZero()) && ((*z).Header.LogicSigArgsBudget == 0) && ((*z).KeyregTxnFields.VotePK.MsgIsZero()) && ((*z).KeyregTxnFields.SelectionPK.MsgIsZero()) && ((*z).KeyregTxnFields.StateProofPK.MsgIsZero()) && ((*z).KeyregTxnFields.VoteFirst.MsgIsZero()) && ((*z).KeyregTxnFields.VoteLast.MsgIsZero()) && ((*z).KeyregTxnFields.VoteKeyDilution == 0) && ((*z).KeyregTxnFields.Nonparticipation == false) && ((*z).PaymentTxnFields.Receiver.MsgIsZero()) && ((*z).PaymentTxnFields.Amount.MsgIsZero()) && ((*z).PaymentTxnFields.CloseRemainderTo.MsgIsZero()) && ((*z).AssetConfigTxnFields.ConfigAsset.MsgIsZero()) && ((*z).AssetConfigTxnFields.AssetParams.MsgIsZero()) && ((*z).AssetTransferTxnFields.XferAsset.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetAmount == 0) && ((*z).AssetTransferTxnFields.AssetSender.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetReceiver.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetCloseTo.MsgIsZero()) && ((*z).AssetFreezeTxnFields.FreezeAccount.MsgIsZero()) && ((*z).AssetFreezeTxnFields.FreezeAsset.MsgIsZero()) && ((*z).AssetFreezeTxnFields.AssetFrozen == false) && ((*z).ApplicationCallTxnFields.ApplicationID.MsgIsZero()) && ((*z).ApplicationCallTxnFields.OnCompletion == 0) && (len((*z).ApplicationCallTxnFields.ApplicationArgs) == 0) && (len((*z).ApplicationCallTxnFields.Accounts) == 0) && (len((*z).ApplicationCallTxnFields.ForeignAssets) == 0) && (len((*z).ApplicationCallTxnFields.ForeignApps) == 0) && (len((*z).ApplicationCallTxnFields.Access) == 0) && (len((*z).ApplicationCallTxnFields.Boxes) == 0) && ((*z).ApplicationCallTxnFields.LocalStateSchema.MsgIsZero()) && ((*z).ApplicationCallTxnFields.GlobalStateSchema.MsgIsZero()) && (len((*z).ApplicationCallTxnFields.ApprovalProgram) == 0) && (len((*z).ApplicationCallTxnFields.ClearStateProgram) == 0) && ((*z).ApplicationCallTxnFields.ExtraProgramPages == 0) && ((*z).ApplicationCallTxnFields.RejectVersion == 0) && ((*z).StateProofTxnFields.StateProofType.MsgIsZero()) && ((*z).StateProofTxnFields.StateProof.MsgIsZero()) && ((*z).StateProofTxnFields.Message.MsgIsZero()) && ((*z).HeartbeatTxnFields == nil)
+	return ((*z).Type.MsgIsZero()) && ((*z).Header.Sender.MsgIsZero()) && ((*z).Header.Fee.MsgIsZero()) && ((*z).Header.FirstValid.MsgIsZero()) && ((*z).Header.LastValid.MsgIsZero()) && (len((*z).Header.Note) == 0) && ((*z).Header.GenesisID == "") && ((*z).Header.GenesisHash.MsgIsZero()) && ((*z).Header.Group.MsgIsZero()) && ((*z).Header.Lease == ([32]byte{})) && ((*z).Header.RekeyTo.MsgIsZero()) && ((*z).Header.MaxLogicSigArgsTotalSize == 0) && ((*z).KeyregTxnFields.VotePK.MsgIsZero()) && ((*z).KeyregTxnFields.SelectionPK.MsgIsZero()) && ((*z).KeyregTxnFields.StateProofPK.MsgIsZero()) && ((*z).KeyregTxnFields.VoteFirst.MsgIsZero()) && ((*z).KeyregTxnFields.VoteLast.MsgIsZero()) && ((*z).KeyregTxnFields.VoteKeyDilution == 0) && ((*z).KeyregTxnFields.Nonparticipation == false) && ((*z).PaymentTxnFields.Receiver.MsgIsZero()) && ((*z).PaymentTxnFields.Amount.MsgIsZero()) && ((*z).PaymentTxnFields.CloseRemainderTo.MsgIsZero()) && ((*z).AssetConfigTxnFields.ConfigAsset.MsgIsZero()) && ((*z).AssetConfigTxnFields.AssetParams.MsgIsZero()) && ((*z).AssetTransferTxnFields.XferAsset.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetAmount == 0) && ((*z).AssetTransferTxnFields.AssetSender.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetReceiver.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetCloseTo.MsgIsZero()) && ((*z).AssetFreezeTxnFields.FreezeAccount.MsgIsZero()) && ((*z).AssetFreezeTxnFields.FreezeAsset.MsgIsZero()) && ((*z).AssetFreezeTxnFields.AssetFrozen == false) && ((*z).ApplicationCallTxnFields.ApplicationID.MsgIsZero()) && ((*z).ApplicationCallTxnFields.OnCompletion == 0) && (len((*z).ApplicationCallTxnFields.ApplicationArgs) == 0) && (len((*z).ApplicationCallTxnFields.Accounts) == 0) && (len((*z).ApplicationCallTxnFields.ForeignAssets) == 0) && (len((*z).ApplicationCallTxnFields.ForeignApps) == 0) && (len((*z).ApplicationCallTxnFields.Access) == 0) && (len((*z).ApplicationCallTxnFields.Boxes) == 0) && ((*z).ApplicationCallTxnFields.LocalStateSchema.MsgIsZero()) && ((*z).ApplicationCallTxnFields.GlobalStateSchema.MsgIsZero()) && (len((*z).ApplicationCallTxnFields.ApprovalProgram) == 0) && (len((*z).ApplicationCallTxnFields.ClearStateProgram) == 0) && ((*z).ApplicationCallTxnFields.ExtraProgramPages == 0) && ((*z).ApplicationCallTxnFields.RejectVersion == 0) && ((*z).StateProofTxnFields.StateProofType.MsgIsZero()) && ((*z).StateProofTxnFields.StateProof.MsgIsZero()) && ((*z).StateProofTxnFields.Message.MsgIsZero()) && ((*z).HeartbeatTxnFields == nil)
 }
 
 // TransactionMaxSize returns a maximum valid message size for this message type

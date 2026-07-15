@@ -134,10 +134,10 @@ func TestWellFormedHeartbeatErrors(t *testing.T) {
 			tx: Transaction{
 				Type: protocol.HeartbeatTx,
 				Header: Header{
-					Sender:             addr1,
-					LastValid:          105,
-					FirstValid:         100,
-					LogicSigArgsBudget: futureProto.LogicSigMaxSize,
+					Sender:                   addr1,
+					LastValid:                105,
+					FirstValid:               100,
+					MaxLogicSigArgsTotalSize: futureProto.LogicSigMaxSize,
 				},
 				HeartbeatTxnFields: &HeartbeatTxnFields{
 					HbProof: crypto.HeartbeatProof{
@@ -149,17 +149,17 @@ func TestWellFormedHeartbeatErrors(t *testing.T) {
 				},
 			},
 			proto:         futureProto,
-			expectedError: fmt.Errorf("tx.LogicSigArgsBudget is set in free heartbeat"),
+			expectedError: fmt.Errorf("tx.MaxLogicSigArgsTotalSize is set in free heartbeat"),
 		},
 		{
 			tx: Transaction{
 				Type: protocol.HeartbeatTx,
 				Header: Header{
-					Sender:             addr1,
-					Fee:                basics.MicroAlgos{Raw: 100},
-					LastValid:          105,
-					FirstValid:         100,
-					LogicSigArgsBudget: futureProto.LogicSigMaxSize,
+					Sender:                   addr1,
+					Fee:                      basics.MicroAlgos{Raw: 100},
+					LastValid:                105,
+					FirstValid:               100,
+					MaxLogicSigArgsTotalSize: futureProto.LogicSigMaxSize,
 				},
 				HeartbeatTxnFields: &HeartbeatTxnFields{
 					HbProof: crypto.HeartbeatProof{
@@ -171,17 +171,17 @@ func TestWellFormedHeartbeatErrors(t *testing.T) {
 				},
 			},
 			proto:         futureProto,
-			expectedError: fmt.Errorf("tx.LogicSigArgsBudget is set in cheap heartbeat"),
+			expectedError: fmt.Errorf("tx.MaxLogicSigArgsTotalSize is set in cheap heartbeat"),
 		},
 		{
 			tx: Transaction{
 				Type: protocol.HeartbeatTx,
 				Header: Header{
-					Sender:             addr1,
-					Fee:                futureProto.MinFee(),
-					LastValid:          105,
-					FirstValid:         100,
-					LogicSigArgsBudget: futureProto.LogicSigMaxSize,
+					Sender:                   addr1,
+					Fee:                      futureProto.MinFee(),
+					LastValid:                105,
+					FirstValid:               100,
+					MaxLogicSigArgsTotalSize: futureProto.LogicSigMaxSize,
 				},
 				HeartbeatTxnFields: &HeartbeatTxnFields{
 					HbProof: crypto.HeartbeatProof{
@@ -198,12 +198,12 @@ func TestWellFormedHeartbeatErrors(t *testing.T) {
 			tx: Transaction{
 				Type: protocol.HeartbeatTx,
 				Header: Header{
-					Sender:             addr1,
-					Fee:                futureProto.MinFee(),
-					LastValid:          105,
-					FirstValid:         100,
-					Group:              crypto.Digest{0x01},
-					LogicSigArgsBudget: futureProto.LogicSigMaxSize,
+					Sender:                   addr1,
+					Fee:                      futureProto.MinFee(),
+					LastValid:                105,
+					FirstValid:               100,
+					Group:                    crypto.Digest{0x01},
+					MaxLogicSigArgsTotalSize: futureProto.LogicSigMaxSize,
 				},
 				HeartbeatTxnFields: &HeartbeatTxnFields{
 					HbProof: crypto.HeartbeatProof{
