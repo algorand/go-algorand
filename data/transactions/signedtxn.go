@@ -204,6 +204,23 @@ func logicSigProgramFeeContribution(txgroup []SignedTxnWithAD, proto config.Cons
 	return surcharge
 }
 
+// logicSigArgsFeeContribution accounts for all LogicSig args bytes beyond the
+// group allowance.
+func logicSigArgsFeeContribution(txgroup []SignedTxnWithAD, proto config.ConsensusParams) basics.Micros {
+	if !proto.TxnSizePricingEnabled() {
+		return 0
+	}
+
+	argsBytes := 0
+	for _, txad := range txgroup {
+		argsBytes += txad.SignedTxn.Lsig.ArgsLen()
+	}
+
+	freeArgsBytes := len(txgroup) * int(proto.LogicSigMaxSize)
+	surcharge, _ := proto.PerByteTxnSurcharge.MulInt(argsBytes - freeArgsBytes)
+	return surcharge
+}
+
 // SummarizeFees takes a group and returns the required fee usage and the total
 // amount paid. The returned `usage` expresses how many basic transaction fees
 // must be paid by the group.
@@ -218,5 +235,6 @@ func SummarizeFees(txgroup []SignedTxnWithAD, proto config.ConsensusParams) (usa
 		paid = paid.AddSaturate(txad.SignedTxn.Txn.Fee)
 	}
 	usage = basics.AddSaturate(usage, logicSigProgramFeeContribution(txgroup, proto))
+	usage = basics.AddSaturate(usage, logicSigArgsFeeContribution(txgroup, proto))
 	return usage, paid
 }

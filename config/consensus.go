@@ -239,6 +239,10 @@ type ConsensusParams struct {
 	// program.
 	MaxAbsoluteLogicSigProgramSize uint64
 
+	// MaxAbsoluteLogicSigArgsSize is the absolute maximum total size of the
+	// arguments carried by one LogicSig.
+	MaxAbsoluteLogicSigArgsSize uint64
+
 	// sum of estimated op cost must be less than this
 	LogicSigMaxCost uint64
 
@@ -802,6 +806,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxAppProgramLen, &bounds.MaxAppProgramLen)
 	checkSetMax((int(p.LogicSigMaxSize) * p.MaxTxGroupSize), &bounds.MaxLogicSigMaxSize)
 	checkSetMax(int(p.MaxAbsoluteLogicSigProgramSize), &bounds.MaxLogicSigMaxSize)
+	checkSetMax(int(p.MaxAbsoluteLogicSigArgsSize), &bounds.MaxLogicSigMaxSize)
 	checkSetMax(p.MaxAbsoluteTxnNoteBytes, &bounds.MaxTxnNoteBytes)
 	checkSetMax(p.MaxTxGroupSize, &bounds.MaxTxGroupSize)
 	// MaxBytesKeyValueLen is max of MaxAppKeyLen and MaxAppBytesValueLen
@@ -1052,6 +1057,7 @@ func initConsensusProtocols() {
 	v18.LogicSigVersion = 1
 	v18.LogicSigMaxSize = 1000
 	v18.MaxAbsoluteLogicSigProgramSize = 1000
+	v18.MaxAbsoluteLogicSigArgsSize = 1000
 	v18.LogicSigMaxCost = 20000
 	v18.LogicSigMsig = true
 	v18.MaxAssetsPerAccount = 1000
@@ -1474,6 +1480,7 @@ func initConsensusProtocols() {
 
 	v40.LogicSigVersion = 11
 	v40.MaxAbsoluteLogicSigProgramSize = 16000
+	v40.MaxAbsoluteLogicSigArgsSize = 16000
 
 	v40.Payouts.Enabled = true
 	v40.Payouts.Percent = 50

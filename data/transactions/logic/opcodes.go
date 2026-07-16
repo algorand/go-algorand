@@ -80,6 +80,10 @@ const mimcVersion = 11
 
 const varintBranchVersion = 13 // branch offsets encoded as binary.Varint instead of big-endian int16
 
+// logicSigArgsSizeVersion is the first TEAL version that can inspect LogicSig
+// args size limits and actual usage.
+const logicSigArgsSizeVersion = 13
+
 // EXPERIMENTAL. These should be revisited whenever a new LogicSigVersion is
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version, and fixup TestAssemble() in assembler_test.go.
