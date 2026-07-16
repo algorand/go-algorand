@@ -118,15 +118,12 @@ func (s SignedTxn) HasSignature() bool {
 
 // signatureFeeContribution dispatches the fee contribution of the signature type.
 // An unknown PQ scheme contributes zero, which is safe because the transaction
-// will be rejected during verification. A PQ envelope nested in a program-less
-// LogicSig also contributes zero, which is safe because LogicSig fields without
-// a program are rejected during verification once TxnSizePricingEnabled, and
-// such an envelope can never verify.
+// will be rejected during verification.
 func (s SignedTxn) signatureFeeContribution(proto config.ConsensusParams) basics.Micros {
 	if !s.PQsig.Blank() {
 		return proto.PQSchemeFeeContribution(s.PQsig.Scheme)
 	}
-	if s.Lsig.HasProgram() && !s.Lsig.PQsig.Blank() {
+	if !s.Lsig.PQsig.Blank() {
 		return proto.PQSchemeFeeContribution(s.Lsig.PQsig.Scheme)
 	}
 	return 0

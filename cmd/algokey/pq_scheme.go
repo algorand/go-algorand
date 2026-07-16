@@ -34,7 +34,7 @@ const pqSchemeFalcon1024Name = "falcon-1024"
 // config.ConsensusParams.PQSchemeFeeContribution.
 type pqSchemeOps interface {
 	deriveSigning(seed crypto.Digest) (pqSigningMaterial, error)
-	signHashable(privateKey []byte, message crypto.Hashable) ([]byte, error)
+	sign(privateKey []byte, message crypto.Hashable) ([]byte, error)
 	publicKeySize() uint64
 	privateKeySize() uint64
 }
@@ -122,7 +122,7 @@ func (falcon1024Ops) publicKeySize() uint64 { return crypto.FalconPublicKeySize 
 
 func (falcon1024Ops) privateKeySize() uint64 { return crypto.FalconPrivateKeySize }
 
-func (falcon1024Ops) signHashable(privateKey []byte, message crypto.Hashable) ([]byte, error) {
+func (falcon1024Ops) sign(privateKey []byte, message crypto.Hashable) ([]byte, error) {
 	var sk crypto.FalconPrivateKey
 	if len(privateKey) != len(sk) {
 		return nil, fmt.Errorf("%w: got private key size %d, want %d", errPQKeyMalformed, len(privateKey), len(sk))

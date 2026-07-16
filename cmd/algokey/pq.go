@@ -136,7 +136,7 @@ var pqSignProgramCmd = &cobra.Command{
 
 var pqCheckAddressCmd = &cobra.Command{
 	Use:   "check-address ADDRESS",
-	Short: "Check that an address is eligible for post-quantum authorization",
+	Short: "Check that an address is PQ compliant",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		exitOnError(runPQCheckAddress(args[0]))
@@ -285,7 +285,7 @@ func runPQSignWithOptions(opts pqSignOptions) error {
 			clearSignedTxnAuthorization(&stxn)
 		}
 
-		pqsig, signErr := signPQHashable(pqctx, stxn.Txn)
+		pqsig, signErr := signPQ(pqctx, stxn.Txn)
 		if signErr != nil {
 			return fmt.Errorf("cannot sign transaction: %w", signErr)
 		}
@@ -346,8 +346,8 @@ func resolvePQSigningContext(keyfile, mnemonic, schemeName string) (pqSigningCon
 	}, nil
 }
 
-func signPQHashable(pqctx pqSigningContext, message crypto.Hashable) (transactions.PQSig, error) {
-	signature, err := pqctx.ops.signHashable(pqctx.signing.PrivateKey, message)
+func signPQ(pqctx pqSigningContext, message crypto.Hashable) (transactions.PQSig, error) {
+	signature, err := pqctx.ops.sign(pqctx.signing.PrivateKey, message)
 	if err != nil {
 		return transactions.PQSig{}, err
 	}
@@ -383,7 +383,7 @@ func runPQSignProgramWithOptions(opts pqSignProgramOptions) error {
 	if len(program) == 0 {
 		return errors.New("program is empty")
 	}
-	pqsig, err := signPQHashable(pqctx, logic.PQDelegatedProgram{Addr: pqctx.signing.Public.address(), Program: program})
+	pqsig, err := signPQ(pqctx, logic.PQDelegatedProgram{Addr: pqctx.signing.Public.address(), Program: program})
 	if err != nil {
 		return fmt.Errorf("cannot sign program: %w", err)
 	}
