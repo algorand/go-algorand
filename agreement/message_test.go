@@ -21,13 +21,103 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 var poolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+
+func TestProposalCarriesInvalidTxnGroupOrder(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genesisHash := crypto.Hash([]byte("proposal-check"))
+	block := bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{
+		GenesisHash: genesisHash,
+		UpgradeState: bookkeeping.UpgradeState{
+			CurrentProtocol: protocol.ConsensusCurrentVersion,
+		},
+	}}
+
+	txns := []transactions.Transaction{
+		{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      basics.Address{1},
+				GenesisHash: genesisHash,
+			},
+		},
+		{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      basics.Address{2},
+				GenesisHash: genesisHash,
+			},
+		},
+	}
+	txgroup := transactions.TxGroup{TxGroupHashes: []crypto.Digest{
+		crypto.Digest(txns[0].ID()),
+		crypto.Digest(txns[1].ID()),
+	}}
+	groupID := crypto.HashObj(txgroup)
+	for i := range txns {
+		txns[i].Group = groupID
+		stib, err := block.EncodeSignedTxn(transactions.SignedTxn{Txn: txns[i]}, transactions.ApplyData{})
+		require.NoError(t, err)
+		block.Payset = append(block.Payset, stib)
+	}
+
+	require.False(t, proposalCarriesInvalidTxn(unauthenticatedProposal{Block: block}), "valid group order must pass the check")
+
+	block.Payset[0], block.Payset[1] = block.Payset[1], block.Payset[0]
+	require.True(t, proposalCarriesInvalidTxn(unauthenticatedProposal{Block: block}), "invalid group order must fail")
+}
+
+func TestProposalCarriesOversizedTxnGroup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genesisHash := crypto.Hash([]byte("oversized-txn-group-proposal-check"))
+	block := bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{
+		GenesisHash: genesisHash,
+		UpgradeState: bookkeeping.UpgradeState{
+			CurrentProtocol: protocol.ConsensusCurrentVersion,
+		},
+	}}
+
+	maxGroupSize := bounds.MaxTxGroupSize
+	txns := make([]transactions.Transaction, maxGroupSize+1)
+	txgroup := transactions.TxGroup{TxGroupHashes: make([]crypto.Digest, len(txns))}
+	for i := range txns {
+		txns[i] = transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      basics.Address{byte(i + 1)},
+				GenesisHash: genesisHash,
+			},
+		}
+		txgroup.TxGroupHashes[i] = crypto.Digest(txns[i].ID())
+	}
+	groupID := crypto.HashObj(txgroup)
+	for i := range txns {
+		txns[i].Group = groupID
+		stib, err := block.EncodeSignedTxn(transactions.SignedTxn{Txn: txns[i]}, transactions.ApplyData{})
+		require.NoError(t, err)
+		block.Payset = append(block.Payset, stib)
+	}
+
+	encoded := protocol.Encode(&transmittedPayload{unauthenticatedProposal: unauthenticatedProposal{Block: block}})
+	decoded, err := decodeProposal(encoded)
+	require.NoError(t, err)
+	proposal := decoded.(compoundMessage).Proposal
+	require.True(t, proposalCarriesInvalidTxn(proposal), "oversized group must be rejected before proposal validation")
+}
 
 func BenchmarkVoteDecoding(b *testing.B) {
 	oneTimeSecrets := crypto.GenerateOneTimeSignatureSecrets(300, 1000)
