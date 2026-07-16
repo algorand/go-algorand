@@ -102,5 +102,10 @@ func decodeProposal(data []byte) (interface{}, error) {
 }
 
 func proposalCarriesInvalidTxn(up unauthenticatedProposal) bool {
-	return transactions.CheckPayset(up.Block.Payset) != nil
+	for group, err := range up.Block.PaysetGroups() {
+		if err != nil || transactions.CheckPaysetGroup(group) != nil {
+			return true
+		}
+	}
+	return false
 }

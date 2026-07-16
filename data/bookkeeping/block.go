@@ -18,9 +18,11 @@ package bookkeeping
 
 import (
 	"fmt"
+	"iter"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/committee"
@@ -881,26 +883,46 @@ func (block Block) ContentsMatchHeader() bool {
 // the transactions in groups.
 func (block Block) DecodePaysetGroups() ([][]transactions.SignedTxnWithAD, error) {
 	var res [][]transactions.SignedTxnWithAD
-	var lastGroup []transactions.SignedTxnWithAD
-	for _, txib := range block.Payset {
-		var err error
-		var stxnad transactions.SignedTxnWithAD
-		stxnad.SignedTxn, stxnad.ApplyData, err = block.DecodeSignedTxn(txib)
+	for group, err := range block.PaysetGroups() {
 		if err != nil {
 			return nil, err
 		}
-
-		if lastGroup != nil && (lastGroup[0].SignedTxn.Txn.Group != stxnad.SignedTxn.Txn.Group || lastGroup[0].SignedTxn.Txn.Group.IsZero()) {
-			res = append(res, lastGroup)
-			lastGroup = nil
-		}
-
-		lastGroup = append(lastGroup, stxnad)
-	}
-	if lastGroup != nil {
-		res = append(res, lastGroup)
+		res = append(res, group)
 	}
 	return res, nil
+}
+
+// PaysetGroups decodes block.Payset using DecodeSignedTxn and yields
+// one transaction group at a time. It stops after yielding an error.
+func (block Block) PaysetGroups() iter.Seq2[[]transactions.SignedTxnWithAD, error] {
+	return func(yield func([]transactions.SignedTxnWithAD, error) bool) {
+		var lastGroup []transactions.SignedTxnWithAD
+		for _, txib := range block.Payset {
+			var err error
+			var stxnad transactions.SignedTxnWithAD
+			stxnad.SignedTxn, stxnad.ApplyData, err = block.DecodeSignedTxn(txib)
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+
+			if lastGroup != nil && (lastGroup[0].SignedTxn.Txn.Group != stxnad.SignedTxn.Txn.Group || lastGroup[0].SignedTxn.Txn.Group.IsZero()) {
+				if !yield(lastGroup, nil) {
+					return
+				}
+				lastGroup = nil
+			}
+
+			if len(lastGroup) >= bounds.MaxTxGroupSize {
+				yield(nil, fmt.Errorf("group size %d exceeds maximum %d", len(lastGroup)+1, bounds.MaxTxGroupSize))
+				return
+			}
+			lastGroup = append(lastGroup, stxnad)
+		}
+		if lastGroup != nil {
+			yield(lastGroup, nil)
+		}
+	}
 }
 
 // DecodePaysetFlat decodes block.Payset using DecodeSignedTxn, and
