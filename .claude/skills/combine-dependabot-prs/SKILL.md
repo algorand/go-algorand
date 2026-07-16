@@ -118,7 +118,7 @@ branch), tagged `enhancement`, with the three random reviewers:
 ```bash
 gh pr create \
   --repo algorand/go-algorand \
-  --head dependabot-<DATE> \
+  --head "$ME:dependabot-<DATE>" \
   --base master \
   --title "build: dependabot-<DATE>" \
   --body "..." \
