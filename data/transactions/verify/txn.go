@@ -298,10 +298,6 @@ func pricedLogicSigValidation(stxs []transactions.SignedTxn, maxAbsoluteArgsSize
 		argsLen := uint64(lsig.ArgsLen())
 
 		if !lsig.HasProgram() {
-			if stxn.Txn.MaxLogicSigArgsTotalSize != 0 {
-				err := errors.New("tx.MaxLogicSigArgsTotalSize is only valid on LogicSig transactions")
-				return &TxGroupError{err, i, TxGroupErrorReasonNotWellFormed}
-			}
 			if !lsig.Blank() {
 				err := errors.New("LogicSig fields without LogicSig program")
 				return &TxGroupError{err, i, TxGroupErrorReasonNotWellFormed}

@@ -1179,7 +1179,8 @@
         "PayoutsGoOnlineFee",
         "PayoutsPercent",
         "PayoutsMinBalance",
-        "PayoutsMaxBalance"
+        "PayoutsMaxBalance",
+        "LogicSigArgsTotalSize"
       ],
       "ArgEnumTypes": [
         "uint64",
@@ -1201,6 +1202,7 @@
         "uint64",
         "[32]byte",
         "bool",
+        "uint64",
         "uint64",
         "uint64",
         "uint64",

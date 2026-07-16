@@ -371,7 +371,7 @@ var txnFieldSpecs = [...]txnFieldSpec{
 	{NumClearStateProgramPages, StackUint64, false, 7, 0, false, "Number of ClearState Program pages"},
 
 	{RejectVersion, StackUint64, false, 12, 12, false, "Application version for which the txn must reject"},
-	{MaxLogicSigArgsTotalSize, StackUint64, false, maxLogicSigArgsTotalSizeVersion, 0, false, "Maximum total LogicSig argument bytes allowed by this transaction"},
+	{MaxLogicSigArgsTotalSize, StackUint64, false, logicSigArgsSizeVersion, 0, false, "Maximum total LogicSig argument bytes allowed by this transaction"},
 }
 
 // TxnFields contains info on the arguments to the txn* family of opcodes
@@ -613,6 +613,11 @@ const (
 	// PayoutsMaxBalance is the maximum algo balance an account can have to receive block payouts (in the agreement round).
 	PayoutsMaxBalance
 
+	// v13
+
+	// LogicSigArgsTotalSize is the total number of argument bytes carried by the current LogicSig.
+	LogicSigArgsTotalSize
+
 	invalidGlobalField // compile-time constant for number of fields
 )
 
@@ -643,8 +648,9 @@ func (fs globalFieldSpec) Note() string {
 	note := fs.doc
 	if fs.mode == ModeApp {
 		note = addExtra(note, "Application mode only.")
+	} else if fs.mode == ModeSig {
+		note = addExtra(note, "Signature mode only.")
 	}
-	// There are no Signature mode only globals
 	return note
 }
 
@@ -689,6 +695,8 @@ var globalFieldSpecs = [...]globalFieldSpec{
 		"The minimum balance an account must have in the agreement round to receive block payouts in the proposal round."},
 	{PayoutsMaxBalance, StackUint64, modeAny, incentiveVersion,
 		"The maximum balance an account can have in the agreement round to receive block payouts in the proposal round."},
+	{LogicSigArgsTotalSize, StackUint64, ModeSig, logicSigArgsSizeVersion,
+		"The total number of argument bytes carried by the current LogicSig."},
 }
 
 func globalFieldSpecByField(f GlobalField) (globalFieldSpec, bool) {

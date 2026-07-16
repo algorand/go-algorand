@@ -467,6 +467,7 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 | 20 | PayoutsPercent | uint64 | v11  | The percentage of transaction fees in a block that can be paid to the block proposer. |
 | 21 | PayoutsMinBalance | uint64 | v11  | The minimum balance an account must have in the agreement round to receive block payouts in the proposal round. |
 | 22 | PayoutsMaxBalance | uint64 | v11  | The maximum balance an account can have in the agreement round to receive block payouts in the proposal round. |
+| 23 | LogicSigArgsTotalSize | uint64 | v13  | The total number of argument bytes carried by the current LogicSig. Signature mode only. |
 
 ## gtxn
 

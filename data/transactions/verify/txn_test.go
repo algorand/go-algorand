@@ -1529,15 +1529,16 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 		_, err := TxnGroup(group, &blkHdr, nil, &DummyLedgerForSignature{})
 		return err
 	}
-	makeSignedTxn := func(proto config.ConsensusParams) transactions.SignedTxn {
+	makeSignedTxn := func(proto config.ConsensusParams, maxArgsTotalSize uint64) transactions.SignedTxn {
 		secrets := keypair()
 		sender := basics.Address(secrets.SignatureVerifier)
 		txn := txntest.Txn{
-			Type:     protocol.PaymentTx,
-			Sender:   sender,
-			Receiver: basics.Address{1},
-			Fee:      proto.MinTxnFee,
-			Amount:   uint64(1000),
+			Type:                     protocol.PaymentTx,
+			Sender:                   sender,
+			Receiver:                 basics.Address{1},
+			Fee:                      proto.MinTxnFee,
+			Amount:                   uint64(1000),
+			MaxLogicSigArgsTotalSize: maxArgsTotalSize,
 		}.Txn()
 		return transactions.SignedTxn{
 			Txn: txn,
@@ -1545,7 +1546,7 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 		}
 	}
 	makeSignedTxnWithOrphanLsig := func(proto config.ConsensusParams, lsig transactions.LogicSig) transactions.SignedTxn {
-		stxn := makeSignedTxn(proto)
+		stxn := makeSignedTxn(proto, 0)
 		stxn.Lsig = lsig
 		return stxn
 	}
@@ -1589,7 +1590,7 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 
 		err := verifyGroupForProtocol(protocol.ConsensusV41, []transactions.SignedTxn{
 			stxn,
-			makeSignedTxn(v41),
+			makeSignedTxn(v41, 0),
 		})
 		require.NoError(t, err)
 	})
@@ -1761,12 +1762,11 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 		require.ErrorContains(t, err, "exceeds MaxAbsoluteLogicSigArgsSize")
 	})
 
-	t.Run("vFuture: maximum LogicSig args size is rejected on non-LogicSig transaction", func(t *testing.T) {
-		stxn := makeSignedTxn(vFuture)
-		stxn.Txn.MaxLogicSigArgsTotalSize = vFuture.LogicSigMaxSize
+	t.Run("vFuture: maximum LogicSig args size is allowed on non-LogicSig transaction", func(t *testing.T) {
+		stxn := makeSignedTxn(vFuture, vFuture.LogicSigMaxSize)
 
 		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{stxn})
-		require.ErrorContains(t, err, "only valid on LogicSig")
+		require.NoError(t, err)
 	})
 
 	t.Run("v41: maximum LogicSig args size is unsupported", func(t *testing.T) {

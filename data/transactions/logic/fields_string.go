@@ -119,12 +119,13 @@ func _() {
 	_ = x[PayoutsPercent-20]
 	_ = x[PayoutsMinBalance-21]
 	_ = x[PayoutsMaxBalance-22]
-	_ = x[invalidGlobalField-23]
+	_ = x[LogicSigArgsTotalSize-23]
+	_ = x[invalidGlobalField-24]
 }
 
-const _GlobalField_name = "MinTxnFeeMinBalanceMaxTxnLifeZeroAddressGroupSizeLogicSigVersionRoundLatestTimestampCurrentApplicationIDCreatorAddressCurrentApplicationAddressGroupIDOpcodeBudgetCallerApplicationIDCallerApplicationAddressAssetCreateMinBalanceAssetOptInMinBalanceGenesisHashPayoutsEnabledPayoutsGoOnlineFeePayoutsPercentPayoutsMinBalancePayoutsMaxBalanceinvalidGlobalField"
+const _GlobalField_name = "MinTxnFeeMinBalanceMaxTxnLifeZeroAddressGroupSizeLogicSigVersionRoundLatestTimestampCurrentApplicationIDCreatorAddressCurrentApplicationAddressGroupIDOpcodeBudgetCallerApplicationIDCallerApplicationAddressAssetCreateMinBalanceAssetOptInMinBalanceGenesisHashPayoutsEnabledPayoutsGoOnlineFeePayoutsPercentPayoutsMinBalancePayoutsMaxBalanceLogicSigArgsTotalSizeinvalidGlobalField"
 
-var _GlobalField_index = [...]uint16{0, 9, 19, 29, 40, 49, 64, 69, 84, 104, 118, 143, 150, 162, 181, 205, 226, 246, 257, 271, 289, 303, 320, 337, 355}
+var _GlobalField_index = [...]uint16{0, 9, 19, 29, 40, 49, 64, 69, 84, 104, 118, 143, 150, 162, 181, 205, 226, 246, 257, 271, 289, 303, 320, 337, 358, 376}
 
 func (i GlobalField) String() string {
 	idx := int(i) - 0

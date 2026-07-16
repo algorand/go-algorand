@@ -1316,7 +1316,7 @@ func TestAllGlobals(t *testing.T) {
 		10: {GenesisHash, globalV10TestProgram},
 		11: {PayoutsMaxBalance, globalV11TestProgram},
 		12: {PayoutsMaxBalance, globalV12TestProgram},
-		13: {PayoutsMaxBalance, globalV13TestProgram},
+		13: {LogicSigArgsTotalSize, globalV13TestProgram},
 	}
 	// tests keys are versions so they must be in a range 1..AssemblerMaxVersion plus zero version
 	require.LessOrEqual(t, len(tests), AssemblerMaxVersion+1)
@@ -1333,6 +1333,11 @@ func TestAllGlobals(t *testing.T) {
 			last := tests[v].lastField
 			testProgram := tests[v].program
 			for _, globalField := range GlobalFieldNames[:last+1] {
+				fs, ok := globalFieldSpecByName[globalField]
+				require.True(t, ok)
+				if fs.mode == ModeSig {
+					continue
+				}
 				if !strings.Contains(testProgram, globalField) {
 					t.Errorf("TestGlobal missing field %v", globalField)
 				}
@@ -1350,6 +1355,47 @@ func TestAllGlobals(t *testing.T) {
 		})
 	}
 }
+
+func TestLogicSigArgsTotalSizeGlobal(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		args [][]byte
+		size uint64
+	}{
+		{
+			name: "zero payload bytes",
+			args: [][]byte{nil, {}},
+			size: 0,
+		},
+		{
+			name: "multiple args",
+			args: [][]byte{make([]byte, 3), make([]byte, 5)},
+			size: 8,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			stxn := transactions.SignedTxn{
+				Lsig: transactions.LogicSig{Args: test.args},
+			}
+			program := fmt.Sprintf("global LogicSigArgsTotalSize; int %d; ==", test.size)
+			testLogic(t, program, logicSigArgsSizeVersion, defaultSigParamsWithVersion(logicSigArgsSizeVersion, stxn))
+		})
+	}
+
+	program := "global LogicSigArgsTotalSize; int 0; =="
+	_, err := testApp(
+		t,
+		program,
+		defaultAppParamsWithVersion(logicSigArgsSizeVersion),
+		"not allowed in current mode",
+	)
+	require.Error(t, err)
+}
+
 func TestTypeEnum(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
