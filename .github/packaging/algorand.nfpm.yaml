@@ -175,20 +175,17 @@ contents:
     file_info:
       mode: 0644
 
-  # DNF automatic update configuration (rpm only)
-  - src: installer/rpm/algorand/0dnf-algorand-hourly.cron
-    dst: /etc/cron.hourly/0dnf-algorand-hourly.cron
+  # Hourly auto-update cron job (rpm only). Upgrades only the Algorand
+  # package from whatever repository the operator has configured under
+  # /etc/yum.repos.d. The package no longer ships a repo file or GPG key;
+  # repository setup is left to the operator. Dotless filename so that
+  # run-parts (which skips names containing ".") executes it.
+  - src: installer/rpm/algorand/algorand-auto-upgrade.cron
+    dst: /etc/cron.hourly/algorand-auto-upgrade
     type: config|noreplace
     packager: rpm
     file_info:
       mode: 0755
-
-  - src: installer/rpm/algorand/dnf-cron-algorand.conf
-    dst: /etc/dnf/dnf-cron-algorand.conf
-    type: config|noreplace
-    packager: rpm
-    file_info:
-      mode: 0644
 
   # Unattended upgrades configuration (deb only, generated at build time)
   - src: .github/packaging/generated/51algorand-upgrades
@@ -222,4 +219,5 @@ overrides:
     depends:
       - systemd
       - shadow-utils
-      - dnf-automatic
+      # cronie services /etc/cron.hourly, where the auto-update job is installed
+      - cronie
