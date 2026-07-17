@@ -18,6 +18,7 @@ package logic
 
 import (
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -38,6 +39,18 @@ type MultisigProgram struct {
 // ToBeHashed implements crypto.Hashable for MultisigProgram
 func (mp MultisigProgram) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.MultisigProgram, append(mp.Addr[:], mp.Program...)
+}
+
+// PQDelegatedProgram is a wrapper for signing programs with address-bound post-quantum
+// delegation proofs.
+type PQDelegatedProgram struct {
+	Addr    basics.Address
+	Program []byte
+}
+
+// ToBeHashed implements crypto.Hashable for PQDelegatedProgram
+func (dp PQDelegatedProgram) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.PostQuantumDelegatedProgram, append(dp.Addr[:], dp.Program...)
 }
 
 // HashProgram takes program bytes and returns the Digest

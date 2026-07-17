@@ -22,12 +22,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -49,6 +51,12 @@ var (
 	pqSignTxfile    string
 	pqSignOutfile   string
 	pqSignOverwrite bool
+
+	pqSignProgramKeyfile  string
+	pqSignProgramMnemonic string
+	pqSignProgramScheme   = pqSchemeFalcon1024Name
+	pqSignProgramProgram  string
+	pqSignProgramOutfile  string
 )
 
 type pqSignOptions struct {
@@ -58,6 +66,19 @@ type pqSignOptions struct {
 	txfile    string
 	outfile   string
 	overwrite bool
+}
+
+type pqSignProgramOptions struct {
+	keyfile  string
+	mnemonic string
+	scheme   string
+	program  string
+	outfile  string
+}
+
+type pqSigningContext struct {
+	ops     pqSchemeOps
+	signing pqSigningMaterial
 }
 
 var pqCmd = &cobra.Command{
@@ -105,22 +126,42 @@ var pqSignCmd = &cobra.Command{
 	},
 }
 
+var pqSignProgramCmd = &cobra.Command{
+	Use:   "sign-program",
+	Short: "Sign a LogicSig program with a post-quantum private key",
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, _ []string) {
+		exitOnError(runPQSignProgram())
+	},
+}
+
+var pqCheckAddressCmd = &cobra.Command{
+	Use:   "check-address ADDRESS",
+	Short: "Check that an address is PQ compliant",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		exitOnError(runPQCheckAddress(args[0]))
+	},
+}
+
 func init() {
 	pqCmd.AddCommand(pqGenerateCmd)
 	pqCmd.AddCommand(pqInfoCmd)
 	pqCmd.AddCommand(pqImportCmd)
 	pqCmd.AddCommand(pqSignCmd)
+	pqCmd.AddCommand(pqSignProgramCmd)
+	pqCmd.AddCommand(pqCheckAddressCmd)
 
 	pqGenerateCmd.Flags().StringVarP(&pqGenerateScheme, "scheme", "S", pqGenerateScheme, "Post-quantum signature scheme: falcon-1024 (f1)")
-	pqGenerateCmd.Flags().StringVarP(&pqGenerateKeyfile, "keyfile", "f", "", "Private key filename")
+	pqGenerateCmd.Flags().StringVarP(&pqGenerateKeyfile, "keyfile", "k", "", "Private key filename")
 	mustMarkFlagRequired(pqGenerateCmd, "keyfile")
 
-	pqInfoCmd.Flags().StringVarP(&pqInfoKeyfile, "keyfile", "f", "", "Private key filename")
+	pqInfoCmd.Flags().StringVarP(&pqInfoKeyfile, "keyfile", "k", "", "Private key filename")
 	mustMarkFlagRequired(pqInfoCmd, "keyfile")
 
 	pqImportCmd.Flags().StringVarP(&pqImportMnemonic, "mnemonic", "m", "", "Private key mnemonic")
 	pqImportCmd.Flags().StringVarP(&pqImportScheme, "scheme", "S", pqImportScheme, "Post-quantum signature scheme: falcon-1024 (f1)")
-	pqImportCmd.Flags().StringVarP(&pqImportKeyfile, "keyfile", "f", "", "Private key filename")
+	pqImportCmd.Flags().StringVarP(&pqImportKeyfile, "keyfile", "k", "", "Private key filename")
 	mustMarkFlagRequired(pqImportCmd, "mnemonic")
 	mustMarkFlagRequired(pqImportCmd, "keyfile")
 
@@ -132,6 +173,14 @@ func init() {
 	pqSignCmd.Flags().BoolVar(&pqSignOverwrite, "overwrite", false, "Overwrite any existing signature category")
 	mustMarkFlagRequired(pqSignCmd, "txfile")
 	mustMarkFlagRequired(pqSignCmd, "outfile")
+
+	pqSignProgramCmd.Flags().StringVarP(&pqSignProgramKeyfile, "keyfile", "k", "", "Private key filename")
+	pqSignProgramCmd.Flags().StringVarP(&pqSignProgramMnemonic, "mnemonic", "m", "", "Private key mnemonic")
+	pqSignProgramCmd.Flags().StringVarP(&pqSignProgramScheme, "scheme", "S", pqSignProgramScheme, "Post-quantum signature scheme: falcon-1024 (f1); used with --mnemonic")
+	pqSignProgramCmd.Flags().StringVarP(&pqSignProgramProgram, "program", "p", "", "Compiled LogicSig program input filename")
+	pqSignProgramCmd.Flags().StringVarP(&pqSignProgramOutfile, "outfile", "o", "", "LogicSig output filename")
+	mustMarkFlagRequired(pqSignProgramCmd, "program")
+	mustMarkFlagRequired(pqSignProgramCmd, "outfile")
 }
 
 func mustMarkFlagRequired(cmd *cobra.Command, flagName string) {
@@ -205,39 +254,11 @@ func runPQSign() error {
 }
 
 func runPQSignWithOptions(opts pqSignOptions) error {
-	var signing pqSigningMaterial
-	var err error
-	switch {
-	case opts.keyfile != "" && opts.mnemonic != "":
-		return errors.New("cannot specify both --keyfile and --mnemonic")
-	case opts.mnemonic != "":
-		entropy, seedErr := seedFromMnemonic(opts.mnemonic)
-		if seedErr != nil {
-			return fmt.Errorf("cannot recover PQ key entropy from mnemonic: %w", seedErr)
-		}
-		scheme := protocol.PQSchemeFalcon1024
-		if opts.scheme != "" {
-			scheme, err = parsePQScheme(opts.scheme)
-			if err != nil {
-				return err
-			}
-		}
-		signing, err = derivePQSigningMaterialFromEntropy(scheme, entropy)
-	case opts.keyfile != "":
-		signing, err = readPQSigningMaterial(opts.keyfile)
-	default:
-		return errors.New("must specify --keyfile or --mnemonic")
-	}
+	pqctx, err := resolvePQSigningContext(opts.keyfile, opts.mnemonic, opts.scheme)
 	if err != nil {
 		return err
 	}
-
-	ops, ok := pqSchemeOpsByScheme[signing.Public.Scheme]
-	if !ok {
-		return fmt.Errorf("%w: %q", crypto.ErrPQSchemeNotSupported, signing.Public.Scheme)
-	}
-
-	public := signing.Public
+	public := pqctx.signing.Public
 
 	txdata, err := readFile(opts.txfile)
 	if err != nil {
@@ -265,17 +286,12 @@ func runPQSignWithOptions(opts pqSignOptions) error {
 			clearSignedTxnAuthorization(&stxn)
 		}
 
-		signature, signErr := ops.signTxn(signing.PrivateKey, stxn.Txn)
+		pqsig, signErr := signPQ(pqctx, stxn.Txn)
 		if signErr != nil {
 			return fmt.Errorf("cannot sign transaction: %w", signErr)
 		}
 
-		stxn.PQsig = transactions.PQSig{
-			Scheme:    public.Scheme,
-			Salt:      public.Salt,
-			PublicKey: public.PublicKey,
-			Signature: signature,
-		}
+		stxn.PQsig = pqsig
 		if stxn.Txn.Sender != public.address() {
 			stxn.AuthAddr = public.address()
 		}
@@ -289,6 +305,126 @@ func runPQSignWithOptions(opts pqSignOptions) error {
 	if err = writeFile(opts.outfile, outBytes, 0600); err != nil {
 		return fmt.Errorf("cannot write signed transactions to %s: %w", opts.outfile, err)
 	}
+	return nil
+}
+
+func resolvePQSigningContext(keyfile, mnemonic, schemeName string) (pqSigningContext, error) {
+	var signing pqSigningMaterial
+	var err error
+	switch {
+	case keyfile != "" && mnemonic != "":
+		return pqSigningContext{}, errors.New("cannot specify both --keyfile and --mnemonic")
+	case mnemonic != "":
+		entropy, seedErr := seedFromMnemonic(mnemonic)
+		if seedErr != nil {
+			return pqSigningContext{}, fmt.Errorf("cannot recover PQ key entropy from mnemonic: %w", seedErr)
+		}
+		scheme := protocol.PQSchemeFalcon1024
+		if schemeName != "" {
+			scheme, err = parsePQScheme(schemeName)
+			if err != nil {
+				return pqSigningContext{}, err
+			}
+		}
+		signing, err = derivePQSigningMaterialFromEntropy(scheme, entropy)
+	case keyfile != "":
+		signing, err = readPQSigningMaterial(keyfile)
+	default:
+		return pqSigningContext{}, errors.New("must specify --keyfile or --mnemonic")
+	}
+	if err != nil {
+		return pqSigningContext{}, err
+	}
+
+	ops, ok := pqSchemeOpsByScheme[signing.Public.Scheme]
+	if !ok {
+		return pqSigningContext{}, fmt.Errorf("%w: %q", crypto.ErrPQSchemeNotSupported, signing.Public.Scheme)
+	}
+
+	return pqSigningContext{
+		ops:     ops,
+		signing: signing,
+	}, nil
+}
+
+func signPQ(pqctx pqSigningContext, message crypto.Hashable) (transactions.PQSig, error) {
+	signature, err := pqctx.ops.sign(pqctx.signing.PrivateKey, message)
+	if err != nil {
+		return transactions.PQSig{}, err
+	}
+
+	return transactions.PQSig{
+		Scheme:    pqctx.signing.Public.Scheme,
+		Salt:      pqctx.signing.Public.Salt,
+		PublicKey: pqctx.signing.Public.PublicKey,
+		Signature: signature,
+	}, nil
+}
+
+func runPQSignProgram() error {
+	return runPQSignProgramWithOptions(pqSignProgramOptions{
+		keyfile:  pqSignProgramKeyfile,
+		mnemonic: pqSignProgramMnemonic,
+		scheme:   pqSignProgramScheme,
+		program:  pqSignProgramProgram,
+		outfile:  pqSignProgramOutfile,
+	})
+}
+
+func runPQSignProgramWithOptions(opts pqSignProgramOptions) error {
+	pqctx, err := resolvePQSigningContext(opts.keyfile, opts.mnemonic, opts.scheme)
+	if err != nil {
+		return err
+	}
+
+	program, err := readFile(opts.program)
+	if err != nil {
+		return fmt.Errorf("cannot read program from %s: %w", opts.program, err)
+	}
+	if len(program) == 0 {
+		return errors.New("program is empty")
+	}
+	if strings.HasSuffix(opts.program, ".teal") {
+		return fmt.Errorf("%s looks like TEAL source; compile it first (e.g. goal clerk compile) and don't use the .teal extension", opts.program)
+	}
+	if looksLikeTealSource(program) {
+		return errors.New("program is not compiled bytecode; compile it first (e.g. goal clerk compile) and don't use the .teal extension")
+	}
+	pqsig, err := signPQ(pqctx, logic.PQDelegatedProgram{Addr: pqctx.signing.Public.address(), Program: program})
+	if err != nil {
+		return fmt.Errorf("cannot sign program: %w", err)
+	}
+
+	lsig := transactions.LogicSig{
+		Logic: program,
+		PQsig: pqsig,
+	}
+	if err = writeFile(opts.outfile, protocol.Encode(&lsig), 0600); err != nil {
+		return fmt.Errorf("cannot write LogicSig to %s: %w", opts.outfile, err)
+	}
+	return nil
+}
+
+// looksLikeTealSource reports whether data is entirely printable ASCII and
+// whitespace, resembling TEAL source rather than compiled bytecode.
+func looksLikeTealSource(data []byte) bool {
+	for _, b := range data {
+		if (b < ' ' && b != '\t' && b != '\n' && b != '\r') || b > '~' {
+			return false
+		}
+	}
+	return true
+}
+
+func runPQCheckAddress(address string) error {
+	addr, err := basics.UnmarshalChecksumAddress(address)
+	if err != nil {
+		return fmt.Errorf("cannot parse address: %w", err)
+	}
+	if !addr.IsPQCompliant() {
+		return fmt.Errorf("address %s is not PQ compliant", addr)
+	}
+	fmt.Printf("address %s is PQ compliant\n", addr)
 	return nil
 }
 

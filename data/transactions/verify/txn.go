@@ -458,6 +458,9 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batch crypto.B
 		hasLMsig = true
 		numSigs++
 	}
+	if !lsig.PQsig.Blank() {
+		numSigs++
+	}
 	if numSigs == 0 {
 		// if the txn.Authorizer() == hash(Logic) then this is a (potentially) valid operation on a contract-only account
 		program := logic.Program(lsig.Logic)
@@ -469,6 +472,14 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batch crypto.B
 	}
 	if numSigs > 1 {
 		return errors.New("LogicSig should have only one type of delegation signature")
+	}
+	if !lsig.PQsig.Blank() {
+		// PQ schemes have no batch verification; verify in-place, like the top-level PQsig path.
+		program := logic.PQDelegatedProgram{Addr: txn.Authorizer(), Program: lsig.Logic}
+		if err := lsig.PQsig.Verify(groupCtx.consensusParams, program, txn.Authorizer()); err != nil {
+			return fmt.Errorf("pq delegated logic signature validation failed: %w", err)
+		}
+		return nil
 	}
 
 	if !hasMsig && !hasLMsig {

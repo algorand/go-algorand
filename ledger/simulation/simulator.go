@@ -136,19 +136,26 @@ func isPlaceholderPQSig(txn transactions.SignedTxn) bool {
 		!txn.PQsig.Blank() && len(txn.PQsig.Signature) == 0
 }
 
-func isSchemeOnlyPlaceholderPQSig(txn transactions.SignedTxn) bool {
-	return isPlaceholderPQSig(txn) && len(txn.PQsig.PublicKey) == 0
+func validatePlaceholderPQSig(proto config.ConsensusParams, pqSig transactions.PQSig, authorizer basics.Address, fixSigners bool) error {
+	if len(pqSig.PublicKey) == 0 || fixSigners {
+		return pqSig.ValidateScheme(proto)
+	}
+	return pqSig.ValidateEnvelope(proto, authorizer)
 }
 
-func validatePlaceholderPQSig(proto config.ConsensusParams, txn transactions.SignedTxn, fixSigners bool) error {
-	if isSchemeOnlyPlaceholderPQSig(txn) || fixSigners {
-		return txn.PQsig.ValidateScheme(proto)
-	}
-	return txn.PQsig.ValidateEnvelope(proto, txn.Authorizer())
+// isPlaceholderDelegatedPQSig reports whether txn carries a placeholder PQSig
+// nested in its LogicSig: a program with a non-blank nested PQ envelope with
+// empty signature bytes and no other signature category set on either the
+// transaction or the LogicSig.
+func isPlaceholderDelegatedPQSig(txn transactions.SignedTxn) bool {
+	return txn.Sig.Blank() && txn.Msig.Blank() && txn.PQsig.Blank() &&
+		txn.Lsig.HasProgram() && txn.Lsig.Sig.Blank() &&
+		txn.Lsig.Msig.Blank() && txn.Lsig.LMsig.Blank() &&
+		!txn.Lsig.PQsig.Blank() && len(txn.Lsig.PQsig.Signature) == 0
 }
 
 func txnNeedsSyntheticSignature(txn transactions.SignedTxn) bool {
-	return !txn.HasSignature() || isPlaceholderPQSig(txn)
+	return !txn.HasSignature() || isPlaceholderPQSig(txn) || isPlaceholderDelegatedPQSig(txn)
 }
 
 // A randomly generated private key. The actual value does not matter, as long as this is a valid
@@ -194,9 +201,25 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 			// itself is valid.
 			txnsToVerify[i] = stxn.Txn.Sign(proxySignerSecrets)
 		} else if overrides.AllowEmptySignatures && isPlaceholderPQSig(stxn) {
-			placeholderErr := validatePlaceholderPQSig(proto, stxn, overrides.FixSigners)
+			placeholderErr := validatePlaceholderPQSig(proto, stxn.PQsig, stxn.Authorizer(), overrides.FixSigners)
 			if placeholderErr == nil {
 				txnsToVerify[i] = stxn.Txn.Sign(proxySignerSecrets)
+			} else {
+				txnsToVerify[i] = stxn
+			}
+		} else if overrides.AllowEmptySignatures && isPlaceholderDelegatedPQSig(stxn) {
+			if validatePlaceholderPQSig(proto, stxn.Lsig.PQsig, stxn.Authorizer(), overrides.FixSigners) == nil {
+				// A delegated LogicSig carries a program that must still be
+				// evaluated and traced, so unlike the no-signature cases we
+				// cannot swap in a proxy-signed bare transaction. Keep the
+				// program but drop the placeholder PQ proof and authorize via
+				// the program hash, so the verification pass treats it as a
+				// contract-only (escrow) account and runs the program without a
+				// real Falcon signature.
+				escrow := stxn
+				escrow.Lsig.PQsig = transactions.PQSig{}
+				escrow.AuthAddr = basics.Address(logic.HashProgram(escrow.Lsig.Logic))
+				txnsToVerify[i] = escrow
 			} else {
 				txnsToVerify[i] = stxn
 			}
@@ -216,11 +239,15 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 func validateFixedPlaceholderPQEnvelopes(proto config.ConsensusParams, txgroup []transactions.SignedTxnWithAD) (int, error) {
 	for i, stxnad := range txgroup {
 		stxn := stxnad.SignedTxn
-		if !isPlaceholderPQSig(stxn) || len(stxn.PQsig.PublicKey) == 0 {
-			continue
+		if isPlaceholderPQSig(stxn) && len(stxn.PQsig.PublicKey) != 0 {
+			if err := validatePlaceholderPQSig(proto, stxn.PQsig, stxn.Authorizer(), false); err != nil {
+				return i, fmt.Errorf("pq signature validation failed: %w", err)
+			}
 		}
-		if err := stxn.PQsig.ValidateEnvelope(proto, stxn.Authorizer()); err != nil {
-			return i, fmt.Errorf("pq signature validation failed: %w", err)
+		if isPlaceholderDelegatedPQSig(stxn) && len(stxn.Lsig.PQsig.PublicKey) != 0 {
+			if err := validatePlaceholderPQSig(proto, stxn.Lsig.PQsig, stxn.Authorizer(), false); err != nil {
+				return i, fmt.Errorf("pq delegated logic signature validation failed: %w", err)
+			}
 		}
 	}
 	return -1, nil

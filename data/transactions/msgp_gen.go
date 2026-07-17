@@ -3851,8 +3851,8 @@ func LocalsRefMaxSize() (s int) {
 func (z *LogicSig) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0002Len := uint32(5)
-	var zb0002Mask uint8 /* 6 bits */
+	zb0002Len := uint32(6)
+	var zb0002Mask uint8 /* 7 bits */
 	if len((*z).Args) == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x2
@@ -3869,9 +3869,13 @@ func (z *LogicSig) MarshalMsg(b []byte) (o []byte) {
 		zb0002Len--
 		zb0002Mask |= 0x10
 	}
-	if (*z).Sig.MsgIsZero() {
+	if (*z).PQsig.MsgIsZero() {
 		zb0002Len--
 		zb0002Mask |= 0x20
+	}
+	if (*z).Sig.MsgIsZero() {
+		zb0002Len--
+		zb0002Mask |= 0x40
 	}
 	// variable map header, size zb0002Len
 	o = append(o, 0x80|uint8(zb0002Len))
@@ -3904,6 +3908,11 @@ func (z *LogicSig) MarshalMsg(b []byte) (o []byte) {
 			o = (*z).Msig.MarshalMsg(o)
 		}
 		if (zb0002Mask & 0x20) == 0 { // if not empty
+			// string "pqsig"
+			o = append(o, 0xa5, 0x70, 0x71, 0x73, 0x69, 0x67)
+			o = (*z).PQsig.MarshalMsg(o)
+		}
+		if (zb0002Mask & 0x40) == 0 { // if not empty
 			// string "sig"
 			o = append(o, 0xa3, 0x73, 0x69, 0x67)
 			o = (*z).Sig.MarshalMsg(o)
@@ -3974,6 +3983,14 @@ func (z *LogicSig) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o 
 			bts, err = (*z).LMsig.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "LMsig")
+				return
+			}
+		}
+		if zb0002 > 0 {
+			zb0002--
+			bts, err = (*z).PQsig.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "PQsig")
 				return
 			}
 		}
@@ -4073,6 +4090,12 @@ func (z *LogicSig) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o 
 					err = msgp.WrapError(err, "LMsig")
 					return
 				}
+			case "pqsig":
+				bts, err = (*z).PQsig.UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "PQsig")
+					return
+				}
 			case "arg":
 				var zb0009 int
 				var zb0010 bool
@@ -4133,7 +4156,7 @@ func (_ *LogicSig) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *LogicSig) Msgsize() (s int) {
-	s = 1 + 2 + msgp.BytesPrefixSize + len((*z).Logic) + 4 + (*z).Sig.Msgsize() + 5 + (*z).Msig.Msgsize() + 6 + (*z).LMsig.Msgsize() + 4 + msgp.ArrayHeaderSize
+	s = 1 + 2 + msgp.BytesPrefixSize + len((*z).Logic) + 4 + (*z).Sig.Msgsize() + 5 + (*z).Msig.Msgsize() + 6 + (*z).LMsig.Msgsize() + 6 + (*z).PQsig.Msgsize() + 4 + msgp.ArrayHeaderSize
 	for zb0001 := range (*z).Args {
 		s += msgp.BytesPrefixSize + len((*z).Args[zb0001])
 	}
@@ -4142,12 +4165,12 @@ func (z *LogicSig) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *LogicSig) MsgIsZero() bool {
-	return (len((*z).Logic) == 0) && ((*z).Sig.MsgIsZero()) && ((*z).Msig.MsgIsZero()) && ((*z).LMsig.MsgIsZero()) && (len((*z).Args) == 0)
+	return (len((*z).Logic) == 0) && ((*z).Sig.MsgIsZero()) && ((*z).Msig.MsgIsZero()) && ((*z).LMsig.MsgIsZero()) && ((*z).PQsig.MsgIsZero()) && (len((*z).Args) == 0)
 }
 
 // LogicSigMaxSize returns a maximum valid message size for this message type
 func LogicSigMaxSize() (s int) {
-	s = 1 + 2 + msgp.BytesPrefixSize + bounds.MaxLogicSigMaxSize + 4 + crypto.SignatureMaxSize() + 5 + crypto.MultisigSigMaxSize() + 6 + crypto.MultisigSigMaxSize() + 4
+	s = 1 + 2 + msgp.BytesPrefixSize + bounds.MaxLogicSigMaxSize + 4 + crypto.SignatureMaxSize() + 5 + crypto.MultisigSigMaxSize() + 6 + crypto.MultisigSigMaxSize() + 6 + PQSigMaxSize() + 4
 	// Calculating size of slice: z.Args
 	s += msgp.ArrayHeaderSize + bounds.MaxLogicSigMaxSize
 	return

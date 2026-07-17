@@ -1194,6 +1194,40 @@ func makePQSignedTxnWithAddressCompliance(t *testing.T, compliant bool) transact
 	}
 }
 
+func makePQDelegatedLogicSigTxnWithAddressCompliance(t *testing.T, compliant bool) transactions.SignedTxn {
+	t.Helper()
+
+	signer, authorizer, pqSig := makePQSigWithAddressCompliance(t, compliant)
+	ops, err := logic.AssembleStringWithVersion("int 1", 1)
+	require.NoError(t, err)
+
+	signature, err := signer.Sign(logic.PQDelegatedProgram{Addr: authorizer, Program: ops.Program})
+	require.NoError(t, err)
+	pqSig.Signature = signature
+
+	txn := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      authorizer,
+			Fee:         basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusFuture].MinTxnFee * 3},
+			FirstValid:  0,
+			LastValid:   100,
+			GenesisHash: genesisHash,
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: authorizer,
+		},
+	}
+
+	return transactions.SignedTxn{
+		Txn: txn,
+		Lsig: transactions.LogicSig{
+			Logic: ops.Program,
+			PQsig: pqSig,
+		},
+	}
+}
+
 func postTransactionTest(t *testing.T, txnToUse int, expectedCode int, method string, opts ...postTransactionOpt) {
 	cfg := config.GetDefaultLocal()
 	for _, opt := range opts {
@@ -1274,6 +1308,19 @@ func TestPostTransactionPQAuthorizerCompliance(t *testing.T) {
 		skip := true
 		test(t, makePQSignedTxnWithAddressCompliance(t, false), futureStatus, model.RawTransactionParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
 	})
+	t.Run("delegated-compliant", func(t *testing.T) {
+		t.Parallel()
+		test(t, makePQDelegatedLogicSigTxnWithAddressCompliance(t, true), futureStatus, model.RawTransactionParams{}, http.StatusOK, "")
+	})
+	t.Run("delegated-not-compliant", func(t *testing.T) {
+		t.Parallel()
+		test(t, makePQDelegatedLogicSigTxnWithAddressCompliance(t, false), futureStatus, model.RawTransactionParams{}, http.StatusBadRequest, "transaction 0: pq signature authorizer address")
+	})
+	t.Run("delegated-not-compliant with skip flag", func(t *testing.T) {
+		t.Parallel()
+		skip := true
+		test(t, makePQDelegatedLogicSigTxnWithAddressCompliance(t, false), futureStatus, model.RawTransactionParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
+	})
 }
 
 const pushIntOp byte = 0x81 // TEAL pushint opcode
@@ -1319,6 +1366,22 @@ func delegatedLogicSigTxnPrep(program []byte) func(transactions.SignedTxn) []byt
 		stxn.Sig = crypto.Signature{}
 		stxn.Msig = crypto.MultisigSig{}
 		stxn.Lsig = transactions.LogicSig{Logic: program, Sig: sig}
+		return protocol.Encode(&stxn)
+	}
+}
+
+// pqDelegatedEscrowLookalikeTxnPrep builds a txn whose authorizer is the
+// program hash, as for an escrow LogicSig, but whose LogicSig carries a nested
+// PQ envelope: the PQ delegation must exempt it from the escrow on-curve check.
+func pqDelegatedEscrowLookalikeTxnPrep(program []byte) func(transactions.SignedTxn) []byte {
+	return func(stxn transactions.SignedTxn) []byte {
+		stxn.Sig = crypto.Signature{}
+		stxn.Msig = crypto.MultisigSig{}
+		stxn.Lsig = transactions.LogicSig{
+			Logic: program,
+			PQsig: transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024},
+		}
+		stxn.Txn.Sender = basics.Address(logic.HashProgram(program))
 		return protocol.Encode(&stxn)
 	}
 }
@@ -1370,6 +1433,16 @@ func TestPostTransactionLogicSigCurveCheck(t *testing.T) {
 		require.Equal(t, http.StatusOK, rec.Code)
 	})
 
+	t.Run("accepts pq delegated on curve logicsig", func(t *testing.T) {
+		program := onCurveLogicSigProgram(t)
+		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, pqDelegatedEscrowLookalikeTxnPrep(program), config.GetDefaultLocal())
+		defer releasefunc()
+
+		err := handler.RawTransaction(c, model.RawTransactionParams{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, rec.Code)
+	})
+
 	t.Run("accepts off curve logicsig", func(t *testing.T) {
 		program := offCurveLogicSigProgram(t)
 		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, logicSigTxnPrep(program), config.GetDefaultLocal())
@@ -1401,11 +1474,10 @@ func TestPostTransactionAsyncPQAuthorizerCompliance(t *testing.T) {
 	cfg.EnableExperimentalAPI = true
 	cfg.EnableDeveloperAPI = true
 
-	test := func(t *testing.T, params model.RawTransactionAsyncParams, expectedCode int, expectedBody string) {
+	test := func(t *testing.T, stxn transactions.SignedTxn, params model.RawTransactionAsyncParams, expectedCode int, expectedBody string) {
 		t.Helper()
 
 		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, func(transactions.SignedTxn) []byte {
-			stxn := makePQSignedTxnWithAddressCompliance(t, false)
 			return protocol.Encode(&stxn)
 		}, cfg)
 		defer releasefunc()
@@ -1420,12 +1492,21 @@ func TestPostTransactionAsyncPQAuthorizerCompliance(t *testing.T) {
 
 	t.Run("not-compliant", func(t *testing.T) {
 		t.Parallel()
-		test(t, model.RawTransactionAsyncParams{}, http.StatusBadRequest, "transaction 0: pq signature authorizer address")
+		test(t, makePQSignedTxnWithAddressCompliance(t, false), model.RawTransactionAsyncParams{}, http.StatusBadRequest, "transaction 0: pq signature authorizer address")
 	})
 	t.Run("not-compliant with skip flag", func(t *testing.T) {
 		t.Parallel()
 		skip := true
-		test(t, model.RawTransactionAsyncParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
+		test(t, makePQSignedTxnWithAddressCompliance(t, false), model.RawTransactionAsyncParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
+	})
+	t.Run("delegated-not-compliant", func(t *testing.T) {
+		t.Parallel()
+		test(t, makePQDelegatedLogicSigTxnWithAddressCompliance(t, false), model.RawTransactionAsyncParams{}, http.StatusBadRequest, "transaction 0: pq signature authorizer address")
+	})
+	t.Run("delegated-not-compliant with skip flag", func(t *testing.T) {
+		t.Parallel()
+		skip := true
+		test(t, makePQDelegatedLogicSigTxnWithAddressCompliance(t, false), model.RawTransactionAsyncParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
 	})
 }
 
