@@ -705,8 +705,14 @@ func TestPQSignProgramRejectsTealSource(t *testing.T) {
 	})
 	require.ErrorContains(t, err, "not compiled bytecode")
 
-	require.Greater(t, int('#'), logic.LogicVersion,
-		"the first-byte check in sign-program no longer catches #pragma source; remove or rethink it")
+	pragmalessFile := filepath.Join(tempDir, "pragmaless.tok")
+	require.NoError(t, os.WriteFile(pragmalessFile, []byte("int 1"), 0600))
+	err = runPQSignProgramWithOptions(pqSignProgramOptions{
+		keyfile: keyfile,
+		program: pragmalessFile,
+		outfile: filepath.Join(tempDir, "program.lsig"),
+	})
+	require.ErrorContains(t, err, "not compiled bytecode")
 }
 
 func TestPQCheckAddress(t *testing.T) {

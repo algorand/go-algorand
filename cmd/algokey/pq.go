@@ -385,10 +385,10 @@ func runPQSignProgramWithOptions(opts pqSignProgramOptions) error {
 		return errors.New("program is empty")
 	}
 	if strings.HasSuffix(opts.program, ".teal") {
-		return fmt.Errorf("%s looks like TEAL source; compile it first (e.g. goal clerk compile)", opts.program)
+		return fmt.Errorf("%s looks like TEAL source; compile it first (e.g. goal clerk compile) and don't use the .teal extension", opts.program)
 	}
-	if program[0] > logic.LogicVersion {
-		return errors.New("program is not compiled bytecode; compile it first (e.g. goal clerk compile)")
+	if looksLikeTealSource(program) {
+		return errors.New("program is not compiled bytecode; compile it first (e.g. goal clerk compile) and don't use the .teal extension")
 	}
 	pqsig, err := signPQ(pqctx, logic.PQDelegatedProgram{Addr: pqctx.signing.Public.address(), Program: program})
 	if err != nil {
@@ -403,6 +403,17 @@ func runPQSignProgramWithOptions(opts pqSignProgramOptions) error {
 		return fmt.Errorf("cannot write LogicSig to %s: %w", opts.outfile, err)
 	}
 	return nil
+}
+
+// looksLikeTealSource reports whether data is entirely printable ASCII and
+// whitespace, resembling TEAL source rather than compiled bytecode.
+func looksLikeTealSource(data []byte) bool {
+	for _, b := range data {
+		if (b < ' ' && b != '\t' && b != '\n' && b != '\r') || b > '~' {
+			return false
+		}
+	}
+	return true
 }
 
 func runPQCheckAddress(address string) error {
