@@ -296,13 +296,13 @@ func TestPQCommandFlagShorthands(t *testing.T) {
 	t.Parallel()
 
 	require.Equal(t, "S", pqGenerateCmd.Flags().Lookup("scheme").Shorthand)
-	require.Equal(t, "f", pqGenerateCmd.Flags().Lookup("keyfile").Shorthand)
+	require.Equal(t, "k", pqGenerateCmd.Flags().Lookup("keyfile").Shorthand)
 
-	require.Equal(t, "f", pqInfoCmd.Flags().Lookup("keyfile").Shorthand)
+	require.Equal(t, "k", pqInfoCmd.Flags().Lookup("keyfile").Shorthand)
 
 	require.Equal(t, "m", pqImportCmd.Flags().Lookup("mnemonic").Shorthand)
 	require.Equal(t, "S", pqImportCmd.Flags().Lookup("scheme").Shorthand)
-	require.Equal(t, "f", pqImportCmd.Flags().Lookup("keyfile").Shorthand)
+	require.Equal(t, "k", pqImportCmd.Flags().Lookup("keyfile").Shorthand)
 
 	require.Equal(t, "k", pqSignCmd.Flags().Lookup("keyfile").Shorthand)
 	require.Equal(t, "m", pqSignCmd.Flags().Lookup("mnemonic").Shorthand)
@@ -676,6 +676,37 @@ func TestPQSignProgramRejectsEmptyInputFile(t *testing.T) {
 		outfile: filepath.Join(tempDir, "empty.lsig"),
 	})
 	require.ErrorContains(t, err, "program is empty")
+}
+
+func TestPQSignProgramRejectsTealSource(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	signing := pqTestSigning(t, 0)
+	tempDir := t.TempDir()
+	keyfile := filepath.Join(tempDir, "account.pq")
+	require.NoError(t, writePQPrivateKeyFile(keyfile, signing))
+
+	tealFile := filepath.Join(tempDir, "program.teal")
+	require.NoError(t, os.WriteFile(tealFile, []byte("int 1"), 0600))
+	err := runPQSignProgramWithOptions(pqSignProgramOptions{
+		keyfile: keyfile,
+		program: tealFile,
+		outfile: filepath.Join(tempDir, "program.lsig"),
+	})
+	require.ErrorContains(t, err, "looks like TEAL source")
+
+	textFile := filepath.Join(tempDir, "program.tok")
+	require.NoError(t, os.WriteFile(textFile, []byte("#pragma version 1\nint 1"), 0600))
+	err = runPQSignProgramWithOptions(pqSignProgramOptions{
+		keyfile: keyfile,
+		program: textFile,
+		outfile: filepath.Join(tempDir, "program.lsig"),
+	})
+	require.ErrorContains(t, err, "not compiled bytecode")
+
+	require.Greater(t, int('#'), logic.LogicVersion,
+		"the first-byte check in sign-program no longer catches #pragma source; remove or rethink it")
 }
 
 func TestPQCheckAddress(t *testing.T) {

@@ -16,7 +16,7 @@ ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 # Easier than prefixing all of the generated files.
 cd "$TEMPDIR"
 
-algokey pq generate -f pq.sk > generate.out
+algokey pq generate -k pq.sk > generate.out
 
 PQMNEMONIC=$(grep 'PQ private key mnemonic:' < generate.out | sed 's/PQ private key mnemonic: //')
 PQPUBKEY=$(grep 'PQ public key:' < generate.out | sed 's/PQ public key: //')
@@ -27,7 +27,7 @@ echo "$PQPUBKEY"
 echo "$PQADDRESS"
 
 # Restoring from mnemonic reproduces the key file.
-algokey pq import -m "$PQMNEMONIC" -f pq-restored.sk
+algokey pq import -m "$PQMNEMONIC" -k pq-restored.sk
 cmp pq.sk pq-restored.sk
 
 # Fund pq account

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -152,15 +153,15 @@ func init() {
 	pqCmd.AddCommand(pqCheckAddressCmd)
 
 	pqGenerateCmd.Flags().StringVarP(&pqGenerateScheme, "scheme", "S", pqGenerateScheme, "Post-quantum signature scheme: falcon-1024 (f1)")
-	pqGenerateCmd.Flags().StringVarP(&pqGenerateKeyfile, "keyfile", "f", "", "Private key filename")
+	pqGenerateCmd.Flags().StringVarP(&pqGenerateKeyfile, "keyfile", "k", "", "Private key filename")
 	mustMarkFlagRequired(pqGenerateCmd, "keyfile")
 
-	pqInfoCmd.Flags().StringVarP(&pqInfoKeyfile, "keyfile", "f", "", "Private key filename")
+	pqInfoCmd.Flags().StringVarP(&pqInfoKeyfile, "keyfile", "k", "", "Private key filename")
 	mustMarkFlagRequired(pqInfoCmd, "keyfile")
 
 	pqImportCmd.Flags().StringVarP(&pqImportMnemonic, "mnemonic", "m", "", "Private key mnemonic")
 	pqImportCmd.Flags().StringVarP(&pqImportScheme, "scheme", "S", pqImportScheme, "Post-quantum signature scheme: falcon-1024 (f1)")
-	pqImportCmd.Flags().StringVarP(&pqImportKeyfile, "keyfile", "f", "", "Private key filename")
+	pqImportCmd.Flags().StringVarP(&pqImportKeyfile, "keyfile", "k", "", "Private key filename")
 	mustMarkFlagRequired(pqImportCmd, "mnemonic")
 	mustMarkFlagRequired(pqImportCmd, "keyfile")
 
@@ -382,6 +383,12 @@ func runPQSignProgramWithOptions(opts pqSignProgramOptions) error {
 	}
 	if len(program) == 0 {
 		return errors.New("program is empty")
+	}
+	if strings.HasSuffix(opts.program, ".teal") {
+		return fmt.Errorf("%s looks like TEAL source; compile it first (e.g. goal clerk compile)", opts.program)
+	}
+	if program[0] > logic.LogicVersion {
+		return errors.New("program is not compiled bytecode; compile it first (e.g. goal clerk compile)")
 	}
 	pqsig, err := signPQ(pqctx, logic.PQDelegatedProgram{Addr: pqctx.signing.Public.address(), Program: program})
 	if err != nil {

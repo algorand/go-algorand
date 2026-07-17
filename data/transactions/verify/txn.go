@@ -474,6 +474,7 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batch crypto.B
 		return errors.New("LogicSig should have only one type of delegation signature")
 	}
 	if !lsig.PQsig.Blank() {
+		// PQ schemes have no batch verification; verify in-place, like the top-level PQsig path.
 		program := logic.PQDelegatedProgram{Addr: txn.Authorizer(), Program: lsig.Logic}
 		if err := lsig.PQsig.Verify(groupCtx.consensusParams, program, txn.Authorizer()); err != nil {
 			return fmt.Errorf("pq delegated logic signature validation failed: %w", err)
