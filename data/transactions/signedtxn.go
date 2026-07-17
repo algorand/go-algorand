@@ -123,6 +123,9 @@ func (s SignedTxn) signatureFeeContribution(proto config.ConsensusParams) basics
 	if !s.PQsig.Blank() {
 		return proto.PQSchemeFeeContribution(s.PQsig.Scheme)
 	}
+	if !s.Lsig.PQsig.Blank() {
+		return proto.PQSchemeFeeContribution(s.Lsig.PQsig.Scheme)
+	}
 	return 0
 }
 

@@ -36,12 +36,14 @@ const MaxLogicSigArgSize = config.MaxAVMBytesSize
 type LogicSig struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	// Logic signed by Sig or Msig, OR hashed to be the Address of an account.
+	// Logic signed by one of the delegation signature categories below, OR
+	// hashed to be the Address of an account.
 	Logic []byte `codec:"l,allocbound=bounds.MaxLogicSigMaxSize"`
 
 	Sig   crypto.Signature   `codec:"sig"`
 	Msig  crypto.MultisigSig `codec:"msig"`
 	LMsig crypto.MultisigSig `codec:"lmsig"`
+	PQsig PQSig              `codec:"pqsig"`
 
 	// Args are not signed, but checked by Logic
 	Args [][]byte `codec:"arg,allocbound=EvalMaxArgs,allocbound=MaxLogicSigArgSize,maxtotalbytes=bounds.MaxLogicSigMaxSize"`
@@ -50,7 +52,7 @@ type LogicSig struct {
 // Blank returns true if the LogicSig is entirely empty.
 func (lsig *LogicSig) Blank() bool {
 	return len(lsig.Logic) == 0 && len(lsig.Args) == 0 &&
-		lsig.Sig.Blank() && lsig.Msig.Blank() && lsig.LMsig.Blank()
+		lsig.Sig.Blank() && lsig.Msig.Blank() && lsig.LMsig.Blank() && lsig.PQsig.Blank()
 }
 
 // HasProgram returns true if the LogicSig carries a program.
@@ -80,7 +82,10 @@ func (lsig *LogicSig) ArgsLen() int {
 // different behaviors within the evaluation of a LogicSig,
 // due to differences in msgpack encoding behavior.
 func (lsig *LogicSig) Equal(b *LogicSig) bool {
-	sigs := lsig.Sig == b.Sig && lsig.Msig.Equal(b.Msig) && lsig.LMsig.Equal(b.LMsig)
+	sigs := lsig.Sig == b.Sig &&
+		lsig.Msig.Equal(b.Msig) &&
+		lsig.LMsig.Equal(b.LMsig) &&
+		lsig.PQsig.Equal(b.PQsig)
 	if !sigs {
 		return false
 	}

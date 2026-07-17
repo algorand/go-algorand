@@ -27,7 +27,10 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -293,19 +296,25 @@ func TestPQCommandFlagShorthands(t *testing.T) {
 	t.Parallel()
 
 	require.Equal(t, "S", pqGenerateCmd.Flags().Lookup("scheme").Shorthand)
-	require.Equal(t, "f", pqGenerateCmd.Flags().Lookup("keyfile").Shorthand)
+	require.Equal(t, "k", pqGenerateCmd.Flags().Lookup("keyfile").Shorthand)
 
-	require.Equal(t, "f", pqInfoCmd.Flags().Lookup("keyfile").Shorthand)
+	require.Equal(t, "k", pqInfoCmd.Flags().Lookup("keyfile").Shorthand)
 
 	require.Equal(t, "m", pqImportCmd.Flags().Lookup("mnemonic").Shorthand)
 	require.Equal(t, "S", pqImportCmd.Flags().Lookup("scheme").Shorthand)
-	require.Equal(t, "f", pqImportCmd.Flags().Lookup("keyfile").Shorthand)
+	require.Equal(t, "k", pqImportCmd.Flags().Lookup("keyfile").Shorthand)
 
 	require.Equal(t, "k", pqSignCmd.Flags().Lookup("keyfile").Shorthand)
 	require.Equal(t, "m", pqSignCmd.Flags().Lookup("mnemonic").Shorthand)
 	require.Equal(t, "S", pqSignCmd.Flags().Lookup("scheme").Shorthand)
 	require.Equal(t, "t", pqSignCmd.Flags().Lookup("txfile").Shorthand)
 	require.Equal(t, "o", pqSignCmd.Flags().Lookup("outfile").Shorthand)
+
+	require.Equal(t, "k", pqSignProgramCmd.Flags().Lookup("keyfile").Shorthand)
+	require.Equal(t, "m", pqSignProgramCmd.Flags().Lookup("mnemonic").Shorthand)
+	require.Equal(t, "S", pqSignProgramCmd.Flags().Lookup("scheme").Shorthand)
+	require.Equal(t, "p", pqSignProgramCmd.Flags().Lookup("program").Shorthand)
+	require.Equal(t, "o", pqSignProgramCmd.Flags().Lookup("outfile").Shorthand)
 }
 
 func TestPQSignProducesVerifiablePQEnvelope(t *testing.T) {
@@ -544,4 +553,178 @@ func TestPQDecodePrivateKeyRejectsMnemonic(t *testing.T) {
 
 	_, err := decodePQPrivateKeyFileBytes([]byte("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"))
 	require.ErrorIs(t, err, errPQKeyMalformed)
+}
+
+func TestPQSignProgramProducesVerifiableDelegatedLogicSig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	signing := pqTestSigning(t, 0)
+	tempDir := t.TempDir()
+	keyfile := filepath.Join(tempDir, "account.pq")
+	programFile := filepath.Join(tempDir, "program.teal.tok")
+	lsigFile := filepath.Join(tempDir, "program.lsig")
+	require.NoError(t, writePQPrivateKeyFile(keyfile, signing))
+
+	ops, err := logic.AssembleStringWithVersion("int 1", 1)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(programFile, ops.Program, 0600))
+
+	require.NoError(t, runPQSignProgramWithOptions(pqSignProgramOptions{
+		keyfile: keyfile,
+		program: programFile,
+		outfile: lsigFile,
+	}))
+
+	lsigBytes, err := os.ReadFile(lsigFile)
+	require.NoError(t, err)
+	var lsig transactions.LogicSig
+	require.NoError(t, protocol.Decode(lsigBytes, &lsig))
+
+	require.Equal(t, ops.Program, lsig.Logic)
+	require.True(t, lsig.Sig.Blank())
+	require.True(t, lsig.Msig.Blank())
+	require.True(t, lsig.LMsig.Blank())
+	require.False(t, lsig.PQsig.Blank())
+	require.Equal(t, signing.Public.Scheme, lsig.PQsig.Scheme)
+	require.Equal(t, signing.Public.Salt, lsig.PQsig.Salt)
+	require.Equal(t, signing.Public.PublicKey, lsig.PQsig.PublicKey)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	payload := logic.PQDelegatedProgram{Addr: signing.Public.address(), Program: lsig.Logic}
+	require.NoError(t, lsig.PQsig.Verify(proto, payload, signing.Public.address()))
+
+	hdr := bookkeeping.BlockHeader{UpgradeState: bookkeeping.UpgradeState{CurrentProtocol: protocol.ConsensusFuture}}
+	stxn := pqTestTxn(signing.Public.address())
+	stxn.Lsig = lsig
+	_, err = verify.TxnGroup([]transactions.SignedTxn{stxn}, &hdr, nil, logic.NoHeaderLedger{})
+	require.NoError(t, err)
+
+	wrongAuthorizerTxn := stxn
+	wrongAuthorizerTxn.Txn.Sender[0] ^= 1
+	_, err = verify.TxnGroup([]transactions.SignedTxn{wrongAuthorizerTxn}, &hdr, nil, logic.NoHeaderLedger{})
+	require.ErrorContains(t, err, "pq signature authorizer mismatch")
+}
+
+func TestPQSignProgramAcceptsMnemonic(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	signing := pqTestSigning(t, 0)
+	var entropy crypto.Seed
+	mnemonic, err := mnemonicFromSeed(entropy)
+	require.NoError(t, err)
+
+	tempDir := t.TempDir()
+	programFile := filepath.Join(tempDir, "program.teal.tok")
+	lsigFile := filepath.Join(tempDir, "program.lsig")
+	ops, err := logic.AssembleStringWithVersion("int 1", 1)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(programFile, ops.Program, 0600))
+
+	require.NoError(t, runPQSignProgramWithOptions(pqSignProgramOptions{
+		mnemonic: mnemonic,
+		scheme:   "f1",
+		program:  programFile,
+		outfile:  lsigFile,
+	}))
+
+	lsigBytes, err := os.ReadFile(lsigFile)
+	require.NoError(t, err)
+	var lsig transactions.LogicSig
+	require.NoError(t, protocol.Decode(lsigBytes, &lsig))
+	require.Equal(t, signing.Public.PublicKey, lsig.PQsig.PublicKey)
+	payload := logic.PQDelegatedProgram{Addr: signing.Public.address(), Program: lsig.Logic}
+	require.NoError(t, lsig.PQsig.Verify(config.Consensus[protocol.ConsensusFuture], payload, signing.Public.address()))
+}
+
+func TestPQSignProgramRejectsMixedKeySources(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	signing := pqTestSigning(t, 0)
+	var entropy crypto.Seed
+	mnemonic, err := mnemonicFromSeed(entropy)
+	require.NoError(t, err)
+
+	keyfile := filepath.Join(t.TempDir(), "account.pq")
+	require.NoError(t, writePQPrivateKeyFile(keyfile, signing))
+
+	err = runPQSignProgramWithOptions(pqSignProgramOptions{
+		keyfile:  keyfile,
+		mnemonic: mnemonic,
+		program:  "program.teal.tok",
+		outfile:  "program.lsig",
+	})
+	require.ErrorContains(t, err, "cannot specify both --keyfile and --mnemonic")
+}
+
+func TestPQSignProgramRejectsEmptyInputFile(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	signing := pqTestSigning(t, 0)
+	tempDir := t.TempDir()
+	keyfile := filepath.Join(tempDir, "account.pq")
+	programFile := filepath.Join(tempDir, "empty.tok")
+	require.NoError(t, writePQPrivateKeyFile(keyfile, signing))
+	require.NoError(t, os.WriteFile(programFile, nil, 0600))
+
+	err := runPQSignProgramWithOptions(pqSignProgramOptions{
+		keyfile: keyfile,
+		program: programFile,
+		outfile: filepath.Join(tempDir, "empty.lsig"),
+	})
+	require.ErrorContains(t, err, "program is empty")
+}
+
+func TestPQSignProgramRejectsTealSource(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	signing := pqTestSigning(t, 0)
+	tempDir := t.TempDir()
+	keyfile := filepath.Join(tempDir, "account.pq")
+	require.NoError(t, writePQPrivateKeyFile(keyfile, signing))
+
+	tealFile := filepath.Join(tempDir, "program.teal")
+	require.NoError(t, os.WriteFile(tealFile, []byte("int 1"), 0600))
+	err := runPQSignProgramWithOptions(pqSignProgramOptions{
+		keyfile: keyfile,
+		program: tealFile,
+		outfile: filepath.Join(tempDir, "program.lsig"),
+	})
+	require.ErrorContains(t, err, "looks like TEAL source")
+
+	textFile := filepath.Join(tempDir, "program.tok")
+	require.NoError(t, os.WriteFile(textFile, []byte("#pragma version 1\nint 1"), 0600))
+	err = runPQSignProgramWithOptions(pqSignProgramOptions{
+		keyfile: keyfile,
+		program: textFile,
+		outfile: filepath.Join(tempDir, "program.lsig"),
+	})
+	require.ErrorContains(t, err, "not compiled bytecode")
+
+	pragmalessFile := filepath.Join(tempDir, "pragmaless.tok")
+	require.NoError(t, os.WriteFile(pragmalessFile, []byte("int 1"), 0600))
+	err = runPQSignProgramWithOptions(pqSignProgramOptions{
+		keyfile: keyfile,
+		program: pragmalessFile,
+		outfile: filepath.Join(tempDir, "program.lsig"),
+	})
+	require.ErrorContains(t, err, "not compiled bytecode")
+}
+
+func TestPQCheckAddress(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	signing := pqTestSigning(t, 0)
+	require.NoError(t, runPQCheckAddress(signing.Public.address().String()))
+
+	var seed crypto.Seed
+	onCurve := basics.Address(crypto.GenerateSignatureSecrets(seed).SignatureVerifier)
+	require.ErrorContains(t, runPQCheckAddress(onCurve.String()), "not PQ compliant")
+
+	require.ErrorContains(t, runPQCheckAddress("not-an-address"), "cannot parse address")
 }
