@@ -65,11 +65,14 @@ type inspectMultisigSubsig struct {
 type inspectLogicSig struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	// Logic signed by Sig or Msig, OR hashed to be the Address of an account.
+	// Logic signed by one of the delegation signature categories below, OR
+	// hashed to be the Address of an account.
 	Logic inspectProgram `codec:"l"`
 
-	Sig  crypto.Signature   `codec:"sig"`
-	Msig inspectMultisigSig `codec:"msig"`
+	Sig   crypto.Signature   `codec:"sig"`
+	Msig  inspectMultisigSig `codec:"msig"`
+	LMsig inspectMultisigSig `codec:"lmsig"`
+	PQsig transactions.PQSig `codec:"pqsig"`
 
 	// Args are not signed, but checked by Logic
 	Args [][]byte `codec:"arg"`
@@ -174,6 +177,8 @@ func lsigToInspect(lsig transactions.LogicSig) inspectLogicSig {
 		Logic: inspectProgram(lsig.Logic),
 		Sig:   lsig.Sig,
 		Msig:  msigToInspect(lsig.Msig),
+		LMsig: msigToInspect(lsig.LMsig),
+		PQsig: lsig.PQsig,
 		Args:  lsig.Args,
 	}
 }
@@ -183,6 +188,8 @@ func lsigFromInspect(lsig inspectLogicSig) transactions.LogicSig {
 		Logic: []byte(lsig.Logic),
 		Sig:   lsig.Sig,
 		Msig:  msigFromInspect(lsig.Msig),
+		LMsig: msigFromInspect(lsig.LMsig),
+		PQsig: lsig.PQsig,
 		Args:  lsig.Args,
 	}
 }

@@ -66,8 +66,8 @@ func (p PQSig) Equal(other PQSig) bool {
 		bytes.Equal(p.Signature, other.Signature)
 }
 
-// AuthorizerAddress returns the authorizer address for the PQSig.
-func (p PQSig) AuthorizerAddress() basics.Address {
+// Address returns the authorizer address for the PQSig.
+func (p PQSig) Address() basics.Address {
 	return basics.PQAddress(p.Scheme, p.Salt, p.PublicKey)
 }
 
@@ -105,7 +105,7 @@ func (p PQSig) validateEnvelope(proto config.ConsensusParams, authorizer basics.
 		return nil, err
 	}
 
-	pqAuthorizer := p.AuthorizerAddress()
+	pqAuthorizer := p.Address()
 	if pqAuthorizer != authorizer {
 		return nil, fmt.Errorf("%w: derived %s, expected %s", errPQSigAuthorizerMismatch, pqAuthorizer, authorizer)
 	}
@@ -124,11 +124,11 @@ func (p PQSig) ValidateEnvelope(proto config.ConsensusParams, authorizer basics.
 	return err
 }
 
-// Verify validates that p is a post-quantum authorization proof for txn and
-// authorizer under proto. It verifies that the carried scheme is supported by
-// the consensus parameters; then it validates the authorization envelope and
-// verifies the scheme-specific signature over the unsigned transaction.
-func (p PQSig) Verify(proto config.ConsensusParams, txn Transaction, authorizer basics.Address) error {
+// Verify validates that p is a post-quantum authorization proof for
+// message and authorizer under proto. It verifies that the carried scheme is
+// supported by the consensus parameters; then it validates the authorization
+// envelope and verifies the scheme-specific signature over message.
+func (p PQSig) Verify(proto config.ConsensusParams, message crypto.Hashable, authorizer basics.Address) error {
 	verifier, err := p.validateEnvelope(proto, authorizer)
 	if err != nil {
 		return err
@@ -138,5 +138,5 @@ func (p PQSig) Verify(proto config.ConsensusParams, txn Transaction, authorizer 
 		return errPQSigEmpty
 	}
 
-	return verifier.Verify(txn, p.PublicKey, p.Signature)
+	return verifier.Verify(message, p.PublicKey, p.Signature)
 }

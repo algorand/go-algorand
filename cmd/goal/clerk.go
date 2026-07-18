@@ -1038,7 +1038,7 @@ func disassembleFile(fname, outname string) {
 	if err == nil {
 		// success, extract program to disassemble
 		program = lsig.Logic
-		if lsig.Sig != (crypto.Signature{}) || (!lsig.Msig.Blank()) || len(lsig.Args) > 0 {
+		if !lsig.Sig.Blank() || !lsig.Msig.Blank() || !lsig.LMsig.Blank() || !lsig.PQsig.Blank() || len(lsig.Args) > 0 {
 			nologic := lsig
 			nologic.Logic = nil
 			ilsig := lsigToInspect(nologic)

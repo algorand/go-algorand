@@ -82,6 +82,6 @@ tools/x-repo-types/x-repo-types
 # python virtual environment
 .venv
 
-# ignore local claude config changes
+# ignore local claude config changes, but share commands/skills/settings.json
 CLAUDE.local.md
-.claude
+.claude/settings.local.json*

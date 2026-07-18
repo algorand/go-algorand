@@ -21,6 +21,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/msgp/msgp"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -30,6 +32,8 @@ func TestLogicSigBlankAndHasProgram(t *testing.T) {
 
 	nonblankSig := crypto.Signature{}
 	nonblankSig[0] = 1
+
+	pqFixture := makePQSigTestFixture(t, 13)
 
 	tests := []struct {
 		name       string
@@ -62,6 +66,10 @@ func TestLogicSigBlankAndHasProgram(t *testing.T) {
 			name: "logic multisig",
 			lsig: LogicSig{LMsig: crypto.MultisigSig{Version: 1}},
 		},
+		{
+			name: "pqsig",
+			lsig: LogicSig{PQsig: pqFixture.pqSig},
+		},
 	}
 
 	for _, test := range tests {
@@ -70,4 +78,42 @@ func TestLogicSigBlankAndHasProgram(t *testing.T) {
 			require.Equal(t, test.hasProgram, test.lsig.HasProgram())
 		})
 	}
+}
+
+func TestLogicSigPQSigMsgpackRoundTrip(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	fixture := makePQSigTestFixture(t, 11)
+	lsig := LogicSig{
+		Logic: []byte{1, 32, 1},
+		Args:  [][]byte{{2, 3}},
+		PQsig: fixture.pqSig,
+	}
+
+	var decoded LogicSig
+	left, err := decoded.UnmarshalMsg(lsig.MarshalMsg(nil))
+	require.NoError(t, err)
+	require.Empty(t, left)
+	require.True(t, lsig.Equal(&decoded))
+}
+
+func TestLogicSigBlankPQSigOmitted(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	lsig := LogicSig{Logic: []byte{1}}
+	bts := lsig.MarshalMsg(nil)
+	fields, isNil, bts, err := msgp.ReadMapHeaderBytes(bts)
+	require.NoError(t, err)
+	require.False(t, isNil)
+
+	for ; fields > 0; fields-- {
+		var field []byte
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		require.NoError(t, err)
+		require.NotEqual(t, "pqsig", string(field))
+
+		bts, err = msgp.Skip(bts)
+		require.NoError(t, err)
+	}
+	require.Empty(t, bts)
 }
