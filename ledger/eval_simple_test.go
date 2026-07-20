@@ -1456,7 +1456,7 @@ func makePQRekeyTestAccount(t *testing.T, firstSeedByte byte) pqRekeyTestAccount
 func signPQRekeyTestTxn(t *testing.T, acct pqRekeyTestAccount, txn transactions.Transaction, authAddr basics.Address) transactions.SignedTxn {
 	t.Helper()
 
-	signature, err := acct.signer.Sign(txn)
+	signature, err := acct.signer.SignHashedMessage(txn)
 	require.NoError(t, err)
 
 	return transactions.SignedTxn{

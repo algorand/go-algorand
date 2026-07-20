@@ -54,11 +54,11 @@ func TestSignAndVerifyFalconHashable(t *testing.T) {
 	key, err := GenerateFalconSigner(seed)
 	a.NoError(err)
 
-	byteSig, err := key.Sign(msg)
+	byteSig, err := key.SignHashedMessage(msg)
 	a.NoError(err)
 
 	verifier := key.GetVerifyingKey()
-	err = verifier.Verify(msg, byteSig)
+	err = verifier.VerifyHashedMessage(msg, byteSig)
 	a.NoError(err)
 }
 
@@ -72,7 +72,7 @@ func TestVerifyFalcon1024RejectsMalformedInputs(t *testing.T) {
 	signer, err := GenerateFalconSigner(seed)
 	require.NoError(t, err)
 
-	signature, err := signer.Sign(msg)
+	signature, err := signer.SignHashedMessage(msg)
 	require.NoError(t, err)
 
 	longPublicKey := append([]byte{}, signer.PublicKey[:]...)
@@ -175,7 +175,7 @@ func TestFalconSignature_ValidateVersion(t *testing.T) {
 	key, err := GenerateFalconSigner(seed)
 	a.NoError(err)
 
-	byteSig, err := key.Sign(msg)
+	byteSig, err := key.SignHashedMessage(msg)
 	a.NoError(err)
 
 	a.True(byteSig.IsSaltVersionEqual(falcon.CurrentSaltVersion))

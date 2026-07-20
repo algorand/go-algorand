@@ -101,7 +101,7 @@ func makePQSignedTxn(t *testing.T, firstSeedByte byte) transactions.SignedTxn {
 	receiver[0] = 1
 	txn := createPayTransaction(config.Consensus[protocol.ConsensusFuture].MinTxnFee, 40, 60, 1, authorizer, receiver)
 
-	signature, err := signer.Sign(txn)
+	signature, err := signer.SignHashedMessage(txn)
 	require.NoError(t, err)
 	pqSig.Signature = signature
 
@@ -130,7 +130,7 @@ func makePQSigForTxn(t *testing.T, firstSeedByte byte, txn *transactions.Transac
 	var signature []byte
 	var err error
 	if txn != nil {
-		signature, err = signer.Sign(*txn)
+		signature, err = signer.SignHashedMessage(*txn)
 		require.NoError(t, err)
 	}
 	pqSig.Signature = signature
@@ -160,7 +160,7 @@ func makePQDelegatedLogicSigTxn(t *testing.T, firstSeedByte byte) transactions.S
 	ops, err := logic.AssembleStringWithVersion("int 1", 1)
 	require.NoError(t, err)
 
-	signature, err := signer.Sign(logic.PQDelegatedProgram{Addr: authorizer, Program: ops.Program})
+	signature, err := signer.SignHashedMessage(logic.PQDelegatedProgram{Addr: authorizer, Program: ops.Program})
 	require.NoError(t, err)
 	pqSig.Signature = signature
 

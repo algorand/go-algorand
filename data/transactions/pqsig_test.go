@@ -61,7 +61,7 @@ func makePQSigTestFixture(t *testing.T, firstSeedByte byte) pqSigTestFixture {
 		},
 	}
 
-	signature, err := signer.Sign(txn)
+	signature, err := signer.SignHashedMessage(txn)
 	require.NoError(t, err)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
