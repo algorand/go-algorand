@@ -95,11 +95,12 @@ type Txn struct {
 	StateProof     stateproof.StateProof
 	StateProofMsg  stateproofmsg.Message
 
-	HbAddress     basics.Address
-	HbProof       crypto.HeartbeatProof
-	HbSeed        committee.Seed
-	HbVoteID      crypto.OneTimeSignatureVerifier
-	HbKeyDilution uint64
+	HbAddress           basics.Address
+	HbProof             crypto.HeartbeatProof
+	HbSeed              committee.Seed
+	HbVoteID            crypto.OneTimeSignatureVerifier
+	HbKeyDilution       uint64
+	HbChallengeDiscount bool
 }
 
 // internalCopy "finishes" a shallow copy done by a simple Go assignment by
@@ -273,11 +274,12 @@ func (tx Txn) Txn() transactions.Transaction {
 	}
 
 	hb := &transactions.HeartbeatTxnFields{
-		HbAddress:     tx.HbAddress,
-		HbProof:       tx.HbProof,
-		HbSeed:        tx.HbSeed,
-		HbVoteID:      tx.HbVoteID,
-		HbKeyDilution: tx.HbKeyDilution,
+		HbAddress:           tx.HbAddress,
+		HbProof:             tx.HbProof,
+		HbSeed:              tx.HbSeed,
+		HbVoteID:            tx.HbVoteID,
+		HbKeyDilution:       tx.HbKeyDilution,
+		HbChallengeDiscount: tx.HbChallengeDiscount,
 	}
 	if hb.MsgIsZero() {
 		hb = nil
