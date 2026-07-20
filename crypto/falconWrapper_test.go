@@ -72,7 +72,7 @@ func TestVerifyFalcon1024RejectsMalformedInputs(t *testing.T) {
 	signer, err := GenerateFalconSigner(seed)
 	require.NoError(t, err)
 
-	signature, err := signer.SignHashedMessage(msg)
+	signature, err := signer.Sign(msg)
 	require.NoError(t, err)
 
 	longPublicKey := append([]byte{}, signer.PublicKey[:]...)

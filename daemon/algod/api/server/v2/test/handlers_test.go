@@ -1184,7 +1184,7 @@ func makePQSignedTxnWithAddressCompliance(t *testing.T, compliant bool) transact
 		},
 	}
 
-	signature, err := signer.SignHashedMessage(txn)
+	signature, err := signer.Sign(txn)
 	require.NoError(t, err)
 	pqSig.Signature = signature
 
@@ -1201,7 +1201,7 @@ func makePQDelegatedLogicSigTxnWithAddressCompliance(t *testing.T, compliant boo
 	ops, err := logic.AssembleStringWithVersion("int 1", 1)
 	require.NoError(t, err)
 
-	signature, err := signer.SignHashedMessage(logic.PQDelegatedProgram{Addr: authorizer, Program: ops.Program})
+	signature, err := signer.Sign(logic.PQDelegatedProgram{Addr: authorizer, Program: ops.Program})
 	require.NoError(t, err)
 	pqSig.Signature = signature
 

@@ -49,7 +49,7 @@ func TestPQBoundsCoverFalcon1024(t *testing.T) {
 	require.NoError(t, err)
 	require.LessOrEqual(t, uint64(len(signer.PublicKey)), uint64(MaxPQPublicKeySize))
 
-	sig, err := signer.SignHashedMessage(TestingHashable{data: []byte("pq bounds")})
+	sig, err := signer.Sign(TestingHashable{data: []byte("pq bounds")})
 	require.NoError(t, err)
 	require.LessOrEqual(t, uint64(len(sig)), uint64(MaxPQSignatureSize))
 }
@@ -68,7 +68,7 @@ func TestPQVerifierFalcon1024RoundTrip(t *testing.T) {
 	seed[0] = 1
 	signer, err := GenerateFalconSigner(seed)
 	require.NoError(t, err)
-	sig, err := signer.SignHashedMessage(msg)
+	sig, err := signer.Sign(msg)
 	require.NoError(t, err)
 
 	require.NoError(t, v.Verify(msg, signer.PublicKey[:], sig))

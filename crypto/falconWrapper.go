@@ -75,7 +75,13 @@ func GenerateFalconSigner(seed FalconSeed) (FalconSigner, error) {
 	}, err
 }
 
-// SignHashedMessage receives a message and generates a signature over that message.
+// Sign receives a message and generates a signature over that message's to-be-hashed representation.
+func (d *FalconSigner) Sign(message Hashable) (FalconSignature, error) {
+	hs := HashRep(message)
+	return d.SignBytes(hs[:])
+}
+
+// SignHashedMessage receives a message and generates a signature over the hash of that message.
 func (d *FalconSigner) SignHashedMessage(message Hashable) (FalconSignature, error) {
 	hs := Hash(HashRep(message))
 	return d.SignBytes(hs[:])
@@ -101,6 +107,12 @@ type FalconVerifier struct {
 	PublicKey FalconPublicKey `codec:"k"`
 }
 
+// Verify follows falcon algorithm to verify a signature.
+func (d *FalconVerifier) Verify(message Hashable, sig FalconSignature) error {
+	hs := HashRep(message)
+	return d.VerifyBytes(hs[:], sig)
+}
+
 // VerifyHashedMessage follows falcon algorithm to verify a signature.
 func (d *FalconVerifier) VerifyHashedMessage(message Hashable, sig FalconSignature) error {
 	hs := Hash(HashRep(message))
@@ -124,7 +136,7 @@ func VerifyFalcon1024(message Hashable, publicKey []byte, signature []byte) erro
 	// oversized signatures itself before doing any work.
 	var fv FalconVerifier
 	copy(fv.PublicKey[:], publicKey)
-	if err := fv.VerifyHashedMessage(message, FalconSignature(signature)); err != nil {
+	if err := fv.Verify(message, FalconSignature(signature)); err != nil {
 		return fmt.Errorf("%w: %w", ErrPQFalcon1024SigInvalid, err)
 	}
 	return nil

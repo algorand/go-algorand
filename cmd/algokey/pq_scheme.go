@@ -130,5 +130,5 @@ func (falcon1024Ops) sign(privateKey []byte, message crypto.Hashable) ([]byte, e
 	copy(sk[:], privateKey)
 
 	signer := crypto.FalconSigner{PrivateKey: sk}
-	return signer.SignHashedMessage(message)
+	return signer.Sign(message)
 }
