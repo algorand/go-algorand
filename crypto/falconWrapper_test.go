@@ -54,11 +54,11 @@ func TestSignAndVerifyFalconHashable(t *testing.T) {
 	key, err := GenerateFalconSigner(seed)
 	a.NoError(err)
 
-	byteSig, err := key.SignHashedMessage(msg)
+	byteSig, err := key.Sign(msg)
 	a.NoError(err)
 
 	verifier := key.GetVerifyingKey()
-	err = verifier.VerifyHashedMessage(msg, byteSig)
+	err = verifier.Verify(msg, byteSig)
 	a.NoError(err)
 }
 
@@ -175,7 +175,7 @@ func TestFalconSignature_ValidateVersion(t *testing.T) {
 	key, err := GenerateFalconSigner(seed)
 	a.NoError(err)
 
-	byteSig, err := key.SignHashedMessage(msg)
+	byteSig, err := key.Sign(msg)
 	a.NoError(err)
 
 	a.True(byteSig.IsSaltVersionEqual(falcon.CurrentSaltVersion))

@@ -77,14 +77,7 @@ func GenerateFalconSigner(seed FalconSeed) (FalconSigner, error) {
 
 // Sign receives a message and generates a signature over that message's to-be-hashed representation.
 func (d *FalconSigner) Sign(message Hashable) (FalconSignature, error) {
-	hs := HashRep(message)
-	return d.SignBytes(hs[:])
-}
-
-// SignHashedMessage receives a message and generates a signature over the hash of that message.
-func (d *FalconSigner) SignHashedMessage(message Hashable) (FalconSignature, error) {
-	hs := Hash(HashRep(message))
-	return d.SignBytes(hs[:])
+	return d.SignBytes(HashRep(message))
 }
 
 // SignBytes receives bytes and signs over them.
@@ -109,14 +102,7 @@ type FalconVerifier struct {
 
 // Verify follows falcon algorithm to verify a signature.
 func (d *FalconVerifier) Verify(message Hashable, sig FalconSignature) error {
-	hs := HashRep(message)
-	return d.VerifyBytes(hs[:], sig)
-}
-
-// VerifyHashedMessage follows falcon algorithm to verify a signature.
-func (d *FalconVerifier) VerifyHashedMessage(message Hashable, sig FalconSignature) error {
-	hs := Hash(HashRep(message))
-	return d.VerifyBytes(hs[:], sig)
+	return d.VerifyBytes(HashRep(message), sig)
 }
 
 // VerifyBytes follows falcon algorithm to verify a signature.
