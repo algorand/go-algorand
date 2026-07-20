@@ -222,14 +222,21 @@ func TestPQSigVerify(t *testing.T) {
 func TestPQSigVerifyAcceptsSignatureOverRawTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	fixture := makePQSigTestFixture(t, 0)
+	fixture := makePQSigTestFixture(t, 0) // uses signer.Sign()
 
 	rawTxnSignature, err := fixture.signer.SignBytes(crypto.HashRep(fixture.txn))
 	require.NoError(t, err)
 
+	// Sign(txn) applies HashRep internally, so it must produce the same sig as SignBytes(HashRep(txn))
+	require.Equal(t, fixture.pqSig.Signature, []byte(rawTxnSignature))
+
 	pqSig := fixture.pqSig
 	pqSig.Signature = rawTxnSignature
 	require.NoError(t, pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer))
+
+	verifier := fixture.signer.GetVerifyingKey()
+	require.NoError(t, verifier.Verify(fixture.txn, rawTxnSignature))
+	require.NoError(t, verifier.VerifyBytes(crypto.HashRep(fixture.txn), rawTxnSignature))
 
 	// A signature over the txid (the pre-hashed payload) must not verify:
 	// the payload is the raw canonical encoding, not its digest.
