@@ -100,7 +100,7 @@ type FalconVerifier struct {
 	PublicKey FalconPublicKey `codec:"k"`
 }
 
-// Verify follows falcon algorithm to verify a signature.
+// Verify verifies a Falcon-1024 signature over that message's to-be-hashed representation.
 func (d *FalconVerifier) Verify(message Hashable, sig FalconSignature) error {
 	return d.VerifyBytes(HashRep(message), sig)
 }

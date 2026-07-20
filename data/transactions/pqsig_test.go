@@ -219,24 +219,26 @@ func TestPQSigVerify(t *testing.T) {
 	require.NoError(t, fixture.pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer))
 }
 
-func TestPQSigVerifyAcceptsSignatureOverTxnID(t *testing.T) {
+func TestPQSigVerifyAcceptsSignatureOverRawTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	fixture := makePQSigTestFixture(t, 0)
 
-	txid := crypto.Digest(fixture.txn.ID())
-	txidSignature, err := fixture.signer.SignBytes(txid[:])
+	rawTxnSignature, err := fixture.signer.SignBytes(crypto.HashRep(fixture.txn))
 	require.NoError(t, err)
 
 	pqSig := fixture.pqSig
-	pqSig.Signature = txidSignature
+	pqSig.Signature = rawTxnSignature
 	require.NoError(t, pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer))
 
-	rawTxnSignature, err := fixture.signer.SignBytes(crypto.HashRep(fixture.txn))
+	// A signature over the txid (the pre-hashed payload) must not verify:
+	// the payload is the raw canonical encoding, not its digest.
+	txid := crypto.Digest(fixture.txn.ID())
+	txidSignature, err := fixture.signer.SignBytes(txid[:])
 	require.NoError(t, err)
 	require.False(t, bytes.Equal(txidSignature, rawTxnSignature))
 
-	pqSig.Signature = rawTxnSignature
+	pqSig.Signature = txidSignature
 	require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer), crypto.ErrPQFalcon1024SigInvalid)
 }
 
