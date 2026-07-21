@@ -18,7 +18,9 @@ package transactions
 
 import (
 	"errors"
+	"fmt"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/protocol"
@@ -32,6 +34,40 @@ var (
 	errMalformedStateProofSignature = errors.New("state proof reveal has an empty or too-short signature")
 	errMalformedStateProofProof     = errors.New("state proof reveal has an invalid Merkle proof depth")
 )
+
+// TxGroupMalformedErrorReasonCode is a reason code for TxGroupMalformedError.
+//
+//msgp:ignore TxGroupMalformedErrorReasonCode
+type TxGroupMalformedErrorReasonCode int
+
+const (
+	// TxGroupMalformedErrorReasonGeneric is a generic (not specific) reason code.
+	TxGroupMalformedErrorReasonGeneric TxGroupMalformedErrorReasonCode = iota
+	// TxGroupMalformedErrorReasonExceedMaxSize indicates a transaction group that is too large.
+	TxGroupMalformedErrorReasonExceedMaxSize
+	// TxGroupMalformedErrorReasonInconsistentGroupID indicates different group IDs in a transaction group.
+	TxGroupMalformedErrorReasonInconsistentGroupID
+	// TxGroupMalformedErrorReasonEmptyGroupID indicates an empty group ID in a multi-transaction group.
+	TxGroupMalformedErrorReasonEmptyGroupID
+	// TxGroupMalformedErrorReasonIncompleteGroup indicates that the group ID does not commit to the provided transactions.
+	TxGroupMalformedErrorReasonIncompleteGroup
+	// TxGroupErrorReasonInvalidFee indicates a group with improper fees.
+	TxGroupErrorReasonInvalidFee
+)
+
+// TxGroupMalformedError indicates a transaction group that violates a group-wide rule.
+type TxGroupMalformedError struct {
+	Msg    string
+	Reason TxGroupMalformedErrorReasonCode
+	// GroupIndex identifies the transaction associated with errors from CheckTxnGroup.
+	// It is -1 when a CheckTxnGroup failure cannot be attributed to one transaction.
+	GroupIndex int
+}
+
+// Error returns the transaction group validation failure message.
+func (e *TxGroupMalformedError) Error() string {
+	return e.Msg
+}
 
 func triggersResourceAvailability(tx *Transaction) bool {
 	return tx.Type == protocol.ApplicationCallTx ||
@@ -69,7 +105,7 @@ func checkApplicationCallBoxes(tx *Transaction) error {
 
 func checkTxnGroup(n int, txn func(i int) *Transaction) error {
 	heartbeat, availTrigger := false, false
-	for i := 0; i < n; i++ {
+	for i := range n {
 		tx := txn(i)
 		switch tx.Type {
 		case protocol.HeartbeatTx:
@@ -97,34 +133,73 @@ func checkTxnGroup(n int, txn func(i int) *Transaction) error {
 	if heartbeat && availTrigger {
 		return errHeartbeatInResourceGroup
 	}
+	return checkTxnGroupID(n, txn)
+}
+
+func checkTxnGroupID(n int, txn func(i int) *Transaction) error {
+	if n == 0 {
+		return nil
+	}
+
+	groupID := txn(0).Group
+	if groupID.IsZero() {
+		if n == 1 {
+			return nil
+		}
+		return &TxGroupMalformedError{
+			Msg:        fmt.Sprintf("transactionGroup: [0] had zero Group but was submitted in a group of %d", n),
+			Reason:     TxGroupMalformedErrorReasonEmptyGroupID,
+			GroupIndex: 0,
+		}
+	}
+
+	computed := TxGroup{
+		TxGroupHashes: make([]crypto.Digest, 0, n),
+	}
+	for i := range n {
+		tx := txn(i)
+		if tx.Group != groupID {
+			return &TxGroupMalformedError{
+				Msg:        fmt.Sprintf("transactionGroup: inconsistent group values: %v != %v", tx.Group, groupID),
+				Reason:     TxGroupMalformedErrorReasonInconsistentGroupID,
+				GroupIndex: i,
+			}
+		}
+
+		current := *tx
+		current.Group = crypto.Digest{}
+		computed.TxGroupHashes = append(computed.TxGroupHashes, crypto.Digest(current.ID()))
+	}
+
+	computedID := hashTxGroup(computed)
+	if groupID != computedID {
+		return &TxGroupMalformedError{
+			Msg:        fmt.Sprintf("transactionGroup: incomplete group: %v != %v (%v)", groupID, computedID, computed),
+			Reason:     TxGroupMalformedErrorReasonIncompleteGroup,
+			GroupIndex: -1,
+		}
+	}
 	return nil
 }
 
-// CheckTxnGroup screens a transaction group for invalid transactions.
+// hashTxGroup computes the canonical group hash using a pooled encoding buffer.
+func hashTxGroup(group TxGroup) crypto.Digest {
+	buf := protocol.GetEncodingBuf()
+	encoded := append(buf.Bytes(), protocol.TxGroup...)
+	encoded = group.MarshalMsg(encoded)
+	digest := crypto.Hash(encoded)
+	protocol.PutEncodingBuf(buf.Update(encoded))
+	return digest
+}
+
+// CheckTxnGroup screens a transaction group for invalid transactions and
+// verifies that its nonzero group ID commits to the provided transaction order.
 func CheckTxnGroup(group []SignedTxn) error {
 	return checkTxnGroup(len(group), func(i int) *Transaction { return &group[i].Txn })
 }
 
-// CheckPayset screens a block's payset for invalid transactions.
-func CheckPayset(payset Payset) error {
-	groupStart := 0
-	for i := 1; i < len(payset); i++ {
-		firstGroup := payset[groupStart].SignedTxn.Txn.Group
-		if firstGroup.IsZero() || firstGroup != payset[i].SignedTxn.Txn.Group {
-			if err := checkPaysetGroup(payset[groupStart:i]); err != nil {
-				return err
-			}
-			groupStart = i
-		}
-	}
-	if groupStart < len(payset) {
-		if err := checkPaysetGroup(payset[groupStart:]); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func checkPaysetGroup(group Payset) error {
+// CheckPaysetGroup screens a decoded block payset group for invalid transactions and
+// verifies that its nonzero group ID commits to the provided transaction order.
+func CheckPaysetGroup(group []SignedTxnWithAD) error {
 	return checkTxnGroup(len(group), func(i int) *Transaction { return &group[i].SignedTxn.Txn })
 }
