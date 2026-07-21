@@ -572,6 +572,51 @@ func TestTxnValidationPQDelegatedLogicSigRejectsInvalidProof(t *testing.T) {
 	})
 }
 
+func TestTxnValidationPQDelegatedLogicSigSignsRawProgram(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	dummyLedger := DummyLedgerForSignature{}
+
+	signer, authorizer, pqSig := makePQSigFields(t, 20)
+	ops, err := logic.AssembleStringWithVersion("int 1", 1)
+	require.NoError(t, err)
+
+	delegation := logic.PQDelegatedProgram{Addr: authorizer, Program: ops.Program}
+	rawSignature, err := signer.SignBytes(crypto.HashRep(delegation))
+	require.NoError(t, err)
+
+	// Sign(delegation) applies HashRep internally, so it must produce the same
+	// deterministic (det1024) signature as SignBytes(HashRep(delegation))
+	viaSign, err := signer.Sign(delegation)
+	require.NoError(t, err)
+	require.Equal(t, []byte(viaSign), []byte(rawSignature))
+
+	pqSig.Signature = rawSignature
+	stxn := transactions.SignedTxn{
+		Txn: createPayTransaction(config.Consensus[protocol.ConsensusFuture].MinTxnFee, 40, 60, 1, authorizer, basics.Address{1}),
+		Lsig: transactions.LogicSig{
+			Logic: ops.Program,
+			PQsig: pqSig,
+		},
+	}
+	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+	require.NoError(t, err)
+
+	// A signature over the SHA-512/256 digest of the delegation payload (the
+	// pre-hashed form) must not verify: the payload is the raw
+	// "PQProgram" || authorizer || program bytes, not their digest.
+	digest := crypto.HashObj(delegation)
+	digestSignature, err := signer.SignBytes(digest[:])
+	require.NoError(t, err)
+	require.NotEqual(t, []byte(digestSignature), []byte(rawSignature))
+
+	stxn.Lsig.PQsig.Signature = digestSignature
+	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+	requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
+	require.ErrorContains(t, err, "invalid falcon-1024 signature")
+}
+
 func TestTxnValidationEmptySig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
