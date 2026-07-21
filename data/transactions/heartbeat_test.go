@@ -36,6 +36,7 @@ func TestWellFormedHeartbeatErrors(t *testing.T) {
 
 	futureProto := config.Consensus[protocol.ConsensusFuture]
 	protoV36 := config.Consensus[protocol.ConsensusV36]
+	protoV41 := config.Consensus[protocol.ConsensusV41]
 	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
 	okHeader := Header{
@@ -131,6 +132,120 @@ func TestWellFormedHeartbeatErrors(t *testing.T) {
 			proto: futureProto,
 		},
 		{
+			// With the explicit-discount rule, the restrictions apply to a heartbeat that
+			// claims the discount with HbChallengeDiscount, regardless of fee.
+			tx: Transaction{
+				Type: protocol.HeartbeatTx,
+				Header: Header{
+					Sender:     addr1,
+					Fee:        futureProto.MinFee(),
+					LastValid:  105,
+					FirstValid: 100,
+					Note:       []byte{0x01},
+				},
+				HeartbeatTxnFields: &HeartbeatTxnFields{
+					HbProof: crypto.HeartbeatProof{
+						Sig: [64]byte{0x01},
+					},
+					HbSeed:              committee.Seed{0x02},
+					HbVoteID:            crypto.OneTimeSignatureVerifier{0x03},
+					HbKeyDilution:       10,
+					HbChallengeDiscount: true,
+				},
+			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.Note is set in discounted heartbeat"),
+		},
+		{
+			tx: Transaction{
+				Type: protocol.HeartbeatTx,
+				Header: Header{
+					Sender:     addr1,
+					Fee:        futureProto.MinFee(),
+					LastValid:  105,
+					FirstValid: 100,
+					Lease:      [32]byte{0x01},
+				},
+				HeartbeatTxnFields: &HeartbeatTxnFields{
+					HbProof: crypto.HeartbeatProof{
+						Sig: [64]byte{0x01},
+					},
+					HbSeed:              committee.Seed{0x02},
+					HbVoteID:            crypto.OneTimeSignatureVerifier{0x03},
+					HbKeyDilution:       10,
+					HbChallengeDiscount: true,
+				},
+			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.Lease is set in discounted heartbeat"),
+		},
+		{
+			tx: Transaction{
+				Type: protocol.HeartbeatTx,
+				Header: Header{
+					Sender:     addr1,
+					LastValid:  105,
+					FirstValid: 100,
+					RekeyTo:    [32]byte{0x01},
+				},
+				HeartbeatTxnFields: &HeartbeatTxnFields{
+					HbProof: crypto.HeartbeatProof{
+						Sig: [64]byte{0x01},
+					},
+					HbSeed:              committee.Seed{0x02},
+					HbVoteID:            crypto.OneTimeSignatureVerifier{0x03},
+					HbKeyDilution:       10,
+					HbChallengeDiscount: true,
+				},
+			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.RekeyTo is set in discounted heartbeat"),
+		},
+		{
+			// A large Note is fine on a paid heartbeat, but a challenged
+			// heartbeat may carry no Note at all.
+			tx: Transaction{
+				Type: protocol.HeartbeatTx,
+				Header: Header{
+					Sender:     addr1,
+					LastValid:  105,
+					FirstValid: 100,
+					Note:       make([]byte, 1025),
+				},
+				HeartbeatTxnFields: &HeartbeatTxnFields{
+					HbProof: crypto.HeartbeatProof{
+						Sig: [64]byte{0x01},
+					},
+					HbSeed:              committee.Seed{0x02},
+					HbVoteID:            crypto.OneTimeSignatureVerifier{0x03},
+					HbKeyDilution:       10,
+					HbChallengeDiscount: true,
+				},
+			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.Note is set in discounted heartbeat"),
+		},
+		{
+			// HbChallengeDiscount has no meaning before the explicit-discount rule and is rejected.
+			tx: Transaction{
+				Type:   protocol.HeartbeatTx,
+				Header: okHeader,
+				HeartbeatTxnFields: &HeartbeatTxnFields{
+					HbProof: crypto.HeartbeatProof{
+						Sig: [64]byte{0x01},
+					},
+					HbSeed:              committee.Seed{0x02},
+					HbVoteID:            crypto.OneTimeSignatureVerifier{0x03},
+					HbKeyDilution:       10,
+					HbChallengeDiscount: true,
+				},
+			},
+			proto:         protoV41,
+			expectedError: fmt.Errorf("tx.HbChallengeDiscount set before it is allowed"),
+		},
+		{
+			// before the explicit-discount rule, the same restrictions apply to an underpaid
+			// singleton heartbeat, inferred from its low fee.
 			tx: Transaction{
 				Type: protocol.HeartbeatTx,
 				Header: Header{
@@ -149,72 +264,7 @@ func TestWellFormedHeartbeatErrors(t *testing.T) {
 					HbKeyDilution: 10,
 				},
 			},
-			proto:         futureProto,
-			expectedError: fmt.Errorf("tx.Note is set in cheap heartbeat"),
-		},
-		{
-			tx: Transaction{
-				Type: protocol.HeartbeatTx,
-				Header: Header{
-					Sender:     addr1,
-					Fee:        basics.MicroAlgos{Raw: 100},
-					LastValid:  105,
-					FirstValid: 100,
-					Lease:      [32]byte{0x01},
-				},
-				HeartbeatTxnFields: &HeartbeatTxnFields{
-					HbProof: crypto.HeartbeatProof{
-						Sig: [64]byte{0x01},
-					},
-					HbSeed:        committee.Seed{0x02},
-					HbVoteID:      crypto.OneTimeSignatureVerifier{0x03},
-					HbKeyDilution: 10,
-				},
-			},
-			proto:         futureProto,
-			expectedError: fmt.Errorf("tx.Lease is set in cheap heartbeat"),
-		},
-		{
-			tx: Transaction{
-				Type: protocol.HeartbeatTx,
-				Header: Header{
-					Sender:     addr1,
-					LastValid:  105,
-					FirstValid: 100,
-					RekeyTo:    [32]byte{0x01},
-				},
-				HeartbeatTxnFields: &HeartbeatTxnFields{
-					HbProof: crypto.HeartbeatProof{
-						Sig: [64]byte{0x01},
-					},
-					HbSeed:        committee.Seed{0x02},
-					HbVoteID:      crypto.OneTimeSignatureVerifier{0x03},
-					HbKeyDilution: 10,
-				},
-			},
-			proto:         futureProto,
-			expectedError: fmt.Errorf("tx.RekeyTo is set in free heartbeat"),
-		},
-		{
-			tx: Transaction{
-				Type: protocol.HeartbeatTx,
-				Header: Header{
-					Sender:     addr1,
-					LastValid:  105,
-					FirstValid: 100,
-					Note:       make([]byte, 1025),   // Big notes are legal now
-					Fee:        futureProto.MinFee(), // But they need a bigger fee
-				},
-				HeartbeatTxnFields: &HeartbeatTxnFields{
-					HbProof: crypto.HeartbeatProof{
-						Sig: [64]byte{0x01},
-					},
-					HbSeed:        committee.Seed{0x02},
-					HbVoteID:      crypto.OneTimeSignatureVerifier{0x03},
-					HbKeyDilution: 10,
-				},
-			},
-			proto:         futureProto,
+			proto:         protoV41,
 			expectedError: fmt.Errorf("tx.Note is set in cheap heartbeat"),
 		},
 	}

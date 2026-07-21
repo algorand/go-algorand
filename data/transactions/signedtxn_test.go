@@ -160,6 +160,14 @@ func TestSignedTxnFeeFactorPQSignatureContribution(t *testing.T) {
 	pqPaidSingletonHeartbeat.Txn.Fee = proto.MinFee()
 	pqGroupedHeartbeat := pqSingletonHeartbeat
 	pqGroupedHeartbeat.Txn.Group = crypto.Digest{1}
+	// A challenged heartbeat gets one min fee off, but still owes any signature
+	// surcharge: only the base fee is discounted.
+	challengedHeartbeat := regularSingletonHeartbeat
+	challengedHeartbeat.Txn.HeartbeatTxnFields = &HeartbeatTxnFields{HbChallengeDiscount: true}
+	pqChallengedHeartbeat := pqSingletonHeartbeat
+	pqChallengedHeartbeat.Txn.HeartbeatTxnFields = &HeartbeatTxnFields{HbChallengeDiscount: true}
+	pqChallengedGrouped := pqChallengedHeartbeat
+	pqChallengedGrouped.Txn.Group = crypto.Digest{1}
 	delegatedPQSingletonHeartbeat := pqSingletonHeartbeat
 	delegatedPQSingletonHeartbeat.PQsig = PQSig{}
 	delegatedPQSingletonHeartbeat.Lsig = delegatedPQSigned.Lsig
@@ -180,14 +188,22 @@ func TestSignedTxnFeeFactorPQSignatureContribution(t *testing.T) {
 	require.Equal(t, delegatedPQSigned.FeeFactor(proto), rekeyedDelegatedPQSigned.FeeFactor(proto))
 	require.Equal(t, basics.Micros(3e6), programlessLsigPQSigned.FeeFactor(proto))
 	require.Equal(t, basics.Micros(3e6), pqAndRegularSigned.FeeFactor(proto))
-	require.Equal(t, basics.Micros(0), regularSingletonHeartbeat.FeeFactor(proto))
-	require.Equal(t, basics.Micros(0), pqSingletonHeartbeat.FeeFactor(proto))
-	require.Equal(t, basics.Micros(0), mixedSingletonHeartbeat.FeeFactor(proto))
-	require.Equal(t, basics.Micros(0), delegatedPQSingletonHeartbeat.FeeFactor(proto))
-	require.Equal(t, basics.Micros(2e6), pqPaidSingletonHeartbeat.FeeFactor(proto))
-	require.Equal(t, basics.Micros(2e6), delegatedPQPaidSingletonHeartbeat.FeeFactor(proto))
+	// With the explicit-discount rule a plain heartbeat pays the base fee (plus surcharges),
+	// whether or not it is a singleton.
+	require.Equal(t, basics.Micros(1e6), regularSingletonHeartbeat.FeeFactor(proto))
+	require.Equal(t, basics.Micros(3e6), pqSingletonHeartbeat.FeeFactor(proto))
+	require.Equal(t, basics.Micros(3e6), mixedSingletonHeartbeat.FeeFactor(proto))
+	require.Equal(t, basics.Micros(3e6), pqPaidSingletonHeartbeat.FeeFactor(proto))
+	// A delegated PQ lsig owes the same surcharge as a native PQ sig, so its
+	// heartbeat behaves like pqSingletonHeartbeat regardless of fee.
+	require.Equal(t, basics.Micros(3e6), delegatedPQSingletonHeartbeat.FeeFactor(proto))
+	require.Equal(t, basics.Micros(3e6), delegatedPQPaidSingletonHeartbeat.FeeFactor(proto))
 	require.Equal(t, basics.Micros(3e6), pqGroupedHeartbeat.FeeFactor(proto))
 	require.Equal(t, basics.Micros(3e6), delegatedPQGroupedHeartbeat.FeeFactor(proto))
+	// The challenge discount removes exactly one min fee, leaving surcharges.
+	require.Equal(t, basics.Micros(0), challengedHeartbeat.FeeFactor(proto))
+	require.Equal(t, basics.Micros(2e6), pqChallengedHeartbeat.FeeFactor(proto))
+	require.Equal(t, basics.Micros(2e6), pqChallengedGrouped.FeeFactor(proto))
 
 	requiredFee, _, overflow := proto.MinFee().FeeForUsage(pqSigned.FeeFactor(proto), 1e6, 0)
 	require.False(t, overflow)
