@@ -1763,6 +1763,18 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 		return makeSignedTxnWithOrphanLsig(proto, transactions.LogicSig{Args: args})
 	}
 
+	amendTxGroupID := func(stxns []transactions.SignedTxn) []transactions.SignedTxn {
+		var group transactions.TxGroup
+		for i := range stxns {
+			group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(stxns[i].ID()))
+		}
+		groupID := crypto.HashObj(group)
+		for i := range stxns {
+			stxns[i].Txn.Group = groupID
+		}
+		return stxns
+	}
+
 	t.Run("v18: singleton still limited by legacy size pool", func(t *testing.T) {
 		program := makeProgram(v18, int(v18.LogicSigMaxSize)+1)
 		err := verifyGroupForProtocol(protocol.ConsensusV18, []transactions.SignedTxn{makeLogicSigTxn(program, nil)})
@@ -1784,12 +1796,24 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 	})
 
 	t.Run("v41: orphan LogicSig args on signed txn can use size pooling", func(t *testing.T) {
-		stxn := makeSignedTxnWithOrphanArgs(v41, [][]byte{make([]byte, int(v41.LogicSigMaxSize)+500)})
+		secrets1 := keypair()
+		secrets2 := keypair()
+		stxn1 := makeSignedTxnWithOrphanArgs(v41, [][]byte{make([]byte, int(v41.LogicSigMaxSize)+500)})
+		stxn2 := makeSignedTxn(v41)
+		// makeSignedTxnWithOrphanArgs and makeSignedTxn use it is own Sender,
+		// so replace and resign to have group id to be valid
+		stxn1.Txn.Sender = basics.Address(secrets1.SignatureVerifier)
+		stxn2.Txn.Sender = basics.Address(secrets2.SignatureVerifier)
 
-		err := verifyGroupForProtocol(protocol.ConsensusV41, []transactions.SignedTxn{
-			stxn,
-			makeSignedTxn(v41),
+		// inject groupID and re-sign
+		stxns := amendTxGroupID([]transactions.SignedTxn{
+			stxn1,
+			stxn2,
 		})
+		stxns[0].Sig = secrets1.Sign(stxns[0].Txn)
+		stxns[1].Sig = secrets2.Sign(stxns[1].Txn)
+
+		err := verifyGroupForProtocol(protocol.ConsensusV41, stxns)
 		require.NoError(t, err)
 	})
 
@@ -1847,10 +1871,12 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 
 	t.Run("v41: ordinary size pooling is still allowed", func(t *testing.T) {
 		program := makeProgram(v41, int(v41.LogicSigMaxSize)+1)
-		err := verifyGroupForProtocol(protocol.ConsensusV41, []transactions.SignedTxn{
+
+		stxns := amendTxGroupID([]transactions.SignedTxn{
 			makeLogicSigTxnForReceiver(program, nil, basics.Address{1}),
 			makeLogicSigTxnForReceiver(makeProgram(v41, 0), nil, basics.Address{2}),
 		})
+		err := verifyGroupForProtocol(protocol.ConsensusV41, stxns)
 		require.NoError(t, err)
 	})
 
@@ -1888,31 +1914,34 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 		program := makeProgram(vFuture, 0)
 		args := [][]byte{make([]byte, int(vFuture.LogicSigMaxSize)+1)}
 
-		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{
+		stxns := amendTxGroupID([]transactions.SignedTxn{
 			makeLogicSigTxnForReceiver(program, args, basics.Address{1}),
 			makeLogicSigTxnForReceiver(program, nil, basics.Address{2}),
 			makeLogicSigTxnForReceiver(program, nil, basics.Address{3}),
 		})
+		err := verifyGroupForProtocol(protocol.ConsensusFuture, stxns)
 		require.NoError(t, err)
 	})
 
 	t.Run("vFuture: LogicSig args pool counts args from every LogicSig", func(t *testing.T) {
 		program := makeProgram(vFuture, 0)
 
-		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{
+		stxns := amendTxGroupID([]transactions.SignedTxn{
 			makeLogicSigTxnForReceiver(program, [][]byte{make([]byte, int(vFuture.LogicSigMaxSize))}, basics.Address{1}),
 			makeLogicSigTxnForReceiver(program, [][]byte{make([]byte, int(vFuture.LogicSigMaxSize)+1)}, basics.Address{2}),
 		})
+		err := verifyGroupForProtocol(protocol.ConsensusFuture, stxns)
 		require.ErrorContains(t, err, "more than the available size pool")
 	})
 
 	t.Run("vFuture: program bytes can exceed legacy group size pool", func(t *testing.T) {
 		program := makeProgram(vFuture, int(vFuture.MaxAbsoluteLogicSigProgramSize))
 
-		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{
+		stxns := amendTxGroupID([]transactions.SignedTxn{
 			makeLogicSigTxnForReceiver(program, nil, basics.Address{1}),
 			makeLogicSigTxnForReceiver(program, nil, basics.Address{2}),
 		})
+		err := verifyGroupForProtocol(protocol.ConsensusFuture, stxns)
 		require.NoError(t, err)
 	})
 
