@@ -54,6 +54,7 @@ jobs:
       CIRCLECI: true
       SHORTTEST: "-short"
       GOARCH: ${{ matrix.platform == 'linux-386' && '386' || 'amd64' }}
+      CGO_ENABLED: "1"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -159,6 +160,7 @@ jobs:
       PARALLEL_FLAG: "-p 4"
       SHORTTEST: "-short"
       GOARCH: ${{ matrix.platform == 'linux-386' && '386' || 'amd64' }}
+      CGO_ENABLED: "1"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -228,6 +230,7 @@ jobs:
       PARALLEL_FLAG: "-p 4"
       SHORTTEST: "-short"
       GOARCH: ${{ matrix.platform == 'linux-386' && '386' || 'amd64' }}
+      CGO_ENABLED: "1"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -298,6 +301,7 @@ jobs:
       CI_KEEP_TEMP_PLATFORM: ""
       SHORTTEST: "-short"
       GOARCH: ${{ matrix.platform == 'linux-386' && '386' || 'amd64' }}
+      CGO_ENABLED: "1"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
