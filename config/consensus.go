@@ -1541,6 +1541,7 @@ func initConsensusProtocols() {
 	vFuture.MaxAbsoluteExtraProgramPages = 7 // Allow larger programs with extra fees
 	vFuture.MaxAbsoluteTotalArgLen = 16384   // We _could_ make this as high as 16*4k
 	vFuture.PerByteTxnSurcharge = 100        // Each charged byte adds 0.000100 of min fee
+	vFuture.EnableSelectF128 = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
