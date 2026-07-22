@@ -452,4 +452,27 @@ func TestSortitionMoneyDomain(t *testing.T) {
 				"consensus version %v: committee size %d exceeds the supply", v, size)
 		}
 	}
+
+	// The checks above prove the guard cannot fire under mainnet economics;
+	// this exercises the guard itself. A stake at the domain bound must make
+	// Verify fail closed with an error instead of calling SelectF128 out of
+	// domain. No released consensus version enables the flag yet, so force it on
+	// a copy of the current proto.
+	protoF128 := proto
+	protoF128.EnableSelectF128 = true
+
+	selParams, _, round, addresses, _, vrfSecrets := testingenv(t, 100, 2000, nil)
+	ok, record, selectionSeed, _ := selParams(addresses[0])
+	require.True(t, ok)
+	// A voting stake exactly at the bound trips the >= check; TotalMoney is set
+	// no lower so the earlier total-money panic does not fire first.
+	record.MicroAlgosWithRewards.Raw = sortition.SelectF128MaxMoney
+	sel := AgreementSelector{Seed: selectionSeed, Round: round, Period: Period(0), Step: Propose}
+	m := Membership{
+		Record:     record,
+		Selector:   sel,
+		TotalMoney: basics.MicroAlgos{Raw: sortition.SelectF128MaxMoney},
+	}
+	_, err := MakeCredential(vrfSecrets[0], sel).Verify(protoF128, m)
+	require.ErrorContains(t, err, "larger than SelectF128MaxMoney")
 }

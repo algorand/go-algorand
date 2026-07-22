@@ -106,6 +106,11 @@ func (cred UnauthenticatedCredential) Verify(proto config.ConsensusParams, m Mem
 		logging.Base().Panicf("UnauthenticatedCredential.Verify: m.TotalMoney %v, expectedSelection %v", m.TotalMoney.Raw, expectedSelection)
 	} else if !userMoney.IsZero() {
 		if proto.EnableSelectF128 {
+			if userMoney.Raw >= sortition.SelectF128MaxMoney {
+				logging.Base().Errorf("UnauthenticatedCredential.Verify: user money %v larger than SelectF128MaxMoney", userMoney)
+				err = fmt.Errorf("UnauthenticatedCredential.Verify: user money %v larger than SelectF128MaxMoney", userMoney)
+				return
+			}
 			weight = sortition.SelectF128(userMoney.Raw, m.TotalMoney.Raw, committeeSize, sortition.Digest(h))
 		} else {
 			weight = sortition.Select(userMoney.Raw, m.TotalMoney.Raw, expectedSelection, sortition.Digest(h))
