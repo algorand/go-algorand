@@ -98,12 +98,11 @@ func (cred UnauthenticatedCredential) Verify(proto config.ConsensusParams, m Mem
 	var weight uint64
 	userMoney := m.Record.VotingStake()
 	committeeSize := m.Selector.CommitteeSize(proto)
-	expectedSelection := float64(committeeSize)
 
 	if m.TotalMoney.Raw < userMoney.Raw {
 		logging.Base().Panicf("UnauthenticatedCredential.Verify: total money = %v, but user money = %v", m.TotalMoney, userMoney)
-	} else if m.TotalMoney.IsZero() || expectedSelection == 0 || expectedSelection > float64(m.TotalMoney.Raw) {
-		logging.Base().Panicf("UnauthenticatedCredential.Verify: m.TotalMoney %v, expectedSelection %v", m.TotalMoney.Raw, expectedSelection)
+	} else if m.TotalMoney.IsZero() || committeeSize == 0 || committeeSize > m.TotalMoney.Raw {
+		logging.Base().Panicf("UnauthenticatedCredential.Verify: m.TotalMoney %v, expectedSelection %v", m.TotalMoney.Raw, committeeSize)
 	} else if !userMoney.IsZero() {
 		if proto.EnableSelectF128 {
 			if userMoney.Raw >= sortition.SelectF128MaxMoney {
@@ -113,7 +112,7 @@ func (cred UnauthenticatedCredential) Verify(proto config.ConsensusParams, m Mem
 			}
 			weight = sortition.SelectF128(userMoney.Raw, m.TotalMoney.Raw, committeeSize, sortition.Digest(h))
 		} else {
-			weight = sortition.Select(userMoney.Raw, m.TotalMoney.Raw, expectedSelection, sortition.Digest(h))
+			weight = sortition.Select(userMoney.Raw, m.TotalMoney.Raw, float64(committeeSize), sortition.Digest(h))
 		}
 	}
 
