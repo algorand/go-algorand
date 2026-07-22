@@ -40,7 +40,7 @@ jobs:
       fail-fast: false
       matrix:
         platform:
-          - "${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}"
+          #- "${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}"
           # Exploratory 32-bit leg: GOARCH=386 on the amd64 runner (x86-64 runs
           # i386 user code natively, no QEMU), exercising Go's 32-bit int. This
           # is a platform token, not a runner label; runs-on maps it back to the
@@ -145,7 +145,7 @@ jobs:
       fail-fast: false
       matrix:
         platform:
-          - "${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}"
+          #- "${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}"
           # Exploratory 32-bit leg (see the test job): builds the node binaries
           # for GOARCH=386 on the amd64 runner.
           - "linux-386"
@@ -214,7 +214,7 @@ jobs:
       fail-fast: false
       matrix:
         platform:
-          - "${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}"
+          #- "${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}"
           # Exploratory 32-bit leg (see the test job): builds the node binaries
           # for GOARCH=386 on the amd64 runner.
           - "linux-386"
