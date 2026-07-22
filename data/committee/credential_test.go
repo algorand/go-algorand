@@ -417,11 +417,11 @@ func BenchmarkSortition(b *testing.B) {
 
 // TestSortitionMoneyDomain verifies that every stake reachable under consensus
 // stays inside the domain bound exported by the sortition package. The money
-// argument of sortition.SelectF128 is a voting stake in microalgos, bounded
-// above by total online money and therefore by the supply minted at genesis;
-// behavior at or above sortition.SelectF128MaxMoney is undefined and is NOT
-// checked at runtime. If an economics change (for example an inflationary
-// model) raises the possible supply, or a consensus version introduces a
+	// argument of sortition.SelectF128 is a voting stake in microalgos, bounded
+	// above by total online money and therefore by the supply minted at genesis;
+	// behavior at or above sortition.SelectF128MaxMoney is undefined in the sortition
+	// package (it does not enforce the bound). If an economics change (for example an inflationary
+	// model) raises the possible supply, or a consensus version introduces a
 // committee size beyond it, this test must fail before the change can
 // silently misround consensus.
 func TestSortitionMoneyDomain(t *testing.T) {
