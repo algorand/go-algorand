@@ -68,6 +68,13 @@ jobs:
       - name: Install 32-bit toolchain
         if: matrix.platform == 'linux-386'
         run: sudo apt-get update && sudo apt-get install -y gcc-multilib g++-multilib
+      - name: Build 32-bit libsodium
+        if: matrix.platform == 'linux-386'
+        # setup-test's `make libsodium` builds the amd64 archive; this builds the
+        # 32-bit one into crypto/libs/linux/386, where the linux,386 cgo
+        # directives expect it. x86-64 runs the -m32 configure probes natively,
+        # so no cross toolchain or --host is needed.
+        run: make libsodium ARCH=386 EXTRA_CONFIGURE_FLAGS='CC="gcc -m32"'
       - name: Run tests
         run: |
           PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
@@ -137,9 +144,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ["${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}"]
+        platform:
+          - "${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}"
+          # Exploratory 32-bit leg (see the test job): builds the node binaries
+          # for GOARCH=386 on the amd64 runner.
+          - "linux-386"
         partition_id: [0, 1, 2, 3, 4] # set PARTITION_TOTAL below to match
-    runs-on: ${{ matrix.platform }}
+    runs-on: ${{ matrix.platform == 'linux-386' && (github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04') || matrix.platform }}
     env:
       CIRCLECI: true
       PARTITION_ID: ${{ matrix.partition_id }}
@@ -147,6 +158,7 @@ jobs:
       E2E_TEST_FILTER: GO
       PARALLEL_FLAG: "-p 4"
       SHORTTEST: "-short"
+      GOARCH: ${{ matrix.platform == 'linux-386' && '386' || 'amd64' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -158,6 +170,16 @@ jobs:
           cache-prefix: build-e2e
       - name: Setup test environment
         uses: ./.github/actions/setup-test
+      - name: Install 32-bit toolchain
+        if: matrix.platform == 'linux-386'
+        run: sudo apt-get update && sudo apt-get install -y gcc-multilib g++-multilib
+      - name: Build 32-bit libsodium
+        if: matrix.platform == 'linux-386'
+        # setup-test's `make libsodium` builds the amd64 archive; this builds the
+        # 32-bit one into crypto/libs/linux/386, where the linux,386 cgo
+        # directives expect it. x86-64 runs the -m32 configure probes natively,
+        # so no cross toolchain or --host is needed.
+        run: make libsodium ARCH=386 EXTRA_CONFIGURE_FLAGS='CC="gcc -m32"'
       - name: Build e2e binaries
         run: make build-e2e
       - name: Run integration tests
@@ -191,9 +213,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ["${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}"]
+        platform:
+          - "${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}"
+          # Exploratory 32-bit leg (see the test job): builds the node binaries
+          # for GOARCH=386 on the amd64 runner.
+          - "linux-386"
         partition_id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] # set PARTITION_TOTAL below to match
-    runs-on: ${{ matrix.platform }}
+    runs-on: ${{ matrix.platform == 'linux-386' && (github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04') || matrix.platform }}
     env:
       CIRCLECI: true
       PARTITION_ID: ${{ matrix.partition_id }}
@@ -201,6 +227,7 @@ jobs:
       E2E_TEST_FILTER: EXPECT
       PARALLEL_FLAG: "-p 4"
       SHORTTEST: "-short"
+      GOARCH: ${{ matrix.platform == 'linux-386' && '386' || 'amd64' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -214,6 +241,16 @@ jobs:
         uses: ./.github/actions/setup-test
         with:
           install-expect: true
+      - name: Install 32-bit toolchain
+        if: matrix.platform == 'linux-386'
+        run: sudo apt-get update && sudo apt-get install -y gcc-multilib g++-multilib
+      - name: Build 32-bit libsodium
+        if: matrix.platform == 'linux-386'
+        # setup-test's `make libsodium` builds the amd64 archive; this builds the
+        # 32-bit one into crypto/libs/linux/386, where the linux,386 cgo
+        # directives expect it. x86-64 runs the -m32 configure probes natively,
+        # so no cross toolchain or --host is needed.
+        run: make libsodium ARCH=386 EXTRA_CONFIGURE_FLAGS='CC="gcc -m32"'
       - name: Build e2e binaries
         run: make build-e2e
       - name: Run E2E expect tests
@@ -247,15 +284,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ["${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}"]
+        platform:
+          - "${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}"
+          # Exploratory 32-bit leg (see the test job): builds the node binaries
+          # for GOARCH=386 on the amd64 runner.
+          - "linux-386"
         testsuite: ["parallel", "vdir-serial"]
-    runs-on: ${{ matrix.platform }}
+    runs-on: ${{ matrix.platform == 'linux-386' && (github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04') || matrix.platform }}
     env:
       E2E_TEST_FILTER: SCRIPTS
       E2E_SUBS_TESTSUITE: ${{ matrix.testsuite }}
       CI_PLATFORM: ${{ matrix.platform }}
       CI_KEEP_TEMP_PLATFORM: ""
       SHORTTEST: "-short"
+      GOARCH: ${{ matrix.platform == 'linux-386' && '386' || 'amd64' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -267,6 +309,16 @@ jobs:
           cache-prefix: buildsrc
       - name: Setup test environment
         uses: ./.github/actions/setup-test
+      - name: Install 32-bit toolchain
+        if: matrix.platform == 'linux-386'
+        run: sudo apt-get update && sudo apt-get install -y gcc-multilib g++-multilib
+      - name: Build 32-bit libsodium
+        if: matrix.platform == 'linux-386'
+        # setup-test's `make libsodium` builds the amd64 archive; this builds the
+        # 32-bit one into crypto/libs/linux/386, where the linux,386 cgo
+        # directives expect it. x86-64 runs the -m32 configure probes natively,
+        # so no cross toolchain or --host is needed.
+        run: make libsodium ARCH=386 EXTRA_CONFIGURE_FLAGS='CC="gcc -m32"'
       - name: Build binaries
         run: make buildsrc
       - name: Run E2E subs tests
