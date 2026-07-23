@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -600,7 +600,7 @@ type mismatchingDirectroyPermissionsLog struct {
 	t *testing.T
 }
 
-func (m mismatchingDirectroyPermissionsLog) Errorf(fmts string, args ...interface{}) {
+func (m mismatchingDirectroyPermissionsLog) Errorf(fmts string, args ...any) {
 	fmtStr := fmt.Sprintf(fmts, args...)
 	require.Contains(m.t, fmtStr, "Unable to create genesis directory")
 }
@@ -868,6 +868,9 @@ func TestMaxSizesCorrect(t *testing.T) {
 	maxCombinedTxnSize := uint64(transactions.SignedTxnMaxSize())
 	// subtract out the two smaller signature sizes (logicsig is biggest, it can *contain* the others)
 	maxCombinedTxnSize -= uint64(crypto.SignatureMaxSize() + crypto.MultisigSigMaxSize())
+	// a transaction carries at most one effective PQSig (top-level OR nested in the
+	// logicsig), but SignedTxnMaxSize counts both, so subtract one.
+	maxCombinedTxnSize -= uint64(transactions.PQSigMaxSize())
 	// the logicsig size is *also* an overestimate, because it thinks that the logicsig and
 	// the logicsig args can both be up to MaxLogicSigMaxSize, but that's the max for
 	// them combined, so it double counts and we have to subtract one.
@@ -1031,11 +1034,18 @@ func TestNodeHybridTopology(t *testing.T) {
 	// ensure discovery of archival node by tracking its ledger
 	select {
 	case <-nodes[0].ledger.Wait(targetRound):
-		e0, err := nodes[0].ledger.Block(targetRound)
+		b0, err := nodes[0].ledger.Block(targetRound)
 		require.NoError(t, err)
-		e1, err := nodes[1].ledger.Block(targetRound)
-		require.NoError(t, err)
-		require.Equal(t, e1.Hash(), e0.Hash())
+
+		var err1 error
+		var b1 bookkeeping.Block
+		require.Eventually(t, func() bool {
+			// it is possible N0 commits blocks faster than R, so wait a bit
+			b1, err1 = nodes[1].ledger.Block(targetRound)
+			return err1 == nil
+		}, 3*time.Second, 50*time.Millisecond)
+
+		require.Equal(t, b1.Hash(), b0.Hash())
 	case <-time.After(3 * time.Minute): // set it to 1.5x of the dht.periodicBootstrapInterval to give DHT code to rebuild routing table one more time
 		require.Fail(t, fmt.Sprintf("no block notification for wallet: %v.", wallets[0]))
 	}
@@ -1174,6 +1184,10 @@ func TestNodeSetCatchpointCatchupMode(t *testing.T) {
 			// "start" catchpoint catchup => close services
 			outCh := n.SetCatchpointCatchupMode(true)
 			<-outCh
+			// make sure SetCatchpointCatchupMode' goroutine has completely finished
+			// to prevent data race on stop/start services
+			n.waitMonitoringRoutines()
+
 			// "stop" catchpoint catchup => resume services
 			outCh = n.SetCatchpointCatchupMode(false)
 			<-outCh

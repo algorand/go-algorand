@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -49,6 +49,127 @@ import (
 
 var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 var testSinkAddr = basics.Address{0x2c, 0x2a, 0x6c, 0xe9, 0xa9, 0xa7, 0xc2, 0x8c, 0x22, 0x95, 0xfd, 0x32, 0x4f, 0x77, 0xa5, 0x4, 0x8b, 0x42, 0xc2, 0xb7, 0xa8, 0x54, 0x84, 0xb6, 0x80, 0xb1, 0xe1, 0x3d, 0x59, 0x9b, 0xeb, 0x36}
+
+func TestCheckGroupFeesBigLogicSigProgram(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	freeSize := int(proto.LogicSigMaxSize)
+
+	tests := []struct {
+		name        string
+		programSize int
+		fees        []uint64
+		wantErr     bool
+	}{
+		{
+			name:        "singleton underpaid",
+			programSize: freeSize + 1,
+			fees:        []uint64{proto.MinTxnFee},
+			wantErr:     true,
+		},
+		{
+			name:        "singleton paid",
+			programSize: freeSize + 1,
+			fees:        []uint64{proto.MinTxnFee + 1},
+		},
+		{
+			name:        "pooled surcharge underpaid",
+			programSize: 2*freeSize + 1,
+			fees:        []uint64{proto.MinTxnFee, proto.MinTxnFee},
+			wantErr:     true,
+		},
+		{
+			name:        "pooled surcharge paid by another group member",
+			programSize: 2*freeSize + 1,
+			fees:        []uint64{proto.MinTxnFee, proto.MinTxnFee + 1},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			program := make([]byte, tt.programSize)
+			logicSigSender := basics.Address(logic.HashProgram(program))
+
+			genesisInitState, addrs, _ := ledgertesting.Genesis(10)
+			genesisInitState.Accounts[logicSigSender] = basics.AccountData{
+				MicroAlgos: basics.MicroAlgos{Raw: 1_000_000_000},
+				Status:     basics.Offline,
+			}
+
+			l := newTestLedger(t, bookkeeping.GenesisBalances{
+				Balances:    genesisInitState.Accounts,
+				FeeSink:     testSinkAddr,
+				RewardsPool: testPoolAddr,
+			})
+			genesisBlockHeader, err := l.BlockHdr(basics.Round(0))
+			require.NoError(t, err)
+			newBlock := bookkeeping.MakeBlock(genesisBlockHeader)
+			eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
+			require.NoError(t, err)
+
+			txns := []transactions.SignedTxn{{
+				Txn: transactions.Transaction{
+					Type: protocol.PaymentTx,
+					Header: transactions.Header{
+						Sender:      logicSigSender,
+						Fee:         basics.MicroAlgos{Raw: tt.fees[0]},
+						FirstValid:  newBlock.Round(),
+						LastValid:   newBlock.Round(),
+						GenesisHash: l.GenesisHash(),
+					},
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver: addrs[0],
+					},
+				},
+				Lsig: transactions.LogicSig{
+					Logic: program,
+				},
+			}}
+
+			for i, fee := range tt.fees[1:] {
+				txns = append(txns, transactions.SignedTxn{
+					Txn: transactions.Transaction{
+						Type: protocol.PaymentTx,
+						Header: transactions.Header{
+							Sender:      addrs[i],
+							Fee:         basics.MicroAlgos{Raw: fee},
+							FirstValid:  newBlock.Round(),
+							LastValid:   newBlock.Round(),
+							GenesisHash: l.GenesisHash(),
+						},
+						PaymentTxnFields: transactions.PaymentTxnFields{
+							Receiver: addrs[i+1],
+						},
+					},
+				})
+			}
+
+			if len(txns) > 1 {
+				var group transactions.TxGroup
+				for _, stxn := range txns {
+					txn := stxn.Txn
+					txn.Group = crypto.Digest{}
+					group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(txn.ID()))
+				}
+				groupID := crypto.HashObj(group)
+				for i := range txns {
+					txns[i].Txn.Group = groupID
+				}
+			}
+
+			err = eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txns)...)
+			if tt.wantErr {
+				require.ErrorContains(t, err, "fees is less than")
+				var groupErr *ledgercore.TxGroupMalformedError
+				require.ErrorAs(t, err, &groupErr)
+				require.Equal(t, ledgercore.TxGroupErrorReasonInvalidFee, groupErr.Reason)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
 
 func TestBlockEvaluatorFeeSink(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -165,8 +286,198 @@ ok:
 	if err != nil {
 		return eval, addrs[0], err
 	}
-	err = eval.TransactionGroup(g)
+	err = eval.TransactionGroup(g...)
 	return eval, addrs[0], err
+}
+
+// panicAtTracer panics from a single, configurable EvalTracer hook, letting a test drive a panic
+// into BlockEvaluator.TransactionGroup at a chosen point: BeforeTxnGroup runs before the loop and
+// AfterTxn after a transaction has mutated the cow (both before the child cow is committed), while
+// the deferred AfterTxnGroup hook runs after cow.commitToParent, inside the committing window.
+type panicAtTracer struct {
+	logic.NullEvalTracer
+	panicIn string
+}
+
+func (pt panicAtTracer) BeforeTxnGroup(*logic.EvalParams) {
+	if pt.panicIn == "BeforeTxnGroup" {
+		panic("simulated panic before committing transaction group")
+	}
+}
+
+func (pt panicAtTracer) AfterTxn(*logic.EvalParams, int, transactions.ApplyData, error) {
+	if pt.panicIn == "AfterTxn" {
+		panic("simulated panic while applying transaction group")
+	}
+}
+
+func (pt panicAtTracer) AfterTxnGroup(*logic.EvalParams, *ledgercore.StateDelta, error) {
+	if pt.panicIn == "AfterTxnGroup" {
+		panic("simulated panic after committing transaction group")
+	}
+}
+
+// TestTransactionGroupRecoversPanic drives real panics through BlockEvaluator.TransactionGroup
+// before cow.commitToParent and asserts the recover contract: the panic becomes an EvalPanicError,
+// block state is untouched (the child cow is discarded), and the same evaluator still accepts a
+// later group. The AfterTxn case panics after the cow was mutated, exercising the rollback.
+func TestTransactionGroupRecoversPanic(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genesisInitState, addrs, keys := ledgertesting.Genesis(10)
+
+	for _, panicIn := range []string{"BeforeTxnGroup", "AfterTxn"} {
+		t.Run(panicIn, func(t *testing.T) {
+			l := newTestLedger(t, bookkeeping.GenesisBalances{
+				Balances:    genesisInitState.Accounts,
+				FeeSink:     testSinkAddr,
+				RewardsPool: testPoolAddr,
+			})
+			blkHeader, err := l.BlockHdr(basics.Round(0))
+			require.NoError(t, err)
+			newBlock := bookkeeping.MakeBlock(blkHeader)
+			eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
+			require.NoError(t, err)
+			eval.validate = true // so blockTxBytes accounting runs
+
+			// pay builds a valid payment from addrs[0]; amount varies the txid so the two groups
+			// applied in this subtest are not rejected as duplicates of each other.
+			pay := func(amount uint64) transactions.SignedTxnWithAD {
+				txn := transactions.Transaction{
+					Type: protocol.PaymentTx,
+					Header: transactions.Header{
+						Sender:      addrs[0],
+						Fee:         basics.MicroAlgos{Raw: eval.proto.MinTxnFee},
+						FirstValid:  newBlock.Round(),
+						LastValid:   newBlock.Round(),
+						GenesisHash: l.GenesisHash(),
+					},
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver: addrs[1],
+						Amount:   basics.MicroAlgos{Raw: amount},
+					},
+				}
+				return txn.Sign(keys[0]).WithAD()
+			}
+
+			paysetBefore := len(eval.block.Payset)
+			bytesBefore := eval.blockTxBytes
+
+			// The panic became an EvalPanicError and the group rolled back: the child cow was
+			// discarded and block bookkeeping is exactly as it was on entry.
+			eval.Tracer = panicAtTracer{panicIn: panicIn}
+			err = eval.TransactionGroup(pay(100_000))
+			var panicErr ledgercore.EvalPanicError
+			require.ErrorAs(t, err, &panicErr)
+			require.Equal(t, eval.Round(), panicErr.Round)
+			require.Len(t, eval.block.Payset, paysetBefore)
+			require.Equal(t, bytesBefore, eval.blockTxBytes)
+
+			// The evaluator is not poisoned: a subsequent (distinct) group still applies and commits.
+			eval.Tracer = nil
+			require.NoError(t, eval.TransactionGroup(pay(100_001)))
+			require.Len(t, eval.block.Payset, paysetBefore+1)
+			require.Greater(t, eval.blockTxBytes, bytesBefore)
+		})
+	}
+}
+
+// TestTransactionGroupCorruptedStateRefusesWork verifies the mid-commit fail-safe: commitToParent
+// cannot be rolled back, so a panic recovered inside the committing window must corrupt-mark the
+// evaluator, which then refuses further groups and GenerateBlock (the pool reuses one evaluator per
+// round). The panic is driven through the deferred AfterTxnGroup tracer hook, which runs after
+// cow.commitToParent, so this exercises the recover's real corrupt-marking branch and pins the
+// placement of the committing flag; TestTransactionGroupRecoversPanic covers that a panic *before*
+// the commit leaves the marker unset and the evaluator reusable.
+func TestTransactionGroupCorruptedStateRefusesWork(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genesisInitState, addrs, keys := ledgertesting.Genesis(10)
+	l := newTestLedger(t, bookkeeping.GenesisBalances{
+		Balances:    genesisInitState.Accounts,
+		FeeSink:     testSinkAddr,
+		RewardsPool: testPoolAddr,
+	})
+	blkHeader, err := l.BlockHdr(basics.Round(0))
+	require.NoError(t, err)
+	newBlock := bookkeeping.MakeBlock(blkHeader)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
+	require.NoError(t, err)
+	eval.validate = true
+
+	// pay builds a valid payment from addrs[0]; amount varies the txid so the groups applied here
+	// are not rejected as duplicates of each other.
+	pay := func(amount uint64) transactions.SignedTxnWithAD {
+		txn := transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      addrs[0],
+				Fee:         basics.MicroAlgos{Raw: eval.proto.MinTxnFee},
+				FirstValid:  newBlock.Round(),
+				LastValid:   newBlock.Round(),
+				GenesisHash: l.GenesisHash(),
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: addrs[1],
+				Amount:   basics.MicroAlgos{Raw: amount},
+			},
+		}
+		return txn.Sign(keys[0]).WithAD()
+	}
+
+	// Apply one valid group so the evaluator holds committed state.
+	require.NoError(t, eval.TransactionGroup(pay(100_000)))
+
+	// Panic inside the committing window: the deferred AfterTxnGroup hook runs after
+	// cow.commitToParent, so the group lands in the block and the recover must corrupt-mark the
+	// evaluator rather than report a clean rejection.
+	eval.Tracer = panicAtTracer{panicIn: "AfterTxnGroup"}
+	err = eval.TransactionGroup(pay(100_001))
+	var corruptErr ledgercore.EvalPanicError
+	require.ErrorAs(t, err, &corruptErr)
+	require.Equal(t, eval.Round(), corruptErr.Round)
+	require.Len(t, eval.block.Payset, 2) // the group committed before the deferred hook panicked
+	paysetAfter := len(eval.block.Payset)
+
+	// Every entry point the pool reuses the evaluator through must now fail fast with the
+	// corrupted-state sentinel (the check returns before any further state is touched), which
+	// distinguishes refused innocent groups from the EvalPanicError the offender received.
+	eval.Tracer = nil
+	stxn := pay(100_002)
+	require.ErrorIs(t, eval.TestTransactionGroup([]transactions.SignedTxn{stxn.SignedTxn}), ledgercore.ErrEvaluatorCorruptedState)
+	require.ErrorIs(t, eval.TransactionGroup(stxn), ledgercore.ErrEvaluatorCorruptedState)
+	require.Len(t, eval.block.Payset, paysetAfter) // the refused group left no trace
+
+	vb, err := eval.GenerateBlock(nil)
+	require.ErrorIs(t, err, ledgercore.ErrEvaluatorCorruptedState)
+	require.Nil(t, vb)
+}
+
+// panicFlushLedger panics in FlushCaches, the first call Eval makes.
+type panicFlushLedger struct{ *evalTestLedger }
+
+func (panicFlushLedger) FlushCaches() { panic("simulated panic flushing caches") }
+
+func TestEvalRecoversPanic(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genesisInitState, _, _ := ledgertesting.Genesis(10)
+	l := newTestLedger(t, bookkeeping.GenesisBalances{
+		Balances:    genesisInitState.Accounts,
+		FeeSink:     testSinkAddr,
+		RewardsPool: testPoolAddr,
+	})
+	blkHeader, err := l.BlockHdr(basics.Round(0))
+	require.NoError(t, err)
+	newBlock := bookkeeping.MakeBlock(blkHeader)
+
+	_, err = Eval(context.Background(), panicFlushLedger{l}, newBlock, false, nil, nil, nil)
+	var panicErr ledgercore.EvalPanicError
+	require.ErrorAs(t, err, &panicErr)
+	require.Equal(t, newBlock.Round(), panicErr.Round)
 }
 
 // TestEvalAppStateCountsWithTxnGroup ensures txns in a group can't violate app state schema limits
@@ -221,12 +532,12 @@ func TestPrivateTransactionGroup(t *testing.T) {
 
 	var txgroup []transactions.SignedTxnWithAD
 	eval := BlockEvaluator{}
-	err := eval.TransactionGroup(txgroup)
+	err := eval.TransactionGroup(txgroup...)
 	require.NoError(t, err) // nothing to do, no problem
 
 	eval.proto = config.Consensus[protocol.ConsensusCurrentVersion]
 	txgroup = make([]transactions.SignedTxnWithAD, eval.proto.MaxTxGroupSize+1)
-	err = eval.TransactionGroup(txgroup)
+	err = eval.TransactionGroup(txgroup...)
 	require.ErrorContains(t, err, "group size")
 }
 
@@ -327,12 +638,13 @@ int 1`,
 			}
 
 			// a non-app call txn
+			payAmount := basics.MicroAlgos{Raw: 1_000_000}
 			payTxn := txntest.Txn{
 				Type:             protocol.PaymentTx,
 				Sender:           addrs[1],
 				Receiver:         addrs[2],
 				CloseRemainderTo: addrs[3],
-				Amount:           1_000_000,
+				Amount:           payAmount,
 
 				FirstValid:  newBlock.Round(),
 				LastValid:   newBlock.Round() + 1000,
@@ -399,7 +711,7 @@ int 1`,
 
 			require.Len(t, eval.block.Payset, 0)
 
-			err = eval.TransactionGroup(txgroup)
+			err = eval.TransactionGroup(txgroup...)
 			switch testCase.firstTxnBehavior {
 			case "approve":
 				if len(scenario.ExpectedError) != 0 {
@@ -427,9 +739,9 @@ int 1`,
 			}
 			expectedPayTxnAD :=
 				transactions.ApplyData{
-					ClosingAmount: basics.MicroAlgos{
-						Raw: balances[payTxn.Sender].MicroAlgos.Raw - payTxn.Amount - txgroup[1].Txn.Fee.Raw,
-					},
+					ClosingAmount: balances[payTxn.Sender].MicroAlgos.
+						SubSaturate(payAmount).
+						SubSaturate(txgroup[1].Txn.Fee),
 				}
 
 			expectedFeeSinkData := ledgercore.ToAccountData(balances[testSinkAddr])
@@ -489,7 +801,7 @@ int 1`,
 
 				expectedAcct1Data := ledgercore.AccountData{}
 				expectedAcct2Data := ledgercore.ToAccountData(balances[addrs[2]])
-				expectedAcct2Data.MicroAlgos.Raw += payTxn.Amount
+				expectedAcct2Data.MicroAlgos.Raw += payAmount.Raw
 				expectedAcct3Data := ledgercore.ToAccountData(balances[addrs[3]])
 				expectedAcct3Data.MicroAlgos.Raw += expectedPayTxnAD.ClosingAmount.Raw
 				expectedFeeSinkData.MicroAlgos.Raw += txgroup[1].Txn.Fee.Raw
@@ -666,7 +978,7 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 		},
 	}
 	st := txn.Sign(keys[0])
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.TransactionGroup(st.WithAD())
 	require.NoError(t, err)
 
 	poolOld, err := eval.workaroundOverspentRewards(rewardPoolBalance, headerRound)
@@ -1420,12 +1732,11 @@ func TestAbsenteeChecks(t *testing.T) {
 		return pay(i, addrs[i]).Sign(keys[i])
 	}
 
-	require.NoError(t, blkEval.Transaction(selfpay(0), transactions.ApplyData{}))
-	require.NoError(t, blkEval.Transaction(selfpay(1), transactions.ApplyData{}))
-	require.NoError(t, blkEval.Transaction(selfpay(2), transactions.ApplyData{}))
+	require.NoError(t, blkEval.TransactionGroup(selfpay(0).WithAD()))
+	require.NoError(t, blkEval.TransactionGroup(selfpay(1).WithAD()))
+	require.NoError(t, blkEval.TransactionGroup(selfpay(2).WithAD()))
 	for i := 0; i < 32; i++ {
-		require.NoError(t, blkEval.Transaction(pay(0, basics.Address{byte(i << 3), 0xaa}).Sign(keys[0]),
-			transactions.ApplyData{}))
+		require.NoError(t, blkEval.TransactionGroup(pay(0, basics.Address{byte(i << 3), 0xaa}).Sign(keys[0]).WithAD()))
 	}
 
 	// Make sure we validate our block as well
@@ -1626,4 +1937,31 @@ func TestIsAbsent(t *testing.T) {
 	// not absent if never seen
 	a.False(absent(1000, 10, 0, 2001))
 	a.True(absent(1000, 10, 1, 2002))
+}
+
+func TestComputeLoad(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	tests := []struct {
+		blockSize int
+		maxSize   int
+		expected  basics.Micros
+	}{
+		{0, 1000, 0},
+		{250, 1000, 250_000},
+		{500, 1000, 500_000},
+		{750, 1000, 750_000},
+		{1000, 1000, 1_000_000},
+		{1500, 1000, 1_000_000}, // overfull capped at max
+		{1, 10, 100_000},
+		{50000, 100000, 500_000},
+		{1, 1000000, 1},
+		{999, 1000, 999_000},
+	}
+
+	for _, tt := range tests {
+		result := ComputeLoad(tt.blockSize, tt.maxSize)
+		require.Equal(t, tt.expected, result)
+	}
 }

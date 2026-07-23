@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,13 +24,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
-	"github.com/stretchr/testify/require"
 )
 
 type accountsV2Reader struct {
@@ -802,19 +803,19 @@ func onlineAccountsDeleteByRowIDs(e db.Executable, rowids []int64, table string)
 	return
 }
 
-func rowidsToChunkedArgs(rowids []int64) [][]interface{} {
+func rowidsToChunkedArgs(rowids []int64) [][]any {
 	const sqliteMaxVariableNumber = 999
 
 	numChunks := len(rowids)/sqliteMaxVariableNumber + 1
 	if len(rowids)%sqliteMaxVariableNumber == 0 {
 		numChunks--
 	}
-	chunks := make([][]interface{}, numChunks)
+	chunks := make([][]any, numChunks)
 	if numChunks == 1 {
 		// optimize memory consumption for the most common case
-		chunks[0] = make([]interface{}, len(rowids))
+		chunks[0] = make([]any, len(rowids))
 		for i, rowid := range rowids {
-			chunks[0][i] = interface{}(rowid)
+			chunks[0][i] = any(rowid)
 		}
 	} else {
 		for i := 0; i < numChunks; i++ {
@@ -822,11 +823,11 @@ func rowidsToChunkedArgs(rowids []int64) [][]interface{} {
 			if i == numChunks-1 {
 				chunkSize = len(rowids) - (numChunks-1)*sqliteMaxVariableNumber
 			}
-			chunks[i] = make([]interface{}, chunkSize)
+			chunks[i] = make([]any, chunkSize)
 		}
 		for i, rowid := range rowids {
 			chunkIndex := i / sqliteMaxVariableNumber
-			chunks[chunkIndex][i%sqliteMaxVariableNumber] = interface{}(rowid)
+			chunks[chunkIndex][i%sqliteMaxVariableNumber] = any(rowid)
 		}
 	}
 	return chunks

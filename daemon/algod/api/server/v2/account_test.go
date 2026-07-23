@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package v2
 
 import (
+	"encoding/base64"
 	"fmt"
 	"testing"
 
@@ -106,7 +107,7 @@ func TestAccount(t *testing.T) {
 	b := a.WithUpdatedRewards(proto.RewardUnit, 100)
 
 	addr := basics.Address{}.String()
-	conv, err := AccountDataToAccount(addr, &b, round, &proto, a.MicroAlgos)
+	conv, err := AccountDataToAccount(addr, &b, round, &proto, a.MicroAlgos, AccountDataToAccountOptions{})
 	require.NoError(t, err)
 	require.Equal(t, addr, conv.Address)
 	require.Equal(t, b.MicroAlgos.Raw, conv.Amount)
@@ -145,7 +146,11 @@ func TestAccount(t *testing.T) {
 	verifyCreatedApp(0, appIdx1, appParams1)
 	verifyCreatedApp(1, appIdx2, appParams2)
 
-	makeTKV := func(k string, v interface{}) model.TealKeyValue {
+	b64 := func(s string) string {
+		return base64.StdEncoding.EncodeToString([]byte(s))
+	}
+
+	makeTKV := func(k string, v any) model.TealKeyValue {
 		value := model.TealValue{}
 		switch v.(type) {
 		case int:
@@ -155,7 +160,7 @@ func TestAccount(t *testing.T) {
 			value.Bytes = b64(v.(string))
 			value.Type = uint64(basics.TealBytesType)
 		default:
-			panic(fmt.Sprintf("Unknown teal type %v", t))
+			panic(fmt.Sprintf("Unknown teal type for %v", v))
 		}
 		return model.TealKeyValue{
 			Key:   b64(k),
@@ -206,7 +211,7 @@ func TestAccount(t *testing.T) {
 		// convert the same account a few more times to make sure we always
 		// produce the same model.Account
 		for i := 0; i < 10; i++ {
-			anotherConv, err := AccountDataToAccount(addr, &b, round, &proto, a.MicroAlgos)
+			anotherConv, err := AccountDataToAccount(addr, &b, round, &proto, a.MicroAlgos, AccountDataToAccountOptions{})
 			require.NoError(t, err)
 
 			require.Equal(t, protocol.EncodeJSON(conv), protocol.EncodeJSON(anotherConv))
@@ -223,7 +228,7 @@ func TestAccountRandomRoundTrip(t *testing.T) {
 		for addr, acct := range accts {
 			round := basics.Round(2)
 			proto := config.Consensus[protocol.ConsensusFuture]
-			conv, err := AccountDataToAccount(addr.String(), &acct, round, &proto, acct.MicroAlgos)
+			conv, err := AccountDataToAccount(addr.String(), &acct, round, &proto, acct.MicroAlgos, AccountDataToAccountOptions{})
 			require.NoError(t, err)
 			c, err := AccountToAccountData(&conv)
 			require.NoError(t, err)

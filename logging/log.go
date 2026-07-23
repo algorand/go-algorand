@@ -97,37 +97,37 @@ type Fields = logrus.Fields
 // Logger is the interface for loggers.
 type Logger interface {
 	// Debug logs a message at level Debug.
-	Debug(...interface{})
-	Debugln(...interface{})
-	Debugf(string, ...interface{})
+	Debug(...any)
+	Debugln(...any)
+	Debugf(string, ...any)
 
 	// Info logs a message at level Info.
-	Info(...interface{})
-	Infoln(...interface{})
-	Infof(string, ...interface{})
+	Info(...any)
+	Infoln(...any)
+	Infof(string, ...any)
 
 	// Warn logs a message at level Warn.
-	Warn(...interface{})
-	Warnln(...interface{})
-	Warnf(string, ...interface{})
+	Warn(...any)
+	Warnln(...any)
+	Warnf(string, ...any)
 
 	// Error logs a message at level Error.
-	Error(...interface{})
-	Errorln(...interface{})
-	Errorf(string, ...interface{})
+	Error(...any)
+	Errorln(...any)
+	Errorf(string, ...any)
 
 	// Fatal logs a message at level Fatal.
-	Fatal(...interface{})
-	Fatalln(...interface{})
-	Fatalf(string, ...interface{})
+	Fatal(...any)
+	Fatalln(...any)
+	Fatalf(string, ...any)
 
 	// Panic logs a message at level Panic.
-	Panic(...interface{})
-	Panicln(...interface{})
-	Panicf(string, ...interface{})
+	Panic(...any)
+	Panicln(...any)
+	Panicf(string, ...any)
 
 	// Add one key-value to log
-	With(key string, value interface{}) Logger
+	With(key string, value any) Logger
 
 	// WithFields logs a message with specific fields
 	WithFields(Fields) Logger
@@ -159,9 +159,9 @@ type Logger interface {
 	UpdateTelemetryURI(uri string) error
 	GetTelemetryEnabled() bool
 	GetTelemetryUploadingEnabled() bool
-	Metrics(category telemetryspec.Category, metrics telemetryspec.MetricDetails, details interface{})
+	Metrics(category telemetryspec.Category, metrics telemetryspec.MetricDetails, details any)
 	Event(category telemetryspec.Category, identifier telemetryspec.Event)
-	EventWithDetails(category telemetryspec.Category, identifier telemetryspec.Event, details interface{})
+	EventWithDetails(category telemetryspec.Category, identifier telemetryspec.Event, details any)
 	GetTelemetrySession() string
 	GetTelemetryGUID() string
 	GetInstanceName() string
@@ -178,80 +178,80 @@ type logger struct {
 	loggerState *loggerState
 }
 
-func (l logger) With(key string, value interface{}) Logger {
+func (l logger) With(key string, value any) Logger {
 	return logger{
 		l.entry.WithField(key, value),
 		l.loggerState,
 	}
 }
 
-func (l logger) Debug(args ...interface{}) {
+func (l logger) Debug(args ...any) {
 	l.source().Debug(args...)
 }
 
-func (l logger) Debugln(args ...interface{}) {
+func (l logger) Debugln(args ...any) {
 	l.source().Debugln(args...)
 }
 
-func (l logger) Debugf(format string, args ...interface{}) {
+func (l logger) Debugf(format string, args ...any) {
 	l.source().Debugf(format, args...)
 }
 
-func (l logger) Info(args ...interface{}) {
+func (l logger) Info(args ...any) {
 	l.source().Info(args...)
 }
 
-func (l logger) Infoln(args ...interface{}) {
+func (l logger) Infoln(args ...any) {
 	l.source().Infoln(args...)
 }
 
-func (l logger) Infof(format string, args ...interface{}) {
+func (l logger) Infof(format string, args ...any) {
 	l.source().Infof(format, args...)
 }
 
-func (l logger) Warn(args ...interface{}) {
+func (l logger) Warn(args ...any) {
 	l.source().Warn(args...)
 }
 
-func (l logger) Warnln(args ...interface{}) {
+func (l logger) Warnln(args ...any) {
 	l.source().Warnln(args...)
 }
 
-func (l logger) Warnf(format string, args ...interface{}) {
+func (l logger) Warnf(format string, args ...any) {
 	l.source().Warnf(format, args...)
 }
 
-func (l logger) Error(args ...interface{}) {
+func (l logger) Error(args ...any) {
 	l.source().Errorln(stackPrefix, string(debug.Stack()))
 	l.source().Error(args...)
 }
 
-func (l logger) Errorln(args ...interface{}) {
+func (l logger) Errorln(args ...any) {
 	l.source().Errorln(stackPrefix, string(debug.Stack()))
 	l.source().Errorln(args...)
 }
 
-func (l logger) Errorf(format string, args ...interface{}) {
+func (l logger) Errorf(format string, args ...any) {
 	l.source().Errorln(stackPrefix, string(debug.Stack()))
 	l.source().Errorf(format, args...)
 }
 
-func (l logger) Fatal(args ...interface{}) {
+func (l logger) Fatal(args ...any) {
 	l.source().Errorln(stackPrefix, string(debug.Stack()))
 	l.source().Fatal(args...)
 }
 
-func (l logger) Fatalln(args ...interface{}) {
+func (l logger) Fatalln(args ...any) {
 	l.source().Errorln(stackPrefix, string(debug.Stack()))
 	l.source().Fatalln(args...)
 }
 
-func (l logger) Fatalf(format string, args ...interface{}) {
+func (l logger) Fatalf(format string, args ...any) {
 	l.source().Errorln(stackPrefix, string(debug.Stack()))
 	l.source().Fatalf(format, args...)
 }
 
-func (l logger) Panic(args ...interface{}) {
+func (l logger) Panic(args ...any) {
 	defer func() {
 		if r := recover(); r != nil {
 			l.FlushTelemetry()
@@ -262,7 +262,7 @@ func (l logger) Panic(args ...interface{}) {
 	l.source().Panic(args...)
 }
 
-func (l logger) Panicln(args ...interface{}) {
+func (l logger) Panicln(args ...any) {
 	defer func() {
 		if r := recover(); r != nil {
 			l.FlushTelemetry()
@@ -273,7 +273,7 @@ func (l logger) Panicln(args ...interface{}) {
 	l.source().Panicln(args...)
 }
 
-func (l logger) Panicf(format string, args ...interface{}) {
+func (l logger) Panicf(format string, args ...any) {
 	defer func() {
 		if r := recover(); r != nil {
 			l.FlushTelemetry()
@@ -292,15 +292,15 @@ func (l logger) WithFields(fields Fields) Logger {
 }
 
 func (l logger) GetLevel() (lvl Level) {
-	return Level(l.entry.Logger.Level)
+	return Level(l.entry.Logger.GetLevel())
 }
 
 func (l logger) SetLevel(lvl Level) {
-	l.entry.Logger.Level = logrus.Level(lvl)
+	l.entry.Logger.SetLevel(logrus.Level(lvl))
 }
 
 func (l logger) IsLevelEnabled(level Level) bool {
-	return l.entry.Logger.Level >= logrus.Level(level)
+	return l.entry.Logger.IsLevelEnabled(logrus.Level(level))
 }
 
 func (l logger) SetOutput(w io.Writer) {
@@ -455,7 +455,7 @@ func (l logger) GetTelemetryUploadingEnabled() bool {
 		l.loggerState.telemetry.telemetryConfig.Enable
 }
 
-func (l logger) Metrics(category telemetryspec.Category, metrics telemetryspec.MetricDetails, details interface{}) {
+func (l logger) Metrics(category telemetryspec.Category, metrics telemetryspec.MetricDetails, details any) {
 	if l.loggerState.telemetry != nil {
 		l.loggerState.telemetry.logMetrics(l, category, metrics, details)
 	}
@@ -465,7 +465,7 @@ func (l logger) Event(category telemetryspec.Category, identifier telemetryspec.
 	l.EventWithDetails(category, identifier, nil)
 }
 
-func (l logger) EventWithDetails(category telemetryspec.Category, identifier telemetryspec.Event, details interface{}) {
+func (l logger) EventWithDetails(category telemetryspec.Category, identifier telemetryspec.Event, details any) {
 	if l.loggerState.telemetry != nil {
 		l.loggerState.telemetry.logEvent(l, category, identifier, details)
 	}

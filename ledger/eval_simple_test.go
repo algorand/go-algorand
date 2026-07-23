@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -79,7 +80,7 @@ func TestBlockEvaluator(t *testing.T) {
 
 	// Correct signature should work
 	st := txn.Sign(keys[0])
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.TransactionGroup(st.WithAD())
 	require.NoError(t, err)
 
 	// Broken signature should fail
@@ -93,7 +94,7 @@ func TestBlockEvaluator(t *testing.T) {
 	txgroup = []transactions.SignedTxn{st}
 	err = eval.TestTransactionGroup(txgroup)
 	require.Error(t, err)
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.TransactionGroup(st.WithAD())
 	require.Error(t, err)
 
 	// out of range should fail
@@ -104,7 +105,7 @@ func TestBlockEvaluator(t *testing.T) {
 	txgroup = []transactions.SignedTxn{st}
 	err = eval.TestTransactionGroup(txgroup)
 	require.Error(t, err)
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.TransactionGroup(st.WithAD())
 	require.Error(t, err)
 
 	// bogus group should fail
@@ -114,7 +115,7 @@ func TestBlockEvaluator(t *testing.T) {
 	txgroup = []transactions.SignedTxn{st}
 	err = eval.TestTransactionGroup(txgroup)
 	require.Error(t, err)
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.TransactionGroup(st.WithAD())
 	require.Error(t, err)
 
 	// mixed fields should fail
@@ -149,7 +150,7 @@ func TestBlockEvaluator(t *testing.T) {
 	err = eval.TestTransactionGroup(txgroup)
 	require.NoError(t, err)
 
-	err = eval.Transaction(stxn, transactions.ApplyData{})
+	err = eval.TransactionGroup(stxn.WithAD())
 	require.NoError(t, err)
 
 	t3 := txn
@@ -164,7 +165,7 @@ func TestBlockEvaluator(t *testing.T) {
 	err = eval.TestTransactionGroup(txgroup)
 	require.Error(t, err)
 	txgroupad := transactions.WrapSignedTxnsWithAD(txgroup)
-	err = eval.TransactionGroup(txgroupad)
+	err = eval.TransactionGroup(txgroupad...)
 	require.Error(t, err)
 
 	// Test a group that should work
@@ -186,7 +187,7 @@ func TestBlockEvaluator(t *testing.T) {
 	err = eval.TestTransactionGroup(txgroup)
 	require.Error(t, err)
 	txgroupad = transactions.WrapSignedTxnsWithAD(txgroup)
-	err = eval.TransactionGroup(txgroupad)
+	err = eval.TransactionGroup(txgroupad...)
 	require.Error(t, err)
 
 	// missing part of the group should fail
@@ -342,6 +343,92 @@ func TestPayoutFees(t *testing.T) {
 		dl.beginBlock()
 		dl.endBlock(proposer)
 		require.EqualValues(t, micros(t, dl.generator, feesink), 100_000)
+	})
+}
+
+// TestFeePooling checks that fees are sufficient across a group to pay for the group
+func TestFeePooling(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// FeePooling was added in v28, but we have now removed the consensus flag,
+	// as we can pretend it was always allowed. Test from v27 to show.
+	ledgertesting.TestConsensusRange(t, 27, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		proto := config.Consensus[cv]
+
+		// A basic transaction has to pay enough!
+		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: proto.MinBalance, Fee: 1},
+			"fees is less than") // avoid using the exact values in the string
+		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: proto.MinBalance, Fee: proto.MinFee()})
+
+		// Two txns need two min fees
+		dl.txgroup("fees is less than",
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: proto.MinBalance, Fee: proto.MinFee()},
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: 1, Fee: 1},
+		)
+		dl.txgroup("",
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: proto.MinBalance, Fee: proto.MinFee()},
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: 1, Fee: proto.MinFee()},
+		)
+		dl.txgroup("",
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: proto.MinBalance, Fee: 2 * proto.MinTxnFee},
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: 1, Fee: 1},
+		)
+		dl.txgroup("",
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: 1, Fee: 1},
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: proto.MinBalance, Fee: 2 * proto.MinTxnFee})
+	})
+}
+
+// TestGroupChecks checks that the group checks are working
+func TestGroupChecks(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// FeePooling was added in v28, but we have now removed the consensus flag,
+	// as we can pretend it was always allowed. Test from v27 to show.
+	ledgertesting.TestConsensusRange(t, 27, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		proto := config.Consensus[cv]
+
+		tx0 := txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   addrs[0],
+			Fee:      basics.MicroAlgos{Raw: proto.MinTxnFee},
+			Receiver: addrs[1],
+		}
+
+		// txgroup sets up the Group properly, so it works, but it doesn't let
+		// us test what happens when the group isn't made properly.
+		dl.txgroup("", &tx0, tx0.Noted("again"))
+
+		// so here we make the group and tweak it to see the errors
+
+		showFail := func(txgroup []transactions.SignedTxn, msg string) {
+			t.Helper()
+			err := dl.eval.TestTransactionGroup(txgroup)
+			require.ErrorContains(t, err, msg)
+
+			err = dl.eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup)...)
+			require.ErrorContains(t, err, msg)
+		}
+
+		dl.beginBlock()
+		g := makeGroup(t, dl.generator, dl.eval, tx0.Noted("x"), tx0.Noted("y"))
+		g[0].Txn.Group = crypto.Digest{}
+		showFail(g, "[0] had zero Group")
+		g[0].Txn.Group = g[1].Txn.Group
+		g[0].Txn.Group[0]++
+		showFail(g, "inconsistent group values")
+		g[1].Txn.Group[0]++
+		showFail(g, "incomplete group")
 	})
 }
 
@@ -1290,7 +1377,7 @@ func TestRekeying(t *testing.T) {
 		require.NoError(t, err)
 
 		for _, stxn := range stxns {
-			err = eval.Transaction(stxn, transactions.ApplyData{})
+			err = eval.TransactionGroup(stxn.WithAD())
 			if err != nil {
 				return err
 			}
@@ -1338,6 +1425,240 @@ func TestRekeying(t *testing.T) {
 	require.Error(t, err)
 
 	// TODO: More tests
+}
+
+type pqRekeyTestAccount struct {
+	signer    crypto.FalconSigner
+	address   basics.Address
+	salt      basics.PQAddressSalt
+	publicKey []byte
+}
+
+func makePQRekeyTestAccount(t *testing.T, firstSeedByte byte) pqRekeyTestAccount {
+	t.Helper()
+
+	var seed crypto.FalconSeed
+	seed[0] = firstSeedByte
+	signer, err := crypto.GenerateFalconSigner(seed)
+	require.NoError(t, err)
+
+	publicKey := signer.PublicKey[:]
+	salt, address, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
+	require.NoError(t, err)
+
+	return pqRekeyTestAccount{
+		signer:    signer,
+		address:   address,
+		salt:      salt,
+		publicKey: publicKey,
+	}
+}
+
+func signPQRekeyTestTxn(t *testing.T, acct pqRekeyTestAccount, txn transactions.Transaction, authAddr basics.Address) transactions.SignedTxn {
+	t.Helper()
+
+	signature, err := acct.signer.Sign(txn)
+	require.NoError(t, err)
+
+	return transactions.SignedTxn{
+		Txn:      txn,
+		AuthAddr: authAddr,
+		PQsig: transactions.PQSig{
+			Scheme:    protocol.PQSchemeFalcon1024,
+			Salt:      acct.salt,
+			PublicKey: acct.publicKey,
+			Signature: signature,
+		},
+	}
+}
+
+func TestPQRekeyedAddressAuthorization(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genesisInitState, addrs, keys := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	require.True(t, proto.EnablePQSchemeFalcon1024)
+	pqFee, _, overflow := proto.MinFee().FeeForUsage(basics.Micros(1e6)+proto.PQSchemeFeeContribution(protocol.PQSchemeFalcon1024), 1e6, 0)
+	require.False(t, overflow)
+
+	pqAcct := makePQRekeyTestAccount(t, 0)
+	genesisInitState.Accounts[pqAcct.address] = basics.AccountData{
+		MicroAlgos: basics.MicroAlgos{Raw: 10_000_000},
+		Status:     basics.Offline,
+	}
+
+	l, err := OpenLedger(logging.TestingLog(t), t.Name(), true, genesisInitState, config.GetDefaultLocal())
+	require.NoError(t, err)
+	defer l.Close()
+
+	nextRound := l.Latest() + basics.Round(1)
+	genHash := l.GenesisHash()
+
+	makePayTxn := func(sender, receiver basics.Address, fee basics.MicroAlgos, rekeyTo basics.Address, uniq uint8) transactions.Transaction {
+		return transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      sender,
+				Fee:         fee,
+				FirstValid:  nextRound,
+				LastValid:   nextRound,
+				GenesisHash: genHash,
+				RekeyTo:     rekeyTo,
+				Note:        []byte{uniq},
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: receiver,
+				Amount:   basics.MicroAlgos{Raw: 1},
+			},
+		}
+	}
+
+	tryBlock := func(stxns []transactions.SignedTxn) error {
+		genesisHdr, err := l.BlockHdr(basics.Round(0))
+		require.NoError(t, err)
+		newBlock := bookkeeping.MakeBlock(genesisHdr)
+		eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
+		require.NoError(t, err)
+
+		for _, stxn := range stxns {
+			err = eval.TransactionGroup(stxn.WithAD())
+			if err != nil {
+				return err
+			}
+		}
+		unfinishedBlock, err := eval.GenerateBlock(nil)
+		if err != nil {
+			return err
+		}
+		fb := unfinishedBlock.FinishBlock(committee.Seed{0x01}, basics.Address{0x01}, false)
+
+		backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+		defer backlogPool.Shutdown()
+		_, err = l.Validate(context.Background(), fb, backlogPool)
+		return err
+	}
+
+	edRekeyToPQ := makePayTxn(addrs[0], addrs[0], minFee, pqAcct.address, 1).Sign(keys[0])
+	edSpendByPQTxn := makePayTxn(addrs[0], addrs[1], pqFee, basics.Address{}, 2)
+	edSpendByPQ := signPQRekeyTestTxn(t, pqAcct, edSpendByPQTxn, pqAcct.address)
+
+	require.NoError(t, tryBlock([]transactions.SignedTxn{edRekeyToPQ, edSpendByPQ}))
+	require.ErrorContains(t, tryBlock([]transactions.SignedTxn{edSpendByPQ}), "should have been authorized by")
+
+	pqRekeyToEdTxn := makePayTxn(pqAcct.address, addrs[1], pqFee, addrs[2], 3)
+	pqRekeyToEd := signPQRekeyTestTxn(t, pqAcct, pqRekeyToEdTxn, basics.Address{})
+	pqSpendByEd := makePayTxn(pqAcct.address, addrs[1], minFee, basics.Address{}, 4).Sign(keys[2])
+
+	require.NoError(t, tryBlock([]transactions.SignedTxn{pqRekeyToEd, pqSpendByEd}))
+	require.ErrorContains(t, tryBlock([]transactions.SignedTxn{pqSpendByEd}), "should have been authorized by")
+}
+
+func TestPQChallengedAccountCanHeartbeatForZeroFee(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	require.True(t, proto.EnablePQSchemeFalcon1024)
+	require.True(t, proto.Heartbeat)
+	require.True(t, proto.Payouts.Enabled)
+	require.NotZero(t, proto.Payouts.ChallengeInterval)
+	require.NotZero(t, proto.Payouts.ChallengeGracePeriod)
+
+	const keyDilution = 777
+	otss := crypto.GenerateOneTimeSignatureSecrets(1, 10)
+	pqAcct := makePQRekeyTestAccount(t, 1)
+
+	genBalances, _, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
+		cfg.OnlineCount = 5
+	})
+	genBalances.Balances[pqAcct.address] = basics.AccountData{
+		MicroAlgos:        basics.MicroAlgos{Raw: 100_000_000},
+		Status:            basics.Online,
+		VoteID:            otss.OneTimeSignatureVerifier,
+		SelectionID:       crypto.VRFVerifier{1},
+		StateProofID:      merklesignature.Commitment{1},
+		VoteFirstValid:    0,
+		VoteLastValid:     1_000_000,
+		VoteKeyDilution:   keyDilution,
+		IncentiveEligible: true,
+	}
+
+	seedAndProp := pqAcct.address
+	seedAndProp[31] ^= 1
+	require.NotEqual(t, pqAcct.address, seedAndProp)
+	genBalances.Balances[seedAndProp] = basics.AccountData{
+		MicroAlgos:        basics.MicroAlgos{Raw: 100_000_000},
+		Status:            basics.Online,
+		VoteID:            crypto.OneTimeSignatureVerifier{1},
+		SelectionID:       crypto.VRFVerifier{1},
+		StateProofID:      merklesignature.Commitment{1},
+		VoteFirstValid:    0,
+		VoteLastValid:     1_000_000,
+		VoteKeyDilution:   1,
+		IncentiveEligible: true,
+	}
+
+	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, config.GetDefaultLocal())
+	defer dl.Close()
+
+	challengeRound := basics.Round(proto.Payouts.ChallengeInterval)
+	for vb := dl.fullBlock(); vb.Block().Round() < challengeRound-1; vb = dl.fullBlock() {
+		// Advance to the round before the challenge.
+	}
+	dl.beginBlock()
+	dl.endBlock(seedAndProp)
+
+	heartbeatRound := challengeRound + basics.Round(proto.Payouts.ChallengeGracePeriod)/2 + 1
+	for vb := dl.fullBlock(); vb.Block().Round() < heartbeatRound-1; vb = dl.fullBlock() {
+		// Advance into the risky challenge period, before suspension is active.
+	}
+
+	lastHdr, err := dl.generator.BlockHdr(dl.generator.Latest())
+	require.NoError(t, err)
+	eval := dl.beginBlock()
+	require.Equal(t, heartbeatRound, eval.Round())
+
+	// A PQ account never pays for a PQ signature on its heartbeat. A heartbeat's
+	// sender is irrelevant to what it proves (onlineness is proven by HbProof,
+	// signed with the account's participation key), so it is sent by the same
+	// ordinary accepting logicsig everyone uses. That sender carries no PQ
+	// surcharge, and the challenge discount covers the base fee, so the account
+	// stays online for free despite authorizing spends with an expensive PQ key.
+	acceptingProgram := logic.MustAssemble(`#pragma version 11
+int 1`)
+	sender := basics.Address(logic.HashProgram(acceptingProgram))
+
+	lastValid := eval.Round() + 10
+	id := basics.OneTimeIDForRound(lastValid, keyDilution)
+	txn := transactions.Transaction{
+		Type: protocol.HeartbeatTx,
+		Header: transactions.Header{
+			Sender:      sender,
+			FirstValid:  lastHdr.Round,
+			LastValid:   lastValid,
+			GenesisHash: dl.generator.GenesisHash(),
+		},
+		HeartbeatTxnFields: &transactions.HeartbeatTxnFields{
+			HbAddress:           pqAcct.address,
+			HbProof:             otss.Sign(id, lastHdr.Seed).ToHeartbeatProof(),
+			HbSeed:              lastHdr.Seed,
+			HbVoteID:            otss.OneTimeSignatureVerifier,
+			HbKeyDilution:       keyDilution,
+			HbChallengeDiscount: true,
+		},
+	}
+	stxn := transactions.SignedTxn{Txn: txn, Lsig: transactions.LogicSig{Logic: acceptingProgram}}
+	txgroup := []transactions.SignedTxn{stxn}
+
+	require.NoError(t, eval.TestTransactionGroup(txgroup))
+	require.NoError(t, eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup)...))
+	vb := dl.endBlock()
+	require.Equal(t, heartbeatRound, vb.Block().Round())
+
+	after := lookup(t, dl.generator, pqAcct.address)
+	require.Equal(t, heartbeatRound, after.LastHeartbeat)
 }
 
 func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalProgram string, consensusVersion protocol.ConsensusVersion) error {
@@ -1397,14 +1718,14 @@ func TestEvalAppPooledBudgetWithTxnGroup(t *testing.T) {
 			"",
 			""},
 		{source(5, 48), false, true,
-			"pc=157 dynamic cost budget exceeded, executing pushint",
+			"dynamic cost budget exceeded, executing pushint",
 			""},
 		{source(16, 17), false, true,
-			"pc= 12 dynamic cost budget exceeded, executing keccak256",
+			"dynamic cost budget exceeded, executing keccak256",
 			""},
 		{source(16, 18), false, false,
-			"pc= 12 dynamic cost budget exceeded, executing keccak256",
-			"pc= 78 dynamic cost budget exceeded, executing pushint"},
+			"dynamic cost budget exceeded, executing keccak256",
+			"dynamic cost budget exceeded, executing pushint"},
 	}
 
 	for i, param := range params {
@@ -1412,11 +1733,9 @@ func TestEvalAppPooledBudgetWithTxnGroup(t *testing.T) {
 			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
 				err := testEvalAppPoolingGroup(t, basics.StateSchema{NumByteSlice: 3}, testCase.prog, param)
 				if !testCase.isSuccessV29 && reflect.DeepEqual(param, protocol.ConsensusV29) {
-					require.Error(t, err)
-					require.Contains(t, err.Error(), testCase.expectedErrorV29)
+					require.ErrorContains(t, err, testCase.expectedErrorV29)
 				} else if !testCase.isSuccessVFuture && reflect.DeepEqual(param, protocol.ConsensusFuture) {
-					require.Error(t, err)
-					require.Contains(t, err.Error(), testCase.expectedErrorVFuture)
+					require.ErrorContains(t, err, testCase.expectedErrorVFuture)
 				}
 			})
 		}

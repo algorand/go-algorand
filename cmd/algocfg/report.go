@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,29 +21,15 @@ import (
 	"os"
 )
 
-func reportInfoln(args ...interface{}) {
-	fmt.Println(args...)
-}
-
-func reportInfof(format string, args ...interface{}) {
+func reportInfof(format string, args ...any) {
 	fmt.Printf(format+"\n", args...)
 }
 
-func reportWarnln(args ...interface{}) {
-	fmt.Print("Warning: ")
-	fmt.Println(args...)
-}
-
-func reportWarnf(format string, args ...interface{}) {
+func reportWarnf(format string, args ...any) {
 	fmt.Printf("Warning: "+format+"\n", args...)
 }
 
-func reportErrorln(args ...interface{}) {
-	fmt.Fprintln(os.Stderr, args...)
-	os.Exit(1)
-}
-
-func reportErrorf(format string, args ...interface{}) {
+func reportErrorf(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
 	os.Exit(1)
 }

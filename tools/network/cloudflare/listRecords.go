@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -88,7 +88,7 @@ type ListDNSRecordResponse struct {
 	Result     []DNSRecordResponseEntry    `json:"result"`
 	ResultInfo DNSRecordResponseResultInfo `json:"result_info"`
 	Errors     []ListDNSRecordError        `json:"errors"`
-	Messages   []interface{}               `json:"messages"`
+	Messages   []any                       `json:"messages"`
 }
 
 // DNSRecordResponseResultInfo is paging status for the returned JSON structure ListDNSRecordResponse

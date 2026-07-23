@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -89,7 +89,7 @@ func (s *LaggedStdIo) SetLinePrefix(linePrefix string) {
 
 // NewLaggedStdIo creates a new instance of the LaggedStdIo.
 // allowed stdio are limited to os.Stdin, os.Stdout and os.Stderr
-func NewLaggedStdIo(stdio interface{}, linePrefix string) *LaggedStdIo {
+func NewLaggedStdIo(stdio any, linePrefix string) *LaggedStdIo {
 	lio := &LaggedStdIo{}
 	lio.LinePrefix.Store(linePrefix)
 	switch stdio {

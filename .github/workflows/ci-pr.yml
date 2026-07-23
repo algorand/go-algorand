@@ -4,6 +4,13 @@ on:
     branches:
       - master
       - 'rel/**'
+  workflow_dispatch:
+    inputs:
+      full_coverage:
+        description: 'Run with -coverpkg to measure cross-package coverage (slower)'
+        required: false
+        type: boolean
+        default: false
 
 env:
   CODECOV_TOKEN: "8b4a1f91-f154-4c26-b84c-c9aaa90159c6"  # Same public token from CircleCI config
@@ -11,8 +18,13 @@ env:
   KMD_NOUSB: True
   BUILD_TYPE: integration
   ALGOTEST: 1
-  SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   SKIP_GO_INSTALLATION: True
+  # Force Xcode SDK on macOS 14 to work around a MacOSX14.sdk bug in CLT 16.x
+  # where IOHIDLibObsolete.h fails to include CFPlugInCOM.h, leaving
+  # IUNKNOWN_C_GUTS undefined and breaking karalabe/hid CGo builds.
+  # See: https://github.com/libusb/hidapi/issues/735
+  DEVELOPER_DIR: /Applications/Xcode_15.4.app/Contents/Developer
 
 concurrency:
   group: pr-${{ github.event.pull_request.number || github.ref }}
@@ -27,7 +39,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ["ubuntu-24.04"]
+        platform: ["${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}"]
         partition_id: [0, 1, 2, 3, 4, 5] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
@@ -49,13 +61,19 @@ jobs:
       - name: Run tests
         run: |
           PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
-          export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')          
+          export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
+          COVERPKG_FLAG=""
+          if [[ "${{ inputs.full_coverage }}" == "true" ]]; then
+            COVERPACKAGES="$(go list ./... | grep -E -v '/go-algorand/(test|debug|cmd|config/defaultsGenerator|tools)' | grep -E -v '(test|testing|mock|mocks)$' | paste -sd ',' -)"
+            COVERPKG_FLAG="-coverpkg=$COVERPACKAGES"
+          fi
           mkdir -p test_results/${{ matrix.platform }}_test/${PARTITION_ID}
           go tool -modfile=tool.mod gotestsum --format standard-quiet \
             --junitfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/results.xml \
             --jsonfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/testresults.json \
             -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" $SHORTTEST \
             -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 4 \
+            $COVERPKG_FLAG \
             $PACKAGE_NAMES
       - name: Notify Slack on failure
         if: failure()
@@ -81,7 +99,7 @@ jobs:
           retention-days: 7
       - name: Upload coverage
         # Only upload coverage from ubuntu-24.04 platform
-        if: matrix.platform == 'ubuntu-24.04' && ${{ !cancelled() }}
+        if: ${{ matrix.platform == 'ubuntu-24.04' && !cancelled() }}
         uses: codecov/codecov-action@v4
         env:
           GITHUB_ACTIONS: True
@@ -89,9 +107,10 @@ jobs:
         with:
           token: ${{ env.CODECOV_TOKEN }}
           file: ./coverage.txt
+          flags: ${{ inputs.full_coverage && 'full_coverage' || '' }}
           fail_ci_if_error: false
       - name: Upload test results to Codecov
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && !github.event.repository.private }}
         uses: codecov/test-results-action@v1
         with:
           file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_test/${{ matrix.partition_id }}/results.xml
@@ -102,7 +121,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ["ubuntu-24.04"]
+        platform: ["${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}"]
         partition_id: [0, 1, 2, 3, 4] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
@@ -145,7 +164,7 @@ jobs:
           path: ~/test_results
           retention-days: 7
       - name: Upload test results to Codecov
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && !github.event.repository.private }}
         uses: codecov/test-results-action@v1
         with:
           file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_integration/${{ matrix.partition_id }}/results.xml
@@ -156,7 +175,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ["ubuntu-24.04"]
+        platform: ["${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}"]
         partition_id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
@@ -201,7 +220,7 @@ jobs:
           path: ~/test_results
           retention-days: 7
       - name: Upload test results to Codecov
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && !github.event.repository.private }}
         uses: codecov/test-results-action@v1
         with:
           file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_e2e_expect/${{ matrix.partition_id }}/results.xml
@@ -212,7 +231,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ["ubuntu-24.04"]
+        platform: ["${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}"]
         testsuite: ["parallel", "vdir-serial"]
     runs-on: ${{ matrix.platform }}
     env:
@@ -260,7 +279,7 @@ jobs:
       fail-fast: false
       matrix:
         test_type: ["test", "integration", "e2e_expect", "e2e_subs"]
-        platform: ["ubuntu-24.04"]
+        platform: ["${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}"]
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -277,8 +296,7 @@ jobs:
             --ignored-tests \
               TestAlgodWithExpect \
               TestAlgohWithExpect \
-              TestGoalWithExpect \
-              TestTealdbgWithExpect
+              TestGoalWithExpect
       - name: Notify Slack on failure
         if: failure()
         uses: ./.github/actions/slack-notify
@@ -290,7 +308,7 @@ jobs:
   report:
     needs: [test, integration, e2e_expect, e2e_subs]
     if: always()
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}
     steps:
       - uses: actions/download-artifact@v4
         with:

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -256,6 +256,11 @@ func (p *testUnicastPeer) RoutingAddr() []byte {
 }
 
 func (p *testUnicastPeer) Request(ctx context.Context, tag protocol.Tag, topics network.Topics) (resp *network.Response, e error) {
+	select {
+	case <-ctx.Done():
+		return resp, ctx.Err()
+	default:
+	}
 
 	responseChannel := make(chan *network.Response, 1)
 	p.responseChannels[0] = responseChannel

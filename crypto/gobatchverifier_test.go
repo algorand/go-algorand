@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,10 +31,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // ensure internal ed25519 types match the expected []byte lengths used by ed25519consensus package
@@ -214,7 +215,7 @@ func testBatchVectors(t *testing.T, makeBV func(int) BatchVerifier, testVectors 
 		}
 		failed, err := bv.VerifyWithFeedback()
 		if slices.Contains(expFail, true) { // some failures expected
-			require.Error(t, err)
+			require.ErrorIs(t, err, ErrBatchHasFailedSigs)
 			require.NotNil(t, failed)
 			require.Len(t, failed, len(vecs))
 			for i := range expFail {

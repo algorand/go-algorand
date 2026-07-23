@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -39,7 +39,7 @@ func NewFormattedJSONEncoder(w io.Writer) *json.Encoder {
 
 // LoadObjectFromFile implements the common pattern for loading an instance
 // of an object from a json file.
-func LoadObjectFromFile(filename string, object interface{}) (err error) {
+func LoadObjectFromFile(filename string, object any) (err error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return
@@ -50,7 +50,7 @@ func LoadObjectFromFile(filename string, object interface{}) (err error) {
 	return
 }
 
-func writeBytes(writer io.Writer, object interface{}, prettyFormat bool) error {
+func writeBytes(writer io.Writer, object any, prettyFormat bool) error {
 	var enc *json.Encoder
 	if prettyFormat {
 		enc = NewFormattedJSONEncoder(writer)
@@ -61,7 +61,7 @@ func writeBytes(writer io.Writer, object interface{}, prettyFormat bool) error {
 }
 
 // SaveObjectToFile implements the common pattern for saving an object to a file as json
-func SaveObjectToFile(filename string, object interface{}, prettyFormat bool) error {
+func SaveObjectToFile(filename string, object any, prettyFormat bool) error {
 	f, err := os.Create(filename)
 	if err != nil {
 		return err
@@ -73,7 +73,7 @@ func SaveObjectToFile(filename string, object interface{}, prettyFormat bool) er
 // WriteNonDefaultValues writes object to a writer as json, but only fields that are not
 // currently set to be the default value.
 // Optionally, you can specify an array of field names to always include.
-func WriteNonDefaultValues(writer io.Writer, object, defaultObject interface{}, ignore []string) error {
+func WriteNonDefaultValues(writer io.Writer, object, defaultObject any, ignore []string) error {
 	// Iterate one line at a time, parse Name
 	// If ignore contains Name, don't delete
 	// Use reflection to compare object[Name].value == defaultObject[Name].value
@@ -155,7 +155,7 @@ func WriteNonDefaultValues(writer io.Writer, object, defaultObject interface{}, 
 // SaveNonDefaultValuesToFile saves an object to a file as json, but only fields that are not
 // currently set to be the default value.
 // Optionally, you can specify an array of field names to always include.
-func SaveNonDefaultValuesToFile(filename string, object, defaultObject interface{}, ignore []string) error {
+func SaveNonDefaultValuesToFile(filename string, object, defaultObject any, ignore []string) error {
 	outFile, err := os.Create(filename)
 	if err != nil {
 		return err
@@ -184,8 +184,8 @@ func extractValueName(line string) (name string) {
 	return line[start+1 : end]
 }
 
-func createValueMap(object interface{}) map[string]interface{} {
-	valueMap := make(map[string]interface{})
+func createValueMap(object any) map[string]any {
+	valueMap := make(map[string]any)
 
 	v := reflect.ValueOf(object)
 	val := reflect.Indirect(v)
@@ -198,7 +198,7 @@ func createValueMap(object interface{}) map[string]interface{} {
 	return valueMap
 }
 
-func isDefaultValue(name string, values, defaults map[string]interface{}) bool {
+func isDefaultValue(name string, values, defaults map[string]any) bool {
 	val, hasVal := values[name]
 	def, hasDef := defaults[name]
 	if hasVal != hasDef {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,9 +20,10 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-deadlock"
 )
 
 // A OneTimeSignature is a cryptographic signature that is produced a limited
@@ -96,14 +97,14 @@ func (ots OneTimeSignature) ToHeartbeatProof() HeartbeatProof {
 	}
 }
 
-// BatchPrep enqueues the necessary checks into the batch.  The caller must call
-// batchVerifier.verify() to verify it.
-func (hbp HeartbeatProof) BatchPrep(voteID OneTimeSignatureVerifier, id OneTimeSignatureIdentifier, msg Hashable, batchVerifier BatchVerifier) {
+// BatchPrep enqueues the necessary checks into the batch.  The signatures are
+// only enqueued; they are checked when the underlying batch is verified.
+func (hbp HeartbeatProof) BatchPrep(voteID OneTimeSignatureVerifier, id OneTimeSignatureIdentifier, msg Hashable, batch BatchEnqueuer) {
 	offsetID := OneTimeSignatureSubkeyOffsetID{SubKeyPK: hbp.PK, Batch: id.Batch, Offset: id.Offset}
 	batchID := OneTimeSignatureSubkeyBatchID{SubKeyPK: hbp.PK2, Batch: id.Batch}
-	batchVerifier.EnqueueSignature(PublicKey(voteID), batchID, Signature(hbp.PK2Sig))
-	batchVerifier.EnqueueSignature(PublicKey(batchID.SubKeyPK), offsetID, Signature(hbp.PK1Sig))
-	batchVerifier.EnqueueSignature(PublicKey(offsetID.SubKeyPK), msg, Signature(hbp.Sig))
+	batch.EnqueueSignature(PublicKey(voteID), batchID, Signature(hbp.PK2Sig))
+	batch.EnqueueSignature(PublicKey(batchID.SubKeyPK), offsetID, Signature(hbp.PK1Sig))
+	batch.EnqueueSignature(PublicKey(offsetID.SubKeyPK), msg, Signature(hbp.Sig))
 
 }
 
@@ -373,24 +374,6 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 		SubKeyPK: sig.PK2,
 		Batch:    id.Batch,
 	}
-
-	if !useSingleVerifierDefault {
-		return v.batchVerify(batchID, offsetID, message, sig)
-	}
-
-	if !ed25519Verify(ed25519PublicKey(v), HashRep(batchID), sig.PK2Sig) {
-		return false
-	}
-	if !ed25519Verify(batchID.SubKeyPK, HashRep(offsetID), sig.PK1Sig) {
-		return false
-	}
-	if !ed25519Verify(offsetID.SubKeyPK, HashRep(message), sig.Sig) {
-		return false
-	}
-	return true
-}
-
-func (v OneTimeSignatureVerifier) batchVerify(batchID OneTimeSignatureSubkeyBatchID, offsetID OneTimeSignatureSubkeyOffsetID, message Hashable, sig OneTimeSignature) bool {
 	bv := MakeBatchVerifierWithHint(3)
 	bv.EnqueueSignature(PublicKey(v), batchID, Signature(sig.PK2Sig))
 	bv.EnqueueSignature(PublicKey(batchID.SubKeyPK), offsetID, Signature(sig.PK1Sig))

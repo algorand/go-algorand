@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -159,11 +159,11 @@ func TestLRUKVPendingWrites(t *testing.T) {
 
 type lruKVTestLogger struct {
 	logging.Logger
-	WarnfCallback func(string, ...interface{})
+	WarnfCallback func(string, ...any)
 	warnMsgCount  int
 }
 
-func (cl *lruKVTestLogger) Infof(s string, args ...interface{}) {
+func (cl *lruKVTestLogger) Infof(s string, args ...any) {
 	if strings.Contains(s, "exceed the warning threshold of") {
 		cl.warnMsgCount++
 	}

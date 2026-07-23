@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -38,6 +38,8 @@ import "C"
 import (
 	"fmt"
 	"unsafe"
+
+	"filippo.io/edwards25519"
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -110,6 +112,18 @@ type PrivateKey ed25519PrivateKey
 
 // PublicKey is an exported ed25519PublicKey
 type PublicKey ed25519PublicKey
+
+// IsEdwards25519Point reports whether encoded can be decoded as an
+// Edwards25519 curve point. This follows edwards25519.Point.SetBytes decoding,
+// which accepts some non-canonical encodings of curve points. It does not
+// check membership in the prime-order subgroup and should not be used as a
+// strict Ed25519 public-key validity check. Note that this predicate differs
+// from libsodium's crypto_core_ed25519_is_valid_point, which also requires
+// main-subgroup membership.
+func IsEdwards25519Point(encoded []byte) bool {
+	_, err := new(edwards25519.Point).SetBytes(encoded)
+	return err == nil
+}
 
 func ed25519GenerateKey() (public ed25519PublicKey, secret ed25519PrivateKey) {
 	var seed ed25519Seed

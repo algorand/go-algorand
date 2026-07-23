@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,22 +17,91 @@
 package p2p
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/network/p2p/peerstore"
-	"github.com/algorand/go-algorand/test/partitiontest"
 
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-deadlock"
+
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network/p2p/peerstore"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
+
+// syncBuffer is a thread-safe bytes.Buffer for use as a log output target.
+type syncBuffer struct {
+	mu  deadlock.Mutex
+	buf bytes.Buffer
+}
+
+func (sb *syncBuffer) Write(p []byte) (int, error) {
+	sb.mu.Lock()
+	defer sb.mu.Unlock()
+	return sb.buf.Write(p)
+}
+
+func (sb *syncBuffer) String() string {
+	sb.mu.Lock()
+	defer sb.mu.Unlock()
+	return sb.buf.String()
+}
+
+func (sb *syncBuffer) Reset() {
+	sb.mu.Lock()
+	defer sb.mu.Unlock()
+	sb.buf.Reset()
+}
+
+func TestLogDispatchErrorDebugLevel(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	logBuffer := &syncBuffer{}
+	logger := logging.NewLogger()
+	logger.SetOutput(logBuffer)
+	logger.SetLevel(logging.Debug)
+
+	sm := &streamManager{log: logger}
+
+	err := &StreamHandlerLoggedError{Err: fmt.Errorf("some debug error"), Level: logging.Debug}
+	sm.logDispatchError(err)
+
+	output := logBuffer.String()
+	require.Contains(t, output, "some debug error")
+	require.Contains(t, output, "level=debug")
+	require.NotContains(t, output, "level=error")
+	require.NotContains(t, output, "level=warning")
+}
+
+func TestLogDispatchErrorErrorLevel(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	logBuffer := &syncBuffer{}
+	logger := logging.NewLogger()
+	logger.SetOutput(logBuffer)
+	logger.SetLevel(logging.Debug)
+
+	sm := &streamManager{log: logger}
+
+	// A plain error (not StreamHandlerLoggedError) should be logged at Error level.
+	err := fmt.Errorf("some plain error")
+	sm.logDispatchError(err)
+
+	output := logBuffer.String()
+	require.Contains(t, output, "some plain error")
+	require.Contains(t, output, "level=error")
+}
 
 // TestConnectedLogsNonDialedOutgoingConnection tests that the Connected function
 // exits early for non-dialed outgoing connections by checking the log output
@@ -40,7 +109,7 @@ func TestStreamNonDialedOutgoingConnection(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	logBuffer := &strings.Builder{}
+	logBuffer := &syncBuffer{}
 	logger := logging.NewLogger()
 	logger.SetOutput(logBuffer)
 	logger.SetLevel(logging.Debug)
@@ -82,8 +151,8 @@ func TestStreamNonDialedOutgoingConnection(t *testing.T) {
 
 	ctx := context.Background()
 	handlers := StreamHandlers{}
-	dialerSM = makeStreamManager(ctx, logger, cfg, dialerHost, handlers, false)
-	listenerSM = makeStreamManager(ctx, logger, cfg, listenerHost, handlers, false)
+	dialerSM = makeStreamManager(ctx, logger, dialerHost, handlers, false)
+	listenerSM = makeStreamManager(ctx, logger, listenerHost, handlers, false)
 
 	// Setup Connected notification
 	dialerHost.Network().Notify(dialerSM)
@@ -110,9 +179,9 @@ func TestStreamNonDialedOutgoingConnection(t *testing.T) {
 	require.Len(t, conns, 1)
 	require.Equal(t, network.DirOutbound, conns[0].Stat().Direction)
 
-	// Check that the log contains the expected message for non-dialed outgoing connection
-	logOutput := logBuffer.String()
-	expectedMsg := "ignoring non-dialed outgoing peer ID"
-	require.Contains(t, logOutput, expectedMsg)
-	require.Contains(t, logOutput, listenerHost.ID().String())
+	const expectedMsg = "ignoring non-dialed outgoing peer ID"
+	require.Eventually(t, func() bool {
+		logOutput := logBuffer.String()
+		return strings.Contains(logOutput, expectedMsg) && strings.Contains(logOutput, listenerHost.ID().String())
+	}, 5*time.Second, 50*time.Millisecond)
 }

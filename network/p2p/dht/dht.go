@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,6 @@ import (
 	"time"
 
 	dht "github.com/libp2p/go-libp2p-kad-dht"
-	dhtmetrics "github.com/libp2p/go-libp2p-kad-dht/metrics"
 	"github.com/libp2p/go-libp2p/core/discovery"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -31,7 +30,6 @@ import (
 	crouting "github.com/libp2p/go-libp2p/core/routing"
 	"github.com/libp2p/go-libp2p/p2p/discovery/backoff"
 	"github.com/libp2p/go-libp2p/p2p/discovery/routing"
-	"go.opencensus.io/stats/view"
 
 	"github.com/algorand/go-algorand/config"
 	algoproto "github.com/algorand/go-algorand/protocol"
@@ -46,21 +44,40 @@ func dhtProtocolPrefix(networkID algoproto.NetworkID) protocol.ID {
 	return protocol.ID(fmt.Sprintf("/algorand/kad/%s", networkID))
 }
 
+// dhtMode returns the appropriate DHT mode based on config.
+// If DHTMode is explicitly set, use that. Otherwise:
+// - Nodes with listen addresses (NetAddress or P2PHybridNetAddress) default to ModeServer to be discoverable
+// - Other nodes default to ModeClient
+func dhtMode(cfg config.Local) dht.ModeOpt {
+	switch cfg.DHTMode {
+	case "server":
+		return dht.ModeServer
+	case "client":
+		return dht.ModeClient
+	case "":
+		// Default behavior: nodes with listen addresses should be discoverable
+		if cfg.IsListenServer() {
+			return dht.ModeServer
+		}
+		return dht.ModeClient
+	default:
+		return dht.ModeClient
+	}
+}
+
 // MakeDHT creates the dht.IpfsDHT object
 func MakeDHT(ctx context.Context, h host.Host, networkID algoproto.NetworkID, cfg config.Local, bootstrapFunc func() []peer.AddrInfo) (*dht.IpfsDHT, error) {
 	dhtCfg := []dht.Option{
-		// Automatically determine server or client mode
-		dht.Mode(dht.ModeAutoServer),
+		dht.Mode(dhtMode(cfg)),
 		// We don't need the value store right now
 		dht.DisableValues(),
 		dht.ProtocolPrefix(dhtProtocolPrefix(networkID)),
 		dht.BootstrapPeersFunc(bootstrapFunc),
 	}
 
-	if err := view.Register(dhtmetrics.DefaultViews...); err != nil {
+	if err := metrics.SetupOTelPrometheusExporter(); err != nil {
 		return nil, err
 	}
-	metrics.DefaultRegistry().Register(&metrics.OpencensusDefaultMetrics)
 
 	return dht.New(ctx, h, dhtCfg...)
 }

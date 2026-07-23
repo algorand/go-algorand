@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,7 +33,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
-	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/blockdb"
@@ -597,8 +596,20 @@ func (l *Ledger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.
 
 // LookupAssets loads asset resources that match the request parameters from the ledger.
 func (l *Ledger) LookupAssets(addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, basics.Round, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+
 	resources, lookupRound, err := l.accts.LookupAssetResources(addr, assetIDGT, limit)
 	return resources, lookupRound, err
+}
+
+// LookupApplications returns the application resources (local state and params) for a given address, with pagination support.
+// If includeParams is false, AppParams will not be populated to save memory allocations.
+func (l *Ledger) LookupApplications(addr basics.Address, appIDGT basics.AppIndex, limit uint64, includeParams bool) ([]ledgercore.AppResourceWithIDs, basics.Round, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+
+	return l.accts.LookupApplicationResources(addr, appIDGT, limit, includeParams)
 }
 
 // lookupResource loads a resource that matches the request parameters from the accounts update
@@ -630,6 +641,15 @@ func (l *Ledger) LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKey
 	defer l.trackerMu.RUnlock()
 
 	return l.accts.LookupKeysByPrefix(round, keyPrefix, maxKeyNum)
+}
+
+// LookupKvPairsByPrefix searches for key-value pairs by prefix with cursor-based pagination.
+// It merges in-memory deltas with database results for current data.
+func (l *Ledger) LookupKvPairsByPrefix(round basics.Round, keyPrefix string, cursor string, limit uint64, maxBytes uint64, includeValues bool) ([]ledgercore.KvPairResult, basics.Round, bool, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+
+	return l.accts.LookupKvPairsByPrefix(round, keyPrefix, cursor, limit, maxBytes, includeValues)
 }
 
 // LookupAgreement returns account data used by agreement.
@@ -998,11 +1018,6 @@ func (l *Ledger) IsBehindCommittingDeltas() bool {
 
 // DebuggerLedger defines the minimal set of method required for creating a debug balances.
 type DebuggerLedger = eval.LedgerForCowBase
-
-// MakeDebugBalances creates a ledger suitable for dryrun and debugger
-func MakeDebugBalances(l DebuggerLedger, round basics.Round, proto protocol.ConsensusVersion, prevTimestamp int64) apply.Balances {
-	return eval.MakeDebugBalances(l, round, proto, prevTimestamp)
-}
 
 var ledgerInitblocksdbCount = metrics.NewCounter("ledger_initblocksdb_count", "calls")
 var ledgerInitblocksdbMicros = metrics.NewCounter("ledger_initblocksdb_micros", "µs spent")

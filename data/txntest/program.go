@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,22 +22,22 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
-// GenerateProgramOfSize return a TEAL bytecode of `size` bytes which always succeeds.
-// `size` must be at least 9 bytes
-func GenerateProgramOfSize(size uint, pragma uint) ([]byte, error) {
-	if size < 9 {
-		return nil, fmt.Errorf("size must be at least 9 bytes; got %d", size)
+// GenerateUnsaltedProgramOfSize returns a TEAL bytecode of `size` bytes which always succeeds.
+// `size` must be at least 5 bytes.
+func GenerateUnsaltedProgramOfSize(size uint, pragma uint) ([]byte, error) {
+	if size < 5 {
+		return nil, fmt.Errorf("size must be at least 5 bytes; got %d", size)
 	}
-	ls := fmt.Sprintf("#pragma version %d\n", pragma)
+	ls := fmt.Sprintf("#pragma version %d\n#pragma autosalt false\n", pragma)
 	if size%2 == 0 {
-		ls += "int 10\npop\nint 1\npop\n"
+		ls += "intcblock 1 1\n"
 	} else {
-		ls += "int 1\npop\nint 1\npop\n"
+		ls += "intcblock 1\n"
 	}
-	for i := uint(11); i <= size; i += 2 {
-		ls = ls + "int 1\npop\n"
+	for i := uint(7); i <= size; i += 2 {
+		ls += "intc_0\npop\n"
 	}
-	ls = ls + "int 1"
+	ls += "intc_0"
 	code, err := logic.AssembleString(ls)
 	if err != nil {
 		return nil, err

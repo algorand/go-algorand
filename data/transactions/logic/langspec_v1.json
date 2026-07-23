@@ -905,7 +905,7 @@
           "Comment": "transaction field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "txn"
+          "Reference": "txn Fields"
         }
       ],
       "IntroducedVersion": 1,
@@ -941,7 +941,7 @@
           "Comment": "a global field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "global"
+          "Reference": "global Fields"
         }
       ],
       "IntroducedVersion": 1,
@@ -1019,7 +1019,7 @@
           "Comment": "transaction field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "txn"
+          "Reference": "txn Fields"
         }
       ],
       "IntroducedVersion": 1,

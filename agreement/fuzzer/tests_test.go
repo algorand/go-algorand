@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,7 +24,6 @@ import (
 	"math"
 	"math/rand"
 	"os"
-
 	//ossignal "os/signal"
 	"path/filepath"
 	//"runtime/pprof"
@@ -34,9 +33,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/logging"
 	//"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -419,7 +418,7 @@ func TestCertVoteDrops(t *testing.T) {
 type FuzzerTestFile struct {
 	FuzzerName string
 	NodesCount int
-	Filters    []interface{}
+	Filters    []any
 	Validator  ValidatorConfig
 	LogLevel   int
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -43,7 +43,7 @@ type Participant struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// PK is the identifier used to verify the signature for a specific participant
-	PK merklesignature.Verifier `codec:"p"`
+	PK merklesignature.Verifier `codec:"p,required"`
 
 	// Weight is AccountData.MicroAlgos.
 	Weight uint64 `codec:"w"`

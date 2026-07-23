@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -485,11 +485,11 @@ var runCmd = &cobra.Command{
 	},
 }
 
-func reportErrorf(format string, args ...interface{}) {
+func reportErrorf(format string, args ...any) {
 	fmt.Printf(format, args...)
 	os.Exit(1)
 }
 
-func reportInfof(format string, args ...interface{}) {
+func reportInfof(format string, args ...any) {
 	fmt.Printf(format, args...)
 }

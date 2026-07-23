@@ -47,9 +47,10 @@ const (
 
 // Defines values for SigType.
 const (
-	SigTypeLsig SigType = "lsig"
-	SigTypeMsig SigType = "msig"
-	SigTypeSig  SigType = "sig"
+	SigTypeLsig  SigType = "lsig"
+	SigTypeMsig  SigType = "msig"
+	SigTypePqsig SigType = "pqsig"
+	SigTypeSig   SigType = "sig"
 )
 
 // Defines values for TxType.
@@ -65,14 +66,21 @@ const (
 
 // Defines values for AccountInformationParamsExclude.
 const (
-	AccountInformationParamsExcludeAll  AccountInformationParamsExclude = "all"
-	AccountInformationParamsExcludeNone AccountInformationParamsExclude = "none"
+	AccountInformationParamsExcludeAll                 AccountInformationParamsExclude = "all"
+	AccountInformationParamsExcludeCreatedAppsParams   AccountInformationParamsExclude = "created-apps-params"
+	AccountInformationParamsExcludeCreatedAssetsParams AccountInformationParamsExclude = "created-assets-params"
+	AccountInformationParamsExcludeNone                AccountInformationParamsExclude = "none"
 )
 
 // Defines values for AccountInformationParamsFormat.
 const (
 	AccountInformationParamsFormatJson    AccountInformationParamsFormat = "json"
 	AccountInformationParamsFormatMsgpack AccountInformationParamsFormat = "msgpack"
+)
+
+// Defines values for AccountApplicationsInformationParamsInclude.
+const (
+	AccountApplicationsInformationParamsIncludeParams AccountApplicationsInformationParamsInclude = "params"
 )
 
 // Defines values for AccountApplicationInformationParamsFormat.
@@ -91,6 +99,11 @@ const (
 const (
 	GetPendingTransactionsByAddressParamsFormatJson    GetPendingTransactionsByAddressParamsFormat = "json"
 	GetPendingTransactionsByAddressParamsFormatMsgpack GetPendingTransactionsByAddressParamsFormat = "msgpack"
+)
+
+// Defines values for GetApplicationBoxesParamsInclude.
+const (
+	GetApplicationBoxesParamsIncludeValues GetApplicationBoxesParamsInclude = "values"
 )
 
 // Defines values for GetBlockParamsFormat.
@@ -256,6 +269,24 @@ type Account struct {
 // * lsig
 type AccountSigType string
 
+// AccountApplicationResource AccountApplicationResource describes the account's application resource (local state and params if the account is the creator) for a specific application ID.
+type AccountApplicationResource struct {
+	// AppLocalState Stores local state associated with an application.
+	AppLocalState *ApplicationLocalState `json:"app-local-state,omitempty"`
+
+	// CreatedAtRound Round when the account opted into or created the application.
+	CreatedAtRound *basics.Round `json:"created-at-round,omitempty"`
+
+	// Deleted Whether the application has been deleted.
+	Deleted *bool `json:"deleted,omitempty"`
+
+	// Id The application ID.
+	Id basics.AppIndex `json:"id"`
+
+	// Params Stores the global information associated with an application.
+	Params *ApplicationParams `json:"params,omitempty"`
+}
+
 // AccountAssetHolding AccountAssetHolding describes the account's asset holding and asset parameters (if either exist) for a specific asset ID.
 type AccountAssetHolding struct {
 	// AssetHolding Describes an asset held by an account.
@@ -320,7 +351,7 @@ type Application struct {
 	Id basics.AppIndex `json:"id"`
 
 	// Params Stores the global information associated with an application.
-	Params ApplicationParams `json:"params"`
+	Params *ApplicationParams `json:"params,omitempty"`
 }
 
 // ApplicationInitialStates An application's initial global/local/box states that were accessed during simulation.
@@ -382,6 +413,12 @@ type ApplicationParams struct {
 	// ExtraProgramPages \[epp\] the amount of extra program pages available to this app.
 	ExtraProgramPages *uint64 `json:"extra-program-pages,omitempty"`
 
+	// FamilyBoxAccess \[fba\] if true, apps with the same creator may read and write this app's boxes
+	FamilyBoxAccess *bool `json:"family-box-access,omitempty"`
+
+	// ForeignBoxReads \[fbr\] if true, any app may read this app's boxes
+	ForeignBoxReads *bool `json:"foreign-box-reads,omitempty"`
+
 	// GlobalState Represents a key-value store for use in an application.
 	GlobalState *TealKeyValueStore `json:"global-state,omitempty"`
 
@@ -436,7 +473,7 @@ type Asset struct {
 	//
 	// Definition:
 	// data/transactions/asset.go : AssetParams
-	Params AssetParams `json:"params"`
+	Params *AssetParams `json:"params,omitempty"`
 }
 
 // AssetHolding Describes an asset held by an account.
@@ -552,6 +589,9 @@ type Box struct {
 type BoxDescriptor struct {
 	// Name Base64 encoded box name
 	Name []byte `json:"name"`
+
+	// Value Base64 encoded box value. Present only when the `values` query parameter is set to true.
+	Value *[]byte `json:"value,omitempty"`
 }
 
 // BoxReference References a box of an application.
@@ -580,72 +620,6 @@ type DebugSettingsProf struct {
 
 	// MutexRate The rate of mutex events. On average 1/rate events are reported. To turn off profiling entirely, pass rate 0
 	MutexRate *uint64 `json:"mutex-rate,omitempty"`
-}
-
-// DryrunRequest Request data type for dryrun endpoint. Given the Transactions and simulated ledger state upload, run TEAL scripts and return debugging information.
-type DryrunRequest struct {
-	Accounts []Account     `json:"accounts"`
-	Apps     []Application `json:"apps"`
-
-	// LatestTimestamp LatestTimestamp is available to some TEAL scripts. Defaults to the latest confirmed timestamp this algod is attached to.
-	LatestTimestamp int64 `json:"latest-timestamp"`
-
-	// ProtocolVersion ProtocolVersion specifies a specific version string to operate under, otherwise whatever the current protocol of the network this algod is running in.
-	ProtocolVersion string `json:"protocol-version"`
-
-	// Round Round is available to some TEAL scripts. Defaults to the current round on the network this algod is attached to.
-	Round   basics.Round      `json:"round"`
-	Sources []DryrunSource    `json:"sources"`
-	Txns    []json.RawMessage `json:"txns"`
-}
-
-// DryrunSource DryrunSource is TEAL source text that gets uploaded, compiled, and inserted into transactions or application state.
-type DryrunSource struct {
-	AppIndex basics.AppIndex `json:"app-index"`
-
-	// FieldName FieldName is what kind of sources this is. If lsig then it goes into the transactions[this.TxnIndex].LogicSig. If approv or clearp it goes into the Approval Program or Clear State Program of application[this.AppIndex].
-	FieldName string `json:"field-name"`
-	Source    string `json:"source"`
-	TxnIndex  int    `json:"txn-index"`
-}
-
-// DryrunState Stores the TEAL eval step data
-type DryrunState struct {
-	// Error Evaluation error if any
-	Error *string `json:"error,omitempty"`
-
-	// Line Line number
-	Line int `json:"line"`
-
-	// Pc Program counter
-	Pc      int          `json:"pc"`
-	Scratch *[]TealValue `json:"scratch,omitempty"`
-	Stack   []TealValue  `json:"stack"`
-}
-
-// DryrunTxnResult DryrunTxnResult contains any LogicSig or ApplicationCall program debug information and state updates from a dryrun.
-type DryrunTxnResult struct {
-	AppCallMessages *[]string      `json:"app-call-messages,omitempty"`
-	AppCallTrace    *[]DryrunState `json:"app-call-trace,omitempty"`
-
-	// BudgetAdded Budget added during execution of app call transaction.
-	BudgetAdded *int `json:"budget-added,omitempty"`
-
-	// BudgetConsumed Budget consumed during execution of app call transaction.
-	BudgetConsumed *int `json:"budget-consumed,omitempty"`
-
-	// Disassembly Disassembled program line by line.
-	Disassembly []string `json:"disassembly"`
-
-	// GlobalDelta Application state delta.
-	GlobalDelta *StateDelta          `json:"global-delta,omitempty"`
-	LocalDeltas *[]AccountStateDelta `json:"local-deltas,omitempty"`
-
-	// LogicSigDisassembly Disassembled lsig program line by line.
-	LogicSigDisassembly *[]string      `json:"logic-sig-disassembly,omitempty"`
-	LogicSigMessages    *[]string      `json:"logic-sig-messages,omitempty"`
-	LogicSigTrace       *[]DryrunState `json:"logic-sig-trace,omitempty"`
-	Logs                *[][]byte      `json:"logs,omitempty"`
 }
 
 // ErrorResponse An error response with optional data field.
@@ -892,6 +866,12 @@ type SimulateTransactionGroupResult struct {
 	// FailureMessage If present, indicates that the transaction group failed and specifies why that happened
 	FailureMessage *string `json:"failure-message,omitempty"`
 
+	// GroupFeesPaid Total fees paid by the transaction group and all of its descendant inner transaction groups.
+	GroupFeesPaid *uint64 `json:"group-fees-paid,omitempty"`
+
+	// GroupUsage Fee usage for the transaction group, including all descendant inner transactions, in millionths of a basic transaction fee unit.
+	GroupUsage *basics.Micros `json:"group-usage,omitempty"`
+
 	// TxnResults Simulation result for individual transactions
 	TxnResults []SimulateTransactionResult `json:"txn-results"`
 
@@ -906,6 +886,9 @@ type SimulateTransactionResult struct {
 
 	// ExecTrace The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.
 	ExecTrace *SimulationTransactionExecTrace `json:"exec-trace,omitempty"`
+
+	// FeesPaid Total fees paid by this transaction and all of its descendant inner transactions.
+	FeesPaid *uint64 `json:"fees-paid,omitempty"`
 
 	// FixedSigner The account that needed to sign this transaction when no signature was provided and the provided signer was incorrect.
 	FixedSigner *string `json:"fixed-signer,omitempty"`
@@ -1117,6 +1100,9 @@ type Catchpoint = string
 // Format defines model for format.
 type Format string
 
+// Include defines model for include.
+type Include = []string
+
 // Limit defines model for limit.
 type Limit = uint64
 
@@ -1145,6 +1131,17 @@ type AccountApplicationResponse struct {
 
 	// CreatedApp Stores the global information associated with an application.
 	CreatedApp *ApplicationParams `json:"created-app,omitempty"`
+
+	// Round The round for which this information is relevant.
+	Round basics.Round `json:"round"`
+}
+
+// AccountApplicationsInformationResponse defines model for AccountApplicationsInformationResponse.
+type AccountApplicationsInformationResponse struct {
+	ApplicationResources *[]AccountApplicationResource `json:"application-resources,omitempty"`
+
+	// NextToken Used for pagination, when making another request provide this token with the next parameter. The next token is the next application ID to use as the pagination cursor.
+	NextToken *string `json:"next-token,omitempty"`
 
 	// Round The round for which this information is relevant.
 	Round basics.Round `json:"round"`
@@ -1225,6 +1222,12 @@ type BoxResponse = Box
 // BoxesResponse defines model for BoxesResponse.
 type BoxesResponse struct {
 	Boxes []BoxDescriptor `json:"boxes"`
+
+	// NextToken Used for pagination, when making another request provide this token with the next parameter. The next token is the box name to use as the pagination cursor, encoded in the goal app call arg form.
+	NextToken *string `json:"next-token,omitempty"`
+
+	// Round The round for which this information is relevant.
+	Round *basics.Round `json:"round,omitempty"`
 }
 
 // CatchpointAbortResponse An catchpoint abort response.
@@ -1258,15 +1261,6 @@ type DebugSettingsProfResponse = DebugSettingsProf
 type DisassembleResponse struct {
 	// Result disassembled Teal code
 	Result string `json:"result"`
-}
-
-// DryrunResponse defines model for DryrunResponse.
-type DryrunResponse struct {
-	Error string `json:"error"`
-
-	// ProtocolVersion Protocol version is the protocol version Dryrun was operated under.
-	ProtocolVersion string            `json:"protocol-version"`
-	Txns            []DryrunTxnResult `json:"txns"`
 }
 
 // GetBlockTimeStampOffsetResponse defines model for GetBlockTimeStampOffsetResponse.
@@ -1432,8 +1426,11 @@ type SupplyResponse struct {
 	// CurrentRound Round
 	CurrentRound basics.Round `json:"current_round"`
 
-	// OnlineMoney OnlineMoney
+	// OnlineMoney Total stake held by accounts with status Online at current_round, including those whose participation keys have expired but have not yet been marked offline.
 	OnlineMoney uint64 `json:"online-money"`
+
+	// OnlineStake Online stake used by agreement to vote for current_round, excluding accounts whose participation keys have expired.
+	OnlineStake uint64 `json:"online-stake"`
 
 	// TotalMoney TotalMoney
 	TotalMoney uint64 `json:"total-money"`
@@ -1466,8 +1463,7 @@ type TransactionParametersResponse struct {
 	// LastRound LastRound indicates the last round seen
 	LastRound basics.Round `json:"last-round"`
 
-	// MinFee The minimum transaction fee (not per byte) required for the
-	// txn to validate for the current network protocol.
+	// MinFee The minimum transaction fee (not per byte) required for the txn to validate for the current network protocol.
 	MinFee uint64 `json:"min-fee"`
 }
 
@@ -1479,8 +1475,8 @@ type VersionsResponse = Version
 
 // AccountInformationParams defines parameters for AccountInformation.
 type AccountInformationParams struct {
-	// Exclude When set to `all` will exclude asset holdings, application local state, created asset parameters, any created application parameters. Defaults to `none`.
-	Exclude *AccountInformationParamsExclude `form:"exclude,omitempty" json:"exclude,omitempty"`
+	// Exclude Exclude additional items from the account. Use `all` to exclude asset holdings, application local state, created asset parameters, and created application parameters. Use `created-apps-params` to exclude only the parameters of created applications (returns only application IDs). Use `created-assets-params` to exclude only the parameters of created assets (returns only asset IDs). Multiple values can be comma-separated (e.g., `created-apps-params,created-assets-params`). Note: `all` and `none` cannot be combined with other values. Defaults to `none`.
+	Exclude *[]AccountInformationParamsExclude `form:"exclude,omitempty" json:"exclude,omitempty"`
 
 	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *AccountInformationParamsFormat `form:"format,omitempty" json:"format,omitempty"`
@@ -1491,6 +1487,21 @@ type AccountInformationParamsExclude string
 
 // AccountInformationParamsFormat defines parameters for AccountInformation.
 type AccountInformationParamsFormat string
+
+// AccountApplicationsInformationParams defines parameters for AccountApplicationsInformation.
+type AccountApplicationsInformationParams struct {
+	// Limit Maximum number of results to return.
+	Limit *uint64 `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Next The next page of results. Use the next token provided by the previous results.
+	Next *string `form:"next,omitempty" json:"next,omitempty"`
+
+	// Include Include additional items in the response. Use `params` to include full application parameters (global state, schema, etc.). Multiple values can be comma-separated. Defaults to returning only application IDs and local state.
+	Include *[]AccountApplicationsInformationParamsInclude `form:"include,omitempty" json:"include,omitempty"`
+}
+
+// AccountApplicationsInformationParamsInclude defines parameters for AccountApplicationsInformation.
+type AccountApplicationsInformationParamsInclude string
 
 // AccountApplicationInformationParams defines parameters for AccountApplicationInformation.
 type AccountApplicationInformationParams struct {
@@ -1541,7 +1552,25 @@ type GetApplicationBoxByNameParams struct {
 type GetApplicationBoxesParams struct {
 	// Max Max number of box names to return. If max is not set, or max == 0, returns all box-names.
 	Max *uint64 `form:"max,omitempty" json:"max,omitempty"`
+
+	// Limit Maximum number of boxes to return per page.
+	Limit *uint64 `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Next A box name, in the goal app call arg form 'encoding:value', representing the earliest box name to include in results. Use the next-token from a previous response.
+	Next *string `form:"next,omitempty" json:"next,omitempty"`
+
+	// Prefix A box name prefix, in the goal app call arg form 'encoding:value', to filter results by. Only boxes whose names start with this prefix will be returned.
+	Prefix *string `form:"prefix,omitempty" json:"prefix,omitempty"`
+
+	// Include Include additional items in the response. Use `values` to include box values. Multiple values can be comma-separated.
+	Include *[]GetApplicationBoxesParamsInclude `form:"include,omitempty" json:"include,omitempty"`
+
+	// Round Return box data from the given round. The round must be within the node's available range.
+	Round *basics.Round `form:"round,omitempty" json:"round,omitempty"`
 }
+
+// GetApplicationBoxesParamsInclude defines parameters for GetApplicationBoxes.
+type GetApplicationBoxesParamsInclude string
 
 // GetBlockParams defines parameters for GetBlock.
 type GetBlockParams struct {
@@ -1636,6 +1665,18 @@ type TealCompileParams struct {
 	Sourcemap *bool `form:"sourcemap,omitempty" json:"sourcemap,omitempty"`
 }
 
+// RawTransactionParams defines parameters for RawTransaction.
+type RawTransactionParams struct {
+	// SkipPqAddressCheck Skip post-quantum address checks, including the check that rejects PQ authorizer and LogicSig escrow (TEAL v13 or later) whose address is an Edwards25519 curve point. This should only be used if you understand the risks and know what you are doing.
+	SkipPqAddressCheck *bool `form:"skip-pq-address-check,omitempty" json:"skip-pq-address-check,omitempty"`
+}
+
+// RawTransactionAsyncParams defines parameters for RawTransactionAsync.
+type RawTransactionAsyncParams struct {
+	// SkipPqAddressCheck Skip post-quantum address checks, including the check that rejects PQ authorizer and LogicSig escrow (TEAL v13 or later) whose address is an Edwards25519 curve point. This should only be used if you understand the risks and know what you are doing.
+	SkipPqAddressCheck *bool `form:"skip-pq-address-check,omitempty" json:"skip-pq-address-check,omitempty"`
+}
+
 // GetPendingTransactionsParams defines parameters for GetPendingTransactions.
 type GetPendingTransactionsParams struct {
 	// Max Truncated number of transactions to display. If max=0, returns all pending txns.
@@ -1668,9 +1709,6 @@ type SimulateTransactionParamsFormat string
 
 // TealCompileTextRequestBody defines body for TealCompile for text/plain ContentType.
 type TealCompileTextRequestBody = TealCompileTextBody
-
-// TealDryrunJSONRequestBody defines body for TealDryrun for application/json ContentType.
-type TealDryrunJSONRequestBody = DryrunRequest
 
 // SimulateTransactionJSONRequestBody defines body for SimulateTransaction for application/json ContentType.
 type SimulateTransactionJSONRequestBody = SimulateRequest

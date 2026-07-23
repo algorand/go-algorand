@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,27 +17,25 @@
 package libgoal
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
-	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
-	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
-	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	modelV2 "github.com/algorand/go-algorand/daemon/algod/api/spec/v2"
+	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
@@ -675,10 +673,19 @@ func (c *Client) AccountInformation(account string, includeCreatables bool) (res
 }
 
 // AccountAssetsInformation returns the assets held by an account, including asset params for non-deleted assets.
-func (c *Client) AccountAssetsInformation(account string, next *string, limit *uint64) (resp model.AccountAssetsInformationResponse, err error) {
+func (c *Client) AccountAssetsInformation(account string, next string, limit uint64) (resp model.AccountAssetsInformationResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.AccountAssetsInformation(account, next, limit)
+	}
+	return
+}
+
+// AccountApplicationsInformation returns the apps opted-into by an account, potentially including app params for non-deleted apps.
+func (c *Client) AccountApplicationsInformation(account string, next string, limit uint64, includeParams bool) (resp model.AccountApplicationsInformationResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.AccountApplicationsInformation(account, next, limit, includeParams)
 	}
 	return
 }
@@ -775,6 +782,15 @@ func (c *Client) ApplicationBoxes(appID basics.AppIndex, maxBoxNum uint64) (resp
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.ApplicationBoxes(appID, maxBoxNum)
+	}
+	return
+}
+
+// ApplicationBoxesPage takes an app's index and returns a page of box names with optional values.
+func (c *Client) ApplicationBoxesPage(appID basics.AppIndex, limit uint64, next string, prefix string, values bool, round basics.Round) (resp model.BoxesResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.ApplicationBoxesPage(appID, limit, next, prefix, values, round)
 	}
 	return
 }
@@ -1138,140 +1154,6 @@ func (c *Client) Catchup(catchpointLabel string, min uint64) (model.CatchpointSt
 
 const defaultAppIdx = 1380011588
 
-// MakeDryrunStateBytes function creates DryrunRequest data structure in serialized form according to the format
-func MakeDryrunStateBytes(client Client, txnOrStxn interface{}, otherTxns []transactions.SignedTxn, otherAccts []basics.Address, proto string, format string) (result []byte, err error) {
-	switch format {
-	case "json":
-		var gdr model.DryrunRequest
-		gdr, err = MakeDryrunStateGenerated(client, txnOrStxn, otherTxns, otherAccts, proto)
-		if err == nil {
-			result = protocol.EncodeJSON(&gdr)
-		}
-		return
-	case "msgp":
-		var dr v2.DryrunRequest
-		dr, err = MakeDryrunState(client, txnOrStxn, otherTxns, otherAccts, proto)
-		if err == nil {
-			result = protocol.EncodeReflect(&dr)
-		}
-		return
-	default:
-		return nil, fmt.Errorf("format %s not supported", format)
-	}
-}
-
-// MakeDryrunState function creates v2.DryrunRequest data structure
-func MakeDryrunState(client Client, txnOrStxn interface{}, otherTxns []transactions.SignedTxn, otherAccts []basics.Address, proto string) (dr v2.DryrunRequest, err error) {
-	gdr, err := MakeDryrunStateGenerated(client, txnOrStxn, otherTxns, otherAccts, proto)
-	if err != nil {
-		return
-	}
-	return v2.DryrunRequestFromGenerated(&gdr)
-}
-
-// MakeDryrunStateGenerated function creates model.DryrunRequest data structure
-func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, otherTxns []transactions.SignedTxn, otherAccts []basics.Address, proto string) (dr model.DryrunRequest, err error) {
-	var txns []transactions.SignedTxn
-	if txnOrStxnOrSlice != nil {
-		switch txnType := txnOrStxnOrSlice.(type) {
-		case transactions.Transaction:
-			txns = append(txns, transactions.SignedTxn{Txn: txnType})
-		case []transactions.Transaction:
-			for _, t := range txnType {
-				txns = append(txns, transactions.SignedTxn{Txn: t})
-			}
-		case transactions.SignedTxn:
-			txns = append(txns, txnType)
-		case []transactions.SignedTxn:
-			txns = append(txns, txnType...)
-		default:
-			err = fmt.Errorf("unsupported txn type")
-			return
-		}
-	}
-
-	txns = append(txns, otherTxns...)
-	for i := range txns {
-		enc := protocol.EncodeJSON(&txns[i])
-		dr.Txns = append(dr.Txns, enc)
-	}
-
-	for _, txn := range txns {
-		tx := txn.Txn
-		if tx.Type == protocol.ApplicationCallTx {
-			accounts := append(tx.Accounts, tx.Sender)
-			accounts = append(accounts, otherAccts...)
-
-			apps := []basics.AppIndex{tx.ApplicationID}
-			apps = append(apps, tx.ForeignApps...)
-			for _, appIdx := range apps {
-				var appParams model.ApplicationParams
-				if appIdx == 0 {
-					// if it is an app create txn then use params from the txn
-					appParams.ApprovalProgram = tx.ApprovalProgram
-					appParams.ClearStateProgram = tx.ClearStateProgram
-					appParams.GlobalStateSchema = &model.ApplicationStateSchema{
-						NumUint:      tx.GlobalStateSchema.NumUint,
-						NumByteSlice: tx.GlobalStateSchema.NumByteSlice,
-					}
-					appParams.LocalStateSchema = &model.ApplicationStateSchema{
-						NumUint:      tx.LocalStateSchema.NumUint,
-						NumByteSlice: tx.LocalStateSchema.NumByteSlice,
-					}
-					appParams.Creator = tx.Sender.String()
-					// zero is not acceptable by ledger in dryrun/debugger
-					appIdx = defaultAppIdx
-				} else {
-					// otherwise need to fetch app state
-					var app model.Application
-					if app, err = client.ApplicationInformation(appIdx); err != nil {
-						return
-					}
-					appParams = app.Params
-					accounts = append(accounts, appIdx.Address())
-				}
-				dr.Apps = append(dr.Apps, model.Application{
-					Id:     appIdx,
-					Params: appParams,
-				})
-			}
-
-			for _, acc := range accounts {
-				var info model.Account
-				if info, err = client.AccountInformation(acc.String(), true); err != nil {
-					// ignore error - accounts might have app addresses that were not funded
-					continue
-				}
-				dr.Accounts = append(dr.Accounts, info)
-			}
-
-			dr.ProtocolVersion = proto
-			if dr.Round, err = client.CurrentRound(); err != nil {
-				return
-			}
-			var b bookkeeping.Block
-			if b, err = client.BookkeepingBlock(dr.Round); err != nil {
-				return
-			}
-			dr.LatestTimestamp = b.BlockHeader.TimeStamp
-		}
-	}
-	return
-}
-
-// Dryrun takes an app's index and returns its information
-func (c *Client) Dryrun(data []byte) (resp model.DryrunResponse, err error) {
-	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		data, err = algod.RawDryrun(data)
-		if err != nil {
-			return
-		}
-		err = json.Unmarshal(data, &resp)
-	}
-	return
-}
-
 // SimulateTransactionsRaw simulates a transaction group by taking raw request bytes and returns relevant simulation results.
 func (c *Client) SimulateTransactionsRaw(encodedRequest []byte) (result v2.PreEncodedSimulateResponse, err error) {
 	algod, err := c.ensureAlgodClient()
@@ -1344,4 +1226,12 @@ func (c *Client) BlockLogs(round basics.Round) (resp model.BlockLogsResponse, er
 		return algod.BlockLogs(round)
 	}
 	return
+}
+
+func nilToZero[T any](valPtr *T) T {
+	if valPtr == nil {
+		var defaultV T
+		return defaultV
+	}
+	return *valPtr
 }

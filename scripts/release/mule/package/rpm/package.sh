@@ -21,6 +21,7 @@ find tmp/node_pkgs -name "*${CHANNEL}*linux*${VERSION}*.tar.gz" | cut -d '/' -f3
     ARCH_TYPE=$(echo "${OS_ARCH}" | cut -d '/' -f2)
     ARCH_UNAME=$(./scripts/release/common/cpu_name.sh ${ARCH_TYPE})
     ALGO_BIN="$REPO_DIR/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE/$CHANNEL/$OS_TYPE-$ARCH_TYPE/bin"
+    ALGO_TOOLS="$REPO_DIR/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE/$CHANNEL/$OS_TYPE-$ARCH_TYPE/tools"
     # A make target in Makefile.mule may pass the name as an argument.
     ALGORAND_PACKAGE_NAME=$(./scripts/compute_package_name.sh "$CHANNEL" "$PACKAGE_NAME")
 
@@ -32,6 +33,7 @@ find tmp/node_pkgs -name "*${CHANNEL}*linux*${VERSION}*.tar.gz" | cut -d '/' -f3
     export DEFAULT_RELEASE_NETWORK
     export REPO_DIR
     export ALGO_BIN
+    export ALGO_TOOLS
 
     RPMTMP=$(mktemp -d 2>/dev/null || mktemp -d -t "rpmtmp")
     trap 'rm -rf $RPMTMP' 0

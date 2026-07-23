@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -39,7 +39,7 @@ func makeSerErrStr(text string) *serializableError {
 	return &s
 }
 
-func makeSerErrf(format string, a ...interface{}) *serializableError {
+func makeSerErrf(format string, a ...any) *serializableError {
 	s := serializableError(fmt.Sprintf(format, a...))
 	return &s
 }

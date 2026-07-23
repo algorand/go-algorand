@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
@@ -125,8 +126,36 @@ func MakeSimulator(ledger *data.Ledger, developerAPI bool) *Simulator {
 	}
 }
 
-func txnHasNoSignature(txn transactions.SignedTxn) bool {
-	return txn.Sig.Blank() && txn.Msig.Blank() && txn.Lsig.Blank()
+// isPlaceholderPQSig reports whether txn carries a placeholder PQSig:
+// a non-blank PQ envelope with empty signature bytes and no other signature
+// category set. There are two placeholders forms:
+// - Scheme-only placeholder: Scheme set, PublicKey empty, Signature empty, for fee surcharge calculation
+// - Full placeholder: Scheme, Salt, and PublicKey set, Signature empty, for authorizer address derivation
+func isPlaceholderPQSig(txn transactions.SignedTxn) bool {
+	return txn.Sig.Blank() && txn.Msig.Blank() && txn.Lsig.Blank() &&
+		!txn.PQsig.Blank() && len(txn.PQsig.Signature) == 0
+}
+
+func validatePlaceholderPQSig(proto config.ConsensusParams, pqSig transactions.PQSig, authorizer basics.Address, fixSigners bool) error {
+	if len(pqSig.PublicKey) == 0 || fixSigners {
+		return pqSig.ValidateScheme(proto)
+	}
+	return pqSig.ValidateEnvelope(proto, authorizer)
+}
+
+// isPlaceholderDelegatedPQSig reports whether txn carries a placeholder PQSig
+// nested in its LogicSig: a program with a non-blank nested PQ envelope with
+// empty signature bytes and no other signature category set on either the
+// transaction or the LogicSig.
+func isPlaceholderDelegatedPQSig(txn transactions.SignedTxn) bool {
+	return txn.Sig.Blank() && txn.Msig.Blank() && txn.PQsig.Blank() &&
+		txn.Lsig.HasProgram() && txn.Lsig.Sig.Blank() &&
+		txn.Lsig.Msig.Blank() && txn.Lsig.LMsig.Blank() &&
+		!txn.Lsig.PQsig.Blank() && len(txn.Lsig.PQsig.Signature) == 0
+}
+
+func txnNeedsSyntheticSignature(txn transactions.SignedTxn) bool {
+	return !txn.HasSignature() || isPlaceholderPQSig(txn) || isPlaceholderDelegatedPQSig(txn)
 }
 
 // A randomly generated private key. The actual value does not matter, as long as this is a valid
@@ -158,18 +187,42 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 	// is indistinguishable from an escrow LogicSig, so we would need to decide on another way of
 	// denoting that a LogicSig's delegation signature is omitted, e.g. by setting all the bits of
 	// the signature.
+	proto := config.Consensus[hdr.CurrentProtocol]
 	txnsToVerify := make([]transactions.SignedTxn, len(txgroup))
 	for i, stxnad := range txgroup {
 		stxn := stxnad.SignedTxn
 		if stxn.Txn.Type == protocol.StateProofTx {
 			return errors.New("cannot simulate StateProof transactions")
 		}
-		if overrides.AllowEmptySignatures && txnHasNoSignature(stxn) {
+		if overrides.AllowEmptySignatures && !stxn.HasSignature() {
 			// Replace the signed txn with one signed by the proxySigner. At evaluation this would
 			// raise an error, since the proxySigner's public key likely does not have authority
 			// over the sender's account. However, this will pass validation, since the signature
 			// itself is valid.
 			txnsToVerify[i] = stxn.Txn.Sign(proxySignerSecrets)
+		} else if overrides.AllowEmptySignatures && isPlaceholderPQSig(stxn) {
+			placeholderErr := validatePlaceholderPQSig(proto, stxn.PQsig, stxn.Authorizer(), overrides.FixSigners)
+			if placeholderErr == nil {
+				txnsToVerify[i] = stxn.Txn.Sign(proxySignerSecrets)
+			} else {
+				txnsToVerify[i] = stxn
+			}
+		} else if overrides.AllowEmptySignatures && isPlaceholderDelegatedPQSig(stxn) {
+			if validatePlaceholderPQSig(proto, stxn.Lsig.PQsig, stxn.Authorizer(), overrides.FixSigners) == nil {
+				// A delegated LogicSig carries a program that must still be
+				// evaluated and traced, so unlike the no-signature cases we
+				// cannot swap in a proxy-signed bare transaction. Keep the
+				// program but drop the placeholder PQ proof and authorize via
+				// the program hash, so the verification pass treats it as a
+				// contract-only (escrow) account and runs the program without a
+				// real Falcon signature.
+				escrow := stxn
+				escrow.Lsig.PQsig = transactions.PQSig{}
+				escrow.AuthAddr = basics.Address(logic.HashProgram(escrow.Lsig.Logic))
+				txnsToVerify[i] = escrow
+			} else {
+				txnsToVerify[i] = stxn
+			}
 		} else {
 			txnsToVerify[i] = stxn
 		}
@@ -183,6 +236,23 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 	return err
 }
 
+func validateFixedPlaceholderPQEnvelopes(proto config.ConsensusParams, txgroup []transactions.SignedTxnWithAD) (int, error) {
+	for i, stxnad := range txgroup {
+		stxn := stxnad.SignedTxn
+		if isPlaceholderPQSig(stxn) && len(stxn.PQsig.PublicKey) != 0 {
+			if err := validatePlaceholderPQSig(proto, stxn.PQsig, stxn.Authorizer(), false); err != nil {
+				return i, fmt.Errorf("pq signature validation failed: %w", err)
+			}
+		}
+		if isPlaceholderDelegatedPQSig(stxn) && len(stxn.Lsig.PQsig.PublicKey) != 0 {
+			if err := validatePlaceholderPQSig(proto, stxn.Lsig.PQsig, stxn.Authorizer(), false); err != nil {
+				return i, fmt.Errorf("pq delegated logic signature validation failed: %w", err)
+			}
+		}
+	}
+	return -1, nil
+}
+
 func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, group []transactions.SignedTxnWithAD, tracer logic.EvalTracer) (*ledgercore.ValidatedBlock, error) {
 	// s.ledger has 'StartEvaluator' because *data.Ledger is embedded in the simulatorLedger
 	// and data.Ledger embeds *ledger.Ledger
@@ -191,7 +261,7 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, group []transactions.Si
 		return nil, err
 	}
 
-	err = eval.TransactionGroup(group)
+	err = eval.TransactionGroup(group...)
 	if err != nil {
 		return nil, EvalFailureError{SimulatorError{err}}
 	}
@@ -208,13 +278,8 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, group []transactions.Si
 	return &vb, nil
 }
 
-func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxnWithAD, tracer logic.EvalTracer, overrides ResultEvalOverrides) (*ledgercore.ValidatedBlock, error) {
-	prevBlockHdr, err := s.ledger.BlockHdr(s.ledger.start)
-	if err != nil {
-		return nil, err
-	}
-	nextBlock := bookkeeping.MakeBlock(prevBlockHdr)
-	hdr := nextBlock.BlockHeader
+func (s Simulator) simulateWithTracer(hdr bookkeeping.BlockHeader, txgroup []transactions.SignedTxnWithAD, tracer logic.EvalTracer, overrides ResultEvalOverrides) (*ledgercore.ValidatedBlock, error) {
+	var err error
 
 	if overrides.FixSigners {
 		// Map of rekeys for senders in the group
@@ -224,7 +289,7 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxnWithAD, tr
 			stxn := &txgroup[i].SignedTxn
 			sender := stxn.Txn.Sender
 
-			if authAddr, ok := staticRekeys[sender]; ok && txnHasNoSignature(*stxn) {
+			if authAddr, ok := staticRekeys[sender]; ok && txnNeedsSyntheticSignature(*stxn) {
 				// If there is a static rekey for the sender set the auth addr to that address
 				stxn.AuthAddr = authAddr
 				if stxn.AuthAddr == sender {
@@ -232,7 +297,7 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxnWithAD, tr
 				}
 			} else {
 				// Otherwise lookup the sender's account and set the txn auth addr to the account's auth addr
-				if txnHasNoSignature(*stxn) {
+				if txnNeedsSyntheticSignature(*stxn) {
 					var data ledgercore.AccountData
 					data, _, _, err = s.ledger.LookupAccount(s.ledger.start, sender)
 					if err != nil {
@@ -276,7 +341,22 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxnWithAD, tr
 	}
 
 	vb, err := s.evaluate(hdr, txgroup, tracer)
-	return vb, err
+	if err != nil {
+		return vb, err
+	}
+	// Full PQ placeholders need the final AuthAddr after FixSigners has run through evaluation.
+	if overrides.AllowEmptySignatures && overrides.FixSigners {
+		if proto, ok := config.Consensus[hdr.CurrentProtocol]; ok {
+			idx, err := validateFixedPlaceholderPQEnvelopes(proto, txgroup)
+			if err != nil {
+				if evalTracer, ok := tracer.(*evalTracer); ok {
+					evalTracer.failedAt = TxnPath{idx}
+				}
+				return nil, EvalFailureError{SimulatorError{err}}
+			}
+		}
+	}
+	return vb, nil
 }
 
 // Simulate simulates a transaction group using the simulator. Will error if the transaction group is not well-formed.
@@ -304,6 +384,12 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 		}
 	}
 
+	prevBlockHdr, err := s.ledger.BlockHdr(s.ledger.start)
+	if err != nil {
+		return Result{}, err
+	}
+	nextBlock := bookkeeping.MakeBlock(prevBlockHdr)
+
 	group := transactions.WrapSignedTxnsWithAD(simulateRequest.TxnGroups[0])
 
 	simulatorTracer, err := makeEvalTracer(s.ledger.start, group, simulateRequest, s.developerAPI)
@@ -311,7 +397,7 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 		return Result{}, err
 	}
 
-	block, err := s.simulateWithTracer(group, simulatorTracer, simulatorTracer.result.EvalOverrides)
+	block, err := s.simulateWithTracer(nextBlock.BlockHeader, group, simulatorTracer, simulatorTracer.result.EvalOverrides)
 	if err != nil {
 		var verifyError *verify.TxGroupError
 		switch {
@@ -330,6 +416,8 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 			return Result{}, err
 		}
 	}
+
+	populateFeeUsage(simulatorTracer.result, config.Consensus[nextBlock.CurrentProtocol])
 
 	if simulatorTracer.result.TxnGroups[0].UnnamedResourcesAccessed != nil {
 		// Remove private fields for easier test comparison

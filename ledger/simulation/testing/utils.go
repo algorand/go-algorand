@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -35,7 +37,6 @@ import (
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/stretchr/testify/require"
 )
 
 // Account contains public and private keys, as well as the state of an account
@@ -118,7 +119,7 @@ func (env *Environment) Txn(txn transactions.SignedTxn) transactions.ApplyData {
 	env.t.Helper()
 
 	evaluator := env.nextBlock()
-	err := evaluator.Transaction(txn, transactions.ApplyData{})
+	err := evaluator.TransactionGroup(txn.WithAD())
 	require.NoError(env.t, err)
 	newBlock := env.endBlock(evaluator).Block()
 
@@ -148,8 +149,8 @@ func (env *Environment) CreateAsset(creator basics.Address, params basics.AssetP
 // AppParams mirrors basics.AppParams, but allows the approval and clear state programs to have the
 // same values that txntest.Txn accepts
 type AppParams struct {
-	ApprovalProgram   interface{}
-	ClearStateProgram interface{}
+	ApprovalProgram   any
+	ClearStateProgram any
 	GlobalState       basics.TealKeyValue
 	LocalStateSchema  basics.StateSchema
 	GlobalStateSchema basics.StateSchema

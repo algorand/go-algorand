@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -50,17 +50,54 @@ type HeartbeatTxnFields struct {
 
 	// HbKeyDilution must match HbAddress account's current KeyDilution.
 	HbKeyDilution uint64 `codec:"kd"`
+
+	// HbChallengeDiscount requests the challenge fee discount: when set, the
+	// required fee is reduced by one min fee. It is optional even for a
+	// challenged account (an account willing to pay the normal fee can leave it
+	// off), so it is a request, not an assertion. apply verifies HbAddress is
+	// actually under challenge before granting it. The flag is only allowed
+	// once transaction size pricing is enabled (proto.TxnSizePricingEnabled());
+	// it makes sense to think in terms of transaction fields changing fees
+	// now, so it needs no separate consensus flag. Before then, the discount
+	// was inferred from an underpaid singleton heartbeat instead (see
+	// wellFormed and apply).
+	HbChallengeDiscount bool `codec:"c"`
 }
 
 // wellFormed performs some stateless checks on the Heartbeat transaction
 func (hb HeartbeatTxnFields) wellFormed(header Header, proto config.ConsensusParams) error {
-	// If this is a free/cheap heartbeat, it must be very simple.
-	if header.Fee.Raw < proto.MinTxnFee && header.Group.IsZero() {
-		kind := "free"
-		if header.Fee.Raw > 0 {
-			kind = "cheap"
+	// A heartbeat that claims the challenge discount must be very simple, so it
+	// can't smuggle in other work at a reduced fee. kind describes how the
+	// discount is being claimed (only for error messages); an empty kind means
+	// no discount, so no restrictions apply.
+	var kind string
+	if proto.TxnSizePricingEnabled() {
+		// The discount is claimed explicitly with HbChallengeDiscount.
+		if hb.HbChallengeDiscount {
+			kind = "discounted"
 		}
+	} else {
+		// Before the explicit-discount rule, HbChallengeDiscount has no meaning
+		// and must not be set, so it can't alter a heartbeat's encoding under the
+		// old rules.
+		if hb.HbChallengeDiscount {
+			return errors.New("tx.HbChallengeDiscount set before it is allowed")
+		}
+		// The discount is instead inferred: a singleton heartbeat that underpays
+		// the normal fee is claiming it.
+		factor := basics.AddSaturate(header.FeeContribution(proto), 1e6)
+		// Fee a normal (non-cheap) heartbeat owes, computed the same way as a
+		// top-level group: no cost multiplier (1e6), no prior residue. FeeForUsage saturates.
+		requiredFee, _, _ := proto.MinFee().FeeForUsage(factor, 1e6, 0)
+		if header.Fee.LessThan(requiredFee) && header.Group.IsZero() {
+			kind = "free"
+			if header.Fee.Raw > 0 {
+				kind = "cheap"
+			}
+		}
+	}
 
+	if kind != "" {
 		if len(header.Note) > 0 {
 			return fmt.Errorf("tx.Note is set in %s heartbeat", kind)
 		}

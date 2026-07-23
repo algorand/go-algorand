@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,7 +31,6 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/algorand/go-codec/codec"
-
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/agreement"

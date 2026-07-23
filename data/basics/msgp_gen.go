@@ -3,6 +3,7 @@
 package basics
 
 import (
+	"errors"
 	"sort"
 
 	"github.com/algorand/msgp/msgp"
@@ -132,6 +133,26 @@ import (
 //      |-----> MsgIsZero
 //      |-----> DeltaActionMaxSize()
 //
+// Micros
+//    |-----> MarshalMsg
+//    |-----> CanMarshalMsg
+//    |-----> (*) UnmarshalMsg
+//    |-----> (*) UnmarshalMsgWithState
+//    |-----> (*) CanUnmarshalMsg
+//    |-----> Msgsize
+//    |-----> MsgIsZero
+//    |-----> MicrosMaxSize()
+//
+// PQAddressSalt
+//       |-----> MarshalMsg
+//       |-----> CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) UnmarshalMsgWithState
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> Msgsize
+//       |-----> MsgIsZero
+//       |-----> PQAddressSaltMaxSize()
+//
 // Participant
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
@@ -151,16 +172,6 @@ import (
 //   |-----> Msgsize
 //   |-----> MsgIsZero
 //   |-----> RoundMaxSize()
-//
-// RoundInterval
-//       |-----> MarshalMsg
-//       |-----> CanMarshalMsg
-//       |-----> (*) UnmarshalMsg
-//       |-----> (*) UnmarshalMsgWithState
-//       |-----> (*) CanUnmarshalMsg
-//       |-----> Msgsize
-//       |-----> MsgIsZero
-//       |-----> RoundIntervalMaxSize()
 //
 // StateDelta
 //      |-----> MarshalMsg
@@ -2008,8 +2019,8 @@ func AppLocalStateMaxSize() (s int) {
 func (z *AppParams) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0003Len := uint32(8)
-	var zb0003Mask uint16 /* 10 bits */
+	zb0003Len := uint32(10)
+	var zb0003Mask uint16 /* 12 bits */
 	if len((*z).ApprovalProgram) == 0 {
 		zb0003Len--
 		zb0003Mask |= 0x4
@@ -2022,25 +2033,33 @@ func (z *AppParams) MarshalMsg(b []byte) (o []byte) {
 		zb0003Len--
 		zb0003Mask |= 0x10
 	}
-	if len((*z).GlobalState) == 0 {
+	if (*z).FamilyBoxAccess == false {
 		zb0003Len--
 		zb0003Mask |= 0x20
 	}
-	if ((*z).StateSchemas.GlobalStateSchema.NumUint == 0) && ((*z).StateSchemas.GlobalStateSchema.NumByteSlice == 0) {
+	if (*z).ForeignBoxReads == false {
 		zb0003Len--
 		zb0003Mask |= 0x40
 	}
-	if ((*z).StateSchemas.LocalStateSchema.NumUint == 0) && ((*z).StateSchemas.LocalStateSchema.NumByteSlice == 0) {
+	if len((*z).GlobalState) == 0 {
 		zb0003Len--
 		zb0003Mask |= 0x80
 	}
-	if (*z).SizeSponsor.MsgIsZero() {
+	if ((*z).StateSchemas.GlobalStateSchema.NumUint == 0) && ((*z).StateSchemas.GlobalStateSchema.NumByteSlice == 0) {
 		zb0003Len--
 		zb0003Mask |= 0x100
 	}
-	if (*z).Version == 0 {
+	if ((*z).StateSchemas.LocalStateSchema.NumUint == 0) && ((*z).StateSchemas.LocalStateSchema.NumByteSlice == 0) {
 		zb0003Len--
 		zb0003Mask |= 0x200
+	}
+	if (*z).SizeSponsor.MsgIsZero() {
+		zb0003Len--
+		zb0003Mask |= 0x400
+	}
+	if (*z).Version == 0 {
+		zb0003Len--
+		zb0003Mask |= 0x800
 	}
 	// variable map header, size zb0003Len
 	o = append(o, 0x80|uint8(zb0003Len))
@@ -2061,6 +2080,16 @@ func (z *AppParams) MarshalMsg(b []byte) (o []byte) {
 			o = msgp.AppendUint32(o, (*z).ExtraProgramPages)
 		}
 		if (zb0003Mask & 0x20) == 0 { // if not empty
+			// string "fba"
+			o = append(o, 0xa3, 0x66, 0x62, 0x61)
+			o = msgp.AppendBool(o, (*z).FamilyBoxAccess)
+		}
+		if (zb0003Mask & 0x40) == 0 { // if not empty
+			// string "fbr"
+			o = append(o, 0xa3, 0x66, 0x62, 0x72)
+			o = msgp.AppendBool(o, (*z).ForeignBoxReads)
+		}
+		if (zb0003Mask & 0x80) == 0 { // if not empty
 			// string "gs"
 			o = append(o, 0xa2, 0x67, 0x73)
 			if (*z).GlobalState == nil {
@@ -2080,7 +2109,7 @@ func (z *AppParams) MarshalMsg(b []byte) (o []byte) {
 				o = zb0002.MarshalMsg(o)
 			}
 		}
-		if (zb0003Mask & 0x40) == 0 { // if not empty
+		if (zb0003Mask & 0x100) == 0 { // if not empty
 			// string "gsch"
 			o = append(o, 0xa4, 0x67, 0x73, 0x63, 0x68)
 			// omitempty: check for empty values
@@ -2107,7 +2136,7 @@ func (z *AppParams) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendUint64(o, (*z).StateSchemas.GlobalStateSchema.NumUint)
 			}
 		}
-		if (zb0003Mask & 0x80) == 0 { // if not empty
+		if (zb0003Mask & 0x200) == 0 { // if not empty
 			// string "lsch"
 			o = append(o, 0xa4, 0x6c, 0x73, 0x63, 0x68)
 			// omitempty: check for empty values
@@ -2134,12 +2163,12 @@ func (z *AppParams) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendUint64(o, (*z).StateSchemas.LocalStateSchema.NumUint)
 			}
 		}
-		if (zb0003Mask & 0x100) == 0 { // if not empty
+		if (zb0003Mask & 0x400) == 0 { // if not empty
 			// string "ss"
 			o = append(o, 0xa2, 0x73, 0x73)
 			o = (*z).SizeSponsor.MarshalMsg(o)
 		}
-		if (zb0003Mask & 0x200) == 0 { // if not empty
+		if (zb0003Mask & 0x800) == 0 { // if not empty
 			// string "v"
 			o = append(o, 0xa1, 0x76)
 			o = msgp.AppendUint64(o, (*z).Version)
@@ -2412,6 +2441,22 @@ func (z *AppParams) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o
 			}
 		}
 		if zb0003 > 0 {
+			zb0003--
+			(*z).ForeignBoxReads, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "ForeignBoxReads")
+				return
+			}
+		}
+		if zb0003 > 0 {
+			zb0003--
+			(*z).FamilyBoxAccess, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "FamilyBoxAccess")
+				return
+			}
+		}
+		if zb0003 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0003)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -2658,6 +2703,18 @@ func (z *AppParams) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o
 					err = msgp.WrapError(err, "SizeSponsor")
 					return
 				}
+			case "fbr":
+				(*z).ForeignBoxReads, bts, err = msgp.ReadBoolBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "ForeignBoxReads")
+					return
+				}
+			case "fba":
+				(*z).FamilyBoxAccess, bts, err = msgp.ReadBoolBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "FamilyBoxAccess")
+					return
+				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -2689,13 +2746,13 @@ func (z *AppParams) Msgsize() (s int) {
 			s += 0 + msgp.StringPrefixSize + len(zb0001) + zb0002.Msgsize()
 		}
 	}
-	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4 + msgp.Uint32Size + 2 + msgp.Uint64Size + 3 + (*z).SizeSponsor.Msgsize()
+	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4 + msgp.Uint32Size + 2 + msgp.Uint64Size + 3 + (*z).SizeSponsor.Msgsize() + 4 + msgp.BoolSize + 4 + msgp.BoolSize
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *AppParams) MsgIsZero() bool {
-	return (len((*z).ApprovalProgram) == 0) && (len((*z).ClearStateProgram) == 0) && (len((*z).GlobalState) == 0) && (((*z).StateSchemas.LocalStateSchema.NumUint == 0) && ((*z).StateSchemas.LocalStateSchema.NumByteSlice == 0)) && (((*z).StateSchemas.GlobalStateSchema.NumUint == 0) && ((*z).StateSchemas.GlobalStateSchema.NumByteSlice == 0)) && ((*z).ExtraProgramPages == 0) && ((*z).Version == 0) && ((*z).SizeSponsor.MsgIsZero())
+	return (len((*z).ApprovalProgram) == 0) && (len((*z).ClearStateProgram) == 0) && (len((*z).GlobalState) == 0) && (((*z).StateSchemas.LocalStateSchema.NumUint == 0) && ((*z).StateSchemas.LocalStateSchema.NumByteSlice == 0)) && (((*z).StateSchemas.GlobalStateSchema.NumUint == 0) && ((*z).StateSchemas.GlobalStateSchema.NumByteSlice == 0)) && ((*z).ExtraProgramPages == 0) && ((*z).Version == 0) && ((*z).SizeSponsor.MsgIsZero()) && ((*z).ForeignBoxReads == false) && ((*z).FamilyBoxAccess == false)
 }
 
 // AppParamsMaxSize returns a maximum valid message size for this message type
@@ -2706,7 +2763,7 @@ func AppParamsMaxSize() (s int) {
 	s += bounds.EncodedMaxKeyValueEntries * (msgp.StringPrefixSize + bounds.MaxAppBytesKeyLen)
 	// Adding size of map values for z.GlobalState
 	s += bounds.EncodedMaxKeyValueEntries * (TealValueMaxSize())
-	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4 + msgp.Uint32Size + 2 + msgp.Uint64Size + 3 + AddressMaxSize()
+	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4 + msgp.Uint32Size + 2 + msgp.Uint64Size + 3 + AddressMaxSize() + 4 + msgp.BoolSize + 4 + msgp.BoolSize
 	return
 }
 
@@ -4816,6 +4873,126 @@ func DeltaActionMaxSize() (s int) {
 }
 
 // MarshalMsg implements msgp.Marshaler
+func (z Micros) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendUint64(o, uint64(z))
+	return
+}
+
+func (_ Micros) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(Micros)
+	if !ok {
+		_, ok = (z).(*Micros)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *Micros) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	{
+		var zb0001 uint64
+		zb0001, bts, err = msgp.ReadUint64Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = Micros(zb0001)
+	}
+	o = bts
+	return
+}
+
+func (z *Micros) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *Micros) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Micros)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z Micros) Msgsize() (s int) {
+	s = msgp.Uint64Size
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z Micros) MsgIsZero() bool {
+	return z == 0
+}
+
+// MicrosMaxSize returns a maximum valid message size for this message type
+func MicrosMaxSize() (s int) {
+	s = msgp.Uint64Size
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z PQAddressSalt) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendUint8(o, uint8(z))
+	return
+}
+
+func (_ PQAddressSalt) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(PQAddressSalt)
+	if !ok {
+		_, ok = (z).(*PQAddressSalt)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *PQAddressSalt) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	{
+		var zb0001 uint8
+		zb0001, bts, err = msgp.ReadUint8Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = PQAddressSalt(zb0001)
+	}
+	o = bts
+	return
+}
+
+func (z *PQAddressSalt) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *PQAddressSalt) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*PQAddressSalt)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z PQAddressSalt) Msgsize() (s int) {
+	s = msgp.Uint8Size
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z PQAddressSalt) MsgIsZero() bool {
+	return z == 0
+}
+
+// PQAddressSaltMaxSize returns a maximum valid message size for this message type
+func PQAddressSaltMaxSize() (s int) {
+	s = msgp.Uint8Size
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
 func (z *Participant) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
@@ -4929,6 +5106,13 @@ func (z *Participant) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 			}
 		}
 	}
+	if (*z).PK.MsgIsZero() {
+		err = errors.New("missing required field: p")
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+	}
 	o = bts
 	return
 }
@@ -5014,66 +5198,6 @@ func (z Round) MsgIsZero() bool {
 
 // RoundMaxSize returns a maximum valid message size for this message type
 func RoundMaxSize() (s int) {
-	s = msgp.Uint64Size
-	return
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z RoundInterval) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendUint64(o, uint64(z))
-	return
-}
-
-func (_ RoundInterval) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(RoundInterval)
-	if !ok {
-		_, ok = (z).(*RoundInterval)
-	}
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *RoundInterval) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
-	if st.AllowableDepth == 0 {
-		err = msgp.ErrMaxDepthExceeded{}
-		return
-	}
-	st.AllowableDepth--
-	{
-		var zb0001 uint64
-		zb0001, bts, err = msgp.ReadUint64Bytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = RoundInterval(zb0001)
-	}
-	o = bts
-	return
-}
-
-func (z *RoundInterval) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
-}
-func (_ *RoundInterval) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*RoundInterval)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z RoundInterval) Msgsize() (s int) {
-	s = msgp.Uint64Size
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z RoundInterval) MsgIsZero() bool {
-	return z == 0
-}
-
-// RoundIntervalMaxSize returns a maximum valid message size for this message type
-func RoundIntervalMaxSize() (s int) {
 	s = msgp.Uint64Size
 	return
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -28,7 +29,15 @@ import (
 	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util"
 )
+
+func surchargeForBytes(t *testing.T, proto config.ConsensusParams, bytes int) basics.Micros {
+	t.Helper()
+	surcharge, overflow := proto.PerByteTxnSurcharge.MulInt(bytes)
+	require.False(t, overflow)
+	return surcharge
+}
 
 func TestTransaction_EstimateEncodedSize(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -150,4 +159,974 @@ func TestLogicSigEquality(t *testing.T) {
 		assert.False(t, ls.Equal(&empty), "Equal() seems to be disregarding something %+v", ls)
 	}
 
+}
+
+// TestHeaderWellFormed tests WellFormed for things that are not transaction
+// specific (which get tested for the specific transactions).
+func TestHeaderWellFormed(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	correctTxn := Transaction{
+		Type: protocol.PaymentTx,
+		Header: Header{
+			Sender:     basics.Address{0x01},
+			Fee:        basics.MicroAlgos{Raw: 1000},
+			FirstValid: 100,
+			LastValid:  200,
+			Note:       []byte{0x02},
+		},
+		PaymentTxnFields: PaymentTxnFields{
+			Receiver: basics.Address{0x03},
+			Amount:   basics.MicroAlgos{Raw: 1000},
+		},
+	}
+
+	sp := SpecialAddresses{
+		RewardsPool: basics.Address{0xEE},
+		FeeSink:     basics.Address{0xFF},
+	}
+
+	current := config.Consensus[protocol.ConsensusCurrentVersion]
+	future := config.Consensus[protocol.ConsensusFuture]
+
+	a := assert.New(t)
+
+	testGood := func(msg string, fn func(tx *Transaction), protos ...config.ConsensusParams) {
+		for _, p := range protos {
+			t.Helper()
+			copy := correctTxn
+			fn(&correctTxn)
+			defer func() { correctTxn = copy }()
+			err := correctTxn.WellFormed(sp, p)
+			a.NoError(err, msg)
+		}
+	}
+
+	testGood("base case", func(tx *Transaction) {}, current, future)
+
+	testBad := func(msg string, fn func(tx *Transaction), protos ...config.ConsensusParams) {
+		for _, p := range protos {
+			t.Helper()
+			copy := correctTxn
+			fn(&correctTxn)
+			defer func() { correctTxn = copy }()
+			err := correctTxn.WellFormed(sp, p)
+			a.ErrorContains(err, msg)
+		}
+	}
+	testBad("invalid range", func(tx *Transaction) {
+		tx.FirstValid = tx.LastValid + 1
+	}, current, future)
+	testBad("window size excessive", func(tx *Transaction) {
+		tx.LastValid = tx.FirstValid + 10_000
+	}, current, future)
+	testBad("note too big", func(tx *Transaction) {
+		tx.Note = make([]byte, 10_000)
+	}, current, future)
+	testBad("from incentive pool is invalid", func(tx *Transaction) {
+		tx.Sender = sp.RewardsPool
+	}, current, future)
+	testBad("cannot have zero sender", func(tx *Transaction) {
+		tx.CloseRemainderTo = basics.Address{0x88} // to avoid the early error that sender != closeTo
+		tx.Sender = basics.Address{}
+	}, current, future)
+
+	// Now test some fields that were added in certain releases
+	testAdded := func(msg string, fn func(tx *Transaction), lastBad protocol.ConsensusVersion) {
+		t.Helper()
+		testBad(msg, fn, config.Consensus[lastBad])
+		if lastBad != protocol.ConsensusFuture {
+			testGood(msg, fn, future)
+		}
+	}
+	testAdded("tried to acquire lease", func(tx *Transaction) {
+		tx.Lease = [32]byte{0x77}
+	}, protocol.ConsensusV17)
+	testAdded("groups not yet enabled", func(tx *Transaction) {
+		tx.Group = crypto.Digest{0x11}
+	}, protocol.ConsensusV17)
+	testAdded("rekeying not yet enabled", func(tx *Transaction) {
+		tx.RekeyTo = basics.Address{0x22}
+	}, protocol.ConsensusV23)
+}
+
+func TestHeaderFieldCount(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// When a field is added to the transaction header, this test will fail as
+	// a reminder to consider whether the field should be banned from use by
+	// stateproofs and/or free heartbeats. Adjust their wellFormed methods and
+	// then change the value in the test.
+
+	// Such a new field should probably also be consensus flagged at the end of
+	// transaction.WellFormed()
+	assert.Equal(t, 11, reflect.TypeFor[Header]().NumField())
+}
+
+// TestFeeFactor_BigNotes tests the FeeFactor calculation with various Note sizes
+func TestFeeFactor_BigNotes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	v41 := config.Consensus[protocol.ConsensusV41]
+	vFuture := config.Consensus[protocol.ConsensusFuture]
+
+	tests := []struct {
+		name           string
+		proto          config.ConsensusParams
+		noteSize       int
+		expectedFactor basics.Micros
+	}{
+		// v41: MaxAbsoluteTxnNoteBytes = MaxTxnNoteBytes = 1024
+		{
+			name:           "v41: standard note size (1024 bytes)",
+			proto:          v41,
+			noteSize:       1024,
+			expectedFactor: 1e6,
+		},
+		// vFuture: MaxAbsoluteTxnNoteBytes = 4096, so larger notes are allowed
+		{
+			name:           "vFuture: standard note size (1024 bytes)",
+			proto:          vFuture,
+			noteSize:       1024,
+			expectedFactor: 1e6,
+		},
+		{
+			name:           "vFuture: 1 extra byte (1025 bytes)",
+			proto:          vFuture,
+			noteSize:       1025,
+			expectedFactor: 1e6 + 100,
+		},
+		{
+			name:           "vFuture: 100 extra bytes (1124 bytes)",
+			proto:          vFuture,
+			noteSize:       1124,
+			expectedFactor: 1e6 + 10000,
+		},
+		{
+			name:           "vFuture: 1024 extra bytes (2048 bytes)",
+			proto:          vFuture,
+			noteSize:       2048,
+			expectedFactor: 1e6 + 102400,
+		},
+		{
+			name:           "vFuture: maximum allowed (4096 bytes)",
+			proto:          vFuture,
+			noteSize:       4096,
+			expectedFactor: 1e6 + (4096-1024)*100,
+		},
+	}
+
+	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
+	require.NoError(t, err)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tx := Transaction{
+				Type: protocol.PaymentTx,
+				Header: Header{
+					Sender:     addr,
+					Fee:        basics.MicroAlgos{Raw: 1000},
+					FirstValid: 100,
+					LastValid:  200,
+					Note:       make([]byte, tt.noteSize),
+				},
+				PaymentTxnFields: PaymentTxnFields{
+					Receiver: addr,
+					Amount:   basics.MicroAlgos{Raw: 1000},
+				},
+			}
+
+			factor := tx.feeFactor(tt.proto)
+			assert.Equal(t, tt.expectedFactor, factor, "FeeFactor mismatch for note size %d", tt.noteSize)
+		})
+	}
+}
+
+// TestFeeFactor_StateProofAndHeartbeat tests that StateProof and Heartbeat transactions
+// maintain their special fee behavior even with large Notes
+func TestFeeFactor_StateProofAndHeartbeat(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	vFuture := config.Consensus[protocol.ConsensusFuture]
+	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
+	require.NoError(t, err)
+
+	// StateProof transactions should always be free. (Notes aren't actually
+	// allowed, but that's up to WellFormed to deal with.)
+	stateProofTx := Transaction{
+		Type: protocol.StateProofTx,
+		Header: Header{
+			Sender:     addr,
+			FirstValid: 100,
+			LastValid:  200,
+			Note:       make([]byte, 2048), // Large note
+		},
+	}
+	assert.Equal(t, basics.Micros(0), stateProofTx.feeFactor(vFuture), "StateProof should be free")
+
+	// With the explicit-discount rule a plain heartbeat pays the normal fee whether or not
+	// it is a singleton; only a challenged heartbeat is discounted.
+	singletonHeartbeat := Transaction{
+		Type: protocol.HeartbeatTx,
+		Header: Header{
+			Sender:     addr,
+			FirstValid: 100,
+			LastValid:  200,
+		},
+		HeartbeatTxnFields: &HeartbeatTxnFields{},
+	}
+	assert.Equal(t, basics.Micros(1e6), singletonHeartbeat.feeFactor(vFuture), "plain singleton heartbeat pays base fee")
+
+	// A challenged heartbeat owes one less min fee. WellFormed forbids extras
+	// (like a Note) on it, so the base fee is all there is, and it drops to 0.
+	challengedHeartbeat := singletonHeartbeat
+	challengedHeartbeat.HeartbeatTxnFields = &HeartbeatTxnFields{HbChallengeDiscount: true}
+	assert.Zero(t, challengedHeartbeat.feeFactor(vFuture))
+
+	// The discount applies inside a group too.
+	challengedGrouped := challengedHeartbeat
+	challengedGrouped.Group = crypto.Digest{1}
+	assert.Zero(t, challengedGrouped.feeFactor(vFuture))
+
+	// Grouped (non-challenged) heartbeat should have normal fee
+	groupedHeartbeat := Transaction{
+		Type: protocol.HeartbeatTx,
+		Header: Header{
+			Sender:     addr,
+			FirstValid: 100,
+			LastValid:  200,
+			Note:       make([]byte, 1024),
+			Group:      crypto.Digest{1}, // Has a group
+		},
+		HeartbeatTxnFields: &HeartbeatTxnFields{},
+	}
+	assert.Equal(t, basics.Micros(1e6), groupedHeartbeat.feeFactor(vFuture), "Grouped heartbeat should have base fee")
+
+	// Grouped heartbeat with big note should have the extra charge for it
+	groupedHeartbeatBigNote := groupedHeartbeat
+	groupedHeartbeatBigNote.Note = make([]byte, 1124)
+	assert.Equal(t, basics.Micros(1_010_000), groupedHeartbeatBigNote.feeFactor(vFuture), "Grouped heartbeat should have extra fee")
+
+	// before the explicit-discount rule, any singleton heartbeat is free, even
+	// with a big note. (though it will fail at wellFormed and apply time)
+	v41 := config.Consensus[protocol.ConsensusV41]
+	oldSingletonHeartbeat := Transaction{
+		Type: protocol.HeartbeatTx,
+		Header: Header{
+			Sender:     addr,
+			FirstValid: 100,
+			LastValid:  200,
+			Note:       make([]byte, 2048), // Large note
+		},
+		HeartbeatTxnFields: &HeartbeatTxnFields{},
+	}
+	assert.Zero(t, oldSingletonHeartbeat.feeFactor(v41))
+}
+
+// TestWellFormed_BigNotes tests Note size validation with MaxAbsoluteTxnNoteBytes
+func TestWellFormed_BigNotes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	v41 := config.Consensus[protocol.ConsensusV41]
+	vFuture := config.Consensus[protocol.ConsensusFuture]
+
+	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
+	require.NoError(t, err)
+
+	spec := SpecialAddresses{
+		FeeSink:     basics.Address{0x01},
+		RewardsPool: basics.Address{0x02},
+	}
+
+	tests := []struct {
+		name     string
+		proto    config.ConsensusParams
+		noteSize int
+		errorMsg string
+	}{
+		// v41: MaxAbsoluteTxnNoteBytes = MaxTxnNoteBytes = 1024
+		{
+			name:     "v41: note at limit (1024 bytes) - pass",
+			proto:    v41,
+			noteSize: 1024,
+		},
+		{
+			name:     "v41: note over limit (1025 bytes) - fail",
+			proto:    v41,
+			noteSize: 1025,
+			errorMsg: "transaction note too big: 1025 > 1024",
+		},
+		{
+			name:     "v41: large note (2048 bytes) - fail",
+			proto:    v41,
+			noteSize: 2048,
+			errorMsg: "transaction note too big: 2048 > 1024",
+		},
+		// vFuture: MaxAbsoluteTxnNoteBytes = 4096, allows larger notes
+		{
+			name:     "vFuture: note at standard limit (1024 bytes) - pass",
+			proto:    vFuture,
+			noteSize: 1024,
+		},
+		{
+			name:     "vFuture: note over standard limit (1025 bytes) - pass",
+			proto:    vFuture,
+			noteSize: 1025,
+		},
+		{
+			name:     "vFuture: large note (2048 bytes) - pass",
+			proto:    vFuture,
+			noteSize: 2048,
+		},
+		{
+			name:     "vFuture: note at absolute limit (4096 bytes) - pass",
+			proto:    vFuture,
+			noteSize: 4096,
+		},
+		{
+			name:     "vFuture: note over absolute limit (4097 bytes) - fail",
+			proto:    vFuture,
+			noteSize: 4097,
+			errorMsg: "transaction note too big: 4097 > 4096",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tx := Transaction{
+				Type: protocol.PaymentTx,
+				Header: Header{
+					Sender:     addr,
+					Fee:        basics.MicroAlgos{Raw: 100000}, // High enough for any test
+					FirstValid: 100,
+					LastValid:  200,
+					Note:       make([]byte, tt.noteSize),
+				},
+				PaymentTxnFields: PaymentTxnFields{
+					Receiver: addr,
+					Amount:   basics.MicroAlgos{Raw: 1000},
+				},
+			}
+
+			err := tx.WellFormed(spec, tt.proto)
+			if tt.errorMsg != "" {
+				require.ErrorContains(t, err, tt.errorMsg)
+			} else {
+				require.NoError(t, err, "Unexpected error for note size %d", tt.noteSize)
+			}
+		})
+	}
+}
+
+// TestSummarizeFees_BigNotes tests fee summarization with large Notes
+func TestSummarizeFees_BigNotes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	v41 := config.Consensus[protocol.ConsensusV41]
+	vFuture := config.Consensus[protocol.ConsensusFuture]
+
+	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
+	require.NoError(t, err)
+
+	// Test case 1: Single transaction with large note in vFuture
+	t.Run("vFuture: single txn with 2KB note", func(t *testing.T) {
+		tx := Transaction{
+			Type: protocol.PaymentTx,
+			Header: Header{
+				Sender:     addr,
+				Fee:        basics.MicroAlgos{Raw: 10000},
+				FirstValid: 100,
+				LastValid:  200,
+				Note:       make([]byte, 2048),
+			},
+			PaymentTxnFields: PaymentTxnFields{
+				Receiver: addr,
+				Amount:   basics.MicroAlgos{Raw: 1000},
+			},
+		}
+
+		stxn := SignedTxn{Txn: tx}
+		stxnAD := SignedTxnWithAD{SignedTxn: stxn}
+
+		usage, paid := SummarizeFees([]SignedTxnWithAD{stxnAD}, vFuture)
+
+		// Expected: 1e6 + (2048-1024)*100 = 1e6 + 102400 = 1102400
+		assert.Equal(t, basics.Micros(1102400), usage, "Usage calculation incorrect")
+		assert.Equal(t, basics.MicroAlgos{Raw: 10000}, paid, "Paid amount incorrect")
+	})
+
+	// Test case 2: Transaction group with mixed note sizes in vFuture
+	t.Run("vFuture: group with mixed note sizes", func(t *testing.T) {
+		// Transaction 1: standard note (1024 bytes)
+		tx1 := Transaction{
+			Type: protocol.PaymentTx,
+			Header: Header{
+				Sender:     addr,
+				Fee:        basics.MicroAlgos{Raw: 1000},
+				FirstValid: 100,
+				LastValid:  200,
+				Note:       make([]byte, 1024),
+			},
+			PaymentTxnFields: PaymentTxnFields{
+				Receiver: addr,
+				Amount:   basics.MicroAlgos{Raw: 1000},
+			},
+		}
+
+		// Transaction 2: large note (2048 bytes)
+		tx2 := Transaction{
+			Type: protocol.PaymentTx,
+			Header: Header{
+				Sender:     addr,
+				Fee:        basics.MicroAlgos{Raw: 2024},
+				FirstValid: 100,
+				LastValid:  200,
+				Note:       make([]byte, 2048),
+			},
+			PaymentTxnFields: PaymentTxnFields{
+				Receiver: addr,
+				Amount:   basics.MicroAlgos{Raw: 1000},
+			},
+		}
+
+		stxn1 := SignedTxn{Txn: tx1}
+		stxn2 := SignedTxn{Txn: tx2}
+		group := []SignedTxnWithAD{
+			{SignedTxn: stxn1},
+			{SignedTxn: stxn2},
+		}
+
+		usage, paid := SummarizeFees(group, vFuture)
+
+		// Expected usage: 1e6 + (1e6 + 102400) = 2102400
+		assert.Equal(t, basics.Micros(2102400), usage, "Group usage calculation incorrect")
+		assert.Equal(t, basics.MicroAlgos{Raw: 3024}, paid, "Group paid amount incorrect")
+	})
+
+	// Test case 3: Transaction in v41 (MaxAbsoluteTxnNoteBytes = 1024)
+	t.Run("v41: standard note has base fee", func(t *testing.T) {
+		tx := Transaction{
+			Type: protocol.PaymentTx,
+			Header: Header{
+				Sender:     addr,
+				Fee:        basics.MicroAlgos{Raw: 1000},
+				FirstValid: 100,
+				LastValid:  200,
+				Note:       make([]byte, 1024), // At the limit in v41
+			},
+			PaymentTxnFields: PaymentTxnFields{
+				Receiver: addr,
+				Amount:   basics.MicroAlgos{Raw: 1000},
+			},
+		}
+
+		stxn := SignedTxn{Txn: tx}
+		stxnAD := SignedTxnWithAD{SignedTxn: stxn}
+
+		usage, paid := SummarizeFees([]SignedTxnWithAD{stxnAD}, v41)
+
+		// Expected: just base fee of 1e6, no extra charge since at MaxTxnNoteBytes
+		assert.Equal(t, basics.Micros(1e6), usage, "Usage should be base fee only in v41")
+		assert.Equal(t, basics.MicroAlgos{Raw: 1000}, paid, "Paid amount incorrect")
+	})
+}
+
+func TestLogicSigProgramFeeContribution(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	v41 := config.Consensus[protocol.ConsensusV41]
+	vFuture := config.Consensus[protocol.ConsensusFuture]
+
+	freeSize := int(vFuture.LogicSigMaxSize)
+
+	tests := []struct {
+		name                 string
+		proto                config.ConsensusParams
+		logicSizes           []int
+		argSizes             []int
+		expectedContribution basics.Micros
+	}{
+		{
+			name:                 "v41: oversized LogicSig program has no surcharge before per-byte fee is set",
+			proto:                v41,
+			logicSizes:           []int{freeSize + 500},
+			expectedContribution: 0,
+		},
+		{
+			name:                 "vFuture: LogicSig program at free limit",
+			proto:                vFuture,
+			logicSizes:           []int{freeSize},
+			expectedContribution: 0,
+		},
+		{
+			name:                 "vFuture: one extra LogicSig program byte",
+			proto:                vFuture,
+			logicSizes:           []int{freeSize + 1},
+			expectedContribution: surchargeForBytes(t, vFuture, 1),
+		},
+		{
+			name:                 "vFuture: large LogicSig program",
+			proto:                vFuture,
+			logicSizes:           []int{freeSize + 500},
+			expectedContribution: surchargeForBytes(t, vFuture, 500),
+		},
+		{
+			name:                 "vFuture: LogicSig args do not reduce the free program size pool",
+			proto:                vFuture,
+			logicSizes:           []int{freeSize},
+			argSizes:             []int{500},
+			expectedContribution: 0,
+		},
+		{
+			name:                 "vFuture: LogicSig args do not affect charged program bytes",
+			proto:                vFuture,
+			logicSizes:           []int{freeSize + 100},
+			argSizes:             []int{500},
+			expectedContribution: surchargeForBytes(t, vFuture, 100),
+		},
+		{
+			name:                 "vFuture: size pooling covers large LogicSig program",
+			proto:                vFuture,
+			logicSizes:           []int{freeSize + 500, 0},
+			expectedContribution: 0,
+		},
+		{
+			name:                 "vFuture: size pooling charges aggregate program bytes beyond the pool",
+			proto:                vFuture,
+			logicSizes:           []int{freeSize + 250, freeSize + 250},
+			expectedContribution: surchargeForBytes(t, vFuture, 500),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			txgroup := make([]SignedTxnWithAD, len(tt.logicSizes))
+			for i, logicSize := range tt.logicSizes {
+				txgroup[i].SignedTxn.Lsig.Logic = make([]byte, logicSize)
+				if i < len(tt.argSizes) {
+					txgroup[i].SignedTxn.Lsig.Args = [][]byte{make([]byte, tt.argSizes[i])}
+				}
+			}
+
+			assert.Equal(t, tt.expectedContribution, logicSigProgramFeeContribution(txgroup, tt.proto))
+		})
+	}
+}
+
+func TestSummarizeFees_BigLogicSigProgram(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	vFuture := config.Consensus[protocol.ConsensusFuture]
+
+	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
+	require.NoError(t, err)
+
+	makeTxn := func(fee uint64) Transaction {
+		return Transaction{
+			Type: protocol.PaymentTx,
+			Header: Header{
+				Sender:     addr,
+				Fee:        basics.MicroAlgos{Raw: fee},
+				FirstValid: 100,
+				LastValid:  200,
+			},
+			PaymentTxnFields: PaymentTxnFields{
+				Receiver: addr,
+				Amount:   basics.MicroAlgos{Raw: 1000},
+			},
+		}
+	}
+
+	freeSize := int(vFuture.LogicSigMaxSize)
+
+	t.Run("vFuture: single txn with large LogicSig program", func(t *testing.T) {
+		stxn := SignedTxn{
+			Txn: makeTxn(2000),
+			Lsig: LogicSig{
+				Logic: make([]byte, freeSize+500),
+			},
+		}
+
+		usage, paid := SummarizeFees([]SignedTxnWithAD{{SignedTxn: stxn}}, vFuture)
+
+		assert.Equal(t, basics.Micros(1e6)+surchargeForBytes(t, vFuture, 500), usage)
+		assert.Equal(t, basics.MicroAlgos{Raw: 2000}, paid)
+	})
+
+	t.Run("vFuture: size pooling can cover LogicSig program bytes", func(t *testing.T) {
+		stxn1 := SignedTxn{
+			Txn: makeTxn(1000),
+			Lsig: LogicSig{
+				Logic: make([]byte, freeSize+500),
+			},
+		}
+		stxn2 := SignedTxn{
+			Txn: makeTxn(1050),
+		}
+
+		usage, paid := SummarizeFees([]SignedTxnWithAD{
+			{SignedTxn: stxn1},
+			{SignedTxn: stxn2},
+		}, vFuture)
+
+		assert.Equal(t, basics.Micros(2e6), usage)
+		assert.Equal(t, basics.MicroAlgos{Raw: 2050}, paid)
+	})
+
+	t.Run("vFuture: LogicSig program bytes beyond size pool increase usage", func(t *testing.T) {
+		stxn1 := SignedTxn{
+			Txn: makeTxn(1000),
+			Lsig: LogicSig{
+				Logic: make([]byte, freeSize*2+500),
+			},
+		}
+		stxn2 := SignedTxn{
+			Txn: makeTxn(1050),
+		}
+
+		usage, paid := SummarizeFees([]SignedTxnWithAD{
+			{SignedTxn: stxn1},
+			{SignedTxn: stxn2},
+		}, vFuture)
+
+		assert.Equal(t, basics.Micros(2e6)+surchargeForBytes(t, vFuture, 500), usage)
+		assert.Equal(t, basics.MicroAlgos{Raw: 2050}, paid)
+	})
+
+	t.Run("vFuture: LogicSig args do not affect program surcharge", func(t *testing.T) {
+		stxn1 := SignedTxn{
+			Txn: makeTxn(1000),
+			Lsig: LogicSig{
+				Logic: make([]byte, freeSize+500),
+				Args:  [][]byte{make([]byte, 600)},
+			},
+		}
+		stxn2 := SignedTxn{
+			Txn: makeTxn(1000),
+		}
+
+		usage, paid := SummarizeFees([]SignedTxnWithAD{
+			{SignedTxn: stxn1},
+			{SignedTxn: stxn2},
+		}, vFuture)
+
+		assert.Equal(t, basics.Micros(2e6), usage)
+		assert.Equal(t, basics.MicroAlgos{Raw: 2000}, paid)
+	})
+}
+
+// TestFeeFactor_BigPrograms tests the FeeFactor calculation with large application programs
+func TestFeeFactor_BigPrograms(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	v41 := config.Consensus[protocol.ConsensusV41]
+	vFuture := config.Consensus[protocol.ConsensusFuture]
+
+	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
+	require.NoError(t, err)
+
+	// v41: MaxExtraAppProgramPages = MaxAbsoluteExtraProgramPages = 3
+	// MaxAppProgramLen = 2048, MaxAppTotalProgramLen = 2048
+	// Standard total limit: (1 + 3) * 2048 = 8192 bytes
+
+	// vFuture: MaxAbsoluteExtraProgramPages = 7 (larger)
+	// Standard limit stays the same though
+
+	tests := []struct {
+		name           string
+		proto          config.ConsensusParams
+		approvalSize   int
+		clearSize      int
+		appArgSizes    []int
+		expectedFactor basics.Micros
+	}{
+		{
+			name:           "v41: standard programs (4KB + 4KB = 8KB)",
+			proto:          v41,
+			approvalSize:   4096,
+			clearSize:      4096,
+			expectedFactor: 1e6,
+		},
+		{
+			name:           "vFuture: standard programs (4KB + 4KB = 8KB)",
+			proto:          vFuture,
+			approvalSize:   4096,
+			clearSize:      4096,
+			appArgSizes:    []int{1024, 1024}, // existing limit
+			expectedFactor: 1e6,
+		},
+		{
+			name:           "vFuture: 1 extra arg byte",
+			proto:          vFuture,
+			approvalSize:   4096,
+			clearSize:      4096,
+			appArgSizes:    []int{1020, 1020, 9},
+			expectedFactor: 1e6 + 100,
+		},
+		{
+			name:           "vFuture: 1 extra program byte (8193 total)",
+			proto:          vFuture,
+			approvalSize:   4096,
+			clearSize:      4097,
+			expectedFactor: 1e6 + 100,
+		},
+		{
+			name:           "vFuture: 100 extra bytes (8292 total)",
+			proto:          vFuture,
+			approvalSize:   4096,
+			clearSize:      4196,
+			expectedFactor: 1e6 + 10000,
+		},
+		{
+			name:           "vFuture: 1024 extra bytes (9216 total)",
+			proto:          vFuture,
+			approvalSize:   4096,
+			clearSize:      5120,
+			expectedFactor: 1e6 + 102400,
+		},
+		{
+			name:           "vFuture: maximum allowed (16KB total with 7 extra pages)",
+			proto:          vFuture,
+			approvalSize:   8192,
+			clearSize:      8192,
+			expectedFactor: 1e6 + (16384-8192)*100,
+		},
+		{
+			name:           "vFuture: oversized app args",
+			proto:          vFuture,
+			appArgSizes:    []int{12000, 3000}, // 15000 total; 12952 bytes over 2048 standard
+			expectedFactor: 1e6 + (15000-2048)*100,
+		},
+		{
+			name:           "vFuture: oversized programs and app args both contribute",
+			proto:          vFuture,
+			approvalSize:   5000,
+			clearSize:      5000,              // 1808 over 8192 standard
+			appArgSizes:    []int{8000, 2000}, // 7952 over 2048 standard
+			expectedFactor: 1e6 + (1808+7952)*100,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tx := Transaction{
+				Type: protocol.ApplicationCallTx,
+				Header: Header{
+					Sender:     addr,
+					Fee:        basics.MicroAlgos{Raw: 100000},
+					FirstValid: 100,
+					LastValid:  200,
+				},
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     0, // App creation
+					ApprovalProgram:   make([]byte, tt.approvalSize),
+					ClearStateProgram: make([]byte, tt.clearSize),
+				},
+			}
+			tx.ApplicationCallTxnFields.ApplicationArgs = util.Map(tt.appArgSizes, func(size int) []byte {
+				return make([]byte, size)
+			})
+
+			factor := tx.feeFactor(tt.proto)
+			assert.Equal(t, tt.expectedFactor, factor, "feeFactor mismatch for approval=%d, clear=%d", tt.approvalSize, tt.clearSize)
+		})
+	}
+}
+
+// TestWellFormed_BigPrograms tests application program size validation
+func TestWellFormed_BigPrograms(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	v41 := config.Consensus[protocol.ConsensusV41]
+	vFuture := config.Consensus[protocol.ConsensusFuture]
+
+	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
+	require.NoError(t, err)
+
+	spec := SpecialAddresses{
+		FeeSink:     basics.Address{0x01},
+		RewardsPool: basics.Address{0x02},
+	}
+
+	tests := []struct {
+		name         string
+		proto        config.ConsensusParams
+		approvalSize int
+		clearSize    int
+		extraPages   uint32
+		errorMsg     string
+	}{
+		// v41: MaxAbsoluteExtraProgramPages = 3
+		{
+			name:         "v41: at limit with 3 extra pages",
+			proto:        v41,
+			approvalSize: 8190,
+			clearSize:    2, // Two bytes: version 6, return
+			extraPages:   3,
+		},
+		{
+			name:         "v41: exceeds extra pages limit",
+			proto:        v41,
+			approvalSize: 8190,
+			clearSize:    2,
+			extraPages:   4,
+			errorMsg:     "tx.ExtraProgramPages exceeds MaxAbsoluteExtraProgramPages = 3",
+		},
+		// vFuture: MaxAbsoluteExtraProgramPages = 7
+		{
+			name:         "vFuture: at limit with 7 extra pages",
+			proto:        vFuture,
+			approvalSize: 16382,
+			clearSize:    2,
+			extraPages:   7,
+		},
+		{
+			name:         "vFuture: exceeds extra pages limit",
+			proto:        vFuture,
+			approvalSize: 16382,
+			clearSize:    2,
+			extraPages:   8,
+			errorMsg:     "tx.ExtraProgramPages exceeds MaxAbsoluteExtraProgramPages = 7",
+		},
+		{
+			name:         "vFuture: total program size exceeds limit for given pages",
+			proto:        vFuture,
+			approvalSize: 8192,
+			clearSize:    8193,
+			extraPages:   7,
+			errorMsg:     "app programs too long",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create programs with valid TEAL opcodes (version 6, padded with int 1)
+			approval := make([]byte, tt.approvalSize)
+			clear := make([]byte, tt.clearSize)
+			if tt.approvalSize > 0 {
+				approval[0] = 6 // Version 6
+				for i := 1; i < tt.approvalSize; i++ {
+					approval[i] = 0x81 // pushint 1
+				}
+			}
+			if tt.clearSize > 0 {
+				clear[0] = 6 // Version 6
+				for i := 1; i < tt.clearSize; i++ {
+					clear[i] = 0x81 // pushint 1
+				}
+			}
+
+			tx := Transaction{
+				Type: protocol.ApplicationCallTx,
+				Header: Header{
+					Sender:     addr,
+					Fee:        basics.MicroAlgos{Raw: 100000},
+					FirstValid: 100,
+					LastValid:  200,
+				},
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     0, // App creation
+					ApprovalProgram:   approval,
+					ClearStateProgram: clear,
+					ExtraProgramPages: tt.extraPages,
+				},
+			}
+
+			err := tx.WellFormed(spec, tt.proto)
+			if tt.errorMsg != "" {
+				require.ErrorContains(t, err, tt.errorMsg)
+			} else {
+				require.NoError(t, err, "Unexpected error for %s", tt.name)
+			}
+		})
+	}
+}
+
+// TestSummarizeFees_BigPrograms tests fee summarization with large programs
+func TestSummarizeFees_BigPrograms(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	vFuture := config.Consensus[protocol.ConsensusFuture]
+
+	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
+	require.NoError(t, err)
+
+	t.Run("vFuture: single app create with large programs", func(t *testing.T) {
+		// Standard limit: 8192 bytes, using 9216 bytes (1024 extra)
+		tx := Transaction{
+			Type: protocol.ApplicationCallTx,
+			Header: Header{
+				Sender:     addr,
+				Fee:        basics.MicroAlgos{Raw: 10000},
+				FirstValid: 100,
+				LastValid:  200,
+			},
+			ApplicationCallTxnFields: ApplicationCallTxnFields{
+				ApplicationID:     0,
+				ApprovalProgram:   make([]byte, 5120),
+				ClearStateProgram: make([]byte, 4096),
+				ExtraProgramPages: 4,
+			},
+		}
+
+		stxn := SignedTxn{Txn: tx}
+		stxnAD := SignedTxnWithAD{SignedTxn: stxn}
+
+		usage, paid := SummarizeFees([]SignedTxnWithAD{stxnAD}, vFuture)
+
+		// Expected: 1e6 + 1024*100 = 1102400
+		assert.Equal(t, basics.Micros(1102400), usage, "Usage calculation incorrect")
+		assert.Equal(t, basics.MicroAlgos{Raw: 10000}, paid, "Paid amount incorrect")
+	})
+
+	t.Run("vFuture: group with mixed transaction types", func(t *testing.T) {
+		// Transaction 1: payment with large note
+		tx1 := Transaction{
+			Type: protocol.PaymentTx,
+			Header: Header{
+				Sender:     addr,
+				Fee:        basics.MicroAlgos{Raw: 2024},
+				FirstValid: 100,
+				LastValid:  200,
+				Note:       make([]byte, 2048), // 1024 extra bytes
+			},
+			PaymentTxnFields: PaymentTxnFields{
+				Receiver: addr,
+				Amount:   basics.MicroAlgos{Raw: 1000},
+			},
+		}
+
+		// Transaction 2: app create with large programs
+		tx2 := Transaction{
+			Type: protocol.ApplicationCallTx,
+			Header: Header{
+				Sender:     addr,
+				Fee:        basics.MicroAlgos{Raw: 2024},
+				FirstValid: 100,
+				LastValid:  200,
+			},
+			ApplicationCallTxnFields: ApplicationCallTxnFields{
+				ApplicationID:     0,
+				ApprovalProgram:   make([]byte, 4608), // Total 9216 bytes = 1024 extra
+				ClearStateProgram: make([]byte, 4608),
+				ExtraProgramPages: 4,
+			},
+		}
+
+		stxn1 := SignedTxn{Txn: tx1}
+		stxn2 := SignedTxn{Txn: tx2}
+		group := []SignedTxnWithAD{
+			{SignedTxn: stxn1},
+			{SignedTxn: stxn2},
+		}
+
+		usage, paid := SummarizeFees(group, vFuture)
+
+		// Expected usage: (1e6 + 1024*100) + (1e6 + 1024*100) = 2204800
+		assert.Equal(t, basics.Micros(2204800), usage, "Group usage calculation incorrect")
+		assert.Equal(t, basics.MicroAlgos{Raw: 4048}, paid, "Group paid amount incorrect")
+	})
 }

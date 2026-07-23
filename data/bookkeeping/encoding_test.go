@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -41,7 +41,8 @@ func TestBlockWithTxnEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	txn := transactions.Transaction{
-		Type: protocol.PaymentTx,
+		Type:   protocol.PaymentTx,
+		Header: transactions.Header{Sender: basics.Address{0x01}},
 		PaymentTxnFields: transactions.PaymentTxnFields{
 			Amount: basics.MicroAlgos{Raw: 1},
 		},
@@ -54,9 +55,7 @@ func TestBlockWithTxnEncoding(t *testing.T) {
 	var b Block
 	b.Payset = []transactions.SignedTxnInBlock{
 		{
-			SignedTxnWithAD: transactions.SignedTxnWithAD{
-				SignedTxn: sigtxn,
-			},
+			SignedTxnWithAD: sigtxn.WithAD(),
 		},
 	}
 	enc := protocol.Encode(&b)

@@ -106,7 +106,7 @@ function configure_data_dir() {
   # start kmd
   if [ "$START_KMD" = "1" ]; then
     local KMD_DIR="kmd-v0.5"
-    # on intial bootstrap, this directory won't exist.
+    # on initial bootstrap, this directory won't exist.
     mkdir -p "$KMD_DIR"
     chmod 0700 "$KMD_DIR"
     cd "$KMD_DIR"

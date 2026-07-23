@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,12 +23,13 @@ import (
 	"net"
 	"time"
 
-	"github.com/algorand/go-algorand/logging"
+	"github.com/libp2p/go-libp2p/core/network"
+	yamux "github.com/libp2p/go-yamux/v5"
+	mnet "github.com/multiformats/go-multiaddr/net"
+
 	"github.com/algorand/websocket"
 
-	"github.com/libp2p/go-libp2p/core/network"
-	yamux "github.com/libp2p/go-yamux/v4"
-	mnet "github.com/multiformats/go-multiaddr/net"
+	"github.com/algorand/go-algorand/logging"
 )
 
 type wsPeerConnP2P struct {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -63,7 +63,7 @@ type Reveal struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	SigSlot sigslotCommit      `codec:"s"`
-	Part    basics.Participant `codec:"p"`
+	Part    basics.Participant `codec:"p,required"`
 }
 
 // StateProof represents a proof on Algorand's state.

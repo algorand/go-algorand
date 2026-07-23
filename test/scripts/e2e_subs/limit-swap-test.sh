@@ -1,6 +1,8 @@
 #!/bin/bash
 
-date '+limit-swap-test start %Y%m%d_%H%M%S'
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
 
 set -e
 set -x
@@ -138,7 +140,6 @@ cat ${TEMPDIR}/gx-0.stx ${TEMPDIR}/gx-1.stx > ${TEMPDIR}/group.stx
 
 ${gcmd} account balance -a $ACCOUNT; ${gcmd} account balance -a $ACCOUNT_ALGO_TRADER; ${gcmd} account balance -a $ACCOUNT_ASSET_TRADER
 
-${gcmd} clerk dryrun -t ${TEMPDIR}/group.stx
 ${gcmd} clerk rawsend -f ${TEMPDIR}/group.stx
 
-date '+limit-swap-test OK %Y%m%d_%H%M%S'
+date "+${scriptname} OK %Y%m%d_%H%M%S"

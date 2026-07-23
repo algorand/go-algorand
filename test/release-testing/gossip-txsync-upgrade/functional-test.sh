@@ -1145,7 +1145,7 @@ function generate_transactions() {
 
     trace_if_needed "Creating keyreg tx"
     fee=$(get_random_fee)
-    "$bin_dir/goal" account changeonlinestatus --fee $fee --address $src_addr -o -t "$tx_dir/keyreg.tx" --firstRound "$firstvalid" --validRounds "$validrounds" -d "$network_dir/$sender_name"
+    "$bin_dir/goal" account changeonlinestatus --fee $fee --address $src_addr -o -t "$tx_dir/keyreg.tx" --firstvalid "$firstvalid" --validrounds "$validrounds" -d "$network_dir/$sender_name"
     "$bin_dir/goal" clerk sign -i "$tx_dir/keyreg.tx" -o "$tx_dir/keyreg.stx" -d "$network_dir/$sender_name"
 
     trace_if_needed "Creating logic sig payset tx"

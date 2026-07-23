@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -216,7 +216,7 @@ type elasticClientLogger struct {
 }
 
 // Printf tunnel the log string into the log file.
-func (el elasticClientLogger) Printf(format string, v ...interface{}) {
+func (el elasticClientLogger) Printf(format string, v ...any) {
 	switch el.level {
 	case logrus.DebugLevel:
 		el.logger.Debugf(format, v...)

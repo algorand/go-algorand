@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -55,12 +55,6 @@ const (
 	// can contain. Its value is verified against consensus parameters in
 	// TestEncodedAppTxnAllocationBounds
 	encodedMaxBoxes = 32
-
-	// encodedMaxAccess sets the allocation bound for the maximum number of
-	// references in Access that a transaction decoded off of the wire can
-	// contain. Its value is verified against consensus parameters in
-	// TestEncodedAppTxnAllocationBounds
-	encodedMaxAccess = 64
 )
 
 // OnCompletion is an enum representing some layer 1 side effect that an
@@ -141,7 +135,7 @@ type ApplicationCallTxnFields struct {
 	// "cross-product" resources (holdings and locals) must be explicitly
 	// listed, as well as app accounts, even the app account of the called app!
 	// Transactions using Access may not use the other lists.
-	Access []ResourceRef `codec:"al,allocbound=encodedMaxAccess"`
+	Access []ResourceRef `codec:"al,allocbound=bounds.MaxAppAccess"`
 
 	// Boxes are the boxes that can be accessed by this transaction (and others
 	// in the same group). The Index in the BoxRef is the slot of ForeignApps
@@ -455,8 +449,8 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 		}
 	}
 
-	if ac.ExtraProgramPages > uint32(proto.MaxExtraAppProgramPages) {
-		return fmt.Errorf("tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = %d", proto.MaxExtraAppProgramPages)
+	if ac.ExtraProgramPages > uint32(proto.MaxAbsoluteExtraProgramPages) {
+		return fmt.Errorf("tx.ExtraProgramPages exceeds MaxAbsoluteExtraProgramPages = %d", proto.MaxAbsoluteExtraProgramPages)
 	}
 
 	effectiveEPP := ac.ExtraProgramPages
@@ -477,7 +471,7 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 		}
 		// allow maximimum size programs for now, since we have not checked the
 		// app params to know the actual epp.
-		effectiveEPP = uint32(proto.MaxExtraAppProgramPages)
+		effectiveEPP = uint32(proto.MaxAbsoluteExtraProgramPages)
 	}
 
 	if err := ac.WellSizedPrograms(effectiveEPP, proto); err != nil {
@@ -492,14 +486,19 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 
 	// Sum up argument lengths
 	var argSum uint64
-	for _, arg := range ac.ApplicationArgs {
-		argSum = basics.AddSaturate(argSum, uint64(len(arg)))
+	for i, arg := range ac.ApplicationArgs {
+		l := len(arg)
+		if l > config.MaxAVMBytesSize {
+			return fmt.Errorf("tx.ApplicationArgs[%d] length is too long. %d > %d",
+				i, l, config.MaxAVMBytesSize)
+		}
+		argSum = basics.AddSaturate(argSum, uint64(l))
 	}
 
 	// Limit total length of all arguments
-	if argSum > uint64(proto.MaxAppTotalArgLen) {
+	if argSum > uint64(proto.MaxAbsoluteTotalArgLen) {
 		return fmt.Errorf("tx.ApplicationArgs total length is too long. %d > %d",
-			argSum, proto.MaxAppTotalArgLen)
+			argSum, proto.MaxAbsoluteTotalArgLen)
 	}
 
 	if len(ac.Access) > 0 {
@@ -581,15 +580,46 @@ func (ac ApplicationCallTxnFields) WellSizedPrograms(extraPages uint32, proto co
 	lcs := len(ac.ClearStateProgram)
 	pages := int(1 + extraPages)
 	if lap > pages*proto.MaxAppProgramLen {
-		return fmt.Errorf("approval program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
+		return fmt.Errorf("approval program too long. (%d > %d)",
+			lap, pages*proto.MaxAppProgramLen)
 	}
 	if lcs > pages*proto.MaxAppProgramLen {
-		return fmt.Errorf("clear state program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
+		return fmt.Errorf("clear state program too long. (%d > %d)",
+			lcs, pages*proto.MaxAppProgramLen)
 	}
 	if lap+lcs > pages*proto.MaxAppTotalProgramLen {
-		return fmt.Errorf("app programs too long. max total len %d bytes", pages*proto.MaxAppTotalProgramLen)
+		return fmt.Errorf("app programs too long. (%d + %d > %d)",
+			lap, lcs, pages*proto.MaxAppTotalProgramLen)
 	}
 	return nil
+}
+
+// LargeProgramExtraBytes returns the number of bytes by which the given total
+// size of the programs exceeds the "free" size available without paying extra.
+func LargeProgramExtraBytes(proto config.ConsensusParams, totalProgramSize int) int {
+	basicAppProgramLimit := proto.MaxAppTotalProgramLen * (1 + proto.MaxExtraAppProgramPages)
+	return max(0, totalProgramSize-basicAppProgramLimit)
+}
+
+// feeContribution returns the amount an app call's basic fee factor should be
+// increased due to oversized app call data beyond standard limits.
+func (ac ApplicationCallTxnFields) feeContribution(proto config.ConsensusParams) basics.Micros {
+	var cost basics.Micros
+
+	// Add extra cost for program bytes beyond standard size.
+	totalProgramBytes := len(ac.ApprovalProgram) + len(ac.ClearStateProgram)
+	surcharge, _ := proto.PerByteTxnSurcharge.MulInt(LargeProgramExtraBytes(proto, totalProgramBytes))
+	cost = basics.AddSaturate(cost, surcharge)
+
+	// Add extra cost for app args bytes beyond standard size.
+	var totalArgBytes int
+	for _, arg := range ac.ApplicationArgs {
+		totalArgBytes += len(arg)
+	}
+	surcharge, _ = proto.PerByteTxnSurcharge.MulInt(totalArgBytes - proto.MaxAppTotalArgLen)
+	cost = basics.AddSaturate(cost, surcharge)
+
+	return cost
 }
 
 // AddressByIndex converts an integer index into an address associated with the

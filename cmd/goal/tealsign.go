@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,13 +21,13 @@ import (
 	"encoding/base64"
 	"os"
 
+	"github.com/spf13/cobra"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
-
-	"github.com/spf13/cobra"
 )
 
 var (
@@ -135,7 +135,7 @@ The base64 encoding of the signature will always be printed to stdout. Optionall
 
 			// Ensure signed transaction has a logic sig with a
 			// program
-			if len(stxn.Lsig.Logic) == 0 {
+			if !stxn.Lsig.HasProgram() {
 				reportErrorf(tealsignEmptyLogic)
 			}
 

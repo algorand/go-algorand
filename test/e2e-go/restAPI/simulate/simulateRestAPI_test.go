@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
@@ -36,11 +38,9 @@ import (
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
+	helper "github.com/algorand/go-algorand/test/e2e-go/restAPI"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
-
-	helper "github.com/algorand/go-algorand/test/e2e-go/restAPI"
 )
 
 func TestSimulateTxnTracerDevMode(t *testing.T) {
@@ -104,17 +104,25 @@ func TestSimulateTxnTracerDevMode(t *testing.T) {
 	a.Equal(result.LastRound, currentAfterAfterSimulate)
 
 	closingAmount := senderBalance - txn.Fee.Raw - txn.Amount.Raw
+	stat, err := testClient.Status()
+	a.NoError(err)
+	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
+	usage := uint64(stxn.FeeFactor(proto))
+	feesPaid := stxn.Txn.Fee.Raw
 	expectedResult := v2.PreEncodedSimulateResponse{
 		Version:   2,
 		LastRound: result.LastRound, // checked above
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
+				GroupUsage:    &usage,
+				GroupFeesPaid: &feesPaid,
 				Txns: []v2.PreEncodedSimulateTxnResult{
 					{
 						Txn: v2.PreEncodedTxInfo{
 							Txn:           stxn,
 							ClosingAmount: &closingAmount,
 						},
+						FeesPaid: &feesPaid,
 					},
 				},
 			},
@@ -192,17 +200,25 @@ func TestSimulateTransaction(t *testing.T) {
 	a.LessOrEqual(result.LastRound, currentAfterAfterSimulate)
 
 	closingAmount := senderBalance - txn.Fee.Raw - txn.Amount.Raw
+	stat, err := testClient.Status()
+	a.NoError(err)
+	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
+	usage := uint64(stxn.FeeFactor(proto))
+	feesPaid := stxn.Txn.Fee.Raw
 	expectedResult := v2.PreEncodedSimulateResponse{
 		Version:   2,
 		LastRound: result.LastRound, // checked above
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
+				GroupUsage:    &usage,
+				GroupFeesPaid: &feesPaid,
 				Txns: []v2.PreEncodedSimulateTxnResult{
 					{
 						Txn: v2.PreEncodedTxInfo{
 							Txn:           stxn,
 							ClosingAmount: &closingAmount,
 						},
+						FeesPaid: &feesPaid,
 					},
 				},
 			},
@@ -388,28 +404,36 @@ func TestSimulateWithOptionalSignatures(t *testing.T) {
 	txn, err := testClient.ConstructPayment(senderAddress, senderAddress, 0, 1, nil, "", [32]byte{}, 0, 0)
 	a.NoError(err)
 
+	unsignedStxn := transactions.SignedTxn{Txn: txn} // no signature, but must be SignedTxn type
+
 	simulateRequest := v2.PreEncodedSimulateRequest{
-		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
-			{
-				Txns: []transactions.SignedTxn{{Txn: txn}}, // no signature
-			},
-		},
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{{
+			Txns: []transactions.SignedTxn{unsignedStxn},
+		}},
 		AllowEmptySignatures: true,
 	}
 	result, err := testClient.SimulateTransactions(simulateRequest)
 	a.NoError(err)
 
 	allowEmptySignatures := true
+	stat, err := testClient.Status()
+	a.NoError(err)
+	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
+	usage := uint64(unsignedStxn.FeeFactor(proto))
+	feesPaid := txn.Fee.Raw
 	expectedResult := v2.PreEncodedSimulateResponse{
 		Version:   2,
 		LastRound: result.LastRound,
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
+				GroupUsage:    &usage,
+				GroupFeesPaid: &feesPaid,
 				Txns: []v2.PreEncodedSimulateTxnResult{
 					{
 						Txn: v2.PreEncodedTxInfo{
 							Txn: transactions.SignedTxn{Txn: txn},
 						},
+						FeesPaid: &feesPaid,
 					},
 				},
 			},
@@ -452,7 +476,7 @@ int 0
 ==
 bnz final
 `
-	for i := 0; i < 17; i++ {
+	for range 17 {
 		prog += `byte "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 log
 `
@@ -519,12 +543,17 @@ int 1`
 	a.NoError(err)
 
 	var logs [][]byte
-	for i := 0; i < 17; i++ {
+	for range 17 {
 		logs = append(logs, []byte("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
 	}
 
 	budgetAdded, budgetUsed := 700, 40
 	maxLogSize, maxLogCalls := 65536, 2048
+	stat, err := testClient.Status()
+	a.NoError(err)
+	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
+	usage := uint64(appCallTxnSigned.FeeFactor(proto))
+	feesPaid := appCallTxnSigned.Txn.Fee.Raw
 
 	expectedResult := v2.PreEncodedSimulateResponse{
 		Version:   2,
@@ -535,6 +564,8 @@ int 1`
 		},
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
+				GroupUsage:    &usage,
+				GroupFeesPaid: &feesPaid,
 				Txns: []v2.PreEncodedSimulateTxnResult{
 					{
 						Txn: v2.PreEncodedTxInfo{
@@ -542,6 +573,7 @@ int 1`
 							Logs: &logs,
 						},
 						AppBudgetConsumed: &budgetUsed,
+						FeesPaid:          &feesPaid,
 					},
 				},
 				AppBudgetAdded:    &budgetAdded,
@@ -646,6 +678,11 @@ int 1`
 	a.NoError(err)
 
 	budgetAdded, budgetUsed := 1404, 1404
+	stat, err := testClient.Status()
+	a.NoError(err)
+	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
+	usage := uint64(appCallTxnSigned.FeeFactor(proto))
+	feesPaid := appCallTxnSigned.Txn.Fee.Raw
 
 	expectedResult := v2.PreEncodedSimulateResponse{
 		Version:       2,
@@ -653,10 +690,13 @@ int 1`
 		EvalOverrides: &model.SimulationEvalOverrides{ExtraOpcodeBudget: &extraBudget},
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
+				GroupUsage:    &usage,
+				GroupFeesPaid: &feesPaid,
 				Txns: []v2.PreEncodedSimulateTxnResult{
 					{
 						Txn:               v2.PreEncodedTxInfo{Txn: appCallTxnSigned},
 						AppBudgetConsumed: &budgetUsed,
+						FeesPaid:          &feesPaid,
 					},
 				},
 				AppBudgetAdded:    &budgetAdded,
@@ -769,7 +809,7 @@ main_l6:
 int 1
 return`
 
-func goValuesToAvmValues(goValues ...interface{}) *[]model.AvmValue {
+func goValuesToAvmValues(goValues ...any) *[]model.AvmValue {
 	if len(goValues) == 0 {
 		return nil
 	}
@@ -813,7 +853,7 @@ func goValuesToAvmValues(goValues ...interface{}) *[]model.AvmValue {
 				Uint: valToNil(&converted),
 			}
 		default:
-			panic("unexpected type inferred from interface{}")
+			panic("unexpected type inferred from any")
 		}
 	}
 	return &modelValues
@@ -1988,7 +2028,7 @@ end:
 	a.Nil(resp.TxnGroups[0].FailureMessage)
 	a.Len(resp.TxnGroups[0].Txns, 3)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		a.NotNil(resp.TxnGroups[0].Txns[i].TransactionTrace.ApprovalProgramHash)
 		a.Equal(approvalHash.ToSlice(), *resp.TxnGroups[0].Txns[i].TransactionTrace.ApprovalProgramHash)
 	}
@@ -2669,6 +2709,11 @@ int 1
 
 	budgetAdded, budgetUsed := 700, 40
 	allowUnnamedResources := true
+	stat, err := testClient.Status()
+	a.NoError(err)
+	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
+	usage := uint64(stxn.FeeFactor(proto))
+	feesPaid := stxn.Txn.Fee.Raw
 
 	expectedResult := v2.PreEncodedSimulateResponse{
 		Version:   2,
@@ -2678,10 +2723,13 @@ int 1
 		},
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
+				GroupUsage:    &usage,
+				GroupFeesPaid: &feesPaid,
 				Txns: []v2.PreEncodedSimulateTxnResult{
 					{
 						Txn:               v2.PreEncodedTxInfo{Txn: stxn},
 						AppBudgetConsumed: &budgetUsed,
+						FeesPaid:          &feesPaid,
 					},
 				},
 				AppBudgetAdded:           &budgetAdded,
@@ -2733,12 +2781,15 @@ func TestSimulateWithFixSigners(t *testing.T) {
 	rekeyTxn.Group = gid
 	txn.Group = gid
 
+	// Snapshot after RekeyTo and Group are set, so the submitted (and expected)
+	// SignedTxns carry the group id and rekey.
+	rekeyStxn := transactions.SignedTxn{Txn: rekeyTxn} // not actually signed
+	stxn := transactions.SignedTxn{Txn: txn}           // not actually signed
+
 	simulateRequest := v2.PreEncodedSimulateRequest{
-		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
-			{
-				Txns: []transactions.SignedTxn{{Txn: rekeyTxn}, {Txn: txn}},
-			},
-		},
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{{
+			Txns: []transactions.SignedTxn{rekeyStxn, stxn},
+		}},
 		AllowEmptySignatures: true,
 		FixSigners:           true,
 	}
@@ -2748,22 +2799,31 @@ func TestSimulateWithFixSigners(t *testing.T) {
 	allowEmptySignatures := true
 	fixSigners := true
 	authAddrStr := authAddr.String()
+	stat, err := testClient.Status()
+	a.NoError(err)
+	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
+	rekeyUsage := uint64(rekeyStxn.FeeFactor(proto))
+	rekeyFeesPaid := rekeyTxn.Fee.Raw
+	txnUsage := uint64(stxn.FeeFactor(proto))
+	txnFeesPaid := txn.Fee.Raw
+	totalUsage := rekeyUsage + txnUsage
+	totalFeesPaid := rekeyFeesPaid + txnFeesPaid
 	expectedResult := v2.PreEncodedSimulateResponse{
 		Version:   2,
 		LastRound: result.LastRound,
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
+				GroupUsage:    &totalUsage,
+				GroupFeesPaid: &totalFeesPaid,
 				Txns: []v2.PreEncodedSimulateTxnResult{
 					{
-						Txn: v2.PreEncodedTxInfo{
-							Txn: transactions.SignedTxn{Txn: rekeyTxn},
-						},
+						Txn:      v2.PreEncodedTxInfo{Txn: rekeyStxn},
+						FeesPaid: &rekeyFeesPaid,
 					},
 					{
-						Txn: v2.PreEncodedTxInfo{
-							Txn: transactions.SignedTxn{Txn: txn},
-						},
+						Txn:         v2.PreEncodedTxInfo{Txn: stxn},
 						FixedSigner: &authAddrStr,
+						FeesPaid:    &txnFeesPaid,
 					},
 				},
 			},

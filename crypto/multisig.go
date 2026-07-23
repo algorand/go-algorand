@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -36,9 +36,9 @@ type MultisigSubsig struct {
 type MultisigSig struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Version   uint8            `codec:"v"`
-	Threshold uint8            `codec:"thr"`
-	Subsigs   []MultisigSubsig `codec:"subsig,allocbound=maxMultisig"`
+	Version   uint8            `codec:"v,required"`
+	Threshold uint8            `codec:"thr,required"`
+	Subsigs   []MultisigSubsig `codec:"subsig,allocbound=maxMultisig,required"`
 }
 
 // MultisigPreimageFromPKs makes an empty MultisigSig for a given preimage. It should be renamed.
@@ -239,8 +239,8 @@ func MultisigVerify(msg Hashable, addr Digest, sig MultisigSig) (err error) {
 }
 
 // MultisigBatchPrep performs checks on the assembled MultisigSig and adds to the batch.
-// The caller must call batchVerifier.verify() to verify it.
-func MultisigBatchPrep(msg Hashable, addr Digest, sig MultisigSig, batchVerifier BatchVerifier) error {
+// The signatures are only enqueued; they are checked when the underlying batch is verified.
+func MultisigBatchPrep(msg Hashable, addr Digest, sig MultisigSig, batch BatchEnqueuer) error {
 	// short circuit: if msig doesn't have subsigs or if Subsigs are empty
 	// then terminate (the upper layer should now verify the unisig)
 	if (len(sig.Subsigs) == 0 || sig.Subsigs[0] == MultisigSubsig{}) {
@@ -269,7 +269,7 @@ func MultisigBatchPrep(msg Hashable, addr Digest, sig MultisigSig, batchVerifier
 	// queues individual signature verifies
 	for _, subsigi := range sig.Subsigs {
 		if !subsigi.Sig.Blank() {
-			batchVerifier.EnqueueSignature(subsigi.Key, msg, subsigi.Sig)
+			batch.EnqueueSignature(subsigi.Key, msg, subsigi.Sig)
 		}
 	}
 	return nil

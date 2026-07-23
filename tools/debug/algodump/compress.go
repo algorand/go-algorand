@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,15 +31,17 @@ import (
 	"time"
 
 	"github.com/DataDog/zstd"
+	kzstd "github.com/klauspost/compress/zstd"
+	"github.com/valyala/gozstd"
+
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/network/vpack"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-deadlock"
-	kzstd "github.com/klauspost/compress/zstd"
-	"github.com/valyala/gozstd"
 )
 
 // Compression-specific flags

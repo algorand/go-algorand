@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -35,6 +35,7 @@ import (
 type nodeConfigurator struct {
 	config                  remote.HostConfig
 	dnsName                 string
+	dnsTTL                  uint
 	genesisFile             string
 	genesisData             bookkeeping.Genesis
 	bootstrappedBlockFile   string
@@ -57,11 +58,14 @@ type txtEntry struct {
 
 // ApplyConfigurationToHost attempts to apply the provided configuration to the local host,
 // based on the configuration specified for the provided hostName, with node
-// directories being created / updated under the specified rootNodeDir
-func ApplyConfigurationToHost(cfg remote.HostConfig, rootConfigDir, rootNodeDir string, dnsName string) (err error) {
+// directories being created / updated under the specified rootNodeDir.
+// dnsTTL is the TTL (in seconds) applied to any DNS records created; pass
+// cloudflare.AutomaticTTL (1) to defer to Cloudflare's Automatic setting.
+func ApplyConfigurationToHost(cfg remote.HostConfig, rootConfigDir, rootNodeDir string, dnsName string, dnsTTL uint) (err error) {
 	nc := nodeConfigurator{
 		config:  cfg,
 		dnsName: dnsName,
+		dnsTTL:  dnsTTL,
 	}
 
 	return nc.apply(rootConfigDir, rootNodeDir)
@@ -231,7 +235,9 @@ func (nc *nodeConfigurator) registerDNSRecords() (err error) {
 	}
 
 	fmt.Fprintf(os.Stdout, "...... Adding DNS Record '%s' -> '%s' .\n", networkHostName, nc.dnsName)
-	cloudflareDNS.SetDNSRecord(context.Background(), recordType, networkHostName, nc.dnsName, cloudflare.AutomaticTTL, priority, proxied)
+	if err = cloudflareDNS.SetDNSRecord(context.Background(), recordType, networkHostName, nc.dnsName, nc.dnsTTL, priority, proxied); err != nil {
+		return fmt.Errorf("error setting %s record %s -> %s: %w", recordType, networkHostName, nc.dnsName, err)
+	}
 
 	for _, entry := range nc.relayEndpoints {
 		port, parseErr := strconv.ParseInt(strings.Split(entry.port, ":")[1], 10, 64)
@@ -241,7 +247,7 @@ func (nc *nodeConfigurator) registerDNSRecords() (err error) {
 		fmt.Fprintf(os.Stdout, "...... Adding Relay SRV Record [%s.%s] '%s' [%d %d] -> '%s' .\n",
 			relayBootstrap, tcpProto, entry.srvName, priority, port, networkHostName)
 		err = cloudflareDNS.SetSRVRecord(context.Background(), entry.srvName, networkHostName,
-			cloudflare.AutomaticTTL, priority, uint(port), relayBootstrap, tcpProto, weight)
+			nc.dnsTTL, priority, uint(port), relayBootstrap, tcpProto, weight)
 		if err != nil {
 			return
 		}
@@ -256,7 +262,7 @@ func (nc *nodeConfigurator) registerDNSRecords() (err error) {
 		fmt.Fprintf(os.Stdout, "...... Adding Metrics SRV Record [%s.%s] '%s' [%d %d] -> '%s' .\n",
 			metricsSrv, tcpProto, entry.srvName, priority, port, networkHostName)
 		err = cloudflareDNS.SetSRVRecord(context.Background(), entry.srvName, networkHostName,
-			cloudflare.AutomaticTTL, priority, uint(port), metricsSrv, tcpProto, weight)
+			nc.dnsTTL, priority, uint(port), metricsSrv, tcpProto, weight)
 		if err != nil {
 			fmt.Fprintf(os.Stdout, "Error creating srv record: %s (%v)\n", err, entry)
 			return
@@ -281,7 +287,7 @@ func (nc *nodeConfigurator) registerDNSRecords() (err error) {
 		fmt.Fprintf(os.Stdout, "...... Adding P2P TXT Record '%s' -> '%s' .\n", dnsaddrsFrom, to)
 		const priority = 1
 		const proxied = false
-		dnsErr := cloudflareDNS.CreateDNSRecord(context.Background(), "TXT", dnsaddrsFrom, to, cloudflare.AutomaticTTL, priority, proxied)
+		dnsErr := cloudflareDNS.CreateDNSRecord(context.Background(), "TXT", dnsaddrsFrom, to, nc.dnsTTL, priority, proxied)
 		if dnsErr != nil {
 			return dnsErr
 		}

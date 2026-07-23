@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,13 +22,21 @@ import (
 	"io"
 	"math"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 )
+
+// slug returns the auto generated named anchor "slug" for a given heading
+// created by mdbook.
+func slug(s string) string {
+	s = strings.ToLower(s)
+	s = strings.ReplaceAll(s, " ", "-")
+	return s
+}
 
 // opImmediateNoteSyntaxMarkdown returns a short string about immediate data which follows the op byte
 func opImmediateNoteSyntaxMarkdown(name string, oids []logic.OpImmediateDetails) string {
@@ -41,7 +49,7 @@ func opImmediateNoteSyntaxMarkdown(name string, oids []logic.OpImmediateDetails)
 	for idx, oid := range oids {
 		argNote := oid.Comment
 		if oid.Reference != "" {
-			argNote = fmt.Sprintf("[%s](#field-group-%s)", oid.Reference, strings.ToLower(oid.Reference))
+			argNote = fmt.Sprintf("[%s](#%s)", oid.Reference, slug(oid.Reference))
 		}
 		argNames[idx] = oid.Name
 		argDocs[idx] = fmt.Sprintf("%s: %s", oid.Name, argNote)
@@ -50,21 +58,26 @@ func opImmediateNoteSyntaxMarkdown(name string, oids []logic.OpImmediateDetails)
 	return fmt.Sprintf("`%s %s` where %s", name, strings.Join(argNames, " "), strings.Join(argDocs, ", "))
 }
 
-func opImmediateNoteEncoding(opcode byte, oids []logic.OpImmediateDetails) string {
+func opImmediateNoteEncoding(op *logic.OpSpec, oids []logic.OpImmediateDetails) string {
+	prefix := fmt.Sprintf("0x%02x", op.Opcode)
+	if op.SubOpcode != 0 {
+		// multi-byte opcode: the sub-opcode byte follows the prefix byte
+		prefix += fmt.Sprintf(" 0x%02x", op.SubOpcode)
+	}
 	if len(oids) == 0 {
-		return fmt.Sprintf("0x%02x", opcode)
+		return prefix
 	}
 
 	notes := make([]string, len(oids))
 	for idx, oid := range oids {
 		notes[idx] = oid.Encoding
 	}
-	return fmt.Sprintf("0x%02x {%s}", opcode, strings.Join(notes, "}, {"))
+	return fmt.Sprintf("%s {%s}", prefix, strings.Join(notes, "}, {"))
 }
 
 func opGroupMarkdownTable(names []string, out io.Writer, version uint64) {
-	fmt.Fprint(out, `| Opcode | Description |
-| - | -- |
+	fmt.Fprint(out, `| OPCODE | DESCRIPTION |
+| :-: | :---------- |
 `)
 	opSpecs := logic.OpsByName[version]
 	for _, opname := range names {
@@ -74,7 +87,7 @@ func opGroupMarkdownTable(names []string, out io.Writer, version uint64) {
 		}
 		fmt.Fprintf(out, "| `%s%s` | %s |\n",
 			markdownTableEscape(spec.Name), immediateMarkdown(&spec),
-			markdownTableEscape(logic.OpDoc(opname)))
+			markdownTableEscape(logic.OpDescOf(opname).Short))
 	}
 }
 
@@ -83,33 +96,30 @@ func markdownTableEscape(x string) string {
 }
 
 func namedStackTypesMarkdown(out io.Writer, stackTypes []namedType) {
-	fmt.Fprintf(out, "#### Definitions\n\n")
-	fmt.Fprintf(out, "| Name | Bound | AVM Type |\n")
-	fmt.Fprintf(out, "| ---- | ---- | -------- |\n")
+	fmt.Fprintf(out, "| NAME | BOUND | AVM TYPE |\n")
+	fmt.Fprintf(out, "| :--- | :---- | :------: |\n")
 
 	for _, st := range stackTypes {
-		fmt.Fprintf(out, "| %s | %s | %s |\n", st.Name, st.boundString(), st.AVMType)
+		bound := st.boundString()
+		if bound == "" {
+			fmt.Fprintf(out, "| `%s` | | `%s` |\n", st.Name, st.AVMType)
+		} else {
+			fmt.Fprintf(out, "| `%s` | %s | `%s` |\n", st.Name, bound, st.AVMType)
+		}
 	}
-	fmt.Fprintf(out, "\n")
 }
 
-func integerConstantsTableMarkdown(out io.Writer) {
-	fmt.Fprintf(out, "#### OnComplete\n\n")
-	fmt.Fprintf(out, "%s\n\n", logic.OnCompletionPreamble)
-	fmt.Fprintf(out, "| Value | Name | Description |\n")
-	fmt.Fprintf(out, "| - | ---- | -------- |\n")
-	for i, name := range logic.OnCompletionNames {
-		value := uint64(i)
-		fmt.Fprintf(out, "| %d | %s | %s |\n", value, markdownTableEscape(name), logic.OnCompletionDescription(value))
+func integerConstantsTableMarkdown(out io.Writer, what string, names []string, descs map[string]string) {
+	fmt.Fprintf(out, "| %s | VALUE | DESCRIPTION |\n", what)
+	fmt.Fprintf(out, "| :----: | :---: | :---------- |\n")
+	for i, name := range names {
+		description := descs[name]
+		if description == "" {
+			fmt.Fprintf(os.Stderr, "%s is undocumented\n", name)
+			os.Exit(1)
+		}
+		fmt.Fprintf(out, "| `%s` | `%d` | %s |\n", markdownTableEscape(name), i, description)
 	}
-	fmt.Fprintf(out, "\n")
-	fmt.Fprintf(out, "#### TypeEnum constants\n\n")
-	fmt.Fprintf(out, "| Value | Name | Description |\n")
-	fmt.Fprintf(out, "| - | --- | ------ |\n")
-	for i, name := range logic.TxnTypeNames {
-		fmt.Fprintf(out, "| %d | %s | %s |\n", i, markdownTableEscape(name), logic.TypeNameDescriptions[name])
-	}
-	out.Write([]byte("\n"))
 }
 
 func fieldGroupMarkdown(out io.Writer, group *logic.FieldGroup, version uint64) {
@@ -131,18 +141,18 @@ func fieldGroupMarkdown(out io.Writer, group *logic.FieldGroup, version uint64) 
 			showVers = true
 		}
 	}
-	headers := "| Index | Name |"
-	widths := "| - | ------ |"
+	headers := "| INDEX | NAME |"
+	widths := "| :-: | :------ |"
 	if showTypes {
-		headers += " Type |"
-		widths += " -- |"
+		headers += " TYPE |"
+		widths += ":--:|"
 	}
 	if showVers {
-		headers += " In |"
-		widths += " - |"
+		headers += " IN |"
+		widths += ":-:|"
 	}
-	headers += " Notes |\n"
-	widths += " --------- |\n"
+	headers += " NOTES |\n"
+	widths += " :--------- |\n"
 	fmt.Fprint(out, headers, widths)
 	for i, name := range group.Names {
 		spec, ok := group.SpecByName(name)
@@ -162,7 +172,6 @@ func fieldGroupMarkdown(out io.Writer, group *logic.FieldGroup, version uint64) 
 		}
 		fmt.Fprintf(out, "%s | %s |\n", str, spec.Note())
 	}
-	fmt.Fprint(out, "\n")
 }
 
 func immediateMarkdown(op *logic.OpSpec) string {
@@ -222,13 +231,17 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bo
 		syntax = fmt.Sprintf("- Syntax: %s\n", opSyntax)
 	}
 
-	encoding := fmt.Sprintf("- Bytecode: %s", opImmediateNoteEncoding(op.Opcode, deets))
+	encoding := fmt.Sprintf("- Bytecode: %s", opImmediateNoteEncoding(op, deets))
 
 	stackEffects := stackMarkdown(op)
 
 	fmt.Fprintf(out, "\n## %s\n\n%s%s\n%s", op.Name, syntax, encoding, stackEffects)
 
-	fmt.Fprintf(out, "- %s\n", logic.OpDoc(op.Name))
+	desc := logic.OpDescOf(op.Name)
+	fmt.Fprintf(out, "- %s\n", desc.Short)
+	if desc.Sugar != "" {
+		fmt.Fprintf(out, "- %s\n", desc.Sugar)
+	}
 	cost := op.DocCost(version)
 	if cost != "1" {
 		fmt.Fprintf(out, "- **Cost**: %s\n", cost)
@@ -243,20 +256,30 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bo
 	for i := range op.OpDetails.Immediates {
 		group := op.OpDetails.Immediates[i].Group
 		if group != nil && group.Doc != "" && !groupDocWritten[group.Name] {
-			fmt.Fprintf(out, "\n### %s\n\n%s\n\n", group.Name, group.Doc)
+			fmt.Fprintf(out, "\n### %s\n\n", group.Heading())
+			if strings.Contains(group.Doc, " ") {
+				fmt.Fprintf(out, "%s\n\n", group.Doc)
+			}
 			fieldGroupMarkdown(out, group, version)
 			groupDocWritten[group.Name] = true
 		}
 	}
-	ode := logic.OpDocExtra(op.Name)
-	if ode != "" {
-		fmt.Fprintf(out, "\n%s\n", ode)
+	if desc.Extra != "" {
+		fmt.Fprintf(out, "\n%s\n", desc.Extra)
 	}
 	return nil
 }
 
 func opsToMarkdown(out io.Writer, version uint64) error {
-	_, err := fmt.Fprintf(out, "# v%d Opcodes\n\nOps have a 'cost' of 1 unless otherwise specified.\n\n", version)
+	_, err := fmt.Fprintf(out, `
+# Version %d Opcodes
+
+Opcodes have a cost of 1 unless otherwise specified.
+
+<!-- this file is autogenerated in the go-algorand repository with "make logic" -->
+
+<!-- markdownlint-disable MD013 MD026 MD060 -->
+`, version)
 	if err != nil {
 		return err
 	}
@@ -271,9 +294,28 @@ func opsToMarkdown(out io.Writer, version uint64) error {
 	return nil
 }
 
+// opcodeBytes is the bytecode that introduces an op: a single prefix byte for
+// ordinary opcodes, or [prefix, sub-opcode] for a member of a multi-byte
+// family. It marshals as a bare number in the single-byte case to preserve the
+// historical langspec format, and as an array otherwise.
+type opcodeBytes []byte
+
+// MarshalJSON renders a single-byte opcode as a number and a multi-byte opcode
+// as an array of numbers (e.g. 212 vs [212, 1]).
+func (o opcodeBytes) MarshalJSON() ([]byte, error) {
+	if len(o) == 1 {
+		return json.Marshal(o[0])
+	}
+	ints := make([]int, len(o))
+	for i, b := range o {
+		ints[i] = int(b)
+	}
+	return json.Marshal(ints)
+}
+
 // OpRecord is a consolidated record of things about an Op
 type OpRecord struct {
-	Opcode  byte
+	Opcode  opcodeBytes
 	Name    string
 	Args    []string `json:",omitempty"`
 	Returns []string `json:",omitempty"`
@@ -311,19 +353,19 @@ func (nt namedType) boundString() string {
 
 	// If they're equal, the val should match exactly
 	if nt.Bound[0] > 0 && nt.Bound[0] == nt.Bound[1] {
-		return fmt.Sprintf("%s == %d", val, nt.Bound[0])
+		return fmt.Sprintf(`\\( %s = %d \\)`, val, nt.Bound[0])
 	}
 
 	// otherwise, provide min/max bounds as lte expression
 	minBound, maxBound := "", ""
 	if nt.Bound[0] > 0 {
-		minBound = fmt.Sprintf("%d <= ", nt.Bound[0])
+		minBound = fmt.Sprintf(`%d \leq `, nt.Bound[0])
 	}
 	if nt.Bound[1] > 0 {
-		maxBound = fmt.Sprintf(" <= %d", nt.Bound[1])
+		maxBound = fmt.Sprintf(` \leq %d`, nt.Bound[1])
 	}
 
-	return fmt.Sprintf("%s%s%s", minBound, val, maxBound)
+	return fmt.Sprintf(`\\( %s%s%s \\)`, minBound, val, maxBound)
 
 }
 
@@ -390,6 +432,10 @@ func argEnums(name string, version uint64) ([]string, []string) {
 		return fieldsAndTypes(logic.AssetParamsFields, version)
 	case "app_params_get":
 		return fieldsAndTypes(logic.AppParamsFields, version)
+	case "app_params_set":
+		// app_params_set does not *return* a type depending on its immediate. It
+		// *takes* it, like itxn_field. ArgEnumTypes is overloaded for that meaning.
+		return fieldsAndTypes(logic.AppParamsSettableFields, version)
 	case "acct_params_get":
 		return fieldsAndTypes(logic.AcctParamsFields, version)
 	case "block":
@@ -411,15 +457,20 @@ func buildLanguageSpec(opGroups map[string][]string, namedTypes []namedType, ver
 	opSpecs := logic.OpcodesByVersion(version)
 	records := make([]OpRecord, len(opSpecs))
 	for i, spec := range opSpecs {
-		records[i].Opcode = spec.Opcode
+		if spec.SubOpcode != 0 {
+			records[i].Opcode = opcodeBytes{spec.Opcode, spec.SubOpcode}
+		} else {
+			records[i].Opcode = opcodeBytes{spec.Opcode}
+		}
 		records[i].Name = spec.Name
 		records[i].Args = typeStrings(spec.Arg.Types)
 		records[i].Returns = typeStrings(spec.Return.Types)
 		records[i].Size = spec.OpDetails.Size
 		records[i].DocCost = spec.DocCost(version)
 		records[i].ArgEnum, records[i].ArgEnumTypes = argEnums(spec.Name, version)
-		records[i].Doc = strings.ReplaceAll(logic.OpDoc(spec.Name), "<br />", "\n")
-		records[i].DocExtra = logic.OpDocExtra(spec.Name)
+		desc := logic.OpDescOf(spec.Name)
+		records[i].Doc = desc.Short
+		records[i].DocExtra = desc.Extra
 		records[i].ImmediateNote = logic.OpImmediateDetailsFromSpec(spec)
 		records[i].Groups = opGroups[spec.Name]
 		records[i].IntroducedVersion = spec.Version
@@ -443,12 +494,13 @@ func create(file string) *os.File {
 }
 
 func main() {
-	const docVersion = uint64(12)
+	const docVersion = 13
 
 	opGroups := make(map[string][]string, len(logic.OpSpecs))
 	for grp, names := range logic.OpGroups {
-		fname := fmt.Sprintf("%s.md", grp)
-		fname = strings.ReplaceAll(fname, " ", "_")
+		fname := fmt.Sprintf("%s.md", strings.ToLower(grp))
+		fname = strings.ReplaceAll(fname, " ", "-")
+
 		fout := create(fname)
 		opGroupMarkdownTable(names, fout, docVersion)
 		fout.Close()
@@ -457,37 +509,30 @@ func main() {
 		}
 	}
 
-	named := make([]namedType, 0, len(logic.AllStackTypes))
+	stackTypes := make([]namedType, 0, len(logic.AllStackTypes))
 	for abbr, t := range logic.AllStackTypes {
-		named = append(named, namedType{
+		stackTypes = append(stackTypes, namedType{
 			Name:         t.String(),
 			Bound:        []uint64{t.Bound[0], t.Bound[1]},
 			Abbreviation: string(abbr),
 			AVMType:      t.AVMType.String(),
 		})
 	}
-	sort.Slice(named, func(i, j int) bool { return named[i].Name < named[j].Name })
+	slices.SortFunc(stackTypes, func(a, b namedType) int {
+		return strings.Compare(a.Name, b.Name)
+	})
 
-	constants := create("named_integer_constants.md")
-	integerConstantsTableMarkdown(constants)
-	constants.Close()
+	oc := create("constants-on-completion.md")
+	integerConstantsTableMarkdown(oc, "ACTION", logic.OnCompletionNames[:], logic.OnCompletionDescriptions)
+	oc.Close()
 
-	namedStackTypes := create("named_stack_types.md")
-	namedStackTypesMarkdown(namedStackTypes, named)
+	te := create("constants-type-enums.md")
+	integerConstantsTableMarkdown(te, "TYPE", logic.TxnTypeNames[:], logic.TypeNameDescriptions)
+	te.Close()
+
+	namedStackTypes := create("avm-stack-types.md")
+	namedStackTypesMarkdown(namedStackTypes, stackTypes)
 	namedStackTypes.Close()
-
-	written := make(map[string]bool)
-	opSpecs := logic.OpcodesByVersion(uint64(docVersion))
-	for _, spec := range opSpecs {
-		for _, imm := range spec.OpDetails.Immediates {
-			if imm.Group != nil && !written[imm.Group.Name] {
-				out := create(strings.ToLower(imm.Group.Name) + "_fields.md")
-				fieldGroupMarkdown(out, imm.Group, docVersion)
-				out.Close()
-				written[imm.Group.Name] = true
-			}
-		}
-	}
 
 	tealtm := create("teal.tmLanguage.json")
 	enc := json.NewEncoder(tealtm)
@@ -502,7 +547,7 @@ func main() {
 		langspecjs := create(fmt.Sprintf("langspec_v%d.json", v))
 		enc := json.NewEncoder(langspecjs)
 		enc.SetIndent("", "  ")
-		if err := enc.Encode(buildLanguageSpec(opGroups, named, v)); err != nil {
+		if err := enc.Encode(buildLanguageSpec(opGroups, stackTypes, v)); err != nil {
 			fmt.Fprintf(os.Stderr, "error encoding langspec JSON for version %d: %v\n", v, err)
 			os.Exit(1)
 		}

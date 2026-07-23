@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -108,4 +108,10 @@ func (addr *Address) UnmarshalText(text []byte) error {
 // IsZero checks if an address is the zero value.
 func (addr Address) IsZero() bool {
 	return addr == Address{}
+}
+
+// IsPQCompliant checks if an address is eligible for native post-quantum account
+// authorization.
+func (addr Address) IsPQCompliant() bool {
+	return !crypto.IsEdwards25519Point(addr[:])
 }

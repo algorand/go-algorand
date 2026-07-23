@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,9 +26,10 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	// logging imports metrics so that we can have metrics about logging, which is more important than the four Debug lines we had here logging about metrics. TODO: find a more clever cycle resolution
-	//"github.com/algorand/go-algorand/logging"
 )
+
+// logging imports metrics so that we can have metrics about logging, which is more important than the four Debug lines we had here logging about metrics. TODO: find a more clever cycle resolution
+// "github.com/algorand/go-algorand/logging"
 
 const (
 	nodeExporterMetricsPath    = "/metrics"
@@ -121,7 +122,11 @@ func (reporter *MetricReporter) waitForTimeStamp(ctx context.Context) bool {
 
 func (reporter *MetricReporter) gatherMetrics() {
 	var buf strings.Builder
-	DefaultRegistry().WriteMetrics(&buf, reporter.formattedLabels)
+	if reporter.serviceConfig.registry != nil {
+		reporter.serviceConfig.registry.WriteMetrics(&buf, reporter.formattedLabels)
+	} else {
+		DefaultRegistry().WriteMetrics(&buf, reporter.formattedLabels)
+	}
 	reporter.lastMetricsBuffer = buf
 }
 

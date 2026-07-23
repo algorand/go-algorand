@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -254,6 +254,11 @@ type AppParams struct {
 	// SizeSponsor, if non-zero, is the account that must hold MBR for
 	// extra program pages, and the global schema.
 	SizeSponsor Address `codec:"ss"`
+
+	// ForeignBoxReads, when true, allows any app to read this app's boxes.
+	ForeignBoxReads bool `codec:"fbr"`
+	// FamilyBoxAccess, when true, allows apps with the same creator to read and write this app's boxes.
+	FamilyBoxAccess bool `codec:"fba"`
 }
 
 // StateSchemas is a thin wrapper around the LocalStateSchema and the

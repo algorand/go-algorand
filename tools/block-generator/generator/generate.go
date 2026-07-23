@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -411,7 +411,7 @@ func (g *generator) WriteAccount(output io.Writer, accountString string) error {
 			nameBytes := []byte(a.name)
 			asset := model.Asset{
 				Index: a.assetID,
-				Params: model.AssetParams{
+				Params: &model.AssetParams{
 					Creator:  accountString,
 					Decimals: 0,
 					Clawback: &accountString,
@@ -552,7 +552,7 @@ func (g *generator) generateTxGroup(round basics.Round, intra uint64) ([]txn.Sig
 
 	txnGroupAD := make([]txn.SignedTxnWithAD, len(signedTxns))
 	for i := range signedTxns {
-		txnGroupAD[i] = txn.SignedTxnWithAD{SignedTxn: signedTxns[i]}
+		txnGroupAD[i] = signedTxns[i].WithAD()
 
 		// for debugging:
 		g.latestPaysetWithExpectedID = append(

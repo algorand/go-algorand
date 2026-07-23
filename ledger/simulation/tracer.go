@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -249,6 +249,13 @@ func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 
 func (tracer *evalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, evalError error) {
 	tracer.handleError(evalError)
+	if evalError == nil && tracer.unnamedResourcePolicy != nil {
+		if err := tracer.unnamedResourcePolicy.tracker.reconcileWriteBudget(ep.DirtyByteCount(), ep.Proto.BytesPerBoxReference); err != nil {
+			// This should never happen, since simulation sets the IO budget to the maximum
+			// achievable budget before large program writes are checked.
+			panic(err.Error())
+		}
+	}
 	tracer.saveApplyData(ad, evalError != nil)
 	// if the current transaction + simulation condition would lead to exec trace making
 	// we should clean them up from tracer.execTraceStack.
@@ -330,10 +337,11 @@ func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *e
 }
 
 func (o *OpcodeTraceUnit) appendStateOperations(cx *logic.EvalContext) {
-	if cx.GetOpSpec().AppStateExplain == nil {
+	spec := cx.GetOpSpec()
+	if spec.AppStateExplain == nil {
 		return
 	}
-	appState, stateOp, appID, acctAddr, stateKey := cx.GetOpSpec().AppStateExplain(cx)
+	appState, stateOp, appID, acctAddr, stateKey := spec.AppStateExplain(cx)
 	// If the operation is not write or delete, return without
 	if stateOp == logic.AppStateRead {
 		return
@@ -420,14 +428,14 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 			tracer.handleError(evalError)
 		}
 		if evalError == nil && tracer.unnamedResourcePolicy != nil {
-			if err := tracer.unnamedResourcePolicy.tracker.reconcileBoxWriteBudget(cx.BoxDirtyBytes(), cx.Proto.BytesPerBoxReference); err != nil {
-				// This should never happen, since we limit the IO budget to tracer.unnamedResourcePolicy.assignment.maxPossibleBoxIOBudget
-				// (as shown below), so we should never have to reconcile an unachievable budget.
+			if err := tracer.unnamedResourcePolicy.tracker.reconcileWriteBudget(cx.DirtyByteCount(), cx.Proto.BytesPerBoxReference); err != nil {
+				// This should never happen, since simulation sets the IO budget to the maximum
+				// achievable budget before dirty bytes are checked.
 				panic(err.Error())
 			}
 
-			// Update box budget. It will decrease if an additional non-box resource has been accessed.
-			cx.SetIOBudget(tracer.unnamedResourcePolicy.tracker.maxPossibleBoxIOBudget(cx.Proto.BytesPerBoxReference))
+			// Update budget. It will decrease if an additional non-box resource has been accessed.
+			cx.SetIOBudget(tracer.unnamedResourcePolicy.tracker.maxPossibleIOBudget(cx.Proto.BytesPerBoxReference))
 		}
 	}
 }
@@ -482,7 +490,7 @@ func (tracer *evalTracer) BeforeProgram(cx *logic.EvalContext) {
 				s := cx.SurplusReadBudget
 				tracer.unnamedResourcePolicy.initialBoxSurplusReadBudget = &s
 			}
-			cx.SetIOBudget(tracer.unnamedResourcePolicy.tracker.maxPossibleBoxIOBudget(cx.Proto.BytesPerBoxReference))
+			cx.SetIOBudget(tracer.unnamedResourcePolicy.tracker.maxPossibleIOBudget(cx.Proto.BytesPerBoxReference))
 		}
 	}
 }
@@ -536,7 +544,7 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, pass bool, evalErr
 			}
 
 			// Fix the current auth addr if this txn doesn't have a signature
-			if txnHasNoSignature(stxn.SignedTxn) {
+			if txnNeedsSyntheticSignature(stxn.SignedTxn) {
 				stxn.AuthAddr = knownAuthAddrs[sender]
 				if stxn.AuthAddr == sender {
 					stxn.AuthAddr = basics.Address{}

@@ -26,8 +26,6 @@ GOLANG_VERSION_BUILD       := $(firstword $(GOLANG_VERSIONS))
 GOLANG_VERSION_BUILD_MAJOR := $(shell echo $(GOLANG_VERSION_BUILD) | cut -d'.' -f1,2)
 GOLANG_VERSION_MIN         := $(lastword $(GOLANG_VERSIONS))
 GOLANG_VERSION_SUPPORT     := $(shell echo $(GOLANG_VERSION_MIN) | cut -d'.' -f1,2)
-CURRENT_GO_VERSION         := $(shell go version | cut -d " " -f 3 | tr -d 'go')
-CURRENT_GO_VERSION_MAJOR   := $(shell echo $(CURRENT_GO_VERSION) | cut -d'.' -f1,2)
 
 # If build number already set, use it - to ensure same build number across multiple platforms being built
 BUILDNUMBER      ?= $(shell ./scripts/compute_build_number.sh)
@@ -44,12 +42,15 @@ GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
 GOTAGSLIST += ${GOTAGSCUSTOM}
 
 GOTESTCOMMAND := go tool -modfile=tool.mod gotestsum --format pkgname --jsonfile testresults.json --
+GOLINTCOMMAND := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.8.0 -c .golangci.yml
 
 ifeq ($(OS_TYPE), darwin)
 # M1 Mac--homebrew install location in /opt/homebrew
 ifeq ($(ARCH), arm64)
+ifneq ($(shell command -v brew 2>/dev/null),)
 export CPATH=/opt/homebrew/include
 export LIBRARY_PATH=/opt/homebrew/lib
+endif
 endif
 endif
 
@@ -84,11 +85,12 @@ GOLDFLAGS := $(GOLDFLAGS_BASE) \
 		 -X github.com/algorand/go-algorand/config.Channel=$(CHANNEL)
 
 UNIT_TEST_SOURCES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | grep -v /go-algorand/test/ ))
+COVERPKG_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | egrep -v '/go-algorand/(test|debug|cmd|config/defaultsGenerator|tools)' | egrep -v '(test|testing|mocks|mock)$$' ))
 ALGOD_API_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd daemon/algod/api; go list ./... ))
 
 GOMOD_DIRS := ./tools/block-generator ./tools/x-repo-types
 
-MSGP_GENERATE	:= ./protocol ./protocol/test ./crypto ./crypto/merklearray ./crypto/merklesignature ./crypto/stateproof ./data/basics ./data/transactions ./data/stateproofmsg ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./network ./node ./ledger ./ledger/ledgercore ./ledger/store/trackerdb ./ledger/store/trackerdb/generickv ./ledger/encoded ./stateproof ./data/account ./daemon/algod/api/spec/v2
+MSGP_GENERATE	:= ./protocol ./protocol/test ./crypto ./crypto/merklearray ./crypto/merklesignature ./crypto/stateproof ./data/basics ./data/transactions ./data/stateproofmsg ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./network ./node ./ledger ./ledger/ledgercore ./ledger/store/trackerdb ./ledger/store/trackerdb/generickv ./ledger/encoded ./stateproof ./data/account ./daemon/algod/api/spec/v2 ./cmd/algokey
 
 default: build
 
@@ -96,16 +98,18 @@ default: build
 
 fmt:
 	go fmt ./...
+	$(GOLINTCOMMAND) fmt
 	./scripts/check_license.sh -i
 
 fix: build
 	$(GOBIN)/algofix */
 
 modernize:
-	GOTOOLCHAIN=auto go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@v0.39.0 -any=false -bloop=false -rangeint=false -fmtappendf=false -waitgroup=false -stringsbuilder=false -omitzero=false -fix ./...
+	GOTOOLCHAIN=auto go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@v0.46.0 -v -atomictypes=false -rangeint=false -waitgroupgo=false -slicesbackward=false -stringsbuilder=false -omitzero=false -stringscut=false -fix ./...
 
 lint:
-	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.6.1 run -c .golangci.yml
+	$(GOLINTCOMMAND) run
+	shellcheck -e SC2034,SC2046,SC2053,SC2207,SC2145 -S warning test/scripts/e2e_subs/*.sh
 
 warninglint: custom-golangci-lint
 	./custom-golangci-lint run -c .golangci-warnings.yml
@@ -113,13 +117,7 @@ warninglint: custom-golangci-lint
 expectlint:
 	cd test/e2e-go/cli/goal/expect && python3 expect_linter.py *.exp
 
-check_go_version:
-	@if [ $(CURRENT_GO_VERSION_MAJOR) != $(GOLANG_VERSION_BUILD_MAJOR) ]; then \
-		echo "Wrong major version of Go installed ($(CURRENT_GO_VERSION_MAJOR)). Please use $(GOLANG_VERSION_BUILD_MAJOR)"; \
-		exit 1; \
-	fi
-
-tidy: check_go_version
+tidy:
 	@echo "Tidying go-algorand"
 	go mod tidy -compat=$(GOLANG_VERSION_SUPPORT)
 	@for dir in $(GOMOD_DIRS); do \
@@ -132,8 +130,19 @@ check_shell:
 
 sanity: fix lint fmt tidy modernize
 
+# "make cover" runs all tests, and collects full coverage across all go-algorand packages by setting -coverpkg.
+# Without setting -coverpkg, coverage reports only measure lines of code exercised within the same package as the tests.
+#
+# "make cover PACKAGE=X" runs all tests in package github.com/algorand/go-algorand/X/... and collects full coverage
+# across all packages that are dependencies of that package.
 cover:
-	go test $(GOTAGS) -coverprofile=cover.out $(UNIT_TEST_SOURCES)
+ifeq ($(PACKAGE),)
+	$(GOTESTCOMMAND) $(GOTAGS) -coverprofile=cover.out $(UNIT_TEST_SOURCES) -covermode=atomic -coverpkg=$(shell echo $(COVERPKG_PACKAGES) | sed 's/ /,/g')
+else
+	cd $(PACKAGE); \
+	$(GOTESTCOMMAND) $(GOTAGS) -coverprofile=cover.out ./... -covermode=atomic -coverpkg=$$( (go list -f '{{ join .Deps "\n" }}' ./...; go list -f '{{ join .TestImports "\n" }}' ./...) | grep 'github.com/algorand/go-algorand' | egrep -v '/go-algorand/(test|debug|cmd|config/defaultsGenerator|tools)' | egrep -v '(test|testing|mocks|mock)$$' | sort | uniq | paste -sd ',' -); \
+	go tool cover -html cover.out
+endif
 
 prof:
 	cd node && go test $(GOTAGS) -cpuprofile=cpu.out -memprofile=mem.out -mutexprofile=mutex.out
@@ -144,12 +153,12 @@ generate:
 msgp: $(patsubst %,%/msgp_gen.go,$(MSGP_GENERATE))
 
 api:
-	make -C daemon/algod/api
+	$(MAKE) -j7 -C daemon/algod/api
 
 logic:
-	make -C data/transactions/logic
+	$(MAKE) -C data/transactions/logic
 
-MSGP := go run github.com/algorand/msgp@v1.1.62
+MSGP := go run github.com/algorand/msgp@v1.1.64
 %/msgp_gen.go: ALWAYS
 		@set +e; \
 		printf "$(MSGP) $(@D)..."; \
@@ -169,7 +178,12 @@ ALWAYS:
 libsodium: crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a
 
 crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a:
+	# ARCH and OS_TYPE feed the cleanup/copy paths below and can be overridden by callers.
+	# Validate them here so the recipe only operates on expected target paths.
+	@case "$(OS_TYPE)" in (darwin|linux|windows) ;; (*) echo "Invalid OS_TYPE: $(OS_TYPE)"; exit 1;; esac
+	@case "$(ARCH)" in (amd64|arm64|arm|riscv64) ;; (*) echo "Invalid ARCH: $(ARCH)"; exit 1;; esac
 	mkdir -p crypto/copies/$(OS_TYPE)/$(ARCH)
+	rm -rf crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork
 	cp -R crypto/libsodium-fork/. crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork
 	cd crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork && \
 		./autogen.sh --prefix $(SRCPATH)/crypto/libs/$(OS_TYPE)/$(ARCH) && \
@@ -297,11 +311,11 @@ build-e2e: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a
 	@mkdir -p $(GOBIN)-race
 	# Build regular binaries (kmd, algod, goal) and race binaries in parallel
 	$(GO_INSTALL) -trimpath $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./cmd/kmd ./cmd/algod ./cmd/goal & \
-	GOBIN=$(GOBIN)-race go install -trimpath $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" ./cmd/goal ./cmd/algod ./cmd/algoh ./cmd/tealdbg ./cmd/msgpacktool ./cmd/algokey ./cmd/pingpong ./tools/teal/algotmpl ./test/e2e-go/cli/tealdbg/cdtmock & \
+	GOBIN=$(GOBIN)-race go install -trimpath $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" ./cmd/goal ./cmd/algod ./cmd/algoh ./cmd/msgpacktool ./cmd/algokey ./cmd/pingpong ./tools/teal/algotmpl & \
 	wait
 	cp $(GOBIN)/kmd $(GOBIN)-race
 
-NONGO_BIN_FILES=$(GOBIN)/find-nodes.sh $(GOBIN)/update.sh $(GOBIN)/COPYING $(GOBIN)/ddconfig.sh
+NONGO_BIN_FILES=$(GOBIN)/find-nodes.sh $(GOBIN)/update.sh $(GOBIN)/COPYING
 
 NONGO_BIN: $(NONGO_BIN_FILES)
 
@@ -310,8 +324,6 @@ $(GOBIN)/find-nodes.sh: scripts/find-nodes.sh
 $(GOBIN)/update.sh: cmd/updater/update.sh
 
 $(GOBIN)/COPYING: COPYING
-
-$(GOBIN)/ddconfig.sh: scripts/ddconfig.sh
 
 $(GOBIN)/%:
 	cp -f $< $@

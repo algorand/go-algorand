@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -83,7 +83,7 @@ const (
 	objectTypeMax
 )
 
-func randomObjectOfType(randtype uint64, width int, depth int) interface{} {
+func randomObjectOfType(randtype uint64, width int, depth int) any {
 	if depth == 0 {
 		return 0
 	}
@@ -118,7 +118,7 @@ func randomObjectOfType(randtype uint64, width int, depth int) interface{} {
 		crypto.RandBytes(buf[:])
 		return base32.StdEncoding.EncodeToString(buf[:])
 	case objectArray:
-		var arr [2]interface{}
+		var arr [2]any
 		if crypto.RandUint64()%2 == 0 { // half the time, make the slice a uniform type
 			t := crypto.RandUint64()
 			for i := range arr {
@@ -136,7 +136,7 @@ func randomObjectOfType(randtype uint64, width int, depth int) interface{} {
 		}
 		return arr
 	case objectSlice:
-		slice := make([]interface{}, 0)
+		slice := make([]any, 0)
 		sz := crypto.RandUint64() % uint64(width)
 		if crypto.RandUint64()%2 == 0 { // half the time, make the slice a uniform type
 			t := crypto.RandUint64()
@@ -161,12 +161,12 @@ func randomObjectOfType(randtype uint64, width int, depth int) interface{} {
 	}
 }
 
-func randomObject(width int, depth int) interface{} {
+func randomObject(width int, depth int) any {
 	return randomObjectOfType(crypto.RandUint64(), width, depth)
 }
 
-func randomMap(width int, depth int) interface{} {
-	r := make(map[string]interface{})
+func randomMap(width int, depth int) any {
+	r := make(map[string]any)
 
 	for i := 0; i < width; i++ {
 		var k [8]byte

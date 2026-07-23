@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -177,7 +177,7 @@ func (w *wsFetcherClient) requestBlock(ctx context.Context, round basics.Round) 
 	}
 
 	if errMsg, found := resp.Topics.GetValue(network.ErrorKey); found {
-		if latest, lfound := resp.Topics.GetValue(rpcs.LatestRoundKey); lfound {
+		if latest, lfound := resp.Topics.GetValue(rpcs.LatestRoundKey); lfound && len(latest) == 8 {
 			return nil, noBlockForRoundError{round: round, latest: basics.Round(binary.BigEndian.Uint64(latest))}
 		}
 		return nil, makeErrWsFetcherRequestFailed(round, w.target.GetAddress(), string(errMsg))

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -165,10 +165,10 @@ func BenchmarkAssembleBlock(b *testing.B) {
 
 type callbackLogger struct {
 	logging.Logger
-	WarnfCallback func(string, ...interface{})
+	WarnfCallback func(string, ...any)
 }
 
-func (cl callbackLogger) Warnf(s string, args ...interface{}) {
+func (cl callbackLogger) Warnf(s string, args ...any) {
 	cl.WarnfCallback(s, args...)
 }
 
@@ -181,7 +181,7 @@ func TestAssembleBlockTransactionPoolBehind(t *testing.T) {
 	baseLog.SetLevel(logging.Info)
 	log := &callbackLogger{
 		Logger: baseLog,
-		WarnfCallback: func(s string, args ...interface{}) {
+		WarnfCallback: func(s string, args ...any) {
 			require.True(t, expectingLog)
 			require.Equal(t, s, "AssembleBlock: assembled block round did not catch up to requested round: %d != %d")
 			expectingLog = false

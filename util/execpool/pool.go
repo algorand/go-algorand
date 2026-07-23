@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -35,8 +35,8 @@ const (
 
 // ExecutionPool interface exposes the core functionality of the execution pool.
 type ExecutionPool interface {
-	Enqueue(enqueueCtx context.Context, t ExecFunc, arg interface{}, i Priority, out chan interface{}) error
-	GetOwner() interface{}
+	Enqueue(enqueueCtx context.Context, t ExecFunc, arg any, i Priority, out chan any) error
+	GetOwner() any
 	Shutdown()
 	GetParallelism() int
 }
@@ -45,7 +45,7 @@ type ExecutionPool interface {
 type pool struct {
 	inputs  []chan enqueuedTask
 	wg      sync.WaitGroup
-	owner   interface{}
+	owner   any
 	numCPUs int
 }
 
@@ -53,7 +53,7 @@ type pool struct {
 //
 // Note that a ExecFunc will occupy a Pool goroutine, so do not schedule tasks
 // that spend an excessive amount of time waiting.
-type ExecFunc func(interface{}) interface{}
+type ExecFunc func(any) any
 
 // A Priority specifies a hint to the Pool to execute a Task at some priority.
 //
@@ -65,12 +65,12 @@ type Priority uint8
 
 type enqueuedTask struct {
 	execFunc ExecFunc
-	arg      interface{}
-	out      chan interface{}
+	arg      any
+	out      chan any
 }
 
 // MakePool creates a pool.
-func MakePool(owner interface{}, profLabels ...string) ExecutionPool {
+func MakePool(owner any, profLabels ...string) ExecutionPool {
 	p := &pool{
 		inputs:  make([]chan enqueuedTask, numPrios),
 		numCPUs: runtime.NumCPU(),
@@ -100,7 +100,7 @@ func (p *pool) GetParallelism() int {
 // pool, the caller should check if it was passed-in or not. Instead of having a separate flag for
 // that purpose, the pool have an "owner" parameters that allows the caller to determine if it need
 // to be shut down or not.
-func (p *pool) GetOwner() interface{} {
+func (p *pool) GetOwner() any {
 	return p.owner
 }
 
@@ -111,7 +111,7 @@ func (p *pool) GetOwner() interface{} {
 // /
 // Enqueue returns nil if task was enqueued successfully or the result of the
 // expired context error.
-func (p *pool) Enqueue(enqueueCtx context.Context, t ExecFunc, arg interface{}, i Priority, out chan interface{}) error {
+func (p *pool) Enqueue(enqueueCtx context.Context, t ExecFunc, arg any, i Priority, out chan any) error {
 	select {
 	case p.inputs[i] <- enqueuedTask{
 		execFunc: t,

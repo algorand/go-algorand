@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -250,9 +250,9 @@ func GetVersionedDefaultLocalConfig(version uint32) (local Local) {
 
 // GetNonDefaultConfigValues takes a provided cfg and list of field names, and returns a map of all values in cfg
 // that are not set to the default for the latest version.
-func GetNonDefaultConfigValues(cfg Local, fieldNames []string) map[string]interface{} {
+func GetNonDefaultConfigValues(cfg Local, fieldNames []string) map[string]any {
 	defCfg := GetDefaultLocal()
-	ret := make(map[string]interface{})
+	ret := make(map[string]any)
 
 	for _, fieldName := range fieldNames {
 		defField := reflect.ValueOf(defCfg).FieldByName(fieldName)

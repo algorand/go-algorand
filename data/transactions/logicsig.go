@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package transactions
 import (
 	"bytes"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 )
 
@@ -26,9 +27,7 @@ import (
 const EvalMaxArgs = 255
 
 // MaxLogicSigArgSize is the maximum size of an argument to an LSig
-// We use 4096 to match the maximum size of a TEAL value
-// (as defined in `const maxStringSize` in package logic)
-const MaxLogicSigArgSize = 4096
+const MaxLogicSigArgSize = config.MaxAVMBytesSize
 
 // LogicSig contains logic for validating a transaction.
 // LogicSig is signed by an account, allowing delegation of operations.
@@ -37,30 +36,43 @@ const MaxLogicSigArgSize = 4096
 type LogicSig struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	// Logic signed by Sig or Msig, OR hashed to be the Address of an account.
+	// Logic signed by one of the delegation signature categories below, OR
+	// hashed to be the Address of an account.
 	Logic []byte `codec:"l,allocbound=bounds.MaxLogicSigMaxSize"`
 
 	Sig   crypto.Signature   `codec:"sig"`
 	Msig  crypto.MultisigSig `codec:"msig"`
 	LMsig crypto.MultisigSig `codec:"lmsig"`
+	PQsig PQSig              `codec:"pqsig"`
 
 	// Args are not signed, but checked by Logic
 	Args [][]byte `codec:"arg,allocbound=EvalMaxArgs,allocbound=MaxLogicSigArgSize,maxtotalbytes=bounds.MaxLogicSigMaxSize"`
 }
 
-// Blank returns true if there is no content in this LogicSig
+// Blank returns true if the LogicSig is entirely empty.
 func (lsig *LogicSig) Blank() bool {
-	return len(lsig.Logic) == 0
+	return len(lsig.Logic) == 0 && len(lsig.Args) == 0 &&
+		lsig.Sig.Blank() && lsig.Msig.Blank() && lsig.LMsig.Blank() && lsig.PQsig.Blank()
 }
 
-// Len returns the length of Logic plus the length of the Args
-// This is limited by config.ConsensusParams.LogicSigMaxSize
+// HasProgram returns true if the LogicSig carries a program.
+func (lsig *LogicSig) HasProgram() bool {
+	return len(lsig.Logic) != 0
+}
+
+// Len returns the total byte length of a logicSig program and arguments
 func (lsig *LogicSig) Len() int {
 	lsiglen := len(lsig.Logic)
+	return lsiglen + lsig.ArgsLen()
+}
+
+// ArgsLen returns the total byte length of the LogicSig arguments
+func (lsig *LogicSig) ArgsLen() int {
+	argsLen := 0
 	for _, arg := range lsig.Args {
-		lsiglen += len(arg)
+		argsLen += len(arg)
 	}
-	return lsiglen
+	return argsLen
 }
 
 // Equal returns true if both LogicSig are equivalent.
@@ -70,7 +82,10 @@ func (lsig *LogicSig) Len() int {
 // different behaviors within the evaluation of a LogicSig,
 // due to differences in msgpack encoding behavior.
 func (lsig *LogicSig) Equal(b *LogicSig) bool {
-	sigs := lsig.Sig == b.Sig && lsig.Msig.Equal(b.Msig) && lsig.LMsig.Equal(b.LMsig)
+	sigs := lsig.Sig == b.Sig &&
+		lsig.Msig.Equal(b.Msig) &&
+		lsig.LMsig.Equal(b.LMsig) &&
+		lsig.PQsig.Equal(b.PQsig)
 	if !sigs {
 		return false
 	}

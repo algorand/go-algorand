@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,7 +21,7 @@ type peersHeap struct {
 }
 
 // Push implements heap.Interface
-func (ph peersHeap) Push(x interface{}) {
+func (ph peersHeap) Push(x any) {
 	wn := ph.wn
 	p := x.(*wsPeer)
 	wn.peers = append(wn.peers, p)
@@ -29,7 +29,7 @@ func (ph peersHeap) Push(x interface{}) {
 }
 
 // Pop implements heap.Interface
-func (ph peersHeap) Pop() interface{} {
+func (ph peersHeap) Pop() any {
 	wn := ph.wn
 	end := len(wn.peers) - 1
 	p := wn.peers[end]

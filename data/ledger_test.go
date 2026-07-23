@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -190,9 +190,7 @@ func TestLedgerCirculation(t *testing.T) {
 		tx.Type = protocol.PaymentTx
 		signedTx := tx.Sign(srcAccountKey)
 		blk.Payset = transactions.Payset{transactions.SignedTxnInBlock{
-			SignedTxnWithAD: transactions.SignedTxnWithAD{
-				SignedTxn: signedTx,
-			},
+			SignedTxnWithAD: signedTx.WithAD(),
 		}}
 		require.NoError(t, l.AddBlock(blk, agreement.Certificate{}))
 		l.WaitForCommit(rnd)
@@ -456,35 +454,35 @@ type loggedMessages struct {
 	unexpectedMessages chan string
 }
 
-func (lm loggedMessages) Debug(args ...interface{}) {
+func (lm loggedMessages) Debug(args ...any) {
 	m := fmt.Sprint(args...)
 	lm.unexpectedMessages <- m
 }
-func (lm loggedMessages) Debugf(s string, args ...interface{}) {
+func (lm loggedMessages) Debugf(s string, args ...any) {
 	m := fmt.Sprintf(s, args...)
 	lm.expectedMessages <- m
 }
-func (lm loggedMessages) Info(args ...interface{}) {
+func (lm loggedMessages) Info(args ...any) {
 	m := fmt.Sprint(args...)
 	lm.unexpectedMessages <- m
 }
-func (lm loggedMessages) Infof(s string, args ...interface{}) {
+func (lm loggedMessages) Infof(s string, args ...any) {
 	m := fmt.Sprintf(s, args...)
 	lm.unexpectedMessages <- m
 }
-func (lm loggedMessages) Warn(args ...interface{}) {
+func (lm loggedMessages) Warn(args ...any) {
 	m := fmt.Sprint(args...)
 	lm.unexpectedMessages <- m
 }
-func (lm loggedMessages) Warnf(s string, args ...interface{}) {
+func (lm loggedMessages) Warnf(s string, args ...any) {
 	m := fmt.Sprintf(s, args...)
 	lm.unexpectedMessages <- m
 }
-func (lm loggedMessages) Error(args ...interface{}) {
+func (lm loggedMessages) Error(args ...any) {
 	m := fmt.Sprint(args...)
 	lm.unexpectedMessages <- m
 }
-func (lm loggedMessages) Errorf(s string, args ...interface{}) {
+func (lm loggedMessages) Errorf(s string, args ...any) {
 	m := fmt.Sprintf(s, args...)
 	lm.unexpectedMessages <- m
 }

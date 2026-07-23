@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -706,6 +706,28 @@ func (l *Ledger) AppParams(appID basics.AppIndex) (basics.AppParams, basics.Addr
 		return app.AppParams, app.Creator, nil
 	}
 	return basics.AppParams{}, basics.Address{}, fmt.Errorf("no app %d", appID)
+}
+
+// SetForeignBoxReads sets the ForeignBoxReads flag on the given app's params.
+func (l *Ledger) SetForeignBoxReads(appID basics.AppIndex, enable bool) error {
+	app, ok := l.applications[appID]
+	if !ok {
+		return fmt.Errorf("no app %d", appID)
+	}
+	app.ForeignBoxReads = enable
+	l.applications[appID] = app
+	return nil
+}
+
+// SetFamilyBoxAccess sets the FamilyBoxAccess flag on the given app's params.
+func (l *Ledger) SetFamilyBoxAccess(appID basics.AppIndex, enable bool) error {
+	app, ok := l.applications[appID]
+	if !ok {
+		return fmt.Errorf("no app %d", appID)
+	}
+	app.FamilyBoxAccess = enable
+	l.applications[appID] = app
+	return nil
 }
 
 var testGenHash = crypto.Digest{0x03, 0x02, 0x03}

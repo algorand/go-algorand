@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -519,7 +519,7 @@ func (n *NetworkFacade) Tick(newClockTime int) bool {
 	return len(expiredClocks) > 0 || msgSent
 }
 
-func (n *NetworkFacade) GetFilterByType(filterType reflect.Type) interface{} {
+func (n *NetworkFacade) GetFilterByType(filterType reflect.Type) any {
 	currentFilter := n.GetDownstreamFilter()
 	for {
 		if currentFilter == nil || currentFilter == n.fuzzer.router.GetDownstreamFilter() {

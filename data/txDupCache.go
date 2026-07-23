@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,11 +23,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/algorand/go-algorand/config/bounds"
-	"github.com/algorand/go-algorand/crypto"
+	"golang.org/x/crypto/blake2b"
+
 	"github.com/algorand/go-deadlock"
 
-	"golang.org/x/crypto/blake2b"
+	"github.com/algorand/go-algorand/config/bounds"
+	"github.com/algorand/go-algorand/crypto"
 )
 
 // digestCache is a rotating cache of size N accepting crypto.Digest as a key
@@ -259,7 +260,7 @@ func (c *txSaltedCache) DeleteByKey(d crypto.Digest) {
 }
 
 var saltedPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		// 2 x MaxAvailableAppProgramLen that covers
 		// max approve + clear state programs with max args for app create txn.
 		// other transactions are much smaller.

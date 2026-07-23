@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -61,7 +61,6 @@ type TransactionPool struct {
 
 	mu                     deadlock.Mutex
 	cond                   sync.Cond
-	expiredTxCount         map[basics.Round]int
 	pendingBlockEvaluator  BlockEvaluator
 	evalTracer             logic.EvalTracer
 	numPendingWholeBlocks  basics.Round
@@ -110,8 +109,7 @@ type BlockEvaluator interface {
 	TestTransactionGroup(txgroup []transactions.SignedTxn) error
 	Round() basics.Round
 	PaySetSize() int
-	TransactionGroup(txads []transactions.SignedTxnWithAD) error
-	Transaction(txn transactions.SignedTxn, ad transactions.ApplyData) error
+	TransactionGroup(txads ...transactions.SignedTxnWithAD) error
 	GenerateBlock(addrs []basics.Address) (*ledgercore.UnfinishedBlock, error)
 	ResetTxnBytes()
 }
@@ -131,7 +129,6 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	pool := TransactionPool{
 		pendingTxids:         make(map[transactions.Txid]transactions.SignedTxn),
 		rememberedTxids:      make(map[transactions.Txid]transactions.SignedTxn),
-		expiredTxCount:       make(map[basics.Round]int),
 		ledger:               ledger,
 		statusCache:          makeStatusCache(cfg.TxPoolSize),
 		logProcessBlockStats: cfg.EnableProcessBlockStats,
@@ -195,7 +192,6 @@ func (pool *TransactionPool) Reset() {
 	pool.pendingTxGroups = nil
 	pool.rememberedTxids = make(map[transactions.Txid]transactions.SignedTxn)
 	pool.rememberedTxGroups = nil
-	pool.expiredTxCount = make(map[basics.Round]int)
 	pool.numPendingWholeBlocks = 0
 	pool.pendingBlockEvaluator = nil
 	pool.statusCache.reset()
@@ -207,15 +203,6 @@ func (pool *TransactionPool) getVotingAccountsForRound(rnd basics.Round) []basic
 		return nil
 	}
 	return pool.vac.VotingAccountsForRound(rnd)
-}
-
-// NumExpired returns the number of transactions that expired at the
-// end of a round (only meaningful if cleanup has been called for that
-// round).
-func (pool *TransactionPool) NumExpired(round basics.Round) int {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-	return pool.expiredTxCount[round]
 }
 
 // PendingTxIDs return the IDs of all pending transactions.
@@ -480,12 +467,6 @@ func (pool *TransactionPool) ingest(txgroup []transactions.SignedTxn, params poo
 	return nil
 }
 
-// RememberOne stores the provided transaction.
-// Precondition: Only RememberOne() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
-func (pool *TransactionPool) RememberOne(t transactions.SignedTxn) error {
-	return pool.Remember([]transactions.SignedTxn{t})
-}
-
 // Remember stores the provided transaction group.
 // Precondition: Only Remember() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
 func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn) error {
@@ -586,10 +567,6 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercor
 	stats.KnownCommittedCount = knownCommitted
 	stats.UnknownCommittedCount = unknownCommitted
 
-	proto := config.Consensus[block.CurrentProtocol]
-	pool.expiredTxCount[block.Round()] = int(stats.ExpiredCount)
-	delete(pool.expiredTxCount, block.Round()-expiredHistory*basics.Round(proto.MaxTxnLife))
-
 	if pool.logProcessBlockStats {
 		var details struct {
 			Round uint64
@@ -632,7 +609,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 		transactionGroupStartsTime = time.Now()
 	}
 
-	err := pool.pendingBlockEvaluator.TransactionGroup(txgroupad)
+	err := pool.pendingBlockEvaluator.TransactionGroup(txgroupad...)
 
 	if recomputing {
 		if !pool.assemblyResults.assemblyCompletedOrAbandoned {
@@ -725,7 +702,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 
 	pool.assemblyMu.Lock()
 	pool.assemblyResults = poolAsmResults{
-		roundStartedEvaluating: prev.Round + basics.Round(1),
+		roundStartedEvaluating: prev.Round + 1,
 	}
 	pool.assemblyMu.Unlock()
 
@@ -766,6 +743,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 		}
 		if _, alreadyCommitted := committedTxIDs[txgroup[0].ID()]; alreadyCommitted {
 			asmStats.EarlyCommittedCount++
+			txPoolReevalCommitted.Inc(nil)
 			continue
 		}
 		err := pool.add(txgroup, &asmStats)
@@ -773,6 +751,9 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 			for _, tx := range txgroup {
 				pool.statusCache.put(tx, err.Error())
 			}
+
+			txPoolReevalCounter.Add(ClassifyTxPoolError(err), 1)
+
 			// metrics here are duplicated for historic reasons. stats is hardly used and should be removed in favor of asmstats
 			switch terr := err.(type) {
 			case *ledgercore.TransactionInLedgerError:
@@ -789,10 +770,6 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 				asmStats.LeaseErrorCount++
 				stats.RemovedInvalidCount++
 				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
-			case *transactions.MinFeeError:
-				asmStats.MinFeeErrorCount++
-				stats.RemovedInvalidCount++
-				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
 			case logic.EvalError:
 				asmStats.LogicErrorCount++
 				stats.RemovedInvalidCount++
@@ -802,6 +779,8 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 				stats.RemovedInvalidCount++
 				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
 			}
+		} else {
+			txPoolReevalSuccess.Inc(nil)
 		}
 	}
 
@@ -843,7 +822,7 @@ func (pool *TransactionPool) getStateProofStats(txib *transactions.SignedTxnInBl
 		TxnSize:        encodedLen,
 	}
 
-	lastSPRound := basics.Round(txib.Txn.StateProofTxnFields.Message.LastAttestedRound)
+	lastSPRound := txib.Txn.StateProofTxnFields.Message.LastAttestedRound
 	verificationCtx, err := pool.ledger.GetStateProofVerificationContext(lastSPRound)
 	if err != nil {
 		return stateProofStats
@@ -977,7 +956,9 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 	pool.assemblyDeadline = time.Time{}
 
 	if pool.assemblyResults.err != nil {
-		return nil, fmt.Errorf("AssemblyBlock: encountered error for round %d: %v", round, pool.assemblyResults.err)
+		pool.log.Warnf("AssembleBlock: encountered error for round %d, assembling empty block instead: %v", round, pool.assemblyResults.err)
+		stats.StopReason = telemetryspec.AssembleBlockGenerationError
+		return pool.assembleEmptyBlock(round)
 	}
 	if pool.assemblyResults.roundStartedEvaluating > round {
 		// this scenario should not happen unless the txpool is receiving the new blocks via OnNewBlock

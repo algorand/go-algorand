@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -78,10 +78,18 @@ const spliceVersion = 10  // box splicing/resizing
 const incentiveVersion = 11 // block fields, heartbeat
 const mimcVersion = 11
 
+const varintBranchVersion = 13 // branch offsets encoded as binary.Varint instead of big-endian int16
+
 // EXPERIMENTAL. These should be revisited whenever a new LogicSigVersion is
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version, and fixup TestAssemble() in assembler_test.go.
 const sumhashVersion = 13
+const poseidon2Version = 13
+const foreignBoxVersion = 13 // app_params_set, foreign app box access
+
+// LogicSigOffCurveVersion is the first AVM version where LogicSig programs
+// assembled by this package are expected to hash to an off-curve address.
+const LogicSigOffCurveVersion = 13
 
 // Unlimited Global Storage opcodes
 const boxVersion = 8 // box_*
@@ -147,6 +155,15 @@ type OpDetails struct {
 	Immediates []immediate // details of each immediate arg to opcode
 
 	trusted bool // if `trusted`, don't check stack effects. they are more complicated than simply checking the opcode prototype.
+
+	// SubOpcode, when non-zero, indicates this OpSpec belongs to a multi-byte
+	// opcode family. Opcode is the prefix byte; SubOpcode is the second byte.
+	// Sub-opcodes begin at 0x01, reserving 0x00 as the "not a sub-opcode" sentinel.
+	SubOpcode byte
+
+	// SubOps, when non-nil, marks this as a prefix opcode. The slice is indexed
+	// by SubOpcode byte; index 0 is always a zero-value OpSpec sentinel.
+	SubOps []OpSpec
 }
 
 func (d *OpDetails) docCost(argLen int, version uint64) string {
@@ -186,6 +203,9 @@ func (d *OpDetails) Cost(program []byte, pc int, stack []stackValue) int {
 	if cost != 0 {
 		return cost
 	}
+	if d.SubOpcode != 0 { // Look for immediates after SubOpcode
+		pc++
+	}
 	for i := range d.Immediates {
 		if d.Immediates[i].fieldCosts != nil {
 			lc := d.Immediates[i].fieldCosts[program[pc+1+i]]
@@ -196,18 +216,28 @@ func (d *OpDetails) Cost(program []byte, pc int, stack []stackValue) int {
 }
 
 func detDefault() OpDetails {
-	return OpDetails{asmDefault, nil, nil, modeAny, linearCost{baseCost: 1}, 1, nil, false}
+	return OpDetails{asmDefault, nil, nil, modeAny, linearCost{baseCost: 1}, 1, nil, false, 0, nil}
 }
 
 func constants(asm asmFunc, checker checkFunc, name string, kind immKind) OpDetails {
-	return OpDetails{asm, checker, nil, modeAny, linearCost{baseCost: 1}, 0, []immediate{imm(name, kind)}, false}
+	return OpDetails{asm, checker, nil, modeAny, linearCost{baseCost: 1}, 0, []immediate{imm(name, kind)}, false, 0, nil}
 }
 
-func detBranch() OpDetails {
+// detBranch2B describes a branch that always has a two-byte branch offset
+func detBranch2B() OpDetails {
 	d := detDefault()
-	d.asm = asmBranch
+	d.asm = asmBranch2B
 	d.check = checkBranch
 	d.Size = 3
+	d.Immediates = []immediate{imm("target", immLabel)}
+	return d
+}
+
+func detBranchVarint() OpDetails {
+	d := detDefault()
+	d.asm = asmBranchVarint
+	d.check = checkBranchVarint
+	d.Size = 0 // dynamic; op and check always set nextpc
 	d.Immediates = []immediate{imm("target", immLabel)}
 	return d
 }
@@ -266,9 +296,21 @@ func (d OpDetails) trust() OpDetails {
 	return d
 }
 
+// subOp marks an OpSpec as belonging to a multi-byte opcode family. The
+// OpSpec.Opcode field is the prefix byte; n is the second byte. Size is set to
+// 2 (prefix + sub-opcode) with no further immediates; If a multibyte opcode
+// ever requires immediates, ensure the resulting opcode's Size is set to
+// account for both the subop and the immediates.
+func subOp(n byte) OpDetails {
+	d := detDefault()
+	d.Size++
+	d.SubOpcode = n
+	return d
+}
+
 func immKinded(kind immKind, names ...string) OpDetails {
 	d := detDefault()
-	d.Size = len(names) + 1
+	d.Size += len(names)
 	d.Immediates = make([]immediate, len(names))
 	for i, name := range names {
 		d.Immediates[i] = imm(name, kind)
@@ -486,8 +528,6 @@ func (spec *OpSpec) deadens() bool {
 
 // OpSpecs is the table of operations that can be assembled and evaluated.
 //
-// Any changes should be reflected in README_in.md which serves as the language spec.
-//
 // Note: assembly can specialize an Any return type if known at
 // assembly-time, with ops.returns()
 var OpSpecs = []OpSpec{
@@ -586,9 +626,13 @@ var OpSpecs = []OpSpec{
 	{0x3e, "loads", opLoads, proto("i:a"), 5, typed(typeLoads)},
 	{0x3f, "stores", opStores, proto("ia:"), 5, typed(typeStores)},
 
-	{0x40, "bnz", opBnz, proto("i:"), 1, detBranch()},
-	{0x41, "bz", opBz, proto("i:"), 2, detBranch()},
-	{0x42, "b", opB, proto(":"), 2, detBranch()},
+	{0x40, "bnz", opBnz2B, proto("i:"), 1, detBranch2B()},
+	{0x41, "bz", opBz2B, proto("i:"), 2, detBranch2B()},
+	{0x42, "b", opB2B, proto(":"), 2, detBranch2B()},
+	// varint-encoded branch offsets (binary.Varint / zigzag+ULEB128), introduced in v13
+	{0x40, "bnz", opBnz, proto("i:"), varintBranchVersion, detBranchVarint()},
+	{0x41, "bz", opBz, proto("i:"), varintBranchVersion, detBranchVarint()},
+	{0x42, "b", opB, proto(":"), varintBranchVersion, detBranchVarint()},
 	{0x43, "return", opReturn, proto("i:x").stackExplain(opReturnStackChange), 2, detDefault()},
 	{0x44, "assert", opAssert, proto("i:"), 3, detDefault()},
 	{0x45, "bury", opBury, proto("a:").stackExplain(opBuryStackChange), fpVersion, immediates("n").typed(typeBury)},
@@ -644,6 +688,7 @@ var OpSpecs = []OpSpec{
 	{0x73, "acct_params_get", opAcctParamsGet, proto("a:aT"), 6, field("f", &AcctParamsFields).only(ModeApp)},
 	{0x74, "voter_params_get", opVoterParamsGet, proto("a:aT"), incentiveVersion, field("f", &VoterParamsFields).only(ModeApp)},
 	{0x75, "online_stake", opOnlineStake, proto(":i"), incentiveVersion, only(ModeApp)},
+	{0x76, "app_params_set", opAppParamsSet, proto("i:"), foreignBoxVersion, field("f", &AppParamsSettableFields).only(ModeApp).assembler(asmAppParamsSet)},
 
 	{0x78, "min_balance", opMinBalance, proto("i:i"), 3, only(ModeApp)},
 	{0x78, "min_balance", opMinBalance, proto("a:i"), directRefEnabledVersion, only(ModeApp)},
@@ -655,19 +700,20 @@ var OpSpecs = []OpSpec{
 	{0x83, "pushints", opPushInts, proto(":", "", "[N items]").stackExplain(opPushIntsStackChange), 8, constants(asmPushInts, checkIntImmArgs, "uint ...", immInts).typed(typePushInts).trust()},
 
 	{0x84, "ed25519verify_bare", opEd25519VerifyBare, proto("bb{64}b{32}:T"), 7, costly(1900)},
-	{0x85, "falcon_verify", opFalconVerify, proto("bb{1232}b{1793}:T"), 12, costly(1700)}, // dynamic for internal hash?
+	{0x85, "falcon_verify", opFalconVerify, proto("bbb{1793}:T"), 12, costly(1700)},
 	{0x86, "sumhash512", opSumhash512, proto("b:b{64}"), sumhashVersion, costByLength(150, 7, 4, 0)},
 	{0x87, "sha512", opSHA512, proto("b:b{64}"), 13, costByLength(15, 32, 2, 0)},
 
 	// "Function oriented"
-	{0x88, "callsub", opCallSub, proto(":"), 4, detBranch()},
+	{0x88, "callsub", opCallSub2B, proto(":"), 4, detBranch2B()},
+	{0x88, "callsub", opCallSub, proto(":"), varintBranchVersion, detBranchVarint()},
 	{0x89, "retsub", opRetSub, proto(":").stackExplain(opRetSubStackChange), 4, detDefault().trust()},
 	// protoByte is a named constant because opCallSub needs to know it.
 	{protoByte, "proto", opProto, proto(":"), fpVersion, immediates("a", "r").typed(typeProto)},
 	{0x8b, "frame_dig", opFrameDig, proto(":a").stackExplain(opFrameDigStackChange), fpVersion, immKinded(immInt8, "i").typed(typeFrameDig)},
 	{0x8c, "frame_bury", opFrameBury, proto("a:").stackExplain(opFrameBuryStackChange), fpVersion, immKinded(immInt8, "i").typed(typeFrameBury)},
 	{0x8d, "switch", opSwitch, proto("i:"), 8, detSwitch()},
-	{0x8e, "match", opMatch, proto(":", "[A1, A2, ..., AN], B", "").stackExplain(opMatchStackChange), 8, detSwitch().trust()},
+	{0x8e, "match", opMatch, proto("a:", "[A1, A2, ..., AN], B", "").stackExplain(opMatchStackChange), 8, detSwitch().typed(typeMatch).trust()},
 
 	// More math
 	{0x90, "shl", opShiftLeft, proto("ii:i"), 4, detDefault()},
@@ -713,13 +759,13 @@ var OpSpecs = []OpSpec{
 	{0xb8, "gitxna", opGitxna, proto(":a"), 6, immediates("t", "f", "i").field("f", &TxnArrayFields).only(ModeApp)},
 
 	// Unlimited Global Storage - Boxes
-	{0xb9, "box_create", opBoxCreate, proto("Ni:T").appStateExplain(opBoxCreateStateChange), boxVersion, only(ModeApp)},
-	{0xba, "box_extract", opBoxExtract, proto("Nii:b").appStateExplain(opBoxExtractStateChange), boxVersion, only(ModeApp)},
-	{0xbb, "box_replace", opBoxReplace, proto("Nib:").appStateExplain(opBoxReplaceStateChange), boxVersion, only(ModeApp)},
-	{0xbc, "box_del", opBoxDel, proto("N:T").appStateExplain(opBoxDelStateChange), boxVersion, only(ModeApp)},
-	{0xbd, "box_len", opBoxLen, proto("N:iT").appStateExplain(opBoxGetStateChange), boxVersion, only(ModeApp)},
-	{0xbe, "box_get", opBoxGet, proto("N:bT").appStateExplain(opBoxGetStateChange), boxVersion, only(ModeApp)},
-	{0xbf, "box_put", opBoxPut, proto("Nb:").appStateExplain(opBoxPutStateChange), boxVersion, only(ModeApp)},
+	{0xb9, "box_create", opBoxCreate, proto("Ni:T").appBoxExplain(AppStateWrite, false), boxVersion, only(ModeApp)},
+	{0xba, "box_extract", opBoxExtract, proto("Nii:b").appBoxExplain(AppStateRead, false), boxVersion, only(ModeApp)},
+	{0xbb, "box_replace", opBoxReplace, proto("Nib:").appBoxExplain(AppStateWrite, false), boxVersion, only(ModeApp)},
+	{0xbc, "box_del", opBoxDel, proto("N:T").appBoxExplain(AppStateDelete, false), boxVersion, only(ModeApp)},
+	{0xbd, "box_len", opBoxLen, proto("N:iT").appBoxExplain(AppStateRead, false), boxVersion, only(ModeApp)},
+	{0xbe, "box_get", opBoxGet, proto("N:bT").appBoxExplain(AppStateRead, false), boxVersion, only(ModeApp)},
+	{0xbf, "box_put", opBoxPut, proto("Nb:").appBoxExplain(AppStateWrite, false), boxVersion, only(ModeApp)},
 
 	// Dynamic indexing
 	{0xc0, "txnas", opTxnas, proto("i:a"), 5, field("f", &TxnArrayFields)},
@@ -733,8 +779,20 @@ var OpSpecs = []OpSpec{
 	// randomness support
 	{0xd0, "vrf_verify", opVrfVerify, proto("bb{80}b{32}:b{64}T"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
 	{0xd1, "block", opBlock, proto("i:a"), randomnessVersion, field("f", &BlockFields)},
-	{0xd2, "box_splice", opBoxSplice, proto("Niib:").appStateExplain(opBoxSpliceStateChange), spliceVersion, only(ModeApp)},
-	{0xd3, "box_resize", opBoxResize, proto("Ni:").appStateExplain(opBoxResizeStateChange), spliceVersion, only(ModeApp)},
+	{0xd2, "box_splice", opBoxSplice, proto("Niib:").appBoxExplain(AppStateWrite, false), spliceVersion, only(ModeApp)},
+	{0xd3, "box_resize", opBoxResize, proto("Ni:").appBoxExplain(AppStateWrite, false), spliceVersion, only(ModeApp)},
+
+	// foreign app box access: all share prefix 0xd4, sub-opcode selects the operation.
+	// Reads are allowed by ForeignBoxReads; writes require FamilyBoxAccess and the same creator.
+	{0xd4, "app_box_create", opAppBoxCreate, proto("iNi:T").appBoxExplain(AppStateWrite, true), foreignBoxVersion, subOp(0x01).only(ModeApp)},
+	{0xd4, "app_box_extract", opAppBoxExtract, proto("iNii:b").appBoxExplain(AppStateRead, true), foreignBoxVersion, subOp(0x02).only(ModeApp)},
+	{0xd4, "app_box_replace", opAppBoxReplace, proto("iNib:").appBoxExplain(AppStateWrite, true), foreignBoxVersion, subOp(0x03).only(ModeApp)},
+	{0xd4, "app_box_del", opAppBoxDel, proto("iN:T").appBoxExplain(AppStateDelete, true), foreignBoxVersion, subOp(0x04).only(ModeApp)},
+	{0xd4, "app_box_len", opAppBoxLen, proto("iN:iT").appBoxExplain(AppStateRead, true), foreignBoxVersion, subOp(0x05).only(ModeApp)},
+	{0xd4, "app_box_get", opAppBoxGet, proto("iN:bT").appBoxExplain(AppStateRead, true), foreignBoxVersion, subOp(0x06).only(ModeApp)},
+	{0xd4, "app_box_put", opAppBoxPut, proto("iNb:").appBoxExplain(AppStateWrite, true), foreignBoxVersion, subOp(0x07).only(ModeApp)},
+	{0xd4, "app_box_splice", opAppBoxSplice, proto("iNiib:").appBoxExplain(AppStateWrite, true), foreignBoxVersion, subOp(0x08).only(ModeApp)},
+	{0xd4, "app_box_resize", opAppBoxResize, proto("iNi:").appBoxExplain(AppStateWrite, true), foreignBoxVersion, subOp(0x09).only(ModeApp)},
 
 	{0xe0, "ec_add", opEcAdd, proto("bb:b"), pairingVersion,
 		costByField("g", &EcGroups, []int{
@@ -811,54 +869,74 @@ var OpSpecs = []OpSpec{
 			chunkCost: 550,
 			chunkSize: 32,
 		}})},
+	{0xe7, "poseidon2", opPoseidon2, proto("b:b{32}"), poseidon2Version, costByFieldAndLength("c", &Poseidon2Configs, []linearCost{
+		BN254t2: {
+			baseCost:  7,
+			chunkCost: 350,
+			chunkSize: 32,
+		},
+		BLS12_381t2: {
+			baseCost:  7,
+			chunkCost: 350,
+			chunkSize: 32,
+		}})},
 }
 
 // OpcodesByVersion returns list of opcodes available in a specific version of TEAL
 // by copying v1 opcodes to v2, and then on to v3 to create a full list
 func OpcodesByVersion(version uint64) []OpSpec {
-	// for updated opcodes use the lowest version opcode was introduced in
-	maxOpcode := 0
-	for i := 0; i < len(OpSpecs); i++ {
-		if int(OpSpecs[i].Opcode) > maxOpcode {
-			maxOpcode = int(OpSpecs[i].Opcode)
-		}
-	}
-	updated := make([]int, maxOpcode+1)
-	for idx := range OpSpecs {
-		op := OpSpecs[idx].Opcode
-		cv := updated[op]
-		if cv == 0 {
-			cv = int(OpSpecs[idx].Version)
-		} else {
-			if int(OpSpecs[idx].Version) < cv {
-				cv = int(OpSpecs[idx].Version)
-			}
-		}
-		updated[op] = cv
+	// A multi-byte opcode shares its prefix Opcode byte with its siblings, so
+	// the combined prefix+sub-opcode identifies a distinct instruction.
+	// Single-byte opcodes have SubOpcode 0, so this collapses to the bare byte.
+	key := func(spec OpSpec) uint16 {
+		return uint16(spec.Opcode)<<8 | uint16(spec.SubOpcode)
 	}
 
-	subv := make(map[byte]OpSpec)
+	// for updated opcodes use the lowest version opcode was introduced in
+	updated := make(map[uint16]int)
+	for idx := range OpSpecs {
+		k := key(OpSpecs[idx])
+		cv, ok := updated[k]
+		if !ok || int(OpSpecs[idx].Version) < cv {
+			cv = int(OpSpecs[idx].Version)
+		}
+		updated[k] = cv
+	}
+
+	subv := make(map[uint16]OpSpec)
 	for idx := range OpSpecs {
 		if OpSpecs[idx].Version <= version {
-			op := OpSpecs[idx].Opcode
-			subv[op] = OpSpecs[idx]
+			k := key(OpSpecs[idx])
+			subv[k] = OpSpecs[idx]
 			// if the opcode was updated then assume backward compatibility
 			// and set version to minimum available
-			if updated[op] < int(OpSpecs[idx].Version) {
+			if updated[k] < int(OpSpecs[idx].Version) {
 				copy := OpSpecs[idx]
-				copy.Version = uint64(updated[op])
-				subv[op] = copy
+				copy.Version = uint64(updated[k])
+				subv[k] = copy
 			}
 		}
 	}
 	values := maps.Values(subv)
 	return slices.SortedFunc(values, func(a, b OpSpec) int {
-		return cmp.Compare(a.Opcode, b.Opcode)
+		return cmp.Compare(key(a), key(b))
 	})
 }
 
 // direct opcode bytes
 var opsByOpcode [LogicVersion + 1][256]OpSpec
+
+// addToSubOps registers oi as a sub-opcode of its prefix entry in table.
+// Callers must ensure the prefix entry's SubOps slice is not shared with
+// another version before calling (see the version-copy loop in init).
+func addToSubOps(table *[256]OpSpec, oi OpSpec) {
+	prefix := &table[oi.Opcode]
+	sub := int(oi.SubOpcode)
+	for sub >= len(prefix.SubOps) {
+		prefix.SubOps = append(prefix.SubOps, OpSpec{})
+	}
+	prefix.SubOps[sub] = oi
+}
 
 // OpsByName map for each version, mapping opcode name to OpSpec
 var OpsByName [LogicVersion + 1]map[string]OpSpec
@@ -881,10 +959,14 @@ func init() {
 		if oi.Version == 1 {
 			cp := oi
 			cp.Version = 0
-			opsByOpcode[0][oi.Opcode] = cp
+			if oi.SubOpcode != 0 {
+				addToSubOps(&opsByOpcode[0], cp)
+				addToSubOps(&opsByOpcode[1], oi)
+			} else {
+				opsByOpcode[0][oi.Opcode] = cp
+				opsByOpcode[1][oi.Opcode] = oi
+			}
 			OpsByName[0][oi.Name] = cp
-
-			opsByOpcode[1][oi.Opcode] = oi
 			OpsByName[1][oi.Name] = oi
 		}
 	}
@@ -895,11 +977,20 @@ func init() {
 		OpsByName[v] = maps.Clone(OpsByName[v-1])
 		// Copy array with direct assignment instead of a loop
 		opsByOpcode[v] = opsByOpcode[v-1]
+		// Clone all SubOps slices so this version owns them before any
+		// addToSubOps calls below modify them.
+		for i := range opsByOpcode[v] {
+			opsByOpcode[v][i].SubOps = slices.Clone(opsByOpcode[v][i].SubOps)
+		}
 
 		// Update tables with opcodes from the current version
 		for _, oi := range OpSpecs {
 			if oi.Version == v {
-				opsByOpcode[v][oi.Opcode] = oi
+				if oi.SubOpcode != 0 {
+					addToSubOps(&opsByOpcode[v], oi)
+				} else {
+					opsByOpcode[v][oi.Opcode] = oi
+				}
 				OpsByName[v][oi.Name] = oi
 			}
 		}

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -214,12 +214,12 @@ func TestHeartbeatDetails(t *testing.T) {
 	// assert JSON serialization is backwards compatible
 	js, err := json.Marshal(data[0])
 	a.NoError(err)
-	var unjs map[string]interface{}
+	var unjs map[string]any
 	a.NoError(json.Unmarshal(js, &unjs))
 	a.Contains(unjs, "details")
-	ev := unjs["details"].(map[string]interface{})
-	Metrics := ev["Metrics"].(map[string]interface{})
-	m := ev["m"].(map[string]interface{})
+	ev := unjs["details"].(map[string]any)
+	Metrics := ev["Metrics"].(map[string]any)
+	m := ev["m"].(map[string]any)
 	a.Equal("v2", Metrics["version"].(string))
 	a.Equal("1234", Metrics["version-num"].(string))
 	a.Equal("alpha", Metrics["channel"].(string))

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -351,11 +351,11 @@ type WarningLogCounter struct {
 	warningsCounter int
 }
 
-func (wlc *WarningLogCounter) Warnf(string, ...interface{}) {
+func (wlc *WarningLogCounter) Warnf(string, ...any) {
 	wlc.warningsCounter++
 }
 
-func (wlc *WarningLogCounter) With(key string, value interface{}) logging.Logger {
+func (wlc *WarningLogCounter) With(key string, value any) logging.Logger {
 	return wlc
 }
 

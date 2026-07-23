@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,16 +33,11 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/sync/semaphore"
-
-	"github.com/algorand/go-algorand/daemon/algod/api/server"
-	"github.com/algorand/go-algorand/ledger/eval"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
-
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/algorand/go-codec/codec"
 
@@ -52,6 +47,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/daemon/algod/api/server"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data"
@@ -63,6 +59,8 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
 	"github.com/algorand/go-algorand/data/txntest"
+	"github.com/algorand/go-algorand/ledger/eval"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	simulationtesting "github.com/algorand/go-algorand/ledger/simulation/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
@@ -83,6 +81,11 @@ func setupMockNodeForMethodGetWithShutdown(t *testing.T, status node.StatusRepor
 	numTransactions := 1
 	offlineAccounts := true
 	mockLedger, rootkeys, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
+	return setupTestForMethodGetWithMockLedger(t, mockLedger, rootkeys, stxns, status, devmode, shutdown, releasefunc)
+}
+
+// setupTestForMethodGetWithMockLedger allows for providing a custom mockLedger for testing
+func setupTestForMethodGetWithMockLedger(t *testing.T, mockLedger *data.Ledger, rootkeys []account.Root, stxns []transactions.SignedTxn, status node.StatusReport, devmode bool, shutdown chan struct{}, releasefunc func()) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
 	mockNode := makeMockNode(mockLedger, t.Name(), nil, status, devmode)
 	handler := v2.Handlers{
 		Node:     mockNode,
@@ -107,6 +110,20 @@ func omitEmpty[T comparable](val T) *T {
 		return nil
 	}
 	return &val
+}
+
+func simulateFeeStats(tx v2.PreEncodedTxInfo, proto config.ConsensusParams) (usage uint64, feesPaid uint64) {
+	usage = uint64(tx.Txn.FeeFactor(proto))
+	feesPaid = tx.Txn.Txn.Fee.Raw
+	if tx.Inners == nil {
+		return usage, feesPaid
+	}
+	for _, inner := range *tx.Inners {
+		innerUsage, innerFeesPaid := simulateFeeStats(inner, proto)
+		usage += innerUsage
+		feesPaid += innerFeesPaid
+	}
+	return usage, feesPaid
 }
 
 func TestSimpleMockBuilding(t *testing.T) {
@@ -140,6 +157,151 @@ func TestAccountInformation(t *testing.T) {
 	accountInformationTest(t, poolAddr, 200)
 }
 
+func TestAccountInformationExcludeCreatedAppsParams(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Test with poolAddr which is in the golden data
+	t.Run("exclude=none", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		excludeNone := []model.AccountInformationParamsExclude{"none"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &excludeNone})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var response model.AccountResponse
+		err = protocol.DecodeJSON(rec.Body.Bytes(), &response)
+		require.NoError(t, err)
+		// With exclude=none, created apps should be present (if any exist)
+		// Just verify the response is valid
+		require.NotNil(t, response.Address)
+	})
+
+	t.Run("exclude=created-apps-params", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		excludeParams := []model.AccountInformationParamsExclude{"created-apps-params"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &excludeParams})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var response model.AccountResponse
+		err = protocol.DecodeJSON(rec.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		// Verify that if created apps exist, they have IDs but no params
+		if response.CreatedApps != nil {
+			for _, app := range *response.CreatedApps {
+				require.Nil(t, app.Params, "Expected params to be absent with exclude=created-apps-params")
+				require.NotZero(t, app.Id, "Expected app ID to be present")
+			}
+		}
+	})
+
+	t.Run("exclude=all", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		excludeAll := []model.AccountInformationParamsExclude{"all"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &excludeAll})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var response model.AccountResponse
+		err = protocol.DecodeJSON(rec.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		// Verify all resources are excluded
+		require.Nil(t, response.CreatedApps)
+		require.Nil(t, response.CreatedAssets)
+		require.Nil(t, response.Assets)
+		require.Nil(t, response.AppsLocalState)
+	})
+
+	t.Run("invalid-exclude-value", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		invalidExclude := []model.AccountInformationParamsExclude{"invalid-value"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &invalidExclude})
+		require.NoError(t, err)
+		require.Equal(t, 400, rec.Code)
+	})
+
+	t.Run("exclude=created-assets-params", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		excludeParams := []model.AccountInformationParamsExclude{"created-assets-params"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &excludeParams})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var response model.AccountResponse
+		err = protocol.DecodeJSON(rec.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		// Verify that if created assets exist, they have IDs but no params
+		if response.CreatedAssets != nil {
+			for _, asset := range *response.CreatedAssets {
+				require.Nil(t, asset.Params, "Expected params to be absent with exclude=created-assets-params")
+				require.NotZero(t, asset.Index, "Expected asset index to be present")
+			}
+		}
+	})
+
+	t.Run("exclude=comma-delimited-both", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		excludeBoth := []model.AccountInformationParamsExclude{"created-apps-params", "created-assets-params"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &excludeBoth})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var response model.AccountResponse
+		err = protocol.DecodeJSON(rec.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		// Verify both apps and assets have no params
+		if response.CreatedApps != nil {
+			for _, app := range *response.CreatedApps {
+				require.Nil(t, app.Params, "Expected app params to be absent")
+				require.NotZero(t, app.Id, "Expected app ID to be present")
+			}
+		}
+		if response.CreatedAssets != nil {
+			for _, asset := range *response.CreatedAssets {
+				require.Nil(t, asset.Params, "Expected asset params to be absent")
+				require.NotZero(t, asset.Index, "Expected asset index to be present")
+			}
+		}
+	})
+
+	t.Run("exclude=all-with-others-fails", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		invalidExclude := []model.AccountInformationParamsExclude{"all", "created-apps-params"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &invalidExclude})
+		require.NoError(t, err)
+		require.Equal(t, 400, rec.Code)
+	})
+
+	t.Run("exclude=none-with-others-fails", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		invalidExclude := []model.AccountInformationParamsExclude{"none", "created-apps-params"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &invalidExclude})
+		require.NoError(t, err)
+		require.Equal(t, 400, rec.Code)
+	})
+}
+
 func getBlockTest(t *testing.T, blockNum basics.Round, format string, expectedCode int) {
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
@@ -162,7 +324,7 @@ func TestGetBlock(t *testing.T) {
 type blockResponseTest struct {
 	Block bookkeeping.Block `codec:"block"`
 
-	Cert *map[string]interface{} `codec:"cert,omitempty"`
+	Cert *map[string]any `codec:"cert,omitempty"`
 }
 
 func getBlockHeaderTest(t *testing.T, blockNum basics.Round, format string, expectedCode int, headerOnly *bool) {
@@ -545,10 +707,38 @@ func TestGetSupply(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler, c, _, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+	a := require.New(t)
+	opts := testEnvOptions{
+		numAccounts:     3,
+		numTransactions: 1,
+		offlineAccounts: true,
+		// Make one online account expire early (at round 50)
+		numExpiredOnline:     1,
+		expiredVoteLastValid: 50,
+		accountBalances:      []uint64{500_000, 300_000, 200_000},
+	}
+	mockLedger, rootkeys, _, stxns, releasefunc := testingenvWithOptions(t, opts)
+	shutdown := make(chan struct{})
+	handler, c, rec, _, _, _ := setupTestForMethodGetWithMockLedger(t, mockLedger, rootkeys, stxns, cannedStatusReportGolden, false, shutdown, releasefunc)
 	defer releasefunc()
+	insertRounds(a, handler, 375)
 	err := handler.GetSupply(c)
 	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	var supplyResponse model.SupplyResponse
+	a.NoError(json.Unmarshal(rec.Body.Bytes(), &supplyResponse))
+	t.Logf("Total Money: %d, Online Money: %d, Online Circulation: %d",
+		supplyResponse.TotalMoney, supplyResponse.OnlineMoney, supplyResponse.OnlineStake)
+
+	a.Equal(basics.Round(375), supplyResponse.CurrentRound)
+	a.Equal(uint64(1_000_000), supplyResponse.TotalMoney)
+	a.Equal(uint64(800_000), supplyResponse.OnlineMoney)
+	a.Equal(uint64(300_000), supplyResponse.OnlineStake)
+
+	totals, err := mockLedger.Totals(basics.Round(supplyResponse.CurrentRound))
+	a.NoError(err)
+	a.Equal(totals.Participating().Raw, supplyResponse.TotalMoney)
+	a.Equal(totals.Online.Money.Raw, supplyResponse.OnlineMoney)
 }
 
 func TestGetStatus(t *testing.T) {
@@ -943,6 +1133,101 @@ func enableDeveloperAPI() postTransactionOpt {
 	}
 }
 
+func makePQSigWithAddressCompliance(t *testing.T, compliant bool) (crypto.FalconSigner, basics.Address, transactions.PQSig) {
+	t.Helper()
+
+	var seed crypto.FalconSeed
+	signer, err := crypto.GenerateFalconSigner(seed)
+	require.NoError(t, err)
+	publicKey := slices.Clone(signer.PublicKey[:])
+
+	var salt basics.PQAddressSalt
+	var authorizer basics.Address
+	if compliant {
+		salt, authorizer, err = basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
+		require.NoError(t, err)
+	} else {
+		found := false
+		for s := 0; s <= math.MaxUint8; s++ {
+			salt = basics.PQAddressSalt(s)
+			authorizer = basics.PQAddress(protocol.PQSchemeFalcon1024, salt, publicKey)
+			if !authorizer.IsPQCompliant() {
+				found = true
+				break
+			}
+		}
+		require.True(t, found, "unable to find non-compliant PQ address salt")
+	}
+
+	return signer, authorizer, transactions.PQSig{
+		Scheme:    protocol.PQSchemeFalcon1024,
+		Salt:      salt,
+		PublicKey: publicKey,
+	}
+}
+
+func makePQSignedTxnWithAddressCompliance(t *testing.T, compliant bool) transactions.SignedTxn {
+	t.Helper()
+
+	signer, authorizer, pqSig := makePQSigWithAddressCompliance(t, compliant)
+	txn := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      authorizer,
+			Fee:         config.Consensus[protocol.ConsensusFuture].MinFee(),
+			FirstValid:  0,
+			LastValid:   100,
+			GenesisHash: genesisHash,
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: authorizer,
+		},
+	}
+
+	signature, err := signer.Sign(txn)
+	require.NoError(t, err)
+	pqSig.Signature = signature
+
+	return transactions.SignedTxn{
+		Txn:   txn,
+		PQsig: pqSig,
+	}
+}
+
+func makePQDelegatedLogicSigTxnWithAddressCompliance(t *testing.T, compliant bool) transactions.SignedTxn {
+	t.Helper()
+
+	signer, authorizer, pqSig := makePQSigWithAddressCompliance(t, compliant)
+	ops, err := logic.AssembleStringWithVersion("int 1", 1)
+	require.NoError(t, err)
+
+	signature, err := signer.Sign(logic.PQDelegatedProgram{Addr: authorizer, Program: ops.Program})
+	require.NoError(t, err)
+	pqSig.Signature = signature
+
+	txn := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      authorizer,
+			Fee:         basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusFuture].MinTxnFee * 3},
+			FirstValid:  0,
+			LastValid:   100,
+			GenesisHash: genesisHash,
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: authorizer,
+		},
+	}
+
+	return transactions.SignedTxn{
+		Txn: txn,
+		Lsig: transactions.LogicSig{
+			Logic: ops.Program,
+			PQsig: pqSig,
+		},
+	}
+}
+
 func postTransactionTest(t *testing.T, txnToUse int, expectedCode int, method string, opts ...postTransactionOpt) {
 	cfg := config.GetDefaultLocal()
 	for _, opt := range opts {
@@ -954,7 +1239,14 @@ func postTransactionTest(t *testing.T, txnToUse int, expectedCode int, method st
 	}
 	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, txnPrep, cfg)
 	defer releasefunc()
-	results := reflect.ValueOf(&handler).MethodByName(method).Call([]reflect.Value{reflect.ValueOf(c)})
+	args := []reflect.Value{reflect.ValueOf(c)}
+	switch method {
+	case "RawTransaction":
+		args = append(args, reflect.ValueOf(model.RawTransactionParams{}))
+	case "RawTransactionAsync":
+		args = append(args, reflect.ValueOf(model.RawTransactionAsyncParams{}))
+	}
+	results := reflect.ValueOf(&handler).MethodByName(method).Call(args)
 	require.Equal(t, 1, len(results))
 	// if the method returns nil, the cast would fail so use type assertion test
 	err, _ := results[0].Interface().(error)
@@ -970,6 +1262,198 @@ func TestPostTransaction(t *testing.T) {
 	postTransactionTest(t, 0, 200, "RawTransaction")
 }
 
+func TestPostTransactionPQAuthorizerCompliance(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	futureStatus := cannedStatusReportGolden
+	futureStatus.LastVersion = protocol.ConsensusFuture
+
+	test := func(t *testing.T, stxn transactions.SignedTxn, status node.StatusReport, params model.RawTransactionParams, expectedCode int, expectedBody string) {
+		t.Helper()
+
+		mockLedger, _, _, _, releasefunc := testingenv(t, 1, 0, true)
+		defer releasefunc()
+
+		mockNode := makeMockNode(mockLedger, t.Name(), nil, status, false)
+		handler := v2.Handlers{
+			Node:     mockNode,
+			Log:      logging.Base(),
+			Shutdown: make(chan struct{}),
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(protocol.Encode(&stxn)))
+		rec := httptest.NewRecorder()
+		c := echo.New().NewContext(req, rec)
+
+		err := handler.RawTransaction(c, params)
+		require.NoError(t, err)
+		require.Equal(t, expectedCode, rec.Code, rec.Body.String())
+		if expectedBody != "" {
+			require.Contains(t, rec.Body.String(), expectedBody)
+			require.NotContains(t, rec.Body.String(), "transaction group 0")
+		}
+	}
+
+	t.Run("compliant", func(t *testing.T) {
+		t.Parallel()
+		test(t, makePQSignedTxnWithAddressCompliance(t, true), futureStatus, model.RawTransactionParams{}, http.StatusOK, "")
+	})
+	t.Run("not-compliant", func(t *testing.T) {
+		t.Parallel()
+		test(t, makePQSignedTxnWithAddressCompliance(t, false), futureStatus, model.RawTransactionParams{}, http.StatusBadRequest, "transaction 0: pq signature authorizer address")
+	})
+	t.Run("not-compliant with skip flag", func(t *testing.T) {
+		t.Parallel()
+		skip := true
+		test(t, makePQSignedTxnWithAddressCompliance(t, false), futureStatus, model.RawTransactionParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
+	})
+	t.Run("delegated-compliant", func(t *testing.T) {
+		t.Parallel()
+		test(t, makePQDelegatedLogicSigTxnWithAddressCompliance(t, true), futureStatus, model.RawTransactionParams{}, http.StatusOK, "")
+	})
+	t.Run("delegated-not-compliant", func(t *testing.T) {
+		t.Parallel()
+		test(t, makePQDelegatedLogicSigTxnWithAddressCompliance(t, false), futureStatus, model.RawTransactionParams{}, http.StatusBadRequest, "transaction 0: pq signature authorizer address")
+	})
+	t.Run("delegated-not-compliant with skip flag", func(t *testing.T) {
+		t.Parallel()
+		skip := true
+		test(t, makePQDelegatedLogicSigTxnWithAddressCompliance(t, false), futureStatus, model.RawTransactionParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
+	})
+}
+
+const pushIntOp byte = 0x81 // TEAL pushint opcode
+
+func onCurveLogicSigProgram(t *testing.T) []byte {
+	t.Helper()
+	program := []byte{logic.LogicSigOffCurveVersion, pushIntOp, 12}
+	require.True(t, logic.ProgramHashIsEdwards25519Point(program))
+	return program
+}
+
+func legacyOnCurveLogicSigProgram(t *testing.T) []byte {
+	t.Helper()
+	program := []byte{12, pushIntOp, 1}
+	require.True(t, logic.ProgramHashIsEdwards25519Point(program))
+	return program
+}
+
+func offCurveLogicSigProgram(t *testing.T) []byte {
+	t.Helper()
+
+	ops, err := logic.AssembleStringWithVersion("pushint 12", logic.LogicSigOffCurveVersion)
+	require.NoError(t, err)
+	require.False(t, logic.ProgramHashIsEdwards25519Point(ops.Program))
+	return ops.Program
+}
+
+func logicSigTxnPrep(program []byte) func(transactions.SignedTxn) []byte {
+	return func(stxn transactions.SignedTxn) []byte {
+		programHash := logic.HashProgram(program)
+		stxn.Sig = crypto.Signature{}
+		stxn.Msig = crypto.MultisigSig{}
+		stxn.Lsig = transactions.LogicSig{Logic: program}
+		stxn.Txn.Sender = basics.Address(programHash)
+		return protocol.Encode(&stxn)
+	}
+}
+
+func delegatedLogicSigTxnPrep(program []byte) func(transactions.SignedTxn) []byte {
+	return func(stxn transactions.SignedTxn) []byte {
+		var sig crypto.Signature
+		sig[0] = 1
+		stxn.Sig = crypto.Signature{}
+		stxn.Msig = crypto.MultisigSig{}
+		stxn.Lsig = transactions.LogicSig{Logic: program, Sig: sig}
+		return protocol.Encode(&stxn)
+	}
+}
+
+// pqDelegatedEscrowLookalikeTxnPrep builds a txn whose authorizer is the
+// program hash, as for an escrow LogicSig, but whose LogicSig carries a nested
+// PQ envelope: the PQ delegation must exempt it from the escrow on-curve check.
+func pqDelegatedEscrowLookalikeTxnPrep(program []byte) func(transactions.SignedTxn) []byte {
+	return func(stxn transactions.SignedTxn) []byte {
+		stxn.Sig = crypto.Signature{}
+		stxn.Msig = crypto.MultisigSig{}
+		stxn.Lsig = transactions.LogicSig{
+			Logic: program,
+			PQsig: transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024},
+		}
+		stxn.Txn.Sender = basics.Address(logic.HashProgram(program))
+		return protocol.Encode(&stxn)
+	}
+}
+
+func TestPostTransactionLogicSigCurveCheck(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	t.Run("rejects on curve logicsig", func(t *testing.T) {
+		program := onCurveLogicSigProgram(t)
+		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, logicSigTxnPrep(program), config.GetDefaultLocal())
+		defer releasefunc()
+
+		err := handler.RawTransaction(c, model.RawTransactionParams{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		require.Contains(t, rec.Body.String(), "TEAL v13 LogicSig program hash is an Edwards25519 point")
+		require.Contains(t, rec.Body.String(), "skip-pq-address-check")
+	})
+
+	t.Run("accepts on curve legacy logicsig", func(t *testing.T) {
+		program := legacyOnCurveLogicSigProgram(t)
+		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, logicSigTxnPrep(program), config.GetDefaultLocal())
+		defer releasefunc()
+
+		err := handler.RawTransaction(c, model.RawTransactionParams{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, rec.Code)
+	})
+
+	t.Run("accepts on curve logicsig with skip flag", func(t *testing.T) {
+		program := onCurveLogicSigProgram(t)
+		skip := true
+		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, logicSigTxnPrep(program), config.GetDefaultLocal())
+		defer releasefunc()
+
+		err := handler.RawTransaction(c, model.RawTransactionParams{SkipPqAddressCheck: &skip})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, rec.Code)
+	})
+
+	t.Run("accepts delegated on curve logicsig", func(t *testing.T) {
+		program := onCurveLogicSigProgram(t)
+		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, delegatedLogicSigTxnPrep(program), config.GetDefaultLocal())
+		defer releasefunc()
+
+		err := handler.RawTransaction(c, model.RawTransactionParams{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, rec.Code)
+	})
+
+	t.Run("accepts pq delegated on curve logicsig", func(t *testing.T) {
+		program := onCurveLogicSigProgram(t)
+		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, pqDelegatedEscrowLookalikeTxnPrep(program), config.GetDefaultLocal())
+		defer releasefunc()
+
+		err := handler.RawTransaction(c, model.RawTransactionParams{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, rec.Code)
+	})
+
+	t.Run("accepts off curve logicsig", func(t *testing.T) {
+		program := offCurveLogicSigProgram(t)
+		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, logicSigTxnPrep(program), config.GetDefaultLocal())
+		defer releasefunc()
+
+		err := handler.RawTransaction(c, model.RawTransactionParams{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, rec.Code)
+	})
+}
+
 func TestPostTransactionAsync(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -980,6 +1464,81 @@ func TestPostTransactionAsync(t *testing.T) {
 	postTransactionTest(t, -1, 404, "RawTransactionAsync", enableExperimentalAPI())
 	postTransactionTest(t, -1, 400, "RawTransactionAsync", enableExperimentalAPI(), enableDeveloperAPI())
 	postTransactionTest(t, 0, 200, "RawTransactionAsync", enableExperimentalAPI(), enableDeveloperAPI())
+}
+
+func TestPostTransactionAsyncPQAuthorizerCompliance(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.EnableExperimentalAPI = true
+	cfg.EnableDeveloperAPI = true
+
+	test := func(t *testing.T, stxn transactions.SignedTxn, params model.RawTransactionAsyncParams, expectedCode int, expectedBody string) {
+		t.Helper()
+
+		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, func(transactions.SignedTxn) []byte {
+			return protocol.Encode(&stxn)
+		}, cfg)
+		defer releasefunc()
+
+		err := handler.RawTransactionAsync(c, params)
+		require.NoError(t, err)
+		require.Equal(t, expectedCode, rec.Code)
+		if expectedBody != "" {
+			require.Contains(t, rec.Body.String(), expectedBody)
+		}
+	}
+
+	t.Run("not-compliant", func(t *testing.T) {
+		t.Parallel()
+		test(t, makePQSignedTxnWithAddressCompliance(t, false), model.RawTransactionAsyncParams{}, http.StatusBadRequest, "transaction 0: pq signature authorizer address")
+	})
+	t.Run("not-compliant with skip flag", func(t *testing.T) {
+		t.Parallel()
+		skip := true
+		test(t, makePQSignedTxnWithAddressCompliance(t, false), model.RawTransactionAsyncParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
+	})
+	t.Run("delegated-not-compliant", func(t *testing.T) {
+		t.Parallel()
+		test(t, makePQDelegatedLogicSigTxnWithAddressCompliance(t, false), model.RawTransactionAsyncParams{}, http.StatusBadRequest, "transaction 0: pq signature authorizer address")
+	})
+	t.Run("delegated-not-compliant with skip flag", func(t *testing.T) {
+		t.Parallel()
+		skip := true
+		test(t, makePQDelegatedLogicSigTxnWithAddressCompliance(t, false), model.RawTransactionAsyncParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
+	})
+}
+
+func TestPostTransactionAsyncLogicSigCurveCheck(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.EnableExperimentalAPI = true
+	cfg.EnableDeveloperAPI = true
+
+	t.Run("rejects on curve logicsig", func(t *testing.T) {
+		program := onCurveLogicSigProgram(t)
+		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, logicSigTxnPrep(program), cfg)
+		defer releasefunc()
+
+		err := handler.RawTransactionAsync(c, model.RawTransactionAsyncParams{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		require.Contains(t, rec.Body.String(), "TEAL v13 LogicSig program hash is an Edwards25519 point")
+	})
+
+	t.Run("accepts on curve logicsig with skip flag", func(t *testing.T) {
+		program := onCurveLogicSigProgram(t)
+		skip := true
+		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, logicSigTxnPrep(program), cfg)
+		defer releasefunc()
+
+		err := handler.RawTransactionAsync(c, model.RawTransactionAsyncParams{SkipPqAddressCheck: &skip})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, rec.Code)
+	})
 }
 
 func simulateTransactionTest(t *testing.T, txnToUse int, format string, expectedCode int) {
@@ -1062,6 +1621,143 @@ func copyInnerTxnGroupIDs(t *testing.T, dst, src *v2.PreEncodedTxInfo) {
 	}
 }
 
+func TestPostSimulateTransactionPlaceholderPQSignatureValidation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	numAccounts := 2
+	offlineAccounts := true
+	mockLedger, roots, _, _, releasefunc := testingenv(t, numAccounts, 0, offlineAccounts)
+	defer releasefunc()
+
+	status := cannedStatusReportGolden
+	status.LastVersion = protocol.ConsensusFuture
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, status, false)
+	handler := v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: make(chan struct{}),
+	}
+
+	hdr, err := mockLedger.BlockHdr(mockLedger.Latest())
+	require.NoError(t, err)
+	txnInfo := simulationtesting.TxnInfo{LatestHeader: hdr}
+	minFee := config.Consensus[hdr.CurrentProtocol].MinTxnFee
+
+	simulate := func(t *testing.T, request v2.PreEncodedSimulateRequest) v2.PreEncodedSimulateResponse {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(protocol.EncodeReflect(&request)))
+		rec := httptest.NewRecorder()
+		c := echo.New().NewContext(req, rec)
+		format := model.SimulateTransactionParamsFormatJson
+		require.NoError(t, handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: &format}))
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+		var response v2.PreEncodedSimulateResponse
+		decoder := codec.NewDecoderBytes(rec.Body.Bytes(), protocol.JSONStrictHandle)
+		require.NoError(t, decoder.Decode(&response))
+		require.Len(t, response.TxnGroups, 1)
+		return response
+	}
+
+	_, pqAuthorizer, pqSig := makePQSigWithAddressCompliance(t, true)
+	// AuthAddr must match the PQsig-derived address to pass placeholder envelope
+	// admission. The sender is not rekeyed to it, so evaluation still fails.
+	placeholderStxn := transactions.SignedTxn{
+		Txn: txnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   roots[0].Address(),
+			Receiver: roots[0].Address(),
+			Amount:   0,
+		}).Txn(),
+		AuthAddr: pqAuthorizer,
+		PQsig:    pqSig,
+	}
+
+	t.Run("placeholder passes admission and echoes envelope", func(t *testing.T) {
+		response := simulate(t, v2.PreEncodedSimulateRequest{
+			TxnGroups:            []v2.PreEncodedSimulateRequestTransactionGroup{{Txns: []transactions.SignedTxn{placeholderStxn}}},
+			AllowEmptySignatures: true,
+		})
+		require.NotNil(t, response.TxnGroups[0].FailureMessage)
+		require.Contains(t, *response.TxnGroups[0].FailureMessage, "should have been authorized by")
+		require.Len(t, response.TxnGroups[0].Txns, 1)
+		actualPQSig := response.TxnGroups[0].Txns[0].Txn.Txn.PQsig
+		require.False(t, actualPQSig.Blank())
+		require.Empty(t, actualPQSig.Signature)
+		require.Equal(t, pqSig.Scheme, actualPQSig.Scheme)
+		require.Equal(t, pqSig.Salt, actualPQSig.Salt)
+		require.Equal(t, pqSig.PublicKey, actualPQSig.PublicKey)
+	})
+
+	t.Run("scheme-only placeholder simulates successfully", func(t *testing.T) {
+		stxn := txnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   roots[0].Address(),
+			Receiver: roots[0].Address(),
+			Fee:      minFee * 3,
+		}).SignedTxn()
+		stxn.PQsig = transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024}
+		response := simulate(t, v2.PreEncodedSimulateRequest{
+			TxnGroups:            []v2.PreEncodedSimulateRequestTransactionGroup{{Txns: []transactions.SignedTxn{stxn}}},
+			AllowEmptySignatures: true,
+		})
+		require.Nil(t, response.TxnGroups[0].FailureMessage)
+		require.Len(t, response.TxnGroups[0].Txns, 1)
+		actualPQSig := response.TxnGroups[0].Txns[0].Txn.Txn.PQsig
+		require.Equal(t, protocol.PQSchemeFalcon1024, actualPQSig.Scheme)
+		require.Empty(t, actualPQSig.PublicKey)
+		require.Empty(t, actualPQSig.Signature)
+	})
+
+	t.Run("empty signature rejected without AllowEmptySignatures", func(t *testing.T) {
+		response := simulate(t, v2.PreEncodedSimulateRequest{
+			TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{{Txns: []transactions.SignedTxn{placeholderStxn}}},
+		})
+		require.NotNil(t, response.TxnGroups[0].FailureMessage)
+		require.Contains(t, *response.TxnGroups[0].FailureMessage, "pq signature is empty")
+	})
+
+	t.Run("authorizer mismatch rejected", func(t *testing.T) {
+		mismatchedStxn := placeholderStxn
+		mismatchedStxn.AuthAddr = roots[1].Address()
+		response := simulate(t, v2.PreEncodedSimulateRequest{
+			TxnGroups:            []v2.PreEncodedSimulateRequestTransactionGroup{{Txns: []transactions.SignedTxn{mismatchedStxn}}},
+			AllowEmptySignatures: true,
+		})
+		require.NotNil(t, response.TxnGroups[0].FailureMessage)
+		require.Contains(t, *response.TxnGroups[0].FailureMessage, "pq signature authorizer mismatch")
+	})
+
+	t.Run("FixSigners resolves the placeholder signer", func(t *testing.T) {
+		_, fixablePQAuthorizer, fixablePQSig := makePQSigWithAddressCompliance(t, true)
+		rekeyTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   roots[0].Address(),
+			Receiver: roots[0].Address(),
+			RekeyTo:  fixablePQAuthorizer,
+			Fee:      minFee,
+		})
+		pqTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   roots[0].Address(),
+			Receiver: roots[0].Address(),
+			Fee:      minFee * 3,
+		})
+		fixableGroup := txntest.Group(&rekeyTxn, &pqTxn)
+		fixableGroup[1].AuthAddr = roots[1].Address()
+		fixableGroup[1].PQsig = fixablePQSig
+		response := simulate(t, v2.PreEncodedSimulateRequest{
+			TxnGroups:            []v2.PreEncodedSimulateRequestTransactionGroup{{Txns: fixableGroup}},
+			AllowEmptySignatures: true,
+			FixSigners:           true,
+		})
+		require.Nil(t, response.TxnGroups[0].FailureMessage)
+		require.NotNil(t, response.TxnGroups[0].Txns[1].FixedSigner)
+		require.Equal(t, fixablePQAuthorizer.String(), *response.TxnGroups[0].Txns[1].FixedSigner)
+	})
+}
+
 func assertSimulationResultsEqual(t *testing.T, expectedError string, expected, actual v2.PreEncodedSimulateResponse) {
 	t.Helper()
 
@@ -1131,7 +1827,14 @@ func TestSimulateTransaction(t *testing.T) {
 	// prepare node and handler
 	numAccounts := 5
 	offlineAccounts := true
-	mockLedger, roots, _, _, releasefunc := testingenvWithBalances(t, 999_998, 999_999, numAccounts, 1, offlineAccounts)
+	opts := testEnvOptions{
+		numAccounts:     numAccounts,
+		numTransactions: 1,
+		offlineAccounts: offlineAccounts,
+		minMoneyAtStart: 999_998,
+		maxMoneyAtStart: 999_999,
+	}
+	mockLedger, roots, _, _, releasefunc := testingenvWithOptions(t, opts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
@@ -1166,7 +1869,7 @@ int 1`,
 			})
 			scenario := scenarioFn(mocktracer.TestScenarioInfo{
 				CallingTxn:   appCallTxn.Txn(),
-				MinFee:       basics.MicroAlgos{Raw: txnInfo.CurrentProtocolParams().MinTxnFee},
+				MinFee:       txnInfo.CurrentProtocolParams().MinFee(),
 				CreatedAppID: futureAppID,
 			})
 			appCallTxn.ApprovalProgram = scenario.Program
@@ -1252,6 +1955,13 @@ int 1`,
 					for i := range scenario.TxnAppBudgetConsumed {
 						txnAppBudgetUsed = append(txnAppBudgetUsed, omitEmpty(scenario.TxnAppBudgetConsumed[i]))
 					}
+					proto := config.Consensus[cannedStatusReportGolden.LastVersion]
+					txn0 := makePendingTxnResponse(t, stxns[0].WithAD())
+					txn0Usage, txn0FeesPaid := simulateFeeStats(txn0, proto)
+					txn1 := makePendingTxnResponse(t, stxns[1].WithAD(scenario.ExpectedSimulationAD))
+					txn1Usage, txn1FeesPaid := simulateFeeStats(txn1, proto)
+					groupUsage := txn0Usage + txn1Usage
+					groupFeesPaid := txn0FeesPaid + txn1FeesPaid
 					expectedBody := v2.PreEncodedSimulateResponse{
 						Version: 2,
 						TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
@@ -1259,20 +1969,19 @@ int 1`,
 								AppBudgetAdded:    appBudgetAdded,
 								AppBudgetConsumed: appBudgetConsumed,
 								FailedAt:          expectedFailedAt,
+								GroupUsage:        omitEmpty(groupUsage),
+								GroupFeesPaid:     omitEmpty(groupFeesPaid),
 								Txns: []v2.PreEncodedSimulateTxnResult{
 									{
-										Txn: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
-											SignedTxn: stxns[0],
-											// expect no ApplyData info
-										}),
+										// expect no ApplyData info
+										Txn:               txn0,
 										AppBudgetConsumed: txnAppBudgetUsed[0],
+										FeesPaid:          omitEmpty(txn0FeesPaid),
 									},
 									{
-										Txn: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
-											SignedTxn: stxns[1],
-											ApplyData: scenario.ExpectedSimulationAD,
-										}),
+										Txn:               txn1,
 										AppBudgetConsumed: txnAppBudgetUsed[1],
+										FeesPaid:          omitEmpty(txn1FeesPaid),
 									},
 								},
 							},
@@ -1627,146 +2336,12 @@ func TestTealDisassemble(t *testing.T) {
 
 	// Test bad program.
 	badProgram := []byte{1, 99}
-	tealDisassembleTest(t, badProgram, 400, "invalid opcode", true)
+	tealDisassembleTest(t, badProgram, 400, "illegal opcode", true)
 
 	// Create a program with MaxTealSourceBytes+1 bytes
 	// This should fail inside the handler when reading the bytes from the request body.
 	largeProgram := []byte(strings.Repeat("a", v2.MaxTealSourceBytes+1))
 	tealDisassembleTest(t, largeProgram, 400, "http: request body too large", true)
-}
-
-func tealDryrunTest(
-	t *testing.T, obj *model.DryrunRequest, format string,
-	expCode int, expResult string, enableDeveloperAPI bool,
-) (response model.DryrunResponse) {
-	numAccounts := 1
-	numTransactions := 1
-	offlineAccounts := true
-	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
-	defer releasefunc()
-	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
-	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
-	handler := v2.Handlers{
-		Node:     mockNode,
-		Log:      logging.Base(),
-		Shutdown: dummyShutdownChan,
-	}
-
-	var data []byte
-	if format == "json" {
-		data = protocol.EncodeJSON(obj)
-	} else {
-		obj2, err := v2.DryrunRequestFromGenerated(obj)
-		require.NoError(t, err)
-		data = protocol.EncodeReflect(&obj2)
-	}
-
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(data))
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	err := handler.TealDryrun(c)
-	require.NoError(t, err)
-	require.Equal(t, expCode, rec.Code)
-	if rec.Code == 200 {
-		data = rec.Body.Bytes()
-		err = protocol.DecodeJSON(data, &response)
-		require.NoError(t, err, string(data))
-
-		require.GreaterOrEqual(t, len(response.Txns), 1)
-		require.NotNil(t, response.Txns[0].AppCallMessages)
-		messages := *response.Txns[0].AppCallMessages
-		require.GreaterOrEqual(t, len(messages), 1)
-		require.Equal(t, expResult, messages[len(messages)-1])
-	} else if rec.Code == 400 {
-		var response model.ErrorResponse
-		data := rec.Body.Bytes()
-		err = protocol.DecodeJSON(data, &response)
-		require.NoError(t, err, string(data))
-		require.Contains(t, response.Message, expResult)
-	}
-	return
-}
-
-func TestTealDryrun(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	var gdr model.DryrunRequest
-	txns := []transactions.SignedTxn{
-		{
-			Txn: transactions.Transaction{
-				Type: protocol.ApplicationCallTx,
-				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-					ApplicationID:   1,
-					ApprovalProgram: []byte{1, 2, 3},
-					ApplicationArgs: [][]byte{
-						[]byte("check"),
-						[]byte("bar"),
-					},
-				},
-			},
-		},
-	}
-	for i := range txns {
-		enc := protocol.EncodeJSON(&txns[i])
-		gdr.Txns = append(gdr.Txns, enc)
-	}
-
-	sucOps, err := logic.AssembleStringWithVersion("int 1", 2)
-	require.NoError(t, err)
-
-	failOps, err := logic.AssembleStringWithVersion("int 0", 2)
-	require.NoError(t, err)
-
-	gdr.Apps = []model.Application{
-		{
-			Id: 1,
-			Params: model.ApplicationParams{
-				ApprovalProgram: sucOps.Program,
-			},
-		},
-	}
-	localv := make(model.TealKeyValueStore, 1)
-	localv[0] = model.TealKeyValue{
-		Key:   "foo",
-		Value: model.TealValue{Type: uint64(basics.TealBytesType), Bytes: "bar"},
-	}
-
-	gdr.Accounts = []model.Account{
-		{
-			Address: basics.Address{}.String(),
-			AppsLocalState: &[]model.ApplicationLocalState{{
-				Id:       1,
-				KeyValue: &localv,
-			}},
-		},
-	}
-
-	gdr.ProtocolVersion = string(protocol.ConsensusFuture)
-	tealDryrunTest(t, &gdr, "json", 200, "PASS", true)
-	tealDryrunTest(t, &gdr, "msgp", 200, "PASS", true)
-	tealDryrunTest(t, &gdr, "msgp", 404, "", false)
-
-	gdr.ProtocolVersion = "unk"
-	tealDryrunTest(t, &gdr, "json", 400, "unsupported protocol version", true)
-	gdr.ProtocolVersion = ""
-
-	ddr := tealDryrunTest(t, &gdr, "json", 200, "PASS", true)
-	require.Equal(t, string(protocol.ConsensusFuture), ddr.ProtocolVersion)
-	gdr.ProtocolVersion = string(protocol.ConsensusFuture)
-	ddr = tealDryrunTest(t, &gdr, "json", 200, "PASS", true)
-	require.Equal(t, string(protocol.ConsensusFuture), ddr.ProtocolVersion)
-
-	gdr.Apps[0].Params.ApprovalProgram = failOps.Program
-	tealDryrunTest(t, &gdr, "json", 200, "REJECT", true)
-	tealDryrunTest(t, &gdr, "msgp", 200, "REJECT", true)
-	tealDryrunTest(t, &gdr, "json", 404, "", false)
-
-	// This should fail inside the handler when reading the bytes from the request body.
-	gdr.ProtocolVersion = strings.Repeat("a", v2.MaxTealDryrunBytes+1)
-	tealDryrunTest(t, &gdr, "json", 400, "http: request body too large", true)
 }
 
 func TestAppendParticipationKeys(t *testing.T) {
@@ -1997,7 +2572,7 @@ func addStateProof(blk bookkeeping.Block) bookkeeping.Block {
 			},
 		},
 	}
-	txnib := transactions.SignedTxnInBlock{SignedTxnWithAD: transactions.SignedTxnWithAD{SignedTxn: tx}}
+	txnib := transactions.SignedTxnInBlock{SignedTxnWithAD: tx.WithAD()}
 	blk.Payset = append(blk.Payset, txnib)
 
 	updatedStateProofTracking := bookkeeping.StateProofTrackingData{
@@ -2316,13 +2891,13 @@ func TestDeltasForTxnGroup(t *testing.T) {
 	blk2 := bookkeeping.BlockHeader{Round: 2}
 	delta1 := ledgercore.StateDelta{Hdr: &blk1}
 	delta2 := ledgercore.StateDelta{Hdr: &blk2, KvMods: map[string]ledgercore.KvValueDelta{"bx1": {Data: []byte("foobar")}}}
-	txn1 := transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.PaymentTx}}}
+	txn1 := transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.PaymentTx}}.WithAD()
 	groupID1, err := crypto.DigestFromString(crypto.Hash([]byte("hello")).String())
 	require.NoError(t, err)
-	txn2 := transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: transactions.Transaction{
+	txn2 := transactions.SignedTxn{Txn: transactions.Transaction{
 		Type:   protocol.AssetTransferTx,
 		Header: transactions.Header{Group: groupID1}},
-	}}
+	}.WithAD()
 
 	tracer := eval.MakeTxnGroupDeltaTracer(2)
 	handlers := v2.Handlers{
@@ -2357,7 +2932,7 @@ func TestDeltasForTxnGroup(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(roundResponse.Deltas))
 	require.Equal(t, []string{txn1.ID().String()}, roundResponse.Deltas[0].Ids)
-	hdr, ok := roundResponse.Deltas[0].Delta["Hdr"].(map[string]interface{})
+	hdr, ok := roundResponse.Deltas[0].Delta["Hdr"].(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, delta1.Hdr.Round, basics.Round(hdr["rnd"].(float64)))
 
@@ -2384,7 +2959,7 @@ func TestDeltasForTxnGroup(t *testing.T) {
 	var groupResponse model.LedgerStateDeltaForTransactionGroupResponse
 	err = json.Unmarshal(rec.Body.Bytes(), &groupResponse)
 	require.NoError(t, err)
-	groupHdr, ok := groupResponse["Hdr"].(map[string]interface{})
+	groupHdr, ok := groupResponse["Hdr"].(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, delta2.Hdr.Round, basics.Round(groupHdr["rnd"].(float64)))
 
@@ -2399,7 +2974,7 @@ func TestDeltasForTxnGroup(t *testing.T) {
 	err = json.Unmarshal(rec.Body.Bytes(), &groupResponse)
 	require.NoError(t, err)
 	require.NotNil(t, groupResponse["KvMods"])
-	groupHdr, ok = groupResponse["Hdr"].(map[string]interface{})
+	groupHdr, ok = groupResponse["Hdr"].(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, delta2.Hdr.Round, basics.Round(groupHdr["rnd"].(float64)))
 

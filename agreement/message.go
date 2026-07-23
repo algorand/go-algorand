@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package agreement
 
 import (
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -58,12 +59,12 @@ type compoundMessage struct {
 
 // streamTokenizer is a function that returns an object of some type after
 // deserializing from some stream.
-type streamTokenizer func([]byte) (interface{}, error)
+type streamTokenizer func([]byte) (any, error)
 
 // decodeVote reads a vote from the given stream.
 //
 // It returns an error on failure.
-func decodeVote(data []byte) (interface{}, error) {
+func decodeVote(data []byte) (any, error) {
 	var uv unauthenticatedVote
 	err := protocol.Decode(data, &uv)
 	if err != nil {
@@ -75,7 +76,7 @@ func decodeVote(data []byte) (interface{}, error) {
 // decodeBundle reads a bundle from the given stream.
 //
 // It returns an error on failure.
-func decodeBundle(data []byte) (interface{}, error) {
+func decodeBundle(data []byte) (any, error) {
 	var b unauthenticatedBundle
 	err := protocol.Decode(data, &b)
 	if err != nil {
@@ -87,7 +88,7 @@ func decodeBundle(data []byte) (interface{}, error) {
 // decodeProposal reads a proposal from the given stream.
 //
 // It returns an error on failure.
-func decodeProposal(data []byte) (interface{}, error) {
+func decodeProposal(data []byte) (any, error) {
 	var p transmittedPayload
 	err := protocol.Decode(data, &p)
 	if err != nil {
@@ -98,4 +99,13 @@ func decodeProposal(data []byte) (interface{}, error) {
 		Vote:     p.PriorVote,
 		Proposal: p.unauthenticatedProposal,
 	}, nil
+}
+
+func proposalCarriesInvalidTxn(up unauthenticatedProposal) bool {
+	for group, err := range up.Block.PaysetGroups() {
+		if err != nil || transactions.CheckPaysetGroup(group) != nil {
+			return true
+		}
+	}
+	return false
 }

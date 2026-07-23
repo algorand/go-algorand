@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -461,7 +461,7 @@ type substrServiceLogger struct {
 	instancesFound []int
 }
 
-func (ssl *substrServiceLogger) Infof(s string, args ...interface{}) {
+func (ssl *substrServiceLogger) Infof(s string, args ...any) {
 	for i, str := range ssl.lookupStrings {
 		if strings.Contains(s, str) {
 			ssl.instancesFound[i]++

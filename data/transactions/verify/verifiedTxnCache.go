@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -155,7 +155,12 @@ func (v *verifiedTransactionCache) GetUnverifiedTransactionGroups(txnGroups [][]
 				break
 			}
 
-			if entryGroup.signedGroupTxns[txnIdx].Sig != txn.Sig || (!entryGroup.signedGroupTxns[txnIdx].Msig.Equal(txn.Msig)) || (!entryGroup.signedGroupTxns[txnIdx].Lsig.Equal(&txn.Lsig)) || (entryGroup.signedGroupTxns[txnIdx].AuthAddr != txn.AuthAddr) {
+			cachedTxn := &entryGroup.signedGroupTxns[txnIdx]
+			if cachedTxn.Sig != txn.Sig ||
+				!cachedTxn.Msig.Equal(txn.Msig) ||
+				!cachedTxn.Lsig.Equal(&txn.Lsig) ||
+				!cachedTxn.PQsig.Equal(txn.PQsig) ||
+				cachedTxn.AuthAddr != txn.AuthAddr {
 				break
 			}
 			verifiedTxn++

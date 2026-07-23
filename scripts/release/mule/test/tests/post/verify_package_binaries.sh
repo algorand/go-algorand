@@ -24,7 +24,6 @@ ALGORAND_BINS=(
     /usr/bin/algod
     /usr/bin/algoh
     /usr/bin/algokey
-    /usr/bin/ddconfig.sh
     /usr/bin/diagcfg
     /usr/bin/goal
     /usr/bin/kmd
@@ -40,10 +39,7 @@ done
 
 DEVTOOLS_BINS=(
     /usr/bin/carpenter
-    /usr/bin/catchupsrv
     /usr/bin/msgpacktool
-    /usr/bin/tealcut
-    /usr/bin/tealdbg
 )
 
 for bin in "${DEVTOOLS_BINS[@]}"; do

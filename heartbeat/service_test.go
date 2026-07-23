@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/account"
@@ -32,8 +36,6 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/go-deadlock"
-	"github.com/stretchr/testify/require"
 )
 
 type table map[basics.Address]ledgercore.AccountData
@@ -302,6 +304,15 @@ func TestHeartbeatOnlyWhenChallenged(t *testing.T) {
 	a.Len(txns[0], 1)
 	a.Equal(txns[0][0].Txn.Type, protocol.HeartbeatTx)
 	a.Equal(txns[0][0].Txn.HbAddress, joe)
+	// ConsensusFuture enables the explicit discount, so the service claims the discount.
+	a.True(txns[0][0].Txn.HbChallengeDiscount)
 
 	s.Stop()
+}
+
+func TestHeartbeatAcceptingSenderIsPQCompliant(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	require.True(t, acceptingSender.IsPQCompliant(), "heartbeat accepting LogicSig sender must be PQ compliant")
 }

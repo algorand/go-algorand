@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,6 +30,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"pgregory.net/rapid"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/config/bounds"
@@ -41,8 +42,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util"
-
-	"pgregory.net/rapid"
 )
 
 type protoOpt func(*config.ConsensusParams)
@@ -89,14 +88,14 @@ func makeTestProto(opts ...protoOpt) *config.ConsensusParams {
 		// With the addition of itxn_field, itxn_submit, which rely on
 		// machinery outside logic package for validity checking, we
 		// need a more realistic set of consensus parameters.
-		Asset:                 true,
-		MaxAssetNameBytes:     12,
-		MaxAssetUnitNameBytes: 6,
-		MaxAssetURLBytes:      32,
-		MaxAssetDecimals:      4,
-		SupportRekeying:       true,
-		MaxTxnNoteBytes:       500,
-		EnableFeePooling:      true,
+		Asset:                   true,
+		MaxAssetNameBytes:       12,
+		MaxAssetUnitNameBytes:   6,
+		MaxAssetURLBytes:        32,
+		MaxAssetDecimals:        4,
+		SupportRekeying:         true,
+		MaxTxnNoteBytes:         500,
+		MaxAbsoluteTxnNoteBytes: 550,
 
 		// Chosen to be different from one another and from normal proto
 		MaxAppBoxReferences:      2,
@@ -105,12 +104,14 @@ func makeTestProto(opts ...protoOpt) *config.ConsensusParams {
 		MaxAppTxnForeignAssets:   6,
 		MaxAppTotalTxnReferences: 7,
 
-		MaxAppArgs:        12,
-		MaxAppTotalArgLen: 800,
+		MaxAppArgs:             12,
+		MaxAppTotalArgLen:      800,
+		MaxAbsoluteTotalArgLen: 2000,
 
-		MaxAppProgramLen:        900,
-		MaxAppTotalProgramLen:   1200, // Weird, but better tests
-		MaxExtraAppProgramPages: 2,
+		MaxAppProgramLen:             800,
+		MaxAppTotalProgramLen:        1200, // Weird, but better tests
+		MaxExtraAppProgramPages:      2,
+		MaxAbsoluteExtraProgramPages: 4,
 
 		MaxGlobalSchemaEntries: 30,
 		MaxLocalSchemaEntries:  13,
@@ -138,6 +139,8 @@ func makeTestProto(opts ...protoOpt) *config.ConsensusParams {
 
 		EnableAppVersioning: true,
 		AppSizeUpdates:      true,
+
+		PerByteTxnSurcharge: 1000,
 	}
 	for _, opt := range opts {
 		if opt != nil { // so some callsites can take one arg and pass it in
@@ -169,7 +172,7 @@ func optSigParams(opt protoOpt, txns ...transactions.SignedTxn) *EvalParams {
 	}
 	// Make it non-Blank so NewSigEval does not short-circuit (but try to avoid
 	// manipulating txns if they were actually supplied with other sigs.)
-	if txns[0].Sig.Blank() && txns[0].Msig.Blank() && txns[0].Lsig.Blank() {
+	if txns[0].Sig.Blank() && txns[0].Msig.Blank() && !txns[0].Lsig.HasProgram() {
 		txns[0].Lsig.Logic = []byte{LogicVersion + 1} // make sure it fails if used
 	}
 
@@ -188,7 +191,8 @@ func defaultAppParamsWithVersion(version uint64, txns ...transactions.SignedTxn)
 			Txn: transactions.Transaction{Type: protocol.ApplicationCallTx},
 		}}
 	}
-	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(txns), makeTestProtoV(version), &transactions.SpecialAddresses{})
+	proto := makeTestProtoV(version)
+	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(txns), proto, &transactions.SpecialAddresses{})
 	if ep != nil { // If supplied no apps, ep is nil.
 		ep.Trace = &strings.Builder{}
 		ledger := NewLedger(nil)
@@ -222,6 +226,10 @@ func (ep *EvalParams) reset() {
 			ep.PooledLogicSigBudget = &budget
 		}
 	case ModeApp:
+		if ep.FeeCredit != nil {
+			*ep.FeeCredit, ep.feeResidue = feeCredit(ep.TxnGroup, *ep.Proto)
+		}
+
 		if ep.Proto.EnableAppCostPooling {
 			budget := ep.Proto.MaxAppProgramCost
 			ep.PooledApplicationBudget = &budget
@@ -1402,7 +1410,7 @@ func TestOnCompletionConstants(t *testing.T) {
 	}
 	require.Less(t, last, max, "too many OnCompletion constants, adjust max limit")
 	require.Equal(t, int(invalidOnCompletionConst), last)
-	require.Equal(t, len(onCompletionMap), len(onCompletionDescriptions))
+	require.Equal(t, len(onCompletionMap), len(OnCompletionDescriptions))
 	require.Equal(t, len(OnCompletionNames), last)
 	for v := NoOp; v < invalidOnCompletionConst; v++ {
 		require.Equal(t, v.String(), OnCompletionNames[int(v)])
@@ -2276,6 +2284,18 @@ func testLogicFull(t *testing.T, program []byte, gi int, ep *EvalParams, problem
 
 func testLogics(t *testing.T, programs []string, txgroup []transactions.SignedTxn, opt protoOpt, expected ...expect) error {
 	t.Helper()
+	return testLogicsWithAssembler(t, programs, txgroup, opt, func(t testing.TB, program string, version uint64) []byte {
+		return testProg(t, program, version).Program
+	}, expected...)
+}
+
+func testLogicsWithoutAutomaticSalt(t *testing.T, programs []string, txgroup []transactions.SignedTxn, opt protoOpt, expected ...expect) error {
+	t.Helper()
+	return testLogicsWithAssembler(t, programs, txgroup, opt, assembleProgramWithoutAutomaticSalt, expected...)
+}
+
+func testLogicsWithAssembler(t *testing.T, programs []string, txgroup []transactions.SignedTxn, opt protoOpt, assemble func(testing.TB, string, uint64) []byte, expected ...expect) error {
+	t.Helper()
 	proto := makeTestProto(opt)
 
 	if txgroup == nil {
@@ -2286,8 +2306,7 @@ func testLogics(t *testing.T, programs []string, txgroup []transactions.SignedTx
 	// Place the logicsig code first, so NewSigEvalParams calcs budget
 	for i, program := range programs {
 		if program != "" {
-			code := testProg(t, program, proto.LogicSigVersion).Program
-			txgroup[i].Lsig.Logic = code
+			txgroup[i].Lsig.Logic = assemble(t, program, proto.LogicSigVersion)
 		}
 	}
 	ep := NewSigEvalParams(txgroup, proto, &NoHeaderLedger{})
@@ -2979,6 +2998,20 @@ func TestGload(t *testing.T) {
 	}
 }
 
+// TestGloadNoProgram covers gload reading a sibling app-call txn that never ran a program.
+func TestGloadNoProgram(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	appcall := transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.ApplicationCallTx}}
+	ep := defaultAppParams(appcall, appcall)
+	// Evaluate gi=1 while gi=0's program was never run, so pastScratch[0] is nil.
+	cx := &EvalContext{EvalParams: ep, groupIndex: 1}
+
+	_, err := opGloadImpl(cx, 0, 0, "gload")
+	require.ErrorContains(t, err, "gload lookup of txn 0 that did not run a program")
+}
+
 // TestGloads tests gloads and gloadss
 func TestGloads(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -3152,13 +3185,13 @@ int %d
 `, budget-1, budget-5)
 	}
 	b := testLogicBudget
-	testLogic(t, source(b), LogicVersion, nil)
+	testLogicBytes(t, assembleProgramWithoutAutomaticSalt(t, source(b), LogicVersion), nil)
 
-	testLogics(t, []string{source(2 * b), source(2*b - 7)}, nil, nil)
+	testLogicsWithoutAutomaticSalt(t, []string{source(2 * b), source(2*b - 7)}, nil, nil)
 
-	testLogics(t, []string{source(3 * b), source(3*b - 7), ""}, nil, nil)
+	testLogicsWithoutAutomaticSalt(t, []string{source(3 * b), source(3*b - 7), ""}, nil, nil)
 
-	testLogics(t, []string{source(b), source(b)}, nil,
+	testLogicsWithoutAutomaticSalt(t, []string{source(b), source(b)}, nil,
 		func(p *config.ConsensusParams) { p.EnableLogicSigCostPooling = false })
 }
 
@@ -3261,10 +3294,12 @@ func TestShortSimple(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, `int 8; store 7`, v)
-			testLogicBytes(t, ops.Program[:len(ops.Program)-1], nil,
-				"program ends short of immediate values",
-				"program ends short of immediate values")
+			source := `int 8; store 7`
+			ops := testProg(t, source, v)
+			end := programEndBeforeTrailingIntcSalt(t, source, v, ops.Program)
+			testLogicBytes(t, ops.Program[:end-1], nil,
+				"program ends without immediate value(s)",
+				"program ends without immediate value(s)")
 		})
 	}
 }
@@ -3282,7 +3317,27 @@ int 1
 `, v)
 			// cut two last bytes - intc_1 and last byte of bnz
 			testLogicBytes(t, ops.Program[:len(ops.Program)-2], nil,
-				"bnz program ends short", "bnz program ends short")
+				"program ends without", "program ends without")
+		})
+	}
+}
+
+func TestEvalBadSubOp(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	for v := uint64(foreignBoxVersion); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			ops := testProg(t, `int 1; byte 0xaabbcc; app_box_len`, v)
+			// cut last byte, leaving only the app_box_len initial opcode, no subop
+			testLogicBytes(t, ops.Program[:len(ops.Program)-1], nil,
+				"missing sub-opcode", "missing sub-opcode")
+			ops.Program[len(ops.Program)-1] = 0x00
+			testLogicBytes(t, ops.Program, nil,
+				"improper sub-opcode 0x00", "improper sub-opcode 0x00")
+			ops.Program[len(ops.Program)-1] = 0x55 // way too big
+			testLogicBytes(t, ops.Program, nil,
+				"improper sub-opcode 0x55", "improper sub-opcode 0x55")
 		})
 	}
 }
@@ -3487,23 +3542,41 @@ func TestMisalignedBranch(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, `int 1
+			source := `int 1
 bnz done
 bytecblock 0x01234576 0xababcdcd 0xf000baad
 done:
-int 1`, v)
+int 1`
+			ops := testProg(t, source, v)
+			ops.Program = assembleProgramWithoutAutomaticSalt(t, source, v)
 			//t.Log(hex.EncodeToString(program))
-			canonicalProgramString := mutateProgVersion(v, "01200101224000112603040123457604ababcdcd04f000baad22")
+			offsetHex := "0011"
+			if v >= varintBranchVersion {
+				// offset +17 as 1-byte varint: zigzag(17)=34=0x22
+				offsetHex = "22"
+			}
+			canonicalProgramString := mutateProgVersion(v, "012001012240"+offsetHex+"2603040123457604ababcdcd04f000baad22")
 			canonicalProgramBytes, err := hex.DecodeString(canonicalProgramString)
 			require.NoError(t, err)
-			require.Equal(t, ops.Program, canonicalProgramBytes)
-			ops.Program[7] = 3 // clobber the branch offset to be in the middle of the bytecblock
+			require.Equal(t, canonicalProgramBytes, ops.Program)
+			if v >= varintBranchVersion {
+				// offset=3 as 1-byte varint: zigzag(3)=6=0x06; target lands in middle of bytecblock
+				ops.Program[6] = 0x06
+			} else {
+				ops.Program[7] = 3 // clobber the branch offset to be in the middle of the bytecblock
+			}
 			// Since Eval() doesn't know the jump is bad, we reject "by luck"
 			testLogicBytes(t, ops.Program, nil, "aligned", "REJECT")
 
 			// back branches are checked differently, so test misaligned back branch
-			ops.Program[6] = 0xff // Clobber the two bytes of offset with 0xff 0xff = -1
-			ops.Program[7] = 0xff // That jumps into the offset itself (pc + 3 -1)
+			if v >= varintBranchVersion {
+				// offset=-2 as 1-byte varint: zigzag(-2)=3=0x03; target is bnz.pc-2,
+				// the value byte inside intcblock (not an instruction start)
+				ops.Program[6] = 0x03
+			} else {
+				ops.Program[6] = 0xff // Clobber the two bytes of offset with 0xff 0xff = -1
+				ops.Program[7] = 0xff // That jumps into the offset itself (pc + 3 -1)
+			}
 			if v < backBranchEnabledVersion {
 				testLogicBytes(t, ops.Program, nil, "negative branch", "negative branch")
 			} else {
@@ -3520,17 +3593,29 @@ func TestBranchTooFar(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, `int 1
+			source := `int 1
 bnz done
 bytecblock 0x01234576 0xababcdcd 0xf000baad
 done:
-int 1`, v)
+int 1`
+			ops := testProg(t, source, v)
+			ops.Program = assembleProgramWithoutAutomaticSalt(t, source, v)
 			//t.Log(hex.EncodeToString(ops.Program))
-			canonicalProgramString := mutateProgVersion(v, "01200101224000112603040123457604ababcdcd04f000baad22")
+			offsetHex := "0011"
+			if v >= varintBranchVersion {
+				// offset +17 as 1-byte varint: zigzag(17)=34=0x22
+				offsetHex = "22"
+			}
+			canonicalProgramString := mutateProgVersion(v, "012001012240"+offsetHex+"2603040123457604ababcdcd04f000baad22")
 			canonicalProgramBytes, err := hex.DecodeString(canonicalProgramString)
 			require.NoError(t, err)
-			require.Equal(t, ops.Program, canonicalProgramBytes)
-			ops.Program[7] = 200 // clobber the branch offset to be beyond the end of the program
+			require.Equal(t, canonicalProgramBytes, ops.Program)
+			if v >= varintBranchVersion {
+				// 0x7e = 1-byte varint encoding jump +63, outside the program
+				ops.Program[6] = 0x7e
+			} else {
+				ops.Program[7] = 200 // clobber the branch offset to be beyond the end of the program
+			}
 			testLogicBytes(t, ops.Program, nil, "outside of program", "outside of program")
 		})
 	}
@@ -3542,17 +3627,24 @@ func TestBranchTooLarge(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, `int 1
+			source := `int 1
 bnz done
 bytecblock 0x01234576 0xababcdcd 0xf000baad
 done:
-int 1`, v)
+int 1`
+			ops := testProg(t, source, v)
+			ops.Program = assembleProgramWithoutAutomaticSalt(t, source, v)
 			//t.Log(hex.EncodeToString(ops.Program))
-			// (br)anch byte, (hi)gh byte of offset,  (lo)w byte:     brhilo
-			canonicalProgramString := mutateProgVersion(v, "01200101224000112603040123457604ababcdcd04f000baad22")
+			// (br)anch byte, offset bytes (big-endian int16 pre-v13, varint v13+)
+			// offset +17 as big-endian: 00 11; as 1-byte varint: 22 (zigzag(17)=34=0x22)
+			offsetHex := "0011"
+			if v >= varintBranchVersion {
+				offsetHex = "22"
+			}
+			canonicalProgramString := mutateProgVersion(v, "012001012240"+offsetHex+"2603040123457604ababcdcd04f000baad22")
 			canonicalProgramBytes, err := hex.DecodeString(canonicalProgramString)
 			require.NoError(t, err)
-			require.Equal(t, ops.Program, canonicalProgramBytes)
+			require.Equal(t, canonicalProgramBytes, ops.Program)
 			ops.Program[6] = 0x70 // clobber hi byte of branch offset
 			testLogicBytes(t, ops.Program, nil, "outside", "outside")
 		})
@@ -3573,8 +3665,8 @@ intc_1
 			source := fmt.Sprintf(template, line)
 			ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 			require.NoError(t, err)
-			ops.Program[7] = 0xf0 // clobber the branch offset - highly negative
-			ops.Program[8] = 0xff // clobber the branch offset
+			// 0x7f encodes jump -64 as a 1-byte varint (zigzag(-64)=127=0x7f), outside program
+			ops.Program[7] = 0x7f
 			testLogicBytes(t, ops.Program, nil, "outside of program", "outside of program")
 		})
 	}
@@ -5002,7 +5094,9 @@ main:
 
 	testPanics(t, "int 1; retsub", 4)
 
-	testPanics(t, "int 1; recur: callsub recur; int 1", 4)
+	// recur: labels the dup instruction so callsub recur is a back-jump to a
+	// different instruction (not jump-to-self, which is disallowed in v13+).
+	testPanics(t, "int 1; callsub recur; int 1; recur: dup; pop; callsub recur", 4)
 }
 
 func TestShifts(t *testing.T) {
@@ -5250,7 +5344,7 @@ func TestPcDetails(t *testing.T) {
 		{"int 1; int 2; -", 5, "pushint 1; pushint 2; -"},
 		{"int 1; err", 3, "pushint 1; err"},
 		{"int 1; dup; int 2; -; +", 6, "dup; pushint 2; -"},
-		{"b end; end:", 4, ""},
+		{"b end; end:", 3, ""},
 	}
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
@@ -5264,10 +5358,16 @@ func TestPcDetails(t *testing.T) {
 			require.False(t, pass)
 			require.NotNil(t, cx) // cx comes back nil if we couldn't even run
 
-			assert.Equal(t, test.pc, cx.pc, ep.Trace.String())
+			expectedPC := test.pc
+			// Empty details mean the failure is at EOF, so a trailing salt suffix
+			// moves the expected PC. Failures at concrete opcodes are unchanged.
+			if test.det == "" {
+				expectedPC += trailingIntcSaltLen(t, test.source, LogicVersion, ops.Program)
+			}
+			assert.Equal(t, expectedPC, cx.pc, ep.Trace.String())
 
 			pc, det := cx.pcDetails()
-			assert.Equal(t, test.pc, pc)
+			assert.Equal(t, expectedPC, pc)
 			assert.Equal(t, test.det, det)
 		})
 	}

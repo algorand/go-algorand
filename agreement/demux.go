@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -125,6 +125,11 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 
 				o, err := tokenize(raw.Data)
 				if err != nil {
+					if tag == protocol.ProposalPayloadTag {
+						d.log.Warnf("dropping proposal that failed to decode: %v", err)
+						d.UpdateEventsQueue(eventQueueTokenizing[tag], 0)
+						continue
+					}
 					warnMsg := fmt.Sprintf("disconnecting from peer: error decoding message tagged %v: %v", tag, err)
 					// check protocol version
 					cv, cvErr := d.ledger.ConsensusVersion(d.ledger.NextRound())
@@ -146,7 +151,13 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 				case protocol.VoteBundleTag:
 					msg = message{messageHandle: raw.MessageHandle, Tag: tag, UnauthenticatedBundle: o.(unauthenticatedBundle)}
 				case protocol.ProposalPayloadTag:
-					msg = message{messageHandle: raw.MessageHandle, Tag: tag, CompoundMessage: o.(compoundMessage)}
+					cm := o.(compoundMessage)
+					if proposalCarriesInvalidTxn(cm.Proposal) {
+						d.log.Warn("dropping proposal with a malformed transaction payload")
+						d.UpdateEventsQueue(eventQueueTokenizing[tag], 0)
+						continue
+					}
+					msg = message{messageHandle: raw.MessageHandle, Tag: tag, CompoundMessage: cm}
 				default:
 					err := fmt.Errorf("bad message tag: %v", tag)
 					d.UpdateEventsQueue(fmt.Sprintf("Tokenizing-%s", tag), 0)

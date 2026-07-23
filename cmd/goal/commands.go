@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -34,11 +34,9 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util"
 )
 
 var log = logging.Base()
@@ -77,9 +75,6 @@ func init() {
 
 	// kmd.go
 	rootCmd.AddCommand(kmdCmd)
-
-	// logging.go
-	rootCmd.AddCommand(loggingCmd)
 
 	// network.go
 	rootCmd.AddCommand(networkCmd)
@@ -437,7 +432,7 @@ func ensurePassword() []byte {
 	return password
 }
 
-func reportInfoln(args ...interface{}) {
+func reportInfoln(args ...any) {
 	for line := range strings.SplitSeq(fmt.Sprint(args...), "\n") {
 		printable, line := unicodePrintable(line)
 		if !printable {
@@ -447,13 +442,13 @@ func reportInfoln(args ...interface{}) {
 	}
 }
 
-func reportInfof(format string, args ...interface{}) {
+func reportInfof(format string, args ...any) {
 	reportInfoln(fmt.Sprintf(format, args...))
 }
 
 // reportWarnRawln prints a warning message to stderr. Only use this function if that warning
 // message already indicates that it's a warning. Otherwise, use reportWarnln
-func reportWarnRawln(args ...interface{}) {
+func reportWarnRawln(args ...any) {
 	for line := range strings.SplitSeq(fmt.Sprint(args...), "\n") {
 		printable, line := unicodePrintable(line)
 		if !printable {
@@ -466,23 +461,23 @@ func reportWarnRawln(args ...interface{}) {
 
 // reportWarnRawf prints a warning message to stderr. Only use this function if that warning message
 // already indicates that it's a warning. Otherwise, use reportWarnf
-func reportWarnRawf(format string, args ...interface{}) {
+func reportWarnRawf(format string, args ...any) {
 	reportWarnRawln(fmt.Sprintf(format, args...))
 }
 
 // reportWarnln prints a warning message to stderr. The message will be prefixed with "Warning: ".
 // If you don't want this prefix, use reportWarnRawln
-func reportWarnln(args ...interface{}) {
+func reportWarnln(args ...any) {
 	reportWarnRawf("Warning: %s", fmt.Sprint(args...))
 }
 
 // reportWarnf prints a warning message to stderr. The message will be prefixed with "Warning: ". If
 // you don't want this prefix, use reportWarnRawf
-func reportWarnf(format string, args ...interface{}) {
+func reportWarnf(format string, args ...any) {
 	reportWarnln(fmt.Sprintf(format, args...))
 }
 
-func reportErrorln(args ...interface{}) {
+func reportErrorln(args ...any) {
 	outStr := fmt.Sprint(args...)
 	for line := range strings.SplitSeq(outStr, "\n") {
 		printable, line := unicodePrintable(line)
@@ -494,7 +489,7 @@ func reportErrorln(args ...interface{}) {
 	exit(1)
 }
 
-func reportErrorf(format string, args ...interface{}) {
+func reportErrorf(format string, args ...any) {
 	reportErrorln(fmt.Sprintf(format, args...))
 }
 
@@ -520,18 +515,6 @@ func writeFile(filename string, data []byte, perm os.FileMode) error {
 		return nil
 	}
 	return os.WriteFile(filename, data, perm)
-}
-
-// writeDryrunReqToFile creates dryrun request object and writes to a file
-func writeDryrunReqToFile(client libgoal.Client, txnOrStxn interface{}, outFilename string) (err error) {
-	proto, _ := getProto(protoVersion)
-	accts := util.Map(dumpForDryrunAccts, cliAddress)
-	data, err := libgoal.MakeDryrunStateBytes(client, txnOrStxn, []transactions.SignedTxn{}, accts, string(proto), dumpForDryrunFormat.String())
-	if err != nil {
-		reportErrorln(err)
-	}
-	err = writeFile(outFilename, data, 0600)
-	return
 }
 
 // readFile is a wrapper of os.ReadFile which considers the

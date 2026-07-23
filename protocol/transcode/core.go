@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,7 +29,7 @@ import (
 )
 
 type decoder interface {
-	Decode(v interface{}) error
+	Decode(v any) error
 }
 
 // Transcode turns msgpack to JSON or JSON to msgpack
@@ -64,7 +64,7 @@ func Transcode(mpToJSON bool, base32Encoding, strictJSON bool, in io.Reader, out
 	}
 
 	for {
-		var a interface{}
+		var a any
 		err := dec.Decode(&a)
 		if err == io.EOF {
 			return nil
@@ -91,9 +91,9 @@ func Transcode(mpToJSON bool, base32Encoding, strictJSON bool, in io.Reader, out
 	}
 }
 
-func isSliceOfBytes(a interface{}) bool {
+func isSliceOfBytes(a any) bool {
 	switch v := a.(type) {
-	case []interface{}:
+	case []any:
 		for _, e := range v {
 			_, ok := e.([]byte)
 			if !ok {
@@ -106,9 +106,9 @@ func isSliceOfBytes(a interface{}) bool {
 	}
 }
 
-func isSliceOfString(a interface{}) bool {
+func isSliceOfString(a any) bool {
 	switch v := a.(type) {
-	case []interface{}:
+	case []any:
 		for _, e := range v {
 			_, ok := e.(string)
 			if !ok {
@@ -121,10 +121,10 @@ func isSliceOfString(a interface{}) bool {
 	}
 }
 
-func toJSON(a interface{}, base32Encoding, strictJSON bool) interface{} {
+func toJSON(a any, base32Encoding, strictJSON bool) any {
 	switch v := a.(type) {
-	case map[interface{}]interface{}:
-		r := make(map[interface{}]interface{})
+	case map[any]any:
+		r := make(map[any]any)
 		for k, e := range v {
 			// Special case: if key is a string, and entry is
 			// a []byte, base64-encode the entry and append
@@ -157,8 +157,8 @@ func toJSON(a interface{}, base32Encoding, strictJSON bool) interface{} {
 		}
 		return r
 
-	case []interface{}:
-		r := make([]interface{}, 0)
+	case []any:
+		r := make([]any, 0)
 		for _, e := range v {
 			eenc := toJSON(e, base32Encoding, strictJSON)
 			r = append(r, eenc)
@@ -170,8 +170,8 @@ func toJSON(a interface{}, base32Encoding, strictJSON bool) interface{} {
 	}
 }
 
-func decodeSliceOfString(a interface{}, decodeFunc func(string) ([]byte, error)) ([][]byte, error) {
-	v, ok := a.([]interface{})
+func decodeSliceOfString(a any, decodeFunc func(string) ([]byte, error)) ([][]byte, error) {
+	v, ok := a.([]any)
 	if !ok {
 		return nil, fmt.Errorf("expected []interface{} for decodeSliceOfString")
 	}
@@ -192,10 +192,10 @@ func decodeSliceOfString(a interface{}, decodeFunc func(string) ([]byte, error))
 	return all, nil
 }
 
-func fromJSON(a interface{}) interface{} {
+func fromJSON(a any) any {
 	switch v := a.(type) {
-	case map[interface{}]interface{}:
-		r := make(map[interface{}]interface{})
+	case map[any]any:
+		r := make(map[any]any)
 		for k, e := range v {
 			// Special case: if key is a string, and ends in
 			// ":b64", and entry is a string, then base64-decode
@@ -235,8 +235,8 @@ func fromJSON(a interface{}) interface{} {
 		}
 		return r
 
-	case map[string]interface{}:
-		r := make(map[string]interface{})
+	case map[string]any:
+		r := make(map[string]any)
 		for ks, e := range v {
 			// Special case: if key ends in ":b64", and entry
 			// is a string, then base64-decode the entry and
@@ -275,8 +275,8 @@ func fromJSON(a interface{}) interface{} {
 		}
 		return r
 
-	case []interface{}:
-		r := make([]interface{}, 0)
+	case []any:
+		r := make([]any, 0)
 		for _, e := range v {
 			r = append(r, fromJSON(e))
 		}

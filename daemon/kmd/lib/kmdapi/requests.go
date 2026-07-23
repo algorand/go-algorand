@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@ import (
 // APIV1Request is the interface that all API V1 requests must satisfy
 //
 // swagger:ignore
-type APIV1Request interface{} // we need to tell swagger to ignore due to bug (go-swagger/issues/1436)
+type APIV1Request any // we need to tell swagger to ignore due to bug (go-swagger/issues/1436)
 
 // VersionsRequest is the request for `GET /versions`
 //

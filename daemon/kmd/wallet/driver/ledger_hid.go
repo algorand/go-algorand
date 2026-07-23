@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -169,6 +169,11 @@ func (l *LedgerUSB) ReadPackets() ([]byte, error) {
 // Exchange sends a message to the Ledger device, waits for a response,
 // and returns the response data.
 func (l *LedgerUSB) Exchange(msg []byte) ([]byte, error) {
+	// Mask SIGURG to prevent Go's async preemption from interrupting
+	// macOS IOKit HID calls (causes kIOReturnError on Darwin).
+	cleanup := maskSIGURG()
+	defer cleanup()
+
 	err := l.WritePackets(msg)
 	if err != nil {
 		return nil, err

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,12 +28,14 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"unicode"
 
 	"github.com/algorand/avm-abi/abi"
+
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -56,20 +58,25 @@ type labelReference struct {
 
 	// ending position of the opcode containing the label reference.
 	offsetPosition int
+
+	// varint indicates that the offset should be encoded as binary.Varint
+	// (zigzag+ULEB128).  Branch labels are encoded varint in recent versions,
+	// but switch/match targets remain 2-bytes.
+	varint bool
 }
 
 type constReference interface {
 	// get the referenced value
-	getValue() interface{}
+	getValue() any
 
 	// check if the referenced value equals other. Other must be the same type
-	valueEquals(other interface{}) bool
+	valueEquals(other any) bool
 
 	// get the index into ops.pending where the opcode for this reference is located
 	getPosition() int
 
 	// get the length of the op for this reference in ops.pending
-	length(ops *OpStream, assembled []byte) (int, error)
+	length(ops *OpStream, assembled []byte) (int, *sourceError)
 
 	// create the opcode bytes for a new reference of the same value
 	makeNewReference(ops *OpStream, singleton bool, newIndex int) []byte
@@ -82,11 +89,11 @@ type intReference struct {
 	position int
 }
 
-func (ref intReference) getValue() interface{} {
+func (ref intReference) getValue() any {
 	return ref.value
 }
 
-func (ref intReference) valueEquals(other interface{}) bool {
+func (ref intReference) valueEquals(other any) bool {
 	return ref.value == other.(uint64)
 }
 
@@ -94,7 +101,7 @@ func (ref intReference) getPosition() int {
 	return ref.position
 }
 
-func (ref intReference) length(ops *OpStream, assembled []byte) (int, error) {
+func (ref intReference) length(ops *OpStream, assembled []byte) (int, *sourceError) {
 	opIntc0 := OpsByName[ops.Version]["intc_0"].Opcode
 	opIntc1 := OpsByName[ops.Version]["intc_1"].Opcode
 	opIntc2 := OpsByName[ops.Version]["intc_2"].Opcode
@@ -151,11 +158,11 @@ type byteReference struct {
 	position int
 }
 
-func (ref byteReference) getValue() interface{} {
+func (ref byteReference) getValue() any {
 	return ref.value
 }
 
-func (ref byteReference) valueEquals(other interface{}) bool {
+func (ref byteReference) valueEquals(other any) bool {
 	return bytes.Equal(ref.value, other.([]byte))
 }
 
@@ -163,7 +170,7 @@ func (ref byteReference) getPosition() int {
 	return ref.position
 }
 
-func (ref byteReference) length(ops *OpStream, assembled []byte) (int, error) {
+func (ref byteReference) length(ops *OpStream, assembled []byte) (int, *sourceError) {
 	opBytec0 := OpsByName[ops.Version]["bytec_0"].Opcode
 	opBytec1 := OpsByName[ops.Version]["bytec_1"].Opcode
 	opBytec2 := OpsByName[ops.Version]["bytec_2"].Opcode
@@ -261,12 +268,22 @@ type OpStream struct {
 	OffsetToSource map[int]SourceLocation
 
 	HasStatefulOps bool
+	autoSalt       autoSaltMode
+	autoSaltToken  token
 
 	// Need new copy for each opstream
 	versionedPseudoOps map[string]map[int]OpSpec
 
 	macros map[string][]token
 }
+
+type autoSaltMode int
+
+const (
+	autoSaltDefault autoSaltMode = iota
+	autoSaltOn
+	autoSaltOff
+)
 
 // newOpStream constructs OpStream instances ready to invoke assemble. A new
 // OpStream must be used for each call to assemble().
@@ -378,9 +395,14 @@ func (ops *OpStream) recordSourceLocation(line, column int) {
 	ops.OffsetToSource[ops.pending.Len()] = SourceLocation{line - 1, column}
 }
 
-// referToLabel records an opcode label reference to resolve later
-func (ops *OpStream) referToLabel(pc int, label token, offsetPosition int) {
-	ops.labelReferences = append(ops.labelReferences, labelReference{pc, label, offsetPosition})
+// referToLabel2B records an opcode label reference to resolve later, using big-endian int16 encoding.
+func (ops *OpStream) referToLabel2B(pc int, label token, offsetPosition int) {
+	ops.labelReferences = append(ops.labelReferences, labelReference{pc, label, offsetPosition, false})
+}
+
+// referToBranchLabel records an opcode label reference to resolve later, using varint encoding.
+func (ops *OpStream) referToBranchLabel(pc int, label token, offsetPosition int) {
+	ops.labelReferences = append(ops.labelReferences, labelReference{pc, label, offsetPosition, true})
 }
 
 type refineFunc func(pgm *ProgramKnowledge, immediates []token) (StackTypes, StackTypes, error)
@@ -985,16 +1007,36 @@ func asmArg(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceEr
 	return asmDefault(ops, &altSpec, mnemonic, args)
 }
 
-func asmBranch(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
+func asmBranch2B(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
 	if err := ops.checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
 		return err
 	}
 
-	ops.referToLabel(ops.pending.Len()+1, args[0], ops.pending.Len()+spec.Size)
+	ops.referToLabel2B(ops.pending.Len()+1, args[0], ops.pending.Len()+spec.Size)
 	ops.pending.WriteByte(spec.Opcode)
 	// zero bytes will get replaced with actual offset in resolveLabels()
 	ops.pending.WriteByte(0)
 	ops.pending.WriteByte(0)
+	return nil
+}
+
+// varintBranchInitialSize is the number of placeholder bytes reserved for a
+// varint branch offset at assembly time. findBranchSizes shrinks these down to
+// the minimum needed size. 3 bytes covers offsets up to ~1 MB.
+const varintBranchInitialSize = 3
+
+// asmBranchVarint assembles branch opcodes that encode their offset as binary.Varint.
+func asmBranchVarint(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
+	if err := ops.checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
+		return err
+	}
+
+	ops.referToBranchLabel(ops.pending.Len()+1, args[0], ops.pending.Len()+1+varintBranchInitialSize)
+	ops.pending.WriteByte(spec.Opcode)
+	// zero bytes will get replaced with varint-encoded offset in resolveLabels()
+	for range varintBranchInitialSize {
+		ops.pending.WriteByte(0)
+	}
 	return nil
 }
 
@@ -1008,7 +1050,7 @@ func asmSwitch(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourc
 	ops.pending.WriteByte(byte(numOffsets))
 	opEndPos := ops.pending.Len() + 2*numOffsets
 	for _, arg := range args {
-		ops.referToLabel(ops.pending.Len(), arg, opEndPos)
+		ops.referToLabel2B(ops.pending.Len(), arg, opEndPos)
 		// zero bytes will get replaced with actual offset in resolveLabels()
 		ops.pending.WriteByte(0)
 		ops.pending.WriteByte(0)
@@ -1091,6 +1133,25 @@ func asmItxnField(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *so
 	return nil
 }
 
+func asmAppParamsSet(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
+	if err := ops.checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
+		return err
+	}
+	fs, ok := appParamsFieldSpecByName[args[0].str]
+	if !ok {
+		return args[0].errorf("%s unknown field: %#v", spec.Name, args[0].str)
+	}
+	if fs.setVersion == 0 {
+		return args[0].errorf("%s %#v is not settable.", spec.Name, args[0].str)
+	}
+	if fs.setVersion > ops.Version {
+		return args[0].errorf("%s %s field is settable in v%d. Missed #pragma version?", spec.Name, args[0].str, fs.setVersion)
+	}
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(fs.Field())
+	return nil
+}
+
 type asmFunc func(*OpStream, *OpSpec, token, []token) *sourceError
 
 func (ops *OpStream) checkArgCount(name string, mnemonic token, args []token, expected int) *sourceError {
@@ -1119,6 +1180,9 @@ func asmDefault(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sour
 		return err
 	}
 	ops.pending.WriteByte(spec.Opcode)
+	if spec.SubOpcode != 0 {
+		ops.pending.WriteByte(spec.SubOpcode)
+	}
 	for i, imm := range spec.OpDetails.Immediates {
 		var correctImmediates []string
 		var numImmediatesWithField []int
@@ -1232,12 +1296,16 @@ func getImm(args []token, argIndex int, signed bool) (int, bool) {
 	return int(n), true
 }
 
-func anyTypes(n int) StackTypes {
+func sameTypes(n int, t StackType) StackTypes {
 	as := make(StackTypes, n)
 	for i := range as {
-		as[i] = StackAny
+		as[i] = t
 	}
 	return as
+}
+
+func anyTypes(n int) StackTypes {
+	return sameTypes(n, StackAny)
 }
 
 func typeSwap(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, error) {
@@ -1610,6 +1678,12 @@ func typeByte(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, erro
 	return nil, StackTypes{NewStackType(avmBytes, static(l), fmt.Sprintf("[%d]byte", l))}, nil
 }
 
+func typeMatch(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, error) {
+	// I'd sort of like to use `sameTypes` with the top type, but it is legal to
+	// mix types.
+	return anyTypes(len(args) + 1), nil, nil
+}
+
 func joinIntsOnOr(singularTerminator string, list ...int) string {
 	if len(list) == 1 {
 		switch list[0] {
@@ -1735,12 +1809,8 @@ func addPseudoDocTags() {
 			if spec.Name == name || i == anyImmediates {
 				continue
 			}
-			msg := fmt.Sprintf("`%s` can be called using `%s` with %s.", spec.Name, name, joinIntsOnOr("immediate", i))
 			desc := opDescByName[spec.Name]
-			if desc.Short == "" {
-				panic(spec.Name)
-			}
-			desc.Short = desc.Short + "<br />" + msg
+			desc.Sugar = fmt.Sprintf("`%s` can be called by using `%s` with %s.", spec.Name, name, joinIntsOnOr("immediate", i))
 			opDescByName[spec.Name] = desc
 		}
 	}
@@ -1835,7 +1905,7 @@ func (se sourceError) Unwrap() error {
 	return se.Err
 }
 
-func sourceErrorf(location SourceLocation, format string, a ...interface{}) *sourceError {
+func sourceErrorf(location SourceLocation, format string, a ...any) *sourceError {
 	return &sourceError{location.Line, location.Column, fmt.Errorf(format, a...)}
 }
 
@@ -1849,11 +1919,11 @@ func (t token) error(err error) *sourceError {
 	return &sourceError{t.line, t.col, err}
 }
 
-func (t token) errorf(format string, args ...interface{}) *sourceError {
+func (t token) errorf(format string, args ...any) *sourceError {
 	return t.error(fmt.Errorf(format, args...))
 }
 
-func (t token) errorAfterf(format string, args ...interface{}) *sourceError {
+func (t token) errorAfterf(format string, args ...any) *sourceError {
 	return &sourceError{t.line, t.col + len(t.str), fmt.Errorf(format, args...)}
 }
 
@@ -1947,14 +2017,14 @@ func tokensFromLine(sourceLine string, lineno int) []token {
 	return tokens
 }
 
-func (ops *OpStream) trace(format string, args ...interface{}) {
+func (ops *OpStream) trace(format string, args ...any) {
 	if ops.Trace == nil {
 		return
 	}
 	fmt.Fprintf(ops.Trace, format, args...)
 }
 
-func (ops *OpStream) typeErrorf(opcode token, format string, args ...interface{}) {
+func (ops *OpStream) typeErrorf(opcode token, format string, args ...any) {
 	if ops.typeTracking {
 		ops.record(opcode.errorf(format, args...))
 	}
@@ -2035,8 +2105,35 @@ type directiveFunc func(*OpStream, []token) *sourceError
 
 var directives = map[string]directiveFunc{"pragma": pragma, "define": define}
 
-// assemble reads text from an input and accumulates the program
+// assemble reads text from an input and accumulates the program.
 func (ops *OpStream) assemble(text string) error {
+	if err := ops.parseText(text); err != nil {
+		return err
+	}
+	var program []byte
+	var prefixLen int
+	if len(ops.Errors) == 0 {
+		var err *sourceError
+		program, prefixLen, err = ops.finalizeProgram()
+		if err != nil {
+			ops.record(err)
+		}
+	}
+	if len(ops.Errors) == 1 {
+		return fmt.Errorf("1 error: %w", ops.Errors[0])
+	}
+	if len(ops.Errors) > 1 {
+		return fmt.Errorf("%d errors", len(ops.Errors))
+	}
+
+	ops.adjustOffsetToSource(prefixLen)
+	ops.Program = program
+
+	return nil
+}
+
+// parseText reads text from an input and accumulates the pending program state.
+func (ops *OpStream) parseText(text string) error {
 	if ops.Version > LogicVersion && ops.Version != assemblerNoVersion {
 		err := fmt.Errorf("Can not assemble version %d", ops.Version)
 		ops.record(&sourceError{0, 0, err})
@@ -2140,21 +2237,92 @@ func (ops *OpStream) assemble(text string) error {
 	}
 
 	if ops.Version >= optimizeConstantsEnabledVersion {
-		ops.optimizeIntcBlock()
-		ops.optimizeBytecBlock()
+		if err := ops.optimizeIntcBlock(); err != nil {
+			ops.record(err)
+		}
+		if err := ops.optimizeBytecBlock(); err != nil {
+			ops.record(err)
+		}
 	}
 
+	ops.findBranchSizes()
 	ops.resolveLabels()
-	program := ops.prependCBlocks()
-	if ops.Errors != nil {
-		l := len(ops.Errors)
-		if l == 1 {
-			return fmt.Errorf("1 error: %w", ops.Errors[0])
-		}
-		return fmt.Errorf("%d errors", l)
-	}
-	ops.Program = program
 	return nil
+}
+
+// assemblerSaltSearchLimit is the number of salt candidates we can try to fit in the one-byte varint range.
+// The chance of all candidates hashing on-curve is 2^-128 under the random-hash model.
+const assemblerSaltSearchLimit = 128
+
+// finalizeProgram constructs final program bytes. For v13+ stateless programs
+// that would hash on-curve, it adds salt to make the hash off-curve. The
+// #pragma autosalt directive can force this behavior on for older versions, or
+// disable it for v13+ programs. If the program has an automatic intcblock, it
+// appends the salt there; otherwise it adds a trailing intcblock at the end of
+// the program.
+func (ops *OpStream) finalizeProgram() ([]byte, int, *sourceError) {
+	program, prefixLen := ops.prependCBlocks()
+	if !ops.shouldAutoSalt(program) {
+		return program, prefixLen, nil
+	}
+
+	if len(ops.intc) > 0 && ops.cntIntcBlock == 0 {
+		return ops.finalizeProgramWithAutoIntcSalt()
+	}
+	return ops.finalizeProgramWithTrailingIntcSalt(program, prefixLen)
+}
+
+func (ops *OpStream) shouldAutoSalt(program []byte) bool {
+	if ops.autoSalt == autoSaltOff {
+		if !ops.HasStatefulOps && ProgramHashIsEdwards25519Point(program) {
+			ops.warn(ops.autoSaltToken, "#pragma autosalt false leaves program hash on curve")
+		}
+		return false
+	}
+	if ops.autoSalt == autoSaltOn {
+		if ops.HasStatefulOps {
+			ops.warn(ops.autoSaltToken, "#pragma autosalt true used with stateful opcodes")
+		}
+		return ProgramHashIsEdwards25519Point(program)
+	}
+	return defaultAutoSaltApplies(ops.Version, ops.HasStatefulOps, program)
+}
+
+func defaultAutoSaltApplies(version uint64, hasStatefulOps bool, program []byte) bool {
+	return version >= LogicSigOffCurveVersion && !hasStatefulOps && ProgramHashIsEdwards25519Point(program)
+}
+
+// TODO: should ops.intc reflect the salted intcblock that ends up
+// in ops.Program, or stay source-derived? Currently the latter.
+func (ops *OpStream) finalizeProgramWithAutoIntcSalt() ([]byte, int, *sourceError) {
+	originalLen := len(ops.intc)
+	defer func() {
+		ops.intc = ops.intc[:originalLen]
+	}()
+
+	ops.intc = append(ops.intc, 0)
+	for saltValue := range uint64(assemblerSaltSearchLimit) {
+		ops.intc[originalLen] = saltValue
+		program, prefixLen := ops.prependCBlocks()
+		if !ProgramHashIsEdwards25519Point(program) {
+			return program, prefixLen, nil
+		}
+	}
+	return nil, 0, &sourceError{ops.sourceLine, 0, errors.New("could not find an automatic intcblock salt that yields an off-curve program")}
+}
+
+func (ops *OpStream) finalizeProgramWithTrailingIntcSalt(program []byte, prefixLen int) ([]byte, int, *sourceError) {
+	suffix := []byte{OpsByName[ops.Version]["intcblock"].Opcode, 1, 0}
+	candidate := slices.Concat(program, suffix)
+	saltOffset := len(candidate) - 1
+
+	for saltValue := range uint64(assemblerSaltSearchLimit) {
+		candidate[saltOffset] = byte(saltValue)
+		if !ProgramHashIsEdwards25519Point(candidate) {
+			return candidate, prefixLen, nil
+		}
+	}
+	return nil, 0, &sourceError{ops.sourceLine, 0, errors.New("could not find a trailing intcblock salt that yields an off-curve program")}
 }
 
 // cycle return a slice of strings that constitute a cycle, if one is
@@ -2337,8 +2505,138 @@ func pragma(ops *OpStream, tokens []token) *sourceError {
 		ops.typeTracking = on
 
 		return nil
+	case "autosalt":
+		if len(tokens) < 3 {
+			return tokens[1].errorf("no autosalt value")
+		}
+		if len(tokens) > 3 {
+			return tokens[3].errorf("unexpected extra tokens:%s", reJoin("", tokens[3:]))
+		}
+		if ops.pending.Len() > 0 {
+			return tokens[0].errorf("#pragma autosalt is only allowed before instructions")
+		}
+		value := tokens[2].str
+		on, err := strconv.ParseBool(value)
+		if err != nil {
+			return tokens[2].errorf("bad #pragma autosalt: %#v", value)
+		}
+		if on {
+			ops.autoSalt = autoSaltOn
+		} else {
+			ops.autoSalt = autoSaltOff
+		}
+		ops.autoSaltToken = tokens[0]
+
+		return nil
 	default:
 		return tokens[0].errorf("unsupported pragma directive: %#v", key)
+	}
+}
+
+// pendingEdit describes a replacement of bytes in ops.pending: oldLen bytes
+// starting at position become newBytes. Edits passed to applyEdits must be
+// sorted by position and non-overlapping.
+type pendingEdit struct {
+	position int
+	oldLen   int
+	newBytes []byte
+}
+
+// applyEdits rewrites ops.pending by applying the given (sorted,
+// non-overlapping) edits, then shifts every stored position that indexes into
+// ops.pending by the cumulative size delta. cumDelta[p] is the total size
+// change from all edits whose replaced region ends at or before p, so applying
+// it to any original position p yields its position in the rewritten buffer
+// regardless of the order positions are visited later.
+func (ops *OpStream) applyEdits(edits []pendingEdit) {
+	raw := ops.pending.Bytes()
+
+	totalDelta := 0
+	for _, e := range edits {
+		totalDelta += len(e.newBytes) - e.oldLen
+	}
+	newRaw := make([]byte, 0, len(raw)+totalDelta)
+	cumDelta := make([]int, len(raw)+1)
+	runningDelta := 0
+	prev := 0
+	for _, e := range edits {
+		for p := prev; p < e.position+e.oldLen; p++ {
+			cumDelta[p] = runningDelta
+		}
+		newRaw = append(newRaw, raw[prev:e.position]...)
+		newRaw = append(newRaw, e.newBytes...)
+		runningDelta += len(e.newBytes) - e.oldLen
+		prev = e.position + e.oldLen
+	}
+	for p := prev; p <= len(raw); p++ {
+		cumDelta[p] = runningDelta
+	}
+	newRaw = append(newRaw, raw[prev:]...)
+
+	for i := range ops.intcRefs {
+		ops.intcRefs[i].position += cumDelta[ops.intcRefs[i].position]
+	}
+	for i := range ops.bytecRefs {
+		ops.bytecRefs[i].position += cumDelta[ops.bytecRefs[i].position]
+	}
+	for label := range ops.labels {
+		ops.labels[label] += cumDelta[ops.labels[label]]
+	}
+	for i := range ops.labelReferences {
+		ops.labelReferences[i].position += cumDelta[ops.labelReferences[i].position]
+		ops.labelReferences[i].offsetPosition += cumDelta[ops.labelReferences[i].offsetPosition]
+	}
+	fixedOffsetsToSource := make(map[int]SourceLocation, len(ops.OffsetToSource))
+	for pos, loc := range ops.OffsetToSource {
+		fixedOffsetsToSource[pos+cumDelta[pos]] = loc
+	}
+	ops.OffsetToSource = fixedOffsetsToSource
+
+	ops.pending = *bytes.NewBuffer(newRaw)
+}
+
+// findBranchSizes shrinks varint branch placeholders to their minimum size after
+// optimizeConstants has finalized all instruction sizes. The offset bytes remain
+// zeros throughout — resolveLabels writes the actual encoded values afterward.
+func (ops *OpStream) findBranchSizes() {
+	var scratch [binary.MaxVarintLen64]byte
+	for {
+		// Collect varint branch instructions whose placeholder can shrink.
+		var edits []pendingEdit
+		for i := range ops.labelReferences {
+			lr := &ops.labelReferences[i]
+			if !lr.varint {
+				// `switch` and `match` references are still 2B
+				continue
+			}
+			dest, ok := ops.labels[lr.label.str]
+			if !ok {
+				continue // undefined labels are reported by resolveLabels
+			}
+			opcodePos := lr.position - 1
+			if dest == opcodePos {
+				continue // will be rejected by resolveLabels
+			}
+			jump := dest - lr.offsetPosition
+			if dest < opcodePos {
+				// Back-jump from instruction start: no instrSize dependency.
+				jump = dest - opcodePos
+			}
+			needed := binary.PutVarint(scratch[:], int64(jump))
+			oldLen := lr.offsetPosition - lr.position
+			if needed < oldLen {
+				// Replacement is zero-filled; resolveLabels writes the encoded
+				// jump after every placeholder size has stabilized.
+				edits = append(edits, pendingEdit{lr.position, oldLen, make([]byte, needed)})
+			}
+		}
+		if len(edits) == 0 {
+			break
+		}
+		slices.SortFunc(edits, func(a, b pendingEdit) int {
+			return a.position - b.position
+		})
+		ops.applyEdits(edits)
 	}
 }
 
@@ -2362,19 +2660,41 @@ func (ops *OpStream) resolveLabels() {
 			}
 		}
 
-		// All branch targets are encoded as 2 offset bytes. The destination is relative to the end of the
-		// instruction they appear in, which is available in lr.offsetPostion
 		if ops.Version < backBranchEnabledVersion && dest < lr.offsetPosition {
 			ops.record(lr.label.errorf("label %#v is a back reference, back jump support was introduced in v4", lr.label.str))
 			continue
 		}
 		jump := dest - lr.offsetPosition
-		if jump > 0x7fff {
-			ops.record(lr.label.errorf("label %#v is too far away", lr.label.str))
-			continue
+		if lr.varint {
+			opcodePos := lr.position - 1
+			if dest == opcodePos {
+				// Jumping to the start of the same instruction creates an
+				// infinite loop. Disallow this to keep the sign-based
+				// back/forward dispatch unambiguous (V=0 means forward).
+				ops.record(lr.label.errorf("branch to start of same instruction: %#v ", lr.label.str))
+				continue
+			}
+			// Back-jumps use the start of the instruction as the reference
+			// point, which avoids any dependency on instruction size.
+			if dest < opcodePos {
+				jump = dest - opcodePos
+			}
+			// An N-byte varint encodes the range [-2^(7N-1), 2^(7N-1)-1].
+			placeholderSize := lr.offsetPosition - lr.position
+			limit := int64(1) << (7*placeholderSize - 1)
+			if int64(jump) < -limit || int64(jump) >= limit {
+				ops.record(lr.label.errorf("label %#v is too far away", lr.label.str))
+				continue
+			}
+			binary.PutVarint(raw[lr.position:], int64(jump))
+		} else {
+			if jump > math.MaxInt16 || jump < math.MinInt16 {
+				ops.record(lr.label.errorf("label %#v is too far away", lr.label.str))
+				continue
+			}
+			raw[lr.position] = uint8(jump >> 8)
+			raw[lr.position+1] = uint8(jump & 0x0ff)
 		}
-		raw[lr.position] = uint8(jump >> 8)
-		raw[lr.position+1] = uint8(jump & 0x0ff)
 	}
 	ops.pending = *bytes.NewBuffer(raw)
 }
@@ -2389,29 +2709,6 @@ const AssemblerDefaultVersion = 1
 const AssemblerMaxVersion = LogicVersion
 const assemblerNoVersion = (^uint64(0))
 
-// replaceBytes returns a slice that is the same as s, except the range starting
-// at index with length originalLen is replaced by newBytes. The returned slice
-// may be the same as s, or it may be a new slice
-func replaceBytes(s []byte, index, originalLen int, newBytes []byte) []byte {
-	prefix := s[:index]
-	suffix := s[index+originalLen:]
-
-	// if we can fit the new bytes into the existing slice, no need to create a
-	// new one
-	if len(newBytes) <= originalLen {
-		copy(s[index:], newBytes)
-		copy(s[index+len(newBytes):], suffix)
-		return s[:len(s)+len(newBytes)-originalLen]
-	}
-
-	replaced := make([]byte, len(prefix)+len(newBytes)+len(suffix))
-	copy(replaced, prefix)
-	copy(replaced[index:], newBytes)
-	copy(replaced[index+len(newBytes):], suffix)
-
-	return replaced
-}
-
 // optimizeIntcBlock rewrites the existing intcblock and the ops that reference
 // it to reduce code size. This is achieved by ordering the intcblock from most
 // frequently referenced constants to least frequently referenced, since the
@@ -2421,13 +2718,13 @@ func replaceBytes(s []byte, index, originalLen int, newBytes []byte) []byte {
 //
 // This function only optimizes constants introduces by the int pseudo-op, not
 // preexisting intcblocks in the code.
-func (ops *OpStream) optimizeIntcBlock() error {
+func (ops *OpStream) optimizeIntcBlock() *sourceError {
 	if ops.cntIntcBlock > 0 {
 		// don't optimize an existing intcblock, only int pseudo-ops
 		return nil
 	}
 
-	constBlock := make([]interface{}, len(ops.intc))
+	constBlock := make([]any, len(ops.intc))
 	for i, value := range ops.intc {
 		constBlock[i] = value
 	}
@@ -2464,13 +2761,13 @@ func (ops *OpStream) optimizeIntcBlock() error {
 //
 // This function only optimizes constants introduces by the byte or addr
 // pseudo-ops, not preexisting bytecblocks in the code.
-func (ops *OpStream) optimizeBytecBlock() error {
+func (ops *OpStream) optimizeBytecBlock() *sourceError {
 	if ops.cntBytecBlock > 0 {
 		// don't optimize an existing bytecblock, only byte/addr pseudo-ops
 		return nil
 	}
 
-	constBlock := make([]interface{}, len(ops.bytec))
+	constBlock := make([]any, len(ops.bytec))
 	for i, value := range ops.bytec {
 		constBlock[i] = value
 	}
@@ -2504,9 +2801,9 @@ func (ops *OpStream) optimizeBytecBlock() error {
 // the first 4 constant can use a special opcode to save space. Additionally,
 // any constants with a reference of 1 are taken out of the constant block and
 // instead referenced with an immediate op.
-func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []interface{}) (optimizedConstBlock []interface{}, err error) {
+func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []any) (optimizedConstBlock []any, err *sourceError) {
 	type constFrequency struct {
-		value interface{}
+		value any
 		freq  int
 	}
 
@@ -2541,18 +2838,13 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 	// sort values by greatest to smallest frequency
 	// since we're using a stable sort, constants with the same frequency
 	// will retain their current ordering (i.e. first referenced, first in constant block)
-	sort.SliceStable(freqs, func(i, j int) bool {
-		return freqs[i].freq > freqs[j].freq
+	slices.SortStableFunc(freqs, func(a, b constFrequency) int {
+		return b.freq - a.freq
 	})
 
-	// sort refs from last to first
-	// this way when we iterate through them and potentially change the size of the assembled
-	// program, the later positions will not affect the indexes of the earlier positions
-	sort.Slice(refs, func(i, j int) bool {
-		return refs[i].getPosition() > refs[j].getPosition()
-	})
-
+	// Determine the new encoding for every reference without mutating raw yet.
 	raw := ops.pending.Bytes()
+	edits := make([]pendingEdit, 0, len(refs))
 	for _, ref := range refs {
 		singleton := false
 		newIndex := -1
@@ -2569,62 +2861,19 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 
 		newBytes := ref.makeNewReference(ops, singleton, newIndex)
 		var currentBytesLen int
-		currentBytesLen, err = ref.length(ops, raw)
-		if err != nil {
-			return
+		currentBytesLen, lengthErr := ref.length(ops, raw)
+		if lengthErr != nil {
+			return nil, lengthErr
 		}
-
-		positionDelta := len(newBytes) - currentBytesLen
-		position := ref.getPosition()
-		raw = replaceBytes(raw, position, currentBytesLen, newBytes)
-
-		// update all indexes into ops.pending that have been shifted by the above line
-
-		// This is a huge optimization for long repetitive programs. Takes
-		// BenchmarkUintMath from 160sec to 19s.
-		if positionDelta == 0 {
-			continue
-		}
-
-		for i := range ops.intcRefs {
-			if ops.intcRefs[i].position > position {
-				ops.intcRefs[i].position += positionDelta
-			}
-		}
-
-		for i := range ops.bytecRefs {
-			if ops.bytecRefs[i].position > position {
-				ops.bytecRefs[i].position += positionDelta
-			}
-		}
-
-		for label := range ops.labels {
-			if ops.labels[label] > position {
-				ops.labels[label] += positionDelta
-			}
-		}
-
-		for i := range ops.labelReferences {
-			if ops.labelReferences[i].position > position {
-				ops.labelReferences[i].position += positionDelta
-				ops.labelReferences[i].offsetPosition += positionDelta
-			}
-		}
-
-		fixedOffsetsToSource := make(map[int]SourceLocation, len(ops.OffsetToSource))
-		for pos, sourceLocation := range ops.OffsetToSource {
-			if pos > position {
-				fixedOffsetsToSource[pos+positionDelta] = sourceLocation
-			} else {
-				fixedOffsetsToSource[pos] = sourceLocation
-			}
-		}
-		ops.OffsetToSource = fixedOffsetsToSource
+		edits = append(edits, pendingEdit{ref.getPosition(), currentBytesLen, newBytes})
 	}
 
-	ops.pending = *bytes.NewBuffer(raw)
+	slices.SortFunc(edits, func(a, b pendingEdit) int {
+		return a.position - b.position
+	})
+	ops.applyEdits(edits)
 
-	optimizedConstBlock = make([]interface{}, 0)
+	optimizedConstBlock = make([]any, 0)
 	for _, f := range freqs {
 		if f.freq == 1 {
 			break
@@ -2636,7 +2885,8 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 }
 
 // prependCBlocks completes the assembly by inserting cblocks if needed.
-func (ops *OpStream) prependCBlocks() []byte {
+// It returns the completed program and the length of the prefix (version and any cblocks).
+func (ops *OpStream) prependCBlocks() ([]byte, int) {
 	var scratch [binary.MaxVarintLen64]byte
 	prebytes := bytes.Buffer{}
 	vlen := binary.PutUvarint(scratch[:], ops.Version)
@@ -2664,25 +2914,19 @@ func (ops *OpStream) prependCBlocks() []byte {
 	pbl := prebytes.Len()
 	outl := ops.pending.Len()
 	out := make([]byte, pbl+outl)
-	pl, err := prebytes.Read(out)
-	if pl != pbl || err != nil {
-		ops.record(&sourceError{ops.sourceLine, 0, fmt.Errorf("%d prebytes, %d to buffer? %w", pbl, pl, err)})
-		return nil
-	}
-	ol, err := ops.pending.Read(out[pl:])
-	if ol != outl || err != nil {
-		ops.record(&sourceError{ops.sourceLine, 0, fmt.Errorf("%d program bytes but %d to buffer. %w", outl, ol, err)})
-		return nil
-	}
+	copy(out, prebytes.Bytes())
+	copy(out[pbl:], ops.pending.Bytes())
+	return out, pbl
+}
 
-	// fixup offset to line mapping
+// adjustOffsetToSource shifts recorded bytecode offsets by the final prefix
+// length so source locations still line up after cblocks are prepended.
+func (ops *OpStream) adjustOffsetToSource(prefixLen int) {
 	newOffsetToSource := make(map[int]SourceLocation, len(ops.OffsetToSource))
 	for o, l := range ops.OffsetToSource {
-		newOffsetToSource[o+pbl] = l
+		newOffsetToSource[o+prefixLen] = l
 	}
 	ops.OffsetToSource = newOffsetToSource
-
-	return out
 }
 
 // record puts an error onto a list for reporting later. The hope is that the
@@ -2693,7 +2937,7 @@ func (ops *OpStream) record(se *sourceError) {
 	ops.Errors = append(ops.Errors, *se)
 }
 
-func (ops *OpStream) warn(t token, format string, a ...interface{}) {
+func (ops *OpStream) warn(t token, format string, a ...any) {
 	warning := sourceError{t.line, t.col, fmt.Errorf(format, a...)}
 	ops.Warnings = append(ops.Warnings, warning)
 }
@@ -2804,6 +3048,9 @@ func (dis *disassembleState) outputLabelIfNeeded() (err error) {
 func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 	out := spec.Name
 	pc := dis.pc + 1
+	if spec.SubOpcode != 0 {
+		pc++ // skip the sub-opcode byte; immediates follow
+	}
 	for _, imm := range spec.OpDetails.Immediates {
 		out += " "
 		switch imm.kind {
@@ -2838,12 +3085,27 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 
 			pc++
 		case immLabel:
-			// decodeBranchOffset assumes it has two bytes to work with
-			if pc+2 > len(dis.program) {
-				return "", fmt.Errorf("program end while reading label for %s", spec.Name)
+			var offset int
+			var offsetLen int
+			if spec.Version >= varintBranchVersion {
+				v, bytesRead := binary.Varint(dis.program[pc:])
+				if bytesRead <= 0 {
+					return "", fmt.Errorf("could not decode label for %s", spec.Name)
+				}
+				offset = int(v)
+				offsetLen = bytesRead
+			} else {
+				// decodeBranchOffset assumes it has two bytes to work with
+				if pc+2 > len(dis.program) {
+					return "", fmt.Errorf("program end while reading label for %s", spec.Name)
+				}
+				offset = decodeBranchOffset(dis.program, pc)
+				offsetLen = 2
 			}
-			offset := decodeBranchOffset(dis.program, pc)
-			target := offset + pc + 2
+			target := offset + pc + offsetLen
+			if spec.Version >= varintBranchVersion && offset < 0 {
+				target = pc - 1 + offset // back-jump from instruction start
+			}
 			var label string
 			if dis.numericTargets {
 				label = fmt.Sprintf("%d", target)
@@ -2857,7 +3119,7 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 				}
 			}
 			out += label
-			pc += 2
+			pc += offsetLen
 		case immInt:
 			val, bytesUsed := binary.Uvarint(dis.program[pc:])
 			if bytesUsed <= 0 {
@@ -3081,6 +3343,13 @@ func guessByteFormat(bytes []byte) string {
 	return "0x" + hex.EncodeToString(bytes)
 }
 
+// PCOffset stores the mapping from a program counter value to an offset in the
+// disassembly of the bytecode
+type PCOffset struct {
+	PC     int `codec:"pc"`
+	Offset int `codec:"offset"`
+}
+
 type disInfo struct {
 	pcOffset       []PCOffset
 	hasStatefulOps bool
@@ -3091,42 +3360,62 @@ type disInfo struct {
 // disassembly. If the labels names are known, they may be passed in.
 // When doing so, labels for all jump targets must be provided.
 func disassembleInstrumented(program []byte, labels map[int]string) (text string, ds disInfo, err error) {
-	out := strings.Builder{}
-	dis := disassembleState{program: program, out: &out, pendingLabels: labels}
+	body := strings.Builder{}
+	dis := disassembleState{program: program, out: &body, pendingLabels: labels}
 	version, vlen := binary.Uvarint(program)
 	if vlen <= 0 {
 		fmt.Fprintf(dis.out, "// invalid version\n")
-		text = out.String()
+		text = body.String()
 		return
 	}
 	if version > LogicVersion {
 		fmt.Fprintf(dis.out, "// unsupported version %d\n", version)
-		text = out.String()
+		text = body.String()
 		return
 	}
-	fmt.Fprintf(dis.out, "#pragma version %d\n", version)
 	dis.pc = vlen
 	for dis.pc < len(program) {
 		err = dis.outputLabelIfNeeded()
 		if err != nil {
 			return
 		}
+		// cx.GetOpSpec would be nice here, but we don't have a cx, we have the
+		// various pieces: version, program, dis.pc all available but separate.
 		op := opsByOpcode[version][program[dis.pc]]
+		if op.SubOps != nil && dis.pc+1 < len(program) {
+			sub := program[dis.pc+1]
+			if int(sub) < len(op.SubOps) && op.SubOps[sub].op != nil {
+				op = op.SubOps[sub]
+			}
+		}
 		if op.Modes == ModeApp {
 			ds.hasStatefulOps = true
 		}
 		if op.Name == "" {
-			ds.pcOffset = append(ds.pcOffset, PCOffset{dis.pc, out.Len()})
+			ds.pcOffset = append(ds.pcOffset, PCOffset{dis.pc, body.Len()})
 			msg := fmt.Sprintf("invalid opcode %02x at pc=%d", program[dis.pc], dis.pc)
-			out.WriteString(msg)
-			out.WriteRune('\n')
-			text = out.String()
-			err = errors.New(msg)
+			err = getOpSpecError(&op, program, dis.pc)
+			body.WriteString(msg)
+			body.WriteRune('\n')
+			text = finalizeDisassemblyWithPragmas(version, program, body.String(), &ds)
 			return
 		}
 
+		// proto marks a subroutine entry point and must always have a label so
+		// that the disassembly can be validly reassembled. If we encounter a
+		// proto without a pending label (e.g. a subroutine that is never
+		// targeted by a callsub), create one now and trigger a rerun so the
+		// label appears before the opcode in the output.
+		if op.Name == "proto" {
+			if _, hasLabel := dis.pendingLabels[dis.pc]; !hasLabel {
+				dis.labelCount++
+				label := fmt.Sprintf("label%d", dis.labelCount)
+				dis.putLabel(label, dis.pc) // sets rerun=true since target <= pc
+			}
+		}
+
 		// ds.pcOffset tracks where in the output each opcode maps to assembly
-		ds.pcOffset = append(ds.pcOffset, PCOffset{dis.pc, out.Len()})
+		ds.pcOffset = append(ds.pcOffset, PCOffset{dis.pc, body.Len()})
 
 		// Actually do the disassembly
 		var instruction string
@@ -3134,16 +3423,14 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 		if err != nil {
 			return
 		}
-		out.WriteString(instruction)
-		out.WriteRune('\n')
+		body.WriteString(instruction)
+		body.WriteRune('\n')
 		dis.pc = dis.nextpc
 	}
 	err = dis.outputLabelIfNeeded()
 	if err != nil {
 		return
 	}
-
-	text = out.String()
 
 	if dis.rerun {
 		if labels != nil {
@@ -3152,7 +3439,22 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 		}
 		return disassembleInstrumented(program, dis.pendingLabels)
 	}
+	text = finalizeDisassemblyWithPragmas(version, program, body.String(), &ds)
 	return
+}
+
+func finalizeDisassemblyWithPragmas(version uint64, program []byte, body string, ds *disInfo) string {
+	header := strings.Builder{}
+	fmt.Fprintf(&header, "#pragma version %d\n", version)
+	if defaultAutoSaltApplies(version, ds.hasStatefulOps, program) {
+		fmt.Fprintf(&header, "#pragma autosalt false\n")
+	}
+	headerLen := header.Len()
+	for i := range ds.pcOffset {
+		ds.pcOffset[i].Offset += headerLen
+	}
+	header.WriteString(body)
+	return header.String()
 }
 
 // Disassemble produces a text form of program bytes.

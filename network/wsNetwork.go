@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -38,9 +38,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/gorilla/mux"
+
 	"github.com/algorand/go-deadlock"
 	"github.com/algorand/websocket"
-	"github.com/gorilla/mux"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -580,7 +581,7 @@ func (wn *WebsocketNetwork) setup() error {
 	wn.server.IdleTimeout = httpServerIdleTimeout
 	wn.server.MaxHeaderBytes = httpServerMaxHeaderBytes
 	wn.ctx, wn.ctxCancel = context.WithCancel(context.Background())
-	wn.relayMessages = wn.config.IsGossipServer() || wn.config.ForceRelayMessages
+	wn.relayMessages = wn.config.IsListenServer() || wn.config.ForceRelayMessages
 	if wn.relayMessages || wn.config.ForceFetchTransactions {
 		wn.wantTXGossip.Store(wantTXGossipYes)
 	}
@@ -641,7 +642,7 @@ func (wn *WebsocketNetwork) setup() error {
 	if wn.config.EnableIncomingMessageFilter {
 		wn.incomingMsgFilter = makeMessageFilter(wn.config.IncomingMessageFilterBucketCount, wn.config.IncomingMessageFilterBucketSize)
 	}
-	wn.connPerfMonitor = makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag, protocol.TxnTag})
+	wn.connPerfMonitor = makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag})
 	wn.outgoingConnsCloser = makeOutgoingConnsCloser(wn.log, wn, wn.connPerfMonitor, cliqueResolveInterval)
 
 	// set our supported versions
@@ -671,7 +672,7 @@ func (wn *WebsocketNetwork) Start() error {
 		wn.messagesOfInterestEnc = marshallMessageOfInterestMap(wn.messagesOfInterest)
 	}
 
-	if wn.relayMessages {
+	if wn.relayMessages && wn.config.IncomingConnectionsLimit != 0 {
 		listener, err := net.Listen("tcp", wn.config.NetAddress)
 		if err != nil {
 			wn.log.Errorf("network could not listen %v: %s", wn.config.NetAddress, err)
@@ -683,6 +684,8 @@ func (wn *WebsocketNetwork) Start() error {
 		// wrap the limited connection listener with a requests tracker listener
 		wn.listener = wn.requestsTracker.Listener(listener)
 		wn.log.Debugf("listening on %s", wn.listener.Addr().String())
+	}
+	if wn.relayMessages {
 		wn.throttledOutgoingConnections.Store(int32(wn.config.GossipFanout / 2))
 	} else {
 		// on non-relay, all the outgoing connections are throttled.
@@ -1656,7 +1659,7 @@ func (wn *WebsocketNetwork) updatePhonebookAddresses(relayAddrs []string, archiv
 		wn.log.Debugf("got %d relay dns addrs, %#v", len(relayAddrs), relayAddrs[:min(5, len(relayAddrs))])
 		wn.phonebook.ReplacePeerList(relayAddrs, string(wn.genesisInfo.NetworkID), phonebook.RelayRole)
 	} else {
-		wn.log.Infof("got no relay DNS addrs for network %s", wn.genesisInfo.NetworkID)
+		wn.log.Warnf("got no relay DNS addrs for network %s; the node may be unable to find peers and sync", wn.genesisInfo.NetworkID)
 	}
 	if len(archiveAddrs) > 0 {
 		wn.phonebook.ReplacePeerList(archiveAddrs, string(wn.genesisInfo.NetworkID), phonebook.ArchivalRole)
@@ -1855,19 +1858,15 @@ func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) (relaysAddresses []
 	var err error
 	relaysAddresses, err = wn.resolveSRVRecords(wn.ctx, "algobootstrap", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
 	if err != nil {
-		// only log this warning on testnet or devnet
-		if wn.genesisInfo.NetworkID == config.Devnet || wn.genesisInfo.NetworkID == config.Testnet {
-			wn.log.Warnf("Cannot lookup algobootstrap SRV record for %s: %v", dnsBootstrap, err)
-		}
+		// Log on all networks: with no relays resolved the node may be unable to find peers.
+		wn.log.Warnf("Cannot lookup algobootstrap SRV record for %s: %v", dnsBootstrap, err)
 		relaysAddresses = nil
 	}
 
 	archivalAddresses, err = wn.resolveSRVRecords(wn.ctx, "archive", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
 	if err != nil {
-		// only log this warning on testnet or devnet
-		if wn.genesisInfo.NetworkID == config.Devnet || wn.genesisInfo.NetworkID == config.Testnet {
-			wn.log.Warnf("Cannot lookup archive SRV record for %s: %v", dnsBootstrap, err)
-		}
+		// Archival peers are optional for most nodes, so this is informational.
+		wn.log.Infof("Cannot lookup archive SRV record for %s: %v", dnsBootstrap, err)
 		archivalAddresses = nil
 	}
 	return
@@ -1986,7 +1985,8 @@ func (wn *WebsocketNetwork) tryConnectReleaseAddr(addr, gossipAddr string) {
 func (wn *WebsocketNetwork) numOutgoingPending() int {
 	wn.tryConnectLock.Lock()
 	defer wn.tryConnectLock.Unlock()
-	return len(wn.tryConnectAddrs)
+	// tryConnectAddrs always populates two entries per pending connection: addr and gossipAddr
+	return len(wn.tryConnectAddrs) / 2
 }
 
 // GetHTTPClient returns a http.Client with a suitable for the network Transport
@@ -2227,7 +2227,7 @@ func (wn *WebsocketNetwork) tryConnect(netAddr, gossipAddr string) {
 }
 
 // GetPeerData returns the peer data associated with a particular key.
-func (wn *WebsocketNetwork) GetPeerData(peer Peer, key string) interface{} {
+func (wn *WebsocketNetwork) GetPeerData(peer Peer, key string) any {
 	switch p := peer.(type) {
 	case *wsPeer:
 		return p.getPeerData(key)
@@ -2237,7 +2237,7 @@ func (wn *WebsocketNetwork) GetPeerData(peer Peer, key string) interface{} {
 }
 
 // SetPeerData sets the peer data associated with a particular key.
-func (wn *WebsocketNetwork) SetPeerData(peer Peer, key string, value interface{}) {
+func (wn *WebsocketNetwork) SetPeerData(peer Peer, key string, value any) {
 	switch p := peer.(type) {
 	case *wsPeer:
 		p.setPeerData(key, value)

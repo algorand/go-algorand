@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,12 +18,13 @@ package logic
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate go tool -modfile=../../../tool.mod stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,EcGroup,MimcConfig,Base64Encoding,JSONRefType,VoterParamsField,VrfStandard,BlockField -output=fields_string.go
+//go:generate go tool -modfile=../../../tool.mod stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,EcGroup,MimcConfig,Poseidon2Config,Base64Encoding,JSONRefType,VoterParamsField,VrfStandard,BlockField -output=fields_string.go
 
 // FieldSpec unifies the various specs for assembly, disassembly, and doc generation.
 type FieldSpec interface {
@@ -46,6 +47,16 @@ type FieldGroup struct {
 	Doc   string
 	Names []string
 	specs fieldSpecMap
+}
+
+// Heading returns a documentation heading for this FieldGroup.
+func (fg FieldGroup) Heading() string {
+	heading := fg.Name
+	if fg.Doc != "" {
+		word, _, _ := strings.Cut(fg.Doc, " ")
+		heading += " " + word
+	}
+	return heading
 }
 
 // SpecByName returns a FieldsSpec for a name, respecting the "sparseness" of
@@ -412,11 +423,37 @@ func txnaFieldNames() []string {
 	return names
 }
 
+// itxnSettableFieldSpec views a txn field through itxn_field's lens: Version()
+// reports when the field became *settable* (itxVersion) rather than gettable, so
+// doc generation gates and presents fields by the version they can actually be
+// set. This mirrors appParamsSetFieldSpec for app_params_set.
+type itxnSettableFieldSpec struct {
+	txnFieldSpec
+}
+
+func (fs itxnSettableFieldSpec) OpVersion() uint64 {
+	return 5 // itxn_field's introduction
+}
+
+func (fs itxnSettableFieldSpec) Version() uint64 {
+	return fs.itxVersion
+}
+
+// itxnSettableNameSpecMap yields the settable view of a txn field, by name.
+type itxnSettableNameSpecMap map[string]itxnSettableFieldSpec
+
+func (s itxnSettableNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+var itxnSettableFieldSpecByName = make(itxnSettableNameSpecMap, len(TxnFieldNames))
+
 // ItxnSettableFields collects info for itxn_field opcode
 var ItxnSettableFields = FieldGroup{
 	"itxn_field", "",
 	itxnSettableFieldNames(),
-	txnFieldSpecByName,
+	itxnSettableFieldSpecByName,
 }
 
 // itxnSettableFieldNames are txn field names that can be set by
@@ -453,6 +490,20 @@ var TxnTypeNames = [...]string{
 	string(protocol.AssetTransferTx),
 	string(protocol.AssetFreezeTx),
 	string(protocol.ApplicationCallTx),
+	string(protocol.StateProofTx),
+	string(protocol.HeartbeatTx),
+}
+
+// txnTypeLongNames provide a friendlier type constant name in assembler.
+var txnTypeLongNames = map[string]string{
+	string(protocol.PaymentTx):         "Payment",
+	string(protocol.KeyRegistrationTx): "KeyRegistration",
+	string(protocol.AssetConfigTx):     "AssetConfig",
+	string(protocol.AssetTransferTx):   "AssetTransfer",
+	string(protocol.AssetFreezeTx):     "AssetFreeze",
+	string(protocol.ApplicationCallTx): "ApplicationCall",
+	string(protocol.StateProofTx):      "State Proof",
+	string(protocol.HeartbeatTx):       "Consensus heartbeat",
 }
 
 // map txn type names (long and short) to index/enum value
@@ -482,7 +533,7 @@ const (
 var OnCompletionNames [invalidOnCompletionConst]string
 
 // onCompletionMap maps symbolic name to uint64 for assembleInt
-var onCompletionMap map[string]uint64
+var onCompletionMap = make(map[string]uint64)
 
 // GlobalField is an enum for `global` opcode
 type GlobalField uint64
@@ -847,9 +898,71 @@ func (s mimcConfigNameSpecMap) get(name string) (FieldSpec, bool) {
 
 // MimcConfigs collects details about the constants used to describe MimcConfigs
 var MimcConfigs = FieldGroup{
-	"Mimc Configurations", "Parameters",
+	"MimcConfigurations", "Parameters",
 	mimcConfigNames[:],
 	mimcConfigSpecByName,
+}
+
+// Poseidon2Config is an enum for the `poseidon2` opcode
+type Poseidon2Config int
+
+const (
+	// BN254t2 is the default Poseidon2 configuration for the BN254 curve with Merkle-Damgard mode, width = 2, full rounds = 6, partial rounds = 50
+	BN254t2 Poseidon2Config = iota
+	// BLS12_381t2 is the default Poseidon2 configuration for the BLS12-381 curve with Merkle-Damgard mode, width = 2, full rounds = 6, partial rounds = 50
+	BLS12_381t2
+	invalidPoseidon2Config // compile-time constant for number of fields
+)
+
+var poseidon2ConfigNames [invalidPoseidon2Config]string
+
+type poseidon2ConfigSpec struct {
+	field Poseidon2Config
+	doc   string
+}
+
+func (fs poseidon2ConfigSpec) Field() byte {
+	return byte(fs.field)
+}
+func (fs poseidon2ConfigSpec) Type() StackType {
+	return StackNone // Will not show, since all are untyped
+}
+func (fs poseidon2ConfigSpec) OpVersion() uint64 {
+	return poseidon2Version
+}
+func (fs poseidon2ConfigSpec) Version() uint64 {
+	return poseidon2Version
+}
+func (fs poseidon2ConfigSpec) Note() string {
+	return fs.doc
+}
+
+var poseidon2ConfigSpecs = [...]poseidon2ConfigSpec{
+	{BN254t2, "Poseidon2 Merkle-Damgard configuration for BN254 with width = 2, full rounds = 6, partial rounds = 50"},
+	{BLS12_381t2, "Poseidon2 Merkle-Damgard configuration for BLS12-381 with width = 2, full rounds = 6, partial rounds = 50"},
+}
+
+func poseidon2ConfigSpecByField(c Poseidon2Config) (poseidon2ConfigSpec, bool) {
+	if int(c) >= len(poseidon2ConfigSpecs) {
+		return poseidon2ConfigSpec{}, false
+	}
+	return poseidon2ConfigSpecs[c], true
+}
+
+var poseidon2ConfigSpecByName = make(poseidon2ConfigNameSpecMap, len(poseidon2ConfigNames))
+
+type poseidon2ConfigNameSpecMap map[string]poseidon2ConfigSpec
+
+func (s poseidon2ConfigNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+// Poseidon2Configs collects details about the constants used to describe Poseidon2Configs
+var Poseidon2Configs = FieldGroup{
+	"Poseidon2 Configurations", "Parameters",
+	poseidon2ConfigNames[:],
+	poseidon2ConfigSpecByName,
 }
 
 // Base64Encoding is an enum for the `base64decode` opcode
@@ -1353,16 +1466,22 @@ const (
 	// AppSizeSponsor is responsible for extra pages and global state balance requirement.
 	AppSizeSponsor
 
+	// AppForeignBoxReads AppParams.ForeignBoxReads
+	AppForeignBoxReads
+	// AppFamilyBoxAccess AppParams.FamilyBoxAccess
+	AppFamilyBoxAccess
+
 	invalidAppParamsField // compile-time constant for number of fields
 )
 
 var appParamsFieldNames [invalidAppParamsField]string
 
 type appParamsFieldSpec struct {
-	field   AppParamsField
-	ftype   StackType
-	version uint64
-	doc     string
+	field      AppParamsField
+	ftype      StackType
+	version    uint64 // version when field became available to app_params_get
+	setVersion uint64 // version when field became settable via app_params_set; 0 means not settable
+	doc        string
 }
 
 func (fs appParamsFieldSpec) Field() byte {
@@ -1382,17 +1501,19 @@ func (fs appParamsFieldSpec) Note() string {
 }
 
 var appParamsFieldSpecs = [...]appParamsFieldSpec{
-	{AppApprovalProgram, StackBytes, 5, "Bytecode of Approval Program"},
-	{AppClearStateProgram, StackBytes, 5, "Bytecode of Clear State Program"},
-	{AppGlobalNumUint, StackUint64, 5, "Number of uint64 values allowed in Global State"},
-	{AppGlobalNumByteSlice, StackUint64, 5, "Number of byte array values allowed in Global State"},
-	{AppLocalNumUint, StackUint64, 5, "Number of uint64 values allowed in Local State"},
-	{AppLocalNumByteSlice, StackUint64, 5, "Number of byte array values allowed in Local State"},
-	{AppExtraProgramPages, StackUint64, 5, "Number of Extra Program Pages of code space"},
-	{AppCreator, StackAddress, 5, "Creator address"},
-	{AppAddress, StackAddress, 5, "Address for which this application has authority"},
-	{AppVersion, StackUint64, 12, "Version of the app, incremented each time the approval or clear program changes"},
-	{AppSizeSponsor, StackAddress, 13, "If non-zero, this account is responsible for the app's extra pages and global state balance requirement"},
+	{AppApprovalProgram, StackBytes, 5, 0, "Bytecode of Approval Program"},
+	{AppClearStateProgram, StackBytes, 5, 0, "Bytecode of Clear State Program"},
+	{AppGlobalNumUint, StackUint64, 5, 0, "Number of uint64 values allowed in Global State"},
+	{AppGlobalNumByteSlice, StackUint64, 5, 0, "Number of byte array values allowed in Global State"},
+	{AppLocalNumUint, StackUint64, 5, 0, "Number of uint64 values allowed in Local State"},
+	{AppLocalNumByteSlice, StackUint64, 5, 0, "Number of byte array values allowed in Local State"},
+	{AppExtraProgramPages, StackUint64, 5, 0, "Number of Extra Program Pages of code space"},
+	{AppCreator, StackAddress, 5, 0, "Creator address"},
+	{AppAddress, StackAddress, 5, 0, "Address for which this application has authority"},
+	{AppVersion, StackUint64, 12, 0, "Version of the app, incremented each time the approval or clear program changes"},
+	{AppSizeSponsor, StackAddress, 13, 0, "If non-zero, this account is responsible for the app's extra pages and global state balance requirement"},
+	{AppForeignBoxReads, StackBoolean, foreignBoxVersion, foreignBoxVersion, "This app's boxes may be read by any app"},
+	{AppFamilyBoxAccess, StackBoolean, foreignBoxVersion, foreignBoxVersion, "This app's boxes may be read and written by any app (existing or future) with the same creator"},
 }
 
 func appParamsFieldSpecByField(f AppParamsField) (appParamsFieldSpec, bool) {
@@ -1417,6 +1538,57 @@ var AppParamsFields = FieldGroup{
 	"app_params", "Fields",
 	appParamsFieldNames[:],
 	appParamsFieldSpecByName,
+}
+
+// appParamsSetFieldSpec views an app params field through app_params_set's lens:
+// Version() reports when the field became *settable* rather than gettable, and
+// OpVersion() is app_params_set's own introduction. This lets doc generation
+// present the settable fields and their versions, the way ItxnSettableFields
+// does for itxn_field.
+type appParamsSetFieldSpec struct {
+	appParamsFieldSpec
+}
+
+func (fs appParamsSetFieldSpec) OpVersion() uint64 {
+	return foreignBoxVersion
+}
+
+func (fs appParamsSetFieldSpec) Version() uint64 {
+	return fs.setVersion
+}
+
+// appParamsSetNameSpecMap yields the settable view of a field, by name.
+type appParamsSetNameSpecMap map[string]appParamsSetFieldSpec
+
+func (s appParamsSetNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+var appParamsSetFieldSpecByName = make(appParamsSetNameSpecMap, len(appParamsFieldNames))
+
+// AppParamsSettableFields describes the fields app_params_set can set. Like
+// itxn_field's ItxnSettableFields, its Names are "sparse": only settable fields
+// are named, so non-settable ones are hidden from docs and disassembly.
+var AppParamsSettableFields = FieldGroup{
+	"app_params_set", "Fields",
+	appParamsSettableFieldNames(),
+	appParamsSetFieldSpecByName,
+}
+
+// appParamsSettableFieldNames are the app params field names that can be set by
+// app_params_set. Return value is a "sparse" slice: settable fields appear at
+// their usual index, non-settable slots are set to "".
+func appParamsSettableFieldNames() []string {
+	names := make([]string, len(appParamsFieldSpecs))
+	for i, fs := range appParamsFieldSpecs {
+		if fs.setVersion == 0 {
+			names[i] = ""
+		} else {
+			names[i] = fs.field.String()
+		}
+	}
+	return names
 }
 
 // AcctParamsField is an enum for `acct_params_get` opcode
@@ -1616,6 +1788,7 @@ func init() {
 		equal(int(s.field), i)
 		TxnFieldNames[s.field] = s.field.String()
 		txnFieldSpecByName[s.field.String()] = s
+		itxnSettableFieldSpecByName[s.field.String()] = itxnSettableFieldSpec{s}
 	}
 
 	equal(len(globalFieldSpecs), len(GlobalFieldNames))
@@ -1644,6 +1817,13 @@ func init() {
 		equal(int(s.field), i)
 		mimcConfigNames[s.field] = s.field.String()
 		mimcConfigSpecByName[s.field.String()] = s
+	}
+
+	equal(len(poseidon2ConfigSpecs), len(poseidon2ConfigNames))
+	for i, s := range poseidon2ConfigSpecs {
+		equal(int(s.field), i)
+		poseidon2ConfigNames[s.field] = s.field.String()
+		poseidon2ConfigSpecByName[s.field.String()] = s
 	}
 
 	equal(len(base64EncodingSpecs), len(base64EncodingNames))
@@ -1693,6 +1873,7 @@ func init() {
 		equal(int(s.field), i)
 		appParamsFieldNames[i] = s.field.String()
 		appParamsFieldSpecByName[s.field.String()] = s
+		appParamsSetFieldSpecByName[s.field.String()] = appParamsSetFieldSpec{s}
 	}
 
 	equal(len(acctParamsFieldSpecs), len(acctParamsFieldNames))
@@ -1709,15 +1890,15 @@ func init() {
 		voterParamsFieldSpecByName[s.field.String()] = s
 	}
 
-	txnTypeMap = make(map[string]uint64)
 	for i, tt := range TxnTypeNames {
 		txnTypeMap[tt] = uint64(i)
 	}
-	for k, v := range TypeNameDescriptions {
+	for k, v := range txnTypeLongNames {
 		txnTypeMap[v] = txnTypeMap[k]
 	}
+	// unknown does not have a long name, hence +1
+	equal(len(TxnTypeNames), len(txnTypeLongNames)+1)
 
-	onCompletionMap = make(map[string]uint64, len(OnCompletionNames))
 	for oc := NoOp; oc < invalidOnCompletionConst; oc++ {
 		symbol := oc.String()
 		OnCompletionNames[oc] = symbol

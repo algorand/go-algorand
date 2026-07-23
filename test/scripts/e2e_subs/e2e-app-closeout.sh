@@ -1,6 +1,8 @@
 #!/bin/bash
 
-date '+app-closeout start %Y%m%d_%H%M%S'
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
 
 set -e
 set -x
@@ -30,7 +32,7 @@ ${gcmd} app optin --app-id $APPID --from $ACCOUNTB
 EXPERROR='outstanding applications'
 RES=$(${gcmd} clerk send --from $ACCOUNTB --close-to $ACCOUNT --to $ACCOUNT -a 0 2>&1 || true)
 if [[ $RES != *"${EXPERROR}"* ]]; then
-    date '+app-closeout FAIL closing out account should fail if still opted in to app %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL closing out account should fail if still opted in to app %Y%m%d_%H%M%S"
     false
 fi
 
@@ -56,7 +58,7 @@ ${gcmd} clerk send --from $ACCOUNTB --close-to $ACCOUNT --to $ACCOUNT -a 0
 EXPERROR='outstanding created applications'
 RES=$(${gcmd} clerk send --from $ACCOUNT --close-to $ACCOUNTB --to $ACCOUNTB -a 0 2>&1 || true)
 if [[ $RES != *"${EXPERROR}"* ]]; then
-    date '+app-closeout FAIL closing out account should fail if created app still exists %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL closing out account should fail if created app still exists %Y%m%d_%H%M%S"
     false
 fi
 

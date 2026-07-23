@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -45,17 +45,17 @@ func main() {
 	}
 }
 
-func reportInfoln(args ...interface{}) {
+func reportInfoln(args ...any) {
 	fmt.Println(args...)
 	// log.Infoln(args...)
 }
 
-func reportInfof(format string, args ...interface{}) {
+func reportInfof(format string, args ...any) {
 	fmt.Printf(format+"\n", args...)
 	// log.Infof(format, args...)
 }
 
-func reportErrorf(format string, args ...interface{}) {
+func reportErrorf(format string, args ...any) {
 	fmt.Printf(format+"\n", args...)
 	os.Exit(1)
 }

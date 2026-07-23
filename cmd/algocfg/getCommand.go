@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -67,7 +67,7 @@ var getCmd = &cobra.Command{
 	},
 }
 
-func serializeObjectProperty(object interface{}, property string) (ret string, err error) {
+func serializeObjectProperty(object any, property string) (ret string, err error) {
 	v := reflect.ValueOf(object)
 	val := reflect.Indirect(v)
 	f := val.FieldByName(property)

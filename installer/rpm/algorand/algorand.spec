@@ -29,7 +29,7 @@ This package provides an implementation of the Algorand protocol.
 mkdir -p %{buildroot}/usr/bin
 # NOTE: keep in sync with scripts/build_deb.sh bin_files
 # NOTE: keep in sync with %files section below
-for f in algocfg algod algoh algokey ddconfig.sh diagcfg goal kmd node_exporter; do
+for f in algocfg algod algoh algokey diagcfg goal kmd node_exporter; do
   install -m 755 ${ALGO_BIN}/${f} %{buildroot}/usr/bin/${f}
 done
 
@@ -77,7 +77,6 @@ fi
 /usr/bin/algod
 /usr/bin/algoh
 /usr/bin/algokey
-/usr/bin/ddconfig.sh
 /usr/bin/diagcfg
 /usr/bin/goal
 /usr/bin/kmd

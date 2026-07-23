@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -54,7 +54,6 @@ const (
 var rawRequestPaths = map[string]bool{
 	"/v2/transactions":          true,
 	"/v2/transactions/async":    true,
-	"/v2/teal/dryrun":           true,
 	"/v2/teal/compile":          true,
 	"/v2/participation":         true,
 	"/v2/transactions/simulate": true,
@@ -170,7 +169,7 @@ func mergeRawQueries(q1, q2 string) string {
 // submitForm is a helper used for submitting (ex.) GETs and POSTs to the server
 // if expectNoContent is true, then it is expected that the response received will have a content length of zero
 func (client RestClient) submitForm(
-	response interface{}, path string, params interface{}, body interface{},
+	response any, path string, params any, body any,
 	requestMethod string, encodeJSON bool, decodeJSON bool, expectNoContent bool) error {
 
 	var err error
@@ -255,26 +254,26 @@ func (client RestClient) submitForm(
 }
 
 // get performs a GET request to the specific path against the server
-func (client RestClient) get(response interface{}, path string, request interface{}) error {
+func (client RestClient) get(response any, path string, request any) error {
 	return client.submitForm(response, path, request, nil, "GET", false /* encodeJSON */, true /* decodeJSON */, false)
 }
 
 // delete performs a DELETE request to the specific path against the server
 // when expectNoContent is true, then no content is expected to be returned from the endpoint
-func (client RestClient) delete(response interface{}, path string, request interface{}, expectNoContent bool) error {
+func (client RestClient) delete(response any, path string, request any, expectNoContent bool) error {
 	return client.submitForm(response, path, request, nil, "DELETE", false /* encodeJSON */, true /* decodeJSON */, expectNoContent)
 }
 
 // getRaw behaves identically to get but doesn't json decode the response, and
 // the response must implement the RawResponse interface
-func (client RestClient) getRaw(response RawResponse, path string, request interface{}) error {
+func (client RestClient) getRaw(response RawResponse, path string, request any) error {
 	return client.submitForm(response, path, request, nil, "GET", false /* encodeJSON */, false /* decodeJSON */, false)
 }
 
 // post sends a POST request to the given path with the given request object.
 // No query parameters will be sent if request is nil.
 // response must be a pointer to an object as post writes the response there.
-func (client RestClient) post(response interface{}, path string, params interface{}, body interface{}, expectNoContent bool) error {
+func (client RestClient) post(response any, path string, params any, body any, expectNoContent bool) error {
 	return client.submitForm(response, path, params, body, "POST", true /* encodeJSON */, true /* decodeJSON */, expectNoContent)
 }
 
@@ -398,6 +397,17 @@ type pendingTransactionsParams struct {
 	Format string `url:"format"`
 }
 
+type rawTransactionParams struct {
+	SkipPqAddressCheck bool `url:"skip-pq-address-check,omitempty"`
+}
+
+func rawTransactionQueryParams(skipPqAddressCheck bool) any {
+	if skipPqAddressCheck {
+		return rawTransactionParams{SkipPqAddressCheck: true}
+	}
+	return nil
+}
+
 // GetPendingTransactions asks algod for a snapshot of current pending txns on the node, bounded by maxTxns.
 // If maxTxns = 0, fetches as many transactions as possible.
 func (client RestClient) GetPendingTransactions(maxTxns uint64) (response model.PendingTransactionsResponse, err error) {
@@ -444,9 +454,15 @@ type accountInformationParams struct {
 	Exclude string `url:"exclude"`
 }
 
-type pageParams struct {
-	Next  *string `url:"next,omitempty"`
-	Limit *uint64 `url:"limit,omitempty"`
+type accountAssetsParams struct {
+	Next  string `url:"next,omitempty"`
+	Limit uint64 `url:"limit,omitempty"`
+}
+
+type accountApplicationsParams struct {
+	Next    string `url:"next,omitempty"`
+	Limit   uint64 `url:"limit,omitempty"`
+	Include string `url:"include,omitempty"`
 }
 
 type catchupParams struct {
@@ -481,12 +497,33 @@ func (client RestClient) ApplicationInformation(index basics.AppIndex) (response
 }
 
 type applicationBoxesParams struct {
-	Max uint64 `url:"max,omitempty"`
+	Max     uint64       `url:"max,omitempty"`
+	Limit   uint64       `url:"limit,omitempty"`
+	Next    string       `url:"next,omitempty"`
+	Prefix  string       `url:"prefix,omitempty"`
+	Include string       `url:"include,omitempty"`
+	Round   basics.Round `url:"round,omitempty"`
 }
 
 // ApplicationBoxes gets the BoxesResponse associated with the passed application ID
 func (client RestClient) ApplicationBoxes(appID basics.AppIndex, maxBoxNum uint64) (response model.BoxesResponse, err error) {
-	err = client.get(&response, fmt.Sprintf("/v2/applications/%d/boxes", appID), applicationBoxesParams{maxBoxNum})
+	err = client.get(&response, fmt.Sprintf("/v2/applications/%d/boxes", appID), applicationBoxesParams{Max: maxBoxNum})
+	return
+}
+
+// ApplicationBoxesPage gets a page of boxes for the given application ID with pagination.
+func (client RestClient) ApplicationBoxesPage(appID basics.AppIndex, limit uint64, next string, prefix string, values bool, round basics.Round) (response model.BoxesResponse, err error) {
+	var include string
+	if values {
+		include = "values"
+	}
+	err = client.get(&response, fmt.Sprintf("/v2/applications/%d/boxes", appID), applicationBoxesParams{
+		Limit:   limit,
+		Next:    next,
+		Prefix:  prefix,
+		Include: include,
+		Round:   round,
+	})
 	return
 }
 
@@ -566,6 +603,16 @@ func (client RestClient) RawAccountApplicationInformation(accountAddress string,
 	return
 }
 
+// AccountApplicationsInformation gets account information about a particular account's applications, subject to pagination.
+func (client RestClient) AccountApplicationsInformation(accountAddress string, next string, limit uint64, includeParams bool) (response model.AccountApplicationsInformationResponse, err error) {
+	var include string
+	if includeParams {
+		include = "params"
+	}
+	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/applications", accountAddress), accountApplicationsParams{next, limit, include})
+	return
+}
+
 // AccountAssetInformation gets account information about a given app.
 func (client RestClient) AccountAssetInformation(accountAddress string, assetID basics.AssetIndex) (response model.AccountAssetResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/assets/%d", accountAddress, assetID), nil)
@@ -573,15 +620,15 @@ func (client RestClient) AccountAssetInformation(accountAddress string, assetID 
 }
 
 // AccountAssetsInformation gets account information about a particular account's assets, subject to pagination.
-func (client RestClient) AccountAssetsInformation(accountAddress string, next *string, limit *uint64) (response model.AccountAssetsInformationResponse, err error) {
-	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/assets", accountAddress), pageParams{next, limit})
+func (client RestClient) AccountAssetsInformation(accountAddress string, next string, limit uint64) (response model.AccountAssetsInformationResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/assets", accountAddress), accountAssetsParams{next, limit})
 	return
 }
 
 // RawAccountAssetsInformation gets account information about a particular account's assets, subject to pagination.
-func (client RestClient) RawAccountAssetsInformation(accountAddress string, next *string, limit *uint64) (response []byte, err error) {
+func (client RestClient) RawAccountAssetsInformation(accountAddress string, next string, limit uint64) (response []byte, err error) {
 	var blob Blob
-	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s/assets", accountAddress), pageParams{next, limit})
+	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s/assets", accountAddress), accountAssetsParams{next, limit})
 	response = blob
 	return
 }
@@ -594,18 +641,33 @@ func (client RestClient) SuggestedParams() (response model.TransactionParameters
 
 // SendRawTransaction gets a SignedTxn and broadcasts it to the network
 func (client RestClient) SendRawTransaction(txn transactions.SignedTxn) (response model.PostTransactionsResponse, err error) {
-	err = client.post(&response, "/v2/transactions", nil, protocol.Encode(&txn), false)
-	return
+	return client.SendRawTransactionWithParams(txn, false)
+}
+
+// SendRawTransactionWithParams gets a SignedTxn and broadcasts it to the network
+func (client RestClient) SendRawTransactionWithParams(txn transactions.SignedTxn, skipPqAddressCheck bool) (response model.PostTransactionsResponse, err error) {
+	err = client.post(&response, "/v2/transactions", rawTransactionQueryParams(skipPqAddressCheck), protocol.Encode(&txn), false)
+	return response, err
 }
 
 // SendRawTransactionAsync gets a SignedTxn and broadcasts it to the network
 func (client RestClient) SendRawTransactionAsync(txn transactions.SignedTxn) (response model.PostTransactionsResponse, err error) {
-	err = client.post(&response, "/v2/transactions/async", nil, protocol.Encode(&txn), true)
-	return
+	return client.SendRawTransactionAsyncWithParams(txn, false)
+}
+
+// SendRawTransactionAsyncWithParams gets a SignedTxn and broadcasts it to the network
+func (client RestClient) SendRawTransactionAsyncWithParams(txn transactions.SignedTxn, skipPqAddressCheck bool) (response model.PostTransactionsResponse, err error) {
+	err = client.post(&response, "/v2/transactions/async", rawTransactionQueryParams(skipPqAddressCheck), protocol.Encode(&txn), true)
+	return response, err
 }
 
 // SendRawTransactionGroup gets a SignedTxn group and broadcasts it to the network
 func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTxn) error {
+	return client.SendRawTransactionGroupWithParams(txgroup, false)
+}
+
+// SendRawTransactionGroupWithParams gets a SignedTxn group and broadcasts it to the network
+func (client RestClient) SendRawTransactionGroupWithParams(txgroup []transactions.SignedTxn, skipPqAddressCheck bool) error {
 	// response is not terribly useful: it's the txid of the first transaction,
 	// which can be computed by the client anyway..
 	var enc []byte
@@ -614,7 +676,7 @@ func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTx
 	}
 
 	var response model.PostTransactionsResponse
-	return client.post(&response, "/v2/transactions", nil, enc, false)
+	return client.post(&response, "/v2/transactions", rawTransactionQueryParams(skipPqAddressCheck), enc, false)
 }
 
 // Block gets the block info for the given round
@@ -755,14 +817,6 @@ func (client RestClient) doGetWithQuery(ctx context.Context, path string, queryA
 		return
 	}
 	result = string(bytes)
-	return
-}
-
-// RawDryrun gets the raw DryrunResponse associated with the passed address
-func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
-	var blob Blob
-	err = client.submitForm(&blob, "/v2/teal/dryrun", nil, data, "POST", false /* encodeJSON */, false /* decodeJSON */, false)
-	response = blob
 	return
 }
 

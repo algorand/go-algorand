@@ -154,6 +154,11 @@ Ledger uses independent state machines that can rebuild from blockchain events, 
 - Race detection enabled for concurrent code validation
 - Benchmark tests for performance-critical paths
 
+### Paginated Resource Lookups (`ledger/acctupdates.go`)
+The `lookupAssetResources`, `lookupApplicationResources`, and `lookupBoxResources` functions follow the same pattern: walk in-memory deltas backwards, query the DB, then merge the two result sets. These functions must stay closely aligned — a bug fix or structural change in one almost certainly requires the same change in the others. They are candidates for future consolidation into shared generic logic.
+
+Their corresponding `Ledger`-level wrappers in `ledger/ledger.go` (`LookupAssets`, `LookupApplications`, `LookupBoxes`) must each hold `trackerMu.RLock()`, matching every other method that accesses tracker state.
+
 ### Code Organization
 - Interface-first design for testability and modularity
 - Dependency injection for component assembly
@@ -170,3 +175,16 @@ Ledger uses independent state machines that can rebuild from blockchain events, 
 - Consensus parameters support versioning for upgrades
 - Backward compatibility maintained through careful interface design
 - Feature flags and gradual rollout mechanisms
+
+### Sibling repositories
+- ../specs contains the Algorand Specification. When directed, make
+  spec updates to describe protocol changes there. As a rule, new
+  consensus parameters, or changes to existing parameters will require
+  an update to the specification. Changes for new opcodes can usually
+  be handled by running `make logic`.
+- ../go-algorand-sdk contains the Go language SDK to access `algod`
+  and `indexer`, as well as utilities such as transaction creation and
+  signing. New REST endpoints and new transaction fields and types
+  will often require updates here. ./scripts/export_sdk_types.py is
+  useful for preparing changes to accommodate changes to go-algorand
+  types.

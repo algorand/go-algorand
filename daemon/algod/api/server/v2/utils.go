@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,8 +27,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/algorand/go-codec/codec"
 	"github.com/labstack/echo/v4"
+
+	"github.com/algorand/go-codec/codec"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
@@ -267,7 +268,7 @@ func getCodecHandle(formatPtr *string) (codec.Handle, string, error) {
 	}
 }
 
-func encode(handle codec.Handle, obj interface{}) ([]byte, error) {
+func encode(handle codec.Handle, obj any) ([]byte, error) {
 	var output []byte
 	enc := codec.NewEncoderBytes(&output, handle)
 
@@ -278,7 +279,7 @@ func encode(handle codec.Handle, obj interface{}) ([]byte, error) {
 	return output, nil
 }
 
-func decode(handle codec.Handle, data []byte, v interface{}) error {
+func decode(handle codec.Handle, data []byte, v any) error {
 	enc := codec.NewDecoderBytes(data, handle)
 
 	err := enc.Decode(v)
@@ -478,6 +479,7 @@ func convertTxnResult(txnResult simulation.TxnResult) PreEncodedSimulateTxnResul
 		Txn:                      ConvertInnerTxn(&txnResult.Txn),
 		AppBudgetConsumed:        omitEmpty(txnResult.AppBudgetConsumed),
 		LogicSigBudgetConsumed:   omitEmpty(txnResult.LogicSigBudgetConsumed),
+		FeesPaid:                 omitEmpty(txnResult.FeesPaid.Raw),
 		TransactionTrace:         convertTxnTrace(txnResult.Trace),
 		UnnamedResourcesAccessed: convertUnnamedResourcesAccessed(txnResult.UnnamedResourcesAccessed),
 	}
@@ -574,6 +576,8 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 		FailureMessage:           omitEmpty(txnGroupResult.FailureMessage),
 		AppBudgetAdded:           omitEmpty(txnGroupResult.AppBudgetAdded),
 		AppBudgetConsumed:        omitEmpty(txnGroupResult.AppBudgetConsumed),
+		GroupUsage:               omitEmpty(uint64(txnGroupResult.GroupUsage)),
+		GroupFeesPaid:            omitEmpty(txnGroupResult.GroupFeesPaid.Raw),
 		UnnamedResourcesAccessed: convertUnnamedResourcesAccessed(txnGroupResult.UnnamedResourcesAccessed),
 	}
 

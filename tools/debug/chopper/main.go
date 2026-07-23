@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -95,7 +95,7 @@ func extractEntries(filename string, checkLabels bool) rootLabelInfo {
 			}
 			result.roots[basics.Round(entry.Details.NewBase)] = &entry.Details
 		} else if checkLabels && strings.HasPrefix(line, `{"file":"catchpointlabel.go"`) {
-			entry := map[string]interface{}{}
+			entry := map[string]any{}
 			if err := json.Unmarshal([]byte(line), &entry); err != nil {
 				fmt.Fprintf(os.Stderr, "Error reading catchpoint label entry %s: %s\n", filename, err.Error())
 				continue
@@ -127,8 +127,8 @@ type reportData struct {
 	size1       int
 	size2       int
 	matched     int
-	mismatched  []interface{}
-	errReporter func(interface{})
+	mismatched  []any
+	errReporter func(any)
 }
 
 // report prints out stats about matched and mismatched roots or labels
@@ -175,7 +175,7 @@ func main() {
 
 	// match roots
 	matchedRoots := 0
-	var mismatchedRoots []interface{}
+	var mismatchedRoots []any
 	for rnd, tree1 := range info1.roots {
 		if tree2, ok := info2.roots[rnd]; ok {
 			if tree1.Root == tree2.Root {
@@ -188,7 +188,7 @@ func main() {
 
 	// match labels
 	matchedLabels := 0
-	var mismatchedLabels []interface{}
+	var mismatchedLabels []any
 	if checkLabels {
 		for rnd, label1 := range info1.labels {
 			if label2, ok := info2.labels[rnd]; ok {
@@ -208,7 +208,7 @@ func main() {
 		size2:      len(info2.roots),
 		matched:    matchedRoots,
 		mismatched: mismatchedRoots,
-		errReporter: func(e interface{}) {
+		errReporter: func(e any) {
 			entry := e.([2]*telemetryspec.CatchpointRootUpdateEventDetails)
 			fmt.Printf("NewBase: %d, first: (%d, %s), second (%d,%s)\n", entry[0].NewBase, entry[0].OldBase, entry[0].Root, entry[1].OldBase, entry[1].Root)
 		},
@@ -221,7 +221,7 @@ func main() {
 			size2:      len(info2.labels),
 			matched:    matchedLabels,
 			mismatched: mismatchedLabels,
-			errReporter: func(e interface{}) {
+			errReporter: func(e any) {
 				entry := e.([2]string)
 				fmt.Printf("first: %s != %s second\n", entry[0], entry[1])
 			},

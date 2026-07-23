@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package txntest
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 
 	"github.com/algorand/go-algorand/config"
@@ -41,10 +42,10 @@ type Txn struct {
 	Type protocol.TxType
 
 	Sender      basics.Address
-	Fee         interface{} // basics.MicroAlgos, uint64, int, or nil
+	Fee         any // basics.MicroAlgos, uint64, int, or nil
 	FirstValid  basics.Round
 	LastValid   basics.Round
-	Note        []byte
+	Note        any // []byte or string
 	GenesisID   string
 	GenesisHash crypto.Digest
 	Group       crypto.Digest
@@ -60,7 +61,7 @@ type Txn struct {
 	StateProofPK     merklesignature.Commitment
 
 	Receiver         basics.Address
-	Amount           uint64
+	Amount           any // basics.MicroAlgos, uint64, int, or nil
 	CloseRemainderTo basics.Address
 
 	ConfigAsset basics.AssetIndex
@@ -94,42 +95,44 @@ type Txn struct {
 	StateProof     stateproof.StateProof
 	StateProofMsg  stateproofmsg.Message
 
-	HbAddress     basics.Address
-	HbProof       crypto.HeartbeatProof
-	HbSeed        committee.Seed
-	HbVoteID      crypto.OneTimeSignatureVerifier
-	HbKeyDilution uint64
+	HbAddress           basics.Address
+	HbProof             crypto.HeartbeatProof
+	HbSeed              committee.Seed
+	HbVoteID            crypto.OneTimeSignatureVerifier
+	HbKeyDilution       uint64
+	HbChallengeDiscount bool
 }
 
 // internalCopy "finishes" a shallow copy done by a simple Go assignment by
 // copying all of the slice fields
 func (tx *Txn) internalCopy() {
-	tx.Note = append([]byte(nil), tx.Note...)
-	if tx.ApplicationArgs != nil {
-		tx.ApplicationArgs = append([][]byte(nil), tx.ApplicationArgs...)
-		for i := range tx.ApplicationArgs {
-			tx.ApplicationArgs[i] = append([]byte(nil), tx.ApplicationArgs[i]...)
-		}
+	// if note is a byte slice, clone it
+	if note, ok := tx.Note.([]byte); ok {
+		tx.Note = slices.Clone(note)
 	}
-	tx.Accounts = append([]basics.Address(nil), tx.Accounts...)
-	tx.ForeignApps = append([]basics.AppIndex(nil), tx.ForeignApps...)
-	tx.ForeignAssets = append([]basics.AssetIndex(nil), tx.ForeignAssets...)
-	tx.Boxes = append([]transactions.BoxRef(nil), tx.Boxes...)
-	for i := 0; i < len(tx.Boxes); i++ {
-		tx.Boxes[i].Name = append([]byte(nil), tx.Boxes[i].Name...)
+	tx.ApplicationArgs = slices.Clone(tx.ApplicationArgs)
+	for i := range tx.ApplicationArgs {
+		tx.ApplicationArgs[i] = slices.Clone(tx.ApplicationArgs[i])
 	}
-	tx.Access = append([]transactions.ResourceRef(nil), tx.Access...)
-	for i := 0; i < len(tx.Access); i++ {
-		tx.Access[i].Box.Name = append([]byte(nil), tx.Access[i].Box.Name...)
+	tx.Accounts = slices.Clone(tx.Accounts)
+	tx.ForeignApps = slices.Clone(tx.ForeignApps)
+	tx.ForeignAssets = slices.Clone(tx.ForeignAssets)
+	tx.Boxes = slices.Clone(tx.Boxes)
+	for i := range tx.Boxes {
+		tx.Boxes[i].Name = slices.Clone(tx.Boxes[i].Name)
+	}
+	tx.Access = slices.Clone(tx.Access)
+	for i := range tx.Access {
+		tx.Access[i].Box.Name = slices.Clone(tx.Access[i].Box.Name)
 	}
 
 	// Programs may or may not actually be byte slices.  The other
 	// possibilitiues don't require copies.
 	if program, ok := tx.ApprovalProgram.([]byte); ok {
-		tx.ApprovalProgram = append([]byte(nil), program...)
+		tx.ApprovalProgram = slices.Clone(program)
 	}
 	if program, ok := tx.ClearStateProgram.([]byte); ok {
-		tx.ClearStateProgram = append([]byte(nil), program...)
+		tx.ClearStateProgram = slices.Clone(program)
 	}
 }
 
@@ -154,9 +157,6 @@ func (tx Txn) Args(strings ...string) *Txn {
 // FillDefaults populates some obvious defaults from config params,
 // unless they have already been set.
 func (tx *Txn) FillDefaults(params config.ConsensusParams) {
-	if tx.Fee == nil {
-		tx.Fee = params.MinTxnFee
-	}
 	if tx.LastValid == 0 {
 		tx.LastValid = tx.FirstValid + basics.Round(params.MaxTxnLife)
 	}
@@ -193,15 +193,27 @@ func (tx *Txn) FillDefaults(params config.ConsensusParams) {
 			case []byte:
 			}
 		}
-		if tx.ApplicationID == 0 && tx.ExtraProgramPages == 0 {
+		if tx.ApplicationID == 0 {
 			totalLength := len(assemble(tx.ApprovalProgram)) + len(assemble(tx.ClearStateProgram))
-			totalPages := basics.DivCeil(totalLength, params.MaxAppTotalProgramLen)
-			tx.ExtraProgramPages = uint32(totalPages - 1)
+			extraPages := basics.DivCeil(totalLength, params.MaxAppTotalProgramLen) - 1
+			if tx.ExtraProgramPages == 0 {
+				tx.ExtraProgramPages = uint32(extraPages)
+			}
+			// If no boxes or access list is already set, set enough boxrefs to create a big program
+			if len(tx.Boxes) == 0 && len(tx.Access) == 0 && extraPages > params.MaxExtraAppProgramPages {
+				tx.Boxes = slices.Repeat([]transactions.BoxRef{{}}, extraPages-params.MaxExtraAppProgramPages)
+			}
 		}
+	}
+	// Do the fee last, so the FeeFactor is accurate. Compute it the same way as a
+	// top-level group: no cost multiplier (1e6), no prior residue.
+	if tx.Fee == nil {
+		f := transactions.SignedTxn{Txn: tx.Txn()}.FeeFactor(params)
+		tx.Fee, _, _ = params.MinFee().FeeForUsage(f, 1e6, 0)
 	}
 }
 
-func assemble(source interface{}) []byte {
+func assemble(source any) []byte {
 	switch program := source.(type) {
 	case string:
 		if program == "" {
@@ -230,17 +242,44 @@ func (tx Txn) Txn() transactions.Transaction {
 	case int:
 		if fee >= 0 {
 			tx.Fee = basics.MicroAlgos{Raw: uint64(fee)}
+		} else {
+			panic("negative fee")
 		}
 	case nil:
 		tx.Fee = basics.MicroAlgos{}
 	}
 
+	switch note := tx.Note.(type) {
+	case []byte:
+		// nothing, already have []byte
+	case string:
+		tx.Note = []byte(note)
+	case nil:
+		tx.Note = []byte(nil)
+	}
+
+	switch amount := tx.Amount.(type) {
+	case basics.MicroAlgos:
+		// nothing, already have MicroAlgos
+	case uint64:
+		tx.Amount = basics.MicroAlgos{Raw: amount}
+	case int:
+		if amount >= 0 {
+			tx.Amount = basics.MicroAlgos{Raw: uint64(amount)}
+		} else {
+			panic("negative amount")
+		}
+	case nil:
+		tx.Amount = basics.MicroAlgos{}
+	}
+
 	hb := &transactions.HeartbeatTxnFields{
-		HbAddress:     tx.HbAddress,
-		HbProof:       tx.HbProof,
-		HbSeed:        tx.HbSeed,
-		HbVoteID:      tx.HbVoteID,
-		HbKeyDilution: tx.HbKeyDilution,
+		HbAddress:           tx.HbAddress,
+		HbProof:             tx.HbProof,
+		HbSeed:              tx.HbSeed,
+		HbVoteID:            tx.HbVoteID,
+		HbKeyDilution:       tx.HbKeyDilution,
+		HbChallengeDiscount: tx.HbChallengeDiscount,
 	}
 	if hb.MsgIsZero() {
 		hb = nil
@@ -252,7 +291,7 @@ func (tx Txn) Txn() transactions.Transaction {
 			Fee:         tx.Fee.(basics.MicroAlgos),
 			FirstValid:  tx.FirstValid,
 			LastValid:   tx.LastValid,
-			Note:        tx.Note,
+			Note:        tx.Note.([]byte),
 			GenesisID:   tx.GenesisID,
 			GenesisHash: tx.GenesisHash,
 			Group:       tx.Group,
@@ -270,7 +309,7 @@ func (tx Txn) Txn() transactions.Transaction {
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
 			Receiver:         tx.Receiver,
-			Amount:           basics.MicroAlgos{Raw: tx.Amount},
+			Amount:           tx.Amount.(basics.MicroAlgos),
 			CloseRemainderTo: tx.CloseRemainderTo,
 		},
 		AssetConfigTxnFields: transactions.AssetConfigTxnFields{
@@ -294,8 +333,8 @@ func (tx Txn) Txn() transactions.Transaction {
 			OnCompletion:      tx.OnCompletion,
 			ApplicationArgs:   tx.ApplicationArgs,
 			Accounts:          tx.Accounts,
-			ForeignApps:       append([]basics.AppIndex(nil), tx.ForeignApps...),
-			ForeignAssets:     append([]basics.AssetIndex(nil), tx.ForeignAssets...),
+			ForeignApps:       slices.Clone(tx.ForeignApps),
+			ForeignAssets:     slices.Clone(tx.ForeignAssets),
 			Boxes:             tx.Boxes,
 			Access:            tx.Access,
 			LocalStateSchema:  tx.LocalStateSchema,
@@ -318,13 +357,6 @@ func (tx Txn) Txn() transactions.Transaction {
 // again, for convenience when driving tests.
 func (tx Txn) SignedTxn() transactions.SignedTxn {
 	return transactions.SignedTxn{Txn: tx.Txn()}
-}
-
-// SignedTxnWithAD produces unsigned, transactions.SignedTxnWithAD
-// from the fields in this Txn.  This seemingly pointless operation
-// exists, again, for convenience when driving tests.
-func (tx Txn) SignedTxnWithAD() transactions.SignedTxnWithAD {
-	return transactions.SignedTxnWithAD{SignedTxn: tx.SignedTxn()}
 }
 
 // Group turns a list of Txns into a slice of SignedTxns with

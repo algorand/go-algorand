@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,27 +19,28 @@ package fixtures
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-deadlock"
+
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // TestingTB is identical to testing.TB, beside the private method.
 type TestingTB interface {
 	Cleanup(func())
-	Error(args ...interface{})
-	Errorf(format string, args ...interface{})
+	Error(args ...any)
+	Errorf(format string, args ...any)
 	Fail()
 	FailNow()
 	Failed() bool
-	Fatal(args ...interface{})
-	Fatalf(format string, args ...interface{})
+	Fatal(args ...any)
+	Fatalf(format string, args ...any)
 	Helper()
-	Log(args ...interface{})
-	Logf(format string, args ...interface{})
+	Log(args ...any)
+	Logf(format string, args ...any)
 	Name() string
-	Skip(args ...interface{})
+	Skip(args ...any)
 	SkipNow()
-	Skipf(format string, args ...interface{})
+	Skipf(format string, args ...any)
 	Skipped() bool
 }
 
@@ -106,14 +107,14 @@ func (st *synchTest) Cleanup(f func()) {
 	defer st.Unlock()
 	st.t.Cleanup(f)
 }
-func (st *synchTest) Error(args ...interface{}) {
+func (st *synchTest) Error(args ...any) {
 	st.Lock()
 	defer st.Unlock()
 	if !st.dontReportFailures {
 		st.t.Error(args...)
 	}
 }
-func (st *synchTest) Errorf(format string, args ...interface{}) {
+func (st *synchTest) Errorf(format string, args ...any) {
 	st.Lock()
 	defer st.Unlock()
 	if !st.dontReportFailures {
@@ -140,7 +141,7 @@ func (st *synchTest) Failed() bool {
 	defer st.Unlock()
 	return st.t.Failed()
 }
-func (st *synchTest) Fatal(args ...interface{}) {
+func (st *synchTest) Fatal(args ...any) {
 	st.Lock()
 	defer st.Unlock()
 	if !st.dontReportFailures {
@@ -148,7 +149,7 @@ func (st *synchTest) Fatal(args ...interface{}) {
 		st.t.Fatal(args...)
 	}
 }
-func (st *synchTest) Fatalf(format string, args ...interface{}) {
+func (st *synchTest) Fatalf(format string, args ...any) {
 	st.Lock()
 	defer st.Unlock()
 	if !st.dontReportFailures {
@@ -161,13 +162,13 @@ func (st *synchTest) Helper() {
 	defer st.Unlock()
 	st.t.Helper()
 }
-func (st *synchTest) Log(args ...interface{}) {
+func (st *synchTest) Log(args ...any) {
 	st.t.Helper()
 	st.Lock()
 	defer st.Unlock()
 	st.t.Log(args...)
 }
-func (st *synchTest) Logf(format string, args ...interface{}) {
+func (st *synchTest) Logf(format string, args ...any) {
 	st.t.Helper()
 	st.Lock()
 	defer st.Unlock()
@@ -178,7 +179,7 @@ func (st *synchTest) Name() string {
 	defer st.Unlock()
 	return st.t.Name()
 }
-func (st *synchTest) Skip(args ...interface{}) {
+func (st *synchTest) Skip(args ...any) {
 	st.Lock()
 	defer st.Unlock()
 	if !st.dontReportFailures {
@@ -194,7 +195,7 @@ func (st *synchTest) SkipNow() {
 		st.t.SkipNow()
 	}
 }
-func (st *synchTest) Skipf(format string, args ...interface{}) {
+func (st *synchTest) Skipf(format string, args ...any) {
 	st.Lock()
 	defer st.Unlock()
 	if !st.dontReportFailures {

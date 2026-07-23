@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,11 +20,12 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 func TestLogicSigSizeBeforePooling(t *testing.T) {
@@ -35,9 +36,9 @@ func TestLogicSigSizeBeforePooling(t *testing.T) {
 	// From consensus version 18, we have lsigs with a maximum size of 1000 bytes.
 	// We need to use pragma 1 for teal in v18
 	pragma := uint(1)
-	tealOK, err := txntest.GenerateProgramOfSize(1000, pragma)
+	tealOK, err := txntest.GenerateUnsaltedProgramOfSize(1000, pragma)
 	a.NoError(err)
-	tealTooLong, err := txntest.GenerateProgramOfSize(1001, pragma)
+	tealTooLong, err := txntest.GenerateUnsaltedProgramOfSize(1001, pragma)
 	a.NoError(err)
 
 	testLogicSize(t, tealOK, tealTooLong, filepath.Join("nettemplates", "TwoNodes50EachV18.json"))
@@ -49,9 +50,9 @@ func TestLogicSigSizeAfterPooling(t *testing.T) {
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	pragma := uint(1)
-	tealOK, err := txntest.GenerateProgramOfSize(2000, pragma)
+	tealOK, err := txntest.GenerateUnsaltedProgramOfSize(2000, pragma)
 	a.NoError(err)
-	tealTooLong, err := txntest.GenerateProgramOfSize(2001, pragma)
+	tealTooLong, err := txntest.GenerateUnsaltedProgramOfSize(2001, pragma)
 	a.NoError(err)
 
 	// TODO: Update this when lsig pooling graduates from vFuture
@@ -124,10 +125,10 @@ func testLogicSize(t *testing.T, tealOK, tealTooLong []byte,
 	a.NoError(err)
 
 	err = client.BroadcastTransactionGroup([]transactions.SignedTxn{stxn1Fail, stxn2Fail})
-	if cp.EnableLogicSigSizePooling {
-		a.ErrorContains(err, "more than the available pool")
+	if cp.TxnSizePricingEnabled() {
+		a.ErrorContains(err, "fees is less than")
 	} else {
-		a.ErrorContains(err, "LogicSig too long")
+		a.ErrorContains(err, "LogicSig.Logic too long")
 	}
 
 	// wait for the second transaction in the successful group to confirm

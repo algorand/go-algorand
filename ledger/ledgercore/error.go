@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,11 +30,16 @@ var ErrNoSpace = errors.New("block does not have space for transaction")
 // Verify each custom error type implements the error interface, and declare which are pointer/value receivers.
 var (
 	_ error = (*TxnNotWellFormedError)(nil)
+	_ error = (*OverspendError)(nil)
+	_ error = (*MinBalanceError)(nil)
+	_ error = (*AssetBalanceError)(nil)
+	_ error = (*ApprovalProgramRejectedError)(nil)
 	_ error = (*TransactionInLedgerError)(nil)
 	_ error = (*LeaseInLedgerError)(nil)
 	_ error = BlockInLedgerError{}
 	_ error = ErrNoEntry{}
 	_ error = ErrNonSequentialBlockEval{}
+	_ error = EvalPanicError{}
 	_ error = (*TxGroupMalformedError)(nil)
 )
 
@@ -45,6 +50,46 @@ type TxnNotWellFormedError string
 
 func (err *TxnNotWellFormedError) Error() string {
 	return string(*err)
+}
+
+// OverspendError indicates a transaction attempted to spend more than available funds.
+type OverspendError struct {
+	Account basics.Address
+	Data    AccountData
+	Tried   basics.MicroAlgos
+}
+
+func (err *OverspendError) Error() string {
+	return fmt.Sprintf("overspend (account %v, data %+v, tried to spend %v)", err.Account, err.Data, err.Tried)
+}
+
+// MinBalanceError indicates a transaction would drop an account below minimum balance.
+type MinBalanceError struct {
+	Account     basics.Address
+	Balance     uint64
+	MinBalance  uint64
+	TotalAssets uint64
+}
+
+func (err *MinBalanceError) Error() string {
+	return fmt.Sprintf("account %v balance %d below min %d (%d assets)", err.Account, err.Balance, err.MinBalance, err.TotalAssets)
+}
+
+// AssetBalanceError indicates a transaction attempted to transfer more of an asset than held.
+type AssetBalanceError struct {
+	Amount       uint64
+	SenderAmount uint64
+}
+
+func (err *AssetBalanceError) Error() string {
+	return fmt.Sprintf("underflow on subtracting %d from sender amount %d", err.Amount, err.SenderAmount)
+}
+
+// ApprovalProgramRejectedError indicates an app call was rejected by its approval program.
+type ApprovalProgramRejectedError struct{}
+
+func (err *ApprovalProgramRejectedError) Error() string {
+	return "transaction rejected by ApprovalProgram"
 }
 
 // TransactionInLedgerError is returned when a transaction cannot be added because it has already been committed, either
@@ -117,30 +162,39 @@ func (err ErrNonSequentialBlockEval) Error() string {
 	return fmt.Sprintf("block evaluation for round %d requires sequential evaluation while the latest round is %d", err.EvaluatorRound, err.LatestRound)
 }
 
+// ErrEvaluatorCorruptedState is returned by a BlockEvaluator refusing further work after a
+// recovered panic left its state half-applied. The refused group was not at fault.
+var ErrEvaluatorCorruptedState = errors.New("block evaluator state was corrupted by a previously recovered panic")
+
+// EvalPanicError is returned when evaluation panicked and was recovered: a typically
+// deterministic defect, so retrying callers back off. Cause is the recovered value's string.
+type EvalPanicError struct {
+	Round basics.Round
+	Cause string
+}
+
+// Error satisfies builtin interface `error`
+func (err EvalPanicError) Error() string {
+	return fmt.Sprintf("panic while evaluating block for round %d: %s", err.Round, err.Cause)
+}
+
 // TxGroupMalformedErrorReasonCode is a reason code for TxGroupMalformed
-//
-//msgp:ignore TxGroupMalformedErrorReasonCode
-type TxGroupMalformedErrorReasonCode int
+type TxGroupMalformedErrorReasonCode = transactions.TxGroupMalformedErrorReasonCode
 
 const (
 	// TxGroupMalformedErrorReasonGeneric is a generic (not specific) reason code
-	TxGroupMalformedErrorReasonGeneric TxGroupMalformedErrorReasonCode = iota
+	TxGroupMalformedErrorReasonGeneric = transactions.TxGroupMalformedErrorReasonGeneric
 	// TxGroupMalformedErrorReasonExceedMaxSize indicates too large txgroup
-	TxGroupMalformedErrorReasonExceedMaxSize
+	TxGroupMalformedErrorReasonExceedMaxSize = transactions.TxGroupMalformedErrorReasonExceedMaxSize
 	// TxGroupMalformedErrorReasonInconsistentGroupID indicates different group IDs in a txgroup
-	TxGroupMalformedErrorReasonInconsistentGroupID
+	TxGroupMalformedErrorReasonInconsistentGroupID = transactions.TxGroupMalformedErrorReasonInconsistentGroupID
 	// TxGroupMalformedErrorReasonEmptyGroupID is for empty group ID but multiple transactions in a txgroup
-	TxGroupMalformedErrorReasonEmptyGroupID
+	TxGroupMalformedErrorReasonEmptyGroupID = transactions.TxGroupMalformedErrorReasonEmptyGroupID
 	// TxGroupMalformedErrorReasonIncompleteGroup indicates expected group ID does not match to provided
-	TxGroupMalformedErrorReasonIncompleteGroup
+	TxGroupMalformedErrorReasonIncompleteGroup = transactions.TxGroupMalformedErrorReasonIncompleteGroup
+	// TxGroupErrorReasonInvalidFee indicates a group with improper fees
+	TxGroupErrorReasonInvalidFee = transactions.TxGroupErrorReasonInvalidFee
 )
 
-// TxGroupMalformedError indicates txgroup has group ID problems or too large
-type TxGroupMalformedError struct {
-	Msg    string
-	Reason TxGroupMalformedErrorReasonCode
-}
-
-func (e *TxGroupMalformedError) Error() string {
-	return e.Msg
-}
+// TxGroupMalformedError indicates txgroup violates a group-wide rule (size, group hash, etc)
+type TxGroupMalformedError = transactions.TxGroupMalformedError

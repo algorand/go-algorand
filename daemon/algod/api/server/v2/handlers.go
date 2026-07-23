@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -51,6 +52,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/simulation"
@@ -70,10 +72,8 @@ import (
 // in the source TEAL. We have some indication that real TEAL programs with comments are about 20 times bigger than the bytecode they produce, and we may soon allow 16,000 byte logicsigs, implying a maximum of 320kb. Let's call it half a meg for a little room to spare.
 const MaxTealSourceBytes = 512 * 1024
 
-// MaxTealDryrunBytes sets a size limit for dryrun requests
-// With the ability to hold unlimited assets DryrunRequests can
-// become quite large, so we allow up to 1MB
-const MaxTealDryrunBytes = 1_000_000
+// MaxSimulateBytes sets a size limit for simulate requests
+const MaxSimulateBytes = 1_000_000
 
 // MaxAssetResults sets a size limit for the number of assets returned in a single request to the
 // /v2/accounts/{address}/assets endpoint
@@ -82,6 +82,22 @@ const MaxAssetResults = 1000
 // DefaultAssetResults sets a default size limit for the number of assets returned in a single request to the
 // /v2/accounts/{address}/assets endpoint
 const DefaultAssetResults = uint64(1000)
+
+// MaxApplicationResults sets a size limit for the number of applications returned in a single request to the
+// /v2/accounts/{address}/applications endpoint when includeParams=true
+const MaxApplicationResults = 1000
+
+// MaxApplicationResultsWithoutParams sets a higher limit when params are excluded, since responses are ~100x smaller
+const MaxApplicationResultsWithoutParams = MaxApplicationResults * 100
+
+// DefaultApplicationResults sets a default size limit for the number of applications returned in a single request to the
+// /v2/accounts/{address}/applications endpoint
+const DefaultApplicationResults = uint64(1000)
+
+// maxBoxFetchBytes is the hard cap on total bytes fetched by paginated box
+// listing responses. The server enforces this limit internally on every
+// paginated request.  Actual response bytes will be larger due to base64/json overhead.
+const maxBoxFetchBytes = 1_000_000
 
 const (
 	errInvalidLimit      = "limit parameter must be a positive integer"
@@ -107,13 +123,16 @@ type LedgerForAPI interface {
 	LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error)
 	LookupKv(round basics.Round, key string) ([]byte, error)
 	LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error)
+	LookupKvPairsByPrefix(round basics.Round, keyPrefix string, cursor string, limit uint64, maxBytes uint64, includeValues bool) ([]ledgercore.KvPairResult, basics.Round, bool, error)
 	ConsensusParams(r basics.Round) (config.ConsensusParams, error)
 	Latest() basics.Round
 	LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error)
 	LookupAssets(addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, basics.Round, error)
 	LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error)
+	LookupApplications(addr basics.Address, appIDGT basics.AppIndex, limit uint64, includeParams bool) ([]ledgercore.AppResourceWithIDs, basics.Round, error)
 	BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error)
 	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
+	OnlineCirculation(rnd basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error)
 	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
 	Wait(r basics.Round) chan struct{}
 	WaitWithCancel(r basics.Round) (chan struct{}, func())
@@ -425,13 +444,36 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address basics.Address,
 	}
 
 	// should we skip fetching apps and assets?
-	if params.Exclude != nil {
-		switch *params.Exclude {
-		case "all":
-			return v2.basicAccountInformation(ctx, address, handle, contentType)
-		case "none", "":
-		default:
-			return badRequest(ctx, err, errFailedToParseExclude, v2.Log)
+	var excludeCreatedAppsParams bool
+	var excludeCreatedAssetsParams bool
+	if params.Exclude != nil && len(*params.Exclude) > 0 {
+		excludeValues := *params.Exclude
+
+		// Handle special cases that must be alone
+		if len(excludeValues) == 1 {
+			val := strings.TrimSpace(string(excludeValues[0]))
+			if val == "all" {
+				return v2.basicAccountInformation(ctx, address, handle, contentType)
+			}
+			if val == "none" || val == "" {
+				// Default behavior - include everything
+				excludeValues = nil
+			}
+		}
+
+		// Parse exclusions
+		for _, excludeVal := range excludeValues {
+			val := strings.TrimSpace(string(excludeVal))
+			switch val {
+			case "created-apps-params":
+				excludeCreatedAppsParams = true
+			case "created-assets-params":
+				excludeCreatedAssetsParams = true
+			case "all", "none":
+				return badRequest(ctx, fmt.Errorf("'%s' cannot be combined with other exclude values", val), errFailedToParseExclude, v2.Log)
+			default:
+				return badRequest(ctx, fmt.Errorf("invalid exclude value: %s", val), errFailedToParseExclude, v2.Log)
+			}
 		}
 	}
 
@@ -479,7 +521,10 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address basics.Address,
 		return internalError(ctx, err, fmt.Sprintf("could not retrieve consensus information for last round (%d)", lastRound), v2.Log)
 	}
 
-	account, err := AccountDataToAccount(address.String(), &record, lastRound, &consensus, amountWithoutPendingRewards)
+	account, err := AccountDataToAccount(address.String(), &record, lastRound, &consensus, amountWithoutPendingRewards, AccountDataToAccountOptions{
+		ExcludeCreatedAppsParams:   excludeCreatedAppsParams,
+		ExcludeCreatedAssetsParams: excludeCreatedAssetsParams,
+	})
 	if err != nil {
 		return internalError(ctx, err, errInternalFailure, v2.Log)
 	}
@@ -595,7 +640,7 @@ func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address basics.Add
 
 	if record.AssetParams != nil {
 		asset := AssetParamsToAsset(address.String(), assetID, record.AssetParams)
-		response.CreatedAsset = &asset.Params
+		response.CreatedAsset = asset.Params
 	}
 
 	if record.AssetHolding != nil {
@@ -643,7 +688,7 @@ func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address basi
 
 	if record.AppParams != nil {
 		app := AppParamsToApplication(address.String(), applicationID, record.AppParams)
-		response.CreatedApp = &app.Params
+		response.CreatedApp = app.Params
 	}
 
 	if record.AppLocalState != nil {
@@ -948,7 +993,20 @@ func (v2 *Handlers) GetTransactionProof(ctx echo.Context, round basics.Round, tx
 func (v2 *Handlers) GetSupply(ctx echo.Context) error {
 	latest, totals, err := v2.Node.LedgerForAPI().LatestTotals()
 	if err != nil {
-		err = fmt.Errorf("GetSupply(): round %d, failed: %v", latest, err)
+		err = fmt.Errorf("GetSupply(): round %d, LatestTotals failed: %v", latest, err)
+		return internalError(ctx, err, errInternalFailure, v2.Log)
+	}
+
+	params, err := v2.Node.LedgerForAPI().ConsensusParams(latest)
+	if err != nil {
+		err = fmt.Errorf("GetSupply(): round %d, ConsensusParams failed: %v", latest, err)
+		return internalError(ctx, err, errInternalFailure, v2.Log)
+	}
+
+	brnd := agreement.BalanceRound(latest, params)
+	onlineCirculation, err := v2.Node.LedgerForAPI().OnlineCirculation(brnd, latest)
+	if err != nil {
+		err = fmt.Errorf("GetSupply(): round %d, OnlineCirculation failed: %v", latest, err)
 		return internalError(ctx, err, errInternalFailure, v2.Log)
 	}
 
@@ -956,6 +1014,7 @@ func (v2 *Handlers) GetSupply(ctx echo.Context) error {
 		CurrentRound: latest,
 		TotalMoney:   totals.Participating().Raw,
 		OnlineMoney:  totals.Online.Money.Raw,
+		OnlineStake:  onlineCirculation.Raw,
 	}
 
 	return ctx.JSON(http.StatusOK, supply)
@@ -1149,9 +1208,56 @@ func decodeTxGroup(body io.Reader, maxTxGroupSize int) ([]transactions.SignedTxn
 	return txgroup, nil
 }
 
+const skipPqAddressCheckParam = "skip-pq-address-check"
+
+func shouldSkipPqAddressCheck(skip *bool) bool {
+	return skip != nil && *skip
+}
+
+func isEscrowLogicSig(stxn transactions.SignedTxn) bool {
+	return stxn.Lsig.Sig.Blank() &&
+		stxn.Lsig.Msig.Blank() &&
+		stxn.Lsig.LMsig.Blank() &&
+		stxn.Lsig.PQsig.Blank() &&
+		stxn.Authorizer() == basics.Address(logic.HashProgram(stxn.Lsig.Logic))
+}
+
+func rejectOnCurveLogicSigPrograms(txgroup []transactions.SignedTxn) error {
+	for i, stxn := range txgroup {
+		if !stxn.Lsig.HasProgram() {
+			continue
+		}
+		version, _, err := transactions.ProgramVersion(stxn.Lsig.Logic)
+		if err != nil || version < logic.LogicSigOffCurveVersion || version > logic.LogicVersion {
+			continue
+		}
+		if isEscrowLogicSig(stxn) && logic.ProgramHashIsEdwards25519Point(stxn.Lsig.Logic) {
+			return fmt.Errorf("transaction %d: TEAL v%d LogicSig program hash is an Edwards25519 point and should not be used; set %s=true to submit anyway if you understand the risks and know what you are doing", i, version, skipPqAddressCheckParam)
+		}
+	}
+	return nil
+}
+
+func enforcePQAuthorizerCompliance(txgroup []transactions.SignedTxn) error {
+	for txnIdx, stxn := range txgroup {
+		pqSig := stxn.PQsig
+		if pqSig.Blank() && stxn.Lsig.HasProgram() {
+			pqSig = stxn.Lsig.PQsig
+		}
+		if pqSig.Blank() || len(pqSig.PublicKey) == 0 {
+			continue
+		}
+		authorizer := pqSig.Address()
+		if !authorizer.IsPQCompliant() {
+			return fmt.Errorf("transaction %d: pq signature authorizer address %s is an Edwards25519 curve point (non PQ-compliant)", txnIdx, authorizer)
+		}
+	}
+	return nil
+}
+
 // RawTransaction broadcasts a raw transaction to the network.
 // (POST /v2/transactions)
-func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
+func (v2 *Handlers) RawTransaction(ctx echo.Context, params model.RawTransactionParams) error {
 	stat, err := v2.Node.Status()
 	if err != nil {
 		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
@@ -1167,6 +1273,15 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
+	if !shouldSkipPqAddressCheck(params.SkipPqAddressCheck) {
+		if err = enforcePQAuthorizerCompliance(txgroup); err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+		if err = rejectOnCurveLogicSigPrograms(txgroup); err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+	}
+
 	err = v2.Node.BroadcastSignedTxGroup(txgroup)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
@@ -1179,16 +1294,25 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 
 // RawTransactionAsync broadcasts a raw transaction to the network without ensuring it is accepted by transaction pool.
 // (POST /v2/transactions/async)
-func (v2 *Handlers) RawTransactionAsync(ctx echo.Context) error {
+func (v2 *Handlers) RawTransactionAsync(ctx echo.Context, params model.RawTransactionAsyncParams) error {
 	if !v2.Node.Config().EnableExperimentalAPI {
 		return ctx.String(http.StatusNotFound, "/transactions/async was not enabled in the configuration file by setting the EnableExperimentalAPI to true")
 	}
 	if !v2.Node.Config().EnableDeveloperAPI {
 		return ctx.String(http.StatusNotFound, "/transactions/async was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
 	}
+
 	txgroup, err := decodeTxGroup(ctx.Request().Body, bounds.MaxTxGroupSize)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	if !shouldSkipPqAddressCheck(params.SkipPqAddressCheck) {
+		if err = enforcePQAuthorizerCompliance(txgroup); err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+		if err = rejectOnCurveLogicSigPrograms(txgroup); err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
 	}
 	err = v2.Node.AsyncBroadcastSignedTxGroup(txgroup)
 	if err != nil {
@@ -1200,10 +1324,6 @@ func (v2 *Handlers) RawTransactionAsync(ctx echo.Context) error {
 // AccountAssetsInformation looks up an account's asset holdings.
 // (GET /v2/accounts/{address}/assets)
 func (v2 *Handlers) AccountAssetsInformation(ctx echo.Context, address basics.Address, params model.AccountAssetsInformationParams) error {
-	if !v2.Node.Config().EnableExperimentalAPI {
-		return ctx.String(http.StatusNotFound, "/v2/accounts/{address}/assets was not enabled in the configuration file by setting the EnableExperimentalAPI to true")
-	}
-
 	var assetGreaterThan uint64 = 0
 	if params.Next != nil {
 		agt, err0 := strconv.ParseUint(*params.Next, 10, 64)
@@ -1271,7 +1391,7 @@ func (v2 *Handlers) AccountAssetsInformation(ctx echo.Context, address basics.Ad
 
 		if !record.Creator.IsZero() {
 			asset := AssetParamsToAsset(record.Creator.String(), record.AssetID, record.AssetParams)
-			aah.AssetParams = &asset.Params
+			aah.AssetParams = asset.Params
 		}
 
 		assetHoldings = append(assetHoldings, aah)
@@ -1282,11 +1402,110 @@ func (v2 *Handlers) AccountAssetsInformation(ctx echo.Context, address basics.Ad
 	return ctx.JSON(http.StatusOK, response)
 }
 
+// AccountApplicationsInformation returns application resources for a specific address.
+func (v2 *Handlers) AccountApplicationsInformation(ctx echo.Context, address basics.Address, params model.AccountApplicationsInformationParams) error {
+	var appGreaterThan uint64 = 0
+	if params.Next != nil {
+		agt, err0 := strconv.ParseUint(*params.Next, 10, 64)
+		if err0 != nil {
+			return badRequest(ctx, err0, fmt.Sprintf("%s: %v", errUnableToParseNext, err0), v2.Log)
+		}
+		appGreaterThan = agt
+	}
+
+	// Determine includeParams first, as it affects limit validation
+	includeParams := false
+	if params.Include != nil {
+		if slices.Contains(*params.Include, model.AccountApplicationsInformationParamsIncludeParams) {
+			includeParams = true
+		}
+	}
+
+	// Choose appropriate max limit based on whether params are included
+	// When params are excluded, responses are ~100x smaller, so we can return more results
+	maxLimit := uint64(MaxApplicationResults)
+	if !includeParams {
+		maxLimit = uint64(MaxApplicationResultsWithoutParams)
+	}
+
+	if params.Limit != nil {
+		if *params.Limit <= 0 {
+			return badRequest(ctx, errors.New(errInvalidLimit), errInvalidLimit, v2.Log)
+		}
+
+		if *params.Limit > maxLimit {
+			limitErrMsg := fmt.Sprintf("limit %d exceeds max applications single batch limit %d", *params.Limit, maxLimit)
+			return badRequest(ctx, errors.New(limitErrMsg), limitErrMsg, v2.Log)
+		}
+	} else {
+		// default limit
+		l := DefaultApplicationResults
+		params.Limit = &l
+	}
+
+	ledger := v2.Node.LedgerForAPI()
+
+	// Logic
+	// 1. Get the account's application resources subject to limits
+	// 2. Handle empty response
+	// 3. Prepare JSON response
+
+	// We intentionally request one more than the limit to determine if there are more applications.
+	records, lookupRound, err := ledger.LookupApplications(address, basics.AppIndex(appGreaterThan), *params.Limit+1, includeParams)
+
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	// prepare JSON response
+	response := model.AccountApplicationsInformationResponse{Round: lookupRound}
+
+	// If the total count is greater than the limit, we set the next token to the last application ID being returned
+	if uint64(len(records)) > *params.Limit {
+		// we do not include the last record in the response
+		records = records[:*params.Limit]
+		nextTk := strconv.FormatUint(uint64(records[len(records)-1].AppID), 10)
+		response.NextToken = &nextTk
+	}
+
+	applicationResources := make([]model.AccountApplicationResource, 0, len(records))
+
+	for _, record := range records {
+		aah := model.AccountApplicationResource{
+			Id: record.AppID,
+		}
+
+		if !record.Creator.IsZero() {
+			// App exists - don't set Deleted field (omit from JSON)
+			if includeParams && record.AppParams != nil {
+				app := AppParamsToApplication(record.Creator.String(), record.AppID, record.AppParams)
+				aah.Params = app.Params
+			}
+		} else {
+			// App deleted - set Deleted=true (only include when true)
+			deleted := true
+			aah.Deleted = &deleted
+		}
+
+		if record.AppLocalState != nil {
+			appLocalState := AppLocalState(*record.AppLocalState, record.AppID)
+			aah.AppLocalState = &appLocalState
+		}
+
+		applicationResources = append(applicationResources, aah)
+	}
+
+	response.ApplicationResources = &applicationResources
+
+	return ctx.JSON(http.StatusOK, response)
+}
+
 // PreEncodedSimulateTxnResult mirrors model.SimulateTransactionResult
 type PreEncodedSimulateTxnResult struct {
 	Txn                      PreEncodedTxInfo                        `codec:"txn-result"`
 	AppBudgetConsumed        *int                                    `codec:"app-budget-consumed,omitempty"`
 	LogicSigBudgetConsumed   *int                                    `codec:"logic-sig-budget-consumed,omitempty"`
+	FeesPaid                 *uint64                                 `codec:"fees-paid,omitempty"`
 	TransactionTrace         *model.SimulationTransactionExecTrace   `codec:"exec-trace,omitempty"`
 	UnnamedResourcesAccessed *model.SimulateUnnamedResourcesAccessed `codec:"unnamed-resources-accessed,omitempty"`
 	FixedSigner              *string                                 `codec:"fixed-signer,omitempty"`
@@ -1296,6 +1515,8 @@ type PreEncodedSimulateTxnResult struct {
 type PreEncodedSimulateTxnGroupResult struct {
 	AppBudgetAdded           *int                                    `codec:"app-budget-added,omitempty"`
 	AppBudgetConsumed        *int                                    `codec:"app-budget-consumed,omitempty"`
+	GroupUsage               *uint64                                 `codec:"group-usage,omitempty"`
+	GroupFeesPaid            *uint64                                 `codec:"group-fees-paid,omitempty"`
 	FailedAt                 *[]int                                  `codec:"failed-at,omitempty"`
 	FailureMessage           *string                                 `codec:"failure-message,omitempty"`
 	UnnamedResourcesAccessed *model.SimulateUnnamedResourcesAccessed `codec:"unnamed-resources-accessed,omitempty"`
@@ -1343,7 +1564,7 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 	proto := config.Consensus[stat.LastVersion]
 
 	requestBuffer := new(bytes.Buffer)
-	requestBodyReader := http.MaxBytesReader(nil, ctx.Request().Body, MaxTealDryrunBytes)
+	requestBodyReader := http.MaxBytesReader(nil, ctx.Request().Body, MaxSimulateBytes)
 	_, err = requestBuffer.ReadFrom(requestBodyReader)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
@@ -1369,7 +1590,6 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
 	}
-
 	// Simulate transaction
 	simulationResult, err := v2.Node.Simulate(convertSimulationRequest(simulateRequest))
 	if err != nil {
@@ -1394,74 +1614,6 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 	}
 
 	return ctx.Blob(http.StatusOK, contentType, responseData)
-}
-
-// TealDryrun takes transactions and additional simulated ledger state and returns debugging information.
-// (POST /v2/teal/dryrun)
-func (v2 *Handlers) TealDryrun(ctx echo.Context) error {
-	if !v2.Node.Config().EnableDeveloperAPI {
-		return ctx.String(http.StatusNotFound, "/teal/dryrun was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
-	}
-	req := ctx.Request()
-	buf := new(bytes.Buffer)
-	req.Body = http.MaxBytesReader(nil, req.Body, MaxTealDryrunBytes)
-	_, err := buf.ReadFrom(ctx.Request().Body)
-	if err != nil {
-		return badRequest(ctx, err, err.Error(), v2.Log)
-	}
-	data := buf.Bytes()
-
-	var dr DryrunRequest
-	var gdr model.DryrunRequest
-	err = decode(protocol.JSONStrictHandle, data, &gdr)
-	if err == nil {
-		dr, err = DryrunRequestFromGenerated(&gdr)
-		if err != nil {
-			return badRequest(ctx, err, err.Error(), v2.Log)
-		}
-	} else {
-		err = decode(protocol.CodecHandle, data, &dr)
-		if err != nil {
-			return badRequest(ctx, err, err.Error(), v2.Log)
-		}
-	}
-
-	// fetch previous block header just once to prevent racing with network
-	var hdr bookkeeping.BlockHeader
-	if dr.ProtocolVersion == "" || dr.Round == 0 || dr.LatestTimestamp == 0 {
-		actualLedger := v2.Node.LedgerForAPI()
-		hdr, err = actualLedger.BlockHdr(actualLedger.Latest())
-		if err != nil {
-			return internalError(ctx, err, "current block error", v2.Log)
-		}
-	}
-
-	var response model.DryrunResponse
-
-	var protocolVersion protocol.ConsensusVersion
-	if dr.ProtocolVersion != "" {
-		var ok bool
-		_, ok = config.Consensus[protocol.ConsensusVersion(dr.ProtocolVersion)]
-		if !ok {
-			return badRequest(ctx, nil, "unsupported protocol version", v2.Log)
-		}
-		protocolVersion = protocol.ConsensusVersion(dr.ProtocolVersion)
-	} else {
-		protocolVersion = hdr.CurrentProtocol
-	}
-	dr.ProtocolVersion = string(protocolVersion)
-
-	if dr.Round == 0 {
-		dr.Round = hdr.Round + 1
-	}
-
-	if dr.LatestTimestamp == 0 {
-		dr.LatestTimestamp = hdr.TimeStamp
-	}
-
-	doDryrunRequest(&dr, &response)
-	response.ProtocolVersion = string(protocolVersion)
-	return ctx.JSON(http.StatusOK, response)
 }
 
 // UnsetSyncRound removes the sync round restriction from the ledger.
@@ -1795,10 +1947,103 @@ func applicationBoxesMaxKeys(requestedMax uint64, algodMax uint64) uint64 {
 // GetApplicationBoxes returns the boxes of an application
 // (GET /v2/applications/{application-id}/boxes)
 func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID basics.AppIndex, params model.GetApplicationBoxesParams) error {
-	ledger := v2.Node.LedgerForAPI()
-	lastRound := ledger.Latest()
+	lgr := v2.Node.LedgerForAPI()
+	lastRound := lgr.Latest()
 	keyPrefix := apps.MakeBoxKey(uint64(applicationID), "")
 
+	// Determine query round: use caller-specified round or latest.
+	queryRound := lastRound
+	if params.Round != nil {
+		queryRound = *params.Round
+		if queryRound > lastRound {
+			return badRequest(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)
+		}
+	}
+
+	limit := nilToZero(params.Limit)
+	includeValues := params.Include != nil && slices.Contains(*params.Include, model.GetApplicationBoxesParamsIncludeValues)
+
+	// When no pagination-related params are provided, preserve current behavior.
+	if limit == 0 && params.Next == nil && !includeValues && (params.Prefix == nil || *params.Prefix == "") && params.Round == nil {
+		return v2.getApplicationBoxesLegacy(ctx, lgr, queryRound, applicationID, keyPrefix, params)
+	}
+
+	// Cap limit to the server's MaxAPIBoxPerApplication configuration.
+	algodMax := v2.Node.Config().MaxAPIBoxPerApplication
+	if algodMax > 0 && (limit == 0 || limit > algodMax) {
+		limit = algodMax
+	}
+
+	// Parse cursor from next token.
+	var cursor string
+	if params.Next != nil && *params.Next != "" {
+		nextBytes, err := apps.NewAppCallBytes(*params.Next)
+		if err != nil {
+			return badRequest(ctx, err, "invalid next token: "+err.Error(), v2.Log)
+		}
+		nextRaw, err := nextBytes.Raw()
+		if err != nil {
+			return badRequest(ctx, err, "invalid next token: "+err.Error(), v2.Log)
+		}
+		cursor = apps.MakeBoxKey(uint64(applicationID), string(nextRaw))
+	}
+
+	// Parse prefix filter.
+	fullKeyPrefix := keyPrefix
+	if params.Prefix != nil && *params.Prefix != "" {
+		prefixBytes, err := apps.NewAppCallBytes(*params.Prefix)
+		if err != nil {
+			return badRequest(ctx, err, "invalid prefix: "+err.Error(), v2.Log)
+		}
+		prefixRaw, err := prefixBytes.Raw()
+		if err != nil {
+			return badRequest(ctx, err, "invalid prefix: "+err.Error(), v2.Log)
+		}
+		fullKeyPrefix = apps.MakeBoxKey(uint64(applicationID), string(prefixRaw))
+	}
+
+	// We can't use the "limit+1" trick here because the request may be limited by
+	// byte size, not lack of more results.
+	results, rnd, moreData, err := lgr.LookupKvPairsByPrefix(queryRound, fullKeyPrefix, cursor, limit, maxBoxFetchBytes, includeValues)
+	if err != nil {
+		var roundOffErr *ledger.RoundOffsetError
+		if errors.As(err, &roundOffErr) {
+			return badRequest(ctx, err, errRoundTooOld, v2.Log)
+		}
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	prefixLen := len(keyPrefix)
+
+	// Set next-token when more data exists.
+	var nextToken *string
+	if moreData && len(results) > 0 {
+		lastBoxName := []byte(results[len(results)-1].Key[prefixLen:])
+		token := encodeBoxNameAsAppCallBytes(lastBoxName)
+		nextToken = &token
+	}
+
+	responseBoxes := make([]model.BoxDescriptor, len(results))
+	for i, kv := range results {
+		boxName := []byte(kv.Key[prefixLen:])
+		desc := model.BoxDescriptor{Name: boxName}
+		if includeValues {
+			val := kv.Value
+			desc.Value = &val
+		}
+		responseBoxes[i] = desc
+	}
+
+	response := model.BoxesResponse{
+		Boxes:     responseBoxes,
+		NextToken: nextToken,
+		Round:     &rnd,
+	}
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// getApplicationBoxesLegacy preserves the original unpaginated behavior.
+func (v2 *Handlers) getApplicationBoxesLegacy(ctx echo.Context, ledger LedgerForAPI, lastRound basics.Round, applicationID basics.AppIndex, keyPrefix string, params model.GetApplicationBoxesParams) error {
 	requestedMax, algodMax := nilToZero(params.Max), v2.Node.Config().MaxAPIBoxPerApplication
 	max := applicationBoxesMaxKeys(requestedMax, algodMax)
 
@@ -1833,6 +2078,11 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID basics.A
 	}
 	response := model.BoxesResponse{Boxes: responseBoxes}
 	return ctx.JSON(http.StatusOK, response)
+}
+
+// encodeBoxNameAsAppCallBytes encodes a raw box name as a b64:-prefixed app call arg string.
+func encodeBoxNameAsAppCallBytes(name []byte) string {
+	return "b64:" + base64.StdEncoding.EncodeToString(name)
 }
 
 // GetApplicationBoxByName returns the value of an application's box

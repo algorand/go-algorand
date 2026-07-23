@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,8 +21,9 @@ import (
 	"io"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func randSignedMsg(t testing.TB, r io.Reader) (SignatureVerifier, Hashable, Signature) {
@@ -60,10 +61,11 @@ func BenchmarkBatchVerifierImpls(b *testing.B) {
 	}
 
 	b.Log("running with", b.N, "iterations using", len(msgs), "batches of", batchSize, "signatures")
-	runImpl := func(b *testing.B, bv BatchVerifier,
+	runImpl := func(b *testing.B, makeBV func() BatchVerifier,
 		msgs [][]Hashable, pks [][]SignatureVerifier, sigs [][]Signature) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
+			bv := makeBV()
 			batchIdx := i % numBatches
 			for j := range msgs[batchIdx] {
 				bv.EnqueueSignature(pks[batchIdx][j], msgs[batchIdx][j], sigs[batchIdx][j])
@@ -73,18 +75,21 @@ func BenchmarkBatchVerifierImpls(b *testing.B) {
 	}
 
 	b.Run("libsodium_single", func(b *testing.B) {
-		bv := makeLibsodiumBatchVerifier(batchSize)
-		bv.(*cgoBatchVerifier).useSingle = true
-		runImpl(b, bv, msgs, pks, sigs)
+		runImpl(b, func() BatchVerifier {
+			bv := makeLibsodiumBatchVerifier(batchSize)
+			bv.(*cgoBatchVerifier).useSingle = true
+			return bv
+		}, msgs, pks, sigs)
 	})
 	b.Run("libsodium_batch", func(b *testing.B) {
-		bv := makeLibsodiumBatchVerifier(batchSize)
-		bv.(*cgoBatchVerifier).useSingle = false
-		runImpl(b, bv, msgs, pks, sigs)
+		runImpl(b, func() BatchVerifier {
+			bv := makeLibsodiumBatchVerifier(batchSize)
+			bv.(*cgoBatchVerifier).useSingle = false
+			return bv
+		}, msgs, pks, sigs)
 	})
 	b.Run("ed25519consensus", func(b *testing.B) {
-		bv := makeEd25519ConsensusBatchVerifier(batchSize)
-		runImpl(b, bv, msgs, pks, sigs)
+		runImpl(b, func() BatchVerifier { return makeEd25519ConsensusBatchVerifier(batchSize) }, msgs, pks, sigs)
 	})
 }
 

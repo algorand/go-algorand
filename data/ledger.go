@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -322,16 +322,19 @@ func (l *Ledger) EnsureValidatedBlock(vb *ledgercore.ValidatedBlock, c agreement
 			break
 		}
 
-		logfn := l.log.Errorf
-
 		switch err.(type) {
 		case ledgercore.BlockInLedgerError:
 			// If the block is already in the ledger (catchup and agreement might be competing),
 			// reporting this as a debug message is sufficient.
-			logfn = l.log.Debugf
-			// Otherwise, the error is because the block is in the future. Error is logged.
+			l.log.Debugf("data.EnsureValidatedBlock: could not write block %d to the ledger: %v", round, err)
+			return
+		default:
+			l.log.Errorf("data.EnsureValidatedBlock: could not write block %d to the ledger: %v", round, err)
 		}
-		logfn("data.EnsureValidatedBlock: could not write block %d to the ledger: %v", round, err)
+
+		// If there was an error, add a delay before the next attempt so a persistent
+		// failure does not spin at full speed.
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 
@@ -341,7 +344,7 @@ func (l *Ledger) EnsureValidatedBlock(vb *ledgercore.ValidatedBlock, c agreement
 // This function can be called concurrently.
 func (l *Ledger) EnsureBlock(block *bookkeeping.Block, c agreement.Certificate) {
 	round := block.Round()
-	protocolErrorLogged := false
+	unrecoverableErrorLogged := false
 
 	for l.LastRound() < round {
 		err := l.AddBlock(*block, c)
@@ -349,12 +352,16 @@ func (l *Ledger) EnsureBlock(block *bookkeeping.Block, c agreement.Certificate) 
 			break
 		}
 
+		errorDelay := 100 * time.Millisecond
 		switch err.(type) {
-		case protocol.Error:
-			if !protocolErrorLogged {
-				l.log.Errorf("data.EnsureBlock: unrecoverable protocol error detected at block %d: %v", round, err)
-				protocolErrorLogged = true
+		case protocol.Error, ledgercore.EvalPanicError:
+			// Both are deterministic failures: retrying can never make progress. Log once and
+			// retry slowly -- the node stays up but is stalled at this round until upgraded.
+			if !unrecoverableErrorLogged {
+				l.log.Errorf("data.EnsureBlock: unrecoverable error writing block %d to the ledger; the node cannot advance past this round: %v", round, err)
+				unrecoverableErrorLogged = true
 			}
+			errorDelay = 120 * time.Second
 		case ledgercore.BlockInLedgerError:
 			// The block is already in the ledger. Catchup and agreement could be competing
 			// It is sufficient to report this as a Debug message
@@ -364,7 +371,7 @@ func (l *Ledger) EnsureBlock(block *bookkeeping.Block, c agreement.Certificate) 
 			l.log.Errorf("data.EnsureBlock: could not write block %d to the ledger: %v", round, err)
 		}
 
-		// If there was an error add a short delay before the next attempt.
-		time.Sleep(100 * time.Millisecond)
+		// If there was an error add a delay before the next attempt.
+		time.Sleep(errorDelay)
 	}
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -190,7 +190,7 @@ func TestLimitedReaderSlurperPerMessageMaxSize(t *testing.T) {
 			b = make([]byte, dataSize)
 			crypto.RandBytes(b[:])
 			err := slurper.Read(bytes.NewBuffer(b))
-			require.Error(t, err)
+			require.ErrorIs(t, err, ErrIncomingMsgTooLarge)
 		}
 	}
 }

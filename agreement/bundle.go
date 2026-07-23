@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -153,7 +153,7 @@ func (b unauthenticatedBundle) verifyAsync(ctx context.Context, l LedgerReader, 
 	}
 
 	// termFmtErrorFn is like termErrorFn but runs fmt.Errorf on its input.
-	termFmtErrorFn := func(format string, a ...interface{}) func() (bundle, error) {
+	termFmtErrorFn := func(format string, a ...any) func() (bundle, error) {
 		return func() (bundle, error) {
 			return bundle{}, fmt.Errorf(format, a...)
 		}

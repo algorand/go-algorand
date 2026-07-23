@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,18 +19,16 @@ package runner
 import (
 	"bytes"
 	"context"
+	_ "embed" // embed conduit template config file
 	"encoding/json"
-	"io"
-	"sort"
-
-	// embed conduit template config file
-	_ "embed"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"text/template"

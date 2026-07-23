@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -59,6 +59,9 @@ const (
 	OneTimeSigKey2                   HashID = "OT2"
 	PaysetFlat                       HashID = "PF"
 	Payload                          HashID = "PL"
+	PostQuantumAddress               HashID = "PQA"
+	PostQuantumKey                   HashID = "PQK"
+	PostQuantumDelegatedProgram      HashID = "PQProgram"
 	Program                          HashID = "Program"
 	ProgramData                      HashID = "ProgData"
 	ProposerSeed                     HashID = "PS"

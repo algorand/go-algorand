@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package logic
 
 import (
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -40,9 +41,29 @@ func (mp MultisigProgram) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.MultisigProgram, append(mp.Addr[:], mp.Program...)
 }
 
+// PQDelegatedProgram is a wrapper for signing programs with address-bound post-quantum
+// delegation proofs.
+type PQDelegatedProgram struct {
+	Addr    basics.Address
+	Program []byte
+}
+
+// ToBeHashed implements crypto.Hashable for PQDelegatedProgram
+func (dp PQDelegatedProgram) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.PostQuantumDelegatedProgram, append(dp.Addr[:], dp.Program...)
+}
+
 // HashProgram takes program bytes and returns the Digest
 // This Digest can be used as an Address for a logic controlled account.
 func HashProgram(program []byte) crypto.Digest {
 	pb := Program(program)
 	return crypto.HashObj(pb)
+}
+
+// ProgramHashIsEdwards25519Point reports whether the LogicSig address derived
+// from program decodes as a canonical Edwards25519 curve point. If it does not,
+// those address bytes cannot be an Ed25519 public key.
+func ProgramHashIsEdwards25519Point(program []byte) bool {
+	hash := HashProgram(program)
+	return crypto.IsEdwards25519Point(hash[:])
 }

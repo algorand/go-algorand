@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,9 +23,11 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/go-codec/codec"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-codec/codec"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type TestArray [4]uint64
@@ -188,7 +190,7 @@ func TestEncodeJSON(t *testing.T) {
 	require.True(t, reflect.DeepEqual(v, nsv))
 	require.True(t, reflect.DeepEqual(v, sv))
 
-	decodeJSONStrict := func(b []byte, objptr interface{}) error {
+	decodeJSONStrict := func(b []byte, objptr any) error {
 		dec := codec.NewDecoderBytes(b, JSONStrictHandle)
 		return dec.Decode(objptr)
 	}
@@ -266,4 +268,11 @@ func TestRandomizeObjectWithPtrField(t *testing.T) {
 	}
 	require.True(t, sawNonZeroU16, "RandomizeObject made all zeroes for testObjB.U16")
 	require.True(t, sawNonZeroU64, "RandomizeObject made all zeroes for testObjA.U64")
+}
+
+func TestCheckMsgpAllocBoundDirectiveCrossPackage(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	require.True(t, hasMsgpAllocBoundDirective("github.com/algorand/go-algorand/protocol/test", "testSlice"))
 }

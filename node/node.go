@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -293,7 +293,7 @@ recreateNetwork:
 	}
 
 	// The health service registers itself with the network
-	if cfg.IsGossipServer() {
+	if cfg.IsListenServer() {
 		rpcs.MakeHealthService(node.net)
 	}
 
@@ -413,8 +413,12 @@ func (node *AlgorandFullNode) Start() error {
 	}
 
 	if node.catchpointCatchupService != nil {
-		startNetwork()
-		node.catchpointCatchupService.Start(node.ctx)
+		if err := startNetwork(); err != nil {
+			return err
+		}
+		if err := node.catchpointCatchupService.Start(node.ctx); err != nil {
+			return err
+		}
 	} else {
 		node.catchupService.Start()
 		node.agreementService.Start()
@@ -424,8 +428,7 @@ func (node *AlgorandFullNode) Start() error {
 		node.txHandler.Start()
 		node.stateProofWorker.Start()
 		node.heartbeatService.Start()
-		err := startNetwork()
-		if err != nil {
+		if err := startNetwork(); err != nil {
 			return err
 		}
 
@@ -437,13 +440,13 @@ func (node *AlgorandFullNode) Start() error {
 // Capabilities returns the node's capabilities for advertising to other nodes.
 func (node *AlgorandFullNode) Capabilities() []p2p.Capability {
 	var caps []p2p.Capability
-	if node.config.Archival && node.config.IsGossipServer() {
+	if node.config.Archival && node.config.IsListenServer() {
 		caps = append(caps, p2p.Archival)
 	}
-	if node.config.StoresCatchpoints() && node.config.IsGossipServer() {
+	if node.config.StoresCatchpoints() && node.config.IsListenServer() {
 		caps = append(caps, p2p.Catchpoints)
 	}
-	if node.config.EnableGossipService && node.config.IsGossipServer() {
+	if node.config.EnableGossipService && node.config.IsListenServer() {
 		caps = append(caps, p2p.Gossip)
 	}
 	return caps
@@ -1252,7 +1255,7 @@ func (node *AlgorandFullNode) AbortCatchup(catchpoint string) error {
 // channel which contains the updated node context. This function need to work asynchronously so that the caller could
 // detect and handle the use case where the node is being shut down while we're switching to/from catchup mode without
 // deadlocking on the shared node mutex.
-func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode bool) (outCtxCh <-chan context.Context) {
+func (node *AlgorandFullNode) SetCatchpointCatchupMode(enable bool) (outCtxCh <-chan context.Context) {
 	// create a non-buffered channel to return the newly created context. The fact that it's non-buffered here
 	// is important, as it allows us to synchronize the "receiving" of the new context before canceling of the previous
 	// one.
@@ -1267,7 +1270,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 			node.mu.Unlock()
 			return
 		}
-		if catchpointCatchupMode {
+		if enable {
 			// stop..
 			defer func() {
 				node.mu.Unlock()

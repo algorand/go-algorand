@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -48,18 +48,23 @@ type resources struct {
 	sharedLocals   map[ledgercore.AccountApp]struct{}
 
 	// boxes are all of the top-level box refs from the txgroup. Most are added
-	// during NewEvalParams(). refs using 0 on an appl create are resolved and
+	// during NewAppEvalParams(). refs using 0 on an appl create are resolved and
 	// added when the appl executes. The boolean value indicates the "dirtiness"
 	// of the box - has it been modified in this txngroup? If yes, the size of
 	// the box counts against the group writeBudget. So delete is NOT a dirtying
 	// operation.
 	boxes map[basics.BoxRef]bool
 
+	// updateBytes tracks the extra program bytes that will be written for created
+	// or updated apps. The value is the currently charged size for the app's
+	// final program state in this transaction group.
+	updateBytes map[basics.AppIndex]uint64
+
 	// unnamedAccess is the number of times that a newly created app may access
 	// a box that was not named.  It is decremented for each box accessed this way.
 	unnamedAccess int
 
-	// dirtyBytes maintains a running count of the number of dirty bytes in `boxes`
+	// dirtyBytes maintains a running count of bytes that count against write budget.
 	dirtyBytes uint64
 }
 
@@ -108,11 +113,10 @@ func (r *resources) fill(tx *transactions.Transaction, ep *EvalParams) {
 		r.fillAssetFreeze(&tx.Header, &tx.AssetFreezeTxnFields)
 	case protocol.ApplicationCallTx:
 		r.fillApplicationCall(ep, &tx.Header, &tx.ApplicationCallTxnFields)
-	case protocol.StateProofTx:
-		// state proof txns add nothing to availability (they can't even appear
-		// in a group with an appl. but still.)
+	case protocol.StateProofTx, protocol.HeartbeatTx:
+		// state proof and heartbeat txns add nothing to availability
 	default:
-		panic(tx.Type)
+		// An unknown transaction type adds nothing to availability.
 	}
 }
 
@@ -374,9 +378,9 @@ func (r *resources) fillApplicationCallForeign(ep *EvalParams, hdr *transactions
 		}
 		var app basics.AppIndex
 		if br.Index > 0 {
-			// Bounds check will already have been done by
-			// WellFormed. For testing purposes, it's better to panic
-			// now than after returning a nil.
+			if br.Index > uint64(len(tx.ForeignApps)) {
+				continue
+			}
 			app = tx.ForeignApps[br.Index-1] // shift for the 0=current convention
 		}
 		r.shareBox(basics.BoxRef{App: app, Name: string(br.Name)}, tx.ApplicationID)

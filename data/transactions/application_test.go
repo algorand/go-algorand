@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -77,9 +77,6 @@ func TestEncodedAppTxnAllocationBounds(t *testing.T) {
 		}
 		if proto.MaxAppBoxReferences > encodedMaxBoxes {
 			require.Failf(t, "proto.MaxAppBoxReferences > encodedMaxBoxes", "protocol version = %s", protoVer)
-		}
-		if proto.MaxAppAccess > encodedMaxAccess {
-			require.Failf(t, "proto.MaxAppAccess > encodedMaxAccess", "protocol version = %s", protoVer)
 		}
 	}
 }
@@ -490,6 +487,7 @@ func TestWellFormedErrors(t *testing.T) {
 	cv28 := protocol.ConsensusV28
 	cv32 := protocol.ConsensusV32
 	cv36 := protocol.ConsensusV36
+	cv41 := protocol.ConsensusV41
 
 	v5 := []byte{0x05}
 	cases := []struct {
@@ -532,7 +530,7 @@ func TestWellFormedErrors(t *testing.T) {
 				ExtraProgramPages: 1,
 			},
 			cv:            cv27,
-			expectedError: "tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = 0",
+			expectedError: "tx.ExtraProgramPages exceeds MaxAbsoluteExtraProgramPages = 0",
 		},
 		{
 			ac: ApplicationCallTxnFields{
@@ -541,7 +539,7 @@ func TestWellFormedErrors(t *testing.T) {
 				ClearStateProgram: []byte("Xjunk"),
 			},
 			cv:            cv27,
-			expectedError: "approval program too long. max len 1024 bytes",
+			expectedError: "approval program too long. (1025 > 1024)",
 		},
 		{
 			ac: ApplicationCallTxnFields{
@@ -556,7 +554,7 @@ func TestWellFormedErrors(t *testing.T) {
 				ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
 				ClearStateProgram: []byte(strings.Repeat("X", 1025)),
 			},
-			expectedError: "app programs too long. max total len 2048 bytes",
+			expectedError: "app programs too long. (1025 + 1025 > 2048)",
 		},
 		{
 			ac: ApplicationCallTxnFields{
@@ -630,7 +628,7 @@ func TestWellFormedErrors(t *testing.T) {
 				},
 				ExtraProgramPages: 4,
 			},
-			expectedError: "tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = 3",
+			expectedError: "tx.ExtraProgramPages exceeds MaxAbsoluteExtraProgramPages = 3",
 			cv:            cv28,
 		},
 		{
@@ -668,6 +666,27 @@ func TestWellFormedErrors(t *testing.T) {
 				ApplicationArgs: [][]byte{make([]byte, 1501), make([]byte, 548)},
 			},
 			expectedError: "tx.ApplicationArgs total length is too long. 2049 > 2048",
+			cv:            cv41,
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:   1,
+				ApplicationArgs: [][]byte{make([]byte, 1501), make([]byte, 548)},
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:   1,
+				ApplicationArgs: [][]byte{make([]byte, 4097), make([]byte, 385)},
+			},
+			expectedError: "tx.ApplicationArgs[0] length is too long. 4097 > 4096",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:   1,
+				ApplicationArgs: slices.Repeat([][]byte{make([]byte, 4000)}, 5),
+			},
+			expectedError: "tx.ApplicationArgs total length is too long. 20000 > 16384",
 		},
 		{
 			ac: ApplicationCallTxnFields{
@@ -747,7 +766,7 @@ func TestWellFormedErrors(t *testing.T) {
 				GlobalStateSchema: basics.StateSchema{NumByteSlice: 1},
 				OnCompletion:      UpdateApplicationOC,
 			},
-			expectedError: "app programs too long. max total len 2048 bytes",
+			expectedError: "app programs too long. (1025 + 1025 > 2048)",
 		},
 		{
 			ac: ApplicationCallTxnFields{
@@ -768,7 +787,7 @@ func TestWellFormedErrors(t *testing.T) {
 				// Now we update epp, but not big enough for programs in txn
 				OnCompletion: UpdateApplicationOC,
 			},
-			expectedError: "app programs too long. max total len 4096 bytes",
+			expectedError: "app programs too long. (2048 + 2049 > 4096)",
 		},
 		{
 			ac: ApplicationCallTxnFields{
