@@ -1023,56 +1023,50 @@ func (v2 *Handlers) GetSupply(ctx echo.Context) error {
 // GetPeers returns the list of connected peers.
 // (GET /v2/node/peers)
 func (v2 *Handlers) GetPeers(ctx echo.Context) error {
-
-	// Get list of connected peers from the node
 	inboundPeers, outboundPeers, err := v2.Node.GetPeers()
 	if err != nil {
 		return internalError(ctx, err, errFailedToGetPeers, v2.Log)
 	}
 
-	// Populate the response struct
-	response := model.GetPeersResponse{
-		Peers: make([]model.PeerStatus, 0, len(inboundPeers)+len(outboundPeers)),
-	}
-	response.Peers = filterPeers(inboundPeers, model.PeerStatusConnectionTypeInbound)
-	response.Peers = append(response.Peers, filterPeers(outboundPeers, model.PeerStatusConnectionTypeOutbound)...)
-	return ctx.JSON(http.StatusOK, response)
+	peers := peerStatuses(inboundPeers, model.PeerStatusConnectionTypeInbound)
+	peers = append(peers, peerStatuses(outboundPeers, model.PeerStatusConnectionTypeOutbound)...)
+	return ctx.JSON(http.StatusOK, model.GetPeersResponse{Peers: peers})
 }
 
-type PeerMap map[string]string
-
-func (pm PeerMap) addPeer(addr string, network string) {
-	if _, found := pm[addr]; !found {
-		pm[addr] = network
-		return
-	}
-	pm[addr] += "," + network
-}
-
-func filterPeers(peers []network.Peer, connType model.PeerStatusConnectionType) []model.PeerStatus {
-	peerMap := make(PeerMap)
-
+// peerStatuses converts connected network peers into API peer statuses, deduplicating
+// peers that appear more than once with the same remote address (a p2p gossip peer is
+// also reported as its underlying libp2p connection). The result is sorted by address.
+func peerStatuses(peers []network.Peer, connType model.PeerStatusConnectionType) []model.PeerStatus {
+	seen := make(map[string]bool, len(peers))
+	statuses := make([]model.PeerStatus, 0, len(peers))
 	for _, p := range peers {
-		switch peer := p.(type) {
-		case network.HTTPPeer:
-			peerMap.addPeer(peer.GetAddress(), string(model.PeerStatusNetworkTypeWs))
-		case network.UnicastPeer:
-			peerMap.addPeer(peer.GetAddress(), string(model.PeerStatusNetworkTypeWs))
-		case network.LibP2PPeer:
-			peerMap.addPeer(peer.GetAddress(), string(model.PeerStatusNetworkTypeP2p))
+		info, ok := p.(network.PeerConnectionInfo)
+		if !ok {
+			continue
 		}
-	}
-	peerStatuses := make([]model.PeerStatus, len(peerMap))
-	var i int = 0
-	for addr := range peerMap {
-		peerStatuses[i] = model.PeerStatus{
+		addr := info.GetAddress()
+		if seen[addr] {
+			continue
+		}
+		seen[addr] = true
+
+		var networkType model.PeerStatusNetworkType
+		switch info.GetNetworkType() {
+		case network.PeerNetworkTypeLibP2P:
+			networkType = model.PeerStatusNetworkTypeP2p
+		default:
+			networkType = model.PeerStatusNetworkTypeWs
+		}
+		statuses = append(statuses, model.PeerStatus{
 			ConnectionType: connType,
 			NetworkAddress: addr,
-			NetworkType:    model.PeerStatusNetworkType(peerMap[addr]),
-		}
-		i++
+			NetworkType:    networkType,
+		})
 	}
-	return peerStatuses
+	slices.SortFunc(statuses, func(a, b model.PeerStatus) int {
+		return strings.Compare(a.NetworkAddress, b.NetworkAddress)
+	})
+	return statuses
 }
 
 // GetStatus gets the current node status.
