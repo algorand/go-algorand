@@ -107,13 +107,23 @@ func initNextBlockHeader(correctHeader *bookkeeping.BlockHeader, lastBlock bookk
 // endOfBlock is simplified implementation of BlockEvaluator.endOfBlock so that
 // our test blocks can pass validation.
 func endOfBlock(blk *bookkeeping.Block) error {
-	if blk.ConsensusProtocol().Payouts.Enabled {
+	proto := blk.ConsensusProtocol()
+	if proto.Payouts.Enabled {
 		// This won't work for inner fees, and it's not bothering with overflow
 		for _, txn := range blk.Payset {
 			blk.FeesCollected.Raw += txn.Txn.Fee.Raw
 		}
 		// blk.ProposerPayout is allowed to be zero, so don't reproduce the calc here.
 		blk.BlockHeader.Proposer = basics.Address{0x01} // Must be set to _something_.
+	}
+	if proto.LoadTracking {
+		// Mirror BlockEvaluator: Load is computed from the total encoded txn
+		// bytes relative to the block size cap.
+		blockTxBytes := 0
+		for i := range blk.Payset {
+			blockTxBytes += blk.Payset[i].GetEncodedLength()
+		}
+		blk.BlockHeader.Load = eval.ComputeLoad(blockTxBytes, proto.MaxTxnBytesPerBlock)
 	}
 	var err error
 	blk.TxnCommitments, err = blk.PaysetCommit()

@@ -229,6 +229,12 @@ const ConsensusV41 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/953304de35264fc3ef91bcd05c123242015eeaed",
 )
 
+// ConsensusV42 enables app size updates, Falcon1024 post-quantum signatures,
+// load tracking, a per-byte transaction surcharge, and TEAL v13.
+const ConsensusV42 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/TODO-REPLACE-BEFORE-RELEASE-v42",
+)
+
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
@@ -258,7 +264,7 @@ const ConsensusVAlpha5 = ConsensusVersion("alpha5")
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV41
+const ConsensusCurrentVersion = ConsensusV42
 
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion
