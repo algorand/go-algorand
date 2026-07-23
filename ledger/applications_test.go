@@ -371,7 +371,15 @@ return`
 
 func TestAppAccountDelta(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	// Exercise both the current protocol and vFuture, so that features staged in
+	// vFuture (e.g. new required block-header fields like Load) surface here
+	// during development rather than at release time.
+	for _, cv := range []protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusFuture} {
+		t.Run(string(cv), func(t *testing.T) { testAppAccountDelta(t, cv) })
+	}
+}
 
+func testAppAccountDelta(t *testing.T, cv protocol.ConsensusVersion) {
 	a := require.New(t)
 	source := `#pragma version 2
 txn ApplicationID
@@ -423,8 +431,8 @@ return`
 	a.Greater(len(ops.Program), 1)
 	program := ops.Program
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	proto := config.Consensus[cv]
+	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, cv, 100)
 
 	creator, err := basics.UnmarshalChecksumAddress("3LN5DBFC2UTPD265LQDP3LMTLGZCQ5M3JV7XTVTGRH5CKSVNQVDFPN6FG4")
 	a.NoError(err)
@@ -620,8 +628,9 @@ return`
 	a.NoError(err)
 	blk.TxnCounter = blk.TxnCounter + 2
 	blk.Payset = append(blk.Payset, txib1, txib2)
-	blk.TxnCommitments, err = blk.PaysetCommit()
-	blk.FeesCollected = basics.MicroAlgos{Raw: txib1.Txn.Fee.Raw + txib2.Txn.Fee.Raw}
+	// Finalize the hand-built block the same way the evaluator would, so that
+	// header fields gated by the active protocol (FeesCollected, Load) are set.
+	err = endOfBlock(&blk)
 	a.NoError(err)
 	err = l.appendUnvalidated(blk)
 	a.NoError(err)
@@ -646,7 +655,12 @@ return`
 
 func TestAppEmptyAccountsLocal(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	for _, cv := range []protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusFuture} {
+		t.Run(string(cv), func(t *testing.T) { testAppEmptyAccountsLocal(t, cv) })
+	}
+}
 
+func testAppEmptyAccountsLocal(t *testing.T, cv protocol.ConsensusVersion) {
 	a := require.New(t)
 	source := `#pragma version 2
 txn ApplicationID
@@ -666,8 +680,8 @@ return`
 	a.Greater(len(ops.Program), 1)
 	program := ops.Program
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	proto := config.Consensus[cv]
+	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, cv, 100)
 
 	creator, err := basics.UnmarshalChecksumAddress("3LN5DBFC2UTPD265LQDP3LMTLGZCQ5M3JV7XTVTGRH5CKSVNQVDFPN6FG4")
 	a.NoError(err)
@@ -765,8 +779,9 @@ return`
 	a.NoError(err)
 	blk.TxnCounter = blk.TxnCounter + 2
 	blk.Payset = append(blk.Payset, txib1, txib2)
-	blk.TxnCommitments, err = blk.PaysetCommit()
-	blk.FeesCollected = basics.MicroAlgos{Raw: txib1.Txn.Fee.Raw + txib2.Txn.Fee.Raw}
+	// Finalize the hand-built block the same way the evaluator would, so that
+	// header fields gated by the active protocol (FeesCollected, Load) are set.
+	err = endOfBlock(&blk)
 	a.NoError(err)
 	err = l.appendUnvalidated(blk)
 	a.NoError(err)
@@ -801,7 +816,12 @@ return`
 
 func TestAppEmptyAccountsGlobal(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	for _, cv := range []protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusFuture} {
+		t.Run(string(cv), func(t *testing.T) { testAppEmptyAccountsGlobal(t, cv) })
+	}
+}
 
+func testAppEmptyAccountsGlobal(t *testing.T, cv protocol.ConsensusVersion) {
 	a := require.New(t)
 	source := `#pragma version 2
 txn ApplicationID
@@ -820,8 +840,8 @@ return`
 	a.Greater(len(ops.Program), 1)
 	program := ops.Program
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	proto := config.Consensus[cv]
+	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, cv, 100)
 
 	creator, err := basics.UnmarshalChecksumAddress("3LN5DBFC2UTPD265LQDP3LMTLGZCQ5M3JV7XTVTGRH5CKSVNQVDFPN6FG4")
 	a.NoError(err)
@@ -902,8 +922,9 @@ return`
 	a.NoError(err)
 	blk.TxnCounter = blk.TxnCounter + 2
 	blk.Payset = append(blk.Payset, txib1, txib2)
-	blk.TxnCommitments, err = blk.PaysetCommit()
-	blk.FeesCollected = basics.MicroAlgos{Raw: txib1.Txn.Fee.Raw + txib2.Txn.Fee.Raw}
+	// Finalize the hand-built block the same way the evaluator would, so that
+	// header fields gated by the active protocol (FeesCollected, Load) are set.
+	err = endOfBlock(&blk)
 	a.NoError(err)
 	err = l.appendUnvalidated(blk)
 	a.NoError(err)

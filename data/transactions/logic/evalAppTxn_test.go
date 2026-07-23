@@ -1730,7 +1730,10 @@ func TestInnerBudgetIncrement(t *testing.T) {
 	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
-	gasup := TestProg(t, "pushint 1", AssemblerMaxVersion)
+	// autosalt off: as an app program this stateless snippet would otherwise
+	// get a salt intcblock at v14 (on-curve hash), adding an opcode of cost and
+	// skewing the budget assertions below.
+	gasup := TestProg(t, "#pragma autosalt false\npushint 1", AssemblerMaxVersion)
 	ledger.NewApp(tx.Receiver, 222, basics.AppParams{
 		ApprovalProgram: gasup.Program,
 	})
@@ -1760,7 +1763,10 @@ func TestIncrementCheck(t *testing.T) {
 	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
-	gasup := TestProg(t, "pushint 1", AssemblerMaxVersion)
+	// autosalt off: as an app program this stateless snippet would otherwise
+	// get a salt intcblock at v14 (on-curve hash), adding an opcode of cost and
+	// skewing the budget assertions below.
+	gasup := TestProg(t, "#pragma autosalt false\npushint 1", AssemblerMaxVersion)
 	ledger.NewApp(tx.Receiver, 222, basics.AppParams{
 		ApprovalProgram: gasup.Program,
 	})

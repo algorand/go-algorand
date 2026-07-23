@@ -28,7 +28,7 @@ import (
 )
 
 // LogicVersion defines default assembler and max eval versions
-const LogicVersion = 13
+const LogicVersion = 14
 
 // rekeyingEnabledVersion is the version of TEAL where RekeyTo functionality
 // was enabled. This is important to remember so that old TEAL accounts cannot
@@ -83,7 +83,7 @@ const varintBranchVersion = 13 // branch offsets encoded as binary.Varint instea
 // EXPERIMENTAL. These should be revisited whenever a new LogicSigVersion is
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version, and fixup TestAssemble() in assembler_test.go.
-const sumhashVersion = 13
+const sumhashVersion = 14
 const poseidon2Version = 13
 const foreignBoxVersion = 13 // app_params_set, foreign app box access
 
