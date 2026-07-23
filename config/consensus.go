@@ -1604,7 +1604,7 @@ func initConsensusProtocols() {
 	Consensus[protocol.ConsensusVFnet3] = vFnet3
 	vFnet2.ApprovedUpgrades[protocol.ConsensusVFnet3] = 10000
 
-	// vFnet4: challenges and heartbeats
+	// vFnet4: replacing challenges and heartbeats, back to vFnet1 parameters, with a new upgrade path to V40
 	vFnet4 := vFnet1
 	vFnet4.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusVFnet4] = vFnet4
