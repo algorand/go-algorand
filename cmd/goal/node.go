@@ -428,9 +428,10 @@ func getPeers(dataDir string) {
 		reportErrorf(errorNodePeers, err)
 	}
 
-	fmt.Printf("CONN TYPE\tNETWORK\tADDRESS\n")
+	rowFormat := "%-9s  %-7s  %s\n"
+	fmt.Printf(rowFormat, "CONN TYPE", "NETWORK", "ADDRESS")
 	for _, peer := range response.Peers {
-		fmt.Printf("%s\t%s\t%s\n", peer.ConnectionType, peer.NetworkType, peer.NetworkAddress)
+		fmt.Printf(rowFormat, peer.ConnectionType, peer.NetworkType, peer.NetworkAddress)
 	}
 
 }
