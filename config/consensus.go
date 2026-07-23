@@ -606,6 +606,10 @@ type ConsensusParams struct {
 	// EnablePQSchemeFalcon1024 enables native Falcon-1024 transaction
 	// authorization for the f1 PQ scheme.
 	EnablePQSchemeFalcon1024 bool
+
+	// EnableSelectF128 changes the sortition algorithm to use a 128-bit software
+	// floating point binomial CDF implementation for committee selection.
+	EnableSelectF128 bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -1537,6 +1541,7 @@ func initConsensusProtocols() {
 	vFuture.MaxAbsoluteExtraProgramPages = 7 // Allow larger programs with extra fees
 	vFuture.MaxAbsoluteTotalArgLen = 16384   // We _could_ make this as high as 16*4k
 	vFuture.PerByteTxnSurcharge = 100        // Each charged byte adds 0.000100 of min fee
+	vFuture.EnableSelectF128 = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
