@@ -14,35 +14,17 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-//go:build !arm && !386
-
-package testsuite
+// go:build 386
+package pebbledbdriver
 
 import (
-	"fmt"
-	"testing"
-
-	"github.com/stretchr/testify/require"
+	"errors"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/ledger/store/trackerdb/pebbledbdriver"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
 )
 
-func TestPebbleDB(t *testing.T) {
-	// partitiontest.PartitionTest(t) // partitioning inside subtest
-	dbFactory := func(proto config.ConsensusParams) dbForTests {
-		// create a tmp dir for the db, the testing runtime will clean it up automatically
-		dir := fmt.Sprintf("%s/db", t.TempDir())
-
-		db, err := pebbledbdriver.Open(dir, false, proto, logging.TestingLog(t))
-		require.NoError(t, err)
-
-		seedDb(t, db)
-
-		return db
-	}
-
-	// run the suite
-	runGenericTestsWithDB(t, dbFactory)
+func Open(dbdir string, inMem bool, proto config.ConsensusParams, log logging.Logger) (trackerdb.Store, error) {
+	return nil, errors.New("pebbledb storage backend not supported on 386")
 }
