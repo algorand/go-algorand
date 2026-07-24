@@ -17,8 +17,8 @@ require (
 	github.com/algorand/falcon v0.1.0 // indirect
 	github.com/algorand/go-codec/codec v1.1.10 // indirect
 	github.com/algorand/go-sumhash v0.1.0 // indirect
-	github.com/algorand/msgp v1.1.63 // indirect
-	github.com/algorand/sortition v1.0.0 // indirect
+	github.com/algorand/msgp v1.1.64 // indirect
+	github.com/algorand/sortition v1.1.0 // indirect
 	github.com/algorand/websocket v1.4.6 // indirect
 	github.com/aws/aws-sdk-go v1.34.0 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
