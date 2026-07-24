@@ -58,6 +58,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/libgoal/participation"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
@@ -152,6 +153,7 @@ type NodeInterface interface {
 	BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
 	AsyncBroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
 	Simulate(request simulation.Request) (result simulation.Result, err error)
+	GetPeers() (inboundPeers []network.Peer, outboundPeers []network.Peer, err error)
 	GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool)
 	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
 	SuggestedFee() basics.MicroAlgos
@@ -421,7 +423,14 @@ func (v2 *Handlers) AppendKeys(ctx echo.Context, participationID string) error {
 
 // ShutdownNode shuts down the node.
 // (POST /v2/shutdown)
+// Deprecated: use ShutdownNode2 instead.
 func (v2 *Handlers) ShutdownNode(ctx echo.Context, params model.ShutdownNodeParams) error {
+	return v2.ShutdownNode2(ctx, (model.ShutdownNode2Params)(params))
+}
+
+// ShutdownNode2 shuts down the node.
+// (POST /v2/node/shutdown)
+func (v2 *Handlers) ShutdownNode2(ctx echo.Context, params model.ShutdownNode2Params) error {
 	// TODO: shutdown endpoint
 	return ctx.String(http.StatusNotImplemented, "Endpoint not implemented.")
 }
@@ -1009,6 +1018,55 @@ func (v2 *Handlers) GetSupply(ctx echo.Context) error {
 	}
 
 	return ctx.JSON(http.StatusOK, supply)
+}
+
+// GetPeers returns the list of connected peers.
+// (GET /v2/node/peers)
+func (v2 *Handlers) GetPeers(ctx echo.Context) error {
+	inboundPeers, outboundPeers, err := v2.Node.GetPeers()
+	if err != nil {
+		return internalError(ctx, err, errFailedToGetPeers, v2.Log)
+	}
+
+	peers := peerStatuses(inboundPeers, model.PeerStatusConnectionTypeInbound)
+	peers = append(peers, peerStatuses(outboundPeers, model.PeerStatusConnectionTypeOutbound)...)
+	return ctx.JSON(http.StatusOK, model.GetPeersResponse{Peers: peers})
+}
+
+// peerStatuses converts connected network peers into API peer statuses, deduplicating
+// peers that appear more than once with the same remote address (a p2p gossip peer is
+// also reported as its underlying libp2p connection). The result is sorted by address.
+func peerStatuses(peers []network.Peer, connType model.PeerStatusConnectionType) []model.PeerStatus {
+	seen := make(map[string]bool, len(peers))
+	statuses := make([]model.PeerStatus, 0, len(peers))
+	for _, p := range peers {
+		info, ok := p.(network.PeerConnectionInfo)
+		if !ok {
+			continue
+		}
+		addr := info.GetAddress()
+		if seen[addr] {
+			continue
+		}
+		seen[addr] = true
+
+		var networkType model.PeerStatusNetworkType
+		switch info.GetNetworkType() {
+		case network.PeerNetworkTypeLibP2P:
+			networkType = model.PeerStatusNetworkTypeP2p
+		default:
+			networkType = model.PeerStatusNetworkTypeWs
+		}
+		statuses = append(statuses, model.PeerStatus{
+			ConnectionType: connType,
+			NetworkAddress: addr,
+			NetworkType:    networkType,
+		})
+	}
+	slices.SortFunc(statuses, func(a, b model.PeerStatus) int {
+		return strings.Compare(a.NetworkAddress, b.NetworkAddress)
+	})
+	return statuses
 }
 
 // GetStatus gets the current node status.

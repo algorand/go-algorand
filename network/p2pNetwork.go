@@ -748,6 +748,35 @@ func addrInfoToWsPeerCore(n *P2PNetwork, addrInfo *peer.AddrInfo) (wsPeerCore, b
 	return peerCore, true
 }
 
+// libP2PPeer represents a libp2p-level connection that is not necessarily
+// running the websocket gossip protocol (e.g. pubsub- or DHT-only peers).
+// It is returned by GetPeers for the PeersP2PConnectionsIn/Out options.
+type libP2PPeer struct {
+	addr multiaddr.Multiaddr
+}
+
+func (p *libP2PPeer) GetAddress() string {
+	return p.addr.String()
+}
+
+func (p *libP2PPeer) GetNetworkType() PeerNetworkType {
+	return PeerNetworkTypeLibP2P
+}
+
+// libP2PConnPeers returns a peer for each libp2p connection in the given direction.
+func (n *P2PNetwork) libP2PConnPeers(dir network.Direction) []Peer {
+	if n.service == nil {
+		return nil
+	}
+	var peers []Peer
+	for _, c := range n.service.Conns() {
+		if c.Stat().Direction == dir {
+			peers = append(peers, &libP2PPeer{addr: c.RemoteMultiaddr()})
+		}
+	}
+	return peers
+}
+
 // GetPeers returns a list of Peers we could potentially send a direct message to.
 func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 	peers := make([]Peer, 0)
@@ -761,6 +790,10 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 				}
 			}
 			n.wsPeersLock.RUnlock()
+		case PeersP2PConnectionsOut:
+			peers = append(peers, n.libP2PConnPeers(network.DirOutbound)...)
+		case PeersP2PConnectionsIn:
+			peers = append(peers, n.libP2PConnPeers(network.DirInbound)...)
 		case PeersPhonebookRelays:
 			const maxNodes = 100
 			addrInfos := n.pstore.GetAddresses(maxNodes, phonebook.RelayRole)

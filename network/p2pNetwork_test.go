@@ -1658,6 +1658,63 @@ func TestP2PMetainfoExchange(t *testing.T) {
 	require.True(t, peer.vpackVoteCompressionSupported())
 }
 
+// TestP2PGetPeersP2PConnections checks that the PeersP2PConnectionsIn/Out options
+// return libp2p-level connections without polluting PeersConnectedIn/Out, and that
+// both peer kinds report connection info with a matching address and p2p network type.
+func TestP2PGetPeersP2PConnections(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := config.GetDefaultLocal()
+	cfg.DNSBootstrapID = "" // disable DNS lookups since the test uses phonebook addresses
+	cfg.NetAddress = "127.0.0.1:0"
+	log := logging.TestingLog(t)
+	netA, err := NewP2PNetwork(log, cfg, "", nil, GenesisInfo{genesisID, config.Devtestnet}, &nopeNodeInfo{}, nil, nil)
+	require.NoError(t, err)
+	err = netA.Start()
+	require.NoError(t, err)
+	defer netA.Stop()
+
+	peerInfoA := netA.service.AddrInfo()
+	addrsA, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
+	require.NoError(t, err)
+	require.NotZero(t, addrsA[0])
+
+	cfg2 := cfg
+	cfg2.NetAddress = ""
+	phoneBookAddresses := []string{addrsA[0].String()}
+	netB, err := NewP2PNetwork(log, cfg2, "", phoneBookAddresses, GenesisInfo{genesisID, config.Devtestnet}, &nopeNodeInfo{}, nil, nil)
+	require.NoError(t, err)
+	err = netB.Start()
+	require.NoError(t, err)
+	defer netB.Stop()
+
+	var gossipPeers []Peer
+	require.Eventually(t, func() bool {
+		gossipPeers = netA.GetPeers(PeersConnectedIn)
+		return len(gossipPeers) > 0
+	}, 2*time.Second, 50*time.Millisecond)
+
+	// PeersConnectedIn must contain only the gossip peer, not raw libp2p connections
+	require.Len(t, gossipPeers, 1)
+	gossipPeer, ok := gossipPeers[0].(*wsPeer)
+	require.True(t, ok)
+	require.Equal(t, PeerNetworkTypeLibP2P, gossipPeer.GetNetworkType())
+
+	connPeers := netA.GetPeers(PeersP2PConnectionsIn)
+	require.Len(t, connPeers, 1)
+	connPeer, ok := connPeers[0].(PeerConnectionInfo)
+	require.True(t, ok)
+	require.Equal(t, PeerNetworkTypeLibP2P, connPeer.GetNetworkType())
+	// the gossip peer and its underlying connection report the same address,
+	// allowing consumers to deduplicate them
+	require.Equal(t, gossipPeer.GetAddress(), connPeer.GetAddress())
+
+	// combining the options returns both views of the same connection
+	require.Len(t, netB.GetPeers(PeersConnectedOut, PeersP2PConnectionsOut), 2)
+	require.Empty(t, netA.GetPeers(PeersP2PConnectionsOut))
+	require.Empty(t, netB.GetPeers(PeersP2PConnectionsIn))
+}
+
 // TestP2PMetainfoV1vsV22 checks v1 and v22 nodes works together.
 // It is done with setting disableV22Protocol=true for the second node,
 // and it renders EnableVoteCompression options to have no effect.

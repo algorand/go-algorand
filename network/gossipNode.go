@@ -58,6 +58,16 @@ const (
 	PeersPhonebookRelays PeerOption = iota
 	// PeersPhonebookArchivalNodes specifies all archival nodes (relay or p2p)
 	PeersPhonebookArchivalNodes PeerOption = iota
+	// PeersP2PConnectionsOut specifies all peer-to-peer transport-level connections
+	// dialed by this node, including peers that do not run the websocket gossip
+	// protocol (e.g. pubsub- or DHT-only peers). Currently only the libp2p-based
+	// P2PNetwork returns peers for this option.
+	PeersP2PConnectionsOut PeerOption = iota
+	// PeersP2PConnectionsIn specifies all peer-to-peer transport-level connections
+	// dialed by the remote peer, including peers that do not run the websocket gossip
+	// protocol (e.g. pubsub- or DHT-only peers). Currently only the libp2p-based
+	// P2PNetwork returns peers for this option.
+	PeersP2PConnectionsIn PeerOption = iota
 )
 
 func (po PeerOption) String() string {
@@ -70,9 +80,32 @@ func (po PeerOption) String() string {
 		return "PhonebookRelays"
 	case PeersPhonebookArchivalNodes:
 		return "PhonebookArchivalNodes"
+	case PeersP2PConnectionsOut:
+		return "P2PConnectionsOut"
+	case PeersP2PConnectionsIn:
+		return "P2PConnectionsIn"
 	default:
 		return "Unknown PeerOption"
 	}
+}
+
+// PeerNetworkType describes the transport protocol of a peer connection.
+//
+//msgp:ignore PeerNetworkType
+type PeerNetworkType string
+
+const (
+	// PeerNetworkTypeWebsocket is a peer connected over a websocket connection
+	PeerNetworkTypeWebsocket PeerNetworkType = "ws"
+	// PeerNetworkTypeLibP2P is a peer connected over a libp2p connection
+	PeerNetworkTypeLibP2P PeerNetworkType = "p2p"
+)
+
+// PeerConnectionInfo is implemented by connected peers that can report the
+// remote address and transport type of their connection.
+type PeerConnectionInfo interface {
+	GetAddress() string
+	GetNetworkType() PeerNetworkType
 }
 
 // GossipNode represents a node in the gossip network

@@ -741,6 +741,37 @@ func TestGetSupply(t *testing.T) {
 	a.Equal(totals.Online.Money.Raw, supplyResponse.OnlineMoney)
 }
 
+func TestGetPeers(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+	defer releasefunc()
+	err := handler.GetPeers(c)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	var peersResponse model.GetPeersResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &peersResponse))
+	// the mock node reports one inbound ws peer and two outbound peers (p2p and ws)
+	require.Equal(t, []model.PeerStatus{
+		{
+			ConnectionType: model.PeerStatusConnectionTypeInbound,
+			NetworkAddress: "192.168.10.2:4160",
+			NetworkType:    model.PeerStatusNetworkTypeWs,
+		},
+		{
+			ConnectionType: model.PeerStatusConnectionTypeOutbound,
+			NetworkAddress: "/ip4/192.168.10.3/tcp/4190",
+			NetworkType:    model.PeerStatusNetworkTypeP2p,
+		},
+		{
+			ConnectionType: model.PeerStatusConnectionTypeOutbound,
+			NetworkAddress: "192.168.10.4:4160",
+			NetworkType:    model.PeerStatusNetworkTypeWs,
+		},
+	}, peersResponse.Peers)
+}
+
 func TestGetStatus(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
