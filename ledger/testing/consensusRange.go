@@ -64,8 +64,9 @@ var consensusByNumber = []protocol.ConsensusVersion{
 	protocol.ConsensusV39, // AVM v10, logicsig opcode budget pooling, elliptic curve ops, dynamic round times
 	protocol.ConsensusV40, // Consensus incentives, AVM v11, mimc
 	protocol.ConsensusV41, // AVM v12, txn access, Sha512BlockHash, AppVersioning
+	protocol.ConsensusV42, // AVM v13, app size updates, Falcon1024 PQ sigs, load tracking, per-byte txn surcharge
 
-	protocol.ConsensusFuture, // Likely: On chain congestion, AVM v13
+	protocol.ConsensusFuture, // Likely: Enforce on chain congestion, AVM v14
 }
 
 func versionStringFromIndex(index int) string {

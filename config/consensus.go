@@ -1526,22 +1526,34 @@ func initConsensusProtocols() {
 	// our current max is 250000
 	v40.ApprovedUpgrades[protocol.ConsensusV41] = 208000
 
+	v42 := v41
+	v42.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	v42.LogicSigVersion = 13
+	v42.AppSizeUpdates = true
+	v42.AllowZeroLocalAppRef = true
+	v42.EnforceAuthAddrSenderDiff = true
+	v42.EnablePQSchemeFalcon1024 = true
+	v42.LoadTracking = true
+	v42.MaxAbsoluteTxnNoteBytes = 4096   // same as largest AVM value
+	v42.MaxAbsoluteExtraProgramPages = 7 // Allow larger programs with extra fees
+	v42.MaxAbsoluteTotalArgLen = 16384   // We _could_ make this as high as 16*4k
+	v42.PerByteTxnSurcharge = 100        // Each charged byte adds 0.000100 of min fee
+	v42.EnableSelectF128 = true
+
+	Consensus[protocol.ConsensusV42] = v42
+
+	// v41 can be upgraded to v42, with an update delay of 7d:
+	// 208000 = (7 * 24 * 60 * 60 / 2.9 ballpark round times)
+	// our current max is 250000
+	v41.ApprovedUpgrades[protocol.ConsensusV42] = 208000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v41
+	vFuture := v42
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	vFuture.LogicSigVersion = 13 // When moving this to a release, put a new higher LogicSigVersion here
-	vFuture.AppSizeUpdates = true
-	vFuture.AllowZeroLocalAppRef = true
-	vFuture.EnforceAuthAddrSenderDiff = true
-	vFuture.EnablePQSchemeFalcon1024 = true
-	vFuture.LoadTracking = true
-	vFuture.MaxAbsoluteTxnNoteBytes = 4096   // same as largest AVM value
-	vFuture.MaxAbsoluteExtraProgramPages = 7 // Allow larger programs with extra fees
-	vFuture.MaxAbsoluteTotalArgLen = 16384   // We _could_ make this as high as 16*4k
-	vFuture.PerByteTxnSurcharge = 100        // Each charged byte adds 0.000100 of min fee
-	vFuture.EnableSelectF128 = true
+	vFuture.LogicSigVersion = 14 // When moving this to a release, put a new higher LogicSigVersion here
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
