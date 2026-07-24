@@ -361,7 +361,7 @@ func setupWebsocketNetworkABwithLogger(t *testing.T, countTarget int, log loggin
 	success = true
 	closeFunc := func() {
 		netStop(t, netB, "B")
-		netStop(t, netB, "A")
+		netStop(t, netA, "A")
 	}
 	return netA, netB, counter, closeFunc
 }
@@ -411,9 +411,28 @@ func TestWebsocketNetworkBasicInvalidTags(t *testing.T) { // nolint:paralleltest
 	log := logging.TestingLog(t)
 	log.SetOutput(&logOutput)
 	log.SetLevel(logging.Level(logging.Debug))
-	netA, netB, counter, closeFunc := setupWebsocketNetworkABwithLogger(t, 0, log)
 
-	defer closeFunc()
+	// set up two nodes without waiting for ready: the invalid tags cause the
+	// MsgOfInterest exchange to drop the connection, sometimes before the peer
+	// is counted toward readiness, so Ready() might never fire.
+	netA := makeTestWebsocketNode(t)
+	netA.config.GossipFanout = 1
+	netA.log = log
+	netA.Start()
+	defer netStop(t, netA, "A")
+
+	netB := makeTestWebsocketNode(t)
+	netB.config.GossipFanout = 1
+	netB.log = log
+	addrA, postListen := netA.Address()
+	require.True(t, postListen)
+	t.Log(addrA)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
+	netB.Start()
+	defer netStop(t, netB, "B")
+
+	counter := newMessageCounter(t, 0)
+	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
 	// register a handler that should never get called, because the message will never be delivered
 	netB.RegisterHandlers([]TaggedMessageHandler{
 		{Tag: "XX", MessageHandler: HandlerFunc(func(msg IncomingMessage) OutgoingMessage {
@@ -424,13 +443,9 @@ func TestWebsocketNetworkBasicInvalidTags(t *testing.T) { // nolint:paralleltest
 	// it should not go through because the defaultSendMessageTags should not be accepted
 	// and the connection should be dropped
 	netA.Broadcast(context.Background(), "XX", []byte("foo"), false, nil)
-	for p := 0; p < 100; p++ {
-		if strings.Contains(logOutput.String(), "wsPeer handleMessageOfInterest: could not unmarshall message from") {
-			break
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	require.Contains(t, logOutput.String(), "wsPeer handleMessageOfInterest: could not unmarshall message from")
+	require.Eventually(t, func() bool {
+		return strings.Contains(logOutput.String(), "wsPeer handleMessageOfInterest: could not unmarshall message from")
+	}, 5*time.Second, 20*time.Millisecond)
 	require.Equal(t, 0, counter.count)
 }
 
