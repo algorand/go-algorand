@@ -606,6 +606,10 @@ type ConsensusParams struct {
 	// EnablePQSchemeFalcon1024 enables native Falcon-1024 transaction
 	// authorization for the f1 PQ scheme.
 	EnablePQSchemeFalcon1024 bool
+
+	// EnableSelectF128 changes the sortition algorithm to use a 128-bit software
+	// floating point binomial CDF implementation for committee selection.
+	EnableSelectF128 bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -1537,6 +1541,7 @@ func initConsensusProtocols() {
 	vFuture.MaxAbsoluteExtraProgramPages = 7 // Allow larger programs with extra fees
 	vFuture.MaxAbsoluteTotalArgLen = 16384   // We _could_ make this as high as 16*4k
 	vFuture.PerByteTxnSurcharge = 100        // Each charged byte adds 0.000100 of min fee
+	vFuture.EnableSelectF128 = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
@@ -1570,6 +1575,47 @@ func initConsensusProtocols() {
 	vAlpha5.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusVAlpha5] = vAlpha5
 	vAlpha4.ApprovedUpgrades[protocol.ConsensusVAlpha5] = 10000
+
+	// vFnetX are like vAlphaX but for AF's FNet. These are the genesis and
+	// historical protocols for the FNet network; a mainline node needs them to
+	// open the FNet genesis ledger (proto fnet1) and to replay the pre-V40 chain.
+	// The on-chain upgrade path was fnet1->fnet2->fnet3->fnet4->V40.
+	vFnet1 := v39
+	vFnet1.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	vFnet1.LogicSigVersion = 11 // When moving this to a release, put a new higher LogicSigVersion here
+	vFnet1.Payouts.Enabled = true
+	vFnet1.Payouts.Percent = 75
+	vFnet1.Payouts.GoOnlineFee = 2_000_000         // 2 algos
+	vFnet1.Payouts.MinBalance = 30_000_000_000     // 30,000 algos
+	vFnet1.Payouts.MaxBalance = 70_000_000_000_000 // 70M algos
+	vFnet1.Payouts.MaxMarkAbsent = 32
+	vFnet1.Payouts.ChallengeInterval = 1000
+	vFnet1.Payouts.ChallengeGracePeriod = 200
+	vFnet1.Payouts.ChallengeBits = 5
+	vFnet1.Bonus.BaseAmount = 10_000_000 // 10 Algos
+	vFnet1.Bonus.DecayInterval = 250_000 // .99^(10.8/0.25) ~ .648. So 35% decay per year
+	Consensus[protocol.ConsensusVFnet1] = vFnet1
+
+	// vFnet2 guards against a future change in block opcodes that the fnet1 client did not support. No change in parameters
+	vFnet2 := vFnet1
+	vFnet2.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	Consensus[protocol.ConsensusVFnet2] = vFnet2
+	vFnet1.ApprovedUpgrades[protocol.ConsensusVFnet2] = 10000
+
+	// vFnet3 disabled challenges - without heartbeats, participating accounts are being evicted
+	vFnet3 := vFnet2
+	vFnet3.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	vFnet3.Payouts.ChallengeInterval = 0
+	Consensus[protocol.ConsensusVFnet3] = vFnet3
+	vFnet2.ApprovedUpgrades[protocol.ConsensusVFnet3] = 10000
+
+	// vFnet4: replacing challenges and heartbeats, back to vFnet1 parameters, with a new upgrade path to V40
+	vFnet4 := vFnet1
+	vFnet4.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	Consensus[protocol.ConsensusVFnet4] = vFnet4
+	vFnet3.ApprovedUpgrades[protocol.ConsensusVFnet4] = 10000
+
+	vFnet4.ApprovedUpgrades[protocol.ConsensusV40] = 10000
 }
 
 // Global defines global Algorand protocol parameters which should not be overridden.

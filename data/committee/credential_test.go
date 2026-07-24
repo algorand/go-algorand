@@ -23,6 +23,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/sortition"
+
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -410,4 +413,66 @@ func BenchmarkSortition(b *testing.B) {
 		}
 		credentials[i], _ = MakeCredential(vrfSecrets[0], sel).Verify(proto, m)
 	}
+}
+
+// TestSortitionMoneyDomain verifies that every stake reachable under consensus
+// stays inside the domain bound exported by the sortition package. The money
+// argument of sortition.SelectF128 is a voting stake in microalgos, bounded
+// above by total online money and therefore by the supply minted at genesis;
+// behavior at or above sortition.SelectF128MaxMoney is undefined in the sortition
+// package (it does not enforce the bound). If an economics change (for example an inflationary
+// model) raises the possible supply, or a consensus version introduces a
+// committee size beyond it, this test must fail before the change can
+// silently misround consensus.
+func TestSortitionMoneyDomain(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// 10 billion Algos in microalgos: the mainnet genesis supply. The ledger
+	// conserves total money, so no VotingStake or TotalMoney can exceed it.
+	const mainnetSupply = uint64(10_000_000_000_000_000)
+
+	require.Less(t, mainnetSupply, sortition.SelectF128MaxMoney,
+		"genesis supply reaches the sortition domain bound")
+	// Insist on headroom so erosion of the margin is a deliberate decision.
+	require.LessOrEqual(t, 7*mainnetSupply, sortition.SelectF128MaxMoney,
+		"less than 2 bits of headroom between the supply and the sortition domain bound")
+
+	for v, p := range config.Consensus {
+		if !p.EnableSelectF128 {
+			continue
+		}
+		committees := []uint64{
+			p.NumProposers, p.SoftCommitteeSize, p.CertCommitteeSize, p.NextCommitteeSize,
+			p.LateCommitteeSize, p.RedoCommitteeSize, p.DownCommitteeSize,
+		}
+		for _, size := range committees {
+			// credential.go panics when expectedSelection exceeds total money,
+			// so a committee size beyond the supply could never form a valid p.
+			require.LessOrEqual(t, size, mainnetSupply,
+				"consensus version %v: committee size %d exceeds the supply", v, size)
+		}
+	}
+
+	// The checks above prove the guard cannot fire under mainnet economics;
+	// this exercises the guard itself. A stake at the domain bound must make
+	// Verify fail closed with an error instead of calling SelectF128 out of
+	// domain. No released consensus version enables the flag yet, so force it on
+	// a copy of the current proto.
+	protoF128 := proto
+	protoF128.EnableSelectF128 = true
+
+	selParams, _, round, addresses, _, vrfSecrets := testingenv(t, 100, 2000, nil)
+	ok, record, selectionSeed, _ := selParams(addresses[0])
+	require.True(t, ok)
+	// A voting stake exactly at the bound trips the >= check; TotalMoney is set
+	// no lower so the earlier total-money panic does not fire first.
+	record.MicroAlgosWithRewards.Raw = sortition.SelectF128MaxMoney
+	sel := AgreementSelector{Seed: selectionSeed, Round: round, Period: Period(0), Step: Propose}
+	m := Membership{
+		Record:     record,
+		Selector:   sel,
+		TotalMoney: basics.MicroAlgos{Raw: sortition.SelectF128MaxMoney},
+	}
+	_, err := MakeCredential(vrfSecrets[0], sel).Verify(protoF128, m)
+	require.ErrorContains(t, err, "larger than SelectF128MaxMoney")
 }
