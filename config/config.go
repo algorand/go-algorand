@@ -40,6 +40,9 @@ const Betanet protocol.NetworkID = "betanet"
 // Alphanet identifies the 'alpha network' use for performance releases of feature/alphanet to the public prior to releasing these to mainnet/testnet
 const Alphanet protocol.NetworkID = "alphanet"
 
+// Fnet identifies the Algorand Foundation's 'fnet' network, a public development network for testing features prior to releasing these to mainnet/testnet
+const Fnet protocol.NetworkID = "fnet"
+
 // Devtestnet identifies the 'development network for tests' use for running tests against development and not generally accessible publicly
 const Devtestnet protocol.NetworkID = "devtestnet"
 
@@ -378,10 +381,10 @@ func LoadConfigurableConsensusProtocols(dataDirectory string) error {
 	return nil
 }
 
-// ApplyShorterUpgradeRoundsForDevNetworks applies a shorter upgrade round time for the Devnet and Betanet networks.
+// ApplyShorterUpgradeRoundsForDevNetworks applies a shorter upgrade round time for the Devnet, Betanet, and Fnet networks.
 // This function should not take precedence over settings loaded via `PreloadConfigurableConsensusProtocols`.
 func ApplyShorterUpgradeRoundsForDevNetworks(id protocol.NetworkID) {
-	if id == Betanet || id == Devnet {
+	if id == Betanet || id == Devnet || id == Fnet {
 		// Go through all approved upgrades and set to the MinUpgradeWaitRounds valid where MinUpgradeWaitRounds is set
 		for _, p := range Consensus {
 			if p.ApprovedUpgrades != nil {
