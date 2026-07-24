@@ -72,3 +72,63 @@ func BenchmarkUnmarshalEncodedBlockCert(b *testing.B) {
 		}
 	}
 }
+
+func TestMarshalUnmarshalPreEncodedBlockCert(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := PreEncodedBlockCert{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingPreEncodedBlockCert(t *testing.T) {
+	protocol.RunEncodingTest(t, &PreEncodedBlockCert{})
+}
+
+func BenchmarkMarshalMsgPreEncodedBlockCert(b *testing.B) {
+	v := PreEncodedBlockCert{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgPreEncodedBlockCert(b *testing.B) {
+	v := PreEncodedBlockCert{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalPreEncodedBlockCert(b *testing.B) {
+	v := PreEncodedBlockCert{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}

@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/algorand/msgp/msgp"
+
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -76,6 +78,7 @@ func (nonpersistent) persistent() bool {
 }
 
 type noopAction struct {
+	_struct struct{} `codec:","`
 	nonpersistent
 }
 
@@ -92,6 +95,7 @@ func (a noopAction) String() string {
 func (a noopAction) ComparableStr() string { return a.String() }
 
 type networkAction struct {
+	_struct struct{} `codec:","`
 	nonpersistent
 
 	// ignore, broadcast, broadcastVotes, relay, disconnect
@@ -104,7 +108,7 @@ type networkAction struct {
 	UnauthenticatedBundle unauthenticatedBundle
 	CompoundMessage       compoundMessage
 
-	UnauthenticatedVotes []unauthenticatedVote
+	UnauthenticatedVotes []unauthenticatedVote `codec:",allocbound=-"`
 
 	Err *serializableError
 }
@@ -180,6 +184,7 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 }
 
 type cryptoAction struct {
+	_struct struct{} `codec:","`
 	nonpersistent
 
 	// verify{Vote,Payload,Bundle}
@@ -226,6 +231,7 @@ func (a cryptoAction) do(ctx context.Context, s *Service) {
 }
 
 type ensureAction struct {
+	_struct struct{} `codec:","`
 	nonpersistent
 
 	// the payload that we will give to the ledger
@@ -298,6 +304,7 @@ func (a ensureAction) do(ctx context.Context, s *Service) {
 }
 
 type stageDigestAction struct {
+	_struct struct{} `codec:","`
 	nonpersistent
 	// Certificate identifies a block and is a proof commitment
 	Certificate Certificate // a block digest is probably sufficient; keep certificate for now to match ledger interface
@@ -326,6 +333,7 @@ func (a stageDigestAction) do(ctx context.Context, service *Service) {
 }
 
 type rezeroAction struct {
+	_struct struct{} `codec:","`
 	nonpersistent
 
 	Round round
@@ -361,6 +369,8 @@ func (a rezeroAction) do(ctx context.Context, s *Service) {
 }
 
 type pseudonodeAction struct {
+	_struct struct{} `codec:","`
+
 	// assemble, repropose, attest
 	T actionType
 
@@ -510,6 +520,8 @@ func zeroAction(t actionType) action {
 		return cryptoAction{}
 	case ensure:
 		return ensureAction{}
+	case stageDigest:
+		return stageDigestAction{}
 	case rezero:
 		return rezeroAction{}
 	case attest, assemble, repropose:
@@ -522,7 +534,72 @@ func zeroAction(t actionType) action {
 	}
 }
 
+// encodeAction serializes an action using its generated msgp marshaler.
+func encodeAction(a action) []byte {
+	switch v := a.(type) {
+	case noopAction:
+		return protocol.Encode(&v)
+	case networkAction:
+		return protocol.Encode(&v)
+	case cryptoAction:
+		return protocol.Encode(&v)
+	case ensureAction:
+		return protocol.Encode(&v)
+	case stageDigestAction:
+		return protocol.Encode(&v)
+	case rezeroAction:
+		return protocol.Encode(&v)
+	case pseudonodeAction:
+		return protocol.Encode(&v)
+	case checkpointAction:
+		return protocol.Encode(&v)
+	default:
+		// matches the panic in protocol.Encode for a non-marshalable object
+		panic(fmt.Errorf("encodeAction: unsupported action type %T", a))
+	}
+}
+
+// unmarshalAction decodes data into a fresh value of concrete action type T.
+func unmarshalAction[T action, PT interface {
+	*T
+	msgp.Unmarshaler
+}](data []byte) (action, error) {
+	var a T
+	if err := protocol.Decode(data, PT(&a)); err != nil {
+		return nil, err
+	}
+	return a, nil
+}
+
+// decodeAction reconstructs the concrete action identified by t from its
+// msgp encoding. It returns an error rather than panicking on an unknown
+// actionType because t is read from the crash recovery database.
+func decodeAction(t actionType, data []byte) (action, error) {
+	switch t {
+	case noop:
+		return unmarshalAction[noopAction](data)
+	case ignore, broadcast, relay, disconnect, broadcastVotes:
+		return unmarshalAction[networkAction](data)
+	case verifyVote, verifyPayload, verifyBundle:
+		return unmarshalAction[cryptoAction](data)
+	case ensure:
+		return unmarshalAction[ensureAction](data)
+	case stageDigest:
+		return unmarshalAction[stageDigestAction](data)
+	case rezero:
+		return unmarshalAction[rezeroAction](data)
+	case attest, assemble, repropose:
+		return unmarshalAction[pseudonodeAction](data)
+	case checkpoint:
+		return unmarshalAction[checkpointAction](data)
+	default:
+		return nil, fmt.Errorf("decodeAction: bad action type: %v", t)
+	}
+}
+
 type checkpointAction struct {
+	_struct struct{} `codec:","`
+
 	Round  round
 	Period period
 	Step   step
