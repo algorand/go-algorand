@@ -336,12 +336,12 @@ type OpRecord struct {
 }
 
 type argDetail struct {
-	Name    string
-	Type    string
-	Doc     string
-	Bytes   int
-	Modes   logic.RunMode `json:",omitzero"` // Zero means "same as the opcode"
-	Version uint64
+	Name         string
+	Type         string `json:",omitempty"`
+	Doc          string
+	ByteEncoding int
+	Modes        logic.RunMode `json:",omitempty"` // Zero means "same as the opcode"
+	Version      uint64
 }
 
 type namedType struct {
@@ -395,6 +395,8 @@ func typeStrings(types logic.StackTypes) []string {
 		out[idx] = t.String()
 		if out[idx] != "none" {
 			allNones = false
+		} else {
+			out[idx] = "" // So omitempty removes it
 		}
 	}
 
@@ -432,14 +434,18 @@ func fieldsAndTypes(group logic.FieldGroup, version uint64, modes logic.RunMode)
 
 		fields = append(fields, name)
 		types = append(types, spec.Type())
+		typeName := spec.Type().String()
+		if typeName == "none" {
+			typeName = ""
+		}
 
 		details = append(details, argDetail{
-			Name:    name,
-			Type:    spec.Type().String(),
-			Doc:     spec.Note(),
-			Bytes:   int(spec.Field()),
-			Modes:   argMode,
-			Version: argVersion,
+			Name:         name,
+			Type:         typeName,
+			Doc:          spec.Note(),
+			ByteEncoding: int(spec.Field()),
+			Modes:        argMode,
+			Version:      argVersion,
 		})
 	}
 	return fields, typeStrings(types), details
