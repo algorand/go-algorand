@@ -356,8 +356,8 @@ func checkTxnSigTypeCounts(s *transactions.SignedTxn, groupIndex int) (sigType s
 func stxnCoreChecks(gi int, groupCtx *GroupContext, batch crypto.BatchEnqueuer) *TxGroupError {
 	s := &groupCtx.signedGroupTxns[gi]
 
-	if !groupCtx.consensusParams.PQSigEnabled() && !s.Lsig.PQsig.Blank() {
-		return &TxGroupError{err: fmt.Errorf("delegated pq signature not enabled"), GroupIndex: gi, Reason: TxGroupErrorReasonSigNotWellFormed}
+	if !groupCtx.consensusParams.PQSigEnabled() && (!s.PQsig.Blank() || !s.Lsig.PQsig.Blank()) {
+		return &TxGroupError{err: fmt.Errorf("pq signature not enabled"), GroupIndex: gi, Reason: TxGroupErrorReasonSigNotWellFormed}
 	}
 
 	sigType, err := checkTxnSigTypeCounts(s, gi)

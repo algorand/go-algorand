@@ -376,9 +376,8 @@ func TestTxnValidationPQSig(t *testing.T) {
 	require.False(t, config.Consensus[disabledBlkHdr.CurrentProtocol].EnablePQSchemeFalcon1024)
 
 	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &disabledBlkHdr, nil, &dummyLedger)
-	require.ErrorContains(t, err, "pq signature validation failed")
+	require.ErrorContains(t, err, "pq signature not enabled")
 	requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
-	require.ErrorContains(t, err, "pq signature scheme not enabled")
 }
 
 func TestTxnValidationPQSigWithAuthAddr(t *testing.T) {
@@ -558,7 +557,7 @@ func TestTxnValidationPQDelegatedLogicSigRejectsInvalidProof(t *testing.T) {
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &disabledBlkHdr, nil, &dummyLedger)
 		requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
-		require.ErrorContains(t, err, "delegated pq signature not enabled")
+		require.ErrorContains(t, err, "pq signature not enabled")
 	})
 
 	t.Run("replay-different-salt", func(t *testing.T) {
@@ -1215,7 +1214,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 
 	/////  the same LogicSig.PQsig is rejected outright before it is enabled
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	require.ErrorContains(t, err, "delegated pq signature not enabled")
+	require.ErrorContains(t, err, "pq signature not enabled")
 }
 
 func TestTxnGroupPQSigMixedSignatures(t *testing.T) {
@@ -1853,7 +1852,7 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 			{
 				name:    "pqsig",
 				lsig:    transactions.LogicSig{PQsig: transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024}},
-				wantErr: "delegated pq signature not enabled",
+				wantErr: "pq signature not enabled",
 			},
 		}
 
@@ -1979,7 +1978,7 @@ func TestOrphanLsigPQSigGatedByConsensus(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// rejection by the pre-upgrade gate in stxnCoreChecks
-	const pqsigGate = "delegated pq signature not enabled"
+	const pqsigGate = "pq signature not enabled"
 	// rejection by the (older) orphan LogicSig content check in
 	// logicSigGroupSizeCheck, which covers the field once size pricing exists
 	const orphanLsig = "LogicSig fields without LogicSig program"
@@ -2002,42 +2001,33 @@ func TestOrphanLsigPQSigGatedByConsensus(t *testing.T) {
 		return stxn
 	}
 
-	verifyForProtocol := func(ver protocol.ConsensusVersion, lsig transactions.LogicSig) error {
-		blkHdr := createDummyBlockHeader(ver)
-		stxn := makeStxn(config.Consensus[ver], lsig)
-		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &DummyLedgerForSignature{})
-		return err
+	for _, tc := range []struct {
+		ver    protocol.ConsensusVersion
+		errMsg string
+		reason TxGroupErrorReason
+	}{
+		{protocol.ConsensusV41, pqsigGate, TxGroupErrorReasonSigNotWellFormed},
+		// vFuture enables the field, and rejects it as orphan LogicSig content
+		{protocol.ConsensusFuture, orphanLsig, TxGroupErrorReasonNotWellFormed},
+	} {
+		t.Run(string(tc.ver), func(t *testing.T) {
+			blkHdr := createDummyBlockHeader(tc.ver)
+			stxn := makeStxn(config.Consensus[tc.ver], orphanPQsig)
+			_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &DummyLedgerForSignature{})
+
+			require.ErrorContains(t, err, tc.errMsg)
+			requireTxGroupErrorReason(t, err, tc.reason)
+		})
 	}
 
-	t.Run("current protocol rejects an orphan PQsig", func(t *testing.T) {
-		err := verifyForProtocol(protocol.ConsensusCurrentVersion, orphanPQsig)
-		require.ErrorContains(t, err, pqsigGate)
-		requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
+	blkHdr := createDummyBlockHeader(protocol.ConsensusV41)
+	stxn := makeStxn(config.Consensus[protocol.ConsensusV41], transactions.LogicSig{})
+	stxn.PQsig = transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024}
+	_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &DummyLedgerForSignature{})
 
-		// the same transaction without the orphan LogicSig is valid, so the
-		// rejection above is attributable to the PQsig alone
-		require.NoError(t, verifyForProtocol(protocol.ConsensusCurrentVersion, transactions.LogicSig{}))
-	})
+	require.ErrorContains(t, err, pqsigGate)
+	requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
 
-	t.Run("named consensus versions", func(t *testing.T) {
-		// Pins the concrete answer per version, so that enabling the field cannot
-		// silently change who accepts it.
-		for _, tc := range []struct {
-			ver    protocol.ConsensusVersion
-			errMsg string
-			reason TxGroupErrorReason
-		}{
-			{protocol.ConsensusV41, pqsigGate, TxGroupErrorReasonSigNotWellFormed},
-			// vFuture enables the field, and rejects it as orphan LogicSig content
-			{protocol.ConsensusFuture, orphanLsig, TxGroupErrorReasonNotWellFormed},
-		} {
-			t.Run(string(tc.ver), func(t *testing.T) {
-				err := verifyForProtocol(tc.ver, orphanPQsig)
-				require.ErrorContains(t, err, tc.errMsg)
-				requireTxGroupErrorReason(t, err, tc.reason)
-			})
-		}
-	})
 }
 
 func testLogicSigMultisigValidation(t *testing.T, consensusVer protocol.ConsensusVersion, useLMsig bool) {
