@@ -38,6 +38,8 @@ var (
 // crypto.MaxPQSignatureSize (the largest sizes over all supported PQ schemes),
 // which feed msgp allocation bounds and therefore PQSigMaxSize, SignedTxnMaxSize,
 // and the SignedTxn wire bound.
+//
+//msgp:postunmarshalcheck PQSig ValidateNonBlankEncoding
 type PQSig struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -45,6 +47,14 @@ type PQSig struct {
 	Salt      basics.PQAddressSalt `codec:"slt"`
 	PublicKey []byte               `codec:"pk,allocbound=crypto.MaxPQPublicKeySize"`
 	Signature []byte               `codec:"sig,allocbound=crypto.MaxPQSignatureSize"`
+}
+
+// ValidateNonBlankEncoding checks that the PQSig is not blank.
+func (p *PQSig) ValidateNonBlankEncoding() error {
+	if p.Blank() {
+		return errPQSigBlank
+	}
+	return nil
 }
 
 // Blank returns true if the PQ authorization envelope is absent.

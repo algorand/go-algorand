@@ -557,7 +557,8 @@ func TestTxnValidationPQDelegatedLogicSigRejectsInvalidProof(t *testing.T) {
 		stxn := makePQDelegatedLogicSigTxn(t, 18)
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &disabledBlkHdr, nil, &dummyLedger)
-		requireLogicPQSigError(t, err, "pq signature scheme not enabled")
+		requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
+		require.ErrorContains(t, err, "delegated pq signature not enabled")
 	})
 
 	t.Run("replay-different-salt", func(t *testing.T) {
@@ -1176,10 +1177,15 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	txnGroups[0][0].Lsig.Msig.Subsigs = nil
 	txnGroups[0][0].Lsig.LMsig.Subsigs = nil
 
+	// The remaining cases carry a LogicSig.PQsig, which the current consensus
+	// version predates and therefore rejects on presence alone (see
+	// TestOrphanLsigPQSigGatedByConsensus).
+	pqBlkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+
 	/////  logic with sig and PQsig
 	txnGroups[0][0].Lsig.Sig = tmpSig
 	txnGroups[0][0].Lsig.PQsig = transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024}
-	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
+	_, err = TxnGroup(txnGroups[0], &pqBlkHdr, nil, &dummyLedger)
 	require.ErrorContains(t, err, "should have only one type of delegation signature")
 	txnGroups[0][0].Lsig.Sig = crypto.Signature{}
 
@@ -1189,7 +1195,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Key: crypto.PublicKey{0x1},
 		Sig: crypto.Signature{0x2},
 	}
-	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
+	_, err = TxnGroup(txnGroups[0], &pqBlkHdr, nil, &dummyLedger)
 	require.ErrorContains(t, err, "should have only one type of delegation signature")
 	txnGroups[0][0].Lsig.Msig.Subsigs = nil
 
@@ -1199,14 +1205,17 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Key: crypto.PublicKey{0x1},
 		Sig: crypto.Signature{0x2},
 	}
-	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
+	_, err = TxnGroup(txnGroups[0], &pqBlkHdr, nil, &dummyLedger)
 	require.ErrorContains(t, err, "should have only one type of delegation signature")
 	txnGroups[0][0].Lsig.LMsig.Subsigs = nil
 
 	/////  logic with PQsig only is classified as a LogicSig authorization proof
-	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
+	_, err = TxnGroup(txnGroups[0], &pqBlkHdr, nil, &dummyLedger)
 	require.ErrorContains(t, err, "pq delegated logic signature validation failed")
 
+	/////  the same LogicSig.PQsig is rejected outright before it is enabled
+	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "delegated pq signature not enabled")
 }
 
 func TestTxnGroupPQSigMixedSignatures(t *testing.T) {
@@ -1828,25 +1837,44 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 		lsigSig := crypto.Signature{}
 		lsigSig[0] = 1
 
+		// Content on a program-less LogicSig is ignored before transaction size
+		// pricing rejects it outright, except for a PQsig: that one must be
+		// rejected because a node running a pre-vFuture binary cannot even decode
+		// it. See TestOrphanLsigPQSigGatedByConsensus.
 		tests := []struct {
 			name string
 			lsig transactions.LogicSig
+
+			wantErr string // "" when the orphan content is ignored
 		}{
 			{name: "sig", lsig: transactions.LogicSig{Sig: lsigSig}},
 			{name: "msig", lsig: transactions.LogicSig{Msig: crypto.MultisigSig{Version: 1}}},
 			{name: "lmsig", lsig: transactions.LogicSig{LMsig: crypto.MultisigSig{Version: 1}}},
-			{name: "pqsig", lsig: transactions.LogicSig{PQsig: transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024}}},
+			{
+				name:    "pqsig",
+				lsig:    transactions.LogicSig{PQsig: transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024}},
+				wantErr: "delegated pq signature not enabled",
+			},
+		}
+
+		requireErr := func(t *testing.T, expected string, err error) {
+			t.Helper()
+			if expected == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, expected)
 		}
 
 		for _, test := range tests {
 			t.Run(test.name, func(t *testing.T) {
 				stxn := makeSignedTxnWithOrphanLsig(v18, test.lsig)
 				err := verifyGroupForProtocol(protocol.ConsensusV18, []transactions.SignedTxn{stxn})
-				require.NoError(t, err)
+				requireErr(t, test.wantErr, err)
 
 				stxn = makeSignedTxnWithOrphanLsig(v41, test.lsig)
 				err = verifyGroupForProtocol(protocol.ConsensusV41, []transactions.SignedTxn{stxn})
-				require.NoError(t, err)
+				requireErr(t, test.wantErr, err)
 
 				stxn = makeSignedTxnWithOrphanLsig(vFuture, test.lsig)
 				err = verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{stxn})
@@ -1945,6 +1973,71 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+}
+
+func TestOrphanLsigPQSigGatedByConsensus(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// rejection by the pre-upgrade gate in stxnCoreChecks
+	const pqsigGate = "delegated pq signature not enabled"
+	// rejection by the (older) orphan LogicSig content check in
+	// logicSigGroupSizeCheck, which covers the field once size pricing exists
+	const orphanLsig = "LogicSig fields without LogicSig program"
+
+	// A PQSig carrying nothing but a salt: the least that puts the field on the
+	// wire. It is not a usable delegation proof, which is exactly the point -- its
+	// presence alone must be rejected, before any signature is looked at.
+	orphanPQsig := transactions.LogicSig{PQsig: transactions.PQSig{Salt: 1}}
+
+	// makeStxn builds an otherwise perfectly valid Sig-authorized payment that
+	// also carries lsig. It is deterministic so that the wire-encoding assertions
+	// below cannot flake on random signature bytes.
+	makeStxn := func(proto config.ConsensusParams, lsig transactions.LogicSig) transactions.SignedTxn {
+		var seed crypto.Seed
+		seed[0] = 1
+		secrets := crypto.GenerateSignatureSecrets(seed)
+		txn := createPayTransaction(proto.MinTxnFee, 40, 60, 1, basics.Address(secrets.SignatureVerifier), basics.Address{1})
+		stxn := txn.Sign(secrets)
+		stxn.Lsig = lsig
+		return stxn
+	}
+
+	verifyForProtocol := func(ver protocol.ConsensusVersion, lsig transactions.LogicSig) error {
+		blkHdr := createDummyBlockHeader(ver)
+		stxn := makeStxn(config.Consensus[ver], lsig)
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &DummyLedgerForSignature{})
+		return err
+	}
+
+	t.Run("current protocol rejects an orphan PQsig", func(t *testing.T) {
+		err := verifyForProtocol(protocol.ConsensusCurrentVersion, orphanPQsig)
+		require.ErrorContains(t, err, pqsigGate)
+		requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
+
+		// the same transaction without the orphan LogicSig is valid, so the
+		// rejection above is attributable to the PQsig alone
+		require.NoError(t, verifyForProtocol(protocol.ConsensusCurrentVersion, transactions.LogicSig{}))
+	})
+
+	t.Run("named consensus versions", func(t *testing.T) {
+		// Pins the concrete answer per version, so that enabling the field cannot
+		// silently change who accepts it.
+		for _, tc := range []struct {
+			ver    protocol.ConsensusVersion
+			errMsg string
+			reason TxGroupErrorReason
+		}{
+			{protocol.ConsensusV41, pqsigGate, TxGroupErrorReasonSigNotWellFormed},
+			// vFuture enables the field, and rejects it as orphan LogicSig content
+			{protocol.ConsensusFuture, orphanLsig, TxGroupErrorReasonNotWellFormed},
+		} {
+			t.Run(string(tc.ver), func(t *testing.T) {
+				err := verifyForProtocol(tc.ver, orphanPQsig)
+				require.ErrorContains(t, err, tc.errMsg)
+				requireTxGroupErrorReason(t, err, tc.reason)
+			})
+		}
+	})
 }
 
 func testLogicSigMultisigValidation(t *testing.T, consensusVer protocol.ConsensusVersion, useLMsig bool) {
