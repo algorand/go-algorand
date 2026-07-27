@@ -454,24 +454,26 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 	}
 
 	effectiveEPP := ac.ExtraProgramPages
-	// Schemas and ExtraProgramPages may only be set during application creation
-	// and explicit attempts to change size during updates.
-	if ac.ApplicationID != 0 && !(proto.AppSizeUpdates && ac.UpdatingSizes()) {
-		if !ac.GlobalStateSchema.Empty() {
-			return fmt.Errorf("inappropriate non-zero tx.GlobalStateSchema (%v)",
-				ac.GlobalStateSchema)
-		}
+	if ac.ApplicationID != 0 {
+		// Local schema can only be set during creation
 		if !ac.LocalStateSchema.Empty() {
 			return fmt.Errorf("inappropriate non-zero tx.LocalStateSchema (%v)",
 				ac.LocalStateSchema)
 		}
-		if ac.ExtraProgramPages != 0 {
-			return fmt.Errorf("inappropriate non-zero tx.ExtraProgramPages (%d)",
-				ac.ExtraProgramPages)
+		// Global schema and extra program pages can only be set during creation or update
+		if !(proto.AppSizeUpdates && ac.UpdatingSizes()) {
+			if !ac.GlobalStateSchema.Empty() {
+				return fmt.Errorf("inappropriate non-zero tx.GlobalStateSchema (%v)",
+					ac.GlobalStateSchema)
+			}
+			if ac.ExtraProgramPages != 0 {
+				return fmt.Errorf("inappropriate non-zero tx.ExtraProgramPages (%d)",
+					ac.ExtraProgramPages)
+			}
+			// allow maximum size programs for now, since we have not checked
+			// the app params to know the actual epp.
+			effectiveEPP = uint32(proto.MaxAbsoluteExtraProgramPages)
 		}
-		// allow maximimum size programs for now, since we have not checked the
-		// app params to know the actual epp.
-		effectiveEPP = uint32(proto.MaxAbsoluteExtraProgramPages)
 	}
 
 	if err := ac.WellSizedPrograms(effectiveEPP, proto); err != nil {
