@@ -289,7 +289,22 @@ if __name__ == "__main__":
     export_type("TealKeyValue", "data/basics/teal.go", "statedelta")
     export_type("TealValue", "data/basics/teal.go", "statedelta")
 
-    # Post-quantum scheme and signature types
+    # Post-quantum scheme
     export_type("PQScheme", "protocol/pq_scheme.go", "transaction")
     export_type("PQAddressSalt", "data/basics/pq_address.go", "transaction")
-    export_type("PQSig", "data/transactions/pqsig.go", "transaction")
+
+    # Signature types
+    #export_type("Signature", "crypto/curve25519.go", "signature")
+    #export_var("BlankSignature", "crypto/curve25519.go", "signature")
+    #export_func("(s *Signature) Blank", "crypto/curve25519.go", "signature")
+    #export_type("PublicKey", "crypto/curve25519.go", "signature")
+    #export_type("MultisigSubsig", "crypto/multisig.go", "signature")
+    #export_type("MultisigSig", "crypto/multisig.go", "signature")
+    #export_func("(msig MultisigSig) Blank", "crypto/multisig.go", "signature")
+    export_type("PQSig", "data/transactions/pqsig.go", "signature")
+    export_func("(p PQSig) Blank", "data/transactions/pqsig.go", "signature")
+    #export_type("LogicSig", "data/transactions/logicsig.go", "signature")
+    #export_func("(lsig *LogicSig) Blank", "data/transactions/logicsig.go", "signature")
+    #export_type("ed25519Signature", "crypto/curve25519.go", "signature")
+    #export_type("ed25519PublicKey", "crypto/curve25519.go", "signature")
+    #export_type("HeartbeatProof", "crypto/onetimesig.go", "signature")
