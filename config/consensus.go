@@ -712,6 +712,12 @@ func (proto ConsensusParams) PQSchemeEnabled(scheme protocol.PQScheme) bool {
 	}
 }
 
+// PQSigEnabled returns whether a post-quantum signature scheme is enabled
+// under these consensus parameters.
+func (proto ConsensusParams) PQSigEnabled() bool {
+	return proto.EnablePQSchemeFalcon1024 // || proto.EnablePQSchemeFalcon512
+}
+
 // PQSchemeFeeContribution is the additional fee factor charged for a transaction
 // authorized with the given PQ scheme, as a fixed-point multiple of the basic
 // min fee (1e6 == one basic min fee). Making it a method (rather than exported
