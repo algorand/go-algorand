@@ -61,6 +61,12 @@ var spec = transactions.SpecialAddresses{
 	RewardsPool: poolAddr,
 }
 
+func init() {
+	useEd25519Consensus := crypto.RandUint64()%2 == 0
+	fmt.Printf("Using Ed25519ConsensusBatchVerifier: %v\n", useEd25519Consensus)
+	crypto.SetEd25519BatchVerifier(useEd25519Consensus)
+}
+
 func verifyTxnGroup(stxs []transactions.SignedTxn, contextHdr *bookkeeping.BlockHeader) error {
 	_, err := txnGroup(stxs, contextHdr, nil, nil, nil)
 	return err
