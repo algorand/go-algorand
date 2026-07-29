@@ -26,8 +26,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -545,5 +547,272 @@ func TestPseudonodeNonEnqueuedTasks(t *testing.T) {
 		drainChannel(ch)
 	}
 	require.Equal(t, enqueuedVotes*len(accounts), subStrLogger.instancesFound[0])
-	require.Equal(t, enqueuedProposals*len(accounts), subStrLogger.instancesFound[1])
+	// filterProposers skips block assembly and vote creation for unelected accounts,
+	// so the number of failed-to-enqueue messages may be less than enqueuedProposals*len(accounts).
+	require.LessOrEqual(t, subStrLogger.instancesFound[1], enqueuedProposals*len(accounts))
+}
+
+// TestFilterProposers verifies that filterProposers correctly identifies which
+// accounts are eligible to propose based on VRF credentials. It covers the
+// happy path (subset filtering), the zero-stake case (no eligible accounts),
+// and the mismatched VRF key case (account filtered out).
+func TestFilterProposers(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Run("subsetOfInput", func(t *testing.T) {
+		t.Parallel()
+
+		rootSeed := sha256.Sum256([]byte(t.Name()))
+		accounts, balances := createTestAccountsAndBalances(t, 10, rootSeed[:])
+		ledger := makeTestLedger(balances)
+
+		sLogger := serviceLogger{logging.NewLogger()}
+		sLogger.SetLevel(logging.Warn)
+
+		keyManager := makeRecordingKeyManager(accounts)
+		pn := asyncPseudonode{
+			factory:   testBlockFactory{Owner: 0},
+			validator: testBlockValidator{},
+			keys:      keyManager,
+			ledger:    ledger,
+			log:       sLogger,
+			monitor:   nil,
+		}
+
+		round := ledger.NextRound()
+		partKeys := pn.loadRoundParticipationKeys(round)
+		require.NotEmpty(t, partKeys)
+
+		originalSet := make(map[basics.Address]bool, len(partKeys))
+		for _, acc := range partKeys {
+			originalSet[acc.Account] = true
+		}
+
+		// Test multiple periods; sortition is random and depends on
+		// the period via the selector, so we exercise different
+		// selection outcomes.
+		totalSelected := 0
+		for p := period(0); p < 20; p++ {
+			result := pn.filterProposers(round, p, partKeys)
+
+			// Result should always be a subset of the input.
+			require.LessOrEqual(t, len(result), len(partKeys),
+				"period %d: result len %d > input len %d", p, len(result), len(partKeys))
+
+			for _, acc := range result {
+				assert.True(t, originalSet[acc.Account],
+					"period %d: account %v not in original set", p, acc.Account)
+			}
+
+			totalSelected += len(result)
+		}
+		// With 10 equal-stake accounts and NumProposers=20,
+		// at least one account should be selected across 20 periods.
+		require.Greater(t, totalSelected, 0,
+			"expected at least one account to be selected across 20 periods")
+	})
+
+	t.Run("noEligibleAccounts", func(t *testing.T) {
+		t.Parallel()
+
+		rootSeed := sha256.Sum256([]byte(t.Name()))
+		accounts, balances := createTestAccountsAndBalances(t, 5, rootSeed[:])
+
+		// Keep the first account with stake; zero out the rest.
+		// A zero total circulation panics in credential.Verify, so we
+		// test that zero-stake accounts are never selected while at
+		// least one non-zero account keeps the circulation positive.
+		stakedAddr := accounts[0].Parent
+		for addr, b := range balances {
+			if addr == stakedAddr {
+				continue
+			}
+			b.MicroAlgos = basics.MicroAlgos{Raw: 0}
+			balances[addr] = b
+		}
+		ledger := makeTestLedger(balances)
+
+		sLogger := serviceLogger{logging.NewLogger()}
+		sLogger.SetLevel(logging.Warn)
+
+		keyManager := makeRecordingKeyManager(accounts)
+		pn := asyncPseudonode{
+			factory:   testBlockFactory{Owner: 0},
+			validator: testBlockValidator{},
+			keys:      keyManager,
+			ledger:    ledger,
+			log:       sLogger,
+			monitor:   nil,
+		}
+
+		round := ledger.NextRound()
+		partKeys := pn.loadRoundParticipationKeys(round)
+		require.NotEmpty(t, partKeys)
+
+		// Test multiple periods: zero-stake accounts must never appear.
+		for p := period(0); p < 10; p++ {
+			result := pn.filterProposers(round, p, partKeys)
+			for _, acc := range result {
+				assert.Equal(t, stakedAddr, acc.Account,
+					"period %d: zero-stake account %v should be filtered out", p, acc.Account)
+			}
+		}
+	})
+
+	t.Run("mismatchedVrfKey", func(t *testing.T) {
+		t.Parallel()
+
+		// Create two accounts with standard matching VRF keys.
+		rootSeed := sha256.Sum256([]byte(t.Name()))
+		accounts, balances := createTestAccountsAndBalances(t, 2, rootSeed[:])
+
+		// Tamper with the first account: replace its SelectionID in the
+		// ledger with a completely different VRF public key so that
+		// credential verification fails.
+		tamperedAddr := accounts[0].Parent
+		tamperedBalance := balances[tamperedAddr]
+		differentVrf := generatePseudoRandomVRF(999)
+		require.NotEqual(t, tamperedBalance.SelectionID, differentVrf.PK,
+			"mismatched VRF test requires different keys")
+		tamperedBalance.SelectionID = differentVrf.PK
+		balances[tamperedAddr] = tamperedBalance
+
+		ledger := makeTestLedger(balances)
+
+		sLogger := serviceLogger{logging.NewLogger()}
+		sLogger.SetLevel(logging.Warn)
+
+		keyManager := makeRecordingKeyManager(accounts)
+		pn := asyncPseudonode{
+			factory:   testBlockFactory{Owner: 0},
+			validator: testBlockValidator{},
+			keys:      keyManager,
+			ledger:    ledger,
+			log:       sLogger,
+			monitor:   nil,
+		}
+
+		round := ledger.NextRound()
+		partKeys := pn.loadRoundParticipationKeys(round)
+		require.Len(t, partKeys, 2)
+
+		// The tampered account should never appear in the result because
+		// its VRF proof cannot be verified by the ledger's SelectionID.
+		for p := period(0); p < 10; p++ {
+			result := pn.filterProposers(round, p, partKeys)
+			for _, acc := range result {
+				assert.NotEqual(t, tamperedAddr, acc.Account,
+					"period %d: tampered account %v should be filtered out", p, tamperedAddr)
+			}
+		}
+	})
+
+	t.Run("singleAccountSelected", func(t *testing.T) {
+		t.Parallel()
+
+		// A single account holding 100% of the stake (NumProposers=20)
+		// is selected with probability 1 - e^(-20), which is effectively
+		// deterministic. This gives us a positive test: filterProposers
+		// must return that account for every period.
+		rootSeed := sha256.Sum256([]byte(t.Name()))
+		accounts, balances := createTestAccountsAndBalances(t, 1, rootSeed[:])
+		ledger := makeTestLedger(balances)
+
+		sLogger := serviceLogger{logging.NewLogger()}
+		sLogger.SetLevel(logging.Warn)
+
+		keyManager := makeRecordingKeyManager(accounts)
+		pn := asyncPseudonode{
+			factory:   testBlockFactory{Owner: 0},
+			validator: testBlockValidator{},
+			keys:      keyManager,
+			ledger:    ledger,
+			log:       sLogger,
+			monitor:   nil,
+		}
+
+		round := ledger.NextRound()
+		partKeys := pn.loadRoundParticipationKeys(round)
+		require.Len(t, partKeys, 1)
+
+		for p := period(0); p < 20; p++ {
+			result := pn.filterProposers(round, p, partKeys)
+			require.Len(t, result, 1,
+				"period %d: single 100%%-stake account must be selected", p)
+			assert.Equal(t, accounts[0].Parent, result[0].Account)
+		}
+	})
+
+	t.Run("ledgerErrors", func(t *testing.T) {
+		t.Parallel()
+
+		// Use a ledger wrapper that injects errors to verify that
+		// filterProposers returns nil for each error path.
+		rootSeed := sha256.Sum256([]byte(t.Name()))
+		accounts, balances := createTestAccountsAndBalances(t, 5, rootSeed[:])
+		realLedger := makeTestLedger(balances)
+
+		sLogger := serviceLogger{logging.NewLogger()}
+		sLogger.SetLevel(logging.Warn)
+
+		keyManager := makeRecordingKeyManager(accounts)
+		round := realLedger.NextRound()
+		partKeys := keyManager.VotingKeys(round, round)
+		require.NotEmpty(t, partKeys)
+
+		// Seed error.
+		errLedger := &errorInjectingLedger{Ledger: realLedger, failSeed: true}
+		pn := asyncPseudonode{
+			factory:   testBlockFactory{Owner: 0},
+			validator: testBlockValidator{},
+			keys:      keyManager,
+			ledger:    errLedger,
+			log:       sLogger,
+			monitor:   nil,
+		}
+		result := pn.filterProposers(round, period(0), partKeys)
+		assert.Nil(t, result, "should return nil on Seed error")
+
+		// Circulation error.
+		errLedger = &errorInjectingLedger{Ledger: realLedger, failCirculation: true}
+		pn.ledger = errLedger
+		result = pn.filterProposers(round, period(0), partKeys)
+		assert.Nil(t, result, "should return nil on Circulation error")
+
+		// ConsensusParams error.
+		errLedger = &errorInjectingLedger{Ledger: realLedger, failConsensusParams: true}
+		pn.ledger = errLedger
+		result = pn.filterProposers(round, period(0), partKeys)
+		assert.Nil(t, result, "should return nil on ConsensusParams error")
+	})
+}
+
+// errorInjectingLedger wraps a Ledger and injects errors for specific methods
+// to test error-handling paths in filterProposers.
+type errorInjectingLedger struct {
+	Ledger
+	failSeed            bool
+	failCirculation     bool
+	failConsensusParams bool
+}
+
+func (l *errorInjectingLedger) Seed(r basics.Round) (committee.Seed, error) {
+	if l.failSeed {
+		return committee.Seed{}, fmt.Errorf("injected Seed error")
+	}
+	return l.Ledger.Seed(r)
+}
+
+func (l *errorInjectingLedger) Circulation(r basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
+	if l.failCirculation {
+		return basics.MicroAlgos{}, fmt.Errorf("injected Circulation error")
+	}
+	return l.Ledger.Circulation(r, voteRnd)
+}
+
+func (l *errorInjectingLedger) ConsensusParams(r basics.Round) (config.ConsensusParams, error) {
+	if l.failConsensusParams {
+		return config.ConsensusParams{}, fmt.Errorf("injected ConsensusParams error")
+	}
+	return l.Ledger.ConsensusParams(r)
 }
