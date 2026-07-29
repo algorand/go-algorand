@@ -79,13 +79,13 @@ const incentiveVersion = 11 // block fields, heartbeat
 const mimcVersion = 11
 
 const varintBranchVersion = 13 // branch offsets encoded as binary.Varint instead of big-endian int16
+const poseidon2Version = 13
+const foreignBoxVersion = 13 // app_params_set, foreign app box access
 
 // EXPERIMENTAL. These should be revisited whenever a new LogicSigVersion is
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version, and fixup TestAssemble() in assembler_test.go.
 const sumhashVersion = 14
-const poseidon2Version = 13
-const foreignBoxVersion = 13 // app_params_set, foreign app box access
 
 // LogicSigOffCurveVersion is the first AVM version where LogicSig programs
 // assembled by this package are expected to hash to an off-curve address.
