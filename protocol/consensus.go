@@ -232,7 +232,7 @@ const ConsensusV41 = ConsensusVersion(
 // ConsensusV42 enables app size updates, Falcon1024 post-quantum signatures,
 // load tracking, a per-byte transaction surcharge, and TEAL v13.
 const ConsensusV42 = ConsensusVersion(
-	"https://github.com/algorandfoundation/specs/tree/TODO-REPLACE-BEFORE-RELEASE-v42",
+	"https://github.com/algorandfoundation/specs/tree/268b63433a907455d439995bf916f6b296018f4f",
 )
 
 // ConsensusFuture is a protocol that should not appear in any production
