@@ -136,6 +136,25 @@ func TestConsensusUpgradeWindow_NetworkOverrides(t *testing.T) {
 		}
 	}
 
+	// reset consensus settings
+	Consensus = make(ConsensusProtocols)
+	initConsensusProtocols()
+
+	ApplyShorterUpgradeRoundsForDevNetworks(Fnet)
+	for _, params := range Consensus {
+		for toVersion, delay := range params.ApprovedUpgrades {
+			if params.MinUpgradeWaitRounds != 0 || params.MaxUpgradeWaitRounds != 0 {
+				require.NotZerof(t, delay, "From :%v\nTo :%v", params, toVersion)
+				require.Equalf(t, delay, params.MinUpgradeWaitRounds, "From :%v\nTo :%v", params, toVersion)
+				// This check is not really needed, but leaving for sanity
+				require.LessOrEqualf(t, delay, params.MaxUpgradeWaitRounds, "From :%v\nTo :%v", params, toVersion)
+			} else {
+				// If no MinUpgradeWaitRounds is set, leaving everything as zero value is expected
+				require.Zerof(t, delay, "From :%v\nTo :%v", params, toVersion)
+			}
+		}
+	}
+
 	// should be no-ops for Testnet
 	Consensus = make(ConsensusProtocols)
 	initConsensusProtocols()

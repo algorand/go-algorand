@@ -446,7 +446,7 @@ func TestSortitionMoneyDomain(t *testing.T) {
 			p.LateCommitteeSize, p.RedoCommitteeSize, p.DownCommitteeSize,
 		}
 		for _, size := range committees {
-			// credential.go panics when expectedSelection exceeds total money,
+			// credential.go panics when committeeSize exceeds total money,
 			// so a committee size beyond the supply could never form a valid p.
 			require.LessOrEqual(t, size, mainnetSupply,
 				"consensus version %v: committee size %d exceeds the supply", v, size)
@@ -474,5 +474,5 @@ func TestSortitionMoneyDomain(t *testing.T) {
 		TotalMoney: basics.MicroAlgos{Raw: sortition.SelectF128MaxMoney},
 	}
 	_, err := MakeCredential(vrfSecrets[0], sel).Verify(protoF128, m)
-	require.ErrorContains(t, err, "larger than SelectF128MaxMoney")
+	require.ErrorContains(t, err, "at or above SelectF128MaxMoney")
 }

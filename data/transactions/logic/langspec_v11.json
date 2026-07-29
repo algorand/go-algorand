@@ -4898,7 +4898,7 @@
       "Size": 2,
       "DocCost": "BN254Mp110=10 + 550 per 32 bytes of A; BLS12_381Mp111=10 + 550 per 32 bytes of A",
       "Doc": "MiMC hash of scalars A, using curve and parameters specified by configuration C",
-      "DocExtra": "A is a list of concatenated 32 byte big-endian unsigned integer scalars.  Fail if A's length is not a multiple of 32 or any element exceeds the curve modulus.\n\nMiMC hashes field elements, not arbitrary byte strings; reducing external inputs modulo the curve modulus makes congruent inputs hash identically. MiMC is thus not a general purpose hash function, but meant to be used in zero knowledge applications to match a zk-circuit implementation.",
+      "DocExtra": "A is a non-empty list of concatenated 32 byte big-endian unsigned integer scalars.  Fail if A's length is not a multiple of 32 or any element is greater than or equal to the scalar field modulus.\n\nMiMC hashes field elements, not arbitrary byte strings; reducing external inputs modulo the scalar field modulus makes congruent inputs hash identically. MiMC is thus not a general purpose hash function, but meant to be used in zero knowledge applications to match a zk-circuit implementation.",
       "ImmediateNote": [
         {
           "Comment": "configuration index",

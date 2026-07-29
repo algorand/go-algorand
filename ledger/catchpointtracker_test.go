@@ -1965,15 +1965,19 @@ func TestCatchpointFastUpdates(t *testing.T) {
 	wg.Wait()
 	ml.trackers.waitAccountsWriting()
 
-	for ml.trackers.getDbRound() <= basics.Round(proto.CatchpointLookback) {
-		// db round stuck <= 320? likely committedUpTo dropped some commit tasks, due to deferredCommits channel full
-		// so give it another try
+	// The racing committedUpTo calls above might not have produced a catchpoint label yet:
+	// 1. commit tasks could have been dropped (deferredCommits channel full), leaving dbRound behind, or
+	// 2. the only catchpoint round crossed had no first stage record, because no commit landed exactly
+	//    on its accountsRound (finishCatchpoint silently skips label creation in that case).
+	// In both cases re-driving committedUpTo(lastRound) advances dbRound across newer catchpoint
+	// rounds whose first stage records exist, so a label eventually appears.
+	require.Eventually(t, func() bool {
+		if ct.GetLastCatchpointLabel() != "" {
+			return true
+		}
 		ml.trackers.committedUpTo(lastRound)
-		require.Eventually(t, func() bool {
-			//ml.trackers.waitAccountsWriting()
-			return ml.trackers.getDbRound() > basics.Round(proto.CatchpointLookback)
-		}, 5*time.Second, 100*time.Millisecond)
-	}
+		return ct.GetLastCatchpointLabel() != ""
+	}, 10*time.Second, 100*time.Millisecond)
 
 	require.NotEmpty(t, ct.GetLastCatchpointLabel())
 }
