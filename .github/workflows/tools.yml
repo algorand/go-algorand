@@ -36,6 +36,14 @@ jobs:
           cd tools/block-generator
           go test -v ./...
       - name: Test tools/x-repo-types
+        # These tests resolve the SDK at @main. proxy.golang.org caches the
+        # branch-to-commit mapping, so for a while after an SDK change merges
+        # the proxy still hands back the previous commit and the comparison
+        # fails against code that has already been fixed. GOPRIVATE bypasses
+        # both the proxy and the (proxy-backed) checksum database for this one
+        # module, so @main is resolved from git directly and is always current.
+        env:
+          GOPRIVATE: github.com/algorand/go-algorand-sdk
         run: |
           cd tools/x-repo-types
           go test -v ./...
