@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config/bounds"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/codecs"
@@ -832,6 +833,42 @@ func TestLocal_ValidateP2PHybridConfig(t *testing.T) {
 			err := c.ValidateP2PHybridConfig()
 			require.Equal(t, test.err, err != nil, "%s: %v => %v", name, test, err)
 		})
+	}
+}
+
+// TestLocal_ValidateBlockDBCompressionWindow exercises the divisor-of-32
+// constraint that lets retention round minToSave down by
+// MaxBlockDBCompressionWindow without ever stranding an anchor. The
+// invariant: because every supported N divides 32, every round at a
+// MaxBlockDBCompressionWindow boundary is also at an N boundary, so the
+// retention round-down lands on an actual anchor for any past or future
+// N value. Out-of-spec values are clamped down to the next valid value
+// (with a warning) rather than rejected, so a node never fails to open
+// the ledger due to a misconfigured window.
+func TestLocal_ValidateBlockDBCompressionWindow(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	log := logging.TestingLog(t)
+	for _, n := range []uint64{0, 1, 2, 4, 8, 16, 32} {
+		c := Local{BlockDBCompressionWindow: n}
+		require.Equal(t, n, c.GetNormalizedBlockDBCompressionWindow(log), "N=%d should round-trip", n)
+	}
+	clampCases := []struct {
+		in   uint64
+		want uint64
+	}{
+		{3, 2},
+		{7, 4},
+		{10, 8},
+		{17, 16},
+		{31, 16},
+		{33, 32},
+		{1 << 20, 32},
+	}
+	for _, tc := range clampCases {
+		c := Local{BlockDBCompressionWindow: tc.in}
+		require.Equal(t, tc.want, c.GetNormalizedBlockDBCompressionWindow(log), "N=%d should clamp to %d", tc.in, tc.want)
 	}
 }
 

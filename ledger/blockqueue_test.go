@@ -149,13 +149,16 @@ func TestBlockQueueSyncerDeletion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
+	roundDown := func(r uint64) basics.Round {
+		return blockdb.RoundDownRetention(basics.Round(r))
+	}
 	tests := []struct {
 		name             string
 		expectedEarliest basics.Round
 		tracker          ledgerTracker
 	}{
-		{"max_batch", maxDeletionBatchSize, nil}, // no trackers, max deletion
-		{"5k_tracker", 5_000, &uptoTracker{}},    // tracker sets minToSave to 5k
+		{"max_batch", roundDown(maxDeletionBatchSize), nil}, // no trackers, max deletion
+		{"5k_tracker", roundDown(5_000), &uptoTracker{}},    // tracker sets minToSave to 5k
 	}
 
 	for _, test := range tests {
@@ -167,18 +170,22 @@ func TestBlockQueueSyncerDeletion(t *testing.T) {
 
 			log := logging.TestingLog(t)
 			err = blockDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-				return initBlocksDB(tx, log, []bookkeeping.Block{}, false)
+				return initBlocksDB(tx, log, []bookkeeping.Block{}, false, 0)
 			})
 			require.NoError(t, err)
 
 			// add 15k blocks
 			const maxBlocks = maxDeletionBatchSize + maxDeletionBatchSize/2 // 15_000
 			err = blockDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+				store, serr := blockdb.NewStore(tx, 0)
+				if serr != nil {
+					return serr
+				}
+				defer store.Close()
 				for i := 0; i < maxBlocks; i++ {
-					err0 := blockdb.BlockPut(
-						tx,
-						bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: basics.Round(i)}},
-						agreement.Certificate{})
+					blk := bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: basics.Round(i)}}
+					cert := agreement.Certificate{}
+					err0 := store.BlockPut(tx, &blk, &cert)
 					if err0 != nil {
 						return err0
 					}

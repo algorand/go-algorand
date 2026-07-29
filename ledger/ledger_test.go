@@ -46,6 +46,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store/blockdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
@@ -3464,12 +3465,22 @@ func TestLedgerSPTrackerAfterReplay(t *testing.T) {
 func TestLedgerMaxBlockHistoryLookback(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	// exercise different compression window sizes
+	for _, compressionWindow := range []uint64{0, 1, 8, 16} {
+		t.Run(fmt.Sprintf("BlockDBCompressionWindow=%d", compressionWindow), func(t *testing.T) {
+			testLedgerMaxBlockHistoryLookback(t, compressionWindow)
+		})
+	}
+}
+
+func testLedgerMaxBlockHistoryLookback(t *testing.T, compressionWindow uint64) {
 	genBalances, _, _ := ledgertesting.NewTestGenesis()
 	var genHash crypto.Digest
 	crypto.RandBytes(genHash[:])
 	cfg := config.GetDefaultLocal()
 	// set the max lookback to 1400
 	cfg.MaxBlockHistoryLookback = 1400
+	cfg.BlockDBCompressionWindow = compressionWindow
 	l := newSimpleLedgerFull(t, genBalances, protocol.ConsensusCurrentVersion, genHash, cfg, simpleLedgerNotArchival())
 	defer l.Close()
 
@@ -3481,6 +3492,8 @@ func TestLedgerMaxBlockHistoryLookback(t *testing.T) {
 	require.Equal(t, basics.Round(1500), l.Latest())
 
 	// make sure we can get the last 1400 blocks
+	// reach a point well clear of the lookback window so the
+	// retention logic has had a chance to delete prior rounds.
 	blk, err := l.Block(100)
 	require.NoError(t, err)
 	require.NotEmpty(t, blk)
@@ -3489,6 +3502,30 @@ func TestLedgerMaxBlockHistoryLookback(t *testing.T) {
 	blk, err = l.Block(90)
 	require.Error(t, err)
 	require.Empty(t, blk)
+}
+
+// TestLedgerOpenLedgerClampsBadCompressionWindow guards the OpenLedger
+// normalization path: a non-divisor BlockDBCompressionWindow value must be
+// clamped down to the nearest supported value (with a warning) rather than
+// rejected, so a misconfigured node still opens its ledger.
+func TestLedgerOpenLedgerClampsBadCompressionWindow(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, _, _ := ledgertesting.NewTestGenesis()
+	var genHash crypto.Digest
+	crypto.RandBytes(genHash[:])
+	genesisInitState := getInitState()
+	genesisInitState.Block.BlockHeader.GenesisHash = genHash
+	genesisInitState.GenesisHash = genHash
+	genesisInitState.Accounts = genBalances.Balances
+
+	cfg := config.GetDefaultLocal()
+	cfg.BlockDBCompressionWindow = 10 // not a divisor of MaxCompressionWindow
+
+	l, err := OpenLedger(logging.Base(), t.Name(), true /*inMem*/, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+	require.Equal(t, uint64(8), l.cfg.BlockDBCompressionWindow)
 }
 
 func TestLedgerRetainMinOffCatchpointInterval(t *testing.T) {
@@ -3507,12 +3544,15 @@ func TestLedgerRetainMinOffCatchpointInterval(t *testing.T) {
 		storeCatchpoints            bool
 		archival                    bool
 		catchpointFileHistoryLength int
+		compressionWindow           uint64 // 0/1 means disabled
 	}{
-		{true, false, 1},   // should use min catchpoint formula
-		{false, true, 1},   // all blocks get retained, archival mode dictates
-		{false, false, 1},  // should not modify min blocks retained based on catchpoint interval
-		{true, false, -1},  // should use min formula, this is the keep all catchpoints setting
-		{true, false, 365}, // should use min formula, this is the default setting for catchpoint file history length
+		{true, false, 1, 0},    // should use min catchpoint formula
+		{false, true, 1, 0},    // all blocks get retained, archival mode dictates
+		{false, false, 1, 0},   // should not modify min blocks retained based on catchpoint interval
+		{true, false, -1, 0},   // should use min formula, this is the keep all catchpoints setting
+		{true, false, 365, 0},  // should use min formula, this is the default setting for catchpoint file history length
+		{true, false, 365, 16}, // compression on: minToSave must use blockdb retention rounding
+		{true, false, 365, 32}, // compression on: same, with the largest supported window
 	}
 	for _, tc := range catchpointIntervalBlockRetentionTestCases {
 		func() {
@@ -3529,6 +3569,7 @@ func TestLedgerRetainMinOffCatchpointInterval(t *testing.T) {
 			}
 			cfg.CatchpointFileHistoryLength = tc.catchpointFileHistoryLength
 			cfg.Archival = tc.archival
+			cfg.BlockDBCompressionWindow = tc.compressionWindow
 
 			l := &Ledger{}
 			l.cfg = cfg
@@ -3548,6 +3589,7 @@ func TestLedgerRetainMinOffCatchpointInterval(t *testing.T) {
 
 					expectedMinBlockToKeep := basics.Round(uint64(i)).SubSaturate(
 						basics.Round(expectedCatchpointLookback))
+					expectedMinBlockToKeep = blockdb.RoundDownRetention(expectedMinBlockToKeep)
 					require.Equal(t, expectedMinBlockToKeep, minBlockToKeep)
 				}
 			}

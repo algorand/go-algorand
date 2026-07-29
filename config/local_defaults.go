@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    38,
+	Version:                                    39,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
 	AgreementIncomingBundlesQueueLength:        15,
@@ -29,6 +29,7 @@ var defaultLocal = Local{
 	AnnounceParticipationKey:                   true,
 	Archival:                                   false,
 	BaseLoggerDebugLevel:                       4,
+	BlockDBCompressionWindow:                   0,
 	BlockDBDir:                                 "",
 	BlockServiceCustomFallbackEndpoints:        "",
 	BlockServiceMemCap:                         500000000,
