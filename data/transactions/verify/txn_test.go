@@ -1182,9 +1182,9 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	txnGroups[0][0].Lsig.Msig.Subsigs = nil
 	txnGroups[0][0].Lsig.LMsig.Subsigs = nil
 
-	// The remaining cases carry a LogicSig.PQsig, which the current consensus
-	// version predates and therefore rejects on presence alone (see
-	// TestOrphanLsigPQSigGatedByConsensus).
+	// The remaining cases carry a LogicSig.PQsig, so they need a consensus
+	// version that allows the field at all -- versions before PQ sigs reject it
+	// on presence alone (see TestOrphanLsigPQSigGatedByConsensus).
 	pqBlkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
 
 	/////  logic with sig and PQsig
@@ -1219,7 +1219,8 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	require.ErrorContains(t, err, "pq delegated logic signature validation failed")
 
 	/////  the same LogicSig.PQsig is rejected outright before it is enabled
-	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
+	prePQBlkHdr := createDummyBlockHeader(protocol.ConsensusV41)
+	_, err = TxnGroup(txnGroups[0], &prePQBlkHdr, nil, &dummyLedger)
 	require.ErrorContains(t, err, "pq signature not enabled")
 }
 

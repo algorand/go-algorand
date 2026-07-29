@@ -1189,14 +1189,6 @@ pushints args are not added to the intcblock during assembly processes
 
 Signature B is variable-length, with maximum size 1423 bytes.
 
-## sumhash512
-
-- Bytecode: 0x86
-- Stack: ..., A: []byte &rarr; ..., [64]byte
-- sumhash512 of value A, yields [64]byte
-- **Cost**: 150 + 7 per 4 bytes of A
-- Availability: v13
-
 ## sha512
 
 - Bytecode: 0x87
