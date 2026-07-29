@@ -22,6 +22,7 @@ import (
 	"encoding/base32"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -259,6 +260,9 @@ type ParticipationRegistry interface {
 	// HasLiveKeys quickly tests to see if there is a valid participation key over some range of rounds
 	HasLiveKeys(from, to basics.Round) bool
 
+	// NumKeys quickly returns the number of participation keys in the DB.
+	NumKeys() uint32
+
 	// Register updates the EffectiveFirst and EffectiveLast fields. If there are multiple records for the account
 	// then it is possible for multiple records to be updated.
 	Register(id ParticipationID, on basics.Round) error
@@ -406,7 +410,10 @@ func dbSchemaUpgrade0(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 
 // participationDB provides a concrete implementation of the ParticipationRegistry interface.
 type participationDB struct {
-	cache map[ParticipationID]ParticipationRecord
+	// This cache contains all ParticipationRecords. It must always contain all available keys
+	// because Get(), GetAll(), and HasLiveKeys() use this cache and never query the DB.
+	cache     map[ParticipationID]ParticipationRecord
+	cacheSize uint32 // atomic uint32 to quickly check if participation DB has any keys in it
 
 	// dirty marked on Record(), DeleteExpired(), cleared on Register(), Delete(), Flush()
 	dirty map[ParticipationID]struct{}
@@ -443,6 +450,8 @@ type updatingParticipationRecord struct {
 	required bool
 }
 
+// initializeCache loads all records from the database and puts them
+// all in the cache.
 func (db *participationDB) initializeCache() error {
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
@@ -462,8 +471,17 @@ func (db *participationDB) initializeCache() error {
 	}
 
 	db.cache = cache
+	db.updateCacheSize()
 	db.dirty = make(map[ParticipationID]struct{})
 	return nil
+}
+
+func (db *participationDB) updateCacheSize() {
+	atomic.StoreUint32(&db.cacheSize, uint32(len(db.cache)))
+}
+
+func (db *participationDB) NumKeys() uint32 {
+	return atomic.LoadUint32(&db.cacheSize)
 }
 
 func (db *participationDB) writeThread() {
@@ -550,6 +568,7 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 		Voting:            voting,
 		VRF:               vrf,
 	}
+	db.updateCacheSize()
 
 	return
 }
@@ -581,6 +600,7 @@ func (db *participationDB) Delete(id ParticipationID) error {
 	}
 	delete(db.dirty, id)
 	delete(db.cache, id)
+	db.updateCacheSize()
 
 	// do the db part async
 	db.writeQueue <- makeOpRequest(&deleteOp{id})
@@ -616,6 +636,7 @@ func (db *participationDB) DeleteExpired(latestRound basics.Round, agreementProt
 		db.dirty[r.ParticipationID] = struct{}{}
 		db.cache[r.ParticipationID] = r
 	}
+	db.updateCacheSize()
 	db.mutex.Unlock()
 	return nil
 }
@@ -945,6 +966,7 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 			delete(db.dirty, id)
 			db.cache[id] = record.ParticipationRecord
 		}
+		db.updateCacheSize()
 		db.mutex.Unlock()
 	}
 
@@ -990,6 +1012,7 @@ func (db *participationDB) Record(account basics.Address, round basics.Round, pa
 
 	db.dirty[record.ParticipationID] = struct{}{}
 	db.cache[record.ParticipationID] = record
+	db.updateCacheSize()
 	return nil
 }
 
