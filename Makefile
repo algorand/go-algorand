@@ -346,6 +346,13 @@ shorttest: build-race
 integration: build-race
 	./test/scripts/run_integration_tests.sh
 
+# Compare types against a local go-algorand-sdk checkout instead of the SDK's
+# published main, which is what the "Test tools modules" CI job uses. Set CASE
+# to a TestCrossRepoTypes subtest (e.g. CASE=goal-v-sdk-eval-delta) to run just
+# one, and SDK_DIR to override the sibling checkout location.
+x-repo-types:
+	./scripts/test_x_repo_types.sh $(CASE)
+
 testall: fulltest integration
 
 clean:
@@ -422,7 +429,7 @@ dump: $(addprefix gen/,$(addsuffix /genesis.dump, $(NETWORKS)))
 install: build
 	scripts/dev_install.sh -p $(GOBIN)
 
-.PHONY: default fmt lint check_shell sanity cover prof build build-race build-e2e test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version rebuild_kmd_swagger universal libsodium modernize
+.PHONY: default fmt lint check_shell sanity cover prof build build-race build-e2e test fulltest shorttest x-repo-types clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version rebuild_kmd_swagger universal libsodium modernize
 
 ###### TARGETS FOR CICD PROCESS ######
 include ./scripts/release/mule/Makefile.mule

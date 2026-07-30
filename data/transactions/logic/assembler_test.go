@@ -473,7 +473,10 @@ const v11Nonsense = v10Nonsense + incentiveNonsense + mimcNonsense
 
 const v12Nonsense = v11Nonsense + fvNonsense
 
-const v13Nonsense = v12Nonsense + sumhashNonsense + sha512Nonsense + poseidon2Nonsense + foreignBoxNonsense
+const v13Nonsense = v12Nonsense + sha512Nonsense + poseidon2Nonsense + foreignBoxNonsense
+
+// sumhash512 is experimental, held back to v14 while v13 is released.
+const v14Nonsense = v13Nonsense + sumhashNonsense
 
 const foreignBoxNonsense = `
 pushint 1
@@ -527,7 +530,11 @@ const foreignBoxCompiled = "8101760bd401d402d403d404d405d406d407d408d409"
 // confirms that a disassemble/pragma-bump/reassemble roundtrip reproduces it.
 const v13BaseCompiled = "2004010002b7a60c26050242420c68656c6c6f20776f726c6421070123456789abcd208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292b0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f2310231123122313231418191a1b1c281716154006290349483403350222231d4a484848482b50512a63222352410442004322602261222704634848222862482864286548482228246628226723286828692322700048482371004848361c0037001a0031183119311b311d311e311f312023221e312131223123312431253126312731283129312a312b312c312d312e312f447825225314225427042455220824564c4d4b0222382124391c0081e80780046a6f686e2281d00f23241f88044202892224902291922494249593a0a1a2a3a4a5a6a7a8a9aaabacadae24af3a00003b003c003d816472064e014f012a57000823810858235b235a2359b03139330039b1b200b322c01a23c1001a2323c21a23c3233e233f8120af06002a494905002a49490700b400b53a03b6b7043cb8033a0c2349c42a9631007300810881088120978101c53a8101c6003a5e005f018120af060180070123456789abcd4949050198800301234549498481ffff03d101d000800243218001775c0280018881015d81018d02fff800008101438a01028bff240b8c0089810246014704450983030102018e02fff500008203013101320131b9babbbcbdbfbe800301234549e00049e10349e200e303e402e501d2d3757401802011223344556677889900aabbccddeeff11223344556677889900aabbccddeeffe6018002abcd494985"
 
-const v13Compiled = v13BaseCompiled + sumhashCompiled + sha512Compiled + poseidon2Compiled + foreignBoxCompiled
+const v13Compiled = v13BaseCompiled + sha512Compiled + poseidon2Compiled + foreignBoxCompiled
+
+// v14 adds no encoding changes over v13, so its base is v13's program with the
+// experimental sumhash512 opcode (held back from the v13 release) appended.
+const v14Compiled = v13Compiled + sumhashCompiled
 
 var nonsense = map[uint64]string{
 	1:  v1Nonsense,
@@ -543,6 +550,7 @@ var nonsense = map[uint64]string{
 	11: v11Nonsense,
 	12: v12Nonsense,
 	13: v13Nonsense,
+	14: v14Nonsense,
 }
 
 var compiled = map[uint64]string{
@@ -559,6 +567,7 @@ var compiled = map[uint64]string{
 	11: "0b" + v11Compiled,
 	12: "0c" + v12Compiled,
 	13: "0d" + v13Compiled,
+	14: "0e" + v14Compiled,
 }
 
 func pseudoOp(opcode string) bool {
@@ -1408,19 +1417,22 @@ func TestManualCBlocks(t *testing.T) {
 
 	// Ignore manually added cblocks in deadcode, so they can be added easily to
 	// existing programs. There are proposals to put metadata there.
-	ops = testProg(t, "int 4; int 4; +; int 8; ==; return; intcblock 10", AssemblerMaxVersion)
+	// autosalt off so the assembled bytes are stable across versions (the
+	// version byte changes the program hash, which otherwise flips whether a
+	// stateless program hashes on-curve and gets a salt constant appended).
+	ops = testProg(t, "#pragma autosalt false\nint 4; int 4; +; int 8; ==; return; intcblock 10", AssemblerMaxVersion)
 	require.Equal(t, ops.Program[1], OpsByName[ops.Version]["intcblock"].Opcode)
 	require.EqualValues(t, ops.Program[3], 4) // <intcblock> 1 4 <intc_0>
 	require.Equal(t, ops.Program[4], OpsByName[ops.Version]["intc_0"].Opcode)
-	ops = testProg(t, "b skip; intcblock 10; skip: int 4; int 4; +; int 8; ==;", AssemblerMaxVersion)
+	ops = testProg(t, "#pragma autosalt false\nb skip; intcblock 10; skip: int 4; int 4; +; int 8; ==;", AssemblerMaxVersion)
 	require.Equal(t, ops.Program[1], OpsByName[ops.Version]["intcblock"].Opcode)
 	require.EqualValues(t, ops.Program[3], 4)
 
-	ops = testProg(t, "byte 0x44; byte 0x44; concat; len; return; bytecblock 0x11", AssemblerMaxVersion)
+	ops = testProg(t, "#pragma autosalt false\nbyte 0x44; byte 0x44; concat; len; return; bytecblock 0x11", AssemblerMaxVersion)
 	require.Equal(t, ops.Program[1], OpsByName[ops.Version]["bytecblock"].Opcode)
 	require.EqualValues(t, ops.Program[4], 0x44) // <bytecblock> 1 1 0x44 <bytec_0>
 	require.Equal(t, ops.Program[5], OpsByName[ops.Version]["bytec_0"].Opcode)
-	ops = testProg(t, "b skip; bytecblock 0x11; skip: byte 0x44; byte 0x44; concat; len; int 4; ==", AssemblerMaxVersion)
+	ops = testProg(t, "#pragma autosalt false\nb skip; bytecblock 0x11; skip: byte 0x44; byte 0x44; concat; len; int 4; ==", AssemblerMaxVersion)
 	require.Equal(t, ops.Program[1], OpsByName[ops.Version]["bytecblock"].Opcode)
 	require.EqualValues(t, ops.Program[4], 0x44)
 }
@@ -1557,7 +1569,7 @@ intc_1 // 4
 	t.Run("All", func(t *testing.T) {
 		t.Parallel()
 
-		program := `
+		program := `#pragma autosalt false
 int 1
 byte 0x0102
 int OptIn // 1
@@ -1578,7 +1590,7 @@ int 4
 byte base32(AEBQ====) // 0x0103
 `
 		// interleaving of previous tests
-		expected := `
+		expected := `#pragma autosalt false
 intcblock 3 4 1
 bytecblock 0x0102 0x0103 0x74657374
 intc_2 // 1
@@ -1616,7 +1628,7 @@ bytec_1 // 0x0103
 	t.Run("Back jumps", func(t *testing.T) {
 		t.Parallel()
 
-		program := `
+		program := `#pragma autosalt false
 int 1
 byte 0x0102
 int OptIn // 1
@@ -1639,7 +1651,7 @@ int 4
 callsub target
 byte base32(AEBQ====) // 0x0103
 `
-		expected := `
+		expected := `#pragma autosalt false
 intcblock 3 4 1
 bytecblock 0x0102 0x0103 0x74657374
 intc_2 // 1
