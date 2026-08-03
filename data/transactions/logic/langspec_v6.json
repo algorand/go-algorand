@@ -6768,7 +6768,7 @@
           "Comment": "transaction field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "txn"
+          "Reference": "txn Fields"
         }
       ],
       "IntroducedVersion": 6,

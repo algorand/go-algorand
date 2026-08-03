@@ -761,7 +761,7 @@ var OpSpecs = []OpSpec{
 	{0xb4, "itxn", opItxn, proto(":a"), 5, field("f", &TxnScalarFields).only(ModeApp).assembler(asmItxn)},
 	{0xb5, "itxna", opItxna, proto(":a"), 5, immediates("f", "i").field("f", &TxnArrayFields).only(ModeApp)},
 	{0xb6, "itxn_next", opItxnNext, proto(":"), 6, only(ModeApp)},
-	{0xb7, "gitxn", opGitxn, proto(":a"), 6, immediates("t", "f").field("f", &TxnFields).only(ModeApp).assembler(asmGitxn)},
+	{0xb7, "gitxn", opGitxn, proto(":a"), 6, immediates("t", "f").field("f", &TxnScalarFields).only(ModeApp).assembler(asmGitxn)},
 	{0xb8, "gitxna", opGitxna, proto(":a"), 6, immediates("t", "f", "i").field("f", &TxnArrayFields).only(ModeApp)},
 
 	// Unlimited Global Storage - Boxes

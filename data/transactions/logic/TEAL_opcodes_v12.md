@@ -1496,7 +1496,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 ## gitxn
 
-- Syntax: `gitxn T F` where T: transaction group index, F: [txn](#txn)
+- Syntax: `gitxn T F` where T: transaction group index, F: [txn Fields](#txn-fields)
 - Bytecode: 0xb7 {uint8}, {uint8}
 - Stack: ... &rarr; ..., any
 - field F of the Tth transaction in the last inner group submitted
