@@ -3458,7 +3458,7 @@ func TestReturnTypes(t *testing.T) {
 								cmd += " 0x123456"
 							case immBytess:
 								cmd += " 0x12 0x34 0x56"
-							case immLabel:
+							case immLabel, immVarintLabel:
 								cmd += " done; done: ;"
 							case immLabels:
 								cmd += " done1 done2; done1: ; done2: ;"

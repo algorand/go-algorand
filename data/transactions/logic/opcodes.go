@@ -238,7 +238,7 @@ func detBranchVarint() OpDetails {
 	d.asm = asmBranchVarint
 	d.check = checkBranchVarint
 	d.Size = 0 // dynamic; op and check always set nextpc
-	d.Immediates = []immediate{imm("target", immLabel)}
+	d.Immediates = []immediate{imm("target", immVarintLabel)}
 	return d
 }
 
@@ -393,6 +393,10 @@ const (
 	immInts
 	immBytess // "ss" not a typo.  Multiple "bytes"
 	immLabels
+	// immVarintLabel is a branch offset encoded as binary.Varint. It is distinct
+	// from immLabel, which remains the two-byte big-endian form used by pre-v13
+	// branches and by switch/match at every version.
+	immVarintLabel
 )
 
 func (ik immKind) String() string {
@@ -413,6 +417,8 @@ func (ik immKind) String() string {
 		return fmt.Sprintf("varuint count, [%s ...]", immBytes.String())
 	case immLabels:
 		return fmt.Sprintf("varuint count, [%s ...]", immLabel.String())
+	case immVarintLabel:
+		return "varint (zigzag)"
 	}
 	return "unknown"
 }

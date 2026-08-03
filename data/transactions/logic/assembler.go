@@ -3084,10 +3084,10 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 			}
 
 			pc++
-		case immLabel:
+		case immLabel, immVarintLabel:
 			var offset int
 			var offsetLen int
-			if spec.Version >= varintBranchVersion {
+			if imm.kind == immVarintLabel {
 				v, bytesRead := binary.Varint(dis.program[pc:])
 				if bytesRead <= 0 {
 					return "", fmt.Errorf("could not decode label for %s", spec.Name)
@@ -3103,7 +3103,7 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 				offsetLen = 2
 			}
 			target := offset + pc + offsetLen
-			if spec.Version >= varintBranchVersion && offset < 0 {
+			if imm.kind == immVarintLabel && offset < 0 {
 				target = pc - 1 + offset // back-jump from instruction start
 			}
 			var label string

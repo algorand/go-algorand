@@ -601,7 +601,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 ## bnz
 
 - Syntax: `bnz TARGET` where TARGET: branch offset
-- Bytecode: 0x40 {int16 (big-endian)}
+- Bytecode: 0x40 {varint (zigzag)}
 - Stack: ..., A: uint64 &rarr; ...
 - branch to TARGET if value A is not zero
 
@@ -612,7 +612,7 @@ At v2 it became allowed to branch to the end of the program exactly after the la
 ## bz
 
 - Syntax: `bz TARGET` where TARGET: branch offset
-- Bytecode: 0x41 {int16 (big-endian)}
+- Bytecode: 0x41 {varint (zigzag)}
 - Stack: ..., A: uint64 &rarr; ...
 - branch to TARGET if value A is zero
 - Availability: v2
@@ -622,7 +622,7 @@ See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.
 ## b
 
 - Syntax: `b TARGET` where TARGET: branch offset
-- Bytecode: 0x42 {int16 (big-endian)}
+- Bytecode: 0x42 {varint (zigzag)}
 - Stack: ... &rarr; ...
 - branch unconditionally to TARGET
 - Availability: v2
@@ -1200,7 +1200,7 @@ Signature B is variable-length, with maximum size 1423 bytes.
 ## callsub
 
 - Syntax: `callsub TARGET` where TARGET: branch offset
-- Bytecode: 0x88 {int16 (big-endian)}
+- Bytecode: 0x88 {varint (zigzag)}
 - Stack: ... &rarr; ...
 - branch unconditionally to TARGET, saving the next instruction on the call stack
 - Availability: v4

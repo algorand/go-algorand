@@ -3707,7 +3707,7 @@
       "ImmediateNote": [
         {
           "Comment": "branch offset",
-          "Encoding": "int16 (big-endian)",
+          "Encoding": "varint (zigzag)",
           "Name": "TARGET"
         }
       ],
@@ -3730,7 +3730,7 @@
       "ImmediateNote": [
         {
           "Comment": "branch offset",
-          "Encoding": "int16 (big-endian)",
+          "Encoding": "varint (zigzag)",
           "Name": "TARGET"
         }
       ],
@@ -3750,7 +3750,7 @@
       "ImmediateNote": [
         {
           "Comment": "branch offset",
-          "Encoding": "int16 (big-endian)",
+          "Encoding": "varint (zigzag)",
           "Name": "TARGET"
         }
       ],
@@ -5429,7 +5429,7 @@
       "ImmediateNote": [
         {
           "Comment": "branch offset",
-          "Encoding": "int16 (big-endian)",
+          "Encoding": "varint (zigzag)",
           "Name": "TARGET"
         }
       ],
