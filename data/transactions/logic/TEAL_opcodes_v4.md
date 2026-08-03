@@ -339,8 +339,8 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 | 7 | Receiver | address |      | 32 byte address |
 | 8 | Amount | uint64 |      | microalgos |
 | 9 | CloseRemainderTo | address |      | 32 byte address |
-| 10 | VotePK | [32]byte |      | 32 byte address |
-| 11 | SelectionPK | [32]byte |      | 32 byte address |
+| 10 | VotePK | [32]byte |      | 32 byte participation public key |
+| 11 | SelectionPK | [32]byte |      | 32 byte VRF public key |
 | 12 | VoteFirst | uint64 |      | The first round that the participation key is valid. |
 | 13 | VoteLast | uint64 |      | The last round that the participation key is valid. |
 | 14 | VoteKeyDilution | uint64 |      | Dilution for the 2-level participation key |

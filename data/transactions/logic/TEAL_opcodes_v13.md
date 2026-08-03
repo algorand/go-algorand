@@ -379,8 +379,8 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 | 7 | Receiver | address |      | 32 byte address |
 | 8 | Amount | uint64 |      | microalgos |
 | 9 | CloseRemainderTo | address |      | 32 byte address |
-| 10 | VotePK | [32]byte |      | 32 byte address |
-| 11 | SelectionPK | [32]byte |      | 32 byte address |
+| 10 | VotePK | [32]byte |      | 32 byte participation public key |
+| 11 | SelectionPK | [32]byte |      | 32 byte VRF public key |
 | 12 | VoteFirst | uint64 |      | The first round that the participation key is valid. |
 | 13 | VoteLast | uint64 |      | The last round that the participation key is valid. |
 | 14 | VoteKeyDilution | uint64 |      | Dilution for the 2-level participation key |
@@ -847,8 +847,8 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 
 | INDEX | NAME | NOTES |
 | :-: | :------ | :--------- |
-| 0 | URLEncoding |  |
-| 1 | StdEncoding |  |
+| 0 | URLEncoding | The base64url alphabet, RFC 4648 section 5 |
+| 1 | StdEncoding | The standard base64 alphabet, RFC 4648 section 4 |
 
 _Warning_: Usage should be restricted to very rare use cases. In almost all cases, smart contracts should directly handle non-encoded byte-strings. This opcode should only be used in cases where base64 is the only available option, e.g. interoperability with a third-party that only signs base64 strings.
 
@@ -867,9 +867,9 @@ _Warning_: Usage should be restricted to very rare use cases. In almost all case
 
 | INDEX | NAME | TYPE | NOTES |
 | :-: | :------ |:--:| :--------- |
-| 0 | JSONString | []byte |  |
-| 1 | JSONUint64 | uint64 |  |
-| 2 | JSONObject | []byte |  |
+| 0 | JSONString | []byte | The value is a JSON string, returned without its surrounding quotes |
+| 1 | JSONUint64 | uint64 | The value is a JSON number, returned as a uint64 |
+| 2 | JSONObject | []byte | The value is a JSON object, returned as its raw bytes |
 
 _Warning_: Usage should be restricted to very rare use cases, as JSON decoding is expensive and quite limited. In addition, JSON objects are large and not optimized for size.
 
@@ -1672,7 +1672,7 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 
 | INDEX | NAME | NOTES |
 | :-: | :------ | :--------- |
-| 0 | VrfAlgorand |  |
+| 0 | VrfAlgorand | ECVRF-ED25519-SHA512-Elligator2, the VRF used by Algorand consensus |
 
 `VrfAlgorand` is the VRF used in Algorand. It is ECVRF-ED25519-SHA512-Elligator2, specified in the IETF internet draft [draft-irtf-cfrg-vrf-03](https://datatracker.ietf.org/doc/draft-irtf-cfrg-vrf/03/).
 
@@ -1688,20 +1688,20 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 
 | INDEX | NAME | TYPE | IN | NOTES |
 | :-: | :------ |:--:|:-:| :--------- |
-| 0 | BlkSeed | [32]byte |      |  |
-| 1 | BlkTimestamp | uint64 |      |  |
-| 2 | BlkProposer | address | v11  |  |
-| 3 | BlkFeesCollected | uint64 | v11  |  |
-| 4 | BlkBonus | uint64 | v11  |  |
-| 5 | BlkBranch | [32]byte | v11  |  |
-| 6 | BlkFeeSink | address | v11  |  |
-| 7 | BlkProtocol | []byte | v11  |  |
-| 8 | BlkTxnCounter | uint64 | v11  |  |
-| 9 | BlkProposerPayout | uint64 | v11  |  |
-| 10 | BlkBranch512 | [64]byte | v13  |  |
-| 11 | BlkSha512_256TxnCommitment | [32]byte | v13  |  |
-| 12 | BlkSha256TxnCommitment | [32]byte | v13  |  |
-| 13 | BlkSha512TxnCommitment | [64]byte | v13  |  |
+| 0 | BlkSeed | [32]byte |      | The block's sortition seed |
+| 1 | BlkTimestamp | uint64 |      | The block's timestamp, in seconds since the Unix epoch. Fails if negative |
+| 2 | BlkProposer | address | v11  | The account that proposed the block. ZeroAddress for blocks proposed before payouts were enabled |
+| 3 | BlkFeesCollected | uint64 | v11  | The sum of the fees paid by the transactions in the block, in microalgos. 0 for blocks from before payouts were enabled |
+| 4 | BlkBonus | uint64 | v11  | The bonus incentive available for proposing this block, in microalgos. It begins at a consensus parameter value and decays periodically. See BlkProposerPayout for the amount actually paid |
+| 5 | BlkBranch | [32]byte | v11  | The sha512_256 hash of the previous block's header |
+| 6 | BlkFeeSink | address | v11  | The fee sink account for the block's round |
+| 7 | BlkProtocol | []byte | v11  | The ConsensusVersion of the block |
+| 8 | BlkTxnCounter | uint64 | v11  | The number of the next transaction to be committed after this block, counted from the beginning of the chain. Genesis blocks start at either 0 or 1000 |
+| 9 | BlkProposerPayout | uint64 | v11  | The amount actually moved from the FeeSink to the proposer, in microalgos. 0 if the proposer was not eligible |
+| 10 | BlkBranch512 | [64]byte | v13  | The sha512 hash of the previous block's header. Zero for blocks from before sha512 block hashing was enabled |
+| 11 | BlkSha512_256TxnCommitment | [32]byte | v13  | Root of the sha512_256 merkle tree over the block's transactions and their ApplyData, the "Algorand native" commitment |
+| 12 | BlkSha256TxnCommitment | [32]byte | v13  | Root of the sha256 vector commitment merkle tree over the block's transactions and their ApplyData |
+| 13 | BlkSha512TxnCommitment | [64]byte | v13  | Root of the sha512 vector commitment merkle tree over the block's transactions and their ApplyData. Zero for blocks from before sha512 block hashing was enabled |
 
 ## box_splice
 

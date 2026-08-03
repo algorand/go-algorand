@@ -379,8 +379,8 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 | 7 | Receiver | address |      | 32 byte address |
 | 8 | Amount | uint64 |      | microalgos |
 | 9 | CloseRemainderTo | address |      | 32 byte address |
-| 10 | VotePK | [32]byte |      | 32 byte address |
-| 11 | SelectionPK | [32]byte |      | 32 byte address |
+| 10 | VotePK | [32]byte |      | 32 byte participation public key |
+| 11 | SelectionPK | [32]byte |      | 32 byte VRF public key |
 | 12 | VoteFirst | uint64 |      | The first round that the participation key is valid. |
 | 13 | VoteLast | uint64 |      | The last round that the participation key is valid. |
 | 14 | VoteKeyDilution | uint64 |      | Dilution for the 2-level participation key |
@@ -841,8 +841,8 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 
 | INDEX | NAME | NOTES |
 | :-: | :------ | :--------- |
-| 0 | URLEncoding |  |
-| 1 | StdEncoding |  |
+| 0 | URLEncoding | The base64url alphabet, RFC 4648 section 5 |
+| 1 | StdEncoding | The standard base64 alphabet, RFC 4648 section 4 |
 
 _Warning_: Usage should be restricted to very rare use cases. In almost all cases, smart contracts should directly handle non-encoded byte-strings. This opcode should only be used in cases where base64 is the only available option, e.g. interoperability with a third-party that only signs base64 strings.
 
@@ -861,9 +861,9 @@ _Warning_: Usage should be restricted to very rare use cases. In almost all case
 
 | INDEX | NAME | TYPE | NOTES |
 | :-: | :------ |:--:| :--------- |
-| 0 | JSONString | []byte |  |
-| 1 | JSONUint64 | uint64 |  |
-| 2 | JSONObject | []byte |  |
+| 0 | JSONString | []byte | The value is a JSON string, returned without its surrounding quotes |
+| 1 | JSONUint64 | uint64 | The value is a JSON number, returned as a uint64 |
+| 2 | JSONObject | []byte | The value is a JSON object, returned as its raw bytes |
 
 _Warning_: Usage should be restricted to very rare use cases, as JSON decoding is expensive and quite limited. In addition, JSON objects are large and not optimized for size.
 
@@ -1601,7 +1601,7 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 
 | INDEX | NAME | NOTES |
 | :-: | :------ | :--------- |
-| 0 | VrfAlgorand |  |
+| 0 | VrfAlgorand | ECVRF-ED25519-SHA512-Elligator2, the VRF used by Algorand consensus |
 
 `VrfAlgorand` is the VRF used in Algorand. It is ECVRF-ED25519-SHA512-Elligator2, specified in the IETF internet draft [draft-irtf-cfrg-vrf-03](https://datatracker.ietf.org/doc/draft-irtf-cfrg-vrf/03/).
 
@@ -1617,8 +1617,8 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 
 | INDEX | NAME | TYPE | NOTES |
 | :-: | :------ |:--:| :--------- |
-| 0 | BlkSeed | [32]byte |  |
-| 1 | BlkTimestamp | uint64 |  |
+| 0 | BlkSeed | [32]byte | The block's sortition seed |
+| 1 | BlkTimestamp | uint64 | The block's timestamp, in seconds since the Unix epoch. Fails if negative |
 
 ## box_splice
 
