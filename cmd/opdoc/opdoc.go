@@ -341,7 +341,7 @@ type argDetail struct {
 	Doc          string
 	ByteEncoding int
 	Modes        logic.RunMode `json:",omitempty"` // Zero means "same as the opcode"
-	Version      uint64
+	Version      uint64        `json:",omitempty"`
 }
 
 type namedType struct {
