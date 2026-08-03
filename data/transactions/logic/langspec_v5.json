@@ -289,7 +289,7 @@
       ],
       "DocCost": "2000",
       "Doc": "for (data A, recovery id B, signature C, D) recover a public key",
-      "DocExtra": "S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to deriver a public key. All values are big-endian encoded. The signed data must be 32 bytes long.",
+      "DocExtra": "S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to derive a public key. All values are big-endian encoded. The signed data must be 32 bytes long.",
       "ImmediateNote": [
         {
           "Comment": "curve index",
@@ -601,7 +601,6 @@
       "Size": 1,
       "DocCost": "1",
       "Doc": "converts big-endian byte array A to uint64. Fails if len(A) \u003e 8. Padded by leading 0s if len(A) \u003c 8.",
-      "DocExtra": "`btoi` fails if the input is longer than 8 bytes.",
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
@@ -759,7 +758,7 @@
       ],
       "Size": 1,
       "DocCost": "20",
-      "Doc": "W,X = (A,B / C,D); Y,Z = (A,B modulo C,D)",
+      "Doc": "W,X = (A,B / C,D); Y,Z = (A,B modulo C,D). Fail if C,D == 0",
       "DocExtra": "The notation J,K indicates that two uint64 values J and K are interpreted as a uint128 value, with J as the high uint64 and K the low.",
       "IntroducedVersion": 4,
       "Groups": [
@@ -3138,7 +3137,7 @@
       ],
       "Size": 1,
       "DocCost": "1",
-      "Doc": "Ath scratch space value.  All scratch spaces are 0 at program start.",
+      "Doc": "Ath scratch space value. All scratch spaces are 0 at program start.",
       "IntroducedVersion": 5,
       "Groups": [
         "Loading Values"
@@ -3170,7 +3169,7 @@
       "Size": 3,
       "DocCost": "1",
       "Doc": "branch to TARGET if value A is not zero",
-      "DocExtra": "The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Starting at v4, the offset is treated as a signed 16 bit integer allowing for backward branches and looping. In prior version (v1 to v3), branch offsets are limited to forward branches only, 0-0x7fff.\n\nAt v2 it became allowed to branch to the end of the program exactly after the last instruction: bnz to byte N (with 0-indexing) was illegal for a TEAL program with N bytes before v2, and is legal after it. This change eliminates the need for a last instruction of no-op as a branch target at the end. (Branching beyond the end--in other words, to a byte larger than N--is still illegal and will cause the program to fail.)",
+      "DocExtra": "From v1 to v12, the `bnz` opcode byte 0x40 is followed by exactly two immediate bytes, high byte first, which together form a 16 bit offset N. The instruction is 3 bytes long. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to the instruction at `pc + 3 + N`, else proceed to the next instruction at `pc + 3`. Starting at v4, the offset is treated as a signed 16 bit integer allowing for backward branches and looping. In prior version (v1 to v3), branch offsets are limited to forward branches only, 0-0x7fff.\n\nStarting at v13, the offset is encoded as a `binary.Varint` (zigzag plus ULEB128) of one or more bytes, so the instruction is `1 + len(offset)` bytes long. A non-negative offset N is measured from the end of the instruction: execution continues at `pc + 1 + len(offset) + N`. A negative offset N is measured from the start of the instruction: execution continues at `pc + N`. Not branching always continues at `pc + 1 + len(offset)`. A branch to the start of its own instruction cannot be encoded, since a zero offset means the following instruction; the assembler rejects the attempt.\n\nBranch targets must be aligned instructions at every version. (e.g. Branching to the second byte of a 2 byte op will be rejected.)\n\nAt v2 it became allowed to branch to the end of the program exactly after the last instruction: bnz to byte N (with 0-indexing) was illegal for a TEAL program with N bytes before v2, and is legal after it. This change eliminates the need for a last instruction of no-op as a branch target at the end. (Branching beyond the end--in other words, to a byte larger than N--is still illegal and will cause the program to fail.)",
       "ImmediateNote": [
         {
           "Comment": "branch offset",
@@ -3698,7 +3697,7 @@
       "Size": 1,
       "DocCost": "1",
       "Doc": "balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted. Changes caused by inner transactions are observable immediately following `itxn_submit`",
-      "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
+      "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.",
       "IntroducedVersion": 2,
       "Groups": [
         "Account Access"
@@ -4054,7 +4053,7 @@
       ],
       "DocCost": "1",
       "Doc": "X is field F from asset A. Y is 1 if A exists, else 0",
-      "DocExtra": "params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return: did_exist flag (1 if the asset existed and 0 otherwise), value.",
+      "DocExtra": "params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id). Return: did_exist flag (1 if the asset existed and 0 otherwise), value.",
       "ImmediateNote": [
         {
           "Comment": "asset params field index",
@@ -4196,7 +4195,7 @@
       "Size": 1,
       "DocCost": "1",
       "Doc": "minimum required balance for account A, in microalgos. Required balance is affected by ASA, App, and Box usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes. Changes caused by inner transactions or box usage are observable immediately following the opcode effecting the change.",
-      "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
+      "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.",
       "IntroducedVersion": 3,
       "Groups": [
         "Account Access"
@@ -4255,7 +4254,7 @@
       "Size": 3,
       "DocCost": "1",
       "Doc": "branch unconditionally to TARGET, saving the next instruction on the call stack",
-      "DocExtra": "The call stack is separate from the data stack. Only `callsub`, `retsub`, and `proto` manipulate it.",
+      "DocExtra": "The call stack is separate from the data stack. Only `callsub`, `retsub`, and `proto` manipulate it. See `bnz` for details on how the branch offset is encoded.",
       "ImmediateNote": [
         {
           "Comment": "branch offset",
@@ -4294,7 +4293,7 @@
       ],
       "Size": 1,
       "DocCost": "1",
-      "Doc": "A times 2^B, modulo 2^64",
+      "Doc": "A times 2^B, modulo 2^64. Fail if B \u003e 63",
       "IntroducedVersion": 4,
       "Groups": [
         "Arithmetic"
@@ -4313,7 +4312,7 @@
       ],
       "Size": 1,
       "DocCost": "1",
-      "Doc": "A divided by 2^B",
+      "Doc": "A divided by 2^B. Fail if B \u003e 63",
       "IntroducedVersion": 4,
       "Groups": [
         "Arithmetic"
@@ -4691,7 +4690,7 @@
       ],
       "Size": 1,
       "DocCost": "1",
-      "Doc": "zero filled byte-array of length A",
+      "Doc": "zero filled byte-array of length A. Fail if A exceeds 4096",
       "IntroducedVersion": 4,
       "Groups": [
         "Loading Values"
@@ -4720,7 +4719,7 @@
       "Size": 1,
       "DocCost": "1",
       "Doc": "begin preparation of a new inner transaction in a new transaction group",
-      "DocExtra": "`itxn_begin` initializes Sender to the application address; Fee to the minimum allowable, taking into account MinTxnFee and credit from overpaying in earlier transactions; FirstValid/LastValid to the values in the invoking transaction, and all other fields to zero or empty values.",
+      "DocExtra": "`itxn_begin` initializes Sender to the application address; Fee to a default, described below; FirstValid/LastValid to the values in the invoking transaction, and all other fields to zero or empty values.\n\nThe default Fee is the additional amount that would make the group's fees sufficient so far: MinTxnFee times the fee usage of the transactions already in the group plus one base fee for this new transaction, less the fees already set and any credit from overpaying in earlier transactions. Because the new transaction's own cost is counted as a single base fee, extra costs from fields set later, such as a large note or program, are not reflected in the default. The group fee is checked and charged at `itxn_submit`, so changing Fee, setting fields that cost more, or adding transactions with `itxn_next` all change what is owed.",
       "IntroducedVersion": 5,
       "Groups": [
         "Inner Transactions"
@@ -4985,7 +4984,7 @@
       ],
       "DocCost": "1",
       "Doc": "set field F of the current inner transaction to A",
-      "DocExtra": "`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_, or an attempt is made extend an array field beyond the limit imposed by consensus parameters. (Addresses set into asset params of acfg transactions need not be _available_.)",
+      "DocExtra": "`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_, or an attempt is made to extend an array field beyond the limit imposed by consensus parameters. (Addresses set into asset params of acfg transactions need not be _available_.)",
       "ImmediateNote": [
         {
           "Comment": "transaction field index",
