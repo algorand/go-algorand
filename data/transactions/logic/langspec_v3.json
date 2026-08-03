@@ -938,9 +938,7 @@
         "TxID",
         "ApplicationID",
         "OnCompletion",
-        "ApplicationArgs",
         "NumAppArgs",
-        "Accounts",
         "NumAccounts",
         "ApprovalProgram",
         "ClearStateProgram",
@@ -960,9 +958,7 @@
         "FreezeAsset",
         "FreezeAssetAccount",
         "FreezeAssetFrozen",
-        "Assets",
         "NumAssets",
-        "Applications",
         "NumApplications",
         "GlobalNumUint",
         "GlobalNumByteSlice",
@@ -995,9 +991,7 @@
         "[32]byte",
         "uint64",
         "uint64",
-        "[]byte",
         "uint64",
-        "address",
         "uint64",
         "[]byte",
         "[]byte",
@@ -1017,8 +1011,6 @@
         "uint64",
         "address",
         "bool",
-        "uint64",
-        "uint64",
         "uint64",
         "uint64",
         "uint64",
@@ -1084,13 +1076,13 @@
         {
           "Name": "VotePK",
           "Type": "[32]byte",
-          "Doc": "32 byte address",
+          "Doc": "32 byte participation public key",
           "ByteEncoding": 10
         },
         {
           "Name": "SelectionPK",
           "Type": "[32]byte",
-          "Doc": "32 byte address",
+          "Doc": "32 byte VRF public key",
           "ByteEncoding": 11
         },
         {
@@ -1180,24 +1172,10 @@
           "Version": 2
         },
         {
-          "Name": "ApplicationArgs",
-          "Type": "[]byte",
-          "Doc": "Arguments passed to the application in the ApplicationCall transaction",
-          "ByteEncoding": 26,
-          "Version": 2
-        },
-        {
           "Name": "NumAppArgs",
           "Type": "uint64",
           "Doc": "Number of ApplicationArgs",
           "ByteEncoding": 27,
-          "Version": 2
-        },
-        {
-          "Name": "Accounts",
-          "Type": "address",
-          "Doc": "Accounts listed in the ApplicationCall transaction",
-          "ByteEncoding": 28,
           "Version": 2
         },
         {
@@ -1334,24 +1312,10 @@
           "Version": 2
         },
         {
-          "Name": "Assets",
-          "Type": "uint64",
-          "Doc": "Foreign Assets listed in the ApplicationCall transaction",
-          "ByteEncoding": 48,
-          "Version": 3
-        },
-        {
           "Name": "NumAssets",
           "Type": "uint64",
           "Doc": "Number of Assets",
           "ByteEncoding": 49,
-          "Version": 3
-        },
-        {
-          "Name": "Applications",
-          "Type": "uint64",
-          "Doc": "Foreign Apps listed in the ApplicationCall transaction",
-          "ByteEncoding": 50,
           "Version": 3
         },
         {
@@ -1557,9 +1521,7 @@
         "TxID",
         "ApplicationID",
         "OnCompletion",
-        "ApplicationArgs",
         "NumAppArgs",
-        "Accounts",
         "NumAccounts",
         "ApprovalProgram",
         "ClearStateProgram",
@@ -1579,9 +1541,7 @@
         "FreezeAsset",
         "FreezeAssetAccount",
         "FreezeAssetFrozen",
-        "Assets",
         "NumAssets",
-        "Applications",
         "NumApplications",
         "GlobalNumUint",
         "GlobalNumByteSlice",
@@ -1614,9 +1574,7 @@
         "[32]byte",
         "uint64",
         "uint64",
-        "[]byte",
         "uint64",
-        "address",
         "uint64",
         "[]byte",
         "[]byte",
@@ -1636,8 +1594,6 @@
         "uint64",
         "address",
         "bool",
-        "uint64",
-        "uint64",
         "uint64",
         "uint64",
         "uint64",
@@ -1703,13 +1659,13 @@
         {
           "Name": "VotePK",
           "Type": "[32]byte",
-          "Doc": "32 byte address",
+          "Doc": "32 byte participation public key",
           "ByteEncoding": 10
         },
         {
           "Name": "SelectionPK",
           "Type": "[32]byte",
-          "Doc": "32 byte address",
+          "Doc": "32 byte VRF public key",
           "ByteEncoding": 11
         },
         {
@@ -1799,24 +1755,10 @@
           "Version": 2
         },
         {
-          "Name": "ApplicationArgs",
-          "Type": "[]byte",
-          "Doc": "Arguments passed to the application in the ApplicationCall transaction",
-          "ByteEncoding": 26,
-          "Version": 2
-        },
-        {
           "Name": "NumAppArgs",
           "Type": "uint64",
           "Doc": "Number of ApplicationArgs",
           "ByteEncoding": 27,
-          "Version": 2
-        },
-        {
-          "Name": "Accounts",
-          "Type": "address",
-          "Doc": "Accounts listed in the ApplicationCall transaction",
-          "ByteEncoding": 28,
           "Version": 2
         },
         {
@@ -1953,24 +1895,10 @@
           "Version": 2
         },
         {
-          "Name": "Assets",
-          "Type": "uint64",
-          "Doc": "Foreign Assets listed in the ApplicationCall transaction",
-          "ByteEncoding": 48,
-          "Version": 3
-        },
-        {
           "Name": "NumAssets",
           "Type": "uint64",
           "Doc": "Number of Assets",
           "ByteEncoding": 49,
-          "Version": 3
-        },
-        {
-          "Name": "Applications",
-          "Type": "uint64",
-          "Doc": "Foreign Apps listed in the ApplicationCall transaction",
-          "ByteEncoding": 50,
           "Version": 3
         },
         {
@@ -2256,9 +2184,7 @@
         "TxID",
         "ApplicationID",
         "OnCompletion",
-        "ApplicationArgs",
         "NumAppArgs",
-        "Accounts",
         "NumAccounts",
         "ApprovalProgram",
         "ClearStateProgram",
@@ -2278,9 +2204,7 @@
         "FreezeAsset",
         "FreezeAssetAccount",
         "FreezeAssetFrozen",
-        "Assets",
         "NumAssets",
-        "Applications",
         "NumApplications",
         "GlobalNumUint",
         "GlobalNumByteSlice",
@@ -2313,9 +2237,7 @@
         "[32]byte",
         "uint64",
         "uint64",
-        "[]byte",
         "uint64",
-        "address",
         "uint64",
         "[]byte",
         "[]byte",
@@ -2335,8 +2257,6 @@
         "uint64",
         "address",
         "bool",
-        "uint64",
-        "uint64",
         "uint64",
         "uint64",
         "uint64",
@@ -2402,13 +2322,13 @@
         {
           "Name": "VotePK",
           "Type": "[32]byte",
-          "Doc": "32 byte address",
+          "Doc": "32 byte participation public key",
           "ByteEncoding": 10
         },
         {
           "Name": "SelectionPK",
           "Type": "[32]byte",
-          "Doc": "32 byte address",
+          "Doc": "32 byte VRF public key",
           "ByteEncoding": 11
         },
         {
@@ -2498,24 +2418,10 @@
           "Version": 2
         },
         {
-          "Name": "ApplicationArgs",
-          "Type": "[]byte",
-          "Doc": "Arguments passed to the application in the ApplicationCall transaction",
-          "ByteEncoding": 26,
-          "Version": 2
-        },
-        {
           "Name": "NumAppArgs",
           "Type": "uint64",
           "Doc": "Number of ApplicationArgs",
           "ByteEncoding": 27,
-          "Version": 2
-        },
-        {
-          "Name": "Accounts",
-          "Type": "address",
-          "Doc": "Accounts listed in the ApplicationCall transaction",
-          "ByteEncoding": 28,
           "Version": 2
         },
         {
@@ -2652,24 +2558,10 @@
           "Version": 2
         },
         {
-          "Name": "Assets",
-          "Type": "uint64",
-          "Doc": "Foreign Assets listed in the ApplicationCall transaction",
-          "ByteEncoding": 48,
-          "Version": 3
-        },
-        {
           "Name": "NumAssets",
           "Type": "uint64",
           "Doc": "Number of Assets",
           "ByteEncoding": 49,
-          "Version": 3
-        },
-        {
-          "Name": "Applications",
-          "Type": "uint64",
-          "Doc": "Foreign Apps listed in the ApplicationCall transaction",
-          "ByteEncoding": 50,
           "Version": 3
         },
         {

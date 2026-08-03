@@ -1000,13 +1000,13 @@
         {
           "Name": "VotePK",
           "Type": "[32]byte",
-          "Doc": "32 byte address",
+          "Doc": "32 byte participation public key",
           "ByteEncoding": 10
         },
         {
           "Name": "SelectionPK",
           "Type": "[32]byte",
-          "Doc": "32 byte address",
+          "Doc": "32 byte VRF public key",
           "ByteEncoding": 11
         },
         {
@@ -1282,13 +1282,13 @@
         {
           "Name": "VotePK",
           "Type": "[32]byte",
-          "Doc": "32 byte address",
+          "Doc": "32 byte participation public key",
           "ByteEncoding": 10
         },
         {
           "Name": "SelectionPK",
           "Type": "[32]byte",
-          "Doc": "32 byte address",
+          "Doc": "32 byte VRF public key",
           "ByteEncoding": 11
         },
         {

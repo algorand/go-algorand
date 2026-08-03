@@ -1108,9 +1108,7 @@
         "TxID",
         "ApplicationID",
         "OnCompletion",
-        "ApplicationArgs",
         "NumAppArgs",
-        "Accounts",
         "NumAccounts",
         "ApprovalProgram",
         "ClearStateProgram",
@@ -1130,9 +1128,7 @@
         "FreezeAsset",
         "FreezeAssetAccount",
         "FreezeAssetFrozen",
-        "Assets",
         "NumAssets",
-        "Applications",
         "NumApplications",
         "GlobalNumUint",
         "GlobalNumByteSlice",
@@ -1140,15 +1136,12 @@
         "LocalNumByteSlice",
         "ExtraProgramPages",
         "Nonparticipation",
-        "Logs",
         "NumLogs",
         "CreatedAssetID",
         "CreatedApplicationID",
         "LastLog",
         "StateProofPK",
-        "ApprovalProgramPages",
         "NumApprovalProgramPages",
-        "ClearStateProgramPages",
         "NumClearStateProgramPages"
       ],
       "ArgEnumTypes": [
@@ -1178,9 +1171,7 @@
         "[32]byte",
         "uint64",
         "uint64",
-        "[]byte",
         "uint64",
-        "address",
         "uint64",
         "[]byte",
         "[]byte",
@@ -1207,18 +1198,13 @@
         "uint64",
         "uint64",
         "uint64",
-        "uint64",
-        "uint64",
         "bool",
-        "[]byte",
         "uint64",
         "uint64",
         "uint64",
         "[]byte",
         "[64]byte",
-        "[]byte",
         "uint64",
-        "[]byte",
         "uint64"
       ],
       "ArgDetails": [
@@ -1286,13 +1272,13 @@
         {
           "Name": "VotePK",
           "Type": "[32]byte",
-          "Doc": "32 byte address",
+          "Doc": "32 byte participation public key",
           "ByteEncoding": 10
         },
         {
           "Name": "SelectionPK",
           "Type": "[32]byte",
-          "Doc": "32 byte address",
+          "Doc": "32 byte VRF public key",
           "ByteEncoding": 11
         },
         {
@@ -1382,24 +1368,10 @@
           "Version": 2
         },
         {
-          "Name": "ApplicationArgs",
-          "Type": "[]byte",
-          "Doc": "Arguments passed to the application in the ApplicationCall transaction",
-          "ByteEncoding": 26,
-          "Version": 2
-        },
-        {
           "Name": "NumAppArgs",
           "Type": "uint64",
           "Doc": "Number of ApplicationArgs",
           "ByteEncoding": 27,
-          "Version": 2
-        },
-        {
-          "Name": "Accounts",
-          "Type": "address",
-          "Doc": "Accounts listed in the ApplicationCall transaction",
-          "ByteEncoding": 28,
           "Version": 2
         },
         {
@@ -1536,24 +1508,10 @@
           "Version": 2
         },
         {
-          "Name": "Assets",
-          "Type": "uint64",
-          "Doc": "Foreign Assets listed in the ApplicationCall transaction",
-          "ByteEncoding": 48,
-          "Version": 3
-        },
-        {
           "Name": "NumAssets",
           "Type": "uint64",
           "Doc": "Number of Assets",
           "ByteEncoding": 49,
-          "Version": 3
-        },
-        {
-          "Name": "Applications",
-          "Type": "uint64",
-          "Doc": "Foreign Apps listed in the ApplicationCall transaction",
-          "ByteEncoding": 50,
           "Version": 3
         },
         {
@@ -1606,14 +1564,6 @@
           "Version": 5
         },
         {
-          "Name": "Logs",
-          "Type": "[]byte",
-          "Doc": "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
-          "ByteEncoding": 58,
-          "Modes": 2,
-          "Version": 5
-        },
-        {
           "Name": "NumLogs",
           "Type": "uint64",
           "Doc": "Number of Logs (only with `itxn` in v5). Application mode only",
@@ -1653,24 +1603,10 @@
           "Version": 6
         },
         {
-          "Name": "ApprovalProgramPages",
-          "Type": "[]byte",
-          "Doc": "Approval Program as an array of pages",
-          "ByteEncoding": 64,
-          "Version": 7
-        },
-        {
           "Name": "NumApprovalProgramPages",
           "Type": "uint64",
           "Doc": "Number of Approval Program pages",
           "ByteEncoding": 65,
-          "Version": 7
-        },
-        {
-          "Name": "ClearStateProgramPages",
-          "Type": "[]byte",
-          "Doc": "ClearState Program as an array of pages",
-          "ByteEncoding": 66,
           "Version": 7
         },
         {
@@ -1924,9 +1860,7 @@
         "TxID",
         "ApplicationID",
         "OnCompletion",
-        "ApplicationArgs",
         "NumAppArgs",
-        "Accounts",
         "NumAccounts",
         "ApprovalProgram",
         "ClearStateProgram",
@@ -1946,9 +1880,7 @@
         "FreezeAsset",
         "FreezeAssetAccount",
         "FreezeAssetFrozen",
-        "Assets",
         "NumAssets",
-        "Applications",
         "NumApplications",
         "GlobalNumUint",
         "GlobalNumByteSlice",
@@ -1956,15 +1888,12 @@
         "LocalNumByteSlice",
         "ExtraProgramPages",
         "Nonparticipation",
-        "Logs",
         "NumLogs",
         "CreatedAssetID",
         "CreatedApplicationID",
         "LastLog",
         "StateProofPK",
-        "ApprovalProgramPages",
         "NumApprovalProgramPages",
-        "ClearStateProgramPages",
         "NumClearStateProgramPages"
       ],
       "ArgEnumTypes": [
@@ -1994,9 +1923,7 @@
         "[32]byte",
         "uint64",
         "uint64",
-        "[]byte",
         "uint64",
-        "address",
         "uint64",
         "[]byte",
         "[]byte",
@@ -2023,18 +1950,13 @@
         "uint64",
         "uint64",
         "uint64",
-        "uint64",
-        "uint64",
         "bool",
-        "[]byte",
         "uint64",
         "uint64",
         "uint64",
         "[]byte",
         "[64]byte",
-        "[]byte",
         "uint64",
-        "[]byte",
         "uint64"
       ],
       "ArgDetails": [
@@ -2102,13 +2024,13 @@
         {
           "Name": "VotePK",
           "Type": "[32]byte",
-          "Doc": "32 byte address",
+          "Doc": "32 byte participation public key",
           "ByteEncoding": 10
         },
         {
           "Name": "SelectionPK",
           "Type": "[32]byte",
-          "Doc": "32 byte address",
+          "Doc": "32 byte VRF public key",
           "ByteEncoding": 11
         },
         {
@@ -2198,24 +2120,10 @@
           "Version": 2
         },
         {
-          "Name": "ApplicationArgs",
-          "Type": "[]byte",
-          "Doc": "Arguments passed to the application in the ApplicationCall transaction",
-          "ByteEncoding": 26,
-          "Version": 2
-        },
-        {
           "Name": "NumAppArgs",
           "Type": "uint64",
           "Doc": "Number of ApplicationArgs",
           "ByteEncoding": 27,
-          "Version": 2
-        },
-        {
-          "Name": "Accounts",
-          "Type": "address",
-          "Doc": "Accounts listed in the ApplicationCall transaction",
-          "ByteEncoding": 28,
           "Version": 2
         },
         {
@@ -2352,24 +2260,10 @@
           "Version": 2
         },
         {
-          "Name": "Assets",
-          "Type": "uint64",
-          "Doc": "Foreign Assets listed in the ApplicationCall transaction",
-          "ByteEncoding": 48,
-          "Version": 3
-        },
-        {
           "Name": "NumAssets",
           "Type": "uint64",
           "Doc": "Number of Assets",
           "ByteEncoding": 49,
-          "Version": 3
-        },
-        {
-          "Name": "Applications",
-          "Type": "uint64",
-          "Doc": "Foreign Apps listed in the ApplicationCall transaction",
-          "ByteEncoding": 50,
           "Version": 3
         },
         {
@@ -2422,14 +2316,6 @@
           "Version": 5
         },
         {
-          "Name": "Logs",
-          "Type": "[]byte",
-          "Doc": "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
-          "ByteEncoding": 58,
-          "Modes": 2,
-          "Version": 5
-        },
-        {
           "Name": "NumLogs",
           "Type": "uint64",
           "Doc": "Number of Logs (only with `itxn` in v5). Application mode only",
@@ -2469,24 +2355,10 @@
           "Version": 6
         },
         {
-          "Name": "ApprovalProgramPages",
-          "Type": "[]byte",
-          "Doc": "Approval Program as an array of pages",
-          "ByteEncoding": 64,
-          "Version": 7
-        },
-        {
           "Name": "NumApprovalProgramPages",
           "Type": "uint64",
           "Doc": "Number of Approval Program pages",
           "ByteEncoding": 65,
-          "Version": 7
-        },
-        {
-          "Name": "ClearStateProgramPages",
-          "Type": "[]byte",
-          "Doc": "ClearState Program as an array of pages",
-          "ByteEncoding": 66,
           "Version": 7
         },
         {
@@ -2801,9 +2673,7 @@
         "TxID",
         "ApplicationID",
         "OnCompletion",
-        "ApplicationArgs",
         "NumAppArgs",
-        "Accounts",
         "NumAccounts",
         "ApprovalProgram",
         "ClearStateProgram",
@@ -2823,9 +2693,7 @@
         "FreezeAsset",
         "FreezeAssetAccount",
         "FreezeAssetFrozen",
-        "Assets",
         "NumAssets",
-        "Applications",
         "NumApplications",
         "GlobalNumUint",
         "GlobalNumByteSlice",
@@ -2833,15 +2701,12 @@
         "LocalNumByteSlice",
         "ExtraProgramPages",
         "Nonparticipation",
-        "Logs",
         "NumLogs",
         "CreatedAssetID",
         "CreatedApplicationID",
         "LastLog",
         "StateProofPK",
-        "ApprovalProgramPages",
         "NumApprovalProgramPages",
-        "ClearStateProgramPages",
         "NumClearStateProgramPages"
       ],
       "ArgEnumTypes": [
@@ -2871,9 +2736,7 @@
         "[32]byte",
         "uint64",
         "uint64",
-        "[]byte",
         "uint64",
-        "address",
         "uint64",
         "[]byte",
         "[]byte",
@@ -2900,18 +2763,13 @@
         "uint64",
         "uint64",
         "uint64",
-        "uint64",
-        "uint64",
         "bool",
-        "[]byte",
         "uint64",
         "uint64",
         "uint64",
         "[]byte",
         "[64]byte",
-        "[]byte",
         "uint64",
-        "[]byte",
         "uint64"
       ],
       "ArgDetails": [
@@ -2979,13 +2837,13 @@
         {
           "Name": "VotePK",
           "Type": "[32]byte",
-          "Doc": "32 byte address",
+          "Doc": "32 byte participation public key",
           "ByteEncoding": 10
         },
         {
           "Name": "SelectionPK",
           "Type": "[32]byte",
-          "Doc": "32 byte address",
+          "Doc": "32 byte VRF public key",
           "ByteEncoding": 11
         },
         {
@@ -3075,24 +2933,10 @@
           "Version": 2
         },
         {
-          "Name": "ApplicationArgs",
-          "Type": "[]byte",
-          "Doc": "Arguments passed to the application in the ApplicationCall transaction",
-          "ByteEncoding": 26,
-          "Version": 2
-        },
-        {
           "Name": "NumAppArgs",
           "Type": "uint64",
           "Doc": "Number of ApplicationArgs",
           "ByteEncoding": 27,
-          "Version": 2
-        },
-        {
-          "Name": "Accounts",
-          "Type": "address",
-          "Doc": "Accounts listed in the ApplicationCall transaction",
-          "ByteEncoding": 28,
           "Version": 2
         },
         {
@@ -3229,24 +3073,10 @@
           "Version": 2
         },
         {
-          "Name": "Assets",
-          "Type": "uint64",
-          "Doc": "Foreign Assets listed in the ApplicationCall transaction",
-          "ByteEncoding": 48,
-          "Version": 3
-        },
-        {
           "Name": "NumAssets",
           "Type": "uint64",
           "Doc": "Number of Assets",
           "ByteEncoding": 49,
-          "Version": 3
-        },
-        {
-          "Name": "Applications",
-          "Type": "uint64",
-          "Doc": "Foreign Apps listed in the ApplicationCall transaction",
-          "ByteEncoding": 50,
           "Version": 3
         },
         {
@@ -3299,14 +3129,6 @@
           "Version": 5
         },
         {
-          "Name": "Logs",
-          "Type": "[]byte",
-          "Doc": "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
-          "ByteEncoding": 58,
-          "Modes": 2,
-          "Version": 5
-        },
-        {
           "Name": "NumLogs",
           "Type": "uint64",
           "Doc": "Number of Logs (only with `itxn` in v5). Application mode only",
@@ -3346,24 +3168,10 @@
           "Version": 6
         },
         {
-          "Name": "ApprovalProgramPages",
-          "Type": "[]byte",
-          "Doc": "Approval Program as an array of pages",
-          "ByteEncoding": 64,
-          "Version": 7
-        },
-        {
           "Name": "NumApprovalProgramPages",
           "Type": "uint64",
           "Doc": "Number of Approval Program pages",
           "ByteEncoding": 65,
-          "Version": 7
-        },
-        {
-          "Name": "ClearStateProgramPages",
-          "Type": "[]byte",
-          "Doc": "ClearState Program as an array of pages",
-          "ByteEncoding": 66,
           "Version": 7
         },
         {
@@ -4278,14 +4086,14 @@
         {
           "Name": "URLEncoding",
           "Type": "any",
-          "Doc": "",
+          "Doc": "The base64url alphabet, RFC 4648 section 5",
           "ByteEncoding": 0,
           "Version": 6
         },
         {
           "Name": "StdEncoding",
           "Type": "any",
-          "Doc": "",
+          "Doc": "The standard base64 alphabet, RFC 4648 section 4",
           "ByteEncoding": 1,
           "Version": 6
         }
@@ -4332,21 +4140,21 @@
         {
           "Name": "JSONString",
           "Type": "[]byte",
-          "Doc": "",
+          "Doc": "The value is a JSON string, returned without its surrounding quotes",
           "ByteEncoding": 0,
           "Version": 7
         },
         {
           "Name": "JSONUint64",
           "Type": "uint64",
-          "Doc": "",
+          "Doc": "The value is a JSON number, returned as a uint64",
           "ByteEncoding": 1,
           "Version": 7
         },
         {
           "Name": "JSONObject",
           "Type": "[]byte",
-          "Doc": "",
+          "Doc": "The value is a JSON object, returned as its raw bytes",
           "ByteEncoding": 2,
           "Version": 7
         }
@@ -5940,14 +5748,14 @@
         {
           "Name": "VotePK",
           "Type": "[32]byte",
-          "Doc": "32 byte address",
+          "Doc": "32 byte participation public key",
           "ByteEncoding": 10,
           "Version": 6
         },
         {
           "Name": "SelectionPK",
           "Type": "[32]byte",
-          "Doc": "32 byte address",
+          "Doc": "32 byte VRF public key",
           "ByteEncoding": 11,
           "Version": 6
         },
@@ -6317,9 +6125,7 @@
         "TxID",
         "ApplicationID",
         "OnCompletion",
-        "ApplicationArgs",
         "NumAppArgs",
-        "Accounts",
         "NumAccounts",
         "ApprovalProgram",
         "ClearStateProgram",
@@ -6339,9 +6145,7 @@
         "FreezeAsset",
         "FreezeAssetAccount",
         "FreezeAssetFrozen",
-        "Assets",
         "NumAssets",
-        "Applications",
         "NumApplications",
         "GlobalNumUint",
         "GlobalNumByteSlice",
@@ -6349,15 +6153,12 @@
         "LocalNumByteSlice",
         "ExtraProgramPages",
         "Nonparticipation",
-        "Logs",
         "NumLogs",
         "CreatedAssetID",
         "CreatedApplicationID",
         "LastLog",
         "StateProofPK",
-        "ApprovalProgramPages",
         "NumApprovalProgramPages",
-        "ClearStateProgramPages",
         "NumClearStateProgramPages"
       ],
       "ArgEnumTypes": [
@@ -6387,9 +6188,7 @@
         "[32]byte",
         "uint64",
         "uint64",
-        "[]byte",
         "uint64",
-        "address",
         "uint64",
         "[]byte",
         "[]byte",
@@ -6416,18 +6215,13 @@
         "uint64",
         "uint64",
         "uint64",
-        "uint64",
-        "uint64",
         "bool",
-        "[]byte",
         "uint64",
         "uint64",
         "uint64",
         "[]byte",
         "[64]byte",
-        "[]byte",
         "uint64",
-        "[]byte",
         "uint64"
       ],
       "ArgDetails": [
@@ -6495,13 +6289,13 @@
         {
           "Name": "VotePK",
           "Type": "[32]byte",
-          "Doc": "32 byte address",
+          "Doc": "32 byte participation public key",
           "ByteEncoding": 10
         },
         {
           "Name": "SelectionPK",
           "Type": "[32]byte",
-          "Doc": "32 byte address",
+          "Doc": "32 byte VRF public key",
           "ByteEncoding": 11
         },
         {
@@ -6591,24 +6385,10 @@
           "Version": 2
         },
         {
-          "Name": "ApplicationArgs",
-          "Type": "[]byte",
-          "Doc": "Arguments passed to the application in the ApplicationCall transaction",
-          "ByteEncoding": 26,
-          "Version": 2
-        },
-        {
           "Name": "NumAppArgs",
           "Type": "uint64",
           "Doc": "Number of ApplicationArgs",
           "ByteEncoding": 27,
-          "Version": 2
-        },
-        {
-          "Name": "Accounts",
-          "Type": "address",
-          "Doc": "Accounts listed in the ApplicationCall transaction",
-          "ByteEncoding": 28,
           "Version": 2
         },
         {
@@ -6745,24 +6525,10 @@
           "Version": 2
         },
         {
-          "Name": "Assets",
-          "Type": "uint64",
-          "Doc": "Foreign Assets listed in the ApplicationCall transaction",
-          "ByteEncoding": 48,
-          "Version": 3
-        },
-        {
           "Name": "NumAssets",
           "Type": "uint64",
           "Doc": "Number of Assets",
           "ByteEncoding": 49,
-          "Version": 3
-        },
-        {
-          "Name": "Applications",
-          "Type": "uint64",
-          "Doc": "Foreign Apps listed in the ApplicationCall transaction",
-          "ByteEncoding": 50,
           "Version": 3
         },
         {
@@ -6815,13 +6581,6 @@
           "Version": 5
         },
         {
-          "Name": "Logs",
-          "Type": "[]byte",
-          "Doc": "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
-          "ByteEncoding": 58,
-          "Version": 5
-        },
-        {
           "Name": "NumLogs",
           "Type": "uint64",
           "Doc": "Number of Logs (only with `itxn` in v5). Application mode only",
@@ -6857,24 +6616,10 @@
           "Version": 6
         },
         {
-          "Name": "ApprovalProgramPages",
-          "Type": "[]byte",
-          "Doc": "Approval Program as an array of pages",
-          "ByteEncoding": 64,
-          "Version": 7
-        },
-        {
           "Name": "NumApprovalProgramPages",
           "Type": "uint64",
           "Doc": "Number of Approval Program pages",
           "ByteEncoding": 65,
-          "Version": 7
-        },
-        {
-          "Name": "ClearStateProgramPages",
-          "Type": "[]byte",
-          "Doc": "ClearState Program as an array of pages",
-          "ByteEncoding": 66,
           "Version": 7
         },
         {
@@ -7045,9 +6790,7 @@
         "TxID",
         "ApplicationID",
         "OnCompletion",
-        "ApplicationArgs",
         "NumAppArgs",
-        "Accounts",
         "NumAccounts",
         "ApprovalProgram",
         "ClearStateProgram",
@@ -7067,9 +6810,7 @@
         "FreezeAsset",
         "FreezeAssetAccount",
         "FreezeAssetFrozen",
-        "Assets",
         "NumAssets",
-        "Applications",
         "NumApplications",
         "GlobalNumUint",
         "GlobalNumByteSlice",
@@ -7077,15 +6818,12 @@
         "LocalNumByteSlice",
         "ExtraProgramPages",
         "Nonparticipation",
-        "Logs",
         "NumLogs",
         "CreatedAssetID",
         "CreatedApplicationID",
         "LastLog",
         "StateProofPK",
-        "ApprovalProgramPages",
         "NumApprovalProgramPages",
-        "ClearStateProgramPages",
         "NumClearStateProgramPages"
       ],
       "ArgEnumTypes": [
@@ -7115,9 +6853,7 @@
         "[32]byte",
         "uint64",
         "uint64",
-        "[]byte",
         "uint64",
-        "address",
         "uint64",
         "[]byte",
         "[]byte",
@@ -7144,18 +6880,13 @@
         "uint64",
         "uint64",
         "uint64",
-        "uint64",
-        "uint64",
         "bool",
-        "[]byte",
         "uint64",
         "uint64",
         "uint64",
         "[]byte",
         "[64]byte",
-        "[]byte",
         "uint64",
-        "[]byte",
         "uint64"
       ],
       "ArgDetails": [
@@ -7223,13 +6954,13 @@
         {
           "Name": "VotePK",
           "Type": "[32]byte",
-          "Doc": "32 byte address",
+          "Doc": "32 byte participation public key",
           "ByteEncoding": 10
         },
         {
           "Name": "SelectionPK",
           "Type": "[32]byte",
-          "Doc": "32 byte address",
+          "Doc": "32 byte VRF public key",
           "ByteEncoding": 11
         },
         {
@@ -7319,24 +7050,10 @@
           "Version": 2
         },
         {
-          "Name": "ApplicationArgs",
-          "Type": "[]byte",
-          "Doc": "Arguments passed to the application in the ApplicationCall transaction",
-          "ByteEncoding": 26,
-          "Version": 2
-        },
-        {
           "Name": "NumAppArgs",
           "Type": "uint64",
           "Doc": "Number of ApplicationArgs",
           "ByteEncoding": 27,
-          "Version": 2
-        },
-        {
-          "Name": "Accounts",
-          "Type": "address",
-          "Doc": "Accounts listed in the ApplicationCall transaction",
-          "ByteEncoding": 28,
           "Version": 2
         },
         {
@@ -7473,24 +7190,10 @@
           "Version": 2
         },
         {
-          "Name": "Assets",
-          "Type": "uint64",
-          "Doc": "Foreign Assets listed in the ApplicationCall transaction",
-          "ByteEncoding": 48,
-          "Version": 3
-        },
-        {
           "Name": "NumAssets",
           "Type": "uint64",
           "Doc": "Number of Assets",
           "ByteEncoding": 49,
-          "Version": 3
-        },
-        {
-          "Name": "Applications",
-          "Type": "uint64",
-          "Doc": "Foreign Apps listed in the ApplicationCall transaction",
-          "ByteEncoding": 50,
           "Version": 3
         },
         {
@@ -7543,13 +7246,6 @@
           "Version": 5
         },
         {
-          "Name": "Logs",
-          "Type": "[]byte",
-          "Doc": "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
-          "ByteEncoding": 58,
-          "Version": 5
-        },
-        {
           "Name": "NumLogs",
           "Type": "uint64",
           "Doc": "Number of Logs (only with `itxn` in v5). Application mode only",
@@ -7585,24 +7281,10 @@
           "Version": 6
         },
         {
-          "Name": "ApprovalProgramPages",
-          "Type": "[]byte",
-          "Doc": "Approval Program as an array of pages",
-          "ByteEncoding": 64,
-          "Version": 7
-        },
-        {
           "Name": "NumApprovalProgramPages",
           "Type": "uint64",
           "Doc": "Number of Approval Program pages",
           "ByteEncoding": 65,
-          "Version": 7
-        },
-        {
-          "Name": "ClearStateProgramPages",
-          "Type": "[]byte",
-          "Doc": "ClearState Program as an array of pages",
-          "ByteEncoding": 66,
           "Version": 7
         },
         {
@@ -8208,6 +7890,75 @@
         "any"
       ],
       "Size": 2,
+      "ArgEnum": [
+        "ApplicationArgs",
+        "Accounts",
+        "Assets",
+        "Applications",
+        "Logs",
+        "ApprovalProgramPages",
+        "ClearStateProgramPages"
+      ],
+      "ArgEnumTypes": [
+        "[]byte",
+        "address",
+        "uint64",
+        "uint64",
+        "[]byte",
+        "[]byte",
+        "[]byte"
+      ],
+      "ArgDetails": [
+        {
+          "Name": "ApplicationArgs",
+          "Type": "[]byte",
+          "Doc": "Arguments passed to the application in the ApplicationCall transaction",
+          "ByteEncoding": 26,
+          "Version": 2
+        },
+        {
+          "Name": "Accounts",
+          "Type": "address",
+          "Doc": "Accounts listed in the ApplicationCall transaction",
+          "ByteEncoding": 28,
+          "Version": 2
+        },
+        {
+          "Name": "Assets",
+          "Type": "uint64",
+          "Doc": "Foreign Assets listed in the ApplicationCall transaction",
+          "ByteEncoding": 48,
+          "Version": 3
+        },
+        {
+          "Name": "Applications",
+          "Type": "uint64",
+          "Doc": "Foreign Apps listed in the ApplicationCall transaction",
+          "ByteEncoding": 50,
+          "Version": 3
+        },
+        {
+          "Name": "Logs",
+          "Type": "[]byte",
+          "Doc": "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 58,
+          "Version": 5
+        },
+        {
+          "Name": "ApprovalProgramPages",
+          "Type": "[]byte",
+          "Doc": "Approval Program as an array of pages",
+          "ByteEncoding": 64,
+          "Version": 7
+        },
+        {
+          "Name": "ClearStateProgramPages",
+          "Type": "[]byte",
+          "Doc": "ClearState Program as an array of pages",
+          "ByteEncoding": 66,
+          "Version": 7
+        }
+      ],
       "DocCost": "1",
       "Doc": "Ath value of the array field F of the last inner transaction",
       "ImmediateNote": [
@@ -8234,6 +7985,75 @@
         "any"
       ],
       "Size": 3,
+      "ArgEnum": [
+        "ApplicationArgs",
+        "Accounts",
+        "Assets",
+        "Applications",
+        "Logs",
+        "ApprovalProgramPages",
+        "ClearStateProgramPages"
+      ],
+      "ArgEnumTypes": [
+        "[]byte",
+        "address",
+        "uint64",
+        "uint64",
+        "[]byte",
+        "[]byte",
+        "[]byte"
+      ],
+      "ArgDetails": [
+        {
+          "Name": "ApplicationArgs",
+          "Type": "[]byte",
+          "Doc": "Arguments passed to the application in the ApplicationCall transaction",
+          "ByteEncoding": 26,
+          "Version": 2
+        },
+        {
+          "Name": "Accounts",
+          "Type": "address",
+          "Doc": "Accounts listed in the ApplicationCall transaction",
+          "ByteEncoding": 28,
+          "Version": 2
+        },
+        {
+          "Name": "Assets",
+          "Type": "uint64",
+          "Doc": "Foreign Assets listed in the ApplicationCall transaction",
+          "ByteEncoding": 48,
+          "Version": 3
+        },
+        {
+          "Name": "Applications",
+          "Type": "uint64",
+          "Doc": "Foreign Apps listed in the ApplicationCall transaction",
+          "ByteEncoding": 50,
+          "Version": 3
+        },
+        {
+          "Name": "Logs",
+          "Type": "[]byte",
+          "Doc": "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 58,
+          "Version": 5
+        },
+        {
+          "Name": "ApprovalProgramPages",
+          "Type": "[]byte",
+          "Doc": "Approval Program as an array of pages",
+          "ByteEncoding": 64,
+          "Version": 7
+        },
+        {
+          "Name": "ClearStateProgramPages",
+          "Type": "[]byte",
+          "Doc": "ClearState Program as an array of pages",
+          "ByteEncoding": 66,
+          "Version": 7
+        }
+      ],
       "DocCost": "1",
       "Doc": "Ath value of the array field F from the Tth transaction in the last inner group submitted",
       "ImmediateNote": [
@@ -8274,7 +8094,7 @@
       "ArgDetails": [
         {
           "Name": "VrfAlgorand",
-          "Doc": "",
+          "Doc": "ECVRF-ED25519-SHA512-Elligator2, the VRF used by Algorand consensus",
           "ByteEncoding": 0,
           "Version": 7
         }
@@ -8318,14 +8138,14 @@
         {
           "Name": "BlkSeed",
           "Type": "[32]byte",
-          "Doc": "",
+          "Doc": "The block's sortition seed",
           "ByteEncoding": 0,
           "Version": 7
         },
         {
           "Name": "BlkTimestamp",
           "Type": "uint64",
-          "Doc": "",
+          "Doc": "The block's timestamp, in seconds since the Unix epoch. Fails if negative",
           "ByteEncoding": 1,
           "Version": 7
         }

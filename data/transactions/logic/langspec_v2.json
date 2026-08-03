@@ -938,9 +938,7 @@
         "TxID",
         "ApplicationID",
         "OnCompletion",
-        "ApplicationArgs",
         "NumAppArgs",
-        "Accounts",
         "NumAccounts",
         "ApprovalProgram",
         "ClearStateProgram",
@@ -987,9 +985,7 @@
         "[32]byte",
         "uint64",
         "uint64",
-        "[]byte",
         "uint64",
-        "address",
         "uint64",
         "[]byte",
         "[]byte",
@@ -1068,13 +1064,13 @@
         {
           "Name": "VotePK",
           "Type": "[32]byte",
-          "Doc": "32 byte address",
+          "Doc": "32 byte participation public key",
           "ByteEncoding": 10
         },
         {
           "Name": "SelectionPK",
           "Type": "[32]byte",
-          "Doc": "32 byte address",
+          "Doc": "32 byte VRF public key",
           "ByteEncoding": 11
         },
         {
@@ -1164,24 +1160,10 @@
           "Version": 2
         },
         {
-          "Name": "ApplicationArgs",
-          "Type": "[]byte",
-          "Doc": "Arguments passed to the application in the ApplicationCall transaction",
-          "ByteEncoding": 26,
-          "Version": 2
-        },
-        {
           "Name": "NumAppArgs",
           "Type": "uint64",
           "Doc": "Number of ApplicationArgs",
           "ByteEncoding": 27,
-          "Version": 2
-        },
-        {
-          "Name": "Accounts",
-          "Type": "address",
-          "Doc": "Accounts listed in the ApplicationCall transaction",
-          "ByteEncoding": 28,
           "Version": 2
         },
         {
@@ -1475,9 +1457,7 @@
         "TxID",
         "ApplicationID",
         "OnCompletion",
-        "ApplicationArgs",
         "NumAppArgs",
-        "Accounts",
         "NumAccounts",
         "ApprovalProgram",
         "ClearStateProgram",
@@ -1524,9 +1504,7 @@
         "[32]byte",
         "uint64",
         "uint64",
-        "[]byte",
         "uint64",
-        "address",
         "uint64",
         "[]byte",
         "[]byte",
@@ -1605,13 +1583,13 @@
         {
           "Name": "VotePK",
           "Type": "[32]byte",
-          "Doc": "32 byte address",
+          "Doc": "32 byte participation public key",
           "ByteEncoding": 10
         },
         {
           "Name": "SelectionPK",
           "Type": "[32]byte",
-          "Doc": "32 byte address",
+          "Doc": "32 byte VRF public key",
           "ByteEncoding": 11
         },
         {
@@ -1701,24 +1679,10 @@
           "Version": 2
         },
         {
-          "Name": "ApplicationArgs",
-          "Type": "[]byte",
-          "Doc": "Arguments passed to the application in the ApplicationCall transaction",
-          "ByteEncoding": 26,
-          "Version": 2
-        },
-        {
           "Name": "NumAppArgs",
           "Type": "uint64",
           "Doc": "Number of ApplicationArgs",
           "ByteEncoding": 27,
-          "Version": 2
-        },
-        {
-          "Name": "Accounts",
-          "Type": "address",
-          "Doc": "Accounts listed in the ApplicationCall transaction",
-          "ByteEncoding": 28,
           "Version": 2
         },
         {
