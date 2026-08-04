@@ -2659,7 +2659,7 @@ func opPushInts(cx *EvalContext) error {
 
 func opByteConstBlock(cx *EvalContext) error {
 	var err error
-	cx.bytec, cx.nextpc, err = parseByteImmArgs(cx.program, cx.pc+1)
+	cx.bytec, cx.nextpc, err = cx.byteImmArgs()
 	return err
 }
 
@@ -2704,8 +2704,33 @@ func opPushBytes(cx *EvalContext) error {
 	return nil
 }
 
+func checkByteImmSizes(cx *EvalContext, bytess [][]byte) error {
+	if cx.Proto.LogicSigVersion >= 13 {
+		for i, b := range bytess {
+			if len(b) > maxStringSize {
+				return fmt.Errorf("%s arg %d is too big (%d bytes, limit %d)",
+					cx.GetOpSpec().Name, i, len(b), maxStringSize)
+			}
+		}
+	}
+	return nil
+}
+
+// byteImmArgs parses the byte constants of a bytecblock or pushbytess at the
+// current pc, enforcing the size limit.
+func (cx *EvalContext) byteImmArgs() ([][]byte, int, error) {
+	bytec, nextpc, err := parseByteImmArgs(cx.program, cx.pc+1)
+	if err != nil {
+		return nil, 0, err
+	}
+	if err := checkByteImmSizes(cx, bytec); err != nil {
+		return nil, 0, err
+	}
+	return bytec, nextpc, nil
+}
+
 func opPushBytess(cx *EvalContext) error {
-	cbytess, nextpc, err := parseByteImmArgs(cx.program, cx.pc+1)
+	cbytess, nextpc, err := cx.byteImmArgs()
 	if err != nil {
 		return err
 	}

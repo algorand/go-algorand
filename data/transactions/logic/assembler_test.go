@@ -2237,6 +2237,16 @@ func TestConstantArgs(t *testing.T) {
 		testProg(t, "pushbytess b32(MFRGGZDFMY) b32(MFRGGZDFMY)", v)
 		testProg(t, "pushbytess b32 MFRGGZDFMY b32 MFRGGZDFMY", v)
 		testProg(t, "pushbytess b32(MFRGGZDFMY b32(MFRGGZDFMY)", v, exp(1, "pushbytess argument b32(MFRGGZDFMY lacks closing parenthesis"))
+
+		testProg(t, "pushbytess 0x"+strings.Repeat("aa", maxStringSize), v)
+		testProg(t, "pushbytess 0x"+strings.Repeat("aa", maxStringSize+1), v,
+			exp(1, "pushbytess arg 0 is too big (4097 bytes, limit 4096)"))
+		testProg(t, "pushbytess 0xaa 0x"+strings.Repeat("aa", maxStringSize+1), v,
+			exp(1, "pushbytess arg 1 is too big (4097 bytes, limit 4096)"))
+
+		testProg(t, "bytecblock 0x"+strings.Repeat("aa", maxStringSize), v)
+		testProg(t, "bytecblock 0x"+strings.Repeat("aa", maxStringSize+1), v,
+			exp(1, "bytecblock arg 0 is too big (4097 bytes, limit 4096)"))
 	}
 }
 

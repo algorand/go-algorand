@@ -930,6 +930,10 @@ func asmByteImmArgs(ops *OpStream, spec *OpSpec, args []token) ([][]byte, *sourc
 			// in the face of errors.  Hard.
 			return nil, rest[0].errorf("%s %w", spec.Name, err)
 		}
+		if len(val) > maxStringSize {
+			return nil, rest[0].errorf("%s arg %d is too big (%d bytes, limit %d)",
+				spec.Name, len(bvals), len(val), maxStringSize)
+		}
 		bvals = append(bvals, val)
 		rest = rest[consumed:]
 	}
@@ -3296,7 +3300,7 @@ func parseByteImmArgs(program []byte, pos int) (bytec [][]byte, nextpc int, err 
 
 func checkByteImmArgs(cx *EvalContext) error {
 	var err error
-	_, cx.nextpc, err = parseByteImmArgs(cx.program, cx.pc+1)
+	_, cx.nextpc, err = cx.byteImmArgs()
 	return err
 }
 
