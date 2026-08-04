@@ -30,6 +30,14 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// docVersion is the newest language version to document. It is bumped by hand
+// when new opcodes are introduced during development, rather than derived from
+// consensus parameters, so that in-progress opcodes can be documented and
+// checked in CI before they are promoted to a released consensus version.
+// Documenting logic.LogicVersion instead would publish vFuture opcodes
+// unconditionally.
+const docVersion = uint64(13)
+
 // slug returns the auto generated named anchor "slug" for a given heading
 // created by mdbook.
 func slug(s string) string {
@@ -527,10 +535,6 @@ func create(file string) *os.File {
 }
 
 func main() {
-	// The newest released language version. Documenting logic.LogicVersion
-	// instead would publish vFuture opcodes.
-	docVersion := config.Consensus[protocol.ConsensusCurrentVersion].LogicSigVersion
-
 	opGroups := make(map[string][]string, len(logic.OpSpecs))
 	for grp, names := range logic.OpGroups {
 		fname := fmt.Sprintf("%s.md", strings.ToLower(grp))
