@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/algorand/go-algorand/protocol"
@@ -100,11 +101,11 @@ var opDescByName = map[string]OpDesc{
 		[]string{"curve index"}, "",
 	},
 	"ec_pairing_check": {"1 if the product of the pairing of each point in A with its respective point in B is equal to the identity element of the target group Gt, else 0",
-		"A and B are concatenated points, encoded and checked as described in `ec_add`. A contains points of the group G, B contains points of the associated group (G2 if G is G1, and vice versa). Fails if A and B have a different number of points, or if any point is not in its described group or outside the main prime-order subgroup - a stronger condition than other opcodes. AVM values are limited to 4096 bytes, so `ec_pairing_check` is limited by the size of the points in the groups being operated upon.",
+		fmt.Sprintf("A and B are concatenated points, encoded and checked as described in `ec_add`. A contains points of the group G, B contains points of the associated group (G2 if G is G1, and vice versa). Fails if A and B have a different number of points, or if any point is not in its described group or outside the main prime-order subgroup - a stronger condition than other opcodes. AVM values are limited to %d bytes, so `ec_pairing_check` is limited by the size of the points in the groups being operated upon.", maxStringSize),
 		[]string{"curve index"}, "",
 	},
 	"ec_multi_scalar_mul": {"for curve points A and scalars B, return curve point B0A0 + B1A1 + B2A2 + ... + BnAn",
-		"A is a list of concatenated points, encoded and checked as described in `ec_add`. B is a list of concatenated scalars which, unlike ec_scalar_mul, must all be exactly 32 bytes long.\nThe operation computes the sum of the individual scalar multiplications, and is often called multi-exponentiation. AVM values are limited to 4096 bytes, so `ec_multi_scalar_mul` is limited by the size of the points in the group being operated upon.",
+		fmt.Sprintf("A is a list of concatenated points, encoded and checked as described in `ec_add`. B is a list of concatenated scalars which, unlike ec_scalar_mul, must all be exactly 32 bytes long.\nThe operation computes the sum of the individual scalar multiplications, and is often called multi-exponentiation. AVM values are limited to %d bytes, so `ec_multi_scalar_mul` is limited by the size of the points in the group being operated upon.", maxStringSize),
 		[]string{"curve index"}, "",
 	},
 	"ec_subgroup_check": {"1 if A is in the main prime-order subgroup of G (including the point at infinity) else 0. Program fails if A is not in G at all.", "", []string{"curve index"}, ""},
@@ -169,7 +170,7 @@ var opDescByName = map[string]OpDesc{
 		"pushbytess args are not added to the bytecblock during assembly processes",
 		[]string{"a list of byte constants"}, ""},
 
-	"bzero": {"zero filled byte-array of length A. Fail if A exceeds 4096", "", nil, ""},
+	"bzero": {fmt.Sprintf("zero filled byte-array of length A. Fail if A exceeds %d", maxStringSize), "", nil, ""},
 	"arg":   {"Nth LogicSig argument", "", []string{"an arg index"}, ""},
 	"arg_0": {"LogicSig argument 0", "", nil, ""},
 	"arg_1": {"LogicSig argument 1", "", nil, ""},
@@ -252,7 +253,7 @@ var opDescByName = map[string]OpDesc{
 	"swap":    {"swaps A and B on stack", "", nil, ""},
 	"select":  {"selects one of two values based on top-of-stack: B if C != 0, else A", "", nil, ""},
 
-	"concat":         {"join A and B", "`concat` fails if the result would be greater than 4096 bytes.", nil, ""},
+	"concat":         {"join A and B", fmt.Sprintf("`concat` fails if the result would be greater than %d bytes.", maxStringSize), nil, ""},
 	"substring":      {"A range of bytes from A starting at S up to but not including E. If E < S, or either is larger than the array length, the program fails", "", []string{"start position", "end position"}, ""},
 	"substring3":     {"A range of bytes from A starting at B up to but not including C. If C < B, or either is larger than the array length, the program fails", "", nil, ""},
 	"getbit":         {"Bth bit of (byte-array or integer) A. If B is greater than or equal to the bit length of the value (8*byte length), the program fails", "see explanation of bit ordering in setbit", nil, ""},
@@ -310,7 +311,7 @@ var opDescByName = map[string]OpDesc{
 
 	"bsqrt": {"The largest integer I such that I^2 <= A. A and I are interpreted as big-endian unsigned integers", "", nil, ""},
 
-	"log":         {"write A to log state of the current application", "`log` fails if called more than MaxLogCalls times in a program, or if the sum of logged bytes exceeds 1024 bytes.", nil, ""},
+	"log":         {"write A to log state of the current application", fmt.Sprintf("`log` fails if called more than MaxLogCalls times in a program, or if the sum of logged bytes exceeds %d bytes.", maxLogSize), nil, ""},
 	"itxn_begin":  {"begin preparation of a new inner transaction in a new transaction group", "`itxn_begin` initializes Sender to the application address; Fee to a default, described below; FirstValid/LastValid to the values in the invoking transaction, and all other fields to zero or empty values.\n\nThe default Fee is the additional amount that would make the group's fees sufficient so far: MinTxnFee times the fee usage of the transactions already in the group plus one base fee for this new transaction, less the fees already set and any credit from overpaying in earlier transactions. Because the new transaction's own cost is counted as a single base fee, extra costs from fields set later, such as a large note or program, are not reflected in the default. The group fee is checked and charged at `itxn_submit`, so changing Fee, setting fields that cost more, or adding transactions with `itxn_next` all change what is owed.", nil, ""},
 	"itxn_next":   {"begin preparation of a new inner transaction in the same transaction group", "`itxn_next` initializes the transaction exactly as `itxn_begin` does", nil, ""},
 	"itxn_field":  {"set field F of the current inner transaction to A", "`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_, or an attempt is made to extend an array field beyond the limit imposed by consensus parameters. (Addresses set into asset params of acfg transactions need not be _available_.)", []string{"transaction field index"}, ""},
