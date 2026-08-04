@@ -6413,6 +6413,56 @@ func TestPushBytessSize(t *testing.T) {
 	testLogicBytes(t, pushed(LogicVersion), nil, tooBigBcb, tooBigBcb)
 }
 
+func TestTrailingEmptyByteImm(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const legacyVersion = 12
+	legacy := func() *EvalParams { return optSigParams(protoVer(legacyVersion)) }
+	ran := "const bytes list ran past end of program"
+
+	pop := OpsByName[LogicVersion]["pop"].Opcode
+	for _, v := range []struct {
+		name string
+		tail []byte
+	}{
+		{"pushbytess", []byte{pop, pop, 0x81, 0x01}},
+		{"bytecblock", []byte{0x81, 0x01}},
+	} {
+		opcode := OpsByName[LogicVersion][v.name].Opcode
+
+		trailing := func(version byte) []byte {
+			return []byte{version, 0x81, 0x01, 0x43, opcode, 0x01, 0x00}
+		}
+		testLogicBytes(t, trailing(legacyVersion), legacy(), ran, "")
+		testLogicBytes(t, trailing(LogicVersion), nil)
+
+		testLogicBytes(t, trailing(legacyVersion), nil)
+
+		short := func(version byte) []byte {
+			return []byte{version, opcode, 0x01, 0x05, 0x01, 0x02}
+		}
+		testLogicBytes(t, short(legacyVersion), legacy(), ran, ran)
+		testLogicBytes(t, short(LogicVersion), nil, ran, ran)
+
+		mid := func(version byte) []byte {
+			return append([]byte{version, opcode, 0x02, 0x00, 0x01, 0x61}, v.tail...)
+		}
+		testLogicBytes(t, mid(legacyVersion), legacy())
+		testLogicBytes(t, mid(LogicVersion), nil)
+	}
+
+	pushbytess := OpsByName[LogicVersion]["pushbytess"].Opcode
+
+	assembled := testProg(t, `int 1; return; pushbytess ""`, LogicVersion).Program
+	require.Equal(t, []byte{LogicVersion, 0x81, 0x01, 0x43, pushbytess, 0x01, 0x00}, assembled)
+	_, err := Disassemble(assembled)
+	require.NoError(t, err)
+
+	testLogicBytes(t, []byte{LogicVersion, pushbytess, 0x01, 0x00}, nil,
+		"", "stack finished with bytes not int")
+}
+
 func TestNoHeaderLedger(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

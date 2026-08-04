@@ -3282,7 +3282,7 @@ func parseByteImmArgs(program []byte, pos int) (bytec [][]byte, nextpc int, err 
 			return
 		}
 		pos += bytesUsed
-		if pos >= len(program) {
+		if pos > len(program) {
 			err = errShortByteImmArgs
 			return
 		}

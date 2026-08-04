@@ -4148,6 +4148,10 @@ func TestAssemblePushConsts(t *testing.T) {
 	ops = testProg(t, source, AssemblerMaxVersion)
 	requireProgramLen(t, source, AssemblerMaxVersion, ops.Program, 515) // prefix + opcode (1) + len (2) + bytess (512)
 
+	source = `int 1; pushbytess ""`
+	ops = testProg(t, source, AssemblerMaxVersion)
+	require.Equal(t, []byte{byte(AssemblerMaxVersion), 0x81, 0x01, 0x82, 0x01, 0x00}, ops.Program)
+
 	// enforce correct types
 	source = `pushints "1" "2" "3"`
 	testProg(t, source, AssemblerMaxVersion, exp(1, `strconv.ParseUint: parsing "\"1\"": invalid syntax`))
