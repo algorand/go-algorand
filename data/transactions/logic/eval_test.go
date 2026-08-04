@@ -6463,6 +6463,33 @@ func TestTrailingEmptyByteImm(t *testing.T) {
 		"", "stack finished with bytes not int")
 }
 
+func TestBulkPushStackDepth(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	bulk := func(name string, n int) []byte {
+		program := []byte{LogicVersion, OpsByName[LogicVersion][name].Opcode}
+		program = binary.AppendUvarint(program, uint64(n))
+		for range n {
+			if name == "pushbytess" {
+				program = append(program, 0x01, 0xaa)
+			} else {
+				program = append(program, 0x01)
+			}
+		}
+		return program
+	}
+
+	for _, name := range []string{"pushbytess", "pushints"} {
+		testLogicBytes(t, bulk(name, maxStackDepth), nil,
+			"", fmt.Sprintf("stack len is %d instead of 1", maxStackDepth))
+
+		testLogicBytes(t, bulk(name, maxStackDepth+1), nil, "", "stack overflow")
+
+		testLogicBytes(t, bulk(name, 8000), nil, "", "stack overflow")
+	}
+}
+
 func TestNoHeaderLedger(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

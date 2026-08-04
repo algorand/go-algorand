@@ -2648,6 +2648,9 @@ func opPushInts(cx *EvalContext) error {
 		return err
 	}
 	finalLen := len(cx.Stack) + len(intc)
+	if finalLen > maxStackDepth {
+		return errors.New("stack overflow")
+	}
 	cx.ensureStackCap(finalLen)
 	for _, cint := range intc {
 		sv := stackValue{Uint: cint}
@@ -2754,6 +2757,9 @@ func opPushBytess(cx *EvalContext) error {
 		return err
 	}
 	finalLen := len(cx.Stack) + len(cbytess)
+	if finalLen > maxStackDepth {
+		return errors.New("stack overflow")
+	}
 	cx.ensureStackCap(finalLen)
 	for _, cbytes := range cbytess {
 		sv := stackValue{Bytes: cbytes}
