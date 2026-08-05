@@ -5411,7 +5411,7 @@
         "[64]byte"
       ],
       "Size": 1,
-      "DocCost": "15 + 32 per 2 bytes of A",
+      "DocCost": "15 + 2 per 32 bytes of A",
       "Doc": "SHA512 of value A, yields [64]byte",
       "IntroducedVersion": 13,
       "Groups": [

@@ -1194,7 +1194,7 @@ Signature B is variable-length, with maximum size 1423 bytes.
 - Bytecode: 0x87
 - Stack: ..., A: []byte &rarr; ..., [64]byte
 - SHA512 of value A, yields [64]byte
-- **Cost**: 15 + 32 per 2 bytes of A
+- **Cost**: 15 + 2 per 32 bytes of A
 - Availability: v13
 
 ## callsub
