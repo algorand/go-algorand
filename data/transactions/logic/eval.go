@@ -2707,34 +2707,6 @@ func opPushBytes(cx *EvalContext) error {
 	return nil
 }
 
-// rejectTrailingEmptyByteImm reproduces a parsing bug that existed before
-// version 13: an empty final constant, ending exactly at the end of the
-// program, was reported as running past the end of the program. Since the bug
-// could only cause errors, and programs are checked when they are put on
-// chain, no stored program depends on it. Once v13 is in effect, this
-// function and its call sites can simply be deleted.
-func (cx *EvalContext) rejectTrailingEmptyByteImm(bytec [][]byte, nextpc int) error {
-	if cx.Proto.LogicSigVersion >= 13 {
-		return nil
-	}
-	if nextpc == len(cx.program) && len(bytec) > 0 && len(bytec[len(bytec)-1]) == 0 {
-		return errShortByteImmArgs
-	}
-	return nil
-}
-
-func checkByteImmSizes(cx *EvalContext, bytess [][]byte) error {
-	if cx.Proto.LogicSigVersion >= 13 {
-		for i, b := range bytess {
-			if len(b) > maxStringSize {
-				return fmt.Errorf("%s arg %d is too big (%d bytes, limit %d)",
-					cx.GetOpSpec().Name, i, len(b), maxStringSize)
-			}
-		}
-	}
-	return nil
-}
-
 // byteImmArgs parses the byte constants of a bytecblock or pushbytess at the
 // current pc, enforcing the size limit and the historical trailing-empty bug.
 func (cx *EvalContext) byteImmArgs() ([][]byte, int, error) {
@@ -2742,11 +2714,25 @@ func (cx *EvalContext) byteImmArgs() ([][]byte, int, error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	if err := cx.rejectTrailingEmptyByteImm(bytec, nextpc); err != nil {
-		return nil, 0, err
-	}
-	if err := checkByteImmSizes(cx, bytec); err != nil {
-		return nil, 0, err
+	if cx.Proto.LogicSigVersion >= 13 {
+		// Each constant is a sub-slice of the program, so none can exceed
+		// maxStringSize unless the program itself does.
+		if len(cx.program) > maxStringSize {
+			for i, b := range bytec {
+				if len(b) > maxStringSize {
+					return nil, 0, fmt.Errorf("%s arg %d is too big (%d bytes, limit %d)",
+						cx.GetOpSpec().Name, i, len(b), maxStringSize)
+				}
+			}
+		}
+	} else if nextpc == len(cx.program) && len(bytec) > 0 && len(bytec[len(bytec)-1]) == 0 {
+		// Reproduce a parsing bug that existed before version 13: an empty
+		// final constant, ending exactly at the end of the program, was
+		// reported as running past the end of the program. Since the bug
+		// could only cause errors, and programs are checked when they are put
+		// on chain, no stored program depends on it. Once v13 is in effect,
+		// this else branch can simply be deleted.
+		return nil, 0, errShortByteImmArgs
 	}
 	return bytec, nextpc, nil
 }
