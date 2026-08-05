@@ -643,6 +643,10 @@ func asmPushBytes(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *so
 	if len(args) != consumed {
 		return args[consumed].errorf("%s with extraneous argument", mnemonic.str)
 	}
+	if len(val) > maxStringSize {
+		return args[0].errorf("%s value is too big (%d bytes, limit %d)",
+			mnemonic.str, len(val), maxStringSize)
+	}
 	ops.pending.WriteByte(spec.Opcode)
 	var scratch [binary.MaxVarintLen64]byte
 	vlen := binary.PutUvarint(scratch[:], uint64(len(val)))
@@ -848,6 +852,10 @@ func asmByte(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceE
 	}
 	if len(args) != consumed {
 		return args[consumed].errorf("%s with extraneous argument", spec.Name)
+	}
+	if len(val) > maxStringSize {
+		return args[0].errorf("%s value is too big (%d bytes, limit %d)",
+			spec.Name, len(val), maxStringSize)
 	}
 	err = ops.byteLiteral(val)
 	if err != nil {
