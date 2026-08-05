@@ -1302,6 +1302,21 @@ func TestGetPeers(t *testing.T) {
 	sort.Strings(peerAddrs2)
 	assert.Equal(t, []string{"d", "e", "f"}, peerAddrs2)
 
+	// the transport views mirror the connected peers as PeerConnectionInfo proxies
+	aTransportIn := netA.GetPeers(PeersTransportConnectionsIn)
+	assert.Equal(t, 1, len(aTransportIn))
+	aTransportPeer, ok := aTransportIn[0].(PeerConnectionInfo)
+	assert.True(t, ok)
+	assert.Equal(t, PeerNetworkTypeWebsocket, aTransportPeer.GetNetworkType())
+	assert.Empty(t, netA.GetPeers(PeersTransportConnectionsOut))
+
+	bTransportOut := netB.GetPeers(PeersTransportConnectionsOut)
+	assert.Equal(t, 1, len(bTransportOut))
+	bTransportPeer, ok := bTransportOut[0].(PeerConnectionInfo)
+	assert.True(t, ok)
+	assert.Equal(t, addrA, bTransportPeer.GetAddress())
+	assert.Equal(t, PeerNetworkTypeWebsocket, bTransportPeer.GetNetworkType())
+	assert.Empty(t, netB.GetPeers(PeersTransportConnectionsIn))
 }
 
 // confirms that if the config PublicAddress is set to "testing",

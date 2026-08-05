@@ -58,16 +58,20 @@ const (
 	PeersPhonebookRelays PeerOption = iota
 	// PeersPhonebookArchivalNodes specifies all archival nodes (relay or p2p)
 	PeersPhonebookArchivalNodes PeerOption = iota
-	// PeersP2PConnectionsOut specifies all peer-to-peer transport-level connections
-	// dialed by this node, including peers that do not run the websocket gossip
-	// protocol (e.g. pubsub- or DHT-only peers). Currently only the libp2p-based
-	// P2PNetwork returns peers for this option.
-	PeersP2PConnectionsOut PeerOption = iota
-	// PeersP2PConnectionsIn specifies all peer-to-peer transport-level connections
-	// dialed by the remote peer, including peers that do not run the websocket gossip
-	// protocol (e.g. pubsub- or DHT-only peers). Currently only the libp2p-based
-	// P2PNetwork returns peers for this option.
-	PeersP2PConnectionsIn PeerOption = iota
+	// PeersTransportConnectionsOut specifies all transport-level connections dialed
+	// by this node, regardless of the gossip protocol state. For the WebsocketNetwork
+	// this is every connected outgoing peer; for the libp2p-based P2PNetwork it is
+	// every outgoing libp2p connection, including peers that do not run the websocket
+	// gossip protocol (e.g. pubsub- or DHT-only peers). Peers are returned as proxy
+	// values implementing PeerConnectionInfo.
+	PeersTransportConnectionsOut PeerOption = iota
+	// PeersTransportConnectionsIn specifies all transport-level connections dialed
+	// by the remote peer, regardless of the gossip protocol state. For the
+	// WebsocketNetwork this is every connected incoming peer; for the libp2p-based
+	// P2PNetwork it is every incoming libp2p connection, including peers that do not
+	// run the websocket gossip protocol (e.g. pubsub- or DHT-only peers). Peers are
+	// returned as proxy values implementing PeerConnectionInfo.
+	PeersTransportConnectionsIn PeerOption = iota
 )
 
 func (po PeerOption) String() string {
@@ -80,10 +84,10 @@ func (po PeerOption) String() string {
 		return "PhonebookRelays"
 	case PeersPhonebookArchivalNodes:
 		return "PhonebookArchivalNodes"
-	case PeersP2PConnectionsOut:
-		return "P2PConnectionsOut"
-	case PeersP2PConnectionsIn:
-		return "P2PConnectionsIn"
+	case PeersTransportConnectionsOut:
+		return "TransportConnectionsOut"
+	case PeersTransportConnectionsIn:
+		return "TransportConnectionsIn"
 	default:
 		return "Unknown PeerOption"
 	}
@@ -107,6 +111,17 @@ type PeerConnectionInfo interface {
 	GetAddress() string
 	GetNetworkType() PeerNetworkType
 }
+
+// transportPeer is a proxy for a transport-level connection to a remote peer,
+// which is not necessarily running the gossip protocol. It is returned by
+// GetPeers for the PeersTransportConnectionsIn/Out options.
+type transportPeer struct {
+	addr        string
+	networkType PeerNetworkType
+}
+
+func (p transportPeer) GetAddress() string              { return p.addr }
+func (p transportPeer) GetNetworkType() PeerNetworkType { return p.networkType }
 
 // GossipNode represents a node in the gossip network
 type GossipNode interface {

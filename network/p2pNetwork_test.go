@@ -1658,10 +1658,10 @@ func TestP2PMetainfoExchange(t *testing.T) {
 	require.True(t, peer.vpackVoteCompressionSupported())
 }
 
-// TestP2PGetPeersP2PConnections checks that the PeersP2PConnectionsIn/Out options
-// return libp2p-level connections without polluting PeersConnectedIn/Out, and that
-// both peer kinds report connection info with a matching address and p2p network type.
-func TestP2PGetPeersP2PConnections(t *testing.T) {
+// TestP2PGetPeersTransportConnections checks that the PeersTransportConnectionsIn/Out
+// options return libp2p-level connections without polluting PeersConnectedIn/Out, and
+// that both views of the connection report the same address and p2p network type.
+func TestP2PGetPeersTransportConnections(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	cfg := config.GetDefaultLocal()
@@ -1700,19 +1700,23 @@ func TestP2PGetPeersP2PConnections(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, PeerNetworkTypeLibP2P, gossipPeer.GetNetworkType())
 
-	connPeers := netA.GetPeers(PeersP2PConnectionsIn)
+	connPeers := netA.GetPeers(PeersTransportConnectionsIn)
 	require.Len(t, connPeers, 1)
 	connPeer, ok := connPeers[0].(PeerConnectionInfo)
 	require.True(t, ok)
 	require.Equal(t, PeerNetworkTypeLibP2P, connPeer.GetNetworkType())
-	// the gossip peer and its underlying connection report the same address,
-	// allowing consumers to deduplicate them
+	// the transport view covers the same connection that backs the gossip peer,
+	// so a single transport query enumerates every connection exactly once
 	require.Equal(t, gossipPeer.GetAddress(), connPeer.GetAddress())
 
-	// combining the options returns both views of the same connection
-	require.Len(t, netB.GetPeers(PeersConnectedOut, PeersP2PConnectionsOut), 2)
-	require.Empty(t, netA.GetPeers(PeersP2PConnectionsOut))
-	require.Empty(t, netB.GetPeers(PeersP2PConnectionsIn))
+	outConnPeers := netB.GetPeers(PeersTransportConnectionsOut)
+	require.Len(t, outConnPeers, 1)
+	outConnPeer, ok := outConnPeers[0].(PeerConnectionInfo)
+	require.True(t, ok)
+	require.Equal(t, PeerNetworkTypeLibP2P, outConnPeer.GetNetworkType())
+
+	require.Empty(t, netA.GetPeers(PeersTransportConnectionsOut))
+	require.Empty(t, netB.GetPeers(PeersTransportConnectionsIn))
 }
 
 // TestP2PMetainfoV1vsV22 checks v1 and v22 nodes works together.

@@ -266,8 +266,8 @@ func (node *AlgorandFollowerNode) GetPendingTransaction(_ transactions.Txid) (re
 
 // GetPeers returns the node's peers
 func (node *AlgorandFollowerNode) GetPeers() (inboundPeers []network.Peer, outboundPeers []network.Peer, err error) {
-	inboundPeers = node.net.GetPeers(network.PeersConnectedIn, network.PeersP2PConnectionsIn)
-	outboundPeers = node.net.GetPeers(network.PeersConnectedOut, network.PeersP2PConnectionsOut)
+	inboundPeers = node.net.GetPeers(network.PeersTransportConnectionsIn)
+	outboundPeers = node.net.GetPeers(network.PeersTransportConnectionsOut)
 	return inboundPeers, outboundPeers, nil
 }
 

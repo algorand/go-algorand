@@ -1028,38 +1028,32 @@ func (v2 *Handlers) GetPeers(ctx echo.Context) error {
 		return internalError(ctx, err, errFailedToGetPeers, v2.Log)
 	}
 
-	peers := peerStatuses(inboundPeers, model.PeerStatusConnectionTypeInbound)
-	peers = append(peers, peerStatuses(outboundPeers, model.PeerStatusConnectionTypeOutbound)...)
+	peers := convertPeers(inboundPeers, model.PeerStatusConnectionTypeInbound)
+	peers = append(peers, convertPeers(outboundPeers, model.PeerStatusConnectionTypeOutbound)...)
 	return ctx.JSON(http.StatusOK, model.GetPeersResponse{Peers: peers})
 }
 
-// peerStatuses converts connected network peers into API peer statuses, deduplicating
-// peers that appear more than once with the same remote address (a p2p gossip peer is
-// also reported as its underlying libp2p connection). The result is sorted by address.
-func peerStatuses(peers []network.Peer, connType model.PeerStatusConnectionType) []model.PeerStatus {
-	seen := make(map[string]bool, len(peers))
+// peerStatusNetworkTypes maps network transport types onto the API enum.
+var peerStatusNetworkTypes = map[network.PeerNetworkType]model.PeerStatusNetworkType{
+	network.PeerNetworkTypeWebsocket: model.PeerStatusNetworkTypeWs,
+	network.PeerNetworkTypeLibP2P:    model.PeerStatusNetworkTypeP2p,
+}
+
+// convertPeers converts connected network peers into API peer statuses, sorted by address.
+func convertPeers(peers []network.Peer, connType model.PeerStatusConnectionType) []model.PeerStatus {
 	statuses := make([]model.PeerStatus, 0, len(peers))
 	for _, p := range peers {
 		info, ok := p.(network.PeerConnectionInfo)
 		if !ok {
 			continue
 		}
-		addr := info.GetAddress()
-		if seen[addr] {
-			continue
-		}
-		seen[addr] = true
-
-		var networkType model.PeerStatusNetworkType
-		switch info.GetNetworkType() {
-		case network.PeerNetworkTypeLibP2P:
-			networkType = model.PeerStatusNetworkTypeP2p
-		default:
+		networkType, ok := peerStatusNetworkTypes[info.GetNetworkType()]
+		if !ok {
 			networkType = model.PeerStatusNetworkTypeWs
 		}
 		statuses = append(statuses, model.PeerStatus{
 			ConnectionType: connType,
-			NetworkAddress: addr,
+			NetworkAddress: info.GetAddress(),
 			NetworkType:    networkType,
 		})
 	}

@@ -536,6 +536,10 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 				peerCore := makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, client, "" /*origin address*/)
 				outPeers = append(outPeers, &peerCore)
 			}
+		case PeersTransportConnectionsOut:
+			outPeers = append(outPeers, wn.transportConnPeers(true)...)
+		case PeersTransportConnectionsIn:
+			outPeers = append(outPeers, wn.transportConnPeers(false)...)
 		case PeersConnectedIn:
 			wn.peersLock.RLock()
 			for _, peer := range wn.peers {
@@ -547,6 +551,19 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 		}
 	}
 	return outPeers
+}
+
+// transportConnPeers returns a proxy peer for each connected peer in the given direction.
+func (wn *WebsocketNetwork) transportConnPeers(outgoing bool) []Peer {
+	wn.peersLock.RLock()
+	defer wn.peersLock.RUnlock()
+	var peers []Peer
+	for _, peer := range wn.peers {
+		if peer.outgoing == outgoing {
+			peers = append(peers, transportPeer{addr: peer.GetAddress(), networkType: peer.GetNetworkType()})
+		}
+	}
+	return peers
 }
 
 func (wn *WebsocketNetwork) setup() error {

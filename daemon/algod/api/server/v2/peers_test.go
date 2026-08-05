@@ -34,21 +34,18 @@ type testPeerConnInfo struct {
 func (p testPeerConnInfo) GetAddress() string                      { return p.addr }
 func (p testPeerConnInfo) GetNetworkType() network.PeerNetworkType { return p.networkType }
 
-func TestPeerStatuses(t *testing.T) {
+func TestConvertPeers(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	peers := []network.Peer{
 		testPeerConnInfo{addr: "/ip4/10.0.0.2/tcp/4160", networkType: network.PeerNetworkTypeLibP2P},
 		testPeerConnInfo{addr: "192.168.1.5:4160", networkType: network.PeerNetworkTypeWebsocket},
-		// a p2p gossip peer is reported both as a wsPeer and as its underlying
-		// libp2p connection with the same address; it must be deduplicated
-		testPeerConnInfo{addr: "/ip4/10.0.0.2/tcp/4160", networkType: network.PeerNetworkTypeLibP2P},
 		// peers that cannot report connection info are skipped
 		struct{}{},
 	}
 
-	statuses := peerStatuses(peers, model.PeerStatusConnectionTypeInbound)
+	statuses := convertPeers(peers, model.PeerStatusConnectionTypeInbound)
 	require.Equal(t, []model.PeerStatus{
 		{
 			ConnectionType: model.PeerStatusConnectionTypeInbound,
@@ -70,5 +67,5 @@ func TestPeerStatuses(t *testing.T) {
 		}, status.NetworkType)
 	}
 
-	require.Empty(t, peerStatuses(nil, model.PeerStatusConnectionTypeOutbound))
+	require.Empty(t, convertPeers(nil, model.PeerStatusConnectionTypeOutbound))
 }
