@@ -3289,11 +3289,9 @@ func parseByteImmArgs(program []byte, pos int) (bytec [][]byte, nextpc int, err 
 			err = fmt.Errorf("could not decode []byte const[%d] at pc=%d", i, pos)
 			return
 		}
+		// pos <= len(program) is guaranteed: Uvarint reports bytesUsed > 0
+		// only when the varint terminated inside the slice.
 		pos += bytesUsed
-		if pos > len(program) {
-			err = errShortByteImmArgs
-			return
-		}
 		end := uint64(pos) + itemLen
 		if end > uint64(len(program)) || end < uint64(pos) {
 			err = errShortByteImmArgs
