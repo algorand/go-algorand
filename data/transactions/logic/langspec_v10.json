@@ -1241,7 +1241,7 @@
         {
           "Name": "Note",
           "Type": "[]byte",
-          "Doc": "Any data up to 1024 bytes",
+          "Doc": "Any data up to 4096 bytes",
           "ByteEncoding": 5
         },
         {
@@ -1993,7 +1993,7 @@
         {
           "Name": "Note",
           "Type": "[]byte",
-          "Doc": "Any data up to 1024 bytes",
+          "Doc": "Any data up to 4096 bytes",
           "ByteEncoding": 5
         },
         {
@@ -2806,7 +2806,7 @@
         {
           "Name": "Note",
           "Type": "[]byte",
-          "Doc": "Any data up to 1024 bytes",
+          "Doc": "Any data up to 4096 bytes",
           "ByteEncoding": 5
         },
         {
@@ -5719,7 +5719,7 @@
         {
           "Name": "Note",
           "Type": "[]byte",
-          "Doc": "Any data up to 1024 bytes",
+          "Doc": "Any data up to 4096 bytes",
           "ByteEncoding": 5,
           "Version": 6
         },
@@ -6258,7 +6258,7 @@
         {
           "Name": "Note",
           "Type": "[]byte",
-          "Doc": "Any data up to 1024 bytes",
+          "Doc": "Any data up to 4096 bytes",
           "ByteEncoding": 5
         },
         {
@@ -6923,7 +6923,7 @@
         {
           "Name": "Note",
           "Type": "[]byte",
-          "Doc": "Any data up to 1024 bytes",
+          "Doc": "Any data up to 4096 bytes",
           "ByteEncoding": 5
         },
         {

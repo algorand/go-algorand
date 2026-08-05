@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -294,7 +295,8 @@ var txnFieldSpecs = [...]txnFieldSpec{
 	{FirstValid, StackUint64, false, 0, 0, false, "round number"},
 	{FirstValidTime, StackUint64, false, randomnessVersion, 0, false, "UNIX timestamp of block before txn.FirstValid. Fails if negative"},
 	{LastValid, StackUint64, false, 0, 0, false, "round number"},
-	{Note, StackBytes, false, 0, 6, false, "Any data up to 1024 bytes"},
+	{Note, StackBytes, false, 0, 6, false,
+		fmt.Sprintf("Any data up to %d bytes", bounds.MaxTxnNoteBytes)},
 	{Lease, StackBytes32, false, 0, 0, false, "32 byte lease value"},
 	{Receiver, StackAddress, false, 0, 5, false, "32 byte address"},
 	{Amount, StackUint64, false, 0, 5, false, "microalgos"},

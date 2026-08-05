@@ -372,7 +372,7 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 | 2 | FirstValid | uint64 |      | round number |
 | 3 | FirstValidTime | uint64 | v7  | UNIX timestamp of block before txn.FirstValid. Fails if negative |
 | 4 | LastValid | uint64 |      | round number |
-| 5 | Note | []byte |      | Any data up to 1024 bytes |
+| 5 | Note | []byte |      | Any data up to 4096 bytes |
 | 6 | Lease | [32]byte |      | 32 byte lease value |
 | 7 | Receiver | address |      | 32 byte address |
 | 8 | Amount | uint64 |      | microalgos |
