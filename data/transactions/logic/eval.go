@@ -5898,9 +5898,9 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 		shortfall := groupFee.SubSaturate(groupPaid)
 		if cx.FeeCredit == nil || cx.FeeCredit.LessThan(shortfall) {
 			if cx.FeeCredit != nil {
-				groupFee = groupFee.SubSaturate(*cx.FeeCredit)
+				shortfall = shortfall.SubSaturate(*cx.FeeCredit)
 			}
-			return fmt.Errorf("group fee %s too small (needs %s more) %#v", groupPaid, groupFee, cx.subtxns)
+			return fmt.Errorf("group fee %s too small (needs %s more) %#v", groupPaid, shortfall, cx.subtxns)
 		}
 		*cx.FeeCredit = cx.FeeCredit.SubSaturate(shortfall)
 	} else {
