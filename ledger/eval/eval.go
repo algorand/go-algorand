@@ -1005,7 +1005,11 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 // associated with inner transactions.  Those costs are monitored during app
 // calls in the logic package.
 func CheckGroupFees(feesPaid basics.MicroAlgos, usage basics.Micros, minFee basics.MicroAlgos) error {
-	feeNeeded, overflow := minFee.MulMicros(usage)
+	// This is the top-level group's charge in the precise-fee scheme: no cost
+	// multiplier (1e6) and no prior residue. It must match the feeNeeded that the
+	// logic package's feeCredit computes for the same top-level usage. The residue
+	// it leaves is irrelevant here, since block evaluation can't see inner groups.
+	feeNeeded, _, overflow := minFee.FeeForUsage(usage, 1e6, 0)
 	if overflow {
 		return &ledgercore.TxGroupMalformedError{
 			Msg:    "txgroup required fee overflow",
@@ -1174,7 +1178,7 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup ...transactions.SignedTxnWi
 	// inner txns, but that will be checked during AVM execution. But this is
 	// the only chance to check that the top-level fees are enough for the
 	// top-level txns.
-	usage, feesPaid := transactions.SummarizeFees(txgroup)
+	usage, feesPaid := transactions.SummarizeFees(txgroup, eval.proto)
 	if err := CheckGroupFees(feesPaid, usage, eval.proto.MinFee()); err != nil {
 		return err
 	}

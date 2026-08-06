@@ -748,6 +748,22 @@ func addrInfoToWsPeerCore(n *P2PNetwork, addrInfo *peer.AddrInfo) (wsPeerCore, b
 	return peerCore, true
 }
 
+// transportConnPeers returns a proxy peer for each libp2p connection in the given
+// direction, including peers that do not run the websocket gossip protocol
+// (e.g. pubsub- or DHT-only peers).
+func (n *P2PNetwork) transportConnPeers(dir network.Direction) []Peer {
+	if n.service == nil {
+		return nil
+	}
+	var peers []Peer
+	for _, c := range n.service.Conns() {
+		if c.Stat().Direction == dir {
+			peers = append(peers, transportPeer{addr: c.RemoteMultiaddr().String(), networkType: PeerNetworkTypeLibP2P})
+		}
+	}
+	return peers
+}
+
 // GetPeers returns a list of Peers we could potentially send a direct message to.
 func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 	peers := make([]Peer, 0)
@@ -761,6 +777,10 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 				}
 			}
 			n.wsPeersLock.RUnlock()
+		case PeersTransportConnectionsOut:
+			peers = append(peers, n.transportConnPeers(network.DirOutbound)...)
+		case PeersTransportConnectionsIn:
+			peers = append(peers, n.transportConnPeers(network.DirInbound)...)
 		case PeersPhonebookRelays:
 			const maxNodes = 100
 			addrInfos := n.pstore.GetAddresses(maxNodes, phonebook.RelayRole)

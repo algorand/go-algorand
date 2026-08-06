@@ -19,6 +19,7 @@ package simulation
 import (
 	"fmt"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -36,6 +37,7 @@ type TxnResult struct {
 	Txn                    transactions.SignedTxnWithAD
 	AppBudgetConsumed      int
 	LogicSigBudgetConsumed int
+	FeesPaid               basics.MicroAlgos
 	Trace                  *TransactionTrace
 
 	// UnnamedResourcesAccessed is present if all of the following are true:
@@ -63,6 +65,10 @@ type TxnGroupResult struct {
 	AppBudgetAdded int
 	// AppBudgetConsumed is the total opcode cost used for this group
 	AppBudgetConsumed int
+	// GroupUsage is the total fee usage used by this group and all descendant inner transaction groups.
+	GroupUsage basics.Micros
+	// GroupFeesPaid is the total fee paid by this group and all descendant inner transaction groups.
+	GroupFeesPaid basics.MicroAlgos
 
 	// UnnamedResourcesAccessed will be present if AllowUnnamedResources is true. In that case, it
 	// will be populated with the unnamed resources accessed by this transaction group from
@@ -145,6 +151,41 @@ type Result struct {
 	Block         *ledgercore.ValidatedBlock
 	TraceConfig   ExecTraceConfig
 	InitialStates *ResourcesInitialStates
+}
+
+func summarizeTxnFeesPaid(txn transactions.SignedTxnWithAD) (feesPaid basics.MicroAlgos) {
+	feesPaid = txn.Txn.Fee
+	for _, inner := range txn.ApplyData.EvalDelta.InnerTxns {
+		feesPaid = feesPaid.AddSaturate(summarizeTxnFeesPaid(inner))
+	}
+	return feesPaid
+}
+
+func summarizeTxnGroupFeeUsage(txgroup []transactions.SignedTxnWithAD, proto config.ConsensusParams) (usage basics.Micros, feesPaid basics.MicroAlgos) {
+	usage, feesPaid = transactions.SummarizeFees(txgroup, proto)
+	for _, txn := range txgroup {
+		innerUsage, innerFeesPaid := summarizeTxnGroupFeeUsage(txn.ApplyData.EvalDelta.InnerTxns, proto)
+		usage = basics.AddSaturate(usage, innerUsage)
+		feesPaid = feesPaid.AddSaturate(innerFeesPaid)
+	}
+	return usage, feesPaid
+}
+
+func populateFeeUsage(result *Result, proto config.ConsensusParams) {
+	for gi := range result.TxnGroups {
+		group := &result.TxnGroups[gi]
+		txgroup := make([]transactions.SignedTxnWithAD, len(group.Txns))
+
+		for ti := range group.Txns {
+			txgroup[ti] = group.Txns[ti].Txn
+			// Per-transaction usage is intentionally not reported: fees pool across
+			// the group and round up once for the whole tree, so usage is only
+			// actionable at the group level. FeesPaid is just a factual report of
+			// what the transaction (and its inners) actually paid.
+			group.Txns[ti].FeesPaid = summarizeTxnFeesPaid(group.Txns[ti].Txn)
+		}
+		group.GroupUsage, group.GroupFeesPaid = summarizeTxnGroupFeeUsage(txgroup, proto)
+	}
 }
 
 // ReturnTrace reads from Result object and decides if simulation returns PC.

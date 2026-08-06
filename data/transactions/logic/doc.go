@@ -40,13 +40,24 @@ var opDescByName = map[string]OpDesc{
 	"sha3_256":   {"SHA3_256 hash of value A, yields [32]byte", "", nil, ""},
 	"sha512":     {"SHA512 of value A, yields [64]byte", "", nil, ""},
 
-	"sumhash512":    {"sumhash512 of value A, yields [64]byte", "", nil, ""},
-	"falcon_verify": {"for (data A, compressed-format signature B, pubkey C) verify the signature of data against the pubkey => {0 or 1}", "", nil, ""},
+	"sumhash512": {"sumhash512 of value A, yields [64]byte", "", nil, ""},
+	"falcon_verify": {
+		"for (data A, deterministic FALCON-1024 compressed-format signature B, pubkey C) verify the signature of data against the pubkey => {0 or 1}",
+		"Signature B is variable-length, with maximum size 1423 bytes.",
+		nil,
+		"",
+	},
 
 	"mimc": {"MiMC hash of scalars A, using curve and parameters specified by configuration C", "" +
-		"A is a list of concatenated 32 byte big-endian unsigned integer scalars.  Fail if A's length is not a multiple of 32 or any element exceeds the curve modulus.\n\n" +
-		"The MiMC hash function has known collisions since any input which is a multiple of the elliptic curve modulus will hash to the same value. " +
+		"A is a non-empty list of concatenated 32 byte big-endian unsigned integer scalars.  Fail if A's length is not a multiple of 32 or any element is greater than or equal to the scalar field modulus.\n\n" +
+		"MiMC hashes field elements, not arbitrary byte strings; reducing external inputs modulo the scalar field modulus makes congruent inputs hash identically. " +
 		"MiMC is thus not a general purpose hash function, but meant to be used in zero knowledge applications to match a zk-circuit implementation.",
+		[]string{"configuration index"}, "",
+	},
+	"poseidon2": {"Poseidon2 hash of scalars A, using curve and parameters specified by configuration C", "" +
+		"A is a non-empty list of concatenated 32 byte big-endian unsigned integer scalars. Fail if A's length is not a multiple of 32 or any element is greater than or equal to the scalar field modulus.\n\n" +
+		"Poseidon2 hashes field elements, not arbitrary byte strings; reducing external inputs modulo the scalar field modulus makes congruent inputs hash identically. " +
+		"Poseidon2 is thus not a general purpose hash function, but meant to be used in zero knowledge applications to match a zk-circuit implementation.",
 		[]string{"configuration index"}, "",
 	},
 
@@ -258,6 +269,7 @@ var opDescByName = map[string]OpDesc{
 	"asset_holding_get": {"X is field F from account A's holding of asset B. Y is 1 if A is opted into B, else 0", "params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or, since v4, a Txn.ForeignAssets offset). Return: did_exist flag (1 if the asset existed and 0 otherwise), value.", []string{"asset holding field index"}, ""},
 	"asset_params_get":  {"X is field F from asset A. Y is 1 if A exists, else 0", "params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return: did_exist flag (1 if the asset existed and 0 otherwise), value.", []string{"asset params field index"}, ""},
 	"app_params_get":    {"X is field F from app A. Y is 1 if A exists, else 0", "params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag (1 if the application existed and 0 otherwise), value.", []string{"app params field index"}, ""},
+	"app_params_set":    {"set field F of the current app to A", "", []string{"app params field index"}, ""},
 	"acct_params_get":   {"X is field F from account A. Y is 1 if A owns positive algos, else 0", "", []string{"account params field index"}, ""},
 	"voter_params_get":  {"X is field F from online account A as of the balance round: 320 rounds before the current round. Y is 1 if A had positive algos online in the agreement round, else Y is 0 and X is a type specific zero-value", "", []string{"voter params field index"}, ""},
 	"online_stake":      {"the total online stake in the agreement round", "", nil, ""},
@@ -309,6 +321,16 @@ var opDescByName = map[string]OpDesc{
 	"box_get":     {"X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0.", "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`", nil, ""},
 	"box_put":     {"replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist", "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`", nil, ""},
 	"box_resize":  {"change the size of box named A to be of length B, adding zero bytes to end or removing bytes from the end, as needed. Fail if the name A is empty, A is not an existing box, or B exceeds 32,768.", "", nil, ""},
+
+	"app_box_create":  {"create a box named B, of length C, for app A. Fail if the name B is empty or C exceeds 32,768. Returns 0 if B already existed, else 1", "Newly created boxes are filled with 0 bytes. `app_box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `app_box_create`.", nil, ""},
+	"app_box_extract": {"read D bytes from box B of app A, starting at offset C. Fail if box B does not exist, or the byte range is outside B's size.", "", nil, ""},
+	"app_box_replace": {"write byte-array D into box B of app A, starting at offset C. Fail if box B does not exist, or the byte range is outside B's size.", "", nil, ""},
+	"app_box_del":     {"delete box named B of app A if it exists. Return 1 if B existed, 0 otherwise", "", nil, ""},
+	"app_box_len":     {"X is the length of box B of app A if B exists, else 0. Y is 1 if B exists, else 0.", "", nil, ""},
+	"app_box_get":     {"X is the contents of box B of app A if B exists, else ''. Y is 1 if B exists, else 0.", "For boxes that exceed 4,096 bytes, consider `app_box_create`, `app_box_extract`, and `app_box_replace`", nil, ""},
+	"app_box_put":     {"replaces the contents of box B of app A with byte-array C. Fails if B exists and len(C) != len(box B). Creates B if it does not exist", "For boxes that exceed 4,096 bytes, consider `app_box_create`, `app_box_extract`, and `app_box_replace`", nil, ""},
+	"app_box_splice":  {"set box B of app A to contain its previous bytes up to index C, followed by E, followed by the original bytes of B that began at index C+D.", "Boxes are of constant length. If D < len(E), then len(E)-D bytes will be removed from the end. If D > len(E), zero bytes will be appended to the end to reach the box length.", nil, ""},
+	"app_box_resize":  {"change the size of box named B of app A to be of length C, adding zero bytes to end or removing bytes from the end, as needed. Fail if the name B is empty, B is not an existing box, or C exceeds 32,768.", "", nil, ""},
 }
 
 // OpDescOf returns the OpDesc for a mnemonic opcode
@@ -358,14 +380,14 @@ var OpGroups = map[string][]string{
 	"Byte Array Manipulation": {"getbit", "setbit", "getbyte", "setbyte", "concat", "len", "substring", "substring3", "extract", "extract3", "extract_uint16", "extract_uint32", "extract_uint64", "replace2", "replace3", "base64_decode", "json_ref"},
 	"Byte Array Arithmetic":   {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%", "bsqrt"},
 	"Byte Array Logic":        {"b|", "b&", "b^", "b~"},
-	"Cryptography":            {"sha256", "keccak256", "sha512_256", "sha3_256", "sha512", "sumhash512", "falcon_verify", "ed25519verify", "ed25519verify_bare", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "vrf_verify", "ec_add", "ec_scalar_mul", "ec_pairing_check", "ec_multi_scalar_mul", "ec_subgroup_check", "ec_map_to", "mimc"},
+	"Cryptography":            {"sha256", "keccak256", "sha512_256", "sha3_256", "sha512", "sumhash512", "falcon_verify", "ed25519verify", "ed25519verify_bare", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "vrf_verify", "ec_add", "ec_scalar_mul", "ec_pairing_check", "ec_multi_scalar_mul", "ec_subgroup_check", "ec_map_to", "mimc", "poseidon2"},
 	"Loading Values":          {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "pushints", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "pushbytess", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gloadss", "gaid", "gaids"},
 	"Flow Control":            {"err", "bnz", "bz", "b", "return", "pop", "popn", "dup", "dup2", "dupn", "dig", "bury", "cover", "uncover", "frame_dig", "frame_bury", "swap", "select", "assert", "callsub", "proto", "retsub", "switch", "match"},
 	"Block Access":            {"online_stake", "log", "block"},
 	"Account Access":          {"balance", "min_balance", "acct_params_get", "voter_params_get"},
 	"Asset Access":            {"asset_holding_get", "asset_params_get"},
-	"Application Access":      {"app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "app_params_get"},
-	"Box Access":              {"box_create", "box_extract", "box_replace", "box_splice", "box_del", "box_len", "box_get", "box_put", "box_resize"},
+	"Application Access":      {"app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "app_params_get", "app_params_set"},
+	"Box Access":              {"box_create", "box_extract", "box_replace", "box_splice", "box_del", "box_len", "box_get", "box_put", "box_resize", "app_box_create", "app_box_extract", "app_box_replace", "app_box_del", "app_box_len", "app_box_get", "app_box_put", "app_box_splice", "app_box_resize"},
 	"Inner Transactions":      {"itxn_begin", "itxn_next", "itxn_field", "itxn_submit", "itxn", "itxna", "itxnas", "gitxn", "gitxna", "gitxnas"},
 }
 

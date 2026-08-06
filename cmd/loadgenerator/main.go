@@ -42,7 +42,7 @@ import (
 
 var nroutines = runtime.NumCPU() * 2
 
-func maybefail(err error, msg string, args ...interface{}) {
+func maybefail(err error, msg string, args ...any) {
 	if err == nil {
 		return
 	}

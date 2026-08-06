@@ -7,7 +7,6 @@ CURRENT_YEAR=$(date +"%Y")
 LICENSE=$(sed "s/{DATE_Y}/$CURRENT_YEAR/" "$LICENSE_LOCATION")
 VERSIONED_GO_FILES=$(git ls-tree --full-tree --name-only -r HEAD | grep "\.go$")
 EXTRA_FILES=(
-    cmd/tealdbg/bundle_home_html.sh
     crypto/memcpy_chk_windows.c
     tools/x-repo-types/typeAnalyzer/main.tmpl
     test/heapwatch/block_history.py

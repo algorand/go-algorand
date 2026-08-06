@@ -18,11 +18,14 @@ package main
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/cmd/util/datadir"
+	apiclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/libgoal"
 )
@@ -773,11 +776,21 @@ var infoAssetCmd = &cobra.Command{
 			asset.Params.Reserve = &asset.Params.Creator
 		}
 
+		// The reserve is an arbitrary address chosen at asset creation. It may
+		// not exist, or may never have opted in, in which case the account/asset
+		// lookup returns a 404. Treat a missing holding as a zero balance rather
+		// than failing the whole command, since the asset parameters themselves
+		// are still valid.
+		var reserveAmount uint64
 		reserve, err := client.AccountAssetInformation(*asset.Params.Reserve, assetID)
 		if err != nil {
-			reportErrorf(errorRequestFail, err)
+			var httpError apiclient.HTTPError
+			if !errors.As(err, &httpError) || httpError.StatusCode != http.StatusNotFound {
+				reportErrorf(errorRequestFail, err)
+			}
+		} else if reserve.AssetHolding != nil {
+			reserveAmount = reserve.AssetHolding.Amount
 		}
-		res := reserve.AssetHolding
 
 		fmt.Printf("Asset ID:         %d\n", assetID)
 		fmt.Printf("Creator:          %s\n", asset.Params.Creator)
@@ -793,8 +806,8 @@ var infoAssetCmd = &cobra.Command{
 		}
 		reportInfof("Unit name:        %s", units)
 		fmt.Printf("Maximum issue:    %s %s\n", assetDecimalsFmt(asset.Params.Total, asset.Params.Decimals), units)
-		fmt.Printf("Reserve amount:   %s %s\n", assetDecimalsFmt(res.Amount, asset.Params.Decimals), units)
-		fmt.Printf("Issued:           %s %s\n", assetDecimalsFmt(asset.Params.Total-res.Amount, asset.Params.Decimals), units)
+		fmt.Printf("Reserve amount:   %s %s\n", assetDecimalsFmt(reserveAmount, asset.Params.Decimals), units)
+		fmt.Printf("Issued:           %s %s\n", assetDecimalsFmt(asset.Params.Total-reserveAmount, asset.Params.Decimals), units)
 		fmt.Printf("Decimals:         %d\n", asset.Params.Decimals)
 		fmt.Printf("Default frozen:   %t\n", nilToZero(asset.Params.DefaultFrozen))
 		safeURL := ""

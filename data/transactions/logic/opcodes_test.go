@@ -88,6 +88,12 @@ func testOpcodesByVersion(t *testing.T) {
 	// Make a copy of the OpSpecs to check if OpcodesByVersion will change it
 	OpSpecs2 := slices.Clone(OpSpecs)
 
+	// A multi-byte opcode shares its prefix byte with its siblings, so identity
+	// and sort order are by the combined prefix+sub-opcode, not the byte alone.
+	key := func(spec OpSpec) uint16 {
+		return uint16(spec.Opcode)<<8 | uint16(spec.SubOpcode)
+	}
+
 	opSpecs := make([][]OpSpec, LogicVersion)
 	for v := uint64(1); v <= LogicVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
@@ -97,18 +103,31 @@ func testOpcodesByVersion(t *testing.T) {
 				cur := opSpecs[v-1][i]
 				next := opSpecs[v-1][i+1]
 				// check duplicates
-				if cur.Opcode == next.Opcode {
+				if key(cur) == key(next) {
 					isOk = false
 					break
 				}
 				// check sorted
-				if cur.Opcode > next.Opcode {
+				if key(cur) > key(next) {
 					isOk = false
 					break
 				}
 
 			}
 			require.True(t, isOk)
+
+			// Every named opcode available in this version, including each
+			// sub-opcode of a multi-byte family, must appear exactly once.
+			// Doc and langspec generation rely on this completeness.
+			byName := make(map[string]int)
+			for _, spec := range opSpecs[v-1] {
+				byName[spec.Name]++
+			}
+			for name, spec := range OpsByName[v] {
+				require.Equalf(t, 1, byName[name],
+					"opcode %q (0x%02x/0x%02x) appears %d times in OpcodesByVersion(%d)",
+					name, spec.Opcode, spec.SubOpcode, byName[name], v)
+			}
 		})
 	}
 	require.Greater(t, len(opSpecs[1]), len(opSpecs[0]))

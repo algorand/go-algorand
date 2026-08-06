@@ -199,6 +199,9 @@ func RandomAppParams() basics.AppParams {
 		}
 	}
 
+	ap.ForeignBoxReads = crypto.RandUint64()%3 == 1
+	ap.FamilyBoxAccess = crypto.RandUint64()%4 == 1
+
 	for i := uint64(0); i < ap.StateSchemas.GlobalStateSchema.NumUint; i++ {
 		var keyName string
 		if crypto.RandUint64()%5 != 0 {

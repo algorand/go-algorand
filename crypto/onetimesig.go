@@ -374,24 +374,6 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 		SubKeyPK: sig.PK2,
 		Batch:    id.Batch,
 	}
-
-	if !useSingleVerifierDefault {
-		return v.batchVerify(batchID, offsetID, message, sig)
-	}
-
-	if !ed25519Verify(ed25519PublicKey(v), HashRep(batchID), sig.PK2Sig) {
-		return false
-	}
-	if !ed25519Verify(batchID.SubKeyPK, HashRep(offsetID), sig.PK1Sig) {
-		return false
-	}
-	if !ed25519Verify(offsetID.SubKeyPK, HashRep(message), sig.Sig) {
-		return false
-	}
-	return true
-}
-
-func (v OneTimeSignatureVerifier) batchVerify(batchID OneTimeSignatureSubkeyBatchID, offsetID OneTimeSignatureSubkeyOffsetID, message Hashable, sig OneTimeSignature) bool {
 	bv := MakeBatchVerifierWithHint(3)
 	bv.EnqueueSignature(PublicKey(v), batchID, Signature(sig.PK2Sig))
 	bv.EnqueueSignature(PublicKey(batchID.SubKeyPK), offsetID, Signature(sig.PK1Sig))

@@ -24,7 +24,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate go tool -modfile=../../../tool.mod stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,EcGroup,MimcConfig,Base64Encoding,JSONRefType,VoterParamsField,VrfStandard,BlockField -output=fields_string.go
+//go:generate go tool -modfile=../../../tool.mod stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,EcGroup,MimcConfig,Poseidon2Config,Base64Encoding,JSONRefType,VoterParamsField,VrfStandard,BlockField -output=fields_string.go
 
 // FieldSpec unifies the various specs for assembly, disassembly, and doc generation.
 type FieldSpec interface {
@@ -32,6 +32,7 @@ type FieldSpec interface {
 	Type() StackType
 	OpVersion() uint64
 	Note() string
+	Modes() RunMode
 	Version() uint64
 }
 
@@ -280,6 +281,13 @@ func (fs txnFieldSpec) Note() string {
 	return note
 }
 
+func (fs txnFieldSpec) Modes() RunMode {
+	if fs.effects {
+		return ModeApp
+	}
+	return modeAny
+}
+
 var txnFieldSpecs = [...]txnFieldSpec{
 	{Sender, StackAddress, false, 0, 5, false, "32 byte address"},
 	{Fee, StackUint64, false, 0, 5, false, "microalgos"},
@@ -423,11 +431,37 @@ func txnaFieldNames() []string {
 	return names
 }
 
+// itxnSettableFieldSpec views a txn field through itxn_field's lens: Version()
+// reports when the field became *settable* (itxVersion) rather than gettable, so
+// doc generation gates and presents fields by the version they can actually be
+// set. This mirrors appParamsSetFieldSpec for app_params_set.
+type itxnSettableFieldSpec struct {
+	txnFieldSpec
+}
+
+func (fs itxnSettableFieldSpec) OpVersion() uint64 {
+	return 5 // itxn_field's introduction
+}
+
+func (fs itxnSettableFieldSpec) Version() uint64 {
+	return fs.itxVersion
+}
+
+// itxnSettableNameSpecMap yields the settable view of a txn field, by name.
+type itxnSettableNameSpecMap map[string]itxnSettableFieldSpec
+
+func (s itxnSettableNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+var itxnSettableFieldSpecByName = make(itxnSettableNameSpecMap, len(TxnFieldNames))
+
 // ItxnSettableFields collects info for itxn_field opcode
 var ItxnSettableFields = FieldGroup{
 	"itxn_field", "",
 	itxnSettableFieldNames(),
-	txnFieldSpecByName,
+	itxnSettableFieldSpecByName,
 }
 
 // itxnSettableFieldNames are txn field names that can be set by
@@ -618,6 +652,10 @@ func (fs globalFieldSpec) Note() string {
 	return note
 }
 
+func (fs globalFieldSpec) Modes() RunMode {
+	return fs.mode
+}
+
 var globalFieldSpecs = [...]globalFieldSpec{
 	// version 0 is the same as v1 (initial release)
 	{MinTxnFee, StackUint64, modeAny, 0, "microalgos"},
@@ -718,6 +756,9 @@ func (fs ecdsaCurveSpec) Version() uint64 {
 func (fs ecdsaCurveSpec) Note() string {
 	return fs.doc
 }
+func (fs ecdsaCurveSpec) Modes() RunMode {
+	return modeAny
+}
 
 var ecdsaCurveSpecs = [...]ecdsaCurveSpec{
 	{Secp256k1, 5, "secp256k1 curve, used in Bitcoin"},
@@ -784,6 +825,9 @@ func (fs ecGroupSpec) Version() uint64 {
 func (fs ecGroupSpec) Note() string {
 	return fs.doc
 }
+func (fs ecGroupSpec) Modes() RunMode {
+	return modeAny
+}
 
 var ecGroupSpecs = [...]ecGroupSpec{
 	{BN254g1, "G1 of the BN254 curve. Points encoded as 32 byte X following by 32 byte Y"},
@@ -848,6 +892,9 @@ func (fs mimcConfigSpec) Version() uint64 {
 func (fs mimcConfigSpec) Note() string {
 	return fs.doc
 }
+func (fs mimcConfigSpec) Modes() RunMode {
+	return modeAny
+}
 
 var mimcConfigSpecs = [...]mimcConfigSpec{
 	{BN254Mp110, "MiMC configuration for the BN254 curve with Miyaguchi-Preneel mode, 110 rounds, exponent 5, seed \"seed\""},
@@ -875,6 +922,71 @@ var MimcConfigs = FieldGroup{
 	"MimcConfigurations", "Parameters",
 	mimcConfigNames[:],
 	mimcConfigSpecByName,
+}
+
+// Poseidon2Config is an enum for the `poseidon2` opcode
+type Poseidon2Config int
+
+const (
+	// BN254t2 is the default Poseidon2 configuration for the BN254 curve with Merkle-Damgard mode, width = 2, full rounds = 6, partial rounds = 50
+	BN254t2 Poseidon2Config = iota
+	// BLS12_381t2 is the default Poseidon2 configuration for the BLS12-381 curve with Merkle-Damgard mode, width = 2, full rounds = 6, partial rounds = 50
+	BLS12_381t2
+	invalidPoseidon2Config // compile-time constant for number of fields
+)
+
+var poseidon2ConfigNames [invalidPoseidon2Config]string
+
+type poseidon2ConfigSpec struct {
+	field Poseidon2Config
+	doc   string
+}
+
+func (fs poseidon2ConfigSpec) Field() byte {
+	return byte(fs.field)
+}
+func (fs poseidon2ConfigSpec) Type() StackType {
+	return StackNone // Will not show, since all are untyped
+}
+func (fs poseidon2ConfigSpec) OpVersion() uint64 {
+	return poseidon2Version
+}
+func (fs poseidon2ConfigSpec) Version() uint64 {
+	return poseidon2Version
+}
+func (fs poseidon2ConfigSpec) Note() string {
+	return fs.doc
+}
+func (fs poseidon2ConfigSpec) Modes() RunMode {
+	return modeAny
+}
+
+var poseidon2ConfigSpecs = [...]poseidon2ConfigSpec{
+	{BN254t2, "Poseidon2 Merkle-Damgard configuration for BN254 with width = 2, full rounds = 6, partial rounds = 50"},
+	{BLS12_381t2, "Poseidon2 Merkle-Damgard configuration for BLS12-381 with width = 2, full rounds = 6, partial rounds = 50"},
+}
+
+func poseidon2ConfigSpecByField(c Poseidon2Config) (poseidon2ConfigSpec, bool) {
+	if int(c) >= len(poseidon2ConfigSpecs) {
+		return poseidon2ConfigSpec{}, false
+	}
+	return poseidon2ConfigSpecs[c], true
+}
+
+var poseidon2ConfigSpecByName = make(poseidon2ConfigNameSpecMap, len(poseidon2ConfigNames))
+
+type poseidon2ConfigNameSpecMap map[string]poseidon2ConfigSpec
+
+func (s poseidon2ConfigNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+// Poseidon2Configs collects details about the constants used to describe Poseidon2Configs
+var Poseidon2Configs = FieldGroup{
+	"Poseidon2 Configurations", "Parameters",
+	poseidon2ConfigNames[:],
+	poseidon2ConfigSpecByName,
 }
 
 // Base64Encoding is an enum for the `base64decode` opcode
@@ -926,6 +1038,9 @@ func (fs base64EncodingSpec) Version() uint64 {
 func (fs base64EncodingSpec) Note() string {
 	note := "" // no doc list?
 	return note
+}
+func (fs base64EncodingSpec) Modes() RunMode {
+	return modeAny
 }
 
 func (s base64EncodingSpecMap) get(name string) (FieldSpec, bool) {
@@ -993,6 +1108,9 @@ func (fs jsonRefSpec) Version() uint64 {
 func (fs jsonRefSpec) Note() string {
 	note := "" // no doc list?
 	return note
+}
+func (fs jsonRefSpec) Modes() RunMode {
+	return modeAny
 }
 
 func (s jsonRefSpecMap) get(name string) (FieldSpec, bool) {
@@ -1062,6 +1180,10 @@ func (fs vrfStandardSpec) Version() uint64 {
 func (fs vrfStandardSpec) Note() string {
 	note := "" // no doc list?
 	return note
+}
+
+func (fs vrfStandardSpec) Modes() RunMode {
+	return modeAny
 }
 
 func (s vrfStandardSpecMap) SpecByName(name string) FieldSpec {
@@ -1176,6 +1298,10 @@ func (fs blockFieldSpec) Note() string {
 	return ""
 }
 
+func (fs blockFieldSpec) Modes() RunMode {
+	return modeAny
+}
+
 func (s blockFieldSpecMap) SpecByName(name string) FieldSpec {
 	return s[name]
 }
@@ -1221,6 +1347,9 @@ func (fs assetHoldingFieldSpec) Version() uint64 {
 }
 func (fs assetHoldingFieldSpec) Note() string {
 	return fs.doc
+}
+func (fs assetHoldingFieldSpec) Modes() RunMode {
+	return ModeApp
 }
 
 var assetHoldingFieldSpecs = [...]assetHoldingFieldSpec{
@@ -1308,6 +1437,9 @@ func (fs assetParamsFieldSpec) Version() uint64 {
 func (fs assetParamsFieldSpec) Note() string {
 	return fs.doc
 }
+func (fs assetParamsFieldSpec) Modes() RunMode {
+	return ModeApp
+}
 
 var assetParamsFieldSpecs = [...]assetParamsFieldSpec{
 	{AssetTotal, StackUint64, 2, "Total number of units of this asset"},
@@ -1378,16 +1510,22 @@ const (
 	// AppSizeSponsor is responsible for extra pages and global state balance requirement.
 	AppSizeSponsor
 
+	// AppForeignBoxReads AppParams.ForeignBoxReads
+	AppForeignBoxReads
+	// AppFamilyBoxAccess AppParams.FamilyBoxAccess
+	AppFamilyBoxAccess
+
 	invalidAppParamsField // compile-time constant for number of fields
 )
 
 var appParamsFieldNames [invalidAppParamsField]string
 
 type appParamsFieldSpec struct {
-	field   AppParamsField
-	ftype   StackType
-	version uint64
-	doc     string
+	field      AppParamsField
+	ftype      StackType
+	version    uint64 // version when field became available to app_params_get
+	setVersion uint64 // version when field became settable via app_params_set; 0 means not settable
+	doc        string
 }
 
 func (fs appParamsFieldSpec) Field() byte {
@@ -1405,19 +1543,24 @@ func (fs appParamsFieldSpec) Version() uint64 {
 func (fs appParamsFieldSpec) Note() string {
 	return fs.doc
 }
+func (fs appParamsFieldSpec) Modes() RunMode {
+	return ModeApp
+}
 
 var appParamsFieldSpecs = [...]appParamsFieldSpec{
-	{AppApprovalProgram, StackBytes, 5, "Bytecode of Approval Program"},
-	{AppClearStateProgram, StackBytes, 5, "Bytecode of Clear State Program"},
-	{AppGlobalNumUint, StackUint64, 5, "Number of uint64 values allowed in Global State"},
-	{AppGlobalNumByteSlice, StackUint64, 5, "Number of byte array values allowed in Global State"},
-	{AppLocalNumUint, StackUint64, 5, "Number of uint64 values allowed in Local State"},
-	{AppLocalNumByteSlice, StackUint64, 5, "Number of byte array values allowed in Local State"},
-	{AppExtraProgramPages, StackUint64, 5, "Number of Extra Program Pages of code space"},
-	{AppCreator, StackAddress, 5, "Creator address"},
-	{AppAddress, StackAddress, 5, "Address for which this application has authority"},
-	{AppVersion, StackUint64, 12, "Version of the app, incremented each time the approval or clear program changes"},
-	{AppSizeSponsor, StackAddress, 13, "If non-zero, this account is responsible for the app's extra pages and global state balance requirement"},
+	{AppApprovalProgram, StackBytes, 5, 0, "Bytecode of Approval Program"},
+	{AppClearStateProgram, StackBytes, 5, 0, "Bytecode of Clear State Program"},
+	{AppGlobalNumUint, StackUint64, 5, 0, "Number of uint64 values allowed in Global State"},
+	{AppGlobalNumByteSlice, StackUint64, 5, 0, "Number of byte array values allowed in Global State"},
+	{AppLocalNumUint, StackUint64, 5, 0, "Number of uint64 values allowed in Local State"},
+	{AppLocalNumByteSlice, StackUint64, 5, 0, "Number of byte array values allowed in Local State"},
+	{AppExtraProgramPages, StackUint64, 5, 0, "Number of Extra Program Pages of code space"},
+	{AppCreator, StackAddress, 5, 0, "Creator address"},
+	{AppAddress, StackAddress, 5, 0, "Address for which this application has authority"},
+	{AppVersion, StackUint64, 12, 0, "Version of the app, incremented each time the approval or clear program changes"},
+	{AppSizeSponsor, StackAddress, 13, 0, "If non-zero, this account is responsible for the app's extra pages and global state balance requirement"},
+	{AppForeignBoxReads, StackBoolean, foreignBoxVersion, foreignBoxVersion, "This app's boxes may be read by any app"},
+	{AppFamilyBoxAccess, StackBoolean, foreignBoxVersion, foreignBoxVersion, "This app's boxes may be read and written by any app (existing or future) with the same creator"},
 }
 
 func appParamsFieldSpecByField(f AppParamsField) (appParamsFieldSpec, bool) {
@@ -1442,6 +1585,57 @@ var AppParamsFields = FieldGroup{
 	"app_params", "Fields",
 	appParamsFieldNames[:],
 	appParamsFieldSpecByName,
+}
+
+// appParamsSetFieldSpec views an app params field through app_params_set's lens:
+// Version() reports when the field became *settable* rather than gettable, and
+// OpVersion() is app_params_set's own introduction. This lets doc generation
+// present the settable fields and their versions, the way ItxnSettableFields
+// does for itxn_field.
+type appParamsSetFieldSpec struct {
+	appParamsFieldSpec
+}
+
+func (fs appParamsSetFieldSpec) OpVersion() uint64 {
+	return foreignBoxVersion
+}
+
+func (fs appParamsSetFieldSpec) Version() uint64 {
+	return fs.setVersion
+}
+
+// appParamsSetNameSpecMap yields the settable view of a field, by name.
+type appParamsSetNameSpecMap map[string]appParamsSetFieldSpec
+
+func (s appParamsSetNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+var appParamsSetFieldSpecByName = make(appParamsSetNameSpecMap, len(appParamsFieldNames))
+
+// AppParamsSettableFields describes the fields app_params_set can set. Like
+// itxn_field's ItxnSettableFields, its Names are "sparse": only settable fields
+// are named, so non-settable ones are hidden from docs and disassembly.
+var AppParamsSettableFields = FieldGroup{
+	"app_params_set", "Fields",
+	appParamsSettableFieldNames(),
+	appParamsSetFieldSpecByName,
+}
+
+// appParamsSettableFieldNames are the app params field names that can be set by
+// app_params_set. Return value is a "sparse" slice: settable fields appear at
+// their usual index, non-settable slots are set to "".
+func appParamsSettableFieldNames() []string {
+	names := make([]string, len(appParamsFieldSpecs))
+	for i, fs := range appParamsFieldSpecs {
+		if fs.setVersion == 0 {
+			names[i] = ""
+		} else {
+			names[i] = fs.field.String()
+		}
+	}
+	return names
 }
 
 // AcctParamsField is an enum for `acct_params_get` opcode
@@ -1512,6 +1706,9 @@ func (fs acctParamsFieldSpec) Version() uint64 {
 }
 func (fs acctParamsFieldSpec) Note() string {
 	return fs.doc
+}
+func (fs acctParamsFieldSpec) Modes() RunMode {
+	return ModeApp
 }
 
 var acctParamsFieldSpecs = [...]acctParamsFieldSpec{
@@ -1600,6 +1797,9 @@ func (fs voterParamsFieldSpec) Version() uint64 {
 func (fs voterParamsFieldSpec) Note() string {
 	return fs.doc
 }
+func (fs voterParamsFieldSpec) Modes() RunMode {
+	return ModeApp
+}
 
 var voterParamsFieldSpecs = [...]voterParamsFieldSpec{
 	{VoterBalance, StackUint64, incentiveVersion, "Online stake in microalgos"},
@@ -1641,6 +1841,7 @@ func init() {
 		equal(int(s.field), i)
 		TxnFieldNames[s.field] = s.field.String()
 		txnFieldSpecByName[s.field.String()] = s
+		itxnSettableFieldSpecByName[s.field.String()] = itxnSettableFieldSpec{s}
 	}
 
 	equal(len(globalFieldSpecs), len(GlobalFieldNames))
@@ -1669,6 +1870,13 @@ func init() {
 		equal(int(s.field), i)
 		mimcConfigNames[s.field] = s.field.String()
 		mimcConfigSpecByName[s.field.String()] = s
+	}
+
+	equal(len(poseidon2ConfigSpecs), len(poseidon2ConfigNames))
+	for i, s := range poseidon2ConfigSpecs {
+		equal(int(s.field), i)
+		poseidon2ConfigNames[s.field] = s.field.String()
+		poseidon2ConfigSpecByName[s.field.String()] = s
 	}
 
 	equal(len(base64EncodingSpecs), len(base64EncodingNames))
@@ -1718,6 +1926,7 @@ func init() {
 		equal(int(s.field), i)
 		appParamsFieldNames[i] = s.field.String()
 		appParamsFieldSpecByName[s.field.String()] = s
+		appParamsSetFieldSpecByName[s.field.String()] = appParamsSetFieldSpec{s}
 	}
 
 	equal(len(acctParamsFieldSpecs), len(acctParamsFieldNames))

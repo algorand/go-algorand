@@ -141,7 +141,7 @@ func TestDeadlockRewrite(t *testing.T) {
 	t.Run("onoff", func(t *testing.T) { testDeadlock(t, deadlockTestSrc, deadlockTestFin) })
 }
 
-func testGoFmt(fset *token.FileSet, node interface{}) (out string, err error) {
+func testGoFmt(fset *token.FileSet, node any) (out string, err error) {
 	var buf bytes.Buffer
 	err = format.Node(&buf, fset, node)
 	if err == nil {
