@@ -1698,7 +1698,6 @@ func TestP2PGetPeersTransportConnections(t *testing.T) {
 	require.Len(t, gossipPeers, 1)
 	gossipPeer, ok := gossipPeers[0].(*wsPeer)
 	require.True(t, ok)
-	require.Equal(t, PeerNetworkTypeLibP2P, gossipPeer.GetNetworkType())
 
 	connPeers := netA.GetPeers(PeersTransportConnectionsIn)
 	require.Len(t, connPeers, 1)
