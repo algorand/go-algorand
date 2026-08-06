@@ -309,7 +309,12 @@ func TestWebsocketProxyWsNet(t *testing.T) {
 		return len(netB.GetPeers(PeersConnectedOut)) == 1
 	}, 5*time.Second, 10*time.Millisecond)
 
-	require.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
+	// netA is the server for this connection: the client's dial completes at
+	// the websocket upgrade, but netA only registers the peer via addPeer
+	// after the upgrade, so wait for it before asserting.
+	require.Eventually(t, func() bool {
+		return len(netA.GetPeers(PeersConnectedIn)) == 1
+	}, 5*time.Second, 10*time.Millisecond)
 	require.Equal(t, 0, len(netA.GetPeers(PeersConnectedOut)))
 	require.Equal(t, 0, len(netB.GetPeers(PeersConnectedIn)))
 	require.Equal(t, 1, len(netB.GetPeers(PeersConnectedOut)))

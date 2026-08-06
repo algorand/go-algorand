@@ -1560,7 +1560,13 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	// A->B and A->C both open
 	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 2, len(netA.GetPeers(PeersConnectedOut)))
-	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
+	// the earlier wait for netB to settle at one inbound peer can pass before
+	// netB's addPeer has run for the abandoned second connection, in which
+	// case netB transiently reports two inbound peers here until the read
+	// loop reaps the closed one, so wait rather than assert equality
+	assert.Eventually(t, func() bool {
+		return len(netB.GetPeers(PeersConnectedIn)) == 1
+	}, time.Second, 50*time.Millisecond)
 	assert.Equal(t, 0, len(netB.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netC.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 0, len(netC.GetPeers(PeersConnectedOut)))
