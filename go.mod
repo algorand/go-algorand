@@ -14,7 +14,7 @@ require (
 	github.com/algorand/go-sumhash v0.1.0
 	github.com/algorand/graphtrace v0.1.0
 	github.com/algorand/msgp v1.1.64
-	github.com/algorand/sortition v1.1.0
+	github.com/algorand/sortition v1.1.1
 	github.com/algorand/websocket v1.4.6
 	github.com/aws/aws-sdk-go v1.34.0
 	github.com/cockroachdb/pebble v0.0.0-20230807162746-af8c5f279001
