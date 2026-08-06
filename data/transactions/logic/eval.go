@@ -2715,14 +2715,12 @@ func (cx *EvalContext) byteImmArgs() ([][]byte, int, error) {
 		return nil, 0, err
 	}
 	if cx.Proto.LogicSigVersion >= 13 {
-		// Each constant is a sub-slice of the program, so none can exceed
-		// maxStringSize unless the program itself does.
-		if len(cx.program) > maxStringSize {
-			for i, b := range bytec {
-				if len(b) > maxStringSize {
-					return nil, 0, fmt.Errorf("%s arg %d is too big (%d bytes, limit %d)",
-						cx.GetOpSpec().Name, i, len(b), maxStringSize)
-				}
+		// Once v13 is in effect, this check could move into parseByteImmArgs,
+		// which already loops over the constants.
+		for i, b := range bytec {
+			if len(b) > maxStringSize {
+				return nil, 0, fmt.Errorf("%s arg %d is too big (%d bytes, limit %d)",
+					cx.GetOpSpec().Name, i, len(b), maxStringSize)
 			}
 		}
 	} else if nextpc == len(cx.program) && len(bytec) > 0 && len(bytec[len(bytec)-1]) == 0 {
