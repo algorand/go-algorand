@@ -882,6 +882,37 @@ int ` + fmt.Sprintf("%d", testLogicBudget-2500-8) + `
 	testAccepts(t, source, fidoVersion)
 }
 
+func testHashCost(t *testing.T, hash string, size int, expected int, intro uint64) {
+	hashCostCheck := `
+pushint %d
+bzero
+%s
+pop
+pushint ` + strconv.Itoa(testLogicBudget-5) + ` // 5 non sha instructions
+global OpcodeBudget
+-
+pushint %d
+==
+`
+	t.Helper()
+	testAccepts(t, fmt.Sprintf(hashCostCheck, size, hash, expected), intro)
+}
+
+func TestHashCosts(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testHashCost(t, "sha512", 0, 15, 13)
+	testHashCost(t, "sha512", 1, 17, 13)
+	testHashCost(t, "sha512", 64, 19, 13)
+	testHashCost(t, "sha512", 1000, 79, 13)
+
+	testHashCost(t, "sumhash512", 0, 150, sumhashVersion)
+	testHashCost(t, "sumhash512", 1, 154, sumhashVersion)
+	testHashCost(t, "sumhash512", 64, 190, sumhashVersion)
+	testHashCost(t, "sumhash512", 1000, 722, sumhashVersion)
+}
+
 func BenchmarkHashes(b *testing.B) {
 	for _, hash := range []string{"sha256", "keccak256" /* skip, same as keccak "sha3_256", */, "sha512_256", "sumhash512", "mimc BN254Mp110", "mimc BLS12_381Mp111", "poseidon2 BN254t2", "poseidon2 BLS12_381t2", "sha512"} {
 		for _, size := range []int{0, 32, 128, 512, 1024, 4096} {
