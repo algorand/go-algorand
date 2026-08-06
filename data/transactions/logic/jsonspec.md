@@ -17,10 +17,11 @@ below says which kind it is.
 
 Whole-text, except as noted.
 
-- The text must be utf-8 encoded; utf-16 and utf-32 texts are rejected
+- The text is expected to be utf-8 encoded; utf-16 and utf-32 texts are rejected
 - The byte order mark (BOM), "\uFEFF", is not allowed at the beginning of a JSON text
-- Raw bytes that are not valid utf-8 are not rejected. On extraction of a string
-  value they are replaced by the replacement character (U+FFFD)
+- utf-8 validity is not otherwise enforced: raw bytes that are not valid utf-8
+  parse without error, and on extraction of a string value each such byte is
+  replaced by the replacement character (U+FFFD)
 
 ### Invalid JSON text
 
@@ -133,23 +134,30 @@ Whole-text.
 
 ### Escaped Characters
 
+These rules concern `\` escape sequences inside strings. Escape sequences are
+plain ASCII in the raw text, so they never affect its utf-8 validity; the rules
+below are about what the sequences decode to.
+
 - a truncated escape sequence, or one that uses an unknown escape letter, is
   rejected (whole-text). `\u` followed by four characters that are not all hex
   digits is not rejected at parse, but extracting a string value that contains
   one is an error. In a key, it becomes the replacement character (U+FFFD)
 - control chars (U+0000 - U+001F) must be escaped (extraction)
-- surrogate pairs are accepted (whole-text)
-- escaped invalid characters are replaced by replacement character (U+FFFD) on extraction
+- an escaped surrogate pair (`\uD800`-`\uDBFF` followed by `\uDC00`-`\uDFFF`) is
+  accepted, and decodes to the single codepoint it represents (whole-text)
+- an escaped surrogate that is not part of such a pair is accepted at parse, but
+  is replaced by the replacement character (U+FFFD) on extraction, since a lone
+  surrogate is not a valid codepoint
 
 #### Example
 
-a valid surrogate pair
+a valid escaped surrogate pair, decoding to U+10437
 
 ```json
 {"key0": "\uD801\udc37"}
 ```
 
-replaced by U+FFFD
+lone surrogates, each replaced by U+FFFD on extraction
 
 ```json
 {"key0": "\uD800\uD800n"}

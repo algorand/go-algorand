@@ -233,7 +233,7 @@ var opDescByName = map[string]OpDesc{
 	"gaids": {"ID of the asset or application created in the Ath transaction of the current group",
 		"`gaids` fails unless the requested transaction created an asset or application and A < GroupIndex.", nil, ""},
 
-	"json_ref": {"key B's value, of type R, from the utf-8 encoded json object A, which must satisfy the [JSON spec](https://github.com/algorand/go-algorand/blob/master/data/transactions/logic/jsonspec.md)",
+	"json_ref": {"key B's value, of type R, from the json object A, which must satisfy the [JSON spec](https://github.com/algorand/go-algorand/blob/master/data/transactions/logic/jsonspec.md)",
 		"_Warning_: Usage should be restricted to very rare use cases, as JSON decoding is expensive and quite limited. In addition, JSON objects are large and not optimized for size.\n\nAlmost all smart contracts should use simpler and smaller methods (such as the [ABI](https://arc.algorand.foundation/ARCs/arc-0004)). This opcode should only be used in cases where JSON is the only available option, e.g. when a third-party only signs JSON.",
 		[]string{"return type index"}, ""},
 

@@ -828,7 +828,7 @@ _Warning_: Usage should be restricted to very rare use cases. In almost all case
 - Syntax: `json_ref R` where R: [json_ref Types](#json_ref-types)
 - Bytecode: 0x5f {uint8}
 - Stack: ..., A: []byte, B: []byte &rarr; ..., any
-- key B's value, of type R, from the utf-8 encoded json object A, which must satisfy the [JSON spec](https://github.com/algorand/go-algorand/blob/master/data/transactions/logic/jsonspec.md)
+- key B's value, of type R, from the json object A, which must satisfy the [JSON spec](https://github.com/algorand/go-algorand/blob/master/data/transactions/logic/jsonspec.md)
 - **Cost**: 25 + 2 per 7 bytes of A
 - Availability: v7
 
