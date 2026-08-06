@@ -4211,17 +4211,23 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 		peerEnqueued: time.Now(),
 		ctx:          context.Background(),
 	}
+	// the metric is a package-wide counter, so compare against its value
+	// before the message rather than an absolute count
+	oldDropped := networkConnectionsDroppedTotal.GetUint64ValueForLabels(map[string]string{"reason": "unrequestedTS"})
 	netA.peers[0].sendBufferBulk <- msg
 	require.Eventually(t,
 		func() bool {
-			return networkConnectionsDroppedTotal.GetUint64ValueForLabels(map[string]string{"reason": "unrequestedTS"}) == 1
+			return networkConnectionsDroppedTotal.GetUint64ValueForLabels(map[string]string{"reason": "unrequestedTS"}) > oldDropped
 		},
 		1*time.Second,
 		50*time.Millisecond,
 	)
 
-	// Stop and confirm that we hit the case of disconnecting a peer for sending an unrequested block response
-	require.Zero(t, netB.NumPeers())
+	// Confirm that we hit the case of disconnecting a peer for sending an
+	// unrequested block response. The metric above is incremented in the read
+	// loop before the deferred cleanup unregisters the peer, so wait for the
+	// peer count to drop rather than asserting immediately.
+	require.Eventually(t, func() bool { return netB.NumPeers() == 0 }, 1*time.Second, 25*time.Millisecond)
 
 	netC.Start()
 	defer netC.Stop()
