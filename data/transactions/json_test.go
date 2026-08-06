@@ -35,7 +35,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func decode(t *testing.T, data string, v interface{}) {
+func decode(t *testing.T, data string, v any) {
 	t.Helper()
 	err := protocol.DecodeJSON([]byte(data), v)
 	require.NoErrorf(t, err, "Cannot decode %s", data)

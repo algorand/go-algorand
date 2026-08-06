@@ -19,8 +19,12 @@ package fixtures
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path"
+	"path/filepath"
 	"runtime"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/algorand/go-algorand/config"
@@ -45,12 +49,35 @@ func getTestDir() string {
 	return os.ExpandEnv("${GOPATH}/src/github.com/algorand/go-algorand/test/")
 }
 
+// goInstallBinDir reports where `go install` (and thus `make install`) places
+// binaries, asking `go env` rather than trusting an exported $GOPATH. This
+// mirrors the GOBIN/GOPATH resolution in the Makefile so a plain `go test`
+// finds algod without requiring NODEBINDIR or an exported GOPATH. The result
+// is cached, since every fixture initialize() would otherwise re-run `go env`.
+var goInstallBinDir = sync.OnceValue(func() string {
+	if out, err := exec.Command("go", "env", "GOBIN").Output(); err == nil {
+		if dir := strings.TrimSpace(string(out)); dir != "" {
+			return dir
+		}
+	}
+	out, err := exec.Command("go", "env", "GOPATH").Output()
+	if err != nil {
+		return ""
+	}
+	// GOPATH may be a list; go install uses the first entry.
+	gopath := filepath.SplitList(strings.TrimSpace(string(out)))
+	if len(gopath) == 0 || gopath[0] == "" {
+		return ""
+	}
+	return filepath.Join(gopath[0], "bin")
+})
+
 func (f *baseFixture) initialize(instance Fixture) {
 	f.instance = instance
 	f.Config = config.Protocol
 	f.binDir = os.Getenv("NODEBINDIR")
 	if f.binDir == "" {
-		f.binDir = os.ExpandEnv("$GOPATH/bin")
+		f.binDir = goInstallBinDir()
 	}
 	f.testDir = os.Getenv("TESTDIR")
 	if f.testDir == "" {

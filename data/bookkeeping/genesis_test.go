@@ -31,7 +31,7 @@ import (
 func TestGenesis_Balances(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	containsErrorFunc := func(str string) assert.ErrorAssertionFunc {
-		return func(_ assert.TestingT, err error, i ...interface{}) bool {
+		return func(_ assert.TestingT, err error, i ...any) bool {
 			require.ErrorContains(t, err, str)
 			return true
 		}

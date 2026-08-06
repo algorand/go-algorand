@@ -1,6 +1,8 @@
 #!/bin/bash
 
-date '+goal-account-asset-test start %Y%m%d_%H%M%S'
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
 
 set -e
 set -x
@@ -46,31 +48,31 @@ ${gcmd} account info -a ${ACCOUNTB}
 # query account assets w/ details, (1)
 RES=$(${gcmd} account assetdetails -a ${ACCOUNTB})
 if [[ ${RES} != *"Account: ${ACCOUNTB}"* ]]; then
-    date '+goal-account-asset-test assetdetails (1) should be for correct account %Y%m%d_%H%M%S'
+    date "+${scriptname} assetdetails (1) should be for correct account %Y%m%d_%H%M%S"
     false
 fi
 if [[ ${RES} != *"Asset ID: ${ASSET_A_ID}"$'\n'"    Amount: 0"* ]]; then
-    date '+goal-account-asset-test assetdetails (1) should contain asset A %Y%m%d_%H%M%S'
+    date "+${scriptname} assetdetails (1) should contain asset A %Y%m%d_%H%M%S"
     false
 fi
 if [[ ${RES} != *"Freeze address:   ${ACCOUNTA}"* ]]; then
-    date '+goal-account-asset-test assetdetails (1) should contain account A as a freezer %Y%m%d_%H%M%S'
+    date "+${scriptname} assetdetails (1) should contain account A as a freezer %Y%m%d_%H%M%S"
     false
 fi
 if [[ ${RES} == *"Freeze address:   ${ACCOUNTB}"* ]]; then
-    date '+goal-account-asset-test assetdetails (1) should not contain account B as a freezer %Y%m%d_%H%M%S'
+    date "+${scriptname} assetdetails (1) should not contain account B as a freezer %Y%m%d_%H%M%S"
     false
 fi
 if [[ ${RES} != *"Asset ID: ${ASSET_B_ID}"$'\n'"    Amount: 0"* ]]; then
-    date '+goal-account-asset-test assetdetails (1) should contain asset B %Y%m%d_%H%M%S'
+    date "+${scriptname} assetdetails (1) should contain asset B %Y%m%d_%H%M%S"
     false
 fi
 if [[ ${RES} != *"Asset ID: ${ASSET_C_ID}"$'\n'"    Amount: 0"* ]]; then
-    date '+goal-account-asset-test assetdetails (1) should contain asset C %Y%m%d_%H%M%S'
+    date "+${scriptname} assetdetails (1) should contain asset C %Y%m%d_%H%M%S"
     false
 fi
 if [[ ${RES} != *"Asset ID: ${ASSET_D_ID}"$'\n'"    Amount: 0"* ]]; then
-    date '+goal-account-asset-test assetdetails (1) should contain asset D %Y%m%d_%H%M%S'
+    date "+${scriptname} assetdetails (1) should contain asset D %Y%m%d_%H%M%S"
     false
 fi
 
@@ -79,34 +81,34 @@ ${gcmd} asset config --assetid ${ASSET_A_ID} --new-freezer ${ACCOUNTC} --manager
 RES=$(${gcmd} account assetdetails -a ${ACCOUNTB})
 
 if [[ ${RES} != *"Freeze address:   ${ACCOUNTC}"* ]]; then
-    date '+goal-account-asset-test assetdetails (1) should contain account C as a freezer %Y%m%d_%H%M%S'
+    date "+${scriptname} assetdetails (1) should contain account C as a freezer %Y%m%d_%H%M%S"
     false
 fi
 if [[ ${RES} == *"Freeze address:   ${ACCOUNTA}"* ]]; then
-    date '+goal-account-asset-test assetdetails (1) should not contain account A as a freezer %Y%m%d_%H%M%S'
+    date "+${scriptname} assetdetails (1) should not contain account A as a freezer %Y%m%d_%H%M%S"
     false
 fi
 
 # query account assets w/ details, limit 2, next set to asset B, (2)
 RES=$(${gcmd} account assetdetails -a ${ACCOUNTB} -l 2 -n ${ASSET_B_ID})
 if [[ ${RES} != *"Account: ${ACCOUNTB}"* ]]; then
-    date '+goal-account-asset-test assetdetails (2) should be for correct account %Y%m%d_%H%M%S'
+    date "+${scriptname} assetdetails (2) should be for correct account %Y%m%d_%H%M%S"
     false
 fi
 if [[ ${RES} == *"Asset ID: ${ASSET_A_ID}"* ]]; then
-    date '+goal-account-asset-test assetdetails (2) should not contain asset A %Y%m%d_%H%M%S'
+    date "+${scriptname} assetdetails (2) should not contain asset A %Y%m%d_%H%M%S"
     false
 fi
 if [[ ${RES} == *"Asset ID: ${ASSET_B_ID}"* ]]; then
-    date '+goal-account-asset-test assetdetails (2) should not contain asset B %Y%m%d_%H%M%S'
+    date "+${scriptname} assetdetails (2) should not contain asset B %Y%m%d_%H%M%S"
     false
 fi
 if [[ ${RES} != *"Asset ID: ${ASSET_C_ID}"$'\n'"    Amount: 0"* ]]; then
-    date '+goal-account-asset-test assetdetails (2) should contain asset C %Y%m%d_%H%M%S'
+    date "+${scriptname} assetdetails (2) should contain asset C %Y%m%d_%H%M%S"
     false
 fi
 if [[ ${RES} != *"Asset ID: ${ASSET_D_ID}"$'\n'"    Amount: 0"* ]]; then
-    date '+goal-account-asset-test assetdetails (2) should contain asset D %Y%m%d_%H%M%S'
+    date "+${scriptname} assetdetails (2) should contain asset D %Y%m%d_%H%M%S"
     false
 fi
 
@@ -116,24 +118,24 @@ ${gcmd} asset destroy --assetid ${ASSET_B_ID} --creator ${ACCOUNTA} --signer ${A
 # query account assets w/ details after deletion, (3)
 RES=$(${gcmd} account assetdetails -a ${ACCOUNTB})
 if [[ ${RES} != *"Account: ${ACCOUNTB}"* ]]; then
-    date '+goal-account-asset-test assetdetails (3) should be for correct account %Y%m%d_%H%M%S'
+    date "+${scriptname} assetdetails (3) should be for correct account %Y%m%d_%H%M%S"
     false
 fi
 if [[ ${RES} != *"Asset ID: ${ASSET_A_ID}"$'\n'"    Amount: 0"* ]]; then
-    date '+goal-account-asset-test assetdetails (3) should contain asset A %Y%m%d_%H%M%S'
+    date "+${scriptname} assetdetails (3) should contain asset A %Y%m%d_%H%M%S"
     false
 fi
 # ensure asset B is still present, but its params are unavailable
 if [[ ${RES} != *"Asset ID: ${ASSET_B_ID}"$'\n'"    Amount (without formatting): 0"* ]]; then
-    date '+goal-account-asset-test assetdetails (3) should contain asset B without asset params %Y%m%d_%H%M%S'
+    date "+${scriptname} assetdetails (3) should contain asset B without asset params %Y%m%d_%H%M%S"
     false
 fi
 if [[ ${RES} != *"Asset ID: ${ASSET_C_ID}"$'\n'"    Amount: 0"* ]]; then
-    date '+goal-account-asset-test assetdetails (3) should contain asset C %Y%m%d_%H%M%S'
+    date "+${scriptname} assetdetails (3) should contain asset C %Y%m%d_%H%M%S"
     false
 fi
 if [[ ${RES} != *"Asset ID: ${ASSET_D_ID}"$'\n'"    Amount: 0"* ]]; then
-    date '+goal-account-asset-test assetdetails (3) should contain asset D %Y%m%d_%H%M%S'
+    date "+${scriptname} assetdetails (3) should contain asset D %Y%m%d_%H%M%S"
     false
 fi
 
@@ -144,6 +146,6 @@ RES=$(${gcmd} account info -a ${ACCOUNTB})
 EXPECTED="ID ${ASSET_B_ID}, <deleted/unknown asset>"
 
 if [[ ${RES} != *"${EXPECTED}"* ]]; then
-    date '+goal-account-asset-test should list account info with deleted asset expected line %Y%m%d_%H%M%S'
+    date "+${scriptname} should list account info with deleted asset expected line %Y%m%d_%H%M%S"
     false
 fi

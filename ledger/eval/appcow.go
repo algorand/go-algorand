@@ -19,12 +19,9 @@ package eval
 import (
 	"fmt"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -451,20 +448,6 @@ func (cb *roundCowState) delKey(addr basics.Address, aidx basics.AppIndex, globa
 	}
 
 	return nil // note: deletion cannot cause us to violate maxCount
-}
-
-// MakeDebugBalances creates a ledger suitable for dryrun and debugger
-func MakeDebugBalances(l LedgerForCowBase, round basics.Round, proto protocol.ConsensusVersion, prevTimestamp int64) apply.Balances {
-	base := makeRoundCowBase(l, round-1, 0, basics.Round(0), config.Consensus[proto])
-
-	hdr := bookkeeping.BlockHeader{
-		Round:        round,
-		UpgradeState: bookkeeping.UpgradeState{CurrentProtocol: proto},
-	}
-	hint := 2
-	// passing an empty AccountTotals here is fine since it's only being used by the top level cow state object.
-	cb := makeRoundCowState(base, hdr, config.Consensus[proto], prevTimestamp, ledgercore.AccountTotals{}, hint)
-	return cb
 }
 
 // StatefulEval runs application.  Execution happens in a child cow and all

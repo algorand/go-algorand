@@ -1,6 +1,8 @@
 #!/bin/bash
 
-date '+rawsend-test start %Y%m%d_%H%M%S'
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
 
 set -e
 set -x
@@ -22,7 +24,7 @@ ${gcmd} clerk sign -i ${TEMPDIR}/send-from-a-to-b.txn -o ${TEMPDIR}/send-from-a-
 RES=$(${gcmd} clerk rawsend -f ${TEMPDIR}/send-from-a-to-b.stxn 2>&1 || true)
 EXPERROR='rejected'
 if [[ $RES == *"${EXPERROR}"* ]]; then
-    date '+rawsend-test sending raw signed payment txn should not be rejected %Y%m%d_%H%M%S'
+    date "+${scriptname} sending raw signed payment txn should not be rejected %Y%m%d_%H%M%S"
     false
 fi
 
@@ -35,7 +37,7 @@ echo "$PENDING_ROUNDS" | sort -nuC
 SORT_CHECK=$?
 
 if [[ ${SORT_CHECK} -ne 0 ]]; then
-    date '+rawsend-test pending rounds should be in ascending order %Y%m%d_%H%M%S'
+    date "+${scriptname} pending rounds should be in ascending order %Y%m%d_%H%M%S"
     false
 fi
 
@@ -46,6 +48,6 @@ COMMITTED_PATTERN='committed in round [[:digit:]]+'
 COMMITTED_ROUND=$(echo ${RES} | grep -Eo "${COMMITTED_PATTERN}" | grep -Eo '[[:digit:]]+')
 
 if [[ ! ${COMMITTED_ROUND} -gt ${LAST_PENDING_ROUND} ]]; then
-    date '+rawsend-test pending rounds should always be smaller than committed round %Y%m%d_%H%M%S'
+    date "+${scriptname} pending rounds should always be smaller than committed round %Y%m%d_%H%M%S"
     false
 fi

@@ -72,4 +72,3 @@ var TestApps = TryApps
 const CreatedResourcesVersion = createdResourcesVersion
 const AssemblerNoVersion = assemblerNoVersion
 const FirstTestID = firstTestID
-const TestCallStackProgram = testCallStackProgram

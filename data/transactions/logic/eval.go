@@ -48,7 +48,7 @@ import (
 // gating them by version. Old programs need to retain their old behavior.
 
 // maxStringSize is the limit of byte string length in an AVM value
-const maxStringSize = 4096
+const maxStringSize = config.MaxAVMBytesSize
 
 // maxByteMathSize is the limit of byte strings supplied as input to byte math opcodes
 const maxByteMathSize = 64
@@ -274,6 +274,11 @@ type LedgerForLogic interface {
 
 	Perform(gi int, ep *EvalParams) error
 	Counter() uint64
+
+	// SetForeignBoxReads sets the ForeignBoxReads flag on the given app's params.
+	SetForeignBoxReads(appID basics.AppIndex, enable bool) error
+	// SetFamilyBoxAccess sets the FamilyBoxAccess flag on the given app's params.
+	SetFamilyBoxAccess(appID basics.AppIndex, enable bool) error
 }
 
 // UnnamedResourcePolicy is an interface that defines the policy for allowing unnamed resources.
@@ -341,6 +346,17 @@ type EvalParams struct {
 	// tracking for some finicky backward compatibility tests.
 	FeeCredit *basics.MicroAlgos
 
+	// feeResidue is the fractional microAlgo (held to 1e-12 precision,
+	// i.e. over basics.feeResidueScale) that the group's fee charges have
+	// rounded up so far but not yet consumed. Carrying it from one group's
+	// charge to the next lets the whole tree of top-level and inner groups
+	// round up only once in aggregate, rather than (potentially) once per
+	// group.  Unlike FeeCredit, it is a value, not a shared pointer: inner
+	// EvalParams inherit it by copy (NewInnerEvalParams) and opItxnSubmit
+	// copies the final value back after evaluating an inner group, so siblings
+	// can't double-spend the same residue.
+	feeResidue uint64
+
 	Specials *transactions.SpecialAddresses
 
 	// CostMultiplier is applied to all inner costs. Only intended to be set for
@@ -364,8 +380,11 @@ type EvalParams struct {
 	// availability across all txns in the group.
 	available *resources
 
-	// ioBudget is the number of bytes that the box ref'd boxes can sum to, and
-	// the number of bytes that created or written boxes may sum to.
+	// ioBudget is the number of bytes of "extra" read and write I/O the app may
+	// do.  All referenced boxes plus the size of referenced apps beyond 8k,
+	// must be less than ioBudget.  Further, all writes to boxes and the size of
+	// any written apps (beyond 8k) must stay under ioBudget throughout
+	// execution.
 	ioBudget uint64
 
 	// readBudgetChecked allows us to only check the read budget once
@@ -410,8 +429,14 @@ func (ep *EvalParams) SetIOBudget(ioBudget uint64) {
 	ep.ioBudget = ioBudget
 }
 
-// BoxDirtyBytes returns the number of bytes that have been written to boxes
-func (ep *EvalParams) BoxDirtyBytes() uint64 {
+// DirtyByteCount returns the number of bytes that count against write budget.
+func (ep *EvalParams) DirtyByteCount() uint64 {
+	// I/O write quota is checked after every transaction, so no app calls may have
+	// occurred (which is when available is populated). In that case, there are
+	// also no dirty bytes.
+	if ep.available == nil {
+		return 0
+	}
 	return ep.available.dirtyBytes
 }
 
@@ -428,7 +453,7 @@ func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.Sign
 func NewSigEvalParams(txgroup []transactions.SignedTxn, proto *config.ConsensusParams, ls LedgerForSignature) *EvalParams {
 	lsigs := 0
 	for _, tx := range txgroup {
-		if !tx.Lsig.Blank() {
+		if tx.Lsig.HasProgram() {
 			lsigs++
 		}
 	}
@@ -464,9 +489,10 @@ func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Cons
 	var pooledApplicationBudget *int
 	var pooledAllowedInners *int
 	var credit *basics.MicroAlgos
+	var residue uint64
 	if apps > 0 { // none of these allocations needed if no apps
 		credit = new(basics.MicroAlgos)
-		*credit = feeCredit(txgroup, proto.MinFee())
+		*credit, residue = feeCredit(txgroup, *proto)
 
 		if proto.EnableAppCostPooling {
 			pooledApplicationBudget = new(int)
@@ -486,6 +512,7 @@ func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Cons
 		Specials:                specials,
 		minAvmVersion:           computeMinAvmVersion(txgroup),
 		FeeCredit:               credit,
+		feeResidue:              residue,
 		CostMultiplier:          1e6,
 		PooledApplicationBudget: pooledApplicationBudget,
 		pooledAllowedInners:     pooledAllowedInners,
@@ -502,6 +529,7 @@ func (ep *EvalParams) computeAvailability() *resources {
 		sharedHoldings: make(map[ledgercore.AccountAsset]struct{}),
 		sharedLocals:   make(map[ledgercore.AccountApp]struct{}),
 		boxes:          make(map[basics.BoxRef]bool),
+		updateBytes:    make(map[basics.AppIndex]uint64),
 	}
 	for i := range ep.TxnGroup {
 		available.fill(&ep.TxnGroup[i].Txn, ep)
@@ -509,13 +537,46 @@ func (ep *EvalParams) computeAvailability() *resources {
 	return available
 }
 
-// feeCredit returns the extra fee supplied in this top-level txgroup compared
-// to required fees. feeCredit should not be used on inner groups, since it
-// expects the Tip to appear in the group. (For inners, Tip is inherited.)
-func feeCredit(txgroup []transactions.SignedTxnWithAD, baseFee basics.MicroAlgos) basics.MicroAlgos {
-	usage, feesPaid := transactions.SummarizeFees(txgroup)
-	feeNeeded, _ := baseFee.MulMicros(usage)
-	return feesPaid.SubSaturate(feeNeeded) // If MulMicros saturates, this is 0
+func (cx *EvalContext) considerBudgetProgramWrites() error {
+	creating := cx.txn.Txn.ApplicationID == 0
+	updating := cx.txn.Txn.OnCompletion == transactions.UpdateApplicationOC
+	deleting := cx.txn.Txn.OnCompletion == transactions.DeleteApplicationOC
+	if !creating && !updating && !deleting { // No program size change
+		return nil
+	}
+	if creating && deleting { // Program never gets written
+		return nil
+	}
+
+	// The "sizes" below are actually the size above the old maximum size.
+	oldSize := cx.available.updateBytes[cx.appID]
+	cx.available.dirtyBytes = basics.SubSaturate(cx.available.dirtyBytes, oldSize)
+
+	newSize := uint64(transactions.LargeProgramExtraBytes(*cx.Proto,
+		len(cx.txn.Txn.ApprovalProgram)+len(cx.txn.Txn.ClearStateProgram)))
+	cx.available.dirtyBytes = basics.AddSaturate(cx.available.dirtyBytes, newSize)
+	cx.available.updateBytes[cx.appID] = newSize
+
+	if cx.available.dirtyBytes > cx.ioBudget {
+		verb := "creating"
+		if updating {
+			verb = "updating"
+		}
+		return fmt.Errorf("write budget exceeded (%d > %d) while %s app %d",
+			cx.available.dirtyBytes, cx.ioBudget, verb, cx.appID)
+	}
+	return nil
+}
+
+// feeCredit returns the extra fee supplied in this top-level txgroup compared to
+// required fees, plus the fractional residue left by rounding that required fee
+// up. The residue seeds EvalParams.feeResidue so that inner groups round up only
+// once in aggregate with the top-level group. feeCredit should not be used on
+// inner groups.
+func feeCredit(txgroup []transactions.SignedTxnWithAD, proto config.ConsensusParams) (credit basics.MicroAlgos, residue uint64) {
+	usage, feesPaid := transactions.SummarizeFees(txgroup, proto)
+	feeNeeded, residue, _ := proto.MinFee().FeeForUsage(usage, 1e6, 0)
+	return feesPaid.SubSaturate(feeNeeded), residue // If FeeForUsage saturates, credit is 0
 }
 
 // NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
@@ -546,6 +607,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		Tracer:                  caller.Tracer,
 		minAvmVersion:           minAvmVersion,
 		FeeCredit:               caller.FeeCredit,
+		feeResidue:              caller.feeResidue,
 		Specials:                caller.Specials,
 		CostMultiplier:          caller.CostMultiplier,
 		PooledApplicationBudget: caller.PooledApplicationBudget,
@@ -675,6 +737,27 @@ type EvalContext struct {
 	version uint64
 	Scratch scratchSpace
 
+	// creatorAddr caches the creator of appID, looked up lazily by
+	// getCreatorAddress (a zero value means "not yet looked up"). Besides
+	// backing the `global CreatorAddress` op, it is used to decide family
+	// membership (same creator) while walking the caller chain for family-box
+	// reentrancy checks.
+	creatorAddr basics.Address
+
+	// touchedFamilyShared records that this frame has read or written a
+	// family-shared box (one owned by a same-creator app with FamilyBoxAccess
+	// set). It marks the frame as holding a stable-state assumption that a
+	// family-member re-entry via a foreign app must not silently violate. See
+	// checkFamilyReentrancy.
+	touchedFamilyShared bool
+
+	// familyReentrancyChecked records that checkFamilyReentrancy has already
+	// passed for this frame. Its result is invariant for the frame's lifetime
+	// (ancestors are suspended, so neither the stack shape nor their touch marks
+	// can change), and a failing check aborts evaluation, so once it passes
+	// there is no need to walk the caller chain again.
+	familyReentrancyChecked bool
+
 	subtxns []transactions.SignedTxnWithAD // place to build for itxn_submit
 	cost    int                            // cost incurred so far
 	logSize int                            // total log size so far
@@ -710,8 +793,38 @@ func (cx *EvalContext) ProgramVersion() uint64 {
 // PC returns the program counter of the current application being evaluated
 func (cx *EvalContext) PC() int { return cx.pc }
 
-// GetOpSpec queries for the OpSpec w.r.t. current program byte.
-func (cx *EvalContext) GetOpSpec() OpSpec { return opsByOpcode[cx.version][cx.program[cx.pc]] }
+// GetOpSpec returns the OpSpec for the current program position. It always
+// returns a non-nil pointer to an OpSpec, even if the opcode is invalid. If the
+// opcode is invalid, the returned OpSpec will have op == nil. This unusual
+// interface allows code that knows it is looking at a valid program (anything
+// after check()) to avoid dealing with errors while other code handle the error
+// with getOpSpecError while this function stays inlined.
+func (cx *EvalContext) GetOpSpec() *OpSpec {
+	spec := &opsByOpcode[cx.version][cx.program[cx.pc]]
+	if spec.SubOps != nil && cx.pc+1 < len(cx.program) {
+		sub := cx.program[cx.pc+1]
+		if int(sub) < len(spec.SubOps) && spec.SubOps[sub].op != nil {
+			return &spec.SubOps[sub]
+		}
+	}
+	return spec
+}
+
+// getOpSpecError returns an error describing the problem with the current
+// opcode. It is kept out of GetOpSpec, and called only on the error path (when
+// the returned spec has op == nil), so that GetOpSpec stays cheap enough to
+// inline into the hot step()/checkStep() loops.
+func getOpSpecError(spec *OpSpec, program []byte, pc int) error {
+	opcode := program[pc]
+	if spec.SubOps != nil {
+		if pc+1 >= len(program) {
+			return fmt.Errorf("prefix opcode 0x%02x missing sub-opcode", opcode)
+		}
+		return fmt.Errorf("prefix opcode 0x%02x with improper sub-opcode 0x%02x",
+			opcode, program[pc+1])
+	}
+	return fmt.Errorf("illegal opcode 0x%02x", opcode)
+}
 
 // GetProgram queries for the current program
 func (cx *EvalContext) GetProgram() []byte { return cx.program }
@@ -840,12 +953,31 @@ func NewStackType(at avmType, bounds [2]uint64, stname ...string) StackType {
 
 	// It's static, set the name to show
 	// the static value
-	if bounds[0] == bounds[1] {
+	switch {
+	case bounds[0] == bounds[1]:
 		switch at {
 		case avmBytes:
 			name = fmt.Sprintf("[%d]byte", bounds[0])
 		case avmUint64:
 			name = fmt.Sprintf("%d", bounds[0])
+		}
+	case bounds[0] == 0 && bounds[1] != 0:
+		switch at {
+		case avmBytes:
+			if bounds[1] != maxStringSize {
+				name = fmt.Sprintf("[<=%d]byte", bounds[1])
+			}
+		case avmUint64:
+			if bounds[1] != math.MaxUint64 {
+				name += fmt.Sprintf(" (<= %d)", bounds[1])
+			}
+		}
+	case bounds[0] != 0 && bounds[1] != 0:
+		switch at {
+		case avmBytes:
+			name = fmt.Sprintf("[%d-%d]byte", bounds[0], bounds[1])
+		case avmUint64:
+			name += fmt.Sprintf(" (%d-%d)", bounds[0], bounds[1])
 		}
 	}
 
@@ -979,7 +1111,7 @@ func filterNoneTypes(sts StackTypes) StackTypes {
 
 // panicError wraps a recover() catching a panic()
 type panicError struct {
-	PanicValue interface{}
+	PanicValue any
 	StackTrace string
 }
 
@@ -1154,9 +1286,20 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		}
 		cx.ioBudget = basics.MulSaturate(bumps, cx.Proto.BytesPerBoxReference)
 
-		used := uint64(0)
-		var surplus int64
-		var overflow bool
+		bytesRead := uint64(0)
+
+		// First count the extra reading required for any large programs that are available.
+		for appID := range cx.available.sharedApps {
+			params, _, err := cx.Ledger.AppParams(appID)
+			if err != nil {
+				continue // There may be an app reference that doesn't exist
+			}
+			extra := transactions.LargeProgramExtraBytes(*cx.Proto,
+				len(params.ApprovalProgram)+len(params.ClearStateProgram))
+			bytesRead = basics.AddSaturate(bytesRead, uint64(extra))
+		}
+
+		// Then count the total size of available boxes
 		for br := range cx.available.boxes {
 			if len(br.Name) == 0 {
 				// 0 length names are not allowed for actual created boxes, but
@@ -1173,27 +1316,27 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 			size := uint64(len(box))
 			cx.available.boxes[br] = false
 
-			used = basics.AddSaturate(used, size)
-			surplus, overflow = basics.ODiff(cx.ioBudget, used)
-			// we defer the check if we have cx.UnnamedResources, so we can ask for the entire surplus at the end.
-			if overflow || (surplus < 0 && cx.UnnamedResources == nil) {
-				err = fmt.Errorf("box read budget (%d) exceeded", cx.ioBudget)
-				if !cx.Proto.EnableBareBudgetError {
-					// We return an EvalError here because we used to do
-					// that. It is wrong, and means that there could be a
-					// ClearState call in an old block that failed on read
-					// quota, but we allowed to execute anyway.  If testnet and
-					// mainnet have no such transactions, we can remove
-					// EnableBareBudgetError and this code.
-					err = EvalError{err, "", false}
-				}
-				return false, nil, err
+			bytesRead = basics.AddSaturate(bytesRead, size)
+		}
+
+		surplus, overflow := basics.ODiff(cx.ioBudget, bytesRead)
+		if overflow || (surplus < 0 && cx.UnnamedResources == nil) {
+			err := fmt.Errorf("read budget exceeded (%d > %d)", bytesRead, cx.ioBudget)
+			if !cx.Proto.EnableBareBudgetError {
+				// We return an EvalError here because we used to do
+				// that. It is wrong, and means that there could be a
+				// ClearState call in an old block that failed on read
+				// quota, but we allowed to execute anyway.  If testnet and
+				// mainnet have no such transactions, we can remove
+				// EnableBareBudgetError and this code.
+				err = EvalError{err, "", false}
 			}
+			return false, nil, err
 		}
 
 		// Report the surplus/deficit to the policy, and find out if we should continue
 		if cx.UnnamedResources != nil && !cx.UnnamedResources.IOSurplus(surplus) {
-			return false, nil, fmt.Errorf("box read budget (%d) exceeded despite policy", cx.ioBudget)
+			return false, nil, fmt.Errorf("read budget exceeded despite policy (%d)", cx.ioBudget)
 		}
 
 		cx.readBudgetChecked = true
@@ -1207,9 +1350,38 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 	if err != nil {
 		err = cx.evalError(err)
 	}
+	if err == nil && pass {
+		err = cx.considerBudgetProgramWrites()
+		if err != nil {
+			pass = false
+		}
+	}
 
 	if cx.Trace != nil && cx.caller != nil {
 		fmt.Fprintf(cx.Trace, "--- exit  %d accept=%t\n", aid, pass)
+	}
+
+	// A family-shared touch by this frame counts as a touch by its caller when
+	// they share a creator: the caller delegated the mutation to us and relies on
+	// that shared state across its own later calls, exactly as if it had touched
+	// the box itself. Fold the mark into the caller as the frame completes -- like
+	// feeResidue after an inner group -- so it chains one hop per return to every
+	// contiguous family ancestor, and survives this frame's return so a later
+	// A->foreign->family re-entry is still caught. No success guard is needed: a
+	// failing frame aborts the whole group, and ClearState (which continues past
+	// rejection) can't touch boxes, so touchedFamilyShared is never set there.
+	if cx.caller != nil && cx.touchedFamilyShared {
+		mine, cerr := cx.getCreatorAddress()
+		if cerr != nil {
+			return false, &cx, cerr
+		}
+		theirs, cerr := cx.caller.getCreatorAddress()
+		if cerr != nil {
+			return false, &cx, cerr
+		}
+		if mine == theirs {
+			cx.caller.touchedFamilyShared = true
+		}
 	}
 
 	return pass, &cx, err
@@ -1528,12 +1700,9 @@ func (cx *EvalContext) remainingInners() int {
 }
 
 func (cx *EvalContext) step() error {
-	opcode := cx.program[cx.pc]
-	spec := &opsByOpcode[cx.version][opcode]
-
-	// this check also ensures versioning: v2 opcodes are not in opsByOpcode[1] array
+	spec := cx.GetOpSpec()
 	if spec.op == nil {
-		return fmt.Errorf("%3d illegal opcode 0x%02x", cx.pc, opcode)
+		return getOpSpecError(spec, cx.program, cx.pc)
 	}
 	if (cx.runMode & spec.Modes) == 0 {
 		return fmt.Errorf("%s not allowed in current mode", spec.Name)
@@ -1552,7 +1721,7 @@ func (cx *EvalContext) step() error {
 
 	deets := &spec.OpDetails
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
-		return fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
+		return fmt.Errorf("program ends without immediate value(s)")
 	}
 
 	// It's something like a 5-10% overhead on our simplest instructions to make
@@ -1562,13 +1731,13 @@ func (cx *EvalContext) step() error {
 	if opcost <= 0 {
 		opcost = deets.Cost(cx.program, cx.pc, cx.Stack)
 		if opcost <= 0 {
-			return fmt.Errorf("%3d %s returned 0 cost", cx.pc, spec.Name)
+			return fmt.Errorf("%s returned 0 cost", spec.Name)
 		}
 	}
 
 	if opcost > cx.remainingBudget() {
-		return fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s: local program cost was %d",
-			cx.pc, spec.Name, cx.cost)
+		return fmt.Errorf("dynamic cost budget exceeded, executing %s: local program cost was %d",
+			spec.Name, cx.cost)
 	}
 
 	cx.cost += opcost
@@ -1621,7 +1790,7 @@ func (cx *EvalContext) step() error {
 		// we don't want to worry about the dissassembly
 		// routines mucking about in the execution context
 		// (changing the pc, for example) and this gives a big
-		// improvement of dryrun readability
+		// improvement in readability
 		dstate := &disassembleState{program: cx.program, pc: cx.pc, numericTargets: true, intc: cx.intc, bytec: cx.bytec}
 		sourceLine, inner := disassemble(dstate, spec)
 		if inner != nil {
@@ -1673,28 +1842,26 @@ func (cx *EvalContext) step() error {
 // unacceptable. TestLinearOpcodes ensures.
 var blankStack = make([]stackValue, 5)
 
-func (cx *EvalContext) checkStep() (int, error) {
+func (cx *EvalContext) checkStep() (cost int, err error) {
 	cx.instructionStarts[cx.pc] = true
-	opcode := cx.program[cx.pc]
-	spec := &opsByOpcode[cx.version][opcode]
+	spec := cx.GetOpSpec()
 	if spec.op == nil {
-		return 0, fmt.Errorf("illegal opcode 0x%02x", opcode)
+		return 0, getOpSpecError(spec, cx.program, cx.pc)
 	}
 	if (cx.runMode & spec.Modes) == 0 {
 		return 0, fmt.Errorf("%s not allowed in current mode", spec.Name)
 	}
 	deets := spec.OpDetails
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
-		return 0, fmt.Errorf("%s program ends short of immediate values", spec.Name)
+		return 0, fmt.Errorf("program ends without immediate value(s)")
 	}
-	opcost := deets.Cost(cx.program, cx.pc, blankStack)
-	if opcost <= 0 {
+	cost = deets.Cost(cx.program, cx.pc, blankStack)
+	if cost <= 0 {
 		return 0, fmt.Errorf("%s reported non-positive cost", spec.Name)
 	}
 	prevpc := cx.pc
 	if deets.check != nil {
-		err := deets.check(cx)
-		if err != nil {
+		if err = deets.check(cx); err != nil {
 			return 0, err
 		}
 		if cx.nextpc != 0 {
@@ -1714,16 +1881,20 @@ func (cx *EvalContext) checkStep() (int, error) {
 			return 0, fmt.Errorf("branch target %d is not an aligned instruction", pc)
 		}
 	}
-	return opcost, nil
+	return cost, nil
 }
 
-func (cx *EvalContext) ensureStackCap(targetCap int) {
+func (cx *EvalContext) ensureStackCap(targetCap int) error {
+	if targetCap > maxStackDepth {
+		return errors.New("stack overflow")
+	}
 	if cap(cx.Stack) < targetCap {
 		// Let's grow all at once, plus a little slack.
 		newStack := make([]stackValue, len(cx.Stack), targetCap+4)
 		copy(newStack, cx.Stack)
 		cx.Stack = newStack
 	}
+	return nil
 }
 
 func opErr(cx *EvalContext) error {
@@ -2481,7 +2652,9 @@ func opPushInts(cx *EvalContext) error {
 		return err
 	}
 	finalLen := len(cx.Stack) + len(intc)
-	cx.ensureStackCap(finalLen)
+	if err := cx.ensureStackCap(finalLen); err != nil {
+		return err
+	}
 	for _, cint := range intc {
 		sv := stackValue{Uint: cint}
 		cx.Stack = append(cx.Stack, sv)
@@ -2492,7 +2665,7 @@ func opPushInts(cx *EvalContext) error {
 
 func opByteConstBlock(cx *EvalContext) error {
 	var err error
-	cx.bytec, cx.nextpc, err = parseByteImmArgs(cx.program, cx.pc+1)
+	cx.bytec, cx.nextpc, err = cx.byteImmArgs()
 	return err
 }
 
@@ -2537,13 +2710,43 @@ func opPushBytes(cx *EvalContext) error {
 	return nil
 }
 
+// byteImmArgs parses the byte constants of a bytecblock or pushbytess at the
+// current pc, enforcing the size limit and the historical trailing-empty bug.
+func (cx *EvalContext) byteImmArgs() ([][]byte, int, error) {
+	bytec, nextpc, err := parseByteImmArgs(cx.program, cx.pc+1)
+	if err != nil {
+		return nil, 0, err
+	}
+	if cx.Proto.LogicSigVersion >= 13 {
+		// Once v13 is in effect, this check could move into parseByteImmArgs,
+		// which already loops over the constants.
+		for i, b := range bytec {
+			if len(b) > maxStringSize {
+				return nil, 0, fmt.Errorf("%s arg %d is too big (%d bytes, limit %d)",
+					cx.GetOpSpec().Name, i, len(b), maxStringSize)
+			}
+		}
+	} else if nextpc == len(cx.program) && len(bytec) > 0 && len(bytec[len(bytec)-1]) == 0 {
+		// Reproduce a parsing bug that existed before version 13: an empty
+		// final constant, ending exactly at the end of the program, was
+		// reported as running past the end of the program. Since the bug
+		// could only cause errors, and programs are checked when they are put
+		// on chain, no stored program depends on it. Once v13 is in effect,
+		// this else branch can simply be deleted.
+		return nil, 0, errShortByteImmArgs
+	}
+	return bytec, nextpc, nil
+}
+
 func opPushBytess(cx *EvalContext) error {
-	cbytess, nextpc, err := parseByteImmArgs(cx.program, cx.pc+1)
+	cbytess, nextpc, err := cx.byteImmArgs()
 	if err != nil {
 		return err
 	}
 	finalLen := len(cx.Stack) + len(cbytess)
-	cx.ensureStackCap(finalLen)
+	if err := cx.ensureStackCap(finalLen); err != nil {
+		return err
+	}
 	for _, cbytes := range cbytess {
 		sv := stackValue{Bytes: cbytes}
 		cx.Stack = append(cx.Stack, sv)
@@ -2689,7 +2892,101 @@ func checkSwitch(cx *EvalContext) error {
 	return nil
 }
 
+func branchTargetVarint(cx *EvalContext) (target int, instrSize int, err error) {
+	offset, bytesRead := binary.Varint(cx.program[cx.pc+1:])
+	if bytesRead <= 0 {
+		if bytesRead == 0 {
+			return 0, 0, fmt.Errorf("program ends without branch target")
+		}
+		return 0, 0, fmt.Errorf("branch offset varint overflows int64")
+	}
+	instrSize = 1 + bytesRead
+	// Negative offsets are back-jumps measured from the start of the
+	// instruction; non-negative offsets are forward-jumps from the end.
+	if offset < 0 {
+		target = cx.pc + int(offset)
+	} else {
+		target = cx.pc + instrSize + int(offset)
+	}
+	if target > len(cx.program) || target < 0 {
+		return 0, 0, fmt.Errorf("branch target %d outside of program", target)
+	}
+	return target, instrSize, nil
+}
+
+func checkBranchVarint(cx *EvalContext) error {
+	target, instrSize, err := branchTargetVarint(cx)
+	if err != nil {
+		return err
+	}
+	if target < cx.pc {
+		if ok := cx.instructionStarts[target]; !ok {
+			return fmt.Errorf("back branch target %d is not an aligned instruction", target)
+		}
+	}
+	cx.branchTargets[target] = true
+	cx.nextpc = cx.pc + instrSize
+	return nil
+}
+
 func opBnz(cx *EvalContext) error {
+	last := len(cx.Stack) - 1
+	isNonZero := cx.Stack[last].Uint != 0
+	cx.Stack = cx.Stack[:last]
+	target, instrSize, err := branchTargetVarint(cx)
+	if err != nil {
+		return err
+	}
+	if isNonZero {
+		cx.nextpc = target
+	} else {
+		cx.nextpc = cx.pc + instrSize
+	}
+	return nil
+}
+
+func opBz(cx *EvalContext) error {
+	last := len(cx.Stack) - 1
+	isZero := cx.Stack[last].Uint == 0
+	cx.Stack = cx.Stack[:last]
+	target, instrSize, err := branchTargetVarint(cx)
+	if err != nil {
+		return err
+	}
+	if isZero {
+		cx.nextpc = target
+	} else {
+		cx.nextpc = cx.pc + instrSize
+	}
+	return nil
+}
+
+func opB(cx *EvalContext) error {
+	target, _, err := branchTargetVarint(cx)
+	if err != nil {
+		return err
+	}
+	cx.nextpc = target
+	return nil
+}
+
+func opCallSub(cx *EvalContext) error {
+	target, instrSize, err := branchTargetVarint(cx)
+	if err != nil {
+		return err
+	}
+	cx.callstack = append(cx.callstack, frame{
+		retpc:  cx.pc + instrSize,
+		height: len(cx.Stack),
+	})
+	cx.nextpc = target
+	if cx.nextpc < len(cx.program) && cx.program[cx.nextpc] == protoByte {
+		cx.fromCallsub = true
+	}
+	return nil
+}
+
+func opBnz2B(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	cx.nextpc = cx.pc + 3
 	isNonZero := cx.Stack[last].Uint != 0
@@ -2704,7 +3001,7 @@ func opBnz(cx *EvalContext) error {
 	return nil
 }
 
-func opBz(cx *EvalContext) error {
+func opBz2B(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	cx.nextpc = cx.pc + 3
 	isZero := cx.Stack[last].Uint == 0
@@ -2719,7 +3016,7 @@ func opBz(cx *EvalContext) error {
 	return nil
 }
 
-func opB(cx *EvalContext) error {
+func opB2B(cx *EvalContext) error {
 	target, err := branchTarget(cx)
 	if err != nil {
 		return err
@@ -2784,12 +3081,12 @@ func opMatch(cx *EvalContext) error {
 
 const protoByte = 0x8a
 
-func opCallSub(cx *EvalContext) error {
+func opCallSub2B(cx *EvalContext) error {
 	cx.callstack = append(cx.callstack, frame{
 		retpc:  cx.pc + 3, // retpc is pc _after_ the callsub
 		height: len(cx.Stack),
 	})
-	err := opB(cx)
+	err := opB2B(cx)
 
 	/* We only set fromCallSub if we know we're jumping to a proto. In opProto,
 	   we confirm we came directly from callsub by checking (and resetting) the
@@ -2968,6 +3265,14 @@ func (cx *EvalContext) appParamsToValue(params *basics.AppParams, fs appParamsFi
 		sv.Uint = params.Version
 	case AppSizeSponsor:
 		sv.Bytes = params.SizeSponsor[:]
+	case AppForeignBoxReads:
+		if params.ForeignBoxReads {
+			sv.Uint = 1
+		}
+	case AppFamilyBoxAccess:
+		if params.FamilyBoxAccess {
+			sv.Uint = 1
+		}
 	default:
 		// The pseudo fields AppCreator and AppAddress are handled before this method
 		return sv, fmt.Errorf("invalid app_params_get field %d", fs.field)
@@ -3694,12 +3999,19 @@ func (ep *EvalParams) GetApplicationAddress(app basics.AppIndex) basics.Address 
 	return appAddr
 }
 
-func (cx *EvalContext) getCreatorAddress() ([]byte, error) {
-	_, creator, err := cx.Ledger.AppParams(cx.appID)
-	if err != nil {
-		return nil, fmt.Errorf("No params for current app")
+// getCreatorAddress returns the creator of the current app, caching the result
+// on the context. A zero creatorAddr means "not yet looked up"; on-chain apps
+// always have a non-zero creator, so the only cost of the sentinel is
+// re-looking-up the zero-creator apps that appear in tests.
+func (cx *EvalContext) getCreatorAddress() (basics.Address, error) {
+	if cx.creatorAddr.IsZero() {
+		_, creator, err := cx.Ledger.AppParams(cx.appID)
+		if err != nil {
+			return basics.Address{}, fmt.Errorf("No params for current app")
+		}
+		cx.creatorAddr = creator
 	}
-	return creator[:], nil
+	return cx.creatorAddr, nil
 }
 
 var zeroAddress basics.Address
@@ -3728,7 +4040,9 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 		addr := cx.GetApplicationAddress(cx.appID)
 		sv.Bytes = addr[:]
 	case CreatorAddress:
-		sv.Bytes, err = cx.getCreatorAddress()
+		var creator basics.Address
+		creator, err = cx.getCreatorAddress()
+		sv.Bytes = creator[:]
 	case GroupID:
 		sv.Bytes = cx.txn.Txn.Group[:]
 	case OpcodeBudget:
@@ -3845,6 +4159,12 @@ func opGloadImpl(cx *EvalContext, gi int, scratchIdx byte, opName string) (stack
 	}
 	if gi > cx.groupIndex {
 		return none, fmt.Errorf("%s can't get future scratch space from txn with index %d", opName, gi)
+	}
+
+	// An app call that never executed its program leaves pastScratch[gi] nil even
+	// though its Type is still appl (e.g., a ClearState against a deleted app).
+	if cx.pastScratch[gi] == nil {
+		return none, fmt.Errorf("%s lookup of txn %d that did not run a program", opName, gi)
 	}
 
 	return cx.pastScratch[gi][scratchIdx], nil
@@ -5010,6 +5330,31 @@ func opAppParamsGet(cx *EvalContext) error {
 	return nil
 }
 
+func opAppParamsSet(cx *EvalContext) error {
+	last := len(cx.Stack) - 1 // value
+
+	paramField := AppParamsField(cx.program[cx.pc+1])
+	fs, ok := appParamsFieldSpecByField(paramField)
+	if !ok || fs.setVersion == 0 || fs.setVersion > cx.version {
+		return fmt.Errorf("invalid app_params_set field %d", paramField)
+	}
+
+	arg, err := cx.Stack[last].uint()
+	if err != nil {
+		return err
+	}
+	cx.Stack = cx.Stack[:last]
+
+	switch fs.field {
+	case AppForeignBoxReads:
+		return cx.Ledger.SetForeignBoxReads(cx.appID, arg != 0)
+	case AppFamilyBoxAccess:
+		return cx.Ledger.SetFamilyBoxAccess(cx.appID, arg != 0)
+	default:
+		return fmt.Errorf("immutable app_params_set field %s", fs.field)
+	}
+}
+
 func opAcctParamsGet(cx *EvalContext) error {
 	last := len(cx.Stack) - 1 // acct
 
@@ -5158,9 +5503,11 @@ func addInnerTxn(cx *EvalContext) error {
 	}
 
 	// Check fees in the existing group first. Allows fee pooling in inner groups.
-	usage, groupPaid := transactions.SummarizeFees(cx.subtxns)
+	usage, groupPaid := transactions.SummarizeFees(cx.subtxns, *cx.Proto)
 	usage = basics.AddSaturate(usage, 1e6) // +1e6 because we're adding a txn
-	groupFee, o := cx.Proto.MinFee().Mul2Micros(usage, cx.EvalParams.CostMultiplier)
+	// Populating a default fee must not consume the residue: this txn might never
+	// be submitted, or its fee might be changed. itxn_submit does the real charge.
+	groupFee, _, o := cx.Proto.MinFee().FeeForUsage(usage, cx.EvalParams.CostMultiplier, cx.feeResidue)
 	if o {
 		return errors.New("inner group fee saturation")
 	}
@@ -5344,8 +5691,8 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 	// wants to inspect?)  If we set, make sure they are legal, both for current
 	// round, and separation by MaxLifetime (check lifetime in submit, not here)
 	case Note:
-		if len(sv.Bytes) > cx.Proto.MaxTxnNoteBytes {
-			return fmt.Errorf("%s may not exceed %d bytes", fs.field, cx.Proto.MaxTxnNoteBytes)
+		if len(sv.Bytes) > cx.Proto.MaxAbsoluteTxnNoteBytes {
+			return fmt.Errorf("%s may not exceed %d bytes", fs.field, cx.Proto.MaxAbsoluteTxnNoteBytes)
 		}
 		txn.Note = slices.Clone(sv.Bytes)
 	// GenesisID, GenesisHash unsettable: surely makes no sense
@@ -5457,7 +5804,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		for _, arg := range txn.ApplicationArgs {
 			total += len(arg)
 		}
-		if total > cx.Proto.MaxAppTotalArgLen {
+		if total > cx.Proto.MaxAbsoluteTotalArgLen {
 			return errors.New("total application args length too long")
 		}
 		if len(txn.ApplicationArgs) >= cx.Proto.MaxAppArgs {
@@ -5475,25 +5822,25 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		}
 		txn.Accounts = append(txn.Accounts, new)
 	case ApprovalProgram:
-		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
+		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxAbsoluteExtraProgramPages)
 		if len(sv.Bytes) > maxPossible {
 			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
 		}
 		txn.ApprovalProgram = slices.Clone(sv.Bytes)
 	case ClearStateProgram:
-		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
+		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxAbsoluteExtraProgramPages)
 		if len(sv.Bytes) > maxPossible {
 			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
 		}
 		txn.ClearStateProgram = slices.Clone(sv.Bytes)
 	case ApprovalProgramPages:
-		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
+		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxAbsoluteExtraProgramPages)
 		txn.ApprovalProgram = append(txn.ApprovalProgram, sv.Bytes...)
 		if len(txn.ApprovalProgram) > maxPossible {
 			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
 		}
 	case ClearStateProgramPages:
-		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
+		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxAbsoluteExtraProgramPages)
 		txn.ClearStateProgram = append(txn.ClearStateProgram, sv.Bytes...)
 		if len(txn.ClearStateProgram) > maxPossible {
 			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
@@ -5533,7 +5880,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 	case ExtraProgramPages:
 		var epp uint64
 		epp, err =
-			sv.uintMaxed(uint64(cx.Proto.MaxExtraAppProgramPages))
+			sv.uintMaxed(uint64(cx.Proto.MaxAbsoluteExtraProgramPages))
 		if err != nil {
 			return err
 		}
@@ -5574,16 +5921,22 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 	}
 
 	// Check fees across the group first. Allows fee pooling in inner groups.
-	usage, groupPaid := transactions.SummarizeFees(cx.subtxns) // tip won't appear in inners
-	groupFee, o := cx.Proto.MinFee().Mul2Micros(usage, cx.EvalParams.CostMultiplier)
+	usage, groupPaid := transactions.SummarizeFees(cx.subtxns, *cx.Proto)
+	// Charge against the running residue so this group rounds up only if the
+	// fractions accumulated from earlier groups can't absorb it.
+	groupFee, residue, o := cx.Proto.MinFee().FeeForUsage(usage, cx.EvalParams.CostMultiplier, cx.feeResidue)
 	if o {
 		return errors.New("inner group fee saturation")
 	}
+	cx.feeResidue = residue
 	if groupPaid.LessThan(groupFee) {
 		// See if the FeeCredit is enough to cover the shortfall
 		shortfall := groupFee.SubSaturate(groupPaid)
 		if cx.FeeCredit == nil || cx.FeeCredit.LessThan(shortfall) {
-			return fmt.Errorf("group fee %s too small (need %s) %#v", groupPaid, groupFee, cx.subtxns)
+			if cx.FeeCredit != nil {
+				shortfall = shortfall.SubSaturate(*cx.FeeCredit)
+			}
+			return fmt.Errorf("group fee %s too small (needs %s more) %#v", groupPaid, shortfall, cx.subtxns)
 		}
 		*cx.FeeCredit = cx.FeeCredit.SubSaturate(shortfall)
 	} else {
@@ -5747,6 +6100,11 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 		// RecordAD has some further responsibilities.
 		ep.RecordAD(i, ep.TxnGroup[i].ApplyData)
 	}
+	// ep inherited a copy of cx.feeResidue and updated it while charging its own
+	// (deeper) inner groups. Copy it back so later sibling groups see the residue
+	// those deeper groups consumed, rather than re-spending it.
+	cx.feeResidue = ep.feeResidue
+
 	cx.txn.EvalDelta.InnerTxns = append(cx.txn.EvalDelta.InnerTxns, ep.TxnGroup...)
 	cx.subtxns = nil
 	// must clear the inner txid cache, otherwise prior inner txids will be returned for this group
@@ -5924,7 +6282,7 @@ func isPrimitiveJSON(jsonText []byte) (bool, error) {
 
 func parseJSON(jsonText []byte) (map[string]json.RawMessage, error) {
 	// parse JSON with Algorand's standard JSON library
-	var parsed map[interface{}]json.RawMessage
+	var parsed map[any]json.RawMessage
 	err := protocol.DecodeJSON(jsonText, &parsed)
 
 	if err != nil {
