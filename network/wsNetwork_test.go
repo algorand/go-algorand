@@ -2301,7 +2301,15 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 		}
 
 		assert.Equal(t, tc.totalInA, len(netA.GetPeers(PeersConnectedIn)))
-		assert.Equal(t, tc.totalOutA, len(netA.GetPeers(PeersConnectedOut)))
+		// in the failure cases, tryConnect has already registered the outgoing
+		// peer before sending the verification message; netA only drops it
+		// after netB rejects that message and closes the connection, so wait
+		// for the count to settle rather than asserting immediately
+		assert.Eventually(
+			t,
+			func() bool { return len(netA.GetPeers(PeersConnectedOut)) == tc.totalOutA },
+			5*time.Second,
+			100*time.Millisecond)
 		assert.Equal(t, tc.totalOutB, len(netB.GetPeers(PeersConnectedOut)))
 		// it is possible for NetB to be in the process of doing addPeer while
 		// the underlying connection is being closed. In this case, the read loop
