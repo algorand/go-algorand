@@ -643,6 +643,10 @@ func asmPushBytes(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *so
 	if len(args) != consumed {
 		return args[consumed].errorf("%s with extraneous argument", mnemonic.str)
 	}
+	if len(val) > maxStringSize {
+		return args[0].errorf("%s value is too big (%d bytes, limit %d)",
+			mnemonic.str, len(val), maxStringSize)
+	}
 	ops.pending.WriteByte(spec.Opcode)
 	var scratch [binary.MaxVarintLen64]byte
 	vlen := binary.PutUvarint(scratch[:], uint64(len(val)))
@@ -849,6 +853,10 @@ func asmByte(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceE
 	if len(args) != consumed {
 		return args[consumed].errorf("%s with extraneous argument", spec.Name)
 	}
+	if len(val) > maxStringSize {
+		return args[0].errorf("%s value is too big (%d bytes, limit %d)",
+			spec.Name, len(val), maxStringSize)
+	}
 	err = ops.byteLiteral(val)
 	if err != nil {
 		return args[0].error(err)
@@ -929,6 +937,10 @@ func asmByteImmArgs(ops *OpStream, spec *OpSpec, args []token) ([][]byte, *sourc
 			// parseBinaryArgs would have to return a useful consumed value even
 			// in the face of errors.  Hard.
 			return nil, rest[0].errorf("%s %w", spec.Name, err)
+		}
+		if len(val) > maxStringSize {
+			return nil, rest[0].errorf("%s arg %d is too big (%d bytes, limit %d)",
+				spec.Name, len(bvals), len(val), maxStringSize)
 		}
 		bvals = append(bvals, val)
 		rest = rest[consumed:]
@@ -3277,11 +3289,9 @@ func parseByteImmArgs(program []byte, pos int) (bytec [][]byte, nextpc int, err 
 			err = fmt.Errorf("could not decode []byte const[%d] at pc=%d", i, pos)
 			return
 		}
+		// pos <= len(program) is guaranteed: Uvarint reports bytesUsed > 0
+		// only when the varint terminated inside the slice.
 		pos += bytesUsed
-		if pos >= len(program) {
-			err = errShortByteImmArgs
-			return
-		}
 		end := uint64(pos) + itemLen
 		if end > uint64(len(program)) || end < uint64(pos) {
 			err = errShortByteImmArgs
@@ -3296,7 +3306,7 @@ func parseByteImmArgs(program []byte, pos int) (bytec [][]byte, nextpc int, err 
 
 func checkByteImmArgs(cx *EvalContext) error {
 	var err error
-	_, cx.nextpc, err = parseByteImmArgs(cx.program, cx.pc+1)
+	_, cx.nextpc, err = cx.byteImmArgs()
 	return err
 }
 

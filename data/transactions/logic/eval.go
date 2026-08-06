@@ -1884,13 +1884,17 @@ func (cx *EvalContext) checkStep() (cost int, err error) {
 	return cost, nil
 }
 
-func (cx *EvalContext) ensureStackCap(targetCap int) {
+func (cx *EvalContext) ensureStackCap(targetCap int) error {
+	if targetCap > maxStackDepth {
+		return errors.New("stack overflow")
+	}
 	if cap(cx.Stack) < targetCap {
 		// Let's grow all at once, plus a little slack.
 		newStack := make([]stackValue, len(cx.Stack), targetCap+4)
 		copy(newStack, cx.Stack)
 		cx.Stack = newStack
 	}
+	return nil
 }
 
 func opErr(cx *EvalContext) error {
@@ -2648,7 +2652,9 @@ func opPushInts(cx *EvalContext) error {
 		return err
 	}
 	finalLen := len(cx.Stack) + len(intc)
-	cx.ensureStackCap(finalLen)
+	if err := cx.ensureStackCap(finalLen); err != nil {
+		return err
+	}
 	for _, cint := range intc {
 		sv := stackValue{Uint: cint}
 		cx.Stack = append(cx.Stack, sv)
@@ -2659,7 +2665,7 @@ func opPushInts(cx *EvalContext) error {
 
 func opByteConstBlock(cx *EvalContext) error {
 	var err error
-	cx.bytec, cx.nextpc, err = parseByteImmArgs(cx.program, cx.pc+1)
+	cx.bytec, cx.nextpc, err = cx.byteImmArgs()
 	return err
 }
 
@@ -2704,13 +2710,43 @@ func opPushBytes(cx *EvalContext) error {
 	return nil
 }
 
+// byteImmArgs parses the byte constants of a bytecblock or pushbytess at the
+// current pc, enforcing the size limit and the historical trailing-empty bug.
+func (cx *EvalContext) byteImmArgs() ([][]byte, int, error) {
+	bytec, nextpc, err := parseByteImmArgs(cx.program, cx.pc+1)
+	if err != nil {
+		return nil, 0, err
+	}
+	if cx.Proto.LogicSigVersion >= 13 {
+		// Once v13 is in effect, this check could move into parseByteImmArgs,
+		// which already loops over the constants.
+		for i, b := range bytec {
+			if len(b) > maxStringSize {
+				return nil, 0, fmt.Errorf("%s arg %d is too big (%d bytes, limit %d)",
+					cx.GetOpSpec().Name, i, len(b), maxStringSize)
+			}
+		}
+	} else if nextpc == len(cx.program) && len(bytec) > 0 && len(bytec[len(bytec)-1]) == 0 {
+		// Reproduce a parsing bug that existed before version 13: an empty
+		// final constant, ending exactly at the end of the program, was
+		// reported as running past the end of the program. Since the bug
+		// could only cause errors, and programs are checked when they are put
+		// on chain, no stored program depends on it. Once v13 is in effect,
+		// this else branch can simply be deleted.
+		return nil, 0, errShortByteImmArgs
+	}
+	return bytec, nextpc, nil
+}
+
 func opPushBytess(cx *EvalContext) error {
-	cbytess, nextpc, err := parseByteImmArgs(cx.program, cx.pc+1)
+	cbytess, nextpc, err := cx.byteImmArgs()
 	if err != nil {
 		return err
 	}
 	finalLen := len(cx.Stack) + len(cbytess)
-	cx.ensureStackCap(finalLen)
+	if err := cx.ensureStackCap(finalLen); err != nil {
+		return err
+	}
 	for _, cbytes := range cbytess {
 		sv := stackValue{Bytes: cbytes}
 		cx.Stack = append(cx.Stack, sv)
