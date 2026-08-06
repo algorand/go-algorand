@@ -1555,9 +1555,9 @@ The default Fee is the additional amount that would make the group's fees suffic
 
 Newly created boxes are filled with 0 bytes. `box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `box_create`.
 
-The box name must be between 1 and 64 bytes, the consensus parameter `MaxAppKeyLen`. The box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. Box access is never permitted from a ClearState program.
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
 
-If this app has set `AppFamilyBoxAccess`, its boxes are family-shared, and modifying one is rejected if an app outside the family, somewhere on the call stack, separates this app from an ancestor in its own family that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
+If this app has set `AppFamilyBoxAccess`, its boxes are family-shared: modifying one fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
 
 ## box_extract
 
@@ -1567,9 +1567,9 @@ If this app has set `AppFamilyBoxAccess`, its boxes are family-shared, and modif
 - Availability: v8
 - Mode: Application
 
-The box name must be between 1 and 64 bytes, the consensus parameter `MaxAppKeyLen`. The box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. Box access is never permitted from a ClearState program.
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
 
-If this app has set `AppFamilyBoxAccess`, its boxes are family-shared, and modifying one is rejected if an app outside the family, somewhere on the call stack, separates this app from an ancestor in its own family that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
+If this app has set `AppFamilyBoxAccess`, its boxes are family-shared: modifying one fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
 
 ## box_replace
 
@@ -1579,9 +1579,9 @@ If this app has set `AppFamilyBoxAccess`, its boxes are family-shared, and modif
 - Availability: v8
 - Mode: Application
 
-The box name must be between 1 and 64 bytes, the consensus parameter `MaxAppKeyLen`. The box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. Box access is never permitted from a ClearState program.
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
 
-If this app has set `AppFamilyBoxAccess`, its boxes are family-shared, and modifying one is rejected if an app outside the family, somewhere on the call stack, separates this app from an ancestor in its own family that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
+If this app has set `AppFamilyBoxAccess`, its boxes are family-shared: modifying one fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
 
 ## box_del
 
@@ -1591,9 +1591,9 @@ If this app has set `AppFamilyBoxAccess`, its boxes are family-shared, and modif
 - Availability: v8
 - Mode: Application
 
-The box name must be between 1 and 64 bytes, the consensus parameter `MaxAppKeyLen`. The box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. Box access is never permitted from a ClearState program.
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
 
-If this app has set `AppFamilyBoxAccess`, its boxes are family-shared, and modifying one is rejected if an app outside the family, somewhere on the call stack, separates this app from an ancestor in its own family that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
+If this app has set `AppFamilyBoxAccess`, its boxes are family-shared: modifying one fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
 
 ## box_len
 
@@ -1603,9 +1603,9 @@ If this app has set `AppFamilyBoxAccess`, its boxes are family-shared, and modif
 - Availability: v8
 - Mode: Application
 
-The box name must be between 1 and 64 bytes, the consensus parameter `MaxAppKeyLen`. The box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. Box access is never permitted from a ClearState program.
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
 
-If this app has set `AppFamilyBoxAccess`, its boxes are family-shared, and modifying one is rejected if an app outside the family, somewhere on the call stack, separates this app from an ancestor in its own family that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
+If this app has set `AppFamilyBoxAccess`, its boxes are family-shared: modifying one fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
 
 ## box_get
 
@@ -1617,9 +1617,9 @@ If this app has set `AppFamilyBoxAccess`, its boxes are family-shared, and modif
 
 For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`
 
-The box name must be between 1 and 64 bytes, the consensus parameter `MaxAppKeyLen`. The box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. Box access is never permitted from a ClearState program.
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
 
-If this app has set `AppFamilyBoxAccess`, its boxes are family-shared, and modifying one is rejected if an app outside the family, somewhere on the call stack, separates this app from an ancestor in its own family that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
+If this app has set `AppFamilyBoxAccess`, its boxes are family-shared: modifying one fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
 
 ## box_put
 
@@ -1631,9 +1631,9 @@ If this app has set `AppFamilyBoxAccess`, its boxes are family-shared, and modif
 
 For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`
 
-The box name must be between 1 and 64 bytes, the consensus parameter `MaxAppKeyLen`. The box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. Box access is never permitted from a ClearState program.
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
 
-If this app has set `AppFamilyBoxAccess`, its boxes are family-shared, and modifying one is rejected if an app outside the family, somewhere on the call stack, separates this app from an ancestor in its own family that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
+If this app has set `AppFamilyBoxAccess`, its boxes are family-shared: modifying one fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
 
 ## txnas
 
@@ -1747,9 +1747,9 @@ If this app has set `AppFamilyBoxAccess`, its boxes are family-shared, and modif
 
 Boxes are of constant length. If C < len(D), then len(D)-C bytes will be removed from the end. If C > len(D), zero bytes will be appended to the end to reach the box length.
 
-The box name must be between 1 and 64 bytes, the consensus parameter `MaxAppKeyLen`. The box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. Box access is never permitted from a ClearState program.
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
 
-If this app has set `AppFamilyBoxAccess`, its boxes are family-shared, and modifying one is rejected if an app outside the family, somewhere on the call stack, separates this app from an ancestor in its own family that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
+If this app has set `AppFamilyBoxAccess`, its boxes are family-shared: modifying one fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
 
 ## box_resize
 
@@ -1759,9 +1759,9 @@ If this app has set `AppFamilyBoxAccess`, its boxes are family-shared, and modif
 - Availability: v10
 - Mode: Application
 
-The box name must be between 1 and 64 bytes, the consensus parameter `MaxAppKeyLen`. The box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. Box access is never permitted from a ClearState program.
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
 
-If this app has set `AppFamilyBoxAccess`, its boxes are family-shared, and modifying one is rejected if an app outside the family, somewhere on the call stack, separates this app from an ancestor in its own family that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
+If this app has set `AppFamilyBoxAccess`, its boxes are family-shared: modifying one fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
 
 ## app_box_create
 
@@ -1773,11 +1773,11 @@ If this app has set `AppFamilyBoxAccess`, its boxes are family-shared, and modif
 
 Newly created boxes are filled with 0 bytes. `app_box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `app_box_create`.
 
-The box name must be between 1 and 64 bytes, the consensus parameter `MaxAppKeyLen`. The box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. Box access is never permitted from a ClearState program.
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
 
-An app may always operate on its own boxes. Accessing another app's box requires permission from that app: reads require the owner to have set `AppForeignBoxReads`, or `AppFamilyBoxAccess` if both apps have the same creator. All other operations (create, write, delete, resize, splice) require `AppFamilyBoxAccess` and that both apps have the same creator.
+An app may always operate on its own boxes. Reading another app's box requires the owner to have set `AppForeignBoxReads`, or `AppFamilyBoxAccess` if both apps share a creator; all other operations (create, write, delete, resize, splice) require `AppFamilyBoxAccess` and a shared creator.
 
-Modifying a family-shared box is additionally rejected if an app outside the family, somewhere on the call stack, separates this app from an ancestor in its own family that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
+Modifying a family-shared box also fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
 
 ## app_box_extract
 
@@ -1787,11 +1787,11 @@ Modifying a family-shared box is additionally rejected if an app outside the fam
 - Availability: v13
 - Mode: Application
 
-The box name must be between 1 and 64 bytes, the consensus parameter `MaxAppKeyLen`. The box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. Box access is never permitted from a ClearState program.
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
 
-An app may always operate on its own boxes. Accessing another app's box requires permission from that app: reads require the owner to have set `AppForeignBoxReads`, or `AppFamilyBoxAccess` if both apps have the same creator. All other operations (create, write, delete, resize, splice) require `AppFamilyBoxAccess` and that both apps have the same creator.
+An app may always operate on its own boxes. Reading another app's box requires the owner to have set `AppForeignBoxReads`, or `AppFamilyBoxAccess` if both apps share a creator; all other operations (create, write, delete, resize, splice) require `AppFamilyBoxAccess` and a shared creator.
 
-Modifying a family-shared box is additionally rejected if an app outside the family, somewhere on the call stack, separates this app from an ancestor in its own family that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
+Modifying a family-shared box also fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
 
 ## app_box_replace
 
@@ -1801,11 +1801,11 @@ Modifying a family-shared box is additionally rejected if an app outside the fam
 - Availability: v13
 - Mode: Application
 
-The box name must be between 1 and 64 bytes, the consensus parameter `MaxAppKeyLen`. The box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. Box access is never permitted from a ClearState program.
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
 
-An app may always operate on its own boxes. Accessing another app's box requires permission from that app: reads require the owner to have set `AppForeignBoxReads`, or `AppFamilyBoxAccess` if both apps have the same creator. All other operations (create, write, delete, resize, splice) require `AppFamilyBoxAccess` and that both apps have the same creator.
+An app may always operate on its own boxes. Reading another app's box requires the owner to have set `AppForeignBoxReads`, or `AppFamilyBoxAccess` if both apps share a creator; all other operations (create, write, delete, resize, splice) require `AppFamilyBoxAccess` and a shared creator.
 
-Modifying a family-shared box is additionally rejected if an app outside the family, somewhere on the call stack, separates this app from an ancestor in its own family that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
+Modifying a family-shared box also fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
 
 ## app_box_del
 
@@ -1815,11 +1815,11 @@ Modifying a family-shared box is additionally rejected if an app outside the fam
 - Availability: v13
 - Mode: Application
 
-The box name must be between 1 and 64 bytes, the consensus parameter `MaxAppKeyLen`. The box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. Box access is never permitted from a ClearState program.
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
 
-An app may always operate on its own boxes. Accessing another app's box requires permission from that app: reads require the owner to have set `AppForeignBoxReads`, or `AppFamilyBoxAccess` if both apps have the same creator. All other operations (create, write, delete, resize, splice) require `AppFamilyBoxAccess` and that both apps have the same creator.
+An app may always operate on its own boxes. Reading another app's box requires the owner to have set `AppForeignBoxReads`, or `AppFamilyBoxAccess` if both apps share a creator; all other operations (create, write, delete, resize, splice) require `AppFamilyBoxAccess` and a shared creator.
 
-Modifying a family-shared box is additionally rejected if an app outside the family, somewhere on the call stack, separates this app from an ancestor in its own family that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
+Modifying a family-shared box also fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
 
 ## app_box_len
 
@@ -1829,11 +1829,11 @@ Modifying a family-shared box is additionally rejected if an app outside the fam
 - Availability: v13
 - Mode: Application
 
-The box name must be between 1 and 64 bytes, the consensus parameter `MaxAppKeyLen`. The box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. Box access is never permitted from a ClearState program.
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
 
-An app may always operate on its own boxes. Accessing another app's box requires permission from that app: reads require the owner to have set `AppForeignBoxReads`, or `AppFamilyBoxAccess` if both apps have the same creator. All other operations (create, write, delete, resize, splice) require `AppFamilyBoxAccess` and that both apps have the same creator.
+An app may always operate on its own boxes. Reading another app's box requires the owner to have set `AppForeignBoxReads`, or `AppFamilyBoxAccess` if both apps share a creator; all other operations (create, write, delete, resize, splice) require `AppFamilyBoxAccess` and a shared creator.
 
-Modifying a family-shared box is additionally rejected if an app outside the family, somewhere on the call stack, separates this app from an ancestor in its own family that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
+Modifying a family-shared box also fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
 
 ## app_box_get
 
@@ -1845,11 +1845,11 @@ Modifying a family-shared box is additionally rejected if an app outside the fam
 
 For boxes that exceed 4,096 bytes, consider `app_box_create`, `app_box_extract`, and `app_box_replace`
 
-The box name must be between 1 and 64 bytes, the consensus parameter `MaxAppKeyLen`. The box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. Box access is never permitted from a ClearState program.
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
 
-An app may always operate on its own boxes. Accessing another app's box requires permission from that app: reads require the owner to have set `AppForeignBoxReads`, or `AppFamilyBoxAccess` if both apps have the same creator. All other operations (create, write, delete, resize, splice) require `AppFamilyBoxAccess` and that both apps have the same creator.
+An app may always operate on its own boxes. Reading another app's box requires the owner to have set `AppForeignBoxReads`, or `AppFamilyBoxAccess` if both apps share a creator; all other operations (create, write, delete, resize, splice) require `AppFamilyBoxAccess` and a shared creator.
 
-Modifying a family-shared box is additionally rejected if an app outside the family, somewhere on the call stack, separates this app from an ancestor in its own family that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
+Modifying a family-shared box also fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
 
 ## app_box_put
 
@@ -1861,11 +1861,11 @@ Modifying a family-shared box is additionally rejected if an app outside the fam
 
 For boxes that exceed 4,096 bytes, consider `app_box_create`, `app_box_extract`, and `app_box_replace`
 
-The box name must be between 1 and 64 bytes, the consensus parameter `MaxAppKeyLen`. The box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. Box access is never permitted from a ClearState program.
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
 
-An app may always operate on its own boxes. Accessing another app's box requires permission from that app: reads require the owner to have set `AppForeignBoxReads`, or `AppFamilyBoxAccess` if both apps have the same creator. All other operations (create, write, delete, resize, splice) require `AppFamilyBoxAccess` and that both apps have the same creator.
+An app may always operate on its own boxes. Reading another app's box requires the owner to have set `AppForeignBoxReads`, or `AppFamilyBoxAccess` if both apps share a creator; all other operations (create, write, delete, resize, splice) require `AppFamilyBoxAccess` and a shared creator.
 
-Modifying a family-shared box is additionally rejected if an app outside the family, somewhere on the call stack, separates this app from an ancestor in its own family that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
+Modifying a family-shared box also fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
 
 ## app_box_splice
 
@@ -1877,11 +1877,11 @@ Modifying a family-shared box is additionally rejected if an app outside the fam
 
 Boxes are of constant length. If D < len(E), then len(E)-D bytes will be removed from the end. If D > len(E), zero bytes will be appended to the end to reach the box length.
 
-The box name must be between 1 and 64 bytes, the consensus parameter `MaxAppKeyLen`. The box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. Box access is never permitted from a ClearState program.
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
 
-An app may always operate on its own boxes. Accessing another app's box requires permission from that app: reads require the owner to have set `AppForeignBoxReads`, or `AppFamilyBoxAccess` if both apps have the same creator. All other operations (create, write, delete, resize, splice) require `AppFamilyBoxAccess` and that both apps have the same creator.
+An app may always operate on its own boxes. Reading another app's box requires the owner to have set `AppForeignBoxReads`, or `AppFamilyBoxAccess` if both apps share a creator; all other operations (create, write, delete, resize, splice) require `AppFamilyBoxAccess` and a shared creator.
 
-Modifying a family-shared box is additionally rejected if an app outside the family, somewhere on the call stack, separates this app from an ancestor in its own family that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
+Modifying a family-shared box also fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
 
 ## app_box_resize
 
@@ -1891,11 +1891,11 @@ Modifying a family-shared box is additionally rejected if an app outside the fam
 - Availability: v13
 - Mode: Application
 
-The box name must be between 1 and 64 bytes, the consensus parameter `MaxAppKeyLen`. The box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. Box access is never permitted from a ClearState program.
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
 
-An app may always operate on its own boxes. Accessing another app's box requires permission from that app: reads require the owner to have set `AppForeignBoxReads`, or `AppFamilyBoxAccess` if both apps have the same creator. All other operations (create, write, delete, resize, splice) require `AppFamilyBoxAccess` and that both apps have the same creator.
+An app may always operate on its own boxes. Reading another app's box requires the owner to have set `AppForeignBoxReads`, or `AppFamilyBoxAccess` if both apps share a creator; all other operations (create, write, delete, resize, splice) require `AppFamilyBoxAccess` and a shared creator.
 
-Modifying a family-shared box is additionally rejected if an app outside the family, somewhere on the call stack, separates this app from an ancestor in its own family that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
+Modifying a family-shared box also fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
 
 ## ec_add
 

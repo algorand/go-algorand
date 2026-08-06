@@ -35,17 +35,17 @@ type OpDesc struct {
 // boxAccessExtra states the name and availability rules that lengthChecks and
 // availableAppBox enforce for every box opcode, not only the ones whose short
 // description mentions them.
-const boxAccessExtra = "The box name must be between 1 and 64 bytes, the consensus parameter `MaxAppKeyLen`. The box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. Box access is never permitted from a ClearState program."
+const boxAccessExtra = "The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes."
 
 // boxFamilyExtra describes the family reentrancy rule, which applies to an app's
 // own boxes as soon as it has set `AppFamilyBoxAccess`.
-const boxFamilyExtra = boxAccessExtra + "\n\nIf this app has set `AppFamilyBoxAccess`, its boxes are family-shared, and modifying one is rejected if an app outside the family, somewhere on the call stack, separates this app from an ancestor in its own family that has already read or written family-shared state, by analogy to the per-app reentrancy ban."
+const boxFamilyExtra = boxAccessExtra + "\n\nIf this app has set `AppFamilyBoxAccess`, its boxes are family-shared: modifying one fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban."
 
 // foreignBoxExtra describes the availability, authorization, and reentrancy rules
 // that govern access to another app's boxes.
 const foreignBoxExtra = boxAccessExtra +
-	"\n\nAn app may always operate on its own boxes. Accessing another app's box requires permission from that app: reads require the owner to have set `AppForeignBoxReads`, or `AppFamilyBoxAccess` if both apps have the same creator. All other operations (create, write, delete, resize, splice) require `AppFamilyBoxAccess` and that both apps have the same creator." +
-	"\n\nModifying a family-shared box is additionally rejected if an app outside the family, somewhere on the call stack, separates this app from an ancestor in its own family that has already read or written family-shared state, by analogy to the per-app reentrancy ban."
+	"\n\nAn app may always operate on its own boxes. Reading another app's box requires the owner to have set `AppForeignBoxReads`, or `AppFamilyBoxAccess` if both apps share a creator; all other operations (create, write, delete, resize, splice) require `AppFamilyBoxAccess` and a shared creator." +
+	"\n\nModifying a family-shared box also fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban."
 
 var opDescByName = map[string]OpDesc{
 	"err": {"Fail immediately.", "", nil, ""},
