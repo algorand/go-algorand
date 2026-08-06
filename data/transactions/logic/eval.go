@@ -1884,13 +1884,17 @@ func (cx *EvalContext) checkStep() (cost int, err error) {
 	return cost, nil
 }
 
-func (cx *EvalContext) ensureStackCap(targetCap int) {
+func (cx *EvalContext) ensureStackCap(targetCap int) error {
+	if targetCap > maxStackDepth {
+		return errors.New("stack overflow")
+	}
 	if cap(cx.Stack) < targetCap {
 		// Let's grow all at once, plus a little slack.
 		newStack := make([]stackValue, len(cx.Stack), targetCap+4)
 		copy(newStack, cx.Stack)
 		cx.Stack = newStack
 	}
+	return nil
 }
 
 func opErr(cx *EvalContext) error {
@@ -2648,10 +2652,9 @@ func opPushInts(cx *EvalContext) error {
 		return err
 	}
 	finalLen := len(cx.Stack) + len(intc)
-	if finalLen > maxStackDepth {
-		return errors.New("stack overflow")
+	if err := cx.ensureStackCap(finalLen); err != nil {
+		return err
 	}
-	cx.ensureStackCap(finalLen)
 	for _, cint := range intc {
 		sv := stackValue{Uint: cint}
 		cx.Stack = append(cx.Stack, sv)
@@ -2741,10 +2744,9 @@ func opPushBytess(cx *EvalContext) error {
 		return err
 	}
 	finalLen := len(cx.Stack) + len(cbytess)
-	if finalLen > maxStackDepth {
-		return errors.New("stack overflow")
+	if err := cx.ensureStackCap(finalLen); err != nil {
+		return err
 	}
-	cx.ensureStackCap(finalLen)
 	for _, cbytes := range cbytess {
 		sv := stackValue{Bytes: cbytes}
 		cx.Stack = append(cx.Stack, sv)
