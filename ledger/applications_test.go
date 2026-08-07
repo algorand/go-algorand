@@ -1449,8 +1449,16 @@ return
 		l1.AddBlock(blk, agreement.Certificate{})
 	}
 
+	// Wait for the blocks to reach the block DB before flushing the trackers.
+	// commitRound derives the round to flush from l1.Latest(), which counts
+	// blocks still queued in the blockQueue, and Close() discards whatever is
+	// left in that queue. Without this the tracker DB can end up ahead of the
+	// block DB, and reopening below resets the accounts DB back to genesis.
+	l1.WaitForCommit(l1.Latest())
+
 	app, err := l1.LookupApplication(l1.Latest(), creator, appIdx)
 	a.NoError(err)
+	a.NotNil(app.AppParams)
 	a.Greater(len(app.AppParams.ApprovalProgram), 0)
 
 	commitRound(10, 0, l1)
@@ -1464,6 +1472,9 @@ return
 
 	app, err = l2.LookupApplication(l2.Latest(), creator, appIdx)
 	a.NoError(err)
+	// LookupApplication reports a missing app as a nil AppParams with no error,
+	// so assert it exists rather than nil-dereferencing it below.
+	a.NotNil(app.AppParams)
 	a.Greater(len(app.AppParams.ApprovalProgram), 0)
 
 	txHeader = transactions.Header{
