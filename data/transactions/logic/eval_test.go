@@ -6334,6 +6334,162 @@ int 1
 `, 8)
 }
 
+func TestPushBytessSize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const legacyVersion = 12
+	legacy := func() *EvalParams { return optSigParams(protoVer(legacyVersion)) }
+
+	pushbytess := OpsByName[LogicVersion]["pushbytess"].Opcode
+	pop := OpsByName[LogicVersion]["pop"].Opcode
+
+	imm := func(version byte, lengths ...int) []byte {
+		program := []byte{version, pushbytess}
+		program = binary.AppendUvarint(program, uint64(len(lengths)))
+		for _, n := range lengths {
+			program = binary.AppendUvarint(program, uint64(n))
+			program = append(program, make([]byte, n)...)
+		}
+		return program
+	}
+	tail := func(program []byte, pushed int) []byte {
+		for range pushed {
+			program = append(program, pop)
+		}
+		return append(program, 0x81, 0x01)
+	}
+	tooBigErr := "pushbytess arg 0 is too big (4097 bytes, limit 4096)"
+
+	testLogicBytes(t, tail(imm(legacyVersion, maxStringSize), 1), legacy())
+	testLogicBytes(t, tail(imm(LogicVersion, maxStringSize), 1), nil)
+
+	testLogicBytes(t, tail(imm(legacyVersion, maxStringSize+1), 1), legacy())
+	testLogicBytes(t, tail(imm(LogicVersion, maxStringSize+1), 1), nil, tooBigErr, tooBigErr)
+
+	testLogicBytes(t, tail(imm(legacyVersion, 1, maxStringSize+1), 2), legacy())
+	testLogicBytes(t, tail(imm(LogicVersion, 1, maxStringSize+1), 2), nil,
+		"pushbytess arg 1 is too big", "pushbytess arg 1 is too big")
+
+	observable := func(version byte) []byte {
+		program := imm(version, maxStringSize+1)
+		program = append(program, OpsByName[LogicVersion]["len"].Opcode, 0x81)
+		program = binary.AppendUvarint(program, maxStringSize+1)
+		return append(program, OpsByName[LogicVersion]["=="].Opcode)
+	}
+	testLogicBytes(t, observable(legacyVersion), legacy())
+	testLogicBytes(t, observable(LogicVersion), nil, tooBigErr, tooBigErr)
+
+	dupn := func(version byte) []byte {
+		program := imm(version, maxStringSize+1)
+		program = append(program, OpsByName[LogicVersion]["dupn"].Opcode, 0x02)
+		return tail(program, 3)
+	}
+	testLogicBytes(t, dupn(legacyVersion), legacy())
+	testLogicBytes(t, dupn(LogicVersion), nil, tooBigErr, tooBigErr)
+
+	testLogicBytes(t, tail(imm(legacyVersion, maxStringSize+1), 1), nil, tooBigErr, tooBigErr)
+
+	bytecblock := OpsByName[LogicVersion]["bytecblock"].Opcode
+	unpushed := func(version byte) []byte {
+		program := []byte{version, bytecblock}
+		program = binary.AppendUvarint(program, 1)
+		program = binary.AppendUvarint(program, maxStringSize+1)
+		program = append(program, make([]byte, maxStringSize+1)...)
+		return append(program, 0x81, 0x01)
+	}
+	tooBigBcb := "bytecblock arg 0 is too big (4097 bytes, limit 4096)"
+	testLogicBytes(t, unpushed(legacyVersion), legacy())
+	testLogicBytes(t, unpushed(LogicVersion), nil, tooBigBcb, tooBigBcb)
+	testLogicBytes(t, unpushed(legacyVersion), nil, tooBigBcb, tooBigBcb)
+
+	tooBigBytec := "bytec_0 produced a too big (4097) byte-array"
+	pushed := func(version byte) []byte {
+		program := unpushed(version)
+		return append(program[:len(program)-2],
+			OpsByName[LogicVersion]["bytec_0"].Opcode, OpsByName[LogicVersion]["len"].Opcode)
+	}
+	testLogicBytes(t, pushed(legacyVersion), legacy(), "", tooBigBytec)
+	testLogicBytes(t, pushed(LogicVersion), nil, tooBigBcb, tooBigBcb)
+}
+
+func TestTrailingEmptyByteImm(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const legacyVersion = 12
+	legacy := func() *EvalParams { return optSigParams(protoVer(legacyVersion)) }
+	ran := "const bytes list ran past end of program"
+
+	pop := OpsByName[LogicVersion]["pop"].Opcode
+	for _, v := range []struct {
+		name string
+		tail []byte
+	}{
+		{"pushbytess", []byte{pop, pop, 0x81, 0x01}},
+		{"bytecblock", []byte{0x81, 0x01}},
+	} {
+		opcode := OpsByName[LogicVersion][v.name].Opcode
+
+		trailing := func(version byte) []byte {
+			return []byte{version, 0x81, 0x01, 0x43, opcode, 0x01, 0x00}
+		}
+		testLogicBytes(t, trailing(legacyVersion), legacy(), ran, "")
+		testLogicBytes(t, trailing(LogicVersion), nil)
+
+		testLogicBytes(t, trailing(legacyVersion), nil)
+
+		short := func(version byte) []byte {
+			return []byte{version, opcode, 0x01, 0x05, 0x01, 0x02}
+		}
+		testLogicBytes(t, short(legacyVersion), legacy(), ran, ran)
+		testLogicBytes(t, short(LogicVersion), nil, ran, ran)
+
+		mid := func(version byte) []byte {
+			return append([]byte{version, opcode, 0x02, 0x00, 0x01, 0x61}, v.tail...)
+		}
+		testLogicBytes(t, mid(legacyVersion), legacy())
+		testLogicBytes(t, mid(LogicVersion), nil)
+	}
+
+	pushbytess := OpsByName[LogicVersion]["pushbytess"].Opcode
+
+	assembled := testProg(t, `int 1; return; pushbytess ""`, LogicVersion).Program
+	require.Equal(t, []byte{LogicVersion, 0x81, 0x01, 0x43, pushbytess, 0x01, 0x00}, assembled)
+	_, err := Disassemble(assembled)
+	require.NoError(t, err)
+
+	testLogicBytes(t, []byte{LogicVersion, pushbytess, 0x01, 0x00}, nil,
+		"", "stack finished with bytes not int")
+}
+
+func TestBulkPushStackDepth(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	bulk := func(name string, n int) []byte {
+		program := []byte{LogicVersion, OpsByName[LogicVersion][name].Opcode}
+		program = binary.AppendUvarint(program, uint64(n))
+		for range n {
+			if name == "pushbytess" {
+				program = append(program, 0x01, 0xaa)
+			} else {
+				program = append(program, 0x01)
+			}
+		}
+		return program
+	}
+
+	for _, name := range []string{"pushbytess", "pushints"} {
+		testLogicBytes(t, bulk(name, maxStackDepth), nil,
+			"", fmt.Sprintf("stack len is %d instead of 1", maxStackDepth))
+
+		testLogicBytes(t, bulk(name, maxStackDepth+1), nil, "", "stack overflow")
+
+		testLogicBytes(t, bulk(name, 8000), nil, "", "stack overflow")
+	}
+}
+
 func TestNoHeaderLedger(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

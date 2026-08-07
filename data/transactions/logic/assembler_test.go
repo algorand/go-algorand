@@ -1840,11 +1840,11 @@ func TestAssembleBranchTooFar(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// Each chunk: pushbytes opcode (1) + length varint (3) + 16 KB data (1<<14)
-	// + pop (1). 65 chunks gives ~1.04 MB between b and done, comfortably above
-	// the 2^20 limit on a 3-byte varint placeholder.
-	const chunkData = 1 << 14
-	const chunks = 65
+	// Each chunk: pushbytes opcode (1) + length varint (2) + maxStringSize data
+	// (4096) + pop (1). 260 chunks gives ~1.07 MB between b and done,
+	// comfortably above the 2^20 limit on a 3-byte varint placeholder.
+	const chunkData = maxStringSize
+	const chunks = 260
 
 	var src strings.Builder
 	src.Grow(chunks * (2*chunkData + 32))
@@ -2204,6 +2204,9 @@ func TestConstantArgs(t *testing.T) {
 		testProg(t, "byte b32", v, exp(1, "byte b32 needs byte literal argument"))
 		testProg(t, "byte 0xaa 0xbb", v, exp(1, "byte with extraneous argument", 10))
 		testProg(t, "byte b32 MFRGGZDFMY MFRGGZDFMY", v, exp(1, "byte with extraneous argument", 20))
+		testProg(t, "byte 0x"+strings.Repeat("aa", maxStringSize), v)
+		testProg(t, "byte 0x"+strings.Repeat("aa", maxStringSize+1), v,
+			exp(1, "byte value is too big (4097 bytes, limit 4096)"))
 		testProg(t, "bytec", v, exp(1, "bytec expects 1 immediate argument"))
 		testProg(t, "bytec 1 x", v, exp(1, "bytec expects 1 immediate argument"))
 		testProg(t, "bytec pay", v, exp(1, "unable to parse constant \"pay\" as integer", 6)) // don't accept "pay" constant
@@ -2223,6 +2226,9 @@ func TestConstantArgs(t *testing.T) {
 		testProg(t, "pushbytes b32", v, exp(1, "pushbytes b32 needs byte literal argument"))
 		testProg(t, "pushbytes b32(MFRGGZDFMY", v, exp(1, "pushbytes argument b32(MFRGGZDFMY lacks closing parenthesis"))
 		testProg(t, "pushbytes b32(MFRGGZDFMY)X", v, exp(1, "pushbytes argument b32(MFRGGZDFMY)X must end at first closing parenthesis"))
+		testProg(t, "pushbytes 0x"+strings.Repeat("aa", maxStringSize), v)
+		testProg(t, "pushbytes 0x"+strings.Repeat("aa", maxStringSize+1), v,
+			exp(1, "pushbytes value is too big (4097 bytes, limit 4096)"))
 	}
 
 	for v := uint64(8); v <= AssemblerMaxVersion; v++ {
@@ -2237,6 +2243,16 @@ func TestConstantArgs(t *testing.T) {
 		testProg(t, "pushbytess b32(MFRGGZDFMY) b32(MFRGGZDFMY)", v)
 		testProg(t, "pushbytess b32 MFRGGZDFMY b32 MFRGGZDFMY", v)
 		testProg(t, "pushbytess b32(MFRGGZDFMY b32(MFRGGZDFMY)", v, exp(1, "pushbytess argument b32(MFRGGZDFMY lacks closing parenthesis"))
+
+		testProg(t, "pushbytess 0x"+strings.Repeat("aa", maxStringSize), v)
+		testProg(t, "pushbytess 0x"+strings.Repeat("aa", maxStringSize+1), v,
+			exp(1, "pushbytess arg 0 is too big (4097 bytes, limit 4096)"))
+		testProg(t, "pushbytess 0xaa 0x"+strings.Repeat("aa", maxStringSize+1), v,
+			exp(1, "pushbytess arg 1 is too big (4097 bytes, limit 4096)"))
+
+		testProg(t, "bytecblock 0x"+strings.Repeat("aa", maxStringSize), v)
+		testProg(t, "bytecblock 0x"+strings.Repeat("aa", maxStringSize+1), v,
+			exp(1, "bytecblock arg 0 is too big (4097 bytes, limit 4096)"))
 	}
 }
 
@@ -4137,6 +4153,10 @@ func TestAssemblePushConsts(t *testing.T) {
 	source = fmt.Sprintf(`pushbytess %s`, strings.Join(valsStr, " "))
 	ops = testProg(t, source, AssemblerMaxVersion)
 	requireProgramLen(t, source, AssemblerMaxVersion, ops.Program, 515) // prefix + opcode (1) + len (2) + bytess (512)
+
+	source = `int 1; pushbytess ""`
+	ops = testProg(t, source, AssemblerMaxVersion)
+	require.Equal(t, []byte{byte(AssemblerMaxVersion), 0x81, 0x01, 0x82, 0x01, 0x00}, ops.Program)
 
 	// enforce correct types
 	source = `pushints "1" "2" "3"`

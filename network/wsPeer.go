@@ -482,6 +482,14 @@ func (wp *wsPeer) OriginAddress() string {
 	return wp.originAddress
 }
 
+// GetNetworkType returns the transport protocol carrying this peer connection.
+func (wp *wsPeer) GetNetworkType() PeerNetworkType {
+	if wp.peerType == peerTypeP2P {
+		return PeerNetworkTypeLibP2P
+	}
+	return PeerNetworkTypeWebsocket
+}
+
 func (wp *wsPeer) reportReadErr(err error) {
 	// only report error if we haven't already closed the peer
 	if wp.didInnerClose.Load() == 0 {
