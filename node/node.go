@@ -1230,6 +1230,7 @@ func (node *AlgorandFullNode) StartCatchup(catchpoint string) error {
 	}
 	err = node.catchpointCatchupService.Start(node.ctx)
 	if err != nil {
+		node.catchpointCatchupService = nil
 		node.log.Warn(err.Error())
 		return MakeStartCatchpointError(catchpoint, err)
 	}

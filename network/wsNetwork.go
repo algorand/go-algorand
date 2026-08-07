@@ -560,7 +560,7 @@ func (wn *WebsocketNetwork) transportConnPeers(outgoing bool) []Peer {
 	var peers []Peer
 	for _, peer := range wn.peers {
 		if peer.outgoing == outgoing {
-			peers = append(peers, transportPeer{addr: peer.GetAddress(), networkType: peer.GetNetworkType()})
+			peers = append(peers, transportPeer{addr: peer.GetAddress(), networkType: PeerNetworkTypeWebsocket})
 		}
 	}
 	return peers
