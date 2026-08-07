@@ -50,6 +50,127 @@ import (
 var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 var testSinkAddr = basics.Address{0x2c, 0x2a, 0x6c, 0xe9, 0xa9, 0xa7, 0xc2, 0x8c, 0x22, 0x95, 0xfd, 0x32, 0x4f, 0x77, 0xa5, 0x4, 0x8b, 0x42, 0xc2, 0xb7, 0xa8, 0x54, 0x84, 0xb6, 0x80, 0xb1, 0xe1, 0x3d, 0x59, 0x9b, 0xeb, 0x36}
 
+func TestCheckGroupFeesBigLogicSigProgram(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	freeSize := int(proto.LogicSigMaxSize)
+
+	tests := []struct {
+		name        string
+		programSize int
+		fees        []uint64
+		wantErr     bool
+	}{
+		{
+			name:        "singleton underpaid",
+			programSize: freeSize + 1,
+			fees:        []uint64{proto.MinTxnFee},
+			wantErr:     true,
+		},
+		{
+			name:        "singleton paid",
+			programSize: freeSize + 1,
+			fees:        []uint64{proto.MinTxnFee + 1},
+		},
+		{
+			name:        "pooled surcharge underpaid",
+			programSize: 2*freeSize + 1,
+			fees:        []uint64{proto.MinTxnFee, proto.MinTxnFee},
+			wantErr:     true,
+		},
+		{
+			name:        "pooled surcharge paid by another group member",
+			programSize: 2*freeSize + 1,
+			fees:        []uint64{proto.MinTxnFee, proto.MinTxnFee + 1},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			program := make([]byte, tt.programSize)
+			logicSigSender := basics.Address(logic.HashProgram(program))
+
+			genesisInitState, addrs, _ := ledgertesting.Genesis(10)
+			genesisInitState.Accounts[logicSigSender] = basics.AccountData{
+				MicroAlgos: basics.MicroAlgos{Raw: 1_000_000_000},
+				Status:     basics.Offline,
+			}
+
+			l := newTestLedger(t, bookkeeping.GenesisBalances{
+				Balances:    genesisInitState.Accounts,
+				FeeSink:     testSinkAddr,
+				RewardsPool: testPoolAddr,
+			})
+			genesisBlockHeader, err := l.BlockHdr(basics.Round(0))
+			require.NoError(t, err)
+			newBlock := bookkeeping.MakeBlock(genesisBlockHeader)
+			eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
+			require.NoError(t, err)
+
+			txns := []transactions.SignedTxn{{
+				Txn: transactions.Transaction{
+					Type: protocol.PaymentTx,
+					Header: transactions.Header{
+						Sender:      logicSigSender,
+						Fee:         basics.MicroAlgos{Raw: tt.fees[0]},
+						FirstValid:  newBlock.Round(),
+						LastValid:   newBlock.Round(),
+						GenesisHash: l.GenesisHash(),
+					},
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver: addrs[0],
+					},
+				},
+				Lsig: transactions.LogicSig{
+					Logic: program,
+				},
+			}}
+
+			for i, fee := range tt.fees[1:] {
+				txns = append(txns, transactions.SignedTxn{
+					Txn: transactions.Transaction{
+						Type: protocol.PaymentTx,
+						Header: transactions.Header{
+							Sender:      addrs[i],
+							Fee:         basics.MicroAlgos{Raw: fee},
+							FirstValid:  newBlock.Round(),
+							LastValid:   newBlock.Round(),
+							GenesisHash: l.GenesisHash(),
+						},
+						PaymentTxnFields: transactions.PaymentTxnFields{
+							Receiver: addrs[i+1],
+						},
+					},
+				})
+			}
+
+			if len(txns) > 1 {
+				var group transactions.TxGroup
+				for _, stxn := range txns {
+					txn := stxn.Txn
+					txn.Group = crypto.Digest{}
+					group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(txn.ID()))
+				}
+				groupID := crypto.HashObj(group)
+				for i := range txns {
+					txns[i].Txn.Group = groupID
+				}
+			}
+
+			err = eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txns)...)
+			if tt.wantErr {
+				require.ErrorContains(t, err, "fees is less than")
+				var groupErr *ledgercore.TxGroupMalformedError
+				require.ErrorAs(t, err, &groupErr)
+				require.Equal(t, ledgercore.TxGroupErrorReasonInvalidFee, groupErr.Reason)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
 func TestBlockEvaluatorFeeSink(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

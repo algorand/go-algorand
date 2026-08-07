@@ -17,6 +17,7 @@
 package v2
 
 import (
+	"encoding/base64"
 	"fmt"
 	"testing"
 
@@ -145,7 +146,11 @@ func TestAccount(t *testing.T) {
 	verifyCreatedApp(0, appIdx1, appParams1)
 	verifyCreatedApp(1, appIdx2, appParams2)
 
-	makeTKV := func(k string, v interface{}) model.TealKeyValue {
+	b64 := func(s string) string {
+		return base64.StdEncoding.EncodeToString([]byte(s))
+	}
+
+	makeTKV := func(k string, v any) model.TealKeyValue {
 		value := model.TealValue{}
 		switch v.(type) {
 		case int:
@@ -155,7 +160,7 @@ func TestAccount(t *testing.T) {
 			value.Bytes = b64(v.(string))
 			value.Type = uint64(basics.TealBytesType)
 		default:
-			panic(fmt.Sprintf("Unknown teal type %v", t))
+			panic(fmt.Sprintf("Unknown teal type for %v", v))
 		}
 		return model.TealKeyValue{
 			Key:   b64(k),

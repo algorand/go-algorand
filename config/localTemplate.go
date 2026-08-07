@@ -430,7 +430,7 @@ type Local struct {
 	// CatchupBlockDownloadRetryAttempts controls the number of attempts the block fetcher would make before giving up on a provided catchpoint.
 	CatchupBlockDownloadRetryAttempts int `version[9]:"1000"`
 
-	// EnableDeveloperAPI enables teal/compile and teal/dryrun API endpoints.
+	// EnableDeveloperAPI enables teal/compile API endpoint.
 	// This functionality is disabled by default.
 	EnableDeveloperAPI bool `version[9]:"false"`
 
@@ -889,8 +889,8 @@ func (cfg *Local) ResolveLogPaths(rootDir string) (liveLog, archive string) {
 }
 
 type logger interface {
-	Infof(format string, args ...interface{})
-	Warnf(format string, args ...interface{})
+	Infof(format string, args ...any)
+	Warnf(format string, args ...any)
 }
 
 // EnsureAndResolveGenesisDirs will resolve the supplied config paths to absolute paths, and will create the genesis directories of each

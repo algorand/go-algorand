@@ -226,6 +226,11 @@ func TestForeignResolution(t *testing.T) {
 		{Index: 2, Name: []byte("xxx")},
 	}, tx.Boxes)
 
+	boxCount := len(tx.Boxes)
+	attachForeignRefs(&tx, RefBundle{EmptyRefs: 2})
+	a.Equal(boxCount+2, len(tx.Boxes))
+	a.Equal([]transactions.BoxRef{{}, {}}, tx.Boxes[boxCount:])
+
 	zero := basics.Address{0x00}
 	one := basics.Address{0x01}
 	two := basics.Address{0x02}
@@ -380,4 +385,9 @@ func TestAccessResolution(t *testing.T) {
 		{App: 444},
 		{Locals: transactions.LocalsRef{App: 22, Address: 15}},
 	}, tx.Access)
+
+	accessCount := len(tx.Access)
+	attachAccessList(&tx, RefBundle{EmptyRefs: 2})
+	a.Equal(accessCount+2, len(tx.Access))
+	a.Equal([]transactions.ResourceRef{{}, {}}, tx.Access[accessCount:])
 }

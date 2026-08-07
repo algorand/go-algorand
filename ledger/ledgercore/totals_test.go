@@ -30,10 +30,10 @@ func TestAccountTotalsCanMarshalMsg(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var at *AccountTotals
-	require.True(t, at.CanMarshalMsg(interface{}(at)))
-	require.False(t, at.CanMarshalMsg(interface{}(t)))
-	require.True(t, at.CanUnmarshalMsg(interface{}(at)))
-	require.False(t, at.CanUnmarshalMsg(interface{}(t)))
+	require.True(t, at.CanMarshalMsg(any(at)))
+	require.False(t, at.CanMarshalMsg(any(t)))
+	require.True(t, at.CanUnmarshalMsg(any(at)))
+	require.False(t, at.CanUnmarshalMsg(any(t)))
 }
 func TestAccountTotalsMarshalMsg(t *testing.T) {
 	partitiontest.PartitionTest(t)

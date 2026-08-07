@@ -135,7 +135,7 @@ The base64 encoding of the signature will always be printed to stdout. Optionall
 
 			// Ensure signed transaction has a logic sig with a
 			// program
-			if len(stxn.Lsig.Logic) == 0 {
+			if !stxn.Lsig.HasProgram() {
 				reportErrorf(tealsignEmptyLogic)
 			}
 

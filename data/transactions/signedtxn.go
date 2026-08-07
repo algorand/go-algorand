@@ -20,6 +20,7 @@ import (
 	"crypto/sha256"
 	"errors"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
@@ -32,11 +33,13 @@ import (
 type SignedTxn struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Sig      crypto.Signature   `codec:"sig"`
-	Msig     crypto.MultisigSig `codec:"msig"`
-	Lsig     LogicSig           `codec:"lsig"`
-	Txn      Transaction        `codec:"txn,required"`
-	AuthAddr basics.Address     `codec:"sgnr"`
+	Sig   crypto.Signature   `codec:"sig"`
+	Msig  crypto.MultisigSig `codec:"msig"`
+	Lsig  LogicSig           `codec:"lsig"`
+	PQsig PQSig              `codec:"pqsig"`
+
+	Txn      Transaction    `codec:"txn,required"`
+	AuthAddr basics.Address `codec:"sgnr"`
 }
 
 // SignedTxnInBlock is how a signed transaction is encoded in a block.
@@ -108,6 +111,33 @@ func (s SignedTxn) Authorizer() basics.Address {
 	return s.AuthAddr
 }
 
+// HasSignature reports whether any signature category is present.
+func (s SignedTxn) HasSignature() bool {
+	return !s.Sig.Blank() || !s.Msig.Blank() || !s.Lsig.Blank() || !s.PQsig.Blank()
+}
+
+// signatureFeeContribution dispatches the fee contribution of the signature type.
+// An unknown PQ scheme contributes zero, which is safe because the transaction
+// will be rejected during verification.
+func (s SignedTxn) signatureFeeContribution(proto config.ConsensusParams) basics.Micros {
+	if !s.PQsig.Blank() {
+		return proto.PQSchemeFeeContribution(s.PQsig.Scheme)
+	}
+	if !s.Lsig.PQsig.Blank() {
+		return proto.PQSchemeFeeContribution(s.Lsig.PQsig.Scheme)
+	}
+	return 0
+}
+
+// FeeFactor is the factor by which the base transaction fee is multiplied. Some
+// transactions are free, others might cost more because they use extra
+// expensive features (e.g., large Note fields, large app programs, quantum
+// sigs).  It is expressed as a fixed-point integer with 6 digits of
+// precision. So 1e6 is a normal base fee transaction.
+func (s SignedTxn) FeeFactor(proto config.ConsensusParams) basics.Micros {
+	return basics.AddSaturate(s.signatureFeeContribution(proto), s.Txn.feeFactor(proto))
+}
+
 // AssembleSignedTxn assembles a multisig-signed transaction from a transaction an optional sig, and an optional multisig.
 // No signature checking is done -- for example, this might only be a partial multisig
 // TODO: is this method used anywhere, or is it safe to remove?
@@ -155,18 +185,35 @@ func WrapSignedTxnsWithAD(txgroup []SignedTxn) []SignedTxnWithAD {
 	return txgroupad
 }
 
-// SummarizeFees takes a group and returns required fees, the total amount paid,
-// and the tip promised. The returned `usage` expresses how many basic
-// transaction fees must be paid by the group.
-func SummarizeFees(txgroup []SignedTxnWithAD) (usage basics.Micros, paid basics.MicroAlgos) {
+// logicSigProgramFeeContribution accounts for priced LogicSig program bytes.
+// This cannot live in Transaction.FeeFactor: the LogicSig is carried by
+// SignedTxn, outside the committed Transaction, and the priced byte count can
+// depend on the group-level LogicSig size allowance. LogicSig args are
+// intentionally ignored here because they can be supplied or padded
+// independently of the LogicSig program signer.
+func logicSigProgramFeeContribution(txgroup []SignedTxnWithAD, proto config.ConsensusParams) basics.Micros {
+	programBytes := 0
+	for _, txad := range txgroup {
+		programBytes += len(txad.SignedTxn.Lsig.Logic)
+	}
+	freeProgramBytes := len(txgroup) * int(proto.LogicSigMaxSize)
+	surcharge, _ := proto.PerByteTxnSurcharge.MulInt(programBytes - freeProgramBytes)
+	return surcharge
+}
+
+// SummarizeFees takes a group and returns the required fee usage and the total
+// amount paid. The returned `usage` expresses how many basic transaction fees
+// must be paid by the group.
+func SummarizeFees(txgroup []SignedTxnWithAD, proto config.ConsensusParams) (usage basics.Micros, paid basics.MicroAlgos) {
 	// TODO: We want to prevent the 2A fee paid to become incentive eligible
 	// from being reused for inners. Since that is expressed as a fixed fee, the
 	// best way to do it might be to not count it in `paid`.  The "obvious" way
 	// to do it (by adjusting the KeyReg's FeeFactor() is more difficult because
 	// the 2A fee is not defined in units of MinFee().
 	for _, txad := range txgroup {
-		usage = basics.AddSaturate(usage, txad.SignedTxn.Txn.FeeFactor())
+		usage = basics.AddSaturate(usage, txad.SignedTxn.FeeFactor(proto))
 		paid = paid.AddSaturate(txad.SignedTxn.Txn.Fee)
 	}
+	usage = basics.AddSaturate(usage, logicSigProgramFeeContribution(txgroup, proto))
 	return usage, paid
 }

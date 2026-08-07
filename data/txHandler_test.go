@@ -1381,9 +1381,9 @@ func getTransactionGroups(N, numUsers, maxGroupSize int, addresses []basics.Addr
 }
 
 func signTransactionGroups(txnGroups [][]transactions.Transaction, secrets []*crypto.SignatureSecrets, invalidProb float32) (
-	ret [][]transactions.SignedTxn, badTxnGroups map[uint64]interface{}) {
+	ret [][]transactions.SignedTxn, badTxnGroups map[uint64]any) {
 	numUsers := len(secrets)
-	badTxnGroups = make(map[uint64]interface{})
+	badTxnGroups = make(map[uint64]any)
 	for tg := range txnGroups {
 		grpSize := len(txnGroups[tg])
 		signedTxGroup := make([]transactions.SignedTxn, 0, grpSize)
@@ -1404,13 +1404,13 @@ func signTransactionGroups(txnGroups [][]transactions.Transaction, secrets []*cr
 }
 
 func signMSigTransactionGroups(txnGroups [][]transactions.Transaction, secrets []*crypto.SignatureSecrets,
-	invalidProb float32, msigSize int) (ret [][]transactions.SignedTxn, badTxnGroups map[uint64]interface{}, err error) {
+	invalidProb float32, msigSize int) (ret [][]transactions.SignedTxn, badTxnGroups map[uint64]any, err error) {
 	ret = make([][]transactions.SignedTxn, len(txnGroups))
 	numUsers := len(secrets)
-	badTxnGroups = make(map[uint64]interface{})
+	badTxnGroups = make(map[uint64]any)
 	badTxnGroupsMU := deadlock.Mutex{}
 	// process them using multiple threads
-	workers := make(chan interface{}, runtime.NumCPU()-1)
+	workers := make(chan any, runtime.NumCPU()-1)
 	wg := sync.WaitGroup{}
 	errChan := make(chan error, 1)
 	for tg := range txnGroups {
@@ -1488,7 +1488,7 @@ func signMSigTransactionGroups(txnGroups [][]transactions.Transaction, secrets [
 // invalid signatures of a given probability (invalidProb)
 func makeSignedTxnGroups(N, numUsers, maxGroupSize int, invalidProb float32, addresses []basics.Address,
 	secrets []*crypto.SignatureSecrets) (ret [][]transactions.SignedTxn,
-	badTxnGroups map[uint64]interface{}) {
+	badTxnGroups map[uint64]any) {
 
 	txnGroups := getTransactionGroups(N, numUsers, maxGroupSize, addresses)
 	ret, badTxnGroups = signTransactionGroups(txnGroups, secrets, invalidProb)
@@ -1597,7 +1597,7 @@ func BenchmarkHandleLsigTxnGroups(b *testing.B) {
 
 type txGenIf interface {
 	makeLedger(tb testing.TB, cfg config.Local, log logging.Logger, namePrefix string) *Ledger
-	createSignedTxGroups(tb testing.TB, txgCount int) ([][]transactions.SignedTxn, map[uint64]interface{})
+	createSignedTxGroups(tb testing.TB, txgCount int) ([][]transactions.SignedTxn, map[uint64]any)
 }
 
 type txGenerator struct {
@@ -1652,7 +1652,7 @@ func makeSigGenerator(tb testing.TB, numUsers, maxGroupSize int, invalidRate flo
 	}
 }
 
-func (g *sigGenerator) createSignedTxGroups(tb testing.TB, txgCount int) ([][]transactions.SignedTxn, map[uint64]interface{}) {
+func (g *sigGenerator) createSignedTxGroups(tb testing.TB, txgCount int) ([][]transactions.SignedTxn, map[uint64]any) {
 	return makeSignedTxnGroups(txgCount, g.numUsers, g.maxGroupSize, g.invalidRate, g.addresses, g.secrets)
 }
 
@@ -1663,7 +1663,7 @@ func makeMsigGenerator(tb testing.TB, numUsers, maxGroupSize int, invalidRate fl
 	}
 }
 
-func (g *msigGenerator) createSignedTxGroups(tb testing.TB, txgCount int) ([][]transactions.SignedTxn, map[uint64]interface{}) {
+func (g *msigGenerator) createSignedTxGroups(tb testing.TB, txgCount int) ([][]transactions.SignedTxn, map[uint64]any) {
 	txnGroups := getTransactionGroups(txgCount, g.numUsers, g.maxGroupSize, g.addresses)
 	signedTransactionGroups, badTxnGroups, err := signMSigTransactionGroups(txnGroups, g.secrets, g.invalidRate, g.msigSize)
 	require.NoError(tb, err)
@@ -1676,9 +1676,9 @@ func makeLsigGenerator(tb testing.TB, numUsers, maxGroupSize int, invalidRate fl
 	}
 }
 
-func (g *lsigGenerator) createSignedTxGroups(tb testing.TB, txgCount int) ([][]transactions.SignedTxn, map[uint64]interface{}) {
+func (g *lsigGenerator) createSignedTxGroups(tb testing.TB, txgCount int) ([][]transactions.SignedTxn, map[uint64]any) {
 	stxns := make([][]transactions.SignedTxn, txgCount)
-	badTxnGroups := make(map[uint64]interface{})
+	badTxnGroups := make(map[uint64]any)
 	for i := 0; i < txgCount; i++ {
 		txns := txntest.CreateTinyManTxGroup(tb, true)
 		stxns[i], _ = txntest.CreateTinyManSignedTxGroup(tb, txns)
@@ -1831,7 +1831,7 @@ func runHandlerBenchmarkWithBacklog(b *testing.B, txGen txGenIf, tps int, useBac
 			handler.Stop() // cancel the handler ctx
 		}()
 		counterMutex := deadlock.Mutex{}
-		stopChan := make(chan interface{})
+		stopChan := make(chan any)
 		// monitor the counters to tell when everything is processed and the checker should stop
 		wg.Add(1)
 		go func() {

@@ -39,7 +39,7 @@ func makeSerErrStr(text string) *serializableError {
 	return &s
 }
 
-func makeSerErrf(format string, a ...interface{}) *serializableError {
+func makeSerErrf(format string, a ...any) *serializableError {
 	s := serializableError(fmt.Sprintf(format, a...))
 	return &s
 }

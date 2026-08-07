@@ -37,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -194,6 +195,29 @@ func (m *mockNode) SuggestedFee() basics.MicroAlgos {
 // unused by handlers:
 func (m *mockNode) Config() config.Local {
 	return m.config
+}
+
+// mockPeer implements network.PeerConnectionInfo
+type mockPeer struct {
+	addr        string
+	networkType network.PeerNetworkType
+}
+
+func (p mockPeer) GetAddress() string                      { return p.addr }
+func (p mockPeer) GetNetworkType() network.PeerNetworkType { return p.networkType }
+
+func (m *mockNode) GetPeers() (inboundPeers []network.Peer, outboundPeers []network.Peer, err error) {
+	if m.err != nil {
+		return nil, nil, m.err
+	}
+	inboundPeers = []network.Peer{
+		mockPeer{addr: "192.168.10.2:4160", networkType: network.PeerNetworkTypeWebsocket},
+	}
+	outboundPeers = []network.Peer{
+		mockPeer{addr: "/ip4/192.168.10.3/tcp/4190", networkType: network.PeerNetworkTypeLibP2P},
+		mockPeer{addr: "192.168.10.4:4160", networkType: network.PeerNetworkTypeWebsocket},
+	}
+	return inboundPeers, outboundPeers, nil
 }
 
 func (m *mockNode) StartCatchup(catchpoint string) error {

@@ -83,7 +83,7 @@ type mockPool struct {
 	asyncDelay   chan struct{} // used to control when the task gets executed after EnqueueBacklog queues and returns
 }
 
-func (mp *mockPool) EnqueueBacklog(enqueueCtx context.Context, t ExecFunc, arg interface{}, out chan interface{}) error {
+func (mp *mockPool) EnqueueBacklog(enqueueCtx context.Context, t ExecFunc, arg any, out chan any) error {
 	// allow the test to know when the exec pool is executing the job
 	<-mp.hold
 	// simulate the execution of the job by the pool
