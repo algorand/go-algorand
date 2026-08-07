@@ -402,6 +402,8 @@ func ApplicationParamsToAppParams(gap *model.ApplicationParams) (basics.AppParam
 		ap.ExtraProgramPages = uint32(*gap.ExtraProgramPages)
 	}
 	ap.Version = nilToZero(gap.Version)
+	ap.ForeignBoxReads = nilToZero(gap.ForeignBoxReads)
+	ap.FamilyBoxAccess = nilToZero(gap.FamilyBoxAccess)
 
 	if gap.LocalStateSchema != nil {
 		ap.LocalStateSchema = basics.StateSchema{
@@ -448,8 +450,10 @@ func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *b
 				NumByteSlice: appParams.GlobalStateSchema.NumByteSlice,
 				NumUint:      appParams.GlobalStateSchema.NumUint,
 			},
-			Version:     omitEmpty(appParams.Version),
-			SizeSponsor: addrOrNil(appParams.SizeSponsor),
+			Version:         omitEmpty(appParams.Version),
+			SizeSponsor:     addrOrNil(appParams.SizeSponsor),
+			ForeignBoxReads: omitEmpty(appParams.ForeignBoxReads),
+			FamilyBoxAccess: omitEmpty(appParams.FamilyBoxAccess),
 		},
 	}
 	return app

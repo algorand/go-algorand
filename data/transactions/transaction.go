@@ -182,25 +182,52 @@ func (tx Transaction) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Transaction, protocol.Encode(&tx)
 }
 
-// FeeFactor is the factor by which the base transaction fee is multiplied. Some
-// transactions are free, others might cost more (none do yet) because they use
-// extra expensive features.  It is expressed as in fixed-point integer with 6 digits
-// of precision. So 1e6 is a normal base fee transaction.
-func (tx Transaction) FeeFactor() basics.Micros {
+func (tx Transaction) isSingletonHeartbeat() bool {
+	return tx.Type == protocol.HeartbeatTx && tx.Group.IsZero()
+}
+
+// feeFactor is the factor by which the base transaction fee is multiplied. Some
+// transactions are free, others might cost more because they use extra
+// expensive features (e.g., large Note fields, large app programs).  It is
+// expressed as a fixed-point integer with 6 digits of precision. So 1e6 is a
+// normal base fee transaction.  It is not exported because one should surely
+// use SignedTxn's version, which would include any surcharges for signatures.
+func (tx Transaction) feeFactor(proto config.ConsensusParams) basics.Micros {
+	factor := basics.Micros(1e6)
+	factor = basics.AddSaturate(factor, tx.Header.FeeContribution(proto))
 	switch tx.Type {
 	case protocol.StateProofTx:
 		return 0
 	case protocol.HeartbeatTx:
-		if tx.Group.IsZero() {
-			// Not every singleton heartbeat is actually free. We confirm a
-			// low/no fee heartbeat is legal in heartbeat's wellFormed() and in
-			// apply/heartbeat.go (for the dynamic check for challenge).
-			return 0
+		// A heartbeat that claims the challenge discount owes one less min fee.
+		// wellFormed() forbids extras (Note, etc.) on such a heartbeat, so factor
+		// is 1e6 for it and this drops it to 0. apply/heartbeat.go verifies the
+		// account is actually under challenge. The explicit discount rule shares
+		// the transaction-size-pricing upgrade; before it, the same discount is
+		// inferred from an underpaid singleton heartbeat instead.
+		if proto.TxnSizePricingEnabled() {
+			if tx.HeartbeatTxnFields != nil && tx.HeartbeatTxnFields.HbChallengeDiscount {
+				factor = basics.SubSaturate(factor, basics.Micros(1e6))
+			}
+		} else if tx.isSingletonHeartbeat() {
+			factor = basics.SubSaturate(factor, basics.Micros(1e6))
 		}
-		return 1e6
+	case protocol.ApplicationCallTx:
+		factor = basics.AddSaturate(factor, tx.ApplicationCallTxnFields.feeContribution(proto))
 	default:
-		return 1e6
+		// no exceptional costs
 	}
+	return factor
+}
+
+// FeeContribution returns the amount a transaction's basic fee factor should be
+// increased due to contents of the header.
+func (header Header) FeeContribution(proto config.ConsensusParams) basics.Micros {
+	var cost basics.Micros
+	// Add extra cost for Note bytes beyond standard size.
+	surcharge, _ := proto.PerByteTxnSurcharge.MulInt(len(header.Note) - proto.MaxTxnNoteBytes)
+	cost = basics.AddSaturate(cost, surcharge)
+	return cost
 }
 
 // txAllocSize returns the max possible size of a transaction without state proof fields.
@@ -212,7 +239,7 @@ func txAllocSize() int {
 // txEncodingPool holds temporary byte slice buffers used for encoding transaction messages.
 // Note, it prepends protocol.Transaction tag to the buffer economizing on subsequent append ops.
 var txEncodingPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		size := txAllocSize() + len(protocol.Transaction)
 		buf := make([]byte, len(protocol.Transaction), size)
 		copy(buf, []byte(protocol.Transaction))
@@ -465,8 +492,8 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	if tx.LastValid-tx.FirstValid > basics.Round(proto.MaxTxnLife) {
 		return fmt.Errorf("transaction window size excessive (%v--%v)", tx.FirstValid, tx.LastValid)
 	}
-	if len(tx.Note) > proto.MaxTxnNoteBytes {
-		return fmt.Errorf("transaction note too big: %d > %d", len(tx.Note), proto.MaxTxnNoteBytes)
+	if len(tx.Note) > proto.MaxAbsoluteTxnNoteBytes {
+		return fmt.Errorf("transaction note too big: %d > %d", len(tx.Note), proto.MaxAbsoluteTxnNoteBytes)
 	}
 	if tx.Sender == spec.RewardsPool {
 		// this check is just to be safe, but reaching here seems impossible, since it requires computing a preimage of rwpool

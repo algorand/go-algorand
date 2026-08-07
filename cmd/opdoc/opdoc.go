@@ -58,16 +58,21 @@ func opImmediateNoteSyntaxMarkdown(name string, oids []logic.OpImmediateDetails)
 	return fmt.Sprintf("`%s %s` where %s", name, strings.Join(argNames, " "), strings.Join(argDocs, ", "))
 }
 
-func opImmediateNoteEncoding(opcode byte, oids []logic.OpImmediateDetails) string {
+func opImmediateNoteEncoding(op *logic.OpSpec, oids []logic.OpImmediateDetails) string {
+	prefix := fmt.Sprintf("0x%02x", op.Opcode)
+	if op.SubOpcode != 0 {
+		// multi-byte opcode: the sub-opcode byte follows the prefix byte
+		prefix += fmt.Sprintf(" 0x%02x", op.SubOpcode)
+	}
 	if len(oids) == 0 {
-		return fmt.Sprintf("0x%02x", opcode)
+		return prefix
 	}
 
 	notes := make([]string, len(oids))
 	for idx, oid := range oids {
 		notes[idx] = oid.Encoding
 	}
-	return fmt.Sprintf("0x%02x {%s}", opcode, strings.Join(notes, "}, {"))
+	return fmt.Sprintf("%s {%s}", prefix, strings.Join(notes, "}, {"))
 }
 
 func opGroupMarkdownTable(names []string, out io.Writer, version uint64) {
@@ -226,7 +231,7 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bo
 		syntax = fmt.Sprintf("- Syntax: %s\n", opSyntax)
 	}
 
-	encoding := fmt.Sprintf("- Bytecode: %s", opImmediateNoteEncoding(op.Opcode, deets))
+	encoding := fmt.Sprintf("- Bytecode: %s", opImmediateNoteEncoding(op, deets))
 
 	stackEffects := stackMarkdown(op)
 
@@ -289,16 +294,36 @@ Opcodes have a cost of 1 unless otherwise specified.
 	return nil
 }
 
+// opcodeBytes is the bytecode that introduces an op: a single prefix byte for
+// ordinary opcodes, or [prefix, sub-opcode] for a member of a multi-byte
+// family. It marshals as a bare number in the single-byte case to preserve the
+// historical langspec format, and as an array otherwise.
+type opcodeBytes []byte
+
+// MarshalJSON renders a single-byte opcode as a number and a multi-byte opcode
+// as an array of numbers (e.g. 212 vs [212, 1]).
+func (o opcodeBytes) MarshalJSON() ([]byte, error) {
+	if len(o) == 1 {
+		return json.Marshal(o[0])
+	}
+	ints := make([]int, len(o))
+	for i, b := range o {
+		ints[i] = int(b)
+	}
+	return json.Marshal(ints)
+}
+
 // OpRecord is a consolidated record of things about an Op
 type OpRecord struct {
-	Opcode  byte
+	Opcode  opcodeBytes
 	Name    string
 	Args    []string `json:",omitempty"`
 	Returns []string `json:",omitempty"`
 	Size    int
 
-	ArgEnum      []string `json:",omitempty"`
-	ArgEnumTypes []string `json:",omitempty"`
+	ArgEnum      []string    `json:",omitempty"`
+	ArgEnumTypes []string    `json:",omitempty"`
+	ArgDetails   []argDetail `json:",omitempty"`
 
 	DocCost string
 
@@ -307,6 +332,16 @@ type OpRecord struct {
 	ImmediateNote     []logic.OpImmediateDetails `json:",omitempty"`
 	IntroducedVersion uint64
 	Groups            []string
+	Modes             logic.RunMode
+}
+
+type argDetail struct {
+	Name         string
+	Type         string `json:",omitempty"`
+	Doc          string
+	ByteEncoding int
+	Modes        logic.RunMode `json:",omitempty"` // Zero means "same as the opcode"
+	Version      uint64        `json:",omitempty"`
 }
 
 type namedType struct {
@@ -360,6 +395,8 @@ func typeStrings(types logic.StackTypes) []string {
 		out[idx] = t.String()
 		if out[idx] != "none" {
 			allNones = false
+		} else {
+			out[idx] = "" // So omitempty removes it
 		}
 	}
 
@@ -374,54 +411,93 @@ func typeStrings(types logic.StackTypes) []string {
 	return out
 }
 
-func fieldsAndTypes(group logic.FieldGroup, version uint64) ([]string, []string) {
+func fieldsAndTypes(group logic.FieldGroup, version uint64, modes logic.RunMode) ([]string, []string, []argDetail) {
 	// reminder: group.Names can be "sparse" See: logic.TxnaFields
 	fields := make([]string, 0, len(group.Names))
 	types := make([]logic.StackType, 0, len(group.Names))
+	details := make([]argDetail, 0, len(group.Names))
+
 	for _, name := range group.Names {
-		if spec, ok := group.SpecByName(name); ok && spec.Version() <= version {
-			fields = append(fields, name)
-			types = append(types, spec.Type())
+		spec, ok := group.SpecByName(name)
+		if !ok {
+			continue
 		}
+		argVersion := spec.Version()
+		argMode := modes & spec.Modes()
+		if version < argVersion || argMode == 0 {
+			continue
+		}
+
+		if argMode == modes {
+			argMode = 0
+		}
+
+		fields = append(fields, name)
+		types = append(types, spec.Type())
+		typeName := spec.Type().String()
+		if typeName == "none" {
+			typeName = ""
+		}
+
+		details = append(details, argDetail{
+			Name:         name,
+			Type:         typeName,
+			Doc:          spec.Note(),
+			ByteEncoding: int(spec.Field()),
+			Modes:        argMode,
+			Version:      argVersion,
+		})
 	}
-	return fields, typeStrings(types)
+	return fields, typeStrings(types), details
 }
 
-func argEnums(name string, version uint64) ([]string, []string) {
+func argEnums(op *logic.OpSpec, version uint64) ([]string, []string, []argDetail) {
 	// reminder: this needs to be manually updated every time
 	// a new opcode is added with an associated FieldGroup
 	// it'd be nice to have this auto-update
-	switch name {
+	switch op.Name {
 	case "txn", "gtxn", "gtxns", "itxn", "gitxn":
-		return fieldsAndTypes(logic.TxnFields, version)
+		return fieldsAndTypes(logic.TxnFields, version, op.Modes)
 	case "itxn_field":
 		// itxn_field does not *return* a type depending on its immediate. It *takes* it.
 		// but until a consumer cares, ArgEnumTypes will be overloaded for that meaning.
-		return fieldsAndTypes(logic.ItxnSettableFields, version)
+		return fieldsAndTypes(logic.ItxnSettableFields, version, op.Modes)
 	case "global":
-		return fieldsAndTypes(logic.GlobalFields, version)
+		return fieldsAndTypes(logic.GlobalFields, version, op.Modes)
 	case "txna", "gtxna", "gtxnsa", "txnas", "gtxnas", "gtxnsas", "itxna", "gitxna":
-		return fieldsAndTypes(logic.TxnArrayFields, version)
+		return fieldsAndTypes(logic.TxnArrayFields, version, op.Modes)
 	case "asset_holding_get":
-		return fieldsAndTypes(logic.AssetHoldingFields, version)
+		return fieldsAndTypes(logic.AssetHoldingFields, version, op.Modes)
 	case "asset_params_get":
-		return fieldsAndTypes(logic.AssetParamsFields, version)
+		return fieldsAndTypes(logic.AssetParamsFields, version, op.Modes)
 	case "app_params_get":
-		return fieldsAndTypes(logic.AppParamsFields, version)
+		return fieldsAndTypes(logic.AppParamsFields, version, op.Modes)
+	case "app_params_set":
+		// app_params_set does not *return* a type depending on its immediate. It
+		// *takes* it, like itxn_field. ArgEnumTypes is overloaded for that meaning.
+		return fieldsAndTypes(logic.AppParamsSettableFields, version, op.Modes)
 	case "acct_params_get":
-		return fieldsAndTypes(logic.AcctParamsFields, version)
+		return fieldsAndTypes(logic.AcctParamsFields, version, op.Modes)
 	case "block":
-		return fieldsAndTypes(logic.BlockFields, version)
+		return fieldsAndTypes(logic.BlockFields, version, op.Modes)
 	case "json_ref":
-		return fieldsAndTypes(logic.JSONRefTypes, version)
+		return fieldsAndTypes(logic.JSONRefTypes, version, op.Modes)
 	case "base64_decode":
-		return fieldsAndTypes(logic.Base64Encodings, version)
+		return fieldsAndTypes(logic.Base64Encodings, version, op.Modes)
 	case "vrf_verify":
-		return fieldsAndTypes(logic.VrfStandards, version)
+		return fieldsAndTypes(logic.VrfStandards, version, op.Modes)
 	case "ecdsa_pk_recover", "ecdsa_verify", "ecdsa_pk_decompress":
-		return fieldsAndTypes(logic.EcdsaCurves, version)
+		return fieldsAndTypes(logic.EcdsaCurves, version, op.Modes)
+	case "ec_add", "ec_scalar_mul", "ec_pairing_check", "ec_multi_scalar_mul", "ec_subgroup_check", "ec_map_to":
+		return fieldsAndTypes(logic.EcGroups, version, op.Modes)
+	case "voter_params_get":
+		return fieldsAndTypes(logic.VoterParamsFields, version, op.Modes)
+	case "mimc":
+		return fieldsAndTypes(logic.MimcConfigs, version, op.Modes)
+	case "poseidon2":
+		return fieldsAndTypes(logic.Poseidon2Configs, version, op.Modes)
 	default:
-		return nil, nil
+		return nil, nil, nil
 	}
 }
 
@@ -429,19 +505,24 @@ func buildLanguageSpec(opGroups map[string][]string, namedTypes []namedType, ver
 	opSpecs := logic.OpcodesByVersion(version)
 	records := make([]OpRecord, len(opSpecs))
 	for i, spec := range opSpecs {
-		records[i].Opcode = spec.Opcode
+		if spec.SubOpcode != 0 {
+			records[i].Opcode = opcodeBytes{spec.Opcode, spec.SubOpcode}
+		} else {
+			records[i].Opcode = opcodeBytes{spec.Opcode}
+		}
 		records[i].Name = spec.Name
 		records[i].Args = typeStrings(spec.Arg.Types)
 		records[i].Returns = typeStrings(spec.Return.Types)
 		records[i].Size = spec.OpDetails.Size
 		records[i].DocCost = spec.DocCost(version)
-		records[i].ArgEnum, records[i].ArgEnumTypes = argEnums(spec.Name, version)
+		records[i].ArgEnum, records[i].ArgEnumTypes, records[i].ArgDetails = argEnums(&spec, version)
 		desc := logic.OpDescOf(spec.Name)
 		records[i].Doc = desc.Short
 		records[i].DocExtra = desc.Extra
 		records[i].ImmediateNote = logic.OpImmediateDetailsFromSpec(spec)
 		records[i].Groups = opGroups[spec.Name]
 		records[i].IntroducedVersion = spec.Version
+		records[i].Modes = spec.Modes
 	}
 
 	return &LanguageSpec{
@@ -462,7 +543,7 @@ func create(file string) *os.File {
 }
 
 func main() {
-	const docVersion = uint64(12)
+	const docVersion = 13
 
 	opGroups := make(map[string][]string, len(logic.OpSpecs))
 	for grp, names := range logic.OpGroups {

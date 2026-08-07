@@ -18,11 +18,17 @@ package dnssec
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/miekg/dns"
 )
+
+// ednsUDPBufferSize is the EDNS0 UDP payload size advertised to DNS servers. Per DNS Flag
+// Day 2020, 1232 bytes keeps responses below the common path MTU to avoid IP fragmentation;
+// larger responses come back truncated (or are dropped) and are retried over TCP by queryServer.
+const ednsUDPBufferSize = 1232
 
 // Querier provides a method for getting RRSet and RRSig from DNSSEC-aware server
 type Querier interface {
@@ -52,14 +58,26 @@ type qsi struct {
 
 // queryServer performs DNS query against provided server with respect of both context and timeout restrictions.
 // If UDP fails then retries with TCP client
-func (t qsi) queryServer(ctx context.Context, server ResolverAddress, msg *dns.Msg, timeout time.Duration) (resp *dns.Msg, err error) {
+func (t qsi) queryServer(ctx context.Context, server ResolverAddress, msg *dns.Msg, timeout time.Duration) (*dns.Msg, error) {
+	var lastErr error
 	for _, netType := range []string{"udp", "tcp"} {
-		if resp, _, err = (&dns.Client{Net: netType, ReadTimeout: timeout}).ExchangeContext(ctx, msg, string(server)); err != nil {
-			return nil, err
+		// Timeout bounds dial+write+read; without it dial/write use miekg's 2s default.
+		resp, _, err := (&dns.Client{Net: netType, Timeout: timeout}).ExchangeContext(ctx, msg, string(server))
+		if err != nil {
+			// Fall through to TCP on a UDP error too (dropped response, or UDP/53
+			// filtered); only a finished context is fatal.
+			if ctx.Err() != nil {
+				return nil, err
+			}
+			lastErr = err
+			continue
 		}
 		if !resp.Truncated {
-			return
+			return resp, nil
 		}
+	}
+	if lastErr != nil {
+		return nil, lastErr
 	}
 	var name string
 	if len(msg.Question) > 0 {
@@ -75,14 +93,20 @@ func (r *dnsClient) query(ctx context.Context, name string, qtype uint16) (resp 
 	msg := new(dns.Msg)
 	msg.RecursionDesired = true
 	msg.SetQuestion(name, qtype)
-	msg.SetEdns0(4096, true) // high enough value prevents truncation and retries with TCP
+	msg.SetEdns0(ednsUDPBufferSize, true)
 
+	var errs []error
 	for _, server := range r.servers {
-		resp, err := r.transport.queryServer(ctx, server, msg, r.readTimeout)
+		resp, err = r.transport.queryServer(ctx, server, msg, r.readTimeout)
 		if err != nil {
+			// Keep each server's error so the eventual failure explains itself.
+			errs = append(errs, fmt.Errorf("%s: %w", server, err))
 			continue
 		}
-		return resp, err
+		return resp, nil
+	}
+	if len(errs) > 0 {
+		return nil, fmt.Errorf("no answer for (%s, %d) from DNS servers %v: %w", name, qtype, r.servers, errors.Join(errs...))
 	}
 	return nil, fmt.Errorf("no answer for (%s, %d) from DNS servers %v", name, qtype, r.servers)
 }

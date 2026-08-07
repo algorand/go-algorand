@@ -252,7 +252,7 @@ cb_addr=$(${gcmd} asset info --assetid $ASSETID | clawback_addr)
 RES=$(appl "transfer(uint64,uint64,address):void" --from="$SMALL" \
      --app-arg="int:$ASSETID" --app-arg="int:1000" --app-arg="addr:$USER2" \
      --foreign-asset="$ASSETID" --app-account="$USER2" 2>&1) && {
-    date '+app-assets-access FAIL transfer should fail without explicit holding %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL transfer should fail without explicit holding %Y%m%d_%H%M%S"
     exit 1
 }
 # allowsAssetTransfer checks the AssetReceiver before AssetSender, so we get that error.
@@ -273,7 +273,7 @@ appl "transfer(uint64,uint64,address):void" \
 RES=$(appl "transfer(uint64,uint64,address):void" --from="$USER2" \
      --app-arg="int:$ASSETID" --app-arg="int:100" --foreign-asset="$ASSETID" \
      --app-arg="addr:$SMALL" --app-account="$SMALL" 2>&1) && {
-    date '+app-assets FAIL transfer using --access should fail without explicit holding %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL transfer using --access should fail without explicit holding %Y%m%d_%H%M%S"
     exit 1
 }
 [[ $RES == *"unavailable Holding"* ]] || exit 1
@@ -298,14 +298,14 @@ $ASSETID3"
 
 # opt out of assets
 RES=$(appl "close(uint64):void" --from="$SMALL" --app-arg "int:$ASSETID2" --foreign-asset="$ASSETID2" 2>&1) && {
-    date '+app-assets FAIL close using --access should fail without explicit app holding %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL close using --access should fail without explicit app holding %Y%m%d_%H%M%S"
     exit 1
 }
 [[ $RES == *"unavailable Holding $ASSETID2+$APPACCT"* ]] || exit 1 # app can't close itself unless its holding is available
 
 # add that holding, but still not enough...
 RES=$(appl "close(uint64):void" --from="$SMALL" --app-arg "int:$ASSETID2" --holding="$ASSETID2+$APPACCT" 2>&1) && {
-    date '+app-assets FAIL close using --access should fail without explicit sender holding %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL close using --access should fail without explicit sender holding %Y%m%d_%H%M%S"
     exit 1
 }
 [[ $RES == *"unavailable Holding $ASSETID2+$SMALL"* ]] || exit 1   # app closes to sender, so needs that holding too
@@ -347,7 +347,7 @@ $APPASSETID"
 
 # freeze asset
 RES=$(appl "freeze(uint64,bool):void" --from="$SMALL" --app-arg="int:$APPASSETID" --app-arg="int:1" --foreign-asset="$APPASSETID" 2>&1) && {
-    date '+app-assets FAIL freeze using --access should fail without explicit sender holding %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL freeze using --access should fail without explicit sender holding %Y%m%d_%H%M%S"
     exit 1
 }
 [[ $RES == *"unavailable Holding $APPASSETID+$SMALL"* ]] || exit 1

@@ -418,7 +418,7 @@ func TestCertVoteDrops(t *testing.T) {
 type FuzzerTestFile struct {
 	FuzzerName string
 	NodesCount int
-	Filters    []interface{}
+	Filters    []any
 	Validator  ValidatorConfig
 	LogLevel   int
 }
