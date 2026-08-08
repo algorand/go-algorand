@@ -156,7 +156,7 @@ func TestProcessBlockBytesErrors(t *testing.T) {
 	}
 
 	blkData := protocol.Encode(&blk)
-	bc := protocol.EncodeReflect(rpcs.PreEncodedBlockCert{
+	bc := protocol.Encode(&rpcs.PreEncodedBlockCert{
 		Block: blkData,
 	})
 

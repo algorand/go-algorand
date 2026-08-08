@@ -30,8 +30,8 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/algorand/go-codec/codec"
 	"github.com/algorand/go-deadlock"
+	"github.com/algorand/msgp/msgp"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -120,11 +120,11 @@ type EncodedBlockCert struct {
 
 // PreEncodedBlockCert defines how GetBlockBytes encodes a block and its certificate,
 // using a pre-encoded Block and Certificate in msgpack format.
-//
-//msgp:ignore PreEncodedBlockCert
 type PreEncodedBlockCert struct {
-	Block       codec.Raw `codec:"block"`
-	Certificate codec.Raw `codec:"cert"`
+	_struct struct{} `codec:""`
+
+	Block       msgp.Raw `codec:"block"`
+	Certificate msgp.Raw `codec:"cert"`
 }
 
 type fallbackEndpoints struct {
@@ -489,7 +489,7 @@ func RawBlockBytes(l LedgerForBlockService, round basics.Round) ([]byte, error) 
 		return nil, ledgercore.ErrNoEntry{Round: round}
 	}
 
-	return protocol.EncodeReflect(PreEncodedBlockCert{
+	return protocol.Encode(&PreEncodedBlockCert{
 		Block:       blk,
 		Certificate: cert,
 	}), nil

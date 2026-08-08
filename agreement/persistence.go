@@ -53,7 +53,7 @@ func persistent(as []action) bool {
 }
 
 // encode serializes the current state into a byte array.
-func encode(t timers.Clock[TimeoutType], rr rootRouter, p player, a []action, reflect bool) (raw []byte) {
+func encode(t timers.Clock[TimeoutType], rr rootRouter, p player, a []action) (raw []byte) {
 	var s diskState
 
 	// Don't persist state for old rounds
@@ -70,27 +70,16 @@ func encode(t timers.Clock[TimeoutType], rr rootRouter, p player, a []action, re
 		rr.Children = children
 	}
 
-	if reflect {
-		s.Router = protocol.EncodeReflect(rr)
-		s.Player = protocol.EncodeReflect(p)
-	} else {
-		s.Router = protocol.Encode(&rr)
-		s.Player = protocol.Encode(&p)
-	}
+	s.Router = protocol.Encode(&rr)
+	s.Player = protocol.Encode(&p)
 	s.Clock = t.Encode()
 	s.ActionTypes = make([]actionType, len(a))
 	s.Actions = make([][]byte, len(a))
 	for i, act := range a {
 		s.ActionTypes[i] = act.t()
-
-		// still use reflection for actions since action is an interface and we can't define marshaller methods on it
-		s.Actions[i] = protocol.EncodeReflect(act)
+		s.Actions[i] = encodeAction(act)
 	}
-	if reflect {
-		raw = protocol.EncodeReflect(s)
-	} else {
-		raw = protocol.Encode(&s)
-	}
+	raw = protocol.Encode(&s)
 	return
 }
 
@@ -209,27 +198,19 @@ func restore(log logging.Logger, crash db.Accessor) (raw []byte, err error) {
 // decode process the incoming raw bytes array and attempt to reconstruct the agreement state objects.
 //
 // In all decoding errors, it returns the error code in err
-func decode(raw []byte, t0 timers.Clock[TimeoutType], log serviceLogger, reflect bool) (t timers.Clock[TimeoutType], rr rootRouter, p player, a []action, err error) {
+func decode(raw []byte, t0 timers.Clock[TimeoutType], log serviceLogger) (t timers.Clock[TimeoutType], rr rootRouter, p player, a []action, err error) {
 	var t2 timers.Clock[TimeoutType]
 	var rr2 rootRouter
 	var p2 player
 	a2 := []action{}
 	var s diskState
-	if reflect {
+	err = protocol.Decode(raw, &s)
+	if err != nil {
+		log.Warnf("decode (agreement): error decoding retrieved state using msgp (len = %v): %v. Trying reflection", len(raw), err)
 		err = protocol.DecodeReflect(raw, &s)
 		if err != nil {
-			log.Errorf("decode (agreement): error decoding retrieved state (len = %v): %v", len(raw), err)
+			log.Errorf("decode (agreement): error decoding using either reflection or msgp): %v", err)
 			return
-		}
-	} else {
-		err = protocol.Decode(raw, &s)
-		if err != nil {
-			log.Warnf("decode (agreement): error decoding retrieved state using msgp (len = %v): %v. Trying reflection", len(raw), err)
-			err = protocol.DecodeReflect(raw, &s)
-			if err != nil {
-				log.Errorf("decode (agreement): error decoding using either reflection or msgp): %v", err)
-				return
-			}
 		}
 	}
 
@@ -238,51 +219,46 @@ func decode(raw []byte, t0 timers.Clock[TimeoutType], log serviceLogger, reflect
 		return
 	}
 
-	if reflect {
+	err = protocol.Decode(s.Player, &p2)
+	if err != nil {
+		log.Warnf("decode (agreement): failed to decode Player using msgp (len = %v): %v. Trying reflection", len(s.Player), err)
 		err = protocol.DecodeReflect(s.Player, &p2)
 		if err != nil {
+			log.Errorf("decode (agreement): failed to decode Player using either reflection or msgp: %v", err)
 			return
 		}
-		p2.lowestCredentialArrivals = makeCredentialArrivalHistory(dynamicFilterCredentialArrivalHistory)
+	}
+	p2.lowestCredentialArrivals = makeCredentialArrivalHistory(dynamicFilterCredentialArrivalHistory)
+	if p2.OldDeadline != 0 {
+		p2.Deadline = Deadline{Duration: p2.OldDeadline, Type: TimeoutDeadline}
+		p2.OldDeadline = 0 // clear old value
+	}
+	rr2 = makeRootRouter(p2)
+	err = protocol.Decode(s.Router, &rr2)
+	if err != nil {
+		log.Warnf("decode (agreement): failed to decode Router using msgp (len = %v): %v. Trying reflection", len(s.Router), err)
 		rr2 = makeRootRouter(p2)
 		err = protocol.DecodeReflect(s.Router, &rr2)
 		if err != nil {
+			log.Errorf("decode (agreement): failed to decode Router using either reflection or msgp: %v", err)
 			return
-		}
-	} else {
-		err = protocol.Decode(s.Player, &p2)
-		if err != nil {
-			log.Warnf("decode (agreement): failed to decode Player using msgp (len = %v): %v. Trying reflection", len(s.Player), err)
-			err = protocol.DecodeReflect(s.Player, &p2)
-			if err != nil {
-				log.Errorf("decode (agreement): failed to decode Player using either reflection or msgp: %v", err)
-				return
-			}
-		}
-		p2.lowestCredentialArrivals = makeCredentialArrivalHistory(dynamicFilterCredentialArrivalHistory)
-		if p2.OldDeadline != 0 {
-			p2.Deadline = Deadline{Duration: p2.OldDeadline, Type: TimeoutDeadline}
-			p2.OldDeadline = 0 // clear old value
-		}
-		rr2 = makeRootRouter(p2)
-		err = protocol.Decode(s.Router, &rr2)
-		if err != nil {
-			log.Warnf("decode (agreement): failed to decode Router using msgp (len = %v): %v. Trying reflection", len(s.Router), err)
-			rr2 = makeRootRouter(p2)
-			err = protocol.DecodeReflect(s.Router, &rr2)
-			if err != nil {
-				log.Errorf("decode (agreement): failed to decode Router using either reflection or msgp: %v", err)
-				return
-			}
 		}
 	}
 
 	for i := range s.Actions {
-		act := zeroAction(s.ActionTypes[i])
-		// always use reflection for actions since action is an interface and we can't define unmarshaller methods on it
-		err = protocol.DecodeReflect(s.Actions[i], &act)
+		var act action
+		act, err = decodeAction(s.ActionTypes[i], s.Actions[i])
 		if err != nil {
-			return
+			// fall back to reflection to read crash state written by a
+			// release that still encoded actions with go-codec
+			log.Warnf("decode (agreement): failed to decode action %d using msgp (len = %v): %v. Trying reflection", i, len(s.Actions[i]), err)
+			ract := zeroAction(s.ActionTypes[i])
+			err = protocol.DecodeReflect(s.Actions[i], &ract)
+			if err != nil {
+				log.Errorf("decode (agreement): failed to decode action %d using either reflection or msgp: %v", i, err)
+				return
+			}
+			act = ract
 		}
 		a2 = append(a2, act)
 	}
@@ -380,7 +356,7 @@ func (p *asyncPersistenceLoop) loop(ctx context.Context) {
 		// sanity check; we check it after the fact, since it's not expected to ever happen.
 		// performance-wise, it takes approximitly 300000ns to execute, and we don't want it to
 		// block the persist operation.
-		_, _, _, _, derr := decode(s.raw, s.clock, p.log, false)
+		_, _, _, _, derr := decode(s.raw, s.clock, p.log)
 		if derr != nil {
 			p.log.Errorf("could not decode own encoded disk state: %v", derr)
 		}
