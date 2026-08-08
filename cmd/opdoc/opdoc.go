@@ -30,6 +30,14 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// docVersion is the newest language version to document. It is bumped by hand
+// when new opcodes are introduced during development, rather than derived from
+// consensus parameters, so that in-progress opcodes can be documented and
+// checked in CI before they are promoted to a released consensus version.
+// Documenting logic.LogicVersion instead would publish vFuture opcodes
+// unconditionally.
+const docVersion = uint64(13)
+
 // slug returns the auto generated named anchor "slug" for a given heading
 // created by mdbook.
 func slug(s string) string {
@@ -131,6 +139,13 @@ func fieldGroupMarkdown(out io.Writer, group *logic.FieldGroup, version uint64) 
 		// reminder: group.Names can be "sparse" See: logic.TxnaFields
 		if !ok || spec.Version() > version {
 			continue
+		}
+		// Unlike integerConstantsTableMarkdown, this used to emit an empty NOTES
+		// cell rather than complain, which is how every block field came to ship
+		// undocumented. Fail instead.
+		if spec.Note() == "" {
+			fmt.Fprintf(os.Stderr, "field %s of %s %s is undocumented\n", name, group.Name, group.Doc)
+			os.Exit(1)
 		}
 		if spec.Type().Typed() {
 			showTypes = true
@@ -451,54 +466,31 @@ func fieldsAndTypes(group logic.FieldGroup, version uint64, modes logic.RunMode)
 	return fields, typeStrings(types), details
 }
 
-func argEnums(op *logic.OpSpec, version uint64) ([]string, []string, []argDetail) {
-	// reminder: this needs to be manually updated every time
-	// a new opcode is added with an associated FieldGroup
-	// it'd be nice to have this auto-update
-	switch op.Name {
-	case "txn", "gtxn", "gtxns", "itxn", "gitxn":
-		return fieldsAndTypes(logic.TxnFields, version, op.Modes)
-	case "itxn_field":
-		// itxn_field does not *return* a type depending on its immediate. It *takes* it.
-		// but until a consumer cares, ArgEnumTypes will be overloaded for that meaning.
-		return fieldsAndTypes(logic.ItxnSettableFields, version, op.Modes)
-	case "global":
-		return fieldsAndTypes(logic.GlobalFields, version, op.Modes)
-	case "txna", "gtxna", "gtxnsa", "txnas", "gtxnas", "gtxnsas", "itxna", "gitxna":
-		return fieldsAndTypes(logic.TxnArrayFields, version, op.Modes)
-	case "asset_holding_get":
-		return fieldsAndTypes(logic.AssetHoldingFields, version, op.Modes)
-	case "asset_params_get":
-		return fieldsAndTypes(logic.AssetParamsFields, version, op.Modes)
-	case "app_params_get":
-		return fieldsAndTypes(logic.AppParamsFields, version, op.Modes)
-	case "app_params_set":
-		// app_params_set does not *return* a type depending on its immediate. It
-		// *takes* it, like itxn_field. ArgEnumTypes is overloaded for that meaning.
-		return fieldsAndTypes(logic.AppParamsSettableFields, version, op.Modes)
-	case "acct_params_get":
-		return fieldsAndTypes(logic.AcctParamsFields, version, op.Modes)
-	case "block":
-		return fieldsAndTypes(logic.BlockFields, version, op.Modes)
-	case "json_ref":
-		return fieldsAndTypes(logic.JSONRefTypes, version, op.Modes)
-	case "base64_decode":
-		return fieldsAndTypes(logic.Base64Encodings, version, op.Modes)
-	case "vrf_verify":
-		return fieldsAndTypes(logic.VrfStandards, version, op.Modes)
-	case "ecdsa_pk_recover", "ecdsa_verify", "ecdsa_pk_decompress":
-		return fieldsAndTypes(logic.EcdsaCurves, version, op.Modes)
-	case "ec_add", "ec_scalar_mul", "ec_pairing_check", "ec_multi_scalar_mul", "ec_subgroup_check", "ec_map_to":
-		return fieldsAndTypes(logic.EcGroups, version, op.Modes)
-	case "voter_params_get":
-		return fieldsAndTypes(logic.VoterParamsFields, version, op.Modes)
-	case "mimc":
-		return fieldsAndTypes(logic.MimcConfigs, version, op.Modes)
-	case "poseidon2":
-		return fieldsAndTypes(logic.Poseidon2Configs, version, op.Modes)
-	default:
-		return nil, nil, nil
+// argEnumOverrides names the opcodes whose documented field group is
+// deliberately not the group attached to their immediate.
+var argEnumOverrides = map[string]*logic.FieldGroup{
+	// itxn_field's spec carries the full TxnFields so that the assembler can
+	// report a useful error for a field that exists but cannot be set. Only the
+	// settable fields belong in the documented enum. Note that itxn_field does
+	// not *return* a type depending on its immediate, it *takes* one, so
+	// ArgEnumTypes is overloaded for that meaning.
+	"itxn_field": &logic.ItxnSettableFields,
+}
+
+// argEnums returns the symbolic names, types, and details of the field group
+// attached to spec's immediates. Deriving this from the OpSpec rather than from
+// a hand-maintained name switch means a new opcode with a FieldGroup is
+// documented without anyone having to remember this function exists.
+func argEnums(spec logic.OpSpec, version uint64) ([]string, []string, []argDetail) {
+	if group, ok := argEnumOverrides[spec.Name]; ok {
+		return fieldsAndTypes(*group, version, spec.Modes)
 	}
+	for i := range spec.OpDetails.Immediates {
+		if group := spec.OpDetails.Immediates[i].Group; group != nil {
+			return fieldsAndTypes(*group, version, spec.Modes)
+		}
+	}
+	return nil, nil, nil
 }
 
 func buildLanguageSpec(opGroups map[string][]string, namedTypes []namedType, version uint64) *LanguageSpec {
@@ -515,7 +507,7 @@ func buildLanguageSpec(opGroups map[string][]string, namedTypes []namedType, ver
 		records[i].Returns = typeStrings(spec.Return.Types)
 		records[i].Size = spec.OpDetails.Size
 		records[i].DocCost = spec.DocCost(version)
-		records[i].ArgEnum, records[i].ArgEnumTypes, records[i].ArgDetails = argEnums(&spec, version)
+		records[i].ArgEnum, records[i].ArgEnumTypes, records[i].ArgDetails = argEnums(spec, version)
 		desc := logic.OpDescOf(spec.Name)
 		records[i].Doc = desc.Short
 		records[i].DocExtra = desc.Extra
@@ -543,8 +535,6 @@ func create(file string) *os.File {
 }
 
 func main() {
-	const docVersion = 13
-
 	opGroups := make(map[string][]string, len(logic.OpSpecs))
 	for grp, names := range logic.OpGroups {
 		fname := fmt.Sprintf("%s.md", strings.ToLower(grp))
@@ -608,5 +598,17 @@ func main() {
 			os.Exit(1)
 		}
 		opcodesMd.Close()
+
+		// Appendix A of the specs is the newest version's opcode reference. Write
+		// it here rather than having the Makefile pick a file out of a glob,
+		// which could not tell a stale TEAL_opcodes_v99.md from a real one.
+		if v == docVersion {
+			appendix := create("avm-appendix-a.md")
+			if err := opsToMarkdown(appendix, v); err != nil {
+				fmt.Fprintf(os.Stderr, "error creating appendix A: %v\n", err)
+				os.Exit(1)
+			}
+			appendix.Close()
+		}
 	}
 }

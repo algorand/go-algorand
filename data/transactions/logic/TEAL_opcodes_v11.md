@@ -81,7 +81,7 @@ The 33 byte public key in a compressed form to be decompressed into X and Y (top
 - **Cost**: 2000
 - Availability: v5
 
-S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to deriver a public key. All values are big-endian encoded. The signed data must be 32 bytes long.
+S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to derive a public key. All values are big-endian encoded. The signed data must be 32 bytes long.
 
 ## +
 
@@ -185,8 +185,6 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Stack: ..., A: []byte &rarr; ..., uint64
 - converts big-endian byte array A to uint64. Fails if len(A) > 8. Padded by leading 0s if len(A) < 8.
 
-`btoi` fails if the input is longer than 8 bytes.
-
 ## %
 
 - Bytecode: 0x18
@@ -234,7 +232,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 
 - Bytecode: 0x1f
 - Stack: ..., A: uint64, B: uint64, C: uint64, D: uint64 &rarr; ..., W: uint64, X: uint64, Y: uint64, Z: uint64
-- W,X = (A,B / C,D); Y,Z = (A,B modulo C,D)
+- W,X = (A,B / C,D); Y,Z = (A,B modulo C,D). Fail if C,D == 0
 - **Cost**: 20
 - Availability: v4
 
@@ -374,13 +372,13 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 | 2 | FirstValid | uint64 |      | round number |
 | 3 | FirstValidTime | uint64 | v7  | UNIX timestamp of block before txn.FirstValid. Fails if negative |
 | 4 | LastValid | uint64 |      | round number |
-| 5 | Note | []byte |      | Any data up to 1024 bytes |
+| 5 | Note | []byte |      | Any data up to 4096 bytes |
 | 6 | Lease | [32]byte |      | 32 byte lease value |
 | 7 | Receiver | address |      | 32 byte address |
 | 8 | Amount | uint64 |      | microalgos |
 | 9 | CloseRemainderTo | address |      | 32 byte address |
-| 10 | VotePK | [32]byte |      | 32 byte address |
-| 11 | SelectionPK | [32]byte |      | 32 byte address |
+| 10 | VotePK | [32]byte |      | 32 byte participation public key |
+| 11 | SelectionPK | [32]byte |      | 32 byte VRF public key |
 | 12 | VoteFirst | uint64 |      | The first round that the participation key is valid. |
 | 13 | VoteLast | uint64 |      | The last round that the participation key is valid. |
 | 14 | VoteKeyDilution | uint64 |      | Dilution for the 2-level participation key |
@@ -587,7 +585,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 
 - Bytecode: 0x3e
 - Stack: ..., A: uint64 &rarr; ..., any
-- Ath scratch space value.  All scratch spaces are 0 at program start.
+- Ath scratch space value. All scratch spaces are 0 at program start.
 - Availability: v5
 
 ## stores
@@ -604,7 +602,11 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 - Stack: ..., A: uint64 &rarr; ...
 - branch to TARGET if value A is not zero
 
-The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Starting at v4, the offset is treated as a signed 16 bit integer allowing for backward branches and looping. In prior version (v1 to v3), branch offsets are limited to forward branches only, 0-0x7fff.
+From v1 to v12, the `bnz` opcode byte 0x40 is followed by exactly two immediate bytes, high byte first, which together form a 16 bit offset N. The instruction is 3 bytes long. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to the instruction at `pc + 3 + N`, else proceed to the next instruction at `pc + 3`. Starting at v4, the offset is treated as a signed 16 bit integer allowing for backward branches and looping. In prior version (v1 to v3), branch offsets are limited to forward branches only, 0-0x7fff.
+
+Starting at v13, the offset is encoded as a `binary.Varint` (zigzag plus ULEB128) of one or more bytes, so the instruction is `1 + len(offset)` bytes long. A non-negative offset N is measured from the end of the instruction: execution continues at `pc + 1 + len(offset) + N`. A negative offset N is measured from the start of the instruction: execution continues at `pc + N`. Not branching always continues at `pc + 1 + len(offset)`. A branch to the start of its own instruction cannot be encoded, since a zero offset means the following instruction; the assembler rejects the attempt.
+
+Branch targets must be aligned instructions at every version. (e.g. Branching to the second byte of a 2 byte op will be rejected.)
 
 At v2 it became allowed to branch to the end of the program exactly after the last instruction: bnz to byte N (with 0-indexing) was illegal for a TEAL program with N bytes before v2, and is legal after it. This change eliminates the need for a last instruction of no-op as a branch target at the end. (Branching beyond the end--in other words, to a byte larger than N--is still illegal and will cause the program to fail.)
 
@@ -846,8 +848,8 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 
 | INDEX | NAME | NOTES |
 | :-: | :------ | :--------- |
-| 0 | URLEncoding |  |
-| 1 | StdEncoding |  |
+| 0 | URLEncoding | The base64url alphabet, RFC 4648 section 5 |
+| 1 | StdEncoding | The standard base64 alphabet, RFC 4648 section 4 |
 
 _Warning_: Usage should be restricted to very rare use cases. In almost all cases, smart contracts should directly handle non-encoded byte-strings. This opcode should only be used in cases where base64 is the only available option, e.g. interoperability with a third-party that only signs base64 strings.
 
@@ -858,7 +860,7 @@ _Warning_: Usage should be restricted to very rare use cases. In almost all case
 - Syntax: `json_ref R` where R: [json_ref Types](#json_ref-types)
 - Bytecode: 0x5f {uint8}
 - Stack: ..., A: []byte, B: []byte &rarr; ..., any
-- key B's value, of type R, from a [valid](jsonspec.md) utf-8 encoded json object A
+- key B's value, of type R, from the json object A, which must satisfy the [JSON spec](https://github.com/algorand/go-algorand/blob/master/data/transactions/logic/jsonspec.md)
 - **Cost**: 25 + 2 per 7 bytes of A
 - Availability: v7
 
@@ -866,13 +868,13 @@ _Warning_: Usage should be restricted to very rare use cases. In almost all case
 
 | INDEX | NAME | TYPE | NOTES |
 | :-: | :------ |:--:| :--------- |
-| 0 | JSONString | []byte |  |
-| 1 | JSONUint64 | uint64 |  |
-| 2 | JSONObject | []byte |  |
+| 0 | JSONString | []byte | The value is a JSON string, returned without its surrounding quotes |
+| 1 | JSONUint64 | uint64 | The value is a JSON number, returned as a uint64 |
+| 2 | JSONObject | []byte | The value is a JSON object, returned as its raw bytes |
 
 _Warning_: Usage should be restricted to very rare use cases, as JSON decoding is expensive and quite limited. In addition, JSON objects are large and not optimized for size.
 
-Almost all smart contracts should use simpler and smaller methods (such as the [ABI](https://arc.algorand.foundation/ARCs/arc-0004). This opcode should only be used in cases where JSON is only available option, e.g. when a third-party only signs JSON.
+Almost all smart contracts should use simpler and smaller methods (such as the [ABI](https://arc.algorand.foundation/ARCs/arc-0004)). This opcode should only be used in cases where JSON is the only available option, e.g. when a third-party only signs JSON.
 
 ## balance
 
@@ -882,7 +884,7 @@ Almost all smart contracts should use simpler and smaller methods (such as the [
 - Availability: v2
 - Mode: Application
 
-params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.
+params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.
 
 ## app_opted_in
 
@@ -1020,7 +1022,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or
 | 10 | AssetClawback | address |      | Clawback address |
 | 11 | AssetCreator | address | v5  | Creator address |
 
-params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return: did_exist flag (1 if the asset existed and 0 otherwise), value.
+params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id). Return: did_exist flag (1 if the asset existed and 0 otherwise), value.
 
 ## app_params_get
 
@@ -1081,7 +1083,7 @@ params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag 
 - Syntax: `voter_params_get F` where F: [voter_params Fields](#voter_params-fields)
 - Bytecode: 0x74 {uint8}
 - Stack: ..., A &rarr; ..., X: any, Y: bool
-- X is field F from online account A as of the balance round: 320 rounds before the current round. Y is 1 if A had positive algos online in the agreement round, else Y is 0 and X is a type specific zero-value
+- X is field F from online account A as of the balance round: 320 rounds before the current round. Y is 1 if A had positive online algos in the balance round, else Y is 0 and X is a type specific zero-value
 - Availability: v11
 - Mode: Application
 
@@ -1096,7 +1098,7 @@ params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag 
 
 - Bytecode: 0x75
 - Stack: ... &rarr; ..., uint64
-- the total online stake in the agreement round
+- the total online stake as of the balance round: 320 rounds before the current round
 - Availability: v11
 - Mode: Application
 
@@ -1108,7 +1110,7 @@ params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag 
 - Availability: v3
 - Mode: Application
 
-params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.
+params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.
 
 ## pushbytes
 
@@ -1166,7 +1168,7 @@ pushints args are not added to the intcblock during assembly processes
 - branch unconditionally to TARGET, saving the next instruction on the call stack
 - Availability: v4
 
-The call stack is separate from the data stack. Only `callsub`, `retsub`, and `proto` manipulate it.
+The call stack is separate from the data stack. Only `callsub`, `retsub`, and `proto` manipulate it. See `bnz` for details on how the branch offset is encoded.
 
 ## retsub
 
@@ -1208,7 +1210,7 @@ Fails unless the last instruction executed was a `callsub`.
 - Syntax: `switch TARGET ...` where TARGET ...: list of labels
 - Bytecode: 0x8d {varuint count, [int16 (big-endian) ...]}
 - Stack: ..., A: uint64 &rarr; ...
-- branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.
+- branch to the Ath label. Labels are numbered from 0, so execution continues at the following instruction if A is greater than or equal to the number of labels.
 - Availability: v8
 
 ## match
@@ -1216,7 +1218,7 @@ Fails unless the last instruction executed was a `callsub`.
 - Syntax: `match TARGET ...` where TARGET ...: list of labels
 - Bytecode: 0x8e {varuint count, [int16 (big-endian) ...]}
 - Stack: ..., [A1, A2, ..., AN], B &rarr; ...
-- given match cases from A[1] to A[N], branch to the Ith label where A[I] = B. Continue to the following instruction if no matches are found.
+- given N match cases, deepest first, branch to the Ith label (numbering from 0) where case I equals B. Continue to the following instruction if no matches are found.
 - Availability: v8
 
 `match` consumes N+1 values from the stack. Let the top stack value be B. The following N values represent an ordered list of match cases/constants (A), where the first value (A[0]) is the deepest in the stack. The immediate arguments are an ordered list of N labels (T). `match` will branch to target T[I], where A[I] = B. If there are no matches then execution continues on to the next instruction.
@@ -1225,14 +1227,14 @@ Fails unless the last instruction executed was a `callsub`.
 
 - Bytecode: 0x90
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
-- A times 2^B, modulo 2^64
+- A times 2^B, modulo 2^64. Fail if B > 63
 - Availability: v4
 
 ## shr
 
 - Bytecode: 0x91
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
-- A divided by 2^B
+- A divided by 2^B. Fail if B > 63
 - Availability: v4
 
 ## sqrt
@@ -1410,7 +1412,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 - Bytecode: 0xaf
 - Stack: ..., A: uint64 &rarr; ..., []byte
-- zero filled byte-array of length A
+- zero filled byte-array of length A. Fail if A exceeds 4096
 - Availability: v4
 
 ## log
@@ -1431,7 +1433,9 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Availability: v5
 - Mode: Application
 
-`itxn_begin` initializes Sender to the application address; Fee to the minimum allowable, taking into account MinTxnFee and credit from overpaying in earlier transactions; FirstValid/LastValid to the values in the invoking transaction, and all other fields to zero or empty values.
+`itxn_begin` initializes Sender to the application address; Fee to a default, described below; FirstValid/LastValid to the values in the invoking transaction, and all other fields to zero or empty values.
+
+The default Fee is the additional amount that would make the group's fees sufficient so far: MinTxnFee times the fee usage of the transactions already in the group plus one base fee for this new transaction, less the fees already set and any credit from overpaying in earlier transactions. Because the new transaction's own cost is counted as a single base fee, extra costs from fields set later, such as a large note or program, are not reflected in the default. The group fee is checked and charged at `itxn_submit`, so changing Fee, setting fields that cost more, or adding transactions with `itxn_next` all change what is owed.
 
 ## itxn_field
 
@@ -1442,7 +1446,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Availability: v5
 - Mode: Application
 
-`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_, or an attempt is made extend an array field beyond the limit imposed by consensus parameters. (Addresses set into asset params of acfg transactions need not be _available_.)
+`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_, or an attempt is made to extend an array field beyond the limit imposed by consensus parameters. (Addresses set into asset params of acfg transactions need not be _available_.)
 
 ## itxn_submit
 
@@ -1484,7 +1488,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 ## gitxn
 
-- Syntax: `gitxn T F` where T: transaction group index, F: [txn](#txn)
+- Syntax: `gitxn T F` where T: transaction group index, F: [txn Fields](#txn-fields)
 - Bytecode: 0xb7 {uint8}, {uint8}
 - Stack: ... &rarr; ..., any
 - field F of the Tth transaction in the last inner group submitted
@@ -1504,11 +1508,15 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 - Bytecode: 0xb9
 - Stack: ..., A: boxName, B: uint64 &rarr; ..., bool
-- create a box named A, of length B. Fail if the name A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1
+- create a box named A, of length B. Fail if the name A is empty or longer than 64 bytes, or B exceeds 32,768. Returns 0 if A already existed, else 1
 - Availability: v8
 - Mode: Application
 
 Newly created boxes are filled with 0 bytes. `box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `box_create`.
+
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
+
+If this app has set `AppFamilyBoxAccess`, its boxes are family-shared: modifying one fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
 
 ## box_extract
 
@@ -1518,6 +1526,10 @@ Newly created boxes are filled with 0 bytes. `box_create` will fail if the refer
 - Availability: v8
 - Mode: Application
 
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
+
+If this app has set `AppFamilyBoxAccess`, its boxes are family-shared: modifying one fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
+
 ## box_replace
 
 - Bytecode: 0xbb
@@ -1525,6 +1537,10 @@ Newly created boxes are filled with 0 bytes. `box_create` will fail if the refer
 - write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.
 - Availability: v8
 - Mode: Application
+
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
+
+If this app has set `AppFamilyBoxAccess`, its boxes are family-shared: modifying one fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
 
 ## box_del
 
@@ -1534,6 +1550,10 @@ Newly created boxes are filled with 0 bytes. `box_create` will fail if the refer
 - Availability: v8
 - Mode: Application
 
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
+
+If this app has set `AppFamilyBoxAccess`, its boxes are family-shared: modifying one fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
+
 ## box_len
 
 - Bytecode: 0xbd
@@ -1541,6 +1561,10 @@ Newly created boxes are filled with 0 bytes. `box_create` will fail if the refer
 - X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0.
 - Availability: v8
 - Mode: Application
+
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
+
+If this app has set `AppFamilyBoxAccess`, its boxes are family-shared: modifying one fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
 
 ## box_get
 
@@ -1552,6 +1576,10 @@ Newly created boxes are filled with 0 bytes. `box_create` will fail if the refer
 
 For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`
 
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
+
+If this app has set `AppFamilyBoxAccess`, its boxes are family-shared: modifying one fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
+
 ## box_put
 
 - Bytecode: 0xbf
@@ -1561,6 +1589,10 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 - Mode: Application
 
 For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`
+
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
+
+If this app has set `AppFamilyBoxAccess`, its boxes are family-shared: modifying one fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
 
 ## txnas
 
@@ -1633,7 +1665,7 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 
 | INDEX | NAME | NOTES |
 | :-: | :------ | :--------- |
-| 0 | VrfAlgorand |  |
+| 0 | VrfAlgorand | ECVRF-ED25519-SHA512-Elligator2, the VRF used by Algorand consensus |
 
 `VrfAlgorand` is the VRF used in Algorand. It is ECVRF-ED25519-SHA512-Elligator2, specified in the IETF internet draft [draft-irtf-cfrg-vrf-03](https://datatracker.ietf.org/doc/draft-irtf-cfrg-vrf/03/).
 
@@ -1649,16 +1681,16 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 
 | INDEX | NAME | TYPE | IN | NOTES |
 | :-: | :------ |:--:|:-:| :--------- |
-| 0 | BlkSeed | [32]byte |      |  |
-| 1 | BlkTimestamp | uint64 |      |  |
-| 2 | BlkProposer | address | v11  |  |
-| 3 | BlkFeesCollected | uint64 | v11  |  |
-| 4 | BlkBonus | uint64 | v11  |  |
-| 5 | BlkBranch | [32]byte | v11  |  |
-| 6 | BlkFeeSink | address | v11  |  |
-| 7 | BlkProtocol | []byte | v11  |  |
-| 8 | BlkTxnCounter | uint64 | v11  |  |
-| 9 | BlkProposerPayout | uint64 | v11  |  |
+| 0 | BlkSeed | [32]byte |      | The block's sortition seed |
+| 1 | BlkTimestamp | uint64 |      | The block's timestamp, in seconds since the Unix epoch. Fails if negative |
+| 2 | BlkProposer | address | v11  | The account that proposed the block. ZeroAddress for blocks proposed before payouts were enabled |
+| 3 | BlkFeesCollected | uint64 | v11  | The sum of the fees paid by the transactions in the block, in microalgos. 0 for blocks from before payouts were enabled |
+| 4 | BlkBonus | uint64 | v11  | The bonus incentive available for proposing this block, in microalgos. It begins at a consensus parameter value and decays periodically. See BlkProposerPayout for the amount actually paid |
+| 5 | BlkBranch | [32]byte | v11  | The sha512_256 hash of the previous block's header |
+| 6 | BlkFeeSink | address | v11  | The fee sink account for the block's round |
+| 7 | BlkProtocol | []byte | v11  | The ConsensusVersion of the block |
+| 8 | BlkTxnCounter | uint64 | v11  | The number of the next transaction to be committed after this block, counted from the beginning of the chain. Genesis blocks start at either 0 or 1000 |
+| 9 | BlkProposerPayout | uint64 | v11  | The amount actually moved from the FeeSink to the proposer, in microalgos. 0 if the proposer was not eligible |
 
 ## box_splice
 
@@ -1670,13 +1702,21 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 
 Boxes are of constant length. If C < len(D), then len(D)-C bytes will be removed from the end. If C > len(D), zero bytes will be appended to the end to reach the box length.
 
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
+
+If this app has set `AppFamilyBoxAccess`, its boxes are family-shared: modifying one fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
+
 ## box_resize
 
 - Bytecode: 0xd3
 - Stack: ..., A: boxName, B: uint64 &rarr; ...
-- change the size of box named A to be of length B, adding zero bytes to end or removing bytes from the end, as needed. Fail if the name A is empty, A is not an existing box, or B exceeds 32,768.
+- change the size of box named A to be of length B, adding zero bytes to end or removing bytes from the end, as needed. Fail if the name A is empty or longer than 64 bytes, A is not an existing box, or B exceeds 32,768.
 - Availability: v10
 - Mode: Application
+
+The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes.
+
+If this app has set `AppFamilyBoxAccess`, its boxes are family-shared: modifying one fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban.
 
 ## ec_add
 
@@ -1739,7 +1779,7 @@ A and B are concatenated points, encoded and checked as described in `ec_add`. A
 - Availability: v10
 
 A is a list of concatenated points, encoded and checked as described in `ec_add`. B is a list of concatenated scalars which, unlike ec_scalar_mul, must all be exactly 32 bytes long.
-The name `ec_multi_scalar_mul` was chosen to reflect common usage, but a more consistent name would be `ec_multi_scalar_mul`. AVM values are limited to 4096 bytes, so `ec_multi_scalar_mul` is limited by the size of the points in the group being operated upon.
+The operation computes the sum of the individual scalar multiplications, and is often called multi-exponentiation. AVM values are limited to 4096 bytes, so `ec_multi_scalar_mul` is limited by the size of the points in the group being operated upon.
 
 ## ec_subgroup_check
 
@@ -1778,6 +1818,6 @@ G1 element inputs are base field elements and G2 element inputs are quadratic fi
 | 0 | BN254Mp110 | MiMC configuration for the BN254 curve with Miyaguchi-Preneel mode, 110 rounds, exponent 5, seed "seed" |
 | 1 | BLS12_381Mp111 | MiMC configuration for the BLS12-381 curve with Miyaguchi-Preneel mode, 111 rounds, exponent 5, seed "seed" |
 
-A is a non-empty list of concatenated 32 byte big-endian unsigned integer scalars.  Fail if A's length is not a multiple of 32 or any element is greater than or equal to the scalar field modulus.
+A is a non-empty list of concatenated 32 byte big-endian unsigned integer scalars. Fail if A's length is not a multiple of 32 or any element is greater than or equal to the scalar field modulus.
 
 MiMC hashes field elements, not arbitrary byte strings; reducing external inputs modulo the scalar field modulus makes congruent inputs hash identically. MiMC is thus not a general purpose hash function, but meant to be used in zero knowledge applications to match a zk-circuit implementation.

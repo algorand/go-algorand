@@ -6,11 +6,22 @@ A valid JSON text must follow the grammar defined in [RFC7159](https://www.rfc-e
 
 Additional specifications used by **json_ref** that are extensions to the RFC7159 grammar are listed below.
 
+Two kinds of rules follow. **Whole-text** rules are enforced when `json_ref`
+parses the JSON text, so violating one anywhere in the object causes an error.
+**Extraction** rules are enforced only on the value that the requested key refers
+to; values elsewhere in the object are checked against the grammar but are never
+interpreted, so an extraction rule they violate goes unnoticed. Each section
+below says which kind it is.
+
 ## File Encoding
 
-- Only utf-8 encoded are accepted
+Whole-text, except as noted.
+
+- The text is expected to be utf-8 encoded; utf-16 and utf-32 texts are rejected
 - The byte order mark (BOM), "\uFEFF", is not allowed at the beginning of a JSON text
-- Raw non-unicode characters not accepted
+- utf-8 validity is not otherwise enforced: raw bytes that are not valid utf-8
+  parse without error, and on extraction of a string value each such byte is
+  replaced by the replacement character (U+FFFD)
 
 ### Invalid JSON text
 
@@ -26,7 +37,9 @@ Additional specifications used by **json_ref** that are extensions to the RFC715
 
 #### duplicate key
 
-Duplicate keys at the top level result in an error; however, duplicate keys nested at a lower level are ignored.
+Whole-text. Duplicate keys at the top level result in an error. Duplicate keys
+nested at a lower level are accepted; extracting such an object returns its raw
+bytes, duplicate keys included.
 
 #### Invalid JSON text
 
@@ -44,17 +57,21 @@ Duplicate keys at the top level result in an error; however, duplicate keys nest
 
 #### Range
 
+Extraction.
+
 - Only integers between 0 and 2^64-1 are accepted
 - All other values result in an error
 
 #### Special Values
 
-- `null`, `true`, `false` are the only accepted special values.
-- other special values such as `NaN`,`+Inf`,`-Inf` are not accepted
+- `true` and `false` are accepted (whole-text)
+- `null` parses, but extracting a key whose value is `null` always results in an
+  error, whatever type is requested (extraction)
+- other special values such as `NaN`,`+Inf`,`-Inf` are not accepted (whole-text)
 
 #### Exponential Notation
 
-Exponential notation is not accepted
+Extraction. Exponential notation is not accepted
 
 #### Invalid JSON text
 
@@ -68,7 +85,7 @@ Exponential notation is not accepted
 
 ##### Hex values
 
-Hex values are not accepted
+Whole-text. Hex values are not accepted
 
 #### Invalid JSON text
 
@@ -82,7 +99,7 @@ Hex values are not accepted
 
 ### Trailing Commas
 
-Trailing commas are not accepted.
+Whole-text. Trailing commas are not accepted.
 
 #### Invalid JSON text
 
@@ -96,7 +113,7 @@ Trailing commas are not accepted.
 
 ### Comment
 
-Comment blocks are not accepted.
+Whole-text. Comment blocks are not accepted.
 
 #### Invalid JSON text
 
@@ -110,24 +127,37 @@ Comment blocks are not accepted.
 
 ### White Spaces
 
+Whole-text.
+
 - space, tab(`\t`), new line(`\n`) and carriage return(`\r`) are allowed
 - form feed(`\f`) is not allowed
 
 ### Escaped Characters
 
-- control chars (U+0000 - U+001F) must be escaped
-- surrogate pairs are accepted
-- escaped invalid characters are replaced by replacement character (U+FFFD)
+These rules concern `\` escape sequences inside strings. Escape sequences are
+plain ASCII in the raw text, so they never affect its utf-8 validity; the rules
+below are about what the sequences decode to.
+
+- a truncated escape sequence, or one that uses an unknown escape letter, is
+  rejected (whole-text). `\u` followed by four characters that are not all hex
+  digits is not rejected at parse, but extracting a string value that contains
+  one is an error. In a key, it becomes the replacement character (U+FFFD)
+- control chars (U+0000 - U+001F) must be escaped (extraction)
+- an escaped surrogate pair (`\uD800`-`\uDBFF` followed by `\uDC00`-`\uDFFF`) is
+  accepted, and decodes to the single codepoint it represents (whole-text)
+- an escaped surrogate that is not part of such a pair is accepted at parse, but
+  is replaced by the replacement character (U+FFFD) on extraction, since a lone
+  surrogate is not a valid codepoint
 
 #### Example
 
-a valid surrogate pair
+a valid escaped surrogate pair, decoding to U+10437
 
 ```json
 {"key0": "\uD801\udc37"}
 ```
 
-replaced by U+FFFD
+lone surrogates, each replaced by U+FFFD on extraction
 
 ```json
 {"key0": "\uD800\uD800n"}
