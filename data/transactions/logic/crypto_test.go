@@ -76,7 +76,7 @@ func TestSumhash(t *testing.T) {
 	}
 
 	for _, v := range testVectors {
-		testAccepts(t, fmt.Sprintf(`byte "%s"; sumhash512; byte 0x%s; ==`, v.in, v.out), 13)
+		testAccepts(t, fmt.Sprintf(`byte "%s"; sumhash512; byte 0x%s; ==`, v.in, v.out), sumhashVersion)
 	}
 }
 
@@ -202,6 +202,84 @@ byte 0x%x
 				testAccepts(t, progText, 11)
 			} else {
 				testPanics(t, progText, 11)
+			}
+		}
+	}
+}
+
+func TestPoseidon2(t *testing.T) {
+	// We created test vectors for the Poseidon2 hash function by defining a set of preimages for different
+	// input sizes and calling gnark-crypto's Poseidon2 implementation to compute the expected hash values.
+	// E.g.:
+	//		import "github.com/consensys/gnark-crypto/ecc/bn254/fr/poseidon2"
+	//		hasher := poseidon2.NewMerkleDamgardHasher()
+	//		hasher.Write(inputBytes)
+	//		hashBytes := hasher.Sum(nil)
+	// Since we are hardcoding the expected hash values, we are also testing that gnark-crypto's Poseidon2
+	// output does not change under the hood with new versions.
+	//
+	// We test that malformed inputs panic, in particular we test malformed inputs of:
+	// 0 length, lengths not multiple of 32 bytes, chunks representing values greater than the modulus.
+	// We test that well formed inputs hash correctly, testing both single chunk inputs (32-byte) and
+	// multiple chunk inputs (96 bytes).
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	type PreImageTestVector struct {
+		PreImage      string
+		ShouldSucceed bool
+	}
+	preImageTestVectors := []PreImageTestVector{
+		{"0x",
+			false}, // zero-length input
+		{"0x23a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b5042535",
+			true}, // 32 bytes, less than modulus
+		{"0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000002",
+			false}, // 32 bytes, more than modulus
+		{"0xdeadf00d",
+			false}, // less than 32 byte
+		{"0x183de351a72141d79c51a27d10405549c98302cb2536c5968deeb3cba635121723a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b504253530644e72e131a029b85045b68181585d2833e84879b9709143e1f593ef676981",
+			true}, // 32 bytes, less than modulus | 32 bytes, less than modulus | 32 bytes, less than modulus
+		{"0x183de351a72141d79c51a27d10405549c98302cb2536c5968deeb3cba635121723a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b504253573eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000002",
+			false}, //  32 bytes, less than modulus | 32 bytes, less than modulus | 32 bytes, more than modulus
+		{"0x183de351a72141d79c51a27d10405549c98302cb2536c5968deeb3cba635121723a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b5042535abba",
+			false}, // 32 bytes, less than modulus | 32 bytes, less than modulus | less than 32 bytes
+	}
+
+	circuitHashTestVectors := map[string][]string{
+		"BN254t2": {
+			"0",
+			"9508867777362231262564394485161648897131889139474639535709054689562539246209",
+			"0",
+			"0",
+			"6791735139456093729163685856803485582211494197517701835714118539027901440151",
+			"0",
+			"0",
+		},
+		"BLS12_381t2": {
+			"0",
+			"34960972753749415790402211978912014226528569245540044525901549350192685584856",
+			"0",
+			"0",
+			"42428992405405528150674275794637337448740652553021708843638392031995718438793",
+			"0",
+			"0",
+		},
+	}
+
+	for _, config := range []string{"BN254t2", "BLS12_381t2"} {
+		for i, preImageTestVector := range preImageTestVectors {
+			var n big.Int
+			n.SetString(circuitHashTestVectors[config][i], 10)
+			circuitHash := n.Bytes()
+			progText := fmt.Sprintf(`byte %s
+poseidon2 %s
+byte 0x%x
+==`, preImageTestVector.PreImage, config, circuitHash)
+			if preImageTestVector.ShouldSucceed {
+				testAccepts(t, progText, poseidon2Version)
+			} else {
+				testPanics(t, progText, poseidon2Version)
 			}
 		}
 	}
@@ -804,10 +882,41 @@ int ` + fmt.Sprintf("%d", testLogicBudget-2500-8) + `
 	testAccepts(t, source, fidoVersion)
 }
 
+func testHashCost(t *testing.T, hash string, size int, expected int, intro uint64) {
+	hashCostCheck := `
+pushint %d
+bzero
+%s
+pop
+pushint ` + strconv.Itoa(testLogicBudget-5) + ` // 5 non sha instructions
+global OpcodeBudget
+-
+pushint %d
+==
+`
+	t.Helper()
+	testAccepts(t, fmt.Sprintf(hashCostCheck, size, hash, expected), intro)
+}
+
+func TestHashCosts(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testHashCost(t, "sha512", 0, 15, 13)
+	testHashCost(t, "sha512", 1, 17, 13)
+	testHashCost(t, "sha512", 64, 19, 13)
+	testHashCost(t, "sha512", 1000, 79, 13)
+
+	testHashCost(t, "sumhash512", 0, 150, sumhashVersion)
+	testHashCost(t, "sumhash512", 1, 154, sumhashVersion)
+	testHashCost(t, "sumhash512", 64, 190, sumhashVersion)
+	testHashCost(t, "sumhash512", 1000, 722, sumhashVersion)
+}
+
 func BenchmarkHashes(b *testing.B) {
-	for _, hash := range []string{"sha256", "keccak256" /* skip, same as keccak "sha3_256", */, "sha512_256", "sumhash512", "mimc BN254Mp110", "mimc BLS12_381Mp111", "sha512"} {
+	for _, hash := range []string{"sha256", "keccak256" /* skip, same as keccak "sha3_256", */, "sha512_256", "sumhash512", "mimc BN254Mp110", "mimc BLS12_381Mp111", "poseidon2 BN254t2", "poseidon2 BLS12_381t2", "sha512"} {
 		for _, size := range []int{0, 32, 128, 512, 1024, 4096} {
-			if size == 0 && (hash == "mimc BN254Mp110" || hash == "mimc BLS12_381Mp111") {
+			if size == 0 && (hash == "mimc BN254Mp110" || hash == "mimc BLS12_381Mp111" || hash == "poseidon2 BN254t2" || hash == "poseidon2 BLS12_381t2") {
 				continue
 			}
 			b.Run(hash+"-"+strconv.Itoa(size), func(b *testing.B) {

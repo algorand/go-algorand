@@ -190,7 +190,7 @@ func TestEncodeJSON(t *testing.T) {
 	require.True(t, reflect.DeepEqual(v, nsv))
 	require.True(t, reflect.DeepEqual(v, sv))
 
-	decodeJSONStrict := func(b []byte, objptr interface{}) error {
+	decodeJSONStrict := func(b []byte, objptr any) error {
 		dec := codec.NewDecoderBytes(b, JSONStrictHandle)
 		return dec.Decode(objptr)
 	}
@@ -268,4 +268,11 @@ func TestRandomizeObjectWithPtrField(t *testing.T) {
 	}
 	require.True(t, sawNonZeroU16, "RandomizeObject made all zeroes for testObjB.U16")
 	require.True(t, sawNonZeroU64, "RandomizeObject made all zeroes for testObjA.U64")
+}
+
+func TestCheckMsgpAllocBoundDirectiveCrossPackage(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	require.True(t, hasMsgpAllocBoundDirective("github.com/algorand/go-algorand/protocol/test", "testSlice"))
 }

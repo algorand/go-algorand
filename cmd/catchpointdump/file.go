@@ -492,7 +492,7 @@ func printAccountsDatabase(databaseName string, stagingTables bool, fileHeader l
 			"Total Online Round Params: %d",
 			"Total Chunks: %d",
 		}
-		var headerValues = []interface{}{
+		var headerValues = []any{
 			fileHeader.Version,
 			fileHeader.BalancesRound,
 			fileHeader.BlocksRound,
@@ -510,13 +510,13 @@ func printAccountsDatabase(databaseName string, stagingTables bool, fileHeader l
 		}
 
 		var actualFields []string
-		var actualValues []interface{}
+		var actualValues []any
 		if len(excludeFields) == 0 {
 			actualFields = headerFields
 			actualValues = headerValues
 		} else {
 			actualFields = make([]string, 0, len(headerFields)-len(excludeFields))
-			actualValues = make([]interface{}, 0, len(headerFields)-len(excludeFields))
+			actualValues = make([]any, 0, len(headerFields)-len(excludeFields))
 			for i, field := range headerFields {
 				lower := strings.ToLower(field)
 				excluded := false
@@ -582,7 +582,7 @@ func printAccountsDatabase(databaseName string, stagingTables bool, fileHeader l
 			return
 		}
 
-		printer := func(addr basics.Address, data interface{}, progress uint64) (err error) {
+		printer := func(addr basics.Address, data any, progress uint64) (err error) {
 			jsonData, err := json.Marshal(data)
 			if err != nil {
 				return err

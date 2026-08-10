@@ -44,7 +44,7 @@ func makeRequestLogger(downsteamHandler http.Handler, log logging.Logger) *Reque
 		log:              log,
 	}
 	rl.trackingWritersPool = sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			return &trackingResponseWriter{}
 		},
 	}

@@ -296,8 +296,7 @@ jobs:
             --ignored-tests \
               TestAlgodWithExpect \
               TestAlgohWithExpect \
-              TestGoalWithExpect \
-              TestTealdbgWithExpect
+              TestGoalWithExpect
       - name: Notify Slack on failure
         if: failure()
         uses: ./.github/actions/slack-notify

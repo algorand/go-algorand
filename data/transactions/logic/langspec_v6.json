@@ -1,6 +1,6 @@
 {
   "Version": 6,
-  "LogicSigVersion": 12,
+  "LogicSigVersion": 13,
   "NamedTypes": [
     {
       "Name": "[]byte",
@@ -103,7 +103,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 1,
@@ -120,7 +121,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 2,
@@ -137,7 +139,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 3,
@@ -154,7 +157,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 4,
@@ -174,7 +178,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 5,
@@ -193,6 +198,14 @@
       "ArgEnum": [
         "Secp256k1"
       ],
+      "ArgDetails": [
+        {
+          "Name": "Secp256k1",
+          "Doc": "secp256k1 curve, used in Bitcoin",
+          "ByteEncoding": 0,
+          "Version": 5
+        }
+      ],
       "DocCost": "Secp256k1=1700",
       "Doc": "for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey =\u003e {0 or 1}",
       "DocExtra": "The 32 byte Y-component of a public key is the last element on the stack, preceded by X-component of a pubkey, preceded by S and R components of a signature, preceded by the data that is fifth element on the stack. All values are big-endian encoded. The signed data must be 32 bytes long, and signatures in lower-S form are only accepted.",
@@ -207,7 +220,8 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 6,
@@ -223,6 +237,14 @@
       "ArgEnum": [
         "Secp256k1"
       ],
+      "ArgDetails": [
+        {
+          "Name": "Secp256k1",
+          "Doc": "secp256k1 curve, used in Bitcoin",
+          "ByteEncoding": 0,
+          "Version": 5
+        }
+      ],
       "DocCost": "Secp256k1=650",
       "Doc": "decompress pubkey A into components X, Y",
       "DocExtra": "The 33 byte public key in a compressed form to be decompressed into X and Y (top) components. All values are big-endian encoded.",
@@ -237,7 +259,8 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 7,
@@ -256,6 +279,14 @@
       "ArgEnum": [
         "Secp256k1"
       ],
+      "ArgDetails": [
+        {
+          "Name": "Secp256k1",
+          "Doc": "secp256k1 curve, used in Bitcoin",
+          "ByteEncoding": 0,
+          "Version": 5
+        }
+      ],
       "DocCost": "2000",
       "Doc": "for (data A, recovery id B, signature C, D) recover a public key",
       "DocExtra": "S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to deriver a public key. All values are big-endian encoded. The signed data must be 32 bytes long.",
@@ -270,7 +301,8 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 8,
@@ -289,7 +321,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 9,
@@ -307,7 +340,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 10,
@@ -326,7 +360,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 11,
@@ -345,7 +380,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 12,
@@ -363,7 +399,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 13,
@@ -381,7 +418,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 14,
@@ -399,7 +437,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 15,
@@ -417,7 +456,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 16,
@@ -435,7 +475,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 17,
@@ -453,7 +494,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 18,
@@ -471,7 +513,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 19,
@@ -489,7 +532,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 20,
@@ -506,7 +550,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 21,
@@ -523,7 +568,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 22,
@@ -540,7 +586,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 23,
@@ -558,7 +605,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 24,
@@ -576,7 +624,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 25,
@@ -594,7 +643,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 26,
@@ -612,7 +662,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 27,
@@ -630,7 +681,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 28,
@@ -647,7 +699,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 29,
@@ -666,7 +719,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 30,
@@ -685,7 +739,8 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 31,
@@ -709,7 +764,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 32,
@@ -728,7 +784,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 33,
@@ -749,7 +806,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 34,
@@ -763,7 +821,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 35,
@@ -777,7 +836,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 36,
@@ -791,7 +851,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 37,
@@ -805,7 +866,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 38,
@@ -824,7 +886,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 39,
@@ -845,7 +908,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 40,
@@ -859,7 +923,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 41,
@@ -873,7 +938,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 42,
@@ -887,7 +953,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 43,
@@ -901,7 +968,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 44,
@@ -922,7 +990,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 1
     },
     {
       "Opcode": 45,
@@ -936,7 +1005,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 1
     },
     {
       "Opcode": 46,
@@ -950,7 +1020,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 1
     },
     {
       "Opcode": 47,
@@ -964,7 +1035,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 1
     },
     {
       "Opcode": 48,
@@ -978,7 +1050,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 1
     },
     {
       "Opcode": 49,
@@ -1117,6 +1190,431 @@
         "[]byte",
         "[64]byte"
       ],
+      "ArgDetails": [
+        {
+          "Name": "Sender",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 0
+        },
+        {
+          "Name": "Fee",
+          "Type": "uint64",
+          "Doc": "microalgos",
+          "ByteEncoding": 1
+        },
+        {
+          "Name": "FirstValid",
+          "Type": "uint64",
+          "Doc": "round number",
+          "ByteEncoding": 2
+        },
+        {
+          "Name": "LastValid",
+          "Type": "uint64",
+          "Doc": "round number",
+          "ByteEncoding": 4
+        },
+        {
+          "Name": "Note",
+          "Type": "[]byte",
+          "Doc": "Any data up to 1024 bytes",
+          "ByteEncoding": 5
+        },
+        {
+          "Name": "Lease",
+          "Type": "[32]byte",
+          "Doc": "32 byte lease value",
+          "ByteEncoding": 6
+        },
+        {
+          "Name": "Receiver",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 7
+        },
+        {
+          "Name": "Amount",
+          "Type": "uint64",
+          "Doc": "microalgos",
+          "ByteEncoding": 8
+        },
+        {
+          "Name": "CloseRemainderTo",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 9
+        },
+        {
+          "Name": "VotePK",
+          "Type": "[32]byte",
+          "Doc": "32 byte address",
+          "ByteEncoding": 10
+        },
+        {
+          "Name": "SelectionPK",
+          "Type": "[32]byte",
+          "Doc": "32 byte address",
+          "ByteEncoding": 11
+        },
+        {
+          "Name": "VoteFirst",
+          "Type": "uint64",
+          "Doc": "The first round that the participation key is valid.",
+          "ByteEncoding": 12
+        },
+        {
+          "Name": "VoteLast",
+          "Type": "uint64",
+          "Doc": "The last round that the participation key is valid.",
+          "ByteEncoding": 13
+        },
+        {
+          "Name": "VoteKeyDilution",
+          "Type": "uint64",
+          "Doc": "Dilution for the 2-level participation key",
+          "ByteEncoding": 14
+        },
+        {
+          "Name": "Type",
+          "Type": "[]byte",
+          "Doc": "Transaction type as bytes",
+          "ByteEncoding": 15
+        },
+        {
+          "Name": "TypeEnum",
+          "Type": "uint64",
+          "Doc": "Transaction type as integer",
+          "ByteEncoding": 16
+        },
+        {
+          "Name": "XferAsset",
+          "Type": "uint64",
+          "Doc": "Asset ID",
+          "ByteEncoding": 17
+        },
+        {
+          "Name": "AssetAmount",
+          "Type": "uint64",
+          "Doc": "value in Asset's units",
+          "ByteEncoding": 18
+        },
+        {
+          "Name": "AssetSender",
+          "Type": "address",
+          "Doc": "32 byte address. Source of assets if Sender is the Asset's Clawback address.",
+          "ByteEncoding": 19
+        },
+        {
+          "Name": "AssetReceiver",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 20
+        },
+        {
+          "Name": "AssetCloseTo",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 21
+        },
+        {
+          "Name": "GroupIndex",
+          "Type": "uint64",
+          "Doc": "Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1",
+          "ByteEncoding": 22
+        },
+        {
+          "Name": "TxID",
+          "Type": "[32]byte",
+          "Doc": "The computed ID for this transaction. 32 bytes.",
+          "ByteEncoding": 23
+        },
+        {
+          "Name": "ApplicationID",
+          "Type": "uint64",
+          "Doc": "ApplicationID from ApplicationCall transaction",
+          "ByteEncoding": 24,
+          "Version": 2
+        },
+        {
+          "Name": "OnCompletion",
+          "Type": "uint64",
+          "Doc": "ApplicationCall transaction on completion action",
+          "ByteEncoding": 25,
+          "Version": 2
+        },
+        {
+          "Name": "ApplicationArgs",
+          "Type": "[]byte",
+          "Doc": "Arguments passed to the application in the ApplicationCall transaction",
+          "ByteEncoding": 26,
+          "Version": 2
+        },
+        {
+          "Name": "NumAppArgs",
+          "Type": "uint64",
+          "Doc": "Number of ApplicationArgs",
+          "ByteEncoding": 27,
+          "Version": 2
+        },
+        {
+          "Name": "Accounts",
+          "Type": "address",
+          "Doc": "Accounts listed in the ApplicationCall transaction",
+          "ByteEncoding": 28,
+          "Version": 2
+        },
+        {
+          "Name": "NumAccounts",
+          "Type": "uint64",
+          "Doc": "Number of Accounts",
+          "ByteEncoding": 29,
+          "Version": 2
+        },
+        {
+          "Name": "ApprovalProgram",
+          "Type": "[]byte",
+          "Doc": "Approval program",
+          "ByteEncoding": 30,
+          "Version": 2
+        },
+        {
+          "Name": "ClearStateProgram",
+          "Type": "[]byte",
+          "Doc": "Clear state program",
+          "ByteEncoding": 31,
+          "Version": 2
+        },
+        {
+          "Name": "RekeyTo",
+          "Type": "address",
+          "Doc": "32 byte Sender's new AuthAddr",
+          "ByteEncoding": 32,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAsset",
+          "Type": "uint64",
+          "Doc": "Asset ID in asset config transaction",
+          "ByteEncoding": 33,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetTotal",
+          "Type": "uint64",
+          "Doc": "Total number of units of this asset created",
+          "ByteEncoding": 34,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetDecimals",
+          "Type": "uint64",
+          "Doc": "Number of digits to display after the decimal place when displaying the asset",
+          "ByteEncoding": 35,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetDefaultFrozen",
+          "Type": "bool",
+          "Doc": "Whether the asset's slots are frozen by default or not, 0 or 1",
+          "ByteEncoding": 36,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetUnitName",
+          "Type": "[]byte",
+          "Doc": "Unit name of the asset",
+          "ByteEncoding": 37,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetName",
+          "Type": "[]byte",
+          "Doc": "The asset name",
+          "ByteEncoding": 38,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetURL",
+          "Type": "[]byte",
+          "Doc": "URL",
+          "ByteEncoding": 39,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetMetadataHash",
+          "Type": "[32]byte",
+          "Doc": "32 byte commitment to unspecified asset metadata",
+          "ByteEncoding": 40,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetManager",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 41,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetReserve",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 42,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetFreeze",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 43,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetClawback",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 44,
+          "Version": 2
+        },
+        {
+          "Name": "FreezeAsset",
+          "Type": "uint64",
+          "Doc": "Asset ID being frozen or un-frozen",
+          "ByteEncoding": 45,
+          "Version": 2
+        },
+        {
+          "Name": "FreezeAssetAccount",
+          "Type": "address",
+          "Doc": "32 byte address of the account whose asset slot is being frozen or un-frozen",
+          "ByteEncoding": 46,
+          "Version": 2
+        },
+        {
+          "Name": "FreezeAssetFrozen",
+          "Type": "bool",
+          "Doc": "The new frozen value, 0 or 1",
+          "ByteEncoding": 47,
+          "Version": 2
+        },
+        {
+          "Name": "Assets",
+          "Type": "uint64",
+          "Doc": "Foreign Assets listed in the ApplicationCall transaction",
+          "ByteEncoding": 48,
+          "Version": 3
+        },
+        {
+          "Name": "NumAssets",
+          "Type": "uint64",
+          "Doc": "Number of Assets",
+          "ByteEncoding": 49,
+          "Version": 3
+        },
+        {
+          "Name": "Applications",
+          "Type": "uint64",
+          "Doc": "Foreign Apps listed in the ApplicationCall transaction",
+          "ByteEncoding": 50,
+          "Version": 3
+        },
+        {
+          "Name": "NumApplications",
+          "Type": "uint64",
+          "Doc": "Number of Applications",
+          "ByteEncoding": 51,
+          "Version": 3
+        },
+        {
+          "Name": "GlobalNumUint",
+          "Type": "uint64",
+          "Doc": "Number of global state integers in ApplicationCall",
+          "ByteEncoding": 52,
+          "Version": 3
+        },
+        {
+          "Name": "GlobalNumByteSlice",
+          "Type": "uint64",
+          "Doc": "Number of global state byteslices in ApplicationCall",
+          "ByteEncoding": 53,
+          "Version": 3
+        },
+        {
+          "Name": "LocalNumUint",
+          "Type": "uint64",
+          "Doc": "Number of local state integers in ApplicationCall",
+          "ByteEncoding": 54,
+          "Version": 3
+        },
+        {
+          "Name": "LocalNumByteSlice",
+          "Type": "uint64",
+          "Doc": "Number of local state byteslices in ApplicationCall",
+          "ByteEncoding": 55,
+          "Version": 3
+        },
+        {
+          "Name": "ExtraProgramPages",
+          "Type": "uint64",
+          "Doc": "Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program.",
+          "ByteEncoding": 56,
+          "Version": 4
+        },
+        {
+          "Name": "Nonparticipation",
+          "Type": "bool",
+          "Doc": "Marks an account nonparticipating for rewards",
+          "ByteEncoding": 57,
+          "Version": 5
+        },
+        {
+          "Name": "Logs",
+          "Type": "[]byte",
+          "Doc": "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 58,
+          "Modes": 2,
+          "Version": 5
+        },
+        {
+          "Name": "NumLogs",
+          "Type": "uint64",
+          "Doc": "Number of Logs (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 59,
+          "Modes": 2,
+          "Version": 5
+        },
+        {
+          "Name": "CreatedAssetID",
+          "Type": "uint64",
+          "Doc": "Asset ID allocated by the creation of an ASA (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 60,
+          "Modes": 2,
+          "Version": 5
+        },
+        {
+          "Name": "CreatedApplicationID",
+          "Type": "uint64",
+          "Doc": "ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 61,
+          "Modes": 2,
+          "Version": 5
+        },
+        {
+          "Name": "LastLog",
+          "Type": "[]byte",
+          "Doc": "The last message emitted. Empty bytes if none were emitted. Application mode only",
+          "ByteEncoding": 62,
+          "Modes": 2,
+          "Version": 6
+        },
+        {
+          "Name": "StateProofPK",
+          "Type": "[64]byte",
+          "Doc": "State proof public key",
+          "ByteEncoding": 63,
+          "Version": 6
+        }
+      ],
       "DocCost": "1",
       "Doc": "field F of current transaction",
       "ImmediateNote": [
@@ -1130,7 +1628,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 50,
@@ -1173,6 +1672,115 @@
         "uint64",
         "address"
       ],
+      "ArgDetails": [
+        {
+          "Name": "MinTxnFee",
+          "Type": "uint64",
+          "Doc": "microalgos",
+          "ByteEncoding": 0
+        },
+        {
+          "Name": "MinBalance",
+          "Type": "uint64",
+          "Doc": "microalgos",
+          "ByteEncoding": 1
+        },
+        {
+          "Name": "MaxTxnLife",
+          "Type": "uint64",
+          "Doc": "rounds",
+          "ByteEncoding": 2
+        },
+        {
+          "Name": "ZeroAddress",
+          "Type": "address",
+          "Doc": "32 byte address of all zero bytes",
+          "ByteEncoding": 3
+        },
+        {
+          "Name": "GroupSize",
+          "Type": "uint64",
+          "Doc": "Number of transactions in this atomic transaction group. At least 1",
+          "ByteEncoding": 4
+        },
+        {
+          "Name": "LogicSigVersion",
+          "Type": "uint64",
+          "Doc": "Maximum supported version",
+          "ByteEncoding": 5,
+          "Version": 2
+        },
+        {
+          "Name": "Round",
+          "Type": "uint64",
+          "Doc": "Current round number. Application mode only.",
+          "ByteEncoding": 6,
+          "Modes": 2,
+          "Version": 2
+        },
+        {
+          "Name": "LatestTimestamp",
+          "Type": "uint64",
+          "Doc": "Last confirmed block UNIX timestamp. Fails if negative. Application mode only.",
+          "ByteEncoding": 7,
+          "Modes": 2,
+          "Version": 2
+        },
+        {
+          "Name": "CurrentApplicationID",
+          "Type": "uint64",
+          "Doc": "ID of current application executing. Application mode only.",
+          "ByteEncoding": 8,
+          "Modes": 2,
+          "Version": 2
+        },
+        {
+          "Name": "CreatorAddress",
+          "Type": "address",
+          "Doc": "Address of the creator of the current application. Application mode only.",
+          "ByteEncoding": 9,
+          "Modes": 2,
+          "Version": 3
+        },
+        {
+          "Name": "CurrentApplicationAddress",
+          "Type": "address",
+          "Doc": "Address that the current application controls. Application mode only.",
+          "ByteEncoding": 10,
+          "Modes": 2,
+          "Version": 5
+        },
+        {
+          "Name": "GroupID",
+          "Type": "[32]byte",
+          "Doc": "ID of the transaction group. 32 zero bytes if the transaction is not part of a group.",
+          "ByteEncoding": 11,
+          "Version": 5
+        },
+        {
+          "Name": "OpcodeBudget",
+          "Type": "uint64",
+          "Doc": "The remaining cost that can be spent by opcodes in this program.",
+          "ByteEncoding": 12,
+          "Version": 6
+        },
+        {
+          "Name": "CallerApplicationID",
+          "Type": "uint64",
+          "Doc": "The application ID of the application that called this application. 0 if this application is at the top-level. Application mode only.",
+          "ByteEncoding": 13,
+          "Modes": 2,
+          "Version": 6
+        },
+        {
+          "Name": "CallerApplicationAddress",
+          "Type": "address",
+          "Doc": "The application address of the application that called this application. ZeroAddress if this application is at the top-level. Application mode only.",
+          "ByteEncoding": 14,
+          "Modes": 2,
+          "Version": 6
+        }
+      ],
       "DocCost": "1",
       "Doc": "global field F",
       "ImmediateNote": [
@@ -1186,7 +1794,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 51,
@@ -1325,6 +1934,431 @@
         "[]byte",
         "[64]byte"
       ],
+      "ArgDetails": [
+        {
+          "Name": "Sender",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 0
+        },
+        {
+          "Name": "Fee",
+          "Type": "uint64",
+          "Doc": "microalgos",
+          "ByteEncoding": 1
+        },
+        {
+          "Name": "FirstValid",
+          "Type": "uint64",
+          "Doc": "round number",
+          "ByteEncoding": 2
+        },
+        {
+          "Name": "LastValid",
+          "Type": "uint64",
+          "Doc": "round number",
+          "ByteEncoding": 4
+        },
+        {
+          "Name": "Note",
+          "Type": "[]byte",
+          "Doc": "Any data up to 1024 bytes",
+          "ByteEncoding": 5
+        },
+        {
+          "Name": "Lease",
+          "Type": "[32]byte",
+          "Doc": "32 byte lease value",
+          "ByteEncoding": 6
+        },
+        {
+          "Name": "Receiver",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 7
+        },
+        {
+          "Name": "Amount",
+          "Type": "uint64",
+          "Doc": "microalgos",
+          "ByteEncoding": 8
+        },
+        {
+          "Name": "CloseRemainderTo",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 9
+        },
+        {
+          "Name": "VotePK",
+          "Type": "[32]byte",
+          "Doc": "32 byte address",
+          "ByteEncoding": 10
+        },
+        {
+          "Name": "SelectionPK",
+          "Type": "[32]byte",
+          "Doc": "32 byte address",
+          "ByteEncoding": 11
+        },
+        {
+          "Name": "VoteFirst",
+          "Type": "uint64",
+          "Doc": "The first round that the participation key is valid.",
+          "ByteEncoding": 12
+        },
+        {
+          "Name": "VoteLast",
+          "Type": "uint64",
+          "Doc": "The last round that the participation key is valid.",
+          "ByteEncoding": 13
+        },
+        {
+          "Name": "VoteKeyDilution",
+          "Type": "uint64",
+          "Doc": "Dilution for the 2-level participation key",
+          "ByteEncoding": 14
+        },
+        {
+          "Name": "Type",
+          "Type": "[]byte",
+          "Doc": "Transaction type as bytes",
+          "ByteEncoding": 15
+        },
+        {
+          "Name": "TypeEnum",
+          "Type": "uint64",
+          "Doc": "Transaction type as integer",
+          "ByteEncoding": 16
+        },
+        {
+          "Name": "XferAsset",
+          "Type": "uint64",
+          "Doc": "Asset ID",
+          "ByteEncoding": 17
+        },
+        {
+          "Name": "AssetAmount",
+          "Type": "uint64",
+          "Doc": "value in Asset's units",
+          "ByteEncoding": 18
+        },
+        {
+          "Name": "AssetSender",
+          "Type": "address",
+          "Doc": "32 byte address. Source of assets if Sender is the Asset's Clawback address.",
+          "ByteEncoding": 19
+        },
+        {
+          "Name": "AssetReceiver",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 20
+        },
+        {
+          "Name": "AssetCloseTo",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 21
+        },
+        {
+          "Name": "GroupIndex",
+          "Type": "uint64",
+          "Doc": "Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1",
+          "ByteEncoding": 22
+        },
+        {
+          "Name": "TxID",
+          "Type": "[32]byte",
+          "Doc": "The computed ID for this transaction. 32 bytes.",
+          "ByteEncoding": 23
+        },
+        {
+          "Name": "ApplicationID",
+          "Type": "uint64",
+          "Doc": "ApplicationID from ApplicationCall transaction",
+          "ByteEncoding": 24,
+          "Version": 2
+        },
+        {
+          "Name": "OnCompletion",
+          "Type": "uint64",
+          "Doc": "ApplicationCall transaction on completion action",
+          "ByteEncoding": 25,
+          "Version": 2
+        },
+        {
+          "Name": "ApplicationArgs",
+          "Type": "[]byte",
+          "Doc": "Arguments passed to the application in the ApplicationCall transaction",
+          "ByteEncoding": 26,
+          "Version": 2
+        },
+        {
+          "Name": "NumAppArgs",
+          "Type": "uint64",
+          "Doc": "Number of ApplicationArgs",
+          "ByteEncoding": 27,
+          "Version": 2
+        },
+        {
+          "Name": "Accounts",
+          "Type": "address",
+          "Doc": "Accounts listed in the ApplicationCall transaction",
+          "ByteEncoding": 28,
+          "Version": 2
+        },
+        {
+          "Name": "NumAccounts",
+          "Type": "uint64",
+          "Doc": "Number of Accounts",
+          "ByteEncoding": 29,
+          "Version": 2
+        },
+        {
+          "Name": "ApprovalProgram",
+          "Type": "[]byte",
+          "Doc": "Approval program",
+          "ByteEncoding": 30,
+          "Version": 2
+        },
+        {
+          "Name": "ClearStateProgram",
+          "Type": "[]byte",
+          "Doc": "Clear state program",
+          "ByteEncoding": 31,
+          "Version": 2
+        },
+        {
+          "Name": "RekeyTo",
+          "Type": "address",
+          "Doc": "32 byte Sender's new AuthAddr",
+          "ByteEncoding": 32,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAsset",
+          "Type": "uint64",
+          "Doc": "Asset ID in asset config transaction",
+          "ByteEncoding": 33,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetTotal",
+          "Type": "uint64",
+          "Doc": "Total number of units of this asset created",
+          "ByteEncoding": 34,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetDecimals",
+          "Type": "uint64",
+          "Doc": "Number of digits to display after the decimal place when displaying the asset",
+          "ByteEncoding": 35,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetDefaultFrozen",
+          "Type": "bool",
+          "Doc": "Whether the asset's slots are frozen by default or not, 0 or 1",
+          "ByteEncoding": 36,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetUnitName",
+          "Type": "[]byte",
+          "Doc": "Unit name of the asset",
+          "ByteEncoding": 37,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetName",
+          "Type": "[]byte",
+          "Doc": "The asset name",
+          "ByteEncoding": 38,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetURL",
+          "Type": "[]byte",
+          "Doc": "URL",
+          "ByteEncoding": 39,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetMetadataHash",
+          "Type": "[32]byte",
+          "Doc": "32 byte commitment to unspecified asset metadata",
+          "ByteEncoding": 40,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetManager",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 41,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetReserve",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 42,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetFreeze",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 43,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetClawback",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 44,
+          "Version": 2
+        },
+        {
+          "Name": "FreezeAsset",
+          "Type": "uint64",
+          "Doc": "Asset ID being frozen or un-frozen",
+          "ByteEncoding": 45,
+          "Version": 2
+        },
+        {
+          "Name": "FreezeAssetAccount",
+          "Type": "address",
+          "Doc": "32 byte address of the account whose asset slot is being frozen or un-frozen",
+          "ByteEncoding": 46,
+          "Version": 2
+        },
+        {
+          "Name": "FreezeAssetFrozen",
+          "Type": "bool",
+          "Doc": "The new frozen value, 0 or 1",
+          "ByteEncoding": 47,
+          "Version": 2
+        },
+        {
+          "Name": "Assets",
+          "Type": "uint64",
+          "Doc": "Foreign Assets listed in the ApplicationCall transaction",
+          "ByteEncoding": 48,
+          "Version": 3
+        },
+        {
+          "Name": "NumAssets",
+          "Type": "uint64",
+          "Doc": "Number of Assets",
+          "ByteEncoding": 49,
+          "Version": 3
+        },
+        {
+          "Name": "Applications",
+          "Type": "uint64",
+          "Doc": "Foreign Apps listed in the ApplicationCall transaction",
+          "ByteEncoding": 50,
+          "Version": 3
+        },
+        {
+          "Name": "NumApplications",
+          "Type": "uint64",
+          "Doc": "Number of Applications",
+          "ByteEncoding": 51,
+          "Version": 3
+        },
+        {
+          "Name": "GlobalNumUint",
+          "Type": "uint64",
+          "Doc": "Number of global state integers in ApplicationCall",
+          "ByteEncoding": 52,
+          "Version": 3
+        },
+        {
+          "Name": "GlobalNumByteSlice",
+          "Type": "uint64",
+          "Doc": "Number of global state byteslices in ApplicationCall",
+          "ByteEncoding": 53,
+          "Version": 3
+        },
+        {
+          "Name": "LocalNumUint",
+          "Type": "uint64",
+          "Doc": "Number of local state integers in ApplicationCall",
+          "ByteEncoding": 54,
+          "Version": 3
+        },
+        {
+          "Name": "LocalNumByteSlice",
+          "Type": "uint64",
+          "Doc": "Number of local state byteslices in ApplicationCall",
+          "ByteEncoding": 55,
+          "Version": 3
+        },
+        {
+          "Name": "ExtraProgramPages",
+          "Type": "uint64",
+          "Doc": "Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program.",
+          "ByteEncoding": 56,
+          "Version": 4
+        },
+        {
+          "Name": "Nonparticipation",
+          "Type": "bool",
+          "Doc": "Marks an account nonparticipating for rewards",
+          "ByteEncoding": 57,
+          "Version": 5
+        },
+        {
+          "Name": "Logs",
+          "Type": "[]byte",
+          "Doc": "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 58,
+          "Modes": 2,
+          "Version": 5
+        },
+        {
+          "Name": "NumLogs",
+          "Type": "uint64",
+          "Doc": "Number of Logs (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 59,
+          "Modes": 2,
+          "Version": 5
+        },
+        {
+          "Name": "CreatedAssetID",
+          "Type": "uint64",
+          "Doc": "Asset ID allocated by the creation of an ASA (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 60,
+          "Modes": 2,
+          "Version": 5
+        },
+        {
+          "Name": "CreatedApplicationID",
+          "Type": "uint64",
+          "Doc": "ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 61,
+          "Modes": 2,
+          "Version": 5
+        },
+        {
+          "Name": "LastLog",
+          "Type": "[]byte",
+          "Doc": "The last message emitted. Empty bytes if none were emitted. Application mode only",
+          "ByteEncoding": 62,
+          "Modes": 2,
+          "Version": 6
+        },
+        {
+          "Name": "StateProofPK",
+          "Type": "[64]byte",
+          "Doc": "State proof public key",
+          "ByteEncoding": 63,
+          "Version": 6
+        }
+      ],
       "DocCost": "1",
       "Doc": "field F of the Tth transaction in the current group",
       "DocExtra": "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`.",
@@ -1344,7 +2378,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 52,
@@ -1365,7 +2400,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 53,
@@ -1386,7 +2422,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 54,
@@ -1409,6 +2446,44 @@
         "uint64",
         "[]byte"
       ],
+      "ArgDetails": [
+        {
+          "Name": "ApplicationArgs",
+          "Type": "[]byte",
+          "Doc": "Arguments passed to the application in the ApplicationCall transaction",
+          "ByteEncoding": 26,
+          "Version": 2
+        },
+        {
+          "Name": "Accounts",
+          "Type": "address",
+          "Doc": "Accounts listed in the ApplicationCall transaction",
+          "ByteEncoding": 28,
+          "Version": 2
+        },
+        {
+          "Name": "Assets",
+          "Type": "uint64",
+          "Doc": "Foreign Assets listed in the ApplicationCall transaction",
+          "ByteEncoding": 48,
+          "Version": 3
+        },
+        {
+          "Name": "Applications",
+          "Type": "uint64",
+          "Doc": "Foreign Apps listed in the ApplicationCall transaction",
+          "ByteEncoding": 50,
+          "Version": 3
+        },
+        {
+          "Name": "Logs",
+          "Type": "[]byte",
+          "Doc": "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 58,
+          "Modes": 2,
+          "Version": 5
+        }
+      ],
       "DocCost": "1",
       "Doc": "Ith value of the array field F of the current transaction",
       "ImmediateNote": [
@@ -1427,7 +2502,8 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 55,
@@ -1449,6 +2525,44 @@
         "uint64",
         "uint64",
         "[]byte"
+      ],
+      "ArgDetails": [
+        {
+          "Name": "ApplicationArgs",
+          "Type": "[]byte",
+          "Doc": "Arguments passed to the application in the ApplicationCall transaction",
+          "ByteEncoding": 26,
+          "Version": 2
+        },
+        {
+          "Name": "Accounts",
+          "Type": "address",
+          "Doc": "Accounts listed in the ApplicationCall transaction",
+          "ByteEncoding": 28,
+          "Version": 2
+        },
+        {
+          "Name": "Assets",
+          "Type": "uint64",
+          "Doc": "Foreign Assets listed in the ApplicationCall transaction",
+          "ByteEncoding": 48,
+          "Version": 3
+        },
+        {
+          "Name": "Applications",
+          "Type": "uint64",
+          "Doc": "Foreign Apps listed in the ApplicationCall transaction",
+          "ByteEncoding": 50,
+          "Version": 3
+        },
+        {
+          "Name": "Logs",
+          "Type": "[]byte",
+          "Doc": "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 58,
+          "Modes": 2,
+          "Version": 5
+        }
       ],
       "DocCost": "1",
       "Doc": "Ith value of the array field F from the Tth transaction in the current group",
@@ -1473,7 +2587,8 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 56,
@@ -1615,6 +2730,431 @@
         "[]byte",
         "[64]byte"
       ],
+      "ArgDetails": [
+        {
+          "Name": "Sender",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 0
+        },
+        {
+          "Name": "Fee",
+          "Type": "uint64",
+          "Doc": "microalgos",
+          "ByteEncoding": 1
+        },
+        {
+          "Name": "FirstValid",
+          "Type": "uint64",
+          "Doc": "round number",
+          "ByteEncoding": 2
+        },
+        {
+          "Name": "LastValid",
+          "Type": "uint64",
+          "Doc": "round number",
+          "ByteEncoding": 4
+        },
+        {
+          "Name": "Note",
+          "Type": "[]byte",
+          "Doc": "Any data up to 1024 bytes",
+          "ByteEncoding": 5
+        },
+        {
+          "Name": "Lease",
+          "Type": "[32]byte",
+          "Doc": "32 byte lease value",
+          "ByteEncoding": 6
+        },
+        {
+          "Name": "Receiver",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 7
+        },
+        {
+          "Name": "Amount",
+          "Type": "uint64",
+          "Doc": "microalgos",
+          "ByteEncoding": 8
+        },
+        {
+          "Name": "CloseRemainderTo",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 9
+        },
+        {
+          "Name": "VotePK",
+          "Type": "[32]byte",
+          "Doc": "32 byte address",
+          "ByteEncoding": 10
+        },
+        {
+          "Name": "SelectionPK",
+          "Type": "[32]byte",
+          "Doc": "32 byte address",
+          "ByteEncoding": 11
+        },
+        {
+          "Name": "VoteFirst",
+          "Type": "uint64",
+          "Doc": "The first round that the participation key is valid.",
+          "ByteEncoding": 12
+        },
+        {
+          "Name": "VoteLast",
+          "Type": "uint64",
+          "Doc": "The last round that the participation key is valid.",
+          "ByteEncoding": 13
+        },
+        {
+          "Name": "VoteKeyDilution",
+          "Type": "uint64",
+          "Doc": "Dilution for the 2-level participation key",
+          "ByteEncoding": 14
+        },
+        {
+          "Name": "Type",
+          "Type": "[]byte",
+          "Doc": "Transaction type as bytes",
+          "ByteEncoding": 15
+        },
+        {
+          "Name": "TypeEnum",
+          "Type": "uint64",
+          "Doc": "Transaction type as integer",
+          "ByteEncoding": 16
+        },
+        {
+          "Name": "XferAsset",
+          "Type": "uint64",
+          "Doc": "Asset ID",
+          "ByteEncoding": 17
+        },
+        {
+          "Name": "AssetAmount",
+          "Type": "uint64",
+          "Doc": "value in Asset's units",
+          "ByteEncoding": 18
+        },
+        {
+          "Name": "AssetSender",
+          "Type": "address",
+          "Doc": "32 byte address. Source of assets if Sender is the Asset's Clawback address.",
+          "ByteEncoding": 19
+        },
+        {
+          "Name": "AssetReceiver",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 20
+        },
+        {
+          "Name": "AssetCloseTo",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 21
+        },
+        {
+          "Name": "GroupIndex",
+          "Type": "uint64",
+          "Doc": "Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1",
+          "ByteEncoding": 22
+        },
+        {
+          "Name": "TxID",
+          "Type": "[32]byte",
+          "Doc": "The computed ID for this transaction. 32 bytes.",
+          "ByteEncoding": 23
+        },
+        {
+          "Name": "ApplicationID",
+          "Type": "uint64",
+          "Doc": "ApplicationID from ApplicationCall transaction",
+          "ByteEncoding": 24,
+          "Version": 2
+        },
+        {
+          "Name": "OnCompletion",
+          "Type": "uint64",
+          "Doc": "ApplicationCall transaction on completion action",
+          "ByteEncoding": 25,
+          "Version": 2
+        },
+        {
+          "Name": "ApplicationArgs",
+          "Type": "[]byte",
+          "Doc": "Arguments passed to the application in the ApplicationCall transaction",
+          "ByteEncoding": 26,
+          "Version": 2
+        },
+        {
+          "Name": "NumAppArgs",
+          "Type": "uint64",
+          "Doc": "Number of ApplicationArgs",
+          "ByteEncoding": 27,
+          "Version": 2
+        },
+        {
+          "Name": "Accounts",
+          "Type": "address",
+          "Doc": "Accounts listed in the ApplicationCall transaction",
+          "ByteEncoding": 28,
+          "Version": 2
+        },
+        {
+          "Name": "NumAccounts",
+          "Type": "uint64",
+          "Doc": "Number of Accounts",
+          "ByteEncoding": 29,
+          "Version": 2
+        },
+        {
+          "Name": "ApprovalProgram",
+          "Type": "[]byte",
+          "Doc": "Approval program",
+          "ByteEncoding": 30,
+          "Version": 2
+        },
+        {
+          "Name": "ClearStateProgram",
+          "Type": "[]byte",
+          "Doc": "Clear state program",
+          "ByteEncoding": 31,
+          "Version": 2
+        },
+        {
+          "Name": "RekeyTo",
+          "Type": "address",
+          "Doc": "32 byte Sender's new AuthAddr",
+          "ByteEncoding": 32,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAsset",
+          "Type": "uint64",
+          "Doc": "Asset ID in asset config transaction",
+          "ByteEncoding": 33,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetTotal",
+          "Type": "uint64",
+          "Doc": "Total number of units of this asset created",
+          "ByteEncoding": 34,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetDecimals",
+          "Type": "uint64",
+          "Doc": "Number of digits to display after the decimal place when displaying the asset",
+          "ByteEncoding": 35,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetDefaultFrozen",
+          "Type": "bool",
+          "Doc": "Whether the asset's slots are frozen by default or not, 0 or 1",
+          "ByteEncoding": 36,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetUnitName",
+          "Type": "[]byte",
+          "Doc": "Unit name of the asset",
+          "ByteEncoding": 37,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetName",
+          "Type": "[]byte",
+          "Doc": "The asset name",
+          "ByteEncoding": 38,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetURL",
+          "Type": "[]byte",
+          "Doc": "URL",
+          "ByteEncoding": 39,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetMetadataHash",
+          "Type": "[32]byte",
+          "Doc": "32 byte commitment to unspecified asset metadata",
+          "ByteEncoding": 40,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetManager",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 41,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetReserve",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 42,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetFreeze",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 43,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetClawback",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 44,
+          "Version": 2
+        },
+        {
+          "Name": "FreezeAsset",
+          "Type": "uint64",
+          "Doc": "Asset ID being frozen or un-frozen",
+          "ByteEncoding": 45,
+          "Version": 2
+        },
+        {
+          "Name": "FreezeAssetAccount",
+          "Type": "address",
+          "Doc": "32 byte address of the account whose asset slot is being frozen or un-frozen",
+          "ByteEncoding": 46,
+          "Version": 2
+        },
+        {
+          "Name": "FreezeAssetFrozen",
+          "Type": "bool",
+          "Doc": "The new frozen value, 0 or 1",
+          "ByteEncoding": 47,
+          "Version": 2
+        },
+        {
+          "Name": "Assets",
+          "Type": "uint64",
+          "Doc": "Foreign Assets listed in the ApplicationCall transaction",
+          "ByteEncoding": 48,
+          "Version": 3
+        },
+        {
+          "Name": "NumAssets",
+          "Type": "uint64",
+          "Doc": "Number of Assets",
+          "ByteEncoding": 49,
+          "Version": 3
+        },
+        {
+          "Name": "Applications",
+          "Type": "uint64",
+          "Doc": "Foreign Apps listed in the ApplicationCall transaction",
+          "ByteEncoding": 50,
+          "Version": 3
+        },
+        {
+          "Name": "NumApplications",
+          "Type": "uint64",
+          "Doc": "Number of Applications",
+          "ByteEncoding": 51,
+          "Version": 3
+        },
+        {
+          "Name": "GlobalNumUint",
+          "Type": "uint64",
+          "Doc": "Number of global state integers in ApplicationCall",
+          "ByteEncoding": 52,
+          "Version": 3
+        },
+        {
+          "Name": "GlobalNumByteSlice",
+          "Type": "uint64",
+          "Doc": "Number of global state byteslices in ApplicationCall",
+          "ByteEncoding": 53,
+          "Version": 3
+        },
+        {
+          "Name": "LocalNumUint",
+          "Type": "uint64",
+          "Doc": "Number of local state integers in ApplicationCall",
+          "ByteEncoding": 54,
+          "Version": 3
+        },
+        {
+          "Name": "LocalNumByteSlice",
+          "Type": "uint64",
+          "Doc": "Number of local state byteslices in ApplicationCall",
+          "ByteEncoding": 55,
+          "Version": 3
+        },
+        {
+          "Name": "ExtraProgramPages",
+          "Type": "uint64",
+          "Doc": "Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program.",
+          "ByteEncoding": 56,
+          "Version": 4
+        },
+        {
+          "Name": "Nonparticipation",
+          "Type": "bool",
+          "Doc": "Marks an account nonparticipating for rewards",
+          "ByteEncoding": 57,
+          "Version": 5
+        },
+        {
+          "Name": "Logs",
+          "Type": "[]byte",
+          "Doc": "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 58,
+          "Modes": 2,
+          "Version": 5
+        },
+        {
+          "Name": "NumLogs",
+          "Type": "uint64",
+          "Doc": "Number of Logs (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 59,
+          "Modes": 2,
+          "Version": 5
+        },
+        {
+          "Name": "CreatedAssetID",
+          "Type": "uint64",
+          "Doc": "Asset ID allocated by the creation of an ASA (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 60,
+          "Modes": 2,
+          "Version": 5
+        },
+        {
+          "Name": "CreatedApplicationID",
+          "Type": "uint64",
+          "Doc": "ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 61,
+          "Modes": 2,
+          "Version": 5
+        },
+        {
+          "Name": "LastLog",
+          "Type": "[]byte",
+          "Doc": "The last message emitted. Empty bytes if none were emitted. Application mode only",
+          "ByteEncoding": 62,
+          "Modes": 2,
+          "Version": 6
+        },
+        {
+          "Name": "StateProofPK",
+          "Type": "[64]byte",
+          "Doc": "State proof public key",
+          "ByteEncoding": 63,
+          "Version": 6
+        }
+      ],
       "DocCost": "1",
       "Doc": "field F of the Ath transaction in the current group",
       "DocExtra": "for notes on transaction fields available, see `txn`. If top of stack is _i_, `gtxns field` is equivalent to `gtxn _i_ field`. gtxns exists so that _i_ can be calculated, often based on the index of the current transaction.",
@@ -1629,7 +3169,8 @@
       "IntroducedVersion": 3,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 57,
@@ -1655,6 +3196,44 @@
         "uint64",
         "[]byte"
       ],
+      "ArgDetails": [
+        {
+          "Name": "ApplicationArgs",
+          "Type": "[]byte",
+          "Doc": "Arguments passed to the application in the ApplicationCall transaction",
+          "ByteEncoding": 26,
+          "Version": 2
+        },
+        {
+          "Name": "Accounts",
+          "Type": "address",
+          "Doc": "Accounts listed in the ApplicationCall transaction",
+          "ByteEncoding": 28,
+          "Version": 2
+        },
+        {
+          "Name": "Assets",
+          "Type": "uint64",
+          "Doc": "Foreign Assets listed in the ApplicationCall transaction",
+          "ByteEncoding": 48,
+          "Version": 3
+        },
+        {
+          "Name": "Applications",
+          "Type": "uint64",
+          "Doc": "Foreign Apps listed in the ApplicationCall transaction",
+          "ByteEncoding": 50,
+          "Version": 3
+        },
+        {
+          "Name": "Logs",
+          "Type": "[]byte",
+          "Doc": "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 58,
+          "Modes": 2,
+          "Version": 5
+        }
+      ],
       "DocCost": "1",
       "Doc": "Ith value of the array field F from the Ath transaction in the current group",
       "ImmediateNote": [
@@ -1673,7 +3252,8 @@
       "IntroducedVersion": 3,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 58,
@@ -1700,7 +3280,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 59,
@@ -1725,7 +3306,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 60,
@@ -1747,7 +3329,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 61,
@@ -1765,7 +3348,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 62,
@@ -1782,7 +3366,8 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 63,
@@ -1797,7 +3382,8 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 64,
@@ -1819,7 +3405,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 65,
@@ -1841,7 +3428,8 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 66,
@@ -1860,7 +3448,8 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 67,
@@ -1874,7 +3463,8 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 68,
@@ -1888,7 +3478,8 @@
       "IntroducedVersion": 3,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 72,
@@ -1902,7 +3493,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 73,
@@ -1920,7 +3512,8 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 74,
@@ -1941,7 +3534,8 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 75,
@@ -1966,7 +3560,8 @@
       "IntroducedVersion": 3,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 76,
@@ -1985,7 +3580,8 @@
       "IntroducedVersion": 3,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 77,
@@ -2004,7 +3600,8 @@
       "IntroducedVersion": 3,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 78,
@@ -2028,7 +3625,8 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 79,
@@ -2052,7 +3650,8 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 80,
@@ -2071,7 +3670,8 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 81,
@@ -2100,7 +3700,8 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 82,
@@ -2119,7 +3720,8 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 83,
@@ -2138,7 +3740,8 @@
       "IntroducedVersion": 3,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 84,
@@ -2158,7 +3761,8 @@
       "IntroducedVersion": 3,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 85,
@@ -2176,7 +3780,8 @@
       "IntroducedVersion": 3,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 86,
@@ -2195,7 +3800,8 @@
       "IntroducedVersion": 3,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 87,
@@ -2224,7 +3830,8 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 88,
@@ -2243,7 +3850,8 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 89,
@@ -2261,7 +3869,8 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 90,
@@ -2279,7 +3888,8 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 91,
@@ -2297,7 +3907,8 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 96,
@@ -2315,7 +3926,8 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Account Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 97,
@@ -2334,7 +3946,8 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Application Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 98,
@@ -2353,7 +3966,8 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Application Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 99,
@@ -2374,7 +3988,8 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Application Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 100,
@@ -2392,7 +4007,8 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Application Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 101,
@@ -2412,7 +4028,8 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Application Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 102,
@@ -2429,7 +4046,8 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Application Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 103,
@@ -2444,7 +4062,8 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Application Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 104,
@@ -2460,7 +4079,8 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Application Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 105,
@@ -2475,7 +4095,8 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Application Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 112,
@@ -2497,6 +4118,22 @@
         "uint64",
         "bool"
       ],
+      "ArgDetails": [
+        {
+          "Name": "AssetBalance",
+          "Type": "uint64",
+          "Doc": "Amount of the asset unit held by this account",
+          "ByteEncoding": 0,
+          "Version": 2
+        },
+        {
+          "Name": "AssetFrozen",
+          "Type": "bool",
+          "Doc": "Is the asset frozen or not",
+          "ByteEncoding": 1,
+          "Version": 2
+        }
+      ],
       "DocCost": "1",
       "Doc": "X is field F from account A's holding of asset B. Y is 1 if A is opted into B, else 0",
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or, since v4, a Txn.ForeignAssets offset). Return: did_exist flag (1 if the asset existed and 0 otherwise), value.",
@@ -2511,7 +4148,8 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Asset Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 113,
@@ -2552,6 +4190,92 @@
         "address",
         "address"
       ],
+      "ArgDetails": [
+        {
+          "Name": "AssetTotal",
+          "Type": "uint64",
+          "Doc": "Total number of units of this asset",
+          "ByteEncoding": 0,
+          "Version": 2
+        },
+        {
+          "Name": "AssetDecimals",
+          "Type": "uint64",
+          "Doc": "See AssetParams.Decimals",
+          "ByteEncoding": 1,
+          "Version": 2
+        },
+        {
+          "Name": "AssetDefaultFrozen",
+          "Type": "bool",
+          "Doc": "Frozen by default or not",
+          "ByteEncoding": 2,
+          "Version": 2
+        },
+        {
+          "Name": "AssetUnitName",
+          "Type": "[]byte",
+          "Doc": "Asset unit name",
+          "ByteEncoding": 3,
+          "Version": 2
+        },
+        {
+          "Name": "AssetName",
+          "Type": "[]byte",
+          "Doc": "Asset name",
+          "ByteEncoding": 4,
+          "Version": 2
+        },
+        {
+          "Name": "AssetURL",
+          "Type": "[]byte",
+          "Doc": "URL with additional info about the asset",
+          "ByteEncoding": 5,
+          "Version": 2
+        },
+        {
+          "Name": "AssetMetadataHash",
+          "Type": "[32]byte",
+          "Doc": "Arbitrary commitment",
+          "ByteEncoding": 6,
+          "Version": 2
+        },
+        {
+          "Name": "AssetManager",
+          "Type": "address",
+          "Doc": "Manager address",
+          "ByteEncoding": 7,
+          "Version": 2
+        },
+        {
+          "Name": "AssetReserve",
+          "Type": "address",
+          "Doc": "Reserve address",
+          "ByteEncoding": 8,
+          "Version": 2
+        },
+        {
+          "Name": "AssetFreeze",
+          "Type": "address",
+          "Doc": "Freeze address",
+          "ByteEncoding": 9,
+          "Version": 2
+        },
+        {
+          "Name": "AssetClawback",
+          "Type": "address",
+          "Doc": "Clawback address",
+          "ByteEncoding": 10,
+          "Version": 2
+        },
+        {
+          "Name": "AssetCreator",
+          "Type": "address",
+          "Doc": "Creator address",
+          "ByteEncoding": 11,
+          "Version": 5
+        }
+      ],
       "DocCost": "1",
       "Doc": "X is field F from asset A. Y is 1 if A exists, else 0",
       "DocExtra": "params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return: did_exist flag (1 if the asset existed and 0 otherwise), value.",
@@ -2566,7 +4290,8 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Asset Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 114,
@@ -2601,6 +4326,71 @@
         "address",
         "address"
       ],
+      "ArgDetails": [
+        {
+          "Name": "AppApprovalProgram",
+          "Type": "[]byte",
+          "Doc": "Bytecode of Approval Program",
+          "ByteEncoding": 0,
+          "Version": 5
+        },
+        {
+          "Name": "AppClearStateProgram",
+          "Type": "[]byte",
+          "Doc": "Bytecode of Clear State Program",
+          "ByteEncoding": 1,
+          "Version": 5
+        },
+        {
+          "Name": "AppGlobalNumUint",
+          "Type": "uint64",
+          "Doc": "Number of uint64 values allowed in Global State",
+          "ByteEncoding": 2,
+          "Version": 5
+        },
+        {
+          "Name": "AppGlobalNumByteSlice",
+          "Type": "uint64",
+          "Doc": "Number of byte array values allowed in Global State",
+          "ByteEncoding": 3,
+          "Version": 5
+        },
+        {
+          "Name": "AppLocalNumUint",
+          "Type": "uint64",
+          "Doc": "Number of uint64 values allowed in Local State",
+          "ByteEncoding": 4,
+          "Version": 5
+        },
+        {
+          "Name": "AppLocalNumByteSlice",
+          "Type": "uint64",
+          "Doc": "Number of byte array values allowed in Local State",
+          "ByteEncoding": 5,
+          "Version": 5
+        },
+        {
+          "Name": "AppExtraProgramPages",
+          "Type": "uint64",
+          "Doc": "Number of Extra Program Pages of code space",
+          "ByteEncoding": 6,
+          "Version": 5
+        },
+        {
+          "Name": "AppCreator",
+          "Type": "address",
+          "Doc": "Creator address",
+          "ByteEncoding": 7,
+          "Version": 5
+        },
+        {
+          "Name": "AppAddress",
+          "Type": "address",
+          "Doc": "Address for which this application has authority",
+          "ByteEncoding": 8,
+          "Version": 5
+        }
+      ],
       "DocCost": "1",
       "Doc": "X is field F from app A. Y is 1 if A exists, else 0",
       "DocExtra": "params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag (1 if the application existed and 0 otherwise), value.",
@@ -2615,7 +4405,8 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Application Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 115,
@@ -2638,6 +4429,29 @@
         "uint64",
         "address"
       ],
+      "ArgDetails": [
+        {
+          "Name": "AcctBalance",
+          "Type": "uint64",
+          "Doc": "Account balance in microalgos",
+          "ByteEncoding": 0,
+          "Version": 6
+        },
+        {
+          "Name": "AcctMinBalance",
+          "Type": "uint64",
+          "Doc": "Minimum required balance for account, in microalgos",
+          "ByteEncoding": 1,
+          "Version": 6
+        },
+        {
+          "Name": "AcctAuthAddr",
+          "Type": "address",
+          "Doc": "Address the account is rekeyed to.",
+          "ByteEncoding": 2,
+          "Version": 6
+        }
+      ],
       "DocCost": "1",
       "Doc": "X is field F from account A. Y is 1 if A owns positive algos, else 0",
       "ImmediateNote": [
@@ -2651,7 +4465,8 @@
       "IntroducedVersion": 6,
       "Groups": [
         "Account Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 120,
@@ -2669,7 +4484,8 @@
       "IntroducedVersion": 3,
       "Groups": [
         "Account Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 128,
@@ -2691,7 +4507,8 @@
       "IntroducedVersion": 3,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 129,
@@ -2713,7 +4530,8 @@
       "IntroducedVersion": 3,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 136,
@@ -2732,7 +4550,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 137,
@@ -2744,7 +4563,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 144,
@@ -2762,7 +4582,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 145,
@@ -2780,7 +4601,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 146,
@@ -2797,7 +4619,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 147,
@@ -2815,7 +4638,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 148,
@@ -2833,7 +4657,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 149,
@@ -2852,7 +4677,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 150,
@@ -2869,7 +4695,8 @@
       "IntroducedVersion": 6,
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 151,
@@ -2889,7 +4716,8 @@
       "IntroducedVersion": 6,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 160,
@@ -2907,7 +4735,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 161,
@@ -2925,7 +4754,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 162,
@@ -2943,7 +4773,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 163,
@@ -2961,7 +4792,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 164,
@@ -2979,7 +4811,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 165,
@@ -2997,7 +4830,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 166,
@@ -3015,7 +4849,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 167,
@@ -3033,7 +4868,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 168,
@@ -3051,7 +4887,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 169,
@@ -3069,7 +4906,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 170,
@@ -3087,7 +4925,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 171,
@@ -3105,7 +4944,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Logic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 172,
@@ -3123,7 +4963,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Logic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 173,
@@ -3141,7 +4982,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Logic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 174,
@@ -3158,7 +5000,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Logic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 175,
@@ -3175,7 +5018,8 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 176,
@@ -3190,7 +5034,8 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Block Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 177,
@@ -3202,7 +5047,8 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Inner Transactions"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 178,
@@ -3313,6 +5159,351 @@
         "bool",
         "[64]byte"
       ],
+      "ArgDetails": [
+        {
+          "Name": "Sender",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 0,
+          "Version": 5
+        },
+        {
+          "Name": "Fee",
+          "Type": "uint64",
+          "Doc": "microalgos",
+          "ByteEncoding": 1,
+          "Version": 5
+        },
+        {
+          "Name": "Note",
+          "Type": "[]byte",
+          "Doc": "Any data up to 1024 bytes",
+          "ByteEncoding": 5,
+          "Version": 6
+        },
+        {
+          "Name": "Receiver",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 7,
+          "Version": 5
+        },
+        {
+          "Name": "Amount",
+          "Type": "uint64",
+          "Doc": "microalgos",
+          "ByteEncoding": 8,
+          "Version": 5
+        },
+        {
+          "Name": "CloseRemainderTo",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 9,
+          "Version": 5
+        },
+        {
+          "Name": "VotePK",
+          "Type": "[32]byte",
+          "Doc": "32 byte address",
+          "ByteEncoding": 10,
+          "Version": 6
+        },
+        {
+          "Name": "SelectionPK",
+          "Type": "[32]byte",
+          "Doc": "32 byte address",
+          "ByteEncoding": 11,
+          "Version": 6
+        },
+        {
+          "Name": "VoteFirst",
+          "Type": "uint64",
+          "Doc": "The first round that the participation key is valid.",
+          "ByteEncoding": 12,
+          "Version": 6
+        },
+        {
+          "Name": "VoteLast",
+          "Type": "uint64",
+          "Doc": "The last round that the participation key is valid.",
+          "ByteEncoding": 13,
+          "Version": 6
+        },
+        {
+          "Name": "VoteKeyDilution",
+          "Type": "uint64",
+          "Doc": "Dilution for the 2-level participation key",
+          "ByteEncoding": 14,
+          "Version": 6
+        },
+        {
+          "Name": "Type",
+          "Type": "[]byte",
+          "Doc": "Transaction type as bytes",
+          "ByteEncoding": 15,
+          "Version": 5
+        },
+        {
+          "Name": "TypeEnum",
+          "Type": "uint64",
+          "Doc": "Transaction type as integer",
+          "ByteEncoding": 16,
+          "Version": 5
+        },
+        {
+          "Name": "XferAsset",
+          "Type": "uint64",
+          "Doc": "Asset ID",
+          "ByteEncoding": 17,
+          "Version": 5
+        },
+        {
+          "Name": "AssetAmount",
+          "Type": "uint64",
+          "Doc": "value in Asset's units",
+          "ByteEncoding": 18,
+          "Version": 5
+        },
+        {
+          "Name": "AssetSender",
+          "Type": "address",
+          "Doc": "32 byte address. Source of assets if Sender is the Asset's Clawback address.",
+          "ByteEncoding": 19,
+          "Version": 5
+        },
+        {
+          "Name": "AssetReceiver",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 20,
+          "Version": 5
+        },
+        {
+          "Name": "AssetCloseTo",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 21,
+          "Version": 5
+        },
+        {
+          "Name": "ApplicationID",
+          "Type": "uint64",
+          "Doc": "ApplicationID from ApplicationCall transaction",
+          "ByteEncoding": 24,
+          "Version": 6
+        },
+        {
+          "Name": "OnCompletion",
+          "Type": "uint64",
+          "Doc": "ApplicationCall transaction on completion action",
+          "ByteEncoding": 25,
+          "Version": 6
+        },
+        {
+          "Name": "ApplicationArgs",
+          "Type": "[]byte",
+          "Doc": "Arguments passed to the application in the ApplicationCall transaction",
+          "ByteEncoding": 26,
+          "Version": 6
+        },
+        {
+          "Name": "Accounts",
+          "Type": "address",
+          "Doc": "Accounts listed in the ApplicationCall transaction",
+          "ByteEncoding": 28,
+          "Version": 6
+        },
+        {
+          "Name": "ApprovalProgram",
+          "Type": "[]byte",
+          "Doc": "Approval program",
+          "ByteEncoding": 30,
+          "Version": 6
+        },
+        {
+          "Name": "ClearStateProgram",
+          "Type": "[]byte",
+          "Doc": "Clear state program",
+          "ByteEncoding": 31,
+          "Version": 6
+        },
+        {
+          "Name": "RekeyTo",
+          "Type": "address",
+          "Doc": "32 byte Sender's new AuthAddr",
+          "ByteEncoding": 32,
+          "Version": 6
+        },
+        {
+          "Name": "ConfigAsset",
+          "Type": "uint64",
+          "Doc": "Asset ID in asset config transaction",
+          "ByteEncoding": 33,
+          "Version": 5
+        },
+        {
+          "Name": "ConfigAssetTotal",
+          "Type": "uint64",
+          "Doc": "Total number of units of this asset created",
+          "ByteEncoding": 34,
+          "Version": 5
+        },
+        {
+          "Name": "ConfigAssetDecimals",
+          "Type": "uint64",
+          "Doc": "Number of digits to display after the decimal place when displaying the asset",
+          "ByteEncoding": 35,
+          "Version": 5
+        },
+        {
+          "Name": "ConfigAssetDefaultFrozen",
+          "Type": "bool",
+          "Doc": "Whether the asset's slots are frozen by default or not, 0 or 1",
+          "ByteEncoding": 36,
+          "Version": 5
+        },
+        {
+          "Name": "ConfigAssetUnitName",
+          "Type": "[]byte",
+          "Doc": "Unit name of the asset",
+          "ByteEncoding": 37,
+          "Version": 5
+        },
+        {
+          "Name": "ConfigAssetName",
+          "Type": "[]byte",
+          "Doc": "The asset name",
+          "ByteEncoding": 38,
+          "Version": 5
+        },
+        {
+          "Name": "ConfigAssetURL",
+          "Type": "[]byte",
+          "Doc": "URL",
+          "ByteEncoding": 39,
+          "Version": 5
+        },
+        {
+          "Name": "ConfigAssetMetadataHash",
+          "Type": "[32]byte",
+          "Doc": "32 byte commitment to unspecified asset metadata",
+          "ByteEncoding": 40,
+          "Version": 5
+        },
+        {
+          "Name": "ConfigAssetManager",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 41,
+          "Version": 5
+        },
+        {
+          "Name": "ConfigAssetReserve",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 42,
+          "Version": 5
+        },
+        {
+          "Name": "ConfigAssetFreeze",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 43,
+          "Version": 5
+        },
+        {
+          "Name": "ConfigAssetClawback",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 44,
+          "Version": 5
+        },
+        {
+          "Name": "FreezeAsset",
+          "Type": "uint64",
+          "Doc": "Asset ID being frozen or un-frozen",
+          "ByteEncoding": 45,
+          "Version": 5
+        },
+        {
+          "Name": "FreezeAssetAccount",
+          "Type": "address",
+          "Doc": "32 byte address of the account whose asset slot is being frozen or un-frozen",
+          "ByteEncoding": 46,
+          "Version": 5
+        },
+        {
+          "Name": "FreezeAssetFrozen",
+          "Type": "bool",
+          "Doc": "The new frozen value, 0 or 1",
+          "ByteEncoding": 47,
+          "Version": 5
+        },
+        {
+          "Name": "Assets",
+          "Type": "uint64",
+          "Doc": "Foreign Assets listed in the ApplicationCall transaction",
+          "ByteEncoding": 48,
+          "Version": 6
+        },
+        {
+          "Name": "Applications",
+          "Type": "uint64",
+          "Doc": "Foreign Apps listed in the ApplicationCall transaction",
+          "ByteEncoding": 50,
+          "Version": 6
+        },
+        {
+          "Name": "GlobalNumUint",
+          "Type": "uint64",
+          "Doc": "Number of global state integers in ApplicationCall",
+          "ByteEncoding": 52,
+          "Version": 6
+        },
+        {
+          "Name": "GlobalNumByteSlice",
+          "Type": "uint64",
+          "Doc": "Number of global state byteslices in ApplicationCall",
+          "ByteEncoding": 53,
+          "Version": 6
+        },
+        {
+          "Name": "LocalNumUint",
+          "Type": "uint64",
+          "Doc": "Number of local state integers in ApplicationCall",
+          "ByteEncoding": 54,
+          "Version": 6
+        },
+        {
+          "Name": "LocalNumByteSlice",
+          "Type": "uint64",
+          "Doc": "Number of local state byteslices in ApplicationCall",
+          "ByteEncoding": 55,
+          "Version": 6
+        },
+        {
+          "Name": "ExtraProgramPages",
+          "Type": "uint64",
+          "Doc": "Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program.",
+          "ByteEncoding": 56,
+          "Version": 6
+        },
+        {
+          "Name": "Nonparticipation",
+          "Type": "bool",
+          "Doc": "Marks an account nonparticipating for rewards",
+          "ByteEncoding": 57,
+          "Version": 6
+        },
+        {
+          "Name": "StateProofPK",
+          "Type": "[64]byte",
+          "Doc": "State proof public key",
+          "ByteEncoding": 63,
+          "Version": 6
+        }
+      ],
       "DocCost": "1",
       "Doc": "set field F of the current inner transaction to A",
       "DocExtra": "`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_, or an attempt is made extend an array field beyond the limit imposed by consensus parameters. (Addresses set into asset params of acfg transactions need not be _available_.)",
@@ -3327,7 +5518,8 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Inner Transactions"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 179,
@@ -3339,7 +5531,8 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Inner Transactions"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 180,
@@ -3478,6 +5671,426 @@
         "[]byte",
         "[64]byte"
       ],
+      "ArgDetails": [
+        {
+          "Name": "Sender",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 0
+        },
+        {
+          "Name": "Fee",
+          "Type": "uint64",
+          "Doc": "microalgos",
+          "ByteEncoding": 1
+        },
+        {
+          "Name": "FirstValid",
+          "Type": "uint64",
+          "Doc": "round number",
+          "ByteEncoding": 2
+        },
+        {
+          "Name": "LastValid",
+          "Type": "uint64",
+          "Doc": "round number",
+          "ByteEncoding": 4
+        },
+        {
+          "Name": "Note",
+          "Type": "[]byte",
+          "Doc": "Any data up to 1024 bytes",
+          "ByteEncoding": 5
+        },
+        {
+          "Name": "Lease",
+          "Type": "[32]byte",
+          "Doc": "32 byte lease value",
+          "ByteEncoding": 6
+        },
+        {
+          "Name": "Receiver",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 7
+        },
+        {
+          "Name": "Amount",
+          "Type": "uint64",
+          "Doc": "microalgos",
+          "ByteEncoding": 8
+        },
+        {
+          "Name": "CloseRemainderTo",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 9
+        },
+        {
+          "Name": "VotePK",
+          "Type": "[32]byte",
+          "Doc": "32 byte address",
+          "ByteEncoding": 10
+        },
+        {
+          "Name": "SelectionPK",
+          "Type": "[32]byte",
+          "Doc": "32 byte address",
+          "ByteEncoding": 11
+        },
+        {
+          "Name": "VoteFirst",
+          "Type": "uint64",
+          "Doc": "The first round that the participation key is valid.",
+          "ByteEncoding": 12
+        },
+        {
+          "Name": "VoteLast",
+          "Type": "uint64",
+          "Doc": "The last round that the participation key is valid.",
+          "ByteEncoding": 13
+        },
+        {
+          "Name": "VoteKeyDilution",
+          "Type": "uint64",
+          "Doc": "Dilution for the 2-level participation key",
+          "ByteEncoding": 14
+        },
+        {
+          "Name": "Type",
+          "Type": "[]byte",
+          "Doc": "Transaction type as bytes",
+          "ByteEncoding": 15
+        },
+        {
+          "Name": "TypeEnum",
+          "Type": "uint64",
+          "Doc": "Transaction type as integer",
+          "ByteEncoding": 16
+        },
+        {
+          "Name": "XferAsset",
+          "Type": "uint64",
+          "Doc": "Asset ID",
+          "ByteEncoding": 17
+        },
+        {
+          "Name": "AssetAmount",
+          "Type": "uint64",
+          "Doc": "value in Asset's units",
+          "ByteEncoding": 18
+        },
+        {
+          "Name": "AssetSender",
+          "Type": "address",
+          "Doc": "32 byte address. Source of assets if Sender is the Asset's Clawback address.",
+          "ByteEncoding": 19
+        },
+        {
+          "Name": "AssetReceiver",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 20
+        },
+        {
+          "Name": "AssetCloseTo",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 21
+        },
+        {
+          "Name": "GroupIndex",
+          "Type": "uint64",
+          "Doc": "Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1",
+          "ByteEncoding": 22
+        },
+        {
+          "Name": "TxID",
+          "Type": "[32]byte",
+          "Doc": "The computed ID for this transaction. 32 bytes.",
+          "ByteEncoding": 23
+        },
+        {
+          "Name": "ApplicationID",
+          "Type": "uint64",
+          "Doc": "ApplicationID from ApplicationCall transaction",
+          "ByteEncoding": 24,
+          "Version": 2
+        },
+        {
+          "Name": "OnCompletion",
+          "Type": "uint64",
+          "Doc": "ApplicationCall transaction on completion action",
+          "ByteEncoding": 25,
+          "Version": 2
+        },
+        {
+          "Name": "ApplicationArgs",
+          "Type": "[]byte",
+          "Doc": "Arguments passed to the application in the ApplicationCall transaction",
+          "ByteEncoding": 26,
+          "Version": 2
+        },
+        {
+          "Name": "NumAppArgs",
+          "Type": "uint64",
+          "Doc": "Number of ApplicationArgs",
+          "ByteEncoding": 27,
+          "Version": 2
+        },
+        {
+          "Name": "Accounts",
+          "Type": "address",
+          "Doc": "Accounts listed in the ApplicationCall transaction",
+          "ByteEncoding": 28,
+          "Version": 2
+        },
+        {
+          "Name": "NumAccounts",
+          "Type": "uint64",
+          "Doc": "Number of Accounts",
+          "ByteEncoding": 29,
+          "Version": 2
+        },
+        {
+          "Name": "ApprovalProgram",
+          "Type": "[]byte",
+          "Doc": "Approval program",
+          "ByteEncoding": 30,
+          "Version": 2
+        },
+        {
+          "Name": "ClearStateProgram",
+          "Type": "[]byte",
+          "Doc": "Clear state program",
+          "ByteEncoding": 31,
+          "Version": 2
+        },
+        {
+          "Name": "RekeyTo",
+          "Type": "address",
+          "Doc": "32 byte Sender's new AuthAddr",
+          "ByteEncoding": 32,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAsset",
+          "Type": "uint64",
+          "Doc": "Asset ID in asset config transaction",
+          "ByteEncoding": 33,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetTotal",
+          "Type": "uint64",
+          "Doc": "Total number of units of this asset created",
+          "ByteEncoding": 34,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetDecimals",
+          "Type": "uint64",
+          "Doc": "Number of digits to display after the decimal place when displaying the asset",
+          "ByteEncoding": 35,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetDefaultFrozen",
+          "Type": "bool",
+          "Doc": "Whether the asset's slots are frozen by default or not, 0 or 1",
+          "ByteEncoding": 36,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetUnitName",
+          "Type": "[]byte",
+          "Doc": "Unit name of the asset",
+          "ByteEncoding": 37,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetName",
+          "Type": "[]byte",
+          "Doc": "The asset name",
+          "ByteEncoding": 38,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetURL",
+          "Type": "[]byte",
+          "Doc": "URL",
+          "ByteEncoding": 39,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetMetadataHash",
+          "Type": "[32]byte",
+          "Doc": "32 byte commitment to unspecified asset metadata",
+          "ByteEncoding": 40,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetManager",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 41,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetReserve",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 42,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetFreeze",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 43,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetClawback",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 44,
+          "Version": 2
+        },
+        {
+          "Name": "FreezeAsset",
+          "Type": "uint64",
+          "Doc": "Asset ID being frozen or un-frozen",
+          "ByteEncoding": 45,
+          "Version": 2
+        },
+        {
+          "Name": "FreezeAssetAccount",
+          "Type": "address",
+          "Doc": "32 byte address of the account whose asset slot is being frozen or un-frozen",
+          "ByteEncoding": 46,
+          "Version": 2
+        },
+        {
+          "Name": "FreezeAssetFrozen",
+          "Type": "bool",
+          "Doc": "The new frozen value, 0 or 1",
+          "ByteEncoding": 47,
+          "Version": 2
+        },
+        {
+          "Name": "Assets",
+          "Type": "uint64",
+          "Doc": "Foreign Assets listed in the ApplicationCall transaction",
+          "ByteEncoding": 48,
+          "Version": 3
+        },
+        {
+          "Name": "NumAssets",
+          "Type": "uint64",
+          "Doc": "Number of Assets",
+          "ByteEncoding": 49,
+          "Version": 3
+        },
+        {
+          "Name": "Applications",
+          "Type": "uint64",
+          "Doc": "Foreign Apps listed in the ApplicationCall transaction",
+          "ByteEncoding": 50,
+          "Version": 3
+        },
+        {
+          "Name": "NumApplications",
+          "Type": "uint64",
+          "Doc": "Number of Applications",
+          "ByteEncoding": 51,
+          "Version": 3
+        },
+        {
+          "Name": "GlobalNumUint",
+          "Type": "uint64",
+          "Doc": "Number of global state integers in ApplicationCall",
+          "ByteEncoding": 52,
+          "Version": 3
+        },
+        {
+          "Name": "GlobalNumByteSlice",
+          "Type": "uint64",
+          "Doc": "Number of global state byteslices in ApplicationCall",
+          "ByteEncoding": 53,
+          "Version": 3
+        },
+        {
+          "Name": "LocalNumUint",
+          "Type": "uint64",
+          "Doc": "Number of local state integers in ApplicationCall",
+          "ByteEncoding": 54,
+          "Version": 3
+        },
+        {
+          "Name": "LocalNumByteSlice",
+          "Type": "uint64",
+          "Doc": "Number of local state byteslices in ApplicationCall",
+          "ByteEncoding": 55,
+          "Version": 3
+        },
+        {
+          "Name": "ExtraProgramPages",
+          "Type": "uint64",
+          "Doc": "Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program.",
+          "ByteEncoding": 56,
+          "Version": 4
+        },
+        {
+          "Name": "Nonparticipation",
+          "Type": "bool",
+          "Doc": "Marks an account nonparticipating for rewards",
+          "ByteEncoding": 57,
+          "Version": 5
+        },
+        {
+          "Name": "Logs",
+          "Type": "[]byte",
+          "Doc": "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 58,
+          "Version": 5
+        },
+        {
+          "Name": "NumLogs",
+          "Type": "uint64",
+          "Doc": "Number of Logs (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 59,
+          "Version": 5
+        },
+        {
+          "Name": "CreatedAssetID",
+          "Type": "uint64",
+          "Doc": "Asset ID allocated by the creation of an ASA (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 60,
+          "Version": 5
+        },
+        {
+          "Name": "CreatedApplicationID",
+          "Type": "uint64",
+          "Doc": "ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 61,
+          "Version": 5
+        },
+        {
+          "Name": "LastLog",
+          "Type": "[]byte",
+          "Doc": "The last message emitted. Empty bytes if none were emitted. Application mode only",
+          "ByteEncoding": 62,
+          "Version": 6
+        },
+        {
+          "Name": "StateProofPK",
+          "Type": "[64]byte",
+          "Doc": "State proof public key",
+          "ByteEncoding": 63,
+          "Version": 6
+        }
+      ],
       "DocCost": "1",
       "Doc": "field F of the last inner transaction",
       "ImmediateNote": [
@@ -3491,7 +6104,8 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Inner Transactions"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 181,
@@ -3514,6 +6128,43 @@
         "uint64",
         "[]byte"
       ],
+      "ArgDetails": [
+        {
+          "Name": "ApplicationArgs",
+          "Type": "[]byte",
+          "Doc": "Arguments passed to the application in the ApplicationCall transaction",
+          "ByteEncoding": 26,
+          "Version": 2
+        },
+        {
+          "Name": "Accounts",
+          "Type": "address",
+          "Doc": "Accounts listed in the ApplicationCall transaction",
+          "ByteEncoding": 28,
+          "Version": 2
+        },
+        {
+          "Name": "Assets",
+          "Type": "uint64",
+          "Doc": "Foreign Assets listed in the ApplicationCall transaction",
+          "ByteEncoding": 48,
+          "Version": 3
+        },
+        {
+          "Name": "Applications",
+          "Type": "uint64",
+          "Doc": "Foreign Apps listed in the ApplicationCall transaction",
+          "ByteEncoding": 50,
+          "Version": 3
+        },
+        {
+          "Name": "Logs",
+          "Type": "[]byte",
+          "Doc": "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 58,
+          "Version": 5
+        }
+      ],
       "DocCost": "1",
       "Doc": "Ith value of the array field F of the last inner transaction",
       "ImmediateNote": [
@@ -3532,7 +6183,8 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Inner Transactions"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 182,
@@ -3544,7 +6196,8 @@
       "IntroducedVersion": 6,
       "Groups": [
         "Inner Transactions"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 183,
@@ -3683,6 +6336,426 @@
         "[]byte",
         "[64]byte"
       ],
+      "ArgDetails": [
+        {
+          "Name": "Sender",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 0
+        },
+        {
+          "Name": "Fee",
+          "Type": "uint64",
+          "Doc": "microalgos",
+          "ByteEncoding": 1
+        },
+        {
+          "Name": "FirstValid",
+          "Type": "uint64",
+          "Doc": "round number",
+          "ByteEncoding": 2
+        },
+        {
+          "Name": "LastValid",
+          "Type": "uint64",
+          "Doc": "round number",
+          "ByteEncoding": 4
+        },
+        {
+          "Name": "Note",
+          "Type": "[]byte",
+          "Doc": "Any data up to 1024 bytes",
+          "ByteEncoding": 5
+        },
+        {
+          "Name": "Lease",
+          "Type": "[32]byte",
+          "Doc": "32 byte lease value",
+          "ByteEncoding": 6
+        },
+        {
+          "Name": "Receiver",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 7
+        },
+        {
+          "Name": "Amount",
+          "Type": "uint64",
+          "Doc": "microalgos",
+          "ByteEncoding": 8
+        },
+        {
+          "Name": "CloseRemainderTo",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 9
+        },
+        {
+          "Name": "VotePK",
+          "Type": "[32]byte",
+          "Doc": "32 byte address",
+          "ByteEncoding": 10
+        },
+        {
+          "Name": "SelectionPK",
+          "Type": "[32]byte",
+          "Doc": "32 byte address",
+          "ByteEncoding": 11
+        },
+        {
+          "Name": "VoteFirst",
+          "Type": "uint64",
+          "Doc": "The first round that the participation key is valid.",
+          "ByteEncoding": 12
+        },
+        {
+          "Name": "VoteLast",
+          "Type": "uint64",
+          "Doc": "The last round that the participation key is valid.",
+          "ByteEncoding": 13
+        },
+        {
+          "Name": "VoteKeyDilution",
+          "Type": "uint64",
+          "Doc": "Dilution for the 2-level participation key",
+          "ByteEncoding": 14
+        },
+        {
+          "Name": "Type",
+          "Type": "[]byte",
+          "Doc": "Transaction type as bytes",
+          "ByteEncoding": 15
+        },
+        {
+          "Name": "TypeEnum",
+          "Type": "uint64",
+          "Doc": "Transaction type as integer",
+          "ByteEncoding": 16
+        },
+        {
+          "Name": "XferAsset",
+          "Type": "uint64",
+          "Doc": "Asset ID",
+          "ByteEncoding": 17
+        },
+        {
+          "Name": "AssetAmount",
+          "Type": "uint64",
+          "Doc": "value in Asset's units",
+          "ByteEncoding": 18
+        },
+        {
+          "Name": "AssetSender",
+          "Type": "address",
+          "Doc": "32 byte address. Source of assets if Sender is the Asset's Clawback address.",
+          "ByteEncoding": 19
+        },
+        {
+          "Name": "AssetReceiver",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 20
+        },
+        {
+          "Name": "AssetCloseTo",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 21
+        },
+        {
+          "Name": "GroupIndex",
+          "Type": "uint64",
+          "Doc": "Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1",
+          "ByteEncoding": 22
+        },
+        {
+          "Name": "TxID",
+          "Type": "[32]byte",
+          "Doc": "The computed ID for this transaction. 32 bytes.",
+          "ByteEncoding": 23
+        },
+        {
+          "Name": "ApplicationID",
+          "Type": "uint64",
+          "Doc": "ApplicationID from ApplicationCall transaction",
+          "ByteEncoding": 24,
+          "Version": 2
+        },
+        {
+          "Name": "OnCompletion",
+          "Type": "uint64",
+          "Doc": "ApplicationCall transaction on completion action",
+          "ByteEncoding": 25,
+          "Version": 2
+        },
+        {
+          "Name": "ApplicationArgs",
+          "Type": "[]byte",
+          "Doc": "Arguments passed to the application in the ApplicationCall transaction",
+          "ByteEncoding": 26,
+          "Version": 2
+        },
+        {
+          "Name": "NumAppArgs",
+          "Type": "uint64",
+          "Doc": "Number of ApplicationArgs",
+          "ByteEncoding": 27,
+          "Version": 2
+        },
+        {
+          "Name": "Accounts",
+          "Type": "address",
+          "Doc": "Accounts listed in the ApplicationCall transaction",
+          "ByteEncoding": 28,
+          "Version": 2
+        },
+        {
+          "Name": "NumAccounts",
+          "Type": "uint64",
+          "Doc": "Number of Accounts",
+          "ByteEncoding": 29,
+          "Version": 2
+        },
+        {
+          "Name": "ApprovalProgram",
+          "Type": "[]byte",
+          "Doc": "Approval program",
+          "ByteEncoding": 30,
+          "Version": 2
+        },
+        {
+          "Name": "ClearStateProgram",
+          "Type": "[]byte",
+          "Doc": "Clear state program",
+          "ByteEncoding": 31,
+          "Version": 2
+        },
+        {
+          "Name": "RekeyTo",
+          "Type": "address",
+          "Doc": "32 byte Sender's new AuthAddr",
+          "ByteEncoding": 32,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAsset",
+          "Type": "uint64",
+          "Doc": "Asset ID in asset config transaction",
+          "ByteEncoding": 33,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetTotal",
+          "Type": "uint64",
+          "Doc": "Total number of units of this asset created",
+          "ByteEncoding": 34,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetDecimals",
+          "Type": "uint64",
+          "Doc": "Number of digits to display after the decimal place when displaying the asset",
+          "ByteEncoding": 35,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetDefaultFrozen",
+          "Type": "bool",
+          "Doc": "Whether the asset's slots are frozen by default or not, 0 or 1",
+          "ByteEncoding": 36,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetUnitName",
+          "Type": "[]byte",
+          "Doc": "Unit name of the asset",
+          "ByteEncoding": 37,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetName",
+          "Type": "[]byte",
+          "Doc": "The asset name",
+          "ByteEncoding": 38,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetURL",
+          "Type": "[]byte",
+          "Doc": "URL",
+          "ByteEncoding": 39,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetMetadataHash",
+          "Type": "[32]byte",
+          "Doc": "32 byte commitment to unspecified asset metadata",
+          "ByteEncoding": 40,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetManager",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 41,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetReserve",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 42,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetFreeze",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 43,
+          "Version": 2
+        },
+        {
+          "Name": "ConfigAssetClawback",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "ByteEncoding": 44,
+          "Version": 2
+        },
+        {
+          "Name": "FreezeAsset",
+          "Type": "uint64",
+          "Doc": "Asset ID being frozen or un-frozen",
+          "ByteEncoding": 45,
+          "Version": 2
+        },
+        {
+          "Name": "FreezeAssetAccount",
+          "Type": "address",
+          "Doc": "32 byte address of the account whose asset slot is being frozen or un-frozen",
+          "ByteEncoding": 46,
+          "Version": 2
+        },
+        {
+          "Name": "FreezeAssetFrozen",
+          "Type": "bool",
+          "Doc": "The new frozen value, 0 or 1",
+          "ByteEncoding": 47,
+          "Version": 2
+        },
+        {
+          "Name": "Assets",
+          "Type": "uint64",
+          "Doc": "Foreign Assets listed in the ApplicationCall transaction",
+          "ByteEncoding": 48,
+          "Version": 3
+        },
+        {
+          "Name": "NumAssets",
+          "Type": "uint64",
+          "Doc": "Number of Assets",
+          "ByteEncoding": 49,
+          "Version": 3
+        },
+        {
+          "Name": "Applications",
+          "Type": "uint64",
+          "Doc": "Foreign Apps listed in the ApplicationCall transaction",
+          "ByteEncoding": 50,
+          "Version": 3
+        },
+        {
+          "Name": "NumApplications",
+          "Type": "uint64",
+          "Doc": "Number of Applications",
+          "ByteEncoding": 51,
+          "Version": 3
+        },
+        {
+          "Name": "GlobalNumUint",
+          "Type": "uint64",
+          "Doc": "Number of global state integers in ApplicationCall",
+          "ByteEncoding": 52,
+          "Version": 3
+        },
+        {
+          "Name": "GlobalNumByteSlice",
+          "Type": "uint64",
+          "Doc": "Number of global state byteslices in ApplicationCall",
+          "ByteEncoding": 53,
+          "Version": 3
+        },
+        {
+          "Name": "LocalNumUint",
+          "Type": "uint64",
+          "Doc": "Number of local state integers in ApplicationCall",
+          "ByteEncoding": 54,
+          "Version": 3
+        },
+        {
+          "Name": "LocalNumByteSlice",
+          "Type": "uint64",
+          "Doc": "Number of local state byteslices in ApplicationCall",
+          "ByteEncoding": 55,
+          "Version": 3
+        },
+        {
+          "Name": "ExtraProgramPages",
+          "Type": "uint64",
+          "Doc": "Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program.",
+          "ByteEncoding": 56,
+          "Version": 4
+        },
+        {
+          "Name": "Nonparticipation",
+          "Type": "bool",
+          "Doc": "Marks an account nonparticipating for rewards",
+          "ByteEncoding": 57,
+          "Version": 5
+        },
+        {
+          "Name": "Logs",
+          "Type": "[]byte",
+          "Doc": "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 58,
+          "Version": 5
+        },
+        {
+          "Name": "NumLogs",
+          "Type": "uint64",
+          "Doc": "Number of Logs (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 59,
+          "Version": 5
+        },
+        {
+          "Name": "CreatedAssetID",
+          "Type": "uint64",
+          "Doc": "Asset ID allocated by the creation of an ASA (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 60,
+          "Version": 5
+        },
+        {
+          "Name": "CreatedApplicationID",
+          "Type": "uint64",
+          "Doc": "ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 61,
+          "Version": 5
+        },
+        {
+          "Name": "LastLog",
+          "Type": "[]byte",
+          "Doc": "The last message emitted. Empty bytes if none were emitted. Application mode only",
+          "ByteEncoding": 62,
+          "Version": 6
+        },
+        {
+          "Name": "StateProofPK",
+          "Type": "[64]byte",
+          "Doc": "State proof public key",
+          "ByteEncoding": 63,
+          "Version": 6
+        }
+      ],
       "DocCost": "1",
       "Doc": "field F of the Tth transaction in the last inner group submitted",
       "ImmediateNote": [
@@ -3701,7 +6774,8 @@
       "IntroducedVersion": 6,
       "Groups": [
         "Inner Transactions"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 184,
@@ -3723,6 +6797,43 @@
         "uint64",
         "uint64",
         "[]byte"
+      ],
+      "ArgDetails": [
+        {
+          "Name": "ApplicationArgs",
+          "Type": "[]byte",
+          "Doc": "Arguments passed to the application in the ApplicationCall transaction",
+          "ByteEncoding": 26,
+          "Version": 2
+        },
+        {
+          "Name": "Accounts",
+          "Type": "address",
+          "Doc": "Accounts listed in the ApplicationCall transaction",
+          "ByteEncoding": 28,
+          "Version": 2
+        },
+        {
+          "Name": "Assets",
+          "Type": "uint64",
+          "Doc": "Foreign Assets listed in the ApplicationCall transaction",
+          "ByteEncoding": 48,
+          "Version": 3
+        },
+        {
+          "Name": "Applications",
+          "Type": "uint64",
+          "Doc": "Foreign Apps listed in the ApplicationCall transaction",
+          "ByteEncoding": 50,
+          "Version": 3
+        },
+        {
+          "Name": "Logs",
+          "Type": "[]byte",
+          "Doc": "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 58,
+          "Version": 5
+        }
       ],
       "DocCost": "1",
       "Doc": "Ith value of the array field F from the Tth transaction in the last inner group submitted",
@@ -3747,7 +6858,8 @@
       "IntroducedVersion": 6,
       "Groups": [
         "Inner Transactions"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 192,
@@ -3773,6 +6885,44 @@
         "uint64",
         "[]byte"
       ],
+      "ArgDetails": [
+        {
+          "Name": "ApplicationArgs",
+          "Type": "[]byte",
+          "Doc": "Arguments passed to the application in the ApplicationCall transaction",
+          "ByteEncoding": 26,
+          "Version": 2
+        },
+        {
+          "Name": "Accounts",
+          "Type": "address",
+          "Doc": "Accounts listed in the ApplicationCall transaction",
+          "ByteEncoding": 28,
+          "Version": 2
+        },
+        {
+          "Name": "Assets",
+          "Type": "uint64",
+          "Doc": "Foreign Assets listed in the ApplicationCall transaction",
+          "ByteEncoding": 48,
+          "Version": 3
+        },
+        {
+          "Name": "Applications",
+          "Type": "uint64",
+          "Doc": "Foreign Apps listed in the ApplicationCall transaction",
+          "ByteEncoding": 50,
+          "Version": 3
+        },
+        {
+          "Name": "Logs",
+          "Type": "[]byte",
+          "Doc": "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 58,
+          "Modes": 2,
+          "Version": 5
+        }
+      ],
       "DocCost": "1",
       "Doc": "Ath value of the array field F of the current transaction",
       "ImmediateNote": [
@@ -3786,7 +6936,8 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 193,
@@ -3812,6 +6963,44 @@
         "uint64",
         "[]byte"
       ],
+      "ArgDetails": [
+        {
+          "Name": "ApplicationArgs",
+          "Type": "[]byte",
+          "Doc": "Arguments passed to the application in the ApplicationCall transaction",
+          "ByteEncoding": 26,
+          "Version": 2
+        },
+        {
+          "Name": "Accounts",
+          "Type": "address",
+          "Doc": "Accounts listed in the ApplicationCall transaction",
+          "ByteEncoding": 28,
+          "Version": 2
+        },
+        {
+          "Name": "Assets",
+          "Type": "uint64",
+          "Doc": "Foreign Assets listed in the ApplicationCall transaction",
+          "ByteEncoding": 48,
+          "Version": 3
+        },
+        {
+          "Name": "Applications",
+          "Type": "uint64",
+          "Doc": "Foreign Apps listed in the ApplicationCall transaction",
+          "ByteEncoding": 50,
+          "Version": 3
+        },
+        {
+          "Name": "Logs",
+          "Type": "[]byte",
+          "Doc": "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 58,
+          "Modes": 2,
+          "Version": 5
+        }
+      ],
       "DocCost": "1",
       "Doc": "Ath value of the array field F from the Tth transaction in the current group",
       "ImmediateNote": [
@@ -3830,7 +7019,8 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 194,
@@ -3857,6 +7047,44 @@
         "uint64",
         "[]byte"
       ],
+      "ArgDetails": [
+        {
+          "Name": "ApplicationArgs",
+          "Type": "[]byte",
+          "Doc": "Arguments passed to the application in the ApplicationCall transaction",
+          "ByteEncoding": 26,
+          "Version": 2
+        },
+        {
+          "Name": "Accounts",
+          "Type": "address",
+          "Doc": "Accounts listed in the ApplicationCall transaction",
+          "ByteEncoding": 28,
+          "Version": 2
+        },
+        {
+          "Name": "Assets",
+          "Type": "uint64",
+          "Doc": "Foreign Assets listed in the ApplicationCall transaction",
+          "ByteEncoding": 48,
+          "Version": 3
+        },
+        {
+          "Name": "Applications",
+          "Type": "uint64",
+          "Doc": "Foreign Apps listed in the ApplicationCall transaction",
+          "ByteEncoding": 50,
+          "Version": 3
+        },
+        {
+          "Name": "Logs",
+          "Type": "[]byte",
+          "Doc": "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+          "ByteEncoding": 58,
+          "Modes": 2,
+          "Version": 5
+        }
+      ],
       "DocCost": "1",
       "Doc": "Bth value of the array field F from the Ath transaction in the current group",
       "ImmediateNote": [
@@ -3870,7 +7098,8 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 195,
@@ -3887,7 +7116,8 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 1
     },
     {
       "Opcode": 196,
@@ -3905,7 +7135,8 @@
       "IntroducedVersion": 6,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 197,
@@ -3930,7 +7161,8 @@
       "IntroducedVersion": 6,
       "Groups": [
         "Inner Transactions"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 198,
@@ -3960,7 +7192,8 @@
       "IntroducedVersion": 6,
       "Groups": [
         "Inner Transactions"
-      ]
+      ],
+      "Modes": 2
     }
   ]
 }

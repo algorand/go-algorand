@@ -381,9 +381,9 @@ func TestFieldVersions(t *testing.T) {
 	}
 }
 
-// TestAppParamsFieldsVersions tests types and accessibility of various app
+// TestAppParamsGetFieldsVersions tests types and accessibility of various app
 // fields over different versions.
-func TestAppParamsFieldsVersions(t *testing.T) {
+func TestAppParamsGetFieldsVersions(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -416,6 +416,49 @@ func TestAppParamsFieldsVersions(t *testing.T) {
 					testAppBytes(t, ops.Program, ep, "invalid app_params_get field")
 				}
 			} else {
+				testProg(t, text, v)
+				testApp(t, text, ep)
+			}
+		})
+	}
+}
+
+// TestAppParamsSetFieldsVersions tests types and accessibility of various app
+// fields over different versions.
+func TestAppParamsSetFieldsVersions(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, field := range appParamsFieldSpecs {
+		// app_params_get introduced in v13
+		testLogicRange(t, 13, 0, func(t *testing.T, ep *EvalParams, txn *transactions.Transaction, ledger *Ledger) {
+
+			text := "int 1;"
+			// No settable field is bytes, so we take a shortcut and use "i:" as
+			// the proto. Thus we _don't_ want to set the right type here, or
+			// the assembler will reject for bad typing.
+			// if field.ftype.AVMType == avmBytes {
+			//	text = "byte 0xaa;"
+			// }
+			text += "app_params_set " + field.field.String() + "; int 1"
+
+			v := ep.Proto.LogicSigVersion
+			ledger.NewApp(txn.Sender, 888, basics.AppParams{})
+			switch {
+			case field.setVersion == 0:
+				testProg(t, text, v, exp(1, "...is not settable..."))
+
+				// Assemble a known settable field in order to modify bytecode and test eval time
+				ops := testProg(t, "pushint 1; app_params_set AppFamilyBoxAccess; pushint 1;", v)
+				ops.Program[4] = field.Field()
+				testAppBytes(t, ops.Program, ep, "invalid app_params_set field")
+			case field.setVersion > v:
+				// check assembler fails if version before setting allowed introduction
+				testProg(t, text, v, exp(1, "...is settable in v..."))
+				ops := testProg(t, text, field.setVersion) // assemble in the future
+				ops.Program[0] = byte(v)                   // but set version back to before intro
+				testAppBytes(t, ops.Program, ep, "is not settable")
+			default: // legally settable
 				testProg(t, text, v)
 				testApp(t, text, ep)
 			}

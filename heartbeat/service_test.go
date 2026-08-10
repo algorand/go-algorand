@@ -304,6 +304,15 @@ func TestHeartbeatOnlyWhenChallenged(t *testing.T) {
 	a.Len(txns[0], 1)
 	a.Equal(txns[0][0].Txn.Type, protocol.HeartbeatTx)
 	a.Equal(txns[0][0].Txn.HbAddress, joe)
+	// ConsensusFuture enables the explicit discount, so the service claims the discount.
+	a.True(txns[0][0].Txn.HbChallengeDiscount)
 
 	s.Stop()
+}
+
+func TestHeartbeatAcceptingSenderIsPQCompliant(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	require.True(t, acceptingSender.IsPQCompliant(), "heartbeat accepting LogicSig sender must be PQ compliant")
 }
