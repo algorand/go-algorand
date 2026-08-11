@@ -1575,7 +1575,13 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	// A->B and A->C both open
 	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 2, len(netA.GetPeers(PeersConnectedOut)))
-	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
+	// the earlier wait for netB to settle at one inbound peer can pass before
+	// netB's addPeer has run for the abandoned second connection, in which
+	// case netB transiently reports two inbound peers here until the read
+	// loop reaps the closed one, so wait rather than assert equality
+	assert.Eventually(t, func() bool {
+		return len(netB.GetPeers(PeersConnectedIn)) == 1
+	}, time.Second, 50*time.Millisecond)
 	assert.Equal(t, 0, len(netB.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netC.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 0, len(netC.GetPeers(PeersConnectedOut)))
@@ -2310,7 +2316,15 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 		}
 
 		assert.Equal(t, tc.totalInA, len(netA.GetPeers(PeersConnectedIn)))
-		assert.Equal(t, tc.totalOutA, len(netA.GetPeers(PeersConnectedOut)))
+		// in the failure cases, tryConnect has already registered the outgoing
+		// peer before sending the verification message; netA only drops it
+		// after netB rejects that message and closes the connection, so wait
+		// for the count to settle rather than asserting immediately
+		assert.Eventually(
+			t,
+			func() bool { return len(netA.GetPeers(PeersConnectedOut)) == tc.totalOutA },
+			5*time.Second,
+			100*time.Millisecond)
 		assert.Equal(t, tc.totalOutB, len(netB.GetPeers(PeersConnectedOut)))
 		// it is possible for NetB to be in the process of doing addPeer while
 		// the underlying connection is being closed. In this case, the read loop
@@ -4212,17 +4226,23 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 		peerEnqueued: time.Now(),
 		ctx:          context.Background(),
 	}
+	// the metric is a package-wide counter, so compare against its value
+	// before the message rather than an absolute count
+	oldDropped := networkConnectionsDroppedTotal.GetUint64ValueForLabels(map[string]string{"reason": "unrequestedTS"})
 	netA.peers[0].sendBufferBulk <- msg
 	require.Eventually(t,
 		func() bool {
-			return networkConnectionsDroppedTotal.GetUint64ValueForLabels(map[string]string{"reason": "unrequestedTS"}) == 1
+			return networkConnectionsDroppedTotal.GetUint64ValueForLabels(map[string]string{"reason": "unrequestedTS"}) > oldDropped
 		},
 		1*time.Second,
 		50*time.Millisecond,
 	)
 
-	// Stop and confirm that we hit the case of disconnecting a peer for sending an unrequested block response
-	require.Zero(t, netB.NumPeers())
+	// Confirm that we hit the case of disconnecting a peer for sending an
+	// unrequested block response. The metric above is incremented in the read
+	// loop before the deferred cleanup unregisters the peer, so wait for the
+	// peer count to drop rather than asserting immediately.
+	require.Eventually(t, func() bool { return netB.NumPeers() == 0 }, 1*time.Second, 25*time.Millisecond)
 
 	netC.Start()
 	defer netC.Stop()
