@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -107,7 +108,7 @@ func makePQSignedTxn(t *testing.T, firstSeedByte byte) transactions.SignedTxn {
 	receiver[0] = 1
 	txn := createPayTransaction(config.Consensus[protocol.ConsensusFuture].MinTxnFee, 40, 60, 1, authorizer, receiver)
 
-	signature, err := signer.sign(txn)
+	signature, err := signer.Sign(txn)
 	require.NoError(t, err)
 	pqSig.Signature = signature
 
@@ -117,56 +118,10 @@ func makePQSignedTxn(t *testing.T, firstSeedByte byte) transactions.SignedTxn {
 	}
 }
 
-// falconTestSigner adapts one scheme's concrete signer to the operations
-// these tests need.
-type falconTestSigner interface {
-	sign(message crypto.Hashable) ([]byte, error)
-	signBytes(data []byte) ([]byte, error)
-	publicKey() []byte
-}
-
-type falcon1024TestSigner struct{ crypto.Falcon1024Signer }
-
-func (s falcon1024TestSigner) sign(message crypto.Hashable) ([]byte, error) { return s.Sign(message) }
-func (s falcon1024TestSigner) signBytes(data []byte) ([]byte, error)        { return s.SignBytes(data) }
-func (s falcon1024TestSigner) publicKey() []byte                            { return s.PublicKey[:] }
-
-type falcon512TestSigner struct{ crypto.Falcon512Signer }
-
-func (s falcon512TestSigner) sign(message crypto.Hashable) ([]byte, error) { return s.Sign(message) }
-func (s falcon512TestSigner) signBytes(data []byte) ([]byte, error)        { return s.SignBytes(data) }
-func (s falcon512TestSigner) publicKey() []byte                            { return s.PublicKey[:] }
-
-func makeFalconSigner(t *testing.T, firstSeedByte byte, scheme protocol.PQScheme) falconTestSigner {
-	t.Helper()
-
-	var seed crypto.FalconSeed
-	seed[0] = firstSeedByte
-	switch scheme {
-	case protocol.PQSchemeFalcon1024:
-		signer, err := crypto.GenerateFalcon1024Signer(seed)
-		require.NoError(t, err)
-		return falcon1024TestSigner{signer}
-	case protocol.PQSchemeFalcon512:
-		signer, err := crypto.GenerateFalcon512Signer(seed)
-		require.NoError(t, err)
-		return falcon512TestSigner{signer}
-	}
-	t.Fatalf("unknown scheme %s", scheme)
-	return nil
-}
-
 // invalidFalconSigErrText is the scheme-specific verification failure message
 // for signatures produced by makePQSigFields' randomly selected scheme.
 func invalidFalconSigErrText(t *testing.T, scheme protocol.PQScheme) string {
-	switch scheme {
-	case protocol.PQSchemeFalcon1024:
-		return crypto.ErrPQFalcon1024SigInvalid.Error()
-	case protocol.PQSchemeFalcon512:
-		return crypto.ErrPQFalcon512SigInvalid.Error()
-	}
-	t.Fatalf("unknown scheme %s", scheme)
-	return ""
+	return basics_testing.PQTestSchemeInfo(t, scheme).ErrSigInvalid.Error()
 }
 
 func makePQSigForTxn(t *testing.T, firstSeedByte byte, txn *transactions.Transaction) (basics.Address, transactions.PQSig) {
@@ -177,7 +132,7 @@ func makePQSigForTxn(t *testing.T, firstSeedByte byte, txn *transactions.Transac
 	var signature []byte
 	var err error
 	if txn != nil {
-		signature, err = signer.sign(*txn)
+		signature, err = signer.Sign(*txn)
 		require.NoError(t, err)
 	}
 	pqSig.Signature = signature
@@ -185,29 +140,17 @@ func makePQSigForTxn(t *testing.T, firstSeedByte byte, txn *transactions.Transac
 	return authorizer, pqSig
 }
 
-func makePQSigFields(t *testing.T, firstSeedByte byte) (falconTestSigner, basics.Address, transactions.PQSig) {
+func makePQSigFields(t *testing.T, firstSeedByte byte) (basics_testing.FalconSigner, basics.Address, transactions.PQSig) {
 	t.Helper()
 
 	// randomly choose between Falcon-512 and Falcon-1024 for the test
-	var falconRandSelector [1]byte
-	crypto.RandBytes(falconRandSelector[:])
+	scheme := basics_testing.RandomPQTestScheme().Scheme
+	acct := basics_testing.MakePQTestAccount(t, firstSeedByte, scheme)
 
-	var scheme protocol.PQScheme
-	if falconRandSelector[0]%2 == 0 {
-		scheme = protocol.PQSchemeFalcon1024
-	} else {
-		scheme = protocol.PQSchemeFalcon512
-	}
-
-	signer := makeFalconSigner(t, firstSeedByte, scheme)
-	publicKey := signer.publicKey()
-	salt, authorizer, err := basics.CanonicalPQAddressSalt(scheme, publicKey)
-	require.NoError(t, err)
-
-	return signer, authorizer, transactions.PQSig{
-		Scheme:    scheme,
-		Salt:      salt,
-		PublicKey: publicKey,
+	return acct.Signer, acct.Address, transactions.PQSig{
+		Scheme:    acct.Scheme,
+		Salt:      acct.Salt,
+		PublicKey: acct.PublicKey,
 	}
 }
 
@@ -218,7 +161,7 @@ func makePQDelegatedLogicSigTxn(t *testing.T, firstSeedByte byte) transactions.S
 	ops, err := logic.AssembleStringWithVersion("int 1", 1)
 	require.NoError(t, err)
 
-	signature, err := signer.sign(logic.PQDelegatedProgram{Addr: authorizer, Program: ops.Program})
+	signature, err := signer.Sign(logic.PQDelegatedProgram{Addr: authorizer, Program: ops.Program})
 	require.NoError(t, err)
 	pqSig.Signature = signature
 
@@ -641,12 +584,12 @@ func TestTxnValidationPQDelegatedLogicSigSignsRawProgram(t *testing.T) {
 	require.NoError(t, err)
 
 	delegation := logic.PQDelegatedProgram{Addr: authorizer, Program: ops.Program}
-	rawSignature, err := signer.signBytes(crypto.HashRep(delegation))
+	rawSignature, err := signer.SignBytes(crypto.HashRep(delegation))
 	require.NoError(t, err)
 
 	// Sign(delegation) applies HashRep internally, so it must produce the same
 	// deterministic Falcon signature as SignBytes(HashRep(delegation))
-	viaSign, err := signer.sign(delegation)
+	viaSign, err := signer.Sign(delegation)
 	require.NoError(t, err)
 	require.Equal(t, viaSign, rawSignature)
 
@@ -665,7 +608,7 @@ func TestTxnValidationPQDelegatedLogicSigSignsRawProgram(t *testing.T) {
 	// pre-hashed form) must not verify: the payload is the raw
 	// "PQProgram" || authorizer || program bytes, not their digest.
 	digest := crypto.HashObj(delegation)
-	digestSignature, err := signer.signBytes(digest[:])
+	digestSignature, err := signer.SignBytes(digest[:])
 	require.NoError(t, err)
 	require.NotEqual(t, digestSignature, rawSignature)
 

@@ -29,52 +29,14 @@ import (
 	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// pqSigTestSigner adapts one scheme's concrete signer to the byte-oriented
-// operations the tests need.
-type pqSigTestSigner interface {
-	sign(message crypto.Hashable) ([]byte, error)
-	signBytes(data []byte) ([]byte, error)
-	verify(message crypto.Hashable, sig []byte) error
-	verifyBytes(data []byte, sig []byte) error
-}
-
-type falcon1024TestSigner struct{ crypto.Falcon1024Signer }
-
-func (s falcon1024TestSigner) sign(message crypto.Hashable) ([]byte, error) {
-	return s.Sign(message)
-}
-func (s falcon1024TestSigner) signBytes(data []byte) ([]byte, error) {
-	return s.SignBytes(data)
-}
-func (s falcon1024TestSigner) verify(message crypto.Hashable, sig []byte) error {
-	return s.GetVerifyingKey().Verify(message, sig)
-}
-func (s falcon1024TestSigner) verifyBytes(data []byte, sig []byte) error {
-	return s.GetVerifyingKey().VerifyBytes(data, sig)
-}
-
-type falcon512TestSigner struct{ crypto.Falcon512Signer }
-
-func (s falcon512TestSigner) sign(message crypto.Hashable) ([]byte, error) {
-	return s.Sign(message)
-}
-func (s falcon512TestSigner) signBytes(data []byte) ([]byte, error) {
-	return s.SignBytes(data)
-}
-func (s falcon512TestSigner) verify(message crypto.Hashable, sig []byte) error {
-	return s.GetVerifyingKey().Verify(message, sig)
-}
-func (s falcon512TestSigner) verifyBytes(data []byte, sig []byte) error {
-	return s.GetVerifyingKey().VerifyBytes(data, sig)
-}
-
 type pqSigTestFixture struct {
 	name             string
-	signer           pqSigTestSigner
+	signer           basics_testing.FalconSigner
 	proto            config.ConsensusParams
 	txn              Transaction
 	authorizer       basics.Address
@@ -99,76 +61,48 @@ func (f pqSigTestFixture) protoWithSchemeDisabled(t *testing.T) config.Consensus
 }
 
 func makePQSigTestFixture(t *testing.T, firstSeedByte byte, scheme protocol.PQScheme) pqSigTestFixture {
-	var seed crypto.FalconSeed
-	seed[0] = firstSeedByte
-
-	var name string
-	var signer pqSigTestSigner
-	var publicKey []byte
-	var errSigInvalid error
-	var maxSignatureSize int
-	switch scheme {
-	case protocol.PQSchemeFalcon1024:
-		s, err := crypto.GenerateFalcon1024Signer(seed)
-		require.NoError(t, err)
-		name = "falcon-1024"
-		signer = falcon1024TestSigner{s}
-		publicKey = slices.Clone(s.PublicKey[:])
-		errSigInvalid = crypto.ErrPQFalcon1024SigInvalid
-		maxSignatureSize = crypto.Falcon1024MaxSignatureSize
-	case protocol.PQSchemeFalcon512:
-		s, err := crypto.GenerateFalcon512Signer(seed)
-		require.NoError(t, err)
-		name = "falcon-512"
-		signer = falcon512TestSigner{s}
-		publicKey = slices.Clone(s.PublicKey[:])
-		errSigInvalid = crypto.ErrPQFalcon512SigInvalid
-		maxSignatureSize = crypto.Falcon512MaxSignatureSize
-	default:
-		t.Fatalf("unknown scheme %s", scheme)
-	}
-
-	salt, authorizer, err := basics.CanonicalPQAddressSalt(scheme, publicKey)
-	require.NoError(t, err)
+	schemeInfo := basics_testing.PQTestSchemeInfo(t, scheme)
+	acct := basics_testing.MakePQTestAccount(t, firstSeedByte, scheme)
 
 	txn := Transaction{
 		Type: protocol.PaymentTx,
 		Header: Header{
-			Sender: authorizer,
+			Sender: acct.Address,
 		},
 		PaymentTxnFields: PaymentTxnFields{
-			Receiver: authorizer,
+			Receiver: acct.Address,
 		},
 	}
 
-	signature, err := signer.sign(txn)
+	signature, err := acct.Signer.Sign(txn)
 	require.NoError(t, err)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
 	require.True(t, proto.PQSchemeEnabled(scheme))
 
 	return pqSigTestFixture{
-		name:       name,
-		signer:     signer,
+		name:       schemeInfo.Name,
+		signer:     acct.Signer,
 		proto:      proto,
 		txn:        txn,
-		authorizer: authorizer,
+		authorizer: acct.Address,
 		pqSig: PQSig{
-			Scheme:    scheme,
-			Salt:      salt,
-			PublicKey: publicKey,
+			Scheme:    acct.Scheme,
+			Salt:      acct.Salt,
+			PublicKey: acct.PublicKey,
 			Signature: signature,
 		},
-		errSigInvalid:    errSigInvalid,
-		maxSignatureSize: maxSignatureSize,
+		errSigInvalid:    schemeInfo.ErrSigInvalid,
+		maxSignatureSize: schemeInfo.MaxSignatureSize,
 	}
 }
 
 func makePQSigTestFixtures(t *testing.T, firstSeedByte byte) []pqSigTestFixture {
-	return []pqSigTestFixture{
-		makePQSigTestFixture(t, firstSeedByte, protocol.PQSchemeFalcon1024),
-		makePQSigTestFixture(t, firstSeedByte, protocol.PQSchemeFalcon512),
+	fixtures := make([]pqSigTestFixture, 0, len(basics_testing.PQTestSchemes))
+	for _, scheme := range basics_testing.PQTestSchemes {
+		fixtures = append(fixtures, makePQSigTestFixture(t, firstSeedByte, scheme.Scheme))
 	}
+	return fixtures
 }
 
 func TestPQDecodeBoundsFeedSignedTxnMaxSize(t *testing.T) {
@@ -323,7 +257,7 @@ func TestPQSigVerifyAcceptsSignatureOverRawTxn(t *testing.T) {
 
 	for _, fixture := range makePQSigTestFixtures(t, 0) { // fixture uses signer.sign()
 		t.Run(fixture.name, func(t *testing.T) {
-			rawTxnSignature, err := fixture.signer.signBytes(crypto.HashRep(fixture.txn))
+			rawTxnSignature, err := fixture.signer.SignBytes(crypto.HashRep(fixture.txn))
 			require.NoError(t, err)
 
 			// Sign(txn) applies HashRep internally, so it must produce the same sig as SignBytes(HashRep(txn))
@@ -333,13 +267,13 @@ func TestPQSigVerifyAcceptsSignatureOverRawTxn(t *testing.T) {
 			pqSig.Signature = rawTxnSignature
 			require.NoError(t, pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer))
 
-			require.NoError(t, fixture.signer.verify(fixture.txn, rawTxnSignature))
-			require.NoError(t, fixture.signer.verifyBytes(crypto.HashRep(fixture.txn), rawTxnSignature))
+			require.NoError(t, fixture.signer.Verify(fixture.txn, rawTxnSignature))
+			require.NoError(t, fixture.signer.VerifyBytes(crypto.HashRep(fixture.txn), rawTxnSignature))
 
 			// A signature over the txid (the pre-hashed payload) must not verify:
 			// the payload is the raw canonical encoding, not its digest.
 			txid := crypto.Digest(fixture.txn.ID())
-			txidSignature, err := fixture.signer.signBytes(txid[:])
+			txidSignature, err := fixture.signer.SignBytes(txid[:])
 			require.NoError(t, err)
 			require.False(t, bytes.Equal(txidSignature, rawTxnSignature))
 

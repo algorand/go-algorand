@@ -53,6 +53,7 @@ import (
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -1164,45 +1165,13 @@ func enableDeveloperAPI() postTransactionOpt {
 	}
 }
 
-type testFalconSignFn func(t *testing.T, message crypto.Hashable) []byte
-
-func makePQSigWithAddressCompliance(t *testing.T, compliant bool) (testFalconSignFn, basics.Address, transactions.PQSig) {
+func makePQSigWithAddressCompliance(t *testing.T, compliant bool) (basics_testing.FalconSigner, basics.Address, transactions.PQSig) {
 	t.Helper()
 
 	// randomly choose between Falcon-512 and Falcon-1024 for the test
-	var falconRandSelector [1]byte
-	crypto.RandBytes(falconRandSelector[:])
-
-	var scheme protocol.PQScheme
-	if falconRandSelector[0]%2 == 0 {
-		scheme = protocol.PQSchemeFalcon1024
-	} else {
-		scheme = protocol.PQSchemeFalcon512
-	}
-
-	var seed crypto.FalconSeed
-	var publicKey []byte
-	var signFn testFalconSignFn
-
-	if scheme == protocol.PQSchemeFalcon1024 {
-		signer, err := crypto.GenerateFalcon1024Signer(seed)
-		require.NoError(t, err)
-		publicKey = slices.Clone(signer.PublicKey[:])
-		signFn = func(t *testing.T, message crypto.Hashable) []byte {
-			signature, err := signer.Sign(message)
-			require.NoError(t, err)
-			return signature
-		}
-	} else {
-		signer, err := crypto.GenerateFalcon512Signer(seed)
-		require.NoError(t, err)
-		publicKey = slices.Clone(signer.PublicKey[:])
-		signFn = func(t *testing.T, message crypto.Hashable) []byte {
-			signature, err := signer.Sign(message)
-			require.NoError(t, err)
-			return signature
-		}
-	}
+	scheme := basics_testing.RandomPQTestScheme().Scheme
+	signer := basics_testing.MakeFalconSigner(t, 0, scheme)
+	publicKey := signer.PublicKey()
 
 	var salt basics.PQAddressSalt
 	var authorizer basics.Address
@@ -1223,7 +1192,7 @@ func makePQSigWithAddressCompliance(t *testing.T, compliant bool) (testFalconSig
 		require.True(t, found, "unable to find non-compliant PQ address salt")
 	}
 
-	return signFn, authorizer, transactions.PQSig{
+	return signer, authorizer, transactions.PQSig{
 		Scheme:    scheme,
 		Salt:      salt,
 		PublicKey: publicKey,
@@ -1233,7 +1202,7 @@ func makePQSigWithAddressCompliance(t *testing.T, compliant bool) (testFalconSig
 func makePQSignedTxnWithAddressCompliance(t *testing.T, compliant bool) transactions.SignedTxn {
 	t.Helper()
 
-	signFn, authorizer, pqSig := makePQSigWithAddressCompliance(t, compliant)
+	signer, authorizer, pqSig := makePQSigWithAddressCompliance(t, compliant)
 	txn := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
@@ -1248,7 +1217,9 @@ func makePQSignedTxnWithAddressCompliance(t *testing.T, compliant bool) transact
 		},
 	}
 
-	pqSig.Signature = signFn(t, txn)
+	signature, err := signer.Sign(txn)
+	require.NoError(t, err)
+	pqSig.Signature = signature
 
 	return transactions.SignedTxn{
 		Txn:   txn,
@@ -1259,11 +1230,12 @@ func makePQSignedTxnWithAddressCompliance(t *testing.T, compliant bool) transact
 func makePQDelegatedLogicSigTxnWithAddressCompliance(t *testing.T, compliant bool) transactions.SignedTxn {
 	t.Helper()
 
-	signFn, authorizer, pqSig := makePQSigWithAddressCompliance(t, compliant)
+	signer, authorizer, pqSig := makePQSigWithAddressCompliance(t, compliant)
 	ops, err := logic.AssembleStringWithVersion("int 1", 1)
 	require.NoError(t, err)
 
-	pqSig.Signature = signFn(t, logic.PQDelegatedProgram{Addr: authorizer, Program: ops.Program})
+	pqSig.Signature, err = signer.Sign(logic.PQDelegatedProgram{Addr: authorizer, Program: ops.Program})
+	require.NoError(t, err)
 
 	txn := transactions.Transaction{
 		Type: protocol.PaymentTx,
