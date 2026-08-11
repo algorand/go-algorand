@@ -41,8 +41,8 @@ type PQVerifier interface {
 // signature means growing these; TestPQBoundsCoverFalcon1024 guards against
 // undersizing the current schemes.
 const (
-	MaxPQPublicKeySize = FalconPublicKeySize
-	MaxPQSignatureSize = FalconMaxSignatureSize
+	MaxPQPublicKeySize = Falcon1024PublicKeySize
+	MaxPQSignatureSize = Falcon1024MaxSignatureSize
 )
 
 // LookupPQScheme returns the verifier for a PQ scheme tag.

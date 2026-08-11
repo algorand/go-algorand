@@ -1428,7 +1428,7 @@ func TestRekeying(t *testing.T) {
 }
 
 type pqRekeyTestAccount struct {
-	signer    crypto.FalconSigner
+	signer    crypto.Falcon1024Signer
 	address   basics.Address
 	salt      basics.PQAddressSalt
 	publicKey []byte
@@ -1439,7 +1439,7 @@ func makePQRekeyTestAccount(t *testing.T, firstSeedByte byte) pqRekeyTestAccount
 
 	var seed crypto.FalconSeed
 	seed[0] = firstSeedByte
-	signer, err := crypto.GenerateFalconSigner(seed)
+	signer, err := crypto.GenerateFalcon1024Signer(seed)
 	require.NoError(t, err)
 
 	publicKey := signer.PublicKey[:]

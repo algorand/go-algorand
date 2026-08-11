@@ -472,7 +472,7 @@ func TestFalconVerify(t *testing.T) {
 	t.Parallel()
 
 	var s crypto.FalconSeed
-	fs, err := crypto.GenerateFalconSigner(s)
+	fs, err := crypto.GenerateFalcon1024Signer(s)
 	require.NoError(t, err)
 
 	msg := "62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"

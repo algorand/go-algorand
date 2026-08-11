@@ -96,7 +96,7 @@ func derivePQKeySeed(scheme protocol.PQScheme, entropy crypto.Seed) crypto.Diges
 }
 
 func (falcon1024Ops) deriveSigning(seed crypto.Digest) (pqSigningMaterial, error) {
-	signer, err := crypto.GenerateFalconSigner(crypto.FalconSeed(seed))
+	signer, err := crypto.GenerateFalcon1024Signer(crypto.FalconSeed(seed))
 	if err != nil {
 		return pqSigningMaterial{}, err
 	}
@@ -118,17 +118,17 @@ func (falcon1024Ops) deriveSigning(seed crypto.Digest) (pqSigningMaterial, error
 	}, nil
 }
 
-func (falcon1024Ops) publicKeySize() uint64 { return crypto.FalconPublicKeySize }
+func (falcon1024Ops) publicKeySize() uint64 { return crypto.Falcon1024PublicKeySize }
 
-func (falcon1024Ops) privateKeySize() uint64 { return crypto.FalconPrivateKeySize }
+func (falcon1024Ops) privateKeySize() uint64 { return crypto.Falcon1024PrivateKeySize }
 
 func (falcon1024Ops) sign(privateKey []byte, message crypto.Hashable) ([]byte, error) {
-	var sk crypto.FalconPrivateKey
+	var sk crypto.Falcon1024PrivateKey
 	if len(privateKey) != len(sk) {
 		return nil, fmt.Errorf("%w: got private key size %d, want %d", errPQKeyMalformed, len(privateKey), len(sk))
 	}
 	copy(sk[:], privateKey)
 
-	signer := crypto.FalconSigner{PrivateKey: sk}
+	signer := crypto.Falcon1024Signer{PrivateKey: sk}
 	return signer.Sign(message)
 }

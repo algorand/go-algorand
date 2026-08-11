@@ -30,7 +30,7 @@ import (
 func falconPublicKeyForPQAddressTest(t *testing.T, firstSeedByte byte) []byte {
 	var seed crypto.FalconSeed
 	seed[0] = firstSeedByte
-	signer, err := crypto.GenerateFalconSigner(seed)
+	signer, err := crypto.GenerateFalcon1024Signer(seed)
 	require.NoError(t, err)
 	return slices.Clone(signer.PublicKey[:])
 }

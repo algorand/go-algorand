@@ -179,13 +179,13 @@ func opFalconVerify(cx *EvalContext) error {
 	prev := last - 1          // index of signature
 	pprev := prev - 1         // index of data
 
-	var fv crypto.FalconVerifier
+	var fv crypto.Falcon1024Verifier
 	if len(cx.Stack[last].Bytes) != len(fv.PublicKey) {
 		return fmt.Errorf("invalid public key size %d != %d", len(cx.Stack[last].Bytes), len(fv.PublicKey))
 	}
 	copy(fv.PublicKey[:], cx.Stack[last].Bytes)
 
-	sig := crypto.FalconSignature(cx.Stack[prev].Bytes)
+	sig := crypto.Falcon1024Signature(cx.Stack[prev].Bytes)
 
 	err := fv.VerifyBytes(cx.Stack[pprev].Bytes, sig)
 	cx.Stack[pprev] = boolToSV(err == nil)

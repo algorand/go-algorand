@@ -117,12 +117,12 @@ func makePQSignedTxn(t *testing.T, firstSeedByte byte) transactions.SignedTxn {
 	}
 }
 
-func makeFalconSigner(t *testing.T, firstSeedByte byte) crypto.FalconSigner {
+func makeFalconSigner(t *testing.T, firstSeedByte byte) crypto.Falcon1024Signer {
 	t.Helper()
 
 	var seed crypto.FalconSeed
 	seed[0] = firstSeedByte
-	signer, err := crypto.GenerateFalconSigner(seed)
+	signer, err := crypto.GenerateFalcon1024Signer(seed)
 	require.NoError(t, err)
 
 	return signer
@@ -144,7 +144,7 @@ func makePQSigForTxn(t *testing.T, firstSeedByte byte, txn *transactions.Transac
 	return authorizer, pqSig
 }
 
-func makePQSigFields(t *testing.T, firstSeedByte byte) (crypto.FalconSigner, basics.Address, transactions.PQSig) {
+func makePQSigFields(t *testing.T, firstSeedByte byte) (crypto.Falcon1024Signer, basics.Address, transactions.PQSig) {
 	t.Helper()
 
 	signer := makeFalconSigner(t, firstSeedByte)

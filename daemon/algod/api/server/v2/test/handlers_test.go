@@ -1164,11 +1164,11 @@ func enableDeveloperAPI() postTransactionOpt {
 	}
 }
 
-func makePQSigWithAddressCompliance(t *testing.T, compliant bool) (crypto.FalconSigner, basics.Address, transactions.PQSig) {
+func makePQSigWithAddressCompliance(t *testing.T, compliant bool) (crypto.Falcon1024Signer, basics.Address, transactions.PQSig) {
 	t.Helper()
 
 	var seed crypto.FalconSeed
-	signer, err := crypto.GenerateFalconSigner(seed)
+	signer, err := crypto.GenerateFalcon1024Signer(seed)
 	require.NoError(t, err)
 	publicKey := slices.Clone(signer.PublicKey[:])
 
@@ -2393,10 +2393,10 @@ func TestAppendParticipationKeys(t *testing.T) {
 	t.Run("Happy path", func(t *testing.T) {
 		// Create test object to append.
 		keys := make(account.StateProofKeys, 2)
-		testKey1 := crypto.FalconSigner{}
+		testKey1 := crypto.Falcon1024Signer{}
 		testKey1.PrivateKey[0] = 100
 
-		testKey2 := crypto.FalconSigner{}
+		testKey2 := crypto.Falcon1024Signer{}
 		testKey2.PrivateKey[0] = 101
 
 		keys[0] = merklesignature.KeyRoundPair{Round: 100, Key: &testKey1}
@@ -2472,10 +2472,10 @@ func TestAppendParticipationKeys(t *testing.T) {
 		}
 
 		keys := make(account.StateProofKeys, 2)
-		testKey1 := crypto.FalconSigner{}
+		testKey1 := crypto.Falcon1024Signer{}
 		testKey1.PrivateKey[0] = 100
 
-		testKey2 := crypto.FalconSigner{}
+		testKey2 := crypto.Falcon1024Signer{}
 		testKey2.PrivateKey[0] = 101
 
 		keys[0] = merklesignature.KeyRoundPair{Round: 100, Key: &testKey1}

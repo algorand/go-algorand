@@ -34,7 +34,7 @@ import (
 )
 
 type pqSigTestFixture struct {
-	signer     crypto.FalconSigner
+	signer     crypto.Falcon1024Signer
 	proto      config.ConsensusParams
 	txn        Transaction
 	authorizer basics.Address
@@ -44,7 +44,7 @@ type pqSigTestFixture struct {
 func makePQSigTestFixture(t *testing.T, firstSeedByte byte) pqSigTestFixture {
 	var seed crypto.FalconSeed
 	seed[0] = firstSeedByte
-	signer, err := crypto.GenerateFalconSigner(seed)
+	signer, err := crypto.GenerateFalcon1024Signer(seed)
 	require.NoError(t, err)
 
 	publicKey := slices.Clone(signer.PublicKey[:])
@@ -323,7 +323,7 @@ func TestPQSigVerifyRejectsMalformedSignature(t *testing.T) {
 	fixture := makePQSigTestFixture(t, 0)
 
 	pqSig := fixture.pqSig
-	pqSig.Signature = make([]byte, crypto.FalconMaxSignatureSize+1)
+	pqSig.Signature = make([]byte, crypto.Falcon1024MaxSignatureSize+1)
 
 	err := pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer)
 	require.ErrorIs(t, err, crypto.ErrPQFalcon1024SigInvalid)

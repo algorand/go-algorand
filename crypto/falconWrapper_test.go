@@ -32,7 +32,7 @@ func TestSignAndVerifyFalcon(t *testing.T) {
 
 	var seed FalconSeed
 	SystemRNG.RandBytes(seed[:])
-	key, err := GenerateFalconSigner(seed)
+	key, err := GenerateFalcon1024Signer(seed)
 	a.NoError(err)
 
 	msg := []byte("Neque porro quisquam est qui dolorem ipsum quia dolor sit amet")
@@ -51,7 +51,7 @@ func TestSignAndVerifyFalconHashable(t *testing.T) {
 	msg := TestingHashable{data: []byte("Neque porro quisquam est qui dolorem ipsum quia dolor sit amet")}
 	var seed FalconSeed
 	SystemRNG.RandBytes(seed[:])
-	key, err := GenerateFalconSigner(seed)
+	key, err := GenerateFalcon1024Signer(seed)
 	a.NoError(err)
 
 	byteSig, err := key.Sign(msg)
@@ -69,7 +69,7 @@ func TestVerifyFalcon1024RejectsMalformedInputs(t *testing.T) {
 	msg := TestingHashable{data: []byte("verify falcon-1024 malformed inputs")}
 	var seed FalconSeed
 	seed[0] = 1
-	signer, err := GenerateFalconSigner(seed)
+	signer, err := GenerateFalcon1024Signer(seed)
 	require.NoError(t, err)
 
 	signature, err := signer.Sign(msg)
@@ -101,7 +101,7 @@ func TestVerifyFalcon1024RejectsMalformedInputs(t *testing.T) {
 		{
 			name:      "oversized signature",
 			publicKey: signer.PublicKey[:],
-			signature: make([]byte, FalconMaxSignatureSize+1),
+			signature: make([]byte, Falcon1024MaxSignatureSize+1),
 		},
 	}
 
@@ -121,7 +121,7 @@ func TestFalconCanHandleNilSignature(t *testing.T) {
 
 	var seed FalconSeed
 	SystemRNG.RandBytes(seed[:])
-	key, err := GenerateFalconSigner(seed)
+	key, err := GenerateFalcon1024Signer(seed)
 	a.NoError(err)
 
 	err = key.GetVerifyingKey().VerifyBytes([]byte("Test"), nil)
@@ -134,7 +134,7 @@ func TestVerificationBytes(t *testing.T) {
 
 	var seed FalconSeed
 	SystemRNG.RandBytes(seed[:])
-	key, err := GenerateFalconSigner(seed)
+	key, err := GenerateFalcon1024Signer(seed)
 	a.NoError(err)
 
 	verifyingRawKey := key.GetVerifyingKey().GetFixedLengthHashableRepresentation()
@@ -148,7 +148,7 @@ func TestFalconsFormatConversion(t *testing.T) {
 
 	var seed FalconSeed
 	SystemRNG.RandBytes(seed[:])
-	key, err := GenerateFalconSigner(seed)
+	key, err := GenerateFalcon1024Signer(seed)
 	a.NoError(err)
 
 	msg := []byte("Neque porro quisquam est qui dolorem ipsum quia dolor sit amet")
@@ -172,7 +172,7 @@ func TestFalconSignature_ValidateVersion(t *testing.T) {
 	msg := TestingHashable{data: []byte("Neque porro quisquam est qui dolorem ipsum quia dolor sit amet")}
 	var seed FalconSeed
 	SystemRNG.RandBytes(seed[:])
-	key, err := GenerateFalconSigner(seed)
+	key, err := GenerateFalcon1024Signer(seed)
 	a.NoError(err)
 
 	byteSig, err := key.Sign(msg)
