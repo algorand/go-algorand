@@ -32,6 +32,6 @@ var (
 	// PQSchemeFalcon1024 - f1: Falcon-1024 using a deterministic signing profile.
 	PQSchemeFalcon1024 = PQScheme{'f', '1'}
 
-	// PQSchemeFalcon512 - f2: Falcon-512 using a deterministic signing profile.
-	PQSchemeFalcon512 = PQScheme{'f', '2'} // reserved, not used
+	// PQSchemeFalcon512 - f5: Falcon-512 using a deterministic signing profile.
+	PQSchemeFalcon512 = PQScheme{'f', '5'}
 )

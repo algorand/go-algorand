@@ -1164,24 +1164,57 @@ func enableDeveloperAPI() postTransactionOpt {
 	}
 }
 
-func makePQSigWithAddressCompliance(t *testing.T, compliant bool) (crypto.Falcon1024Signer, basics.Address, transactions.PQSig) {
+type testFalconSignFn func(t *testing.T, message crypto.Hashable) []byte
+
+func makePQSigWithAddressCompliance(t *testing.T, compliant bool) (testFalconSignFn, basics.Address, transactions.PQSig) {
 	t.Helper()
 
+	// randomly choose between Falcon-512 and Falcon-1024 for the test
+	var falconRandSelector [1]byte
+	crypto.RandBytes(falconRandSelector[:])
+
+	var scheme protocol.PQScheme
+	if falconRandSelector[0]%2 == 0 {
+		scheme = protocol.PQSchemeFalcon1024
+	} else {
+		scheme = protocol.PQSchemeFalcon512
+	}
+
 	var seed crypto.FalconSeed
-	signer, err := crypto.GenerateFalcon1024Signer(seed)
-	require.NoError(t, err)
-	publicKey := slices.Clone(signer.PublicKey[:])
+	var publicKey []byte
+	var signFn testFalconSignFn
+
+	if scheme == protocol.PQSchemeFalcon1024 {
+		signer, err := crypto.GenerateFalcon1024Signer(seed)
+		require.NoError(t, err)
+		publicKey = slices.Clone(signer.PublicKey[:])
+		signFn = func(t *testing.T, message crypto.Hashable) []byte {
+			signature, err := signer.Sign(message)
+			require.NoError(t, err)
+			return signature
+		}
+	} else {
+		signer, err := crypto.GenerateFalcon512Signer(seed)
+		require.NoError(t, err)
+		publicKey = slices.Clone(signer.PublicKey[:])
+		signFn = func(t *testing.T, message crypto.Hashable) []byte {
+			signature, err := signer.Sign(message)
+			require.NoError(t, err)
+			return signature
+		}
+	}
 
 	var salt basics.PQAddressSalt
 	var authorizer basics.Address
 	if compliant {
-		salt, authorizer, err = basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
+		var err error
+		salt, authorizer, err = basics.CanonicalPQAddressSalt(scheme, publicKey)
 		require.NoError(t, err)
 	} else {
 		found := false
 		for s := 0; s <= math.MaxUint8; s++ {
 			salt = basics.PQAddressSalt(s)
-			authorizer = basics.PQAddress(protocol.PQSchemeFalcon1024, salt, publicKey)
+			authorizer = basics.PQAddress(scheme, salt, publicKey)
 			if !authorizer.IsPQCompliant() {
 				found = true
 				break
@@ -1190,8 +1223,8 @@ func makePQSigWithAddressCompliance(t *testing.T, compliant bool) (crypto.Falcon
 		require.True(t, found, "unable to find non-compliant PQ address salt")
 	}
 
-	return signer, authorizer, transactions.PQSig{
-		Scheme:    protocol.PQSchemeFalcon1024,
+	return signFn, authorizer, transactions.PQSig{
+		Scheme:    scheme,
 		Salt:      salt,
 		PublicKey: publicKey,
 	}
@@ -1200,7 +1233,7 @@ func makePQSigWithAddressCompliance(t *testing.T, compliant bool) (crypto.Falcon
 func makePQSignedTxnWithAddressCompliance(t *testing.T, compliant bool) transactions.SignedTxn {
 	t.Helper()
 
-	signer, authorizer, pqSig := makePQSigWithAddressCompliance(t, compliant)
+	signFn, authorizer, pqSig := makePQSigWithAddressCompliance(t, compliant)
 	txn := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
@@ -1215,9 +1248,7 @@ func makePQSignedTxnWithAddressCompliance(t *testing.T, compliant bool) transact
 		},
 	}
 
-	signature, err := signer.Sign(txn)
-	require.NoError(t, err)
-	pqSig.Signature = signature
+	pqSig.Signature = signFn(t, txn)
 
 	return transactions.SignedTxn{
 		Txn:   txn,
@@ -1228,13 +1259,11 @@ func makePQSignedTxnWithAddressCompliance(t *testing.T, compliant bool) transact
 func makePQDelegatedLogicSigTxnWithAddressCompliance(t *testing.T, compliant bool) transactions.SignedTxn {
 	t.Helper()
 
-	signer, authorizer, pqSig := makePQSigWithAddressCompliance(t, compliant)
+	signFn, authorizer, pqSig := makePQSigWithAddressCompliance(t, compliant)
 	ops, err := logic.AssembleStringWithVersion("int 1", 1)
 	require.NoError(t, err)
 
-	signature, err := signer.Sign(logic.PQDelegatedProgram{Addr: authorizer, Program: ops.Program})
-	require.NoError(t, err)
-	pqSig.Signature = signature
+	pqSig.Signature = signFn(t, logic.PQDelegatedProgram{Addr: authorizer, Program: ops.Program})
 
 	txn := transactions.Transaction{
 		Type: protocol.PaymentTx,

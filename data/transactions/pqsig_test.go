@@ -33,22 +33,102 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-type pqSigTestFixture struct {
-	signer     crypto.Falcon1024Signer
-	proto      config.ConsensusParams
-	txn        Transaction
-	authorizer basics.Address
-	pqSig      PQSig
+// pqSigTestSigner adapts one scheme's concrete signer to the byte-oriented
+// operations the tests need.
+type pqSigTestSigner interface {
+	sign(message crypto.Hashable) ([]byte, error)
+	signBytes(data []byte) ([]byte, error)
+	verify(message crypto.Hashable, sig []byte) error
+	verifyBytes(data []byte, sig []byte) error
 }
 
-func makePQSigTestFixture(t *testing.T, firstSeedByte byte) pqSigTestFixture {
+type falcon1024TestSigner struct{ crypto.Falcon1024Signer }
+
+func (s falcon1024TestSigner) sign(message crypto.Hashable) ([]byte, error) {
+	return s.Sign(message)
+}
+func (s falcon1024TestSigner) signBytes(data []byte) ([]byte, error) {
+	return s.SignBytes(data)
+}
+func (s falcon1024TestSigner) verify(message crypto.Hashable, sig []byte) error {
+	return s.GetVerifyingKey().Verify(message, sig)
+}
+func (s falcon1024TestSigner) verifyBytes(data []byte, sig []byte) error {
+	return s.GetVerifyingKey().VerifyBytes(data, sig)
+}
+
+type falcon512TestSigner struct{ crypto.Falcon512Signer }
+
+func (s falcon512TestSigner) sign(message crypto.Hashable) ([]byte, error) {
+	return s.Sign(message)
+}
+func (s falcon512TestSigner) signBytes(data []byte) ([]byte, error) {
+	return s.SignBytes(data)
+}
+func (s falcon512TestSigner) verify(message crypto.Hashable, sig []byte) error {
+	return s.GetVerifyingKey().Verify(message, sig)
+}
+func (s falcon512TestSigner) verifyBytes(data []byte, sig []byte) error {
+	return s.GetVerifyingKey().VerifyBytes(data, sig)
+}
+
+type pqSigTestFixture struct {
+	name             string
+	signer           pqSigTestSigner
+	proto            config.ConsensusParams
+	txn              Transaction
+	authorizer       basics.Address
+	pqSig            PQSig
+	errSigInvalid    error
+	maxSignatureSize int
+}
+
+// protoWithSchemeDisabled returns a copy of the fixture's consensus params
+// with the fixture's scheme turned off.
+func (f pqSigTestFixture) protoWithSchemeDisabled(t *testing.T) config.ConsensusParams {
+	proto := f.proto
+	switch f.pqSig.Scheme {
+	case protocol.PQSchemeFalcon1024:
+		proto.EnablePQSchemeFalcon1024 = false
+	case protocol.PQSchemeFalcon512:
+		proto.EnablePQSchemeFalcon512 = false
+	default:
+		t.Fatalf("unknown scheme %s", f.pqSig.Scheme)
+	}
+	return proto
+}
+
+func makePQSigTestFixture(t *testing.T, firstSeedByte byte, scheme protocol.PQScheme) pqSigTestFixture {
 	var seed crypto.FalconSeed
 	seed[0] = firstSeedByte
-	signer, err := crypto.GenerateFalcon1024Signer(seed)
-	require.NoError(t, err)
 
-	publicKey := slices.Clone(signer.PublicKey[:])
-	salt, authorizer, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
+	var name string
+	var signer pqSigTestSigner
+	var publicKey []byte
+	var errSigInvalid error
+	var maxSignatureSize int
+	switch scheme {
+	case protocol.PQSchemeFalcon1024:
+		s, err := crypto.GenerateFalcon1024Signer(seed)
+		require.NoError(t, err)
+		name = "falcon-1024"
+		signer = falcon1024TestSigner{s}
+		publicKey = slices.Clone(s.PublicKey[:])
+		errSigInvalid = crypto.ErrPQFalcon1024SigInvalid
+		maxSignatureSize = crypto.Falcon1024MaxSignatureSize
+	case protocol.PQSchemeFalcon512:
+		s, err := crypto.GenerateFalcon512Signer(seed)
+		require.NoError(t, err)
+		name = "falcon-512"
+		signer = falcon512TestSigner{s}
+		publicKey = slices.Clone(s.PublicKey[:])
+		errSigInvalid = crypto.ErrPQFalcon512SigInvalid
+		maxSignatureSize = crypto.Falcon512MaxSignatureSize
+	default:
+		t.Fatalf("unknown scheme %s", scheme)
+	}
+
+	salt, authorizer, err := basics.CanonicalPQAddressSalt(scheme, publicKey)
 	require.NoError(t, err)
 
 	txn := Transaction{
@@ -61,23 +141,33 @@ func makePQSigTestFixture(t *testing.T, firstSeedByte byte) pqSigTestFixture {
 		},
 	}
 
-	signature, err := signer.Sign(txn)
+	signature, err := signer.sign(txn)
 	require.NoError(t, err)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-	require.True(t, proto.EnablePQSchemeFalcon1024)
+	require.True(t, proto.PQSchemeEnabled(scheme))
 
 	return pqSigTestFixture{
+		name:       name,
 		signer:     signer,
 		proto:      proto,
 		txn:        txn,
 		authorizer: authorizer,
 		pqSig: PQSig{
-			Scheme:    protocol.PQSchemeFalcon1024,
+			Scheme:    scheme,
 			Salt:      salt,
 			PublicKey: publicKey,
 			Signature: signature,
 		},
+		errSigInvalid:    errSigInvalid,
+		maxSignatureSize: maxSignatureSize,
+	}
+}
+
+func makePQSigTestFixtures(t *testing.T, firstSeedByte byte) []pqSigTestFixture {
+	return []pqSigTestFixture{
+		makePQSigTestFixture(t, firstSeedByte, protocol.PQSchemeFalcon1024),
+		makePQSigTestFixture(t, firstSeedByte, protocol.PQSchemeFalcon512),
 	}
 }
 
@@ -120,6 +210,7 @@ func TestPQSigBlank(t *testing.T) {
 
 	require.False(t, (PQSig{Salt: 1}).Blank())
 	require.False(t, (PQSig{Scheme: protocol.PQSchemeFalcon1024}).Blank())
+	require.False(t, (PQSig{Scheme: protocol.PQSchemeFalcon512}).Blank())
 	require.False(t, (PQSig{PublicKey: []byte{1}}).Blank())
 	require.False(t, (PQSig{Signature: []byte{1}}).Blank())
 }
@@ -127,227 +218,253 @@ func TestPQSigBlank(t *testing.T) {
 func TestPQSigEqual(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	fixture := makePQSigTestFixture(t, 0)
-	same := fixture.pqSig
-	same.PublicKey = slices.Clone(same.PublicKey)
-	same.Signature = slices.Clone(same.Signature)
+	for _, fixture := range makePQSigTestFixtures(t, 0) {
+		t.Run(fixture.name, func(t *testing.T) {
+			same := fixture.pqSig
+			same.PublicKey = slices.Clone(same.PublicKey)
+			same.Signature = slices.Clone(same.Signature)
 
-	require.True(t, fixture.pqSig.Equal(same))
+			require.True(t, fixture.pqSig.Equal(same))
 
-	changedScheme := fixture.pqSig
-	changedScheme.Scheme = protocol.PQScheme{'x', '1'}
-	require.False(t, fixture.pqSig.Equal(changedScheme))
+			changedScheme := fixture.pqSig
+			changedScheme.Scheme = protocol.PQScheme{'x', '1'}
+			require.False(t, fixture.pqSig.Equal(changedScheme))
 
-	changedSalt := fixture.pqSig
-	changedSalt.Salt++
-	require.False(t, fixture.pqSig.Equal(changedSalt))
+			changedSalt := fixture.pqSig
+			changedSalt.Salt++
+			require.False(t, fixture.pqSig.Equal(changedSalt))
 
-	changedPublicKey := fixture.pqSig
-	changedPublicKey.PublicKey = slices.Clone(changedPublicKey.PublicKey)
-	changedPublicKey.PublicKey[0] ^= 1
-	require.False(t, fixture.pqSig.Equal(changedPublicKey))
+			changedPublicKey := fixture.pqSig
+			changedPublicKey.PublicKey = slices.Clone(changedPublicKey.PublicKey)
+			changedPublicKey.PublicKey[0] ^= 1
+			require.False(t, fixture.pqSig.Equal(changedPublicKey))
 
-	changedSignature := fixture.pqSig
-	changedSignature.Signature = slices.Clone(changedSignature.Signature)
-	changedSignature.Signature[0] ^= 1
-	require.False(t, fixture.pqSig.Equal(changedSignature))
+			changedSignature := fixture.pqSig
+			changedSignature.Signature = slices.Clone(changedSignature.Signature)
+			changedSignature.Signature[0] ^= 1
+			require.False(t, fixture.pqSig.Equal(changedSignature))
 
-	blank := PQSig{}
-	require.True(t, blank.Equal(PQSig{}))
-	require.False(t, blank.Equal(fixture.pqSig))
+			blank := PQSig{}
+			require.True(t, blank.Equal(PQSig{}))
+			require.False(t, blank.Equal(fixture.pqSig))
+		})
+	}
 }
 
 func TestPQSigAuthorizerAddress(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	fixture := makePQSigTestFixture(t, 0)
-
-	require.Equal(t, fixture.authorizer, fixture.pqSig.Address())
-	require.Equal(t, basics.PQAddress(fixture.pqSig.Scheme, fixture.pqSig.Salt, fixture.pqSig.PublicKey), fixture.pqSig.Address())
+	for _, fixture := range makePQSigTestFixtures(t, 0) {
+		t.Run(fixture.name, func(t *testing.T) {
+			require.Equal(t, fixture.authorizer, fixture.pqSig.Address())
+			require.Equal(t, basics.PQAddress(fixture.pqSig.Scheme, fixture.pqSig.Salt, fixture.pqSig.PublicKey), fixture.pqSig.Address())
+		})
+	}
 }
 
 func TestPQSigValidateEnvelope(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	fixture := makePQSigTestFixture(t, 0)
+	for _, fixture := range makePQSigTestFixtures(t, 0) {
+		t.Run(fixture.name, func(t *testing.T) {
+			require.NoError(t, fixture.pqSig.ValidateScheme(fixture.proto))
 
-	require.NoError(t, fixture.pqSig.ValidateScheme(fixture.proto))
+			schemeOnly := PQSig{Scheme: fixture.pqSig.Scheme}
+			require.NoError(t, schemeOnly.ValidateScheme(fixture.proto))
 
-	schemeOnly := PQSig{Scheme: protocol.PQSchemeFalcon1024}
-	require.NoError(t, schemeOnly.ValidateScheme(fixture.proto))
+			require.NoError(t, fixture.pqSig.ValidateEnvelope(fixture.proto, fixture.authorizer))
 
-	require.NoError(t, fixture.pqSig.ValidateEnvelope(fixture.proto, fixture.authorizer))
+			noSignature := fixture.pqSig
+			noSignature.Signature = nil
+			require.NoError(t, noSignature.ValidateEnvelope(fixture.proto, fixture.authorizer))
 
-	noSignature := fixture.pqSig
-	noSignature.Signature = nil
-	require.NoError(t, noSignature.ValidateEnvelope(fixture.proto, fixture.authorizer))
+			disabledProto := fixture.protoWithSchemeDisabled(t)
+			require.ErrorIs(t, fixture.pqSig.ValidateScheme(disabledProto), crypto.ErrPQSchemeNotEnabled)
+			require.ErrorIs(t, fixture.pqSig.ValidateEnvelope(disabledProto, fixture.authorizer), crypto.ErrPQSchemeNotEnabled)
 
-	disabledProto := fixture.proto
-	disabledProto.EnablePQSchemeFalcon1024 = false
-	require.ErrorIs(t, fixture.pqSig.ValidateScheme(disabledProto), crypto.ErrPQSchemeNotEnabled)
-	require.ErrorIs(t, fixture.pqSig.ValidateEnvelope(disabledProto, fixture.authorizer), crypto.ErrPQSchemeNotEnabled)
+			unknownScheme := fixture.pqSig
+			unknownScheme.Scheme = protocol.PQScheme{'x', '1'}
+			require.ErrorIs(t, unknownScheme.ValidateScheme(fixture.proto), crypto.ErrPQSchemeNotSupported)
+			require.ErrorIs(t, unknownScheme.ValidateEnvelope(fixture.proto, unknownScheme.Address()), crypto.ErrPQSchemeNotSupported)
 
-	unknownScheme := fixture.pqSig
-	unknownScheme.Scheme = protocol.PQScheme{'x', '1'}
-	require.ErrorIs(t, unknownScheme.ValidateScheme(fixture.proto), crypto.ErrPQSchemeNotSupported)
-	require.ErrorIs(t, unknownScheme.ValidateEnvelope(fixture.proto, unknownScheme.Address()), crypto.ErrPQSchemeNotSupported)
+			malformedPublicKey := fixture.pqSig
+			malformedPublicKey.PublicKey = malformedPublicKey.PublicKey[:len(malformedPublicKey.PublicKey)-1]
+			require.NoError(t, malformedPublicKey.ValidateEnvelope(fixture.proto, malformedPublicKey.Address()))
+			require.ErrorIs(t, malformedPublicKey.Verify(fixture.proto, fixture.txn, malformedPublicKey.Address()), fixture.errSigInvalid)
 
-	malformedPublicKey := fixture.pqSig
-	malformedPublicKey.PublicKey = malformedPublicKey.PublicKey[:len(malformedPublicKey.PublicKey)-1]
-	require.NoError(t, malformedPublicKey.ValidateEnvelope(fixture.proto, malformedPublicKey.Address()))
-	require.ErrorIs(t, malformedPublicKey.Verify(fixture.proto, fixture.txn, malformedPublicKey.Address()), crypto.ErrPQFalcon1024SigInvalid)
+			var wrongAuthorizer basics.Address
+			wrongAuthorizer[0] = 1
+			require.ErrorIs(t, fixture.pqSig.ValidateEnvelope(fixture.proto, wrongAuthorizer), errPQSigAuthorizerMismatch)
 
-	var wrongAuthorizer basics.Address
-	wrongAuthorizer[0] = 1
-	require.ErrorIs(t, fixture.pqSig.ValidateEnvelope(fixture.proto, wrongAuthorizer), errPQSigAuthorizerMismatch)
+			corruptSignature := fixture.pqSig
+			corruptSignature.Signature = slices.Clone(corruptSignature.Signature)
+			corruptSignature.Signature[0] ^= 1
+			require.NoError(t, corruptSignature.ValidateEnvelope(fixture.proto, fixture.authorizer))
+			require.Error(t, corruptSignature.Verify(fixture.proto, fixture.txn, fixture.authorizer))
 
-	corruptSignature := fixture.pqSig
-	corruptSignature.Signature = slices.Clone(corruptSignature.Signature)
-	corruptSignature.Signature[0] ^= 1
-	require.NoError(t, corruptSignature.ValidateEnvelope(fixture.proto, fixture.authorizer))
-	require.Error(t, corruptSignature.Verify(fixture.proto, fixture.txn, fixture.authorizer))
-
-	require.ErrorIs(t, (PQSig{}).ValidateEnvelope(fixture.proto, fixture.authorizer), errPQSigBlank)
-	require.ErrorIs(t, (PQSig{}).ValidateScheme(fixture.proto), errPQSigBlank)
+			require.ErrorIs(t, (PQSig{}).ValidateEnvelope(fixture.proto, fixture.authorizer), errPQSigBlank)
+			require.ErrorIs(t, (PQSig{}).ValidateScheme(fixture.proto), errPQSigBlank)
+		})
+	}
 }
 
 func TestPQSigVerify(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	fixture := makePQSigTestFixture(t, 0)
-
-	require.NoError(t, fixture.pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer))
+	for _, fixture := range makePQSigTestFixtures(t, 0) {
+		t.Run(fixture.name, func(t *testing.T) {
+			require.NoError(t, fixture.pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer))
+		})
+	}
 }
 
 func TestPQSigVerifyAcceptsSignatureOverRawTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	fixture := makePQSigTestFixture(t, 0) // uses signer.Sign()
+	for _, fixture := range makePQSigTestFixtures(t, 0) { // fixture uses signer.sign()
+		t.Run(fixture.name, func(t *testing.T) {
+			rawTxnSignature, err := fixture.signer.signBytes(crypto.HashRep(fixture.txn))
+			require.NoError(t, err)
 
-	rawTxnSignature, err := fixture.signer.SignBytes(crypto.HashRep(fixture.txn))
-	require.NoError(t, err)
+			// Sign(txn) applies HashRep internally, so it must produce the same sig as SignBytes(HashRep(txn))
+			require.Equal(t, fixture.pqSig.Signature, rawTxnSignature)
 
-	// Sign(txn) applies HashRep internally, so it must produce the same sig as SignBytes(HashRep(txn))
-	require.Equal(t, fixture.pqSig.Signature, []byte(rawTxnSignature))
+			pqSig := fixture.pqSig
+			pqSig.Signature = rawTxnSignature
+			require.NoError(t, pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer))
 
-	pqSig := fixture.pqSig
-	pqSig.Signature = rawTxnSignature
-	require.NoError(t, pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer))
+			require.NoError(t, fixture.signer.verify(fixture.txn, rawTxnSignature))
+			require.NoError(t, fixture.signer.verifyBytes(crypto.HashRep(fixture.txn), rawTxnSignature))
 
-	verifier := fixture.signer.GetVerifyingKey()
-	require.NoError(t, verifier.Verify(fixture.txn, rawTxnSignature))
-	require.NoError(t, verifier.VerifyBytes(crypto.HashRep(fixture.txn), rawTxnSignature))
+			// A signature over the txid (the pre-hashed payload) must not verify:
+			// the payload is the raw canonical encoding, not its digest.
+			txid := crypto.Digest(fixture.txn.ID())
+			txidSignature, err := fixture.signer.signBytes(txid[:])
+			require.NoError(t, err)
+			require.False(t, bytes.Equal(txidSignature, rawTxnSignature))
 
-	// A signature over the txid (the pre-hashed payload) must not verify:
-	// the payload is the raw canonical encoding, not its digest.
-	txid := crypto.Digest(fixture.txn.ID())
-	txidSignature, err := fixture.signer.SignBytes(txid[:])
-	require.NoError(t, err)
-	require.False(t, bytes.Equal(txidSignature, rawTxnSignature))
-
-	pqSig.Signature = txidSignature
-	require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer), crypto.ErrPQFalcon1024SigInvalid)
+			pqSig.Signature = txidSignature
+			require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer), fixture.errSigInvalid)
+		})
+	}
 }
 
 func TestPQSigVerifyChecksConsensusParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	fixture := makePQSigTestFixture(t, 0)
+	for _, fixture := range makePQSigTestFixtures(t, 0) {
+		t.Run(fixture.name, func(t *testing.T) {
+			require.NoError(t, fixture.pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer))
 
-	require.NoError(t, fixture.pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer))
-
-	disabledProto := fixture.proto
-	disabledProto.EnablePQSchemeFalcon1024 = false
-	require.ErrorIs(t, fixture.pqSig.Verify(disabledProto, fixture.txn, fixture.authorizer), crypto.ErrPQSchemeNotEnabled)
+			disabledProto := fixture.protoWithSchemeDisabled(t)
+			require.ErrorIs(t, fixture.pqSig.Verify(disabledProto, fixture.txn, fixture.authorizer), crypto.ErrPQSchemeNotEnabled)
+		})
+	}
 }
 
 func TestPQSigVerifyRejectsBlank(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	fixture := makePQSigTestFixture(t, 0)
-
-	require.ErrorIs(t, (PQSig{}).Verify(fixture.proto, fixture.txn, fixture.authorizer), errPQSigBlank)
+	for _, fixture := range makePQSigTestFixtures(t, 0) {
+		t.Run(fixture.name, func(t *testing.T) {
+			require.ErrorIs(t, (PQSig{}).Verify(fixture.proto, fixture.txn, fixture.authorizer), errPQSigBlank)
+		})
+	}
 }
 
 func TestPQSigVerifyRejectsEmptySignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	fixture := makePQSigTestFixture(t, 0)
+	for _, fixture := range makePQSigTestFixtures(t, 0) {
+		t.Run(fixture.name, func(t *testing.T) {
+			pqSig := fixture.pqSig
+			pqSig.Signature = nil
 
-	pqSig := fixture.pqSig
-	pqSig.Signature = nil
-
-	require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer), errPQSigEmpty)
+			require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer), errPQSigEmpty)
+		})
+	}
 }
 
 func TestPQSigVerifyRejectsUnsupportedScheme(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	fixture := makePQSigTestFixture(t, 0)
+	for _, fixture := range makePQSigTestFixtures(t, 0) {
+		t.Run(fixture.name, func(t *testing.T) {
+			pqSig := fixture.pqSig
+			pqSig.Scheme = protocol.PQScheme{'x', '1'}
+			pqSig.Signature = []byte{1}
 
-	pqSig := fixture.pqSig
-	pqSig.Scheme = protocol.PQScheme{'x', '1'}
-	pqSig.Signature = []byte{1}
-
-	require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, pqSig.Address()), crypto.ErrPQSchemeNotSupported)
+			require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, pqSig.Address()), crypto.ErrPQSchemeNotSupported)
+		})
+	}
 }
 
 func TestPQSigVerifyRejectsAuthorizerMismatch(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	fixture := makePQSigTestFixture(t, 0)
+	for _, fixture := range makePQSigTestFixtures(t, 0) {
+		t.Run(fixture.name, func(t *testing.T) {
+			var wrongAuthorizer basics.Address
+			wrongAuthorizer[0] = 1
+			require.NotEqual(t, fixture.authorizer, wrongAuthorizer)
 
-	var wrongAuthorizer basics.Address
-	wrongAuthorizer[0] = 1
-	require.NotEqual(t, fixture.authorizer, wrongAuthorizer)
-
-	require.ErrorIs(t, fixture.pqSig.Verify(fixture.proto, fixture.txn, wrongAuthorizer), errPQSigAuthorizerMismatch)
+			require.ErrorIs(t, fixture.pqSig.Verify(fixture.proto, fixture.txn, wrongAuthorizer), errPQSigAuthorizerMismatch)
+		})
+	}
 }
 
 func TestPQSigVerifyRejectsMalformedPublicKey(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	fixture := makePQSigTestFixture(t, 0)
+	for _, fixture := range makePQSigTestFixtures(t, 0) {
+		t.Run(fixture.name, func(t *testing.T) {
+			pqSig := fixture.pqSig
+			pqSig.PublicKey = pqSig.PublicKey[:len(pqSig.PublicKey)-1]
 
-	pqSig := fixture.pqSig
-	pqSig.PublicKey = pqSig.PublicKey[:len(pqSig.PublicKey)-1]
-
-	err := pqSig.Verify(fixture.proto, fixture.txn, pqSig.Address())
-	require.Error(t, err)
-	require.NotErrorIs(t, err, errPQSigAuthorizerMismatch)
+			err := pqSig.Verify(fixture.proto, fixture.txn, pqSig.Address())
+			require.Error(t, err)
+			require.NotErrorIs(t, err, errPQSigAuthorizerMismatch)
+		})
+	}
 }
 
 func TestPQSigVerifyRejectsMalformedSignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	fixture := makePQSigTestFixture(t, 0)
+	for _, fixture := range makePQSigTestFixtures(t, 0) {
+		t.Run(fixture.name, func(t *testing.T) {
+			pqSig := fixture.pqSig
+			pqSig.Signature = make([]byte, fixture.maxSignatureSize+1)
 
-	pqSig := fixture.pqSig
-	pqSig.Signature = make([]byte, crypto.Falcon1024MaxSignatureSize+1)
-
-	err := pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer)
-	require.ErrorIs(t, err, crypto.ErrPQFalcon1024SigInvalid)
+			err := pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer)
+			require.ErrorIs(t, err, fixture.errSigInvalid)
+		})
+	}
 }
 
 func TestPQSigVerifyRejectsChangedTransaction(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	fixture := makePQSigTestFixture(t, 0)
+	for _, fixture := range makePQSigTestFixtures(t, 0) {
+		t.Run(fixture.name, func(t *testing.T) {
+			txn := fixture.txn
+			txn.Note = []byte("changed")
 
-	txn := fixture.txn
-	txn.Note = []byte("changed")
-
-	require.ErrorIs(t, fixture.pqSig.Verify(fixture.proto, txn, fixture.authorizer), crypto.ErrPQFalcon1024SigInvalid)
+			require.ErrorIs(t, fixture.pqSig.Verify(fixture.proto, txn, fixture.authorizer), fixture.errSigInvalid)
+		})
+	}
 }
 
 func TestPQSigVerifyRejectsChangedSignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	fixture := makePQSigTestFixture(t, 0)
+	for _, fixture := range makePQSigTestFixtures(t, 0) {
+		t.Run(fixture.name, func(t *testing.T) {
+			pqSig := fixture.pqSig
+			pqSig.Signature = slices.Clone(pqSig.Signature)
+			pqSig.Signature[len(pqSig.Signature)-1] ^= 1
 
-	pqSig := fixture.pqSig
-	pqSig.Signature = slices.Clone(pqSig.Signature)
-	pqSig.Signature[len(pqSig.Signature)-1] ^= 1
-
-	require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer), crypto.ErrPQFalcon1024SigInvalid)
+			require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer), fixture.errSigInvalid)
+		})
+	}
 }

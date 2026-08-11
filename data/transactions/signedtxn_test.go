@@ -94,7 +94,7 @@ func TestSignedTxnInBlockHash(t *testing.T) {
 func TestSignedTxnHasSignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	fixture := makePQSigTestFixture(t, 14)
+	fixture := makePQSigTestFixture(t, 14, protocol.PQSchemeFalcon1024)
 	nonblankSig := crypto.Signature{}
 	nonblankSig[0] = 1
 
@@ -122,7 +122,7 @@ func TestSignedTxnFeeFactorPQSignatureContribution(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-	fixture := makePQSigTestFixture(t, 0)
+	fixture := makePQSigTestFixture(t, 0, protocol.PQSchemeFalcon1024)
 
 	baseTxn := SignedTxn{Txn: fixture.txn}
 	regularSigned := baseTxn
@@ -180,6 +180,7 @@ func TestSignedTxnFeeFactorPQSignatureContribution(t *testing.T) {
 		require.Equal(t, basics.Micros(1e6), stxn.FeeFactor(proto))
 	}
 	require.Equal(t, basics.Micros(2e6), proto.PQSchemeFeeContribution(protocol.PQSchemeFalcon1024))
+	require.Equal(t, basics.Micros(1e6+5e5), proto.PQSchemeFeeContribution(protocol.PQSchemeFalcon512))
 	require.Equal(t, basics.Micros(1e6), unknownPQSigned.FeeFactor(proto))
 	require.Equal(t, basics.Micros(1e6), unknownDelegatedPQSigned.FeeFactor(proto))
 	require.Equal(t, basics.Micros(3e6), pqSigned.FeeFactor(proto))
