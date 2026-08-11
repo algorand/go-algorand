@@ -174,7 +174,7 @@ func opSHA512(cx *EvalContext) error {
 	return nil
 }
 
-func opFalconVerify(cx *EvalContext) error {
+func opFalcon1024Verify(cx *EvalContext) error {
 	last := len(cx.Stack) - 1 // index of PK
 	prev := last - 1          // index of signature
 	pprev := prev - 1         // index of data
@@ -188,6 +188,41 @@ func opFalconVerify(cx *EvalContext) error {
 	sig := crypto.Falcon1024Signature(cx.Stack[prev].Bytes)
 
 	err := fv.VerifyBytes(cx.Stack[pprev].Bytes, sig)
+	cx.Stack[pprev] = boolToSV(err == nil)
+	cx.Stack = cx.Stack[:prev]
+	return nil
+}
+
+func opFalconVerify(cx *EvalContext) error {
+	last := len(cx.Stack) - 1 // index of PK
+	prev := last - 1          // index of signature
+	pprev := prev - 1         // index of data
+
+	config := FalconConfig(cx.program[cx.pc+1])
+	fs, ok := falconConfigSpecByField(config)
+	if !ok { // no version check yet, both configs appeared at once
+		return fmt.Errorf("invalid falcon config %s", config)
+	}
+
+	pk := cx.Stack[last].Bytes
+	if len(pk) != fs.pubKeyLen {
+		return fmt.Errorf("invalid public key size %d != %d", len(pk), fs.pubKeyLen)
+	}
+
+	var err error
+	switch config {
+	case FalconDet1024:
+		var fv crypto.Falcon1024Verifier
+		copy(fv.PublicKey[:], pk)
+		err = fv.VerifyBytes(cx.Stack[pprev].Bytes, crypto.Falcon1024Signature(cx.Stack[prev].Bytes))
+	case FalconDet512:
+		var fv crypto.Falcon512Verifier
+		copy(fv.PublicKey[:], pk)
+		err = fv.VerifyBytes(cx.Stack[pprev].Bytes, crypto.Falcon512Signature(cx.Stack[prev].Bytes))
+	default:
+		return fmt.Errorf("invalid falcon config %s", config)
+	}
+
 	cx.Stack[pprev] = boolToSV(err == nil)
 	cx.Stack = cx.Stack[:prev]
 	return nil
