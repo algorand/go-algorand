@@ -32,21 +32,6 @@ type OpDesc struct {
 	Sugar      string // pseudo calling information
 }
 
-// boxAccessExtra states the name and availability rules that lengthChecks and
-// availableAppBox enforce for every box opcode, not only the ones whose short
-// description mentions them.
-const boxAccessExtra = "The box name must be 1 to 64 bytes (`MaxAppKeyLen`), and the box must be _available_: named in a box reference, or owned by an app created in this group while a spare box reference remains. ClearState programs may never access boxes."
-
-// boxFamilyExtra describes the family reentrancy rule, which applies to an app's
-// own boxes as soon as it has set `AppFamilyBoxAccess`.
-const boxFamilyExtra = boxAccessExtra + "\n\nIf this app has set `AppFamilyBoxAccess`, its boxes are family-shared: modifying one fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban."
-
-// foreignBoxExtra describes the availability, authorization, and reentrancy rules
-// that govern access to another app's boxes.
-const foreignBoxExtra = boxAccessExtra +
-	"\n\nAn app may always operate on its own boxes. Reading another app's box requires the owner to have set `AppForeignBoxReads`, or `AppFamilyBoxAccess` if both apps share a creator; all other operations (create, write, delete, resize, splice) require `AppFamilyBoxAccess` and a shared creator." +
-	"\n\nModifying a family-shared box also fails if a non-family app on the call stack separates this app from a family ancestor that has already read or written family-shared state, by analogy to the per-app reentrancy ban."
-
 var opDescByName = map[string]OpDesc{
 	"err": {"Fail immediately.", "", nil, ""},
 
@@ -327,25 +312,25 @@ var opDescByName = map[string]OpDesc{
 	"frame_bury": {"replace the Nth (signed) value from the frame pointer in the stack with A", "", []string{"frame slot"}, ""},
 	"popn":       {"remove N values from the top of the stack", "", []string{"stack depth"}, ""},
 
-	"box_create":  {"create a box named A, of length B. Fail if the name A is empty or longer than 64 bytes, or B exceeds 32,768. Returns 0 if A already existed, else 1", "Newly created boxes are filled with 0 bytes. `box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `box_create`." + "\n\n" + boxFamilyExtra, nil, ""},
-	"box_extract": {"read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.", boxFamilyExtra, nil, ""},
-	"box_replace": {"write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.", boxFamilyExtra, nil, ""},
-	"box_splice":  {"set box A to contain its previous bytes up to index B, followed by D, followed by the original bytes of A that began at index B+C.", "Boxes are of constant length. If C < len(D), then len(D)-C bytes will be removed from the end. If C > len(D), zero bytes will be appended to the end to reach the box length." + "\n\n" + boxFamilyExtra, nil, ""},
-	"box_del":     {"delete box named A if it exists. Return 1 if A existed, 0 otherwise", boxFamilyExtra, nil, ""},
-	"box_len":     {"X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0.", boxFamilyExtra, nil, ""},
-	"box_get":     {"X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0.", "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`" + "\n\n" + boxFamilyExtra, nil, ""},
-	"box_put":     {"replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist", "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`" + "\n\n" + boxFamilyExtra, nil, ""},
-	"box_resize":  {"change the size of box named A to be of length B, adding zero bytes to end or removing bytes from the end, as needed. Fail if the name A is empty or longer than 64 bytes, A is not an existing box, or B exceeds 32,768.", boxFamilyExtra, nil, ""},
+	"box_create":  {"create a box named A, of length B. Fail if the name A is empty or longer than 64 bytes, or B exceeds 32,768. Returns 0 if A already existed, else 1", "Newly created boxes are filled with 0 bytes. `box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `box_create`.", nil, ""},
+	"box_extract": {"read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.", "", nil, ""},
+	"box_replace": {"write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.", "", nil, ""},
+	"box_splice":  {"set box A to contain its previous bytes up to index B, followed by D, followed by the original bytes of A that began at index B+C.", "Boxes are of constant length. If C < len(D), then len(D)-C bytes will be removed from the end. If C > len(D), zero bytes will be appended to the end to reach the box length.", nil, ""},
+	"box_del":     {"delete box named A if it exists. Return 1 if A existed, 0 otherwise", "", nil, ""},
+	"box_len":     {"X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0.", "", nil, ""},
+	"box_get":     {"X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0.", "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`", nil, ""},
+	"box_put":     {"replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist", "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`", nil, ""},
+	"box_resize":  {"change the size of box named A to be of length B, adding zero bytes to end or removing bytes from the end, as needed. Fail if the name A is empty or longer than 64 bytes, A is not an existing box, or B exceeds 32,768.", "", nil, ""},
 
-	"app_box_create":  {"create a box named B, of length C, for app A. Fail if the name B is empty or longer than 64 bytes, or C exceeds 32,768. Returns 0 if B already existed, else 1", "Newly created boxes are filled with 0 bytes. `app_box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `app_box_create`." + "\n\n" + foreignBoxExtra, nil, ""},
-	"app_box_extract": {"read D bytes from box B of app A, starting at offset C. Fail if box B does not exist, or the byte range is outside B's size.", foreignBoxExtra, nil, ""},
-	"app_box_replace": {"write byte-array D into box B of app A, starting at offset C. Fail if box B does not exist, or the byte range is outside B's size.", foreignBoxExtra, nil, ""},
-	"app_box_del":     {"delete box named B of app A if it exists. Return 1 if B existed, 0 otherwise", foreignBoxExtra, nil, ""},
-	"app_box_len":     {"X is the length of box B of app A if B exists, else 0. Y is 1 if B exists, else 0.", foreignBoxExtra, nil, ""},
-	"app_box_get":     {"X is the contents of box B of app A if B exists, else ''. Y is 1 if B exists, else 0.", "For boxes that exceed 4,096 bytes, consider `app_box_create`, `app_box_extract`, and `app_box_replace`" + "\n\n" + foreignBoxExtra, nil, ""},
-	"app_box_put":     {"replaces the contents of box B of app A with byte-array C. Fails if B exists and len(C) != len(box B). Creates B if it does not exist", "For boxes that exceed 4,096 bytes, consider `app_box_create`, `app_box_extract`, and `app_box_replace`" + "\n\n" + foreignBoxExtra, nil, ""},
-	"app_box_splice":  {"set box B of app A to contain its previous bytes up to index C, followed by E, followed by the original bytes of B that began at index C+D.", "Boxes are of constant length. If D < len(E), then len(E)-D bytes will be removed from the end. If D > len(E), zero bytes will be appended to the end to reach the box length." + "\n\n" + foreignBoxExtra, nil, ""},
-	"app_box_resize":  {"change the size of box named B of app A to be of length C, adding zero bytes to end or removing bytes from the end, as needed. Fail if the name B is empty or longer than 64 bytes, B is not an existing box, or C exceeds 32,768.", foreignBoxExtra, nil, ""},
+	"app_box_create":  {"create a box named B, of length C, for app A. Fail if the name B is empty or longer than 64 bytes, or C exceeds 32,768. Returns 0 if B already existed, else 1", "Newly created boxes are filled with 0 bytes. `app_box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `app_box_create`.", nil, ""},
+	"app_box_extract": {"read D bytes from box B of app A, starting at offset C. Fail if box B does not exist, or the byte range is outside B's size.", "", nil, ""},
+	"app_box_replace": {"write byte-array D into box B of app A, starting at offset C. Fail if box B does not exist, or the byte range is outside B's size.", "", nil, ""},
+	"app_box_del":     {"delete box named B of app A if it exists. Return 1 if B existed, 0 otherwise", "", nil, ""},
+	"app_box_len":     {"X is the length of box B of app A if B exists, else 0. Y is 1 if B exists, else 0.", "", nil, ""},
+	"app_box_get":     {"X is the contents of box B of app A if B exists, else ''. Y is 1 if B exists, else 0.", "For boxes that exceed 4,096 bytes, consider `app_box_create`, `app_box_extract`, and `app_box_replace`", nil, ""},
+	"app_box_put":     {"replaces the contents of box B of app A with byte-array C. Fails if B exists and len(C) != len(box B). Creates B if it does not exist", "For boxes that exceed 4,096 bytes, consider `app_box_create`, `app_box_extract`, and `app_box_replace`", nil, ""},
+	"app_box_splice":  {"set box B of app A to contain its previous bytes up to index C, followed by E, followed by the original bytes of B that began at index C+D.", "Boxes are of constant length. If D < len(E), then len(E)-D bytes will be removed from the end. If D > len(E), zero bytes will be appended to the end to reach the box length.", nil, ""},
+	"app_box_resize":  {"change the size of box named B of app A to be of length C, adding zero bytes to end or removing bytes from the end, as needed. Fail if the name B is empty or longer than 64 bytes, B is not an existing box, or C exceeds 32,768.", "", nil, ""},
 }
 
 // OpDescOf returns the OpDesc for a mnemonic opcode
