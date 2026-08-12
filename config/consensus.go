@@ -718,7 +718,7 @@ func (proto ConsensusParams) PQSchemeEnabled(scheme protocol.PQScheme) bool {
 	}
 }
 
-// PQSigEnabled returns whether a post-quantum signatures are enabled
+// PQSigEnabled returns whether any post-quantum signatures are enabled
 // under these consensus parameters.
 func (proto ConsensusParams) PQSigEnabled() bool {
 	return proto.EnablePQSchemeFalcon1024 || proto.EnablePQSchemeFalcon512
@@ -733,7 +733,7 @@ func (proto ConsensusParams) PQSchemeFeeContribution(scheme protocol.PQScheme) b
 	case protocol.PQSchemeFalcon1024:
 		return 2e6
 	case protocol.PQSchemeFalcon512:
-		return 1e6 + 5e5 // kept below the Falcon-1024 contribution
+		return 1e6 // it is half of the Falcon-1024 contribution
 	default:
 		return 0
 	}

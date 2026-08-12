@@ -17,7 +17,6 @@
 package basics
 
 import (
-	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -34,11 +33,11 @@ func falconPublicKeyForPQAddressTest(t *testing.T, scheme protocol.PQScheme, fir
 	case protocol.PQSchemeFalcon1024:
 		signer, err := crypto.GenerateFalcon1024Signer(seed)
 		require.NoError(t, err)
-		return slices.Clone(signer.PublicKey[:])
+		return signer.PublicKey[:]
 	case protocol.PQSchemeFalcon512:
 		signer, err := crypto.GenerateFalcon512Signer(seed)
 		require.NoError(t, err)
-		return slices.Clone(signer.PublicKey[:])
+		return signer.PublicKey[:]
 	}
 	t.Fatalf("unknown scheme %s", scheme)
 	return nil
