@@ -152,7 +152,7 @@ func init() {
 	pqCmd.AddCommand(pqSignProgramCmd)
 	pqCmd.AddCommand(pqCheckAddressCmd)
 
-	pqGenerateCmd.Flags().StringVarP(&pqGenerateScheme, "scheme", "S", pqGenerateScheme, "Post-quantum signature scheme: falcon-1024 (f1)")
+	pqGenerateCmd.Flags().StringVarP(&pqGenerateScheme, "scheme", "S", pqGenerateScheme, "Post-quantum signature scheme: falcon-1024 (f1), falcon-512 (f5)")
 	pqGenerateCmd.Flags().StringVarP(&pqGenerateKeyfile, "keyfile", "k", "", "Private key filename")
 	mustMarkFlagRequired(pqGenerateCmd, "keyfile")
 
@@ -160,14 +160,14 @@ func init() {
 	mustMarkFlagRequired(pqInfoCmd, "keyfile")
 
 	pqImportCmd.Flags().StringVarP(&pqImportMnemonic, "mnemonic", "m", "", "Private key mnemonic")
-	pqImportCmd.Flags().StringVarP(&pqImportScheme, "scheme", "S", pqImportScheme, "Post-quantum signature scheme: falcon-1024 (f1)")
+	pqImportCmd.Flags().StringVarP(&pqImportScheme, "scheme", "S", pqImportScheme, "Post-quantum signature scheme: falcon-1024 (f1), falcon-512 (f5)")
 	pqImportCmd.Flags().StringVarP(&pqImportKeyfile, "keyfile", "k", "", "Private key filename")
 	mustMarkFlagRequired(pqImportCmd, "mnemonic")
 	mustMarkFlagRequired(pqImportCmd, "keyfile")
 
 	pqSignCmd.Flags().StringVarP(&pqSignKeyfile, "keyfile", "k", "", "Private key filename")
 	pqSignCmd.Flags().StringVarP(&pqSignMnemonic, "mnemonic", "m", "", "Private key mnemonic")
-	pqSignCmd.Flags().StringVarP(&pqSignScheme, "scheme", "S", pqSignScheme, "Post-quantum signature scheme: falcon-1024 (f1); used with --mnemonic")
+	pqSignCmd.Flags().StringVarP(&pqSignScheme, "scheme", "S", pqSignScheme, "Post-quantum signature scheme: falcon-1024 (f1), falcon-512 (f5); used with --mnemonic")
 	pqSignCmd.Flags().StringVarP(&pqSignTxfile, "txfile", "t", "", "Transaction input filename")
 	pqSignCmd.Flags().StringVarP(&pqSignOutfile, "outfile", "o", "", "Transaction output filename")
 	pqSignCmd.Flags().BoolVar(&pqSignOverwrite, "overwrite", false, "Overwrite any existing signature category")
@@ -176,7 +176,7 @@ func init() {
 
 	pqSignProgramCmd.Flags().StringVarP(&pqSignProgramKeyfile, "keyfile", "k", "", "Private key filename")
 	pqSignProgramCmd.Flags().StringVarP(&pqSignProgramMnemonic, "mnemonic", "m", "", "Private key mnemonic")
-	pqSignProgramCmd.Flags().StringVarP(&pqSignProgramScheme, "scheme", "S", pqSignProgramScheme, "Post-quantum signature scheme: falcon-1024 (f1); used with --mnemonic")
+	pqSignProgramCmd.Flags().StringVarP(&pqSignProgramScheme, "scheme", "S", pqSignProgramScheme, "Post-quantum signature scheme: falcon-1024 (f1), falcon-512 (f5); used with --mnemonic")
 	pqSignProgramCmd.Flags().StringVarP(&pqSignProgramProgram, "program", "p", "", "Compiled LogicSig program input filename")
 	pqSignProgramCmd.Flags().StringVarP(&pqSignProgramOutfile, "outfile", "o", "", "LogicSig output filename")
 	mustMarkFlagRequired(pqSignProgramCmd, "program")

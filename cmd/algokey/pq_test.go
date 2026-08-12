@@ -111,22 +111,59 @@ func TestPQGenerateUsesMnemonicSizedEntropy(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	rng := &countingRNG{}
-	entropy, signing, err := generatePQSigningMaterial(protocol.PQSchemeFalcon1024, rng)
-	require.NoError(t, err)
+	testcases := []struct {
+		name   string
+		scheme protocol.PQScheme
+		// address is a known answer pinning the entropy -> seed -> key -> salt
+		// derivation: a change here would break existing mnemonic imports.
+		address string
+		// rederive regenerates the concrete signer's keys straight from the
+		// scheme's keygen seed, independently of the ops registry.
+		rederive func(t *testing.T, seed crypto.Digest) (publicKey, privateKey []byte)
+	}{
+		{
+			name:    "falcon-1024",
+			scheme:  protocol.PQSchemeFalcon1024,
+			address: "ZEJ4BLG3XWAUUZQGCEDJLYIC6D2NCWHRSX5DJMDPE54PXXR7G3PCQTARXU",
+			rederive: func(t *testing.T, seed crypto.Digest) ([]byte, []byte) {
+				signer, err := crypto.GenerateFalcon1024Signer(crypto.FalconSeed(seed))
+				require.NoError(t, err)
+				return signer.PublicKey[:], signer.PrivateKey[:]
+			},
+		},
+		{
+			name:    "falcon-512",
+			scheme:  protocol.PQSchemeFalcon512,
+			address: "6XJVA45MCHLBBACBGN6ENAXFBDXCEYE5QIWA4R4LO5EY3UNAIP2UGP7ANI",
+			rederive: func(t *testing.T, seed crypto.Digest) ([]byte, []byte) {
+				signer, err := crypto.GenerateFalcon512Signer(crypto.FalconSeed(seed))
+				require.NoError(t, err)
+				return signer.PublicKey[:], signer.PrivateKey[:]
+			},
+		},
+	}
 
-	require.Equal(t, 1, rng.calls)
-	require.Equal(t, len(crypto.Seed{}), rng.bytes)
-	require.Equal(t, protocol.PQSchemeFalcon1024, signing.Public.Scheme)
-	require.Equal(t, crypto.Seed{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32}, entropy)
-	require.True(t, signing.Public.address().IsPQCompliant())
-	require.Equal(t, "ZEJ4BLG3XWAUUZQGCEDJLYIC6D2NCWHRSX5DJMDPE54PXXR7G3PCQTARXU", signing.Public.address().String())
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	seed := derivePQKeySeed(protocol.PQSchemeFalcon1024, entropy)
-	signer, err := crypto.GenerateFalcon1024Signer(crypto.FalconSeed(seed))
-	require.NoError(t, err)
-	require.Equal(t, signer.PublicKey[:], signing.Public.PublicKey)
-	require.Equal(t, signer.PrivateKey[:], signing.PrivateKey)
+			rng := &countingRNG{}
+			entropy, signing, err := generatePQSigningMaterial(tc.scheme, rng)
+			require.NoError(t, err)
+
+			require.Equal(t, 1, rng.calls)
+			require.Equal(t, len(crypto.Seed{}), rng.bytes)
+			require.Equal(t, tc.scheme, signing.Public.Scheme)
+			require.Equal(t, crypto.Seed{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32}, entropy)
+			require.True(t, signing.Public.address().IsPQCompliant())
+			require.Equal(t, tc.address, signing.Public.address().String())
+
+			seed := derivePQKeySeed(tc.scheme, entropy)
+			publicKey, privateKey := tc.rederive(t, seed)
+			require.Equal(t, publicKey, signing.Public.PublicKey)
+			require.Equal(t, privateKey, signing.PrivateKey)
+		})
+	}
 }
 
 func TestPQSchemeRegistriesConsistent(t *testing.T) {
@@ -138,7 +175,7 @@ func TestPQSchemeRegistriesConsistent(t *testing.T) {
 		require.True(t, ok, "algokey scheme %q missing from crypto registry", scheme)
 	}
 
-	for _, scheme := range []protocol.PQScheme{protocol.PQSchemeFalcon1024} {
+	for _, scheme := range []protocol.PQScheme{protocol.PQSchemeFalcon1024, protocol.PQSchemeFalcon512} {
 		_, ok := pqSchemeOpsByScheme[scheme]
 		require.True(t, ok, "basics scheme %q missing from algokey ops registry", scheme)
 	}
@@ -167,6 +204,23 @@ func TestParsePQSchemeAcceptsLongName(t *testing.T) {
 	scheme, err = parsePQScheme("f1")
 	require.NoError(t, err)
 	require.Equal(t, protocol.PQSchemeFalcon1024, scheme)
+
+	scheme, err = parsePQScheme("falcon-512")
+	require.NoError(t, err)
+	require.Equal(t, protocol.PQSchemeFalcon512, scheme)
+
+	scheme, err = parsePQScheme("f5")
+	require.NoError(t, err)
+	require.Equal(t, protocol.PQSchemeFalcon512, scheme)
+}
+
+func TestFormatPQScheme(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	require.Equal(t, pqSchemeFalcon1024Name, formatPQScheme(protocol.PQSchemeFalcon1024))
+	require.Equal(t, pqSchemeFalcon512Name, formatPQScheme(protocol.PQSchemeFalcon512))
+	require.Equal(t, protocol.PQScheme{'z', 'z'}.String(), formatPQScheme(protocol.PQScheme{'z', 'z'}))
 }
 
 func TestPQPrivateKeyFileStoresKeysNotEntropy(t *testing.T) {
