@@ -17,10 +17,12 @@
 package logic
 
 import (
+	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"slices"
 	"strings"
 	"testing"
 
@@ -33,6 +35,7 @@ import (
 	bn254fr "github.com/consensys/gnark-crypto/ecc/bn254/fr"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -1075,13 +1078,152 @@ func TestEd25519SubgroupCheck(t *testing.T) {
 	testRejects(t, tealBytes(ed25519PointToBytes(mixed))+check, edwardsVersion)
 }
 
+// BenchmarkEd25519VerifyInTeal times the hand-written verifier against the
+// opcode it reimplements, which is the price of doing this in TEAL rather than
+// in Go.
+func BenchmarkEd25519VerifyInTeal(b *testing.B) {
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(b, err)
+	msg := []byte("attack at dawn")
+	sig := ed25519.Sign(priv, msg)
+
+	run := func(b *testing.B, program []byte, args [][]byte) {
+		b.Helper()
+		var txn transactions.SignedTxn
+		txn.Lsig.Logic = program
+		txn.Lsig.Args = args
+		ep := benchmarkSigParams(txn)
+		for range b.N {
+			pass, err := EvalSignature(0, ep)
+			if err != nil || !pass {
+				b.Fatalf("%v %v", pass, err)
+			}
+			ep.reset()
+		}
+	}
+
+	b.Run("teal", func(b *testing.B) {
+		run(b, testProg(b, ed25519VerifySource, edwardsVersion).Program,
+			[][]byte{msg, sig, pub, ed25519Hint(pub), ed25519Hint(sig[:32])})
+	})
+	b.Run("opcode", func(b *testing.B) {
+		run(b, testProg(b, "arg 0; arg 1; arg 2; ed25519verify_bare", edwardsVersion).Program,
+			[][]byte{msg, sig, pub})
+	})
+}
+
+// ed25519NafWeight returns the number of nonzero digits in the width-w
+// non-adjacent form of k. That count is exactly the number of point additions
+// edwards25519's variable-time routines perform for k: the 256 doublings are
+// fixed and shared between points, so the NAF weight is the only part of the
+// work a caller controls. It reimplements the (unexported) algorithm in
+// edwards25519's Scalar.nonAdjacentForm, bottom up rather than by 64-bit
+// windows.
+func ed25519NafWeight(k *big.Int, w uint) int {
+	x := new(big.Int).Set(k)
+	width := new(big.Int).Lsh(big.NewInt(1), w)
+	mask := new(big.Int).Sub(width, big.NewInt(1))
+	half := new(big.Int).Rsh(width, 1)
+	digit := new(big.Int)
+	weight := 0
+	for x.Sign() > 0 {
+		if x.Bit(0) == 1 {
+			digit.And(x, mask)
+			if digit.Cmp(half) >= 0 {
+				digit.Sub(digit, width) // the "negative" of the pair, as NAF prefers
+			}
+			x.Sub(x, digit)
+			weight++
+		}
+		x.Rsh(x, 1)
+	}
+	return weight
+}
+
+// ed25519WorstScalar is the scalar that makes the variable-time routines do the
+// most work. A width-5 NAF keeps at least four zeros between nonzero digits, so
+// weight is maximized by a nonzero digit every fifth position, which is what a
+// bit set every fifth position produces. Below L, so reduction leaves it alone.
+var ed25519WorstScalar = func() []byte {
+	k := new(big.Int)
+	for i := 0; i <= 250; i += 5 {
+		k.SetBit(k, i, 1)
+	}
+	return leftPad(k.Bytes(), scalarSize)
+}()
+
+func TestEd25519WorstScalar(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	worst := new(big.Int).SetBytes(ed25519WorstScalar)
+	require.Negative(t, worst.Cmp(ed25519Order)) // survives reduction unchanged
+
+	// 253 bits, nonzero digits five apart, is 51 of them.
+	require.Equal(t, 51, ed25519NafWeight(worst, 5))
+
+	// Random scalars come in well under that, averaging about 256/(w+1).
+	total, high := 0, 0
+	const trials = 200
+	for range trials {
+		k := new(big.Int).SetBytes(reversed(ed25519RandomScalar().Bytes()))
+		weight := ed25519NafWeight(k, 5)
+		require.LessOrEqual(t, weight, 51)
+		total += weight
+		high = max(high, weight)
+	}
+	require.Less(t, total/trials, 46, "random scalars should not average near the worst case")
+	t.Logf("width-5 NAF weight over %d random scalars: mean %d, max %d (worst possible 51)",
+		trials, total/trials, high)
+}
+
+// BenchmarkEd25519 is how the ED25519 costs were set. To read it, divide ns/op
+// by the cost the op is charged, and compare against the same ratio for the
+// signature opcodes in BenchmarkVerify, which are the calibration anchors
+// (ed25519verify_bare, ecdsa_verify, and vrf_verify all land near 25 ns per
+// unit of cost).
+//
+// The scalar multiplications are variable time, so the "worst" cases here feed
+// them ed25519WorstScalar, which maximizes the work. Costs are set from those,
+// not from the random-scalar cases.
+func BenchmarkEd25519(b *testing.B) {
+	pt := tealBytes(ed25519RandomPoint())
+	worst := tealBytes(ed25519WorstScalar)
+
+	b.Run("add", func(b *testing.B) {
+		benchmarkOperation(b, pt, "dup; ec_add ED25519", "len")
+	})
+
+	b.Run("scalar_mul", func(b *testing.B) {
+		benchmarkOperation(b, pt, "dup; extract 0 32; ec_scalar_mul ED25519", "len")
+	})
+	b.Run("scalar_mul worst", func(b *testing.B) {
+		benchmarkOperation(b, pt, worst+"ec_scalar_mul ED25519", "len")
+	})
+
+	for i := 0; i < 7; i++ {
+		size := 1 << uint(i)
+		dups := strings.Repeat("dup; concat;", i)
+		b.Run(fmt.Sprintf("multi_exp %d", size), func(b *testing.B) {
+			benchmarkOperation(b, pt, dups+"dup; extract 0 32;"+dups+"ec_multi_scalar_mul ED25519", "len")
+		})
+		b.Run(fmt.Sprintf("multi_exp %d worst", size), func(b *testing.B) {
+			benchmarkOperation(b, pt, dups+byteRepeat(ed25519WorstScalar, size)+"ec_multi_scalar_mul ED25519", "len")
+		})
+	}
+
+	b.Run("subgroup", func(b *testing.B) {
+		benchmarkOperation(b, "", pt+"ec_subgroup_check ED25519; assert", "int 1")
+	})
+}
+
 func TestEd25519Versioning(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// ED25519 was introduced in v13; earlier versions reject it at assembly.
+	// ED25519 was introduced in v14; earlier versions reject it at assembly.
 	testProg(t, "byte 0x00; byte 0x00; ec_add ED25519", edwardsVersion-1,
-		exp(1, "ec_add ED25519 field was introduced in v13. Missed #pragma version?"))
+		exp(1, "ec_add ED25519 field was introduced in v14. Missed #pragma version?"))
 	testProg(t, "byte 0x00; byte 0x00; ec_add ED25519", edwardsVersion) // ok at v13
 
 	// ED25519 is not valid for the pairing-only opcodes, at any version.
@@ -1092,4 +1234,234 @@ func TestEd25519Versioning(t *testing.T) {
 
 	// but it is valid for ec_subgroup_check
 	testProg(t, "byte 0x00; ec_subgroup_check ED25519", edwardsVersion)
+}
+
+// ed25519VerifySource is ed25519verify_bare written out in TEAL, using nothing
+// but sha512 and the ED25519 ec_ opcodes. RFC 8032 verification is
+// k = SHA512(R || A || M) and then [S]B == R + [k]A, the "cofactorless"
+// equation that crypto/ed25519 uses.
+//
+//	arg 0  message
+//	arg 1  signature: 32 byte compressed R, then 32 byte little-endian S
+//	arg 2  public key: 32 byte compressed A
+//	arg 3  hint: A uncompressed (32 byte big-endian X, then 32 byte big-endian Y)
+//	arg 4  hint: R uncompressed
+//
+// The ec_ opcodes work on uncompressed points, and decompressing takes a
+// modular square root, which the AVM has no cheap way to compute. So the caller
+// supplies the uncompressed points, and the program checks them by compressing
+// them back down - a byte reversal and one sign bit - and comparing against the
+// 32 bytes that were actually signed over. Compression is injective on curve
+// points, so a hint that survives the check is the point its compressed
+// encoding denotes, and a caller gains nothing by lying about it.
+//
+// This is stricter than crypto/ed25519 in one respect: non-canonical encodings
+// of A or R (a y coordinate that is not reduced mod p, or x == 0 with the sign
+// bit set) have no uncompressed preimage here, so they cannot be verified.
+//
+// It costs about 4,200, so it fits in a logic sig. The multi-exp is 1,970 of
+// that, and the four byte reversals another 1,900 or so, which makes shuffling
+// bytes between big and little endian nearly as expensive as the curve
+// arithmetic.
+//
+// Only the final group equation rejects. Everything else - a wrong length, a
+// non-canonical S, a hint that is not the point it claims to be - fails the
+// program outright, which for a logic sig amounts to the same thing.
+const ed25519VerifySource = `
+arg 1; len; int 64; ==; assert	// signature is R || S
+arg 2; len; int 32; ==; assert	// compressed public key
+
+// k = SHA512(R || A || M) mod L, big-endian for ec_scalar_mul
+arg 1; extract 0 32; arg 2; concat; arg 0; concat
+sha512
+callsub reverse			// the digest is read as a little-endian scalar
+byte 0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3ed // L
+b%
+int 32; bzero; b|		// b% trims leading zeros, and scalars are fixed width
+store 0				// k
+
+// S must be canonical. Reducing it instead of rejecting it is what makes
+// naive verifiers accept malleated signatures.
+arg 1; extract 32 32; callsub reverse
+dup
+byte 0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3ed // L
+b<
+assert
+store 1				// S
+
+// the hints must be the points that the signed-over encodings denote
+arg 3; callsub compress; arg 2; ==; assert
+arg 4; callsub compress; arg 1; extract 0 32; ==; assert
+
+// [S]B - [k]A == R, as a single multi-exp. The 256 point doublings dominate a
+// scalar multiplication and one multi-exp shares them across both terms, so
+// this is far cheaper than multiplying twice and adding.
+byte 0x216936d3cd6e53fec0a4e231fdd6dc5c692cc7609525a7b2c9562d608f25d51a6666666666666666666666666666666666666666666666666666666666666658 // B
+
+// -A is (p-X, Y). A hint with X of 0 (only the identity and the point of order
+// two) or X above p has no negation here, and fails the program.
+byte 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed // p
+arg 3; extract 0 32
+b-
+int 32; bzero; b|		// b- trims leading zeros, and coordinates are fixed width
+arg 3; extract 32 32
+concat
+concat				// B then -A
+
+load 1				// S
+load 0				// k
+concat
+ec_multi_scalar_mul ED25519
+arg 4				// R
+==
+return
+
+// reverse converts between the big-endian byte order the ec_ opcodes use for
+// scalars and coordinates, and the little-endian order ed25519 encodes in.
+reverse:
+proto 1 1
+byte ""
+frame_dig -1; len		// index of the byte after the one to append next
+reverse_loop:
+int 1; -
+dup
+frame_dig -1; swap; int 1; extract3
+swap; cover 2			// accumulator and byte on top, index below
+concat
+swap
+dup; bnz reverse_loop
+pop
+retsub
+
+// compress turns an uncompressed point into its 32 byte RFC 8032 encoding:
+// little-endian Y, with the low bit of X as the high bit.
+compress:
+proto 1 1
+frame_dig -1; extract 32 32; callsub reverse
+int 248				// high bit of the last byte, in setbit's ordering
+frame_dig -1; int 255; getbit	// low bit of X
+setbit
+retsub
+`
+
+// ed25519Hint decompresses a 32 byte RFC 8032 point encoding into the
+// uncompressed form the ec_ opcodes consume. Tampered encodings often do not
+// decompress at all; the identity stands in for those, so that the program
+// under test rejects on the compression check rather than erring on an
+// undecodable point.
+func ed25519Hint(compressed []byte) []byte {
+	p, err := new(edwards25519.Point).SetBytes(compressed)
+	if err != nil {
+		return ed25519Identity()
+	}
+	return ed25519PointToBytes(p)
+}
+
+func TestEd25519VerifyInTeal(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// the two constants the program embeds, in the encoding it expects
+	require.Contains(t, ed25519VerifySource,
+		hex.EncodeToString(ed25519PointToBytes(edwards25519.NewGeneratorPoint())))
+	require.Contains(t, ed25519VerifySource,
+		hex.EncodeToString(leftPad(ed25519Order.Bytes(), 32)))
+
+	teal := testProg(t, ed25519VerifySource, edwardsVersion).Program
+	// the opcode this program reimplements, for comparison
+	bare := testProg(t, "arg 0; arg 1; arg 2; ed25519verify_bare", edwardsVersion).Program
+
+	accepts := func(program []byte, args [][]byte) bool {
+		var txn transactions.SignedTxn
+		txn.Lsig.Logic = program
+		txn.Lsig.Args = args
+		pass, err := EvalSignature(0, defaultSigParams(txn))
+		return pass && err == nil
+	}
+	// hinted builds the five arguments the TEAL verifier takes from the three
+	// the opcode takes.
+	hinted := func(msg, sig, pk []byte) [][]byte {
+		return [][]byte{msg, sig, pk, ed25519Hint(pk), ed25519Hint(sig[:32])}
+	}
+
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	other, _, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	msg := []byte("attack at dawn")
+	sig := ed25519.Sign(priv, msg)
+
+	flip := func(b []byte, i int) []byte {
+		c := slices.Clone(b)
+		c[i] ^= 1
+		return c
+	}
+	// S + L is a second encoding of the same scalar. Conforming verifiers
+	// reject it, so the signature cannot be mauled into a distinct-looking one.
+	malleated := slices.Clone(sig)
+	s := new(big.Int).SetBytes(reversed(sig[32:]))
+	copy(malleated[32:], reversed(leftPad(s.Add(s, ed25519Order).Bytes(), 32)))
+
+	var verifyTests = []struct {
+		name string
+		msg  []byte
+		sig  []byte
+		pk   []byte
+		pass bool
+	}{
+		{"valid", msg, sig, pub, true},
+		{"wrong message", []byte("attack at dusk"), sig, pub, false},
+		{"tampered R", msg, flip(sig, 0), pub, false},
+		{"tampered S", msg, flip(sig, 63), pub, false},
+		{"wrong key", msg, sig, other, false},
+		{"malleated S", msg, malleated, pub, false},
+	}
+	for _, test := range verifyTests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, test.pass, accepts(teal, hinted(test.msg, test.sig, test.pk)))
+			// the TEAL agrees with the opcode, and both agree with the
+			// reference implementation
+			require.Equal(t, test.pass, accepts(bare, [][]byte{test.msg, test.sig, test.pk}))
+			require.Equal(t, test.pass, ed25519.Verify(test.pk, test.msg, test.sig))
+		})
+	}
+
+	// A hint that is a perfectly good point, but not the one the signature or
+	// public key names, is caught by the compression check.
+	for _, arg := range []int{3, 4} {
+		lying := hinted(msg, sig, pub)
+		lying[arg] = ed25519RandomPoint()
+		require.False(t, accepts(teal, lying))
+	}
+
+	// Compressing only looks at Y and the low bit of X, so a hint can compress
+	// correctly and still not be on the curve. Nothing in the program checks
+	// the curve equation; the opcodes do it, when they decode the point.
+	offCurve := hinted(msg, sig, pub)
+	offCurve[3] = slices.Clone(offCurve[3])
+	offCurve[3][31] ^= 2 // changes X, but not its low bit
+	var txn transactions.SignedTxn
+	txn.Lsig.Args = offCurve
+	testLogicBytes(t, teal, defaultSigParams(txn), "invalid ed25519 point")
+
+	// The identity as a public key compresses correctly, but negating it needs
+	// p-0, which is not a canonical coordinate, so the program fails rather
+	// than verifying anything. libsodium rejects such a key too, by an
+	// explicit small-order check.
+	identity := hinted(msg, sig, pub)
+	identity[2] = make([]byte, ed25519fpSize)
+	identity[2][0] = 1 // little-endian y of 1, x sign clear
+	identity[3] = ed25519Identity()
+	txn.Lsig.Args = identity
+	testLogicBytes(t, teal, defaultSigParams(txn), "larger than modulus")
+
+	// short signature and short public key fail the length assertions
+	txn.Lsig.Args = hinted(msg, sig, pub)
+	txn.Lsig.Args[1] = sig[1:]
+	testLogicBytes(t, teal, defaultSigParams(txn), "assert failed")
+	txn.Lsig.Args = hinted(msg, sig, pub)
+	txn.Lsig.Args[2] = pub[1:]
+	testLogicBytes(t, teal, defaultSigParams(txn), "assert failed")
 }

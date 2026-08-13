@@ -1016,6 +1016,13 @@ func ed25519Add(aBytes, bBytes []byte) ([]byte, error) {
 	return ed25519PointToBytes(&res), nil
 }
 
+// The scalar multiplications below use edwards25519's variable-time routines,
+// whose running time depends on the scalar. There is nothing to leak: a
+// program, its arguments, and the whole transaction are public, so the scalars
+// these opcodes multiply by are public too. They are about 40% faster than the
+// constant-time equivalents, and produce identical results. Their costs are set
+// from the worst-case scalar rather than a typical one, which BenchmarkEd25519
+// measures directly.
 func ed25519ScalarMul(aBytes []byte, k *big.Int) ([]byte, error) {
 	a, err := bytesToEd25519Point(aBytes)
 	if err != nil {
@@ -1026,7 +1033,7 @@ func ed25519ScalarMul(aBytes []byte, k *big.Int) ([]byte, error) {
 		return nil, err
 	}
 	var res edwards25519.Point
-	res.ScalarMult(s, a)
+	res.VarTimeMultiScalarMult([]*edwards25519.Scalar{s}, []*edwards25519.Point{a})
 	return ed25519PointToBytes(&res), nil
 }
 
@@ -1056,7 +1063,7 @@ func ed25519MultiMul(pointBytes, scalarBytes []byte) ([]byte, error) {
 		}
 	}
 	var res edwards25519.Point
-	res.MultiScalarMult(scalars, points)
+	res.VarTimeMultiScalarMult(scalars, points)
 	return ed25519PointToBytes(&res), nil
 }
 
@@ -1069,7 +1076,7 @@ func ed25519SubgroupCheck(pointBytes []byte) (bool, error) {
 		return false, err
 	}
 	var lp edwards25519.Point
-	lp.ScalarMult(ed25519OrderMinusOne, point)
+	lp.VarTimeMultiScalarMult([]*edwards25519.Scalar{ed25519OrderMinusOne}, []*edwards25519.Point{point})
 	lp.Add(&lp, point)
 	return lp.Equal(edwards25519.NewIdentityPoint()) == 1, nil
 }

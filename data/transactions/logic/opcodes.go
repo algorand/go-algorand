@@ -799,13 +799,13 @@ var OpSpecs = []OpSpec{
 		costByField("g", &EcGroups, []int{
 			BN254g1: 125, BN254g2: 170,
 			BLS12_381g1: 205, BLS12_381g2: 290,
-			ED25519: 350})}, // uncompressed points: one output inversion dominates; scaled from BN254g1 timings
+			ED25519: 200})}, // uncompressed points: one output inversion dominates; 1.6x a BN254g1 add, by BenchmarkEd25519
 
 	{0xe1, "ec_scalar_mul", opEcScalarMul, proto("bb:b"), pairingVersion,
 		costByField("g", &EcGroups, []int{
 			BN254g1: 1810, BN254g2: 3430,
 			BLS12_381g1: 2950, BLS12_381g2: 6530,
-			ED25519: 1750})}, // scaled from BN254g1 scalar_mul timings
+			ED25519: 1600})}, // 40us for the worst-case scalar, by BenchmarkEd25519
 
 	{0xe2, "ec_pairing_check", opEcPairingCheck, proto("bb:T"), pairingVersion,
 		costByFieldAndLength("g", &ecPairingGroups, []linearCost{
@@ -853,9 +853,9 @@ var OpSpecs = []OpSpec{
 				chunkCost: 485,
 				chunkSize: scalarSize,
 			},
-			ED25519: { // scaled from BN254g1 scalar_mul timings (filippo MultiScalarMult)
+			ED25519: { // the doublings are shared, so only the per-point additions scale
 				baseCost:  1_200,
-				chunkCost: 650,
+				chunkCost: 385,
 				chunkSize: scalarSize,
 			}})},
 
@@ -863,7 +863,7 @@ var OpSpecs = []OpSpec{
 		costByField("g", &EcGroups, []int{
 			BN254g1: 20, BN254g2: 3_100, // g1 subgroup is nearly a no-op
 			BLS12_381g1: 1_850, BLS12_381g2: 2_340,
-			ED25519: 1_650})}, // ~one scalar mul ([L]P), not cheap like g1; scaled from BN254g1 scalar_mul timings
+			ED25519: 1_300})}, // ~one scalar mul ([L]P), not cheap like g1; by BenchmarkEd25519
 	{0xe5, "ec_map_to", opEcMapTo, proto("b:b"), pairingVersion,
 		costByField("g", &ecPairingGroups, []int{
 			BN254g1: 630, BN254g2: 3_300,
