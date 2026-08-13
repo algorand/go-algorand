@@ -64,9 +64,10 @@ Extraction.
 
 #### Special Values
 
-- `true` and `false` are accepted (whole-text)
-- `null` parses, but extracting a key whose value is `null` always results in an
-  error, whatever type is requested (extraction)
+- `true`, `false`, and `null` are accepted when parsing, but extracting a key
+  whose value is any of them always results in an error, whatever type is
+  requested: booleans are not readable as `JSONString` letters or `JSONUint64`
+  0 and 1 (whole-text and extraction)
 - other special values such as `NaN`,`+Inf`,`-Inf` are not accepted (whole-text)
 
 #### Exponential Notation
