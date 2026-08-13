@@ -337,6 +337,10 @@ func TestVrfVerify(t *testing.T) {
 	testLogic(t, source, LogicVersion, ep)
 }
 
+// falconVerifyBench builds the body of a falcon_verify benchmark for one Falcon
+// variant. The key and signature are generated from a fixed seed rather than
+// hardcoded, so that the `assert` measures, and confirms, a verification that
+// actually succeeds for whichever variant the immediate names.
 func falconVerifyBench(b *testing.B, config FalconConfig, msg []byte) string {
 	var seed crypto.FalconSeed
 	var pk, sig []byte
@@ -361,10 +365,6 @@ func falconVerifyBench(b *testing.B, config FalconConfig, msg []byte) string {
 }
 
 // BenchmarkVerify is useful to see relative speeds of various crypto verify functions
-// falconVerifyBench builds the body of a falcon_verify benchmark for one Falcon
-// variant. The key and signature are generated from a fixed seed rather than
-// hardcoded, so that the `assert` measures, and confirms, a verification that
-// actually succeeds for whichever variant the immediate names.
 func BenchmarkVerify(b *testing.B) {
 	benchMsg, err := hex.DecodeString("62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd")
 	require.NoError(b, err)
