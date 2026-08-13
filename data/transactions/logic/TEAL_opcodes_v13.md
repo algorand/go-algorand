@@ -1702,7 +1702,7 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 | 5 | BlkBranch | [32]byte | v11  | The sha512_256 hash of the previous block's header |
 | 6 | BlkFeeSink | address | v11  | The fee sink account for the block's round |
 | 7 | BlkProtocol | []byte | v11  | The ConsensusVersion of the block |
-| 8 | BlkTxnCounter | uint64 | v11  | The number of the next transaction to be committed after this block, counted from the beginning of the chain. Genesis blocks start at either 0 or 1000 |
+| 8 | BlkTxnCounter | uint64 | v11  | The number of the next transaction to be committed after this block, counted from the beginning of the chain. Genesis blocks start at 1000 |
 | 9 | BlkProposerPayout | uint64 | v11  | The amount actually moved from the FeeSink to the proposer, in microalgos. 0 if the proposer was not eligible |
 | 10 | BlkBranch512 | [64]byte | v13  | The sha512 hash of the previous block's header. Zero for blocks from before sha512 block hashing was enabled |
 | 11 | BlkSha512_256TxnCommitment | [32]byte | v13  | Root of the sha512_256 merkle tree over the block's transactions and their ApplyData, the "Algorand native" commitment |

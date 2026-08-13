@@ -8532,7 +8532,7 @@
         {
           "Name": "BlkTxnCounter",
           "Type": "uint64",
-          "Doc": "The number of the next transaction to be committed after this block, counted from the beginning of the chain. Genesis blocks start at either 0 or 1000",
+          "Doc": "The number of the next transaction to be committed after this block, counted from the beginning of the chain. Genesis blocks start at 1000",
           "ByteEncoding": 8,
           "Version": 11
         },

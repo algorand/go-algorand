@@ -1257,7 +1257,7 @@ var blockFieldSpecs = [...]blockFieldSpec{
 	{BlkBranch, StackBytes32, incentiveVersion, "The sha512_256 hash of the previous block's header"},
 	{BlkFeeSink, StackAddress, incentiveVersion, "The fee sink account for the block's round"},
 	{BlkProtocol, StackBytes, incentiveVersion, "The ConsensusVersion of the block"},
-	{BlkTxnCounter, StackUint64, incentiveVersion, "The number of the next transaction to be committed after this block, counted from the beginning of the chain. Genesis blocks start at either 0 or 1000"},
+	{BlkTxnCounter, StackUint64, incentiveVersion, "The number of the next transaction to be committed after this block, counted from the beginning of the chain. Genesis blocks start at 1000"},
 	{BlkProposerPayout, StackUint64, incentiveVersion, "The amount actually moved from the FeeSink to the proposer, in microalgos. 0 if the proposer was not eligible"},
 	{BlkBranch512, StackBytes64, 13, "The sha512 hash of the previous block's header. Zero for blocks from before sha512 block hashing was enabled"},
 	{BlkSha512_256TxnCommitment, StackBytes32, 13, "Root of the sha512_256 merkle tree over the block's transactions and their ApplyData, the \"Algorand native\" commitment"},
