@@ -67,16 +67,16 @@ type labelReference struct {
 
 type constReference interface {
 	// get the referenced value
-	getValue() interface{}
+	getValue() any
 
 	// check if the referenced value equals other. Other must be the same type
-	valueEquals(other interface{}) bool
+	valueEquals(other any) bool
 
 	// get the index into ops.pending where the opcode for this reference is located
 	getPosition() int
 
 	// get the length of the op for this reference in ops.pending
-	length(ops *OpStream, assembled []byte) (int, error)
+	length(ops *OpStream, assembled []byte) (int, *sourceError)
 
 	// create the opcode bytes for a new reference of the same value
 	makeNewReference(ops *OpStream, singleton bool, newIndex int) []byte
@@ -89,11 +89,11 @@ type intReference struct {
 	position int
 }
 
-func (ref intReference) getValue() interface{} {
+func (ref intReference) getValue() any {
 	return ref.value
 }
 
-func (ref intReference) valueEquals(other interface{}) bool {
+func (ref intReference) valueEquals(other any) bool {
 	return ref.value == other.(uint64)
 }
 
@@ -101,7 +101,7 @@ func (ref intReference) getPosition() int {
 	return ref.position
 }
 
-func (ref intReference) length(ops *OpStream, assembled []byte) (int, error) {
+func (ref intReference) length(ops *OpStream, assembled []byte) (int, *sourceError) {
 	opIntc0 := OpsByName[ops.Version]["intc_0"].Opcode
 	opIntc1 := OpsByName[ops.Version]["intc_1"].Opcode
 	opIntc2 := OpsByName[ops.Version]["intc_2"].Opcode
@@ -158,11 +158,11 @@ type byteReference struct {
 	position int
 }
 
-func (ref byteReference) getValue() interface{} {
+func (ref byteReference) getValue() any {
 	return ref.value
 }
 
-func (ref byteReference) valueEquals(other interface{}) bool {
+func (ref byteReference) valueEquals(other any) bool {
 	return bytes.Equal(ref.value, other.([]byte))
 }
 
@@ -170,7 +170,7 @@ func (ref byteReference) getPosition() int {
 	return ref.position
 }
 
-func (ref byteReference) length(ops *OpStream, assembled []byte) (int, error) {
+func (ref byteReference) length(ops *OpStream, assembled []byte) (int, *sourceError) {
 	opBytec0 := OpsByName[ops.Version]["bytec_0"].Opcode
 	opBytec1 := OpsByName[ops.Version]["bytec_1"].Opcode
 	opBytec2 := OpsByName[ops.Version]["bytec_2"].Opcode
@@ -268,12 +268,22 @@ type OpStream struct {
 	OffsetToSource map[int]SourceLocation
 
 	HasStatefulOps bool
+	autoSalt       autoSaltMode
+	autoSaltToken  token
 
 	// Need new copy for each opstream
 	versionedPseudoOps map[string]map[int]OpSpec
 
 	macros map[string][]token
 }
+
+type autoSaltMode int
+
+const (
+	autoSaltDefault autoSaltMode = iota
+	autoSaltOn
+	autoSaltOff
+)
 
 // newOpStream constructs OpStream instances ready to invoke assemble. A new
 // OpStream must be used for each call to assemble().
@@ -633,6 +643,10 @@ func asmPushBytes(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *so
 	if len(args) != consumed {
 		return args[consumed].errorf("%s with extraneous argument", mnemonic.str)
 	}
+	if len(val) > maxStringSize {
+		return args[0].errorf("%s value is too big (%d bytes, limit %d)",
+			mnemonic.str, len(val), maxStringSize)
+	}
 	ops.pending.WriteByte(spec.Opcode)
 	var scratch [binary.MaxVarintLen64]byte
 	vlen := binary.PutUvarint(scratch[:], uint64(len(val)))
@@ -839,6 +853,10 @@ func asmByte(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceE
 	if len(args) != consumed {
 		return args[consumed].errorf("%s with extraneous argument", spec.Name)
 	}
+	if len(val) > maxStringSize {
+		return args[0].errorf("%s value is too big (%d bytes, limit %d)",
+			spec.Name, len(val), maxStringSize)
+	}
 	err = ops.byteLiteral(val)
 	if err != nil {
 		return args[0].error(err)
@@ -919,6 +937,10 @@ func asmByteImmArgs(ops *OpStream, spec *OpSpec, args []token) ([][]byte, *sourc
 			// parseBinaryArgs would have to return a useful consumed value even
 			// in the face of errors.  Hard.
 			return nil, rest[0].errorf("%s %w", spec.Name, err)
+		}
+		if len(val) > maxStringSize {
+			return nil, rest[0].errorf("%s arg %d is too big (%d bytes, limit %d)",
+				spec.Name, len(bvals), len(val), maxStringSize)
 		}
 		bvals = append(bvals, val)
 		rest = rest[consumed:]
@@ -1123,6 +1145,25 @@ func asmItxnField(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *so
 	return nil
 }
 
+func asmAppParamsSet(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
+	if err := ops.checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
+		return err
+	}
+	fs, ok := appParamsFieldSpecByName[args[0].str]
+	if !ok {
+		return args[0].errorf("%s unknown field: %#v", spec.Name, args[0].str)
+	}
+	if fs.setVersion == 0 {
+		return args[0].errorf("%s %#v is not settable.", spec.Name, args[0].str)
+	}
+	if fs.setVersion > ops.Version {
+		return args[0].errorf("%s %s field is settable in v%d. Missed #pragma version?", spec.Name, args[0].str, fs.setVersion)
+	}
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(fs.Field())
+	return nil
+}
+
 type asmFunc func(*OpStream, *OpSpec, token, []token) *sourceError
 
 func (ops *OpStream) checkArgCount(name string, mnemonic token, args []token, expected int) *sourceError {
@@ -1151,6 +1192,9 @@ func asmDefault(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sour
 		return err
 	}
 	ops.pending.WriteByte(spec.Opcode)
+	if spec.SubOpcode != 0 {
+		ops.pending.WriteByte(spec.SubOpcode)
+	}
 	for i, imm := range spec.OpDetails.Immediates {
 		var correctImmediates []string
 		var numImmediatesWithField []int
@@ -1873,7 +1917,7 @@ func (se sourceError) Unwrap() error {
 	return se.Err
 }
 
-func sourceErrorf(location SourceLocation, format string, a ...interface{}) *sourceError {
+func sourceErrorf(location SourceLocation, format string, a ...any) *sourceError {
 	return &sourceError{location.Line, location.Column, fmt.Errorf(format, a...)}
 }
 
@@ -1887,11 +1931,11 @@ func (t token) error(err error) *sourceError {
 	return &sourceError{t.line, t.col, err}
 }
 
-func (t token) errorf(format string, args ...interface{}) *sourceError {
+func (t token) errorf(format string, args ...any) *sourceError {
 	return t.error(fmt.Errorf(format, args...))
 }
 
-func (t token) errorAfterf(format string, args ...interface{}) *sourceError {
+func (t token) errorAfterf(format string, args ...any) *sourceError {
 	return &sourceError{t.line, t.col + len(t.str), fmt.Errorf(format, args...)}
 }
 
@@ -1985,14 +2029,14 @@ func tokensFromLine(sourceLine string, lineno int) []token {
 	return tokens
 }
 
-func (ops *OpStream) trace(format string, args ...interface{}) {
+func (ops *OpStream) trace(format string, args ...any) {
 	if ops.Trace == nil {
 		return
 	}
 	fmt.Fprintf(ops.Trace, format, args...)
 }
 
-func (ops *OpStream) typeErrorf(opcode token, format string, args ...interface{}) {
+func (ops *OpStream) typeErrorf(opcode token, format string, args ...any) {
 	if ops.typeTracking {
 		ops.record(opcode.errorf(format, args...))
 	}
@@ -2073,8 +2117,35 @@ type directiveFunc func(*OpStream, []token) *sourceError
 
 var directives = map[string]directiveFunc{"pragma": pragma, "define": define}
 
-// assemble reads text from an input and accumulates the program
+// assemble reads text from an input and accumulates the program.
 func (ops *OpStream) assemble(text string) error {
+	if err := ops.parseText(text); err != nil {
+		return err
+	}
+	var program []byte
+	var prefixLen int
+	if len(ops.Errors) == 0 {
+		var err *sourceError
+		program, prefixLen, err = ops.finalizeProgram()
+		if err != nil {
+			ops.record(err)
+		}
+	}
+	if len(ops.Errors) == 1 {
+		return fmt.Errorf("1 error: %w", ops.Errors[0])
+	}
+	if len(ops.Errors) > 1 {
+		return fmt.Errorf("%d errors", len(ops.Errors))
+	}
+
+	ops.adjustOffsetToSource(prefixLen)
+	ops.Program = program
+
+	return nil
+}
+
+// parseText reads text from an input and accumulates the pending program state.
+func (ops *OpStream) parseText(text string) error {
 	if ops.Version > LogicVersion && ops.Version != assemblerNoVersion {
 		err := fmt.Errorf("Can not assemble version %d", ops.Version)
 		ops.record(&sourceError{0, 0, err})
@@ -2178,22 +2249,92 @@ func (ops *OpStream) assemble(text string) error {
 	}
 
 	if ops.Version >= optimizeConstantsEnabledVersion {
-		ops.optimizeIntcBlock()
-		ops.optimizeBytecBlock()
+		if err := ops.optimizeIntcBlock(); err != nil {
+			ops.record(err)
+		}
+		if err := ops.optimizeBytecBlock(); err != nil {
+			ops.record(err)
+		}
 	}
 
 	ops.findBranchSizes()
 	ops.resolveLabels()
-	program := ops.prependCBlocks()
-	if ops.Errors != nil {
-		l := len(ops.Errors)
-		if l == 1 {
-			return fmt.Errorf("1 error: %w", ops.Errors[0])
-		}
-		return fmt.Errorf("%d errors", l)
-	}
-	ops.Program = program
 	return nil
+}
+
+// assemblerSaltSearchLimit is the number of salt candidates we can try to fit in the one-byte varint range.
+// The chance of all candidates hashing on-curve is 2^-128 under the random-hash model.
+const assemblerSaltSearchLimit = 128
+
+// finalizeProgram constructs final program bytes. For v13+ stateless programs
+// that would hash on-curve, it adds salt to make the hash off-curve. The
+// #pragma autosalt directive can force this behavior on for older versions, or
+// disable it for v13+ programs. If the program has an automatic intcblock, it
+// appends the salt there; otherwise it adds a trailing intcblock at the end of
+// the program.
+func (ops *OpStream) finalizeProgram() ([]byte, int, *sourceError) {
+	program, prefixLen := ops.prependCBlocks()
+	if !ops.shouldAutoSalt(program) {
+		return program, prefixLen, nil
+	}
+
+	if len(ops.intc) > 0 && ops.cntIntcBlock == 0 {
+		return ops.finalizeProgramWithAutoIntcSalt()
+	}
+	return ops.finalizeProgramWithTrailingIntcSalt(program, prefixLen)
+}
+
+func (ops *OpStream) shouldAutoSalt(program []byte) bool {
+	if ops.autoSalt == autoSaltOff {
+		if !ops.HasStatefulOps && ProgramHashIsEdwards25519Point(program) {
+			ops.warn(ops.autoSaltToken, "#pragma autosalt false leaves program hash on curve")
+		}
+		return false
+	}
+	if ops.autoSalt == autoSaltOn {
+		if ops.HasStatefulOps {
+			ops.warn(ops.autoSaltToken, "#pragma autosalt true used with stateful opcodes")
+		}
+		return ProgramHashIsEdwards25519Point(program)
+	}
+	return defaultAutoSaltApplies(ops.Version, ops.HasStatefulOps, program)
+}
+
+func defaultAutoSaltApplies(version uint64, hasStatefulOps bool, program []byte) bool {
+	return version >= LogicSigOffCurveVersion && !hasStatefulOps && ProgramHashIsEdwards25519Point(program)
+}
+
+// TODO: should ops.intc reflect the salted intcblock that ends up
+// in ops.Program, or stay source-derived? Currently the latter.
+func (ops *OpStream) finalizeProgramWithAutoIntcSalt() ([]byte, int, *sourceError) {
+	originalLen := len(ops.intc)
+	defer func() {
+		ops.intc = ops.intc[:originalLen]
+	}()
+
+	ops.intc = append(ops.intc, 0)
+	for saltValue := range uint64(assemblerSaltSearchLimit) {
+		ops.intc[originalLen] = saltValue
+		program, prefixLen := ops.prependCBlocks()
+		if !ProgramHashIsEdwards25519Point(program) {
+			return program, prefixLen, nil
+		}
+	}
+	return nil, 0, &sourceError{ops.sourceLine, 0, errors.New("could not find an automatic intcblock salt that yields an off-curve program")}
+}
+
+func (ops *OpStream) finalizeProgramWithTrailingIntcSalt(program []byte, prefixLen int) ([]byte, int, *sourceError) {
+	suffix := []byte{OpsByName[ops.Version]["intcblock"].Opcode, 1, 0}
+	candidate := slices.Concat(program, suffix)
+	saltOffset := len(candidate) - 1
+
+	for saltValue := range uint64(assemblerSaltSearchLimit) {
+		candidate[saltOffset] = byte(saltValue)
+		if !ProgramHashIsEdwards25519Point(candidate) {
+			return candidate, prefixLen, nil
+		}
+	}
+	return nil, 0, &sourceError{ops.sourceLine, 0, errors.New("could not find a trailing intcblock salt that yields an off-curve program")}
 }
 
 // cycle return a slice of strings that constitute a cycle, if one is
@@ -2374,6 +2515,29 @@ func pragma(ops *OpStream, tokens []token) *sourceError {
 			ops.known.reset()
 		}
 		ops.typeTracking = on
+
+		return nil
+	case "autosalt":
+		if len(tokens) < 3 {
+			return tokens[1].errorf("no autosalt value")
+		}
+		if len(tokens) > 3 {
+			return tokens[3].errorf("unexpected extra tokens:%s", reJoin("", tokens[3:]))
+		}
+		if ops.pending.Len() > 0 {
+			return tokens[0].errorf("#pragma autosalt is only allowed before instructions")
+		}
+		value := tokens[2].str
+		on, err := strconv.ParseBool(value)
+		if err != nil {
+			return tokens[2].errorf("bad #pragma autosalt: %#v", value)
+		}
+		if on {
+			ops.autoSalt = autoSaltOn
+		} else {
+			ops.autoSalt = autoSaltOff
+		}
+		ops.autoSaltToken = tokens[0]
 
 		return nil
 	default:
@@ -2566,13 +2730,13 @@ const assemblerNoVersion = (^uint64(0))
 //
 // This function only optimizes constants introduces by the int pseudo-op, not
 // preexisting intcblocks in the code.
-func (ops *OpStream) optimizeIntcBlock() error {
+func (ops *OpStream) optimizeIntcBlock() *sourceError {
 	if ops.cntIntcBlock > 0 {
 		// don't optimize an existing intcblock, only int pseudo-ops
 		return nil
 	}
 
-	constBlock := make([]interface{}, len(ops.intc))
+	constBlock := make([]any, len(ops.intc))
 	for i, value := range ops.intc {
 		constBlock[i] = value
 	}
@@ -2609,13 +2773,13 @@ func (ops *OpStream) optimizeIntcBlock() error {
 //
 // This function only optimizes constants introduces by the byte or addr
 // pseudo-ops, not preexisting bytecblocks in the code.
-func (ops *OpStream) optimizeBytecBlock() error {
+func (ops *OpStream) optimizeBytecBlock() *sourceError {
 	if ops.cntBytecBlock > 0 {
 		// don't optimize an existing bytecblock, only byte/addr pseudo-ops
 		return nil
 	}
 
-	constBlock := make([]interface{}, len(ops.bytec))
+	constBlock := make([]any, len(ops.bytec))
 	for i, value := range ops.bytec {
 		constBlock[i] = value
 	}
@@ -2649,9 +2813,9 @@ func (ops *OpStream) optimizeBytecBlock() error {
 // the first 4 constant can use a special opcode to save space. Additionally,
 // any constants with a reference of 1 are taken out of the constant block and
 // instead referenced with an immediate op.
-func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []interface{}) (optimizedConstBlock []interface{}, err error) {
+func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []any) (optimizedConstBlock []any, err *sourceError) {
 	type constFrequency struct {
-		value interface{}
+		value any
 		freq  int
 	}
 
@@ -2709,9 +2873,9 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 
 		newBytes := ref.makeNewReference(ops, singleton, newIndex)
 		var currentBytesLen int
-		currentBytesLen, err = ref.length(ops, raw)
-		if err != nil {
-			return
+		currentBytesLen, lengthErr := ref.length(ops, raw)
+		if lengthErr != nil {
+			return nil, lengthErr
 		}
 		edits = append(edits, pendingEdit{ref.getPosition(), currentBytesLen, newBytes})
 	}
@@ -2721,7 +2885,7 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 	})
 	ops.applyEdits(edits)
 
-	optimizedConstBlock = make([]interface{}, 0)
+	optimizedConstBlock = make([]any, 0)
 	for _, f := range freqs {
 		if f.freq == 1 {
 			break
@@ -2733,7 +2897,8 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 }
 
 // prependCBlocks completes the assembly by inserting cblocks if needed.
-func (ops *OpStream) prependCBlocks() []byte {
+// It returns the completed program and the length of the prefix (version and any cblocks).
+func (ops *OpStream) prependCBlocks() ([]byte, int) {
 	var scratch [binary.MaxVarintLen64]byte
 	prebytes := bytes.Buffer{}
 	vlen := binary.PutUvarint(scratch[:], ops.Version)
@@ -2761,25 +2926,19 @@ func (ops *OpStream) prependCBlocks() []byte {
 	pbl := prebytes.Len()
 	outl := ops.pending.Len()
 	out := make([]byte, pbl+outl)
-	pl, err := prebytes.Read(out)
-	if pl != pbl || err != nil {
-		ops.record(&sourceError{ops.sourceLine, 0, fmt.Errorf("%d prebytes, %d to buffer? %w", pbl, pl, err)})
-		return nil
-	}
-	ol, err := ops.pending.Read(out[pl:])
-	if ol != outl || err != nil {
-		ops.record(&sourceError{ops.sourceLine, 0, fmt.Errorf("%d program bytes but %d to buffer. %w", outl, ol, err)})
-		return nil
-	}
+	copy(out, prebytes.Bytes())
+	copy(out[pbl:], ops.pending.Bytes())
+	return out, pbl
+}
 
-	// fixup offset to line mapping
+// adjustOffsetToSource shifts recorded bytecode offsets by the final prefix
+// length so source locations still line up after cblocks are prepended.
+func (ops *OpStream) adjustOffsetToSource(prefixLen int) {
 	newOffsetToSource := make(map[int]SourceLocation, len(ops.OffsetToSource))
 	for o, l := range ops.OffsetToSource {
-		newOffsetToSource[o+pbl] = l
+		newOffsetToSource[o+prefixLen] = l
 	}
 	ops.OffsetToSource = newOffsetToSource
-
-	return out
 }
 
 // record puts an error onto a list for reporting later. The hope is that the
@@ -2790,7 +2949,7 @@ func (ops *OpStream) record(se *sourceError) {
 	ops.Errors = append(ops.Errors, *se)
 }
 
-func (ops *OpStream) warn(t token, format string, a ...interface{}) {
+func (ops *OpStream) warn(t token, format string, a ...any) {
 	warning := sourceError{t.line, t.col, fmt.Errorf(format, a...)}
 	ops.Warnings = append(ops.Warnings, warning)
 }
@@ -2901,6 +3060,9 @@ func (dis *disassembleState) outputLabelIfNeeded() (err error) {
 func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 	out := spec.Name
 	pc := dis.pc + 1
+	if spec.SubOpcode != 0 {
+		pc++ // skip the sub-opcode byte; immediates follow
+	}
 	for _, imm := range spec.OpDetails.Immediates {
 		out += " "
 		switch imm.kind {
@@ -3127,11 +3289,9 @@ func parseByteImmArgs(program []byte, pos int) (bytec [][]byte, nextpc int, err 
 			err = fmt.Errorf("could not decode []byte const[%d] at pc=%d", i, pos)
 			return
 		}
+		// pos <= len(program) is guaranteed: Uvarint reports bytesUsed > 0
+		// only when the varint terminated inside the slice.
 		pos += bytesUsed
-		if pos >= len(program) {
-			err = errShortByteImmArgs
-			return
-		}
 		end := uint64(pos) + itemLen
 		if end > uint64(len(program)) || end < uint64(pos) {
 			err = errShortByteImmArgs
@@ -3146,7 +3306,7 @@ func parseByteImmArgs(program []byte, pos int) (bytec [][]byte, nextpc int, err 
 
 func checkByteImmArgs(cx *EvalContext) error {
 	var err error
-	_, cx.nextpc, err = parseByteImmArgs(cx.program, cx.pc+1)
+	_, cx.nextpc, err = cx.byteImmArgs()
 	return err
 }
 
@@ -3193,6 +3353,13 @@ func guessByteFormat(bytes []byte) string {
 	return "0x" + hex.EncodeToString(bytes)
 }
 
+// PCOffset stores the mapping from a program counter value to an offset in the
+// disassembly of the bytecode
+type PCOffset struct {
+	PC     int `codec:"pc"`
+	Offset int `codec:"offset"`
+}
+
 type disInfo struct {
 	pcOffset       []PCOffset
 	hasStatefulOps bool
@@ -3203,37 +3370,44 @@ type disInfo struct {
 // disassembly. If the labels names are known, they may be passed in.
 // When doing so, labels for all jump targets must be provided.
 func disassembleInstrumented(program []byte, labels map[int]string) (text string, ds disInfo, err error) {
-	out := strings.Builder{}
-	dis := disassembleState{program: program, out: &out, pendingLabels: labels}
+	body := strings.Builder{}
+	dis := disassembleState{program: program, out: &body, pendingLabels: labels}
 	version, vlen := binary.Uvarint(program)
 	if vlen <= 0 {
 		fmt.Fprintf(dis.out, "// invalid version\n")
-		text = out.String()
+		text = body.String()
 		return
 	}
 	if version > LogicVersion {
 		fmt.Fprintf(dis.out, "// unsupported version %d\n", version)
-		text = out.String()
+		text = body.String()
 		return
 	}
-	fmt.Fprintf(dis.out, "#pragma version %d\n", version)
 	dis.pc = vlen
 	for dis.pc < len(program) {
 		err = dis.outputLabelIfNeeded()
 		if err != nil {
 			return
 		}
+		// cx.GetOpSpec would be nice here, but we don't have a cx, we have the
+		// various pieces: version, program, dis.pc all available but separate.
 		op := opsByOpcode[version][program[dis.pc]]
+		if op.SubOps != nil && dis.pc+1 < len(program) {
+			sub := program[dis.pc+1]
+			if int(sub) < len(op.SubOps) && op.SubOps[sub].op != nil {
+				op = op.SubOps[sub]
+			}
+		}
 		if op.Modes == ModeApp {
 			ds.hasStatefulOps = true
 		}
 		if op.Name == "" {
-			ds.pcOffset = append(ds.pcOffset, PCOffset{dis.pc, out.Len()})
+			ds.pcOffset = append(ds.pcOffset, PCOffset{dis.pc, body.Len()})
 			msg := fmt.Sprintf("invalid opcode %02x at pc=%d", program[dis.pc], dis.pc)
-			out.WriteString(msg)
-			out.WriteRune('\n')
-			text = out.String()
-			err = errors.New(msg)
+			err = getOpSpecError(&op, program, dis.pc)
+			body.WriteString(msg)
+			body.WriteRune('\n')
+			text = finalizeDisassemblyWithPragmas(version, program, body.String(), &ds)
 			return
 		}
 
@@ -3251,7 +3425,7 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 		}
 
 		// ds.pcOffset tracks where in the output each opcode maps to assembly
-		ds.pcOffset = append(ds.pcOffset, PCOffset{dis.pc, out.Len()})
+		ds.pcOffset = append(ds.pcOffset, PCOffset{dis.pc, body.Len()})
 
 		// Actually do the disassembly
 		var instruction string
@@ -3259,16 +3433,14 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 		if err != nil {
 			return
 		}
-		out.WriteString(instruction)
-		out.WriteRune('\n')
+		body.WriteString(instruction)
+		body.WriteRune('\n')
 		dis.pc = dis.nextpc
 	}
 	err = dis.outputLabelIfNeeded()
 	if err != nil {
 		return
 	}
-
-	text = out.String()
 
 	if dis.rerun {
 		if labels != nil {
@@ -3277,7 +3449,22 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 		}
 		return disassembleInstrumented(program, dis.pendingLabels)
 	}
+	text = finalizeDisassemblyWithPragmas(version, program, body.String(), &ds)
 	return
+}
+
+func finalizeDisassemblyWithPragmas(version uint64, program []byte, body string, ds *disInfo) string {
+	header := strings.Builder{}
+	fmt.Fprintf(&header, "#pragma version %d\n", version)
+	if defaultAutoSaltApplies(version, ds.hasStatefulOps, program) {
+		fmt.Fprintf(&header, "#pragma autosalt false\n")
+	}
+	headerLen := header.Len()
+	for i := range ds.pcOffset {
+		ds.pcOffset[i].Offset += headerLen
+	}
+	header.WriteString(body)
+	return header.String()
 }
 
 // Disassemble produces a text form of program bytes.

@@ -254,6 +254,11 @@ type AppParams struct {
 	// SizeSponsor, if non-zero, is the account that must hold MBR for
 	// extra program pages, and the global schema.
 	SizeSponsor Address `codec:"ss"`
+
+	// ForeignBoxReads, when true, allows any app to read this app's boxes.
+	ForeignBoxReads bool `codec:"fbr"`
+	// FamilyBoxAccess, when true, allows apps with the same creator to read and write this app's boxes.
+	FamilyBoxAccess bool `codec:"fba"`
 }
 
 // StateSchemas is a thin wrapper around the LocalStateSchema and the

@@ -361,7 +361,7 @@ func setupWebsocketNetworkABwithLogger(t *testing.T, countTarget int, log loggin
 	success = true
 	closeFunc := func() {
 		netStop(t, netB, "B")
-		netStop(t, netB, "A")
+		netStop(t, netA, "A")
 	}
 	return netA, netB, counter, closeFunc
 }
@@ -411,9 +411,28 @@ func TestWebsocketNetworkBasicInvalidTags(t *testing.T) { // nolint:paralleltest
 	log := logging.TestingLog(t)
 	log.SetOutput(&logOutput)
 	log.SetLevel(logging.Level(logging.Debug))
-	netA, netB, counter, closeFunc := setupWebsocketNetworkABwithLogger(t, 0, log)
 
-	defer closeFunc()
+	// set up two nodes without waiting for ready: the invalid tags cause the
+	// MsgOfInterest exchange to drop the connection, sometimes before the peer
+	// is counted toward readiness, so Ready() might never fire.
+	netA := makeTestWebsocketNode(t)
+	netA.config.GossipFanout = 1
+	netA.log = log
+	netA.Start()
+	defer netStop(t, netA, "A")
+
+	netB := makeTestWebsocketNode(t)
+	netB.config.GossipFanout = 1
+	netB.log = log
+	addrA, postListen := netA.Address()
+	require.True(t, postListen)
+	t.Log(addrA)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
+	netB.Start()
+	defer netStop(t, netB, "B")
+
+	counter := newMessageCounter(t, 0)
+	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
 	// register a handler that should never get called, because the message will never be delivered
 	netB.RegisterHandlers([]TaggedMessageHandler{
 		{Tag: "XX", MessageHandler: HandlerFunc(func(msg IncomingMessage) OutgoingMessage {
@@ -424,13 +443,9 @@ func TestWebsocketNetworkBasicInvalidTags(t *testing.T) { // nolint:paralleltest
 	// it should not go through because the defaultSendMessageTags should not be accepted
 	// and the connection should be dropped
 	netA.Broadcast(context.Background(), "XX", []byte("foo"), false, nil)
-	for p := 0; p < 100; p++ {
-		if strings.Contains(logOutput.String(), "wsPeer handleMessageOfInterest: could not unmarshall message from") {
-			break
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	require.Contains(t, logOutput.String(), "wsPeer handleMessageOfInterest: could not unmarshall message from")
+	require.Eventually(t, func() bool {
+		return strings.Contains(logOutput.String(), "wsPeer handleMessageOfInterest: could not unmarshall message from")
+	}, 5*time.Second, 20*time.Millisecond)
 	require.Equal(t, 0, counter.count)
 }
 
@@ -1302,6 +1317,21 @@ func TestGetPeers(t *testing.T) {
 	sort.Strings(peerAddrs2)
 	assert.Equal(t, []string{"d", "e", "f"}, peerAddrs2)
 
+	// the transport views mirror the connected peers as PeerConnectionInfo proxies
+	aTransportIn := netA.GetPeers(PeersTransportConnectionsIn)
+	assert.Equal(t, 1, len(aTransportIn))
+	aTransportPeer, ok := aTransportIn[0].(PeerConnectionInfo)
+	assert.True(t, ok)
+	assert.Equal(t, PeerNetworkTypeWebsocket, aTransportPeer.GetNetworkType())
+	assert.Empty(t, netA.GetPeers(PeersTransportConnectionsOut))
+
+	bTransportOut := netB.GetPeers(PeersTransportConnectionsOut)
+	assert.Equal(t, 1, len(bTransportOut))
+	bTransportPeer, ok := bTransportOut[0].(PeerConnectionInfo)
+	assert.True(t, ok)
+	assert.Equal(t, addrA, bTransportPeer.GetAddress())
+	assert.Equal(t, PeerNetworkTypeWebsocket, bTransportPeer.GetNetworkType())
+	assert.Empty(t, netB.GetPeers(PeersTransportConnectionsIn))
 }
 
 // confirms that if the config PublicAddress is set to "testing",
@@ -1537,13 +1567,24 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 		return len(netA.GetPeers(PeersConnectedOut)) == 2
 	}, time.Second, 50*time.Millisecond)
 
+	// let netC's addPeer to add the inbound connection
+	assert.Eventually(t, func() bool {
+		return len(netC.GetPeers(PeersConnectedIn)) == 1
+	}, time.Second, 50*time.Millisecond)
+
 	// A->B and A->C both open
 	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 2, len(netA.GetPeers(PeersConnectedOut)))
-	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
+	// the earlier wait for netB to settle at one inbound peer can pass before
+	// netB's addPeer has run for the abandoned second connection, in which
+	// case netB transiently reports two inbound peers here until the read
+	// loop reaps the closed one, so wait rather than assert equality
+	assert.Eventually(t, func() bool {
+		return len(netB.GetPeers(PeersConnectedIn)) == 1
+	}, time.Second, 50*time.Millisecond)
 	assert.Equal(t, 0, len(netB.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netC.GetPeers(PeersConnectedIn)))
-	assert.Equal(t, 0, len(netB.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 0, len(netC.GetPeers(PeersConnectedOut)))
 
 	// confirm identity map was added to for both hosts
 	assert.Equal(t, 3, netA.identityTracker.(*mockIdentityTracker).getSetCount())
@@ -2275,7 +2316,15 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 		}
 
 		assert.Equal(t, tc.totalInA, len(netA.GetPeers(PeersConnectedIn)))
-		assert.Equal(t, tc.totalOutA, len(netA.GetPeers(PeersConnectedOut)))
+		// in the failure cases, tryConnect has already registered the outgoing
+		// peer before sending the verification message; netA only drops it
+		// after netB rejects that message and closes the connection, so wait
+		// for the count to settle rather than asserting immediately
+		assert.Eventually(
+			t,
+			func() bool { return len(netA.GetPeers(PeersConnectedOut)) == tc.totalOutA },
+			5*time.Second,
+			100*time.Millisecond)
 		assert.Equal(t, tc.totalOutB, len(netB.GetPeers(PeersConnectedOut)))
 		// it is possible for NetB to be in the process of doing addPeer while
 		// the underlying connection is being closed. In this case, the read loop
@@ -3563,7 +3612,7 @@ func testWebsocketDisconnection(t *testing.T, disconnectFunc func(wn *WebsocketN
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
 	netA.config.EnablePingHandler = false
-	dlNetA := eventsDetailsLogger{Logger: logging.TestingLog(t), eventReceived: make(chan interface{}, 1), eventIdentifier: telemetryspec.DisconnectPeerEvent}
+	dlNetA := eventsDetailsLogger{Logger: logging.TestingLog(t), eventReceived: make(chan any, 1), eventIdentifier: telemetryspec.DisconnectPeerEvent}
 	netA.log = dlNetA
 
 	netA.Start()
@@ -3571,7 +3620,7 @@ func testWebsocketDisconnection(t *testing.T, disconnectFunc func(wn *WebsocketN
 	netB := makeTestWebsocketNode(t)
 	netB.config.GossipFanout = 1
 	netB.config.EnablePingHandler = false
-	dlNetB := eventsDetailsLogger{Logger: logging.TestingLog(t), eventReceived: make(chan interface{}, 1), eventIdentifier: telemetryspec.DisconnectPeerEvent}
+	dlNetB := eventsDetailsLogger{Logger: logging.TestingLog(t), eventReceived: make(chan any, 1), eventIdentifier: telemetryspec.DisconnectPeerEvent}
 	netB.log = dlNetB
 
 	addrA, postListen := netA.Address()
@@ -3685,23 +3734,23 @@ func TestASCIIFiltering(t *testing.T) {
 
 type callbackLogger struct {
 	logging.Logger
-	InfoCallback  func(...interface{})
-	InfofCallback func(string, ...interface{})
-	WarnCallback  func(...interface{})
-	WarnfCallback func(string, ...interface{})
+	InfoCallback  func(...any)
+	InfofCallback func(string, ...any)
+	WarnCallback  func(...any)
+	WarnfCallback func(string, ...any)
 }
 
-func (cl callbackLogger) Info(args ...interface{}) {
+func (cl callbackLogger) Info(args ...any) {
 	cl.InfoCallback(args...)
 }
-func (cl callbackLogger) Infof(s string, args ...interface{}) {
+func (cl callbackLogger) Infof(s string, args ...any) {
 	cl.InfofCallback(s, args...)
 }
 
-func (cl callbackLogger) Warn(args ...interface{}) {
+func (cl callbackLogger) Warn(args ...any) {
 	cl.WarnCallback(args...)
 }
-func (cl callbackLogger) Warnf(s string, args ...interface{}) {
+func (cl callbackLogger) Warnf(s string, args ...any) {
 	cl.WarnfCallback(s, args...)
 }
 
@@ -3714,19 +3763,19 @@ func TestMaliciousCheckServerResponseVariables(t *testing.T) {
 	wn.randomID = "random-id1"
 	wn.log = callbackLogger{
 		Logger: wn.log,
-		InfoCallback: func(args ...interface{}) {
+		InfoCallback: func(args ...any) {
 			s := fmt.Sprint(args...)
 			require.NotContains(t, s, "א")
 		},
-		InfofCallback: func(s string, args ...interface{}) {
+		InfofCallback: func(s string, args ...any) {
 			s = fmt.Sprintf(s, args...)
 			require.NotContains(t, s, "א")
 		},
-		WarnCallback: func(args ...interface{}) {
+		WarnCallback: func(args ...any) {
 			s := fmt.Sprint(args...)
 			require.NotContains(t, s, "א")
 		},
-		WarnfCallback: func(s string, args ...interface{}) {
+		WarnfCallback: func(s string, args ...any) {
 			s = fmt.Sprintf(s, args...)
 			require.NotContains(t, s, "א")
 		},
@@ -4177,17 +4226,23 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 		peerEnqueued: time.Now(),
 		ctx:          context.Background(),
 	}
+	// the metric is a package-wide counter, so compare against its value
+	// before the message rather than an absolute count
+	oldDropped := networkConnectionsDroppedTotal.GetUint64ValueForLabels(map[string]string{"reason": "unrequestedTS"})
 	netA.peers[0].sendBufferBulk <- msg
 	require.Eventually(t,
 		func() bool {
-			return networkConnectionsDroppedTotal.GetUint64ValueForLabels(map[string]string{"reason": "unrequestedTS"}) == 1
+			return networkConnectionsDroppedTotal.GetUint64ValueForLabels(map[string]string{"reason": "unrequestedTS"}) > oldDropped
 		},
 		1*time.Second,
 		50*time.Millisecond,
 	)
 
-	// Stop and confirm that we hit the case of disconnecting a peer for sending an unrequested block response
-	require.Zero(t, netB.NumPeers())
+	// Confirm that we hit the case of disconnecting a peer for sending an
+	// unrequested block response. The metric above is incremented in the read
+	// loop before the deferred cleanup unregisters the peer, so wait for the
+	// peer count to drop rather than asserting immediately.
+	require.Eventually(t, func() bool { return netB.NumPeers() == 0 }, 1*time.Second, 25*time.Millisecond)
 
 	netC.Start()
 	defer netC.Stop()

@@ -80,7 +80,7 @@ func TestZstdDecompress(t *testing.T) {
 	compressed, err = zstd.Compress(nil, msg)
 	require.NoError(t, err)
 	decompressed, err = d.convert(compressed)
-	require.ErrorContains(t, err, `proposal data is too large: 20971530`)
+	require.ErrorContains(t, err, `proposal data is too large: 5250628`)
 	require.Nil(t, decompressed)
 }
 
@@ -101,11 +101,11 @@ func TestZstdCompressMsg(t *testing.T) {
 
 type converterTestLogger struct {
 	logging.Logger
-	WarnfCallback func(string, ...interface{})
+	WarnfCallback func(string, ...any)
 	warnMsgCount  int
 }
 
-func (cl *converterTestLogger) Warnf(s string, args ...interface{}) {
+func (cl *converterTestLogger) Warnf(s string, args ...any) {
 	cl.warnMsgCount++
 }
 

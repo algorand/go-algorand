@@ -154,7 +154,7 @@ func (w *whiteholeNetwork) DisconnectPeers() {
 func (w *whiteholeNetwork) Ready() chan struct{} {
 	return make(chan struct{})
 }
-func (w *whiteholeNetwork) RegisterRPCName(name string, rcvr interface{}) {
+func (w *whiteholeNetwork) RegisterRPCName(name string, rcvr any) {
 	return
 }
 func (w *whiteholeNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {

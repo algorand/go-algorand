@@ -1663,6 +1663,66 @@ func TestP2PMetainfoExchange(t *testing.T) {
 	require.True(t, peer.vpackVoteCompressionSupported())
 }
 
+// TestP2PGetPeersTransportConnections checks that the PeersTransportConnectionsIn/Out
+// options return libp2p-level connections without polluting PeersConnectedIn/Out, and
+// that both views of the connection report the same address and p2p network type.
+func TestP2PGetPeersTransportConnections(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := config.GetDefaultLocal()
+	cfg.DNSBootstrapID = "" // disable DNS lookups since the test uses phonebook addresses
+	cfg.NetAddress = "127.0.0.1:0"
+	log := logging.TestingLog(t)
+	netA, err := NewP2PNetwork(log, cfg, "", nil, GenesisInfo{genesisID, config.Devtestnet}, &nopeNodeInfo{}, nil, nil)
+	require.NoError(t, err)
+	err = netA.Start()
+	require.NoError(t, err)
+	defer netA.Stop()
+
+	peerInfoA := netA.service.AddrInfo()
+	addrsA, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
+	require.NoError(t, err)
+	require.NotZero(t, addrsA[0])
+
+	cfg2 := cfg
+	cfg2.NetAddress = ""
+	phoneBookAddresses := []string{addrsA[0].String()}
+	netB, err := NewP2PNetwork(log, cfg2, "", phoneBookAddresses, GenesisInfo{genesisID, config.Devtestnet}, &nopeNodeInfo{}, nil, nil)
+	require.NoError(t, err)
+	err = netB.Start()
+	require.NoError(t, err)
+	defer netB.Stop()
+
+	var gossipPeers []Peer
+	require.Eventually(t, func() bool {
+		gossipPeers = netA.GetPeers(PeersConnectedIn)
+		return len(gossipPeers) > 0
+	}, 2*time.Second, 50*time.Millisecond)
+
+	// PeersConnectedIn must contain only the gossip peer, not raw libp2p connections
+	require.Len(t, gossipPeers, 1)
+	gossipPeer, ok := gossipPeers[0].(*wsPeer)
+	require.True(t, ok)
+
+	connPeers := netA.GetPeers(PeersTransportConnectionsIn)
+	require.Len(t, connPeers, 1)
+	connPeer, ok := connPeers[0].(PeerConnectionInfo)
+	require.True(t, ok)
+	require.Equal(t, PeerNetworkTypeLibP2P, connPeer.GetNetworkType())
+	// the transport view covers the same connection that backs the gossip peer,
+	// so a single transport query enumerates every connection exactly once
+	require.Equal(t, gossipPeer.GetAddress(), connPeer.GetAddress())
+
+	outConnPeers := netB.GetPeers(PeersTransportConnectionsOut)
+	require.Len(t, outConnPeers, 1)
+	outConnPeer, ok := outConnPeers[0].(PeerConnectionInfo)
+	require.True(t, ok)
+	require.Equal(t, PeerNetworkTypeLibP2P, outConnPeer.GetNetworkType())
+
+	require.Empty(t, netA.GetPeers(PeersTransportConnectionsOut))
+	require.Empty(t, netB.GetPeers(PeersTransportConnectionsIn))
+}
+
 // TestP2PMetainfoV1vsV22 checks v1 and v22 nodes works together.
 // It is done with setting disableV22Protocol=true for the second node,
 // and it renders EnableVoteCompression options to have no effect.

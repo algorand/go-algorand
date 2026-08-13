@@ -73,6 +73,7 @@ const (
 	TxPoolErrTagOverspend    = "overspend"   // Insufficient Algo funds
 	TxPoolErrTagAssetBalance = "asset_bal"   // Insufficient asset balance
 	TxPoolErrTagEvalGeneric  = "eval"        // Other evaluation errors not matching known patterns
+	TxPoolErrTagPanic        = "panic"       // Recovered panic during evaluation (ledgercore.EvalPanicError)
 )
 
 // TxPoolErrTags is the list of all error tags for use with TagCounter.
@@ -82,6 +83,7 @@ var TxPoolErrTags = []string{
 	TxPoolErrTagTxID, TxPoolErrTagLease, TxPoolErrTagTxIDEval, TxPoolErrTagLeaseEval,
 	TxPoolErrTagNotWell, TxPoolErrTagTealErr, TxPoolErrTagTealReject,
 	TxPoolErrTagMinBalance, TxPoolErrTagOverspend, TxPoolErrTagAssetBalance, TxPoolErrTagEvalGeneric,
+	TxPoolErrTagPanic,
 }
 
 // txPoolReevalCounter tracks transaction groups that failed during block assembly
@@ -195,6 +197,11 @@ func ClassifyTxPoolError(err error) string {
 	var evalErr logic.EvalError
 	if errors.As(err, &evalErr) {
 		return TxPoolErrTagTealErr
+	}
+
+	var panicErr ledgercore.EvalPanicError
+	if errors.As(err, &panicErr) || errors.Is(err, ledgercore.ErrEvaluatorCorruptedState) {
+		return TxPoolErrTagPanic
 	}
 
 	return TxPoolErrTagEvalGeneric

@@ -111,6 +111,35 @@ func (cs *roundCowState) putAppParams(addr basics.Address, aidx basics.AppIndex,
 	return nil
 }
 
+// appParamsSetter is a read-modify-write helper for AppParams fields.
+// It looks up the creator, fetches current params, applies setter, and writes back.
+func (cs *roundCowState) appParamsSetter(aidx basics.AppIndex, setter func(*basics.AppParams)) error {
+	creator, ok, err := cs.getCreator(basics.CreatableIndex(aidx), basics.AppCreatable)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("app %d does not exist", aidx)
+	}
+	params, ok, err := cs.GetAppParams(creator, aidx)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("app %d params not found", aidx)
+	}
+	setter(&params)
+	return cs.PutAppParams(creator, aidx, params)
+}
+
+func (cs *roundCowState) SetForeignBoxReads(appID basics.AppIndex, enable bool) error {
+	return cs.appParamsSetter(appID, func(p *basics.AppParams) { p.ForeignBoxReads = enable })
+}
+
+func (cs *roundCowState) SetFamilyBoxAccess(appID basics.AppIndex, enable bool) error {
+	return cs.appParamsSetter(appID, func(p *basics.AppParams) { p.FamilyBoxAccess = enable })
+}
+
 func (cs *roundCowState) PutAppLocalState(addr basics.Address, aidx basics.AppIndex, state basics.AppLocalState) error {
 	return cs.putAppLocalState(addr, aidx, ledgercore.AppLocalStateDelta{LocalState: &state})
 }

@@ -107,13 +107,23 @@ func initNextBlockHeader(correctHeader *bookkeeping.BlockHeader, lastBlock bookk
 // endOfBlock is simplified implementation of BlockEvaluator.endOfBlock so that
 // our test blocks can pass validation.
 func endOfBlock(blk *bookkeeping.Block) error {
-	if blk.ConsensusProtocol().Payouts.Enabled {
+	proto := blk.ConsensusProtocol()
+	if proto.Payouts.Enabled {
 		// This won't work for inner fees, and it's not bothering with overflow
 		for _, txn := range blk.Payset {
 			blk.FeesCollected.Raw += txn.Txn.Fee.Raw
 		}
 		// blk.ProposerPayout is allowed to be zero, so don't reproduce the calc here.
 		blk.BlockHeader.Proposer = basics.Address{0x01} // Must be set to _something_.
+	}
+	if proto.LoadTracking {
+		// Mirror BlockEvaluator: Load is computed from the total encoded txn
+		// bytes relative to the block size cap.
+		blockTxBytes := 0
+		for i := range blk.Payset {
+			blockTxBytes += blk.Payset[i].GetEncodedLength()
+		}
+		blk.BlockHeader.Load = eval.ComputeLoad(blockTxBytes, proto.MaxTxnBytesPerBlock)
 	}
 	var err error
 	blk.TxnCommitments, err = blk.PaysetCommit()
@@ -1140,7 +1150,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 
 	correctTxHeader := transactions.Header{
 		Sender:      addrList[0],
-		Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+		Fee:         proto.MinFee(),
 		FirstValid:  l.Latest() + 1,
 		LastValid:   l.Latest() + 10,
 		GenesisID:   t.Name(),
@@ -1243,7 +1253,12 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 
 	badTx = correctPay
 	badTx.Note = make([]byte, proto.MaxTxnNoteBytes+1)
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with overly large note field")
+	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with overly large note field, with extra fee")
+
+	badTx = correctPay
+	badTx.Note = make([]byte, proto.MaxAbsoluteTxnNoteBytes+1)
+	badTx.Fee, _ = proto.MinFee().MulMicros(10e6) // 10x the fee, just to show it's not a fee problem
+	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with very very large note field")
 
 	badTx = correctPay
 	badTx.Sender = basics.Address{}

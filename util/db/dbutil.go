@@ -196,7 +196,7 @@ func Retry(fn func() error) (err error) {
 }
 
 // getDecoratedLogger returns a decorated logger that includes the readonly true/false, caller and extra fields.
-func (db *Accessor) getDecoratedLogger(fn idemFn, extras ...interface{}) logging.Logger {
+func (db *Accessor) getDecoratedLogger(fn idemFn, extras ...any) logging.Logger {
 	log := db.logger().With("readonly", db.readOnly)
 	_, file, line, ok := runtime.Caller(3)
 	if ok {
@@ -223,7 +223,7 @@ func (db *Accessor) IsSharedCacheConnection() bool {
 // For transactions where readOnly is false, sync determines whether or not to wait for the result.
 // The return error of fn should be a native sqlite3.Error type or an error wrapping it.
 // DO NOT return a custom error - the internal logic of Atomic expects an sqlite error and uses that value.
-func (db *Accessor) Atomic(fn idemFn, extras ...interface{}) (err error) {
+func (db *Accessor) Atomic(fn idemFn, extras ...any) (err error) {
 	return db.AtomicContext(context.Background(), fn, nil, extras...)
 }
 
@@ -232,7 +232,7 @@ func (db *Accessor) Atomic(fn idemFn, extras ...interface{}) (err error) {
 // Like for Atomic, the return error of fn should be a native sqlite3.Error type or an error wrapping it.
 // If retryClearFn is provided, it will be called in between retries of calls to fn, if the error is a
 // temporary error that will be retried. This helps a caller that might change in-memory state inside fn.
-func (db *Accessor) AtomicContext(ctx context.Context, fn idemFn, retryClearFn func(context.Context), extras ...interface{}) (err error) {
+func (db *Accessor) AtomicContext(ctx context.Context, fn idemFn, retryClearFn func(context.Context), extras ...any) (err error) {
 	atomicDeadline := time.Now().Add(time.Second)
 
 	// note that the sql library will drop panics inside an active transaction
@@ -343,7 +343,7 @@ func (db *Accessor) AtomicContext(ctx context.Context, fn idemFn, retryClearFn f
 // however, the transaction context and transaction object can be used to uniquely associate the request
 // with a particular deadline.
 // the function fails if the given transaction is not on the stack of the provided context.
-func ResetTransactionWarnDeadline(ctx context.Context, tx interface{}, deadline time.Time) (prevDeadline time.Time, err error) {
+func ResetTransactionWarnDeadline(ctx context.Context, tx any, deadline time.Time) (prevDeadline time.Time, err error) {
 	txContextData, ok := ctx.Value(tx).(*txExecutionContext)
 	if !ok {
 		// it's not a valid call. just return an error.

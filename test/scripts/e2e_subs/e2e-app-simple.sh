@@ -1,6 +1,8 @@
 #!/bin/bash
 
-date '+app-simple-test start %Y%m%d_%H%M%S'
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
 
 set -e
 set -x
@@ -26,7 +28,7 @@ printf 'int 1' > "${TEMPDIR}/simplev1.teal"
 RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${TEMPDIR}/simplev1.teal" --clear-prog "${TEMPDIR}/simple.teal" --global-byteslices 0 --global-ints ${GLOBAL_INTS} --local-byteslices 0 --local-ints 0 2>&1 || true)
 EXPERROR='program version must be >= 2 for this transaction group'
 if [[ $RES != *"${EXPERROR}"* ]]; then
-    date '+app-create-test FAIL should fail to create app with v1 approval program %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL should fail to create app with v1 approval program %Y%m%d_%H%M%S"
     false
 fi
 
@@ -34,7 +36,7 @@ fi
 RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${TEMPDIR}/simple.teal" --clear-prog "${TEMPDIR}/simplev1.teal" --global-byteslices 0 --global-ints ${GLOBAL_INTS} --local-byteslices 0 --local-ints 0 2>&1 || true)
 EXPERROR='program version must be >= 2 for this transaction group'
 if [[ $RES != *"${EXPERROR}"* ]]; then
-    date '+app-create-test FAIL should fail to create app with v1 clearstate program %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL should fail to create app with v1 clearstate program %Y%m%d_%H%M%S"
     false
 fi
 
@@ -48,22 +50,22 @@ GLOBAL_CHECK=($(${gcmd} app info --app-id $APPID | grep "global integers"))
 PROGRAM_CHECK=($(${gcmd} app info --app-id $APPID | grep "Approval"))
 
 if [[ ${APPID} != ${APPID_CHECK[2]} ]]; then
-    date '+app-create-test FAIL returned app ID does not match ${APPID} != ${APPID_CHECK[2]} %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL returned app ID does not match ${APPID} != ${APPID_CHECK[2]} %Y%m%d_%H%M%S"
     false
 fi
 
 if [[ ${ACCOUNT} != ${CREATOR_CHECK[1]} ]]; then
-    date '+app-create-test FAIL returned creator does not match ${ACCOUNT} != ${CREATOR_CHECK[1]} %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL returned creator does not match ${ACCOUNT} != ${CREATOR_CHECK[1]} %Y%m%d_%H%M%S"
     false
 fi
 
 if [[ ${GLOBAL_INTS} != ${GLOBAL_CHECK[3]} ]]; then
-    date '+app-create-test FAIL returned global integers does not match ${GLOBAL_CHECK[3]} != ${GLOBAL_INTS} %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL returned global integers does not match ${GLOBAL_CHECK[3]} != ${GLOBAL_INTS} %Y%m%d_%H%M%S"
     false
 fi
 
 if [[ ${PROGRAM[1]} != ${PROGRAM_CHECK[2]} ]]; then
-    date '+app-create-test FAIL returned app ID does not match ${PROGRAM[1]} != ${PROGRAM_CHECK[2]} %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL returned app ID does not match ${PROGRAM[1]} != ${PROGRAM_CHECK[2]} %Y%m%d_%H%M%S"
     false
 fi
 
@@ -71,7 +73,7 @@ fi
 RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog <(printf '#pragma version 2\nint 0') --clear-prog "${TEMPDIR}/simple.teal" --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 || true)
 EXPERROR='rejected by ApprovalProgram'
 if [[ $RES != *"${EXPERROR}"* ]]; then
-    date '+app-create-test FAIL txn with failing approval prog should be rejected %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL txn with failing approval prog should be rejected %Y%m%d_%H%M%S"
     false
 fi
 
@@ -85,7 +87,7 @@ ${gcmd} app closeout --app-id $APPID --from $ACCOUNT
 RES=$(${gcmd} app closeout --app-id $APPID --from $ACCOUNT 2>&1 || true)
 EXPERROR='is not opted in'
 if [[ $RES != *"${EXPERROR}"* ]]; then
-    date '+app-create-test FAIL closing out twice should fail %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL closing out twice should fail %Y%m%d_%H%M%S"
     false
 fi
 
@@ -99,7 +101,7 @@ ${gcmd} app clear --app-id $APPID --from $ACCOUNT
 RES=$(${gcmd} app clear --app-id $APPID --from $ACCOUNT 2>&1 || true)
 EXPERROR='not currently opted in'
 if [[ $RES != *"${EXPERROR}"* ]]; then
-    date '+app-create-test FAIL clearing state twice should fail %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL clearing state twice should fail %Y%m%d_%H%M%S"
     false
 fi
 
@@ -133,7 +135,7 @@ EXPERROR='Cannot assemble empty program text'
 if [[ $RES != *"${EXPERROR}"* ]]; then
     echo RES="$RES"
     echo EXPERROR="$EXPERROR"
-    date '+clerk-compile-test FAIL wrong error for compiling empty program %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL wrong error for compiling empty program %Y%m%d_%H%M%S"
     false
 fi
 
@@ -143,6 +145,6 @@ EXPERROR='Cannot assemble empty program text'
 if [[ $RES != *"${EXPERROR}"* ]]; then
     echo RES="$RES"
     echo EXPERROR="$EXPERROR"
-    date '+app-create-test FAIL wrong error for creating app with empty clear program %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL wrong error for creating app with empty clear program %Y%m%d_%H%M%S"
     false
 fi

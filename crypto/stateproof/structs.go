@@ -63,7 +63,7 @@ type Reveal struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	SigSlot sigslotCommit      `codec:"s"`
-	Part    basics.Participant `codec:"p"`
+	Part    basics.Participant `codec:"p,required"`
 }
 
 // StateProof represents a proof on Algorand's state.

@@ -21,7 +21,7 @@ import (
 	"os"
 )
 
-func exitErrorf(msg string, args ...interface{}) {
+func exitErrorf(msg string, args ...any) {
 	fmt.Fprintf(os.Stderr, msg+"\n", args...)
 	os.Exit(1)
 }

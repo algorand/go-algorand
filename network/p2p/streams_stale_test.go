@@ -256,13 +256,13 @@ func assertStreamMapEmpty(t *testing.T, sm *streamManager, remotePeer peer.ID) {
 
 // --- test cases ---
 
-// TestStream_MapCleanupOnDispatchFailure verifies that n.streams is cleaned up
+// TestStream_MapCleanupOnDispatchProblem verifies that n.streams is cleaned up
 // when dispatch (V22 handshake) fails, across all 8 combinations:
 //
 //	directions (inbound/outbound) ×
 //	peer ID orderings (local < remote / local > remote) ×
 //	dial origins (dialNode / DHT-pubsub)
-func TestStream_MapCleanupOnDispatchFailure(t *testing.T) {
+func TestStream_MapCleanupOnDispatchProblem(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -424,9 +424,9 @@ func TestStream_MapCleanupOnDispatchFailure(t *testing.T) {
 	})
 }
 
-// TestStream_HandlerKeepsOldStreamOnDispatchFailure verifies that when a new
+// TestStream_HandlerKeepsOldStreamOnDispatchProblem verifies that when a new
 // stream arrives but dispatch fails, the existing stream is preserved.
-func TestStream_HandlerKeepsOldStreamOnDispatchFailure(t *testing.T) {
+func TestStream_HandlerKeepsOldStreamOnDispatchProblem(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -650,7 +650,7 @@ func TestStream_DisconnectedCanRunWhileDispatchIsBlocked(t *testing.T) {
 	require.Equal(t, newStream, current, "replacement stream should be installed after disconnect cleanup")
 }
 
-func TestStream_ConcurrentFailureDoesNotUnprotectWhileAnotherAttemptInFlight(t *testing.T) {
+func TestStream_ConcurrentProblemDoesNotUnprotectWhileAnotherAttemptInFlight(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -722,7 +722,7 @@ func TestStream_ConcurrentFailureDoesNotUnprotectWhileAnotherAttemptInFlight(t *
 	require.True(t, failStream.wasReset(), "failed stream should be reset")
 }
 
-func TestStream_ConcurrentFailedAttemptsUnprotectOnce(t *testing.T) {
+func TestStream_ConcurrentBadAttemptsUnprotectOnce(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 

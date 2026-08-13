@@ -438,11 +438,10 @@ func TestMarshalUnmarshalHeader(t *testing.T) {
 	v := Header{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	// The zero value omits its required field(s), so UnmarshalMsg is expected to
+	// reject it; only MarshalMsg and Skip are exercised against a zero value.
+	if err == nil {
+		t.Errorf("expected a missing-required-field error decoding a zero Header")
 	}
 
 	left, err = msgp.Skip(bts)
@@ -486,10 +485,9 @@ func BenchmarkUnmarshalHeader(b *testing.B) {
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := v.UnmarshalMsg(bts)
-		if err != nil {
-			b.Fatal(err)
-		}
+		// The zero value fails the required-field check; ignore the error so the
+		// benchmark still measures the decoding work.
+		_, _ = v.UnmarshalMsg(bts)
 	}
 }
 
@@ -793,6 +791,66 @@ func BenchmarkUnmarshalLogicSig(b *testing.B) {
 	}
 }
 
+func TestMarshalUnmarshalPQSig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := PQSig{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingPQSig(t *testing.T) {
+	protocol.RunEncodingTest(t, &PQSig{})
+}
+
+func BenchmarkMarshalMsgPQSig(b *testing.B) {
+	v := PQSig{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgPQSig(b *testing.B) {
+	v := PQSig{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalPQSig(b *testing.B) {
+	v := PQSig{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func TestMarshalUnmarshalPaymentTxnFields(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	v := PaymentTxnFields{}
@@ -978,11 +1036,10 @@ func TestMarshalUnmarshalSignedTxn(t *testing.T) {
 	v := SignedTxn{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	// The zero value omits its required field(s), so UnmarshalMsg is expected to
+	// reject it; only MarshalMsg and Skip are exercised against a zero value.
+	if err == nil {
+		t.Errorf("expected a missing-required-field error decoding a zero SignedTxn")
 	}
 
 	left, err = msgp.Skip(bts)
@@ -1026,10 +1083,9 @@ func BenchmarkUnmarshalSignedTxn(b *testing.B) {
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := v.UnmarshalMsg(bts)
-		if err != nil {
-			b.Fatal(err)
-		}
+		// The zero value fails the required-field check; ignore the error so the
+		// benchmark still measures the decoding work.
+		_, _ = v.UnmarshalMsg(bts)
 	}
 }
 
@@ -1038,11 +1094,10 @@ func TestMarshalUnmarshalSignedTxnInBlock(t *testing.T) {
 	v := SignedTxnInBlock{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	// The zero value omits its required field(s), so UnmarshalMsg is expected to
+	// reject it; only MarshalMsg and Skip are exercised against a zero value.
+	if err == nil {
+		t.Errorf("expected a missing-required-field error decoding a zero SignedTxnInBlock")
 	}
 
 	left, err = msgp.Skip(bts)
@@ -1086,10 +1141,9 @@ func BenchmarkUnmarshalSignedTxnInBlock(b *testing.B) {
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := v.UnmarshalMsg(bts)
-		if err != nil {
-			b.Fatal(err)
-		}
+		// The zero value fails the required-field check; ignore the error so the
+		// benchmark still measures the decoding work.
+		_, _ = v.UnmarshalMsg(bts)
 	}
 }
 
@@ -1098,11 +1152,10 @@ func TestMarshalUnmarshalSignedTxnWithAD(t *testing.T) {
 	v := SignedTxnWithAD{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	// The zero value omits its required field(s), so UnmarshalMsg is expected to
+	// reject it; only MarshalMsg and Skip are exercised against a zero value.
+	if err == nil {
+		t.Errorf("expected a missing-required-field error decoding a zero SignedTxnWithAD")
 	}
 
 	left, err = msgp.Skip(bts)
@@ -1146,10 +1199,9 @@ func BenchmarkUnmarshalSignedTxnWithAD(b *testing.B) {
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := v.UnmarshalMsg(bts)
-		if err != nil {
-			b.Fatal(err)
-		}
+		// The zero value fails the required-field check; ignore the error so the
+		// benchmark still measures the decoding work.
+		_, _ = v.UnmarshalMsg(bts)
 	}
 }
 
@@ -1218,11 +1270,10 @@ func TestMarshalUnmarshalTransaction(t *testing.T) {
 	v := Transaction{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	// The zero value omits its required field(s), so UnmarshalMsg is expected to
+	// reject it; only MarshalMsg and Skip are exercised against a zero value.
+	if err == nil {
+		t.Errorf("expected a missing-required-field error decoding a zero Transaction")
 	}
 
 	left, err = msgp.Skip(bts)
@@ -1266,10 +1317,9 @@ func BenchmarkUnmarshalTransaction(b *testing.B) {
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := v.UnmarshalMsg(bts)
-		if err != nil {
-			b.Fatal(err)
-		}
+		// The zero value fails the required-field check; ignore the error so the
+		// benchmark still measures the decoding work.
+		_, _ = v.UnmarshalMsg(bts)
 	}
 }
 

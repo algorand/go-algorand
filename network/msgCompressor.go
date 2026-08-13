@@ -87,7 +87,7 @@ func vpackCompressVote(tbytes []byte, d []byte) ([]byte, string) {
 // MaxDecompressedMessageSize defines a maximum decompressed data size
 // to prevent zip bombs. This depends on MaxTxnBytesPerBlock consensus parameter
 // and should be larger.
-const MaxDecompressedMessageSize = 20 * 1024 * 1024 // some large enough value
+const MaxDecompressedMessageSize = protocol.ProposalPayloadTagMaxSize
 
 // wsPeerMsgCodec performs optional message compression/decompression for certain
 // types of messages. It handles:

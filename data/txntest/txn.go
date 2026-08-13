@@ -95,11 +95,12 @@ type Txn struct {
 	StateProof     stateproof.StateProof
 	StateProofMsg  stateproofmsg.Message
 
-	HbAddress     basics.Address
-	HbProof       crypto.HeartbeatProof
-	HbSeed        committee.Seed
-	HbVoteID      crypto.OneTimeSignatureVerifier
-	HbKeyDilution uint64
+	HbAddress           basics.Address
+	HbProof             crypto.HeartbeatProof
+	HbSeed              committee.Seed
+	HbVoteID            crypto.OneTimeSignatureVerifier
+	HbKeyDilution       uint64
+	HbChallengeDiscount bool
 }
 
 // internalCopy "finishes" a shallow copy done by a simple Go assignment by
@@ -156,9 +157,6 @@ func (tx Txn) Args(strings ...string) *Txn {
 // FillDefaults populates some obvious defaults from config params,
 // unless they have already been set.
 func (tx *Txn) FillDefaults(params config.ConsensusParams) {
-	if tx.Fee == nil {
-		tx.Fee = params.MinTxnFee
-	}
 	if tx.LastValid == 0 {
 		tx.LastValid = tx.FirstValid + basics.Round(params.MaxTxnLife)
 	}
@@ -195,11 +193,23 @@ func (tx *Txn) FillDefaults(params config.ConsensusParams) {
 			case []byte:
 			}
 		}
-		if tx.ApplicationID == 0 && tx.ExtraProgramPages == 0 {
+		if tx.ApplicationID == 0 {
 			totalLength := len(assemble(tx.ApprovalProgram)) + len(assemble(tx.ClearStateProgram))
-			totalPages := basics.DivCeil(totalLength, params.MaxAppTotalProgramLen)
-			tx.ExtraProgramPages = uint32(totalPages - 1)
+			extraPages := basics.DivCeil(totalLength, params.MaxAppTotalProgramLen) - 1
+			if tx.ExtraProgramPages == 0 {
+				tx.ExtraProgramPages = uint32(extraPages)
+			}
+			// If no boxes or access list is already set, set enough boxrefs to create a big program
+			if len(tx.Boxes) == 0 && len(tx.Access) == 0 && extraPages > params.MaxExtraAppProgramPages {
+				tx.Boxes = slices.Repeat([]transactions.BoxRef{{}}, extraPages-params.MaxExtraAppProgramPages)
+			}
 		}
+	}
+	// Do the fee last, so the FeeFactor is accurate. Compute it the same way as a
+	// top-level group: no cost multiplier (1e6), no prior residue.
+	if tx.Fee == nil {
+		f := transactions.SignedTxn{Txn: tx.Txn()}.FeeFactor(params)
+		tx.Fee, _, _ = params.MinFee().FeeForUsage(f, 1e6, 0)
 	}
 }
 
@@ -264,11 +274,12 @@ func (tx Txn) Txn() transactions.Transaction {
 	}
 
 	hb := &transactions.HeartbeatTxnFields{
-		HbAddress:     tx.HbAddress,
-		HbProof:       tx.HbProof,
-		HbSeed:        tx.HbSeed,
-		HbVoteID:      tx.HbVoteID,
-		HbKeyDilution: tx.HbKeyDilution,
+		HbAddress:           tx.HbAddress,
+		HbProof:             tx.HbProof,
+		HbSeed:              tx.HbSeed,
+		HbVoteID:            tx.HbVoteID,
+		HbKeyDilution:       tx.HbKeyDilution,
+		HbChallengeDiscount: tx.HbChallengeDiscount,
 	}
 	if hb.MsgIsZero() {
 		hb = nil

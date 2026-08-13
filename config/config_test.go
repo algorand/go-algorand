@@ -613,7 +613,7 @@ func TestLocal_GetNonDefaultConfigValues(t *testing.T) {
 	ndmap := GetNonDefaultConfigValues(cfg, []string{"AgreementIncomingBundlesQueueLength", "TxPoolSize"})
 
 	// assert correct
-	expected := map[string]interface{}{
+	expected := map[string]any{
 		"AgreementIncomingBundlesQueueLength": uint64(2),
 		"TxPoolSize":                          int(30),
 	}
@@ -857,11 +857,11 @@ func TestEnsureAbsDir(t *testing.T) {
 
 type tLogger struct{ t *testing.T }
 
-func (l tLogger) Infof(fmts string, args ...interface{}) {
+func (l tLogger) Infof(fmts string, args ...any) {
 	l.t.Logf(fmts, args...)
 }
 
-func (l tLogger) Warnf(fmts string, args ...interface{}) {
+func (l tLogger) Warnf(fmts string, args ...any) {
 	l.t.Logf(fmts, args...)
 }
 

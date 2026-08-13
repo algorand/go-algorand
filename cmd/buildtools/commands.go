@@ -45,17 +45,17 @@ func main() {
 	}
 }
 
-func reportInfoln(args ...interface{}) {
+func reportInfoln(args ...any) {
 	fmt.Println(args...)
 	// log.Infoln(args...)
 }
 
-func reportInfof(format string, args ...interface{}) {
+func reportInfof(format string, args ...any) {
 	fmt.Printf(format+"\n", args...)
 	// log.Infof(format, args...)
 }
 
-func reportErrorf(format string, args ...interface{}) {
+func reportErrorf(format string, args ...any) {
 	fmt.Printf(format+"\n", args...)
 	os.Exit(1)
 }

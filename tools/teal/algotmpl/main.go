@@ -32,7 +32,7 @@ const tmplSuffix = ".teal.tmpl"
 var templateDir string
 var dummyHelp bool
 
-func reportErrorf(format string, args ...interface{}) {
+func reportErrorf(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
 	os.Exit(1)
 }

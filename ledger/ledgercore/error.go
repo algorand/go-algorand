@@ -39,6 +39,7 @@ var (
 	_ error = BlockInLedgerError{}
 	_ error = ErrNoEntry{}
 	_ error = ErrNonSequentialBlockEval{}
+	_ error = EvalPanicError{}
 	_ error = (*TxGroupMalformedError)(nil)
 )
 
@@ -161,32 +162,39 @@ func (err ErrNonSequentialBlockEval) Error() string {
 	return fmt.Sprintf("block evaluation for round %d requires sequential evaluation while the latest round is %d", err.EvaluatorRound, err.LatestRound)
 }
 
+// ErrEvaluatorCorruptedState is returned by a BlockEvaluator refusing further work after a
+// recovered panic left its state half-applied. The refused group was not at fault.
+var ErrEvaluatorCorruptedState = errors.New("block evaluator state was corrupted by a previously recovered panic")
+
+// EvalPanicError is returned when evaluation panicked and was recovered: a typically
+// deterministic defect, so retrying callers back off. Cause is the recovered value's string.
+type EvalPanicError struct {
+	Round basics.Round
+	Cause string
+}
+
+// Error satisfies builtin interface `error`
+func (err EvalPanicError) Error() string {
+	return fmt.Sprintf("panic while evaluating block for round %d: %s", err.Round, err.Cause)
+}
+
 // TxGroupMalformedErrorReasonCode is a reason code for TxGroupMalformed
-//
-//msgp:ignore TxGroupMalformedErrorReasonCode
-type TxGroupMalformedErrorReasonCode int
+type TxGroupMalformedErrorReasonCode = transactions.TxGroupMalformedErrorReasonCode
 
 const (
 	// TxGroupMalformedErrorReasonGeneric is a generic (not specific) reason code
-	TxGroupMalformedErrorReasonGeneric TxGroupMalformedErrorReasonCode = iota
+	TxGroupMalformedErrorReasonGeneric = transactions.TxGroupMalformedErrorReasonGeneric
 	// TxGroupMalformedErrorReasonExceedMaxSize indicates too large txgroup
-	TxGroupMalformedErrorReasonExceedMaxSize
+	TxGroupMalformedErrorReasonExceedMaxSize = transactions.TxGroupMalformedErrorReasonExceedMaxSize
 	// TxGroupMalformedErrorReasonInconsistentGroupID indicates different group IDs in a txgroup
-	TxGroupMalformedErrorReasonInconsistentGroupID
+	TxGroupMalformedErrorReasonInconsistentGroupID = transactions.TxGroupMalformedErrorReasonInconsistentGroupID
 	// TxGroupMalformedErrorReasonEmptyGroupID is for empty group ID but multiple transactions in a txgroup
-	TxGroupMalformedErrorReasonEmptyGroupID
+	TxGroupMalformedErrorReasonEmptyGroupID = transactions.TxGroupMalformedErrorReasonEmptyGroupID
 	// TxGroupMalformedErrorReasonIncompleteGroup indicates expected group ID does not match to provided
-	TxGroupMalformedErrorReasonIncompleteGroup
+	TxGroupMalformedErrorReasonIncompleteGroup = transactions.TxGroupMalformedErrorReasonIncompleteGroup
 	// TxGroupErrorReasonInvalidFee indicates a group with improper fees
-	TxGroupErrorReasonInvalidFee
+	TxGroupErrorReasonInvalidFee = transactions.TxGroupErrorReasonInvalidFee
 )
 
 // TxGroupMalformedError indicates txgroup violates a group-wide rule (size, group hash, etc)
-type TxGroupMalformedError struct {
-	Msg    string
-	Reason TxGroupMalformedErrorReasonCode
-}
-
-func (e *TxGroupMalformedError) Error() string {
-	return e.Msg
-}
+type TxGroupMalformedError = transactions.TxGroupMalformedError

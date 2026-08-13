@@ -956,7 +956,9 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 	pool.assemblyDeadline = time.Time{}
 
 	if pool.assemblyResults.err != nil {
-		return nil, fmt.Errorf("AssemblyBlock: encountered error for round %d: %v", round, pool.assemblyResults.err)
+		pool.log.Warnf("AssembleBlock: encountered error for round %d, assembling empty block instead: %v", round, pool.assemblyResults.err)
+		stats.StopReason = telemetryspec.AssembleBlockGenerationError
+		return pool.assembleEmptyBlock(round)
 	}
 	if pool.assemblyResults.roundStartedEvaluating > round {
 		// this scenario should not happen unless the txpool is receiving the new blocks via OnNewBlock
