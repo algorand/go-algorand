@@ -1251,18 +1251,18 @@ type blockFieldSpec struct {
 var blockFieldSpecs = [...]blockFieldSpec{
 	{BlkSeed, StackBytes32, randomnessVersion, "The block's sortition seed"},
 	{BlkTimestamp, StackUint64, randomnessVersion, "The block's timestamp, in seconds since the Unix epoch. Fails if negative"},
-	{BlkProposer, StackAddress, incentiveVersion, "The account that proposed the block. ZeroAddress for blocks proposed before payouts were enabled"},
-	{BlkFeesCollected, StackUint64, incentiveVersion, "The sum of the fees paid by the transactions in the block, in microalgos. 0 for blocks from before payouts were enabled"},
+	{BlkProposer, StackAddress, incentiveVersion, "The account that proposed the block"},
+	{BlkFeesCollected, StackUint64, incentiveVersion, "The sum of the fees paid by the transactions in the block, in microalgos"},
 	{BlkBonus, StackUint64, incentiveVersion, "The bonus incentive available for proposing this block, in microalgos. It begins at a consensus parameter value and decays periodically. See BlkProposerPayout for the amount actually paid"},
 	{BlkBranch, StackBytes32, incentiveVersion, "The sha512_256 hash of the previous block's header"},
 	{BlkFeeSink, StackAddress, incentiveVersion, "The fee sink account for the block's round"},
 	{BlkProtocol, StackBytes, incentiveVersion, "The ConsensusVersion of the block"},
 	{BlkTxnCounter, StackUint64, incentiveVersion, "The number of the next transaction to be committed after this block, counted from the beginning of the chain. Genesis blocks start at 1000"},
 	{BlkProposerPayout, StackUint64, incentiveVersion, "The amount actually moved from the FeeSink to the proposer, in microalgos. 0 if the proposer was not eligible"},
-	{BlkBranch512, StackBytes64, 13, "The sha512 hash of the previous block's header. Zero for blocks from before sha512 block hashing was enabled"},
+	{BlkBranch512, StackBytes64, 13, "The sha512 hash of the previous block's header"},
 	{BlkSha512_256TxnCommitment, StackBytes32, 13, "Root of the sha512_256 merkle tree over the block's transactions and their ApplyData, the \"Algorand native\" commitment"},
 	{BlkSha256TxnCommitment, StackBytes32, 13, "Root of the sha256 vector commitment merkle tree over the block's transactions and their ApplyData"},
-	{BlkSha512TxnCommitment, StackBytes64, 13, "Root of the sha512 vector commitment merkle tree over the block's transactions and their ApplyData. Zero for blocks from before sha512 block hashing was enabled"},
+	{BlkSha512TxnCommitment, StackBytes64, 13, "Root of the sha512 vector commitment merkle tree over the block's transactions and their ApplyData"},
 }
 
 func blockFieldSpecByField(r BlockField) (blockFieldSpec, bool) {

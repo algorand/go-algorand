@@ -1696,18 +1696,18 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 | :-: | :------ |:--:|:-:| :--------- |
 | 0 | BlkSeed | [32]byte |      | The block's sortition seed |
 | 1 | BlkTimestamp | uint64 |      | The block's timestamp, in seconds since the Unix epoch. Fails if negative |
-| 2 | BlkProposer | address | v11  | The account that proposed the block. ZeroAddress for blocks proposed before payouts were enabled |
-| 3 | BlkFeesCollected | uint64 | v11  | The sum of the fees paid by the transactions in the block, in microalgos. 0 for blocks from before payouts were enabled |
+| 2 | BlkProposer | address | v11  | The account that proposed the block |
+| 3 | BlkFeesCollected | uint64 | v11  | The sum of the fees paid by the transactions in the block, in microalgos |
 | 4 | BlkBonus | uint64 | v11  | The bonus incentive available for proposing this block, in microalgos. It begins at a consensus parameter value and decays periodically. See BlkProposerPayout for the amount actually paid |
 | 5 | BlkBranch | [32]byte | v11  | The sha512_256 hash of the previous block's header |
 | 6 | BlkFeeSink | address | v11  | The fee sink account for the block's round |
 | 7 | BlkProtocol | []byte | v11  | The ConsensusVersion of the block |
 | 8 | BlkTxnCounter | uint64 | v11  | The number of the next transaction to be committed after this block, counted from the beginning of the chain. Genesis blocks start at 1000 |
 | 9 | BlkProposerPayout | uint64 | v11  | The amount actually moved from the FeeSink to the proposer, in microalgos. 0 if the proposer was not eligible |
-| 10 | BlkBranch512 | [64]byte | v13  | The sha512 hash of the previous block's header. Zero for blocks from before sha512 block hashing was enabled |
+| 10 | BlkBranch512 | [64]byte | v13  | The sha512 hash of the previous block's header |
 | 11 | BlkSha512_256TxnCommitment | [32]byte | v13  | Root of the sha512_256 merkle tree over the block's transactions and their ApplyData, the "Algorand native" commitment |
 | 12 | BlkSha256TxnCommitment | [32]byte | v13  | Root of the sha256 vector commitment merkle tree over the block's transactions and their ApplyData |
-| 13 | BlkSha512TxnCommitment | [64]byte | v13  | Root of the sha512 vector commitment merkle tree over the block's transactions and their ApplyData. Zero for blocks from before sha512 block hashing was enabled |
+| 13 | BlkSha512TxnCommitment | [64]byte | v13  | Root of the sha512 vector commitment merkle tree over the block's transactions and their ApplyData |
 
 ## box_splice
 

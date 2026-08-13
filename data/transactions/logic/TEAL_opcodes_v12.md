@@ -1667,8 +1667,8 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 | :-: | :------ |:--:|:-:| :--------- |
 | 0 | BlkSeed | [32]byte |      | The block's sortition seed |
 | 1 | BlkTimestamp | uint64 |      | The block's timestamp, in seconds since the Unix epoch. Fails if negative |
-| 2 | BlkProposer | address | v11  | The account that proposed the block. ZeroAddress for blocks proposed before payouts were enabled |
-| 3 | BlkFeesCollected | uint64 | v11  | The sum of the fees paid by the transactions in the block, in microalgos. 0 for blocks from before payouts were enabled |
+| 2 | BlkProposer | address | v11  | The account that proposed the block |
+| 3 | BlkFeesCollected | uint64 | v11  | The sum of the fees paid by the transactions in the block, in microalgos |
 | 4 | BlkBonus | uint64 | v11  | The bonus incentive available for proposing this block, in microalgos. It begins at a consensus parameter value and decays periodically. See BlkProposerPayout for the amount actually paid |
 | 5 | BlkBranch | [32]byte | v11  | The sha512_256 hash of the previous block's header |
 | 6 | BlkFeeSink | address | v11  | The fee sink account for the block's round |

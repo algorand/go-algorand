@@ -8389,14 +8389,14 @@
         {
           "Name": "BlkProposer",
           "Type": "address",
-          "Doc": "The account that proposed the block. ZeroAddress for blocks proposed before payouts were enabled",
+          "Doc": "The account that proposed the block",
           "ByteEncoding": 2,
           "Version": 11
         },
         {
           "Name": "BlkFeesCollected",
           "Type": "uint64",
-          "Doc": "The sum of the fees paid by the transactions in the block, in microalgos. 0 for blocks from before payouts were enabled",
+          "Doc": "The sum of the fees paid by the transactions in the block, in microalgos",
           "ByteEncoding": 3,
           "Version": 11
         },
