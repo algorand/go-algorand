@@ -337,11 +337,6 @@ func TestVrfVerify(t *testing.T) {
 	testLogic(t, source, LogicVersion, ep)
 }
 
-// BenchmarkVerify is useful to see relative speeds of various crypto verify functions
-// falconVerifyBench builds the body of a falcon_verify benchmark for one Falcon
-// variant. The key and signature are generated from a fixed seed rather than
-// hardcoded, so that the `assert` measures, and confirms, a verification that
-// actually succeeds for whichever variant the immediate names.
 func falconVerifyBench(b *testing.B, config FalconConfig, msg []byte) string {
 	var seed crypto.FalconSeed
 	var pk, sig []byte
@@ -365,6 +360,11 @@ func falconVerifyBench(b *testing.B, config FalconConfig, msg []byte) string {
 		msg, sig, pk, config)
 }
 
+// BenchmarkVerify is useful to see relative speeds of various crypto verify functions
+// falconVerifyBench builds the body of a falcon_verify benchmark for one Falcon
+// variant. The key and signature are generated from a fixed seed rather than
+// hardcoded, so that the `assert` measures, and confirms, a verification that
+// actually succeeds for whichever variant the immediate names.
 func BenchmarkVerify(b *testing.B) {
 	benchMsg, err := hex.DecodeString("62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd")
 	require.NoError(b, err)
@@ -547,6 +547,18 @@ func TestFalconVerify(t *testing.T) {
 			exercise(t, v, "FalconDet512", fs512.PublicKey[:], sig512)
 		})
 	}
+}
+
+// TestFalconVerifyNeedsImmediate confirms that the falcon_verify opcode cannot
+// be used without an immediate (seems like a plausible regression since it used
+// to be allowed).
+func TestFalconVerifyNeedsImmediate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testProg(t, "arg 0; arg 1; arg 3; falcon_verify",
+		f512Version, exp(1, "falcon_verify expects 1 immediate argument"))
+
 }
 
 // TestFalconVerifyConfigMismatch confirms that a public key whose length belongs
