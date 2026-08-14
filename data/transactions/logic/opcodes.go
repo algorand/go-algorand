@@ -86,6 +86,7 @@ const foreignBoxVersion = 13 // app_params_set, foreign app box access
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version, and fixup TestAssemble() in assembler_test.go.
 const sumhashVersion = 14
+const f512Version = 14
 
 // LogicSigOffCurveVersion is the first AVM version where LogicSig programs
 // assembled by this package are expected to hash to an off-curve address.
@@ -700,7 +701,10 @@ var OpSpecs = []OpSpec{
 	{0x83, "pushints", opPushInts, proto(":", "", "[N items]").stackExplain(opPushIntsStackChange), 8, constants(asmPushInts, checkIntImmArgs, "uint ...", immInts).typed(typePushInts).trust()},
 
 	{0x84, "ed25519verify_bare", opEd25519VerifyBare, proto("bb{64}b{32}:T"), 7, costly(1900)},
-	{0x85, "falcon_verify", opFalconVerify, proto("bbb{1793}:T"), 12, costly(1700)},
+	{0x85, "falcon_verify", opFalcon1024Verify, proto("bbb{1793}:T"), 12, costly(1700)},
+	{0x85, "falcon_verify", opFalconVerify, proto("bbb:T"), f512Version,
+		costByField("f", &FalconConfigs, []int{
+			FalconDet1024: 1700, FalconDet512: 850}).typed(typeFalconVerify)},
 	{0x86, "sumhash512", opSumhash512, proto("b:b{64}"), sumhashVersion, costByLength(150, 4, 7, 0)},
 	{0x87, "sha512", opSHA512, proto("b:b{64}"), 13, costByLength(15, 2, 32, 0)},
 

@@ -174,23 +174,50 @@ func opSHA512(cx *EvalContext) error {
 	return nil
 }
 
-func opFalconVerify(cx *EvalContext) error {
+// falconVerify implements falcon_verify for a single Falcon configuration. The
+// original opcode had no immediate and could only mean Falcon-1024, so it
+// supplies that config itself, while the immediate form reads it from the
+// program.
+func falconVerify(cx *EvalContext, config FalconConfig) error {
 	last := len(cx.Stack) - 1 // index of PK
 	prev := last - 1          // index of signature
 	pprev := prev - 1         // index of data
 
-	var fv crypto.Falcon1024Verifier
-	if len(cx.Stack[last].Bytes) != len(fv.PublicKey) {
-		return fmt.Errorf("invalid public key size %d != %d", len(cx.Stack[last].Bytes), len(fv.PublicKey))
+	fs, ok := falconConfigSpecByField(config)
+	if !ok { // no version check yet, both configs appeared at once
+		return fmt.Errorf("invalid falcon config %s", config)
 	}
-	copy(fv.PublicKey[:], cx.Stack[last].Bytes)
 
-	sig := crypto.Falcon1024Signature(cx.Stack[prev].Bytes)
+	pk := cx.Stack[last].Bytes
+	if len(pk) != fs.pubKeyLen {
+		return fmt.Errorf("invalid public key size %d != %d", len(pk), fs.pubKeyLen)
+	}
 
-	err := fv.VerifyBytes(cx.Stack[pprev].Bytes, sig)
+	var err error
+	switch config {
+	case FalconDet1024:
+		var fv crypto.Falcon1024Verifier
+		copy(fv.PublicKey[:], pk)
+		err = fv.VerifyBytes(cx.Stack[pprev].Bytes, crypto.Falcon1024Signature(cx.Stack[prev].Bytes))
+	case FalconDet512:
+		var fv crypto.Falcon512Verifier
+		copy(fv.PublicKey[:], pk)
+		err = fv.VerifyBytes(cx.Stack[pprev].Bytes, crypto.Falcon512Signature(cx.Stack[prev].Bytes))
+	default:
+		return fmt.Errorf("invalid falcon config %s", config)
+	}
+
 	cx.Stack[pprev] = boolToSV(err == nil)
 	cx.Stack = cx.Stack[:prev]
 	return nil
+}
+
+func opFalcon1024Verify(cx *EvalContext) error {
+	return falconVerify(cx, FalconDet1024)
+}
+
+func opFalconVerify(cx *EvalContext) error {
+	return falconVerify(cx, FalconConfig(cx.program[cx.pc+1]))
 }
 
 // Msg is data meant to be signed and then verified with the
