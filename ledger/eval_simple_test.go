@@ -1427,46 +1427,19 @@ func TestRekeying(t *testing.T) {
 	// TODO: More tests
 }
 
-type pqRekeyTestAccount struct {
-	signer    crypto.Falcon1024Signer
-	address   basics.Address
-	salt      basics.PQAddressSalt
-	publicKey []byte
-}
-
-func makePQRekeyTestAccount(t *testing.T, firstSeedByte byte) pqRekeyTestAccount {
+func signPQRekeyTestTxn(t *testing.T, acct basics_testing.PQTestAccount, txn transactions.Transaction, authAddr basics.Address) transactions.SignedTxn {
 	t.Helper()
 
-	var seed crypto.FalconSeed
-	seed[0] = firstSeedByte
-	signer, err := crypto.GenerateFalcon1024Signer(seed)
-	require.NoError(t, err)
-
-	publicKey := signer.PublicKey[:]
-	salt, address, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
-	require.NoError(t, err)
-
-	return pqRekeyTestAccount{
-		signer:    signer,
-		address:   address,
-		salt:      salt,
-		publicKey: publicKey,
-	}
-}
-
-func signPQRekeyTestTxn(t *testing.T, acct pqRekeyTestAccount, txn transactions.Transaction, authAddr basics.Address) transactions.SignedTxn {
-	t.Helper()
-
-	signature, err := acct.signer.Sign(txn)
+	signature, err := acct.Signer.Sign(txn)
 	require.NoError(t, err)
 
 	return transactions.SignedTxn{
 		Txn:      txn,
 		AuthAddr: authAddr,
 		PQsig: transactions.PQSig{
-			Scheme:    protocol.PQSchemeFalcon1024,
-			Salt:      acct.salt,
-			PublicKey: acct.publicKey,
+			Scheme:    acct.Scheme,
+			Salt:      acct.Salt,
+			PublicKey: acct.PublicKey,
 			Signature: signature,
 		},
 	}
@@ -1476,83 +1449,90 @@ func TestPQRekeyedAddressAuthorization(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	genesisInitState, addrs, keys := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
+	for _, tc := range basics_testing.PQTestSchemes {
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
 
-	proto := config.Consensus[protocol.ConsensusFuture]
-	require.True(t, proto.EnablePQSchemeFalcon1024)
-	pqFee, _, overflow := proto.MinFee().FeeForUsage(basics.Micros(1e6)+proto.PQSchemeFeeContribution(protocol.PQSchemeFalcon1024), 1e6, 0)
-	require.False(t, overflow)
+			genesisInitState, addrs, keys := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
 
-	pqAcct := makePQRekeyTestAccount(t, 0)
-	genesisInitState.Accounts[pqAcct.address] = basics.AccountData{
-		MicroAlgos: basics.MicroAlgos{Raw: 10_000_000},
-		Status:     basics.Offline,
-	}
+			pqAcct := basics_testing.MakePQTestAccount(t, 0, tc.Scheme)
 
-	l, err := OpenLedger(logging.TestingLog(t), t.Name(), true, genesisInitState, config.GetDefaultLocal())
-	require.NoError(t, err)
-	defer l.Close()
+			proto := config.Consensus[protocol.ConsensusFuture]
+			require.True(t, proto.PQSchemeEnabled(pqAcct.Scheme))
+			pqFee, _, overflow := proto.MinFee().FeeForUsage(basics.Micros(1e6)+proto.PQSchemeFeeContribution(pqAcct.Scheme), 1e6, 0)
+			require.False(t, overflow)
 
-	nextRound := l.Latest() + basics.Round(1)
-	genHash := l.GenesisHash()
+			genesisInitState.Accounts[pqAcct.Address] = basics.AccountData{
+				MicroAlgos: basics.MicroAlgos{Raw: 10_000_000},
+				Status:     basics.Offline,
+			}
 
-	makePayTxn := func(sender, receiver basics.Address, fee basics.MicroAlgos, rekeyTo basics.Address, uniq uint8) transactions.Transaction {
-		return transactions.Transaction{
-			Type: protocol.PaymentTx,
-			Header: transactions.Header{
-				Sender:      sender,
-				Fee:         fee,
-				FirstValid:  nextRound,
-				LastValid:   nextRound,
-				GenesisHash: genHash,
-				RekeyTo:     rekeyTo,
-				Note:        []byte{uniq},
-			},
-			PaymentTxnFields: transactions.PaymentTxnFields{
-				Receiver: receiver,
-				Amount:   basics.MicroAlgos{Raw: 1},
-			},
-		}
-	}
+			l, err := OpenLedger(logging.TestingLog(t), t.Name(), true, genesisInitState, config.GetDefaultLocal())
+			require.NoError(t, err)
+			defer l.Close()
 
-	tryBlock := func(stxns []transactions.SignedTxn) error {
-		genesisHdr, err := l.BlockHdr(basics.Round(0))
-		require.NoError(t, err)
-		newBlock := bookkeeping.MakeBlock(genesisHdr)
-		eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
-		require.NoError(t, err)
+			nextRound := l.Latest() + basics.Round(1)
+			genHash := l.GenesisHash()
 
-		for _, stxn := range stxns {
-			err = eval.TransactionGroup(stxn.WithAD())
-			if err != nil {
+			makePayTxn := func(sender, receiver basics.Address, fee basics.MicroAlgos, rekeyTo basics.Address, uniq uint8) transactions.Transaction {
+				return transactions.Transaction{
+					Type: protocol.PaymentTx,
+					Header: transactions.Header{
+						Sender:      sender,
+						Fee:         fee,
+						FirstValid:  nextRound,
+						LastValid:   nextRound,
+						GenesisHash: genHash,
+						RekeyTo:     rekeyTo,
+						Note:        []byte{uniq},
+					},
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver: receiver,
+						Amount:   basics.MicroAlgos{Raw: 1},
+					},
+				}
+			}
+
+			tryBlock := func(stxns []transactions.SignedTxn) error {
+				genesisHdr, err := l.BlockHdr(basics.Round(0))
+				require.NoError(t, err)
+				newBlock := bookkeeping.MakeBlock(genesisHdr)
+				eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
+				require.NoError(t, err)
+
+				for _, stxn := range stxns {
+					err = eval.TransactionGroup(stxn.WithAD())
+					if err != nil {
+						return err
+					}
+				}
+				unfinishedBlock, err := eval.GenerateBlock(nil)
+				if err != nil {
+					return err
+				}
+				fb := unfinishedBlock.FinishBlock(committee.Seed{0x01}, basics.Address{0x01}, false)
+
+				backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+				defer backlogPool.Shutdown()
+				_, err = l.Validate(context.Background(), fb, backlogPool)
 				return err
 			}
-		}
-		unfinishedBlock, err := eval.GenerateBlock(nil)
-		if err != nil {
-			return err
-		}
-		fb := unfinishedBlock.FinishBlock(committee.Seed{0x01}, basics.Address{0x01}, false)
 
-		backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-		defer backlogPool.Shutdown()
-		_, err = l.Validate(context.Background(), fb, backlogPool)
-		return err
+			edRekeyToPQ := makePayTxn(addrs[0], addrs[0], minFee, pqAcct.Address, 1).Sign(keys[0])
+			edSpendByPQTxn := makePayTxn(addrs[0], addrs[1], pqFee, basics.Address{}, 2)
+			edSpendByPQ := signPQRekeyTestTxn(t, pqAcct, edSpendByPQTxn, pqAcct.Address)
+
+			require.NoError(t, tryBlock([]transactions.SignedTxn{edRekeyToPQ, edSpendByPQ}))
+			require.ErrorContains(t, tryBlock([]transactions.SignedTxn{edSpendByPQ}), "should have been authorized by")
+
+			pqRekeyToEdTxn := makePayTxn(pqAcct.Address, addrs[1], pqFee, addrs[2], 3)
+			pqRekeyToEd := signPQRekeyTestTxn(t, pqAcct, pqRekeyToEdTxn, basics.Address{})
+			pqSpendByEd := makePayTxn(pqAcct.Address, addrs[1], minFee, basics.Address{}, 4).Sign(keys[2])
+
+			require.NoError(t, tryBlock([]transactions.SignedTxn{pqRekeyToEd, pqSpendByEd}))
+			require.ErrorContains(t, tryBlock([]transactions.SignedTxn{pqSpendByEd}), "should have been authorized by")
+		})
 	}
-
-	edRekeyToPQ := makePayTxn(addrs[0], addrs[0], minFee, pqAcct.address, 1).Sign(keys[0])
-	edSpendByPQTxn := makePayTxn(addrs[0], addrs[1], pqFee, basics.Address{}, 2)
-	edSpendByPQ := signPQRekeyTestTxn(t, pqAcct, edSpendByPQTxn, pqAcct.address)
-
-	require.NoError(t, tryBlock([]transactions.SignedTxn{edRekeyToPQ, edSpendByPQ}))
-	require.ErrorContains(t, tryBlock([]transactions.SignedTxn{edSpendByPQ}), "should have been authorized by")
-
-	pqRekeyToEdTxn := makePayTxn(pqAcct.address, addrs[1], pqFee, addrs[2], 3)
-	pqRekeyToEd := signPQRekeyTestTxn(t, pqAcct, pqRekeyToEdTxn, basics.Address{})
-	pqSpendByEd := makePayTxn(pqAcct.address, addrs[1], minFee, basics.Address{}, 4).Sign(keys[2])
-
-	require.NoError(t, tryBlock([]transactions.SignedTxn{pqRekeyToEd, pqSpendByEd}))
-	require.ErrorContains(t, tryBlock([]transactions.SignedTxn{pqSpendByEd}), "should have been authorized by")
 }
 
 func TestPQChallengedAccountCanHeartbeatForZeroFee(t *testing.T) {
@@ -1560,105 +1540,111 @@ func TestPQChallengedAccountCanHeartbeatForZeroFee(t *testing.T) {
 	t.Parallel()
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-	require.True(t, proto.EnablePQSchemeFalcon1024)
 	require.True(t, proto.Heartbeat)
 	require.True(t, proto.Payouts.Enabled)
 	require.NotZero(t, proto.Payouts.ChallengeInterval)
 	require.NotZero(t, proto.Payouts.ChallengeGracePeriod)
 
-	const keyDilution = 777
-	otss := crypto.GenerateOneTimeSignatureSecrets(1, 10)
-	pqAcct := makePQRekeyTestAccount(t, 1)
+	for _, tc := range basics_testing.PQTestSchemes {
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
 
-	genBalances, _, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
-		cfg.OnlineCount = 5
-	})
-	genBalances.Balances[pqAcct.address] = basics.AccountData{
-		MicroAlgos:        basics.MicroAlgos{Raw: 100_000_000},
-		Status:            basics.Online,
-		VoteID:            otss.OneTimeSignatureVerifier,
-		SelectionID:       crypto.VRFVerifier{1},
-		StateProofID:      merklesignature.Commitment{1},
-		VoteFirstValid:    0,
-		VoteLastValid:     1_000_000,
-		VoteKeyDilution:   keyDilution,
-		IncentiveEligible: true,
-	}
+			const keyDilution = 777
+			otss := crypto.GenerateOneTimeSignatureSecrets(1, 10)
+			pqAcct := basics_testing.MakePQTestAccount(t, 1, tc.Scheme)
+			require.True(t, proto.PQSchemeEnabled(pqAcct.Scheme))
 
-	seedAndProp := pqAcct.address
-	seedAndProp[31] ^= 1
-	require.NotEqual(t, pqAcct.address, seedAndProp)
-	genBalances.Balances[seedAndProp] = basics.AccountData{
-		MicroAlgos:        basics.MicroAlgos{Raw: 100_000_000},
-		Status:            basics.Online,
-		VoteID:            crypto.OneTimeSignatureVerifier{1},
-		SelectionID:       crypto.VRFVerifier{1},
-		StateProofID:      merklesignature.Commitment{1},
-		VoteFirstValid:    0,
-		VoteLastValid:     1_000_000,
-		VoteKeyDilution:   1,
-		IncentiveEligible: true,
-	}
+			genBalances, _, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
+				cfg.OnlineCount = 5
+			})
+			genBalances.Balances[pqAcct.Address] = basics.AccountData{
+				MicroAlgos:        basics.MicroAlgos{Raw: 100_000_000},
+				Status:            basics.Online,
+				VoteID:            otss.OneTimeSignatureVerifier,
+				SelectionID:       crypto.VRFVerifier{1},
+				StateProofID:      merklesignature.Commitment{1},
+				VoteFirstValid:    0,
+				VoteLastValid:     1_000_000,
+				VoteKeyDilution:   keyDilution,
+				IncentiveEligible: true,
+			}
 
-	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, config.GetDefaultLocal())
-	defer dl.Close()
+			seedAndProp := pqAcct.Address
+			seedAndProp[31] ^= 1
+			require.NotEqual(t, pqAcct.Address, seedAndProp)
+			genBalances.Balances[seedAndProp] = basics.AccountData{
+				MicroAlgos:        basics.MicroAlgos{Raw: 100_000_000},
+				Status:            basics.Online,
+				VoteID:            crypto.OneTimeSignatureVerifier{1},
+				SelectionID:       crypto.VRFVerifier{1},
+				StateProofID:      merklesignature.Commitment{1},
+				VoteFirstValid:    0,
+				VoteLastValid:     1_000_000,
+				VoteKeyDilution:   1,
+				IncentiveEligible: true,
+			}
 
-	challengeRound := basics.Round(proto.Payouts.ChallengeInterval)
-	for vb := dl.fullBlock(); vb.Block().Round() < challengeRound-1; vb = dl.fullBlock() {
-		// Advance to the round before the challenge.
-	}
-	dl.beginBlock()
-	dl.endBlock(seedAndProp)
+			dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, config.GetDefaultLocal())
+			defer dl.Close()
 
-	heartbeatRound := challengeRound + basics.Round(proto.Payouts.ChallengeGracePeriod)/2 + 1
-	for vb := dl.fullBlock(); vb.Block().Round() < heartbeatRound-1; vb = dl.fullBlock() {
-		// Advance into the risky challenge period, before suspension is active.
-	}
+			challengeRound := basics.Round(proto.Payouts.ChallengeInterval)
+			for vb := dl.fullBlock(); vb.Block().Round() < challengeRound-1; vb = dl.fullBlock() {
+				// Advance to the round before the challenge.
+			}
+			dl.beginBlock()
+			dl.endBlock(seedAndProp)
 
-	lastHdr, err := dl.generator.BlockHdr(dl.generator.Latest())
-	require.NoError(t, err)
-	eval := dl.beginBlock()
-	require.Equal(t, heartbeatRound, eval.Round())
+			heartbeatRound := challengeRound + basics.Round(proto.Payouts.ChallengeGracePeriod)/2 + 1
+			for vb := dl.fullBlock(); vb.Block().Round() < heartbeatRound-1; vb = dl.fullBlock() {
+				// Advance into the risky challenge period, before suspension is active.
+			}
 
-	// A PQ account never pays for a PQ signature on its heartbeat. A heartbeat's
-	// sender is irrelevant to what it proves (onlineness is proven by HbProof,
-	// signed with the account's participation key), so it is sent by the same
-	// ordinary accepting logicsig everyone uses. That sender carries no PQ
-	// surcharge, and the challenge discount covers the base fee, so the account
-	// stays online for free despite authorizing spends with an expensive PQ key.
-	acceptingProgram := logic.MustAssemble(`#pragma version 11
+			lastHdr, err := dl.generator.BlockHdr(dl.generator.Latest())
+			require.NoError(t, err)
+			eval := dl.beginBlock()
+			require.Equal(t, heartbeatRound, eval.Round())
+
+			// A PQ account never pays for a PQ signature on its heartbeat. A heartbeat's
+			// sender is irrelevant to what it proves (onlineness is proven by HbProof,
+			// signed with the account's participation key), so it is sent by the same
+			// ordinary accepting logicsig everyone uses. That sender carries no PQ
+			// surcharge, and the challenge discount covers the base fee, so the account
+			// stays online for free despite authorizing spends with an expensive PQ key.
+			acceptingProgram := logic.MustAssemble(`#pragma version 11
 int 1`)
-	sender := basics.Address(logic.HashProgram(acceptingProgram))
+			sender := basics.Address(logic.HashProgram(acceptingProgram))
 
-	lastValid := eval.Round() + 10
-	id := basics.OneTimeIDForRound(lastValid, keyDilution)
-	txn := transactions.Transaction{
-		Type: protocol.HeartbeatTx,
-		Header: transactions.Header{
-			Sender:      sender,
-			FirstValid:  lastHdr.Round,
-			LastValid:   lastValid,
-			GenesisHash: dl.generator.GenesisHash(),
-		},
-		HeartbeatTxnFields: &transactions.HeartbeatTxnFields{
-			HbAddress:           pqAcct.address,
-			HbProof:             otss.Sign(id, lastHdr.Seed).ToHeartbeatProof(),
-			HbSeed:              lastHdr.Seed,
-			HbVoteID:            otss.OneTimeSignatureVerifier,
-			HbKeyDilution:       keyDilution,
-			HbChallengeDiscount: true,
-		},
+			lastValid := eval.Round() + 10
+			id := basics.OneTimeIDForRound(lastValid, keyDilution)
+			txn := transactions.Transaction{
+				Type: protocol.HeartbeatTx,
+				Header: transactions.Header{
+					Sender:      sender,
+					FirstValid:  lastHdr.Round,
+					LastValid:   lastValid,
+					GenesisHash: dl.generator.GenesisHash(),
+				},
+				HeartbeatTxnFields: &transactions.HeartbeatTxnFields{
+					HbAddress:           pqAcct.Address,
+					HbProof:             otss.Sign(id, lastHdr.Seed).ToHeartbeatProof(),
+					HbSeed:              lastHdr.Seed,
+					HbVoteID:            otss.OneTimeSignatureVerifier,
+					HbKeyDilution:       keyDilution,
+					HbChallengeDiscount: true,
+				},
+			}
+			stxn := transactions.SignedTxn{Txn: txn, Lsig: transactions.LogicSig{Logic: acceptingProgram}}
+			txgroup := []transactions.SignedTxn{stxn}
+
+			require.NoError(t, eval.TestTransactionGroup(txgroup))
+			require.NoError(t, eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup)...))
+			vb := dl.endBlock()
+			require.Equal(t, heartbeatRound, vb.Block().Round())
+
+			after := lookup(t, dl.generator, pqAcct.Address)
+			require.Equal(t, heartbeatRound, after.LastHeartbeat)
+		})
 	}
-	stxn := transactions.SignedTxn{Txn: txn, Lsig: transactions.LogicSig{Logic: acceptingProgram}}
-	txgroup := []transactions.SignedTxn{stxn}
-
-	require.NoError(t, eval.TestTransactionGroup(txgroup))
-	require.NoError(t, eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup)...))
-	vb := dl.endBlock()
-	require.Equal(t, heartbeatRound, vb.Block().Round())
-
-	after := lookup(t, dl.generator, pqAcct.address)
-	require.Equal(t, heartbeatRound, after.LastHeartbeat)
 }
 
 func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalProgram string, consensusVersion protocol.ConsensusVersion) error {
