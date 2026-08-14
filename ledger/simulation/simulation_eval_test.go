@@ -6659,7 +6659,7 @@ func makePlaceholderPQSigForSimulation(t *testing.T, seedByte byte) (basics.Addr
 
 	var seed crypto.FalconSeed
 	seed[0] = seedByte
-	signer, err := crypto.GenerateFalconSigner(seed)
+	signer, err := crypto.GenerateFalcon1024Signer(seed)
 	require.NoError(t, err)
 
 	publicKey := slices.Clone(signer.PublicKey[:])

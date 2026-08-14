@@ -42,9 +42,11 @@ var opDescByName = map[string]OpDesc{
 
 	"sumhash512": {"sumhash512 of value A, yields [64]byte", "", nil, ""},
 	"falcon_verify": {
-		"for (data A, deterministic FALCON-1024 compressed-format signature B, pubkey C) verify the signature of data against the pubkey => {0 or 1}",
-		"Signature B is variable-length, with maximum size 1423 bytes.",
-		nil,
+		"for (data A, deterministic Falcon compressed-format signature B, pubkey C) verify the signature of data against the pubkey => {0 or 1}",
+		"Since v14, the Falcon variant is named by immediate F. Before that, `falcon_verify` took no immediate and always used FALCON-DET1024.\n\n" +
+			"Signature B is variable-length, with maximum size 1423 bytes for FalconDet1024, or 713 bytes for FalconDet512. " +
+			"Pubkey C must be exactly 1793 bytes for FalconDet1024, or 897 bytes for FalconDet512.",
+		[]string{"falcon configuration index"},
 		"",
 	},
 

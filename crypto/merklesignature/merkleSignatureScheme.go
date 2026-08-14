@@ -35,10 +35,10 @@ type (
 	Signature struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-		Signature             crypto.FalconSignature      `codec:"sig"`
+		Signature             crypto.Falcon1024Signature  `codec:"sig"`
 		VectorCommitmentIndex uint64                      `codec:"idx"`
 		Proof                 merklearray.SingleLeafProof `codec:"prf"`
-		VerifyingKey          crypto.FalconVerifier       `codec:"vkey"`
+		VerifyingKey          crypto.Falcon1024Verifier   `codec:"vkey"`
 	}
 
 	// Secrets contains the private data needed by the merkle signature scheme.
@@ -48,7 +48,7 @@ type (
 		// these keys should be temporarily stored in memory until Persist is called,
 		// in which they will be dumped into database and disposed of.
 		// non-exported fields to prevent msgpack marshalling
-		ephemeralKeys []crypto.FalconSigner
+		ephemeralKeys []crypto.Falcon1024Signer
 
 		SignerContext
 	}
@@ -56,7 +56,7 @@ type (
 	// Signer represents the StateProof signer for a specified round.
 	//msgp:ignore Signer
 	Signer struct {
-		SigningKey *crypto.FalconSigner
+		SigningKey *crypto.Falcon1024Signer
 
 		// The round for which the signature would be valid
 		Round uint64
@@ -88,8 +88,8 @@ type (
 	KeyRoundPair struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-		Round uint64               `codec:"rnd"`
-		Key   *crypto.FalconSigner `codec:"key"`
+		Round uint64                   `codec:"rnd"`
+		Key   *crypto.Falcon1024Signer `codec:"key"`
 	}
 )
 
@@ -221,7 +221,7 @@ func (s *Secrets) GetAllKeys() []KeyRoundPair {
 
 // GetKey retrieves key from memory
 // the function return nil if the key does not exists
-func (s *Secrets) GetKey(round uint64) *crypto.FalconSigner {
+func (s *Secrets) GetKey(round uint64) *crypto.Falcon1024Signer {
 	keyRound := firstRoundInKeyLifetime(round, s.KeyLifetime)
 	idx := roundToIndex(s.FirstValid, keyRound, s.KeyLifetime)
 	if idx >= uint64(len(s.ephemeralKeys)) || (keyRound%s.KeyLifetime) != 0 || keyRound < s.FirstValid {

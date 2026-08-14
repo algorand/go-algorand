@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -101,7 +102,13 @@ func keypair() *crypto.SignatureSecrets {
 func makePQSignedTxn(t *testing.T, firstSeedByte byte) transactions.SignedTxn {
 	t.Helper()
 
-	signer, authorizer, pqSig := makePQSigFields(t, firstSeedByte)
+	return makePQSignedTxnForScheme(t, firstSeedByte, basics_testing.RandomPQTestScheme().Scheme)
+}
+
+func makePQSignedTxnForScheme(t *testing.T, firstSeedByte byte, scheme protocol.PQScheme) transactions.SignedTxn {
+	t.Helper()
+
+	signer, authorizer, pqSig := makePQSigFieldsForScheme(t, firstSeedByte, scheme)
 
 	var receiver basics.Address
 	receiver[0] = 1
@@ -117,15 +124,10 @@ func makePQSignedTxn(t *testing.T, firstSeedByte byte) transactions.SignedTxn {
 	}
 }
 
-func makeFalconSigner(t *testing.T, firstSeedByte byte) crypto.FalconSigner {
-	t.Helper()
-
-	var seed crypto.FalconSeed
-	seed[0] = firstSeedByte
-	signer, err := crypto.GenerateFalconSigner(seed)
-	require.NoError(t, err)
-
-	return signer
+// invalidFalconSigErrText is the scheme-specific verification failure message
+// for signatures produced by makePQSigFields' randomly selected scheme.
+func invalidFalconSigErrText(t *testing.T, scheme protocol.PQScheme) string {
+	return basics_testing.PQTestSchemeInfo(t, scheme).ErrSigInvalid.Error()
 }
 
 func makePQSigForTxn(t *testing.T, firstSeedByte byte, txn *transactions.Transaction) (basics.Address, transactions.PQSig) {
@@ -144,25 +146,35 @@ func makePQSigForTxn(t *testing.T, firstSeedByte byte, txn *transactions.Transac
 	return authorizer, pqSig
 }
 
-func makePQSigFields(t *testing.T, firstSeedByte byte) (crypto.FalconSigner, basics.Address, transactions.PQSig) {
+func makePQSigFields(t *testing.T, firstSeedByte byte) (basics_testing.FalconSigner, basics.Address, transactions.PQSig) {
 	t.Helper()
 
-	signer := makeFalconSigner(t, firstSeedByte)
-	publicKey := signer.PublicKey[:]
-	salt, authorizer, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
-	require.NoError(t, err)
+	// randomly choose between Falcon-512 and Falcon-1024 for the test
+	return makePQSigFieldsForScheme(t, firstSeedByte, basics_testing.RandomPQTestScheme().Scheme)
+}
 
-	return signer, authorizer, transactions.PQSig{
-		Scheme:    protocol.PQSchemeFalcon1024,
-		Salt:      salt,
-		PublicKey: publicKey,
+func makePQSigFieldsForScheme(t *testing.T, firstSeedByte byte, scheme protocol.PQScheme) (basics_testing.FalconSigner, basics.Address, transactions.PQSig) {
+	t.Helper()
+
+	acct := basics_testing.MakePQTestAccount(t, firstSeedByte, scheme)
+
+	return acct.Signer, acct.Address, transactions.PQSig{
+		Scheme:    acct.Scheme,
+		Salt:      acct.Salt,
+		PublicKey: acct.PublicKey,
 	}
 }
 
 func makePQDelegatedLogicSigTxn(t *testing.T, firstSeedByte byte) transactions.SignedTxn {
 	t.Helper()
 
-	signer, authorizer, pqSig := makePQSigFields(t, firstSeedByte)
+	return makePQDelegatedLogicSigTxnForScheme(t, firstSeedByte, basics_testing.RandomPQTestScheme().Scheme)
+}
+
+func makePQDelegatedLogicSigTxnForScheme(t *testing.T, firstSeedByte byte, scheme protocol.PQScheme) transactions.SignedTxn {
+	t.Helper()
+
+	signer, authorizer, pqSig := makePQSigFieldsForScheme(t, firstSeedByte, scheme)
 	ops, err := logic.AssembleStringWithVersion("int 1", 1)
 	require.NoError(t, err)
 
@@ -379,11 +391,57 @@ func TestTxnValidationPQSig(t *testing.T) {
 	require.NoError(t, err)
 
 	disabledBlkHdr := createDummyBlockHeader(protocol.ConsensusV41)
-	require.False(t, config.Consensus[disabledBlkHdr.CurrentProtocol].EnablePQSchemeFalcon1024)
+	require.False(t, config.Consensus[disabledBlkHdr.CurrentProtocol].PQSigEnabled())
 
 	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &disabledBlkHdr, nil, &dummyLedger)
 	require.ErrorContains(t, err, "pq signature not enabled")
 	requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
+}
+
+// TestTxnValidationPQSigSchemeBoundary pins the per-scheme enablement boundary
+// at the released ConsensusV42, where falcon-1024 is enabled but falcon-512 is not
+func TestTxnValidationPQSigSchemeBoundary(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	v42 := config.Consensus[protocol.ConsensusV42]
+	require.True(t, v42.PQSigEnabled())
+	require.True(t, v42.PQSchemeEnabled(protocol.PQSchemeFalcon1024))
+	require.False(t, v42.PQSchemeEnabled(protocol.PQSchemeFalcon512))
+
+	blkHdr := createDummyBlockHeader(protocol.ConsensusV42)
+	dummyLedger := DummyLedgerForSignature{}
+
+	t.Run("falcon-1024-txn", func(t *testing.T) {
+		stxn := makePQSignedTxnForScheme(t, 0, protocol.PQSchemeFalcon1024)
+
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		require.NoError(t, err)
+	})
+
+	t.Run("falcon-1024-lsig", func(t *testing.T) {
+		stxn := makePQDelegatedLogicSigTxnForScheme(t, 1, protocol.PQSchemeFalcon1024)
+
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		require.NoError(t, err)
+	})
+
+	t.Run("falcon-512-txn", func(t *testing.T) {
+		stxn := makePQSignedTxnForScheme(t, 2, protocol.PQSchemeFalcon512)
+
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		require.ErrorContains(t, err, "pq signature validation failed")
+		require.ErrorIs(t, err, crypto.ErrPQSchemeNotEnabled)
+		requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
+	})
+
+	t.Run("falcon-512-lsig", func(t *testing.T) {
+		stxn := makePQDelegatedLogicSigTxnForScheme(t, 3, protocol.PQSchemeFalcon512)
+
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		require.ErrorContains(t, err, "pq delegated logic signature validation failed")
+		require.ErrorIs(t, err, crypto.ErrPQSchemeNotEnabled)
+		requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
+	})
 }
 
 func TestTxnValidationPQSigWithAuthAddr(t *testing.T) {
@@ -523,7 +581,7 @@ func TestTxnValidationPQDelegatedLogicSigRejectsInvalidProof(t *testing.T) {
 		stxn.Lsig.Logic = ops.Program
 
 		_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-		requireLogicPQSigError(t, err, "invalid falcon-1024 signature")
+		requireLogicPQSigError(t, err, invalidFalconSigErrText(t, stxn.Lsig.PQsig.Scheme))
 	})
 
 	t.Run("wrong-signature", func(t *testing.T) {
@@ -531,7 +589,7 @@ func TestTxnValidationPQDelegatedLogicSigRejectsInvalidProof(t *testing.T) {
 		stxn.Lsig.PQsig.Signature[0] ^= 1
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-		requireLogicPQSigError(t, err, "invalid falcon-1024 signature")
+		requireLogicPQSigError(t, err, invalidFalconSigErrText(t, stxn.Lsig.PQsig.Scheme))
 	})
 
 	t.Run("malformed-public-key", func(t *testing.T) {
@@ -555,7 +613,7 @@ func TestTxnValidationPQDelegatedLogicSigRejectsInvalidProof(t *testing.T) {
 		stxn.Lsig.PQsig.Signature = make([]byte, crypto.MaxPQSignatureSize+1)
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-		requireLogicPQSigError(t, err, "invalid falcon-1024 signature")
+		requireLogicPQSigError(t, err, invalidFalconSigErrText(t, stxn.Lsig.PQsig.Scheme))
 	})
 
 	t.Run("disabled-scheme", func(t *testing.T) {
@@ -574,7 +632,7 @@ func TestTxnValidationPQDelegatedLogicSigRejectsInvalidProof(t *testing.T) {
 		require.NotEqual(t, originalAuthorizer, stxn.Txn.Sender)
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-		requireLogicPQSigError(t, err, "invalid falcon-1024 signature")
+		requireLogicPQSigError(t, err, invalidFalconSigErrText(t, stxn.Lsig.PQsig.Scheme))
 	})
 }
 
@@ -593,10 +651,10 @@ func TestTxnValidationPQDelegatedLogicSigSignsRawProgram(t *testing.T) {
 	require.NoError(t, err)
 
 	// Sign(delegation) applies HashRep internally, so it must produce the same
-	// deterministic (det1024) signature as SignBytes(HashRep(delegation))
+	// deterministic Falcon signature as SignBytes(HashRep(delegation))
 	viaSign, err := signer.Sign(delegation)
 	require.NoError(t, err)
-	require.Equal(t, []byte(viaSign), []byte(rawSignature))
+	require.Equal(t, viaSign, rawSignature)
 
 	pqSig.Signature = rawSignature
 	stxn := transactions.SignedTxn{
@@ -615,12 +673,12 @@ func TestTxnValidationPQDelegatedLogicSigSignsRawProgram(t *testing.T) {
 	digest := crypto.HashObj(delegation)
 	digestSignature, err := signer.SignBytes(digest[:])
 	require.NoError(t, err)
-	require.NotEqual(t, []byte(digestSignature), []byte(rawSignature))
+	require.NotEqual(t, digestSignature, rawSignature)
 
 	stxn.Lsig.PQsig.Signature = digestSignature
 	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 	requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
-	require.ErrorContains(t, err, "invalid falcon-1024 signature")
+	require.ErrorContains(t, err, invalidFalconSigErrText(t, pqSig.Scheme))
 }
 
 func TestTxnValidationEmptySig(t *testing.T) {
