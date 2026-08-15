@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -250,6 +251,8 @@ func opEcMapTo(cx *EvalContext) error {
 		res, err = bls12381MapToG1(fpBytes)
 	case BLS12_381g2:
 		res, err = bls12381MapToG2(fpBytes)
+	case ED25519:
+		res, err = ed25519MapTo(fpBytes)
 	default:
 		err = fmt.Errorf("invalid ec_map_to %s", group)
 	}
@@ -1079,4 +1082,108 @@ func ed25519SubgroupCheck(pointBytes []byte) (bool, error) {
 	lp.VarTimeMultiScalarMult([]*edwards25519.Scalar{ed25519OrderMinusOne}, []*edwards25519.Point{point})
 	lp.Add(&lp, point)
 	return lp.Equal(edwards25519.NewIdentityPoint()) == 1, nil
+}
+
+// ed25519MontJ is the J coefficient of curve25519, K*t^2 = s^3 + J*s^2 + s with
+// K of 1, the Montgomery curve that edwards25519 is birationally equivalent to.
+var ed25519MontJ = new(edfield.Element).Mult32(new(edfield.Element).One(), 486662)
+
+// ed25519MapC is sqrt(-486664), the constant in the birational map from
+// curve25519 to edwards25519. RFC 9380 requires the root whose sgn0 is 0, so
+// that mapping the edwards25519 base point yields the curve25519 base point.
+// SqrtRatio returns exactly that root.
+var ed25519MapC = func() *edfield.Element {
+	var negJ2 edfield.Element
+	negJ2.Mult32(new(edfield.Element).One(), 486664)
+	negJ2.Negate(&negJ2)
+	c, wasSquare := new(edfield.Element).SqrtRatio(&negJ2, new(edfield.Element).One())
+	if wasSquare != 1 {
+		panic("edwards25519: -486664 is not square") // it is
+	}
+	return c
+}()
+
+// ed25519MapTo is RFC 9380's map_to_curve_elligator2_edwards25519, followed by
+// clearing the cofactor so that the result is always in the prime-order
+// subgroup - the guarantee the other groups' maps make as well.
+//
+// It is map_to_curve, not hash_to_curve. It maps one field element, and does
+// not hash. Producing that element from a message (RFC 9380's expand_message
+// with a domain separation tag) is the caller's job, as is mapping two elements
+// and adding them if the caller needs an output uniform over the group. A
+// single mapped element is not uniform.
+//
+// Coordinates are carried as fractions rather than divided, so the square root
+// and the one inversion needed to encode the result are the only
+// exponentiations.
+func ed25519MapTo(fpBytes []byte) ([]byte, error) {
+	if len(fpBytes) > ed25519fpSize {
+		return nil, fmt.Errorf("bad ed25519 field element length %d. Expected at most %d",
+			len(fpBytes), ed25519fpSize)
+	}
+	padded := make([]byte, ed25519fpSize) // short inputs need not be 0-padded, as elsewhere
+	copy(padded[ed25519fpSize-len(fpBytes):], fpBytes)
+	u, err := bytesToEd25519Field(padded)
+	if err != nil {
+		return nil, err
+	}
+	one := new(edfield.Element).One()
+
+	// Elligator 2 onto curve25519, keeping x as the fraction xMn/xMd
+	var zuu, xMd, x1n, xMd2, gxd, gx1n edfield.Element
+	zuu.Square(u)
+	zuu.Add(&zuu, &zuu)      // Z*u^2, the suite's Z being 2
+	xMd.Add(&zuu, one)       // 1 + Z*u^2, never 0: -1 is square and Z*u^2 is not
+	x1n.Negate(ed25519MontJ) // x1 = -J / (1 + Z*u^2)
+	xMd2.Square(&xMd)
+	gxd.Multiply(&xMd2, &xMd) // xMd^3, the denominator of g(x1) and g(x2)
+	gx1n.Multiply(ed25519MontJ, &zuu)
+	gx1n.Multiply(&gx1n, &x1n)
+	gx1n.Add(&gx1n, &xMd2)
+	gx1n.Multiply(&gx1n, &x1n) // x1n^3 + J*x1n^2*xMd + x1n*xMd^2
+
+	xMn := x1n
+	yM, wasSquare := new(edfield.Element).SqrtRatio(&gx1n, &gxd)
+	if wasSquare == 1 {
+		yM.Negate(yM) // RFC 9380 wants sgn0 of 1 here, where SqrtRatio gives 0
+	} else {
+		// x2 = Z*u^2*x1, whose g() is Z*u^2*g(x1), and is square when g(x1) is not
+		xMn.Multiply(&x1n, &zuu)
+		var gx2n edfield.Element
+		gx2n.Multiply(&gx1n, &zuu)
+		var square int
+		if yM, square = new(edfield.Element).SqrtRatio(&gx2n, &gxd); square != 1 {
+			return nil, errors.New("ed25519 elligator2: neither candidate was square")
+		}
+		// and here it wants sgn0 of 0, which is what SqrtRatio returns
+	}
+
+	// across the birational map: x = c*xM/yM and y = (xM-1)/(xM+1), with xM
+	// still a fraction, so both coordinates come out as fractions too
+	var xn, xd, yn, yd, degenerate edfield.Element
+	xn.Multiply(&xMn, ed25519MapC)
+	xd.Multiply(&xMd, yM)
+	yn.Subtract(&xMn, &xMd)
+	yd.Add(&xMn, &xMd)
+	degenerate.Multiply(&xd, &yd)
+	if degenerate.Equal(new(edfield.Element).Zero()) == 1 {
+		xn.Zero() // the map sends these to the identity
+		xd.One()
+		yn.One()
+		yd.One()
+	}
+
+	// extended coordinates are projective, so the fractions go straight in:
+	// X/Z is xn/xd, Y/Z is yn/yd, and the T relation X*Y == Z*T holds
+	var X, Y, Z, T edfield.Element
+	X.Multiply(&xn, &yd)
+	Y.Multiply(&yn, &xd)
+	Z.Multiply(&xd, &yd)
+	T.Multiply(&xn, &yn)
+	var point edwards25519.Point
+	if _, err := point.SetExtendedCoordinates(&X, &Y, &Z, &T); err != nil {
+		return nil, fmt.Errorf("ed25519 elligator2 left the curve: %w", err)
+	}
+	point.MultByCofactor(&point) // into the prime-order subgroup
+	return ed25519PointToBytes(&point), nil
 }

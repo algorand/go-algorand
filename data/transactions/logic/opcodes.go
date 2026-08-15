@@ -865,10 +865,10 @@ var OpSpecs = []OpSpec{
 			BLS12_381g1: 1_850, BLS12_381g2: 2_340,
 			ED25519: 1_300})}, // ~one scalar mul ([L]P), not cheap like g1; by BenchmarkEd25519
 	{0xe5, "ec_map_to", opEcMapTo, proto("b:b"), pairingVersion,
-		costByField("g", &ecPairingGroups, []int{
+		costByField("g", &EcGroups, []int{
 			BN254g1: 630, BN254g2: 3_300,
 			BLS12_381g1: 1_950, BLS12_381g2: 8_150,
-			ED25519: 1})}, // unreachable placeholder: ED25519 rejected at assembly
+			ED25519: 500})}, // elligator2, 12.3us on the branch that takes two square roots
 	{0xe6, "mimc", opMimc, proto("b:b{32}"), mimcVersion, costByFieldAndLength("c", &MimcConfigs, []linearCost{
 		BN254Mp110: {
 			baseCost:  10,

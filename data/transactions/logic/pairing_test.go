@@ -27,6 +27,7 @@ import (
 	"testing"
 
 	"filippo.io/edwards25519"
+	edfield "filippo.io/edwards25519/field"
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
 	bls12381fp "github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
 	bls12381fr "github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
@@ -34,6 +35,7 @@ import (
 	bn254fp "github.com/consensys/gnark-crypto/ecc/bn254/fp"
 	bn254fr "github.com/consensys/gnark-crypto/ecc/bn254/fr"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/sha3"
 
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -1231,6 +1233,120 @@ func BenchmarkEd25519(b *testing.B) {
 	b.Run("subgroup", func(b *testing.B) {
 		benchmarkOperation(b, "", pt+"ec_subgroup_check ED25519; assert", "int 1")
 	})
+
+	// Elligator 2 branches on whether g(x1) is square, and the branch that is
+	// not takes a second square root, so both are timed and the cost comes from
+	// the slower.
+	square, notSquare := ed25519MapInputs()
+	b.Run("map_to square", func(b *testing.B) {
+		benchmarkOperation(b, "", tealBytes(square)+"ec_map_to ED25519; pop", "int 1")
+	})
+	b.Run("map_to nonsquare", func(b *testing.B) {
+		benchmarkOperation(b, "", tealBytes(notSquare)+"ec_map_to ED25519; pop", "int 1")
+	})
+}
+
+// TestEd25519MapTo checks ec_map_to ED25519 against RFC 9380's own test
+// vectors, from Appendix J.5.2, edwards25519_XMD:SHA-512_ELL2_NU_. The RFC
+// prints, for each message, the field element u it hashed to, the point Q that
+// map_to_curve produced from u, and the point P after clearing the cofactor.
+// The opcode does both steps, so it must produce P, and Q must be P once
+// multiplied by the cofactor of 8.
+// ed25519MapInputs returns two field elements that drive ec_map_to down its two
+// paths: one whose g(x1) is a square, so the map takes a single square root,
+// and one whose is not, so it takes a second for the other candidate x. It
+// recomputes the branch condition rather than observing it, since the map does
+// not report which way it went.
+func ed25519MapInputs() (square, notSquare []byte) {
+	one := new(edfield.Element).One()
+	for i := 1; square == nil || notSquare == nil; i++ {
+		u := new(edfield.Element).Mult32(one, uint32(i))
+		var zuu, xMd, x1n, xMd2, gxd, gx1n edfield.Element
+		zuu.Square(u)
+		zuu.Add(&zuu, &zuu)
+		xMd.Add(&zuu, one)
+		x1n.Negate(ed25519MontJ)
+		xMd2.Square(&xMd)
+		gxd.Multiply(&xMd2, &xMd)
+		gx1n.Multiply(ed25519MontJ, &zuu)
+		gx1n.Multiply(&gx1n, &x1n)
+		gx1n.Add(&gx1n, &xMd2)
+		gx1n.Multiply(&gx1n, &x1n)
+		if _, wasSquare := new(edfield.Element).SqrtRatio(&gx1n, &gxd); wasSquare == 1 {
+			square = reversed(u.Bytes()) // the opcode reads big-endian
+		} else {
+			notSquare = reversed(u.Bytes())
+		}
+	}
+	return
+}
+
+func TestEd25519MapTo(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var vectors = []struct{ u, qx, qy, px, py string }{
+		{
+			"7f3e7fb9428103ad7f52db32f9df32505d7b427d894c5093f7a0f0374a30641d",
+			"42836f691d05211ebc65ef8fcf01e0fb6328ec9c4737c26050471e50803022eb",
+			"22cb4aaa555e23bd460262d2130d6a3c9207aa8bbb85060928beb263d6d42a95",
+			"1ff2b70ecf862799e11b7ae744e3489aa058ce805dd323a936375a84695e76da",
+			"222e314d04a4d5725e9f2aff9fb2a6b69ef375a1214eb19021ceab2d687f0f9b",
+		}, {
+			"09cfa30ad79bd59456594a0f5d3a76f6b71c6787b04de98be5cd201a556e253b",
+			"333e41b61c6dd43af220c1ac34a3663e1cf537f996bab50ab66e33c4bd8e4e19",
+			"51b6f178eb08c4a782c820e306b82c6e273ab22e258d972cd0c511787b2a3443",
+			"5f13cc69c891d86927eb37bd4afc6672360007c63f68a33ab423a3aa040fd2a8",
+			"67732d50f9a26f73111dd1ed5dba225614e538599db58ba30aaea1f5c827fa42",
+		}, {
+			"475ccff99225ef90d78cc9338e9f6a6bb7b17607c0c4428937de75d33edba941",
+			"55186c242c78e7d0ec5b6c9553f04c6aeef64e69ec2e824472394da32647cfc6",
+			"5b9ea3c265ee42256a8f724f616307ef38496ef7eba391c08f99f3bea6fa88f0",
+			"1dd2fefce934ecfd7aae6ec998de088d7dd03316aa1847198aecf699ba6613f1",
+			"2f8a6c24dd1adde73909cada6a4a137577b0f179d336685c4a955a0a8e1a86fb",
+		}, {
+			"049a1c8bd51bcb2aec339f387d1ff51428b88d0763a91bcdf6929814ac95d03d",
+			"024b6e1621606dca8071aa97b43dce4040ca78284f2a527dcf5d0fbfac2b07e7",
+			"5102353883d739bdc9f8a3af650342b171217167dcce34f8db57208ec1dfdbf2",
+			"35fbdc5143e8a97afd3096f2b843e07df72e15bfca2eaf6879bf97c5d3362f73",
+			"2af6ff6ef5ebba128b0774f4296cb4c2279a074658b083b8dcca91f57a603450",
+		}, {
+			"3cb0178a8137cefa5b79a3a57c858d7eeeaa787b2781be4a362a2f0750d24fa0",
+			"3e6368cff6e88a58e250c54bd27d2c989ae9b3acb6067f2651ad282ab8c21cd9",
+			"38fb39f1566ca118ae6c7af42810c0bb9767ae5960abb5a8ca792530bfb9447d",
+			"6e5e1f37e99345887fc12111575fc1c3e36df4b289b8759d23af14d774b66bff",
+			"2c90c3d39eb18ff291d33441b35f3262cdd307162cc97c31bfcc7a4245891a37",
+		},
+	}
+
+	mapTo := "ec_map_to ED25519;"
+	for i, v := range vectors {
+		t.Run(fmt.Sprintf("rfc9380/%d", i), func(t *testing.T) {
+			t.Parallel()
+			u := "byte 0x" + v.u + ";"
+			p := "byte 0x" + v.px + v.py + ";"
+			q := "byte 0x" + v.qx + v.qy + ";"
+			// the opcode maps and clears the cofactor, landing on P
+			testAccepts(t, u+mapTo+p+"==", edwardsVersion)
+			// and P is the RFC's Q with the cofactor cleared
+			testAccepts(t, q+"byte 0x08; ec_scalar_mul ED25519;"+p+"==", edwardsVersion)
+			// which means the result is torsion free, as every group's map promises
+			testAccepts(t, u+mapTo+"ec_subgroup_check ED25519", edwardsVersion)
+		})
+	}
+
+	// zero is the input that drives the map into its degenerate case, where the
+	// Montgomery y is 0 and the birational map has no image but the identity
+	testAccepts(t, "byte 0x00;"+mapTo+tealBytes(ed25519Identity())+"==", edwardsVersion)
+	testAccepts(t, "byte 0x;"+mapTo+tealBytes(ed25519Identity())+"==", edwardsVersion)
+
+	// short inputs are accepted without 0-padding, as for the other curves
+	testAccepts(t, "byte 0x07;"+mapTo+"byte 0x0000000000000000000000000000000000000000000000000000000000000007;"+mapTo+"==", edwardsVersion)
+
+	// but not over-long ones, nor field elements at or above the modulus
+	testPanics(t, "int 33; bzero;"+mapTo+"len", edwardsVersion, "Expected at most 32")
+	testPanics(t, "byte 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed;"+mapTo+"len",
+		edwardsVersion, "larger than modulus")
 }
 
 func TestEd25519Versioning(t *testing.T) {
@@ -1242,23 +1358,28 @@ func TestEd25519Versioning(t *testing.T) {
 		exp(1, "ec_add ED25519 field was introduced in v14. Missed #pragma version?"))
 	testProg(t, "byte 0x00; byte 0x00; ec_add ED25519", edwardsVersion) // ok at v13
 
-	// ED25519 is not valid for the pairing-only opcodes, at any version.
+	// ED25519 is not valid for ec_pairing_check, at any version, there being no
+	// pairing on it to check.
 	testProg(t, "byte 0x00; byte 0x00; ec_pairing_check ED25519", edwardsVersion,
 		exp(1, "ec_pairing_check unknown field: \"ED25519\""))
-	testProg(t, "byte 0x00; ec_map_to ED25519", edwardsVersion,
-		exp(1, "ec_map_to unknown field: \"ED25519\""))
 
-	// Need to confirm they also fail at evaluation time, patch in the ED field code
+	// Need to confirm it also fails at evaluation time, patch in the ED field code
 	ep := defaultSigParams()
 	ops := testProg(t, "#pragma autosalt false\n byte 0x00; byte 0x00; ec_pairing_check BLS12_381g2", edwardsVersion)
 	ops.Program[len(ops.Program)-1] = byte(ED25519)
 	testLogicBytes(t, ops.Program, ep, "invalid ec_pairing_check group ED25519")
-	ops = testProg(t, "#pragma autosalt false\n byte 0x00; ec_map_to BLS12_381g2", edwardsVersion)
-	ops.Program[len(ops.Program)-1] = byte(ED25519)
-	testLogicBytes(t, ops.Program, ep, "invalid ec_map_to ED25519")
 
-	// but it is valid for ec_subgroup_check
+	// but it is valid for every other ec_ opcode, subject to the same version gate
 	testProg(t, "byte 0x00; ec_subgroup_check ED25519", edwardsVersion)
+	testProg(t, "byte 0x00; ec_map_to ED25519", edwardsVersion)
+	testProg(t, "byte 0x00; ec_map_to ED25519", edwardsVersion-1,
+		exp(1, "ec_map_to ED25519 field was introduced in v14. Missed #pragma version?"))
+
+	// and the gate holds at evaluation too, so that a hand-assembled older
+	// program cannot reach a map that did not exist when it was written
+	ops = testProg(t, "#pragma autosalt false\n byte 0x00; ec_map_to BLS12_381g1", pairingVersion)
+	ops.Program[len(ops.Program)-1] = byte(ED25519)
+	testLogicBytes(t, ops.Program, ep, "invalid ec_map_to group ED25519")
 }
 
 // ed25519VerifySource is ed25519verify_bare written out in TEAL, using nothing
@@ -1340,7 +1461,13 @@ ec_multi_scalar_mul ED25519
 arg 4				// R
 ==
 return
+` + ed25519TealHelpers
 
+// ed25519TealHelpers are the subroutines any ed25519 program needs, because the
+// ec_ opcodes take big-endian coordinates and uncompressed points, while
+// ed25519 itself encodes little-endian and compressed. Appended to the programs
+// below, which jump into them.
+const ed25519TealHelpers = `
 // reverse converts between the big-endian byte order the ec_ opcodes use for
 // scalars and coordinates, and the little-endian order ed25519 encodes in.
 reverse:
@@ -1369,6 +1496,119 @@ setbit
 retsub
 `
 
+// ringVerifySource verifies a ring signature of the shape Monero used before
+// RingCT: n public keys, one of whose owners signed, and no way to tell which.
+// Signing produces a chain of challenges that closes on itself, and verifying
+// walks the chain and checks that it does:
+//
+//	for i in 0..n-1:   c[i+1] = H(m || compress([s_i]B + [c_i]P_i))
+//	accept if c[n] == c[0]
+//
+// where H is keccak-256 read as a little-endian scalar and reduced, which is
+// Monero's hash_to_scalar. Only the signer's own step is computed forwards
+// (from a random nonce); every other s_i is chosen at random and the challenge
+// it produces is whatever it is. The verifier cannot tell the two apart.
+//
+//	arg 0  message
+//	arg 1  c[0], the challenge the ring must close on (32 byte little-endian)
+//	arg 2  s_0..s_n-1, concatenated 32 byte little-endian scalars
+//	arg 3  the ring: P_0..P_n-1, concatenated 32 byte compressed points
+//	arg 4  hint: the same points uncompressed, 64 bytes each
+//
+// The hints are untrusted and checked by compressing them, exactly as in
+// ed25519VerifySource. Nothing else needs to bind the ring, since substituting
+// a key changes every later challenge and the chain stops closing.
+//
+// It costs 466 plus about 3,880 per ring member, so a ring of five fits in one
+// logic sig and Monero's current ring size of sixteen (62,595) needs four
+// pooled. Half of the per-member cost is the multi-exp; most of the rest is
+// byte reversal, since Monero is little-endian throughout and the ec_ opcodes
+// are big-endian.
+//
+// WHAT THIS LEAVES OUT. Monero's ring signatures are *linkable*, and that is
+// the part that stops double spends: alongside each L_i the signer publishes a
+// key image I and the verifier also computes
+//
+//	R_i = [s_i]H_p(P_i) + [c_i]I,   c[i+1] = H(m || L_i || R_i)
+//
+// where H_p hashes a public key to a curve point. Because I = [x]H_p(P) for the
+// signer's own secret x, one key always yields one image, so a second spend is
+// spotted without learning which ring member spent.
+//
+// H_p is what the AVM cannot do. Monero's is keccak-256 followed by
+// ge_fromfe_frombytes_vartime and multiplication by the cofactor; ec_map_to
+// exists but is not available for ED25519. Nor does the hint trick above rescue
+// it: hints work for decompression because compressing is the cheap direction,
+// so a claimed point can be checked. Hash-to-point has no cheap inverse, and a
+// hinted H_p(P_i) that nobody verifies is a forgery, since choosing it freely
+// lets one key produce any number of images.
+//
+// It could be done by supplying the square roots inside the map as witnesses
+// and checking the relations they satisfy: verifying a root is a single
+// multiplication where computing it is a 252 step modular exponentiation, which
+// is the difference between a thousand and tens of thousands per ring member.
+// That means mirroring ge_fromfe_frombytes_vartime exactly, branches included,
+// and proving which branch was taken. Worth knowing it is possible; not
+// something to get subtly wrong.
+//
+// This is also the pre-RingCT signature. Current Monero uses CLSAG, which adds
+// commitment layers and aggregation coefficients on top of the above, and
+// Bulletproofs range proofs, which are far out of reach.
+const ringVerifySource = `
+// the ring's length sets n, and the other two arrays must agree with it
+arg 3; len; int 32; %; !; assert	// whole keys only
+arg 3; len; int 32; /
+dup; assert				// a ring of nobody signs nothing
+store 0					// n
+arg 2; len; load 0; int 32; *; ==; assert
+arg 4; len; load 0; int 64; *; ==; assert
+
+// c[0], which is both where the walk starts and what it must come back to
+arg 1; callsub reverse
+dup
+byte 0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3ed // L
+b<; assert				// canonical, as Monero's sc_check demands
+dup; store 1				// running challenge
+store 3					// and the value to close against
+
+int 0; store 2				// i
+
+ring_loop:
+// P_i, from the hint, and it must be the key the ring names
+arg 4; load 2; int 64; *; int 64; extract3
+dup; callsub compress
+arg 3; load 2; int 32; *; int 32; extract3
+==; assert				// leaves the uncompressed P_i
+
+// L_i = [s_i]B + [c]P_i, one multi-exp rather than two multiplies and an add
+byte 0x216936d3cd6e53fec0a4e231fdd6dc5c692cc7609525a7b2c9562d608f25d51a6666666666666666666666666666666666666666666666666666666666666658 // B
+swap; concat				// B then P_i
+arg 2; load 2; int 32; *; int 32; extract3; callsub reverse
+dup
+byte 0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3ed // L
+b<; assert				// s_i canonical too
+load 1; concat				// s_i then c, matching the points
+ec_multi_scalar_mul ED25519
+callsub compress			// Monero hashes points compressed
+
+// c = H(m || L_i)
+arg 0; swap; concat
+keccak256
+callsub reverse				// the digest is read as a little-endian scalar
+byte 0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3ed // L
+b%
+int 32; bzero; b|			// b% trims leading zeros, and scalars are fixed width
+store 1
+
+load 2; int 1; +; dup; store 2
+load 0; <
+bnz ring_loop
+
+// the ring closes
+load 1; load 3; ==
+return
+` + ed25519TealHelpers
+
 // ed25519Hint decompresses a 32 byte RFC 8032 point encoding into the
 // uncompressed form the ec_ opcodes consume. Tampered encodings often do not
 // decompress at all; the identity stands in for those, so that the program
@@ -1380,6 +1620,157 @@ func ed25519Hint(compressed []byte) []byte {
 		return ed25519Identity()
 	}
 	return ed25519PointToBytes(p)
+}
+
+// ringChallenge is Monero's hash_to_scalar over a message and a point: keccak,
+// read little-endian, reduced.
+func ringChallenge(msg []byte, l *edwards25519.Point) *edwards25519.Scalar {
+	h := sha3.NewLegacyKeccak256()
+	h.Write(msg)
+	h.Write(l.Bytes()) // compressed, as Monero hashes points
+	k := new(big.Int).SetBytes(reversed(h.Sum(nil)))
+	s, err := bigIntToEd25519Scalar(k)
+	if err != nil {
+		panic(err)
+	}
+	return s
+}
+
+// ringSign signs msg on behalf of ring[signer], whose secret it is given. It is
+// the construction the verifier inverts: run one step forwards from a random
+// nonce, pick every other scalar at random and accept whatever challenges they
+// produce, then solve for the signer's own scalar so that the chain closes.
+// Which index did the solving is not recoverable from the result.
+func ringSign(ring []*edwards25519.Point, secret *edwards25519.Scalar, signer int, msg []byte) (c0 []byte, scalars []byte) {
+	n := len(ring)
+	s := make([]*edwards25519.Scalar, n)
+	c := make([]*edwards25519.Scalar, n) // c[i] is the challenge entering step i
+
+	// the signer's step, forwards from the nonce: L = [alpha]B
+	alpha := ed25519RandomScalar()
+	c[(signer+1)%n] = ringChallenge(msg, new(edwards25519.Point).ScalarBaseMult(alpha))
+
+	// every other step, with a scalar picked before the challenge it produces
+	for k := 1; k < n; k++ {
+		i := (signer + k) % n
+		s[i] = ed25519RandomScalar()
+		l := new(edwards25519.Point).VarTimeDoubleScalarBaseMult(c[i], ring[i], s[i])
+		c[(i+1)%n] = ringChallenge(msg, l)
+	}
+
+	// solve: [s]B + [c]P == [alpha]B when s == alpha - c*x
+	s[signer] = new(edwards25519.Scalar).Subtract(alpha,
+		new(edwards25519.Scalar).Multiply(c[signer], secret))
+
+	for _, si := range s {
+		scalars = append(scalars, si.Bytes()...)
+	}
+	return c[0].Bytes(), scalars
+}
+
+func TestRingVerifyInTeal(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	teal := testProg(t, ringVerifySource, edwardsVersion).Program
+	msg := []byte("spend it once")
+
+	// a ring, and the secrets that would let each member sign
+	const n = 5
+	secrets := make([]*edwards25519.Scalar, n)
+	ring := make([]*edwards25519.Point, n)
+	for i := range ring {
+		secrets[i] = ed25519RandomScalar()
+		ring[i] = new(edwards25519.Point).ScalarBaseMult(secrets[i])
+	}
+	// the two encodings of the ring: compressed as the signature names it,
+	// uncompressed as the opcodes consume it
+	packed := func(ring []*edwards25519.Point) (compressed, uncompressed []byte) {
+		for _, p := range ring {
+			compressed = append(compressed, p.Bytes()...)
+			uncompressed = append(uncompressed, ed25519PointToBytes(p)...)
+		}
+		return
+	}
+	compressed, uncompressed := packed(ring)
+
+	accepts := func(args [][]byte) bool {
+		var txn transactions.SignedTxn
+		txn.Lsig.Logic = teal
+		txn.Lsig.Args = args
+		pass, err := EvalSignature(0, defaultSigParams(txn))
+		return pass && err == nil
+	}
+
+	// any member can sign, and the signature does not say which did
+	for signer := range ring {
+		c0, scalars := ringSign(ring, secrets[signer], signer, msg)
+		require.True(t, accepts([][]byte{msg, c0, scalars, compressed, uncompressed}),
+			"signer %d", signer)
+	}
+
+	c0, scalars := ringSign(ring, secrets[2], 2, msg)
+	good := [][]byte{msg, c0, scalars, compressed, uncompressed}
+	require.True(t, accepts(good))
+
+	// break each part in turn, and the chain stops closing
+	var breakTests = []struct {
+		name string
+		arg  int
+		mung func([]byte) []byte
+	}{
+		{"message", 0, func(b []byte) []byte { return append(slices.Clone(b), '!') }},
+		{"starting challenge", 1, func(b []byte) []byte { return flipScalar(b) }},
+		{"a scalar", 2, func(b []byte) []byte { return flipScalar(b) }},
+		{"another scalar", 2, func(b []byte) []byte {
+			c := slices.Clone(b)
+			copy(c[3*32:4*32], flipScalar(c[3*32:4*32]))
+			return c
+		}},
+	}
+	for _, test := range breakTests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			broken := slices.Clone(good)
+			broken[test.arg] = test.mung(broken[test.arg])
+			require.False(t, accepts(broken))
+		})
+	}
+
+	// a different ring does not verify, even one that differs by a single key
+	other := slices.Clone(ring)
+	other[4] = new(edwards25519.Point).ScalarBaseMult(ed25519RandomScalar())
+	otherCompressed, otherUncompressed := packed(other)
+	require.False(t, accepts([][]byte{msg, c0, scalars, otherCompressed, otherUncompressed}))
+
+	// a hint that is a real point, but not the key the ring names, is caught
+	lying := slices.Clone(good)
+	lying[4] = slices.Clone(uncompressed)
+	copy(lying[4][64:128], ed25519RandomPoint())
+	require.False(t, accepts(lying))
+
+	// a ring of one is just a Schnorr signature, and still works
+	single := []*edwards25519.Point{ring[0]}
+	singleCompressed, singleUncompressed := packed(single)
+	c0, scalars = ringSign(single, secrets[0], 0, msg)
+	require.True(t, accepts([][]byte{msg, c0, scalars, singleCompressed, singleUncompressed}))
+
+	// lengths that do not agree, and a ring of nobody, are program failures
+	var txn transactions.SignedTxn
+	txn.Lsig.Args = [][]byte{msg, good[1], good[2], compressed[:32*4], uncompressed}
+	testLogicBytes(t, teal, defaultSigParams(txn), "assert failed")
+	txn.Lsig.Args = [][]byte{msg, good[1], good[2], compressed[:31], uncompressed}
+	testLogicBytes(t, teal, defaultSigParams(txn), "assert failed")
+	txn.Lsig.Args = [][]byte{msg, good[1], nil, nil, nil}
+	testLogicBytes(t, teal, defaultSigParams(txn), "assert failed")
+}
+
+// flipScalar changes a 32 byte little-endian scalar, keeping it canonical by
+// touching a low byte rather than the top one.
+func flipScalar(b []byte) []byte {
+	c := slices.Clone(b)
+	c[0] ^= 1
+	return c
 }
 
 func TestEd25519VerifyInTeal(t *testing.T) {

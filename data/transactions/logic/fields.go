@@ -806,7 +806,7 @@ const (
 )
 
 // ecGroupNames includes every EcGroup. ecPairingGroupNames omits ED25519, which
-// is not valid for the pairing-only opcodes (ec_pairing_check, ec_map_to).
+// is not valid for ec_pairing_check, the one opcode that needs a pairing.
 var ecGroupNames [invalidEcGroup]string
 var ecPairingGroupNames [invalidEcGroup]string
 
@@ -840,7 +840,7 @@ var ecGroupSpecs = [...]ecGroupSpec{
 	{BN254g2, pairingVersion, "G2 of the BN254 curve. Points encoded as 64 byte X following by 64 byte Y"},
 	{BLS12_381g1, pairingVersion, "G1 of the BLS 12-381 curve. Points encoded as 48 byte X following by 48 byte Y"},
 	{BLS12_381g2, pairingVersion, "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y"},
-	{ED25519, edwardsVersion, "The Edwards25519 (ed25519) curve. Points encoded as 32 byte X followed by 32 byte Y. Not valid for ec_pairing_check or ec_map_to."},
+	{ED25519, edwardsVersion, "The Edwards25519 (ed25519) curve. Points encoded as 32 byte X followed by 32 byte Y. Not valid for ec_pairing_check, which has no pairing to check."},
 }
 
 func ecGroupSpecByField(c EcGroup) (ecGroupSpec, bool) {
@@ -860,17 +860,17 @@ func (s ecGroupNameSpecMap) get(name string) (FieldSpec, bool) {
 }
 
 // EcGroups collects details about the constants used to describe EcGroups. It
-// includes every group, and is used by the opcodes that accept ED25519
-// (ec_add, ec_scalar_mul, ec_multi_scalar_mul, ec_subgroup_check).
+// includes every group, and is used by every ec_ opcode except
+// ec_pairing_check.
 var EcGroups = FieldGroup{
 	"EC", "Groups",
 	ecGroupNames[:],
 	ecGroupSpecByName,
 }
 
-// ecPairingGroups is the subset valid for the pairing-only opcodes
-// (ec_pairing_check, ec_map_to). It omits ED25519 (blank name in
-// ecPairingGroupNames), so the assembler rejects it as an unknown field. It
+// ecPairingGroups is the subset valid for ec_pairing_check. It omits ED25519
+// (blank name in ecPairingGroupNames), so the assembler rejects it as an
+// unknown field. It
 // shares EcGroups' Name and Doc so the two reference the same documentation
 // heading/anchor; the doc generator dedups the section by Name, and EcGroups
 // (attached to the earlier ec_add) documents the full set.
