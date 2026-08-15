@@ -46,7 +46,7 @@ const (
 func opEcAdd(cx *EvalContext) error {
 	group := EcGroup(cx.program[cx.pc+1])
 	fs, ok := ecGroupSpecByField(group)
-	if !ok { // no version check yet, both appeared at once
+	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid ec_add group %s", group)
 	}
 
@@ -83,7 +83,7 @@ func opEcAdd(cx *EvalContext) error {
 func opEcScalarMul(cx *EvalContext) error {
 	group := EcGroup(cx.program[cx.pc+1])
 	fs, ok := ecGroupSpecByField(group)
-	if !ok { // no version check yet, both appeared at once
+	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid ec_scalar_mul group %s", group)
 	}
 
@@ -125,7 +125,7 @@ func opEcScalarMul(cx *EvalContext) error {
 func opEcPairingCheck(cx *EvalContext) error {
 	group := EcGroup(cx.program[cx.pc+1])
 	fs, ok := ecGroupSpecByField(group)
-	if !ok { // no version check yet, both appeared at once
+	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid ec_pairing_check group %s", group)
 	}
 
@@ -162,7 +162,7 @@ func opEcPairingCheck(cx *EvalContext) error {
 func opEcMultiScalarMul(cx *EvalContext) error {
 	group := EcGroup(cx.program[cx.pc+1])
 	fs, ok := ecGroupSpecByField(group)
-	if !ok { // no version check yet, both appeared at once
+	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid ec_multi_scalar_mul group %s", group)
 	}
 
@@ -201,8 +201,8 @@ func opEcSubgroupCheck(cx *EvalContext) error {
 
 	group := EcGroup(cx.program[cx.pc+1])
 	fs, ok := ecGroupSpecByField(group)
-	if !ok { // no version check yet, both appeared at once
-		return fmt.Errorf("invalid ec_pairing_check group %s", group)
+	if !ok || fs.version > cx.version {
+		return fmt.Errorf("invalid ec_subgroup_check group %s", group)
 	}
 
 	var err error
@@ -235,8 +235,8 @@ func opEcMapTo(cx *EvalContext) error {
 
 	group := EcGroup(cx.program[cx.pc+1])
 	fs, ok := ecGroupSpecByField(group)
-	if !ok { // no version check yet, both appeared at once
-		return fmt.Errorf("invalid ec_pairing_check group %s", group)
+	if !ok || fs.version > cx.version {
+		return fmt.Errorf("invalid ec_map_to group %s", group)
 	}
 
 	var res []byte
@@ -251,7 +251,7 @@ func opEcMapTo(cx *EvalContext) error {
 	case BLS12_381g2:
 		res, err = bls12381MapToG2(fpBytes)
 	default:
-		err = fmt.Errorf("invalid ec_pairing_check group %s", group)
+		err = fmt.Errorf("invalid ec_map_to %s", group)
 	}
 	cx.Stack[last].Bytes = res
 	return err
@@ -1042,11 +1042,11 @@ func ed25519MultiMul(pointBytes, scalarBytes []byte) ([]byte, error) {
 		return nil, fmt.Errorf("bad ed25519 points length %d, not a multiple of %d", len(pointBytes), ed25519PointSize)
 	}
 	n := len(pointBytes) / ed25519PointSize
+	if n == 0 {
+		return nil, errEmptyInput // as the other groups do, though the empty sum is the identity
+	}
 	if len(scalarBytes) != scalarSize*n {
 		return nil, fmt.Errorf("bad scalars length %d. Expected %d", len(scalarBytes), scalarSize*n)
-	}
-	if n == 0 {
-		return ed25519PointToBytes(edwards25519.NewIdentityPoint()), nil // empty sum is the identity
 	}
 	points := make([]*edwards25519.Point, n)
 	scalars := make([]*edwards25519.Scalar, n)

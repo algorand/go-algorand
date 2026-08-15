@@ -1054,6 +1054,22 @@ func leftPad(b []byte, n int) []byte {
 	return out
 }
 
+// A multi-exp over no points at all is rejected by every group. The empty sum
+// is arguably the identity, but the opcode should not answer differently
+// depending on which group its immediate names.
+func TestEcMultiScalarMulEmpty(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, group := range EcGroups.Names {
+		introduced := uint64(pairingVersion)
+		if group == "ED25519" {
+			introduced = edwardsVersion
+		}
+		testPanics(t, "byte 0x; byte 0x; ec_multi_scalar_mul "+group+"; len", introduced, "empty input")
+	}
+}
+
 func TestEd25519SubgroupCheck(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1231,6 +1247,15 @@ func TestEd25519Versioning(t *testing.T) {
 		exp(1, "ec_pairing_check unknown field: \"ED25519\""))
 	testProg(t, "byte 0x00; ec_map_to ED25519", edwardsVersion,
 		exp(1, "ec_map_to unknown field: \"ED25519\""))
+
+	// Need to confirm they also fail at evaluation time, patch in the ED field code
+	ep := defaultSigParams()
+	ops := testProg(t, "#pragma autosalt false\n byte 0x00; byte 0x00; ec_pairing_check BLS12_381g2", edwardsVersion)
+	ops.Program[len(ops.Program)-1] = byte(ED25519)
+	testLogicBytes(t, ops.Program, ep, "invalid ec_pairing_check group ED25519")
+	ops = testProg(t, "#pragma autosalt false\n byte 0x00; ec_map_to BLS12_381g2", edwardsVersion)
+	ops.Program[len(ops.Program)-1] = byte(ED25519)
+	testLogicBytes(t, ops.Program, ep, "invalid ec_map_to ED25519")
 
 	// but it is valid for ec_subgroup_check
 	testProg(t, "byte 0x00; ec_subgroup_check ED25519", edwardsVersion)
