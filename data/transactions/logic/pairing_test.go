@@ -1356,7 +1356,7 @@ func TestEd25519Versioning(t *testing.T) {
 	// ED25519 was introduced in v14; earlier versions reject it at assembly.
 	testProg(t, "byte 0x00; byte 0x00; ec_add ED25519", edwardsVersion-1,
 		exp(1, "ec_add ED25519 field was introduced in v14. Missed #pragma version?"))
-	testProg(t, "byte 0x00; byte 0x00; ec_add ED25519", edwardsVersion) // ok at v13
+	testProg(t, "byte 0x00; byte 0x00; ec_add ED25519", edwardsVersion) // ok at v14
 
 	// ED25519 is not valid for ec_pairing_check, at any version, there being no
 	// pairing on it to check.
@@ -1375,11 +1375,23 @@ func TestEd25519Versioning(t *testing.T) {
 	testProg(t, "byte 0x00; ec_map_to ED25519", edwardsVersion-1,
 		exp(1, "ec_map_to ED25519 field was introduced in v14. Missed #pragma version?"))
 
-	// and the gate holds at evaluation too, so that a hand-assembled older
-	// program cannot reach a map that did not exist when it was written
-	ops = testProg(t, "#pragma autosalt false\n byte 0x00; ec_map_to BLS12_381g1", pairingVersion)
-	ops.Program[len(ops.Program)-1] = byte(ED25519)
-	testLogicBytes(t, ops.Program, ep, "invalid ec_map_to group ED25519")
+	// The version gate has to hold at evaluation as well, since assembly is not
+	// in the loop for hand-written bytecode. Without it, a v10 program could
+	// name a group that did not exist when it was written, and would be
+	// accepted by nodes that have this code and rejected by nodes that do not.
+	for _, test := range []struct{ op, args string }{
+		{"ec_add", "byte 0x00; byte 0x00;"},
+		{"ec_scalar_mul", "byte 0x00; byte 0x00;"},
+		{"ec_multi_scalar_mul", "byte 0x00; byte 0x00;"},
+		{"ec_subgroup_check", "byte 0x00;"},
+		{"ec_map_to", "byte 0x00;"},
+	} {
+		// autosalt off, and the group immediate last, so patching the final
+		// byte swaps the group without disturbing anything else
+		ops = testProg(t, "#pragma autosalt false\n"+test.args+test.op+" BLS12_381g1", pairingVersion)
+		ops.Program[len(ops.Program)-1] = byte(ED25519)
+		testLogicBytes(t, ops.Program, ep, "invalid "+test.op+" group ED25519")
+	}
 }
 
 // ed25519VerifySource is ed25519verify_bare written out in TEAL, using nothing
