@@ -610,14 +610,29 @@ func (db *participationDB) DeleteExpired(latestRound basics.Round, agreementProt
 		}
 	}
 
-	// mark updated records as dirty, so they will be flushed by a call to FlushRegistry after each round
-	db.mutex.Lock()
-	for _, r := range updated {
-		db.dirty[r.ParticipationID] = struct{}{}
-		db.cache[r.ParticipationID] = r
-	}
-	db.mutex.Unlock()
+	db.applyVotingTruncation(updated)
 	return nil
+}
+
+// applyVotingTruncation installs the truncated voting secrets that DeleteExpired
+// computed from its GetAll snapshot, and marks the records dirty so the next
+// FlushRegistry persists them. The snapshot is truncated without holding the
+// registry lock, so a record may since have been deleted or updated: writing an
+// absent record back would hand its secrets to AccountManager.Keys until the node
+// restarts, and overwriting a present one would revert a concurrent Record or
+// Register, so only Voting is merged into what the cache holds now.
+func (db *participationDB) applyVotingTruncation(updated []ParticipationRecord) {
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
+	for _, r := range updated {
+		cached, ok := db.cache[r.ParticipationID]
+		if !ok {
+			continue
+		}
+		cached.Voting = r.Voting
+		db.cache[r.ParticipationID] = cached
+		db.dirty[r.ParticipationID] = struct{}{}
+	}
 }
 
 // scanRecords is a helper to manage scanning participation records.
@@ -939,18 +954,32 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 
 	if len(updated) != 0 {
 		db.writeQueue <- makeOpRequest(&registerOp{updated: updated})
-
-		db.mutex.Lock()
-		for id, record := range updated {
-			delete(db.dirty, id)
-			db.cache[id] = record.ParticipationRecord
-		}
-		db.mutex.Unlock()
+		db.applyRegistration(updated)
 	}
 
 	db.log.Infof("Registered key (%s) for account (%s) first valid (%d) last valid (%d)\n",
 		id, recordToRegister.Account, recordToRegister.FirstValid, recordToRegister.LastValid)
 	return nil
+}
+
+// applyRegistration installs the effective rounds that Register computed from its
+// snapshot, and clears the dirty flag because registerOp persists those fields.
+// Register also builds its update without holding the registry lock, so the same
+// rule as applyVotingTruncation applies: skip records deleted in the meantime, and
+// merge only the fields Register changed.
+func (db *participationDB) applyRegistration(updated map[ParticipationID]updatingParticipationRecord) {
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
+	for id, record := range updated {
+		cached, ok := db.cache[id]
+		if !ok {
+			continue
+		}
+		cached.EffectiveFirst = record.ParticipationRecord.EffectiveFirst
+		cached.EffectiveLast = record.ParticipationRecord.EffectiveLast
+		db.cache[id] = cached
+		delete(db.dirty, id)
+	}
 }
 
 func (db *participationDB) Record(account basics.Address, round basics.Round, participationAction ParticipationAction) error {

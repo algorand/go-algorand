@@ -273,6 +273,94 @@ func (m testMessage) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Message, []byte(m)
 }
 
+// TestParticipation_WriteBackAfterDelete covers the window DeleteExpired and
+// Register leave open: both read a snapshot, compute their update without holding
+// the registry lock, then write it back. A Delete landing in that window must win,
+// since the API removes the key file and the database row and only the cache would
+// keep the secrets, and AccountManager.Keys serves votes straight from the cache.
+// Calling the write-backs directly puts the Delete inside the window without
+// depending on goroutine timing.
+func TestParticipation_WriteBackAfterDelete(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
+
+	isDirty := func(id ParticipationID) bool {
+		registry.mutex.RLock()
+		defer registry.mutex.RUnlock()
+		_, dirty := registry.dirty[id]
+		return dirty
+	}
+
+	t.Run("DeleteExpired", func(t *testing.T) {
+		a := require.New(t)
+		p := makeTestParticipation(a, 1, 1, 10, 1)
+		id, err := registry.Insert(p)
+		a.NoError(err)
+
+		snapshot := registry.GetAll()
+		a.Len(snapshot, 1)
+
+		a.NoError(registry.Delete(id))
+		a.True(registry.Get(id).IsZero())
+
+		registry.applyVotingTruncation(snapshot)
+		a.True(registry.Get(id).IsZero(), "deleted key was restored to the cache")
+		a.Empty(registry.GetAll())
+		a.False(isDirty(id), "deleted key was marked dirty")
+	})
+
+	t.Run("Register", func(t *testing.T) {
+		a := require.New(t)
+		p := makeTestParticipation(a, 2, 1, 10, 1)
+		id, err := registry.Insert(p)
+		a.NoError(err)
+
+		record := registry.Get(id)
+		a.False(record.IsZero())
+		record.EffectiveFirst = 1
+		record.EffectiveLast = 10
+		update := map[ParticipationID]updatingParticipationRecord{
+			id: {record, true},
+		}
+
+		a.NoError(registry.Delete(id))
+		a.True(registry.Get(id).IsZero())
+
+		registry.applyRegistration(update)
+		a.True(registry.Get(id).IsZero(), "deleted key was restored to the cache")
+		a.Empty(registry.GetAll())
+	})
+
+	// A record still present takes the truncation, and keeps the fields the
+	// write-back does not own: a vote recorded inside the window survives.
+	t.Run("concurrent update", func(t *testing.T) {
+		a := require.New(t)
+		p := makeTestParticipation(a, 3, 1, 10, 1)
+		id, err := registry.Insert(p)
+		a.NoError(err)
+		a.NoError(registry.Register(id, 1))
+
+		snapshot := registry.GetAll()
+		a.Len(snapshot, 1)
+		truncated := snapshot[0]
+		keysBefore := len(truncated.Voting.Offsets) + len(truncated.Voting.Batches)
+		truncated.Voting.DeleteBeforeFineGrained(basics.OneTimeIDForRound(5, truncated.KeyDilution), truncated.KeyDilution)
+		a.Less(len(truncated.Voting.Offsets)+len(truncated.Voting.Batches), keysBefore)
+
+		a.NoError(registry.Record(p.Parent, 4, Vote))
+
+		registry.applyVotingTruncation([]ParticipationRecord{truncated})
+		record := registry.Get(id)
+		a.Equal(basics.Round(4), record.LastVote, "vote recorded in the window was reverted")
+		a.Equal(len(truncated.Voting.Offsets)+len(truncated.Voting.Batches),
+			len(record.Voting.Offsets)+len(record.Voting.Batches), "truncation was not applied")
+		a.True(isDirty(id))
+
+		a.NoError(registry.Delete(id))
+	})
+}
+
 func TestParticipation_DeleteExpired(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -666,6 +754,8 @@ func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
 	a.EqualError(err, ErrMultipleKeysForID.Error())
 
 	// Registering the ID - No error because it is already registered so we don't try to re-register.
+	// Voting must be set: the flush below snapshots it, and the registration write-back
+	// no longer replaces this record wholesale, so nothing else supplies it.
 	registry.cache[id] = ParticipationRecord{
 		ParticipationID: id,
 		Account:         p.Parent,
@@ -674,6 +764,7 @@ func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
 		KeyDilution:     p.KeyDilution,
 		EffectiveFirst:  p.FirstValid,
 		EffectiveLast:   p.LastValid,
+		Voting:          &crypto.OneTimeSignatureSecrets{},
 	}
 	err = registry.Register(id, 1)
 	a.NoError(err)
