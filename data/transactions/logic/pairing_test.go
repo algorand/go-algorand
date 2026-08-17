@@ -1535,21 +1535,31 @@ retsub
 // signer's own secret x, one key always yields one image, so a second spend is
 // spotted without learning which ring member spent.
 //
-// H_p is what the AVM cannot do. Monero's is keccak-256 followed by
-// ge_fromfe_frombytes_vartime and multiplication by the cofactor; ec_map_to
-// exists but is not available for ED25519. Nor does the hint trick above rescue
-// it: hints work for decompression because compressing is the cheap direction,
-// so a claimed point can be checked. Hash-to-point has no cheap inverse, and a
-// hinted H_p(P_i) that nobody verifies is a forgery, since choosing it freely
-// lets one key produce any number of images.
+// Monero's H_p is the part the AVM cannot supply, and not for want of a
+// hash-to-point opcode. ec_map_to ED25519 exists, but it is Elligator 2 as
+// RFC 9380 specifies it, and Monero's H_p is a different function: keccak-256
+// followed by ge_fromfe_frombytes_vartime, a map CryptoNote wrote years before
+// that RFC, then multiplication by the cofactor. Both hash to the curve; they
+// do not hash to the same point, so ec_map_to computes something Monero would
+// reject, and Monero's map computes something no standard names. Elligator 2
+// was the deliberate choice for the opcode - see the reasoning where
+// ed25519MapTo is defined - which means a linkable ring signature designed
+// against RFC 9380 could be verified here in full. Monero's own cannot.
 //
-// It could be done by supplying the square roots inside the map as witnesses
-// and checking the relations they satisfy: verifying a root is a single
-// multiplication where computing it is a 252 step modular exponentiation, which
-// is the difference between a thousand and tens of thousands per ring member.
-// That means mirroring ge_fromfe_frombytes_vartime exactly, branches included,
-// and proving which branch was taken. Worth knowing it is possible; not
-// something to get subtly wrong.
+// Nor does the hint trick above rescue it. Hints work for decompression because
+// compressing is the cheap direction, so a claimed point can be checked.
+// Hash-to-point has no cheap inverse, and a hinted H_p(P_i) that nobody
+// verifies is a forgery, since choosing it freely lets one key produce any
+// number of images.
+//
+// Monero's map could still be verified, by supplying the square roots inside it
+// as witnesses and checking the relations they satisfy: verifying a root is a
+// single multiplication where computing it is a 252 step modular
+// exponentiation, which is the difference between a thousand and tens of
+// thousands of cost per ring member. That means mirroring
+// ge_fromfe_frombytes_vartime exactly, branches included, and proving which
+// branch was taken. Worth knowing it is possible; not something to get subtly
+// wrong.
 //
 // This is also the pre-RingCT signature. Current Monero uses CLSAG, which adds
 // commitment layers and aggregation coefficients on top of the above, and

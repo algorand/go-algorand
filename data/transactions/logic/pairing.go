@@ -1113,6 +1113,16 @@ var ed25519MapC = func() *edfield.Element {
 // and adding them if the caller needs an output uniform over the group. A
 // single mapped element is not uniform.
 //
+// Elligator 2 is the choice the rest of the opcode makes for us: ec_map_to
+// means "this curve's standard map", SSWU for BLS12-381 and SVDW for BN254, and
+// for edwards25519 that is Elligator 2. It is also what this node already
+// computes elsewhere, since vrf_verify is ECVRF-ED25519-SHA512-Elligator2.
+// Protocols predating RFC 9380 hash to this curve by their own maps - Monero's
+// is keccak-256 into CryptoNote's ge_fromfe_frombytes_vartime - and those are
+// deliberately not what this computes. An opcode whose meaning is "the standard
+// map" for four groups and "one project's legacy function" for a fifth would be
+// a trap for everyone else hashing to edwards25519.
+//
 // Coordinates are carried as fractions rather than divided, so the square root
 // and the one inversion needed to encode the result are the only
 // exponentiations.
