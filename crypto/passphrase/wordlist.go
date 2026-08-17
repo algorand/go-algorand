@@ -32,7 +32,7 @@ func init() {
 }
 
 // This wordlist was taken from https://git.io/fhZUO
-var wordlist = strings.Split(wordlistRaw, "\n")
+var wordlist = strings.Split(strings.TrimSpace(wordlistRaw), "\n")
 var wordlistRaw = `abandon
 ability
 able
