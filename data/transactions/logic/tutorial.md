@@ -1,29 +1,46 @@
 # LogicSig
 
-An Algorand transaction may be signed one of three ways:
+An Algorand transaction may be signed one of four ways:
 
-- by one signature corresponding to the public key that is the Sender address
+- by one signature corresponding to the public key that is the transaction's authorizer
 - by several signatures that are components of a MultiSig address
+- by a post-quantum signature
 - by a program that is part of a LogicSig data structure
 
-Standard accounts and MultiSig accounts are covered elsewhere.
+The _authorizer_ is the transaction's AuthAddr if the sending account has been
+rekeyed, and the Sender otherwise. Standard accounts and MultiSig accounts are
+covered elsewhere.
 
-LogicSig has four parts:
+LogicSig has these parts:
 
 - Logic: raw program bytes (required)
 - Sig: an optional signature of the program bytes
-- Msig: an optional MultiSig signature of the program bytes
+- Msig: an optional MultiSig signature of the program bytes (legacy, see below)
+- LMsig: an optional address-bound MultiSig signature of the program bytes
+- PQsig: an optional post-quantum signature of the program bytes
 - Args: an optional array of byte strings the program can use
+
+At most one of Sig, Msig, LMsig and PQsig may be present.
 
 A LogicSig is valid if one of the following is true:
 
-- Sig is a valid signature of the program by the Sender
-- Msig is a valid MultiSig signature of the program by the Sender
-- The hash of the program is equal to the Sender address
+- Sig is a valid signature of the program by the authorizer
+- Msig is a valid MultiSig signature of the program by the authorizer
+- LMsig is a valid MultiSig signature, by the authorizer, of the program
+  together with the authorizer's address
+- PQsig is a valid post-quantum signature, by the authorizer, of the program
+  together with the authorizer's address
+- The hash of the program is equal to the authorizer
 
-The first two cases are examples of _delegation_. An account owner can declare that on their behalf the signed logic can authorize transactions. The simplest program might be `int 1` which is effectively `return true`. If an account owner Bob signed this program with their key, anyone with that bit of signed logic could apply it to validate any transaction on behalf of Bob (don't do this). A better program might be "allow a transfer to Alice 100 Algos next Thursday between 18:00 and 19:00 if she presents a secret key".
+Sig and Msig sign only the program bytes, so the same signed program is valid
+for any account that authorized it. LMsig and PQsig bind the authorizer's
+address into the signed message, so a signature made for one account cannot be
+replayed against another. Msig is superseded by LMsig and is rejected from
+consensus v41 onward; new multisig-delegated LogicSigs must use LMsig.
 
-The third case is an account wholly governed by the program. The program cannot be changed. Once assets have been sent to that account, assets only come out when there is a transaction that approves it. If the account is the hash of the program `int 0` (aka, `return false`), all transactions are rejected and nothing can be gotten out (until someone brute-forces the public key of that account which is considered infeasible). If the account is the hash of the program `int 1` any transaction is approved. In between are a wide variety of checks and contracts possible.
+Every case but the last is an example of _delegation_. An account owner can declare that on their behalf the signed logic can authorize transactions. The simplest program might be `int 1` which is effectively `return true`. If an account owner Bob signed this program with their key, anyone with that bit of signed logic could apply it to validate any transaction on behalf of Bob (don't do this). A better program might be "allow a transfer to Alice 100 Algos next Thursday between 18:00 and 19:00 if she presents a secret key".
+
+The last case is an account wholly governed by the program. The program cannot be changed. Once assets have been sent to that account, assets only come out when there is a transaction that approves it. If the account is the hash of the program `int 0` (aka, `return false`), all transactions are rejected and nothing can be gotten out (until someone brute-forces the public key of that account which is considered infeasible). If the account is the hash of the program `int 1` any transaction is approved. In between are a wide variety of checks and contracts possible.
 
 Accounts wholly governed by programs are the root of **escrow accounts**. If two parties share the program source, they can hash it and verify the address of the account governed by the program. Checking the publicly known balance on that account and the logic governing the release of those assets is a key feature of many contracts. A common pattern is the 'time locked hash contract', e.g. "Alice puts 100 Algos into the account and gets it back after some timeout unless Bob claims it by supplying some secret key". Templates for this sort of contract and others are available.
 
@@ -72,7 +89,7 @@ Unlock a hash contract, send from the escrow account governed by the program. To
 goal clerk send -a 1000 -c DFPKC2SJP3OTFVJFMCD356YB7BOT4SJZTGWLIPPFEWL3ZABUFLTOY6ILYE --to DFPKC2SJP3OTFVJFMCD356YB7BOT4SJZTGWLIPPFEWL3ZABUFLTOY6ILYE --from-program tlhc.teal --argb64 "90GwXNJlVYGvgNwUl9eIUW21E/5vRu9/uqaCkw67sQk="
 ```
 
-## LogicSic signed by a MultiSig account
+## LogicSig signed by a MultiSig account
 
 For some multisig account, 2 of 3:
 
@@ -81,6 +98,10 @@ goal account multisig new -T 2 DFPKC2SJP3OTFVJFMCD356YB7BOT4SJZTGWLIPPFEWL3ZABUF
 ```
 
 Create an lsig with the first signature, add more signatures to it. `-A` is the multisig address, `-a` is the sub-key adding its signature. After the lsig file is created the multisig address is built into it and doesn't need to be specified.
+
+Against a network at consensus v41 or later this writes an address-bound LMsig,
+which is the form that still validates. Pass `--legacy-msig` to write the older
+Msig instead, bearing in mind that such a LogicSig will be rejected.
 
 ```
 goal clerk multisig signprogram -p ~/Documents/tlhc.teal -a YYKRMERAFXMXCDWMBNR6BUUWQXDCUR53FPUGXLUYS7VNASRTJW2ENQ7BMQ -A 5DLEJBZHDG4XTIILEEJ6HSLG2YFGHNDAKIUAFASMFV234CJGEDQYMJ6LMI -o /tmp/tlhca.lsig

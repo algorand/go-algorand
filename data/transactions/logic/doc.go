@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/algorand/go-algorand/protocol"
@@ -49,7 +50,7 @@ var opDescByName = map[string]OpDesc{
 	},
 
 	"mimc": {"MiMC hash of scalars A, using curve and parameters specified by configuration C", "" +
-		"A is a non-empty list of concatenated 32 byte big-endian unsigned integer scalars.  Fail if A's length is not a multiple of 32 or any element is greater than or equal to the scalar field modulus.\n\n" +
+		"A is a non-empty list of concatenated 32 byte big-endian unsigned integer scalars. Fail if A's length is not a multiple of 32 or any element is greater than or equal to the scalar field modulus.\n\n" +
 		"MiMC hashes field elements, not arbitrary byte strings; reducing external inputs modulo the scalar field modulus makes congruent inputs hash identically. " +
 		"MiMC is thus not a general purpose hash function, but meant to be used in zero knowledge applications to match a zk-circuit implementation.",
 		[]string{"configuration index"}, "",
@@ -65,7 +66,7 @@ var opDescByName = map[string]OpDesc{
 	"ed25519verify_bare":  {"for (data A, signature B, pubkey C) verify the signature of the data against the pubkey => {0 or 1}", "", nil, ""},
 	"ecdsa_verify":        {"for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}", "The 32 byte Y-component of a public key is the last element on the stack, preceded by X-component of a pubkey, preceded by S and R components of a signature, preceded by the data that is fifth element on the stack. All values are big-endian encoded. The signed data must be 32 bytes long, and signatures in lower-S form are only accepted.", []string{"curve index"}, ""},
 	"ecdsa_pk_decompress": {"decompress pubkey A into components X, Y", "The 33 byte public key in a compressed form to be decompressed into X and Y (top) components. All values are big-endian encoded.", []string{"curve index"}, ""},
-	"ecdsa_pk_recover":    {"for (data A, recovery id B, signature C, D) recover a public key", "S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to deriver a public key. All values are big-endian encoded. The signed data must be 32 bytes long.", []string{"curve index"}, ""},
+	"ecdsa_pk_recover":    {"for (data A, recovery id B, signature C, D) recover a public key", "S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to derive a public key. All values are big-endian encoded. The signed data must be 32 bytes long.", []string{"curve index"}, ""},
 
 	"ec_add": {"for curve points A and B, return the curve point A + B", "" +
 		"A and B are curve points in affine representation: field element X concatenated with field element Y. " +
@@ -85,11 +86,11 @@ var opDescByName = map[string]OpDesc{
 		[]string{"curve index"}, "",
 	},
 	"ec_pairing_check": {"1 if the product of the pairing of each point in A with its respective point in B is equal to the identity element of the target group Gt, else 0",
-		"A and B are concatenated points, encoded and checked as described in `ec_add`. A contains points of the group G, B contains points of the associated group (G2 if G is G1, and vice versa). Fails if A and B have a different number of points, or if any point is not in its described group or outside the main prime-order subgroup - a stronger condition than other opcodes. AVM values are limited to 4096 bytes, so `ec_pairing_check` is limited by the size of the points in the groups being operated upon.",
+		fmt.Sprintf("A and B are concatenated points, encoded and checked as described in `ec_add`. A contains points of the group G, B contains points of the associated group (G2 if G is G1, and vice versa). Fails if A and B have a different number of points, or if any point is not in its described group or outside the main prime-order subgroup - a stronger condition than other opcodes. AVM values are limited to %d bytes, so `ec_pairing_check` is limited by the size of the points in the groups being operated upon.", maxStringSize),
 		[]string{"curve index"}, "",
 	},
 	"ec_multi_scalar_mul": {"for curve points A and scalars B, return curve point B0A0 + B1A1 + B2A2 + ... + BnAn",
-		"A is a list of concatenated points, encoded and checked as described in `ec_add`. B is a list of concatenated scalars which, unlike ec_scalar_mul, must all be exactly 32 bytes long.\nThe name `ec_multi_scalar_mul` was chosen to reflect common usage, but a more consistent name would be `ec_multi_scalar_mul`. AVM values are limited to 4096 bytes, so `ec_multi_scalar_mul` is limited by the size of the points in the group being operated upon.",
+		fmt.Sprintf("A is a list of concatenated points, encoded and checked as described in `ec_add`. B is a list of concatenated scalars which, unlike ec_scalar_mul, must all be exactly 32 bytes long.\nThe operation computes the sum of the individual scalar multiplications, and is often called multi-exponentiation. AVM values are limited to %d bytes, so `ec_multi_scalar_mul` is limited by the size of the points in the group being operated upon.", maxStringSize),
 		[]string{"curve index"}, "",
 	},
 	"ec_subgroup_check": {"1 if A is in the main prime-order subgroup of G (including the point at infinity) else 0. Program fails if A is not in G at all.", "", []string{"curve index"}, ""},
@@ -115,16 +116,15 @@ var opDescByName = map[string]OpDesc{
 
 	"len":  {"yields length of byte value A", "", nil, ""},
 	"itob": {"converts uint64 A to big-endian byte array, always of length 8", "", nil, ""},
-	"btoi": {"converts big-endian byte array A to uint64. Fails if len(A) > 8. Padded by leading 0s if len(A) < 8.",
-		"`btoi` fails if the input is longer than 8 bytes.", nil, ""},
+	"btoi": {"converts big-endian byte array A to uint64. Fails if len(A) > 8. Padded by leading 0s if len(A) < 8.", "", nil, ""},
 
 	"%":      {"A modulo B. Fail if B == 0.", "", nil, ""},
 	"|":      {"A bitwise-or B", "", nil, ""},
 	"&":      {"A bitwise-and B", "", nil, ""},
 	"^":      {"A bitwise-xor B", "", nil, ""},
 	"~":      {"bitwise invert value A", "", nil, ""},
-	"shl":    {"A times 2^B, modulo 2^64", "", nil, ""},
-	"shr":    {"A divided by 2^B", "", nil, ""},
+	"shl":    {"A times 2^B, modulo 2^64. Fail if B > 63", "", nil, ""},
+	"shr":    {"A divided by 2^B. Fail if B > 63", "", nil, ""},
 	"sqrt":   {"The largest integer I such that I^2 <= A", "", nil, ""},
 	"bitlen": {"The highest set bit in A. If A is a byte-array, it is interpreted as a big-endian unsigned integer. bitlen of 0 is 0, bitlen of 8 is 4", "bitlen interprets arrays as big-endian integers, unlike setbit/getbit", nil, ""},
 	"exp":    {"A raised to the Bth power. Fail if A == B == 0 and on overflow", "", nil, ""},
@@ -133,7 +133,7 @@ var opDescByName = map[string]OpDesc{
 	"addw":   {"A plus B as a 128-bit result. X is the carry-bit, Y is the low-order 64 bits.", "", nil, ""},
 	"divw": {"A,B / C. Fail if C == 0 or if result overflows.",
 		"The notation A,B indicates that A and B are interpreted as a uint128 value, with A as the high uint64 and B the low.", nil, ""},
-	"divmodw": {"W,X = (A,B / C,D); Y,Z = (A,B modulo C,D)",
+	"divmodw": {"W,X = (A,B / C,D); Y,Z = (A,B modulo C,D). Fail if C,D == 0",
 		"The notation J,K indicates that two uint64 values J and K are interpreted as a uint128 value, with J as the high uint64 and K the low.", nil, ""},
 
 	"intcblock":  {"prepare block of uint64 constants for use by intc", "`intcblock` loads following program bytes into an array of integer constants in the evaluator. These integer constants can be referred to by `intc` and `intc_*` which will push the value onto the stack. Subsequent calls to `intcblock` reset and replace the integer constants available to the script.", []string{"a block of int constant values"}, ""},
@@ -155,7 +155,7 @@ var opDescByName = map[string]OpDesc{
 		"pushbytess args are not added to the bytecblock during assembly processes",
 		[]string{"a list of byte constants"}, ""},
 
-	"bzero": {"zero filled byte-array of length A", "", nil, ""},
+	"bzero": {fmt.Sprintf("zero filled byte-array of length A. Fail if A exceeds %d", maxStringSize), "", nil, ""},
 	"arg":   {"Nth LogicSig argument", "", []string{"an arg index"}, ""},
 	"arg_0": {"LogicSig argument 0", "", nil, ""},
 	"arg_1": {"LogicSig argument 1", "", nil, ""},
@@ -202,7 +202,7 @@ var opDescByName = map[string]OpDesc{
 		[]string{"position in scratch space to load from"}, ""},
 	"store": {"store A to the Ith scratch space", "",
 		[]string{"position in scratch space to store to"}, ""},
-	"loads":  {"Ath scratch space value.  All scratch spaces are 0 at program start.", "", nil, ""},
+	"loads":  {"Ath scratch space value. All scratch spaces are 0 at program start.", "", nil, ""},
 	"stores": {"store B to the Ath scratch space", "", nil, ""},
 	"gload": {"Ith scratch space value of the Tth transaction in the current group",
 		"`gload` fails unless the requested transaction is an ApplicationCall and T < GroupIndex.",
@@ -218,11 +218,11 @@ var opDescByName = map[string]OpDesc{
 	"gaids": {"ID of the asset or application created in the Ath transaction of the current group",
 		"`gaids` fails unless the requested transaction created an asset or application and A < GroupIndex.", nil, ""},
 
-	"json_ref": {"key B's value, of type R, from a [valid](jsonspec.md) utf-8 encoded json object A",
-		"_Warning_: Usage should be restricted to very rare use cases, as JSON decoding is expensive and quite limited. In addition, JSON objects are large and not optimized for size.\n\nAlmost all smart contracts should use simpler and smaller methods (such as the [ABI](https://arc.algorand.foundation/ARCs/arc-0004). This opcode should only be used in cases where JSON is only available option, e.g. when a third-party only signs JSON.",
+	"json_ref": {"key B's value, of type R, from the json object A, which must satisfy the [JSON spec](https://github.com/algorand/go-algorand/blob/master/data/transactions/logic/jsonspec.md)",
+		"_Warning_: Usage should be restricted to very rare use cases, as JSON decoding is expensive and quite limited. In addition, JSON objects are large and not optimized for size.\n\nAlmost all smart contracts should use simpler and smaller methods (such as the [ABI](https://arc.algorand.foundation/ARCs/arc-0004)). This opcode should only be used in cases where JSON is the only available option, e.g. when a third-party only signs JSON.",
 		[]string{"return type index"}, ""},
 
-	"bnz":    {"branch to TARGET if value A is not zero", "The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Starting at v4, the offset is treated as a signed 16 bit integer allowing for backward branches and looping. In prior version (v1 to v3), branch offsets are limited to forward branches only, 0-0x7fff.\n\nAt v2 it became allowed to branch to the end of the program exactly after the last instruction: bnz to byte N (with 0-indexing) was illegal for a TEAL program with N bytes before v2, and is legal after it. This change eliminates the need for a last instruction of no-op as a branch target at the end. (Branching beyond the end--in other words, to a byte larger than N--is still illegal and will cause the program to fail.)", []string{"branch offset"}, ""},
+	"bnz":    {"branch to TARGET if value A is not zero", "From v1 to v12, the `bnz` opcode byte 0x40 is followed by exactly two immediate bytes, high byte first, which together form a 16 bit offset N. The instruction is 3 bytes long. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to the instruction at `pc + 3 + N`, else proceed to the next instruction at `pc + 3`. Starting at v4, the offset is treated as a signed 16 bit integer allowing for backward branches and looping. In prior version (v1 to v3), branch offsets are limited to forward branches only, 0-0x7fff.\n\nStarting at v13, the offset is encoded as a `binary.Varint` (zigzag plus ULEB128) of one or more bytes, so the instruction is `1 + len(offset)` bytes long. A non-negative offset N is measured from the end of the instruction: execution continues at `pc + 1 + len(offset) + N`. A negative offset N is measured from the start of the instruction: execution continues at `pc + N`. Not branching always continues at `pc + 1 + len(offset)`. A branch to the start of its own instruction cannot be encoded, since a zero offset means the following instruction; the assembler rejects the attempt.\n\nBranch targets must be aligned instructions at every version. (e.g. Branching to the second byte of a 2 byte op will be rejected.)\n\nAt v2 it became allowed to branch to the end of the program exactly after the last instruction: bnz to byte N (with 0-indexing) was illegal for a TEAL program with N bytes before v2, and is legal after it. This change eliminates the need for a last instruction of no-op as a branch target at the end. (Branching beyond the end--in other words, to a byte larger than N--is still illegal and will cause the program to fail.)", []string{"branch offset"}, ""},
 	"bz":     {"branch to TARGET if value A is zero", "See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.", []string{"branch offset"}, ""},
 	"b":      {"branch unconditionally to TARGET", "See `bnz` for details on how branches work. `b` always jumps to the offset.", []string{"branch offset"}, ""},
 	"return": {"use A as success value; end", "", nil, ""},
@@ -238,7 +238,7 @@ var opDescByName = map[string]OpDesc{
 	"swap":    {"swaps A and B on stack", "", nil, ""},
 	"select":  {"selects one of two values based on top-of-stack: B if C != 0, else A", "", nil, ""},
 
-	"concat":         {"join A and B", "`concat` fails if the result would be greater than 4096 bytes.", nil, ""},
+	"concat":         {"join A and B", fmt.Sprintf("`concat` fails if the result would be greater than %d bytes.", maxStringSize), nil, ""},
 	"substring":      {"A range of bytes from A starting at S up to but not including E. If E < S, or either is larger than the array length, the program fails", "", []string{"start position", "end position"}, ""},
 	"substring3":     {"A range of bytes from A starting at B up to but not including C. If C < B, or either is larger than the array length, the program fails", "", nil, ""},
 	"getbit":         {"Bth bit of (byte-array or integer) A. If B is greater than or equal to the bit length of the value (8*byte length), the program fails", "see explanation of bit ordering in setbit", nil, ""},
@@ -255,8 +255,8 @@ var opDescByName = map[string]OpDesc{
 
 	"base64_decode": {"decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E", "_Warning_: Usage should be restricted to very rare use cases. In almost all cases, smart contracts should directly handle non-encoded byte-strings. This opcode should only be used in cases where base64 is the only available option, e.g. interoperability with a third-party that only signs base64 strings.\n\n Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See [RFC 4648 sections 4 and 5](https://rfc-editor.org/rfc/rfc4648.html#section-4). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\\n` and `\\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\\r`, or `\\n`.", []string{"encoding index"}, ""},
 
-	"balance":           {"balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted. Changes caused by inner transactions are observable immediately following `itxn_submit`", "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.", nil, ""},
-	"min_balance":       {"minimum required balance for account A, in microalgos. Required balance is affected by ASA, App, and Box usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes. Changes caused by inner transactions or box usage are observable immediately following the opcode effecting the change.", "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.", nil, ""},
+	"balance":           {"balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted. Changes caused by inner transactions are observable immediately following `itxn_submit`", "params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.", nil, ""},
+	"min_balance":       {"minimum required balance for account A, in microalgos. Required balance is affected by ASA, App, and Box usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes. Changes caused by inner transactions or box usage are observable immediately following the opcode effecting the change.", "params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.", nil, ""},
 	"app_opted_in":      {"1 if account A is opted in to application B, else 0", "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: 1 if opted in and 0 otherwise.", nil, ""},
 	"app_local_get":     {"local state of the key B in the current application in account A", "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key. Return: value. The value is zero (of type uint64) if the key does not exist.", nil, ""},
 	"app_local_get_ex":  {"X is the local state of application B, key C in account A. Y is 1 if key existed, else 0", "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.", nil, ""},
@@ -267,14 +267,14 @@ var opDescByName = map[string]OpDesc{
 	"app_local_del":     {"delete key B from account A's local state of the current application", "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key.\n\nDeleting a key which is already absent has no effect on the application local state. (In particular, it does _not_ cause the program to fail.)", nil, ""},
 	"app_global_del":    {"delete key A from the global state of the current application", "params: state key.\n\nDeleting a key which is already absent has no effect on the application global state. (In particular, it does _not_ cause the program to fail.)", nil, ""},
 	"asset_holding_get": {"X is field F from account A's holding of asset B. Y is 1 if A is opted into B, else 0", "params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or, since v4, a Txn.ForeignAssets offset). Return: did_exist flag (1 if the asset existed and 0 otherwise), value.", []string{"asset holding field index"}, ""},
-	"asset_params_get":  {"X is field F from asset A. Y is 1 if A exists, else 0", "params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return: did_exist flag (1 if the asset existed and 0 otherwise), value.", []string{"asset params field index"}, ""},
+	"asset_params_get":  {"X is field F from asset A. Y is 1 if A exists, else 0", "params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id). Return: did_exist flag (1 if the asset existed and 0 otherwise), value.", []string{"asset params field index"}, ""},
 	"app_params_get":    {"X is field F from app A. Y is 1 if A exists, else 0", "params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag (1 if the application existed and 0 otherwise), value.", []string{"app params field index"}, ""},
-	"app_params_set":    {"set field F of the current app to A", "", []string{"app params field index"}, ""},
+	"app_params_set":    {"set field F of the current app to A", "Setting `AppForeignBoxReads` allows any app to read this app's boxes. Setting `AppFamilyBoxAccess` allows any app with the same creator, present or future, to read and write them, and subjects this app's boxes to the family reentrancy rule. Either flag may be set (A nonzero) or cleared (A zero) at any time by the app itself.", []string{"app params field index"}, ""},
 	"acct_params_get":   {"X is field F from account A. Y is 1 if A owns positive algos, else 0", "", []string{"account params field index"}, ""},
-	"voter_params_get":  {"X is field F from online account A as of the balance round: 320 rounds before the current round. Y is 1 if A had positive algos online in the agreement round, else Y is 0 and X is a type specific zero-value", "", []string{"voter params field index"}, ""},
-	"online_stake":      {"the total online stake in the agreement round", "", nil, ""},
+	"voter_params_get":  {"X is field F from online account A as of the balance round: 320 rounds before the current round. Y is 1 if A had positive online algos in the balance round, else Y is 0 and X is a type specific zero-value", "", []string{"voter params field index"}, ""},
+	"online_stake":      {"the total online stake as of the balance round: 320 rounds before the current round", "", nil, ""},
 	"assert":            {"immediately fail unless A is a non-zero number", "", nil, ""},
-	"callsub":           {"branch unconditionally to TARGET, saving the next instruction on the call stack", "The call stack is separate from the data stack. Only `callsub`, `retsub`, and `proto` manipulate it.", []string{"branch offset"}, ""},
+	"callsub":           {"branch unconditionally to TARGET, saving the next instruction on the call stack", "The call stack is separate from the data stack. Only `callsub`, `retsub`, and `proto` manipulate it. See `bnz` for details on how the branch offset is encoded.", []string{"branch offset"}, ""},
 	"proto":             {"Prepare top call frame for a retsub that will assume A args and R return values.", "Fails unless the last instruction executed was a `callsub`.", []string{"number of arguments", "number of return values"}, ""},
 	"retsub":            {"pop the top instruction from the call stack and branch to it", "If the current frame was prepared by `proto A R`, `retsub` will remove the 'A' arguments from the stack, move the `R` return values down, and pop any stack locations above the relocated return values.", nil, ""},
 
@@ -296,23 +296,23 @@ var opDescByName = map[string]OpDesc{
 
 	"bsqrt": {"The largest integer I such that I^2 <= A. A and I are interpreted as big-endian unsigned integers", "", nil, ""},
 
-	"log":         {"write A to log state of the current application", "`log` fails if called more than MaxLogCalls times in a program, or if the sum of logged bytes exceeds 1024 bytes.", nil, ""},
-	"itxn_begin":  {"begin preparation of a new inner transaction in a new transaction group", "`itxn_begin` initializes Sender to the application address; Fee to the minimum allowable, taking into account MinTxnFee and credit from overpaying in earlier transactions; FirstValid/LastValid to the values in the invoking transaction, and all other fields to zero or empty values.", nil, ""},
+	"log":         {"write A to log state of the current application", fmt.Sprintf("`log` fails if called more than MaxLogCalls times in a program, or if the sum of logged bytes exceeds %d bytes.", maxLogSize), nil, ""},
+	"itxn_begin":  {"begin preparation of a new inner transaction in a new transaction group", "`itxn_begin` initializes Sender to the application address; Fee to a default, described below; FirstValid/LastValid to the values in the invoking transaction, and all other fields to zero or empty values.\n\nThe default Fee is the additional amount that would make the group's fees sufficient so far: MinTxnFee times the fee usage of the transactions already in the group plus one base fee for this new transaction, less the fees already set and any credit from overpaying in earlier transactions. Because the new transaction's own cost is counted as a single base fee, extra costs from fields set later, such as a large note or program, are not reflected in the default. The group fee is checked and charged at `itxn_submit`, so changing Fee, setting fields that cost more, or adding transactions with `itxn_next` all change what is owed.", nil, ""},
 	"itxn_next":   {"begin preparation of a new inner transaction in the same transaction group", "`itxn_next` initializes the transaction exactly as `itxn_begin` does", nil, ""},
-	"itxn_field":  {"set field F of the current inner transaction to A", "`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_, or an attempt is made extend an array field beyond the limit imposed by consensus parameters. (Addresses set into asset params of acfg transactions need not be _available_.)", []string{"transaction field index"}, ""},
+	"itxn_field":  {"set field F of the current inner transaction to A", "`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_, or an attempt is made to extend an array field beyond the limit imposed by consensus parameters. (Addresses set into asset params of acfg transactions need not be _available_.)", []string{"transaction field index"}, ""},
 	"itxn_submit": {"execute the current inner transaction group. Fail if executing this group would exceed the inner transaction limit, or if any transaction in the group fails.", "`itxn_submit` resets the current transaction so that it can not be resubmitted. A new `itxn_begin` is required to prepare another inner transaction.", nil, ""},
 
-	"vrf_verify": {"Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.", "`VrfAlgorand` is the VRF used in Algorand. It is ECVRF-ED25519-SHA512-Elligator2, specified in the IETF internet draft [draft-irtf-cfrg-vrf-03](https://datatracker.ietf.org/doc/draft-irtf-cfrg-vrf/03/).", []string{" parameters index"}, ""},
-	"block":      {"field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)", "", []string{" block field index"}, ""},
+	"vrf_verify": {"Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.", "`VrfAlgorand` is the VRF used in Algorand. It is ECVRF-ED25519-SHA512-Elligator2, specified in the IETF internet draft [draft-irtf-cfrg-vrf-03](https://datatracker.ietf.org/doc/draft-irtf-cfrg-vrf/03/).", []string{"parameters index"}, ""},
+	"block":      {"field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)", "", []string{"block field index"}, ""},
 
-	"switch": {"branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.", "", []string{"list of labels"}, ""},
-	"match":  {"given match cases from A[1] to A[N], branch to the Ith label where A[I] = B. Continue to the following instruction if no matches are found.", "`match` consumes N+1 values from the stack. Let the top stack value be B. The following N values represent an ordered list of match cases/constants (A), where the first value (A[0]) is the deepest in the stack. The immediate arguments are an ordered list of N labels (T). `match` will branch to target T[I], where A[I] = B. If there are no matches then execution continues on to the next instruction.", []string{"list of labels"}, ""},
+	"switch": {"branch to the Ath label. Labels are numbered from 0, so execution continues at the following instruction if A is greater than or equal to the number of labels.", "", []string{"list of labels"}, ""},
+	"match":  {"given N match cases, deepest first, branch to the Ith label (numbering from 0) where case I equals B. Continue to the following instruction if no matches are found.", "`match` consumes N+1 values from the stack. Let the top stack value be B. The following N values represent an ordered list of match cases/constants (A), where the first value (A[0]) is the deepest in the stack. The immediate arguments are an ordered list of N labels (T). `match` will branch to target T[I], where A[I] = B. If there are no matches then execution continues on to the next instruction.", []string{"list of labels"}, ""},
 
 	"frame_dig":  {"Nth (signed) value from the frame pointer.", "", []string{"frame slot"}, ""},
 	"frame_bury": {"replace the Nth (signed) value from the frame pointer in the stack with A", "", []string{"frame slot"}, ""},
 	"popn":       {"remove N values from the top of the stack", "", []string{"stack depth"}, ""},
 
-	"box_create":  {"create a box named A, of length B. Fail if the name A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1", "Newly created boxes are filled with 0 bytes. `box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `box_create`.", nil, ""},
+	"box_create":  {"create a box named A, of length B. Fail if the name A is empty or longer than 64 bytes, or B exceeds 32,768. Returns 0 if A already existed, else 1", "Newly created boxes are filled with 0 bytes. `box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `box_create`.", nil, ""},
 	"box_extract": {"read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.", "", nil, ""},
 	"box_replace": {"write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.", "", nil, ""},
 	"box_splice":  {"set box A to contain its previous bytes up to index B, followed by D, followed by the original bytes of A that began at index B+C.", "Boxes are of constant length. If C < len(D), then len(D)-C bytes will be removed from the end. If C > len(D), zero bytes will be appended to the end to reach the box length.", nil, ""},
@@ -320,9 +320,9 @@ var opDescByName = map[string]OpDesc{
 	"box_len":     {"X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0.", "", nil, ""},
 	"box_get":     {"X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0.", "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`", nil, ""},
 	"box_put":     {"replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist", "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`", nil, ""},
-	"box_resize":  {"change the size of box named A to be of length B, adding zero bytes to end or removing bytes from the end, as needed. Fail if the name A is empty, A is not an existing box, or B exceeds 32,768.", "", nil, ""},
+	"box_resize":  {"change the size of box named A to be of length B, adding zero bytes to end or removing bytes from the end, as needed. Fail if the name A is empty or longer than 64 bytes, A is not an existing box, or B exceeds 32,768.", "", nil, ""},
 
-	"app_box_create":  {"create a box named B, of length C, for app A. Fail if the name B is empty or C exceeds 32,768. Returns 0 if B already existed, else 1", "Newly created boxes are filled with 0 bytes. `app_box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `app_box_create`.", nil, ""},
+	"app_box_create":  {"create a box named B, of length C, for app A. Fail if the name B is empty or longer than 64 bytes, or C exceeds 32,768. Returns 0 if B already existed, else 1", "Newly created boxes are filled with 0 bytes. `app_box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `app_box_create`.", nil, ""},
 	"app_box_extract": {"read D bytes from box B of app A, starting at offset C. Fail if box B does not exist, or the byte range is outside B's size.", "", nil, ""},
 	"app_box_replace": {"write byte-array D into box B of app A, starting at offset C. Fail if box B does not exist, or the byte range is outside B's size.", "", nil, ""},
 	"app_box_del":     {"delete box named B of app A if it exists. Return 1 if B existed, 0 otherwise", "", nil, ""},
@@ -330,7 +330,7 @@ var opDescByName = map[string]OpDesc{
 	"app_box_get":     {"X is the contents of box B of app A if B exists, else ''. Y is 1 if B exists, else 0.", "For boxes that exceed 4,096 bytes, consider `app_box_create`, `app_box_extract`, and `app_box_replace`", nil, ""},
 	"app_box_put":     {"replaces the contents of box B of app A with byte-array C. Fails if B exists and len(C) != len(box B). Creates B if it does not exist", "For boxes that exceed 4,096 bytes, consider `app_box_create`, `app_box_extract`, and `app_box_replace`", nil, ""},
 	"app_box_splice":  {"set box B of app A to contain its previous bytes up to index C, followed by E, followed by the original bytes of B that began at index C+D.", "Boxes are of constant length. If D < len(E), then len(E)-D bytes will be removed from the end. If D > len(E), zero bytes will be appended to the end to reach the box length.", nil, ""},
-	"app_box_resize":  {"change the size of box named B of app A to be of length C, adding zero bytes to end or removing bytes from the end, as needed. Fail if the name B is empty, B is not an existing box, or C exceeds 32,768.", "", nil, ""},
+	"app_box_resize":  {"change the size of box named B of app A to be of length C, adding zero bytes to end or removing bytes from the end, as needed. Fail if the name B is empty or longer than 64 bytes, B is not an existing box, or C exceeds 32,768.", "", nil, ""},
 }
 
 // OpDescOf returns the OpDesc for a mnemonic opcode
@@ -338,7 +338,7 @@ func OpDescOf(opName string) OpDesc {
 	return opDescByName[opName]
 }
 
-// OpImmediateDetails contains information about the an immediate argument for
+// OpImmediateDetails contains information about an immediate argument for
 // a given opcode, combining OpSpec details with the extra note in
 // the opcodeImmediateNotes map
 type OpImmediateDetails struct {
@@ -420,9 +420,9 @@ var OnCompletionDescriptions = map[string]string{
 	NoOp.String():              "_Only_ execute the Approval Program associated with the _application ID_, with no additional effects.",
 	OptIn.String():             "_Before_ executing the Approval Program, allocate _local state_ for this _application ID_ into the _sender_'s account data.",
 	CloseOut.String():          "_After_ executing the Approval Program, clear any _local state_ for this _application ID_ out of the _sender_'s account data.",
-	ClearState.String():        "_Do not_ execute the Approval Program, and instead execute the Clear State Program (which may not reject this transaction). Additionally, clear any _local state_ for the _application ID_ out of the _sender_’s account data (as in `CloseOutOC`).",
+	ClearState.String():        "_Do not_ execute the Approval Program, and instead execute the Clear State Program (which may not reject this transaction). Additionally, clear any _local state_ for the _application ID_ out of the _sender_'s account data (as in `CloseOut`).",
 	UpdateApplication.String(): "_After_ executing the Approval Program, _replace_ the Approval Program and Clear State Program associated with the _application ID_ with the programs specified in this transaction.",
-	DeleteApplication.String(): "_After_ executing the Approval Program, _delete_ the parameters of with the _application ID_ from the account data of the application’s creator.",
+	DeleteApplication.String(): "_After_ executing the Approval Program, _delete_ the parameters with the _application ID_ from the account data of the application's creator.",
 }
 
 func addExtra(original string, extra string) string {
