@@ -81,7 +81,8 @@ var opDescByName = map[string]OpDesc{
 		[]string{"curve index"}, "",
 	},
 	"ec_scalar_mul": {"for curve point A and scalar B, return the curve point BA, the point A multiplied by the scalar B.",
-		"A is a curve point encoded and checked as described in `ec_add`. Scalar B is interpreted as a big-endian unsigned integer. Fails if B exceeds 32 bytes.",
+		"A is a curve point encoded and checked as described in `ec_add`. Scalar B is interpreted as a big-endian unsigned integer. Fails if B exceeds 32 bytes.\n" +
+			"B is reduced modulo the order of the main prime-order subgroup of G before use, so scalars larger than that order wrap around. When A is in that subgroup the result is the ordinary multiple of A by B. Subgroup membership is not checked, as in `ec_add`.",
 		[]string{"curve index"}, "",
 	},
 	"ec_pairing_check": {"1 if the product of the pairing of each point in A with its respective point in B is equal to the identity element of the target group Gt, else 0",
@@ -89,7 +90,7 @@ var opDescByName = map[string]OpDesc{
 		[]string{"curve index"}, "",
 	},
 	"ec_multi_scalar_mul": {"for curve points A and scalars B, return curve point B0A0 + B1A1 + B2A2 + ... + BnAn",
-		"A is a list of concatenated points, encoded and checked as described in `ec_add`. B is a list of concatenated scalars which, unlike ec_scalar_mul, must all be exactly 32 bytes long.\nThe name `ec_multi_scalar_mul` was chosen to reflect common usage, but a more consistent name would be `ec_multi_scalar_mul`. AVM values are limited to 4096 bytes, so `ec_multi_scalar_mul` is limited by the size of the points in the group being operated upon.",
+		"A is a list of concatenated points, encoded and checked as described in `ec_add`. B is a list of concatenated scalars which, unlike ec_scalar_mul, must all be exactly 32 bytes long. Each scalar is reduced, and each product formed, as described in `ec_scalar_mul`.\nAVM values are limited to 4096 bytes, so `ec_multi_scalar_mul` is limited by the size of the points in the group being operated upon.",
 		[]string{"curve index"}, "",
 	},
 	"ec_subgroup_check": {"1 if A is in the main prime-order subgroup of G (including the point at infinity) else 0. Program fails if A is not in G at all.", "", []string{"curve index"}, ""},
