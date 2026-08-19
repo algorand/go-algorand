@@ -802,14 +802,20 @@ const (
 	BLS12_381g1
 	// BLS12_381g2 specifies the G2 group of BLS 12-381
 	BLS12_381g2
+	// ED25519 specifies the Edwards25519 (ed25519) curve
+	ED25519
 	invalidEcGroup // compile-time constant for number of fields
 )
 
+// ecGroupNames includes every EcGroup. ecPairingGroupNames omits ED25519, which
+// is not valid for ec_pairing_check, the one opcode that needs a pairing.
 var ecGroupNames [invalidEcGroup]string
+var ecPairingGroupNames [invalidEcGroup]string
 
 type ecGroupSpec struct {
-	field EcGroup
-	doc   string
+	field   EcGroup
+	version uint64
+	doc     string
 }
 
 func (fs ecGroupSpec) Field() byte {
@@ -822,7 +828,7 @@ func (fs ecGroupSpec) OpVersion() uint64 {
 	return pairingVersion
 }
 func (fs ecGroupSpec) Version() uint64 {
-	return pairingVersion
+	return fs.version
 }
 func (fs ecGroupSpec) Note() string {
 	return fs.doc
@@ -832,10 +838,11 @@ func (fs ecGroupSpec) Modes() RunMode {
 }
 
 var ecGroupSpecs = [...]ecGroupSpec{
-	{BN254g1, "G1 of the BN254 curve. Points encoded as 32 byte X following by 32 byte Y"},
-	{BN254g2, "G2 of the BN254 curve. Points encoded as 64 byte X following by 64 byte Y"},
-	{BLS12_381g1, "G1 of the BLS 12-381 curve. Points encoded as 48 byte X following by 48 byte Y"},
-	{BLS12_381g2, "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y"},
+	{BN254g1, pairingVersion, "G1 of the BN254 curve. Points encoded as 32 byte X following by 32 byte Y"},
+	{BN254g2, pairingVersion, "G2 of the BN254 curve. Points encoded as 64 byte X following by 64 byte Y"},
+	{BLS12_381g1, pairingVersion, "G1 of the BLS 12-381 curve. Points encoded as 48 byte X following by 48 byte Y"},
+	{BLS12_381g2, pairingVersion, "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y"},
+	{ED25519, edwardsVersion, "The Edwards25519 (ed25519) curve. Points encoded as 32 byte X followed by 32 byte Y. Not valid for ec_pairing_check, which has no pairing to check."},
 }
 
 func ecGroupSpecByField(c EcGroup) (ecGroupSpec, bool) {
@@ -854,10 +861,24 @@ func (s ecGroupNameSpecMap) get(name string) (FieldSpec, bool) {
 	return fs, ok
 }
 
-// EcGroups collects details about the constants used to describe EcGroups
+// EcGroups collects details about the constants used to describe EcGroups. It
+// includes every group, and is used by every ec_ opcode except
+// ec_pairing_check.
 var EcGroups = FieldGroup{
 	"EC", "Groups",
 	ecGroupNames[:],
+	ecGroupSpecByName,
+}
+
+// ecPairingGroups is the subset valid for ec_pairing_check. It omits ED25519
+// (blank name in ecPairingGroupNames), so the assembler rejects it as an
+// unknown field. It
+// shares EcGroups' Name and Doc so the two reference the same documentation
+// heading/anchor; the doc generator dedups the section by Name, and EcGroups
+// (attached to the earlier ec_add) documents the full set.
+var ecPairingGroups = FieldGroup{
+	"EC", "Groups",
+	ecPairingGroupNames[:],
 	ecGroupSpecByName,
 }
 
@@ -1865,6 +1886,9 @@ func init() {
 	for i, s := range ecGroupSpecs {
 		equal(int(s.field), i)
 		ecGroupNames[s.field] = s.field.String()
+		if s.field != ED25519 { // ED25519 left blank: invalid for pairing-only opcodes
+			ecPairingGroupNames[s.field] = s.field.String()
+		}
 		ecGroupSpecByName[s.field.String()] = s
 	}
 
