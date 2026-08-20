@@ -20,6 +20,16 @@ import (
 //         |-----> (*) MsgIsZero
 //         |-----> EncodedBlockCertMaxSize()
 //
+// PreEncodedBlockCert
+//          |-----> (*) MarshalMsg
+//          |-----> (*) CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) UnmarshalMsgWithState
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> (*) Msgsize
+//          |-----> (*) MsgIsZero
+//          |-----> PreEncodedBlockCertMaxSize()
+//
 
 // MarshalMsg implements msgp.Marshaler
 func (z *EncodedBlockCert) MarshalMsg(b []byte) (o []byte) {
@@ -144,4 +154,129 @@ func (z *EncodedBlockCert) MsgIsZero() bool {
 func EncodedBlockCertMaxSize() (s int) {
 	s = 1 + 6 + bookkeeping.BlockMaxSize() + 5 + agreement.CertificateMaxSize()
 	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *PreEncodedBlockCert) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 2
+	// string "block"
+	o = append(o, 0x82, 0xa5, 0x62, 0x6c, 0x6f, 0x63, 0x6b)
+	o = (*z).Block.MarshalMsg(o)
+	// string "cert"
+	o = append(o, 0xa4, 0x63, 0x65, 0x72, 0x74)
+	o = (*z).Certificate.MarshalMsg(o)
+	return
+}
+
+func (_ *PreEncodedBlockCert) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*PreEncodedBlockCert)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *PreEncodedBlockCert) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Block.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Block")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Certificate.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Certificate")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = PreEncodedBlockCert{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "block":
+				bts, err = (*z).Block.UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "Block")
+					return
+				}
+			case "cert":
+				bts, err = (*z).Certificate.UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "Certificate")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (z *PreEncodedBlockCert) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *PreEncodedBlockCert) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*PreEncodedBlockCert)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *PreEncodedBlockCert) Msgsize() (s int) {
+	s = 1 + 6 + (*z).Block.Msgsize() + 5 + (*z).Certificate.Msgsize()
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *PreEncodedBlockCert) MsgIsZero() bool {
+	return ((*z).Block.MsgIsZero()) && ((*z).Certificate.MsgIsZero())
+}
+
+// PreEncodedBlockCertMaxSize returns a maximum valid message size for this message type
+func PreEncodedBlockCertMaxSize() (s int) {
+	s = 1 + 6
+	panic("Unable to determine max size: MaxSize() not implemented for Raw type")
 }
