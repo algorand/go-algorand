@@ -17,6 +17,8 @@
 package verify
 
 import (
+	"fmt"
+	"runtime"
 	"slices"
 	"testing"
 	"time"
@@ -42,7 +44,17 @@ func TestAddingToCache(t *testing.T) {
 	for _, txn := range txnGroups[0] {
 		ctx, has := impl.buckets[impl.base][txn.ID()]
 		require.True(t, has)
-		require.Equal(t, ctx, groupCtx)
+		require.Equal(t, ctx, &verifiedTxnCtx{
+			specAddrs:        groupCtx.specAddrs,
+			consensusVersion: groupCtx.consensusVersion,
+			sigs: txnAuth{
+				Sig:      txn.Sig,
+				Msig:     txn.Msig,
+				Lsig:     txn.Lsig,
+				PQsig:    txn.PQsig,
+				AuthAddr: txn.AuthAddr,
+			},
+		})
 	}
 }
 
@@ -252,4 +264,126 @@ func TestPinningTransactions(t *testing.T) {
 
 	// try to pin an entry that was not added.
 	require.Error(t, impl.Pin(txnGroups[len(txnGroups)-1]))
+}
+
+// TestGetUnverifiedTransactionGroupsAuthChanges checks that a cached transaction whose
+// authorization material has been altered is reported as unverified.
+func TestGetUnverifiedTransactionGroupsAuthChanges(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	blkHdr := createDummyBlockHeader()
+	cache := MakeVerifiedTransactionCache(50)
+
+	_, signedTxns, secrets, addrs := generateTestObjects(2, 2, 0, 50)
+	group := generateTransactionGroups(1, signedTxns, secrets, addrs)[0]
+	groupCtx, err := PrepareGroupContext(group, &blkHdr, nil, nil)
+	require.NoError(t, err)
+	cache.Add(groupCtx)
+
+	// the unmodified group is cached
+	require.Empty(t, cache.GetUnverifiedTransactionGroups([][]transactions.SignedTxn{group}, groupCtx.specAddrs, groupCtx.consensusVersion))
+
+	tests := []struct {
+		name   string
+		mutate func(*transactions.SignedTxn)
+	}{
+		{"sig", func(stxn *transactions.SignedTxn) { stxn.Sig[0] ^= 1 }},
+		{"auth-addr", func(stxn *transactions.SignedTxn) { stxn.AuthAddr[0] ^= 1 }},
+		{"msig-version", func(stxn *transactions.SignedTxn) { stxn.Msig.Version ^= 1 }},
+		{"lsig-logic", func(stxn *transactions.SignedTxn) { stxn.Lsig.Logic = []byte{0x06, 0x81, 0x01} }},
+		{"lsig-args", func(stxn *transactions.SignedTxn) { stxn.Lsig.Args = [][]byte{[]byte("arg")} }},
+		{"lsig-sig", func(stxn *transactions.SignedTxn) { stxn.Lsig.Sig[0] ^= 1 }},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			mutated := group[0]
+			test.mutate(&mutated)
+			require.Equal(t, group[0].ID(), mutated.ID())
+
+			unverifiedGroups := cache.GetUnverifiedTransactionGroups(
+				[][]transactions.SignedTxn{{mutated}}, groupCtx.specAddrs, groupCtx.consensusVersion)
+			require.Len(t, unverifiedGroups, 1, "altered authorization was accepted as already-verified")
+			require.Equal(t, []transactions.SignedTxn{mutated}, unverifiedGroups[0])
+		})
+	}
+}
+
+// BenchmarkVerifiedCacheEntryRetention reports the marginal live heap each cached
+// transaction costs: pre-sized maps are filled without triggering growth or bucket
+// rotation, and the empty-container cost is measured separately and excluded, so the
+// reported figure is the retained value.
+// To translate a bytes/txn figure into a node footprint, multiply by the cache capacity,
+// which is 1.5x the configured VerifiedTranscationsCacheSize: the implementation keeps
+// three buckets of (size+1)/2 entries. At the default 150000 that is 225000 entries.
+func BenchmarkVerifiedCacheRetention(b *testing.B) {
+	for _, groupSize := range []int{1, 4, 16} {
+		b.Run(fmt.Sprintf("gs=%d", groupSize), func(b *testing.B) {
+			var perTxn, totalMB float64
+			for i := 0; i < b.N; i++ {
+				perTxn, totalMB = measureRetention(b, groupSize)
+			}
+			b.ReportMetric(perTxn, "bytes/txn")
+			b.ReportMetric(totalMB, "MB")
+			b.ReportMetric(perTxn*225000/(1024*1024), "MB-def-cap")
+		})
+	}
+}
+
+// liveHeap reports the live heap once the collector has settled. Two cycles are needed
+// because the first can leave finalizable objects uncollected.
+func liveHeap() uint64 {
+	runtime.GC()
+	runtime.GC()
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	return ms.HeapAlloc
+}
+
+// generateGroupContexts builds signed transaction groups totalling at least numTxns
+// transactions and prepares a GroupContext for each, exactly as the verification path
+// does before handing them to the cache.
+func generateGroupContexts(tb testing.TB, maxGroupSize, numTxns int) ([]*GroupContext, int) {
+	groupCtxs := make([]*GroupContext, 0, numTxns)
+	total := 0
+	for total < numTxns {
+		// generate in chunks so no single signing pass dominates
+		_, signedTxns, secrets, addrs := generateTestObjects(1024, 64, total, 50)
+		for _, group := range generateTransactionGroups(maxGroupSize, signedTxns, secrets, addrs) {
+			groupCtx, err := PrepareGroupContext(group, blockHeader, nil, nil)
+			require.NoError(tb, err)
+			groupCtxs = append(groupCtxs, groupCtx)
+			total += len(group)
+			if total >= numTxns {
+				break
+			}
+		}
+	}
+	return groupCtxs, total
+}
+
+// measureRetention fills one container and returns bytes retained per transaction and in
+// total. The GroupContexts and their transactions go out of scope before the final
+// measurement, so only what the container itself holds is counted.
+func measureRetention(tb testing.TB, groupSize int) (perTxn, totalMB float64) {
+	// sized so that every entry fits without map growth or bucket rotation
+	const membenchTxns = 20000
+	cache := MakeVerifiedTransactionCache(membenchTxns * 3)
+
+	// the empty containers are already allocated, so their fixed cost is excluded
+	empty := liveHeap()
+
+	total := func() int {
+		groupCtxs, total := generateGroupContexts(tb, groupSize, membenchTxns)
+		for _, groupCtx := range groupCtxs {
+			cache.Add(groupCtx)
+		}
+		return total
+	}()
+
+	full := liveHeap()
+	runtime.KeepAlive(cache)
+
+	retained := full - empty
+	return float64(retained) / float64(total), float64(retained) / (1024 * 1024)
 }

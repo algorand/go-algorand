@@ -21,6 +21,8 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -75,23 +77,51 @@ type verifiedTransactionCache struct {
 	// bucketsLock is the lock for synchronizing access to the cache
 	bucketsLock deadlock.Mutex
 	// buckets is the circular cache buckets buffer
-	buckets []map[transactions.Txid]*GroupContext
+	buckets []map[transactions.Txid]*verifiedTxnCtx
 	// pinned is the pinned transactions entries map.
-	pinned map[transactions.Txid]*GroupContext
+	pinned map[transactions.Txid]*verifiedTxnCtx
 	// base is the index into the buckets array where the next transaction entry would be written.
 	base int
+}
+
+type txnAuth struct {
+	Sig      crypto.Signature
+	Msig     crypto.MultisigSig
+	Lsig     transactions.LogicSig
+	PQsig    transactions.PQSig
+	AuthAddr basics.Address
+}
+
+type verifiedTxnCtx struct {
+	specAddrs        transactions.SpecialAddresses
+	consensusVersion protocol.ConsensusVersion
+	sigs             txnAuth
+}
+
+// matches reports whether this cached entry records a verification that still applies to
+// txn. Both halves are required: the entry must have been verified under the same
+// specAddrs and consensus version, and txn must carry the same authorization material
+// that was verified back then.
+func (v *verifiedTxnCtx) matches(specAddrs transactions.SpecialAddresses, consensusVersion protocol.ConsensusVersion, txn *transactions.SignedTxn) bool {
+	return v.specAddrs == specAddrs &&
+		v.consensusVersion == consensusVersion &&
+		v.sigs.Sig == txn.Sig &&
+		v.sigs.Msig.Equal(txn.Msig) &&
+		v.sigs.Lsig.Equal(&txn.Lsig) &&
+		v.sigs.PQsig.Equal(txn.PQsig) &&
+		v.sigs.AuthAddr == txn.AuthAddr
 }
 
 // MakeVerifiedTransactionCache creates an instance of verifiedTransactionCache and returns it.
 func MakeVerifiedTransactionCache(cacheSize int) VerifiedTransactionCache {
 	impl := &verifiedTransactionCache{
 		entriesPerBucket: (cacheSize + 1) / 2,
-		buckets:          make([]map[transactions.Txid]*GroupContext, 3),
-		pinned:           make(map[transactions.Txid]*GroupContext, cacheSize),
+		buckets:          make([]map[transactions.Txid]*verifiedTxnCtx, 3),
+		pinned:           make(map[transactions.Txid]*verifiedTxnCtx, cacheSize),
 		base:             0,
 	}
 	for i := 0; i < len(impl.buckets); i++ {
-		impl.buckets[i] = make(map[transactions.Txid]*GroupContext, impl.entriesPerBucket)
+		impl.buckets[i] = make(map[transactions.Txid]*verifiedTxnCtx, impl.entriesPerBucket)
 	}
 	return impl
 }
@@ -117,10 +147,6 @@ func (v *verifiedTransactionCache) AddPayset(groupCtxs []*GroupContext) {
 func (v *verifiedTransactionCache) GetUnverifiedTransactionGroups(txnGroups [][]transactions.SignedTxn, currSpecAddrs transactions.SpecialAddresses, currProto protocol.ConsensusVersion) (unverifiedGroups [][]transactions.SignedTxn) {
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
-	groupCtx := &GroupContext{
-		specAddrs:        currSpecAddrs,
-		consensusVersion: currProto,
-	}
 	unverifiedGroups = make([][]transactions.SignedTxn, 0, len(txnGroups))
 
 	for txnGroupIndex := 0; txnGroupIndex < len(txnGroups); txnGroupIndex++ {
@@ -132,35 +158,25 @@ func (v *verifiedTransactionCache) GetUnverifiedTransactionGroups(txnGroups [][]
 			txn := &signedTxnGroup[txnIdx]
 			id := txn.Txn.ID()
 			// check pinned first
-			entryGroup := v.pinned[id]
+			entryTxnCtx := v.pinned[id]
 			// if not found in the pinned map, try to find in the verified buckets:
-			if entryGroup == nil {
+			if entryTxnCtx == nil {
 				// try to look in the previously verified buckets.
 				// we use the (base + W) % W trick here so we can go backward and wrap around the zero.
 				for offsetBucketIdx := baseBucket + len(v.buckets); offsetBucketIdx > baseBucket; offsetBucketIdx-- {
 					bucketIdx := offsetBucketIdx % len(v.buckets)
 					if params, has := v.buckets[bucketIdx][id]; has {
-						entryGroup = params
+						entryTxnCtx = params
 						baseBucket = bucketIdx
 						break
 					}
 				}
 			}
 
-			if entryGroup == nil {
+			if entryTxnCtx == nil {
 				break
 			}
-
-			if !entryGroup.Equal(groupCtx) {
-				break
-			}
-
-			cachedTxn := &entryGroup.signedGroupTxns[txnIdx]
-			if cachedTxn.Sig != txn.Sig ||
-				!cachedTxn.Msig.Equal(txn.Msig) ||
-				!cachedTxn.Lsig.Equal(&txn.Lsig) ||
-				!cachedTxn.PQsig.Equal(txn.PQsig) ||
-				cachedTxn.AuthAddr != txn.AuthAddr {
+			if !entryTxnCtx.matches(currSpecAddrs, currProto, txn) {
 				break
 			}
 			verifiedTxn++
@@ -177,7 +193,7 @@ func (v *verifiedTransactionCache) GetUnverifiedTransactionGroups(txnGroups [][]
 func (v *verifiedTransactionCache) UpdatePinned(pinnedTxns map[transactions.Txid]transactions.SignedTxn) (err error) {
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
-	pinned := make(map[transactions.Txid]*GroupContext, len(pinnedTxns))
+	pinned := make(map[transactions.Txid]*verifiedTxnCtx, len(pinnedTxns))
 	for txID := range pinnedTxns {
 		if groupEntry, has := v.pinned[txID]; has {
 			pinned[txID] = groupEntry
@@ -251,11 +267,21 @@ func (v *verifiedTransactionCache) add(groupCtx *GroupContext) {
 	if len(v.buckets[v.base])+len(groupCtx.signedGroupTxns) > v.entriesPerBucket {
 		// move to the next bucket while deleting the content of the next bucket.
 		v.base = (v.base + 1) % len(v.buckets)
-		v.buckets[v.base] = make(map[transactions.Txid]*GroupContext, v.entriesPerBucket)
+		v.buckets[v.base] = make(map[transactions.Txid]*verifiedTxnCtx, v.entriesPerBucket)
 	}
 	currentBucket := v.buckets[v.base]
 	for _, txn := range groupCtx.signedGroupTxns {
-		currentBucket[txn.ID()] = groupCtx
+		currentBucket[txn.ID()] = &verifiedTxnCtx{
+			specAddrs:        groupCtx.specAddrs,
+			consensusVersion: groupCtx.consensusVersion,
+			sigs: txnAuth{
+				Sig:      txn.Sig,
+				Msig:     txn.Msig,
+				Lsig:     txn.Lsig,
+				PQsig:    txn.PQsig,
+				AuthAddr: txn.AuthAddr,
+			},
+		}
 	}
 }
 
