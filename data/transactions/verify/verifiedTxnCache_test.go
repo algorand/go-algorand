@@ -309,7 +309,7 @@ func TestGetUnverifiedTransactionGroupsAuthChanges(t *testing.T) {
 	}
 }
 
-// BenchmarkVerifiedCacheEntryRetention reports the marginal live heap each cached
+// BenchmarkVerifiedCacheRetention reports the marginal live heap each cached
 // transaction costs: pre-sized maps are filled without triggering growth or bucket
 // rotation, and the empty-container cost is measured separately and excluded, so the
 // reported figure is the retained value.
