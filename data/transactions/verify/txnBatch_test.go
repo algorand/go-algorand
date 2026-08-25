@@ -217,6 +217,7 @@ func TestStreamToBatchCases(t *testing.T) {
 	txnGroups[mod][0].Txn.Header.Fee = basics.MicroAlgos{Raw: 0}
 	txnGroups[mod][0].Txn.Header.Sender = transactions.StateProofSender
 	txnGroups[mod][0].Txn.PaymentTxnFields = transactions.PaymentTxnFields{}
+	txnGroups[mod][0].Txn.StateProof = stateProofForTxnValidation()
 	sv = streamVerifierTestCore(txnGroups, badTxnGroups, nil, t)
 	sv.WaitForStop()
 	mod++

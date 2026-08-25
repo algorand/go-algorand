@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -177,4 +178,50 @@ func TestTreeDepth(t *testing.T) {
 	sProof.SigProofs.TreeDepth = tmp
 
 	a.NoError(verifier.Verify(stateProofIntervalForTests, p.data, &sProof))
+}
+
+func wellFormedAlgorithmProof() *StateProof {
+	return &StateProof{
+		SigCommit:  make(crypto.GenericDigest, HashSize),
+		SigProofs:  merklearray.Proof{HashFactory: crypto.HashFactory{HashType: HashType}},
+		PartProofs: merklearray.Proof{HashFactory: crypto.HashFactory{HashType: HashType}},
+	}
+}
+
+// TestVerifyStateProofAlgorithms pins the hash algorithm and SigCommit size to
+// the package constants.
+func TestVerifyStateProofAlgorithms(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	require.NoError(t, verifyStateProofAlgorithms(wellFormedAlgorithmProof()))
+
+	// SigProofs declaring a non-Sumhash algorithm is rejected.
+	s := wellFormedAlgorithmProof()
+	s.SigProofs.HashFactory.HashType = crypto.Sha256
+	require.ErrorIs(t, verifyStateProofAlgorithms(s), ErrInvalidHashType)
+
+	// PartProofs declaring a non-Sumhash algorithm is rejected.
+	s = wellFormedAlgorithmProof()
+	s.PartProofs.HashFactory.HashType = crypto.Sha512_256
+	require.ErrorIs(t, verifyStateProofAlgorithms(s), ErrInvalidHashType)
+
+	// A SigCommit sized for a 32-byte digest instead of Sumhash is rejected.
+	s = wellFormedAlgorithmProof()
+	s.SigCommit = make(crypto.GenericDigest, crypto.Sha256Size)
+	require.ErrorIs(t, verifyStateProofAlgorithms(s), ErrInvalidSigCommitSize)
+
+	// Each nested Merkle signature proof is also part of StateProofBasic and
+	// must use the Merkle signature scheme's fixed Sumhash algorithm.
+	s = wellFormedAlgorithmProof()
+	reveal := Reveal{}
+	reveal.SigSlot.Sig.Signature = crypto.FalconSignature{1, 2}
+	reveal.SigSlot.Sig.Proof.HashFactory.HashType = merklesignature.MerkleSignatureSchemeHashFunction
+	s.Reveals = map[uint64]Reveal{7: reveal}
+	require.NoError(t, verifyStateProofAlgorithms(s))
+
+	reveal.SigSlot.Sig.Proof.HashFactory.HashType = crypto.Sha256
+	s.Reveals[7] = reveal
+	require.ErrorIs(t, verifyStateProofAlgorithms(s), ErrInvalidHashType)
+	require.ErrorIs(t, (&Verifier{}).Verify(0, MessageHash{}, s), ErrInvalidHashType)
 }
