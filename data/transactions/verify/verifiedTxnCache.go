@@ -87,10 +87,17 @@ type verifiedTransactionCache struct {
 type txnAuth struct {
 	Sig      crypto.Signature
 	Msig     crypto.MultisigSig
-	Lsig     transactions.LogicSig
-	PQsig    transactions.PQSig
+	Lsig     *transactions.LogicSig // 232B struct that is almost always nil
+	PQsig    *transactions.PQSig    // 56B struct
 	AuthAddr basics.Address
 }
+
+// emptyLogicSig is the emptiness test for the out-of-line LogicSig. It is deliberately
+// Equal against the zero value rather than Blank(): Blank() treats a non-nil empty slice
+// as empty, while Equal() -- the comparison matches() actually performs -- distinguishes
+// it from nil. Compressing on Blank() would let those two forms collide in the cache and
+// report a hit where a full comparison would not. Never written to.
+var emptyLogicSig transactions.LogicSig
 
 type verifiedTxnCtx struct {
 	specAddrs        transactions.SpecialAddresses
@@ -103,13 +110,31 @@ type verifiedTxnCtx struct {
 // specAddrs and consensus version, and txn must carry the same authorization material
 // that was verified back then.
 func (v *verifiedTxnCtx) matches(specAddrs transactions.SpecialAddresses, consensusVersion protocol.ConsensusVersion, txn *transactions.SignedTxn) bool {
-	return v.specAddrs == specAddrs &&
+	isEqual := v.specAddrs == specAddrs &&
 		v.consensusVersion == consensusVersion &&
 		v.sigs.Sig == txn.Sig &&
 		v.sigs.Msig.Equal(txn.Msig) &&
-		v.sigs.Lsig.Equal(&txn.Lsig) &&
-		v.sigs.PQsig.Equal(txn.PQsig) &&
 		v.sigs.AuthAddr == txn.AuthAddr
+
+	txnLsigEmpty := txn.Lsig.Equal(&emptyLogicSig)
+	txnPQsigBlank := txn.PQsig.Blank()
+	lsigNotNil := v.sigs.Lsig != nil
+	pqsigNotNil := v.sigs.PQsig != nil
+
+	if lsigNotNil && txnLsigEmpty || !lsigNotNil && !txnLsigEmpty {
+		return false
+	}
+	if lsigNotNil {
+		isEqual = isEqual && v.sigs.Lsig.Equal(&txn.Lsig)
+	}
+
+	if pqsigNotNil && txnPQsigBlank || !pqsigNotNil && !txnPQsigBlank {
+		return false
+	}
+	if pqsigNotNil {
+		isEqual = isEqual && v.sigs.PQsig.Equal(txn.PQsig)
+	}
+	return isEqual
 }
 
 // MakeVerifiedTransactionCache creates an instance of verifiedTransactionCache and returns it.
@@ -271,17 +296,24 @@ func (v *verifiedTransactionCache) add(groupCtx *GroupContext) {
 	}
 	currentBucket := v.buckets[v.base]
 	for _, txn := range groupCtx.signedGroupTxns {
-		currentBucket[txn.ID()] = &verifiedTxnCtx{
+		entry := &verifiedTxnCtx{
 			specAddrs:        groupCtx.specAddrs,
 			consensusVersion: groupCtx.consensusVersion,
 			sigs: txnAuth{
 				Sig:      txn.Sig,
 				Msig:     txn.Msig,
-				Lsig:     txn.Lsig,
-				PQsig:    txn.PQsig,
 				AuthAddr: txn.AuthAddr,
 			},
 		}
+		if !txn.Lsig.Equal(&emptyLogicSig) {
+			lsig := txn.Lsig // local copy to avoid the entire SignedTxn being referenced
+			entry.sigs.Lsig = &lsig
+		}
+		if !txn.PQsig.Blank() {
+			pqsig := txn.PQsig
+			entry.sigs.PQsig = &pqsig
+		}
+		currentBucket[txn.ID()] = entry
 	}
 }
 

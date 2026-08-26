@@ -49,11 +49,75 @@ func TestAddingToCache(t *testing.T) {
 			consensusVersion: groupCtx.consensusVersion,
 			sigs: txnAuth{
 				Sig:      txn.Sig,
-				Msig:     txn.Msig,
-				Lsig:     txn.Lsig,
-				PQsig:    txn.PQsig,
 				AuthAddr: txn.AuthAddr,
+				Msig:     txn.Msig,
+				Lsig:     nil,
+				PQsig:    nil,
 			},
+		})
+	}
+}
+
+// TestAddingToCacheOutOfLineSigs covers the authorization material the cache keeps out of
+// line. Lsig and PQsig are stored behind pointers because almost no transaction carries
+// either, so both the present and the absent case need checking.
+func TestAddingToCacheOutOfLineSigs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	_, signedTxns, _, _ := generateTestObjects(1, 2, 0, 50)
+
+	// a contract-account logicsig, which is the shape essentially all of them have:
+	// a program and arguments, with no delegation signature
+	contractLsig := transactions.SignedTxn{Txn: signedTxns[0].Txn}
+	contractLsig.Lsig.Logic = []byte{0x06, 0x81, 0x01}
+	contractLsig.Lsig.Args = [][]byte{[]byte("arg0"), []byte("arg1")}
+
+	tests := []struct {
+		name string
+		stxn transactions.SignedTxn
+	}{
+		{"lsig", contractLsig},
+		{"pqsig", makePQSignedTxn(t, 20)},
+		{"lsig-delegated-by-pqsig", makePQDelegatedLogicSigTxn(t, 21)},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			icache := MakeVerifiedTransactionCache(500)
+			impl := icache.(*verifiedTransactionCache)
+
+			group := []transactions.SignedTxn{test.stxn}
+			groupCtx, err := PrepareGroupContext(group, blockHeader, nil, nil)
+			require.NoError(t, err)
+			impl.Add(groupCtx)
+
+			ctx, has := impl.buckets[impl.base][group[0].ID()]
+			require.True(t, has)
+
+			if test.stxn.Lsig.Blank() {
+				require.Nil(t, ctx.sigs.Lsig)
+			} else {
+				require.NotNil(t, ctx.sigs.Lsig, "a present Lsig must be stored")
+				require.Equal(t, test.stxn.Lsig, *ctx.sigs.Lsig)
+			}
+			if test.stxn.PQsig.Blank() {
+				require.Nil(t, ctx.sigs.PQsig)
+			} else {
+				require.NotNil(t, ctx.sigs.PQsig, "a present PQsig must be stored")
+				require.Equal(t, test.stxn.PQsig, *ctx.sigs.PQsig)
+			}
+
+			// the entry keeps its own copy: PrepareGroupContext retains the caller's
+			// slice, so storing a pointer into it would let later edits rewrite history
+			group[0].Lsig.Sig[0]++
+			group[0].Lsig.Logic = []byte{0xff}
+			group[0].PQsig.Salt++
+			if ctx.sigs.Lsig != nil {
+				require.Equal(t, test.stxn.Lsig, *ctx.sigs.Lsig, "cached Lsig aliases the caller")
+			}
+			if ctx.sigs.PQsig != nil {
+				require.Equal(t, test.stxn.PQsig, *ctx.sigs.PQsig, "cached PQsig aliases the caller")
+			}
 		})
 	}
 }
@@ -386,4 +450,42 @@ func measureRetention(tb testing.TB, groupSize int) (perTxn, totalMB float64) {
 
 	retained := full - empty
 	return float64(retained) / float64(total), float64(retained) / (1024 * 1024)
+}
+
+// TestAddingToCacheBlankLsigNilVsEmpty checks that the cache does not collapse a nil
+// LogicSig field with a non-nil empty one. LogicSig.Blank() treats both as empty, but
+// LogicSig.Equal() -- the comparison the cache actually performs -- distinguishes them
+// via safeSliceCheck, so compressing the entry on Blank() would report a hit for a
+// transaction that a full comparison rejects.
+func TestAddingToCacheBlankLsigNilVsEmpty(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var nilLsig, emptyLsig transactions.LogicSig
+	emptyLsig.Logic = []byte{}
+	require.True(t, nilLsig.Blank())
+	require.True(t, emptyLsig.Blank(), "Blank() does not distinguish nil from empty")
+	require.False(t, nilLsig.Equal(&emptyLsig), "Equal() does distinguish them")
+
+	_, signedTxns, secrets, addrs := generateTestObjects(2, 2, 0, 50)
+	group := generateTransactionGroups(1, signedTxns, secrets, addrs)[0]
+
+	cached := group[0]
+	cached.Lsig.Logic = []byte{} // blank, but not nil
+	probe := cached
+	probe.Lsig.Logic = nil // blank, and nil
+	require.Equal(t, cached.ID(), probe.ID(), "the cache key must be identical")
+
+	cache := MakeVerifiedTransactionCache(50)
+	groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{cached}, blockHeader, nil, nil)
+	require.NoError(t, err)
+	cache.Add(groupCtx)
+
+	// the transaction as cached is still recognised
+	require.Empty(t, cache.GetUnverifiedTransactionGroups(
+		[][]transactions.SignedTxn{{cached}}, groupCtx.specAddrs, groupCtx.consensusVersion))
+
+	// the nil-valued form is a different LogicSig and must not inherit the verification
+	require.Len(t, cache.GetUnverifiedTransactionGroups(
+		[][]transactions.SignedTxn{{probe}}, groupCtx.specAddrs, groupCtx.consensusVersion), 1,
+		"a LogicSig that Equal() rejects was reported as already verified")
 }
