@@ -48,11 +48,11 @@ func TestAddingToCache(t *testing.T) {
 			specAddrs:        groupCtx.specAddrs,
 			consensusVersion: groupCtx.consensusVersion,
 			sigs: txnAuth{
-				Sig:      txn.Sig,
-				AuthAddr: txn.AuthAddr,
-				Msig:     txn.Msig,
-				Lsig:     nil,
-				PQsig:    nil,
+				sig:      txn.Sig,
+				authAddr: txn.AuthAddr,
+				msig:     txn.Msig,
+				lsig:     nil,
+				pqsig:    nil,
 			},
 		})
 	}
@@ -95,16 +95,16 @@ func TestAddingToCacheOutOfLineSigs(t *testing.T) {
 			require.True(t, has)
 
 			if test.stxn.Lsig.Blank() {
-				require.Nil(t, ctx.sigs.Lsig)
+				require.Nil(t, ctx.sigs.lsig)
 			} else {
-				require.NotNil(t, ctx.sigs.Lsig, "a present Lsig must be stored")
-				require.Equal(t, test.stxn.Lsig, *ctx.sigs.Lsig)
+				require.NotNil(t, ctx.sigs.lsig, "a present Lsig must be stored")
+				require.Equal(t, test.stxn.Lsig, *ctx.sigs.lsig)
 			}
 			if test.stxn.PQsig.Blank() {
-				require.Nil(t, ctx.sigs.PQsig)
+				require.Nil(t, ctx.sigs.pqsig)
 			} else {
-				require.NotNil(t, ctx.sigs.PQsig, "a present PQsig must be stored")
-				require.Equal(t, test.stxn.PQsig, *ctx.sigs.PQsig)
+				require.NotNil(t, ctx.sigs.pqsig, "a present PQsig must be stored")
+				require.Equal(t, test.stxn.PQsig, *ctx.sigs.pqsig)
 			}
 
 			// the entry keeps its own copy: PrepareGroupContext retains the caller's
@@ -112,11 +112,11 @@ func TestAddingToCacheOutOfLineSigs(t *testing.T) {
 			group[0].Lsig.Sig[0]++
 			group[0].Lsig.Logic = []byte{0xff}
 			group[0].PQsig.Salt++
-			if ctx.sigs.Lsig != nil {
-				require.Equal(t, test.stxn.Lsig, *ctx.sigs.Lsig, "cached Lsig aliases the caller")
+			if ctx.sigs.lsig != nil {
+				require.Equal(t, test.stxn.Lsig, *ctx.sigs.lsig, "cached Lsig aliases the caller")
 			}
-			if ctx.sigs.PQsig != nil {
-				require.Equal(t, test.stxn.PQsig, *ctx.sigs.PQsig, "cached PQsig aliases the caller")
+			if ctx.sigs.pqsig != nil {
+				require.Equal(t, test.stxn.PQsig, *ctx.sigs.pqsig, "cached PQsig aliases the caller")
 			}
 		})
 	}

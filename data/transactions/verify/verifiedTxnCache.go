@@ -85,11 +85,11 @@ type verifiedTransactionCache struct {
 }
 
 type txnAuth struct {
-	Sig      crypto.Signature
-	Msig     crypto.MultisigSig
-	Lsig     *transactions.LogicSig // 232B struct that is almost always nil
-	PQsig    *transactions.PQSig    // 56B struct
-	AuthAddr basics.Address
+	sig      crypto.Signature
+	msig     crypto.MultisigSig
+	lsig     *transactions.LogicSig // 232B struct that is almost always nil
+	pqsig    *transactions.PQSig    // 56B struct
+	authAddr basics.Address
 }
 
 // emptyLogicSig is the emptiness test for the out-of-line LogicSig. It is deliberately
@@ -112,27 +112,27 @@ type verifiedTxnCtx struct {
 func (v *verifiedTxnCtx) matches(specAddrs transactions.SpecialAddresses, consensusVersion protocol.ConsensusVersion, txn *transactions.SignedTxn) bool {
 	isEqual := v.specAddrs == specAddrs &&
 		v.consensusVersion == consensusVersion &&
-		v.sigs.Sig == txn.Sig &&
-		v.sigs.Msig.Equal(txn.Msig) &&
-		v.sigs.AuthAddr == txn.AuthAddr
+		v.sigs.sig == txn.Sig &&
+		v.sigs.msig.Equal(txn.Msig) &&
+		v.sigs.authAddr == txn.AuthAddr
 
 	txnLsigEmpty := txn.Lsig.Equal(&emptyLogicSig)
 	txnPQsigBlank := txn.PQsig.Blank()
-	lsigNotNil := v.sigs.Lsig != nil
-	pqsigNotNil := v.sigs.PQsig != nil
+	lsigNotNil := v.sigs.lsig != nil
+	pqsigNotNil := v.sigs.pqsig != nil
 
 	if lsigNotNil && txnLsigEmpty || !lsigNotNil && !txnLsigEmpty {
 		return false
 	}
 	if lsigNotNil {
-		isEqual = isEqual && v.sigs.Lsig.Equal(&txn.Lsig)
+		isEqual = isEqual && v.sigs.lsig.Equal(&txn.Lsig)
 	}
 
 	if pqsigNotNil && txnPQsigBlank || !pqsigNotNil && !txnPQsigBlank {
 		return false
 	}
 	if pqsigNotNil {
-		isEqual = isEqual && v.sigs.PQsig.Equal(txn.PQsig)
+		isEqual = isEqual && v.sigs.pqsig.Equal(txn.PQsig)
 	}
 	return isEqual
 }
@@ -300,18 +300,18 @@ func (v *verifiedTransactionCache) add(groupCtx *GroupContext) {
 			specAddrs:        groupCtx.specAddrs,
 			consensusVersion: groupCtx.consensusVersion,
 			sigs: txnAuth{
-				Sig:      txn.Sig,
-				Msig:     txn.Msig,
-				AuthAddr: txn.AuthAddr,
+				sig:      txn.Sig,
+				msig:     txn.Msig,
+				authAddr: txn.AuthAddr,
 			},
 		}
 		if !txn.Lsig.Equal(&emptyLogicSig) {
 			lsig := txn.Lsig // local copy to avoid the entire SignedTxn being referenced
-			entry.sigs.Lsig = &lsig
+			entry.sigs.lsig = &lsig
 		}
 		if !txn.PQsig.Blank() {
 			pqsig := txn.PQsig
-			entry.sigs.PQsig = &pqsig
+			entry.sigs.pqsig = &pqsig
 		}
 		currentBucket[txn.ID()] = entry
 	}
