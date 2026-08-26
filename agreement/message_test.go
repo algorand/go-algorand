@@ -23,6 +23,8 @@ import (
 
 	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
@@ -32,6 +34,58 @@ import (
 )
 
 var poolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+
+func TestProposalCarriesMalformedStateProofPath(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genesisHash := crypto.Hash([]byte("state-proof-path-proposal-check"))
+	block := bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{
+		GenesisHash:  genesisHash,
+		UpgradeState: bookkeeping.UpgradeState{CurrentProtocol: protocol.ConsensusCurrentVersion},
+	}}
+	txn := transactions.Transaction{
+		Type: protocol.StateProofTx,
+		Header: transactions.Header{
+			GenesisHash: genesisHash,
+		},
+		StateProofTxnFields: transactions.StateProofTxnFields{
+			StateProof: stateproof.StateProof{
+				SigCommit: make(crypto.GenericDigest, stateproof.HashSize),
+				SigProofs: merklearray.Proof{
+					HashFactory: crypto.HashFactory{HashType: stateproof.HashType},
+				},
+				PartProofs: merklearray.Proof{
+					Path:        []crypto.GenericDigest{make(crypto.GenericDigest, 2*stateproof.HashSize)},
+					HashFactory: crypto.HashFactory{HashType: stateproof.HashType},
+					TreeDepth:   1,
+				},
+			},
+		},
+	}
+
+	stib, err := block.EncodeSignedTxn(transactions.SignedTxn{Txn: txn}, transactions.ApplyData{})
+	require.NoError(t, err)
+	block.Payset = append(block.Payset, stib)
+	require.True(t, proposalCarriesInvalidTxn(unauthenticatedProposal{Block: block}),
+		"a proposal carrying a malformed Merkle path must be dropped")
+
+	// A path using the wrong algorithm is outside the StateProofBasic suite.
+	txn.StateProof.PartProofs.HashFactory.HashType = crypto.Sha256
+	txn.StateProof.PartProofs.Path[0] = make(crypto.GenericDigest, crypto.Sha256Size)
+	stib, err = block.EncodeSignedTxn(transactions.SignedTxn{Txn: txn}, transactions.ApplyData{})
+	require.NoError(t, err)
+	block.Payset = []transactions.SignedTxnInBlock{stib}
+	require.True(t, proposalCarriesInvalidTxn(unauthenticatedProposal{Block: block}))
+
+	// StateProofBasic parameters remain accepted.
+	txn.StateProof.PartProofs.HashFactory.HashType = stateproof.HashType
+	txn.StateProof.PartProofs.Path[0] = make(crypto.GenericDigest, stateproof.HashSize)
+	stib, err = block.EncodeSignedTxn(transactions.SignedTxn{Txn: txn}, transactions.ApplyData{})
+	require.NoError(t, err)
+	block.Payset = []transactions.SignedTxnInBlock{stib}
+	require.False(t, proposalCarriesInvalidTxn(unauthenticatedProposal{Block: block}))
+}
 
 func TestProposalCarriesInvalidTxnGroupOrder(t *testing.T) {
 	partitiontest.PartitionTest(t)
