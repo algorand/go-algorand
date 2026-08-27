@@ -42,9 +42,16 @@ above the current stack.
 
 ## Stack Types
 
-While every element of the stack is restricted to the types `uint64` and `bytes`, 
-the values of these types may be known to be bounded.  The more common bounded types are 
+While every element of the stack is restricted to the types `uint64` and `bytes`,
+the values of these types may be known to be bounded.  The more common bounded types are
 named to provide more semantic information in the documentation. They're also used during
 assembly time to do type checking and to provide more informative error messages.
+The full table of named types is generated into `avm-stack-types.md`.
 
+## Assembler Syntax
+
+The assembler accepts several pseudo-ops that have no opcode of their own, and so
+appear in none of the opcode tables: `int`, `byte`, `addr`, and `method`. See the
+assembler chapter of the [AVM specification](https://github.com/algorandfoundation/specs)
+for their syntax.
 

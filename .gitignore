@@ -56,9 +56,15 @@ crypto/libs
 # Mac
 .DS_Store
 
-# doc intermediates
+# doc intermediates. The per-group tables, avm-stack-types.md, constants-*.md and
+# avm-appendix-a.md are generated for the specs repo, which is where they are
+# version controlled. Everything published from here or hand-written must be
+# negated below, or a new .md in this directory is invisible to git add.
 data/transactions/logic/*.md
 !data/transactions/logic/TEAL_opcodes*.md
+!data/transactions/logic/README.md
+!data/transactions/logic/jsonspec.md
+!data/transactions/logic/tutorial.md
 
 *.pem
 

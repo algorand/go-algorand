@@ -351,6 +351,9 @@ type TestScenarioGenerator func(info TestScenarioInfo) TestScenario
 // possible during each inner transaction, as well as before all inners, between the two inner
 // groups, and after all inners. For app call failures, there are scenarios for both rejection and
 // runtime errors, which should invoke tracer hooks slightly differently.
+//
+// A scenario's AppBudgetAdded counts only its app calls: the calling txn, plus inner (a) once it has
+// been submitted. The payments in the second inner group grant no opcode budget.
 func GetTestScenarios() map[string]TestScenarioGenerator {
 	successInnerProgramBytes := []byte{0x06, 0x80, 0x01, 0x78, 0xb0, 0x81, 0x01} // #pragma version 6; pushbytes "x"; log; pushint 1
 	successInnerProgram := "0x" + hex.EncodeToString(successInnerProgramBytes)
@@ -404,7 +407,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 			}),
 			ExpectedSimulationAD: expectedAD,
 			ExpectedStateDelta:   expectedDelta,
-			AppBudgetAdded:       2100,
+			AppBudgetAdded:       1400,
 			AppBudgetConsumed:    35,
 			TxnAppBudgetConsumed: []int{0, 35},
 		}
@@ -646,7 +649,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					}),
 					ExpectedSimulationAD: expectedAD,
 					ExpectedStateDelta:   expectedDelta,
-					AppBudgetAdded:       2100,
+					AppBudgetAdded:       1400,
 					AppBudgetConsumed:    32,
 					TxnAppBudgetConsumed: []int{0, 32},
 				}
@@ -714,7 +717,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					}),
 					ExpectedSimulationAD: expectedAD,
 					ExpectedStateDelta:   expectedDelta,
-					AppBudgetAdded:       2100,
+					AppBudgetAdded:       1400,
 					AppBudgetConsumed:    32,
 					TxnAppBudgetConsumed: []int{0, 32},
 				}
@@ -780,7 +783,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 				}),
 				ExpectedSimulationAD: expectedAD,
 				ExpectedStateDelta:   expectedDelta,
-				AppBudgetAdded:       2100,
+				AppBudgetAdded:       1400,
 				AppBudgetConsumed:    35,
 				TxnAppBudgetConsumed: []int{0, 35},
 			}
