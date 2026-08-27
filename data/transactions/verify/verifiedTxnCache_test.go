@@ -22,6 +22,7 @@ import (
 	"slices"
 	"testing"
 	"time"
+	"unique"
 
 	"github.com/stretchr/testify/require"
 
@@ -45,8 +46,10 @@ func TestAddingToCache(t *testing.T) {
 		ctx, has := impl.buckets[impl.base][txn.ID()]
 		require.True(t, has)
 		require.Equal(t, ctx, &verifiedTxnCtx{
-			specAddrs:        groupCtx.specAddrs,
-			consensusVersion: groupCtx.consensusVersion,
+			vctx: unique.Make(verificationContext{
+				specAddrs:        groupCtx.specAddrs,
+				consensusVersion: groupCtx.consensusVersion,
+			}),
 			sigs: txnAuth{
 				sig:      txn.Sig,
 				authAddr: txn.AuthAddr,
@@ -488,4 +491,76 @@ func TestAddingToCacheBlankLsigNilVsEmpty(t *testing.T) {
 	require.Len(t, cache.GetUnverifiedTransactionGroups(
 		[][]transactions.SignedTxn{{probe}}, groupCtx.specAddrs, groupCtx.consensusVersion), 1,
 		"a LogicSig that Equal() rejects was reported as already verified")
+}
+
+// TestGetUnverifiedTransactionGroupsContextChanges checks that a cached verification is
+// not reused when the external state it depended on has changed. The special addresses
+// and the consensus version are interned together into one handle, so this also guards
+// against that composite collapsing two distinct contexts onto the same handle.
+func TestGetUnverifiedTransactionGroupsContextChanges(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	_, signedTxns, secrets, addrs := generateTestObjects(4, 4, 0, 50)
+	group := generateTransactionGroups(1, signedTxns, secrets, addrs)[0]
+
+	cache := MakeVerifiedTransactionCache(50)
+	groupCtx, err := PrepareGroupContext(group, blockHeader, nil, nil)
+	require.NoError(t, err)
+	cache.Add(groupCtx)
+
+	cachedSpec := groupCtx.specAddrs
+	cachedProto := groupCtx.consensusVersion
+	payset := [][]transactions.SignedTxn{group}
+
+	// control: queried under the very context it was verified in, it is a hit
+	require.Empty(t, cache.GetUnverifiedTransactionGroups(payset, cachedSpec, cachedProto),
+		"the group must be recognised under its own verification context")
+
+	otherFeeSink := cachedSpec.FeeSink
+	otherFeeSink[0]++
+	otherRewardsPool := cachedSpec.RewardsPool
+	otherRewardsPool[0]++
+
+	tests := []struct {
+		name      string
+		specAddrs transactions.SpecialAddresses
+		proto     protocol.ConsensusVersion
+	}{
+		{
+			name:      "fee-sink",
+			specAddrs: transactions.SpecialAddresses{FeeSink: otherFeeSink, RewardsPool: cachedSpec.RewardsPool},
+			proto:     cachedProto,
+		},
+		{
+			name:      "rewards-pool",
+			specAddrs: transactions.SpecialAddresses{FeeSink: cachedSpec.FeeSink, RewardsPool: otherRewardsPool},
+			proto:     cachedProto,
+		},
+		{
+			name:      "consensus-version",
+			specAddrs: cachedSpec,
+			proto:     protocol.ConsensusFuture,
+		},
+		{
+			name:      "all-three",
+			specAddrs: transactions.SpecialAddresses{FeeSink: otherFeeSink, RewardsPool: otherRewardsPool},
+			proto:     protocol.ConsensusFuture,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			require.NotEqual(t, unique.Make(verificationContext{specAddrs: cachedSpec, consensusVersion: cachedProto}),
+				unique.Make(verificationContext{specAddrs: test.specAddrs, consensusVersion: test.proto}),
+				"the changed context must intern to a different handle")
+
+			unverified := cache.GetUnverifiedTransactionGroups(payset, test.specAddrs, test.proto)
+			require.Len(t, unverified, 1, "a cached verification was reused under a changed context")
+			require.Equal(t, group, unverified[0])
+		})
+	}
+
+	// and the original context still hits afterwards: querying under a different context
+	// must not disturb the entry
+	require.Empty(t, cache.GetUnverifiedTransactionGroups(payset, cachedSpec, cachedProto))
 }

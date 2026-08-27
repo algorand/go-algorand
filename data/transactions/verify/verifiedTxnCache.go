@@ -18,6 +18,7 @@ package verify
 
 import (
 	"errors"
+	"unique"
 
 	"github.com/algorand/go-deadlock"
 
@@ -99,19 +100,25 @@ type txnAuth struct {
 // report a hit where a full comparison would not. Never written to.
 var emptyLogicSig transactions.LogicSig
 
-type verifiedTxnCtx struct {
+// verificationContext is the external state a past verification depended on,
+// both fields move together and are shared by every entry so they are interned as a unit.
+// This makes the entry as a single 8-byte handle and reduces the comparison in matches() to a pointer equality.
+type verificationContext struct {
 	specAddrs        transactions.SpecialAddresses
 	consensusVersion protocol.ConsensusVersion
-	sigs             txnAuth
+}
+
+type verifiedTxnCtx struct {
+	vctx unique.Handle[verificationContext]
+	sigs txnAuth
 }
 
 // matches reports whether this cached entry records a verification that still applies to
 // txn. Both halves are required: the entry must have been verified under the same
 // specAddrs and consensus version, and txn must carry the same authorization material
 // that was verified back then.
-func (v *verifiedTxnCtx) matches(specAddrs transactions.SpecialAddresses, consensusVersion protocol.ConsensusVersion, txn *transactions.SignedTxn) bool {
-	isEqual := v.specAddrs == specAddrs &&
-		v.consensusVersion == consensusVersion &&
+func (v *verifiedTxnCtx) matches(vctx unique.Handle[verificationContext], txn *transactions.SignedTxn) bool {
+	isEqual := v.vctx == vctx &&
 		v.sigs.sig == txn.Sig &&
 		v.sigs.msig.Equal(txn.Msig) &&
 		v.sigs.authAddr == txn.AuthAddr
@@ -175,6 +182,8 @@ func (v *verifiedTransactionCache) AddPayset(groupCtxs []*GroupContext) {
 
 // GetUnverifiedTransactionGroups compares the provided payset against the currently cached transactions and figure which transaction groups aren't fully cached.
 func (v *verifiedTransactionCache) GetUnverifiedTransactionGroups(txnGroups [][]transactions.SignedTxn, currSpecAddrs transactions.SpecialAddresses, currProto protocol.ConsensusVersion) (unverifiedGroups [][]transactions.SignedTxn) {
+	vctx := unique.Make(verificationContext{specAddrs: currSpecAddrs, consensusVersion: currProto})
+
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
 	unverifiedGroups = make([][]transactions.SignedTxn, 0, len(txnGroups))
@@ -206,7 +215,7 @@ func (v *verifiedTransactionCache) GetUnverifiedTransactionGroups(txnGroups [][]
 			if entryTxnCtx == nil {
 				break
 			}
-			if !entryTxnCtx.matches(currSpecAddrs, currProto, txn) {
+			if !entryTxnCtx.matches(vctx, txn) {
 				break
 			}
 			verifiedTxn++
@@ -300,10 +309,13 @@ func (v *verifiedTransactionCache) add(groupCtx *GroupContext) {
 		v.buckets[v.base] = make(map[transactions.Txid]*verifiedTxnCtx, v.entriesPerBucket)
 	}
 	currentBucket := v.buckets[v.base]
+	vctx := unique.Make(verificationContext{
+		specAddrs:        groupCtx.specAddrs,
+		consensusVersion: groupCtx.consensusVersion,
+	})
 	for _, txn := range groupCtx.signedGroupTxns {
 		entry := &verifiedTxnCtx{
-			specAddrs:        groupCtx.specAddrs,
-			consensusVersion: groupCtx.consensusVersion,
+			vctx: vctx,
 			sigs: txnAuth{
 				sig:      txn.Sig,
 				msig:     txn.Msig,
