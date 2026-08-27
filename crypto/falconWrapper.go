@@ -36,7 +36,8 @@ var (
 // SHAKE256 explicit-seed.
 //
 // The seed carries no scheme-specific structure, so a single seed type serves
-// both Falcon-1024 and Falcon-512 keygen.
+// both Falcon-1024 and Falcon-512 keygen. Do not use the same seed value across
+// schemes.
 const FalconSeedSize = 32
 
 // FalconSeed represents the fixed-length seed used by default Falcon keygen.
