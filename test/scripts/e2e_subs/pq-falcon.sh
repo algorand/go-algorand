@@ -30,8 +30,9 @@ echo "$PQADDRESS"
 algokey pq import -m "$PQMNEMONIC" -k pq-restored.sk
 cmp pq.sk pq-restored.sk
 
-# Fund pq account
-${gcmd} clerk send -a 10000000 -f "${ACCOUNT}" -t "${PQADDRESS}"
+# Fund pq account below one reward unit to avoid unexpected balance drift from rewards.
+FUNDING=900000
+${gcmd} clerk send -a "${FUNDING}" -f "${ACCOUNT}" -t "${PQADDRESS}"
 
 
 # Send a pay back from the PQACCOUNT. `goal clerk` can not sign, since
@@ -56,7 +57,7 @@ algokey pq sign-program -k pq.sk -p pq-true.tok -o pq-true.lsig
 ${gcmd} clerk send -a 7777 -f "${PQADDRESS}" -t "${ACCOUNT}" --fee 3000 -L pq-true.lsig
 
 BALANCE=$(${gcmd} account balance -a "${PQADDRESS}" | awk '{ print $1 }')
-EXPECT=$((10000000 - 6666 - 3000 - 7777 - 3000))
+EXPECT=$((FUNDING - 6666 - 3000 - 7777 - 3000))
 if [ "$BALANCE" -ne "$EXPECT" ]; then
     date "+${scriptname} FAIL wanted balance=${EXPECT} but got ${BALANCE} %Y%m%d_%H%M%S"
     false

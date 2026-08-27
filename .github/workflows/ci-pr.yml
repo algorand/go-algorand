@@ -59,11 +59,13 @@ jobs:
       - name: Setup test environment
         uses: ./.github/actions/setup-test
       - name: Run tests
+        env:
+          FULL_COVERAGE: ${{ inputs.full_coverage }}
         run: |
           PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
           export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
           COVERPKG_FLAG=""
-          if [[ "${{ inputs.full_coverage }}" == "true" ]]; then
+          if [[ "$FULL_COVERAGE" == "true" ]]; then
             COVERPACKAGES="$(go list ./... | grep -E -v '/go-algorand/(test|debug|cmd|config/defaultsGenerator|tools)' | grep -E -v '(test|testing|mock|mocks)$' | paste -sd ',' -)"
             COVERPKG_FLAG="-coverpkg=$COVERPACKAGES"
           fi

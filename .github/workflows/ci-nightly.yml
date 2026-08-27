@@ -286,11 +286,14 @@ jobs:
       AWS_ROLE: ${{ secrets.AWS_ROLE }}
     steps:
       - name: Set CI_E2E_FILENAME for e2e test data publishing
+        env:
+          BRANCH_NAME: ${{ github.event.inputs.branch || github.ref_name }}
         run: |
           # Set CI_E2E_FILENAME based on branch name, replacing '/' with '-' - used when publishing e2e test data to S3 (e2e.sh) for indexer tests
-          BRANCH_NAME="${{ github.event.inputs.branch || github.ref_name }}"
-          MODIFIED_BRANCH_NAME="${BRANCH_NAME//\//-}"
-          echo "CI_E2E_FILENAME=${MODIFIED_BRANCH_NAME}" >> $GITHUB_ENV
+          # Drop CR/LF first: workflow_dispatch inputs are free-form, and a newline here would append extra entries to the $GITHUB_ENV file
+          SANITIZED_BRANCH_NAME="${BRANCH_NAME//[$'\r\n']/}"
+          MODIFIED_BRANCH_NAME="${SANITIZED_BRANCH_NAME//\//-}"
+          echo "CI_E2E_FILENAME=${MODIFIED_BRANCH_NAME}" >> "$GITHUB_ENV"
       - name: Download workspace archive
         uses: actions/download-artifact@v4
         with:
@@ -395,10 +398,11 @@ jobs:
           S3_RELEASE_BUCKET: ${{ secrets.S3_RELEASE_BUCKET }}
         timeout-minutes: 20
         run: |
-          if [[ "${{ github.ref }}" == "refs/heads/rel/nightly" ]]; then
+          # GITHUB_REF/GITHUB_REF_NAME are runner-provided defaults, so the ref never reaches the shell as interpolated text
+          if [[ "$GITHUB_REF" == "refs/heads/rel/nightly" ]]; then
             export NIGHTLY_BUILD="true"
           fi
-          export TRAVIS_BRANCH="${{ github.ref_name }}"
+          export TRAVIS_BRANCH="$GITHUB_REF_NAME"
           scripts/travis/deploy_packages.sh
         shell: bash
       - name: Notify Slack on failure

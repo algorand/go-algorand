@@ -5816,6 +5816,36 @@ func TestOpJSONRef(t *testing.T) {
 			previousVersErrors: []expect{exp(1, "unknown opcode: json_ref")},
 		},
 		{
+			source:             `byte  "{\"key0\": true }"; byte "key0"; json_ref JSONString;`,
+			error:              "json: cannot unmarshal bool into Go value of type string",
+			previousVersErrors: []expect{exp(1, "unknown opcode: json_ref")},
+		},
+		{
+			source:             `byte  "{\"key0\": false }"; byte "key0"; json_ref JSONUint64;`,
+			error:              "json: cannot unmarshal bool into Go value of type uint64",
+			previousVersErrors: []expect{exp(1, "unknown opcode: json_ref")},
+		},
+		{
+			source:             `byte  "{\"key0\": true }"; byte "key0"; json_ref JSONObject;`,
+			error:              "json: cannot unmarshal bool into Go value of type map[string]json.RawMessage",
+			previousVersErrors: []expect{exp(1, "unknown opcode: json_ref")},
+		},
+		{
+			source:             `byte  "{\"key0\": null }"; byte "key0"; json_ref JSONString;`,
+			error:              "unexpected end of JSON input",
+			previousVersErrors: []expect{exp(1, "unknown opcode: json_ref")},
+		},
+		{
+			source:             `byte  "{\"key0\": null }"; byte "key0"; json_ref JSONUint64;`,
+			error:              "unexpected end of JSON input",
+			previousVersErrors: []expect{exp(1, "unknown opcode: json_ref")},
+		},
+		{
+			source:             `byte  "{\"key0\": null }"; byte "key0"; json_ref JSONObject;`,
+			error:              "unexpected end of JSON input",
+			previousVersErrors: []expect{exp(1, "unknown opcode: json_ref")},
+		},
+		{
 			source:             `byte  "{\"key0\": \"1\"}"; byte "key0"; json_ref JSONObject;`,
 			error:              "json: cannot unmarshal string into Go value of type map[string]json.RawMessage",
 			previousVersErrors: []expect{exp(1, "unknown opcode: json_ref")},

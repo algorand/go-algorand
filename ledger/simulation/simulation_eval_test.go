@@ -1756,6 +1756,103 @@ int 1`,
 	})
 }
 
+// TestExtraBudgetWithInner checks that a requested ExtraOpcodeBudget is granted
+// once for the whole group, not again for every inner group. Inner groups share
+// the one pool, so re-applying it would hand out a multiple of what was asked
+// for, and let simulate approve a group that would run out of budget on chain.
+func TestExtraBudgetWithInner(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Costs 700 and invokes an inner transaction, so the group has two app calls
+	// granting 700 each, and exactly one inner group to be tempted by.
+	exactly700AndCallInner := fmt.Sprintf(`#pragma version 6
+pushint 1
+cover 0 // This is a noop, just to fix an odd number of ops
+%s
+itxn_begin
+int appl
+itxn_field TypeEnum
+byte 0x068101
+dup
+itxn_field ClearStateProgram
+itxn_field ApprovalProgram
+itxn_submit
+`, strings.Repeat(`pushint 1
+pop
+`, 345))
+
+	const extraBudget = 1000
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		futureAppID := basics.AppIndex(1002)
+		fund := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: futureAppID.Address(),
+			Amount:   401_000,
+		})
+		appCall := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          sender.Addr,
+			ApprovalProgram: exactly700AndCallInner,
+			ClearStateProgram: `#pragma version 6
+int 1`,
+		})
+
+		txntest.Group(&fund, &appCall)
+
+		signedFundTxn := fund.Txn().Sign(sender.Sk)
+		signedAppCall := appCall.Txn().Sign(sender.Sk)
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedFundTxn, signedAppCall},
+				},
+				ExtraOpcodeBudget: extraBudget,
+			},
+			expected: simulation.Result{
+				Version:       simulation.ResultLatestVersion,
+				LastRound:     env.TxnInfo.LatestRound(),
+				EvalOverrides: simulation.ResultEvalOverrides{ExtraOpcodeBudget: extraBudget},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{FeesPaid: signedFundTxn.Txn.Fee},
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+										EvalDelta: transactions.EvalDelta{
+											InnerTxns: []transactions.SignedTxnWithAD{
+												{
+													ApplyData: transactions.ApplyData{
+														ApplicationID: futureAppID + 1,
+													},
+												},
+											},
+										},
+									},
+								},
+								AppBudgetConsumed: 701,
+								FeesPaid:          basics.MicroAlgos{Raw: 2 * signedAppCall.Txn.Fee.Raw},
+							},
+						},
+						// 700 per app call, plus the extra once, not once per group
+						AppBudgetAdded:    1400 + extraBudget,
+						AppBudgetConsumed: 701,
+						GroupUsage:        3e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 3 * signedFundTxn.Txn.Fee.Raw},
+					},
+				},
+			},
+		}
+	})
+}
+
 func TestStartRound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -2562,7 +2659,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 								},
 							},
 						},
-						AppBudgetAdded:    4200,
+						AppBudgetAdded:    7000, // 2 top-level app calls plus 8 inner app calls
 						AppBudgetConsumed: 385,
 					},
 				},
@@ -7619,7 +7716,7 @@ int 1`,
 								AppBudgetConsumed: 23,
 							},
 						},
-						AppBudgetAdded:    2100,
+						AppBudgetAdded:    1400, // only the app calls grant budget; the inner acfg grants none
 						AppBudgetConsumed: 23,
 						FailedAt:          simulation.TxnPath{1, 1},
 					},
@@ -7715,7 +7812,7 @@ int 1`,
 								AppBudgetConsumed: 17,
 							},
 						},
-						AppBudgetAdded:    2100,
+						AppBudgetAdded:    700, // the inner acfg txns grant no opcode budget
 						AppBudgetConsumed: 17,
 						FailedAt:          simulation.TxnPath{1, 1},
 					},
@@ -7884,6 +7981,9 @@ func TestUnnamedResources(t *testing.T) {
 				}
 
 				var innerCount int
+				// Only inner app calls grant opcode budget, so they are counted
+				// separately from the pay and axfer inners.
+				var innerAppCount int
 
 				program := fmt.Sprintf("#pragma version %d\n", v)
 
@@ -7947,6 +8047,7 @@ func TestUnnamedResources(t *testing.T) {
 				if v >= 6 { // contract to contract itxn calls introduced
 					program += fmt.Sprintf("itxn_begin; int appl; itxn_field TypeEnum; int %d; itxn_field ApplicationID; itxn_submit;", otherAppID)
 					innerCount++
+					innerAppCount++
 				}
 				expectedResources.Accounts[otherAppUser] = struct{}{}
 				if v >= 9 {
@@ -8067,7 +8168,7 @@ func TestUnnamedResources(t *testing.T) {
 										UnnamedResourcesAccessed: expectedUnnamedResourceTxnAssignment,
 									},
 								},
-								AppBudgetAdded:           700 + 700*innerCount,
+								AppBudgetAdded:           700 + 700*innerAppCount,
 								AppBudgetConsumed:        ignoreAppBudgetConsumed,
 								UnnamedResourcesAccessed: expectedUnnamedResourceGroupAssignment,
 							},
@@ -10311,7 +10412,7 @@ func TestFixSigners(t *testing.T) {
 								{FeesPaid: inputs.txgroup[4].Txn.Fee}, // pay3
 							},
 							AppBudgetConsumed: ignoreAppBudgetConsumed,
-							AppBudgetAdded:    2800,
+							AppBudgetAdded:    1400,
 							GroupUsage:        8e6,
 							GroupFeesPaid:     basics.MicroAlgos{Raw: 8 * inputs.txgroup[0].Txn.Fee.Raw},
 						},
@@ -10405,7 +10506,7 @@ func TestFixSigners(t *testing.T) {
 								{FeesPaid: inputs.txgroup[4].Txn.Fee}, // pay3
 							},
 							AppBudgetConsumed: ignoreAppBudgetConsumed,
-							AppBudgetAdded:    2800,
+							AppBudgetAdded:    1400,
 							GroupUsage:        8e6,
 							GroupFeesPaid:     basics.MicroAlgos{Raw: 8 * inputs.txgroup[0].Txn.Fee.Raw},
 						},
