@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 	"unique"
+	"unsafe"
 
 	"github.com/stretchr/testify/require"
 
@@ -31,6 +32,18 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
+
+// maxInlineMapElemSize is the largest map element the Go 1.25 runtime stores inline in the
+// bucket array.
+const maxInlineMapElemSize = 128
+
+// TestVerifiedTxnCtxStaysInline checks that verifiedTxnCtx is small enough to be stored inline in the cache maps
+func TestVerifiedTxnCtxStaysInline(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	require.LessOrEqual(t, unsafe.Sizeof(verifiedTxnCtx{}), uintptr(maxInlineMapElemSize),
+		"verifiedTxnCtx no longer fits inline in the cache maps")
+}
 
 func TestAddingToCache(t *testing.T) {
 	partitiontest.PartitionTest(t)
