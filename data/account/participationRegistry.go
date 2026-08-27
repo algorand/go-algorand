@@ -408,7 +408,7 @@ func dbSchemaUpgrade0(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 type participationDB struct {
 	cache map[ParticipationID]ParticipationRecord
 
-	// dirty marked on Record(), DeleteExpired(), cleared on Register(), Delete(), Flush()
+	// dirty marked on Record(), DeleteExpired(), cleared on Delete(), Flush()
 	dirty map[ParticipationID]struct{}
 
 	log   logging.Logger
@@ -963,10 +963,13 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 }
 
 // applyRegistration installs the effective rounds that Register computed from its
-// snapshot, and clears the dirty flag because registerOp persists those fields.
-// Register also builds its update without holding the registry lock, so the same
-// rule as applyVotingTruncation applies: skip records deleted in the meantime, and
-// merge only the fields Register changed.
+// snapshot. Register builds its update without holding the registry lock, so the
+// same rule as applyVotingTruncation applies: skip records deleted in the meantime,
+// and merge only the fields Register changed.
+//
+// The dirty flag is left alone. registerOp writes every rolling field from
+// Register's snapshot, so a Record or DeleteExpired that landed inside the window is
+// already stale on disk; clearing the flag would drop the flush that repairs it.
 func (db *participationDB) applyRegistration(updated map[ParticipationID]updatingParticipationRecord) {
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
@@ -978,7 +981,6 @@ func (db *participationDB) applyRegistration(updated map[ParticipationID]updatin
 		cached.EffectiveFirst = record.ParticipationRecord.EffectiveFirst
 		cached.EffectiveLast = record.ParticipationRecord.EffectiveLast
 		db.cache[id] = cached
-		delete(db.dirty, id)
 	}
 }
 

@@ -359,6 +359,39 @@ func TestParticipation_WriteBackAfterDelete(t *testing.T) {
 
 		a.NoError(registry.Delete(id))
 	})
+
+	// A vote recorded inside Register's window has to survive the write-back and
+	// still reach the database: registerOp writes the rolling fields from Register's
+	// snapshot, which predates the vote.
+	t.Run("concurrent update during registration", func(t *testing.T) {
+		a := require.New(t)
+		p := makeTestParticipation(a, 4, 1, 10, 1)
+		id, err := registry.Insert(p)
+		a.NoError(err)
+		a.NoError(registry.Register(id, 1))
+
+		snapshot := registry.Get(id)
+		a.False(snapshot.IsZero())
+		update := map[ParticipationID]updatingParticipationRecord{id: {snapshot, true}}
+
+		a.NoError(registry.Record(p.Parent, 4, Vote))
+
+		registry.applyRegistration(update)
+		a.Equal(basics.Round(4), registry.Get(id).LastVote, "vote recorded in the window was reverted")
+		a.True(isDirty(id), "vote recorded in the window lost its pending flush")
+
+		a.NoError(registry.Flush(defaultTimeout))
+		var lastVote basics.Round
+		err = registry.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			return tx.QueryRow(
+				`SELECT lastVoteRound FROM Rolling WHERE pk IN (SELECT pk FROM Keysets WHERE participationID=?)`,
+				id[:]).Scan(&lastVote)
+		})
+		a.NoError(err)
+		a.Equal(basics.Round(4), lastVote, "vote recorded in the window never reached the database")
+
+		a.NoError(registry.Delete(id))
+	})
 }
 
 func TestParticipation_DeleteExpired(t *testing.T) {
