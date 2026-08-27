@@ -26,6 +26,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -53,7 +54,7 @@ func TestAddingToCache(t *testing.T) {
 			sigs: txnAuth{
 				sig:      txn.Sig,
 				authAddr: txn.AuthAddr,
-				msig:     txn.Msig,
+				msig:     nil,
 				lsig:     nil,
 				pqsig:    nil,
 			},
@@ -491,6 +492,49 @@ func TestAddingToCacheBlankLsigNilVsEmpty(t *testing.T) {
 	require.Len(t, cache.GetUnverifiedTransactionGroups(
 		[][]transactions.SignedTxn{{probe}}, groupCtx.specAddrs, groupCtx.consensusVersion), 1,
 		"a LogicSig that Equal() rejects was reported as already verified")
+}
+
+// TestAddingToCacheBlankMsigNilVsEmpty pins down the multisig counterpart of
+// TestAddingToCacheBlankLsigNilVsEmpty test above, which points the opposite way.
+//
+// MultisigSig.Blank() tests Subsigs != nil, while MultisigSig.Equal() compares len(), so
+// a non-nil empty Subsigs is NOT blank yet IS equal to the zero value -- the mirror image
+// of LogicSig, where Blank() is the lenient one. The cache compresses on Blank(), so such
+// a transaction is stored out of line and a later nil-valued one is reported as a miss
+// even though Equal() would accept it.
+func TestAddingToCacheBlankMsigNilVsEmpty(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// the asymmetry this test exists to document
+	var emptyMsig crypto.MultisigSig
+	emptyMsig.Subsigs = []crypto.MultisigSubsig{}
+	require.False(t, emptyMsig.Blank(), "Blank() tests Subsigs != nil, so an empty slice is not blank")
+	require.True(t, emptyMsig.Equal(crypto.MultisigSig{}), "Equal() compares len(), so it accepts the zero value")
+
+	_, signedTxns, secrets, addrs := generateTestObjects(2, 2, 0, 50)
+	group := generateTransactionGroups(1, signedTxns, secrets, addrs)[0]
+
+	cached := group[0]
+	cached.Msig.Subsigs = []crypto.MultisigSubsig{} // not blank, but equal to the zero value
+
+	mutated := cached
+	mutated.Msig.Subsigs = nil // blank, and still equal to the zero value
+	require.Equal(t, cached.ID(), mutated.ID(), "the cache key must be identical")
+	require.True(t, cached.Msig.Equal(mutated.Msig), "Equal() cannot tell these apart")
+
+	cache := MakeVerifiedTransactionCache(50)
+	groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{cached}, blockHeader, nil, nil)
+	require.NoError(t, err)
+	cache.Add(groupCtx)
+
+	// the transaction as cached is still recognised
+	require.Empty(t, cache.GetUnverifiedTransactionGroups(
+		[][]transactions.SignedTxn{{cached}}, groupCtx.specAddrs, groupCtx.consensusVersion))
+
+	// the nil-valued form is reported as unverified: the conservative direction
+	require.Len(t, cache.GetUnverifiedTransactionGroups(
+		[][]transactions.SignedTxn{{mutated}}, groupCtx.specAddrs, groupCtx.consensusVersion), 1,
+		"compressing on Blank() must report a miss rather than inherit the verification")
 }
 
 // TestGetUnverifiedTransactionGroupsContextChanges checks that a cached verification is

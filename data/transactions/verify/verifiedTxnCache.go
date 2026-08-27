@@ -87,10 +87,10 @@ type verifiedTransactionCache struct {
 
 type txnAuth struct {
 	sig      crypto.Signature
-	msig     crypto.MultisigSig
-	lsig     *transactions.LogicSig // 232B struct that is almost always nil
-	pqsig    *transactions.PQSig    // 56B struct
 	authAddr basics.Address
+	lsig     *transactions.LogicSig // 232B struct that is almost always nil
+	msig     *crypto.MultisigSig    // 32B struct
+	pqsig    *transactions.PQSig    // 56B struct
 }
 
 // emptyLogicSig is the emptiness test for the out-of-line LogicSig. It is deliberately
@@ -120,7 +120,6 @@ type verifiedTxnCtx struct {
 func (v *verifiedTxnCtx) matches(vctx unique.Handle[verificationContext], txn *transactions.SignedTxn) bool {
 	isEqual := v.vctx == vctx &&
 		v.sigs.sig == txn.Sig &&
-		v.sigs.msig.Equal(txn.Msig) &&
 		v.sigs.authAddr == txn.AuthAddr
 
 	if !isEqual {
@@ -129,14 +128,23 @@ func (v *verifiedTxnCtx) matches(vctx unique.Handle[verificationContext], txn *t
 
 	txnLsigEmpty := txn.Lsig.Equal(&emptyLogicSig)
 	txnPQsigBlank := txn.PQsig.Blank()
+	txnMsigBlank := txn.Msig.Blank()
 	lsigNotNil := v.sigs.lsig != nil
 	pqsigNotNil := v.sigs.pqsig != nil
+	msigNotNil := v.sigs.msig != nil
 
 	if lsigNotNil && txnLsigEmpty || !lsigNotNil && !txnLsigEmpty {
 		return false
 	}
 	if lsigNotNil {
 		isEqual = v.sigs.lsig.Equal(&txn.Lsig)
+	}
+
+	if msigNotNil && txnMsigBlank || !msigNotNil && !txnMsigBlank {
+		return false
+	}
+	if msigNotNil {
+		isEqual = isEqual && v.sigs.msig.Equal(txn.Msig)
 	}
 
 	if pqsigNotNil && txnPQsigBlank || !pqsigNotNil && !txnPQsigBlank {
@@ -318,13 +326,16 @@ func (v *verifiedTransactionCache) add(groupCtx *GroupContext) {
 			vctx: vctx,
 			sigs: txnAuth{
 				sig:      txn.Sig,
-				msig:     txn.Msig,
 				authAddr: txn.AuthAddr,
 			},
 		}
 		if !txn.Lsig.Equal(&emptyLogicSig) {
 			lsig := txn.Lsig // local copy to avoid the entire SignedTxn being referenced
 			entry.sigs.lsig = &lsig
+		}
+		if !txn.Msig.Blank() {
+			msig := txn.Msig
+			entry.sigs.msig = &msig
 		}
 		if !txn.PQsig.Blank() {
 			pqsig := txn.PQsig
