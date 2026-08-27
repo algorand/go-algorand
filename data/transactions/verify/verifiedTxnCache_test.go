@@ -46,7 +46,7 @@ func TestAddingToCache(t *testing.T) {
 	for _, txn := range txnGroups[0] {
 		ctx, has := impl.buckets[impl.base][txn.ID()]
 		require.True(t, has)
-		require.Equal(t, ctx, &verifiedTxnCtx{
+		require.Equal(t, ctx, verifiedTxnCtx{
 			vctx: unique.Make(verificationContext{
 				specAddrs:        groupCtx.specAddrs,
 				consensusVersion: groupCtx.consensusVersion,
@@ -607,4 +607,70 @@ func TestGetUnverifiedTransactionGroupsContextChanges(t *testing.T) {
 	// and the original context still hits afterwards: querying under a different context
 	// must not disturb the entry
 	require.Empty(t, cache.GetUnverifiedTransactionGroups(payset, cachedSpec, cachedProto))
+}
+
+// BenchmarkVerifiedCacheGC measures what a saturated cache costs the garbage collector.
+//
+// This is the number the entry layout is really aimed at. Entries small enough to be
+// stored inline live inside the maps' bucket arrays; larger ones are allocated
+// individually, giving the collector one more object to find and trace per cached
+// transaction. At the default capacity that is the difference between a few thousand
+// objects and a few hundred thousand.
+//
+// ms/GC is GC work, not stop-the-world pause: marking is mostly concurrent in a running
+// node, so this shows CPU spent collecting rather than latency. total-MB is reported
+// alongside because storing entries inline trades memory for that work -- the maps are
+// pre-sized, so unused slots cost a whole entry each rather than a pointer.
+//
+// It touches the cache only through Add(), so it runs unchanged on any revision.
+func BenchmarkVerifiedCacheGC(b *testing.B) {
+	const cacheSize = 20000
+
+	runtime.GC()
+	before := liveHeap()
+
+	cache := MakeVerifiedTransactionCache(cacheSize)
+	impl := cache.(*verifiedTransactionCache)
+	// fill past capacity so the buckets have cycled and the cache is in the steady state
+	// a long-running node sees
+	for added := 0; added < cacheSize*3; {
+		groupCtxs, n := generateGroupContexts(b, 1, 2000)
+		for _, groupCtx := range groupCtxs {
+			cache.Add(groupCtx)
+		}
+		added += n
+	}
+	retained := liveHeap() - before
+
+	live := len(impl.pinned)
+	for _, bucket := range impl.buckets {
+		live += len(bucket)
+	}
+
+	// Everything reported below describes a full cache, so check that it actually is one.
+	// The fill relies on every generated transaction having a distinct Txid; were that to
+	// stop holding, later transactions would overwrite earlier ones and this would quietly
+	// measure a nearly empty cache instead of a saturated one. Groups here are always a
+	// single transaction, so the buckets fill exactly.
+	if capacity := impl.entriesPerBucket * len(impl.buckets); live != capacity {
+		b.Fatalf("cache did not saturate: %d live entries, capacity %d -- "+
+			"the generated transactions are probably not all distinct", live, capacity)
+	}
+
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	objects := ms.HeapObjects
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		runtime.GC()
+	}
+	b.StopTimer()
+	runtime.KeepAlive(cache)
+
+	b.ReportMetric(float64(b.Elapsed().Microseconds())/float64(b.N)/1000, "ms/GC")
+	b.ReportMetric(float64(objects), "heap-objects")
+	b.ReportMetric(float64(live), "live-entries")
+	b.ReportMetric(float64(retained)/(1024*1024), "total-MB")
+	b.ReportMetric(float64(retained)/float64(live), "bytes/entry")
 }
