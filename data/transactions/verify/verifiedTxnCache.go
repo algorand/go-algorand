@@ -116,6 +116,10 @@ func (v *verifiedTxnCtx) matches(specAddrs transactions.SpecialAddresses, consen
 		v.sigs.msig.Equal(txn.Msig) &&
 		v.sigs.authAddr == txn.AuthAddr
 
+	if !isEqual {
+		return false
+	}
+
 	txnLsigEmpty := txn.Lsig.Equal(&emptyLogicSig)
 	txnPQsigBlank := txn.PQsig.Blank()
 	lsigNotNil := v.sigs.lsig != nil
@@ -125,12 +129,13 @@ func (v *verifiedTxnCtx) matches(specAddrs transactions.SpecialAddresses, consen
 		return false
 	}
 	if lsigNotNil {
-		isEqual = isEqual && v.sigs.lsig.Equal(&txn.Lsig)
+		isEqual = v.sigs.lsig.Equal(&txn.Lsig)
 	}
 
 	if pqsigNotNil && txnPQsigBlank || !pqsigNotNil && !txnPQsigBlank {
 		return false
 	}
+
 	if pqsigNotNil {
 		isEqual = isEqual && v.sigs.pqsig.Equal(txn.PQsig)
 	}
