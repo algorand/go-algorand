@@ -184,7 +184,7 @@ const (
 	Falcon512PrivateKeySize = cfalcon.Det512PrivateKeySize
 
 	// Falcon512MaxSignatureSize Represents the max possible size in bytes of a falcon-512 signature
-	Falcon512MaxSignatureSize = cfalcon.Det512CTSignatureSize
+	Falcon512MaxSignatureSize = cfalcon.Det512SignatureMaxSize
 )
 
 type (
