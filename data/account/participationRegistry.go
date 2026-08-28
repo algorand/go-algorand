@@ -953,8 +953,11 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 	}
 
 	if len(updated) != 0 {
-		db.writeQueue <- makeOpRequest(&registerOp{updated: updated})
+		// Update the cache before queuing the write. The queue has one consumer, so a
+		// flushOp queued after registerOp applies after it, and would otherwise write
+		// pre-registration effective rounds read from a cache not yet updated.
 		db.applyRegistration(updated)
+		db.writeQueue <- makeOpRequest(&registerOp{updated: updated})
 	}
 
 	db.log.Infof("Registered key (%s) for account (%s) first valid (%d) last valid (%d)\n",
