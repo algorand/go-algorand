@@ -36,6 +36,9 @@ import (
 // checked in CI before they are promoted to a released consensus version.
 // Documenting logic.LogicVersion instead would publish vFuture opcodes
 // unconditionally.
+// TODO: When docVersion is bumped to 14, copy authorization.md to the specs
+// opcode includes in data/transactions/logic/Makefile and add the corresponding
+// specs-side include.
 const docVersion = 13
 
 // slug returns the auto generated named anchor "slug" for a given heading
