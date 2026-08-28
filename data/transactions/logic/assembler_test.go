@@ -443,6 +443,10 @@ pushbytes 0x0123
 sumhash512
 `
 
+const allowNonsense = `
+allow RekeyTo
+`
+
 const sha512Nonsense = `
 pushbytes 0x0123
 sha512
@@ -475,8 +479,9 @@ const v12Nonsense = v11Nonsense + fvNonsense
 
 const v13Nonsense = v12Nonsense + sha512Nonsense + poseidon2Nonsense + foreignBoxNonsense
 
-// sumhash512 is experimental, held back to v14 while v13 is released.
-const v14Nonsense = v13Nonsense + sumhashNonsense
+// LogicSig allowances are part of v14. sumhash512 is experimental at v14
+// and should move with sumhashVersion if it is not promoted.
+const v14Nonsense = v13Nonsense + sumhashNonsense + allowNonsense
 
 const foreignBoxNonsense = `
 pushint 1
@@ -519,6 +524,7 @@ const fvCompiled = "8002abcd494985"
 const v12Compiled = v11Compiled + fvCompiled
 
 const sumhashCompiled = "8002012386"
+const allowCompiled = "c700"
 const sha512Compiled = "8002012387"
 const poseidon2Compiled = "802011223344556677889900aabbccddeeff11223344556677889900aabbccddeeffe700"
 const foreignBoxCompiled = "8101760bd401d402d403d404d405d406d407d408d409"
@@ -533,8 +539,8 @@ const v13BaseCompiled = "2004010002b7a60c26050242420c68656c6c6f20776f726c6421070
 const v13Compiled = v13BaseCompiled + sha512Compiled + poseidon2Compiled + foreignBoxCompiled
 
 // v14 adds no encoding changes over v13, so its base is v13's program with the
-// experimental sumhash512 opcode (held back from the v13 release) appended.
-const v14Compiled = v13Compiled + sumhashCompiled
+// experimental v14 opcodes appended.
+const v14Compiled = v13Compiled + sumhashCompiled + allowCompiled
 
 var nonsense = map[uint64]string{
 	1:  v1Nonsense,

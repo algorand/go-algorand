@@ -623,6 +623,85 @@ func TestTxnValidationPQDelegatedLogicSigSignsRawProgram(t *testing.T) {
 	require.ErrorContains(t, err, "invalid falcon-1024 signature")
 }
 
+func TestTxnValidationLogicSigAllow(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	dummyLedger := DummyLedgerForSignature{}
+
+	makeLogicSigTxn := func(t *testing.T, source string, version uint64, delegated bool) transactions.SignedTxn {
+		t.Helper()
+
+		ops, err := logic.AssembleStringWithVersion(source, version)
+		require.NoError(t, err)
+
+		var sender basics.Address
+		var sig crypto.Signature
+		if delegated {
+			secrets := keypair()
+			sender = basics.Address(secrets.SignatureVerifier)
+			sig = secrets.Sign(logic.Program(ops.Program))
+		} else {
+			sender = basics.Address(logic.HashProgram(ops.Program))
+		}
+
+		txn := createPayTransaction(proto.MinTxnFee, 40, 60, 1, sender, basics.Address{1})
+		txn.RekeyTo = basics.Address{2}
+		return transactions.SignedTxn{
+			Txn: txn,
+			Lsig: transactions.LogicSig{
+				Logic: ops.Program,
+				Sig:   sig,
+			},
+		}
+	}
+	makeKeyregLogicSigTxn := func(t *testing.T, source string, version uint64, delegated bool) transactions.SignedTxn {
+		t.Helper()
+		stxn := makeLogicSigTxn(t, source, version, delegated)
+		stxn.Txn.Type = protocol.KeyRegistrationTx
+		stxn.Txn.RekeyTo = basics.Address{}
+		stxn.Txn.PaymentTxnFields = transactions.PaymentTxnFields{}
+		return stxn
+	}
+
+	for _, delegated := range []bool{false, true} {
+		name := "contract"
+		if delegated {
+			name = "delegated"
+		}
+		t.Run(name, func(t *testing.T) {
+			// Programs from before v14 retain their historical behavior.
+			stxn := makeLogicSigTxn(t, "int 1", 13, delegated)
+			_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+			require.NoError(t, err)
+
+			stxn = makeLogicSigTxn(t, "int 1", proto.LogicSigVersion, delegated)
+			_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+			requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
+			require.ErrorContains(t, err, "transaction field RekeyTo requires `allow RekeyTo`")
+
+			stxn = makeLogicSigTxn(t, "allow RekeyTo; int 1", proto.LogicSigVersion, delegated)
+			_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+			require.NoError(t, err)
+
+			// Key registration requires a transaction-level allowance.
+			stxn = makeKeyregLogicSigTxn(t, "int 1", 13, delegated)
+			_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+			require.NoError(t, err)
+
+			stxn = makeKeyregLogicSigTxn(t, "int 1", proto.LogicSigVersion, delegated)
+			_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+			requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
+			require.ErrorContains(t, err, "transaction type KeyRegistration requires `allow KeyRegistration`")
+
+			stxn = makeKeyregLogicSigTxn(t, "allow KeyRegistration; int 1", proto.LogicSigVersion, delegated)
+			_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+			require.NoError(t, err)
+		})
+	}
+}
+
 func TestTxnValidationEmptySig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
