@@ -292,6 +292,25 @@ func TestParticipation_WriteBackAfterDelete(t *testing.T) {
 		return dirty
 	}
 
+	votingKeys := func(v *crypto.OneTimeSignatureSecrets) int {
+		return len(v.Offsets) + len(v.Batches)
+	}
+
+	// votingKeysInDB reads the persisted voting secrets, which is where a resurrected
+	// key would survive a restart.
+	votingKeysInDB := func(a *require.Assertions, id ParticipationID) int {
+		var raw []byte
+		err := registry.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			return tx.QueryRow(
+				`SELECT voting FROM Rolling WHERE pk IN (SELECT pk FROM Keysets WHERE participationID=?)`,
+				id[:]).Scan(&raw)
+		})
+		a.NoError(err)
+		var voting crypto.OneTimeSignatureSecrets
+		a.NoError(protocol.Decode(raw, &voting))
+		return votingKeys(&voting)
+	}
+
 	t.Run("DeleteExpired", func(t *testing.T) {
 		a := require.New(t)
 		p := makeTestParticipation(a, 1, 1, 10, 1)
@@ -389,6 +408,42 @@ func TestParticipation_WriteBackAfterDelete(t *testing.T) {
 		})
 		a.NoError(err)
 		a.Equal(basics.Round(4), lastVote, "vote recorded in the window never reached the database")
+
+		a.NoError(registry.Delete(id))
+	})
+
+	// registerOp carries Register's snapshot, so it must write only the effective
+	// rounds. A truncation and its flush landing between the snapshot and registerOp
+	// reaching the database would otherwise be undone on disk: the cache stays
+	// truncated while the database holds keys a restart would load back.
+	t.Run("stale registration write", func(t *testing.T) {
+		a := require.New(t)
+		p := makeTestParticipation(a, 5, 1, 10, 1)
+		id, err := registry.Insert(p)
+		a.NoError(err)
+		a.NoError(registry.Register(id, 1))
+
+		// the snapshot Register would have taken, before the truncation below
+		stale := registry.Get(id)
+		a.False(stale.IsZero())
+
+		truncated := registry.Get(id)
+		keysBefore := votingKeys(truncated.Voting)
+		truncated.Voting.DeleteBeforeFineGrained(basics.OneTimeIDForRound(5, truncated.KeyDilution), truncated.KeyDilution)
+		keysAfter := votingKeys(truncated.Voting)
+		a.Less(keysAfter, keysBefore)
+
+		registry.applyVotingTruncation([]ParticipationRecord{truncated})
+		a.NoError(registry.Flush(defaultTimeout))
+		a.Equal(keysAfter, votingKeysInDB(a, id))
+
+		// registerOp reaches the database only after that flush
+		registry.writeQueue <- makeOpRequest(&registerOp{
+			updated: map[ParticipationID]updatingParticipationRecord{id: {stale, true}},
+		})
+		a.NoError(registry.Flush(defaultTimeout))
+		a.Equal(keysAfter, votingKeysInDB(a, id), "registration restored truncated voting keys")
+		a.Equal(keysAfter, votingKeys(registry.Get(id).Voting), "cache lost the truncation")
 
 		a.NoError(registry.Delete(id))
 	})

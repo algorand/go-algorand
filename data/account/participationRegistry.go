@@ -368,9 +368,13 @@ const (
 		FROM StateProofKeys s
 		WHERE round=?
 		   AND pk IN (SELECT pk FROM Keysets WHERE participationID=?)`
-	deleteKeysets          = `DELETE FROM Keysets WHERE pk=?`
-	deleteRolling          = `DELETE FROM Rolling WHERE pk=?`
-	deleteStateProofByPK   = `DELETE FROM StateProofKeys WHERE pk=?`
+	deleteKeysets            = `DELETE FROM Keysets WHERE pk=?`
+	deleteRolling            = `DELETE FROM Rolling WHERE pk=?`
+	deleteStateProofByPK     = `DELETE FROM StateProofKeys WHERE pk=?`
+	updateEffectiveRoundsSQL = `UPDATE Rolling
+		 SET effectiveFirstRound=?,
+		     effectiveLastRound=?
+		 WHERE pk IN (SELECT pk FROM Keysets WHERE participationID=?)`
 	updateRollingFieldsSQL = `UPDATE Rolling
 		 SET lastVoteRound=?,
 		     lastBlockProposalRound=?,
@@ -408,7 +412,8 @@ func dbSchemaUpgrade0(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 type participationDB struct {
 	cache map[ParticipationID]ParticipationRecord
 
-	// dirty marked on Record(), DeleteExpired(), cleared on Delete(), Flush()
+	// dirty marked on Record(), DeleteExpired(); cleared on Delete(), Flush(),
+	// and when registerOp evicts a record whose Rolling row has vanished
 	dirty map[ParticipationID]struct{}
 
 	log   logging.Logger
@@ -882,6 +887,29 @@ func updateRollingFields(ctx context.Context, tx *sql.Tx, record ParticipationRe
 		return err
 	}
 
+	return rollingRowsAffected(result)
+}
+
+// updateEffectiveRounds sets only the effective rounds, which is all Register owns.
+// The other rolling fields belong to Record and DeleteExpired, and reach the database
+// through flushOp from the live cache. Writing them from Register's snapshot would
+// revert whatever landed after that snapshot was taken.
+func updateEffectiveRounds(ctx context.Context, tx *sql.Tx, record ParticipationRecord) error {
+	result, err := tx.ExecContext(ctx, updateEffectiveRoundsSQL,
+		record.EffectiveFirst,
+		record.EffectiveLast,
+		record.ParticipationID[:])
+
+	if err != nil {
+		return err
+	}
+
+	return rollingRowsAffected(result)
+}
+
+// rollingRowsAffected turns the row count of a Rolling update into the sentinel
+// errors its callers switch on.
+func rollingRowsAffected(result sql.Result) error {
 	numRows, err := result.RowsAffected()
 	if err != nil {
 		return err
@@ -970,9 +998,8 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 // same rule as applyVotingTruncation applies: skip records deleted in the meantime,
 // and merge only the fields Register changed.
 //
-// The dirty flag is left alone. registerOp writes every rolling field from
-// Register's snapshot, so a Record or DeleteExpired that landed inside the window is
-// already stale on disk; clearing the flag would drop the flush that repairs it.
+// The dirty flag is left alone: registerOp persists the effective rounds only, so it
+// says nothing about the fields the flag tracks.
 func (db *participationDB) applyRegistration(updated map[ParticipationID]updatingParticipationRecord) {
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
