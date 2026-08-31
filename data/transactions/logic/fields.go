@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -294,13 +295,14 @@ var txnFieldSpecs = [...]txnFieldSpec{
 	{FirstValid, StackUint64, false, 0, 0, false, "round number"},
 	{FirstValidTime, StackUint64, false, randomnessVersion, 0, false, "UNIX timestamp of block before txn.FirstValid. Fails if negative"},
 	{LastValid, StackUint64, false, 0, 0, false, "round number"},
-	{Note, StackBytes, false, 0, 6, false, "Any data up to 1024 bytes"},
+	{Note, StackBytes, false, 0, 6, false,
+		fmt.Sprintf("Any data up to %d bytes", bounds.MaxTxnNoteBytes)},
 	{Lease, StackBytes32, false, 0, 0, false, "32 byte lease value"},
 	{Receiver, StackAddress, false, 0, 5, false, "32 byte address"},
 	{Amount, StackUint64, false, 0, 5, false, "microalgos"},
 	{CloseRemainderTo, StackAddress, false, 0, 5, false, "32 byte address"},
-	{VotePK, StackBytes32, false, 0, 6, false, "32 byte address"},
-	{SelectionPK, StackBytes32, false, 0, 6, false, "32 byte address"},
+	{VotePK, StackBytes32, false, 0, 6, false, "32 byte participation public key"},
+	{SelectionPK, StackBytes32, false, 0, 6, false, "32 byte VRF public key"},
 	{VoteFirst, StackUint64, false, 0, 6, false, "The first round that the participation key is valid."},
 	{VoteLast, StackUint64, false, 0, 6, false, "The last round that the participation key is valid."},
 	{VoteKeyDilution, StackUint64, false, 0, 6, false, "Dilution for the 2-level participation key"},
@@ -1026,11 +1028,12 @@ var base64EncodingNames [invalidBase64Encoding]string
 type base64EncodingSpec struct {
 	field   Base64Encoding
 	version uint64
+	doc     string
 }
 
 var base64EncodingSpecs = [...]base64EncodingSpec{
-	{URLEncoding, 6},
-	{StdEncoding, 6},
+	{URLEncoding, 6, "The base64url alphabet, RFC 4648 section 5"},
+	{StdEncoding, 6, "The standard base64 alphabet, RFC 4648 section 4"},
 }
 
 func base64EncodingSpecByField(e Base64Encoding) (base64EncodingSpec, bool) {
@@ -1057,8 +1060,7 @@ func (fs base64EncodingSpec) Version() uint64 {
 	return fs.version
 }
 func (fs base64EncodingSpec) Note() string {
-	note := "" // no doc list?
-	return note
+	return fs.doc
 }
 func (fs base64EncodingSpec) Modes() RunMode {
 	return modeAny
@@ -1095,12 +1097,13 @@ type jsonRefSpec struct {
 	field   JSONRefType
 	ftype   StackType
 	version uint64
+	doc     string
 }
 
 var jsonRefSpecs = [...]jsonRefSpec{
-	{JSONString, StackBytes, fidoVersion},
-	{JSONUint64, StackUint64, fidoVersion},
-	{JSONObject, StackBytes, fidoVersion},
+	{JSONString, StackBytes, fidoVersion, "The value is a JSON string, returned without its surrounding quotes"},
+	{JSONUint64, StackUint64, fidoVersion, "The value is a JSON number, returned as a uint64"},
+	{JSONObject, StackBytes, fidoVersion, "The value is a JSON object, returned as its raw bytes"},
 }
 
 func jsonRefSpecByField(r JSONRefType) (jsonRefSpec, bool) {
@@ -1127,8 +1130,7 @@ func (fs jsonRefSpec) Version() uint64 {
 	return fs.version
 }
 func (fs jsonRefSpec) Note() string {
-	note := "" // no doc list?
-	return note
+	return fs.doc
 }
 func (fs jsonRefSpec) Modes() RunMode {
 	return modeAny
@@ -1160,10 +1162,11 @@ var vrfStandardNames [invalidVrfStandard]string
 type vrfStandardSpec struct {
 	field   VrfStandard
 	version uint64
+	doc     string
 }
 
 var vrfStandardSpecs = [...]vrfStandardSpec{
-	{VrfAlgorand, randomnessVersion},
+	{VrfAlgorand, randomnessVersion, "ECVRF-ED25519-SHA512-Elligator2, the VRF used by Algorand consensus"},
 }
 
 func vrfStandardSpecByField(r VrfStandard) (vrfStandardSpec, bool) {
@@ -1199,8 +1202,7 @@ func (fs vrfStandardSpec) Version() uint64 {
 }
 
 func (fs vrfStandardSpec) Note() string {
-	note := "" // no doc list?
-	return note
+	return fs.doc
 }
 
 func (fs vrfStandardSpec) Modes() RunMode {
@@ -1211,7 +1213,7 @@ func (s vrfStandardSpecMap) SpecByName(name string) FieldSpec {
 	return s[name]
 }
 
-// VrfStandards describes the json_ref immediate
+// VrfStandards describes the vrf_verify immediate
 var VrfStandards = FieldGroup{
 	"vrf_verify", "Standards",
 	vrfStandardNames[:],
@@ -1264,23 +1266,24 @@ type blockFieldSpec struct {
 	field   BlockField
 	ftype   StackType
 	version uint64
+	doc     string
 }
 
 var blockFieldSpecs = [...]blockFieldSpec{
-	{BlkSeed, StackBytes32, randomnessVersion},
-	{BlkTimestamp, StackUint64, randomnessVersion},
-	{BlkProposer, StackAddress, incentiveVersion},
-	{BlkFeesCollected, StackUint64, incentiveVersion},
-	{BlkBonus, StackUint64, incentiveVersion},
-	{BlkBranch, StackBytes32, incentiveVersion},
-	{BlkFeeSink, StackAddress, incentiveVersion},
-	{BlkProtocol, StackBytes, incentiveVersion},
-	{BlkTxnCounter, StackUint64, incentiveVersion},
-	{BlkProposerPayout, StackUint64, incentiveVersion},
-	{BlkBranch512, StackBytes64, 13},
-	{BlkSha512_256TxnCommitment, StackBytes32, 13},
-	{BlkSha256TxnCommitment, StackBytes32, 13},
-	{BlkSha512TxnCommitment, StackBytes64, 13},
+	{BlkSeed, StackBytes32, randomnessVersion, "The block's sortition seed"},
+	{BlkTimestamp, StackUint64, randomnessVersion, "The block's timestamp, in seconds since the Unix epoch. Fails if negative"},
+	{BlkProposer, StackAddress, incentiveVersion, "The account that proposed the block"},
+	{BlkFeesCollected, StackUint64, incentiveVersion, "The sum of the fees paid by the transactions in the block, in microalgos"},
+	{BlkBonus, StackUint64, incentiveVersion, "The bonus incentive available for proposing this block, in microalgos. It begins at a consensus parameter value and decays periodically. See BlkProposerPayout for the amount actually paid"},
+	{BlkBranch, StackBytes32, incentiveVersion, "The sha512_256 hash of the previous block's header"},
+	{BlkFeeSink, StackAddress, incentiveVersion, "The fee sink account for the block's round"},
+	{BlkProtocol, StackBytes, incentiveVersion, "The ConsensusVersion of the block"},
+	{BlkTxnCounter, StackUint64, incentiveVersion, "The number of the next transaction to be committed after this block, counted from the beginning of the chain. Genesis blocks start at 1000"},
+	{BlkProposerPayout, StackUint64, incentiveVersion, "The amount actually moved from the FeeSink to the proposer, in microalgos. 0 if the proposer was not eligible"},
+	{BlkBranch512, StackBytes64, 13, "The sha512 hash of the previous block's header"},
+	{BlkSha512_256TxnCommitment, StackBytes32, 13, "Root of the sha512_256 merkle tree over the block's transactions and their ApplyData, the \"Algorand native\" commitment"},
+	{BlkSha256TxnCommitment, StackBytes32, 13, "Root of the sha256 vector commitment merkle tree over the block's transactions and their ApplyData"},
+	{BlkSha512TxnCommitment, StackBytes64, 13, "Root of the sha512 vector commitment merkle tree over the block's transactions and their ApplyData"},
 }
 
 func blockFieldSpecByField(r BlockField) (blockFieldSpec, bool) {
@@ -1316,7 +1319,7 @@ func (fs blockFieldSpec) Version() uint64 {
 }
 
 func (fs blockFieldSpec) Note() string {
-	return ""
+	return fs.doc
 }
 
 func (fs blockFieldSpec) Modes() RunMode {
@@ -1327,7 +1330,7 @@ func (s blockFieldSpecMap) SpecByName(name string) FieldSpec {
 	return s[name]
 }
 
-// BlockFields describes the json_ref immediate
+// BlockFields describes the block immediate
 var BlockFields = FieldGroup{
 	"block", "Fields",
 	blockFieldNames[:],

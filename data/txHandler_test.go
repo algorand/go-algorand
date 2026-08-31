@@ -31,6 +31,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/stretchr/testify/require"
 
@@ -3259,4 +3260,55 @@ func TestTxHandlerNilTxPool(t *testing.T) {
 		TxPool: &mockTxPool{},
 	})
 	require.NotErrorIs(t, err, ErrInvalidTxPool)
+}
+
+// TestTxHandlerDecodeMsgNoStaleFields checks that decoding does not leak fields from a previously decoded message.
+func TestTxHandlerDecodeMsgNoStaleFields(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// a full-size "dirty" message: makeRandomTransactions populates the optional Note and
+	// AuthAddr fields, so every slot of the scratch buffer ends up holding them
+	_, dirty := makeRandomTransactions(bounds.MaxTxGroupSize)
+
+	// ...and a single-transaction "clean" message that omits both
+	cleanTxns, _ := makeRandomTransactions(1)
+	cleanTxns[0].Txn.Note = nil
+	cleanTxns[0].AuthAddr = basics.Address{}
+	clean := protocol.Encode(&cleanTxns[0])
+
+	// the scratch buffer comes from a sync.Pool, so repeat enough times to be confident
+	// the same buffer is handed to both decodes
+	for i := 0; i < 100; i++ {
+		_, _, invalid := decodeMsg(dirty)
+		require.False(t, invalid)
+
+		group, _, invalid := decodeMsg(clean)
+		require.False(t, invalid)
+		require.Equal(t, cleanTxns, group, "iteration %d decoded stale fields", i)
+	}
+}
+
+const sizeofSignedTxn = int(unsafe.Sizeof(transactions.SignedTxn{}))
+
+// BenchmarkTxHandlerDecodeMsg measures decodeMsg across the legal group sizes.
+func BenchmarkTxHandlerDecodeMsg(b *testing.B) {
+	for _, n := range []int{1, 2, 4, 8, bounds.MaxTxGroupSize} {
+		b.Run(fmt.Sprintf("group-%d", n), func(b *testing.B) {
+			_, blob := makeRandomTransactions(n)
+
+			b.ReportAllocs()
+			b.SetBytes(int64(len(blob)))
+			b.ResetTimer()
+
+			var retained int64
+			for i := 0; i < b.N; i++ {
+				group, _, invalid := decodeMsg(blob)
+				if invalid {
+					b.Fatal("decodeMsg reported invalid")
+				}
+				retained += int64(cap(group) * sizeofSignedTxn)
+			}
+			b.ReportMetric(float64(retained)/float64(b.N), "retained-B/op")
+		})
+	}
 }

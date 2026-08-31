@@ -274,6 +274,10 @@ const ConsensusVFnet3 = ConsensusVersion("fnet3")
 // ConsensusV40.
 const ConsensusVFnet4 = ConsensusVersion("fnet4")
 
+// ConsensusVFnet5 is the protocol AF's FNet runs, with the same parameters as
+// ConsensusV42
+const ConsensusVFnet5 = ConsensusVersion("fnet5")
+
 // !!! ********************* !!!
 // !!! *** Please update ConsensusCurrentVersion when adding new protocol versions *** !!!
 // !!! ********************* !!!

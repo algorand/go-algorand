@@ -328,6 +328,15 @@ func TestParseRawNonUnicodeChar(t *testing.T) {
 	text := `{"key0": "πζθ"}`
 	_, err := parseJSON([]byte(text))
 	require.NoError(t, err)
+	// raw bytes that are not valid utf-8 parse, and become the replacement
+	// character (U+FFFD) when a string value containing them is extracted
+	text = "{\"key0\": \"ab\xffcd\"}"
+	msg, err := parseJSON([]byte(text))
+	require.NoError(t, err)
+	var value string
+	err = json.Unmarshal(msg["key0"], &value)
+	require.NoError(t, err)
+	require.Equal(t, "ab\uFFFDcd", value)
 	text = `{"key0": "\uFF"}`
 	_, err = parseJSON([]byte(text))
 	require.Error(t, err)
