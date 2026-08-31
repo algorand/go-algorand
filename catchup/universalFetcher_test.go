@@ -188,7 +188,6 @@ func TestRequestBlockBytesErrors(t *testing.T) {
 		t.Fatal(err)
 		return
 	}
-	defer ledger.Ledger.Close()
 
 	blockServiceConfig := config.GetDefaultLocal()
 	blockServiceConfig.EnableBlockService = true
