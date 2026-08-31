@@ -29,6 +29,8 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
@@ -642,6 +644,21 @@ func TestTxnValidationEmptySig(t *testing.T) {
 	}
 }
 
+// stateProofForTxnValidation returns the minimum StateProofBasic structure
+// accepted by CheckTxnGroup. These tests exercise outer transaction
+// validation, not cryptographic proof validity.
+func stateProofForTxnValidation() stateproof.StateProof {
+	return stateproof.StateProof{
+		SigCommit: make(crypto.GenericDigest, stateproof.HashSize),
+		SigProofs: merklearray.Proof{
+			HashFactory: crypto.HashFactory{HashType: stateproof.HashType},
+		},
+		PartProofs: merklearray.Proof{
+			HashFactory: crypto.HashFactory{HashType: stateproof.HashType},
+		},
+	}
+}
+
 func TestTxnValidationStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -655,6 +672,9 @@ func TestTxnValidationStateProof(t *testing.T) {
 				Sender:     transactions.StateProofSender,
 				FirstValid: 0,
 				LastValid:  10,
+			},
+			StateProofTxnFields: transactions.StateProofTxnFields{
+				StateProof: stateProofForTxnValidation(),
 			},
 		},
 	}
