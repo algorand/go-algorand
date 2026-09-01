@@ -58,6 +58,7 @@ func TestUGetBlockWs(t *testing.T) {
 	up := makeTestUnicastPeer(net, t)
 	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, ledger, net, "test genesisID")
 	ls.Start()
+	defer ls.Stop()
 
 	fetcher := makeUniversalBlockFetcher(logging.TestingLog(t), net, cfg)
 
