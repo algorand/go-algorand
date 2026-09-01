@@ -22,6 +22,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -33,6 +34,10 @@ var (
 	errMalformedApplicationBoxIndex = errors.New("application transaction box index exceeds foreign apps")
 	errMalformedStateProofSignature = errors.New("state proof reveal has an empty or too-short signature")
 	errMalformedStateProofProof     = errors.New("state proof reveal has an invalid Merkle proof depth")
+	errMalformedStateProofPath      = errors.New("state proof has a Merkle path element with an unexpected size")
+	errMalformedStateProofType      = errors.New("state proof has an unsupported type")
+	errMalformedStateProofHash      = errors.New("state proof uses an unexpected hash algorithm")
+	errMalformedStateProofCommit    = errors.New("state proof has an unexpected signature commitment size")
 )
 
 // TxGroupMalformedErrorReasonCode is a reason code for TxGroupMalformedError.
@@ -74,7 +79,37 @@ func triggersResourceAvailability(tx *Transaction) bool {
 		(tx.Type == protocol.AssetConfigTx && tx.ConfigAsset == 0)
 }
 
-func checkStateProofReveals(sp *stateproof.StateProof) error {
+// checkBasicStateProofPath enforces the Merkle proof parameters fixed by the
+// StateProofBasic cryptographic suite.
+func checkBasicStateProofPath(proof *merklearray.Proof, expectedHash crypto.HashType, digestSize int) error {
+	if proof.HashFactory.HashType != expectedHash {
+		return fmt.Errorf("%w: uses %d, expected %d",
+			errMalformedStateProofHash, proof.HashFactory.HashType, expectedHash)
+	}
+
+	for i := range proof.Path {
+		// An empty path element represents a missing sibling. Every present
+		// sibling must be one complete Sumhash digest.
+		if len(proof.Path[i]) != 0 && len(proof.Path[i]) != digestSize {
+			return fmt.Errorf("%w: element %d has length %d, expected %d",
+				errMalformedStateProofPath, i, len(proof.Path[i]), digestSize)
+		}
+	}
+	return nil
+}
+
+func checkBasicStateProof(sp *stateproof.StateProof) error {
+	if len(sp.SigCommit) != stateproof.HashSize {
+		return fmt.Errorf("%w: has length %d, expected %d",
+			errMalformedStateProofCommit, len(sp.SigCommit), stateproof.HashSize)
+	}
+	if err := checkBasicStateProofPath(&sp.SigProofs, stateproof.HashType, stateproof.HashSize); err != nil {
+		return err
+	}
+	if err := checkBasicStateProofPath(&sp.PartProofs, stateproof.HashType, stateproof.HashSize); err != nil {
+		return err
+	}
+
 	for _, r := range sp.Reveals {
 		sig := r.SigSlot.Sig
 		if sig.MsgIsZero() {
@@ -87,8 +122,20 @@ func checkStateProofReveals(sp *stateproof.StateProof) error {
 			sig.Proof.TreeDepth > merklearray.MaxEncodedTreeDepth {
 			return errMalformedStateProofProof
 		}
+		if err := checkBasicStateProofPath(sig.Proof.ToProof(), merklesignature.MerkleSignatureSchemeHashFunction, merklesignature.MerkleSignatureSchemeRootSize); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+func checkStateProof(spType protocol.StateProofType, sp *stateproof.StateProof) error {
+	switch spType {
+	case protocol.StateProofBasic:
+		return checkBasicStateProof(sp)
+	default:
+		return fmt.Errorf("%w: %d", errMalformedStateProofType, spType)
+	}
 }
 
 func checkApplicationCallBoxes(tx *Transaction) error {
@@ -114,7 +161,7 @@ func checkTxnGroup(n int, txn func(i int) *Transaction) error {
 				return errMissingHeartbeatFields
 			}
 		case protocol.StateProofTx:
-			if err := checkStateProofReveals(&tx.StateProof); err != nil {
+			if err := checkStateProof(tx.StateProofType, &tx.StateProof); err != nil {
 				return err
 			}
 		case protocol.ApplicationCallTx:

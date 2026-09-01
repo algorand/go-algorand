@@ -22,10 +22,113 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
+
+func stateProofPathForCheck(hashType crypto.HashType, elementSize int) merklearray.Proof {
+	return merklearray.Proof{
+		Path:        []crypto.GenericDigest{make(crypto.GenericDigest, elementSize), nil},
+		HashFactory: crypto.HashFactory{HashType: hashType},
+		TreeDepth:   1,
+	}
+}
+
+func stateProofTxnForCheck() Transaction {
+	return Transaction{
+		Type: protocol.StateProofTx,
+		StateProofTxnFields: StateProofTxnFields{
+			StateProof: stateproof.StateProof{
+				SigCommit:  make(crypto.GenericDigest, stateproof.HashSize),
+				SigProofs:  stateProofPathForCheck(stateproof.HashType, stateproof.HashSize),
+				PartProofs: stateProofPathForCheck(stateproof.HashType, stateproof.HashSize),
+			},
+		},
+	}
+}
+
+func TestCheckTxnGroupStateProofBasicSuite(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	valid := stateProofTxnForCheck()
+	require.NoError(t, CheckTxnGroup([]SignedTxn{{Txn: valid}}))
+	require.NoError(t, CheckPaysetGroup([]SignedTxnWithAD{SignedTxn{Txn: valid}.WithAD()}))
+
+	t.Run("unsupported state proof type", func(t *testing.T) {
+		t.Parallel()
+		malformed := stateProofTxnForCheck()
+		malformed.StateProofType = protocol.StateProofType(1)
+		require.ErrorIs(t, CheckTxnGroup([]SignedTxn{{Txn: malformed}}), errMalformedStateProofType)
+	})
+
+	t.Run("signature commitment proof hash", func(t *testing.T) {
+		t.Parallel()
+		malformed := stateProofTxnForCheck()
+		malformed.StateProof.SigProofs = stateProofPathForCheck(crypto.Sha256, crypto.Sha256Size)
+		require.ErrorIs(t, CheckTxnGroup([]SignedTxn{{Txn: malformed}}), errMalformedStateProofHash)
+	})
+
+	t.Run("participant commitment proof hash", func(t *testing.T) {
+		t.Parallel()
+		malformed := stateProofTxnForCheck()
+		malformed.StateProof.PartProofs = stateProofPathForCheck(crypto.Sha256, crypto.Sha256Size)
+		require.ErrorIs(t, CheckPaysetGroup([]SignedTxnWithAD{SignedTxn{Txn: malformed}.WithAD()}), errMalformedStateProofHash)
+	})
+
+	t.Run("path element size", func(t *testing.T) {
+		t.Parallel()
+		malformed := stateProofTxnForCheck()
+		malformed.StateProof.PartProofs.Path[0] = make(crypto.GenericDigest, crypto.Sha256Size)
+		require.ErrorIs(t, CheckTxnGroup([]SignedTxn{{Txn: malformed}}), errMalformedStateProofPath)
+	})
+
+	t.Run("signature commitment size", func(t *testing.T) {
+		t.Parallel()
+		malformed := stateProofTxnForCheck()
+		malformed.StateProof.SigCommit = make(crypto.GenericDigest, crypto.Sha256Size)
+		require.ErrorIs(t, CheckTxnGroup([]SignedTxn{{Txn: malformed}}), errMalformedStateProofCommit)
+	})
+
+	t.Run("nested Merkle signature proof hash", func(t *testing.T) {
+		t.Parallel()
+		malformed := stateProofTxnForCheck()
+		reveal := stateproof.Reveal{}
+		reveal.SigSlot.Sig.Signature = crypto.FalconSignature{1, 2}
+		reveal.SigSlot.Sig.Proof = merklearray.SingleLeafProof{
+			Proof: stateProofPathForCheck(crypto.Sha256, crypto.Sha256Size),
+		}
+		malformed.StateProof.Reveals = map[uint64]stateproof.Reveal{0: reveal}
+		require.ErrorIs(t, CheckTxnGroup([]SignedTxn{{Txn: malformed}}), errMalformedStateProofHash)
+	})
+
+	t.Run("nested Merkle signature proof path size", func(t *testing.T) {
+		t.Parallel()
+		malformed := stateProofTxnForCheck()
+		reveal := stateproof.Reveal{}
+		reveal.SigSlot.Sig.Signature = crypto.FalconSignature{1, 2}
+		reveal.SigSlot.Sig.Proof = merklearray.SingleLeafProof{
+			Proof: stateProofPathForCheck(stateproof.HashType, crypto.Sha256Size),
+		}
+		malformed.StateProof.Reveals = map[uint64]stateproof.Reveal{0: reveal}
+		require.ErrorIs(t, CheckTxnGroup([]SignedTxn{{Txn: malformed}}), errMalformedStateProofPath)
+	})
+
+	t.Run("nested Basic Merkle signature proof", func(t *testing.T) {
+		t.Parallel()
+		valid := stateProofTxnForCheck()
+		reveal := stateproof.Reveal{}
+		reveal.SigSlot.Sig.Signature = crypto.FalconSignature{1, 2}
+		reveal.SigSlot.Sig.Proof = merklearray.SingleLeafProof{
+			Proof: stateProofPathForCheck(stateproof.HashType, stateproof.HashSize),
+		}
+		valid.StateProof.Reveals = map[uint64]stateproof.Reveal{0: reveal}
+		require.NoError(t, CheckTxnGroup([]SignedTxn{{Txn: valid}}))
+	})
+}
 
 func TestCheckTxnGroupApplicationBoxIndex(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -174,8 +277,9 @@ func TestCheckTxnGroupUnknownType(t *testing.T) {
 	for _, tt := range []protocol.TxType{
 		protocol.PaymentTx, protocol.KeyRegistrationTx, protocol.AssetConfigTx,
 		protocol.AssetTransferTx, protocol.AssetFreezeTx, protocol.ApplicationCallTx,
-		protocol.StateProofTx,
 	} {
 		require.NoError(t, CheckTxnGroup([]SignedTxn{{Txn: Transaction{Type: tt}}}), "type %q must be accepted", tt)
 	}
+	require.NoError(t, CheckTxnGroup([]SignedTxn{{Txn: stateProofTxnForCheck()}}),
+		"type %q must be accepted", protocol.StateProofTx)
 }
