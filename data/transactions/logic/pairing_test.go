@@ -837,7 +837,7 @@ func TestFieldCosts(t *testing.T) { //nolint:paralleltest // manipulates opcode 
 		Name:      "xxx",
 		op:        opPop,
 		Proto:     proto("a:"),
-		OpDetails: costByField("f", &EcGroups, []int{10, 20, 30, 33, 40}),
+		OpDetails: costByField("f", &EcGroups, []int{10, 20, 30, 33, 40, 50}),
 	}
 
 	withOpcode(t, LogicVersion, xxx, func(opcode byte) {
@@ -870,6 +870,10 @@ func TestLinearFieldCost(t *testing.T) { //nolint:paralleltest // manipulates op
 			baseCost:  5,
 			chunkCost: 2,
 			chunkSize: 10,
+		}, {
+			baseCost:  1,
+			chunkCost: 1,
+			chunkSize: 1,
 		}, {
 			baseCost:  1,
 			chunkCost: 1,
@@ -1063,12 +1067,13 @@ func TestEcMultiScalarMulEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	for _, group := range EcGroups.Names {
-		introduced := uint64(pairingVersion)
-		if group == "ED25519" {
-			introduced = edwardsVersion
+	for _, group := range ecArithGroups.Names {
+		if group == "" { // a group this opcode does not accept, ED25519_Monero
+			continue
 		}
-		testPanics(t, "byte 0x; byte 0x; ec_multi_scalar_mul "+group+"; len", introduced, "empty input")
+		spec, ok := ecArithGroups.SpecByName(group)
+		require.True(t, ok)
+		testPanics(t, "byte 0x; byte 0x; ec_multi_scalar_mul "+group+"; len", spec.Version(), "empty input")
 	}
 }
 
@@ -1244,14 +1249,17 @@ func BenchmarkEd25519(b *testing.B) {
 	b.Run("map_to nonsquare", func(b *testing.B) {
 		benchmarkOperation(b, "", tealBytes(notSquare)+"ec_map_to ED25519; pop", "int 1")
 	})
+
+	// The Monero map takes one exponentiation whichever of its four branches it
+	// takes, so all four are timed to show that the cost really does not depend
+	// on the branch, and the worst sets the cost.
+	for _, v := range moneroMapVectors {
+		b.Run("monero map_to "+v.branch, func(b *testing.B) {
+			benchmarkOperation(b, "", tealBytes(moneroMapArg(b, v.hash))+"ec_map_to ED25519_Monero; pop", "int 1")
+		})
+	}
 }
 
-// TestEd25519MapTo checks ec_map_to ED25519 against RFC 9380's own test
-// vectors, from Appendix J.5.2, edwards25519_XMD:SHA-512_ELL2_NU_. The RFC
-// prints, for each message, the field element u it hashed to, the point Q that
-// map_to_curve produced from u, and the point P after clearing the cofactor.
-// The opcode does both steps, so it must produce P, and Q must be P once
-// multiplied by the cofactor of 8.
 // ed25519MapInputs returns two field elements that drive ec_map_to down its two
 // paths: one whose g(x1) is a square, so the map takes a single square root,
 // and one whose is not, so it takes a second for the other candidate x. It
@@ -1281,6 +1289,12 @@ func ed25519MapInputs() (square, notSquare []byte) {
 	return
 }
 
+// TestEd25519MapTo checks ec_map_to ED25519 against RFC 9380's own test
+// vectors, from Appendix J.5.2, edwards25519_XMD:SHA-512_ELL2_NU_. The RFC
+// prints, for each message, the field element u it hashed to, the point Q that
+// map_to_curve produced from u, and the point P after clearing the cofactor.
+// The opcode does both steps, so it must produce P, and Q must be P once
+// multiplied by the cofactor of 8.
 func TestEd25519MapTo(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1349,6 +1363,228 @@ func TestEd25519MapTo(t *testing.T) {
 		edwardsVersion, "larger than modulus")
 }
 
+// moneroMapVectors come from Monero's tests/crypto/tests.txt, whose
+// "hash_to_point" lines exercise ge_fromfe_frombytes_vartime alone, without the
+// ge_mul8 that Monero's hash_to_ec (and this opcode) finish with. So the point
+// here is the map's own output, and the opcode should land on eight times it.
+//
+// The four are one apiece for the four square roots the map chooses between,
+// which is every branch it has. Nothing about a vector says which branch it
+// takes, so branch here is a claim, and TestEd25519MoneroBranches checks it.
+//
+// hash is the 32 byte little-endian string Monero maps. The opcode takes a
+// big-endian field element instead, like every other ec_ immediate, so a caller
+// reverses and reduces first - which is what moneroMapArg does here and what
+// the TEAL below does with reverse and b%.
+var moneroMapVectors = []struct{ branch, hash, point string }{
+	{"fffb1", // x == -w
+		"d7a3cb05a3846008cda1755b6d2f0d3b4ba3e2d1fddd098670d86ac58b4a6da4",
+		"bdfdf6e21eaaa082618d408e8c2da5485e5de7568dfb7908ff8399b056a8f709",
+	}, {"fffb2", // x == w
+		"3f287e7e6cf6ef2ed9a8c7361e4ec96535f0df208ddee9a57ffb94d4afb94a93",
+		"e462eea6e7d404b0f1219076e3433c742a1641dbcc9146362c27d152c6175410",
+	}, {"fffb3", // the negative branch
+		"5c380f98794ab7a9be7c2d3259b92772125ce93527be6a76210631fdd8001498",
+		"31a1feb4986d42e2137ae061ea031838d24fa523234954cf8860bcd42421ae94",
+	}, {"fffb4", // the negative branch
+		"83efb774657700e37291f4b8dd10c839d1c739fd135c07a2fd7382334dafdd6a",
+		"2789ecbaf36e4fcb41c6157228001538b40ca379464b718d830c58caae7ea4ca",
+	},
+}
+
+// moneroMapArg is the transformation a contract performs before ec_map_to
+// ED25519_Monero: read Monero's 32 byte hash as the little-endian integer it is,
+// and reduce it modulo p. The reduction is not optional. Monero's map drops the
+// mask that fe_frombytes applies to the top bit, so it consumes all 256 bits,
+// and half of all 32 byte strings are at or above the modulus.
+func moneroMapArg(tb testing.TB, hash string) []byte {
+	tb.Helper()
+	le, err := hex.DecodeString(hash)
+	require.NoError(tb, err)
+	require.Len(tb, le, 32)
+	return new(big.Int).Mod(new(big.Int).SetBytes(reversed(le)), ed25519FieldModulus).Bytes()
+}
+
+// moneroMapPoint decompresses a vector's point and clears its cofactor, which
+// is what ge_mul8 does and therefore what the opcode returns.
+func moneroMapPoint(tb testing.TB, compressed string) []byte {
+	tb.Helper()
+	b, err := hex.DecodeString(compressed)
+	require.NoError(tb, err)
+	p, err := new(edwards25519.Point).SetBytes(b)
+	require.NoError(tb, err)
+	return ed25519PointToBytes(new(edwards25519.Point).MultByCofactor(p))
+}
+
+func TestEd25519MoneroMapTo(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	mapTo := "ec_map_to ED25519_Monero;"
+	for i, v := range moneroMapVectors {
+		t.Run(fmt.Sprintf("monero/%d", i), func(t *testing.T) {
+			t.Parallel()
+			u := tealBytes(moneroMapArg(t, v.hash))
+			// the opcode maps and clears the cofactor, landing on 8 times the
+			// point Monero's own hash_to_point reports
+			testAccepts(t, u+mapTo+tealBytes(moneroMapPoint(t, v.point))+"==", edwardsVersion)
+			// so the result is torsion free, as every group's map promises
+			testAccepts(t, u+mapTo+"ec_subgroup_check ED25519", edwardsVersion)
+
+			// Both maps are Elligator 2 with the same Z, so they agree on the
+			// Montgomery x and can only disagree on the sign of the root. They
+			// do, on exactly the inputs Monero's negative branch claims: there
+			// the two results sum to the identity, and elsewhere they are equal.
+			// Half of all inputs land on each, so a program that reached for
+			// ED25519 instead would be right half the time - which for a key
+			// image is no better than never.
+			standard := u + "ec_map_to ED25519;"
+			if v.branch == "fffb3" || v.branch == "fffb4" {
+				testAccepts(t, u+mapTo+standard+"ec_add ED25519;"+tealBytes(ed25519Identity())+"==",
+					edwardsVersion)
+			} else {
+				testAccepts(t, u+mapTo+standard+"==", edwardsVersion)
+			}
+		})
+	}
+
+	// The top bit of Monero's hash is data, not padding: ge_fromfe_frombytes_vartime
+	// leaves out the mask that fe_frombytes applies, so a caller that masks
+	// instead of reducing maps a value 19 away from the right one, and lands
+	// somewhere else entirely. The first vector's hash has that bit set.
+	masked := func(hash string) []byte {
+		le, err := hex.DecodeString(hash)
+		require.NoError(t, err)
+		require.NotZero(t, le[31]&0x80, "vector does not exercise the top bit")
+		le[31] &= 0x7f
+		return reversed(le)
+	}
+	v := moneroMapVectors[0]
+	testAccepts(t, tealBytes(masked(v.hash))+mapTo+tealBytes(moneroMapPoint(t, v.point))+"!=",
+		edwardsVersion)
+
+	// zero maps to the order-2 point, which the cofactor clearing takes to the
+	// identity - the same answer the standard map gives 0, by a different route
+	testAccepts(t, "byte 0x00;"+mapTo+tealBytes(ed25519Identity())+"==", edwardsVersion)
+	testAccepts(t, "byte 0x;"+mapTo+tealBytes(ed25519Identity())+"==", edwardsVersion)
+
+	// short inputs are accepted without 0-padding, as for the other curves
+	testAccepts(t, "byte 0x07;"+mapTo+"byte 0x0000000000000000000000000000000000000000000000000000000000000007;"+mapTo+"==", edwardsVersion)
+
+	// but not over-long ones, nor field elements at or above the modulus. This
+	// map is defined on a 32 byte string, but the opcode's argument is a field
+	// element for every group, so a caller reduces rather than relying on it.
+	testPanics(t, "int 33; bzero;"+mapTo+"len", edwardsVersion, "Expected at most 32")
+	testPanics(t, "byte 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed;"+mapTo+"len",
+		edwardsVersion, "larger than modulus")
+}
+
+// TestEd25519MoneroBranches checks the branch each vector above claims, by
+// recomputing it from scratch. The implementation cannot report which branch it
+// took, and a vector set that missed one would leave a quarter of the map
+// untested while looking thorough. The claims also decide what
+// TestEd25519MoneroMapTo expects of the standard map, so a wrong label there
+// would be a test that passes for the wrong reason.
+func TestEd25519MoneroBranches(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	p := ed25519FieldModulus
+	mod := func(x *big.Int) *big.Int { return new(big.Int).Mod(x, p) }
+	j := big.NewInt(486662)
+	// i is a square root of -1, and (p+3)/4 the exponent that squares the
+	// map's candidate root
+	i := new(big.Int).Exp(big.NewInt(2), new(big.Int).Rsh(new(big.Int).Sub(p, big.NewInt(1)), 2), p)
+	quarter := new(big.Int).Rsh(new(big.Int).Add(p, big.NewInt(3)), 2)
+
+	branch := func(u *big.Int) string {
+		v := mod(new(big.Int).Lsh(new(big.Int).Mul(u, u), 1))
+		w := mod(new(big.Int).Add(v, big.NewInt(1)))
+		x := mod(new(big.Int).Sub(mod(new(big.Int).Mul(w, w)), mod(new(big.Int).Mul(mod(new(big.Int).Mul(j, j)), v))))
+		require.NotZero(t, x.Sign(), "x is 0, which the map cannot divide by")
+		s := mod(new(big.Int).Mul(w, new(big.Int).ModInverse(x, p)))
+		xx := mod(new(big.Int).Mul(new(big.Int).Exp(s, quarter, p), x))
+		switch {
+		case xx.Cmp(w) == 0:
+			return "fffb2"
+		case xx.Cmp(mod(new(big.Int).Neg(w))) == 0:
+			return "fffb1"
+		}
+		xi := mod(new(big.Int).Mul(xx, i))
+		switch {
+		case mod(new(big.Int).Sub(w, xi)).Sign() == 0:
+			return "fffb4"
+		case mod(new(big.Int).Add(w, xi)).Sign() == 0:
+			return "fffb3"
+		}
+		return "none" // the case ed25519MoneroMapTo returns an error for
+	}
+
+	seen := map[string]bool{}
+	for _, v := range moneroMapVectors {
+		require.Equal(t, v.branch, branch(new(big.Int).SetBytes(moneroMapArg(t, v.hash))), v.hash)
+		seen[v.branch] = true
+	}
+	require.Equal(t, map[string]bool{"fffb1": true, "fffb2": true, "fffb3": true, "fffb4": true}, seen)
+}
+
+// TestEd25519MoneroConstants checks the six constants the map multiplies by,
+// which are derived here rather than copied out of Monero's limb arrays. It also
+// settles two claims the implementation depends on: that all four roots exist,
+// and that no input can drive the map's Z to zero.
+func TestEd25519MoneroConstants(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	p := ed25519FieldModulus
+	legendre := func(x *big.Int) int {
+		switch s := new(big.Int).Exp(new(big.Int).Mod(x, p), new(big.Int).Rsh(new(big.Int).Sub(p, big.NewInt(1)), 1), p); {
+		case s.Sign() == 0:
+			return 0
+		case s.Cmp(big.NewInt(1)) == 0:
+			return 1
+		default:
+			return -1
+		}
+	}
+	// p is 5 mod 8, which is what makes 2 and sqrt(-1) non-squares
+	require.EqualValues(t, 5, new(big.Int).Mod(p, big.NewInt(8)).Int64())
+	require.Equal(t, -1, legendre(big.NewInt(2)))
+
+	j := big.NewInt(486662)
+	jj2 := new(big.Int).Mul(j, new(big.Int).Add(j, big.NewInt(2))) // A*(A+2)
+	i := new(big.Int).Exp(big.NewInt(2), new(big.Int).Rsh(new(big.Int).Sub(p, big.NewInt(1)), 2), p)
+	require.Equal(t, -1, legendre(i))
+
+	// A*(A+2) is a non-square, and that is exactly what leaves the four roots
+	// the map needs all existing: 2*A*(A+2) because 2 is a non-square too, and
+	// both of +/-i*A*(A+2) because i is.
+	require.Equal(t, -1, legendre(jj2))
+	require.Equal(t, 1, legendre(new(big.Int).Lsh(jj2, 1)))
+	require.Equal(t, 1, legendre(new(big.Int).Mul(i, jj2)))
+	require.Equal(t, 1, legendre(new(big.Int).Mul(new(big.Int).Neg(i), jj2)))
+
+	// and the derived constants really are roots of those values
+	toBig := func(e *edfield.Element) *big.Int { return new(big.Int).SetBytes(reversed(e.Bytes())) }
+	square := func(x *big.Int) *big.Int { return new(big.Int).Mod(new(big.Int).Mul(x, x), p) }
+	norm := func(x *big.Int) *big.Int { return new(big.Int).Mod(x, p) }
+	require.Equal(t, norm(new(big.Int).Neg(j)), toBig(ed25519MontNegJ))
+	require.Equal(t, norm(new(big.Int).Neg(new(big.Int).Mul(j, j))), toBig(ed25519MontNegJSq))
+	require.Equal(t, norm(big.NewInt(-1)), square(toBig(ed25519SqrtM1)))
+	require.Equal(t, norm(new(big.Int).Neg(new(big.Int).Lsh(jj2, 1))), square(toBig(ed25519MoneroFFFB1)))
+	require.Equal(t, norm(new(big.Int).Lsh(jj2, 1)), square(toBig(ed25519MoneroFFFB2)))
+	require.Equal(t, norm(new(big.Int).Mul(new(big.Int).Neg(toBig(ed25519SqrtM1)), jj2)), square(toBig(ed25519MoneroFFFB3)))
+	require.Equal(t, norm(new(big.Int).Mul(toBig(ed25519SqrtM1), jj2)), square(toBig(ed25519MoneroFFFB4)))
+
+	// The map's Z is z+w, and z is either -A*v (with v = w-1) or -A. So Z is 0
+	// only for u^2 == 1/(2*(A-1)) or u^2 == (A-1)/2, and neither is a square, so
+	// no u reaches the degenerate case at all. The implementation still returns
+	// an error there rather than a point that is not on the curve.
+	half := new(big.Int).ModInverse(big.NewInt(2), p)
+	require.Equal(t, -1, legendre(new(big.Int).ModInverse(new(big.Int).Lsh(new(big.Int).Sub(j, big.NewInt(1)), 1), p)))
+	require.Equal(t, -1, legendre(new(big.Int).Mul(new(big.Int).Sub(j, big.NewInt(1)), half)))
+}
+
 func TestEd25519Versioning(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1363,11 +1599,14 @@ func TestEd25519Versioning(t *testing.T) {
 	testProg(t, "byte 0x00; byte 0x00; ec_pairing_check ED25519", edwardsVersion,
 		exp(1, "ec_pairing_check unknown field: \"ED25519\""))
 
-	// Need to confirm it also fails at evaluation time, patch in the ED field code
+	// Need to confirm it also fails at evaluation time, patch in the ED field
+	// code. The complaint names the field byte rather than the group, because
+	// ec_pairing_check's cost depends on the field, so eval checks that the
+	// field is one it accepts before it charges anything for it.
 	ep := defaultSigParams()
 	ops := testProg(t, "#pragma autosalt false\n byte 0x00; byte 0x00; ec_pairing_check BLS12_381g2", edwardsVersion)
 	ops.Program[len(ops.Program)-1] = byte(ED25519)
-	testLogicBytes(t, ops.Program, ep, "invalid ec_pairing_check group ED25519")
+	testLogicBytes(t, ops.Program, ep, fmt.Sprintf("ec_pairing_check unknown field: %d", ED25519))
 
 	// but it is valid for every other ec_ opcode, subject to the same version gate
 	testProg(t, "byte 0x00; ec_subgroup_check ED25519", edwardsVersion)
@@ -1391,6 +1630,38 @@ func TestEd25519Versioning(t *testing.T) {
 		ops = testProg(t, "#pragma autosalt false\n"+test.args+test.op+" BLS12_381g1", pairingVersion)
 		ops.Program[len(ops.Program)-1] = byte(ED25519)
 		testLogicBytes(t, ops.Program, ep, "invalid "+test.op+" group ED25519")
+	}
+}
+
+// TestEd25519MoneroVersioning is TestEd25519Versioning for the second
+// edwards25519 map, which is more tightly held: ec_map_to is the only opcode
+// that takes it, because it names a map rather than a group. Nothing else has a
+// use for it, and letting it through would leave two spellings of one group.
+func TestEd25519MoneroVersioning(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testProg(t, "byte 0x00; ec_map_to ED25519_Monero", edwardsVersion) // ok at v14
+	testProg(t, "byte 0x00; ec_map_to ED25519_Monero", edwardsVersion-1,
+		exp(1, "ec_map_to ED25519_Monero field was introduced in v14. Missed #pragma version?"))
+
+	for _, test := range []struct{ op, args string }{
+		{"ec_add", "byte 0x00; byte 0x00;"},
+		{"ec_scalar_mul", "byte 0x00; byte 0x00;"},
+		{"ec_pairing_check", "byte 0x00; byte 0x00;"},
+		{"ec_multi_scalar_mul", "byte 0x00; byte 0x00;"},
+		{"ec_subgroup_check", "byte 0x00;"},
+	} {
+		// every other ec_ opcode rejects the name at assembly, at any version
+		testProg(t, test.args+test.op+" ED25519_Monero", edwardsVersion,
+			exp(1, test.op+" unknown field: \"ED25519_Monero\""))
+
+		// and at evaluation, which is what actually holds the line, since
+		// hand-written bytecode never passes through the assembler
+		ops := testProg(t, "#pragma autosalt false\n"+test.args+test.op+" BLS12_381g1", pairingVersion)
+		ops.Program[len(ops.Program)-1] = byte(ED25519_Monero)
+		testLogicBytes(t, ops.Program, defaultSigParams(),
+			fmt.Sprintf("%s unknown field: %d", test.op, ED25519_Monero))
 	}
 }
 
@@ -1508,10 +1779,9 @@ setbit
 retsub
 `
 
-// ringVerifySource verifies a ring signature of the shape Monero used before
-// RingCT: n public keys, one of whose owners signed, and no way to tell which.
-// Signing produces a chain of challenges that closes on itself, and verifying
-// walks the chain and checks that it does:
+// ringVerifySource verifies a ring signature: n public keys, one of whose owners
+// signed, and no way to tell which. Signing produces a chain of challenges that
+// closes on itself, and verifying walks the chain and checks that it does:
 //
 //	for i in 0..n-1:   c[i+1] = H(m || compress([s_i]B + [c_i]P_i))
 //	accept if c[n] == c[0]
@@ -1520,6 +1790,10 @@ retsub
 // Monero's hash_to_scalar. Only the signer's own step is computed forwards
 // (from a random nonce); every other s_i is chosen at random and the challenge
 // it produces is whatever it is. The verifier cannot tell the two apart.
+//
+// The chain is the shape RingCT's MLSAG takes. Monero's own pre-RingCT
+// signature sums its challenges instead, and linkableRingVerifySource below
+// verifies that one exactly, against Monero's test vectors.
 //
 //	arg 0  message
 //	arg 1  c[0], the challenge the ring must close on (32 byte little-endian)
@@ -1541,37 +1815,26 @@ retsub
 // the part that stops double spends: alongside each L_i the signer publishes a
 // key image I and the verifier also computes
 //
-//	R_i = [s_i]H_p(P_i) + [c_i]I,   c[i+1] = H(m || L_i || R_i)
+//	R_i = [s_i]H_p(P_i) + [c_i]I
 //
 // where H_p hashes a public key to a curve point. Because I = [x]H_p(P) for the
 // signer's own secret x, one key always yields one image, so a second spend is
 // spotted without learning which ring member spent.
 //
-// Monero's H_p is the part the AVM cannot supply, and not for want of a
-// hash-to-point opcode. ec_map_to ED25519 exists, but it is Elligator 2 as
-// RFC 9380 specifies it, and Monero's H_p is a different function: keccak-256
-// followed by ge_fromfe_frombytes_vartime, a map CryptoNote wrote years before
-// that RFC, then multiplication by the cofactor. Both hash to the curve; they
-// do not hash to the same point, so ec_map_to computes something Monero would
-// reject, and Monero's map computes something no standard names. Elligator 2
-// was the deliberate choice for the opcode - see the reasoning where
-// ed25519MapTo is defined - which means a linkable ring signature designed
-// against RFC 9380 could be verified here in full. Monero's own cannot.
+// H_p is keccak-256 followed by ge_fromfe_frombytes_vartime, a map CryptoNote
+// wrote years before RFC 9380, and then the cofactor. ec_map_to ED25519 is not
+// it: that is Elligator 2 as the RFC specifies, which agrees with Monero's map
+// on half of its inputs and returns the negation on the other half, so it would
+// compute the right key image half the time. Elligator 2 is nonetheless the
+// right meaning for the plain name - see the reasoning where ed25519MapTo is
+// defined - so Monero's map has its own immediate, ED25519_Monero, and
+// linkableRingVerifySource below verifies the linkable signature in full.
 //
-// Nor does the hint trick above rescue it. Hints work for decompression because
+// Hinting H_p would not have done instead. Hints work for decompression because
 // compressing is the cheap direction, so a claimed point can be checked.
 // Hash-to-point has no cheap inverse, and a hinted H_p(P_i) that nobody
 // verifies is a forgery, since choosing it freely lets one key produce any
 // number of images.
-//
-// Monero's map could still be verified, by supplying the square roots inside it
-// as witnesses and checking the relations they satisfy: verifying a root is a
-// single multiplication where computing it is a 252 step modular
-// exponentiation, which is the difference between a thousand and tens of
-// thousands of cost per ring member. That means mirroring
-// ge_fromfe_frombytes_vartime exactly, branches included, and proving which
-// branch was taken. Worth knowing it is possible; not something to get subtly
-// wrong.
 //
 // This is also the pre-RingCT signature. Current Monero uses CLSAG, which adds
 // commitment layers and aggregation coefficients on top of the above, and
@@ -1793,6 +2056,385 @@ func flipScalar(b []byte) []byte {
 	c := slices.Clone(b)
 	c[0] ^= 1
 	return c
+}
+
+// linkableRingVerifySource verifies Monero's pre-RingCT ring signature in full,
+// which is to say the linkable one, key image and all. It is crypto::check_ring_signature
+// from src/crypto/crypto.cpp, and the shape is not the chain that
+// ringVerifySource walks. Every step is computed forwards, and the challenges
+// are checked by summing them:
+//
+//	for i in 0..n-1:
+//	    L_i = [r_i]B        + [c_i]P_i
+//	    R_i = [r_i]H_p(P_i) + [c_i]I
+//	accept if sum(c_i) == H(prefix || L_0 || R_0 || ... || L_n-1 || R_n-1)
+//
+// where H is Monero's hash_to_scalar (keccak-256 read little-endian, reduced)
+// and H_p its hash to point: keccak-256 of the compressed key, then
+// ec_map_to ED25519_Monero, which is where the whole of this program's reason
+// for existing sits. The signer knows one x with P = [x]B, publishes
+// I = [x]H_p(P), and can answer the challenge at that one index; the ring hides
+// which index that was. Because I is a function of the key alone, a second
+// signature by the same key repeats it, and that is what stops a double spend.
+//
+// Nothing here needs to bind the ring beyond the hash: substituting a key
+// changes L_i and R_i, and the sum stops matching.
+//
+//	arg 0  prefix hash, the message the signature commits to
+//	arg 1  the key image I, 32 byte compressed
+//	arg 2  the ring: P_0..P_n-1, concatenated 32 byte compressed points
+//	arg 3  the signature: n pairs of 32 byte little-endian scalars, c_i then r_i
+//	arg 4  hint: I uncompressed, then the ring uncompressed, 64 bytes each
+//
+// The hints are untrusted and checked by compressing them, as in
+// ringVerifySource. H_p(P_i) is not hinted and could not be: compressing is the
+// cheap direction, so a claimed decompression can be checked, but a claimed
+// hash to point cannot, and a program that took one on trust would let a single
+// key produce as many images as it liked.
+//
+// It costs 1,069 plus 7,125 per ring member, so three members exhaust one logic
+// sig and Monero's current ring size of sixteen (115,069) needs six pooled. The
+// two multi-exponentiations are over half of the per-member cost and the byte
+// reversals are most of the rest; the map this is all for is 350 of it.
+//
+// WHAT THIS LEAVES OUT. check_ring_signature is the whole of the pre-RingCT
+// signature, but not the whole of what a Monero node checks. The key image is
+// tested for the main subgroup elsewhere in Monero, and a verifier that wanted
+// that here would add ec_subgroup_check ED25519 on the hinted I. Current Monero
+// uses CLSAG rather than this, which adds commitment layers and aggregation
+// coefficients, and Bulletproofs range proofs, which are far out of reach.
+const linkableRingVerifySource = `
+arg 0; len; int 32; ==; assert		// a hash, not a message of any length
+
+// the ring's length sets n, and the other arrays must agree with it
+arg 2; len; int 32; %; !; assert	// whole keys only
+arg 2; len; int 32; /
+dup; assert				// a ring of nobody signs nothing
+store 0					// n
+arg 3; len; load 0; int 64; *; ==; assert
+arg 4; len; load 0; int 1; +; int 64; *; ==; assert
+
+// I, from the first hint, and it must be the image the signature names
+arg 4; extract 0 64
+dup; callsub compress
+arg 1; ==; assert
+store 4					// uncompressed I
+
+arg 0; store 5				// what gets hashed: prefix, then every L and R
+int 32; bzero; store 6			// the running sum of challenges
+int 0; store 2				// i
+
+ring_loop:
+// c_i and r_i, both canonical, as Monero's sc_check demands
+arg 3; load 2; int 64; *; int 32; extract3; callsub reverse
+dup
+byte 0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3ed // L
+b<; assert
+store 1					// c_i
+arg 3; load 2; int 64; *; int 32; +; int 32; extract3; callsub reverse
+dup
+byte 0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3ed // L
+b<; assert
+store 3					// r_i
+
+// P_i, from its hint, and it must be the key the ring names
+arg 4; load 2; int 1; +; int 64; *; int 64; extract3
+dup; callsub compress
+arg 2; load 2; int 32; *; int 32; extract3
+==; assert				// leaves the uncompressed P_i
+
+// L_i = [r_i]B + [c_i]P_i, one multi-exp rather than two multiplies and an add
+byte 0x216936d3cd6e53fec0a4e231fdd6dc5c692cc7609525a7b2c9562d608f25d51a6666666666666666666666666666666666666666666666666666666666666658 // B
+swap; concat				// B then P_i
+load 3; load 1; concat			// r_i then c_i, matching the points
+ec_multi_scalar_mul ED25519
+callsub compress			// Monero hashes points compressed
+load 5; swap; concat; store 5
+
+// H_p(P_i). The digest is a 32 byte string to Monero and a field element to
+// ec_map_to, so it is reversed and reduced on the way in.
+arg 2; load 2; int 32; *; int 32; extract3
+keccak256
+callsub reverse
+byte 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed // p
+b%
+ec_map_to ED25519_Monero
+
+// R_i = [r_i]H_p(P_i) + [c_i]I
+load 4; concat				// H_p(P_i) then I
+load 3; load 1; concat
+ec_multi_scalar_mul ED25519
+callsub compress
+load 5; swap; concat; store 5
+
+// the challenges are summed here, not chained as in ringVerifySource
+load 6; load 1; b+
+byte 0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3ed // L
+b%
+int 32; bzero; b|			// b% trims leading zeros, and scalars are fixed width
+store 6
+
+load 2; int 1; +; dup; store 2
+load 0; <
+bnz ring_loop
+
+// the signature stands if the challenges sum to the hash of the whole walk
+load 5; keccak256; callsub reverse
+byte 0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3ed // L
+b%
+int 32; bzero; b|
+load 6; ==
+return
+` + ed25519TealHelpers
+
+// linkableRingVectors come from the check_ring_signature lines of Monero's
+// tests/crypto/tests.txt, which carry both signatures that verify and
+// signatures that do not. They are real Monero ring signatures, so a program
+// that accepts exactly these is one Monero would agree with.
+var linkableRingVectors = []struct {
+	valid         bool
+	prefix, image string
+	ring          []string
+	sig           string
+}{
+	{valid: false,
+		prefix: "d26f225fcb6ca8e13089a96e17d1844cc0264af9f7149048b96ad0de6f16567c",
+		image:  "e3eff7c3e814a43140a264bd49704171f93baa8806c561b7448a0441ad1a32cf",
+		ring: []string{
+			"9e5ba7c35a5a809999bc39e543adf5a1bf007c7236498c3a772f4daeeeea30e0",
+		},
+		sig: "cf80ccacc126c14015e06d5c631484d659f75bb87a596e9e4a988957533e5307" +
+			"f8cd8bae2044231358b1d495814fab2710fd47e7529625a1f0fa2f2093e8a40e",
+	},
+	{valid: true,
+		prefix: "c70652ca5f06255dc529bc0924491754f5fad28552f4c9cd7e396f1582cecdca",
+		image:  "89d2e649616ccdf1680e0a3f316dcbd59f0c7f20eba96e86500aa68f123f9ecd",
+		ring: []string{
+			"9cc7f48f7a41d634397102d46b71dd46e6accd6465b903cb83e1c2cd0c41744e",
+		},
+		sig: "3e292a748b8814564f4f393b6c4bd2eaaface741b37fd7ac39c06ab41f1b700d" +
+			"b548462601351a1226e8247fea67df6f49ea8f7d952a66b9ec9456a99ce7b90b",
+	},
+	{valid: false,
+		prefix: "01504ac79366978307ff9ddf25e051817a2a94f1f71e5e03b6fa0353ed25e6a3",
+		image:  "c26444038d90ac980e62ae2b51e8bf08eaea3d9e42ebb9a024bc19ac641e4826",
+		ring: []string{
+			"f7f38889ea8803c737651de3a1be85e5403f4d742a9165e6d36d760e1b1b9342",
+			"b193744ea1cb8c2a6e780fda538e776343cd0d6c469c16e60a62793e1fe62bc9",
+		},
+		sig: "77ab659d67aed19f3a98b3a79d2a11fa1dff903ff3588c343ac6f43139e43104" +
+			"e2861a14a787aabd4f9739e954a07276722d8dd9b567b8b7bdff3ff97dc5b30e" +
+			"fca0e003a4017c33d224bf4f2ae768ec6ee51284a06b855faa9a50d643754908" +
+			"f6875872fb236c17354024708e507275e061096d7c19610754161ee45c8aa40f",
+	},
+	{valid: true,
+		prefix: "90660b84dd3be5705c7766695fec404348af6df58f8c5d58213f3b70b8b67a23",
+		image:  "6289b9b151eeb263fc29e4b5e90978db7670f06f408403c8973bbfff2a884dd9",
+		ring: []string{
+			"4af96f2c3a70ac1860d48132136989c1d38551367025d43f36aec0ffa8e7f28a",
+			"376cc178d8ae3a68ce467bfbe719e88b22514617dbd1e764e0b94b4f6bc961af",
+		},
+		sig: "4ccadd504d1d03e385ebd25dc51b98c6f3a0e1c1be7e5694e44dc2377898510c" +
+			"a3202d7872294cc04b65d8c109e3a6e843c327b3416ca3a2b1c585fe41522605" +
+			"55441dd7b1543549f749acf5fc9a93a3f3c240425c5f7cadccdef4f06cef0702" +
+			"ae4ad477d0cb60a1a48c1da22f5a8b20c7c5672833c7ae13f78edeb3db1a7b01",
+	},
+	{valid: true,
+		prefix: "f6d2c5db9f57fca3c124032a588abaa623e16373c859cecce4cbd95f175edde5",
+		image:  "be3aaaae636683d032cea44982b860687072eb87bd5d8419e76c19075f8b3238",
+		ring: []string{
+			"0f73c60791e9d89110da4e459a9c8a08df9bd87f95ebe1553c9605214e87862a",
+			"57dec9cd6476939b62c0d1743d3f2da84551486525917abd866415d8bc42cb50",
+			"627a0c2a9a5e279f17b1b949364cb62706bb6c56f01eafe7a6b21dee06858218",
+			"82e0318d21793d7a50de4cd3210681fee3a94db40d756de03bc8e73ebdfc3946",
+		},
+		sig: "062f6896ea42d4a27eb2a760b1b3941ba7c36e655bc3e58499cc83cdddea1e00" +
+			"e07d7c00f7ed3accc20830485a5c561dd809e7fea35553cb7e5cdbdd939b5c0e" +
+			"a60030190addb34d76155254f5f290370e3ea93aaeadaab8be2401b1204a920d" +
+			"16e4e63c8d763bfd379b49ee4489de92b2b2eee1acc704570fe594d22052ce06" +
+			"70925c65613ffbc6d34c4202ccab7862d5d89bc567f8f22e748ff0227d2dd208" +
+			"f4fc34f51e511a28921abb92e7abd56e7e2e51996a30d7c5cef55665e5346c03" +
+			"5b7b533dc0bdc490f347be660a8d95f1a897cb2c68fbd88927a3a969ef9a610e" +
+			"63594aa6d83863c9c689b8a51bb59fbc6076e3718a76dafe715865de4f62f104",
+	},
+}
+
+func TestLinkableRingVerifyInTeal(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	teal := testProg(t, linkableRingVerifySource, edwardsVersion).Program
+
+	// hints for the image and every ring member, in the order the program reads
+	// them. They are untrusted, and the program checks them by compressing.
+	hints := func(image string, ring []string) []byte {
+		out := ed25519Hint(unhex(t, image))
+		for _, p := range ring {
+			out = append(out, ed25519Hint(unhex(t, p))...)
+		}
+		return out
+	}
+
+	args := func(v struct {
+		valid         bool
+		prefix, image string
+		ring          []string
+		sig           string
+	}) [][]byte {
+		var ring []byte
+		for _, p := range v.ring {
+			ring = append(ring, unhex(t, p)...)
+		}
+		return [][]byte{unhex(t, v.prefix), unhex(t, v.image), ring,
+			unhex(t, v.sig), hints(v.image, v.ring)}
+	}
+
+	for i, v := range linkableRingVectors {
+		t.Run(fmt.Sprintf("monero/%d/n=%d", i, len(v.ring)), func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, v.valid, ringAccepts(t, teal, args(v), len(v.ring)))
+		})
+	}
+
+	// The cost quoted on linkableRingVerifySource, measured rather than
+	// asserted, so that the note cannot quietly rot and neither can the pooling
+	// ringAccepts does from the same two numbers.
+	for _, v := range linkableRingVectors {
+		if !v.valid {
+			continue // a rejected signature stops early and costs less
+		}
+		var txn transactions.SignedTxn
+		txn.Lsig.Logic = teal
+		txn.Lsig.Args = args(v)
+		ep := defaultSigParams(txn)
+		const plenty = 10_000_000
+		remaining := plenty // eval spends this in place, so keep the start separately
+		ep.PooledLogicSigBudget = &remaining
+		pass, err := EvalSignature(0, ep)
+		require.NoError(t, err)
+		require.True(t, pass)
+		require.Equal(t, linkableRingBase+linkableRingPer*len(v.ring), plenty-remaining)
+	}
+
+	// The rest works from one good signature, and breaks it in a different way
+	// each time. A key image is only worth anything if it cannot be moved.
+	good := linkableRingVectors[len(linkableRingVectors)-1]
+	require.True(t, good.valid)
+	n := len(good.ring)
+	require.Greater(t, n, 1)
+
+	var breakTests = []struct {
+		name string
+		arg  int
+		mung func([]byte) []byte
+	}{
+		{"prefix", 0, func(b []byte) []byte { return flipScalar(b) }},
+		{"key image", 1, func(b []byte) []byte { return ed25519RandomCompressed() }},
+		{"a ring member", 2, func(b []byte) []byte {
+			c := slices.Clone(b)
+			copy(c[32:64], ed25519RandomCompressed())
+			return c
+		}},
+		{"a challenge", 3, func(b []byte) []byte { return flipScalar(b) }},
+		{"a response", 3, func(b []byte) []byte {
+			c := slices.Clone(b)
+			copy(c[32:64], flipScalar(c[32:64]))
+			return c
+		}},
+		{"the ring's order", 2, func(b []byte) []byte {
+			c := slices.Clone(b)
+			copy(c[:32], b[32:64])
+			copy(c[32:64], b[:32])
+			return c
+		}},
+	}
+	for _, test := range breakTests {
+		t.Run("broken "+test.name, func(t *testing.T) {
+			t.Parallel()
+			a := args(good)
+			a[test.arg] = test.mung(a[test.arg])
+			if test.arg == 1 || test.arg == 2 { // the hints must still match
+				a[4] = hints(hex.EncodeToString(a[1]), splitPoints(a[2]))
+			}
+			require.False(t, ringAccepts(t, teal, a, n))
+		})
+	}
+
+	// A hint that is a real point, but not the one it stands in for, is caught
+	// by the compression check rather than trusted.
+	a := args(good)
+	copy(a[4][64:128], ed25519RandomPoint())
+	require.False(t, ringAccepts(t, teal, a, n))
+
+	// A scalar at or above the group order is where the program stops rather
+	// than rejecting, which is Monero's sc_check drawn as an assert. The
+	// vectors above all fail the ring equation itself instead, so this is the
+	// only thing that covers that check.
+	var txn transactions.SignedTxn
+	txn.Lsig.Logic = teal
+	pooled := make([]transactions.SignedTxn, 1+(linkableRingBase+linkableRingPer*n)/20_000)
+	failsWith := func(args [][]byte, msg string) {
+		txn.Lsig.Args = args
+		pooled[0] = txn
+		testLogicBytes(t, teal, defaultSigParams(pooled...), msg)
+	}
+	order := unhex(t, "edd3f55c1a631258d69cf7a2def9de1400000000000000000000000000000010") // L, little-endian
+	noncanonical := args(good)
+	copy(noncanonical[3], order)
+	failsWith(noncanonical, "assert failed")
+
+	// and arrays that do not agree on n are program failures too, not rejections
+	short := args(good)
+	short[2] = short[2][:32*(n-1)]
+	failsWith(short, "assert failed")
+	partial := args(good)
+	partial[2] = partial[2][:31]
+	failsWith(partial, "assert failed")
+	failsWith([][]byte{args(good)[0], nil, nil, nil, nil}, "assert failed")
+}
+
+// linkableRingBase and linkableRingPer are what the linkable verifier costs,
+// measured in TestLinkableRingVerifyInTeal rather than estimated here.
+const (
+	linkableRingBase = 1_069
+	linkableRingPer  = 7_125
+)
+
+// ringAccepts runs the verifier over a ring of n, pooling as many logic sigs as
+// the ring needs. One logic sig is 20,000, which runs out at three members, so
+// spreading the cost over a group is the normal case rather than the exception.
+func ringAccepts(t *testing.T, teal []byte, args [][]byte, n int) bool {
+	t.Helper()
+	txns := make([]transactions.SignedTxn, 1+(linkableRingBase+linkableRingPer*n)/20_000)
+	txns[0].Lsig.Logic = teal
+	txns[0].Lsig.Args = args
+	pass, err := EvalSignature(0, defaultSigParams(txns...))
+	return pass && err == nil
+}
+
+func unhex(t *testing.T, s string) []byte {
+	t.Helper()
+	b, err := hex.DecodeString(s)
+	require.NoError(t, err)
+	return b
+}
+
+func splitPoints(b []byte) []string {
+	var out []string
+	for i := 0; i < len(b); i += 32 {
+		out = append(out, hex.EncodeToString(b[i:i+32]))
+	}
+	return out
+}
+
+// ed25519RandomCompressed is a random point in the compressed encoding Monero
+// uses, for tests that need a well formed key that is the wrong key.
+func ed25519RandomCompressed() []byte {
+	p, err := bytesToEd25519Point(ed25519RandomPoint())
+	if err != nil {
+		panic(err)
+	}
+	return p.Bytes()
 }
 
 func TestEd25519VerifyInTeal(t *testing.T) {

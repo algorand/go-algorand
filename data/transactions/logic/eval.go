@@ -1728,7 +1728,10 @@ func (cx *EvalContext) step() error {
 	// the Cost() call without the FullCost.compute() short-circuit, even
 	// though Cost() tries to exit fast. Use BenchmarkUintMath to test changes.
 	opcost := deets.FullCost.compute(cx.Stack)
-	if opcost <= 0 {
+	if opcost <= 0 { // zero FullCost means the cost comes from a field immediate
+		if err := deets.checkFieldCosted(spec.Name, cx.program, cx.pc); err != nil {
+			return err
+		}
 		opcost = deets.Cost(cx.program, cx.pc, cx.Stack)
 		if opcost <= 0 {
 			return fmt.Errorf("%s returned 0 cost", spec.Name)

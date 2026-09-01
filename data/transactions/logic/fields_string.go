@@ -298,12 +298,13 @@ func _() {
 	_ = x[BLS12_381g1-2]
 	_ = x[BLS12_381g2-3]
 	_ = x[ED25519-4]
-	_ = x[invalidEcGroup-5]
+	_ = x[ED25519_Monero-5]
+	_ = x[invalidEcGroup-6]
 }
 
-const _EcGroup_name = "BN254g1BN254g2BLS12_381g1BLS12_381g2ED25519invalidEcGroup"
+const _EcGroup_name = "BN254g1BN254g2BLS12_381g1BLS12_381g2ED25519ED25519_MoneroinvalidEcGroup"
 
-var _EcGroup_index = [...]uint8{0, 7, 14, 25, 36, 43, 57}
+var _EcGroup_index = [...]uint8{0, 7, 14, 25, 36, 43, 57, 71}
 
 func (i EcGroup) String() string {
 	idx := int(i) - 0

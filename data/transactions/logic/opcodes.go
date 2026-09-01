@@ -86,7 +86,7 @@ const foreignBoxVersion = 13 // app_params_set, foreign app box access
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version, and fixup TestAssemble() in assembler_test.go.
 const sumhashVersion = 14
-const edwardsVersion = 14 // ED25519 group for ec_add, ec_scalar_mul, ec_multi_scalar_mul, ec_subgroup_check
+const edwardsVersion = 14 // ED25519 group for the ec_ opcodes, and its two maps for ec_map_to
 
 // LogicSigOffCurveVersion is the first AVM version where LogicSig programs
 // assembled by this package are expected to hash to an off-curve address.
@@ -214,6 +214,34 @@ func (d *OpDetails) Cost(program []byte, pc int, stack []stackValue) int {
 		}
 	}
 	return cost
+}
+
+// checkFieldCosted reports a field immediate that names nothing the opcode
+// accepts, for the opcodes whose cost is looked up by that immediate. Cost is
+// charged before an opcode runs, and the lookup table is 256 long so that it can
+// answer for any byte, so without this the report for a bad field would be
+// whatever the table holds in the slot that field never legitimately reaches -
+// which is unreachableCost, and so a budget error. Only hand-assembled bytecode
+// can get here; the assembler rejects these names outright.
+//
+// Each opcode's own dispatch rejects the same fields, and must keep doing so:
+// this covers the fields a group leaves blank, not the ones a program is too old
+// to name, and it is one guard where those are several.
+func (d *OpDetails) checkFieldCosted(name string, program []byte, pc int) error {
+	if d.SubOpcode != 0 { // as in Cost: immediates follow the sub-opcode byte
+		pc++
+	}
+	for i := range d.Immediates {
+		imm := &d.Immediates[i]
+		if imm.fieldCosts == nil || imm.Group == nil {
+			continue
+		}
+		field := program[pc+1+i]
+		if int(field) >= len(imm.Group.Names) || imm.Group.Names[field] == "" {
+			return fmt.Errorf("%s unknown field: %d", name, field)
+		}
+	}
+	return nil
 }
 
 func detDefault() OpDetails {
@@ -347,6 +375,15 @@ func (d OpDetails) field(name string, group *FieldGroup) OpDetails {
 	}
 	panic(name)
 }
+
+// unreachableCost fills a slot in a cost table that no program can reach,
+// because the opcode's field group leaves that field's name blank and so the
+// assembler rejects it, checkFieldCosted rejects it before this table is
+// consulted, and eval's own dispatch rejects it after. The tables must still be
+// as long as the group's name array, so the slots have to hold something. It
+// might as well be huge, so that an unforeseen bug that did reach one could not
+// go on to do the work cheaply.
+const unreachableCost = 1e10
 
 func costByField(immediate string, group *FieldGroup, costs []int) OpDetails {
 	if len(costs) != len(group.Names) {
@@ -802,16 +839,18 @@ var OpSpecs = []OpSpec{
 	{0xd4, "app_box_resize", opAppBoxResize, proto("iNi:").appBoxExplain(AppStateWrite, true), foreignBoxVersion, subOp(0x09).only(ModeApp)},
 
 	{0xe0, "ec_add", opEcAdd, proto("bb:b"), pairingVersion,
-		costByField("g", &EcGroups, []int{
+		costByField("g", &ecArithGroups, []int{
 			BN254g1: 125, BN254g2: 170,
 			BLS12_381g1: 205, BLS12_381g2: 290,
-			ED25519: 200})}, // uncompressed points: one output inversion dominates; 1.6x a BN254g1 add, by BenchmarkEd25519
+			ED25519:        200, // uncompressed points: one output inversion dominates; 1.6x a BN254g1 add, by BenchmarkEd25519
+			ED25519_Monero: unreachableCost})},
 
 	{0xe1, "ec_scalar_mul", opEcScalarMul, proto("bb:b"), pairingVersion,
-		costByField("g", &EcGroups, []int{
+		costByField("g", &ecArithGroups, []int{
 			BN254g1: 1810, BN254g2: 3430,
 			BLS12_381g1: 2950, BLS12_381g2: 6530,
-			ED25519: 1600})}, // 40us for the worst-case scalar, by BenchmarkEd25519
+			ED25519:        1600, // 40us for the worst-case scalar, by BenchmarkEd25519
+			ED25519_Monero: unreachableCost})},
 
 	{0xe2, "ec_pairing_check", opEcPairingCheck, proto("bb:T"), pairingVersion,
 		costByFieldAndLength("g", &ecPairingGroups, []linearCost{
@@ -835,10 +874,11 @@ var OpSpecs = []OpSpec{
 				chunkCost: 10_000,
 				chunkSize: bls12381g2Size,
 			},
-			ED25519: {baseCost: 1}})}, // unreachable placeholder: ED25519 rejected at assembly
+			ED25519:        {baseCost: unreachableCost},
+			ED25519_Monero: {baseCost: unreachableCost}})},
 
 	{0xe3, "ec_multi_scalar_mul", opEcMultiScalarMul, proto("bb:b"), pairingVersion,
-		costByFieldAndLength("g", &EcGroups, []linearCost{
+		costByFieldAndLength("g", &ecArithGroups, []linearCost{
 			BN254g1: {
 				baseCost:  3_600,
 				chunkCost: 90,
@@ -863,18 +903,21 @@ var OpSpecs = []OpSpec{
 				baseCost:  1_200,
 				chunkCost: 385,
 				chunkSize: scalarSize,
-			}})},
+			},
+			ED25519_Monero: {baseCost: unreachableCost}})},
 
 	{0xe4, "ec_subgroup_check", opEcSubgroupCheck, proto("b:T"), pairingVersion,
-		costByField("g", &EcGroups, []int{
+		costByField("g", &ecArithGroups, []int{
 			BN254g1: 20, BN254g2: 3_100, // g1 subgroup is nearly a no-op
 			BLS12_381g1: 1_850, BLS12_381g2: 2_340,
-			ED25519: 1_300})}, // ~one scalar mul ([L]P), not cheap like g1; by BenchmarkEd25519
+			ED25519:        1_300, // ~one scalar mul ([L]P), not cheap like g1; by BenchmarkEd25519
+			ED25519_Monero: unreachableCost})},
 	{0xe5, "ec_map_to", opEcMapTo, proto("b:b"), pairingVersion,
 		costByField("g", &EcGroups, []int{
 			BN254g1: 630, BN254g2: 3_300,
 			BLS12_381g1: 1_950, BLS12_381g2: 8_150,
-			ED25519: 500})}, // elligator2, 12.3us on the branch that takes two square roots
+			ED25519:        500,    // elligator2, 12.3us on the branch that takes two square roots
+			ED25519_Monero: 350})}, // 8.6us on each of its four branches, one root apiece
 	{0xe6, "mimc", opMimc, proto("b:b{32}"), mimcVersion, costByFieldAndLength("c", &MimcConfigs, []linearCost{
 		BN254Mp110: {
 			baseCost:  10,

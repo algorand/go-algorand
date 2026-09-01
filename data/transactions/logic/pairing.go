@@ -253,6 +253,8 @@ func opEcMapTo(cx *EvalContext) error {
 		res, err = bls12381MapToG2(fpBytes)
 	case ED25519:
 		res, err = ed25519MapTo(fpBytes)
+	case ED25519_Monero:
+		res, err = ed25519MoneroMapTo(fpBytes)
 	default:
 		err = fmt.Errorf("invalid ec_map_to %s", group)
 	}
@@ -1103,6 +1105,19 @@ var ed25519MapC = func() *edfield.Element {
 	return c
 }()
 
+// ed25519MapInput decodes the argument both edwards25519 maps take: a
+// big-endian field element below the modulus, which need not be 0-padded, as
+// for the other curves.
+func ed25519MapInput(fpBytes []byte) (*edfield.Element, error) {
+	if len(fpBytes) > ed25519fpSize {
+		return nil, fmt.Errorf("bad ed25519 field element length %d. Expected at most %d",
+			len(fpBytes), ed25519fpSize)
+	}
+	padded := make([]byte, ed25519fpSize)
+	copy(padded[ed25519fpSize-len(fpBytes):], fpBytes)
+	return bytesToEd25519Field(padded)
+}
+
 // ed25519MapTo is RFC 9380's map_to_curve_elligator2_edwards25519, followed by
 // clearing the cofactor so that the result is always in the prime-order
 // subgroup - the guarantee the other groups' maps make as well.
@@ -1113,27 +1128,19 @@ var ed25519MapC = func() *edfield.Element {
 // and adding them if the caller needs an output uniform over the group. A
 // single mapped element is not uniform.
 //
-// Elligator 2 is the choice the rest of the opcode makes for us: ec_map_to
-// means "this curve's standard map", SSWU for BLS12-381 and SVDW for BN254, and
-// for edwards25519 that is Elligator 2. It is also what this node already
-// computes elsewhere, since vrf_verify is ECVRF-ED25519-SHA512-Elligator2.
-// Protocols predating RFC 9380 hash to this curve by their own maps - Monero's
-// is keccak-256 into CryptoNote's ge_fromfe_frombytes_vartime - and those are
-// deliberately not what this computes. An opcode whose meaning is "the standard
-// map" for four groups and "one project's legacy function" for a fifth would be
-// a trap for everyone else hashing to edwards25519.
+// ec_map_to means "this curve's standard map", SSWU for BLS12-381 and SVDW for
+// BN254, and for edwards25519 that is Elligator 2. It is also what this node
+// already computes elsewhere, since vrf_verify is
+// ECVRF-ED25519-SHA512-Elligator2. Protocols predating RFC 9380 hash to this
+// curve by their own maps, and those are deliberately not what this computes. A
+// program that wants such a map names it: ED25519_Monero selects the one
+// CryptoNote wrote, in ed25519MoneroMapTo below.
 //
 // Coordinates are carried as fractions rather than divided, so the square root
 // and the one inversion needed to encode the result are the only
 // exponentiations.
 func ed25519MapTo(fpBytes []byte) ([]byte, error) {
-	if len(fpBytes) > ed25519fpSize {
-		return nil, fmt.Errorf("bad ed25519 field element length %d. Expected at most %d",
-			len(fpBytes), ed25519fpSize)
-	}
-	padded := make([]byte, ed25519fpSize) // short inputs need not be 0-padded, as elsewhere
-	copy(padded[ed25519fpSize-len(fpBytes):], fpBytes)
-	u, err := bytesToEd25519Field(padded)
+	u, err := ed25519MapInput(fpBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -1195,5 +1202,165 @@ func ed25519MapTo(fpBytes []byte) ([]byte, error) {
 		return nil, fmt.Errorf("ed25519 elligator2 left the curve: %w", err)
 	}
 	point.MultByCofactor(&point) // into the prime-order subgroup
+	return ed25519PointToBytes(&point), nil
+}
+
+// The constants of the CryptoNote map, all derived from J, which Monero's C
+// calls A. Monero stores them as fixed limb arrays in crypto-ops-data.c; naming
+// what they are here is what lets the port be read against the original.
+//
+// The four roots all exist. p is 5 mod 8, so 2 and sqrt(-1) are both
+// non-squares, and J*(J+2) is a non-square as well, which leaves 2*J*(J+2) and
+// both of +/-sqrt(-1)*J*(J+2) squares. TestEd25519MoneroConstants checks each
+// one rather than trusting that sentence.
+//
+// Which root of each SqrtRatio returns does not matter. The map's last step
+// forces the sign of the result to the branch it took, and using the other root
+// of -1 swaps the fffb3 and fffb4 branches and their constants together.
+var (
+	ed25519MontNegJ   = new(edfield.Element).Negate(ed25519MontJ)                 // -A
+	ed25519MontNegJSq = new(edfield.Element).Negate(ed25519Squared(ed25519MontJ)) // -A^2
+	ed25519SqrtM1     = ed25519MustSqrt(new(edfield.Element).Negate(new(edfield.Element).One()))
+
+	// J*(J+2) and twice it, the values the four roots are roots of
+	ed25519MontJJ2 = new(edfield.Element).Multiply(ed25519MontJ,
+		new(edfield.Element).Add(ed25519MontJ, new(edfield.Element).Mult32(new(edfield.Element).One(), 2)))
+	ed25519MontJJ2x2 = new(edfield.Element).Add(ed25519MontJJ2, ed25519MontJJ2)
+
+	ed25519MoneroFFFB1 = ed25519MustSqrt(new(edfield.Element).Negate(ed25519MontJJ2x2)) // sqrt(-2*A*(A+2))
+	ed25519MoneroFFFB2 = ed25519MustSqrt(ed25519MontJJ2x2)                              // sqrt(2*A*(A+2))
+	ed25519MoneroFFFB3 = ed25519MustSqrt(new(edfield.Element).Multiply(
+		new(edfield.Element).Negate(ed25519SqrtM1), ed25519MontJJ2)) // sqrt(-sqrt(-1)*A*(A+2))
+	ed25519MoneroFFFB4 = ed25519MustSqrt(new(edfield.Element).Multiply(
+		ed25519SqrtM1, ed25519MontJJ2)) // sqrt(sqrt(-1)*A*(A+2))
+)
+
+func ed25519Squared(x *edfield.Element) *edfield.Element {
+	return new(edfield.Element).Square(x)
+}
+
+// ed25519MustSqrt returns a square root of x, panicking if x has none. Every use
+// is on a constant, so a panic here is a bug in this file rather than anything a
+// program can cause.
+func ed25519MustSqrt(x *edfield.Element) *edfield.Element {
+	root, wasSquare := new(edfield.Element).SqrtRatio(x, new(edfield.Element).One())
+	if wasSquare != 1 {
+		panic("edwards25519: constant is not a square")
+	}
+	return root
+}
+
+// ed25519DivPowM1 returns (u/v)^((p+3)/8), which is a square root of u/v when
+// one exists, and sqrt(-1) times one when it does not. It is Monero's
+// fe_divpowm1: u*v^3*(u*v^7)^((p-5)/8), which trades the inversion u/v would
+// need for a few multiplications, since Pow22523 is x^((p-5)/8) already.
+func ed25519DivPowM1(u, v *edfield.Element) *edfield.Element {
+	var v3, uv7, t edfield.Element
+	v3.Multiply(ed25519Squared(v), v)    // v^3
+	uv7.Multiply(ed25519Squared(&v3), v) // v^7
+	uv7.Multiply(&uv7, u)                // u*v^7
+	t.Pow22523(&uv7)                     // (u*v^7)^((p-5)/8)
+	t.Multiply(&t, &v3)
+	return t.Multiply(&t, u)
+}
+
+// ed25519MoneroMapTo is CryptoNote's ge_fromfe_frombytes_vartime followed by
+// ge_mul8, which together are Monero's map to edwards25519: the second half of
+// its hash_to_ec, and all of the hash_to_point its own tests name. A program
+// composes the whole of hash_to_ec by hashing first, and the argument here is
+// the field element that hash produced, big-endian and reduced, exactly as
+// ec_map_to takes for every other group.
+//
+// The point of it is that Monero's key images are I = [x]H_p(P), so a contract
+// that cannot compute H_p cannot check a Monero linkable ring signature at all.
+//
+// It is Elligator 2 as well, over the same curve with the same Z of 2, which is
+// nearer to ED25519 than it looks: the two agree on the Montgomery x, and can
+// differ only in which square root they take. They do differ, on exactly the
+// inputs that reach the negative branch below, and those are half of all
+// inputs.  So the results are the same point half the time and negations of
+// each other otherwise, and a program that reached for ED25519 instead of this
+// would compute the right key image half the time.  The standard map keeps the
+// plain name; see the comment on ed25519MapTo.
+//
+// This is a faithful port, written to be read beside the C rather than to be
+// written fresh. The C reaches its common tail with a goto, which here is the
+// sign == 0 test after the branches.
+//
+// The map is not injective and its output is not uniform over the group - the
+// non-uniformity is why current Monero calls the wrapper biased_hash_to_ec - so
+// everything ed25519MapTo says about map versus hash applies here too.
+func ed25519MoneroMapTo(fpBytes []byte) ([]byte, error) {
+	u, err := ed25519MapInput(fpBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	zero := new(edfield.Element).Zero()
+	isZero := func(e *edfield.Element) bool { return e.Equal(zero) == 1 }
+
+	var v, w, x, z, X edfield.Element
+	uu := ed25519Squared(u)
+	v.Add(uu, uu) // v = 2*u^2
+	w.Add(&v, new(edfield.Element).One())
+	x.Add(ed25519Squared(&w), new(edfield.Element).Multiply(ed25519MontNegJSq, &v)) // x = w^2 - A^2*v
+	X.Set(ed25519DivPowM1(&w, &x))
+	x.Multiply(ed25519Squared(&X), &x) // the candidate root, squared back
+	z.Set(ed25519MontNegJ)
+
+	// Which root the candidate is a root of decides both the constant that
+	// turns it into the root of what is wanted, and the sign forced below.
+	var root *edfield.Element
+	sign := 0
+	switch {
+	case isZero(new(edfield.Element).Subtract(&w, &x)): // x == w
+		root = ed25519MoneroFFFB2
+	case isZero(new(edfield.Element).Add(&w, &x)): // x == -w
+		root = ed25519MoneroFFFB1
+	default:
+		// w/x was not a square, so x is sqrt(-1) times w, of one sign or other
+		x.Multiply(&x, ed25519SqrtM1)
+		switch {
+		case isZero(new(edfield.Element).Subtract(&w, &x)):
+			root = ed25519MoneroFFFB4
+		case isZero(new(edfield.Element).Add(&w, &x)):
+			root = ed25519MoneroFFFB3
+		default:
+			// the C asserts this cannot happen. Inputs are attacker
+			// controlled, so it is an error here rather than a panic, though
+			// no input is known to reach it.
+			return nil, errors.New("ed25519 monero map: no branch matched")
+		}
+		sign = 1
+	}
+	X.Multiply(&X, root)
+	if sign == 0 { // only the square branches scale by u and z by v
+		X.Multiply(&X, u)
+		z.Multiply(&z, &v) // -A*v
+	}
+	if X.IsNegative() != sign {
+		X.Negate(&X)
+	}
+
+	// affine x is X and affine y is (z-w)/(z+w), so extended coordinates take
+	// the fraction directly: X*Z over Z, and (z-w) over Z, with X*Y == Z*T
+	var Y, Z, T edfield.Element
+	Z.Add(&z, &w)
+	Y.Subtract(&z, &w)
+	if isZero(&Z) {
+		// Z is zero only for u^2 == 1/(2*(A-1)) or u^2 == (A-1)/2, and
+		// TestEd25519MoneroConstants shows neither is a square, so no input
+		// reaches this. Monero, whose check of the curve equation here is a
+		// debug-build assert, would carry the degenerate point forward.
+		return nil, errors.New("ed25519 monero map: degenerate point")
+	}
+	T.Multiply(&X, &Y)
+	X.Multiply(&X, &Z)
+
+	var point edwards25519.Point
+	if _, err := point.SetExtendedCoordinates(&X, &Y, &Z, &T); err != nil {
+		return nil, fmt.Errorf("ed25519 monero map left the curve: %w", err)
+	}
+	point.MultByCofactor(&point) // ge_mul8
 	return ed25519PointToBytes(&point), nil
 }
