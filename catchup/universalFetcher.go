@@ -192,7 +192,7 @@ func (w *wsFetcherClient) requestBlock(ctx context.Context, round basics.Round) 
 		return nil, makeErrWsFetcherRequestFailed(round, w.target.GetAddress(), "Cert data not found")
 	}
 
-	blockCertBytes := protocol.EncodeReflect(rpcs.PreEncodedBlockCert{
+	blockCertBytes := protocol.Encode(&rpcs.PreEncodedBlockCert{
 		Block:       blk,
 		Certificate: cert})
 
