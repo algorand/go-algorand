@@ -73,7 +73,7 @@ func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, 
 	}
 	// The ledger's tracker goroutines log through log, which is bound to t: if the
 	// ledger outlives the test, they keep calling t.Log() after the test has
-	// completed. Closing the ledger makes the tracker syncher goroutine to exit.
+	// completed. Closing the ledger makes the tracker syncher goroutine exit.
 	// It is safe to call ledger.Close() in tests as well.
 	t.Cleanup(ledger.Close)
 

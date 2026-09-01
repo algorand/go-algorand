@@ -130,7 +130,8 @@ func testAccountsCanSendMoneyAcrossUpgrade(t *testing.T, templatePath string, ta
 		// stop upgrading at targetVersion if the caller specified one.
 		// this allows a test to run assertions against a specific protocol version
 		// without upgrading rest of the newer consensus versions.
-		targetParams := consensus[targetVersion]
+		targetParams, ok := consensus[targetVersion]
+		a.True(ok, "targetVersion %s not in generated consensus", targetVersion)
 		targetParams.ApprovedUpgrades = make(map[protocol.ConsensusVersion]uint64)
 		consensus[targetVersion] = targetParams
 	}
