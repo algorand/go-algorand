@@ -2481,9 +2481,14 @@ int %d // 10001000
 	}
 
 	commitRoundLookback(basics.Round(cfg.MaxAcctLookback), l)
+	// read dbRound out before asserting: a failing require calls t.FailNow, and running
+	// the deferred l.Close() while still holding trackers.mu deadlocks against the
+	// commitSyncer goroutine that Close waits on.
 	l.trackers.mu.RLock()
-	require.Equal(t, programRound, l.trackers.dbRound+1) // programRound is next to be replayed
+	dbRound := l.trackers.dbRound
 	l.trackers.mu.RUnlock()
+	require.Equal(t, programRound, dbRound+1) // programRound is next to be replayed
+
 	err = l.reloadLedger()
 	require.NoError(t, err)
 }
