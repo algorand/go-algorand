@@ -156,17 +156,14 @@ func (router *rootRouter) update(state player, r round, gc bool) {
 	}
 
 	if gc {
-		children := make(map[round]*roundRouter)
-		for r, c := range router.Children {
+		for r := range router.Children {
 			// We may still receive credential messages from old rounds. Keep
 			// old round routers around, for as long as those credentials may
 			// arrive to keep track of them.
-			rr := r + credentialRoundLag
-			if rr >= state.Round {
-				children[r] = c
+			if r+credentialRoundLag < state.Round {
+				delete(router.Children, r)
 			}
 		}
-		router.Children = children
 	}
 }
 
@@ -216,19 +213,15 @@ func (router *roundRouter) update(state player, p period, gc bool) {
 	}
 
 	if gc {
-		children := make(map[period]*periodRouter)
-		for p, c := range router.Children {
-			if p+1 >= state.Period {
-				children[p] = c
-			} else if p <= 1 {
-				// avoid garbage-collecting (next round, period 0/1) state
-				// this is conservative:
-				// we can collect more eagerly if router's round is passed in
-				// TODO may want regression test for correct pipelining behavior
-				children[p] = c
+		for p := range router.Children {
+			// Keep p+1 >= state.Period, and keep periods 0 and 1 to avoid
+			// garbage-collecting (next round, period 0/1) state. This is conservative:
+			// we can collect more eagerly if router's round is passed in.
+			// TODO may want regression test for correct pipelining behavior
+			if p+1 < state.Period && p > 1 {
+				delete(router.Children, p)
 			}
 		}
-		router.Children = children
 	}
 }
 
