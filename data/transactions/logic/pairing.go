@@ -256,7 +256,7 @@ func opEcMapTo(cx *EvalContext) error {
 	case ED25519_Monero:
 		res, err = ed25519MoneroMapTo(fpBytes)
 	default:
-		err = fmt.Errorf("invalid ec_map_to %s", group)
+		err = fmt.Errorf("invalid ec_map_to group %s", group)
 	}
 	cx.Stack[last].Bytes = res
 	return err

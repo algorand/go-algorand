@@ -227,6 +227,14 @@ func (d *OpDetails) Cost(program []byte, pc int, stack []stackValue) int {
 // Each opcode's own dispatch rejects the same fields, and must keep doing so:
 // this covers the fields a group leaves blank, not the ones a program is too old
 // to name, and it is one guard where those are several.
+//
+// checkStep does not call this, and so does add unreachableCost to its static
+// cost for such a field. That is deliberate. Validating there would reject a
+// program that check() accepts today, which for an application would mean a
+// creation that currently succeeds beginning to fail - a consensus change, to
+// improve a message on a program that cannot run either way. It is harmless
+// because check() only compares its static cost against a budget below
+// backBranchEnabledVersion, and every field-costed opcode is v10 or later.
 func (d *OpDetails) checkFieldCosted(name string, program []byte, pc int) error {
 	if d.SubOpcode != 0 { // as in Cost: immediates follow the sub-opcode byte
 		pc++
@@ -377,13 +385,18 @@ func (d OpDetails) field(name string, group *FieldGroup) OpDetails {
 }
 
 // unreachableCost fills a slot in a cost table that no program can reach,
-// because the opcode's field group leaves that field's name blank and so the
-// assembler rejects it, checkFieldCosted rejects it before this table is
-// consulted, and eval's own dispatch rejects it after. The tables must still be
-// as long as the group's name array, so the slots have to hold something. It
-// might as well be huge, so that an unforeseen bug that did reach one could not
-// go on to do the work cheaply.
-const unreachableCost = 1e10
+// because the opcode's field group leaves that field's name blank, so the
+// assembler rejects the name, checkFieldCosted rejects the byte before eval
+// consults this table, and the opcode's own dispatch rejects it after. The
+// tables must still be as long as the group's name array, so the slots have to
+// hold something. It might as well be far more than any budget, so that an
+// unforeseen bug reaching one could not go on to do the work cheaply.
+//
+// It stays under MaxInt32 because these tables are []int and go-algorand builds
+// for 32-bit arm, where a larger constant does not compile. Written as a shift
+// rather than 1e9 because 1e9 is a float constant, whose default type would
+// surprise anyone who assigned it with :=.
+const unreachableCost = 1 << 30
 
 func costByField(immediate string, group *FieldGroup, costs []int) OpDetails {
 	if len(costs) != len(group.Names) {
