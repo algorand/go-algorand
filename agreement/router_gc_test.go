@@ -156,9 +156,9 @@ func TestRouterUpdateKeepsChildIdentity(t *testing.T) {
 // rootRouter.update and roundRouter.update run on every event routed through the state
 // machine tree -- submitTop and dispatch both call them with gc set -- so their allocation
 // count is multiplied by the agreement message rate. Reported allocs/op is the figure of
-// interest: collecting in place rather than rebuilding the children map should keep it at
-// the one allocation update genuinely makes (the child for the requested round), and none
-// at all once that child already exists.
+// interest: collecting in place rather than rebuilding the children map, and not creating
+// a child that collection would immediately delete, should make steady-state updates
+// allocation-free.
 func BenchmarkRouterUpdate(b *testing.B) {
 	b.Run("root", func(b *testing.B) {
 		router := new(rootRouter)
