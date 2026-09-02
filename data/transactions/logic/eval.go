@@ -737,8 +737,9 @@ type EvalContext struct {
 	version uint64
 	Scratch scratchSpace
 
-	// logicSigAllowances records sensitive transaction operations authorized by
-	// allow opcodes that were executed on the successful LogicSig path.
+	// logicSigAllowances is a bitset of sensitive transaction operations authorized
+	// by executed allow opcodes. Bit n corresponds to the LogicSig allowance whose
+	// immediate field index is n.
 	logicSigAllowances uint64
 
 	// creatorAddr caches the creator of appID, looked up lazily by
