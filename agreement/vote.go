@@ -161,6 +161,15 @@ func makeVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecr
 		return unauthenticatedVote{}, fmt.Errorf("makeVote: could not get membership parameters: %v", err)
 	}
 
+	cred := committee.MakeCredential(&selection.SK, m.Selector)
+	return makeVoteWithCredential(rv, voting, cred, l)
+}
+
+// makeVoteWithCredential creates a new unauthenticated vote using a
+// previously computed VRF credential, avoiding the membership lookup and
+// VRF prove that makeVote performs. The credential must have been created
+// for the same (sender, round, period, step) selector as rv.
+func makeVoteWithCredential(rv rawVote, voting crypto.OneTimeSigner, cred committee.UnauthenticatedCredential, l Ledger) (unauthenticatedVote, error) {
 	proto, err := l.ConsensusParams(ParamsRound(rv.Round))
 	if err != nil {
 		return unauthenticatedVote{}, fmt.Errorf("makeVote: could not get consensus params for round %d: %v", ParamsRound(rv.Round), err)
@@ -183,7 +192,6 @@ func makeVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecr
 		return unauthenticatedVote{}, fmt.Errorf("makeVote: got back empty signature for vote")
 	}
 
-	cred := committee.MakeCredential(&selection.SK, m.Selector)
 	ret := unauthenticatedVote{R: rv, Cred: cred, Sig: sig}
 
 	// for use when running in tests

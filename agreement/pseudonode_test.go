@@ -743,6 +743,52 @@ func TestFilterProposers(t *testing.T) {
 		}
 	})
 
+	t.Run("credentialReuse", func(t *testing.T) {
+		t.Parallel()
+
+		// Votes produced by makeProposals reuse the VRF credential computed
+		// by filterProposers rather than recomputing it in makeVote. Verify
+		// that such a vote passes full verification against the ledger, and
+		// that the reused credential is identical to what makeVote would
+		// have produced.
+		rootSeed := sha256.Sum256([]byte(t.Name()))
+		accounts, balances := createTestAccountsAndBalances(t, 1, rootSeed[:])
+		ledger := makeTestLedger(balances)
+
+		sLogger := serviceLogger{logging.NewLogger()}
+		sLogger.SetLevel(logging.Warn)
+
+		keyManager := makeRecordingKeyManager(accounts)
+		pn := asyncPseudonode{
+			factory:   testBlockFactory{Owner: 0},
+			validator: testBlockValidator{},
+			keys:      keyManager,
+			ledger:    ledger,
+			log:       sLogger,
+			monitor:   nil,
+		}
+
+		round := ledger.NextRound()
+		partKeys := pn.loadRoundParticipationKeys(round)
+		require.Len(t, partKeys, 1)
+
+		// A single 100%-stake account is always elected, so makeProposals
+		// must produce exactly one proposal and one vote.
+		proposals, votes := pn.makeProposals(round, period(0), partKeys)
+		require.Len(t, proposals, 1)
+		require.Len(t, votes, 1)
+
+		// The vote (carrying the reused credential) must verify.
+		_, err := votes[0].verify(ledger)
+		require.NoError(t, err, "vote with reused credential failed verification")
+
+		// The reused credential must match the one makeVote computes from
+		// scratch: VRF proofs are deterministic for a given key and selector.
+		uv, err := makeVote(votes[0].R, partKeys[0].VotingSigner(), partKeys[0].VRF, ledger)
+		require.NoError(t, err)
+		require.Equal(t, uv.Cred, votes[0].Cred)
+	})
+
 	t.Run("ledgerErrors", func(t *testing.T) {
 		t.Parallel()
 

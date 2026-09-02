@@ -283,12 +283,21 @@ func (n asyncPseudonode) makePseudonodeVerifier(voteVerifier *AsyncVoteVerifier)
 	return pv
 }
 
+// eligibleProposer is a participating account that has been selected as a
+// proposer, along with the VRF credential that proved its selection. The
+// credential is retained so that makeProposals can reuse it in the proposal
+// vote instead of recomputing the VRF proof.
+type eligibleProposer struct {
+	account.ParticipationRecordForRound
+	cred committee.UnauthenticatedCredential
+}
+
 // filterProposers returns the subset of accounts that are selected as proposers
 // for the given round and period, determined by verifying their VRF credentials
 // against committee membership. This check uses only ledger state — no block
 // assembly is required — allowing callers to skip the expensive AssembleBlock
 // call when no accounts are elected.
-func (n asyncPseudonode) filterProposers(round basics.Round, period period, accounts []account.ParticipationRecordForRound) []account.ParticipationRecordForRound {
+func (n asyncPseudonode) filterProposers(round basics.Round, period period, accounts []account.ParticipationRecordForRound) []eligibleProposer {
 	cparams, err := n.ledger.ConsensusParams(ParamsRound(round))
 	if err != nil {
 		n.log.Warnf("pseudonode.filterProposers: could not get consensus params for round %d: %v", round, err)
@@ -314,7 +323,7 @@ func (n asyncPseudonode) filterProposers(round basics.Round, period period, acco
 	sel := selector{Seed: seed, Round: round, Period: period, Step: propose}
 
 	// Pre-allocate with capacity to avoid reallocation during append.
-	selected := make([]account.ParticipationRecordForRound, 0, len(accounts))
+	selected := make([]eligibleProposer, 0, len(accounts))
 
 	// Create membership template with shared fields; only Record varies per account.
 	m := committee.Membership{
@@ -333,7 +342,7 @@ func (n asyncPseudonode) filterProposers(round basics.Round, period period, acco
 
 		cred := committee.MakeCredential(&acc.VRF.SK, m.Selector)
 		if _, err = cred.Verify(cparams, m); err == nil {
-			selected = append(selected, acc)
+			selected = append(selected, eligibleProposer{ParticipationRecordForRound: acc, cred: cred})
 		}
 	}
 	return selected
@@ -369,9 +378,9 @@ func (n asyncPseudonode) makeProposals(round basics.Round, period period, accoun
 			continue
 		}
 
-		// attempt to make the vote
+		// attempt to make the vote, reusing the VRF credential computed by filterProposers
 		rv := rawVote{Sender: acc.Account, Round: round, Period: period, Step: propose, Proposal: proposal}
-		uv, vErr := makeVote(rv, acc.VotingSigner(), acc.VRF, n.ledger)
+		uv, vErr := makeVoteWithCredential(rv, acc.VotingSigner(), acc.cred, n.ledger)
 		if vErr != nil {
 			n.log.Warnf("pseudonode.makeProposals: could not create vote: %v", vErr)
 			continue
