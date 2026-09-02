@@ -119,7 +119,6 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 	params.Set("bf", bloomParam)
 	request, err := http.NewRequest("POST", syncURL, strings.NewReader(params.Encode()))
 	if err != nil {
-		hts.log.Errorf("txSync POST setup %v: %s", syncURL, err)
 		return nil, err
 	}
 	request.Header.Set("Content-Type", requestContentType)
@@ -137,7 +136,6 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 		response.Body.Close()
 		return [][]transactions.SignedTxn{}, nil
 	default:
-		hts.log.Warn("txSync response status code : ", response.StatusCode)
 		response.Body.Close()
 		return nil, fmt.Errorf("txSync POST error response status code %d for '%s'. Request bloom filter length was %d bytes", response.StatusCode, syncURL, len(bloomParam))
 	}
@@ -147,7 +145,6 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 	contentTypes := response.Header["Content-Type"]
 	if len(contentTypes) != 1 {
 		err = fmt.Errorf("txSync POST invalid content type count %d", len(contentTypes))
-		hts.log.Warn(err)
 		response.Body.Close()
 		return nil, err
 	}
@@ -155,7 +152,6 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 	// Remove this 'old' string after next release.
 	const responseContentTypeOld = "application/x-algorand-ptx-v1"
 	if contentTypes[0] != responseContentType && contentTypes[0] != responseContentTypeOld {
-		hts.log.Warnf("http response has an invalid content type : %s", contentTypes[0])
 		response.Body.Close()
 		return nil, fmt.Errorf("txSync POST invalid content type '%s'", contentTypes[0])
 	}
