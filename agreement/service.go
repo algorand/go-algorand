@@ -162,14 +162,6 @@ func (s *Service) Start() {
 	})
 
 	s.persistenceLoop.Start()
-	// These three channels are deliberately unbuffered: their rendezvous is what
-	// serializes mainLoop against demuxLoop, and ready is the one that does the work.
-	// Each iteration mainLoop hands its actions over output, parks on ready, and resumes
-	// only when demuxLoop sends the next event over input. demuxLoop meanwhile runs do()
-	// - where encode reads the router tree mainLoop shares through persistRouter - and
-	// only receives from ready once do() has returned. So mainLoop is still parked while
-	// that read is in flight and cannot re-enter submitTop to mutate the tree. Buffering
-	// any of the three would let mainLoop run ahead and break that ordering.
 	input := make(chan externalEvent)
 	output := make(chan []action)
 	ready := make(chan externalDemuxSignals)
