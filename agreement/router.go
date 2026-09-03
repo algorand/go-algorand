@@ -84,6 +84,13 @@ func (h *routerHandle) dispatch(state player, e event, dest stateMachineTag, r r
 // router routes events and queries to the correct receiving state machine.
 //
 // router also encapsulates the garbage collection of old state machines.
+//
+// A router tree is owned by the goroutine running Service.mainLoop and is not
+// synchronized. Note that this applies to queries as well as events: dispatch
+// calls update, which mutates the tree by lazily building children and
+// collecting old ones, so even a read-only helper like stagedValue writes. No
+// other goroutine may touch a tree that mainLoop is still driving; see the
+// persistRouter assignment in mainLoop for the one snapshot that escapes.
 type router interface {
 	dispatch(t *tracer, state player, e event, src stateMachineTag, dest stateMachineTag, r round, p period, s step) event
 }
