@@ -160,7 +160,7 @@ func (router *rootRouter) update(state player, r round, gc bool) {
 	}
 	// Don't create a child the gc pass below would immediately delete;
 	// submitTop hits this with r=0 on every event.
-	if router.Children[r] == nil && (!gc || r+credentialRoundLag >= state.Round) {
+	if (!gc || r+credentialRoundLag >= state.Round) && router.Children[r] == nil {
 		router.Children[r] = new(roundRouter)
 	}
 
@@ -218,7 +218,7 @@ func (router *roundRouter) update(state player, p period, gc bool) {
 		router.Children = make(map[period]*periodRouter)
 	}
 	// As above, don't create a child the gc pass would immediately delete.
-	if router.Children[p] == nil && (!gc || p+1 >= state.Period || p <= 1) {
+	if (!gc || p+1 >= state.Period || p <= 1) && router.Children[p] == nil {
 		router.Children[p] = new(periodRouter)
 	}
 
