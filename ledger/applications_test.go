@@ -46,21 +46,20 @@ func commitRound(offset uint64, dbRound basics.Round, l *Ledger) {
 	commitRoundLookback(l.Latest().SubSaturate(dbRound+basics.Round(offset)), l)
 }
 
+// commitRoundLookback schedules a commit and waits until the tracker db round has
+// actually reached Latest()-lookback.
 func commitRoundLookback(lookback basics.Round, l *Ledger) {
-	l.trackers.mu.Lock()
-	l.trackers.lastFlushTime = time.Time{}
-	l.trackers.mu.Unlock()
-
-	l.trackers.scheduleCommit(l.Latest(), lookback)
-	// wait for the operation to complete. Once it does complete, the tr.lastFlushTime is going to be updated, so we can
-	// use that as an indicator.
+	target := l.Latest().SubSaturate(lookback)
 	for {
 		l.trackers.mu.Lock()
-		isDone := (!l.trackers.lastFlushTime.IsZero()) && (len(l.trackers.deferredCommits) == 0)
+		dbRound := l.trackers.dbRound
+		l.trackers.lastFlushTime = time.Time{} // force a flush
 		l.trackers.mu.Unlock()
-		if isDone {
-			break
+
+		if dbRound >= target {
+			return
 		}
+		l.trackers.scheduleCommit(l.Latest(), lookback)
 		time.Sleep(time.Millisecond)
 	}
 }

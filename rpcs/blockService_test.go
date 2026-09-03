@@ -25,7 +25,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -240,6 +239,14 @@ func TestBlockServiceShutdown(t *testing.T) {
 	<-requestDone
 }
 
+// setMemoryUsed overrides the block service memory accounting, so that tests can
+// drive the service in and out of its over-capacity state deterministically.
+func (bs *BlockService) setMemoryUsed(used uint64) {
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
+	bs.memoryUsed = used
+}
+
 // TestRedirectOnFullCapacity tests the case when the block service
 // fallback to another because its memory use is at capacity
 func TestRedirectOnFullCapacity(t *testing.T) {
@@ -296,74 +303,52 @@ func TestRedirectOnFullCapacity(t *testing.T) {
 	parsedURL, err := addr.ParseHostOrURL(nodeA.rootURL())
 	require.NoError(t, err)
 
-	client := http.Client{}
-
 	parsedURL.Path = FormatBlockQuery(uint64(2), parsedURL.Path, net1)
 	parsedURL.Path = strings.Replace(parsedURL.Path, "{genesisID}", "test-genesis-ID", 1)
 	blockURL := parsedURL.String()
-	request, err := http.NewRequest("GET", blockURL, nil)
-	require.NoError(t, err)
-	network.SetUserAgentHeader(request.Header)
 
-	var responses1, responses2, responses3, responses4 *http.Response
-	var blk bookkeeping.Block
-	var l2Failed bool
-	xDone := 1000
-	// Keep on sending 4 simultaneous requests to the first node, to force it to redirect to node 2
-	// then check the timestamp from the block header to confirm the redirection took place
-	var x int
-forloop:
-	for ; x < xDone; x++ {
-		wg := sync.WaitGroup{}
-		wg.Add(4)
-		go func() {
-			defer wg.Done()
-			responses1, _ = client.Do(request)
-		}()
-		go func() {
-			defer wg.Done()
-			responses2, _ = client.Do(request)
-		}()
-		go func() {
-			defer wg.Done()
-			responses3, _ = client.Do(request)
-		}()
-		go func() {
-			defer wg.Done()
-			responses4, _ = client.Do(request)
-		}()
-
-		wg.Wait()
-		responses := [4]*http.Response{responses1, responses2, responses3, responses4}
-		for p := 0; p < 4; p++ {
-			if responses[p] == nil {
-				continue
-			}
-			if responses[p].StatusCode == http.StatusServiceUnavailable {
-				l2Failed = true
-				require.Equal(t, "3", responses[p].Header["Retry-After"][0])
-				continue
-			}
-			// parse the block to get the header timestamp which is needed to know which node served the block
-			require.Equal(t, http.StatusOK, responses[p].StatusCode)
-			bodyData, err := io.ReadAll(responses[p].Body)
-			require.NoError(t, err)
-			require.NotEqual(t, 0, len(bodyData))
-			var blkCert PreEncodedBlockCert
-			err = protocol.DecodeReflect(bodyData, &blkCert)
-			require.NoError(t, err)
-			err = protocol.Decode(blkCert.Block, &blk)
-			require.NoError(t, err)
-			if blk.TimeStamp == l2Block2Ts && l2Failed {
-				break forloop
-			}
-		}
+	client := http.Client{}
+	getBlock := func() *http.Response {
+		t.Helper()
+		request, err := http.NewRequest("GET", blockURL, nil)
+		require.NoError(t, err)
+		network.SetUserAgentHeader(request.Header)
+		response, err := client.Do(request)
+		require.NoError(t, err)
+		t.Cleanup(func() { response.Body.Close() })
+		return response
 	}
-	require.Less(t, x, xDone)
+
+	// Both the redirect and the retry-after paths trigger off memoryUsed exceeding
+	// memoryCap, which rawBlockBytes checks before serving a block. Set that state
+	// directly instead of racing concurrent requests for it.
+
+	// Both nodes are over capacity: nodeA redirects to nodeB, and nodeB, having no
+	// fallback endpoint of its own, has to answer with retry-after. Neither node
+	// serves a block here, so neither one touches its own memory accounting.
+	bs1.setMemoryUsed(bs1.memoryCap + 1)
+	bs2.setMemoryUsed(bs2.memoryCap + 1)
+
+	response := getBlock()
+	require.Equal(t, http.StatusServiceUnavailable, response.StatusCode)
+	require.Equal(t, blockResponseRetryAfter, response.Header.Get("Retry-After"))
+
+	// nodeA is still over capacity but nodeB now has room, so the redirected
+	// request gets served out of ledger2.
+	bs2.setMemoryUsed(0)
+
+	response = getBlock()
+	require.Equal(t, http.StatusOK, response.StatusCode)
+	bodyData, err := io.ReadAll(response.Body)
+	require.NoError(t, err)
+	require.NotEqual(t, 0, len(bodyData))
+	// parse the block to get the header timestamp, which tells us which node served it
+	var blkCert PreEncodedBlockCert
+	require.NoError(t, protocol.DecodeReflect(bodyData, &blkCert))
+	var blk bookkeeping.Block
+	require.NoError(t, protocol.Decode(blkCert.Block, &blk))
 	// check if redirection happened
-	require.Equal(t, blk.TimeStamp, l2Block2Ts)
-	// check if node 2 was also overwhelmed and responded with retry-after, since it cannod redirect
-	require.True(t, l2Failed)
+	require.Equal(t, l2Block2Ts, blk.TimeStamp)
 
 	// First node redirects, does not return retry
 	require.True(t, strings.Contains(logBuffer1.String(), "redirectRequest: redirected block request to"))

@@ -337,7 +337,7 @@ func TestSyncingFullNode(t *testing.T) {
 					}
 				}
 			case <-timer.C:
-				require.Fail(t, fmt.Sprintf("no block notification for account: %d - %v. Iteration: %v", i, wallets[i], tests))
+				require.Fail(t, fmt.Sprintf("no block notification for account: %d - %v. Iteration: %v. Rounds reached: %v", i, wallets[i], tests, nodesLastRounds(nodes)))
 				return
 			}
 		}
@@ -467,8 +467,9 @@ func TestSimpleUpgrade(t *testing.T) {
 					panic(err)
 				}
 				blocks[i] = blk
-			case <-time.After(60 * time.Second):
-				require.Fail(t, fmt.Sprintf("no block notification for account: %v. Iteration: %v", wallets[i], tests))
+			case <-time.After(30*time.Second + 2*expectedAgreementTime):
+				require.Fail(t, fmt.Sprintf("no block notification for account: %v. Iteration: %v. Rounds reached: %v",
+					wallets[i], tests, nodesLastRounds(nodes)))
 				return
 			}
 		}
@@ -499,6 +500,16 @@ func TestSimpleUpgrade(t *testing.T) {
 	}
 
 	require.Equal(t, 2, roundsCheckedForUpgrade)
+}
+
+// nodesLastRounds reports the round each node last committed, so a missing block
+// notification can be told apart from a network that is merely slow.
+func nodesLastRounds(nodes []*AlgorandFullNode) []basics.Round {
+	rounds := make([]basics.Round, len(nodes))
+	for i := range nodes {
+		rounds[i] = nodes[i].ledger.LastRound()
+	}
+	return rounds
 }
 
 const defaultFirstNodeStartDelay = 20 * time.Second
