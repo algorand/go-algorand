@@ -21,11 +21,12 @@ import (
 	"strings"
 
 	"github.com/algorand/go-algorand/config/bounds"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate go tool -modfile=../../../tool.mod stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,EcGroup,MimcConfig,Poseidon2Config,Base64Encoding,JSONRefType,VoterParamsField,VrfStandard,BlockField -output=fields_string.go
+//go:generate go tool -modfile=../../../tool.mod stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,EcGroup,MimcConfig,Poseidon2Config,FalconConfig,Base64Encoding,JSONRefType,VoterParamsField,VrfStandard,BlockField -output=fields_string.go
 
 // FieldSpec unifies the various specs for assembly, disassembly, and doc generation.
 type FieldSpec interface {
@@ -991,6 +992,76 @@ var Poseidon2Configs = FieldGroup{
 	poseidon2ConfigSpecByName,
 }
 
+// FalconConfig is an enum for the `falcon_verify` opcode
+type FalconConfig int
+
+const (
+	// FalconDet1024 is the deterministic Falcon-1024 profile. It is the only
+	// scheme `falcon_verify` could use before it gained this immediate, so it
+	// must remain field 0 to keep the two forms describing the same default.
+	FalconDet1024 FalconConfig = iota
+	// FalconDet512 is the deterministic Falcon-512 profile
+	FalconDet512
+	invalidFalconConfig // compile-time constant for number of fields
+)
+
+var falconConfigNames [invalidFalconConfig]string
+
+type falconConfigSpec struct {
+	field FalconConfig
+	// pubKeyLen lets the assembler check the public key argument's length, the
+	// way the pre-immediate form of falcon_verify did with a b{1793} proto.
+	pubKeyLen int
+	doc       string
+}
+
+func (fs falconConfigSpec) Field() byte {
+	return byte(fs.field)
+}
+func (fs falconConfigSpec) Type() StackType {
+	return StackNone // Will not show, since all are untyped
+}
+func (fs falconConfigSpec) OpVersion() uint64 {
+	return f512Version
+}
+func (fs falconConfigSpec) Version() uint64 {
+	return f512Version
+}
+func (fs falconConfigSpec) Note() string {
+	return fs.doc
+}
+func (fs falconConfigSpec) Modes() RunMode {
+	return modeAny
+}
+
+var falconConfigSpecs = [...]falconConfigSpec{
+	{FalconDet1024, crypto.Falcon1024PublicKeySize, "Deterministic Falcon-1024 (FALCON-DET1024)"},
+	{FalconDet512, crypto.Falcon512PublicKeySize, "Deterministic Falcon-512 (FALCON-DET512)"},
+}
+
+func falconConfigSpecByField(c FalconConfig) (falconConfigSpec, bool) {
+	if int(c) >= len(falconConfigSpecs) {
+		return falconConfigSpec{}, false
+	}
+	return falconConfigSpecs[c], true
+}
+
+var falconConfigSpecByName = make(falconConfigNameSpecMap, len(falconConfigNames))
+
+type falconConfigNameSpecMap map[string]falconConfigSpec
+
+func (s falconConfigNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+// FalconConfigs collects details about the constants used to describe FalconConfigs
+var FalconConfigs = FieldGroup{
+	"Falcon Configurations", "Parameters",
+	falconConfigNames[:],
+	falconConfigSpecByName,
+}
+
 // Base64Encoding is an enum for the `base64decode` opcode
 type Base64Encoding int
 
@@ -1880,6 +1951,13 @@ func init() {
 		equal(int(s.field), i)
 		poseidon2ConfigNames[s.field] = s.field.String()
 		poseidon2ConfigSpecByName[s.field.String()] = s
+	}
+
+	equal(len(falconConfigSpecs), len(falconConfigNames))
+	for i, s := range falconConfigSpecs {
+		equal(int(s.field), i)
+		falconConfigNames[s.field] = s.field.String()
+		falconConfigSpecByName[s.field.String()] = s
 	}
 
 	equal(len(base64EncodingSpecs), len(base64EncodingNames))

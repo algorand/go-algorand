@@ -38,11 +38,11 @@ type PQVerifier interface {
 // MaxPQPublicKeySize and MaxPQSignatureSize are the largest public-key and
 // signature sizes over all supported PQ schemes; they are the PQ wire/decode
 // bounds (used for msgp allocbounds). Adding a scheme with a larger key or
-// signature means growing these; TestPQBoundsCoverFalcon1024 guards against
+// signature means growing these; TestPQBoundsCoverFalcon guards against
 // undersizing the current schemes.
 const (
-	MaxPQPublicKeySize = FalconPublicKeySize
-	MaxPQSignatureSize = FalconMaxSignatureSize
+	MaxPQPublicKeySize = max(Falcon1024PublicKeySize, Falcon512PublicKeySize)
+	MaxPQSignatureSize = max(Falcon1024MaxSignatureSize, Falcon512MaxSignatureSize)
 )
 
 // LookupPQScheme returns the verifier for a PQ scheme tag.
@@ -57,8 +57,8 @@ func LookupPQScheme(s protocol.PQScheme) (PQVerifier, bool) {
 	switch s {
 	case protocol.PQSchemeFalcon1024:
 		return falcon1024{}, true
-		// case protocol.PQSchemeFalcon512:
-		// 	return falcon512{}, true
+	case protocol.PQSchemeFalcon512:
+		return falcon512{}, true
 	}
 	return nil, false
 }
@@ -68,4 +68,11 @@ type falcon1024 struct{}
 
 func (falcon1024) Verify(message Hashable, publicKey, signature []byte) error {
 	return VerifyFalcon1024(message, publicKey, signature)
+}
+
+// falcon512 is the Falcon-512 (f5) scheme.
+type falcon512 struct{}
+
+func (falcon512) Verify(message Hashable, publicKey, signature []byte) error {
+	return VerifyFalcon512(message, publicKey, signature)
 }

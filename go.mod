@@ -201,3 +201,5 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect
 )
+
+replace github.com/algorand/falcon => github.com/nullun/falcon v0.0.0-20260702112837-bd898d21fbdc
