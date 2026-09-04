@@ -802,14 +802,32 @@ const (
 	BLS12_381g1
 	// BLS12_381g2 specifies the G2 group of BLS 12-381
 	BLS12_381g2
+	// ED25519 specifies the Edwards25519 (ed25519) curve
+	ED25519
+	// ED25519_Monero specifies the Edwards25519 curve mapped as Monero does.
+	// It names a choice of map, not a group, so ec_map_to is the only opcode
+	// that accepts it.
+	//
+	// The underscore is not Go style, but these constants are spelled the way
+	// a program spells them, as BLS12_381g1 is.
+	ED25519_Monero //nolint:revive // var-naming: underscore is deliberate
 	invalidEcGroup // compile-time constant for number of fields
 )
 
+// ecGroupNames includes every EcGroup. The others are sparse subsets, holding a
+// blank at every group their opcodes do not accept, which is what makes the
+// assembler reject the name. ecArithGroupNames omits ED25519_Monero, which
+// selects a map rather than a group to do arithmetic in. ecPairingGroupNames
+// omits that and ED25519, neither being valid for ec_pairing_check, the one
+// opcode that needs a pairing.
 var ecGroupNames [invalidEcGroup]string
+var ecArithGroupNames [invalidEcGroup]string
+var ecPairingGroupNames [invalidEcGroup]string
 
 type ecGroupSpec struct {
-	field EcGroup
-	doc   string
+	field   EcGroup
+	version uint64
+	doc     string
 }
 
 func (fs ecGroupSpec) Field() byte {
@@ -822,7 +840,7 @@ func (fs ecGroupSpec) OpVersion() uint64 {
 	return pairingVersion
 }
 func (fs ecGroupSpec) Version() uint64 {
-	return pairingVersion
+	return fs.version
 }
 func (fs ecGroupSpec) Note() string {
 	return fs.doc
@@ -832,10 +850,12 @@ func (fs ecGroupSpec) Modes() RunMode {
 }
 
 var ecGroupSpecs = [...]ecGroupSpec{
-	{BN254g1, "G1 of the BN254 curve. Points encoded as 32 byte X following by 32 byte Y"},
-	{BN254g2, "G2 of the BN254 curve. Points encoded as 64 byte X following by 64 byte Y"},
-	{BLS12_381g1, "G1 of the BLS 12-381 curve. Points encoded as 48 byte X following by 48 byte Y"},
-	{BLS12_381g2, "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y"},
+	{BN254g1, pairingVersion, "G1 of the BN254 curve. Points encoded as 32 byte X following by 32 byte Y"},
+	{BN254g2, pairingVersion, "G2 of the BN254 curve. Points encoded as 64 byte X following by 64 byte Y"},
+	{BLS12_381g1, pairingVersion, "G1 of the BLS 12-381 curve. Points encoded as 48 byte X following by 48 byte Y"},
+	{BLS12_381g2, pairingVersion, "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y"},
+	{ED25519, edwardsVersion, "The Edwards25519 (ed25519) curve. Points encoded as 32 byte X followed by 32 byte Y. Not valid for ec_pairing_check, which has no pairing to check."},
+	{ED25519_Monero, edwardsVersion, "The Edwards25519 curve, mapped by the function CryptoNote defined (ge_fromfe_frombytes_vartime) and Monero's hash_to_ec uses, rather than by Elligator 2. Only valid for ec_map_to, being a choice of map rather than a group."},
 }
 
 func ecGroupSpecByField(c EcGroup) (ecGroupSpec, bool) {
@@ -854,10 +874,32 @@ func (s ecGroupNameSpecMap) get(name string) (FieldSpec, bool) {
 	return fs, ok
 }
 
-// EcGroups collects details about the constants used to describe EcGroups
+// EcGroups collects details about the constants used to describe EcGroups. It
+// includes every group, and is used by ec_map_to, which accepts them all. It is
+// also the documented set: the three groups here share a Name and Doc, so they
+// reference one documentation heading and anchor, and the doc generator picks
+// which of them fills in that section (see docGroupOverrides in cmd/opdoc).
 var EcGroups = FieldGroup{
 	"EC", "Groups",
 	ecGroupNames[:],
+	ecGroupSpecByName,
+}
+
+// ecArithGroups is the subset that can be added and multiplied: every group,
+// but not ED25519_Monero, which names a map. Used by ec_add, ec_scalar_mul,
+// ec_multi_scalar_mul, and ec_subgroup_check.
+var ecArithGroups = FieldGroup{
+	"EC", "Groups",
+	ecArithGroupNames[:],
+	ecGroupSpecByName,
+}
+
+// ecPairingGroups is the subset valid for ec_pairing_check, which is the two
+// pairing-friendly curves. Neither edwards25519 entry belongs, there being no
+// pairing on that curve to check.
+var ecPairingGroups = FieldGroup{
+	"EC", "Groups",
+	ecPairingGroupNames[:],
 	ecGroupSpecByName,
 }
 
@@ -1865,6 +1907,12 @@ func init() {
 	for i, s := range ecGroupSpecs {
 		equal(int(s.field), i)
 		ecGroupNames[s.field] = s.field.String()
+		if s.field != ED25519_Monero { // a map, not a group to do arithmetic in
+			ecArithGroupNames[s.field] = s.field.String()
+			if s.field != ED25519 { // no pairing on edwards25519 to check
+				ecPairingGroupNames[s.field] = s.field.String()
+			}
+		}
 		ecGroupSpecByName[s.field.String()] = s
 	}
 

@@ -82,7 +82,8 @@ var opDescByName = map[string]OpDesc{
 		[]string{"curve index"}, "",
 	},
 	"ec_scalar_mul": {"for curve point A and scalar B, return the curve point BA, the point A multiplied by the scalar B.",
-		"A is a curve point encoded and checked as described in `ec_add`. Scalar B is interpreted as a big-endian unsigned integer. Fails if B exceeds 32 bytes.",
+		"A is a curve point encoded and checked as described in `ec_add`. Scalar B is interpreted as a big-endian unsigned integer. Fails if B exceeds 32 bytes.\n" +
+			"B is reduced modulo the order of the main prime-order subgroup of G before use, so scalars larger than that order wrap around. When A is in that subgroup the result is the ordinary multiple of A by B. Subgroup membership is not checked, as in `ec_add`.",
 		[]string{"curve index"}, "",
 	},
 	"ec_pairing_check": {"1 if the product of the pairing of each point in A with its respective point in B is equal to the identity element of the target group Gt, else 0",
@@ -90,12 +91,15 @@ var opDescByName = map[string]OpDesc{
 		[]string{"curve index"}, "",
 	},
 	"ec_multi_scalar_mul": {"for curve points A and scalars B, return curve point B0A0 + B1A1 + B2A2 + ... + BnAn",
-		fmt.Sprintf("A is a list of concatenated points, encoded and checked as described in `ec_add`. B is a list of concatenated scalars which, unlike ec_scalar_mul, must all be exactly 32 bytes long.\nThe operation computes the sum of the individual scalar multiplications, and is often called multi-exponentiation. AVM values are limited to %d bytes, so `ec_multi_scalar_mul` is limited by the size of the points in the group being operated upon.", maxStringSize),
+		fmt.Sprintf("A is a list of concatenated points, encoded and checked as described in `ec_add`. B is a list of concatenated scalars which, unlike ec_scalar_mul, must all be exactly 32 bytes long. Each scalar is reduced, and each product formed, as described in `ec_scalar_mul`.\nThe operation computes the sum of the individual scalar multiplications, and is often called multi-exponentiation. AVM values are limited to %d bytes, so `ec_multi_scalar_mul` is limited by the size of the points in the group being operated upon.", maxStringSize),
 		[]string{"curve index"}, "",
 	},
 	"ec_subgroup_check": {"1 if A is in the main prime-order subgroup of G (including the point at infinity) else 0. Program fails if A is not in G at all.", "", []string{"curve index"}, ""},
 	"ec_map_to": {"maps field element A to group G", "" +
-		"BN254 points are mapped by the SVDW map. BLS12-381 points are mapped by the SSWU map.\n" +
+		"BN254 points are mapped by the SVDW map. BLS12-381 points are mapped by the SSWU map. ED25519 points are mapped by Elligator 2, as RFC 9380 specifies for edwards25519.\n" +
+		"This is a map, not a hash. It takes a field element, not a message, and its output is not uniform over the group. To hash a message to a group element, derive the field element as RFC 9380 does (expand_message with a domain separation tag), and for an output that behaves like a random oracle, derive two field elements, map each, and add the results.\n" +
+		"ED25519_Monero is the same curve under a different map: the one CryptoNote defined as ge_fromfe_frombytes_vartime, which Monero's hash_to_ec uses to find the point behind a key image. It is here so that Monero's ring signatures can be checked, and it is not interchangeable with ED25519, which computes the same point for only half of its inputs and the negation for the rest. Monero applies its map to a keccak-256 digest read little-endian, so a program reverses that digest and reduces it modulo the field order to form the field element this opcode takes.\n" +
+		"The result is always in the group: each map clears the cofactor.\n" +
 		"G1 element inputs are base field elements and G2 element inputs are quadratic field elements, with nearly the same encoding rules (for field elements) as defined in `ec_add`. There is one difference of encoding rule: G1 element inputs do not need to be 0-padded if they fit in less than 32 bytes for BN254 and less than 48 bytes for BLS12-381. (As usual, the empty byte array represents 0.) G2 elements inputs need to be always have the required size.",
 		[]string{"curve index"}, "",
 	},
