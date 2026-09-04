@@ -1627,7 +1627,7 @@ func TestP2PMetainfoExchange(t *testing.T) {
 
 	cfg2 := cfg
 	cfg2.EnableVoteCompression = false
-	cfg.NetAddress = ""
+	cfg2.NetAddress = ""
 	multiAddrStr := addrsA[0].String()
 	phoneBookAddresses := []string{multiAddrStr}
 	netB, err := NewP2PNetwork(log, cfg2, "", phoneBookAddresses, GenesisInfo{genesisID, config.Devtestnet}, &nopeNodeInfo{}, nil, nil)
@@ -1640,12 +1640,11 @@ func TestP2PMetainfoExchange(t *testing.T) {
 		return len(netA.service.Conns()) > 0 && len(netB.service.Conns()) > 0
 	}, 2*time.Second, 50*time.Millisecond)
 
-	var peers []Peer
 	require.Eventually(t, func() bool {
-		peers = netA.GetPeers(PeersConnectedIn)
-		return len(peers) > 0
+		return len(netA.GetPeers(PeersConnectedIn)) > 0 && len(netB.GetPeers(PeersConnectedOut)) > 0
 	}, 2*time.Second, 50*time.Millisecond)
 
+	peers := netA.GetPeers(PeersConnectedIn)
 	require.Len(t, peers, 1)
 	peer := peers[0].(*wsPeer)
 	require.True(t, peer.features&pfCompressedProposal != 0)
