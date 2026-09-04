@@ -737,6 +737,11 @@ type EvalContext struct {
 	version uint64
 	Scratch scratchSpace
 
+	// logicSigAllowances is a bitset of sensitive transaction operations authorized
+	// by executed allow opcodes. Bit n corresponds to the LogicSig allowance whose
+	// immediate field index is n.
+	logicSigAllowances uint64
+
 	// creatorAddr caches the creator of appID, looked up lazily by
 	// getCreatorAddress (a zero value means "not yet looked up"). Besides
 	// backing the `global CreatorAddress` op, it is used to decide family
@@ -1527,7 +1532,53 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 		return false, errors.New("stack finished with bytes not int")
 	}
 
-	return cx.Stack[0].Uint != 0, nil
+	if cx.Stack[0].Uint == 0 {
+		return false, nil
+	}
+	if cx.runMode == ModeSig && cx.version >= logicSigAllowVersion {
+		if err := cx.checkLogicSigAllowances(); err != nil {
+			return false, err
+		}
+	}
+
+	return true, nil
+}
+
+func (cx *EvalContext) checkLogicSigAllowances() error {
+	txn := &cx.txn.Txn
+	var required uint64
+
+	if !txn.RekeyTo.IsZero() {
+		required |= uint64(1) << uint(allowRekeyTo)
+	}
+
+	switch txn.Type {
+	case protocol.PaymentTx:
+		if !txn.CloseRemainderTo.IsZero() {
+			required |= uint64(1) << uint(allowCloseRemainderTo)
+		}
+	case protocol.AssetTransferTx:
+		if !txn.AssetCloseTo.IsZero() {
+			required |= uint64(1) << uint(allowAssetCloseTo)
+		}
+		if !txn.AssetSender.IsZero() {
+			required |= uint64(1) << uint(allowAssetSender)
+		}
+	case protocol.KeyRegistrationTx:
+		required |= uint64(1) << uint(allowKeyRegistration)
+	}
+
+	missing := required &^ cx.logicSigAllowances
+	for field := logicSigAllowance(0); field < invalidLogicSigAllowance; field++ {
+		if missing&(uint64(1)<<uint(field)) != 0 {
+			fs, _ := logicSigAllowanceSpecByField(field)
+			if fs.version > cx.version {
+				continue
+			}
+			return fmt.Errorf("transaction %s %s requires `allow %s`", fs.kind, fs.name, fs.name)
+		}
+	}
+	return nil
 }
 
 // CheckContract should be faster than EvalContract.  It can perform
@@ -1899,6 +1950,16 @@ func (cx *EvalContext) ensureStackCap(targetCap int) error {
 
 func opErr(cx *EvalContext) error {
 	return errors.New("err opcode executed")
+}
+
+func opAllow(cx *EvalContext) error {
+	field := logicSigAllowance(cx.program[cx.pc+1])
+	fs, ok := logicSigAllowanceSpecByField(field)
+	if !ok || fs.version > cx.version {
+		return fmt.Errorf("invalid allow field %s", field)
+	}
+	cx.logicSigAllowances |= uint64(1) << uint(field)
+	return nil
 }
 
 func opReturn(cx *EvalContext) error {
