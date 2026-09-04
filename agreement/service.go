@@ -266,10 +266,9 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 		if persistent(a) {
 			// This is a shallow copy: the Children map and every router below
 			// it remain shared with the tree mainLoop keeps mutating. It is
-			// sound only because encode runs synchronously inside demuxLoop's
-			// do(), by which point mainLoop is parked on the unbuffered
-			// output/ready/input handshake and cannot reach submitTop. Running
-			// encode anywhere else requires a deep copy.
+			// safe only because encode runs synchronously inside demuxLoop's
+			// do(), while mainLoop is blocked on input and cannot reach submitTop.
+			// Running encode anywhere else requires a deep copy.
 			s.persistRouter = router
 			s.persistStatus = status
 			s.persistActions = a
