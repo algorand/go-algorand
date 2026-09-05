@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-deadlock"
 
@@ -91,9 +92,18 @@ func (w *whiteholeNetwork) RegisterHandlers(dispatch []network.TaggedMessageHand
 	w.mux.RegisterHandlers(dispatch)
 }
 
+func (w *whiteholeNetwork) RegisterValidatorHandlers(dispatch []network.TaggedMessageValidatorHandler) {
+	w.mux.RegisterValidatorHandlers(dispatch)
+}
+
 // ClearHandlers deregisters all the existing message handlers.
 func (w *whiteholeNetwork) ClearHandlers() {
 	w.mux.ClearHandlers([]network.Tag{})
+}
+
+// ClearValidatorHandlers deregisters all the existing message handlers.
+func (w *whiteholeNetwork) ClearValidatorHandlers() {
+	w.mux.ClearValidatorHandlers([]network.Tag{})
 }
 
 func (w *whiteholeNetwork) Address() (string, bool) {
@@ -326,12 +336,12 @@ func makewhiteholeNetwork(domain *whiteholeDomain) *whiteholeNetwork {
 	return w
 }
 
-func spinNetworkImpl(domain *whiteholeDomain) (whiteholeNet *whiteholeNetwork, counter *messageCounter) {
+func spinNetworkImpl(t *testing.T, domain *whiteholeDomain) (whiteholeNet *whiteholeNetwork, counter *messageCounter) {
 	whiteholeNet = makewhiteholeNetwork(domain)
 	netImpl := WrapNetwork(whiteholeNet, logging.Base(), config.GetDefaultLocal()).(*networkImpl)
 	counter = startMessageCounter(netImpl)
 	whiteholeNet.Start()
-	netImpl.Start()
+	netImpl.Start(t.Context())
 	return
 }
 
@@ -347,9 +357,9 @@ func TestNetworkImpl(t *testing.T) {
 	}
 	domain.messagesCond = sync.NewCond(&domain.messagesMu)
 
-	net1, counter1 := spinNetworkImpl(domain)
-	net2, counter2 := spinNetworkImpl(domain)
-	net3, counter3 := spinNetworkImpl(domain)
+	net1, counter1 := spinNetworkImpl(t, domain)
+	net2, counter2 := spinNetworkImpl(t, domain)
+	net3, counter3 := spinNetworkImpl(t, domain)
 	defer counter1.stop()
 	defer counter2.stop()
 	defer counter3.stop()
@@ -399,4 +409,151 @@ func TestNetworkImpl(t *testing.T) {
 	counter3.verify(t, 0, 0, 1)
 	domain.reconnectNetwork(net1, net2, net3)
 
+}
+
+// bridgeCall records the arguments of a single BridgeP2PToWS invocation.
+type bridgeCall struct {
+	tag    protocol.Tag
+	data   []byte
+	except network.Peer
+}
+
+// hybridGossipMock is a minimal GossipNode that also implements HybridRelayer,
+// recording BridgeP2PToWS calls made by the wrapping networkImpl.
+type hybridGossipMock struct {
+	network.GossipNode
+
+	mu    deadlock.Mutex
+	calls []bridgeCall
+}
+
+func (h *hybridGossipMock) BridgeP2PToWS(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.calls = append(h.calls, bridgeCall{tag: tag, data: data, except: except})
+	return nil
+}
+
+func (h *hybridGossipMock) snapshot() []bridgeCall {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	out := make([]bridgeCall, len(h.calls))
+	copy(out, h.calls)
+	return out
+}
+
+func (h *hybridGossipMock) RegisterHandlers([]network.TaggedMessageHandler)                   {}
+func (h *hybridGossipMock) RegisterValidatorHandlers([]network.TaggedMessageValidatorHandler) {}
+func (h *hybridGossipMock) Broadcast(context.Context, protocol.Tag, []byte, bool, network.Peer) error {
+	return nil
+}
+func (h *hybridGossipMock) Relay(context.Context, protocol.Tag, []byte, bool, network.Peer) error {
+	return nil
+}
+func (h *hybridGossipMock) Disconnect(network.DisconnectablePeer) {}
+
+var _ HybridRelayer = (*hybridGossipMock)(nil)
+
+// TestNetworkImplBridgeP2PToWS verifies that processValidateMessage forwards the
+// incoming agreement message to the WS network via BridgeP2PToWS only when the
+// agreement-side action is Accept, and not when it is Disconnect or Ignore.
+func TestNetworkImplBridgeP2PToWS(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cases := []struct {
+		name         string
+		action       network.ForwardingPolicy
+		expectBridge bool
+	}{
+		{name: "Accept", action: network.Accept, expectBridge: true},
+		{name: "Disconnect", action: network.Disconnect, expectBridge: false},
+		{name: "Ignore", action: network.Ignore, expectBridge: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mock := &hybridGossipMock{}
+			netImpl := WrapNetwork(mock, logging.TestingLog(t), config.GetDefaultLocal()).(*networkImpl)
+
+			ctx := t.Context()
+			netImpl.Start(ctx)
+
+			raw := network.IncomingMessage{
+				Tag:  protocol.AgreementVoteTag,
+				Data: []byte{1, 2, 3},
+			}
+
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				wg.Done()
+				select {
+				case msg := <-netImpl.Messages(protocol.AgreementVoteTag):
+					meta := messageMetadataFromHandle(msg.MessageHandle)
+					require.NotNil(t, meta)
+					meta.syncCh <- tc.action
+				case <-ctx.Done():
+				}
+			}()
+
+			out := netImpl.processValidateVoteMessage(raw)
+			wg.Wait()
+
+			assert.Equal(t, tc.action, out.Action)
+			calls := mock.snapshot()
+			if tc.expectBridge {
+				require.Len(t, calls, 1)
+				assert.Equal(t, raw.Tag, calls[0].tag)
+				assert.Equal(t, raw.Data, calls[0].data)
+				assert.Equal(t, network.Peer(raw.Sender), calls[0].except)
+			} else {
+				assert.Empty(t, calls)
+			}
+		})
+	}
+}
+
+// TestNetworkImplBridgeP2PToWSNonHybrid verifies that wrapping a non-HybridRelayer
+// GossipNode does not panic and obviously does not invoke any bridge call when
+// the validation action is Accept.
+func TestNetworkImplBridgeP2PToWSNonHybrid(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	domain := &whiteholeDomain{
+		messages: make([]sentMessage, 0),
+		peerIdx:  uint32(0),
+		log:      logging.TestingLog(t),
+	}
+	domain.messagesCond = sync.NewCond(&domain.messagesMu)
+	wnet := makewhiteholeNetwork(domain)
+	// confirm whiteholeNetwork does NOT implement HybridRelayer.
+	_, ok := interface{}(wnet).(HybridRelayer)
+	require.False(t, ok)
+
+	netImpl := WrapNetwork(wnet, logging.TestingLog(t), config.GetDefaultLocal()).(*networkImpl)
+	ctx := t.Context()
+	netImpl.Start(ctx)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		select {
+		case msg := <-netImpl.Messages(protocol.AgreementVoteTag):
+			meta := messageMetadataFromHandle(msg.MessageHandle)
+			require.NotNil(t, meta)
+			meta.syncCh <- network.Accept
+		case <-ctx.Done():
+		}
+	}()
+
+	out := netImpl.processValidateVoteMessage(network.IncomingMessage{
+		Tag:  protocol.AgreementVoteTag,
+		Data: []byte{1, 2, 3},
+	})
+	wg.Wait()
+
+	assert.Equal(t, network.Accept, out.Action)
 }

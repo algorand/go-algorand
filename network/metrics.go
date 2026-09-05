@@ -17,6 +17,8 @@
 package network
 
 import (
+	"sync/atomic"
+
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	p2proto "github.com/libp2p/go-libp2p/core/protocol"
@@ -107,15 +109,28 @@ var peers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peers", De
 var incomingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_incoming_peers", Description: "Number of active incoming peers."})
 var outgoingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_outgoing_peers", Description: "Number of active outgoing peers."})
 
-var transactionMessagesP2PRejectMessage = metrics.NewTagCounter(metrics.TransactionMessagesP2PRejectMessage.Name, metrics.TransactionMessagesP2PRejectMessage.Description)
-var transactionMessagesP2PDuplicateMessage = metrics.MakeCounter(metrics.TransactionMessagesP2PDuplicateMessage)
-var transactionMessagesP2PDeliverMessage = metrics.MakeCounter(metrics.TransactionMessagesP2PDeliverMessage)
-var transactionMessagesP2PUnderdeliverableMessage = metrics.MakeCounter(metrics.TransactionMessagesP2PUndeliverableMessage)
+var networkP2PGossipSubRejectMessage = metrics.NewTagCounter(metrics.NetworkP2PGossipSubRejectMessage.Name, metrics.NetworkP2PGossipSubRejectMessage.Description)
+
+// Per-(reason, topic) breakdown of pubsub rejections. Used to tell whether the
+// aggregate gs_reject_{full,throttled} pressure is dominated by a single topic
+// (e.g. TX bursts crowding out PP/AV) or distributed across topics. Tag layout:
+// "<reason>_<topic>" — e.g. "full_algotx01", "throttled_algopp01". "unk" topic
+// is used if pubsub delivers a Reject for a message without a topic.
+var networkP2PGossipSubRejectMessageByTopic = metrics.NewTagCounter(
+	"algod_network_p2p_gs_reject_by_topic_{TAG}",
+	"Number of pubsub messages rejected, by reason and topic; tag layout: <reason>_<topic>",
+	"full_algotx01", "full_algoav01", "full_algopp01", "full_algovb01", "full_unk",
+	"throttled_algotx01", "throttled_algoav01", "throttled_algopp01", "throttled_algovb01", "throttled_unk",
+	"failed_algotx01", "failed_algoav01", "failed_algopp01", "failed_algovb01", "failed_unk",
+	"ignored_algotx01", "ignored_algoav01", "ignored_algopp01", "ignored_algovb01", "ignored_unk",
+	"other_algotx01", "other_algoav01", "other_algopp01", "other_algovb01", "other_unk",
+)
+var networkP2PGossipSubDuplicateMessage = metrics.MakeCounter(metrics.NetworkP2PGossipSubDuplicateMessage)
+var networkP2PGossipSubDeliverMessage = metrics.MakeCounter(metrics.NetworkP2PGossipSubDeliverMessage)
+var networkP2PGossipSubUndeliverableMessage = metrics.MakeCounter(metrics.NetworkP2PGossipSubUndeliverableMessage)
 
 var networkP2PGossipSubSentBytesTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_p2p_gs_sent_bytes_total", Description: "Total number of bytes sent through gossipsub"})
 var networkP2PGossipSubReceivedBytesTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_p2p_gs_received_bytes_total", Description: "Total number of bytes received through gossipsub"})
-
-// var networkP2PGossipSubSentMsgs = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_p2p_gs_message_sent", Description: "Number of complete messages that were sent to the network through gossipsub"})
 
 var networkVoteBroadcastCompressedBytes = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vote_compressed_bytes_broadcast_total", Description: "Total AV message bytes broadcast after applying stateless compression"})
 var networkVoteBroadcastUncompressedBytes = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vote_uncompressed_bytes_broadcast_total", Description: "Total AV message bytes broadcast before applying stateless compression"})
@@ -125,6 +140,33 @@ var networkVPAbortMessagesSent = metrics.MakeCounter(metrics.MetricName{Name: "a
 var networkVPAbortMessagesReceived = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vpack_abort_messages_received_total", Description: "Total number of vpack abort messages received from peers"})
 var networkVPCompressedBytesSent = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vpack_compressed_bytes_sent_total", Description: "Total VP message bytes sent, after compressing AV to VP messages"})
 var networkVPUncompressedBytesSent = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vpack_uncompressed_bytes_sent_total", Description: "Total VP message bytes sent, before compressing AV to VP messages"})
+
+// pubsub validate-queue saturation metrics. Inflight is a proxy for queue
+// occupancy: we cannot inspect pubsub's internal validate queue directly, but
+// counting topicValidator entries minus returns is a close approximation.
+// Compare against the constant p2p.PubsubValidateQueueSize and pair with the
+// rejected-message counters (networkP2PGossipSubRejectMessage{full,throttled})
+// to confirm saturation.
+var networkP2PPubsubValidateInflight = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_p2p_pubsub_validate_inflight", Description: "Current number of in-flight topicValidator calls across all topics"})
+var networkP2PPubsubValidateEntryByTopic = metrics.NewTagCounter("algod_network_p2p_pubsub_validate_entry_{TAG}", "Number of topicValidator entries by topic",
+	p2p.TXTopicName, p2p.AVTopicName, p2p.PPTopicName, p2p.VBTopicName)
+var networkP2PPubsubValidateExitByTopic = metrics.NewTagCounter("algod_network_p2p_pubsub_validate_exit_{TAG}", "Number of topicValidator returns by topic",
+	p2p.TXTopicName, p2p.AVTopicName, p2p.PPTopicName, p2p.VBTopicName)
+
+var pubsubValidateInflight atomic.Int64
+
+// pubsub topicValidator self-validate short-circuit (msg.ReceivedFrom == self).
+// Subtract this from validate_entry to recover the peer-received count.
+var networkP2PPubsubSelfValidateByTopic = metrics.NewTagCounter("algod_network_p2p_pubsub_self_validate_{TAG}", "Number of topicValidator invocations short-circuited because ReceivedFrom == self, by topic",
+	p2p.TXTopicName, p2p.AVTopicName, p2p.PPTopicName, p2p.VBTopicName)
+
+// pubsub gossipsub mesh size per topic, sampled periodically. A value of 0 at the
+// moment a publisher publishes explains a missing SendRPC: rt.Publish had nobody
+// to send to.
+var networkP2PPubsubMeshPeersTX = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_p2p_pubsub_mesh_peers_TX", Description: "Pubsub peers subscribed to the TX topic (proxy for gossipsub mesh size)"})
+var networkP2PPubsubMeshPeersAV = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_p2p_pubsub_mesh_peers_AV", Description: "Pubsub peers subscribed to the AV topic (proxy for gossipsub mesh size)"})
+var networkP2PPubsubMeshPeersPP = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_p2p_pubsub_mesh_peers_PP", Description: "Pubsub peers subscribed to the PP topic (proxy for gossipsub mesh size)"})
+var networkP2PPubsubMeshPeersVB = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_p2p_pubsub_mesh_peers_VB", Description: "Pubsub peers subscribed to the VB topic (proxy for gossipsub mesh size)"})
 
 var _ = pubsub.RawTracer(pubsubMetricsTracer{})
 
@@ -155,7 +197,7 @@ func (t pubsubMetricsTracer) ValidateMessage(msg *pubsub.Message) {
 
 // DeliverMessage is invoked when a message is delivered
 func (t pubsubMetricsTracer) DeliverMessage(msg *pubsub.Message) {
-	transactionMessagesP2PDeliverMessage.Inc(nil)
+	networkP2PGossipSubDeliverMessage.Inc(nil)
 }
 
 // RejectMessage is invoked when a message is Rejected or Ignored.
@@ -163,23 +205,35 @@ func (t pubsubMetricsTracer) DeliverMessage(msg *pubsub.Message) {
 func (t pubsubMetricsTracer) RejectMessage(msg *pubsub.Message, reason string) {
 	// TagCounter cannot handle tags with spaces so pubsub.Reject* cannot be used directly.
 	// Since Go's strings are immutable, char replacement is a new allocation so that stick to string literals.
+	var reasonTag string
 	switch reason {
 	case pubsub.RejectValidationThrottled:
-		transactionMessagesP2PRejectMessage.Add("throttled", 1)
+		reasonTag = "throttled"
 	case pubsub.RejectValidationQueueFull:
-		transactionMessagesP2PRejectMessage.Add("full", 1)
+		reasonTag = "full"
 	case pubsub.RejectValidationFailed:
-		transactionMessagesP2PRejectMessage.Add("failed", 1)
+		reasonTag = "failed"
 	case pubsub.RejectValidationIgnored:
-		transactionMessagesP2PRejectMessage.Add("ignored", 1)
+		reasonTag = "ignored"
 	default:
-		transactionMessagesP2PRejectMessage.Add("other", 1)
+		reasonTag = "other"
 	}
+	networkP2PGossipSubRejectMessage.Add(reasonTag, 1)
+
+	// Per-topic breakdown so we can tell which topic the rejection pressure is on.
+	topic := "unk"
+	if msg != nil && msg.Topic != nil {
+		switch *msg.Topic {
+		case p2p.TXTopicName, p2p.AVTopicName, p2p.PPTopicName, p2p.VBTopicName:
+			topic = *msg.Topic
+		}
+	}
+	networkP2PGossipSubRejectMessageByTopic.Add(reasonTag+"_"+topic, 1)
 }
 
 // DuplicateMessage is invoked when a duplicate message is dropped.
 func (t pubsubMetricsTracer) DuplicateMessage(msg *pubsub.Message) {
-	transactionMessagesP2PDuplicateMessage.Inc(nil)
+	networkP2PGossipSubDuplicateMessage.Inc(nil)
 }
 
 // ThrottlePeer is invoked when a peer is throttled by the peer gater.
@@ -193,7 +247,23 @@ func (t pubsubMetricsTracer) RecvRPC(rpc *pubsub.RPC) {
 			case p2p.TXTopicName:
 				networkP2PReceivedBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
 				networkP2PReceivedBytesByTag.Add(string(protocol.TxnTag), uint64(len(rpc.Publish[i].Data)))
+				networkP2PMessageReceivedTotal.AddUint64(1, nil)
 				networkP2PMessageReceivedByTag.Add(string(protocol.TxnTag), 1)
+			case p2p.AVTopicName:
+				networkP2PReceivedBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
+				networkP2PReceivedBytesByTag.Add(string(protocol.AgreementVoteTag), uint64(len(rpc.Publish[i].Data)))
+				networkP2PMessageReceivedTotal.AddUint64(1, nil)
+				networkP2PMessageReceivedByTag.Add(string(protocol.AgreementVoteTag), 1)
+			case p2p.PPTopicName:
+				networkP2PReceivedBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
+				networkP2PReceivedBytesByTag.Add(string(protocol.ProposalPayloadTag), uint64(len(rpc.Publish[i].Data)))
+				networkP2PMessageReceivedTotal.AddUint64(1, nil)
+				networkP2PMessageReceivedByTag.Add(string(protocol.ProposalPayloadTag), 1)
+			case p2p.VBTopicName:
+				networkP2PReceivedBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
+				networkP2PReceivedBytesByTag.Add(string(protocol.VoteBundleTag), uint64(len(rpc.Publish[i].Data)))
+				networkP2PMessageReceivedTotal.AddUint64(1, nil)
+				networkP2PMessageReceivedByTag.Add(string(protocol.VoteBundleTag), 1)
 			}
 		}
 	}
@@ -210,7 +280,23 @@ func (t pubsubMetricsTracer) SendRPC(rpc *pubsub.RPC, p peer.ID) {
 			case p2p.TXTopicName:
 				networkP2PSentBytesByTag.Add(string(protocol.TxnTag), uint64(len(rpc.Publish[i].Data)))
 				networkP2PSentBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
+				networkP2PMessageSentTotal.AddUint64(1, nil)
 				networkP2PMessageSentByTag.Add(string(protocol.TxnTag), 1)
+			case p2p.AVTopicName:
+				networkP2PSentBytesByTag.Add(string(protocol.AgreementVoteTag), uint64(len(rpc.Publish[i].Data)))
+				networkP2PSentBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
+				networkP2PMessageSentTotal.AddUint64(1, nil)
+				networkP2PMessageSentByTag.Add(string(protocol.AgreementVoteTag), 1)
+			case p2p.PPTopicName:
+				networkP2PSentBytesByTag.Add(string(protocol.ProposalPayloadTag), uint64(len(rpc.Publish[i].Data)))
+				networkP2PSentBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
+				networkP2PMessageSentTotal.AddUint64(1, nil)
+				networkP2PMessageSentByTag.Add(string(protocol.ProposalPayloadTag), 1)
+			case p2p.VBTopicName:
+				networkP2PSentBytesByTag.Add(string(protocol.VoteBundleTag), uint64(len(rpc.Publish[i].Data)))
+				networkP2PSentBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
+				networkP2PMessageSentTotal.AddUint64(1, nil)
+				networkP2PMessageSentByTag.Add(string(protocol.VoteBundleTag), 1)
 			}
 		}
 	}
@@ -224,5 +310,5 @@ func (t pubsubMetricsTracer) DropRPC(rpc *pubsub.RPC, p peer.ID) {
 // UndeliverableMessage is invoked when the consumer of Subscribe is not reading messages fast enough and
 // the pressure release mechanism trigger, dropping messages.
 func (t pubsubMetricsTracer) UndeliverableMessage(msg *pubsub.Message) {
-	transactionMessagesP2PUnderdeliverableMessage.Inc(nil)
+	networkP2PGossipSubUndeliverableMessage.Inc(nil)
 }

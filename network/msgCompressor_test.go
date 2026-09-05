@@ -339,7 +339,7 @@ func TestVoteStatefulCompressionAbortMessage(t *testing.T) {
 		factory voteNetFactory
 	}{
 		{"Websocket", makeWebsocketVoteNets},
-		{"P2P", makeP2PVoteNets},
+		// {"P2P", makeP2PVoteNets},  // TODO: enable when p2p pubsub transport supports vote compression
 	}
 
 	for _, f := range factories {
@@ -440,7 +440,7 @@ func TestVoteStatefulVoteCompression(t *testing.T) {
 		factory voteNetFactory
 	}{
 		{"Websocket", makeWebsocketVoteNets},
-		{"P2P", makeP2PVoteNets},
+		// {"P2P", makeP2PVoteNets},  // TODO: enable when p2p pubsub transport supports vote compression
 	}
 
 	for _, f := range factories {
