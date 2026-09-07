@@ -44,6 +44,8 @@ repodir = os.path.join(scriptdir, "..", "..")
 
 # less than 16kB of log we show the whole thing, otherwise the last 16kB
 LOG_WHOLE_CUTOFF = 1024 * 16
+KMD_REQUEST_TIMEOUT = 120
+KMD_SESSION_LIFETIME_SECS = 300
 
 def openkmd(algodata):
     kmdnetpath = sorted(glob.glob(os.path.join(algodata,'kmd-*','kmd.net')))[-1]
@@ -74,11 +76,13 @@ def read_script_for_timeout(fname):
     return None
 
 
-def create_kmd_config_with_unsafe_scrypt(working_dir):
+def create_kmd_config(working_dir, session_lifetime_secs, unsafe_scrypt):
 
     kmd_config_dir = os.path.join(working_dir,"kmd-v0.5")
     with open(os.path.join(kmd_config_dir,"kmd_config.json.example")) as f:
         kmd_conf_data = json.load(f)
+    if "session_lifetime_secs" not in kmd_conf_data:
+        raise Exception("kmd_conf example does not contain session_lifetime_secs attribute")
     if "drivers" not in kmd_conf_data:
         raise Exception("kmd_conf example does not contain drivers attribute")
     if "sqlite" not in kmd_conf_data["drivers"]:
@@ -92,8 +96,11 @@ def create_kmd_config_with_unsafe_scrypt(working_dir):
     if "scrypt_r" not in kmd_conf_data["drivers"]["sqlite"]["scrypt"]:
         raise Exception("kmd_conf example does not contain scrypt_r attribute")
 
-    kmd_conf_data["drivers"]["sqlite"]["allow_unsafe_scrypt"] = True
-    kmd_conf_data["drivers"]["sqlite"]["scrypt"]["scrypt_n"] = 4096
+    if session_lifetime_secs:
+        kmd_conf_data["session_lifetime_secs"] = session_lifetime_secs
+    if unsafe_scrypt:
+        kmd_conf_data["drivers"]["sqlite"]["allow_unsafe_scrypt"] = True
+        kmd_conf_data["drivers"]["sqlite"]["scrypt"]["scrypt_n"] = 4096
     with open(os.path.join(kmd_config_dir,"kmd_config.json"),"w") as f:
         json.dump(kmd_conf_data,f)
 
@@ -106,9 +113,9 @@ def _script_thread_inner(runset, scriptname, timeout):
 
     # create a wallet for the test
     walletname = base64.b16encode(os.urandom(16)).decode()
-    winfo = kmd.create_wallet(walletname, '', timeout=120) # 2 minute timeout
-    handle = kmd.init_wallet_handle(winfo['id'], '')
-    addr = kmd.generate_key(handle)
+    winfo = kmd.create_wallet(walletname, '', timeout=KMD_REQUEST_TIMEOUT)
+    handle = kmd.init_wallet_handle(winfo['id'], '', timeout=KMD_REQUEST_TIMEOUT)
+    addr = kmd.generate_key(handle, timeout=KMD_REQUEST_TIMEOUT)
 
     # send one million Algos to the test wallet's account
     params = algod.suggested_params()
@@ -116,7 +123,7 @@ def _script_thread_inner(runset, scriptname, timeout):
     max_init_wait_rounds = 5
     params.last = params.first + max_init_wait_rounds
     txn = algosdk.transaction.PaymentTxn(maxpubaddr, params, addr, 1_000_000_000_000)
-    stxn = kmd.sign_transaction(pubw, '', txn)
+    stxn = kmd.sign_transaction(pubw, '', txn, timeout=KMD_REQUEST_TIMEOUT)
     txid = algod.send_transaction(stxn)
     txinfo = None
     for _ in range(max_init_wait_rounds):
@@ -468,9 +475,8 @@ def main():
     env['ALGORAND_DATA'] = nodeDataDir
     env['ALGORAND_DATA2'] = primaryDataDir
 
-    if args.unsafe_scrypt:
-        create_kmd_config_with_unsafe_scrypt(env['ALGORAND_DATA'])
-        create_kmd_config_with_unsafe_scrypt(env['ALGORAND_DATA2'])
+    create_kmd_config(env['ALGORAND_DATA'], KMD_SESSION_LIFETIME_SECS, args.unsafe_scrypt)
+    create_kmd_config(env['ALGORAND_DATA2'], KMD_SESSION_LIFETIME_SECS, args.unsafe_scrypt)
 
     xrun(['goal', '-v'], env=env, timeout=5)
     xrun(['goal', 'node', 'status'], env=env, timeout=5)
