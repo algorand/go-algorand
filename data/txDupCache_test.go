@@ -203,8 +203,13 @@ func TestTxHandlerSaltedCacheScheduled(t *testing.T) {
 
 	const size = 20
 	updateInterval := 1000 * time.Microsecond
+	ctx, cancel := context.WithCancel(context.Background())
 	cache := makeSaltedCache(size)
-	cache.Start(context.Background(), updateInterval)
+	cache.Start(ctx, updateInterval)
+	defer func() {
+		cancel()
+		cache.WaitForStop()
+	}()
 	require.Zero(t, cache.Len())
 
 	// add some unique random
@@ -220,7 +225,10 @@ func TestTxHandlerSaltedCacheScheduled(t *testing.T) {
 		}
 	}
 
-	require.Less(t, cache.Len(), size)
+	// Two scheduled rotations evict everything inserted above. Do not require them to land
+	// inside the loop: on a busy machine the salter goroutine can be starved for longer than
+	// the whole loop and ticker ticks coalesce, leaving Len() == size at this point.
+	require.Eventually(t, func() bool { return cache.Len() < size }, 10*time.Second, updateInterval)
 }
 
 func TestTxHandlerSaltedCacheManual(t *testing.T) {
