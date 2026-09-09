@@ -82,6 +82,10 @@ const varintBranchVersion = 13 // branch offsets encoded as binary.Varint instea
 const poseidon2Version = 13
 const foreignBoxVersion = 13 // app_params_set, foreign app box access
 
+// logicSigAllowVersion is the first version in which LogicSigs must explicitly
+// authorize sensitive transaction operations with the allow opcode.
+const logicSigAllowVersion = 14
+
 // EXPERIMENTAL. These should be revisited whenever a new LogicSigVersion is
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version, and fixup TestAssemble() in assembler_test.go.
@@ -781,6 +785,7 @@ var OpSpecs = []OpSpec{
 	{0xc4, "gloadss", opGloadss, proto("ii:a"), 6, only(ModeApp)},
 	{0xc5, "itxnas", opItxnas, proto("i:a"), 6, field("f", &TxnArrayFields).only(ModeApp)},
 	{0xc6, "gitxnas", opGitxnas, proto("i:a"), 6, immediates("t", "f").field("f", &TxnArrayFields).only(ModeApp)},
+	{0xc7, "allow", opAllow, proto(":"), logicSigAllowVersion, field("f", &LogicSigAllowanceFields).only(ModeSig)},
 
 	// randomness support
 	{0xd0, "vrf_verify", opVrfVerify, proto("bb{80}b{32}:b{64}T"), randomnessVersion, field("s", &VrfStandards).costs(5700)},

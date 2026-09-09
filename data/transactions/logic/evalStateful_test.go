@@ -268,7 +268,8 @@ txna Accounts 0
 gtxna 0 ApplicationArgs 0
 ==
 `
-	opcodesRunModeSignature := `arg_0
+	opcodesRunModeSignature := `allow RekeyTo
+arg_0
 arg_1
 !=
 arg_2
@@ -403,13 +404,14 @@ log
 			"not allowed in current mode", "not allowed in current mode")
 	}
 
-	// check that arg is not allowed in stateful mode beyond v5
+	// check that signature-only opcodes are not allowed in stateful mode
 	disallowed := []string{
 		"arg 0",
 		"arg_0",
 		"arg_1",
 		"arg_2",
 		"arg_3",
+		"allow RekeyTo",
 	}
 	for _, source := range disallowed {
 		ops := testProg(t, source, AssemblerMaxVersion)
@@ -3479,6 +3481,7 @@ func TestReturnTypes(t *testing.T) {
 
 				tx0 := makeSampleTxn()
 				tx0.Txn.Type = protocol.ApplicationCallTx
+				tx0.Txn.RekeyTo = basics.Address{}
 				tx0.Txn.ApplicationID = 300
 				tx0.Txn.ForeignApps = []basics.AppIndex{300}
 				tx0.Txn.ForeignAssets = []basics.AssetIndex{400}

@@ -162,6 +162,12 @@ var opDescByName = map[string]OpDesc{
 	"arg_2": {"LogicSig argument 2", "", nil, ""},
 	"arg_3": {"LogicSig argument 3", "", nil, ""},
 	"args":  {"Ath LogicSig argument", "", nil, ""},
+	"allow": {
+		"authorize the current LogicSig to perform sensitive transaction operation F",
+		"Authorization takes effect only when `allow` executes and applies only to the current transaction. " +
+			"In v14+, the protected fields and any `KeyRegistration` transaction require corresponding authorization.",
+		[]string{"LogicSig allowance index"}, "",
+	},
 
 	"txn": {"field F of current transaction", "", []string{"transaction field index"}, ""},
 	"gtxn": {
@@ -382,6 +388,7 @@ var OpGroups = map[string][]string{
 	"Byte Array Logic":        {"b|", "b&", "b^", "b~"},
 	"Cryptography":            {"sha256", "keccak256", "sha512_256", "sha3_256", "sha512", "sumhash512", "falcon_verify", "ed25519verify", "ed25519verify_bare", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "vrf_verify", "ec_add", "ec_scalar_mul", "ec_pairing_check", "ec_multi_scalar_mul", "ec_subgroup_check", "ec_map_to", "mimc", "poseidon2"},
 	"Loading Values":          {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "pushints", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "pushbytess", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gloadss", "gaid", "gaids"},
+	"Authorization":           {"allow"},
 	"Flow Control":            {"err", "bnz", "bz", "b", "return", "pop", "popn", "dup", "dup2", "dupn", "dig", "bury", "cover", "uncover", "frame_dig", "frame_bury", "swap", "select", "assert", "callsub", "proto", "retsub", "switch", "match"},
 	"Block Access":            {"online_stake", "log", "block"},
 	"Account Access":          {"balance", "min_balance", "acct_params_get", "voter_params_get"},
