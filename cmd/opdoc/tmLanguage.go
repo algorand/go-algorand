@@ -130,14 +130,20 @@ func buildSyntaxHighlight(version uint64) *tmLanguage {
 	for _, spec := range opSpecs {
 		for _, imm := range spec.OpDetails.Immediates {
 			if imm.Group != nil && !accumulated[imm.Group.Name] {
-				for _, name := range imm.Group.Names {
-					spec, ok := imm.Group.SpecByName(name)
+				group := imm.Group
+				// as in opToMarkdown: one group per name is read, so it has to
+				// be the one that names every field a program may write
+				if full, ok := docGroupOverrides[group.Name]; ok {
+					group = full
+				}
+				for _, name := range group.Names {
+					spec, ok := group.SpecByName(name)
 					if !ok || spec.Version() > version {
 						continue
 					}
 					allNamedFields = append(allNamedFields, name)
 				}
-				accumulated[imm.Group.Name] = true
+				accumulated[group.Name] = true
 			}
 		}
 	}
