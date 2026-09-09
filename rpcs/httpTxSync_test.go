@@ -50,7 +50,7 @@ func TestTxSyncResponseDecode(t *testing.T) {
 
 	t.Run("normal", func(t *testing.T) {
 		t.Parallel()
-		txns := []transactions.SignedTxn{
+		txns := txSyncResponse{
 			{Txn: transactions.Transaction{
 				Type:             protocol.PaymentTx,
 				Header:           transactions.Header{Sender: basics.Address{1}, Fee: basics.MicroAlgos{Raw: 1000}},
@@ -62,22 +62,26 @@ func TestTxSyncResponseDecode(t *testing.T) {
 			}},
 		}
 		var decoded txSyncResponse
-		require.NoError(t, protocol.Decode(protocol.EncodeReflect(txns), &decoded))
-		require.Equal(t, txns, []transactions.SignedTxn(decoded))
+		require.NoError(t, protocol.Decode(protocol.Encode(txns), &decoded))
+		require.Equal(t, txns, decoded)
 	})
 
-	// a server with nothing to send encodes a nil slice, which is msgpack nil
+	// The serve side sends a non-nil empty slice, an empty array. msgpack nil is the other
+	// encoding of an absent array, and must decode to empty rather than error.
 	t.Run("empty response", func(t *testing.T) {
 		t.Parallel()
-		var none []transactions.SignedTxn
-		var decoded txSyncResponse
-		require.NoError(t, protocol.Decode(protocol.EncodeReflect(none), &decoded))
-		require.Empty(t, decoded)
+		require.Equal(t, []byte{0x90}, protocol.Encode(txSyncResponse{}))    // empty array
+		require.Equal(t, []byte{0xc0}, protocol.Encode(txSyncResponse(nil))) // nil
+
+		for _, none := range []txSyncResponse{{}, nil} {
+			var decoded txSyncResponse
+			require.NoError(t, protocol.Decode(protocol.Encode(none), &decoded))
+			require.Empty(t, decoded)
+		}
 	})
 
-	// Reflection decoded msgpack nil into a zero SignedTxn. The generated decoder
-	// rejects it, since txn is a required field, though only after allocating from
-	// the declared length, which is why the bound below is what limits the allocation.
+	// A nil element is rejected, txn being required, but only after the decoder allocates
+	// from the declared length. That is why the bound, not the error, caps the allocation.
 	t.Run("nil elements", func(t *testing.T) {
 		t.Parallel()
 		var decoded txSyncResponse
@@ -90,8 +94,8 @@ func TestTxSyncResponseDecode(t *testing.T) {
 		Type:   protocol.PaymentTx,
 		Header: transactions.Header{Sender: basics.Address{1}},
 	}}
-	repeated := func(n int) []transactions.SignedTxn {
-		txns := make([]transactions.SignedTxn, n)
+	repeated := func(n int) txSyncResponse {
+		txns := make(txSyncResponse, n)
 		for i := range txns {
 			txns[i] = minimal
 		}
@@ -101,15 +105,15 @@ func TestTxSyncResponseDecode(t *testing.T) {
 	t.Run("at the bound", func(t *testing.T) {
 		t.Parallel()
 		var decoded txSyncResponse
-		require.NoError(t, protocol.Decode(protocol.EncodeReflect(repeated(maxTxSyncResponseTxns)), &decoded))
+		require.NoError(t, protocol.Decode(protocol.Encode(repeated(maxTxSyncResponseTxns)), &decoded))
 		require.Len(t, decoded, maxTxSyncResponseTxns)
 	})
 
-	// This many transactions exceed the default byte cap when encoded, so the
-	// bound also covers a raised TxSyncServeResponseSize.
+	// Even at the smallest decodable SignedTxn, this many overrun the default
+	// TxSyncServeResponseSize, so the serve side cannot reach the bound.
 	t.Run("over the bound", func(t *testing.T) {
 		t.Parallel()
-		body := protocol.EncodeReflect(repeated(maxTxSyncResponseTxns + 1))
+		body := protocol.Encode(repeated(maxTxSyncResponseTxns + 1))
 		require.Greater(t, uint64(len(body)), uint64(config.GetDefaultLocal().TxSyncServeResponseSize))
 
 		var decoded txSyncResponse

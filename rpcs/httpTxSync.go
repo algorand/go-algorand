@@ -55,9 +55,7 @@ const baseResponseReadingBufferSize = uint64(1024)
 // several times what an honest response holds at the default TxSyncServeResponseSize.
 const maxTxSyncResponseTxns = 25000
 
-// txSyncResponse is a txsync response body, named so the decode goes through msgp and
-// the bound above. Decoding through reflection bypasses msgp allocbounds. The wire
-// format is unchanged.
+// txSyncResponse is a txsync response body, used for msgp encoding.
 //
 //msgp:allocbound txSyncResponse maxTxSyncResponseTxns
 type txSyncResponse []transactions.SignedTxn
