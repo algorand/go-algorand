@@ -7,6 +7,7 @@ import (
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
 )
 
 // The following msgp objects are implemented in this file:
@@ -19,6 +20,16 @@ import (
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
 //         |-----> EncodedBlockCertMaxSize()
+//
+// txSyncResponse
+//        |-----> MarshalMsg
+//        |-----> CanMarshalMsg
+//        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalMsgWithState
+//        |-----> (*) CanUnmarshalMsg
+//        |-----> Msgsize
+//        |-----> MsgIsZero
+//        |-----> TxSyncResponseMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -143,5 +154,93 @@ func (z *EncodedBlockCert) MsgIsZero() bool {
 // EncodedBlockCertMaxSize returns a maximum valid message size for this message type
 func EncodedBlockCertMaxSize() (s int) {
 	s = 1 + 6 + bookkeeping.BlockMaxSize() + 5 + agreement.CertificateMaxSize()
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z txSyncResponse) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	if z == nil {
+		o = msgp.AppendNil(o)
+	} else {
+		o = msgp.AppendArrayHeader(o, uint32(len(z)))
+	}
+	for za0004 := range z {
+		o = z[za0004].MarshalMsg(o)
+	}
+	return
+}
+
+func (_ txSyncResponse) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(txSyncResponse)
+	if !ok {
+		_, ok = (z).(*txSyncResponse)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *txSyncResponse) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	var zb0002 int
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 > maxTxSyncResponseTxns {
+		err = msgp.ErrOverflow(uint64(zb0002), uint64(maxTxSyncResponseTxns))
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0003 {
+		(*z) = nil
+	} else if (*z) != nil && cap((*z)) >= zb0002 {
+		(*z) = (*z)[:zb0002]
+	} else {
+		(*z) = make(txSyncResponse, zb0002)
+	}
+	for zb0001 := range *z {
+		bts, err = (*z)[zb0001].UnmarshalMsgWithState(bts, st)
+		if err != nil {
+			err = msgp.WrapError(err, zb0001)
+			return
+		}
+	}
+	o = bts
+	return
+}
+
+func (z *txSyncResponse) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *txSyncResponse) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*txSyncResponse)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z txSyncResponse) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize
+	for za0004 := range z {
+		s += z[za0004].Msgsize()
+	}
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z txSyncResponse) MsgIsZero() bool {
+	return len(z) == 0
+}
+
+// TxSyncResponseMaxSize returns a maximum valid message size for this message type
+func TxSyncResponseMaxSize() (s int) {
+	// Calculating size of slice: z
+	s += msgp.ArrayHeaderSize + ((maxTxSyncResponseTxns) * (transactions.SignedTxnMaxSize()))
 	return
 }

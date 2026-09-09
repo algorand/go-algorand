@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/components/mocks"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
@@ -77,10 +78,13 @@ func makeMockPendingTxAggregate(txCount int) mockPendingTxAggregate {
 	for i := 0; i < txCount; i++ {
 		var note [16]byte
 		testRandBytes(note[:])
+		// Sender must be set: it is a required field, so a transaction without one
+		// does not survive a round trip through the txsync response encoding.
 		tx := transactions.Transaction{
 			Type: protocol.PaymentTx,
 			Header: transactions.Header{
-				Note: note[:],
+				Sender: basics.Address(sk.SignatureVerifier),
+				Note:   note[:],
 			},
 		}
 		stx := tx.Sign(sk)

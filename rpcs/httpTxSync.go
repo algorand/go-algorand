@@ -48,6 +48,20 @@ type HTTPTxSync struct {
 const requestContentType = "application/x-www-form-urlencoded"
 const baseResponseReadingBufferSize = uint64(1024)
 
+// maxTxSyncResponseTxns bounds how many transactions a txsync response may decode
+// into. The byte cap on the response body does not bound this on its own: a msgpack
+// element can be far smaller than the SignedTxn it decodes into, and the decoder
+// allocates from the declared array length before reading any element. The bound is
+// several times what an honest response holds at the default TxSyncServeResponseSize.
+const maxTxSyncResponseTxns = 25000
+
+// txSyncResponse is a txsync response body, named so the decode goes through msgp and
+// the bound above. Decoding through reflection bypasses msgp allocbounds. The wire
+// format is unchanged.
+//
+//msgp:allocbound txSyncResponse maxTxSyncResponseTxns
+type txSyncResponse []transactions.SignedTxn
+
 // ResponseBytes reads the content of the response object and return the body content
 // while obeying the read size limits
 func ResponseBytes(response *http.Response, log logging.Logger, limit uint64) (data []byte, err error) {
@@ -163,8 +177,8 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 	}
 	hts.log.Debugf("http sync got %d bytes", len(data))
 
-	var txns []transactions.SignedTxn
-	err = protocol.DecodeReflect(data, &txns)
+	var txns txSyncResponse
+	err = protocol.Decode(data, &txns)
 	if err != nil {
 		hts.log.Warn("txSync protocol decode: ", err)
 	}
