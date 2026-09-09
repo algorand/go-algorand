@@ -194,6 +194,8 @@ const (
 	TxGroupMalformedErrorReasonIncompleteGroup = transactions.TxGroupMalformedErrorReasonIncompleteGroup
 	// TxGroupErrorReasonInvalidFee indicates a group with improper fees
 	TxGroupErrorReasonInvalidFee = transactions.TxGroupErrorReasonInvalidFee
+	// TxGroupMalformedErrorReasonDuplicateTxn indicates a group that contains the same transaction twice
+	TxGroupMalformedErrorReasonDuplicateTxn = transactions.TxGroupMalformedErrorReasonDuplicateTxn
 )
 
 // TxGroupMalformedError indicates txgroup violates a group-wide rule (size, group hash, etc)
