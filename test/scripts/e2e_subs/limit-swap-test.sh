@@ -106,8 +106,8 @@ echo "setup trader with Algos"
 ${gcmd} clerk send --amount 1000000 --from ${ACCOUNT} --to ${ACCOUNT_ASSET_TRADER}
 
 echo "make asset trader able to accept asset"
-ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
-${gcmd} asset optin -o ${TEMPDIR}/b-asset-init.tx --assetid ${ASSET_ID} -a $ACCOUNT_ASSET_TRADER --validrounds $((${SETUP_ROUND} - ${ROUND} - 1))
+# The program only approves the opt-in if txn.LastValid < TMPL_TIMEOUT.
+${gcmd} asset optin -o ${TEMPDIR}/b-asset-init.tx --assetid ${ASSET_ID} -a $ACCOUNT_ASSET_TRADER --lastvalid ${SETUP_ROUND}
 
 ${gcmd} clerk sign -i ${TEMPDIR}/b-asset-init.tx -p ${TEMPDIR}/limit-order-b.teal -o ${TEMPDIR}/b-asset-init.stx
 
