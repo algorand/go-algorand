@@ -1529,6 +1529,20 @@ func typeByteMath(resultSize uint64) refineFunc {
 	}
 }
 
+// typeFalconVerify pins the public key argument to the length required by the
+// named config, restoring the assembly-time check that falcon_verify had before
+// it became configurable.
+func typeFalconVerify(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, error) {
+	if len(args) != 1 {
+		return nil, nil, nil
+	}
+	fs, ok := falconConfigSpecByName[args[0].str]
+	if !ok {
+		return nil, nil, nil
+	}
+	return StackTypes{StackBytes, StackBytes, NewStackType(avmBytes, static(uint64(fs.pubKeyLen)))}, nil, nil
+}
+
 func typeTxField(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, error) {
 	if len(args) != 1 {
 		return nil, nil, nil

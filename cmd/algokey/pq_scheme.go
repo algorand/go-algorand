@@ -26,7 +26,10 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-const pqSchemeFalcon1024Name = "falcon-1024"
+const (
+	pqSchemeFalcon1024Name = "falcon-1024"
+	pqSchemeFalcon512Name  = "falcon-512"
+)
 
 // pqSchemeOps holds the signing-side, private-key operations for one PQ
 // scheme. The consensus-relevant scheme behavior (signature verification,
@@ -41,14 +44,19 @@ type pqSchemeOps interface {
 
 var pqSchemeOpsByScheme = map[protocol.PQScheme]pqSchemeOps{
 	protocol.PQSchemeFalcon1024: falcon1024Ops{},
+	protocol.PQSchemeFalcon512:  falcon512Ops{},
 }
 
 type falcon1024Ops struct{}
+type falcon512Ops struct{}
 
 func parsePQScheme(value string) (protocol.PQScheme, error) {
 	value = strings.TrimSpace(value)
 	if strings.EqualFold(value, pqSchemeFalcon1024Name) {
 		return protocol.PQSchemeFalcon1024, nil
+	}
+	if strings.EqualFold(value, pqSchemeFalcon512Name) {
+		return protocol.PQSchemeFalcon512, nil
 	}
 
 	var scheme protocol.PQScheme
@@ -62,6 +70,9 @@ func parsePQScheme(value string) (protocol.PQScheme, error) {
 func formatPQScheme(scheme protocol.PQScheme) string {
 	if scheme == protocol.PQSchemeFalcon1024 {
 		return pqSchemeFalcon1024Name
+	}
+	if scheme == protocol.PQSchemeFalcon512 {
+		return pqSchemeFalcon512Name
 	}
 	return scheme.String()
 }
@@ -96,7 +107,7 @@ func derivePQKeySeed(scheme protocol.PQScheme, entropy crypto.Seed) crypto.Diges
 }
 
 func (falcon1024Ops) deriveSigning(seed crypto.Digest) (pqSigningMaterial, error) {
-	signer, err := crypto.GenerateFalconSigner(crypto.FalconSeed(seed))
+	signer, err := crypto.GenerateFalcon1024Signer(crypto.FalconSeed(seed))
 	if err != nil {
 		return pqSigningMaterial{}, err
 	}
@@ -118,17 +129,55 @@ func (falcon1024Ops) deriveSigning(seed crypto.Digest) (pqSigningMaterial, error
 	}, nil
 }
 
-func (falcon1024Ops) publicKeySize() uint64 { return crypto.FalconPublicKeySize }
+func (falcon1024Ops) publicKeySize() uint64 { return crypto.Falcon1024PublicKeySize }
 
-func (falcon1024Ops) privateKeySize() uint64 { return crypto.FalconPrivateKeySize }
+func (falcon1024Ops) privateKeySize() uint64 { return crypto.Falcon1024PrivateKeySize }
 
 func (falcon1024Ops) sign(privateKey []byte, message crypto.Hashable) ([]byte, error) {
-	var sk crypto.FalconPrivateKey
+	var sk crypto.Falcon1024PrivateKey
 	if len(privateKey) != len(sk) {
 		return nil, fmt.Errorf("%w: got private key size %d, want %d", errPQKeyMalformed, len(privateKey), len(sk))
 	}
 	copy(sk[:], privateKey)
 
-	signer := crypto.FalconSigner{PrivateKey: sk}
+	signer := crypto.Falcon1024Signer{PrivateKey: sk}
+	return signer.Sign(message)
+}
+
+func (falcon512Ops) deriveSigning(seed crypto.Digest) (pqSigningMaterial, error) {
+	signer, err := crypto.GenerateFalcon512Signer(crypto.FalconSeed(seed))
+	if err != nil {
+		return pqSigningMaterial{}, err
+	}
+
+	publicKey := slices.Clone(signer.PublicKey[:])
+	privateKey := slices.Clone(signer.PrivateKey[:])
+	salt, _, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon512, publicKey)
+	if err != nil {
+		return pqSigningMaterial{}, err
+	}
+
+	return pqSigningMaterial{
+		Public: pqPublicMaterial{
+			Scheme:    protocol.PQSchemeFalcon512,
+			Salt:      salt,
+			PublicKey: publicKey,
+		},
+		PrivateKey: privateKey,
+	}, nil
+}
+
+func (falcon512Ops) publicKeySize() uint64 { return crypto.Falcon512PublicKeySize }
+
+func (falcon512Ops) privateKeySize() uint64 { return crypto.Falcon512PrivateKeySize }
+
+func (falcon512Ops) sign(privateKey []byte, message crypto.Hashable) ([]byte, error) {
+	var sk crypto.Falcon512PrivateKey
+	if len(privateKey) != len(sk) {
+		return nil, fmt.Errorf("%w: got private key size %d, want %d", errPQKeyMalformed, len(privateKey), len(sk))
+	}
+	copy(sk[:], privateKey)
+
+	signer := crypto.Falcon512Signer{PrivateKey: sk}
 	return signer.Sign(message)
 }

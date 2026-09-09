@@ -45,8 +45,6 @@ github.com/DataDog/zstd v1.5.7 h1:ybO8RBeh29qrxIhCA9E8gKY6xfONU9T6G6aP9DTKfLE=
 github.com/DataDog/zstd v1.5.7/go.mod h1:g4AWEaM3yOg3HYfnJ3YIawPnVdXJh9QME85blwSAmyw=
 github.com/algorand/avm-abi v0.2.0 h1:bkjsG+BOEcxUcnGSALLosmltE0JZdg+ZisXKx0UDX2k=
 github.com/algorand/avm-abi v0.2.0/go.mod h1:+CgwM46dithy850bpTeHh9MC99zpn2Snirb3QTl2O/g=
-github.com/algorand/falcon v0.1.0 h1:xl832kfZ7hHG6B4p90DQynjfKFGbIUgUOnsRiMZXfAo=
-github.com/algorand/falcon v0.1.0/go.mod h1:OkQyHlGvS0kLNcIWbC21/uQcnbfwSOQm+wiqWwBG9pQ=
 github.com/algorand/go-codec/codec v1.1.10 h1:zmWYU1cp64jQVTOG8Tw8wa+k0VfwgXIPbnDfiVa+5QA=
 github.com/algorand/go-codec/codec v1.1.10/go.mod h1:YkEx5nmr/zuCeaDYOIhlDg92Lxju8tj2d2NrYqP7g7k=
 github.com/algorand/go-deadlock v0.2.5 h1:Kn3WJMn9+wK1pqJrr2+1/y3Z8p1dcftpr2Mbbl1CShw=
@@ -424,6 +422,8 @@ github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
 github.com/neelance/astrewrite v0.0.0-20160511093645-99348263ae86/go.mod h1:kHJEU3ofeGjhHklVoIGuVj85JJwZ6kWPaJwCIxgnFmo=
 github.com/neelance/sourcemap v0.0.0-20200213170602-2833bce08e4c/go.mod h1:Qr6/a/Q4r9LP1IltGz7tA7iOK1WonHEYhu1HRBA7ZiM=
+github.com/nullun/falcon v0.0.0-20260702112837-bd898d21fbdc h1:Z3BMCMjoP3R2C1tu67tss4E6LeAN0Msp7aJ/juELc9E=
+github.com/nullun/falcon v0.0.0-20260702112837-bd898d21fbdc/go.mod h1:3hWwlfoSF09tMKQUMXcgNcYzA+2lhAOtQUYZYHGSV2g=
 github.com/oapi-codegen/runtime v1.1.1 h1:EXLHh0DXIJnWhdRPN2w4MXAzFyE4CskzhNLUmtpMYro=
 github.com/oapi-codegen/runtime v1.1.1/go.mod h1:SK9X900oXmPWilYR5/WKPzt3Kqxn/uS/+lbpREv+eCg=
 github.com/olivere/elastic v6.2.14+incompatible h1:k+KadwNP/dkXE0/eu+T6otk1+5fe0tEpPyQJ4XVm5i8=

@@ -201,7 +201,7 @@ func (z *KeyRoundPair) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState)
 				(*z).Key = nil
 			} else {
 				if (*z).Key == nil {
-					(*z).Key = new(crypto.FalconSigner)
+					(*z).Key = new(crypto.Falcon1024Signer)
 				}
 				bts, err = (*z).Key.UnmarshalMsgWithState(bts, st)
 				if err != nil {
@@ -248,7 +248,7 @@ func (z *KeyRoundPair) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState)
 					(*z).Key = nil
 				} else {
 					if (*z).Key == nil {
-						(*z).Key = new(crypto.FalconSigner)
+						(*z).Key = new(crypto.Falcon1024Signer)
 					}
 					bts, err = (*z).Key.UnmarshalMsgWithState(bts, st)
 					if err != nil {
@@ -296,7 +296,7 @@ func (z *KeyRoundPair) MsgIsZero() bool {
 // KeyRoundPairMaxSize returns a maximum valid message size for this message type
 func KeyRoundPairMaxSize() (s int) {
 	s = 1 + 4 + msgp.Uint64Size + 4
-	s += crypto.FalconSignerMaxSize()
+	s += crypto.Falcon1024SignerMaxSize()
 	return
 }
 
@@ -651,7 +651,7 @@ func (z *Signature) MsgIsZero() bool {
 
 // SignatureMaxSize returns a maximum valid message size for this message type
 func SignatureMaxSize() (s int) {
-	s = 1 + 4 + crypto.FalconSignatureMaxSize() + 4 + msgp.Uint64Size + 4 + merklearray.SingleLeafProofMaxSize() + 5 + crypto.FalconVerifierMaxSize()
+	s = 1 + 4 + crypto.Falcon1024SignatureMaxSize() + 4 + msgp.Uint64Size + 4 + merklearray.SingleLeafProofMaxSize() + 5 + crypto.Falcon1024VerifierMaxSize()
 	return
 }
 

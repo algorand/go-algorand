@@ -5201,8 +5201,8 @@
       ],
       "Size": 1,
       "DocCost": "1700",
-      "Doc": "for (data A, deterministic FALCON-1024 compressed-format signature B, pubkey C) verify the signature of data against the pubkey =\u003e {0 or 1}",
-      "DocExtra": "Signature B is variable-length, with maximum size 1423 bytes.",
+      "Doc": "for (data A, deterministic Falcon compressed-format signature B, pubkey C) verify the signature of data against the pubkey =\u003e {0 or 1}",
+      "DocExtra": "Since v14, the Falcon variant is named by immediate F. Before that, `falcon_verify` took no immediate and always used FALCON-DET1024.\n\nSignature B is variable-length, with maximum size 1423 bytes for FalconDet1024, or 713 bytes for FalconDet512. Pubkey C must be exactly 1793 bytes for FalconDet1024, or 897 bytes for FalconDet512.",
       "IntroducedVersion": 12,
       "Groups": [
         "Cryptography"
