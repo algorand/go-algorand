@@ -78,7 +78,21 @@ const (
 // Naming convention: "algo" + 2 bytes protocol tag + 2 bytes version
 const TXTopicName = "algotx01"
 
-const incomingThreads = 20 // matches to number wsNetwork workers
+// AVTopicName defines a pubsub topic for Agreement Vote messages
+const AVTopicName = "algoav01"
+
+// PPTopicName defines a pubsub topic for Proposal Payload messages
+const PPTopicName = "algopp01"
+
+// VBTopicName defines a pubsub topic for Vote Bundle messages
+const VBTopicName = "algovb01"
+
+// Number of goroutines used for both wsNetwork workers and pubsub topic handler loops (e.g., agreementTopicHandleLoop)
+const incomingThreads = 20
+
+// PubsubValidateQueueSize is the size of pubsub's per-subscription validate queue.
+// Exposed so it can be reported as a metric for saturation analysis.
+const PubsubValidateQueueSize = 1024
 
 // deriveAlgorandGossipSubParams derives the gossip sub parameters from the cfg.GossipFanout value
 // by using the same proportions as pubsub defaults - see GossipSubD, GossipSubDlo, etc.
@@ -140,6 +154,21 @@ func deriveAlgorandGossipSubParams(numOutgoingConns int) pubsub.GossipSubParams 
 }
 
 func makePubSub(ctx context.Context, host host.Host, numOutgoingConns int, pubsubOptions ...PubSubOption) (*pubsub.PubSub, error) {
+	topicScoringOpts := pubsub.TopicScoreParams{
+		TopicWeight: 0.1,
+
+		TimeInMeshWeight:  0.0002778, // ~1/3600
+		TimeInMeshQuantum: time.Second,
+		TimeInMeshCap:     1,
+
+		FirstMessageDeliveriesWeight: 0.5, // max value is 50
+		FirstMessageDeliveriesDecay:  pubsub.ScoreParameterDecay(10 * time.Minute),
+		FirstMessageDeliveriesCap:    100, // 100 messages in 10 minutes
+
+		// invalid messages decay after 1 hour
+		InvalidMessageDeliveriesWeight: -1000,
+		InvalidMessageDeliveriesDecay:  pubsub.ScoreParameterDecay(time.Hour),
+	}
 	options := []pubsub.Option{
 		pubsub.WithPeerScore(&pubsub.PeerScoreParams{
 			DecayInterval: pubsub.DefaultDecayInterval,
@@ -148,21 +177,10 @@ func makePubSub(ctx context.Context, host host.Host, numOutgoingConns int, pubsu
 			AppSpecificScore: func(p peer.ID) float64 { return 1000 },
 
 			Topics: map[string]*pubsub.TopicScoreParams{
-				TXTopicName: {
-					TopicWeight: 0.1,
-
-					TimeInMeshWeight:  0.0002778, // ~1/3600
-					TimeInMeshQuantum: time.Second,
-					TimeInMeshCap:     1,
-
-					FirstMessageDeliveriesWeight: 0.5, // max value is 50
-					FirstMessageDeliveriesDecay:  pubsub.ScoreParameterDecay(10 * time.Minute),
-					FirstMessageDeliveriesCap:    100, // 100 messages in 10 minutes
-
-					// invalid messages decay after 1 hour
-					InvalidMessageDeliveriesWeight: -1000,
-					InvalidMessageDeliveriesDecay:  pubsub.ScoreParameterDecay(time.Hour),
-				},
+				TXTopicName: &topicScoringOpts,
+				AVTopicName: &topicScoringOpts,
+				PPTopicName: &topicScoringOpts,
+				VBTopicName: &topicScoringOpts,
 			},
 		},
 			&pubsub.PeerScoreThresholds{
@@ -174,9 +192,9 @@ func makePubSub(ctx context.Context, host host.Host, numOutgoingConns int, pubsu
 			},
 		),
 		// pubsub.WithPeerGater(&pubsub.PeerGaterParams{}),
-		pubsub.WithSubscriptionFilter(pubsub.WrapLimitSubscriptionFilter(pubsub.NewAllowlistSubscriptionFilter(TXTopicName), 100)),
+		pubsub.WithSubscriptionFilter(pubsub.WrapLimitSubscriptionFilter(pubsub.NewAllowlistSubscriptionFilter(TXTopicName, AVTopicName, PPTopicName, VBTopicName), 100)),
 		// pubsub.WithEventTracer(jsonTracer),
-		pubsub.WithValidateQueueSize(256),
+		pubsub.WithValidateQueueSize(PubsubValidateQueueSize),
 		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
 		// pubsub.WithValidateThrottle(cfg.TxBacklogSize),
 		pubsub.WithValidateWorkers(incomingThreads),
@@ -213,6 +231,9 @@ func (s *serviceImpl) getOrCreateTopic(topicName string) (*pubsub.Topic, error) 
 		switch topicName {
 		case TXTopicName:
 			topt = append(topt, pubsub.WithTopicMessageIdFn(txMsgID))
+		case AVTopicName, PPTopicName, VBTopicName:
+			// use default message ID function (sender ID + sequence number)
+			// important for agreement messages to ensure if agreement needs to re-transmit a known message
 		}
 
 		psTopic, err := s.pubsub.Join(topicName, topt...)
@@ -226,7 +247,7 @@ func (s *serviceImpl) getOrCreateTopic(topicName string) (*pubsub.Topic, error) 
 
 // Subscribe returns a subscription to the given topic
 func (s *serviceImpl) Subscribe(topic string, val pubsub.ValidatorEx) (SubNextCancellable, error) {
-	if err := s.pubsub.RegisterTopicValidator(topic, val); err != nil {
+	if err := s.pubsub.RegisterTopicValidator(topic, val, pubsub.WithValidatorConcurrency(4096), pubsub.WithValidatorTimeout(5*time.Second)); err != nil {
 		return nil, err
 	}
 	t, err := s.getOrCreateTopic(topic)

@@ -47,6 +47,18 @@ var (
 	NetworkP2PMessageReceivedTotal = MetricName{Name: "algod_network_p2p_message_received_total", Description: "Total number of complete messages that were received from the p2p network"}
 	// NetworkP2PMessageSentTotal Total number of complete messages that were sent to the p2p network
 	NetworkP2PMessageSentTotal = MetricName{Name: "algod_network_p2p_message_sent_total", Description: "Total number of complete messages that were sent to the p2p network"}
+
+	// NetworkP2PGossipSubRejectMessage "Number of rejected p2p pubsub messages"
+	NetworkP2PGossipSubRejectMessage = MetricName{Name: "algod_network_p2p_gs_reject", Description: "Number of rejected p2p pubsub messages"}
+	// NetworkP2PGossipSubDuplicateMessage "Number of duplicate p2p pubsub messages"
+	NetworkP2PGossipSubDuplicateMessage = MetricName{Name: "algod_network_p2p_gs_duplicate", Description: "Number of duplicate p2p pubsub messages"}
+	// NetworkP2PGossipSubDeliverMessage "Number of delivered p2p pubsub messages"
+	NetworkP2PGossipSubDeliverMessage = MetricName{Name: "algod_network_p2p_gs_delivered", Description: "Number of delivered p2p pubsub messages"}
+	// NetworkP2PGossipSubUndeliverableMessage "Number of undeliverable p2p pubsub messages"
+	NetworkP2PGossipSubUndeliverableMessage = MetricName{Name: "algod_network_p2p_gs_undeliverable", Description: "Number of undeliverable p2p pubsub messages"}
+	// NetworkP2PGossipSubValidateMessage "Number of p2p pubsub messages received for validation"
+	NetworkP2PGossipSubValidateMessage = MetricName{Name: "algod_network_p2p_gs_validate", Description: "Number of p2p pubsub messages received for validation"}
+
 	// NetworkConnectionsDroppedTotal Total number of connections that were dropped before a message
 	NetworkConnectionsDroppedTotal = MetricName{Name: "algod_network_connections_dropped_total", Description: "Total number of connections that were dropped before a message"}
 	// NetworkSentDecompressedBytesTotal Total number of bytes that were sent over the network prior of being compressed
@@ -135,17 +147,6 @@ var (
 	TransactionMessagesAppLimiterDrop = MetricName{Name: "algod_transaction_messages_dropped_app_limiter", Description: "Number of transaction messages dropped after app limits check"}
 	// TransactionMessagesBacklogSize "Number of transaction messages in the TX handler backlog queue"
 	TransactionMessagesBacklogSize = MetricName{Name: "algod_transaction_messages_backlog_size", Description: "Number of transaction messages in the TX handler backlog queue"}
-
-	// TransactionMessagesP2PRejectMessage "Number of rejected p2p pubsub transaction messages"
-	TransactionMessagesP2PRejectMessage = MetricName{Name: "algod_transaction_messages_p2p_reject", Description: "Number of rejected p2p pubsub transaction messages"}
-	// TransactionMessagesP2PDuplicateMessage "Number of duplicate p2p pubsub transaction messages"}
-	TransactionMessagesP2PDuplicateMessage = MetricName{Name: "algod_transaction_messages_p2p_duplicate", Description: "Number of duplicate p2p pubsub transaction messages"}
-	// TransactionMessagesP2PDeliverMessage "Number of delivered p2p pubsub transaction messages"
-	TransactionMessagesP2PDeliverMessage = MetricName{Name: "algod_transaction_messages_p2p_delivered", Description: "Number of delivered p2p pubsub transaction messages"}
-	// TransactionMessagesP2PUndeliverableMessage "Number of undeliverable p2p pubsub transaction messages"
-	TransactionMessagesP2PUndeliverableMessage = MetricName{Name: "algod_transaction_messages_p2p_undeliverable", Description: "Number of undeliverable p2p pubsub transaction messages"}
-	// TransactionMessagesP2PValidateMessage "Number of p2p pubsub transaction messages received for validation"
-	TransactionMessagesP2PValidateMessage = MetricName{Name: "algod_transaction_messages_p2p_validate", Description: "Number of p2p pubsub transaction messages received for validation"}
 
 	// TransactionGroupTxSyncHandled "Number of transaction groups handled via txsync"
 	TransactionGroupTxSyncHandled = MetricName{Name: "algod_transaction_group_txsync_handled", Description: "Number of transaction groups handled via txsync"}
