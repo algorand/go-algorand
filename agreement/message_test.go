@@ -17,6 +17,7 @@
 package agreement
 
 import (
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -171,6 +172,52 @@ func TestProposalCarriesOversizedTxnGroup(t *testing.T) {
 	require.NoError(t, err)
 	proposal := decoded.(compoundMessage).Proposal
 	require.True(t, proposalCarriesInvalidTxn(proposal), "oversized group must be rejected before proposal validation")
+}
+
+func TestDecodeRejectsStepAboveDown(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		step     step
+		rejected bool
+	}{
+		{name: "propose", step: propose},
+		{name: "soft", step: soft},
+		{name: "cert", step: cert},
+		{name: "next", step: next},
+		{name: "next+1", step: next + 1},
+		{name: "late-1", step: late - 1},
+		{name: "late", step: late},
+		{name: "redo", step: redo},
+		{name: "down", step: down},
+		{name: "down+1", step: down + 1, rejected: true},
+		{name: "maxuint64", step: step(math.MaxUint64), rejected: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			uv := unauthenticatedVote{R: rawVote{Sender: poolAddr, Round: basics.Round(1), Period: period(1), Step: tc.step}}
+			_, voteErr := decodeVote(protocol.Encode(&uv))
+
+			ub := unauthenticatedBundle{Round: basics.Round(1), Period: period(1), Step: tc.step}
+			_, bundleErr := decodeBundle(protocol.Encode(&ub))
+
+			tp := transmittedPayload{PriorVote: uv}
+			_, proposalErr := decodeProposal(protocol.Encode(&tp))
+
+			if tc.rejected {
+				require.ErrorContains(t, voteErr, "exceeds max step")
+				require.ErrorContains(t, bundleErr, "exceeds max step")
+				require.ErrorContains(t, proposalErr, "exceeds max step")
+			} else {
+				require.NoError(t, voteErr)
+				require.NoError(t, bundleErr)
+				require.NoError(t, proposalErr)
+			}
+		})
+	}
 }
 
 func BenchmarkVoteDecoding(b *testing.B) {
