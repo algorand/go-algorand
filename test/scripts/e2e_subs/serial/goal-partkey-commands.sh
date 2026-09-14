@@ -42,6 +42,11 @@ if ! echo "$OUTPUT" | grep -q 'Effective last round:[[:space:]]* 3000';      the
 if ! echo "$OUTPUT" | grep -q 'Key dilution:[[:space:]]* 100\(00\)\?';          then echo "Key dilution should have been 10000."; exit 1; fi
 if ! echo "$OUTPUT" | grep -q 'Participation ID:[[:space:]]*[[:alnum:]]\{52\}'; then echo "There should be a participation ID.";  exit 1; fi
 
+PARTICIPATION_ID=$(echo "$OUTPUT" | awk '/Participation ID:/ { print $3; exit }')
+VERBOSE_OUTPUT=$(${gcmd} account listpartkeys -v)
+if ! echo "$VERBOSE_OUTPUT" | grep -q -F "$INITIAL_ACCOUNT"; then echo "Verbose output should include the full account address."; exit 1; fi
+if ! echo "$VERBOSE_OUTPUT" | grep -q -F "$PARTICIPATION_ID"; then echo "Verbose output should include the full participation ID."; exit 1; fi
+
 # Test multiple data directory supported
 NUM_OUTPUT_1=$(echo "$OUTPUT"|grep -c 'Participation ID')
 OUTPUT=$(${gcmd} account partkeyinfo -d "$ALGORAND_DATA" -d "$ALGORAND_DATA2")
