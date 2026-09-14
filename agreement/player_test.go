@@ -4011,3 +4011,97 @@ func assertPayloadTimings(t *testing.T, pWhite *player, pM ioAutomata, r round, 
 }
 
 // todo: test pipelined rounds, and round interruption
+
+// traceHasActionType reports whether the trace contains an action of the given type.
+func traceHasActionType(trace ioTrace, at actionType) bool {
+	return trace.ContainsFn(func(b event) bool {
+		if b.t() != wrappedAction {
+			return false
+		}
+		return b.(wrappedActionEvent).action.t() == at
+	})
+}
+
+// TestPlayerIgnoresStaleCertBundle checks that a cert bundle two or more
+// periods behind the player is filtered like any other bundle, per the spec
+// bundle relay rule, and never reaches the vote trackers.
+//
+// The period 2 case guards against a crash: the round router garbage-collects
+// periods below p-1 once they exceed 1, so routing a bundle's votes into
+// period 2 while the player is at period 4 dereferenced a nil period router
+// before cert bundles lost their freshness exemption. Periods 0 and 1 are
+// never collected, so the period 0 case instead pins the deliberate loss of
+// the old fast path for lagging nodes.
+func TestPlayerIgnoresStaleCertBundle(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const r = round(209)
+	const p = period(4)
+
+	for _, bundlePeriod := range []period{0, 2} {
+		for _, eventType := range []eventType{bundlePresent, bundleVerified} {
+			t.Run(fmt.Sprintf("period%d/%v", bundlePeriod, eventType), func(t *testing.T) {
+				pWhite, pM, helper := setupP(t, r, p, soft)
+				pV := helper.MakeRandomProposalValue()
+				b := helper.MakeVerifiedBundle(t, r, bundlePeriod, cert, *pV)
+				inMsg := messageEvent{
+					T: eventType,
+					Input: message{
+						Bundle:                b,
+						UnauthenticatedBundle: b.U,
+						messageHandle:         "staleCertBundle",
+					},
+					Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+				}
+
+				err, panicErr := pM.transition(inMsg)
+				require.NoError(t, err)
+				require.NoError(t, panicErr)
+
+				trace := pM.getTrace()
+				expectIgnore(t, trace, "player should ignore a stale cert bundle, player: %v, event: %v", 0, 0)
+				requireActionCount(t, trace, 1, 0, 0)
+				require.False(t, traceHasActionType(trace, verifyBundle), "stale cert bundle must not be verified")
+				require.False(t, traceHasActionType(trace, stageDigest), "stale cert bundle must not stage a certificate")
+				require.False(t, traceHasActionType(trace, ensure), "stale cert bundle must not commit a block")
+				require.False(t, traceHasActionType(trace, relay), "stale cert bundle must not be relayed")
+				require.Equal(t, r, pWhite.Round)
+				require.Equal(t, p, pWhite.Period)
+			})
+		}
+	}
+}
+
+// TestPlayerConsumesCertBundleOnePeriodBehind pins the boundary of the bundle
+// relay rule: a cert bundle exactly one period behind the player is still
+// observed, so the player relays it and stages its digest.
+func TestPlayerConsumesCertBundleOnePeriodBehind(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const r = round(209)
+	const p = period(4)
+	pWhite, pM, helper := setupP(t, r, p, soft)
+	pV := helper.MakeRandomProposalValue()
+	b := helper.MakeVerifiedBundle(t, r, p-1, cert, *pV)
+	inMsg := messageEvent{
+		T: bundleVerified,
+		Input: message{
+			Bundle:                b,
+			UnauthenticatedBundle: b.U,
+			messageHandle:         "lateCertBundle",
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+
+	err, panicErr := pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	trace := pM.getTrace()
+	expectRelay(t, trace, "player should relay a cert bundle one period behind, player: %v, event: %v", 0, 0)
+	require.True(t, trace.Contains(ev(stageDigestAction{Certificate: Certificate(b.U)})), "player should stage the certificate digest")
+	require.False(t, traceHasActionType(trace, ignore), "cert bundle one period behind must not be filtered")
+	// Without the matching payload the round cannot end yet.
+	require.Equal(t, r, pWhite.Round)
+	require.Equal(t, p, pWhite.Period)
+}

@@ -152,6 +152,12 @@ type testingNetwork struct {
 	crownedNodes      map[nodeID]bool
 	relayNodes        map[nodeID]bool
 	interceptFn       multicastInterceptFn
+
+	// disconnectsIgnored turns peer disconnect hints into counted no-ops, so a
+	// test can inject deliberately invalid messages without partitioning the
+	// network it is observing.
+	disconnectsIgnored bool
+	ignoredDisconnects int
 }
 
 type testingNetworkEndpoint struct {
@@ -392,8 +398,24 @@ func (n *testingNetwork) disconnect(a nodeID, b nodeID) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
+	if n.disconnectsIgnored {
+		n.ignoredDisconnects++
+		return
+	}
 	n.connected[a][b] = false
 	n.connected[b][a] = false
+}
+
+func (n *testingNetwork) ignoreDisconnects() {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.disconnectsIgnored = true
+}
+
+func (n *testingNetwork) ignoredDisconnectCount() int {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.ignoredDisconnects
 }
 
 // Set the given list of nodes as a partition; heal whatever previous
@@ -2222,8 +2244,9 @@ func TestAgreementLargePeriods(t *testing.T) {
 }
 
 type testSuspendableBlockValidator struct {
-	mu deadlock.Mutex
-	x  chan struct{}
+	mu      deadlock.Mutex
+	x       chan struct{}
+	pending int // calls currently blocked inside Validate
 }
 
 func makeTestSuspendableBlockValidator() (v *testSuspendableBlockValidator) {
@@ -2236,10 +2259,22 @@ func makeTestSuspendableBlockValidator() (v *testSuspendableBlockValidator) {
 func (v *testSuspendableBlockValidator) Validate(ctx context.Context, e bookkeeping.Block) (ValidatedBlock, error) {
 	v.mu.Lock()
 	ch := v.x
+	v.pending++
 	v.mu.Unlock()
 
 	<-ch
+
+	v.mu.Lock()
+	v.pending--
+	v.mu.Unlock()
 	return testValidatedBlock{Inside: e}, nil
+}
+
+// pendingValidations returns the number of Validate calls blocked by suspend.
+func (v *testSuspendableBlockValidator) pendingValidations() int {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	return v.pending
 }
 
 // returns a channel which when closed terminates validation
@@ -2558,4 +2593,114 @@ func TestAgreementServiceStartDeadline(t *testing.T) {
 	}
 	require.Equal(t, testConsensusParams.AgreementFilterTimeoutPeriod0, demuxSignal.Deadline.Duration)
 	require.Equal(t, baseLedger.NextRound(), demuxSignal.CurrentRound)
+}
+
+// total returns the number of outstanding coservice tasks across all nodes.
+func (m *activityMonitor) total() uint {
+	m.Lock()
+	defer m.Unlock()
+	return m.sum()
+}
+
+// TestAgreementFutureBundlesDoNotCancelPayloadVerification checks that bundles
+// from far-future periods, which pass freshness while still unauthenticated,
+// cannot cancel the round's pending payload verification when the crypto
+// verifier admits them. Payload validation is suspended so the pending
+// verifications are observable, invalid future-period bundles are injected, and
+// the round is then expected to finish once validation resumes. Before bundle
+// verification contexts were isolated from the bundle's period, admitting each
+// bundle cancelled every pending vote and payload verification for the round.
+func TestAgreementFutureBundlesDoNotCancelPayloadVerification(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	numNodes := 5
+	validator := makeTestSuspendableBlockValidator()
+	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreementWithValidator(t, numNodes, disabled, validator, makeTestLedger)
+	startRound := baseLedger.NextRound()
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
+	defer cleanupFn()
+
+	// The injected bundles fail verification, and every receiver responds by
+	// asking the network to disconnect the sender. Counting those hints instead
+	// of honoring them keeps the network intact and gives a completion signal.
+	baseNetwork.ignoreDisconnects()
+
+	for i := 0; i < numNodes; i++ {
+		services[i].Start()
+	}
+	activityMonitor.waitForActivity()
+	activityMonitor.waitForQuiet()
+	zeroes := expectNewPeriod(t, clocks, 0)
+
+	// run two rounds
+	for j := 0; j < 2; j++ {
+		zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
+	}
+
+	// Suspend validation and pocket the next round's payloads, so the round
+	// starts with its proposal votes known but no payload delivered yet.
+	pocket := make(chan multicastParams, 100)
+	resumeValidation := validator.suspend()
+	closeFn := baseNetwork.pocketAllCompound(pocket) // (takes effect next round)
+	triggerGlobalTimeout(FilterTimeout(0, version), TimeoutFilter, clocks, activityMonitor)
+	zeroes = expectNewPeriod(t, clocks, zeroes)
+	baseNetwork.repairAll()
+	closeFn()
+
+	attackedRound := ledgers[0].NextRound()
+	for i := 0; i < numNodes; i++ {
+		require.Equal(t, attackedRound, ledgers[i].NextRound())
+	}
+
+	// Release the payloads. Only the winning proposal keeps an assembler on
+	// each node, so every node other than its proposer starts exactly one
+	// payload verification and blocks inside the suspended validator.
+	baseNetwork.prepareAllMulticast()
+	for p := range pocket {
+		baseNetwork.multicast(p.tag, p.data, p.source, p.exclude)
+	}
+	baseNetwork.finishAllMulticast()
+	activityMonitor.waitForActivity()
+
+	expectedPending := numNodes - 1
+	settled := func() bool {
+		return validator.pendingValidations() == expectedPending && activityMonitor.total() == uint(expectedPending)
+	}
+	require.Eventually(t, settled, 10*time.Second, 10*time.Millisecond, "payload verifications did not settle")
+
+	// Inject invalid bundles from far-future periods. They are fresh for the
+	// current round, so every node admits them to bundle verification.
+	const numBundles = 3
+	attackers := []nodeID{0, 1} // between them, every node receives each bundle
+	for i := 0; i < numBundles; i++ {
+		ub := unauthenticatedBundle{Round: attackedRound, Period: period(1000 + i), Step: soft}
+		data := protocol.Encode(&ub)
+		for _, src := range attackers {
+			baseNetwork.multicast(protocol.VoteBundleTag, data, src, src)
+		}
+	}
+	expectedDisconnects := numBundles * len(attackers) * (numNodes - 1)
+	require.Eventually(t, func() bool {
+		return baseNetwork.ignoredDisconnectCount() == expectedDisconnects && settled()
+	}, 10*time.Second, 10*time.Millisecond, "bundle injection did not settle")
+
+	// Resume validation. With the payload verifications intact, the filter
+	// timeout leads to soft and cert thresholds and the round ends.
+	close(resumeValidation)
+	activityMonitor.waitForQuiet()
+	triggerGlobalTimeout(FilterTimeout(0, version), TimeoutFilter, clocks, activityMonitor)
+	zeroes = expectNewPeriod(t, clocks, zeroes)
+
+	// one more ordinary round to show the network is healthy afterwards
+	zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
+
+	for i := 0; i < numNodes; i++ {
+		services[i].Shutdown()
+	}
+
+	const expectNumRounds = 5
+	for i := 0; i < numNodes; i++ {
+		require.Equal(t, startRound+round(expectNumRounds), ledgers[i].NextRound(), "did not progress %d rounds", expectNumRounds)
+	}
+	sanityCheck(startRound, expectNumRounds, ledgers)
 }
