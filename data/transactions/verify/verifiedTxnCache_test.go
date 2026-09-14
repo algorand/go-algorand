@@ -687,3 +687,101 @@ func BenchmarkVerifiedCacheGC(b *testing.B) {
 	b.ReportMetric(float64(retained)/(1024*1024), "total-MB")
 	b.ReportMetric(float64(retained)/float64(live), "bytes/entry")
 }
+
+// TestTxnGroupRejectsDuplicateTxid checks that a group carrying the same
+// transaction twice, differing only in LogicSig args, fails verification and
+// leaves nothing in the cache. The cache keys entries by transaction ID, so
+// two such transactions would otherwise share one entry.
+func TestTxnGroupRejectsDuplicateTxid(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	blkHdr := createDummyBlockHeader()
+	cache := MakeVerifiedTransactionCache(10)
+	dummyLedger := DummyLedgerForSignature{}
+
+	_, signedTxns, _, _ := generateTestObjects(1, 2, 0, 50)
+
+	// two copies of one contract-account LogicSig transaction, with
+	// different args: same Txn, hence same transaction ID
+	a0 := transactions.SignedTxn{Txn: signedTxns[0].Txn}
+	a0.Lsig.Logic = []byte{0x06, 0x81, 0x01} // pushint 1
+	a0.Lsig.Args = [][]byte{{0}}
+	a1 := a0
+	a1.Lsig.Args = [][]byte{{1}}
+
+	group := []transactions.SignedTxn{a0, a1}
+	grpObj := transactions.TxGroup{}
+	for i := range group {
+		group[i].Txn.Group = crypto.Digest{}
+		grpObj.TxGroupHashes = append(grpObj.TxGroupHashes, crypto.Digest(group[i].Txn.ID()))
+	}
+	groupID := crypto.HashObj(grpObj)
+	for i := range group {
+		group[i].Txn.Group = groupID
+	}
+	require.Equal(t, group[0].ID(), group[1].ID())
+
+	// the group ID commits to both occurrences, so only the duplicate
+	// check can reject it
+	_, err := TxnGroup(group, &blkHdr, cache, &dummyLedger)
+	require.Error(t, err)
+	var malformed *transactions.TxGroupMalformedError
+	require.ErrorAs(t, err, &malformed)
+	require.Equal(t, transactions.TxGroupMalformedErrorReasonDuplicateTxn, malformed.Reason)
+
+	// nothing may arrive in the cache from the failed group
+	impl := cache.(*verifiedTransactionCache)
+	require.Empty(t, impl.pinned)
+	for _, bucket := range impl.buckets {
+		require.Empty(t, bucket)
+	}
+	unverified := cache.GetUnverifiedTransactionGroups(
+		[][]transactions.SignedTxn{{a1, a1}}, spec, blkHdr.CurrentProtocol)
+	require.Len(t, unverified, 1)
+}
+
+// TestGetUnverifiedTransactionGroupsMalformedGroups covers groups that reuse a
+// cached group's ID: a superset ([A,B,B]), a permutation ([B,A]) and a prefix
+// ([A]). The lookup must not panic on any of them, and CheckTxnGroupID must
+// reject all three: the cache is position-blind, so callers establish group-ID
+// validity and transaction-ID uniqueness before consulting it.
+func TestGetUnverifiedTransactionGroupsMalformedGroups(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// cap the generator at two so pairs are the common outcome rather than a lucky draw
+	_, signedTxns, secrets, addrs := generateTestObjects(64, 8, 0, 50)
+	var ab []transactions.SignedTxn
+	for _, g := range generateTransactionGroups(2, signedTxns, secrets, addrs) {
+		if len(g) == 2 {
+			ab = g
+			break
+		}
+	}
+	require.NotNil(t, ab)
+
+	cache := MakeVerifiedTransactionCache(500)
+	groupCtx, err := PrepareGroupContext(ab, blockHeader, nil, nil)
+	require.NoError(t, err)
+	cache.Add(groupCtx)
+	require.Empty(t, cache.GetUnverifiedTransactionGroups(
+		[][]transactions.SignedTxn{ab}, groupCtx.specAddrs, groupCtx.consensusVersion),
+		"the honest group must hit the cache")
+
+	for _, test := range []struct {
+		name  string
+		group []transactions.SignedTxn
+	}{
+		{"superset", []transactions.SignedTxn{ab[0], ab[1], ab[1]}},
+		{"permutation", []transactions.SignedTxn{ab[1], ab[0]}},
+		{"prefix", []transactions.SignedTxn{ab[0]}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			require.NotPanics(t, func() {
+				cache.GetUnverifiedTransactionGroups(
+					[][]transactions.SignedTxn{test.group}, groupCtx.specAddrs, groupCtx.consensusVersion)
+			})
+			require.Error(t, transactions.CheckTxnGroupID(test.group),
+				"the group-ID and duplicate checks must reject this before the cache is consulted")
+		})
+	}
+}

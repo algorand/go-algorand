@@ -2144,6 +2144,13 @@ func (validator *evalTxValidator) run() {
 				return
 			}
 		}
+		// A group that fully hits the cache below skips verify.PaysetGroups,
+		// so the checks inside it would never run on that group. Run them
+		// here instead, ahead of the cache.
+		if err := transactions.CheckTxnGroupID(signedTxnGroup); err != nil {
+			validator.done <- err
+			return
+		}
 		unverifiedTxnGroups = append(unverifiedTxnGroups, signedTxnGroup)
 	}
 

@@ -50,26 +50,25 @@ func stateProofTxnForCheck() Transaction {
 	}
 }
 
-func TestCheckTxnGroupStateProofBasicSuite(t *testing.T) {
+func TestCheckPaysetGroupStateProofBasicSuite(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	valid := stateProofTxnForCheck()
-	require.NoError(t, CheckTxnGroup([]SignedTxn{{Txn: valid}}))
 	require.NoError(t, CheckPaysetGroup([]SignedTxnWithAD{SignedTxn{Txn: valid}.WithAD()}))
 
 	t.Run("unsupported state proof type", func(t *testing.T) {
 		t.Parallel()
 		malformed := stateProofTxnForCheck()
 		malformed.StateProofType = protocol.StateProofType(1)
-		require.ErrorIs(t, CheckTxnGroup([]SignedTxn{{Txn: malformed}}), errMalformedStateProofType)
+		require.ErrorIs(t, CheckPaysetGroup([]SignedTxnWithAD{SignedTxn{Txn: malformed}.WithAD()}), errMalformedStateProofType)
 	})
 
 	t.Run("signature commitment proof hash", func(t *testing.T) {
 		t.Parallel()
 		malformed := stateProofTxnForCheck()
 		malformed.StateProof.SigProofs = stateProofPathForCheck(crypto.Sha256, crypto.Sha256Size)
-		require.ErrorIs(t, CheckTxnGroup([]SignedTxn{{Txn: malformed}}), errMalformedStateProofHash)
+		require.ErrorIs(t, CheckPaysetGroup([]SignedTxnWithAD{SignedTxn{Txn: malformed}.WithAD()}), errMalformedStateProofHash)
 	})
 
 	t.Run("participant commitment proof hash", func(t *testing.T) {
@@ -83,14 +82,14 @@ func TestCheckTxnGroupStateProofBasicSuite(t *testing.T) {
 		t.Parallel()
 		malformed := stateProofTxnForCheck()
 		malformed.StateProof.PartProofs.Path[0] = make(crypto.GenericDigest, crypto.Sha256Size)
-		require.ErrorIs(t, CheckTxnGroup([]SignedTxn{{Txn: malformed}}), errMalformedStateProofPath)
+		require.ErrorIs(t, CheckPaysetGroup([]SignedTxnWithAD{SignedTxn{Txn: malformed}.WithAD()}), errMalformedStateProofPath)
 	})
 
 	t.Run("signature commitment size", func(t *testing.T) {
 		t.Parallel()
 		malformed := stateProofTxnForCheck()
 		malformed.StateProof.SigCommit = make(crypto.GenericDigest, crypto.Sha256Size)
-		require.ErrorIs(t, CheckTxnGroup([]SignedTxn{{Txn: malformed}}), errMalformedStateProofCommit)
+		require.ErrorIs(t, CheckPaysetGroup([]SignedTxnWithAD{SignedTxn{Txn: malformed}.WithAD()}), errMalformedStateProofCommit)
 	})
 
 	t.Run("nested Merkle signature proof hash", func(t *testing.T) {
@@ -102,7 +101,7 @@ func TestCheckTxnGroupStateProofBasicSuite(t *testing.T) {
 			Proof: stateProofPathForCheck(crypto.Sha256, crypto.Sha256Size),
 		}
 		malformed.StateProof.Reveals = map[uint64]stateproof.Reveal{0: reveal}
-		require.ErrorIs(t, CheckTxnGroup([]SignedTxn{{Txn: malformed}}), errMalformedStateProofHash)
+		require.ErrorIs(t, CheckPaysetGroup([]SignedTxnWithAD{SignedTxn{Txn: malformed}.WithAD()}), errMalformedStateProofHash)
 	})
 
 	t.Run("nested Merkle signature proof path size", func(t *testing.T) {
@@ -114,7 +113,7 @@ func TestCheckTxnGroupStateProofBasicSuite(t *testing.T) {
 			Proof: stateProofPathForCheck(stateproof.HashType, crypto.Sha256Size),
 		}
 		malformed.StateProof.Reveals = map[uint64]stateproof.Reveal{0: reveal}
-		require.ErrorIs(t, CheckTxnGroup([]SignedTxn{{Txn: malformed}}), errMalformedStateProofPath)
+		require.ErrorIs(t, CheckPaysetGroup([]SignedTxnWithAD{SignedTxn{Txn: malformed}.WithAD()}), errMalformedStateProofPath)
 	})
 
 	t.Run("nested Basic Merkle signature proof", func(t *testing.T) {
@@ -126,52 +125,8 @@ func TestCheckTxnGroupStateProofBasicSuite(t *testing.T) {
 			Proof: stateProofPathForCheck(stateproof.HashType, stateproof.HashSize),
 		}
 		valid.StateProof.Reveals = map[uint64]stateproof.Reveal{0: reveal}
-		require.NoError(t, CheckTxnGroup([]SignedTxn{{Txn: valid}}))
+		require.NoError(t, CheckPaysetGroup([]SignedTxnWithAD{SignedTxn{Txn: valid}.WithAD()}))
 	})
-}
-
-func TestCheckTxnGroupApplicationBoxIndex(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	malformed := Transaction{
-		Type: protocol.ApplicationCallTx,
-		ApplicationCallTxnFields: ApplicationCallTxnFields{
-			Boxes: []BoxRef{{Index: 1}},
-		},
-	}
-	require.ErrorIs(t, CheckTxnGroup([]SignedTxn{{Txn: malformed}}), errMalformedApplicationBoxIndex)
-
-	currentApp := Transaction{
-		Type: protocol.ApplicationCallTx,
-		ApplicationCallTxnFields: ApplicationCallTxnFields{
-			Boxes: []BoxRef{{Index: 0}},
-		},
-	}
-	require.NoError(t, CheckTxnGroup([]SignedTxn{{Txn: currentApp}}))
-
-	foreignApp := Transaction{
-		Type: protocol.ApplicationCallTx,
-		ApplicationCallTxnFields: ApplicationCallTxnFields{
-			ForeignApps: []basics.AppIndex{1},
-			Boxes:       []BoxRef{{Index: 1}},
-		},
-	}
-	require.NoError(t, CheckTxnGroup([]SignedTxn{{Txn: foreignApp}}))
-}
-
-func TestCheckPaysetGroupApplicationBoxIndex(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	malformed := Transaction{
-		Type: protocol.ApplicationCallTx,
-		ApplicationCallTxnFields: ApplicationCallTxnFields{
-			Boxes: []BoxRef{{Index: 1}},
-		},
-	}
-	group := []SignedTxnWithAD{SignedTxn{Txn: malformed}.WithAD()}
-	require.ErrorIs(t, CheckPaysetGroup(group), errMalformedApplicationBoxIndex)
 }
 
 func TestCheckPaysetGroupID(t *testing.T) {
@@ -251,35 +206,63 @@ func TestHashTxGroupMatchesHashObj(t *testing.T) {
 	}
 }
 
-func TestCheckTxnGroupUnknownType(t *testing.T) {
+func TestCheckTxnGroupIDDuplicateTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// A lone unknown transaction type does NOT crash today: nothing triggers the group-wide
-	// computeAvailability, so resources.fill is never called on it (WellFormed / applyTransaction's
-	// default reject it). The screen rejects it anyway, since an unknown type is always invalid.
-	bogus := Transaction{Type: protocol.TxType("bogus")}
-	require.ErrorIs(t, CheckTxnGroup([]SignedTxn{{Txn: bogus}}), errMalformedTxType)
-
-	// The crash case: the unknown type grouped *after* an app call. The app call triggers the
-	// whole-group computeAvailability, whose fill walks the unknown member before its WellFormed
-	// runs (and outside the eval() recover) and hits resources.fill's default. Caught as a group
-	// and after block decoding.
-	appcall := Transaction{Type: protocol.ApplicationCallTx}
-	require.ErrorIs(t, CheckTxnGroup([]SignedTxn{{Txn: appcall}, {Txn: bogus}}), errMalformedTxType)
-	require.ErrorIs(t, CheckPaysetGroup([]SignedTxnWithAD{
-		SignedTxn{Txn: appcall}.WithAD(),
-		SignedTxn{Txn: bogus}.WithAD(),
-	}), errMalformedTxType)
-
-	// Every known type that fill handles must still be accepted (guard against over-rejection).
-	// Heartbeat is excluded here because it independently requires its fields (tested elsewhere).
-	for _, tt := range []protocol.TxType{
-		protocol.PaymentTx, protocol.KeyRegistrationTx, protocol.AssetConfigTx,
-		protocol.AssetTransferTx, protocol.AssetFreezeTx, protocol.ApplicationCallTx,
-	} {
-		require.NoError(t, CheckTxnGroup([]SignedTxn{{Txn: Transaction{Type: tt}}}), "type %q must be accepted", tt)
+	regroup := func(stxns []SignedTxn) {
+		group := TxGroup{}
+		for i := range stxns {
+			stxns[i].Txn.Group = crypto.Digest{}
+			group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(stxns[i].Txn.ID()))
+		}
+		groupID := crypto.HashObj(group)
+		for i := range stxns {
+			stxns[i].Txn.Group = groupID
+		}
 	}
-	require.NoError(t, CheckTxnGroup([]SignedTxn{{Txn: stateProofTxnForCheck()}}),
-		"type %q must be accepted", protocol.StateProofTx)
+
+	// [A, A]: the same transaction twice, with a group ID that commits to
+	// both occurrences, so only the duplicate check can reject it.
+	txn := SignedTxn{Txn: Transaction{Type: protocol.PaymentTx, Header: Header{Sender: basics.Address{1}}}}
+	dup := []SignedTxn{txn, txn}
+	regroup(dup)
+	err := CheckTxnGroupID(dup)
+	require.ErrorContains(t, err, "duplicate transaction")
+	var malformed *TxGroupMalformedError
+	require.ErrorAs(t, err, &malformed)
+	require.Equal(t, TxGroupMalformedErrorReasonDuplicateTxn, malformed.Reason)
+	require.Equal(t, 1, malformed.GroupIndex)
+
+	// [A(0), A(1)]: identical transactions whose LogicSigs carry different
+	// args. Same transaction IDs, so still a duplicate.
+	argsDup := []SignedTxn{txn, txn}
+	regroup(argsDup)
+	argsDup[0].Lsig = LogicSig{Logic: []byte{0x01}, Args: [][]byte{{0}}}
+	argsDup[1].Lsig = LogicSig{Logic: []byte{0x01}, Args: [][]byte{{1}}}
+	require.Equal(t, argsDup[0].Txn.ID(), argsDup[1].Txn.ID())
+	err = CheckTxnGroupID(argsDup)
+	require.ErrorAs(t, err, &malformed)
+	require.Equal(t, TxGroupMalformedErrorReasonDuplicateTxn, malformed.Reason)
+
+	// The duplicate need not be adjacent.
+	other := SignedTxn{Txn: Transaction{Type: protocol.PaymentTx, Header: Header{Sender: basics.Address{2}}}}
+	spread := []SignedTxn{txn, other, txn}
+	regroup(spread)
+	err = CheckTxnGroupID(spread)
+	require.ErrorAs(t, err, &malformed)
+	require.Equal(t, TxGroupMalformedErrorReasonDuplicateTxn, malformed.Reason)
+	require.Equal(t, 2, malformed.GroupIndex)
+
+	// Distinct transactions still pass, as does a lone ungrouped transaction.
+	valid := []SignedTxn{txn, other}
+	regroup(valid)
+	require.NoError(t, CheckTxnGroupID(valid))
+	require.NoError(t, CheckTxnGroupID([]SignedTxn{{Txn: Transaction{Type: protocol.PaymentTx}}}))
+
+	// The payset form used by the agreement proposal filter rejects it too.
+	dupAD := []SignedTxnWithAD{dup[0].WithAD(), dup[1].WithAD()}
+	err = CheckPaysetGroup(dupAD)
+	require.ErrorAs(t, err, &malformed)
+	require.Equal(t, TxGroupMalformedErrorReasonDuplicateTxn, malformed.Reason)
 }

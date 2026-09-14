@@ -1965,3 +1965,85 @@ func TestComputeLoad(t *testing.T) {
 		require.Equal(t, tt.expected, result)
 	}
 }
+
+// TestEvalTxValidatorGroupChecksPrecedeCache checks that evalTxValidator
+// rejects a group whose ID does not commit to its contents, and a group that
+// repeats a transaction, before consulting the verified-txn cache. The cache is
+// mocked to report everything as verified, so a failure here means the checks
+// ran after it rather than before.
+func TestEvalTxValidatorGroupChecksPrecedeCache(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var blk bookkeeping.Block
+	blk.BlockHeader.Round = 1
+	blk.BlockHeader.GenesisHash = crypto.Digest{0x01}
+	blk.BlockHeader.CurrentProtocol = protocol.ConsensusCurrentVersion
+
+	mkTxn := func(sender byte) transactions.SignedTxn {
+		return transactions.SignedTxn{Txn: transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      basics.Address{sender},
+				FirstValid:  1,
+				LastValid:   1000,
+				GenesisHash: blk.BlockHeader.GenesisHash,
+			},
+		}}
+	}
+	regroup := func(stxns []transactions.SignedTxn) {
+		group := transactions.TxGroup{}
+		for i := range stxns {
+			stxns[i].Txn.Group = crypto.Digest{}
+			group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(stxns[i].Txn.ID()))
+		}
+		groupID := crypto.HashObj(group)
+		for i := range stxns {
+			stxns[i].Txn.Group = groupID
+		}
+	}
+	toADs := func(stxns []transactions.SignedTxn) []transactions.SignedTxnWithAD {
+		ads := make([]transactions.SignedTxnWithAD, len(stxns))
+		for i, stxn := range stxns {
+			ads[i] = stxn.WithAD()
+		}
+		return ads
+	}
+	validate := func(group []transactions.SignedTxnWithAD) error {
+		validator := evalTxValidator{
+			// alwaysVerified: every group presented to the cache hits in full
+			txcache:  verify.GetMockedCache(true),
+			block:    blk,
+			ctx:      context.Background(),
+			txgroups: [][]transactions.SignedTxnWithAD{group},
+			done:     make(chan error, 1),
+		}
+		validator.run()
+		return <-validator.done
+	}
+
+	a, b := mkTxn(1), mkTxn(2)
+
+	// control: a well-formed group passes (via the mocked cache hit).
+	good := []transactions.SignedTxn{a, b}
+	regroup(good)
+	require.NoError(t, validate(toADs(good)))
+
+	// [B, A] carrying the group ID of [A, B]: the ID does not commit to the
+	// presented order.
+	permuted := []transactions.SignedTxn{good[1], good[0]}
+	var malformed *ledgercore.TxGroupMalformedError
+	err := validate(toADs(permuted))
+	require.ErrorContains(t, err, "incomplete group")
+	require.ErrorAs(t, err, &malformed)
+	require.Equal(t, ledgercore.TxGroupMalformedErrorReasonIncompleteGroup, malformed.Reason)
+
+	// [A, A] with a group ID that commits to both occurrences, so only the
+	// duplicate check can reject it.
+	dup := []transactions.SignedTxn{a, a}
+	regroup(dup)
+	err = validate(toADs(dup))
+	require.ErrorContains(t, err, "duplicate transaction")
+	require.ErrorAs(t, err, &malformed)
+	require.Equal(t, ledgercore.TxGroupMalformedErrorReasonDuplicateTxn, malformed.Reason)
+}
