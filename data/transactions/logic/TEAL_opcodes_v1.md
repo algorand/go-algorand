@@ -270,12 +270,16 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Nth LogicSig argument
 - Mode: Signature
 
+LogicSig arguments are supplied outside of any signature, and are part of neither the transaction ID nor the group hash, so a third party can alter them while a transaction is in flight. A LogicSig may therefore carry no argument it does not read: none at all above the highest index it reads, and none below that index unless the argument is empty or is read.
+
 ## arg_0
 
 - Bytecode: 0x2d
 - Stack: ... &rarr; ..., []byte
 - LogicSig argument 0
 - Mode: Signature
+
+LogicSig arguments are supplied outside of any signature, and are part of neither the transaction ID nor the group hash, so a third party can alter them while a transaction is in flight. A LogicSig may therefore carry no argument it does not read: none at all above the highest index it reads, and none below that index unless the argument is empty or is read.
 
 ## arg_1
 
@@ -284,6 +288,8 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - LogicSig argument 1
 - Mode: Signature
 
+LogicSig arguments are supplied outside of any signature, and are part of neither the transaction ID nor the group hash, so a third party can alter them while a transaction is in flight. A LogicSig may therefore carry no argument it does not read: none at all above the highest index it reads, and none below that index unless the argument is empty or is read.
+
 ## arg_2
 
 - Bytecode: 0x2f
@@ -291,12 +297,16 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - LogicSig argument 2
 - Mode: Signature
 
+LogicSig arguments are supplied outside of any signature, and are part of neither the transaction ID nor the group hash, so a third party can alter them while a transaction is in flight. A LogicSig may therefore carry no argument it does not read: none at all above the highest index it reads, and none below that index unless the argument is empty or is read.
+
 ## arg_3
 
 - Bytecode: 0x30
 - Stack: ... &rarr; ..., []byte
 - LogicSig argument 3
 - Mode: Signature
+
+LogicSig arguments are supplied outside of any signature, and are part of neither the transaction ID nor the group hash, so a third party can alter them while a transaction is in flight. A LogicSig may therefore carry no argument it does not read: none at all above the highest index it reads, and none below that index unless the argument is empty or is read.
 
 ## txn
 
