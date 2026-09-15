@@ -81,7 +81,7 @@ func spinNetwork(t *testing.T, nodesCount int, cfg config.Local) ([]*networkImpl
 	for _, gossipNode := range gossipNodes {
 		networkImpl := WrapNetwork(gossipNode, log, cfg).(*networkImpl)
 		networkImpls = append(networkImpls, networkImpl)
-		networkImpl.Start()
+		networkImpl.Start(t.Context())
 		msgCounter := startMessageCounter(networkImpl)
 		msgCounters = append(msgCounters, msgCounter)
 	}
