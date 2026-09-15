@@ -3383,6 +3383,9 @@ func TestReturnTypes(t *testing.T) {
 		"mimc": ": byte 0x0000000000000000000000000000000000000000000000000000000000000001; mimc BN254Mp110",
 		// poseidon2 requires an input size multiple of 32 bytes.
 		"poseidon2": ": byte 0x0000000000000000000000000000000000000000000000000000000000000001; poseidon2 BN254t2",
+		// falcon_verify's required pubkey length comes from its configuration
+		// immediate, so it can't be inferred from the opcode's proto.
+		"falcon_verify": ": byte 0x3456; byte 0x3456; byte 0x" + strings.Repeat("33", 1793) + "; falcon_verify FalconDet1024",
 	}
 
 	/* Make sure the specialCmd tests the opcode in question */

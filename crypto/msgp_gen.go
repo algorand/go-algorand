@@ -21,7 +21,37 @@ import (
 //    |-----> (*) MsgIsZero
 //    |-----> DigestMaxSize()
 //
-// FalconPrivateKey
+// Falcon1024PrivateKey
+//           |-----> (*) MarshalMsg
+//           |-----> (*) CanMarshalMsg
+//           |-----> (*) UnmarshalMsg
+//           |-----> (*) UnmarshalMsgWithState
+//           |-----> (*) CanUnmarshalMsg
+//           |-----> (*) Msgsize
+//           |-----> (*) MsgIsZero
+//           |-----> Falcon1024PrivateKeyMaxSize()
+//
+// Falcon1024PublicKey
+//          |-----> (*) MarshalMsg
+//          |-----> (*) CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) UnmarshalMsgWithState
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> (*) Msgsize
+//          |-----> (*) MsgIsZero
+//          |-----> Falcon1024PublicKeyMaxSize()
+//
+// Falcon1024Signature
+//          |-----> MarshalMsg
+//          |-----> CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) UnmarshalMsgWithState
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> Msgsize
+//          |-----> MsgIsZero
+//          |-----> Falcon1024SignatureMaxSize()
+//
+// Falcon1024Signer
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
@@ -29,9 +59,49 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
-//         |-----> FalconPrivateKeyMaxSize()
+//         |-----> Falcon1024SignerMaxSize()
 //
-// FalconPublicKey
+// Falcon1024Verifier
+//          |-----> (*) MarshalMsg
+//          |-----> (*) CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) UnmarshalMsgWithState
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> (*) Msgsize
+//          |-----> (*) MsgIsZero
+//          |-----> Falcon1024VerifierMaxSize()
+//
+// Falcon512PrivateKey
+//          |-----> (*) MarshalMsg
+//          |-----> (*) CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) UnmarshalMsgWithState
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> (*) Msgsize
+//          |-----> (*) MsgIsZero
+//          |-----> Falcon512PrivateKeyMaxSize()
+//
+// Falcon512PublicKey
+//          |-----> (*) MarshalMsg
+//          |-----> (*) CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) UnmarshalMsgWithState
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> (*) Msgsize
+//          |-----> (*) MsgIsZero
+//          |-----> Falcon512PublicKeyMaxSize()
+//
+// Falcon512Signature
+//          |-----> MarshalMsg
+//          |-----> CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) UnmarshalMsgWithState
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> Msgsize
+//          |-----> MsgIsZero
+//          |-----> Falcon512SignatureMaxSize()
+//
+// Falcon512Signer
 //        |-----> (*) MarshalMsg
 //        |-----> (*) CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
@@ -39,37 +109,17 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
-//        |-----> FalconPublicKeyMaxSize()
+//        |-----> Falcon512SignerMaxSize()
 //
-// FalconSignature
-//        |-----> MarshalMsg
-//        |-----> CanMarshalMsg
-//        |-----> (*) UnmarshalMsg
-//        |-----> (*) UnmarshalMsgWithState
-//        |-----> (*) CanUnmarshalMsg
-//        |-----> Msgsize
-//        |-----> MsgIsZero
-//        |-----> FalconSignatureMaxSize()
-//
-// FalconSigner
-//       |-----> (*) MarshalMsg
-//       |-----> (*) CanMarshalMsg
-//       |-----> (*) UnmarshalMsg
-//       |-----> (*) UnmarshalMsgWithState
-//       |-----> (*) CanUnmarshalMsg
-//       |-----> (*) Msgsize
-//       |-----> (*) MsgIsZero
-//       |-----> FalconSignerMaxSize()
-//
-// FalconVerifier
-//        |-----> (*) MarshalMsg
-//        |-----> (*) CanMarshalMsg
-//        |-----> (*) UnmarshalMsg
-//        |-----> (*) UnmarshalMsgWithState
-//        |-----> (*) CanUnmarshalMsg
-//        |-----> (*) Msgsize
-//        |-----> (*) MsgIsZero
-//        |-----> FalconVerifierMaxSize()
+// Falcon512Verifier
+//         |-----> (*) MarshalMsg
+//         |-----> (*) CanMarshalMsg
+//         |-----> (*) UnmarshalMsg
+//         |-----> (*) UnmarshalMsgWithState
+//         |-----> (*) CanUnmarshalMsg
+//         |-----> (*) Msgsize
+//         |-----> (*) MsgIsZero
+//         |-----> Falcon512VerifierMaxSize()
 //
 // GenericDigest
 //       |-----> MarshalMsg
@@ -417,19 +467,19 @@ func DigestMaxSize() (s int) {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *FalconPrivateKey) MarshalMsg(b []byte) (o []byte) {
+func (z *Falcon1024PrivateKey) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
 	return
 }
 
-func (_ *FalconPrivateKey) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*FalconPrivateKey)
+func (_ *Falcon1024PrivateKey) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon1024PrivateKey)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *FalconPrivateKey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+func (z *Falcon1024PrivateKey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
 	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
@@ -444,46 +494,46 @@ func (z *FalconPrivateKey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSt
 	return
 }
 
-func (z *FalconPrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Falcon1024PrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
 }
-func (_ *FalconPrivateKey) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*FalconPrivateKey)
+func (_ *Falcon1024PrivateKey) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon1024PrivateKey)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *FalconPrivateKey) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (FalconPrivateKeySize * (msgp.ByteSize))
+func (z *Falcon1024PrivateKey) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize + (Falcon1024PrivateKeySize * (msgp.ByteSize))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *FalconPrivateKey) MsgIsZero() bool {
-	return (*z) == (FalconPrivateKey{})
+func (z *Falcon1024PrivateKey) MsgIsZero() bool {
+	return (*z) == (Falcon1024PrivateKey{})
 }
 
-// FalconPrivateKeyMaxSize returns a maximum valid message size for this message type
-func FalconPrivateKeyMaxSize() (s int) {
+// Falcon1024PrivateKeyMaxSize returns a maximum valid message size for this message type
+func Falcon1024PrivateKeyMaxSize() (s int) {
 	// Calculating size of array: z
-	s = msgp.ArrayHeaderSize + ((FalconPrivateKeySize) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((Falcon1024PrivateKeySize) * (msgp.ByteSize))
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *FalconPublicKey) MarshalMsg(b []byte) (o []byte) {
+func (z *Falcon1024PublicKey) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
 	return
 }
 
-func (_ *FalconPublicKey) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*FalconPublicKey)
+func (_ *Falcon1024PublicKey) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon1024PublicKey)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *FalconPublicKey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+func (z *Falcon1024PublicKey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
 	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
@@ -498,49 +548,49 @@ func (z *FalconPublicKey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSta
 	return
 }
 
-func (z *FalconPublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Falcon1024PublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
 }
-func (_ *FalconPublicKey) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*FalconPublicKey)
+func (_ *Falcon1024PublicKey) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon1024PublicKey)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *FalconPublicKey) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (FalconPublicKeySize * (msgp.ByteSize))
+func (z *Falcon1024PublicKey) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize + (Falcon1024PublicKeySize * (msgp.ByteSize))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *FalconPublicKey) MsgIsZero() bool {
-	return (*z) == (FalconPublicKey{})
+func (z *Falcon1024PublicKey) MsgIsZero() bool {
+	return (*z) == (Falcon1024PublicKey{})
 }
 
-// FalconPublicKeyMaxSize returns a maximum valid message size for this message type
-func FalconPublicKeyMaxSize() (s int) {
+// Falcon1024PublicKeyMaxSize returns a maximum valid message size for this message type
+func Falcon1024PublicKeyMaxSize() (s int) {
 	// Calculating size of array: z
-	s = msgp.ArrayHeaderSize + ((FalconPublicKeySize) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((Falcon1024PublicKeySize) * (msgp.ByteSize))
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z FalconSignature) MarshalMsg(b []byte) (o []byte) {
+func (z Falcon1024Signature) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, []byte(z))
 	return
 }
 
-func (_ FalconSignature) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(FalconSignature)
+func (_ Falcon1024Signature) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(Falcon1024Signature)
 	if !ok {
-		_, ok = (z).(*FalconSignature)
+		_, ok = (z).(*Falcon1024Signature)
 	}
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *FalconSignature) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+func (z *Falcon1024Signature) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
 	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
@@ -554,8 +604,8 @@ func (z *FalconSignature) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSta
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0002 > FalconMaxSignatureSize {
-			err = msgp.ErrOverflow(uint64(zb0002), uint64(FalconMaxSignatureSize))
+		if zb0002 > Falcon1024MaxSignatureSize {
+			err = msgp.ErrOverflow(uint64(zb0002), uint64(Falcon1024MaxSignatureSize))
 			return
 		}
 		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
@@ -563,48 +613,48 @@ func (z *FalconSignature) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSta
 			err = msgp.WrapError(err)
 			return
 		}
-		(*z) = FalconSignature(zb0001)
+		(*z) = Falcon1024Signature(zb0001)
 	}
 	o = bts
 	return
 }
 
-func (z *FalconSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Falcon1024Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
 }
-func (_ *FalconSignature) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*FalconSignature)
+func (_ *Falcon1024Signature) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon1024Signature)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z FalconSignature) Msgsize() (s int) {
+func (z Falcon1024Signature) Msgsize() (s int) {
 	s = msgp.BytesPrefixSize + len([]byte(z))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z FalconSignature) MsgIsZero() bool {
+func (z Falcon1024Signature) MsgIsZero() bool {
 	return len(z) == 0
 }
 
-// FalconSignatureMaxSize returns a maximum valid message size for this message type
-func FalconSignatureMaxSize() (s int) {
-	s = msgp.BytesPrefixSize + FalconMaxSignatureSize
+// Falcon1024SignatureMaxSize returns a maximum valid message size for this message type
+func Falcon1024SignatureMaxSize() (s int) {
+	s = msgp.BytesPrefixSize + Falcon1024MaxSignatureSize
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *FalconSigner) MarshalMsg(b []byte) (o []byte) {
+func (z *Falcon1024Signer) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0003Len := uint32(2)
 	var zb0003Mask uint8 /* 3 bits */
-	if (*z).PublicKey == (FalconPublicKey{}) {
+	if (*z).PublicKey == (Falcon1024PublicKey{}) {
 		zb0003Len--
 		zb0003Mask |= 0x2
 	}
-	if (*z).PrivateKey == (FalconPrivateKey{}) {
+	if (*z).PrivateKey == (Falcon1024PrivateKey{}) {
 		zb0003Len--
 		zb0003Mask |= 0x4
 	}
@@ -625,13 +675,13 @@ func (z *FalconSigner) MarshalMsg(b []byte) (o []byte) {
 	return
 }
 
-func (_ *FalconSigner) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*FalconSigner)
+func (_ *Falcon1024Signer) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon1024Signer)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *FalconSigner) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+func (z *Falcon1024Signer) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
 	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
@@ -677,7 +727,7 @@ func (z *FalconSigner) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState)
 			return
 		}
 		if zb0004 {
-			(*z) = FalconSigner{}
+			(*z) = Falcon1024Signer{}
 		}
 		for zb0003 > 0 {
 			zb0003--
@@ -712,43 +762,43 @@ func (z *FalconSigner) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState)
 	return
 }
 
-func (z *FalconSigner) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Falcon1024Signer) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
 }
-func (_ *FalconSigner) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*FalconSigner)
+func (_ *Falcon1024Signer) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon1024Signer)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *FalconSigner) Msgsize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + (FalconPublicKeySize * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (FalconPrivateKeySize * (msgp.ByteSize))
+func (z *Falcon1024Signer) Msgsize() (s int) {
+	s = 1 + 3 + msgp.ArrayHeaderSize + (Falcon1024PublicKeySize * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (Falcon1024PrivateKeySize * (msgp.ByteSize))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *FalconSigner) MsgIsZero() bool {
-	return ((*z).PublicKey == (FalconPublicKey{})) && ((*z).PrivateKey == (FalconPrivateKey{}))
+func (z *Falcon1024Signer) MsgIsZero() bool {
+	return ((*z).PublicKey == (Falcon1024PublicKey{})) && ((*z).PrivateKey == (Falcon1024PrivateKey{}))
 }
 
-// FalconSignerMaxSize returns a maximum valid message size for this message type
-func FalconSignerMaxSize() (s int) {
+// Falcon1024SignerMaxSize returns a maximum valid message size for this message type
+func Falcon1024SignerMaxSize() (s int) {
 	s = 1 + 3
 	// Calculating size of array: z.PublicKey
-	s += msgp.ArrayHeaderSize + ((FalconPublicKeySize) * (msgp.ByteSize))
+	s += msgp.ArrayHeaderSize + ((Falcon1024PublicKeySize) * (msgp.ByteSize))
 	s += 3
 	// Calculating size of array: z.PrivateKey
-	s += msgp.ArrayHeaderSize + ((FalconPrivateKeySize) * (msgp.ByteSize))
+	s += msgp.ArrayHeaderSize + ((Falcon1024PrivateKeySize) * (msgp.ByteSize))
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *FalconVerifier) MarshalMsg(b []byte) (o []byte) {
+func (z *Falcon1024Verifier) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0002Len := uint32(1)
 	var zb0002Mask uint8 /* 2 bits */
-	if (*z).PublicKey == (FalconPublicKey{}) {
+	if (*z).PublicKey == (Falcon1024PublicKey{}) {
 		zb0002Len--
 		zb0002Mask |= 0x2
 	}
@@ -764,13 +814,13 @@ func (z *FalconVerifier) MarshalMsg(b []byte) (o []byte) {
 	return
 }
 
-func (_ *FalconVerifier) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*FalconVerifier)
+func (_ *Falcon1024Verifier) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon1024Verifier)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *FalconVerifier) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+func (z *Falcon1024Verifier) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
 	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
@@ -808,7 +858,7 @@ func (z *FalconVerifier) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalStat
 			return
 		}
 		if zb0003 {
-			(*z) = FalconVerifier{}
+			(*z) = Falcon1024Verifier{}
 		}
 		for zb0002 > 0 {
 			zb0002--
@@ -837,30 +887,478 @@ func (z *FalconVerifier) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalStat
 	return
 }
 
-func (z *FalconVerifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Falcon1024Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
 }
-func (_ *FalconVerifier) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*FalconVerifier)
+func (_ *Falcon1024Verifier) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon1024Verifier)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *FalconVerifier) Msgsize() (s int) {
-	s = 1 + 2 + msgp.ArrayHeaderSize + (FalconPublicKeySize * (msgp.ByteSize))
+func (z *Falcon1024Verifier) Msgsize() (s int) {
+	s = 1 + 2 + msgp.ArrayHeaderSize + (Falcon1024PublicKeySize * (msgp.ByteSize))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *FalconVerifier) MsgIsZero() bool {
-	return ((*z).PublicKey == (FalconPublicKey{}))
+func (z *Falcon1024Verifier) MsgIsZero() bool {
+	return ((*z).PublicKey == (Falcon1024PublicKey{}))
 }
 
-// FalconVerifierMaxSize returns a maximum valid message size for this message type
-func FalconVerifierMaxSize() (s int) {
+// Falcon1024VerifierMaxSize returns a maximum valid message size for this message type
+func Falcon1024VerifierMaxSize() (s int) {
 	s = 1 + 2
 	// Calculating size of array: z.PublicKey
-	s += msgp.ArrayHeaderSize + ((FalconPublicKeySize) * (msgp.ByteSize))
+	s += msgp.ArrayHeaderSize + ((Falcon1024PublicKeySize) * (msgp.ByteSize))
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *Falcon512PrivateKey) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendBytes(o, (*z)[:])
+	return
+}
+
+func (_ *Falcon512PrivateKey) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon512PrivateKey)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *Falcon512PrivateKey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	o = bts
+	return
+}
+
+func (z *Falcon512PrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *Falcon512PrivateKey) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon512PrivateKey)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *Falcon512PrivateKey) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize + (Falcon512PrivateKeySize * (msgp.ByteSize))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *Falcon512PrivateKey) MsgIsZero() bool {
+	return (*z) == (Falcon512PrivateKey{})
+}
+
+// Falcon512PrivateKeyMaxSize returns a maximum valid message size for this message type
+func Falcon512PrivateKeyMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((Falcon512PrivateKeySize) * (msgp.ByteSize))
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *Falcon512PublicKey) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendBytes(o, (*z)[:])
+	return
+}
+
+func (_ *Falcon512PublicKey) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon512PublicKey)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *Falcon512PublicKey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	o = bts
+	return
+}
+
+func (z *Falcon512PublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *Falcon512PublicKey) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon512PublicKey)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *Falcon512PublicKey) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize + (Falcon512PublicKeySize * (msgp.ByteSize))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *Falcon512PublicKey) MsgIsZero() bool {
+	return (*z) == (Falcon512PublicKey{})
+}
+
+// Falcon512PublicKeyMaxSize returns a maximum valid message size for this message type
+func Falcon512PublicKeyMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((Falcon512PublicKeySize) * (msgp.ByteSize))
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z Falcon512Signature) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendBytes(o, []byte(z))
+	return
+}
+
+func (_ Falcon512Signature) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(Falcon512Signature)
+	if !ok {
+		_, ok = (z).(*Falcon512Signature)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *Falcon512Signature) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	{
+		var zb0001 []byte
+		var zb0002 int
+		zb0002, err = msgp.ReadBytesBytesHeader(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > Falcon512MaxSignatureSize {
+			err = msgp.ErrOverflow(uint64(zb0002), uint64(Falcon512MaxSignatureSize))
+			return
+		}
+		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = Falcon512Signature(zb0001)
+	}
+	o = bts
+	return
+}
+
+func (z *Falcon512Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *Falcon512Signature) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon512Signature)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z Falcon512Signature) Msgsize() (s int) {
+	s = msgp.BytesPrefixSize + len([]byte(z))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z Falcon512Signature) MsgIsZero() bool {
+	return len(z) == 0
+}
+
+// Falcon512SignatureMaxSize returns a maximum valid message size for this message type
+func Falcon512SignatureMaxSize() (s int) {
+	s = msgp.BytesPrefixSize + Falcon512MaxSignatureSize
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *Falcon512Signer) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0003Len := uint32(2)
+	var zb0003Mask uint8 /* 3 bits */
+	if (*z).PublicKey == (Falcon512PublicKey{}) {
+		zb0003Len--
+		zb0003Mask |= 0x2
+	}
+	if (*z).PrivateKey == (Falcon512PrivateKey{}) {
+		zb0003Len--
+		zb0003Mask |= 0x4
+	}
+	// variable map header, size zb0003Len
+	o = append(o, 0x80|uint8(zb0003Len))
+	if zb0003Len != 0 {
+		if (zb0003Mask & 0x2) == 0 { // if not empty
+			// string "pk"
+			o = append(o, 0xa2, 0x70, 0x6b)
+			o = msgp.AppendBytes(o, ((*z).PublicKey)[:])
+		}
+		if (zb0003Mask & 0x4) == 0 { // if not empty
+			// string "sk"
+			o = append(o, 0xa2, 0x73, 0x6b)
+			o = msgp.AppendBytes(o, ((*z).PrivateKey)[:])
+		}
+	}
+	return
+}
+
+func (_ *Falcon512Signer) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon512Signer)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *Falcon512Signer) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	var field []byte
+	_ = field
+	var zb0003 int
+	var zb0004 bool
+	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0003 > 0 {
+			zb0003--
+			bts, err = msgp.ReadExactBytes(bts, ((*z).PublicKey)[:])
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "PublicKey")
+				return
+			}
+		}
+		if zb0003 > 0 {
+			zb0003--
+			bts, err = msgp.ReadExactBytes(bts, ((*z).PrivateKey)[:])
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "PrivateKey")
+				return
+			}
+		}
+		if zb0003 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0003)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0004 {
+			(*z) = Falcon512Signer{}
+		}
+		for zb0003 > 0 {
+			zb0003--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "pk":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).PublicKey)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "PublicKey")
+					return
+				}
+			case "sk":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).PrivateKey)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "PrivateKey")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (z *Falcon512Signer) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *Falcon512Signer) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon512Signer)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *Falcon512Signer) Msgsize() (s int) {
+	s = 1 + 3 + msgp.ArrayHeaderSize + (Falcon512PublicKeySize * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (Falcon512PrivateKeySize * (msgp.ByteSize))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *Falcon512Signer) MsgIsZero() bool {
+	return ((*z).PublicKey == (Falcon512PublicKey{})) && ((*z).PrivateKey == (Falcon512PrivateKey{}))
+}
+
+// Falcon512SignerMaxSize returns a maximum valid message size for this message type
+func Falcon512SignerMaxSize() (s int) {
+	s = 1 + 3
+	// Calculating size of array: z.PublicKey
+	s += msgp.ArrayHeaderSize + ((Falcon512PublicKeySize) * (msgp.ByteSize))
+	s += 3
+	// Calculating size of array: z.PrivateKey
+	s += msgp.ArrayHeaderSize + ((Falcon512PrivateKeySize) * (msgp.ByteSize))
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *Falcon512Verifier) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0002Len := uint32(1)
+	var zb0002Mask uint8 /* 2 bits */
+	if (*z).PublicKey == (Falcon512PublicKey{}) {
+		zb0002Len--
+		zb0002Mask |= 0x2
+	}
+	// variable map header, size zb0002Len
+	o = append(o, 0x80|uint8(zb0002Len))
+	if zb0002Len != 0 {
+		if (zb0002Mask & 0x2) == 0 { // if not empty
+			// string "k"
+			o = append(o, 0xa1, 0x6b)
+			o = msgp.AppendBytes(o, ((*z).PublicKey)[:])
+		}
+	}
+	return
+}
+
+func (_ *Falcon512Verifier) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon512Verifier)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *Falcon512Verifier) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	var field []byte
+	_ = field
+	var zb0002 int
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > 0 {
+			zb0002--
+			bts, err = msgp.ReadExactBytes(bts, ((*z).PublicKey)[:])
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "PublicKey")
+				return
+			}
+		}
+		if zb0002 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0002)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0003 {
+			(*z) = Falcon512Verifier{}
+		}
+		for zb0002 > 0 {
+			zb0002--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "k":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).PublicKey)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "PublicKey")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (z *Falcon512Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *Falcon512Verifier) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon512Verifier)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *Falcon512Verifier) Msgsize() (s int) {
+	s = 1 + 2 + msgp.ArrayHeaderSize + (Falcon512PublicKeySize * (msgp.ByteSize))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *Falcon512Verifier) MsgIsZero() bool {
+	return ((*z).PublicKey == (Falcon512PublicKey{}))
+}
+
+// Falcon512VerifierMaxSize returns a maximum valid message size for this message type
+func Falcon512VerifierMaxSize() (s int) {
+	s = 1 + 2
+	// Calculating size of array: z.PublicKey
+	s += msgp.ArrayHeaderSize + ((Falcon512PublicKeySize) * (msgp.ByteSize))
 	return
 }
 
