@@ -98,6 +98,7 @@ type ResultEvalOverrides struct {
 	MaxLogCalls           *int
 	MaxLogSize            *int
 	ExtraOpcodeBudget     int
+	ExtraFees             uint64
 	FixSigners            bool
 }
 
@@ -249,6 +250,7 @@ func makeSimulationResult(lastRound basics.Round, request Request, developerAPI 
 	resultEvalConstants := ResultEvalOverrides{
 		AllowEmptySignatures:  request.AllowEmptySignatures,
 		ExtraOpcodeBudget:     request.ExtraOpcodeBudget,
+		ExtraFees:             request.ExtraFees,
 		AllowUnnamedResources: request.AllowUnnamedResources,
 		FixSigners:            request.FixSigners,
 	}.AllowMoreLogging(request.AllowMoreLogging)
