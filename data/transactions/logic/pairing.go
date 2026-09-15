@@ -17,9 +17,12 @@
 package logic
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
+	"filippo.io/edwards25519"
+	edfield "filippo.io/edwards25519/field"
 	"github.com/consensys/gnark-crypto/ecc"
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
 	bls12381fp "github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
@@ -44,7 +47,7 @@ const (
 func opEcAdd(cx *EvalContext) error {
 	group := EcGroup(cx.program[cx.pc+1])
 	fs, ok := ecGroupSpecByField(group)
-	if !ok { // no version check yet, both appeared at once
+	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid ec_add group %s", group)
 	}
 
@@ -64,6 +67,8 @@ func opEcAdd(cx *EvalContext) error {
 		res, err = bls12381G1Add(a, b)
 	case BLS12_381g2:
 		res, err = bls12381G2Add(a, b)
+	case ED25519:
+		res, err = ed25519Add(a, b)
 	default:
 		err = fmt.Errorf("invalid ec_add group %s", group)
 	}
@@ -79,7 +84,7 @@ func opEcAdd(cx *EvalContext) error {
 func opEcScalarMul(cx *EvalContext) error {
 	group := EcGroup(cx.program[cx.pc+1])
 	fs, ok := ecGroupSpecByField(group)
-	if !ok { // no version check yet, both appeared at once
+	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid ec_scalar_mul group %s", group)
 	}
 
@@ -103,6 +108,8 @@ func opEcScalarMul(cx *EvalContext) error {
 		res, err = bls12381G1ScalarMul(aBytes, k)
 	case BLS12_381g2:
 		res, err = bls12381G2ScalarMul(aBytes, k)
+	case ED25519:
+		res, err = ed25519ScalarMul(aBytes, k)
 	default:
 		err = fmt.Errorf("invalid ec_scalar_mul group %s", group)
 	}
@@ -119,7 +126,7 @@ func opEcScalarMul(cx *EvalContext) error {
 func opEcPairingCheck(cx *EvalContext) error {
 	group := EcGroup(cx.program[cx.pc+1])
 	fs, ok := ecGroupSpecByField(group)
-	if !ok { // no version check yet, both appeared at once
+	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid ec_pairing_check group %s", group)
 	}
 
@@ -156,7 +163,7 @@ func opEcPairingCheck(cx *EvalContext) error {
 func opEcMultiScalarMul(cx *EvalContext) error {
 	group := EcGroup(cx.program[cx.pc+1])
 	fs, ok := ecGroupSpecByField(group)
-	if !ok { // no version check yet, both appeared at once
+	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid ec_multi_scalar_mul group %s", group)
 	}
 
@@ -176,6 +183,8 @@ func opEcMultiScalarMul(cx *EvalContext) error {
 		res, err = bls12381G1MultiMul(pointBytes, scalarBytes)
 	case BLS12_381g2:
 		res, err = bls12381G2MultiMul(pointBytes, scalarBytes)
+	case ED25519:
+		res, err = ed25519MultiMul(pointBytes, scalarBytes)
 	default:
 		err = fmt.Errorf("invalid ec_multi_scalar_mul group %s", group)
 	}
@@ -193,8 +202,8 @@ func opEcSubgroupCheck(cx *EvalContext) error {
 
 	group := EcGroup(cx.program[cx.pc+1])
 	fs, ok := ecGroupSpecByField(group)
-	if !ok { // no version check yet, both appeared at once
-		return fmt.Errorf("invalid ec_pairing_check group %s", group)
+	if !ok || fs.version > cx.version {
+		return fmt.Errorf("invalid ec_subgroup_check group %s", group)
 	}
 
 	var err error
@@ -208,8 +217,10 @@ func opEcSubgroupCheck(cx *EvalContext) error {
 		ok, err = bls12381G1SubgroupCheck(pointBytes)
 	case BLS12_381g2:
 		ok, err = bls12381G2SubgroupCheck(pointBytes)
+	case ED25519:
+		ok, err = ed25519SubgroupCheck(pointBytes)
 	default:
-		err = fmt.Errorf("invalid ec_pairing_check group %s", group)
+		err = fmt.Errorf("invalid ec_subgroup_check group %s", group)
 	}
 
 	cx.Stack[last] = boolToSV(ok)
@@ -225,8 +236,8 @@ func opEcMapTo(cx *EvalContext) error {
 
 	group := EcGroup(cx.program[cx.pc+1])
 	fs, ok := ecGroupSpecByField(group)
-	if !ok { // no version check yet, both appeared at once
-		return fmt.Errorf("invalid ec_pairing_check group %s", group)
+	if !ok || fs.version > cx.version {
+		return fmt.Errorf("invalid ec_map_to group %s", group)
 	}
 
 	var res []byte
@@ -240,8 +251,12 @@ func opEcMapTo(cx *EvalContext) error {
 		res, err = bls12381MapToG1(fpBytes)
 	case BLS12_381g2:
 		res, err = bls12381MapToG2(fpBytes)
+	case ED25519:
+		res, err = ed25519MapTo(fpBytes)
+	case ED25519_Monero:
+		res, err = ed25519MoneroMapTo(fpBytes)
 	default:
-		err = fmt.Errorf("invalid ec_pairing_check group %s", group)
+		err = fmt.Errorf("invalid ec_map_to group %s", group)
 	}
 	cx.Stack[last].Bytes = res
 	return err
@@ -257,6 +272,9 @@ const (
 	bn254g1Size  = 2 * bn254fpSize
 	bn254fp2Size = 2 * bn254fpSize
 	bn254g2Size  = 2 * bn254fp2Size
+
+	ed25519fpSize    = 32
+	ed25519PointSize = 2 * ed25519fpSize // uncompressed affine: 32 byte X then 32 byte Y, big-endian
 
 	scalarSize = 32
 )
@@ -895,4 +913,454 @@ func bn254G2SubgroupCheck(pointBytes []byte) (bool, error) {
 		return false, err
 	}
 	return point.IsInSubGroup(), nil
+}
+
+// ed25519Order is the prime order L of the ed25519 main subgroup,
+// 2^252 + 27742317777372353535851937790883648493.
+var ed25519Order, _ = new(big.Int).SetString("7237005577332262213973186563042994240857116359379907606001950938285454250989", 10)
+
+// ed25519OrderMinusOne is L-1 as a canonical scalar. Used by the subgroup check
+// to compute [L]P as [L-1]P + P, since edwards25519.Scalar cannot represent L
+// itself (it would reduce to 0).
+var ed25519OrderMinusOne = func() *edwards25519.Scalar {
+	s, err := bigIntToEd25519Scalar(new(big.Int).Sub(ed25519Order, big.NewInt(1)))
+	if err != nil {
+		panic(err) // L-1 is canonical by construction
+	}
+	return s
+}()
+
+// ed25519FieldModulus is p = 2^255 - 19, the ed25519 base field order.
+var ed25519FieldModulus = new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 255), big.NewInt(19))
+
+// reverse32 returns a new slice with the bytes of a (32-byte) coordinate
+// reversed, converting between the big-endian on-stack encoding (shared with
+// the other ec_ groups) and edwards25519/field's little-endian encoding.
+func reverse32(b []byte) []byte {
+	out := make([]byte, len(b))
+	for i := range b {
+		out[len(b)-1-i] = b[i]
+	}
+	return out
+}
+
+// bytesToEd25519Field decodes a 32-byte big-endian field element, rejecting
+// non-canonical encodings (>= p) as the other ec_ groups do.
+func bytesToEd25519Field(b []byte) (*edfield.Element, error) {
+	if big := new(big.Int).SetBytes(b); big.Cmp(ed25519FieldModulus) >= 0 {
+		return nil, fmt.Errorf("ed25519 coordinate %s larger than modulus", big.String())
+	}
+	return new(edfield.Element).SetBytes(reverse32(b)) // length already curve-checked by caller
+}
+
+// bytesToEd25519Point decodes an uncompressed point: 32 byte big-endian X
+// followed by 32 byte big-endian Y, validating that it is on the curve. Like
+// the other ec_ groups, points are kept uncompressed so that chained
+// operations avoid a per-op decompression (square root).
+func bytesToEd25519Point(b []byte) (*edwards25519.Point, error) {
+	if len(b) != ed25519PointSize {
+		return nil, fmt.Errorf("bad ed25519 point length %d. Expected %d", len(b), ed25519PointSize)
+	}
+	x, err := bytesToEd25519Field(b[:ed25519fpSize])
+	if err != nil {
+		return nil, err
+	}
+	y, err := bytesToEd25519Field(b[ed25519fpSize:])
+	if err != nil {
+		return nil, err
+	}
+	// Extended coordinates with Z=1, so T = x*y. SetExtendedCoordinates checks
+	// both the curve equation and the T relation.
+	t := new(edfield.Element).Multiply(x, y)
+	point, err := new(edwards25519.Point).SetExtendedCoordinates(x, y, new(edfield.Element).One(), t)
+	if err != nil {
+		return nil, fmt.Errorf("invalid ed25519 point: %w", err)
+	}
+	return point, nil
+}
+
+// ed25519PointToBytes encodes a point as uncompressed 32 byte big-endian X
+// followed by 32 byte big-endian Y. The single field inversion to recover
+// affine coordinates is the only unavoidable per-op cost, matching the gnark
+// curves.
+func ed25519PointToBytes(point *edwards25519.Point) []byte {
+	bigX, bigY, bigZ, _ := point.ExtendedCoordinates()
+	zInv := new(edfield.Element).Invert(bigZ)
+	var x, y edfield.Element
+	x.Multiply(bigX, zInv)
+	y.Multiply(bigY, zInv)
+	out := make([]byte, ed25519PointSize)
+	copy(out[:ed25519fpSize], reverse32(x.Bytes()))
+	copy(out[ed25519fpSize:], reverse32(y.Bytes()))
+	return out
+}
+
+// bigIntToEd25519Scalar reduces a big-endian integer (the on-stack scalar
+// convention shared by all ec_ opcodes) modulo L and returns it as a canonical
+// edwards25519.Scalar.
+func bigIntToEd25519Scalar(k *big.Int) (*edwards25519.Scalar, error) {
+	be := new(big.Int).Mod(k, ed25519Order).Bytes() // 0 <= r < L, big-endian, <= 32 bytes
+	var le [32]byte
+	for i := range be {
+		le[len(be)-1-i] = be[i] // reverse to little-endian, leaving high bytes zero
+	}
+	return new(edwards25519.Scalar).SetCanonicalBytes(le[:])
+}
+
+func ed25519Add(aBytes, bBytes []byte) ([]byte, error) {
+	a, err := bytesToEd25519Point(aBytes)
+	if err != nil {
+		return nil, err
+	}
+	b, err := bytesToEd25519Point(bBytes)
+	if err != nil {
+		return nil, err
+	}
+	var res edwards25519.Point
+	res.Add(a, b)
+	return ed25519PointToBytes(&res), nil
+}
+
+// The scalar multiplications below use edwards25519's variable-time routines,
+// whose running time depends on the scalar. There is nothing to leak: a
+// program, its arguments, and the whole transaction are public, so the scalars
+// these opcodes multiply by are public too. They are about 40% faster than the
+// constant-time equivalents, and produce identical results. Their costs are set
+// from the worst-case scalar rather than a typical one, which BenchmarkEd25519
+// measures directly.
+func ed25519ScalarMul(aBytes []byte, k *big.Int) ([]byte, error) {
+	a, err := bytesToEd25519Point(aBytes)
+	if err != nil {
+		return nil, err
+	}
+	s, err := bigIntToEd25519Scalar(k)
+	if err != nil {
+		return nil, err
+	}
+	var res edwards25519.Point
+	res.VarTimeMultiScalarMult([]*edwards25519.Scalar{s}, []*edwards25519.Point{a})
+	return ed25519PointToBytes(&res), nil
+}
+
+func ed25519MultiMul(pointBytes, scalarBytes []byte) ([]byte, error) {
+	if len(pointBytes)%ed25519PointSize != 0 {
+		return nil, fmt.Errorf("bad ed25519 points length %d, not a multiple of %d", len(pointBytes), ed25519PointSize)
+	}
+	n := len(pointBytes) / ed25519PointSize
+	if n == 0 {
+		return nil, errEmptyInput // as the other groups do, though the empty sum is the identity
+	}
+	if len(scalarBytes) != scalarSize*n {
+		return nil, fmt.Errorf("bad scalars length %d. Expected %d", len(scalarBytes), scalarSize*n)
+	}
+	points := make([]*edwards25519.Point, n)
+	scalars := make([]*edwards25519.Scalar, n)
+	for i := range points {
+		var err error
+		points[i], err = bytesToEd25519Point(pointBytes[i*ed25519PointSize : (i+1)*ed25519PointSize])
+		if err != nil {
+			return nil, err
+		}
+		k := new(big.Int).SetBytes(scalarBytes[i*scalarSize : (i+1)*scalarSize])
+		scalars[i], err = bigIntToEd25519Scalar(k)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var res edwards25519.Point
+	res.VarTimeMultiScalarMult(scalars, points)
+	return ed25519PointToBytes(&res), nil
+}
+
+// ed25519SubgroupCheck reports whether the point is in the prime-order
+// subgroup, i.e. it is torsion-free. P is torsion-free iff [L]P is the
+// identity, computed here as [L-1]P + P.
+func ed25519SubgroupCheck(pointBytes []byte) (bool, error) {
+	point, err := bytesToEd25519Point(pointBytes)
+	if err != nil {
+		return false, err
+	}
+	var lp edwards25519.Point
+	lp.VarTimeMultiScalarMult([]*edwards25519.Scalar{ed25519OrderMinusOne}, []*edwards25519.Point{point})
+	lp.Add(&lp, point)
+	return lp.Equal(edwards25519.NewIdentityPoint()) == 1, nil
+}
+
+// ed25519MontJ is the J coefficient of curve25519, K*t^2 = s^3 + J*s^2 + s with
+// K of 1, the Montgomery curve that edwards25519 is birationally equivalent to.
+var ed25519MontJ = new(edfield.Element).Mult32(new(edfield.Element).One(), 486662)
+
+// ed25519MapC is sqrt(-486664), the constant in the birational map from
+// curve25519 to edwards25519. RFC 9380 requires the root whose sgn0 is 0, so
+// that mapping the edwards25519 base point yields the curve25519 base point.
+// SqrtRatio returns exactly that root.
+var ed25519MapC = func() *edfield.Element {
+	var negJ2 edfield.Element
+	negJ2.Mult32(new(edfield.Element).One(), 486664)
+	negJ2.Negate(&negJ2)
+	c, wasSquare := new(edfield.Element).SqrtRatio(&negJ2, new(edfield.Element).One())
+	if wasSquare != 1 {
+		panic("edwards25519: -486664 is not square") // it is
+	}
+	return c
+}()
+
+// ed25519MapInput decodes the argument both edwards25519 maps take: a
+// big-endian field element below the modulus, which need not be 0-padded, as
+// for the other curves.
+func ed25519MapInput(fpBytes []byte) (*edfield.Element, error) {
+	if len(fpBytes) > ed25519fpSize {
+		return nil, fmt.Errorf("bad ed25519 field element length %d. Expected at most %d",
+			len(fpBytes), ed25519fpSize)
+	}
+	padded := make([]byte, ed25519fpSize)
+	copy(padded[ed25519fpSize-len(fpBytes):], fpBytes)
+	return bytesToEd25519Field(padded)
+}
+
+// ed25519MapTo is RFC 9380's map_to_curve_elligator2_edwards25519, followed by
+// clearing the cofactor so that the result is always in the prime-order
+// subgroup - the guarantee the other groups' maps make as well.
+//
+// It is map_to_curve, not hash_to_curve. It maps one field element, and does
+// not hash. Producing that element from a message (RFC 9380's expand_message
+// with a domain separation tag) is the caller's job, as is mapping two elements
+// and adding them if the caller needs an output uniform over the group. A
+// single mapped element is not uniform.
+//
+// ec_map_to means "this curve's standard map", SSWU for BLS12-381 and SVDW for
+// BN254, and for edwards25519 that is Elligator 2. It is also what this node
+// already computes elsewhere, since vrf_verify is
+// ECVRF-ED25519-SHA512-Elligator2. Protocols predating RFC 9380 hash to this
+// curve by their own maps, and those are deliberately not what this computes. A
+// program that wants such a map names it: ED25519_Monero selects the one
+// CryptoNote wrote, in ed25519MoneroMapTo below.
+//
+// Coordinates are carried as fractions rather than divided, so the square root
+// and the one inversion needed to encode the result are the only
+// exponentiations.
+func ed25519MapTo(fpBytes []byte) ([]byte, error) {
+	u, err := ed25519MapInput(fpBytes)
+	if err != nil {
+		return nil, err
+	}
+	one := new(edfield.Element).One()
+
+	// Elligator 2 onto curve25519, keeping x as the fraction xMn/xMd
+	var zuu, xMd, x1n, xMd2, gxd, gx1n edfield.Element
+	zuu.Square(u)
+	zuu.Add(&zuu, &zuu)      // Z*u^2, the suite's Z being 2
+	xMd.Add(&zuu, one)       // 1 + Z*u^2, never 0: -1 is square and Z*u^2 is not
+	x1n.Negate(ed25519MontJ) // x1 = -J / (1 + Z*u^2)
+	xMd2.Square(&xMd)
+	gxd.Multiply(&xMd2, &xMd) // xMd^3, the denominator of g(x1) and g(x2)
+	gx1n.Multiply(ed25519MontJ, &zuu)
+	gx1n.Multiply(&gx1n, &x1n)
+	gx1n.Add(&gx1n, &xMd2)
+	gx1n.Multiply(&gx1n, &x1n) // x1n^3 + J*x1n^2*xMd + x1n*xMd^2
+
+	xMn := x1n
+	yM, wasSquare := new(edfield.Element).SqrtRatio(&gx1n, &gxd)
+	if wasSquare == 1 {
+		yM.Negate(yM) // RFC 9380 wants sgn0 of 1 here, where SqrtRatio gives 0
+	} else {
+		// x2 = Z*u^2*x1, whose g() is Z*u^2*g(x1), and is square when g(x1) is not
+		xMn.Multiply(&x1n, &zuu)
+		var gx2n edfield.Element
+		gx2n.Multiply(&gx1n, &zuu)
+		var square int
+		if yM, square = new(edfield.Element).SqrtRatio(&gx2n, &gxd); square != 1 {
+			return nil, errors.New("ed25519 elligator2: neither candidate was square")
+		}
+		// and here it wants sgn0 of 0, which is what SqrtRatio returns
+	}
+
+	// across the birational map: x = c*xM/yM and y = (xM-1)/(xM+1), with xM
+	// still a fraction, so both coordinates come out as fractions too
+	var xn, xd, yn, yd, degenerate edfield.Element
+	xn.Multiply(&xMn, ed25519MapC)
+	xd.Multiply(&xMd, yM)
+	yn.Subtract(&xMn, &xMd)
+	yd.Add(&xMn, &xMd)
+	degenerate.Multiply(&xd, &yd)
+	if degenerate.Equal(new(edfield.Element).Zero()) == 1 {
+		xn.Zero() // the map sends these to the identity
+		xd.One()
+		yn.One()
+		yd.One()
+	}
+
+	// extended coordinates are projective, so the fractions go straight in:
+	// X/Z is xn/xd, Y/Z is yn/yd, and the T relation X*Y == Z*T holds
+	var X, Y, Z, T edfield.Element
+	X.Multiply(&xn, &yd)
+	Y.Multiply(&yn, &xd)
+	Z.Multiply(&xd, &yd)
+	T.Multiply(&xn, &yn)
+	var point edwards25519.Point
+	if _, err := point.SetExtendedCoordinates(&X, &Y, &Z, &T); err != nil {
+		return nil, fmt.Errorf("ed25519 elligator2 left the curve: %w", err)
+	}
+	point.MultByCofactor(&point) // into the prime-order subgroup
+	return ed25519PointToBytes(&point), nil
+}
+
+// The constants of the CryptoNote map, all derived from J, which Monero's C
+// calls A. Monero stores them as fixed limb arrays in crypto-ops-data.c; naming
+// what they are here is what lets the port be read against the original.
+//
+// The four roots all exist. p is 5 mod 8, so 2 and sqrt(-1) are both
+// non-squares, and J*(J+2) is a non-square as well, which leaves 2*J*(J+2) and
+// both of +/-sqrt(-1)*J*(J+2) squares. TestEd25519MoneroConstants checks each
+// one rather than trusting that sentence.
+//
+// Which root of each SqrtRatio returns does not matter. The map's last step
+// forces the sign of the result to the branch it took, and using the other root
+// of -1 swaps the fffb3 and fffb4 branches and their constants together.
+var (
+	ed25519MontNegJ   = new(edfield.Element).Negate(ed25519MontJ)                 // -A
+	ed25519MontNegJSq = new(edfield.Element).Negate(ed25519Squared(ed25519MontJ)) // -A^2
+	ed25519SqrtM1     = ed25519MustSqrt(new(edfield.Element).Negate(new(edfield.Element).One()))
+
+	// J*(J+2) and twice it, the values the four roots are roots of
+	ed25519MontJJ2 = new(edfield.Element).Multiply(ed25519MontJ,
+		new(edfield.Element).Add(ed25519MontJ, new(edfield.Element).Mult32(new(edfield.Element).One(), 2)))
+	ed25519MontJJ2x2 = new(edfield.Element).Add(ed25519MontJJ2, ed25519MontJJ2)
+
+	ed25519MoneroFFFB1 = ed25519MustSqrt(new(edfield.Element).Negate(ed25519MontJJ2x2)) // sqrt(-2*A*(A+2))
+	ed25519MoneroFFFB2 = ed25519MustSqrt(ed25519MontJJ2x2)                              // sqrt(2*A*(A+2))
+	ed25519MoneroFFFB3 = ed25519MustSqrt(new(edfield.Element).Multiply(
+		new(edfield.Element).Negate(ed25519SqrtM1), ed25519MontJJ2)) // sqrt(-sqrt(-1)*A*(A+2))
+	ed25519MoneroFFFB4 = ed25519MustSqrt(new(edfield.Element).Multiply(
+		ed25519SqrtM1, ed25519MontJJ2)) // sqrt(sqrt(-1)*A*(A+2))
+)
+
+func ed25519Squared(x *edfield.Element) *edfield.Element {
+	return new(edfield.Element).Square(x)
+}
+
+// ed25519MustSqrt returns a square root of x, panicking if x has none. Every use
+// is on a constant, so a panic here is a bug in this file rather than anything a
+// program can cause.
+func ed25519MustSqrt(x *edfield.Element) *edfield.Element {
+	root, wasSquare := new(edfield.Element).SqrtRatio(x, new(edfield.Element).One())
+	if wasSquare != 1 {
+		panic("edwards25519: constant is not a square")
+	}
+	return root
+}
+
+// ed25519DivPowM1 returns (u/v)^((p+3)/8), which is a square root of u/v when
+// one exists, and sqrt(-1) times one when it does not. It is Monero's
+// fe_divpowm1: u*v^3*(u*v^7)^((p-5)/8), which trades the inversion u/v would
+// need for a few multiplications, since Pow22523 is x^((p-5)/8) already.
+func ed25519DivPowM1(u, v *edfield.Element) *edfield.Element {
+	var v3, uv7, t edfield.Element
+	v3.Multiply(ed25519Squared(v), v)    // v^3
+	uv7.Multiply(ed25519Squared(&v3), v) // v^7
+	uv7.Multiply(&uv7, u)                // u*v^7
+	t.Pow22523(&uv7)                     // (u*v^7)^((p-5)/8)
+	t.Multiply(&t, &v3)
+	return t.Multiply(&t, u)
+}
+
+// ed25519MoneroMapTo is CryptoNote's ge_fromfe_frombytes_vartime followed by
+// ge_mul8, which together are Monero's map to edwards25519: the second half of
+// its hash_to_ec, and all of the hash_to_point its own tests name. A program
+// composes the whole of hash_to_ec by hashing first, and the argument here is
+// the field element that hash produced, big-endian and reduced, exactly as
+// ec_map_to takes for every other group.
+//
+// The point of it is that Monero's key images are I = [x]H_p(P), so a contract
+// that cannot compute H_p cannot check a Monero linkable ring signature at all.
+//
+// It is Elligator 2 as well, over the same curve with the same Z of 2, which is
+// nearer to ED25519 than it looks: the two agree on the Montgomery x, and can
+// differ only in which square root they take. They do differ, on exactly the
+// inputs that reach the negative branch below, and those are half of all
+// inputs.  So the results are the same point half the time and negations of
+// each other otherwise, and a program that reached for ED25519 instead of this
+// would compute the right key image half the time.  The standard map keeps the
+// plain name; see the comment on ed25519MapTo.
+//
+// This is a faithful port, written to be read beside the C rather than to be
+// written fresh. The C reaches its common tail with a goto, which here is the
+// sign == 0 test after the branches.
+//
+// The map is not injective and its output is not uniform over the group - the
+// non-uniformity is why current Monero calls the wrapper biased_hash_to_ec - so
+// everything ed25519MapTo says about map versus hash applies here too.
+func ed25519MoneroMapTo(fpBytes []byte) ([]byte, error) {
+	u, err := ed25519MapInput(fpBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	zero := new(edfield.Element).Zero()
+	isZero := func(e *edfield.Element) bool { return e.Equal(zero) == 1 }
+
+	var v, w, x, z, X edfield.Element
+	uu := ed25519Squared(u)
+	v.Add(uu, uu) // v = 2*u^2
+	w.Add(&v, new(edfield.Element).One())
+	x.Add(ed25519Squared(&w), new(edfield.Element).Multiply(ed25519MontNegJSq, &v)) // x = w^2 - A^2*v
+	X.Set(ed25519DivPowM1(&w, &x))
+	x.Multiply(ed25519Squared(&X), &x) // the candidate root, squared back
+	z.Set(ed25519MontNegJ)
+
+	// Which root the candidate is a root of decides both the constant that
+	// turns it into the root of what is wanted, and the sign forced below.
+	var root *edfield.Element
+	sign := 0
+	switch {
+	case isZero(new(edfield.Element).Subtract(&w, &x)): // x == w
+		root = ed25519MoneroFFFB2
+	case isZero(new(edfield.Element).Add(&w, &x)): // x == -w
+		root = ed25519MoneroFFFB1
+	default:
+		// w/x was not a square, so x is sqrt(-1) times w, of one sign or other
+		x.Multiply(&x, ed25519SqrtM1)
+		switch {
+		case isZero(new(edfield.Element).Subtract(&w, &x)):
+			root = ed25519MoneroFFFB4
+		case isZero(new(edfield.Element).Add(&w, &x)):
+			root = ed25519MoneroFFFB3
+		default:
+			// the C asserts this cannot happen. Inputs are attacker
+			// controlled, so it is an error here rather than a panic, though
+			// no input is known to reach it.
+			return nil, errors.New("ed25519 monero map: no branch matched")
+		}
+		sign = 1
+	}
+	X.Multiply(&X, root)
+	if sign == 0 { // only the square branches scale by u and z by v
+		X.Multiply(&X, u)
+		z.Multiply(&z, &v) // -A*v
+	}
+	if X.IsNegative() != sign {
+		X.Negate(&X)
+	}
+
+	// affine x is X and affine y is (z-w)/(z+w), so extended coordinates take
+	// the fraction directly: X*Z over Z, and (z-w) over Z, with X*Y == Z*T
+	var Y, Z, T edfield.Element
+	Z.Add(&z, &w)
+	Y.Subtract(&z, &w)
+	if isZero(&Z) {
+		// Z is zero only for u^2 == 1/(2*(A-1)) or u^2 == (A-1)/2, and
+		// TestEd25519MoneroConstants shows neither is a square, so no input
+		// reaches this. Monero, whose check of the curve equation here is a
+		// debug-build assert, would carry the degenerate point forward.
+		return nil, errors.New("ed25519 monero map: degenerate point")
+	}
+	T.Multiply(&X, &Y)
+	X.Multiply(&X, &Z)
+
+	var point edwards25519.Point
+	if _, err := point.SetExtendedCoordinates(&X, &Y, &Z, &T); err != nil {
+		return nil, fmt.Errorf("ed25519 monero map left the curve: %w", err)
+	}
+	point.MultByCofactor(&point) // ge_mul8
+	return ed25519PointToBytes(&point), nil
 }
