@@ -1608,6 +1608,74 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	verifyGroup(t, txnGroups, &blkHdr, breakSignatureFunc, restoreSignatureFunc, "rejected by logic")
 }
 
+// TestLogicSigArgAccess checks the consensus rule that a LogicSig may carry no
+// argument it did not read: none above the highest index it read, and none
+// unread below that index unless it is empty. The program used here is a v1
+// program, which demonstrates that the rule is gated on consensus rather than on
+// the program's LogicSig version.
+func TestLogicSigArgAccess(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Reads args 0 and 2, deliberately skipping 1.
+	ops, err := logic.AssembleString("arg 0; len; int 1; ==; arg 2; len; int 1; ==; &&")
+	require.NoError(t, err)
+	programAddr := basics.Address(logic.HashProgram(ops.Program))
+
+	signed := func(args ...[]byte) transactions.SignedTxn {
+		pay := txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   programAddr,
+			Receiver: poolAddr,
+			Fee:      config.Consensus[protocol.ConsensusFuture].MinTxnFee,
+		}
+		return transactions.SignedTxn{
+			Lsig: transactions.LogicSig{Logic: ops.Program, Args: args},
+			Txn:  pay.Txn(),
+		}
+	}
+
+	x := []byte("x")
+
+	// Padding an lsig alters nothing that any signature or hash covers. This is
+	// the property the rule exists to compensate for, so pin it here.
+	t.Run("padding does not change the txid", func(t *testing.T) {
+		require.Equal(t, signed(x, nil, x).ID(), signed(x, nil, x, []byte("junk")).ID())
+	})
+
+	cases := []struct {
+		name string
+		args [][]byte
+		bad  bool
+	}{
+		{"exactly what is read", [][]byte{x, nil, x}, false},
+		{"empty hole below the mark", [][]byte{x, {}, x}, false},
+		{"filled hole below the mark", [][]byte{x, []byte("junk"), x}, true},
+		{"junk appended", [][]byte{x, nil, x, []byte("junk")}, true},
+		{"empty appended", [][]byte{x, nil, x, {}}, true},
+	}
+
+	dummyLedger := DummyLedgerForSignature{}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Without the consensus rule every shape is accepted, which is what
+			// makes the padding undetectable today.
+			permissive := createDummyBlockHeader(protocol.ConsensusV42)
+			_, err := TxnGroup([]transactions.SignedTxn{signed(tc.args...)}, &permissive, nil, &dummyLedger)
+			require.NoError(t, err)
+
+			strict := createDummyBlockHeader(protocol.ConsensusFuture)
+			_, err = TxnGroup([]transactions.SignedTxn{signed(tc.args...)}, &strict, nil, &dummyLedger)
+			if !tc.bad {
+				require.NoError(t, err)
+				return
+			}
+			requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
+			require.ErrorContains(t, err, "was not accessed")
+		})
+	}
+}
+
 func createDummyBlockHeader(optVer ...protocol.ConsensusVersion) bookkeeping.BlockHeader {
 	// Most tests in this file were written to use current.  Future is probably
 	// the better test, but I don't want to make that choice now, so optVer.
@@ -1746,6 +1814,18 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 			minSize = 5
 		}
 		program, err := txntest.GenerateUnsaltedProgramOfSize(uint(minSize), uint(proto.LogicSigVersion))
+		require.NoError(t, err)
+		return program
+	}
+
+	// A LogicSig may carry no argument it does not read, so any case below that
+	// supplies args and expects success needs a program that reads them. Seven
+	// bytes is the smallest program with room for one arg read.
+	makeArgProgram := func(proto config.ConsensusParams, minSize int, args uint) []byte {
+		if minSize < 7 {
+			minSize = 7
+		}
+		program, err := txntest.GenerateUnsaltedArgReadingProgramOfSize(uint(minSize), uint(proto.LogicSigVersion), args)
 		require.NoError(t, err)
 		return program
 	}
@@ -1949,7 +2029,7 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 	})
 
 	t.Run("vFuture: singleton program and args have independent allowances", func(t *testing.T) {
-		program := makeProgram(vFuture, int(vFuture.LogicSigMaxSize))
+		program := makeArgProgram(vFuture, int(vFuture.LogicSigMaxSize), 1)
 		args := [][]byte{make([]byte, int(vFuture.LogicSigMaxSize))}
 
 		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{makeLogicSigTxn(program, args)})
@@ -1966,10 +2046,11 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 
 	t.Run("vFuture: LogicSig args above allowance can use size pooling", func(t *testing.T) {
 		program := makeProgram(vFuture, 0)
+		argProgram := makeArgProgram(vFuture, 0, 1)
 		args := [][]byte{make([]byte, int(vFuture.LogicSigMaxSize)+1)}
 
 		stxns := amendTxGroupID([]transactions.SignedTxn{
-			makeLogicSigTxnForReceiver(program, args, basics.Address{1}),
+			makeLogicSigTxnForReceiver(argProgram, args, basics.Address{1}),
 			makeLogicSigTxnForReceiver(program, nil, basics.Address{2}),
 			makeLogicSigTxnForReceiver(program, nil, basics.Address{3}),
 		})
