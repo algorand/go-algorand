@@ -83,7 +83,7 @@ var opDescByName = map[string]OpDesc{
 	},
 	"ec_scalar_mul": {"for curve point A and scalar B, return the curve point BA, the point A multiplied by the scalar B.",
 		"A is a curve point encoded and checked as described in `ec_add`. Scalar B is interpreted as a big-endian unsigned integer. Fails if B exceeds 32 bytes.\n" +
-			"B is reduced modulo the order of the main prime-order subgroup of G before use, so scalars larger than that order wrap around. When A is in that subgroup the result is the ordinary multiple of A by B. Subgroup membership is not checked, as in `ec_add`.",
+			"B is reduced modulo the order of the main prime-order subgroup of G before use, so scalars larger than that order wrap around. When A is in that subgroup the result is the ordinary multiple of A by B. Subgroup membership is not checked, as in `ec_add`. For `BN254g2`, `BLS12_381g1`, and `BLS12_381g2`, programs must not rely on the result when A is outside the main prime-order subgroup.",
 		[]string{"curve index"}, "",
 	},
 	"ec_pairing_check": {"1 if the product of the pairing of each point in A with its respective point in B is equal to the identity element of the target group Gt, else 0",
@@ -91,7 +91,7 @@ var opDescByName = map[string]OpDesc{
 		[]string{"curve index"}, "",
 	},
 	"ec_multi_scalar_mul": {"for curve points A and scalars B, return curve point B0A0 + B1A1 + B2A2 + ... + BnAn",
-		fmt.Sprintf("A is a list of concatenated points, encoded and checked as described in `ec_add`. B is a list of concatenated scalars which, unlike ec_scalar_mul, must all be exactly 32 bytes long. Each scalar is reduced, and each product formed, as described in `ec_scalar_mul`.\nThe operation computes the sum of the individual scalar multiplications, and is often called multi-exponentiation. AVM values are limited to %d bytes, so `ec_multi_scalar_mul` is limited by the size of the points in the group being operated upon.", maxStringSize),
+		fmt.Sprintf("A is a list of concatenated points, encoded and checked as described in `ec_add`. B is a list of concatenated scalars which, unlike `ec_scalar_mul`, must all be exactly 32 bytes long. Each product formed as described in `ec_scalar_mul`.\nThe operation computes the sum of the individual scalar multiplications, and is often called multi-exponentiation. AVM values are limited to %d bytes, so `ec_multi_scalar_mul` is limited by the size of the points in the group being operated upon.", maxStringSize),
 		[]string{"curve index"}, "",
 	},
 	"ec_subgroup_check": {"1 if A is in the main prime-order subgroup of G (including the point at infinity) else 0. Program fails if A is not in G at all.", "", []string{"curve index"}, ""},

@@ -1846,7 +1846,7 @@ Does _not_ check if A and B are in the main prime-order subgroup.
 - Availability: v10
 
 A is a curve point encoded and checked as described in `ec_add`. Scalar B is interpreted as a big-endian unsigned integer. Fails if B exceeds 32 bytes.
-B is reduced modulo the order of the main prime-order subgroup of G before use, so scalars larger than that order wrap around. When A is in that subgroup the result is the ordinary multiple of A by B. Subgroup membership is not checked, as in `ec_add`.
+B is reduced modulo the order of the main prime-order subgroup of G before use, so scalars larger than that order wrap around. When A is in that subgroup the result is the ordinary multiple of A by B. Subgroup membership is not checked, as in `ec_add`. For `BN254g2`, `BLS12_381g1`, and `BLS12_381g2`, programs must not rely on the result when A is outside the main prime-order subgroup.
 
 ## ec_pairing_check
 
@@ -1868,7 +1868,7 @@ A and B are concatenated points, encoded and checked as described in `ec_add`. A
 - **Cost**: BN254g1=3600 + 90 per 32 bytes of B; BN254g2=7200 + 270 per 32 bytes of B; BLS12_381g1=6500 + 95 per 32 bytes of B; BLS12_381g2=14850 + 485 per 32 bytes of B
 - Availability: v10
 
-A is a list of concatenated points, encoded and checked as described in `ec_add`. B is a list of concatenated scalars which, unlike ec_scalar_mul, must all be exactly 32 bytes long. Each scalar is reduced, and each product formed, as described in `ec_scalar_mul`.
+A is a list of concatenated points, encoded and checked as described in `ec_add`. B is a list of concatenated scalars which, unlike `ec_scalar_mul`, must all be exactly 32 bytes long. Each product formed as described in `ec_scalar_mul`.
 The operation computes the sum of the individual scalar multiplications, and is often called multi-exponentiation. AVM values are limited to 4096 bytes, so `ec_multi_scalar_mul` is limited by the size of the points in the group being operated upon.
 
 ## ec_subgroup_check
