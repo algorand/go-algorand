@@ -31,6 +31,7 @@ func TestPQSchemes(t *testing.T) {
 	schemes := []PQScheme{
 		PQSchemeFalcon1024,
 		PQSchemeFalcon512,
+		PQSchemeLogicSig,
 	}
 
 	seen := make(map[PQScheme]struct{}, len(schemes))

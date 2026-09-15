@@ -211,6 +211,52 @@ func TestPQSigValidateEnvelope(t *testing.T) {
 	require.ErrorIs(t, (PQSig{}).ValidateScheme(fixture.proto), errPQSigBlank)
 }
 
+// TestPQSigLogicSigScheme pins the split that the ls scheme depends on: its
+// envelope validates like any other PQ scheme, so the address check is shared,
+// but the generic Verify path refuses it. Callers must dispatch on the scheme
+// and evaluate the program instead.
+func TestPQSigLogicSigScheme(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	require.True(t, proto.EnablePQSchemeLogicSig)
+
+	program := []byte{0x0e, 0x81, 0x01} // #pragma version 14; pushint 1
+	salt, authorizer, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeLogicSig, program)
+	require.NoError(t, err)
+	require.True(t, authorizer.IsPQCompliant())
+
+	pqSig := PQSig{
+		Scheme:    protocol.PQSchemeLogicSig,
+		Salt:      salt,
+		PublicKey: program,
+	}
+	require.Equal(t, authorizer, pqSig.Address())
+
+	// The address check must be reachable for ls, since that is the whole
+	// authorization other than evaluating the program.
+	require.NoError(t, pqSig.ValidateEnvelope(proto, authorizer))
+
+	var wrongAuthorizer basics.Address
+	wrongAuthorizer[0] = 1
+	require.ErrorIs(t, pqSig.ValidateEnvelope(proto, wrongAuthorizer), errPQSigAuthorizerMismatch)
+
+	disabledProto := proto
+	disabledProto.EnablePQSchemeLogicSig = false
+	require.ErrorIs(t, pqSig.ValidateEnvelope(disabledProto, authorizer), crypto.ErrPQSchemeNotEnabled)
+
+	// A program's args are not signature bytes. Whatever they hold, no caller
+	// may authorize an ls account by handing them to a signature verifier.
+	withArgs := pqSig
+	withArgs.Signature = []byte("args")
+	txn := Transaction{
+		Type:             protocol.PaymentTx,
+		Header:           Header{Sender: authorizer},
+		PaymentTxnFields: PaymentTxnFields{Receiver: authorizer},
+	}
+	require.ErrorIs(t, withArgs.Verify(proto, txn, authorizer), crypto.ErrPQLogicSigNotEvaluated)
+}
+
 func TestPQSigVerify(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
