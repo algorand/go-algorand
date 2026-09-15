@@ -116,7 +116,9 @@ func (s *OneTimeSignatureSecrets) PersistentScalarsAndOffsets() (scalars OneTime
 // row deletions in storage).  Zero rows reassemble to nil slices, preserving
 // the DeleteBeforeFineGrained semantics that an exhausted key's FirstBatch is
 // never spuriously bumped.
-func OneTimeSignatureSecretsFromParts(scalars OneTimeSignatureSecretsPersistent, batches []KeyedSubkey, offsets []KeyedSubkey) (*OneTimeSignatureSecrets, error) {
+func OneTimeSignatureSecretsFromParts(
+	scalars OneTimeSignatureSecretsPersistent, batches []KeyedSubkey, offsets []KeyedSubkey,
+) (*OneTimeSignatureSecrets, error) {
 	if len(scalars.Batches) != 0 || len(scalars.Offsets) != 0 {
 		return nil, fmt.Errorf("OneTimeSignatureSecretsFromParts: scalars carry %d batch and %d offset subkeys, expected none", len(scalars.Batches), len(scalars.Offsets))
 	}
