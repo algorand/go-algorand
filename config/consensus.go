@@ -611,6 +611,12 @@ type ConsensusParams struct {
 	// authorization for the f1 PQ scheme.
 	EnablePQSchemeFalcon1024 bool
 
+	// EnablePQSchemeLogicSig enables transaction authorization by a LogicSig
+	// carried in a PQSig under the ls scheme, whose address commits to the
+	// program and a salt. Unlike the LogicSig in SignedTxn.Lsig, such an account
+	// can choose an address that is not an Edwards25519 point.
+	EnablePQSchemeLogicSig bool
+
 	// EnableSelectF128 changes the sortition algorithm to use a 128-bit software
 	// floating point binomial CDF implementation for committee selection.
 	EnableSelectF128 bool
@@ -725,6 +731,8 @@ func (proto ConsensusParams) PQSchemeEnabled(scheme protocol.PQScheme) bool {
 		return proto.EnablePQSchemeFalcon1024
 	case protocol.PQSchemeFalcon512:
 		return proto.EnablePQSchemeFalcon512
+	case protocol.PQSchemeLogicSig:
+		return proto.EnablePQSchemeLogicSig
 	default:
 		return false
 	}
@@ -733,7 +741,8 @@ func (proto ConsensusParams) PQSchemeEnabled(scheme protocol.PQScheme) bool {
 // PQSigEnabled returns whether any post-quantum signatures are enabled
 // under these consensus parameters.
 func (proto ConsensusParams) PQSigEnabled() bool {
-	return proto.EnablePQSchemeFalcon1024 || proto.EnablePQSchemeFalcon512
+	return proto.EnablePQSchemeFalcon1024 || proto.EnablePQSchemeFalcon512 ||
+		proto.EnablePQSchemeLogicSig
 }
 
 // PQSchemeFeeContribution is the additional fee factor charged for a transaction
@@ -746,6 +755,13 @@ func (proto ConsensusParams) PQSchemeFeeContribution(scheme protocol.PQScheme) b
 		return 2e6
 	case protocol.PQSchemeFalcon512:
 		return 1e6 // it is half of the Falcon-1024 contribution
+	case protocol.PQSchemeLogicSig:
+		// No surcharge. The Falcon contributions price signature verification
+		// that nothing else accounts for. An ls account costs one hash plus AVM
+		// execution, and both the opcode budget and PerByteTxnSurcharge already
+		// charge for those. A surcharge here would make the off-curve form cost
+		// more than the on-curve SignedTxn.Lsig form it exists to replace.
+		return 0
 	default:
 		return 0
 	}
@@ -1581,6 +1597,8 @@ func initConsensusProtocols() {
 	vFuture.EnablePQSchemeFalcon512 = true
 	vFuture.RequireLogicSigArgAccess = true
 	vFuture.AllowGroupedHeartbeats = true
+
+	vFuture.EnablePQSchemeLogicSig = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
