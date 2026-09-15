@@ -344,7 +344,7 @@ func TestRedirectOnFullCapacity(t *testing.T) {
 	require.NotEqual(t, 0, len(bodyData))
 	// parse the block to get the header timestamp, which tells us which node served it
 	var blkCert PreEncodedBlockCert
-	require.NoError(t, protocol.DecodeReflect(bodyData, &blkCert))
+	require.NoError(t, protocol.Decode(bodyData, &blkCert))
 	var blk bookkeeping.Block
 	require.NoError(t, protocol.Decode(blkCert.Block, &blk))
 	// check if redirection happened
