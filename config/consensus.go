@@ -610,6 +610,14 @@ type ConsensusParams struct {
 	// EnableSelectF128 changes the sortition algorithm to use a 128-bit software
 	// floating point binomial CDF implementation for committee selection.
 	EnableSelectF128 bool
+
+	// RequireLogicSigArgAccess requires that a LogicSig carry no argument it did
+	// not read: nothing above the highest index it read, and nothing unread
+	// below that index unless it is empty. Args are covered by no signature, and
+	// are part of neither the transaction ID nor the group hash, so without this
+	// rule a third party can append bytes to a transaction in flight, and the
+	// program has no way to detect it.
+	RequireLogicSigArgAccess bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -1560,6 +1568,8 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 14 // When moving this to a release, put a new higher LogicSigVersion here
+
+	vFuture.RequireLogicSigArgAccess = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
