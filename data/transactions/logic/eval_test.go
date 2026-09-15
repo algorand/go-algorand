@@ -434,6 +434,190 @@ func TestWrongProtoVersion(t *testing.T) {
 	}
 }
 
+func TestLogicSigAllow(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	protected := []struct {
+		name    string
+		txnType protocol.TxType
+		set     func(*transactions.Transaction)
+	}{
+		{"RekeyTo", protocol.ApplicationCallTx, func(txn *transactions.Transaction) { txn.RekeyTo = basics.Address{1} }},
+		{"CloseRemainderTo", protocol.PaymentTx, func(txn *transactions.Transaction) { txn.CloseRemainderTo = basics.Address{1} }},
+		{"AssetCloseTo", protocol.AssetTransferTx, func(txn *transactions.Transaction) { txn.AssetCloseTo = basics.Address{1} }},
+		{"AssetSender", protocol.AssetTransferTx, func(txn *transactions.Transaction) { txn.AssetSender = basics.Address{1} }},
+	}
+
+	for _, tc := range protected {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var txn transactions.SignedTxn
+			txn.Txn.Type = tc.txnType
+			tc.set(&txn.Txn)
+
+			// Existing LogicSigs retain their historical behavior.
+			testLogic(t, "int 1", logicSigAllowVersion-1, defaultSigParams(txn))
+
+			errText := fmt.Sprintf("transaction field %s requires `allow %s`", tc.name, tc.name)
+			// A v14+ LogicSig fails without the corresponding `allow`.
+			testLogic(t, "int 1", logicSigAllowVersion, defaultSigParams(txn), errText)
+			// A v14+ LogicSig succeeds with the corresponding `allow`.
+			testLogic(t, "allow "+tc.name+"; int 1", logicSigAllowVersion, defaultSigParams(txn))
+			// Repeated `allow` is ok.
+			testLogic(t, "allow "+tc.name+"; allow "+tc.name+"; int 1", logicSigAllowVersion, defaultSigParams(txn))
+		})
+	}
+
+	// Every key registration form changes persistent participation state.
+	t.Run("KeyRegistration", func(t *testing.T) {
+		t.Parallel()
+		forms := []struct {
+			name string
+			set  func(*transactions.Transaction)
+		}{
+			{"Offline", func(*transactions.Transaction) {}},
+			{"Online", func(txn *transactions.Transaction) {
+				txn.VotePK[0] = 1
+				txn.SelectionPK[0] = 1
+				txn.StateProofPK[0] = 1
+				txn.VoteFirst = 1
+				txn.VoteLast = 2
+				txn.VoteKeyDilution = 1
+			}},
+			{"Nonparticipating", func(txn *transactions.Transaction) { txn.Nonparticipation = true }},
+		}
+
+		for _, form := range forms {
+			t.Run(form.name, func(t *testing.T) {
+				t.Parallel()
+				var txn transactions.SignedTxn
+				txn.Txn.Type = protocol.KeyRegistrationTx
+				form.set(&txn.Txn)
+
+				testLogic(t, "int 1", logicSigAllowVersion-1, defaultSigParams(txn))
+				testLogic(t, "int 1", logicSigAllowVersion, defaultSigParams(txn),
+					"transaction type KeyRegistration requires `allow KeyRegistration`")
+				testLogic(t, "allow KeyRegistration; int 1", logicSigAllowVersion, defaultSigParams(txn))
+			})
+		}
+
+		t.Run("WithRekey", func(t *testing.T) {
+			t.Parallel()
+			var txn transactions.SignedTxn
+			txn.Txn.Type = protocol.KeyRegistrationTx
+			txn.Txn.RekeyTo = basics.Address{1}
+
+			testLogic(t, "allow KeyRegistration; int 1", logicSigAllowVersion, defaultSigParams(txn),
+				"transaction field RekeyTo requires `allow RekeyTo`")
+			testLogic(t, "allow RekeyTo; int 1", logicSigAllowVersion, defaultSigParams(txn),
+				"transaction type KeyRegistration requires `allow KeyRegistration`")
+			testLogic(t, "allow RekeyTo; allow KeyRegistration; int 1", logicSigAllowVersion, defaultSigParams(txn))
+		})
+	})
+
+	// Multiple allowances work together.
+	t.Run("Multiple", func(t *testing.T) {
+		t.Parallel()
+		var txn transactions.SignedTxn
+		txn.Txn.Type = protocol.PaymentTx
+		txn.Txn.RekeyTo = basics.Address{1}
+		txn.Txn.CloseRemainderTo = basics.Address{2}
+
+		testLogic(t, "allow RekeyTo; int 1", logicSigAllowVersion, defaultSigParams(txn),
+			"transaction field CloseRemainderTo requires `allow CloseRemainderTo`")
+		testLogic(t, "allow RekeyTo; allow CloseRemainderTo; int 1", logicSigAllowVersion, defaultSigParams(txn))
+	})
+
+	// AssetCloseTo and AssetSender require independent allowances.
+	t.Run("MultipleAssetTransfer", func(t *testing.T) {
+		t.Parallel()
+		var txn transactions.SignedTxn
+		txn.Txn.Type = protocol.AssetTransferTx
+		txn.Txn.AssetCloseTo = basics.Address{1}
+		txn.Txn.AssetSender = basics.Address{2}
+
+		testLogic(t, "allow AssetCloseTo; int 1", logicSigAllowVersion, defaultSigParams(txn),
+			"transaction field AssetSender requires `allow AssetSender`")
+		testLogic(t, "allow AssetCloseTo; allow AssetSender; int 1", logicSigAllowVersion, defaultSigParams(txn))
+	})
+
+	// `allow` must be executed to be effective.
+	t.Run("ExecutedPath", func(t *testing.T) {
+		t.Parallel()
+		var txn transactions.SignedTxn
+		txn.Txn.Type = protocol.PaymentTx
+		txn.Txn.RekeyTo = basics.Address{1}
+
+		testLogic(t, "int 0; bnz skip; allow RekeyTo; skip: int 1", logicSigAllowVersion, defaultSigParams(txn))
+		testLogic(t, "int 1; bnz skip; allow RekeyTo; skip: int 1", logicSigAllowVersion, defaultSigParams(txn),
+			"transaction field RekeyTo requires `allow RekeyTo`")
+	})
+
+	// A program rejection takes precedence over a missing allowance.
+	t.Run("RejectBeforeAllowanceCheck", func(t *testing.T) {
+		t.Parallel()
+		var txn transactions.SignedTxn
+		txn.Txn.Type = protocol.PaymentTx
+		txn.Txn.RekeyTo = basics.Address{1}
+
+		program := testProg(t, "int 0", logicSigAllowVersion).Program
+		err := testLogicFull(t, program, 0, defaultSigParams(txn), "REJECT")
+		require.NoError(t, err)
+	})
+
+	// `allow` only affects its own transaction.
+	t.Run("GroupIsolation", func(t *testing.T) {
+		t.Parallel()
+		txns := make([]transactions.SignedTxn, 2)
+		for i := range txns {
+			txns[i].Txn.Type = protocol.PaymentTx
+			txns[i].Txn.RekeyTo = basics.Address{byte(i + 1)}
+		}
+		testLogics(t, []string{"allow RekeyTo; int 1", "int 1"}, txns, nil,
+			exp(1, "transaction field RekeyTo requires `allow RekeyTo`"))
+	})
+
+	// Zero-valued protected fields do not require `allow`.
+	t.Run("ZeroFields", func(t *testing.T) {
+		t.Parallel()
+		var txn transactions.SignedTxn
+		txn.Txn.Type = protocol.PaymentTx
+		testLogic(t, "int 1", logicSigAllowVersion, defaultSigParams(txn))
+	})
+}
+
+func TestLogicSigAllowOpcode(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, fs := range logicSigAllowanceSpecs {
+		source := "allow " + fs.name + "; int 1"
+		ops := testProg(t, source, fs.version)
+		previousVersion := fs.version - 1
+		if fs.version == logicSigAllowVersion {
+			testProg(t, source, previousVersion, exp(1, "allow opcode was introduced in v14"))
+		} else {
+			testProg(t, source, previousVersion, exp(1,
+				fmt.Sprintf("...allow %s field was introduced in v%d...", fs.name, fs.version)))
+			ops.Program[0] = byte(previousVersion)
+			testLogicBytes(t, ops.Program, defaultSigParamsWithVersion(previousVersion), "invalid allow field")
+		}
+	}
+	testProg(t, "allow Unknown; int 1", logicSigAllowVersion, exp(1, "allow unknown field..."))
+
+	op := OpsByName[logicSigAllowVersion]["allow"]
+	truncatedProgram := []byte{byte(logicSigAllowVersion), op.Opcode}
+	testLogicBytes(t, truncatedProgram, defaultSigParams(),
+		"program ends without immediate value", "program ends without immediate value")
+
+	program := testProg(t, "allow RekeyTo; int 1", logicSigAllowVersion).Program
+	require.Equal(t, op.Opcode, program[1])
+	require.Equal(t, byte(allowRekeyTo), program[2])
+	program[2] = byte(invalidLogicSigAllowance)
+	testLogicBytes(t, program, defaultSigParams(), "invalid allow field")
+}
+
 // TestBlankStackSufficient will fail if an opcode is added with more than the
 // current max number of stack arguments. Update `blankStack` to be longer.
 func TestBlankStackSufficient(t *testing.T) {
@@ -597,7 +781,11 @@ func TestTLHC(t *testing.T) {
 			a1, _ := basics.UnmarshalChecksumAddress("DFPKC2SJP3OTFVJFMCD356YB7BOT4SJZTGWLIPPFEWL3ZABUFLTOY6ILYE")
 			a2, _ := basics.UnmarshalChecksumAddress("YYKRMERAFXMXCDWMBNR6BUUWQXDCUR53FPUGXLUYS7VNASRTJW2ENQ7BMQ")
 			secret, _ := base64.StdEncoding.DecodeString("xPUB+DJir1wsH7g2iEY1QwYqHqYH1vUJtzZKW4RxXsY=")
-			ops := testProg(t, tlhcProgramText, v)
+			source := tlhcProgramText
+			if v >= logicSigAllowVersion {
+				source = "allow CloseRemainderTo\n" + source
+			}
+			ops := testProg(t, source, v)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			// right answer
@@ -1382,6 +1570,10 @@ txn TypeEnum
 int %s
 ==
 &&`, symbol, string(tt))
+					// A successful v14+ keyreg LogicSig must authorize the transaction type.
+					if v >= logicSigAllowVersion && tt == protocol.KeyRegistrationTx {
+						text += "\nallow KeyRegistration"
+					}
 					ops := testProg(t, text, v)
 					txn := transactions.SignedTxn{}
 					txn.Txn.Type = tt
@@ -1835,8 +2027,8 @@ const testTxnProgramTextV13 = testTxnProgramTextV12 + `
 assert
 int 1`
 
-// v14 adds no new txn fields.
-const testTxnProgramTextV14 = testTxnProgramTextV13
+// v14 LogicSigs must explicitly authorize a nonzero RekeyTo.
+const testTxnProgramTextV14 = "allow RekeyTo\n" + testTxnProgramTextV13
 
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
@@ -2309,7 +2501,14 @@ func testLogicsWithAssembler(t *testing.T, programs []string, txgroup []transact
 
 	if txgroup == nil {
 		for range programs {
-			txgroup = append(txgroup, makeSampleTxn())
+			txn := makeSampleTxn()
+			// Generic LogicSig tests use the richly populated sample transaction
+			// for field access, but are not exercising sensitive operations. Clear
+			// protected fields rather than changing the supplied programs, whose
+			// exact bytecode and cost may be part of the test.
+			txn.Txn.RekeyTo = basics.Address{}
+			txn.Txn.CloseRemainderTo = basics.Address{}
+			txgroup = append(txgroup, txn)
 		}
 	}
 	// Place the logicsig code first, so NewSigEvalParams calcs budget
@@ -4510,6 +4709,7 @@ func TestAnyRekeyToOrApplicationRaisesMinAvmVersion(t *testing.T) {
 	txn0 := makeSampleTxn()
 	txn0.Txn.Type = protocol.PaymentTx
 	txn0.Txn.RekeyTo = basics.Address{}
+	txn0.Txn.CloseRemainderTo = basics.Address{}
 	txn1 := txn0
 	txngroup0 := []transactions.SignedTxn{txn0, txn1}
 
@@ -4517,6 +4717,7 @@ func TestAnyRekeyToOrApplicationRaisesMinAvmVersion(t *testing.T) {
 	txn2 := makeSampleTxn()
 	txn2.Txn.Type = protocol.PaymentTx
 	txn2.Txn.RekeyTo = basics.Address{}
+	txn2.Txn.CloseRemainderTo = basics.Address{}
 	txn3 := txn2
 	txn3.Txn.Type = protocol.ApplicationCallTx
 	txngroup1 := []transactions.SignedTxn{txn2, txn3}
@@ -4524,6 +4725,7 @@ func TestAnyRekeyToOrApplicationRaisesMinAvmVersion(t *testing.T) {
 	// Construct a group of one payment, one rekeying payment
 	txn4 := makeSampleTxn()
 	txn4.Txn.Type = protocol.PaymentTx
+	txn4.Txn.CloseRemainderTo = basics.Address{}
 	txn5 := txn4
 	txn4.Txn.RekeyTo = basics.Address{}
 	txn5.Txn.RekeyTo = basics.Address{1}

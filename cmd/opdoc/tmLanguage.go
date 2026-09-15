@@ -187,6 +187,11 @@ func buildSyntaxHighlight(version uint64) *tmLanguage {
 		names := logic.OpGroups[grp]
 		sort.Strings(names)
 		switch grp {
+		case "Authorization":
+			keywords.Patterns = append(keywords.Patterns, pattern{
+				Name:  "keyword.other.teal",
+				Match: fmt.Sprintf("^(%s)\\b", strings.Join(names, "|")),
+			})
 		case "Flow Control":
 			keywords.Patterns = append(keywords.Patterns, pattern{
 				Name:  "keyword.control.teal",
