@@ -407,11 +407,7 @@ func (s *OneTimeSignatureSecrets) DeleteBeforeFineGrained(current OneTimeSignatu
 	}
 
 	// We are trying to move forward into a new batch.  The plan is fourfold:
-	// 1. Delete existing offsets.  Consuming them advances FirstOffset to the
-	//    end of their batch, so a key that runs out of batches below leaves a
-	//    cursor that is distinguishable from a live, partially used final
-	//    batch (persistent storage relies on this to tell the two apart).
-	s.FirstOffset += uint64(len(s.Offsets))
+	// 1. Delete existing offsets.
 	s.Offsets = nil
 
 	// 2. Delete any whole batches that we are jumping over.

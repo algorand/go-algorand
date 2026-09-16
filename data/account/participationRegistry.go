@@ -17,7 +17,6 @@
 package account
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/base32"
@@ -340,7 +339,7 @@ const (
 			effectiveFirstRound         INTEGER,
 			effectiveLastRound          INTEGER,
 
-			voting BLOB --*  msgpack encoding of ParticipationAccount.voting
+			votingHeader BLOB --*  msgpack encoding of crypto.OneTimeSignatureSecretsHeader
 		)`
 
 	createStateProof = `CREATE TABLE StateProofKeys (
@@ -352,7 +351,7 @@ const (
 
 	// VotingBatches/VotingOffsets hold one row per ephemeral voting subkey,
 	// so per-round key deletion is a row delete instead of a rewrite of the
-	// whole keyset (Rolling.voting holds only the scalar fields).
+	// whole keyset (Rolling.votingHeader describes the rows).
 	createVotingBatches = `CREATE TABLE VotingBatches (
 			pk    INTEGER NOT NULL,
 			batch INTEGER NOT NULL, --* absolute batch number
@@ -367,7 +366,7 @@ const (
 			PRIMARY KEY (pk, batch, off)
 		)`
 	insertKeysetQuery         = `INSERT INTO Keysets (participationID, account, firstValidRound, lastValidRound, keyDilution, vrf, stateProof) VALUES (?, ?, ?, ?, ?, ?, ?)`
-	insertRollingQuery        = `INSERT INTO Rolling (pk, voting) VALUES (?, ?)`
+	insertRollingQuery        = `INSERT INTO Rolling (pk, votingHeader) VALUES (?, ?)`
 	appendStateProofKeysQuery = `INSERT INTO StateProofKeys (pk, round, key) VALUES(?, ?, ?)`
 	deleteStateProofKeysQuery = `DELETE FROM StateProofKeys WHERE pk=? AND round<?`
 
@@ -378,7 +377,7 @@ const (
 			k.pk, k.participationID, k.account, k.firstValidRound,
        		k.lastValidRound, k.keyDilution, k.vrf, k.stateProof,
 			r.lastVoteRound, r.lastBlockProposalRound, r.lastStateProofRound,
-			r.effectiveFirstRound, r.effectiveLastRound, r.voting
+			r.effectiveFirstRound, r.effectiveLastRound, r.votingHeader
 		FROM Keysets k
 		INNER JOIN Rolling r
 		ON k.pk = r.pk`
@@ -387,7 +386,7 @@ const (
 		FROM StateProofKeys s
 		WHERE round=?
 		   AND pk IN (SELECT pk FROM Keysets WHERE participationID=?)`
-	selectRollingVotingByID = `SELECT r.pk, r.voting
+	selectRollingVotingByID = `SELECT r.pk, r.votingHeader
 		FROM Rolling r
 		WHERE r.pk IN (SELECT pk FROM Keysets WHERE participationID=?)`
 	selectVotingBatches    = `SELECT batch, data FROM VotingBatches WHERE pk=? ORDER BY batch`
@@ -443,8 +442,10 @@ func dbSchemaUpgrade0(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 	return nil
 }
 
-// dbSchemaUpgrade1 moves the voting subkeys out of the Rolling.voting blob
-// into per-subkey rows, leaving only the scalar fields in the blob.
+// dbSchemaUpgrade1 moves the voting subkeys out of the whole-secrets
+// Rolling.voting blob into per-subkey rows described by a Rolling.votingHeader
+// column, then drops the legacy column so the blob (which held every subkey)
+// is erased from the registry.
 func dbSchemaUpgrade1(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 	_, err := tx.Exec(createVotingBatches)
 	if err != nil {
@@ -456,10 +457,15 @@ func dbSchemaUpgrade1(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 	}
 
 	if newDatabase {
+		// dbSchemaUpgrade0 already created Rolling with votingHeader
 		return nil
 	}
 
-	// convert every existing whole-secrets blob into rows
+	_, err = tx.Exec("ALTER TABLE Rolling ADD COLUMN votingHeader BLOB")
+	if err != nil {
+		return fmt.Errorf("dbSchemaUpgrade1: failed to add the votingHeader column: %w", err)
+	}
+
 	type pkVoting struct {
 		pk        int64
 		rawVoting []byte
@@ -488,46 +494,31 @@ func dbSchemaUpgrade1(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 		}
 		voting := &crypto.OneTimeSignatureSecrets{}
 		if err := protocol.Decode(entry.rawVoting, voting); err != nil {
-			// Leave an undecodable blob in place rather than failing the
-			// whole migration (db.Initialize would mask this error as a
-			// generic upgrade failure with no quarantine path).  The record
-			// is excluded from the cache with a warning at load time, so it
-			// does not block the registry from opening.
+			// Do not fail the whole migration over one undecodable blob
+			// (db.Initialize would mask this as a generic upgrade failure
+			// with no quarantine path).  Carry the bytes over as they are:
+			// they do not decode as a header either, so the record is
+			// excluded from the cache with a warning at load time, exactly
+			// as an undecodable blob was before.
+			if _, err := tx.Exec("UPDATE Rolling SET votingHeader=? WHERE pk=?", entry.rawVoting, entry.pk); err != nil {
+				return fmt.Errorf("dbSchemaUpgrade1: failed to carry over the undecodable voting blob for pk %d: %w", entry.pk, err)
+			}
 			continue
 		}
-		delta, err := computeVotingDelta(nil, voting)
-		if err != nil {
-			return fmt.Errorf("dbSchemaUpgrade1: failed to compute conversion for pk %d: %w", entry.pk, err)
+		target := registryVotingTarget(entry.pk)
+		// freshly decoded and unshared: no lock is needed for the snapshot
+		if err := rewriteVotingRows(tx, target, voting.OneTimeSignatureSecretsPersistent); err != nil {
+			return fmt.Errorf("dbSchemaUpgrade1: failed to convert the voting blob for pk %d: %w", entry.pk, err)
 		}
-		if err = applyVotingDeltaToRegistry(tx, entry.pk, delta, voting); err != nil {
-			return fmt.Errorf("dbSchemaUpgrade1: failed to convert voting blob for pk %d: %w", entry.pk, err)
-		}
-
-		// validate inside the transaction: reconstruct from what was written
-		// and compare the complete key material against the original blob
-		var storedScalars []byte
-		if err = tx.QueryRow("SELECT voting FROM Rolling WHERE pk=?", entry.pk).Scan(&storedScalars); err != nil {
-			return fmt.Errorf("dbSchemaUpgrade1: failed to read back scalars for pk %d: %w", entry.pk, err)
-		}
-		batches, err := readKeyedSubkeys(tx, selectVotingBatches, entry.pk)
-		if err != nil {
-			return fmt.Errorf("dbSchemaUpgrade1: failed to read back batch subkeys for pk %d: %w", entry.pk, err)
-		}
-		offsets, offsetBatches, err := readOffsetSubkeys(tx, selectVotingOffsets, entry.pk)
-		if err != nil {
-			return fmt.Errorf("dbSchemaUpgrade1: failed to read back offset subkeys for pk %d: %w", entry.pk, err)
-		}
-		reconstructed, rowBased, err := decodeRowOrientedVoting(storedScalars, batches, offsets, offsetBatches)
-		if err != nil || !rowBased {
-			return fmt.Errorf("dbSchemaUpgrade1: reconstruction of converted state for pk %d failed: %v", entry.pk, err)
-		}
-		origSnap := voting.Snapshot()
-		newSnap := reconstructed.Snapshot()
-		if !bytes.Equal(protocol.Encode(&origSnap), protocol.Encode(&newSnap)) {
-			return fmt.Errorf("dbSchemaUpgrade1: converted state for pk %d does not match the original key material", entry.pk)
+		if err := verifyVotingRowsMatch(tx, target, voting); err != nil {
+			return fmt.Errorf("dbSchemaUpgrade1: pk %d: %w", entry.pk, err)
 		}
 	}
 
+	_, err = tx.Exec("ALTER TABLE Rolling DROP COLUMN voting")
+	if err != nil {
+		return fmt.Errorf("dbSchemaUpgrade1: failed to drop the legacy voting column: %w", err)
+	}
 	return nil
 }
 
@@ -861,7 +852,7 @@ func (db *participationDB) getAllFromDB() (records []ParticipationRecord, err er
 		}
 		defer rows.Close()
 
-		scanned, pks, rawVotings, err := scanRecords(rows)
+		scanned, pks, rawHeaders, err := scanRecords(rows)
 		if err != nil {
 			return fmt.Errorf("problem scanning records: %w", err)
 		}
@@ -878,20 +869,21 @@ func (db *participationDB) getAllFromDB() (records []ParticipationRecord, err er
 			return fmt.Errorf("unable to read voting offset subkeys: %w", err)
 		}
 
-		// decode and reattach the voting secrets; a record whose voting data
-		// is corrupt is excluded with a warning rather than blocking the
-		// whole registry (and with it the node) from loading
+		// reassemble the voting secrets; a record whose voting data is
+		// corrupt is excluded with a warning rather than blocking the whole
+		// registry (and with it the node) from loading
 		records = make([]ParticipationRecord, 0, len(scanned))
 		for i := range scanned {
-			if len(rawVotings[i]) > 0 {
+			if len(rawHeaders[i]) > 0 {
 				batches := batchesByPK[pks[i]]
 				offsets := offsetsByPK[pks[i]]
-				voting, rowBased, verr := decodeRowOrientedVoting(rawVotings[i], batches.subkeys, offsets.subkeys, offsets.batches)
-				if verr == nil && rowBased {
-					verr = validateVotingRowCounts(&voting.OneTimeSignatureSecretsPersistent, scanned[i].LastValid, scanned[i].KeyDilution, len(batches.subkeys), len(offsets.subkeys))
+				var voting *crypto.OneTimeSignatureSecrets
+				hdr, verr := decodeVotingHeader(rawHeaders[i])
+				if verr == nil {
+					voting, verr = votingFromRows(hdr, batches.subkeys, offsets.subkeys, offsets.batches)
 				}
 				if verr != nil {
-					db.log.Warnf("participationDB: excluding key %s (pk %d) from the registry, its voting data is corrupt: %v; delete %s and restart to rebuild the registry",
+					db.log.Warnf("participationDB: excluding key %s (pk %d) from the registry, its voting data is corrupt: %v; it is re-installed from its key file at the next restart (or delete %s and restart to rebuild the registry)",
 						scanned[i].ParticipationID, pks[i], verr, config.ParticipationRegistryFilename)
 					continue
 				}
@@ -1022,10 +1014,10 @@ func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (
 	return result, nil
 }
 
-// resolveRollingPK looks up the Rolling primary key and last-persisted voting
-// scalars for a participation ID, keeping the legacy ErrNoKeyForID and
+// resolveRollingPK looks up the Rolling primary key and stored voting
+// header for a participation ID, keeping the legacy ErrNoKeyForID and
 // ErrMultipleKeysForID semantics that callers special-case.
-func resolveRollingPK(ctx context.Context, tx *sql.Tx, id ParticipationID) (pk int64, rawVoting []byte, err error) {
+func resolveRollingPK(ctx context.Context, tx *sql.Tx, id ParticipationID) (pk int64, rawHeader []byte, err error) {
 	rows, err := tx.QueryContext(ctx, selectRollingVotingByID, id[:])
 	if err != nil {
 		return 0, nil, err
@@ -1034,7 +1026,7 @@ func resolveRollingPK(ctx context.Context, tx *sql.Tx, id ParticipationID) (pk i
 
 	numRows := 0
 	for rows.Next() {
-		if err = rows.Scan(&pk, &rawVoting); err != nil {
+		if err = rows.Scan(&pk, &rawHeader); err != nil {
 			return 0, nil, err
 		}
 		numRows++
@@ -1048,7 +1040,7 @@ func resolveRollingPK(ctx context.Context, tx *sql.Tx, id ParticipationID) (pk i
 	if numRows < 1 {
 		return 0, nil, ErrNoKeyForID
 	}
-	return pk, rawVoting, nil
+	return pk, rawHeader, nil
 }
 
 // updateRegistrationFields persists only the registration window
@@ -1066,11 +1058,11 @@ func updateRegistrationFields(ctx context.Context, tx *sql.Tx, record Participat
 }
 
 // updateRollingFields sets all of the rolling fields according to the record
-// object, persisting the voting secrets incrementally: the last-persisted
-// scalars are compared against the record's secrets and only the difference
-// (consumed subkey rows, refreshed offsets, new scalars) is written.
+// object, persisting the voting secrets incrementally: the stored voting
+// header is compared against the record's secrets and only the transition
+// (consumed subkey rows, refreshed offsets, new header) is written.
 func updateRollingFields(ctx context.Context, tx *sql.Tx, record ParticipationRecord) error {
-	pk, rawVoting, err := resolveRollingPK(ctx, tx, record.ParticipationID)
+	pk, rawHeader, err := resolveRollingPK(ctx, tx, record.ParticipationID)
 	if err != nil {
 		return err
 	}
@@ -1090,23 +1082,15 @@ func updateRollingFields(ctx context.Context, tx *sql.Tx, record ParticipationRe
 		return nil
 	}
 
-	var old *crypto.OneTimeSignatureSecretsPersistent
-	if len(rawVoting) > 0 {
-		// Fail closed: without the persisted cursor there is no way to tell
-		// whether memory lags storage, and rewriting from memory could
-		// resurrect keys the registry already retired.
-		var decoded crypto.OneTimeSignatureSecrets
-		if err := protocol.Decode(rawVoting, &decoded); err != nil {
-			return fmt.Errorf("stored voting scalars for key %s are undecodable; refusing to rewrite voting rows from memory (delete %s and restart to rebuild the registry): %v",
-				record.ParticipationID, config.ParticipationRegistryFilename, err)
-		}
-		old = &decoded.OneTimeSignatureSecretsPersistent
-	}
-	delta, err := computeVotingDelta(old, record.Voting)
+	// Fail closed: without the stored cursor there is no way to tell whether
+	// memory lags storage, and rewriting from memory could resurrect keys the
+	// registry already retired.
+	stored, err := decodeVotingHeader(rawHeader)
 	if err != nil {
-		return err
+		return fmt.Errorf("stored voting header for key %s is undecodable; refusing to rewrite voting rows from memory (restart to re-install it from its key file, or delete %s and restart to rebuild the registry): %v",
+			record.ParticipationID, config.ParticipationRegistryFilename, err)
 	}
-	return applyVotingDeltaToRegistry(tx, pk, delta, record.Voting)
+	return syncVotingRows(tx, registryVotingTarget(pk), stored, votingSnapshot(record.Voting))
 }
 
 func recordActive(record ParticipationRecord, on basics.Round) bool {

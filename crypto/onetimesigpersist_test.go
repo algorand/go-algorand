@@ -26,11 +26,10 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// reassemble runs a secrets through PersistentParts/FromParts and returns the result.
-func reassemble(t *testing.T, s *OneTimeSignatureSecrets) *OneTimeSignatureSecrets {
+// reassemble round-trips a snapshot through Header/Encoded*/FromRows.
+func reassemble(t *testing.T, snap OneTimeSignatureSecretsPersistent) *OneTimeSignatureSecrets {
 	t.Helper()
-	scalars, batches, offsets := s.PersistentParts()
-	restored, err := OneTimeSignatureSecretsFromParts(scalars, batches, offsets)
+	restored, err := OneTimeSignatureSecretsFromRows(snap.Header(), snap.EncodedBatches(), snap.EncodedOffsets())
 	require.NoError(t, err)
 	return restored
 }
@@ -43,75 +42,10 @@ func requireSameSecrets(t *testing.T, expected, actual *OneTimeSignatureSecrets)
 	require.Equal(t, protocol.Encode(&e), protocol.Encode(&a))
 }
 
-// TestFromPartsNilBatchesEdge verifies that zero rows reassemble to nil
-// slices, so an exhausted key's FirstBatch is not spuriously bumped by a
-// later far-future DeleteBeforeFineGrained (which skips the bump only when
-// Batches is nil).
-func TestFromPartsNilBatchesEdge(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	const numKeysPerBatch = 16
-
-	spent := GenerateOneTimeSignatureSecrets(0, 3)
-	spent.DeleteBeforeFineGrained(OneTimeSignatureIdentifier{Batch: 50, Offset: 0}, numKeysPerBatch)
-	require.Nil(t, spent.Batches)
-	firstBatchAfterExhaustion := spent.FirstBatch
-
-	restored := reassemble(t, spent)
-	require.Nil(t, restored.Batches)
-	require.Nil(t, restored.Offsets)
-
-	restored.DeleteBeforeFineGrained(OneTimeSignatureIdentifier{Batch: 200, Offset: 0}, numKeysPerBatch)
-	require.Equal(t, firstBatchAfterExhaustion, restored.FirstBatch)
-}
-
-func TestFromPartsValidation(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	const numKeysPerBatch = 16
-	s := GenerateOneTimeSignatureSecrets(0, 10)
-	s.DeleteBeforeFineGrained(OneTimeSignatureIdentifier{Batch: 2, Offset: 3}, numKeysPerBatch)
-	scalars, batches, offsets := s.PersistentParts()
-	require.NotEmpty(t, batches)
-	require.NotEmpty(t, offsets)
-
-	// good baseline
-	_, err := OneTimeSignatureSecretsFromParts(scalars, batches, offsets)
-	require.NoError(t, err)
-
-	// scalars carrying subkeys
-	badScalars := s.Snapshot().OneTimeSignatureSecretsPersistent
-	require.NotEmpty(t, badScalars.Batches)
-	_, err = OneTimeSignatureSecretsFromParts(badScalars, batches, offsets)
-	require.ErrorContains(t, err, "expected none")
-
-	// gap in batch rows
-	gapped := append([]KeyedSubkey{}, batches...)
-	gapped[1].Index++
-	_, err = OneTimeSignatureSecretsFromParts(scalars, gapped, offsets)
-	require.ErrorContains(t, err, "batch row")
-
-	// wrong anchor for offset rows
-	shifted := append([]KeyedSubkey{}, offsets...)
-	for i := range shifted {
-		shifted[i].Index++
-	}
-	_, err = OneTimeSignatureSecretsFromParts(scalars, batches, shifted)
-	require.ErrorContains(t, err, "offset row")
-
-	// corrupt row bytes
-	corrupt := append([]KeyedSubkey{}, batches...)
-	corrupt[0].Key = []byte{0xff, 0x00, 0x01}
-	_, err = OneTimeSignatureSecretsFromParts(scalars, corrupt, offsets)
-	require.ErrorContains(t, err, "failed to decode")
-}
-
-// TestPersistentPartsSignAfterReassembly walks a simulated sequence of rounds
-// (crossing several batch boundaries), reassembling from parts at every step
-// and checking the restored secrets still produce verifiable signatures.
-func TestPersistentPartsSignAfterReassembly(t *testing.T) {
+// TestHeaderRoundTrip walks a key through its life (fresh, mid-batch, across
+// several batch boundaries, exhausted), reassembling from header and rows at
+// every step and checking the restored secrets still sign verifiably.
+func TestHeaderRoundTrip(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -119,31 +53,102 @@ func TestPersistentPartsSignAfterReassembly(t *testing.T) {
 	s := GenerateOneTimeSignatureSecrets(0, 6)
 	pub := s.OneTimeSignatureVerifier
 
-	// fresh state (batch subkeys only, no offsets) round-trips
-	requireSameSecrets(t, s, reassemble(t, s))
+	// fresh: batch subkeys only
+	hdr := s.Snapshot().Header()
+	require.Equal(t, uint64(6), hdr.BatchCount)
+	require.Zero(t, hdr.OffsetCount)
+	require.False(t, hdr.Exhausted())
+	requireSameSecrets(t, s, reassemble(t, s.Snapshot().OneTimeSignatureSecretsPersistent))
 
 	msg := randString()
 	for round := uint64(0); round < 4*numKeysPerBatch; round += 3 {
 		id := OneTimeSignatureIdentifier{Batch: round / numKeysPerBatch, Offset: round % numKeysPerBatch}
 		s.DeleteBeforeFineGrained(id, numKeysPerBatch)
 
-		restored := reassemble(t, s)
+		snap := s.Snapshot().OneTimeSignatureSecretsPersistent
+		hdr = snap.Header()
+		require.Equal(t, uint64(len(snap.Batches)), hdr.BatchCount)
+		require.Equal(t, uint64(len(snap.Offsets)), hdr.OffsetCount)
+		require.Equal(t, snap.FirstBatch-1, id.Batch, "offsets belong to batch FirstBatch-1")
+
+		restored := reassemble(t, snap)
 		require.Equal(t, pub, restored.OneTimeSignatureVerifier)
 		sig := restored.Sign(id, msg)
 		require.True(t, pub.Verify(id, msg, sig), "restored secrets failed to sign round %d", round)
 		requireSameSecrets(t, s, restored)
 	}
+
+	// exhausted: both counts zero, nil slices after reassembly, and a later
+	// far-future deletion does not bump FirstBatch (DeleteBeforeFineGrained
+	// skips the bump only when Batches is nil)
+	s.DeleteBeforeFineGrained(OneTimeSignatureIdentifier{Batch: 50}, numKeysPerBatch)
+	hdr = s.Snapshot().Header()
+	require.True(t, hdr.Exhausted())
+	restored := reassemble(t, s.Snapshot().OneTimeSignatureSecretsPersistent)
+	require.Nil(t, restored.Batches)
+	require.Nil(t, restored.Offsets)
+	restored.DeleteBeforeFineGrained(OneTimeSignatureIdentifier{Batch: 200}, numKeysPerBatch)
+	require.Equal(t, hdr.FirstBatch, restored.FirstBatch)
 }
 
-// TestPersistentPartsConcurrentDelete exercises PersistentParts racing
-// DeleteBeforeFineGrained under -race; it verifies every captured snapshot is
-// internally consistent (reassembles without contiguity errors).
-func TestPersistentPartsConcurrentDelete(t *testing.T) {
+func TestFromRowsValidation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const numKeysPerBatch = 16
+	s := GenerateOneTimeSignatureSecrets(0, 10)
+	s.DeleteBeforeFineGrained(OneTimeSignatureIdentifier{Batch: 2, Offset: 3}, numKeysPerBatch)
+	snap := s.Snapshot().OneTimeSignatureSecretsPersistent
+	hdr, batches, offsets := snap.Header(), snap.EncodedBatches(), snap.EncodedOffsets()
+	require.NotEmpty(t, batches)
+	require.NotEmpty(t, offsets)
+
+	_, err := OneTimeSignatureSecretsFromRows(hdr, batches, offsets)
+	require.NoError(t, err)
+
+	// row count disagrees with the header
+	_, err = OneTimeSignatureSecretsFromRows(hdr, batches[1:], offsets)
+	require.ErrorContains(t, err, "missing or extra rows")
+	_, err = OneTimeSignatureSecretsFromRows(hdr, batches, offsets[:len(offsets)-1])
+	require.ErrorContains(t, err, "missing or extra rows")
+
+	// gap in batch rows
+	gapped := append([]KeyedSubkey{}, batches...)
+	gapped[1].Index++
+	_, err = OneTimeSignatureSecretsFromRows(hdr, gapped, offsets)
+	require.ErrorContains(t, err, "batch row")
+
+	// wrong anchor for offset rows
+	shifted := append([]KeyedSubkey{}, offsets...)
+	for i := range shifted {
+		shifted[i].Index++
+	}
+	_, err = OneTimeSignatureSecretsFromRows(hdr, batches, shifted)
+	require.ErrorContains(t, err, "offset row")
+
+	// corrupt row bytes
+	corrupt := append([]KeyedSubkey{}, batches...)
+	corrupt[0].Key = []byte{0xff, 0x00, 0x01}
+	_, err = OneTimeSignatureSecretsFromRows(hdr, corrupt, offsets)
+	require.ErrorContains(t, err, "failed to decode")
+
+	// offsets cannot exist before any batch was expanded
+	noBatch := hdr
+	noBatch.FirstBatch = 0
+	_, err = OneTimeSignatureSecretsFromRows(noBatch, batches, offsets)
+	require.ErrorContains(t, err, "FirstBatch is 0")
+}
+
+// TestSnapshotStableUnderConcurrentDelete verifies a snapshot stays
+// internally consistent and usable while DeleteBeforeFineGrained (and Sign,
+// as agreement does) run concurrently on the live secrets, under -race.
+func TestSnapshotStableUnderConcurrentDelete(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	const numKeysPerBatch = 8
 	s := GenerateOneTimeSignatureSecrets(0, 64)
+	pub := s.OneTimeSignatureVerifier
 	msg := randString()
 
 	var wg sync.WaitGroup
@@ -158,15 +163,19 @@ func TestPersistentPartsConcurrentDelete(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 200; i++ {
-			scalars, batches, offsets := s.PersistentParts()
-			_, err := OneTimeSignatureSecretsFromParts(scalars, batches, offsets)
-			require.NoError(t, err)
+			snap := s.Snapshot().OneTimeSignatureSecretsPersistent
+			restored := reassemble(t, snap)
+			hdr := snap.Header()
+			if hdr.OffsetCount > 0 {
+				// the snapshot's first live offset must sign verifiably even if
+				// the live secrets have since moved past it
+				id := OneTimeSignatureIdentifier{Batch: hdr.FirstBatch - 1, Offset: hdr.FirstOffset}
+				require.True(t, pub.Verify(id, msg, restored.Sign(id, msg)))
+			}
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		// signing (as agreement does) must be safe against concurrent
-		// deletion and persistence snapshots
 		for round := uint64(0); round < 16*numKeysPerBatch; round++ {
 			id := OneTimeSignatureIdentifier{Batch: round / numKeysPerBatch, Offset: round % numKeysPerBatch}
 			s.Sign(id, msg)

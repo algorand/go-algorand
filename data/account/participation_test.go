@@ -36,7 +36,7 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-var partableColumnNames = [...]string{"parent", "vrf", "voting", "stateProof", "firstValid", "lastValid", "keyDilution"}
+var partableColumnNames = [...]string{"parent", "vrf", "votingHeader", "stateProof", "firstValid", "lastValid", "keyDilution"}
 
 func TestParticipation_NewDB(t *testing.T) {
 	partitiontest.PartitionTest(t)

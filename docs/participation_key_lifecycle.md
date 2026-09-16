@@ -70,15 +70,20 @@ Using **algokey** a set of keys can be generated with the command:
 algokey part generate --first 35000000 --last 36000000 --parent <account-address> --keyfile keys.db
 ```
 
-This creates a SQLite DB file named **keys.db**. Metadata and the scalar
-fields of the voting keyset live in a single-row table, while each ephemeral
-voting subkey is stored as its own row (tables **OtsBatches**/**OtsOffsets**).
-This row-per-subkey layout means the per-round forward-security deletion of
-used keys is a small row delete instead of a rewrite of the whole keyset.
+This creates a SQLite DB file named **keys.db**. Metadata and a small header
+describing the voting keyset (its public key, deletion cursor, and subkey row
+counts, in the **votingHeader** column) live in a single-row table, while each
+ephemeral voting subkey is stored as its own row (tables
+**VotingBatches**/**VotingOffsets**). This row-per-subkey layout means the
+per-round forward-security deletion of used keys is a small row delete plus a
+header update instead of a rewrite of the whole keyset; the header alone
+determines which rows must exist, so missing rows are detected as corruption.
 State proof keys follow the same row-per-key pattern in their own table.
 
 Files created by older releases (schema version 3) stored the whole voting
-keyset as one BLOB. **algod** migrates such a file in place when it loads it
+keyset as one BLOB in a **voting** column; the migration converts it to the
+header and rows and drops that column, so no consumed subkey lingers in the
+file. **algod** migrates such a file in place when it loads it
 at startup (and migrates the copy it receives through the REST install
 endpoint), as does `algokey part reparent`; the read-only commands
 (`algokey part info`, `algokey part keyreg --keyfile`,
@@ -148,8 +153,9 @@ votes are cast for the same account causing both to be ignored.
 Once installed keys are stored in the **Participation Registry**. This is a
 service that wraps a SQLite file for storage. Like the key files, the registry
 stores each ephemeral voting subkey as its own row (tables
-**VotingBatches**/**VotingOffsets**), so the per-round deletion of used keys
-writes only the consumed rows. A registry created by an older release is
+**VotingBatches**/**VotingOffsets**) described by a **votingHeader** column, so
+the per-round deletion of used keys writes only the consumed rows and the
+header. A registry created by an older release is
 upgraded automatically at node startup; older releases refuse to open the
 upgraded registry, so rolling back requires deleting **partregistry.sqlite**
 and re-installing the keys. Once installed, keys are assigned

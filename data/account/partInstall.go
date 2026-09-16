@@ -17,7 +17,6 @@
 package account
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
@@ -48,7 +47,7 @@ func partInstallDatabase(tx *sql.Tx) error {
 
 		--* participation keys
 		vrf BLOB,         --*  msgpack encoding of ParticipationAccount.vrf
-		voting BLOB,      --*  msgpack encoding of the voting key scalars (whole secrets before schema v4)
+		votingHeader BLOB, --*  msgpack encoding of crypto.OneTimeSignatureSecretsHeader (schema v3 held the whole voting secrets in a "voting" column)
 
 		firstValid INTEGER,
 		lastValid INTEGER,
@@ -144,7 +143,7 @@ func updateDB(tx *sql.Tx, partVersion int) (int, error) {
 }
 
 func createVotingSubkeyTables(tx *sql.Tx) error {
-	_, err := tx.Exec(`CREATE TABLE OtsBatches (
+	_, err := tx.Exec(`CREATE TABLE VotingBatches (
 		batch INTEGER PRIMARY KEY, --* absolute batch number
 		data BLOB NOT NULL         --* msgpack encoding of the batch subkey
 	);`)
@@ -152,7 +151,7 @@ func createVotingSubkeyTables(tx *sql.Tx) error {
 		return err
 	}
 
-	_, err = tx.Exec(`CREATE TABLE OtsOffsets (
+	_, err = tx.Exec(`CREATE TABLE VotingOffsets (
 		batch INTEGER NOT NULL, --* the batch these offsets belong to (FirstBatch-1)
 		off INTEGER NOT NULL,   --* absolute offset within batch
 		data BLOB NOT NULL,     --* msgpack encoding of the offset subkey
@@ -161,63 +160,42 @@ func createVotingSubkeyTables(tx *sql.Tx) error {
 	return err
 }
 
-// migrateVotingBlobToRows converts the whole-secrets voting blob into
-// per-subkey rows, leaving only the scalar fields in the voting column.  The
-// converted state is read back and compared against the original key
-// material before the transaction is allowed to commit.
+// migrateVotingBlobToRows converts the whole-secrets voting blob of a version
+// 3 file into a votingHeader column plus per-subkey rows.  The converted state
+// is read back and compared against the original key material before the
+// transaction may commit, and the legacy column is then dropped so the blob
+// (which held every subkey) is erased from the file.
 func migrateVotingBlobToRows(tx *sql.Tx) error {
-	err := createVotingSubkeyTables(tx)
-	if err != nil {
+	if err := createVotingSubkeyTables(tx); err != nil {
 		return err
+	}
+	if _, err := tx.Exec("ALTER TABLE ParticipationAccount ADD COLUMN votingHeader BLOB"); err != nil {
+		return fmt.Errorf("migrateVotingBlobToRows: failed to add the votingHeader column: %w", err)
 	}
 
 	var rawVoting []byte
-	err = tx.QueryRow("SELECT voting FROM ParticipationAccount").Scan(&rawVoting)
-	if err == sql.ErrNoRows {
+	err := tx.QueryRow("SELECT voting FROM ParticipationAccount").Scan(&rawVoting)
+	switch {
+	case err == sql.ErrNoRows:
 		// no account row (partially initialized file); nothing to convert
-		return nil
-	}
-	if err != nil {
+	case err != nil:
 		return err
-	}
-	if len(rawVoting) == 0 {
-		return nil
-	}
-
-	voting := &crypto.OneTimeSignatureSecrets{}
-	err = protocol.Decode(rawVoting, voting)
-	if err != nil {
-		return fmt.Errorf("migrateVotingBlobToRows: failed to decode voting blob: %w", err)
-	}
-
-	delta, err := computeVotingDelta(nil, voting)
-	if err != nil {
-		return fmt.Errorf("migrateVotingBlobToRows: %w", err)
-	}
-	err = applyVotingDeltaToPartkeyFile(tx, delta, voting)
-	if err != nil {
-		return err
+	case len(rawVoting) > 0:
+		voting := &crypto.OneTimeSignatureSecrets{}
+		if err := protocol.Decode(rawVoting, voting); err != nil {
+			return fmt.Errorf("migrateVotingBlobToRows: failed to decode the voting blob: %w", err)
+		}
+		// freshly decoded and unshared: no lock is needed for the snapshot
+		if err := rewriteVotingRows(tx, partkeyFileVotingTarget, voting.OneTimeSignatureSecretsPersistent); err != nil {
+			return fmt.Errorf("migrateVotingBlobToRows: %w", err)
+		}
+		if err := verifyVotingRowsMatch(tx, partkeyFileVotingTarget, voting); err != nil {
+			return fmt.Errorf("migrateVotingBlobToRows: %w", err)
+		}
 	}
 
-	// validate inside the transaction: reconstruct from what was written and
-	// compare the complete key material against the original blob
-	var storedScalars []byte
-	err = tx.QueryRow("SELECT voting FROM ParticipationAccount").Scan(&storedScalars)
-	if err != nil {
-		return fmt.Errorf("migrateVotingBlobToRows: failed to read back scalars: %w", err)
-	}
-	batches, offsets, offsetBatches, err := readVotingRowsFromPartkeyFile(tx)
-	if err != nil {
-		return fmt.Errorf("migrateVotingBlobToRows: failed to read back subkey rows: %w", err)
-	}
-	reconstructed, rowBased, err := decodeRowOrientedVoting(storedScalars, batches, offsets, offsetBatches)
-	if err != nil || !rowBased {
-		return fmt.Errorf("migrateVotingBlobToRows: reconstruction of the converted state failed: %v", err)
-	}
-	origSnap := voting.Snapshot()
-	newSnap := reconstructed.Snapshot()
-	if !bytes.Equal(protocol.Encode(&origSnap), protocol.Encode(&newSnap)) {
-		return fmt.Errorf("migrateVotingBlobToRows: converted state does not match the original key material")
+	if _, err := tx.Exec("ALTER TABLE ParticipationAccount DROP COLUMN voting"); err != nil {
+		return fmt.Errorf("migrateVotingBlobToRows: failed to drop the legacy voting column: %w", err)
 	}
 	return nil
 }

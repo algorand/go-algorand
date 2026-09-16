@@ -17,405 +17,352 @@
 package account
 
 import (
+	"bytes"
 	"database/sql"
 	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// errInconsistentVotingRows signals that the stored subkey rows disagree with
-// the stored scalars (a trim removed an unexpected number of rows).  The
-// appliers recover from it by rebuilding the rows from memory.
-var errInconsistentVotingRows = errors.New("stored voting rows are inconsistent with the stored scalars")
+// Row-oriented storage of voting secrets, shared by the .partkey file and the
+// participation registry.  Each store holds a crypto.OneTimeSignatureSecretsHeader
+// in a votingHeader column and one row per ephemeral subkey in two tables, so
+// the header alone says exactly which rows must exist.  Three operations are
+// provided: insertVotingRows for a key that is stored for the first time,
+// rewriteVotingRows for format migration and repair, and syncVotingRows for
+// the per-round transition from the stored header to the in-memory state.
 
-// votingDelta describes the row operations needed to bring row-oriented
-// persisted voting secrets (whose last-persisted scalars are known) up to the
-// current in-memory state.  Voting subkeys advance monotonically: batch rows
-// are written once when a key is stored and only ever deleted afterwards;
-// offset rows are replaced wholesale on a batch rollover and deleted from the
-// front as rounds pass.
-type votingDelta struct {
-	// noop means the persisted state already matches; skip all writes.
-	noop bool
+// errInconsistentVotingRows reports that the stored subkey rows disagree with
+// the stored header (a trim removed an unexpected number of rows, or the two
+// headers' counts cannot be reconciled).  syncVotingRows repairs it by
+// rewriting the rows from memory.
+var errInconsistentVotingRows = errors.New("stored voting subkey rows are inconsistent with the stored header")
 
-	// fullRewrite means the persisted state cannot be diffed (missing,
-	// undecodable, or a legacy whole-blob): delete every row and re-insert
-	// insertBatches+insertOffsets.
-	fullRewrite bool
-
-	// clearAllRows means the in-memory secrets carry no subkeys at all while
-	// the scalars are unchanged (the end-of-key-life transition): delete
-	// every row, keep the stored scalars.  Idempotent, and once the tables
-	// are empty it writes nothing.
-	clearAllRows bool
-
-	// deleteBatchesBelow deletes batch rows with index < this value
-	// (rollover path; 0 means no batch deletion).
-	deleteBatchesBelow uint64
-
-	// expectedBatchDeletes is the exact number of rows deleteBatchesBelow
-	// must remove; a mismatch means the stored rows are inconsistent with
-	// the stored scalars.  -1 skips the check.
-	expectedBatchDeletes int64
-
-	// deleteOffsetsBelow deletes offset rows with index < this value
-	// (same-batch path; 0 means no offset range-deletion).
-	deleteOffsetsBelow uint64
-
-	// expectedOffsetDeletes is the exact number of rows deleteOffsetsBelow
-	// must remove.  -1 skips the check.
-	expectedOffsetDeletes int64
-
-	// replaceAllOffsets clears the offsets table before inserting
-	// insertOffsets.  Offsets restart at 0 in every batch, so a rollover must
-	// clear rather than range-delete.
-	replaceAllOffsets bool
-
-	insertBatches []crypto.KeyedSubkey
-	insertOffsets []crypto.KeyedSubkey
-
-	// offsetsBatch is the batch the insertOffsets subkeys belong to
-	// (FirstBatch-1 of the scalars they were captured with); meaningful only
-	// when insertOffsets is non-empty.
-	offsetsBatch uint64
-
-	// newScalars is the encoded scalar state to store; nil when the stored
-	// scalars need no update (noop and clearAllRows).
-	newScalars []byte
-}
-
-// cursorAhead reports whether a's deletion cursor is strictly ahead of b's.
-func cursorAhead(a, b *crypto.OneTimeSignatureSecretsPersistent) bool {
-	return a.FirstBatch > b.FirstBatch ||
-		(a.FirstBatch == b.FirstBatch && a.FirstOffset > b.FirstOffset)
-}
-
-// computeVotingDelta compares the last-persisted scalars against the current
-// in-memory secrets and returns the row operations to persist the difference.
-// old == nil requests an unconditional full rewrite and is only legitimate for
-// known-new state (nothing persisted yet) and explicit format migration; an
-// undecodable persisted state must fail closed at the caller instead, since
-// it cannot rule out that memory lags storage.
-//
-// Forward security requires the persisted deletion cursor to be monotonic:
-// if storage is ahead of memory, rewriting from memory would resurrect keys
-// that were already deleted on disk, so that state is an error rather than a
-// self-heal.
-func computeVotingDelta(old *crypto.OneTimeSignatureSecretsPersistent, secrets *crypto.OneTimeSignatureSecrets) (votingDelta, error) {
-	fullRewrite := func() (votingDelta, error) {
-		scalars, batches, offsets := secrets.PersistentParts()
-		d := votingDelta{
-			fullRewrite:           true,
-			expectedBatchDeletes:  -1,
-			expectedOffsetDeletes: -1,
-			insertBatches:         batches,
-			insertOffsets:         offsets,
-			newScalars:            protocol.Encode(&scalars),
-		}
-		if len(offsets) > 0 {
-			var err error
-			d.offsetsBatch, err = offsetsOwningBatch(scalars.FirstBatch)
-			if err != nil {
-				return votingDelta{}, err
-			}
-		}
-		return d, nil
-	}
-
-	if old == nil {
-		return fullRewrite()
-	}
-
-	scalars, numBatches, numOffsets := secrets.PersistentState()
-
-	if cursorAhead(old, &scalars) {
-		return votingDelta{}, fmt.Errorf("computeVotingDelta: persisted voting state (batch %d, offset %d) is ahead of memory (batch %d, offset %d): stale or corrupt store; refusing to resurrect deleted keys",
-			old.FirstBatch, old.FirstOffset, scalars.FirstBatch, scalars.FirstOffset)
-	}
-
-	// Legacy whole-blob persisted state: convert in place.  The cursor check
-	// above guarantees memory holds no more keys than the blob did.
-	if len(old.Batches) != 0 || len(old.Offsets) != 0 {
-		return fullRewrite()
-	}
-
-	switch {
-	case scalars.FirstBatch == old.FirstBatch && scalars.FirstOffset == old.FirstOffset:
-		if numBatches == 0 && numOffsets == 0 {
-			// Exhausted key whose stored cursor did not move when its rows
-			// were erased (state written before exhaustion advanced
-			// FirstOffset to the batch end): scalar equality does not imply
-			// the stored rows are current, and a key with no subkeys in
-			// memory must have no rows on disk (forward security).
-			return votingDelta{clearAllRows: true, expectedBatchDeletes: -1, expectedOffsetDeletes: -1}, nil
-		}
-		return votingDelta{noop: true}, nil
-
-	case scalars.FirstBatch == old.FirstBatch:
-		// Common per-round path: offsets consumed from the front.  Storage
-		// held rows from old.FirstOffset, so the trim size is exact.
-		return votingDelta{
-			deleteOffsetsBelow:    scalars.FirstOffset,
-			expectedOffsetDeletes: int64(scalars.FirstOffset - old.FirstOffset),
-			expectedBatchDeletes:  -1,
-			newScalars:            protocol.Encode(&scalars),
-		}, nil
-
-	default:
-		// Batch rollover: batch rows consumed, offset rows regenerated.
-		// Re-capture scalars and offset rows in one consistent snapshot;
-		// batch rows are already present in storage and never re-inserted.
-		partScalars, offsets := secrets.PersistentScalarsAndOffsets()
-		d := votingDelta{
-			deleteBatchesBelow:    partScalars.FirstBatch,
-			expectedBatchDeletes:  -1,
-			expectedOffsetDeletes: -1,
-			replaceAllOffsets:     true,
-			insertOffsets:         offsets,
-			newScalars:            protocol.Encode(&partScalars),
-		}
-		if len(offsets) > 0 {
-			var err error
-			d.offsetsBatch, err = offsetsOwningBatch(partScalars.FirstBatch)
-			if err != nil {
-				return votingDelta{}, err
-			}
-			// memory still holds the tail of the batch sequence, so storage
-			// must have carried exactly the same tail and the trim size is
-			// exact; when memory ran out of batches entirely the tail length
-			// is unknown here, so the check is skipped
-			d.expectedBatchDeletes = int64(partScalars.FirstBatch - old.FirstBatch)
-		}
-		return d, nil
-	}
-}
-
-// votingDeltaTarget names the SQL statements for one of the two row-oriented
-// voting key stores: the .partkey file tables, or the registry tables scoped
-// by pk.  Statements taking a threshold or row values receive prefixArgs
-// first; insertOffset additionally receives the owning batch number between
-// the prefix and the row values.
-type votingDeltaTarget struct {
-	deleteAllBatches   string
+// votingRowTarget names the SQL statements of one row-oriented voting key
+// store: the .partkey file tables, or the registry tables scoped by pk.
+// prefixArgs (the registry pk) lead every statement's arguments, except
+// updateHeader where the header value comes first.
+type votingRowTarget struct {
+	selectHeader       string // args: (prefixArgs...) -> header blob
+	selectBatches      string // args: (prefixArgs...) -> (batch, data) ordered by batch
+	selectOffsets      string // args: (prefixArgs...) -> (batch, off, data) ordered by off
+	deleteAllBatches   string // args: (prefixArgs...)
 	deleteBatchesBelow string // args: (prefixArgs..., threshold)
-	deleteAllOffsets   string
+	deleteAllOffsets   string // args: (prefixArgs...)
 	deleteOffsetsBelow string // args: (prefixArgs..., threshold)
 	insertBatch        string // args: (prefixArgs..., index, data)
 	insertOffset       string // args: (prefixArgs..., batch, index, data)
-	updateScalars      string // args: (scalars, prefixArgs...)
+	updateHeader       string // args: (header, prefixArgs...)
 	prefixArgs         []any
 }
 
-var partkeyFileVotingTarget = votingDeltaTarget{
-	deleteAllBatches:   "DELETE FROM OtsBatches",
-	deleteBatchesBelow: "DELETE FROM OtsBatches WHERE batch<?",
-	deleteAllOffsets:   "DELETE FROM OtsOffsets",
-	deleteOffsetsBelow: "DELETE FROM OtsOffsets WHERE off<?",
-	insertBatch:        "INSERT INTO OtsBatches (batch, data) VALUES (?, ?)",
-	insertOffset:       "INSERT INTO OtsOffsets (batch, off, data) VALUES (?, ?, ?)",
-	updateScalars:      "UPDATE ParticipationAccount SET voting=?",
+var partkeyFileVotingTarget = votingRowTarget{
+	selectHeader:       "SELECT votingHeader FROM ParticipationAccount",
+	selectBatches:      "SELECT batch, data FROM VotingBatches ORDER BY batch",
+	selectOffsets:      "SELECT batch, off, data FROM VotingOffsets ORDER BY off",
+	deleteAllBatches:   "DELETE FROM VotingBatches",
+	deleteBatchesBelow: "DELETE FROM VotingBatches WHERE batch<?",
+	deleteAllOffsets:   "DELETE FROM VotingOffsets",
+	deleteOffsetsBelow: "DELETE FROM VotingOffsets WHERE off<?",
+	insertBatch:        "INSERT INTO VotingBatches (batch, data) VALUES (?, ?)",
+	insertOffset:       "INSERT INTO VotingOffsets (batch, off, data) VALUES (?, ?, ?)",
+	updateHeader:       "UPDATE ParticipationAccount SET votingHeader=?",
 }
 
-func registryVotingTarget(pk int64) votingDeltaTarget {
-	return votingDeltaTarget{
+func registryVotingTarget(pk int64) votingRowTarget {
+	return votingRowTarget{
+		selectHeader:       "SELECT votingHeader FROM Rolling WHERE pk=?",
+		selectBatches:      selectVotingBatches,
+		selectOffsets:      selectVotingOffsets,
 		deleteAllBatches:   deleteVotingBatchesPK,
 		deleteBatchesBelow: "DELETE FROM VotingBatches WHERE pk=? AND batch<?",
 		deleteAllOffsets:   deleteVotingOffsetsPK,
 		deleteOffsetsBelow: "DELETE FROM VotingOffsets WHERE pk=? AND off<?",
 		insertBatch:        "INSERT INTO VotingBatches (pk, batch, data) VALUES (?, ?, ?)",
 		insertOffset:       "INSERT INTO VotingOffsets (pk, batch, off, data) VALUES (?, ?, ?, ?)",
-		updateScalars:      "UPDATE Rolling SET voting=? WHERE pk=?",
+		updateHeader:       "UPDATE Rolling SET votingHeader=? WHERE pk=?",
 		prefixArgs:         []any{pk},
 	}
 }
 
-// applyVotingDeltaToPartkeyFile applies a delta to a .partkey database,
-// rebuilding the rows from secrets if they turn out inconsistent.
-func applyVotingDeltaToPartkeyFile(tx *sql.Tx, d votingDelta, secrets *crypto.OneTimeSignatureSecrets) error {
-	return applyVotingDeltaSelfHealing(tx, partkeyFileVotingTarget, d, secrets)
+// args returns the target's prefix arguments followed by extra.
+func (t votingRowTarget) args(extra ...any) []any {
+	return append(append(make([]any, 0, len(t.prefixArgs)+len(extra)), t.prefixArgs...), extra...)
 }
 
-// applyVotingDeltaToRegistry applies a delta to the participation registry
-// tables for one key, rebuilding the rows from secrets if they turn out
-// inconsistent.
-func applyVotingDeltaToRegistry(tx *sql.Tx, pk int64, d votingDelta, secrets *crypto.OneTimeSignatureSecrets) error {
-	return applyVotingDeltaSelfHealing(tx, registryVotingTarget(pk), d, secrets)
+// votingSnapshot captures the state of live voting secrets for persistence.
+func votingSnapshot(secrets *crypto.OneTimeSignatureSecrets) crypto.OneTimeSignatureSecretsPersistent {
+	return secrets.Snapshot().OneTimeSignatureSecretsPersistent
 }
 
-// applyVotingDeltaSelfHealing applies a delta and, when the trim row counts
-// reveal that the stored rows disagree with the stored scalars, falls back to
-// rebuilding the rows from memory.  The fallback is safe: computeVotingDelta's
-// monotonicity guard already established that storage is not ahead of memory,
-// so a full rewrite can only remove or faithfully restore keys memory
-// legitimately holds — never resurrect deleted ones.  Without it, one
-// inconsistent key would fail every flush forever (blocking on-disk key
-// deletion for all keys, since the registry flush is one transaction).
-func applyVotingDeltaSelfHealing(tx *sql.Tx, target votingDeltaTarget, d votingDelta, secrets *crypto.OneTimeSignatureSecrets) error {
-	err := applyVotingDelta(tx, target, d)
-	if !errors.Is(err, errInconsistentVotingRows) || secrets == nil {
-		return err
+// decodeVotingHeader decodes a stored voting header; an empty value is an
+// error, since every row-oriented store writes a header along with the key.
+func decodeVotingHeader(raw []byte) (crypto.OneTimeSignatureSecretsHeader, error) {
+	var hdr crypto.OneTimeSignatureSecretsHeader
+	if len(raw) == 0 {
+		return hdr, errors.New("no voting header stored")
 	}
-	// reaching this path means a disk problem or a delta bug — repair it,
-	// but never silently
-	logging.Base().Warnf("participation voting rows were inconsistent and have been rebuilt from memory: %v", err)
-	full, ferr := computeVotingDelta(nil, secrets)
-	if ferr != nil {
-		return ferr
+	if err := protocol.Decode(raw, &hdr); err != nil {
+		return hdr, err
 	}
-	return applyVotingDelta(tx, target, full)
+	return hdr, nil
 }
 
-// offsetsOwningBatch returns the batch that offset subkeys belong to.  Offset
-// subkeys only exist after a batch expansion, which leaves FirstBatch >= 1;
-// FirstBatch == 0 alongside offsets means corrupt in-memory state, which must
-// fail at write time rather than persist a row every later load would reject.
-func offsetsOwningBatch(firstBatch uint64) (uint64, error) {
-	if firstBatch == 0 {
-		return 0, errors.New("offset subkeys present but FirstBatch is 0: corrupt voting state")
+// offsetsBatch returns the batch the offset subkeys of hdr belong to.  Offset
+// subkeys only exist after a batch expansion, which leaves FirstBatch >= 1.
+func offsetsBatch(hdr crypto.OneTimeSignatureSecretsHeader) (uint64, error) {
+	if hdr.FirstBatch == 0 {
+		return 0, errors.New("offset subkeys present but no batch has been expanded (FirstBatch is 0)")
 	}
-	return firstBatch - 1, nil
+	return hdr.FirstBatch - 1, nil
 }
 
-func applyVotingDelta(tx *sql.Tx, target votingDeltaTarget, d votingDelta) error {
-	if d.noop {
+// storedHeaderAhead reports whether the stored deletion cursor is strictly
+// ahead of memory's.  Exhaustion is terminal: an exhausted store is ahead of
+// any live in-memory state, whatever its cursor says.
+func storedHeaderAhead(stored, mem crypto.OneTimeSignatureSecretsHeader) bool {
+	if stored.Exhausted() {
+		return !mem.Exhausted()
+	}
+	if mem.Exhausted() {
+		return false
+	}
+	return stored.FirstBatch > mem.FirstBatch ||
+		(stored.FirstBatch == mem.FirstBatch && stored.FirstOffset > mem.FirstOffset)
+}
+
+// insertVotingRows inserts one row per subkey of snap.  It is the row half of
+// storing a key for the first time; the caller stores the header with the
+// key's own row.
+func insertVotingRows(tx *sql.Tx, target votingRowTarget, snap crypto.OneTimeSignatureSecretsPersistent) error {
+	if err := insertKeyedSubkeys(tx, target.insertBatch, target.prefixArgs, snap.EncodedBatches()); err != nil {
+		return fmt.Errorf("failed to insert voting batch subkeys: %w", err)
+	}
+	if len(snap.Offsets) == 0 {
 		return nil
 	}
-
-	if d.fullRewrite || d.clearAllRows {
-		if _, err := tx.Exec(target.deleteAllBatches, target.prefixArgs...); err != nil {
-			return fmt.Errorf("applyVotingDelta: failed to clear batches: %w", err)
-		}
-	} else if d.deleteBatchesBelow > 0 {
-		result, err := tx.Exec(target.deleteBatchesBelow, append(append([]any{}, target.prefixArgs...), d.deleteBatchesBelow)...)
-		if err != nil {
-			return fmt.Errorf("applyVotingDelta: failed to trim batches: %w", err)
-		}
-		if err := verifyRowsAffected(result, d.expectedBatchDeletes, "batch subkey trim"); err != nil {
-			return fmt.Errorf("applyVotingDelta: %w", err)
-		}
+	batch, err := offsetsBatch(snap.Header())
+	if err != nil {
+		return err
 	}
-
-	if d.fullRewrite || d.clearAllRows || d.replaceAllOffsets {
-		if _, err := tx.Exec(target.deleteAllOffsets, target.prefixArgs...); err != nil {
-			return fmt.Errorf("applyVotingDelta: failed to clear offsets: %w", err)
-		}
-	} else if d.deleteOffsetsBelow > 0 {
-		result, err := tx.Exec(target.deleteOffsetsBelow, append(append([]any{}, target.prefixArgs...), d.deleteOffsetsBelow)...)
-		if err != nil {
-			return fmt.Errorf("applyVotingDelta: failed to trim offsets: %w", err)
-		}
-		if err := verifyRowsAffected(result, d.expectedOffsetDeletes, "offset subkey trim"); err != nil {
-			return fmt.Errorf("applyVotingDelta: %w", err)
-		}
-	}
-
-	if err := insertKeyedSubkeys(tx, target.insertBatch, target.prefixArgs, d.insertBatches); err != nil {
-		return fmt.Errorf("applyVotingDelta: failed to insert batches: %w", err)
-	}
-	if len(d.insertOffsets) > 0 {
-		offsetPrefix := append(append([]any{}, target.prefixArgs...), d.offsetsBatch)
-		if err := insertKeyedSubkeys(tx, target.insertOffset, offsetPrefix, d.insertOffsets); err != nil {
-			return fmt.Errorf("applyVotingDelta: failed to insert offsets: %w", err)
-		}
-	}
-
-	if d.newScalars != nil {
-		result, err := tx.Exec(target.updateScalars, append([]any{d.newScalars}, target.prefixArgs...)...)
-		if err != nil {
-			return fmt.Errorf("applyVotingDelta: failed to update scalars: %w", err)
-		}
-		// deliberately not the self-heal sentinel: a missing scalar row is
-		// not repairable by rewriting the subkey rows
-		n, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if n != 1 {
-			return fmt.Errorf("applyVotingDelta: scalar update affected %d rows, expected 1", n)
-		}
+	if err := insertKeyedSubkeys(tx, target.insertOffset, target.args(batch), snap.EncodedOffsets()); err != nil {
+		return fmt.Errorf("failed to insert voting offset subkeys: %w", err)
 	}
 	return nil
 }
 
-// verifyRowsAffected checks a statement changed exactly the expected number
-// of rows; expected < 0 skips the check.
-func verifyRowsAffected(result sql.Result, expected int64, what string) error {
-	if expected < 0 {
-		return nil
+// rewriteVotingRows replaces everything the store holds for the key (rows and
+// header) with snap.  Used by format migration and by repair.
+func rewriteVotingRows(tx *sql.Tx, target votingRowTarget, snap crypto.OneTimeSignatureSecretsPersistent) error {
+	if _, err := tx.Exec(target.deleteAllBatches, target.prefixArgs...); err != nil {
+		return fmt.Errorf("failed to clear voting batch subkeys: %w", err)
+	}
+	if _, err := tx.Exec(target.deleteAllOffsets, target.prefixArgs...); err != nil {
+		return fmt.Errorf("failed to clear voting offset subkeys: %w", err)
+	}
+	if err := insertVotingRows(tx, target, snap); err != nil {
+		return err
+	}
+	return updateVotingHeader(tx, target, snap.Header())
+}
+
+func updateVotingHeader(tx *sql.Tx, target votingRowTarget, hdr crypto.OneTimeSignatureSecretsHeader) error {
+	result, err := tx.Exec(target.updateHeader, append([]any{protocol.Encode(&hdr)}, target.prefixArgs...)...)
+	if err != nil {
+		return fmt.Errorf("failed to update the voting header: %w", err)
 	}
 	n, err := result.RowsAffected()
 	if err != nil {
 		return err
 	}
-	if n != expected {
-		return fmt.Errorf("%s affected %d rows, expected %d: %w", what, n, expected, errInconsistentVotingRows)
+	if n != 1 {
+		return fmt.Errorf("voting header update affected %d rows, expected 1", n)
 	}
 	return nil
 }
 
-// validateVotingRowCounts verifies the number of stored subkey rows matches
-// what the scalars imply.  Batch rows are only ever trimmed from the front,
-// so a key valid through lastValid must hold exactly the batches from
-// FirstBatch through the last batch of its validity window.  Offset rows for
-// the current batch (FirstBatch-1) must cover FirstOffset through
-// dilution-1, except while the key is past its final batch where zero rows
-// (erased at end of key life) are also legitimate.  dilution 0 (ancient keys
-// deferring to consensus parameters) skips the checks.
-func validateVotingRowCounts(scalars *crypto.OneTimeSignatureSecretsPersistent, lastValid basics.Round, dilution uint64, numBatchRows, numOffsetRows int) error {
-	if dilution == 0 {
+// syncVotingRows brings the store from the stored header to the state of
+// snap, writing only the transition: consumed subkey rows are deleted, a
+// batch rollover additionally replaces the offset rows, and the header is
+// updated.  Subkeys advance monotonically (batch rows are written once and
+// only deleted afterwards; offset rows are consumed from the front and
+// regenerated per batch), so every transition has an exact expected row
+// count; a mismatch means the stored rows drifted from the header and the
+// store is repaired by rewriting it from memory, which is safe because the
+// monotonicity guard below has established that storage is not ahead.
+//
+// Forward security requires the stored deletion cursor to be monotonic: if
+// storage is ahead of memory, writing memory would resurrect keys that were
+// already deleted on disk, so that state is an error rather than a repair.
+func syncVotingRows(tx *sql.Tx, target votingRowTarget, stored crypto.OneTimeSignatureSecretsHeader, snap crypto.OneTimeSignatureSecretsPersistent) error {
+	mem := snap.Header()
+	if storedHeaderAhead(stored, mem) {
+		return fmt.Errorf("stored voting state (batch %d, offset %d, %d+%d subkeys) is ahead of memory (batch %d, offset %d, %d+%d subkeys): stale or corrupt store; refusing to resurrect deleted keys",
+			stored.FirstBatch, stored.FirstOffset, stored.BatchCount, stored.OffsetCount,
+			mem.FirstBatch, mem.FirstOffset, mem.BatchCount, mem.OffsetCount)
+	}
+	if stored == mem {
 		return nil
 	}
-	lastBatch := basics.OneTimeIDForRound(lastValid, dilution).Batch
 
-	expectedBatches := 0
-	if scalars.FirstBatch <= lastBatch {
-		expectedBatches = int(lastBatch - scalars.FirstBatch + 1)
+	err := applyVotingTransition(tx, target, stored, mem, snap)
+	if errors.Is(err, errInconsistentVotingRows) {
+		// reaching this path means a disk problem or a bug — repair it, but
+		// never silently
+		logging.Base().Warnf("participation voting subkey rows were inconsistent with the stored header and have been rebuilt from memory: %v", err)
+		return rewriteVotingRows(tx, target, snap)
 	}
-	if numBatchRows != expectedBatches {
-		return fmt.Errorf("voting key has %d batch subkey rows, expected %d (first batch %d, last batch %d): missing or extra rows", numBatchRows, expectedBatches, scalars.FirstBatch, lastBatch)
+	if err != nil {
+		return err
 	}
+	return updateVotingHeader(tx, target, mem)
+}
 
-	expectedOffsets := 0
-	if dilution > scalars.FirstOffset {
-		expectedOffsets = int(dilution - scalars.FirstOffset)
-	}
+// applyVotingTransition deletes (and, on a batch rollover, re-inserts) the
+// subkey rows that differ between the stored and in-memory headers.  It does
+// not touch the header itself.
+func applyVotingTransition(tx *sql.Tx, target votingRowTarget, stored, mem crypto.OneTimeSignatureSecretsHeader, snap crypto.OneTimeSignatureSecretsPersistent) error {
 	switch {
-	case !scalars.OffsetsExpanded():
-		expectedOffsets = 0
-	case scalars.FirstBatch == lastBatch+1:
-		// final-batch phase: the rows are either still live or already
-		// erased at the end of the key's life — both are legitimate
-		if numOffsetRows == 0 {
+	case mem.Exhausted():
+		if err := deleteExpecting(tx, target.deleteAllBatches, target.prefixArgs, stored.BatchCount, "retiring batch subkeys"); err != nil {
+			return err
+		}
+		return deleteExpecting(tx, target.deleteAllOffsets, target.prefixArgs, stored.OffsetCount, "retiring offset subkeys")
+
+	case mem.FirstBatch == stored.FirstBatch:
+		// common per-round path: offsets consumed from the front of the
+		// current batch (the guard guarantees mem.FirstOffset >= stored.FirstOffset)
+		consumed := mem.FirstOffset - stored.FirstOffset
+		if mem.BatchCount != stored.BatchCount || mem.OffsetCount+consumed != stored.OffsetCount {
+			return fmt.Errorf("%w: same-batch transition with batch count %d->%d, offset count %d->%d, first offset %d->%d",
+				errInconsistentVotingRows, stored.BatchCount, mem.BatchCount, stored.OffsetCount, mem.OffsetCount, stored.FirstOffset, mem.FirstOffset)
+		}
+		return deleteExpecting(tx, target.deleteOffsetsBelow, target.args(int64(mem.FirstOffset)), consumed, "offset subkey trim")
+
+	default:
+		// batch rollover (mem.FirstBatch > stored.FirstBatch): batch rows
+		// consumed from the front, offset rows regenerated for the new batch
+		if mem.BatchCount > stored.BatchCount {
+			return fmt.Errorf("%w: batch rollover with batch count %d->%d", errInconsistentVotingRows, stored.BatchCount, mem.BatchCount)
+		}
+		if err := deleteExpecting(tx, target.deleteBatchesBelow, target.args(int64(mem.FirstBatch)), stored.BatchCount-mem.BatchCount, "batch subkey trim"); err != nil {
+			return err
+		}
+		if err := deleteExpecting(tx, target.deleteAllOffsets, target.prefixArgs, stored.OffsetCount, "offset subkey replacement"); err != nil {
+			return err
+		}
+		if mem.OffsetCount == 0 {
 			return nil
 		}
-	case scalars.FirstBatch > lastBatch+1:
-		expectedOffsets = 0
+		batch, err := offsetsBatch(mem)
+		if err != nil {
+			return err
+		}
+		if err := insertKeyedSubkeys(tx, target.insertOffset, target.args(batch), snap.EncodedOffsets()); err != nil {
+			return fmt.Errorf("failed to insert voting offset subkeys: %w", err)
+		}
+		return nil
 	}
-	if numOffsetRows != expectedOffsets {
-		return fmt.Errorf("voting key has %d offset subkey rows, expected %d (first offset %d, dilution %d): missing or extra rows", numOffsetRows, expectedOffsets, scalars.FirstOffset, dilution)
+}
+
+// deleteExpecting runs a delete that must remove exactly expected rows.
+func deleteExpecting(tx *sql.Tx, query string, args []any, expected uint64, what string) error {
+	result, err := tx.Exec(query, args...)
+	if err != nil {
+		return fmt.Errorf("%s failed: %w", what, err)
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n != int64(expected) {
+		return fmt.Errorf("%w: %s affected %d rows, expected %d", errInconsistentVotingRows, what, n, expected)
 	}
 	return nil
 }
 
-// validateOffsetRowBatches verifies every stored offset row belongs to the
-// batch the scalars say is expanded (FirstBatch-1), so a scalar/row mismatch
-// cannot silently associate offsets with the wrong batch.
-func validateOffsetRowBatches(scalars *crypto.OneTimeSignatureSecretsPersistent, offsetBatches []uint64) error {
+// readVotingHeader reads and decodes the stored header of a key.
+func readVotingHeader(tx *sql.Tx, target votingRowTarget) (crypto.OneTimeSignatureSecretsHeader, error) {
+	var raw []byte
+	if err := tx.QueryRow(target.selectHeader, target.prefixArgs...).Scan(&raw); err != nil {
+		return crypto.OneTimeSignatureSecretsHeader{}, fmt.Errorf("failed to read the stored voting header: %w", err)
+	}
+	hdr, err := decodeVotingHeader(raw)
+	if err != nil {
+		return hdr, fmt.Errorf("stored voting header is undecodable: %w", err)
+	}
+	return hdr, nil
+}
+
+// readVotingRows reads the subkey rows of a key: batches ordered by index,
+// offsets ordered by index along with each offset row's batch column.
+func readVotingRows(tx *sql.Tx, target votingRowTarget) (batches, offsets []crypto.KeyedSubkey, offsetBatches []uint64, err error) {
+	batches, err = readKeyedSubkeys(tx, target.selectBatches, target.prefixArgs...)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	offsets, offsetBatches, err = readOffsetSubkeys(tx, target.selectOffsets, target.prefixArgs...)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return batches, offsets, offsetBatches, nil
+}
+
+// votingFromRows reassembles voting secrets from a header and its rows,
+// checking first that every offset row belongs to the batch the header says
+// is expanded.  Errors are wrapped in ErrCorruptedVotingData.
+func votingFromRows(hdr crypto.OneTimeSignatureSecretsHeader, batches, offsets []crypto.KeyedSubkey, offsetBatches []uint64) (*crypto.OneTimeSignatureSecrets, error) {
+	if err := validateOffsetRowBatches(hdr, offsetBatches); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrCorruptedVotingData, err)
+	}
+	voting, err := crypto.OneTimeSignatureSecretsFromRows(hdr, batches, offsets)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrCorruptedVotingData, err)
+	}
+	return voting, nil
+}
+
+// validateOffsetRowBatches verifies every stored offset row belongs to batch
+// FirstBatch-1, so a header/row mismatch cannot silently associate offsets
+// with the wrong batch.
+func validateOffsetRowBatches(hdr crypto.OneTimeSignatureSecretsHeader, offsetBatches []uint64) error {
 	if len(offsetBatches) == 0 {
 		return nil
 	}
-	if !scalars.OffsetsExpanded() || scalars.FirstBatch == 0 {
-		return fmt.Errorf("offset subkey rows present but the key has no expanded batch")
+	want, err := offsetsBatch(hdr)
+	if err != nil {
+		return err
 	}
-	want := scalars.FirstBatch - 1
 	for _, b := range offsetBatches {
 		if b != want {
 			return fmt.Errorf("offset subkey row belongs to batch %d, expected batch %d", b, want)
 		}
+	}
+	return nil
+}
+
+// verifyVotingRowsMatch reads back what a migration wrote and compares the
+// reassembled secrets against the original key material.
+func verifyVotingRowsMatch(tx *sql.Tx, target votingRowTarget, original *crypto.OneTimeSignatureSecrets) error {
+	hdr, err := readVotingHeader(tx, target)
+	if err != nil {
+		return fmt.Errorf("reading back the converted voting state: %w", err)
+	}
+	batches, offsets, offsetBatches, err := readVotingRows(tx, target)
+	if err != nil {
+		return fmt.Errorf("reading back the converted voting subkey rows: %w", err)
+	}
+	reconstructed, err := votingFromRows(hdr, batches, offsets, offsetBatches)
+	if err != nil {
+		return fmt.Errorf("reconstruction of the converted voting state failed: %w", err)
+	}
+	origSnap := original.Snapshot()
+	newSnap := reconstructed.Snapshot()
+	if !bytes.Equal(protocol.Encode(&origSnap), protocol.Encode(&newSnap)) {
+		return errors.New("converted voting state does not match the original key material")
 	}
 	return nil
 }
@@ -443,20 +390,6 @@ func insertKeyedSubkeys(tx *sql.Tx, insertSQL string, prefixArgs []any, rows []c
 	return nil
 }
 
-// readVotingRowsFromPartkeyFile loads the subkey rows from a v4 .partkey
-// database, ordered by index, along with each offset row's owning batch.
-func readVotingRowsFromPartkeyFile(tx *sql.Tx) (batches, offsets []crypto.KeyedSubkey, offsetBatches []uint64, err error) {
-	batches, err = readKeyedSubkeys(tx, "SELECT batch, data FROM OtsBatches ORDER BY batch")
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	offsets, offsetBatches, err = readOffsetSubkeys(tx, "SELECT batch, off, data FROM OtsOffsets ORDER BY off")
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	return batches, offsets, offsetBatches, nil
-}
-
 func readKeyedSubkeys(tx *sql.Tx, query string, args ...any) ([]crypto.KeyedSubkey, error) {
 	rows, err := tx.Query(query, args...)
 	if err != nil {
@@ -473,6 +406,27 @@ func readKeyedSubkeys(tx *sql.Tx, query string, args ...any) ([]crypto.KeyedSubk
 		result = append(result, row)
 	}
 	return result, rows.Err()
+}
+
+func readOffsetSubkeys(tx *sql.Tx, query string, args ...any) ([]crypto.KeyedSubkey, []uint64, error) {
+	rows, err := tx.Query(query, args...)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+
+	var result []crypto.KeyedSubkey
+	var batches []uint64
+	for rows.Next() {
+		var batch uint64
+		var row crypto.KeyedSubkey
+		if err := rows.Scan(&batch, &row.Index, &row.Key); err != nil {
+			return nil, nil, err
+		}
+		result = append(result, row)
+		batches = append(batches, batch)
+	}
+	return result, batches, rows.Err()
 }
 
 // groupedSubkeys carries the subkey rows of one pk; batches holds each row's
@@ -513,25 +467,4 @@ func readGroupedSubkeys(tx *sql.Tx, query string, withBatch bool) (map[int64]gro
 		result[pk] = group
 	}
 	return result, rows.Err()
-}
-
-func readOffsetSubkeys(tx *sql.Tx, query string, args ...any) ([]crypto.KeyedSubkey, []uint64, error) {
-	rows, err := tx.Query(query, args...)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer rows.Close()
-
-	var result []crypto.KeyedSubkey
-	var batches []uint64
-	for rows.Next() {
-		var batch uint64
-		var row crypto.KeyedSubkey
-		if err := rows.Scan(&batch, &row.Index, &row.Key); err != nil {
-			return nil, nil, err
-		}
-		result = append(result, row)
-		batches = append(batches, batch)
-	}
-	return result, batches, rows.Err()
 }

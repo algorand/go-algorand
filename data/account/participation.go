@@ -194,31 +194,18 @@ func (part PersistedParticipation) DeleteOldKeys(current basics.Round, proto con
 	errorCh := make(chan error, 1)
 	deleteOldKeys := func() {
 		errorCh <- part.Store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-			// read the last-persisted scalars to compute an incremental delta
-			// instead of rewriting the whole keyset
-			var rawVoting []byte
-			err := tx.QueryRow("SELECT voting FROM ParticipationAccount").Scan(&rawVoting)
+			// compare the stored header against memory and write only the
+			// transition instead of rewriting the whole keyset
+			stored, err := readVotingHeader(tx, partkeyFileVotingTarget)
 			if err != nil {
-				return fmt.Errorf("Participation.DeleteOldKeys: failed to read persisted voting scalars: %v", err)
-			}
-			var old *crypto.OneTimeSignatureSecretsPersistent
-			if len(rawVoting) > 0 {
-				// Fail closed: without the persisted cursor there is no way to
+				// Fail closed: without the stored cursor there is no way to
 				// tell whether memory lags storage, and rewriting from memory
 				// could resurrect keys the file already retired.
-				var decoded crypto.OneTimeSignatureSecrets
-				if err = protocol.Decode(rawVoting, &decoded); err != nil {
-					return fmt.Errorf("Participation.DeleteOldKeys: persisted voting scalars are undecodable; refusing to rewrite voting rows from memory: %v", err)
-				}
-				old = &decoded.OneTimeSignatureSecretsPersistent
+				return fmt.Errorf("Participation.DeleteOldKeys: %v; refusing to rewrite voting rows from memory", err)
 			}
-			delta, err := computeVotingDelta(old, part.Voting)
+			err = syncVotingRows(tx, partkeyFileVotingTarget, stored, votingSnapshot(part.Voting))
 			if err != nil {
 				return fmt.Errorf("Participation.DeleteOldKeys: %v", err)
-			}
-			err = applyVotingDeltaToPartkeyFile(tx, delta, part.Voting)
-			if err != nil {
-				return fmt.Errorf("Participation.DeleteOldKeys: failed to update account: %v", err)
 			}
 			return nil
 		})
@@ -300,8 +287,9 @@ func (part PersistedParticipation) PersistWithSecrets() error {
 // Persist writes a Participation out to a database on the disk
 func (part PersistedParticipation) Persist() error {
 	rawVRF := protocol.Encode(part.VRF)
-	scalars, batches, offsets := part.Voting.PersistentParts()
-	rawVoting := protocol.Encode(&scalars)
+	voting := votingSnapshot(part.Voting)
+	votingHeader := voting.Header()
+	rawVotingHeader := protocol.Encode(&votingHeader)
 	rawStateProof := protocol.Encode(part.StateProofSecrets)
 
 	err := part.Store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
@@ -310,28 +298,13 @@ func (part PersistedParticipation) Persist() error {
 			return fmt.Errorf("failed to install database: %w", err)
 		}
 
-		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, voting, firstValid, lastValid, keyDilution, stateProof) VALUES (?, ?, ?, ?, ?, ?,?)",
-			part.Parent[:], rawVRF, rawVoting, part.FirstValid, part.LastValid, part.KeyDilution, rawStateProof)
+		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, votingHeader, firstValid, lastValid, keyDilution, stateProof) VALUES (?, ?, ?, ?, ?, ?, ?)",
+			part.Parent[:], rawVRF, rawVotingHeader, part.FirstValid, part.LastValid, part.KeyDilution, rawStateProof)
 		if err != nil {
 			return fmt.Errorf("failed to insert account: %w", err)
 		}
 
-		err = insertKeyedSubkeys(tx, "INSERT INTO OtsBatches (batch, data) VALUES (?, ?)", nil, batches)
-		if err != nil {
-			return fmt.Errorf("failed to insert voting batch subkeys: %w", err)
-		}
-		if len(offsets) > 0 {
-			// offset subkeys belong to the batch preceding FirstBatch
-			owningBatch, err := offsetsOwningBatch(scalars.FirstBatch)
-			if err != nil {
-				return err
-			}
-			err = insertKeyedSubkeys(tx, "INSERT INTO OtsOffsets (batch, off, data) VALUES (?, ?, ?)", []any{owningBatch}, offsets)
-			if err != nil {
-				return fmt.Errorf("failed to insert voting offset subkeys: %w", err)
-			}
-		}
-		return nil
+		return insertVotingRows(tx, partkeyFileVotingTarget, voting)
 	})
 
 	if err != nil {

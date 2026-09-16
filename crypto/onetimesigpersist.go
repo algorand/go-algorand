@@ -22,130 +22,143 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// Row-oriented persistent storage of OneTimeSignatureSecrets.
+//
+// Storage keeps one row per ephemeral subkey plus a small header, so the
+// per-round forward-security deletion of a used subkey is a row delete
+// instead of a rewrite of the whole keyset.  The header is a separate type
+// from OneTimeSignatureSecretsPersistent (the legacy whole-blob encoding) and
+// records how many rows exist, so the expected row set is fully determined by
+// the header alone: missing rows mean corruption, never "maybe exhausted".
+//
+// All helpers here operate on a snapshot (see OneTimeSignatureSecrets.Snapshot)
+// and take no locks.  A snapshot is a shallow copy: it shares the subkey
+// backing arrays with the live secrets.  That is safe because DeleteBefore*
+// only reslices existing arrays and allocates a new array when it expands a
+// batch; it never modifies subkeys in place.  Wiping consumed subkeys in
+// memory would invalidate this and require copying in Snapshot.
+
 //msgp:ignore KeyedSubkey
 
-// KeyedSubkey is one ephemeral subkey prepared for row-oriented persistent
-// storage.  Index is the absolute batch number for batch subkeys, or the
-// absolute offset (within batch FirstBatch-1) for offset subkeys.  Key is the
-// msgpack encoding of the subkey.
+// KeyedSubkey is one ephemeral subkey prepared for row-oriented storage.
+// Index is the absolute batch number for batch subkeys, or the absolute
+// offset (within batch FirstBatch-1) for offset subkeys.  Key is the msgpack
+// encoding of the subkey.
 type KeyedSubkey struct {
 	Index uint64
 	Key   []byte
 }
 
-// PersistentState returns a copy of the persistent scalar fields (with the
-// Batches and Offsets slices nil'ed out) plus the number of live batch and
-// offset subkeys, captured atomically with respect to concurrent mutating
-// calls (specifically, DeleteBefore*).  This is the cheap per-round probe for
-// row-oriented storage: no subkey is encoded.
-func (s *OneTimeSignatureSecrets) PersistentState() (scalars OneTimeSignatureSecretsPersistent, numBatches int, numOffsets int) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+// OneTimeSignatureSecretsHeader is the stored description of a row-oriented
+// OneTimeSignatureSecrets: the fixed-size fields plus the number of subkey
+// rows.  Batch subkey rows cover [FirstBatch, FirstBatch+BatchCount); offset
+// subkey rows cover [FirstOffset, FirstOffset+OffsetCount) and belong to
+// batch FirstBatch-1.  Both counts zero means the key is exhausted.
+type OneTimeSignatureSecretsHeader struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	return s.persistentScalarsLocked(), len(s.Batches), len(s.Offsets)
+	Verifier OneTimeSignatureVerifier `codec:"pk"`
+
+	FirstBatch uint64 `codec:"fb"`
+	BatchCount uint64 `codec:"nb"`
+
+	FirstOffset uint64 `codec:"fo"`
+	OffsetCount uint64 `codec:"no"`
+
+	// OffsetsPK2 is the intermediate-level public key that verifies the
+	// offset subkeys, and OffsetsPK2Sig is the master key's signature on
+	// OneTimeSignatureSubkeyBatchID(OffsetsPK2, FirstBatch-1).
+	OffsetsPK2    ed25519PublicKey `codec:"pk2"`
+	OffsetsPK2Sig ed25519Signature `codec:"pk2sig"`
 }
 
-func (s *OneTimeSignatureSecrets) persistentScalarsLocked() OneTimeSignatureSecretsPersistent {
-	scalars := s.OneTimeSignatureSecretsPersistent
-	scalars.Batches = nil
-	scalars.Offsets = nil
-	return scalars
+// Exhausted reports whether the header describes a key with no subkeys left.
+func (h OneTimeSignatureSecretsHeader) Exhausted() bool {
+	return h.BatchCount == 0 && h.OffsetCount == 0
 }
 
-func (s *OneTimeSignatureSecrets) encodedBatchesLocked() []KeyedSubkey {
+// Header returns the storage header describing a snapshot.
+func (s OneTimeSignatureSecretsPersistent) Header() OneTimeSignatureSecretsHeader {
+	return OneTimeSignatureSecretsHeader{
+		Verifier:      s.OneTimeSignatureVerifier,
+		FirstBatch:    s.FirstBatch,
+		BatchCount:    uint64(len(s.Batches)),
+		FirstOffset:   s.FirstOffset,
+		OffsetCount:   uint64(len(s.Offsets)),
+		OffsetsPK2:    s.OffsetsPK2,
+		OffsetsPK2Sig: s.OffsetsPK2Sig,
+	}
+}
+
+// EncodedBatches returns the batch subkeys of a snapshot as rows;
+// rows[i].Index == FirstBatch+i.
+func (s OneTimeSignatureSecretsPersistent) EncodedBatches() []KeyedSubkey {
 	if len(s.Batches) == 0 {
 		return nil
 	}
-	batches := make([]KeyedSubkey, len(s.Batches))
+	rows := make([]KeyedSubkey, len(s.Batches))
 	for i := range s.Batches {
-		batches[i] = KeyedSubkey{
-			Index: s.FirstBatch + uint64(i),
-			Key:   protocol.Encode(&s.Batches[i]),
-		}
+		rows[i] = KeyedSubkey{Index: s.FirstBatch + uint64(i), Key: protocol.Encode(&s.Batches[i])}
 	}
-	return batches
+	return rows
 }
 
-func (s *OneTimeSignatureSecrets) encodedOffsetsLocked() []KeyedSubkey {
+// EncodedOffsets returns the offset subkeys of a snapshot as rows;
+// rows[j].Index == FirstOffset+j, all belonging to batch FirstBatch-1.
+func (s OneTimeSignatureSecretsPersistent) EncodedOffsets() []KeyedSubkey {
 	if len(s.Offsets) == 0 {
 		return nil
 	}
-	offsets := make([]KeyedSubkey, len(s.Offsets))
+	rows := make([]KeyedSubkey, len(s.Offsets))
 	for j := range s.Offsets {
-		offsets[j] = KeyedSubkey{
-			Index: s.FirstOffset + uint64(j),
-			Key:   protocol.Encode(&s.Offsets[j]),
-		}
+		rows[j] = KeyedSubkey{Index: s.FirstOffset + uint64(j), Key: protocol.Encode(&s.Offsets[j])}
 	}
-	return offsets
+	return rows
 }
 
-// OffsetsExpanded returns whether a batch has ever been expanded into offset
-// subkeys: OffsetsPK2 is set on the first expansion and never cleared.  A key
-// that was never expanded legitimately has no offset subkeys.
-func (s *OneTimeSignatureSecretsPersistent) OffsetsExpanded() bool {
-	return s.OffsetsPK2 != (ed25519PublicKey{})
-}
-
-// PersistentParts returns the scalar fields plus every subkey encoded as its
-// own row, all captured atomically under a single lock acquisition so the
-// scalars and rows are mutually consistent even while DeleteBefore* runs
-// concurrently.  batches[i].Index == scalars.FirstBatch+i, and
-// offsets[j].Index == scalars.FirstOffset+j (offset subkeys belong to batch
-// scalars.FirstBatch-1).
-func (s *OneTimeSignatureSecrets) PersistentParts() (scalars OneTimeSignatureSecretsPersistent, batches []KeyedSubkey, offsets []KeyedSubkey) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	return s.persistentScalarsLocked(), s.encodedBatchesLocked(), s.encodedOffsetsLocked()
-}
-
-// PersistentScalarsAndOffsets is PersistentParts without encoding the batch
-// subkeys.  Batch rows are immutable in storage after the initial insert
-// (they are only ever deleted), so steady-state persistence such as a batch
-// rollover never needs them re-encoded.
-func (s *OneTimeSignatureSecrets) PersistentScalarsAndOffsets() (scalars OneTimeSignatureSecretsPersistent, offsets []KeyedSubkey) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	return s.persistentScalarsLocked(), s.encodedOffsetsLocked()
-}
-
-// OneTimeSignatureSecretsFromParts reassembles OneTimeSignatureSecrets from
-// scalars and subkey rows produced by PersistentParts (possibly trimmed by
-// row deletions in storage).  Zero rows reassemble to nil slices, preserving
-// the DeleteBeforeFineGrained semantics that an exhausted key's FirstBatch is
-// never spuriously bumped.
-func OneTimeSignatureSecretsFromParts(
-	scalars OneTimeSignatureSecretsPersistent, batches []KeyedSubkey, offsets []KeyedSubkey,
-) (*OneTimeSignatureSecrets, error) {
-	if len(scalars.Batches) != 0 || len(scalars.Offsets) != 0 {
-		return nil, fmt.Errorf("OneTimeSignatureSecretsFromParts: scalars carry %d batch and %d offset subkeys, expected none", len(scalars.Batches), len(scalars.Offsets))
+// OneTimeSignatureSecretsFromRows reassembles OneTimeSignatureSecrets from a
+// header and the subkey rows it describes, in index order.  Zero counts
+// reassemble to nil slices, preserving the DeleteBeforeFineGrained semantics
+// that an exhausted key's FirstBatch is never spuriously bumped.
+func OneTimeSignatureSecretsFromRows(hdr OneTimeSignatureSecretsHeader, batches []KeyedSubkey, offsets []KeyedSubkey) (*OneTimeSignatureSecrets, error) {
+	if uint64(len(batches)) != hdr.BatchCount {
+		return nil, fmt.Errorf("OneTimeSignatureSecretsFromRows: %d batch subkey rows, header expects %d: missing or extra rows", len(batches), hdr.BatchCount)
+	}
+	if uint64(len(offsets)) != hdr.OffsetCount {
+		return nil, fmt.Errorf("OneTimeSignatureSecretsFromRows: %d offset subkey rows, header expects %d: missing or extra rows", len(offsets), hdr.OffsetCount)
+	}
+	if hdr.OffsetCount > 0 && hdr.FirstBatch == 0 {
+		return nil, fmt.Errorf("OneTimeSignatureSecretsFromRows: offset subkeys present but no batch has been expanded (FirstBatch is 0)")
 	}
 
+	p := OneTimeSignatureSecretsPersistent{
+		OneTimeSignatureVerifier: hdr.Verifier,
+		FirstBatch:               hdr.FirstBatch,
+		FirstOffset:              hdr.FirstOffset,
+		OffsetsPK2:               hdr.OffsetsPK2,
+		OffsetsPK2Sig:            hdr.OffsetsPK2Sig,
+	}
 	if len(batches) > 0 {
-		scalars.Batches = make([]ephemeralSubkey, len(batches))
+		p.Batches = make([]ephemeralSubkey, len(batches))
 		for i, row := range batches {
-			if want := scalars.FirstBatch + uint64(i); row.Index != want {
-				return nil, fmt.Errorf("OneTimeSignatureSecretsFromParts: batch row %d has index %d, expected %d", i, row.Index, want)
+			if want := hdr.FirstBatch + uint64(i); row.Index != want {
+				return nil, fmt.Errorf("OneTimeSignatureSecretsFromRows: batch row %d has index %d, expected %d", i, row.Index, want)
 			}
-			if err := protocol.Decode(row.Key, &scalars.Batches[i]); err != nil {
-				return nil, fmt.Errorf("OneTimeSignatureSecretsFromParts: batch row %d (index %d) failed to decode: %w", i, row.Index, err)
+			if err := protocol.Decode(row.Key, &p.Batches[i]); err != nil {
+				return nil, fmt.Errorf("OneTimeSignatureSecretsFromRows: batch row %d (index %d) failed to decode: %w", i, row.Index, err)
 			}
 		}
 	}
-
 	if len(offsets) > 0 {
-		scalars.Offsets = make([]ephemeralSubkey, len(offsets))
+		p.Offsets = make([]ephemeralSubkey, len(offsets))
 		for j, row := range offsets {
-			if want := scalars.FirstOffset + uint64(j); row.Index != want {
-				return nil, fmt.Errorf("OneTimeSignatureSecretsFromParts: offset row %d has index %d, expected %d", j, row.Index, want)
+			if want := hdr.FirstOffset + uint64(j); row.Index != want {
+				return nil, fmt.Errorf("OneTimeSignatureSecretsFromRows: offset row %d has index %d, expected %d", j, row.Index, want)
 			}
-			if err := protocol.Decode(row.Key, &scalars.Offsets[j]); err != nil {
-				return nil, fmt.Errorf("OneTimeSignatureSecretsFromParts: offset row %d (index %d) failed to decode: %w", j, row.Index, err)
+			if err := protocol.Decode(row.Key, &p.Offsets[j]); err != nil {
+				return nil, fmt.Errorf("OneTimeSignatureSecretsFromRows: offset row %d (index %d) failed to decode: %w", j, row.Index, err)
 			}
 		}
 	}
-
-	return &OneTimeSignatureSecrets{OneTimeSignatureSecretsPersistent: scalars}, nil
+	return &OneTimeSignatureSecrets{OneTimeSignatureSecretsPersistent: p}, nil
 }

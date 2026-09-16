@@ -52,17 +52,63 @@ func countTableRows(a *require.Assertions, store db.Accessor, table string) (n i
 	return n
 }
 
-func readVotingColumn(a *require.Assertions, store db.Accessor) (raw []byte) {
-	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return tx.QueryRow("SELECT voting FROM ParticipationAccount").Scan(&raw)
+// tableColumnsTx lists the column names of a table.
+func tableColumnsTx(tx *sql.Tx, table string) (names []string, err error) {
+	rows, err := tx.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid, notnull, pk int
+		var name, ctype string
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return nil, err
+		}
+		names = append(names, name)
+	}
+	return names, rows.Err()
+}
+
+func tableColumns(a *require.Assertions, store db.Accessor, table string) (names []string) {
+	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		names, err = tableColumnsTx(tx, table)
+		return err
 	})
 	a.NoError(err)
-	return raw
+	return names
+}
+
+func readPartkeyVotingHeader(a *require.Assertions, store db.Accessor) (hdr crypto.OneTimeSignatureSecretsHeader) {
+	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		hdr, err = readVotingHeader(tx, partkeyFileVotingTarget)
+		return err
+	})
+	a.NoError(err)
+	return hdr
+}
+
+func execPartkeySQL(a *require.Assertions, store db.Accessor, query string, args ...any) {
+	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.Exec(query, args...)
+		return err
+	})
+	a.NoError(err)
 }
 
 func encodedVotingSnapshot(secrets *crypto.OneTimeSignatureSecrets) []byte {
 	snap := secrets.Snapshot()
 	return protocol.Encode(&snap)
+}
+
+// requireRetiredIDUnusable checks a restore of the store cannot sign id.
+func requireRetiredIDUnusable(a *require.Assertions, store db.Accessor, verifier crypto.OneTimeSignatureVerifier, id crypto.OneTimeSignatureIdentifier) {
+	restored, err := RestoreParticipationUnmigrated(store)
+	a.NoError(err)
+	msg := crypto.OneTimeSignatureSubkeyBatchID{Batch: 1}
+	sig := restored.Voting.Sign(id, msg)
+	a.False(verifier.Verify(id, msg, sig), "restored secrets signed a retired identifier")
 }
 
 func setupTestDBAtVer3(partDB db.Accessor, part Participation) error {
@@ -97,231 +143,178 @@ func setupTestDBAtVer3(partDB db.Accessor, part Participation) error {
 	})
 }
 
+// TestMigrateFromVersion3 converts hand-built version 3 files (a mid-life key
+// and an exhausted one) and verifies the header, the rows, the dropped legacy
+// column, and that the restored secrets equal the original; a file whose blob
+// is damaged must roll back untouched.
 func TestMigrateFromVersion3(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	a := require.New(t)
+	cases := []struct {
+		name      string
+		advance   basics.Round
+		exhausted bool
+		corrupt   bool
+	}{
+		{"midLife", 55, false, false},
+		{"exhausted", 999, true, false},
+		{"corruptBlobRollsBack", 55, false, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			a := require.New(t)
+			const dilution = 10
 
-	// build a mid-life key: offsets expanded, some batches consumed
-	part, tmpDB := makeSmallTestKey(t, a, 0, 300, 10)
-	defer closeDBS(tmpDB)
-	part.Voting.DeleteBeforeFineGrained(basics.OneTimeIDForRound(55, 10), 10)
-	a.NotEmpty(part.Voting.Offsets)
-	a.NotZero(part.Voting.FirstBatch)
+			part, tmpDB := makeSmallTestKey(t, a, 0, 300, dilution)
+			defer closeDBS(tmpDB)
+			part.Voting.DeleteBeforeFineGrained(basics.OneTimeIDForRound(tc.advance, dilution), dilution)
+			snap := votingSnapshot(part.Voting)
+			a.Equal(tc.exhausted, snap.Header().Exhausted())
 
-	partDB, err := db.MakeAccessor(t.Name()+"_v3", false, true)
-	a.NoError(err)
-	defer closeDBS(partDB)
+			partDB, err := db.MakeAccessor(t.Name()+"_v3", false, true)
+			a.NoError(err)
+			defer closeDBS(partDB)
+			a.NoError(setupTestDBAtVer3(partDB, part.Participation))
 
-	a.NoError(setupTestDBAtVer3(partDB, part.Participation))
-	a.NoError(Migrate(partDB))
+			if tc.corrupt {
+				// mangle the voting blob so the conversion fails mid-transaction
+				var raw []byte
+				err = partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+					return tx.QueryRow("SELECT voting FROM ParticipationAccount").Scan(&raw)
+				})
+				a.NoError(err)
+				execPartkeySQL(a, partDB, "UPDATE ParticipationAccount SET voting=?", raw[:len(raw)/2])
 
-	versions, err := getSchemaVersions(partDB)
-	a.NoError(err)
-	a.Equal(PartTableSchemaVersion, versions[PartTableSchemaName])
-	a.NoError(testDBContainsAllColumns(partDB))
+				a.Error(Migrate(partDB))
 
-	a.Equal(len(part.Voting.Batches), countTableRows(a, partDB, "OtsBatches"))
-	a.Equal(len(part.Voting.Offsets), countTableRows(a, partDB, "OtsOffsets"))
+				// the whole migration transaction rolled back
+				versions, err := getSchemaVersions(partDB)
+				a.NoError(err)
+				a.Equal(3, versions[PartTableSchemaName])
+				columns := tableColumns(a, partDB, "ParticipationAccount")
+				a.Contains(columns, "voting")
+				a.NotContains(columns, "votingHeader")
+				var n int
+				err = partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+					return tx.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN ('VotingBatches', 'VotingOffsets')").Scan(&n)
+				})
+				a.NoError(err)
+				a.Zero(n, "migration tables survived the rollback")
+				return
+			}
 
-	// voting column now holds scalars only
-	var scalars crypto.OneTimeSignatureSecrets
-	a.NoError(protocol.Decode(readVotingColumn(a, partDB), &scalars))
-	a.Empty(scalars.Batches)
-	a.Empty(scalars.Offsets)
-	a.Equal(part.Voting.FirstBatch, scalars.FirstBatch)
-	a.Equal(part.Voting.FirstOffset, scalars.FirstOffset)
+			a.NoError(Migrate(partDB))
 
-	// full restore equals the original
-	restored, err := RestoreParticipation(partDB)
-	a.NoError(err)
-	a.Equal(encodedVotingSnapshot(part.Voting), encodedVotingSnapshot(restored.Voting))
-	a.Equal(part.Parent, restored.Parent)
-	a.Equal(part.KeyDilution, restored.KeyDilution)
+			versions, err := getSchemaVersions(partDB)
+			a.NoError(err)
+			a.Equal(PartTableSchemaVersion, versions[PartTableSchemaName])
+			a.NoError(testDBContainsAllColumns(partDB))
+
+			// the legacy blob column is gone, the header column is present
+			columns := tableColumns(a, partDB, "ParticipationAccount")
+			a.Contains(columns, "votingHeader")
+			a.NotContains(columns, "voting")
+
+			a.Equal(len(snap.Batches), countTableRows(a, partDB, "VotingBatches"))
+			a.Equal(len(snap.Offsets), countTableRows(a, partDB, "VotingOffsets"))
+			a.Equal(snap.Header(), readPartkeyVotingHeader(a, partDB))
+
+			// full restore equals the original
+			restored, err := RestoreParticipation(partDB)
+			a.NoError(err)
+			a.Equal(encodedVotingSnapshot(part.Voting), encodedVotingSnapshot(restored.Voting))
+			a.Equal(part.Parent, restored.Parent)
+			a.Equal(part.KeyDilution, restored.KeyDilution)
+		})
+	}
 }
 
-func TestComputeVotingDelta(t *testing.T) {
+// TestSyncVotingRows drives the per-round synchronizer through every
+// transition against a real store, checking the rows, the header, repair of
+// drifted rows, and the forward-security guard.
+func TestSyncVotingRows(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
 	const dilution = 8
-
-	secrets := crypto.GenerateOneTimeSignatureSecrets(0, 10)
-	secrets.DeleteBeforeFineGrained(crypto.OneTimeSignatureIdentifier{Batch: 2, Offset: 3}, dilution)
-	current, _, _ := secrets.PersistentState()
-
-	// noop: persisted state matches memory
-	d, err := computeVotingDelta(&current, secrets)
-	a.NoError(err)
-	a.True(d.noop)
-
-	// same-batch advance
-	older := current
-	older.FirstOffset = current.FirstOffset - 2
-	d, err = computeVotingDelta(&older, secrets)
-	a.NoError(err)
-	a.False(d.noop)
-	a.False(d.fullRewrite)
-	a.False(d.replaceAllOffsets)
-	a.Equal(current.FirstOffset, d.deleteOffsetsBelow)
-	a.Equal(int64(2), d.expectedOffsetDeletes)
-	a.Zero(d.deleteBatchesBelow)
-	a.Empty(d.insertBatches)
-	a.Empty(d.insertOffsets)
-	a.NotNil(d.newScalars)
-
-	// batch rollover (single and multi-batch jump behave identically)
-	prevBatch := current
-	prevBatch.FirstBatch = current.FirstBatch - 2
-	prevBatch.FirstOffset = 5
-	d, err = computeVotingDelta(&prevBatch, secrets)
-	a.NoError(err)
-	a.False(d.noop)
-	a.False(d.fullRewrite)
-	a.True(d.replaceAllOffsets)
-	a.Equal(current.FirstBatch, d.deleteBatchesBelow)
-	a.Equal(int64(2), d.expectedBatchDeletes)
-	a.Empty(d.insertBatches)
-	a.Equal(len(secrets.Offsets), len(d.insertOffsets))
-	a.Equal(current.FirstBatch-1, d.offsetsBatch)
-	a.NotNil(d.newScalars)
-
-	// nil old: full rewrite
-	d, err = computeVotingDelta(nil, secrets)
-	a.NoError(err)
-	a.True(d.fullRewrite)
-	a.Equal(len(secrets.Batches), len(d.insertBatches))
-	a.Equal(len(secrets.Offsets), len(d.insertOffsets))
-	a.Equal(current.FirstBatch-1, d.offsetsBatch)
-	a.NotNil(d.newScalars)
-
-	// legacy whole-blob persisted state: full rewrite
-	legacy := secrets.Snapshot().OneTimeSignatureSecretsPersistent
-	a.NotEmpty(legacy.Batches)
-	d, err = computeVotingDelta(&legacy, secrets)
-	a.NoError(err)
-	a.True(d.fullRewrite)
-
-	// persisted state ahead of memory: forward security forbids moving the
-	// deletion cursor backward, so this is an error rather than a rewrite
-	ahead := current
-	ahead.FirstBatch = current.FirstBatch + 1
-	_, err = computeVotingDelta(&ahead, secrets)
-	a.ErrorContains(err, "refusing to resurrect")
-	aheadOffset := current
-	aheadOffset.FirstOffset = current.FirstOffset + 1
-	_, err = computeVotingDelta(&aheadOffset, secrets)
-	a.ErrorContains(err, "refusing to resurrect")
-	// a legacy blob ahead of memory is refused as well
-	legacyAhead := legacy
-	legacyAhead.FirstBatch = current.FirstBatch + 1
-	_, err = computeVotingDelta(&legacyAhead, secrets)
-	a.ErrorContains(err, "refusing to resurrect")
-
-	// end-of-key-life: moving past the final batch consumes its remaining
-	// offsets and advances FirstOffset to the batch end, so exhaustion is
-	// distinguishable from a live final batch and persists as an exact trim
-	spent := crypto.GenerateOneTimeSignatureSecrets(0, 4)
-	spent.DeleteBeforeFineGrained(crypto.OneTimeSignatureIdentifier{Batch: 3, Offset: 2}, dilution)
-	a.NotEmpty(spent.Offsets) // final batch expanded
-	a.Empty(spent.Batches)
-	persisted, _, numOffsets := spent.PersistentState()
-	spent.DeleteBeforeFineGrained(crypto.OneTimeSignatureIdentifier{Batch: 4, Offset: 0}, dilution)
-	a.Empty(spent.Offsets)
-	afterState, _, _ := spent.PersistentState()
-	a.Equal(persisted.FirstBatch, afterState.FirstBatch)
-	a.Equal(uint64(dilution), afterState.FirstOffset)
-	d, err = computeVotingDelta(&persisted, spent)
-	a.NoError(err)
-	a.Equal(uint64(dilution), d.deleteOffsetsBelow)
-	a.Equal(int64(numOffsets), d.expectedOffsetDeletes)
-
-	// an exhausted key whose stored cursor did not move (legacy encoding of
-	// exhaustion) still gets its rows cleared rather than a noop
-	d, err = computeVotingDelta(&afterState, spent)
-	a.NoError(err)
-	a.False(d.noop)
-	a.True(d.clearAllRows)
-	a.Nil(d.newScalars)
-}
-
-// TestDeleteOldKeysFailsClosedOnCorruptScalars verifies an undecodable
-// persisted cursor refuses to write (a rewrite from possibly-stale memory
-// could resurrect retired keys) and marks the file as corrupt for quarantine.
-func TestDeleteOldKeysFailsClosedOnCorruptScalars(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	a := require.New(t)
-	const dilution = 10
-	part, partDB := makeSmallTestKey(t, a, 0, 300, dilution)
+	// FirstValid 0 gives a key whose FirstBatch is 0 (the uint64 edge for
+	// batch-1 arithmetic); batches 0..12
+	part, partDB := makeSmallTestKey(t, a, 0, 100, dilution)
 	defer closeDBS(partDB)
+	secrets := part.Voting
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	a.NoError(<-part.DeleteOldKeys(basics.Round(25), proto))
-	batchRows := countTableRows(a, partDB, "OtsBatches")
-	offsetRows := countTableRows(a, partDB, "OtsOffsets")
-
-	err := partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		_, err := tx.Exec("UPDATE ParticipationAccount SET voting=?", []byte{0xff, 0x00})
-		return err
-	})
-	a.NoError(err)
-
-	err = <-part.DeleteOldKeys(basics.Round(26), proto)
-	a.ErrorContains(err, "undecodable")
-	a.Equal(batchRows, countTableRows(a, partDB, "OtsBatches"), "rows rewritten despite undecodable cursor")
-	a.Equal(offsetRows, countTableRows(a, partDB, "OtsOffsets"))
-
-	_, err = RestoreParticipationUnmigrated(partDB)
-	a.ErrorIs(err, ErrCorruptedVotingData)
-}
-
-func TestDeleteOldKeysIncremental(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	a := require.New(t)
-	const dilution = 10
-	part, partDB := makeSmallTestKey(t, a, 0, 300, dilution)
-	defer closeDBS(partDB)
-
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-
-	// a fresh Persist stores one row per batch subkey, no offsets, and a
-	// scalar-only voting column (a whole-secrets blob would silently defeat
-	// the row-oriented format through the legacy tolerance)
-	a.Equal(len(part.Voting.Batches), countTableRows(a, partDB, "OtsBatches"))
-	a.Zero(countTableRows(a, partDB, "OtsOffsets"))
-	var freshScalars crypto.OneTimeSignatureSecrets
-	a.NoError(protocol.Decode(readVotingColumn(a, partDB), &freshScalars))
-	a.Empty(freshScalars.Batches)
-	a.Empty(freshScalars.Offsets)
-
-	prevBatchRows := countTableRows(a, partDB, "OtsBatches")
-	for r := basics.Round(1); r <= 120; r++ {
-		firstBatchBefore := part.Voting.FirstBatch
-		a.NoError(<-part.DeleteOldKeys(r, proto))
-
-		// persisted state reconstructs to exactly the in-memory state
-		restored, err := RestoreParticipationUnmigrated(partDB)
-		a.NoError(err)
-		a.Equal(encodedVotingSnapshot(part.Voting), encodedVotingSnapshot(restored.Voting), "round %d", r)
-
-		// batch rows only churn when a batch is consumed (expanded into offsets)
-		batchRows := countTableRows(a, partDB, "OtsBatches")
-		if part.Voting.FirstBatch == firstBatchBefore {
-			a.Equal(prevBatchRows, batchRows, "batch rows changed off-rollover at round %d", r)
-		} else {
-			a.Less(batchRows, prevBatchRows, "batch rows not trimmed at rollover round %d", r)
-		}
-		prevBatchRows = batchRows
+	// sync brings the store from its stored header to the given memory state
+	sync := func(mem *crypto.OneTimeSignatureSecrets) error {
+		return partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			stored, err := readVotingHeader(tx, partkeyFileVotingTarget)
+			if err != nil {
+				return err
+			}
+			return syncVotingRows(tx, partkeyFileVotingTarget, stored, votingSnapshot(mem))
+		})
 	}
+	// advance moves memory to id, syncs, and checks header, row counts, and
+	// reassembly against memory
+	advance := func(id crypto.OneTimeSignatureIdentifier, what string) {
+		secrets.DeleteBeforeFineGrained(id, dilution)
+		a.NoError(sync(secrets), what)
+		hdr := votingSnapshot(secrets).Header()
+		a.Equal(hdr, readPartkeyVotingHeader(a, partDB), what)
+		a.Equal(int(hdr.BatchCount), countTableRows(a, partDB, "VotingBatches"), what)
+		a.Equal(int(hdr.OffsetCount), countTableRows(a, partDB, "VotingOffsets"), what)
+		restored, err := RestoreParticipationUnmigrated(partDB)
+		a.NoError(err, what)
+		a.Equal(encodedVotingSnapshot(secrets), encodedVotingSnapshot(restored.Voting), what)
+	}
+
+	// fresh: unchanged header is a no-op
+	a.Zero(readPartkeyVotingHeader(a, partDB).FirstBatch)
+	a.NoError(sync(secrets))
+	advance(crypto.OneTimeSignatureIdentifier{}, "unchanged")
+
+	advance(crypto.OneTimeSignatureIdentifier{Batch: 0, Offset: 2}, "first expansion")
+	advance(crypto.OneTimeSignatureIdentifier{Batch: 0, Offset: 5}, "same-batch trim")
+	advance(crypto.OneTimeSignatureIdentifier{Batch: 1, Offset: 1}, "rollover")
+	advance(crypto.OneTimeSignatureIdentifier{Batch: 5, Offset: 3}, "multi-batch jump")
+
+	// drifted rows are repaired by the next transition: a stray row below the
+	// cursor makes the trim remove too many rows, a lost row too few
+	execPartkeySQL(a, partDB, "INSERT INTO VotingOffsets (batch, off, data) VALUES (4, 0, x'00')")
+	advance(crypto.OneTimeSignatureIdentifier{Batch: 5, Offset: 4}, "repair after stray row")
+	execPartkeySQL(a, partDB, "DELETE FROM VotingOffsets WHERE off=(SELECT MIN(off) FROM VotingOffsets)")
+	advance(crypto.OneTimeSignatureIdentifier{Batch: 5, Offset: 5}, "repair after lost row")
+
+	// stored header ahead of memory (on either cursor field): refused,
+	// nothing written
+	current := votingSnapshot(secrets).Header()
+	ahead := current
+	ahead.FirstOffset++
+	ahead.OffsetCount--
+	execPartkeySQL(a, partDB, "UPDATE ParticipationAccount SET votingHeader=?", protocol.Encode(&ahead))
+	a.ErrorContains(sync(secrets), "refusing to resurrect")
+	a.Equal(ahead, readPartkeyVotingHeader(a, partDB))
+	ahead = current
+	ahead.FirstBatch++
+	execPartkeySQL(a, partDB, "UPDATE ParticipationAccount SET votingHeader=?", protocol.Encode(&ahead))
+	a.ErrorContains(sync(secrets), "refusing to resurrect")
+	execPartkeySQL(a, partDB, "UPDATE ParticipationAccount SET votingHeader=?", protocol.Encode(&current))
+
+	// jump that runs out of batches: exhausted, every row erased, and a
+	// restore cannot sign an identifier that was live a moment ago
+	lastLive := crypto.OneTimeSignatureIdentifier{Batch: 5, Offset: 6}
+	advance(crypto.OneTimeSignatureIdentifier{Batch: 50}, "exhausted")
+	a.True(readPartkeyVotingHeader(a, partDB).Exhausted())
+	requireRetiredIDUnusable(a, partDB, secrets.OneTimeSignatureVerifier, lastLive)
+
+	// an exhausted store is terminal: a live copy of the key is refused
+	a.ErrorContains(sync(crypto.GenerateOneTimeSignatureSecrets(0, 3)), "refusing to resurrect")
 }
 
-// TestDeleteOldKeysEndOfLife walks a key past its final batch and verifies
-// every subkey row is erased from the file — the forward-security guarantee
-// at the end-of-key-life transition, where DeleteBeforeFineGrained clears the
-// remaining offsets without advancing the scalars.
-func TestDeleteOldKeysEndOfLife(t *testing.T) {
+// TestDeleteOldKeysLifecycle walks a key through DeleteOldKeys from its first
+// round past the end of its life, verifying the file reassembles to exactly
+// the in-memory state after every round, that batch rows only churn on a
+// rollover, and that the end of life erases every subkey row.
+func TestDeleteOldKeysLifecycle(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
@@ -331,70 +324,95 @@ func TestDeleteOldKeysEndOfLife(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	// expand the final batch (a multi-batch jump from the fresh state), then
-	// move past the end of the key
-	a.NoError(<-part.DeleteOldKeys(basics.Round(305), proto))
-	a.NotZero(countTableRows(a, partDB, "OtsOffsets"))
-	midRestore, err := RestoreParticipationUnmigrated(partDB)
-	a.NoError(err)
-	a.Equal(encodedVotingSnapshot(part.Voting), encodedVotingSnapshot(midRestore.Voting))
-	a.NoError(<-part.DeleteOldKeys(basics.Round(311), proto))
+	// a fresh Persist stores one row per batch subkey, no offsets, and a
+	// header that says so
+	a.Equal(len(part.Voting.Batches), countTableRows(a, partDB, "VotingBatches"))
+	a.Zero(countTableRows(a, partDB, "VotingOffsets"))
+	fresh := readPartkeyVotingHeader(a, partDB)
+	a.Equal(uint64(len(part.Voting.Batches)), fresh.BatchCount)
+	a.Zero(fresh.OffsetCount)
 
+	// every round through 120, then a jump into the final batch, past the
+	// end of the key, and one more round on the dead key
+	var rounds []basics.Round
+	for r := basics.Round(1); r <= 120; r++ {
+		rounds = append(rounds, r)
+	}
+	rounds = append(rounds, 305, 311, 315)
+
+	prevBatchRows := countTableRows(a, partDB, "VotingBatches")
+	for _, r := range rounds {
+		firstBatchBefore := part.Voting.FirstBatch
+		a.NoError(<-part.DeleteOldKeys(r, proto))
+
+		// persisted state reconstructs to exactly the in-memory state
+		restored, err := RestoreParticipationUnmigrated(partDB)
+		a.NoError(err)
+		a.Equal(encodedVotingSnapshot(part.Voting), encodedVotingSnapshot(restored.Voting), "round %d", r)
+
+		// batch rows only churn when a batch is consumed (expanded into offsets)
+		batchRows := countTableRows(a, partDB, "VotingBatches")
+		if part.Voting.FirstBatch == firstBatchBefore {
+			a.Equal(prevBatchRows, batchRows, "batch rows changed off-rollover at round %d", r)
+		} else {
+			a.Less(batchRows, prevBatchRows, "batch rows not trimmed at rollover round %d", r)
+		}
+		prevBatchRows = batchRows
+	}
+
+	// end of life: every subkey row erased and no retired round signable
 	a.Empty(part.Voting.Offsets)
-	a.Zero(countTableRows(a, partDB, "OtsOffsets"), "retired offset subkeys survived on disk")
-	a.Zero(countTableRows(a, partDB, "OtsBatches"))
-
-	// a fresh restore must not resurrect any signing capability
-	restored, err := RestoreParticipationUnmigrated(partDB)
-	a.NoError(err)
-	a.Empty(restored.Voting.Offsets)
-	a.Empty(restored.Voting.Batches)
-	id := basics.OneTimeIDForRound(305, dilution)
-	msg := crypto.OneTimeSignatureSubkeyBatchID{Batch: 1}
-	sig := restored.Voting.Sign(id, msg)
-	a.False(part.Voting.OneTimeSignatureVerifier.Verify(id, msg, sig), "restored secrets signed a retired round")
-
-	// subsequent rounds on the dead key stay cheap and consistent
-	a.NoError(<-part.DeleteOldKeys(basics.Round(315), proto))
-	a.Zero(countTableRows(a, partDB, "OtsOffsets"))
+	a.Zero(countTableRows(a, partDB, "VotingOffsets"), "retired offset subkeys survived on disk")
+	a.Zero(countTableRows(a, partDB, "VotingBatches"))
+	a.True(readPartkeyVotingHeader(a, partDB).Exhausted())
+	requireRetiredIDUnusable(a, partDB, part.Voting.OneTimeSignatureVerifier, basics.OneTimeIDForRound(305, dilution))
 }
 
-// TestDeleteOldKeysRefusesStaleDisk verifies the forward-security monotonic
-// guard: when the persisted deletion cursor is ahead of memory, the write is
-// refused instead of resurrecting deleted keys.
-func TestDeleteOldKeysRefusesStaleDisk(t *testing.T) {
+// TestDeleteOldKeysRefusesUnsafeStore verifies DeleteOldKeys writes nothing
+// when the stored header cannot be trusted: an undecodable header fails
+// closed, and a header ahead of memory is refused rather than rewound (a
+// rewrite from memory could resurrect retired keys either way).
+func TestDeleteOldKeysRefusesUnsafeStore(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	a := require.New(t)
-	const dilution = 10
-	part, partDB := makeSmallTestKey(t, a, 0, 300, dilution)
-	defer closeDBS(partDB)
+	cases := []struct {
+		name    string
+		header  func(current crypto.OneTimeSignatureSecretsHeader) []byte
+		wantErr string
+	}{
+		{"undecodableHeader", func(crypto.OneTimeSignatureSecretsHeader) []byte { return []byte{0xff, 0x00} }, "undecodable"},
+		{"futureCursor", func(h crypto.OneTimeSignatureSecretsHeader) []byte {
+			h.FirstBatch += 5
+			h.BatchCount -= 5
+			return protocol.Encode(&h)
+		}, "refusing to resurrect"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			a := require.New(t)
+			const dilution = 10
+			part, partDB := makeSmallTestKey(t, a, 0, 300, dilution)
+			defer closeDBS(partDB)
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	a.NoError(<-part.DeleteOldKeys(basics.Round(25), proto))
-	batchRows := countTableRows(a, partDB, "OtsBatches")
-	offsetRows := countTableRows(a, partDB, "OtsOffsets")
+			proto := config.Consensus[protocol.ConsensusCurrentVersion]
+			a.NoError(<-part.DeleteOldKeys(basics.Round(25), proto))
+			batchRows := countTableRows(a, partDB, "VotingBatches")
+			offsetRows := countTableRows(a, partDB, "VotingOffsets")
 
-	// plant a persisted cursor from the future
-	future, _, _ := part.Voting.PersistentState()
-	future.FirstBatch += 5
-	err := partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		_, err := tx.Exec("UPDATE ParticipationAccount SET voting=?", protocol.Encode(&future))
-		return err
-	})
-	a.NoError(err)
+			execPartkeySQL(a, partDB, "UPDATE ParticipationAccount SET votingHeader=?", tc.header(votingSnapshot(part.Voting).Header()))
 
-	err = <-part.DeleteOldKeys(basics.Round(26), proto)
-	a.ErrorContains(err, "refusing to resurrect")
-
-	// nothing was written
-	a.Equal(batchRows, countTableRows(a, partDB, "OtsBatches"))
-	a.Equal(offsetRows, countTableRows(a, partDB, "OtsOffsets"))
+			err := <-part.DeleteOldKeys(basics.Round(26), proto)
+			a.ErrorContains(err, tc.wantErr)
+			a.Equal(batchRows, countTableRows(a, partDB, "VotingBatches"), "rows written despite an unsafe stored header")
+			a.Equal(offsetRows, countTableRows(a, partDB, "VotingOffsets"))
+		})
+	}
 }
 
-// TestRestoreDetectsCorruptRows verifies damaged subkey tables are reported
-// as corruption instead of loading a key that silently cannot vote.
-func TestRestoreDetectsCorruptRows(t *testing.T) {
+// TestRestoreDetectsCorruption verifies a damaged header or damaged subkey
+// tables are reported with the quarantine sentinel instead of loading a key
+// that silently cannot vote.
+func TestRestoreDetectsCorruption(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	cases := []struct {
@@ -402,8 +420,9 @@ func TestRestoreDetectsCorruptRows(t *testing.T) {
 		tamperSQL string
 		wantErr   string
 	}{
-		{"missingBatchRow", "DELETE FROM OtsBatches WHERE batch=(SELECT MAX(batch) FROM OtsBatches)", "missing or extra rows"},
-		{"wrongOffsetBatch", "UPDATE OtsOffsets SET batch=batch+1 WHERE off=(SELECT MIN(off) FROM OtsOffsets)", "expected batch"},
+		{"undecodableHeader", "UPDATE ParticipationAccount SET votingHeader=x'ff00'", "undecodable voting header"},
+		{"missingBatchRow", "DELETE FROM VotingBatches WHERE batch=(SELECT MAX(batch) FROM VotingBatches)", "missing or extra rows"},
+		{"wrongOffsetBatch", "UPDATE VotingOffsets SET batch=batch+1 WHERE off=(SELECT MIN(off) FROM VotingOffsets)", "expected batch"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -419,85 +438,11 @@ func TestRestoreDetectsCorruptRows(t *testing.T) {
 			_, err := RestoreParticipationUnmigrated(partDB)
 			a.NoError(err)
 
-			err = partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-				_, err := tx.Exec(tc.tamperSQL)
-				return err
-			})
-			a.NoError(err)
+			execPartkeySQL(a, partDB, tc.tamperSQL)
 			_, err = RestoreParticipationUnmigrated(partDB)
 			a.ErrorContains(err, tc.wantErr)
 			// the sentinel lets the node quarantine the file as *.old
 			a.ErrorIs(err, ErrCorruptedVotingData)
 		})
 	}
-}
-
-// TestDeleteOldKeysSelfHealsInconsistentRows verifies a file whose rows drift
-// from its scalars is rebuilt from memory by the next deletion instead of
-// failing every round.
-func TestDeleteOldKeysSelfHealsInconsistentRows(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	a := require.New(t)
-	const dilution = 10
-	part, partDB := makeSmallTestKey(t, a, 0, 300, dilution)
-	defer closeDBS(partDB)
-
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	a.NoError(<-part.DeleteOldKeys(basics.Round(25), proto))
-
-	// lose one offset row behind the node's back
-	err := partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		_, err := tx.Exec("DELETE FROM OtsOffsets WHERE off=(SELECT MIN(off) FROM OtsOffsets)")
-		return err
-	})
-	a.NoError(err)
-
-	a.NoError(<-part.DeleteOldKeys(basics.Round(26), proto))
-
-	restored, err := RestoreParticipationUnmigrated(partDB)
-	a.NoError(err)
-	a.Equal(encodedVotingSnapshot(part.Voting), encodedVotingSnapshot(restored.Voting))
-}
-
-// TestMigrationRollsBackOnFailure verifies a failing v3-to-v4 migration
-// leaves the file at version 3 with none of the new tables behind.
-func TestMigrationRollsBackOnFailure(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	a := require.New(t)
-	part, tmpDB := makeSmallTestKey(t, a, 0, 300, 10)
-	defer closeDBS(tmpDB)
-
-	partDB, err := db.MakeAccessor(t.Name()+"_v3", false, true)
-	a.NoError(err)
-	defer closeDBS(partDB)
-	a.NoError(setupTestDBAtVer3(partDB, part.Participation))
-
-	// mangle the voting blob so the conversion fails mid-transaction
-	err = partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		var raw []byte
-		if err := tx.QueryRow("SELECT voting FROM ParticipationAccount").Scan(&raw); err != nil {
-			return err
-		}
-		_, err := tx.Exec("UPDATE ParticipationAccount SET voting=?", raw[:len(raw)/2])
-		return err
-	})
-	a.NoError(err)
-
-	a.Error(Migrate(partDB))
-
-	// the whole migration transaction rolled back
-	versions, err := getSchemaVersions(partDB)
-	a.NoError(err)
-	a.Equal(3, versions[PartTableSchemaName])
-	err = partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		var n int
-		if err := tx.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN ('OtsBatches', 'OtsOffsets')").Scan(&n); err != nil {
-			return err
-		}
-		require.Zero(t, n, "migration tables survived the rollback")
-		return nil
-	})
-	a.NoError(err)
 }

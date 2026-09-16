@@ -24,7 +24,6 @@ import (
 	"maps"
 	"strings"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
@@ -140,33 +139,42 @@ func (r *registerOp) apply(db *participationDB) error {
 // and resurrect retired keys on disk.  Fast-forwarding is exact because the
 // participation ID commits to the key material: a stored cursor ahead of the
 // inserted copy means those rounds were already voted and retired.
+//
+// A stored header that cannot be used (undecodable, or carrying a different
+// verifier than the key the ID commits to) is ignored with a warning, so the
+// insert replaces the stored rows with the inserted copy.  Failing closed
+// here would protect nothing: the record was already excluded from the cache
+// as corrupt, and the operator's remedy rebuilds the registry from this very
+// key file, while refusing would leave its retired subkeys on disk for good.
 func fastForwardToStoredCursor(tx *sql.Tx, log logging.Logger, id ParticipationID, secrets *crypto.OneTimeSignatureSecrets, dilution uint64) error {
 	rows, err := tx.Query(selectRollingVotingByID, id[:])
 	if err != nil {
-		return fmt.Errorf("unable to read stored voting scalars for %s: %w", id, err)
+		return fmt.Errorf("unable to read the stored voting header for %s: %w", id, err)
 	}
 	defer rows.Close()
 
-	var stored *crypto.OneTimeSignatureSecretsPersistent
+	current := votingSnapshot(secrets).Header()
+	var stored *crypto.OneTimeSignatureSecretsHeader
 	for rows.Next() {
 		var pk int64
-		var rawVoting []byte
-		if err := rows.Scan(&pk, &rawVoting); err != nil {
+		var rawHeader []byte
+		if err := rows.Scan(&pk, &rawHeader); err != nil {
 			return err
 		}
-		if len(rawVoting) == 0 {
+		if len(rawHeader) == 0 {
 			continue
 		}
-		var decoded crypto.OneTimeSignatureSecrets
-		// Fail closed: an undecodable stored cursor cannot be compared, and
-		// replacing it from the inserted copy could resurrect retired keys.
-		if err := protocol.Decode(rawVoting, &decoded); err != nil {
-			return fmt.Errorf("stored voting scalars for key %s are undecodable; refusing to replace them from the inserted copy (delete %s and restart to rebuild the registry): %v",
-				id, config.ParticipationRegistryFilename, err)
+		hdr, err := decodeVotingHeader(rawHeader)
+		if err != nil {
+			log.Warnf("participationDB: stored voting header for key %s is undecodable (%v); the inserted copy replaces it", id, err)
+			continue
 		}
-		if stored == nil || cursorAhead(&decoded.OneTimeSignatureSecretsPersistent, stored) {
-			s := decoded.OneTimeSignatureSecretsPersistent
-			stored = &s
+		if hdr.Verifier != current.Verifier {
+			log.Warnf("participationDB: stored voting header for key %s belongs to a different voting key; the inserted copy replaces it", id)
+			continue
+		}
+		if stored == nil || storedHeaderAhead(hdr, *stored) {
+			stored = &hdr
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -175,27 +183,18 @@ func fastForwardToStoredCursor(tx *sql.Tx, log logging.Logger, id ParticipationI
 	rows.Close()
 
 	if stored == nil {
-		return nil // known-new: nothing stored for this key
+		return nil // known-new (or unusable) stored state: nothing to fast-forward to
 	}
-	// Exhaustion written by older code left FirstOffset behind while every
-	// row was erased, so (FirstBatch, FirstOffset) alone cannot tell an
-	// exhausted key from a live, partially used final batch.  With no rows
-	// at all the stored key holds nothing, so treat its cursor as the end of
-	// the batch — erring towards fewer keys.
-	if stored.OffsetsExpanded() && dilution > 0 && stored.FirstOffset < dilution {
-		var storedRows int
-		err := tx.QueryRow(`SELECT (SELECT count(*) FROM VotingBatches WHERE pk IN (SELECT pk FROM Keysets WHERE participationID=?))
-			+ (SELECT count(*) FROM VotingOffsets WHERE pk IN (SELECT pk FROM Keysets WHERE participationID=?))`, id[:], id[:]).Scan(&storedRows)
-		if err != nil {
-			return fmt.Errorf("unable to count stored voting rows for %s: %w", id, err)
-		}
-		if storedRows == 0 {
-			stored.FirstOffset = dilution
-		}
+	if !storedHeaderAhead(*stored, current) {
+		return nil
 	}
-
-	current, _, _ := secrets.PersistentState()
-	if !cursorAhead(stored, &current) {
+	if stored.Exhausted() {
+		// every subkey was retired: moving past the inserted copy's last
+		// batch consumes them all without expanding anything, so the key
+		// dilution is not needed
+		log.Warnf("participationDB: inserted copy of key %s (batch %d, offset %d) lags the stored deletion cursor, which is exhausted; retiring every subkey",
+			id, current.FirstBatch, current.FirstOffset)
+		secrets.DeleteBeforeFineGrained(crypto.OneTimeSignatureIdentifier{Batch: current.FirstBatch + current.BatchCount}, dilution)
 		return nil
 	}
 	// a cursor can only be ahead after a batch expansion, so FirstBatch >= 1
@@ -238,22 +237,13 @@ func (i *insertOp) apply(db *participationDB) (err error) {
 			}
 		}
 
-		// capture the voting parts only after the potential fast-forward
-		var rawVoting []byte
-		var votingBatches, votingOffsets []crypto.KeyedSubkey
-		var votingOffsetsBatch uint64
+		// snapshot the voting secrets only after the potential fast-forward
+		var rawVotingHeader []byte
+		var voting crypto.OneTimeSignatureSecretsPersistent
 		if i.record.Voting != nil {
-			var scalars crypto.OneTimeSignatureSecretsPersistent
-			scalars, votingBatches, votingOffsets = i.record.Voting.PersistentParts()
-			rawVoting = protocol.Encode(&scalars)
-			if len(votingOffsets) > 0 {
-				// offset subkeys belong to the batch preceding FirstBatch
-				var err2 error
-				votingOffsetsBatch, err2 = offsetsOwningBatch(scalars.FirstBatch)
-				if err2 != nil {
-					return err2
-				}
-			}
+			voting = votingSnapshot(i.record.Voting)
+			votingHeader := voting.Header()
+			rawVotingHeader = protocol.Encode(&votingHeader)
 		}
 
 		// Clear any pre-existing rows for this participation ID.  A corrupt
@@ -294,19 +284,16 @@ func (i *insertOp) apply(db *participationDB) (err error) {
 		}
 
 		// Create Rolling entry
-		result, err2 = tx.Exec(insertRollingQuery, pk, rawVoting)
+		result, err2 = tx.Exec(insertRollingQuery, pk, rawVotingHeader)
 		if err2 = verifyExecWithOneRowEffected(err2, result, "insert rolling"); err2 != nil {
 			return err2
 		}
 
-		// Per-subkey voting rows (a mid-life key carries offsets too)
-		err2 = insertKeyedSubkeys(tx, "INSERT INTO VotingBatches (pk, batch, data) VALUES (?, ?, ?)", []any{pk}, votingBatches)
-		if err2 != nil {
-			return fmt.Errorf("unable to insert voting batch subkeys: %w", err2)
-		}
-		err2 = insertKeyedSubkeys(tx, "INSERT INTO VotingOffsets (pk, batch, off, data) VALUES (?, ?, ?, ?)", []any{pk, votingOffsetsBatch}, votingOffsets)
-		if err2 != nil {
-			return fmt.Errorf("unable to insert voting offset subkeys: %w", err2)
+		if i.record.Voting != nil {
+			// per-subkey voting rows (a mid-life key carries offsets too)
+			if err2 = insertVotingRows(tx, registryVotingTarget(pk), voting); err2 != nil {
+				return fmt.Errorf("unable to insert voting subkeys: %w", err2)
+			}
 		}
 		return nil
 	})
@@ -386,7 +373,7 @@ func (f *flushOp) apply(db *participationDB) error {
 	}
 
 	// Each record is written under its own savepoint so one record that
-	// cannot be persisted (e.g. undecodable stored scalars, which fail
+	// cannot be persisted (e.g. an undecodable stored header, which fails
 	// closed) does not roll back the others and stall on-disk key deletion
 	// for every key; only the failed records are retried at the next flush.
 	var failed []ParticipationID
