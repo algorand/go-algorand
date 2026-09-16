@@ -307,7 +307,9 @@ func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn, groupIndex int) 
 	case stateProofTxn:
 		return 0, nil
 	case pqSig:
-		// Post-quantum signatures are not batched.
+		if stx.PQsig.Batched() {
+			return 1, nil
+		}
 		return 0, nil
 	default:
 		// this case is impossible
