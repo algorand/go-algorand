@@ -81,6 +81,71 @@ func makePQSigTestFixture(t *testing.T, firstSeedByte byte) pqSigTestFixture {
 	}
 }
 
+func TestLogicSigArgsRoundTrip(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	for _, args := range []LogicSigArgs{
+		nil,
+		{{}},
+		{{1}},
+		{{1, 2, 3}, {}, {4}},
+		{make([]byte, MaxLogicSigArgSize)},
+		make(LogicSigArgs, EvalMaxArgs),
+	} {
+		decoded, err := DecodeLogicSigArgs(EncodeLogicSigArgs(args))
+		require.NoError(t, err)
+		require.Equal(t, args.Len(), decoded.Len())
+		if len(args) == 0 {
+			require.Empty(t, decoded)
+			continue
+		}
+		require.Len(t, decoded, len(args))
+	}
+
+	// No arguments must be no bytes, so that "absent" and "present but empty"
+	// cannot both appear on the wire.
+	require.Empty(t, EncodeLogicSigArgs(nil))
+	require.Empty(t, EncodeLogicSigArgs(LogicSigArgs{}))
+}
+
+func TestLogicSigArgsRejectsNonCanonical(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	canonical := EncodeLogicSigArgs(LogicSigArgs{{1, 2, 3}})
+	decoded, err := DecodeLogicSigArgs(canonical)
+	require.NoError(t, err)
+	require.Equal(t, LogicSigArgs{{1, 2, 3}}, decoded)
+
+	// An empty array spells no arguments, which must be spelled as no bytes.
+	_, err = DecodeLogicSigArgs([]byte{0x90})
+	require.ErrorIs(t, err, errLogicSigArgsNotCanonical)
+
+	// Trailing bytes are not part of the arguments, so they are not canonical
+	// either, whatever they hold.
+	_, err = DecodeLogicSigArgs(append(slices.Clone(canonical), 0x00))
+	require.ErrorIs(t, err, errLogicSigArgsNotCanonical)
+
+	// array16 spelling of a length that fits in a fixarray.
+	wide := append([]byte{0xdc, 0x00, 0x01}, canonical[1:]...)
+	_, err = DecodeLogicSigArgs(wide)
+	require.ErrorIs(t, err, errLogicSigArgsNotCanonical)
+
+	_, err = DecodeLogicSigArgs([]byte{0xc1})
+	require.Error(t, err)
+}
+
+func TestLogicSigArgsDecodeBounds(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	tooMany := make(LogicSigArgs, EvalMaxArgs+1)
+	_, err := DecodeLogicSigArgs(protocol.Encode(tooMany))
+	require.Error(t, err)
+
+	tooBig := LogicSigArgs{make([]byte, MaxLogicSigArgSize+1)}
+	_, err = DecodeLogicSigArgs(protocol.Encode(tooBig))
+	require.Error(t, err)
+}
+
 // TestPQBoundsCoverLogicSig checks the PQ wire bounds against the LogicSig
 // bounds they have to cover, now that an ls-scheme PQSig carries a program as
 // its public key and that program's arguments as its signature. The crypto

@@ -149,6 +149,16 @@ import (
 //     |-----> (*) MsgIsZero
 //     |-----> LogicSigMaxSize()
 //
+// LogicSigArgs
+//       |-----> MarshalMsg
+//       |-----> CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) UnmarshalMsgWithState
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> Msgsize
+//       |-----> MsgIsZero
+//       |-----> LogicSigArgsMaxSize()
+//
 // OnCompletion
 //       |-----> MarshalMsg
 //       |-----> CanMarshalMsg
@@ -4173,6 +4183,104 @@ func LogicSigMaxSize() (s int) {
 	s = 1 + 2 + msgp.BytesPrefixSize + bounds.MaxLogicSigMaxSize + 4 + crypto.SignatureMaxSize() + 5 + crypto.MultisigSigMaxSize() + 6 + crypto.MultisigSigMaxSize() + 6 + PQSigMaxSize() + 4
 	// Calculating size of slice: z.Args
 	s += msgp.ArrayHeaderSize + bounds.MaxLogicSigMaxSize
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z LogicSigArgs) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	if z == nil {
+		o = msgp.AppendNil(o)
+	} else {
+		o = msgp.AppendArrayHeader(o, uint32(len(z)))
+	}
+	for za0001 := range z {
+		o = msgp.AppendBytes(o, z[za0001])
+	}
+	return
+}
+
+func (_ LogicSigArgs) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(LogicSigArgs)
+	if !ok {
+		_, ok = (z).(*LogicSigArgs)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *LogicSigArgs) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	var zb0002 int
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 > EvalMaxArgs {
+		err = msgp.ErrOverflow(uint64(zb0002), uint64(EvalMaxArgs))
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0003 {
+		(*z) = nil
+	} else if (*z) != nil && cap((*z)) >= zb0002 {
+		(*z) = (*z)[:zb0002]
+	} else {
+		(*z) = make(LogicSigArgs, zb0002)
+	}
+	for zb0001 := range *z {
+		var zb0004 int
+		zb0004, err = msgp.ReadBytesBytesHeader(bts)
+		if err != nil {
+			err = msgp.WrapError(err, zb0001)
+			return
+		}
+		if zb0004 > MaxLogicSigArgSize {
+			err = msgp.ErrOverflow(uint64(zb0004), uint64(MaxLogicSigArgSize))
+			return
+		}
+		(*z)[zb0001], bts, err = msgp.ReadBytesBytes(bts, (*z)[zb0001])
+		if err != nil {
+			err = msgp.WrapError(err, zb0001)
+			return
+		}
+	}
+	o = bts
+	return
+}
+
+func (z *LogicSigArgs) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *LogicSigArgs) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*LogicSigArgs)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z LogicSigArgs) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize
+	for za0001 := range z {
+		s += msgp.BytesPrefixSize + len(z[za0001])
+	}
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z LogicSigArgs) MsgIsZero() bool {
+	return len(z) == 0
+}
+
+// LogicSigArgsMaxSize returns a maximum valid message size for this message type
+func LogicSigArgsMaxSize() (s int) {
+	// Calculating size of slice: z
+	s += msgp.ArrayHeaderSize + ((EvalMaxArgs) * (msgp.BytesPrefixSize + MaxLogicSigArgSize))
 	return
 }
 
