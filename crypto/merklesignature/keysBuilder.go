@@ -25,7 +25,7 @@ import (
 )
 
 // KeysBuilder Responsible for generate slice of falcon keys
-func KeysBuilder(numberOfKeys uint64) ([]crypto.FalconSigner, error) {
+func KeysBuilder(numberOfKeys uint64) ([]crypto.Falcon1024Signer, error) {
 	numOfKeysPerRoutine, _ := calculateRanges(numberOfKeys)
 
 	ctx, ctxCancel := context.WithCancel(context.Background())
@@ -36,7 +36,7 @@ func KeysBuilder(numberOfKeys uint64) ([]crypto.FalconSigner, error) {
 
 	var wg sync.WaitGroup
 	var endIdx uint64
-	keys := make([]crypto.FalconSigner, numberOfKeys)
+	keys := make([]crypto.Falcon1024Signer, numberOfKeys)
 
 	for i := uint64(0); i < numberOfKeys; i = endIdx {
 		endIdx = i + numOfKeysPerRoutine
@@ -47,7 +47,7 @@ func KeysBuilder(numberOfKeys uint64) ([]crypto.FalconSigner, error) {
 		}
 
 		wg.Add(1)
-		go func(startIdx, endIdx uint64, keys []crypto.FalconSigner) {
+		go func(startIdx, endIdx uint64, keys []crypto.Falcon1024Signer) {
 			defer wg.Done()
 			if err := generateKeysForRange(ctx, startIdx, endIdx, keys); err != nil {
 				// write to the error channel, if it's not full already.
@@ -64,7 +64,7 @@ func KeysBuilder(numberOfKeys uint64) ([]crypto.FalconSigner, error) {
 
 	select {
 	case err := <-errors:
-		return []crypto.FalconSigner{}, err
+		return []crypto.Falcon1024Signer{}, err
 	default:
 	}
 	return keys, nil
@@ -81,12 +81,12 @@ func calculateRanges(numberOfKeys uint64) (numOfKeysPerRoutine uint64, numOfRout
 	return
 }
 
-func generateKeysForRange(ctx context.Context, startIdx uint64, endIdx uint64, keys []crypto.FalconSigner) error {
+func generateKeysForRange(ctx context.Context, startIdx uint64, endIdx uint64, keys []crypto.Falcon1024Signer) error {
 	for k := startIdx; k < endIdx; k++ {
 		if ctx.Err() != nil {
 			return nil //nolint:nilerr // we don't need to return the ctx error, since the other goroutine will report it.
 		}
-		sigAlgo, err := crypto.NewFalconSigner()
+		sigAlgo, err := crypto.NewFalcon1024Signer()
 		if err != nil {
 			return err
 		}
