@@ -146,14 +146,14 @@ func makePQSigForTxn(t *testing.T, firstSeedByte byte, txn *transactions.Transac
 	return authorizer, pqSig
 }
 
-func makePQSigFields(t *testing.T, firstSeedByte byte) (basics_testing.FalconSigner, basics.Address, transactions.PQSig) {
+func makePQSigFields(t *testing.T, firstSeedByte byte) (basics_testing.PQSigner, basics.Address, transactions.PQSig) {
 	t.Helper()
 
 	// randomly choose between Falcon-512 and Falcon-1024 for the test
 	return makePQSigFieldsForScheme(t, firstSeedByte, basics_testing.RandomPQTestScheme().Scheme)
 }
 
-func makePQSigFieldsForScheme(t *testing.T, firstSeedByte byte, scheme protocol.PQScheme) (basics_testing.FalconSigner, basics.Address, transactions.PQSig) {
+func makePQSigFieldsForScheme(t *testing.T, firstSeedByte byte, scheme protocol.PQScheme) (basics_testing.PQSigner, basics.Address, transactions.PQSig) {
 	t.Helper()
 
 	acct := basics_testing.MakePQTestAccount(t, firstSeedByte, scheme)

@@ -36,7 +36,7 @@ import (
 
 type pqSigTestFixture struct {
 	name             string
-	signer           basics_testing.FalconSigner
+	signer           basics_testing.PQSigner
 	proto            config.ConsensusParams
 	txn              Transaction
 	authorizer       basics.Address
