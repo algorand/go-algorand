@@ -1165,12 +1165,12 @@ func enableDeveloperAPI() postTransactionOpt {
 	}
 }
 
-func makePQSigWithAddressCompliance(t *testing.T, compliant bool) (basics_testing.FalconSigner, basics.Address, transactions.PQSig) {
+func makePQSigWithAddressCompliance(t *testing.T, compliant bool) (basics_testing.PQSigner, basics.Address, transactions.PQSig) {
 	t.Helper()
 
 	// randomly choose between Falcon-512 and Falcon-1024 for the test
 	scheme := basics_testing.RandomPQTestScheme().Scheme
-	signer := basics_testing.MakeFalconSigner(t, 0, scheme)
+	signer := basics_testing.MakePQSigner(t, 0, scheme)
 	publicKey := signer.PublicKey()
 
 	var salt basics.PQAddressSalt

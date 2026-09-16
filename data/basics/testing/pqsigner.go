@@ -27,10 +27,9 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// FalconSigner adapts one PQ scheme's concrete signer (crypto.Falcon1024Signer
-// or crypto.Falcon512Signer) to a byte-oriented API so tests can treat both
-// schemes uniformly.
-type FalconSigner interface {
+// PQSigner adapts a PQ scheme's concrete signer to a byte-oriented API so tests
+// can treat all schemes uniformly.
+type PQSigner interface {
 	Sign(message crypto.Hashable) ([]byte, error)
 	SignBytes(data []byte) ([]byte, error)
 	Verify(message crypto.Hashable, sig []byte) error
@@ -121,9 +120,9 @@ func RandomPQTestScheme() PQTestScheme {
 	return PQTestSchemes[int(selector[0])%len(PQTestSchemes)]
 }
 
-// MakeFalconSigner builds a wrapped Falcon signer for the given scheme from a
+// MakePQSigner builds a wrapped signer for the given scheme from a
 // deterministic seed.
-func MakeFalconSigner(t testing.TB, firstSeedByte byte, scheme protocol.PQScheme) FalconSigner {
+func MakePQSigner(t testing.TB, firstSeedByte byte, scheme protocol.PQScheme) PQSigner {
 	t.Helper()
 
 	var seed crypto.FalconSeed
@@ -145,7 +144,7 @@ func MakeFalconSigner(t testing.TB, firstSeedByte byte, scheme protocol.PQScheme
 // PQTestAccount is a PQ-addressed test account: a wrapped signer plus its
 // canonical PQ address derivation.
 type PQTestAccount struct {
-	Signer    FalconSigner
+	Signer    PQSigner
 	Scheme    protocol.PQScheme
 	Address   basics.Address
 	Salt      basics.PQAddressSalt
@@ -158,7 +157,7 @@ type PQTestAccount struct {
 func MakePQTestAccount(t testing.TB, firstSeedByte byte, scheme protocol.PQScheme) PQTestAccount {
 	t.Helper()
 
-	signer := MakeFalconSigner(t, firstSeedByte, scheme)
+	signer := MakePQSigner(t, firstSeedByte, scheme)
 	publicKey := signer.PublicKey()
 	salt, address, err := basics.CanonicalPQAddressSalt(scheme, publicKey)
 	require.NoError(t, err)
