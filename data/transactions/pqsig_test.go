@@ -81,6 +81,20 @@ func makePQSigTestFixture(t *testing.T, firstSeedByte byte) pqSigTestFixture {
 	}
 }
 
+// TestPQBoundsCoverLogicSig checks the PQ wire bounds against the LogicSig
+// bounds they have to cover, now that an ls-scheme PQSig carries a program as
+// its public key and that program's arguments as its signature. The crypto
+// package writes its bounds out by hand because it cannot read config/bounds,
+// whose values are filled in when config initializes, after crypto. This is the
+// check that catches the two drifting apart, so a consensus version that raises
+// MaxAbsoluteLogicSigProgramSize fails here rather than truncating a decode.
+func TestPQBoundsCoverLogicSig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	require.GreaterOrEqual(t, crypto.MaxPQPublicKeySize, bounds.MaxLogicSigMaxSize)
+	require.GreaterOrEqual(t, crypto.MaxPQSignatureSize, bounds.MaxLogicSigMaxSize)
+}
+
 func TestPQDecodeBoundsFeedSignedTxnMaxSize(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

@@ -40,14 +40,23 @@ type PQVerifier interface {
 	Verify(message Hashable, publicKey, signature []byte) error
 }
 
+// maxPQLogicSigSize is the largest program, or largest set of program
+// arguments, that an ls-scheme PQSig can carry. It must cover
+// bounds.MaxLogicSigMaxSize, but cannot be written in terms of it: those bounds
+// are filled in when config initializes, which happens after this package.
+// TestPQBoundsCoverLogicSig checks the two against each other.
+const maxPQLogicSigSize = 16000
+
 // MaxPQPublicKeySize and MaxPQSignatureSize are the largest public-key and
 // signature sizes over all supported PQ schemes; they are the PQ wire/decode
-// bounds (used for msgp allocbounds). Adding a scheme with a larger key or
-// signature means growing these; TestPQBoundsCoverFalcon1024 guards against
-// undersizing the current schemes.
+// bounds (used for msgp allocbounds). The ls scheme is the largest of them, and
+// not by a small margin: its public key is a whole LogicSig program and its
+// signature is that program's arguments. Adding a scheme with a larger key or
+// signature means growing these; TestPQBoundsCoverFalcon1024 and
+// TestPQBoundsCoverLogicSig guard against undersizing the current schemes.
 const (
-	MaxPQPublicKeySize = FalconPublicKeySize
-	MaxPQSignatureSize = FalconMaxSignatureSize
+	MaxPQPublicKeySize = max(FalconPublicKeySize, maxPQLogicSigSize)
+	MaxPQSignatureSize = max(FalconMaxSignatureSize, maxPQLogicSigSize)
 )
 
 // LookupPQScheme returns the verifier for a PQ scheme tag. Every scheme is
