@@ -18,6 +18,7 @@ package crypto
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -28,9 +29,12 @@ var (
 
 	// ErrPQSchemeNotEnabled is returned when a PQScheme is not enabled under the protocol.
 	ErrPQSchemeNotEnabled = errors.New("pq signature scheme not enabled")
+
+	// ErrPQEd25519SigInvalid is returned when Ed25519 signature verification fails.
+	ErrPQEd25519SigInvalid = errors.New("invalid ed25519 signature")
 )
 
-// PQVerifier verifies a post-quantum signature for one scheme.
+// PQVerifier verifies a signature for one account authorization scheme.
 type PQVerifier interface {
 	Verify(message Hashable, publicKey, signature []byte) error
 }
@@ -38,11 +42,11 @@ type PQVerifier interface {
 // MaxPQPublicKeySize and MaxPQSignatureSize are the largest public-key and
 // signature sizes over all supported PQ schemes; they are the PQ wire/decode
 // bounds (used for msgp allocbounds). Adding a scheme with a larger key or
-// signature means growing these; TestPQBoundsCoverFalcon guards against
+// signature means growing these; TestPQBoundsCoverSchemes guards against
 // undersizing the current schemes.
 const (
-	MaxPQPublicKeySize = max(Falcon1024PublicKeySize, Falcon512PublicKeySize)
-	MaxPQSignatureSize = max(Falcon1024MaxSignatureSize, Falcon512MaxSignatureSize)
+	MaxPQPublicKeySize = max(Falcon1024PublicKeySize, Falcon512PublicKeySize, len(PublicKey{}))
+	MaxPQSignatureSize = max(Falcon1024MaxSignatureSize, Falcon512MaxSignatureSize, len(Signature{}))
 )
 
 // LookupPQScheme returns the verifier for a PQ scheme tag.
@@ -52,6 +56,7 @@ const (
 //   - add a case here returning its PQVerifier,
 //   - add its config.ConsensusParams.PQSchemeEnabled case and PQSchemeFeeContribution,
 //   - add the signing/private-key ops in cmd/algokey,
+//   - add it to basics_testing.PQTestSchemes,
 //   - grow MaxPQPublicKeySize/MaxPQSignatureSize if its public key or signature is larger.
 func LookupPQScheme(s protocol.PQScheme) (PQVerifier, bool) {
 	switch s {
@@ -59,6 +64,8 @@ func LookupPQScheme(s protocol.PQScheme) (PQVerifier, bool) {
 		return falcon1024{}, true
 	case protocol.PQSchemeFalcon512:
 		return falcon512{}, true
+	case protocol.PQSchemeEd25519:
+		return ed25519Scheme{}, true
 	}
 	return nil, false
 }
@@ -75,4 +82,28 @@ type falcon512 struct{}
 
 func (falcon512) Verify(message Hashable, publicKey, signature []byte) error {
 	return VerifyFalcon512(message, publicKey, signature)
+}
+
+// ed25519Scheme is the classical Ed25519 (ed) scheme.
+type ed25519Scheme struct{}
+
+func (ed25519Scheme) Verify(message Hashable, publicKey, signature []byte) error {
+	verifier, sig, err := parseEd25519Signature(publicKey, signature)
+	if err != nil {
+		return err
+	}
+	if !verifier.Verify(message, sig) {
+		return ErrPQEd25519SigInvalid
+	}
+	return nil
+}
+
+func parseEd25519Signature(publicKey, signature []byte) (SignatureVerifier, Signature, error) {
+	if len(publicKey) != len(PublicKey{}) {
+		return SignatureVerifier{}, Signature{}, fmt.Errorf("%w: public key size %d, want %d", ErrPQEd25519SigInvalid, len(publicKey), len(PublicKey{}))
+	}
+	if len(signature) != len(Signature{}) {
+		return SignatureVerifier{}, Signature{}, fmt.Errorf("%w: signature size %d, want %d", ErrPQEd25519SigInvalid, len(signature), len(Signature{}))
+	}
+	return SignatureVerifier(publicKey), Signature(signature), nil
 }
