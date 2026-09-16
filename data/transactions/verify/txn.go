@@ -449,7 +449,7 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batch crypto.B
 		return errors.New("LogicSig.Logic version too new")
 	}
 
-	err := logic.CheckSignature(gi, groupCtx.evalParams)
+	err := logic.CheckSignature(lsig.Logic, groupCtx.evalParams)
 	if err != nil {
 		return err
 	}

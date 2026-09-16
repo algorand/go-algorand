@@ -772,6 +772,13 @@ type EvalContext struct {
 	// jumping into the middle of multibyte instruction.
 	instructionStarts []bool
 
+	// sigArgs are the arguments to the program running in ModeSig, which the
+	// arg opcodes read. Usually they are cx.txn.Lsig.Args, but a program need
+	// not be the transaction's Lsig: an ls-scheme PQSig carries a program and
+	// its arguments together, so the running program's arguments cannot always
+	// be found from the transaction alone.
+	sigArgs [][]byte
+
 	programHashCached crypto.Digest
 }
 
@@ -1393,10 +1400,13 @@ func EvalApp(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (b
 	return pass, err
 }
 
-// EvalSignatureFull evaluates the logicsig of the ith transaction in params.
+// EvalSignatureProgram evaluates program, with args as the arguments its arg
+// opcodes read, as a signature authorizing the ith transaction in params. The
+// program need not be that transaction's Lsig: an ls-scheme PQSig carries a
+// program and arguments of its own.
 // A program passes successfully if it finishes with one int element on the stack that is non-zero.
 // It returns EvalContext suitable for obtaining additional info about the execution.
-func EvalSignatureFull(gi int, params *EvalParams) (bool, *EvalContext, error) {
+func EvalSignatureProgram(program []byte, args [][]byte, gi int, params *EvalParams) (bool, *EvalContext, error) {
 	if params.SigLedger == nil {
 		return false, nil, errors.New("no sig ledger in signature eval")
 	}
@@ -1408,19 +1418,28 @@ func EvalSignatureFull(gi int, params *EvalParams) (bool, *EvalContext, error) {
 		runMode:    ModeSig,
 		groupIndex: gi,
 		txn:        &params.TxnGroup[gi],
+		sigArgs:    args,
 	}
 	// Save scratch. `gload*` opcodes are not currently allowed in ModeSig
 	// (though it seems we could allow them, with access to LogicSig scratch
 	// values). But error returns and potentially debug code might like to
 	// return them.
 	cx.pastScratch[cx.groupIndex] = &cx.Scratch
-	pass, err := eval(cx.txn.Lsig.Logic, &cx)
+	pass, err := eval(program, &cx)
 
 	if err != nil {
 		err = cx.evalError(err)
 	}
 
 	return pass, &cx, err
+}
+
+// EvalSignatureFull evaluates the logicsig of the ith transaction in params.
+// A program passes successfully if it finishes with one int element on the stack that is non-zero.
+// It returns EvalContext suitable for obtaining additional info about the execution.
+func EvalSignatureFull(gi int, params *EvalParams) (bool, *EvalContext, error) {
+	lsig := &params.TxnGroup[gi].Lsig
+	return EvalSignatureProgram(lsig.Logic, lsig.Args, gi, params)
 }
 
 // EvalSignature evaluates the logicsig of the ith transaction in params.
@@ -1482,11 +1501,11 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 	if (cx.EvalParams.Proto == nil) || (cx.EvalParams.Proto.LogicSigVersion == 0) {
 		return false, errLogicSigNotSupported
 	}
-	if cx.txn.Lsig.Args != nil {
-		if len(cx.txn.Lsig.Args) > transactions.EvalMaxArgs {
+	if cx.sigArgs != nil {
+		if len(cx.sigArgs) > transactions.EvalMaxArgs {
 			return false, errTooManyArgs
 		}
-		for _, arg := range cx.txn.Lsig.Args {
+		for _, arg := range cx.sigArgs {
 			if len(arg) > transactions.MaxLogicSigArgSize {
 				return false, errLogicSigArgTooLarge
 			}
@@ -1535,17 +1554,26 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 // these static checks include a cost estimate that must be low enough
 // (controlled by params.Proto).
 func CheckContract(program []byte, gi int, params *EvalParams) error {
-	return check(program, gi, params, ModeApp)
+	return check(program, &params.TxnGroup[gi], params, ModeApp)
 }
 
 // CheckSignature should be faster than EvalSignature.  It can perform static
 // checks and reject programs that are invalid. Prior to v4, these static checks
 // include a cost estimate that must be low enough (controlled by params.Proto).
-func CheckSignature(gi int, params *EvalParams) error {
-	return check(params.TxnGroup[gi].Lsig.Logic, gi, params, ModeSig)
+//
+// It names no transaction. A signature program is not always the Lsig of one,
+// since an ls-scheme PQSig carries a program of its own, and nothing in a
+// ModeSig check consults the transaction anyway. Callers pass the program they
+// are about to evaluate, so the check and the evaluation cannot disagree about
+// which bytes run.
+func CheckSignature(program []byte, params *EvalParams) error {
+	return check(program, nil, params, ModeSig)
 }
 
-func check(program []byte, gi int, params *EvalParams, mode RunMode) (err error) {
+// check statically checks program. txn is the transaction the program will run
+// for, and may be nil when there is none to name: nothing in a ModeSig check
+// consults it.
+func check(program []byte, txn *transactions.SignedTxnWithAD, params *EvalParams, mode RunMode) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			buf := make([]byte, 16*1024)
@@ -1567,7 +1595,7 @@ func check(program []byte, gi int, params *EvalParams, mode RunMode) (err error)
 	cx.runMode = mode
 	cx.branchTargets = make([]bool, len(program)+1) // teal v2 allowed jumping to the end of the prog
 	cx.instructionStarts = make([]bool, len(program)+1)
-	cx.txn = &params.TxnGroup[gi]
+	cx.txn = txn
 
 	if err := cx.begin(program); err != nil {
 		return err
@@ -1616,6 +1644,15 @@ func (cx *EvalContext) begin(program []byte) error {
 	// that a preSharing program could have access to an account and an ASA, but
 	// not the corresponding holding. We DO allow logicsigs, because they can't
 	// access state anyway.
+	//
+	// This is the only reason check() needs a transaction at all, and it would
+	// belong in evaluation alone were it not for application update. Creation
+	// runs the program it stores, so evaluation would catch it there anyway.
+	// Update runs the *old* program, so the new one is only ever checked, never
+	// evaluated, and dropping this from check() would let an update install a
+	// pre-sharedResources program from a transaction carrying an Access list.
+	// Moving it would therefore take a consensus change, and should have one:
+	// then check() could stop naming a transaction entirely.
 	if version < sharedResourcesVersion && cx.runMode == ModeApp && len(cx.txn.Txn.Access) > 0 {
 		return fmt.Errorf("pre-sharedResources program cannot be invoked with tx.Access")
 	}
@@ -1674,7 +1711,7 @@ func (cx *EvalContext) remainingBudget() int {
 	}
 
 	// restrict clear state programs from using more than standard unpooled budget
-	// cx.Txn is not set during check()
+	// cx.txn is nil during a ModeSig check, which names no transaction
 	if cx.Proto.IsolateClearState && cx.txn != nil && cx.txn.Txn.OnCompletion == transactions.ClearStateOC {
 		// Need not confirm that *cx.PooledApplicationBudget is also >0, as
 		// ClearState programs are only run if *cx.PooledApplicationBudget >
@@ -2756,10 +2793,10 @@ func opPushBytess(cx *EvalContext) error {
 }
 
 func opArgN(cx *EvalContext, n uint64) error {
-	if n >= uint64(len(cx.txn.Lsig.Args)) {
-		return fmt.Errorf("cannot load arg[%d] of %d", n, len(cx.txn.Lsig.Args))
+	if n >= uint64(len(cx.sigArgs)) {
+		return fmt.Errorf("cannot load arg[%d] of %d", n, len(cx.sigArgs))
 	}
-	val := nilToEmpty(cx.txn.Lsig.Args[n])
+	val := nilToEmpty(cx.sigArgs[n])
 	cx.Stack = append(cx.Stack, stackValue{Bytes: val})
 	return nil
 }
