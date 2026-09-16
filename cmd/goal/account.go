@@ -49,29 +49,30 @@ import (
 )
 
 var (
-	accountAddress     string
-	walletName         string
-	defaultAccountName string
-	defaultAccount     bool
-	unencryptedWallet  bool
-	online             bool
-	accountName        string
-	transactionFee     uint64
-	statusChangeLease  string
-	statusChangeTxFile string
-	roundFirstValid    basics.Round
-	roundLastValid     basics.Round
-	keyDilution        uint64
-	threshold          uint8
-	partKeyOutDir      string
-	partKeyFile        string
-	partKeyDeleteInput bool
-	importDefault      bool
-	mnemonic           string
-	dumpOutFile        string
-	listAccountInfo    bool
-	onlyShowAssetIDs   bool
-	partKeyIDToDelete  string
+	accountAddress      string
+	walletName          string
+	defaultAccountName  string
+	defaultAccount      bool
+	unencryptedWallet   bool
+	online              bool
+	accountName         string
+	transactionFee      uint64
+	statusChangeLease   string
+	statusChangeTxFile  string
+	roundFirstValid     basics.Round
+	roundLastValid      basics.Round
+	keyDilution         uint64
+	threshold           uint8
+	partKeyOutDir       string
+	partKeyFile         string
+	partKeyDeleteInput  bool
+	importDefault       bool
+	mnemonic            string
+	dumpOutFile         string
+	listAccountInfo     bool
+	onlyShowAssetIDs    bool
+	partKeyIDToDelete   string
+	listPartKeysVerbose bool
 
 	next             string
 	limit            uint64
@@ -137,6 +138,9 @@ func init() {
 
 	// Account list flags
 	listCmd.Flags().BoolVar(&listAccountInfo, "info", false, "Include additional information about each account's assets and applications")
+
+	// List participation keys flags
+	listParticipationKeysCmd.Flags().BoolVarP(&listPartKeysVerbose, "verbose", "v", false, "Show full account addresses and participation key IDs")
 
 	// Info flags
 	infoCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to look up (required)")
@@ -1368,10 +1372,16 @@ var listParticipationKeysCmd = &cobra.Command{
 				lastUsed = maxRound(lastUsed, part.LastBlockProposal)
 				lastUsed = maxRound(lastUsed, part.LastStateProof)
 				lastUsedString := roundOrNA(&lastUsed)
+				account := fmt.Sprintf("%s...%s", part.Address[:4], part.Address[len(part.Address)-4:])
+				partID := fmt.Sprintf("%s...", part.Id[:8])
+				if listPartKeysVerbose {
+					account = part.Address
+					partID = part.Id
+				}
 				fmt.Printf(rowFormat,
 					onlineInfoStr,
-					fmt.Sprintf("%s...%s", part.Address[:4], part.Address[len(part.Address)-4:]),
-					fmt.Sprintf("%s...", part.Id[:8]),
+					account,
+					partID,
 					lastUsedString,
 					part.Key.VoteFirstValid,
 					part.Key.VoteLastValid)
