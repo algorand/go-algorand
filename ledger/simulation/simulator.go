@@ -41,6 +41,7 @@ type Request struct {
 	AllowMoreLogging      bool
 	AllowUnnamedResources bool
 	ExtraOpcodeBudget     int
+	ExtraFees             uint64
 	TraceConfig           ExecTraceConfig
 	FixSigners            bool
 }
@@ -48,7 +49,8 @@ type Request struct {
 // simulatorLedger patches the ledger interface to use a constant latest round.
 type simulatorLedger struct {
 	*data.Ledger
-	start basics.Round
+	start     basics.Round
+	extraFees basics.MicroAlgos
 }
 
 // Latest is part of the ledger.Ledger interface.
@@ -86,6 +88,7 @@ func (l simulatorLedger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint,
 			Validate:            true,
 			MaxTxnBytesPerBlock: maxTxnBytesPerBlock,
 			Tracer:              tracer,
+			ExtraFees:           l.extraFees,
 		})
 }
 
@@ -121,7 +124,7 @@ type Simulator struct {
 // MakeSimulator creates a new simulator from a ledger.
 func MakeSimulator(ledger *data.Ledger, developerAPI bool) *Simulator {
 	return &Simulator{
-		ledger:       simulatorLedger{ledger, 0}, // start round to be specified in Simulate method
+		ledger:       simulatorLedger{Ledger: ledger}, // start round to be specified in Simulate method
 		developerAPI: developerAPI,
 	}
 }
@@ -383,6 +386,7 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 			},
 		}
 	}
+	s.ledger.extraFees = basics.MicroAlgos{Raw: simulateRequest.ExtraFees}
 
 	prevBlockHdr, err := s.ledger.BlockHdr(s.ledger.start)
 	if err != nil {

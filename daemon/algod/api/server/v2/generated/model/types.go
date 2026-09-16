@@ -821,6 +821,9 @@ type SimulateRequest struct {
 	// ExtraOpcodeBudget Applies extra opcode budget during simulation for each transaction group.
 	ExtraOpcodeBudget *int `json:"extra-opcode-budget,omitempty"`
 
+	// ExtraFees Applies additional fee credit during simulation for each transaction group. This amount is not deducted from any account.
+	ExtraFees *uint64 `json:"extra-fees,omitempty"`
+
 	// FixSigners If true, signers for transactions that are missing signatures will be fixed during evaluation.
 	FixSigners *bool `json:"fix-signers,omitempty"`
 
@@ -937,6 +940,9 @@ type SimulationEvalOverrides struct {
 
 	// ExtraOpcodeBudget The extra opcode budget added to each transaction group during simulation
 	ExtraOpcodeBudget *int `json:"extra-opcode-budget,omitempty"`
+
+	// ExtraFees The additional fee credit applied to each transaction group during simulation without deducting it from any account.
+	ExtraFees *uint64 `json:"extra-fees,omitempty"`
 
 	// FixSigners If true, signers for transactions that are missing signatures will be fixed during evaluation.
 	FixSigners *bool `json:"fix-signers,omitempty"`
