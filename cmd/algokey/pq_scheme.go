@@ -29,6 +29,7 @@ import (
 const (
 	pqSchemeFalcon1024Name = "falcon-1024"
 	pqSchemeFalcon512Name  = "falcon-512"
+	pqSchemeEd25519Name    = "ed25519"
 )
 
 // pqSchemeOps holds the signing-side, private-key operations for one PQ
@@ -45,10 +46,12 @@ type pqSchemeOps interface {
 var pqSchemeOpsByScheme = map[protocol.PQScheme]pqSchemeOps{
 	protocol.PQSchemeFalcon1024: falcon1024Ops{},
 	protocol.PQSchemeFalcon512:  falcon512Ops{},
+	protocol.PQSchemeEd25519:    ed25519Ops{},
 }
 
 type falcon1024Ops struct{}
 type falcon512Ops struct{}
+type ed25519Ops struct{}
 
 func parsePQScheme(value string) (protocol.PQScheme, error) {
 	value = strings.TrimSpace(value)
@@ -57,6 +60,9 @@ func parsePQScheme(value string) (protocol.PQScheme, error) {
 	}
 	if strings.EqualFold(value, pqSchemeFalcon512Name) {
 		return protocol.PQSchemeFalcon512, nil
+	}
+	if strings.EqualFold(value, pqSchemeEd25519Name) {
+		return protocol.PQSchemeEd25519, nil
 	}
 
 	var scheme protocol.PQScheme
@@ -73,6 +79,9 @@ func formatPQScheme(scheme protocol.PQScheme) string {
 	}
 	if scheme == protocol.PQSchemeFalcon512 {
 		return pqSchemeFalcon512Name
+	}
+	if scheme == protocol.PQSchemeEd25519 {
+		return pqSchemeEd25519Name
 	}
 	return scheme.String()
 }
@@ -180,4 +189,42 @@ func (falcon512Ops) sign(privateKey []byte, message crypto.Hashable) ([]byte, er
 
 	signer := crypto.Falcon512Signer{PrivateKey: sk}
 	return signer.Sign(message)
+}
+
+func (ed25519Ops) deriveSigning(seed crypto.Digest) (pqSigningMaterial, error) {
+	signer := crypto.GenerateSignatureSecrets(crypto.Seed(seed))
+	publicKey := slices.Clone(signer.SignatureVerifier[:])
+	privateKey := slices.Clone(signer.SK[:])
+	salt, _, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeEd25519, publicKey)
+	if err != nil {
+		return pqSigningMaterial{}, err
+	}
+
+	return pqSigningMaterial{
+		Public: pqPublicMaterial{
+			Scheme:    protocol.PQSchemeEd25519,
+			Salt:      salt,
+			PublicKey: publicKey,
+		},
+		PrivateKey: privateKey,
+	}, nil
+}
+
+func (ed25519Ops) publicKeySize() uint64 { return uint64(len(crypto.PublicKey{})) }
+
+func (ed25519Ops) privateKeySize() uint64 { return uint64(len(crypto.PrivateKey{})) }
+
+func (ed25519Ops) sign(privateKey []byte, message crypto.Hashable) ([]byte, error) {
+	var sk crypto.PrivateKey
+	if len(privateKey) != len(sk) {
+		return nil, fmt.Errorf("%w: got private key size %d, want %d", errPQKeyMalformed, len(privateKey), len(sk))
+	}
+	copy(sk[:], privateKey)
+
+	signer, err := crypto.SecretKeyToSignatureSecrets(sk)
+	if err != nil {
+		return nil, err
+	}
+	sig := signer.Sign(message)
+	return sig[:], nil
 }
