@@ -136,6 +136,10 @@ func TestSignedTxnFeeFactorPQSignatureContribution(t *testing.T) {
 	pqSigned := SignedTxn{Txn: fixture.txn, PQsig: fixture.pqSig}
 	delegatedPQSigned := baseTxn
 	delegatedPQSigned.Lsig = LogicSig{Logic: []byte{1}, PQsig: fixture.pqSig}
+	edPQSig := PQSig{Scheme: protocol.PQSchemeEd25519}
+	edPQSigned := SignedTxn{Txn: fixture.txn, PQsig: edPQSig}
+	edDelegatedPQSigned := baseTxn
+	edDelegatedPQSigned.Lsig = LogicSig{Logic: []byte{1}, PQsig: edPQSig}
 	unknownDelegatedPQSigned := baseTxn
 	unknownDelegatedPQSigned.Lsig = LogicSig{Logic: []byte{1}, PQsig: PQSig{Scheme: protocol.PQScheme{'x', '1'}}}
 	rekeyedDelegatedPQSigned := delegatedPQSigned
@@ -181,8 +185,11 @@ func TestSignedTxnFeeFactorPQSignatureContribution(t *testing.T) {
 	}
 	require.Equal(t, basics.Micros(2e6), proto.PQSchemeFeeContribution(protocol.PQSchemeFalcon1024))
 	require.Equal(t, basics.Micros(1e6), proto.PQSchemeFeeContribution(protocol.PQSchemeFalcon512))
+	require.Equal(t, basics.Micros(0), proto.PQSchemeFeeContribution(protocol.PQSchemeEd25519))
 	require.Equal(t, basics.Micros(1e6), unknownPQSigned.FeeFactor(proto))
 	require.Equal(t, basics.Micros(1e6), unknownDelegatedPQSigned.FeeFactor(proto))
+	require.Equal(t, basics.Micros(1e6), edPQSigned.FeeFactor(proto))
+	require.Equal(t, basics.Micros(1e6), edDelegatedPQSigned.FeeFactor(proto))
 	require.Equal(t, basics.Micros(3e6), pqSigned.FeeFactor(proto))
 	require.Equal(t, basics.Micros(3e6), delegatedPQSigned.FeeFactor(proto))
 	require.Equal(t, pqSigned.FeeFactor(proto), delegatedPQSigned.FeeFactor(proto))
