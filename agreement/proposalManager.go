@@ -103,7 +103,7 @@ func (m *proposalManager) handleNewPeriod(r routerHandle, p player, e thresholdE
 //     proposal-vote.  A voteFiltered event is returned if the proposal-vote is
 //     not fresh or is a duplicate.  Otherwise, an empty event is returned.
 //
-//   - A voteVerified event is delievered after verification was attempted on a
+//   - A voteVerified event is delivered after verification was attempted on a
 //     proposal-vote.  A voteMalformed event is returned if the proposal-vote is
 //     ill-formed and resulted from a corrupt process.  A voteFiltered event is
 //     emitted if the vote is not fresh or is a duplicate.  Otherwise the
