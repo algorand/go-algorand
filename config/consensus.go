@@ -614,6 +614,10 @@ type ConsensusParams struct {
 	// EnablePQSchemeFalcon512 enables native Falcon-512 transaction
 	// authorization for the f5 PQ scheme.
 	EnablePQSchemeFalcon512 bool
+
+	// EnablePQSchemeEd25519 enables Ed25519 transaction authorization for the
+	// ed scheme's hashed-address profile.
+	EnablePQSchemeEd25519 bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -705,7 +709,7 @@ func (proto ConsensusParams) MinFee() basics.MicroAlgos {
 	return basics.MicroAlgos{Raw: proto.MinTxnFee}
 }
 
-// PQSchemeEnabled returns whether a post-quantum signature scheme is enabled
+// PQSchemeEnabled returns whether an account authorization scheme is enabled
 // under these consensus parameters.
 func (proto ConsensusParams) PQSchemeEnabled(scheme protocol.PQScheme) bool {
 	switch scheme {
@@ -713,15 +717,17 @@ func (proto ConsensusParams) PQSchemeEnabled(scheme protocol.PQScheme) bool {
 		return proto.EnablePQSchemeFalcon1024
 	case protocol.PQSchemeFalcon512:
 		return proto.EnablePQSchemeFalcon512
+	case protocol.PQSchemeEd25519:
+		return proto.EnablePQSchemeEd25519
 	default:
 		return false
 	}
 }
 
-// PQSigEnabled returns whether any post-quantum signatures are enabled
+// PQSigEnabled returns whether any PQSig authorization schemes are enabled
 // under these consensus parameters.
 func (proto ConsensusParams) PQSigEnabled() bool {
-	return proto.EnablePQSchemeFalcon1024 || proto.EnablePQSchemeFalcon512
+	return proto.EnablePQSchemeFalcon1024 || proto.EnablePQSchemeFalcon512 || proto.EnablePQSchemeEd25519
 }
 
 // PQSchemeFeeContribution is the additional fee factor charged for a transaction
@@ -734,6 +740,8 @@ func (proto ConsensusParams) PQSchemeFeeContribution(scheme protocol.PQScheme) b
 		return 2e6
 	case protocol.PQSchemeFalcon512:
 		return 1e6 // it is half of the Falcon-1024 contribution
+	case protocol.PQSchemeEd25519:
+		return 0 // it shares the Ed25519 batch
 	default:
 		return 0
 	}
@@ -1568,6 +1576,7 @@ func initConsensusProtocols() {
 	vFuture.LogicSigVersion = 14 // When moving this to a release, put a new higher LogicSigVersion here
 
 	vFuture.EnablePQSchemeFalcon512 = true
+	vFuture.EnablePQSchemeEd25519 = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
