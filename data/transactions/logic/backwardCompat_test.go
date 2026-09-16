@@ -295,10 +295,10 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	}
 
 	// Cost should stay exactly 2140 for v1, even as future changes are made
-	err = CheckSignature(0, optSigParams(maxCost(2139), stxn))
+	err = CheckSignature(program, optSigParams(maxCost(2139), stxn))
 	require.ErrorContains(t, err, "static cost")
 	ep := optSigParams(maxCost(2140), stxn)
-	err = CheckSignature(0, ep)
+	err = CheckSignature(program, ep)
 	require.NoError(t, err)
 
 	pass, err := EvalSignature(0, ep)
