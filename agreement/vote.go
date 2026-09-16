@@ -93,9 +93,20 @@ type (
 	UnauthenticatedVote = unauthenticatedVote
 )
 
+// wellFormed performs stateless checks on a vote received from the network.
+func (uv unauthenticatedVote) wellFormed() error {
+	if uv.R.Step > down { // down is the largest step defined by the protocol.
+		return fmt.Errorf("unauthenticatedVote.wellFormed: step %d exceeds max step %d", uv.R.Step, down)
+	}
+	return nil
+}
+
 // verify verifies that a vote that was received from the network is valid.
 func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 	rv := uv.R
+	if err := uv.wellFormed(); err != nil {
+		return vote{}, err
+	}
 	m, err := membership(l, rv.Sender, rv.Round, rv.Period, rv.Step)
 	if err != nil {
 		return vote{}, fmt.Errorf("unauthenticatedVote.verify: could not get membership parameters: %w", err)
