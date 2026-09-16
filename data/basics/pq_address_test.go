@@ -26,7 +26,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func falconPublicKeyForPQAddressTest(t *testing.T, scheme protocol.PQScheme, firstSeedByte byte) []byte {
+func publicKeyForPQAddressTest(t *testing.T, scheme protocol.PQScheme, firstSeedByte byte) []byte {
 	var seed crypto.FalconSeed
 	seed[0] = firstSeedByte
 	switch scheme {
@@ -38,6 +38,9 @@ func falconPublicKeyForPQAddressTest(t *testing.T, scheme protocol.PQScheme, fir
 		signer, err := crypto.GenerateFalcon512Signer(seed)
 		require.NoError(t, err)
 		return signer.PublicKey[:]
+	case protocol.PQSchemeEd25519:
+		signer := crypto.GenerateSignatureSecrets(crypto.Seed{firstSeedByte})
+		return signer.SignatureVerifier[:]
 	}
 	t.Fatalf("unknown scheme %s", scheme)
 	return nil
@@ -60,6 +63,11 @@ func TestPQAddressPreimage(t *testing.T) {
 			name:            "falcon-512",
 			scheme:          protocol.PQSchemeFalcon512,
 			expectedPayload: []byte{'f', '5', 0x7f, 0xab, 0xcd, 0xef},
+		},
+		{
+			name:            "ed25519",
+			scheme:          protocol.PQSchemeEd25519,
+			expectedPayload: []byte{'e', 'd', 0x7f, 0xab, 0xcd, 0xef},
 		},
 	}
 
@@ -190,13 +198,61 @@ func TestPQAddressKnownAnswers(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:   "ed25519",
+			scheme: protocol.PQSchemeEd25519,
+			answers: []knownAnswer{
+				{
+					name:            "zero salt",
+					firstSeedByte:   3,
+					salt:            0,
+					expectedAddress: "BS24KS3PNANVECBJECXBRKSCEYCHY2KUQFAAGX6DR2JMYITDN3W5A3M3M4",
+					compliant:       false,
+				},
+				{
+					name:            "nonzero salt",
+					firstSeedByte:   1,
+					salt:            1,
+					expectedAddress: "76X26JCOZ6KBTLL4LLIYHBGM5THQPWVNOMRFBVK43MWTWRFBYCLZHACW2M",
+					compliant:       false,
+				},
+				{
+					name:            "max salt",
+					firstSeedByte:   0,
+					salt:            255,
+					expectedAddress: "RVYDADZDRDSIHWI4R4TTALJPGGBO4ZWGK2R4YTGQGUMKJCVKHQETODHA5Q",
+					compliant:       true,
+				},
+				{
+					name:            "different seed",
+					firstSeedByte:   2,
+					salt:            2,
+					expectedAddress: "JDIRZBWHK6SDOXKRGSNRCO7I4BF6ACVN4ACPHLNGINQNKFZOMHC2YY5TQM",
+					compliant:       false,
+				},
+				{
+					name:            "max seed and salt",
+					firstSeedByte:   255,
+					salt:            255,
+					expectedAddress: "XVNRCMCRAYGJ3RUGN57YX2SKDLAJ6DNBO2LE5YLVG4OGQEC6SXMSO7V7EE",
+					compliant:       true,
+				},
+				{
+					name:            "different salt",
+					firstSeedByte:   1,
+					salt:            0,
+					expectedAddress: "52TWNOHFPAIAQPARIGBF3SXBHZ6NEX6QURSOTXYBUI5JXIO4DEBMZEF5AQ",
+					compliant:       true,
+				},
+			},
+		},
 	}
 
 	for _, sc := range testCases {
 		t.Run(sc.name, func(t *testing.T) {
 			for _, tc := range sc.answers {
 				t.Run(tc.name, func(t *testing.T) {
-					publicKey := falconPublicKeyForPQAddressTest(t, sc.scheme, tc.firstSeedByte)
+					publicKey := publicKeyForPQAddressTest(t, sc.scheme, tc.firstSeedByte)
 
 					addr := PQAddress(sc.scheme, tc.salt, publicKey)
 					require.Equal(t, tc.expectedAddress, addr.String())
@@ -232,11 +288,17 @@ func TestCanonicalPQAddressSalt(t *testing.T) {
 			expectedSalt:    1,
 			expectedAddress: "NQHOCVCR45XKZ5LMJSBDWGPZ6QZQIDKQU26KNQ3O4A3EGIRR7BPIX4CW3A",
 		},
+		{
+			name:            "ed25519",
+			scheme:          protocol.PQSchemeEd25519,
+			expectedSalt:    0,
+			expectedAddress: "52TWNOHFPAIAQPARIGBF3SXBHZ6NEX6QURSOTXYBUI5JXIO4DEBMZEF5AQ",
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			publicKey := falconPublicKeyForPQAddressTest(t, tc.scheme, 1)
+			publicKey := publicKeyForPQAddressTest(t, tc.scheme, 1)
 
 			salt, addr, err := CanonicalPQAddressSalt(tc.scheme, publicKey)
 			require.NoError(t, err)

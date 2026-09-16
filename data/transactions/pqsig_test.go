@@ -54,6 +54,8 @@ func (f pqSigTestFixture) protoWithSchemeDisabled(t *testing.T) config.Consensus
 		proto.EnablePQSchemeFalcon1024 = false
 	case protocol.PQSchemeFalcon512:
 		proto.EnablePQSchemeFalcon512 = false
+	case protocol.PQSchemeEd25519:
+		proto.EnablePQSchemeEd25519 = false
 	default:
 		t.Fatalf("unknown scheme %s", f.pqSig.Scheme)
 	}
@@ -105,22 +107,6 @@ func makePQSigTestFixtures(t *testing.T, firstSeedByte byte) []pqSigTestFixture 
 	return fixtures
 }
 
-func makeEd25519PQSig(t *testing.T, firstSeedByte byte, message crypto.Hashable) (PQSig, basics.Address) {
-	t.Helper()
-
-	signer := crypto.GenerateSignatureSecrets(crypto.Seed{firstSeedByte})
-	publicKey := slices.Clone(signer.SignatureVerifier[:])
-	salt, authorizer, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeEd25519, publicKey)
-	require.NoError(t, err)
-	signature := signer.Sign(message)
-	return PQSig{
-		Scheme:    protocol.PQSchemeEd25519,
-		Salt:      salt,
-		PublicKey: publicKey,
-		Signature: slices.Clone(signature[:]),
-	}, authorizer
-}
-
 func TestPQDecodeBoundsFeedSignedTxnMaxSize(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -161,6 +147,7 @@ func TestPQSigBlank(t *testing.T) {
 	require.False(t, (PQSig{Salt: 1}).Blank())
 	require.False(t, (PQSig{Scheme: protocol.PQSchemeFalcon1024}).Blank())
 	require.False(t, (PQSig{Scheme: protocol.PQSchemeFalcon512}).Blank())
+	require.False(t, (PQSig{Scheme: protocol.PQSchemeEd25519}).Blank())
 	require.False(t, (PQSig{PublicKey: []byte{1}}).Blank())
 	require.False(t, (PQSig{Signature: []byte{1}}).Blank())
 }
@@ -271,12 +258,10 @@ func TestPQSigVerify(t *testing.T) {
 func TestPQSigBatchPrep(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	proto := config.Consensus[protocol.ConsensusFuture]
-	txn := Transaction{Type: protocol.PaymentTx}
-	edSig, authorizer := makeEd25519PQSig(t, 1, txn)
+	ed := makePQSigTestFixture(t, 1, protocol.PQSchemeEd25519)
 	edBatch := crypto.MakeBatchVerifier()
-	require.True(t, edSig.Batched())
-	require.NoError(t, edSig.BatchPrep(proto, txn, authorizer, edBatch))
+	require.True(t, ed.pqSig.Batched())
+	require.NoError(t, ed.pqSig.BatchPrep(ed.proto, ed.txn, ed.authorizer, edBatch))
 	require.Equal(t, 1, edBatch.GetNumberOfEnqueuedSignatures())
 	require.NoError(t, edBatch.Verify())
 
@@ -291,9 +276,8 @@ func TestPQSigBatchPrep(t *testing.T) {
 func TestPQSigBatchPrepMatchesVerifyEnvelopeErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	proto := config.Consensus[protocol.ConsensusFuture]
-	txn := Transaction{Type: protocol.PaymentTx}
-	valid, authorizer := makeEd25519PQSig(t, 2, txn)
+	fixture := makePQSigTestFixture(t, 2, protocol.PQSchemeEd25519)
+	proto, txn, valid, authorizer := fixture.proto, fixture.txn, fixture.pqSig, fixture.authorizer
 	disabledProto := proto
 	disabledProto.EnablePQSchemeEd25519 = false
 	unsupported := valid

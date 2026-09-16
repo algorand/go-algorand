@@ -73,6 +73,30 @@ func (s falcon512Signer) PublicKey() []byte {
 	return slices.Clone(s.Falcon512Signer.PublicKey[:])
 }
 
+type ed25519Signer struct{ *crypto.SignatureSecrets }
+
+func (s ed25519Signer) Sign(message crypto.Hashable) ([]byte, error) {
+	sig := s.SignatureSecrets.Sign(message)
+	return sig[:], nil
+}
+func (s ed25519Signer) SignBytes(data []byte) ([]byte, error) {
+	sig := s.SignatureSecrets.SignBytes(data)
+	return sig[:], nil
+}
+func (s ed25519Signer) Verify(message crypto.Hashable, sig []byte) error {
+	verifier, _ := crypto.LookupPQScheme(protocol.PQSchemeEd25519)
+	return verifier.Verify(message, s.PublicKey(), sig)
+}
+func (s ed25519Signer) VerifyBytes(data []byte, sig []byte) error {
+	if len(sig) != len(crypto.Signature{}) || !s.SignatureVerifier.VerifyBytes(data, crypto.Signature(sig)) {
+		return crypto.ErrPQEd25519SigInvalid
+	}
+	return nil
+}
+func (s ed25519Signer) PublicKey() []byte {
+	return slices.Clone(s.SignatureVerifier[:])
+}
+
 // PQTestScheme carries one PQ scheme's test metadata.
 type PQTestScheme struct {
 	// Name is a human-readable scheme name, suitable for subtest names.
@@ -96,6 +120,12 @@ var PQTestSchemes = []PQTestScheme{
 		Scheme:           protocol.PQSchemeFalcon512,
 		ErrSigInvalid:    crypto.ErrPQFalcon512SigInvalid,
 		MaxSignatureSize: crypto.Falcon512MaxSignatureSize,
+	},
+	{
+		Name:             "ed25519",
+		Scheme:           protocol.PQSchemeEd25519,
+		ErrSigInvalid:    crypto.ErrPQEd25519SigInvalid,
+		MaxSignatureSize: len(crypto.Signature{}),
 	},
 }
 
@@ -136,6 +166,8 @@ func MakePQSigner(t testing.TB, firstSeedByte byte, scheme protocol.PQScheme) PQ
 		signer, err := crypto.GenerateFalcon512Signer(seed)
 		require.NoError(t, err)
 		return falcon512Signer{signer}
+	case protocol.PQSchemeEd25519:
+		return ed25519Signer{crypto.GenerateSignatureSecrets(crypto.Seed{firstSeedByte})}
 	}
 	t.Fatalf("unknown scheme %s", scheme)
 	return nil
