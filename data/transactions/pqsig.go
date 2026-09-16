@@ -33,9 +33,9 @@ var (
 	errPQSigAuthorizerMismatch = errors.New("pq signature authorizer mismatch")
 )
 
-// PQSig is a post-quantum transaction authorization proof. Its public key and
+// PQSig is a scheme-tagged transaction authorization proof. Its public key and
 // signature are wire/decode-bounded by crypto.MaxPQPublicKeySize and
-// crypto.MaxPQSignatureSize (the largest sizes over all supported PQ schemes),
+// crypto.MaxPQSignatureSize (the largest sizes over all supported PQSig schemes),
 // which feed msgp allocation bounds and therefore PQSigMaxSize, SignedTxnMaxSize,
 // and the SignedTxn wire bound.
 type PQSig struct {
@@ -124,19 +124,50 @@ func (p PQSig) ValidateEnvelope(proto config.ConsensusParams, authorizer basics.
 	return err
 }
 
-// Verify validates that p is a post-quantum authorization proof for
+// validateForVerification validates the envelope and requires a non-empty signature.
+func (p PQSig) validateForVerification(proto config.ConsensusParams, authorizer basics.Address) (crypto.PQVerifier, error) {
+	verifier, err := p.validateEnvelope(proto, authorizer)
+	if err != nil {
+		return nil, err
+	}
+	if len(p.Signature) == 0 {
+		return nil, errPQSigEmpty
+	}
+	return verifier, nil
+}
+
+// Verify validates that p is an authorization proof for
 // message and authorizer under proto. It verifies that the carried scheme is
 // supported by the consensus parameters; then it validates the authorization
 // envelope and verifies the scheme-specific signature over message.
 func (p PQSig) Verify(proto config.ConsensusParams, message crypto.Hashable, authorizer basics.Address) error {
-	verifier, err := p.validateEnvelope(proto, authorizer)
+	verifier, err := p.validateForVerification(proto, authorizer)
 	if err != nil {
 		return err
 	}
-
-	if len(p.Signature) == 0 {
-		return errPQSigEmpty
-	}
-
 	return verifier.Verify(message, p.PublicKey, p.Signature)
+}
+
+// BatchPrep validates p like Verify, then enqueues the signature into batch when
+// the scheme is a crypto.PQBatchPreparer, or verifies it in place otherwise.
+// Enqueued signatures are only checked when the batch is verified.
+func (p PQSig) BatchPrep(proto config.ConsensusParams, message crypto.Hashable, authorizer basics.Address, batch crypto.BatchEnqueuer) error {
+	verifier, err := p.validateForVerification(proto, authorizer)
+	if err != nil {
+		return err
+	}
+	if preparer, ok := verifier.(crypto.PQBatchPreparer); ok {
+		return preparer.BatchPrep(message, p.PublicKey, p.Signature, batch)
+	}
+	return verifier.Verify(message, p.PublicKey, p.Signature)
+}
+
+// Batched reports whether p's scheme supports batch verification.
+func (p PQSig) Batched() bool {
+	verifier, ok := crypto.LookupPQScheme(p.Scheme)
+	if !ok {
+		return false
+	}
+	_, ok = verifier.(crypto.PQBatchPreparer)
+	return ok
 }

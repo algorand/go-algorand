@@ -105,6 +105,22 @@ func makePQSigTestFixtures(t *testing.T, firstSeedByte byte) []pqSigTestFixture 
 	return fixtures
 }
 
+func makeEd25519PQSig(t *testing.T, firstSeedByte byte, message crypto.Hashable) (PQSig, basics.Address) {
+	t.Helper()
+
+	signer := crypto.GenerateSignatureSecrets(crypto.Seed{firstSeedByte})
+	publicKey := slices.Clone(signer.SignatureVerifier[:])
+	salt, authorizer, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeEd25519, publicKey)
+	require.NoError(t, err)
+	signature := signer.Sign(message)
+	return PQSig{
+		Scheme:    protocol.PQSchemeEd25519,
+		Salt:      salt,
+		PublicKey: publicKey,
+		Signature: slices.Clone(signature[:]),
+	}, authorizer
+}
+
 func TestPQDecodeBoundsFeedSignedTxnMaxSize(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -248,6 +264,65 @@ func TestPQSigVerify(t *testing.T) {
 	for _, fixture := range makePQSigTestFixtures(t, 0) {
 		t.Run(fixture.name, func(t *testing.T) {
 			require.NoError(t, fixture.pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer))
+		})
+	}
+}
+
+func TestPQSigBatchPrep(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	txn := Transaction{Type: protocol.PaymentTx}
+	edSig, authorizer := makeEd25519PQSig(t, 1, txn)
+	edBatch := crypto.MakeBatchVerifier()
+	require.True(t, edSig.Batched())
+	require.NoError(t, edSig.BatchPrep(proto, txn, authorizer, edBatch))
+	require.Equal(t, 1, edBatch.GetNumberOfEnqueuedSignatures())
+	require.NoError(t, edBatch.Verify())
+
+	falcon := makePQSigTestFixture(t, 1, protocol.PQSchemeFalcon1024)
+	falconBatch := crypto.MakeBatchVerifier()
+	require.False(t, falcon.pqSig.Batched())
+	require.NoError(t, falcon.pqSig.BatchPrep(falcon.proto, falcon.txn, falcon.authorizer, falconBatch))
+	require.Zero(t, falconBatch.GetNumberOfEnqueuedSignatures())
+	require.False(t, (PQSig{Scheme: protocol.PQScheme{'x', '1'}}).Batched())
+}
+
+func TestPQSigBatchPrepMatchesVerifyEnvelopeErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	txn := Transaction{Type: protocol.PaymentTx}
+	valid, authorizer := makeEd25519PQSig(t, 2, txn)
+	disabledProto := proto
+	disabledProto.EnablePQSchemeEd25519 = false
+	unsupported := valid
+	unsupported.Scheme = protocol.PQScheme{'x', '1'}
+	emptySignature := valid
+	emptySignature.Signature = nil
+	wrongAuthorizer := authorizer
+	wrongAuthorizer[0] ^= 1
+
+	tests := []struct {
+		name       string
+		pqSig      PQSig
+		proto      config.ConsensusParams
+		authorizer basics.Address
+		expected   error
+	}{
+		{"blank", PQSig{}, proto, authorizer, errPQSigBlank},
+		{"unsupported", unsupported, proto, authorizer, crypto.ErrPQSchemeNotSupported},
+		{"disabled", valid, disabledProto, authorizer, crypto.ErrPQSchemeNotEnabled},
+		{"authorizer-mismatch", valid, proto, wrongAuthorizer, errPQSigAuthorizerMismatch},
+		{"empty-signature", emptySignature, proto, authorizer, errPQSigEmpty},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			verifyErr := test.pqSig.Verify(test.proto, txn, test.authorizer)
+			batchErr := test.pqSig.BatchPrep(test.proto, txn, test.authorizer, crypto.MakeBatchVerifier())
+			require.ErrorIs(t, verifyErr, test.expected)
+			require.ErrorIs(t, batchErr, test.expected)
+			require.EqualError(t, batchErr, verifyErr.Error())
 		})
 	}
 }
