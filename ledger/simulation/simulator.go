@@ -215,7 +215,7 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 				// program but drop the placeholder PQ proof and authorize via
 				// the program hash, so the verification pass treats it as a
 				// contract-only (escrow) account and runs the program without a
-				// real Falcon signature.
+				// real authorization signature.
 				escrow := stxn
 				escrow.Lsig.PQsig = transactions.PQSig{}
 				escrow.AuthAddr = basics.Address(logic.HashProgram(escrow.Lsig.Logic))
