@@ -61,6 +61,13 @@ func PQAddress(scheme protocol.PQScheme, salt PQAddressSalt, pk []byte) Address 
 	return Address(crypto.HashObj(pqAddressPreimage{scheme, salt, pk}))
 }
 
+// PQLogicSigAddress returns the salt and address a LogicSig program authorizes
+// from under the ls scheme. The salt is a function of the program, so it never
+// has to be stored alongside one.
+func PQLogicSigAddress(program []byte) (PQAddressSalt, Address, error) {
+	return CanonicalPQAddressSalt(protocol.PQSchemeLogicSig, program)
+}
+
 // CanonicalPQAddressSalt returns the lowest salt whose derived address for a
 // PQScheme/public-key pair complies with the crypto.IsEdwards25519Point
 // rejection-sampling predicate (ascending 0..255 scan order).

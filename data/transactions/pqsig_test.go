@@ -301,7 +301,7 @@ func TestPQSigLogicSigScheme(t *testing.T) {
 	require.True(t, proto.EnablePQSchemeLogicSig)
 
 	program := []byte{0x0e, 0x81, 0x01} // #pragma version 14; pushint 1
-	salt, authorizer, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeLogicSig, program)
+	salt, authorizer, err := basics.PQLogicSigAddress(program)
 	require.NoError(t, err)
 	require.True(t, authorizer.IsPQCompliant())
 
