@@ -1966,84 +1966,109 @@ func TestComputeLoad(t *testing.T) {
 	}
 }
 
-// TestEvalTxValidatorGroupChecksPrecedeCache checks that evalTxValidator
-// rejects a group whose ID does not commit to its contents, and a group that
-// repeats a transaction, before consulting the verified-txn cache. The cache is
-// mocked to report everything as verified, so a failure here means the checks
-// ran after it rather than before.
-func TestEvalTxValidatorGroupChecksPrecedeCache(t *testing.T) {
+// TestGroupChecksAgreeWithVerify pins that eval and verify reject the same
+// malformed groups. The group ID rule is enforced twice: CheckTxnGroupID in
+// verify, before signatures are checked, and again inline in
+// BlockEvaluator.transactionGroup, which is what a block is actually held to.
+// The two are separate implementations, so each case below is asserted against
+// both.
+//
+// Eval's copy carries the weight. The verified transaction cache is keyed by
+// transaction ID and knows nothing about a transaction's position or its
+// siblings, so a group repeating a transaction, or one carrying another group's
+// ID, can hit the cache in full and skip verify entirely. The cache here is
+// mocked to report every transaction as verified, so verify.PaysetGroups is
+// skipped and only eval's own checks remain.
+//
+// They reject the same groups but not always with the same error: eval catches
+// a repeated transaction ID through checkDup on the cow the group shares rather
+// than through the group ID rule, so each side has its own expected message.
+// Both are asserted on, so that a block rejected here for some unrelated reason
+// fails the test rather than passing it.
+func TestGroupChecksAgreeWithVerify(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	var blk bookkeeping.Block
-	blk.BlockHeader.Round = 1
-	blk.BlockHeader.GenesisHash = crypto.Digest{0x01}
-	blk.BlockHeader.CurrentProtocol = protocol.ConsensusCurrentVersion
+	genesisInitState, addrs, _ := ledgertesting.Genesis(10)
+	l := newTestLedger(t, bookkeeping.GenesisBalances{
+		Balances:    genesisInitState.Accounts,
+		FeeSink:     testSinkAddr,
+		RewardsPool: testPoolAddr,
+		Timestamp:   0,
+	})
 
-	mkTxn := func(sender byte) transactions.SignedTxn {
-		return transactions.SignedTxn{Txn: transactions.Transaction{
+	// an empty block with a valid header, left out of the ledger so every case
+	// below is evaluated against the same round
+	blkEval := l.nextBlock(t)
+	unfinished, err := blkEval.GenerateBlock(nil)
+	require.NoError(t, err)
+	vb := ledgercore.MakeValidatedBlock(
+		unfinished.UnfinishedBlock().WithProposer(committee.Seed{}, testPoolAddr, true),
+		unfinished.UnfinishedDeltas())
+	empty := vb.Block()
+
+	mkTxn := func(sender basics.Address) transactions.Transaction {
+		return transactions.Transaction{
 			Type: protocol.PaymentTx,
 			Header: transactions.Header{
-				Sender:      basics.Address{sender},
-				FirstValid:  1,
-				LastValid:   1000,
-				GenesisHash: blk.BlockHeader.GenesisHash,
+				Sender:      sender,
+				Fee:         basics.MicroAlgos{Raw: 1000},
+				FirstValid:  empty.Round() - 1,
+				LastValid:   empty.Round() + 100,
+				GenesisHash: l.GenesisHash(),
 			},
-		}}
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: addrs[1],
+				Amount:   basics.MicroAlgos{Raw: 100},
+			},
+		}
 	}
-	regroup := func(stxns []transactions.SignedTxn) {
-		group := transactions.TxGroup{}
-		for i := range stxns {
-			stxns[i].Txn.Group = crypto.Digest{}
-			group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(stxns[i].Txn.ID()))
+	regroup := func(txns []transactions.Transaction) {
+		var group transactions.TxGroup
+		for i := range txns {
+			txns[i].Group = crypto.Digest{}
+			group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(txns[i].ID()))
 		}
 		groupID := crypto.HashObj(group)
-		for i := range stxns {
-			stxns[i].Txn.Group = groupID
+		for i := range txns {
+			txns[i].Group = groupID
 		}
 	}
-	toADs := func(stxns []transactions.SignedTxn) []transactions.SignedTxnWithAD {
-		ads := make([]transactions.SignedTxnWithAD, len(stxns))
-		for i, stxn := range stxns {
-			ads[i] = stxn.WithAD()
-		}
-		return ads
-	}
-	validate := func(group []transactions.SignedTxnWithAD) error {
-		validator := evalTxValidator{
-			// alwaysVerified: every group presented to the cache hits in full
-			txcache:  verify.GetMockedCache(true),
-			block:    blk,
-			ctx:      context.Background(),
-			txgroups: [][]transactions.SignedTxnWithAD{group},
-			done:     make(chan error, 1),
-		}
-		validator.run()
-		return <-validator.done
-	}
 
-	a, b := mkTxn(1), mkTxn(2)
-
-	// control: a well-formed group passes (via the mocked cache hit).
-	good := []transactions.SignedTxn{a, b}
-	regroup(good)
-	require.NoError(t, validate(toADs(good)))
-
-	// [B, A] carrying the group ID of [A, B]: the ID does not commit to the
-	// presented order.
-	permuted := []transactions.SignedTxn{good[1], good[0]}
-	var malformed *ledgercore.TxGroupMalformedError
-	err := validate(toADs(permuted))
-	require.ErrorContains(t, err, "incomplete group")
-	require.ErrorAs(t, err, &malformed)
-	require.Equal(t, ledgercore.TxGroupMalformedErrorReasonIncompleteGroup, malformed.Reason)
-
-	// [A, A] with a group ID that commits to both occurrences, so only the
-	// duplicate check can reject it.
-	dup := []transactions.SignedTxn{a, a}
+	a, b, c := mkTxn(addrs[0]), mkTxn(addrs[2]), mkTxn(addrs[3])
+	abc := []transactions.Transaction{a, b, c}
+	regroup(abc)
+	// [A, A] needs a group ID committing to both occurrences, so that the ID
+	// recomputes correctly and only duplicate detection can reject it
+	dup := []transactions.Transaction{a, a}
 	regroup(dup)
-	err = validate(toADs(dup))
-	require.ErrorContains(t, err, "duplicate transaction")
-	require.ErrorAs(t, err, &malformed)
-	require.Equal(t, ledgercore.TxGroupMalformedErrorReasonDuplicateTxn, malformed.Reason)
+
+	for _, test := range []struct {
+		name      string
+		group     []transactions.Transaction
+		verifyErr string
+		evalErr   string
+	}{
+		{"duplicate", dup, "duplicate transaction", "transaction already in ledger"},
+		{"permutation", []transactions.Transaction{abc[1], abc[0], abc[2]}, "incomplete group", "incomplete group"},
+		{"prefix", []transactions.Transaction{abc[0], abc[1]}, "incomplete group", "incomplete group"},
+		{"superset", []transactions.Transaction{abc[0], abc[1], abc[2], abc[2]}, "duplicate transaction", "transaction already in ledger"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			stxns := make([]transactions.SignedTxn, len(test.group))
+			blk := empty
+			blk.Payset = nil
+			for i, txn := range test.group {
+				stxns[i] = transactions.SignedTxn{Txn: txn}
+				stib, err := blk.EncodeSignedTxn(stxns[i], transactions.ApplyData{})
+				require.NoError(t, err)
+				blk.Payset = append(blk.Payset, stib)
+			}
+
+			require.ErrorContains(t, transactions.CheckTxnGroupID(stxns), test.verifyErr)
+
+			_, err := Eval(context.Background(), l, blk, true, verify.GetMockedCache(true), nil, nil)
+			require.ErrorContains(t, err, test.evalErr)
+		})
+	}
 }
