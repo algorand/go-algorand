@@ -16,7 +16,12 @@ env:
   CODECOV_TOKEN: "8b4a1f91-f154-4c26-b84c-c9aaa90159c6"  # Same public token from CircleCI config
 
 concurrency:
-  group: pr-coverage-${{ github.event.issue.number }}
+  # Concurrency is evaluated per run, before the job conditions below, so any
+  # comment would otherwise join this group and cancel a coverage run in
+  # progress -- including one from somebody not allowed to start a run at all.
+  # Only a request the authorize job would accept displaces one, so this has to
+  # test what that job tests: keep the two conditions together.
+  group: pr-coverage-${{ github.event.issue.pull_request && startsWith(github.event.comment.body, '/coverage') && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) && github.event.issue.number || github.run_id }}
   cancel-in-progress: true
 
 permissions: {}
@@ -24,7 +29,8 @@ permissions: {}
 jobs:
   authorize:
     # Only for "/coverage" on a pull request, and only from people who can
-    # already push here, since this runs the pull request's code.
+    # already push here, since this runs the pull request's code. The
+    # concurrency group above tests the same thing; change them together.
     if: >-
       github.event.issue.pull_request &&
       startsWith(github.event.comment.body, '/coverage') &&
@@ -89,7 +95,10 @@ jobs:
       - name: Checkout the pull request
         uses: actions/checkout@v4
         with:
-          ref: refs/pull/${{ github.event.issue.number }}/head
+          # The commit resolved above rather than the mutable head ref: a push
+          # while these jobs are queued would otherwise leave partitions testing
+          # different commits from the one the upload is attributed to.
+          ref: ${{ needs.authorize.outputs.sha }}
           fetch-depth: 0
       - name: Set up Go
         uses: ./.github/actions/setup-go
