@@ -38,6 +38,7 @@ func abs(t *testing.T, path string) string {
 
 func TestAuthorizeWithProgram(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	program := []byte{0x06, 0x81, 0x01} // #pragma version 6; int 1
 	lsig := transactions.LogicSig{Logic: program, Args: [][]byte{[]byte("arg")}}

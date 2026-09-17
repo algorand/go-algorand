@@ -740,13 +740,15 @@ proc ::AlgorandGoal::LimitOrder {TEAL_DRIVER SWAP_N SWAP_D MIN_TRD OWNER FEE TIM
 }
 
 # Compile
+# compile reports both of a program's addresses, the program hash first and then
+# the salted one, so only the first match is kept.
 proc ::AlgorandGoal::TealCompile { TEAL_SOURCE } {
     if { [ catch {
         set TEAL_HASH "NOT SET"
         spawn goal clerk compile $TEAL_SOURCE
         expect {
             timeout { ::AlgorandGoal::Abort "Timed out compiling $TEAL_SOURCE"  }
-            -re {[A-Z2-9]{58}} {set TEAL_HASH $expect_out(0,string); exp_continue }
+            -re {[A-Z2-9]{58}} {if { $TEAL_HASH eq "NOT SET" } { set TEAL_HASH $expect_out(0,string) }; exp_continue }
             eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed to compile teal : error code [lindex $result 3]"} }
         }
     } EXCEPTION ] } {
