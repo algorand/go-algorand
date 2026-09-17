@@ -1,18 +1,37 @@
 codecov:
   require_ci_to_pass: yes
 
-# Every report uploaded here is measured the same way: "go test -coverpkg" over
-# all go-algorand packages, uploaded under the full_coverage flag. Reports taken
-# without -coverpkg count only the lines a package's own tests exercise; mixing
-# the two made the coverage of a master commit depend on which workflow happened
-# to upload for it, so PR jobs no longer submit coverage at all unless they were
-# dispatched with full_coverage.
+# Only reports measured with -coverpkg across all packages are uploaded here;
+# coverage taken without it counts just a package's own tests and is not
+# comparable. See .github/workflows/pr-coverage.yml.
 
 ignore:
   - "**/*_gen.go"
   - "**/*_gen_test.go"
   - "**/generated"
   - "**/*_string.go"  # ignore stringer-generated code
+
+comment:
+  # Project coverage moves with the file set as much as with the tests. Report
+  # the change under review instead.
+  hide_project_coverage: true
+  layout: "condensed_header, components, condensed_files, condensed_footer"
+  after_n_builds: 6  # one report per test partition
+
+component_management:
+  individual_components:
+    - component_id: ledger
+      paths: ["ledger/**"]
+    - component_id: agreement
+      paths: ["agreement/**"]
+    - component_id: avm
+      paths: ["data/transactions/logic/**"]
+    - component_id: network
+      paths: ["network/**"]
+    - component_id: algod_api
+      paths: ["daemon/algod/api/**"]
+    - component_id: catchup
+      paths: ["catchup/**", "rpcs/**"]
 
 coverage:
   status:
