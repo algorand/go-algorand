@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -121,8 +120,8 @@ func (falcon1024Ops) deriveSigning(seed crypto.Digest) (pqSigningMaterial, error
 		return pqSigningMaterial{}, err
 	}
 
-	publicKey := slices.Clone(signer.PublicKey[:])
-	privateKey := slices.Clone(signer.PrivateKey[:])
+	publicKey := signer.PublicKey[:]
+	privateKey := signer.PrivateKey[:]
 	salt, _, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
 	if err != nil {
 		return pqSigningMaterial{}, err
@@ -159,8 +158,8 @@ func (falcon512Ops) deriveSigning(seed crypto.Digest) (pqSigningMaterial, error)
 		return pqSigningMaterial{}, err
 	}
 
-	publicKey := slices.Clone(signer.PublicKey[:])
-	privateKey := slices.Clone(signer.PrivateKey[:])
+	publicKey := signer.PublicKey[:]
+	privateKey := signer.PrivateKey[:]
 	salt, _, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon512, publicKey)
 	if err != nil {
 		return pqSigningMaterial{}, err
@@ -193,8 +192,8 @@ func (falcon512Ops) sign(privateKey []byte, message crypto.Hashable) ([]byte, er
 
 func (ed25519Ops) deriveSigning(seed crypto.Digest) (pqSigningMaterial, error) {
 	signer := crypto.GenerateSignatureSecrets(crypto.Seed(seed))
-	publicKey := slices.Clone(signer.SignatureVerifier[:])
-	privateKey := slices.Clone(signer.SK[:])
+	publicKey := signer.SignatureVerifier[:]
+	privateKey := signer.SK[:]
 	salt, _, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeEd25519, publicKey)
 	if err != nil {
 		return pqSigningMaterial{}, err

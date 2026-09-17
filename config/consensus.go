@@ -709,7 +709,7 @@ func (proto ConsensusParams) MinFee() basics.MicroAlgos {
 	return basics.MicroAlgos{Raw: proto.MinTxnFee}
 }
 
-// PQSchemeEnabled returns whether an account authorization scheme is enabled
+// PQSchemeEnabled returns whether an account authorization scheme is enabled in PQsig
 // under these consensus parameters.
 func (proto ConsensusParams) PQSchemeEnabled(scheme protocol.PQScheme) bool {
 	switch scheme {
@@ -741,7 +741,7 @@ func (proto ConsensusParams) PQSchemeFeeContribution(scheme protocol.PQScheme) b
 	case protocol.PQSchemeFalcon512:
 		return 1e6 // it is half of the Falcon-1024 contribution
 	case protocol.PQSchemeEd25519:
-		return 0 // it shares the Ed25519 batch
+		return 0 // we consider a single Ed25519 signature to be part of min fee
 	default:
 		return 0
 	}

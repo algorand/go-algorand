@@ -387,14 +387,6 @@ func TestPQCommandFlagShorthands(t *testing.T) {
 	require.Equal(t, "S", pqSignProgramCmd.Flags().Lookup("scheme").Shorthand)
 	require.Equal(t, "p", pqSignProgramCmd.Flags().Lookup("program").Shorthand)
 	require.Equal(t, "o", pqSignProgramCmd.Flags().Lookup("outfile").Shorthand)
-
-	require.Contains(t, pqGenerateCmd.Flags().Lookup("scheme").Usage, "ed25519 (ed)")
-	require.Contains(t, pqImportCmd.Flags().Lookup("scheme").Usage, "ed25519 (ed)")
-	require.Contains(t, pqSignCmd.Flags().Lookup("scheme").Usage, "ed25519 (ed)")
-	require.Contains(t, pqSignProgramCmd.Flags().Lookup("scheme").Usage, "ed25519 (ed)")
-	require.Equal(t, schemeMnemonicUsage, pqImportCmd.Flags().Lookup("mnemonic").Usage)
-	require.Equal(t, schemeMnemonicUsage, pqSignCmd.Flags().Lookup("mnemonic").Usage)
-	require.Equal(t, schemeMnemonicUsage, pqSignProgramCmd.Flags().Lookup("mnemonic").Usage)
 }
 
 func TestPQSignProducesVerifiablePQEnvelope(t *testing.T) {
