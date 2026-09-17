@@ -27,10 +27,9 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// FalconSigner adapts one PQ scheme's concrete signer (crypto.Falcon1024Signer
-// or crypto.Falcon512Signer) to a byte-oriented API so tests can treat both
-// schemes uniformly.
-type FalconSigner interface {
+// PQSigner adapts a PQ scheme's concrete signer to a byte-oriented API so tests
+// can treat all schemes uniformly.
+type PQSigner interface {
 	Sign(message crypto.Hashable) ([]byte, error)
 	SignBytes(data []byte) ([]byte, error)
 	Verify(message crypto.Hashable, sig []byte) error
@@ -74,6 +73,30 @@ func (s falcon512Signer) PublicKey() []byte {
 	return slices.Clone(s.Falcon512Signer.PublicKey[:])
 }
 
+type ed25519Signer struct{ *crypto.SignatureSecrets }
+
+func (s ed25519Signer) Sign(message crypto.Hashable) ([]byte, error) {
+	sig := s.SignatureSecrets.Sign(message)
+	return sig[:], nil
+}
+func (s ed25519Signer) SignBytes(data []byte) ([]byte, error) {
+	sig := s.SignatureSecrets.SignBytes(data)
+	return sig[:], nil
+}
+func (s ed25519Signer) Verify(message crypto.Hashable, sig []byte) error {
+	verifier, _ := crypto.LookupPQScheme(protocol.PQSchemeEd25519)
+	return verifier.Verify(message, s.PublicKey(), sig)
+}
+func (s ed25519Signer) VerifyBytes(data []byte, sig []byte) error {
+	if len(sig) != len(crypto.Signature{}) || !s.SignatureVerifier.VerifyBytes(data, crypto.Signature(sig)) {
+		return crypto.ErrPQEd25519SigInvalid
+	}
+	return nil
+}
+func (s ed25519Signer) PublicKey() []byte {
+	return slices.Clone(s.SignatureVerifier[:])
+}
+
 // PQTestScheme carries one PQ scheme's test metadata.
 type PQTestScheme struct {
 	// Name is a human-readable scheme name, suitable for subtest names.
@@ -98,6 +121,12 @@ var PQTestSchemes = []PQTestScheme{
 		ErrSigInvalid:    crypto.ErrPQFalcon512SigInvalid,
 		MaxSignatureSize: crypto.Falcon512MaxSignatureSize,
 	},
+	{
+		Name:             "ed25519",
+		Scheme:           protocol.PQSchemeEd25519,
+		ErrSigInvalid:    crypto.ErrPQEd25519SigInvalid,
+		MaxSignatureSize: len(crypto.Signature{}),
+	},
 }
 
 // PQTestSchemeInfo returns the PQTestSchemes entry for scheme, failing the
@@ -121,9 +150,9 @@ func RandomPQTestScheme() PQTestScheme {
 	return PQTestSchemes[int(selector[0])%len(PQTestSchemes)]
 }
 
-// MakeFalconSigner builds a wrapped Falcon signer for the given scheme from a
+// MakePQSigner builds a wrapped signer for the given scheme from a
 // deterministic seed.
-func MakeFalconSigner(t testing.TB, firstSeedByte byte, scheme protocol.PQScheme) FalconSigner {
+func MakePQSigner(t testing.TB, firstSeedByte byte, scheme protocol.PQScheme) PQSigner {
 	t.Helper()
 
 	var seed crypto.FalconSeed
@@ -137,6 +166,8 @@ func MakeFalconSigner(t testing.TB, firstSeedByte byte, scheme protocol.PQScheme
 		signer, err := crypto.GenerateFalcon512Signer(seed)
 		require.NoError(t, err)
 		return falcon512Signer{signer}
+	case protocol.PQSchemeEd25519:
+		return ed25519Signer{crypto.GenerateSignatureSecrets(crypto.Seed{firstSeedByte})}
 	}
 	t.Fatalf("unknown scheme %s", scheme)
 	return nil
@@ -145,7 +176,7 @@ func MakeFalconSigner(t testing.TB, firstSeedByte byte, scheme protocol.PQScheme
 // PQTestAccount is a PQ-addressed test account: a wrapped signer plus its
 // canonical PQ address derivation.
 type PQTestAccount struct {
-	Signer    FalconSigner
+	Signer    PQSigner
 	Scheme    protocol.PQScheme
 	Address   basics.Address
 	Salt      basics.PQAddressSalt
@@ -158,7 +189,7 @@ type PQTestAccount struct {
 func MakePQTestAccount(t testing.TB, firstSeedByte byte, scheme protocol.PQScheme) PQTestAccount {
 	t.Helper()
 
-	signer := MakeFalconSigner(t, firstSeedByte, scheme)
+	signer := MakePQSigner(t, firstSeedByte, scheme)
 	publicKey := signer.PublicKey()
 	salt, address, err := basics.CanonicalPQAddressSalt(scheme, publicKey)
 	require.NoError(t, err)
