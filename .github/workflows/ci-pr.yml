@@ -70,13 +70,21 @@ jobs:
             COVERPKG_FLAG="-coverpkg=$COVERPACKAGES"
           fi
           mkdir -p test_results/${{ matrix.platform }}_test/${PARTITION_ID}
+          mkdir -p "$RUNNER_TEMP/covdata"
           go tool -modfile=tool.mod gotestsum --format standard-quiet \
             --junitfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/results.xml \
             --jsonfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/testresults.json \
             -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" $SHORTTEST \
-            -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 4 \
+            -race -timeout 1h -cover -covermode=atomic -p 4 \
             $COVERPKG_FLAG \
-            $PACKAGE_NAMES
+            $PACKAGE_NAMES \
+            -args -test.gocoverdir="$RUNNER_TEMP/covdata"
+      - name: Merge coverage data
+        # Collect raw coverage data and merge it, rather than asking go test for a
+        # text profile directly -- see scripts/merge_coverage.sh. Runs even when
+        # tests failed, so partial coverage is still uploaded as it was before.
+        if: ${{ !cancelled() }}
+        run: ./scripts/merge_coverage.sh "$RUNNER_TEMP/covdata" ./coverage.txt
       - name: Notify Slack on failure
         if: failure()
         uses: ./.github/actions/slack-notify
