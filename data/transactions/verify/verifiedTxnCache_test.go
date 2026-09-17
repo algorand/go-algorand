@@ -724,7 +724,6 @@ func TestTxnGroupRejectsDuplicateTxid(t *testing.T) {
 	// the group ID commits to both occurrences, so only the duplicate
 	// check can reject it
 	_, err := TxnGroup(group, &blkHdr, cache, &dummyLedger)
-	require.Error(t, err)
 	var malformed *transactions.TxGroupMalformedError
 	require.ErrorAs(t, err, &malformed)
 	require.Equal(t, transactions.TxGroupMalformedErrorReasonDuplicateTxn, malformed.Reason)
@@ -768,20 +767,24 @@ func TestGetUnverifiedTransactionGroupsMalformedGroups(t *testing.T) {
 		"the honest group must hit the cache")
 
 	for _, test := range []struct {
-		name  string
-		group []transactions.SignedTxn
+		name   string
+		group  []transactions.SignedTxn
+		reason transactions.TxGroupMalformedErrorReasonCode
 	}{
-		{"superset", []transactions.SignedTxn{ab[0], ab[1], ab[1]}},
-		{"permutation", []transactions.SignedTxn{ab[1], ab[0]}},
-		{"prefix", []transactions.SignedTxn{ab[0]}},
+		{"superset", []transactions.SignedTxn{ab[0], ab[1], ab[1]}, transactions.TxGroupMalformedErrorReasonDuplicateTxn},
+		{"permutation", []transactions.SignedTxn{ab[1], ab[0]}, transactions.TxGroupMalformedErrorReasonIncompleteGroup},
+		{"prefix", []transactions.SignedTxn{ab[0]}, transactions.TxGroupMalformedErrorReasonIncompleteGroup},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			require.NotPanics(t, func() {
 				cache.GetUnverifiedTransactionGroups(
 					[][]transactions.SignedTxn{test.group}, groupCtx.specAddrs, groupCtx.consensusVersion)
 			})
-			require.Error(t, transactions.CheckTxnGroupID(test.group),
+			err := transactions.CheckTxnGroupID(test.group)
+			var malformed *transactions.TxGroupMalformedError
+			require.ErrorAs(t, err, &malformed,
 				"the group-ID and duplicate checks must reject this before the cache is consulted")
+			require.Equal(t, test.reason, malformed.Reason)
 		})
 	}
 }
