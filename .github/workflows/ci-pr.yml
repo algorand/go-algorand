@@ -64,26 +64,32 @@ jobs:
         run: |
           PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
           export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
-          COVERPKG_FLAG=""
+          # Coverage is only collected when a full-coverage run was requested.
+          # Without -coverpkg the numbers count only the lines a package's own
+          # tests exercise, which is not comparable to the full_coverage baseline
+          # that push builds publish, so there is nothing worth measuring.
+          COVER_FLAGS=""
+          COVER_ARGS=""
           if [[ "$FULL_COVERAGE" == "true" ]]; then
             COVERPACKAGES="$(go list ./... | grep -E -v '/go-algorand/(test|debug|cmd|config/defaultsGenerator|tools)' | grep -E -v '(test|testing|mock|mocks)$' | paste -sd ',' -)"
-            COVERPKG_FLAG="-coverpkg=$COVERPACKAGES"
+            mkdir -p "$RUNNER_TEMP/covdata"
+            COVER_FLAGS="-cover -covermode=atomic -coverpkg=$COVERPACKAGES"
+            COVER_ARGS="-args -test.gocoverdir=$RUNNER_TEMP/covdata"
           fi
           mkdir -p test_results/${{ matrix.platform }}_test/${PARTITION_ID}
-          mkdir -p "$RUNNER_TEMP/covdata"
           go tool -modfile=tool.mod gotestsum --format standard-quiet \
             --junitfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/results.xml \
             --jsonfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/testresults.json \
             -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" $SHORTTEST \
-            -race -timeout 1h -cover -covermode=atomic -p 4 \
-            $COVERPKG_FLAG \
+            -race -timeout 1h -p 4 \
+            $COVER_FLAGS \
             $PACKAGE_NAMES \
-            -args -test.gocoverdir="$RUNNER_TEMP/covdata"
+            $COVER_ARGS
       - name: Merge coverage data
         # Collect raw coverage data and merge it, rather than asking go test for a
         # text profile directly -- see scripts/merge_coverage.sh. Runs even when
         # tests failed, so partial coverage is still uploaded as it was before.
-        if: ${{ !cancelled() }}
+        if: ${{ inputs.full_coverage && !cancelled() }}
         run: ./scripts/merge_coverage.sh "$RUNNER_TEMP/covdata" ./coverage.txt
       - name: Notify Slack on failure
         if: failure()
@@ -108,8 +114,10 @@ jobs:
           path: ~/test_results
           retention-days: 7
       - name: Upload coverage
-        # Only upload coverage from ubuntu-24.04 platform
-        if: ${{ matrix.platform == 'ubuntu-24.04' && !cancelled() }}
+        # Only full-coverage runs are uploaded, and only from ubuntu-24.04. See
+        # .codecov.yml: every report Codecov holds has to be measured the same
+        # way as the baseline, or project-coverage deltas are meaningless.
+        if: ${{ inputs.full_coverage && matrix.platform == 'ubuntu-24.04' && !cancelled() }}
         uses: codecov/codecov-action@v4
         env:
           GITHUB_ACTIONS: True
@@ -117,7 +125,7 @@ jobs:
         with:
           token: ${{ env.CODECOV_TOKEN }}
           file: ./coverage.txt
-          flags: ${{ inputs.full_coverage && 'full_coverage' || '' }}
+          flags: full_coverage
           fail_ci_if_error: false
       - name: Upload test results to Codecov
         if: ${{ !cancelled() && !github.event.repository.private }}

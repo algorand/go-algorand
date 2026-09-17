@@ -1,9 +1,12 @@
 codecov:
   require_ci_to_pass: yes
 
-flags:
-  full_coverage:
-    joined: false
+# Every report uploaded here is measured the same way: "go test -coverpkg" over
+# all go-algorand packages, uploaded under the full_coverage flag. Reports taken
+# without -coverpkg count only the lines a package's own tests exercise; mixing
+# the two made the coverage of a master commit depend on which workflow happened
+# to upload for it, so PR jobs no longer submit coverage at all unless they were
+# dispatched with full_coverage.
 
 ignore:
   - "**/*_gen.go"
