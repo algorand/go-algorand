@@ -22,6 +22,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -30,6 +34,51 @@ func abs(t *testing.T, path string) string {
 	absPath, err := filepath.Abs(path)
 	require.NoError(t, err)
 	return absPath
+}
+
+func TestAuthorizeWithProgram(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	program := []byte{0x06, 0x81, 0x01} // #pragma version 6; int 1
+	lsig := transactions.LogicSig{Logic: program, Args: [][]byte{[]byte("arg")}}
+
+	legacyAddr := basics.Address(logic.HashProgram(program))
+	saltedSalt, saltedAddr := saltedProgramAuthorizer(program)
+	require.NotEqual(t, legacyAddr, saltedAddr)
+	require.True(t, saltedAddr.IsPQCompliant())
+
+	// Without the flag, a program authorizes from its hash, as it always has.
+	legacy := transactions.SignedTxn{Txn: transactions.Transaction{Header: transactions.Header{Sender: legacyAddr}}}
+	authorizeWithProgram(&legacy, lsig, false)
+	require.Equal(t, lsig, legacy.Lsig)
+	require.True(t, legacy.PQsig.Blank())
+
+	// The flag moves it to the salted form, which carries the args in place of
+	// signature bytes.
+	salted := transactions.SignedTxn{Txn: transactions.Transaction{Header: transactions.Header{Sender: saltedAddr}}}
+	authorizeWithProgram(&salted, lsig, true)
+	require.True(t, salted.Lsig.Blank())
+	require.Equal(t, protocol.PQSchemeLogicSig, salted.PQsig.Scheme)
+	require.Equal(t, saltedSalt, salted.PQsig.Salt)
+	require.Equal(t, program, salted.PQsig.PublicKey)
+	decoded, err := salted.PQsig.Lsig()
+	require.NoError(t, err)
+	require.Equal(t, lsig.Args, [][]byte(decoded.Args))
+
+	// A sender that is already the salted address picks that form on its own,
+	// so a caller who knows the account need not say which form it uses.
+	inferred := transactions.SignedTxn{Txn: transactions.Transaction{Header: transactions.Header{Sender: saltedAddr}}}
+	authorizeWithProgram(&inferred, lsig, false)
+	require.Equal(t, salted.PQsig, inferred.PQsig)
+
+	// Rekeying names the authorizer somewhere other than the sender, and that is
+	// what the form is read from.
+	rekeyed := transactions.SignedTxn{
+		Txn:      transactions.Transaction{Header: transactions.Header{Sender: basics.Address{1}}},
+		AuthAddr: saltedAddr,
+	}
+	authorizeWithProgram(&rekeyed, lsig, false)
+	require.Equal(t, salted.PQsig, rekeyed.PQsig)
 }
 
 func TestDeterminePathToSourceFromSourceMap(t *testing.T) {
