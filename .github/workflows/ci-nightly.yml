@@ -145,7 +145,7 @@ jobs:
           token: ${{ env.CODECOV_TOKEN }}
           files: ./coverage.txt
           disable_search: true  # coverage.txt is the only report we want
-          flags: full_coverage
+          flags: unit
           fail_ci_if_error: false
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}

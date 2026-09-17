@@ -114,7 +114,7 @@ jobs:
           token: ${{ env.CODECOV_TOKEN }}
           files: ./coverage.txt
           disable_search: true  # coverage.txt is the only report we want
-          flags: full_coverage
+          flags: unit
           override_commit: ${{ needs.authorize.outputs.sha }}
           override_branch: ${{ needs.authorize.outputs.branch }}
           override_pr: ${{ github.event.issue.number }}

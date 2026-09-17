@@ -4,13 +4,6 @@ on:
     branches:
       - master
       - 'rel/**'
-  workflow_dispatch:
-    inputs:
-      full_coverage:
-        description: 'Run with -coverpkg to measure cross-package coverage (slower)'
-        required: false
-        type: boolean
-        default: false
 
 env:
   CODECOV_TOKEN: "8b4a1f91-f154-4c26-b84c-c9aaa90159c6"  # Same public token from CircleCI config
@@ -63,8 +56,6 @@ jobs:
           short: 'true'
           parallel: '4'
           test-results-path: ${{ matrix.platform }}_test/${{ matrix.partition_id }}
-          # Coverage is only measured when it was asked for; see .codecov.yml.
-          coverage: ${{ inputs.full_coverage && 'true' || 'false' }}
       - name: Notify Slack on failure
         if: failure()
         uses: ./.github/actions/slack-notify
@@ -87,21 +78,6 @@ jobs:
           name: test-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: ~/test_results
           retention-days: 7
-      - name: Upload coverage
-        # Only full-coverage runs are uploaded, and only from ubuntu-24.04. See
-        # .codecov.yml: every report Codecov holds has to be measured the same
-        # way as the baseline, or project-coverage deltas are meaningless.
-        if: ${{ inputs.full_coverage && matrix.platform == 'ubuntu-24.04' && !cancelled() }}
-        uses: codecov/codecov-action@v7
-        env:
-          GITHUB_ACTIONS: True
-          CIRCLECI: ""
-        with:
-          token: ${{ env.CODECOV_TOKEN }}
-          files: ./coverage.txt
-          disable_search: true  # coverage.txt is the only report we want
-          flags: full_coverage
-          fail_ci_if_error: false
       - name: Upload test results to Codecov
         if: ${{ !cancelled() && !github.event.repository.private }}
         uses: codecov/test-results-action@v1
