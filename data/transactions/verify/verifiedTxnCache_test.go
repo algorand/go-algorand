@@ -263,6 +263,61 @@ func TestGetUnverifiedTransactionGroupsPQSigProofChanges(t *testing.T) {
 	}
 }
 
+// TestGetUnverifiedTransactionGroupsLogicSigPQSigChanges checks that rewriting
+// an ls-scheme program or its arguments misses the cache. Neither is signed, and
+// neither is part of the transaction ID, so a hit here would report a program as
+// verified when what ran was something else.
+func TestGetUnverifiedTransactionGroupsLogicSigPQSigChanges(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	cache := MakeVerifiedTransactionCache(10)
+	dummyLedger := DummyLedgerForSignature{}
+
+	stxn := makeLogicSigPQTxn(t, `arg 0; byte "open"; ==`, transactions.LogicSigArgs{[]byte("open")})
+	group := []transactions.SignedTxn{stxn}
+	_, err := TxnGroup(group, &blkHdr, cache, &dummyLedger)
+	require.NoError(t, err)
+
+	require.Empty(t, cache.GetUnverifiedTransactionGroups([][]transactions.SignedTxn{group}, spec, blkHdr.CurrentProtocol))
+
+	tests := []struct {
+		name   string
+		mutate func(*transactions.SignedTxn)
+	}{
+		{
+			name: "args",
+			mutate: func(stxn *transactions.SignedTxn) {
+				stxn.PQsig.Signature = transactions.EncodeLogicSigArgs(transactions.LogicSigArgs{[]byte("shut")})
+			},
+		},
+		{
+			name: "no-args",
+			mutate: func(stxn *transactions.SignedTxn) {
+				stxn.PQsig.Signature = nil
+			},
+		},
+		{
+			name: "program",
+			mutate: func(stxn *transactions.SignedTxn) {
+				stxn.PQsig.PublicKey = slices.Clone(stxn.PQsig.PublicKey)
+				stxn.PQsig.PublicKey[len(stxn.PQsig.PublicKey)-1] ^= 1
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			mutated := stxn
+			test.mutate(&mutated)
+			require.Equal(t, stxn.ID(), mutated.ID())
+
+			unverifiedGroups := cache.GetUnverifiedTransactionGroups([][]transactions.SignedTxn{{mutated}}, spec, blkHdr.CurrentProtocol)
+			require.Len(t, unverifiedGroups, 1)
+		})
+	}
+}
+
 func BenchmarkGetUnverifiedTransactionGroups50(b *testing.B) {
 	if b.N < 20000 {
 		b.N = 20000
