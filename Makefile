@@ -87,7 +87,7 @@ GOLDFLAGS := $(GOLDFLAGS_BASE) \
 		 -X github.com/algorand/go-algorand/config.Channel=$(CHANNEL)
 
 UNIT_TEST_SOURCES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | grep -v /go-algorand/test/ ))
-COVERPKG_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | egrep -v '/go-algorand/(test|debug|cmd|config/defaultsGenerator|tools)' | egrep -v '(test|testing|mocks|mock)$$' ))
+COVERPKG_PACKAGES := $(shell $(CURDIR)/scripts/coverpkg.sh)
 ALGOD_API_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd daemon/algod/api; go list ./... ))
 # Raw coverage data collected by "make cover". Must be an absolute path: each test
 # binary runs with its own package directory as its working directory.
@@ -146,7 +146,7 @@ sanity: fix lint fmt tidy modernize
 cover:
 	rm -rf $(COVDATA_DIR) && mkdir -p $(COVDATA_DIR)
 ifeq ($(PACKAGE),)
-	$(GOTESTCOMMAND) $(GOTAGS) -cover -covermode=atomic -coverpkg=$(shell echo $(COVERPKG_PACKAGES) | sed 's/ /,/g') $(UNIT_TEST_SOURCES) -args -test.gocoverdir=$(COVDATA_DIR)
+	$(GOTESTCOMMAND) $(GOTAGS) -cover -covermode=atomic -coverpkg=$(COVERPKG_PACKAGES) $(UNIT_TEST_SOURCES) -args -test.gocoverdir=$(COVDATA_DIR)
 	./scripts/merge_coverage.sh $(COVDATA_DIR) cover.out
 else
 	cd $(PACKAGE); \

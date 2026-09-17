@@ -109,7 +109,7 @@ jobs:
           ./scripts/configure_dev.sh
           PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
           export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
-          COVERPACKAGES="$(go list ./... | grep -E -v '/go-algorand/(test|debug|cmd|config/defaultsGenerator|tools)' | grep -E -v '(test|testing|mock|mocks)$' | paste -sd ',' -)"
+          COVERPACKAGES="$(./scripts/coverpkg.sh)"
           mkdir -p test_results/${{ matrix.platform }}_test_nightly/${PARTITION_ID}
           mkdir -p "$RUNNER_TEMP/covdata"
           go tool -modfile=tool.mod gotestsum --format standard-quiet \
@@ -150,13 +150,16 @@ jobs:
       - name: Upload coverage
         # Only upload coverage from ubuntu-24.04 platform
         if: ${{ matrix.platform == 'ubuntu-24.04' && !cancelled() }}
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         env:
           GITHUB_ACTIONS: True
           CIRCLECI: ""
         with:
           token: ${{ env.CODECOV_TOKEN }}
-          file: ./coverage.txt
+          files: ./coverage.txt
+          # coverage.txt is the only report worth uploading; without this
+          # the uploader also searches the tree and picks up strays.
+          disable_search: true
           flags: full_coverage
           fail_ci_if_error: false
       - name: Upload test results to Codecov

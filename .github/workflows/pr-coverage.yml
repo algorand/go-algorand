@@ -1,0 +1,174 @@
+name: PR Coverage
+
+# Measures full cross-package coverage for a pull request on request, by
+# commenting "/coverage" on it, and attaches the result to that pull request in
+# Codecov.
+#
+# PR builds do not measure coverage themselves: coverage taken without -coverpkg
+# counts only the lines a package's own tests exercise, which is not comparable
+# to the baseline that push builds publish. See .codecov.yml.
+#
+# issue_comment workflows always run the copy of this file on the default
+# branch, so a pull request cannot change what this does. The job that checks
+# out and builds the pull request is nonetheless given read-only permissions and
+# no secrets, because building a branch executes code from it.
+
+on:
+  issue_comment:
+    types: [created]
+
+env:
+  CODECOV_TOKEN: "8b4a1f91-f154-4c26-b84c-c9aaa90159c6"  # Same public token from CircleCI config
+
+concurrency:
+  group: pr-coverage-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  authorize:
+    # Only for "/coverage" on a pull request, and only from people who can
+    # already push here, since this runs the pull request's code.
+    if: >-
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/coverage') &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: write
+    outputs:
+      sha: ${{ steps.pr.outputs.sha }}
+      branch: ${{ steps.pr.outputs.branch }}
+    steps:
+      - name: Acknowledge the request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method POST \
+            "repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
+            -f content=eyes
+      - name: Resolve the pull request head
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The head commit is passed to Codecov explicitly further down. This
+          # workflow runs with the default branch checked out, so left to itself
+          # the upload would be attributed to master and would overwrite the
+          # baseline. Codecov names a fork's branch "owner:branch".
+          read -r SHA BRANCH < <(
+            gh api "repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}" \
+              --jq 'if .head.repo.full_name == .base.repo.full_name
+                    then "\(.head.sha) \(.head.ref)"
+                    else "\(.head.sha) \(.head.label)" end'
+          )
+          if [[ -z "$SHA" || -z "$BRANCH" ]]; then
+            echo "could not resolve the head of pull request #${{ github.event.issue.number }}" >&2
+            exit 1
+          fi
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+  coverage:
+    needs: authorize
+    strategy:
+      fail-fast: false
+      matrix:
+        partition_id: [0, 1, 2, 3, 4, 5] # set PARTITION_TOTAL below to match
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      # Match how the push build measures the baseline, so the two are
+      # comparable: same tags, -race, no -short, and CIRCLECI set, which a
+      # handful of tests check. Only the partitioning differs, which changes how
+      # the tests are spread across runners but not which of them run.
+      ALGORAND_DEADLOCK: enable
+      KMD_NOUSB: True
+      BUILD_TYPE: integration
+      ALGOTEST: 1
+      SKIP_GO_INSTALLATION: True
+      CIRCLECI: true
+      PARTITION_ID: ${{ matrix.partition_id }}
+      PARTITION_TOTAL: 6
+    steps:
+      - name: Checkout the pull request
+        uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
+          fetch-depth: 0
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+        with:
+          cache-prefix: test
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test
+      - name: Run tests
+        run: |
+          PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
+          export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
+          COVERPACKAGES="$(./scripts/coverpkg.sh)"
+          mkdir -p "$RUNNER_TEMP/covdata"
+          go tool -modfile=tool.mod gotestsum --format standard-quiet \
+            -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" \
+            -race -timeout 1h -cover -covermode=atomic -p 1 \
+            -coverpkg=$COVERPACKAGES \
+            $PACKAGE_NAMES \
+            -args -test.gocoverdir="$RUNNER_TEMP/covdata"
+      - name: Merge coverage data
+        # Runs even when tests failed, so a partial run still reports what it
+        # managed to cover. See scripts/merge_coverage.sh.
+        if: ${{ !cancelled() }}
+        run: ./scripts/merge_coverage.sh "$RUNNER_TEMP/covdata" ./coverage.txt
+      - name: Upload coverage
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v7
+        env:
+          # The job sets CIRCLECI so that the tests behave as they do in the
+          # push build; the uploader would otherwise detect the wrong CI.
+          GITHUB_ACTIONS: True
+          CIRCLECI: ""
+        with:
+          token: ${{ env.CODECOV_TOKEN }}
+          files: ./coverage.txt
+          # coverage.txt is the only report worth uploading; without this
+          # the uploader also searches the tree and picks up strays.
+          disable_search: true
+          flags: full_coverage
+          override_commit: ${{ needs.authorize.outputs.sha }}
+          override_branch: ${{ needs.authorize.outputs.branch }}
+          override_pr: ${{ github.event.issue.number }}
+          # Getting the report to Codecov is the only purpose of this job, so a
+          # failed upload fails the job instead of passing silently.
+          fail_ci_if_error: true
+
+  report:
+    needs: [authorize, coverage]
+    if: ${{ always() && needs.authorize.result == 'success' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: write
+    steps:
+      - name: React with the outcome
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESULT: ${{ needs.coverage.result }}
+        run: |
+          if [[ "$RESULT" == "success" ]]; then
+            CONTENT=rocket
+          else
+            CONTENT=confused
+          fi
+          gh api --method POST \
+            "repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
+            -f content="$CONTENT"
+      - name: Say so if it failed
+        if: ${{ needs.coverage.result != 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment "${{ github.event.issue.number }}" \
+            --repo "${{ github.repository }}" \
+            --body "The \`/coverage\` run did not finish: [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
