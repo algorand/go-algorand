@@ -1,17 +1,12 @@
 name: PR Coverage
 
-# Measures full cross-package coverage for a pull request on request, by
-# commenting "/coverage" on it, and attaches the result to that pull request in
-# Codecov.
+# Commenting "/coverage" on a pull request measures cross-package coverage for
+# its head and attaches the result to that pull request in Codecov. PR builds do
+# not measure coverage themselves; see .codecov.yml.
 #
-# PR builds do not measure coverage themselves: coverage taken without -coverpkg
-# counts only the lines a package's own tests exercise, which is not comparable
-# to the baseline that push builds publish. See .codecov.yml.
-#
-# issue_comment workflows always run the copy of this file on the default
-# branch, so a pull request cannot change what this does. The job that checks
-# out and builds the pull request is nonetheless given read-only permissions and
-# no secrets, because building a branch executes code from it.
+# issue_comment workflows always run this file as it exists on the default
+# branch, so a pull request cannot change what it does. The job that checks the
+# branch out still gets read-only permissions and no secrets.
 
 on:
   issue_comment:
@@ -53,10 +48,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # The head commit is passed to Codecov explicitly further down. This
-          # workflow runs with the default branch checked out, so left to itself
-          # the upload would be attributed to master and would overwrite the
-          # baseline. Codecov names a fork's branch "owner:branch".
+          # Passed to Codecov below: this workflow runs on the default branch,
+          # so an upload left to itself would land on master. Codecov names a
+          # fork's branch "owner:branch".
           read -r SHA BRANCH < <(
             gh api "repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}" \
               --jq 'if .head.repo.full_name == .base.repo.full_name
@@ -81,10 +75,8 @@ jobs:
     permissions:
       contents: read
     env:
-      # Match how the push build measures the baseline, so the two are
-      # comparable: same tags, -race, no -short, and CIRCLECI set, which a
-      # handful of tests check. Only the partitioning differs, which changes how
-      # the tests are spread across runners but not which of them run.
+      # Measured like the push build that publishes the baseline, so the two
+      # are comparable. Only the partitioning differs.
       ALGORAND_DEADLOCK: enable
       KMD_NOUSB: True
       BUILD_TYPE: integration
@@ -106,43 +98,27 @@ jobs:
       - name: Setup test environment
         uses: ./.github/actions/setup-test
       - name: Run tests
-        run: |
-          PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
-          export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
-          COVERPACKAGES="$(./scripts/coverpkg.sh)"
-          mkdir -p "$RUNNER_TEMP/covdata"
-          go tool -modfile=tool.mod gotestsum --format standard-quiet \
-            -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" \
-            -race -timeout 1h -cover -covermode=atomic -p 1 \
-            -coverpkg=$COVERPACKAGES \
-            $PACKAGE_NAMES \
-            -args -test.gocoverdir="$RUNNER_TEMP/covdata"
-      - name: Merge coverage data
-        # Runs even when tests failed, so a partial run still reports what it
-        # managed to cover. See scripts/merge_coverage.sh.
-        if: ${{ !cancelled() }}
-        run: ./scripts/merge_coverage.sh "$RUNNER_TEMP/covdata" ./coverage.txt
+        uses: ./.github/actions/unit-tests
+        with:
+          parallel: '1'
+          coverage: 'true'
       - name: Upload coverage
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
         env:
-          # The job sets CIRCLECI so that the tests behave as they do in the
-          # push build; the uploader would otherwise detect the wrong CI.
+          # The job sets CIRCLECI for the tests; the uploader would otherwise
+          # detect the wrong CI.
           GITHUB_ACTIONS: True
           CIRCLECI: ""
         with:
           token: ${{ env.CODECOV_TOKEN }}
           files: ./coverage.txt
-          # coverage.txt is the only report worth uploading; without this
-          # the uploader also searches the tree and picks up strays.
-          disable_search: true
+          disable_search: true  # coverage.txt is the only report we want
           flags: full_coverage
           override_commit: ${{ needs.authorize.outputs.sha }}
           override_branch: ${{ needs.authorize.outputs.branch }}
           override_pr: ${{ github.event.issue.number }}
-          # Getting the report to Codecov is the only purpose of this job, so a
-          # failed upload fails the job instead of passing silently.
-          fail_ci_if_error: true
+          fail_ci_if_error: true  # the upload is the point of this job
 
   report:
     needs: [authorize, coverage]

@@ -1,13 +1,10 @@
 #!/usr/bin/env bash
 
-# Print the go-algorand packages that coverage is measured for, comma separated,
-# for "go test -coverpkg".
+# Print the packages coverage is measured for, comma separated, for -coverpkg.
 #
-# Excluded are the e2e test tree, the command line programs and tools, and
-# packages that exist only to support other packages' tests. Keep this in sync
-# with the ignore list in .codecov.yml: a package measured here but ignored
-# there, or the other way round, silently changes which files the coverage
-# total is computed over.
+# Excluded are the e2e tree, the command line programs and tools, and packages
+# that only support other packages' tests. Keep in sync with the ignore list in
+# .codecov.yml, which decides the same thing for the report.
 
 set -eo pipefail
 

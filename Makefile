@@ -41,8 +41,7 @@ GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
 # e.g. make GOTAGSCUSTOM=msgtrace
 GOTAGSLIST += ${GOTAGSCUSTOM}
 
-# tool.mod is referenced by an absolute path so that recipes which cd into a
-# subdirectory (make cover PACKAGE=X) still find it.
+# Absolute path so recipes that cd elsewhere (make cover PACKAGE=X) find it.
 GOTESTCOMMAND := go tool -modfile=$(CURDIR)/tool.mod gotestsum --format pkgname --jsonfile testresults.json --
 GOLINTCOMMAND := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.8.0 -c .golangci.yml
 
@@ -89,8 +88,7 @@ GOLDFLAGS := $(GOLDFLAGS_BASE) \
 UNIT_TEST_SOURCES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | grep -v /go-algorand/test/ ))
 COVERPKG_PACKAGES := $(shell $(CURDIR)/scripts/coverpkg.sh)
 ALGOD_API_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd daemon/algod/api; go list ./... ))
-# Raw coverage data collected by "make cover". Must be an absolute path: each test
-# binary runs with its own package directory as its working directory.
+# Absolute: each test binary runs in its own package directory.
 COVDATA_DIR := $(CURDIR)/.covdata
 
 GOMOD_DIRS := ./tools/block-generator ./tools/x-repo-types ./tools/debug/algodump
@@ -141,8 +139,7 @@ sanity: fix lint fmt tidy modernize
 # "make cover PACKAGE=X" runs all tests in package github.com/algorand/go-algorand/X/... and collects full coverage
 # across all packages that are dependencies of that package.
 #
-# Coverage is collected as raw data and merged with "go tool covdata" rather than
-# written straight out with -coverprofile; see scripts/merge_coverage.sh for why.
+# Coverage is merged with "go tool covdata"; see scripts/merge_coverage.sh.
 cover:
 	rm -rf $(COVDATA_DIR) && mkdir -p $(COVDATA_DIR)
 ifeq ($(PACKAGE),)

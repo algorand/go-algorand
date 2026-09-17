@@ -46,7 +46,6 @@ jobs:
       PARTITION_ID: ${{ matrix.partition_id }}
       PARTITION_TOTAL: 6
       CIRCLECI: true
-      SHORTTEST: "-short"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -59,38 +58,13 @@ jobs:
       - name: Setup test environment
         uses: ./.github/actions/setup-test
       - name: Run tests
-        env:
-          FULL_COVERAGE: ${{ inputs.full_coverage }}
-        run: |
-          PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
-          export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
-          # Coverage is only collected when a full-coverage run was requested.
-          # Without -coverpkg the numbers count only the lines a package's own
-          # tests exercise, which is not comparable to the full_coverage baseline
-          # that push builds publish, so there is nothing worth measuring.
-          COVER_FLAGS=""
-          COVER_ARGS=""
-          if [[ "$FULL_COVERAGE" == "true" ]]; then
-            COVERPACKAGES="$(./scripts/coverpkg.sh)"
-            mkdir -p "$RUNNER_TEMP/covdata"
-            COVER_FLAGS="-cover -covermode=atomic -coverpkg=$COVERPACKAGES"
-            COVER_ARGS="-args -test.gocoverdir=$RUNNER_TEMP/covdata"
-          fi
-          mkdir -p test_results/${{ matrix.platform }}_test/${PARTITION_ID}
-          go tool -modfile=tool.mod gotestsum --format standard-quiet \
-            --junitfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/results.xml \
-            --jsonfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/testresults.json \
-            -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" $SHORTTEST \
-            -race -timeout 1h -p 4 \
-            $COVER_FLAGS \
-            $PACKAGE_NAMES \
-            $COVER_ARGS
-      - name: Merge coverage data
-        # Collect raw coverage data and merge it, rather than asking go test for a
-        # text profile directly -- see scripts/merge_coverage.sh. Runs even when
-        # tests failed, so partial coverage is still uploaded as it was before.
-        if: ${{ inputs.full_coverage && !cancelled() }}
-        run: ./scripts/merge_coverage.sh "$RUNNER_TEMP/covdata" ./coverage.txt
+        uses: ./.github/actions/unit-tests
+        with:
+          short: 'true'
+          parallel: '4'
+          test-results-path: ${{ matrix.platform }}_test/${{ matrix.partition_id }}
+          # Coverage is only measured when it was asked for; see .codecov.yml.
+          coverage: ${{ inputs.full_coverage && 'true' || 'false' }}
       - name: Notify Slack on failure
         if: failure()
         uses: ./.github/actions/slack-notify
@@ -125,9 +99,7 @@ jobs:
         with:
           token: ${{ env.CODECOV_TOKEN }}
           files: ./coverage.txt
-          # coverage.txt is the only report worth uploading; without this
-          # the uploader also searches the tree and picks up strays.
-          disable_search: true
+          disable_search: true  # coverage.txt is the only report we want
           flags: full_coverage
           fail_ci_if_error: false
       - name: Upload test results to Codecov
