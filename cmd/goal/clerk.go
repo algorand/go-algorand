@@ -1132,7 +1132,14 @@ var compileCmd = &cobra.Command{
 			if !signProgram && shouldPrintAdditionalInfo {
 				pd := logic.HashProgram(program)
 				addr := basics.Address(pd)
-				fmt.Printf("%s: %s\n", fname, addr.String())
+				// The ls address is appended to this line rather than printed on
+				// one of its own, so that scripts reading the first address by
+				// field or by word keep working.
+				_, pqAddr, err := basics.PQLogicSigAddress(program)
+				if err != nil {
+					reportErrorf("Could not derive pq address: %s", err)
+				}
+				fmt.Printf("%s: %s (pq: %s)\n", fname, addr.String(), pqAddr.String())
 			}
 		}
 	},

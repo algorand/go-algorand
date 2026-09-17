@@ -469,7 +469,7 @@ func makeLogicSigPQTxn(t *testing.T, source string, args transactions.LogicSigAr
 	ops, err := logic.AssembleString(source)
 	require.NoError(t, err)
 
-	salt, authorizer, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeLogicSig, ops.Program)
+	salt, authorizer, err := basics.PQLogicSigAddress(ops.Program)
 	require.NoError(t, err)
 
 	return transactions.SignedTxn{
