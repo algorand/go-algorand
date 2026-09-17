@@ -35,6 +35,16 @@ func TestLookupPQScheme(t *testing.T) {
 
 	_, ok = LookupPQScheme(protocol.PQScheme{'x', '1'})
 	require.False(t, ok)
+
+	// ls is a registered scheme, so that address derivation and validation treat
+	// it like any other, but its program is evaluated rather than verified as
+	// bytes. Calling the verifier means a caller skipped that dispatch.
+	v, ok = LookupPQScheme(protocol.PQSchemeLogicSig)
+	require.True(t, ok)
+	require.NotNil(t, v)
+	require.ErrorIs(t,
+		v.Verify(TestingHashable{data: []byte("ls")}, []byte("program"), []byte("args")),
+		ErrPQLogicSigNotEvaluated)
 }
 
 // TestPQBoundsCoverFalcon1024 guards against MaxPQ*Size being smaller than a

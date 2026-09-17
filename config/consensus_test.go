@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -56,6 +57,42 @@ func TestConsensusParams(t *testing.T) {
 		}
 		if params.MaxAbsoluteLogicSigProgramSize < params.LogicSigMaxSize {
 			t.Errorf("Protocol %s: MaxAbsoluteLogicSigProgramSize is smaller than LogicSigMaxSize", proto)
+		}
+	}
+}
+
+// TestPQSchemeLogicSigParams pins the consensus-parameter invariants of the ls
+// scheme, which differs from the DSA-backed schemes in ways that are easy to
+// undo by accident.
+func TestPQSchemeLogicSigParams(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	for proto, params := range Consensus {
+		// An ls account costs a hash plus AVM execution, both of which the
+		// opcode budget and PerByteTxnSurcharge already price. Charging the
+		// Falcon-style surcharge would make the off-curve form more expensive
+		// than the on-curve SignedTxn.Lsig form it exists to replace.
+		if fee := params.PQSchemeFeeContribution(protocol.PQSchemeLogicSig); fee != 0 {
+			t.Errorf("Protocol %s: ls scheme contributes a fee of %d", proto, fee)
+		}
+
+		if params.PQSchemeEnabled(protocol.PQSchemeLogicSig) != params.EnablePQSchemeLogicSig {
+			t.Errorf("Protocol %s: PQSchemeEnabled disagrees with EnablePQSchemeLogicSig", proto)
+		}
+
+		if params.EnablePQSchemeLogicSig {
+			if !params.PQSigEnabled() {
+				t.Errorf("Protocol %s: ls enabled but PQSigEnabled is false", proto)
+			}
+			// A delegating ls account runs two programs against one budget. The
+			// unpooled fallback in EvalContext.remainingBudget would hand each a
+			// full LogicSigMaxCost instead.
+			if !params.EnableLogicSigCostPooling {
+				t.Errorf("Protocol %s: ls enabled without LogicSig cost pooling", proto)
+			}
+			if params.LogicSigVersion == 0 {
+				t.Errorf("Protocol %s: ls enabled without LogicSigs", proto)
+			}
 		}
 	}
 }

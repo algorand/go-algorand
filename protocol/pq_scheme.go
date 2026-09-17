@@ -16,9 +16,10 @@
 
 package protocol
 
-// PQScheme is a 2-byte ASCII identifier of a post-quantum account authorization scheme.
-// Conventionally, the first byte is the PQ-DSA family, and the second byte is a version
-// or variant identifier.
+// PQScheme is a 2-byte ASCII identifier of a scheme for deriving and authorizing
+// a post-quantum account address. For a scheme built on a PQ-DSA, the first byte
+// is conventionally the DSA family and the second a version or variant
+// identifier. Not every scheme is a DSA: see PQSchemeLogicSig.
 //
 //msgp:test ignore PQScheme
 type PQScheme [2]byte
@@ -27,11 +28,18 @@ func (s PQScheme) String() string {
 	return string(s[:])
 }
 
-// Supported post-quantum signature schemes.
+// Supported post-quantum account schemes.
 var (
 	// PQSchemeFalcon1024 - f1: Falcon-1024 using a deterministic signing profile.
 	PQSchemeFalcon1024 = PQScheme{'f', '1'}
 
 	// PQSchemeFalcon512 - f2: Falcon-512 using a deterministic signing profile.
 	PQSchemeFalcon512 = PQScheme{'f', '2'} // reserved, not used
+
+	// PQSchemeLogicSig - ls: a LogicSig account. The program bytes take the place
+	// of the public key, so the account address commits to the program, and the
+	// salt selects among the addresses a single program can have. Authorization is
+	// the program's own evaluation rather than a signature check, so this scheme
+	// has no crypto.PQVerifier and never appears in crypto.LookupPQScheme.
+	PQSchemeLogicSig = PQScheme{'l', 's'}
 )

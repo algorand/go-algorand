@@ -18,9 +18,11 @@ package transactions
 
 import (
 	"bytes"
+	"errors"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // EvalMaxArgs is the maximum number of arguments to an LSig
@@ -28,6 +30,58 @@ const EvalMaxArgs = 255
 
 // MaxLogicSigArgSize is the maximum size of an argument to an LSig
 const MaxLogicSigArgSize = config.MaxAVMBytesSize
+
+// LogicSigArgs are arguments to a program that is not carried in a LogicSig,
+// which is how an ls-scheme PQSig holds the arguments to its own program. They
+// are the same thing as LogicSig.Args, in a place that has no room for a
+// structured field, so they carry the same bounds. The total encoded size is
+// bounded by whatever holds them.
+//
+//msgp:allocbound LogicSigArgs EvalMaxArgs,MaxLogicSigArgSize
+type LogicSigArgs [][]byte
+
+// errLogicSigArgsNotCanonical is returned for arguments that decode correctly
+// but were not encoded the way EncodeLogicSigArgs would encode them.
+var errLogicSigArgsNotCanonical = errors.New("logicsig args are not canonically encoded")
+
+// EncodeLogicSigArgs encodes program arguments for carrying somewhere that has
+// only room for bytes. No arguments encode to no bytes, so that "absent" and
+// "present but empty" have one representation between them rather than two.
+func EncodeLogicSigArgs(args LogicSigArgs) []byte {
+	if len(args) == 0 {
+		return nil
+	}
+	return protocol.Encode(args)
+}
+
+// DecodeLogicSigArgs decodes program arguments encoded by EncodeLogicSigArgs.
+// It insists on that exact encoding, by re-encoding what it decoded and
+// requiring the bytes back. Nothing signs these bytes, so without that rule one
+// set of arguments would have many equally valid wire forms, differing in how
+// msgpack spelled the lengths.
+func DecodeLogicSigArgs(encoded []byte) (LogicSigArgs, error) {
+	if len(encoded) == 0 {
+		return nil, nil
+	}
+	var args LogicSigArgs
+	if err := protocol.Decode(encoded, &args); err != nil {
+		return nil, err
+	}
+	if !bytes.Equal(EncodeLogicSigArgs(args), encoded) {
+		return nil, errLogicSigArgsNotCanonical
+	}
+	return args, nil
+}
+
+// Len returns the total size of the arguments, which is what the LogicSig size
+// pool measures. It does not count the bytes msgpack spends framing them.
+func (args LogicSigArgs) Len() int {
+	size := 0
+	for _, arg := range args {
+		size += len(arg)
+	}
+	return size
+}
 
 // LogicSig contains logic for validating a transaction.
 // LogicSig is signed by an account, allowing delegation of operations.

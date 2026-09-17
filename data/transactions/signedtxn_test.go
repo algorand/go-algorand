@@ -217,4 +217,41 @@ func TestSignedTxnFeeFactorPQSignatureContribution(t *testing.T) {
 	require.Equal(t, basics.Micros(4e6), usage)
 }
 
+// TestLogicSigPQSigFee checks that a program authorizing from an ls-scheme
+// PQSig is priced by the byte like one in a LogicSig, and carries no scheme
+// surcharge of its own.
+func TestLogicSigPQSigFee(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	require.True(t, proto.TxnSizePricingEnabled())
+
+	// Charging the Falcon surcharge here would make the off-curve form cost
+	// more than the on-curve LogicSig it exists to replace.
+	lsPQSigned := SignedTxn{PQsig: PQSig{
+		Scheme:    protocol.PQSchemeLogicSig,
+		PublicKey: make([]byte, proto.LogicSigMaxSize),
+	}}
+	require.Equal(t, basics.Micros(1e6), lsPQSigned.FeeFactor(proto))
+
+	// A program is free up to the group's per-transaction allowance, whether it
+	// sits in the Lsig or stands in for a PQ public key.
+	group := WrapSignedTxnsWithAD([]SignedTxn{lsPQSigned})
+	usage, _ := SummarizeFees(group, proto)
+	require.Equal(t, basics.Micros(1e6), usage)
+
+	// Beyond it, the bytes are surcharged exactly as a LogicSig's are.
+	overBy := 500
+	lsOver := lsPQSigned
+	lsOver.PQsig.PublicKey = make([]byte, int(proto.LogicSigMaxSize)+overBy)
+	lsigOver := SignedTxn{Lsig: LogicSig{Logic: make([]byte, int(proto.LogicSigMaxSize)+overBy)}}
+
+	lsUsage, _ := SummarizeFees(WrapSignedTxnsWithAD([]SignedTxn{lsOver}), proto)
+	lsigUsage, _ := SummarizeFees(WrapSignedTxnsWithAD([]SignedTxn{lsigOver}), proto)
+	require.Equal(t, lsigUsage, lsUsage)
+
+	surcharge, _ := proto.PerByteTxnSurcharge.MulInt(overBy)
+	require.Equal(t, basics.AddSaturate(basics.Micros(1e6), surcharge), lsUsage)
+}
+
 //TODO: test multisig
