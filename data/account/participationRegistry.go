@@ -478,12 +478,12 @@ func dbSchemaUpgrade1(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 	defer rows.Close()
 	for rows.Next() {
 		var entry pkVoting
-		if err := rows.Scan(&entry.pk, &entry.rawVoting); err != nil {
+		if err = rows.Scan(&entry.pk, &entry.rawVoting); err != nil {
 			return err
 		}
 		blobs = append(blobs, entry)
 	}
-	if err := rows.Err(); err != nil {
+	if err = rows.Err(); err != nil {
 		return err
 	}
 	rows.Close()
@@ -493,24 +493,24 @@ func dbSchemaUpgrade1(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 			continue
 		}
 		voting := &crypto.OneTimeSignatureSecrets{}
-		if err := protocol.Decode(entry.rawVoting, voting); err != nil {
+		if err = protocol.Decode(entry.rawVoting, voting); err != nil {
 			// Do not fail the whole migration over one undecodable blob
 			// (db.Initialize would mask this as a generic upgrade failure
 			// with no quarantine path).  Carry the bytes over as they are:
 			// they do not decode as a header either, so the record is
 			// excluded from the cache with a warning at load time, exactly
 			// as an undecodable blob was before.
-			if _, err := tx.Exec("UPDATE Rolling SET votingHeader=? WHERE pk=?", entry.rawVoting, entry.pk); err != nil {
+			if _, err = tx.Exec("UPDATE Rolling SET votingHeader=? WHERE pk=?", entry.rawVoting, entry.pk); err != nil {
 				return fmt.Errorf("dbSchemaUpgrade1: failed to carry over the undecodable voting blob for pk %d: %w", entry.pk, err)
 			}
 			continue
 		}
 		target := registryVotingTarget(entry.pk)
 		// freshly decoded and unshared: no lock is needed for the snapshot
-		if err := rewriteVotingRows(tx, target, voting.OneTimeSignatureSecretsPersistent); err != nil {
+		if err = rewriteVotingRows(tx, target, voting.OneTimeSignatureSecretsPersistent); err != nil {
 			return fmt.Errorf("dbSchemaUpgrade1: failed to convert the voting blob for pk %d: %w", entry.pk, err)
 		}
-		if err := verifyVotingRowsMatch(tx, target, voting); err != nil {
+		if err = verifyVotingRowsMatch(tx, target, voting); err != nil {
 			return fmt.Errorf("dbSchemaUpgrade1: pk %d: %w", entry.pk, err)
 		}
 	}
