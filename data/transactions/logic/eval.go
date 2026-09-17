@@ -453,7 +453,9 @@ func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.Sign
 func NewSigEvalParams(txgroup []transactions.SignedTxn, proto *config.ConsensusParams, ls LedgerForSignature) *EvalParams {
 	lsigs := 0
 	for _, tx := range txgroup {
-		if tx.Lsig.HasProgram() {
+		// An ls-scheme PQSig carries its program in place of a public key, so a
+		// transaction can have a signature program with nothing in its Lsig.
+		if tx.Lsig.HasProgram() || tx.PQsig.IsLogicSig() {
 			lsigs++
 		}
 	}
