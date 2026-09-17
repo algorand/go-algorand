@@ -430,8 +430,14 @@ func stxnCoreChecks(gi int, groupCtx *GroupContext, batch crypto.BatchEnqueuer) 
 }
 
 // LogicSigSanityCheck checks that the signature is valid and that the program is basically well formed.
-// It does not evaluate the logic.
+// It does not evaluate the logic. It covers both the program in a LogicSig and
+// the one an ls-scheme PQSig carries.
 func LogicSigSanityCheck(gi int, groupCtx *GroupContext) error {
+	if groupCtx.signedGroupTxns[gi].PQsig.IsLogicSig() {
+		_, err := pqLogicSigSanityCheckPrep(gi, groupCtx)
+		return err
+	}
+
 	batchVerifier := crypto.MakeBatchVerifier()
 
 	if err := logicSigSanityCheckBatchPrep(gi, groupCtx, batchVerifier); err != nil {
@@ -480,28 +486,37 @@ func evalSigProgram(gi int, groupCtx *GroupContext, lsig transactions.LogicSig) 
 	return nil
 }
 
+// pqLogicSigSanityCheckPrep checks an ls-scheme PQSig as far as can be done
+// without evaluating its program, and returns the logic signature it carries.
+func pqLogicSigSanityCheckPrep(gi int, groupCtx *GroupContext) (transactions.LogicSig, error) {
+	if groupCtx.consensusParams.LogicSigVersion == 0 {
+		return transactions.LogicSig{}, errors.New("LogicSig not enabled")
+	}
+	txn := &groupCtx.signedGroupTxns[gi]
+
+	if err := txn.PQsig.ValidateEnvelope(groupCtx.consensusParams, txn.Authorizer()); err != nil {
+		return transactions.LogicSig{}, err
+	}
+
+	lsig, err := txn.PQsig.Lsig()
+	if err != nil {
+		return transactions.LogicSig{}, err
+	}
+	if err := sigProgramSanityCheck(lsig.Logic, "PQsig LogicSig", groupCtx); err != nil {
+		return transactions.LogicSig{}, err
+	}
+	return lsig, nil
+}
+
 // pqLogicSigVerify authorizes a transaction with an ls-scheme PQSig. The
 // address commits to the program, so once the envelope establishes that the
 // authorizer is that program's address, evaluating it is the whole
 // authorization: there are no signature bytes to check.
 func pqLogicSigVerify(gi int, groupCtx *GroupContext) error {
-	if groupCtx.consensusParams.LogicSigVersion == 0 {
-		return errors.New("LogicSig not enabled")
-	}
-	txn := &groupCtx.signedGroupTxns[gi]
-
-	if err := txn.PQsig.ValidateEnvelope(groupCtx.consensusParams, txn.Authorizer()); err != nil {
-		return err
-	}
-
-	lsig, err := txn.PQsig.Lsig()
+	lsig, err := pqLogicSigSanityCheckPrep(gi, groupCtx)
 	if err != nil {
 		return err
 	}
-	if err := sigProgramSanityCheck(lsig.Logic, "PQsig LogicSig", groupCtx); err != nil {
-		return err
-	}
-
 	return evalSigProgram(gi, groupCtx, lsig)
 }
 
