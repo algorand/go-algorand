@@ -529,6 +529,10 @@ type participationDB struct {
 	// dirty marked on Record(), DeleteExpired(), cleared on Register(), Delete(), Flush()
 	dirty map[ParticipationID]struct{}
 
+	// pendingInserts holds the IDs of inserts whose write has not completed
+	// yet; they are not in the cache, so this is what dedups them
+	pendingInserts map[ParticipationID]struct{}
+
 	log   logging.Logger
 	store db.Pair
 	mutex deadlock.RWMutex
@@ -581,6 +585,9 @@ func (db *participationDB) initializeCache() error {
 
 	db.cache = cache
 	db.dirty = make(map[ParticipationID]struct{})
+	if db.pendingInserts == nil {
+		db.pendingInserts = make(map[ParticipationID]struct{})
+	}
 	return nil
 }
 
@@ -589,14 +596,23 @@ func (db *participationDB) writeThread() {
 	var lastErr error
 
 	for op := range db.writeQueue {
-		if err := op.operation.apply(db); err != nil {
-			lastErr = err
+		err := op.operation.apply(db)
+		if op.errChannel == nil {
+			// fire-and-forget: surfaced by the next flush
+			if err != nil {
+				lastErr = err
+			}
+			continue
 		}
-
-		if op.errChannel != nil {
-			op.errChannel <- lastErr
+		// an op with a channel reports its own result; a flush additionally
+		// surfaces the errors of earlier fire-and-forget ops
+		if _, isFlush := op.operation.(*flushOp); isFlush {
+			if err == nil {
+				err = lastErr
+			}
 			lastErr = nil
 		}
+		op.errChannel <- err
 	}
 }
 
@@ -615,16 +631,25 @@ func verifyExecWithOneRowEffected(err error, result sql.Result, operationName st
 	return nil
 }
 
+// Insert stores the participation key and makes it available.  The write is
+// validated on the write thread before the record enters the cache (a copy
+// that lags the stored deletion cursor is fast-forwarded, and one whose
+// relation to the stored state cannot be established is rejected), so a
+// rejected copy is never usable.
 func (db *participationDB) Insert(record Participation) (id ParticipationID, err error) {
-	db.mutex.Lock()
-	defer db.mutex.Unlock()
-
 	id = record.ID()
-	if _, ok := db.cache[id]; ok {
+
+	db.mutex.Lock()
+	_, inCache := db.cache[id]
+	_, pending := db.pendingInserts[id]
+	if inCache || pending {
+		db.mutex.Unlock()
 		// PKI TODO: Add a special case to set the StateProof public key if it is in the input
 		//           but not in the cache.
 		return id, ErrAlreadyInserted
 	}
+	db.pendingInserts[id] = struct{}{}
+	db.mutex.Unlock()
 
 	// Make some copies.
 	var vrf *crypto.VRFSecrets
@@ -645,16 +670,25 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 	// and persisting a newer state than the cache holds would trip the
 	// monotonicity guard on the next flush
 	record.Voting = voting
-	db.writeQueue <- makeOpRequest(&insertOp{
+	written := make(chan error, 1)
+	db.writeQueue <- makeOpRequestWithError(&insertOp{
 		id:     id,
 		record: record,
-	})
+	}, written)
+	err = <-written
 
 	var stateProofVerifierPtr *merklesignature.Verifier
 	if record.StateProofSecrets != nil {
 		stateProofVerifierPtr = &merklesignature.Verifier{}
 		copy(stateProofVerifierPtr.Commitment[:], record.StateProofSecrets.GetVerifier().Commitment[:])
 		stateProofVerifierPtr.KeyLifetime = record.StateProofSecrets.GetVerifier().KeyLifetime
+	}
+
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
+	delete(db.pendingInserts, id)
+	if err != nil {
+		return id, fmt.Errorf("participationDB: unable to insert key %s: %w", id, err)
 	}
 
 	// update cache.
@@ -674,7 +708,7 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 		VRF:               vrf,
 	}
 
-	return
+	return id, nil
 }
 
 func (db *participationDB) AppendKeys(id ParticipationID, keys StateProofKeys) error {
@@ -874,16 +908,17 @@ func (db *participationDB) getAllFromDB() (records []ParticipationRecord, err er
 		// registry (and with it the node) from loading
 		records = make([]ParticipationRecord, 0, len(scanned))
 		for i := range scanned {
-			if len(rawHeaders[i]) > 0 {
-				batches := batchesByPK[pks[i]]
-				offsets := offsetsByPK[pks[i]]
+			batches := batchesByPK[pks[i]]
+			offsets := offsetsByPK[pks[i]]
+			hasRows := len(batches.subkeys)+len(offsets.subkeys) > 0
+			if len(rawHeaders[i]) > 0 || hasRows {
 				var voting *crypto.OneTimeSignatureSecrets
 				hdr, verr := decodeVotingHeader(rawHeaders[i])
 				if verr == nil {
 					voting, verr = votingFromRows(hdr, batches.subkeys, offsets.subkeys, offsets.batches)
 				}
 				if verr != nil {
-					db.log.Warnf("participationDB: excluding key %s (pk %d) from the registry, its voting data is corrupt: %v; it is re-installed from its key file at the next restart (or delete %s and restart to rebuild the registry)",
+					db.log.Warnf("participationDB: excluding key %s (pk %d) from the registry, its voting data is corrupt: %v; delete %s and restart to rebuild the registry",
 						scanned[i].ParticipationID, pks[i], verr, config.ParticipationRegistryFilename)
 					continue
 				}
@@ -1087,7 +1122,7 @@ func updateRollingFields(ctx context.Context, tx *sql.Tx, record ParticipationRe
 	// registry already retired.
 	stored, err := decodeVotingHeader(rawHeader)
 	if err != nil {
-		return fmt.Errorf("stored voting header for key %s is undecodable; refusing to rewrite voting rows from memory (restart to re-install it from its key file, or delete %s and restart to rebuild the registry): %v",
+		return fmt.Errorf("stored voting header for key %s is undecodable; refusing to rewrite voting rows from memory (delete %s and restart to rebuild the registry): %v",
 			record.ParticipationID, config.ParticipationRegistryFilename, err)
 	}
 	return syncVotingRows(tx, registryVotingTarget(pk), stored, votingSnapshot(record.Voting))

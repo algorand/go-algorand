@@ -24,6 +24,7 @@ import (
 	"maps"
 	"strings"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
@@ -140,12 +141,13 @@ func (r *registerOp) apply(db *participationDB) error {
 // participation ID commits to the key material: a stored cursor ahead of the
 // inserted copy means those rounds were already voted and retired.
 //
-// A stored header that cannot be used (undecodable, or carrying a different
-// verifier than the key the ID commits to) is ignored with a warning, so the
-// insert replaces the stored rows with the inserted copy.  Failing closed
-// here would protect nothing: the record was already excluded from the cache
-// as corrupt, and the operator's remedy rebuilds the registry from this very
-// key file, while refusing would leave its retired subkeys on disk for good.
+// It fails closed when a stored header for the id cannot be used (it is
+// undecodable, or carries a different verifier than the key the ID commits
+// to): the registry may be ahead of the supplied copy (a key file restored
+// from a backup, or one that missed the last round's deletion), and a copy
+// whose relation to the stored cursor cannot be established must not replace
+// it.  The record stays excluded from the cache until the operator rebuilds
+// the registry.
 func fastForwardToStoredCursor(tx *sql.Tx, log logging.Logger, id ParticipationID, secrets *crypto.OneTimeSignatureSecrets, dilution uint64) error {
 	rows, err := tx.Query(selectRollingVotingByID, id[:])
 	if err != nil {
@@ -161,17 +163,16 @@ func fastForwardToStoredCursor(tx *sql.Tx, log logging.Logger, id ParticipationI
 		if err := rows.Scan(&pk, &rawHeader); err != nil {
 			return err
 		}
-		if len(rawHeader) == 0 {
-			continue
-		}
+		// an existing row without a usable header (empty or undecodable)
+		// cannot establish the stored deletion state: fail closed
 		hdr, err := decodeVotingHeader(rawHeader)
 		if err != nil {
-			log.Warnf("participationDB: stored voting header for key %s is undecodable (%v); the inserted copy replaces it", id, err)
-			continue
+			return fmt.Errorf("stored voting header for key %s is undecodable; refusing to replace it from the inserted copy (delete %s and restart to rebuild the registry): %v",
+				id, config.ParticipationRegistryFilename, err)
 		}
 		if hdr.Verifier != current.Verifier {
-			log.Warnf("participationDB: stored voting header for key %s belongs to a different voting key; the inserted copy replaces it", id)
-			continue
+			return fmt.Errorf("stored voting header for key %s belongs to a different voting key; refusing to replace it from the inserted copy (delete %s and restart to rebuild the registry)",
+				id, config.ParticipationRegistryFilename)
 		}
 		if stored == nil || storedHeaderAhead(hdr, *stored) {
 			stored = &hdr
@@ -183,7 +184,7 @@ func fastForwardToStoredCursor(tx *sql.Tx, log logging.Logger, id ParticipationI
 	rows.Close()
 
 	if stored == nil {
-		return nil // known-new (or unusable) stored state: nothing to fast-forward to
+		return nil // known-new: nothing stored for this key
 	}
 	if !storedHeaderAhead(*stored, current) {
 		return nil

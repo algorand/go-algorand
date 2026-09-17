@@ -229,31 +229,44 @@ func TestRegistryKeyLifecycle(t *testing.T) {
 // TestRegistryExcludesCorruptRecord verifies a record whose voting data is
 // damaged is excluded from the cache with a warning instead of blocking the
 // whole registry (and the node) from loading, that healthy records survive,
-// and that re-inserting the key from its key file replaces the damaged rows
-// whatever the damage: lost subkey rows, an undecodable header, or a header
-// belonging to a different key (whose cursor must not be adopted).
+// and what a re-insert of the key from its key file may do: replace the rows
+// when the stored header still establishes the deletion state (lost subkey
+// rows), but nothing when it does not (an undecodable, empty, or foreign
+// header) — the registry may be ahead of the key file, so the copy must
+// neither reach the store nor become usable from the cache.
 func TestRegistryExcludesCorruptRecord(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	const dilution = 10
+	damageHeader := func(a *require.Assertions, registry *participationDB, corruptID ParticipationID, header any) {
+		registryExecSQL(a, registry, "UPDATE Rolling SET votingHeader=? WHERE pk=(SELECT pk FROM Keysets WHERE participationID=?)", header, corruptID[:])
+	}
 	cases := []struct {
-		name   string
-		damage func(a *require.Assertions, registry *participationDB, corruptID ParticipationID, healthy Participation)
+		name string
+		// rounds voted (and persisted) before the damage, so the registry is
+		// ahead of the fresh key-file copy that is re-inserted later
+		advance basics.Round
+		damage  func(a *require.Assertions, registry *participationDB, corruptID ParticipationID, healthy Participation)
+		// refused is the error the re-insert must fail with; empty means it
+		// must succeed and replace the rows
+		refused string
 	}{
-		{"missingBatchRow", func(a *require.Assertions, registry *participationDB, corruptID ParticipationID, _ Participation) {
+		{"missingBatchRow", 0, func(a *require.Assertions, registry *participationDB, corruptID ParticipationID, _ Participation) {
 			registryExecSQL(a, registry, "DELETE FROM VotingBatches WHERE batch=(SELECT MAX(batch) FROM VotingBatches) AND pk=(SELECT pk FROM Keysets WHERE participationID=?)", corruptID[:])
-		}},
-		{"undecodableHeader", func(a *require.Assertions, registry *participationDB, corruptID ParticipationID, _ Participation) {
-			registryExecSQL(a, registry, "UPDATE Rolling SET votingHeader=x'ff00' WHERE pk=(SELECT pk FROM Keysets WHERE participationID=?)", corruptID[:])
-		}},
-		{"foreignHeader", func(a *require.Assertions, registry *participationDB, corruptID ParticipationID, healthy Participation) {
-			// another key's header with a cursor far ahead: the re-inserted
-			// copy must not be fast-forwarded by it
+		}, ""},
+		{"undecodableHeader", 150, func(a *require.Assertions, registry *participationDB, corruptID ParticipationID, _ Participation) {
+			damageHeader(a, registry, corruptID, []byte{0xff, 0x00})
+		}, "undecodable"},
+		{"emptyHeader", 150, func(a *require.Assertions, registry *participationDB, corruptID ParticipationID, _ Participation) {
+			damageHeader(a, registry, corruptID, nil)
+		}, "no voting header stored"},
+		{"foreignHeader", 0, func(a *require.Assertions, registry *participationDB, corruptID ParticipationID, healthy Participation) {
+			// another key's header with a cursor ahead of the stored rows
 			foreign := votingSnapshot(healthy.Voting).Header()
 			foreign.FirstBatch += 5
 			foreign.BatchCount -= 5
-			registryExecSQL(a, registry, "UPDATE Rolling SET votingHeader=? WHERE pk=(SELECT pk FROM Keysets WHERE participationID=?)", protocol.Encode(&foreign), corruptID[:])
-		}},
+			damageHeader(a, registry, corruptID, protocol.Encode(&foreign))
+		}, "different voting key"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -267,7 +280,23 @@ func TestRegistryExcludesCorruptRecord(t *testing.T) {
 			pCorrupt := makeTestParticipation(a, 2, 1, 200, dilution)
 			corruptID, err := registry.Insert(pCorrupt)
 			a.NoError(err)
+			proto := config.Consensus[protocol.ConsensusCurrentVersion]
+			if tc.advance != 0 {
+				a.NoError(registry.DeleteExpired(tc.advance, proto))
+			}
 			a.NoError(registry.Flush(defaultTimeout))
+
+			corruptRows := func() (keysets, batches int) {
+				err := registry.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+					if err := tx.QueryRow("SELECT count(*) FROM Keysets WHERE participationID=?", corruptID[:]).Scan(&keysets); err != nil {
+						return err
+					}
+					return tx.QueryRow("SELECT count(*) FROM VotingBatches WHERE pk=(SELECT pk FROM Keysets WHERE participationID=?)", corruptID[:]).Scan(&batches)
+				})
+				a.NoError(err)
+				return keysets, batches
+			}
+			_, batchesBefore := corruptRows()
 
 			tc.damage(a, registry, corruptID, pHealthy)
 
@@ -275,33 +304,34 @@ func TestRegistryExcludesCorruptRecord(t *testing.T) {
 			a.True(registry.Get(corruptID).IsZero(), "corrupt record not excluded")
 			a.False(registry.Get(healthyID).IsZero(), "healthy record lost")
 
-			// re-inserting the excluded key (as loadParticipationKeys does from
-			// the .partkey file in the same startup) must replace the damaged
-			// rows with exactly the inserted copy, and must not leave a
-			// duplicate Keysets row (which would fail every flush with
-			// ErrMultipleKeysForID)
+			// re-insert the key-file copy, as loadParticipationKeys does in
+			// the same startup
 			reinsertedID, err := registry.Insert(pCorrupt)
-			a.NoError(err)
 			a.Equal(corruptID, reinsertedID)
-			a.NoError(registry.Flush(defaultTimeout))
 
-			var keysetRows, batchRows int
-			err = registry.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-				if err := tx.QueryRow("SELECT count(*) FROM Keysets WHERE participationID=?", corruptID[:]).Scan(&keysetRows); err != nil {
-					return err
-				}
-				return tx.QueryRow("SELECT count(*) FROM VotingBatches WHERE pk=(SELECT pk FROM Keysets WHERE participationID=?)", corruptID[:]).Scan(&batchRows)
-			})
+			keysets, batches := corruptRows()
+			a.Equal(1, keysets, "duplicate Keysets row after re-insert")
+			if tc.refused != "" {
+				// refused: the copy is not usable from the cache, the stored
+				// rows are untouched, and a reload keeps the record excluded,
+				// so no retired round is signable
+				a.ErrorContains(err, tc.refused)
+				a.True(registry.Get(corruptID).IsZero(), "rejected copy usable from the cache")
+				a.Equal(batchesBefore, batches, "stored rows replaced despite an unusable header")
+				a.NoError(registry.Flush(defaultTimeout))
+				a.NoError(registry.initializeCache())
+				a.True(registry.Get(corruptID).IsZero(), "older copy resurrected the excluded record")
+				a.False(registry.Get(healthyID).IsZero())
+				return
+			}
+
+			// replaced with exactly the inserted copy, and the next round's
+			// deletion flush works for every key
 			a.NoError(err)
-			a.Equal(1, keysetRows, "duplicate Keysets row after re-insert")
-			a.Equal(len(pCorrupt.Voting.Batches), batchRows, "re-inserted copy not stored intact")
+			a.Equal(len(pCorrupt.Voting.Batches), batches, "re-inserted copy not stored intact")
 			a.Equal(votingSnapshot(pCorrupt.Voting).Header(), registryReadVotingHeader(a, registry, corruptID))
-
-			// the next round's deletion flush works for every key
-			proto := config.Consensus[protocol.ConsensusCurrentVersion]
 			a.NoError(registry.DeleteExpired(1, proto))
 			a.NoError(registry.Flush(defaultTimeout))
-
 			a.NoError(registry.initializeCache())
 			a.False(registry.Get(corruptID).IsZero(), "re-inserted record not restored")
 			a.False(registry.Get(healthyID).IsZero(), "healthy record lost after re-insert")

@@ -1007,9 +1007,12 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 		return account.ParticipationID{}, fmt.Errorf("cannot install partkey with missing (zero) parent address")
 	}
 
-	// Tell the AccountManager about the Participation (dupes don't matter) so we ignore the return value
+	// Tell the AccountManager about the Participation.
 	// This is ephemeral since we are deleting the file after this function is done
-	added := node.accountManager.AddParticipation(partkey, true)
+	added, err := node.accountManager.AddParticipation(partkey, true)
+	if err != nil {
+		return account.ParticipationID{}, err
+	}
 	if !added {
 		return account.ParticipationID{}, fmt.Errorf("ParticipationRegistry: cannot register duplicate participation key")
 	}
@@ -1089,7 +1092,10 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 			// are being store to the registry in that point
 			// These files are not ephemeral and must be deleted eventually since
 			// this function is called to load files located in the node on startup
-			added := node.accountManager.AddParticipation(part, false)
+			added, err := node.accountManager.AddParticipation(part, false)
+			if err != nil {
+				node.log.Warnf("Participation key %s was not added: %v", info.Name(), err)
+			}
 			if !added {
 				part.Close()
 				continue
