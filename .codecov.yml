@@ -1,15 +1,42 @@
 codecov:
   require_ci_to_pass: yes
 
-flags:
-  full_coverage:
-    joined: false
+# Only reports measured with -coverpkg across all packages are uploaded here;
+# coverage taken without it counts just a package's own tests and is not
+# comparable. See .github/workflows/pr-coverage.yml.
 
+# The entries below the generated-code ones mirror what scripts/coverpkg.sh
+# leaves out of the measurement: command line programs, build and debug tools,
+# the e2e tree, and packages that only support other packages' tests. Those
+# produce no coverage data at all, so listing them keeps the decision visible
+# rather than leaving the files to go quietly uncounted. Change the two together.
 ignore:
   - "**/*_gen.go"
   - "**/*_gen_test.go"
   - "**/generated"
   - "**/*_string.go"  # ignore stringer-generated code
+  - "cmd/**"
+  - "tools/**"
+  - "test/**"
+  - "config/defaultsGenerator/**"
+  - "agreement/agreementtest/**"
+  - "components/mocks/**"
+  - "daemon/algod/api/server/common/test/**"
+  - "daemon/algod/api/server/v2/test/**"
+  - "data/basics/testing/**"
+  - "data/datatest/**"
+  - "data/txntest/**"
+  - "ledger/simulation/testing/**"
+  - "ledger/store/testing/**"
+  - "ledger/testing/**"
+  - "network/p2p/testing/**"
+  - "protocol/test/**"
+
+comment:
+  # Project coverage moves with the file set as much as with the tests. Report
+  # the change under review instead.
+  hide_project_coverage: true
+  layout: "condensed_header, condensed_files, condensed_footer"
 
 coverage:
   status:
