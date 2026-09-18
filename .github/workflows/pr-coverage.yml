@@ -107,18 +107,44 @@ jobs:
       - name: Setup test environment
         uses: ./.github/actions/setup-test
       - name: Run tests
+        id: tests
         uses: ./.github/actions/unit-tests
         with:
           parallel: '1'
           coverage: 'true'
+      - name: Keep this partition's coverage data
+        uses: actions/upload-artifact@v4
+        with:
+          name: covdata-${{ matrix.partition_id }}
+          path: ${{ steps.tests.outputs.covdata-dir }}
+          if-no-files-found: error
+          retention-days: 1
+
+  upload:
+    needs: [authorize, coverage]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout the pull request
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.authorize.outputs.sha }}
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+      - name: Collect every partition's coverage data
+        uses: actions/download-artifact@v4
+        with:
+          pattern: covdata-*
+          path: covdata
+      - name: Build one profile from all of them
+        # This job only runs when every partition succeeded, so whatever the
+        # download produced is the whole run.
+        run: |
+          mapfile -t DIRS < <(find covdata -mindepth 1 -maxdepth 1 -type d | sort)
+          ./scripts/merge_coverage.sh ./coverage.txt "${DIRS[@]}"
       - name: Upload coverage
-        if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
-        env:
-          # The job sets CIRCLECI for the tests; the uploader would otherwise
-          # detect the wrong CI.
-          GITHUB_ACTIONS: True
-          CIRCLECI: ""
         with:
           token: ${{ env.CODECOV_TOKEN }}
           files: ./coverage.txt
@@ -127,10 +153,10 @@ jobs:
           override_commit: ${{ needs.authorize.outputs.sha }}
           override_branch: ${{ needs.authorize.outputs.branch }}
           override_pr: ${{ github.event.issue.number }}
-          fail_ci_if_error: true  # the upload is the point of this job
+          fail_ci_if_error: true  # the upload is the point of this workflow
 
   report:
-    needs: [authorize, coverage]
+    needs: [authorize, coverage, upload]
     if: ${{ always() && needs.authorize.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
@@ -139,7 +165,7 @@ jobs:
       - name: React with the outcome
         env:
           GH_TOKEN: ${{ github.token }}
-          RESULT: ${{ needs.coverage.result }}
+          RESULT: ${{ needs.upload.result }}
         run: |
           if [[ "$RESULT" == "success" ]]; then
             CONTENT=rocket
@@ -150,7 +176,7 @@ jobs:
             "repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
             -f content="$CONTENT"
       - name: Say so if it failed
-        if: ${{ needs.coverage.result != 'success' }}
+        if: ${{ needs.upload.result != 'success' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

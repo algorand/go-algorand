@@ -14,13 +14,18 @@ inputs:
     required: false
     default: ''
   coverage:
-    description: 'Measure coverage across every package scripts/coverpkg.sh names, into ./coverage.txt'
+    description: 'Measure coverage across every package scripts/coverpkg.sh names'
     required: false
     default: 'false'
+outputs:
+  covdata-dir:
+    description: 'Raw coverage data, for the job that merges every partition into one report'
+    value: ${{ steps.run.outputs.covdata-dir }}
 runs:
   using: 'composite'
   steps:
     - name: Run tests
+      id: run
       shell: bash
       env:
         SHORT: ${{ inputs.short }}
@@ -29,6 +34,8 @@ runs:
         COVERAGE: ${{ inputs.coverage }}
         COVERAGE_DIR: ${{ runner.temp }}/covdata
       run: |
+        echo "covdata-dir=$COVERAGE_DIR" >> "$GITHUB_OUTPUT"
+
         PACKAGE_NAMES=$(go list ./... | grep -v /go-algorand/test/ | tr '\n' ' ')
 
         SHORTTEST=""
@@ -60,8 +67,3 @@ runs:
           "${COVER_FLAGS[@]}" \
           $PACKAGE_NAMES \
           "${COVER_ARGS[@]}"
-    - name: Merge coverage data
-      # Also after a failed run, so partial coverage is still reported.
-      if: ${{ inputs.coverage == 'true' && !cancelled() }}
-      shell: bash
-      run: ./scripts/merge_coverage.sh "${{ runner.temp }}/covdata" ./coverage.txt

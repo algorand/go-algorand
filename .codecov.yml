@@ -37,7 +37,6 @@ comment:
   # the change under review instead.
   hide_project_coverage: true
   layout: "condensed_header, condensed_files, condensed_footer"
-  after_n_builds: 6  # one report per test partition
 
 coverage:
   status:

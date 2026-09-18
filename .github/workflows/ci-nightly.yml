@@ -107,6 +107,7 @@ jobs:
       - name: Configure development environment
         run: ./scripts/configure_dev.sh
       - name: Run tests
+        id: tests
         uses: ./.github/actions/unit-tests
         with:
           parallel: '1'
@@ -134,19 +135,14 @@ jobs:
           name: test-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: ~/test_results
           retention-days: 7
-      - name: Upload coverage
-        # Only upload coverage from ubuntu-24.04 platform
-        if: ${{ matrix.platform == 'ubuntu-24.04' && !cancelled() }}
-        uses: codecov/codecov-action@v7
-        env:
-          GITHUB_ACTIONS: True
-          CIRCLECI: ""
+      - name: Keep this partition's coverage data
+        if: ${{ matrix.platform == 'ubuntu-24.04' && success() }}
+        uses: actions/upload-artifact@v4
         with:
-          token: ${{ env.CODECOV_TOKEN }}
-          files: ./coverage.txt
-          disable_search: true  # coverage.txt is the only report we want
-          flags: unit
-          fail_ci_if_error: false
+          name: covdata-${{ matrix.partition_id }}
+          path: ${{ steps.tests.outputs.covdata-dir }}
+          if-no-files-found: error
+          retention-days: 1
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
@@ -154,6 +150,35 @@ jobs:
           file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_test_nightly/${{ matrix.partition_id }}/results.xml
           token: ${{ env.CODECOV_TOKEN }}
           fail_ci_if_error: false
+
+  coverage_nightly:
+    needs: test_nightly
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+      - name: Collect every partition's coverage data
+        uses: actions/download-artifact@v4
+        with:
+          pattern: covdata-*
+          path: covdata
+      - name: Build one profile from all of them
+        # This job only runs when every partition succeeded, so whatever the
+        # download produced is the whole run.
+        run: |
+          mapfile -t DIRS < <(find covdata -mindepth 1 -maxdepth 1 -type d | sort)
+          ./scripts/merge_coverage.sh ./coverage.txt "${DIRS[@]}"
+      - name: Upload coverage
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ env.CODECOV_TOKEN }}
+          files: ./coverage.txt
+          disable_search: true  # coverage.txt is the only report we want
+          flags: unit
+          # This is the baseline every pull request is compared against, so a
+          # failed upload fails the job rather than leaving a commit uncovered.
+          fail_ci_if_error: true
 
   integration_nightly:
     needs: [build]

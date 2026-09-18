@@ -144,11 +144,11 @@ cover:
 	rm -rf $(COVDATA_DIR) && mkdir -p $(COVDATA_DIR)
 ifeq ($(PACKAGE),)
 	$(GOTESTCOMMAND) $(GOTAGS) -cover -covermode=atomic -coverpkg=$(COVERPKG_PACKAGES) $(UNIT_TEST_SOURCES) -args -test.gocoverdir=$(COVDATA_DIR)
-	./scripts/merge_coverage.sh $(COVDATA_DIR) cover.out
+	./scripts/merge_coverage.sh cover.out $(COVDATA_DIR)
 else
 	cd $(PACKAGE); \
 	$(GOTESTCOMMAND) $(GOTAGS) -cover -covermode=atomic -coverpkg=$$( (go list -f '{{ join .Deps "\n" }}' ./...; go list -f '{{ join .TestImports "\n" }}' ./...) | grep 'github.com/algorand/go-algorand' | egrep -v '/go-algorand/(test|debug|cmd|config/defaultsGenerator|tools)' | egrep -v '(test|testing|mocks|mock)$$' | sort | uniq | paste -sd ',' -) ./... -args -test.gocoverdir=$(COVDATA_DIR); \
-	$(CURDIR)/scripts/merge_coverage.sh $(COVDATA_DIR) cover.out; \
+	$(CURDIR)/scripts/merge_coverage.sh cover.out $(COVDATA_DIR); \
 	go tool cover -html cover.out
 endif
 
