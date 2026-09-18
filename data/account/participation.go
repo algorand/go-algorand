@@ -192,19 +192,26 @@ func (part PersistedParticipation) DeleteOldKeys(current basics.Round, proto con
 	part.Voting.DeleteBeforeFineGrained(basics.OneTimeIDForRound(current, keyDilution), keyDilution)
 
 	errorCh := make(chan error, 1)
-	deleteOldKeys := func(encodedVotingSecrets []byte) {
+	deleteOldKeys := func() {
 		errorCh <- part.Store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-			_, err := tx.Exec("UPDATE ParticipationAccount SET voting=?", encodedVotingSecrets)
+			// compare the stored header against memory and write only the
+			// transition instead of rewriting the whole keyset
+			stored, err := readVotingHeader(tx, partkeyFileVotingTarget)
 			if err != nil {
-				return fmt.Errorf("Participation.DeleteOldKeys: failed to update account: %v", err)
+				// Fail closed: without the stored cursor there is no way to
+				// tell whether memory lags storage, and rewriting from memory
+				// could resurrect keys the file already retired.
+				return fmt.Errorf("Participation.DeleteOldKeys: %v; refusing to rewrite voting rows from memory", err)
+			}
+			err = syncVotingRows(tx, partkeyFileVotingTarget, stored, votingSnapshot(part.Voting))
+			if err != nil {
+				return fmt.Errorf("Participation.DeleteOldKeys: %v", err)
 			}
 			return nil
 		})
 		close(errorCh)
 	}
-	voting := part.Voting.Snapshot()
-	encodedVotingSecrets := protocol.Encode(&voting)
-	go deleteOldKeys(encodedVotingSecrets)
+	go deleteOldKeys()
 	return errorCh
 }
 
@@ -280,8 +287,9 @@ func (part PersistedParticipation) PersistWithSecrets() error {
 // Persist writes a Participation out to a database on the disk
 func (part PersistedParticipation) Persist() error {
 	rawVRF := protocol.Encode(part.VRF)
-	voting := part.Voting.Snapshot()
-	rawVoting := protocol.Encode(&voting)
+	voting := votingSnapshot(part.Voting)
+	votingHeader := voting.Header()
+	rawVotingHeader := protocol.Encode(&votingHeader)
 	rawStateProof := protocol.Encode(part.StateProofSecrets)
 
 	err := part.Store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
@@ -290,12 +298,13 @@ func (part PersistedParticipation) Persist() error {
 			return fmt.Errorf("failed to install database: %w", err)
 		}
 
-		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, voting, firstValid, lastValid, keyDilution, stateProof) VALUES (?, ?, ?, ?, ?, ?,?)",
-			part.Parent[:], rawVRF, rawVoting, part.FirstValid, part.LastValid, part.KeyDilution, rawStateProof)
+		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, votingHeader, firstValid, lastValid, keyDilution, stateProof) VALUES (?, ?, ?, ?, ?, ?, ?)",
+			part.Parent[:], rawVRF, rawVotingHeader, part.FirstValid, part.LastValid, part.KeyDilution, rawStateProof)
 		if err != nil {
 			return fmt.Errorf("failed to insert account: %w", err)
 		}
-		return nil
+
+		return insertVotingRows(tx, partkeyFileVotingTarget, voting)
 	})
 
 	if err != nil {

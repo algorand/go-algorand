@@ -1002,7 +1002,8 @@ var changeOnlineCmd = &cobra.Command{
 				reportErrorf("Cannot open partkey %s: %v\n", partKeyFile, err)
 			}
 
-			partkey, err := algodAcct.RestoreParticipation(partdb)
+			// read-only: do not migrate the file as a side effect of a status change
+			partkey, err := algodAcct.RestoreParticipationUnmigrated(partdb)
 			if err != nil {
 				reportErrorf("Cannot load partkey %s: %v\n", partKeyFile, err)
 			}

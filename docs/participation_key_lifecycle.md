@@ -70,9 +70,42 @@ Using **algokey** a set of keys can be generated with the command:
 algokey part generate --first 35000000 --last 36000000 --parent <account-address> --keyfile keys.db
 ```
 
-This creates a SQLite DB file named **keys.db**. The schema is pretty basic,
-consisting of BLOBs for voting keys. State proof keys are also included and are
-a bit more involved in their storage pattern.
+This creates a SQLite DB file named **keys.db**. Metadata and a small header
+describing the voting keyset (its public key, deletion cursor, and subkey row
+counts, in the **votingHeader** column) live in a single-row table, while each
+ephemeral voting subkey is stored as its own row (tables
+**VotingBatches**/**VotingOffsets**). This row-per-subkey layout means the
+per-round forward-security deletion of used keys is a small row delete plus a
+header update instead of a rewrite of the whole keyset; the header alone
+determines which rows must exist, so missing rows are detected as corruption.
+State proof keys follow the same row-per-key pattern in their own table.
+
+Files created by older releases (schema version 3) stored the whole voting
+keyset as one BLOB in a **voting** column; the migration converts it to the
+header and rows and drops that column, so no consumed subkey lingers in the
+file. **algod** migrates such a file in place when it loads it
+at startup (and migrates the copy it receives through the REST install
+endpoint), as does `algokey part reparent`; the read-only commands
+(`algokey part info`, `algokey part keyreg --keyfile`,
+`goal account changeonlinestatus --partkeyfile`) read the file as-is without
+migrating it. Once a file is migrated, older releases cannot read it (the node
+renames such files to `*.old` and skips them); rolling back to an older
+release requires a pre-upgrade backup of the file, or generating and
+registering fresh keys. Schema versions 1 and 2 predate state proofs — any
+key stored in such a file expired years ago — and are no longer readable; the
+node renames them to `*.old` and skips them as well.
+
+To rehearse the migration of a version 3 file without touching the original —
+and to see how long algod will spend doing it at startup — use:
+```
+algokey part migrate --keyfile keys.db
+```
+This writes a migrated copy to **keys.db.new** (taken as an atomic SQLite
+snapshot, so it is consistent even if algod has the file open), prints the
+pure migration time, and validates the migrated keys — including the state
+proof secret keys — against the original (skippable with `--no-validation`).
+If algod advances the keys while the validation is running, the comparison
+can report a spurious mismatch; prefer running it against a stopped node.
 
 Similar functionality is built into **goal** along with convenience methods to:
 * Generate and install.
@@ -118,7 +151,14 @@ votes are cast for the same account causing both to be ignored.
 ## Key Storage
 
 Once installed keys are stored in the **Participation Registry**. This is a
-service that wraps a SQLite file for storage. Once installed, keys are assigned
+service that wraps a SQLite file for storage. Like the key files, the registry
+stores each ephemeral voting subkey as its own row (tables
+**VotingBatches**/**VotingOffsets**) described by a **votingHeader** column, so
+the per-round deletion of used keys writes only the consumed rows and the
+header. A registry created by an older release is
+upgraded automatically at node startup; older releases refuse to open the
+upgraded registry, so rolling back requires deleting **partregistry.sqlite**
+and re-installing the keys. Once installed, keys are assigned
 an ID, which is referred to as **<participation-ID>** below. The ID is a hash
 built from parts of the participation key metadata. There are additional Admin
 API endpoints available to manage the registry:

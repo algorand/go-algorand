@@ -20,6 +20,7 @@ package account
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -134,13 +135,52 @@ func (root Root) Address() basics.Address {
 }
 
 // RestoreParticipation restores a Participation from a database
-// handle.
+// handle. The file is migrated to the latest schema version first.
 func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err error) {
-	var rawParent, rawVRF, rawVoting, rawStateProof []byte
-
 	err = Migrate(store)
 	if err != nil {
-		return
+		return PersistedParticipation{}, err
+	}
+
+	return restoreParticipationAtVersion(store, PartTableSchemaVersion)
+}
+
+// ErrCorruptedVotingData is returned when a participation file's voting data
+// is corrupt: an undecodable voting header, or subkey rows inconsistent with
+// it (missing, extra, or misattributed rows).  Callers may quarantine
+// such a file the same way an unsupported-schema file is quarantined.
+var ErrCorruptedVotingData = errors.New("participation file voting data is corrupt")
+
+// RestoreParticipationUnmigrated restores a Participation without migrating
+// the file, reading whichever supported schema version (3 or 4) it is at.
+// This keeps the file byte-identical, e.g. for validating a migration
+// against the original.
+//
+// The returned value must be treated as read-only: the mutating helpers
+// (DeleteOldKeys, Persist, PersistNewParent) assume the latest schema and
+// fail on an older store.
+func RestoreParticipationUnmigrated(store db.Accessor) (PersistedParticipation, error) {
+	version, err := PartkeySchemaVersion(store)
+	if err != nil {
+		return PersistedParticipation{}, err
+	}
+	if version != PartTableSchemaVersion && version != PartTableSchemaVersion-1 {
+		return PersistedParticipation{}, ErrUnsupportedSchema
+	}
+	return restoreParticipationAtVersion(store, version)
+}
+
+func restoreParticipationAtVersion(store db.Accessor, version int) (acc PersistedParticipation, err error) {
+	var rawParent, rawVRF, rawVoting, rawStateProof []byte
+	var batches, offsets []crypto.KeyedSubkey
+	var offsetBatches []uint64
+
+	// schema version 3 stores the whole voting secrets in the "voting" column;
+	// version 4 stores a header in "votingHeader" plus subkey rows
+	rowOriented := version >= PartTableSchemaVersionVotingSplit
+	votingColumn := "voting"
+	if rowOriented {
+		votingColumn = "votingHeader"
 	}
 
 	err = store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
@@ -151,14 +191,21 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 			return fmt.Errorf("RestoreParticipation: could not query storage: %v", err1)
 		}
 		if nrows != 1 {
-			logging.Base().Infof("RestoreParticipation: state not found (n = %v)", nrows)
+			return fmt.Errorf("RestoreParticipation: expected exactly one account row, found %d", nrows)
 		}
 
-		row = tx.QueryRow("select parent, vrf, voting, firstValid, lastValid, keyDilution, stateProof from ParticipationAccount")
+		row = tx.QueryRow("select parent, vrf, " + votingColumn + ", firstValid, lastValid, keyDilution, stateProof from ParticipationAccount")
 
 		err1 = row.Scan(&rawParent, &rawVRF, &rawVoting, &acc.FirstValid, &acc.LastValid, &acc.KeyDilution, &rawStateProof)
 		if err1 != nil {
 			return fmt.Errorf("RestoreParticipation: could not read account raw data: %v", err1)
+		}
+
+		if rowOriented {
+			batches, offsets, offsetBatches, err1 = readVotingRows(tx, partkeyFileVotingTarget)
+			if err1 != nil {
+				return fmt.Errorf("RestoreParticipation: could not read voting subkey rows: %v", err1)
+			}
 		}
 
 		copy(acc.Parent[:32], rawParent)
@@ -176,10 +223,21 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 		return PersistedParticipation{}, err
 	}
 
-	acc.Voting = &crypto.OneTimeSignatureSecrets{}
-	err = protocol.Decode(rawVoting, acc.Voting)
-	if err != nil {
-		return PersistedParticipation{}, err
+	if rowOriented {
+		hdr, herr := decodeVotingHeader(rawVoting)
+		if herr != nil {
+			return PersistedParticipation{}, fmt.Errorf("RestoreParticipation: %w: undecodable voting header: %v", ErrCorruptedVotingData, herr)
+		}
+		acc.Voting, err = votingFromRows(hdr, batches, offsets, offsetBatches)
+		if err != nil {
+			return PersistedParticipation{}, fmt.Errorf("RestoreParticipation: %w", err)
+		}
+	} else {
+		acc.Voting = &crypto.OneTimeSignatureSecrets{}
+		err = protocol.Decode(rawVoting, acc.Voting)
+		if err != nil {
+			return PersistedParticipation{}, err
+		}
 	}
 
 	if len(rawStateProof) == 0 {

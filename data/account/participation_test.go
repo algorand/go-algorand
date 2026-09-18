@@ -36,7 +36,7 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-var partableColumnNames = [...]string{"parent", "vrf", "voting", "stateProof", "firstValid", "lastValid", "keyDilution"}
+var partableColumnNames = [...]string{"parent", "vrf", "votingHeader", "stateProof", "firstValid", "lastValid", "keyDilution"}
 
 func TestParticipation_NewDB(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -203,55 +203,43 @@ func TestRetrieveFromDB(t *testing.T) {
 
 }
 
-func TestRetrieveFromDBAtVersion1(t *testing.T) {
+// TestRetrieveFromDBAtUnsupportedVersions verifies pre-state-proof schema
+// versions (1 and 2) are rejected rather than migrated: any key stored in
+// such a file expired years ago.
+func TestRetrieveFromDBAtUnsupportedVersions(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
 	ppart := setupkeyWithNoDBS(t, a)
-	_, rootDB, partDB := createTestDBs(a, t.Name())
-	defer closeDBS(rootDB, partDB)
-
 	part := ppart.Participation
-	a.NoError(setupTestDBAtVer1(partDB, part))
 
-	retrivedPart, err := RestoreParticipation(partDB)
-	a.NoError(err)
-	assertionForRestoringFromDBAtLowVersion(a, retrivedPart)
-	assertStateProofTablesExists(a, partDB)
+	setups := map[string]func(db.Accessor, Participation) error{
+		"v1": setupTestDBAtVer1,
+		"v2": setupTestDBAtVer2,
+	}
+	for name, setup := range setups {
+		_, rootDB, partDB := createTestDBs(a, t.Name()+name)
 
-	retrivedPart, err = RestoreParticipationWithSecrets(partDB)
-	a.NoError(err)
-	assertionForRestoringFromDBAtLowVersion(a, retrivedPart)
-	assertStateProofTablesExists(a, partDB)
-}
+		a.NoError(setup(partDB, part))
 
-func TestRetrieveFromDBAtVersion2(t *testing.T) {
-	partitiontest.PartitionTest(t)
+		_, err := RestoreParticipation(partDB)
+		a.ErrorIs(err, ErrUnsupportedSchema, name)
+		_, err = RestoreParticipationWithSecrets(partDB)
+		a.ErrorIs(err, ErrUnsupportedSchema, name)
+		_, err = RestoreParticipationUnmigrated(partDB)
+		a.ErrorIs(err, ErrUnsupportedSchema, name)
 
-	a := require.New(t)
+		// the rejected file was not modified
+		versions, err := getSchemaVersions(partDB)
+		a.NoError(err)
+		expectedVersion := 1
+		if name == "v2" {
+			expectedVersion = 2
+		}
+		a.Equal(expectedVersion, versions[PartTableSchemaName], name)
 
-	ppart := setupkeyWithNoDBS(t, a)
-	_, rootDB, partDB := createTestDBs(a, t.Name())
-	defer closeDBS(rootDB, partDB)
-
-	part := ppart.Participation
-	a.NoError(setupTestDBAtVer2(partDB, part))
-
-	retrivedPart, err := RestoreParticipation(partDB)
-	a.NoError(err)
-	assertionForRestoringFromDBAtLowVersion(a, retrivedPart)
-	assertStateProofTablesExists(a, partDB)
-	versions, err := getSchemaVersions(partDB)
-	a.NoError(err)
-	a.Equal(versions[PartTableSchemaName], PartTableSchemaVersion)
-
-	retrivedPart, err = RestoreParticipationWithSecrets(partDB)
-	a.NoError(err)
-	assertionForRestoringFromDBAtLowVersion(a, retrivedPart)
-	assertStateProofTablesExists(a, partDB)
-	versions, err = getSchemaVersions(partDB)
-	a.NoError(err)
-	a.Equal(versions[PartTableSchemaName], PartTableSchemaVersion)
+		closeDBS(rootDB, partDB)
+	}
 }
 
 func TestKeyRegCreation(t *testing.T) {
@@ -272,49 +260,6 @@ func closeDBS(dbAccessor ...db.Accessor) {
 	for _, accessor := range dbAccessor {
 		accessor.Close()
 	}
-}
-
-func assertStateProofTablesExists(a *require.Assertions, store db.Accessor) {
-	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		_, err := tx.Exec("select count(*) From StateProofKeys;")
-		return err
-	})
-	a.NoError(err)
-
-}
-func assertionForRestoringFromDBAtLowVersion(a *require.Assertions, retrivedPart PersistedParticipation) {
-	a.NotNil(retrivedPart)
-	a.Nil(retrivedPart.StateProofSecrets)
-}
-
-func TestMigrateFromVersion1(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	a := require.New(t)
-	part := setupkeyWithNoDBS(t, a).Participation
-
-	_, rootDB, partDB := createTestDBs(a, t.Name())
-	defer closeDBS(rootDB, partDB)
-
-	a.NoError(setupTestDBAtVer1(partDB, part))
-	a.NoError(Migrate(partDB))
-
-	a.NoError(testDBContainsAllColumns(partDB))
-}
-
-func TestMigrationFromVersion2(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	a := require.New(t)
-	part := setupkeyWithNoDBS(t, a).Participation
-
-	_, rootDB, partDB := createTestDBs(a, t.Name())
-	defer closeDBS(rootDB, partDB)
-
-	a.NoError(setupTestDBAtVer2(partDB, part))
-	a.NoError(Migrate(partDB))
-
-	a.NoError(testDBContainsAllColumns(partDB))
 }
 
 func testDBContainsAllColumns(partDB db.Accessor) error {
