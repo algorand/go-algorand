@@ -36,23 +36,8 @@ comment:
   # Project coverage moves with the file set as much as with the tests. Report
   # the change under review instead.
   hide_project_coverage: true
-  layout: "condensed_header, components, condensed_files, condensed_footer"
+  layout: "condensed_header, condensed_files, condensed_footer"
   after_n_builds: 6  # one report per test partition
-
-component_management:
-  individual_components:
-    - component_id: ledger
-      paths: ["ledger/**"]
-    - component_id: agreement
-      paths: ["agreement/**"]
-    - component_id: avm
-      paths: ["data/transactions/logic/**"]
-    - component_id: network
-      paths: ["network/**"]
-    - component_id: algod_api
-      paths: ["daemon/algod/api/**"]
-    - component_id: catchup
-      paths: ["catchup/**", "rpcs/**"]
 
 coverage:
   status:
