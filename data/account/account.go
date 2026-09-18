@@ -175,8 +175,8 @@ func restoreParticipationAtVersion(store db.Accessor, version int) (acc Persiste
 	var batches, offsets []crypto.KeyedSubkey
 	var offsetBatches []uint64
 
-	// schema version 3 stores the whole voting secrets in the "voting"
-	// column; version 4 stores a header in "votingHeader" plus subkey rows
+	// schema version 3 stores the whole voting secrets in the "voting" column;
+	// version 4 stores a header in "votingHeader" plus subkey rows
 	rowOriented := version >= PartTableSchemaVersionVotingSplit
 	votingColumn := "voting"
 	if rowOriented {

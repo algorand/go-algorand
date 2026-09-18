@@ -47,7 +47,7 @@ func partInstallDatabase(tx *sql.Tx) error {
 
 		--* participation keys
 		vrf BLOB,         --*  msgpack encoding of ParticipationAccount.vrf
-		votingHeader BLOB, --*  msgpack encoding of crypto.OneTimeSignatureSecretsHeader (schema v3 held the whole voting secrets in a "voting" column)
+		votingHeader BLOB, --*  msgpack encoding of crypto.OneTimeSignatureSecretsHeader
 
 		firstValid INTEGER,
 		lastValid INTEGER,
@@ -122,11 +122,6 @@ func partMigrate(tx *sql.Tx) (err error) {
 }
 
 func updateDB(tx *sql.Tx, partVersion int) (int, error) {
-	// Schema versions 1 and 2 predate state proofs; any key stored in such a
-	// file expired years ago and cannot be registered on today's network, so
-	// those versions are no longer migrated (partMigrate reports them as
-	// ErrUnsupportedSchema).
-
 	if partVersion == 3 {
 		err := migrateVotingBlobToRows(tx)
 		if err != nil {
