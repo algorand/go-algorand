@@ -4,6 +4,7 @@ on:
     branches:
       - master
   pull_request:
+  workflow_dispatch:
 jobs:
   build-windows:
     runs-on: windows-2022
