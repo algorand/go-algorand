@@ -171,8 +171,7 @@ elif [ "${OS}" = "darwin" ]; then
     fi
 elif [ "${OS}" = "windows" ]; then
     # Update pacman
-    $msys2 pacman -Syu
-    if ! $msys2 pacman -S --disable-download-timeout --noconfirm git automake autoconf m4 libtool make mingw-w64-x86_64-gcc mingw-w64-x86_64-python mingw-w64-x86_64-jq unzip procps; then
+    if ! $msys2 pacman -S --disable-download-timeout --noconfirm git automake autoconf m4 libtool make mingw-w64-x86_64-gcc mingw-w64-x86_64-python mingw-w64-ucrt-x86_64-jq unzip procps; then
         echo "Error installing pacman dependencies"
         exit 1
     fi
