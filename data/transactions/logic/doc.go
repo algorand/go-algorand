@@ -35,7 +35,7 @@ type OpDesc struct {
 // argAccess documents the rule shared by every opcode that reads a LogicSig
 // argument. It is repeated on each of them because they are documented
 // separately and a reader may meet any one of them first.
-const argAccess = "LogicSig arguments are supplied outside of any signature, and are part of neither the transaction ID nor the group hash, so a third party can alter them while a transaction is in flight. A LogicSig may therefore carry no argument it does not read: none at all above the highest index it reads, and none below that index unless the argument is empty or is read."
+const argAccess = "LogicSig arguments are supplied outside of any signature, and are part of neither the transaction ID nor the group hash, so a third party can alter them while a transaction is in flight. From AVM v14 a LogicSig may therefore carry no argument it does not read: none at all above the highest index it reads, and none below that index unless the argument is empty or is read."
 
 var opDescByName = map[string]OpDesc{
 	"err": {"Fail immediately.", "", nil, ""},

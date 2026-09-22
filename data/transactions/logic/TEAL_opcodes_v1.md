@@ -270,7 +270,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Nth LogicSig argument
 - Mode: Signature
 
-LogicSig arguments are supplied outside of any signature, and are part of neither the transaction ID nor the group hash, so a third party can alter them while a transaction is in flight. A LogicSig may therefore carry no argument it does not read: none at all above the highest index it reads, and none below that index unless the argument is empty or is read.
+LogicSig arguments are supplied outside of any signature, and are part of neither the transaction ID nor the group hash, so a third party can alter them while a transaction is in flight. From AVM v14 a LogicSig may therefore carry no argument it does not read: none at all above the highest index it reads, and none below that index unless the argument is empty or is read.
 
 ## arg_0
 
@@ -279,7 +279,7 @@ LogicSig arguments are supplied outside of any signature, and are part of neithe
 - LogicSig argument 0
 - Mode: Signature
 
-LogicSig arguments are supplied outside of any signature, and are part of neither the transaction ID nor the group hash, so a third party can alter them while a transaction is in flight. A LogicSig may therefore carry no argument it does not read: none at all above the highest index it reads, and none below that index unless the argument is empty or is read.
+LogicSig arguments are supplied outside of any signature, and are part of neither the transaction ID nor the group hash, so a third party can alter them while a transaction is in flight. From AVM v14 a LogicSig may therefore carry no argument it does not read: none at all above the highest index it reads, and none below that index unless the argument is empty or is read.
 
 ## arg_1
 
@@ -288,7 +288,7 @@ LogicSig arguments are supplied outside of any signature, and are part of neithe
 - LogicSig argument 1
 - Mode: Signature
 
-LogicSig arguments are supplied outside of any signature, and are part of neither the transaction ID nor the group hash, so a third party can alter them while a transaction is in flight. A LogicSig may therefore carry no argument it does not read: none at all above the highest index it reads, and none below that index unless the argument is empty or is read.
+LogicSig arguments are supplied outside of any signature, and are part of neither the transaction ID nor the group hash, so a third party can alter them while a transaction is in flight. From AVM v14 a LogicSig may therefore carry no argument it does not read: none at all above the highest index it reads, and none below that index unless the argument is empty or is read.
 
 ## arg_2
 
@@ -297,7 +297,7 @@ LogicSig arguments are supplied outside of any signature, and are part of neithe
 - LogicSig argument 2
 - Mode: Signature
 
-LogicSig arguments are supplied outside of any signature, and are part of neither the transaction ID nor the group hash, so a third party can alter them while a transaction is in flight. A LogicSig may therefore carry no argument it does not read: none at all above the highest index it reads, and none below that index unless the argument is empty or is read.
+LogicSig arguments are supplied outside of any signature, and are part of neither the transaction ID nor the group hash, so a third party can alter them while a transaction is in flight. From AVM v14 a LogicSig may therefore carry no argument it does not read: none at all above the highest index it reads, and none below that index unless the argument is empty or is read.
 
 ## arg_3
 
@@ -306,7 +306,7 @@ LogicSig arguments are supplied outside of any signature, and are part of neithe
 - LogicSig argument 3
 - Mode: Signature
 
-LogicSig arguments are supplied outside of any signature, and are part of neither the transaction ID nor the group hash, so a third party can alter them while a transaction is in flight. A LogicSig may therefore carry no argument it does not read: none at all above the highest index it reads, and none below that index unless the argument is empty or is read.
+LogicSig arguments are supplied outside of any signature, and are part of neither the transaction ID nor the group hash, so a third party can alter them while a transaction is in flight. From AVM v14 a LogicSig may therefore carry no argument it does not read: none at all above the highest index it reads, and none below that index unless the argument is empty or is read.
 
 ## txn
 
