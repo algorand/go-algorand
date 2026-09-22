@@ -395,7 +395,7 @@ func stxnCoreChecks(gi int, groupCtx *GroupContext, batch crypto.BatchEnqueuer) 
 		return nil
 
 	case pqSig:
-		if err := s.PQsig.Verify(groupCtx.consensusParams, s.Txn, s.Authorizer()); err != nil {
+		if err := s.PQsig.BatchPrep(groupCtx.consensusParams, s.Txn, s.Authorizer(), batch); err != nil {
 			return &TxGroupError{err: fmt.Errorf("pq signature validation failed: %w", err), GroupIndex: gi, Reason: TxGroupErrorReasonSigNotWellFormed}
 		}
 		return nil
@@ -484,9 +484,8 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batch crypto.B
 		return errors.New("LogicSig should have only one type of delegation signature")
 	}
 	if !lsig.PQsig.Blank() {
-		// PQ schemes have no batch verification; verify in-place, like the top-level PQsig path.
 		program := logic.PQDelegatedProgram{Addr: txn.Authorizer(), Program: lsig.Logic}
-		if err := lsig.PQsig.Verify(groupCtx.consensusParams, program, txn.Authorizer()); err != nil {
+		if err := lsig.PQsig.BatchPrep(groupCtx.consensusParams, program, txn.Authorizer(), batch); err != nil {
 			return fmt.Errorf("pq delegated logic signature validation failed: %w", err)
 		}
 		return nil

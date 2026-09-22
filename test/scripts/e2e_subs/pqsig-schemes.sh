@@ -16,6 +16,13 @@ ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 # Easier than prefixing all of the generated files.
 cd "$TEMPDIR"
 
+echo "int 1" > pq-true.teal
+${gcmd} clerk compile pq-true.teal -o pq-true.tok
+
+# Fund accounts below one reward unit to avoid unexpected balance drift from rewards.
+FUNDING=900000
+
+# Falcon-1024 is the default scheme, so no need to specify it explicitly.
 algokey pq generate -k pq.sk > generate.out
 
 PQMNEMONIC=$(grep 'PQ private key mnemonic:' < generate.out | sed 's/PQ private key mnemonic: //')
@@ -30,8 +37,6 @@ echo "$PQADDRESS"
 algokey pq import -m "$PQMNEMONIC" -k pq-restored.sk
 cmp pq.sk pq-restored.sk
 
-# Fund pq account below one reward unit to avoid unexpected balance drift from rewards.
-FUNDING=900000
 ${gcmd} clerk send -a "${FUNDING}" -f "${ACCOUNT}" -t "${PQADDRESS}"
 
 
@@ -51,8 +56,6 @@ algokey pq sign -t enough.tx -k pq.sk -o enough-signed.tx
 ${gcmd} clerk rawsend -f enough-signed.tx
 
 ## Show that a delegated LogicSig signed by the PQ account can authorize a txn
-echo "int 1" > pq-true.teal
-${gcmd} clerk compile pq-true.teal -o pq-true.tok
 algokey pq sign-program -k pq.sk -p pq-true.tok -o pq-true.lsig
 ${gcmd} clerk send -a 7777 -f "${PQADDRESS}" -t "${ACCOUNT}" --fee 3000 -L pq-true.lsig
 
@@ -101,5 +104,36 @@ BALANCE512=$(${gcmd} account balance -a "${PQ512ADDRESS}" | awk '{ print $1 }')
 EXPECT512=$((10000000 - 6666 - 2000 - 7777 - 2000))
 if [ "$BALANCE512" -ne "$EXPECT512" ]; then
     date "+${scriptname} FAIL wanted falcon-512 balance=${EXPECT512} but got ${BALANCE512} %Y%m%d_%H%M%S"
+    false
+fi
+
+# Repeat with Ed25519 hashed account, generated with an explicit scheme. Ed25519 has no fee surcharge.
+algokey pq generate -S ed25519 -k pq-ed.sk > generate-ed.out
+
+grep 'PQ scheme: ed25519' < generate-ed.out
+EDMNEMONIC=$(grep 'PQ private key mnemonic:' < generate-ed.out | sed 's/PQ private key mnemonic: //')
+EDADDRESS=$(grep 'PQ address:' < generate-ed.out | sed 's/PQ address: //')
+
+echo "$EDMNEMONIC"
+echo "$EDADDRESS"
+
+algokey pq import -m "$EDMNEMONIC" -S ed25519 -k pq-ed-restored.sk
+cmp pq-ed.sk pq-ed-restored.sk
+algokey pq check-address "$EDADDRESS"
+
+${gcmd} clerk send -a "${FUNDING}" -f "${ACCOUNT}" -t "${EDADDRESS}"
+
+# The usual minimum fee is sufficient.
+${gcmd} clerk send -a 6666 -f "${EDADDRESS}" -t "${ACCOUNT}" --fee 1000 -o ed.tx
+algokey pq sign -t ed.tx -k pq-ed.sk -o ed-signed.tx
+${gcmd} clerk rawsend -f ed-signed.tx
+
+algokey pq sign-program -k pq-ed.sk -p pq-true.tok -o pq-ed-true.lsig
+${gcmd} clerk send -a 7777 -f "${EDADDRESS}" -t "${ACCOUNT}" --fee 1000 -L pq-ed-true.lsig
+
+BALANCEED=$(${gcmd} account balance -a "${EDADDRESS}" | awk '{ print $1 }')
+EXPECTED=$((FUNDING - 6666 - 1000 - 7777 - 1000))
+if [ "$BALANCEED" -ne "$EXPECTED" ]; then
+    date "+${scriptname} FAIL wanted ed25519 balance=${EXPECTED} but got ${BALANCEED} %Y%m%d_%H%M%S"
     false
 fi
