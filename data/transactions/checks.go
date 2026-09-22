@@ -151,10 +151,13 @@ func checkTxnGroup(n int, txn func(i int) *Transaction) error {
 // provided transaction order, and that no transaction appears twice within the
 // group.
 //
-// Both must run before the caller consults the VerifiedTransactionCache, which
-// keys entries by transaction ID: a full-group hit means the group itself was
-// verified only if the ID commits to this group and the transaction IDs within
-// it are distinct.
+// verify runs both before adding a group to the VerifiedTransactionCache, so a
+// cached entry always comes from a group that satisfied them. That matters
+// because the cache is keyed by transaction ID and records nothing about a
+// transaction's position: without the duplicate check, two transactions sharing
+// an ID but carrying different LogicSig args would collapse onto one entry. The
+// block evaluator rejects the same groups independently, through its own group
+// ID check and duplicate detection.
 func checkTxnGroupID(n int, txn func(i int) *Transaction) error {
 	if n == 0 {
 		return nil
@@ -222,8 +225,7 @@ func hashTxGroup(group TxGroup) crypto.Digest {
 	return digest
 }
 
-// CheckTxnGroupID verifies a group's ID and transaction-ID uniqueness. Callers
-// must establish both before consulting the VerifiedTransactionCache -- see
+// CheckTxnGroupID verifies a group's ID and transaction-ID uniqueness -- see
 // checkTxnGroupID.
 func CheckTxnGroupID(group []SignedTxn) error {
 	return checkTxnGroupID(len(group), func(i int) *Transaction { return &group[i].Txn })

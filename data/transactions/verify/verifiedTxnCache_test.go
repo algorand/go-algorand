@@ -742,8 +742,8 @@ func TestTxnGroupRejectsDuplicateTxid(t *testing.T) {
 // TestGetUnverifiedTransactionGroupsMalformedGroups covers groups that reuse a
 // cached group's ID: a superset ([A,B,B]), a permutation ([B,A]) and a prefix
 // ([A]). The lookup must not panic on any of them, and CheckTxnGroupID must
-// reject all three: the cache is position-blind, so callers establish group-ID
-// validity and transaction-ID uniqueness before consulting it.
+// reject all three, which is what keeps a group of these shapes from being
+// verified and cached in the first place.
 func TestGetUnverifiedTransactionGroupsMalformedGroups(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -783,7 +783,7 @@ func TestGetUnverifiedTransactionGroupsMalformedGroups(t *testing.T) {
 			err := transactions.CheckTxnGroupID(test.group)
 			var malformed *transactions.TxGroupMalformedError
 			require.ErrorAs(t, err, &malformed,
-				"the group-ID and duplicate checks must reject this before the cache is consulted")
+				"CheckTxnGroupID must reject this shape")
 			require.Equal(t, test.reason, malformed.Reason)
 		})
 	}
