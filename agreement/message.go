@@ -70,6 +70,9 @@ func decodeVote(data []byte) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := uv.wellFormed(); err != nil {
+		return nil, err
+	}
 	return uv, nil
 }
 
@@ -82,6 +85,9 @@ func decodeBundle(data []byte) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := b.wellFormed(); err != nil {
+		return nil, err
+	}
 	return b, nil
 }
 
@@ -92,6 +98,9 @@ func decodeProposal(data []byte) (any, error) {
 	var p transmittedPayload
 	err := protocol.Decode(data, &p)
 	if err != nil {
+		return nil, err
+	}
+	if err := p.PriorVote.wellFormed(); err != nil {
 		return nil, err
 	}
 
