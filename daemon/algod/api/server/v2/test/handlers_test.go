@@ -53,6 +53,7 @@ import (
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -1164,24 +1165,25 @@ func enableDeveloperAPI() postTransactionOpt {
 	}
 }
 
-func makePQSigWithAddressCompliance(t *testing.T, compliant bool) (crypto.FalconSigner, basics.Address, transactions.PQSig) {
+func makePQSigWithAddressCompliance(t *testing.T, compliant bool) (basics_testing.FalconSigner, basics.Address, transactions.PQSig) {
 	t.Helper()
 
-	var seed crypto.FalconSeed
-	signer, err := crypto.GenerateFalconSigner(seed)
-	require.NoError(t, err)
-	publicKey := slices.Clone(signer.PublicKey[:])
+	// randomly choose between Falcon-512 and Falcon-1024 for the test
+	scheme := basics_testing.RandomPQTestScheme().Scheme
+	signer := basics_testing.MakeFalconSigner(t, 0, scheme)
+	publicKey := signer.PublicKey()
 
 	var salt basics.PQAddressSalt
 	var authorizer basics.Address
 	if compliant {
-		salt, authorizer, err = basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
+		var err error
+		salt, authorizer, err = basics.CanonicalPQAddressSalt(scheme, publicKey)
 		require.NoError(t, err)
 	} else {
 		found := false
 		for s := 0; s <= math.MaxUint8; s++ {
 			salt = basics.PQAddressSalt(s)
-			authorizer = basics.PQAddress(protocol.PQSchemeFalcon1024, salt, publicKey)
+			authorizer = basics.PQAddress(scheme, salt, publicKey)
 			if !authorizer.IsPQCompliant() {
 				found = true
 				break
@@ -1191,7 +1193,7 @@ func makePQSigWithAddressCompliance(t *testing.T, compliant bool) (crypto.Falcon
 	}
 
 	return signer, authorizer, transactions.PQSig{
-		Scheme:    protocol.PQSchemeFalcon1024,
+		Scheme:    scheme,
 		Salt:      salt,
 		PublicKey: publicKey,
 	}
@@ -1232,9 +1234,8 @@ func makePQDelegatedLogicSigTxnWithAddressCompliance(t *testing.T, compliant boo
 	ops, err := logic.AssembleStringWithVersion("int 1", 1)
 	require.NoError(t, err)
 
-	signature, err := signer.Sign(logic.PQDelegatedProgram{Addr: authorizer, Program: ops.Program})
+	pqSig.Signature, err = signer.Sign(logic.PQDelegatedProgram{Addr: authorizer, Program: ops.Program})
 	require.NoError(t, err)
-	pqSig.Signature = signature
 
 	txn := transactions.Transaction{
 		Type: protocol.PaymentTx,
@@ -2393,10 +2394,10 @@ func TestAppendParticipationKeys(t *testing.T) {
 	t.Run("Happy path", func(t *testing.T) {
 		// Create test object to append.
 		keys := make(account.StateProofKeys, 2)
-		testKey1 := crypto.FalconSigner{}
+		testKey1 := crypto.Falcon1024Signer{}
 		testKey1.PrivateKey[0] = 100
 
-		testKey2 := crypto.FalconSigner{}
+		testKey2 := crypto.Falcon1024Signer{}
 		testKey2.PrivateKey[0] = 101
 
 		keys[0] = merklesignature.KeyRoundPair{Round: 100, Key: &testKey1}
@@ -2472,10 +2473,10 @@ func TestAppendParticipationKeys(t *testing.T) {
 		}
 
 		keys := make(account.StateProofKeys, 2)
-		testKey1 := crypto.FalconSigner{}
+		testKey1 := crypto.Falcon1024Signer{}
 		testKey1.PrivateKey[0] = 100
 
-		testKey2 := crypto.FalconSigner{}
+		testKey2 := crypto.Falcon1024Signer{}
 		testKey2.PrivateKey[0] = 101
 
 		keys[0] = merklesignature.KeyRoundPair{Round: 100, Key: &testKey1}
