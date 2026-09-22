@@ -81,6 +81,85 @@ func makePQSigTestFixture(t *testing.T, firstSeedByte byte) pqSigTestFixture {
 	}
 }
 
+func TestLogicSigArgsRoundTrip(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	for _, args := range []LogicSigArgs{
+		nil,
+		{{}},
+		{{1}},
+		{{1, 2, 3}, {}, {4}},
+		{make([]byte, MaxLogicSigArgSize)},
+		make(LogicSigArgs, EvalMaxArgs),
+	} {
+		decoded, err := DecodeLogicSigArgs(EncodeLogicSigArgs(args))
+		require.NoError(t, err)
+		require.Equal(t, args.Len(), decoded.Len())
+		if len(args) == 0 {
+			require.Empty(t, decoded)
+			continue
+		}
+		require.Len(t, decoded, len(args))
+	}
+
+	// No arguments must be no bytes, so that "absent" and "present but empty"
+	// cannot both appear on the wire.
+	require.Empty(t, EncodeLogicSigArgs(nil))
+	require.Empty(t, EncodeLogicSigArgs(LogicSigArgs{}))
+}
+
+func TestLogicSigArgsRejectsNonCanonical(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	canonical := EncodeLogicSigArgs(LogicSigArgs{{1, 2, 3}})
+	decoded, err := DecodeLogicSigArgs(canonical)
+	require.NoError(t, err)
+	require.Equal(t, LogicSigArgs{{1, 2, 3}}, decoded)
+
+	// An empty array spells no arguments, which must be spelled as no bytes.
+	_, err = DecodeLogicSigArgs([]byte{0x90})
+	require.ErrorIs(t, err, errLogicSigArgsNotCanonical)
+
+	// Trailing bytes are not part of the arguments, so they are not canonical
+	// either, whatever they hold.
+	_, err = DecodeLogicSigArgs(append(slices.Clone(canonical), 0x00))
+	require.ErrorIs(t, err, errLogicSigArgsNotCanonical)
+
+	// array16 spelling of a length that fits in a fixarray.
+	wide := append([]byte{0xdc, 0x00, 0x01}, canonical[1:]...)
+	_, err = DecodeLogicSigArgs(wide)
+	require.ErrorIs(t, err, errLogicSigArgsNotCanonical)
+
+	_, err = DecodeLogicSigArgs([]byte{0xc1})
+	require.Error(t, err)
+}
+
+func TestLogicSigArgsDecodeBounds(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	tooMany := make(LogicSigArgs, EvalMaxArgs+1)
+	_, err := DecodeLogicSigArgs(protocol.Encode(tooMany))
+	require.Error(t, err)
+
+	tooBig := LogicSigArgs{make([]byte, MaxLogicSigArgSize+1)}
+	_, err = DecodeLogicSigArgs(protocol.Encode(tooBig))
+	require.Error(t, err)
+}
+
+// TestPQBoundsCoverLogicSig checks the PQ wire bounds against the LogicSig
+// bounds they have to cover, now that an ls-scheme PQSig carries a program as
+// its public key and that program's arguments as its signature. The crypto
+// package writes its bounds out by hand because it cannot read config/bounds,
+// whose values are filled in when config initializes, after crypto. This is the
+// check that catches the two drifting apart, so a consensus version that raises
+// MaxAbsoluteLogicSigProgramSize fails here rather than truncating a decode.
+func TestPQBoundsCoverLogicSig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	require.GreaterOrEqual(t, crypto.MaxPQPublicKeySize, bounds.MaxLogicSigMaxSize)
+	require.GreaterOrEqual(t, crypto.MaxPQSignatureSize, bounds.MaxLogicSigMaxSize)
+}
+
 func TestPQDecodeBoundsFeedSignedTxnMaxSize(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -209,6 +288,52 @@ func TestPQSigValidateEnvelope(t *testing.T) {
 
 	require.ErrorIs(t, (PQSig{}).ValidateEnvelope(fixture.proto, fixture.authorizer), errPQSigBlank)
 	require.ErrorIs(t, (PQSig{}).ValidateScheme(fixture.proto), errPQSigBlank)
+}
+
+// TestPQSigLogicSigScheme pins the split that the ls scheme depends on: its
+// envelope validates like any other PQ scheme, so the address check is shared,
+// but the generic Verify path refuses it. Callers must dispatch on the scheme
+// and evaluate the program instead.
+func TestPQSigLogicSigScheme(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	require.True(t, proto.EnablePQSchemeLogicSig)
+
+	program := []byte{0x0e, 0x81, 0x01} // #pragma version 14; pushint 1
+	salt, authorizer, err := basics.PQLogicSigAddress(program)
+	require.NoError(t, err)
+	require.True(t, authorizer.IsPQCompliant())
+
+	pqSig := PQSig{
+		Scheme:    protocol.PQSchemeLogicSig,
+		Salt:      salt,
+		PublicKey: program,
+	}
+	require.Equal(t, authorizer, pqSig.Address())
+
+	// The address check must be reachable for ls, since that is the whole
+	// authorization other than evaluating the program.
+	require.NoError(t, pqSig.ValidateEnvelope(proto, authorizer))
+
+	var wrongAuthorizer basics.Address
+	wrongAuthorizer[0] = 1
+	require.ErrorIs(t, pqSig.ValidateEnvelope(proto, wrongAuthorizer), errPQSigAuthorizerMismatch)
+
+	disabledProto := proto
+	disabledProto.EnablePQSchemeLogicSig = false
+	require.ErrorIs(t, pqSig.ValidateEnvelope(disabledProto, authorizer), crypto.ErrPQSchemeNotEnabled)
+
+	// A program's args are not signature bytes. Whatever they hold, no caller
+	// may authorize an ls account by handing them to a signature verifier.
+	withArgs := pqSig
+	withArgs.Signature = []byte("args")
+	txn := Transaction{
+		Type:             protocol.PaymentTx,
+		Header:           Header{Sender: authorizer},
+		PaymentTxnFields: PaymentTxnFields{Receiver: authorizer},
+	}
+	require.ErrorIs(t, withArgs.Verify(proto, txn, authorizer), crypto.ErrPQLogicSigNotEvaluated)
 }
 
 func TestPQSigVerify(t *testing.T) {

@@ -388,6 +388,133 @@ func TestTxnValidationPQSig(t *testing.T) {
 	requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
 }
 
+// amendTxGroupID sets the group ID that a group of more than one transaction
+// must carry.
+func amendTxGroupID(stxns []transactions.SignedTxn) []transactions.SignedTxn {
+	var group transactions.TxGroup
+	for i := range stxns {
+		group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(stxns[i].ID()))
+	}
+	groupID := crypto.HashObj(group)
+	for i := range stxns {
+		stxns[i].Txn.Group = groupID
+	}
+	return stxns
+}
+
+// makeLogicSigPQTxn builds a transaction authorized by an ls-scheme PQSig: the
+// program stands in for the public key, its encoded arguments for the
+// signature, and the address commits to both scheme and program.
+func makeLogicSigPQTxn(t *testing.T, source string, args transactions.LogicSigArgs) transactions.SignedTxn {
+	t.Helper()
+
+	ops, err := logic.AssembleString(source)
+	require.NoError(t, err)
+
+	salt, authorizer, err := basics.PQLogicSigAddress(ops.Program)
+	require.NoError(t, err)
+
+	return transactions.SignedTxn{
+		Txn: createPayTransaction(config.Consensus[protocol.ConsensusFuture].MinTxnFee, 40, 60, 1, authorizer, basics.Address{1}),
+		PQsig: transactions.PQSig{
+			Scheme:    protocol.PQSchemeLogicSig,
+			Salt:      salt,
+			PublicKey: ops.Program,
+			Signature: transactions.EncodeLogicSigArgs(args),
+		},
+	}
+}
+
+func TestTxnValidationLogicSigPQSig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dummyLedger := DummyLedgerForSignature{}
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+
+	// A program with no arguments authorizes on its own. Its empty Signature is
+	// a complete proof, not a missing one.
+	stxn := makeLogicSigPQTxn(t, "int 1", nil)
+	require.Empty(t, stxn.PQsig.Signature)
+	_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+	require.NoError(t, err)
+
+	// The arguments reach the program's arg opcodes.
+	withArgs := makeLogicSigPQTxn(t, `arg 0; byte "open"; ==`, transactions.LogicSigArgs{[]byte("open")})
+	_, err = TxnGroup([]transactions.SignedTxn{withArgs}, &blkHdr, nil, &dummyLedger)
+	require.NoError(t, err)
+
+	// Anyone may rewrite the arguments, since nothing signs them, but only the
+	// ones the program accepts get it to approve.
+	wrongArgs := withArgs
+	wrongArgs.PQsig.Signature = transactions.EncodeLogicSigArgs(transactions.LogicSigArgs{[]byte("shut")})
+	_, err = TxnGroup([]transactions.SignedTxn{wrongArgs}, &blkHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "rejected by logic")
+	requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
+
+	// A rejecting program authorizes nothing, even though its address is right.
+	reject := makeLogicSigPQTxn(t, "int 0", nil)
+	_, err = TxnGroup([]transactions.SignedTxn{reject}, &blkHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "rejected by logic")
+
+	// The address commits to the program, so another program cannot spend here.
+	swapped := stxn
+	other, err := logic.AssembleString("int 1; int 1; &&")
+	require.NoError(t, err)
+	swapped.PQsig.PublicKey = other.Program
+	_, err = TxnGroup([]transactions.SignedTxn{swapped}, &blkHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "authorizer mismatch")
+
+	// Nor does the same program under a different salt.
+	resalted := stxn
+	resalted.PQsig.Salt++
+	_, err = TxnGroup([]transactions.SignedTxn{resalted}, &blkHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "authorizer mismatch")
+
+	// Arguments must be canonically encoded, since nothing signs them and one
+	// set of arguments must not have several spellings.
+	noncanonical := stxn
+	noncanonical.PQsig.Signature = []byte{0x90} // an empty array, which is no args
+	_, err = TxnGroup([]transactions.SignedTxn{noncanonical}, &blkHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "not canonically encoded")
+
+	disabledBlkHdr := createDummyBlockHeader(protocol.ConsensusV42)
+	require.False(t, config.Consensus[disabledBlkHdr.CurrentProtocol].EnablePQSchemeLogicSig)
+	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &disabledBlkHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "not enabled")
+}
+
+// TestLogicSigPQSigBudget checks that an ls-scheme program draws on the group's
+// pooled LogicSig budget. NewSigEvalParams decides whether to allocate that pool
+// by looking for programs, and an ls transaction carries one with an empty Lsig,
+// so a pool it does not count would leave each program a fresh unpooled budget.
+func TestLogicSigPQSigBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dummyLedger := DummyLedgerForSignature{}
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	proto := config.Consensus[protocol.ConsensusFuture]
+	require.True(t, proto.EnableLogicSigCostPooling)
+
+	budget := func(cost uint64) transactions.SignedTxn {
+		return makeLogicSigPQTxn(t, fmt.Sprintf("#pragma version 6\nglobal OpcodeBudget; int %d; ==", cost), nil)
+	}
+
+	// In a group of two the pool is twice LogicSigMaxCost, less the cost of the
+	// global opcode itself. The first program sees the whole pool and the second
+	// sees what the first left, three opcodes later.
+	pooled := 2*proto.LogicSigMaxCost - 1
+	group := amendTxGroupID([]transactions.SignedTxn{budget(pooled), budget(pooled - 3)})
+	_, err := TxnGroup(group, &blkHdr, nil, &dummyLedger)
+	require.NoError(t, err)
+
+	// Had the pool not been allocated, each program would have started from a
+	// fresh LogicSigMaxCost of its own.
+	unpooled := proto.LogicSigMaxCost - 1
+	group = amendTxGroupID([]transactions.SignedTxn{budget(unpooled), budget(unpooled)})
+	_, err = TxnGroup(group, &blkHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "rejected by logic")
+}
+
 func TestTxnValidationPQSigWithAuthAddr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1796,18 +1923,6 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 	}
 	makeSignedTxnWithOrphanArgs := func(proto config.ConsensusParams, args [][]byte) transactions.SignedTxn {
 		return makeSignedTxnWithOrphanLsig(proto, transactions.LogicSig{Args: args})
-	}
-
-	amendTxGroupID := func(stxns []transactions.SignedTxn) []transactions.SignedTxn {
-		var group transactions.TxGroup
-		for i := range stxns {
-			group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(stxns[i].ID()))
-		}
-		groupID := crypto.HashObj(group)
-		for i := range stxns {
-			stxns[i].Txn.Group = groupID
-		}
-		return stxns
 	}
 
 	t.Run("v18: singleton still limited by legacy size pool", func(t *testing.T) {

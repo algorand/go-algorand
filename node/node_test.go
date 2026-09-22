@@ -33,7 +33,6 @@ import (
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	csp "github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/account"
@@ -882,10 +881,9 @@ func TestMaxSizesCorrect(t *testing.T) {
 	// a transaction carries at most one effective PQSig (top-level OR nested in the
 	// logicsig), but SignedTxnMaxSize counts both, so subtract one.
 	maxCombinedTxnSize -= uint64(transactions.PQSigMaxSize())
-	// the logicsig size is *also* an overestimate, because it thinks that the logicsig and
-	// the logicsig args can both be up to MaxLogicSigMaxSize, but that's the max for
-	// them combined, so it double counts and we have to subtract one.
-	maxCombinedTxnSize -= uint64(bounds.MaxLogicSigMaxSize)
+	// Note that the logicsig program and its args are *not* double counted. Once
+	// transaction size pricing exists, they are bounded separately, each up to
+	// MaxLogicSigMaxSize, so a single logicsig really can carry both in full.
 
 	// maxCombinedTxnSize is still an overestimate because it assumes all txn
 	// type fields can be in the same txn.  That's not true, but it provides an

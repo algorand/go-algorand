@@ -135,6 +135,33 @@ func TestCanonicalPQAddressSalt(t *testing.T) {
 	}
 }
 
+func TestPQLogicSigAddress(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	program := []byte{0x02, 0x81, 0x01} // #pragma version 2; int 1
+
+	salt, addr, err := PQLogicSigAddress(program)
+	require.NoError(t, err)
+	require.True(t, addr.IsPQCompliant())
+	require.Equal(t, PQAddress(protocol.PQSchemeLogicSig, salt, program), addr)
+
+	// The salt is derived from the program, so the address can always be
+	// recovered from the program alone.
+	againSalt, againAddr, err := PQLogicSigAddress(program)
+	require.NoError(t, err)
+	require.Equal(t, salt, againSalt)
+	require.Equal(t, addr, againAddr)
+
+	for lowerSalt := 0; lowerSalt < int(salt); lowerSalt++ {
+		lowerAddr := PQAddress(protocol.PQSchemeLogicSig, PQAddressSalt(lowerSalt), program)
+		require.False(t, lowerAddr.IsPQCompliant())
+	}
+
+	// The scheme is part of the preimage, so a program's address cannot collide
+	// with the address a Falcon key of the same bytes would derive.
+	require.NotEqual(t, PQAddress(protocol.PQSchemeFalcon1024, salt, program), addr)
+}
+
 func TestCanonicalPQAddressSaltDoesNotRequireRegisteredSchemeOrValidatedKey(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

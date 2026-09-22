@@ -28,6 +28,11 @@ var (
 
 	// ErrPQSchemeNotEnabled is returned when a PQScheme is not enabled under the protocol.
 	ErrPQSchemeNotEnabled = errors.New("pq signature scheme not enabled")
+
+	// ErrPQLogicSigNotEvaluated is returned by the ls scheme's verifier, which
+	// must never be called. Reaching it means a caller took the generic PQ
+	// signature path for a logic signature instead of evaluating its program.
+	ErrPQLogicSigNotEvaluated = errors.New("logic signature must be verified by evaluating its program, not by checking signature bytes")
 )
 
 // PQVerifier verifies a post-quantum signature for one scheme.
@@ -35,19 +40,33 @@ type PQVerifier interface {
 	Verify(message Hashable, publicKey, signature []byte) error
 }
 
+// maxPQLogicSigSize is the largest program, or largest set of program
+// arguments, that an ls-scheme PQSig can carry. It must cover
+// bounds.MaxLogicSigMaxSize, but cannot be written in terms of it: those bounds
+// are filled in when config initializes, which happens after this package.
+// TestPQBoundsCoverLogicSig checks the two against each other.
+const maxPQLogicSigSize = 16000
+
 // MaxPQPublicKeySize and MaxPQSignatureSize are the largest public-key and
 // signature sizes over all supported PQ schemes; they are the PQ wire/decode
-// bounds (used for msgp allocbounds). Adding a scheme with a larger key or
-// signature means growing these; TestPQBoundsCoverFalcon1024 guards against
-// undersizing the current schemes.
+// bounds (used for msgp allocbounds). The ls scheme is the largest of them, and
+// not by a small margin: its public key is a whole LogicSig program and its
+// signature is that program's arguments. Adding a scheme with a larger key or
+// signature means growing these; TestPQBoundsCoverFalcon1024 and
+// TestPQBoundsCoverLogicSig guard against undersizing the current schemes.
 const (
-	MaxPQPublicKeySize = FalconPublicKeySize
-	MaxPQSignatureSize = FalconMaxSignatureSize
+	MaxPQPublicKeySize = max(FalconPublicKeySize, maxPQLogicSigSize)
+	MaxPQSignatureSize = max(FalconMaxSignatureSize, maxPQLogicSigSize)
 )
 
-// LookupPQScheme returns the verifier for a PQ scheme tag.
+// LookupPQScheme returns the verifier for a PQ scheme tag. Every scheme is
+// listed here, so that callers which only need to know a scheme exists (to
+// derive and check its address, say) can treat them uniformly. A scheme that is
+// not authorized by checking signature bytes still needs an entry; it returns a
+// verifier that always errors, because the alternative is that a missing entry
+// makes the scheme look unsupported everywhere.
 //
-// To add a scheme:
+// To add a signature scheme:
 //   - add its protocol.PQScheme tag,
 //   - add a case here returning its PQVerifier,
 //   - add its config.ConsensusParams.PQSchemeEnabled case and PQSchemeFeeContribution,
@@ -59,6 +78,8 @@ func LookupPQScheme(s protocol.PQScheme) (PQVerifier, bool) {
 		return falcon1024{}, true
 		// case protocol.PQSchemeFalcon512:
 		// 	return falcon512{}, true
+	case protocol.PQSchemeLogicSig:
+		return logicSig{}, true
 	}
 	return nil, false
 }
@@ -68,4 +89,15 @@ type falcon1024 struct{}
 
 func (falcon1024) Verify(message Hashable, publicKey, signature []byte) error {
 	return VerifyFalcon1024(message, publicKey, signature)
+}
+
+// logicSig is the LogicSig (ls) scheme. A logic signature is authorized by
+// evaluating its program against the transaction group, which needs a ledger
+// and an opcode budget that PQVerifier does not supply and this package cannot
+// reach. Callers must dispatch on the scheme before verifying, so this exists
+// only to make ls a fully registered scheme, and to fail loudly if they do not.
+type logicSig struct{}
+
+func (logicSig) Verify(message Hashable, publicKey, signature []byte) error {
+	return ErrPQLogicSigNotEvaluated
 }

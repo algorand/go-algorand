@@ -38,7 +38,7 @@ func BenchmarkCheckSignature(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		err = logic.CheckSignature(0, ep)
+		err = logic.CheckSignature(ops.Program, ep)
 		require.NoError(b, err)
 	}
 }
