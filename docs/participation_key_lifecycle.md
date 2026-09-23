@@ -155,7 +155,11 @@ service that wraps a SQLite file for storage. Like the key files, the registry
 stores each ephemeral voting subkey as its own row (tables
 **VotingBatches**/**VotingOffsets**) described by a **votingHeader** column, so
 the per-round deletion of used keys writes only the consumed rows and the
-header. A registry created by an older release is
+header. A stored key whose voting data fails validation at startup is logged
+as an error and excluded: it cannot vote, its subkey rows are erased at once,
+and it is removed when it expires or when deleted through the API. A key that
+still has its `.partkey` file is re-installed from it at startup; a key that
+was installed over the REST API must be installed again. A registry created by an older release is
 upgraded automatically at node startup; older releases refuse to open the
 upgraded registry, so rolling back requires deleting **partregistry.sqlite**
 and re-installing the keys. Once installed, keys are assigned

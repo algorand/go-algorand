@@ -533,6 +533,12 @@ type participationDB struct {
 	// yet; they are not in the cache, so this is what dedups them
 	pendingInserts map[ParticipationID]struct{}
 
+	// excluded holds the stored keys whose voting data failed validation at
+	// load.  They are kept out of the cache (they cannot vote) and their
+	// subkey rows are erased, but they stay tracked so they are deleted when
+	// they expire or on request, and replaced if the key is re-inserted.
+	excluded map[ParticipationID]excludedRecord
+
 	log   logging.Logger
 	store db.Pair
 	mutex deadlock.RWMutex
@@ -541,6 +547,13 @@ type participationDB struct {
 	writeQueueDone chan struct{}
 
 	flushTimeout time.Duration
+}
+
+// excludedRecord identifies a stored key excluded from the cache at load.
+type excludedRecord struct {
+	id        ParticipationID
+	pk        int64
+	lastValid basics.Round
 }
 
 // DeleteStateProofKeys is a non-blocking operation, responsible for removing state-proof keys from the DB.
@@ -569,7 +582,7 @@ func (db *participationDB) initializeCache() error {
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
 
-	records, err := db.getAllFromDB()
+	records, corrupt, err := db.getAllFromDB()
 	if err != nil {
 		return err
 	}
@@ -583,8 +596,33 @@ func (db *participationDB) initializeCache() error {
 		cache[record.ParticipationID] = record
 	}
 
+	// Forward security: the subkeys of a record that failed validation can
+	// no longer be accounted for, so they are erased now instead of lingering
+	// past their rounds.  The header stays, so a re-insert of the key from
+	// its file can still be checked against the stored deletion cursor.
+	excluded := make(map[ParticipationID]excludedRecord, len(corrupt))
+	if len(corrupt) > 0 {
+		err = db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			for _, rec := range corrupt {
+				for _, query := range []string{deleteVotingBatchesPK, deleteVotingOffsetsPK} {
+					if _, err := tx.Exec(query, rec.pk); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("unable to erase the voting subkeys of corrupt records: %w", err)
+		}
+		for _, rec := range corrupt {
+			excluded[rec.id] = rec
+		}
+	}
+
 	db.cache = cache
 	db.dirty = make(map[ParticipationID]struct{})
+	db.excluded = excluded
 	if db.pendingInserts == nil {
 		db.pendingInserts = make(map[ParticipationID]struct{})
 	}
@@ -690,6 +728,7 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 	if err != nil {
 		return id, fmt.Errorf("participationDB: unable to insert key %s: %w", id, err)
 	}
+	delete(db.excluded, id) // the insert replaced the excluded record's rows
 
 	// update cache.
 	db.cache[id] = ParticipationRecord{
@@ -732,12 +771,15 @@ func (db *participationDB) Delete(id ParticipationID) error {
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
 
-	// NoOp if key does not exist.
-	if _, ok := db.cache[id]; !ok {
+	// NoOp if key does not exist (an excluded record is deletable too).
+	_, cached := db.cache[id]
+	_, isExcluded := db.excluded[id]
+	if !cached && !isExcluded {
 		return nil
 	}
 	delete(db.dirty, id)
 	delete(db.cache, id)
+	delete(db.excluded, id)
 
 	// do the db part async
 	db.writeQueue <- makeOpRequest(&deleteOp{id})
@@ -773,7 +815,19 @@ func (db *participationDB) DeleteExpired(latestRound basics.Round, agreementProt
 		db.dirty[r.ParticipationID] = struct{}{}
 		db.cache[r.ParticipationID] = r
 	}
+	// excluded records cannot vote, but they expire like any other key
+	var expired []ParticipationID
+	for id, rec := range db.excluded {
+		if rec.lastValid < latestRound {
+			expired = append(expired, id)
+		}
+	}
 	db.mutex.Unlock()
+	for _, id := range expired {
+		if err := db.Delete(id); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -878,7 +932,10 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, []int64, [][]byte, erro
 	return results, pks, rawVotings, nil
 }
 
-func (db *participationDB) getAllFromDB() (records []ParticipationRecord, err error) {
+// getAllFromDB loads every stored record.  Records whose voting data fails
+// validation are returned separately in corrupt, so the caller can keep them
+// out of the cache without failing the whole load.
+func (db *participationDB) getAllFromDB() (records []ParticipationRecord, corrupt []excludedRecord, err error) {
 	err = db.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		rows, err := tx.Query(selectRecords)
 		if err != nil {
@@ -918,8 +975,9 @@ func (db *participationDB) getAllFromDB() (records []ParticipationRecord, err er
 					voting, verr = votingFromRows(hdr, batches.subkeys, offsets.subkeys, offsets.batches)
 				}
 				if verr != nil {
-					db.log.Warnf("participationDB: excluding key %s (pk %d) from the registry, its voting data is corrupt: %v; delete %s and restart to rebuild the registry",
+					db.log.Errorf("participationDB: excluding key %s (pk %d) from the registry and erasing its voting subkeys, its voting data is corrupt: %v; the key cannot vote until it is re-installed (a key with a .partkey file is re-installed at startup; one installed over the REST API must be installed again), or delete %s and restart to rebuild the registry",
 						scanned[i].ParticipationID, pks[i], verr, config.ParticipationRegistryFilename)
+					corrupt = append(corrupt, excludedRecord{id: scanned[i].ParticipationID, pk: pks[i], lastValid: scanned[i].LastValid})
 					continue
 				}
 				scanned[i].Voting = voting

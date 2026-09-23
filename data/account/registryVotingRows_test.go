@@ -296,31 +296,42 @@ func TestRegistryExcludesCorruptRecord(t *testing.T) {
 				a.NoError(err)
 				return keysets, batches
 			}
-			_, batchesBefore := corruptRows()
-
 			tc.damage(a, registry, corruptID, pHealthy)
 
+			// exclusion erases the record's subkey rows (forward security) but
+			// keeps its identity and header
 			a.NoError(registry.initializeCache())
 			a.True(registry.Get(corruptID).IsZero(), "corrupt record not excluded")
 			a.False(registry.Get(healthyID).IsZero(), "healthy record lost")
+			keysets, batches := corruptRows()
+			a.Equal(1, keysets)
+			a.Zero(batches, "excluded record's subkeys left on disk")
+			a.Equal(len(registry.Get(healthyID).Voting.Batches), registryCountRows(a, registry, "VotingBatches"), "healthy record's rows touched")
 
 			// re-insert the key-file copy, as loadParticipationKeys does in
 			// the same startup
 			reinsertedID, err := registry.Insert(pCorrupt)
 			a.Equal(corruptID, reinsertedID)
 
-			keysets, batches := corruptRows()
+			keysets, batches = corruptRows()
 			a.Equal(1, keysets, "duplicate Keysets row after re-insert")
 			if tc.refused != "" {
-				// refused: the copy is not usable from the cache, the stored
-				// rows are untouched, and a reload keeps the record excluded,
-				// so no retired round is signable
+				// refused: the copy is not usable from the cache, nothing was
+				// written, and a reload keeps the record excluded, so no
+				// retired round is signable
 				a.ErrorContains(err, tc.refused)
 				a.True(registry.Get(corruptID).IsZero(), "rejected copy usable from the cache")
-				a.Equal(batchesBefore, batches, "stored rows replaced despite an unusable header")
+				a.Zero(batches, "rows written despite an unusable header")
 				a.NoError(registry.Flush(defaultTimeout))
+				// after a reload the record is either still excluded or, once
+				// its rows are erased and its header is empty, indistinguishable
+				// from a key stored without voting secrets; either way nothing
+				// is signable
 				a.NoError(registry.initializeCache())
-				a.True(registry.Get(corruptID).IsZero(), "older copy resurrected the excluded record")
+				if reloaded := registry.Get(corruptID); !reloaded.IsZero() {
+					a.Empty(reloaded.Voting.Batches, "older copy resurrected the excluded record")
+					a.Empty(reloaded.Voting.Offsets, "older copy resurrected the excluded record")
+				}
 				a.False(registry.Get(healthyID).IsZero())
 				return
 			}
@@ -337,6 +348,66 @@ func TestRegistryExcludesCorruptRecord(t *testing.T) {
 			a.False(registry.Get(healthyID).IsZero(), "healthy record lost after re-insert")
 		})
 	}
+}
+
+// TestRegistryExcludedRecordCleanup verifies an excluded record does not
+// linger: it is deleted when it expires, like any other key, and it can be
+// deleted on request (the remedy for a key installed over the REST API, which
+// has no key file to be re-installed from).
+func TestRegistryExcludedRecordCleanup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
+
+	const dilution = 10
+	pExpiring := makeTestParticipation(a, 1, 1, 50, dilution)
+	expiringID, err := registry.Insert(pExpiring)
+	a.NoError(err)
+	pDeleted := makeTestParticipation(a, 2, 1, 200, dilution)
+	deletedID, err := registry.Insert(pDeleted)
+	a.NoError(err)
+	pHealthy := makeTestParticipation(a, 3, 1, 200, dilution)
+	healthyID, err := registry.Insert(pHealthy)
+	a.NoError(err)
+	a.NoError(registry.Flush(defaultTimeout))
+
+	keysetRows := func(id ParticipationID) (n int) {
+		err := registry.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			return tx.QueryRow("SELECT count(*) FROM Keysets WHERE participationID=?", id[:]).Scan(&n)
+		})
+		a.NoError(err)
+		return n
+	}
+
+	// corrupt both headers and reload: both excluded, healthy key intact
+	for _, id := range []ParticipationID{expiringID, deletedID} {
+		registryExecSQL(a, registry, "UPDATE Rolling SET votingHeader=x'ff00' WHERE pk=(SELECT pk FROM Keysets WHERE participationID=?)", id[:])
+	}
+	a.NoError(registry.initializeCache())
+	a.True(registry.Get(expiringID).IsZero())
+	a.True(registry.Get(deletedID).IsZero())
+	a.False(registry.Get(healthyID).IsZero())
+	a.Equal(len(pHealthy.Voting.Batches), registryCountRows(a, registry, "VotingBatches"), "only the healthy key's rows remain")
+
+	// the expiring key is removed by the regular expiry pass
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	a.NoError(registry.DeleteExpired(60, proto))
+	a.NoError(registry.Flush(defaultTimeout))
+	a.Zero(keysetRows(expiringID), "expired excluded record not deleted")
+	a.Equal(1, keysetRows(deletedID))
+
+	// the other is removed on request
+	a.NoError(registry.Delete(deletedID))
+	a.NoError(registry.Flush(defaultTimeout))
+	a.Zero(keysetRows(deletedID), "excluded record not deleted on request")
+	a.Equal(1, keysetRows(healthyID))
+
+	// nothing comes back on a reload, and the healthy key is untouched
+	a.NoError(registry.initializeCache())
+	a.Len(registry.GetAll(), 1)
+	a.False(registry.Get(healthyID).IsZero())
 }
 
 // TestInsertFastForwardsLaggingCopy verifies re-inserting a lagging copy of a
