@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 
 	"github.com/algorand/go-algorand/config"
@@ -407,21 +408,29 @@ func (f *flushOp) apply(db *participationDB) error {
 
 	if err != nil {
 		// the whole transaction failed: put back everything
-		db.mutex.Lock()
-		maps.Copy(db.dirty, dirty)
-		db.mutex.Unlock()
+		db.redirty(slices.Collect(maps.Keys(dirty)))
 		return err
 	}
 	if len(failed) != 0 {
 		// the others committed; retry only the failed records
-		db.mutex.Lock()
-		for _, id := range failed {
-			db.dirty[id] = struct{}{}
-		}
-		db.mutex.Unlock()
+		db.redirty(failed)
 		return errors.New(errorStr.String())
 	}
 	return nil
+}
+
+// redirty marks records for the next flush after a failed one, skipping any
+// record deleted while the flush was running: re-dirtying an id that is no
+// longer cached would only make the next flush report a spurious dirty-flag
+// desynchronization.
+func (db *participationDB) redirty(ids []ParticipationID) {
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
+	for _, id := range ids {
+		if _, cached := db.cache[id]; cached {
+			db.dirty[id] = struct{}{}
+		}
+	}
 }
 
 func (a *appendKeysOp) apply(db *participationDB) error {

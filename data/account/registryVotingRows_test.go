@@ -701,10 +701,21 @@ func TestFlushIsolatesCorruptHeader(t *testing.T) {
 	a.Equal(votingSnapshot(cachedA.Voting).Header(), registryReadVotingHeader(a, registry, idA), "A's deletion was not persisted")
 
 	// only B stays dirty for retry
-	registry.mutex.RLock()
-	_, aDirty := registry.dirty[idA]
-	_, bDirty := registry.dirty[idB]
-	registry.mutex.RUnlock()
-	a.False(aDirty)
-	a.True(bDirty)
+	isDirty := func(id ParticipationID) bool {
+		registry.mutex.RLock()
+		defer registry.mutex.RUnlock()
+		_, dirty := registry.dirty[id]
+		return dirty
+	}
+	a.False(isDirty(idA))
+	a.True(isDirty(idB))
+
+	// a record deleted while its flush was failing must not come back as
+	// dirty (the next flush would report a spurious desynchronization)
+	a.NoError(registry.Delete(idB))
+	a.False(isDirty(idB))
+	registry.redirty([]ParticipationID{idA, idB})
+	a.True(isDirty(idA))
+	a.False(isDirty(idB), "deleted record re-dirtied after a failed flush")
+	a.NoError(registry.Flush(defaultTimeout))
 }
