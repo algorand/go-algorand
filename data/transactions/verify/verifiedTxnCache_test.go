@@ -373,6 +373,12 @@ func TestGetUnverifiedTransactionGroupsAuthChanges(t *testing.T) {
 		{"msig-version", func(stxn *transactions.SignedTxn) { stxn.Msig.Version ^= 1 }},
 		{"lsig-logic", func(stxn *transactions.SignedTxn) { stxn.Lsig.Logic = []byte{0x06, 0x81, 0x01} }},
 		{"lsig-args", func(stxn *transactions.SignedTxn) { stxn.Lsig.Args = [][]byte{[]byte("arg")} }},
+		// An appended empty arg carries no bytes that ArgsLen counts, so it is the
+		// subtlest padding there is. The cache must still miss on it, because the
+		// cache key is the Txid, which args do not affect.
+		{"lsig-args-empty-appended", func(stxn *transactions.SignedTxn) {
+			stxn.Lsig.Args = append(stxn.Lsig.Args, []byte{})
+		}},
 		{"lsig-sig", func(stxn *transactions.SignedTxn) { stxn.Lsig.Sig[0] ^= 1 }},
 	}
 

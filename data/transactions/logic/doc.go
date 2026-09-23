@@ -32,6 +32,11 @@ type OpDesc struct {
 	Sugar      string // pseudo calling information
 }
 
+// argAccess documents the rule shared by every opcode that reads a LogicSig
+// argument. It is repeated on each of them because they are documented
+// separately and a reader may meet any one of them first.
+const argAccess = "LogicSig arguments are supplied outside of any signature, and are part of neither the transaction ID nor the group hash, so a third party can alter them while a transaction is in flight. From AVM v14 a LogicSig may therefore carry no argument it does not read: none at all above the highest index it reads, and none below that index unless the argument is empty or is read."
+
 var opDescByName = map[string]OpDesc{
 	"err": {"Fail immediately.", "", nil, ""},
 
@@ -156,12 +161,12 @@ var opDescByName = map[string]OpDesc{
 		[]string{"a list of byte constants"}, ""},
 
 	"bzero": {fmt.Sprintf("zero filled byte-array of length A. Fail if A exceeds %d", maxStringSize), "", nil, ""},
-	"arg":   {"Nth LogicSig argument", "", []string{"an arg index"}, ""},
-	"arg_0": {"LogicSig argument 0", "", nil, ""},
-	"arg_1": {"LogicSig argument 1", "", nil, ""},
-	"arg_2": {"LogicSig argument 2", "", nil, ""},
-	"arg_3": {"LogicSig argument 3", "", nil, ""},
-	"args":  {"Ath LogicSig argument", "", nil, ""},
+	"arg":   {"Nth LogicSig argument", argAccess, []string{"an arg index"}, ""},
+	"arg_0": {"LogicSig argument 0", argAccess, nil, ""},
+	"arg_1": {"LogicSig argument 1", argAccess, nil, ""},
+	"arg_2": {"LogicSig argument 2", argAccess, nil, ""},
+	"arg_3": {"LogicSig argument 3", argAccess, nil, ""},
+	"args":  {"Ath LogicSig argument", argAccess, nil, ""},
 
 	"txn": {"field F of current transaction", "", []string{"transaction field index"}, ""},
 	"gtxn": {

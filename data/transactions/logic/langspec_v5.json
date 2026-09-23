@@ -979,6 +979,7 @@
       "Size": 2,
       "DocCost": "1",
       "Doc": "Nth LogicSig argument",
+      "DocExtra": "LogicSig arguments are supplied outside of any signature, and are part of neither the transaction ID nor the group hash, so a third party can alter them while a transaction is in flight. From AVM v14 a LogicSig may therefore carry no argument it does not read: none at all above the highest index it reads, and none below that index unless the argument is empty or is read.",
       "ImmediateNote": [
         {
           "Comment": "an arg index",
@@ -1001,6 +1002,7 @@
       "Size": 1,
       "DocCost": "1",
       "Doc": "LogicSig argument 0",
+      "DocExtra": "LogicSig arguments are supplied outside of any signature, and are part of neither the transaction ID nor the group hash, so a third party can alter them while a transaction is in flight. From AVM v14 a LogicSig may therefore carry no argument it does not read: none at all above the highest index it reads, and none below that index unless the argument is empty or is read.",
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
@@ -1016,6 +1018,7 @@
       "Size": 1,
       "DocCost": "1",
       "Doc": "LogicSig argument 1",
+      "DocExtra": "LogicSig arguments are supplied outside of any signature, and are part of neither the transaction ID nor the group hash, so a third party can alter them while a transaction is in flight. From AVM v14 a LogicSig may therefore carry no argument it does not read: none at all above the highest index it reads, and none below that index unless the argument is empty or is read.",
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
@@ -1031,6 +1034,7 @@
       "Size": 1,
       "DocCost": "1",
       "Doc": "LogicSig argument 2",
+      "DocExtra": "LogicSig arguments are supplied outside of any signature, and are part of neither the transaction ID nor the group hash, so a third party can alter them while a transaction is in flight. From AVM v14 a LogicSig may therefore carry no argument it does not read: none at all above the highest index it reads, and none below that index unless the argument is empty or is read.",
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
@@ -1046,6 +1050,7 @@
       "Size": 1,
       "DocCost": "1",
       "Doc": "LogicSig argument 3",
+      "DocExtra": "LogicSig arguments are supplied outside of any signature, and are part of neither the transaction ID nor the group hash, so a third party can alter them while a transaction is in flight. From AVM v14 a LogicSig may therefore carry no argument it does not read: none at all above the highest index it reads, and none below that index unless the argument is empty or is read.",
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
@@ -5853,6 +5858,7 @@
       "Size": 1,
       "DocCost": "1",
       "Doc": "Ath LogicSig argument",
+      "DocExtra": "LogicSig arguments are supplied outside of any signature, and are part of neither the transaction ID nor the group hash, so a third party can alter them while a transaction is in flight. From AVM v14 a LogicSig may therefore carry no argument it does not read: none at all above the highest index it reads, and none below that index unless the argument is empty or is read.",
       "IntroducedVersion": 5,
       "Groups": [
         "Loading Values"
