@@ -1174,6 +1174,13 @@ func updateRollingFields(ctx context.Context, tx *sql.Tx, record ParticipationRe
 	if record.Voting == nil {
 		return nil
 	}
+	snap := votingSnapshot(record.Voting)
+	if len(rawHeader) == 0 && snap.Header() == (crypto.OneTimeSignatureSecretsHeader{}) {
+		// a record stored without voting secrets (a NULL header and no rows):
+		// the cache carries a zero-value placeholder for it, since Duplicate
+		// never hands out a nil Voting, and there is nothing to persist
+		return nil
+	}
 
 	// Fail closed: without the stored cursor there is no way to tell whether
 	// memory lags storage, and rewriting from memory could resurrect keys the
@@ -1183,7 +1190,7 @@ func updateRollingFields(ctx context.Context, tx *sql.Tx, record ParticipationRe
 		return fmt.Errorf("stored voting header for key %s is undecodable; refusing to rewrite voting rows from memory (delete %s and restart to rebuild the registry): %v",
 			record.ParticipationID, config.ParticipationRegistryFilename, err)
 	}
-	return syncVotingRows(tx, registryVotingTarget(pk), stored, votingSnapshot(record.Voting))
+	return syncVotingRows(tx, registryVotingTarget(pk), stored, snap)
 }
 
 func recordActive(record ParticipationRecord, on basics.Round) bool {

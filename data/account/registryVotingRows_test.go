@@ -101,6 +101,9 @@ func TestRegistryMigrationV1ToV2(t *testing.T) {
 	exhausted := makeTestParticipation(a, 2, 1, 200, dilution)
 	exhausted.Voting.DeleteBeforeFineGrained(basics.OneTimeIDForRound(999, dilution), dilution)
 	a.True(votingSnapshot(exhausted.Voting).Header().Exhausted())
+	// a legacy record stored without voting secrets (empty blob)
+	noVoting := makeTestParticipation(a, 3, 1, 200, dilution)
+	noVoting.Voting = nil
 
 	rootDB, err := db.OpenPair(t.Name(), true)
 	a.NoError(err)
@@ -115,7 +118,7 @@ func TestRegistryMigrationV1ToV2(t *testing.T) {
 		if _, err := db.SetUserVersion(ctx, tx, 1); err != nil {
 			return err
 		}
-		for _, p := range []Participation{midLife, exhausted} {
+		for _, p := range []Participation{midLife, exhausted, noVoting} {
 			id := p.ID()
 			result, err := tx.Exec(insertKeysetQuery, id[:], p.Parent[:], p.FirstValid, p.LastValid, p.KeyDilution,
 				protocol.Encode(p.VRF), protocol.Encode(&p.StateProofSecrets.SignerContext))
@@ -126,7 +129,11 @@ func TestRegistryMigrationV1ToV2(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			if _, err = tx.Exec("INSERT INTO Rolling (pk, voting) VALUES (?, ?)", pk, protocol.Encode(p.Voting)); err != nil {
+			var rawVoting []byte
+			if p.Voting != nil {
+				rawVoting = protocol.Encode(p.Voting)
+			}
+			if _, err = tx.Exec("INSERT INTO Rolling (pk, voting) VALUES (?, ?)", pk, rawVoting); err != nil {
 				return err
 			}
 		}
@@ -162,6 +169,51 @@ func TestRegistryMigrationV1ToV2(t *testing.T) {
 		a.False(record.IsZero())
 		a.Equal(encodedVotingSnapshot(p.Voting), encodedVotingSnapshot(record.Voting))
 	}
+
+	// the record without voting secrets loads (as a zero-value placeholder)
+	// and keeps flushing normally
+	a.Empty(registryReadRawVotingHeader(a, registry, noVoting.ID()))
+	a.True(registry.Get(noVoting.ID()).Voting.MsgIsZero())
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	a.NoError(registry.DeleteExpired(10, proto))
+	a.NoError(registry.Flush(defaultTimeout))
+}
+
+// TestFlushWithoutVotingSecrets verifies a key stored without voting secrets
+// keeps flushing its rolling fields: the cache holds a zero-value Voting for
+// it (Duplicate never returns nil), which must not be mistaken for a key
+// whose stored header went missing.
+func TestFlushWithoutVotingSecrets(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
+
+	p := makeTestParticipation(a, 1, 1, 200, 10)
+	p.Voting = nil
+	p.VRF = nil
+	id, err := registry.Insert(p)
+	a.NoError(err)
+	a.NoError(registry.Register(id, 1))
+	a.Empty(registryReadRawVotingHeader(a, registry, id))
+
+	// the per-round deletion pass hands the flush a zero-value Voting
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	for round := basics.Round(10); round <= 30; round += 10 {
+		a.NoError(registry.DeleteExpired(round, proto))
+		a.NoError(registry.Record(p.Parent, round, Vote))
+		a.NoError(registry.Flush(defaultTimeout), "round %d", round)
+	}
+
+	// the rolling fields landed and nothing was invented for the voting state
+	a.NoError(registry.initializeCache())
+	record := registry.Get(id)
+	a.False(record.IsZero())
+	a.Equal(basics.Round(30), record.LastVote)
+	a.True(record.Voting.MsgIsZero())
+	a.Empty(registryReadRawVotingHeader(a, registry, id))
+	a.Zero(registryCountRows(a, registry, "VotingBatches"))
 }
 
 // TestRegistryKeyLifecycle inserts a mid-life key and walks it through
