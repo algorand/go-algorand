@@ -599,6 +599,66 @@ func TestRegisterStaleSnapshotDoesNotTouchVoting(t *testing.T) {
 	a.NoError(registry.Flush(defaultTimeout))
 }
 
+// TestDeleteExpiredMergesOnlyVoting verifies the per-round deletion pass,
+// whose snapshots are taken before it re-acquires the lock, merges only the
+// advanced voting secrets into the cache: a Register or Record that landed in
+// between must survive instead of being overwritten by the stale snapshot and
+// flushed over.
+func TestDeleteExpiredMergesOnlyVoting(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
+
+	const dilution = 10
+	p := makeTestParticipation(a, 1, 1, 200, dilution)
+	id, err := registry.Insert(p)
+	a.NoError(err)
+
+	// the snapshot DeleteExpired would work on, taken before the concurrent
+	// updates below
+	stale := registry.Get(id)
+	a.Zero(stale.EffectiveFirst)
+	a.Zero(stale.LastVote)
+
+	// concurrent registration and vote recording land in the live entry
+	a.NoError(registry.Register(id, 1))
+	a.NoError(registry.Record(p.Parent, 5, Vote))
+	live := registry.Get(id)
+	a.Equal(basics.Round(1), live.EffectiveFirst)
+	a.Equal(basics.Round(5), live.LastVote)
+
+	// the deletion pass advances the stale snapshot's secrets and merges
+	stale.Voting.DeleteBeforeFineGrained(basics.OneTimeIDForRound(6, dilution), dilution)
+	registry.mutex.Lock()
+	registry.mergeAdvancedVoting([]ParticipationRecord{stale})
+	_, dirty := registry.dirty[id]
+	registry.mutex.Unlock()
+	a.True(dirty)
+
+	merged := registry.Get(id)
+	a.Equal(basics.Round(1), merged.EffectiveFirst, "registration lost to a stale snapshot")
+	a.Equal(p.LastValid, merged.EffectiveLast)
+	a.Equal(basics.Round(5), merged.LastVote, "recorded vote lost to a stale snapshot")
+	a.Equal(encodedVotingSnapshot(stale.Voting), encodedVotingSnapshot(merged.Voting), "advanced voting secrets not merged")
+
+	// and the flush persists the merged state, not the snapshot
+	a.NoError(registry.Flush(defaultTimeout))
+	a.NoError(registry.initializeCache())
+	reloaded := registry.Get(id)
+	a.Equal(basics.Round(1), reloaded.EffectiveFirst)
+	a.Equal(basics.Round(5), reloaded.LastVote)
+	a.Equal(encodedVotingSnapshot(stale.Voting), encodedVotingSnapshot(reloaded.Voting))
+
+	// a snapshot of a record deleted in between must not resurrect it
+	a.NoError(registry.Delete(id))
+	registry.mutex.Lock()
+	registry.mergeAdvancedVoting([]ParticipationRecord{stale})
+	registry.mutex.Unlock()
+	a.True(registry.Get(id).IsZero())
+}
+
 // TestFlushIsolatesCorruptHeader verifies a key whose stored header is
 // undecodable fails closed (nothing rewritten from memory) without taking the
 // other keys' flush down with it.

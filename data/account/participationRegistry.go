@@ -809,12 +809,10 @@ func (db *participationDB) DeleteExpired(latestRound basics.Round, agreementProt
 		}
 	}
 
-	// mark updated records as dirty, so they will be flushed by a call to FlushRegistry after each round
+	// merge the advanced voting secrets into the cache and mark the records
+	// dirty, so they will be flushed by a call to FlushRegistry after each round
 	db.mutex.Lock()
-	for _, r := range updated {
-		db.dirty[r.ParticipationID] = struct{}{}
-		db.cache[r.ParticipationID] = r
-	}
+	db.mergeAdvancedVoting(updated)
 	// excluded records cannot vote, but they expire like any other key
 	var expired []ParticipationID
 	for id, rec := range db.excluded {
@@ -829,6 +827,25 @@ func (db *participationDB) DeleteExpired(latestRound basics.Round, agreementProt
 		}
 	}
 	return nil
+}
+
+// mergeAdvancedVoting stores the voting secrets of the given snapshots into
+// the live cache entries and marks them dirty.  Only Voting is merged: the
+// snapshots predate the lock the caller holds, so a Register or Record that
+// ran in between has already updated the other fields of the live entry, and
+// overwriting the whole record would lose (and then flush over) that update.
+// The caller must hold db.mutex.
+func (db *participationDB) mergeAdvancedVoting(updated []ParticipationRecord) {
+	for _, r := range updated {
+		live, ok := db.cache[r.ParticipationID]
+		if !ok {
+			// deleted meanwhile; do not resurrect it in the cache
+			continue
+		}
+		live.Voting = r.Voting
+		db.cache[r.ParticipationID] = live
+		db.dirty[r.ParticipationID] = struct{}{}
+	}
 }
 
 // scanRecords is a helper to manage scanning participation records.
