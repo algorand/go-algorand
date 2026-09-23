@@ -315,8 +315,8 @@ func (s *serviceImpl) Close() error {
 	// closing the host closes all connections and streams, which unblocks any
 	// stream I/O in progress in the stream handlers.
 	err := s.host.Close()
-	// wait for the handler goroutines spawned by streamManager to finish so that
-	// nothing logs or touches state after Close returns.
+	// wait (bounded) for the handler goroutines spawned by streamManager to finish
+	// so that nothing logs or touches state after Close returns.
 	s.streams.close()
 	return err
 }

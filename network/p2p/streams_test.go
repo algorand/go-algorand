@@ -273,3 +273,73 @@ func TestStream_CloseWaitsForHandlers(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	require.Equal(t, int32(2), newStreamCalls.Load())
 }
+
+// TestStream_CloseTimeout verifies that streamManager.close gives up on a stuck handler
+// after closeTimeout instead of hanging shutdown, and logs a warning naming the peer.
+func TestStream_CloseTimeout(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	lowPeer := peer.ID("AAAA-low-peer")
+	highPeer := peer.ID("ZZZZ-high-peer")
+	require.True(t, lowPeer < highPeer)
+
+	sm, h := newTestStreamManager(lowPeer, true)
+	logBuffer := &syncBuffer{}
+	logger := logging.NewLogger()
+	logger.SetOutput(logBuffer)
+	logger.SetLevel(logging.Debug)
+	sm.log = logger
+	sm.closeTimeout = 100 * time.Millisecond
+
+	conn := newMockConn(lowPeer, highPeer, network.DirOutbound)
+	h.cm.Protect(highPeer, cnmgrTag)
+
+	newStreamStarted := make(chan struct{})
+	newStreamRelease := make(chan struct{})
+	h.newStreamFn = func(context.Context, peer.ID, ...protocol.ID) (network.Stream, error) {
+		close(newStreamStarted)
+		<-newStreamRelease
+		return nil, errors.New("test: failed to open stream")
+	}
+
+	require.True(t, sm.goHandleConnected(conn))
+	select {
+	case <-newStreamStarted:
+	case <-time.After(5 * time.Second):
+		require.Fail(t, "handleConnected was not started")
+	}
+
+	// the handler is stuck: close must return after the timeout rather than block forever
+	start := time.Now()
+	closeDone := make(chan struct{})
+	go func() {
+		sm.close()
+		close(closeDone)
+	}()
+	select {
+	case <-closeDone:
+	case <-time.After(5 * time.Second):
+		require.Fail(t, "close did not return after closeTimeout with a stuck handler")
+	}
+	require.GreaterOrEqual(t, time.Since(start), sm.closeTimeout)
+
+	logOutput := logBuffer.String()
+	require.Contains(t, logOutput, "timed out")
+	require.Contains(t, logOutput, "waiting for stream handlers to finish")
+	require.Contains(t, logOutput, highPeer.String())
+
+	// release the stuck handler and make sure it drains so the test leaks nothing
+	close(newStreamRelease)
+	drained := make(chan struct{})
+	go func() {
+		sm.handlersWg.Wait()
+		close(drained)
+	}()
+	select {
+	case <-drained:
+	case <-time.After(5 * time.Second):
+		require.Fail(t, "stuck handler did not finish after release")
+	}
+	require.Empty(t, sm.inflightPeers())
+}
