@@ -642,7 +642,7 @@ btoi`)
 		{
 			name:          "error",
 			arguments:     [][]byte{},
-			expectedError: "rejected by logic err=cannot load arg[0] of 0",
+			expectedError: "rejected by logic err=cannot load arg[0] from 0 args",
 			cost:          1,
 		},
 	}
