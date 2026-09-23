@@ -157,6 +157,8 @@ func checkTxnGroup(n int, txn func(i int) *Transaction) error {
 			}
 		}
 	}
+	// This rule is stricter than consensus -- the ledger accepts a fee-paying
+	// grouped heartbeat -- and is slated for removal in a future release.
 	if heartbeat && availTrigger {
 		return errHeartbeatInResourceGroup
 	}

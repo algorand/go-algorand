@@ -220,9 +220,8 @@ func TestCheckTxnGroupUnknownType(t *testing.T) {
 		"unknown tx type")
 
 	// The group-wide rule that remains: a heartbeat may not be grouped with a
-	// transaction that brings in resource availability. It is stricter than
-	// consensus -- the shape it rejects is valid to the ledger -- so it governs
-	// only what this node relays and puts in its own blocks.
+	// transaction that brings in resource availability. See
+	// errHeartbeatInResourceGroup.
 	appcall := Transaction{Type: protocol.ApplicationCallTx}
 	heartbeat := Transaction{Type: protocol.HeartbeatTx}
 	require.ErrorIs(t, CheckTxnGroup([]SignedTxn{{Txn: appcall}, {Txn: heartbeat}}), errHeartbeatInResourceGroup)
@@ -236,10 +235,10 @@ func TestCheckTxnGroupUnknownType(t *testing.T) {
 	require.NotErrorIs(t, CheckTxnGroup([]SignedTxn{{Txn: heartbeat}, {Txn: assetChange}}), errHeartbeatInResourceGroup)
 
 	// Every known type must still be accepted (guard against over-rejection).
-	// Heartbeat is excluded here because it independently requires its fields (tested elsewhere).
 	for _, tt := range []protocol.TxType{
 		protocol.PaymentTx, protocol.KeyRegistrationTx, protocol.AssetConfigTx,
 		protocol.AssetTransferTx, protocol.AssetFreezeTx, protocol.ApplicationCallTx,
+		protocol.HeartbeatTx,
 	} {
 		require.NoError(t, CheckTxnGroup([]SignedTxn{{Txn: Transaction{Type: tt}}}), "type %q must be accepted", tt)
 	}
@@ -286,8 +285,16 @@ func TestCheckTxnGroupIDDuplicateTxn(t *testing.T) {
 	require.ErrorAs(t, err, &malformed)
 	require.Equal(t, TxGroupMalformedErrorReasonDuplicateTxn, malformed.Reason)
 
-	// Distinct transactions still pass, as does a lone ungrouped transaction.
+	// The duplicate need not be adjacent, and GroupIndex names the later one.
 	other := SignedTxn{Txn: Transaction{Type: protocol.PaymentTx, Header: Header{Sender: basics.Address{2}}}}
+	spread := []SignedTxn{txn, other, txn}
+	regroup(spread)
+	err = CheckTxnGroup(spread)
+	require.ErrorAs(t, err, &malformed)
+	require.Equal(t, TxGroupMalformedErrorReasonDuplicateTxn, malformed.Reason)
+	require.Equal(t, 2, malformed.GroupIndex)
+
+	// Distinct transactions still pass, as does a lone ungrouped transaction.
 	valid := []SignedTxn{txn, other}
 	regroup(valid)
 	require.NoError(t, CheckTxnGroup(valid))
