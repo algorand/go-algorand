@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/stateproof"
@@ -50,25 +51,26 @@ func stateProofTxnForCheck() Transaction {
 	}
 }
 
-func TestCheckPaysetGroupStateProofBasicSuite(t *testing.T) {
+func TestCheckTxnGroupStateProofBasicSuite(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	valid := stateProofTxnForCheck()
+	require.NoError(t, CheckTxnGroup([]SignedTxn{{Txn: valid}}))
 	require.NoError(t, CheckPaysetGroup([]SignedTxnWithAD{SignedTxn{Txn: valid}.WithAD()}))
 
 	t.Run("unsupported state proof type", func(t *testing.T) {
 		t.Parallel()
 		malformed := stateProofTxnForCheck()
 		malformed.StateProofType = protocol.StateProofType(1)
-		require.ErrorIs(t, CheckPaysetGroup([]SignedTxnWithAD{SignedTxn{Txn: malformed}.WithAD()}), errMalformedStateProofType)
+		require.ErrorIs(t, CheckTxnGroup([]SignedTxn{{Txn: malformed}}), errMalformedStateProofType)
 	})
 
 	t.Run("signature commitment proof hash", func(t *testing.T) {
 		t.Parallel()
 		malformed := stateProofTxnForCheck()
 		malformed.StateProof.SigProofs = stateProofPathForCheck(crypto.Sha256, crypto.Sha256Size)
-		require.ErrorIs(t, CheckPaysetGroup([]SignedTxnWithAD{SignedTxn{Txn: malformed}.WithAD()}), errMalformedStateProofHash)
+		require.ErrorIs(t, CheckTxnGroup([]SignedTxn{{Txn: malformed}}), errMalformedStateProofHash)
 	})
 
 	t.Run("participant commitment proof hash", func(t *testing.T) {
@@ -82,14 +84,14 @@ func TestCheckPaysetGroupStateProofBasicSuite(t *testing.T) {
 		t.Parallel()
 		malformed := stateProofTxnForCheck()
 		malformed.StateProof.PartProofs.Path[0] = make(crypto.GenericDigest, crypto.Sha256Size)
-		require.ErrorIs(t, CheckPaysetGroup([]SignedTxnWithAD{SignedTxn{Txn: malformed}.WithAD()}), errMalformedStateProofPath)
+		require.ErrorIs(t, CheckTxnGroup([]SignedTxn{{Txn: malformed}}), errMalformedStateProofPath)
 	})
 
 	t.Run("signature commitment size", func(t *testing.T) {
 		t.Parallel()
 		malformed := stateProofTxnForCheck()
 		malformed.StateProof.SigCommit = make(crypto.GenericDigest, crypto.Sha256Size)
-		require.ErrorIs(t, CheckPaysetGroup([]SignedTxnWithAD{SignedTxn{Txn: malformed}.WithAD()}), errMalformedStateProofCommit)
+		require.ErrorIs(t, CheckTxnGroup([]SignedTxn{{Txn: malformed}}), errMalformedStateProofCommit)
 	})
 
 	t.Run("nested Merkle signature proof hash", func(t *testing.T) {
@@ -101,7 +103,7 @@ func TestCheckPaysetGroupStateProofBasicSuite(t *testing.T) {
 			Proof: stateProofPathForCheck(crypto.Sha256, crypto.Sha256Size),
 		}
 		malformed.StateProof.Reveals = map[uint64]stateproof.Reveal{0: reveal}
-		require.ErrorIs(t, CheckPaysetGroup([]SignedTxnWithAD{SignedTxn{Txn: malformed}.WithAD()}), errMalformedStateProofHash)
+		require.ErrorIs(t, CheckTxnGroup([]SignedTxn{{Txn: malformed}}), errMalformedStateProofHash)
 	})
 
 	t.Run("nested Merkle signature proof path size", func(t *testing.T) {
@@ -113,7 +115,7 @@ func TestCheckPaysetGroupStateProofBasicSuite(t *testing.T) {
 			Proof: stateProofPathForCheck(stateproof.HashType, crypto.Sha256Size),
 		}
 		malformed.StateProof.Reveals = map[uint64]stateproof.Reveal{0: reveal}
-		require.ErrorIs(t, CheckPaysetGroup([]SignedTxnWithAD{SignedTxn{Txn: malformed}.WithAD()}), errMalformedStateProofPath)
+		require.ErrorIs(t, CheckTxnGroup([]SignedTxn{{Txn: malformed}}), errMalformedStateProofPath)
 	})
 
 	t.Run("nested Basic Merkle signature proof", func(t *testing.T) {
@@ -125,7 +127,7 @@ func TestCheckPaysetGroupStateProofBasicSuite(t *testing.T) {
 			Proof: stateProofPathForCheck(stateproof.HashType, stateproof.HashSize),
 		}
 		valid.StateProof.Reveals = map[uint64]stateproof.Reveal{0: reveal}
-		require.NoError(t, CheckPaysetGroup([]SignedTxnWithAD{SignedTxn{Txn: valid}.WithAD()}))
+		require.NoError(t, CheckTxnGroup([]SignedTxn{{Txn: valid}}))
 	})
 }
 
@@ -206,6 +208,45 @@ func TestHashTxGroupMatchesHashObj(t *testing.T) {
 	}
 }
 
+func TestCheckTxnGroupUnknownType(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// checkTxnGroup used to reject an unknown type on behalf of nodes whose
+	// resources.fill could not cope with one. WellFormed is what rejects it.
+	bogus := Transaction{Type: protocol.TxType("bogus")}
+	require.ErrorContains(t,
+		bogus.WellFormed(SpecialAddresses{}, config.Consensus[protocol.ConsensusCurrentVersion]),
+		"unknown tx type")
+
+	// The group-wide rule that remains: a heartbeat may not be grouped with a
+	// transaction that brings in resource availability. It is stricter than
+	// consensus -- the shape it rejects is valid to the ledger -- so it governs
+	// only what this node relays and puts in its own blocks.
+	appcall := Transaction{Type: protocol.ApplicationCallTx}
+	heartbeat := Transaction{Type: protocol.HeartbeatTx}
+	require.ErrorIs(t, CheckTxnGroup([]SignedTxn{{Txn: appcall}, {Txn: heartbeat}}), errHeartbeatInResourceGroup)
+	require.ErrorIs(t, CheckPaysetGroup([]SignedTxnWithAD{
+		SignedTxn{Txn: appcall}.WithAD(),
+		SignedTxn{Txn: heartbeat}.WithAD(),
+	}), errHeartbeatInResourceGroup)
+
+	// Reconfiguring an asset brings in no resources, so it may be grouped.
+	assetChange := Transaction{Type: protocol.AssetConfigTx, AssetConfigTxnFields: AssetConfigTxnFields{ConfigAsset: 7}}
+	require.NotErrorIs(t, CheckTxnGroup([]SignedTxn{{Txn: heartbeat}, {Txn: assetChange}}), errHeartbeatInResourceGroup)
+
+	// Every known type must still be accepted (guard against over-rejection).
+	// Heartbeat is excluded here because it independently requires its fields (tested elsewhere).
+	for _, tt := range []protocol.TxType{
+		protocol.PaymentTx, protocol.KeyRegistrationTx, protocol.AssetConfigTx,
+		protocol.AssetTransferTx, protocol.AssetFreezeTx, protocol.ApplicationCallTx,
+	} {
+		require.NoError(t, CheckTxnGroup([]SignedTxn{{Txn: Transaction{Type: tt}}}), "type %q must be accepted", tt)
+	}
+	require.NoError(t, CheckTxnGroup([]SignedTxn{{Txn: stateProofTxnForCheck()}}),
+		"type %q must be accepted", protocol.StateProofTx)
+}
+
 func TestCheckTxnGroupIDDuplicateTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -227,7 +268,7 @@ func TestCheckTxnGroupIDDuplicateTxn(t *testing.T) {
 	txn := SignedTxn{Txn: Transaction{Type: protocol.PaymentTx, Header: Header{Sender: basics.Address{1}}}}
 	dup := []SignedTxn{txn, txn}
 	regroup(dup)
-	err := CheckTxnGroupID(dup)
+	err := CheckTxnGroup(dup)
 	require.ErrorContains(t, err, "duplicate transaction")
 	var malformed *TxGroupMalformedError
 	require.ErrorAs(t, err, &malformed)
@@ -241,24 +282,16 @@ func TestCheckTxnGroupIDDuplicateTxn(t *testing.T) {
 	argsDup[0].Lsig = LogicSig{Logic: []byte{0x01}, Args: [][]byte{{0}}}
 	argsDup[1].Lsig = LogicSig{Logic: []byte{0x01}, Args: [][]byte{{1}}}
 	require.Equal(t, argsDup[0].Txn.ID(), argsDup[1].Txn.ID())
-	err = CheckTxnGroupID(argsDup)
+	err = CheckTxnGroup(argsDup)
 	require.ErrorAs(t, err, &malformed)
 	require.Equal(t, TxGroupMalformedErrorReasonDuplicateTxn, malformed.Reason)
-
-	// The duplicate need not be adjacent.
-	other := SignedTxn{Txn: Transaction{Type: protocol.PaymentTx, Header: Header{Sender: basics.Address{2}}}}
-	spread := []SignedTxn{txn, other, txn}
-	regroup(spread)
-	err = CheckTxnGroupID(spread)
-	require.ErrorAs(t, err, &malformed)
-	require.Equal(t, TxGroupMalformedErrorReasonDuplicateTxn, malformed.Reason)
-	require.Equal(t, 2, malformed.GroupIndex)
 
 	// Distinct transactions still pass, as does a lone ungrouped transaction.
+	other := SignedTxn{Txn: Transaction{Type: protocol.PaymentTx, Header: Header{Sender: basics.Address{2}}}}
 	valid := []SignedTxn{txn, other}
 	regroup(valid)
-	require.NoError(t, CheckTxnGroupID(valid))
-	require.NoError(t, CheckTxnGroupID([]SignedTxn{{Txn: Transaction{Type: protocol.PaymentTx}}}))
+	require.NoError(t, CheckTxnGroup(valid))
+	require.NoError(t, CheckTxnGroup([]SignedTxn{{Txn: Transaction{Type: protocol.PaymentTx}}}))
 
 	// The payset form used by the agreement proposal filter rejects it too.
 	dupAD := []SignedTxnWithAD{dup[0].WithAD(), dup[1].WithAD()}

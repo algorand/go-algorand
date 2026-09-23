@@ -1967,24 +1967,10 @@ func TestComputeLoad(t *testing.T) {
 }
 
 // TestGroupChecksAgreeWithVerify pins that eval and verify reject the same
-// malformed groups. The group ID rule is enforced twice: CheckTxnGroupID in
-// verify, before signatures are checked, and again inline in
-// BlockEvaluator.transactionGroup, which is what a block is actually held to.
-// The two are separate implementations, so each case below is asserted against
-// both.
-//
-// Eval's copy carries the weight. The verified transaction cache is keyed by
-// transaction ID and knows nothing about a transaction's position or its
-// siblings, so a group repeating a transaction, or one carrying another group's
-// ID, can hit the cache in full and skip verify entirely. The cache here is
-// mocked to report every transaction as verified, so verify.PaysetGroups is
-// skipped and only eval's own checks remain.
-//
-// They reject the same groups but not always with the same error: eval catches
-// a repeated transaction ID through checkDup on the cow the group shares rather
-// than through the group ID rule, so each side has its own expected message.
-// Both are asserted on, so that a block rejected here for some unrelated reason
-// fails the test rather than passing it.
+// malformed groups. They are separate implementations and report different
+// errors -- eval catches a repeated transaction ID through checkDup -- so each
+// side has its own expected message. The cache is mocked as always-verified,
+// leaving only eval's own checks.
 func TestGroupChecksAgreeWithVerify(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1997,8 +1983,7 @@ func TestGroupChecksAgreeWithVerify(t *testing.T) {
 		Timestamp:   0,
 	})
 
-	// an empty block with a valid header, left out of the ledger so every case
-	// below is evaluated against the same round
+	// left out of the ledger so every case is evaluated against the same round
 	blkEval := l.nextBlock(t)
 	unfinished, err := blkEval.GenerateBlock(nil)
 	require.NoError(t, err)
@@ -2038,8 +2023,8 @@ func TestGroupChecksAgreeWithVerify(t *testing.T) {
 	a, b, c := mkTxn(addrs[0]), mkTxn(addrs[2]), mkTxn(addrs[3])
 	abc := []transactions.Transaction{a, b, c}
 	regroup(abc)
-	// [A, A] needs a group ID committing to both occurrences, so that the ID
-	// recomputes correctly and only duplicate detection can reject it
+	// [A, A] needs a group ID committing to both, so only the duplicate
+	// check can reject it
 	dup := []transactions.Transaction{a, a}
 	regroup(dup)
 
@@ -2065,7 +2050,7 @@ func TestGroupChecksAgreeWithVerify(t *testing.T) {
 				blk.Payset = append(blk.Payset, stib)
 			}
 
-			require.ErrorContains(t, transactions.CheckTxnGroupID(stxns), test.verifyErr)
+			require.ErrorContains(t, transactions.CheckTxnGroup(stxns), test.verifyErr)
 
 			_, err := Eval(context.Background(), l, blk, true, verify.GetMockedCache(true), nil, nil)
 			require.ErrorContains(t, err, test.evalErr)

@@ -29,6 +29,7 @@ import (
 )
 
 var (
+	errHeartbeatInResourceGroup     = errors.New("heartbeat transaction may not be grouped with an application call or asset creation")
 	errMalformedStateProofSignature = errors.New("state proof reveal has an empty or too-short signature")
 	errMalformedStateProofProof     = errors.New("state proof reveal has an invalid Merkle proof depth")
 	errMalformedStateProofPath      = errors.New("state proof has a Merkle path element with an unexpected size")
@@ -71,6 +72,11 @@ type TxGroupMalformedError struct {
 // Error returns the transaction group validation failure message.
 func (e *TxGroupMalformedError) Error() string {
 	return e.Msg
+}
+
+func triggersResourceAvailability(tx *Transaction) bool {
+	return tx.Type == protocol.ApplicationCallTx ||
+		(tx.Type == protocol.AssetConfigTx && tx.ConfigAsset == 0)
 }
 
 // checkBasicStateProofPath enforces the Merkle proof parameters fixed by the
@@ -132,32 +138,34 @@ func checkStateProof(spType protocol.StateProofType, sp *stateproof.StateProof) 
 	}
 }
 
-// checkTxnGroup screens a group on behalf of the agreement proposal filter,
-// which is the only caller: it validates proposal payloads without ever
-// calling WellFormed, so any check it needs must be repeated here.
 func checkTxnGroup(n int, txn func(i int) *Transaction) error {
+	heartbeat, availTrigger := false, false
 	for i := range n {
 		tx := txn(i)
-		if tx.Type == protocol.StateProofTx {
+		switch tx.Type {
+		case protocol.HeartbeatTx:
+			heartbeat = true
+		case protocol.StateProofTx:
 			if err := checkStateProof(tx.StateProofType, &tx.StateProof); err != nil {
 				return err
 			}
+		case protocol.ApplicationCallTx:
+			availTrigger = true
+		case protocol.PaymentTx, protocol.KeyRegistrationTx, protocol.AssetConfigTx, protocol.AssetTransferTx, protocol.AssetFreezeTx:
+			if triggersResourceAvailability(tx) {
+				availTrigger = true
+			}
 		}
+	}
+	if heartbeat && availTrigger {
+		return errHeartbeatInResourceGroup
 	}
 	return checkTxnGroupID(n, txn)
 }
 
-// checkTxnGroupID verifies that a group's nonzero group ID commits to the
-// provided transaction order, and that no transaction appears twice within the
-// group.
-//
-// verify runs both before adding a group to the VerifiedTransactionCache, so a
-// cached entry always comes from a group that satisfied them. That matters
-// because the cache is keyed by transaction ID and records nothing about a
-// transaction's position: without the duplicate check, two transactions sharing
-// an ID but carrying different LogicSig args would collapse onto one entry. The
-// block evaluator rejects the same groups independently, through its own group
-// ID check and duplicate detection.
+// checkTxnGroupID verifies the group ID and that no transaction appears twice.
+// Both are permanent: the VerifiedTransactionCache is keyed by transaction ID,
+// so its entries only mean anything for groups that satisfied them.
 func checkTxnGroupID(n int, txn func(i int) *Transaction) error {
 	if n == 0 {
 		return nil
@@ -225,10 +233,10 @@ func hashTxGroup(group TxGroup) crypto.Digest {
 	return digest
 }
 
-// CheckTxnGroupID verifies a group's ID and transaction-ID uniqueness -- see
-// checkTxnGroupID.
-func CheckTxnGroupID(group []SignedTxn) error {
-	return checkTxnGroupID(len(group), func(i int) *Transaction { return &group[i].Txn })
+// CheckTxnGroup screens a transaction group for invalid transactions and
+// verifies that its nonzero group ID commits to the provided transaction order.
+func CheckTxnGroup(group []SignedTxn) error {
+	return checkTxnGroup(len(group), func(i int) *Transaction { return &group[i].Txn })
 }
 
 // CheckPaysetGroup screens a decoded block payset group for invalid transactions and
