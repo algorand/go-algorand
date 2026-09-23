@@ -99,6 +99,21 @@ func (n *streamManager) endHandler() {
 	n.handlersWg.Done()
 }
 
+// goHandleConnected runs handleConnected for conn in a new goroutine tracked by handlersWg,
+// so that close() waits for it. It returns false without spawning anything if the
+// stream manager is closing. This is the only way handleConnected should be started
+// asynchronously: an untracked goroutine can outlive the service and log after shutdown.
+func (n *streamManager) goHandleConnected(conn network.Conn) bool {
+	if !n.beginHandler() {
+		return false
+	}
+	go func() {
+		defer n.endHandler()
+		n.handleConnected(conn)
+	}()
+	return true
+}
+
 // close prevents new handlers from starting and waits for in-flight ones to finish.
 // It must be called after the host has been closed (or the context cancelled) so that
 // any blocking stream I/O inside handlers is interrupted, and after StopNotify so that
@@ -260,14 +275,9 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 		}
 	}
 
-	if !n.beginHandler() {
+	if !n.goHandleConnected(conn) {
 		n.log.Debugf("%s: ignoring connection from %s, shutting down", localPeer.String(), remotePeer.String())
-		return
 	}
-	go func() {
-		defer n.endHandler()
-		n.handleConnected(conn)
-	}()
 }
 
 func (n *streamManager) handleConnected(conn network.Conn) {

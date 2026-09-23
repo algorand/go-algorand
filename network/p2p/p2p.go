@@ -358,7 +358,11 @@ func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) bool {
 				// could protect it, so handleConnected skipped stream creation.
 				// protect and re-trigger stream setup now.
 				s.host.ConnManager().Protect(peerInfo.ID, cnmgrTag)
-				go s.streams.handleConnected(conns[0])
+				if !s.streams.goHandleConnected(conns[0]) {
+					// the service is shutting down: undo the protection and stop dialing
+					s.host.ConnManager().Unprotect(peerInfo.ID, cnmgrTag)
+					return numOutgoingConns > preExistingConns
+				}
 				if conns[0].Stat().Direction == network.DirOutbound {
 					numOutgoingConns++
 				}

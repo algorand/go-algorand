@@ -231,6 +231,11 @@ func TestStream_CloseWaitsForHandlers(t *testing.T) {
 		require.Fail(t, "handleConnected was not started by Connected")
 	}
 
+	// a direct tracked spawn (as done by DialPeersUntilTargetCount) is accepted before close.
+	// its NewStream call is the second one and fails immediately, so the handler finishes
+	// quickly, but close() below must still account for it.
+	require.True(t, sm.goHandleConnected(conn))
+
 	closeDone := make(chan struct{})
 	go func() {
 		sm.close()
@@ -250,10 +255,12 @@ func TestStream_CloseWaitsForHandlers(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		require.Fail(t, "close did not return after handleConnected finished")
 	}
-	require.Equal(t, int32(1), newStreamCalls.Load())
+	require.Equal(t, int32(2), newStreamCalls.Load())
 
 	// after close, Connected must not spawn new handlers...
 	sm.Connected(nil, conn)
+	// ...nor may a direct tracked spawn be accepted...
+	require.False(t, sm.goHandleConnected(conn))
 	// ...and inbound streams must be rejected without dispatching to the handler.
 	inConn := newMockConn(lowPeer, highPeer, network.DirInbound)
 	stream := newMockStream(inConn, testProto, network.DirInbound)
@@ -261,7 +268,8 @@ func TestStream_CloseWaitsForHandlers(t *testing.T) {
 	require.True(t, stream.wasReset())
 	require.Equal(t, int32(0), handlerCalls.Load())
 
-	// give a would-be handleConnected goroutine a chance to run: none must have started
+	// give a would-be handleConnected goroutine a chance to run: none must have started.
+	// two NewStream calls are expected: one from Connected and one from the direct spawn.
 	time.Sleep(50 * time.Millisecond)
-	require.Equal(t, int32(1), newStreamCalls.Load())
+	require.Equal(t, int32(2), newStreamCalls.Load())
 }
