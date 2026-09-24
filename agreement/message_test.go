@@ -22,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
@@ -270,4 +271,46 @@ func BenchmarkVoteDecoding(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		decodeVote(msgBytes)
 	}
+}
+
+// TestProposalGroupRuleFollowsProtocol checks that the screen applies the
+// heartbeat group rule according to the protocol of the block it is screening.
+// A sender naming a protocol the chain is not on gains nothing: the header
+// fails BlockHeader.PreCheck during validation, so the payload is rejected
+// there instead of here.
+func TestProposalGroupRuleFollowsProtocol(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	require.True(t, config.Consensus[protocol.ConsensusFuture].AllowGroupedHeartbeats)
+	require.False(t, config.Consensus[protocol.ConsensusCurrentVersion].AllowGroupedHeartbeats)
+
+	genesisHash := crypto.Hash([]byte("group-rule-follows-protocol"))
+	build := func(version protocol.ConsensusVersion) unauthenticatedProposal {
+		block := bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{
+			GenesisHash:  genesisHash,
+			UpgradeState: bookkeeping.UpgradeState{CurrentProtocol: version},
+		}}
+		txns := []transactions.Transaction{
+			{Type: protocol.ApplicationCallTx, Header: transactions.Header{GenesisHash: genesisHash}},
+			{Type: protocol.HeartbeatTx, Header: transactions.Header{GenesisHash: genesisHash}},
+		}
+		// a real group ID, so the only rule that can reject this is the one
+		// keeping a heartbeat out of a resource group
+		var group transactions.TxGroup
+		for _, txn := range txns {
+			group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(txn.ID()))
+		}
+		groupID := crypto.HashObj(group)
+		for i := range txns {
+			txns[i].Group = groupID
+			stib, err := block.EncodeSignedTxn(transactions.SignedTxn{Txn: txns[i]}, transactions.ApplyData{})
+			require.NoError(t, err)
+			block.Payset = append(block.Payset, stib)
+		}
+		return unauthenticatedProposal{Block: block}
+	}
+
+	require.True(t, proposalCarriesInvalidTxn(build(protocol.ConsensusCurrentVersion)))
+	require.False(t, proposalCarriesInvalidTxn(build(protocol.ConsensusFuture)))
 }
