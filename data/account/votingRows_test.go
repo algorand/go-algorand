@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -122,56 +121,28 @@ func setupTestDBAtVer3(partDB db.Accessor, part Participation) error {
 	})
 }
 
-// TestRestoreUnmigratedLegacyVersions verifies the read-only restore handles
-// every supported schema version as-is, which is what keeps the read-only
-// commands from rewriting a key file as a side effect.
-func TestRestoreUnmigratedLegacyVersions(t *testing.T) {
+// TestMigrateLegacyVersions covers every legacy .partkey schema version: the
+// file is read as-is by the read-only restore and left untouched, then
+// migrated to the latest version, with the header, the rows, the dropped
+// legacy column, and a restore equal to the original checked.  Two damaged v3
+// files must roll back untouched.
+func TestMigrateLegacyVersions(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	a := require.New(t)
-
-	part, tmpDB := makeSmallTestKey(t, a, 0, 300, 10)
-	defer closeDBS(tmpDB)
 
 	setups := map[int]func(db.Accessor, Participation) error{1: setupTestDBAtVer1, 2: setupTestDBAtVer2, 3: setupTestDBAtVer3}
-	for version, setup := range setups {
-		partDB, err := db.MakeAccessor(fmt.Sprintf("%s_v%d", t.Name(), version), false, true)
-		a.NoError(err)
-		a.NoError(setup(partDB, part.Participation))
-
-		restored, err := RestoreParticipationUnmigrated(partDB)
-		a.NoError(err, "version %d", version)
-		a.Equal(encodedVotingSnapshot(part.Voting), encodedVotingSnapshot(restored.Voting), "version %d", version)
-		a.Equal(part.Parent, restored.Parent)
-		if version >= 2 {
-			a.Equal(part.KeyDilution, restored.KeyDilution)
-		}
-		a.Equal(version >= 3, restored.StateProofSecrets != nil, "version %d", version)
-
-		// the file was not touched
-		versions, err := getSchemaVersions(partDB)
-		a.NoError(err)
-		a.Equal(version, versions[PartTableSchemaName])
-		closeDBS(partDB)
-	}
-}
-
-// TestMigrateFromVersion3 converts hand-built version 3 files (a mid-life key
-// and an exhausted one) and verifies the header, the rows, the dropped legacy
-// column, and that the restored secrets equal the original; a file whose blob
-// is damaged must roll back untouched.
-func TestMigrateFromVersion3(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	cases := []struct {
 		name      string
+		version   int
 		advance   basics.Round
 		exhausted bool
 		damage    string // SQL that makes the file unusable; the migration must roll back
 	}{
-		{"midLife", 55, false, ""},
-		{"exhausted", 999, true, ""},
-		{"corruptBlobRollsBack", 55, false, "UPDATE ParticipationAccount SET voting=substr(voting, 1, length(voting)/2)"},
-		{"twoAccountRowsRollBack", 55, false, "INSERT INTO ParticipationAccount SELECT * FROM ParticipationAccount"},
+		{"v1", 1, 55, false, ""},
+		{"v2", 2, 55, false, ""},
+		{"v3", 3, 55, false, ""},
+		{"v3Exhausted", 3, 999, true, ""},
+		{"v3CorruptBlobRollsBack", 3, 55, false, "UPDATE ParticipationAccount SET voting=substr(voting, 1, length(voting)/2)"},
+		{"v3TwoAccountRowsRollBack", 3, 55, false, "INSERT INTO ParticipationAccount SELECT * FROM ParticipationAccount"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -184,25 +155,34 @@ func TestMigrateFromVersion3(t *testing.T) {
 			snap := votingSnapshot(part.Voting)
 			a.Equal(tc.exhausted, snap.Header().Exhausted())
 
-			partDB, err := db.MakeAccessor(t.Name()+"_v3", false, true)
+			partDB, err := db.MakeAccessor(t.Name(), false, true)
 			a.NoError(err)
 			defer closeDBS(partDB)
-			a.NoError(setupTestDBAtVer3(partDB, part.Participation))
+			a.NoError(setups[tc.version](partDB, part.Participation))
+
+			// the read-only restore reads the file as-is, with the metadata
+			// its version has, and leaves it untouched
+			restored, err := RestoreParticipationUnmigrated(partDB)
+			a.NoError(err)
+			a.Equal(encodedVotingSnapshot(part.Voting), encodedVotingSnapshot(restored.Voting))
+			a.Equal(tc.version >= 3, restored.StateProofSecrets != nil)
+			versions, err := getSchemaVersions(partDB)
+			a.NoError(err)
+			a.Equal(tc.version, versions[PartTableSchemaName])
 
 			if tc.damage != "" {
 				execSQL(a, partDB, tc.damage)
 
 				// unusable content is reported with the quarantine sentinel
-				// (the node renames the file instead of failing to start)
+				// (the node renames the file instead of failing to start) and
+				// the whole migration transaction rolls back
 				err = Migrate(partDB)
 				a.ErrorIs(err, ErrCorruptedVotingData)
 				_, err = RestoreParticipation(partDB)
 				a.ErrorIs(err, ErrCorruptedVotingData)
-
-				// the whole migration transaction rolled back
-				versions, err := getSchemaVersions(partDB)
+				versions, err = getSchemaVersions(partDB)
 				a.NoError(err)
-				a.Equal(PartTableSchemaVersionWholeBlob, versions[PartTableSchemaName])
+				a.Equal(tc.version, versions[PartTableSchemaName])
 				a.True(hasColumn(a, partDB, "ParticipationAccount", "voting"))
 				a.False(hasColumn(a, partDB, "ParticipationAccount", "votingHeader"))
 				a.Zero(queryInt(a, partDB, "SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN ('VotingBatches', 'VotingOffsets')"),
@@ -211,28 +191,32 @@ func TestMigrateFromVersion3(t *testing.T) {
 			}
 
 			a.NoError(Migrate(partDB))
-
-			versions, err := getSchemaVersions(partDB)
+			versions, err = getSchemaVersions(partDB)
 			a.NoError(err)
 			a.Equal(PartTableSchemaVersion, versions[PartTableSchemaName])
 			a.NoError(testDBContainsAllColumns(partDB))
-
+			assertStateProofTablesExists(a, partDB)
 			requireNoAutoIndex(a, partDB)
 
 			// the legacy blob column is gone, the header column is present
 			a.True(hasColumn(a, partDB, "ParticipationAccount", "votingHeader"))
 			a.False(hasColumn(a, partDB, "ParticipationAccount", "voting"))
-
 			a.Equal(len(snap.Batches), countTableRows(a, partDB, "VotingBatches"))
 			a.Equal(len(snap.Offsets), countTableRows(a, partDB, "VotingOffsets"))
 			a.Equal(snap.Header(), readPartkeyVotingHeader(a, partDB))
 
-			// full restore equals the original
-			restored, err := RestoreParticipation(partDB)
+			// full restore equals the original; metadata the version lacked
+			// comes back zero
+			restored, err = RestoreParticipation(partDB)
 			a.NoError(err)
 			a.Equal(encodedVotingSnapshot(part.Voting), encodedVotingSnapshot(restored.Voting))
 			a.Equal(part.Parent, restored.Parent)
-			a.Equal(part.KeyDilution, restored.KeyDilution)
+			if tc.version >= 2 {
+				a.Equal(part.KeyDilution, restored.KeyDilution)
+			} else {
+				a.Zero(restored.KeyDilution)
+			}
+			a.Equal(tc.version >= 3, restored.StateProofSecrets != nil)
 		})
 	}
 }
@@ -294,7 +278,8 @@ func TestMigrationErasesLegacyBlob(t *testing.T) {
 
 // TestSyncVotingRows drives the per-round synchronizer through every
 // transition against a real store, checking the rows, the header, repair of
-// drifted rows, and the forward-security guard.
+// drifted rows, and the refusals that protect forward security (a stored
+// cursor ahead of memory, an undecodable stored header).
 func TestSyncVotingRows(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -356,6 +341,13 @@ func TestSyncVotingRows(t *testing.T) {
 	ahead.FirstBatch++
 	execSQL(a, partDB, "UPDATE ParticipationAccount SET votingHeader=?", protocol.Encode(&ahead))
 	a.ErrorContains(sync(secrets), "refusing to resurrect")
+	// ... and so is an undecodable stored header (failing closed: a rewrite
+	// from possibly-stale memory could resurrect retired keys)
+	execSQL(a, partDB, "UPDATE ParticipationAccount SET votingHeader=?", []byte{0xff, 0x00})
+	batchRows, offsetRows := countTableRows(a, partDB, "VotingBatches"), countTableRows(a, partDB, "VotingOffsets")
+	a.ErrorContains(sync(secrets), "undecodable")
+	a.Equal(batchRows, countTableRows(a, partDB, "VotingBatches"))
+	a.Equal(offsetRows, countTableRows(a, partDB, "VotingOffsets"))
 	execSQL(a, partDB, "UPDATE ParticipationAccount SET votingHeader=?", protocol.Encode(&current))
 
 	// jump that runs out of batches: exhausted, every row erased, and a
@@ -425,47 +417,6 @@ func TestDeleteOldKeysLifecycle(t *testing.T) {
 	a.Zero(countTableRows(a, partDB, "VotingBatches"))
 	a.True(readPartkeyVotingHeader(a, partDB).Exhausted())
 	requireRetiredIDUnusable(a, partDB, part.Voting.OneTimeSignatureVerifier, basics.OneTimeIDForRound(305, dilution))
-}
-
-// TestDeleteOldKeysRefusesUnsafeStore verifies DeleteOldKeys writes nothing
-// when the stored header cannot be trusted: an undecodable header fails
-// closed, and a header ahead of memory is refused rather than rewound (a
-// rewrite from memory could resurrect retired keys either way).
-func TestDeleteOldKeysRefusesUnsafeStore(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	cases := []struct {
-		name    string
-		header  func(current crypto.OneTimeSignatureSecretsHeader) []byte
-		wantErr string
-	}{
-		{"undecodableHeader", func(crypto.OneTimeSignatureSecretsHeader) []byte { return []byte{0xff, 0x00} }, "undecodable"},
-		{"futureCursor", func(h crypto.OneTimeSignatureSecretsHeader) []byte {
-			h.FirstBatch += 5
-			h.BatchCount -= 5
-			return protocol.Encode(&h)
-		}, "refusing to resurrect"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			a := require.New(t)
-			const dilution = 10
-			part, partDB := makeSmallTestKey(t, a, 0, 300, dilution)
-			defer closeDBS(partDB)
-
-			proto := config.Consensus[protocol.ConsensusCurrentVersion]
-			a.NoError(<-part.DeleteOldKeys(basics.Round(25), proto))
-			batchRows := countTableRows(a, partDB, "VotingBatches")
-			offsetRows := countTableRows(a, partDB, "VotingOffsets")
-
-			execSQL(a, partDB, "UPDATE ParticipationAccount SET votingHeader=?", tc.header(votingSnapshot(part.Voting).Header()))
-
-			err := <-part.DeleteOldKeys(basics.Round(26), proto)
-			a.ErrorContains(err, tc.wantErr)
-			a.Equal(batchRows, countTableRows(a, partDB, "VotingBatches"), "rows written despite an unsafe stored header")
-			a.Equal(offsetRows, countTableRows(a, partDB, "VotingOffsets"))
-		})
-	}
 }
 
 // TestRestoreDetectsCorruption verifies a damaged header or damaged subkey

@@ -175,13 +175,10 @@ func TestRegistryMigrationV1ToV2(t *testing.T) {
 	a.True(registry.Get(unconvertible.ID()).IsZero(), "unconvertible record not excluded")
 	a.Equal(len(midLife.Voting.Batches), countTableRows(a, registry.store.Rdb, "VotingBatches"), "rows left behind by the failed conversion")
 
-	// the record without voting secrets loads (as a zero-value placeholder)
-	// and keeps flushing normally
+	// the record without voting secrets loads as a zero-value placeholder
+	// (TestFlushWithoutVotingSecrets covers flushing it)
 	a.Empty(registryReadRawVotingHeader(a, registry, noVoting.ID()))
 	a.True(registry.Get(noVoting.ID()).Voting.MsgIsZero())
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	a.NoError(registry.DeleteExpired(10, proto))
-	a.NoError(registry.Flush(defaultTimeout))
 }
 
 // TestFlushWithoutVotingSecrets verifies a key stored without voting secrets
@@ -290,7 +287,10 @@ func TestRegistryKeyLifecycle(t *testing.T) {
 // when the stored header still establishes the deletion state (lost subkey
 // rows), but nothing when it does not (an undecodable, empty, or foreign
 // header) — the registry may be ahead of the key file, so the copy must
-// neither reach the store nor become usable from the cache.
+// neither reach the store nor become usable from the cache.  An excluded
+// record does not linger either: it expires like any other key, or is
+// deleted on request (the remedy for a key installed over the REST API,
+// which has no key file to be re-installed from).
 func TestRegistryExcludesCorruptRecord(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -307,23 +307,27 @@ func TestRegistryExcludesCorruptRecord(t *testing.T) {
 		// refused is the error the re-insert must fail with; empty means it
 		// must succeed and replace the rows
 		refused string
+		// expire cleans the refused record up by expiry (its LastValid is
+		// 200) rather than by Delete
+		expire bool
 	}{
 		{"missingBatchRow", 0, func(a *require.Assertions, registry *participationDB, corruptID ParticipationID, _ Participation) {
-			execSQL(a, registry.store.Wdb, "DELETE FROM VotingBatches WHERE batch=(SELECT MAX(batch) FROM VotingBatches) AND pk=(SELECT pk FROM Keysets WHERE participationID=?)", corruptID[:])
-		}, ""},
+			// the healthy key has more batches, so scope the damage to this key's rows
+			execSQL(a, registry.store.Wdb, "DELETE FROM VotingBatches WHERE pk=(SELECT pk FROM Keysets WHERE participationID=?) AND batch=(SELECT MAX(batch) FROM VotingBatches WHERE pk=(SELECT pk FROM Keysets WHERE participationID=?))", corruptID[:], corruptID[:])
+		}, "", false},
 		{"undecodableHeader", 150, func(a *require.Assertions, registry *participationDB, corruptID ParticipationID, _ Participation) {
 			damageHeader(a, registry, corruptID, []byte{0xff, 0x00})
-		}, "undecodable"},
+		}, "undecodable", true},
 		{"emptyHeader", 150, func(a *require.Assertions, registry *participationDB, corruptID ParticipationID, _ Participation) {
 			damageHeader(a, registry, corruptID, nil)
-		}, "no voting header stored"},
+		}, "no voting header stored", false},
 		{"foreignHeader", 0, func(a *require.Assertions, registry *participationDB, corruptID ParticipationID, healthy Participation) {
 			// another key's header with a cursor ahead of the stored rows
 			foreign := votingSnapshot(healthy.Voting).Header()
 			foreign.FirstBatch += 5
 			foreign.BatchCount -= 5
 			damageHeader(a, registry, corruptID, protocol.Encode(&foreign))
-		}, "different voting key"},
+		}, "different voting key", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -331,7 +335,9 @@ func TestRegistryExcludesCorruptRecord(t *testing.T) {
 			registry, dbfile := getRegistry(t)
 			defer registryCloseTest(t, registry, dbfile)
 
-			pHealthy := makeTestParticipation(a, 1, 1, 200, dilution)
+			// the healthy key outlives the corrupt one, so expiring the latter
+			// leaves the former in place
+			pHealthy := makeTestParticipation(a, 1, 1, 300, dilution)
 			healthyID, err := registry.Insert(pHealthy)
 			a.NoError(err)
 			pCorrupt := makeTestParticipation(a, 2, 1, 200, dilution)
@@ -385,6 +391,20 @@ func TestRegistryExcludesCorruptRecord(t *testing.T) {
 					a.Empty(reloaded.Voting.Offsets, "older copy resurrected the excluded record")
 				}
 				a.False(registry.Get(healthyID).IsZero())
+
+				// cleanup: by expiry or on request, the record's rows are gone
+				// and the healthy key is untouched
+				if tc.expire {
+					a.NoError(registry.DeleteExpired(201, proto))
+				} else {
+					a.NoError(registry.Delete(corruptID))
+				}
+				a.NoError(registry.Flush(defaultTimeout))
+				keysets, _ = corruptRows()
+				a.Zero(keysets, "excluded record not cleaned up")
+				a.NoError(registry.initializeCache())
+				a.True(registry.Get(corruptID).IsZero())
+				a.False(registry.Get(healthyID).IsZero())
 				return
 			}
 
@@ -400,62 +420,6 @@ func TestRegistryExcludesCorruptRecord(t *testing.T) {
 			a.False(registry.Get(healthyID).IsZero(), "healthy record lost after re-insert")
 		})
 	}
-}
-
-// TestRegistryExcludedRecordCleanup verifies an excluded record does not
-// linger: it is deleted when it expires, like any other key, and it can be
-// deleted on request (the remedy for a key installed over the REST API, which
-// has no key file to be re-installed from).
-func TestRegistryExcludedRecordCleanup(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
-
-	registry, dbfile := getRegistry(t)
-	defer registryCloseTest(t, registry, dbfile)
-
-	const dilution = 10
-	pExpiring := makeTestParticipation(a, 1, 1, 50, dilution)
-	expiringID, err := registry.Insert(pExpiring)
-	a.NoError(err)
-	pDeleted := makeTestParticipation(a, 2, 1, 200, dilution)
-	deletedID, err := registry.Insert(pDeleted)
-	a.NoError(err)
-	pHealthy := makeTestParticipation(a, 3, 1, 200, dilution)
-	healthyID, err := registry.Insert(pHealthy)
-	a.NoError(err)
-	a.NoError(registry.Flush(defaultTimeout))
-
-	keysetRows := func(id ParticipationID) int {
-		return queryInt(a, registry.store.Rdb, "SELECT count(*) FROM Keysets WHERE participationID=?", id[:])
-	}
-
-	// corrupt both headers and reload: both excluded, healthy key intact
-	for _, id := range []ParticipationID{expiringID, deletedID} {
-		execSQL(a, registry.store.Wdb, "UPDATE Rolling SET votingHeader=x'ff00' WHERE pk=(SELECT pk FROM Keysets WHERE participationID=?)", id[:])
-	}
-	a.NoError(registry.initializeCache())
-	a.True(registry.Get(expiringID).IsZero())
-	a.True(registry.Get(deletedID).IsZero())
-	a.False(registry.Get(healthyID).IsZero())
-	a.Equal(len(pHealthy.Voting.Batches), countTableRows(a, registry.store.Rdb, "VotingBatches"), "only the healthy key's rows remain")
-
-	// the expiring key is removed by the regular expiry pass
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	a.NoError(registry.DeleteExpired(60, proto))
-	a.NoError(registry.Flush(defaultTimeout))
-	a.Zero(keysetRows(expiringID), "expired excluded record not deleted")
-	a.Equal(1, keysetRows(deletedID))
-
-	// the other is removed on request
-	a.NoError(registry.Delete(deletedID))
-	a.NoError(registry.Flush(defaultTimeout))
-	a.Zero(keysetRows(deletedID), "excluded record not deleted on request")
-	a.Equal(1, keysetRows(healthyID))
-
-	// nothing comes back on a reload, and the healthy key is untouched
-	a.NoError(registry.initializeCache())
-	a.Len(registry.GetAll(), 1)
-	a.False(registry.Get(healthyID).IsZero())
 }
 
 // TestInsertFastForwardsLaggingCopy verifies re-inserting a lagging copy of a
@@ -675,58 +639,11 @@ func (b *blockingOp) apply(*participationDB) error {
 	return nil
 }
 
-// TestDeleteDuringPendingInsert verifies a Delete that arrives while the
-// key's insert is still being written is honored once the write lands,
-// instead of being dropped as "not found" and the key coming back.
-func TestDeleteDuringPendingInsert(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
-
-	registry, dbfile := getRegistry(t)
-	defer registryCloseTest(t, registry, dbfile)
-
-	p := makeTestParticipation(a, 1, 1, 200, 10)
-	id := p.ID()
-
-	// park the write thread, then start the insert behind it
-	block := &blockingOp{started: make(chan struct{}), release: make(chan struct{})}
-	registry.writeQueue <- makeOpRequest(block)
-	<-block.started
-	inserted := make(chan error, 1)
-	go func() {
-		_, err := registry.Insert(p)
-		inserted <- err
-	}()
-	a.Eventually(func() bool {
-		registry.mutex.RLock()
-		defer registry.mutex.RUnlock()
-		_, pending := registry.pendingInserts[id]
-		return pending
-	}, 5*time.Second, time.Millisecond, "insert never became pending")
-	a.True(registry.Get(id).IsZero(), "pending insert visible from the cache")
-
-	// the delete lands in the pending window
-	a.NoError(registry.Delete(id))
-	close(block.release)
-	a.NoError(<-inserted)
-	a.NoError(registry.Flush(defaultTimeout))
-
-	a.True(registry.Get(id).IsZero(), "deleted key came back once the pending insert completed")
-	a.Zero(queryInt(a, registry.store.Rdb, "SELECT count(*) FROM Keysets WHERE participationID=?", id[:]), "deleted key left on disk")
-	a.NoError(registry.initializeCache())
-	a.True(registry.Get(id).IsZero())
-
-	// and the key can be inserted again afterwards
-	_, err := registry.Insert(p)
-	a.NoError(err)
-	a.False(registry.Get(id).IsZero())
-}
-
-// TestReinsertDuringDeferredDelete verifies a re-insert that races the
-// deferred deletion of a pending insert cannot order its write ahead of that
-// deletion: the ID stays reserved until the deletion is queued, so the
-// re-insert is refused instead of being stored and then erased from disk
-// while still cached.
+// TestReinsertDuringDeferredDelete verifies a Delete that arrives while the
+// key's insert is still being written is honored once the write lands, and
+// that a re-insert racing that deferred deletion cannot order its write ahead
+// of it: the ID stays reserved until the deletion is queued, so the re-insert
+// is refused instead of being stored and then erased from disk while cached.
 func TestReinsertDuringDeferredDelete(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -773,8 +690,10 @@ func TestReinsertDuringDeferredDelete(t *testing.T) {
 	close(gateRelease)
 	a.NoError(<-inserted)
 	a.NoError(registry.Flush(defaultTimeout))
+	a.True(registry.Get(id).IsZero(), "deleted key came back once the pending insert completed")
+	a.Zero(queryInt(a, registry.store.Rdb, "SELECT count(*) FROM Keysets WHERE participationID=?", id[:]), "deleted key left on disk")
+	a.NoError(registry.initializeCache())
 	a.True(registry.Get(id).IsZero())
-	a.Zero(queryInt(a, registry.store.Rdb, "SELECT count(*) FROM Keysets WHERE participationID=?", id[:]))
 
 	// once the deletion is queued the key can be inserted again, and cache
 	// and disk agree
