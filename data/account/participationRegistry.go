@@ -353,20 +353,23 @@ const (
 
 	// VotingBatches/VotingOffsets hold one row per ephemeral voting subkey,
 	// so per-round key deletion is a row delete instead of a rewrite of the
-	// whole keyset (Rolling.votingHeader describes the rows).
+	// whole keyset (Rolling.votingHeader describes the rows).  WITHOUT ROWID
+	// makes the composite primary key the table's only B-tree; a rowid table
+	// would maintain a separate index B-tree and write an extra page per
+	// deleted row.
 	createVotingBatches = `CREATE TABLE VotingBatches (
 			pk    INTEGER NOT NULL,
 			batch INTEGER NOT NULL, --* absolute batch number
 			data  BLOB    NOT NULL, --* msgpack encoding of the batch subkey
 			PRIMARY KEY (pk, batch)
-		)`
+		) WITHOUT ROWID`
 	createVotingOffsets = `CREATE TABLE VotingOffsets (
 			pk    INTEGER NOT NULL,
 			batch INTEGER NOT NULL, --* the batch these offsets belong to (FirstBatch-1)
 			off   INTEGER NOT NULL, --* absolute offset within batch
 			data  BLOB    NOT NULL, --* msgpack encoding of the offset subkey
 			PRIMARY KEY (pk, batch, off)
-		)`
+		) WITHOUT ROWID`
 	insertKeysetQuery         = `INSERT INTO Keysets (participationID, account, firstValidRound, lastValidRound, keyDilution, vrf, stateProof) VALUES (?, ?, ?, ?, ?, ?, ?)`
 	insertRollingQuery        = `INSERT INTO Rolling (pk, votingHeader) VALUES (?, ?)`
 	appendStateProofKeysQuery = `INSERT INTO StateProofKeys (pk, round, key) VALUES(?, ?, ?)`

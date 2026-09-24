@@ -165,6 +165,7 @@ func TestRegistryMigrationV1ToV2(t *testing.T) {
 		a.NoError(err2)
 		a.Contains(columns, "votingHeader")
 		a.NotContains(columns, "voting")
+		requireNoAutoIndex(a, tx)
 		return err
 	})
 	a.NoError(err)

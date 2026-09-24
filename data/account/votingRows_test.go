@@ -55,6 +55,16 @@ func countTableRows(a *require.Assertions, store db.Accessor, table string) (n i
 	return n
 }
 
+// requireNoAutoIndex checks the subkey tables have no separate index B-tree
+// (a rowid table with a composite primary key gets an automatic one, which
+// would cost an extra page write per deleted row).
+func requireNoAutoIndex(a *require.Assertions, tx *sql.Tx) {
+	var n int
+	err := tx.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='index' AND tbl_name IN ('VotingBatches', 'VotingOffsets')").Scan(&n)
+	a.NoError(err)
+	a.Zero(n, "subkey tables carry a separate index B-tree")
+}
+
 // tableColumnsTx lists the column names of a table.
 func tableColumnsTx(tx *sql.Tx, table string) (names []string, err error) {
 	rows, err := tx.Query("PRAGMA table_info(" + table + ")")
@@ -212,6 +222,11 @@ func TestMigrateFromVersion3(t *testing.T) {
 			a.NoError(err)
 			a.Equal(PartTableSchemaVersion, versions[PartTableSchemaName])
 			a.NoError(testDBContainsAllColumns(partDB))
+
+			a.NoError(partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+				requireNoAutoIndex(a, tx)
+				return nil
+			}))
 
 			// the legacy blob column is gone, the header column is present
 			columns := tableColumns(a, partDB, "ParticipationAccount")
