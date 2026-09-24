@@ -301,15 +301,21 @@ func (d OpDetails) trust() OpDetails {
 }
 
 // subOp marks an OpSpec as belonging to a multi-byte opcode family. The
-// OpSpec.Opcode field is the prefix byte; n is the second byte. Size is set to
-// 2 (prefix + sub-opcode) with no further immediates; If a multibyte opcode
-// ever requires immediates, ensure the resulting opcode's Size is set to
-// account for both the subop and the immediates.
-func subOp(n byte) OpDetails {
-	d := detDefault()
-	d.Size++
+// OpSpec.Opcode field is the prefix byte; n is the second byte. Fixed sizes
+// grow to include the sub-opcode; dynamically determined sizes remain zero.
+// For dynamic-size members, both check and op must account for the
+// sub-opcode byte when computing nextpc.
+func (d OpDetails) subOp(n byte) OpDetails {
+	if d.Size != 0 {
+		d.Size++
+	}
 	d.SubOpcode = n
 	return d
+}
+
+// subOp constructs a multi-byte opcode with no immediates.
+func subOp(n byte) OpDetails {
+	return detDefault().subOp(n)
 }
 
 func immKinded(kind immKind, names ...string) OpDetails {
@@ -785,7 +791,9 @@ var OpSpecs = []OpSpec{
 	{0xc4, "gloadss", opGloadss, proto("ii:a"), 6, only(ModeApp)},
 	{0xc5, "itxnas", opItxnas, proto("i:a"), 6, field("f", &TxnArrayFields).only(ModeApp)},
 	{0xc6, "gitxnas", opGitxnas, proto("i:a"), 6, immediates("t", "f").field("f", &TxnArrayFields).only(ModeApp)},
-	{0xc7, "allow", opAllow, proto(":"), logicSigAllowVersion, field("f", &LogicSigAllowanceFields).only(ModeSig)},
+
+	// Execution settings: prefix 0xc7, with sub-opcodes selecting the operation.
+	{0xc7, "allow", opAllow, proto(":"), logicSigAllowVersion, field("f", &LogicSigAllowanceFields).subOp(0x01).only(ModeSig)},
 
 	// randomness support
 	{0xd0, "vrf_verify", opVrfVerify, proto("bb{80}b{32}:b{64}T"), randomnessVersion, field("s", &VrfStandards).costs(5700)},

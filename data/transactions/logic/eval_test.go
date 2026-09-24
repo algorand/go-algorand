@@ -697,9 +697,17 @@ func TestLogicSigAllowOpcode(t *testing.T) {
 	for _, fs := range logicSigAllowanceSpecs {
 		source := "allow " + fs.name + "; int 1"
 		ops := testProg(t, source, fs.version)
+		disassembled, err := Disassemble(ops.Program)
+		require.NoError(t, err)
+		require.Contains(t, disassembled, "allow "+fs.name)
+		reassembled := testProg(t, disassembled, assemblerNoVersion)
+		require.Equal(t, ops.Program, reassembled.Program)
+
 		previousVersion := fs.version - 1
 		if fs.version == logicSigAllowVersion {
 			testProg(t, source, previousVersion, exp(1, "allow opcode was introduced in v14"))
+			ops.Program[0] = byte(previousVersion)
+			testLogicBytes(t, ops.Program, defaultSigParamsWithVersion(previousVersion), "illegal opcode", "illegal opcode")
 		} else {
 			testProg(t, source, previousVersion, exp(1,
 				fmt.Sprintf("...allow %s field was introduced in v%d...", fs.name, fs.version)))
@@ -710,15 +718,27 @@ func TestLogicSigAllowOpcode(t *testing.T) {
 	testProg(t, "allow Unknown; int 1", logicSigAllowVersion, exp(1, "allow unknown field..."))
 
 	op := OpsByName[logicSigAllowVersion]["allow"]
-	truncatedProgram := []byte{byte(logicSigAllowVersion), op.Opcode}
+	// A family member needs both a sub-opcode and its field immediate.
+	testLogicBytes(t, []byte{byte(logicSigAllowVersion), op.Opcode}, defaultSigParams(),
+		"missing sub-opcode", "missing sub-opcode")
+	for _, sub := range []byte{0x00, 0xff} {
+		testLogicBytes(t, []byte{byte(logicSigAllowVersion), op.Opcode, sub}, defaultSigParams(),
+			"improper sub-opcode", "improper sub-opcode")
+	}
+	truncatedProgram := []byte{byte(logicSigAllowVersion), op.Opcode, op.SubOpcode}
 	testLogicBytes(t, truncatedProgram, defaultSigParams(),
 		"program ends without immediate value", "program ends without immediate value")
+	_, err := Disassemble(truncatedProgram)
+	require.ErrorContains(t, err, "program end while reading immediate f for allow")
 
 	program := testProg(t, "allow RekeyTo; int 1", logicSigAllowVersion).Program
 	require.Equal(t, op.Opcode, program[1])
-	require.Equal(t, byte(allowRekeyTo), program[2])
-	program[2] = byte(invalidLogicSigAllowance)
+	require.Equal(t, op.SubOpcode, program[2])
+	require.Equal(t, byte(allowRekeyTo), program[3])
+	program[3] = byte(invalidLogicSigAllowance)
 	testLogicBytes(t, program, defaultSigParams(), "invalid allow field")
+	_, err = Disassemble(program)
+	require.ErrorContains(t, err, "invalid immediate f for allow")
 }
 
 // TestBlankStackSufficient will fail if an opcode is added with more than the
