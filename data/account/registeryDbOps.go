@@ -149,24 +149,20 @@ func (r *registerOp) apply(db *participationDB) error {
 // whose relation to the stored cursor cannot be established must not replace
 // it.  The record stays excluded from the cache until the operator rebuilds
 // the registry.
-func fastForwardToStoredCursor(tx *sql.Tx, log logging.Logger, id ParticipationID, secrets *crypto.OneTimeSignatureSecrets, dilution uint64) error {
-	rows, err := tx.Query(selectRollingVotingByID, id[:])
+func fastForwardToStoredCursor(ctx context.Context, tx *sql.Tx, log logging.Logger, id ParticipationID, secrets *crypto.OneTimeSignatureSecrets, dilution uint64) error {
+	// every stored row is considered (a duplicate left by damage is possible),
+	// and the most advanced cursor wins
+	headers, err := readRollingHeaders(ctx, tx, id)
 	if err != nil {
 		return fmt.Errorf("unable to read the stored voting header for %s: %w", id, err)
 	}
-	defer rows.Close()
 
 	current := votingSnapshot(secrets).Header()
 	var stored *crypto.OneTimeSignatureSecretsHeader
-	for rows.Next() {
-		var pk int64
-		var rawHeader []byte
-		if err := rows.Scan(&pk, &rawHeader); err != nil {
-			return err
-		}
+	for _, h := range headers {
 		// an existing row without a usable header (empty or undecodable)
 		// cannot establish the stored deletion state: fail closed
-		hdr, err := decodeVotingHeader(rawHeader)
+		hdr, err := decodeVotingHeader(h.raw)
 		if err != nil {
 			return fmt.Errorf("stored voting header for key %s is undecodable; refusing to replace it from the inserted copy (delete %s and restart to rebuild the registry): %v",
 				id, config.ParticipationRegistryFilename, err)
@@ -179,10 +175,6 @@ func fastForwardToStoredCursor(tx *sql.Tx, log logging.Logger, id ParticipationI
 			stored = &hdr
 		}
 	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	rows.Close()
 
 	if stored == nil {
 		return nil // known-new: nothing stored for this key
@@ -242,7 +234,7 @@ func (i *insertOp) apply(db *participationDB) (err error) {
 			if dilution == 0 {
 				dilution = config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution
 			}
-			if err2 := fastForwardToStoredCursor(tx, db.log, i.id, i.record.Voting, dilution); err2 != nil {
+			if err2 := fastForwardToStoredCursor(ctx, tx, db.log, i.id, i.record.Voting, dilution); err2 != nil {
 				return err2
 			}
 		}

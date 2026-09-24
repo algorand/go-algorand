@@ -1190,33 +1190,48 @@ func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (
 	return result, nil
 }
 
+// rollingHeader is one Rolling row of a participation ID: its primary key
+// and stored voting header.
+type rollingHeader struct {
+	pk  int64
+	raw []byte
+}
+
+// readRollingHeaders returns every Rolling row stored for a participation ID
+// (normally exactly one).
+func readRollingHeaders(ctx context.Context, tx *sql.Tx, id ParticipationID) ([]rollingHeader, error) {
+	rows, err := tx.QueryContext(ctx, selectRollingVotingByID, id[:])
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var headers []rollingHeader
+	for rows.Next() {
+		var h rollingHeader
+		if err = rows.Scan(&h.pk, &h.raw); err != nil {
+			return nil, err
+		}
+		headers = append(headers, h)
+	}
+	return headers, rows.Err()
+}
+
 // resolveRollingPK looks up the Rolling primary key and stored voting
 // header for a participation ID, keeping the legacy ErrNoKeyForID and
 // ErrMultipleKeysForID semantics that callers special-case.
 func resolveRollingPK(ctx context.Context, tx *sql.Tx, id ParticipationID) (pk int64, rawHeader []byte, err error) {
-	rows, err := tx.QueryContext(ctx, selectRollingVotingByID, id[:])
+	headers, err := readRollingHeaders(ctx, tx, id)
 	if err != nil {
 		return 0, nil, err
 	}
-	defer rows.Close()
-
-	numRows := 0
-	for rows.Next() {
-		if err = rows.Scan(&pk, &rawHeader); err != nil {
-			return 0, nil, err
-		}
-		numRows++
-	}
-	if err = rows.Err(); err != nil {
-		return 0, nil, err
-	}
-	if numRows > 1 {
+	if len(headers) > 1 {
 		return 0, nil, ErrMultipleKeysForID
 	}
-	if numRows < 1 {
+	if len(headers) < 1 {
 		return 0, nil, ErrNoKeyForID
 	}
-	return pk, rawHeader, nil
+	return headers[0].pk, headers[0].raw, nil
 }
 
 // updateRegistrationFields persists only the registration window

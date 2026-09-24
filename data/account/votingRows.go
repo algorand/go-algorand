@@ -395,43 +395,59 @@ func insertKeyedSubkeys(tx *sql.Tx, insertSQL string, prefixArgs []any, rows []c
 	return nil
 }
 
+// scanSubkeyRows drives a subkey row scan.  Rows carry (index, data),
+// preceded by the owning pk when withPK is set and by the owning batch when
+// withBatch is set; visit receives each row with those leading columns (zero
+// when absent).  The rows are closed on return.
+func scanSubkeyRows(rows *sql.Rows, withPK, withBatch bool, visit func(pk int64, batch uint64, row crypto.KeyedSubkey)) error {
+	defer rows.Close()
+	for rows.Next() {
+		var pk int64
+		var batch uint64
+		var row crypto.KeyedSubkey
+		dest := make([]any, 0, 4)
+		if withPK {
+			dest = append(dest, &pk)
+		}
+		if withBatch {
+			dest = append(dest, &batch)
+		}
+		dest = append(dest, &row.Index, &row.Key)
+		if err := rows.Scan(dest...); err != nil {
+			return err
+		}
+		visit(pk, batch, row)
+	}
+	return rows.Err()
+}
+
+// readKeyedSubkeys reads (index, data) rows.
 func readKeyedSubkeys(tx *sql.Tx, query string, args ...any) ([]crypto.KeyedSubkey, error) {
 	rows, err := tx.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
 	var result []crypto.KeyedSubkey
-	for rows.Next() {
-		var row crypto.KeyedSubkey
-		if err := rows.Scan(&row.Index, &row.Key); err != nil {
-			return nil, err
-		}
+	err = scanSubkeyRows(rows, false, false, func(_ int64, _ uint64, row crypto.KeyedSubkey) {
 		result = append(result, row)
-	}
-	return result, rows.Err()
+	})
+	return result, err
 }
 
+// readOffsetSubkeys reads (batch, index, data) rows, returning each row's
+// batch alongside the subkeys.
 func readOffsetSubkeys(tx *sql.Tx, query string, args ...any) ([]crypto.KeyedSubkey, []uint64, error) {
 	rows, err := tx.Query(query, args...)
 	if err != nil {
 		return nil, nil, err
 	}
-	defer rows.Close()
-
 	var result []crypto.KeyedSubkey
 	var batches []uint64
-	for rows.Next() {
-		var batch uint64
-		var row crypto.KeyedSubkey
-		if err := rows.Scan(&batch, &row.Index, &row.Key); err != nil {
-			return nil, nil, err
-		}
+	err = scanSubkeyRows(rows, false, true, func(_ int64, batch uint64, row crypto.KeyedSubkey) {
 		result = append(result, row)
 		batches = append(batches, batch)
-	}
-	return result, batches, rows.Err()
+	})
+	return result, batches, err
 }
 
 // groupedSubkeys carries the subkey rows of one pk; batches holds each row's
@@ -449,27 +465,14 @@ func readGroupedSubkeys(tx *sql.Tx, query string, withBatch bool) (map[int64]gro
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
 	result := make(map[int64]groupedSubkeys)
-	for rows.Next() {
-		var pk int64
-		var batch uint64
-		var row crypto.KeyedSubkey
-		if withBatch {
-			err = rows.Scan(&pk, &batch, &row.Index, &row.Key)
-		} else {
-			err = rows.Scan(&pk, &row.Index, &row.Key)
-		}
-		if err != nil {
-			return nil, err
-		}
+	err = scanSubkeyRows(rows, true, withBatch, func(pk int64, batch uint64, row crypto.KeyedSubkey) {
 		group := result[pk]
 		group.subkeys = append(group.subkeys, row)
 		if withBatch {
 			group.batches = append(group.batches, batch)
 		}
 		result[pk] = group
-	}
-	return result, rows.Err()
+	})
+	return result, err
 }
