@@ -91,9 +91,8 @@ endpoint), as does `algokey part reparent`; the read-only commands
 migrating it. Once a file is migrated, older releases cannot read it (the node
 renames such files to `*.old` and skips them); rolling back to an older
 release requires a pre-upgrade backup of the file, or generating and
-registering fresh keys. Schema versions 1 and 2 predate state proofs — any
-key stored in such a file expired years ago — and are no longer readable; the
-node renames them to `*.old` and skips them as well.
+registering fresh keys. Files at schema versions 1 and 2 are migrated through
+the same path.
 
 To rehearse the migration of a version 3 file without touching the original —
 and to see how long algod will spend doing it at startup — use:

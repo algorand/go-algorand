@@ -211,8 +211,8 @@ func runPartMigrate(keyfile string, noValidation bool, out io.Writer) (partkey a
 		fmt.Fprintf(out, "Already at the latest schema version; nothing to do.\n")
 		return partkey, false, nil
 	}
-	if version != account.PartTableSchemaVersionWholeBlob {
-		return partkey, false, fmt.Errorf("unsupported schema version %d: only version %d files can be migrated", version, account.PartTableSchemaVersionWholeBlob)
+	if version < 1 || version > account.PartTableSchemaVersion {
+		return partkey, false, fmt.Errorf("unsupported schema version %d", version)
 	}
 
 	newFile := keyfile + ".new"

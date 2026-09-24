@@ -34,8 +34,8 @@ const PartTableSchemaVersion = 4
 
 // PartTableSchemaVersionWholeBlob is the last schema version that stored the
 // voting secrets as one blob; later versions store a header plus per-subkey
-// rows.  It is the oldest version that can still be read (without migration)
-// and the only one that is migrated.
+// rows.  Versions 1 and 2 stored the blob too, without the metadata columns
+// added later, and are migrated through it.
 const PartTableSchemaVersionWholeBlob = 3
 
 // ErrUnsupportedSchema is the error returned when the PartTable schema version is wrong.
@@ -124,6 +124,32 @@ func partMigrate(tx *sql.Tx) (err error) {
 }
 
 func updateDB(tx *sql.Tx, partVersion int) (int, error) {
+	if partVersion == 1 {
+		_, err := tx.Exec("ALTER TABLE ParticipationAccount ADD keyDilution INTEGER NOT NULL DEFAULT 0")
+		if err != nil {
+			return 0, err
+		}
+
+		partVersion = 2
+		_, err = tx.Exec("UPDATE schema SET version=? WHERE tablename=?", partVersion, PartTableSchemaName)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	if partVersion == 2 {
+		_, err := tx.Exec("ALTER TABLE ParticipationAccount ADD stateProof BLOB")
+		if err != nil {
+			return 0, err
+		}
+
+		partVersion = 3
+		_, err = tx.Exec("UPDATE schema SET version=? WHERE tablename=?", partVersion, PartTableSchemaName)
+		if err != nil {
+			return 0, err
+		}
+	}
+
 	if partVersion == PartTableSchemaVersionWholeBlob {
 		err := migrateVotingBlobToRows(tx)
 		if err != nil {

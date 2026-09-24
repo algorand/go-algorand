@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -119,6 +120,39 @@ func setupTestDBAtVer3(partDB db.Accessor, part Participation) error {
 		_, err := tx.Exec("UPDATE schema SET version=? WHERE tablename=?", PartTableSchemaVersionWholeBlob, PartTableSchemaName)
 		return err
 	})
+}
+
+// TestRestoreUnmigratedLegacyVersions verifies the read-only restore handles
+// every supported schema version as-is (the migrate command validates a
+// converted copy against its untouched original this way).
+func TestRestoreUnmigratedLegacyVersions(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	part, tmpDB := makeSmallTestKey(t, a, 0, 300, 10)
+	defer closeDBS(tmpDB)
+
+	setups := map[int]func(db.Accessor, Participation) error{1: setupTestDBAtVer1, 2: setupTestDBAtVer2, 3: setupTestDBAtVer3}
+	for version, setup := range setups {
+		partDB, err := db.MakeAccessor(fmt.Sprintf("%s_v%d", t.Name(), version), false, true)
+		a.NoError(err)
+		a.NoError(setup(partDB, part.Participation))
+
+		restored, err := RestoreParticipationUnmigrated(partDB)
+		a.NoError(err, "version %d", version)
+		a.Equal(encodedVotingSnapshot(part.Voting), encodedVotingSnapshot(restored.Voting), "version %d", version)
+		a.Equal(part.Parent, restored.Parent)
+		if version >= 2 {
+			a.Equal(part.KeyDilution, restored.KeyDilution)
+		}
+		a.Equal(version >= 3, restored.StateProofSecrets != nil, "version %d", version)
+
+		// the file was not touched
+		versions, err := getSchemaVersions(partDB)
+		a.NoError(err)
+		a.Equal(version, versions[PartTableSchemaName])
+		closeDBS(partDB)
+	}
 }
 
 // TestMigrateFromVersion3 converts hand-built version 3 files (a mid-life key

@@ -155,8 +155,7 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 var ErrCorruptedVotingData = errors.New("participation file voting data is corrupt")
 
 // RestoreParticipationUnmigrated restores a Participation without migrating
-// the file, reading whichever supported schema version it is at (from the
-// last whole-blob version through the latest).
+// the file, reading whichever supported schema version it is at.
 // This keeps the file byte-identical, e.g. for validating a migration
 // against the original.
 //
@@ -168,7 +167,7 @@ func RestoreParticipationUnmigrated(store db.Accessor) (PersistedParticipation, 
 	if err != nil {
 		return PersistedParticipation{}, err
 	}
-	if version < PartTableSchemaVersionWholeBlob || version > PartTableSchemaVersion {
+	if version < 1 || version > PartTableSchemaVersion {
 		return PersistedParticipation{}, ErrUnsupportedSchema
 	}
 	return restoreParticipationAtVersion(store, version)
@@ -197,9 +196,20 @@ func restoreParticipationAtVersion(store db.Accessor, version int) (acc Persiste
 			return fmt.Errorf("RestoreParticipation: %w: expected exactly one account row, found %d", ErrCorruptedVotingData, nrows)
 		}
 
-		row = tx.QueryRow("select parent, vrf, " + votingColumn + ", firstValid, lastValid, keyDilution, stateProof from ParticipationAccount")
+		// keyDilution arrived with schema version 2 and stateProof with 3
+		columns := "parent, vrf, " + votingColumn + ", firstValid, lastValid"
+		dest := []any{&rawParent, &rawVRF, &rawVoting, &acc.FirstValid, &acc.LastValid}
+		if version >= 2 {
+			columns += ", keyDilution"
+			dest = append(dest, &acc.KeyDilution)
+		}
+		if version >= 3 {
+			columns += ", stateProof"
+			dest = append(dest, &rawStateProof)
+		}
+		row = tx.QueryRow("select " + columns + " from ParticipationAccount")
 
-		err1 = row.Scan(&rawParent, &rawVRF, &rawVoting, &acc.FirstValid, &acc.LastValid, &acc.KeyDilution, &rawStateProof)
+		err1 = row.Scan(dest...)
 		if err1 != nil {
 			return fmt.Errorf("RestoreParticipation: could not read account raw data: %v", err1)
 		}

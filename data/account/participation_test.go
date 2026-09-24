@@ -203,31 +203,55 @@ func TestRetrieveFromDB(t *testing.T) {
 
 }
 
-// TestRetrieveFromDBAtUnsupportedVersions verifies pre-state-proof schema
-// versions (1 and 2) are rejected rather than migrated: any key stored in
-// such a file expired years ago.
-func TestRetrieveFromDBAtUnsupportedVersions(t *testing.T) {
+func TestRetrieveFromDBAtVersion1(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
-	part := setupkeyWithNoDBS(t, a).Participation
+	ppart := setupkeyWithNoDBS(t, a)
+	_, rootDB, partDB := createTestDBs(a, t.Name())
+	defer closeDBS(rootDB, partDB)
 
-	setups := map[int]func(db.Accessor, Participation) error{1: setupTestDBAtVer1, 2: setupTestDBAtVer2}
-	for version, setup := range setups {
-		_, rootDB, partDB := createTestDBs(a, fmt.Sprintf("%s_v%d", t.Name(), version))
-		a.NoError(setup(partDB, part))
+	part := ppart.Participation
+	a.NoError(setupTestDBAtVer1(partDB, part))
 
-		for _, restore := range []func(db.Accessor) (PersistedParticipation, error){RestoreParticipation, RestoreParticipationWithSecrets, RestoreParticipationUnmigrated} {
-			_, err := restore(partDB)
-			a.ErrorIs(err, ErrUnsupportedSchema, "version %d", version)
-		}
+	retrivedPart, err := RestoreParticipation(partDB)
+	a.NoError(err)
+	assertionForRestoringFromDBAtLowVersion(a, retrivedPart)
+	assertStateProofTablesExists(a, partDB)
 
-		// the rejected file was not modified
-		versions, err := getSchemaVersions(partDB)
-		a.NoError(err)
-		a.Equal(version, versions[PartTableSchemaName])
-		closeDBS(rootDB, partDB)
-	}
+	retrivedPart, err = RestoreParticipationWithSecrets(partDB)
+	a.NoError(err)
+	assertionForRestoringFromDBAtLowVersion(a, retrivedPart)
+	assertStateProofTablesExists(a, partDB)
+}
+
+func TestRetrieveFromDBAtVersion2(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+
+	ppart := setupkeyWithNoDBS(t, a)
+	_, rootDB, partDB := createTestDBs(a, t.Name())
+	defer closeDBS(rootDB, partDB)
+
+	part := ppart.Participation
+	a.NoError(setupTestDBAtVer2(partDB, part))
+
+	retrivedPart, err := RestoreParticipation(partDB)
+	a.NoError(err)
+	assertionForRestoringFromDBAtLowVersion(a, retrivedPart)
+	assertStateProofTablesExists(a, partDB)
+	versions, err := getSchemaVersions(partDB)
+	a.NoError(err)
+	a.Equal(versions[PartTableSchemaName], PartTableSchemaVersion)
+
+	retrivedPart, err = RestoreParticipationWithSecrets(partDB)
+	a.NoError(err)
+	assertionForRestoringFromDBAtLowVersion(a, retrivedPart)
+	assertStateProofTablesExists(a, partDB)
+	versions, err = getSchemaVersions(partDB)
+	a.NoError(err)
+	a.Equal(versions[PartTableSchemaName], PartTableSchemaVersion)
 }
 
 func TestKeyRegCreation(t *testing.T) {
@@ -248,6 +272,49 @@ func closeDBS(dbAccessor ...db.Accessor) {
 	for _, accessor := range dbAccessor {
 		accessor.Close()
 	}
+}
+
+func assertStateProofTablesExists(a *require.Assertions, store db.Accessor) {
+	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.Exec("select count(*) From StateProofKeys;")
+		return err
+	})
+	a.NoError(err)
+
+}
+func assertionForRestoringFromDBAtLowVersion(a *require.Assertions, retrivedPart PersistedParticipation) {
+	a.NotNil(retrivedPart)
+	a.Nil(retrivedPart.StateProofSecrets)
+}
+
+func TestMigrateFromVersion1(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	part := setupkeyWithNoDBS(t, a).Participation
+
+	_, rootDB, partDB := createTestDBs(a, t.Name())
+	defer closeDBS(rootDB, partDB)
+
+	a.NoError(setupTestDBAtVer1(partDB, part))
+	a.NoError(Migrate(partDB))
+
+	a.NoError(testDBContainsAllColumns(partDB))
+}
+
+func TestMigrationFromVersion2(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	part := setupkeyWithNoDBS(t, a).Participation
+
+	_, rootDB, partDB := createTestDBs(a, t.Name())
+	defer closeDBS(rootDB, partDB)
+
+	a.NoError(setupTestDBAtVer2(partDB, part))
+	a.NoError(Migrate(partDB))
+
+	a.NoError(testDBContainsAllColumns(partDB))
 }
 
 func testDBContainsAllColumns(partDB db.Accessor) error {
