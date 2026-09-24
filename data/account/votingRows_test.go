@@ -17,8 +17,11 @@
 package account
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -227,6 +230,56 @@ func TestMigrateFromVersion3(t *testing.T) {
 			a.Equal(part.KeyDilution, restored.KeyDilution)
 		})
 	}
+}
+
+// TestMigrationErasesLegacyBlob verifies the v3 migration leaves no trace of
+// the legacy voting blob in the file even when the caller's accessor was
+// opened without secure_delete: the blob held every subkey.
+func TestMigrationErasesLegacyBlob(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	part, tmpDB := makeSmallTestKey(t, a, 0, 300, 10)
+	defer closeDBS(tmpDB)
+	// a secret that only the legacy blob and the batch rows contain
+	secret := part.Voting.Batches[3].SK
+	fileContains := func(path string, needle []byte) bool {
+		data, err := os.ReadFile(path)
+		a.NoError(err)
+		return bytes.Contains(data, needle)
+	}
+
+	// build the v3 file with a plain (non-erasable) accessor, as the genesis
+	// generator and older tools do, and close it so the WAL is checkpointed
+	path := filepath.Join(t.TempDir(), "legacy.partkey")
+	partDB, err := db.MakeAccessor(path, false, false)
+	a.NoError(err)
+	a.NoError(setupTestDBAtVer3(partDB, part.Participation))
+	partDB.Close()
+	a.True(fileContains(path, secret[:]), "fixture does not contain the secret; the test proves nothing")
+
+	// migrate through the same kind of accessor
+	partDB, err = db.MakeAccessor(path, false, false)
+	a.NoError(err)
+	a.NoError(Migrate(partDB))
+	restored, err := RestoreParticipation(partDB)
+	a.NoError(err)
+	a.Equal(encodedVotingSnapshot(part.Voting), encodedVotingSnapshot(restored.Voting))
+	partDB.Close()
+
+	// the secret now lives only in its row; retire it through the erasable
+	// accessor the node uses, then check the file: only the migration's
+	// leftovers could still hold it
+	partDB, err = db.MakeErasableAccessor(path)
+	a.NoError(err)
+	restored, err = RestoreParticipation(partDB)
+	a.NoError(err)
+	restored.Store = partDB
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	a.NoError(<-restored.DeleteOldKeys(basics.Round(45), proto)) // consumes batches 0..3
+	partDB.Close()
+	a.NoFileExists(path + "-wal")
+	a.False(fileContains(path, secret[:]), "retired subkey recoverable from the migrated file")
 }
 
 // TestSyncVotingRows drives the per-round synchronizer through every

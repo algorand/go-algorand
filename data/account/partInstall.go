@@ -161,6 +161,12 @@ func createVotingSubkeyTables(tx *sql.Tx) error {
 // transaction may commit, and the legacy column is then dropped so the blob
 // (which held every subkey) is erased from the file.
 func migrateVotingBlobToRows(tx *sql.Tx) error {
+	// The legacy blob holds every subkey; dropping its column below must not
+	// leave it recoverable from freed pages, whatever accessor the caller
+	// opened the file with.
+	if err := enableSecureDelete(tx); err != nil {
+		return err
+	}
 	if err := createVotingSubkeyTables(tx); err != nil {
 		return err
 	}
@@ -191,6 +197,17 @@ func migrateVotingBlobToRows(tx *sql.Tx) error {
 
 	if _, err := tx.Exec("ALTER TABLE ParticipationAccount DROP COLUMN voting"); err != nil {
 		return fmt.Errorf("migrateVotingBlobToRows: failed to drop the legacy voting column: %w", err)
+	}
+	return nil
+}
+
+// enableSecureDelete turns on SQLite's secure_delete for the transaction's
+// connection, so content freed by the following statements is overwritten
+// with zeros instead of lingering in free pages.  The setting is per
+// connection and harmless to leave on.
+func enableSecureDelete(tx *sql.Tx) error {
+	if _, err := tx.Exec("PRAGMA secure_delete=ON"); err != nil {
+		return fmt.Errorf("failed to enable secure_delete: %w", err)
 	}
 	return nil
 }

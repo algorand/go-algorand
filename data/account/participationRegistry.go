@@ -461,6 +461,11 @@ func dbSchemaUpgrade1(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 		return nil
 	}
 
+	// the legacy blobs hold every subkey: whatever is freed below must be
+	// erased, not left in free pages
+	if err = enableSecureDelete(tx); err != nil {
+		return fmt.Errorf("dbSchemaUpgrade1: %w", err)
+	}
 	_, err = tx.Exec("ALTER TABLE Rolling ADD COLUMN votingHeader BLOB")
 	if err != nil {
 		return fmt.Errorf("dbSchemaUpgrade1: failed to add the votingHeader column: %w", err)
