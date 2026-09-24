@@ -171,17 +171,7 @@ func rewriteVotingRows(tx *sql.Tx, target votingRowTarget, snap crypto.OneTimeSi
 
 func updateVotingHeader(tx *sql.Tx, target votingRowTarget, hdr crypto.OneTimeSignatureSecretsHeader) error {
 	result, err := tx.Exec(target.updateHeader, append([]any{protocol.Encode(&hdr)}, target.prefixArgs...)...)
-	if err != nil {
-		return fmt.Errorf("failed to update the voting header: %w", err)
-	}
-	n, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if n != 1 {
-		return fmt.Errorf("voting header update affected %d rows, expected 1", n)
-	}
-	return nil
+	return verifyExecWithOneRowEffected(err, result, "update voting header")
 }
 
 // syncVotingRows brings the store's subkey rows from the stored header to
