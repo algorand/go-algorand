@@ -731,6 +731,11 @@ func verifyExecWithOneRowEffected(err error, result sql.Result, operationName st
 // that lags the stored deletion cursor is fast-forwarded, and one whose
 // relation to the stored state cannot be established is rejected), so a
 // rejected copy is never usable.
+//
+// A Delete that arrives while the write is in flight is honored as soon as
+// the write lands.  Insert still reports success in that case, since the key
+// was stored, so a caller that reads the key back immediately may find it
+// already gone.
 func (db *participationDB) Insert(record Participation) (id ParticipationID, err error) {
 	id = record.ID()
 
@@ -907,6 +912,13 @@ func (db *participationDB) DeleteExpired(latestRound basics.Round, agreementProt
 // ran in between has already updated the other fields of the live entry, and
 // overwriting the whole record would lose (and then flush over) that update.
 // The caller must hold db.mutex.
+//
+// A key deleted and re-inserted under the same ID in that window receives the
+// snapshot's Voting as well.  That is deliberate and safe: the ID pins the key
+// material, and the snapshot was advanced past the stored cursor the
+// re-inserted copy was fast-forwarded to, so it never rewinds the entry.
+// Skipping such entries would instead leave this round's deletion out of the
+// cache until the next pass.
 func (db *participationDB) mergeAdvancedVoting(updated []ParticipationRecord) {
 	for _, r := range updated {
 		live, ok := db.cache[r.ParticipationID]
