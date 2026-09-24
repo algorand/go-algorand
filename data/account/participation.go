@@ -203,7 +203,7 @@ func (part PersistedParticipation) DeleteOldKeys(current basics.Round, proto con
 				// could resurrect keys the file already retired.
 				return fmt.Errorf("Participation.DeleteOldKeys: %v; refusing to rewrite voting rows from memory", err)
 			}
-			err = syncVotingRows(tx, partkeyFileVotingTarget, stored, votingSnapshot(part.Voting))
+			err = syncVotingRowsAndHeader(tx, partkeyFileVotingTarget, stored, votingSnapshot(part.Voting))
 			if err != nil {
 				return fmt.Errorf("Participation.DeleteOldKeys: %v", err)
 			}

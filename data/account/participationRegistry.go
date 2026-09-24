@@ -418,6 +418,14 @@ const (
 		     effectiveFirstRound=?,
 		     effectiveLastRound=?
 		 WHERE pk=?`
+	updateRollingFieldsAndHeaderSQL = `UPDATE Rolling
+		 SET lastVoteRound=?,
+		     lastBlockProposalRound=?,
+		     lastStateProofRound=?,
+		     effectiveFirstRound=?,
+		     effectiveLastRound=?,
+		     votingHeader=?
+		 WHERE pk=?`
 	updateRegistrationFieldsSQL = `UPDATE Rolling
 		 SET effectiveFirstRound=?,
 		     effectiveLastRound=?
@@ -1227,45 +1235,53 @@ func updateRegistrationFields(ctx context.Context, tx *sql.Tx, record Participat
 
 // updateRollingFields sets all of the rolling fields according to the record
 // object, persisting the voting secrets incrementally: the stored voting
-// header is compared against the record's secrets and only the transition
-// (consumed subkey rows, refreshed offsets, new header) is written.
+// header is compared against the record's secrets, only the transition
+// (consumed subkey rows, refreshed offsets) is written, and the new header
+// travels in the same UPDATE as the rolling fields.
 func updateRollingFields(ctx context.Context, tx *sql.Tx, record ParticipationRecord) error {
 	pk, rawHeader, err := resolveRollingPK(ctx, tx, record.ParticipationID)
 	if err != nil {
 		return err
 	}
 
-	result, err := tx.ExecContext(ctx, updateRollingFieldsSQL,
-		record.LastVote,
-		record.LastBlockProposal,
-		record.LastStateProof,
-		record.EffectiveFirst,
-		record.EffectiveLast,
-		pk)
-	if err = verifyExecWithOneRowEffected(err, result, "update rolling fields"); err != nil {
-		return err
+	var newHeader *crypto.OneTimeSignatureSecretsHeader
+	if record.Voting != nil {
+		snap := votingSnapshot(record.Voting)
+		switch {
+		case len(rawHeader) == 0 && snap.Header() == (crypto.OneTimeSignatureSecretsHeader{}):
+			// a record stored without voting secrets (a NULL header and no
+			// rows): the cache carries a zero-value placeholder for it, since
+			// Duplicate never hands out a nil Voting, and there is nothing to
+			// persist
+		default:
+			// Fail closed: without the stored cursor there is no way to tell
+			// whether memory lags storage, and rewriting from memory could
+			// resurrect keys the registry already retired.
+			stored, herr := decodeVotingHeader(rawHeader)
+			if herr != nil {
+				return fmt.Errorf("stored voting header for key %s is undecodable; refusing to rewrite voting rows from memory (delete %s and restart to rebuild the registry): %v",
+					record.ParticipationID, config.ParticipationRegistryFilename, herr)
+			}
+			newHeader, err = syncVotingRows(tx, registryVotingTarget(pk), stored, snap)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
-	if record.Voting == nil {
-		return nil
+	// one UPDATE per record: the rolling fields, plus the voting header when
+	// the transition produced a new one
+	var result sql.Result
+	if newHeader != nil {
+		result, err = tx.ExecContext(ctx, updateRollingFieldsAndHeaderSQL,
+			record.LastVote, record.LastBlockProposal, record.LastStateProof,
+			record.EffectiveFirst, record.EffectiveLast, protocol.Encode(newHeader), pk)
+	} else {
+		result, err = tx.ExecContext(ctx, updateRollingFieldsSQL,
+			record.LastVote, record.LastBlockProposal, record.LastStateProof,
+			record.EffectiveFirst, record.EffectiveLast, pk)
 	}
-	snap := votingSnapshot(record.Voting)
-	if len(rawHeader) == 0 && snap.Header() == (crypto.OneTimeSignatureSecretsHeader{}) {
-		// a record stored without voting secrets (a NULL header and no rows):
-		// the cache carries a zero-value placeholder for it, since Duplicate
-		// never hands out a nil Voting, and there is nothing to persist
-		return nil
-	}
-
-	// Fail closed: without the stored cursor there is no way to tell whether
-	// memory lags storage, and rewriting from memory could resurrect keys the
-	// registry already retired.
-	stored, err := decodeVotingHeader(rawHeader)
-	if err != nil {
-		return fmt.Errorf("stored voting header for key %s is undecodable; refusing to rewrite voting rows from memory (delete %s and restart to rebuild the registry): %v",
-			record.ParticipationID, config.ParticipationRegistryFilename, err)
-	}
-	return syncVotingRows(tx, registryVotingTarget(pk), stored, snap)
+	return verifyExecWithOneRowEffected(err, result, "update rolling fields")
 }
 
 func recordActive(record ParticipationRecord, on basics.Round) bool {

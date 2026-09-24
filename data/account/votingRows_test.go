@@ -318,7 +318,7 @@ func TestSyncVotingRows(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			return syncVotingRows(tx, partkeyFileVotingTarget, stored, votingSnapshot(mem))
+			return syncVotingRowsAndHeader(tx, partkeyFileVotingTarget, stored, votingSnapshot(mem))
 		})
 	}
 	// advance moves memory to id, syncs, and checks header, row counts, and

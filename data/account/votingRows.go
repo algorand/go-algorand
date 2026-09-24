@@ -184,28 +184,33 @@ func updateVotingHeader(tx *sql.Tx, target votingRowTarget, hdr crypto.OneTimeSi
 	return nil
 }
 
-// syncVotingRows brings the store from the stored header to the state of
-// snap, writing only the transition: consumed subkey rows are deleted, a
-// batch rollover additionally replaces the offset rows, and the header is
-// updated.  Subkeys advance monotonically (batch rows are written once and
-// only deleted afterwards; offset rows are consumed from the front and
-// regenerated per batch), so every transition has an exact expected row
-// count; a mismatch means the stored rows drifted from the header and the
-// store is repaired by rewriting it from memory, which is safe because the
-// monotonicity guard below has established that storage is not ahead.
+// syncVotingRows brings the store's subkey rows from the stored header to
+// the state of snap, writing only the transition: consumed subkey rows are
+// deleted and a batch rollover additionally replaces the offset rows.
+// Subkeys advance monotonically (batch rows are written once and only deleted
+// afterwards; offset rows are consumed from the front and regenerated per
+// batch), so every transition has an exact expected row count; a mismatch
+// means the stored rows drifted from the header and the store is repaired by
+// rewriting it from memory, which is safe because the monotonicity guard
+// below has established that storage is not ahead.
+//
+// It returns the header the caller must store to complete the transition, so
+// the caller can fold it into a row update of its own; nil means nothing is
+// left to write (the store already matched, or the repair rewrote the header
+// along with the rows).
 //
 // Forward security requires the stored deletion cursor to be monotonic: if
 // storage is ahead of memory, writing memory would resurrect keys that were
 // already deleted on disk, so that state is an error rather than a repair.
-func syncVotingRows(tx *sql.Tx, target votingRowTarget, stored crypto.OneTimeSignatureSecretsHeader, snap crypto.OneTimeSignatureSecretsPersistent) error {
+func syncVotingRows(tx *sql.Tx, target votingRowTarget, stored crypto.OneTimeSignatureSecretsHeader, snap crypto.OneTimeSignatureSecretsPersistent) (*crypto.OneTimeSignatureSecretsHeader, error) {
 	mem := snap.Header()
 	if storedHeaderAhead(stored, mem) {
-		return fmt.Errorf("stored voting state (batch %d, offset %d, %d+%d subkeys) is ahead of memory (batch %d, offset %d, %d+%d subkeys): stale or corrupt store; refusing to resurrect deleted keys",
+		return nil, fmt.Errorf("stored voting state (batch %d, offset %d, %d+%d subkeys) is ahead of memory (batch %d, offset %d, %d+%d subkeys): stale or corrupt store; refusing to resurrect deleted keys",
 			stored.FirstBatch, stored.FirstOffset, stored.BatchCount, stored.OffsetCount,
 			mem.FirstBatch, mem.FirstOffset, mem.BatchCount, mem.OffsetCount)
 	}
 	if stored == mem {
-		return nil
+		return nil, nil
 	}
 
 	err := applyVotingTransition(tx, target, stored, mem, snap)
@@ -213,12 +218,22 @@ func syncVotingRows(tx *sql.Tx, target votingRowTarget, stored crypto.OneTimeSig
 		// reaching this path means a disk problem or a bug — repair it, but
 		// never silently
 		logging.Base().Warnf("participation voting subkey rows were inconsistent with the stored header and have been rebuilt from memory: %v", err)
-		return rewriteVotingRows(tx, target, snap)
+		return nil, rewriteVotingRows(tx, target, snap)
 	}
 	if err != nil {
+		return nil, err
+	}
+	return &mem, nil
+}
+
+// syncVotingRowsAndHeader is syncVotingRows followed by the header write, for
+// callers with no row update of their own to fold it into.
+func syncVotingRowsAndHeader(tx *sql.Tx, target votingRowTarget, stored crypto.OneTimeSignatureSecretsHeader, snap crypto.OneTimeSignatureSecretsPersistent) error {
+	hdr, err := syncVotingRows(tx, target, stored, snap)
+	if err != nil || hdr == nil {
 		return err
 	}
-	return updateVotingHeader(tx, target, mem)
+	return updateVotingHeader(tx, target, *hdr)
 }
 
 // applyVotingTransition deletes (and, on a batch rollover, re-inserts) the
