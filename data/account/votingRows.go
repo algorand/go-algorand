@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
@@ -90,7 +91,7 @@ func registryVotingTarget(pk int64) votingRowTarget {
 
 // args returns the target's prefix arguments followed by extra.
 func (t votingRowTarget) args(extra ...any) []any {
-	return append(append(make([]any, 0, len(t.prefixArgs)+len(extra)), t.prefixArgs...), extra...)
+	return slices.Concat(t.prefixArgs, extra)
 }
 
 // votingSnapshot captures the state of live voting secrets for persistence.
@@ -223,10 +224,10 @@ func syncVotingRowsAndHeader(tx *sql.Tx, target votingRowTarget, snap crypto.One
 func applyVotingTransition(tx *sql.Tx, target votingRowTarget, stored, mem crypto.OneTimeSignatureSecretsHeader, snap crypto.OneTimeSignatureSecretsPersistent) error {
 	switch {
 	case mem.Exhausted():
-		if err := deleteExpecting(tx, target.deleteAllBatches, target.prefixArgs, stored.BatchCount, "retiring batch subkeys"); err != nil {
+		if err := deleteExactly(tx, target.deleteAllBatches, target.prefixArgs, stored.BatchCount, "retiring batch subkeys"); err != nil {
 			return err
 		}
-		return deleteExpecting(tx, target.deleteAllOffsets, target.prefixArgs, stored.OffsetCount, "retiring offset subkeys")
+		return deleteExactly(tx, target.deleteAllOffsets, target.prefixArgs, stored.OffsetCount, "retiring offset subkeys")
 
 	case mem.FirstBatch == stored.FirstBatch:
 		// common per-round path: offsets consumed from the front of the
@@ -236,7 +237,7 @@ func applyVotingTransition(tx *sql.Tx, target votingRowTarget, stored, mem crypt
 			return fmt.Errorf("%w: same-batch transition with batch count %d->%d, offset count %d->%d, first offset %d->%d",
 				errInconsistentVotingRows, stored.BatchCount, mem.BatchCount, stored.OffsetCount, mem.OffsetCount, stored.FirstOffset, mem.FirstOffset)
 		}
-		return deleteExpecting(tx, target.deleteOffsetsBelow, target.args(int64(mem.FirstOffset)), consumed, "offset subkey trim")
+		return deleteExactly(tx, target.deleteOffsetsBelow, target.args(int64(mem.FirstOffset)), consumed, "offset subkey trim")
 
 	default:
 		// batch rollover (mem.FirstBatch > stored.FirstBatch): batch rows
@@ -244,10 +245,10 @@ func applyVotingTransition(tx *sql.Tx, target votingRowTarget, stored, mem crypt
 		if mem.BatchCount > stored.BatchCount {
 			return fmt.Errorf("%w: batch rollover with batch count %d->%d", errInconsistentVotingRows, stored.BatchCount, mem.BatchCount)
 		}
-		if err := deleteExpecting(tx, target.deleteBatchesBelow, target.args(int64(mem.FirstBatch)), stored.BatchCount-mem.BatchCount, "batch subkey trim"); err != nil {
+		if err := deleteExactly(tx, target.deleteBatchesBelow, target.args(int64(mem.FirstBatch)), stored.BatchCount-mem.BatchCount, "batch subkey trim"); err != nil {
 			return err
 		}
-		if err := deleteExpecting(tx, target.deleteAllOffsets, target.prefixArgs, stored.OffsetCount, "offset subkey replacement"); err != nil {
+		if err := deleteExactly(tx, target.deleteAllOffsets, target.prefixArgs, stored.OffsetCount, "offset subkey replacement"); err != nil {
 			return err
 		}
 		if err := insertKeyedSubkeys(tx, target.insertOffset, target.prefixArgs, snap.EncodedOffsets()); err != nil {
@@ -257,8 +258,8 @@ func applyVotingTransition(tx *sql.Tx, target votingRowTarget, stored, mem crypt
 	}
 }
 
-// deleteExpecting runs a delete that must remove exactly expected rows.
-func deleteExpecting(tx *sql.Tx, query string, args []any, expected uint64, what string) error {
+// deleteExactly runs a delete that must remove exactly expected rows.
+func deleteExactly(tx *sql.Tx, query string, args []any, expected uint64, what string) error {
 	result, err := tx.Exec(query, args...)
 	if err != nil {
 		return fmt.Errorf("%s failed: %w", what, err)

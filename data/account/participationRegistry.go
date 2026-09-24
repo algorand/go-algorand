@@ -672,14 +672,14 @@ func (db *participationDB) writeThread() {
 	for op := range db.writeQueue {
 		err := op.operation.apply(db)
 		if op.errChannel == nil {
-			// fire-and-forget: surfaced by the next flush
+			// will be surfaced by the next flush
 			if err != nil {
 				lastErr = err
 			}
 			continue
 		}
 		// an op with a channel reports its own result; a flush additionally
-		// surfaces the errors of earlier fire-and-forget ops
+		// surfaces the errors of earlier ops
 		if _, isFlush := op.operation.(*flushOp); isFlush {
 			if err == nil {
 				err = lastErr
@@ -1042,8 +1042,6 @@ func (db *participationDB) getAllFromDB() (records []ParticipationRecord, corrup
 		if err != nil {
 			return fmt.Errorf("problem scanning records: %w", err)
 		}
-		// release the cursor before issuing the subkey queries below
-		rows.Close()
 
 		// reassemble each key's voting secrets from its subkey rows; a record
 		// whose voting data is corrupt is excluded with an error log rather
