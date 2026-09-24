@@ -138,7 +138,7 @@ func checkStateProof(spType protocol.StateProofType, sp *stateproof.StateProof) 
 	}
 }
 
-func checkTxnGroup(n int, txn func(i int) *Transaction) error {
+func checkTxnGroup(n int, txn func(i int) *Transaction, allowGroupedHeartbeats bool) error {
 	heartbeat, availTrigger := false, false
 	for i := range n {
 		tx := txn(i)
@@ -157,9 +157,7 @@ func checkTxnGroup(n int, txn func(i int) *Transaction) error {
 			}
 		}
 	}
-	// This rule is stricter than consensus -- the ledger accepts a fee-paying
-	// grouped heartbeat -- and is slated for removal in a future release.
-	if heartbeat && availTrigger {
+	if !allowGroupedHeartbeats && heartbeat && availTrigger {
 		return errHeartbeatInResourceGroup
 	}
 	return checkTxnGroupID(n, txn)
@@ -237,12 +235,12 @@ func hashTxGroup(group TxGroup) crypto.Digest {
 
 // CheckTxnGroup screens a transaction group for invalid transactions and
 // verifies that its nonzero group ID commits to the provided transaction order.
-func CheckTxnGroup(group []SignedTxn) error {
-	return checkTxnGroup(len(group), func(i int) *Transaction { return &group[i].Txn })
+func CheckTxnGroup(group []SignedTxn, allowGroupedHeartbeats bool) error {
+	return checkTxnGroup(len(group), func(i int) *Transaction { return &group[i].Txn }, allowGroupedHeartbeats)
 }
 
 // CheckPaysetGroup screens a decoded block payset group for invalid transactions and
 // verifies that its nonzero group ID commits to the provided transaction order.
-func CheckPaysetGroup(group []SignedTxnWithAD) error {
-	return checkTxnGroup(len(group), func(i int) *Transaction { return &group[i].SignedTxn.Txn })
+func CheckPaysetGroup(group []SignedTxnWithAD, allowGroupedHeartbeats bool) error {
+	return checkTxnGroup(len(group), func(i int) *Transaction { return &group[i].SignedTxn.Txn }, allowGroupedHeartbeats)
 }

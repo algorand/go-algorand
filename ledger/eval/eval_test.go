@@ -2050,7 +2050,7 @@ func TestGroupChecksAgreeWithVerify(t *testing.T) {
 				blk.Payset = append(blk.Payset, stib)
 			}
 
-			require.ErrorContains(t, transactions.CheckTxnGroup(stxns), test.verifyErr)
+			require.ErrorContains(t, transactions.CheckTxnGroup(stxns, config.Consensus[protocol.ConsensusCurrentVersion].AllowGroupedHeartbeats), test.verifyErr)
 
 			_, err := Eval(context.Background(), l, blk, true, verify.GetMockedCache(true), nil, nil)
 			require.ErrorContains(t, err, test.evalErr)
