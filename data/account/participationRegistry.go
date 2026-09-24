@@ -455,6 +455,12 @@ func dbSchemaUpgrade0(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 	return nil
 }
 
+// unusableVotingHeader marks a record whose legacy voting blob could not be
+// converted: a single msgpack "never used" byte.  It holds no secrets and
+// never decodes as a header, so the record is excluded at load and any
+// re-insert of the key fails closed, exactly as for a damaged header.
+var unusableVotingHeader = []byte{0xc1}
+
 // dbSchemaUpgrade1 moves the voting subkeys out of the whole-secrets
 // Rolling.voting blob into per-subkey rows described by a Rolling.votingHeader
 // column, then drops the legacy column so the blob (which held every subkey)
@@ -463,9 +469,9 @@ func dbSchemaUpgrade0(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 // A record whose blob cannot be decoded or converted does not fail the
 // upgrade: db.Initialize would report only the schema versions, leaving algod
 // unable to start with no indication of which record is at fault.  Instead
-// the failure is logged with its pk and cause, and the blob is carried over
-// into votingHeader as-is; it does not decode as a header, so the record is
-// excluded from the cache (with its subkeys erased) at load time.
+// the failure is logged with its pk and cause, and its votingHeader is set to
+// unusableVotingHeader, so the record is excluded from the cache at load
+// time while its blob is erased along with the legacy column.
 func dbSchemaUpgrade1(ctx context.Context, tx *sql.Tx, newDatabase bool, log logging.Logger) error {
 	err := dbSchemaUpgrade1Impl(ctx, tx, newDatabase, log)
 	if err != nil {
@@ -530,9 +536,9 @@ func dbSchemaUpgrade1Impl(ctx context.Context, tx *sql.Tx, newDatabase bool, log
 		if convErr == nil {
 			continue
 		}
-		log.Errorf("participationDB: voting blob of registry record pk %d cannot be converted and is carried over as-is; the record will be excluded at load (%v)", entry.pk, convErr)
-		if _, err := tx.Exec("UPDATE Rolling SET votingHeader=? WHERE pk=?", entry.rawVoting, entry.pk); err != nil {
-			return fmt.Errorf("dbSchemaUpgrade1: failed to carry over the voting blob for pk %d: %w", entry.pk, err)
+		log.Errorf("participationDB: voting blob of registry record pk %d cannot be converted and is discarded; the record will be excluded at load and must be re-installed (%v)", entry.pk, convErr)
+		if _, err := tx.Exec("UPDATE Rolling SET votingHeader=? WHERE pk=?", unusableVotingHeader, entry.pk); err != nil {
+			return fmt.Errorf("dbSchemaUpgrade1: failed to mark the voting header of pk %d unusable: %w", entry.pk, err)
 		}
 	}
 

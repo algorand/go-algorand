@@ -183,10 +183,13 @@ func TestRegistryMigrationV1ToV2(t *testing.T) {
 		a.Equal(encodedVotingSnapshot(p.Voting), encodedVotingSnapshot(record.Voting))
 	}
 
-	// the unconvertible record did not fail the upgrade: its blob was carried
-	// over as-is, it is excluded from the cache, and nothing of the failed
-	// conversion attempt was kept
-	a.Equal(unconvertibleBlob, registryReadRawVotingHeader(a, registry, unconvertible.ID()))
+	// the unconvertible record did not fail the upgrade: its blob (which held
+	// every subkey) is gone, replaced by a marker that never decodes, so it
+	// is excluded from the cache, and nothing of the failed conversion
+	// attempt was kept
+	a.Equal(unusableVotingHeader, registryReadRawVotingHeader(a, registry, unconvertible.ID()))
+	_, err = decodeVotingHeader(unusableVotingHeader)
+	a.Error(err, "the unusable marker must never decode as a header")
 	a.True(registry.Get(unconvertible.ID()).IsZero(), "unconvertible record not excluded")
 	a.Equal(len(midLife.Voting.Batches), registryCountRows(a, registry, "VotingBatches"), "rows left behind by the failed conversion")
 
