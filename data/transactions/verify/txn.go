@@ -543,6 +543,13 @@ func logicSigVerify(gi int, groupCtx *GroupContext) error {
 		logicRejTotal.Inc(nil)
 		return fmt.Errorf("transaction %v: rejected by logic", groupCtx.signedGroupTxns[gi].ID())
 	}
+	if groupCtx.consensusParams.RequireLogicSigArgAccess {
+		if i, bad := cx.UnaccountedArg(); bad {
+			logicRejTotal.Inc(nil)
+			return fmt.Errorf("transaction %v: LogicSig arg[%d] of %d was not accessed",
+				groupCtx.signedGroupTxns[gi].ID(), i, len(groupCtx.signedGroupTxns[gi].Lsig.Args))
+		}
+	}
 	logicGoodTotal.Inc(nil)
 	logicCostTotal.AddUint64(uint64(cx.Cost()), nil)
 	return nil

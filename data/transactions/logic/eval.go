@@ -772,6 +772,12 @@ type EvalContext struct {
 	// jumping into the middle of multibyte instruction.
 	instructionStarts []bool
 
+	// argsRead records which Lsig.Args opArgN has pushed, one bit per index. It
+	// tracks the consensus rule that a LogicSig must read its
+	// arguments. EvalMaxArgs is 255, so four words suffice and the zero value
+	// is already correct.
+	argsRead [(transactions.EvalMaxArgs + 63) / 64]uint64
+
 	programHashCached crypto.Digest
 }
 
@@ -2757,11 +2763,35 @@ func opPushBytess(cx *EvalContext) error {
 
 func opArgN(cx *EvalContext, n uint64) error {
 	if n >= uint64(len(cx.txn.Lsig.Args)) {
-		return fmt.Errorf("cannot load arg[%d] of %d", n, len(cx.txn.Lsig.Args))
+		return fmt.Errorf("cannot load arg[%d] from %d args", n, len(cx.txn.Lsig.Args))
 	}
+	// Marked after the bounds check, so a failed read does not count as access,
+	// and before nilToEmpty, so that reading an empty arg counts like any other.
+	cx.argsRead[n/64] |= 1 << (n % 64)
 	val := nilToEmpty(cx.txn.Lsig.Args[n])
 	cx.Stack = append(cx.Stack, stackValue{Bytes: val})
 	return nil
+}
+
+// argRead reports whether opArgN has pushed the nth arg.
+func (cx *EvalContext) argRead(n int) bool {
+	return cx.argsRead[n/64]&(1<<(n%64)) != 0
+}
+
+// UnaccountedArg reports an argument this LogicSig did not read.
+func (cx *EvalContext) UnaccountedArg() (int, bool) {
+	// Reading the last arg is what rules out anything sitting above the highest
+	// index the program read, so the loop below need only police the blanks.
+	last := len(cx.txn.Lsig.Args) - 1
+	if last >= 0 && !cx.argRead(last) {
+		return last, true
+	}
+	for i, arg := range cx.txn.Lsig.Args {
+		if len(arg) > 0 && !cx.argRead(i) {
+			return i, true
+		}
+	}
+	return 0, false
 }
 
 func opArg(cx *EvalContext) error {
