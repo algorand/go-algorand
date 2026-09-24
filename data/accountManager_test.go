@@ -185,7 +185,11 @@ func testAccountManagerKeys(t *testing.T, registry account.ParticipationRegistry
 	<-keyDeletionDone
 	testDuration := time.Since(testStartTime)
 	t.Logf("testDuration %v keysTotalDuration %v\n", testDuration, keysTotalDuration)
-	require.Lessf(t, keysTotalDuration, testDuration/100, fmt.Sprintf("the time to acquire the keys via Keys() was %v whereas blocking on keys deletion took %v", keysTotalDuration, testDuration))
+	// 5% rather than 1%: with go-deadlock enabled (always in tests) under -race,
+	// its global bookkeeping lock adds a few ms per Keys() call while deletion
+	// runs, and row-level deletion is fast enough to leave a 1% budget of ~45ms.
+	// Keys() blocking on deletion would still take seconds.
+	require.Lessf(t, keysTotalDuration, testDuration/20,fmt.Sprintf("the time to acquire the keys via Keys() was %v whereas blocking on keys deletion took %v", keysTotalDuration, testDuration))
 	t.Logf("Calling AccountManager.Keys() while AccountManager.DeleteOldKeys() was busy, 10 times in a row, resulted in accumulated delay of %v\n", keysTotalDuration)
 }
 
