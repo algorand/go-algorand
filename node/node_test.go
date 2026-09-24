@@ -698,10 +698,7 @@ func TestLoadParticipationKeysRenamesUnsupported(t *testing.T) {
 	partdb, err := db.MakeErasableAccessor(partfile)
 	require.NoError(t, err)
 	err = partdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		if _, err := tx.Exec(`CREATE TABLE schema (tablename TEXT PRIMARY KEY, version INTEGER);`); err != nil {
-			return err
-		}
-		_, err := tx.Exec("INSERT INTO schema (tablename, version) VALUES (?, ?)", account.PartTableSchemaName, 99)
+		_, err := tx.Exec(fmt.Sprintf("CREATE TABLE schema (tablename TEXT PRIMARY KEY, version INTEGER); INSERT INTO schema VALUES ('%s', 99);", account.PartTableSchemaName))
 		return err
 	})
 	require.NoError(t, err)

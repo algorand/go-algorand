@@ -210,34 +210,22 @@ func TestRetrieveFromDBAtUnsupportedVersions(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
-	ppart := setupkeyWithNoDBS(t, a)
-	part := ppart.Participation
+	part := setupkeyWithNoDBS(t, a).Participation
 
-	setups := map[string]func(db.Accessor, Participation) error{
-		"v1": setupTestDBAtVer1,
-		"v2": setupTestDBAtVer2,
-	}
-	for name, setup := range setups {
-		_, rootDB, partDB := createTestDBs(a, t.Name()+name)
-
+	setups := map[int]func(db.Accessor, Participation) error{1: setupTestDBAtVer1, 2: setupTestDBAtVer2}
+	for version, setup := range setups {
+		_, rootDB, partDB := createTestDBs(a, fmt.Sprintf("%s_v%d", t.Name(), version))
 		a.NoError(setup(partDB, part))
 
-		_, err := RestoreParticipation(partDB)
-		a.ErrorIs(err, ErrUnsupportedSchema, name)
-		_, err = RestoreParticipationWithSecrets(partDB)
-		a.ErrorIs(err, ErrUnsupportedSchema, name)
-		_, err = RestoreParticipationUnmigrated(partDB)
-		a.ErrorIs(err, ErrUnsupportedSchema, name)
+		for _, restore := range []func(db.Accessor) (PersistedParticipation, error){RestoreParticipation, RestoreParticipationWithSecrets, RestoreParticipationUnmigrated} {
+			_, err := restore(partDB)
+			a.ErrorIs(err, ErrUnsupportedSchema, "version %d", version)
+		}
 
 		// the rejected file was not modified
 		versions, err := getSchemaVersions(partDB)
 		a.NoError(err)
-		expectedVersion := 1
-		if name == "v2" {
-			expectedVersion = 2
-		}
-		a.Equal(expectedVersion, versions[PartTableSchemaName], name)
-
+		a.Equal(version, versions[PartTableSchemaName])
 		closeDBS(rootDB, partDB)
 	}
 }

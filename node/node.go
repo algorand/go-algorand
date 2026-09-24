@@ -1007,7 +1007,7 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 		return account.ParticipationID{}, fmt.Errorf("cannot install partkey with missing (zero) parent address")
 	}
 
-	// Tell the AccountManager about the Participation.
+	// Tell the AccountManager about the Participation (dupes don't matter) so we ignore the return value
 	// This is ephemeral since we are deleting the file after this function is done
 	added, err := node.accountManager.AddParticipation(partkey, true)
 	if err != nil {
@@ -1093,10 +1093,7 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 			// These files are not ephemeral and must be deleted eventually since
 			// this function is called to load files located in the node on startup
 			added, err := node.accountManager.AddParticipation(part, false)
-			if err != nil {
-				node.log.Warnf("Participation key %s was not added: %v", info.Name(), err)
-			}
-			if !added {
+			if err != nil || !added {
 				part.Close()
 				continue
 			}

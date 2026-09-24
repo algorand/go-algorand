@@ -150,6 +150,12 @@ func (r *registerOp) apply(db *participationDB) error {
 // it.  The record stays excluded from the cache until the operator rebuilds
 // the registry.
 func fastForwardToStoredCursor(ctx context.Context, tx *sql.Tx, log logging.Logger, id ParticipationID, secrets *crypto.OneTimeSignatureSecrets, dilution uint64) error {
+	// KeyDilution 0 defers to the consensus default, as DeleteExpired and
+	// DeleteOldKeys resolve it (the value has been the same in every version)
+	if dilution == 0 {
+		dilution = config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution
+	}
+
 	// every stored row is considered (a duplicate left by damage is possible),
 	// and the most advanced cursor wins
 	headers, err := readRollingHeaders(ctx, tx, id)
@@ -195,11 +201,6 @@ func fastForwardToStoredCursor(ctx context.Context, tx *sql.Tx, log logging.Logg
 	if stored.FirstBatch == 0 {
 		return nil
 	}
-	if dilution == 0 {
-		// the caller resolves a zero KeyDilution to the consensus default;
-		// expanding a batch with no dilution would leave the key unable to sign
-		return fmt.Errorf("internal error: fast-forwarding key %s requires a resolved key dilution", id)
-	}
 	log.Warnf("participationDB: inserted copy of key %s lags the stored deletion cursor; fast-forwarding from (batch %d, offset %d) to (batch %d, offset %d)",
 		id, current.FirstBatch, current.FirstOffset, stored.FirstBatch, stored.FirstOffset)
 	secrets.DeleteBeforeFineGrained(crypto.OneTimeSignatureIdentifier{Batch: stored.FirstBatch - 1, Offset: stored.FirstOffset}, dilution)
@@ -219,33 +220,18 @@ func (i *insertOp) apply(db *participationDB) (err error) {
 	}
 
 	err = db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		// Replacing pre-existing rows must never rewind the persisted
-		// deletion cursor: the .partkey file and the registry are
-		// independent stores, so an inserted copy can lag what the registry
-		// already retired (e.g. a key file restored from a backup).  The
-		// participation ID commits to the key material, so the stored and
-		// inserted secrets are the same key — fast-forward the inserted copy
-		// to the most advanced stored cursor before persisting it.
-		if i.record.Voting != nil {
-			// KeyDilution 0 defers to the consensus default, exactly as
-			// DeleteExpired and DeleteOldKeys resolve it (the value has been
-			// the same in every consensus version)
-			dilution := i.record.KeyDilution
-			if dilution == 0 {
-				dilution = config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution
-			}
-			if err2 := fastForwardToStoredCursor(ctx, tx, db.log, i.id, i.record.Voting, dilution); err2 != nil {
-				return err2
-			}
-		}
-
-		// snapshot the voting secrets only after the potential fast-forward
+		// The inserted copy may lag what the registry already retired (the
+		// .partkey file and the registry are independent stores).  The ID
+		// commits to the key material, so fast-forward the copy to the stored
+		// cursor, then snapshot it for persistence.
 		var rawVotingHeader []byte
 		var voting crypto.OneTimeSignatureSecretsPersistent
 		if i.record.Voting != nil {
+			if err2 := fastForwardToStoredCursor(ctx, tx, db.log, i.id, i.record.Voting, i.record.KeyDilution); err2 != nil {
+				return err2
+			}
 			voting = votingSnapshot(i.record.Voting)
-			votingHeader := voting.Header()
-			rawVotingHeader = protocol.Encode(&votingHeader)
+			rawVotingHeader = encodeVotingHeader(voting.Header())
 		}
 
 		// Clear any pre-existing rows for this participation ID.  A corrupt

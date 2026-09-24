@@ -34,14 +34,6 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-func registryCountRows(a *require.Assertions, registry *participationDB, table string) (n int) {
-	err := registry.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return tx.QueryRow("SELECT count(*) FROM " + table).Scan(&n)
-	})
-	a.NoError(err)
-	return n
-}
-
 func registryReadRawVotingHeader(a *require.Assertions, registry *participationDB, id ParticipationID) (raw []byte) {
 	err := registry.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return tx.QueryRow(selectRollingVotingByID, id[:]).Scan(new(int64), &raw)
@@ -54,14 +46,6 @@ func registryReadVotingHeader(a *require.Assertions, registry *participationDB, 
 	hdr, err := decodeVotingHeader(registryReadRawVotingHeader(a, registry, id))
 	a.NoError(err)
 	return hdr
-}
-
-func registryExecSQL(a *require.Assertions, registry *participationDB, query string, args ...any) {
-	err := registry.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		_, err := tx.Exec(query, args...)
-		return err
-	})
-	a.NoError(err)
 }
 
 // registryEvict drops a key from the cache the way the corrupt-record
@@ -161,18 +145,16 @@ func TestRegistryMigrationV1ToV2(t *testing.T) {
 	err = rootDB.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		version, err := db.GetUserVersion(ctx, tx)
 		a.Equal(int32(2), version)
-		columns, err2 := tableColumnsTx(tx, "Rolling")
-		a.NoError(err2)
-		a.Contains(columns, "votingHeader")
-		a.NotContains(columns, "voting")
-		requireNoAutoIndex(a, tx)
 		return err
 	})
 	a.NoError(err)
+	a.True(hasColumn(a, rootDB.Rdb, "Rolling", "votingHeader"))
+	a.False(hasColumn(a, rootDB.Rdb, "Rolling", "voting"))
+	requireNoAutoIndex(a, rootDB.Rdb)
 
 	// only the mid-life key contributes rows; the exhausted one has none
-	a.Equal(len(midLife.Voting.Batches), registryCountRows(a, registry, "VotingBatches"))
-	a.Equal(len(midLife.Voting.Offsets), registryCountRows(a, registry, "VotingOffsets"))
+	a.Equal(len(midLife.Voting.Batches), countTableRows(a, registry.store.Rdb, "VotingBatches"))
+	a.Equal(len(midLife.Voting.Offsets), countTableRows(a, registry.store.Rdb, "VotingOffsets"))
 	a.Equal(votingSnapshot(midLife.Voting).Header(), registryReadVotingHeader(a, registry, midLife.ID()))
 	a.True(registryReadVotingHeader(a, registry, exhausted.ID()).Exhausted())
 
@@ -191,7 +173,7 @@ func TestRegistryMigrationV1ToV2(t *testing.T) {
 	_, err = decodeVotingHeader(unusableVotingHeader)
 	a.Error(err, "the unusable marker must never decode as a header")
 	a.True(registry.Get(unconvertible.ID()).IsZero(), "unconvertible record not excluded")
-	a.Equal(len(midLife.Voting.Batches), registryCountRows(a, registry, "VotingBatches"), "rows left behind by the failed conversion")
+	a.Equal(len(midLife.Voting.Batches), countTableRows(a, registry.store.Rdb, "VotingBatches"), "rows left behind by the failed conversion")
 
 	// the record without voting secrets loads (as a zero-value placeholder)
 	// and keeps flushing normally
@@ -236,7 +218,7 @@ func TestFlushWithoutVotingSecrets(t *testing.T) {
 	a.Equal(basics.Round(30), record.LastVote)
 	a.True(record.Voting.MsgIsZero())
 	a.Empty(registryReadRawVotingHeader(a, registry, id))
-	a.Zero(registryCountRows(a, registry, "VotingBatches"))
+	a.Zero(countTableRows(a, registry.store.Rdb, "VotingBatches"))
 }
 
 // TestRegistryKeyLifecycle inserts a mid-life key and walks it through
@@ -264,8 +246,8 @@ func TestRegistryKeyLifecycle(t *testing.T) {
 	a.NoError(registry.Flush(defaultTimeout))
 
 	// a mid-life insert stores the offsets too
-	a.Equal(len(p.Voting.Batches), registryCountRows(a, registry, "VotingBatches"))
-	a.Equal(len(p.Voting.Offsets), registryCountRows(a, registry, "VotingOffsets"))
+	a.Equal(len(p.Voting.Batches), countTableRows(a, registry.store.Rdb, "VotingBatches"))
+	a.Equal(len(p.Voting.Offsets), countTableRows(a, registry.store.Rdb, "VotingOffsets"))
 
 	reloadEqualsCache := func(what string) {
 		cached := registry.Get(id)
@@ -282,7 +264,7 @@ func TestRegistryKeyLifecycle(t *testing.T) {
 	a.NoError(registry.Record(p.Parent, 38, Vote))
 	a.NoError(registry.Flush(defaultTimeout))
 	a.Equal(headerBefore, registryReadRawVotingHeader(a, registry, id))
-	a.Equal(len(p.Voting.Offsets), registryCountRows(a, registry, "VotingOffsets"))
+	a.Equal(len(p.Voting.Offsets), countTableRows(a, registry.store.Rdb, "VotingOffsets"))
 	a.Equal(basics.Round(38), registry.Get(id).LastVote)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -293,8 +275,8 @@ func TestRegistryKeyLifecycle(t *testing.T) {
 	}
 
 	// end of life: every subkey row erased, nothing left to resurrect
-	a.Zero(registryCountRows(a, registry, "VotingOffsets"), "retired offset subkeys survived in the registry")
-	a.Zero(registryCountRows(a, registry, "VotingBatches"))
+	a.Zero(countTableRows(a, registry.store.Rdb, "VotingOffsets"), "retired offset subkeys survived in the registry")
+	a.Zero(countTableRows(a, registry.store.Rdb, "VotingBatches"))
 	a.True(registryReadVotingHeader(a, registry, id).Exhausted())
 	record := registry.Get(id)
 	a.Empty(record.Voting.Offsets)
@@ -314,7 +296,7 @@ func TestRegistryExcludesCorruptRecord(t *testing.T) {
 
 	const dilution = 10
 	damageHeader := func(a *require.Assertions, registry *participationDB, corruptID ParticipationID, header any) {
-		registryExecSQL(a, registry, "UPDATE Rolling SET votingHeader=? WHERE pk=(SELECT pk FROM Keysets WHERE participationID=?)", header, corruptID[:])
+		execSQL(a, registry.store.Wdb, "UPDATE Rolling SET votingHeader=? WHERE pk=(SELECT pk FROM Keysets WHERE participationID=?)", header, corruptID[:])
 	}
 	cases := []struct {
 		name string
@@ -327,7 +309,7 @@ func TestRegistryExcludesCorruptRecord(t *testing.T) {
 		refused string
 	}{
 		{"missingBatchRow", 0, func(a *require.Assertions, registry *participationDB, corruptID ParticipationID, _ Participation) {
-			registryExecSQL(a, registry, "DELETE FROM VotingBatches WHERE batch=(SELECT MAX(batch) FROM VotingBatches) AND pk=(SELECT pk FROM Keysets WHERE participationID=?)", corruptID[:])
+			execSQL(a, registry.store.Wdb, "DELETE FROM VotingBatches WHERE batch=(SELECT MAX(batch) FROM VotingBatches) AND pk=(SELECT pk FROM Keysets WHERE participationID=?)", corruptID[:])
 		}, ""},
 		{"undecodableHeader", 150, func(a *require.Assertions, registry *participationDB, corruptID ParticipationID, _ Participation) {
 			damageHeader(a, registry, corruptID, []byte{0xff, 0x00})
@@ -362,13 +344,8 @@ func TestRegistryExcludesCorruptRecord(t *testing.T) {
 			a.NoError(registry.Flush(defaultTimeout))
 
 			corruptRows := func() (keysets, batches int) {
-				err := registry.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-					if err := tx.QueryRow("SELECT count(*) FROM Keysets WHERE participationID=?", corruptID[:]).Scan(&keysets); err != nil {
-						return err
-					}
-					return tx.QueryRow("SELECT count(*) FROM VotingBatches WHERE pk=(SELECT pk FROM Keysets WHERE participationID=?)", corruptID[:]).Scan(&batches)
-				})
-				a.NoError(err)
+				keysets = queryInt(a, registry.store.Rdb, "SELECT count(*) FROM Keysets WHERE participationID=?", corruptID[:])
+				batches = queryInt(a, registry.store.Rdb, "SELECT count(*) FROM VotingBatches WHERE pk=(SELECT pk FROM Keysets WHERE participationID=?)", corruptID[:])
 				return keysets, batches
 			}
 			tc.damage(a, registry, corruptID, pHealthy)
@@ -381,7 +358,7 @@ func TestRegistryExcludesCorruptRecord(t *testing.T) {
 			keysets, batches := corruptRows()
 			a.Equal(1, keysets)
 			a.Zero(batches, "excluded record's subkeys left on disk")
-			a.Equal(len(registry.Get(healthyID).Voting.Batches), registryCountRows(a, registry, "VotingBatches"), "healthy record's rows touched")
+			a.Equal(len(registry.Get(healthyID).Voting.Batches), countTableRows(a, registry.store.Rdb, "VotingBatches"), "healthy record's rows touched")
 
 			// re-insert the key-file copy, as loadParticipationKeys does in
 			// the same startup
@@ -448,23 +425,19 @@ func TestRegistryExcludedRecordCleanup(t *testing.T) {
 	a.NoError(err)
 	a.NoError(registry.Flush(defaultTimeout))
 
-	keysetRows := func(id ParticipationID) (n int) {
-		err := registry.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-			return tx.QueryRow("SELECT count(*) FROM Keysets WHERE participationID=?", id[:]).Scan(&n)
-		})
-		a.NoError(err)
-		return n
+	keysetRows := func(id ParticipationID) int {
+		return queryInt(a, registry.store.Rdb, "SELECT count(*) FROM Keysets WHERE participationID=?", id[:])
 	}
 
 	// corrupt both headers and reload: both excluded, healthy key intact
 	for _, id := range []ParticipationID{expiringID, deletedID} {
-		registryExecSQL(a, registry, "UPDATE Rolling SET votingHeader=x'ff00' WHERE pk=(SELECT pk FROM Keysets WHERE participationID=?)", id[:])
+		execSQL(a, registry.store.Wdb, "UPDATE Rolling SET votingHeader=x'ff00' WHERE pk=(SELECT pk FROM Keysets WHERE participationID=?)", id[:])
 	}
 	a.NoError(registry.initializeCache())
 	a.True(registry.Get(expiringID).IsZero())
 	a.True(registry.Get(deletedID).IsZero())
 	a.False(registry.Get(healthyID).IsZero())
-	a.Equal(len(pHealthy.Voting.Batches), registryCountRows(a, registry, "VotingBatches"), "only the healthy key's rows remain")
+	a.Equal(len(pHealthy.Voting.Batches), countTableRows(a, registry.store.Rdb, "VotingBatches"), "only the healthy key's rows remain")
 
 	// the expiring key is removed by the regular expiry pass
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -551,8 +524,8 @@ func TestInsertFastForwardsLaggingCopy(t *testing.T) {
 			a.GreaterOrEqual(after.FirstBatch, tc.minFirstBatch, "persisted deletion cursor rewound")
 			a.Equal(stored.Exhausted(), after.Exhausted())
 			if stored.Exhausted() {
-				a.Zero(registryCountRows(a, registry, "VotingOffsets"), "retired offsets regenerated")
-				a.Zero(registryCountRows(a, registry, "VotingBatches"))
+				a.Zero(countTableRows(a, registry.store.Rdb, "VotingOffsets"), "retired offsets regenerated")
+				a.Zero(countTableRows(a, registry.store.Rdb, "VotingBatches"))
 			}
 
 			// after a reload, retired rounds cannot produce valid signatures
@@ -739,17 +712,12 @@ func TestDeleteDuringPendingInsert(t *testing.T) {
 	a.NoError(registry.Flush(defaultTimeout))
 
 	a.True(registry.Get(id).IsZero(), "deleted key came back once the pending insert completed")
-	var keysets int
-	err := registry.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return tx.QueryRow("SELECT count(*) FROM Keysets WHERE participationID=?", id[:]).Scan(&keysets)
-	})
-	a.NoError(err)
-	a.Zero(keysets, "deleted key left on disk")
+	a.Zero(queryInt(a, registry.store.Rdb, "SELECT count(*) FROM Keysets WHERE participationID=?", id[:]), "deleted key left on disk")
 	a.NoError(registry.initializeCache())
 	a.True(registry.Get(id).IsZero())
 
 	// and the key can be inserted again afterwards
-	_, err = registry.Insert(p)
+	_, err := registry.Insert(p)
 	a.NoError(err)
 	a.False(registry.Get(id).IsZero())
 }
@@ -776,13 +744,9 @@ func TestFlushIsolatesCorruptHeader(t *testing.T) {
 	a.NoError(registry.Flush(defaultTimeout))
 
 	// corrupt B's stored header
-	registryExecSQL(a, registry, "UPDATE Rolling SET votingHeader=? WHERE pk=(SELECT pk FROM Keysets WHERE participationID=?)", []byte{0xff, 0x00}, idB[:])
-	bOffsetRows := func() (n int) {
-		err := registry.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-			return tx.QueryRow("SELECT count(*) FROM VotingOffsets WHERE pk=(SELECT pk FROM Keysets WHERE participationID=?)", idB[:]).Scan(&n)
-		})
-		a.NoError(err)
-		return n
+	execSQL(a, registry.store.Wdb, "UPDATE Rolling SET votingHeader=? WHERE pk=(SELECT pk FROM Keysets WHERE participationID=?)", []byte{0xff, 0x00}, idB[:])
+	bOffsetRows := func() int {
+		return queryInt(a, registry.store.Rdb, "SELECT count(*) FROM VotingOffsets WHERE pk=(SELECT pk FROM Keysets WHERE participationID=?)", idB[:])
 	}
 	bRowsBefore := bOffsetRows()
 

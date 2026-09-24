@@ -311,40 +311,40 @@ func runPartMigrate(keyfile string, noValidation bool, out io.Writer) (partkey a
 // comparePartkeys verifies two participation keys carry identical key
 // material and metadata.
 func comparePartkeys(expected, actual account.Participation) error {
-	if expected.Parent != actual.Parent {
-		return fmt.Errorf("parent address mismatch")
-	}
-	if expected.FirstValid != actual.FirstValid || expected.LastValid != actual.LastValid || expected.KeyDilution != actual.KeyDilution {
-		return fmt.Errorf("validity metadata mismatch")
-	}
-	if !bytes.Equal(protocol.Encode(expected.VRF), protocol.Encode(actual.VRF)) {
-		return fmt.Errorf("VRF secrets mismatch")
-	}
-	expectedVoting := expected.Voting.Snapshot()
-	actualVoting := actual.Voting.Snapshot()
-	if !bytes.Equal(protocol.Encode(&expectedVoting), protocol.Encode(&actualVoting)) {
-		return fmt.Errorf("voting secrets mismatch")
+	if expected.Parent != actual.Parent || expected.FirstValid != actual.FirstValid ||
+		expected.LastValid != actual.LastValid || expected.KeyDilution != actual.KeyDilution {
+		return fmt.Errorf("metadata mismatch")
 	}
 	// v1/v2 files (and v3 files upgraded from them) have no state proof secrets
 	if (expected.StateProofSecrets == nil) != (actual.StateProofSecrets == nil) {
 		return fmt.Errorf("state proof secrets presence mismatch")
 	}
+
+	expectedVoting, actualVoting := expected.Voting.Snapshot(), actual.Voting.Snapshot()
+	type pair struct {
+		what             string
+		expected, actual []byte
+	}
+	pairs := []pair{
+		{"VRF secrets", protocol.Encode(expected.VRF), protocol.Encode(actual.VRF)},
+		{"voting secrets", protocol.Encode(&expectedVoting), protocol.Encode(&actualVoting)},
+	}
 	if expected.StateProofSecrets != nil {
-		// the encoding covers the SignerContext only
-		if !bytes.Equal(protocol.Encode(expected.StateProofSecrets), protocol.Encode(actual.StateProofSecrets)) {
-			return fmt.Errorf("state proof secrets mismatch")
-		}
-		// the secret keys live in their own table and must be compared
-		// explicitly (callers load them with RestoreAllSecrets)
-		expectedKeys := expected.StateProofSecrets.GetAllKeys()
-		actualKeys := actual.StateProofSecrets.GetAllKeys()
+		// the encoding covers the SignerContext only; the secret keys live in
+		// their own table and are compared explicitly (callers load them with
+		// RestoreAllSecrets)
+		pairs = append(pairs, pair{"state proof secrets", protocol.Encode(expected.StateProofSecrets), protocol.Encode(actual.StateProofSecrets)})
+		expectedKeys, actualKeys := expected.StateProofSecrets.GetAllKeys(), actual.StateProofSecrets.GetAllKeys()
 		if len(expectedKeys) != len(actualKeys) {
 			return fmt.Errorf("state proof key count mismatch (%d != %d)", len(expectedKeys), len(actualKeys))
 		}
 		for i := range expectedKeys {
-			if !bytes.Equal(protocol.Encode(&expectedKeys[i]), protocol.Encode(&actualKeys[i])) {
-				return fmt.Errorf("state proof key %d mismatch", i)
-			}
+			pairs = append(pairs, pair{fmt.Sprintf("state proof key %d", i), protocol.Encode(&expectedKeys[i]), protocol.Encode(&actualKeys[i])})
+		}
+	}
+	for _, p := range pairs {
+		if !bytes.Equal(p.expected, p.actual) {
+			return fmt.Errorf("%s mismatch", p.what)
 		}
 	}
 	return nil

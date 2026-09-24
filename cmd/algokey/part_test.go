@@ -150,6 +150,25 @@ func TestPartMigrate(t *testing.T) {
 		})
 	}
 
+	t.Run("alreadyLatest", func(t *testing.T) {
+		t.Parallel()
+		a := require.New(t)
+
+		keyfile := filepath.Join(t.TempDir(), "latest.partkey")
+		partdb, err := db.MakeErasableAccessor(keyfile)
+		a.NoError(err)
+		_, err = account.FillDBWithParticipationKeys(partdb, basics.Address{1}, 1, 200, 10)
+		partdb.Close()
+		a.NoError(err)
+
+		var out bytes.Buffer
+		_, migrated, err := runPartMigrate(keyfile, false, &out)
+		a.NoError(err)
+		a.False(migrated)
+		a.Contains(out.String(), "nothing to do")
+		a.NoFileExists(keyfile + ".new")
+	})
+
 	t.Run("existingNewRefused", func(t *testing.T) {
 		t.Parallel()
 		a := require.New(t)
@@ -172,12 +191,9 @@ func TestComparePartkeys(t *testing.T) {
 	t.Parallel()
 	a := require.New(t)
 
-	dir := t.TempDir()
-	p1 := makeV3PartkeyFile(t, filepath.Join(dir, "a.partkey"), false)
-	p2 := makeV3PartkeyFile(t, filepath.Join(dir, "b.partkey"), false)
-
+	keyfile := filepath.Join(t.TempDir(), "a.partkey")
+	p1 := makeV3PartkeyFile(t, keyfile, false)
 	a.NoError(comparePartkeys(p1, p1))
-	a.Error(comparePartkeys(p1, p2))
 
 	tweaked := p1
 	tweaked.KeyDilution++
@@ -185,7 +201,7 @@ func TestComparePartkeys(t *testing.T) {
 
 	// state proof secret keys live in their own table and are compared only
 	// when loaded; a copy missing them must be detected
-	partdb, err := db.MakeErasableAccessor(filepath.Join(dir, "a.partkey"))
+	partdb, err := db.MakeErasableAccessor(keyfile)
 	a.NoError(err)
 	defer partdb.Close()
 

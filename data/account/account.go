@@ -135,11 +135,11 @@ func (root Root) Address() basics.Address {
 }
 
 // RestoreParticipation restores a Participation from a database
-// handle. The file is migrated to the latest schema version first.
+// handle.
 func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err error) {
 	err = Migrate(store)
 	if err != nil {
-		return PersistedParticipation{}, err
+		return
 	}
 
 	return restoreParticipationAtVersion(store, PartTableSchemaVersion)
@@ -181,7 +181,7 @@ func restoreParticipationAtVersion(store db.Accessor, version int) (acc Persiste
 
 	// the whole-blob version stores the voting secrets in the "voting" column;
 	// the split versions store a header in "votingHeader" plus subkey rows
-	rowOriented := version >= PartTableSchemaVersionVotingSplit
+	rowOriented := version > PartTableSchemaVersionWholeBlob
 	votingColumn := "voting"
 	if rowOriented {
 		votingColumn = "votingHeader"

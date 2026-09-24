@@ -100,15 +100,16 @@ func votingSnapshot(secrets *crypto.OneTimeSignatureSecrets) crypto.OneTimeSigna
 
 // decodeVotingHeader decodes a stored voting header; an empty value is an
 // error, since every row-oriented store writes a header along with the key.
-func decodeVotingHeader(raw []byte) (crypto.OneTimeSignatureSecretsHeader, error) {
-	var hdr crypto.OneTimeSignatureSecretsHeader
+func decodeVotingHeader(raw []byte) (hdr crypto.OneTimeSignatureSecretsHeader, err error) {
 	if len(raw) == 0 {
 		return hdr, errors.New("no voting header stored")
 	}
-	if err := protocol.Decode(raw, &hdr); err != nil {
-		return hdr, err
-	}
-	return hdr, nil
+	err = protocol.Decode(raw, &hdr)
+	return hdr, err
+}
+
+func encodeVotingHeader(hdr crypto.OneTimeSignatureSecretsHeader) []byte {
+	return protocol.Encode(&hdr)
 }
 
 // offsetsBatch returns the batch the offset subkeys of hdr belong to.  Offset
@@ -170,7 +171,7 @@ func rewriteVotingRows(tx *sql.Tx, target votingRowTarget, snap crypto.OneTimeSi
 }
 
 func updateVotingHeader(tx *sql.Tx, target votingRowTarget, hdr crypto.OneTimeSignatureSecretsHeader) error {
-	result, err := tx.Exec(target.updateHeader, append([]any{protocol.Encode(&hdr)}, target.prefixArgs...)...)
+	result, err := tx.Exec(target.updateHeader, append([]any{encodeVotingHeader(hdr)}, target.prefixArgs...)...)
 	return verifyExecWithOneRowEffected(err, result, "update voting header")
 }
 
@@ -216,9 +217,15 @@ func syncVotingRows(tx *sql.Tx, target votingRowTarget, stored crypto.OneTimeSig
 	return &mem, nil
 }
 
-// syncVotingRowsAndHeader is syncVotingRows followed by the header write, for
-// callers with no row update of their own to fold it into.
-func syncVotingRowsAndHeader(tx *sql.Tx, target votingRowTarget, stored crypto.OneTimeSignatureSecretsHeader, snap crypto.OneTimeSignatureSecretsPersistent) error {
+// syncVotingRowsAndHeader reads the stored header, runs syncVotingRows, and
+// writes the resulting header, for callers with no row update of their own to
+// fold it into.  An unusable stored header fails closed: without the stored
+// cursor there is no way to tell whether memory lags storage.
+func syncVotingRowsAndHeader(tx *sql.Tx, target votingRowTarget, snap crypto.OneTimeSignatureSecretsPersistent) error {
+	stored, err := readVotingHeader(tx, target)
+	if err != nil {
+		return fmt.Errorf("%w; refusing to rewrite voting rows from memory", err)
+	}
 	hdr, err := syncVotingRows(tx, target, stored, snap)
 	if err != nil || hdr == nil {
 		return err
@@ -396,27 +403,21 @@ func insertKeyedSubkeys(tx *sql.Tx, insertSQL string, prefixArgs []any, rows []c
 }
 
 // scanSubkeyRows drives a subkey row scan.  Rows carry (index, data),
-// preceded by the owning pk when withPK is set and by the owning batch when
-// withBatch is set; visit receives each row with those leading columns (zero
-// when absent).  The rows are closed on return.
-func scanSubkeyRows(rows *sql.Rows, withPK, withBatch bool, visit func(pk int64, batch uint64, row crypto.KeyedSubkey)) error {
+// preceded by the owning batch when withBatch is set; visit receives each row
+// with its batch (zero when absent).  The rows are closed on return.
+func scanSubkeyRows(rows *sql.Rows, withBatch bool, visit func(batch uint64, row crypto.KeyedSubkey)) error {
 	defer rows.Close()
 	for rows.Next() {
-		var pk int64
 		var batch uint64
 		var row crypto.KeyedSubkey
-		dest := make([]any, 0, 4)
-		if withPK {
-			dest = append(dest, &pk)
-		}
+		dest := []any{&row.Index, &row.Key}
 		if withBatch {
-			dest = append(dest, &batch)
+			dest = append([]any{&batch}, dest...)
 		}
-		dest = append(dest, &row.Index, &row.Key)
 		if err := rows.Scan(dest...); err != nil {
 			return err
 		}
-		visit(pk, batch, row)
+		visit(batch, row)
 	}
 	return rows.Err()
 }
@@ -428,7 +429,7 @@ func readKeyedSubkeys(tx *sql.Tx, query string, args ...any) ([]crypto.KeyedSubk
 		return nil, err
 	}
 	var result []crypto.KeyedSubkey
-	err = scanSubkeyRows(rows, false, false, func(_ int64, _ uint64, row crypto.KeyedSubkey) {
+	err = scanSubkeyRows(rows, false, func(_ uint64, row crypto.KeyedSubkey) {
 		result = append(result, row)
 	})
 	return result, err
@@ -443,36 +444,9 @@ func readOffsetSubkeys(tx *sql.Tx, query string, args ...any) ([]crypto.KeyedSub
 	}
 	var result []crypto.KeyedSubkey
 	var batches []uint64
-	err = scanSubkeyRows(rows, false, true, func(_ int64, batch uint64, row crypto.KeyedSubkey) {
+	err = scanSubkeyRows(rows, true, func(batch uint64, row crypto.KeyedSubkey) {
 		result = append(result, row)
 		batches = append(batches, batch)
 	})
 	return result, batches, err
-}
-
-// groupedSubkeys carries the subkey rows of one pk; batches holds each row's
-// owning batch for offset subkeys (nil for batch subkeys).
-type groupedSubkeys struct {
-	subkeys []crypto.KeyedSubkey
-	batches []uint64
-}
-
-// readGroupedSubkeys loads subkey rows for every key at once, grouped by pk.
-// The query must yield (pk, index, data) rows, or (pk, batch, index, data)
-// when withBatch is set, ordered by (pk, index).
-func readGroupedSubkeys(tx *sql.Tx, query string, withBatch bool) (map[int64]groupedSubkeys, error) {
-	rows, err := tx.Query(query)
-	if err != nil {
-		return nil, err
-	}
-	result := make(map[int64]groupedSubkeys)
-	err = scanSubkeyRows(rows, true, withBatch, func(pk int64, batch uint64, row crypto.KeyedSubkey) {
-		group := result[pk]
-		group.subkeys = append(group.subkeys, row)
-		if withBatch {
-			group.batches = append(group.batches, batch)
-		}
-		result[pk] = group
-	})
-	return result, err
 }

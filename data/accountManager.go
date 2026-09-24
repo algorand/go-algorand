@@ -111,12 +111,13 @@ func (manager *AccountManager) AddParticipation(participation account.PersistedP
 	// Tell the ParticipationRegistry about the Participation. Duplicate entries
 	// are ignored.
 	pid, err := manager.registry.Insert(participation.Participation)
-	if err == account.ErrAlreadyInserted {
-		return false, nil
-	}
-	if err != nil {
+	if err != nil && err != account.ErrAlreadyInserted {
 		manager.log.Warnf("Failed to insert participation key: %v", err)
 		return false, err
+	}
+
+	if err == account.ErrAlreadyInserted {
+		return false, nil
 	}
 
 	manager.log.Infof("Inserted key (%s) for account (%s) first valid (%d) last valid (%d)\n",

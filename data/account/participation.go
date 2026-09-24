@@ -196,14 +196,7 @@ func (part PersistedParticipation) DeleteOldKeys(current basics.Round, proto con
 		errorCh <- part.Store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			// compare the stored header against memory and write only the
 			// transition instead of rewriting the whole keyset
-			stored, err := readVotingHeader(tx, partkeyFileVotingTarget)
-			if err != nil {
-				// Fail closed: without the stored cursor there is no way to
-				// tell whether memory lags storage, and rewriting from memory
-				// could resurrect keys the file already retired.
-				return fmt.Errorf("Participation.DeleteOldKeys: %v; refusing to rewrite voting rows from memory", err)
-			}
-			err = syncVotingRowsAndHeader(tx, partkeyFileVotingTarget, stored, votingSnapshot(part.Voting))
+			err := syncVotingRowsAndHeader(tx, partkeyFileVotingTarget, votingSnapshot(part.Voting))
 			if err != nil {
 				return fmt.Errorf("Participation.DeleteOldKeys: %v", err)
 			}
@@ -288,8 +281,7 @@ func (part PersistedParticipation) PersistWithSecrets() error {
 func (part PersistedParticipation) Persist() error {
 	rawVRF := protocol.Encode(part.VRF)
 	voting := votingSnapshot(part.Voting)
-	votingHeader := voting.Header()
-	rawVotingHeader := protocol.Encode(&votingHeader)
+	rawVotingHeader := encodeVotingHeader(voting.Header())
 	rawStateProof := protocol.Encode(part.StateProofSecrets)
 
 	err := part.Store.Atomic(func(ctx context.Context, tx *sql.Tx) error {

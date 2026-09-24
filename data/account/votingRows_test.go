@@ -47,50 +47,38 @@ func makeSmallTestKey(t *testing.T, a *require.Assertions, first, last basics.Ro
 	return part, partDB
 }
 
-func countTableRows(a *require.Assertions, store db.Accessor, table string) (n int) {
+// queryInt runs a query that yields a single integer.
+func queryInt(a *require.Assertions, store db.Accessor, query string, args ...any) (n int) {
 	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return tx.QueryRow("SELECT count(*) FROM " + table).Scan(&n)
+		return tx.QueryRow(query, args...).Scan(&n)
 	})
 	a.NoError(err)
 	return n
 }
 
+func countTableRows(a *require.Assertions, store db.Accessor, table string) int {
+	return queryInt(a, store, "SELECT count(*) FROM "+table)
+}
+
+// hasColumn reports whether a table has a column.
+func hasColumn(a *require.Assertions, store db.Accessor, table, column string) bool {
+	return queryInt(a, store, "SELECT count(*) FROM pragma_table_info(?) WHERE name=?", table, column) > 0
+}
+
 // requireNoAutoIndex checks the subkey tables have no separate index B-tree
 // (a rowid table with a composite primary key gets an automatic one, which
 // would cost an extra page write per deleted row).
-func requireNoAutoIndex(a *require.Assertions, tx *sql.Tx) {
-	var n int
-	err := tx.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='index' AND tbl_name IN ('VotingBatches', 'VotingOffsets')").Scan(&n)
-	a.NoError(err)
-	a.Zero(n, "subkey tables carry a separate index B-tree")
+func requireNoAutoIndex(a *require.Assertions, store db.Accessor) {
+	a.Zero(queryInt(a, store, "SELECT count(*) FROM sqlite_master WHERE type='index' AND tbl_name IN ('VotingBatches', 'VotingOffsets')"),
+		"subkey tables carry a separate index B-tree")
 }
 
-// tableColumnsTx lists the column names of a table.
-func tableColumnsTx(tx *sql.Tx, table string) (names []string, err error) {
-	rows, err := tx.Query("PRAGMA table_info(" + table + ")")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var cid, notnull, pk int
-		var name, ctype string
-		var dflt sql.NullString
-		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
-			return nil, err
-		}
-		names = append(names, name)
-	}
-	return names, rows.Err()
-}
-
-func tableColumns(a *require.Assertions, store db.Accessor, table string) (names []string) {
-	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		names, err = tableColumnsTx(tx, table)
+func execSQL(a *require.Assertions, store db.Accessor, query string, args ...any) {
+	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.Exec(query, args...)
 		return err
 	})
 	a.NoError(err)
-	return names
 }
 
 func readPartkeyVotingHeader(a *require.Assertions, store db.Accessor) (hdr crypto.OneTimeSignatureSecretsHeader) {
@@ -100,14 +88,6 @@ func readPartkeyVotingHeader(a *require.Assertions, store db.Accessor) (hdr cryp
 	})
 	a.NoError(err)
 	return hdr
-}
-
-func execPartkeySQL(a *require.Assertions, store db.Accessor, query string, args ...any) {
-	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		_, err := tx.Exec(query, args...)
-		return err
-	})
-	a.NoError(err)
 }
 
 func encodedVotingSnapshot(secrets *crypto.OneTimeSignatureSecrets) []byte {
@@ -125,33 +105,18 @@ func requireRetiredIDUnusable(a *require.Assertions, store db.Accessor, verifier
 }
 
 func setupTestDBAtVer3(partDB db.Accessor, part Participation) error {
-	rawVRF := protocol.Encode(part.VRF)
-	voting := part.Voting.Snapshot()
-	rawVoting := protocol.Encode(&voting)
-	rawStateProof := protocol.Encode(part.StateProofSecrets)
-
+	// a version 2 file plus the state proof column, as the v2->v3 migration left it
+	if err := setupTestDBAtVer2(partDB, part); err != nil {
+		return err
+	}
 	return partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		_, err := tx.Exec(`CREATE TABLE ParticipationAccount (
-		parent BLOB,
-
-		vrf BLOB,
-		voting BLOB,
-
-		firstValid INTEGER,
-		lastValid INTEGER,
-
-		keyDilution INTEGER NOT NULL DEFAULT 0,
-		stateProof BLOB
-	);`)
-		if err != nil {
+		if _, err := tx.Exec("ALTER TABLE ParticipationAccount ADD COLUMN stateProof BLOB"); err != nil {
 			return err
 		}
-
-		if err := setupSchemaForTest(tx, 3); err != nil {
+		if _, err := tx.Exec("UPDATE ParticipationAccount SET stateProof=?", protocol.Encode(part.StateProofSecrets)); err != nil {
 			return err
 		}
-		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, voting, firstValid, lastValid, keyDilution, stateProof) VALUES (?, ?, ?, ?, ?, ?, ?)",
-			part.Parent[:], rawVRF, rawVoting, part.FirstValid, part.LastValid, part.KeyDilution, rawStateProof)
+		_, err := tx.Exec("UPDATE schema SET version=? WHERE tablename=?", PartTableSchemaVersionWholeBlob, PartTableSchemaName)
 		return err
 	})
 }
@@ -191,7 +156,7 @@ func TestMigrateFromVersion3(t *testing.T) {
 			a.NoError(setupTestDBAtVer3(partDB, part.Participation))
 
 			if tc.damage != "" {
-				execPartkeySQL(a, partDB, tc.damage)
+				execSQL(a, partDB, tc.damage)
 
 				// unusable content is reported with the quarantine sentinel
 				// (the node renames the file instead of failing to start)
@@ -203,16 +168,11 @@ func TestMigrateFromVersion3(t *testing.T) {
 				// the whole migration transaction rolled back
 				versions, err := getSchemaVersions(partDB)
 				a.NoError(err)
-				a.Equal(3, versions[PartTableSchemaName])
-				columns := tableColumns(a, partDB, "ParticipationAccount")
-				a.Contains(columns, "voting")
-				a.NotContains(columns, "votingHeader")
-				var n int
-				err = partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-					return tx.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN ('VotingBatches', 'VotingOffsets')").Scan(&n)
-				})
-				a.NoError(err)
-				a.Zero(n, "migration tables survived the rollback")
+				a.Equal(PartTableSchemaVersionWholeBlob, versions[PartTableSchemaName])
+				a.True(hasColumn(a, partDB, "ParticipationAccount", "voting"))
+				a.False(hasColumn(a, partDB, "ParticipationAccount", "votingHeader"))
+				a.Zero(queryInt(a, partDB, "SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN ('VotingBatches', 'VotingOffsets')"),
+					"migration tables survived the rollback")
 				return
 			}
 
@@ -223,15 +183,11 @@ func TestMigrateFromVersion3(t *testing.T) {
 			a.Equal(PartTableSchemaVersion, versions[PartTableSchemaName])
 			a.NoError(testDBContainsAllColumns(partDB))
 
-			a.NoError(partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-				requireNoAutoIndex(a, tx)
-				return nil
-			}))
+			requireNoAutoIndex(a, partDB)
 
 			// the legacy blob column is gone, the header column is present
-			columns := tableColumns(a, partDB, "ParticipationAccount")
-			a.Contains(columns, "votingHeader")
-			a.NotContains(columns, "voting")
+			a.True(hasColumn(a, partDB, "ParticipationAccount", "votingHeader"))
+			a.False(hasColumn(a, partDB, "ParticipationAccount", "voting"))
 
 			a.Equal(len(snap.Batches), countTableRows(a, partDB, "VotingBatches"))
 			a.Equal(len(snap.Offsets), countTableRows(a, partDB, "VotingOffsets"))
@@ -270,6 +226,11 @@ func TestMigrationErasesLegacyBlob(t *testing.T) {
 	partDB, err := db.MakeAccessor(path, false, false)
 	a.NoError(err)
 	a.NoError(setupTestDBAtVer3(partDB, part.Participation))
+	// compact the fixture: building it rewrote the account row without
+	// secure_delete, leaving a stale copy of the blob in free pages that a
+	// real v3 file (written once, then updated under secure_delete) never has
+	_, err = partDB.Handle.Exec("VACUUM")
+	a.NoError(err)
 	partDB.Close()
 	a.True(fileContains(path, secret[:]), "fixture does not contain the secret; the test proves nothing")
 
@@ -314,11 +275,7 @@ func TestSyncVotingRows(t *testing.T) {
 	// sync brings the store from its stored header to the given memory state
 	sync := func(mem *crypto.OneTimeSignatureSecrets) error {
 		return partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-			stored, err := readVotingHeader(tx, partkeyFileVotingTarget)
-			if err != nil {
-				return err
-			}
-			return syncVotingRowsAndHeader(tx, partkeyFileVotingTarget, stored, votingSnapshot(mem))
+			return syncVotingRowsAndHeader(tx, partkeyFileVotingTarget, votingSnapshot(mem))
 		})
 	}
 	// advance moves memory to id, syncs, and checks header, row counts, and
@@ -347,9 +304,9 @@ func TestSyncVotingRows(t *testing.T) {
 
 	// drifted rows are repaired by the next transition: a stray row below the
 	// cursor makes the trim remove too many rows, a lost row too few
-	execPartkeySQL(a, partDB, "INSERT INTO VotingOffsets (batch, off, data) VALUES (4, 0, x'00')")
+	execSQL(a, partDB, "INSERT INTO VotingOffsets (batch, off, data) VALUES (4, 0, x'00')")
 	advance(crypto.OneTimeSignatureIdentifier{Batch: 5, Offset: 4}, "repair after stray row")
-	execPartkeySQL(a, partDB, "DELETE FROM VotingOffsets WHERE off=(SELECT MIN(off) FROM VotingOffsets)")
+	execSQL(a, partDB, "DELETE FROM VotingOffsets WHERE off=(SELECT MIN(off) FROM VotingOffsets)")
 	advance(crypto.OneTimeSignatureIdentifier{Batch: 5, Offset: 5}, "repair after lost row")
 
 	// stored header ahead of memory (on either cursor field): refused,
@@ -358,14 +315,14 @@ func TestSyncVotingRows(t *testing.T) {
 	ahead := current
 	ahead.FirstOffset++
 	ahead.OffsetCount--
-	execPartkeySQL(a, partDB, "UPDATE ParticipationAccount SET votingHeader=?", protocol.Encode(&ahead))
+	execSQL(a, partDB, "UPDATE ParticipationAccount SET votingHeader=?", protocol.Encode(&ahead))
 	a.ErrorContains(sync(secrets), "refusing to resurrect")
 	a.Equal(ahead, readPartkeyVotingHeader(a, partDB))
 	ahead = current
 	ahead.FirstBatch++
-	execPartkeySQL(a, partDB, "UPDATE ParticipationAccount SET votingHeader=?", protocol.Encode(&ahead))
+	execSQL(a, partDB, "UPDATE ParticipationAccount SET votingHeader=?", protocol.Encode(&ahead))
 	a.ErrorContains(sync(secrets), "refusing to resurrect")
-	execPartkeySQL(a, partDB, "UPDATE ParticipationAccount SET votingHeader=?", protocol.Encode(&current))
+	execSQL(a, partDB, "UPDATE ParticipationAccount SET votingHeader=?", protocol.Encode(&current))
 
 	// jump that runs out of batches: exhausted, every row erased, and a
 	// restore cannot sign an identifier that was live a moment ago
@@ -467,7 +424,7 @@ func TestDeleteOldKeysRefusesUnsafeStore(t *testing.T) {
 			batchRows := countTableRows(a, partDB, "VotingBatches")
 			offsetRows := countTableRows(a, partDB, "VotingOffsets")
 
-			execPartkeySQL(a, partDB, "UPDATE ParticipationAccount SET votingHeader=?", tc.header(votingSnapshot(part.Voting).Header()))
+			execSQL(a, partDB, "UPDATE ParticipationAccount SET votingHeader=?", tc.header(votingSnapshot(part.Voting).Header()))
 
 			err := <-part.DeleteOldKeys(basics.Round(26), proto)
 			a.ErrorContains(err, tc.wantErr)
@@ -508,7 +465,7 @@ func TestRestoreDetectsCorruption(t *testing.T) {
 			_, err := RestoreParticipationUnmigrated(partDB)
 			a.NoError(err)
 
-			execPartkeySQL(a, partDB, tc.tamperSQL)
+			execSQL(a, partDB, tc.tamperSQL)
 			_, err = RestoreParticipationUnmigrated(partDB)
 			a.ErrorContains(err, tc.wantErr)
 			// the sentinel lets the node quarantine the file as *.old

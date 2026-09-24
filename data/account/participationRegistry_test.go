@@ -344,17 +344,7 @@ func TestParticipation_CleanupTablesAfterDeleteExpired(t *testing.T) {
 	a.NoError(registry.Flush(defaultTimeout))
 	// make sure tables are clean
 	for _, table := range []string{"Keysets", "Rolling", "stateproofkeys", "VotingBatches", "VotingOffsets"} {
-		var numOfRecords int
-		err = registry.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-			row := tx.QueryRow(`select count(*) from ` + table)
-			err = row.Scan(&numOfRecords)
-			if err != nil {
-				return fmt.Errorf("unable to scan count: %w", err)
-			}
-			return nil
-		})
-		a.NoError(err)
-		a.Equal(0, numOfRecords, "table %s not cleaned up", table)
+		a.Zero(countTableRows(a, registry.store.Rdb, table), "table %s not cleaned up", table)
 	}
 }
 

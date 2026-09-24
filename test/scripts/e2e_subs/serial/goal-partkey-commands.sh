@@ -106,25 +106,14 @@ verify_registered_state () {
 # install manually generated participation keys (do not register)
 NEW_ACCOUNT_1=$(create_and_fund_account)
 algokey part generate --keyfile test_partkey --first 0 --last 3000 --parent "$NEW_ACCOUNT_1"
+# a freshly generated file is already at the latest schema version: migrate is a no-op and leaves no .new copy
+OUTPUT=$(algokey part migrate --keyfile test_partkey)
+if ! echo "$OUTPUT" | grep -q "nothing to do" || [ -f test_partkey.new ]; then
+    fail_test "algokey part migrate on a fresh key should be a no-op: $OUTPUT"
+fi
 OUTPUT=$(${gcmd} account installpartkey --delete-input --partkey test_partkey)
 PARTICIPATION_ID_1=$(echo "$OUTPUT" |awk '{ print $7 }')
 verify_registered_state "no" "$PARTICIPATION_ID_1" "goal account installpartkey"
-
-# algokey part migrate
-# freshly generated files are already at the latest schema version, so migrate
-# reports a no-op and leaves no .new copy behind; the v4 file still installs
-NEW_ACCOUNT_MIGRATE=$(create_and_fund_account)
-algokey part generate --keyfile test_partkey_migrate --first 0 --last 3000 --parent "$NEW_ACCOUNT_MIGRATE"
-OUTPUT=$(algokey part migrate --keyfile test_partkey_migrate)
-if ! echo "$OUTPUT" | grep -q "nothing to do"; then
-    fail_test "algokey part migrate on a fresh key should be a no-op: $OUTPUT"
-fi
-if [ -f test_partkey_migrate.new ]; then
-    fail_test "algokey part migrate no-op should not create test_partkey_migrate.new"
-fi
-OUTPUT=$(${gcmd} account installpartkey --delete-input --partkey test_partkey_migrate)
-PARTICIPATION_ID_MIGRATE=$(echo "$OUTPUT" |awk '{ print $7 }')
-verify_registered_state "no" "$PARTICIPATION_ID_MIGRATE" "goal account installpartkey (latest schema)"
 
 # goal account addpartkey
 # generate and install participation keys (do not register)
