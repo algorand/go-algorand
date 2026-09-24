@@ -362,7 +362,7 @@ func verifyVotingRowsMatch(tx *sql.Tx, target votingRowTarget, original *crypto.
 	origSnap := original.Snapshot()
 	newSnap := reconstructed.Snapshot()
 	if !bytes.Equal(protocol.Encode(&origSnap), protocol.Encode(&newSnap)) {
-		return errors.New("converted voting state does not match the original key material")
+		return fmt.Errorf("%w: converted voting state does not match the original key material", ErrCorruptedVotingData)
 	}
 	return nil
 }

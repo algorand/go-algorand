@@ -145,10 +145,13 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 	return restoreParticipationAtVersion(store, PartTableSchemaVersion)
 }
 
-// ErrCorruptedVotingData is returned when a participation file's voting data
-// is corrupt: an undecodable voting header, or subkey rows inconsistent with
-// it (missing, extra, or misattributed rows).  Callers may quarantine
-// such a file the same way an unsupported-schema file is quarantined.
+// ErrCorruptedVotingData is returned when a participation file's content is
+// corrupt and cannot be used: an undecodable voting header, subkey rows
+// inconsistent with it (missing, extra, or misattributed rows), a legacy
+// voting blob that fails to decode or convert, undecodable VRF or state proof
+// data, or an account table without exactly one row.  Callers may quarantine
+// such a file the same way an unsupported-schema file is quarantined; errors
+// that do not carry this sentinel are I/O or database failures.
 var ErrCorruptedVotingData = errors.New("participation file voting data is corrupt")
 
 // RestoreParticipationUnmigrated restores a Participation without migrating
@@ -191,7 +194,7 @@ func restoreParticipationAtVersion(store db.Accessor, version int) (acc Persiste
 			return fmt.Errorf("RestoreParticipation: could not query storage: %v", err1)
 		}
 		if nrows != 1 {
-			return fmt.Errorf("RestoreParticipation: expected exactly one account row, found %d", nrows)
+			return fmt.Errorf("RestoreParticipation: %w: expected exactly one account row, found %d", ErrCorruptedVotingData, nrows)
 		}
 
 		row = tx.QueryRow("select parent, vrf, " + votingColumn + ", firstValid, lastValid, keyDilution, stateProof from ParticipationAccount")
@@ -220,7 +223,7 @@ func restoreParticipationAtVersion(store db.Accessor, version int) (acc Persiste
 	acc.VRF = &crypto.VRFSecrets{}
 	err = protocol.Decode(rawVRF, acc.VRF)
 	if err != nil {
-		return PersistedParticipation{}, err
+		return PersistedParticipation{}, fmt.Errorf("RestoreParticipation: %w: undecodable VRF secrets: %v", ErrCorruptedVotingData, err)
 	}
 
 	if rowOriented {
@@ -236,7 +239,7 @@ func restoreParticipationAtVersion(store db.Accessor, version int) (acc Persiste
 		acc.Voting = &crypto.OneTimeSignatureSecrets{}
 		err = protocol.Decode(rawVoting, acc.Voting)
 		if err != nil {
-			return PersistedParticipation{}, err
+			return PersistedParticipation{}, fmt.Errorf("RestoreParticipation: %w: undecodable voting blob: %v", ErrCorruptedVotingData, err)
 		}
 	}
 
@@ -246,7 +249,7 @@ func restoreParticipationAtVersion(store db.Accessor, version int) (acc Persiste
 	acc.StateProofSecrets = &merklesignature.Secrets{}
 	// only the state proof data is decoded here (the keys are stored in a different DB table and are fetched separately)
 	if err = protocol.Decode(rawStateProof, acc.StateProofSecrets); err != nil {
-		return PersistedParticipation{}, err
+		return PersistedParticipation{}, fmt.Errorf("RestoreParticipation: %w: undecodable state proof data: %v", ErrCorruptedVotingData, err)
 	}
 
 	return acc, nil

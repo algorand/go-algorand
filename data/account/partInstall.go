@@ -174,17 +174,24 @@ func migrateVotingBlobToRows(tx *sql.Tx) error {
 		return fmt.Errorf("migrateVotingBlobToRows: failed to add the votingHeader column: %w", err)
 	}
 
-	var rawVoting []byte
-	err := tx.QueryRow("SELECT voting FROM ParticipationAccount").Scan(&rawVoting)
-	switch {
-	case err == sql.ErrNoRows:
-		// no account row (partially initialized file); nothing to convert
-	case err != nil:
+	// Content that cannot be converted is reported with ErrCorruptedVotingData
+	// so the node quarantines the file (the transaction rolls back and the
+	// file stays at version 3); other errors are database failures.
+	var nrows int
+	if err := tx.QueryRow("SELECT count(*) FROM ParticipationAccount").Scan(&nrows); err != nil {
 		return err
-	case len(rawVoting) > 0:
+	}
+	if nrows != 1 {
+		return fmt.Errorf("migrateVotingBlobToRows: %w: expected exactly one account row, found %d", ErrCorruptedVotingData, nrows)
+	}
+	var rawVoting []byte
+	if err := tx.QueryRow("SELECT voting FROM ParticipationAccount").Scan(&rawVoting); err != nil {
+		return err
+	}
+	if len(rawVoting) > 0 {
 		voting := &crypto.OneTimeSignatureSecrets{}
 		if err := protocol.Decode(rawVoting, voting); err != nil {
-			return fmt.Errorf("migrateVotingBlobToRows: failed to decode the voting blob: %w", err)
+			return fmt.Errorf("migrateVotingBlobToRows: %w: undecodable voting blob: %v", ErrCorruptedVotingData, err)
 		}
 		// freshly decoded and unshared: no lock is needed for the snapshot
 		if err := rewriteVotingRows(tx, partkeyFileVotingTarget, voting.OneTimeSignatureSecretsPersistent); err != nil {

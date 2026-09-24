@@ -157,11 +157,12 @@ func TestMigrateFromVersion3(t *testing.T) {
 		name      string
 		advance   basics.Round
 		exhausted bool
-		corrupt   bool
+		damage    string // SQL that makes the file unusable; the migration must roll back
 	}{
-		{"midLife", 55, false, false},
-		{"exhausted", 999, true, false},
-		{"corruptBlobRollsBack", 55, false, true},
+		{"midLife", 55, false, ""},
+		{"exhausted", 999, true, ""},
+		{"corruptBlobRollsBack", 55, false, "UPDATE ParticipationAccount SET voting=substr(voting, 1, length(voting)/2)"},
+		{"twoAccountRowsRollBack", 55, false, "INSERT INTO ParticipationAccount SELECT * FROM ParticipationAccount"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -179,16 +180,15 @@ func TestMigrateFromVersion3(t *testing.T) {
 			defer closeDBS(partDB)
 			a.NoError(setupTestDBAtVer3(partDB, part.Participation))
 
-			if tc.corrupt {
-				// mangle the voting blob so the conversion fails mid-transaction
-				var raw []byte
-				err = partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-					return tx.QueryRow("SELECT voting FROM ParticipationAccount").Scan(&raw)
-				})
-				a.NoError(err)
-				execPartkeySQL(a, partDB, "UPDATE ParticipationAccount SET voting=?", raw[:len(raw)/2])
+			if tc.damage != "" {
+				execPartkeySQL(a, partDB, tc.damage)
 
-				a.Error(Migrate(partDB))
+				// unusable content is reported with the quarantine sentinel
+				// (the node renames the file instead of failing to start)
+				err = Migrate(partDB)
+				a.ErrorIs(err, ErrCorruptedVotingData)
+				_, err = RestoreParticipation(partDB)
+				a.ErrorIs(err, ErrCorruptedVotingData)
 
 				// the whole migration transaction rolled back
 				versions, err := getSchemaVersions(partDB)
@@ -476,6 +476,8 @@ func TestRestoreDetectsCorruption(t *testing.T) {
 		{"undecodableHeader", "UPDATE ParticipationAccount SET votingHeader=x'ff00'", "undecodable voting header"},
 		{"missingBatchRow", "DELETE FROM VotingBatches WHERE batch=(SELECT MAX(batch) FROM VotingBatches)", "missing or extra rows"},
 		{"wrongOffsetBatch", "UPDATE VotingOffsets SET batch=batch+1 WHERE off=(SELECT MIN(off) FROM VotingOffsets)", "expected batch"},
+		{"undecodableVRF", "UPDATE ParticipationAccount SET vrf=x'ff00'", "undecodable VRF"},
+		{"twoAccountRows", "INSERT INTO ParticipationAccount SELECT * FROM ParticipationAccount", "exactly one account row"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
