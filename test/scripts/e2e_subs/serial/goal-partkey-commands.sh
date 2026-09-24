@@ -106,11 +106,6 @@ verify_registered_state () {
 # install manually generated participation keys (do not register)
 NEW_ACCOUNT_1=$(create_and_fund_account)
 algokey part generate --keyfile test_partkey --first 0 --last 3000 --parent "$NEW_ACCOUNT_1"
-# a freshly generated file is already at the latest schema version: migrate is a no-op and leaves no .new copy
-OUTPUT=$(algokey part migrate --keyfile test_partkey)
-if ! echo "$OUTPUT" | grep -q "nothing to do" || [ -f test_partkey.new ]; then
-    fail_test "algokey part migrate on a fresh key should be a no-op: $OUTPUT"
-fi
 OUTPUT=$(${gcmd} account installpartkey --delete-input --partkey test_partkey)
 PARTICIPATION_ID_1=$(echo "$OUTPUT" |awk '{ print $7 }')
 verify_registered_state "no" "$PARTICIPATION_ID_1" "goal account installpartkey"

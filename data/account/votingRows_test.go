@@ -123,8 +123,8 @@ func setupTestDBAtVer3(partDB db.Accessor, part Participation) error {
 }
 
 // TestRestoreUnmigratedLegacyVersions verifies the read-only restore handles
-// every supported schema version as-is (the migrate command validates a
-// converted copy against its untouched original this way).
+// every supported schema version as-is, which is what keeps the read-only
+// commands from rewriting a key file as a side effect.
 func TestRestoreUnmigratedLegacyVersions(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)

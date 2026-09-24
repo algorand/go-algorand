@@ -155,9 +155,8 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 var ErrCorruptedVotingData = errors.New("participation file voting data is corrupt")
 
 // RestoreParticipationUnmigrated restores a Participation without migrating
-// the file, reading whichever supported schema version it is at.
-// This keeps the file byte-identical, e.g. for validating a migration
-// against the original.
+// the file, reading whichever supported schema version it is at.  This keeps
+// the file byte-identical, for commands that only read it.
 //
 // The returned value must be treated as read-only: the mutating helpers
 // (DeleteOldKeys, Persist, PersistNewParent) assume the latest schema and

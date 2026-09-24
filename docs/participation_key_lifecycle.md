@@ -94,18 +94,6 @@ release requires a pre-upgrade backup of the file, or generating and
 registering fresh keys. Files at schema versions 1 and 2 are migrated through
 the same path.
 
-To rehearse the migration of a version 3 file without touching the original —
-and to see how long algod will spend doing it at startup — use:
-```
-algokey part migrate --keyfile keys.db
-```
-This writes a migrated copy to **keys.db.new** (taken as an atomic SQLite
-snapshot, so it is consistent even if algod has the file open), prints the
-pure migration time, and validates the migrated keys — including the state
-proof secret keys — against the original (skippable with `--no-validation`).
-If algod advances the keys while the validation is running, the comparison
-can report a spurious mismatch; prefer running it against a stopped node.
-
 Similar functionality is built into **goal** along with convenience methods to:
 * Generate and install.
 * Generate, install and register.
