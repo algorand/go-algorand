@@ -470,9 +470,11 @@ func TestRegistryExcludedRecordCleanup(t *testing.T) {
 func TestInsertFastForwardsLaggingCopy(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	const dilution = 10
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	cases := []struct {
 		name          string
+		dilution      uint64 // the keys' real dilution
+		zeroDilution  bool   // store KeyDilution 0, which defers to the consensus default
 		lastValid     basics.Round
 		advance       []basics.Round // DeleteExpired rounds before the copy is re-inserted
 		lagRound      basics.Round   // how far the lagging copy got
@@ -481,25 +483,31 @@ func TestInsertFastForwardsLaggingCopy(t *testing.T) {
 		minFirstBatch uint64
 	}{
 		// vote through round 999 (stored cursor at batch 101), copy at round 500
-		{"midLife", 3000, []basics.Round{999}, 500, 500, 1500, 101},
+		{"midLife", 10, false, 3000, []basics.Round{999}, 500, 500, 1500, 101},
 		// LastValid 209 keeps the record registered through the end of its
 		// final batch (20): expand it, exhaust it, copy at round 100
-		{"exhausted", 209, []basics.Round{200, 209}, 100, 205, 0, 0},
+		{"exhausted", 10, false, 209, []basics.Round{200, 209}, 100, 205, 0, 0},
+		// a legacy record with KeyDilution 0 fast-forwards with the same
+		// default dilution DeleteExpired uses instead of being rejected
+		{"zeroDilution", proto.DefaultKeyDilution, true, 30000, []basics.Round{25000}, 15000, 15000, 29000, 3},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			a := require.New(t)
 			registry, dbfile := getRegistry(t)
 			defer registryCloseTest(t, registry, dbfile)
+			dilution := tc.dilution
 
 			p := makeTestParticipation(a, 1, 1, tc.lastValid, dilution)
+			if tc.zeroDilution {
+				p.KeyDilution = 0
+			}
 			behind := p
 			behindVoting := p.Voting.Snapshot()
 			behind.Voting = &behindVoting
 
 			id, err := registry.Insert(p)
 			a.NoError(err)
-			proto := config.Consensus[protocol.ConsensusCurrentVersion]
 			for _, round := range tc.advance {
 				a.NoError(registry.DeleteExpired(round, proto))
 			}

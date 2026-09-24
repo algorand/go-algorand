@@ -204,8 +204,9 @@ func fastForwardToStoredCursor(tx *sql.Tx, log logging.Logger, id ParticipationI
 		return nil
 	}
 	if dilution == 0 {
-		return fmt.Errorf("stored voting state for %s (batch %d, offset %d) is ahead of the inserted copy (batch %d, offset %d) and its key dilution is unknown; refusing to rewind the deletion cursor",
-			id, stored.FirstBatch, stored.FirstOffset, current.FirstBatch, current.FirstOffset)
+		// the caller resolves a zero KeyDilution to the consensus default;
+		// expanding a batch with no dilution would leave the key unable to sign
+		return fmt.Errorf("internal error: fast-forwarding key %s requires a resolved key dilution", id)
 	}
 	log.Warnf("participationDB: inserted copy of key %s lags the stored deletion cursor; fast-forwarding from (batch %d, offset %d) to (batch %d, offset %d)",
 		id, current.FirstBatch, current.FirstOffset, stored.FirstBatch, stored.FirstOffset)
@@ -234,7 +235,14 @@ func (i *insertOp) apply(db *participationDB) (err error) {
 		// inserted secrets are the same key — fast-forward the inserted copy
 		// to the most advanced stored cursor before persisting it.
 		if i.record.Voting != nil {
-			if err2 := fastForwardToStoredCursor(tx, db.log, i.id, i.record.Voting, i.record.KeyDilution); err2 != nil {
+			// KeyDilution 0 defers to the consensus default, exactly as
+			// DeleteExpired and DeleteOldKeys resolve it (the value has been
+			// the same in every consensus version)
+			dilution := i.record.KeyDilution
+			if dilution == 0 {
+				dilution = config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution
+			}
+			if err2 := fastForwardToStoredCursor(tx, db.log, i.id, i.record.Voting, dilution); err2 != nil {
 				return err2
 			}
 		}
