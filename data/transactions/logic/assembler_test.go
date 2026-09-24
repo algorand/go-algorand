@@ -524,7 +524,7 @@ const fvCompiled = "8002abcd494985"
 const v12Compiled = v11Compiled + fvCompiled
 
 const sumhashCompiled = "8002012386"
-const allowCompiled = "c700"
+const allowCompiled = "c70100"
 const sha512Compiled = "8002012387"
 const poseidon2Compiled = "802011223344556677889900aabbccddeeff11223344556677889900aabbccddeeffe700"
 const foreignBoxCompiled = "8101760bd401d402d403d404d405d406d407d408d409"

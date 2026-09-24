@@ -1959,7 +1959,7 @@ func opErr(cx *EvalContext) error {
 }
 
 func opAllow(cx *EvalContext) error {
-	field := logicSigAllowance(cx.program[cx.pc+1])
+	field := logicSigAllowance(cx.program[cx.pc+2])
 	fs, ok := logicSigAllowanceSpecByField(field)
 	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid allow field %s", field)
