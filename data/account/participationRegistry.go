@@ -530,8 +530,10 @@ type participationDB struct {
 	dirty map[ParticipationID]struct{}
 
 	// pendingInserts holds the IDs of inserts whose write has not completed
-	// yet; they are not in the cache, so this is what dedups them
-	pendingInserts map[ParticipationID]struct{}
+	// yet; they are not in the cache, so this is what dedups them.  The value
+	// records whether a Delete arrived meanwhile, to be honored once the
+	// write lands.
+	pendingInserts map[ParticipationID]bool
 
 	// excluded holds the stored keys whose voting data failed validation at
 	// load.  They are kept out of the cache (they cannot vote) and their
@@ -624,7 +626,7 @@ func (db *participationDB) initializeCache() error {
 	db.dirty = make(map[ParticipationID]struct{})
 	db.excluded = excluded
 	if db.pendingInserts == nil {
-		db.pendingInserts = make(map[ParticipationID]struct{})
+		db.pendingInserts = make(map[ParticipationID]bool)
 	}
 	return nil
 }
@@ -686,7 +688,7 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 		//           but not in the cache.
 		return id, ErrAlreadyInserted
 	}
-	db.pendingInserts[id] = struct{}{}
+	db.pendingInserts[id] = false
 	db.mutex.Unlock()
 
 	// Make some copies.
@@ -723,30 +725,39 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 	}
 
 	db.mutex.Lock()
-	defer db.mutex.Unlock()
+	deleteRequested := db.pendingInserts[id]
 	delete(db.pendingInserts, id)
+	if err == nil && !deleteRequested {
+		delete(db.excluded, id) // the insert replaced the excluded record's rows
+		db.cache[id] = ParticipationRecord{
+			ParticipationID:   id,
+			Account:           record.Address(),
+			FirstValid:        record.FirstValid,
+			LastValid:         record.LastValid,
+			KeyDilution:       record.KeyDilution,
+			LastVote:          0,
+			LastBlockProposal: 0,
+			LastStateProof:    0,
+			EffectiveFirst:    0,
+			EffectiveLast:     0,
+			StateProof:        stateProofVerifierPtr,
+			Voting:            voting,
+			VRF:               vrf,
+		}
+	}
+	if deleteRequested {
+		delete(db.excluded, id)
+	}
+	db.mutex.Unlock()
+
+	if deleteRequested {
+		// a Delete arrived while the write was pending: honor it now that
+		// the rows exist (a no-op if the insert was rejected)
+		db.writeQueue <- makeOpRequest(&deleteOp{id})
+	}
 	if err != nil {
 		return id, fmt.Errorf("participationDB: unable to insert key %s: %w", id, err)
 	}
-	delete(db.excluded, id) // the insert replaced the excluded record's rows
-
-	// update cache.
-	db.cache[id] = ParticipationRecord{
-		ParticipationID:   id,
-		Account:           record.Address(),
-		FirstValid:        record.FirstValid,
-		LastValid:         record.LastValid,
-		KeyDilution:       record.KeyDilution,
-		LastVote:          0,
-		LastBlockProposal: 0,
-		LastStateProof:    0,
-		EffectiveFirst:    0,
-		EffectiveLast:     0,
-		StateProof:        stateProofVerifierPtr,
-		Voting:            voting,
-		VRF:               vrf,
-	}
-
 	return id, nil
 }
 
@@ -771,6 +782,12 @@ func (db *participationDB) Delete(id ParticipationID) error {
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
 
+	// A key whose insert is still being written is deleted once the write
+	// lands, so the delete is not lost to the pending window.
+	if _, pending := db.pendingInserts[id]; pending {
+		db.pendingInserts[id] = true
+		return nil
+	}
 	// NoOp if key does not exist (an excluded record is deletable too).
 	_, cached := db.cache[id]
 	_, isExcluded := db.excluded[id]

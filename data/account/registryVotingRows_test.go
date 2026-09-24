@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -665,6 +666,70 @@ func TestDeleteExpiredMergesOnlyVoting(t *testing.T) {
 	registry.mergeAdvancedVoting([]ParticipationRecord{stale})
 	registry.mutex.Unlock()
 	a.True(registry.Get(id).IsZero())
+}
+
+// blockingOp parks the registry's write thread until released, so a test can
+// hold an insert in its pending window.
+type blockingOp struct {
+	started, release chan struct{}
+}
+
+func (b *blockingOp) apply(*participationDB) error {
+	close(b.started)
+	<-b.release
+	return nil
+}
+
+// TestDeleteDuringPendingInsert verifies a Delete that arrives while the
+// key's insert is still being written is honored once the write lands,
+// instead of being dropped as "not found" and the key coming back.
+func TestDeleteDuringPendingInsert(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
+
+	p := makeTestParticipation(a, 1, 1, 200, 10)
+	id := p.ID()
+
+	// park the write thread, then start the insert behind it
+	block := &blockingOp{started: make(chan struct{}), release: make(chan struct{})}
+	registry.writeQueue <- makeOpRequest(block)
+	<-block.started
+	inserted := make(chan error, 1)
+	go func() {
+		_, err := registry.Insert(p)
+		inserted <- err
+	}()
+	a.Eventually(func() bool {
+		registry.mutex.RLock()
+		defer registry.mutex.RUnlock()
+		_, pending := registry.pendingInserts[id]
+		return pending
+	}, 5*time.Second, time.Millisecond, "insert never became pending")
+	a.True(registry.Get(id).IsZero(), "pending insert visible from the cache")
+
+	// the delete lands in the pending window
+	a.NoError(registry.Delete(id))
+	close(block.release)
+	a.NoError(<-inserted)
+	a.NoError(registry.Flush(defaultTimeout))
+
+	a.True(registry.Get(id).IsZero(), "deleted key came back once the pending insert completed")
+	var keysets int
+	err := registry.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return tx.QueryRow("SELECT count(*) FROM Keysets WHERE participationID=?", id[:]).Scan(&keysets)
+	})
+	a.NoError(err)
+	a.Zero(keysets, "deleted key left on disk")
+	a.NoError(registry.initializeCache())
+	a.True(registry.Get(id).IsZero())
+
+	// and the key can be inserted again afterwards
+	_, err = registry.Insert(p)
+	a.NoError(err)
+	a.False(registry.Get(id).IsZero())
 }
 
 // TestFlushIsolatesCorruptHeader verifies a key whose stored header is
