@@ -49,8 +49,7 @@ type Request struct {
 // simulatorLedger patches the ledger interface to use a constant latest round.
 type simulatorLedger struct {
 	*data.Ledger
-	start     basics.Round
-	extraFees basics.MicroAlgos
+	start basics.Round
 }
 
 // Latest is part of the ledger.Ledger interface.
@@ -88,7 +87,6 @@ func (l simulatorLedger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint,
 			Validate:            true,
 			MaxTxnBytesPerBlock: maxTxnBytesPerBlock,
 			Tracer:              tracer,
-			ExtraFees:           l.extraFees,
 		})
 }
 
@@ -386,8 +384,6 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 			},
 		}
 	}
-	s.ledger.extraFees = basics.MicroAlgos{Raw: simulateRequest.ExtraFees}
-
 	prevBlockHdr, err := s.ledger.BlockHdr(s.ledger.start)
 	if err != nil {
 		return Result{}, err
