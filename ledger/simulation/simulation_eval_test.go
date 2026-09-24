@@ -1909,6 +1909,36 @@ int 1`,
 	require.Zero(t, result.TxnGroups[0].Txns[1].Txn.ApplyData.EvalDelta.InnerTxns[0].Txn.Fee.Raw)
 }
 
+func TestExtraFeesCoverOuterFee(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	sender := env.Accounts[0]
+	minFee := env.TxnInfo.CurrentProtocolParams().MinFee().Raw
+	appCall := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:   protocol.ApplicationCallTx,
+		Sender: sender.Addr,
+		Fee:    0,
+		ApprovalProgram: `#pragma version 6
+int 1`,
+		ClearStateProgram: `#pragma version 6
+int 1`,
+	})
+	group := []transactions.SignedTxn{appCall.Txn().Sign(sender.Sk)}
+
+	result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+		TxnGroups: [][]transactions.SignedTxn{group},
+		ExtraFees: minFee,
+	})
+	require.NoError(t, err)
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+	require.Equal(t, minFee, result.EvalOverrides.ExtraFees)
+	require.Zero(t, result.TxnGroups[0].GroupFeesPaid.Raw)
+}
+
 func TestStartRound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
