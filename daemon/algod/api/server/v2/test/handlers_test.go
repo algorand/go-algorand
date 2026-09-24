@@ -1629,6 +1629,50 @@ func TestPostSimulateTransaction(t *testing.T) {
 	}
 }
 
+func TestSimulateTransactionExtraFees(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	mockLedger, roots, _, _, releasefunc := testingenv(t, 2, 0, true)
+	defer releasefunc()
+	handler := v2.Handlers{
+		Node:     makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false),
+		Log:      logging.Base(),
+		Shutdown: make(chan struct{}),
+	}
+
+	hdr, err := mockLedger.BlockHdr(mockLedger.Latest())
+	require.NoError(t, err)
+	txnInfo := simulationtesting.TxnInfo{LatestHeader: hdr}
+	txn := txnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   roots[0].Address(),
+		Receiver: roots[1].Address(),
+		Amount:   1,
+	})
+	stxn := txn.Txn().Sign(roots[0].Secrets())
+	const extraFees = uint64(2_000)
+	request := v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{{Txns: []transactions.SignedTxn{stxn}}},
+		ExtraFees: extraFees,
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(protocol.EncodeReflect(&request)))
+	rec := httptest.NewRecorder()
+	ctx := echo.New().NewContext(req, rec)
+	format := model.SimulateTransactionParamsFormatJson
+	require.NoError(t, handler.SimulateTransaction(ctx, model.SimulateTransactionParams{Format: &format}))
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var response v2.PreEncodedSimulateResponse
+	require.NoError(t, codec.NewDecoderBytes(rec.Body.Bytes(), protocol.JSONStrictHandle).Decode(&response))
+	require.NotNil(t, response.EvalOverrides)
+	require.NotNil(t, response.EvalOverrides.ExtraFees)
+	require.Equal(t, extraFees, *response.EvalOverrides.ExtraFees)
+	require.NotNil(t, response.TxnGroups[0].GroupFeesPaid)
+	require.Equal(t, stxn.Txn.Fee.Raw, *response.TxnGroups[0].GroupFeesPaid)
+}
+
 func copyInnerTxnGroupIDs(t *testing.T, dst, src *v2.PreEncodedTxInfo) {
 	t.Helper()
 

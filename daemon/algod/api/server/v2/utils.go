@@ -598,6 +598,7 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 			MaxLogSize:            result.EvalOverrides.MaxLogSize,
 			MaxLogCalls:           result.EvalOverrides.MaxLogCalls,
 			ExtraOpcodeBudget:     omitEmpty(result.EvalOverrides.ExtraOpcodeBudget),
+			ExtraFees:             omitEmpty(result.EvalOverrides.ExtraFees),
 			FixSigners:            omitEmpty(result.EvalOverrides.FixSigners),
 		}
 	}
@@ -624,6 +625,7 @@ func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Requ
 		AllowMoreLogging:      request.AllowMoreLogging,
 		AllowUnnamedResources: request.AllowUnnamedResources,
 		ExtraOpcodeBudget:     request.ExtraOpcodeBudget,
+		ExtraFees:             request.ExtraFees,
 		TraceConfig:           request.ExecTraceConfig,
 		FixSigners:            request.FixSigners,
 	}

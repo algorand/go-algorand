@@ -178,6 +178,14 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 		*ep.PooledApplicationBudget += tracer.result.EvalOverrides.ExtraOpcodeBudget
 	}
 
+	// ExtraFees is simulation-only fee credit. Apply it through the tracer so
+	// normal evaluation cannot take this path. It is granted once to the
+	// top-level group, then shared by its inner transaction groups.
+	if ep.FeeCredit != nil && ep.GetCaller() == nil {
+		extraFees := basics.MicroAlgos{Raw: tracer.result.EvalOverrides.ExtraFees}
+		*ep.FeeCredit = ep.FeeCredit.AddSaturate(extraFees)
+	}
+
 	if ep.GetCaller() == nil {
 		// Override runtime related constraints against ep, before entering txn group
 		ep.EvalConstants = tracer.result.EvalOverrides.LogicEvalConstants()
