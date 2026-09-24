@@ -148,15 +148,10 @@ func createVotingSubkeyTables(tx *sql.Tx) error {
 		return err
 	}
 
-	// WITHOUT ROWID: the composite key is the table's only B-tree, so the
-	// per-round row delete writes no separate index page (VotingBatches uses
-	// INTEGER PRIMARY KEY, which already is the rowid)
 	_, err = tx.Exec(`CREATE TABLE VotingOffsets (
-		batch INTEGER NOT NULL, --* the batch these offsets belong to (FirstBatch-1)
-		off INTEGER NOT NULL,   --* absolute offset within batch
-		data BLOB NOT NULL,     --* msgpack encoding of the offset subkey
-		PRIMARY KEY (batch, off)
-	) WITHOUT ROWID;`)
+		off INTEGER PRIMARY KEY, --* absolute offset within the expanded batch (FirstBatch-1 of the header)
+		data BLOB NOT NULL       --* msgpack encoding of the offset subkey
+	);`)
 	return err
 }
 

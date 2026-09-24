@@ -371,10 +371,9 @@ const (
 		) WITHOUT ROWID`
 	createVotingOffsets = `CREATE TABLE VotingOffsets (
 			pk    INTEGER NOT NULL,
-			batch INTEGER NOT NULL, --* the batch these offsets belong to (FirstBatch-1)
-			off   INTEGER NOT NULL, --* absolute offset within batch
+			off   INTEGER NOT NULL, --* absolute offset within the expanded batch (FirstBatch-1 of the header)
 			data  BLOB    NOT NULL, --* msgpack encoding of the offset subkey
-			PRIMARY KEY (pk, batch, off)
+			PRIMARY KEY (pk, off)
 		) WITHOUT ROWID`
 	insertKeysetQuery         = `INSERT INTO Keysets (participationID, account, firstValidRound, lastValidRound, keyDilution, vrf, stateProof) VALUES (?, ?, ?, ?, ?, ?, ?)`
 	insertRollingQuery        = `INSERT INTO Rolling (pk, votingHeader) VALUES (?, ?)`
@@ -401,7 +400,7 @@ const (
 		FROM Rolling r
 		WHERE r.pk IN (SELECT pk FROM Keysets WHERE participationID=?)`
 	selectVotingBatches   = `SELECT batch, data FROM VotingBatches WHERE pk=? ORDER BY batch`
-	selectVotingOffsets   = `SELECT batch, off, data FROM VotingOffsets WHERE pk=? ORDER BY off`
+	selectVotingOffsets   = `SELECT off, data FROM VotingOffsets WHERE pk=? ORDER BY off`
 	deleteKeysets         = `DELETE FROM Keysets WHERE pk=?`
 	deleteRolling         = `DELETE FROM Rolling WHERE pk=?`
 	deleteStateProofByPK  = `DELETE FROM StateProofKeys WHERE pk=?`
@@ -1034,7 +1033,7 @@ func (db *participationDB) getAllFromDB() (records []ParticipationRecord, corrup
 		// than blocking the whole registry (and with it the node) from loading
 		records = make([]ParticipationRecord, 0, len(scanned))
 		for _, sr := range scanned {
-			batches, offsets, offsetBatches, err := readVotingRows(tx, registryVotingTarget(sr.pk))
+			batches, offsets, err := readVotingRows(tx, registryVotingTarget(sr.pk))
 			if err != nil {
 				return fmt.Errorf("unable to read the voting subkeys of pk %d: %w", sr.pk, err)
 			}
@@ -1042,7 +1041,7 @@ func (db *participationDB) getAllFromDB() (records []ParticipationRecord, corrup
 				var voting *crypto.OneTimeSignatureSecrets
 				hdr, verr := decodeVotingHeader(sr.rawHeader)
 				if verr == nil {
-					voting, verr = votingFromRows(hdr, batches, offsets, offsetBatches)
+					voting, verr = votingFromRows(hdr, batches, offsets)
 				}
 				if verr != nil {
 					db.log.Errorf("participationDB: excluding key %s (pk %d) from the registry and erasing its voting subkeys, its voting data is corrupt: %v; the key cannot vote until it is re-installed (a key with a .partkey file is re-installed at startup; one installed over the REST API must be installed again), or delete %s and restart to rebuild the registry",

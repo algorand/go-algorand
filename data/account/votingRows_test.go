@@ -304,7 +304,7 @@ func TestSyncVotingRows(t *testing.T) {
 
 	// drifted rows are repaired by the next transition: a stray row below the
 	// cursor makes the trim remove too many rows, a lost row too few
-	execSQL(a, partDB, "INSERT INTO VotingOffsets (batch, off, data) VALUES (4, 0, x'00')")
+	execSQL(a, partDB, "INSERT INTO VotingOffsets (off, data) VALUES (0, x'00')")
 	advance(crypto.OneTimeSignatureIdentifier{Batch: 5, Offset: 4}, "repair after stray row")
 	execSQL(a, partDB, "DELETE FROM VotingOffsets WHERE off=(SELECT MIN(off) FROM VotingOffsets)")
 	advance(crypto.OneTimeSignatureIdentifier{Batch: 5, Offset: 5}, "repair after lost row")
@@ -447,7 +447,7 @@ func TestRestoreDetectsCorruption(t *testing.T) {
 	}{
 		{"undecodableHeader", "UPDATE ParticipationAccount SET votingHeader=x'ff00'", "undecodable voting header"},
 		{"missingBatchRow", "DELETE FROM VotingBatches WHERE batch=(SELECT MAX(batch) FROM VotingBatches)", "missing or extra rows"},
-		{"wrongOffsetBatch", "UPDATE VotingOffsets SET batch=batch+1 WHERE off=(SELECT MIN(off) FROM VotingOffsets)", "expected batch"},
+		{"misplacedOffsetRow", "UPDATE VotingOffsets SET off=off-1 WHERE off=(SELECT MIN(off) FROM VotingOffsets)", "offset row 0 has index"},
 		{"undecodableVRF", "UPDATE ParticipationAccount SET vrf=x'ff00'", "undecodable VRF"},
 		{"twoAccountRows", "INSERT INTO ParticipationAccount SELECT * FROM ParticipationAccount", "exactly one account row"},
 	}

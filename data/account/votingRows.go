@@ -48,13 +48,13 @@ var errInconsistentVotingRows = errors.New("stored voting subkey rows are incons
 type votingRowTarget struct {
 	selectHeader       string // args: (prefixArgs...) -> header blob
 	selectBatches      string // args: (prefixArgs...) -> (batch, data) ordered by batch
-	selectOffsets      string // args: (prefixArgs...) -> (batch, off, data) ordered by off
+	selectOffsets      string // args: (prefixArgs...) -> (off, data) ordered by off
 	deleteAllBatches   string // args: (prefixArgs...)
 	deleteBatchesBelow string // args: (prefixArgs..., threshold)
 	deleteAllOffsets   string // args: (prefixArgs...)
 	deleteOffsetsBelow string // args: (prefixArgs..., threshold)
 	insertBatch        string // args: (prefixArgs..., index, data)
-	insertOffset       string // args: (prefixArgs..., batch, index, data)
+	insertOffset       string // args: (prefixArgs..., index, data)
 	updateHeader       string // args: (header, prefixArgs...)
 	prefixArgs         []any
 }
@@ -62,13 +62,13 @@ type votingRowTarget struct {
 var partkeyFileVotingTarget = votingRowTarget{
 	selectHeader:       "SELECT votingHeader FROM ParticipationAccount",
 	selectBatches:      "SELECT batch, data FROM VotingBatches ORDER BY batch",
-	selectOffsets:      "SELECT batch, off, data FROM VotingOffsets ORDER BY off",
+	selectOffsets:      "SELECT off, data FROM VotingOffsets ORDER BY off",
 	deleteAllBatches:   "DELETE FROM VotingBatches",
 	deleteBatchesBelow: "DELETE FROM VotingBatches WHERE batch<?",
 	deleteAllOffsets:   "DELETE FROM VotingOffsets",
 	deleteOffsetsBelow: "DELETE FROM VotingOffsets WHERE off<?",
 	insertBatch:        "INSERT INTO VotingBatches (batch, data) VALUES (?, ?)",
-	insertOffset:       "INSERT INTO VotingOffsets (batch, off, data) VALUES (?, ?, ?)",
+	insertOffset:       "INSERT INTO VotingOffsets (off, data) VALUES (?, ?)",
 	updateHeader:       "UPDATE ParticipationAccount SET votingHeader=?",
 }
 
@@ -82,7 +82,7 @@ func registryVotingTarget(pk int64) votingRowTarget {
 		deleteAllOffsets:   deleteVotingOffsetsPK,
 		deleteOffsetsBelow: "DELETE FROM VotingOffsets WHERE pk=? AND off<?",
 		insertBatch:        "INSERT INTO VotingBatches (pk, batch, data) VALUES (?, ?, ?)",
-		insertOffset:       "INSERT INTO VotingOffsets (pk, batch, off, data) VALUES (?, ?, ?, ?)",
+		insertOffset:       "INSERT INTO VotingOffsets (pk, off, data) VALUES (?, ?, ?)",
 		updateHeader:       "UPDATE Rolling SET votingHeader=? WHERE pk=?",
 		prefixArgs:         []any{pk},
 	}
@@ -112,15 +112,6 @@ func encodeVotingHeader(hdr crypto.OneTimeSignatureSecretsHeader) []byte {
 	return protocol.Encode(&hdr)
 }
 
-// offsetsBatch returns the batch the offset subkeys of hdr belong to.  Offset
-// subkeys only exist after a batch expansion, which leaves FirstBatch >= 1.
-func offsetsBatch(hdr crypto.OneTimeSignatureSecretsHeader) (uint64, error) {
-	if hdr.FirstBatch == 0 {
-		return 0, errors.New("offset subkeys present but no batch has been expanded (FirstBatch is 0)")
-	}
-	return hdr.FirstBatch - 1, nil
-}
-
 // storedHeaderAhead reports whether the stored deletion cursor is strictly
 // ahead of memory's.  Exhaustion is terminal: an exhausted store is ahead of
 // any live in-memory state, whatever its cursor says.
@@ -142,14 +133,7 @@ func insertVotingRows(tx *sql.Tx, target votingRowTarget, snap crypto.OneTimeSig
 	if err := insertKeyedSubkeys(tx, target.insertBatch, target.prefixArgs, snap.EncodedBatches()); err != nil {
 		return fmt.Errorf("failed to insert voting batch subkeys: %w", err)
 	}
-	if len(snap.Offsets) == 0 {
-		return nil
-	}
-	batch, err := offsetsBatch(snap.Header())
-	if err != nil {
-		return err
-	}
-	if err := insertKeyedSubkeys(tx, target.insertOffset, target.args(batch), snap.EncodedOffsets()); err != nil {
+	if err := insertKeyedSubkeys(tx, target.insertOffset, target.prefixArgs, snap.EncodedOffsets()); err != nil {
 		return fmt.Errorf("failed to insert voting offset subkeys: %w", err)
 	}
 	return nil
@@ -266,14 +250,7 @@ func applyVotingTransition(tx *sql.Tx, target votingRowTarget, stored, mem crypt
 		if err := deleteExpecting(tx, target.deleteAllOffsets, target.prefixArgs, stored.OffsetCount, "offset subkey replacement"); err != nil {
 			return err
 		}
-		if mem.OffsetCount == 0 {
-			return nil
-		}
-		batch, err := offsetsBatch(mem)
-		if err != nil {
-			return err
-		}
-		if err := insertKeyedSubkeys(tx, target.insertOffset, target.args(batch), snap.EncodedOffsets()); err != nil {
+		if err := insertKeyedSubkeys(tx, target.insertOffset, target.prefixArgs, snap.EncodedOffsets()); err != nil {
 			return fmt.Errorf("failed to insert voting offset subkeys: %w", err)
 		}
 		return nil
@@ -309,51 +286,25 @@ func readVotingHeader(tx *sql.Tx, target votingRowTarget) (crypto.OneTimeSignatu
 	return hdr, nil
 }
 
-// readVotingRows reads the subkey rows of a key: batches ordered by index,
-// offsets ordered by index along with each offset row's batch column.
-func readVotingRows(tx *sql.Tx, target votingRowTarget) (batches, offsets []crypto.KeyedSubkey, offsetBatches []uint64, err error) {
-	batches, err = readKeyedSubkeys(tx, target.selectBatches, target.prefixArgs...)
-	if err != nil {
-		return nil, nil, nil, err
+// readVotingRows reads the subkey rows of a key, each ordered by index.
+func readVotingRows(tx *sql.Tx, target votingRowTarget) (batches, offsets []crypto.KeyedSubkey, err error) {
+	if batches, err = readKeyedSubkeys(tx, target.selectBatches, target.prefixArgs...); err != nil {
+		return nil, nil, err
 	}
-	offsets, offsetBatches, err = readOffsetSubkeys(tx, target.selectOffsets, target.prefixArgs...)
-	if err != nil {
-		return nil, nil, nil, err
+	if offsets, err = readKeyedSubkeys(tx, target.selectOffsets, target.prefixArgs...); err != nil {
+		return nil, nil, err
 	}
-	return batches, offsets, offsetBatches, nil
+	return batches, offsets, nil
 }
 
-// votingFromRows reassembles voting secrets from a header and its rows,
-// checking first that every offset row belongs to the batch the header says
-// is expanded.  Errors are wrapped in ErrCorruptedVotingData.
-func votingFromRows(hdr crypto.OneTimeSignatureSecretsHeader, batches, offsets []crypto.KeyedSubkey, offsetBatches []uint64) (*crypto.OneTimeSignatureSecrets, error) {
-	if err := validateOffsetRowBatches(hdr, offsetBatches); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrCorruptedVotingData, err)
-	}
+// votingFromRows reassembles voting secrets from a header and its rows.
+// Errors are wrapped in ErrCorruptedVotingData.
+func votingFromRows(hdr crypto.OneTimeSignatureSecretsHeader, batches, offsets []crypto.KeyedSubkey) (*crypto.OneTimeSignatureSecrets, error) {
 	voting, err := crypto.OneTimeSignatureSecretsFromRows(hdr, batches, offsets)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrCorruptedVotingData, err)
 	}
 	return voting, nil
-}
-
-// validateOffsetRowBatches verifies every stored offset row belongs to batch
-// FirstBatch-1, so a header/row mismatch cannot silently associate offsets
-// with the wrong batch.
-func validateOffsetRowBatches(hdr crypto.OneTimeSignatureSecretsHeader, offsetBatches []uint64) error {
-	if len(offsetBatches) == 0 {
-		return nil
-	}
-	want, err := offsetsBatch(hdr)
-	if err != nil {
-		return err
-	}
-	for _, b := range offsetBatches {
-		if b != want {
-			return fmt.Errorf("offset subkey row belongs to batch %d, expected batch %d", b, want)
-		}
-	}
-	return nil
 }
 
 // verifyVotingRowsMatch reads back what a migration wrote and compares the
@@ -363,11 +314,11 @@ func verifyVotingRowsMatch(tx *sql.Tx, target votingRowTarget, original *crypto.
 	if err != nil {
 		return fmt.Errorf("reading back the converted voting state: %w", err)
 	}
-	batches, offsets, offsetBatches, err := readVotingRows(tx, target)
+	batches, offsets, err := readVotingRows(tx, target)
 	if err != nil {
 		return fmt.Errorf("reading back the converted voting subkey rows: %w", err)
 	}
-	reconstructed, err := votingFromRows(hdr, batches, offsets, offsetBatches)
+	reconstructed, err := votingFromRows(hdr, batches, offsets)
 	if err != nil {
 		return fmt.Errorf("reconstruction of the converted voting state failed: %w", err)
 	}
@@ -402,51 +353,21 @@ func insertKeyedSubkeys(tx *sql.Tx, insertSQL string, prefixArgs []any, rows []c
 	return nil
 }
 
-// scanSubkeyRows drives a subkey row scan.  Rows carry (index, data),
-// preceded by the owning batch when withBatch is set; visit receives each row
-// with its batch (zero when absent).  The rows are closed on return.
-func scanSubkeyRows(rows *sql.Rows, withBatch bool, visit func(batch uint64, row crypto.KeyedSubkey)) error {
-	defer rows.Close()
-	for rows.Next() {
-		var batch uint64
-		var row crypto.KeyedSubkey
-		dest := []any{&row.Index, &row.Key}
-		if withBatch {
-			dest = append([]any{&batch}, dest...)
-		}
-		if err := rows.Scan(dest...); err != nil {
-			return err
-		}
-		visit(batch, row)
-	}
-	return rows.Err()
-}
-
 // readKeyedSubkeys reads (index, data) rows.
 func readKeyedSubkeys(tx *sql.Tx, query string, args ...any) ([]crypto.KeyedSubkey, error) {
 	rows, err := tx.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
-	var result []crypto.KeyedSubkey
-	err = scanSubkeyRows(rows, false, func(_ uint64, row crypto.KeyedSubkey) {
-		result = append(result, row)
-	})
-	return result, err
-}
+	defer rows.Close()
 
-// readOffsetSubkeys reads (batch, index, data) rows, returning each row's
-// batch alongside the subkeys.
-func readOffsetSubkeys(tx *sql.Tx, query string, args ...any) ([]crypto.KeyedSubkey, []uint64, error) {
-	rows, err := tx.Query(query, args...)
-	if err != nil {
-		return nil, nil, err
-	}
 	var result []crypto.KeyedSubkey
-	var batches []uint64
-	err = scanSubkeyRows(rows, true, func(batch uint64, row crypto.KeyedSubkey) {
+	for rows.Next() {
+		var row crypto.KeyedSubkey
+		if err := rows.Scan(&row.Index, &row.Key); err != nil {
+			return nil, err
+		}
 		result = append(result, row)
-		batches = append(batches, batch)
-	})
-	return result, batches, err
+	}
+	return result, rows.Err()
 }

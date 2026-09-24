@@ -177,7 +177,6 @@ func RestoreParticipationUnmigrated(store db.Accessor) (PersistedParticipation, 
 func restoreParticipationAtVersion(store db.Accessor, version int) (acc PersistedParticipation, err error) {
 	var rawParent, rawVRF, rawVoting, rawStateProof []byte
 	var batches, offsets []crypto.KeyedSubkey
-	var offsetBatches []uint64
 
 	// the whole-blob version stores the voting secrets in the "voting" column;
 	// the split versions store a header in "votingHeader" plus subkey rows
@@ -206,7 +205,7 @@ func restoreParticipationAtVersion(store db.Accessor, version int) (acc Persiste
 		}
 
 		if rowOriented {
-			batches, offsets, offsetBatches, err1 = readVotingRows(tx, partkeyFileVotingTarget)
+			batches, offsets, err1 = readVotingRows(tx, partkeyFileVotingTarget)
 			if err1 != nil {
 				return fmt.Errorf("RestoreParticipation: could not read voting subkey rows: %v", err1)
 			}
@@ -232,7 +231,7 @@ func restoreParticipationAtVersion(store db.Accessor, version int) (acc Persiste
 		if herr != nil {
 			return PersistedParticipation{}, fmt.Errorf("RestoreParticipation: %w: undecodable voting header: %v", ErrCorruptedVotingData, herr)
 		}
-		acc.Voting, err = votingFromRows(hdr, batches, offsets, offsetBatches)
+		acc.Voting, err = votingFromRows(hdr, batches, offsets)
 		if err != nil {
 			return PersistedParticipation{}, fmt.Errorf("RestoreParticipation: %w", err)
 		}
