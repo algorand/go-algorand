@@ -722,6 +722,69 @@ func TestDeleteDuringPendingInsert(t *testing.T) {
 	a.False(registry.Get(id).IsZero())
 }
 
+// TestReinsertDuringDeferredDelete verifies a re-insert that races the
+// deferred deletion of a pending insert cannot order its write ahead of that
+// deletion: the ID stays reserved until the deletion is queued, so the
+// re-insert is refused instead of being stored and then erased from disk
+// while still cached.
+func TestReinsertDuringDeferredDelete(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
+
+	p := makeTestParticipation(a, 1, 1, 200, 10)
+	id := p.ID()
+
+	// park the write thread, start the insert behind it, and request the
+	// delete while the insert is pending
+	block := &blockingOp{started: make(chan struct{}), release: make(chan struct{})}
+	registry.writeQueue <- makeOpRequest(block)
+	<-block.started
+	inserted := make(chan error, 1)
+	go func() {
+		_, err := registry.Insert(p)
+		inserted <- err
+	}()
+	a.Eventually(func() bool {
+		registry.mutex.RLock()
+		defer registry.mutex.RUnlock()
+		_, pending := registry.pendingInserts[id]
+		return pending
+	}, 5*time.Second, time.Millisecond)
+	a.NoError(registry.Delete(id))
+
+	// hold the first insert between its write landing and its deferred
+	// deletion being queued, then let the write land
+	gateEntered := make(chan struct{})
+	gateRelease := make(chan struct{})
+	registry.testInsertGate = func() {
+		close(gateEntered)
+		<-gateRelease
+	}
+	close(block.release)
+	<-gateEntered
+
+	// in that window a re-insert must be refused, not ordered ahead of the deletion
+	_, err := registry.Insert(p)
+	a.ErrorIs(err, ErrAlreadyInserted, "re-insert slipped in ahead of the deferred deletion")
+
+	close(gateRelease)
+	a.NoError(<-inserted)
+	a.NoError(registry.Flush(defaultTimeout))
+	a.True(registry.Get(id).IsZero())
+	a.Zero(queryInt(a, registry.store.Rdb, "SELECT count(*) FROM Keysets WHERE participationID=?", id[:]))
+
+	// once the deletion is queued the key can be inserted again, and cache
+	// and disk agree
+	registry.testInsertGate = nil
+	_, err = registry.Insert(p)
+	a.NoError(err)
+	a.False(registry.Get(id).IsZero())
+	a.Equal(1, queryInt(a, registry.store.Rdb, "SELECT count(*) FROM Keysets WHERE participationID=?", id[:]))
+}
+
 // TestFlushIsolatesCorruptHeader verifies a key whose stored header is
 // undecodable fails closed (nothing rewritten from memory) without taking the
 // other keys' flush down with it.

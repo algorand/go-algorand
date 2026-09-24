@@ -575,8 +575,12 @@ type participationDB struct {
 	// pendingInserts holds the IDs of inserts whose write has not completed
 	// yet; they are not in the cache, so this is what dedups them.  The value
 	// records whether a Delete arrived meanwhile, to be honored once the
-	// write lands.
+	// write lands; the ID stays reserved until that deletion is queued.
 	pendingInserts map[ParticipationID]bool
+
+	// testInsertGate, when set (tests only), runs after an insert's write has
+	// landed and before its deferred deletion is queued.
+	testInsertGate func()
 
 	// excluded holds the stored keys whose voting data failed validation at
 	// load, with their LastValid.  They are kept out of the cache (they
@@ -710,7 +714,8 @@ func verifyExecWithOneRowEffected(err error, result sql.Result, operationName st
 // A Delete that arrives while the write is in flight is honored as soon as
 // the write lands.  Insert still reports success in that case, since the key
 // was stored, so a caller that reads the key back immediately may find it
-// already gone.
+// already gone; a re-insert racing that deletion is reported as
+// ErrAlreadyInserted until the deletion has been queued.
 func (db *participationDB) Insert(record Participation) (id ParticipationID, err error) {
 	id = record.ID()
 
@@ -761,7 +766,9 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 
 	db.mutex.Lock()
 	deleteRequested := db.pendingInserts[id]
-	delete(db.pendingInserts, id)
+	if !deleteRequested {
+		delete(db.pendingInserts, id)
+	}
 	if err == nil || deleteRequested {
 		delete(db.excluded, id) // replaced by the insert, or deleted on request
 	}
@@ -785,9 +792,17 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 	db.mutex.Unlock()
 
 	if deleteRequested {
-		// a Delete arrived while the write was pending: honor it now that
-		// the rows exist (a no-op if the insert was rejected)
+		// A Delete arrived while the write was pending: honor it now that the
+		// rows exist (a no-op if the insert was rejected).  The ID stays
+		// reserved until the deletion is queued, so a concurrent re-insert
+		// cannot order its write ahead of it and lose its rows to it.
+		if db.testInsertGate != nil {
+			db.testInsertGate()
+		}
 		db.writeQueue <- makeOpRequest(&deleteOp{id})
+		db.mutex.Lock()
+		delete(db.pendingInserts, id)
+		db.mutex.Unlock()
 	}
 	if err != nil {
 		return id, fmt.Errorf("participationDB: unable to insert key %s: %w", id, err)
