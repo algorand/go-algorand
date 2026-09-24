@@ -286,7 +286,9 @@ func makeParticipationRegistry(accessor db.Pair, log logging.Logger) (*participa
 
 	migrations := []db.Migration{
 		dbSchemaUpgrade0,
-		dbSchemaUpgrade1,
+		func(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
+			return dbSchemaUpgrade1(ctx, tx, newDatabase, log)
+		},
 	}
 
 	err := db.Initialize(accessor.Wdb, migrations)
@@ -446,7 +448,23 @@ func dbSchemaUpgrade0(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 // Rolling.voting blob into per-subkey rows described by a Rolling.votingHeader
 // column, then drops the legacy column so the blob (which held every subkey)
 // is erased from the registry.
-func dbSchemaUpgrade1(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
+//
+// A record whose blob cannot be decoded or converted does not fail the
+// upgrade: db.Initialize would report only the schema versions, leaving algod
+// unable to start with no indication of which record is at fault.  Instead
+// the failure is logged with its pk and cause, and the blob is carried over
+// into votingHeader as-is; it does not decode as a header, so the record is
+// excluded from the cache (with its subkeys erased) at load time.
+func dbSchemaUpgrade1(ctx context.Context, tx *sql.Tx, newDatabase bool, log logging.Logger) error {
+	err := dbSchemaUpgrade1Impl(ctx, tx, newDatabase, log)
+	if err != nil {
+		// db.Initialize masks the cause; keep it in the log
+		log.Errorf("participationDB: registry upgrade to version 2 failed: %v", err)
+	}
+	return err
+}
+
+func dbSchemaUpgrade1Impl(ctx context.Context, tx *sql.Tx, newDatabase bool, log logging.Logger) error {
 	_, err := tx.Exec(createVotingBatches)
 	if err != nil {
 		return err
@@ -483,12 +501,12 @@ func dbSchemaUpgrade1(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 	defer rows.Close()
 	for rows.Next() {
 		var entry pkVoting
-		if err = rows.Scan(&entry.pk, &entry.rawVoting); err != nil {
+		if err := rows.Scan(&entry.pk, &entry.rawVoting); err != nil {
 			return err
 		}
 		blobs = append(blobs, entry)
 	}
-	if err = rows.Err(); err != nil {
+	if err := rows.Err(); err != nil {
 		return err
 	}
 	rows.Close()
@@ -497,26 +515,13 @@ func dbSchemaUpgrade1(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 		if len(entry.rawVoting) == 0 {
 			continue
 		}
-		voting := &crypto.OneTimeSignatureSecrets{}
-		if err = protocol.Decode(entry.rawVoting, voting); err != nil {
-			// Do not fail the whole migration over one undecodable blob
-			// (db.Initialize would mask this as a generic upgrade failure
-			// with no quarantine path).  Carry the bytes over as they are:
-			// they do not decode as a header either, so the record is
-			// excluded from the cache with a warning at load time, exactly
-			// as an undecodable blob was before.
-			if _, err = tx.Exec("UPDATE Rolling SET votingHeader=? WHERE pk=?", entry.rawVoting, entry.pk); err != nil {
-				return fmt.Errorf("dbSchemaUpgrade1: failed to carry over the undecodable voting blob for pk %d: %w", entry.pk, err)
-			}
+		convErr := convertLegacyVotingBlob(tx, entry.pk, entry.rawVoting)
+		if convErr == nil {
 			continue
 		}
-		target := registryVotingTarget(entry.pk)
-		// freshly decoded and unshared: no lock is needed for the snapshot
-		if err = rewriteVotingRows(tx, target, voting.OneTimeSignatureSecretsPersistent); err != nil {
-			return fmt.Errorf("dbSchemaUpgrade1: failed to convert the voting blob for pk %d: %w", entry.pk, err)
-		}
-		if err = verifyVotingRowsMatch(tx, target, voting); err != nil {
-			return fmt.Errorf("dbSchemaUpgrade1: pk %d: %w", entry.pk, err)
+		log.Errorf("participationDB: voting blob of registry record pk %d cannot be converted and is carried over as-is; the record will be excluded at load (%v)", entry.pk, convErr)
+		if _, err := tx.Exec("UPDATE Rolling SET votingHeader=? WHERE pk=?", entry.rawVoting, entry.pk); err != nil {
+			return fmt.Errorf("dbSchemaUpgrade1: failed to carry over the voting blob for pk %d: %w", entry.pk, err)
 		}
 	}
 
@@ -525,6 +530,34 @@ func dbSchemaUpgrade1(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 		return fmt.Errorf("dbSchemaUpgrade1: failed to drop the legacy voting column: %w", err)
 	}
 	return nil
+}
+
+// convertLegacyVotingBlob converts one record's whole-secrets blob into a
+// header and rows, verified by read-back, under a savepoint so a failure
+// leaves nothing of the attempt behind.
+func convertLegacyVotingBlob(tx *sql.Tx, pk int64, rawVoting []byte) error {
+	voting := &crypto.OneTimeSignatureSecrets{}
+	if err := protocol.Decode(rawVoting, voting); err != nil {
+		return fmt.Errorf("undecodable voting blob: %w", err)
+	}
+	if _, err := tx.Exec("SAVEPOINT convert_record"); err != nil {
+		return err
+	}
+	target := registryVotingTarget(pk)
+	// freshly decoded and unshared: no lock is needed for the snapshot
+	err := rewriteVotingRows(tx, target, voting.OneTimeSignatureSecretsPersistent)
+	if err == nil {
+		err = verifyVotingRowsMatch(tx, target, voting)
+	}
+	if err != nil {
+		if _, rerr := tx.Exec("ROLLBACK TO SAVEPOINT convert_record"); rerr != nil {
+			return fmt.Errorf("%v (and rolling the attempt back failed: %w)", err, rerr)
+		}
+	}
+	if _, rerr := tx.Exec("RELEASE SAVEPOINT convert_record"); rerr != nil {
+		return rerr
+	}
+	return err
 }
 
 // participationDB provides a concrete implementation of the ParticipationRegistry interface.

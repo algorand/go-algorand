@@ -105,6 +105,14 @@ func TestRegistryMigrationV1ToV2(t *testing.T) {
 	// a legacy record stored without voting secrets (empty blob)
 	noVoting := makeTestParticipation(a, 3, 1, 200, dilution)
 	noVoting.Voting = nil
+	// a legacy record whose blob decodes but cannot be converted: offset
+	// subkeys with no expanded batch (FirstBatch 0); it must not fail the
+	// upgrade, only be excluded
+	unconvertible := makeTestParticipation(a, 4, 1, 200, dilution)
+	unconvertible.Voting.DeleteBeforeFineGrained(basics.OneTimeIDForRound(55, dilution), dilution)
+	unconvertibleSnap := unconvertible.Voting.Snapshot()
+	unconvertibleSnap.FirstBatch = 0
+	unconvertibleBlob := protocol.Encode(&unconvertibleSnap)
 
 	rootDB, err := db.OpenPair(t.Name(), true)
 	a.NoError(err)
@@ -119,7 +127,7 @@ func TestRegistryMigrationV1ToV2(t *testing.T) {
 		if _, err := db.SetUserVersion(ctx, tx, 1); err != nil {
 			return err
 		}
-		for _, p := range []Participation{midLife, exhausted, noVoting} {
+		for _, p := range []Participation{midLife, exhausted, noVoting, unconvertible} {
 			id := p.ID()
 			result, err := tx.Exec(insertKeysetQuery, id[:], p.Parent[:], p.FirstValid, p.LastValid, p.KeyDilution,
 				protocol.Encode(p.VRF), protocol.Encode(&p.StateProofSecrets.SignerContext))
@@ -131,7 +139,10 @@ func TestRegistryMigrationV1ToV2(t *testing.T) {
 				return err
 			}
 			var rawVoting []byte
-			if p.Voting != nil {
+			switch {
+			case id == unconvertible.ID():
+				rawVoting = unconvertibleBlob
+			case p.Voting != nil:
 				rawVoting = protocol.Encode(p.Voting)
 			}
 			if _, err = tx.Exec("INSERT INTO Rolling (pk, voting) VALUES (?, ?)", pk, rawVoting); err != nil {
@@ -170,6 +181,13 @@ func TestRegistryMigrationV1ToV2(t *testing.T) {
 		a.False(record.IsZero())
 		a.Equal(encodedVotingSnapshot(p.Voting), encodedVotingSnapshot(record.Voting))
 	}
+
+	// the unconvertible record did not fail the upgrade: its blob was carried
+	// over as-is, it is excluded from the cache, and nothing of the failed
+	// conversion attempt was kept
+	a.Equal(unconvertibleBlob, registryReadRawVotingHeader(a, registry, unconvertible.ID()))
+	a.True(registry.Get(unconvertible.ID()).IsZero(), "unconvertible record not excluded")
+	a.Equal(len(midLife.Voting.Batches), registryCountRows(a, registry, "VotingBatches"), "rows left behind by the failed conversion")
 
 	// the record without voting secrets loads (as a zero-value placeholder)
 	// and keeps flushing normally
