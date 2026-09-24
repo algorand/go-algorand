@@ -506,12 +506,12 @@ func dbSchemaUpgrade1(ctx context.Context, tx *sql.Tx, newDatabase bool, log log
 	defer rows.Close()
 	for rows.Next() {
 		var entry pkVoting
-		if err := rows.Scan(&entry.pk, &entry.rawVoting); err != nil {
+		if err = rows.Scan(&entry.pk, &entry.rawVoting); err != nil {
 			return err
 		}
 		blobs = append(blobs, entry)
 	}
-	if err := rows.Err(); err != nil {
+	if err = rows.Err(); err != nil {
 		return err
 	}
 	rows.Close()
@@ -525,7 +525,7 @@ func dbSchemaUpgrade1(ctx context.Context, tx *sql.Tx, newDatabase bool, log log
 			continue
 		}
 		log.Errorf("participationDB: voting blob of registry record pk %d cannot be converted and is discarded; the record will be excluded at load and must be re-installed (%v)", entry.pk, convErr)
-		if _, err := tx.Exec("UPDATE Rolling SET votingHeader=? WHERE pk=?", unusableVotingHeader, entry.pk); err != nil {
+		if _, err = tx.Exec("UPDATE Rolling SET votingHeader=? WHERE pk=?", unusableVotingHeader, entry.pk); err != nil {
 			return fmt.Errorf("failed to mark the voting header of pk %d unusable: %w", entry.pk, err)
 		}
 	}
@@ -647,7 +647,7 @@ func (db *participationDB) initializeCache() error {
 		err = db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			for id := range corrupt {
 				for _, query := range []string{clearVotingBatchesByID, clearVotingOffsetsByID} {
-					if _, err := tx.Exec(query, id[:]); err != nil {
+					if _, err = tx.Exec(query, id[:]); err != nil {
 						return err
 					}
 				}
