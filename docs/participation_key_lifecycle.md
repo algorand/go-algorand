@@ -88,11 +88,17 @@ at startup (and migrates the copy it receives through the REST install
 endpoint), as does `algokey part reparent`; the read-only commands
 (`algokey part info`, `algokey part keyreg --keyfile`,
 `goal account changeonlinestatus --partkeyfile`) read the file as-is without
-migrating it. Once a file is migrated, older releases cannot read it (the node
-renames such files to `*.old` and skips them); rolling back to an older
-release requires a pre-upgrade backup of the file, or generating and
-registering fresh keys. Files at schema versions 1 and 2 are migrated through
-the same path.
+migrating it. Once a file is migrated, older releases cannot read it; rolling
+back to an older release requires a pre-upgrade backup of the file, or
+generating and registering fresh keys. Files at schema versions 1 and 2 are
+migrated through the same path.
+
+A key file **algod** cannot load, because its schema version is unsupported or
+its content fails validation, is quarantined rather than failing startup: it is
+renamed to `*.old` (or `*.old.N`), logged at error level, and never loaded
+again. The rename erases nothing, so the quarantined file still contains the
+key's private material and needs operator handling: repair it and rename it
+back, or delete it securely. The key does not vote until then.
 
 Similar functionality is built into **goal** along with convenience methods to:
 * Generate and install.

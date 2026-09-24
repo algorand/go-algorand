@@ -1067,7 +1067,12 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 		if err != nil {
 			handle.Close()
 			if errors.Is(err, account.ErrUnsupportedSchema) || errors.Is(err, account.ErrCorruptedVotingData) {
-				node.log.Warnf("loadParticipationKeys: not loading participation key %s (%v); renaming to *.old", info.Name(), err)
+				// The file's content cannot be used, so it is quarantined
+				// rather than failing startup: renamed to *.old, which the
+				// node never loads.  The rename erases nothing, so the file
+				// keeps the key's private material until the operator repairs
+				// it or deletes it securely.
+				loadErr := err
 				fullname := filepath.Join(genesisDir, info.Name())
 				// pick a name that does not clobber a previous backup; on any
 				// Stat error other than not-exist, stop probing and let the
@@ -1079,9 +1084,10 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 					}
 					renamedFileName = fmt.Sprintf("%s.old.%d", fullname, i)
 				}
-				err = os.Rename(fullname, renamedFileName)
-				if err != nil {
-					node.log.Warnf("loadParticipationKeys: failed to rename unsupported participation key file '%s' to '%s': %v", fullname, renamedFileName, err)
+				if renameErr := os.Rename(fullname, renamedFileName); renameErr != nil {
+					node.log.Errorf("loadParticipationKeys: participation key file %s cannot be loaded (%v) and could not be renamed to %s: %v; the key will not vote and the file will be retried at the next startup", info.Name(), loadErr, renamedFileName, renameErr)
+				} else {
+					node.log.Errorf("loadParticipationKeys: participation key file %s cannot be loaded (%v); renamed to %s and skipped from now on. The renamed file still contains the key's private material and needs operator handling: repair it and rename it back, or delete it securely. The key will not vote until then.", info.Name(), loadErr, filepath.Base(renamedFileName))
 				}
 			} else {
 				return fmt.Errorf("AlgorandFullNode.loadParticipationKeys: cannot load account at %v: %v", info.Name(), err)
