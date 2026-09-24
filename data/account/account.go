@@ -155,7 +155,8 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 var ErrCorruptedVotingData = errors.New("participation file voting data is corrupt")
 
 // RestoreParticipationUnmigrated restores a Participation without migrating
-// the file, reading whichever supported schema version (3 or 4) it is at.
+// the file, reading whichever supported schema version it is at (from the
+// last whole-blob version through the latest).
 // This keeps the file byte-identical, e.g. for validating a migration
 // against the original.
 //
@@ -167,7 +168,7 @@ func RestoreParticipationUnmigrated(store db.Accessor) (PersistedParticipation, 
 	if err != nil {
 		return PersistedParticipation{}, err
 	}
-	if version != PartTableSchemaVersion && version != PartTableSchemaVersion-1 {
+	if version < PartTableSchemaVersionWholeBlob || version > PartTableSchemaVersion {
 		return PersistedParticipation{}, ErrUnsupportedSchema
 	}
 	return restoreParticipationAtVersion(store, version)
@@ -178,8 +179,8 @@ func restoreParticipationAtVersion(store db.Accessor, version int) (acc Persiste
 	var batches, offsets []crypto.KeyedSubkey
 	var offsetBatches []uint64
 
-	// schema version 3 stores the whole voting secrets in the "voting" column;
-	// version 4 stores a header in "votingHeader" plus subkey rows
+	// the whole-blob version stores the voting secrets in the "voting" column;
+	// the split versions store a header in "votingHeader" plus subkey rows
 	rowOriented := version >= PartTableSchemaVersionVotingSplit
 	votingColumn := "voting"
 	if rowOriented {

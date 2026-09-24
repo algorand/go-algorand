@@ -74,7 +74,7 @@ func makeV3PartkeyFile(t *testing.T, keyfile string, nullStateProof bool) accoun
 		if _, err := tx.Exec(`CREATE TABLE schema (tablename TEXT PRIMARY KEY, version INTEGER);`); err != nil {
 			return err
 		}
-		if _, err := tx.Exec("INSERT INTO schema (tablename, version) VALUES (?, ?)", account.PartTableSchemaName, account.PartTableSchemaVersionVotingSplit-1); err != nil {
+		if _, err := tx.Exec("INSERT INTO schema (tablename, version) VALUES (?, ?)", account.PartTableSchemaName, account.PartTableSchemaVersionWholeBlob); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(`CREATE TABLE ParticipationAccount (
@@ -143,7 +143,7 @@ func TestPartMigrate(t *testing.T) {
 			bytesAfter, err := os.ReadFile(keyfile)
 			a.NoError(err)
 			a.Equal(bytesBefore, bytesAfter)
-			a.Equal(account.PartTableSchemaVersionVotingSplit-1, partkeyFileVersion(a, keyfile))
+			a.Equal(account.PartTableSchemaVersionWholeBlob, partkeyFileVersion(a, keyfile))
 			a.Equal(account.PartTableSchemaVersion, partkeyFileVersion(a, keyfile+".new"))
 			a.NoError(comparePartkeys(original, partkey))
 			a.Equal(nullStateProof, partkey.StateProofSecrets == nil)

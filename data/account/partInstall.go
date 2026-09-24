@@ -33,8 +33,13 @@ const PartTableSchemaName = "parttable"
 const PartTableSchemaVersion = 4
 
 // PartTableSchemaVersionVotingSplit is the schema version that split the
-// voting secrets into per-subkey rows.
+// voting secrets into a header plus per-subkey rows.
 const PartTableSchemaVersionVotingSplit = 4
+
+// PartTableSchemaVersionWholeBlob is the last schema version that stored the
+// voting secrets as one blob.  It is the oldest version that can still be
+// read (without migration) and the only one that is migrated.
+const PartTableSchemaVersionWholeBlob = PartTableSchemaVersionVotingSplit - 1
 
 // ErrUnsupportedSchema is the error returned when the PartTable schema version is wrong.
 var ErrUnsupportedSchema = fmt.Errorf("unsupported participation file schema version (expected %d)", PartTableSchemaVersion)
@@ -122,13 +127,13 @@ func partMigrate(tx *sql.Tx) (err error) {
 }
 
 func updateDB(tx *sql.Tx, partVersion int) (int, error) {
-	if partVersion == 3 {
+	if partVersion == PartTableSchemaVersionWholeBlob {
 		err := migrateVotingBlobToRows(tx)
 		if err != nil {
 			return 0, err
 		}
 
-		partVersion = 4
+		partVersion = PartTableSchemaVersionVotingSplit
 		_, err = tx.Exec("UPDATE schema SET version=? WHERE tablename=?", partVersion, PartTableSchemaName)
 		if err != nil {
 			return 0, err
