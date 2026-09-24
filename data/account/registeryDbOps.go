@@ -54,6 +54,10 @@ type deleteOp struct {
 type insertOp struct {
 	id     ParticipationID
 	record Participation
+	// replacesExcluded is set when the ID belongs to a record excluded at
+	// load: the insert is the intended recovery and its clearing of the
+	// stale rows is expected
+	replacesExcluded bool
 }
 
 type appendKeysOp struct {
@@ -234,12 +238,17 @@ func (i *insertOp) apply(db *participationDB) (err error) {
 			rawVotingHeader = encodeVotingHeader(voting.Header())
 		}
 
-		// Clear any pre-existing rows for this participation ID.  A corrupt
-		// record excluded from the cache at load leaves its rows behind, and
-		// the caller (e.g. loadParticipationKeys in the same startup) then
-		// legitimately re-inserts the key: dedup happens against the cache
-		// only, and a duplicate Keysets row would make every subsequent
-		// flush fail with ErrMultipleKeysForID.
+		// Replace whatever the registry already holds for this ID.  Normally
+		// that is nothing: Insert deduplicates against the cache, which
+		// mirrors the store.  The exception is a record excluded at load
+		// because its voting data was corrupt: it is absent from the cache
+		// while its Keysets, Rolling, and state proof rows remain, and
+		// re-installing the key from its .partkey file is the intended
+		// recovery.  Inserting next to those rows would leave two Keysets
+		// rows for one ID and fail every later flush with
+		// ErrMultipleKeysForID, so they are cleared first.  The fast-forward
+		// above has already aligned the copy with the stored cursor, so the
+		// replacement cannot rewind it.
 		var cleared int64
 		for _, query := range []string{clearRollingByID, clearStateProofByID, clearVotingBatchesByID, clearVotingOffsetsByID, clearKeysetsByID} {
 			result, err2 := tx.Exec(query, i.id[:])
@@ -251,7 +260,11 @@ func (i *insertOp) apply(db *participationDB) (err error) {
 			}
 		}
 		if cleared > 0 {
-			db.log.Warnf("participationDB: insert of key %s replaced %d pre-existing rows", i.id, cleared)
+			if i.replacesExcluded {
+				db.log.Infof("participationDB: key %s re-installed over its excluded record, %d rows replaced", i.id, cleared)
+			} else {
+				db.log.Warnf("participationDB: insert of key %s replaced %d pre-existing rows it did not expect", i.id, cleared)
+			}
 		}
 
 		result, err2 := tx.Exec(

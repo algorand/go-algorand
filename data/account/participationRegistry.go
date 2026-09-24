@@ -729,6 +729,7 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 		return id, ErrAlreadyInserted
 	}
 	db.pendingInserts[id] = false
+	_, replacesExcluded := db.excluded[id]
 	db.mutex.Unlock()
 
 	// Make some copies.
@@ -752,8 +753,9 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 	record.Voting = voting
 	written := make(chan error, 1)
 	db.writeQueue <- makeOpRequestWithError(&insertOp{
-		id:     id,
-		record: record,
+		id:               id,
+		record:           record,
+		replacesExcluded: replacesExcluded,
 	}, written)
 	err = <-written
 
