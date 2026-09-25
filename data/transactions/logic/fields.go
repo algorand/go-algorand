@@ -1127,6 +1127,86 @@ var JSONRefTypes = FieldGroup{
 	jsonRefSpecByName,
 }
 
+// logicSigAllowance identifies a sensitive transaction operation that a
+// LogicSig may explicitly authorize with the allow opcode.
+type logicSigAllowance int
+
+const (
+	allowRekeyTo logicSigAllowance = iota
+	allowCloseRemainderTo
+	allowAssetCloseTo
+	allowAssetSender
+	allowKeyRegistration
+	invalidLogicSigAllowance
+)
+
+var logicSigAllowanceNames [invalidLogicSigAllowance]string
+
+type logicSigAllowanceSpec struct {
+	field   logicSigAllowance
+	version uint64
+	name    string
+	kind    string
+	doc     string
+}
+
+func (fs logicSigAllowanceSpec) Field() byte {
+	return byte(fs.field)
+}
+func (fs logicSigAllowanceSpec) Type() StackType {
+	return StackNone
+}
+func (fs logicSigAllowanceSpec) OpVersion() uint64 {
+	return logicSigAllowVersion
+}
+func (fs logicSigAllowanceSpec) Version() uint64 {
+	return fs.version
+}
+func (fs logicSigAllowanceSpec) Note() string {
+	return fs.doc
+}
+func (fs logicSigAllowanceSpec) Modes() RunMode {
+	return ModeSig
+}
+
+var logicSigAllowanceSpecs = [...]logicSigAllowanceSpec{
+	{allowRekeyTo, logicSigAllowVersion, "RekeyTo", "field", "Permit a nonzero RekeyTo field to change the transaction sender's authorizer"},
+	{allowCloseRemainderTo, logicSigAllowVersion, "CloseRemainderTo", "field", "Permit a payment to close the sender's remaining Algo balance"},
+	{allowAssetCloseTo, logicSigAllowVersion, "AssetCloseTo", "field", "Permit an asset transfer to close the sender's asset holding"},
+	{allowAssetSender, logicSigAllowVersion, "AssetSender", "field", "Permit a nonzero AssetSender field, enabling an asset clawback"},
+	{allowKeyRegistration, logicSigAllowVersion, "KeyRegistration", "type", "Permit a key registration transaction to change the sender's participation status or consensus keys"},
+}
+
+func logicSigAllowanceSpecByField(field logicSigAllowance) (logicSigAllowanceSpec, bool) {
+	if field < 0 || int(field) >= len(logicSigAllowanceSpecs) {
+		return logicSigAllowanceSpec{}, false
+	}
+	return logicSigAllowanceSpecs[field], true
+}
+
+func (field logicSigAllowance) String() string {
+	if fs, ok := logicSigAllowanceSpecByField(field); ok {
+		return fs.name
+	}
+	return fmt.Sprintf("logicSigAllowance(%d)", field)
+}
+
+var logicSigAllowanceSpecByName = make(logicSigAllowanceNameSpecMap, len(logicSigAllowanceNames))
+
+type logicSigAllowanceNameSpecMap map[string]logicSigAllowanceSpec
+
+func (s logicSigAllowanceNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+// LogicSigAllowanceFields describes the immediate constants accepted by allow.
+var LogicSigAllowanceFields = FieldGroup{
+	"LogicSig", "Allowances",
+	logicSigAllowanceNames[:],
+	logicSigAllowanceSpecByName,
+}
+
 // VrfStandard is an enum for the `vrf_verify` opcode
 type VrfStandard int
 
@@ -1894,6 +1974,16 @@ func init() {
 		equal(int(s.field), i)
 		jsonRefTypeNames[i] = s.field.String()
 		jsonRefSpecByName[s.field.String()] = s
+	}
+
+	equal(len(logicSigAllowanceSpecs), len(logicSigAllowanceNames))
+	if invalidLogicSigAllowance > 64 {
+		panic("too many LogicSig allowances for allowance bitset")
+	}
+	for i, s := range logicSigAllowanceSpecs {
+		equal(int(s.field), i)
+		logicSigAllowanceNames[s.field] = s.name
+		logicSigAllowanceSpecByName[s.name] = s
 	}
 
 	equal(len(vrfStandardSpecs), len(vrfStandardNames))
