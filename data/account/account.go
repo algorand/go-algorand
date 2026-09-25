@@ -66,6 +66,7 @@ func ImportRoot(store db.Accessor, seed [32]byte) (acc Root, err error) {
 		if err1 != nil {
 			return fmt.Errorf("ImportRoot: failed to prepare statement: %v", err1)
 		}
+		defer stmt.Close()
 
 		_, err1 = stmt.Exec(raw)
 		if err1 != nil {

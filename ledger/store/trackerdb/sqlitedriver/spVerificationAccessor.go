@@ -95,6 +95,7 @@ func (spa *stateProofVerificationWriter) StoreSPContexts(ctx context.Context, ve
 	if err != nil {
 		return err
 	}
+	defer spWriteStmt.Close()
 	for i := range verificationContext {
 		_, err = spWriteStmt.ExecContext(ctx, verificationContext[i].LastAttestedRound, protocol.Encode(verificationContext[i]))
 		if err != nil {
@@ -111,6 +112,7 @@ func (spa *stateProofVerificationWriter) StoreSPContextsToCatchpointTbl(ctx cont
 	if err != nil {
 		return err
 	}
+	defer spWriteStmt.Close()
 
 	for i := range verificationContexts {
 		_, err = spWriteStmt.ExecContext(ctx, verificationContexts[i].LastAttestedRound, protocol.Encode(&verificationContexts[i]))
@@ -159,7 +161,7 @@ func (spa *stateProofVerificationReader) getAllSPContextsInternal(ctx context.Co
 			result = append(result, record)
 		}
 
-		return nil
+		return rows.Err()
 	}
 
 	err := db.Retry(queryFunc)

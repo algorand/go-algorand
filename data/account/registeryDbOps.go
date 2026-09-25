@@ -283,6 +283,7 @@ func (a *appendKeysOp) apply(db *participationDB) error {
 		if err != nil {
 			return fmt.Errorf("unable to prepare state proof insert: %w", err)
 		}
+		defer stmt.Close()
 
 		for _, key := range a.keys {
 			result, err := stmt.Exec(pk, key.Round, protocol.Encode(key.Key))

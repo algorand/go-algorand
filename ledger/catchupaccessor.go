@@ -1100,6 +1100,9 @@ func calculateVerificationHash[T crypto.Hashable](
 		}
 		cnt++
 	}
+	if err := rows.Err(); err != nil {
+		return crypto.Digest{}, 0, err
+	}
 	ret := hasher.Sum(nil)
 	if len(ret) != crypto.DigestSize {
 		return crypto.Digest{}, 0, fmt.Errorf("unexpected hash size: %d", len(ret))

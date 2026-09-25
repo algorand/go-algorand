@@ -139,6 +139,7 @@ func (cr *catchpointReader) SelectUnfinishedCatchpoints(ctx context.Context) ([]
 		if err != nil {
 			return err
 		}
+		defer rows.Close()
 
 		// Clear `res` in case this function is repeated.
 		res = res[:0]
@@ -153,7 +154,7 @@ func (cr *catchpointReader) SelectUnfinishedCatchpoints(ctx context.Context) ([]
 			res = append(res, record)
 		}
 
-		return nil
+		return rows.Err()
 	}
 	err := db.Retry(f)
 	if err != nil {
@@ -201,6 +202,7 @@ func (cr *catchpointReader) SelectOldCatchpointFirstStageInfoRounds(ctx context.
 		if err != nil {
 			return err
 		}
+		defer rows.Close()
 
 		// Clear `res` in case this function is repeated.
 		res = res[:0]
@@ -213,7 +215,7 @@ func (cr *catchpointReader) SelectOldCatchpointFirstStageInfoRounds(ctx context.
 			res = append(res, r)
 		}
 
-		return nil
+		return rows.Err()
 	}
 	err := db.Retry(f)
 	if err != nil {
@@ -315,16 +317,19 @@ func (cw *catchpointWriter) WriteCatchpointStagingBalances(ctx context.Context, 
 	if err != nil {
 		return err
 	}
+	defer selectAcctStmt.Close()
 
 	insertAcctStmt, err := cw.e.PrepareContext(ctx, "INSERT INTO catchpointbalances(address, normalizedonlinebalance, data) VALUES(?, ?, ?)")
 	if err != nil {
 		return err
 	}
+	defer insertAcctStmt.Close()
 
 	insertRscStmt, err := cw.e.PrepareContext(ctx, "INSERT INTO catchpointresources(addrid, aidx, data) VALUES(?, ?, ?)")
 	if err != nil {
 		return err
 	}
+	defer insertRscStmt.Close()
 
 	var result sql.Result
 	var rowID int64
@@ -382,6 +387,7 @@ func (cw *catchpointWriter) WriteCatchpointStagingHashes(ctx context.Context, ba
 	if err != nil {
 		return err
 	}
+	defer insertStmt.Close()
 
 	for _, balance := range bals {
 		for _, hash := range balance.AccountHashes {

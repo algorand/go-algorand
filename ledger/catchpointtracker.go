@@ -1687,6 +1687,9 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx trackerdb.
 			}
 			// We could insert code to report things every 5 seconds, like was done for accounts.
 		}
+		if err = kvs.Err(); err != nil {
+			return fmt.Errorf("initializeHashes was unable to iterate kvs: %w", err)
+		}
 
 		// this trie Evict will commit using the current transaction.
 		// if anything goes wrong, it will still get rolled back.

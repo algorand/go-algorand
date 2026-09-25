@@ -320,7 +320,7 @@ func (qs *accountsDbQueries) LookupKeysByPrefix(prefix string, maxKeyNum uint64,
 				resultCount++
 			}
 		}
-		return nil
+		return rows.Err()
 	})
 	return
 }
@@ -584,7 +584,7 @@ func (qs *accountsDbQueries) LookupAllResources(addr basics.Address) (data []tra
 			})
 			rnd = dbRound
 		}
-		return nil
+		return rows.Err()
 	})
 	return
 }
@@ -672,7 +672,7 @@ func (qs *accountsDbQueries) LookupLimitedResources(addr basics.Address, minIdx 
 
 			rnd = dbRound
 		}
-		return nil
+		return rows.Err()
 	})
 	return
 }
@@ -787,7 +787,7 @@ func (qs *onlineAccountsDbQueries) LookupOnlineHistory(addr basics.Address) (res
 			data.Addr = addr
 			result = append(result, data)
 		}
-		return nil
+		return rows.Err()
 	})
 	return
 }
