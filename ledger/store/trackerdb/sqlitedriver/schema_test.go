@@ -245,6 +245,7 @@ func TestRemoveStrayStateProofID(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, added)
 		}
+		require.NoError(t, rows.Err())
 		_, err = trie.Evict(true)
 		require.NoError(t, err)
 		return trie.RootHash()
@@ -291,4 +292,5 @@ func TestRemoveStrayStateProofID(t *testing.T) {
 			require.Zero(t, ba.StateProofID)
 		}
 	}
+	require.NoError(t, rows.Err())
 }

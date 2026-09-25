@@ -148,7 +148,7 @@ func (s *Secrets) RestoreAllSecrets(store db.Accessor) error {
 		for rows.Next() {
 			var keyB []byte
 			key := crypto.FalconSigner{}
-			err := rows.Scan(&keyB)
+			err = rows.Scan(&keyB)
 			if err != nil {
 				return fmt.Errorf("%w - %v", errKeyDecodeError, err)
 			}
@@ -157,6 +157,9 @@ func (s *Secrets) RestoreAllSecrets(store db.Accessor) error {
 				return err
 			}
 			keys = append(keys, key)
+		}
+		if err = rows.Err(); err != nil {
+			return fmt.Errorf("%w - %v", errSelectKeysError, err)
 		}
 		return nil
 	})

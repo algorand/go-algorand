@@ -870,6 +870,7 @@ func reencodeAccounts(ctx context.Context, e db.Executable) (modifiedAccounts ui
 	if err != nil {
 		return 0, err
 	}
+	defer updateStmt.Close()
 
 	rows, err := e.QueryContext(ctx, "SELECT address, data FROM accountbase")
 	if err != nil {
@@ -934,7 +935,6 @@ func reencodeAccounts(ctx context.Context, e db.Executable) (modifiedAccounts ui
 	}
 
 	err = rows.Err()
-	updateStmt.Close()
 	return
 }
 

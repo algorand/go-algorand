@@ -752,7 +752,7 @@ func printKeyValueStore(databaseName string, stagingTables bool, outFile *os.Fil
 				printDumpingCatchpointProgressLine(int(float64(progress)*50.0/float64(rowsCount)), 50, int64(progress))
 			}
 		}
-		return nil
+		return rows.Err()
 	})
 }
 
@@ -783,7 +783,7 @@ func printOnlineAccounts(databaseName string, stagingTables bool, outFile *os.Fi
 
 			fmt.Fprintf(fileWriter, "onlineaccount: %s\n", string(jsonData))
 		}
-		return nil
+		return rows.Err()
 	})
 }
 
@@ -814,6 +814,6 @@ func printOnlineRoundParams(databaseName string, stagingTables bool, outFile *os
 
 			fmt.Fprintf(fileWriter, "onlineroundparams: %s\n", string(jsonData))
 		}
-		return nil
+		return rows.Err()
 	})
 }

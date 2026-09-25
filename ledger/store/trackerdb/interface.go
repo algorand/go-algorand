@@ -242,6 +242,8 @@ type AccountAddressHash struct {
 type KVsIter interface {
 	Next() bool
 	KeyValue() (k []byte, v []byte, err error)
+	// Err returns the error, if any, that ended iteration early; call it once Next returns false.
+	Err() error
 	Close()
 }
 
@@ -249,6 +251,8 @@ type KVsIter interface {
 type TableIterator[T any] interface {
 	Next() bool
 	GetItem() (T, error)
+	// Err returns the error, if any, that ended iteration early; call it once Next returns false.
+	Err() error
 	Close()
 }
 

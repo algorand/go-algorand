@@ -41,7 +41,7 @@ func MakeCatchpointPendingHashesIterator(hashCount int, q db.Queryable) *catchpo
 // Next returns an array containing the hashes, returning HashCount hashes at a time.
 func (iterator *catchpointPendingHashesIterator) Next(ctx context.Context) (hashes [][]byte, err error) {
 	if iterator.rows == nil {
-		iterator.rows, err = iterator.q.QueryContext(ctx, "SELECT data FROM catchpointpendinghashes ORDER BY data")
+		iterator.rows, err = iterator.q.QueryContext(ctx, "SELECT data FROM catchpointpendinghashes ORDER BY data") //nolint:rowserrcheck // checked via iterator.rows.Err() in Next
 		if err != nil {
 			return
 		}

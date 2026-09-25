@@ -158,6 +158,7 @@ func BenchmarkSQLQueryAPIs(b *testing.B) {
 			if err != nil {
 				return err
 			}
+			defer stmt.Close()
 
 			for i := 0; i < b.N; i++ {
 				var r int
@@ -225,6 +226,7 @@ func BenchmarkSQLQueryAPIs(b *testing.B) {
 	b.Run("rdb.Handle.Prepare.QueryRow", func(b *testing.B) {
 		stmt, err := rdb.Handle.Prepare("SELECT b FROM t WHERE a=?")
 		require.NoError(b, err)
+		defer stmt.Close()
 
 		for i := 0; i < b.N; i++ {
 			var r int

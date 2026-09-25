@@ -171,6 +171,7 @@ func (r *accountsV2Reader) CheckCreatablesTest(t *testing.T,
 		require.Equal(t, expectedDbImage[asset].Ctype, mc.Ctype)
 		require.True(t, expectedDbImage[asset].Created)
 	}
+	require.NoError(t, rows.Err())
 	require.Equal(t, len(expectedDbImage), counter)
 }
 
@@ -274,7 +275,7 @@ func (r *accountsV2Reader) OnlineAccountsAll(maxAccounts uint64) ([]trackerdb.Pe
 		var buf []byte
 		var rowid int64
 		data := trackerdb.PersistedOnlineAccountData{}
-		err := rows.Scan(&rowid, &addrbuf, &data.UpdRound, &buf)
+		err = rows.Scan(&rowid, &addrbuf, &data.UpdRound, &buf)
 		if err != nil {
 			return nil, err
 		}
@@ -298,6 +299,9 @@ func (r *accountsV2Reader) OnlineAccountsAll(maxAccounts uint64) ([]trackerdb.Pe
 			return nil, err
 		}
 		result = append(result, data)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
 	}
 	return result, nil
 }
@@ -324,7 +328,7 @@ ORDER BY address`, rnd, voteRnd)
 		var addr basics.Address
 		var baseData trackerdb.BaseOnlineAccountData
 		var updround sql.NullInt64
-		err := rows.Scan(&addrbuf, &buf, &updround)
+		err = rows.Scan(&addrbuf, &buf, &updround)
 		if err != nil {
 			return nil, err
 		}
@@ -342,6 +346,9 @@ ORDER BY address`, rnd, voteRnd)
 			return nil, fmt.Errorf("duplicate address in expired online accounts: %s", addr.String())
 		}
 		ret[addr] = &oadata
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
 	}
 	return ret, nil
 }
@@ -429,6 +436,9 @@ func (r *accountsV2Reader) LoadTxTail(ctx context.Context, dbRound basics.Round)
 		roundHash = append(roundHash, crypto.Hash(data))
 		expectedRound--
 	}
+	if err = rows.Err(); err != nil {
+		return nil, nil, 0, err
+	}
 	// reverse the array ordering in-place so that it would be incremental order.
 	for i := 0; i < len(roundData)/2; i++ {
 		roundData[i], roundData[len(roundData)-i-1] = roundData[len(roundData)-i-1], roundData[i]
@@ -463,7 +473,7 @@ func (r *accountsV2Reader) LookupAccountAddressFromAddressID(ctx context.Context
 // LookupOnlineAccountDataByAddress looks up online account data by address.
 func (r *accountsV2Reader) LookupOnlineAccountDataByAddress(addr basics.Address) (ref trackerdb.OnlineAccountRef, data []byte, err error) {
 	// optimize this query for repeated usage
-	selectStmt, err := r.getOrPrepare("SELECT rowid, data FROM onlineaccounts WHERE address=? ORDER BY updround DESC LIMIT 1")
+	selectStmt, err := r.getOrPrepare("SELECT rowid, data FROM onlineaccounts WHERE address=? ORDER BY updround DESC LIMIT 1") //nolint:sqlclosecheck // cached for reuse; the reader is scoped to a *sql.Tx, which closes its prepared statements on commit/rollback
 	if err != nil {
 		return
 	}
@@ -482,7 +492,7 @@ func (r *accountsV2Reader) LookupOnlineAccountDataByAddress(addr basics.Address)
 // LookupAccountRowID looks up the rowid of an account based on its address.
 func (r *accountsV2Reader) LookupAccountRowID(addr basics.Address) (ref trackerdb.AccountRef, err error) {
 	// optimize this query for repeated usage
-	addrRowidStmt, err := r.getOrPrepare("SELECT rowid FROM accountbase WHERE address=?")
+	addrRowidStmt, err := r.getOrPrepare("SELECT rowid FROM accountbase WHERE address=?") //nolint:sqlclosecheck // cached for reuse; the reader is scoped to a *sql.Tx, which closes its prepared statements on commit/rollback
 	if err != nil {
 		return
 	}
@@ -505,7 +515,7 @@ func (r *accountsV2Reader) LookupResourceDataByAddrID(accountRef trackerdb.Accou
 	}
 	addrid := accountRef.(sqlRowRef).rowid
 	// optimize this query for repeated usage
-	selectStmt, err := r.getOrPrepare("SELECT data FROM resources WHERE addrid = ? AND aidx = ?")
+	selectStmt, err := r.getOrPrepare("SELECT data FROM resources WHERE addrid = ? AND aidx = ?") //nolint:sqlclosecheck // cached for reuse; the reader is scoped to a *sql.Tx, which closes its prepared statements on commit/rollback
 	if err != nil {
 		return
 	}
@@ -569,6 +579,7 @@ func (r *accountsV2Reader) LoadAllFullAccounts(
 
 		count++
 	}
+	err = baseRows.Err()
 	return
 }
 
@@ -641,6 +652,9 @@ func (r *accountsV2Reader) LoadFullAccount(ctx context.Context, resourcesTable s
 			return
 		}
 	}
+	if err = resRows.Err(); err != nil {
+		return
+	}
 
 	if uint64(len(ad.AssetParams)) != data.TotalAssetParams {
 		err = fmt.Errorf("%s assets params mismatch: %d != %d", addr.String(), len(ad.AssetParams), data.TotalAssetParams)
@@ -679,6 +693,9 @@ func (r *accountsV2Reader) AccountsOnlineRoundParams() (onlineRoundParamsData []
 		}
 
 		onlineRoundParamsData = append(onlineRoundParamsData, data)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, 0, err
 	}
 	return
 }
@@ -780,6 +797,9 @@ func (w *accountsV2Writer) onlineAccountsDelete(forgetBefore basics.Round, table
 		}
 		// delete all subsequent entries
 		rowids = append(rowids, rowid.Int64)
+	}
+	if err = rows.Err(); err != nil {
+		return err
 	}
 
 	return onlineAccountsDeleteByRowIDs(w.e, rowids, table)
@@ -893,6 +913,7 @@ func (w *accountsV2Writer) AccountsPutOnlineRoundParams(onlineRoundParamsData []
 	if err != nil {
 		return err
 	}
+	defer insertStmt.Close()
 
 	for i := range onlineRoundParamsData {
 		_, err = insertStmt.Exec(startRound+basics.Round(i), protocol.Encode(&onlineRoundParamsData[i]))
