@@ -8,6 +8,7 @@ linters:
     - errortype
     - gosec
     - partitiontest
+    - retryclosure
   settings:
     gosec:
       excludes: [G101, G103, G104, G107, G112, G114, G115, G202, G204, G301, G302, G303, G304, G306, G307, G404]
@@ -34,6 +35,9 @@ linters:
       partitiontest:
         type: "module"
         description: This custom linter ensures test functions call 'partitiontest.PartitionTest(t)'
+      retryclosure:
+        type: "module"
+        description: This custom linter reports closures that may be retried by util/db or trackerdb and write to variables declared outside them
   exclusions:
     generated: lax
     rules:

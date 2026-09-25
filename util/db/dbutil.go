@@ -195,14 +195,45 @@ func Retry(fn func() error) (err error) {
 	return LoggedRetry(fn, logging.Base())
 }
 
+// RetryResult is like Retry, for a function that produces a result. Only the result of the
+// final attempt is returned, so fn does not need to discard results from an attempt that
+// failed and was retried, as it would if it stored them in variables declared outside fn.
+func RetryResult[T any](fn func() (T, error)) (res T, err error) {
+	err = Retry(func() error { //nolint:retryclosure // res is overwritten by every attempt, so only the final attempt's result is returned
+		var fnErr error
+		res, fnErr = fn()
+		return fnErr
+	})
+	return
+}
+
+// dbPackage is this package's import path, used to find the first caller outside it.
+const dbPackage = "github.com/algorand/go-algorand/util/db"
+
+// callerOutsidePackage returns the location of the innermost caller outside this package, so
+// log messages point at the code that started a transaction, whichever helper it used.
+func callerOutsidePackage() (file string, line int, ok bool) {
+	pcs := make([]uintptr, 16)
+	frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs)])
+	for {
+		frame, more := frames.Next()
+		if !strings.HasPrefix(frame.Function, dbPackage+".") {
+			return frame.File, frame.Line, frame.PC != 0
+		}
+		if !more {
+			return "", 0, false
+		}
+	}
+}
+
 // getDecoratedLogger returns a decorated logger that includes the readonly true/false, caller and extra fields.
-func (db *Accessor) getDecoratedLogger(fn idemFn, extras ...any) logging.Logger {
+// callee is the function run in the transaction, which is named in the log.
+func (db *Accessor) getDecoratedLogger(callee any, extras ...any) logging.Logger {
 	log := db.logger().With("readonly", db.readOnly)
-	_, file, line, ok := runtime.Caller(3)
-	if ok {
+	if file, line, ok := callerOutsidePackage(); ok {
 		log = log.With("caller", fmt.Sprintf("%s:%d", file, line))
 	}
-	log = log.With("callee", runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name())
+	log = log.With("callee", runtime.FuncForPC(reflect.ValueOf(callee).Pointer()).Name())
 	for i, e := range extras {
 		if e == nil || reflect.ValueOf(e).IsNil() {
 			continue
@@ -233,6 +264,29 @@ func (db *Accessor) Atomic(fn idemFn, extras ...any) (err error) {
 // If retryClearFn is provided, it will be called in between retries of calls to fn, if the error is a
 // temporary error that will be retried. This helps a caller that might change in-memory state inside fn.
 func (db *Accessor) AtomicContext(ctx context.Context, fn idemFn, retryClearFn func(context.Context), extras ...any) (err error) {
+	return db.atomic(ctx, fn, fn, retryClearFn, extras...)
+}
+
+// AtomicResult is like Accessor.Atomic, for a function that produces a result. Only the result
+// of the final attempt is returned; see RetryResult.
+func AtomicResult[T any](db *Accessor, fn func(ctx context.Context, tx *sql.Tx) (T, error), extras ...any) (T, error) {
+	return AtomicContextResult(context.Background(), db, fn, nil, extras...)
+}
+
+// AtomicContextResult is like Accessor.AtomicContext, for a function that produces a result.
+// Only the result of the final attempt is returned; see RetryResult.
+func AtomicContextResult[T any](ctx context.Context, db *Accessor, fn func(ctx context.Context, tx *sql.Tx) (T, error), retryClearFn func(context.Context), extras ...any) (res T, err error) {
+	err = db.atomic(ctx, func(ctx context.Context, tx *sql.Tx) error { //nolint:retryclosure // res is overwritten by every attempt, so only the final attempt's result is returned
+		var fnErr error
+		res, fnErr = fn(ctx, tx)
+		return fnErr
+	}, fn, retryClearFn, extras...)
+	return
+}
+
+// atomic implements AtomicContext and AtomicContextResult. callee is the caller's function,
+// named in log messages in place of fn, which may be a wrapper around it.
+func (db *Accessor) atomic(ctx context.Context, fn idemFn, callee any, retryClearFn func(context.Context), extras ...any) (err error) {
 	atomicDeadline := time.Now().Add(time.Second)
 
 	// note that the sql library will drop panics inside an active transaction
@@ -263,12 +317,12 @@ func (db *Accessor) AtomicContext(ctx context.Context, fn idemFn, retryClearFn f
 	for i := 0; (i == 0) || dbretry(err); i++ {
 		if i > 0 {
 			if i < infoTxRetries {
-				db.getDecoratedLogger(fn, extras).Infof("db.atomic: %d connection retries (last err: %v)", i, err)
+				db.getDecoratedLogger(callee, extras).Infof("db.atomic: %d connection retries (last err: %v)", i, err)
 			} else if i >= 1000 {
-				db.getDecoratedLogger(fn, extras).Errorf("db.atomic: %d connection retries (last err: %v)", i, err)
+				db.getDecoratedLogger(callee, extras).Errorf("db.atomic: %d connection retries (last err: %v)", i, err)
 				break
 			} else if i%warnTxRetriesInterval == 0 {
-				db.getDecoratedLogger(fn, extras).Warnf("db.atomic: %d connection retries (last err: %v)", i, err)
+				db.getDecoratedLogger(callee, extras).Warnf("db.atomic: %d connection retries (last err: %v)", i, err)
 			}
 		}
 		conn, err = db.Handle.Conn(ctx)
@@ -283,12 +337,12 @@ func (db *Accessor) AtomicContext(ctx context.Context, fn idemFn, retryClearFn f
 	for i := 0; ; i++ {
 		if i > 0 {
 			if i < infoTxRetries {
-				db.getDecoratedLogger(fn, extras).Infof("db.atomic: %d retries (last err: %v)", i, err)
+				db.getDecoratedLogger(callee, extras).Infof("db.atomic: %d retries (last err: %v)", i, err)
 			} else if i >= 1000 {
-				db.getDecoratedLogger(fn, extras).Errorf("db.atomic: %d retries (last err: %v)", i, err)
+				db.getDecoratedLogger(callee, extras).Errorf("db.atomic: %d retries (last err: %v)", i, err)
 				break
 			} else if i%warnTxRetriesInterval == 0 {
-				db.getDecoratedLogger(fn, extras).Warnf("db.atomic: %d retries (last err: %v)", i, err)
+				db.getDecoratedLogger(callee, extras).Warnf("db.atomic: %d retries (last err: %v)", i, err)
 			}
 		}
 
@@ -333,7 +387,7 @@ func (db *Accessor) AtomicContext(ctx context.Context, fn idemFn, retryClearFn f
 	}
 
 	if time.Now().After(atomicDeadline) {
-		db.getDecoratedLogger(fn, extras).Warnf("dbatomic: tx surpassed expected deadline by %v", time.Since(atomicDeadline))
+		db.getDecoratedLogger(callee, extras).Warnf("dbatomic: tx surpassed expected deadline by %v", time.Since(atomicDeadline))
 	}
 	return
 }

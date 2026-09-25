@@ -163,3 +163,53 @@ type TransactionFn func(ctx context.Context, tx TransactionScope) error
 
 // RetryClearFn is the rollback callback lambda used in `TransactionWithRetryClearFn`.
 type RetryClearFn func(ctx context.Context)
+
+// The *Result functions below are like the Store methods of the same name without the suffix,
+// for a function that produces a result. Only the result of the final attempt is returned, so
+// fn does not need to discard results from an attempt that failed and was retried, as it
+// would if it stored them in variables declared outside fn.
+
+// BatchResult is like Store.Batch, for a function that produces a result.
+func BatchResult[T any](s Store, fn func(ctx context.Context, tx BatchScope) (T, error)) (T, error) {
+	return BatchContextResult(context.Background(), s, fn)
+}
+
+// BatchContextResult is like Store.BatchContext, for a function that produces a result.
+func BatchContextResult[T any](ctx context.Context, s Store, fn func(ctx context.Context, tx BatchScope) (T, error)) (res T, err error) {
+	err = s.BatchContext(ctx, func(ctx context.Context, tx BatchScope) error { //nolint:retryclosure // res is overwritten by every attempt, so only the final attempt's result is returned
+		var fnErr error
+		res, fnErr = fn(ctx, tx)
+		return fnErr
+	})
+	return
+}
+
+// SnapshotResult is like Store.Snapshot, for a function that produces a result.
+func SnapshotResult[T any](s Store, fn func(ctx context.Context, tx SnapshotScope) (T, error)) (T, error) {
+	return SnapshotContextResult(context.Background(), s, fn)
+}
+
+// SnapshotContextResult is like Store.SnapshotContext, for a function that produces a result.
+func SnapshotContextResult[T any](ctx context.Context, s Store, fn func(ctx context.Context, tx SnapshotScope) (T, error)) (res T, err error) {
+	err = s.SnapshotContext(ctx, func(ctx context.Context, tx SnapshotScope) error { //nolint:retryclosure // res is overwritten by every attempt, so only the final attempt's result is returned
+		var fnErr error
+		res, fnErr = fn(ctx, tx)
+		return fnErr
+	})
+	return
+}
+
+// TransactionResult is like Store.Transaction, for a function that produces a result.
+func TransactionResult[T any](s Store, fn func(ctx context.Context, tx TransactionScope) (T, error)) (T, error) {
+	return TransactionContextResult(context.Background(), s, fn)
+}
+
+// TransactionContextResult is like Store.TransactionContext, for a function that produces a result.
+func TransactionContextResult[T any](ctx context.Context, s Store, fn func(ctx context.Context, tx TransactionScope) (T, error)) (res T, err error) {
+	err = s.TransactionContext(ctx, func(ctx context.Context, tx TransactionScope) error { //nolint:retryclosure // res is overwritten by every attempt, so only the final attempt's result is returned
+		var fnErr error
+		res, fnErr = fn(ctx, tx)
+		return fnErr
+	})
+	return
+}

@@ -83,7 +83,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: custom-golangci-lint
-          key: custom-golangci-lint-${{ env.GO_VERSION }}-${{ env.GOLANGCI_LINT_VERSION }}-${{ hashFiles('cmd/partitiontest_linter/**', '.custom-gcl.yml') }}
+          key: custom-golangci-lint-${{ env.GO_VERSION }}-${{ env.GOLANGCI_LINT_VERSION }}-${{ hashFiles('cmd/partitiontest_linter/**', 'cmd/retryclosure_linter/**', '.custom-gcl.yml') }}
       - name: Build custom golangci-lint with partitiontest plugin
         if: steps.cache-custom-golangci-lint.outputs.cache-hit != 'true'
         run: |
