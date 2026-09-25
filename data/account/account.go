@@ -277,6 +277,11 @@ func RestoreParticipationWithSecrets(store db.Accessor) (PersistedParticipation,
 	}
 
 	err = persistedParticipation.StateProofSecrets.RestoreAllSecrets(store)
+	if errors.Is(err, merklesignature.ErrKeyDecode) {
+		// corrupt content, not a database failure: quarantinable like the
+		// rest of the file's data
+		return PersistedParticipation{}, fmt.Errorf("RestoreParticipation: %w: undecodable state proof key: %w", ErrCorruptedVotingData, err)
+	}
 	if err != nil {
 		return PersistedParticipation{}, err
 	}

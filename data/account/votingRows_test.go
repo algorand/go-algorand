@@ -429,12 +429,14 @@ func TestRestoreDetectsCorruption(t *testing.T) {
 		name      string
 		tamperSQL string
 		wantErr   string
+		restore   func(db.Accessor) (PersistedParticipation, error) // nil: the read-only restore, which never reads the state proof keys
 	}{
-		{"undecodableHeader", "UPDATE ParticipationAccount SET votingHeader=x'ff00'", "undecodable voting header"},
-		{"missingBatchRow", "DELETE FROM VotingBatches WHERE batch=(SELECT MAX(batch) FROM VotingBatches)", "missing or extra rows"},
-		{"misplacedOffsetRow", "UPDATE VotingOffsets SET off=off-1 WHERE off=(SELECT MIN(off) FROM VotingOffsets)", "offset row 0 has index"},
-		{"undecodableVRF", "UPDATE ParticipationAccount SET vrf=x'ff00'", "undecodable VRF"},
-		{"twoAccountRows", "INSERT INTO ParticipationAccount SELECT * FROM ParticipationAccount", "exactly one account row"},
+		{"undecodableHeader", "UPDATE ParticipationAccount SET votingHeader=x'ff00'", "undecodable voting header", nil},
+		{"missingBatchRow", "DELETE FROM VotingBatches WHERE batch=(SELECT MAX(batch) FROM VotingBatches)", "missing or extra rows", nil},
+		{"misplacedOffsetRow", "UPDATE VotingOffsets SET off=off-1 WHERE off=(SELECT MIN(off) FROM VotingOffsets)", "offset row 0 has index", nil},
+		{"undecodableVRF", "UPDATE ParticipationAccount SET vrf=x'ff00'", "undecodable VRF", nil},
+		{"twoAccountRows", "INSERT INTO ParticipationAccount SELECT * FROM ParticipationAccount", "exactly one account row", nil},
+		{"undecodableStateProofKey", "UPDATE StateProofKeys SET key=x'ff00' WHERE round=(SELECT MIN(round) FROM StateProofKeys)", "undecodable state proof key", RestoreParticipationWithSecrets},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -442,16 +444,20 @@ func TestRestoreDetectsCorruption(t *testing.T) {
 			const dilution = 10
 			part, partDB := makeSmallTestKey(t, a, 0, 300, dilution)
 			defer closeDBS(partDB)
+			restore := tc.restore
+			if restore == nil {
+				restore = RestoreParticipationUnmigrated
+			}
 
 			proto := config.Consensus[protocol.ConsensusCurrentVersion]
 			a.NoError(<-part.DeleteOldKeys(basics.Round(25), proto))
 
 			// sanity: loads fine before the damage
-			_, err := RestoreParticipationUnmigrated(partDB)
+			_, err := restore(partDB)
 			a.NoError(err)
 
 			execSQL(a, partDB, tc.tamperSQL)
-			_, err = RestoreParticipationUnmigrated(partDB)
+			_, err = restore(partDB)
 			a.ErrorContains(err, tc.wantErr)
 			// the sentinel lets the node quarantine the file as *.old
 			a.ErrorIs(err, ErrCorruptedVotingData)
