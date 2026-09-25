@@ -103,19 +103,21 @@ func (manager *AccountManager) HasLiveKeys(from, to basics.Round) bool {
 
 // AddParticipation adds a new account.Participation to be managed.
 // The return value indicates if the key has been added (true) or
-// if this is a duplicate key (false).
+// if this is a duplicate key (false); an error means the participation
+// registry rejected the key, which is then not added either.
 // if ephemeral is true then the key is not stored in the internal hashmap and
 // will not be deleted by DeleteOldKeys()
-func (manager *AccountManager) AddParticipation(participation account.PersistedParticipation, ephemeral bool) bool {
+func (manager *AccountManager) AddParticipation(participation account.PersistedParticipation, ephemeral bool) (bool, error) {
 	// Tell the ParticipationRegistry about the Participation. Duplicate entries
 	// are ignored.
 	pid, err := manager.registry.Insert(participation.Participation)
 	if err != nil && err != account.ErrAlreadyInserted {
-		manager.log.Warnf("Failed to insert participation key.")
+		manager.log.Warnf("Failed to insert participation key: %v", err)
+		return false, err
 	}
 
 	if err == account.ErrAlreadyInserted {
-		return false
+		return false, nil
 	}
 
 	manager.log.Infof("Inserted key (%s) for account (%s) first valid (%d) last valid (%d)\n",
@@ -139,7 +141,7 @@ func (manager *AccountManager) AddParticipation(participation account.PersistedP
 	// Check if we already have participation keys for this address in this interval
 	_, alreadyPresent := manager.partKeys[partkeyID]
 	if alreadyPresent {
-		return false
+		return false, nil
 	}
 
 	if !ephemeral {
@@ -162,7 +164,7 @@ func (manager *AccountManager) AddParticipation(participation account.PersistedP
 		})
 	}
 
-	return true
+	return true, nil
 }
 
 // DeleteOldKeys deletes all accounts' ephemeral keys strictly older than the

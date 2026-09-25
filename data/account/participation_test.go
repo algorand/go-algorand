@@ -36,7 +36,7 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-var partableColumnNames = [...]string{"parent", "vrf", "voting", "stateProof", "firstValid", "lastValid", "keyDilution"}
+var partableColumnNames = [...]string{"parent", "vrf", "votingHeader", "stateProof", "firstValid", "lastValid", "keyDilution"}
 
 func TestParticipation_NewDB(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -285,36 +285,6 @@ func assertStateProofTablesExists(a *require.Assertions, store db.Accessor) {
 func assertionForRestoringFromDBAtLowVersion(a *require.Assertions, retrivedPart PersistedParticipation) {
 	a.NotNil(retrivedPart)
 	a.Nil(retrivedPart.StateProofSecrets)
-}
-
-func TestMigrateFromVersion1(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	a := require.New(t)
-	part := setupkeyWithNoDBS(t, a).Participation
-
-	_, rootDB, partDB := createTestDBs(a, t.Name())
-	defer closeDBS(rootDB, partDB)
-
-	a.NoError(setupTestDBAtVer1(partDB, part))
-	a.NoError(Migrate(partDB))
-
-	a.NoError(testDBContainsAllColumns(partDB))
-}
-
-func TestMigrationFromVersion2(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	a := require.New(t)
-	part := setupkeyWithNoDBS(t, a).Participation
-
-	_, rootDB, partDB := createTestDBs(a, t.Name())
-	defer closeDBS(rootDB, partDB)
-
-	a.NoError(setupTestDBAtVer2(partDB, part))
-	a.NoError(Migrate(partDB))
-
-	a.NoError(testDBContainsAllColumns(partDB))
 }
 
 func testDBContainsAllColumns(partDB db.Accessor) error {

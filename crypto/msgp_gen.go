@@ -161,6 +161,16 @@ import (
 //            |-----> (*) MsgIsZero
 //            |-----> OneTimeSignatureSecretsMaxSize()
 //
+// OneTimeSignatureSecretsHeader
+//               |-----> (*) MarshalMsg
+//               |-----> (*) CanMarshalMsg
+//               |-----> (*) UnmarshalMsg
+//               |-----> (*) UnmarshalMsgWithState
+//               |-----> (*) CanUnmarshalMsg
+//               |-----> (*) Msgsize
+//               |-----> (*) MsgIsZero
+//               |-----> OneTimeSignatureSecretsHeaderMaxSize()
+//
 // OneTimeSignatureSecretsPersistent
 //                 |-----> (*) MarshalMsg
 //                 |-----> (*) CanMarshalMsg
@@ -2350,6 +2360,272 @@ func OneTimeSignatureSecretsMaxSize() (s int) {
 	s += 6 + msgp.Uint64Size + 4
 	// Calculating size of slice: z.OneTimeSignatureSecretsPersistent.Batches
 	panic("Slice z.OneTimeSignatureSecretsPersistent.Batches is unbounded")
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *OneTimeSignatureSecretsHeader) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0004Len := uint32(7)
+	var zb0004Mask uint8 /* 8 bits */
+	if (*z).FirstBatch == 0 {
+		zb0004Len--
+		zb0004Mask |= 0x2
+	}
+	if (*z).FirstOffset == 0 {
+		zb0004Len--
+		zb0004Mask |= 0x4
+	}
+	if (*z).BatchCount == 0 {
+		zb0004Len--
+		zb0004Mask |= 0x8
+	}
+	if (*z).OffsetCount == 0 {
+		zb0004Len--
+		zb0004Mask |= 0x10
+	}
+	if (*z).Verifier == (OneTimeSignatureVerifier{}) {
+		zb0004Len--
+		zb0004Mask |= 0x20
+	}
+	if (*z).OffsetsPK2 == (ed25519PublicKey{}) {
+		zb0004Len--
+		zb0004Mask |= 0x40
+	}
+	if (*z).OffsetsPK2Sig == (ed25519Signature{}) {
+		zb0004Len--
+		zb0004Mask |= 0x80
+	}
+	// variable map header, size zb0004Len
+	o = append(o, 0x80|uint8(zb0004Len))
+	if zb0004Len != 0 {
+		if (zb0004Mask & 0x2) == 0 { // if not empty
+			// string "fb"
+			o = append(o, 0xa2, 0x66, 0x62)
+			o = msgp.AppendUint64(o, (*z).FirstBatch)
+		}
+		if (zb0004Mask & 0x4) == 0 { // if not empty
+			// string "fo"
+			o = append(o, 0xa2, 0x66, 0x6f)
+			o = msgp.AppendUint64(o, (*z).FirstOffset)
+		}
+		if (zb0004Mask & 0x8) == 0 { // if not empty
+			// string "nb"
+			o = append(o, 0xa2, 0x6e, 0x62)
+			o = msgp.AppendUint64(o, (*z).BatchCount)
+		}
+		if (zb0004Mask & 0x10) == 0 { // if not empty
+			// string "no"
+			o = append(o, 0xa2, 0x6e, 0x6f)
+			o = msgp.AppendUint64(o, (*z).OffsetCount)
+		}
+		if (zb0004Mask & 0x20) == 0 { // if not empty
+			// string "pk"
+			o = append(o, 0xa2, 0x70, 0x6b)
+			o = msgp.AppendBytes(o, ((*z).Verifier)[:])
+		}
+		if (zb0004Mask & 0x40) == 0 { // if not empty
+			// string "pk2"
+			o = append(o, 0xa3, 0x70, 0x6b, 0x32)
+			o = msgp.AppendBytes(o, ((*z).OffsetsPK2)[:])
+		}
+		if (zb0004Mask & 0x80) == 0 { // if not empty
+			// string "pk2sig"
+			o = append(o, 0xa6, 0x70, 0x6b, 0x32, 0x73, 0x69, 0x67)
+			o = msgp.AppendBytes(o, ((*z).OffsetsPK2Sig)[:])
+		}
+	}
+	return
+}
+
+func (_ *OneTimeSignatureSecretsHeader) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*OneTimeSignatureSecretsHeader)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *OneTimeSignatureSecretsHeader) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	var field []byte
+	_ = field
+	var zb0004 int
+	var zb0005 bool
+	zb0004, zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0004 > 0 {
+			zb0004--
+			bts, err = msgp.ReadExactBytes(bts, ((*z).Verifier)[:])
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Verifier")
+				return
+			}
+		}
+		if zb0004 > 0 {
+			zb0004--
+			(*z).FirstBatch, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "FirstBatch")
+				return
+			}
+		}
+		if zb0004 > 0 {
+			zb0004--
+			(*z).BatchCount, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "BatchCount")
+				return
+			}
+		}
+		if zb0004 > 0 {
+			zb0004--
+			(*z).FirstOffset, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "FirstOffset")
+				return
+			}
+		}
+		if zb0004 > 0 {
+			zb0004--
+			(*z).OffsetCount, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "OffsetCount")
+				return
+			}
+		}
+		if zb0004 > 0 {
+			zb0004--
+			bts, err = msgp.ReadExactBytes(bts, ((*z).OffsetsPK2)[:])
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "OffsetsPK2")
+				return
+			}
+		}
+		if zb0004 > 0 {
+			zb0004--
+			bts, err = msgp.ReadExactBytes(bts, ((*z).OffsetsPK2Sig)[:])
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "OffsetsPK2Sig")
+				return
+			}
+		}
+		if zb0004 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0004)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0005 {
+			(*z) = OneTimeSignatureSecretsHeader{}
+		}
+		for zb0004 > 0 {
+			zb0004--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "pk":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).Verifier)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "Verifier")
+					return
+				}
+			case "fb":
+				(*z).FirstBatch, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "FirstBatch")
+					return
+				}
+			case "nb":
+				(*z).BatchCount, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "BatchCount")
+					return
+				}
+			case "fo":
+				(*z).FirstOffset, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "FirstOffset")
+					return
+				}
+			case "no":
+				(*z).OffsetCount, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "OffsetCount")
+					return
+				}
+			case "pk2":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).OffsetsPK2)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "OffsetsPK2")
+					return
+				}
+			case "pk2sig":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).OffsetsPK2Sig)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "OffsetsPK2Sig")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (z *OneTimeSignatureSecretsHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *OneTimeSignatureSecretsHeader) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*OneTimeSignatureSecretsHeader)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *OneTimeSignatureSecretsHeader) Msgsize() (s int) {
+	s = 1 + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 3 + msgp.Uint64Size + 3 + msgp.Uint64Size + 3 + msgp.Uint64Size + 3 + msgp.Uint64Size + 4 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 7 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *OneTimeSignatureSecretsHeader) MsgIsZero() bool {
+	return ((*z).Verifier == (OneTimeSignatureVerifier{})) && ((*z).FirstBatch == 0) && ((*z).BatchCount == 0) && ((*z).FirstOffset == 0) && ((*z).OffsetCount == 0) && ((*z).OffsetsPK2 == (ed25519PublicKey{})) && ((*z).OffsetsPK2Sig == (ed25519Signature{}))
+}
+
+// OneTimeSignatureSecretsHeaderMaxSize returns a maximum valid message size for this message type
+func OneTimeSignatureSecretsHeaderMaxSize() (s int) {
+	s = 1 + 3
+	// Calculating size of array: z.Verifier
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 3 + msgp.Uint64Size + 3 + msgp.Uint64Size + 3 + msgp.Uint64Size + 3 + msgp.Uint64Size + 4
+	// Calculating size of array: z.OffsetsPK2
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 7
+	// Calculating size of array: z.OffsetsPK2Sig
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler

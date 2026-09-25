@@ -286,6 +286,14 @@ func makeParticipationRegistry(accessor db.Pair, log logging.Logger) (*participa
 
 	migrations := []db.Migration{
 		dbSchemaUpgrade0,
+		func(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
+			err := dbSchemaUpgrade1(ctx, tx, newDatabase, log)
+			if err != nil {
+				// db.Initialize masks the cause; keep it in the log
+				log.Errorf("participationDB: registry upgrade to version 2 failed: %v", err)
+			}
+			return err
+		},
 	}
 
 	err := db.Initialize(accessor.Wdb, migrations)
@@ -300,6 +308,7 @@ func makeParticipationRegistry(accessor db.Pair, log logging.Logger) (*participa
 		writeQueue:     make(chan opRequest, 10),
 		writeQueueDone: make(chan struct{}),
 		flushTimeout:   defaultTimeout,
+		pendingInserts: make(map[ParticipationID]bool),
 	}
 	go registry.writeThread()
 
@@ -338,7 +347,7 @@ const (
 			effectiveFirstRound         INTEGER,
 			effectiveLastRound          INTEGER,
 
-			voting BLOB --*  msgpack encoding of ParticipationAccount.voting
+			votingHeader BLOB --*  msgpack encoding of crypto.OneTimeSignatureSecretsHeader
 		)`
 
 	createStateProof = `CREATE TABLE StateProofKeys (
@@ -347,8 +356,27 @@ const (
 			key   BLOB    NOT NULL, --*  msgpack encoding of ParticipationAccount.BlockProof.SignatureAlgorithm
 			PRIMARY KEY (pk, round)
 		)`
+
+	// VotingBatches/VotingOffsets hold one row per ephemeral voting subkey,
+	// so per-round key deletion is a row delete instead of a rewrite of the
+	// whole keyset (Rolling.votingHeader describes the rows).  WITHOUT ROWID
+	// makes the composite primary key the table's only B-tree; a rowid table
+	// would maintain a separate index B-tree and write an extra page per
+	// deleted row.
+	createVotingBatches = `CREATE TABLE VotingBatches (
+			pk    INTEGER NOT NULL,
+			batch INTEGER NOT NULL, --* absolute batch number
+			data  BLOB    NOT NULL, --* msgpack encoding of the batch subkey
+			PRIMARY KEY (pk, batch)
+		) WITHOUT ROWID`
+	createVotingOffsets = `CREATE TABLE VotingOffsets (
+			pk    INTEGER NOT NULL,
+			off   INTEGER NOT NULL, --* absolute offset within the expanded batch (FirstBatch-1 of the header)
+			data  BLOB    NOT NULL, --* msgpack encoding of the offset subkey
+			PRIMARY KEY (pk, off)
+		) WITHOUT ROWID`
 	insertKeysetQuery         = `INSERT INTO Keysets (participationID, account, firstValidRound, lastValidRound, keyDilution, vrf, stateProof) VALUES (?, ?, ?, ?, ?, ?, ?)`
-	insertRollingQuery        = `INSERT INTO Rolling (pk, voting) VALUES (?, ?)`
+	insertRollingQuery        = `INSERT INTO Rolling (pk, votingHeader) VALUES (?, ?)`
 	appendStateProofKeysQuery = `INSERT INTO StateProofKeys (pk, round, key) VALUES(?, ?, ?)`
 	deleteStateProofKeysQuery = `DELETE FROM StateProofKeys WHERE pk=? AND round<?`
 
@@ -356,10 +384,10 @@ const (
 	selectPK      = `SELECT pk FROM Keysets WHERE participationID = ? LIMIT 1`
 	selectLastPK  = `SELECT pk FROM Keysets ORDER BY pk DESC LIMIT 1`
 	selectRecords = `SELECT
-			k.participationID, k.account, k.firstValidRound,
+			k.pk, k.participationID, k.account, k.firstValidRound,
        		k.lastValidRound, k.keyDilution, k.vrf, k.stateProof,
 			r.lastVoteRound, r.lastBlockProposalRound, r.lastStateProofRound,
-			r.effectiveFirstRound, r.effectiveLastRound, r.voting
+			r.effectiveFirstRound, r.effectiveLastRound, r.votingHeader
 		FROM Keysets k
 		INNER JOIN Rolling r
 		ON k.pk = r.pk`
@@ -368,17 +396,37 @@ const (
 		FROM StateProofKeys s
 		WHERE round=?
 		   AND pk IN (SELECT pk FROM Keysets WHERE participationID=?)`
-	deleteKeysets          = `DELETE FROM Keysets WHERE pk=?`
-	deleteRolling          = `DELETE FROM Rolling WHERE pk=?`
-	deleteStateProofByPK   = `DELETE FROM StateProofKeys WHERE pk=?`
+	selectRollingVotingByID = `SELECT r.pk, r.votingHeader
+		FROM Rolling r
+		WHERE r.pk IN (SELECT pk FROM Keysets WHERE participationID=?)`
+	selectVotingBatches   = `SELECT batch, data FROM VotingBatches WHERE pk=? ORDER BY batch`
+	selectVotingOffsets   = `SELECT off, data FROM VotingOffsets WHERE pk=? ORDER BY off`
+	deleteKeysets         = `DELETE FROM Keysets WHERE pk=?`
+	deleteRolling         = `DELETE FROM Rolling WHERE pk=?`
+	deleteStateProofByPK  = `DELETE FROM StateProofKeys WHERE pk=?`
+	deleteVotingBatchesPK = `DELETE FROM VotingBatches WHERE pk=?`
+	deleteVotingOffsetsPK = `DELETE FROM VotingOffsets WHERE pk=?`
+
+	// insert-time clearing of any pre-existing rows for a participation ID
+	// (child tables first — their subqueries depend on Keysets)
+	clearRollingByID       = `DELETE FROM Rolling WHERE pk IN (SELECT pk FROM Keysets WHERE participationID=?)`
+	clearStateProofByID    = `DELETE FROM StateProofKeys WHERE pk IN (SELECT pk FROM Keysets WHERE participationID=?)`
+	clearVotingBatchesByID = `DELETE FROM VotingBatches WHERE pk IN (SELECT pk FROM Keysets WHERE participationID=?)`
+	clearVotingOffsetsByID = `DELETE FROM VotingOffsets WHERE pk IN (SELECT pk FROM Keysets WHERE participationID=?)`
+	clearKeysetsByID       = `DELETE FROM Keysets WHERE participationID=?`
+	// a NULL votingHeader argument keeps the stored header
 	updateRollingFieldsSQL = `UPDATE Rolling
 		 SET lastVoteRound=?,
 		     lastBlockProposalRound=?,
 		     lastStateProofRound=?,
 		     effectiveFirstRound=?,
 		     effectiveLastRound=?,
-		     voting=?
-		 WHERE pk IN (SELECT pk FROM Keysets WHERE participationID=?)`
+		     votingHeader=COALESCE(?, votingHeader)
+		 WHERE pk=?`
+	updateRegistrationFieldsSQL = `UPDATE Rolling
+		 SET effectiveFirstRound=?,
+		     effectiveLastRound=?
+		 WHERE pk=?`
 )
 
 // dbSchemaUpgrade0 initialize the tables.
@@ -404,12 +452,142 @@ func dbSchemaUpgrade0(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 	return nil
 }
 
+// unusableVotingHeader marks a record whose legacy voting blob could not be
+// converted: a single msgpack "never used" byte.  It holds no secrets and
+// never decodes as a header, so the record is excluded at load and any
+// re-insert of the key fails closed, exactly as for a damaged header.
+var unusableVotingHeader = []byte{0xc1}
+
+// dbSchemaUpgrade1 moves the voting subkeys out of the whole-secrets
+// Rolling.voting blob into per-subkey rows described by a Rolling.votingHeader
+// column, then drops the legacy column so the blob (which held every subkey)
+// is erased from the registry.
+//
+// A record whose blob cannot be decoded or converted does not fail the
+// upgrade: db.Initialize would report only the schema versions, leaving algod
+// unable to start with no indication of which record is at fault.  Instead
+// the failure is logged with its pk and cause, and its votingHeader is set to
+// unusableVotingHeader, so the record is excluded from the cache at load
+// time while its blob is erased along with the legacy column.
+func dbSchemaUpgrade1(ctx context.Context, tx *sql.Tx, newDatabase bool, log logging.Logger) error {
+	_, err := tx.Exec(createVotingBatches)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(createVotingOffsets)
+	if err != nil {
+		return err
+	}
+
+	if newDatabase {
+		// dbSchemaUpgrade0 already created Rolling with votingHeader
+		return nil
+	}
+
+	// the legacy blobs hold every subkey: whatever is freed below must be
+	// erased, not left in free pages
+	if err = enableSecureDelete(tx); err != nil {
+		return err
+	}
+	_, err = tx.Exec("ALTER TABLE Rolling ADD COLUMN votingHeader BLOB")
+	if err != nil {
+		return fmt.Errorf("failed to add the votingHeader column: %w", err)
+	}
+
+	type pkVoting struct {
+		pk        int64
+		rawVoting []byte
+	}
+	var blobs []pkVoting
+	rows, err := tx.Query("SELECT pk, voting FROM Rolling")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var entry pkVoting
+		if err = rows.Scan(&entry.pk, &entry.rawVoting); err != nil {
+			return err
+		}
+		blobs = append(blobs, entry)
+	}
+	if err = rows.Err(); err != nil {
+		return err
+	}
+	rows.Close()
+
+	for _, entry := range blobs {
+		if len(entry.rawVoting) == 0 {
+			continue
+		}
+		convErr := convertLegacyVotingBlob(tx, entry.pk, entry.rawVoting)
+		if convErr == nil {
+			continue
+		}
+		log.Errorf("participationDB: voting blob of registry record pk %d cannot be converted and is discarded; the record will be excluded at load and must be re-installed (%v)", entry.pk, convErr)
+		if _, err = tx.Exec("UPDATE Rolling SET votingHeader=? WHERE pk=?", unusableVotingHeader, entry.pk); err != nil {
+			return fmt.Errorf("failed to mark the voting header of pk %d unusable: %w", entry.pk, err)
+		}
+	}
+
+	_, err = tx.Exec("ALTER TABLE Rolling DROP COLUMN voting")
+	if err != nil {
+		return fmt.Errorf("failed to drop the legacy voting column: %w", err)
+	}
+	return nil
+}
+
+// convertLegacyVotingBlob converts one record's whole-secrets blob into a
+// header and rows, verified by read-back, under a savepoint so a failure
+// leaves nothing of the attempt behind.
+func convertLegacyVotingBlob(tx *sql.Tx, pk int64, rawVoting []byte) error {
+	voting := &crypto.OneTimeSignatureSecrets{}
+	if err := protocol.Decode(rawVoting, voting); err != nil {
+		return fmt.Errorf("undecodable voting blob: %w", err)
+	}
+	if _, err := tx.Exec("SAVEPOINT convert_record"); err != nil {
+		return err
+	}
+	target := registryVotingTarget(pk)
+	// freshly decoded and unshared: no lock is needed for the snapshot
+	err := rewriteVotingRows(tx, target, voting.OneTimeSignatureSecretsPersistent)
+	if err == nil {
+		err = verifyVotingRowsMatch(tx, target, voting)
+	}
+	if err != nil {
+		if _, rerr := tx.Exec("ROLLBACK TO SAVEPOINT convert_record"); rerr != nil {
+			return fmt.Errorf("%v (and rolling the attempt back failed: %w)", err, rerr)
+		}
+	}
+	if _, rerr := tx.Exec("RELEASE SAVEPOINT convert_record"); rerr != nil {
+		return rerr
+	}
+	return err
+}
+
 // participationDB provides a concrete implementation of the ParticipationRegistry interface.
 type participationDB struct {
 	cache map[ParticipationID]ParticipationRecord
 
 	// dirty marked on Record(), DeleteExpired(), cleared on Register(), Delete(), Flush()
 	dirty map[ParticipationID]struct{}
+
+	// pendingInserts holds the IDs of inserts whose write has not completed
+	// yet; they are not in the cache, so this is what dedups them.  The value
+	// records whether a Delete arrived meanwhile, to be honored once the
+	// write lands; the ID stays reserved until that deletion is queued.
+	pendingInserts map[ParticipationID]bool
+
+	// testInsertGate, when set (tests only), runs after an insert's write has
+	// landed and before its deferred deletion is queued.
+	testInsertGate func()
+
+	// excluded holds the stored keys whose voting data failed validation at
+	// load, with their LastValid.  They are kept out of the cache (they
+	// cannot vote) and their subkey rows are erased, but they stay tracked so
+	// they are deleted when they expire or on request, and replaced if the
+	// key is re-inserted.
+	excluded map[ParticipationID]basics.Round
 
 	log   logging.Logger
 	store db.Pair
@@ -447,7 +625,7 @@ func (db *participationDB) initializeCache() error {
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
 
-	records, err := db.getAllFromDB()
+	records, corrupt, err := db.getAllFromDB()
 	if err != nil {
 		return err
 	}
@@ -461,8 +639,29 @@ func (db *participationDB) initializeCache() error {
 		cache[record.ParticipationID] = record
 	}
 
+	// Forward security: the subkeys of a record that failed validation can
+	// no longer be accounted for, so they are erased now instead of lingering
+	// past their rounds.  The header stays, so a re-insert of the key from
+	// its file can still be checked against the stored deletion cursor.
+	if len(corrupt) > 0 {
+		err = db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			for id := range corrupt {
+				for _, query := range []string{clearVotingBatchesByID, clearVotingOffsetsByID} {
+					if _, err = tx.Exec(query, id[:]); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("unable to erase the voting subkeys of corrupt records: %w", err)
+		}
+	}
+
 	db.cache = cache
 	db.dirty = make(map[ParticipationID]struct{})
+	db.excluded = corrupt
 	return nil
 }
 
@@ -471,14 +670,23 @@ func (db *participationDB) writeThread() {
 	var lastErr error
 
 	for op := range db.writeQueue {
-		if err := op.operation.apply(db); err != nil {
-			lastErr = err
+		err := op.operation.apply(db)
+		if op.errChannel == nil {
+			// will be surfaced by the next flush
+			if err != nil {
+				lastErr = err
+			}
+			continue
 		}
-
-		if op.errChannel != nil {
-			op.errChannel <- lastErr
+		// an op with a channel reports its own result; a flush additionally
+		// surfaces the errors of earlier ops
+		if _, isFlush := op.operation.(*flushOp); isFlush {
+			if err == nil {
+				err = lastErr
+			}
 			lastErr = nil
 		}
+		op.errChannel <- err
 	}
 }
 
@@ -497,21 +705,32 @@ func verifyExecWithOneRowEffected(err error, result sql.Result, operationName st
 	return nil
 }
 
+// Insert stores the participation key and makes it available.  The write is
+// validated on the write thread before the record enters the cache (a copy
+// that lags the stored deletion cursor is fast-forwarded, and one whose
+// relation to the stored state cannot be established is rejected), so a
+// rejected copy is never usable.
+//
+// A Delete that arrives while the write is in flight is honored as soon as
+// the write lands.  Insert still reports success in that case, since the key
+// was stored, so a caller that reads the key back immediately may find it
+// already gone; a re-insert racing that deletion is reported as
+// ErrAlreadyInserted until the deletion has been queued.
 func (db *participationDB) Insert(record Participation) (id ParticipationID, err error) {
-	db.mutex.Lock()
-	defer db.mutex.Unlock()
-
 	id = record.ID()
-	if _, ok := db.cache[id]; ok {
+
+	db.mutex.Lock()
+	_, inCache := db.cache[id]
+	_, pending := db.pendingInserts[id]
+	if inCache || pending {
+		db.mutex.Unlock()
 		// PKI TODO: Add a special case to set the StateProof public key if it is in the input
 		//           but not in the cache.
 		return id, ErrAlreadyInserted
 	}
-
-	db.writeQueue <- makeOpRequest(&insertOp{
-		id:     id,
-		record: record,
-	})
+	db.pendingInserts[id] = false
+	_, replacesExcluded := db.excluded[id]
+	db.mutex.Unlock()
 
 	// Make some copies.
 	var vrf *crypto.VRFSecrets
@@ -527,6 +746,19 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 		*voting = record.Voting.Snapshot()
 	}
 
+	// hand the write op the same frozen snapshot the cache gets: the caller
+	// may keep advancing the live secrets (e.g. the partkey file's copy),
+	// and persisting a newer state than the cache holds would trip the
+	// monotonicity guard on the next flush
+	record.Voting = voting
+	written := make(chan error, 1)
+	db.writeQueue <- makeOpRequestWithError(&insertOp{
+		id:               id,
+		record:           record,
+		replacesExcluded: replacesExcluded,
+	}, written)
+	err = <-written
+
 	var stateProofVerifierPtr *merklesignature.Verifier
 	if record.StateProofSecrets != nil {
 		stateProofVerifierPtr = &merklesignature.Verifier{}
@@ -534,24 +766,50 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 		stateProofVerifierPtr.KeyLifetime = record.StateProofSecrets.GetVerifier().KeyLifetime
 	}
 
-	// update cache.
-	db.cache[id] = ParticipationRecord{
-		ParticipationID:   id,
-		Account:           record.Address(),
-		FirstValid:        record.FirstValid,
-		LastValid:         record.LastValid,
-		KeyDilution:       record.KeyDilution,
-		LastVote:          0,
-		LastBlockProposal: 0,
-		LastStateProof:    0,
-		EffectiveFirst:    0,
-		EffectiveLast:     0,
-		StateProof:        stateProofVerifierPtr,
-		Voting:            voting,
-		VRF:               vrf,
+	db.mutex.Lock()
+	deleteRequested := db.pendingInserts[id]
+	if !deleteRequested {
+		delete(db.pendingInserts, id)
 	}
+	if err == nil || deleteRequested {
+		delete(db.excluded, id) // replaced by the insert, or deleted on request
+	}
+	if err == nil && !deleteRequested {
+		db.cache[id] = ParticipationRecord{
+			ParticipationID:   id,
+			Account:           record.Address(),
+			FirstValid:        record.FirstValid,
+			LastValid:         record.LastValid,
+			KeyDilution:       record.KeyDilution,
+			LastVote:          0,
+			LastBlockProposal: 0,
+			LastStateProof:    0,
+			EffectiveFirst:    0,
+			EffectiveLast:     0,
+			StateProof:        stateProofVerifierPtr,
+			Voting:            voting,
+			VRF:               vrf,
+		}
+	}
+	db.mutex.Unlock()
 
-	return
+	if deleteRequested {
+		// A Delete arrived while the write was pending: honor it now that the
+		// rows exist (a no-op if the insert was rejected).  The ID stays
+		// reserved until the deletion is queued, so a concurrent re-insert
+		// cannot order its write ahead of it and lose its rows to it.
+		if db.testInsertGate != nil {
+			db.testInsertGate()
+		}
+		db.writeQueue <- makeOpRequest(&deleteOp{id})
+		db.mutex.Lock()
+		delete(db.pendingInserts, id)
+		db.mutex.Unlock()
+	}
+	if err != nil {
+		return id, fmt.Errorf("participationDB: unable to insert key %s: %w", id, err)
+	}
+	return id, nil
 }
 
 func (db *participationDB) AppendKeys(id ParticipationID, keys StateProofKeys) error {
@@ -575,12 +833,21 @@ func (db *participationDB) Delete(id ParticipationID) error {
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
 
-	// NoOp if key does not exist.
-	if _, ok := db.cache[id]; !ok {
+	// A key whose insert is still being written is deleted once the write
+	// lands, so the delete is not lost to the pending window.
+	if _, pending := db.pendingInserts[id]; pending {
+		db.pendingInserts[id] = true
+		return nil
+	}
+	// NoOp if key does not exist (an excluded record is deletable too).
+	_, cached := db.cache[id]
+	_, isExcluded := db.excluded[id]
+	if !cached && !isExcluded {
 		return nil
 	}
 	delete(db.dirty, id)
 	delete(db.cache, id)
+	delete(db.excluded, id)
 
 	// do the db part async
 	db.writeQueue <- makeOpRequest(&deleteOp{id})
@@ -610,20 +877,66 @@ func (db *participationDB) DeleteExpired(latestRound basics.Round, agreementProt
 		}
 	}
 
-	// mark updated records as dirty, so they will be flushed by a call to FlushRegistry after each round
+	// merge the advanced voting secrets into the cache and mark the records
+	// dirty, so they will be flushed by a call to FlushRegistry after each round
 	db.mutex.Lock()
-	for _, r := range updated {
-		db.dirty[r.ParticipationID] = struct{}{}
-		db.cache[r.ParticipationID] = r
+	db.mergeAdvancedVoting(updated)
+	// excluded records cannot vote, but they expire like any other key
+	var expired []ParticipationID
+	for id, lastValid := range db.excluded {
+		if lastValid < latestRound {
+			expired = append(expired, id)
+		}
 	}
 	db.mutex.Unlock()
+	for _, id := range expired {
+		if err := db.Delete(id); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
+// mergeAdvancedVoting stores the voting secrets of the given snapshots into
+// the live cache entries and marks them dirty.  Only Voting is merged: the
+// snapshots predate the lock the caller holds, so a Register or Record that
+// ran in between has already updated the other fields of the live entry, and
+// overwriting the whole record would lose (and then flush over) that update.
+// The caller must hold db.mutex.
+//
+// A key deleted and re-inserted under the same ID in that window receives the
+// snapshot's Voting as well.  That is deliberate and safe: the ID pins the key
+// material, and the snapshot was advanced past the stored cursor the
+// re-inserted copy was fast-forwarded to, so it never rewinds the entry.
+// Skipping such entries would instead leave this round's deletion out of the
+// cache until the next pass.
+func (db *participationDB) mergeAdvancedVoting(updated []ParticipationRecord) {
+	for _, r := range updated {
+		live, ok := db.cache[r.ParticipationID]
+		if !ok {
+			// deleted meanwhile; do not resurrect it in the cache
+			continue
+		}
+		live.Voting = r.Voting
+		db.cache[r.ParticipationID] = live
+		db.dirty[r.ParticipationID] = struct{}{}
+	}
+}
+
+// scannedRecord is one Keysets+Rolling row: the record, its primary key, and
+// its raw voting header.  The caller decodes the voting secrets, so a corrupt
+// record can be excluded instead of failing the whole scan.
+type scannedRecord struct {
+	record    ParticipationRecord
+	pk        int64
+	rawHeader []byte
+}
+
 // scanRecords is a helper to manage scanning participation records.
-func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
-	results := make([]ParticipationRecord, 0)
+func scanRecords(rows *sql.Rows) ([]scannedRecord, error) {
+	results := make([]scannedRecord, 0)
 	for rows.Next() {
+		var pk int64
 		var record ParticipationRecord
 		var rawParticipation []byte
 		var rawAccount []byte
@@ -638,6 +951,7 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 		var effectiveLast sql.NullInt64
 
 		err := rows.Scan(
+			&pk,
 			&rawParticipation,
 			&rawAccount,
 			&record.FirstValid,
@@ -679,14 +993,6 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 			record.StateProof = &stateProofVerifer
 		}
 
-		if len(rawVoting) > 0 {
-			record.Voting = &crypto.OneTimeSignatureSecrets{}
-			err = protocol.Decode(rawVoting, record.Voting)
-			if err != nil {
-				return nil, fmt.Errorf("unable to decode Voting: %w", err)
-			}
-		}
-
 		// Check optional values.
 		if lastVote.Valid {
 			record.LastVote = basics.Round(lastVote.Int64)
@@ -708,23 +1014,59 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 			record.EffectiveLast = basics.Round(effectiveLast.Int64)
 		}
 
-		results = append(results, record)
+		results = append(results, scannedRecord{record: record, pk: pk, rawHeader: rawVoting})
+	}
+
+	// an iteration error ends the loop the same way exhaustion does; without
+	// this check it would silently truncate the result set
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return results, nil
 }
 
-func (db *participationDB) getAllFromDB() (records []ParticipationRecord, err error) {
+// getAllFromDB loads every stored record.  Records whose voting data fails
+// validation are returned separately in corrupt (id to LastValid), so the
+// caller can keep them out of the cache without failing the whole load.
+func (db *participationDB) getAllFromDB() (records []ParticipationRecord, corrupt map[ParticipationID]basics.Round, err error) {
+	corrupt = make(map[ParticipationID]basics.Round)
 	err = db.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		rows, err := tx.Query(selectRecords)
 		if err != nil {
 			return fmt.Errorf("unable to query records: %w", err)
 		}
+		defer rows.Close()
 
-		records, err = scanRecords(rows)
+		scanned, err := scanRecords(rows)
 		if err != nil {
-			records = nil
 			return fmt.Errorf("problem scanning records: %w", err)
+		}
+
+		// reassemble each key's voting secrets from its subkey rows; a record
+		// whose voting data is corrupt is excluded with an error log rather
+		// than blocking the whole registry (and with it the node) from loading
+		records = make([]ParticipationRecord, 0, len(scanned))
+		for _, sr := range scanned {
+			batches, offsets, err := readVotingRows(tx, registryVotingTarget(sr.pk))
+			if err != nil {
+				return fmt.Errorf("unable to read the voting subkeys of pk %d: %w", sr.pk, err)
+			}
+			if len(sr.rawHeader) > 0 || len(batches)+len(offsets) > 0 {
+				var voting *crypto.OneTimeSignatureSecrets
+				hdr, verr := decodeVotingHeader(sr.rawHeader)
+				if verr == nil {
+					voting, verr = votingFromRows(hdr, batches, offsets)
+				}
+				if verr != nil {
+					db.log.Errorf("participationDB: excluding key %s (pk %d) from the registry and erasing its voting subkeys, its voting data is corrupt: %v; the key cannot vote until it is re-installed (a key with a .partkey file is re-installed at startup; one installed over the REST API must be installed again), or delete %s and restart to rebuild the registry",
+						sr.record.ParticipationID, sr.pk, verr, config.ParticipationRegistryFilename)
+					corrupt[sr.record.ParticipationID] = sr.record.LastValid
+					continue
+				}
+				sr.record.Voting = voting
+			}
+			records = append(records, sr.record)
 		}
 
 		return nil
@@ -849,38 +1191,108 @@ func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (
 	return result, nil
 }
 
-// updateRollingFields sets all of the rolling fields according to the record object.
+// rollingHeader is one Rolling row of a participation ID: its primary key
+// and stored voting header.
+type rollingHeader struct {
+	pk  int64
+	raw []byte
+}
+
+// readRollingHeaders returns every Rolling row stored for a participation ID
+// (normally exactly one).
+func readRollingHeaders(ctx context.Context, tx *sql.Tx, id ParticipationID) ([]rollingHeader, error) {
+	rows, err := tx.QueryContext(ctx, selectRollingVotingByID, id[:])
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var headers []rollingHeader
+	for rows.Next() {
+		var h rollingHeader
+		if err = rows.Scan(&h.pk, &h.raw); err != nil {
+			return nil, err
+		}
+		headers = append(headers, h)
+	}
+	return headers, rows.Err()
+}
+
+// resolveRollingPK looks up the Rolling primary key and stored voting
+// header for a participation ID, keeping the legacy ErrNoKeyForID and
+// ErrMultipleKeysForID semantics that callers special-case.
+func resolveRollingPK(ctx context.Context, tx *sql.Tx, id ParticipationID) (pk int64, rawHeader []byte, err error) {
+	headers, err := readRollingHeaders(ctx, tx, id)
+	if err != nil {
+		return 0, nil, err
+	}
+	if len(headers) > 1 {
+		return 0, nil, ErrMultipleKeysForID
+	}
+	if len(headers) < 1 {
+		return 0, nil, ErrNoKeyForID
+	}
+	return headers[0].pk, headers[0].raw, nil
+}
+
+// updateRegistrationFields persists only the registration window
+// (EffectiveFirst/EffectiveLast) of the record.  Registration deliberately
+// does not touch the voting secrets or the last-used rounds: the record it
+// carries is a snapshot taken when Register was called, and a flush that ran
+// in between may already have persisted a newer deletion cursor.
+func updateRegistrationFields(ctx context.Context, tx *sql.Tx, record ParticipationRecord) error {
+	pk, _, err := resolveRollingPK(ctx, tx, record.ParticipationID)
+	if err != nil {
+		return err
+	}
+	result, err := tx.ExecContext(ctx, updateRegistrationFieldsSQL, record.EffectiveFirst, record.EffectiveLast, pk)
+	return verifyExecWithOneRowEffected(err, result, "update registration fields")
+}
+
+// updateRollingFields sets all of the rolling fields according to the record
+// object, persisting the voting secrets incrementally: the stored voting
+// header is compared against the record's secrets, only the transition
+// (consumed subkey rows, refreshed offsets) is written, and the new header
+// travels in the same UPDATE as the rolling fields.
 func updateRollingFields(ctx context.Context, tx *sql.Tx, record ParticipationRecord) error {
-	voting := record.Voting.Snapshot()
-	encodedVotingSecrets := protocol.Encode(&voting)
+	pk, rawHeader, err := resolveRollingPK(ctx, tx, record.ParticipationID)
+	if err != nil {
+		return err
+	}
 
+	// A record stored without voting secrets (a NULL header and no rows)
+	// carries a zero-value placeholder in the cache, since Duplicate never
+	// hands out a nil Voting: nothing to persist for it.
+	var newHeader *crypto.OneTimeSignatureSecretsHeader
+	var snap crypto.OneTimeSignatureSecretsPersistent
+	if record.Voting != nil {
+		snap = votingSnapshot(record.Voting)
+	}
+	if record.Voting != nil && (len(rawHeader) > 0 || snap.Header() != (crypto.OneTimeSignatureSecretsHeader{})) {
+		// Fail closed: without the stored cursor there is no way to tell
+		// whether memory lags storage, and rewriting from memory could
+		// resurrect keys the registry already retired.
+		stored, herr := decodeVotingHeader(rawHeader)
+		if herr != nil {
+			return fmt.Errorf("stored voting header for key %s is undecodable; refusing to rewrite voting rows from memory (delete %s and restart to rebuild the registry): %v",
+				record.ParticipationID, config.ParticipationRegistryFilename, herr)
+		}
+		newHeader, err = syncVotingRows(tx, registryVotingTarget(pk), stored, snap)
+		if err != nil {
+			return err
+		}
+	}
+
+	// one UPDATE per record: the rolling fields, plus the voting header when
+	// the transition produced a new one (NULL keeps the stored header)
+	var rawNewHeader []byte
+	if newHeader != nil {
+		rawNewHeader = encodeVotingHeader(*newHeader)
+	}
 	result, err := tx.ExecContext(ctx, updateRollingFieldsSQL,
-		record.LastVote,
-		record.LastBlockProposal,
-		record.LastStateProof,
-		record.EffectiveFirst,
-		record.EffectiveLast,
-		encodedVotingSecrets,
-		record.ParticipationID[:])
-
-	if err != nil {
-		return err
-	}
-
-	numRows, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if numRows > 1 {
-		return ErrMultipleKeysForID
-	}
-
-	if numRows < 1 {
-		return ErrNoKeyForID
-	}
-
-	return nil
+		record.LastVote, record.LastBlockProposal, record.LastStateProof,
+		record.EffectiveFirst, record.EffectiveLast, rawNewHeader, pk)
+	return verifyExecWithOneRowEffected(err, result, "update rolling fields")
 }
 
 func recordActive(record ParticipationRecord, on basics.Round) bool {
@@ -940,10 +1352,22 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 	if len(updated) != 0 {
 		db.writeQueue <- makeOpRequest(&registerOp{updated: updated})
 
+		// Merge only the registration window into the live cache entries.
+		// The snapshots in updated predate this lock: a DeleteExpired in
+		// between may have advanced the cached voting secrets, and
+		// overwriting them would rewind the cache.  The dirty flags stay
+		// set — registration persists nothing else, so pending changes
+		// still need the next flush.
 		db.mutex.Lock()
 		for id, record := range updated {
-			delete(db.dirty, id)
-			db.cache[id] = record.ParticipationRecord
+			current, ok := db.cache[id]
+			if !ok {
+				// deleted meanwhile; do not resurrect it in the cache
+				continue
+			}
+			current.EffectiveFirst = record.EffectiveFirst
+			current.EffectiveLast = record.EffectiveLast
+			db.cache[id] = current
 		}
 		db.mutex.Unlock()
 	}

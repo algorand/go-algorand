@@ -38,7 +38,11 @@ const merkleSignatureTableSchemaName = "merklesignaturescheme"
 // Errors for the persistent merkle signature scheme
 var (
 	errSelectKeysError = errors.New("failed to fetch stateproof keys from DB")
-	errKeyDecodeError  = errors.New("failed to decode stateproof key")
+	errKeyScanError    = errors.New("failed to read stateproof key row")
+
+	// ErrKeyDecode reports a stored stateproof key that does not decode: the
+	// persisted content is corrupt, as opposed to a database failure.
+	ErrKeyDecode = errors.New("failed to decode stateproof key")
 )
 
 // InstallStateProofTable creates (or migrates if exists already) the StateProofKeys database table
@@ -150,15 +154,17 @@ func (s *Secrets) RestoreAllSecrets(store db.Accessor) error {
 			key := crypto.FalconSigner{}
 			err := rows.Scan(&keyB)
 			if err != nil {
-				return fmt.Errorf("%w - %v", errKeyDecodeError, err)
+				return fmt.Errorf("%w - %v", errKeyScanError, err)
 			}
 			err = protocol.Decode(keyB, &key)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w - %v", ErrKeyDecode, err)
 			}
 			keys = append(keys, key)
 		}
-		return nil
+		// an iteration error ends the loop like exhaustion does; without this
+		// check it would silently truncate the key set
+		return rows.Err()
 	})
 	if err != nil {
 		return err
