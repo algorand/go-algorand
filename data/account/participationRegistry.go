@@ -250,6 +250,12 @@ type ParticipationRegistry interface {
 	// GetAll of the participation records.
 	GetAll() []ParticipationRecord
 
+	// GetExcluded reports whether a stored key was excluded at load because
+	// its voting data failed validation, and returns its validity window (the
+	// key file is named after it).  Excluded keys are invisible to Get and
+	// GetAll; Delete and expiry are the only operations that apply to them.
+	GetExcluded(id ParticipationID) (firstValid, lastValid basics.Round, excluded bool)
+
 	// GetForRound fetches a record with voting secrets for a particular round.
 	GetForRound(id ParticipationID, round basics.Round) (ParticipationRecordForRound, error)
 
@@ -583,11 +589,11 @@ type participationDB struct {
 	testInsertGate func()
 
 	// excluded holds the stored keys whose voting data failed validation at
-	// load, with their LastValid.  They are kept out of the cache (they
-	// cannot vote) and their subkey rows are erased, but they stay tracked so
+	// load, with their validity window.  They are kept out of the cache (they
+	// cannot vote) and their secrets are erased, but they stay tracked so
 	// they are deleted when they expire or on request, and replaced if the
 	// key is re-inserted.
-	excluded map[ParticipationID]basics.Round
+	excluded map[ParticipationID]validityWindow
 
 	log   logging.Logger
 	store db.Pair
@@ -597,6 +603,13 @@ type participationDB struct {
 	writeQueueDone chan struct{}
 
 	flushTimeout time.Duration
+}
+
+// validityWindow is the round range of a stored key; it is all that is kept
+// of a record excluded at load (the key file is named after it, and expiry
+// needs the end of it).
+type validityWindow struct {
+	firstValid, lastValid basics.Round
 }
 
 // DeleteStateProofKeys is a non-blocking operation, responsible for removing state-proof keys from the DB.
@@ -886,8 +899,8 @@ func (db *participationDB) DeleteExpired(latestRound basics.Round, agreementProt
 	db.mergeAdvancedVoting(updated)
 	// excluded records cannot vote, but they expire like any other key
 	var expired []ParticipationID
-	for id, lastValid := range db.excluded {
-		if lastValid < latestRound {
+	for id, window := range db.excluded {
+		if window.lastValid < latestRound {
 			expired = append(expired, id)
 		}
 	}
@@ -1030,10 +1043,10 @@ func scanRecords(rows *sql.Rows) ([]scannedRecord, error) {
 }
 
 // getAllFromDB loads every stored record.  Records whose voting data fails
-// validation are returned separately in corrupt (id to LastValid), so the
-// caller can keep them out of the cache without failing the whole load.
-func (db *participationDB) getAllFromDB() (records []ParticipationRecord, corrupt map[ParticipationID]basics.Round, err error) {
-	corrupt = make(map[ParticipationID]basics.Round)
+// validation are returned separately in corrupt (id to validity window), so
+// the caller can keep them out of the cache without failing the whole load.
+func (db *participationDB) getAllFromDB() (records []ParticipationRecord, corrupt map[ParticipationID]validityWindow, err error) {
+	corrupt = make(map[ParticipationID]validityWindow)
 	err = db.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		rows, err := tx.Query(selectRecords)
 		if err != nil {
@@ -1064,7 +1077,7 @@ func (db *participationDB) getAllFromDB() (records []ParticipationRecord, corrup
 				if verr != nil {
 					db.log.Errorf("participationDB: excluding key %s (pk %d) from the registry and erasing its voting subkeys and state proof keys, its voting data is corrupt: %v; the key cannot vote until it is installed again: if its stored voting header is intact and its .partkey file is present it is re-installed from the file during this startup; otherwise copy the .partkey file aside, delete the key, and install the copy (deleting the key also removes its file), or stop the node, delete %s, and restart to rebuild the registry from the key files",
 						sr.record.ParticipationID, sr.pk, verr, config.ParticipationRegistryFilename)
-					corrupt[sr.record.ParticipationID] = sr.record.LastValid
+					corrupt[sr.record.ParticipationID] = validityWindow{firstValid: sr.record.FirstValid, lastValid: sr.record.LastValid}
 					continue
 				}
 				sr.record.Voting = voting
@@ -1087,6 +1100,13 @@ func (db *participationDB) Get(id ParticipationID) ParticipationRecord {
 		return ParticipationRecord{}
 	}
 	return record.Duplicate()
+}
+
+func (db *participationDB) GetExcluded(id ParticipationID) (firstValid, lastValid basics.Round, excluded bool) {
+	db.mutex.RLock()
+	defer db.mutex.RUnlock()
+	window, excluded := db.excluded[id]
+	return window.firstValid, window.lastValid, excluded
 }
 
 func (db *participationDB) GetAll() []ParticipationRecord {

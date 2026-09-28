@@ -907,14 +907,22 @@ func (node *AlgorandFullNode) RemoveParticipationKey(partKeyID account.Participa
 	// Let's first get the recorded information from the registry so we can lookup the file
 
 	partRecord := node.accountManager.Registry().Get(partKeyID)
+	firstValid, lastValid := partRecord.FirstValid, partRecord.LastValid
 
 	if partRecord.IsZero() {
-		return account.ErrParticipationIDNotFound
+		// a key excluded from the registry at load (corrupt voting data) is
+		// not served by Get, but deleting it is exactly the operator's
+		// remedy, so it must be reachable here
+		var excluded bool
+		firstValid, lastValid, excluded = node.accountManager.Registry().GetExcluded(partKeyID)
+		if !excluded {
+			return account.ErrParticipationIDNotFound
+		}
 	}
 
 	outDir := node.genesisDirs.RootGenesisDir
 
-	filename := config.PartKeyFilename(partRecord.ParticipationID.String(), uint64(partRecord.FirstValid), uint64(partRecord.LastValid))
+	filename := config.PartKeyFilename(partKeyID.String(), uint64(firstValid), uint64(lastValid))
 	fullyQualifiedFilename := filepath.Join(outDir, filepath.Base(filename))
 
 	err := node.accountManager.Registry().Delete(partKeyID)

@@ -370,6 +370,14 @@ func TestRegistryExcludesCorruptRecord(t *testing.T) {
 			a.NoError(registry.initializeCache())
 			a.True(registry.Get(corruptID).IsZero(), "corrupt record not excluded")
 			a.False(registry.Get(healthyID).IsZero(), "healthy record lost")
+			// the excluded record is reported with its validity window (the
+			// node needs it to name the key file when deleting the key)
+			first, last, excluded := registry.GetExcluded(corruptID)
+			a.True(excluded)
+			a.Equal(pCorrupt.FirstValid, first)
+			a.Equal(pCorrupt.LastValid, last)
+			_, _, excluded = registry.GetExcluded(healthyID)
+			a.False(excluded)
 			keysets, batches := corruptRows()
 			a.Equal(1, keysets)
 			a.Zero(batches, "excluded record's subkeys left on disk")
@@ -415,6 +423,8 @@ func TestRegistryExcludesCorruptRecord(t *testing.T) {
 				a.NoError(registry.initializeCache())
 				a.True(registry.Get(corruptID).IsZero())
 				a.False(registry.Get(healthyID).IsZero())
+				_, _, excluded = registry.GetExcluded(corruptID)
+				a.False(excluded, "cleaned-up record still reported as excluded")
 
 				// with the record deleted, the key installs again as a new one:
 				// this delete-then-install sequence is the operator's remedy
