@@ -547,9 +547,15 @@ func TestPseudonodeNonEnqueuedTasks(t *testing.T) {
 		drainChannel(ch)
 	}
 	require.Equal(t, enqueuedVotes*len(accounts), subStrLogger.instancesFound[0])
-	// filterProposers skips block assembly and vote creation for unelected accounts,
-	// so the number of failed-to-enqueue messages may be less than enqueuedProposals*len(accounts).
-	require.LessOrEqual(t, subStrLogger.instancesFound[1], enqueuedProposals*len(accounts))
+	// makeProposals only creates votes for accounts that filterProposers selects,
+	// so each enqueued proposal task logs one failure per elected account.
+	partKeys := keyManager.VotingKeys(startRound, startRound)
+	expectedProposalVotes := 0
+	for p := 0; p < enqueuedProposals; p++ {
+		expectedProposalVotes += len(pb.(asyncPseudonode).filterProposers(startRound, period(p), partKeys))
+	}
+	require.Positive(t, expectedProposalVotes)
+	require.Equal(t, expectedProposalVotes, subStrLogger.instancesFound[1])
 }
 
 // TestFilterProposers verifies that filterProposers correctly identifies which
