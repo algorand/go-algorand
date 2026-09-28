@@ -833,6 +833,82 @@ func TestFilterProposers(t *testing.T) {
 	})
 }
 
+// proposerCirculationLedger overrides the test ledger's circulation, which
+// otherwise includes expired stake.
+type proposerCirculationLedger struct {
+	Ledger
+	circulation basics.MicroAlgos
+}
+
+func (l proposerCirculationLedger) Circulation(basics.Round, basics.Round) (basics.MicroAlgos, error) {
+	return l.circulation, nil
+}
+
+func TestFilterProposersKeyValidity(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const round basics.Round = 900
+	for _, tc := range []struct {
+		name        string
+		first, last basics.Round
+		circulation uint64
+		selected    bool
+	}{
+		{"beforeFirstValid", round + 1, round + 10, 1_000_000, false},
+		{"atFirstValid", round, round + 10, 1_000_000, true},
+		{"atLastValid", round - 10, round, 1_000_000, true},
+		{"noLastValid", round - 10, 0, 1_000_000, true},
+		{"expiredWithRemainingStake", round - 10, round - 1, 100_000, false},
+		{"expiredWithZeroCirculation", round - 10, round - 1, 0, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			rootSeed := sha256.Sum256([]byte(t.Name()))
+			accounts, balances := createTestAccountsAndBalances(t, 1, rootSeed[:])
+			addr := accounts[0].Parent
+			record := balances[addr]
+			record.VoteFirstValid = tc.first
+			record.VoteLastValid = tc.last
+			balances[addr] = record
+
+			baseLedger := makeTestLedger(balances).(*testLedger)
+			baseLedger.nextRound = round
+			ledger := proposerCirculationLedger{Ledger: baseLedger, circulation: basics.MicroAlgos{Raw: tc.circulation}}
+			pn := asyncPseudonode{
+				factory: testBlockFactory{},
+				keys:    makeRecordingKeyManager(accounts),
+				ledger:  ledger,
+				log:     serviceLogger{logging.TestingLog(t)},
+			}
+			// Local keys remain valid through round 1000, even when their
+			// on-chain registration has expired. Both public keys still match.
+			partKeys := pn.loadRoundParticipationKeys(round)
+			require.Len(t, partKeys, 1)
+			require.GreaterOrEqual(t, partKeys[0].LastValid, round)
+			require.Equal(t, record.SelectionID, partKeys[0].VRF.PK)
+			require.Equal(t, record.VoteID, partKeys[0].Voting.OneTimeSignatureVerifier)
+
+			if !tc.selected {
+				// Neither sortition (which panics for the expired-stake
+				// cases) nor block assembly should run for an invalid key.
+				pn.factory = nil
+				proposals, votes := pn.makeProposals(round, 0, partKeys)
+				require.Empty(t, proposals)
+				require.Empty(t, votes)
+				return
+			}
+
+			proposals, votes := pn.makeProposals(round, 0, partKeys)
+			require.Len(t, proposals, 1)
+			require.Len(t, votes, 1)
+			_, err := votes[0].verify(ledger)
+			require.NoError(t, err)
+		})
+	}
+}
+
 // errorInjectingLedger wraps a Ledger and injects errors for specific methods
 // to test error-handling paths in filterProposers.
 type errorInjectingLedger struct {

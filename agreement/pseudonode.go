@@ -338,6 +338,12 @@ func (n asyncPseudonode) filterProposers(round basics.Round, period period, acco
 			continue
 		}
 
+		// Match vote verification's validity checks before sortition: expired
+		// stake may already be excluded from the total circulation.
+		if round < record.VoteFirstValid || (record.VoteLastValid != 0 && round > record.VoteLastValid) {
+			continue
+		}
+
 		m.Record = committee.BalanceRecord{OnlineAccountData: record, Addr: acc.Account}
 
 		cred := committee.MakeCredential(&acc.VRF.SK, m.Selector)
