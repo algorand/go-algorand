@@ -150,10 +150,14 @@ stores each ephemeral voting subkey as its own row (tables
 the per-round deletion of used keys writes only the consumed rows and the
 header. A stored key whose voting data fails validation at startup is logged
 as an error and excluded: it cannot vote, its voting subkeys and state proof
-keys are erased at once, and it is removed when it expires or when deleted
-through the API. A key that still has its `.partkey` file is re-installed from
-it at startup; a key that was installed over the REST API must be installed
-again. A registry created by an older release is
+keys are erased at once, and it is removed when it expires or when deleted. If
+its stored voting header is intact and its `.partkey` file is still present,
+the key is re-installed from the file during the same startup. Otherwise
+either copy the `.partkey` file aside, delete the key, and install the copy
+(deleting a key through the API also removes its file from the node's
+directory, so without a copy the key would have to be generated and
+registered anew), or stop the node, delete **partregistry.sqlite**, and
+restart: the key files are kept and re-installed. A registry created by an older release is
 upgraded automatically at node startup; older releases refuse to open the
 upgraded registry, so rolling back requires deleting **partregistry.sqlite**
 and re-installing the keys. Once installed, keys are assigned

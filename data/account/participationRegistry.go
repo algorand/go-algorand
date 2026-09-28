@@ -524,7 +524,7 @@ func dbSchemaUpgrade1(ctx context.Context, tx *sql.Tx, newDatabase bool, log log
 		if convErr == nil {
 			continue
 		}
-		log.Errorf("participationDB: voting blob of registry record pk %d cannot be converted and is discarded; the record will be excluded at load and must be re-installed (%v)", entry.pk, convErr)
+		log.Errorf("participationDB: voting blob of registry record pk %d cannot be converted and is discarded; the record will be excluded at load; copy its .partkey file aside, delete the key, and install the copy (%v)", entry.pk, convErr)
 		if _, err = tx.Exec("UPDATE Rolling SET votingHeader=? WHERE pk=?", unusableVotingHeader, entry.pk); err != nil {
 			return fmt.Errorf("failed to mark the voting header of pk %d unusable: %w", entry.pk, err)
 		}
@@ -1062,7 +1062,7 @@ func (db *participationDB) getAllFromDB() (records []ParticipationRecord, corrup
 					voting, verr = votingFromRows(hdr, batches, offsets)
 				}
 				if verr != nil {
-					db.log.Errorf("participationDB: excluding key %s (pk %d) from the registry and erasing its voting subkeys and state proof keys, its voting data is corrupt: %v; the key cannot vote until it is re-installed (a key with a .partkey file is re-installed at startup; one installed over the REST API must be installed again), or delete %s and restart to rebuild the registry",
+					db.log.Errorf("participationDB: excluding key %s (pk %d) from the registry and erasing its voting subkeys and state proof keys, its voting data is corrupt: %v; the key cannot vote until it is installed again: if its stored voting header is intact and its .partkey file is present it is re-installed from the file during this startup; otherwise copy the .partkey file aside, delete the key, and install the copy (deleting the key also removes its file), or stop the node, delete %s, and restart to rebuild the registry from the key files",
 						sr.record.ParticipationID, sr.pk, verr, config.ParticipationRegistryFilename)
 					corrupt[sr.record.ParticipationID] = sr.record.LastValid
 					continue
@@ -1277,7 +1277,7 @@ func updateRollingFields(ctx context.Context, tx *sql.Tx, record ParticipationRe
 		// resurrect keys the registry already retired.
 		stored, herr := decodeVotingHeader(rawHeader)
 		if herr != nil {
-			return fmt.Errorf("stored voting header for key %s is undecodable; refusing to rewrite voting rows from memory (delete %s and restart to rebuild the registry): %v",
+			return fmt.Errorf("stored voting header for key %s is undecodable; refusing to rewrite voting rows from memory (copy its .partkey file aside, delete the key, and install the copy; or delete %s and restart to rebuild the registry from the key files): %v",
 				record.ParticipationID, config.ParticipationRegistryFilename, herr)
 		}
 		newHeader, err = syncVotingRows(tx, registryVotingTarget(pk), stored, snap)

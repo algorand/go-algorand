@@ -317,7 +317,7 @@ func TestRegistryExcludesCorruptRecord(t *testing.T) {
 		}, "", false},
 		{"undecodableHeader", 150, func(a *require.Assertions, registry *participationDB, corruptID ParticipationID, _ Participation) {
 			damageHeader(a, registry, corruptID, []byte{0xff, 0x00})
-		}, "undecodable", true},
+		}, "undecodable", false},
 		{"emptyHeader", 150, func(a *require.Assertions, registry *participationDB, corruptID ParticipationID, _ Participation) {
 			damageHeader(a, registry, corruptID, nil)
 		}, "no voting header stored", false},
@@ -327,7 +327,7 @@ func TestRegistryExcludesCorruptRecord(t *testing.T) {
 			foreign.FirstBatch += 5
 			foreign.BatchCount -= 5
 			damageHeader(a, registry, corruptID, protocol.Encode(&foreign))
-		}, "different voting key", false},
+		}, "different voting key", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -415,6 +415,17 @@ func TestRegistryExcludesCorruptRecord(t *testing.T) {
 				a.NoError(registry.initializeCache())
 				a.True(registry.Get(corruptID).IsZero())
 				a.False(registry.Get(healthyID).IsZero())
+
+				// with the record deleted, the key installs again as a new one:
+				// this delete-then-install sequence is the operator's remedy
+				if !tc.expire {
+					_, err = registry.Insert(pCorrupt)
+					a.NoError(err, "install after delete failed")
+					a.False(registry.Get(corruptID).IsZero())
+					keysets, batches = corruptRows()
+					a.Equal(1, keysets)
+					a.Equal(len(pCorrupt.Voting.Batches), batches)
+				}
 				return
 			}
 

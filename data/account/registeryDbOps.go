@@ -174,11 +174,11 @@ func fastForwardToStoredCursor(ctx context.Context, tx *sql.Tx, log logging.Logg
 		// cannot establish the stored deletion state: fail closed
 		hdr, err := decodeVotingHeader(h.raw)
 		if err != nil {
-			return fmt.Errorf("stored voting header for key %s is undecodable; refusing to replace it from the inserted copy (delete %s and restart to rebuild the registry): %v",
+			return fmt.Errorf("stored voting header for key %s is undecodable; refusing to replace it from the inserted copy (copy its .partkey file aside, delete the key, and install the copy; or delete %s and restart to rebuild the registry from the key files): %v",
 				id, config.ParticipationRegistryFilename, err)
 		}
 		if hdr.Verifier != current.Verifier {
-			return fmt.Errorf("stored voting header for key %s belongs to a different voting key; refusing to replace it from the inserted copy (delete %s and restart to rebuild the registry)",
+			return fmt.Errorf("stored voting header for key %s belongs to a different voting key; refusing to replace it from the inserted copy (copy its .partkey file aside, delete the key, and install the copy; or delete %s and restart to rebuild the registry from the key files)",
 				id, config.ParticipationRegistryFilename)
 		}
 		if stored == nil || storedHeaderAhead(hdr, *stored) {
