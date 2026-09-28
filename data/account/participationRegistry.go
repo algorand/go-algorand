@@ -639,14 +639,17 @@ func (db *participationDB) initializeCache() error {
 		cache[record.ParticipationID] = record
 	}
 
-	// Forward security: the subkeys of a record that failed validation can
-	// no longer be accounted for, so they are erased now instead of lingering
+	// Forward security: the secrets of a record that failed validation can no
+	// longer be accounted for (an excluded record is invisible to the per-round
+	// voting deletion and to the state proof key cleanup alike), so its
+	// voting subkeys and state proof keys are erased now instead of lingering
 	// past their rounds.  The header stays, so a re-insert of the key from
-	// its file can still be checked against the stored deletion cursor.
+	// its file can still be checked against the stored deletion cursor; the
+	// node re-appends the state proof keys when it re-installs the key.
 	if len(corrupt) > 0 {
 		err = db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			for id := range corrupt {
-				for _, query := range []string{clearVotingBatchesByID, clearVotingOffsetsByID} {
+				for _, query := range []string{clearVotingBatchesByID, clearVotingOffsetsByID, clearStateProofByID} {
 					if _, err = tx.Exec(query, id[:]); err != nil {
 						return err
 					}
@@ -1059,7 +1062,7 @@ func (db *participationDB) getAllFromDB() (records []ParticipationRecord, corrup
 					voting, verr = votingFromRows(hdr, batches, offsets)
 				}
 				if verr != nil {
-					db.log.Errorf("participationDB: excluding key %s (pk %d) from the registry and erasing its voting subkeys, its voting data is corrupt: %v; the key cannot vote until it is re-installed (a key with a .partkey file is re-installed at startup; one installed over the REST API must be installed again), or delete %s and restart to rebuild the registry",
+					db.log.Errorf("participationDB: excluding key %s (pk %d) from the registry and erasing its voting subkeys and state proof keys, its voting data is corrupt: %v; the key cannot vote until it is re-installed (a key with a .partkey file is re-installed at startup; one installed over the REST API must be installed again), or delete %s and restart to rebuild the registry",
 						sr.record.ParticipationID, sr.pk, verr, config.ParticipationRegistryFilename)
 					corrupt[sr.record.ParticipationID] = sr.record.LastValid
 					continue

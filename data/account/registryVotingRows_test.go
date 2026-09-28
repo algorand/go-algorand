@@ -354,16 +354,26 @@ func TestRegistryExcludesCorruptRecord(t *testing.T) {
 				batches = queryInt(a, registry.store.Rdb, "SELECT count(*) FROM VotingBatches WHERE pk=(SELECT pk FROM Keysets WHERE participationID=?)", corruptID[:])
 				return keysets, batches
 			}
+			// the corrupt key also holds state proof keys, appended the way the
+			// node does after an insert
+			a.NoError(registry.AppendKeys(corruptID, StateProofKeys(pCorrupt.StateProofSecrets.GetAllKeys())))
+			a.NoError(registry.Flush(defaultTimeout))
+			stateProofRows := func() int {
+				return queryInt(a, registry.store.Rdb, "SELECT count(*) FROM StateProofKeys WHERE pk=(SELECT pk FROM Keysets WHERE participationID=?)", corruptID[:])
+			}
+			a.NotZero(stateProofRows())
 			tc.damage(a, registry, corruptID, pHealthy)
 
-			// exclusion erases the record's subkey rows (forward security) but
-			// keeps its identity and header
+			// exclusion erases the record's subkey rows and state proof keys
+			// (forward security: neither cleanup can see an excluded record)
+			// but keeps its identity and header
 			a.NoError(registry.initializeCache())
 			a.True(registry.Get(corruptID).IsZero(), "corrupt record not excluded")
 			a.False(registry.Get(healthyID).IsZero(), "healthy record lost")
 			keysets, batches := corruptRows()
 			a.Equal(1, keysets)
 			a.Zero(batches, "excluded record's subkeys left on disk")
+			a.Zero(stateProofRows(), "excluded record's state proof keys left on disk")
 			a.Equal(len(registry.Get(healthyID).Voting.Batches), countTableRows(a, registry.store.Rdb, "VotingBatches"), "healthy record's rows touched")
 
 			// re-insert the key-file copy, as loadParticipationKeys does in
