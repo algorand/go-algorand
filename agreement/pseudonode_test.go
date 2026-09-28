@@ -559,17 +559,31 @@ func TestPseudonodeNonEnqueuedTasks(t *testing.T) {
 }
 
 // TestFilterProposers verifies that filterProposers correctly identifies which
-// accounts are eligible to propose based on VRF credentials. It covers the
-// happy path (subset filtering), the zero-stake case (no eligible accounts),
-// and the mismatched VRF key case (account filtered out).
+// accounts are eligible to propose based on VRF credentials. It checks that the
+// selection matches full propose-vote verification exactly, and covers
+// zero-stake accounts, mismatched VRF keys, credential reuse, and ledger errors.
 func TestFilterProposers(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	t.Run("subsetOfInput", func(t *testing.T) {
+	t.Run("matchesVoteVerification", func(t *testing.T) {
 		t.Parallel()
 
+		// filterProposers must select exactly the accounts whose propose-step
+		// vote passes full verification. Selecting fewer would drop valid
+		// proposals; selecting more would assemble blocks for votes that are
+		// then discarded.
 		rootSeed := sha256.Sum256([]byte(t.Name()))
-		accounts, balances := createTestAccountsAndBalances(t, 10, rootSeed[:])
+		accounts, balances := createTestAccountsAndBalances(t, 20, rootSeed[:])
+		// Vary stakes so sortition weights differ, and include zero-stake accounts.
+		for i, acc := range accounts {
+			b := balances[acc.Parent]
+			if i%5 == 0 {
+				b.MicroAlgos = basics.MicroAlgos{Raw: 0}
+			} else {
+				b.MicroAlgos = basics.MicroAlgos{Raw: uint64(i+1) * 1_000_000}
+			}
+			balances[acc.Parent] = b
+		}
 		ledger := makeTestLedger(balances)
 
 		sLogger := serviceLogger{logging.NewLogger()}
@@ -587,38 +601,40 @@ func TestFilterProposers(t *testing.T) {
 
 		round := ledger.NextRound()
 		partKeys := pn.loadRoundParticipationKeys(round)
-		require.NotEmpty(t, partKeys)
+		require.Len(t, partKeys, len(accounts))
 
-		originalSet := make(map[basics.Address]bool, len(partKeys))
-		for _, acc := range partKeys {
-			originalSet[acc.Account] = true
-		}
-
-		// Test multiple periods; sortition is random and depends on
-		// the period via the selector, so we exercise different
-		// selection outcomes.
-		totalSelected := 0
-		for p := period(0); p < 20; p++ {
-			result := pn.filterProposers(round, p, partKeys)
-
-			// Result should always be a subset of the input.
-			require.LessOrEqual(t, len(result), len(partKeys),
-				"period %d: result len %d > input len %d", p, len(result), len(partKeys))
-
-			for _, acc := range result {
-				assert.True(t, originalSet[acc.Account],
-					"period %d: account %v not in original set", p, acc.Account)
+		// Sortition depends on the period via the selector, so each period
+		// gives a different selection outcome.
+		totalSelected, totalChecked := 0, 0
+		for p := period(0); p < 50; p++ {
+			selected := make(map[basics.Address]committee.UnauthenticatedCredential)
+			for _, e := range pn.filterProposers(round, p, partKeys) {
+				selected[e.Account] = e.cred
 			}
 
-			totalSelected += len(result)
+			for _, acc := range partKeys {
+				rv := rawVote{Sender: acc.Account, Round: round, Period: p, Step: propose, Proposal: makeProposalValue(p, acc.Account)}
+				uv, err := makeVote(rv, acc.VotingSigner(), acc.VRF, ledger)
+				require.NoError(t, err)
+				_, verr := uv.verify(ledger)
+
+				cred, ok := selected[acc.Account]
+				require.Equal(t, verr == nil, ok,
+					"period %d, account %v: filterProposers selected=%v, vote verification error=%v", p, acc.Account, ok, verr)
+				if ok {
+					// The credential kept for reuse is the one makeVote computes.
+					require.Equal(t, uv.Cred, cred, "period %d, account %v", p, acc.Account)
+				}
+				totalChecked++
+			}
+			totalSelected += len(selected)
 		}
-		// With 10 equal-stake accounts and NumProposers=20,
-		// at least one account should be selected across 20 periods.
-		require.Greater(t, totalSelected, 0,
-			"expected at least one account to be selected across 20 periods")
+		// Both outcomes must have been exercised.
+		require.Positive(t, totalSelected)
+		require.Less(t, totalSelected, totalChecked)
 	})
 
-	t.Run("noEligibleAccounts", func(t *testing.T) {
+	t.Run("zeroStakeNeverSelected", func(t *testing.T) {
 		t.Parallel()
 
 		rootSeed := sha256.Sum256([]byte(t.Name()))
@@ -836,6 +852,19 @@ func TestFilterProposers(t *testing.T) {
 		pn.ledger = errLedger
 		result = pn.filterProposers(round, period(0), partKeys)
 		assert.Nil(t, result, "should return nil on ConsensusParams error")
+
+		// LookupAgreement error for one account: only that account is
+		// skipped, and every other selection is unchanged. Pick an account
+		// that is selected on the real ledger so that skipping it is visible.
+		// With 5 equal-stake accounts, P(none selected) is about e^-20.
+		pn.ledger = realLedger
+		expected := pn.filterProposers(round, period(0), partKeys)
+		require.NotEmpty(t, expected)
+		failAddr := expected[0].Account
+
+		pn.ledger = &errorInjectingLedger{Ledger: realLedger, failLookupAddr: &failAddr}
+		result = pn.filterProposers(round, period(0), partKeys)
+		require.Equal(t, expected[1:], result, "only the account with the failed lookup should be skipped")
 	})
 }
 
@@ -922,6 +951,14 @@ type errorInjectingLedger struct {
 	failSeed            bool
 	failCirculation     bool
 	failConsensusParams bool
+	failLookupAddr      *basics.Address // if set, LookupAgreement fails for this address only
+}
+
+func (l *errorInjectingLedger) LookupAgreement(r basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
+	if l.failLookupAddr != nil && *l.failLookupAddr == addr {
+		return basics.OnlineAccountData{}, fmt.Errorf("injected LookupAgreement error")
+	}
+	return l.Ledger.LookupAgreement(r, addr)
 }
 
 func (l *errorInjectingLedger) Seed(r basics.Round) (committee.Seed, error) {

@@ -168,7 +168,9 @@ func makeVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecr
 // makeVoteWithCredential creates a new unauthenticated vote using a
 // previously computed VRF credential, avoiding the membership lookup and
 // VRF prove that makeVote performs. The credential must have been created
-// for the same (sender, round, period, step) selector as rv.
+// with rv.Sender's VRF selection key over the selector
+// (seed, rv.Round, rv.Period, rv.Step). This is not checked here: a
+// mismatched credential yields a vote that fails verification.
 func makeVoteWithCredential(rv rawVote, voting crypto.OneTimeSigner, cred committee.UnauthenticatedCredential, l Ledger) (unauthenticatedVote, error) {
 	proto, err := l.ConsensusParams(ParamsRound(rv.Round))
 	if err != nil {
