@@ -144,6 +144,7 @@ func (s *Secrets) RestoreAllSecrets(store db.Accessor) error {
 	var keys []crypto.FalconSigner
 
 	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		keys = nil
 		rows, err := tx.Query("SELECT key FROM StateProofKeys")
 		if err != nil {
 			return fmt.Errorf("%w - %v", errSelectKeysError, err)
