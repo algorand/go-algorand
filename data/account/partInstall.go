@@ -249,7 +249,15 @@ func enableSecureDelete(tx *sql.Tx) error {
 // migrating it.  Returns ErrUnsupportedSchema if no version is recorded.
 func PartkeySchemaVersion(store db.Accessor) (version int, err error) {
 	err = store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		serr := tx.QueryRow("SELECT version FROM schema WHERE tablename=?", PartTableSchemaName).Scan(&version)
+		var tables int
+		serr := tx.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='schema'").Scan(&tables)
+		if serr != nil {
+			return serr
+		}
+		if tables == 0 {
+			return ErrUnsupportedSchema
+		}
+		serr = tx.QueryRow("SELECT version FROM schema WHERE tablename=?", PartTableSchemaName).Scan(&version)
 		if serr == sql.ErrNoRows {
 			return ErrUnsupportedSchema
 		}
