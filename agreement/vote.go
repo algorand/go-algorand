@@ -124,7 +124,7 @@ func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 		return vote{}, fmt.Errorf("unauthenticatedVote.verify: could not get consensus params for round %d: %v", ParamsRound(rv.Round), err)
 	}
 
-	if err := checkVoteKeyValidity(m.Record.OnlineAccountData, rv.Round); err != nil {
+	if err = checkVoteKeyValidity(m.Record.OnlineAccountData, rv.Round); err != nil {
 		return vote{}, fmt.Errorf("unauthenticatedVote.verify: vote by %v %w: %+v", rv.Sender, err, uv)
 	}
 
