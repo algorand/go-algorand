@@ -1922,3 +1922,66 @@ func TestRememberTxnDeadError(t *testing.T) {
 		require.Equal(t, basics.Round(5), tde.LastValid)
 	}
 }
+
+// TestAssembleBlockTimeoutClearsDeadline checks that AssembleBlock clears the
+// assembly deadline when it gives up and returns an empty block. A stale
+// deadline makes every later recompute treat assembly as timed out, so blocks
+// get cut after the first transaction group until the next AssembleBlock
+// call. That call may be many rounds away on a node that is rarely elected
+// to propose.
+func TestAssembleBlockTimeoutClearsDeadline(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	secrets, addresses := generateAccounts(5)
+	mockLedger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
+	cfg := config.GetDefaultLocal()
+	transactionPool := MakeTransactionPool(mockLedger, cfg, logging.TestingLog(t), nil)
+
+	numTxns := 0
+	for i, sender := range addresses {
+		for j, receiver := range addresses {
+			if sender == receiver {
+				continue
+			}
+			tx := transactions.Transaction{
+				Type: protocol.PaymentTx,
+				Header: transactions.Header{
+					Sender:      sender,
+					Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+					FirstValid:  0,
+					LastValid:   basics.Round(proto.MaxTxnLife),
+					Note:        []byte{byte(i), byte(j)},
+					GenesisHash: mockLedger.GenesisHash(),
+				},
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: receiver,
+					Amount:   basics.MicroAlgos{Raw: 1},
+				},
+			}
+			require.NoError(t, transactionPool.rememberOne(tx.Sign(secrets[i])))
+			numTxns++
+		}
+	}
+	round := mockLedger.Latest() + 1
+
+	// Make AssembleBlock take its timeout path: the pool looks like it is
+	// still assembling this round and never finishes before deadline+eps.
+	transactionPool.assemblyMu.Lock()
+	transactionPool.assemblyResults = poolAsmResults{roundStartedEvaluating: round}
+	transactionPool.assemblyMu.Unlock()
+	ufblk, err := transactionPool.AssembleBlock(round, time.Now().Add(10*time.Millisecond))
+	require.NoError(t, err)
+	require.Empty(t, ufblk.UnfinishedBlock().Payset)
+
+	transactionPool.assemblyMu.Lock()
+	require.True(t, transactionPool.assemblyDeadline.IsZero(), "timed-out AssembleBlock left a stale assembly deadline")
+	transactionPool.assemblyMu.Unlock()
+
+	// A recompute that runs before the next AssembleBlock call (for example
+	// on a round where this node is not elected) must still build a full block.
+	transactionPool.recomputeBlockEvaluator(nil, 0)
+	ufblk, err = transactionPool.AssembleBlock(round, time.Now().Add(500*time.Millisecond))
+	require.NoError(t, err)
+	require.Len(t, ufblk.UnfinishedBlock().Payset, numTxns)
+}

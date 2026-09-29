@@ -338,6 +338,11 @@ func (n asyncPseudonode) filterProposers(round basics.Round, period period, acco
 			continue
 		}
 
+		// Apply vote verification's key validity check before sortition.
+		if checkVoteKeyValidity(record, round) != nil {
+			continue
+		}
+
 		m.Record = committee.BalanceRecord{OnlineAccountData: record, Addr: acc.Account}
 
 		cred := committee.MakeCredential(&acc.VRF.SK, m.Selector)
