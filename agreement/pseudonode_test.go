@@ -879,6 +879,10 @@ func (l proposerCirculationLedger) Circulation(basics.Round, basics.Round) (basi
 	return l.circulation, nil
 }
 
+// TestFilterProposersKeyValidity checks that filterProposers and vote
+// verification agree on which on-chain key registrations are valid for the
+// round (both use checkVoteKeyValidity), and that an invalid key never
+// reaches sortition or block assembly.
 func TestFilterProposersKeyValidity(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -888,14 +892,14 @@ func TestFilterProposersKeyValidity(t *testing.T) {
 		name        string
 		first, last basics.Round
 		circulation uint64
-		selected    bool
+		verifyErr   string // expected vote verification error; empty if the key is valid
 	}{
-		{"beforeFirstValid", round + 1, round + 10, 1_000_000, false},
-		{"atFirstValid", round, round + 10, 1_000_000, true},
-		{"atLastValid", round - 10, round, 1_000_000, true},
-		{"noLastValid", round - 10, 0, 1_000_000, true},
-		{"expiredWithRemainingStake", round - 10, round - 1, 100_000, false},
-		{"expiredWithZeroCirculation", round - 10, round - 1, 0, false},
+		{"beforeFirstValid", round + 1, round + 10, 1_000_000, "before VoteFirstValid"},
+		{"atFirstValid", round, round + 10, 1_000_000, ""},
+		{"atLastValid", round - 10, round, 1_000_000, ""},
+		{"noLastValid", round - 10, 0, 1_000_000, ""},
+		{"expiredWithRemainingStake", round - 10, round - 1, 100_000, "after VoteLastValid"},
+		{"expiredWithZeroCirculation", round - 10, round - 1, 0, "after VoteLastValid"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -925,9 +929,17 @@ func TestFilterProposersKeyValidity(t *testing.T) {
 			require.Equal(t, record.SelectionID, partKeys[0].VRF.PK)
 			require.Equal(t, record.VoteID, partKeys[0].Voting.OneTimeSignatureVerifier)
 
-			if !tc.selected {
-				// Neither sortition (which panics for the expired-stake
-				// cases) nor block assembly should run for an invalid key.
+			if tc.verifyErr != "" {
+				// Vote verification rejects the key before sortition...
+				rv := rawVote{Sender: addr, Round: round, Period: 0, Step: propose, Proposal: makeProposalValue(0, addr)}
+				uv, err := makeVote(rv, partKeys[0].VotingSigner(), partKeys[0].VRF, ledger)
+				require.NoError(t, err)
+				_, err = uv.verify(ledger)
+				require.ErrorContains(t, err, tc.verifyErr)
+
+				// ...and so must filterProposers: neither sortition (which
+				// panics for the expired-stake cases) nor block assembly
+				// should run for an invalid key.
 				pn.factory = nil
 				proposals, votes := pn.makeProposals(round, 0, partKeys)
 				require.Empty(t, proposals)

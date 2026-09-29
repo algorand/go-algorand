@@ -124,12 +124,8 @@ func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 		return vote{}, fmt.Errorf("unauthenticatedVote.verify: could not get consensus params for round %d: %v", ParamsRound(rv.Round), err)
 	}
 
-	if rv.Round < m.Record.VoteFirstValid {
-		return vote{}, fmt.Errorf("unauthenticatedVote.verify: vote by %v in round %d before VoteFirstValid %d: %+v", rv.Sender, rv.Round, m.Record.VoteFirstValid, uv)
-	}
-
-	if m.Record.VoteLastValid != 0 && rv.Round > m.Record.VoteLastValid {
-		return vote{}, fmt.Errorf("unauthenticatedVote.verify: vote by %v in round %d after VoteLastValid %d: %+v", rv.Sender, rv.Round, m.Record.VoteLastValid, uv)
+	if err := checkVoteKeyValidity(m.Record.OnlineAccountData, rv.Round); err != nil {
+		return vote{}, fmt.Errorf("unauthenticatedVote.verify: vote by %v %w: %+v", rv.Sender, err, uv)
 	}
 
 	ephID := basics.OneTimeIDForRound(rv.Round, proto.EffectiveKeyDilution(m.Record.OnlineAccountData.VoteKeyDilution))
@@ -144,6 +140,20 @@ func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 	}
 
 	return vote{R: rv, Cred: cred, Sig: uv.Sig}, nil
+}
+
+// checkVoteKeyValidity returns an error if the participation key registered in
+// record is not valid for voting in round r. It must run before sortition: the
+// stake of an expired key may already be excluded from the online circulation,
+// and sortition panics when an account's stake exceeds the circulation.
+func checkVoteKeyValidity(record basics.OnlineAccountData, r basics.Round) error {
+	if r < record.VoteFirstValid {
+		return fmt.Errorf("in round %d before VoteFirstValid %d", r, record.VoteFirstValid)
+	}
+	if record.VoteLastValid != 0 && r > record.VoteLastValid {
+		return fmt.Errorf("in round %d after VoteLastValid %d", r, record.VoteLastValid)
+	}
+	return nil
 }
 
 var (

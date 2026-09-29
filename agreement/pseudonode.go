@@ -338,9 +338,8 @@ func (n asyncPseudonode) filterProposers(round basics.Round, period period, acco
 			continue
 		}
 
-		// Match vote verification's validity checks before sortition: expired
-		// stake may already be excluded from the total circulation.
-		if round < record.VoteFirstValid || (record.VoteLastValid != 0 && round > record.VoteLastValid) {
+		// Apply vote verification's key validity check before sortition.
+		if checkVoteKeyValidity(record, round) != nil {
 			continue
 		}
 
