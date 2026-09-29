@@ -92,23 +92,42 @@ type txExecutionContext struct {
 	deadline time.Time
 }
 
-// MakeAccessor creates a new Accessor.
-func MakeAccessor(dbfilename string, readOnly bool, inMemory bool) (Accessor, error) {
-	return makeAccessorImpl(dbfilename, readOnly, inMemory, []string{"_journal_mode=wal"})
+// erasableDriverName is the sqlite3 driver behind the erasable accessors.  Its
+// connections keep SQLite's temporary files in memory: with secure_delete on,
+// zeroing a freed page first saves the page's original content in the
+// statement or savepoint journal, and a journal that spills to disk would
+// leave that content in an unlinked, never-overwritten temp file outside the
+// database.  temp_store is set when each connection opens because SQLite
+// fixes where a transaction's journals live when the transaction begins.
+const erasableDriverName = "sqlite3_erasable"
+
+func init() {
+	sql.Register(erasableDriverName, &sqlite3.SQLiteDriver{
+		ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+			_, err := conn.Exec("PRAGMA temp_store=MEMORY", nil)
+			return err
+		},
+	})
 }
 
-// MakeErasableAccessor creates a new Accessor with the secure_delete pragma set;
-// see https://www.sqlite.org/pragma.html#pragma_secure_delete
+// MakeAccessor creates a new Accessor.
+func MakeAccessor(dbfilename string, readOnly bool, inMemory bool) (Accessor, error) {
+	return makeAccessorImpl("sqlite3", dbfilename, readOnly, inMemory, []string{"_journal_mode=wal"})
+}
+
+// MakeErasableAccessor creates a new Accessor with the secure_delete pragma set
+// and temporary files kept in memory; see
+// https://www.sqlite.org/pragma.html#pragma_secure_delete
 // It is not read-only and not in-memory (otherwise, erasability doesn't matter)
 func MakeErasableAccessor(dbfilename string) (Accessor, error) {
 	return makeErasableAccessor(dbfilename, false)
 }
 
 func makeErasableAccessor(dbfilename string, readOnly bool) (Accessor, error) {
-	return makeAccessorImpl(dbfilename, readOnly, false, []string{"_secure_delete=on", "_journal_mode=wal"})
+	return makeAccessorImpl(erasableDriverName, dbfilename, readOnly, false, []string{"_secure_delete=on", "_journal_mode=wal"})
 }
 
-func makeAccessorImpl(dbfilename string, readOnly bool, inMemory bool, params []string) (Accessor, error) {
+func makeAccessorImpl(driverName string, dbfilename string, readOnly bool, inMemory bool, params []string) (Accessor, error) {
 	var db Accessor
 	db.readOnly = readOnly
 	db.inMemory = inMemory
@@ -122,7 +141,7 @@ func makeAccessorImpl(dbfilename string, readOnly bool, inMemory bool, params []
 	// The connection goes to a connection pool inside Go's sql package and will be re-used when needed.
 	// See https://github.com/algorand/go-algorand/issues/846 for more details.
 	var err error
-	db.Handle, err = sql.Open("sqlite3", URI(dbfilename, readOnly, inMemory)+"&"+strings.Join(params, "&"))
+	db.Handle, err = sql.Open(driverName, URI(dbfilename, readOnly, inMemory)+"&"+strings.Join(params, "&"))
 
 	if err == nil {
 		// create a connection to safely initialize SQLite once
