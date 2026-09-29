@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
+	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -238,4 +239,21 @@ func TestSimulateRequestStruct(t *testing.T) {
 	}
 
 	generatedResponseGraph.AssertEquals(t, customResponseGraph)
+}
+
+func TestSimulateExtraFeesConversion(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const extraFees = uint64(2_000)
+
+	request := convertSimulationRequest(PreEncodedSimulateRequest{ExtraFees: extraFees})
+	require.Equal(t, extraFees, request.ExtraFees)
+
+	response := convertSimulationResult(simulation.Result{
+		EvalOverrides: simulation.ResultEvalOverrides{ExtraFees: extraFees},
+	})
+	require.NotNil(t, response.EvalOverrides)
+	require.NotNil(t, response.EvalOverrides.ExtraFees)
+	require.Equal(t, extraFees, *response.EvalOverrides.ExtraFees)
 }
