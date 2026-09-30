@@ -464,6 +464,36 @@ func TestStateOverrideAppValidation(t *testing.T) {
 			expectedError: "exceeds maximum",
 		},
 		{
+			name:          "delete missing global key",
+			aidx:          aidx,
+			override:      simulation.AppOverride{DeleteGlobalState: []string{"missing"}},
+			expectedError: "key does not exist",
+		},
+		{
+			name: "set and delete global key",
+			aidx: aidx,
+			override: simulation.AppOverride{
+				GlobalState:       basics.TealKeyValue{"a": {Type: basics.TealUintType, Uint: 1}},
+				DeleteGlobalState: []string{"a"},
+			},
+			expectedError: "cannot be both set and deleted",
+		},
+		{
+			name:          "delete missing box",
+			aidx:          aidx,
+			override:      simulation.AppOverride{DeleteBoxes: []string{"missing"}},
+			expectedError: "box does not exist",
+		},
+		{
+			name: "set and delete box",
+			aidx: aidx,
+			override: simulation.AppOverride{
+				Boxes:       map[string][]byte{"a": []byte("v")},
+				DeleteBoxes: []string{"a"},
+			},
+			expectedError: "cannot be both set and deleted",
+		},
+		{
 			name:          "empty box name",
 			aidx:          aidx,
 			override:      simulation.AppOverride{Boxes: map[string][]byte{"": nil}},
@@ -623,4 +653,128 @@ int 1`, ownerAidx))
 			}
 		})
 	}
+}
+
+func TestStateOverrideDeleteState(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	creator := env.Accounts[0]
+	proto := env.TxnInfo.CurrentProtocolParams()
+
+	// After deleting box "x", only box "y" (1 byte name + 3 byte value) remains
+	appAcctMinBalance := ledgercore.AccountData{
+		AccountBaseData: ledgercore.AccountBaseData{TotalBoxes: 1, TotalBoxBytes: 4},
+	}.MinBalance(&proto).Raw
+
+	aidx := env.CreateApp(creator.Addr, simulationtesting.AppParams{
+		ApprovalProgram: fmt.Sprintf(`#pragma version 8
+txn ApplicationID
+bz create
+txn NumAppArgs
+bnz setup
+
+// "a" and box "x" must be gone, while "b" and box "y" remain
+int 0
+byte "a"
+app_global_get_ex
+bury 1
+!
+assert
+int 0
+byte "b"
+app_global_get_ex
+assert
+int 2
+==
+assert
+byte "x"
+box_len
+bury 1
+!
+assert
+byte "y"
+box_len
+assert
+int 3
+==
+assert
+global CurrentApplicationAddress
+min_balance
+int %d
+==
+return
+
+setup:
+byte "x"
+int 4
+box_create
+assert
+byte "y"
+int 3
+box_create
+return
+
+create:
+byte "a"
+int 1
+app_global_put
+byte "b"
+int 2
+app_global_put
+int 1`, appAcctMinBalance),
+		ClearStateProgram: "#pragma version 8\nint 1",
+		GlobalStateSchema: basics.StateSchema{NumUint: 2},
+	})
+	env.TransferAlgos(creator.Addr, aidx.Address(), 1_000_000)
+	boxRefs := []transactions.BoxRef{{Index: 0, Name: []byte("x")}, {Index: 0, Name: []byte("y")}}
+	env.Txn(env.TxnInfo.NewTxn(txntest.Txn{
+		Type:            protocol.ApplicationCallTx,
+		Sender:          creator.Addr,
+		ApplicationID:   aidx,
+		ApplicationArgs: [][]byte{[]byte("setup")},
+		Boxes:           boxRefs,
+	}).SignedTxn())
+
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        creator.Addr,
+		ApplicationID: aidx,
+		Boxes:         boxRefs,
+	}).Txn().Sign(creator.Sk)
+
+	s := simulation.MakeSimulator(env.Ledger, false)
+
+	result, err := s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{{txn}}})
+	require.NoError(t, err)
+	require.Contains(t, result.TxnGroups[0].FailureMessage, "assert failed")
+
+	deleteOverride := func(override simulation.AppOverride) simulation.StateOverrides {
+		return simulation.StateOverrides{Apps: map[basics.AppIndex]simulation.AppOverride{aidx: override}}
+	}
+
+	result, err = s.Simulate(simulation.Request{
+		TxnGroups: [][]transactions.SignedTxn{{txn}},
+		StateOverrides: deleteOverride(simulation.AppOverride{
+			DeleteGlobalState: []string{"a"},
+			DeleteBoxes:       []string{"x"},
+		}),
+	})
+	require.NoError(t, err)
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+
+	// A box cannot be deleted twice
+	_, err = s.Simulate(simulation.Request{
+		TxnGroups:      [][]transactions.SignedTxn{{txn}},
+		StateOverrides: deleteOverride(simulation.AppOverride{DeleteBoxes: []string{"x", "x"}}),
+	})
+	require.ErrorContains(t, err, "box does not exist")
+
+	// The real ledger is unaffected
+	value, err := env.Ledger.LookupKv(env.Ledger.Latest(), apps.MakeBoxKey(uint64(aidx), "x"))
+	require.NoError(t, err)
+	require.NotNil(t, value)
 }

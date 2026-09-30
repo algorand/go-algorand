@@ -80,9 +80,17 @@ type AppOverride struct {
 	// keys are left unchanged.
 	GlobalState basics.TealKeyValue
 
+	// DeleteGlobalState lists global state keys to delete. Each key must exist, and must not also
+	// be set in GlobalState.
+	DeleteGlobalState []string
+
 	// Boxes maps box names to contents. Each box is created, or replaced if it already exists.
 	// Other existing boxes are left unchanged.
 	Boxes map[string][]byte
+
+	// DeleteBoxes lists the names of boxes to delete. Each box must exist, and must not also be set
+	// in Boxes.
+	DeleteBoxes []string
 }
 
 // reservedCreatableIDs is the number of IDs above the current txn counter that cannot be used for
@@ -99,7 +107,8 @@ type appOverlay struct {
 type stateOverlay struct {
 	accounts map[basics.Address]ledgercore.AccountData
 	apps     map[basics.AppIndex]appOverlay
-	kvs      map[string][]byte
+	// kvs holds overridden boxes, where a nil value denotes a deleted box
+	kvs map[string][]byte
 	// totals are the start round totals, adjusted to reflect the overridden accounts
 	totals ledgercore.AccountTotals
 }
@@ -261,6 +270,15 @@ func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Addr
 	if override.FamilyBoxAccess != nil {
 		params.FamilyBoxAccess = *override.FamilyBoxAccess
 	}
+	for _, key := range override.DeleteGlobalState {
+		if _, ok := override.GlobalState[key]; ok {
+			return invalidOverride("app %d global key %#x cannot be both set and deleted", aidx, key)
+		}
+		if _, ok := params.GlobalState[key]; !ok {
+			return invalidOverride("cannot delete app %d global key %#x: key does not exist", aidx, key)
+		}
+		delete(params.GlobalState, key)
+	}
 	for key, value := range override.GlobalState {
 		if params.GlobalState == nil {
 			params.GlobalState = make(basics.TealKeyValue)
@@ -305,13 +323,29 @@ func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Addr
 
 	o.apps[aidx] = appOverlay{creator: creator, params: params}
 
-	if len(override.Boxes) == 0 {
+	if len(override.Boxes) == 0 && len(override.DeleteBoxes) == 0 {
 		return nil
 	}
 	appAddr := aidx.Address()
 	appAcct, err := getAccount(appAddr)
 	if err != nil {
 		return err
+	}
+	for _, name := range override.DeleteBoxes {
+		if _, ok := override.Boxes[name]; ok {
+			return invalidOverride("app %d box %#x cannot be both set and deleted", aidx, name)
+		}
+		key := apps.MakeBoxKey(uint64(aidx), name)
+		existing, err := l.Ledger.LookupKv(l.start, key)
+		if err != nil {
+			return err
+		}
+		if deleted, ok := o.kvs[key]; existing == nil || (ok && deleted == nil) {
+			return invalidOverride("cannot delete app %d box %#x: box does not exist", aidx, name)
+		}
+		appAcct.TotalBoxes = basics.SubSaturate(appAcct.TotalBoxes, 1)
+		appAcct.TotalBoxBytes = basics.SubSaturate(appAcct.TotalBoxBytes, uint64(len(name)+len(existing)))
+		o.kvs[key] = nil
 	}
 	for _, name := range sortedKeys(override.Boxes) {
 		value := override.Boxes[name]
@@ -435,6 +469,10 @@ func (l simulatorLedger) GetCreatorForRound(rnd basics.Round, cidx basics.Creata
 func (l simulatorLedger) LookupKv(rnd basics.Round, key string) ([]byte, error) {
 	if l.overlay != nil && rnd == l.start {
 		if value, ok := l.overlay.kvs[key]; ok {
+			if value == nil {
+				// The box was deleted
+				return nil, nil
+			}
 			return append([]byte{}, value...), nil
 		}
 	}
