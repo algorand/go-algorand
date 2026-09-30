@@ -43,12 +43,78 @@ type Request struct {
 	ExtraOpcodeBudget     int
 	TraceConfig           ExecTraceConfig
 	FixSigners            bool
+	StateOverrides        StateOverrides
+}
+
+// StateOverrides describes modifications to ledger state that are applied before any evaluation
+// takes place. The overrides are only visible to the simulation and are never persisted.
+type StateOverrides struct {
+	Accounts map[basics.Address]AccountOverride
+}
+
+// AccountOverride describes modifications to a single account's state. Nil fields are left unchanged.
+type AccountOverride struct {
+	// Balance, if set, replaces the account's balance. Pending rewards are forfeited, so the
+	// account's balance at the start of simulation is exactly this value.
+	Balance *basics.MicroAlgos
 }
 
 // simulatorLedger patches the ledger interface to use a constant latest round.
 type simulatorLedger struct {
 	*data.Ledger
 	start basics.Round
+
+	// accountOverrides holds the overridden account data as of the start round
+	accountOverrides map[basics.Address]ledgercore.AccountData
+	// totals, if non-nil, are the start round totals adjusted to account for accountOverrides
+	totals *ledgercore.AccountTotals
+}
+
+// applyStateOverrides computes the overridden account data and totals as of the start round.
+func (l *simulatorLedger) applyStateOverrides(overrides StateOverrides, proto config.ConsensusParams) error {
+	if len(overrides.Accounts) == 0 {
+		return nil
+	}
+
+	totals, err := l.Totals(l.start)
+	if err != nil {
+		return err
+	}
+
+	accountOverrides := make(map[basics.Address]ledgercore.AccountData, len(overrides.Accounts))
+	var ot basics.OverflowTracker
+	for addr, override := range overrides.Accounts {
+		acct, _, err := l.Ledger.LookupWithoutRewards(l.start, addr)
+		if err != nil {
+			return err
+		}
+		totals.DelAccount(proto.RewardUnit, acct, &ot)
+
+		if override.Balance != nil {
+			acct.MicroAlgos = *override.Balance
+			// Set the rewards base to the current rewards level so there are no pending rewards
+			acct.RewardsBase = totals.RewardsLevel
+		}
+
+		totals.AddAccount(proto.RewardUnit, acct, &ot)
+		accountOverrides[addr] = acct
+	}
+	if ot.Overflowed {
+		return InvalidRequestError{SimulatorError{errors.New("account overrides overflowed ledger totals")}}
+	}
+
+	l.accountOverrides = accountOverrides
+	l.totals = &totals
+	return nil
+}
+
+// LookupWithoutRewards is part of the ledger.Ledger interface.
+// We override this to apply any account overrides.
+func (l simulatorLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
+	if acct, ok := l.accountOverrides[addr]; ok && rnd == l.start {
+		return acct, rnd, nil
+	}
+	return l.Ledger.LookupWithoutRewards(rnd, addr)
 }
 
 // Latest is part of the ledger.Ledger interface.
@@ -59,6 +125,9 @@ func (l simulatorLedger) Latest() basics.Round {
 
 // LatestTotals is part of the ledger.Ledger interface.
 func (l simulatorLedger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
+	if l.totals != nil {
+		return l.start, *l.totals, nil
+	}
 	totals, err := l.Totals(l.start)
 	return l.start, totals, err
 }
@@ -121,7 +190,7 @@ type Simulator struct {
 // MakeSimulator creates a new simulator from a ledger.
 func MakeSimulator(ledger *data.Ledger, developerAPI bool) *Simulator {
 	return &Simulator{
-		ledger:       simulatorLedger{ledger, 0}, // start round to be specified in Simulate method
+		ledger:       simulatorLedger{Ledger: ledger}, // start round to be specified in Simulate method
 		developerAPI: developerAPI,
 	}
 }
@@ -389,6 +458,12 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 		return Result{}, err
 	}
 	nextBlock := bookkeeping.MakeBlock(prevBlockHdr)
+
+	// Apply state overrides before any evaluation takes place
+	err = s.ledger.applyStateOverrides(simulateRequest.StateOverrides, config.Consensus[prevBlockHdr.CurrentProtocol])
+	if err != nil {
+		return Result{}, err
+	}
 
 	group := transactions.WrapSignedTxnsWithAD(simulateRequest.TxnGroups[0])
 

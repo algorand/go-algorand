@@ -65,6 +65,7 @@ func TestNonOverridenDataLedgerMethodsUseRoundParameter(t *testing.T) {
 		"Latest",
 		"LookupLatest",
 		"LatestTotals",
+		"LookupWithoutRewards",
 	}
 
 	// methods that don't use a round number
