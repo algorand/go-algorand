@@ -157,7 +157,17 @@ either copy the `.partkey` file aside, delete the key, and install the copy
 (deleting a key through the API also removes its file from the node's
 directory, so without a copy the key would have to be generated and
 registered anew), or stop the node, delete **partregistry.sqlite**, and
-restart: the key files are kept and re-installed. A registry created by an older release is
+restart: the key files are kept and re-installed. Both the registry and the
+key files use SQLite's write-ahead log, which keeps the image of every page a
+transaction wrote until the log is refilled or truncated, so the image of a
+page from before a subkey was deleted would otherwise stay readable in the log
+for a while. After every write the node checkpoints the log and, whenever it
+holds anything but the last transaction's images or the write stored subkeys
+wholesale (an install, a migration, a batch rollover), overwrites the whole
+log in place with zero pages and truncates it. Like `secure_delete`, this
+erases the previous content on file systems that write in place; copy-on-write
+file systems and flash storage may keep old blocks, where disk encryption is
+the remedy. A registry created by an older release is
 upgraded automatically at node startup; older releases refuse to open the
 upgraded registry, so rolling back requires deleting **partregistry.sqlite**
 and re-installing the keys. Once installed, keys are assigned

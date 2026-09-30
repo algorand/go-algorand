@@ -324,6 +324,15 @@ func makeParticipationRegistry(accessor db.Pair, log logging.Logger) (*participa
 		return nil, fmt.Errorf("unable to initialize participation registry cache: %w", err)
 	}
 
+	// the upgrade and the erasure of excluded records' secrets write
+	// wholesale: erase their images from the log (free for an up-to-date
+	// registry, whose log is empty at this point); the write thread has
+	// nothing to do until the registry is handed out, so this is the only
+	// writer, as the erasure requires
+	if err = registry.store.Wdb.EraseWAL(context.Background(), true); err != nil {
+		log.Warnf("participationDB: unable to erase the write-ahead log: %v", err)
+	}
+
 	return registry, nil
 }
 
@@ -687,6 +696,7 @@ func (db *participationDB) writeThread() {
 
 	for op := range db.writeQueue {
 		err := op.operation.apply(db)
+		db.eraseWAL(op.operation)
 		if op.errChannel == nil {
 			// will be surfaced by the next flush
 			if err != nil {
@@ -703,6 +713,28 @@ func (db *participationDB) writeThread() {
 			lastErr = nil
 		}
 		op.errChannel <- err
+	}
+}
+
+// bulkWriter is implemented by operations that may store secret-bearing rows
+// wholesale in one transaction (a key's subkeys or state proof keys, or a
+// flush that rolled a key over to a new batch); their page images are erased
+// from the write-ahead log right after the write instead of at the next one.
+type bulkWriter interface {
+	bulk() bool
+}
+
+// eraseWAL erases stale page images from the registry's write-ahead log
+// after an operation; see db.Accessor.EraseWAL.  It runs on the write
+// thread, the registry's only writer once it is constructed, as the erasure
+// requires.
+func (db *participationDB) eraseWAL(op dbOp) {
+	all := false
+	if b, ok := op.(bulkWriter); ok {
+		all = b.bulk()
+	}
+	if err := db.store.Wdb.EraseWAL(context.Background(), all); err != nil {
+		db.log.Warnf("participationDB: unable to erase the write-ahead log: %v", err)
 	}
 }
 
@@ -1276,11 +1308,12 @@ func updateRegistrationFields(ctx context.Context, tx *sql.Tx, record Participat
 // object, persisting the voting secrets incrementally: the stored voting
 // header is compared against the record's secrets, only the transition
 // (consumed subkey rows, refreshed offsets) is written, and the new header
-// travels in the same UPDATE as the rolling fields.
-func updateRollingFields(ctx context.Context, tx *sql.Tx, record ParticipationRecord) error {
+// travels in the same UPDATE as the rolling fields.  It reports whether the
+// voting transition wrote subkey rows wholesale (see votingTransitionBulk).
+func updateRollingFields(ctx context.Context, tx *sql.Tx, record ParticipationRecord) (bulk bool, err error) {
 	pk, rawHeader, err := resolveRollingPK(ctx, tx, record.ParticipationID)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	// A record stored without voting secrets (a NULL header and no rows)
@@ -1297,13 +1330,14 @@ func updateRollingFields(ctx context.Context, tx *sql.Tx, record ParticipationRe
 		// resurrect keys the registry already retired.
 		stored, herr := decodeVotingHeader(rawHeader)
 		if herr != nil {
-			return fmt.Errorf("stored voting header for key %s is undecodable; refusing to rewrite voting rows from memory (copy its .partkey file aside, delete the key, and install the copy; or delete %s and restart to rebuild the registry from the key files): %v",
+			return false, fmt.Errorf("stored voting header for key %s is undecodable; refusing to rewrite voting rows from memory (copy its .partkey file aside, delete the key, and install the copy; or delete %s and restart to rebuild the registry from the key files): %v",
 				record.ParticipationID, config.ParticipationRegistryFilename, herr)
 		}
 		newHeader, err = syncVotingRows(tx, registryVotingTarget(pk), stored, snap)
 		if err != nil {
-			return err
+			return false, err
 		}
+		bulk = votingTransitionBulk(stored, snap.Header(), newHeader)
 	}
 
 	// one UPDATE per record: the rolling fields, plus the voting header when
@@ -1315,7 +1349,7 @@ func updateRollingFields(ctx context.Context, tx *sql.Tx, record ParticipationRe
 	result, err := tx.ExecContext(ctx, updateRollingFieldsSQL,
 		record.LastVote, record.LastBlockProposal, record.LastStateProof,
 		record.EffectiveFirst, record.EffectiveLast, rawNewHeader, pk)
-	return verifyExecWithOneRowEffected(err, result, "update rolling fields")
+	return bulk, verifyExecWithOneRowEffected(err, result, "update rolling fields")
 }
 
 func recordActive(record ParticipationRecord, on basics.Round) bool {

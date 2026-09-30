@@ -294,7 +294,8 @@ func TestSyncVotingRows(t *testing.T) {
 	// sync brings the store from its stored header to the given memory state
 	sync := func(mem *crypto.OneTimeSignatureSecrets) error {
 		return partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-			return syncVotingRowsAndHeader(tx, partkeyFileVotingTarget, votingSnapshot(mem))
+			_, err := syncVotingRowsAndHeader(tx, partkeyFileVotingTarget, votingSnapshot(mem))
+			return err
 		})
 	}
 	// advance moves memory to id, syncs, and checks header, row counts, and

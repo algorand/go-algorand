@@ -205,17 +205,33 @@ func syncVotingRows(tx *sql.Tx, target votingRowTarget, stored crypto.OneTimeSig
 // syncVotingRowsAndHeader reads the stored header, runs syncVotingRows, and
 // writes the resulting header, for callers with no row update of their own to
 // fold it into.  An unusable stored header fails closed: without the stored
-// cursor there is no way to tell whether memory lags storage.
-func syncVotingRowsAndHeader(tx *sql.Tx, target votingRowTarget, snap crypto.OneTimeSignatureSecretsPersistent) error {
+// cursor there is no way to tell whether memory lags storage.  It reports
+// whether the transition wrote subkey rows wholesale (see
+// votingTransitionBulk).
+func syncVotingRowsAndHeader(tx *sql.Tx, target votingRowTarget, snap crypto.OneTimeSignatureSecretsPersistent) (bulk bool, err error) {
 	stored, err := readVotingHeader(tx, target)
 	if err != nil {
-		return fmt.Errorf("%w; refusing to rewrite voting rows from memory", err)
+		return false, fmt.Errorf("%w; refusing to rewrite voting rows from memory", err)
 	}
 	hdr, err := syncVotingRows(tx, target, stored, snap)
-	if err != nil || hdr == nil {
-		return err
+	if err != nil {
+		return false, err
 	}
-	return updateVotingHeader(tx, target, *hdr)
+	bulk = votingTransitionBulk(stored, snap.Header(), hdr)
+	if hdr == nil {
+		return bulk, nil
+	}
+	return bulk, updateVotingHeader(tx, target, *hdr)
+}
+
+// votingTransitionBulk reports whether a syncVotingRows transition from
+// stored to mem (returning hdr) wrote subkey rows wholesale: a rollover to a
+// new batch, whose offset rows are written together and then consumed one
+// per round, or a repair, which rewrites everything (a nil hdr for a changed
+// state).  The caller erases such writes from the write-ahead log at once
+// rather than at the next write; see db.Accessor.EraseWAL.
+func votingTransitionBulk(stored, mem crypto.OneTimeSignatureSecretsHeader, hdr *crypto.OneTimeSignatureSecretsHeader) bool {
+	return stored.FirstBatch != mem.FirstBatch || (hdr == nil && stored != mem)
 }
 
 // applyVotingTransition deletes (and, on a batch rollover, re-inserts) the

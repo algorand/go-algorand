@@ -68,9 +68,14 @@ var sqliteInitOnce sync.Once
 // An Accessor manages a sqlite database handle and any outstanding batching operations.
 type Accessor struct {
 	Handle   *sql.DB
+	filename string
 	readOnly bool
 	inMemory bool
 	log      logging.Logger
+
+	// eraseWALAfterOverwrite, when set (tests only), runs inside EraseWAL
+	// once the log has been overwritten and before it is truncated.
+	eraseWALAfterOverwrite func()
 }
 
 // VacuumStats returns the database statistics before and after a vacuum operation
@@ -129,6 +134,7 @@ func makeErasableAccessor(dbfilename string, readOnly bool) (Accessor, error) {
 
 func makeAccessorImpl(driverName string, dbfilename string, readOnly bool, inMemory bool, params []string) (Accessor, error) {
 	var db Accessor
+	db.filename = dbfilename
 	db.readOnly = readOnly
 	db.inMemory = inMemory
 

@@ -183,6 +183,9 @@ func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos,
 }
 
 // DeleteOldKeys securely deletes ephemeral keys for rounds strictly older than the given round.
+// Calls for the same file must not overlap, and nothing else may write the
+// file meanwhile: the erasure of the write-ahead log that follows the
+// deletion requires the only writer (see db.Accessor.EraseWAL).
 func (part PersistedParticipation) DeleteOldKeys(current basics.Round, proto config.ConsensusParams) <-chan error {
 	keyDilution := part.KeyDilution
 	if keyDilution == 0 {
@@ -193,19 +196,45 @@ func (part PersistedParticipation) DeleteOldKeys(current basics.Round, proto con
 
 	errorCh := make(chan error, 1)
 	deleteOldKeys := func() {
-		errorCh <- part.Store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		var bulk bool
+		err := part.Store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			// compare the stored header against memory and write only the
 			// transition instead of rewriting the whole keyset
-			err := syncVotingRowsAndHeader(tx, partkeyFileVotingTarget, votingSnapshot(part.Voting))
-			if err != nil {
-				return fmt.Errorf("Participation.DeleteOldKeys: %v", err)
+			var serr error
+			bulk, serr = syncVotingRowsAndHeader(tx, partkeyFileVotingTarget, votingSnapshot(part.Voting))
+			if serr != nil {
+				return fmt.Errorf("Participation.DeleteOldKeys: %v", serr)
 			}
 			return nil
 		})
+		if err == nil {
+			err = part.eraseWAL(bulk)
+		}
+		errorCh <- err
 		close(errorCh)
 	}
 	go deleteOldKeys()
 	return errorCh
+}
+
+// eraseWAL erases stale page images from the key file's write-ahead log
+// after a write; see db.Accessor.EraseWAL.  all is set after a write that
+// stored subkeys wholesale.
+func (part PersistedParticipation) eraseWAL(all bool) error {
+	if err := part.Store.EraseWAL(context.Background(), all); err != nil {
+		return fmt.Errorf("erasing the write-ahead log of the participation key file: %w", err)
+	}
+	return nil
+}
+
+// warnEraseWAL logs an erase failure after a write that retired nothing (a
+// key just generated or migrated).  The key is complete and usable, and the
+// images left in the log are of live subkeys, which the file holds anyway,
+// so the failure is not the write's.
+func warnEraseWAL(what string, err error) {
+	if err != nil {
+		logging.Base().Warnf("%s: %v", what, err)
+	}
 }
 
 // PersistNewParent writes a new parent address to the partkey database.
@@ -274,7 +303,12 @@ func (part PersistedParticipation) PersistWithSecrets() error {
 	if err != nil {
 		return err
 	}
-	return part.StateProofSecrets.Persist(part.Store) // must be called after part.Persist()
+	err = part.StateProofSecrets.Persist(part.Store) // must be called after part.Persist()
+	if err != nil {
+		return err
+	}
+	warnEraseWAL("PersistedParticipation.PersistWithSecrets", part.eraseWAL(true))
+	return nil
 }
 
 // Persist writes a Participation out to a database on the disk
@@ -300,15 +334,18 @@ func (part PersistedParticipation) Persist() error {
 	})
 
 	if err != nil {
-		err = fmt.Errorf("PersistedParticipation.Persist: %w", err)
+		return fmt.Errorf("PersistedParticipation.Persist: %w", err)
 	}
-	return err
+	// every subkey was just stored: erase the images from the log now rather
+	// than leaving them until the first per-round deletion
+	warnEraseWAL("PersistedParticipation.Persist", part.eraseWAL(true))
+	return nil
 }
 
 // Migrate is called when loading participation keys.
 // Calls through to the migration helper and returns the result.
 func Migrate(partDB db.Accessor) error {
-	return partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err := partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		err := partMigrate(tx)
 		if err != nil {
 			return err
@@ -316,6 +353,15 @@ func Migrate(partDB db.Accessor) error {
 
 		return merklesignature.InstallStateProofTable(tx)
 	})
+	if err != nil {
+		return err
+	}
+	// a migration rewrote every subkey: erase the images from the log (this
+	// is free for an up-to-date file, whose log is empty)
+	if err = partDB.EraseWAL(context.Background(), true); err != nil {
+		warnEraseWAL("Migrate", fmt.Errorf("erasing the write-ahead log of the participation key file: %w", err))
+	}
+	return nil
 }
 
 // Close closes the underlying database handle.

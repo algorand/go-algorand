@@ -41,7 +41,18 @@ type opRequest struct {
 	errChannel chan error
 }
 
-type flushOp struct{} // does nothing but flushes the latest error.
+// flushOp writes the dirty records and flushes the latest error.
+type flushOp struct {
+	// wroteBulk is set when a record's voting transition wrote subkey rows
+	// wholesale (a batch rollover)
+	wroteBulk bool
+}
+
+func (f *flushOp) bulk() bool { return f.wroteBulk }
+
+func (i *insertOp) bulk() bool { return true }
+
+func (a *appendKeysOp) bulk() bool { return true }
 
 type registerOp struct {
 	updated map[ParticipationID]updatingParticipationRecord
@@ -386,7 +397,10 @@ func (f *flushOp) apply(db *participationDB) error {
 			if _, serr := tx.ExecContext(ctx, "SAVEPOINT flush_record"); serr != nil {
 				return serr
 			}
-			err := updateRollingFields(ctx, tx, record)
+			bulk, err := updateRollingFields(ctx, tx, record)
+			if err == nil && bulk {
+				f.wroteBulk = true
+			}
 			// This should only be updating key usage so ignoring missing keys is not a problem.
 			if err != nil && err != ErrNoKeyForID {
 				if _, rerr := tx.ExecContext(ctx, "ROLLBACK TO SAVEPOINT flush_record"); rerr != nil {
