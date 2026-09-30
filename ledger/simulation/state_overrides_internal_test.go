@@ -17,12 +17,14 @@
 package simulation
 
 import (
+	"math"
 	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	simulationtesting "github.com/algorand/go-algorand/ledger/simulation/testing"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -60,6 +62,63 @@ func newOverlayLedger(t *testing.T, env *simulationtesting.Environment, override
 	l.overlay, err = l.buildStateOverlay(overrides, hdr)
 	require.NoError(t, err)
 	return l
+}
+
+func TestAccountOverridesDoNotOverflowIntermediateTotals(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	rnd := env.Ledger.Latest()
+	totals, err := env.Ledger.Totals(rnd)
+	require.NoError(t, err)
+	a := env.Accounts[0].Addr
+	aData, _, err := env.Ledger.LookupWithoutRewards(rnd, a)
+	require.NoError(t, err)
+	var b basics.Address
+	var bData ledgercore.AccountData
+	for _, account := range env.Accounts[1:] {
+		data, _, lookupErr := env.Ledger.LookupWithoutRewards(rnd, account.Addr)
+		require.NoError(t, lookupErr)
+		if data.Status == aData.Status {
+			b, bData = account.Addr, data
+			break
+		}
+	}
+	require.NotEqual(t, basics.Address{}, b)
+
+	// The final status total fits exactly, but adding b before removing a would overflow.
+	proto := env.TxnInfo.CurrentProtocolParams()
+	aMoney, _ := aData.Money(proto.RewardUnit, totals.RewardsLevel)
+	bMoney, _ := bData.Money(proto.RewardUnit, totals.RewardsLevel)
+	var statusTotal uint64
+	switch aData.Status {
+	case basics.Online:
+		statusTotal = totals.Online.Money.Raw
+	case basics.Offline:
+		statusTotal = totals.Offline.Money.Raw
+	case basics.NotParticipating:
+		statusTotal = totals.NotParticipating.Money.Raw
+	}
+	zero := basics.MicroAlgos{}
+	large := basics.MicroAlgos{Raw: math.MaxUint64 - statusTotal + aMoney.Raw + bMoney.Raw}
+	overrides := StateOverrides{Accounts: map[basics.Address]AccountOverride{
+		a: {Balance: &zero},
+		b: {Balance: &large},
+	}}
+	for range 20 {
+		l := newOverlayLedger(t, &env, overrides)
+		switch aData.Status {
+		case basics.Online:
+			require.Equal(t, uint64(math.MaxUint64), l.overlay.totals.Online.Money.Raw)
+		case basics.Offline:
+			require.Equal(t, uint64(math.MaxUint64), l.overlay.totals.Offline.Money.Raw)
+		case basics.NotParticipating:
+			require.Equal(t, uint64(math.MaxUint64), l.overlay.totals.NotParticipating.Money.Raw)
+		}
+	}
 }
 
 func TestAppOverrideAllParams(t *testing.T) {

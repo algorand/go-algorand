@@ -174,8 +174,12 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 	}
 
 	var ot basics.OverflowTracker
-	for addr, acct := range o.accounts {
+	// Remove all original balances before adding replacements. Otherwise an increase
+	// can overflow the totals temporarily even when the final totals fit.
+	for addr := range o.accounts {
 		totals.DelAccount(proto.RewardUnit, original[addr], &ot)
+	}
+	for _, acct := range o.accounts {
 		totals.AddAccount(proto.RewardUnit, acct, &ot)
 	}
 	if ot.Overflowed {
