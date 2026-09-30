@@ -1015,15 +1015,7 @@ func (n *P2PNetwork) baseWsStreamHandler(ctx context.Context, p2pPeer peer.ID, s
 		voteCompressionTableSize: n.voteCompressionTableSize,
 	}
 	if !incoming {
-		throttledConnection := false
-		if n.throttledOutgoingConnections.Add(int32(-1)) >= 0 {
-			throttledConnection = true
-		} else {
-			n.throttledOutgoingConnections.Add(int32(1))
-		}
-
 		wsp.connMonitor = n.connPerfMonitor
-		wsp.throttledOutgoingConnection = throttledConnection
 	}
 
 	localAddr, has := n.Address()
@@ -1045,6 +1037,9 @@ func (n *P2PNetwork) baseWsStreamHandler(ctx context.Context, p2pPeer peer.ID, s
 		networkPeerAlreadyClosed.Inc(nil)
 		n.wsPeersLock.Unlock()
 		return &p2p.StreamHandlerLoggedError{Level: logging.Debug, Err: fmt.Errorf("peer closing %s", addr)}
+	}
+	if !incoming {
+		wsp.throttledOutgoingConnection = claimThrottleSlot(&n.throttledOutgoingConnections)
 	}
 	n.wsPeers[p2pPeer] = wsp
 	n.wsPeersToIDs[wsp] = p2pPeer
