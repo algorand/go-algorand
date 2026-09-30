@@ -1900,7 +1900,8 @@ func TestP2PThrottleSlotNotLeakedOnIdentityDedup(t *testing.T) {
 	rawB, err := pubKeyB.Raw()
 	require.NoError(t, err)
 	tracker := NewIdentityTracker()
-	require.True(t, tracker.setIdentity(&wsPeer{identity: algocrypto.PublicKey(rawB)}))
+	existing := &wsPeer{identity: algocrypto.PublicKey(rawB)}
+	require.True(t, tracker.setIdentity(existing))
 
 	peerInfoB := netB.service.AddrInfo()
 	addrsB, err := peer.AddrInfoToP2pAddrs(&peerInfoB)
@@ -1920,4 +1921,18 @@ func TestP2PThrottleSlotNotLeakedOnIdentityDedup(t *testing.T) {
 	}, 10*time.Second, 50*time.Millisecond, "netA never rejected the duplicate connection to netB")
 	require.False(t, netA.hasPeers())
 	require.Equal(t, slots, netA.throttledOutgoingConnections.Load(), "the identity dedup rejection leaked an outgoing throttle slot")
+
+	// Allow registration, then check that disconnecting returns the claimed slot.
+	tracker.removeIdentity(existing)
+	require.Eventually(t, func() bool {
+		netA.RequestConnectOutgoing(false, nil)
+		return len(netA.GetPeers(PeersConnectedOut)) == 1
+	}, 10*time.Second, 50*time.Millisecond, "netA never registered an outgoing connection to netB")
+	outPeers := netA.GetPeers(PeersConnectedOut)
+	require.Len(t, outPeers, 1)
+	require.True(t, outPeers[0].(*wsPeer).throttledOutgoingConnection)
+	require.Equal(t, slots-1, netA.throttledOutgoingConnections.Load())
+
+	netA.disconnect(outPeers[0], disconnectReasonNone)
+	require.Equal(t, slots, netA.throttledOutgoingConnections.Load(), "disconnecting a registered peer did not give its throttle slot back")
 }
