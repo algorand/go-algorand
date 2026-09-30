@@ -224,7 +224,8 @@ func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Addr
 		if !override.Creator.IsZero() && override.Creator != creator {
 			return invalidOverride("app %d exists with creator %s, which cannot be changed to %s", aidx, creator, override.Creator)
 		}
-		res, err := l.Ledger.LookupApplication(l.start, creator, aidx)
+		var res ledgercore.AppResource
+		res, err = l.Ledger.LookupApplication(l.start, creator, aidx)
 		if err != nil {
 			return err
 		}
@@ -240,7 +241,8 @@ func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Addr
 			return invalidOverride("cannot create app %d: new app IDs must not be in the range (%d, %d], which may be assigned during simulation",
 				aidx, prevHdr.TxnCounter, basics.AddSaturate(prevHdr.TxnCounter, reservedCreatableIDs))
 		}
-		_, isAsset, err := l.Ledger.GetCreatorForRound(l.start, basics.CreatableIndex(aidx), basics.AssetCreatable)
+		var isAsset bool
+		_, isAsset, err = l.Ledger.GetCreatorForRound(l.start, basics.CreatableIndex(aidx), basics.AssetCreatable)
 		if err != nil {
 			return err
 		}
@@ -304,16 +306,17 @@ func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Addr
 		params.GlobalState[key] = value
 	}
 
-	if err := validateProtocolSupport(prevHdr.CurrentProtocol, aidx, params, override); err != nil {
+	if err = validateProtocolSupport(prevHdr.CurrentProtocol, aidx, params, override); err != nil {
 		return err
 	}
-	if err := validateAppParams(proto, aidx, params); err != nil {
+	if err = validateAppParams(proto, aidx, params); err != nil {
 		return err
 	}
 
 	// Update minimum balance bookkeeping for the app and its global schema and extra pages
+	var acct ledgercore.AccountData
 	if !exists {
-		acct, err := getAccount(creator)
+		acct, err = getAccount(creator)
 		if err != nil {
 			return err
 		}
@@ -322,7 +325,7 @@ func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Addr
 	}
 	// Release the old charge from the old sponsor before adding the new charge to the new sponsor,
 	// which may be the same account
-	acct, err := getAccount(oldSponsor)
+	acct, err = getAccount(oldSponsor)
 	if err != nil {
 		return err
 	}
