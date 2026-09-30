@@ -271,6 +271,9 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bo
 	for i := range op.OpDetails.Immediates {
 		group := op.OpDetails.Immediates[i].Group
 		if group != nil && group.Doc != "" && !groupDocWritten[group.Name] {
+			if full, ok := docGroupOverrides[group.Name]; ok {
+				group = full
+			}
 			fmt.Fprintf(out, "\n### %s\n\n", group.Heading())
 			if strings.Contains(group.Doc, " ") {
 				fmt.Fprintf(out, "%s\n\n", group.Doc)
@@ -464,6 +467,18 @@ func fieldsAndTypes(group logic.FieldGroup, version uint64, modes logic.RunMode)
 		})
 	}
 	return fields, typeStrings(types), details
+}
+
+// docGroupOverrides names the field groups whose documented member list is not
+// the one attached to the first opcode that happens to use the group. The
+// section is written once, by that first opcode, and shared by every later one,
+// so a group that narrows the set would otherwise leave names undocumented.
+//
+// The "EC" section is written by ec_add, whose group omits ED25519_Monero, a
+// choice of map rather than a group to add points in. ec_map_to does accept it,
+// so the shared section has to list it.
+var docGroupOverrides = map[string]*logic.FieldGroup{
+	"EC": &logic.EcGroups,
 }
 
 // argEnumOverrides names the opcodes whose documented field group is
