@@ -306,7 +306,8 @@ func (s Simulator) simulateWithTracer(hdr bookkeeping.BlockHeader, txgroup []tra
 				// Otherwise lookup the sender's account and set the txn auth addr to the account's auth addr
 				if txnNeedsSyntheticSignature(*stxn) {
 					var data ledgercore.AccountData
-					data, _, _, err = s.ledger.LookupAccount(s.ledger.start, sender)
+					// Use LookupWithoutRewards, which applies any state overrides
+					data, _, err = s.ledger.LookupWithoutRewards(s.ledger.start, sender)
 					if err != nil {
 						return nil, err
 					}

@@ -464,6 +464,25 @@ func TestStateOverrideAppValidation(t *testing.T) {
 			expectedError: "exceeds maximum",
 		},
 		{
+			name: "global uint value with bytes",
+			aidx: aidx,
+			override: simulation.AppOverride{GlobalState: basics.TealKeyValue{
+				"a": {Type: basics.TealUintType, Uint: 1, Bytes: "x"},
+			}},
+			expectedError: "must not have bytes",
+		},
+		{
+			name: "global bytes value with uint",
+			aidx: aidx,
+			override: simulation.AppOverride{
+				GlobalStateSchema: &basics.StateSchema{NumByteSlice: 1},
+				GlobalState: basics.TealKeyValue{
+					"a": {Type: basics.TealBytesType, Bytes: "x", Uint: 1},
+				},
+			},
+			expectedError: "must not have a uint",
+		},
+		{
 			name:          "delete missing global key",
 			aidx:          aidx,
 			override:      simulation.AppOverride{DeleteGlobalState: []string{"missing"}},

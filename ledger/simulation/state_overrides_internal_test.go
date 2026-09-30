@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	simulationtesting "github.com/algorand/go-algorand/ledger/simulation/testing"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -201,4 +202,40 @@ func TestAppOverrideAllParams(t *testing.T) {
 	require.Equal(t, realCreator.TotalAppSchema.SubSchema(basics.StateSchema{NumUint: 1}).AddSchema(globalSchema), creatorData.TotalAppSchema)
 	_, touched := l.overlay.accounts[sponsor]
 	require.False(t, touched)
+}
+
+func TestAppOverrideProtocolSupport(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	sponsor := basics.Address{1}
+	boxes := AppOverride{Boxes: map[string][]byte{"b": nil}}
+
+	testCases := []struct {
+		name          string
+		version       protocol.ConsensusVersion
+		params        basics.AppParams
+		override      AppOverride
+		expectedError string
+	}{
+		{name: "size sponsor", version: protocol.ConsensusV41, params: basics.AppParams{SizeSponsor: sponsor}, expectedError: "size sponsor is not supported"},
+		{name: "foreign box reads", version: protocol.ConsensusV41, params: basics.AppParams{ForeignBoxReads: true}, expectedError: "AppForeignBoxReads is not supported"},
+		{name: "family box access", version: protocol.ConsensusV41, params: basics.AppParams{FamilyBoxAccess: true}, expectedError: "AppFamilyBoxAccess is not supported"},
+		{name: "boxes", version: protocol.ConsensusV35, override: boxes, expectedError: "boxes are not supported"},
+		{name: "all supported", version: protocol.ConsensusV42, params: basics.AppParams{SizeSponsor: sponsor, ForeignBoxReads: true, FamilyBoxAccess: true}, override: boxes},
+		// Default values are allowed in any protocol
+		{name: "defaults", version: protocol.ConsensusV35},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateProtocolSupport(tc.version, 1, tc.params, tc.override)
+			if tc.expectedError == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorAs(t, err, &InvalidRequestError{})
+			require.ErrorContains(t, err, tc.expectedError)
+		})
+	}
 }

@@ -29,7 +29,9 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // StateOverrides describes modifications to ledger state that are applied before any evaluation
@@ -43,6 +45,9 @@ type StateOverrides struct {
 type AccountOverride struct {
 	// Balance, if set, replaces the account's balance. Pending rewards are forfeited, so the
 	// account's balance at the start of simulation is exactly this value.
+	//
+	// Online stake is not overridden, so for an online account, the voting balance (e.g. as seen
+	// by voter_params_get) and the online circulation still reflect the original balance.
 	Balance *basics.MicroAlgos
 }
 
@@ -56,6 +61,8 @@ type AccountOverride struct {
 // Minimum balance bookkeeping (created apps, global schema, extra pages, boxes) is updated on the
 // relevant accounts, but their balances are not, so an AccountOverride may be needed to keep them
 // above their minimum balance.
+//
+// Fields may only be set to non-default values if the simulation round's protocol supports them.
 type AppOverride struct {
 	// Creator is required when creating an application. For an existing application, it must be
 	// empty or match the existing creator.
@@ -65,6 +72,8 @@ type AppOverride struct {
 	ApprovalProgram   []byte
 	ClearStateProgram []byte
 	GlobalStateSchema *basics.StateSchema
+	// LocalStateSchema only applies to accounts that opt in during simulation. Accounts that are
+	// already opted in keep the local schema, and minimum balance, from when they opted in.
 	LocalStateSchema  *basics.StateSchema
 	ExtraProgramPages *uint32
 	Version           *uint64
@@ -160,7 +169,12 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 		}
 	}
 
-	for addr, override := range overrides.Accounts {
+	// Sort accounts so that errors are deterministic
+	addrs := slices.SortedFunc(maps.Keys(overrides.Accounts), func(a, b basics.Address) int {
+		return bytes.Compare(a[:], b[:])
+	})
+	for _, addr := range addrs {
+		override := overrides.Accounts[addr]
 		acct, err := getAccount(addr)
 		if err != nil {
 			return nil, err
@@ -287,12 +301,12 @@ func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Addr
 		if params.GlobalState == nil {
 			params.GlobalState = make(basics.TealKeyValue)
 		}
-		if value.Type == basics.TealBytesType {
-			value.Bytes = string(bytes.Clone([]byte(value.Bytes)))
-		}
 		params.GlobalState[key] = value
 	}
 
+	if err := validateProtocolSupport(prevHdr.CurrentProtocol, aidx, params, override); err != nil {
+		return err
+	}
 	if err := validateAppParams(proto, aidx, params); err != nil {
 		return err
 	}
@@ -387,6 +401,38 @@ func sizeSponsor(params basics.AppParams, creator basics.Address) basics.Address
 	return params.SizeSponsor
 }
 
+// validateProtocolSupport ensures an overridden app only uses features supported by proto, so that
+// simulation cannot start from state that is impossible in that protocol.
+func validateProtocolSupport(version protocol.ConsensusVersion, aidx basics.AppIndex, params basics.AppParams, override AppOverride) error {
+	proto := config.Consensus[version]
+	// A size sponsor can only be assigned by an app update that changes sizes
+	if !params.SizeSponsor.IsZero() && !proto.AppSizeUpdates {
+		return invalidOverride("app %d size sponsor is not supported by protocol %s", aidx, version)
+	}
+	for _, flag := range []struct {
+		field logic.AppParamsField
+		set   bool
+	}{
+		{logic.AppForeignBoxReads, params.ForeignBoxReads},
+		{logic.AppFamilyBoxAccess, params.FamilyBoxAccess},
+	} {
+		if !flag.set {
+			continue
+		}
+		spec, ok := logic.AppParamsFields.SpecByName(flag.field.String())
+		if !ok {
+			return fmt.Errorf("no field spec for %s", flag.field)
+		}
+		if proto.LogicSigVersion < spec.Version() {
+			return invalidOverride("app %d %s is not supported by protocol %s", aidx, flag.field, version)
+		}
+	}
+	if len(override.Boxes) > 0 && proto.MaxBoxSize == 0 {
+		return invalidOverride("app %d boxes are not supported by protocol %s", aidx, version)
+	}
+	return nil
+}
+
 func validateAppParams(proto config.ConsensusParams, aidx basics.AppIndex, params basics.AppParams) error {
 	if params.ExtraProgramPages > uint32(proto.MaxExtraAppProgramPages) {
 		return invalidOverride("app %d extra program pages %d exceeds maximum %d", aidx, params.ExtraProgramPages, proto.MaxExtraAppProgramPages)
@@ -410,7 +456,13 @@ func validateAppParams(proto config.ConsensusParams, aidx basics.AppIndex, param
 		}
 		switch value.Type {
 		case basics.TealUintType:
+			if len(value.Bytes) != 0 {
+				return invalidOverride("app %d global uint value for key %#x must not have bytes", aidx, key)
+			}
 		case basics.TealBytesType:
+			if value.Uint != 0 {
+				return invalidOverride("app %d global bytes value for key %#x must not have a uint", aidx, key)
+			}
 			if len(value.Bytes) > proto.MaxAppBytesValueLen {
 				return invalidOverride("app %d global value for key %#x length %d exceeds maximum %d", aidx, key, len(value.Bytes), proto.MaxAppBytesValueLen)
 			}
