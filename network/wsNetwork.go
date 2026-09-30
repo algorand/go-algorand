@@ -2163,27 +2163,19 @@ func (wn *WebsocketNetwork) tryConnect(netAddr, gossipAddr string) {
 		}
 	}
 
-	throttledConnection := false
-	if wn.throttledOutgoingConnections.Add(int32(-1)) >= 0 {
-		throttledConnection = true
-	} else {
-		wn.throttledOutgoingConnections.Add(int32(1))
-	}
-
 	client, _ := wn.GetHTTPClient(netAddr)
 	peer := &wsPeer{
-		wsPeerCore:                  makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, netAddr, client, "" /* origin */),
-		conn:                        wsPeerWebsocketConnImpl{conn},
-		outgoing:                    true,
-		incomingMsgFilter:           wn.incomingMsgFilter,
-		createTime:                  time.Now(),
-		connMonitor:                 wn.connPerfMonitor,
-		throttledOutgoingConnection: throttledConnection,
-		version:                     matchingVersion,
-		identity:                    peerID,
-		features:                    decodePeerFeatures(matchingVersion, response.Header.Get(PeerFeaturesHeader)),
-		enableVoteCompression:       wn.config.EnableVoteCompression,
-		voteCompressionTableSize:    wn.voteCompressionTableSize,
+		wsPeerCore:               makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, netAddr, client, "" /* origin */),
+		conn:                     wsPeerWebsocketConnImpl{conn},
+		outgoing:                 true,
+		incomingMsgFilter:        wn.incomingMsgFilter,
+		createTime:               time.Now(),
+		connMonitor:              wn.connPerfMonitor,
+		version:                  matchingVersion,
+		identity:                 peerID,
+		features:                 decodePeerFeatures(matchingVersion, response.Header.Get(PeerFeaturesHeader)),
+		enableVoteCompression:    wn.config.EnableVoteCompression,
+		voteCompressionTableSize: wn.voteCompressionTableSize,
 	}
 	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
 	wn.log.Debugf("Client: server features '%s', decoded %x", response.Header.Get(PeerFeaturesHeader), peer.features)
@@ -2400,6 +2392,9 @@ func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
 	if slices.Contains(wn.peers, peer) {
 		wn.log.Errorf("dup peer added %#v", peer)
 		return
+	}
+	if peer.outgoing {
+		peer.throttledOutgoingConnection = claimThrottleSlot(&wn.throttledOutgoingConnections)
 	}
 	heap.Push(peersHeap{wn}, peer)
 	wn.prioTracker.setPriority(peer, peer.prioAddress, peer.prioWeight)
