@@ -315,7 +315,6 @@ func (part PersistedParticipation) PersistWithSecrets() error {
 func (part PersistedParticipation) Persist() error {
 	rawVRF := protocol.Encode(part.VRF)
 	voting := votingSnapshot(part.Voting)
-	rawVotingHeader := encodeVotingHeader(voting.Header())
 	rawStateProof := protocol.Encode(part.StateProofSecrets)
 
 	err := part.Store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
@@ -324,13 +323,16 @@ func (part PersistedParticipation) Persist() error {
 			return fmt.Errorf("failed to install database: %w", err)
 		}
 
-		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, votingHeader, firstValid, lastValid, keyDilution, stateProof) VALUES (?, ?, ?, ?, ?, ?, ?)",
-			part.Parent[:], rawVRF, rawVotingHeader, part.FirstValid, part.LastValid, part.KeyDilution, rawStateProof)
+		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, firstValid, lastValid, keyDilution, stateProof) VALUES (?, ?, ?, ?, ?, ?)",
+			part.Parent[:], rawVRF, part.FirstValid, part.LastValid, part.KeyDilution, rawStateProof)
 		if err != nil {
 			return fmt.Errorf("failed to insert account: %w", err)
 		}
 
-		return insertVotingRows(tx, partkeyFileVotingTarget, voting)
+		if err = insertVotingRows(tx, partkeyFileVotingTarget, voting); err != nil {
+			return err
+		}
+		return updateVotingHeader(tx, partkeyFileVotingTarget, voting.Header())
 	})
 
 	if err != nil {

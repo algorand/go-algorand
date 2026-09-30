@@ -30,8 +30,9 @@ import (
 
 // Row-oriented storage of voting secrets, shared by the .partkey file and the
 // participation registry.  Each store holds a crypto.OneTimeSignatureSecretsHeader
-// in a votingHeader column and one row per ephemeral subkey in two tables, so
-// the header alone says exactly which rows must exist.  Three operations are
+// (the file in a table of its own, the registry in a column of the key's
+// Rolling row) and one row per ephemeral subkey in two tables, so the header
+// alone says exactly which rows must exist.  Three operations are
 // provided: insertVotingRows for a key that is stored for the first time,
 // rewriteVotingRows for format migration and repair, and syncVotingRows for
 // the per-round transition from the stored header to the in-memory state.
@@ -61,7 +62,7 @@ type votingRowTarget struct {
 }
 
 var partkeyFileVotingTarget = votingRowTarget{
-	selectHeader:       "SELECT votingHeader FROM ParticipationAccount",
+	selectHeader:       "SELECT header FROM VotingHeader",
 	selectBatches:      "SELECT batch, data FROM VotingBatches ORDER BY batch",
 	selectOffsets:      "SELECT off, data FROM VotingOffsets ORDER BY off",
 	deleteAllBatches:   "DELETE FROM VotingBatches",
@@ -70,7 +71,7 @@ var partkeyFileVotingTarget = votingRowTarget{
 	deleteOffsetsBelow: "DELETE FROM VotingOffsets WHERE off<?",
 	insertBatch:        "INSERT INTO VotingBatches (batch, data) VALUES (?, ?)",
 	insertOffset:       "INSERT INTO VotingOffsets (off, data) VALUES (?, ?)",
-	updateHeader:       "UPDATE ParticipationAccount SET votingHeader=?",
+	updateHeader:       "INSERT OR REPLACE INTO VotingHeader (id, header) VALUES (1, ?)",
 }
 
 func registryVotingTarget(pk int64) votingRowTarget {
@@ -128,8 +129,8 @@ func storedHeaderAhead(stored, mem crypto.OneTimeSignatureSecretsHeader) bool {
 }
 
 // insertVotingRows inserts one row per subkey of snap.  It is the row half of
-// storing a key for the first time; the caller stores the header with the
-// key's own row.
+// storing a key for the first time; the caller stores the header
+// (updateVotingHeader for the file, the Rolling row for the registry).
 func insertVotingRows(tx *sql.Tx, target votingRowTarget, snap crypto.OneTimeSignatureSecretsPersistent) error {
 	if err := insertKeyedSubkeys(tx, target.insertBatch, target.prefixArgs, snap.EncodedBatches()); err != nil {
 		return fmt.Errorf("failed to insert voting batch subkeys: %w", err)

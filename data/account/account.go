@@ -176,13 +176,10 @@ func restoreParticipationAtVersion(store db.Accessor, version int) (acc Persiste
 	var rawParent, rawVRF, rawVoting, rawStateProof []byte
 	var batches, offsets []crypto.KeyedSubkey
 
-	// the whole-blob version stores the voting secrets in the "voting" column;
-	// the split versions store a header in "votingHeader" plus subkey rows
+	// the whole-blob versions store the voting secrets in the account row's
+	// "voting" column; the split versions store a header in the VotingHeader
+	// table plus subkey rows
 	rowOriented := version > PartTableSchemaVersionWholeBlob
-	votingColumn := "voting"
-	if rowOriented {
-		votingColumn = "votingHeader"
-	}
 
 	err = store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var nrows int
@@ -196,8 +193,12 @@ func restoreParticipationAtVersion(store db.Accessor, version int) (acc Persiste
 		}
 
 		// keyDilution arrived with schema version 2 and stateProof with 3
-		columns := "parent, vrf, " + votingColumn + ", firstValid, lastValid"
-		dest := []any{&rawParent, &rawVRF, &rawVoting, &acc.FirstValid, &acc.LastValid}
+		columns := "parent, vrf, firstValid, lastValid"
+		dest := []any{&rawParent, &rawVRF, &acc.FirstValid, &acc.LastValid}
+		if !rowOriented {
+			columns = "parent, vrf, voting, firstValid, lastValid"
+			dest = []any{&rawParent, &rawVRF, &rawVoting, &acc.FirstValid, &acc.LastValid}
+		}
 		if version >= 2 {
 			columns += ", keyDilution"
 			dest = append(dest, &acc.KeyDilution)
@@ -214,6 +215,13 @@ func restoreParticipationAtVersion(store db.Accessor, version int) (acc Persiste
 		}
 
 		if rowOriented {
+			err1 = tx.QueryRow(partkeyFileVotingTarget.selectHeader).Scan(&rawVoting)
+			if errors.Is(err1, sql.ErrNoRows) {
+				return fmt.Errorf("RestoreParticipation: %w: missing voting header", ErrCorruptedVotingData)
+			}
+			if err1 != nil {
+				return fmt.Errorf("RestoreParticipation: could not read the voting header: %v", err1)
+			}
 			batches, offsets, err1 = readVotingRows(tx, partkeyFileVotingTarget)
 			if err1 != nil {
 				return fmt.Errorf("RestoreParticipation: could not read voting subkey rows: %v", err1)

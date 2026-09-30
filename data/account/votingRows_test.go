@@ -69,8 +69,8 @@ func hasColumn(a *require.Assertions, store db.Accessor, table, column string) b
 // (a rowid table with a composite primary key gets an automatic one, which
 // would cost an extra page write per deleted row).
 func requireNoAutoIndex(a *require.Assertions, store db.Accessor) {
-	a.Zero(queryInt(a, store, "SELECT count(*) FROM sqlite_master WHERE type='index' AND tbl_name IN ('VotingBatches', 'VotingOffsets')"),
-		"subkey tables carry a separate index B-tree")
+	a.Zero(queryInt(a, store, "SELECT count(*) FROM sqlite_master WHERE type='index' AND tbl_name IN ('VotingHeader', 'VotingBatches', 'VotingOffsets')"),
+		"voting tables carry a separate index B-tree")
 }
 
 func execSQL(a *require.Assertions, store db.Accessor, query string, args ...any) {
@@ -184,8 +184,7 @@ func TestMigrateLegacyVersions(t *testing.T) {
 				a.NoError(err)
 				a.Equal(tc.version, versions[PartTableSchemaName])
 				a.True(hasColumn(a, partDB, "ParticipationAccount", "voting"))
-				a.False(hasColumn(a, partDB, "ParticipationAccount", "votingHeader"))
-				a.Zero(queryInt(a, partDB, "SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN ('VotingBatches', 'VotingOffsets')"),
+				a.Zero(queryInt(a, partDB, "SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN ('VotingHeader', 'VotingBatches', 'VotingOffsets')"),
 					"migration tables survived the rollback")
 				return
 			}
@@ -198,8 +197,8 @@ func TestMigrateLegacyVersions(t *testing.T) {
 			assertStateProofTablesExists(a, partDB)
 			requireNoAutoIndex(a, partDB)
 
-			// the legacy blob column is gone, the header column is present
-			a.True(hasColumn(a, partDB, "ParticipationAccount", "votingHeader"))
+			// the legacy blob column is gone, the header has its row
+			a.Equal(1, countTableRows(a, partDB, "VotingHeader"))
 			a.False(hasColumn(a, partDB, "ParticipationAccount", "voting"))
 			a.Equal(len(snap.Batches), countTableRows(a, partDB, "VotingBatches"))
 			a.Equal(len(snap.Offsets), countTableRows(a, partDB, "VotingOffsets"))
@@ -335,21 +334,21 @@ func TestSyncVotingRows(t *testing.T) {
 	ahead := current
 	ahead.FirstOffset++
 	ahead.OffsetCount--
-	execSQL(a, partDB, "UPDATE ParticipationAccount SET votingHeader=?", protocol.Encode(&ahead))
+	execSQL(a, partDB, "UPDATE VotingHeader SET header=?", protocol.Encode(&ahead))
 	a.ErrorContains(sync(secrets), "refusing to resurrect")
 	a.Equal(ahead, readPartkeyVotingHeader(a, partDB))
 	ahead = current
 	ahead.FirstBatch++
-	execSQL(a, partDB, "UPDATE ParticipationAccount SET votingHeader=?", protocol.Encode(&ahead))
+	execSQL(a, partDB, "UPDATE VotingHeader SET header=?", protocol.Encode(&ahead))
 	a.ErrorContains(sync(secrets), "refusing to resurrect")
 	// ... and so is an undecodable stored header (failing closed: a rewrite
 	// from possibly-stale memory could resurrect retired keys)
-	execSQL(a, partDB, "UPDATE ParticipationAccount SET votingHeader=?", []byte{0xff, 0x00})
+	execSQL(a, partDB, "UPDATE VotingHeader SET header=?", []byte{0xff, 0x00})
 	batchRows, offsetRows := countTableRows(a, partDB, "VotingBatches"), countTableRows(a, partDB, "VotingOffsets")
 	a.ErrorContains(sync(secrets), "undecodable")
 	a.Equal(batchRows, countTableRows(a, partDB, "VotingBatches"))
 	a.Equal(offsetRows, countTableRows(a, partDB, "VotingOffsets"))
-	execSQL(a, partDB, "UPDATE ParticipationAccount SET votingHeader=?", protocol.Encode(&current))
+	execSQL(a, partDB, "UPDATE VotingHeader SET header=?", protocol.Encode(&current))
 
 	// jump that runs out of batches: exhausted, every row erased, and a
 	// restore cannot sign an identifier that was live a moment ago
@@ -432,7 +431,8 @@ func TestRestoreDetectsCorruption(t *testing.T) {
 		wantErr   string
 		restore   func(db.Accessor) (PersistedParticipation, error) // nil: the read-only restore, which never reads the state proof keys
 	}{
-		{"undecodableHeader", "UPDATE ParticipationAccount SET votingHeader=x'ff00'", "undecodable voting header", nil},
+		{"undecodableHeader", "UPDATE VotingHeader SET header=x'ff00'", "undecodable voting header", nil},
+		{"missingHeader", "DELETE FROM VotingHeader", "missing voting header", nil},
 		{"missingBatchRow", "DELETE FROM VotingBatches WHERE batch=(SELECT MAX(batch) FROM VotingBatches)", "missing or extra rows", nil},
 		{"misplacedOffsetRow", "UPDATE VotingOffsets SET off=off-1 WHERE off=(SELECT MIN(off) FROM VotingOffsets)", "offset row 0 has index", nil},
 		{"undecodableVRF", "UPDATE ParticipationAccount SET vrf=x'ff00'", "undecodable VRF", nil},

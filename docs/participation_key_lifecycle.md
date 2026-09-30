@@ -70,15 +70,18 @@ Using **algokey** a set of keys can be generated with the command:
 algokey part generate --first 35000000 --last 36000000 --parent <account-address> --keyfile keys.db
 ```
 
-This creates a SQLite DB file named **keys.db**. Metadata and a small header
-describing the voting keyset (its public key, deletion cursor, and subkey row
-counts, in the **votingHeader** column) live in a single-row table, while each
-ephemeral voting subkey is stored as its own row (tables
-**VotingBatches**/**VotingOffsets**). This row-per-subkey layout means the
-per-round forward-security deletion of used keys is a small row delete plus a
-header update instead of a rewrite of the whole keyset; the header alone
-determines which rows must exist, so missing rows are detected as corruption.
-State proof keys follow the same row-per-key pattern in their own table.
+This creates a SQLite DB file named **keys.db**. Metadata lives in a
+single-row table (**ParticipationAccount**), a small header describing the
+voting keyset (its public key, deletion cursor, and subkey row counts) in a
+single-row table of its own (**VotingHeader**), and each ephemeral voting
+subkey is stored as its own row (tables **VotingBatches**/**VotingOffsets**).
+This row-per-subkey layout means the per-round forward-security deletion of
+used keys is a small row delete plus a header update instead of a rewrite of
+the whole keyset; the header alone determines which rows must exist, so
+missing rows are detected as corruption. The header has its own table so that
+updating it never rewrites the metadata row, whose state proof key tree spans
+hundreds of pages. State proof keys follow the same row-per-key pattern in
+their own table.
 
 Files created by older releases (schema version 3) stored the whole voting
 keyset as one BLOB in a **voting** column; the migration converts it to the

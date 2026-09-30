@@ -49,7 +49,6 @@ func partInstallDatabase(tx *sql.Tx) error {
 
 		--* participation keys
 		vrf BLOB,         --*  msgpack encoding of ParticipationAccount.vrf
-		votingHeader BLOB, --*  msgpack encoding of crypto.OneTimeSignatureSecretsHeader
 
 		firstValid INTEGER,
 		lastValid INTEGER,
@@ -61,7 +60,7 @@ func partInstallDatabase(tx *sql.Tx) error {
 		return err
 	}
 
-	err = createVotingSubkeyTables(tx)
+	err = createVotingTables(tx)
 	if err != nil {
 		return err
 	}
@@ -165,8 +164,22 @@ func updateDB(tx *sql.Tx, partVersion int) (int, error) {
 	return partVersion, nil
 }
 
-func createVotingSubkeyTables(tx *sql.Tx) error {
-	_, err := tx.Exec(`CREATE TABLE VotingBatches (
+// createVotingTables creates the row-oriented voting key storage: the header
+// in a single-row table of its own and one row per ephemeral subkey in two
+// tables.  The header has its own table, rather than a column of the account
+// row, because it is rewritten every round while that row carries the state
+// proof key tree, which spans hundreds of pages; SQLite re-lays out a record
+// whenever its encoded size changes, so the two must not share one.
+func createVotingTables(tx *sql.Tx) error {
+	_, err := tx.Exec(`CREATE TABLE VotingHeader (
+		id INTEGER PRIMARY KEY CHECK (id = 1), --* single row
+		header BLOB NOT NULL                   --* msgpack encoding of crypto.OneTimeSignatureSecretsHeader
+	);`)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(`CREATE TABLE VotingBatches (
 		batch INTEGER PRIMARY KEY, --* absolute batch number
 		data BLOB NOT NULL         --* msgpack encoding of the batch subkey
 	);`)
@@ -182,7 +195,7 @@ func createVotingSubkeyTables(tx *sql.Tx) error {
 }
 
 // migrateVotingBlobToRows converts the whole-secrets voting blob of a version
-// 3 file into a votingHeader column plus per-subkey rows.  The converted state
+// 3 file into a VotingHeader table plus per-subkey rows.  The converted state
 // is read back and compared against the original key material before the
 // transaction may commit, and the legacy column is then dropped so the blob
 // (which held every subkey) is erased from the file.
@@ -193,11 +206,8 @@ func migrateVotingBlobToRows(tx *sql.Tx) error {
 	if err := enableSecureDelete(tx); err != nil {
 		return err
 	}
-	if err := createVotingSubkeyTables(tx); err != nil {
+	if err := createVotingTables(tx); err != nil {
 		return err
-	}
-	if _, err := tx.Exec("ALTER TABLE ParticipationAccount ADD COLUMN votingHeader BLOB"); err != nil {
-		return fmt.Errorf("migrateVotingBlobToRows: failed to add the votingHeader column: %w", err)
 	}
 
 	// Content that cannot be converted is reported with ErrCorruptedVotingData
