@@ -2262,6 +2262,138 @@
         ],
         "type": "object"
       },
+      "SimulateAccountOverride": {
+        "description": "Modifications to a single account's state. Omitted fields are left unchanged.",
+        "properties": {
+          "address": {
+            "description": "The address of the account to override.",
+            "type": "string",
+            "x-algorand-format": "Address"
+          },
+          "balance": {
+            "description": "If set, replaces the account's balance in microAlgos. Pending rewards are forfeited. Online stake is not overridden.",
+            "format": "uint64",
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          }
+        },
+        "required": [
+          "address"
+        ],
+        "type": "object"
+      },
+      "SimulateAppOverride": {
+        "description": "Modifications to a single application's state. If the application does not exist, it is created, in which case creator, approval-program, and clear-state-program are required. Omitted fields are left unchanged. Minimum balance requirements of affected accounts are updated, but their balances are not.",
+        "properties": {
+          "approval-program": {
+            "description": "If set, replaces the approval program.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string",
+            "x-algorand-format": "TEALProgram"
+          },
+          "boxes": {
+            "description": "Boxes to create, or replace if they already exist. Other existing boxes are left unchanged.",
+            "items": {
+              "$ref": "#/components/schemas/SimulateBoxOverride"
+            },
+            "type": "array"
+          },
+          "clear-state-program": {
+            "description": "If set, replaces the clear state program.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string",
+            "x-algorand-format": "TEALProgram"
+          },
+          "creator": {
+            "description": "The application's creator. Required when creating an application. For an existing application, it must be omitted or match the existing creator.",
+            "type": "string",
+            "x-algorand-format": "Address"
+          },
+          "delete-boxes": {
+            "description": "Names of boxes to delete. Each box must exist and must not also be set in boxes.",
+            "items": {
+              "format": "byte",
+              "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "delete-global-state": {
+            "description": "Global state keys to delete. Each key must exist and must not also be set in global-state.",
+            "items": {
+              "format": "byte",
+              "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "extra-program-pages": {
+            "description": "If set, replaces the number of extra program pages.",
+            "type": "integer",
+            "x-go-type": "uint32"
+          },
+          "family-box-access": {
+            "description": "If set, replaces whether apps with the same creator may read and write this app's boxes.",
+            "type": "boolean"
+          },
+          "foreign-box-reads": {
+            "description": "If set, replaces whether any app may read this app's boxes.",
+            "type": "boolean"
+          },
+          "global-state": {
+            "$ref": "#/components/schemas/TealKeyValueStore"
+          },
+          "global-state-schema": {
+            "$ref": "#/components/schemas/ApplicationStateSchema"
+          },
+          "id": {
+            "description": "The ID of the application to override. A new application's ID must not be in the range of IDs that may be assigned to creatables made during simulation.",
+            "type": "integer",
+            "x-go-type": "basics.AppIndex"
+          },
+          "local-state-schema": {
+            "$ref": "#/components/schemas/ApplicationStateSchema"
+          },
+          "size-sponsor": {
+            "description": "If set, replaces the account responsible for extra pages and global state minimum balance. The zero address makes the creator responsible.",
+            "type": "string",
+            "x-algorand-format": "Address"
+          },
+          "version": {
+            "description": "If set, replaces the number of updates to the application programs.",
+            "type": "integer",
+            "x-go-type": "uint64"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "SimulateBoxOverride": {
+        "description": "A box to create or replace during simulation.",
+        "properties": {
+          "name": {
+            "description": "The box name, base64 encoded.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
+          },
+          "value": {
+            "description": "The box value, base64 encoded.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ],
+        "type": "object"
+      },
       "SimulateInitialStates": {
         "description": "Initial states of resources that were accessed during simulation.",
         "properties": {
@@ -2306,6 +2438,9 @@
             "type": "integer",
             "x-go-type": "basics.Round"
           },
+          "state-overrides": {
+            "$ref": "#/components/schemas/SimulateStateOverrides"
+          },
           "txn-groups": {
             "description": "The transaction groups to simulate.",
             "items": {
@@ -2336,6 +2471,26 @@
         "required": [
           "txns"
         ],
+        "type": "object"
+      },
+      "SimulateStateOverrides": {
+        "description": "Modifications to ledger state that are applied before simulation begins. Overrides are only visible to the simulation and are never persisted.",
+        "properties": {
+          "accounts": {
+            "description": "Account state overrides. Each address may appear at most once.",
+            "items": {
+              "$ref": "#/components/schemas/SimulateAccountOverride"
+            },
+            "type": "array"
+          },
+          "apps": {
+            "description": "Application state overrides. Each application ID may appear at most once.",
+            "items": {
+              "$ref": "#/components/schemas/SimulateAppOverride"
+            },
+            "type": "array"
+          }
+        },
         "type": "object"
       },
       "SimulateTraceConfig": {

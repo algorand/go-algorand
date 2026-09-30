@@ -612,10 +612,14 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 	}
 }
 
-func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Request {
+func convertSimulationRequest(request PreEncodedSimulateRequest) (simulation.Request, error) {
 	txnGroups := make([][]transactions.SignedTxn, len(request.TxnGroups))
 	for i, txnGroup := range request.TxnGroups {
 		txnGroups[i] = txnGroup.Txns
+	}
+	stateOverrides, err := convertStateOverrides(request.StateOverrides)
+	if err != nil {
+		return simulation.Request{}, err
 	}
 	return simulation.Request{
 		TxnGroups:             txnGroups,
@@ -626,7 +630,144 @@ func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Requ
 		ExtraOpcodeBudget:     request.ExtraOpcodeBudget,
 		TraceConfig:           request.ExecTraceConfig,
 		FixSigners:            request.FixSigners,
+		StateOverrides:        stateOverrides,
+	}, nil
+}
+
+func convertStateOverrides(overrides *model.SimulateStateOverrides) (simulation.StateOverrides, error) {
+	var result simulation.StateOverrides
+	if overrides == nil {
+		return result, nil
 	}
+
+	if overrides.Accounts != nil && len(*overrides.Accounts) > 0 {
+		result.Accounts = make(map[basics.Address]simulation.AccountOverride, len(*overrides.Accounts))
+		for _, acct := range *overrides.Accounts {
+			addr, err := basics.UnmarshalChecksumAddress(acct.Address)
+			if err != nil {
+				return simulation.StateOverrides{}, fmt.Errorf("invalid state override: account address %q: %w", acct.Address, err)
+			}
+			if _, ok := result.Accounts[addr]; ok {
+				return simulation.StateOverrides{}, fmt.Errorf("invalid state override: duplicate account %s", addr)
+			}
+			var override simulation.AccountOverride
+			if acct.Balance != nil {
+				override.Balance = &basics.MicroAlgos{Raw: *acct.Balance}
+			}
+			result.Accounts[addr] = override
+		}
+	}
+
+	if overrides.Apps != nil && len(*overrides.Apps) > 0 {
+		result.Apps = make(map[basics.AppIndex]simulation.AppOverride, len(*overrides.Apps))
+		for _, app := range *overrides.Apps {
+			if _, ok := result.Apps[app.Id]; ok {
+				return simulation.StateOverrides{}, fmt.Errorf("invalid state override: duplicate app %d", app.Id)
+			}
+			override, err := convertAppOverride(app)
+			if err != nil {
+				return simulation.StateOverrides{}, fmt.Errorf("invalid state override: app %d: %w", app.Id, err)
+			}
+			result.Apps[app.Id] = override
+		}
+	}
+
+	return result, nil
+}
+
+func convertAppOverride(app model.SimulateAppOverride) (simulation.AppOverride, error) {
+	var override simulation.AppOverride
+	if app.Creator != nil {
+		creator, err := basics.UnmarshalChecksumAddress(*app.Creator)
+		if err != nil {
+			return simulation.AppOverride{}, fmt.Errorf("creator %q: %w", *app.Creator, err)
+		}
+		override.Creator = creator
+	}
+	if app.ApprovalProgram != nil {
+		// A nil program means the program is left unchanged, so keep empty programs non-nil
+		override.ApprovalProgram = append([]byte{}, *app.ApprovalProgram...)
+	}
+	if app.ClearStateProgram != nil {
+		override.ClearStateProgram = append([]byte{}, *app.ClearStateProgram...)
+	}
+	if app.GlobalStateSchema != nil {
+		override.GlobalStateSchema = &basics.StateSchema{
+			NumUint:      app.GlobalStateSchema.NumUint,
+			NumByteSlice: app.GlobalStateSchema.NumByteSlice,
+		}
+	}
+	if app.LocalStateSchema != nil {
+		override.LocalStateSchema = &basics.StateSchema{
+			NumUint:      app.LocalStateSchema.NumUint,
+			NumByteSlice: app.LocalStateSchema.NumByteSlice,
+		}
+	}
+	override.ExtraProgramPages = app.ExtraProgramPages
+	override.Version = app.Version
+	if app.SizeSponsor != nil {
+		sponsor, err := basics.UnmarshalChecksumAddress(*app.SizeSponsor)
+		if err != nil {
+			return simulation.AppOverride{}, fmt.Errorf("size sponsor %q: %w", *app.SizeSponsor, err)
+		}
+		override.SizeSponsor = &sponsor
+	}
+	override.ForeignBoxReads = app.ForeignBoxReads
+	override.FamilyBoxAccess = app.FamilyBoxAccess
+
+	if app.GlobalState != nil {
+		override.GlobalState = make(basics.TealKeyValue, len(*app.GlobalState))
+		for _, kv := range *app.GlobalState {
+			key, err := base64.StdEncoding.DecodeString(kv.Key)
+			if err != nil {
+				return simulation.AppOverride{}, fmt.Errorf("global state key %q: %w", kv.Key, err)
+			}
+			value, err := base64.StdEncoding.DecodeString(kv.Value.Bytes)
+			if err != nil {
+				return simulation.AppOverride{}, fmt.Errorf("global state value for key %#x: %w", key, err)
+			}
+			if _, ok := override.GlobalState[string(key)]; ok {
+				return simulation.AppOverride{}, fmt.Errorf("duplicate global state key %#x", key)
+			}
+			override.GlobalState[string(key)] = basics.TealValue{
+				Type:  basics.TealType(kv.Value.Type),
+				Uint:  kv.Value.Uint,
+				Bytes: string(value),
+			}
+		}
+	}
+	if app.DeleteGlobalState != nil {
+		seen := make(map[string]bool, len(*app.DeleteGlobalState))
+		for _, key := range *app.DeleteGlobalState {
+			if seen[string(key)] {
+				return simulation.AppOverride{}, fmt.Errorf("duplicate deleted global state key %#x", key)
+			}
+			seen[string(key)] = true
+			override.DeleteGlobalState = append(override.DeleteGlobalState, string(key))
+		}
+	}
+
+	if app.Boxes != nil {
+		override.Boxes = make(map[string][]byte, len(*app.Boxes))
+		for _, box := range *app.Boxes {
+			if _, ok := override.Boxes[string(box.Name)]; ok {
+				return simulation.AppOverride{}, fmt.Errorf("duplicate box %#x", box.Name)
+			}
+			override.Boxes[string(box.Name)] = append([]byte{}, box.Value...)
+		}
+	}
+	if app.DeleteBoxes != nil {
+		seen := make(map[string]bool, len(*app.DeleteBoxes))
+		for _, name := range *app.DeleteBoxes {
+			if seen[string(name)] {
+				return simulation.AppOverride{}, fmt.Errorf("duplicate deleted box %#x", name)
+			}
+			seen[string(name)] = true
+			override.DeleteBoxes = append(override.DeleteBoxes, string(name))
+		}
+	}
+
+	return override, nil
 }
 
 // printableUTF8OrEmpty checks to see if the entire string is a UTF8 printable string.
