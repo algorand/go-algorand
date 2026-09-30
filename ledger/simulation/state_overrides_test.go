@@ -499,3 +499,128 @@ func TestStateOverrideAppValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestStateOverrideBoxAccessFlags(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	creator := env.Accounts[0]
+	otherCreator := env.Accounts[1]
+	caller := env.Accounts[2]
+
+	// Advance the txn counter so there are unused IDs available for new apps
+	env.TransferAlgos(creator.Addr, caller.Addr, 1)
+	env.TransferAlgos(creator.Addr, caller.Addr, 1)
+	ownerAidx := basics.AppIndex(env.TxnInfo.LatestHeader.TxnCounter)
+	callerAidx := ownerAidx - 1
+
+	clear := assemble(t, "#pragma version 13\nint 1")
+	readProgram := assemble(t, fmt.Sprintf(`#pragma version 13
+int %d
+byte "shared"
+app_box_get
+assert
+byte "old"
+==`, ownerAidx))
+	writeProgram := assemble(t, fmt.Sprintf(`#pragma version 13
+int %d
+byte "shared"
+byte "new"
+app_box_put
+int 1`, ownerAidx))
+
+	newTxn := func() transactions.SignedTxn {
+		return env.TxnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        caller.Addr,
+			ApplicationID: callerAidx,
+			ForeignApps:   []basics.AppIndex{ownerAidx},
+			Boxes:         []transactions.BoxRef{{Index: 1, Name: []byte("shared")}},
+		}).Txn().Sign(caller.Sk)
+	}
+
+	boxKey := apps.MakeBoxKey(uint64(ownerAidx), "shared")
+	yes := true
+
+	testCases := []struct {
+		name           string
+		callerCreator  basics.Address
+		callerProgram  []byte
+		owner          simulation.AppOverride
+		expectedFailed string
+		expectedBox    []byte
+	}{
+		{
+			name:           "family write without FamilyBoxAccess",
+			callerCreator:  creator.Addr,
+			callerProgram:  writeProgram,
+			expectedFailed: fmt.Sprintf("family app %d may not write box of %d", callerAidx, ownerAidx),
+		},
+		{
+			name:          "family write with FamilyBoxAccess",
+			callerCreator: creator.Addr,
+			callerProgram: writeProgram,
+			owner:         simulation.AppOverride{FamilyBoxAccess: &yes},
+			expectedBox:   []byte("new"),
+		},
+		{
+			name:           "foreign read without ForeignBoxReads",
+			callerCreator:  otherCreator.Addr,
+			callerProgram:  readProgram,
+			expectedFailed: fmt.Sprintf("foreign app %d may not read box of %d", callerAidx, ownerAidx),
+		},
+		{
+			name:          "foreign read with ForeignBoxReads",
+			callerCreator: otherCreator.Addr,
+			callerProgram: readProgram,
+			owner:         simulation.AppOverride{ForeignBoxReads: &yes},
+		},
+		{
+			name:           "foreign write with ForeignBoxReads",
+			callerCreator:  otherCreator.Addr,
+			callerProgram:  writeProgram,
+			owner:          simulation.AppOverride{ForeignBoxReads: &yes},
+			expectedFailed: fmt.Sprintf("foreign app %d may not write box of %d", callerAidx, ownerAidx),
+		},
+	}
+
+	s := simulation.MakeSimulator(env.Ledger, false)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			owner := tc.owner
+			owner.Creator = creator.Addr
+			owner.ApprovalProgram = clear
+			owner.ClearStateProgram = clear
+			owner.Boxes = map[string][]byte{"shared": []byte("old")}
+
+			result, err := s.Simulate(simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{{newTxn()}},
+				StateOverrides: simulation.StateOverrides{
+					Accounts: map[basics.Address]simulation.AccountOverride{
+						ownerAidx.Address(): {Balance: &basics.MicroAlgos{Raw: 1_000_000}},
+					},
+					Apps: map[basics.AppIndex]simulation.AppOverride{
+						ownerAidx: owner,
+						callerAidx: {
+							Creator:           tc.callerCreator,
+							ApprovalProgram:   tc.callerProgram,
+							ClearStateProgram: clear,
+						},
+					},
+				},
+			})
+			require.NoError(t, err)
+			if tc.expectedFailed != "" {
+				require.Contains(t, result.TxnGroups[0].FailureMessage, tc.expectedFailed)
+				return
+			}
+			require.Empty(t, result.TxnGroups[0].FailureMessage)
+			if tc.expectedBox != nil {
+				require.Equal(t, tc.expectedBox, result.Block.Delta().KvMods[boxKey].Data)
+			}
+		})
+	}
+}

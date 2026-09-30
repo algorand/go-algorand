@@ -67,6 +67,14 @@ type AppOverride struct {
 	GlobalStateSchema *basics.StateSchema
 	LocalStateSchema  *basics.StateSchema
 	ExtraProgramPages *uint32
+	Version           *uint64
+
+	// SizeSponsor, if set, replaces the account that holds the minimum balance for the global
+	// schema and extra program pages. The zero address makes the creator hold it.
+	SizeSponsor *basics.Address
+
+	ForeignBoxReads *bool
+	FamilyBoxAccess *bool
 
 	// GlobalState entries are set, replacing any existing value for the same key. Other existing
 	// keys are left unchanged.
@@ -221,6 +229,8 @@ func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Addr
 		creator = override.Creator
 	}
 
+	// For a new app, these are zero values and so release nothing from the creator
+	oldSponsor := sizeSponsor(params, creator)
 	oldGlobalSchema := params.GlobalStateSchema
 	oldExtraPages := params.ExtraProgramPages
 
@@ -238,6 +248,18 @@ func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Addr
 	}
 	if override.ExtraProgramPages != nil {
 		params.ExtraProgramPages = *override.ExtraProgramPages
+	}
+	if override.Version != nil {
+		params.Version = *override.Version
+	}
+	if override.SizeSponsor != nil {
+		params.SizeSponsor = *override.SizeSponsor
+	}
+	if override.ForeignBoxReads != nil {
+		params.ForeignBoxReads = *override.ForeignBoxReads
+	}
+	if override.FamilyBoxAccess != nil {
+		params.FamilyBoxAccess = *override.FamilyBoxAccess
 	}
 	for key, value := range override.GlobalState {
 		if params.GlobalState == nil {
@@ -262,17 +284,24 @@ func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Addr
 		acct.TotalAppParams = basics.AddSaturate(acct.TotalAppParams, 1)
 		o.accounts[creator] = acct
 	}
-	sponsor := params.SizeSponsor
-	if sponsor.IsZero() {
-		sponsor = creator
-	}
-	acct, err := getAccount(sponsor)
+	// Release the old charge from the old sponsor before adding the new charge to the new sponsor,
+	// which may be the same account
+	acct, err := getAccount(oldSponsor)
 	if err != nil {
 		return err
 	}
-	acct.TotalAppSchema = acct.TotalAppSchema.SubSchema(oldGlobalSchema).AddSchema(params.GlobalStateSchema)
-	acct.TotalExtraAppPages = basics.AddSaturate(basics.SubSaturate(acct.TotalExtraAppPages, oldExtraPages), params.ExtraProgramPages)
-	o.accounts[sponsor] = acct
+	acct.TotalAppSchema = acct.TotalAppSchema.SubSchema(oldGlobalSchema)
+	acct.TotalExtraAppPages = basics.SubSaturate(acct.TotalExtraAppPages, oldExtraPages)
+	o.accounts[oldSponsor] = acct
+
+	newSponsor := sizeSponsor(params, creator)
+	acct, err = getAccount(newSponsor)
+	if err != nil {
+		return err
+	}
+	acct.TotalAppSchema = acct.TotalAppSchema.AddSchema(params.GlobalStateSchema)
+	acct.TotalExtraAppPages = basics.AddSaturate(acct.TotalExtraAppPages, params.ExtraProgramPages)
+	o.accounts[newSponsor] = acct
 
 	o.apps[aidx] = appOverlay{creator: creator, params: params}
 
@@ -309,6 +338,15 @@ func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Addr
 	o.accounts[appAddr] = appAcct
 
 	return nil
+}
+
+// sizeSponsor returns the account that holds the minimum balance for an app's global schema and
+// extra program pages.
+func sizeSponsor(params basics.AppParams, creator basics.Address) basics.Address {
+	if params.SizeSponsor.IsZero() {
+		return creator
+	}
+	return params.SizeSponsor
 }
 
 func validateAppParams(proto config.ConsensusParams, aidx basics.AppIndex, params basics.AppParams) error {
