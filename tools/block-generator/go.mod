@@ -20,7 +20,7 @@ require (
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/DataDog/zstd v1.5.7 // indirect
-	github.com/algorand/falcon v0.1.0 // indirect
+	github.com/algorand/falcon v0.2.0 // indirect
 	github.com/algorand/go-sumhash v0.1.0 // indirect
 	github.com/algorand/msgp v1.1.64 // indirect
 	github.com/algorand/sortition v1.1.1 // indirect
@@ -179,5 +179,3 @@ require (
 	gopkg.in/sohlich/elogrus.v3 v3.0.0-20180410122755-1fa29e2f2009 // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect
 )
-
-replace github.com/algorand/falcon => github.com/nullun/falcon v0.0.0-20260702112837-bd898d21fbdc
