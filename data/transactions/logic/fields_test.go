@@ -68,11 +68,11 @@ func TestGlobalVersionsAndTypes(t *testing.T) {
 			ops := testProg(t, text, ver)
 			switch field.mode {
 			case ModeSig:
-				testLogicBytes(t, ops.Program, defaultSigParamsWithVersion(ver))
+				testLogic(t, withAllowAll(text, ver), ver, defaultSigParamsWithVersion(ver))
 			case ModeApp:
 				testAppBytes(t, ops.Program, defaultAppParamsWithVersion(ver))
 			case modeAny:
-				testLogicBytes(t, ops.Program, defaultSigParamsWithVersion(ver))
+				testLogic(t, withAllowAll(text, ver), ver, defaultSigParamsWithVersion(ver))
 				testAppBytes(t, ops.Program, defaultAppParamsWithVersion(ver))
 			default:
 				t.Fail()

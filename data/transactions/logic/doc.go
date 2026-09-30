@@ -167,11 +167,23 @@ var opDescByName = map[string]OpDesc{
 	"arg_2": {"LogicSig argument 2", argAccess, nil, ""},
 	"arg_3": {"LogicSig argument 3", argAccess, nil, ""},
 	"args":  {"Ath LogicSig argument", argAccess, nil, ""},
-	"allow": {
-		"authorize the current LogicSig to perform sensitive transaction operation F",
-		"Authorization takes effect only when `allow` executes and applies only to the current transaction. " +
-			"In v14+, the protected fields and any `KeyRegistration` transaction require corresponding authorization.",
-		[]string{"LogicSig allowance index"}, "",
+	"allow_all": {
+		"permit every transaction type and protected field for the current LogicSig transaction",
+		"A successful v14+ LogicSig must permit its transaction's type, with `allow_all` or `allow_types`, and every protected field that has a non-default value, with `allow_all` or `allow_fields`. " +
+			"Permissions take effect only when the opcode executes and apply only to the current transaction. " +
+			"`allow_all` fails after `allow_types` or `allow_fields`. Either of those after `allow_all` replaces the blanket permission with only the types and fields they name.",
+		nil, "",
+	},
+	"allow_types": {
+		"permit transaction types T for the current LogicSig transaction",
+		"Repeated instructions accumulate permitted types. See `allow_all` for how permissions combine.",
+		[]string{"one or more transaction types, combined into a mask"}, "",
+	},
+	"allow_fields": {
+		"permit protected fields F to have non-default values in the current LogicSig transaction",
+		"Repeated instructions accumulate permitted fields. See `allow_all` for how permissions combine. " +
+			"`Fee` permits any nonzero fee, so a program that allows it should bound `txn Fee`.",
+		[]string{"one or more protected fields, combined into a mask"}, "",
 	},
 
 	"txn": {"field F of current transaction", "", []string{"transaction field index"}, ""},
@@ -393,7 +405,7 @@ var OpGroups = map[string][]string{
 	"Byte Array Logic":        {"b|", "b&", "b^", "b~"},
 	"Cryptography":            {"sha256", "keccak256", "sha512_256", "sha3_256", "sha512", "sumhash512", "falcon_verify", "ed25519verify", "ed25519verify_bare", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "vrf_verify", "ec_add", "ec_scalar_mul", "ec_pairing_check", "ec_multi_scalar_mul", "ec_subgroup_check", "ec_map_to", "mimc", "poseidon2"},
 	"Loading Values":          {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "pushints", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "pushbytess", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gloadss", "gaid", "gaids"},
-	"Authorization":           {"allow"},
+	"Authorization":           {"allow_all", "allow_types", "allow_fields"},
 	"Flow Control":            {"err", "bnz", "bz", "b", "return", "pop", "popn", "dup", "dup2", "dupn", "dig", "bury", "cover", "uncover", "frame_dig", "frame_bury", "swap", "select", "assert", "callsub", "proto", "retsub", "switch", "match"},
 	"Block Access":            {"online_stake", "log", "block"},
 	"Account Access":          {"balance", "min_balance", "acct_params_get", "voter_params_get"},

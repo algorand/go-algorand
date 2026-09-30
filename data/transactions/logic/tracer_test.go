@@ -107,9 +107,15 @@ func TestLogicSigEvalWithTracer(t *testing.T) {
 			mock := mocktracer.Tracer{}
 			ep := DefaultSigParams()
 			ep.Tracer = &mock
-			TestLogic(t, testCase.program, AssemblerMaxVersion, ep, testCase.evalProblems...)
+			TestLogic(t, "#pragma autosalt false\nallow_all\n"+testCase.program, AssemblerMaxVersion, ep, testCase.evalProblems...)
 
-			require.Equal(t, testCase.expectedEvents, mock.Events)
+			// The policy declaration adds one opcode after BeforeProgram.
+			expected := mocktracer.FlattenEvents([][]mocktracer.Event{
+				testCase.expectedEvents[:1],
+				mocktracer.OpcodeEvents(1, false),
+				testCase.expectedEvents[1:],
+			})
+			require.Equal(t, expected, mock.Events)
 		})
 	}
 }

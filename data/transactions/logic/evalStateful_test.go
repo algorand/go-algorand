@@ -268,7 +268,7 @@ txna Accounts 0
 gtxna 0 ApplicationArgs 0
 ==
 `
-	opcodesRunModeSignature := `allow RekeyTo
+	opcodesRunModeSignature := `allow_all
 arg_0
 arg_1
 !=
@@ -411,7 +411,9 @@ log
 		"arg_1",
 		"arg_2",
 		"arg_3",
-		"allow RekeyTo",
+		"allow_all",
+		"allow_types pay",
+		"allow_fields RekeyTo",
 	}
 	for _, source := range disallowed {
 		ops := testProg(t, source, AssemblerMaxVersion)
@@ -3471,6 +3473,9 @@ func TestReturnTypes(t *testing.T) {
 					}
 				}
 				var sb strings.Builder
+				if m == ModeSig {
+					sb.WriteString("allow_all\n")
+				}
 				if provideStackInput {
 					for _, t := range spec.Arg.Types {
 						sb.WriteString(typeToArg(t))
@@ -3481,7 +3486,6 @@ func TestReturnTypes(t *testing.T) {
 
 				tx0 := makeSampleTxn()
 				tx0.Txn.Type = protocol.ApplicationCallTx
-				tx0.Txn.RekeyTo = basics.Address{}
 				tx0.Txn.ApplicationID = 300
 				tx0.Txn.ForeignApps = []basics.AppIndex{300}
 				tx0.Txn.ForeignAssets = []basics.AssetIndex{400}

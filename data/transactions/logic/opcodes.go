@@ -82,8 +82,8 @@ const varintBranchVersion = 13 // branch offsets encoded as binary.Varint instea
 const poseidon2Version = 13
 const foreignBoxVersion = 13 // app_params_set, foreign app box access
 
-// logicSigAllowVersion is the first version in which LogicSigs must explicitly
-// authorize sensitive transaction operations with the allow opcode.
+// logicSigAllowVersion is the first version in which LogicSigs approve only the
+// transaction types and protected fields they permit with the allow opcodes.
 const logicSigAllowVersion = 14
 
 // EXPERIMENTAL. These should be revisited whenever a new LogicSigVersion is
@@ -300,6 +300,13 @@ func (d OpDetails) trust() OpDetails {
 	return d
 }
 
+// checker installs a static check for an op of fixed size. The check need not
+// set nextpc.
+func (d OpDetails) checker(check checkFunc) OpDetails {
+	d.check = check
+	return d
+}
+
 // subOp marks an OpSpec as belonging to a multi-byte opcode family. The
 // OpSpec.Opcode field is the prefix byte; n is the second byte. Fixed sizes
 // grow to include the sub-opcode; dynamically determined sizes remain zero.
@@ -407,6 +414,7 @@ const (
 	// from immLabel, which remains the two-byte big-endian form used by pre-v13
 	// branches and by switch/match at every version.
 	immVarintLabel
+	immLogicSigMask // allow_types and allow_fields one-byte option mask
 )
 
 func (ik immKind) String() string {
@@ -429,6 +437,8 @@ func (ik immKind) String() string {
 		return fmt.Sprintf("varuint count, [%s ...]", immLabel.String())
 	case immVarintLabel:
 		return "varint (zigzag)"
+	case immLogicSigMask:
+		return "uint8 mask"
 	}
 	return "unknown"
 }
@@ -793,7 +803,9 @@ var OpSpecs = []OpSpec{
 	{0xc6, "gitxnas", opGitxnas, proto("i:a"), 6, immediates("t", "f").field("f", &TxnArrayFields).only(ModeApp)},
 
 	// Execution settings: prefix 0xc7, with sub-opcodes selecting the operation.
-	{0xc7, "allow", opAllow, proto(":"), logicSigAllowVersion, field("f", &LogicSigAllowanceFields).subOp(0x01).only(ModeSig)},
+	{0xc7, "allow_all", opAllowAll, proto(":"), logicSigAllowVersion, subOp(0x01).only(ModeSig)},
+	{0xc7, "allow_types", opAllowTypes, proto(":"), logicSigAllowVersion, immKinded(immLogicSigMask, "t ...").field("t ...", &LogicSigAllowTypes).assembler(asmAllowMask).checker(checkAllowTypes).subOp(0x02).only(ModeSig)},
+	{0xc7, "allow_fields", opAllowFields, proto(":"), logicSigAllowVersion, immKinded(immLogicSigMask, "f ...").field("f ...", &LogicSigAllowFields).assembler(asmAllowMask).checker(checkAllowFields).subOp(0x03).only(ModeSig)},
 
 	// randomness support
 	{0xd0, "vrf_verify", opVrfVerify, proto("bb{80}b{32}:b{64}T"), randomnessVersion, field("s", &VrfStandards).costs(5700)},

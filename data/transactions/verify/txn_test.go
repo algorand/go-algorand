@@ -632,6 +632,7 @@ func TestTxnValidationLogicSigAllow(t *testing.T) {
 	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
 	dummyLedger := DummyLedgerForSignature{}
 
+	// makeLogicSigTxn returns a payment with a nonzero Fee and RekeyTo.
 	makeLogicSigTxn := func(t *testing.T, source string, version uint64, delegated bool) transactions.SignedTxn {
 		t.Helper()
 
@@ -658,6 +659,7 @@ func TestTxnValidationLogicSigAllow(t *testing.T) {
 			},
 		}
 	}
+	// makeKeyregLogicSigTxn returns a key registration with a nonzero Fee.
 	makeKeyregLogicSigTxn := func(t *testing.T, source string, version uint64, delegated bool) transactions.SignedTxn {
 		t.Helper()
 		stxn := makeLogicSigTxn(t, source, version, delegated)
@@ -665,6 +667,16 @@ func TestTxnValidationLogicSigAllow(t *testing.T) {
 		stxn.Txn.RekeyTo = basics.Address{}
 		stxn.Txn.PaymentTxnFields = transactions.PaymentTxnFields{}
 		return stxn
+	}
+	verify := func(t *testing.T, stxn transactions.SignedTxn, problem string) {
+		t.Helper()
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		if problem == "" {
+			require.NoError(t, err)
+			return
+		}
+		requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
+		require.ErrorContains(t, err, problem)
 	}
 
 	for _, delegated := range []bool{false, true} {
@@ -674,32 +686,43 @@ func TestTxnValidationLogicSigAllow(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			// Programs from before v14 retain their historical behavior.
-			stxn := makeLogicSigTxn(t, "int 1", 13, delegated)
-			_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-			require.NoError(t, err)
+			verify(t, makeLogicSigTxn(t, "int 1", 13, delegated), "")
 
-			stxn = makeLogicSigTxn(t, "int 1", proto.LogicSigVersion, delegated)
-			_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-			requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
-			require.ErrorContains(t, err, "transaction field RekeyTo requires `allow RekeyTo`")
+			// The transaction's type must be permitted, even without protected
+			// fields.
+			stxn := makeLogicSigTxn(t, "int 1", proto.LogicSigVersion, delegated)
+			stxn.Txn.RekeyTo = basics.Address{}
+			stxn.Txn.Fee = basics.MicroAlgos{}
+			verify(t, stxn, "transaction type pay requires `allow_types pay`")
+			stxn = makeLogicSigTxn(t, "allow_types pay; int 1", proto.LogicSigVersion, delegated)
+			stxn.Txn.RekeyTo = basics.Address{}
+			stxn.Txn.Fee = basics.MicroAlgos{}
+			verify(t, stxn, "")
 
-			stxn = makeLogicSigTxn(t, "allow RekeyTo; int 1", proto.LogicSigVersion, delegated)
-			_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-			require.NoError(t, err)
+			// Each protected field with a non-default value must be permitted.
+			verify(t, makeLogicSigTxn(t, "allow_types pay; int 1", proto.LogicSigVersion, delegated),
+				"transaction field RekeyTo requires `allow_fields RekeyTo`")
+			verify(t, makeLogicSigTxn(t, "allow_types pay; allow_fields RekeyTo; int 1", proto.LogicSigVersion, delegated),
+				"transaction field Fee requires `allow_fields Fee`")
+			verify(t, makeLogicSigTxn(t, "allow_types pay; allow_fields RekeyTo Fee; int 1", proto.LogicSigVersion, delegated), "")
+			verify(t, makeLogicSigTxn(t, "allow_all; int 1", proto.LogicSigVersion, delegated), "")
 
-			// Key registration requires a transaction-level allowance.
-			stxn = makeKeyregLogicSigTxn(t, "int 1", 13, delegated)
-			_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-			require.NoError(t, err)
+			// Key registration is a type of its own, and nonparticipation also
+			// needs its field.
+			verify(t, makeKeyregLogicSigTxn(t, "int 1", 13, delegated), "")
+			verify(t, makeKeyregLogicSigTxn(t, "allow_types pay; allow_fields Fee; int 1", proto.LogicSigVersion, delegated),
+				"transaction type keyreg requires `allow_types keyreg`")
+			verify(t, makeKeyregLogicSigTxn(t, "allow_types keyreg; allow_fields Fee; int 1", proto.LogicSigVersion, delegated), "")
 
-			stxn = makeKeyregLogicSigTxn(t, "int 1", proto.LogicSigVersion, delegated)
-			_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-			requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
-			require.ErrorContains(t, err, "transaction type KeyRegistration requires `allow KeyRegistration`")
-
-			stxn = makeKeyregLogicSigTxn(t, "allow KeyRegistration; int 1", proto.LogicSigVersion, delegated)
-			_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-			require.NoError(t, err)
+			stxn = makeKeyregLogicSigTxn(t, "allow_types keyreg; allow_fields Fee; int 1", proto.LogicSigVersion, delegated)
+			stxn.Txn.Nonparticipation = true
+			verify(t, stxn, "transaction field Nonparticipation requires `allow_fields Nonparticipation`")
+			stxn = makeKeyregLogicSigTxn(t, "allow_types keyreg; allow_fields Fee Nonparticipation; int 1", proto.LogicSigVersion, delegated)
+			stxn.Txn.Nonparticipation = true
+			verify(t, stxn, "")
+			stxn = makeKeyregLogicSigTxn(t, "allow_all; int 1", proto.LogicSigVersion, delegated)
+			stxn.Txn.Nonparticipation = true
+			verify(t, stxn, "")
 		})
 	}
 }
@@ -1888,10 +1911,12 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 
 	makeProgram := func(proto config.ConsensusParams, minSize int) []byte {
 		// GenerateUnsaltedProgramOfSize needs at least 5 bytes for a valid
-		// always-succeeding program.
-		if minSize < 5 {
-			minSize = 5
+		// approving program, plus 2 bytes for the v14 allow_all.
+		minimum := 5
+		if proto.LogicSigVersion >= 14 {
+			minimum += 2
 		}
+		minSize = max(minSize, minimum)
 		program, err := txntest.GenerateUnsaltedProgramOfSize(uint(minSize), uint(proto.LogicSigVersion))
 		require.NoError(t, err)
 		return program
@@ -1899,11 +1924,13 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 
 	// A LogicSig may carry no argument it does not read, so any case below that
 	// supplies args and expects success needs a program that reads them. Seven
-	// bytes is the smallest program with room for one arg read.
+	// bytes (9 in v14+) is the smallest program with room for one arg read.
 	makeArgProgram := func(proto config.ConsensusParams, minSize int, args uint) []byte {
-		if minSize < 7 {
-			minSize = 7
+		minimum := 5 + 2*int(args)
+		if proto.LogicSigVersion >= 14 {
+			minimum += 2
 		}
+		minSize = max(minSize, minimum)
 		program, err := txntest.GenerateUnsaltedArgReadingProgramOfSize(uint(minSize), uint(proto.LogicSigVersion), args)
 		require.NoError(t, err)
 		return program

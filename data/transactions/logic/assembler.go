@@ -1186,6 +1186,30 @@ func (ops *OpStream) checkArgCount(name string, mnemonic token, args []token, ex
 	return nil
 }
 
+// asmAllowMask assembles allow_types and allow_fields, ORing their options into
+// a one-byte mask.
+func asmAllowMask(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
+	if len(args) == 0 {
+		return mnemonic.errorAfterf("%s needs at least one option", spec.Name)
+	}
+	group := spec.Immediates[0].Group
+	var mask byte
+	for _, arg := range args {
+		fs, ok := group.SpecByName(arg.str)
+		if !ok {
+			return arg.errorf("%s unknown field: %#v", spec.Name, arg.str)
+		}
+		if fs.Version() > ops.Version {
+			return arg.errorf("%s %s field was introduced in v%d. Missed #pragma version?", spec.Name, arg.str, fs.Version())
+		}
+		mask |= fs.Field()
+	}
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(spec.SubOpcode)
+	ops.pending.WriteByte(mask)
+	return nil
+}
+
 // Basic assembly, used for most opcodes. It assembles based on the information in OpSpec.
 func asmDefault(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
 	if err := ops.checkArgCount(spec.Name, mnemonic, args, len(spec.OpDetails.Immediates)); err != nil {
@@ -3019,6 +3043,7 @@ func AssembleStringWithVersion(text string, version uint64) (*OpStream, error) {
 
 type disassembleState struct {
 	program []byte
+	version uint64
 	pc      int
 	out     io.Writer
 
@@ -3066,6 +3091,20 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 	for _, imm := range spec.OpDetails.Immediates {
 		out += " "
 		switch imm.kind {
+		case immLogicSigMask:
+			if pc+1 > len(dis.program) {
+				return "", fmt.Errorf("program end while reading immediate %s for %s", imm.Name, spec.Name)
+			}
+			mask := dis.program[pc]
+			if err := validateLogicSigMask(imm.Group, mask, dis.version); err != nil {
+				return "", fmt.Errorf("invalid immediate %s for %s: %w", imm.Name, spec.Name, err)
+			}
+			var names []string
+			for bit := range maskBits(mask) {
+				names = append(names, imm.Group.Names[bit])
+			}
+			out += strings.Join(names, " ")
+			pc++
 		case immByte, immInt8:
 			if pc+1 > len(dis.program) {
 				return "", fmt.Errorf("program end while reading immediate %s for %s",
@@ -3383,6 +3422,7 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 		text = body.String()
 		return
 	}
+	dis.version = version
 	dis.pc = vlen
 	for dis.pc < len(program) {
 		err = dis.outputLabelIfNeeded()
