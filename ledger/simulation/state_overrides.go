@@ -213,8 +213,8 @@ func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Addr
 		if res.AppParams == nil {
 			return fmt.Errorf("app %d params not found for creator %s", aidx, creator)
 		}
-		params = *res.AppParams
-		params.GlobalState = params.GlobalState.Clone()
+		// Deep copy so nothing here can modify the ledger's own data
+		params = res.AppParams.Clone()
 	} else {
 		// Apps created during simulation are assigned IDs just above the current txn counter, so
 		// new apps must stay clear of that range to avoid colliding with them.

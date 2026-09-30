@@ -778,3 +778,177 @@ int 1`, appAcctMinBalance),
 	require.NoError(t, err)
 	require.NotNil(t, value)
 }
+
+// TestStateOverridesDoNotModifyLedger simulates a transaction that modifies every kind of
+// overridden state, and checks that the real ledger is unchanged afterwards.
+func TestStateOverridesDoNotModifyLedger(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	creator := env.Accounts[0]
+	caller := env.Accounts[1]
+	sponsor := env.Accounts[2]
+	proto := env.TxnInfo.CurrentProtocolParams()
+
+	// An existing app with global state and a box on the real ledger
+	aidx := env.CreateApp(creator.Addr, simulationtesting.AppParams{
+		ApprovalProgram: `#pragma version 8
+txn ApplicationID
+bz create
+byte "x"
+int 4
+box_create
+return
+create:
+byte "a"
+int 1
+app_global_put
+int 1`,
+		ClearStateProgram: "#pragma version 8\nint 1",
+		GlobalStateSchema: basics.StateSchema{NumUint: 1},
+	})
+	env.TransferAlgos(creator.Addr, aidx.Address(), 1_000_000)
+	env.Txn(env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        creator.Addr,
+		ApplicationID: aidx,
+		Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("x")}},
+	}).SignedTxn())
+	newAidx := basics.AppIndex(env.TxnInfo.LatestHeader.TxnCounter)
+
+	addrs := []basics.Address{creator.Addr, caller.Addr, sponsor.Addr, aidx.Address(), newAidx.Address()}
+	boxKeys := []string{
+		apps.MakeBoxKey(uint64(aidx), "x"),
+		apps.MakeBoxKey(uint64(aidx), "y"),
+		apps.MakeBoxKey(uint64(newAidx), "n"),
+	}
+
+	type ledgerSnapshot struct {
+		Latest    basics.Round
+		Totals    ledgercore.AccountTotals
+		Accounts  []ledgercore.AccountData
+		App       ledgercore.AppResource
+		AppExists bool
+		NewExists bool
+		Boxes     [][]byte
+	}
+	snapshot := func() ledgerSnapshot {
+		t.Helper()
+		var snap ledgerSnapshot
+		var err error
+		snap.Latest = env.Ledger.Latest()
+		snap.Totals, err = env.Ledger.Totals(snap.Latest)
+		require.NoError(t, err)
+		for _, addr := range addrs {
+			acct, _, err := env.Ledger.LookupWithoutRewards(snap.Latest, addr)
+			require.NoError(t, err)
+			snap.Accounts = append(snap.Accounts, acct)
+		}
+		snap.App, err = env.Ledger.LookupApplication(snap.Latest, creator.Addr, aidx)
+		require.NoError(t, err)
+		_, snap.AppExists, err = env.Ledger.GetCreatorForRound(snap.Latest, basics.CreatableIndex(aidx), basics.AppCreatable)
+		require.NoError(t, err)
+		_, snap.NewExists, err = env.Ledger.GetCreatorForRound(snap.Latest, basics.CreatableIndex(newAidx), basics.AppCreatable)
+		require.NoError(t, err)
+		for _, key := range boxKeys {
+			value, err := env.Ledger.LookupKv(snap.Latest, key)
+			require.NoError(t, err)
+			snap.Boxes = append(snap.Boxes, value)
+		}
+		return snap
+	}
+	before := snapshot()
+	require.True(t, before.AppExists)
+	require.False(t, before.NewExists)
+
+	// Replace the app's program with one that modifies global state, both boxes, and pays the
+	// caller from the app account
+	mutatingProgram := assemble(t, `#pragma version 8
+byte "a"
+int 99
+app_global_put
+byte "y"
+byte "zzz"
+box_put
+byte "x"
+box_del
+assert
+itxn_begin
+int pay
+itxn_field TypeEnum
+txn Sender
+itxn_field Receiver
+int 5000
+itxn_field Amount
+itxn_submit
+int 1`)
+	clear := assemble(t, "#pragma version 8\nint 1")
+	globalSchema := basics.StateSchema{NumUint: 1}
+	version := uint64(3)
+	yes := true
+	balance := func(microAlgos uint64) simulation.AccountOverride {
+		return simulation.AccountOverride{Balance: &basics.MicroAlgos{Raw: microAlgos}}
+	}
+
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        caller.Addr,
+		ApplicationID: aidx,
+		Fee:           2 * proto.MinTxnFee,
+		Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("x")}, {Index: 0, Name: []byte("y")}},
+	}).Txn().Sign(caller.Sk)
+
+	s := simulation.MakeSimulator(env.Ledger, false)
+	result, err := s.Simulate(simulation.Request{
+		TxnGroups: [][]transactions.SignedTxn{{txn}},
+		StateOverrides: simulation.StateOverrides{
+			Accounts: map[basics.Address]simulation.AccountOverride{
+				creator.Addr:      balance(50_000_000),
+				caller.Addr:       balance(40_000_000),
+				sponsor.Addr:      balance(30_000_000),
+				aidx.Address():    balance(20_000_000),
+				newAidx.Address(): balance(10_000_000),
+			},
+			Apps: map[basics.AppIndex]simulation.AppOverride{
+				aidx: {
+					ApprovalProgram: mutatingProgram,
+					Version:         &version,
+					SizeSponsor:     &sponsor.Addr,
+					ForeignBoxReads: &yes,
+					FamilyBoxAccess: &yes,
+					GlobalState:     basics.TealKeyValue{"a": {Type: basics.TealUintType, Uint: 5}},
+					Boxes:           map[string][]byte{"y": []byte("yyy")},
+				},
+				newAidx: {
+					Creator:           creator.Addr,
+					ApprovalProgram:   clear,
+					ClearStateProgram: clear,
+					GlobalStateSchema: &globalSchema,
+					Boxes:             map[string][]byte{"n": []byte("new")},
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+
+	// The simulation really did modify the overridden state
+	delta := result.Block.Delta()
+	require.Equal(t, []byte("zzz"), delta.KvMods[boxKeys[1]].Data)
+	require.Nil(t, delta.KvMods[boxKeys[0]].Data)
+	require.Contains(t, delta.KvMods, boxKeys[0])
+	require.Len(t, result.TxnGroups[0].Txns[0].Txn.EvalDelta.InnerTxns, 1)
+
+	// But the real ledger did not change
+	require.Equal(t, before, snapshot())
+
+	// And the overrides do not leak into later simulations: the app's real program runs, and
+	// fails because box "x" already exists
+	result, err = s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{{txn}}})
+	require.NoError(t, err)
+	require.Contains(t, result.TxnGroups[0].FailureMessage, "rejected by ApprovalProgram")
+	require.Equal(t, before, snapshot())
+}
