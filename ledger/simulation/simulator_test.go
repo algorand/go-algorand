@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
@@ -66,6 +67,9 @@ func TestNonOverridenDataLedgerMethodsUseRoundParameter(t *testing.T) {
 		"LookupLatest",
 		"LatestTotals",
 		"LookupWithoutRewards",
+		"LookupApplication",
+		"GetCreatorForRound",
+		"LookupKv",
 	}
 
 	// methods that don't use a round number
@@ -252,4 +256,18 @@ int 1`,
 		mocktracer.AfterBlock(block.Block().Round()),
 	}
 	mocktracer.AssertEventsEqual(t, expectedEvents, mockTracer.Events)
+}
+
+// TestReservedCreatableIDs ensures a single group cannot create more creatables than the IDs
+// reserved for them, which would let them collide with apps created by state overrides.
+func TestReservedCreatableIDs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for version, proto := range config.Consensus {
+		// Each top-level txn may issue MaxInnerTransactions, or with pooling the group shares
+		// MaxTxGroupSize * MaxInnerTransactions (including nested inners), so the totals match.
+		maxTxns := proto.MaxTxGroupSize * (1 + proto.MaxInnerTransactions)
+		require.Less(t, maxTxns, reservedCreatableIDs, "consensus version %s", version)
+	}
 }
