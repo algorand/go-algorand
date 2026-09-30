@@ -225,7 +225,7 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 		}
 	}
 
-	if err := transactions.CheckTxnGroup(stxs); err != nil {
+	if err := transactions.CheckTxnGroup(stxs, groupCtx.consensusParams.AllowGroupedHeartbeats); err != nil {
 		groupIndex := -1
 		var groupErr *transactions.TxGroupMalformedError
 		if errors.As(err, &groupErr) {
