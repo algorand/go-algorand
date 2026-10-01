@@ -80,6 +80,10 @@ type P2PNetwork struct {
 	wsPeersConnectivityCheckTicker *time.Ticker
 	peerStater                     peerConnectionStater
 
+	// wsPeersClosed is set by innerStop under wsPeersLock. Once it is set, stream
+	// handlers must not register new wsPeers, because nothing would close them.
+	wsPeersClosed bool
+
 	// connPerfMonitor is used on outgoing connections to measure their relative message timing
 	connPerfMonitor *connectionPerformanceMonitor
 
@@ -515,6 +519,7 @@ func (n *P2PNetwork) Stop() {
 func (n *P2PNetwork) innerStop() {
 	closeGroup := sync.WaitGroup{}
 	n.wsPeersLock.Lock()
+	n.wsPeersClosed = true
 	closeGroup.Add(len(n.wsPeers))
 	deadline := time.Now().Add(peerDisconnectionAckDuration)
 	for peerID, peer := range n.wsPeers {
@@ -1032,19 +1037,10 @@ func (n *P2PNetwork) baseWsStreamHandler(ctx context.Context, p2pPeer peer.ID, s
 	}
 
 	wsp.init(n.config, outgoingMessagesBufferSize)
-	n.wsPeersLock.Lock()
-	if wsp.didSignalClose.Load() == 1 {
-		networkPeerAlreadyClosed.Inc(nil)
-		n.wsPeersLock.Unlock()
-		return &p2p.StreamHandlerLoggedError{Level: logging.Debug, Err: fmt.Errorf("peer closing %s", addr)}
+	if !n.addPeer(p2pPeer, wsp) {
+		wsp.CloseAndWait(time.Now().Add(peerDisconnectionAckDuration))
+		return &p2p.StreamHandlerLoggedError{Level: logging.Debug, Err: fmt.Errorf("peer closing or network stopping: %s", addr)}
 	}
-	if !incoming {
-		wsp.throttledOutgoingConnection = claimThrottleSlot(&n.throttledOutgoingConnections)
-	}
-	n.wsPeers[p2pPeer] = wsp
-	n.wsPeersToIDs[wsp] = p2pPeer
-	n.wsPeersLock.Unlock()
-	n.wsPeersChangeCounter.Add(1)
 
 	event := "ConnectedOut"
 	msg := "Made outgoing connection to peer %s"
@@ -1068,6 +1064,30 @@ func (n *P2PNetwork) baseWsStreamHandler(ctx context.Context, p2pPeer peer.ID, s
 			InstanceName:  wsp.InstanceName,
 		})
 	return nil
+}
+
+// addPeer registers wsp unless it is closing or the network has stopped.
+// The caller must close and wait for a rejected peer.
+func (n *P2PNetwork) addPeer(id peer.ID, wsp *wsPeer) bool {
+	n.wsPeersLock.Lock()
+	defer n.wsPeersLock.Unlock()
+	if wsp.didSignalClose.Load() == 1 {
+		networkPeerAlreadyClosed.Inc(nil)
+		n.identityTracker.removeIdentity(wsp)
+		return false
+	}
+	if n.wsPeersClosed {
+		n.identityTracker.removeIdentity(wsp)
+		return false
+	}
+	// Only registered peers own throttle slots; removePeer releases them.
+	if wsp.outgoing {
+		wsp.throttledOutgoingConnection = claimThrottleSlot(&n.throttledOutgoingConnections)
+	}
+	n.wsPeers[id] = wsp
+	n.wsPeersToIDs[wsp] = id
+	n.wsPeersChangeCounter.Add(1)
+	return true
 }
 
 // peerRemoteClose called from wsPeer to report that it has closed
