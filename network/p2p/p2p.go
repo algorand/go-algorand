@@ -346,13 +346,19 @@ func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) bool {
 		// if we are already connected to this peer, ensure it's properly handled
 		if conns := s.host.Network().ConnsToPeer(peerInfo.ID); len(conns) > 0 {
 			if !s.host.ConnManager().IsProtected(peerInfo.ID, cnmgrTag) {
-				// connection was established by DHT/pubsub before the mesh thread
+				// outbound connection was established by DHT/pubsub before the mesh thread
 				// could protect it, so handleConnected skipped stream creation.
 				// protect and re-trigger stream setup now.
-				s.host.ConnManager().Protect(peerInfo.ID, cnmgrTag)
-				go s.streams.handleConnected(conns[0])
-				if conns[0].Stat().Direction == network.DirOutbound {
-					numOutgoingConns++
+				// inbound connections are not re-triggered: streamManager.Connected already
+				// applied the peer ID ordering to them, and opening another stream here
+				// would duplicate the one opened by Connected or by the remote peer.
+				for _, conn := range conns {
+					if conn.Stat().Direction == network.DirOutbound {
+						s.host.ConnManager().Protect(peerInfo.ID, cnmgrTag)
+						go s.streams.handleConnected(conn)
+						numOutgoingConns++
+						break
+					}
 				}
 			}
 			continue
