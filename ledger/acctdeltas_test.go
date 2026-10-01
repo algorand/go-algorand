@@ -1405,11 +1405,10 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 
 	nilRowCounter := func() (nilRowCount int, err error) {
 		err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err0 error) {
-			stmt, err0 := tx.PrepareContext(ctx, "SELECT key FROM kvstore WHERE value IS NULL;")
+			stmt, err0 := tx.PrepareContext(ctx, "SELECT key FROM kvstore WHERE value IS NULL;") //nolint:sqlclosecheck // prepared on tx, which closes it on commit or rollback
 			if err0 != nil {
 				return
 			}
-			defer stmt.Close()
 			rows, err0 := stmt.QueryContext(ctx)
 			if err0 != nil {
 				return

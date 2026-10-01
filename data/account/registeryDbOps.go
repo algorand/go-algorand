@@ -73,11 +73,10 @@ func (d deleteStateProofKeysOp) apply(db *participationDB) error {
 			return fmt.Errorf("unable to scan pk: %w", err)
 		}
 
-		stmt, err := tx.Prepare(deleteStateProofKeysQuery)
+		stmt, err := tx.Prepare(deleteStateProofKeysQuery) //nolint:sqlclosecheck // prepared on tx, which closes it on commit or rollback
 		if err != nil {
 			return fmt.Errorf("unable to prepare state proof delete: %w", err)
 		}
-		defer stmt.Close()
 
 		_, err = stmt.Exec(pk, d.round)
 		if err != nil {
@@ -280,11 +279,10 @@ func (a *appendKeysOp) apply(db *participationDB) error {
 			return fmt.Errorf("unable to scan pk: %w", err)
 		}
 
-		stmt, err := tx.Prepare(appendStateProofKeysQuery)
+		stmt, err := tx.Prepare(appendStateProofKeysQuery) //nolint:sqlclosecheck // prepared on tx, which closes it on commit or rollback
 		if err != nil {
 			return fmt.Errorf("unable to prepare state proof insert: %w", err)
 		}
-		defer stmt.Close()
 
 		for _, key := range a.keys {
 			result, err := stmt.Exec(pk, key.Round, protocol.Encode(key.Key))

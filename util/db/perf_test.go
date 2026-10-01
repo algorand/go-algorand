@@ -154,11 +154,10 @@ func BenchmarkSQLQueryAPIs(b *testing.B) {
 
 	b.Run("rdb.Atomic/PrepareBatch", func(b *testing.B) {
 		err = rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-			stmt, err := tx.Prepare("SELECT b FROM t WHERE a=?")
+			stmt, err := tx.Prepare("SELECT b FROM t WHERE a=?") //nolint:sqlclosecheck // prepared on tx, which closes it on commit or rollback
 			if err != nil {
 				return err
 			}
-			defer stmt.Close()
 
 			for i := 0; i < b.N; i++ {
 				var r int

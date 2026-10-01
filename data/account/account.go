@@ -62,11 +62,10 @@ func ImportRoot(store db.Accessor, seed [32]byte) (acc Root, err error) {
 			return fmt.Errorf("ImportRoot: failed to install database: %v", err1)
 		}
 
-		stmt, err1 := tx.Prepare("insert into RootAccount values (?)")
+		stmt, err1 := tx.Prepare("insert into RootAccount values (?)") //nolint:sqlclosecheck // prepared on tx, which closes it on commit or rollback
 		if err1 != nil {
 			return fmt.Errorf("ImportRoot: failed to prepare statement: %v", err1)
 		}
-		defer stmt.Close()
 
 		_, err1 = stmt.Exec(raw)
 		if err1 != nil {
