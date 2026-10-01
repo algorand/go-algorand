@@ -167,7 +167,9 @@ type RetryClearFn func(ctx context.Context)
 // The *Result functions below are like the Store methods of the same name without the suffix,
 // for a function that produces a result. Only the result of the final attempt is returned, so
 // fn does not need to discard results from an attempt that failed and was retried, as it
-// would if it stored them in variables declared outside fn.
+// would if it stored them in variables declared outside fn. If err is not nil, the result is
+// what the last call to fn returned along with its error, or the zero value if that call
+// succeeded but its transaction was not committed.
 
 // BatchResult is like Store.Batch, for a function that produces a result.
 func BatchResult[T any](s Store, fn func(ctx context.Context, tx BatchScope) (T, error)) (T, error) {
@@ -176,11 +178,17 @@ func BatchResult[T any](s Store, fn func(ctx context.Context, tx BatchScope) (T,
 
 // BatchContextResult is like Store.BatchContext, for a function that produces a result.
 func BatchContextResult[T any](ctx context.Context, s Store, fn func(ctx context.Context, tx BatchScope) (T, error)) (res T, err error) {
-	err = s.BatchContext(ctx, func(ctx context.Context, tx BatchScope) error { //nolint:retryclosure // res is overwritten by every attempt, so only the final attempt's result is returned
+	var fnFailed bool
+	err = s.BatchContext(ctx, func(ctx context.Context, tx BatchScope) error { //retryclosure:ignore res and fnFailed are overwritten by every attempt, so they describe only the final attempt
 		var fnErr error
 		res, fnErr = fn(ctx, tx)
+		fnFailed = fnErr != nil
 		return fnErr
 	})
+	if err != nil && !fnFailed {
+		var zero T
+		res = zero
+	}
 	return
 }
 
@@ -191,11 +199,17 @@ func SnapshotResult[T any](s Store, fn func(ctx context.Context, tx SnapshotScop
 
 // SnapshotContextResult is like Store.SnapshotContext, for a function that produces a result.
 func SnapshotContextResult[T any](ctx context.Context, s Store, fn func(ctx context.Context, tx SnapshotScope) (T, error)) (res T, err error) {
-	err = s.SnapshotContext(ctx, func(ctx context.Context, tx SnapshotScope) error { //nolint:retryclosure // res is overwritten by every attempt, so only the final attempt's result is returned
+	var fnFailed bool
+	err = s.SnapshotContext(ctx, func(ctx context.Context, tx SnapshotScope) error { //retryclosure:ignore res and fnFailed are overwritten by every attempt, so they describe only the final attempt
 		var fnErr error
 		res, fnErr = fn(ctx, tx)
+		fnFailed = fnErr != nil
 		return fnErr
 	})
+	if err != nil && !fnFailed {
+		var zero T
+		res = zero
+	}
 	return
 }
 
@@ -206,10 +220,16 @@ func TransactionResult[T any](s Store, fn func(ctx context.Context, tx Transacti
 
 // TransactionContextResult is like Store.TransactionContext, for a function that produces a result.
 func TransactionContextResult[T any](ctx context.Context, s Store, fn func(ctx context.Context, tx TransactionScope) (T, error)) (res T, err error) {
-	err = s.TransactionContext(ctx, func(ctx context.Context, tx TransactionScope) error { //nolint:retryclosure // res is overwritten by every attempt, so only the final attempt's result is returned
+	var fnFailed bool
+	err = s.TransactionContext(ctx, func(ctx context.Context, tx TransactionScope) error { //retryclosure:ignore res and fnFailed are overwritten by every attempt, so they describe only the final attempt
 		var fnErr error
 		res, fnErr = fn(ctx, tx)
+		fnFailed = fnErr != nil
 		return fnErr
 	})
+	if err != nil && !fnFailed {
+		var zero T
+		res = zero
+	}
 	return
 }

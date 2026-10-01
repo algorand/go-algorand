@@ -45,6 +45,10 @@ linters:
       - linters:
           - gosec
         path: _test\.go
+      # TODO: convert retried closures in tests to the util/db and trackerdb *Result helpers
+      - linters:
+          - retryclosure
+        path: _test\.go
       - linters:
           - partitiontest
         path: crypto/secp256k1/secp256_test\.go

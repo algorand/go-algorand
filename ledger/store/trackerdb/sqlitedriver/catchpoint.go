@@ -63,100 +63,94 @@ func (cr *catchpointReader) GetCatchpoint(ctx context.Context, round basics.Roun
 	return
 }
 
-func (cr *catchpointReader) GetOldestCatchpointFiles(ctx context.Context, fileCount int, filesToKeep int) (fileNames map[basics.Round]string, err error) {
-	err = db.Retry(func() (err error) {
+func (cr *catchpointReader) GetOldestCatchpointFiles(ctx context.Context, fileCount int, filesToKeep int) (map[basics.Round]string, error) {
+	fileNames, err := db.RetryResult(func() (map[basics.Round]string, error) {
 		query := "SELECT round, filename FROM storedcatchpoints WHERE pinned = 0 and round <= COALESCE((SELECT round FROM storedcatchpoints WHERE pinned = 0 ORDER BY round DESC LIMIT ?, 1),0) ORDER BY round ASC LIMIT ?"
 		rows, err := cr.q.QueryContext(ctx, query, filesToKeep, fileCount)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		defer rows.Close()
 
-		fileNames = make(map[basics.Round]string)
+		fileNames := make(map[basics.Round]string)
 		for rows.Next() {
 			var fileName string
 			var round basics.Round
 			err = rows.Scan(&round, &fileName)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			fileNames[round] = fileName
 		}
 
-		return rows.Err()
+		return fileNames, rows.Err()
 	})
 	if err != nil {
-		fileNames = nil
+		return nil, err
 	}
-	return
+	return fileNames, nil
 }
 
-func (cr *catchpointReader) ReadCatchpointStateUint64(ctx context.Context, stateName trackerdb.CatchpointState) (val uint64, err error) {
-	err = db.Retry(func() (err error) {
+func (cr *catchpointReader) ReadCatchpointStateUint64(ctx context.Context, stateName trackerdb.CatchpointState) (uint64, error) {
+	return db.RetryResult(func() (uint64, error) {
 		query := "SELECT intval FROM catchpointstate WHERE id=?"
 		var v sql.NullInt64
-		err = cr.q.QueryRowContext(ctx, query, stateName).Scan(&v)
+		err := cr.q.QueryRowContext(ctx, query, stateName).Scan(&v)
 		if err == sql.ErrNoRows {
-			return nil
+			return 0, nil
 		}
 		if err != nil {
-			return err
+			return 0, err
 		}
 		if v.Valid {
-			val = uint64(v.Int64)
+			return uint64(v.Int64), nil
 		}
-		return nil
+		return 0, nil
 	})
-	return val, err
 }
 
-func (cr *catchpointReader) ReadCatchpointStateString(ctx context.Context, stateName trackerdb.CatchpointState) (val string, err error) {
-	err = db.Retry(func() (err error) {
+func (cr *catchpointReader) ReadCatchpointStateString(ctx context.Context, stateName trackerdb.CatchpointState) (string, error) {
+	return db.RetryResult(func() (string, error) {
 		query := "SELECT strval FROM catchpointstate WHERE id=?"
 		var v sql.NullString
-		err = cr.q.QueryRowContext(ctx, query, stateName).Scan(&v)
+		err := cr.q.QueryRowContext(ctx, query, stateName).Scan(&v)
 		if err == sql.ErrNoRows {
-			return nil
+			return "", nil
 		}
 		if err != nil {
-			return err
+			return "", err
 		}
 
 		if v.Valid {
-			val = v.String
+			return v.String, nil
 		}
-		return nil
+		return "", nil
 	})
-	return val, err
 }
 
 func (cr *catchpointReader) SelectUnfinishedCatchpoints(ctx context.Context) ([]trackerdb.UnfinishedCatchpointRecord, error) {
-	var res []trackerdb.UnfinishedCatchpointRecord
-
-	f := func() error {
+	res, err := db.RetryResult(func() ([]trackerdb.UnfinishedCatchpointRecord, error) {
 		query := "SELECT round, blockhash FROM unfinishedcatchpoints ORDER BY round"
 		rows, err := cr.q.QueryContext(ctx, query)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		defer rows.Close()
 
-		// Clear `res` in case this function is repeated.
-		res = res[:0]
+		var res []trackerdb.UnfinishedCatchpointRecord
 		for rows.Next() {
 			var record trackerdb.UnfinishedCatchpointRecord
 			var blockHash []byte
 			err = rows.Scan(&record.Round, &blockHash)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			copy(record.BlockHash[:], blockHash)
 			res = append(res, record)
 		}
 
-		return rows.Err()
-	}
-	err := db.Retry(f)
+		return res, rows.Err()
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -165,17 +159,15 @@ func (cr *catchpointReader) SelectUnfinishedCatchpoints(ctx context.Context) ([]
 }
 
 func (cr *catchpointReader) SelectCatchpointFirstStageInfo(ctx context.Context, round basics.Round) (trackerdb.CatchpointFirstStageInfo, bool /*exists*/, error) {
-	var data []byte
-	f := func() error {
+	data, err := db.RetryResult(func() ([]byte, error) {
 		query := "SELECT info FROM catchpointfirststageinfo WHERE round=?"
+		var data []byte
 		err := cr.q.QueryRowContext(ctx, query, round).Scan(&data)
 		if err == sql.ErrNoRows {
-			data = nil
-			return nil
+			return nil, nil
 		}
-		return err
-	}
-	err := db.Retry(f)
+		return data, err
+	})
 	if err != nil {
 		return trackerdb.CatchpointFirstStageInfo{}, false, err
 	}
@@ -194,30 +186,26 @@ func (cr *catchpointReader) SelectCatchpointFirstStageInfo(ctx context.Context, 
 }
 
 func (cr *catchpointReader) SelectOldCatchpointFirstStageInfoRounds(ctx context.Context, maxRound basics.Round) ([]basics.Round, error) {
-	var res []basics.Round
-
-	f := func() error {
+	res, err := db.RetryResult(func() ([]basics.Round, error) {
 		query := "SELECT round FROM catchpointfirststageinfo WHERE round <= ?"
 		rows, err := cr.q.QueryContext(ctx, query, maxRound)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		defer rows.Close()
 
-		// Clear `res` in case this function is repeated.
-		res = res[:0]
+		var res []basics.Round
 		for rows.Next() {
 			var r basics.Round
 			err = rows.Scan(&r)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			res = append(res, r)
 		}
 
-		return rows.Err()
-	}
-	err := db.Retry(f)
+		return res, rows.Err()
+	})
 	if err != nil {
 		return nil, err
 	}

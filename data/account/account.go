@@ -87,26 +87,25 @@ func ImportRoot(store db.Accessor, seed [32]byte) (acc Root, err error) {
 
 // RestoreRoot restores a Root from a database handle.
 func RestoreRoot(store db.Accessor) (acc Root, err error) {
-	var raw []byte
-
-	err = store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	raw, err := db.AtomicResult(&store, func(ctx context.Context, tx *sql.Tx) ([]byte, error) {
 		var nrows int
 		row := tx.QueryRow("select count(*) from RootAccount")
 		err1 := row.Scan(&nrows)
 		if err1 != nil {
-			return fmt.Errorf("RestoreRoot: could not query storage: %v", err1)
+			return nil, fmt.Errorf("RestoreRoot: could not query storage: %v", err1)
 		}
 		if nrows != 1 {
 			logging.Base().Infof("RestoreRoot: state not found (n = %v)", nrows)
 		}
 
+		var raw []byte
 		row = tx.QueryRow("select data from RootAccount")
 		err1 = row.Scan(&raw)
 		if err1 != nil {
-			return fmt.Errorf("RestoreRoot: could not read account raw data: %v", err1)
+			return nil, fmt.Errorf("RestoreRoot: could not read account raw data: %v", err1)
 		}
 
-		return nil
+		return raw, nil
 	})
 
 	if err != nil {
@@ -137,19 +136,22 @@ func (root Root) Address() basics.Address {
 // RestoreParticipation restores a Participation from a database
 // handle.
 func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err error) {
-	var rawParent, rawVRF, rawVoting, rawStateProof []byte
-
 	err = Migrate(store)
 	if err != nil {
 		return
 	}
 
-	err = store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	// result holds the fields read from the ParticipationAccount table, with the secrets still encoded.
+	type result struct {
+		part                             Participation
+		rawVRF, rawVoting, rawStateProof []byte
+	}
+	res, err := db.AtomicResult(&store, func(ctx context.Context, tx *sql.Tx) (result, error) {
 		var nrows int
 		row := tx.QueryRow("select count(*) from ParticipationAccount")
 		err1 := row.Scan(&nrows)
 		if err1 != nil {
-			return fmt.Errorf("RestoreParticipation: could not query storage: %v", err1)
+			return result{}, fmt.Errorf("RestoreParticipation: could not query storage: %v", err1)
 		}
 		if nrows != 1 {
 			logging.Base().Infof("RestoreParticipation: state not found (n = %v)", nrows)
@@ -157,38 +159,41 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 
 		row = tx.QueryRow("select parent, vrf, voting, firstValid, lastValid, keyDilution, stateProof from ParticipationAccount")
 
-		err1 = row.Scan(&rawParent, &rawVRF, &rawVoting, &acc.FirstValid, &acc.LastValid, &acc.KeyDilution, &rawStateProof)
+		var res result
+		var rawParent []byte
+		err1 = row.Scan(&rawParent, &res.rawVRF, &res.rawVoting, &res.part.FirstValid, &res.part.LastValid, &res.part.KeyDilution, &res.rawStateProof)
 		if err1 != nil {
-			return fmt.Errorf("RestoreParticipation: could not read account raw data: %v", err1)
+			return result{}, fmt.Errorf("RestoreParticipation: could not read account raw data: %v", err1)
 		}
 
-		copy(acc.Parent[:32], rawParent)
-		return nil
+		copy(res.part.Parent[:32], rawParent)
+		return res, nil
 	})
 	if err != nil {
 		return PersistedParticipation{}, err
 	}
 
+	acc.Participation = res.part
 	acc.Store = store
 
 	acc.VRF = &crypto.VRFSecrets{}
-	err = protocol.Decode(rawVRF, acc.VRF)
+	err = protocol.Decode(res.rawVRF, acc.VRF)
 	if err != nil {
 		return PersistedParticipation{}, err
 	}
 
 	acc.Voting = &crypto.OneTimeSignatureSecrets{}
-	err = protocol.Decode(rawVoting, acc.Voting)
+	err = protocol.Decode(res.rawVoting, acc.Voting)
 	if err != nil {
 		return PersistedParticipation{}, err
 	}
 
-	if len(rawStateProof) == 0 {
+	if len(res.rawStateProof) == 0 {
 		return acc, nil
 	}
 	acc.StateProofSecrets = &merklesignature.Secrets{}
 	// only the state proof data is decoded here (the keys are stored in a different DB table and are fetched separately)
-	if err = protocol.Decode(rawStateProof, acc.StateProofSecrets); err != nil {
+	if err = protocol.Decode(res.rawStateProof, acc.StateProofSecrets); err != nil {
 		return PersistedParticipation{}, err
 	}
 

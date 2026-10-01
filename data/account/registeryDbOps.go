@@ -26,6 +26,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
+	dbutil "github.com/algorand/go-algorand/util/db"
 )
 
 type dbOp interface {
@@ -100,8 +101,8 @@ func makeOpRequestWithError(operation dbOp, errChan chan error) opRequest {
 }
 
 func (r *registerOp) apply(db *participationDB) error {
-	var cacheDeletes []ParticipationID
-	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	cacheDeletes, err := dbutil.AtomicResult(&db.store.Wdb, func(ctx context.Context, tx *sql.Tx) ([]ParticipationID, error) {
+		var cacheDeletes []ParticipationID
 		// Disable active key if there is one
 		for id, record := range r.updated {
 			err := updateRollingFields(ctx, tx, record.ParticipationRecord)
@@ -114,10 +115,10 @@ func (r *registerOp) apply(db *participationDB) error {
 				}
 			}
 			if err != nil {
-				return fmt.Errorf("unable to disable old key when registering %s: %w", id, err)
+				return nil, fmt.Errorf("unable to disable old key when registering %s: %w", id, err)
 			}
 		}
-		return nil
+		return cacheDeletes, nil
 	})
 
 	// Update cache

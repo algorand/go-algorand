@@ -197,20 +197,24 @@ func (ct *catchpointTracker) GetLastCatchpointLabel() string {
 }
 
 func (ct *catchpointTracker) getSPVerificationData() (encodedData []byte, spVerificationHash crypto.Digest, err error) {
-	err = ct.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) error {
+	type spVerificationData struct {
+		encodedData []byte
+		hash        crypto.Digest
+	}
+	data, err := trackerdb.SnapshotResult(ct.dbs, func(ctx context.Context, tx trackerdb.SnapshotScope) (spVerificationData, error) {
 		rawData, dbErr := tx.MakeSpVerificationCtxReader().GetAllSPContexts(ctx)
 		if dbErr != nil {
-			return dbErr
+			return spVerificationData{}, dbErr
 		}
 
 		wrappedData := catchpointStateProofVerificationContext{Data: rawData}
-		spVerificationHash, encodedData = crypto.EncodeAndHash(wrappedData)
-		return nil
+		hash, encoded := crypto.EncodeAndHash(wrappedData)
+		return spVerificationData{encodedData: encoded, hash: hash}, nil
 	})
 	if err != nil {
 		return nil, crypto.Digest{}, err
 	}
-	return encodedData, spVerificationHash, nil
+	return data.encodedData, data.hash, nil
 }
 
 func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basics.Round, onlineAccountsForgetBefore basics.Round, blockProto protocol.ConsensusVersion, updatingBalancesDuration time.Duration) error {
@@ -254,23 +258,24 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 	}
 	if params.EnableCatchpointsWithOnlineAccounts {
 		// Generate hashes of the onlineaccounts and onlineroundparams tables.
-		err := ct.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) error {
-			var dbErr error
-			onlineAccountsHash, _, dbErr = calculateVerificationHash(ctx, makeCatchpointOrderedOnlineAccountsIterFactory(tx.MakeOrderedOnlineAccountsIter, dbRound, params), onlineExcludeBefore, false)
+		type onlineHashes struct{ onlineAccounts, onlineRoundParams crypto.Digest }
+		hashes, err := trackerdb.SnapshotResult(ct.dbs, func(ctx context.Context, tx trackerdb.SnapshotScope) (onlineHashes, error) {
+			accountsHash, _, dbErr := calculateVerificationHash(ctx, makeCatchpointOrderedOnlineAccountsIterFactory(tx.MakeOrderedOnlineAccountsIter, dbRound, params), onlineExcludeBefore, false)
 			if dbErr != nil {
-				return dbErr
+				return onlineHashes{}, dbErr
 
 			}
 
-			onlineRoundParamsHash, _, dbErr = calculateVerificationHash(ctx, tx.MakeOnlineRoundParamsIter, onlineExcludeBefore, false)
+			roundParamsHash, _, dbErr := calculateVerificationHash(ctx, tx.MakeOnlineRoundParamsIter, onlineExcludeBefore, false)
 			if dbErr != nil {
-				return dbErr
+				return onlineHashes{}, dbErr
 			}
-			return nil
+			return onlineHashes{onlineAccounts: accountsHash, onlineRoundParams: roundParamsHash}, nil
 		})
 		if err != nil {
 			return err
 		}
+		onlineAccountsHash, onlineRoundParamsHash = hashes.onlineAccounts, hashes.onlineRoundParams
 	}
 
 	if ct.enableGeneratingCatchpointFiles {
@@ -289,22 +294,28 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 		}
 	}
 
-	return ct.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
+	trieBalancesHash, err := trackerdb.TransactionResult(ct.dbs, func(ctx context.Context, tx trackerdb.TransactionScope) (crypto.Digest, error) {
 		cw, err := tx.MakeCatchpointWriter()
 		if err != nil {
-			return err
+			return crypto.Digest{}, err
 		}
 
-		err = ct.recordFirstStageInfo(ctx, tx, &catchpointGenerationStats, dbRound,
+		trieBalancesHash, err := ct.recordFirstStageInfo(ctx, tx, dbRound,
 			totalAccounts, totalKVs, totalOnlineAccounts, totalOnlineRoundParams, totalChunks, biggestChunkLen,
 			spVerificationHash, onlineAccountsHash, onlineRoundParamsHash)
 		if err != nil {
-			return err
+			return crypto.Digest{}, err
 		}
 
 		// Clear the db record.
-		return cw.WriteCatchpointStateUint64(ctx, trackerdb.CatchpointStateWritingFirstStageInfo, 0)
+		return trieBalancesHash, cw.WriteCatchpointStateUint64(ctx, trackerdb.CatchpointStateWritingFirstStageInfo, 0)
 	})
+	if err != nil {
+		return err
+	}
+	// Report only once the first stage info is committed, since the transaction may be retried.
+	ct.reportFirstStageInfo(&catchpointGenerationStats, trieBalancesHash, spVerificationHash)
+	return nil
 }
 
 // Possibly finish generating first stage catchpoint db record and data file after
@@ -1241,26 +1252,31 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, params 
 	catchpointDataFilePath := filepath.Join(ct.tmpDir, trackerdb.CatchpointDirName)
 	catchpointDataFilePath = filepath.Join(catchpointDataFilePath, makeCatchpointDataFilePath(accountsRound))
 
-	more := true
 	const shortChunkExecutionDuration = 50 * time.Millisecond
 	const longChunkExecutionDuration = 1 * time.Second
-	var chunkExecutionDuration time.Duration
-	select {
-	case <-ct.catchpointDataSlowWriting:
-		chunkExecutionDuration = longChunkExecutionDuration
-	default:
-		chunkExecutionDuration = shortChunkExecutionDuration
-	}
 
-	var catchpointWriter *catchpointFileWriter
+	type writeResult struct {
+		catchpointWriter *catchpointFileWriter
+		// cpuTime is the time spent writing chunks, accumulated into catchpointGenerationStats.CPUTime.
+		cpuTime uint64
+	}
 
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
-	err = ct.dbs.SnapshotContext(ctx, func(dbCtx context.Context, tx trackerdb.SnapshotScope) (err error) {
-		catchpointWriter, err = makeCatchpointFileWriter(dbCtx, params, catchpointDataFilePath, tx, ResourcesPerCatchpointFileChunk, accountsRound, onlineExcludeBefore)
+	res, err := trackerdb.SnapshotContextResult(ctx, ct.dbs, func(dbCtx context.Context, tx trackerdb.SnapshotScope) (res writeResult, err error) {
+		var chunkExecutionDuration time.Duration
+		select {
+		case <-ct.catchpointDataSlowWriting:
+			chunkExecutionDuration = longChunkExecutionDuration
+		default:
+			chunkExecutionDuration = shortChunkExecutionDuration
+		}
+
+		catchpointWriter, err := makeCatchpointFileWriter(dbCtx, params, catchpointDataFilePath, tx, ResourcesPerCatchpointFileChunk, accountsRound, onlineExcludeBefore)
 		if err != nil {
 			return
 		}
+		res.catchpointWriter = catchpointWriter
 
 		// do not write encodedSPData if not provided,
 		// this is an indication the older catchpoint file is being generated.
@@ -1271,12 +1287,13 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, params 
 			}
 		}
 
+		more := true
 		for more {
 			stepCtx, stepCancelFunction := context.WithTimeout(dbCtx, chunkExecutionDuration)
 			writeStepStartTime := time.Now()
 			more, err = catchpointWriter.FileWriteStep(stepCtx)
 			// accumulate the actual time we've spent writing in this step.
-			catchpointGenerationStats.CPUTime += uint64(time.Since(writeStepStartTime).Nanoseconds())
+			res.cpuTime += uint64(time.Since(writeStepStartTime).Nanoseconds())
 			stepCancelFunction()
 			if more && err == nil {
 				// we just wrote some data, but there is more to be written.
@@ -1298,9 +1315,9 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, params 
 					//retryCatchpointCreation = true
 					err2 := catchpointWriter.Abort()
 					if err2 != nil {
-						return fmt.Errorf("error removing catchpoint file : %v", err2)
+						return res, fmt.Errorf("error removing catchpoint file : %v", err2)
 					}
-					return nil
+					return res, nil
 				case <-ct.catchpointDataSlowWriting:
 					chunkExecutionDuration = longChunkExecutionDuration
 				}
@@ -1323,6 +1340,8 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, params 
 		ct.log.Warnf("catchpointTracker.generateCatchpointData() %v", err)
 		return 0, 0, 0, 0, 0, 0, err
 	}
+	catchpointWriter := res.catchpointWriter
+	catchpointGenerationStats.CPUTime += res.cpuTime
 
 	catchpointGenerationStats.FileSize = uint64(catchpointWriter.writtenBytes)
 	catchpointGenerationStats.WritingDuration = uint64(time.Since(startTime).Nanoseconds())
@@ -1335,31 +1354,32 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, params 
 	return catchpointWriter.totalAccounts, catchpointWriter.totalKVs, catchpointWriter.totalOnlineAccounts, catchpointWriter.totalOnlineRoundParams, catchpointWriter.chunkNum, catchpointWriter.biggestChunkLen, nil
 }
 
+// recordFirstStageInfo writes the first stage info for accountsRound, and returns the balances
+// trie root hash it recorded.
 func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx trackerdb.TransactionScope,
-	catchpointGenerationStats *telemetryspec.CatchpointGenerationEventDetails,
 	accountsRound basics.Round,
 	totalAccounts, totalKVs, totalOnlineAccounts, totalOnlineRoundParams, totalChunks, biggestChunkLen uint64,
-	stateProofVerificationHash, onlineAccountsVerificationHash, onlineRoundParamsVerificationHash crypto.Digest) error {
+	stateProofVerificationHash, onlineAccountsVerificationHash, onlineRoundParamsVerificationHash crypto.Digest) (crypto.Digest, error) {
 	ar, err := tx.MakeAccountsReader()
 	if err != nil {
-		return err
+		return crypto.Digest{}, err
 	}
 
 	accountTotals, err := ar.AccountsTotals(ctx, false)
 	if err != nil {
-		return err
+		return crypto.Digest{}, err
 	}
 
 	mc, err := tx.MakeMerkleCommitter(false)
 	if err != nil {
-		return err
+		return crypto.Digest{}, err
 	}
 	ct.catchpointsMu.Lock()
 	if ct.balancesTrie == nil {
 		trie, trieErr := merkletrie.MakeTrie(mc, trackerdb.TrieMemoryConfig)
 		if trieErr != nil {
 			ct.catchpointsMu.Unlock()
-			return trieErr
+			return crypto.Digest{}, trieErr
 		}
 		ct.balancesTrie = trie
 	} else {
@@ -1369,13 +1389,13 @@ func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx tracke
 	trieBalancesHash, err := ct.balancesTrie.RootHash()
 	if err != nil {
 		ct.catchpointsMu.Unlock()
-		return err
+		return crypto.Digest{}, err
 	}
 	ct.catchpointsMu.Unlock()
 
 	cw, err := tx.MakeCatchpointWriter()
 	if err != nil {
-		return err
+		return crypto.Digest{}, err
 	}
 
 	info := trackerdb.CatchpointFirstStageInfo{
@@ -1394,9 +1414,13 @@ func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx tracke
 
 	err = cw.InsertOrReplaceCatchpointFirstStageInfo(ctx, accountsRound, &info)
 	if err != nil {
-		return err
+		return crypto.Digest{}, err
 	}
+	return trieBalancesHash, nil
+}
 
+// reportFirstStageInfo sends the catchpoint generation telemetry event for a recorded first stage.
+func (ct *catchpointTracker) reportFirstStageInfo(catchpointGenerationStats *telemetryspec.CatchpointGenerationEventDetails, trieBalancesHash, stateProofVerificationHash crypto.Digest) {
 	catchpointGenerationStats.MerkleTrieRootHash = base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(trieBalancesHash[:])
 	catchpointGenerationStats.SPVerificationCtxsHash = base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(stateProofVerificationHash[:])
 	ct.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.CatchpointGenerationEvent, catchpointGenerationStats)
@@ -1412,7 +1436,6 @@ func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx tracke
 		With("MerkleTrieRootHash", catchpointGenerationStats.MerkleTrieRootHash).
 		With("SPVerificationCtxsHash", catchpointGenerationStats.SPVerificationCtxsHash).
 		Infof("Catchpoint data file was generated")
-	return nil
 }
 
 func makeCatchpointDataFilePath(accountsRound basics.Round) string {
@@ -1460,26 +1483,29 @@ func (ct *catchpointTracker) recordCatchpointFile(ctx context.Context, crw track
 
 // GetCatchpointStream returns a ReadCloseSizer to the catchpoint file associated with the provided round
 func (ct *catchpointTracker) GetCatchpointStream(round basics.Round) (ReadCloseSizer, error) {
-	dbFileName := ""
-	fileSize := int64(0)
+	type catchpointFile struct {
+		fileName string
+		fileSize int64
+	}
 	start := time.Now()
 	ledgerGetcatchpointCount.Inc(nil)
 	// TODO: we need to generalize this, check @cce PoC PR, he has something
 	//       somewhat broken for some KVs..
-	err := ct.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) (err error) {
+	cf, err := trackerdb.SnapshotResult(ct.dbs, func(ctx context.Context, tx trackerdb.SnapshotScope) (cf catchpointFile, err error) {
 		cr, err := tx.MakeCatchpointReader()
 		if err != nil {
-			return err
+			return cf, err
 		}
 
-		dbFileName, _, fileSize, err = cr.GetCatchpoint(ctx, round)
-		return
+		cf.fileName, _, cf.fileSize, err = cr.GetCatchpoint(ctx, round)
+		return cf, err
 	})
 	ledgerGetcatchpointMicros.AddMicrosecondsSince(start, nil)
 	if err != nil && err != sql.ErrNoRows {
 		// we had some sql error.
 		return nil, fmt.Errorf("catchpointTracker.GetCatchpointStream() unable to lookup catchpoint %d: %v", round, err)
 	}
+	dbFileName, fileSize := cf.fileName, cf.fileSize
 	if dbFileName != "" {
 		catchpointPath := filepath.Join(ct.dbDirectory, dbFileName)
 		file, openErr := os.OpenFile(catchpointPath, os.O_RDONLY, 0666)

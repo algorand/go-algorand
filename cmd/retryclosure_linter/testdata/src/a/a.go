@@ -148,3 +148,35 @@ func retryClearFnNotChecked(acc *db.Accessor, t *thing) error {
 func uncheckable(fns []func() error) error {
 	return db.Retry(fns[0]) // want `cannot check the function passed to db.Retry`
 }
+
+func ignoredWithReason() error {
+	n := 0
+	return db.Retry(func() error { //retryclosure:ignore n only counts attempts
+		n++
+		return nil
+	})
+}
+
+func ignoredOnLineAbove() error {
+	n := 0
+	//retryclosure:ignore n only counts attempts
+	return db.Retry(func() error {
+		n++
+		return nil
+	})
+}
+
+func ignoredWithoutReason() error {
+	n := 0
+	//retryclosure:ignore
+	return db.Retry(func() error { // want `writes to n .*comment needs a reason`
+		n++
+		return nil
+	})
+}
+
+func unusedDirective() error {
+	return db.Retry(func() error { //retryclosure:ignore nothing to suppress // want `does not suppress any finding`
+		return nil
+	})
+}

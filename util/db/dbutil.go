@@ -198,8 +198,9 @@ func Retry(fn func() error) (err error) {
 // RetryResult is like Retry, for a function that produces a result. Only the result of the
 // final attempt is returned, so fn does not need to discard results from an attempt that
 // failed and was retried, as it would if it stored them in variables declared outside fn.
+// If err is not nil, the result is what the last call to fn returned along with its error.
 func RetryResult[T any](fn func() (T, error)) (res T, err error) {
-	err = Retry(func() error { //nolint:retryclosure // res is overwritten by every attempt, so only the final attempt's result is returned
+	err = Retry(func() error { //retryclosure:ignore res is overwritten by every attempt, so only the final attempt's result is returned
 		var fnErr error
 		res, fnErr = fn()
 		return fnErr
@@ -274,13 +275,21 @@ func AtomicResult[T any](db *Accessor, fn func(ctx context.Context, tx *sql.Tx) 
 }
 
 // AtomicContextResult is like Accessor.AtomicContext, for a function that produces a result.
-// Only the result of the final attempt is returned; see RetryResult.
+// Only the result of the final attempt is returned; see RetryResult. If err is not nil, the
+// result is what the last call to fn returned along with its error, or the zero value if that
+// call succeeded but its transaction was not committed.
 func AtomicContextResult[T any](ctx context.Context, db *Accessor, fn func(ctx context.Context, tx *sql.Tx) (T, error), retryClearFn func(context.Context), extras ...any) (res T, err error) {
-	err = db.atomic(ctx, func(ctx context.Context, tx *sql.Tx) error { //nolint:retryclosure // res is overwritten by every attempt, so only the final attempt's result is returned
+	var fnFailed bool
+	err = db.atomic(ctx, func(ctx context.Context, tx *sql.Tx) error { //retryclosure:ignore res and fnFailed are overwritten by every attempt, so they describe only the final attempt
 		var fnErr error
 		res, fnErr = fn(ctx, tx)
+		fnFailed = fnErr != nil
 		return fnErr
 	}, fn, retryClearFn, extras...)
+	if err != nil && !fnFailed {
+		var zero T
+		res = zero
+	}
 	return
 }
 

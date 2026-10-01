@@ -612,13 +612,9 @@ func performOnlineRoundParamsTailMigration(ctx context.Context, e db.Executable,
 	if newDatabase {
 		currentProto = initProto
 	} else {
-		err = blockDb.Atomic(func(ctx context.Context, blockTx *sql.Tx) error {
+		currentProto, err = db.AtomicResult(&blockDb, func(ctx context.Context, blockTx *sql.Tx) (protocol.ConsensusVersion, error) {
 			hdr, hdrErr := blockdb.BlockGetHdr(blockTx, rnd)
-			if hdrErr != nil {
-				return hdrErr
-			}
-			currentProto = hdr.CurrentProtocol
-			return nil
+			return hdr.CurrentProtocol, hdrErr
 		})
 		if err != nil {
 			return err

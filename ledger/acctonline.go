@@ -159,33 +159,36 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	ao.dbs = l.trackerDB()
 	ao.log = l.trackerLog()
 
-	err = ao.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) error {
+	type diskState struct {
+		onlineRoundParamsData []ledgercore.OnlineRoundParamsData
+		onlineAccounts        []trackerdb.PersistedOnlineAccountData
+	}
+	var state diskState
+	state, err = trackerdb.SnapshotResult(ao.dbs, func(ctx context.Context, tx trackerdb.SnapshotScope) (diskState, error) {
 		ar, makeErr := tx.MakeAccountsReader()
 		if makeErr != nil {
-			return makeErr
+			return diskState{}, makeErr
 		}
 
-		var err0 error
-		var endRound basics.Round
-		ao.onlineRoundParamsData, endRound, err0 = ar.AccountsOnlineRoundParams()
+		onlineRoundParamsData, endRound, err0 := ar.AccountsOnlineRoundParams()
 		if err0 != nil {
-			return err0
+			return diskState{}, err0
 		}
 		if endRound != ao.cachedDBRoundOnline {
-			return fmt.Errorf("last onlineroundparams round %d does not match dbround %d", endRound, ao.cachedDBRoundOnline)
+			return diskState{}, fmt.Errorf("last onlineroundparams round %d does not match dbround %d", endRound, ao.cachedDBRoundOnline)
 		}
 
 		onlineAccounts, err0 := ar.OnlineAccountsAll(onlineAccountsCacheMaxSize)
 		if err0 != nil {
-			return err0
+			return diskState{}, err0
 		}
-		ao.onlineAccountsCache.init(onlineAccounts, onlineAccountsCacheMaxSize)
-
-		return nil
+		return diskState{onlineRoundParamsData: onlineRoundParamsData, onlineAccounts: onlineAccounts}, nil
 	})
 	if err != nil {
 		return
 	}
+	ao.onlineRoundParamsData = state.onlineRoundParamsData
+	ao.onlineAccountsCache.init(state.onlineAccounts, onlineAccountsCacheMaxSize)
 
 	ao.accountsq, err = ao.dbs.MakeOnlineAccountsOptimizedReader()
 	if err != nil {
@@ -867,23 +870,29 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 			var accts map[basics.Address]*ledgercore.OnlineAccount
 			start := time.Now()
 			ledgerAccountsOnlineTopCount.Inc(nil)
-			err = ao.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) (err error) {
+			type topAccounts struct {
+				accts   map[basics.Address]*ledgercore.OnlineAccount
+				dbRound basics.Round
+			}
+			var top topAccounts
+			top, err = trackerdb.SnapshotResult(ao.dbs, func(ctx context.Context, tx trackerdb.SnapshotScope) (top topAccounts, err error) {
 				ar, err := tx.MakeAccountsReader()
 				if err != nil {
-					return err
+					return top, err
 				}
 
-				accts, err = ar.AccountsOnlineTop(rnd, batchOffset, batchSize, genesisProto.RewardUnit)
+				top.accts, err = ar.AccountsOnlineTop(rnd, batchOffset, batchSize, genesisProto.RewardUnit)
 				if err != nil {
-					return
+					return top, err
 				}
-				dbRound, err = ar.AccountsRound()
-				return
+				top.dbRound, err = ar.AccountsRound()
+				return top, err
 			})
 			ledgerAccountsOnlineTopMicros.AddMicrosecondsSince(start, nil)
 			if err != nil {
 				return nil, basics.MicroAlgos{}, err
 			}
+			accts, dbRound = top.accts, top.dbRound
 
 			if dbRound != currentDbRound {
 				break
@@ -1024,23 +1033,29 @@ func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (
 
 		// Step 1: get all online accounts from DB for rnd
 		// Not unlocking ao.accountsMu yet, to stay consistent with Step 2
-		var dbRound basics.Round
-		err = ao.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) (err error) {
+		type expired struct {
+			accounts map[basics.Address]*basics.OnlineAccountData
+			dbRound  basics.Round
+		}
+		var res expired
+		res, err = trackerdb.SnapshotResult(ao.dbs, func(ctx context.Context, tx trackerdb.SnapshotScope) (res expired, err error) {
 			ar, err := tx.MakeAccountsReader()
 			if err != nil {
-				return err
+				return res, err
 			}
-			expiredAccounts, err = ar.ExpiredOnlineAccountsForRound(rnd, voteRnd, rewardsParams.RewardUnit, rewardsLevel)
+			res.accounts, err = ar.ExpiredOnlineAccountsForRound(rnd, voteRnd, rewardsParams.RewardUnit, rewardsLevel)
 			if err != nil {
-				return err
+				return res, err
 			}
-			dbRound, err = ar.AccountsRound()
-			return err
+			res.dbRound, err = ar.AccountsRound()
+			return res, err
 		})
 		ledgerAccountsExpiredByRoundMicros.AddMicrosecondsSince(start, nil)
 		if err != nil {
 			return nil, err
 		}
+		expiredAccounts = res.accounts
+		dbRound := res.dbRound
 
 		// If dbRound has advanced beyond the last read of ao.cachedDBRoundOnline, postCommmit has
 		// occurred since then, so wait until deltas is consistent with dbRound and try again.

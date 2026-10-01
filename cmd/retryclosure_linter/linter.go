@@ -18,6 +18,14 @@
 // more than once by a database retry loop and that write to variables declared outside the
 // closure. State written that way survives from one attempt to the next, so a retried attempt
 // can see (and, for example, append to) results left behind by a failed one.
+//
+// A finding that is safe can be suppressed with a comment on the reported line, or the line
+// above it, of the form
+//
+//	//retryclosure:ignore <reason a repeated attempt is safe>
+//
+// This is used instead of //nolint:retryclosure because golangci-lint builds without this
+// plugin warn about unknown linters named in //nolint directives.
 package linter
 
 import (
@@ -89,8 +97,20 @@ func (*retriesParams) AFact() {}
 
 func (f *retriesParams) String() string { return fmt.Sprintf("retriesParams%v", f.Indexes) }
 
+// ignoreDirective is the comment prefix that suppresses a finding on its line or the next.
+const ignoreDirective = "//retryclosure:ignore"
+
+// directive is a //retryclosure:ignore comment, and whether it suppressed a finding.
+type directive struct {
+	pos    token.Pos
+	reason string
+	used   bool
+}
+
 type checker struct {
 	pass *analysis.Pass
+	// directives maps file name and line to the ignore directive on that line.
+	directives map[string]map[int]*directive
 	// wrappers holds retried parameter indexes for functions declared in this package.
 	wrappers map[*types.Func][]int
 	// funcLits maps local variables to the function literal they are initialized with, so a
@@ -106,6 +126,7 @@ func run(pass *analysis.Pass) (any, error) {
 		funcLits: make(map[types.Object]*ast.FuncLit),
 		decls:    make(map[*types.Func]*ast.FuncDecl),
 	}
+	c.collectDirectives()
 	c.collectDecls()
 	c.findWrappers()
 	for fn, idxs := range c.wrappers {
@@ -130,7 +151,51 @@ func run(pass *analysis.Pass) (any, error) {
 			return true
 		})
 	}
+	for _, lines := range c.directives {
+		for _, d := range lines {
+			if !d.used {
+				pass.Reportf(d.pos, "retryclosure: %s does not suppress any finding; remove it", ignoreDirective)
+			}
+		}
+	}
 	return nil, nil
+}
+
+// collectDirectives indexes the //retryclosure:ignore comments in the package's files.
+func (c *checker) collectDirectives() {
+	c.directives = make(map[string]map[int]*directive)
+	for _, f := range c.pass.Files {
+		for _, group := range f.Comments {
+			for _, comment := range group.List {
+				rest, ok := strings.CutPrefix(comment.Text, ignoreDirective)
+				if !ok {
+					continue
+				}
+				position := c.pass.Fset.Position(comment.Pos())
+				if c.directives[position.Filename] == nil {
+					c.directives[position.Filename] = make(map[int]*directive)
+				}
+				c.directives[position.Filename][position.Line] = &directive{pos: comment.Pos(), reason: strings.TrimSpace(rest)}
+			}
+		}
+	}
+}
+
+// report reports a finding at pos unless an ignore directive with a reason covers it.
+func (c *checker) report(pos token.Pos, format string, args ...any) {
+	position := c.pass.Fset.Position(pos)
+	lines := c.directives[position.Filename]
+	for _, line := range []int{position.Line, position.Line - 1} {
+		if d := lines[line]; d != nil {
+			d.used = true
+			if d.reason != "" {
+				return
+			}
+			c.pass.Reportf(pos, format+"; the "+ignoreDirective+" comment needs a reason", args...)
+			return
+		}
+	}
+	c.pass.Reportf(pos, format, args...)
 }
 
 // collectDecls indexes function declarations and closure-valued local variables.
@@ -336,7 +401,7 @@ func (c *checker) checkArg(arg ast.Expr, callee *types.Func) {
 			}
 		}
 	}
-	c.pass.Reportf(arg.Pos(), "retryclosure: cannot check the function passed to %s, which may run more than once; pass a function literal or a function declared in this package", calleeName(callee))
+	c.report(arg.Pos(), "retryclosure: cannot check the function passed to %s, which may run more than once; pass a function literal or a function declared in this package", calleeName(callee))
 }
 
 func calleeName(fn *types.Func) string {
@@ -479,7 +544,7 @@ func (c *checker) checkBody(reportPos token.Pos, callee *types.Func, body ast.No
 	for i, name := range order {
 		parts[i] = fmt.Sprintf("%s (line %d, %s)", name, c.pass.Fset.Position(written[name]).Line, how[name])
 	}
-	c.pass.Reportf(reportPos, "retryclosure: function passed to %s may run more than once, but writes to %s, declared outside it; that state persists between attempts. Return results from the function instead, or reset the state at the start of each attempt and explain with //nolint:retryclosure",
+	c.report(reportPos, "retryclosure: function passed to %s may run more than once, but writes to %s, declared outside it; that state persists between attempts. Return results from the function instead, or, if a repeated attempt is safe, explain why with a "+ignoreDirective+" comment",
 		calleeName(callee), strings.Join(parts, ", "))
 }
 

@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/stateproof/verify"
+	"github.com/algorand/go-algorand/util/db"
 )
 
 var errVotersNotTracked = errors.New("voters not tracked for the given lookback round")
@@ -67,10 +68,8 @@ func (spw *Worker) OnPrepareVoterCommit(oldBase basics.Round, newBase basics.Rou
 			continue
 		}
 
-		var proverExists bool
-		err = spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			proverExists, err = proverExistInDB(tx, rnd)
-			return err
+		proverExists, err := db.AtomicResult(&spw.db, func(ctx context.Context, tx *sql.Tx) (bool, error) {
+			return proverExistInDB(tx, rnd)
 		})
 		if err != nil {
 			spw.log.Warnf("OnPrepareVoterCommit(%d): could not check prover existence, assuming it doesn't exist: %v\n", rnd, err)
@@ -102,7 +101,7 @@ func (spw *Worker) OnPrepareVoterCommit(oldBase basics.Round, newBase basics.Rou
 		// At this point, there is a possibility that the signer has already created this specific builder
 		// (signer created  the builder after proverExistInDB was called and was fast enough to persist it).
 		// In this case we will rewrite the new builder
-		err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+		err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error { //retryclosure:ignore persistProver only reads provr, to encode it
 			return persistProver(tx, rnd, &provr)
 		})
 		if err != nil {
@@ -126,10 +125,8 @@ func (spw *Worker) loadOrCreateProverWithSignatures(rnd basics.Round) (spProver,
 }
 
 func (spw *Worker) loadOrCreateProver(rnd basics.Round) (spProver, error) {
-	var prover spProver
-	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		prover, err = getProver(tx, rnd)
-		return err
+	prover, err := db.AtomicResult(&spw.db, func(ctx context.Context, tx *sql.Tx) (spProver, error) {
+		return getProver(tx, rnd)
 	})
 
 	if err == nil {
@@ -145,7 +142,7 @@ func (spw *Worker) loadOrCreateProver(rnd basics.Round) (spProver, error) {
 		return spProver{}, err
 	}
 
-	err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+	err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error { //retryclosure:ignore persistProver only reads prover, to encode it
 		return persistProver(tx, rnd, &prover)
 	})
 
@@ -159,11 +156,8 @@ func (spw *Worker) loadOrCreateProver(rnd basics.Round) (spProver, error) {
 }
 
 func (spw *Worker) loadSignaturesIntoProver(prover *spProver) error {
-	var sigs []pendingSig
-	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		var err2 error
-		sigs, err2 = getPendingSigsForRound(tx, basics.Round(prover.Round))
-		return err2
+	sigs, err := db.AtomicResult(&spw.db, func(ctx context.Context, tx *sql.Tx) ([]pendingSig, error) {
+		return getPendingSigsForRound(tx, basics.Round(prover.Round))
 	})
 	if err != nil {
 		return err
@@ -269,14 +263,9 @@ func (spw *Worker) getAllOnlineProverRounds() ([]basics.Round, error) {
 	latestStateProofRound := latest.RoundDownToMultipleOf(basics.Round(proto.StateProofInterval))
 	threshold := onlineProversThreshold(&proto, latestHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 
-	var rnds []basics.Round
-	err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
-		var err2 error
-		rnds, err2 = getSignatureRounds(tx, threshold, latestStateProofRound)
-		return err2
+	return db.AtomicResult(&spw.db, func(_ context.Context, tx *sql.Tx) ([]basics.Round, error) {
+		return getSignatureRounds(tx, threshold, latestStateProofRound)
 	})
-
-	return rnds, err
 }
 
 var errAddressNotInVoters = errors.New("cannot find address in builder")                 // Address was not a part of the voters for this StateProof (top N accounts)
@@ -500,14 +489,11 @@ func (spw *Worker) broadcastSigs(brnd basics.Round, stateProofNextRound basics.R
 
 	latestStateProofRound := brnd.RoundDownToMultipleOf(basics.Round(proto.StateProofInterval))
 	threshold := onlineProversThreshold(&proto, stateProofNextRound)
-	var roundSigs map[basics.Round][]pendingSig
-	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	roundSigs, err := db.AtomicResult(&spw.db, func(ctx context.Context, tx *sql.Tx) (map[basics.Round][]pendingSig, error) {
 		if brnd%basics.Round(proto.StateProofInterval) < basics.Round(proto.StateProofInterval/2) {
-			roundSigs, err = getPendingSigs(tx, threshold, latestStateProofRound, true)
-		} else {
-			roundSigs, err = getPendingSigs(tx, threshold, latestStateProofRound, false)
+			return getPendingSigs(tx, threshold, latestStateProofRound, true)
 		}
-		return
+		return getPendingSigs(tx, threshold, latestStateProofRound, false)
 	})
 	if err != nil {
 		spw.log.Warnf("broadcastSigs: getPendingSigs: %v", err)

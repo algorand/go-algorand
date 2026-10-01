@@ -123,46 +123,45 @@ func (w *stagingWriterImpl) writeBalances(ctx context.Context, balances []tracke
 }
 
 func (w *stagingWriterImpl) writeKVs(ctx context.Context, kvrs []encoded.KVRecordV6) error {
+	keys := make([][]byte, len(kvrs))
+	values := make([][]byte, len(kvrs))
+	hashes := make([][]byte, len(kvrs))
+	for i := 0; i < len(kvrs); i++ {
+		keys[i] = kvrs[i].Key
+
+		// Since `encoded.KVRecordV6` is `omitempty` and `omitemptyarray`,
+		// when we have an instance of `encoded.KVRecordV6` with nil value,
+		// an empty box is unmarshalled to have `nil` value,
+		// while this might be mistaken to be a box deletion.
+		//
+		// We don't want to mistake this to be a deleted box:
+		// We are (and should be) during Fast Catchup (FC)
+		// writing to DB with empty byte string, rather than writing nil.
+		//
+		// This matters in sqlite3,
+		// for sqlite3 differs on writing nil byte slice to table from writing []byte{}:
+		// - writing nil byte slice is true that `value is NULL`
+		// - writing []byte{} is false on `value is NULL`.
+		//
+		// For the sake of consistency, we convert nil to []byte{}.
+		//
+		// Also, from a round by round catchup perspective,
+		// when we delete a box, in accountsNewRoundImpl method,
+		// the kv pair with value = nil will be deleted from kvstore table.
+		// Thus, it seems more consistent and appropriate to write as []byte{}.
+
+		if kvrs[i].Value == nil {
+			kvrs[i].Value = []byte{}
+		}
+		values[i] = kvrs[i].Value
+		hashes[i] = trackerdb.KvHashBuilderV6(string(keys[i]), values[i])
+	}
+
 	return w.wdb.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		crw, err := tx.MakeCatchpointReaderWriter()
 		if err != nil {
 			return err
 		}
-
-		keys := make([][]byte, len(kvrs))
-		values := make([][]byte, len(kvrs))
-		hashes := make([][]byte, len(kvrs))
-		for i := 0; i < len(kvrs); i++ {
-			keys[i] = kvrs[i].Key
-
-			// Since `encoded.KVRecordV6` is `omitempty` and `omitemptyarray`,
-			// when we have an instance of `encoded.KVRecordV6` with nil value,
-			// an empty box is unmarshalled to have `nil` value,
-			// while this might be mistaken to be a box deletion.
-			//
-			// We don't want to mistake this to be a deleted box:
-			// We are (and should be) during Fast Catchup (FC)
-			// writing to DB with empty byte string, rather than writing nil.
-			//
-			// This matters in sqlite3,
-			// for sqlite3 differs on writing nil byte slice to table from writing []byte{}:
-			// - writing nil byte slice is true that `value is NULL`
-			// - writing []byte{} is false on `value is NULL`.
-			//
-			// For the sake of consistency, we convert nil to []byte{}.
-			//
-			// Also, from a round by round catchup perspective,
-			// when we delete a box, in accountsNewRoundImpl method,
-			// the kv pair with value = nil will be deleted from kvstore table.
-			// Thus, it seems more consistent and appropriate to write as []byte{}.
-
-			if kvrs[i].Value == nil {
-				kvrs[i].Value = []byte{}
-			}
-			values[i] = kvrs[i].Value
-			hashes[i] = trackerdb.KvHashBuilderV6(string(keys[i]), values[i])
-		}
-
 		return crw.WriteCatchpointStagingKVs(ctx, keys, values, hashes)
 	})
 }
@@ -830,7 +829,7 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 		defer close(writerQueue)
 
 		// Note: this needs to be accessed on a snapshot to guarantee a concurrent read-only access to the sqlite db
-		dbErr := dbs.Snapshot(func(transactionCtx context.Context, tx trackerdb.SnapshotScope) (err error) {
+		dbErr := dbs.Snapshot(func(transactionCtx context.Context, tx trackerdb.SnapshotScope) (err error) { //retryclosure:ignore a retry resends hashes already queued, which the writer rejects as duplicate accounts, so it fails rather than building a wrong trie
 			it := tx.MakeCatchpointPendingHashesIterator(trieRebuildAccountChunkSize)
 			var hashes [][]byte
 		scan:
@@ -873,21 +872,20 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 		// Deferred so every exit path releases a parked reader, including the trie-creation
 		// failure below that returns before the receive loop starts.
 		defer workCancel()
-		var trie *merkletrie.Trie
 		uncommitedHashesCount := 0
 		keepWriting := true
 		accountHashesWritten, kvHashesWritten := uint64(0), uint64(0)
-		var mc trackerdb.MerkleCommitter
 
-		txErr := dbs.Transaction(func(transactionCtx context.Context, tx trackerdb.TransactionScope) (err error) {
+		// The transactions below modify trie in memory, which is not undone if a transaction
+		// is rolled back and retried.
+		trie, txErr := trackerdb.TransactionResult(dbs, func(transactionCtx context.Context, tx trackerdb.TransactionScope) (*merkletrie.Trie, error) {
 			// create the merkle trie for the balances
-			mc, err = tx.MakeMerkleCommitter(true)
-			if err != nil {
-				return
+			mc, mcErr := tx.MakeMerkleCommitter(true)
+			if mcErr != nil {
+				return nil, mcErr
 			}
 
-			trie, err = merkletrie.MakeTrie(mc, trackerdb.TrieMemoryConfig)
-			return err
+			return merkletrie.MakeTrie(mc, trackerdb.TrieMemoryConfig)
 		})
 		if txErr != nil {
 			errChan <- txErr
@@ -909,7 +907,7 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 			}
 
 			txErr = dbs.Transaction(func(transactionCtx context.Context, tx trackerdb.TransactionScope) (err error) {
-				mc, err = tx.MakeMerkleCommitter(true)
+				mc, err := tx.MakeMerkleCommitter(true)
 				if err != nil {
 					return
 				}
@@ -925,17 +923,16 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 					}
 
 				}
-				uncommitedHashesCount += len(hashesToWrite)
-
-				accounts, kvs := countHashes(hashesToWrite)
-				kvHashesWritten += kvs
-				accountHashesWritten += accounts
-
 				return nil
 			})
 			if txErr != nil {
 				break
 			}
+			uncommitedHashesCount += len(hashesToWrite)
+
+			accounts, kvs := countHashes(hashesToWrite)
+			kvHashesWritten += kvs
+			accountHashesWritten += accounts
 
 			if uncommitedHashesCount >= trieRebuildCommitFrequency {
 				txErr = dbs.Transaction(func(transactionCtx context.Context, tx trackerdb.TransactionScope) (err error) {
@@ -944,22 +941,19 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 					if err != nil {
 						return
 					}
-					mc, err = tx.MakeMerkleCommitter(true)
+					mc, err := tx.MakeMerkleCommitter(true)
 					if err != nil {
 						return
 					}
 					trie.SetCommitter(mc)
 					_, err = trie.Evict(true)
-					if err != nil {
-						return
-					}
-					uncommitedHashesCount = 0
-					return nil
+					return
 				})
 				if txErr != nil {
 					keepWriting = false
 					continue
 				}
+				uncommitedHashesCount = 0
 			}
 
 			if progressUpdates != nil {
@@ -977,7 +971,7 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 				if err != nil {
 					return
 				}
-				mc, err = tx.MakeMerkleCommitter(true)
+				mc, err := tx.MakeMerkleCommitter(true)
 				if err != nil {
 					return
 				}
@@ -1014,48 +1008,51 @@ func (c *catchpointCatchupAccessorImpl) GetCatchupBlockRound(ctx context.Context
 }
 
 func (c *catchpointCatchupAccessorImpl) GetVerifyData(ctx context.Context) (balancesHash, spverHash, onlineAccountsHash, onlineRoundParamsHash crypto.Digest, totals ledgercore.AccountTotals, err error) {
-	var rawStateProofVerificationContext []ledgercore.StateProofVerificationContext
-
-	err = c.ledger.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+	type verifyData struct {
+		balancesHash, onlineAccountsHash, onlineRoundParamsHash crypto.Digest
+		totals                                                  ledgercore.AccountTotals
+		rawStateProofVerificationContext                        []ledgercore.StateProofVerificationContext
+	}
+	d, err := trackerdb.TransactionResult(c.ledger.trackerDB(), func(ctx context.Context, tx trackerdb.TransactionScope) (d verifyData, err error) {
 		ar, err := tx.MakeAccountsReader()
 		if err != nil {
-			return err
+			return d, err
 		}
 
 		// create the merkle trie for the balances
 		mc, err0 := tx.MakeMerkleCommitter(true)
 		if err0 != nil {
-			return fmt.Errorf("unable to make MerkleCommitter: %v", err0)
+			return d, fmt.Errorf("unable to make MerkleCommitter: %v", err0)
 		}
 		var trie *merkletrie.Trie
 		trie, err = merkletrie.MakeTrie(mc, trackerdb.TrieMemoryConfig)
 		if err != nil {
-			return fmt.Errorf("unable to make trie: %v", err)
+			return d, fmt.Errorf("unable to make trie: %v", err)
 		}
 
-		balancesHash, err = trie.RootHash()
+		d.balancesHash, err = trie.RootHash()
 		if err != nil {
-			return fmt.Errorf("unable to get trie root hash: %v", err)
+			return d, fmt.Errorf("unable to get trie root hash: %v", err)
 		}
 
-		totals, err = ar.AccountsTotals(ctx, true)
+		d.totals, err = ar.AccountsTotals(ctx, true)
 		if err != nil {
-			return fmt.Errorf("unable to get accounts totals: %v", err)
+			return d, fmt.Errorf("unable to get accounts totals: %v", err)
 		}
 
-		rawStateProofVerificationContext, err = tx.MakeSpVerificationCtxReader().GetAllSPContextsFromCatchpointTbl(ctx)
+		d.rawStateProofVerificationContext, err = tx.MakeSpVerificationCtxReader().GetAllSPContextsFromCatchpointTbl(ctx)
 		if err != nil {
-			return fmt.Errorf("unable to get state proof verification data: %v", err)
+			return d, fmt.Errorf("unable to get state proof verification data: %v", err)
 		}
 
-		onlineAccountsHash, _, err = calculateVerificationHash(ctx, tx.MakeOrderedOnlineAccountsIter, 0, true)
+		d.onlineAccountsHash, _, err = calculateVerificationHash(ctx, tx.MakeOrderedOnlineAccountsIter, 0, true)
 		if err != nil {
-			return fmt.Errorf("unable to get online accounts verification data: %v", err)
+			return d, fmt.Errorf("unable to get online accounts verification data: %v", err)
 		}
 
-		onlineRoundParamsHash, _, err = calculateVerificationHash(ctx, tx.MakeOnlineRoundParamsIter, 0, true)
+		d.onlineRoundParamsHash, _, err = calculateVerificationHash(ctx, tx.MakeOnlineRoundParamsIter, 0, true)
 		if err != nil {
-			return fmt.Errorf("unable to get online round params verification data: %v", err)
+			return d, fmt.Errorf("unable to get online round params verification data: %v", err)
 		}
 
 		return
@@ -1064,10 +1061,10 @@ func (c *catchpointCatchupAccessorImpl) GetVerifyData(ctx context.Context) (bala
 		return crypto.Digest{}, crypto.Digest{}, crypto.Digest{}, crypto.Digest{}, ledgercore.AccountTotals{}, err
 	}
 
-	wrappedContext := catchpointStateProofVerificationContext{Data: rawStateProofVerificationContext}
+	wrappedContext := catchpointStateProofVerificationContext{Data: d.rawStateProofVerificationContext}
 	spverHash = crypto.HashObj(wrappedContext)
 
-	return balancesHash, spverHash, onlineAccountsHash, onlineRoundParamsHash, totals, nil
+	return d.balancesHash, spverHash, d.onlineAccountsHash, d.onlineRoundParamsHash, d.totals, nil
 }
 
 // calculateVerificationHash iterates over a TableIterator, hashes each item, and returns a hash of
@@ -1245,9 +1242,8 @@ func (c *catchpointCatchupAccessorImpl) EnsureFirstBlock(ctx context.Context) (b
 	blockDbs := c.ledger.blockDB()
 	start := time.Now()
 	ledgerCatchpointEnsureblock1Count.Inc(nil)
-	err = blockDbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		blk, err = blockdb.BlockEnsureSingleBlock(tx)
-		return
+	blk, err = db.AtomicResult(&blockDbs.Wdb, func(ctx context.Context, tx *sql.Tx) (bookkeeping.Block, error) {
+		return blockdb.BlockEnsureSingleBlock(tx)
 	})
 	ledgerCatchpointEnsureblock1Micros.AddMicrosecondsSince(start, nil)
 	if err != nil {
@@ -1275,6 +1271,15 @@ func (c *catchpointCatchupAccessorImpl) CompleteCatchup(ctx context.Context) (er
 func (c *catchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err error) {
 	start := time.Now()
 	ledgerCatchpointFinishBalsCount.Inc(nil)
+	tp := trackerdb.Params{
+		InitAccounts:      c.ledger.GenesisAccounts(),
+		InitProto:         c.ledger.GenesisProtoVersion(),
+		GenesisHash:       c.ledger.GenesisHash(),
+		FromCatchpoint:    true,
+		CatchpointEnabled: c.ledger.catchpoint.catchpointEnabled(),
+		DbPathPrefix:      c.ledger.catchpoint.dbDirectory,
+		BlockDb:           c.ledger.blockDBs,
+	}
 	err = c.ledger.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		crw, err := tx.MakeCatchpointReaderWriter()
 		if err != nil {
@@ -1332,15 +1337,6 @@ func (c *catchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 			return err
 		}
 
-		tp := trackerdb.Params{
-			InitAccounts:      c.ledger.GenesisAccounts(),
-			InitProto:         c.ledger.GenesisProtoVersion(),
-			GenesisHash:       c.ledger.GenesisHash(),
-			FromCatchpoint:    true,
-			CatchpointEnabled: c.ledger.catchpoint.catchpointEnabled(),
-			DbPathPrefix:      c.ledger.catchpoint.dbDirectory,
-			BlockDb:           c.ledger.blockDBs,
-		}
 		// Upgrade to v6
 		_, err = tx.RunMigrations(ctx, tp, c.ledger.log, 6 /*target database version*/)
 		if err != nil {

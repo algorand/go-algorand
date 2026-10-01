@@ -19,6 +19,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 
 	"github.com/mattn/go-sqlite3"
@@ -79,4 +80,30 @@ func TestAtomicResult(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []int{2}, res)
 	require.Equal(t, 1, cleared)
+}
+
+func TestAtomicResultOnError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	acc, err := MakeAccessor("atomicresulterr.db", false, true)
+	require.NoError(t, err)
+	defer acc.Close()
+
+	// When fn fails, its result is returned along with its error.
+	errFn := errors.New("fn failed")
+	res, err := AtomicResult(&acc, func(ctx context.Context, tx *sql.Tx) ([]int, error) {
+		return []int{1}, errFn
+	})
+	require.ErrorIs(t, err, errFn)
+	require.Equal(t, []int{1}, res)
+
+	// When fn succeeds but its transaction is not committed, the result is not returned. Rolling
+	// back inside fn makes the commit fail.
+	res, err = AtomicResult(&acc, func(ctx context.Context, tx *sql.Tx) ([]int, error) {
+		require.NoError(t, tx.Rollback())
+		return []int{1}, nil
+	})
+	require.ErrorIs(t, err, sql.ErrTxDone)
+	require.Nil(t, res)
 }

@@ -259,70 +259,80 @@ func MakeAccountsSQLWriter(e db.Executable, hasAccounts, hasResources, hasKvPair
 // After check source code, a []byte slice destination is definitely cloned.
 
 // LookupKeyValue returns the application boxed value associated with the key.
-func (qs *accountsDbQueries) LookupKeyValue(key string) (pv trackerdb.PersistedKVData, err error) {
-	err = db.Retry(func() error {
+func (qs *accountsDbQueries) LookupKeyValue(key string) (trackerdb.PersistedKVData, error) {
+	return db.RetryResult(func() (pv trackerdb.PersistedKVData, err error) {
 		var rawkey []byte
 		var val []byte
 		// Cast to []byte to avoid interpretation as character string, see note in upsertKvPair
-		err := qs.lookupKvPairStmt.QueryRow([]byte(key)).Scan(&pv.Round, &rawkey, &val)
+		err = qs.lookupKvPairStmt.QueryRow([]byte(key)).Scan(&pv.Round, &rawkey, &val)
 		if err != nil {
 			// this should never happen; it indicates that we don't have a current round in the acctrounds table.
 			if err == sql.ErrNoRows {
 				// Return the zero value of data
 				err = fmt.Errorf("unable to query value for key %v : %w", key, err)
 			}
-			return err
+			return pv, err
 		}
 		if rawkey != nil { // We got a non-null key, so it exists
 			if val == nil {
 				val = []byte{}
 			}
 			pv.Value = val
-			return nil
+			return pv, nil
 		}
 		// we don't have that key, just return pv with the database round (pv.value==nil)
-		return nil
+		return pv, nil
 	})
-	return
 }
 
 // LookupKeysByPrefix returns a set of application boxed values matching the prefix.
-func (qs *accountsDbQueries) LookupKeysByPrefix(prefix string, maxKeyNum uint64, results map[string]bool, resultCount uint64) (round basics.Round, err error) {
+func (qs *accountsDbQueries) LookupKeysByPrefix(prefix string, maxKeyNum uint64, results map[string]bool, resultCount uint64) (basics.Round, error) {
 	start, end := keyPrefixIntervalPreprocessing([]byte(prefix))
 	if end == nil {
 		// Not an expected use case, it's asking for all keys, or all keys
 		// prefixed by some number of 0xFF bytes.
 		return 0, fmt.Errorf("lookup by strange prefix %#v", prefix)
 	}
-	err = db.Retry(func() error {
-		var rows *sql.Rows
-		rows, err = qs.lookupKeysByRangeStmt.Query(start, end)
+	type lookupResult struct {
+		round basics.Round
+		// keys found in this lookup that are not already in results
+		keys []string
+	}
+	res, err := db.RetryResult(func() (res lookupResult, err error) {
+		rows, err := qs.lookupKeysByRangeStmt.Query(start, end)
 		if err != nil {
-			return err
+			return res, err
 		}
 		defer rows.Close()
 
 		var v sql.NullString
 
+		count := resultCount
 		for rows.Next() {
-			if resultCount == maxKeyNum {
-				return nil
+			if count == maxKeyNum {
+				return res, nil
 			}
-			err = rows.Scan(&round, &v)
+			err = rows.Scan(&res.round, &v)
 			if err != nil {
-				return err
+				return res, err
 			}
 			if v.Valid {
 				if _, ok := results[v.String]; ok {
 					continue
 				}
-				results[v.String] = true
-				resultCount++
+				res.keys = append(res.keys, v.String)
+				count++
 			}
 		}
-		return rows.Err()
+		return res, rows.Err()
 	})
-	return
+	if err != nil {
+		return res.round, err
+	}
+	for _, k := range res.keys {
+		results[k] = true
+	}
+	return res.round, nil
 }
 
 // LookupKeysByPrefixCursor returns a page of key-value pairs matching the prefix, starting after cursor.
@@ -347,27 +357,25 @@ func (qs *accountsDbQueries) LookupKeysByPrefixCursor(prefix string, cursor stri
 		stmt = qs.lookupKeysByRangeCursorWithValueStmt
 	}
 
-	var round basics.Round
-	var results []ledgercore.KvPairResult
-	var moreData bool
-
-	err := db.Retry(func() error {
+	type page struct {
+		round    basics.Round
+		results  []ledgercore.KvPairResult
+		moreData bool
+	}
+	p, err := db.RetryResult(func() (page, error) {
 		rows, err := stmt.Query(queryStart, end)
 		if err != nil {
-			return err
+			return page{}, err
 		}
 		defer rows.Close()
 
 		rnd, res, more, err := qs.processKvRows(rows, cursor, limit, maxBytes, includeValues, exclude)
 		if err != nil {
-			return err
+			return page{}, err
 		}
-		round = rnd
-		results = res
-		moreData = more
-		return nil
+		return page{round: rnd, results: res, moreData: more}, nil
 	})
-	return round, results, moreData, err
+	return p.round, p.results, p.moreData, err
 }
 
 // maxPreallocLimit caps the slice pre-allocation to avoid excessive memory use
@@ -482,153 +490,163 @@ func keyPrefixIntervalPreprocessing(prefix []byte) ([]byte, []byte) {
 }
 
 // LookupCreator returns the address and round of the creator.
-func (qs *accountsDbQueries) LookupCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (addr basics.Address, ok bool, dbRound basics.Round, err error) {
-	err = db.Retry(func() error {
+func (qs *accountsDbQueries) LookupCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, basics.Round, error) {
+	type creator struct {
+		addr    basics.Address
+		ok      bool
+		dbRound basics.Round
+	}
+	c, err := db.RetryResult(func() (c creator, err error) {
 		var buf []byte
-		err := qs.lookupCreatorStmt.QueryRow(cidx, ctype).Scan(&dbRound, &buf)
+		err = qs.lookupCreatorStmt.QueryRow(cidx, ctype).Scan(&c.dbRound, &buf)
 
 		// this shouldn't happen unless we can't figure the round number.
 		if err == sql.ErrNoRows {
-			return fmt.Errorf("lookupCreator was unable to retrieve round number")
+			return c, fmt.Errorf("lookupCreator was unable to retrieve round number")
 		}
 
 		// Some other database error
 		if err != nil {
-			return err
+			return c, err
 		}
 
 		if len(buf) > 0 {
-			ok = true
-			copy(addr[:], buf)
+			c.ok = true
+			copy(c.addr[:], buf)
 		}
-		return nil
+		return c, nil
 	})
-	return
+	return c.addr, c.ok, c.dbRound, err
 }
 
 // LookupResources returns the requested resource.
-func (qs *accountsDbQueries) LookupResources(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (data trackerdb.PersistedResourcesData, err error) {
-	err = db.Retry(func() error {
+func (qs *accountsDbQueries) LookupResources(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (trackerdb.PersistedResourcesData, error) {
+	return db.RetryResult(func() (data trackerdb.PersistedResourcesData, err error) {
 		var buf []byte
 		var rowid sql.NullInt64
-		err := qs.lookupResourcesStmt.QueryRow(addr[:], aidx).Scan(&rowid, &data.Round, &buf)
+		err = qs.lookupResourcesStmt.QueryRow(addr[:], aidx).Scan(&rowid, &data.Round, &buf)
 		if err == nil {
 			data.Aidx = aidx
 			if len(buf) > 0 && rowid.Valid {
 				data.AcctRef = sqlRowRef{rowid.Int64}
 				err = protocol.Decode(buf, &data.Data)
 				if err != nil {
-					return err
+					return data, err
 				}
 				if ctype == basics.AssetCreatable && !data.Data.IsAsset() {
-					return fmt.Errorf("lookupResources asked for an asset but got %v", data.Data)
+					return data, fmt.Errorf("lookupResources asked for an asset but got %v", data.Data)
 				}
 				if ctype == basics.AppCreatable && !data.Data.IsApp() {
-					return fmt.Errorf("lookupResources asked for an app but got %v", data.Data)
+					return data, fmt.Errorf("lookupResources asked for an app but got %v", data.Data)
 				}
-				return nil
+				return data, nil
 			}
 			data.Data = trackerdb.MakeResourcesData(0)
 			// we don't have that account, just return the database round.
-			return nil
+			return data, nil
 		}
 
 		// this should never happen; it indicates that we don't have a current round in the acctrounds table.
 		if err == sql.ErrNoRows {
 			// Return the zero value of data
-			return fmt.Errorf("unable to query resource data for address %v aidx %v ctype %v : %w", addr, aidx, ctype, err)
+			return data, fmt.Errorf("unable to query resource data for address %v aidx %v ctype %v : %w", addr, aidx, ctype, err)
 		}
-		return err
+		return data, err
 	})
-	return
 }
 
 // LookupAllResources returns all resources associated with the given address.
-func (qs *accountsDbQueries) LookupAllResources(addr basics.Address) (data []trackerdb.PersistedResourcesData, rnd basics.Round, err error) {
-	err = db.Retry(func() error {
+func (qs *accountsDbQueries) LookupAllResources(addr basics.Address) ([]trackerdb.PersistedResourcesData, basics.Round, error) {
+	type resources struct {
+		data []trackerdb.PersistedResourcesData
+		rnd  basics.Round
+	}
+	res, err := db.RetryResult(func() (res resources, err error) {
 		// Query for all resources
-		rows, err0 := qs.lookupAllResourcesStmt.Query(addr[:])
-		if err0 != nil {
-			return err0
+		rows, err := qs.lookupAllResourcesStmt.Query(addr[:])
+		if err != nil {
+			return res, err
 		}
 		defer rows.Close()
 
 		var addrid, aidx sql.NullInt64
 		var dbRound basics.Round
-		data = nil
 		var buf []byte
 		for rows.Next() {
 			err = rows.Scan(&addrid, &dbRound, &aidx, &buf)
 			if err != nil {
-				return err
+				return res, err
 			}
 			if !addrid.Valid || !aidx.Valid {
 				// we received an entry without any index. This would happen only on the first entry when there are no resources for this address.
 				// ensure this is the first entry, set the round and return
-				if len(data) != 0 {
-					return fmt.Errorf("lookupAllResources: unexpected invalid result on non-first resource record: (%v, %v)", addrid.Valid, aidx.Valid)
+				if len(res.data) != 0 {
+					return res, fmt.Errorf("lookupAllResources: unexpected invalid result on non-first resource record: (%v, %v)", addrid.Valid, aidx.Valid)
 				}
-				rnd = dbRound
+				res.rnd = dbRound
 				break
 			}
 			var resData trackerdb.ResourcesData
 			err = protocol.Decode(buf, &resData)
 			if err != nil {
-				return err
+				return res, err
 			}
-			data = append(data, trackerdb.PersistedResourcesData{
+			res.data = append(res.data, trackerdb.PersistedResourcesData{
 				AcctRef: sqlRowRef{addrid.Int64},
 				Aidx:    basics.CreatableIndex(aidx.Int64),
 				Data:    resData,
 				Round:   dbRound,
 			})
-			rnd = dbRound
+			res.rnd = dbRound
 		}
-		return rows.Err()
+		return res, rows.Err()
 	})
-	return
+	return res.data, res.rnd, err
 }
 
-func (qs *accountsDbQueries) LookupLimitedResources(addr basics.Address, minIdx basics.CreatableIndex, maxCreatables uint64, ctype basics.CreatableType) (data []trackerdb.PersistedResourcesDataWithCreator, rnd basics.Round, err error) {
-	err = db.Retry(func() error {
-		rows, err0 := qs.lookupLimitedResourcesStmt.Query(addr[:], ctype, minIdx, maxCreatables)
-		if err0 != nil {
-			return err0
+func (qs *accountsDbQueries) LookupLimitedResources(addr basics.Address, minIdx basics.CreatableIndex, maxCreatables uint64, ctype basics.CreatableType) ([]trackerdb.PersistedResourcesDataWithCreator, basics.Round, error) {
+	type resources struct {
+		data []trackerdb.PersistedResourcesDataWithCreator
+		rnd  basics.Round
+	}
+	res, err := db.RetryResult(func() (res resources, err error) {
+		rows, err := qs.lookupLimitedResourcesStmt.Query(addr[:], ctype, minIdx, maxCreatables)
+		if err != nil {
+			return res, err
 		}
 		defer rows.Close()
 
 		var addrid, aidx sql.NullInt64
 		var dbRound basics.Round
-		data = nil
 		var actResourceBuf []byte
 		var crtResourceBuf []byte
 		var creatorAddrBuf []byte
 		for rows.Next() {
 			err = rows.Scan(&addrid, &dbRound, &aidx, &creatorAddrBuf, &actResourceBuf, &crtResourceBuf)
 			if err != nil {
-				return err
+				return res, err
 			}
 			if !addrid.Valid || !aidx.Valid {
 				// we received an entry without any index. This would happen only on the first entry when there are no resources for this address.
 				// ensure this is the first entry, set the round and return
-				if len(data) != 0 {
-					return fmt.Errorf("LookupLimitedResources: unexpected invalid result on non-first resource record: (%v, %v)", addrid.Valid, aidx.Valid)
+				if len(res.data) != 0 {
+					return res, fmt.Errorf("LookupLimitedResources: unexpected invalid result on non-first resource record: (%v, %v)", addrid.Valid, aidx.Valid)
 				}
-				rnd = dbRound
+				res.rnd = dbRound
 				break
 			}
 			var actResData trackerdb.ResourcesData
 			var crtResData trackerdb.ResourcesData
 			err = protocol.Decode(actResourceBuf, &actResData)
 			if err != nil {
-				return err
+				return res, err
 			}
 
 			var prdwc trackerdb.PersistedResourcesDataWithCreator
 			if len(crtResourceBuf) > 0 {
 				err = protocol.Decode(crtResourceBuf, &crtResData)
 				if err != nil {
-					return err
+					return res, err
 				}
 
 				// The creator's resource has the params; merge the account's
@@ -668,94 +686,88 @@ func (qs *accountsDbQueries) LookupLimitedResources(addr basics.Address, minIdx 
 				}
 			}
 
-			data = append(data, prdwc)
+			res.data = append(res.data, prdwc)
 
-			rnd = dbRound
+			res.rnd = dbRound
 		}
-		return rows.Err()
+		return res, rows.Err()
 	})
-	return
+	return res.data, res.rnd, err
 }
 
 // LookupAccount looks up for a the account data given it's address. It returns the persistedAccountData, which includes the current database round and the matching
 // account data, if such was found. If no matching account data could be found for the given address, an empty account data would
 // be retrieved.
-func (qs *accountsDbQueries) LookupAccount(addr basics.Address) (data trackerdb.PersistedAccountData, err error) {
-	err = db.Retry(func() error {
+func (qs *accountsDbQueries) LookupAccount(addr basics.Address) (trackerdb.PersistedAccountData, error) {
+	return db.RetryResult(func() (data trackerdb.PersistedAccountData, err error) {
 		var buf []byte
 		var rowid sql.NullInt64
-		err := qs.lookupAccountStmt.QueryRow(addr[:]).Scan(&rowid, &data.Round, &buf)
+		err = qs.lookupAccountStmt.QueryRow(addr[:]).Scan(&rowid, &data.Round, &buf)
 		if err == nil {
 			data.Addr = addr
 			if len(buf) > 0 && rowid.Valid {
 				data.Ref = sqlRowRef{rowid.Int64}
 				err = protocol.Decode(buf, &data.AccountData)
-				return err
+				return data, err
 			} else if len(buf) == 0 && rowid.Valid {
 				// we are sure empty valid accounts do not exist in the database.
-				return fmt.Errorf("account %v exists but has no data in the database", addr)
+				return data, fmt.Errorf("account %v exists but has no data in the database", addr)
 			}
 			// we don't have that account, just return the database round.
-			return nil
+			return data, nil
 		}
 
 		// this should never happen; it indicates that we don't have a current round in the acctrounds table.
 		if err == sql.ErrNoRows {
 			// Return the zero value of data
-			return fmt.Errorf("unable to query account data for address %v : %w", addr, err)
+			return data, fmt.Errorf("unable to query account data for address %v : %w", addr, err)
 		}
 
-		return err
+		return data, err
 	})
-	return
 }
 
 // LookupOnline returns the online account data for the given address.
-func (qs *onlineAccountsDbQueries) LookupOnline(addr basics.Address, rnd basics.Round) (data trackerdb.PersistedOnlineAccountData, err error) {
-	err = db.Retry(func() error {
+func (qs *onlineAccountsDbQueries) LookupOnline(addr basics.Address, rnd basics.Round) (trackerdb.PersistedOnlineAccountData, error) {
+	return db.RetryResult(func() (data trackerdb.PersistedOnlineAccountData, err error) {
 		var buf []byte
 		var rowid sql.NullInt64
 		var updround sql.NullInt64
-		err := qs.lookupOnlineStmt.QueryRow(addr[:], rnd).Scan(&rowid, &updround, &data.Round, &buf)
+		err = qs.lookupOnlineStmt.QueryRow(addr[:], rnd).Scan(&rowid, &updround, &data.Round, &buf)
 		if err == nil {
 			data.Addr = addr
 			if len(buf) > 0 && rowid.Valid && updround.Valid {
 				data.Ref = sqlRowRef{rowid.Int64}
 				data.UpdRound = basics.Round(updround.Int64)
 				err = protocol.Decode(buf, &data.AccountData)
-				return err
+				return data, err
 			}
 			// we don't have that account, just return the database round.
-			return nil
+			return data, nil
 		}
 
 		// this should never happen; it indicates that we don't have a current round in the acctrounds table.
 		if err == sql.ErrNoRows {
 			// Return the zero value of data
-			return fmt.Errorf("unable to query online account data for address %v : %w", addr, err)
+			return data, fmt.Errorf("unable to query online account data for address %v : %w", addr, err)
 		}
 
-		return err
+		return data, err
 	})
-	return
 }
 
 func (qs *onlineAccountsDbQueries) LookupOnlineRoundParams(round basics.Round) (ledgercore.OnlineRoundParamsData, error) {
-	data := ledgercore.OnlineRoundParamsData{}
-	err := db.Retry(func() error {
+	data, err := db.RetryResult(func() (data ledgercore.OnlineRoundParamsData, err error) {
 		row := qs.lookupOnlineTotalsStmt.QueryRow(round)
 		var buf []byte
-		err := row.Scan(&buf)
+		err = row.Scan(&buf)
 		if err == sql.ErrNoRows {
-			return trackerdb.ErrNotFound
+			return data, trackerdb.ErrNotFound
 		} else if err != nil {
-			return err
+			return data, err
 		}
 		err = protocol.Decode(buf, &data)
-		if err != nil {
-			return err
-		}
-		return nil
+		return data, err
 	})
 	if err != nil {
 		return ledgercore.OnlineRoundParamsData{}, err
@@ -763,11 +775,15 @@ func (qs *onlineAccountsDbQueries) LookupOnlineRoundParams(round basics.Round) (
 	return data, nil
 }
 
-func (qs *onlineAccountsDbQueries) LookupOnlineHistory(addr basics.Address) (result []trackerdb.PersistedOnlineAccountData, rnd basics.Round, err error) {
-	err = db.Retry(func() error {
+func (qs *onlineAccountsDbQueries) LookupOnlineHistory(addr basics.Address) ([]trackerdb.PersistedOnlineAccountData, basics.Round, error) {
+	type history struct {
+		result []trackerdb.PersistedOnlineAccountData
+		rnd    basics.Round
+	}
+	h, err := db.RetryResult(func() (h history, err error) {
 		rows, err := qs.lookupOnlineHistoryStmt.Query(addr[:])
 		if err != nil {
-			return err
+			return h, err
 		}
 		defer rows.Close()
 
@@ -775,21 +791,21 @@ func (qs *onlineAccountsDbQueries) LookupOnlineHistory(addr basics.Address) (res
 			var buf []byte
 			data := trackerdb.PersistedOnlineAccountData{}
 			var rowid int64
-			err = rows.Scan(&rowid, &data.UpdRound, &rnd, &buf)
+			err = rows.Scan(&rowid, &data.UpdRound, &h.rnd, &buf)
 			if err != nil {
-				return err
+				return h, err
 			}
 			data.Ref = sqlRowRef{rowid}
 			err = protocol.Decode(buf, &data.AccountData)
 			if err != nil {
-				return err
+				return h, err
 			}
 			data.Addr = addr
-			result = append(result, data)
+			h.result = append(h.result, data)
 		}
-		return rows.Err()
+		return h, rows.Err()
 	})
-	return
+	return h.result, h.rnd, err
 }
 
 func (qs *accountsDbQueries) Close() {

@@ -62,24 +62,19 @@ func MakeStateProofVerificationReader(q db.Queryable) trackerdb.SpVerificationCt
 
 // LookupSPContext retrieves stateproof verification context from the database.
 func (spa *stateProofVerificationReader) LookupSPContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
-	verificationContext := ledgercore.StateProofVerificationContext{}
-	queryFunc := func() error {
+	verificationContext, err := db.RetryResult(func() (ledgercore.StateProofVerificationContext, error) {
 		row := spa.q.QueryRow("SELECT verificationcontext FROM stateproofverification WHERE lastattestedround=?", stateProofLastAttestedRound)
 		var buf []byte
 		err := row.Scan(&buf)
 		if err == sql.ErrNoRows {
-			return trackerdb.ErrNotFound
+			return ledgercore.StateProofVerificationContext{}, trackerdb.ErrNotFound
 		} else if err != nil {
-			return err
+			return ledgercore.StateProofVerificationContext{}, err
 		}
+		var verificationContext ledgercore.StateProofVerificationContext
 		err = protocol.Decode(buf, &verificationContext)
-		if err != nil {
-			return err
-		}
-		return nil
-	}
-
-	err := db.Retry(queryFunc)
+		return verificationContext, err
+	})
 	return &verificationContext, err
 }
 
@@ -134,36 +129,31 @@ func (spa *stateProofVerificationReader) GetAllSPContextsFromCatchpointTbl(ctx c
 }
 
 func (spa *stateProofVerificationReader) getAllSPContextsInternal(ctx context.Context, query string) ([]ledgercore.StateProofVerificationContext, error) {
-	var result []ledgercore.StateProofVerificationContext
-	queryFunc := func() error {
+	return db.RetryResult(func() ([]ledgercore.StateProofVerificationContext, error) {
 		rows, err := spa.q.QueryContext(ctx, query)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		defer rows.Close()
 
-		// Clear `res` in case this function is repeated.
-		result = result[:0]
+		var result []ledgercore.StateProofVerificationContext
 		for rows.Next() {
 			var rawData []byte
 			err = rows.Scan(&rawData)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			var record ledgercore.StateProofVerificationContext
 			err = protocol.Decode(rawData, &record)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			result = append(result, record)
 		}
 
-		return rows.Err()
-	}
-
-	err := db.Retry(queryFunc)
-	return result, err
+		return result, rows.Err()
+	})
 }

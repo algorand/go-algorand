@@ -542,7 +542,7 @@ func printAccountsDatabase(databaseName string, stagingTables bool, fileHeader l
 			totals.NotParticipating.Money.Raw, totals.NotParticipating.RewardUnits,
 			totals.RewardsLevel)
 	}
-	return dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	return dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) { //retryclosure:ignore debugging tool; a retry repeats output already printed, which is acceptable here
 		arw := sqlitedriver.NewAccountsSQLReaderWriter(tx)
 
 		fmt.Printf("\n")
@@ -668,14 +668,11 @@ func printStateProofVerificationContext(databaseName string, stagingTables bool,
 	}
 	defer dbAccessor.Close()
 
-	var stateProofVerificationContext []ledgercore.StateProofVerificationContext
-	err = dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	stateProofVerificationContext, err := db.AtomicResult(&dbAccessor, func(ctx context.Context, tx *sql.Tx) ([]ledgercore.StateProofVerificationContext, error) {
 		if stagingTables {
-			stateProofVerificationContext, err = sqlitedriver.MakeStateProofVerificationReader(tx).GetAllSPContextsFromCatchpointTbl(ctx)
-		} else {
-			stateProofVerificationContext, err = sqlitedriver.MakeStateProofVerificationReader(tx).GetAllSPContexts(ctx)
+			return sqlitedriver.MakeStateProofVerificationReader(tx).GetAllSPContextsFromCatchpointTbl(ctx)
 		}
-		return err
+		return sqlitedriver.MakeStateProofVerificationReader(tx).GetAllSPContexts(ctx)
 	})
 
 	if err != nil {
@@ -725,7 +722,7 @@ func printKeyValueStore(databaseName string, stagingTables bool, outFile *os.Fil
 		kvTable = "catchpointkvstore"
 	}
 
-	return dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	return dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) error { //retryclosure:ignore debugging tool; a retry repeats output already written, which is acceptable here
 		var rowsCount int64
 		err := tx.QueryRow(fmt.Sprintf("SELECT count(*) from %s", kvTable)).Scan(&rowsCount)
 		if err != nil {
