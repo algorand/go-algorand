@@ -317,7 +317,7 @@ func TestVrfVerify(t *testing.T) {
 	testLogic(t, "byte 0x3344; int 80; bzero; int 32; bzero; vrf_verify VrfAlgorand", LogicVersion, ep, "stack len is 2")
 
 	// working app, but the verify itself fails
-	testLogic(t, "byte 0x3344; int 80; bzero; int 32; bzero; vrf_verify VrfAlgorand; !; assert; int 64; bzero; ==", LogicVersion, ep)
+	testLogic(t, withAllowAll("byte 0x3344; int 80; bzero; int 32; bzero; vrf_verify VrfAlgorand; !; assert; int 64; bzero; ==", LogicVersion), LogicVersion, ep)
 
 	source := testVrfApp(
 		"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",                                                                                                 //pubkey
@@ -325,7 +325,7 @@ func TestVrfVerify(t *testing.T) {
 		"", // data
 		"5b49b554d05c0cd5a5325376b3387de59d924fd1e13ded44648ab33c21349a603f25b84ec5ed887995b33da5e3bfcb87cd2f64521c4c62cf825cffabbe5d31cc", // output
 	)
-	testLogic(t, source, LogicVersion, ep)
+	testLogic(t, withAllowAll(source, LogicVersion), LogicVersion, ep)
 
 	source = testVrfApp(
 		"3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c",                                                                                                 //pk
@@ -333,7 +333,7 @@ func TestVrfVerify(t *testing.T) {
 		"72", // alpha
 		"94f4487e1b2fec954309ef1289ecb2e15043a2461ecc7b2ae7d4470607ef82eb1cfa97d84991fe4a7bfdfd715606bc27e2967a6c557cfb5875879b671740b7d8", // beta
 	)
-	testLogic(t, source, LogicVersion, ep)
+	testLogic(t, withAllowAll(source, LogicVersion), LogicVersion, ep)
 }
 
 // BenchmarkVerify is useful to see relative speeds of various crypto verify functions
@@ -402,7 +402,7 @@ func TestEd25519verify(t *testing.T) {
 
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, fmt.Sprintf("arg 0; arg 1; arg 2; ed25519verify"), v)
+			ops := testProg(t, withAllowAll("arg 0; arg 1; arg 2; ed25519verify", v), v)
 			sig := c.Sign(Msg{
 				ProgramHash: crypto.HashObj(Program(ops.Program)),
 				Data:        data[:],
@@ -441,7 +441,7 @@ func TestEd25519VerifyBare(t *testing.T) {
 
 	for v := uint64(7); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, "arg 0; arg 1; arg 2; ed25519verify_bare", v)
+			ops := testProg(t, withAllowAll("arg 0; arg 1; arg 2; ed25519verify_bare", v), v)
 			require.NoError(t, err)
 			sig := c.SignBytes(data)
 			var txn transactions.SignedTxn
@@ -479,16 +479,12 @@ func TestFalconVerify(t *testing.T) {
 	data, err := hex.DecodeString(msg)
 	require.NoError(t, err)
 
-	yes := testProg(t, fmt.Sprintf(`arg 0; arg 1; byte 0x%s; falcon_verify`,
-		hex.EncodeToString(fs.PublicKey[:])), 12)
-	require.NoError(t, err)
-	no := testProg(t, fmt.Sprintf(`arg 0; arg 1; byte 0x%s; falcon_verify; !`,
-		hex.EncodeToString(fs.PublicKey[:])), 12)
-	require.NoError(t, err)
+	source := fmt.Sprintf(`arg 0; arg 1; byte 0x%s; falcon_verify`, hex.EncodeToString(fs.PublicKey[:]))
 
 	for v := uint64(12); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			yes.Program[0] = byte(v)
+			yes := testProg(t, withAllowAll(source, v), v)
+			no := testProg(t, withAllowAll(source+"; !", v), v)
 			sig, err := fs.SignBytes(data)
 			require.NoError(t, err)
 
@@ -950,10 +946,10 @@ func BenchmarkEd25519Verifyx1(b *testing.B) {
 		secret := crypto.GenerateSignatureSecrets(randSeed()) //generate programs and signatures
 		pk := basics.Address(secret.SignatureVerifier)
 		pkStr := pk.String()
-		ops, err := AssembleStringWithVersion(fmt.Sprintf(`arg 0
+		ops, err := AssembleStringWithVersion(withAllowAll(fmt.Sprintf(`arg 0
 arg 1
 addr %s
-ed25519verify`, pkStr), AssemblerMaxVersion)
+ed25519verify`, pkStr), AssemblerMaxVersion), AssemblerMaxVersion)
 		require.NoError(b, err)
 		programs = append(programs, ops.Program)
 		sig := secret.Sign(Msg{

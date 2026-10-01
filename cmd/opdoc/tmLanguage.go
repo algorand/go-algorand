@@ -177,6 +177,8 @@ func buildSyntaxHighlight(version uint64) *tmLanguage {
 	}
 	var allAccess []string
 	var allArithmetics []string
+	// Loading Values and Authorization share a scope, so they form one pattern.
+	others := []string{"int", "byte", "addr"}
 
 	var keys []string
 	for key := range logic.OpGroups {
@@ -192,13 +194,8 @@ func buildSyntaxHighlight(version uint64) *tmLanguage {
 				Name:  "keyword.control.teal",
 				Match: fmt.Sprintf("^(%s)\\b", strings.Join(names, "|")),
 			})
-		case "Loading Values":
-			loading := []string{"int", "byte", "addr"}
-			loading = append(loading, names...)
-			keywords.Patterns = append(keywords.Patterns, pattern{
-				Name:  "keyword.other.teal",
-				Match: fmt.Sprintf("^(%s)\\b", strings.Join(loading, "|")),
-			})
+		case "Loading Values", "Authorization":
+			others = append(others, names...)
 		case "Block Access", "Account Access", "Asset Access", "Application Access", "Box Access":
 			allAccess = append(allAccess, names...)
 		// For these, accumulate into allArithmetics,
@@ -234,6 +231,10 @@ func buildSyntaxHighlight(version uint64) *tmLanguage {
 			panic(fmt.Sprintf("Unknown ops group: %s", grp))
 		}
 	}
+	keywords.Patterns = append(keywords.Patterns, pattern{
+		Name:  "keyword.other.teal",
+		Match: fmt.Sprintf("^(%s)\\b", strings.Join(others, "|")),
+	})
 	keywords.Patterns = append(keywords.Patterns, pattern{
 		Name:  "keyword.other.unit.teal",
 		Match: fmt.Sprintf("^(%s)\\b", strings.Join(allAccess, "|")),

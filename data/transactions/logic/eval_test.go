@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
@@ -352,7 +353,7 @@ func TestUnaccountedArg(t *testing.T) {
 					}
 
 					for v := test.minVer; v <= AssemblerMaxVersion; v++ {
-						ops := testProg(t, test.source, v)
+						ops := testProg(t, withAllowAll(test.source, v), v)
 						var txn transactions.SignedTxn
 						txn.Lsig.Logic = ops.Program
 						txn.Lsig.Args = args
@@ -537,6 +538,456 @@ func TestWrongProtoVersion(t *testing.T) {
 	}
 }
 
+func TestLogicSigAllowTypes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, ts := range logicSigTypeSpecs {
+		t.Run(ts.name, func(t *testing.T) {
+			t.Parallel()
+			var txn transactions.SignedTxn
+			txn.Txn.Type = protocol.TxType(ts.name)
+			other := string(protocol.PaymentTx)
+			if ts.name == other {
+				other = string(protocol.AssetTransferTx)
+			}
+
+			// Existing LogicSigs retain their historical behavior.
+			testLogic(t, "int 1", logicSigAllowVersion-1, defaultSigParams(txn))
+
+			missing := fmt.Sprintf("transaction type %s requires `allow_types %s`", ts.name, ts.name)
+			testLogic(t, "int 1", logicSigAllowVersion, defaultSigParams(txn), missing)
+			testLogic(t, "allow_types "+other+"; int 1", logicSigAllowVersion, defaultSigParams(txn), missing)
+			testLogic(t, "allow_types "+ts.name+"; int 1", logicSigAllowVersion, defaultSigParams(txn))
+			testLogic(t, "allow_types "+other+" "+ts.name+"; int 1", logicSigAllowVersion, defaultSigParams(txn))
+			testLogic(t, "allow_types "+other+"; allow_types "+ts.name+"; int 1", logicSigAllowVersion, defaultSigParams(txn))
+			testLogic(t, "allow_all; int 1", logicSigAllowVersion, defaultSigParams(txn))
+		})
+	}
+
+	// A type that allow_types cannot name needs allow_all.
+	t.Run("StateProof", func(t *testing.T) {
+		t.Parallel()
+		var txn transactions.SignedTxn
+		txn.Txn.Type = protocol.StateProofTx
+		testLogic(t, "allow_types pay; int 1", logicSigAllowVersion, defaultSigParams(txn),
+			"transaction type stpf requires `allow_all`")
+		testLogic(t, "allow_all; int 1", logicSigAllowVersion, defaultSigParams(txn))
+	})
+}
+
+func TestLogicSigAllowFields(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	protected := []struct {
+		name    string
+		txnType protocol.TxType
+		set     func(*transactions.Transaction)
+	}{
+		{"RekeyTo", protocol.AssetFreezeTx, func(txn *transactions.Transaction) { txn.RekeyTo = basics.Address{1} }},
+		{"Fee", protocol.PaymentTx, func(txn *transactions.Transaction) { txn.Fee = basics.MicroAlgos{Raw: 1} }},
+		{"CloseRemainderTo", protocol.PaymentTx, func(txn *transactions.Transaction) { txn.CloseRemainderTo = basics.Address{1} }},
+		{"Nonparticipation", protocol.KeyRegistrationTx, func(txn *transactions.Transaction) { txn.Nonparticipation = true }},
+		{"AssetCloseTo", protocol.AssetTransferTx, func(txn *transactions.Transaction) { txn.AssetCloseTo = basics.Address{1} }},
+		{"AssetSender", protocol.AssetTransferTx, func(txn *transactions.Transaction) { txn.AssetSender = basics.Address{1} }},
+		{"OnCompletion", protocol.ApplicationCallTx, func(txn *transactions.Transaction) { txn.OnCompletion = transactions.OptInOC }},
+		{"ApprovalProgram", protocol.ApplicationCallTx, func(txn *transactions.Transaction) { txn.ApprovalProgram = []byte{0x01} }},
+	}
+	require.Len(t, protected, len(logicSigFieldSpecs))
+
+	for _, tc := range protected {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var txn transactions.SignedTxn
+			txn.Txn.Type = tc.txnType
+			allowType := "allow_types " + string(tc.txnType) + "; "
+
+			// A protected field at its default value needs no allow_fields permission.
+			testLogic(t, allowType+"int 1", logicSigAllowVersion, defaultSigParams(txn))
+
+			tc.set(&txn.Txn)
+			testLogic(t, "int 1", logicSigAllowVersion-1, defaultSigParams(txn))
+
+			missing := fmt.Sprintf("transaction field %s requires `allow_fields %s`", tc.name, tc.name)
+			testLogic(t, allowType+"int 1", logicSigAllowVersion, defaultSigParams(txn), missing)
+			testLogic(t, allowType+"allow_fields "+tc.name+"; int 1", logicSigAllowVersion, defaultSigParams(txn))
+			testLogic(t, "allow_fields "+tc.name+"; "+allowType+"allow_fields "+tc.name+"; int 1", logicSigAllowVersion, defaultSigParams(txn))
+			testLogic(t, "allow_all; int 1", logicSigAllowVersion, defaultSigParams(txn))
+		})
+	}
+
+	// Every OnCompletion other than NoOp needs the allowance.
+	t.Run("OnCompletionValues", func(t *testing.T) {
+		t.Parallel()
+		for oc := transactions.OptInOC; oc <= transactions.DeleteApplicationOC; oc++ {
+			var txn transactions.SignedTxn
+			txn.Txn.Type = protocol.ApplicationCallTx
+			txn.Txn.OnCompletion = oc
+			testLogic(t, "allow_types appl; int 1", logicSigAllowVersion, defaultSigParams(txn),
+				"transaction field OnCompletion requires `allow_fields OnCompletion`")
+			testLogic(t, "allow_types appl; allow_fields OnCompletion; int 1", logicSigAllowVersion, defaultSigParams(txn))
+		}
+	})
+
+	// Missing permissions are reported type first, then fields in mask order.
+	t.Run("Order", func(t *testing.T) {
+		t.Parallel()
+		var txn transactions.SignedTxn
+		txn.Txn.Type = protocol.PaymentTx
+		txn.Txn.CloseRemainderTo = basics.Address{1}
+		txn.Txn.Fee = basics.MicroAlgos{Raw: 1}
+		txn.Txn.RekeyTo = basics.Address{2}
+
+		testLogic(t, "allow_fields RekeyTo Fee CloseRemainderTo; int 1", logicSigAllowVersion, defaultSigParams(txn),
+			"transaction type pay requires `allow_types pay`")
+		testLogic(t, "allow_types pay; int 1", logicSigAllowVersion, defaultSigParams(txn),
+			"transaction field RekeyTo requires `allow_fields RekeyTo`")
+		testLogic(t, "allow_types pay; allow_fields RekeyTo; int 1", logicSigAllowVersion, defaultSigParams(txn),
+			"transaction field Fee requires `allow_fields Fee`")
+		testLogic(t, "allow_types pay; allow_fields RekeyTo Fee; int 1", logicSigAllowVersion, defaultSigParams(txn),
+			"transaction field CloseRemainderTo requires `allow_fields CloseRemainderTo`")
+		testLogic(t, "allow_types pay; allow_fields CloseRemainderTo Fee RekeyTo; int 1", logicSigAllowVersion, defaultSigParams(txn))
+		testLogic(t, "allow_types pay; allow_fields RekeyTo; allow_fields Fee; allow_fields CloseRemainderTo; int 1",
+			logicSigAllowVersion, defaultSigParams(txn))
+	})
+
+	// Closing out while clawing back needs both asset transfer fields.
+	t.Run("CloseAndClawback", func(t *testing.T) {
+		t.Parallel()
+		var txn transactions.SignedTxn
+		txn.Txn.Type = protocol.AssetTransferTx
+		txn.Txn.AssetCloseTo = basics.Address{1}
+		txn.Txn.AssetSender = basics.Address{2}
+		testLogic(t, "allow_types axfer; allow_fields AssetCloseTo; int 1", logicSigAllowVersion, defaultSigParams(txn),
+			"transaction field AssetSender requires `allow_fields AssetSender`")
+		testLogic(t, "allow_types axfer; allow_fields AssetSender; int 1", logicSigAllowVersion, defaultSigParams(txn),
+			"transaction field AssetCloseTo requires `allow_fields AssetCloseTo`")
+		testLogic(t, "allow_types axfer; allow_fields AssetCloseTo AssetSender; int 1", logicSigAllowVersion, defaultSigParams(txn))
+	})
+
+	// Creating an app and opting in to it needs both app fields.
+	t.Run("CreateAndOptIn", func(t *testing.T) {
+		t.Parallel()
+		var txn transactions.SignedTxn
+		txn.Txn.Type = protocol.ApplicationCallTx
+		txn.Txn.OnCompletion = transactions.OptInOC
+		txn.Txn.ApprovalProgram = []byte{0x01}
+		testLogic(t, "allow_types appl; allow_fields ApprovalProgram; int 1", logicSigAllowVersion, defaultSigParams(txn),
+			"transaction field OnCompletion requires `allow_fields OnCompletion`")
+		testLogic(t, "allow_types appl; allow_fields OnCompletion; int 1", logicSigAllowVersion, defaultSigParams(txn),
+			"transaction field ApprovalProgram requires `allow_fields ApprovalProgram`")
+		testLogic(t, "allow_types appl; allow_fields OnCompletion ApprovalProgram; int 1", logicSigAllowVersion, defaultSigParams(txn))
+	})
+}
+
+func TestLogicSigAllow(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// An allow opcode must be executed to be effective.
+	t.Run("ExecutedPath", func(t *testing.T) {
+		t.Parallel()
+		var txn transactions.SignedTxn
+		txn.Txn.Type = protocol.PaymentTx
+		txn.Txn.RekeyTo = basics.Address{1}
+
+		testLogic(t, "allow_types pay; int 0; bnz skip; allow_fields RekeyTo; skip: int 1", logicSigAllowVersion, defaultSigParams(txn))
+		testLogic(t, "allow_types pay; int 1; bnz skip; allow_fields RekeyTo; skip: int 1", logicSigAllowVersion, defaultSigParams(txn),
+			"transaction field RekeyTo requires `allow_fields RekeyTo`")
+	})
+
+	// A missing permission is reported at the instruction that ended execution,
+	// in both the detailed error and the trace.
+	t.Run("ErrorLocation", func(t *testing.T) {
+		t.Parallel()
+		var txn transactions.SignedTxn
+		txn.Txn.Type = protocol.PaymentTx
+		txn.Txn.RekeyTo = basics.Address{1}
+
+		ops := testProg(t, "allow_types pay\nint 1\nreturn\nint 0", logicSigAllowVersion)
+		returnPC := -1
+		for offset, loc := range ops.OffsetToSource {
+			if loc.Line == 2 {
+				returnPC = offset
+			}
+		}
+		require.Positive(t, returnPC)
+
+		ep := defaultSigParams(txn)
+		ep.Tracer = EvalErrorDetailsTracer{}
+		ep.TxnGroup[0].Lsig.Logic = ops.Program
+		pass, err := EvalSignature(0, ep)
+		require.False(t, pass)
+		const missing = "transaction field RekeyTo requires `allow_fields RekeyTo`"
+		require.ErrorContains(t, err, missing)
+		require.ErrorContains(t, err, fmt.Sprintf("pc=%d, opcodes=", returnPC))
+		require.True(t, strings.HasSuffix(err.Error(), "; return"), err.Error())
+		require.Contains(t, ep.Trace.String(), fmt.Sprintf("%3d %s", returnPC, missing))
+	})
+
+	// A program rejection takes precedence over a missing permission.
+	t.Run("RejectBeforeAllowanceCheck", func(t *testing.T) {
+		t.Parallel()
+		var txn transactions.SignedTxn
+		txn.Txn.Type = protocol.PaymentTx
+		txn.Txn.RekeyTo = basics.Address{1}
+
+		for _, source := range []string{"int 0", "allow_types pay; int 0", "allow_fields RekeyTo; int 0", "allow_all; int 0"} {
+			program := testProg(t, source, logicSigAllowVersion).Program
+			err := testLogicFull(t, program, 0, defaultSigParams(txn), "REJECT")
+			require.NoError(t, err)
+		}
+	})
+
+	// Permissions only affect their own transaction.
+	t.Run("GroupIsolation", func(t *testing.T) {
+		t.Parallel()
+		txns := make([]transactions.SignedTxn, 2)
+		for i := range txns {
+			txns[i].Txn.Type = protocol.PaymentTx
+			txns[i].Txn.RekeyTo = basics.Address{byte(i + 1)}
+		}
+		testLogics(t, []string{"allow_types pay; allow_fields RekeyTo; int 1", "allow_types pay; int 1"}, txns, nil,
+			exp(1, "transaction field RekeyTo requires `allow_fields RekeyTo`"))
+		testLogics(t, []string{"allow_all; int 1", "allow_types pay; int 1"}, txns, nil,
+			exp(1, "transaction field RekeyTo requires `allow_fields RekeyTo`"))
+		testLogics(t, []string{"allow_all; int 1", "int 1"}, txns, nil,
+			exp(1, "transaction type pay requires `allow_types pay`"))
+		testLogics(t, []string{"allow_types pay; allow_fields RekeyTo; int 1", "allow_all; int 1"}, txns, nil)
+	})
+}
+
+func TestLogicSigAllowModes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const missingType = "transaction type pay requires `allow_types pay`"
+	const missingRekey = "transaction field RekeyTo requires `allow_fields RekeyTo`"
+	const cannotWiden = "allow_all cannot follow allow_types or allow_fields"
+	cases := []struct {
+		name   string
+		source string
+		rekey  bool
+		err    string
+	}{
+		{"None", "int 1", false, missingType},
+		{"NoneWithReturn", "int 1; return", false, missingType},
+		{"Types", "allow_types pay; int 1", false, ""},
+		{"TypesWithoutField", "allow_types pay; int 1", true, missingRekey},
+		{"FieldsWithoutType", "allow_fields RekeyTo; int 1", true, missingType},
+		{"TypesAndFields", "allow_types pay; allow_fields RekeyTo; int 1", true, ""},
+		{"FieldsThenTypes", "allow_fields RekeyTo; allow_types pay; int 1", true, ""},
+		{"All", "allow_all; int 1", true, ""},
+		{"RepeatedAll", "allow_all; allow_all; int 1", true, ""},
+		{"AllToTypes", "allow_all; allow_types pay; int 1", true, missingRekey},
+		{"AllToTypesWithoutFields", "allow_all; allow_types pay; int 1", false, ""},
+		{"AllToFields", "allow_all; allow_fields RekeyTo; int 1", true, missingType},
+		{"AllToTypesAndFields", "allow_all; allow_types pay; allow_fields RekeyTo; int 1", true, ""},
+		{"TypesToAll", "allow_types pay; allow_all; int 1", false, cannotWiden},
+		{"FieldsToAll", "allow_fields RekeyTo; allow_all; int 1", false, cannotWiden},
+		{"InvalidTransitionBeforeRejection", "allow_types pay; allow_all; int 0", false, cannotWiden},
+		{"CannotRestoreAll", "allow_all; allow_types pay; allow_all; int 1", false, cannotWiden},
+		{"SkippedAll", "int 1; bnz end; allow_all; end: int 1", false, missingType},
+		{"SkippedTypes", "int 1; bnz end; allow_types pay; end: int 1", false, missingType},
+		{"SkippedAllAfterTypes", "allow_types pay; int 1; bnz end; allow_all; end: int 1", false, ""},
+		{"SubroutineCannotWiden", "allow_types pay; callsub helper; int 1; return; helper: allow_all; retsub", false, cannotWiden},
+		{"TypesInSubroutine", "callsub policy; allow_fields RekeyTo; int 1; return; policy: allow_types pay; retsub", true, ""},
+		{"AllDoesNotBypassErrors", "allow_all; err", false, "err opcode executed"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var txn transactions.SignedTxn
+			txn.Txn.Type = protocol.PaymentTx
+			if tc.rekey {
+				txn.Txn.RekeyTo = basics.Address{1}
+			}
+			testLogic(t, tc.source, logicSigAllowVersion, defaultSigParams(txn), tc.err)
+		})
+	}
+}
+
+func TestLogicSigAllowMask(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ops := testProg(t, "#pragma autosalt false\nallow_all", logicSigAllowVersion)
+	require.Equal(t, []byte{byte(logicSigAllowVersion), 0xc7, 0x01}, ops.Program)
+
+	cases := []struct {
+		source    string
+		program   []byte
+		canonical string
+	}{
+		{"allow_types pay", []byte{0xc7, 0x02, 0x01}, "allow_types pay"},
+		{"allow_types keyreg", []byte{0xc7, 0x02, 0x02}, "allow_types keyreg"},
+		{"allow_types acfg", []byte{0xc7, 0x02, 0x04}, "allow_types acfg"},
+		{"allow_types axfer", []byte{0xc7, 0x02, 0x08}, "allow_types axfer"},
+		{"allow_types afrz", []byte{0xc7, 0x02, 0x10}, "allow_types afrz"},
+		{"allow_types appl", []byte{0xc7, 0x02, 0x20}, "allow_types appl"},
+		{"allow_types hb", []byte{0xc7, 0x02, 0x40}, "allow_types hb"},
+		{"allow_types hb appl pay pay", []byte{0xc7, 0x02, 0x61}, "allow_types pay appl hb"},
+		{"allow_types pay keyreg acfg axfer afrz appl hb", []byte{0xc7, 0x02, 0x7f}, "allow_types pay keyreg acfg axfer afrz appl hb"},
+		{"allow_fields RekeyTo", []byte{0xc7, 0x03, 0x01}, "allow_fields RekeyTo"},
+		{"allow_fields Fee", []byte{0xc7, 0x03, 0x02}, "allow_fields Fee"},
+		{"allow_fields CloseRemainderTo", []byte{0xc7, 0x03, 0x04}, "allow_fields CloseRemainderTo"},
+		{"allow_fields Nonparticipation", []byte{0xc7, 0x03, 0x08}, "allow_fields Nonparticipation"},
+		{"allow_fields AssetCloseTo", []byte{0xc7, 0x03, 0x10}, "allow_fields AssetCloseTo"},
+		{"allow_fields AssetSender", []byte{0xc7, 0x03, 0x20}, "allow_fields AssetSender"},
+		{"allow_fields OnCompletion", []byte{0xc7, 0x03, 0x40}, "allow_fields OnCompletion"},
+		{"allow_fields ApprovalProgram", []byte{0xc7, 0x03, 0x80}, "allow_fields ApprovalProgram"},
+		{"allow_fields Fee RekeyTo Fee", []byte{0xc7, 0x03, 0x03}, "allow_fields RekeyTo Fee"},
+		{"allow_fields ApprovalProgram OnCompletion AssetSender AssetCloseTo Nonparticipation CloseRemainderTo Fee RekeyTo",
+			[]byte{0xc7, 0x03, 0xff},
+			"allow_fields RekeyTo Fee CloseRemainderTo Nonparticipation AssetCloseTo AssetSender OnCompletion ApprovalProgram"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.source, func(t *testing.T) {
+			t.Parallel()
+			ops := testProg(t, "#pragma autosalt false\n"+tc.source, logicSigAllowVersion)
+			require.Equal(t, append([]byte{byte(logicSigAllowVersion)}, tc.program...), ops.Program)
+			disassembled, err := Disassemble(ops.Program)
+			require.NoError(t, err)
+			require.Contains(t, disassembled, tc.canonical+"\n")
+			reassembled := assembleProgramWithoutAutomaticSalt(t, disassembled, assemblerNoVersion)
+			require.Equal(t, ops.Program, reassembled)
+		})
+	}
+
+	for _, name := range []string{"allow_types", "allow_fields"} {
+		testProg(t, name, logicSigAllowVersion, exp(1, name+" needs at least one option"))
+	}
+	testProg(t, "allow_types pay Unknown", logicSigAllowVersion, exp(1, "allow_types unknown field..."))
+	testProg(t, "allow_types RekeyTo", logicSigAllowVersion, exp(1, "allow_types unknown field..."))
+	testProg(t, "allow_types stpf", logicSigAllowVersion, exp(1, "allow_types unknown field..."))
+	testProg(t, "allow_fields pay", logicSigAllowVersion, exp(1, "allow_fields unknown field..."))
+	testProg(t, "allow_all pay", logicSigAllowVersion, exp(1, "allow_all expects 0 immediate arguments"))
+
+	// Check every byte of each mask. Check, eval, and disassembly agree, and a
+	// valid mask is a single cost-1 instruction regardless of bit count.
+	masks := []struct {
+		name     string
+		subOp    byte
+		immName  string
+		validMax int
+	}{
+		{"allow_types", 0x02, "t ...", 0x7f},
+		{"allow_fields", 0x03, "f ...", 0xff},
+	}
+	for _, m := range masks {
+		for raw := 0; raw <= 0xff; raw++ {
+			t.Run(fmt.Sprintf("%s/Byte%02x", m.name, raw), func(t *testing.T) {
+				t.Parallel()
+				// allow_types pay; <mask op>; pushint 1
+				program := []byte{byte(logicSigAllowVersion), 0xc7, 0x02, 0x01, 0xc7, m.subOp, byte(raw), 0x81, 0x01}
+				var txn transactions.SignedTxn
+				txn.Txn.Type = protocol.PaymentTx
+				txn.Lsig.Logic = program
+				checkErr := CheckSignature(0, defaultSigParams(txn))
+				pass, cx, err := EvalSignatureFull(0, defaultSigParams(txn))
+				_, disErr := Disassemble(program)
+				if raw != 0 && raw <= m.validMax {
+					require.NoError(t, checkErr)
+					require.NoError(t, err)
+					require.True(t, pass)
+					require.Equal(t, 3, cx.Cost())
+					require.NoError(t, disErr)
+				} else {
+					require.Error(t, checkErr)
+					require.Error(t, err)
+					require.False(t, pass)
+					require.ErrorContains(t, disErr, "invalid immediate "+m.immName+" for "+m.name)
+				}
+			})
+		}
+	}
+
+	// Per-bit introduction versions matter independently of the opcode version.
+	for _, group := range []*FieldGroup{&LogicSigAllowTypes, &LogicSigAllowFields} {
+		for _, name := range group.Names {
+			if name == "" {
+				continue
+			}
+			fs, ok := group.SpecByName(name)
+			require.True(t, ok)
+			err := validateLogicSigMask(group, fs.Field(), fs.Version()-1)
+			require.ErrorContains(t, err, fmt.Sprintf("%s option %s is not available", group.Name, name))
+			require.NoError(t, validateLogicSigMask(group, fs.Field(), fs.Version()))
+		}
+	}
+}
+
+func TestLogicSigAllowOpcode(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Every opcode and option round-trips, and none exists before its version.
+	sources := []string{"allow_all"}
+	for _, ts := range logicSigTypeSpecs {
+		sources = append(sources, "allow_types "+ts.name)
+	}
+	for _, fs := range logicSigFieldSpecs {
+		sources = append(sources, "allow_fields "+fs.name)
+	}
+	for _, source := range sources {
+		ops := testProg(t, source+"; int 1", logicSigAllowVersion)
+		disassembled, err := Disassemble(ops.Program)
+		require.NoError(t, err)
+		require.Contains(t, disassembled, source+"\n")
+		reassembled := testProg(t, disassembled, assemblerNoVersion)
+		require.Equal(t, ops.Program, reassembled.Program)
+
+		name, _, _ := strings.Cut(source, " ")
+		testProg(t, source+"; int 1", logicSigAllowVersion-1, exp(1, name+" opcode was introduced in v14"))
+		ops.Program[0] = byte(logicSigAllowVersion - 1)
+		testLogicBytes(t, ops.Program, defaultSigParamsWithVersion(logicSigAllowVersion-1), "illegal opcode", "illegal opcode")
+	}
+
+	prefix := OpsByName[logicSigAllowVersion]["allow_all"].Opcode
+	// A family member needs its sub-opcode, and mask opcodes need their mask.
+	testLogicBytes(t, []byte{byte(logicSigAllowVersion), prefix}, defaultSigParams(),
+		"missing sub-opcode", "missing sub-opcode")
+	for _, sub := range []byte{0x00, 0x04, 0xff} {
+		testLogicBytes(t, []byte{byte(logicSigAllowVersion), prefix, sub}, defaultSigParams(),
+			"improper sub-opcode", "improper sub-opcode")
+	}
+	for _, name := range []string{"allow_types", "allow_fields"} {
+		op := OpsByName[logicSigAllowVersion][name]
+		truncated := []byte{byte(logicSigAllowVersion), op.Opcode, op.SubOpcode}
+		testLogicBytes(t, truncated, defaultSigParams(),
+			"program ends without immediate value", "program ends without immediate value")
+		_, err := Disassemble(truncated)
+		require.ErrorContains(t, err, "program end while reading immediate "+op.Immediates[0].Name+" for "+name)
+	}
+
+	invalid := []struct {
+		name string
+		mask byte
+		err  string
+	}{
+		{"allow_types", 0x00, "empty allow_types mask"},
+		{"allow_types", 0x80, "invalid allow_types mask 0x80"},
+		{"allow_types", 0x81, "invalid allow_types mask 0x81"},
+		{"allow_fields", 0x00, "empty allow_fields mask"},
+	}
+	for _, tc := range invalid {
+		op := OpsByName[logicSigAllowVersion][tc.name]
+		program := []byte{byte(logicSigAllowVersion), op.Opcode, op.SubOpcode, tc.mask, 0x81, 0x01}
+		testLogicBytes(t, program, defaultSigParams(), tc.err, tc.err)
+		_, err := Disassemble(program)
+		require.ErrorContains(t, err, "invalid immediate "+op.Immediates[0].Name+" for "+tc.name)
+	}
+
+	// Reject invalid masks during static checking, including in unreachable
+	// code.
+	op := OpsByName[logicSigAllowVersion]["allow_types"]
+	unreachable := testProg(t, "allow_all; int 1; return; allow_types pay", logicSigAllowVersion).Program
+	mask := bytes.LastIndex(unreachable, []byte{op.Opcode, op.SubOpcode, byte(allowPay)}) + 2
+	unreachable[mask] = 0x80
+	testLogicBytes(t, unreachable, defaultSigParams(), "invalid allow_types mask 0x80", "")
+}
+
 // TestBlankStackSufficient will fail if an opcode is added with more than the
 // current max number of stack arguments. Update `blankStack` to be longer.
 func TestBlankStackSufficient(t *testing.T) {
@@ -600,10 +1051,10 @@ func TestSha256EqArg(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, `arg 0
+			ops := testProg(t, withAllowAll(`arg 0
 sha256
 byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
-==`, v)
+==`, v), v)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			txn.Lsig.Args = [][]byte{[]byte("=0\x97S\x85H\xe9\x91B\xfd\xdb;1\xf5Z\xaec?\xae\xf2I\x93\x08\x12\x94\xaa~\x06\x08\x849b")}
@@ -700,8 +1151,13 @@ func TestTLHC(t *testing.T) {
 			a1, _ := basics.UnmarshalChecksumAddress("DFPKC2SJP3OTFVJFMCD356YB7BOT4SJZTGWLIPPFEWL3ZABUFLTOY6ILYE")
 			a2, _ := basics.UnmarshalChecksumAddress("YYKRMERAFXMXCDWMBNR6BUUWQXDCUR53FPUGXLUYS7VNASRTJW2ENQ7BMQ")
 			secret, _ := base64.StdEncoding.DecodeString("xPUB+DJir1wsH7g2iEY1QwYqHqYH1vUJtzZKW4RxXsY=")
-			ops := testProg(t, tlhcProgramText, v)
+			source := tlhcProgramText
+			if v >= logicSigAllowVersion {
+				source = "allow_types pay\nallow_fields CloseRemainderTo\n" + source
+			}
+			ops := testProg(t, source, v)
 			var txn transactions.SignedTxn
+			txn.Txn.Type = protocol.PaymentTx
 			txn.Lsig.Logic = ops.Program
 			// right answer
 			txn.Lsig.Args = [][]byte{secret}
@@ -1274,7 +1730,7 @@ func TestArg(t *testing.T) {
 				[]byte("aoeu3"),
 				[]byte("aoeu4"),
 			}
-			ops := testProg(t, source, v)
+			ops := testProg(t, withAllowAll(source, v), v)
 			testLogicBytes(t, ops.Program, defaultSigParams(txn))
 		})
 	}
@@ -1485,7 +1941,7 @@ txn TypeEnum
 int %s
 ==
 &&`, symbol, string(tt))
-					ops := testProg(t, text, v)
+					ops := testProg(t, withAllowAll(text, v), v)
 					txn := transactions.SignedTxn{}
 					txn.Txn.Type = tt
 					if v < appsEnabledVersion && tt == protocol.ApplicationCallTx {
@@ -1938,8 +2394,8 @@ const testTxnProgramTextV13 = testTxnProgramTextV12 + `
 assert
 int 1`
 
-// v14 adds no new txn fields.
-const testTxnProgramTextV14 = testTxnProgramTextV13
+// v14 LogicSigs must permit the sample transaction's type and protected fields.
+const testTxnProgramTextV14 = "allow_all\n" + testTxnProgramTextV13
 
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
@@ -2442,7 +2898,7 @@ func TestTxna(t *testing.T) {
 txna ApplicationArgs 0
 ==
 `
-	ops := testProg(t, source, AssemblerMaxVersion)
+	ops := testProg(t, source+"\nallow_all", AssemblerMaxVersion)
 	var txn transactions.SignedTxn
 	txn.Txn.Accounts = make([]basics.Address, 1)
 	txn.Txn.Accounts[0] = txn.Txn.Sender
@@ -2478,7 +2934,7 @@ txna ApplicationArgs 0
 txn Sender
 ==
 `
-	ops2 := testProg(t, source, AssemblerMaxVersion)
+	ops2 := testProg(t, source+"\nallow_all", AssemblerMaxVersion)
 	var txn2 transactions.SignedTxn
 	copy(txn2.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
 	testLogicBytes(t, ops2.Program, defaultSigParams(txn2))
@@ -2487,7 +2943,7 @@ txn Sender
 	source = `gtxna 0 Accounts 1
 txna ApplicationArgs 0
 ==`
-	ops = testProg(t, source, AssemblerMaxVersion)
+	ops = testProg(t, source+"\nallow_all", AssemblerMaxVersion)
 	testLogicBytes(t, ops.Program, ep)
 
 	// modify gtxn index
@@ -2518,7 +2974,7 @@ txna ApplicationArgs 0
 txn Sender
 ==
 `
-	ops3 := testProg(t, source, AssemblerMaxVersion)
+	ops3 := testProg(t, source+"\nallow_all", AssemblerMaxVersion)
 	var txn3 transactions.SignedTxn
 	copy(txn2.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
 	testLogicBytes(t, ops3.Program, defaultSigParams(txn3))
@@ -2534,7 +2990,7 @@ btoi
 int 0
 ==
 `
-	ops := testProg(t, source, AssemblerMaxVersion)
+	ops := testProg(t, withAllowAll(source, AssemblerMaxVersion), AssemblerMaxVersion)
 
 	var txn transactions.SignedTxn
 	txn.Txn.ApplicationArgs = make([][]byte, 1)
@@ -2548,7 +3004,7 @@ int 0
 global ZeroAddress
 ==
 `
-	ops = testProg(t, source2, AssemblerMaxVersion)
+	ops = testProg(t, withAllowAll(source2, AssemblerMaxVersion), AssemblerMaxVersion)
 
 	var txn2 transactions.SignedTxn
 	txn2.Txn.Accounts = make([]basics.Address, 1)
@@ -2582,13 +3038,13 @@ int 1
 	for i := range txn.Txn.ApprovalProgram {
 		txn.Txn.ApprovalProgram[i] = byte(i % 7)
 	}
-	testLogic(t, source, AssemblerMaxVersion, defaultSigParams(txn))
+	testLogic(t, withAllowAll(source, AssemblerMaxVersion), AssemblerMaxVersion, defaultSigParams(txn))
 
 	testLogic(t, `txna ApprovalProgramPages 2`, AssemblerMaxVersion, defaultSigParams(txn),
 		"invalid ApprovalProgramPages index")
 
 	// ClearStateProgram is not in the txn at all
-	testLogic(t, `txn NumClearStateProgramPages; !`, AssemblerMaxVersion, defaultSigParams(txn))
+	testLogic(t, `allow_all; txn NumClearStateProgramPages; !`, AssemblerMaxVersion, defaultSigParams(txn))
 	testLogic(t, `txna ClearStateProgramPages 0`, AssemblerMaxVersion, defaultSigParams(txn),
 		"invalid ClearStateProgramPages index")
 }
@@ -2604,7 +3060,7 @@ int 0
 txnas ApplicationArgs
 ==
 `
-	ops := testProg(t, source, AssemblerMaxVersion)
+	ops := testProg(t, withAllowAll(source, AssemblerMaxVersion), AssemblerMaxVersion)
 	var txn transactions.SignedTxn
 	txn.Txn.Accounts = make([]basics.Address, 1)
 	txn.Txn.Accounts[0] = txn.Txn.Sender
@@ -2619,7 +3075,7 @@ txnas Accounts
 txn Sender
 ==
 `
-	ops = testProg(t, source, AssemblerMaxVersion)
+	ops = testProg(t, withAllowAll(source, AssemblerMaxVersion), AssemblerMaxVersion)
 	var txn2 transactions.SignedTxn
 	copy(txn2.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
 	testLogicBytes(t, ops.Program, defaultSigParams(txn2))
@@ -2629,7 +3085,7 @@ txn Sender
 gtxnas 0 Accounts
 txna ApplicationArgs 0
 ==`
-	ops = testProg(t, source, AssemblerMaxVersion)
+	ops = testProg(t, withAllowAll(source, AssemblerMaxVersion), AssemblerMaxVersion)
 	testLogicBytes(t, ops.Program, ep)
 
 	// check special case: Account 0 == Sender
@@ -2639,7 +3095,7 @@ gtxnas 0 Accounts
 txn Sender
 ==
 	`
-	ops = testProg(t, source, AssemblerMaxVersion)
+	ops = testProg(t, withAllowAll(source, AssemblerMaxVersion), AssemblerMaxVersion)
 	var txn3 transactions.SignedTxn
 	copy(txn3.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
 	testLogicBytes(t, ops.Program, defaultSigParams(txn3))
@@ -2650,7 +3106,7 @@ int 1
 gtxnsas Accounts
 txna ApplicationArgs 0
 ==`
-	ops = testProg(t, source, AssemblerMaxVersion)
+	ops = testProg(t, withAllowAll(source, AssemblerMaxVersion), AssemblerMaxVersion)
 	testLogicBytes(t, ops.Program, ep)
 }
 
@@ -2959,7 +3415,7 @@ int 100; byte 0x0201; == // types mismatch so this will fail
 	scratch[10] = uint64(5)
 	scratch[15] = []byte{0x01, 0x02, 0x03, 0x00}
 	require.Equal(t, map[string]any{
-		"pc":          19,
+		"pc":          21, // includes the v14 allow_all prefix
 		"group-index": 0,
 		"eval-states": []evalState{
 			{
@@ -2978,7 +3434,7 @@ int 1
 	gscratch[2] = uint64(4)
 	gscratch[3] = []byte("jj")
 
-	err = testLogics(t, []string{goodsource, badsource}, nil, nil, exp(1, "cannot compare"))
+	err = testLogics(t, []string{withAllowAll(goodsource, LogicVersion), badsource}, nil, nil, exp(1, "cannot compare"))
 	attrs = basics.Attributes(err)
 	require.Equal(t, map[string]any{
 		"pc":          19,
@@ -3294,14 +3750,14 @@ assert
 global OpcodeBudget
 int %d
 ==
-`, budget-1, budget-5)
+`, budget-1, budget-5) + "\nallow_all"
 	}
 	b := testLogicBudget
 	testLogicBytes(t, assembleProgramWithoutAutomaticSalt(t, source(b), LogicVersion), nil)
 
-	testLogicsWithoutAutomaticSalt(t, []string{source(2 * b), source(2*b - 7)}, nil, nil)
+	testLogicsWithoutAutomaticSalt(t, []string{source(2 * b), source(2*b - 8)}, nil, nil)
 
-	testLogicsWithoutAutomaticSalt(t, []string{source(3 * b), source(3*b - 7), ""}, nil, nil)
+	testLogicsWithoutAutomaticSalt(t, []string{source(3 * b), source(3*b - 8), ""}, nil, nil)
 
 	testLogicsWithoutAutomaticSalt(t, []string{source(b), source(b)}, nil,
 		func(p *config.ConsensusParams) { p.EnableLogicSigCostPooling = false })
@@ -4092,7 +4548,7 @@ func evalLoop(b *testing.B, runs int, programs ...[]byte) {
 }
 
 func benchmarkBasicProgram(b *testing.B, source string) {
-	ops := testProg(b, source, AssemblerMaxVersion)
+	ops := testProg(b, withAllowAll(source, AssemblerMaxVersion), AssemblerMaxVersion)
 	evalLoop(b, b.N, ops.Program)
 }
 
@@ -4107,13 +4563,13 @@ func benchmarkOperation(b *testing.B, prefix string, operation string, suffix st
 	runs := b.N / 2000
 	inst := strings.Count(operation, ";") + strings.Count(operation, "\n")
 	source := prefix + ";" + strings.Repeat(operation+"\n", 2000) + ";" + suffix
-	ops := testProg(b, source, AssemblerMaxVersion)
+	ops := testProg(b, withAllowAll(source, AssemblerMaxVersion), AssemblerMaxVersion)
 	finalOps := ops
 
 	if b.N%2000 != 0 {
 		runs++
 		finalSource := prefix + ";" + strings.Repeat(operation+"\n", b.N%2000) + ";" + suffix
-		finalOps = testProg(b, finalSource, AssemblerMaxVersion)
+		finalOps = testProg(b, withAllowAll(finalSource, AssemblerMaxVersion), AssemblerMaxVersion)
 	}
 	evalLoop(b, runs, ops.Program, finalOps.Program)
 	b.ReportMetric(float64(inst), "extra/op")
@@ -4493,7 +4949,7 @@ intc_0
 txna ApplicationArgs 0
 pop
 `
-	ops := testProg(t, text, AssemblerMaxVersion)
+	ops := testProg(t, text+"\nallow_all", AssemblerMaxVersion)
 
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = ops.Program
@@ -4667,7 +5123,7 @@ func TestAnyRekeyToOrApplicationRaisesMinAvmVersion(t *testing.T) {
 			for v := cse.validFromVersion; v <= AssemblerMaxVersion; v++ {
 				ops := testProg(t, source, v)
 				testAppBytes(t, ops.Program, aep)
-				testLogicBytes(t, ops.Program, sep)
+				testLogic(t, withAllowAll(source, v), v, sep)
 			}
 		})
 	}
@@ -4835,6 +5291,16 @@ func notrack(program string) string {
 
 type evalTester func(t *testing.T, pass bool, err error) bool
 
+// withAllowAll permits everything in generic opcode tests that also run as
+// v14+ LogicSigs. Call sites opt in explicitly so bytecode, cost, and
+// authorization tests can continue to exercise unmodified programs.
+func withAllowAll(program string, version uint64) string {
+	if version >= logicSigAllowVersion {
+		return "allow_all\n" + program
+	}
+	return program
+}
+
 func testEvaluation(t *testing.T, program string, introduced uint64, tester evalTester) error {
 	t.Helper()
 
@@ -4846,7 +5312,7 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 				testProg(t, notrack(program), v, exp(0, "...was introduced..."))
 				return
 			}
-			ops := testProg(t, program, v)
+			ops := testProg(t, withAllowAll(program, v), v)
 			// Programs created with a previous assembler
 			// should still operate properly with future
 			// EvalParams, so try all forward versions.
@@ -4855,13 +5321,21 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 					t.Helper()
 					var txn transactions.SignedTxn
 					txn.Lsig.Logic = ops.Program
-					ep := defaultSigParamsWithVersion(lv, txn)
+					params := func(p *config.ConsensusParams) {
+						protoVer(lv)(p)
+						// Reserve the added policy instruction's cost so tests of
+						// OpcodeBudget still see the original snippet's budget.
+						if v >= logicSigAllowVersion {
+							p.LogicSigMaxCost++
+						}
+					}
+					ep := optSigParams(params, txn)
 					err := CheckSignature(0, ep)
 					if err != nil {
 						t.Log(ep.Trace.String())
 					}
 					require.NoError(t, err)
-					ep = defaultSigParamsWithVersion(lv, txn)
+					ep = optSigParams(params, txn)
 					pass, err := EvalSignature(0, ep)
 					ok := tester(t, pass, err)
 					if !ok {
@@ -5868,7 +6342,7 @@ func TestOpJSONRef(t *testing.T) {
 		if fidoVersion > AssemblerMaxVersion {
 			continue
 		}
-		ops := testProg(t, s.source, AssemblerMaxVersion)
+		ops := testProg(t, withAllowAll(s.source, AssemblerMaxVersion), AssemblerMaxVersion)
 
 		testLogicBytes(t, ops.Program, defaultSigParams())
 	}
@@ -6210,7 +6684,7 @@ func TestShortSwitch(t *testing.T) {
 	label1:
 	label2:
 	`
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err := AssembleStringWithVersion(withAllowAll(source, AssemblerMaxVersion), AssemblerMaxVersion)
 	require.NoError(t, err)
 
 	// fine as is
@@ -6397,7 +6871,7 @@ func TestShortMatch(t *testing.T) {
 	label1:
     label2:
 	`
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err := AssembleStringWithVersion(withAllowAll(source, AssemblerMaxVersion), AssemblerMaxVersion)
 	require.NoError(t, err)
 
 	// fine as is
@@ -6487,6 +6961,10 @@ func TestPushBytessSize(t *testing.T) {
 		return program
 	}
 	tail := func(program []byte, pushed int) []byte {
+		if program[0] >= logicSigAllowVersion {
+			op := OpsByName[LogicVersion]["allow_all"]
+			program = append(program, op.Opcode, op.SubOpcode)
+		}
 		for range pushed {
 			program = append(program, pop)
 		}
@@ -6565,7 +7043,12 @@ func TestTrailingEmptyByteImm(t *testing.T) {
 		opcode := OpsByName[LogicVersion][v.name].Opcode
 
 		trailing := func(version byte) []byte {
-			return []byte{version, 0x81, 0x01, 0x43, opcode, 0x01, 0x00}
+			program := []byte{version}
+			if version >= logicSigAllowVersion {
+				op := OpsByName[LogicVersion]["allow_all"]
+				program = append(program, op.Opcode, op.SubOpcode)
+			}
+			return append(program, 0x81, 0x01, 0x43, opcode, 0x01, 0x00)
 		}
 		testLogicBytes(t, trailing(legacyVersion), legacy(), ran, "")
 		testLogicBytes(t, trailing(LogicVersion), nil)
@@ -6579,7 +7062,12 @@ func TestTrailingEmptyByteImm(t *testing.T) {
 		testLogicBytes(t, short(LogicVersion), nil, ran, ran)
 
 		mid := func(version byte) []byte {
-			return append([]byte{version, opcode, 0x02, 0x00, 0x01, 0x61}, v.tail...)
+			program := append([]byte{version, opcode, 0x02, 0x00, 0x01, 0x61}, v.tail...)
+			if version >= logicSigAllowVersion {
+				op := OpsByName[LogicVersion]["allow_all"]
+				program = append(program, op.Opcode, op.SubOpcode)
+			}
+			return program
 		}
 		testLogicBytes(t, mid(legacyVersion), legacy())
 		testLogicBytes(t, mid(LogicVersion), nil)

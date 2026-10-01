@@ -32,6 +32,6 @@ fields_string.go:	fields.go
 clean:
 	rm -f TEAL_opcodes*.md langspec_v*.json teal.tmLanguage.json fields_string.go \
 	      avm-appendix-a.md avm-stack-types.md constants-*.md \
-	      account-access.md application-access.md arithmetic.md asset-access.md \
+	      account-access.md application-access.md arithmetic.md asset-access.md authorization.md \
 	      block-access.md box-access.md byte-array-*.md cryptography.md \
 	      flow-control.md inner-transactions.md loading-values.md

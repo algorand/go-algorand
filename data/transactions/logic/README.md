@@ -21,6 +21,16 @@ single non-zero uint64 value, though `return` can be used to signal an
 early approval which approves based only upon the top stack value
 being a non-zero uint64 value.
 
+Starting with v14, a _Smart Signature_ approves only what it has
+permitted by executing `allow_types`, `allow_fields`, or `allow_all`.
+The transaction's type must be permitted with `allow_types`, for
+example `allow_types pay`. Each protected field with a non-default
+value must be permitted with `allow_fields`: a nonzero `RekeyTo`,
+`Fee`, `CloseRemainderTo`, `AssetCloseTo`, or `AssetSender`, a set
+`Nonparticipation`, an `OnCompletion` other than NoOp, or a non-empty
+`ApprovalProgram`. `allow_all` permits everything, as LogicSigs before
+v14 do.
+
 ## The Stack
 
 The stack starts empty and can contain values of either uint64 or byte-arrays

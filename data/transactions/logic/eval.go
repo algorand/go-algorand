@@ -701,6 +701,14 @@ type frame struct {
 
 type scratchSpace [256]stackValue
 
+// logicSigAllowMode is zero until an allow opcode executes.
+type logicSigAllowMode uint8
+
+const (
+	logicSigAllowAll logicSigAllowMode = iota + 1
+	logicSigAllowNamed
+)
+
 // EvalContext is the execution context of AVM bytecode.  It contains the full
 // state of the running program, and tracks some of the things that the program
 // has done, like log messages and inner transactions.
@@ -736,6 +744,15 @@ type EvalContext struct {
 	bytec   [][]byte
 	version uint64
 	Scratch scratchSpace
+
+	// logicSigAllowMode records whether the last executed allow opcode was
+	// allow_all, or allow_types or allow_fields, which permit only what they name.
+	logicSigAllowMode logicSigAllowMode
+
+	// logicSigAllowedTypes and logicSigAllowedFields accumulate the options of
+	// executed allow_types and allow_fields.
+	logicSigAllowedTypes  logicSigTypeMask
+	logicSigAllowedFields logicSigFieldMask
 
 	// creatorAddr caches the creator of appID, looked up lazily by
 	// getCreatorAddress (a zero value means "not yet looked up"). Besides
@@ -1502,11 +1519,13 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 		return false, verr
 	}
 
+	lastpc := cx.pc
 	for (err == nil) && (cx.pc < len(cx.program)) {
 		if cx.Tracer != nil {
 			cx.Tracer.BeforeOpcode(cx)
 		}
 
+		lastpc = cx.pc
 		err = cx.step()
 
 		if cx.Tracer != nil {
@@ -1533,7 +1552,80 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 		return false, errors.New("stack finished with bytes not int")
 	}
 
-	return cx.Stack[0].Uint != 0, nil
+	if cx.Stack[0].Uint == 0 {
+		return false, nil
+	}
+	if cx.runMode == ModeSig && cx.version >= logicSigAllowVersion {
+		if err := cx.checkLogicSigAllowances(); err != nil {
+			// Report the failure at the instruction that ended execution, which
+			// approved the transaction, rather than past the end of the program.
+			cx.pc = lastpc
+			if cx.Trace != nil {
+				fmt.Fprintf(cx.Trace, "%3d %s\n", cx.pc, err)
+			}
+			return false, err
+		}
+	}
+
+	return true, nil
+}
+
+// checkLogicSigAllowances requires that executed allow opcodes permit the
+// transaction's type and every protected field with a non-default value.
+func (cx *EvalContext) checkLogicSigAllowances() error {
+	if cx.logicSigAllowMode == logicSigAllowAll {
+		return nil
+	}
+
+	txn := &cx.txn.Txn
+	ts, ok := logicSigTypeSpecByName[string(txn.Type)]
+	if !ok || ts.version > cx.version {
+		return fmt.Errorf("transaction type %s requires `allow_all`", txn.Type)
+	}
+	if cx.logicSigAllowedTypes&logicSigTypeMask(ts.bit) == 0 {
+		return fmt.Errorf("transaction type %s requires `allow_types %s`", txn.Type, txn.Type)
+	}
+
+	var required logicSigFieldMask
+	if !txn.RekeyTo.IsZero() {
+		required |= allowRekeyTo
+	}
+	if txn.Fee.Raw != 0 {
+		required |= allowFee
+	}
+	switch txn.Type {
+	case protocol.PaymentTx:
+		if !txn.CloseRemainderTo.IsZero() {
+			required |= allowCloseRemainderTo
+		}
+	case protocol.KeyRegistrationTx:
+		if txn.Nonparticipation {
+			required |= allowNonparticipation
+		}
+	case protocol.AssetTransferTx:
+		if !txn.AssetCloseTo.IsZero() {
+			required |= allowAssetCloseTo
+		}
+		if !txn.AssetSender.IsZero() {
+			required |= allowAssetSender
+		}
+	case protocol.ApplicationCallTx:
+		if txn.OnCompletion != transactions.NoOpOC {
+			required |= allowOnCompletion
+		}
+		if len(txn.ApprovalProgram) != 0 {
+			required |= allowApprovalProgram
+		}
+	}
+
+	for field := range maskBits(required &^ cx.logicSigAllowedFields) {
+		fs := logicSigFieldSpecByName[logicSigFieldNames[field]]
+		if fs.version > cx.version {
+			continue
+		}
+		return fmt.Errorf("transaction field %s requires `allow_fields %s`", fs.name, fs.name)
+	}
+	return nil
 }
 
 // CheckContract should be faster than EvalContract.  It can perform
@@ -1797,7 +1889,7 @@ func (cx *EvalContext) step() error {
 		// routines mucking about in the execution context
 		// (changing the pc, for example) and this gives a big
 		// improvement in readability
-		dstate := &disassembleState{program: cx.program, pc: cx.pc, numericTargets: true, intc: cx.intc, bytec: cx.bytec}
+		dstate := &disassembleState{program: cx.program, version: cx.version, pc: cx.pc, numericTargets: true, intc: cx.intc, bytec: cx.bytec}
 		sourceLine, inner := disassemble(dstate, spec)
 		if inner != nil {
 			if err != nil { // don't override an error from evaluation
@@ -1905,6 +1997,44 @@ func (cx *EvalContext) ensureStackCap(targetCap int) error {
 
 func opErr(cx *EvalContext) error {
 	return errors.New("err opcode executed")
+}
+
+// checkAllowTypes and checkAllowFields reject invalid masks during static
+// checking, including in unreachable code.
+func checkAllowTypes(cx *EvalContext) error {
+	return validateLogicSigMask(&LogicSigAllowTypes, cx.program[cx.pc+2], cx.version)
+}
+
+func checkAllowFields(cx *EvalContext) error {
+	return validateLogicSigMask(&LogicSigAllowFields, cx.program[cx.pc+2], cx.version)
+}
+
+func opAllowAll(cx *EvalContext) error {
+	if cx.logicSigAllowMode == logicSigAllowNamed {
+		return errors.New("allow_all cannot follow allow_types or allow_fields")
+	}
+	cx.logicSigAllowMode = logicSigAllowAll
+	return nil
+}
+
+func opAllowTypes(cx *EvalContext) error {
+	mask := cx.program[cx.pc+2]
+	if err := validateLogicSigMask(&LogicSigAllowTypes, mask, cx.version); err != nil {
+		return err
+	}
+	cx.logicSigAllowMode = logicSigAllowNamed
+	cx.logicSigAllowedTypes |= logicSigTypeMask(mask)
+	return nil
+}
+
+func opAllowFields(cx *EvalContext) error {
+	mask := cx.program[cx.pc+2]
+	if err := validateLogicSigMask(&LogicSigAllowFields, mask, cx.version); err != nil {
+		return err
+	}
+	cx.logicSigAllowMode = logicSigAllowNamed
+	cx.logicSigAllowedFields |= logicSigFieldMask(mask)
+	return nil
 }
 
 func opReturn(cx *EvalContext) error {

@@ -18,6 +18,7 @@ package logic
 
 import (
 	"fmt"
+	"iter"
 	"strings"
 
 	"github.com/algorand/go-algorand/config/bounds"
@@ -1127,6 +1128,143 @@ var JSONRefTypes = FieldGroup{
 	jsonRefSpecByName,
 }
 
+// logicSigTypeMask and logicSigFieldMask are the one-byte immediates of
+// allow_types and allow_fields. Each bit permits one transaction type, or one
+// protected field to have a non-default value.
+//
+// The seven transaction types a LogicSig can sign use all but the top bit of
+// the type mask, and the eight protected fields fill the field mask. Because
+// unknown bits are rejected, a later version may still give the spare bit any
+// meaning. Further types or fields can use another member of the 0xc7 family.
+type logicSigTypeMask byte
+
+type logicSigFieldMask byte
+
+const (
+	allowPay logicSigTypeMask = 1 << iota
+	allowKeyreg
+	allowAcfg
+	allowAxfer
+	allowAfrz
+	allowAppl
+	allowHb
+)
+
+const (
+	allowRekeyTo logicSigFieldMask = 1 << iota
+	allowFee
+	allowCloseRemainderTo
+	allowNonparticipation
+	allowAssetCloseTo
+	allowAssetSender
+	allowOnCompletion
+	allowApprovalProgram
+)
+
+// logicSigMaskSpec describes one option of allow_types or allow_fields.
+type logicSigMaskSpec struct {
+	bit     byte
+	version uint64
+	name    string
+	doc     string
+}
+
+func (fs logicSigMaskSpec) Field() byte {
+	return fs.bit
+}
+func (fs logicSigMaskSpec) Type() StackType {
+	return StackNone
+}
+func (fs logicSigMaskSpec) OpVersion() uint64 {
+	return logicSigAllowVersion
+}
+func (fs logicSigMaskSpec) Version() uint64 {
+	return fs.version
+}
+func (fs logicSigMaskSpec) Note() string {
+	return fs.doc
+}
+func (fs logicSigMaskSpec) Modes() RunMode {
+	return ModeSig
+}
+
+var logicSigTypeSpecs = []logicSigMaskSpec{
+	{byte(allowPay), logicSigAllowVersion, string(protocol.PaymentTx), "Payment"},
+	{byte(allowKeyreg), logicSigAllowVersion, string(protocol.KeyRegistrationTx), "KeyRegistration"},
+	{byte(allowAcfg), logicSigAllowVersion, string(protocol.AssetConfigTx), "AssetConfig"},
+	{byte(allowAxfer), logicSigAllowVersion, string(protocol.AssetTransferTx), "AssetTransfer"},
+	{byte(allowAfrz), logicSigAllowVersion, string(protocol.AssetFreezeTx), "AssetFreeze"},
+	{byte(allowAppl), logicSigAllowVersion, string(protocol.ApplicationCallTx), "ApplicationCall"},
+	{byte(allowHb), logicSigAllowVersion, string(protocol.HeartbeatTx), "Heartbeat"},
+}
+
+var logicSigFieldSpecs = []logicSigMaskSpec{
+	{byte(allowRekeyTo), logicSigAllowVersion, "RekeyTo", "Nonzero RekeyTo, which changes the sender's authorizer"},
+	{byte(allowFee), logicSigAllowVersion, "Fee", "Nonzero Fee, which the program should bound with `txn Fee`"},
+	{byte(allowCloseRemainderTo), logicSigAllowVersion, "CloseRemainderTo", "Nonzero CloseRemainderTo, which closes the sender's Algo balance"},
+	{byte(allowNonparticipation), logicSigAllowVersion, "Nonparticipation", "Nonparticipation set, which permanently marks the sender nonparticipating"},
+	{byte(allowAssetCloseTo), logicSigAllowVersion, "AssetCloseTo", "Nonzero AssetCloseTo, which closes the sender's asset holding"},
+	{byte(allowAssetSender), logicSigAllowVersion, "AssetSender", "Nonzero AssetSender, which claws back another account's assets"},
+	{byte(allowOnCompletion), logicSigAllowVersion, "OnCompletion", "OnCompletion other than NoOp, such as OptIn, CloseOut, or ClearState"},
+	{byte(allowApprovalProgram), logicSigAllowVersion, "ApprovalProgram", "Non-empty ApprovalProgram, which creates or updates an application"},
+}
+
+var logicSigTypeNames [256]string
+var logicSigFieldNames [256]string
+
+var logicSigTypeSpecByName = make(logicSigMaskSpecMap, len(logicSigTypeSpecs))
+var logicSigFieldSpecByName = make(logicSigMaskSpecMap, len(logicSigFieldSpecs))
+
+type logicSigMaskSpecMap map[string]logicSigMaskSpec
+
+func (s logicSigMaskSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+// LogicSigAllowTypes are the transaction types that allow_types can permit.
+var LogicSigAllowTypes = FieldGroup{
+	"allow_types", "Types",
+	logicSigTypeNames[:],
+	logicSigTypeSpecByName,
+}
+
+// LogicSigAllowFields are the protected fields that allow_fields can permit.
+var LogicSigAllowFields = FieldGroup{
+	"allow_fields", "Fields",
+	logicSigFieldNames[:],
+	logicSigFieldSpecByName,
+}
+
+// maskBits yields each bit set in mask, lowest first.
+func maskBits[M ~byte](mask M) iter.Seq[M] {
+	return func(yield func(M) bool) {
+		for bit := M(1); bit != 0; bit <<= 1 {
+			if mask&bit != 0 && !yield(bit) {
+				return
+			}
+		}
+	}
+}
+
+// validateLogicSigMask rejects an empty mask, bits that name no option of
+// group, and options unavailable in the program's version.
+func validateLogicSigMask(group *FieldGroup, mask byte, version uint64) error {
+	if mask == 0 {
+		return fmt.Errorf("empty %s mask", group.Name)
+	}
+	for bit := range maskBits(mask) {
+		fs, ok := group.SpecByName(group.Names[bit])
+		if !ok {
+			return fmt.Errorf("invalid %s mask 0x%02x", group.Name, mask)
+		}
+		if fs.Version() > version {
+			return fmt.Errorf("%s option %s is not available in v%d", group.Name, group.Names[bit], version)
+		}
+	}
+	return nil
+}
+
 // VrfStandard is an enum for the `vrf_verify` opcode
 type VrfStandard int
 
@@ -1894,6 +2032,21 @@ func init() {
 		equal(int(s.field), i)
 		jsonRefTypeNames[i] = s.field.String()
 		jsonRefSpecByName[s.field.String()] = s
+	}
+
+	for _, group := range []struct {
+		specs  []logicSigMaskSpec
+		names  *[256]string
+		byName logicSigMaskSpecMap
+	}{
+		{logicSigTypeSpecs, &logicSigTypeNames, logicSigTypeSpecByName},
+		{logicSigFieldSpecs, &logicSigFieldNames, logicSigFieldSpecByName},
+	} {
+		for i, s := range group.specs {
+			equal(int(s.bit), 1<<i)
+			group.names[s.bit] = s.name
+			group.byName[s.name] = s
+		}
 	}
 
 	equal(len(vrfStandardSpecs), len(vrfStandardNames))

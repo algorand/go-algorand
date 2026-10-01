@@ -82,6 +82,10 @@ const varintBranchVersion = 13 // branch offsets encoded as binary.Varint instea
 const poseidon2Version = 13
 const foreignBoxVersion = 13 // app_params_set, foreign app box access
 
+// logicSigAllowVersion is the first version in which LogicSigs approve only the
+// transaction types and protected fields they permit with the allow opcodes.
+const logicSigAllowVersion = 14
+
 // EXPERIMENTAL. These should be revisited whenever a new LogicSigVersion is
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version, and fixup TestAssemble() in assembler_test.go.
@@ -296,16 +300,29 @@ func (d OpDetails) trust() OpDetails {
 	return d
 }
 
+// checker installs a static check for an op of fixed size. The check need not
+// set nextpc.
+func (d OpDetails) checker(check checkFunc) OpDetails {
+	d.check = check
+	return d
+}
+
 // subOp marks an OpSpec as belonging to a multi-byte opcode family. The
-// OpSpec.Opcode field is the prefix byte; n is the second byte. Size is set to
-// 2 (prefix + sub-opcode) with no further immediates; If a multibyte opcode
-// ever requires immediates, ensure the resulting opcode's Size is set to
-// account for both the subop and the immediates.
-func subOp(n byte) OpDetails {
-	d := detDefault()
-	d.Size++
+// OpSpec.Opcode field is the prefix byte; n is the second byte. Fixed sizes
+// grow to include the sub-opcode; dynamically determined sizes remain zero.
+// For dynamic-size members, both check and op must account for the
+// sub-opcode byte when computing nextpc.
+func (d OpDetails) subOp(n byte) OpDetails {
+	if d.Size != 0 {
+		d.Size++
+	}
 	d.SubOpcode = n
 	return d
+}
+
+// subOp constructs a multi-byte opcode with no immediates.
+func subOp(n byte) OpDetails {
+	return detDefault().subOp(n)
 }
 
 func immKinded(kind immKind, names ...string) OpDetails {
@@ -397,6 +414,7 @@ const (
 	// from immLabel, which remains the two-byte big-endian form used by pre-v13
 	// branches and by switch/match at every version.
 	immVarintLabel
+	immLogicSigMask // allow_types and allow_fields one-byte option mask
 )
 
 func (ik immKind) String() string {
@@ -419,6 +437,8 @@ func (ik immKind) String() string {
 		return fmt.Sprintf("varuint count, [%s ...]", immLabel.String())
 	case immVarintLabel:
 		return "varint (zigzag)"
+	case immLogicSigMask:
+		return "uint8 mask"
 	}
 	return "unknown"
 }
@@ -781,6 +801,11 @@ var OpSpecs = []OpSpec{
 	{0xc4, "gloadss", opGloadss, proto("ii:a"), 6, only(ModeApp)},
 	{0xc5, "itxnas", opItxnas, proto("i:a"), 6, field("f", &TxnArrayFields).only(ModeApp)},
 	{0xc6, "gitxnas", opGitxnas, proto("i:a"), 6, immediates("t", "f").field("f", &TxnArrayFields).only(ModeApp)},
+
+	// Execution settings: prefix 0xc7, with sub-opcodes selecting the operation.
+	{0xc7, "allow_all", opAllowAll, proto(":"), logicSigAllowVersion, subOp(0x01).only(ModeSig)},
+	{0xc7, "allow_types", opAllowTypes, proto(":"), logicSigAllowVersion, immKinded(immLogicSigMask, "t ...").field("t ...", &LogicSigAllowTypes).assembler(asmAllowMask).checker(checkAllowTypes).subOp(0x02).only(ModeSig)},
+	{0xc7, "allow_fields", opAllowFields, proto(":"), logicSigAllowVersion, immKinded(immLogicSigMask, "f ...").field("f ...", &LogicSigAllowFields).assembler(asmAllowMask).checker(checkAllowFields).subOp(0x03).only(ModeSig)},
 
 	// randomness support
 	{0xd0, "vrf_verify", opVrfVerify, proto("bb{80}b{32}:b{64}T"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
