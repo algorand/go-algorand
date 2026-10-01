@@ -128,12 +128,11 @@ func (s *trackerSQLStore) BeginTransaction(ctx context.Context) (trackerdb.Trans
 	return &sqlTransactionScope{handle, false, &sqlReader{handle}, &sqlWriter{handle}, &sqlCatchpoint{handle}}, nil
 }
 
-func (s trackerSQLStore) RunMigrations(ctx context.Context, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
-	err = wrapIOError(s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
-		mgr, err = RunMigrations(ctx, tx, params, log, targetVersion)
-		return err
-	}, nil))
-	return
+func (s trackerSQLStore) RunMigrations(ctx context.Context, params trackerdb.Params, log logging.Logger, targetVersion int32) (trackerdb.InitParams, error) {
+	mgr, err := db.AtomicContextResult(ctx, &s.pair.Wdb, func(ctx context.Context, tx *sql.Tx) (trackerdb.InitParams, error) {
+		return RunMigrations(ctx, tx, params, log, targetVersion)
+	}, nil)
+	return mgr, wrapIOError(err)
 }
 
 // TODO: rename: this is a sqlite specific name, this could also be used to trigger compact on KV stores.

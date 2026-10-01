@@ -376,6 +376,9 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 				break
 			}
 		}
+		if err := cw.kvRows.Err(); err != nil {
+			return err
+		}
 		if len(kvrs) > 0 {
 			cw.chunk = CatchpointSnapshotChunkV6{KVs: kvrs}
 			return nil
@@ -406,6 +409,9 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 				break
 			}
 		}
+		if err := cw.onlineAccountRows.Err(); err != nil {
+			return err
+		}
 		if len(onlineAccts) > 0 {
 			cw.chunk = CatchpointSnapshotChunkV6{OnlineAccounts: onlineAccts}
 			return nil
@@ -434,6 +440,9 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 			if len(onlineRndParams) == BalancesPerCatchpointFileChunk {
 				break
 			}
+		}
+		if err := cw.onlineRoundParamsRows.Err(); err != nil {
+			return err
 		}
 		if len(onlineRndParams) > 0 {
 			cw.chunk = CatchpointSnapshotChunkV6{OnlineRoundParams: onlineRndParams}
@@ -508,6 +517,7 @@ func makeCatchpointOrderedOnlineAccountsIterFactory(
 }
 
 func (i *catchpointOnlineAccountsIterWrapper) Next() bool { return i.iter.Next() }
+func (i *catchpointOnlineAccountsIterWrapper) Err() error { return i.iter.Err() }
 func (i *catchpointOnlineAccountsIterWrapper) Close()     { i.iter.Close() }
 func (i *catchpointOnlineAccountsIterWrapper) GetItem() (*encoded.OnlineAccountRecordV6, error) {
 	oa, err := i.iter.GetItem()

@@ -37,7 +37,7 @@ type kvsIter struct {
 
 // MakeKVsIter creates a KV iterator.
 func MakeKVsIter(ctx context.Context, q db.Queryable) (*kvsIter, error) {
-	rows, err := q.QueryContext(ctx, "SELECT key, value FROM kvstore")
+	rows, err := q.QueryContext(ctx, "SELECT key, value FROM kvstore") //nolint:rowserrcheck // caller checks via kvsIter.Err
 	if err != nil {
 		return nil, err
 	}
@@ -57,6 +57,10 @@ func (iter *kvsIter) KeyValue() (k []byte, v []byte, err error) {
 	return k, v, err
 }
 
+func (iter *kvsIter) Err() error {
+	return iter.rows.Err()
+}
+
 func (iter *kvsIter) Close() {
 	iter.rows.Close()
 }
@@ -69,6 +73,7 @@ type tableIterator[T any] struct {
 }
 
 func (iter *tableIterator[T]) Next() bool { return iter.rows.Next() }
+func (iter *tableIterator[T]) Err() error { return iter.rows.Err() }
 func (iter *tableIterator[T]) Close() {
 	iter.rows.Close()
 	if iter.onClose != nil {
@@ -134,7 +139,7 @@ func MakeOrderedOnlineAccountsIter(ctx context.Context, q db.Queryable, useStagi
 		table = destTable
 	}
 
-	rows, err := q.QueryContext(ctx, fmt.Sprintf("SELECT address, updround, normalizedonlinebalance, votelastvalid, data FROM %s ORDER BY address, updround", table))
+	rows, err := q.QueryContext(ctx, fmt.Sprintf("SELECT address, updround, normalizedonlinebalance, votelastvalid, data FROM %s ORDER BY address, updround", table)) //nolint:rowserrcheck // caller checks via tableIterator.Err
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +211,7 @@ func MakeOnlineRoundParamsIter(ctx context.Context, q db.Queryable, useStaging b
 		where = fmt.Sprintf("WHERE rnd >= %d", excludeBefore)
 	}
 
-	rows, err := q.QueryContext(ctx, fmt.Sprintf("SELECT rnd, data FROM %s %s ORDER BY rnd", table, where))
+	rows, err := q.QueryContext(ctx, fmt.Sprintf("SELECT rnd, data FROM %s %s ORDER BY rnd", table, where)) //nolint:rowserrcheck // caller checks via tableIterator.Err
 	if err != nil {
 		return nil, err
 	}

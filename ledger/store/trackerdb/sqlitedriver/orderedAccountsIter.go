@@ -123,12 +123,12 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []trackerdb
 	}
 	if iterator.step == oaiStepQueryAccounts {
 		// iterate over the existing accounts
-		iterator.accountBaseRows, err = iterator.e.QueryContext(ctx, "SELECT rowid, address, data FROM accountbase ORDER BY rowid")
+		iterator.accountBaseRows, err = iterator.e.QueryContext(ctx, "SELECT rowid, address, data FROM accountbase ORDER BY rowid") //nolint:rowserrcheck // checked via processAllBaseAccountRecords
 		if err != nil {
 			return
 		}
 		// iterate over the existing resources
-		iterator.resourcesRows, err = iterator.e.QueryContext(ctx, "SELECT addrid, aidx, data FROM resources ORDER BY addrid, aidx")
+		iterator.resourcesRows, err = iterator.e.QueryContext(ctx, "SELECT addrid, aidx, data FROM resources ORDER BY addrid, aidx") //nolint:rowserrcheck // checked via processAllResources and Next
 		if err != nil {
 			return
 		}
@@ -187,6 +187,10 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []trackerdb
 			err = errors.New("resource table entries exceed the ones specified in the accountbase table")
 			return
 		}
+		if err = iterator.resourcesRows.Err(); err != nil {
+			iterator.Close(ctx)
+			return
+		}
 
 		processedRecords = count
 		iterator.accountBaseRows.Close()
@@ -211,7 +215,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []trackerdb
 	}
 	if iterator.step == oaiStepSelectFromOrderedTable {
 		// select the data from the ordered table
-		iterator.hashesRows, err = iterator.e.QueryContext(ctx, "SELECT addrid, hash FROM accountsiteratorhashes ORDER BY hash")
+		iterator.hashesRows, err = iterator.e.QueryContext(ctx, "SELECT addrid, hash FROM accountsiteratorhashes ORDER BY hash") //nolint:rowserrcheck // checked via iterator.hashesRows.Err() in Next
 
 		if err != nil {
 			iterator.Close(ctx)
@@ -237,6 +241,10 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []trackerdb
 				// we're done with this iteration.
 				return
 			}
+		}
+		if err = iterator.hashesRows.Err(); err != nil {
+			iterator.Close(ctx)
+			return nil, 0, err
 		}
 		acct = acct[:acctIdx]
 		iterator.step = oaiStepShutdown
@@ -302,6 +310,9 @@ func processAllBaseAccountRecords(
 			pendingBase = pendingBaseRow{}
 		} else {
 			if !baseRows.Next() {
+				if err = baseRows.Err(); err != nil {
+					return 0, pendingBaseRow{}, pendingResourceRow{}, err
+				}
 				break
 			}
 
@@ -393,6 +404,9 @@ func processAllResources(
 			pr = pendingResourceRow{}
 		} else {
 			if !resRows.Next() {
+				if err = resRows.Err(); err != nil {
+					return pendingResourceRow{}, count, err
+				}
 				err = callback(addr, 0, nil, nil, false)
 				if err != nil {
 					return pendingResourceRow{}, count, err

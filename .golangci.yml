@@ -20,7 +20,8 @@ linters:
     - paralleltest
     - reassign
     - revive
-    #- sqlclosecheck
+    - rowserrcheck
+    - sqlclosecheck
     - staticcheck
     - testifylint
     - unused

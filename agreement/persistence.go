@@ -162,7 +162,11 @@ func restore(log logging.Logger, crash db.Accessor) (raw []byte, err error) {
 		return
 	}
 
-	err = crash.Atomic(func(ctx context.Context, tx *sql.Tx) (res error) {
+	type result struct {
+		raw          []byte
+		noCrashState bool
+	}
+	res, err := db.AtomicResult(&crash, func(ctx context.Context, tx *sql.Tx) (res result, err error) {
 		var reset bool
 		defer func() {
 			if !reset {
@@ -171,39 +175,40 @@ func restore(log logging.Logger, crash db.Accessor) (raw []byte, err error) {
 			log.Infof("restore (agreement): resetting crash state")
 
 			// we could not retrieve our state, so wipe it
-			_, err = tx.Exec("delete from Service")
-			if err != nil {
-				res = fmt.Errorf("restore (agreement): (in reset) failed to clear Service table")
+			_, execErr := tx.Exec("delete from Service")
+			if execErr != nil {
+				err = fmt.Errorf("restore (agreement): (in reset) failed to clear Service table")
 				return
 			}
 		}()
 
 		var nrows int
 		row := tx.QueryRow("select count(*) from Service")
-		err := row.Scan(&nrows)
+		err = row.Scan(&nrows)
 		if err != nil {
 			log.Errorf("restore (agreement): could not query raw state: %v", err)
 			reset = true
-			return err
+			return result{}, err
 		}
 		if nrows != 1 {
 			log.Infof("restore (agreement): crash state not found (n = %d)", nrows)
 			reset = true
-			noCrashState = true // this is a normal case (we have leftover crash state from an old round)
-			return errNoCrashStateAvailable
+			// this is a normal case (we have leftover crash state from an old round)
+			return result{noCrashState: true}, errNoCrashStateAvailable
 		}
 
 		row = tx.QueryRow("select data from Service")
-		err = row.Scan(&raw)
+		err = row.Scan(&res.raw)
 		if err != nil {
 			log.Errorf("restore (agreement): could not read crash state raw data: %v", err)
 			reset = true
-			return err
+			return result{}, err
 		}
 
-		return nil
+		return res, nil
 	})
-	return
+	noCrashState = res.noCrashState
+	return res.raw, err
 }
 
 // decode process the incoming raw bytes array and attempt to reconstruct the agreement state objects.

@@ -32,7 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util/db"
+	dbutil "github.com/algorand/go-algorand/util/db"
 )
 
 const defaultTimeout = 5 * time.Second
@@ -274,21 +274,21 @@ type ParticipationRegistry interface {
 }
 
 // MakeParticipationRegistry creates a db.Accessor backed ParticipationRegistry.
-func MakeParticipationRegistry(accessor db.Pair, log logging.Logger) (ParticipationRegistry, error) {
+func MakeParticipationRegistry(accessor dbutil.Pair, log logging.Logger) (ParticipationRegistry, error) {
 	return makeParticipationRegistry(accessor, log)
 }
 
 // makeParticipationRegistry creates a db.Accessor backed ParticipationRegistry.
-func makeParticipationRegistry(accessor db.Pair, log logging.Logger) (*participationDB, error) {
+func makeParticipationRegistry(accessor dbutil.Pair, log logging.Logger) (*participationDB, error) {
 	if log == nil {
 		return nil, errors.New("invalid logger provided")
 	}
 
-	migrations := []db.Migration{
+	migrations := []dbutil.Migration{
 		dbSchemaUpgrade0,
 	}
 
-	err := db.Initialize(accessor.Wdb, migrations)
+	err := dbutil.Initialize(accessor.Wdb, migrations)
 	if err != nil {
 		accessor.Close()
 		return nil, fmt.Errorf("unable to initialize participation registry database: %w", err)
@@ -412,7 +412,7 @@ type participationDB struct {
 	dirty map[ParticipationID]struct{}
 
 	log   logging.Logger
-	store db.Pair
+	store dbutil.Pair
 	mutex deadlock.RWMutex
 
 	writeQueue     chan opRequest
@@ -710,27 +710,28 @@ func scanRecords(rows *sql.Rows) ([]ParticipationRecord, error) {
 
 		results = append(results, record)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
 	return results, nil
 }
 
-func (db *participationDB) getAllFromDB() (records []ParticipationRecord, err error) {
-	err = db.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+func (db *participationDB) getAllFromDB() ([]ParticipationRecord, error) {
+	return dbutil.AtomicResult(&db.store.Rdb, func(ctx context.Context, tx *sql.Tx) ([]ParticipationRecord, error) {
 		rows, err := tx.Query(selectRecords)
 		if err != nil {
-			return fmt.Errorf("unable to query records: %w", err)
+			return nil, fmt.Errorf("unable to query records: %w", err)
 		}
+		defer rows.Close()
 
-		records, err = scanRecords(rows)
+		records, err := scanRecords(rows)
 		if err != nil {
-			records = nil
-			return fmt.Errorf("problem scanning records: %w", err)
+			return nil, fmt.Errorf("problem scanning records: %w", err)
 		}
 
-		return nil
+		return records, nil
 	})
-
-	return
 }
 
 func (db *participationDB) Get(id ParticipationID) ParticipationRecord {
@@ -780,24 +781,24 @@ func (db *participationDB) GetStateProofSecretsForRound(id ParticipationID, roun
 
 	var result StateProofSecretsForRound
 	result.ParticipationRecord = partRecord.ParticipationRecord
-	var rawStateProofKey []byte
-	err = db.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	rawStateProofKey, err := dbutil.AtomicResult(&db.store.Rdb, func(ctx context.Context, tx *sql.Tx) ([]byte, error) {
 		// fetch secret key
 		keyFirstValidRound, err2 := partRecord.StateProof.FirstRoundInKeyLifetime(uint64(round))
 		if err2 != nil {
-			return err2
+			return nil, err2
 		}
 
+		var rawStateProofKey []byte
 		row := tx.QueryRow(selectStateProofKey, keyFirstValidRound, id[:])
 		err2 = row.Scan(&rawStateProofKey)
 		if err2 == sql.ErrNoRows {
-			return ErrSecretNotFound
+			return nil, ErrSecretNotFound
 		}
 		if err2 != nil {
-			return fmt.Errorf("error while querying secrets: %w", err2)
+			return nil, fmt.Errorf("error while querying secrets: %w", err2)
 		}
 
-		return nil
+		return rawStateProofKey, nil
 	})
 	if err != nil {
 		return StateProofSecretsForRound{}, fmt.Errorf("failed to fetch state proof for round %d: %w", round, err)
@@ -813,15 +814,15 @@ func (db *participationDB) GetStateProofSecretsForRound(id ParticipationID, roun
 		return StateProofSecretsForRound{}, err
 	}
 
-	var rawSignerContext []byte
-	err = db.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	rawSignerContext, err := dbutil.AtomicResult(&db.store.Rdb, func(ctx context.Context, tx *sql.Tx) ([]byte, error) {
 		// fetch stateproof public data
+		var rawSignerContext []byte
 		row := tx.QueryRow(selectStateProofData, id[:])
 		err2 := row.Scan(&rawSignerContext)
 		if err2 != nil {
-			return fmt.Errorf("error while querying stateproof data: %w", err2)
+			return nil, fmt.Errorf("error while querying stateproof data: %w", err2)
 		}
-		return nil
+		return rawSignerContext, nil
 	})
 	if err != nil {
 		return StateProofSecretsForRound{}, err

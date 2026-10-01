@@ -445,5 +445,5 @@ include ./scripts/release/mule/Makefile.mule
 archive:
 	aws s3 cp tmp/node_pkgs s3://algorand-internal/channel/$(CHANNEL)/$(FULLBUILDNUMBER) --recursive --exclude "*" --include "*$(FULLBUILDNUMBER)*"
 
-custom-golangci-lint: .custom-gcl.yml
+custom-golangci-lint: .custom-gcl.yml $(wildcard cmd/*_linter/*.go)
 	golangci-lint custom -v

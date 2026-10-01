@@ -98,23 +98,28 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 
 	t.log = l.trackerLog()
 
-	var roundData []*trackerdb.TxTailRound
-	var roundTailHashes []crypto.Digest
-	var baseRound basics.Round
+	type storedTail struct {
+		roundData       []*trackerdb.TxTailRound
+		roundTailHashes []crypto.Digest
+		baseRound       basics.Round
+	}
+	var tail storedTail
 	if dbRound > 0 {
-		err := l.trackerDB().Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) (err error) {
+		var err error
+		tail, err = trackerdb.SnapshotResult(l.trackerDB(), func(ctx context.Context, tx trackerdb.SnapshotScope) (tail storedTail, err error) {
 			ar, err := tx.MakeAccountsReader()
 			if err != nil {
-				return err
+				return tail, err
 			}
 
-			roundData, roundTailHashes, baseRound, err = ar.LoadTxTail(ctx, dbRound)
-			return
+			tail.roundData, tail.roundTailHashes, tail.baseRound, err = ar.LoadTxTail(ctx, dbRound)
+			return tail, err
 		})
 		if err != nil {
 			return err
 		}
 	}
+	roundData, roundTailHashes, baseRound := tail.roundData, tail.roundTailHashes, tail.baseRound
 
 	t.lowWaterMark = l.Latest()
 	t.lastValid = make(map[basics.Round]map[transactions.Txid]uint16)

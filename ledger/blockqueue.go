@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/store/blockdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -79,15 +80,14 @@ func (bq *blockQueue) start() error {
 	bq.closed = make(chan struct{})
 	ledgerBlockqInitCount.Inc(nil)
 	start := time.Now()
-	err := bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		var err0 error
-		bq.lastCommitted, err0 = blockdb.BlockLatest(tx)
-		return err0
+	lastCommitted, err := db.AtomicResult(&bq.l.blockDBs.Rdb, func(ctx context.Context, tx *sql.Tx) (basics.Round, error) {
+		return blockdb.BlockLatest(tx)
 	})
 	ledgerBlockqInitMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		return err
 	}
+	bq.lastCommitted = lastCommitted
 
 	go bq.syncer()
 	return nil
@@ -167,13 +167,12 @@ func (bq *blockQueue) syncer() {
 
 			minToSave := bq.l.notifyCommit(committed)
 			var earliest basics.Round
-			err = bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-				var err0 error
-				earliest, err0 = blockdb.BlockEarliest(tx)
+			earliest, err = db.AtomicResult(&bq.l.blockDBs.Rdb, func(ctx context.Context, tx *sql.Tx) (basics.Round, error) {
+				rnd, err0 := blockdb.BlockEarliest(tx)
 				if err0 != nil {
 					bq.l.log.Warnf("blockQueue.syncer: BlockEarliest(): %v", err0)
 				}
-				return err0
+				return rnd, err0
 			})
 			if err == nil {
 				if basics.SubSaturate(minToSave, earliest) > maxDeletionBatchSize {
@@ -297,10 +296,8 @@ func (bq *blockQueue) getBlock(r basics.Round) (blk bookkeeping.Block, err error
 
 	start := time.Now()
 	ledgerGetblockCount.Inc(nil)
-	err = bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		var err0 error
-		blk, err0 = blockdb.BlockGet(tx, r)
-		return err0
+	blk, err = db.AtomicResult(&bq.l.blockDBs.Rdb, func(ctx context.Context, tx *sql.Tx) (bookkeeping.Block, error) {
+		return blockdb.BlockGet(tx, r)
 	})
 	ledgerGetblockMicros.AddMicrosecondsSince(start, nil)
 	err = updateErrNoEntry(err, lastCommitted, latest)
@@ -319,10 +316,8 @@ func (bq *blockQueue) getBlockHdr(r basics.Round) (hdr bookkeeping.BlockHeader, 
 
 	start := time.Now()
 	ledgerGetblockhdrCount.Inc(nil)
-	err = bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		var err0 error
-		hdr, err0 = blockdb.BlockGetHdr(tx, r)
-		return err0
+	hdr, err = db.AtomicResult(&bq.l.blockDBs.Rdb, func(ctx context.Context, tx *sql.Tx) (bookkeeping.BlockHeader, error) {
+		return blockdb.BlockGetHdr(tx, r)
 	})
 	ledgerGetblockhdrMicros.AddMicrosecondsSince(start, nil)
 	err = updateErrNoEntry(err, lastCommitted, latest)
@@ -345,11 +340,13 @@ func (bq *blockQueue) getEncodedBlockCert(r basics.Round) (blk []byte, cert []by
 
 	start := time.Now()
 	ledgerGeteblockcertCount.Inc(nil)
-	err = bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		var err0 error
-		blk, cert, err0 = blockdb.BlockGetEncodedCert(tx, r)
-		return err0
+	type encodedBlockCert struct{ blk, cert []byte }
+	var bc encodedBlockCert
+	bc, err = db.AtomicResult(&bq.l.blockDBs.Rdb, func(ctx context.Context, tx *sql.Tx) (encodedBlockCert, error) {
+		b, c, err0 := blockdb.BlockGetEncodedCert(tx, r)
+		return encodedBlockCert{b, c}, err0
 	})
+	blk, cert = bc.blk, bc.cert
 	ledgerGeteblockcertMicros.AddMicrosecondsSince(start, nil)
 	err = updateErrNoEntry(err, lastCommitted, latest)
 	return
@@ -367,11 +364,16 @@ func (bq *blockQueue) getBlockCert(r basics.Round) (blk bookkeeping.Block, cert 
 
 	start := time.Now()
 	ledgerGetblockcertCount.Inc(nil)
-	err = bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		var err0 error
-		blk, cert, err0 = blockdb.BlockGetCert(tx, r)
-		return err0
+	type blockCert struct {
+		blk  bookkeeping.Block
+		cert agreement.Certificate
+	}
+	var bc blockCert
+	bc, err = db.AtomicResult(&bq.l.blockDBs.Rdb, func(ctx context.Context, tx *sql.Tx) (blockCert, error) {
+		b, c, err0 := blockdb.BlockGetCert(tx, r)
+		return blockCert{b, c}, err0
 	})
+	blk, cert = bc.blk, bc.cert
 	ledgerGetblockcertMicros.AddMicrosecondsSince(start, nil)
 	err = updateErrNoEntry(err, lastCommitted, latest)
 	return
