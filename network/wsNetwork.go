@@ -1391,15 +1391,14 @@ func (wn *msgBroadcaster) broadcastThread(wg *sync.WaitGroup, net networkPeerMan
 		return true
 	}
 
-	// load the peers list
-	updatePeers()
-
 	// wait until the we have at least a single peer connected.
 	if !waitForPeers(nil) {
 		return
 	}
 
 	for {
+		updatePeers()
+
 		// broadcast from high prio channel as long as we can
 		// we want to try and keep this as a single case select with a default, since go compiles a single-case
 		// select with a default into a more efficient non-blocking receive, instead of compiling it to the general-purpose selectgo
