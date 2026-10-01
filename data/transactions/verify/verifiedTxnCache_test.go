@@ -693,3 +693,54 @@ func BenchmarkVerifiedCacheGC(b *testing.B) {
 	b.ReportMetric(float64(retained)/(1024*1024), "total-MB")
 	b.ReportMetric(float64(retained)/float64(live), "bytes/entry")
 }
+
+// TestTxnGroupRejectsDuplicateTxid checks that a group carrying the same
+// transaction twice, differing only in LogicSig args, fails verification and
+// leaves nothing in the cache. The cache keys entries by transaction ID, so
+// two such transactions would otherwise share one entry.
+func TestTxnGroupRejectsDuplicateTxid(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	blkHdr := createDummyBlockHeader()
+	cache := MakeVerifiedTransactionCache(10)
+	dummyLedger := DummyLedgerForSignature{}
+
+	_, signedTxns, _, _ := generateTestObjects(1, 2, 0, 50)
+
+	// two copies of one contract-account LogicSig transaction, with
+	// different args: same Txn, hence same transaction ID
+	a0 := transactions.SignedTxn{Txn: signedTxns[0].Txn}
+	a0.Lsig.Logic = []byte{0x06, 0x81, 0x01} // pushint 1
+	a0.Lsig.Args = [][]byte{{0}}
+	a1 := a0
+	a1.Lsig.Args = [][]byte{{1}}
+
+	group := []transactions.SignedTxn{a0, a1}
+	grpObj := transactions.TxGroup{}
+	for i := range group {
+		group[i].Txn.Group = crypto.Digest{}
+		grpObj.TxGroupHashes = append(grpObj.TxGroupHashes, crypto.Digest(group[i].Txn.ID()))
+	}
+	groupID := crypto.HashObj(grpObj)
+	for i := range group {
+		group[i].Txn.Group = groupID
+	}
+	require.Equal(t, group[0].ID(), group[1].ID())
+
+	// the group ID commits to both occurrences, so only the duplicate
+	// check can reject it
+	_, err := TxnGroup(group, &blkHdr, cache, &dummyLedger)
+	var malformed *transactions.TxGroupMalformedError
+	require.ErrorAs(t, err, &malformed)
+	require.Equal(t, transactions.TxGroupMalformedErrorReasonDuplicateTxn, malformed.Reason)
+
+	// nothing may arrive in the cache from the failed group
+	impl := cache.(*verifiedTransactionCache)
+	require.Empty(t, impl.pinned)
+	for _, bucket := range impl.buckets {
+		require.Empty(t, bucket)
+	}
+	unverified := cache.GetUnverifiedTransactionGroups(
+		[][]transactions.SignedTxn{{a1, a1}}, spec, blkHdr.CurrentProtocol)
+	require.Len(t, unverified, 1)
+}

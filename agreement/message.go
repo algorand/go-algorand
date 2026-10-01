@@ -17,6 +17,7 @@
 package agreement
 
 import (
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -111,8 +112,10 @@ func decodeProposal(data []byte) (any, error) {
 }
 
 func proposalCarriesInvalidTxn(up unauthenticatedProposal) bool {
+	// if CurrentProtocol is wrong, it will be rejected in eval.StartEvaluator by BlockHeader.PreCheck
+	allowGroupedHeartbeats := config.Consensus[up.Block.CurrentProtocol].AllowGroupedHeartbeats
 	for group, err := range up.Block.PaysetGroups() {
-		if err != nil || transactions.CheckPaysetGroup(group) != nil {
+		if err != nil || transactions.CheckPaysetGroup(group, allowGroupedHeartbeats) != nil {
 			return true
 		}
 	}
