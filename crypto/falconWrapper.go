@@ -57,7 +57,7 @@ const (
 	Falcon1024PrivateKeySize = cfalcon.PrivateKeySize
 
 	// Falcon1024MaxSignatureSize Represents the max possible size in bytes of a falcon-1024 signature
-	Falcon1024MaxSignatureSize = cfalcon.CTSignatureSize
+	Falcon1024MaxSignatureSize = cfalcon.SignatureMaxSize
 )
 
 type (

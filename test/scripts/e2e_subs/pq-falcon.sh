@@ -78,8 +78,8 @@ echo "$PQ512ADDRESS"
 algokey pq import -m "$PQ512MNEMONIC" -S falcon-512 -k pq512-restored.sk
 cmp pq512.sk pq512-restored.sk
 
-# Fund pq-512 account
-${gcmd} clerk send -a 10000000 -f "${ACCOUNT}" -t "${PQ512ADDRESS}"
+# Fund pq-512 account below one reward unit to avoid unexpected balance drift from rewards.
+${gcmd} clerk send -a "${FUNDING}" -f "${ACCOUNT}" -t "${PQ512ADDRESS}"
 
 ## Show the usual min fee is insufficient
 ${gcmd} clerk send -a 5555 -f "${PQ512ADDRESS}" -t "${ACCOUNT}" --fee 1000 -o low512.tx
@@ -98,7 +98,7 @@ algokey pq sign-program -k pq512.sk -p pq-true.tok -o pq-true512.lsig
 ${gcmd} clerk send -a 7777 -f "${PQ512ADDRESS}" -t "${ACCOUNT}" --fee 2000 -L pq-true512.lsig
 
 BALANCE512=$(${gcmd} account balance -a "${PQ512ADDRESS}" | awk '{ print $1 }')
-EXPECT512=$((10000000 - 6666 - 2000 - 7777 - 2000))
+EXPECT512=$((FUNDING - 6666 - 2000 - 7777 - 2000))
 if [ "$BALANCE512" -ne "$EXPECT512" ]; then
     date "+${scriptname} FAIL wanted falcon-512 balance=${EXPECT512} but got ${BALANCE512} %Y%m%d_%H%M%S"
     false
