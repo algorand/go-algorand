@@ -1103,7 +1103,7 @@ func BenchmarkTransactionPoolRecompute(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		transactionPool[i].recomputeBlockEvaluator(committedTxIDs[i], knownCommitted[i])
+		transactionPool[i].recomputeBlockEvaluator(committedTxIDs[i], knownCommitted[i], false)
 	}
 	b.StopTimer()
 	if profF != nil {
@@ -1426,7 +1426,7 @@ func TestStateProofLogging(t *testing.T) {
 
 	err = transactionPool.rememberOne(stxn)
 	require.NoError(t, err)
-	transactionPool.recomputeBlockEvaluator(nil, 0)
+	transactionPool.recomputeBlockEvaluator(nil, 0, false)
 	_, err = transactionPool.AssembleBlock(514, time.Time{})
 	require.NoError(t, err)
 
