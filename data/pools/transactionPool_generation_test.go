@@ -18,6 +18,7 @@ package pools
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -258,6 +259,61 @@ func TestPoolSkippedAssemblyWakesWaiter(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("skipping generation did not wake the assembly request")
 	}
+}
+
+func TestPoolSkippedAssemblyAllowsRecompute(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	pool, addresses := makeGenerationTestPool(t, protocol.ConsensusCurrentVersion, 0, 1000)
+	committed, err := pool.assembleEmptyBlock(1)
+	require.NoError(t, err)
+	block := committed.FinishBlock(committee.Seed{}, addresses[0], false)
+
+	// Pause the fallback after its evaluator has started, while it is loading
+	// possible proposers. Recomputing the next round must still be able to finish.
+	fallbackStarted := make(chan struct{})
+	continueFallback := make(chan struct{})
+	releaseFallback := sync.OnceFunc(func() { close(continueFallback) })
+	pool.vac = poolVotingAccountsFunc(func(r basics.Round) []basics.Address {
+		if r == 1 {
+			close(fallbackStarted)
+			<-continueFallback
+		}
+		return nil
+	})
+	assemblyDone := make(chan struct{})
+	var assemblyErr error
+	var returnedBlock bool
+	go func() {
+		defer close(assemblyDone)
+		blk, err := pool.AssembleBlock(1, time.Now().Add(10*time.Second))
+		assemblyErr, returnedBlock = err, blk != nil
+	}()
+	t.Cleanup(func() { releaseFallback(); <-assemblyDone })
+	select {
+	case <-fallbackStarted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("assembly did not start its fallback")
+	}
+
+	require.NoError(t, pool.ledger.AddBlock(block, agreement.Certificate{}))
+	recomputeDone := make(chan struct{})
+	go func() {
+		defer close(recomputeDone)
+		pool.OnNewBlock(block, committed.UnfinishedDeltas())
+	}()
+	t.Cleanup(func() { releaseFallback(); <-recomputeDone })
+	select {
+	case <-recomputeDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("fallback held the assembly mutex and blocked recomputation")
+	}
+
+	releaseFallback()
+	<-assemblyDone
+	require.ErrorIs(t, assemblyErr, ErrStaleBlockAssemblyRequest)
+	require.False(t, returnedBlock, "must discard the fallback after the pool advances")
+	require.True(t, pool.assemblyDeadline.IsZero())
 }
 
 func TestPoolAssemblyTimeoutClearsDeadline(t *testing.T) {

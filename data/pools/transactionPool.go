@@ -1000,7 +1000,14 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 		// evaluator: the pool's evaluator can now contain multiple blocks' worth
 		// of transactions. The next round will resume speculative generation.
 		stats.StopReason = telemetryspec.AssembleBlockNoProposers
-		return pool.assembleEmptyBlock(round)
+		// Ledger work can be slow; let recomputation proceed while building the fallback.
+		pool.assemblyMu.Unlock()
+		emptyBlock, emptyBlockErr := pool.assembleEmptyBlock(round)
+		pool.assemblyMu.Lock()
+		if pool.assemblyResults.roundStartedEvaluating > round {
+			return nil, ErrStaleBlockAssemblyRequest
+		}
+		return emptyBlock, emptyBlockErr
 	}
 
 	stats = pool.assemblyResults.stats
