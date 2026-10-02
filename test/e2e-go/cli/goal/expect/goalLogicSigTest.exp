@@ -26,6 +26,9 @@ if { [catch {
     set PRIMARY_NODE_ADDRESS [ ::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR ]
     puts "Primary Node Address: $PRIMARY_NODE_ADDRESS"
 
+    # Wait for the first block before submitting the confirming clerk send below.
+    ::AlgorandGoal::WaitForRound 1 $TEST_PRIMARY_NODE_DIR
+
     set PRIMARY_WALLET_NAME unencrypted-default-wallet
 
     # Determine primary account

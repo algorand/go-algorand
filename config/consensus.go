@@ -579,6 +579,10 @@ type ConsensusParams struct {
 	// Heartbeat support
 	Heartbeat bool
 
+	// AllowGroupedHeartbeats lets a heartbeat share a transaction group with
+	// an application call or an asset creation.
+	AllowGroupedHeartbeats bool
+
 	// EnableSha512BlockHash adds an additional SHA-512 hash to the block header.
 	EnableSha512BlockHash bool
 
@@ -614,6 +618,14 @@ type ConsensusParams struct {
 	// EnablePQSchemeFalcon512 enables native Falcon-512 transaction
 	// authorization for the f5 PQ scheme.
 	EnablePQSchemeFalcon512 bool
+
+	// RequireLogicSigArgAccess requires that a LogicSig carry no argument it did
+	// not read: nothing above the highest index it read, and nothing unread
+	// below that index unless it is empty. Args are covered by no signature, and
+	// are part of neither the transaction ID nor the group hash, so without this
+	// rule a third party can append bytes to a transaction in flight, and the
+	// program has no way to detect it.
+	RequireLogicSigArgAccess bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -1566,8 +1578,9 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 14 // When moving this to a release, put a new higher LogicSigVersion here
-
 	vFuture.EnablePQSchemeFalcon512 = true
+	vFuture.RequireLogicSigArgAccess = true
+	vFuture.AllowGroupedHeartbeats = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

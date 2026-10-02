@@ -221,7 +221,7 @@ func (a cryptoAction) do(ctx context.Context, s *Service) {
 	case verifyPayload:
 		s.demux.verifyPayload(ctx, a.M, a.Round, a.Period, a.Pinned)
 	case verifyBundle:
-		s.demux.verifyBundle(ctx, a.M, a.Round, a.Period, a.Step)
+		s.demux.verifyBundle(ctx, a.M, a.Round)
 	}
 }
 

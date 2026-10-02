@@ -225,7 +225,7 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 		}
 	}
 
-	if err := transactions.CheckTxnGroup(stxs); err != nil {
+	if err := transactions.CheckTxnGroup(stxs, groupCtx.consensusParams.AllowGroupedHeartbeats); err != nil {
 		groupIndex := -1
 		var groupErr *transactions.TxGroupMalformedError
 		if errors.As(err, &groupErr) {
@@ -542,6 +542,13 @@ func logicSigVerify(gi int, groupCtx *GroupContext) error {
 	if !pass {
 		logicRejTotal.Inc(nil)
 		return fmt.Errorf("transaction %v: rejected by logic", groupCtx.signedGroupTxns[gi].ID())
+	}
+	if groupCtx.consensusParams.RequireLogicSigArgAccess {
+		if i, bad := cx.UnaccountedArg(); bad {
+			logicRejTotal.Inc(nil)
+			return fmt.Errorf("transaction %v: LogicSig arg[%d] of %d was not accessed",
+				groupCtx.signedGroupTxns[gi].ID(), i, len(groupCtx.signedGroupTxns[gi].Lsig.Args))
+		}
 	}
 	logicGoodTotal.Inc(nil)
 	logicCostTotal.AddUint64(uint64(cx.Cost()), nil)

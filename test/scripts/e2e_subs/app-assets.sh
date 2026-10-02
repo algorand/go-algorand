@@ -40,33 +40,24 @@ MAX_MIN_BALANCE=628500
 TOTAL_NEEDED=$((NEEDED_FOR_FEES + MAX_MIN_BALANCE + MIN_FEE * 3))
 
 # Fund with at least 2 Algos to ensure enough for high MIN_FEE scenarios
-# Note: Account will earn rewards (RewardUnit = 1,000,000), so balance checks must be tolerant
+# Note: Account will earn rewards (RewardUnit = 1,000,000), so balance checks exclude rewards
 SMALL_FUNDING=$((TOTAL_NEEDED > 2000000 ? TOTAL_NEEDED : 2000000))
 
-# Tolerance for balance checks (to account for rewards earned)
-# Allow up to 5000 microAlgos tolerance per balance check
-BALANCE_TOLERANCE=5000
 SMALL=$(${gcmd} account new | awk '{ print $6 }')
 ${gcmd} clerk send -a $SMALL_FUNDING -f "$ACCOUNT" -t "$SMALL"
 
-function balance {
-    acct=$1; shift
-    goal account balance -a "$acct" | awk '{print $1}'
-}
-
-# Check if balance is within tolerance of expected value
+# Check that an account's balance, excluding rewards, exactly matches the expected value.
 # Usage: check_balance <account> <expected_balance>
-# Allows BALANCE_TOLERANCE above expected (for rewards) but exact match below
 function check_balance {
     local acct=$1
     local expected=$2
     local actual
-    actual=$(balance "$acct")
+    actual=$(balance_without_rewards "$acct")
     local diff=$((actual - expected))
 
-    if [ $diff -lt 0 ] || [ $diff -gt $BALANCE_TOLERANCE ]; then
+    if [ "$diff" -ne 0 ]; then
         echo "ERROR: Balance check failed for $acct"
-        echo "  Expected: $expected (tolerance: +0 to +$BALANCE_TOLERANCE)"
+        echo "  Expected: $expected"
         echo "  Actual:   $actual (diff: $diff)"
         return 1
     fi

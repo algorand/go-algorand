@@ -52,7 +52,8 @@ function balance {
     goal account balance -a "$acct" | awk '{print $1}'
 }
 
-[ "$(balance "$ACCOUNT")" = $((1000000000000 - SMALL_FUNDING - MIN_FEE)) ]
+# ACCOUNT holds 1M Algos and earns 1 Algo every time the rewards level ticks, so exclude rewards.
+[ "$(balance_without_rewards "$ACCOUNT")" = $((1000000000000 - SMALL_FUNDING - MIN_FEE)) ]
 [ "$(balance "$SMALL")" = $SMALL_FUNDING ]
 
 APPID=$(${gcmd} app create --creator "${SMALL}" --approval-prog=${TEAL}/app-escrow.teal --global-byteslices 4 --global-ints 0 --local-byteslices 0 --local-ints 1  --clear-prog=${TEAL}/approve-all.teal | grep Created | awk '{ print $6 }')

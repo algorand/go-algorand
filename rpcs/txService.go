@@ -136,7 +136,7 @@ func (txs *TxService) ServeHTTP(response http.ResponseWriter, request *http.Requ
 		return
 	}
 	txns := txs.getFilteredTxns(filter)
-	txblob := protocol.EncodeReflect(txns)
+	txblob := protocol.Encode(txns)
 	txs.log.Debugf("sending %d txns in %d bytes", len(txns), len(txblob))
 	response.Header().Set("Content-Length", strconv.Itoa(len(txblob)))
 	response.Header().Set("Content-Type", responseContentType)
@@ -147,7 +147,7 @@ func (txs *TxService) ServeHTTP(response http.ResponseWriter, request *http.Requ
 	}
 }
 
-func (txs *TxService) getFilteredTxns(bloom *bloom.Filter) (txns []transactions.SignedTxn) {
+func (txs *TxService) getFilteredTxns(bloom *bloom.Filter) (txns txSyncResponse) {
 	pendingTxGroups := txs.updateTxCache()
 
 	missingTxns := make([]transactions.SignedTxn, 0)

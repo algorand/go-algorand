@@ -345,6 +345,46 @@ func TestMerkleVerifyEdgeCases(t *testing.T) {
 	a.NoError(err)
 }
 
+// TestVerifyRejectsOversizedPathElement checks path element size validation.
+func TestVerifyRejectsOversizedPathElement(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const size = 8
+	a := make(TestArray, size)
+	for i := range a {
+		crypto.RandBytes(a[i][:])
+	}
+
+	tree, err := Build(a, crypto.HashFactory{HashType: crypto.Sha256})
+	require.NoError(t, err)
+	root := tree.Root()
+
+	proof, err := tree.Prove([]uint64{0})
+	require.NoError(t, err)
+
+	// A valid proof is accepted.
+	require.NoError(t, Verify(root, map[uint64]crypto.Hashable{0: a[0]}, proof))
+
+	// Select a present path element.
+	tampered := -1
+	for i := range proof.Path {
+		if len(proof.Path[i]) != 0 {
+			tampered = i
+			break
+		}
+	}
+	require.GreaterOrEqual(t, tampered, 0, "expected at least one non-empty path element")
+
+	digestSize := proof.HashFactory.NewHash().Size()
+	oversized := make(crypto.GenericDigest, 2*digestSize)
+	copy(oversized, proof.Path[tampered])
+	proof.Path[tampered] = oversized
+
+	err = Verify(root, map[uint64]crypto.Hashable{0: a[0]}, proof)
+	require.ErrorIs(t, err, ErrPathElementSizeMismatch)
+}
+
 func TestProveDuplicateLeaves(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -843,6 +883,30 @@ func TestMerkleTreeInternalNodeFullTree(t *testing.T) {
 	root2 := tree.Root()
 	require.Equal(t, rootHash, []byte(root2))
 
+}
+
+// TestToBeHashedDoesNotEraseSibling checks fixed-width child placement.
+func TestToBeHashedDoesNotEraseSibling(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const digestSize = 32
+
+	right := make(crypto.GenericDigest, digestSize)
+	right[0] = 0xAA
+
+	oversizedLeft := make(crypto.GenericDigest, 2*digestSize)
+	for i := range oversizedLeft {
+		oversizedLeft[i] = 0xFF
+	}
+
+	p := pair{l: oversizedLeft, r: right, hashDigestSize: digestSize}
+	_, buf := p.ToBeHashed()
+
+	require.Len(t, buf, 2*digestSize)
+	// Each child occupies its digest-sized slot.
+	require.Equal(t, []byte(right), buf[digestSize:])
+	require.Equal(t, oversizedLeft[:digestSize], crypto.GenericDigest(buf[:digestSize]))
 }
 
 func hashInternalNode(h hash.Hash, firstLeafHash []byte, secondLeafHash []byte) []byte {

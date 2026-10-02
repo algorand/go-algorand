@@ -85,6 +85,10 @@ function get_min_fee {
   fi
 }
 
+function balance_without_rewards {
+  rest "/v2/accounts/$1" | jq -r '.amount - .rewards'
+}
+
 
 function fail_and_exit {
   printf "\n\nFailed test - $1 ($2): $3\n\n"

@@ -2,6 +2,7 @@
 *.log.archive
 *.out
 *.prof
+.covdata/
 coverage.html
 coverage.txt
 cover.out

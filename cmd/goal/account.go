@@ -18,6 +18,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -1312,6 +1313,17 @@ func renewPartKeysInDir(dataDir string, lastValidRound basics.Round, fee uint64,
 	return nil
 }
 
+// isPartkeyRegistered reports whether part is the participation key currently
+// registered on account.
+func isPartkeyRegistered(account model.Account, part model.ParticipationKey) bool {
+	return account.Participation != nil &&
+		bytes.Equal(account.Participation.VoteParticipationKey, part.Key.VoteParticipationKey) &&
+		bytes.Equal(account.Participation.SelectionParticipationKey, part.Key.SelectionParticipationKey) &&
+		account.Participation.VoteFirstValid == part.Key.VoteFirstValid &&
+		account.Participation.VoteLastValid == part.Key.VoteLastValid &&
+		account.Participation.VoteKeyDilution == part.Key.VoteKeyDilution
+}
+
 func maxRound(current basics.Round, next *basics.Round) basics.Round {
 	if next != nil && *next > current {
 		return *next
@@ -1341,14 +1353,7 @@ var listParticipationKeysCmd = &cobra.Command{
 			onlineAccountInfo, err := client.AccountInformation(part.Address, false)
 			if err == nil {
 				onlineInfoStr := "no"
-				votingBytes := part.Key.VoteParticipationKey
-				vrfBytes := part.Key.SelectionParticipationKey
-				if onlineAccountInfo.Participation != nil &&
-					(string(onlineAccountInfo.Participation.VoteParticipationKey) == string(votingBytes[:])) &&
-					(string(onlineAccountInfo.Participation.SelectionParticipationKey) == string(vrfBytes[:])) &&
-					(onlineAccountInfo.Participation.VoteFirstValid == part.Key.VoteFirstValid) &&
-					(onlineAccountInfo.Participation.VoteLastValid == part.Key.VoteLastValid) &&
-					(onlineAccountInfo.Participation.VoteKeyDilution == part.Key.VoteKeyDilution) {
+				if isPartkeyRegistered(onlineAccountInfo, part) {
 					onlineInfoStr = "yes"
 				}
 
@@ -1583,6 +1588,14 @@ var partkeyInfoCmd = &cobra.Command{
 				fmt.Println()
 				fmt.Printf("Participation ID:          %s\n", part.Id)
 				fmt.Printf("Parent address:            %s\n", part.Address)
+				registered := "unknown"
+				if account, err := client.AccountInformation(part.Address, false); err == nil {
+					registered = "no"
+					if isPartkeyRegistered(account, part) {
+						registered = "yes"
+					}
+				}
+				fmt.Printf("Registered:                %s\n", registered)
 				fmt.Printf("Last vote round:           %s\n", roundOrNA(part.LastVote))
 				fmt.Printf("Last block proposal round: %s\n", roundOrNA(part.LastBlockProposal))
 				// PKI TODO: enable with state proof support.

@@ -81,6 +81,9 @@ func (lsig *LogicSig) ArgsLen() int {
 // from byte slice-typed nil values as they may have subtly
 // different behaviors within the evaluation of a LogicSig,
 // due to differences in msgpack encoding behavior.
+//
+// Comparing Args is important since the verified transaction cache is keyed by Txid,
+// which does not cover Args.
 func (lsig *LogicSig) Equal(b *LogicSig) bool {
 	sigs := lsig.Sig == b.Sig &&
 		lsig.Msig.Equal(b.Msig) &&

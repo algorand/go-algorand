@@ -4,13 +4,6 @@ on:
     branches:
       - master
       - 'rel/**'
-  workflow_dispatch:
-    inputs:
-      full_coverage:
-        description: 'Run with -coverpkg to measure cross-package coverage (slower)'
-        required: false
-        type: boolean
-        default: false
 
 env:
   CODECOV_TOKEN: "8b4a1f91-f154-4c26-b84c-c9aaa90159c6"  # Same public token from CircleCI config
@@ -46,7 +39,6 @@ jobs:
       PARTITION_ID: ${{ matrix.partition_id }}
       PARTITION_TOTAL: 6
       CIRCLECI: true
-      SHORTTEST: "-short"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -59,24 +51,11 @@ jobs:
       - name: Setup test environment
         uses: ./.github/actions/setup-test
       - name: Run tests
-        env:
-          FULL_COVERAGE: ${{ inputs.full_coverage }}
-        run: |
-          PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
-          export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
-          COVERPKG_FLAG=""
-          if [[ "$FULL_COVERAGE" == "true" ]]; then
-            COVERPACKAGES="$(go list ./... | grep -E -v '/go-algorand/(test|debug|cmd|config/defaultsGenerator|tools)' | grep -E -v '(test|testing|mock|mocks)$' | paste -sd ',' -)"
-            COVERPKG_FLAG="-coverpkg=$COVERPACKAGES"
-          fi
-          mkdir -p test_results/${{ matrix.platform }}_test/${PARTITION_ID}
-          go tool -modfile=tool.mod gotestsum --format standard-quiet \
-            --junitfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/results.xml \
-            --jsonfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/testresults.json \
-            -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" $SHORTTEST \
-            -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 4 \
-            $COVERPKG_FLAG \
-            $PACKAGE_NAMES
+        uses: ./.github/actions/unit-tests
+        with:
+          short: 'true'
+          parallel: '4'
+          test-results-path: ${{ matrix.platform }}_test/${{ matrix.partition_id }}
       - name: Notify Slack on failure
         if: failure()
         uses: ./.github/actions/slack-notify
@@ -99,18 +78,6 @@ jobs:
           name: test-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: ~/test_results
           retention-days: 7
-      - name: Upload coverage
-        # Only upload coverage from ubuntu-24.04 platform
-        if: ${{ matrix.platform == 'ubuntu-24.04' && !cancelled() }}
-        uses: codecov/codecov-action@v4
-        env:
-          GITHUB_ACTIONS: True
-          CIRCLECI: ""
-        with:
-          token: ${{ env.CODECOV_TOKEN }}
-          file: ./coverage.txt
-          flags: ${{ inputs.full_coverage && 'full_coverage' || '' }}
-          fail_ci_if_error: false
       - name: Upload test results to Codecov
         if: ${{ !cancelled() && !github.event.repository.private }}
         uses: codecov/test-results-action@v1

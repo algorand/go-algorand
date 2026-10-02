@@ -146,14 +146,20 @@ func TestRekeyUpgrade(t *testing.T) {
 
 	startLoopTime := time.Now()
 	// wait until the network upgrade : this can take a while.
-	for protocol.ConsensusVersion(curStatus.LastVersion) != consensusTestFastUpgrade(firstProtocolWithApplicationSupport) {
+	// wait for "left the unupgraded protocol" rather than for the target version
+	// itself: the network only stays on any given version for a handful of rounds,
+	// so a test that samples for an exact version can miss it entirely.
+	for protocol.ConsensusVersion(curStatus.LastVersion) == consensusTestUnupgradedProtocol {
 		curStatus, err = client.Status()
 		a.NoError(err)
 
 		a.Less(int64(time.Since(startLoopTime)), int64(3*time.Minute))
 		time.Sleep(time.Duration(smallLambdaMs) * time.Millisecond)
-		round = curStatus.LastRound
 	}
+	// makeApplicationUpgradeConsensus terminates the upgrade path at this version,
+	// which is the first one supporting rekeying.
+	a.Equal(consensusTestFastUpgrade(firstProtocolWithApplicationSupport), protocol.ConsensusVersion(curStatus.LastVersion))
+	round = curStatus.LastRound
 
 	// now that the network already upgraded:
 	tx, err = client.ConstructPayment(accountC, accountD, fee, amount, nil, "", lease, basics.Round(round), basics.Round(round+1000))

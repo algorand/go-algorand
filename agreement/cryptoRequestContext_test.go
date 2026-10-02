@@ -35,10 +35,10 @@ func forEachTagDo(fn func(protocol.Tag)) {
 func TestCryptoRequestContextAddCancelRound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	pending := makePendingRequestsContext()
 	rnd := round(10)
 	per := period(10)
 	forEachTagDo(func(tag protocol.Tag) {
+		pending := makePendingRequestsContext()
 		var ctx context.Context
 		switch tag {
 		case protocol.AgreementVoteTag:
@@ -48,14 +48,18 @@ func TestCryptoRequestContextAddCancelRound(t *testing.T) {
 			req := cryptoProposalRequest{Round: rnd, Period: per}
 			ctx = pending.addProposal(req)
 		case protocol.VoteBundleTag:
-			req := cryptoBundleRequest{Round: rnd, Period: per}
+			req := cryptoBundleRequest{Round: rnd}
 			ctx = pending.addBundle(req)
 		}
 
 		roundCtx, hasRound := pending[rnd]
 		require.True(t, hasRound)
 
-		_, hasPeriod := pending[rnd].periods[cryptoRequestCtxKey{period: per}]
+		pkey := cryptoRequestCtxKey{period: per}
+		if tag == protocol.VoteBundleTag {
+			pkey = cryptoRequestCtxKey{bundle: true}
+		}
+		_, hasPeriod := pending[rnd].periods[pkey]
 		require.True(t, hasPeriod)
 
 		roundCtx.cancel()
@@ -84,8 +88,7 @@ func TestCryptoRequestContextAddCancelPeriod(t *testing.T) {
 			req := cryptoProposalRequest{Round: rnd, Period: per}
 			ctx = pending.addProposal(req)
 		case protocol.VoteBundleTag:
-			req := cryptoBundleRequest{Round: rnd, Period: per}
-			ctx = pending.addBundle(req)
+			return // bundles have a round-scoped context
 		}
 
 		_, hasRound := pending[rnd]
@@ -207,11 +210,11 @@ func TestCryptoRequestContextAddNoInterferencePinnedProposal(t *testing.T) {
 func TestCryptoRequestContextCleanupByRound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	pending := makePendingRequestsContext()
 	rnd := round(10)
 	per := period(10)
 
 	forEachTagDo(func(tag protocol.Tag) {
+		pending := makePendingRequestsContext()
 		var ctx context.Context
 		switch tag {
 		case protocol.AgreementVoteTag:
@@ -221,14 +224,18 @@ func TestCryptoRequestContextCleanupByRound(t *testing.T) {
 			req := cryptoProposalRequest{Round: rnd, Period: per}
 			ctx = pending.addProposal(req)
 		case protocol.VoteBundleTag:
-			req := cryptoBundleRequest{Round: rnd, Period: per}
+			req := cryptoBundleRequest{Round: rnd}
 			ctx = pending.addBundle(req)
 		}
 
 		_, hasRound := pending[rnd]
 		require.True(t, hasRound)
 
-		_, hasPeriod := pending[rnd].periods[cryptoRequestCtxKey{period: per}]
+		pkey := cryptoRequestCtxKey{period: per}
+		if tag == protocol.VoteBundleTag {
+			pkey = cryptoRequestCtxKey{bundle: true}
+		}
+		_, hasPeriod := pending[rnd].periods[pkey]
 		require.True(t, hasPeriod)
 
 		pending.clearStaleContexts(rnd+1, 20, false, false)
@@ -248,12 +255,12 @@ func TestCryptoRequestContextCleanupByRound(t *testing.T) {
 		_, hasRound = pending[rnd]
 		require.False(t, hasRound)
 
-		_, hasPeriod = pending[rnd].periods[cryptoRequestCtxKey{period: per}]
+		_, hasPeriod = pending[rnd].periods[pkey]
 		require.False(t, hasPeriod)
 	})
 }
 
-func TestCryptoRequestContextCleanupByRoundPinnedCertify(t *testing.T) {
+func TestCryptoRequestContextCleanupByRoundPinnedBundle(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	pending := makePendingRequestsContext()
@@ -276,13 +283,13 @@ func TestCryptoRequestContextCleanupByRoundPinnedCertify(t *testing.T) {
 			require.True(t, hasPeriod)
 
 		case protocol.VoteBundleTag:
-			req := cryptoBundleRequest{Round: rnd, Certify: true}
+			req := cryptoBundleRequest{Round: rnd}
 			ctx = pending.addBundle(req)
 
 			_, hasRound = pending[rnd]
 			require.True(t, hasRound)
 
-			_, hasPeriod = pending[rnd].periods[cryptoRequestCtxKey{certify: true}]
+			_, hasPeriod = pending[rnd].periods[cryptoRequestCtxKey{bundle: true}]
 			require.True(t, hasPeriod)
 		}
 
@@ -310,7 +317,7 @@ func TestCryptoRequestContextCleanupByRoundPinnedCertify(t *testing.T) {
 			_, hasPeriod = pending[rnd].periods[cryptoRequestCtxKey{pinned: true}]
 			require.False(t, hasPeriod)
 		case protocol.VoteBundleTag:
-			_, hasPeriod = pending[rnd].periods[cryptoRequestCtxKey{certify: true}]
+			_, hasPeriod = pending[rnd].periods[cryptoRequestCtxKey{bundle: true}]
 			require.False(t, hasPeriod)
 		}
 	})
@@ -333,8 +340,7 @@ func TestCryptoRequestContextCleanupByPeriod(t *testing.T) {
 			req := cryptoProposalRequest{Round: rnd, Period: per}
 			ctx = pending.addProposal(req)
 		case protocol.VoteBundleTag:
-			req := cryptoBundleRequest{Round: rnd, Period: per}
-			ctx = pending.addBundle(req)
+			return // bundles have a round-scoped context
 		}
 
 		_, hasRound := pending[rnd]
@@ -360,7 +366,7 @@ func TestCryptoRequestContextCleanupByPeriod(t *testing.T) {
 		pending.clearStaleContexts(rnd, per+3, false, true)
 		select {
 		case <-ctx.Done():
-			t.Errorf("cancelled request via certify")
+			t.Errorf("cancelled request via bundle")
 		default:
 		}
 
@@ -401,13 +407,13 @@ func TestCryptoRequestContextCleanupByPeriodPinned(t *testing.T) {
 			require.True(t, hasPeriod)
 
 		case protocol.VoteBundleTag:
-			req := cryptoBundleRequest{Round: rnd, Certify: true}
+			req := cryptoBundleRequest{Round: rnd}
 			ctx = pending.addBundle(req)
 
 			_, hasRound := pending[rnd]
 			require.True(t, hasRound)
 
-			_, hasPeriod := pending[rnd].periods[cryptoRequestCtxKey{certify: req.Certify}]
+			_, hasPeriod := pending[rnd].periods[cryptoRequestCtxKey{bundle: true}]
 			require.True(t, hasPeriod)
 		}
 
@@ -421,7 +427,7 @@ func TestCryptoRequestContextCleanupByPeriodPinned(t *testing.T) {
 		pending.clearStaleContexts(rnd, 13, false, false)
 		select {
 		case <-ctx.Done():
-			t.Errorf("cancelled request but pinned/certify set")
+			t.Errorf("cancelled request but pinned/bundle set")
 		default:
 		}
 	})

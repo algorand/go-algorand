@@ -17,6 +17,7 @@
 package agreement
 
 import (
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -70,6 +71,9 @@ func decodeVote(data []byte) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := uv.wellFormed(); err != nil {
+		return nil, err
+	}
 	return uv, nil
 }
 
@@ -80,6 +84,9 @@ func decodeBundle(data []byte) (any, error) {
 	var b unauthenticatedBundle
 	err := protocol.Decode(data, &b)
 	if err != nil {
+		return nil, err
+	}
+	if err := b.wellFormed(); err != nil {
 		return nil, err
 	}
 	return b, nil
@@ -94,6 +101,9 @@ func decodeProposal(data []byte) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := p.PriorVote.wellFormed(); err != nil {
+		return nil, err
+	}
 
 	return compoundMessage{
 		Vote:     p.PriorVote,
@@ -102,8 +112,10 @@ func decodeProposal(data []byte) (any, error) {
 }
 
 func proposalCarriesInvalidTxn(up unauthenticatedProposal) bool {
+	// if CurrentProtocol is wrong, it will be rejected in eval.StartEvaluator by BlockHeader.PreCheck
+	allowGroupedHeartbeats := config.Consensus[up.Block.CurrentProtocol].AllowGroupedHeartbeats
 	for group, err := range up.Block.PaysetGroups() {
-		if err != nil || transactions.CheckPaysetGroup(group) != nil {
+		if err != nil || transactions.CheckPaysetGroup(group, allowGroupedHeartbeats) != nil {
 			return true
 		}
 	}

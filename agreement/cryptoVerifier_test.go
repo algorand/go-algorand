@@ -19,6 +19,7 @@ package agreement
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/rand"
 	"sync/atomic"
 	"testing"
@@ -410,4 +411,189 @@ func TestCryptoVerifierVerificationErrs(t *testing.T) {
 	require.Equal(t, context.Canceled, voteResponse.err)
 	require.True(t, voteResponse.cancelled)
 	require.Equal(t, uint64(14), voteResponse.index)
+}
+
+// Bundle admission must not let unauthenticated periods cancel other work or
+// allocate an entry for every distinct period. Exercise VerifyBundle itself,
+// draining its input synchronously so the checks do not depend on scheduling.
+func TestCryptoVerifierBundleContextIsolation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, bundleStep := range []step{soft, next, cert} {
+		t.Run(fmt.Sprint(bundleStep), func(t *testing.T) {
+			c := &poolCryptoVerifier{
+				proposalContexts: makePendingRequestsContext(),
+				bundles:          bundleChanPair{in: make(chan cryptoBundleRequest, 1)},
+			}
+			const rnd, per = 10, 7
+			voteCtx := c.proposalContexts.addVote(cryptoVoteRequest{Round: rnd, Period: per})
+			payloadCtx := c.proposalContexts.addProposal(cryptoProposalRequest{Round: rnd, Period: per})
+			pinnedCtx := c.proposalContexts.addProposal(cryptoProposalRequest{Round: rnd, Pinned: true})
+			defer c.proposalContexts[rnd].cancel()
+
+			var bundleCtx context.Context
+			for _, future := range []period{per + 3, 1000, 999, 998, math.MaxUint64, math.MaxUint64 - 1} {
+				ub := unauthenticatedBundle{Round: rnd, Period: future, Step: bundleStep}
+				if future%2 == 0 {
+					// Nonempty bundles with invalid authenticators have the same
+					// context effects as empty bundles before verification.
+					ub.Votes = []voteAuthenticator{{}}
+				}
+				require.NoError(t, bundleFresh(freshnessData{PlayerRound: rnd, PlayerPeriod: per}, ub))
+				c.VerifyBundle(context.Background(), cryptoBundleRequest{
+					message: message{Tag: protocol.VoteBundleTag, UnauthenticatedBundle: ub},
+					Round:   rnd,
+				})
+				request := <-c.bundles.in
+				require.NoError(t, voteCtx.Err(), "bundle cancelled an honest vote")
+				require.NoError(t, payloadCtx.Err(), "bundle cancelled an honest payload")
+				require.NoError(t, pinnedCtx.Err(), "bundle cancelled a pinned payload")
+				require.NoError(t, request.ctx.Err())
+				if bundleCtx == nil {
+					bundleCtx = request.ctx
+				} else {
+					require.Same(t, bundleCtx, request.ctx, "bundle periods must share a context")
+				}
+				require.Len(t, c.proposalContexts, 1)
+				require.Len(t, c.proposalContexts[rnd].periods, 3, "one period, one pinned payload, and one bundle context")
+			}
+
+			// Legitimate period progress still cancels obsolete ordinary work,
+			// while bundles and pinned payloads survive until round cleanup.
+			c.proposalContexts.clearStaleContexts(rnd, per+3, false, false)
+			require.ErrorIs(t, voteCtx.Err(), context.Canceled)
+			require.ErrorIs(t, payloadCtx.Err(), context.Canceled)
+			require.NoError(t, pinnedCtx.Err())
+			require.NoError(t, bundleCtx.Err())
+			c.proposalContexts.clearStaleContexts(rnd+1, 0, false, false)
+			require.NoError(t, bundleCtx.Err())
+			c.proposalContexts.clearStaleContexts(rnd+2, 0, false, false)
+			require.ErrorIs(t, bundleCtx.Err(), context.Canceled)
+			require.ErrorIs(t, pinnedCtx.Err(), context.Canceled)
+			require.Empty(t, c.proposalContexts)
+		})
+	}
+}
+
+func TestCryptoVerifierBundleContextBound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	c := &poolCryptoVerifier{
+		proposalContexts: makePendingRequestsContext(),
+		bundles:          bundleChanPair{in: make(chan cryptoBundleRequest, 1)},
+	}
+	const rnd = 10
+	defer func() { c.proposalContexts[rnd].cancel() }()
+	for future := period(1000); future > 900; future-- {
+		ub := unauthenticatedBundle{Round: rnd, Period: future, Step: soft}
+		c.VerifyBundle(context.Background(), cryptoBundleRequest{
+			message: message{Tag: protocol.VoteBundleTag, UnauthenticatedBundle: ub},
+			Round:   rnd,
+		})
+		<-c.bundles.in
+		require.Len(t, c.proposalContexts, 1)
+		require.Len(t, c.proposalContexts[rnd].periods, 1, "bundle contexts grew with unauthenticated periods")
+	}
+}
+
+// Bundle admission alone must collect old round contexts; cleanup must not
+// depend on a vote or payload request arriving first.
+func TestCryptoVerifierBundleContextCleanupByRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	c := &poolCryptoVerifier{
+		proposalContexts: makePendingRequestsContext(),
+		bundles:          bundleChanPair{in: make(chan cryptoBundleRequest, 1)},
+	}
+	t.Cleanup(func() {
+		for _, roundCtx := range c.proposalContexts {
+			roundCtx.cancel()
+		}
+	})
+
+	verifyBundle := func(r round) context.Context {
+		t.Helper()
+		ub := unauthenticatedBundle{Round: r, Period: 1000, Step: soft}
+		require.NoError(t, bundleFresh(freshnessData{PlayerRound: r}, ub))
+		c.VerifyBundle(context.Background(), cryptoBundleRequest{
+			message: message{Tag: protocol.VoteBundleTag, UnauthenticatedBundle: ub},
+			Round:   r,
+		})
+		request := <-c.bundles.in
+		require.NoError(t, request.ctx.Err())
+		return request.ctx
+	}
+
+	const rnd round = 10
+	firstCtx := verifyBundle(rnd)
+	nextCtx := verifyBundle(rnd + 1)
+	require.NoError(t, firstCtx.Err(), "previous-round work must remain live")
+	require.Len(t, c.proposalContexts, 2)
+
+	currentCtx := verifyBundle(rnd + 2)
+	require.ErrorIs(t, firstCtx.Err(), context.Canceled)
+	require.NotContains(t, c.proposalContexts, rnd)
+	require.NoError(t, nextCtx.Err())
+	require.NoError(t, currentCtx.Err())
+	require.Len(t, c.proposalContexts, 2, "bundles must collect old round contexts without votes or payloads")
+}
+
+func TestCryptoVerifierFutureBundleVerification(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ledger, addresses, selections, signers := readOnlyFixture100()
+	rnd := ledger.NextRound()
+	const future = 1000
+	var votes []vote
+	for i, address := range addresses {
+		uv, err := makeVote(rawVote{Sender: address, Round: rnd, Period: future, Step: next, Proposal: bottom}, signers[i], selections[i], ledger)
+		require.NoError(t, err)
+		v, err := uv.verify(ledger)
+		if err == nil {
+			votes = append(votes, v)
+		}
+	}
+	ub := makeBundle(config.Consensus[protocol.ConsensusCurrentVersion], bottom, votes, nil)
+	avv := MakeAsyncVoteVerifier(nil)
+	defer avv.Quit()
+	c := makeCryptoVerifier(ledger, testBlockValidator{}, avv, logging.TestingLog(t)).(*poolCryptoVerifier)
+	defer c.Quit()
+	payloadCtx := c.proposalContexts.addProposal(cryptoProposalRequest{Round: rnd, Period: 0})
+	defer c.proposalContexts[rnd].cancel()
+
+	verify := func(b unauthenticatedBundle) cryptoResult {
+		t.Helper()
+		require.NoError(t, bundleFresh(freshnessData{PlayerRound: rnd}, b))
+		c.VerifyBundle(context.Background(), cryptoBundleRequest{
+			message: message{Tag: protocol.VoteBundleTag, UnauthenticatedBundle: b},
+			Round:   rnd,
+		})
+		select {
+		case result := <-c.Verified(protocol.VoteBundleTag):
+			require.False(t, result.Cancelled)
+			require.NoError(t, payloadCtx.Err())
+			return result
+		case <-time.After(10 * time.Second):
+			t.Fatal("timed out waiting for bundle verification")
+			return cryptoResult{}
+		}
+	}
+
+	// Invalid future bundles must still be rejected, without cancelling payloads
+	// or retaining a new context for each completed request.
+	for per := period(future + 10); per > future; per-- {
+		invalid := ub
+		invalid.Period = per // signatures were made for a different period
+		require.NotNil(t, verify(invalid).Err)
+		require.Len(t, c.proposalContexts[rnd].periods, 2)
+	}
+
+	// A genuine future-period quorum must remain eligible for fast-forwarding.
+	result := verify(ub)
+	require.Nil(t, result.Err)
+	require.Equal(t, ub, result.Bundle.U)
 }

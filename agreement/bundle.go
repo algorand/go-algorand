@@ -134,6 +134,14 @@ func makeBundle(proto config.ConsensusParams, targetProposal proposalValue, vote
 	}
 }
 
+// wellFormed performs stateless checks on a bundle received from the network.
+func (b unauthenticatedBundle) wellFormed() error {
+	if b.Step > down { // down is the largest step defined by the protocol.
+		return fmt.Errorf("unauthenticatedBundle.wellFormed: step %d exceeds max step %d", b.Step, down)
+	}
+	return nil
+}
+
 // verify checks that the bundle is valid, i.e.:
 //
 // - all the votes in the bundle are valid
@@ -157,6 +165,10 @@ func (b unauthenticatedBundle) verifyAsync(ctx context.Context, l LedgerReader, 
 		return func() (bundle, error) {
 			return bundle{}, fmt.Errorf(format, a...)
 		}
+	}
+
+	if err := b.wellFormed(); err != nil {
+		return termErrorFn(err)
 	}
 
 	if b.Step == propose {

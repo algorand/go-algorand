@@ -30,13 +30,13 @@ type periodRequestsContext struct {
 
 // cryptoRequestCtxKey keys the map roundRequestsContext.periods.
 //
-// It allows for the pinned value to act as a sentinel.
+// Pinned proposals and bundles use separate, round-scoped sentinels.
 type cryptoRequestCtxKey struct {
 	period period
 
 	// note: following two booleans are mutually exclusive
-	certify bool // If this is set, period should be 0.
-	pinned  bool // If this is set, period should be 0.
+	bundle bool // If this is set, period should be 0.
+	pinned bool // If this is set, period should be 0.
 }
 
 // roundRequestsContext keeps a the root context for all cryptoRequests associated with a round.
@@ -96,17 +96,15 @@ func (pending pendingRequestsContext) addProposal(request cryptoProposalRequest)
 	return proposalContext
 }
 
-// addBundle returns a context associated with a given request
+// addBundle shares one context among all bundles in a round. Unlike individual
+// votes, bundles may be from arbitrarily far future periods. Their unauthenticated
+// periods must neither allocate per-period state nor determine its lifetime.
 func (pending pendingRequestsContext) addBundle(request cryptoBundleRequest) context.Context {
-	pkey := cryptoRequestCtxKey{period: request.Period}
-	if request.Certify {
-		pkey = cryptoRequestCtxKey{certify: request.Certify}
-	}
-	return pending.getReqCtx(request.Round, pkey).ctx
+	return pending.getReqCtx(request.Round, cryptoRequestCtxKey{bundle: true}).ctx
 }
 
 // clearStaleContexts cancels contexts associated with cryptoRequests that are no longer relevant at the given round and period
-func (pending pendingRequestsContext) clearStaleContexts(r round, p period, pinned bool, certify bool) {
+func (pending pendingRequestsContext) clearStaleContexts(r round, p period, pinned bool, bundle bool) {
 	// at round r + 2 we can clear tasks from round r
 	oldRounds := make([]round, 0)
 	for round := range pending {
@@ -119,9 +117,9 @@ func (pending pendingRequestsContext) clearStaleContexts(r round, p period, pinn
 		delete(pending, oldRound)
 	}
 
-	// we got a new pinned proposal or a cert bundle:
+	// we got a new pinned proposal or a bundle:
 	// do not clear period tasks
-	if pinned || certify {
+	if pinned || bundle {
 		return
 	}
 
@@ -129,7 +127,7 @@ func (pending pendingRequestsContext) clearStaleContexts(r round, p period, pinn
 	if _, has := pending[r]; has {
 		oldPeriods := make([]cryptoRequestCtxKey, 0)
 		for pkey := range pending[r].periods {
-			if !pkey.pinned && !pkey.certify && pkey.period+3 <= p {
+			if !pkey.pinned && !pkey.bundle && pkey.period+3 <= p {
 				oldPeriods = append(oldPeriods, pkey)
 			}
 		}

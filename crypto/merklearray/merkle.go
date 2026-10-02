@@ -46,6 +46,7 @@ var (
 	ErrUnexpectedTreeDepth           = errors.New("unexpected tree depth")
 	ErrPosOutOfBound                 = errors.New("pos out of bound")
 	ErrProofLengthDigestSizeMismatch = errors.New("proof length and digest size mismatched")
+	ErrPathElementSizeMismatch       = errors.New("proof path element length does not match digest size")
 )
 
 // Tree is a Merkle tree, represented by layers of nodes (hashes) in the tree
@@ -351,11 +352,22 @@ func Verify(root crypto.GenericDigest, elems map[uint64]crypto.Hashable, proof *
 func verifyPath(root crypto.GenericDigest, proof *Proof, pl partialLayer) error {
 	hints := proof.Path
 
+	hsh := proof.HashFactory.NewHash()
+
+	// Empty elements represent missing siblings; all other elements must match
+	// the selected algorithm's digest size.
+	digestSize := hsh.Size()
+	for i := range hints {
+		if len(hints[i]) != 0 && len(hints[i]) != digestSize {
+			return fmt.Errorf("%w: path element %d length %d, digest size %d",
+				ErrPathElementSizeMismatch, i, len(hints[i]), digestSize)
+		}
+	}
+
 	s := &siblings{
 		hints: hints,
 	}
 
-	hsh := proof.HashFactory.NewHash()
 	var err error
 	for l := uint64(0); len(s.hints) > 0 || len(pl) > 1; l++ {
 		if pl, err = pl.up(s, l, true, hsh); err != nil {

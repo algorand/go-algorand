@@ -989,13 +989,25 @@ func (cfg *Local) EnsureAndResolveGenesisDirs(rootDir, genesisID string, logger 
 }
 
 func moveDirIfExists(logger logger, srcdir, dstdir string, files ...string) error {
-	// first, check if any files already exist in dstdir, and quit if so
+	// first, check if any files exist in srcdir; if none do, there is nothing to migrate
+	// (e.g. the files were already moved to dstdir on a previous startup)
+	srcExists := false
+	for _, file := range files {
+		if _, err := os.Stat(filepath.Join(srcdir, file)); err == nil {
+			srcExists = true
+			break
+		}
+	}
+	if !srcExists {
+		return nil
+	}
+	// then, check if any files already exist in dstdir, and quit if so
 	for _, file := range files {
 		if _, err := os.Stat(filepath.Join(dstdir, file)); err == nil {
 			return fmt.Errorf("destination file %s already exists, not overwriting", filepath.Join(dstdir, file))
 		}
 	}
-	// then, check if any files exist in srcdir, and move them to dstdir
+	// finally, move the files that exist in srcdir to dstdir
 	for _, file := range files {
 		if _, err := os.Stat(filepath.Join(srcdir, file)); err == nil {
 			if err := util.MoveFile(filepath.Join(srcdir, file), filepath.Join(dstdir, file)); err != nil {

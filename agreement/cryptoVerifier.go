@@ -106,8 +106,6 @@ type (
 		message                   // the message we would like to verify.
 		TaskIndex uint64          // Caller specific number that would be passed back in the asyncVerifyVoteResponse.TaskIndex field
 		Round     round           // The round that we're going to test against.
-		Period    period          // The period associated with the message we're going to test.
-		Certify   bool            // A flag that set if this is a cert bundle.
 		ctx       context.Context // A context for this request, if the context is cancelled then the request is stale.
 	}
 
@@ -307,7 +305,9 @@ func (c *poolCryptoVerifier) VerifyProposal(ctx context.Context, request cryptoP
 }
 
 func (c *poolCryptoVerifier) VerifyBundle(ctx context.Context, request cryptoBundleRequest) {
-	c.proposalContexts.clearStaleContexts(request.Round, request.Period, false, request.Certify)
+	// Bundle freshness constrains the round, but not future periods. Do not let
+	// an unauthenticated period cancel legitimate vote or payload verification.
+	c.proposalContexts.clearStaleContexts(request.Round, 0, false, true)
 	request.ctx = c.proposalContexts.addBundle(request)
 	switch request.Tag {
 	case protocol.VoteBundleTag:

@@ -62,6 +62,10 @@ func makeApplicationUpgradeConsensus(t *testing.T) (appConsensus config.Consensu
 	currentProtocolParams.ApprovedUpgrades = make(map[protocol.ConsensusVersion]uint64)
 	currentProtocolParams.ApprovedUpgrades[consensusTestFastUpgrade(firstProtocolWithApplicationSupport)] = 0
 
+	// terminate the upgrade path at the target version to prevent upgrading further
+	// in order to ensure the upgrade waiting loop not to miss the target version.
+	futureProtocolParams.ApprovedUpgrades = make(map[protocol.ConsensusVersion]uint64)
+
 	appConsensus[consensusTestUnupgradedProtocol] = currentProtocolParams
 	appConsensus[consensusTestFastUpgrade(firstProtocolWithApplicationSupport)] = futureProtocolParams
 

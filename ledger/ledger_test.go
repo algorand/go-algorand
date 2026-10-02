@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -1800,7 +1801,16 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 }
 
 func createBlkWithStateproof(t *testing.T, maxBlocks int, proto config.ConsensusParams, genesisInitState ledgercore.InitState, l *Ledger, accounts map[basics.Address]basics.AccountData) bookkeeping.Block {
-	sp := stateproof.StateProof{SignedWeight: 5000000000000000}
+	sp := stateproof.StateProof{
+		SigCommit:    make(crypto.GenericDigest, stateproof.HashSize),
+		SignedWeight: 5000000000000000,
+		SigProofs: merklearray.Proof{
+			HashFactory: crypto.HashFactory{HashType: stateproof.HashType},
+		},
+		PartProofs: merklearray.Proof{
+			HashFactory: crypto.HashFactory{HashType: stateproof.HashType},
+		},
+	}
 	var stxn transactions.SignedTxn
 	stxn.Txn.Type = protocol.StateProofTx
 	stxn.Txn.Sender = transactions.StateProofSender
@@ -2481,9 +2491,14 @@ int %d // 10001000
 	}
 
 	commitRoundLookback(basics.Round(cfg.MaxAcctLookback), l)
+	// read dbRound out before asserting: a failing require calls t.FailNow, and running
+	// the deferred l.Close() while still holding trackers.mu deadlocks against the
+	// commitSyncer goroutine that Close waits on.
 	l.trackers.mu.RLock()
-	require.Equal(t, programRound, l.trackers.dbRound+1) // programRound is next to be replayed
+	dbRound := l.trackers.dbRound
 	l.trackers.mu.RUnlock()
+	require.Equal(t, programRound, dbRound+1) // programRound is next to be replayed
+
 	err = l.reloadLedger()
 	require.NoError(t, err)
 }

@@ -289,6 +289,109 @@ func TestArgTooLarge(t *testing.T) {
 
 }
 
+// TestUnaccountedArg checks the rule that a LogicSig may carry no argument it
+// did not read: nothing above the highest index it read, and nothing unread
+// below that index unless the argument is empty. Args are covered by no
+// signature, so anything unread is material a third party could have appended.
+func TestUnaccountedArg(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		minVer uint64
+		source string
+		args   []string
+		bad    bool
+		index  int // the offending arg, when bad
+	}{
+		{"none supplied", 1, "int 1", nil, false, 0},
+		{"all read", 1, "arg 0; arg 1; ==", []string{"a", "a"}, false, 0},
+		{"unread above", 1, "arg 0; len; int 1; ==", []string{"a", "b"}, true, 1},
+		// A trailing arg is unaccounted even when empty: it is still bytes on the
+		// wire, and ArgsLen does not count it.
+		{"empty above", 1, "arg 0; len; int 1; ==", []string{"a", ""}, true, 1},
+		// Holes below the high water mark are the tealsign padding pattern.
+		{"empty holes below", 1, "arg 2; len; int 1; ==", []string{"", "", "x"}, false, 0},
+		{"filled hole below", 1, "arg 2; len; int 1; ==", []string{"j", "", "x"}, true, 0},
+		{"empty arg read", 1, "arg 0; len; !", []string{""}, false, 0},
+		// Reading arg 0 twice must not be mistaken for reading two args.
+		{"same arg twice", 1, "arg 0; arg 0; ==", []string{"x", "y"}, true, 1},
+		{"dynamic access", 5, "int 0; args; int 1; args; !=", []string{"x", "y"}, false, 0},
+		// 255 args reads the top word of the argsRead mask.
+		{"all of EvalMaxArgs", 5,
+			"int 0; loop: dup; args; pop; int 1; +; dup; int 255; <; bnz loop; pop; int 1",
+			make([]string, 255), false, 0},
+	}
+
+	// An empty arg reaches eval as either a zero-length slice or a nil, and
+	// LogicSig.Equal deliberately tells them apart. This rule must not: only the
+	// byte count matters. So every case runs both ways.
+	blanks := []struct {
+		name  string
+		empty []byte
+	}{
+		{"zero-length", []byte{}},
+		{"nil", nil},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			for _, blank := range blanks {
+				t.Run(blank.name, func(t *testing.T) {
+					a := require.New(t)
+
+					var args [][]byte
+					for _, arg := range test.args {
+						if arg == "" {
+							args = append(args, blank.empty)
+						} else {
+							args = append(args, []byte(arg))
+						}
+					}
+
+					for v := test.minVer; v <= AssemblerMaxVersion; v++ {
+						ops := testProg(t, test.source, v)
+						var txn transactions.SignedTxn
+						txn.Lsig.Logic = ops.Program
+						txn.Lsig.Args = args
+
+						pass, cx, err := EvalSignatureFull(0, defaultSigParams(txn))
+						a.NoError(err, "v=%d", v)
+						a.True(pass, "v=%d", v)
+
+						index, bad := cx.UnaccountedArg()
+						a.Equal(test.bad, bad, "v=%d", v)
+						if test.bad {
+							a.Equal(test.index, index, "v=%d", v)
+						}
+					}
+				})
+			}
+		})
+	}
+}
+
+// TestUnaccountedArgFailedRead confirms that an out of range read does not mark
+// the index it failed on, which matters because the mask is consulted after a
+// program that approved, and a program can recover from nothing.
+func TestUnaccountedArgFailedRead(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	a := require.New(t)
+
+	ops := testProg(t, "arg_1", AssemblerMaxVersion)
+	var txn transactions.SignedTxn
+	txn.Lsig.Logic = ops.Program
+	txn.Lsig.Args = [][]byte{[]byte("x")}
+
+	pass, _, err := EvalSignatureFull(0, defaultSigParams(txn))
+	a.ErrorContains(err, "cannot load arg[1] from 1 arg")
+	a.False(pass)
+}
+
 func TestEmptyProgram(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
