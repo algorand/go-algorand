@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -1873,5 +1874,152 @@ func TestP2PVoteCompression(t *testing.T) {
 			peer = peers[0].(*wsPeer)
 			require.Equal(t, test.netAEnableCompression, peer.vpackVoteCompressionSupported())
 		})
+	}
+}
+
+// TestP2PThrottleSlotNotLeakedOnIdentityDedup checks that an outgoing peer rejected before
+// registration does not keep an outgoing throttle slot. netA shares its identity tracker with
+// a stand-in for an existing ws connection to netB, as a hybrid node's P2P and ws networks do,
+// so netA's outgoing P2P connection to netB is rejected as a duplicate.
+func TestP2PThrottleSlotNotLeakedOnIdentityDedup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := config.GetDefaultLocal()
+	cfg.DNSBootstrapID = ""
+	log := logging.TestingLog(t)
+	genesisInfo := GenesisInfo{genesisID, config.Devtestnet}
+
+	cfgB := cfg
+	cfgB.NetAddress = "127.0.0.1:0"
+	netB, err := NewP2PNetwork(log, cfgB, "", nil, genesisInfo, &nopeNodeInfo{}, nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, netB.Start())
+	defer netB.Stop()
+
+	pubKeyB, err := netB.service.ID().ExtractPublicKey()
+	require.NoError(t, err)
+	rawB, err := pubKeyB.Raw()
+	require.NoError(t, err)
+	tracker := NewIdentityTracker()
+	existing := &wsPeer{identity: algocrypto.PublicKey(rawB)}
+	require.True(t, tracker.setIdentity(existing))
+
+	peerInfoB := netB.service.AddrInfo()
+	addrsB, err := peer.AddrInfoToP2pAddrs(&peerInfoB)
+	require.NoError(t, err)
+	netA, err := NewP2PNetwork(log, cfg, "", []string{addrsB[0].String()}, genesisInfo, &nopeNodeInfo{}, &identityOpts{tracker: tracker}, nil)
+	require.NoError(t, err)
+	// netA is not a relay, so Start gives it one throttle slot per GossipFanout
+	require.False(t, netA.relayMessages)
+	slots := int32(cfg.GossipFanout)
+
+	dedupsBefore := networkPeerIdentityDisconnect.GetUint64Value()
+	require.NoError(t, netA.Start())
+	defer netA.Stop()
+
+	require.Eventually(t, func() bool {
+		return networkPeerIdentityDisconnect.GetUint64Value() > dedupsBefore
+	}, 10*time.Second, 50*time.Millisecond, "netA never rejected the duplicate connection to netB")
+	require.False(t, netA.hasPeers())
+	require.Equal(t, slots, netA.throttledOutgoingConnections.Load(), "the identity dedup rejection leaked an outgoing throttle slot")
+
+	// Allow registration, then check that disconnecting returns the claimed slot.
+	tracker.removeIdentity(existing)
+	require.Eventually(t, func() bool {
+		netA.RequestConnectOutgoing(false, nil)
+		return len(netA.GetPeers(PeersConnectedOut)) == 1
+	}, 10*time.Second, 50*time.Millisecond, "netA never registered an outgoing connection to netB")
+	outPeers := netA.GetPeers(PeersConnectedOut)
+	require.Len(t, outPeers, 1)
+	require.True(t, outPeers[0].(*wsPeer).throttledOutgoingConnection)
+	require.Equal(t, slots-1, netA.throttledOutgoingConnections.Load())
+
+	netA.disconnect(outPeers[0], disconnectReasonNone)
+	require.Equal(t, slots, netA.throttledOutgoingConnections.Load(), "disconnecting a registered peer did not give its throttle slot back")
+}
+
+// logNeedleWriter records whether a log line containing needle has been written.
+type logNeedleWriter struct {
+	needle string
+	seen   atomic.Bool
+}
+
+func (w *logNeedleWriter) Write(p []byte) (int, error) {
+	if strings.Contains(string(p), w.needle) {
+		w.seen.Store(true)
+	}
+	return len(p), nil
+}
+
+// TestP2PNoPeerRegisteredAfterInnerStop reproduces the shutdown window in P2PNetwork.Stop:
+// innerStop has swept wsPeers but the host is still open, so a stream handler that runs now
+// must not register a new wsPeer that nothing will ever close.
+func TestP2PNoPeerRegisteredAfterInnerStop(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := config.GetDefaultLocal()
+	cfg.NetAddress = "127.0.0.1:0"
+	cfg.DNSBootstrapID = ""
+	genesisInfo := GenesisInfo{genesisID, config.Devtestnet}
+
+	logA := logging.NewLogger()
+	rejected := &logNeedleWriter{needle: "peer closing or network stopping"}
+	logA.SetOutput(rejected)
+	logA.SetLevel(logging.Debug)
+	netA, err := NewP2PNetwork(logA, cfg, "", nil, genesisInfo, &nopeNodeInfo{}, nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, netA.Start())
+	defer netA.Stop()
+
+	// the first step of netA.Stop: the peer map is swept, the host keeps running
+	netA.innerStop()
+
+	peerInfoA := netA.service.AddrInfo()
+	addrsA, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
+	require.NoError(t, err)
+	netB, err := NewP2PNetwork(logging.TestingLog(t), cfg, "", []string{addrsA[0].String()}, genesisInfo, &nopeNodeInfo{}, nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, netB.Start())
+	defer netB.Stop()
+
+	// netB connects and the metadata exchange completes, so netA's stream handler reaches
+	// the point where it would register the peer. It must drop the peer instead.
+	require.Eventually(t, rejected.seen.Load, 10*time.Second, 50*time.Millisecond, "netA did not drop a peer that arrived after innerStop")
+	require.False(t, netA.hasPeers())
+}
+
+func TestP2PPeerAdmission(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	for _, state := range []string{"stopped", "closing", "open"} {
+		for _, outgoing := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/outgoing=%v", state, outgoing), func(t *testing.T) {
+				n := &P2PNetwork{
+					identityTracker: NewIdentityTracker(),
+					wsPeers:         make(map[peer.ID]*wsPeer),
+					wsPeersToIDs:    make(map[*wsPeer]peer.ID),
+				}
+				n.throttledOutgoingConnections.Store(2)
+				if state == "stopped" {
+					n.innerStop()
+				}
+				p := &wsPeer{conn: &nopConnSingleton, outgoing: outgoing}
+				p.identity[0] = 1
+				require.True(t, n.identityTracker.setIdentity(p))
+				if state == "closing" {
+					p.didSignalClose.Store(1)
+				}
+				accepted := state == "open"
+				require.Equal(t, accepted, n.addPeer(peer.ID("test"), p))
+				require.Equal(t, accepted, len(n.wsPeers) == 1)
+				reserved := accepted && outgoing
+				require.Equal(t, reserved, p.throttledOutgoingConnection)
+				slots := int32(2)
+				if reserved {
+					slots--
+				}
+				require.Equal(t, slots, n.throttledOutgoingConnections.Load())
+				require.Equal(t, !accepted, n.identityTracker.setIdentity(&wsPeer{identity: p.identity}))
+			})
+		}
 	}
 }
