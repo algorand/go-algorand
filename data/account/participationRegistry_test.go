@@ -342,41 +342,10 @@ func TestParticipation_CleanupTablesAfterDeleteExpired(t *testing.T) {
 	a.NoError(err)
 
 	a.NoError(registry.Flush(defaultTimeout))
-	var numOfRecords int
 	// make sure tables are clean
-	err = registry.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		row := tx.QueryRow(`select count(*) from Keysets`)
-		err = row.Scan(&numOfRecords)
-		if err != nil {
-			return fmt.Errorf("unable to scan pk: %w", err)
-		}
-		return nil
-	})
-
-	a.NoError(err)
-	a.Equal(0, numOfRecords)
-
-	err = registry.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		row := tx.QueryRow(`select count(*) from Rolling`)
-		err = row.Scan(&numOfRecords)
-		if err != nil {
-			return fmt.Errorf("unable to scan pk: %w", err)
-		}
-		return nil
-	})
-	a.NoError(err)
-	a.Equal(0, numOfRecords)
-
-	err = registry.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		row := tx.QueryRow(`select count(*) from stateproofkeys`)
-		err = row.Scan(&numOfRecords)
-		if err != nil {
-			return fmt.Errorf("unable to scan pk: %w", err)
-		}
-		return nil
-	})
-	a.NoError(err)
-	a.Equal(0, numOfRecords)
+	for _, table := range []string{"Keysets", "Rolling", "stateproofkeys", "VotingBatches", "VotingOffsets"} {
+		a.Zero(countTableRows(a, registry.store.Rdb, table), "table %s not cleaned up", table)
+	}
 }
 
 // Make sure the register function properly sets effective first/last for all effected records.
@@ -724,7 +693,7 @@ func TestParticipation_NoKeyToUpdate(t *testing.T) {
 			EffectiveFirst:  4,
 			EffectiveLast:   5,
 		}
-		err := updateRollingFields(ctx, tx, record)
+		_, err := updateRollingFields(ctx, tx, record)
 		a.EqualError(err, ErrNoKeyForID.Error())
 		return nil
 	})

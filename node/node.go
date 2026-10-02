@@ -907,14 +907,22 @@ func (node *AlgorandFullNode) RemoveParticipationKey(partKeyID account.Participa
 	// Let's first get the recorded information from the registry so we can lookup the file
 
 	partRecord := node.accountManager.Registry().Get(partKeyID)
+	firstValid, lastValid := partRecord.FirstValid, partRecord.LastValid
 
 	if partRecord.IsZero() {
-		return account.ErrParticipationIDNotFound
+		// a key excluded from the registry at load (corrupt voting data) is
+		// not served by Get, but deleting it is exactly the operator's
+		// remedy, so it must be reachable here
+		var excluded bool
+		firstValid, lastValid, excluded = node.accountManager.Registry().GetExcluded(partKeyID)
+		if !excluded {
+			return account.ErrParticipationIDNotFound
+		}
 	}
 
 	outDir := node.genesisDirs.RootGenesisDir
 
-	filename := config.PartKeyFilename(partRecord.ParticipationID.String(), uint64(partRecord.FirstValid), uint64(partRecord.LastValid))
+	filename := config.PartKeyFilename(partKeyID.String(), uint64(firstValid), uint64(lastValid))
 	fullyQualifiedFilename := filepath.Join(outDir, filepath.Base(filename))
 
 	err := node.accountManager.Registry().Delete(partKeyID)
@@ -1009,7 +1017,10 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 
 	// Tell the AccountManager about the Participation (dupes don't matter) so we ignore the return value
 	// This is ephemeral since we are deleting the file after this function is done
-	added := node.accountManager.AddParticipation(partkey, true)
+	added, err := node.accountManager.AddParticipation(partkey, true)
+	if err != nil {
+		return account.ParticipationID{}, err
+	}
 	if !added {
 		return account.ParticipationID{}, fmt.Errorf("ParticipationRegistry: cannot register duplicate participation key")
 	}
@@ -1063,14 +1074,28 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 		part, err := account.RestoreParticipationWithSecrets(handle)
 		if err != nil {
 			handle.Close()
-			if err == account.ErrUnsupportedSchema {
-				node.log.Infof("Loaded participation keys from storage: %s %s", part.Address(), info.Name())
-				node.log.Warnf("loadParticipationKeys: not loading unsupported participation key: %s; renaming to *.old", info.Name())
+			if errors.Is(err, account.ErrUnsupportedSchema) || errors.Is(err, account.ErrCorruptedVotingData) {
+				// The file's content cannot be used, so it is quarantined
+				// rather than failing startup: renamed to *.old, which the
+				// node never loads.  The rename erases nothing, so the file
+				// keeps the key's private material until the operator repairs
+				// it or deletes it securely.
+				loadErr := err
 				fullname := filepath.Join(genesisDir, info.Name())
-				renamedFileName := filepath.Join(fullname, ".old")
-				err = os.Rename(fullname, renamedFileName)
-				if err != nil {
-					node.log.Warnf("loadParticipationKeys: failed to rename unsupported participation key file '%s' to '%s': %v", fullname, renamedFileName, err)
+				// pick a name that does not clobber a previous backup; on any
+				// Stat error other than not-exist, stop probing and let the
+				// rename surface the underlying problem
+				renamedFileName := fullname + ".old"
+				for i := 1; ; i++ {
+					if _, statErr := os.Stat(renamedFileName); statErr != nil {
+						break
+					}
+					renamedFileName = fmt.Sprintf("%s.old.%d", fullname, i)
+				}
+				if renameErr := os.Rename(fullname, renamedFileName); renameErr != nil {
+					node.log.Errorf("loadParticipationKeys: participation key file %s cannot be loaded (%v) and could not be renamed to %s: %v; the key will not vote and the file will be retried at the next startup", info.Name(), loadErr, renamedFileName, renameErr)
+				} else {
+					node.log.Errorf("loadParticipationKeys: participation key file %s cannot be loaded (%v); renamed to %s and skipped from now on. The renamed file still contains the key's private material and needs operator handling: repair it and rename it back, or delete it securely. The key will not vote until then.", info.Name(), loadErr, filepath.Base(renamedFileName))
 				}
 			} else {
 				return fmt.Errorf("AlgorandFullNode.loadParticipationKeys: cannot load account at %v: %v", info.Name(), err)
@@ -1081,8 +1106,8 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 			// are being store to the registry in that point
 			// These files are not ephemeral and must be deleted eventually since
 			// this function is called to load files located in the node on startup
-			added := node.accountManager.AddParticipation(part, false)
-			if !added {
+			added, err := node.accountManager.AddParticipation(part, false)
+			if err != nil || !added {
 				part.Close()
 				continue
 			}

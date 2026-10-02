@@ -18,6 +18,8 @@ package node
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
 	"fmt"
 	"math/rand"
 	"os"
@@ -682,6 +684,119 @@ func TestDefaultResourcePaths(t *testing.T) {
 	require.NoError(t, err)
 	_, err = os.Stat(filepath.Join(testDirectory, genesis.ID(), "crash.sqlite"))
 	require.NoError(t, err)
+}
+
+// TestLoadParticipationKeysRenamesUnsupported confirms that a participation
+// key file with an unsupported (future) schema version is renamed to
+// <name>.old and does not prevent the node from starting.
+func TestLoadParticipationKeysRenamesUnsupported(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	testDirectory := t.TempDir()
+
+	genesis := bookkeeping.Genesis{
+		SchemaID:    "gen",
+		Proto:       protocol.ConsensusCurrentVersion,
+		Network:     config.Devtestnet,
+		FeeSink:     sinkAddr.String(),
+		RewardsPool: poolAddr.String(),
+	}
+
+	// plant a partkey file with a schema version from the future
+	genesisDir := filepath.Join(testDirectory, genesis.ID())
+	require.NoError(t, os.MkdirAll(genesisDir, 0700))
+	partfile := filepath.Join(genesisDir, config.PartKeyFilename("unsupported", 0, 3000))
+	partdb, err := db.MakeErasableAccessor(partfile)
+	require.NoError(t, err)
+	err = partdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.Exec(fmt.Sprintf("CREATE TABLE schema (tablename TEXT PRIMARY KEY, version INTEGER); INSERT INTO schema VALUES ('%s', 99);", account.PartTableSchemaName))
+		return err
+	})
+	require.NoError(t, err)
+	partdb.Close()
+
+	// a backup from an earlier rename must not be clobbered
+	previousBackup := []byte("previous unsupported key backup")
+	require.NoError(t, os.WriteFile(partfile+".old", previousBackup, 0600))
+
+	n, err := MakeFull(logging.TestingLog(t), testDirectory, config.GetDefaultLocal(), []string{}, genesis)
+	require.NoError(t, err)
+	err = n.Start()
+	if err == nil {
+		defer n.Stop()
+	}
+	require.NoError(t, err)
+
+	require.NoFileExists(t, partfile)
+	require.FileExists(t, partfile+".old.1")
+	preserved, err := os.ReadFile(partfile + ".old")
+	require.NoError(t, err)
+	require.Equal(t, previousBackup, preserved)
+}
+
+// TestRemoveParticipationKeyExcludedFromRegistry confirms a key whose registry
+// record was excluded at load (its stored voting header is unusable) can still
+// be deleted through the node: the excluded record is not served, and its key
+// file is not re-installed automatically, so DELETE is the operator's remedy.
+func TestRemoveParticipationKeyExcludedFromRegistry(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	testDirectory := t.TempDir()
+	genesis := bookkeeping.Genesis{
+		SchemaID:    "gen",
+		Proto:       protocol.ConsensusCurrentVersion,
+		Network:     config.Devtestnet,
+		FeeSink:     sinkAddr.String(),
+		RewardsPool: poolAddr.String(),
+	}
+	genesisDir := filepath.Join(testDirectory, genesis.ID())
+	require.NoError(t, os.MkdirAll(genesisDir, 0700))
+
+	// a key file in the genesis directory, as loadParticipationKeys finds it
+	tmpfile := filepath.Join(genesisDir, "tmp.partkey")
+	partdb, err := db.MakeErasableAccessor(tmpfile)
+	require.NoError(t, err)
+	part, err := account.FillDBWithParticipationKeys(partdb, basics.Address{1}, 0, 3000, 10)
+	require.NoError(t, err)
+	partdb.Close()
+	id := part.ID()
+	partfile := filepath.Join(genesisDir, config.PartKeyFilename(id.String(), 0, 3000))
+	require.NoError(t, os.Rename(tmpfile, partfile))
+
+	// the same key in the registry, with its stored voting header damaged
+	registryFile := filepath.Join(genesisDir, config.ParticipationRegistryFilename)
+	pair, err := db.OpenErasablePair(registryFile)
+	require.NoError(t, err)
+	registry, err := account.MakeParticipationRegistry(pair, logging.TestingLog(t))
+	require.NoError(t, err)
+	_, err = registry.Insert(part.Participation)
+	require.NoError(t, err)
+	require.NoError(t, registry.Flush(10*time.Second))
+	registry.Close()
+	regdb, err := db.MakeAccessor(registryFile, false, false)
+	require.NoError(t, err)
+	err = regdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.Exec("UPDATE Rolling SET votingHeader=x'ff00'")
+		return err
+	})
+	require.NoError(t, err)
+	regdb.Close()
+
+	n, err := MakeFull(logging.TestingLog(t), testDirectory, config.GetDefaultLocal(), []string{}, genesis)
+	require.NoError(t, err)
+	require.NoError(t, n.Start())
+	defer n.Stop()
+
+	// excluded: not served, and the key file could not re-install it (its
+	// relation to the stored cursor cannot be established)
+	_, err = n.GetParticipationKey(id)
+	require.ErrorIs(t, err, account.ErrParticipationIDNotFound)
+	require.FileExists(t, partfile)
+
+	// but it can be deleted, file included, after which the ID is unknown
+	require.NoError(t, n.RemoveParticipationKey(id))
+	require.NoFileExists(t, partfile)
+	require.ErrorIs(t, n.RemoveParticipationKey(id), account.ErrParticipationIDNotFound)
 }
 
 // TestConfiguredDataDirs tests to see that when HotDataDir and ColdDataDir are set, underlying resources are created in the correct locations
