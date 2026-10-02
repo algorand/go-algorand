@@ -1875,3 +1875,64 @@ func TestP2PVoteCompression(t *testing.T) {
 		})
 	}
 }
+
+// TestP2PThrottleSlotNotLeakedOnIdentityDedup checks that an outgoing peer rejected before
+// registration does not keep an outgoing throttle slot. netA shares its identity tracker with
+// a stand-in for an existing ws connection to netB, as a hybrid node's P2P and ws networks do,
+// so netA's outgoing P2P connection to netB is rejected as a duplicate.
+func TestP2PThrottleSlotNotLeakedOnIdentityDedup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := config.GetDefaultLocal()
+	cfg.DNSBootstrapID = ""
+	log := logging.TestingLog(t)
+	genesisInfo := GenesisInfo{genesisID, config.Devtestnet}
+
+	cfgB := cfg
+	cfgB.NetAddress = "127.0.0.1:0"
+	netB, err := NewP2PNetwork(log, cfgB, "", nil, genesisInfo, &nopeNodeInfo{}, nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, netB.Start())
+	defer netB.Stop()
+
+	pubKeyB, err := netB.service.ID().ExtractPublicKey()
+	require.NoError(t, err)
+	rawB, err := pubKeyB.Raw()
+	require.NoError(t, err)
+	tracker := NewIdentityTracker()
+	existing := &wsPeer{identity: algocrypto.PublicKey(rawB)}
+	require.True(t, tracker.setIdentity(existing))
+
+	peerInfoB := netB.service.AddrInfo()
+	addrsB, err := peer.AddrInfoToP2pAddrs(&peerInfoB)
+	require.NoError(t, err)
+	netA, err := NewP2PNetwork(log, cfg, "", []string{addrsB[0].String()}, genesisInfo, &nopeNodeInfo{}, &identityOpts{tracker: tracker}, nil)
+	require.NoError(t, err)
+	// netA is not a relay, so Start gives it one throttle slot per GossipFanout
+	require.False(t, netA.relayMessages)
+	slots := int32(cfg.GossipFanout)
+
+	dedupsBefore := networkPeerIdentityDisconnect.GetUint64Value()
+	require.NoError(t, netA.Start())
+	defer netA.Stop()
+
+	require.Eventually(t, func() bool {
+		return networkPeerIdentityDisconnect.GetUint64Value() > dedupsBefore
+	}, 10*time.Second, 50*time.Millisecond, "netA never rejected the duplicate connection to netB")
+	require.False(t, netA.hasPeers())
+	require.Equal(t, slots, netA.throttledOutgoingConnections.Load(), "the identity dedup rejection leaked an outgoing throttle slot")
+
+	// Allow registration, then check that disconnecting returns the claimed slot.
+	tracker.removeIdentity(existing)
+	require.Eventually(t, func() bool {
+		netA.RequestConnectOutgoing(false, nil)
+		return len(netA.GetPeers(PeersConnectedOut)) == 1
+	}, 10*time.Second, 50*time.Millisecond, "netA never registered an outgoing connection to netB")
+	outPeers := netA.GetPeers(PeersConnectedOut)
+	require.Len(t, outPeers, 1)
+	require.True(t, outPeers[0].(*wsPeer).throttledOutgoingConnection)
+	require.Equal(t, slots-1, netA.throttledOutgoingConnections.Load())
+
+	netA.disconnect(outPeers[0], disconnectReasonNone)
+	require.Equal(t, slots, netA.throttledOutgoingConnections.Load(), "disconnecting a registered peer did not give its throttle slot back")
+}

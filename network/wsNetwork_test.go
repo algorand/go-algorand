@@ -5082,3 +5082,62 @@ func TestNumOutgoingPending(t *testing.T) {
 	require.Equal(t, 0, len(netA.tryConnectAddrs), "map should be empty after all releases")
 	netA.tryConnectLock.Unlock()
 }
+
+// TestWebsocketNetworkThrottleSlotNotLeakedOnIdentityDedup checks that an outgoing peer
+// rejected by identity deduplication does not keep an outgoing throttle slot.
+// netA's identity tracker already holds netB's identity, as it would with an existing
+// connection to netB, so netA's outgoing connection to netB is rejected as a duplicate.
+func TestWebsocketNetworkThrottleSlotNotLeakedOnIdentityDedup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
+	netA.config.PublicAddress = "testing"
+	netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
+	netB.config.PublicAddress = "testing"
+
+	require.NoError(t, netA.Start())
+	defer netA.Stop()
+	require.NoError(t, netB.Start())
+	defer netB.Stop()
+
+	schemeB, ok := netB.identityScheme.(*identityChallengePublicKeyScheme)
+	require.True(t, ok)
+	require.NotNil(t, schemeB.identityKeys)
+	existing := &wsPeer{identity: schemeB.identityKeys.PublicKey()}
+	require.True(t, netA.identityTracker.setIdentity(existing))
+
+	slots := netA.throttledOutgoingConnections.Load()
+	require.Positive(t, slots)
+	dedupsBefore := networkPeerIdentityDisconnect.GetUint64Value()
+
+	addrB, ok := netB.Address()
+	require.True(t, ok)
+	gossipB, err := netB.addrToGossipAddr(addrB)
+	require.NoError(t, err)
+	addrB = hostAndPort(addrB)
+	_, ok = netA.tryConnectReserveAddr(addrB)
+	require.True(t, ok)
+	netA.wg.Add(1)
+	netA.tryConnect(addrB, gossipB)
+
+	require.Greater(t, networkPeerIdentityDisconnect.GetUint64Value(), dedupsBefore, "netA did not reject the duplicate connection to netB")
+	require.Empty(t, netA.GetPeers(PeersConnectedOut))
+	require.Equal(t, slots, netA.throttledOutgoingConnections.Load(), "the identity dedup rejection leaked an outgoing throttle slot")
+
+	// without the existing identity the connection is registered and claims a slot,
+	// and disconnecting it gives the slot back
+	netA.identityTracker.removeIdentity(existing)
+	_, ok = netA.tryConnectReserveAddr(addrB)
+	require.True(t, ok)
+	netA.wg.Add(1)
+	netA.tryConnect(addrB, gossipB)
+	outPeers := netA.GetPeers(PeersConnectedOut)
+	require.Len(t, outPeers, 1)
+	require.True(t, outPeers[0].(*wsPeer).throttledOutgoingConnection)
+	require.Equal(t, slots-1, netA.throttledOutgoingConnections.Load())
+
+	netA.disconnect(outPeers[0], disconnectReasonNone)
+	require.Eventually(t, func() bool {
+		return netA.throttledOutgoingConnections.Load() == slots
+	}, 5*time.Second, 50*time.Millisecond, "disconnecting a registered peer did not give its throttle slot back")
+}
