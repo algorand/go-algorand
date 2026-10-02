@@ -215,7 +215,7 @@ func TestVerifyStateProofAlgorithms(t *testing.T) {
 	// must use the Merkle signature scheme's fixed Sumhash algorithm.
 	s = wellFormedAlgorithmProof()
 	reveal := Reveal{}
-	reveal.SigSlot.Sig.Signature = crypto.FalconSignature{1, 2}
+	reveal.SigSlot.Sig.Signature = crypto.Falcon1024Signature{1, 2}
 	reveal.SigSlot.Sig.Proof.HashFactory.HashType = merklesignature.MerkleSignatureSchemeHashFunction
 	s.Reveals = map[uint64]Reveal{7: reveal}
 	require.NoError(t, verifyStateProofAlgorithms(s))

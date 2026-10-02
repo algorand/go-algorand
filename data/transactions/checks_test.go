@@ -100,7 +100,7 @@ func TestCheckTxnGroupStateProofBasicSuite(t *testing.T) {
 		t.Parallel()
 		malformed := stateProofTxnForCheck()
 		reveal := stateproof.Reveal{}
-		reveal.SigSlot.Sig.Signature = crypto.FalconSignature{1, 2}
+		reveal.SigSlot.Sig.Signature = crypto.Falcon1024Signature{1, 2}
 		reveal.SigSlot.Sig.Proof = merklearray.SingleLeafProof{
 			Proof: stateProofPathForCheck(crypto.Sha256, crypto.Sha256Size),
 		}
@@ -112,7 +112,7 @@ func TestCheckTxnGroupStateProofBasicSuite(t *testing.T) {
 		t.Parallel()
 		malformed := stateProofTxnForCheck()
 		reveal := stateproof.Reveal{}
-		reveal.SigSlot.Sig.Signature = crypto.FalconSignature{1, 2}
+		reveal.SigSlot.Sig.Signature = crypto.Falcon1024Signature{1, 2}
 		reveal.SigSlot.Sig.Proof = merklearray.SingleLeafProof{
 			Proof: stateProofPathForCheck(stateproof.HashType, crypto.Sha256Size),
 		}
@@ -124,7 +124,7 @@ func TestCheckTxnGroupStateProofBasicSuite(t *testing.T) {
 		t.Parallel()
 		valid := stateProofTxnForCheck()
 		reveal := stateproof.Reveal{}
-		reveal.SigSlot.Sig.Signature = crypto.FalconSignature{1, 2}
+		reveal.SigSlot.Sig.Signature = crypto.Falcon1024Signature{1, 2}
 		reveal.SigSlot.Sig.Proof = merklearray.SingleLeafProof{
 			Proof: stateProofPathForCheck(stateproof.HashType, stateproof.HashSize),
 		}

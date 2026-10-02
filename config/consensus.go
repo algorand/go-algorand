@@ -615,6 +615,10 @@ type ConsensusParams struct {
 	// floating point binomial CDF implementation for committee selection.
 	EnableSelectF128 bool
 
+	// EnablePQSchemeFalcon512 enables native Falcon-512 transaction
+	// authorization for the f5 PQ scheme.
+	EnablePQSchemeFalcon512 bool
+
 	// RequireLogicSigArgAccess requires that a LogicSig carry no argument it did
 	// not read: nothing above the highest index it read, and nothing unread
 	// below that index unless it is empty. Args are covered by no signature, and
@@ -719,15 +723,17 @@ func (proto ConsensusParams) PQSchemeEnabled(scheme protocol.PQScheme) bool {
 	switch scheme {
 	case protocol.PQSchemeFalcon1024:
 		return proto.EnablePQSchemeFalcon1024
+	case protocol.PQSchemeFalcon512:
+		return proto.EnablePQSchemeFalcon512
 	default:
 		return false
 	}
 }
 
-// PQSigEnabled returns whether a post-quantum signature scheme is enabled
+// PQSigEnabled returns whether any post-quantum signatures are enabled
 // under these consensus parameters.
 func (proto ConsensusParams) PQSigEnabled() bool {
-	return proto.EnablePQSchemeFalcon1024 // || proto.EnablePQSchemeFalcon512
+	return proto.EnablePQSchemeFalcon1024 || proto.EnablePQSchemeFalcon512
 }
 
 // PQSchemeFeeContribution is the additional fee factor charged for a transaction
@@ -739,7 +745,7 @@ func (proto ConsensusParams) PQSchemeFeeContribution(scheme protocol.PQScheme) b
 	case protocol.PQSchemeFalcon1024:
 		return 2e6
 	case protocol.PQSchemeFalcon512:
-		return 1e6 // kept below the Falcon-1024 contribution
+		return 1e6 // it is half of the Falcon-1024 contribution
 	default:
 		return 0
 	}
@@ -1572,9 +1578,8 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 14 // When moving this to a release, put a new higher LogicSigVersion here
-
+	vFuture.EnablePQSchemeFalcon512 = true
 	vFuture.RequireLogicSigArgAccess = true
-
 	vFuture.AllowGroupedHeartbeats = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture

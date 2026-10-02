@@ -8,7 +8,7 @@ require (
 	filippo.io/edwards25519 v1.2.0
 	github.com/DataDog/zstd v1.5.7
 	github.com/algorand/avm-abi v0.2.0
-	github.com/algorand/falcon v0.1.0
+	github.com/algorand/falcon v0.2.0
 	github.com/algorand/go-codec/codec v1.1.10
 	github.com/algorand/go-deadlock v0.2.5
 	github.com/algorand/go-sumhash v0.1.0

@@ -73,9 +73,9 @@ func BenchmarkUnmarshalDigest(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalFalconPrivateKey(t *testing.T) {
+func TestMarshalUnmarshalFalcon1024PrivateKey(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := FalconPrivateKey{}
+	v := Falcon1024PrivateKey{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -94,12 +94,12 @@ func TestMarshalUnmarshalFalconPrivateKey(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingFalconPrivateKey(t *testing.T) {
-	protocol.RunEncodingTest(t, &FalconPrivateKey{})
+func TestRandomizedEncodingFalcon1024PrivateKey(t *testing.T) {
+	protocol.RunEncodingTest(t, &Falcon1024PrivateKey{})
 }
 
-func BenchmarkMarshalMsgFalconPrivateKey(b *testing.B) {
-	v := FalconPrivateKey{}
+func BenchmarkMarshalMsgFalcon1024PrivateKey(b *testing.B) {
+	v := Falcon1024PrivateKey{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -107,8 +107,8 @@ func BenchmarkMarshalMsgFalconPrivateKey(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgFalconPrivateKey(b *testing.B) {
-	v := FalconPrivateKey{}
+func BenchmarkAppendMsgFalcon1024PrivateKey(b *testing.B) {
+	v := Falcon1024PrivateKey{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -119,8 +119,8 @@ func BenchmarkAppendMsgFalconPrivateKey(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalFalconPrivateKey(b *testing.B) {
-	v := FalconPrivateKey{}
+func BenchmarkUnmarshalFalcon1024PrivateKey(b *testing.B) {
+	v := Falcon1024PrivateKey{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -133,9 +133,9 @@ func BenchmarkUnmarshalFalconPrivateKey(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalFalconPublicKey(t *testing.T) {
+func TestMarshalUnmarshalFalcon1024PublicKey(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := FalconPublicKey{}
+	v := Falcon1024PublicKey{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -154,12 +154,12 @@ func TestMarshalUnmarshalFalconPublicKey(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingFalconPublicKey(t *testing.T) {
-	protocol.RunEncodingTest(t, &FalconPublicKey{})
+func TestRandomizedEncodingFalcon1024PublicKey(t *testing.T) {
+	protocol.RunEncodingTest(t, &Falcon1024PublicKey{})
 }
 
-func BenchmarkMarshalMsgFalconPublicKey(b *testing.B) {
-	v := FalconPublicKey{}
+func BenchmarkMarshalMsgFalcon1024PublicKey(b *testing.B) {
+	v := Falcon1024PublicKey{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -167,8 +167,8 @@ func BenchmarkMarshalMsgFalconPublicKey(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgFalconPublicKey(b *testing.B) {
-	v := FalconPublicKey{}
+func BenchmarkAppendMsgFalcon1024PublicKey(b *testing.B) {
+	v := Falcon1024PublicKey{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -179,8 +179,8 @@ func BenchmarkAppendMsgFalconPublicKey(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalFalconPublicKey(b *testing.B) {
-	v := FalconPublicKey{}
+func BenchmarkUnmarshalFalcon1024PublicKey(b *testing.B) {
+	v := Falcon1024PublicKey{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -193,9 +193,9 @@ func BenchmarkUnmarshalFalconPublicKey(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalFalconSigner(t *testing.T) {
+func TestMarshalUnmarshalFalcon1024Signer(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := FalconSigner{}
+	v := Falcon1024Signer{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -214,12 +214,12 @@ func TestMarshalUnmarshalFalconSigner(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingFalconSigner(t *testing.T) {
-	protocol.RunEncodingTest(t, &FalconSigner{})
+func TestRandomizedEncodingFalcon1024Signer(t *testing.T) {
+	protocol.RunEncodingTest(t, &Falcon1024Signer{})
 }
 
-func BenchmarkMarshalMsgFalconSigner(b *testing.B) {
-	v := FalconSigner{}
+func BenchmarkMarshalMsgFalcon1024Signer(b *testing.B) {
+	v := Falcon1024Signer{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -227,8 +227,8 @@ func BenchmarkMarshalMsgFalconSigner(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgFalconSigner(b *testing.B) {
-	v := FalconSigner{}
+func BenchmarkAppendMsgFalcon1024Signer(b *testing.B) {
+	v := Falcon1024Signer{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -239,8 +239,8 @@ func BenchmarkAppendMsgFalconSigner(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalFalconSigner(b *testing.B) {
-	v := FalconSigner{}
+func BenchmarkUnmarshalFalcon1024Signer(b *testing.B) {
+	v := Falcon1024Signer{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -253,9 +253,9 @@ func BenchmarkUnmarshalFalconSigner(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalFalconVerifier(t *testing.T) {
+func TestMarshalUnmarshalFalcon1024Verifier(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := FalconVerifier{}
+	v := Falcon1024Verifier{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -274,12 +274,12 @@ func TestMarshalUnmarshalFalconVerifier(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingFalconVerifier(t *testing.T) {
-	protocol.RunEncodingTest(t, &FalconVerifier{})
+func TestRandomizedEncodingFalcon1024Verifier(t *testing.T) {
+	protocol.RunEncodingTest(t, &Falcon1024Verifier{})
 }
 
-func BenchmarkMarshalMsgFalconVerifier(b *testing.B) {
-	v := FalconVerifier{}
+func BenchmarkMarshalMsgFalcon1024Verifier(b *testing.B) {
+	v := Falcon1024Verifier{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -287,8 +287,8 @@ func BenchmarkMarshalMsgFalconVerifier(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgFalconVerifier(b *testing.B) {
-	v := FalconVerifier{}
+func BenchmarkAppendMsgFalcon1024Verifier(b *testing.B) {
+	v := Falcon1024Verifier{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -299,8 +299,248 @@ func BenchmarkAppendMsgFalconVerifier(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalFalconVerifier(b *testing.B) {
-	v := FalconVerifier{}
+func BenchmarkUnmarshalFalcon1024Verifier(b *testing.B) {
+	v := Falcon1024Verifier{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestMarshalUnmarshalFalcon512PrivateKey(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := Falcon512PrivateKey{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingFalcon512PrivateKey(t *testing.T) {
+	protocol.RunEncodingTest(t, &Falcon512PrivateKey{})
+}
+
+func BenchmarkMarshalMsgFalcon512PrivateKey(b *testing.B) {
+	v := Falcon512PrivateKey{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgFalcon512PrivateKey(b *testing.B) {
+	v := Falcon512PrivateKey{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalFalcon512PrivateKey(b *testing.B) {
+	v := Falcon512PrivateKey{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestMarshalUnmarshalFalcon512PublicKey(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := Falcon512PublicKey{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingFalcon512PublicKey(t *testing.T) {
+	protocol.RunEncodingTest(t, &Falcon512PublicKey{})
+}
+
+func BenchmarkMarshalMsgFalcon512PublicKey(b *testing.B) {
+	v := Falcon512PublicKey{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgFalcon512PublicKey(b *testing.B) {
+	v := Falcon512PublicKey{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalFalcon512PublicKey(b *testing.B) {
+	v := Falcon512PublicKey{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestMarshalUnmarshalFalcon512Signer(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := Falcon512Signer{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingFalcon512Signer(t *testing.T) {
+	protocol.RunEncodingTest(t, &Falcon512Signer{})
+}
+
+func BenchmarkMarshalMsgFalcon512Signer(b *testing.B) {
+	v := Falcon512Signer{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgFalcon512Signer(b *testing.B) {
+	v := Falcon512Signer{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalFalcon512Signer(b *testing.B) {
+	v := Falcon512Signer{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestMarshalUnmarshalFalcon512Verifier(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := Falcon512Verifier{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingFalcon512Verifier(t *testing.T) {
+	protocol.RunEncodingTest(t, &Falcon512Verifier{})
+}
+
+func BenchmarkMarshalMsgFalcon512Verifier(b *testing.B) {
+	v := Falcon512Verifier{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgFalcon512Verifier(b *testing.B) {
+	v := Falcon512Verifier{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalFalcon512Verifier(b *testing.B) {
+	v := Falcon512Verifier{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
