@@ -679,6 +679,7 @@ type BlockEvaluator struct {
 	l LedgerForEvaluator
 
 	maxTxnBytesPerBlock int
+	extraFees           basics.MicroAlgos
 
 	Tracer logic.EvalTracer
 }
@@ -700,6 +701,8 @@ type EvaluatorOptions struct {
 	Generate            bool
 	MaxTxnBytesPerBlock int
 	Tracer              logic.EvalTracer
+	// ExtraFees is simulation-only fee credit applied to each transaction group.
+	ExtraFees basics.MicroAlgos
 }
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header
@@ -752,6 +755,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 		genesisHash:         l.GenesisHash(),
 		l:                   l,
 		maxTxnBytesPerBlock: evalOpts.MaxTxnBytesPerBlock,
+		extraFees:           evalOpts.ExtraFees,
 		Tracer:              evalOpts.Tracer,
 	}
 
@@ -1088,6 +1092,9 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup ...transactions.SignedTxnWi
 	defer cow.recycle()
 
 	evalParams := logic.NewAppEvalParams(txgroup, &eval.proto, &eval.specials)
+	if evalParams.FeeCredit != nil {
+		*evalParams.FeeCredit = evalParams.FeeCredit.AddSaturate(eval.extraFees)
+	}
 	evalParams.Tracer = eval.Tracer
 
 	if eval.Tracer != nil {
@@ -1179,6 +1186,7 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup ...transactions.SignedTxnWi
 	// the only chance to check that the top-level fees are enough for the
 	// top-level txns.
 	usage, feesPaid := transactions.SummarizeFees(txgroup, eval.proto)
+	feesPaid = feesPaid.AddSaturate(eval.extraFees)
 	if err := CheckGroupFees(feesPaid, usage, eval.proto.MinFee()); err != nil {
 		return err
 	}
