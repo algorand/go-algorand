@@ -295,10 +295,7 @@ var createAssetCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
-		explicitFee := cmd.Flags().Changed("fee")
-		if explicitFee {
-			tx.Fee = basics.MicroAlgos{Raw: fee}
-		}
+		applyFeeAndTip(&tx, cmd, client, fee)
 
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
@@ -375,10 +372,7 @@ var destroyAssetCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
-		explicitFee := cmd.Flags().Changed("fee")
-		if explicitFee {
-			tx.Fee = basics.MicroAlgos{Raw: fee}
-		}
+		applyFeeAndTip(&tx, cmd, client, fee)
 
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
@@ -469,10 +463,7 @@ var configAssetCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
-		explicitFee := cmd.Flags().Changed("fee")
-		if explicitFee {
-			tx.Fee = basics.MicroAlgos{Raw: fee}
-		}
+		applyFeeAndTip(&tx, cmd, client, fee)
 
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
@@ -557,10 +548,7 @@ var sendAssetCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
-		explicitFee := cmd.Flags().Changed("fee")
-		if explicitFee {
-			tx.Fee = basics.MicroAlgos{Raw: fee}
-		}
+		applyFeeAndTip(&tx, cmd, client, fee)
 
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
@@ -627,10 +615,7 @@ var freezeAssetCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
-		explicitFee := cmd.Flags().Changed("fee")
-		if explicitFee {
-			tx.Fee = basics.MicroAlgos{Raw: fee}
-		}
+		applyFeeAndTip(&tx, cmd, client, fee)
 
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
@@ -717,10 +702,7 @@ var optinAssetCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
-		explicitFee := cmd.Flags().Changed("fee")
-		if explicitFee {
-			tx.Fee = basics.MicroAlgos{Raw: fee}
-		}
+		applyFeeAndTip(&tx, cmd, client, fee)
 
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)

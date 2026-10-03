@@ -20,6 +20,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/libgoal"
 )
 
 const (
@@ -75,3 +77,28 @@ func parseRekey(rekeyToAddress string) basics.Address {
 	}
 	return rekeyTo
 }
+
+// applyFeeAndTip applies explicit fee and tip flags to a transaction.
+// If the user explicitly provided --fee (including --fee=0 for fee-pooling in tx groups),
+// it overrides any default or suggested fee that was computed during transaction creation.
+// If a --tip flag is present on the command and set, it adds the tip to the transaction fee.
+func applyFeeAndTip(tx *transactions.Transaction, cmd *cobra.Command, client libgoal.Client, explicitFee ...uint64) {
+	if cmd != nil && cmd.Flags().Lookup("fee") != nil && cmd.Flags().Changed("fee") {
+		f, err := cmd.Flags().GetUint64("fee")
+		if err == nil {
+			tx.Fee = basics.MicroAlgos{Raw: f}
+		} else if len(explicitFee) > 0 {
+			tx.Fee = basics.MicroAlgos{Raw: explicitFee[0]}
+		}
+	} else if len(explicitFee) > 0 && explicitFee[0] != 0 {
+		tx.Fee = basics.MicroAlgos{Raw: explicitFee[0]}
+	}
+
+	if cmd != nil && cmd.Flags().Lookup("tip") != nil && cmd.Flags().Changed("tip") {
+		tipVal, err := cmd.Flags().GetUint64("tip")
+		if err == nil {
+			tx.Fee = tx.Fee.AddSaturate(basics.MicroAlgos{Raw: tipVal})
+		}
+	}
+}
+

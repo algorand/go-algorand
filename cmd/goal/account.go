@@ -1019,7 +1019,7 @@ var changeOnlineCmd = &cobra.Command{
 			reportErrorln(err)
 		}
 		err = changeAccountOnlineStatus(
-			accountAddress, online, statusChangeTxFile, walletName,
+			cmd, accountAddress, online, statusChangeTxFile, walletName,
 			firstTxRound, lastTxRound, transactionFee, scLeaseBytes(cmd), dataDir, client,
 		)
 		if err != nil {
@@ -1029,6 +1029,7 @@ var changeOnlineCmd = &cobra.Command{
 }
 
 func changeAccountOnlineStatus(
+	cmd *cobra.Command,
 	acct string, goOnline bool, txFile string, wallet string,
 	firstTxRound, lastTxRound basics.Round, fee uint64, leaseBytes [32]byte,
 	dataDir string, client libgoal.Client,
@@ -1044,6 +1045,8 @@ func changeAccountOnlineStatus(
 	if err != nil {
 		return err
 	}
+
+	applyFeeAndTip(&utx, cmd, client, fee)
 
 	utx.RekeyTo = parseRekey(rekeyToAddress)
 
@@ -1192,7 +1195,7 @@ var renewParticipationKeyCmd = &cobra.Command{
 			}
 		}
 
-		err = generateAndRegisterPartKey(accountAddress, currentRound, roundLastValid, txRoundLastValid, transactionFee, scLeaseBytes(cmd), keyDilution, walletName, dataDir, client)
+		err = generateAndRegisterPartKey(cmd, accountAddress, currentRound, roundLastValid, txRoundLastValid, transactionFee, scLeaseBytes(cmd), keyDilution, walletName, dataDir, client)
 		if err != nil {
 			reportErrorln(err)
 		}
@@ -1202,7 +1205,7 @@ var renewParticipationKeyCmd = &cobra.Command{
 	},
 }
 
-func generateAndRegisterPartKey(address string, currentRound, keyLastValidRound, txLastValidRound basics.Round, fee uint64, leaseBytes [32]byte, dilution uint64, wallet string, dataDir string, client libgoal.Client) error {
+func generateAndRegisterPartKey(cmd *cobra.Command, address string, currentRound, keyLastValidRound, txLastValidRound basics.Round, fee uint64, leaseBytes [32]byte, dilution uint64, wallet string, dataDir string, client libgoal.Client) error {
 	// Generate a participation keys database and install it
 	var part algodAcct.Participation
 	var keyPath string
@@ -1223,7 +1226,7 @@ func generateAndRegisterPartKey(address string, currentRound, keyLastValidRound,
 	// Now register it as our new online participation key
 	goOnline := true
 	txFile := ""
-	err = changeAccountOnlineStatus(address, goOnline, txFile, wallet, currentRound, txLastValidRound, fee, leaseBytes, dataDir, client)
+	err = changeAccountOnlineStatus(cmd, address, goOnline, txFile, wallet, currentRound, txLastValidRound, fee, leaseBytes, dataDir, client)
 	if err != nil {
 		os.Remove(keyPath)
 		fmt.Fprintf(os.Stderr, "  Error registering keys - deleting newly-generated key file: %s\n", keyPath)
@@ -1240,7 +1243,7 @@ var renewAllParticipationKeyCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		datadir.OnDataDirs(func(dataDir string) {
 			fmt.Printf("Renewing participation keys in %s...\n", dataDir)
-			err := renewPartKeysInDir(dataDir, roundLastValid, transactionFee, scLeaseBytes(cmd), keyDilution, walletName)
+			err := renewPartKeysInDir(cmd, dataDir, roundLastValid, transactionFee, scLeaseBytes(cmd), keyDilution, walletName)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "  Error: %s\n", err)
 			}
@@ -1248,7 +1251,7 @@ var renewAllParticipationKeyCmd = &cobra.Command{
 	},
 }
 
-func renewPartKeysInDir(dataDir string, lastValidRound basics.Round, fee uint64, leaseBytes [32]byte, dilution uint64, wallet string) error {
+func renewPartKeysInDir(cmd *cobra.Command, dataDir string, lastValidRound basics.Round, fee uint64, leaseBytes [32]byte, dilution uint64, wallet string) error {
 	client := ensureAlgodClient(dataDir)
 
 	// Build list of accounts to renew from all accounts with part keys present
@@ -1301,7 +1304,7 @@ func renewPartKeysInDir(dataDir string, lastValidRound basics.Round, fee uint64,
 		}
 
 		address := renewPart.Address
-		err = generateAndRegisterPartKey(address, currentRound, lastValidRound, txLastValidRound, fee, leaseBytes, dilution, wallet, dataDir, client)
+		err = generateAndRegisterPartKey(cmd, address, currentRound, lastValidRound, txLastValidRound, fee, leaseBytes, dilution, wallet, dataDir, client)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  Error renewing part key for account %s: %v\n", address, err)
 			anyErrors = true
@@ -1634,6 +1637,8 @@ var markNonparticipatingCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf(errorConstructingTX, err)
 		}
+
+		applyFeeAndTip(&utx, cmd, client, transactionFee)
 
 		utx.RekeyTo = parseRekey(rekeyToAddress)
 

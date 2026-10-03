@@ -19,9 +19,13 @@ package main
 import (
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -56,3 +60,95 @@ func TestIsPartkeyRegistered(t *testing.T) {
 		require.False(t, isPartkeyRegistered(model.Account{Participation: &other}, part), name)
 	}
 }
+
+func TestApplyFeeAndTip(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	t.Run("default fee is preserved when flag is not changed", func(t *testing.T) {
+		cmd := &cobra.Command{}
+		cmd.Flags().Uint64("fee", 0, "")
+		tx := transactions.Transaction{
+			Header: transactions.Header{
+				Fee: basics.MicroAlgos{Raw: 1000},
+			},
+		}
+		applyFeeAndTip(&tx, cmd, libgoal.Client{})
+		require.Equal(t, uint64(1000), tx.Fee.Raw)
+	})
+
+	t.Run("explicit zero fee overrides suggested fee", func(t *testing.T) {
+		cmd := &cobra.Command{}
+		cmd.Flags().Uint64("fee", 0, "")
+		err := cmd.Flags().Set("fee", "0")
+		require.NoError(t, err)
+
+		tx := transactions.Transaction{
+			Header: transactions.Header{
+				Fee: basics.MicroAlgos{Raw: 1000},
+			},
+		}
+		applyFeeAndTip(&tx, cmd, libgoal.Client{})
+		require.Equal(t, uint64(0), tx.Fee.Raw)
+	})
+
+	t.Run("explicit non-zero fee overrides suggested fee", func(t *testing.T) {
+		cmd := &cobra.Command{}
+		cmd.Flags().Uint64("fee", 0, "")
+		err := cmd.Flags().Set("fee", "2500")
+		require.NoError(t, err)
+
+		tx := transactions.Transaction{
+			Header: transactions.Header{
+				Fee: basics.MicroAlgos{Raw: 1000},
+			},
+		}
+		applyFeeAndTip(&tx, cmd, libgoal.Client{})
+		require.Equal(t, uint64(2500), tx.Fee.Raw)
+	})
+
+	t.Run("explicit fee and tip are combined", func(t *testing.T) {
+		cmd := &cobra.Command{}
+		cmd.Flags().Uint64("fee", 0, "")
+		cmd.Flags().Uint64("tip", 0, "")
+		err := cmd.Flags().Set("fee", "1000")
+		require.NoError(t, err)
+		err = cmd.Flags().Set("tip", "500")
+		require.NoError(t, err)
+
+		tx := transactions.Transaction{
+			Header: transactions.Header{
+				Fee: basics.MicroAlgos{Raw: 2000},
+			},
+		}
+		applyFeeAndTip(&tx, cmd, libgoal.Client{})
+		require.Equal(t, uint64(1500), tx.Fee.Raw)
+	})
+
+	t.Run("tip added to suggested fee when fee flag is not set", func(t *testing.T) {
+		cmd := &cobra.Command{}
+		cmd.Flags().Uint64("fee", 0, "")
+		cmd.Flags().Uint64("tip", 0, "")
+		err := cmd.Flags().Set("tip", "300")
+		require.NoError(t, err)
+
+		tx := transactions.Transaction{
+			Header: transactions.Header{
+				Fee: basics.MicroAlgos{Raw: 1000},
+			},
+		}
+		applyFeeAndTip(&tx, cmd, libgoal.Client{})
+		require.Equal(t, uint64(1300), tx.Fee.Raw)
+	})
+
+	t.Run("fallback explicitFee used when cmd is nil", func(t *testing.T) {
+		tx := transactions.Transaction{
+			Header: transactions.Header{
+				Fee: basics.MicroAlgos{Raw: 1000},
+			},
+		}
+		applyFeeAndTip(&tx, nil, libgoal.Client{}, 3000)
+		require.Equal(t, uint64(3000), tx.Fee.Raw)
+	})
+}
+
