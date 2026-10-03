@@ -43,12 +43,16 @@ type Request struct {
 	ExtraOpcodeBudget     int
 	TraceConfig           ExecTraceConfig
 	FixSigners            bool
+	StateOverrides        StateOverrides
 }
 
 // simulatorLedger patches the ledger interface to use a constant latest round.
 type simulatorLedger struct {
 	*data.Ledger
 	start basics.Round
+
+	// overlay, if non-nil, holds ledger state overridden by the simulation request
+	overlay *stateOverlay
 }
 
 // Latest is part of the ledger.Ledger interface.
@@ -59,6 +63,9 @@ func (l simulatorLedger) Latest() basics.Round {
 
 // LatestTotals is part of the ledger.Ledger interface.
 func (l simulatorLedger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
+	if l.overlay != nil {
+		return l.start, l.overlay.totals, nil
+	}
 	totals, err := l.Totals(l.start)
 	return l.start, totals, err
 }
@@ -121,7 +128,7 @@ type Simulator struct {
 // MakeSimulator creates a new simulator from a ledger.
 func MakeSimulator(ledger *data.Ledger, developerAPI bool) *Simulator {
 	return &Simulator{
-		ledger:       simulatorLedger{ledger, 0}, // start round to be specified in Simulate method
+		ledger:       simulatorLedger{Ledger: ledger}, // start round to be specified in Simulate method
 		developerAPI: developerAPI,
 	}
 }
@@ -299,7 +306,8 @@ func (s Simulator) simulateWithTracer(hdr bookkeeping.BlockHeader, txgroup []tra
 				// Otherwise lookup the sender's account and set the txn auth addr to the account's auth addr
 				if txnNeedsSyntheticSignature(*stxn) {
 					var data ledgercore.AccountData
-					data, _, _, err = s.ledger.LookupAccount(s.ledger.start, sender)
+					// Use LookupWithoutRewards, which applies any state overrides
+					data, _, err = s.ledger.LookupWithoutRewards(s.ledger.start, sender)
 					if err != nil {
 						return nil, err
 					}
@@ -389,6 +397,12 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 		return Result{}, err
 	}
 	nextBlock := bookkeeping.MakeBlock(prevBlockHdr)
+
+	// Apply state overrides before any evaluation takes place
+	s.ledger.overlay, err = s.ledger.buildStateOverlay(simulateRequest.StateOverrides, prevBlockHdr)
+	if err != nil {
+		return Result{}, err
+	}
 
 	group := transactions.WrapSignedTxnsWithAD(simulateRequest.TxnGroups[0])
 

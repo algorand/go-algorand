@@ -798,6 +798,72 @@ type ScratchChange struct {
 	Slot int `json:"slot"`
 }
 
+// SimulateAccountOverride Modifications to a single account's state. Omitted fields are left unchanged.
+type SimulateAccountOverride struct {
+	// Address The address of the account to override.
+	Address string `json:"address"`
+
+	// Balance If set, replaces the account's balance in microAlgos. Pending rewards are forfeited. Online stake is not overridden.
+	Balance *uint64 `json:"balance,omitempty"`
+}
+
+// SimulateAppOverride Modifications to a single application's state. If the application does not exist, it is created, in which case creator, approval-program, and clear-state-program are required. Omitted fields are left unchanged. Minimum balance requirements of affected accounts are updated, but their balances are not.
+type SimulateAppOverride struct {
+	// ApprovalProgram If set, replaces the approval program.
+	ApprovalProgram *[]byte `json:"approval-program,omitempty"`
+
+	// Boxes Boxes to create, or replace if they already exist. Other existing boxes are left unchanged.
+	Boxes *[]SimulateBoxOverride `json:"boxes,omitempty"`
+
+	// ClearStateProgram If set, replaces the clear state program.
+	ClearStateProgram *[]byte `json:"clear-state-program,omitempty"`
+
+	// Creator The application's creator. Required when creating an application. For an existing application, it must be omitted or match the existing creator.
+	Creator *string `json:"creator,omitempty"`
+
+	// DeleteBoxes Names of boxes to delete. Each box must exist and must not also be set in boxes.
+	DeleteBoxes *[][]byte `json:"delete-boxes,omitempty"`
+
+	// DeleteGlobalState Global state keys to delete. Each key must exist and must not also be set in global-state.
+	DeleteGlobalState *[][]byte `json:"delete-global-state,omitempty"`
+
+	// ExtraProgramPages If set, replaces the number of extra program pages.
+	ExtraProgramPages *uint32 `json:"extra-program-pages,omitempty"`
+
+	// FamilyBoxAccess If set, replaces whether apps with the same creator may read and write this app's boxes.
+	FamilyBoxAccess *bool `json:"family-box-access,omitempty"`
+
+	// ForeignBoxReads If set, replaces whether any app may read this app's boxes.
+	ForeignBoxReads *bool `json:"foreign-box-reads,omitempty"`
+
+	// GlobalState Represents a key-value store for use in an application.
+	GlobalState *TealKeyValueStore `json:"global-state,omitempty"`
+
+	// GlobalStateSchema Specifies maximums on the number of each type that may be stored.
+	GlobalStateSchema *ApplicationStateSchema `json:"global-state-schema,omitempty"`
+
+	// Id The ID of the application to override. A new application's ID must not be in the range of IDs that may be assigned to creatables made during simulation.
+	Id basics.AppIndex `json:"id"`
+
+	// LocalStateSchema Specifies maximums on the number of each type that may be stored.
+	LocalStateSchema *ApplicationStateSchema `json:"local-state-schema,omitempty"`
+
+	// SizeSponsor If set, replaces the account responsible for extra pages and global state minimum balance. The zero address makes the creator responsible.
+	SizeSponsor *string `json:"size-sponsor,omitempty"`
+
+	// Version If set, replaces the number of updates to the application programs.
+	Version *uint64 `json:"version,omitempty"`
+}
+
+// SimulateBoxOverride A box to create or replace during simulation.
+type SimulateBoxOverride struct {
+	// Name The box name, base64 encoded.
+	Name []byte `json:"name"`
+
+	// Value The box value, base64 encoded.
+	Value []byte `json:"value"`
+}
+
 // SimulateInitialStates Initial states of resources that were accessed during simulation.
 type SimulateInitialStates struct {
 	// AppInitialStates The initial states of accessed application before simulation. The order of this array is arbitrary.
@@ -827,6 +893,9 @@ type SimulateRequest struct {
 	// Round If provided, specifies the round preceding the simulation. State changes through this round will be used to run this simulation. Usually only the 4 most recent rounds will be available (controlled by the node config value MaxAcctLookback). If not specified, defaults to the latest available round.
 	Round *basics.Round `json:"round,omitempty"`
 
+	// StateOverrides Modifications to ledger state that are applied before simulation begins. Overrides are only visible to the simulation and are never persisted.
+	StateOverrides *SimulateStateOverrides `json:"state-overrides,omitempty"`
+
 	// TxnGroups The transaction groups to simulate.
 	TxnGroups []SimulateRequestTransactionGroup `json:"txn-groups"`
 }
@@ -835,6 +904,15 @@ type SimulateRequest struct {
 type SimulateRequestTransactionGroup struct {
 	// Txns An atomic transaction group.
 	Txns []json.RawMessage `json:"txns"`
+}
+
+// SimulateStateOverrides Modifications to ledger state that are applied before simulation begins. Overrides are only visible to the simulation and are never persisted.
+type SimulateStateOverrides struct {
+	// Accounts Account state overrides. Each address may appear at most once.
+	Accounts *[]SimulateAccountOverride `json:"accounts,omitempty"`
+
+	// Apps Application state overrides. Each application ID may appear at most once.
+	Apps *[]SimulateAppOverride `json:"apps,omitempty"`
 }
 
 // SimulateTraceConfig An object that configures simulation execution trace.
