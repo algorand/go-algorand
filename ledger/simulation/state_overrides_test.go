@@ -453,17 +453,6 @@ func TestStateOverrideAppValidation(t *testing.T) {
 			expectedError: "exceeds global schema",
 		},
 		{
-			name: "global value too long",
-			aidx: aidx,
-			override: simulation.AppOverride{
-				GlobalStateSchema: &basics.StateSchema{NumByteSlice: 1},
-				GlobalState: basics.TealKeyValue{
-					"a": {Type: basics.TealBytesType, Bytes: string(make([]byte, 200))},
-				},
-			},
-			expectedError: "exceeds maximum",
-		},
-		{
 			name: "global uint value with bytes",
 			aidx: aidx,
 			override: simulation.AppOverride{GlobalState: basics.TealKeyValue{
@@ -516,7 +505,7 @@ func TestStateOverrideAppValidation(t *testing.T) {
 			name:          "empty box name",
 			aidx:          aidx,
 			override:      simulation.AppOverride{Boxes: map[string][]byte{"": nil}},
-			expectedError: "box name length 0",
+			expectedError: "box name must not be empty",
 		},
 	}
 

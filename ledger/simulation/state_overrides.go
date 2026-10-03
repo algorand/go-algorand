@@ -29,9 +29,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/protocol"
 )
 
 // StateOverrides describes modifications to ledger state that are applied before any evaluation
@@ -62,7 +60,8 @@ type AccountOverride struct {
 // relevant accounts, but their balances are not, so an AccountOverride may be needed to keep them
 // above their minimum balance.
 //
-// Fields may only be set to non-default values if the simulation round's protocol supports them.
+// Overrides are not checked against the consensus parameters of the simulation round, so they may
+// use features or exceed limits that the protocol does not allow.
 type AppOverride struct {
 	// Creator is required when creating an application. For an existing application, it must be
 	// empty or match the existing creator.
@@ -164,7 +163,7 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 	}
 
 	for _, aidx := range sortedKeys(overrides.Apps) {
-		if err := l.overlayApp(o, getAccount, proto, prevHdr, aidx, overrides.Apps[aidx]); err != nil {
+		if err := l.overlayApp(o, getAccount, prevHdr, aidx, overrides.Apps[aidx]); err != nil {
 			return nil, err
 		}
 	}
@@ -205,7 +204,7 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 }
 
 func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Address) (ledgercore.AccountData, error),
-	proto config.ConsensusParams, prevHdr bookkeeping.BlockHeader, aidx basics.AppIndex, override AppOverride) error {
+	prevHdr bookkeeping.BlockHeader, aidx basics.AppIndex, override AppOverride) error {
 	if aidx == 0 {
 		return invalidOverride("app ID must be non-zero")
 	}
@@ -306,10 +305,7 @@ func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Addr
 		params.GlobalState[key] = value
 	}
 
-	if err = validateProtocolSupport(prevHdr.CurrentProtocol, aidx, params, override); err != nil {
-		return err
-	}
-	if err = validateAppParams(proto, aidx, params); err != nil {
+	if err = validateAppParams(aidx, params); err != nil {
 		return err
 	}
 
@@ -370,11 +366,8 @@ func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Addr
 	}
 	for _, name := range sortedKeys(override.Boxes) {
 		value := override.Boxes[name]
-		if len(name) == 0 || len(name) > proto.MaxAppKeyLen {
-			return invalidOverride("app %d box name length %d must be between 1 and %d", aidx, len(name), proto.MaxAppKeyLen)
-		}
-		if uint64(len(value)) > proto.MaxBoxSize {
-			return invalidOverride("app %d box %#x size %d exceeds maximum %d", aidx, name, len(value), proto.MaxBoxSize)
+		if len(name) == 0 {
+			return invalidOverride("app %d box name must not be empty", aidx)
 		}
 		key := apps.MakeBoxKey(uint64(aidx), name)
 		existing, err := l.Ledger.LookupKv(l.start, key)
@@ -404,59 +397,8 @@ func sizeSponsor(params basics.AppParams, creator basics.Address) basics.Address
 	return params.SizeSponsor
 }
 
-// validateProtocolSupport ensures an overridden app only uses features supported by proto, so that
-// simulation cannot start from state that is impossible in that protocol.
-func validateProtocolSupport(version protocol.ConsensusVersion, aidx basics.AppIndex, params basics.AppParams, override AppOverride) error {
-	proto := config.Consensus[version]
-	// A size sponsor can only be assigned by an app update that changes sizes
-	if !params.SizeSponsor.IsZero() && !proto.AppSizeUpdates {
-		return invalidOverride("app %d size sponsor is not supported by protocol %s", aidx, version)
-	}
-	for _, flag := range []struct {
-		field logic.AppParamsField
-		set   bool
-	}{
-		{logic.AppForeignBoxReads, params.ForeignBoxReads},
-		{logic.AppFamilyBoxAccess, params.FamilyBoxAccess},
-	} {
-		if !flag.set {
-			continue
-		}
-		spec, ok := logic.AppParamsFields.SpecByName(flag.field.String())
-		if !ok {
-			return fmt.Errorf("no field spec for %s", flag.field)
-		}
-		if proto.LogicSigVersion < spec.Version() {
-			return invalidOverride("app %d %s is not supported by protocol %s", aidx, flag.field, version)
-		}
-	}
-	if len(override.Boxes) > 0 && proto.MaxBoxSize == 0 {
-		return invalidOverride("app %d boxes are not supported by protocol %s", aidx, version)
-	}
-	return nil
-}
-
-func validateAppParams(proto config.ConsensusParams, aidx basics.AppIndex, params basics.AppParams) error {
-	if params.ExtraProgramPages > uint32(proto.MaxExtraAppProgramPages) {
-		return invalidOverride("app %d extra program pages %d exceeds maximum %d", aidx, params.ExtraProgramPages, proto.MaxExtraAppProgramPages)
-	}
-	if params.GlobalStateSchema.NumEntries() > proto.MaxGlobalSchemaEntries {
-		return invalidOverride("app %d global schema has %d entries, exceeding maximum %d", aidx, params.GlobalStateSchema.NumEntries(), proto.MaxGlobalSchemaEntries)
-	}
-	if params.LocalStateSchema.NumEntries() > proto.MaxLocalSchemaEntries {
-		return invalidOverride("app %d local schema has %d entries, exceeding maximum %d", aidx, params.LocalStateSchema.NumEntries(), proto.MaxLocalSchemaEntries)
-	}
-
-	pages := 1 + int(params.ExtraProgramPages)
-	if len(params.ApprovalProgram) > pages*proto.MaxAppProgramLen || len(params.ClearStateProgram) > pages*proto.MaxAppProgramLen ||
-		len(params.ApprovalProgram)+len(params.ClearStateProgram) > pages*proto.MaxAppTotalProgramLen {
-		return invalidOverride("app %d programs are too long for %d extra pages", aidx, params.ExtraProgramPages)
-	}
-
+func validateAppParams(aidx basics.AppIndex, params basics.AppParams) error {
 	for key, value := range params.GlobalState {
-		if len(key) > proto.MaxAppKeyLen {
-			return invalidOverride("app %d global key %#x length %d exceeds maximum %d", aidx, key, len(key), proto.MaxAppKeyLen)
-		}
 		switch value.Type {
 		case basics.TealUintType:
 			if len(value.Bytes) != 0 {
@@ -465,12 +407,6 @@ func validateAppParams(proto config.ConsensusParams, aidx basics.AppIndex, param
 		case basics.TealBytesType:
 			if value.Uint != 0 {
 				return invalidOverride("app %d global bytes value for key %#x must not have a uint", aidx, key)
-			}
-			if len(value.Bytes) > proto.MaxAppBytesValueLen {
-				return invalidOverride("app %d global value for key %#x length %d exceeds maximum %d", aidx, key, len(value.Bytes), proto.MaxAppBytesValueLen)
-			}
-			if len(key)+len(value.Bytes) > proto.MaxAppSumKeyValueLens {
-				return invalidOverride("app %d global key/value for key %#x total length %d exceeds maximum %d", aidx, key, len(key)+len(value.Bytes), proto.MaxAppSumKeyValueLens)
 			}
 		default:
 			return invalidOverride("app %d global value for key %#x has invalid type %d", aidx, key, value.Type)
