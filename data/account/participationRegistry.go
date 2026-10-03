@@ -368,9 +368,13 @@ const (
 		FROM StateProofKeys s
 		WHERE round=?
 		   AND pk IN (SELECT pk FROM Keysets WHERE participationID=?)`
-	deleteKeysets          = `DELETE FROM Keysets WHERE pk=?`
-	deleteRolling          = `DELETE FROM Rolling WHERE pk=?`
-	deleteStateProofByPK   = `DELETE FROM StateProofKeys WHERE pk=?`
+	deleteKeysets            = `DELETE FROM Keysets WHERE pk=?`
+	deleteRolling            = `DELETE FROM Rolling WHERE pk=?`
+	deleteStateProofByPK     = `DELETE FROM StateProofKeys WHERE pk=?`
+	updateEffectiveRoundsSQL = `UPDATE Rolling
+		 SET effectiveFirstRound=?,
+		     effectiveLastRound=?
+		 WHERE pk IN (SELECT pk FROM Keysets WHERE participationID=?)`
 	updateRollingFieldsSQL = `UPDATE Rolling
 		 SET lastVoteRound=?,
 		     lastBlockProposalRound=?,
@@ -408,7 +412,8 @@ func dbSchemaUpgrade0(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 type participationDB struct {
 	cache map[ParticipationID]ParticipationRecord
 
-	// dirty marked on Record(), DeleteExpired(), cleared on Register(), Delete(), Flush()
+	// dirty marked on Record(), DeleteExpired(); cleared on Delete(), Flush(),
+	// and when registerOp evicts a record whose Rolling row has vanished
 	dirty map[ParticipationID]struct{}
 
 	log   logging.Logger
@@ -610,14 +615,29 @@ func (db *participationDB) DeleteExpired(latestRound basics.Round, agreementProt
 		}
 	}
 
-	// mark updated records as dirty, so they will be flushed by a call to FlushRegistry after each round
-	db.mutex.Lock()
-	for _, r := range updated {
-		db.dirty[r.ParticipationID] = struct{}{}
-		db.cache[r.ParticipationID] = r
-	}
-	db.mutex.Unlock()
+	db.applyVotingTruncation(updated)
 	return nil
+}
+
+// applyVotingTruncation installs the truncated voting secrets that DeleteExpired
+// computed from its GetAll snapshot, and marks the records dirty so the next
+// FlushRegistry persists them. The snapshot is truncated without holding the
+// registry lock, so a record may since have been deleted or updated: writing an
+// absent record back would hand its secrets to AccountManager.Keys until the node
+// restarts, and overwriting a present one would revert a concurrent Record or
+// Register, so only Voting is merged into what the cache holds now.
+func (db *participationDB) applyVotingTruncation(updated []ParticipationRecord) {
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
+	for _, r := range updated {
+		cached, ok := db.cache[r.ParticipationID]
+		if !ok {
+			continue
+		}
+		cached.Voting = r.Voting
+		db.cache[r.ParticipationID] = cached
+		db.dirty[r.ParticipationID] = struct{}{}
+	}
 }
 
 // scanRecords is a helper to manage scanning participation records.
@@ -867,6 +887,29 @@ func updateRollingFields(ctx context.Context, tx *sql.Tx, record ParticipationRe
 		return err
 	}
 
+	return rollingRowsAffected(result)
+}
+
+// updateEffectiveRounds sets only the effective rounds, which is all Register owns.
+// The other rolling fields belong to Record and DeleteExpired, and reach the database
+// through flushOp from the live cache. Writing them from Register's snapshot would
+// revert whatever landed after that snapshot was taken.
+func updateEffectiveRounds(ctx context.Context, tx *sql.Tx, record ParticipationRecord) error {
+	result, err := tx.ExecContext(ctx, updateEffectiveRoundsSQL,
+		record.EffectiveFirst,
+		record.EffectiveLast,
+		record.ParticipationID[:])
+
+	if err != nil {
+		return err
+	}
+
+	return rollingRowsAffected(result)
+}
+
+// rollingRowsAffected turns the row count of a Rolling update into the sentinel
+// errors its callers switch on.
+func rollingRowsAffected(result sql.Result) error {
 	numRows, err := result.RowsAffected()
 	if err != nil {
 		return err
@@ -938,19 +981,37 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 	}
 
 	if len(updated) != 0 {
+		// Update the cache before queuing the write. The queue has one consumer, so a
+		// flushOp queued after registerOp applies after it, and would otherwise write
+		// pre-registration effective rounds read from a cache not yet updated.
+		db.applyRegistration(updated)
 		db.writeQueue <- makeOpRequest(&registerOp{updated: updated})
-
-		db.mutex.Lock()
-		for id, record := range updated {
-			delete(db.dirty, id)
-			db.cache[id] = record.ParticipationRecord
-		}
-		db.mutex.Unlock()
 	}
 
 	db.log.Infof("Registered key (%s) for account (%s) first valid (%d) last valid (%d)\n",
 		id, recordToRegister.Account, recordToRegister.FirstValid, recordToRegister.LastValid)
 	return nil
+}
+
+// applyRegistration installs the effective rounds that Register computed from its
+// snapshot. Register builds its update without holding the registry lock, so the
+// same rule as applyVotingTruncation applies: skip records deleted in the meantime,
+// and merge only the fields Register changed.
+//
+// The dirty flag is left alone: registerOp persists the effective rounds only, so it
+// says nothing about the fields the flag tracks.
+func (db *participationDB) applyRegistration(updated map[ParticipationID]updatingParticipationRecord) {
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
+	for id, record := range updated {
+		cached, ok := db.cache[id]
+		if !ok {
+			continue
+		}
+		cached.EffectiveFirst = record.ParticipationRecord.EffectiveFirst
+		cached.EffectiveLast = record.ParticipationRecord.EffectiveLast
+		db.cache[id] = cached
+	}
 }
 
 func (db *participationDB) Record(account basics.Address, round basics.Round, participationAction ParticipationAction) error {
