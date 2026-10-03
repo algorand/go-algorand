@@ -14,7 +14,7 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
-	github.com/algorand/falcon v0.1.0 // indirect
+	github.com/algorand/falcon v0.2.0 // indirect
 	github.com/algorand/go-codec/codec v1.1.10 // indirect
 	github.com/algorand/go-sumhash v0.1.0 // indirect
 	github.com/algorand/msgp v1.1.64 // indirect

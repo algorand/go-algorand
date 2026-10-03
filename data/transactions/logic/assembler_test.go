@@ -438,6 +438,14 @@ dup; dup
 falcon_verify
 `
 
+// falcon_verify gained a configuration immediate in v14, so it is spelled
+// differently from v14 on.
+const fvConfigNonsense = `
+pushbytes 0xabcd
+dup; dup
+falcon_verify FalconDet512
+`
+
 const sumhashNonsense = `
 pushbytes 0x0123
 sumhash512
@@ -473,10 +481,13 @@ const v11Nonsense = v10Nonsense + incentiveNonsense + mimcNonsense
 
 const v12Nonsense = v11Nonsense + fvNonsense
 
-const v13Nonsense = v12Nonsense + sha512Nonsense + poseidon2Nonsense + foreignBoxNonsense
+const v13Extras = sha512Nonsense + poseidon2Nonsense + foreignBoxNonsense
 
-// sumhash512 is experimental, held back to v14 while v13 is released.
-const v14Nonsense = v13Nonsense + sumhashNonsense
+const v13Nonsense = v12Nonsense + v13Extras
+
+// sumhash512 is experimental, held back to v14 while v13 is released. v14 also
+// substitutes falcon_verify's configurable form for the bare one.
+const v14Nonsense = v11Nonsense + fvConfigNonsense + v13Extras + sumhashNonsense
 
 const foreignBoxNonsense = `
 pushint 1
@@ -532,9 +543,16 @@ const v13BaseCompiled = "2004010002b7a60c26050242420c68656c6c6f20776f726c6421070
 
 const v13Compiled = v13BaseCompiled + sha512Compiled + poseidon2Compiled + foreignBoxCompiled
 
+// falcon_verify takes a configuration immediate from v14 on, so v14 substitutes
+// the configured form for the bare one that ends the v13 base.
+const fvConfigCompiled = "8002abcd49498501"
+
+var v13PreFvCompiled = strings.TrimSuffix(v13BaseCompiled, fvCompiled)
+
 // v14 adds no encoding changes over v13, so its base is v13's program with the
 // experimental sumhash512 opcode (held back from the v13 release) appended.
-const v14Compiled = v13Compiled + sumhashCompiled
+var v14Compiled = v13PreFvCompiled + fvConfigCompiled +
+	sha512Compiled + poseidon2Compiled + foreignBoxCompiled + sumhashCompiled
 
 var nonsense = map[uint64]string{
 	1:  v1Nonsense,

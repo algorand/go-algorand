@@ -71,7 +71,7 @@ const NetIDVerificationTagMaxSize = 215
 const ProposalPayloadTagMaxSize = 0x501e3a
 
 // StateProofSigTagMaxSize is the maximum size of a StateProofSigTag message
-const StateProofSigTagMaxSize = 6378
+const StateProofSigTagMaxSize = 6263
 
 // TopicMsgRespTagMaxSize is the maximum size of a TopicMsgRespTag message
 // This is a response to a topic message request (either UE or MI) and the largest possible
