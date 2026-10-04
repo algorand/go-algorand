@@ -3344,6 +3344,16 @@ byte "bvalue"
 				}},
 				Boxes: &[]model.SimulateBoxOverride{{Name: []byte("bname"), Value: []byte("bvalue")}},
 			}},
+			Blocks: &[]model.SimulateBlockOverride{{
+				Round:          hdr.Round,
+				Timestamp:      omitEmpty(int64(1_700_000_000)),
+				Seed:           &[]byte{31: 1},
+				Proposer:       omitEmpty(creator.Address().String()),
+				FeeSink:        omitEmpty(hdr.FeeSink.String()),
+				FeesCollected:  omitEmpty(uint64(1)),
+				Bonus:          omitEmpty(uint64(2)),
+				ProposerPayout: omitEmpty(uint64(3)),
+			}},
 		}
 	}
 
@@ -3499,6 +3509,35 @@ byte "bvalue"
 						(*(*o.Accounts)[0].Apps)[0].DeleteKeyValue = &[][]byte{[]byte("k"), []byte("k")}
 					},
 					expected: "local state has duplicate deleted key",
+				},
+				{
+					name: "duplicate block",
+					modify: func(o *model.SimulateStateOverrides) {
+						*o.Blocks = append(*o.Blocks, (*o.Blocks)[0])
+					},
+					expected: "duplicate block",
+				},
+				{
+					name: "short seed",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*o.Blocks)[0].Seed = &[]byte{1}
+					},
+					expected: "seed must be 32 bytes",
+				},
+				{
+					name: "bad proposer",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*o.Blocks)[0].Proposer = omitEmpty("not an address")
+					},
+					expected: "proposer",
+				},
+				{
+					// Rejected by the simulator rather than during conversion
+					name: "future block",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*o.Blocks)[0].Round = hdr.Round + 1
+					},
+					expected: "after the start round",
 				},
 				{
 					// Rejected by the simulator rather than during conversion

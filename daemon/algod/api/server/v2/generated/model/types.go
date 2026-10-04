@@ -975,6 +975,33 @@ type SimulateAssetOverride struct {
 	UrlB64 *[]byte `json:"url-b64,omitempty"`
 }
 
+// SimulateBlockOverride Modifications to the header of a block at or before the round that simulation starts from. Omitted fields are left unchanged. Overridden headers are visible to the block opcode. The header of the round that simulation starts from is the previous header of the simulated block, so its overrides also affect that block: global LatestTimestamp is its timestamp, the simulated block's timestamp is no earlier than it, the simulated block's bonus is derived from its bonus, and fees are paid to its fee sink.
+type SimulateBlockOverride struct {
+	// Bonus If set, replaces the block's bonus, in microAlgos.
+	Bonus *uint64 `json:"bonus,omitempty"`
+
+	// FeeSink If set, replaces the block's fee sink.
+	FeeSink *string `json:"fee-sink,omitempty"`
+
+	// FeesCollected If set, replaces the fees collected in the block, in microAlgos.
+	FeesCollected *uint64 `json:"fees-collected,omitempty"`
+
+	// Proposer If set, replaces the block's proposer.
+	Proposer *string `json:"proposer,omitempty"`
+
+	// ProposerPayout If set, replaces the amount paid to the block's proposer, in microAlgos.
+	ProposerPayout *uint64 `json:"proposer-payout,omitempty"`
+
+	// Round The round of the block to override. It must be at or before the round that simulation starts from.
+	Round basics.Round `json:"round"`
+
+	// Seed If set, replaces the block's 32 byte seed.
+	Seed *[]byte `json:"seed,omitempty"`
+
+	// Timestamp If set, replaces the block's timestamp, in seconds since the epoch. It must not be negative.
+	Timestamp *int64 `json:"timestamp,omitempty"`
+}
+
 // SimulateBoxOverride A box to create or replace during simulation.
 type SimulateBoxOverride struct {
 	// Name The box name, base64 encoded.
@@ -1036,6 +1063,9 @@ type SimulateStateOverrides struct {
 
 	// Assets Asset state overrides. Each asset ID may appear at most once.
 	Assets *[]SimulateAssetOverride `json:"assets,omitempty"`
+
+	// Blocks Block header overrides. Each round may appear at most once.
+	Blocks *[]SimulateBlockOverride `json:"blocks,omitempty"`
 }
 
 // SimulateTraceConfig An object that configures simulation execution trace.

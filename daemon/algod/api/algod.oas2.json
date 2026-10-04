@@ -3340,6 +3340,63 @@
           "items": {
             "$ref": "#/definitions/SimulateAssetOverride"
           }
+        },
+        "blocks": {
+          "description": "Block header overrides. Each round may appear at most once.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulateBlockOverride"
+          }
+        }
+      }
+    },
+    "SimulateBlockOverride": {
+      "description": "Modifications to the header of a block at or before the round that simulation starts from. Omitted fields are left unchanged. Overridden headers are visible to the block opcode. The header of the round that simulation starts from is the previous header of the simulated block, so its overrides also affect that block: global LatestTimestamp is its timestamp, the simulated block's timestamp is no earlier than it, the simulated block's bonus is derived from its bonus, and fees are paid to its fee sink.",
+      "type": "object",
+      "required": ["round"],
+      "properties": {
+        "round": {
+          "description": "The round of the block to override. It must be at or before the round that simulation starts from.",
+          "type": "integer",
+          "x-go-type": "basics.Round"
+        },
+        "timestamp": {
+          "description": "If set, replaces the block's timestamp, in seconds since the epoch. It must not be negative.",
+          "type": "integer",
+          "format": "int64"
+        },
+        "seed": {
+          "description": "If set, replaces the block's 32 byte seed.",
+          "type": "string",
+          "format": "byte"
+        },
+        "proposer": {
+          "description": "If set, replaces the block's proposer.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
+        "fee-sink": {
+          "description": "If set, replaces the block's fee sink.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
+        "fees-collected": {
+          "description": "If set, replaces the fees collected in the block, in microAlgos.",
+          "type": "integer",
+          "format": "uint64",
+          "x-algorand-format": "uint64"
+        },
+        "bonus": {
+          "description": "If set, replaces the block's bonus, in microAlgos.",
+          "type": "integer",
+          "format": "uint64",
+          "x-algorand-format": "uint64"
+        },
+        "proposer-payout": {
+          "description": "If set, replaces the amount paid to the block's proposer, in microAlgos.",
+          "type": "integer",
+          "format": "uint64",
+          "x-algorand-format": "uint64"
         }
       }
     },

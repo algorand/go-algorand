@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
@@ -1708,4 +1709,167 @@ int %[5]d
 	circulation, err := env.Ledger.OnlineCirculation(brnd, start+1)
 	require.NoError(t, err)
 	require.Equal(t, realCirculation, circulation)
+}
+
+func TestStateOverrideBlockVisibleToAVM(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+	// Ensure there is an earlier round available to the block opcode
+	env.AdvanceRounds(2)
+
+	sender := env.Accounts[0]
+	feeSink := env.Accounts[1].Addr
+	proposer := env.Accounts[2].Addr
+	prevProposer := env.Accounts[3].Addr
+	start := env.Ledger.Latest()
+	realHdr, err := env.Ledger.BlockHdr(start)
+	require.NoError(t, err)
+
+	var seed committee.Seed
+	crypto.RandBytes(seed[:])
+	timestamp := int64(1_700_000_000)
+	prevTimestamp := int64(1_600_000_000)
+	feesCollected := basics.MicroAlgos{Raw: 1_234}
+	bonus := basics.MicroAlgos{Raw: 5_678}
+	payout := basics.MicroAlgos{Raw: 9_012}
+	overrides := simulation.StateOverrides{Blocks: map[basics.Round]simulation.BlockOverride{
+		start: {
+			TimeStamp:      &timestamp,
+			Seed:           &seed,
+			Proposer:       &proposer,
+			FeeSink:        &feeSink,
+			FeesCollected:  &feesCollected,
+			Bonus:          &bonus,
+			ProposerPayout: &payout,
+		},
+		start - 1: {TimeStamp: &prevTimestamp, Proposer: &prevProposer},
+	}}
+
+	appCall := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:   protocol.ApplicationCallTx,
+		Sender: sender.Addr,
+		ApprovalProgram: fmt.Sprintf(`#pragma version 11
+int %[1]d
+block BlkTimestamp
+int %[2]d
+==
+assert
+global LatestTimestamp
+int %[2]d
+==
+assert
+int %[1]d
+block BlkSeed
+byte 0x%[3]x
+==
+assert
+int %[1]d
+block BlkProposer
+addr %[4]s
+==
+assert
+int %[1]d
+block BlkFeeSink
+addr %[5]s
+==
+assert
+int %[1]d
+block BlkFeesCollected
+int %[6]d
+==
+assert
+int %[1]d
+block BlkBonus
+int %[7]d
+==
+assert
+int %[1]d
+block BlkProposerPayout
+int %[8]d
+==
+assert
+int %[9]d
+block BlkTimestamp
+int %[10]d
+==
+assert
+int %[9]d
+block BlkProposer
+addr %[11]s
+==`, start, timestamp, seed[:], proposer, feeSink, feesCollected.Raw, bonus.Raw, payout.Raw,
+			start-1, prevTimestamp, prevProposer),
+		ClearStateProgram: "#pragma version 11\nint 1",
+	})
+	// Make the start round available to the block opcode
+	appCall.FirstValid = start + 1
+	txn := appCall.Txn().Sign(sender.Sk)
+
+	s := simulation.MakeSimulator(env.Ledger, false)
+
+	result, err := s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{{txn}}})
+	require.NoError(t, err)
+	require.Contains(t, result.TxnGroups[0].FailureMessage, "assert failed")
+
+	result, err = s.Simulate(simulation.Request{
+		TxnGroups:      [][]transactions.SignedTxn{{txn}},
+		StateOverrides: overrides,
+	})
+	require.NoError(t, err)
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+
+	// The simulated block follows from the overridden start round header
+	proto := env.TxnInfo.CurrentProtocolParams()
+	block := result.Block.Block()
+	require.GreaterOrEqual(t, block.TimeStamp, timestamp)
+	require.LessOrEqual(t, block.TimeStamp, timestamp+proto.MaxTimestampIncrement)
+	require.Equal(t, feeSink, block.FeeSink)
+	feeSinkData, ok := result.Block.Delta().Accts.GetData(feeSink)
+	require.True(t, ok)
+	require.Equal(t, env.Accounts[1].AcctData.MicroAlgos.Raw+txn.Txn.Fee.Raw, feeSinkData.MicroAlgos.Raw)
+
+	// The real ledger is unaffected
+	hdr, err := env.Ledger.BlockHdr(start)
+	require.NoError(t, err)
+	require.Equal(t, realHdr, hdr)
+}
+
+func TestStateOverrideBlockValidation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	sender := env.Accounts[0]
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Addr,
+		Receiver: sender.Addr,
+	}).Txn().Sign(sender.Sk)
+
+	start := env.Ledger.Latest()
+	negative := int64(-1)
+	zero := int64(0)
+	cases := []struct {
+		name     string
+		blocks   map[basics.Round]simulation.BlockOverride
+		expected string
+	}{
+		{"future round", map[basics.Round]simulation.BlockOverride{start + 1: {TimeStamp: &zero}}, "after the start round"},
+		{"negative timestamp", map[basics.Round]simulation.BlockOverride{start: {TimeStamp: &negative}}, "must not be negative"},
+	}
+	s := simulation.MakeSimulator(env.Ledger, false)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := s.Simulate(simulation.Request{
+				TxnGroups:      [][]transactions.SignedTxn{{txn}},
+				StateOverrides: simulation.StateOverrides{Blocks: tc.blocks},
+			})
+			require.ErrorAs(t, err, &simulation.InvalidRequestError{})
+			require.ErrorContains(t, err, tc.expected)
+		})
+	}
 }

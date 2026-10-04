@@ -396,13 +396,18 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	nextBlock := bookkeeping.MakeBlock(prevBlockHdr)
 
 	// Apply state overrides before any evaluation takes place
 	s.ledger.overlay, err = s.ledger.buildStateOverlay(simulateRequest.StateOverrides, prevBlockHdr)
 	if err != nil {
 		return Result{}, err
 	}
+	// Make the next block from the start round's header as overridden
+	prevBlockHdr, err = s.ledger.BlockHdr(s.ledger.start)
+	if err != nil {
+		return Result{}, err
+	}
+	nextBlock := bookkeeping.MakeBlock(prevBlockHdr)
 
 	group := transactions.WrapSignedTxnsWithAD(simulateRequest.TxnGroups[0])
 

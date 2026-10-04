@@ -35,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -687,7 +688,66 @@ func convertStateOverrides(overrides *model.SimulateStateOverrides) (simulation.
 		}
 	}
 
+	if overrides.Blocks != nil && len(*overrides.Blocks) > 0 {
+		result.Blocks = make(map[basics.Round]simulation.BlockOverride, len(*overrides.Blocks))
+		for _, block := range *overrides.Blocks {
+			if _, ok := result.Blocks[block.Round]; ok {
+				return simulation.StateOverrides{}, fmt.Errorf("invalid state override: duplicate block %d", block.Round)
+			}
+			override, err := convertBlockOverride(block)
+			if err != nil {
+				return simulation.StateOverrides{}, fmt.Errorf("invalid state override: block %d: %w", block.Round, err)
+			}
+			result.Blocks[block.Round] = override
+		}
+	}
+
 	return result, nil
+}
+
+func convertBlockOverride(block model.SimulateBlockOverride) (simulation.BlockOverride, error) {
+	var override simulation.BlockOverride
+	override.TimeStamp = block.Timestamp
+	if block.Seed != nil {
+		var seed committee.Seed
+		if len(*block.Seed) != len(seed) {
+			return simulation.BlockOverride{}, fmt.Errorf("seed must be %d bytes, not %d", len(seed), len(*block.Seed))
+		}
+		copy(seed[:], *block.Seed)
+		override.Seed = &seed
+	}
+	addrs := []struct {
+		name  string
+		value *string
+		dest  **basics.Address
+	}{
+		{"proposer", block.Proposer, &override.Proposer},
+		{"fee sink", block.FeeSink, &override.FeeSink},
+	}
+	for _, a := range addrs {
+		if a.value == nil {
+			continue
+		}
+		addr, err := basics.UnmarshalChecksumAddress(*a.value)
+		if err != nil {
+			return simulation.BlockOverride{}, fmt.Errorf("%s %q: %w", a.name, *a.value, err)
+		}
+		*a.dest = &addr
+	}
+	amounts := []struct {
+		value *uint64
+		dest  **basics.MicroAlgos
+	}{
+		{block.FeesCollected, &override.FeesCollected},
+		{block.Bonus, &override.Bonus},
+		{block.ProposerPayout, &override.ProposerPayout},
+	}
+	for _, a := range amounts {
+		if a.value != nil {
+			*a.dest = &basics.MicroAlgos{Raw: *a.value}
+		}
+	}
+	return override, nil
 }
 
 func convertAccountOverride(acct model.SimulateAccountOverride) (simulation.AccountOverride, error) {

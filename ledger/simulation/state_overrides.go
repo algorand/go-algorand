@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
@@ -42,6 +43,25 @@ type StateOverrides struct {
 	Accounts map[basics.Address]AccountOverride
 	Apps     map[basics.AppIndex]AppOverride
 	Assets   map[basics.AssetIndex]AssetOverride
+	Blocks   map[basics.Round]BlockOverride
+}
+
+// BlockOverride describes modifications to the header of a block at or before the start round.
+// Nil fields are left unchanged. Overridden headers are seen by the block opcode, and by anything
+// else that reads past block headers, such as the validation of heartbeats.
+//
+// The start round's header is the previous header of the block being simulated, so its overrides
+// also affect that block where it is derived from the previous header: global LatestTimestamp is
+// TimeStamp, the simulated block's timestamp is no earlier than it, its bonus is derived from
+// Bonus, and its fees are paid to FeeSink.
+type BlockOverride struct {
+	TimeStamp      *int64
+	Seed           *committee.Seed
+	Proposer       *basics.Address
+	FeeSink        *basics.Address
+	FeesCollected  *basics.MicroAlgos
+	Bonus          *basics.MicroAlgos
+	ProposerPayout *basics.MicroAlgos
 }
 
 // AccountOverride describes modifications to a single account's state. Nil fields are left unchanged.
@@ -227,6 +247,8 @@ type stateOverlay struct {
 	localStates map[localStateKey]*basics.AppLocalState
 	// kvs holds overridden boxes, where a nil value denotes a deleted box
 	kvs map[string][]byte
+	// blocks holds overrides of block headers at or before the start round
+	blocks map[basics.Round]BlockOverride
 	// totals are the start round totals, adjusted to reflect the overridden accounts
 	totals ledgercore.AccountTotals
 
@@ -252,7 +274,7 @@ func sortedKeys[K cmp.Ordered, V any](m map[K]V) []K {
 // buildStateOverlay computes the ledger state that results from applying overrides to the state
 // as of l.start. It returns nil if there are no overrides.
 func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr bookkeeping.BlockHeader) (*stateOverlay, error) {
-	if len(overrides.Accounts) == 0 && len(overrides.Apps) == 0 && len(overrides.Assets) == 0 {
+	if len(overrides.Accounts) == 0 && len(overrides.Apps) == 0 && len(overrides.Assets) == 0 && len(overrides.Blocks) == 0 {
 		return nil, nil
 	}
 
@@ -269,7 +291,14 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 		holdings:    make(map[holdingKey]basics.AssetHolding),
 		localStates: make(map[localStateKey]*basics.AppLocalState),
 		kvs:         make(map[string][]byte),
+		blocks:      make(map[basics.Round]BlockOverride),
 		online:      make(map[basics.Address]basics.OnlineAccountData),
+	}
+
+	for _, rnd := range sortedKeys(overrides.Blocks) {
+		if err := l.overlayBlock(o, rnd, overrides.Blocks[rnd]); err != nil {
+			return nil, err
+		}
 	}
 
 	// original holds the unmodified data of every account in o.accounts, to adjust totals
@@ -407,6 +436,45 @@ func (l simulatorLedger) overlayOnline(o *stateOverlay, overrides StateOverrides
 		return invalidOverride("account balances overflow online circulation")
 	}
 	return nil
+}
+
+func (l simulatorLedger) overlayBlock(o *stateOverlay, rnd basics.Round, override BlockOverride) error {
+	if rnd > l.start {
+		return invalidOverride("cannot override block %d: it is after the start round %d", rnd, l.start)
+	}
+	if _, err := l.Ledger.BlockHdr(rnd); err != nil {
+		return invalidOverride("cannot override block %d: %v", rnd, err)
+	}
+	if override.TimeStamp != nil && *override.TimeStamp < 0 {
+		return invalidOverride("block %d timestamp %d must not be negative", rnd, *override.TimeStamp)
+	}
+	o.blocks[rnd] = override
+	return nil
+}
+
+// apply applies the override to hdr.
+func (override BlockOverride) apply(hdr *bookkeeping.BlockHeader) {
+	if override.TimeStamp != nil {
+		hdr.TimeStamp = *override.TimeStamp
+	}
+	if override.Seed != nil {
+		hdr.Seed = *override.Seed
+	}
+	if override.Proposer != nil {
+		hdr.Proposer = *override.Proposer
+	}
+	if override.FeeSink != nil {
+		hdr.FeeSink = *override.FeeSink
+	}
+	if override.FeesCollected != nil {
+		hdr.FeesCollected = *override.FeesCollected
+	}
+	if override.Bonus != nil {
+		hdr.Bonus = *override.Bonus
+	}
+	if override.ProposerPayout != nil {
+		hdr.ProposerPayout = *override.ProposerPayout
+	}
 }
 
 // overlayAccountFields applies the overrides of an account's own fields, other than its balance.
@@ -915,6 +983,19 @@ func applyKeyValueOverride(kv basics.TealKeyValue, set basics.TealKeyValue, del 
 		kv[key] = value
 	}
 	return kv, nil
+}
+
+// BlockHdr is part of the ledger.Ledger interface.
+// We override this to apply any block header overrides.
+func (l simulatorLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+	hdr, err := l.Ledger.BlockHdr(rnd)
+	if err != nil || l.overlay == nil {
+		return hdr, err
+	}
+	if override, ok := l.overlay.blocks[rnd]; ok {
+		override.apply(&hdr)
+	}
+	return hdr, nil
 }
 
 // LookupWithoutRewards is part of the ledger.Ledger interface.
