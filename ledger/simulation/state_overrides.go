@@ -19,6 +19,7 @@ package simulation
 import (
 	"bytes"
 	"cmp"
+	"errors"
 	"fmt"
 	"maps"
 	"math"
@@ -26,6 +27,7 @@ import (
 
 	"github.com/algorand/avm-abi/apps"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
@@ -47,8 +49,10 @@ type AccountOverride struct {
 	// Balance, if set, replaces the account's balance. Pending rewards are forfeited, so the
 	// account's balance at the start of simulation is exactly this value.
 	//
-	// Online stake is not overridden, so for an online account, the voting balance (e.g. as seen
-	// by voter_params_get) and the online circulation still reflect the original balance.
+	// If Balance or any of the consensus participation fields below are set, the account is
+	// treated as though it has been in its overridden state since the balance round used for
+	// agreement. Its online data (e.g. as seen by voter_params_get) and its contribution to the
+	// online stake (e.g. as seen by online_stake) reflect the overridden account.
 	Balance *basics.MicroAlgos
 
 	// AuthAddr, if set, replaces the address whose signature authorizes the account's
@@ -57,10 +61,8 @@ type AccountOverride struct {
 
 	// Status, VotingData fields, IncentiveEligible, LastProposed and LastHeartbeat replace the
 	// account's consensus participation state. The account's balance moves between the online,
-	// offline and not participating totals if its status changes.
-	//
-	// As with Balance, this does not override the online state used for agreement, which is
-	// looked up as of the balance round (e.g. as seen by voter_params_get and online_stake).
+	// offline and not participating totals if its status changes, and as with Balance, the
+	// overridden state is also used for agreement.
 	Status            *basics.Status
 	VoteID            *crypto.OneTimeSignatureVerifier
 	SelectionID       *crypto.VRFVerifier
@@ -227,6 +229,16 @@ type stateOverlay struct {
 	kvs map[string][]byte
 	// totals are the start round totals, adjusted to reflect the overridden accounts
 	totals ledgercore.AccountTotals
+
+	// balanceRound is the round whose online state agreement uses for the round being simulated
+	balanceRound basics.Round
+	// online holds the online data of accounts whose agreement state is overridden. Accounts
+	// that are not online have empty online data.
+	online map[basics.Address]basics.OnlineAccountData
+	// onlineAdded and onlineRemoved are the stake that the accounts in online add to and remove
+	// from the online circulation at balanceRound
+	onlineAdded   basics.MicroAlgos
+	onlineRemoved basics.MicroAlgos
 }
 
 func invalidOverride(format string, args ...any) error {
@@ -257,6 +269,7 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 		holdings:    make(map[holdingKey]basics.AssetHolding),
 		localStates: make(map[localStateKey]*basics.AppLocalState),
 		kvs:         make(map[string][]byte),
+		online:      make(map[basics.Address]basics.OnlineAccountData),
 	}
 
 	// original holds the unmodified data of every account in o.accounts, to adjust totals
@@ -330,7 +343,70 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 	}
 	o.totals = totals
 
+	if err = l.overlayOnline(o, overrides, proto, prevHdr); err != nil {
+		return nil, err
+	}
+
 	return o, nil
+}
+
+// affectsAgreement reports whether the override modifies state that agreement uses.
+func (override AccountOverride) affectsAgreement() bool {
+	return override.Balance != nil || override.Status != nil || override.VoteID != nil ||
+		override.SelectionID != nil || override.StateProofID != nil || override.VoteFirstValid != nil ||
+		override.VoteLastValid != nil || override.VoteKeyDilution != nil || override.IncentiveEligible != nil ||
+		override.LastProposed != nil || override.LastHeartbeat != nil
+}
+
+// overlayOnline computes the online state used for agreement, for accounts whose overrides affect
+// it. Such accounts are treated as though they have been in their overridden state since the
+// balance round.
+func (l simulatorLedger) overlayOnline(o *stateOverlay, overrides StateOverrides, proto config.ConsensusParams, prevHdr bookkeeping.BlockHeader) error {
+	if !slices.ContainsFunc(slices.Collect(maps.Values(overrides.Accounts)), AccountOverride.affectsAgreement) {
+		return nil
+	}
+
+	// Match the evaluator's choice of balance round for the round being simulated
+	current := l.start + 1
+	paramsHdr, err := l.Ledger.BlockHdr(agreement.ParamsRound(current))
+	if err != nil {
+		return err
+	}
+	o.balanceRound = agreement.BalanceRound(current, config.Consensus[paramsHdr.CurrentProtocol])
+
+	balanceHdr, err := l.Ledger.BlockHdr(o.balanceRound)
+	if err != nil {
+		return err
+	}
+	// Match the ledger's exclusion of expired stake from the online circulation
+	excludeExpired := config.Consensus[balanceHdr.CurrentProtocol].ExcludeExpiredCirculation && o.balanceRound != 0
+	circulating := func(data basics.OnlineAccountData) basics.MicroAlgos {
+		if excludeExpired && data.VoteLastValid > 0 && data.VoteLastValid < current {
+			return basics.MicroAlgos{}
+		}
+		return data.VotingStake()
+	}
+
+	var ot basics.OverflowTracker
+	for addr, override := range overrides.Accounts {
+		if !override.affectsAgreement() {
+			continue
+		}
+		original, err := l.Ledger.LookupAgreement(o.balanceRound, addr)
+		if err != nil {
+			return err
+		}
+		// Rewards are applied as of the start round, since the account's rewards base may be later
+		// than the balance round
+		data := o.accounts[addr].OnlineAccountData(proto.RewardUnit, prevHdr.RewardsLevel)
+		o.online[addr] = data
+		o.onlineRemoved = ot.AddA(o.onlineRemoved, circulating(original))
+		o.onlineAdded = ot.AddA(o.onlineAdded, circulating(data))
+	}
+	if ot.Overflowed {
+		return invalidOverride("account balances overflow online circulation")
+	}
+	return nil
 }
 
 // overlayAccountFields applies the overrides of an account's own fields, other than its balance.
@@ -850,6 +926,55 @@ func (l simulatorLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Addr
 		}
 	}
 	return l.Ledger.LookupWithoutRewards(rnd, addr)
+}
+
+// LookupAgreement is part of the ledger.Ledger interface.
+// We override this to apply any account overrides that affect agreement.
+func (l simulatorLedger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
+	if l.overlay != nil && rnd == l.overlay.balanceRound {
+		if data, ok := l.overlay.online[addr]; ok {
+			return data, nil
+		}
+	}
+	return l.Ledger.LookupAgreement(rnd, addr)
+}
+
+// OnlineCirculation is part of the ledger.Ledger interface.
+// We override this to apply any account overrides that affect agreement.
+func (l simulatorLedger) OnlineCirculation(rnd basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
+	total, err := l.Ledger.OnlineCirculation(rnd, voteRnd)
+	if err != nil || l.overlay == nil || rnd != l.overlay.balanceRound || voteRnd != l.start+1 {
+		return total, err
+	}
+	// The original stake was approximated per account, so saturate rather than fail if it
+	// slightly exceeds the total
+	var ot basics.OverflowTracker
+	total = ot.AddA(total, l.overlay.onlineAdded)
+	if ot.Overflowed {
+		return basics.MicroAlgos{}, errors.New("overridden online circulation overflows")
+	}
+	return basics.MicroAlgos{Raw: basics.SubSaturate(total.Raw, l.overlay.onlineRemoved.Raw)}, nil
+}
+
+// GetKnockOfflineCandidates is part of the ledger.Ledger interface.
+// We override this so that accounts overridden to be online are considered for suspension, and
+// accounts overridden to not be online are not.
+func (l simulatorLedger) GetKnockOfflineCandidates(rnd basics.Round, proto config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error) {
+	candidates, err := l.Ledger.GetKnockOfflineCandidates(rnd, proto)
+	// A nil result means candidates are not considered at all
+	if err != nil || candidates == nil || l.overlay == nil || rnd != l.start || len(l.overlay.online) == 0 {
+		return candidates, err
+	}
+	// Copy, so the ledger's result is not modified
+	candidates = maps.Clone(candidates)
+	for addr, data := range l.overlay.online {
+		if l.overlay.accounts[addr].Status != basics.Online {
+			delete(candidates, addr)
+			continue
+		}
+		candidates[addr] = data
+	}
+	return candidates, nil
 }
 
 // LookupApplication is part of the ledger.Ledger interface.

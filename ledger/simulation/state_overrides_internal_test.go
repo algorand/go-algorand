@@ -17,6 +17,7 @@
 package simulation
 
 import (
+	"fmt"
 	"math"
 	"reflect"
 	"slices"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
@@ -450,4 +452,109 @@ func TestAccountOverrideFields(t *testing.T) {
 	// The account's stake moves from the online to the offline totals
 	require.Equal(t, totals.Online.Money.Raw-money.Raw, l.overlay.totals.Online.Money.Raw)
 	require.Equal(t, totals.Offline.Money.Raw+money.Raw, l.overlay.totals.Offline.Money.Raw)
+}
+
+func TestOnlineOverrides(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, pastLookback := range []bool{false, true} {
+		t.Run(fmt.Sprintf("past lookback=%v", pastLookback), func(t *testing.T) {
+			t.Parallel()
+			env := simulationtesting.PrepareSimulatorTest(t)
+			defer env.Close()
+
+			proto := env.TxnInfo.CurrentProtocolParams()
+			if pastLookback {
+				// Move the balance round past 0, so that expired stake is excluded
+				env.AdvanceRounds(int(agreement.BalanceLookback(proto)) + 5)
+			}
+			start := env.Ledger.Latest()
+			brnd := agreement.BalanceRound(start+1, proto)
+			require.Equal(t, pastLookback, brnd > 0)
+			excludeExpired := proto.ExcludeExpiredCirculation && brnd > 0
+
+			// Genesis accounts are online
+			stillOnline := env.Accounts[0].Addr
+			goneOffline := env.Accounts[1].Addr
+			rekeyedOnly := env.Accounts[2].Addr
+			var newOnline, expired basics.Address
+			crypto.RandBytes(newOnline[:])
+			crypto.RandBytes(expired[:])
+
+			realAgreement := func(addr basics.Address) basics.OnlineAccountData {
+				data, err := env.Ledger.LookupAgreement(brnd, addr)
+				require.NoError(t, err)
+				return data
+			}
+			require.NotZero(t, realAgreement(stillOnline).VotingStake().Raw)
+			require.NotZero(t, realAgreement(goneOffline).VotingStake().Raw)
+			realCirculation, err := env.Ledger.OnlineCirculation(brnd, start+1)
+			require.NoError(t, err)
+
+			online := basics.Online
+			offline := basics.Offline
+			balance := func(raw uint64) *basics.MicroAlgos { return &basics.MicroAlgos{Raw: raw} }
+			voteLast := basics.Round(100_000)
+			expiredLast := basics.Round(1)
+			voteID := crypto.OneTimeSignatureVerifier{1}
+			l := newOverlayLedger(t, &env, StateOverrides{Accounts: map[basics.Address]AccountOverride{
+				stillOnline: {Balance: balance(1_000_000_000)},
+				goneOffline: {Status: &offline},
+				rekeyedOnly: {AuthAddr: &stillOnline},
+				newOnline:   {Balance: balance(2_000_000_000), Status: &online, VoteID: &voteID, VoteLastValid: &voteLast},
+				expired:     {Balance: balance(3_000_000_000), Status: &online, VoteLastValid: &expiredLast},
+			}})
+			require.Equal(t, brnd, l.overlay.balanceRound)
+
+			lookup := func(addr basics.Address) basics.OnlineAccountData {
+				data, err := l.LookupAgreement(brnd, addr)
+				require.NoError(t, err)
+				return data
+			}
+			require.Equal(t, uint64(1_000_000_000), lookup(stillOnline).VotingStake().Raw)
+			require.Equal(t, basics.OnlineAccountData{}, lookup(goneOffline))
+			// An override that does not affect agreement leaves the account's online data alone
+			require.Equal(t, realAgreement(rekeyedOnly), lookup(rekeyedOnly))
+			newData := lookup(newOnline)
+			require.Equal(t, uint64(2_000_000_000), newData.VotingStake().Raw)
+			require.Equal(t, voteID, newData.VoteID)
+			require.Equal(t, voteLast, newData.VoteLastValid)
+
+			expected := realCirculation.Raw - realAgreement(stillOnline).VotingStake().Raw -
+				realAgreement(goneOffline).VotingStake().Raw + 1_000_000_000 + 2_000_000_000
+			if !excludeExpired {
+				expected += 3_000_000_000
+			}
+			circulation, err := l.OnlineCirculation(brnd, start+1)
+			require.NoError(t, err)
+			require.Equal(t, expected, circulation.Raw)
+
+			// Other rounds are not overridden
+			circulation, err = l.OnlineCirculation(brnd, start+2)
+			require.NoError(t, err)
+			realOther, err := env.Ledger.OnlineCirculation(brnd, start+2)
+			require.NoError(t, err)
+			require.Equal(t, realOther, circulation)
+			if brnd > 0 {
+				data, err := l.LookupAgreement(brnd-1, stillOnline)
+				require.NoError(t, err)
+				realData, err := env.Ledger.LookupAgreement(brnd-1, stillOnline)
+				require.NoError(t, err)
+				require.Equal(t, realData, data)
+			}
+
+			// Accounts overridden online are candidates for suspension, and those overridden
+			// offline are not
+			candidates, err := l.GetKnockOfflineCandidates(start, proto)
+			require.NoError(t, err)
+			require.NotNil(t, candidates)
+			require.NotContains(t, candidates, goneOffline)
+			require.Equal(t, newData, candidates[newOnline])
+			require.Contains(t, candidates, expired)
+			realCandidates, err := env.Ledger.GetKnockOfflineCandidates(start, proto)
+			require.NoError(t, err)
+			require.Contains(t, realCandidates, goneOffline, "the ledger's result was modified")
+		})
+	}
 }

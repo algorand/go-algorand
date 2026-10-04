@@ -25,6 +25,7 @@ import (
 
 	"github.com/algorand/avm-abi/apps"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -1633,4 +1634,78 @@ func TestStateOverrideAccountStatus(t *testing.T) {
 	})
 	require.ErrorAs(t, err, &simulation.InvalidRequestError{})
 	require.ErrorContains(t, err, "status 9 is not valid")
+}
+
+func TestStateOverrideOnlineStakeVisibleToAVM(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	sender := env.Accounts[0]
+	voter := env.Accounts[1].Addr
+	var newVoter basics.Address
+	crypto.RandBytes(newVoter[:])
+
+	proto := env.TxnInfo.CurrentProtocolParams()
+	start := env.Ledger.Latest()
+	brnd := agreement.BalanceRound(start+1, proto)
+	realVoter, err := env.Ledger.LookupAgreement(brnd, voter)
+	require.NoError(t, err)
+	realCirculation, err := env.Ledger.OnlineCirculation(brnd, start+1)
+	require.NoError(t, err)
+
+	const voterBalance = 5_000_000_000
+	const newVoterBalance = 7_000_000_000
+	expectedStake := realCirculation.Raw - realVoter.VotingStake().Raw + voterBalance + newVoterBalance
+
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:   protocol.ApplicationCallTx,
+		Sender: sender.Addr,
+		ApprovalProgram: fmt.Sprintf(`#pragma version 11
+addr %[1]s
+voter_params_get VoterBalance
+assert
+int %[2]d
+==
+assert
+addr %[3]s
+voter_params_get VoterBalance
+assert
+int %[4]d
+==
+assert
+online_stake
+int %[5]d
+==`, voter, voterBalance, newVoter, newVoterBalance, expectedStake),
+		ClearStateProgram: "#pragma version 11\nint 1",
+		Accounts:          []basics.Address{voter, newVoter},
+	}).Txn().Sign(sender.Sk)
+
+	s := simulation.MakeSimulator(env.Ledger, false)
+
+	result, err := s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{{txn}}})
+	require.NoError(t, err)
+	require.Contains(t, result.TxnGroups[0].FailureMessage, "assert failed")
+
+	online := basics.Online
+	voteLast := basics.Round(100_000)
+	result, err = s.Simulate(simulation.Request{
+		TxnGroups: [][]transactions.SignedTxn{{txn}},
+		StateOverrides: simulation.StateOverrides{Accounts: map[basics.Address]simulation.AccountOverride{
+			voter:    {Balance: &basics.MicroAlgos{Raw: voterBalance}},
+			newVoter: {Balance: &basics.MicroAlgos{Raw: newVoterBalance}, Status: &online, VoteLastValid: &voteLast},
+		}},
+	})
+	require.NoError(t, err)
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+
+	// The real ledger is unaffected
+	data, err := env.Ledger.LookupAgreement(brnd, voter)
+	require.NoError(t, err)
+	require.Equal(t, realVoter, data)
+	circulation, err := env.Ledger.OnlineCirculation(brnd, start+1)
+	require.NoError(t, err)
+	require.Equal(t, realCirculation, circulation)
 }

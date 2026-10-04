@@ -798,7 +798,7 @@ type ScratchChange struct {
 	Slot int `json:"slot"`
 }
 
-// SimulateAccountOverride Modifications to a single account's state. Omitted fields are left unchanged.
+// SimulateAccountOverride Modifications to a single account's state. Omitted fields are left unchanged. Pending rewards cannot be overridden.
 type SimulateAccountOverride struct {
 	// Address The address of the account to override.
 	Address string `json:"address"`
@@ -812,7 +812,7 @@ type SimulateAccountOverride struct {
 	// AuthAddr If set, replaces the address against which signing should be checked. The zero address means the account is not rekeyed.
 	AuthAddr *string `json:"auth-addr,omitempty"`
 
-	// Balance If set, replaces the account's balance in microAlgos. Pending rewards are forfeited. Online stake is not overridden.
+	// Balance If set, replaces the account's balance in microAlgos. Pending rewards are forfeited. If balance or any consensus participation field (status, participation keys and validity, incentive-eligible, last-proposed, last-heartbeat) is set, agreement treats the account as though it has been in its overridden state since the balance round, so its online stake and the online circulation reflect the override.
 	Balance *uint64 `json:"balance,omitempty"`
 
 	// IncentiveEligible If set, replaces whether the account can receive block incentives.
@@ -830,7 +830,7 @@ type SimulateAccountOverride struct {
 	// StateProofKey If set, replaces the 64 byte root of the state proof key.
 	StateProofKey *[]byte `json:"state-proof-key,omitempty"`
 
-	// Status If set, replaces the account's participation status, which is one of Offline, Online, or NotParticipating. The account's balance moves between the corresponding totals. The online state used for agreement, as of the balance round, is not overridden.
+	// Status If set, replaces the account's participation status, which is one of Offline, Online, or NotParticipating. The account's balance moves between the corresponding totals, and agreement uses the overridden status.
 	Status *string `json:"status,omitempty"`
 
 	// VoteFirstValid If set, replaces the first round for which the participation key is valid.

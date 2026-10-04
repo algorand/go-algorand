@@ -69,6 +69,9 @@ func TestNonOverridenDataLedgerMethodsUseRoundParameter(t *testing.T) {
 		"LookupWithoutRewards",
 		"LookupApplication",
 		"LookupAsset",
+		"LookupAgreement",
+		"OnlineCirculation",
+		"GetKnockOfflineCandidates",
 		"GetCreatorForRound",
 		"LookupKv",
 	}

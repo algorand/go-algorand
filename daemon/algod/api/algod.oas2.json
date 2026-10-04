@@ -3344,7 +3344,7 @@
       }
     },
     "SimulateAccountOverride": {
-      "description": "Modifications to a single account's state. Omitted fields are left unchanged.",
+      "description": "Modifications to a single account's state. Omitted fields are left unchanged. Pending rewards cannot be overridden.",
       "type": "object",
       "required": ["address"],
       "properties": {
@@ -3354,7 +3354,7 @@
           "x-algorand-format": "Address"
         },
         "balance": {
-          "description": "If set, replaces the account's balance in microAlgos. Pending rewards are forfeited. Online stake is not overridden.",
+          "description": "If set, replaces the account's balance in microAlgos. Pending rewards are forfeited. If balance or any consensus participation field (status, participation keys and validity, incentive-eligible, last-proposed, last-heartbeat) is set, agreement treats the account as though it has been in its overridden state since the balance round, so its online stake and the online circulation reflect the override.",
           "type": "integer",
           "format": "uint64",
           "x-algorand-format": "uint64"
@@ -3365,7 +3365,7 @@
           "x-algorand-format": "Address"
         },
         "status": {
-          "description": "If set, replaces the account's participation status, which is one of Offline, Online, or NotParticipating. The account's balance moves between the corresponding totals. The online state used for agreement, as of the balance round, is not overridden.",
+          "description": "If set, replaces the account's participation status, which is one of Offline, Online, or NotParticipating. The account's balance moves between the corresponding totals, and agreement uses the overridden status.",
           "type": "string"
         },
         "vote-participation-key": {
