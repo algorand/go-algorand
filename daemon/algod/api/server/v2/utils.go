@@ -666,6 +666,19 @@ func convertStateOverrides(overrides *model.SimulateStateOverrides) (simulation.
 					}
 				}
 			}
+			if acct.Apps != nil && len(*acct.Apps) > 0 {
+				override.Apps = make(map[basics.AppIndex]simulation.AppLocalStateOverride, len(*acct.Apps))
+				for _, local := range *acct.Apps {
+					if _, ok := override.Apps[local.AppID]; ok {
+						return simulation.StateOverrides{}, fmt.Errorf("invalid state override: account %s: duplicate app %d", addr, local.AppID)
+					}
+					localOverride, err := convertAppLocalStateOverride(local)
+					if err != nil {
+						return simulation.StateOverrides{}, fmt.Errorf("invalid state override: account %s: app %d: %w", addr, local.AppID, err)
+					}
+					override.Apps[local.AppID] = localOverride
+				}
+			}
 			result.Accounts[addr] = override
 		}
 	}
@@ -699,6 +712,74 @@ func convertStateOverrides(overrides *model.SimulateStateOverrides) (simulation.
 	}
 
 	return result, nil
+}
+
+func convertAppLocalStateOverride(local model.SimulateAppLocalStateOverride) (simulation.AppLocalStateOverride, error) {
+	var override simulation.AppLocalStateOverride
+	if local.Schema != nil {
+		override.Schema = &basics.StateSchema{
+			NumUint:      local.Schema.NumUint,
+			NumByteSlice: local.Schema.NumByteSlice,
+		}
+	}
+	if local.KeyValue != nil {
+		kv, err := convertTealKeyValueStore(*local.KeyValue)
+		if err != nil {
+			return simulation.AppLocalStateOverride{}, fmt.Errorf("local state %w", err)
+		}
+		override.KeyValue = kv
+	}
+	if local.DeleteKeyValue != nil {
+		deleted, err := convertDeletedKeys(*local.DeleteKeyValue)
+		if err != nil {
+			return simulation.AppLocalStateOverride{}, fmt.Errorf("local state %w", err)
+		}
+		override.DeleteKeyValue = deleted
+	}
+	if local.OptOut != nil {
+		override.OptOut = *local.OptOut
+	}
+	return override, nil
+}
+
+// convertTealKeyValueStore converts key/value pairs with base64 encoded keys and byte values.
+// Errors are phrased to follow a description of the store, e.g. "global state".
+func convertTealKeyValueStore(store model.TealKeyValueStore) (basics.TealKeyValue, error) {
+	kv := make(basics.TealKeyValue, len(store))
+	for _, entry := range store {
+		key, err := base64.StdEncoding.DecodeString(entry.Key)
+		if err != nil {
+			return nil, fmt.Errorf("key %q: %w", entry.Key, err)
+		}
+		value, err := base64.StdEncoding.DecodeString(entry.Value.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("value for key %#x: %w", key, err)
+		}
+		if _, ok := kv[string(key)]; ok {
+			return nil, fmt.Errorf("has duplicate key %#x", key)
+		}
+		kv[string(key)] = basics.TealValue{
+			Type:  basics.TealType(entry.Value.Type),
+			Uint:  entry.Value.Uint,
+			Bytes: string(value),
+		}
+	}
+	return kv, nil
+}
+
+// convertDeletedKeys converts a list of keys to delete, rejecting duplicates. Errors are phrased to
+// follow a description of the store, e.g. "global state".
+func convertDeletedKeys(keys [][]byte) ([]string, error) {
+	seen := make(map[string]bool, len(keys))
+	deleted := make([]string, 0, len(keys))
+	for _, key := range keys {
+		if seen[string(key)] {
+			return nil, fmt.Errorf("has duplicate deleted key %#x", key)
+		}
+		seen[string(key)] = true
+		deleted = append(deleted, string(key))
+	}
+	return deleted, nil
 }
 
 func convertAssetOverride(asset model.SimulateAssetOverride) (simulation.AssetOverride, error) {
@@ -807,35 +888,18 @@ func convertAppOverride(app model.SimulateAppOverride) (simulation.AppOverride, 
 	override.FamilyBoxAccess = app.FamilyBoxAccess
 
 	if app.GlobalState != nil {
-		override.GlobalState = make(basics.TealKeyValue, len(*app.GlobalState))
-		for _, kv := range *app.GlobalState {
-			key, err := base64.StdEncoding.DecodeString(kv.Key)
-			if err != nil {
-				return simulation.AppOverride{}, fmt.Errorf("global state key %q: %w", kv.Key, err)
-			}
-			value, err := base64.StdEncoding.DecodeString(kv.Value.Bytes)
-			if err != nil {
-				return simulation.AppOverride{}, fmt.Errorf("global state value for key %#x: %w", key, err)
-			}
-			if _, ok := override.GlobalState[string(key)]; ok {
-				return simulation.AppOverride{}, fmt.Errorf("duplicate global state key %#x", key)
-			}
-			override.GlobalState[string(key)] = basics.TealValue{
-				Type:  basics.TealType(kv.Value.Type),
-				Uint:  kv.Value.Uint,
-				Bytes: string(value),
-			}
+		globalState, err := convertTealKeyValueStore(*app.GlobalState)
+		if err != nil {
+			return simulation.AppOverride{}, fmt.Errorf("global state %w", err)
 		}
+		override.GlobalState = globalState
 	}
 	if app.DeleteGlobalState != nil {
-		seen := make(map[string]bool, len(*app.DeleteGlobalState))
-		for _, key := range *app.DeleteGlobalState {
-			if seen[string(key)] {
-				return simulation.AppOverride{}, fmt.Errorf("duplicate deleted global state key %#x", key)
-			}
-			seen[string(key)] = true
-			override.DeleteGlobalState = append(override.DeleteGlobalState, string(key))
+		deleted, err := convertDeletedKeys(*app.DeleteGlobalState)
+		if err != nil {
+			return simulation.AppOverride{}, fmt.Errorf("global state %w", err)
 		}
+		override.DeleteGlobalState = deleted
 	}
 
 	if app.Boxes != nil {

@@ -53,6 +53,31 @@ type AccountOverride struct {
 	// to an asset, it is opted in. The asset must exist, either on the ledger or by an
 	// AssetOverride.
 	Assets map[basics.AssetIndex]AssetHoldingOverride
+
+	// Apps maps app IDs to overrides of the account's local state. If the account is not opted in
+	// to an app, it is opted in, unless the override opts it out. The app must exist, either on the
+	// ledger or by an AppOverride.
+	Apps map[basics.AppIndex]AppLocalStateOverride
+}
+
+// AppLocalStateOverride describes modifications to an account's local state for an app. Nil fields
+// are left unchanged. For a new opt-in, the schema defaults to the app's LocalStateSchema.
+type AppLocalStateOverride struct {
+	// Schema, if set, replaces the local schema recorded when the account opted in, which
+	// determines how much local state the account may hold, and its minimum balance.
+	Schema *basics.StateSchema
+
+	// KeyValue entries are set, replacing any existing value for the same key. Other existing keys
+	// are left unchanged.
+	KeyValue basics.TealKeyValue
+
+	// DeleteKeyValue lists local state keys to delete. Each key must exist, and must not also be
+	// set in KeyValue.
+	DeleteKeyValue []string
+
+	// OptOut, if true, removes the account's local state. The account must be opted in, and no
+	// other field may be set.
+	OptOut bool
 }
 
 // AssetHoldingOverride describes modifications to an account's holding of an asset. Nil fields are
@@ -85,8 +110,9 @@ type AppOverride struct {
 	ApprovalProgram   []byte
 	ClearStateProgram []byte
 	GlobalStateSchema *basics.StateSchema
-	// LocalStateSchema only applies to accounts that opt in during simulation. Accounts that are
-	// already opted in keep the local schema, and minimum balance, from when they opted in.
+	// LocalStateSchema only applies to accounts that opt in during simulation, or by an
+	// AppLocalStateOverride. Accounts that are already opted in keep the local schema, and
+	// minimum balance, from when they opted in, unless an AppLocalStateOverride replaces it.
 	LocalStateSchema  *basics.StateSchema
 	ExtraProgramPages *uint32
 	Version           *uint64
@@ -161,12 +187,19 @@ type holdingKey struct {
 	aidx basics.AssetIndex
 }
 
+type localStateKey struct {
+	addr basics.Address
+	aidx basics.AppIndex
+}
+
 // stateOverlay holds the overridden ledger state as of the simulation's start round.
 type stateOverlay struct {
 	accounts map[basics.Address]ledgercore.AccountData
 	apps     map[basics.AppIndex]appOverlay
 	assets   map[basics.AssetIndex]assetOverlay
 	holdings map[holdingKey]basics.AssetHolding
+	// localStates holds overridden local states, where a nil value denotes an opted out account
+	localStates map[localStateKey]*basics.AppLocalState
 	// kvs holds overridden boxes, where a nil value denotes a deleted box
 	kvs map[string][]byte
 	// totals are the start round totals, adjusted to reflect the overridden accounts
@@ -195,11 +228,12 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 	}
 
 	o := &stateOverlay{
-		accounts: make(map[basics.Address]ledgercore.AccountData),
-		apps:     make(map[basics.AppIndex]appOverlay),
-		assets:   make(map[basics.AssetIndex]assetOverlay),
-		holdings: make(map[holdingKey]basics.AssetHolding),
-		kvs:      make(map[string][]byte),
+		accounts:    make(map[basics.Address]ledgercore.AccountData),
+		apps:        make(map[basics.AppIndex]appOverlay),
+		assets:      make(map[basics.AssetIndex]assetOverlay),
+		holdings:    make(map[holdingKey]basics.AssetHolding),
+		localStates: make(map[localStateKey]*basics.AppLocalState),
+		kvs:         make(map[string][]byte),
 	}
 
 	// original holds the unmodified data of every account in o.accounts, to adjust totals
@@ -245,6 +279,11 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 		}
 		for _, aidx := range sortedKeys(override.Assets) {
 			if acct, err = l.overlayHolding(o, acct, addr, aidx, override.Assets[aidx]); err != nil {
+				return nil, err
+			}
+		}
+		for _, aidx := range sortedKeys(override.Apps) {
+			if acct, err = l.overlayLocalState(o, acct, addr, aidx, override.Apps[aidx]); err != nil {
 				return nil, err
 			}
 		}
@@ -347,20 +386,9 @@ func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Addr
 	if override.FamilyBoxAccess != nil {
 		params.FamilyBoxAccess = *override.FamilyBoxAccess
 	}
-	for _, key := range override.DeleteGlobalState {
-		if _, ok := override.GlobalState[key]; ok {
-			return invalidOverride("app %d global key %#x cannot be both set and deleted", aidx, key)
-		}
-		if _, ok := params.GlobalState[key]; !ok {
-			return invalidOverride("cannot delete app %d global key %#x: key does not exist", aidx, key)
-		}
-		delete(params.GlobalState, key)
-	}
-	for key, value := range override.GlobalState {
-		if params.GlobalState == nil {
-			params.GlobalState = make(basics.TealKeyValue)
-		}
-		params.GlobalState[key] = value
+	params.GlobalState, err = applyKeyValueOverride(params.GlobalState, override.GlobalState, override.DeleteGlobalState)
+	if err != nil {
+		return invalidOverride("app %d global state: %v", aidx, err)
 	}
 
 	if err = validateAppParams(aidx, params); err != nil {
@@ -612,6 +640,74 @@ func (l simulatorLedger) overlayHolding(o *stateOverlay, acct ledgercore.Account
 	return acct, nil
 }
 
+// overlayLocalState applies a local state override to the account addr, whose current data is
+// acct, and returns the updated account data. The app must already be in o.apps, or on the ledger.
+func (l simulatorLedger) overlayLocalState(o *stateOverlay, acct ledgercore.AccountData, addr basics.Address,
+	aidx basics.AppIndex, override AppLocalStateOverride) (ledgercore.AccountData, error) {
+	res, err := l.Ledger.LookupApplication(l.start, addr, aidx)
+	if err != nil {
+		return ledgercore.AccountData{}, err
+	}
+	state := res.AppLocalState
+
+	if override.OptOut {
+		if override.Schema != nil || override.KeyValue != nil || override.DeleteKeyValue != nil {
+			return ledgercore.AccountData{}, invalidOverride("account %s app %d local state cannot be both modified and opted out", addr, aidx)
+		}
+		if state == nil {
+			return ledgercore.AccountData{}, invalidOverride("cannot opt %s out of app %d: account is not opted in", addr, aidx)
+		}
+		acct.TotalAppLocalStates = basics.SubSaturate(acct.TotalAppLocalStates, 1)
+		acct.TotalAppSchema = acct.TotalAppSchema.SubSchema(state.Schema)
+		o.localStates[localStateKey{addr: addr, aidx: aidx}] = nil
+		return acct, nil
+	}
+
+	var newState basics.AppLocalState
+	if state != nil {
+		newState = *state
+		// Release the old schema, as it may be replaced
+		acct.TotalAppSchema = acct.TotalAppSchema.SubSchema(state.Schema)
+	} else {
+		// Opt the account in, which requires the app to exist
+		app, exists := o.apps[aidx]
+		if !exists {
+			creator, ok, err := l.Ledger.GetCreatorForRound(l.start, basics.CreatableIndex(aidx), basics.AppCreatable)
+			if err != nil {
+				return ledgercore.AccountData{}, err
+			}
+			if !ok {
+				return ledgercore.AccountData{}, invalidOverride("cannot opt %s in to app %d: app does not exist", addr, aidx)
+			}
+			res, err = l.Ledger.LookupApplication(l.start, creator, aidx)
+			if err != nil {
+				return ledgercore.AccountData{}, err
+			}
+			if res.AppParams == nil {
+				return ledgercore.AccountData{}, fmt.Errorf("app %d params not found for creator %s", aidx, creator)
+			}
+			app.params = *res.AppParams
+		}
+		newState.Schema = app.params.LocalStateSchema
+		acct.TotalAppLocalStates = basics.AddSaturate(acct.TotalAppLocalStates, 1)
+	}
+
+	if override.Schema != nil {
+		newState.Schema = *override.Schema
+	}
+	newState.KeyValue, err = applyKeyValueOverride(newState.KeyValue, override.KeyValue, override.DeleteKeyValue)
+	if err != nil {
+		return ledgercore.AccountData{}, invalidOverride("account %s app %d local state: %v", addr, aidx, err)
+	}
+	if err = validateTealKeyValue(newState.KeyValue, newState.Schema); err != nil {
+		return ledgercore.AccountData{}, invalidOverride("account %s app %d local state: %v", addr, aidx, err)
+	}
+
+	acct.TotalAppSchema = acct.TotalAppSchema.AddSchema(newState.Schema)
+	o.localStates[localStateKey{addr: addr, aidx: aidx}] = &newState
+	return acct, nil
+}
+
 // sizeSponsor returns the account that holds the minimum balance for an app's global schema and
 // extra program pages.
 func sizeSponsor(params basics.AppParams, creator basics.Address) basics.Address {
@@ -622,28 +718,58 @@ func sizeSponsor(params basics.AppParams, creator basics.Address) basics.Address
 }
 
 func validateAppParams(aidx basics.AppIndex, params basics.AppParams) error {
-	for key, value := range params.GlobalState {
+	if err := validateTealKeyValue(params.GlobalState, params.GlobalStateSchema); err != nil {
+		return invalidOverride("app %d global state: %v", aidx, err)
+	}
+	return nil
+}
+
+// validateTealKeyValue checks that every value in kv is well formed, and that kv fits in schema.
+func validateTealKeyValue(kv basics.TealKeyValue, schema basics.StateSchema) error {
+	for key, value := range kv {
 		switch value.Type {
 		case basics.TealUintType:
 			if len(value.Bytes) != 0 {
-				return invalidOverride("app %d global uint value for key %#x must not have bytes", aidx, key)
+				return fmt.Errorf("uint value for key %#x must not have bytes", key)
 			}
 		case basics.TealBytesType:
 			if value.Uint != 0 {
-				return invalidOverride("app %d global bytes value for key %#x must not have a uint", aidx, key)
+				return fmt.Errorf("bytes value for key %#x must not have a uint", key)
 			}
 		default:
-			return invalidOverride("app %d global value for key %#x has invalid type %d", aidx, key, value.Type)
+			return fmt.Errorf("value for key %#x has invalid type %d", key, value.Type)
 		}
 	}
-	schema, err := params.GlobalState.ToStateSchema()
+	used, err := kv.ToStateSchema()
 	if err != nil {
-		return invalidOverride("app %d global state: %v", aidx, err)
+		return err
 	}
-	if !params.GlobalStateSchema.Allows(schema) {
-		return invalidOverride("app %d global state %v exceeds global schema %v", aidx, schema, params.GlobalStateSchema)
+	if !schema.Allows(used) {
+		return fmt.Errorf("%v exceeds schema %v", used, schema)
 	}
 	return nil
+}
+
+// applyKeyValueOverride returns kv with the keys in del deleted, and the entries in set set. kv is
+// not modified.
+func applyKeyValueOverride(kv basics.TealKeyValue, set basics.TealKeyValue, del []string) (basics.TealKeyValue, error) {
+	kv = kv.Clone()
+	for _, key := range del {
+		if _, ok := set[key]; ok {
+			return nil, fmt.Errorf("key %#x cannot be both set and deleted", key)
+		}
+		if _, ok := kv[key]; !ok {
+			return nil, fmt.Errorf("cannot delete key %#x: key does not exist", key)
+		}
+		delete(kv, key)
+	}
+	for key, value := range set {
+		if kv == nil {
+			kv = make(basics.TealKeyValue)
+		}
+		kv[key] = value
+	}
+	return kv, nil
 }
 
 // LookupWithoutRewards is part of the ledger.Ledger interface.
@@ -658,7 +784,7 @@ func (l simulatorLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Addr
 }
 
 // LookupApplication is part of the ledger.Ledger interface.
-// We override this to apply any app overrides.
+// We override this to apply any app and local state overrides.
 func (l simulatorLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
 	res, err := l.Ledger.LookupApplication(rnd, addr, aidx)
 	if err != nil || l.overlay == nil || rnd != l.start {
@@ -668,6 +794,16 @@ func (l simulatorLedger) LookupApplication(rnd basics.Round, addr basics.Address
 		params := app.params
 		params.GlobalState = params.GlobalState.Clone()
 		res.AppParams = &params
+	}
+	if state, ok := l.overlay.localStates[localStateKey{addr: addr, aidx: aidx}]; ok {
+		if state == nil {
+			// The account was opted out
+			res.AppLocalState = nil
+		} else {
+			local := *state
+			local.KeyValue = local.KeyValue.Clone()
+			res.AppLocalState = &local
+		}
 	}
 	return res, nil
 }

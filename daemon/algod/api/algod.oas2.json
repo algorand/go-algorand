@@ -3365,6 +3365,46 @@
           "items": {
             "$ref": "#/definitions/SimulateAssetHoldingOverride"
           }
+        },
+        "apps": {
+          "description": "Application local state overrides. If the account is not opted in to an application, it is opted in, unless the override opts it out. Each application ID may appear at most once.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulateAppLocalStateOverride"
+          }
+        }
+      }
+    },
+    "SimulateAppLocalStateOverride": {
+      "description": "Modifications to an account's local state for an application. Omitted fields are left unchanged. For a new opt-in, the schema defaults to the application's local-state-schema.",
+      "type": "object",
+      "required": ["app-id"],
+      "properties": {
+        "app-id": {
+          "description": "The ID of the application. It must exist, either on the ledger or by an application override.",
+          "type": "integer",
+          "x-go-type": "basics.AppIndex",
+          "x-go-name": "AppID"
+        },
+        "schema": {
+          "description": "If set, replaces the local state schema recorded when the account opted in, which determines how much local state the account may hold, and its minimum balance.",
+          "$ref": "#/definitions/ApplicationStateSchema"
+        },
+        "key-value": {
+          "description": "Local state entries to set, replacing any existing value for the same key. Other existing keys are left unchanged.",
+          "$ref": "#/definitions/TealKeyValueStore"
+        },
+        "delete-key-value": {
+          "description": "Local state keys to delete. Each key must exist and must not also be set in key-value.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "opt-out": {
+          "description": "If true, removes the account's local state. The account must be opted in, and no other field may be set.",
+          "type": "boolean"
         }
       }
     },
@@ -3507,7 +3547,7 @@
           "$ref": "#/definitions/ApplicationStateSchema"
         },
         "local-state-schema": {
-          "description": "If set, replaces the local state schema. This only applies to accounts that opt in during simulation.",
+          "description": "If set, replaces the local state schema. This only applies to accounts that opt in during simulation, or by an application local state override.",
           "$ref": "#/definitions/ApplicationStateSchema"
         },
         "extra-program-pages": {

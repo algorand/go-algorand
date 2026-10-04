@@ -3258,6 +3258,12 @@ app_global_get
 int 42
 ==
 assert
+txn Sender
+byte "lkey"
+app_local_get
+int 5
+==
+assert
 byte "bname"
 box_get
 assert
@@ -3303,6 +3309,13 @@ byte "bvalue"
 					Address: sender.Address().String(),
 					Balance: omitEmpty(uint64(10_000_000)),
 					Assets:  &[]model.SimulateAssetHoldingOverride{{AssetID: assetID, Amount: omitEmpty(uint64(10))}},
+					Apps: &[]model.SimulateAppLocalStateOverride{{
+						AppID: appID,
+						KeyValue: &model.TealKeyValueStore{{
+							Key:   base64.StdEncoding.EncodeToString([]byte("lkey")),
+							Value: model.TealValue{Type: uint64(basics.TealUintType), Uint: 5},
+						}},
+					}},
 				},
 			},
 			Assets: &[]model.SimulateAssetOverride{{
@@ -3320,6 +3333,7 @@ byte "bvalue"
 				ApprovalProgram:   &approval.Program,
 				ClearStateProgram: &clearState.Program,
 				GlobalStateSchema: &model.ApplicationStateSchema{NumUint: 1},
+				LocalStateSchema:  &model.ApplicationStateSchema{NumUint: 1},
 				GlobalState: &model.TealKeyValueStore{{
 					Key:   base64.StdEncoding.EncodeToString([]byte("gkey")),
 					Value: model.TealValue{Type: uint64(basics.TealUintType), Uint: 42},
@@ -3452,6 +3466,36 @@ byte "bvalue"
 						(*o.Assets)[0].Manager = omitEmpty("not an address")
 					},
 					expected: "manager",
+				},
+				{
+					name: "duplicate local state app",
+					modify: func(o *model.SimulateStateOverrides) {
+						apps := (*o.Accounts)[0].Apps
+						*apps = append(*apps, (*apps)[0])
+					},
+					expected: "duplicate app 1000000",
+				},
+				{
+					name: "bad local state key",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*(*(*o.Accounts)[0].Apps)[0].KeyValue)[0].Key = "not base64!"
+					},
+					expected: "local state key",
+				},
+				{
+					name: "duplicate deleted local state key",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*(*o.Accounts)[0].Apps)[0].DeleteKeyValue = &[][]byte{[]byte("k"), []byte("k")}
+					},
+					expected: "local state has duplicate deleted key",
+				},
+				{
+					// Rejected by the simulator rather than during conversion
+					name: "opt out and modify local state",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*(*o.Accounts)[0].Apps)[0].OptOut = omitEmpty(true)
+					},
+					expected: "cannot be both modified and opted out",
 				},
 				{
 					// Rejected by the simulator rather than during conversion

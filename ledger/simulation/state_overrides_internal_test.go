@@ -54,6 +54,7 @@ func TestOverridesCoverAllFields(t *testing.T) {
 	requireOverrideCovers(t, reflect.TypeFor[AppOverride](), reflect.TypeFor[basics.AppParams]())
 	requireOverrideCovers(t, reflect.TypeFor[AssetOverride](), reflect.TypeFor[basics.AssetParams]())
 	requireOverrideCovers(t, reflect.TypeFor[AssetHoldingOverride](), reflect.TypeFor[basics.AssetHolding]())
+	requireOverrideCovers(t, reflect.TypeFor[AppLocalStateOverride](), reflect.TypeFor[basics.AppLocalState]())
 }
 
 func newOverlayLedger(t *testing.T, env *simulationtesting.Environment, overrides StateOverrides) simulatorLedger {
@@ -280,4 +281,90 @@ func TestAssetOverrideHoldings(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, realHolder.TotalAssets+2, holderData.TotalAssets)
 	require.Equal(t, realHolder.TotalAssetParams, holderData.TotalAssetParams)
+}
+
+func TestLocalStateOverrides(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	creator := env.Accounts[0].Addr
+	optedIn := env.Accounts[1].Addr
+	newOptIn := env.Accounts[2].Addr
+	optOut := env.Accounts[3].Addr
+	localSchema := basics.StateSchema{NumUint: 1}
+	aidx := env.CreateApp(creator, simulationtesting.AppParams{
+		ApprovalProgram:   "#pragma version 8\nint 1",
+		ClearStateProgram: "#pragma version 8\nint 1",
+		LocalStateSchema:  localSchema,
+	})
+	env.OptIntoApp(optedIn, aidx)
+	env.OptIntoApp(optOut, aidx)
+
+	rnd := env.Ledger.Latest()
+	real := make(map[basics.Address]ledgercore.AccountData)
+	for _, addr := range []basics.Address{optedIn, newOptIn, optOut} {
+		acct, _, err := env.Ledger.LookupWithoutRewards(rnd, addr)
+		require.NoError(t, err)
+		real[addr] = acct
+	}
+
+	bigSchema := basics.StateSchema{NumUint: 2, NumByteSlice: 1}
+	appLocalSchema := basics.StateSchema{NumByteSlice: 3}
+	kv := basics.TealKeyValue{
+		"u": {Type: basics.TealUintType, Uint: 1},
+		"b": {Type: basics.TealBytesType, Bytes: "v"},
+	}
+	l := newOverlayLedger(t, &env, StateOverrides{
+		Accounts: map[basics.Address]AccountOverride{
+			optedIn:  {Apps: map[basics.AppIndex]AppLocalStateOverride{aidx: {Schema: &bigSchema, KeyValue: kv}}},
+			newOptIn: {Apps: map[basics.AppIndex]AppLocalStateOverride{aidx: {}}},
+			optOut:   {Apps: map[basics.AppIndex]AppLocalStateOverride{aidx: {OptOut: true}}},
+		},
+		// A new opt-in takes the app's overridden local schema
+		Apps: map[basics.AppIndex]AppOverride{aidx: {LocalStateSchema: &appLocalSchema}},
+	})
+
+	// An existing opt-in's schema and state are replaced
+	res, err := l.LookupApplication(l.start, optedIn, aidx)
+	require.NoError(t, err)
+	require.Equal(t, &basics.AppLocalState{Schema: bigSchema, KeyValue: kv}, res.AppLocalState)
+	acct, _, err := l.LookupWithoutRewards(l.start, optedIn)
+	require.NoError(t, err)
+	require.Equal(t, real[optedIn].TotalAppLocalStates, acct.TotalAppLocalStates)
+	require.Equal(t, real[optedIn].TotalAppSchema.SubSchema(localSchema).AddSchema(bigSchema), acct.TotalAppSchema)
+
+	res, err = l.LookupApplication(l.start, newOptIn, aidx)
+	require.NoError(t, err)
+	require.Equal(t, &basics.AppLocalState{Schema: appLocalSchema}, res.AppLocalState)
+	acct, _, err = l.LookupWithoutRewards(l.start, newOptIn)
+	require.NoError(t, err)
+	require.Equal(t, real[newOptIn].TotalAppLocalStates+1, acct.TotalAppLocalStates)
+	require.Equal(t, real[newOptIn].TotalAppSchema.AddSchema(appLocalSchema), acct.TotalAppSchema)
+
+	res, err = l.LookupApplication(l.start, optOut, aidx)
+	require.NoError(t, err)
+	require.Nil(t, res.AppLocalState)
+	acct, _, err = l.LookupWithoutRewards(l.start, optOut)
+	require.NoError(t, err)
+	require.Equal(t, real[optOut].TotalAppLocalStates-1, acct.TotalAppLocalStates)
+	require.Equal(t, real[optOut].TotalAppSchema.SubSchema(localSchema), acct.TotalAppSchema)
+
+	// Callers cannot modify the overlay through the returned state
+	res, err = l.LookupApplication(l.start, optedIn, aidx)
+	require.NoError(t, err)
+	res.AppLocalState.KeyValue["u"] = basics.TealValue{Type: basics.TealUintType, Uint: 99}
+	res, err = l.LookupApplication(l.start, optedIn, aidx)
+	require.NoError(t, err)
+	require.Equal(t, kv, res.AppLocalState.KeyValue)
+
+	// The real ledger is unaffected
+	res, err = env.Ledger.LookupApplication(rnd, optOut, aidx)
+	require.NoError(t, err)
+	require.NotNil(t, res.AppLocalState)
+	res, err = env.Ledger.LookupApplication(rnd, newOptIn, aidx)
+	require.NoError(t, err)
+	require.Nil(t, res.AppLocalState)
 }

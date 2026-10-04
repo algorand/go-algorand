@@ -450,7 +450,7 @@ func TestStateOverrideAppValidation(t *testing.T) {
 				"a": {Type: basics.TealUintType, Uint: 1},
 				"b": {Type: basics.TealUintType, Uint: 2},
 			}},
-			expectedError: "exceeds global schema",
+			expectedError: "global state: {NumUint:2 NumByteSlice:0} exceeds schema",
 		},
 		{
 			name: "global uint value with bytes",
@@ -1248,6 +1248,213 @@ func TestStateOverrideAssetValidation(t *testing.T) {
 			_, err := s.Simulate(simulation.Request{
 				TxnGroups:      [][]transactions.SignedTxn{{txn}},
 				StateOverrides: tc.overrides,
+			})
+			require.ErrorAs(t, err, &simulation.InvalidRequestError{})
+			require.ErrorContains(t, err, tc.expectedError)
+		})
+	}
+}
+
+func TestStateOverrideLocalState(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	creator := env.Accounts[0]
+	caller := env.Accounts[1]
+	aidx := env.CreateApp(creator.Addr, simulationtesting.AppParams{
+		ApprovalProgram: `#pragma version 8
+txn ApplicationID
+bz end
+txn OnCompletion
+int OptIn
+==
+bnz end
+txn Sender
+byte "x"
+app_local_get
+int 7
+==
+assert
+txn Sender
+byte "x"
+int 8
+app_local_put
+end:
+int 1`,
+		ClearStateProgram: "#pragma version 8\nint 1",
+		LocalStateSchema:  basics.StateSchema{NumUint: 1},
+	})
+
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        caller.Addr,
+		ApplicationID: aidx,
+	}).Txn().Sign(caller.Sk)
+
+	s := simulation.MakeSimulator(env.Ledger, false)
+
+	// The caller is not opted in
+	result, err := s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{{txn}}})
+	require.NoError(t, err)
+	require.Contains(t, result.TxnGroups[0].FailureMessage, "has not opted in")
+
+	localOverride := func(override simulation.AppLocalStateOverride) simulation.StateOverrides {
+		return simulation.StateOverrides{
+			Accounts: map[basics.Address]simulation.AccountOverride{
+				caller.Addr: {Apps: map[basics.AppIndex]simulation.AppLocalStateOverride{aidx: override}},
+			},
+		}
+	}
+
+	// Opting in by override is not enough, as "x" is not set
+	result, err = s.Simulate(simulation.Request{
+		TxnGroups:      [][]transactions.SignedTxn{{txn}},
+		StateOverrides: localOverride(simulation.AppLocalStateOverride{}),
+	})
+	require.NoError(t, err)
+	require.Contains(t, result.TxnGroups[0].FailureMessage, "assert failed")
+
+	result, err = s.Simulate(simulation.Request{
+		TxnGroups: [][]transactions.SignedTxn{{txn}},
+		StateOverrides: localOverride(simulation.AppLocalStateOverride{
+			KeyValue: basics.TealKeyValue{"x": {Type: basics.TealUintType, Uint: 7}},
+		}),
+	})
+	require.NoError(t, err)
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+	require.Equal(t, basics.StateDelta{"x": {Action: basics.SetUintAction, Uint: 8}},
+		result.TxnGroups[0].Txns[0].Txn.EvalDelta.LocalDeltas[0])
+
+	// Once really opted in, an override can opt the caller back out
+	env.OptIntoApp(caller.Addr, aidx)
+	txn = env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        caller.Addr,
+		ApplicationID: aidx,
+	}).Txn().Sign(caller.Sk)
+	result, err = s.Simulate(simulation.Request{
+		TxnGroups:      [][]transactions.SignedTxn{{txn}},
+		StateOverrides: localOverride(simulation.AppLocalStateOverride{OptOut: true}),
+	})
+	require.NoError(t, err)
+	require.Contains(t, result.TxnGroups[0].FailureMessage, "has not opted in")
+}
+
+func TestStateOverrideLocalStateValidation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	creator := env.Accounts[0]
+	optedIn := env.Accounts[1].Addr
+	other := env.Accounts[2].Addr
+	aidx := env.CreateApp(creator.Addr, simulationtesting.AppParams{
+		ApprovalProgram:   "#pragma version 8\nint 1",
+		ClearStateProgram: "#pragma version 8\nint 1",
+		LocalStateSchema:  basics.StateSchema{NumUint: 1},
+	})
+	env.OptIntoApp(optedIn, aidx)
+
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   creator.Addr,
+		Receiver: other,
+	}).Txn().Sign(creator.Sk)
+
+	uintValue := basics.TealValue{Type: basics.TealUintType, Uint: 1}
+	testCases := []struct {
+		name          string
+		addr          basics.Address
+		aidx          basics.AppIndex
+		override      simulation.AppLocalStateOverride
+		expectedError string
+	}{
+		{
+			name:          "missing app",
+			addr:          other,
+			aidx:          aidx + 1_000_000,
+			expectedError: "app does not exist",
+		},
+		{
+			name:          "opt out when not opted in",
+			addr:          other,
+			aidx:          aidx,
+			override:      simulation.AppLocalStateOverride{OptOut: true},
+			expectedError: "account is not opted in",
+		},
+		{
+			name: "opt out and modify",
+			addr: optedIn,
+			aidx: aidx,
+			override: simulation.AppLocalStateOverride{
+				OptOut:   true,
+				KeyValue: basics.TealKeyValue{"a": uintValue},
+			},
+			expectedError: "cannot be both modified and opted out",
+		},
+		{
+			name: "exceeds schema",
+			addr: optedIn,
+			aidx: aidx,
+			override: simulation.AppLocalStateOverride{
+				KeyValue: basics.TealKeyValue{"a": uintValue, "b": uintValue},
+			},
+			expectedError: "exceeds schema",
+		},
+		{
+			name: "shrunk schema",
+			addr: optedIn,
+			aidx: aidx,
+			override: simulation.AppLocalStateOverride{
+				Schema:   &basics.StateSchema{},
+				KeyValue: basics.TealKeyValue{"a": uintValue},
+			},
+			expectedError: "exceeds schema",
+		},
+		{
+			name: "invalid type",
+			addr: optedIn,
+			aidx: aidx,
+			override: simulation.AppLocalStateOverride{
+				KeyValue: basics.TealKeyValue{"a": {Type: 9}},
+			},
+			expectedError: "invalid type",
+		},
+		{
+			name:          "delete missing key",
+			addr:          optedIn,
+			aidx:          aidx,
+			override:      simulation.AppLocalStateOverride{DeleteKeyValue: []string{"missing"}},
+			expectedError: "key does not exist",
+		},
+		{
+			name: "set and delete key",
+			addr: optedIn,
+			aidx: aidx,
+			override: simulation.AppLocalStateOverride{
+				KeyValue:       basics.TealKeyValue{"a": uintValue},
+				DeleteKeyValue: []string{"a"},
+			},
+			expectedError: "cannot be both set and deleted",
+		},
+	}
+
+	s := simulation.MakeSimulator(env.Ledger, false)
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := s.Simulate(simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{{txn}},
+				StateOverrides: simulation.StateOverrides{
+					Accounts: map[basics.Address]simulation.AccountOverride{
+						tc.addr: {Apps: map[basics.AppIndex]simulation.AppLocalStateOverride{tc.aidx: tc.override}},
+					},
+				},
 			})
 			require.ErrorAs(t, err, &simulation.InvalidRequestError{})
 			require.ErrorContains(t, err, tc.expectedError)

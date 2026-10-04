@@ -803,11 +803,32 @@ type SimulateAccountOverride struct {
 	// Address The address of the account to override.
 	Address string `json:"address"`
 
+	// Apps Application local state overrides. If the account is not opted in to an application, it is opted in, unless the override opts it out. Each application ID may appear at most once.
+	Apps *[]SimulateAppLocalStateOverride `json:"apps,omitempty"`
+
 	// Assets Asset holding overrides. If the account is not opted in to an asset, it is opted in. Each asset ID may appear at most once.
 	Assets *[]SimulateAssetHoldingOverride `json:"assets,omitempty"`
 
 	// Balance If set, replaces the account's balance in microAlgos. Pending rewards are forfeited. Online stake is not overridden.
 	Balance *uint64 `json:"balance,omitempty"`
+}
+
+// SimulateAppLocalStateOverride Modifications to an account's local state for an application. Omitted fields are left unchanged. For a new opt-in, the schema defaults to the application's local-state-schema.
+type SimulateAppLocalStateOverride struct {
+	// AppID The ID of the application. It must exist, either on the ledger or by an application override.
+	AppID basics.AppIndex `json:"app-id"`
+
+	// DeleteKeyValue Local state keys to delete. Each key must exist and must not also be set in key-value.
+	DeleteKeyValue *[][]byte `json:"delete-key-value,omitempty"`
+
+	// KeyValue Represents a key-value store for use in an application.
+	KeyValue *TealKeyValueStore `json:"key-value,omitempty"`
+
+	// OptOut If true, removes the account's local state. The account must be opted in, and no other field may be set.
+	OptOut *bool `json:"opt-out,omitempty"`
+
+	// Schema Specifies maximums on the number of each type that may be stored.
+	Schema *ApplicationStateSchema `json:"schema,omitempty"`
 }
 
 // SimulateAppOverride Modifications to a single application's state. If the application does not exist, it is created, in which case creator, approval-program, and clear-state-program are required. Omitted fields are left unchanged. Minimum balance requirements of affected accounts are updated, but their balances are not.
