@@ -3250,6 +3250,7 @@ func TestSimulateTransactionStateOverrides(t *testing.T) {
 	creator := roots[2]
 	// Well clear of IDs that may be assigned during simulation
 	appID := basics.AppIndex(1_000_000)
+	assetID := basics.AssetIndex(2_000_000)
 
 	approval, err := logic.AssembleString(`#pragma version 8
 byte "gkey"
@@ -3280,17 +3281,39 @@ byte "bvalue"
 		ApplicationID: appID,
 		Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("bname")}},
 	})
-	txntest.Group(&payTxn, &appCallTxn)
+	// The asset, and the sender's holding of it, only exist because of the asset overrides
+	axferTxn := txnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.AssetTransferTx,
+		Sender:        sender.Address(),
+		AssetReceiver: creator.Address(),
+		XferAsset:     assetID,
+		AssetAmount:   7,
+	})
+	txntest.Group(&payTxn, &appCallTxn, &axferTxn)
 	stxns := []transactions.SignedTxn{
 		payTxn.Txn().Sign(sender.Secrets()),
 		appCallTxn.Txn().Sign(sender.Secrets()),
+		axferTxn.Txn().Sign(sender.Secrets()),
 	}
 
 	validOverrides := func() *model.SimulateStateOverrides {
 		return &model.SimulateStateOverrides{
 			Accounts: &[]model.SimulateAccountOverride{
-				{Address: sender.Address().String(), Balance: omitEmpty(uint64(10_000_000))},
+				{
+					Address: sender.Address().String(),
+					Balance: omitEmpty(uint64(10_000_000)),
+					Assets:  &[]model.SimulateAssetHoldingOverride{{AssetID: assetID, Amount: omitEmpty(uint64(10))}},
+				},
 			},
+			Assets: &[]model.SimulateAssetOverride{{
+				Id:           assetID,
+				Creator:      omitEmpty(creator.Address().String()),
+				Total:        omitEmpty(uint64(100)),
+				UnitName:     omitEmpty("UNIT"),
+				NameB64:      &[]byte{0xff, 0xfe},
+				MetadataHash: &[]byte{31: 1},
+				Manager:      omitEmpty(creator.Address().String()),
+			}},
 			Apps: &[]model.SimulateAppOverride{{
 				Id:                appID,
 				Creator:           omitEmpty(creator.Address().String()),
@@ -3393,6 +3416,50 @@ byte "bvalue"
 						*boxes = append(*boxes, (*boxes)[0])
 					},
 					expected: "duplicate box",
+				},
+				{
+					name: "duplicate asset",
+					modify: func(o *model.SimulateStateOverrides) {
+						*o.Assets = append(*o.Assets, (*o.Assets)[0])
+					},
+					expected: "duplicate asset 2000000",
+				},
+				{
+					name: "duplicate asset holding",
+					modify: func(o *model.SimulateStateOverrides) {
+						holdings := (*o.Accounts)[0].Assets
+						*holdings = append(*holdings, (*holdings)[0])
+					},
+					expected: "duplicate asset 2000000",
+				},
+				{
+					name: "asset unit name and unit name b64",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*o.Assets)[0].UnitNameB64 = &[]byte{1}
+					},
+					expected: "unit-name and unit-name-b64 cannot both be set",
+				},
+				{
+					name: "short metadata hash",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*o.Assets)[0].MetadataHash = &[]byte{1}
+					},
+					expected: "metadata hash must be 32 bytes",
+				},
+				{
+					name: "bad asset manager",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*o.Assets)[0].Manager = omitEmpty("not an address")
+					},
+					expected: "manager",
+				},
+				{
+					// Rejected by the simulator rather than during conversion
+					name: "new asset without creator",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*o.Assets)[0].Creator = nil
+					},
+					expected: "creator is required",
 				},
 				{
 					// Rejected by the simulator rather than during conversion

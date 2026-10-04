@@ -37,6 +37,7 @@ import (
 type StateOverrides struct {
 	Accounts map[basics.Address]AccountOverride
 	Apps     map[basics.AppIndex]AppOverride
+	Assets   map[basics.AssetIndex]AssetOverride
 }
 
 // AccountOverride describes modifications to a single account's state. Nil fields are left unchanged.
@@ -47,6 +48,19 @@ type AccountOverride struct {
 	// Online stake is not overridden, so for an online account, the voting balance (e.g. as seen
 	// by voter_params_get) and the online circulation still reflect the original balance.
 	Balance *basics.MicroAlgos
+
+	// Assets maps asset IDs to overrides of the account's holdings. If the account is not opted in
+	// to an asset, it is opted in. The asset must exist, either on the ledger or by an
+	// AssetOverride.
+	Assets map[basics.AssetIndex]AssetHoldingOverride
+}
+
+// AssetHoldingOverride describes modifications to an account's holding of an asset. Nil fields are
+// left unchanged. For a new holding, they default to an amount of zero and the asset's
+// DefaultFrozen.
+type AssetHoldingOverride struct {
+	Amount *uint64
+	Frozen *bool
 }
 
 // AppOverride describes modifications to a single application's state. If the application does
@@ -101,6 +115,32 @@ type AppOverride struct {
 	DeleteBoxes []string
 }
 
+// AssetOverride describes modifications to a single asset's params. If the asset does not exist,
+// it is created. Nil fields are left unchanged.
+//
+// New asset IDs are subject to the same restrictions as new app IDs. A new asset's creator is opted
+// in to it with a holding of the asset's total, which an AccountOverride may then modify.
+//
+// Holdings are not checked against the asset's total, and, as for apps, overrides are not checked
+// against the consensus parameters of the simulation round.
+type AssetOverride struct {
+	// Creator is required when creating an asset. For an existing asset, it must be empty or match
+	// the existing creator.
+	Creator basics.Address
+
+	Total         *uint64
+	Decimals      *uint32
+	DefaultFrozen *bool
+	UnitName      *string
+	AssetName     *string
+	URL           *string
+	MetadataHash  *[32]byte
+	Manager       *basics.Address
+	Reserve       *basics.Address
+	Freeze        *basics.Address
+	Clawback      *basics.Address
+}
+
 // reservedCreatableIDs is the number of IDs above the current txn counter that cannot be used for
 // new apps, since they may be assigned to creatables made during simulation. It comfortably
 // exceeds the number of transactions a single group can contain, including inner transactions.
@@ -111,10 +151,22 @@ type appOverlay struct {
 	params  basics.AppParams
 }
 
+type assetOverlay struct {
+	creator basics.Address
+	params  basics.AssetParams
+}
+
+type holdingKey struct {
+	addr basics.Address
+	aidx basics.AssetIndex
+}
+
 // stateOverlay holds the overridden ledger state as of the simulation's start round.
 type stateOverlay struct {
 	accounts map[basics.Address]ledgercore.AccountData
 	apps     map[basics.AppIndex]appOverlay
+	assets   map[basics.AssetIndex]assetOverlay
+	holdings map[holdingKey]basics.AssetHolding
 	// kvs holds overridden boxes, where a nil value denotes a deleted box
 	kvs map[string][]byte
 	// totals are the start round totals, adjusted to reflect the overridden accounts
@@ -132,7 +184,7 @@ func sortedKeys[K cmp.Ordered, V any](m map[K]V) []K {
 // buildStateOverlay computes the ledger state that results from applying overrides to the state
 // as of l.start. It returns nil if there are no overrides.
 func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr bookkeeping.BlockHeader) (*stateOverlay, error) {
-	if len(overrides.Accounts) == 0 && len(overrides.Apps) == 0 {
+	if len(overrides.Accounts) == 0 && len(overrides.Apps) == 0 && len(overrides.Assets) == 0 {
 		return nil, nil
 	}
 
@@ -145,6 +197,8 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 	o := &stateOverlay{
 		accounts: make(map[basics.Address]ledgercore.AccountData),
 		apps:     make(map[basics.AppIndex]appOverlay),
+		assets:   make(map[basics.AssetIndex]assetOverlay),
+		holdings: make(map[holdingKey]basics.AssetHolding),
 		kvs:      make(map[string][]byte),
 	}
 
@@ -167,6 +221,12 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 			return nil, err
 		}
 	}
+	// Assets come after apps, so that new assets can check for collisions with new apps
+	for _, aidx := range sortedKeys(overrides.Assets) {
+		if err := l.overlayAsset(o, getAccount, prevHdr, aidx, overrides.Assets[aidx]); err != nil {
+			return nil, err
+		}
+	}
 
 	// Sort accounts so that errors are deterministic
 	addrs := slices.SortedFunc(maps.Keys(overrides.Accounts), func(a, b basics.Address) int {
@@ -182,6 +242,11 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 			acct.MicroAlgos = *override.Balance
 			// Set the rewards base to the current rewards level so there are no pending rewards
 			acct.RewardsBase = totals.RewardsLevel
+		}
+		for _, aidx := range sortedKeys(override.Assets) {
+			if acct, err = l.overlayHolding(o, acct, addr, aidx, override.Assets[aidx]); err != nil {
+				return nil, err
+			}
 		}
 		o.accounts[addr] = acct
 	}
@@ -205,12 +270,8 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 
 func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Address) (ledgercore.AccountData, error),
 	prevHdr bookkeeping.BlockHeader, aidx basics.AppIndex, override AppOverride) error {
-	if aidx == 0 {
-		return invalidOverride("app ID must be non-zero")
-	}
-	// The ledger's database stores IDs as signed 64-bit integers, so larger IDs cannot be looked up
-	if uint64(aidx) > math.MaxInt64 {
-		return invalidOverride("app ID %d exceeds maximum %d", aidx, int64(math.MaxInt64))
+	if err := checkCreatableID(basics.CreatableIndex(aidx), "app"); err != nil {
+		return err
 	}
 
 	creator, exists, err := l.Ledger.GetCreatorForRound(l.start, basics.CreatableIndex(aidx), basics.AppCreatable)
@@ -234,11 +295,8 @@ func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Addr
 		// Deep copy so nothing here can modify the ledger's own data
 		params = res.AppParams.Clone()
 	} else {
-		// Apps created during simulation are assigned IDs just above the current txn counter, so
-		// new apps must stay clear of that range to avoid colliding with them.
-		if uint64(aidx) > prevHdr.TxnCounter && uint64(aidx) <= basics.AddSaturate(prevHdr.TxnCounter, reservedCreatableIDs) {
-			return invalidOverride("cannot create app %d: new app IDs must not be in the range (%d, %d], which may be assigned during simulation",
-				aidx, prevHdr.TxnCounter, basics.AddSaturate(prevHdr.TxnCounter, reservedCreatableIDs))
+		if err = checkNewCreatableID(basics.CreatableIndex(aidx), "app", prevHdr); err != nil {
+			return err
 		}
 		var isAsset bool
 		_, isAsset, err = l.Ledger.GetCreatorForRound(l.start, basics.CreatableIndex(aidx), basics.AssetCreatable)
@@ -388,6 +446,172 @@ func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Addr
 	return nil
 }
 
+func checkCreatableID(cidx basics.CreatableIndex, kind string) error {
+	if cidx == 0 {
+		return invalidOverride("%s ID must be non-zero", kind)
+	}
+	// The ledger's database stores IDs as signed 64-bit integers, so larger IDs cannot be looked up
+	if uint64(cidx) > math.MaxInt64 {
+		return invalidOverride("%s ID %d exceeds maximum %d", kind, cidx, int64(math.MaxInt64))
+	}
+	return nil
+}
+
+func checkNewCreatableID(cidx basics.CreatableIndex, kind string, prevHdr bookkeeping.BlockHeader) error {
+	// Creatables made during simulation are assigned IDs just above the current txn counter, so
+	// new ones must stay clear of that range to avoid colliding with them.
+	if uint64(cidx) > prevHdr.TxnCounter && uint64(cidx) <= basics.AddSaturate(prevHdr.TxnCounter, reservedCreatableIDs) {
+		return invalidOverride("cannot create %s %d: new %s IDs must not be in the range (%d, %d], which may be assigned during simulation",
+			kind, cidx, kind, prevHdr.TxnCounter, basics.AddSaturate(prevHdr.TxnCounter, reservedCreatableIDs))
+	}
+	return nil
+}
+
+func (l simulatorLedger) overlayAsset(o *stateOverlay, getAccount func(basics.Address) (ledgercore.AccountData, error),
+	prevHdr bookkeeping.BlockHeader, aidx basics.AssetIndex, override AssetOverride) error {
+	if err := checkCreatableID(basics.CreatableIndex(aidx), "asset"); err != nil {
+		return err
+	}
+
+	creator, exists, err := l.Ledger.GetCreatorForRound(l.start, basics.CreatableIndex(aidx), basics.AssetCreatable)
+	if err != nil {
+		return err
+	}
+
+	var params basics.AssetParams
+	if exists {
+		if !override.Creator.IsZero() && override.Creator != creator {
+			return invalidOverride("asset %d exists with creator %s, which cannot be changed to %s", aidx, creator, override.Creator)
+		}
+		var res ledgercore.AssetResource
+		res, err = l.Ledger.LookupAsset(l.start, creator, aidx)
+		if err != nil {
+			return err
+		}
+		if res.AssetParams == nil {
+			return fmt.Errorf("asset %d params not found for creator %s", aidx, creator)
+		}
+		params = *res.AssetParams
+	} else {
+		if err = checkNewCreatableID(basics.CreatableIndex(aidx), "asset", prevHdr); err != nil {
+			return err
+		}
+		var isApp bool
+		_, isApp, err = l.Ledger.GetCreatorForRound(l.start, basics.CreatableIndex(aidx), basics.AppCreatable)
+		if err != nil {
+			return err
+		}
+		if _, ok := o.apps[basics.AppIndex(aidx)]; isApp || ok {
+			return invalidOverride("cannot create asset %d: an app exists with that ID", aidx)
+		}
+		if override.Creator.IsZero() {
+			return invalidOverride("cannot create asset %d: creator is required", aidx)
+		}
+		creator = override.Creator
+	}
+
+	if override.Total != nil {
+		params.Total = *override.Total
+	}
+	if override.Decimals != nil {
+		params.Decimals = *override.Decimals
+	}
+	if override.DefaultFrozen != nil {
+		params.DefaultFrozen = *override.DefaultFrozen
+	}
+	if override.UnitName != nil {
+		params.UnitName = *override.UnitName
+	}
+	if override.AssetName != nil {
+		params.AssetName = *override.AssetName
+	}
+	if override.URL != nil {
+		params.URL = *override.URL
+	}
+	if override.MetadataHash != nil {
+		params.MetadataHash = *override.MetadataHash
+	}
+	if override.Manager != nil {
+		params.Manager = *override.Manager
+	}
+	if override.Reserve != nil {
+		params.Reserve = *override.Reserve
+	}
+	if override.Freeze != nil {
+		params.Freeze = *override.Freeze
+	}
+	if override.Clawback != nil {
+		params.Clawback = *override.Clawback
+	}
+
+	o.assets[aidx] = assetOverlay{creator: creator, params: params}
+
+	if exists {
+		return nil
+	}
+	// As when an asset is created, the creator holds the entire supply
+	acct, err := getAccount(creator)
+	if err != nil {
+		return err
+	}
+	acct.TotalAssetParams = basics.AddSaturate(acct.TotalAssetParams, 1)
+	acct, err = l.overlayHolding(o, acct, creator, aidx, AssetHoldingOverride{Amount: &params.Total})
+	if err != nil {
+		return err
+	}
+	o.accounts[creator] = acct
+	return nil
+}
+
+// overlayHolding applies a holding override to the account addr, whose current data is acct, and
+// returns the updated account data. The asset must already be in o.assets, or on the ledger.
+func (l simulatorLedger) overlayHolding(o *stateOverlay, acct ledgercore.AccountData, addr basics.Address,
+	aidx basics.AssetIndex, override AssetHoldingOverride) (ledgercore.AccountData, error) {
+	key := holdingKey{addr: addr, aidx: aidx}
+	holding, ok := o.holdings[key]
+	if !ok {
+		res, err := l.Ledger.LookupAsset(l.start, addr, aidx)
+		if err != nil {
+			return ledgercore.AccountData{}, err
+		}
+		if res.AssetHolding != nil {
+			holding = *res.AssetHolding
+		} else {
+			// Opt the account in, which requires the asset to exist
+			var params basics.AssetParams
+			if asset, exists := o.assets[aidx]; exists {
+				params = asset.params
+			} else {
+				creator, exists, err := l.Ledger.GetCreatorForRound(l.start, basics.CreatableIndex(aidx), basics.AssetCreatable)
+				if err != nil {
+					return ledgercore.AccountData{}, err
+				}
+				if !exists {
+					return ledgercore.AccountData{}, invalidOverride("cannot opt %s in to asset %d: asset does not exist", addr, aidx)
+				}
+				res, err = l.Ledger.LookupAsset(l.start, creator, aidx)
+				if err != nil {
+					return ledgercore.AccountData{}, err
+				}
+				if res.AssetParams == nil {
+					return ledgercore.AccountData{}, fmt.Errorf("asset %d params not found for creator %s", aidx, creator)
+				}
+				params = *res.AssetParams
+			}
+			holding = basics.AssetHolding{Frozen: params.DefaultFrozen}
+			acct.TotalAssets = basics.AddSaturate(acct.TotalAssets, 1)
+		}
+	}
+	if override.Amount != nil {
+		holding.Amount = *override.Amount
+	}
+	if override.Frozen != nil {
+		holding.Frozen = *override.Frozen
+	}
+	o.holdings[key] = holding
+	return acct, nil
+}
+
 // sizeSponsor returns the account that holds the minimum balance for an app's global schema and
 // extra program pages.
 func sizeSponsor(params basics.AppParams, creator basics.Address) basics.Address {
@@ -448,12 +672,36 @@ func (l simulatorLedger) LookupApplication(rnd basics.Round, addr basics.Address
 	return res, nil
 }
 
+// LookupAsset is part of the ledger.Ledger interface.
+// We override this to apply any asset and holding overrides.
+func (l simulatorLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+	res, err := l.Ledger.LookupAsset(rnd, addr, aidx)
+	if err != nil || l.overlay == nil || rnd != l.start {
+		return res, err
+	}
+	if asset, ok := l.overlay.assets[aidx]; ok && asset.creator == addr {
+		params := asset.params
+		res.AssetParams = &params
+	}
+	if holding, ok := l.overlay.holdings[holdingKey{addr: addr, aidx: aidx}]; ok {
+		res.AssetHolding = &holding
+	}
+	return res, nil
+}
+
 // GetCreatorForRound is part of the ledger.Ledger interface.
-// We override this to apply any app overrides.
+// We override this to apply any app and asset overrides.
 func (l simulatorLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
-	if l.overlay != nil && rnd == l.start && ctype == basics.AppCreatable {
-		if app, ok := l.overlay.apps[basics.AppIndex(cidx)]; ok {
-			return app.creator, true, nil
+	if l.overlay != nil && rnd == l.start {
+		switch ctype {
+		case basics.AppCreatable:
+			if app, ok := l.overlay.apps[basics.AppIndex(cidx)]; ok {
+				return app.creator, true, nil
+			}
+		case basics.AssetCreatable:
+			if asset, ok := l.overlay.assets[basics.AssetIndex(cidx)]; ok {
+				return asset.creator, true, nil
+			}
 		}
 	}
 	return l.Ledger.GetCreatorForRound(rnd, cidx, ctype)

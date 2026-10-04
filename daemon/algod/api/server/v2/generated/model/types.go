@@ -803,6 +803,9 @@ type SimulateAccountOverride struct {
 	// Address The address of the account to override.
 	Address string `json:"address"`
 
+	// Assets Asset holding overrides. If the account is not opted in to an asset, it is opted in. Each asset ID may appear at most once.
+	Assets *[]SimulateAssetHoldingOverride `json:"assets,omitempty"`
+
 	// Balance If set, replaces the account's balance in microAlgos. Pending rewards are forfeited. Online stake is not overridden.
 	Balance *uint64 `json:"balance,omitempty"`
 }
@@ -853,6 +856,69 @@ type SimulateAppOverride struct {
 
 	// Version If set, replaces the number of updates to the application programs.
 	Version *uint64 `json:"version,omitempty"`
+}
+
+// SimulateAssetHoldingOverride Modifications to an account's holding of an asset. Omitted fields are left unchanged. For a new holding, they default to an amount of zero and the asset's default-frozen.
+type SimulateAssetHoldingOverride struct {
+	// Amount If set, replaces the number of units held.
+	Amount *uint64 `json:"amount,omitempty"`
+
+	// AssetID The ID of the asset. It must exist, either on the ledger or by an asset override.
+	AssetID basics.AssetIndex `json:"asset-id"`
+
+	// IsFrozen If set, replaces whether the holding is frozen.
+	IsFrozen *bool `json:"is-frozen,omitempty"`
+}
+
+// SimulateAssetOverride Modifications to a single asset's params. If the asset does not exist, it is created, in which case creator is required, and the creator is opted in with a holding of the asset's total. Omitted fields are left unchanged. Holdings are not checked against the asset's total.
+type SimulateAssetOverride struct {
+	// Clawback If set, replaces the address of the account used to clawback holdings of the asset. The zero address means clawback is not permitted.
+	Clawback *string `json:"clawback,omitempty"`
+
+	// Creator The asset's creator. Required when creating an asset. For an existing asset, it must be omitted or match the existing creator.
+	Creator *string `json:"creator,omitempty"`
+
+	// Decimals If set, replaces the number of digits to use after the decimal point when displaying the asset.
+	Decimals *uint32 `json:"decimals,omitempty"`
+
+	// DefaultFrozen If set, replaces whether holdings of the asset are frozen by default.
+	DefaultFrozen *bool `json:"default-frozen,omitempty"`
+
+	// Freeze If set, replaces the address of the account used to freeze holdings of the asset. The zero address means freezing is not permitted.
+	Freeze *string `json:"freeze,omitempty"`
+
+	// Id The ID of the asset to override. A new asset's ID must not be in the range of IDs that may be assigned to creatables made during simulation.
+	Id basics.AssetIndex `json:"id"`
+
+	// Manager If set, replaces the address of the account used to manage the asset. The zero address means there is no manager.
+	Manager *string `json:"manager,omitempty"`
+
+	// MetadataHash If set, replaces the 32 byte commitment to the asset's metadata.
+	MetadataHash *[]byte `json:"metadata-hash,omitempty"`
+
+	// Name If set, replaces the name of the asset. Use name-b64 instead for a value that is not valid utf-8. At most one of name and name-b64 may be set.
+	Name *string `json:"name,omitempty"`
+
+	// NameB64 If set, replaces the name of the asset, base64 encoded.
+	NameB64 *[]byte `json:"name-b64,omitempty"`
+
+	// Reserve If set, replaces the address of the account holding reserve units of the asset.
+	Reserve *string `json:"reserve,omitempty"`
+
+	// Total If set, replaces the total number of units of the asset.
+	Total *uint64 `json:"total,omitempty"`
+
+	// UnitName If set, replaces the name of a unit of the asset. Use unit-name-b64 instead for a value that is not valid utf-8. At most one of unit-name and unit-name-b64 may be set.
+	UnitName *string `json:"unit-name,omitempty"`
+
+	// UnitNameB64 If set, replaces the name of a unit of the asset, base64 encoded.
+	UnitNameB64 *[]byte `json:"unit-name-b64,omitempty"`
+
+	// Url If set, replaces the URL where more information about the asset can be retrieved. Use url-b64 instead for a value that is not valid utf-8. At most one of url and url-b64 may be set.
+	Url *string `json:"url,omitempty"`
+
+	// UrlB64 If set, replaces the URL where more information about the asset can be retrieved, base64 encoded.
+	UrlB64 *[]byte `json:"url-b64,omitempty"`
 }
 
 // SimulateBoxOverride A box to create or replace during simulation.
@@ -913,6 +979,9 @@ type SimulateStateOverrides struct {
 
 	// Apps Application state overrides. Each application ID may appear at most once.
 	Apps *[]SimulateAppOverride `json:"apps,omitempty"`
+
+	// Assets Asset state overrides. Each asset ID may appear at most once.
+	Assets *[]SimulateAssetOverride `json:"assets,omitempty"`
 }
 
 // SimulateTraceConfig An object that configures simulation execution trace.

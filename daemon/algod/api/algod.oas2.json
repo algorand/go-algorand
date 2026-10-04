@@ -3333,6 +3333,13 @@
           "items": {
             "$ref": "#/definitions/SimulateAppOverride"
           }
+        },
+        "assets": {
+          "description": "Asset state overrides. Each asset ID may appear at most once.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulateAssetOverride"
+          }
         }
       }
     },
@@ -3351,6 +3358,120 @@
           "type": "integer",
           "format": "uint64",
           "x-algorand-format": "uint64"
+        },
+        "assets": {
+          "description": "Asset holding overrides. If the account is not opted in to an asset, it is opted in. Each asset ID may appear at most once.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulateAssetHoldingOverride"
+          }
+        }
+      }
+    },
+    "SimulateAssetHoldingOverride": {
+      "description": "Modifications to an account's holding of an asset. Omitted fields are left unchanged. For a new holding, they default to an amount of zero and the asset's default-frozen.",
+      "type": "object",
+      "required": ["asset-id"],
+      "properties": {
+        "asset-id": {
+          "description": "The ID of the asset. It must exist, either on the ledger or by an asset override.",
+          "type": "integer",
+          "x-go-type": "basics.AssetIndex",
+          "x-go-name": "AssetID"
+        },
+        "amount": {
+          "description": "If set, replaces the number of units held.",
+          "type": "integer",
+          "format": "uint64",
+          "x-algorand-format": "uint64"
+        },
+        "is-frozen": {
+          "description": "If set, replaces whether the holding is frozen.",
+          "type": "boolean"
+        }
+      }
+    },
+    "SimulateAssetOverride": {
+      "description": "Modifications to a single asset's params. If the asset does not exist, it is created, in which case creator is required, and the creator is opted in with a holding of the asset's total. Omitted fields are left unchanged. Holdings are not checked against the asset's total.",
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "description": "The ID of the asset to override. A new asset's ID must not be in the range of IDs that may be assigned to creatables made during simulation.",
+          "type": "integer",
+          "x-go-type": "basics.AssetIndex"
+        },
+        "creator": {
+          "description": "The asset's creator. Required when creating an asset. For an existing asset, it must be omitted or match the existing creator.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
+        "total": {
+          "description": "If set, replaces the total number of units of the asset.",
+          "type": "integer",
+          "format": "uint64",
+          "x-algorand-format": "uint64"
+        },
+        "decimals": {
+          "description": "If set, replaces the number of digits to use after the decimal point when displaying the asset.",
+          "type": "integer",
+          "x-go-type": "uint32"
+        },
+        "default-frozen": {
+          "description": "If set, replaces whether holdings of the asset are frozen by default.",
+          "type": "boolean"
+        },
+        "unit-name": {
+          "description": "If set, replaces the name of a unit of the asset. Use unit-name-b64 instead for a value that is not valid utf-8. At most one of unit-name and unit-name-b64 may be set.",
+          "type": "string"
+        },
+        "unit-name-b64": {
+          "description": "If set, replaces the name of a unit of the asset, base64 encoded.",
+          "type": "string",
+          "format": "byte"
+        },
+        "name": {
+          "description": "If set, replaces the name of the asset. Use name-b64 instead for a value that is not valid utf-8. At most one of name and name-b64 may be set.",
+          "type": "string"
+        },
+        "name-b64": {
+          "description": "If set, replaces the name of the asset, base64 encoded.",
+          "type": "string",
+          "format": "byte"
+        },
+        "url": {
+          "description": "If set, replaces the URL where more information about the asset can be retrieved. Use url-b64 instead for a value that is not valid utf-8. At most one of url and url-b64 may be set.",
+          "type": "string"
+        },
+        "url-b64": {
+          "description": "If set, replaces the URL where more information about the asset can be retrieved, base64 encoded.",
+          "type": "string",
+          "format": "byte"
+        },
+        "metadata-hash": {
+          "description": "If set, replaces the 32 byte commitment to the asset's metadata.",
+          "type": "string",
+          "format": "byte"
+        },
+        "manager": {
+          "description": "If set, replaces the address of the account used to manage the asset. The zero address means there is no manager.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
+        "reserve": {
+          "description": "If set, replaces the address of the account holding reserve units of the asset.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
+        "freeze": {
+          "description": "If set, replaces the address of the account used to freeze holdings of the asset. The zero address means freezing is not permitted.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
+        "clawback": {
+          "description": "If set, replaces the address of the account used to clawback holdings of the asset. The zero address means clawback is not permitted.",
+          "type": "string",
+          "x-algorand-format": "Address"
         }
       }
     },

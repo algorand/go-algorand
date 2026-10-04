@@ -29,29 +29,31 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// TestAppOverrideCoversAppParams ensures that every field of basics.AppParams can be overridden,
-// so that new app params are not forgotten.
-func TestAppOverrideCoversAppParams(t *testing.T) {
+// requireOverrideCovers ensures that override has a field for every field of params, so that new
+// fields are not forgotten.
+func requireOverrideCovers(t *testing.T, override reflect.Type, params reflect.Type) {
+	t.Helper()
+	for i := 0; i < params.NumField(); i++ {
+		field := params.Field(i)
+		if field.Name == "_struct" {
+			continue
+		}
+		if field.Anonymous {
+			requireOverrideCovers(t, override, field.Type)
+			continue
+		}
+		_, ok := override.FieldByName(field.Name)
+		require.True(t, ok, "%s has no field for %s.%s", override.Name(), params.Name(), field.Name)
+	}
+}
+
+func TestOverridesCoverAllFields(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	overrideType := reflect.TypeFor[AppOverride]()
-	var check func(reflect.Type)
-	check = func(typ reflect.Type) {
-		for i := 0; i < typ.NumField(); i++ {
-			field := typ.Field(i)
-			if field.Name == "_struct" {
-				continue
-			}
-			if field.Anonymous {
-				check(field.Type)
-				continue
-			}
-			_, ok := overrideType.FieldByName(field.Name)
-			require.True(t, ok, "AppOverride has no field for AppParams.%s", field.Name)
-		}
-	}
-	check(reflect.TypeFor[basics.AppParams]())
+	requireOverrideCovers(t, reflect.TypeFor[AppOverride](), reflect.TypeFor[basics.AppParams]())
+	requireOverrideCovers(t, reflect.TypeFor[AssetOverride](), reflect.TypeFor[basics.AssetParams]())
+	requireOverrideCovers(t, reflect.TypeFor[AssetHoldingOverride](), reflect.TypeFor[basics.AssetHolding]())
 }
 
 func newOverlayLedger(t *testing.T, env *simulationtesting.Environment, overrides StateOverrides) simulatorLedger {
@@ -201,4 +203,81 @@ func TestAppOverrideAllParams(t *testing.T) {
 	require.Equal(t, realCreator.TotalAppSchema.SubSchema(basics.StateSchema{NumUint: 1}).AddSchema(globalSchema), creatorData.TotalAppSchema)
 	_, touched := l.overlay.accounts[sponsor]
 	require.False(t, touched)
+}
+
+func TestAssetOverrideHoldings(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	creator := env.Accounts[0].Addr
+	holder := env.Accounts[1].Addr
+	aidx := env.CreateAsset(creator, basics.AssetParams{Total: 100})
+	env.TransferAlgos(creator, holder, 1)
+	newAidx := basics.AssetIndex(env.TxnInfo.LatestHeader.TxnCounter)
+
+	rnd := env.Ledger.Latest()
+	realCreator, _, err := env.Ledger.LookupWithoutRewards(rnd, creator)
+	require.NoError(t, err)
+	realHolder, _, err := env.Ledger.LookupWithoutRewards(rnd, holder)
+	require.NoError(t, err)
+
+	yes := true
+	total := uint64(55)
+	amount := uint64(5)
+	l := newOverlayLedger(t, &env, StateOverrides{
+		Accounts: map[basics.Address]AccountOverride{
+			// The creator's own holding of a new asset can be overridden
+			creator: {Assets: map[basics.AssetIndex]AssetHoldingOverride{newAidx: {Amount: &amount}}},
+			holder: {Assets: map[basics.AssetIndex]AssetHoldingOverride{
+				aidx:    {},
+				newAidx: {},
+			}},
+		},
+		Assets: map[basics.AssetIndex]AssetOverride{
+			// An existing asset's DefaultFrozen applies to accounts opted in by override
+			aidx:    {DefaultFrozen: &yes},
+			newAidx: {Creator: creator, Total: &total},
+		},
+	})
+
+	res, err := l.LookupAsset(l.start, holder, aidx)
+	require.NoError(t, err)
+	require.Equal(t, &basics.AssetHolding{Frozen: true}, res.AssetHolding)
+	require.Nil(t, res.AssetParams)
+
+	res, err = l.LookupAsset(l.start, holder, newAidx)
+	require.NoError(t, err)
+	require.Equal(t, &basics.AssetHolding{}, res.AssetHolding)
+
+	res, err = l.LookupAsset(l.start, creator, newAidx)
+	require.NoError(t, err)
+	require.Equal(t, &basics.AssetParams{Total: total}, res.AssetParams)
+	require.Equal(t, &basics.AssetHolding{Amount: amount}, res.AssetHolding)
+
+	// The existing creator's holding is untouched
+	res, err = l.LookupAsset(l.start, creator, aidx)
+	require.NoError(t, err)
+	require.Equal(t, &basics.AssetHolding{Amount: 100}, res.AssetHolding)
+	require.True(t, res.AssetParams.DefaultFrozen)
+
+	creatorAddr, ok, err := l.GetCreatorForRound(l.start, basics.CreatableIndex(newAidx), basics.AssetCreatable)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, creator, creatorAddr)
+	_, ok, err = l.GetCreatorForRound(l.start, basics.CreatableIndex(newAidx), basics.AppCreatable)
+	require.NoError(t, err)
+	require.False(t, ok)
+
+	creatorData, _, err := l.LookupWithoutRewards(l.start, creator)
+	require.NoError(t, err)
+	require.Equal(t, realCreator.TotalAssetParams+1, creatorData.TotalAssetParams)
+	require.Equal(t, realCreator.TotalAssets+1, creatorData.TotalAssets)
+
+	holderData, _, err := l.LookupWithoutRewards(l.start, holder)
+	require.NoError(t, err)
+	require.Equal(t, realHolder.TotalAssets+2, holderData.TotalAssets)
+	require.Equal(t, realHolder.TotalAssetParams, holderData.TotalAssetParams)
 }

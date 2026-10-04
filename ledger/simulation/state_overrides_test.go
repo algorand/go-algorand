@@ -960,3 +960,297 @@ int 1`)
 	require.Contains(t, result.TxnGroups[0].FailureMessage, "rejected by ApprovalProgram")
 	require.Equal(t, before, snapshot())
 }
+
+func TestStateOverrideAssetHolding(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	creator := env.Accounts[0]
+	holder := env.Accounts[1]
+	aidx := env.CreateAsset(creator.Addr, basics.AssetParams{Total: 1_000, Freeze: creator.Addr})
+	realHolder, _, err := env.Ledger.LookupWithoutRewards(env.Ledger.Latest(), holder.Addr)
+	require.NoError(t, err)
+
+	// The holder is not opted in, so cannot send the asset
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.AssetTransferTx,
+		Sender:        holder.Addr,
+		AssetReceiver: creator.Addr,
+		XferAsset:     aidx,
+		AssetAmount:   100,
+	}).Txn().Sign(holder.Sk)
+
+	s := simulation.MakeSimulator(env.Ledger, false)
+
+	result, err := s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{{txn}}})
+	require.NoError(t, err)
+	require.Contains(t, result.TxnGroups[0].FailureMessage, fmt.Sprintf("asset %d missing from %s", aidx, holder.Addr))
+
+	holding := func(amount uint64, frozen *bool) simulation.StateOverrides {
+		return simulation.StateOverrides{
+			Accounts: map[basics.Address]simulation.AccountOverride{
+				holder.Addr: {Assets: map[basics.AssetIndex]simulation.AssetHoldingOverride{
+					aidx: {Amount: &amount, Frozen: frozen},
+				}},
+			},
+		}
+	}
+
+	// Overriding the holding opts the holder in
+	result, err = s.Simulate(simulation.Request{
+		TxnGroups:      [][]transactions.SignedTxn{{txn}},
+		StateOverrides: holding(500, nil),
+	})
+	require.NoError(t, err)
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+
+	delta := result.Block.Delta()
+	holderHolding, ok := delta.Accts.GetAssetHolding(holder.Addr, aidx)
+	require.True(t, ok)
+	require.Equal(t, uint64(400), holderHolding.Holding.Amount)
+	holderData, ok := delta.Accts.GetData(holder.Addr)
+	require.True(t, ok)
+	require.Equal(t, realHolder.TotalAssets+1, holderData.TotalAssets)
+
+	// The overridden amount is respected
+	result, err = s.Simulate(simulation.Request{
+		TxnGroups:      [][]transactions.SignedTxn{{txn}},
+		StateOverrides: holding(50, nil),
+	})
+	require.NoError(t, err)
+	require.Contains(t, result.TxnGroups[0].FailureMessage, "underflow")
+
+	// As is the frozen flag
+	yes := true
+	result, err = s.Simulate(simulation.Request{
+		TxnGroups:      [][]transactions.SignedTxn{{txn}},
+		StateOverrides: holding(500, &yes),
+	})
+	require.NoError(t, err)
+	require.Contains(t, result.TxnGroups[0].FailureMessage, "frozen")
+
+	// The real ledger is unaffected
+	res, err := env.Ledger.LookupAsset(env.Ledger.Latest(), holder.Addr, aidx)
+	require.NoError(t, err)
+	require.Nil(t, res.AssetHolding)
+	acct, _, err := env.Ledger.LookupWithoutRewards(env.Ledger.Latest(), holder.Addr)
+	require.NoError(t, err)
+	require.Equal(t, realHolder, acct)
+}
+
+func TestStateOverrideExistingAsset(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	creator := env.Accounts[0]
+	caller := env.Accounts[1]
+	aidx := env.CreateAsset(creator.Addr, basics.AssetParams{Total: 1_000, UnitName: "old"})
+
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:   protocol.ApplicationCallTx,
+		Sender: caller.Addr,
+		ApprovalProgram: fmt.Sprintf(`#pragma version 8
+int %[1]d
+asset_params_get AssetUnitName
+assert
+byte "new"
+==
+assert
+int %[1]d
+asset_params_get AssetTotal
+assert
+int 7
+==
+assert
+int %[1]d
+asset_params_get AssetManager
+assert
+addr %[2]s
+==`, aidx, caller.Addr),
+		ClearStateProgram: "#pragma version 8\nint 1",
+		ForeignAssets:     []basics.AssetIndex{aidx},
+	}).Txn().Sign(caller.Sk)
+
+	s := simulation.MakeSimulator(env.Ledger, false)
+
+	result, err := s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{{txn}}})
+	require.NoError(t, err)
+	require.Contains(t, result.TxnGroups[0].FailureMessage, "assert failed")
+
+	unitName := "new"
+	total := uint64(7)
+	result, err = s.Simulate(simulation.Request{
+		TxnGroups: [][]transactions.SignedTxn{{txn}},
+		StateOverrides: simulation.StateOverrides{
+			Assets: map[basics.AssetIndex]simulation.AssetOverride{
+				aidx: {UnitName: &unitName, Total: &total, Manager: &caller.Addr},
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+}
+
+func TestStateOverrideCreateAsset(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	creator := env.Accounts[0]
+	receiver := env.Accounts[1]
+
+	// Advance the txn counter so there is an unused ID available for the new asset
+	env.TransferAlgos(creator.Addr, receiver.Addr, 1)
+	aidx := basics.AssetIndex(env.TxnInfo.LatestHeader.TxnCounter)
+	realCreator, _, err := env.Ledger.LookupWithoutRewards(env.Ledger.Latest(), creator.Addr)
+	require.NoError(t, err)
+
+	// The creator holds the total, and sends some to the receiver, which is opted in by override
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.AssetTransferTx,
+		Sender:        creator.Addr,
+		AssetReceiver: receiver.Addr,
+		XferAsset:     aidx,
+		AssetAmount:   300,
+	}).Txn().Sign(creator.Sk)
+
+	total := uint64(1_000)
+	result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+		TxnGroups: [][]transactions.SignedTxn{{txn}},
+		StateOverrides: simulation.StateOverrides{
+			Accounts: map[basics.Address]simulation.AccountOverride{
+				receiver.Addr: {Assets: map[basics.AssetIndex]simulation.AssetHoldingOverride{aidx: {}}},
+			},
+			Assets: map[basics.AssetIndex]simulation.AssetOverride{
+				aidx: {Creator: creator.Addr, Total: &total},
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+
+	delta := result.Block.Delta()
+	creatorHolding, ok := delta.Accts.GetAssetHolding(creator.Addr, aidx)
+	require.True(t, ok)
+	require.Equal(t, uint64(700), creatorHolding.Holding.Amount)
+	receiverHolding, ok := delta.Accts.GetAssetHolding(receiver.Addr, aidx)
+	require.True(t, ok)
+	require.Equal(t, uint64(300), receiverHolding.Holding.Amount)
+	creatorData, ok := delta.Accts.GetData(creator.Addr)
+	require.True(t, ok)
+	require.Equal(t, realCreator.TotalAssetParams+1, creatorData.TotalAssetParams)
+	require.Equal(t, realCreator.TotalAssets+1, creatorData.TotalAssets)
+
+	// The real ledger is unaffected
+	_, exists, err := env.Ledger.GetCreatorForRound(env.Ledger.Latest(), basics.CreatableIndex(aidx), basics.AssetCreatable)
+	require.NoError(t, err)
+	require.False(t, exists)
+}
+
+func TestStateOverrideAssetValidation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	creator := env.Accounts[0]
+	other := env.Accounts[1]
+	aidx := env.CreateAsset(creator.Addr, basics.AssetParams{Total: 1})
+	appIdx := env.CreateApp(creator.Addr, simulationtesting.AppParams{
+		ApprovalProgram:   "#pragma version 8\nint 1",
+		ClearStateProgram: "#pragma version 8\nint 1",
+	})
+	env.TransferAlgos(creator.Addr, other.Addr, 1)
+	newAidx := basics.AssetIndex(env.TxnInfo.LatestHeader.TxnCounter)
+	txnCounter := env.TxnInfo.LatestHeader.TxnCounter
+	program := assemble(t, "#pragma version 8\nint 1")
+
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   creator.Addr,
+		Receiver: other.Addr,
+	}).Txn().Sign(creator.Sk)
+
+	testCases := []struct {
+		name          string
+		overrides     simulation.StateOverrides
+		expectedError string
+	}{
+		{
+			name:          "zero ID",
+			overrides:     simulation.StateOverrides{Assets: map[basics.AssetIndex]simulation.AssetOverride{0: {Creator: creator.Addr}}},
+			expectedError: "asset ID must be non-zero",
+		},
+		{
+			name:          "ID too large",
+			overrides:     simulation.StateOverrides{Assets: map[basics.AssetIndex]simulation.AssetOverride{math.MaxInt64 + 1: {Creator: creator.Addr}}},
+			expectedError: "exceeds maximum",
+		},
+		{
+			name:          "reserved ID",
+			overrides:     simulation.StateOverrides{Assets: map[basics.AssetIndex]simulation.AssetOverride{basics.AssetIndex(txnCounter + 1): {Creator: creator.Addr}}},
+			expectedError: "may be assigned during simulation",
+		},
+		{
+			name:          "missing creator",
+			overrides:     simulation.StateOverrides{Assets: map[basics.AssetIndex]simulation.AssetOverride{newAidx: {}}},
+			expectedError: "creator is required",
+		},
+		{
+			name:          "change creator",
+			overrides:     simulation.StateOverrides{Assets: map[basics.AssetIndex]simulation.AssetOverride{aidx: {Creator: other.Addr}}},
+			expectedError: "cannot be changed",
+		},
+		{
+			name:          "existing app ID",
+			overrides:     simulation.StateOverrides{Assets: map[basics.AssetIndex]simulation.AssetOverride{basics.AssetIndex(appIdx): {Creator: creator.Addr}}},
+			expectedError: "an app exists with that ID",
+		},
+		{
+			name: "new app ID",
+			overrides: simulation.StateOverrides{
+				Apps: map[basics.AppIndex]simulation.AppOverride{
+					basics.AppIndex(newAidx): {Creator: creator.Addr, ApprovalProgram: program, ClearStateProgram: program},
+				},
+				Assets: map[basics.AssetIndex]simulation.AssetOverride{newAidx: {Creator: creator.Addr}},
+			},
+			expectedError: "an app exists with that ID",
+		},
+		{
+			name: "app with existing asset ID",
+			overrides: simulation.StateOverrides{Apps: map[basics.AppIndex]simulation.AppOverride{
+				basics.AppIndex(aidx): {Creator: creator.Addr, ApprovalProgram: program, ClearStateProgram: program},
+			}},
+			expectedError: "an asset exists with that ID",
+		},
+		{
+			name: "holding of missing asset",
+			overrides: simulation.StateOverrides{Accounts: map[basics.Address]simulation.AccountOverride{
+				other.Addr: {Assets: map[basics.AssetIndex]simulation.AssetHoldingOverride{newAidx: {}}},
+			}},
+			expectedError: "asset does not exist",
+		},
+	}
+
+	s := simulation.MakeSimulator(env.Ledger, false)
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := s.Simulate(simulation.Request{
+				TxnGroups:      [][]transactions.SignedTxn{{txn}},
+				StateOverrides: tc.overrides,
+			})
+			require.ErrorAs(t, err, &simulation.InvalidRequestError{})
+			require.ErrorContains(t, err, tc.expectedError)
+		})
+	}
+}

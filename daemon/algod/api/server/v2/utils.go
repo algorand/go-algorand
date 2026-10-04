@@ -654,6 +654,18 @@ func convertStateOverrides(overrides *model.SimulateStateOverrides) (simulation.
 			if acct.Balance != nil {
 				override.Balance = &basics.MicroAlgos{Raw: *acct.Balance}
 			}
+			if acct.Assets != nil && len(*acct.Assets) > 0 {
+				override.Assets = make(map[basics.AssetIndex]simulation.AssetHoldingOverride, len(*acct.Assets))
+				for _, holding := range *acct.Assets {
+					if _, ok := override.Assets[holding.AssetID]; ok {
+						return simulation.StateOverrides{}, fmt.Errorf("invalid state override: account %s: duplicate asset %d", addr, holding.AssetID)
+					}
+					override.Assets[holding.AssetID] = simulation.AssetHoldingOverride{
+						Amount: holding.Amount,
+						Frozen: holding.IsFrozen,
+					}
+				}
+			}
 			result.Accounts[addr] = override
 		}
 	}
@@ -672,7 +684,86 @@ func convertStateOverrides(overrides *model.SimulateStateOverrides) (simulation.
 		}
 	}
 
+	if overrides.Assets != nil && len(*overrides.Assets) > 0 {
+		result.Assets = make(map[basics.AssetIndex]simulation.AssetOverride, len(*overrides.Assets))
+		for _, asset := range *overrides.Assets {
+			if _, ok := result.Assets[asset.Id]; ok {
+				return simulation.StateOverrides{}, fmt.Errorf("invalid state override: duplicate asset %d", asset.Id)
+			}
+			override, err := convertAssetOverride(asset)
+			if err != nil {
+				return simulation.StateOverrides{}, fmt.Errorf("invalid state override: asset %d: %w", asset.Id, err)
+			}
+			result.Assets[asset.Id] = override
+		}
+	}
+
 	return result, nil
+}
+
+func convertAssetOverride(asset model.SimulateAssetOverride) (simulation.AssetOverride, error) {
+	var override simulation.AssetOverride
+	var err error
+	if asset.Creator != nil {
+		override.Creator, err = basics.UnmarshalChecksumAddress(*asset.Creator)
+		if err != nil {
+			return simulation.AssetOverride{}, fmt.Errorf("creator %q: %w", *asset.Creator, err)
+		}
+	}
+	override.Total = asset.Total
+	override.Decimals = asset.Decimals
+	override.DefaultFrozen = asset.DefaultFrozen
+	if override.UnitName, err = stringOrB64("unit-name", asset.UnitName, asset.UnitNameB64); err != nil {
+		return simulation.AssetOverride{}, err
+	}
+	if override.AssetName, err = stringOrB64("name", asset.Name, asset.NameB64); err != nil {
+		return simulation.AssetOverride{}, err
+	}
+	if override.URL, err = stringOrB64("url", asset.Url, asset.UrlB64); err != nil {
+		return simulation.AssetOverride{}, err
+	}
+	if asset.MetadataHash != nil {
+		var hash [32]byte
+		if len(*asset.MetadataHash) != len(hash) {
+			return simulation.AssetOverride{}, fmt.Errorf("metadata hash must be %d bytes, not %d", len(hash), len(*asset.MetadataHash))
+		}
+		copy(hash[:], *asset.MetadataHash)
+		override.MetadataHash = &hash
+	}
+	addrs := []struct {
+		name  string
+		value *string
+		dest  **basics.Address
+	}{
+		{"manager", asset.Manager, &override.Manager},
+		{"reserve", asset.Reserve, &override.Reserve},
+		{"freeze", asset.Freeze, &override.Freeze},
+		{"clawback", asset.Clawback, &override.Clawback},
+	}
+	for _, a := range addrs {
+		if a.value == nil {
+			continue
+		}
+		addr, err := basics.UnmarshalChecksumAddress(*a.value)
+		if err != nil {
+			return simulation.AssetOverride{}, fmt.Errorf("%s %q: %w", a.name, *a.value, err)
+		}
+		*a.dest = &addr
+	}
+	return override, nil
+}
+
+// stringOrB64 returns the value of a field that may be given either as a string or as base64
+// encoded bytes, but not both.
+func stringOrB64(name string, str *string, b64 *[]byte) (*string, error) {
+	if str != nil && b64 != nil {
+		return nil, fmt.Errorf("%s and %s-b64 cannot both be set", name, name)
+	}
+	if b64 != nil {
+		value := string(*b64)
+		return &value, nil
+	}
+	return str, nil
 }
 
 func convertAppOverride(app model.SimulateAppOverride) (simulation.AppOverride, error) {
