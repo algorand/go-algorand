@@ -27,6 +27,8 @@ import (
 	"github.com/algorand/avm-abi/apps"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -48,6 +50,27 @@ type AccountOverride struct {
 	// Online stake is not overridden, so for an online account, the voting balance (e.g. as seen
 	// by voter_params_get) and the online circulation still reflect the original balance.
 	Balance *basics.MicroAlgos
+
+	// AuthAddr, if set, replaces the address whose signature authorizes the account's
+	// transactions. The zero address means the account is not rekeyed.
+	AuthAddr *basics.Address
+
+	// Status, VotingData fields, IncentiveEligible, LastProposed and LastHeartbeat replace the
+	// account's consensus participation state. The account's balance moves between the online,
+	// offline and not participating totals if its status changes.
+	//
+	// As with Balance, this does not override the online state used for agreement, which is
+	// looked up as of the balance round (e.g. as seen by voter_params_get and online_stake).
+	Status            *basics.Status
+	VoteID            *crypto.OneTimeSignatureVerifier
+	SelectionID       *crypto.VRFVerifier
+	StateProofID      *merklesignature.Commitment
+	VoteFirstValid    *basics.Round
+	VoteLastValid     *basics.Round
+	VoteKeyDilution   *uint64
+	IncentiveEligible *bool
+	LastProposed      *basics.Round
+	LastHeartbeat     *basics.Round
 
 	// Assets maps asset IDs to overrides of the account's holdings. If the account is not opted in
 	// to an asset, it is opted in. The asset must exist, either on the ledger or by an
@@ -277,6 +300,9 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 			// Set the rewards base to the current rewards level so there are no pending rewards
 			acct.RewardsBase = totals.RewardsLevel
 		}
+		if err = overlayAccountFields(&acct, addr, override); err != nil {
+			return nil, err
+		}
 		for _, aidx := range sortedKeys(override.Assets) {
 			if acct, err = l.overlayHolding(o, acct, addr, aidx, override.Assets[aidx]); err != nil {
 				return nil, err
@@ -305,6 +331,49 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 	o.totals = totals
 
 	return o, nil
+}
+
+// overlayAccountFields applies the overrides of an account's own fields, other than its balance.
+func overlayAccountFields(acct *ledgercore.AccountData, addr basics.Address, override AccountOverride) error {
+	if override.Status != nil {
+		switch *override.Status {
+		case basics.Offline, basics.Online, basics.NotParticipating:
+			acct.Status = *override.Status
+		default:
+			return invalidOverride("account %s status %d is not valid", addr, *override.Status)
+		}
+	}
+	if override.AuthAddr != nil {
+		acct.AuthAddr = *override.AuthAddr
+	}
+	if override.VoteID != nil {
+		acct.VoteID = *override.VoteID
+	}
+	if override.SelectionID != nil {
+		acct.SelectionID = *override.SelectionID
+	}
+	if override.StateProofID != nil {
+		acct.StateProofID = *override.StateProofID
+	}
+	if override.VoteFirstValid != nil {
+		acct.VoteFirstValid = *override.VoteFirstValid
+	}
+	if override.VoteLastValid != nil {
+		acct.VoteLastValid = *override.VoteLastValid
+	}
+	if override.VoteKeyDilution != nil {
+		acct.VoteKeyDilution = *override.VoteKeyDilution
+	}
+	if override.IncentiveEligible != nil {
+		acct.IncentiveEligible = *override.IncentiveEligible
+	}
+	if override.LastProposed != nil {
+		acct.LastProposed = *override.LastProposed
+	}
+	if override.LastHeartbeat != nil {
+		acct.LastHeartbeat = *override.LastHeartbeat
+	}
+	return nil
 }
 
 func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Address) (ledgercore.AccountData, error),

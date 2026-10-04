@@ -1461,3 +1461,176 @@ func TestStateOverrideLocalStateValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestStateOverrideAuthAddr(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	sender := env.Accounts[0]
+	signer := env.Accounts[1]
+	receiver := env.Accounts[2]
+
+	payment := func() txntest.Txn {
+		return env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: receiver.Addr,
+			Amount:   1,
+		})
+	}
+	rekeyedTxn := payment().Txn().Sign(signer.Sk)
+	rekeyedTxn.AuthAddr = signer.Addr
+	ownTxn := payment().Txn().Sign(sender.Sk)
+	authOverride := func(addr basics.Address) simulation.StateOverrides {
+		return simulation.StateOverrides{Accounts: map[basics.Address]simulation.AccountOverride{
+			sender.Addr: {AuthAddr: &addr},
+		}}
+	}
+
+	s := simulation.MakeSimulator(env.Ledger, false)
+
+	// Without the override, the sender is not rekeyed
+	result, err := s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{{rekeyedTxn}}})
+	require.NoError(t, err)
+	require.Contains(t, result.TxnGroups[0].FailureMessage, "should have been authorized by")
+
+	result, err = s.Simulate(simulation.Request{
+		TxnGroups:      [][]transactions.SignedTxn{{rekeyedTxn}},
+		StateOverrides: authOverride(signer.Addr),
+	})
+	require.NoError(t, err)
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+
+	// Once rekeyed, the sender's own signature is not enough
+	result, err = s.Simulate(simulation.Request{
+		TxnGroups:      [][]transactions.SignedTxn{{ownTxn}},
+		StateOverrides: authOverride(signer.Addr),
+	})
+	require.NoError(t, err)
+	require.Contains(t, result.TxnGroups[0].FailureMessage, "should have been authorized by")
+
+	// Fixing signers uses the overridden auth addr
+	unsigned := payment().SignedTxn()
+	result, err = s.Simulate(simulation.Request{
+		TxnGroups:            [][]transactions.SignedTxn{{unsigned}},
+		AllowEmptySignatures: true,
+		FixSigners:           true,
+		StateOverrides:       authOverride(signer.Addr),
+	})
+	require.NoError(t, err)
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+	require.Equal(t, signer.Addr, result.TxnGroups[0].Txns[0].FixedSigner)
+
+	// The zero address undoes a real rekey
+	env.Rekey(sender.Addr, signer.Addr)
+	ownTxn = payment().Txn().Sign(sender.Sk)
+	result, err = s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{{ownTxn}}})
+	require.NoError(t, err)
+	require.Contains(t, result.TxnGroups[0].FailureMessage, "should have been authorized by")
+
+	result, err = s.Simulate(simulation.Request{
+		TxnGroups:      [][]transactions.SignedTxn{{ownTxn}},
+		StateOverrides: authOverride(basics.Address{}),
+	})
+	require.NoError(t, err)
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+}
+
+func TestStateOverrideAccountParamsVisibleToAVM(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	sender := env.Accounts[0]
+	authAddr := env.Accounts[1].Addr
+
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:   protocol.ApplicationCallTx,
+		Sender: sender.Addr,
+		ApprovalProgram: fmt.Sprintf(`#pragma version 11
+txn Sender
+acct_params_get AcctAuthAddr
+assert
+addr %s
+==
+assert
+txn Sender
+acct_params_get AcctIncentiveEligible
+assert
+assert
+txn Sender
+acct_params_get AcctLastProposed
+assert
+int 11
+==
+assert
+txn Sender
+acct_params_get AcctLastHeartbeat
+assert
+int 12
+==`, authAddr),
+		ClearStateProgram: "#pragma version 11\nint 1",
+	})
+	// The sender is rekeyed, so the auth addr must sign
+	stxn := txn.Txn().Sign(env.Accounts[1].Sk)
+	stxn.AuthAddr = authAddr
+
+	yes := true
+	lastProposed := basics.Round(11)
+	lastHeartbeat := basics.Round(12)
+	result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+		TxnGroups: [][]transactions.SignedTxn{{stxn}},
+		StateOverrides: simulation.StateOverrides{Accounts: map[basics.Address]simulation.AccountOverride{
+			sender.Addr: {
+				AuthAddr:          &authAddr,
+				IncentiveEligible: &yes,
+				LastProposed:      &lastProposed,
+				LastHeartbeat:     &lastHeartbeat,
+			},
+		}},
+	})
+	require.NoError(t, err)
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+}
+
+func TestStateOverrideAccountStatus(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	sender := env.Accounts[0]
+
+	// Going offline is only allowed for an account that is not NotParticipating
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:   protocol.KeyRegistrationTx,
+		Sender: sender.Addr,
+	}).Txn().Sign(sender.Sk)
+
+	s := simulation.MakeSimulator(env.Ledger, false)
+	notParticipating := basics.NotParticipating
+	result, err := s.Simulate(simulation.Request{
+		TxnGroups: [][]transactions.SignedTxn{{txn}},
+		StateOverrides: simulation.StateOverrides{Accounts: map[basics.Address]simulation.AccountOverride{
+			sender.Addr: {Status: &notParticipating},
+		}},
+	})
+	require.NoError(t, err)
+	require.Contains(t, result.TxnGroups[0].FailureMessage, "cannot change online/offline status of non-participating account")
+
+	invalid := basics.Status(9)
+	_, err = s.Simulate(simulation.Request{
+		TxnGroups: [][]transactions.SignedTxn{{txn}},
+		StateOverrides: simulation.StateOverrides{Accounts: map[basics.Address]simulation.AccountOverride{
+			sender.Addr: {Status: &invalid},
+		}},
+	})
+	require.ErrorAs(t, err, &simulation.InvalidRequestError{})
+	require.ErrorContains(t, err, "status 9 is not valid")
+}

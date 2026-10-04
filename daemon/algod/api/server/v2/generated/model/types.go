@@ -809,8 +809,41 @@ type SimulateAccountOverride struct {
 	// Assets Asset holding overrides. If the account is not opted in to an asset, it is opted in. Each asset ID may appear at most once.
 	Assets *[]SimulateAssetHoldingOverride `json:"assets,omitempty"`
 
+	// AuthAddr If set, replaces the address against which signing should be checked. The zero address means the account is not rekeyed.
+	AuthAddr *string `json:"auth-addr,omitempty"`
+
 	// Balance If set, replaces the account's balance in microAlgos. Pending rewards are forfeited. Online stake is not overridden.
 	Balance *uint64 `json:"balance,omitempty"`
+
+	// IncentiveEligible If set, replaces whether the account can receive block incentives.
+	IncentiveEligible *bool `json:"incentive-eligible,omitempty"`
+
+	// LastHeartbeat If set, replaces the round in which the account last sent a heartbeat.
+	LastHeartbeat *basics.Round `json:"last-heartbeat,omitempty"`
+
+	// LastProposed If set, replaces the round in which the account last proposed a block.
+	LastProposed *basics.Round `json:"last-proposed,omitempty"`
+
+	// SelectionParticipationKey If set, replaces the 32 byte selection public key.
+	SelectionParticipationKey *[]byte `json:"selection-participation-key,omitempty"`
+
+	// StateProofKey If set, replaces the 64 byte root of the state proof key.
+	StateProofKey *[]byte `json:"state-proof-key,omitempty"`
+
+	// Status If set, replaces the account's participation status, which is one of Offline, Online, or NotParticipating. The account's balance moves between the corresponding totals. The online state used for agreement, as of the balance round, is not overridden.
+	Status *string `json:"status,omitempty"`
+
+	// VoteFirstValid If set, replaces the first round for which the participation key is valid.
+	VoteFirstValid *basics.Round `json:"vote-first-valid,omitempty"`
+
+	// VoteKeyDilution If set, replaces the number of subkeys in each batch of participation keys.
+	VoteKeyDilution *uint64 `json:"vote-key-dilution,omitempty"`
+
+	// VoteLastValid If set, replaces the last round for which the participation key is valid.
+	VoteLastValid *basics.Round `json:"vote-last-valid,omitempty"`
+
+	// VoteParticipationKey If set, replaces the 32 byte root participation public key.
+	VoteParticipationKey *[]byte `json:"vote-participation-key,omitempty"`
 }
 
 // SimulateAppLocalStateOverride Modifications to an account's local state for an application. Omitted fields are left unchanged. For a new opt-in, the schema defaults to the application's local-state-schema.

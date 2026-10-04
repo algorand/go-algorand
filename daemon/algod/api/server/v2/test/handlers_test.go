@@ -3308,7 +3308,11 @@ byte "bvalue"
 				{
 					Address: sender.Address().String(),
 					Balance: omitEmpty(uint64(10_000_000)),
-					Assets:  &[]model.SimulateAssetHoldingOverride{{AssetID: assetID, Amount: omitEmpty(uint64(10))}},
+					// Not rekeyed, as the sender signs
+					AuthAddr:          omitEmpty(basics.Address{}.String()),
+					Status:            omitEmpty("Offline"),
+					IncentiveEligible: omitEmpty(true),
+					Assets:            &[]model.SimulateAssetHoldingOverride{{AssetID: assetID, Amount: omitEmpty(uint64(10))}},
 					Apps: &[]model.SimulateAppLocalStateOverride{{
 						AppID: appID,
 						KeyValue: &model.TealKeyValueStore{{
@@ -3401,6 +3405,13 @@ byte "bvalue"
 						(*o.Accounts)[0].Address = "not an address"
 					},
 					expected: "account address",
+				},
+				{
+					name: "bad status",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*o.Accounts)[0].Status = omitEmpty("Asleep")
+					},
+					expected: "unknown account status",
 				},
 				{
 					name: "duplicate account",

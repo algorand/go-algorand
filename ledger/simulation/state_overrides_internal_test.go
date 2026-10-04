@@ -19,27 +19,30 @@ package simulation
 import (
 	"math"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	simulationtesting "github.com/algorand/go-algorand/ledger/simulation/testing"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// requireOverrideCovers ensures that override has a field for every field of params, so that new
-// fields are not forgotten.
-func requireOverrideCovers(t *testing.T, override reflect.Type, params reflect.Type) {
+// requireOverrideCovers ensures that override has a field for every field of params, other than
+// those excluded, so that new fields are not forgotten.
+func requireOverrideCovers(t *testing.T, override reflect.Type, params reflect.Type, excluded ...string) {
 	t.Helper()
 	for i := 0; i < params.NumField(); i++ {
 		field := params.Field(i)
-		if field.Name == "_struct" {
+		if field.Name == "_struct" || slices.Contains(excluded, field.Name) {
 			continue
 		}
 		if field.Anonymous {
-			requireOverrideCovers(t, override, field.Type)
+			requireOverrideCovers(t, override, field.Type, excluded...)
 			continue
 		}
 		_, ok := override.FieldByName(field.Name)
@@ -55,6 +58,12 @@ func TestOverridesCoverAllFields(t *testing.T) {
 	requireOverrideCovers(t, reflect.TypeFor[AssetOverride](), reflect.TypeFor[basics.AssetParams]())
 	requireOverrideCovers(t, reflect.TypeFor[AssetHoldingOverride](), reflect.TypeFor[basics.AssetHolding]())
 	requireOverrideCovers(t, reflect.TypeFor[AppLocalStateOverride](), reflect.TypeFor[basics.AppLocalState]())
+	requireOverrideCovers(t, reflect.TypeFor[AccountOverride](), reflect.TypeFor[ledgercore.AccountData](),
+		// The balance is overridden by Balance, and pending rewards are not overridable
+		"MicroAlgos", "RewardsBase", "RewardedMicroAlgos",
+		// These are derived from the account's resources, so are maintained by their overrides
+		"TotalAppSchema", "TotalExtraAppPages", "TotalAppParams", "TotalAppLocalStates",
+		"TotalAssetParams", "TotalAssets", "TotalBoxes", "TotalBoxBytes")
 }
 
 func newOverlayLedger(t *testing.T, env *simulationtesting.Environment, overrides StateOverrides) simulatorLedger {
@@ -367,4 +376,78 @@ func TestLocalStateOverrides(t *testing.T) {
 	res, err = env.Ledger.LookupApplication(rnd, newOptIn, aidx)
 	require.NoError(t, err)
 	require.Nil(t, res.AppLocalState)
+}
+
+func TestAccountOverrideFields(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	rnd := env.Ledger.Latest()
+	totals, err := env.Ledger.Totals(rnd)
+	require.NoError(t, err)
+	proto := env.TxnInfo.CurrentProtocolParams()
+
+	// Find an online account to take offline
+	var addr basics.Address
+	var real ledgercore.AccountData
+	for _, account := range env.Accounts {
+		data, _, lookupErr := env.Ledger.LookupWithoutRewards(rnd, account.Addr)
+		require.NoError(t, lookupErr)
+		if data.Status == basics.Online {
+			addr, real = account.Addr, data
+			break
+		}
+	}
+	require.False(t, addr.IsZero(), "no online account")
+	money, _ := real.Money(proto.RewardUnit, totals.RewardsLevel)
+
+	offline := basics.Offline
+	authAddr := env.Accounts[0].Addr
+	voteID := crypto.OneTimeSignatureVerifier{1}
+	selectionID := crypto.VRFVerifier{2}
+	stateProofID := merklesignature.Commitment{3}
+	first, last := basics.Round(4), basics.Round(5)
+	dilution := uint64(6)
+	yes := true
+	lastProposed, lastHeartbeat := basics.Round(7), basics.Round(8)
+	l := newOverlayLedger(t, &env, StateOverrides{Accounts: map[basics.Address]AccountOverride{
+		addr: {
+			AuthAddr:          &authAddr,
+			Status:            &offline,
+			VoteID:            &voteID,
+			SelectionID:       &selectionID,
+			StateProofID:      &stateProofID,
+			VoteFirstValid:    &first,
+			VoteLastValid:     &last,
+			VoteKeyDilution:   &dilution,
+			IncentiveEligible: &yes,
+			LastProposed:      &lastProposed,
+			LastHeartbeat:     &lastHeartbeat,
+		},
+	}})
+
+	expected := real
+	expected.AuthAddr = authAddr
+	expected.Status = basics.Offline
+	expected.VotingData = basics.VotingData{
+		VoteID:          voteID,
+		SelectionID:     selectionID,
+		StateProofID:    stateProofID,
+		VoteFirstValid:  first,
+		VoteLastValid:   last,
+		VoteKeyDilution: dilution,
+	}
+	expected.IncentiveEligible = true
+	expected.LastProposed = lastProposed
+	expected.LastHeartbeat = lastHeartbeat
+	acct, _, err := l.LookupWithoutRewards(l.start, addr)
+	require.NoError(t, err)
+	require.Equal(t, expected, acct)
+
+	// The account's stake moves from the online to the offline totals
+	require.Equal(t, totals.Online.Money.Raw-money.Raw, l.overlay.totals.Online.Money.Raw)
+	require.Equal(t, totals.Offline.Money.Raw+money.Raw, l.overlay.totals.Offline.Money.Raw)
 }

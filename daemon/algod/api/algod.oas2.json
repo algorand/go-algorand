@@ -3359,6 +3359,59 @@
           "format": "uint64",
           "x-algorand-format": "uint64"
         },
+        "auth-addr": {
+          "description": "If set, replaces the address against which signing should be checked. The zero address means the account is not rekeyed.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
+        "status": {
+          "description": "If set, replaces the account's participation status, which is one of Offline, Online, or NotParticipating. The account's balance moves between the corresponding totals. The online state used for agreement, as of the balance round, is not overridden.",
+          "type": "string"
+        },
+        "vote-participation-key": {
+          "description": "If set, replaces the 32 byte root participation public key.",
+          "type": "string",
+          "format": "byte"
+        },
+        "selection-participation-key": {
+          "description": "If set, replaces the 32 byte selection public key.",
+          "type": "string",
+          "format": "byte"
+        },
+        "state-proof-key": {
+          "description": "If set, replaces the 64 byte root of the state proof key.",
+          "type": "string",
+          "format": "byte"
+        },
+        "vote-first-valid": {
+          "description": "If set, replaces the first round for which the participation key is valid.",
+          "type": "integer",
+          "x-go-type": "basics.Round"
+        },
+        "vote-last-valid": {
+          "description": "If set, replaces the last round for which the participation key is valid.",
+          "type": "integer",
+          "x-go-type": "basics.Round"
+        },
+        "vote-key-dilution": {
+          "description": "If set, replaces the number of subkeys in each batch of participation keys.",
+          "type": "integer",
+          "x-go-type": "uint64"
+        },
+        "incentive-eligible": {
+          "description": "If set, replaces whether the account can receive block incentives.",
+          "type": "boolean"
+        },
+        "last-proposed": {
+          "description": "If set, replaces the round in which the account last proposed a block.",
+          "type": "integer",
+          "x-go-type": "basics.Round"
+        },
+        "last-heartbeat": {
+          "description": "If set, replaces the round in which the account last sent a heartbeat.",
+          "type": "integer",
+          "x-go-type": "basics.Round"
+        },
         "assets": {
           "description": "Asset holding overrides. If the account is not opted in to an asset, it is opted in. Each asset ID may appear at most once.",
           "type": "array",

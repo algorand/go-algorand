@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-codec/codec"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -650,34 +651,9 @@ func convertStateOverrides(overrides *model.SimulateStateOverrides) (simulation.
 			if _, ok := result.Accounts[addr]; ok {
 				return simulation.StateOverrides{}, fmt.Errorf("invalid state override: duplicate account %s", addr)
 			}
-			var override simulation.AccountOverride
-			if acct.Balance != nil {
-				override.Balance = &basics.MicroAlgos{Raw: *acct.Balance}
-			}
-			if acct.Assets != nil && len(*acct.Assets) > 0 {
-				override.Assets = make(map[basics.AssetIndex]simulation.AssetHoldingOverride, len(*acct.Assets))
-				for _, holding := range *acct.Assets {
-					if _, ok := override.Assets[holding.AssetID]; ok {
-						return simulation.StateOverrides{}, fmt.Errorf("invalid state override: account %s: duplicate asset %d", addr, holding.AssetID)
-					}
-					override.Assets[holding.AssetID] = simulation.AssetHoldingOverride{
-						Amount: holding.Amount,
-						Frozen: holding.IsFrozen,
-					}
-				}
-			}
-			if acct.Apps != nil && len(*acct.Apps) > 0 {
-				override.Apps = make(map[basics.AppIndex]simulation.AppLocalStateOverride, len(*acct.Apps))
-				for _, local := range *acct.Apps {
-					if _, ok := override.Apps[local.AppID]; ok {
-						return simulation.StateOverrides{}, fmt.Errorf("invalid state override: account %s: duplicate app %d", addr, local.AppID)
-					}
-					localOverride, err := convertAppLocalStateOverride(local)
-					if err != nil {
-						return simulation.StateOverrides{}, fmt.Errorf("invalid state override: account %s: app %d: %w", addr, local.AppID, err)
-					}
-					override.Apps[local.AppID] = localOverride
-				}
+			override, err := convertAccountOverride(acct)
+			if err != nil {
+				return simulation.StateOverrides{}, fmt.Errorf("invalid state override: account %s: %w", addr, err)
 			}
 			result.Accounts[addr] = override
 		}
@@ -712,6 +688,92 @@ func convertStateOverrides(overrides *model.SimulateStateOverrides) (simulation.
 	}
 
 	return result, nil
+}
+
+func convertAccountOverride(acct model.SimulateAccountOverride) (simulation.AccountOverride, error) {
+	var override simulation.AccountOverride
+	if acct.Balance != nil {
+		override.Balance = &basics.MicroAlgos{Raw: *acct.Balance}
+	}
+	if acct.AuthAddr != nil {
+		authAddr, err := basics.UnmarshalChecksumAddress(*acct.AuthAddr)
+		if err != nil {
+			return simulation.AccountOverride{}, fmt.Errorf("auth addr %q: %w", *acct.AuthAddr, err)
+		}
+		override.AuthAddr = &authAddr
+	}
+	if acct.Status != nil {
+		var status basics.Status
+		// Accept the documented NotParticipating, as well as "Not Participating", which is how
+		// account status is returned
+		if *acct.Status == "NotParticipating" {
+			status = basics.NotParticipating
+		} else {
+			var err error
+			status, err = basics.UnmarshalStatus(*acct.Status)
+			if err != nil {
+				return simulation.AccountOverride{}, err
+			}
+		}
+		override.Status = &status
+	}
+	if acct.VoteParticipationKey != nil {
+		var voteID crypto.OneTimeSignatureVerifier
+		if len(*acct.VoteParticipationKey) != len(voteID) {
+			return simulation.AccountOverride{}, fmt.Errorf("vote participation key must be %d bytes, not %d", len(voteID), len(*acct.VoteParticipationKey))
+		}
+		copy(voteID[:], *acct.VoteParticipationKey)
+		override.VoteID = &voteID
+	}
+	if acct.SelectionParticipationKey != nil {
+		var selectionID crypto.VRFVerifier
+		if len(*acct.SelectionParticipationKey) != len(selectionID) {
+			return simulation.AccountOverride{}, fmt.Errorf("selection participation key must be %d bytes, not %d", len(selectionID), len(*acct.SelectionParticipationKey))
+		}
+		copy(selectionID[:], *acct.SelectionParticipationKey)
+		override.SelectionID = &selectionID
+	}
+	if acct.StateProofKey != nil {
+		var stateProofID merklesignature.Commitment
+		if len(*acct.StateProofKey) != len(stateProofID) {
+			return simulation.AccountOverride{}, fmt.Errorf("state proof key must be %d bytes, not %d", len(stateProofID), len(*acct.StateProofKey))
+		}
+		copy(stateProofID[:], *acct.StateProofKey)
+		override.StateProofID = &stateProofID
+	}
+	override.VoteFirstValid = acct.VoteFirstValid
+	override.VoteLastValid = acct.VoteLastValid
+	override.VoteKeyDilution = acct.VoteKeyDilution
+	override.IncentiveEligible = acct.IncentiveEligible
+	override.LastProposed = acct.LastProposed
+	override.LastHeartbeat = acct.LastHeartbeat
+
+	if acct.Assets != nil && len(*acct.Assets) > 0 {
+		override.Assets = make(map[basics.AssetIndex]simulation.AssetHoldingOverride, len(*acct.Assets))
+		for _, holding := range *acct.Assets {
+			if _, ok := override.Assets[holding.AssetID]; ok {
+				return simulation.AccountOverride{}, fmt.Errorf("duplicate asset %d", holding.AssetID)
+			}
+			override.Assets[holding.AssetID] = simulation.AssetHoldingOverride{
+				Amount: holding.Amount,
+				Frozen: holding.IsFrozen,
+			}
+		}
+	}
+	if acct.Apps != nil && len(*acct.Apps) > 0 {
+		override.Apps = make(map[basics.AppIndex]simulation.AppLocalStateOverride, len(*acct.Apps))
+		for _, local := range *acct.Apps {
+			if _, ok := override.Apps[local.AppID]; ok {
+				return simulation.AccountOverride{}, fmt.Errorf("duplicate app %d", local.AppID)
+			}
+			localOverride, err := convertAppLocalStateOverride(local)
+			if err != nil {
+				return simulation.AccountOverride{}, fmt.Errorf("app %d: %w", local.AppID, err)
+			}
+			override.Apps[local.AppID] = localOverride
+		}
+	}
+	return override, nil
 }
 
 func convertAppLocalStateOverride(local model.SimulateAppLocalStateOverride) (simulation.AppLocalStateOverride, error) {
