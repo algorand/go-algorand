@@ -1069,7 +1069,11 @@ const (
 	// PKCS1v15_SHA256 is RSASSA-PKCS1-v1_5 over a SHA-256 digest
 	PKCS1v15_SHA256 RsaScheme = iota //nolint:revive // the TEAL field name is taken from the identifier
 	// PKCS1v15_SHA512 is RSASSA-PKCS1-v1_5 over a SHA-512 digest
-	PKCS1v15_SHA512  //nolint:revive // the TEAL field name is taken from the identifier
+	PKCS1v15_SHA512 //nolint:revive // the TEAL field name is taken from the identifier
+	// PSS_SHA256 is RSASSA-PSS over a SHA-256 digest, with MGF1-SHA-256 and a 32 byte salt
+	PSS_SHA256 //nolint:revive // the TEAL field name is taken from the identifier
+	// PSS_SHA512 is RSASSA-PSS over a SHA-512 digest, with MGF1-SHA-512 and a 64 byte salt
+	PSS_SHA512       //nolint:revive // the TEAL field name is taken from the identifier
 	invalidRsaScheme // compile-time constant for number of fields
 )
 
@@ -1103,6 +1107,8 @@ func (fs rsaSchemeSpec) Modes() RunMode {
 var rsaSchemeSpecs = [...]rsaSchemeSpec{
 	{PKCS1v15_SHA256, rsaVersion, "RSASSA-PKCS1-v1_5 with a 32 byte SHA-256 digest"},
 	{PKCS1v15_SHA512, rsaVersion, "RSASSA-PKCS1-v1_5 with a 64 byte SHA-512 digest"},
+	{PSS_SHA256, rsaVersion, "RSASSA-PSS with a 32 byte SHA-256 digest, MGF1 with SHA-256, and a 32 byte salt"},
+	{PSS_SHA512, rsaVersion, "RSASSA-PSS with a 64 byte SHA-512 digest, MGF1 with SHA-512, and a 64 byte salt"},
 }
 
 func rsaSchemeSpecByField(s RsaScheme) (rsaSchemeSpec, bool) {

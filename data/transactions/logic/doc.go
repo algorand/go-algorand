@@ -76,9 +76,9 @@ var opDescByName = map[string]OpDesc{
 	"ecdsa_pk_recover":    {"for (data A, recovery id B, signature C, D) recover a public key", "S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to derive a public key. All values are big-endian encoded. The signed data must be 32 bytes long.", []string{"curve index"}, ""},
 
 	"rsa_verify": {"for (digest A, signature B, modulus C, exponent D) verify the RSA signature of the digest against the public key => {0 or 1}", "" +
-		"A is the digest of the signed message, not the message; the opcode builds the DigestInfo that the scheme signs. B and C are big-endian, and D is the public exponent. " +
+		"A is the digest of the signed message, not the message. The PKCS1v15 schemes build the DigestInfo that is signed. The PSS schemes use MGF1 with the digest's hash, and a salt as long as the digest. B and C are big-endian, and D is the public exponent. " +
 		"Fail if A is not the digest length of scheme S, if C is longer than 512 bytes, or if B is not exactly as long as C: leading zero bytes are never added or removed. " +
-		"Return 0 if C has a leading zero byte, the modulus is shorter than 1024 bits or even, D is even, below 3 or above 65537, B is not less than the modulus, or the padding or digest does not match.",
+		"Return 0 if C has a leading zero byte, the modulus is shorter than 1024 bits (1034 bits for PSS_SHA512, the shortest that fits its encoding) or even, D is even, below 3 or above 65537, B is not less than the modulus, or the padding or digest does not match.",
 		[]string{"scheme index"}, ""},
 
 	"ec_add": {"for curve points A and B, return the curve point A + B", "" +

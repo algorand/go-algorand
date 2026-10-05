@@ -377,12 +377,14 @@ func _() {
 	var x [1]struct{}
 	_ = x[PKCS1v15_SHA256-0]
 	_ = x[PKCS1v15_SHA512-1]
-	_ = x[invalidRsaScheme-2]
+	_ = x[PSS_SHA256-2]
+	_ = x[PSS_SHA512-3]
+	_ = x[invalidRsaScheme-4]
 }
 
-const _RsaScheme_name = "PKCS1v15_SHA256PKCS1v15_SHA512invalidRsaScheme"
+const _RsaScheme_name = "PKCS1v15_SHA256PKCS1v15_SHA512PSS_SHA256PSS_SHA512invalidRsaScheme"
 
-var _RsaScheme_index = [...]uint8{0, 15, 30, 46}
+var _RsaScheme_index = [...]uint8{0, 15, 30, 40, 50, 66}
 
 func (i RsaScheme) String() string {
 	idx := int(i) - 0

@@ -22,6 +22,8 @@ import (
 	"crypto/elliptic"
 	"crypto/sha256"
 	"crypto/sha512"
+	"crypto/subtle"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"hash"
@@ -483,12 +485,17 @@ func opRsaVerify(cx *EvalContext) error {
 	}
 
 	var digestLen int
-	var digestInfo []byte
+	var digestInfo []byte        // PKCS #1 v1.5 schemes
+	var newHash func() hash.Hash // PSS schemes
 	switch fs.field {
 	case PKCS1v15_SHA256:
 		digestLen, digestInfo = sha256.Size, rsaSHA256DigestInfo
 	case PKCS1v15_SHA512:
 		digestLen, digestInfo = sha512.Size, rsaSHA512DigestInfo
+	case PSS_SHA256:
+		digestLen, newHash = sha256.Size, sha256.New
+	case PSS_SHA512:
+		digestLen, newHash = sha512.Size, sha512.New
 	default:
 		return fmt.Errorf("unsupported rsa scheme %s", scheme)
 	}
@@ -513,9 +520,41 @@ func opRsaVerify(cx *EvalContext) error {
 		return fmt.Errorf("the signature must be as long as the modulus (%d bytes), not %d", len(modulus), len(sig))
 	}
 
-	cx.Stack[fourth] = boolToSV(rsaVerifyPKCS1v15(digestInfo, digest, sig, modulus, e))
+	var verified bool
+	if newHash != nil {
+		verified = rsaVerifyPSS(newHash(), digest, sig, modulus, e)
+	} else {
+		verified = rsaVerifyPKCS1v15(digestInfo, digest, sig, modulus, e)
+	}
+	cx.Stack[fourth] = boolToSV(verified)
 	cx.Stack = cx.Stack[:pprev]
 	return nil
+}
+
+// rsaKey returns the modulus n of the public key, or nil for every key the
+// opcode does not accept.
+func rsaKey(modulus []byte, e uint64) *big.Int {
+	if len(modulus) == 0 || modulus[0] == 0 {
+		return nil
+	}
+	n := new(big.Int).SetBytes(modulus)
+	if n.BitLen() < rsaMinModulusBits || n.Bit(0) == 0 {
+		return nil
+	}
+	if e < 3 || e > rsaMaxExponent || e%2 == 0 {
+		return nil
+	}
+	return n
+}
+
+// rsaVP1 applies the public key to sig: RSAVP1 (RFC 8017, section 5.2.2). It
+// returns sig^e mod n, or nil if sig is not less than n.
+func rsaVP1(sig []byte, n *big.Int, e uint64) *big.Int {
+	s := new(big.Int).SetBytes(sig)
+	if s.Cmp(n) >= 0 {
+		return nil
+	}
+	return new(big.Int).Exp(s, new(big.Int).SetUint64(e), n)
 }
 
 // rsaVerifyPKCS1v15 verifies an RSASSA-PKCS1-v1_5 signature (RFC 8017, section
@@ -524,26 +563,19 @@ func opRsaVerify(cx *EvalContext) error {
 // re-encodes the expected message and compares it whole, rather than parsing
 // the decrypted signature.
 func rsaVerifyPKCS1v15(digestInfo, digest, sig, modulus []byte, e uint64) bool {
-	k := len(modulus)
-	if k == 0 || modulus[0] == 0 {
+	n := rsaKey(modulus, e)
+	if n == nil {
 		return false
 	}
-	n := new(big.Int).SetBytes(modulus)
-	if n.BitLen() < rsaMinModulusBits || n.Bit(0) == 0 {
+	m := rsaVP1(sig, n, e)
+	if m == nil {
 		return false
 	}
-	if e < 3 || e > rsaMaxExponent || e%2 == 0 {
-		return false
-	}
-	s := new(big.Int).SetBytes(sig)
-	if s.Cmp(n) >= 0 {
-		return false
-	}
-	m := new(big.Int).Exp(s, new(big.Int).SetUint64(e), n)
 
 	// EM = 0x00 || 0x01 || PS || 0x00 || DigestInfo || digest, where PS is
 	// 0xff bytes filling EM to k bytes. With k >= 128 and the longest
 	// DigestInfo and digest at 83 bytes, PS always exceeds the 8 byte minimum.
+	k := len(modulus)
 	tLen := len(digestInfo) + len(digest)
 	expected := make([]byte, k)
 	expected[1] = 0x01
@@ -553,6 +585,81 @@ func rsaVerifyPKCS1v15(digestInfo, digest, sig, modulus []byte, e uint64) bool {
 	copy(expected[k-tLen:], digestInfo)
 	copy(expected[k-len(digest):], digest)
 	return bytes.Equal(m.FillBytes(make([]byte, k)), expected)
+}
+
+// rsaVerifyPSS verifies an RSASSA-PSS signature (RFC 8017, section 8.1.2) of
+// digest. h is the hash function that produced the digest, and MGF1 uses it
+// too. The salt is as long as the digest. It reports false, rather than an
+// error, for every key or signature the opcode does not accept. The salt makes
+// the encoded message impossible to re-encode without first decoding it, so it
+// follows the steps of EMSA-PSS-VERIFY (RFC 8017, section 9.1.2).
+func rsaVerifyPSS(h hash.Hash, digest, sig, modulus []byte, e uint64) bool {
+	n := rsaKey(modulus, e)
+	if n == nil {
+		return false
+	}
+	hLen := len(digest)
+	sLen := hLen
+	emBits := n.BitLen() - 1
+	emLen := (emBits + 7) / 8
+
+	// Step 3, which depends on the modulus alone, so it comes before the
+	// exponentiation. Only PSS_SHA512 under a modulus below 1034 bits fails it.
+	if emLen < hLen+sLen+2 {
+		return false
+	}
+	m := rsaVP1(sig, n, e)
+	if m == nil {
+		return false
+	}
+	// EM is m as emLen bytes, and its leftmost 8*emLen - emBits bits must be
+	// zero (step 6). When emBits is a multiple of 8, emLen is one byte shorter
+	// than the modulus, so this also rejects an m that does not fit in EM
+	// (RFC 8017, section 8.1.2, step 2c).
+	if m.BitLen() > emBits {
+		return false
+	}
+	em := m.FillBytes(make([]byte, emLen))
+	// Step 4.
+	if em[emLen-1] != 0xbc {
+		return false
+	}
+	// Steps 5 and 7 to 9: DB = maskedDB XOR MGF(H), with its leftmost
+	// 8*emLen - emBits bits cleared.
+	db := em[:emLen-hLen-1]
+	hh := em[emLen-hLen-1 : emLen-1]
+	rsaMGF1XOR(h, db, hh)
+	db[0] &= 0xff >> (8*emLen - emBits)
+	// Step 10: DB = PS || 0x01 || salt, where PS is zero bytes.
+	psLen := emLen - hLen - sLen - 2
+	for _, b := range db[:psLen] {
+		if b != 0 {
+			return false
+		}
+	}
+	if db[psLen] != 0x01 {
+		return false
+	}
+	// Steps 11 to 14: H = Hash(0x00 * 8 || digest || salt)
+	h.Reset()
+	h.Write(make([]byte, 8))
+	h.Write(digest)
+	h.Write(db[psLen+1:])
+	return bytes.Equal(h.Sum(nil), hh)
+}
+
+// rsaMGF1XOR XORs MGF1 of seed over h (RFC 8017, appendix B.2.1) into out.
+func rsaMGF1XOR(h hash.Hash, out, seed []byte) {
+	var counter [4]byte
+	var block []byte
+	for c := uint32(0); len(out) > 0; c++ {
+		binary.BigEndian.PutUint32(counter[:], c)
+		h.Reset()
+		h.Write(seed)
+		h.Write(counter[:])
+		block = h.Sum(block[:0])
+		out = out[subtle.XORBytes(out, out, block):]
+	}
 }
 
 type rawMessage []byte

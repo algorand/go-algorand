@@ -26,6 +26,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/sha512"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -35,6 +36,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -69,6 +71,14 @@ var rsaTestPrimes = map[int][2]string{
 		"1f4e9ab2c96415b17957f2778bf57bf6707af22c8025bc707c97a53c57bd080082f4bd54691f19a4a5b495856b8c19cc14e5e874ef6ced312c26731ea533f007d",
 		"c581f84372e5aa23203e0336cbc3a8da562e648a6ecf5d7e0ca848c586c988d3a7ce171c935f60dc2a468e09af7b53d93e1b703035c71a2e452747c58526591f",
 	},
+	1033: {
+		"e4bdfa0e33cc69651a00880d8c34f845b616e674ec9acc4f93a3b3232fa0b76b3f96226f39f0a28cf4b4ed9a1596a81aaabb678bc761a17c011d3ff5c9e29603d",
+		"1b6b39d59d9db61fc23897e5515d5bb9277dd905d9b606ec1d6d80c3f036d724aa823b357b4ad78c5484715c0adb0c387e2b615092c195987079dcef26c7205b23",
+	},
+	1034: {
+		"1cee95ddfd60218175bd0da8b06adb5c1285662e30f4c45325d961251cc1c4cff3dee93faf64df29abf7c0954bfda725de397aea7f634e0c587f046340bec774b9",
+		"1f979d23664f0f2d660a2ff2467b1e1df8b50cb4d25a17094ce34dd6abf9129c7488129c35877b8451f42a7a8bf74a5d99386921bd5cf0248d47a2b8ddca2ecaf1",
+	},
 	2047: {
 		"f2d5bb63188a6714f565f35ca58d6e600f35f12a6e1622dc7b20d646e3695f3312a37ae3bab8e2da35303291069bac283f47dbba7ea9b2ef6d44cad8e89b63e2871e04d62be2f30bca8b167bd7aee4e358c80fb74675e752b09a6e3bda794e3c6b90714f2aaeaf203ab52440d2bb4d19c47ee44d23ae28a723bf5ad2d803794f",
 		"799b7eafe9c86fca9208f685e0194bf50fe64158c8a13d2a372f22bfdd7a228ca55ede5d3af719a5b72fa69e86674f45207dd3f478df2109e0371a136373aea29e5d3174d65c5341188056955375b89c329207afcedc0c2a0e2bb19bd8b4126b4d539c1acfdf2f07170deb2f1bf36231b46d22ea7693e854cf15af149ec656c1",
@@ -76,6 +86,10 @@ var rsaTestPrimes = map[int][2]string{
 	2048: {
 		"cc5bfc55564f09761e8c5c288461eaa40f3dc646425dc101e880070eefd951a243bd66adbdbb457cf10fd18e20643a987dc86fea425c0d67334df2caced1ca614aa2c6480f09dfe246c778b0bc3a87331b87b3ad8beaac61a6d80d3fb8ff8ec2bf0ee5e02b9648fe06933a0d93c1142d87803127f1a168b8c7882229b16a4285",
 		"e77c42f95d630d62b94eb4267afca10805aaf0825763bbf8157e413b394c2f34a79a3cc1c9bc5033fcebaf4b9f650a98366ef3faf5a9a596b116d2d69c942a8d25f351d614805627c0e332e0dd954142af8bb0179284ec9d8ecae272eaee12c56fd8aef842386a1e8faf7c2e860045f24a247d6d4bf648a5cf0f150a57165b0f",
+	},
+	2049: {
+		"f90aca7020be40ad10d3b086a64abd26ac0745393c1fbdb0a01e674e8281fb7a9236f2554e80b89c5f696ee82ccac8070f0a231d695f0952b497a5a77f414ac53ad1eedc62bf310a341a80cb469114834a5677c02db2d39343f757b17b5e48171cc53d41f1452694030b83a032683d0693364cd404ec5dee9ce4e1ebaceb678d",
+		"190d3a63d39a7e45782a2c45e4b2ef505cacc1d6ea3c29960fdedff4726f098ab4d370f3f17190a4e1121fed709cc4c247addcdf365f6850a3f3ec16a8066707b4bacd07c02ceb0cf797745f097b795ae3a50a2083881fcc5302bd8e6748555c14a8a8328fd9bbf2d75427ce5b032208b1390b8f53fc9740bc522cf77cb5b9aeb",
 	},
 	3072: {
 		"fca0965f3f03a7a362d7843e0f609ff124ae93a07e66ab1c87f4597755b1b053267ef2bc3a057b626de0a4cf2cc6f0be1af2bf9d9486326e6fb91000d3804a9b8eb1c711e03150077354188062d1d8e9b775bdbe9b7db29ea18fc542bc3c2709d6b9c72d96f73774fd467df14191a722e5c77d0637ebf6940c101fca714216824d327ad915bf379c678ef789f5b85352aba823b834f08a1113a7568ca993160565a420f90823e7b4df23e9ce970c5f0e8ce24445a13becb26226a75631410e1b",
@@ -117,8 +131,8 @@ func (k rsaTestKey) d(e int) *big.Int {
 	return new(big.Int).ModInverse(big.NewInt(int64(e)), lcm)
 }
 
-// sign signs digest with crypto/rsa, an encoder independent of rsa_verify's.
-func (k rsaTestKey) sign(t testing.TB, e int, hash crypto.Hash, digest []byte) []byte {
+// privateKey returns the crypto/rsa private key for public exponent e.
+func (k rsaTestKey) privateKey(t testing.TB, e int) *rsa.PrivateKey {
 	t.Helper()
 	priv := &rsa.PrivateKey{
 		PublicKey: rsa.PublicKey{N: k.n, E: e},
@@ -127,7 +141,23 @@ func (k rsaTestKey) sign(t testing.TB, e int, hash crypto.Hash, digest []byte) [
 	}
 	priv.Precompute()
 	require.NoError(t, priv.Validate())
-	sig, err := rsa.SignPKCS1v15(nil, priv, hash, digest)
+	return priv
+}
+
+// sign signs digest with crypto/rsa, an encoder independent of rsa_verify's.
+func (k rsaTestKey) sign(t testing.TB, e int, hash crypto.Hash, digest []byte) []byte {
+	t.Helper()
+	sig, err := rsa.SignPKCS1v15(nil, k.privateKey(t, e), hash, digest)
+	require.NoError(t, err)
+	return sig
+}
+
+// signPSS signs digest with crypto/rsa under RSASSA-PSS, with a random salt as
+// long as the digest.
+func (k rsaTestKey) signPSS(t testing.TB, e int, hash crypto.Hash, digest []byte) []byte {
+	t.Helper()
+	opts := &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash}
+	sig, err := rsa.SignPSS(rand.Reader, k.privateKey(t, e), hash, digest, opts)
 	require.NoError(t, err)
 	return sig
 }
@@ -188,22 +218,34 @@ func TestRsaVerify(t *testing.T) {
 	sum512 := sha512.Sum512(msg)
 	schemes := []struct {
 		name   string
+		pss    bool
 		hash   crypto.Hash
 		digest []byte
 	}{
-		{"PKCS1v15_SHA256", crypto.SHA256, sum256[:]},
-		{"PKCS1v15_SHA512", crypto.SHA512, sum512[:]},
+		{"PKCS1v15_SHA256", false, crypto.SHA256, sum256[:]},
+		{"PKCS1v15_SHA512", false, crypto.SHA512, sum512[:]},
+		{"PSS_SHA256", true, crypto.SHA256, sum256[:]},
+		{"PSS_SHA512", true, crypto.SHA512, sum512[:]},
 	}
 
-	for _, bits := range []int{1024, 1025, 2047, 2048, 3072, 4096} {
+	// Under a modulus of 1025, 1033 or 2049 bits, the PSS encoding is one byte
+	// shorter than the modulus. PSS_SHA512 fits under 2049 bits only.
+	for _, bits := range []int{1024, 1025, 1033, 1034, 2047, 2048, 2049, 3072, 4096} {
 		key := newRsaTestKey(t, bits)
 		n := key.modulus()
 		for _, e := range []int{3, 17, 65535, 65537} {
-			for i, scheme := range schemes {
-				other := schemes[1-i]
+			for _, scheme := range schemes {
+				if scheme.name == "PSS_SHA512" && bits < 1034 {
+					continue // too short for the encoding, see TestRsaVerifyPSS
+				}
 				t.Run(fmt.Sprintf("bits=%d/e=%d/%s", bits, e, scheme.name), func(t *testing.T) {
 					t.Parallel()
-					sig := key.sign(t, e, scheme.hash, scheme.digest)
+					var sig []byte
+					if scheme.pss {
+						sig = key.signPSS(t, e, scheme.hash, scheme.digest)
+					} else {
+						sig = key.sign(t, e, scheme.hash, scheme.digest)
+					}
 					testAccepts(t, rsaProgram(scheme.name, scheme.digest, sig, n, uint64(e)), rsaVersion)
 
 					digest := slices.Clone(scheme.digest)
@@ -214,9 +256,13 @@ func TestRsaVerify(t *testing.T) {
 					tampered[len(tampered)-1] ^= 0x01
 					testRejects(t, rsaProgram(scheme.name, scheme.digest, tampered, n, uint64(e)), rsaVersion)
 
-					// The other scheme rejects the signature, given a digest of
-					// its own length.
-					testRejects(t, rsaProgram(other.name, other.digest, sig, n, uint64(e)), rsaVersion)
+					// Every other scheme rejects the signature, given a digest
+					// of its own length.
+					for _, other := range schemes {
+						if other.name != scheme.name {
+							testRejects(t, rsaProgram(other.name, other.digest, sig, n, uint64(e)), rsaVersion)
+						}
+					}
 				})
 			}
 		}
@@ -253,6 +299,15 @@ func TestRsaVerifyLengths(t *testing.T) {
 	testPanics(t, rsaProgram("PKCS1v15_SHA256", sum256[:], append([]byte{0}, sig...), n, 65537), rsaVersion, sigLen+", not 129")
 	testPanics(t, rsaProgram("PKCS1v15_SHA256", sum256[:], sig[1:], n, 65537), rsaVersion, sigLen+", not 127")
 	testPanics(t, rsaProgram("PKCS1v15_SHA256", sum256[:], nil, n, 65537), rsaVersion, sigLen+", not 0")
+
+	// The PSS schemes fail on the same lengths.
+	testPanics(t, rsaProgram("PSS_SHA256", sum512[:], sig, n, 65537), rsaVersion,
+		"the digest must be 32 bytes long for PSS_SHA256, not 64")
+	testPanics(t, rsaProgram("PSS_SHA512", sum256[:], sig, n, 65537), rsaVersion,
+		"the digest must be 64 bytes long for PSS_SHA512, not 32")
+	testPanics(t, rsaProgram("PSS_SHA256", sum256[:], long, long, 65537), rsaVersion,
+		"the modulus must be at most 512 bytes long, not 513")
+	testPanics(t, rsaProgram("PSS_SHA256", sum256[:], sig[1:], n, 65537), rsaVersion, sigLen+", not 127")
 }
 
 // TestRsaVerifyRejects checks the inputs that return 0. Where it can, each case
@@ -415,19 +470,217 @@ func TestRsaVerifyRejects(t *testing.T) {
 	})
 }
 
-// TestRsaVerifyWycheproof runs the RSASSA-PKCS1-v1_5 verification vectors of
-// Project Wycheproof, which aim at known verifier bugs: BER encodings, altered
-// DigestInfo, short padding, wrong hashes, malleable signatures and more. The
-// files in testdata/wycheproof are unmodified, gzipped copies of
-// testvectors_v1/rsa_signature_*_test.json from
-// https://github.com/C2SP/wycheproof at commit
-// 3fa63dd0344abb611f1fb1d77e119938603ea230, under the Apache License 2.0 in
-// the same directory.
+// rsaTestMGF1 returns length bytes of MGF1 of seed over hash (RFC 8017,
+// appendix B.2.1).
+func rsaTestMGF1(hash crypto.Hash, seed []byte, length int) []byte {
+	var out []byte
+	for c := uint32(0); len(out) < length; c++ {
+		h := hash.New()
+		h.Write(seed)
+		h.Write(binary.BigEndian.AppendUint32(nil, c))
+		out = h.Sum(out)
+	}
+	return out[:length]
+}
+
+// rsaTestPSSEM returns the emBits bit EMSA-PSS encoding (RFC 8017, section
+// 9.1.1) of digest and salt: maskedDB || H || 0xbc, where
+// H = hash(0x00 * 8 || digest || salt), DB = 0x00... || 0x01 || salt, and the
+// mask is MGF1 of H over mgfHash. If edit is not nil, it edits DB before DB is
+// masked.
+func rsaTestPSSEM(hash, mgfHash crypto.Hash, emBits int, digest, salt []byte, edit func(db []byte)) []byte {
+	emLen := (emBits + 7) / 8
+	h := hash.New()
+	h.Write(make([]byte, 8))
+	h.Write(digest)
+	h.Write(salt)
+	hh := h.Sum(nil)
+	db := make([]byte, emLen-len(hh)-1)
+	db[len(db)-len(salt)-1] = 0x01
+	copy(db[len(db)-len(salt):], salt)
+	if edit != nil {
+		edit(db)
+	}
+	for i, b := range rsaTestMGF1(mgfHash, hh, len(db)) {
+		db[i] ^= b
+	}
+	db[0] &= 0xff >> (8*emLen - emBits)
+	return slices.Concat(db, hh, []byte{0xbc})
+}
+
+// TestRsaVerifyPSS checks the PSS encodings that rsa_verify rejects. Each case
+// is built to verify arithmetically, so that only the rule under test rejects
+// it.
+func TestRsaVerifyPSS(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	sum256 := sha256.Sum256([]byte("rsa_verify"))
+	sum512 := sha512.Sum512([]byte("rsa_verify"))
+	digest := sum256[:]
+	salt64 := sha512.Sum512([]byte("rsa_verify salt"))
+	salt := salt64[:32]
+
+	// program signs em under key, checks that the signature verifies
+	// arithmetically, and returns a program that checks it with rsa_verify.
+	program := func(t *testing.T, scheme string, digest []byte, key rsaTestKey, em []byte) string {
+		t.Helper()
+		sig := key.rawSign(65537, em)
+		require.True(t, rsaArith(sig, key.modulus(), 65537, em))
+		return rsaProgram(scheme, digest, sig, key.modulus(), 65537)
+	}
+	// fit returns the first variant, made with successive salts, that is less
+	// than the modulus of key, so that it can be signed.
+	fit := func(t *testing.T, key rsaTestKey, variant func(salt []byte) []byte) []byte {
+		t.Helper()
+		for i := 0; i < 1000; i++ {
+			salt := sha256.Sum256([]byte(fmt.Sprintf("rsa_verify salt %d", i)))
+			if v := variant(salt[:]); new(big.Int).SetBytes(v).Cmp(key.n) < 0 {
+				return v
+			}
+		}
+		require.Fail(t, "no variant is less than the modulus")
+		return nil
+	}
+
+	key := newRsaTestKey(t, 1024)
+	n := key.modulus()
+	encode := func(salt []byte, edit func(db []byte)) []byte {
+		return rsaTestPSSEM(crypto.SHA256, crypto.SHA256, 1023, digest, salt, edit)
+	}
+	em := encode(salt, nil)
+	// rsaTestPSSEM agrees with crypto/rsa, and is accepted, so the cases built
+	// with it below are rejected only for the rule they break.
+	pub := &rsa.PublicKey{N: key.n, E: 65537}
+	require.NoError(t, rsa.VerifyPSS(pub, crypto.SHA256, digest, key.rawSign(65537, em), &rsa.PSSOptions{SaltLength: 32}))
+	testAccepts(t, program(t, "PSS_SHA256", digest, key, em), rsaVersion)
+
+	t.Run("encoding", func(t *testing.T) {
+		t.Parallel()
+		psLen := len(em) - 2*sha256.Size - 2
+		trailer := func(b byte) []byte {
+			variant := slices.Clone(em)
+			variant[len(variant)-1] = b
+			return variant
+		}
+		for name, variant := range map[string][]byte{
+			"trailer 0xbd":       trailer(0xbd),
+			"trailer 0x00":       trailer(0x00),
+			"first byte of PS":   encode(salt, func(db []byte) { db[0] = 0x01 }),
+			"last byte of PS":    encode(salt, func(db []byte) { db[psLen-1] = 0x01 }),
+			"separator 0x00":     encode(salt, func(db []byte) { db[psLen] = 0x00 }),
+			"separator 0x02":     encode(salt, func(db []byte) { db[psLen] = 0x02 }),
+			"salt of 0 bytes":    encode(nil, nil),
+			"salt of 20 bytes":   encode(salt[:20], nil),
+			"salt of 31 bytes":   encode(salt[:31], nil),
+			"salt of 33 bytes":   encode(salt64[:33], nil),
+			"MGF1 with SHA-384":  rsaTestPSSEM(crypto.SHA256, crypto.SHA384, 1023, digest, salt, nil),
+			"MGF1 with SHA-512":  rsaTestPSSEM(crypto.SHA256, crypto.SHA512, 1023, digest, salt, nil),
+			"H with SHA-512/256": rsaTestPSSEM(crypto.SHA512_256, crypto.SHA256, 1023, digest, salt, nil),
+		} {
+			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+				require.NotEqual(t, em, variant)
+				testRejects(t, program(t, "PSS_SHA256", digest, key, variant), rsaVersion)
+			})
+		}
+	})
+
+	t.Run("leftmost bit", func(t *testing.T) {
+		t.Parallel()
+		// emBits is 1023, so the leftmost bit of EM must be zero, though DB
+		// would be valid with it cleared.
+		variant := fit(t, key, func(salt []byte) []byte {
+			em := encode(salt, nil)
+			em[0] |= 0x80
+			return em
+		})
+		testRejects(t, program(t, "PSS_SHA256", digest, key, variant), rsaVersion)
+		variant[0] &^= 0x80
+		testAccepts(t, program(t, "PSS_SHA256", digest, key, variant), rsaVersion)
+	})
+
+	t.Run("too long for EM", func(t *testing.T) {
+		t.Parallel()
+		// Under a 1025 bit modulus, emBits is 1024 and EM is 128 bytes, one
+		// less than the modulus. The decrypted signature must fit in EM,
+		// though its last 128 bytes would be a valid EM.
+		key := newRsaTestKey(t, 1025)
+		variant := fit(t, key, func(salt []byte) []byte {
+			return append([]byte{0x01}, rsaTestPSSEM(crypto.SHA256, crypto.SHA256, 1024, digest, salt, nil)...)
+		})
+		testRejects(t, program(t, "PSS_SHA256", digest, key, variant), rsaVersion)
+		testAccepts(t, program(t, "PSS_SHA256", digest, key, variant[1:]), rsaVersion)
+	})
+
+	t.Run("PSS_SHA512 floor", func(t *testing.T) {
+		t.Parallel()
+		// EM must hold H, a salt as long as H, and two more bytes. For SHA-512
+		// that is 130 bytes, so emBits must be at least 1033. Under a shorter
+		// modulus, a signature with the longest salt that fits verifies under
+		// crypto/rsa, but not under rsa_verify.
+		for _, bits := range []int{1024, 1033} {
+			key := newRsaTestKey(t, bits)
+			emBits := bits - 1
+			sLen := (emBits+7)/8 - sha512.Size - 2
+			em := rsaTestPSSEM(crypto.SHA512, crypto.SHA512, emBits, sum512[:], salt64[:sLen], nil)
+			pub := &rsa.PublicKey{N: key.n, E: 65537}
+			opts := &rsa.PSSOptions{SaltLength: sLen}
+			require.NoError(t, rsa.VerifyPSS(pub, crypto.SHA512, sum512[:], key.rawSign(65537, em), opts))
+			testRejects(t, program(t, "PSS_SHA512", sum512[:], key, em), rsaVersion)
+		}
+		// Under a 1034 bit modulus, EM is 130 bytes, and PS is empty.
+		key := newRsaTestKey(t, 1034)
+		em := rsaTestPSSEM(crypto.SHA512, crypto.SHA512, 1033, sum512[:], salt64[:], nil)
+		require.Len(t, em, 130)
+		testAccepts(t, program(t, "PSS_SHA512", sum512[:], key, em), rsaVersion)
+	})
+
+	t.Run("key rules", func(t *testing.T) {
+		t.Parallel()
+		// The rules about the key and the signature are the same for every
+		// scheme. TestRsaVerifyRejects covers them in full.
+		rejects := func(t *testing.T, sig, modulus []byte, e uint64, em []byte) {
+			t.Helper()
+			require.True(t, rsaArith(sig, modulus, e, em))
+			testRejects(t, rsaProgram("PSS_SHA256", digest, sig, modulus, e), rsaVersion)
+		}
+		sig := key.rawSign(65537, em)
+		rejects(t, append([]byte{0}, sig...), append([]byte{0}, n...), 65537, em)
+
+		short := newRsaTestKey(t, 1023)
+		shortEM := rsaTestPSSEM(crypto.SHA256, crypto.SHA256, 1022, digest, salt, nil)
+		rejects(t, short.rawSign(65537, shortEM), short.modulus(), 65537, shortEM)
+
+		even := new(big.Int).Lsh(short.n, 1)
+		rejects(t, rsaRawSign(even, short.d(65537), em), even.Bytes(), 65537, em)
+
+		rejects(t, em, n, 1, em)
+		rejects(t, key.rawSign(65539, em), n, 65539, em)
+
+		long := newRsaTestKey(t, 2047)
+		longEM := rsaTestPSSEM(crypto.SHA256, crypto.SHA256, 2046, digest, salt, nil)
+		longSig := long.rawSign(65537, longEM)
+		testAccepts(t, rsaProgram("PSS_SHA256", digest, longSig, long.modulus(), 65537), rsaVersion)
+		plusN := new(big.Int).Add(new(big.Int).SetBytes(longSig), long.n).FillBytes(make([]byte, len(long.modulus())))
+		rejects(t, plusN, long.modulus(), 65537, longEM)
+	})
+}
+
+// TestRsaVerifyWycheproof runs the RSASSA-PKCS1-v1_5 and RSASSA-PSS
+// verification vectors of Project Wycheproof, which aim at known verifier bugs:
+// BER encodings, altered DigestInfo, short padding, wrong hashes, malleable
+// signatures, altered PSS padding, other salt lengths and MGF1 hashes, and
+// more. The files in testdata/wycheproof are unmodified, gzipped copies of
+// testvectors_v1/rsa_signature_*_test.json and some of
+// testvectors_v1/rsa_pss_*_test.json from https://github.com/C2SP/wycheproof
+// at commit 3fa63dd0344abb611f1fb1d77e119938603ea230, under the Apache
+// License 2.0 in the same directory.
 func TestRsaVerifyWycheproof(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	files, err := filepath.Glob("testdata/wycheproof/rsa_signature_*_test.json.gz")
+	files, err := filepath.Glob("testdata/wycheproof/rsa_*_test.json.gz")
 	require.NoError(t, err)
 	require.NotEmpty(t, files)
 	for _, file := range files {
@@ -442,6 +695,9 @@ func TestRsaVerifyWycheproof(t *testing.T) {
 				Algorithm  string
 				TestGroups []struct {
 					Sha       string
+					Mgf       string // RSASSA-PSS only
+					MgfSha    string // RSASSA-PSS only
+					SLen      int    // RSASSA-PSS only
 					PublicKey struct {
 						Modulus        string
 						PublicExponent string
@@ -457,20 +713,30 @@ func TestRsaVerifyWycheproof(t *testing.T) {
 				}
 			}
 			require.NoError(t, json.NewDecoder(rd).Decode(&vectors))
-			require.Equal(t, "RSASSA-PKCS1-v1_5", vectors.Algorithm)
+			require.Contains(t, []string{"RSASSA-PKCS1-v1_5", "RSASSA-PSS"}, vectors.Algorithm)
+			pss := vectors.Algorithm == "RSASSA-PSS"
 
+			tested := 0
 			for _, group := range vectors.TestGroups {
-				var scheme string
-				var hash func([]byte) []byte
+				var hash crypto.Hash
 				switch group.Sha {
 				case "SHA-256":
-					scheme = "PKCS1v15_SHA256"
-					hash = func(b []byte) []byte { sum := sha256.Sum256(b); return sum[:] }
+					hash = crypto.SHA256
 				case "SHA-512":
-					scheme = "PKCS1v15_SHA512"
-					hash = func(b []byte) []byte { sum := sha512.Sum512(b); return sum[:] }
+					hash = crypto.SHA512
 				default:
-					require.Fail(t, "unexpected hash", group.Sha)
+					// rsa_pss_misc_test.json has groups for other hashes too.
+					require.True(t, pss, "unexpected hash %s", group.Sha)
+					continue
+				}
+				scheme := "PKCS1v15_" + strings.ReplaceAll(group.Sha, "-", "")
+				// supported is whether rsa_verify supports the parameters of
+				// the group. For PSS, it supports only MGF1 with the hash of
+				// the digest, and a salt as long as the digest.
+				supported := true
+				if pss {
+					scheme = "PSS_" + strings.ReplaceAll(group.Sha, "-", "")
+					supported = group.Mgf == "MGF1" && group.MgfSha == group.Sha && group.SLen == hash.Size()
 				}
 				// The modulus is an ASN.1 INTEGER, with a leading zero byte when
 				// its top bit is set. rsa_verify takes it without one.
@@ -487,31 +753,36 @@ func TestRsaVerifyWycheproof(t *testing.T) {
 					sig, err := hex.DecodeString(test.Sig)
 					require.NoError(t, err)
 
+					h := hash.New()
+					h.Write(msg)
 					var txn transactions.SignedTxn
 					txn.Lsig.Logic = ops.Program
-					txn.Lsig.Args = [][]byte{hash(msg), sig, modulus}
+					txn.Lsig.Args = [][]byte{h.Sum(nil), sig, modulus}
 					pass, err := EvalSignature(0, defaultSigParams(txn))
 
 					id := fmt.Sprintf("tcId %d (%s) %v", test.TcID, test.Comment, test.Flags)
 					switch {
-					case test.Result == "valid":
+					case test.Result == "valid" && supported:
 						require.NoError(t, err, id)
 						require.True(t, pass, id)
-					case test.Result == "acceptable" && slices.Equal(test.Flags, []string{"MissingNull"}):
-						// Some verifiers accept a DigestInfo without NULL
-						// parameters. rsa_verify does not.
-						require.NoError(t, err, id)
-						require.False(t, pass, id)
 					case test.Result == "invalid" && len(sig) != len(modulus):
 						require.ErrorContains(t, err, "the signature must be as long as the modulus", id)
-					case test.Result == "invalid":
+					case test.Result == "invalid",
+						// valid, under PSS parameters that rsa_verify does not
+						// support
+						test.Result == "valid",
+						// Some verifiers accept a DigestInfo without NULL
+						// parameters. rsa_verify does not.
+						test.Result == "acceptable" && slices.Equal(test.Flags, []string{"MissingNull"}):
 						require.NoError(t, err, id)
 						require.False(t, pass, id)
 					default:
 						require.Fail(t, "unexpected result", id+" "+test.Result)
 					}
+					tested++
 				}
 			}
+			require.NotZero(t, tested)
 		})
 	}
 }
@@ -619,10 +890,20 @@ func rsaBenchEval(b *testing.B, source string, args [][]byte) {
 
 // BenchmarkRsaVerify times rsa_verify at the top of each cost bracket, and
 // ecdsa_verify, whose costs are established, evaluated the same way. Along
-// with a real key, it tries moduli of extreme shape, since any odd modulus is
-// accepted and big.Int division time depends on its operands.
+// with a real key, under each scheme, it tries moduli of extreme shape, since
+// any odd modulus is accepted and big.Int division time depends on its
+// operands. Signatures under those are invalid, and rejected right after the
+// exponentiation. A valid PSS signature under the same moduli, were one known,
+// would take their time plus the time of the real key under PSS, minus that of
+// the real key under PKCS1v15_SHA256.
 func BenchmarkRsaVerify(b *testing.B) {
+	type rsaBenchCase struct {
+		name, scheme   string
+		digest, n, sig []byte
+		valid          bool
+	}
 	sum := sha256.Sum256([]byte("rsa_verify"))
+	sum512 := sha512.Sum512([]byte("rsa_verify"))
 
 	b.Run("reference/ecdsa_verify Secp256k1", func(b *testing.B) {
 		key, err := ecdsa.GenerateKey(secp256k1.S256(), rand.Reader)
@@ -647,21 +928,22 @@ func BenchmarkRsaVerify(b *testing.B) {
 		sparse := make([]byte, k) // 2^(8k-1) + 1
 		sparse[0], sparse[k-1] = 0x80, 0x01
 		for _, e := range []int{3, 65537, 65535} {
-			for _, c := range []struct {
-				name   string
-				n, sig []byte
-				valid  bool
-			}{
-				{"key", key.modulus(), key.sign(b, e, crypto.SHA256, sum[:]), true},
-				{"ones", bytes.Repeat([]byte{0xff}, k), rsaBenchBytes(k, 0xfe), false},
-				{"sparse", sparse, rsaBenchBytes(k, 0x7f), false},
-			} {
-				b.Run(fmt.Sprintf("bits=%d/e=%d/%s", bits, e, c.name), func(b *testing.B) {
-					source := fmt.Sprintf("arg 0; arg 1; arg 2; int %d; rsa_verify PKCS1v15_SHA256", e)
+			cases := []rsaBenchCase{
+				{"key", "PKCS1v15_SHA256", sum[:], key.modulus(), key.sign(b, e, crypto.SHA256, sum[:]), true},
+				{"key", "PSS_SHA256", sum[:], key.modulus(), key.signPSS(b, e, crypto.SHA256, sum[:]), true},
+				{"ones", "PKCS1v15_SHA256", sum[:], bytes.Repeat([]byte{0xff}, k), rsaBenchBytes(k, 0xfe), false},
+				{"sparse", "PKCS1v15_SHA256", sum[:], sparse, rsaBenchBytes(k, 0x7f), false},
+			}
+			if bits >= 1034 { // a shorter modulus cannot hold a PSS_SHA512 encoding
+				cases = append(cases, rsaBenchCase{"key", "PSS_SHA512", sum512[:], key.modulus(), key.signPSS(b, e, crypto.SHA512, sum512[:]), true})
+			}
+			for _, c := range cases {
+				b.Run(fmt.Sprintf("bits=%d/e=%d/%s/%s", bits, e, c.name, c.scheme), func(b *testing.B) {
+					source := fmt.Sprintf("arg 0; arg 1; arg 2; int %d; rsa_verify %s", e, c.scheme)
 					if !c.valid {
 						source += "; !"
 					}
-					rsaBenchEval(b, source, [][]byte{sum[:], c.sig, c.n})
+					rsaBenchEval(b, source, [][]byte{c.digest, c.sig, c.n})
 				})
 			}
 		}
