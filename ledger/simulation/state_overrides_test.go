@@ -1275,6 +1275,20 @@ func TestStateOverrideAssetValidation(t *testing.T) {
 			}},
 			expectedError: "asset does not exist",
 		},
+		{
+			name: "holding ID too large",
+			overrides: simulation.StateOverrides{Accounts: map[basics.Address]simulation.AccountOverride{
+				other.Addr: {Assets: map[basics.AssetIndex]simulation.AssetHoldingOverride{math.MaxInt64 + 1: {}}},
+			}},
+			expectedError: "asset ID 9223372036854775808 exceeds maximum",
+		},
+		{
+			name: "local state ID too large",
+			overrides: simulation.StateOverrides{Accounts: map[basics.Address]simulation.AccountOverride{
+				other.Addr: {Apps: map[basics.AppIndex]simulation.AppLocalStateOverride{math.MaxInt64 + 1: {}}},
+			}},
+			expectedError: "app ID 9223372036854775808 exceeds maximum",
+		},
 	}
 
 	s := simulation.MakeSimulator(env.Ledger, false)
@@ -1887,6 +1901,7 @@ func TestStateOverrideBlockValidation(t *testing.T) {
 	start := env.Ledger.Latest()
 	negative := int64(-1)
 	zero := int64(0)
+	huge := int64(math.MaxInt64)
 	cases := []struct {
 		name     string
 		blocks   map[basics.Round]simulation.BlockOverride
@@ -1894,6 +1909,7 @@ func TestStateOverrideBlockValidation(t *testing.T) {
 	}{
 		{"future round", map[basics.Round]simulation.BlockOverride{start + 1: {TimeStamp: &zero}}, "after the start round"},
 		{"negative timestamp", map[basics.Round]simulation.BlockOverride{start: {TimeStamp: &negative}}, "must not be negative"},
+		{"huge timestamp", map[basics.Round]simulation.BlockOverride{start: {TimeStamp: &huge}}, "exceeds maximum"},
 	}
 	s := simulation.MakeSimulator(env.Ledger, false)
 	for _, tc := range cases {

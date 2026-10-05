@@ -296,7 +296,7 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 	}
 
 	for _, rnd := range sortedKeys(overrides.Blocks) {
-		if err := l.overlayBlock(o, rnd, overrides.Blocks[rnd]); err != nil {
+		if err := l.overlayBlock(o, rnd, overrides.Blocks[rnd], proto); err != nil {
 			return nil, err
 		}
 	}
@@ -442,7 +442,7 @@ func (l simulatorLedger) overlayOnline(o *stateOverlay, overrides StateOverrides
 	return nil
 }
 
-func (l simulatorLedger) overlayBlock(o *stateOverlay, rnd basics.Round, override BlockOverride) error {
+func (l simulatorLedger) overlayBlock(o *stateOverlay, rnd basics.Round, override BlockOverride, proto config.ConsensusParams) error {
 	if rnd > l.start {
 		return invalidOverride("cannot override block %d: it is after the start round %d", rnd, l.start)
 	}
@@ -451,6 +451,10 @@ func (l simulatorLedger) overlayBlock(o *stateOverlay, rnd basics.Round, overrid
 	}
 	if override.TimeStamp != nil && *override.TimeStamp < 0 {
 		return invalidOverride("block %d timestamp %d must not be negative", rnd, *override.TimeStamp)
+	}
+	// The next block's timestamp is checked against prev.TimeStamp+MaxTimestampIncrement, which must not overflow
+	if maxTimestamp := int64(math.MaxInt64) - proto.MaxTimestampIncrement; override.TimeStamp != nil && *override.TimeStamp > maxTimestamp {
+		return invalidOverride("block %d timestamp %d exceeds maximum %d", rnd, *override.TimeStamp, maxTimestamp)
 	}
 	o.blocks[rnd] = override
 	return nil
@@ -815,6 +819,9 @@ func (l simulatorLedger) overlayAsset(o *stateOverlay, getAccount func(basics.Ad
 // returns the updated account data. The asset must already be in o.assets, or on the ledger.
 func (l simulatorLedger) overlayHolding(o *stateOverlay, acct ledgercore.AccountData, addr basics.Address,
 	aidx basics.AssetIndex, override AssetHoldingOverride) (ledgercore.AccountData, error) {
+	if err := checkCreatableID(basics.CreatableIndex(aidx), "asset"); err != nil {
+		return ledgercore.AccountData{}, err
+	}
 	key := holdingKey{addr: addr, aidx: aidx}
 	holding, ok := o.holdings[key]
 	if !ok {
@@ -864,6 +871,9 @@ func (l simulatorLedger) overlayHolding(o *stateOverlay, acct ledgercore.Account
 // acct, and returns the updated account data. The app must already be in o.apps, or on the ledger.
 func (l simulatorLedger) overlayLocalState(o *stateOverlay, acct ledgercore.AccountData, addr basics.Address,
 	aidx basics.AppIndex, override AppLocalStateOverride) (ledgercore.AccountData, error) {
+	if err := checkCreatableID(basics.CreatableIndex(aidx), "app"); err != nil {
+		return ledgercore.AccountData{}, err
+	}
 	res, err := l.Ledger.LookupApplication(l.start, addr, aidx)
 	if err != nil {
 		return ledgercore.AccountData{}, err
