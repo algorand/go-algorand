@@ -367,6 +367,10 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 	for _, acct := range o.accounts {
 		totals.AddAccount(proto.RewardUnit, acct, &ot)
 	}
+	// Each status total may fit even when their combined balance does not. Check
+	// the sum here, since AccountTotals.All and Participating panic on overflow.
+	participating := ot.AddA(totals.Online.Money, totals.Offline.Money)
+	_ = ot.AddA(participating, totals.NotParticipating.Money)
 	if ot.Overflowed {
 		return nil, invalidOverride("account balances overflow ledger totals")
 	}
@@ -796,7 +800,10 @@ func (l simulatorLedger) overlayAsset(o *stateOverlay, getAccount func(basics.Ad
 		return err
 	}
 	acct.TotalAssetParams = basics.AddSaturate(acct.TotalAssetParams, 1)
-	acct, err = l.overlayHolding(o, acct, creator, aidx, AssetHoldingOverride{Amount: &params.Total})
+	// Asset creation leaves the creator's holding unfrozen, even if opt-ins are
+	// frozen by default. A subsequent account override may still change it.
+	frozen := false
+	acct, err = l.overlayHolding(o, acct, creator, aidx, AssetHoldingOverride{Amount: &params.Total, Frozen: &frozen})
 	if err != nil {
 		return err
 	}
@@ -1029,12 +1036,15 @@ func (l simulatorLedger) OnlineCirculation(rnd basics.Round, voteRnd basics.Roun
 	}
 	// The original stake was approximated per account, so saturate rather than fail if it
 	// slightly exceeds the total
+	total.Raw = basics.SubSaturate(total.Raw, l.overlay.onlineRemoved.Raw)
+	// Remove the original stake before adding its replacement, so an intermediate
+	// sum cannot overflow when the final circulation fits.
 	var ot basics.OverflowTracker
 	total = ot.AddA(total, l.overlay.onlineAdded)
 	if ot.Overflowed {
 		return basics.MicroAlgos{}, errors.New("overridden online circulation overflows")
 	}
-	return basics.MicroAlgos{Raw: basics.SubSaturate(total.Raw, l.overlay.onlineRemoved.Raw)}, nil
+	return total, nil
 }
 
 // GetKnockOfflineCandidates is part of the ledger.Ledger interface.

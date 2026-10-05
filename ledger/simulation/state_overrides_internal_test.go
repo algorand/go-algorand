@@ -103,7 +103,7 @@ func TestAccountOverridesDoNotOverflowIntermediateTotals(t *testing.T) {
 	}
 	require.NotEqual(t, basics.Address{}, b)
 
-	// The final status total fits exactly, but adding b before removing a would overflow.
+	// The final ledger total fits exactly, but adding b before removing a would overflow.
 	proto := env.TxnInfo.CurrentProtocolParams()
 	aMoney, _ := aData.Money(proto.RewardUnit, totals.RewardsLevel)
 	bMoney, _ := bData.Money(proto.RewardUnit, totals.RewardsLevel)
@@ -117,20 +117,22 @@ func TestAccountOverridesDoNotOverflowIntermediateTotals(t *testing.T) {
 		statusTotal = totals.NotParticipating.Money.Raw
 	}
 	zero := basics.MicroAlgos{}
-	large := basics.MicroAlgos{Raw: math.MaxUint64 - statusTotal + aMoney.Raw + bMoney.Raw}
+	large := basics.MicroAlgos{Raw: math.MaxUint64 - totals.All().Raw + aMoney.Raw + bMoney.Raw}
+	expectedStatusTotal := uint64(math.MaxUint64) - (totals.All().Raw - statusTotal)
 	overrides := StateOverrides{Accounts: map[basics.Address]AccountOverride{
 		a: {Balance: &zero},
 		b: {Balance: &large},
 	}}
 	for range 20 {
 		l := newOverlayLedger(t, &env, overrides)
+		require.Equal(t, uint64(math.MaxUint64), l.overlay.totals.All().Raw)
 		switch aData.Status {
 		case basics.Online:
-			require.Equal(t, uint64(math.MaxUint64), l.overlay.totals.Online.Money.Raw)
+			require.Equal(t, expectedStatusTotal, l.overlay.totals.Online.Money.Raw)
 		case basics.Offline:
-			require.Equal(t, uint64(math.MaxUint64), l.overlay.totals.Offline.Money.Raw)
+			require.Equal(t, expectedStatusTotal, l.overlay.totals.Offline.Money.Raw)
 		case basics.NotParticipating:
-			require.Equal(t, uint64(math.MaxUint64), l.overlay.totals.NotParticipating.Money.Raw)
+			require.Equal(t, expectedStatusTotal, l.overlay.totals.NotParticipating.Money.Raw)
 		}
 	}
 }
@@ -294,6 +296,48 @@ func TestAssetOverrideHoldings(t *testing.T) {
 	require.Equal(t, realHolder.TotalAssetParams, holderData.TotalAssetParams)
 }
 
+func TestNewAssetOverrideCreatorHolding(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	creator := env.Accounts[0].Addr
+	holder := env.Accounts[1].Addr
+	total := uint64(100)
+	frozen := true
+	realID := env.CreateAsset(creator, basics.AssetParams{Total: total, DefaultFrozen: frozen})
+	real, err := env.Ledger.LookupAsset(env.Ledger.Latest(), creator, realID)
+	require.NoError(t, err)
+	aidx := basics.AssetIndex(env.TxnInfo.LatestHeader.TxnCounter + reservedCreatableIDs + 1)
+	overrides := StateOverrides{
+		Assets: map[basics.AssetIndex]AssetOverride{
+			aidx: {Creator: creator, Total: &total, DefaultFrozen: &frozen},
+		},
+		Accounts: map[basics.Address]AccountOverride{
+			holder: {Assets: map[basics.AssetIndex]AssetHoldingOverride{aidx: {}}},
+		},
+	}
+	l := newOverlayLedger(t, &env, overrides)
+	res, err := l.LookupAsset(l.start, creator, aidx)
+	require.NoError(t, err)
+	require.Equal(t, real.AssetHolding, res.AssetHolding)
+	require.False(t, res.AssetHolding.Frozen)
+	res, err = l.LookupAsset(l.start, holder, aidx)
+	require.NoError(t, err)
+	require.True(t, res.AssetHolding.Frozen, "new opt-ins still use DefaultFrozen")
+
+	// Account overrides may explicitly freeze the creator's initial holding.
+	overrides.Accounts[creator] = AccountOverride{
+		Assets: map[basics.AssetIndex]AssetHoldingOverride{aidx: {Frozen: &frozen}},
+	}
+	l = newOverlayLedger(t, &env, overrides)
+	res, err = l.LookupAsset(l.start, creator, aidx)
+	require.NoError(t, err)
+	require.Equal(t, &basics.AssetHolding{Amount: total, Frozen: true}, res.AssetHolding)
+}
+
 func TestLocalStateOverrides(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -452,6 +496,45 @@ func TestAccountOverrideFields(t *testing.T) {
 	// The account's stake moves from the online to the offline totals
 	require.Equal(t, totals.Online.Money.Raw-money.Raw, l.overlay.totals.Online.Money.Raw)
 	require.Equal(t, totals.Offline.Money.Raw+money.Raw, l.overlay.totals.Offline.Money.Raw)
+}
+
+func TestOnlineOverrideCirculationBounds(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	zero := basics.MicroAlgos{}
+	maximum := basics.MicroAlgos{Raw: math.MaxUint64}
+	accounts := make(map[basics.Address]AccountOverride)
+	for _, acct := range env.Accounts {
+		accounts[acct.Addr] = AccountOverride{Balance: &zero}
+	}
+	accounts[env.FeeSinkAccount.Addr] = AccountOverride{Balance: &zero}
+	accounts[env.RewardsPoolAccount.Addr] = AccountOverride{Balance: &zero}
+	accounts[env.Accounts[0].Addr] = AccountOverride{Balance: &maximum}
+	l := newOverlayLedger(t, &env, StateOverrides{Accounts: accounts})
+	require.Equal(t, uint64(math.MaxUint64), l.overlay.totals.All().Raw)
+	require.NotZero(t, l.overlay.onlineRemoved.Raw)
+
+	// The final circulation fits exactly, despite an overflowing intermediate
+	// sum if the replacement stake is added before removing the original stake.
+	circulation, err := l.OnlineCirculation(l.overlay.balanceRound, l.start+1)
+	require.NoError(t, err)
+	require.Equal(t, maximum, circulation)
+
+	// A final circulation that really exceeds the maximum must still fail.
+	l.overlay.onlineRemoved.Raw--
+	_, err = l.OnlineCirculation(l.overlay.balanceRound, l.start+1)
+	require.ErrorContains(t, err, "overridden online circulation overflows")
+
+	// Preserve saturation when the approximated original stake exceeds the total.
+	l.overlay.onlineRemoved.Raw += 2
+	l.overlay.onlineAdded = basics.MicroAlgos{Raw: 123}
+	circulation, err = l.OnlineCirculation(l.overlay.balanceRound, l.start+1)
+	require.NoError(t, err)
+	require.Equal(t, l.overlay.onlineAdded, circulation)
 }
 
 func TestOnlineOverrides(t *testing.T) {

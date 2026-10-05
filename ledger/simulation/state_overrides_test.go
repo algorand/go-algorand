@@ -123,6 +123,40 @@ func TestStateOverrideBalanceDecrease(t *testing.T) {
 	require.Equal(t, simulation.TxnPath{0}, result.TxnGroups[0].FailedAt)
 }
 
+func TestStateOverrideCombinedBalanceOverflow(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	totals, err := env.Ledger.Totals(env.Ledger.Latest())
+	require.NoError(t, err)
+	balance := basics.MicroAlgos{Raw: math.MaxUint64 - totals.All().Raw + 1}
+	var addr basics.Address
+	crypto.RandBytes(addr[:])
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   env.Accounts[0].Addr,
+		Receiver: env.Accounts[1].Addr,
+		Amount:   1,
+	}).Txn().Sign(env.Accounts[0].Sk)
+
+	for _, status := range []basics.Status{basics.Online, basics.Offline, basics.NotParticipating} {
+		t.Run(status.String(), func(t *testing.T) {
+			// Each status total fits, but their combined balance overflows by one.
+			_, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{{txn}},
+				StateOverrides: simulation.StateOverrides{Accounts: map[basics.Address]simulation.AccountOverride{
+					addr: {Balance: &balance, Status: &status},
+				}},
+			})
+			require.ErrorAs(t, err, &simulation.InvalidRequestError{})
+			require.ErrorContains(t, err, "account balances overflow ledger totals")
+		})
+	}
+}
+
 func TestStateOverrideBalanceVisibleToAVM(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
