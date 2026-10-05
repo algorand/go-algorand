@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/sha256"
@@ -459,6 +460,99 @@ func opEcdsaPkRecover(cx *EvalContext) error {
 	}
 	cx.Stack = cx.Stack[:prev]
 	return nil
+}
+
+const (
+	rsaMaxModulusSize = 512 // bytes, 4096 bits
+	rsaMinModulusBits = 1024
+	rsaMaxExponent    = 65537
+)
+
+// The DER encoding of a DigestInfo with NULL parameters, up to the digest
+// itself. RFC 8017, section 9.2, note 1.
+var (
+	rsaSHA256DigestInfo = []byte{0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01, 0x05, 0x00, 0x04, 0x20}
+	rsaSHA512DigestInfo = []byte{0x30, 0x51, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x03, 0x05, 0x00, 0x04, 0x40}
+)
+
+func opRsaVerify(cx *EvalContext) error {
+	scheme := RsaScheme(cx.program[cx.pc+1])
+	fs, ok := rsaSchemeSpecByField(scheme)
+	if !ok || fs.version > cx.version {
+		return fmt.Errorf("invalid rsa scheme %s", scheme)
+	}
+
+	var digestLen int
+	var digestInfo []byte
+	switch fs.field {
+	case PKCS1v15_SHA256:
+		digestLen, digestInfo = sha256.Size, rsaSHA256DigestInfo
+	case PKCS1v15_SHA512:
+		digestLen, digestInfo = sha512.Size, rsaSHA512DigestInfo
+	default:
+		return fmt.Errorf("unsupported rsa scheme %s", scheme)
+	}
+
+	last := len(cx.Stack) - 1 // index of public exponent
+	prev := last - 1          // index of modulus
+	pprev := prev - 1         // index of signature
+	fourth := pprev - 1       // index of digest
+
+	e := cx.Stack[last].Uint
+	modulus := cx.Stack[prev].Bytes
+	sig := cx.Stack[pprev].Bytes
+	digest := cx.Stack[fourth].Bytes
+
+	if len(digest) != digestLen {
+		return fmt.Errorf("the digest must be %d bytes long for %s, not %d", digestLen, scheme, len(digest))
+	}
+	if len(modulus) > rsaMaxModulusSize {
+		return fmt.Errorf("the modulus must be at most %d bytes long, not %d", rsaMaxModulusSize, len(modulus))
+	}
+	if len(sig) != len(modulus) {
+		return fmt.Errorf("the signature must be as long as the modulus (%d bytes), not %d", len(modulus), len(sig))
+	}
+
+	cx.Stack[fourth] = boolToSV(rsaVerifyPKCS1v15(digestInfo, digest, sig, modulus, e))
+	cx.Stack = cx.Stack[:pprev]
+	return nil
+}
+
+// rsaVerifyPKCS1v15 verifies an RSASSA-PKCS1-v1_5 signature (RFC 8017, section
+// 8.2.2) of digest, prefixed by its DigestInfo. It reports false, rather than
+// an error, for every key or signature the opcode does not accept. It
+// re-encodes the expected message and compares it whole, rather than parsing
+// the decrypted signature.
+func rsaVerifyPKCS1v15(digestInfo, digest, sig, modulus []byte, e uint64) bool {
+	k := len(modulus)
+	if k == 0 || modulus[0] == 0 {
+		return false
+	}
+	n := new(big.Int).SetBytes(modulus)
+	if n.BitLen() < rsaMinModulusBits || n.Bit(0) == 0 {
+		return false
+	}
+	if e < 3 || e > rsaMaxExponent || e%2 == 0 {
+		return false
+	}
+	s := new(big.Int).SetBytes(sig)
+	if s.Cmp(n) >= 0 {
+		return false
+	}
+	m := new(big.Int).Exp(s, new(big.Int).SetUint64(e), n)
+
+	// EM = 0x00 || 0x01 || PS || 0x00 || DigestInfo || digest, where PS is
+	// 0xff bytes filling EM to k bytes. With k >= 128 and the longest
+	// DigestInfo and digest at 83 bytes, PS always exceeds the 8 byte minimum.
+	tLen := len(digestInfo) + len(digest)
+	expected := make([]byte, k)
+	expected[1] = 0x01
+	for i := 2; i < k-tLen-1; i++ {
+		expected[i] = 0xff
+	}
+	copy(expected[k-tLen:], digestInfo)
+	copy(expected[k-len(digest):], digest)
+	return bytes.Equal(m.FillBytes(make([]byte, k)), expected)
 }
 
 type rawMessage []byte

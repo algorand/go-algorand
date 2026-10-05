@@ -3386,6 +3386,8 @@ func TestReturnTypes(t *testing.T) {
 		// falcon_verify's required pubkey length comes from its configuration
 		// immediate, so it can't be inferred from the opcode's proto.
 		"falcon_verify": ": byte 0x3456; byte 0x3456; byte 0x" + strings.Repeat("33", 1793) + "; falcon_verify FalconDet1024",
+		// rsa_verify requires a 32 byte digest, and a signature as long as the modulus.
+		"rsa_verify": `: byte 0x0000000000000000000000000000000000000000000000000000000000000001; byte ""; byte ""; int 3; rsa_verify PKCS1v15_SHA256`,
 	}
 
 	/* Make sure the specialCmd tests the opcode in question */

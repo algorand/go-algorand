@@ -4793,15 +4793,16 @@ func TestAllowedOpcodesV3(t *testing.T) {
 	require.Len(t, tests, cnt)
 }
 
-// TestLinearOpcodes ensures we don't have a linear cost opcode (which
-// inherently requires a dynamic cost model) before backBranchEnabledVersion,
-// which introduced our dynamic model.
+// TestLinearOpcodes ensures we don't have a linear or bracket cost opcode
+// (which inherently requires a dynamic cost model) before
+// backBranchEnabledVersion, which introduced our dynamic model.
 func TestLinearOpcodes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	for _, spec := range OpSpecs {
 		if spec.Version < backBranchEnabledVersion {
 			require.Zero(t, spec.OpDetails.FullCost.chunkCost, spec)
+			require.Nil(t, spec.OpDetails.brackets, spec)
 		}
 	}
 }
