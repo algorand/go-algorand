@@ -30,8 +30,9 @@ var (
 	// ErrPQSchemeNotEnabled is returned when a PQScheme is not enabled under the protocol.
 	ErrPQSchemeNotEnabled = errors.New("pq signature scheme not enabled")
 
-	// ErrPQEd25519SigInvalid is returned when Ed25519 signature verification fails.
-	ErrPQEd25519SigInvalid = errors.New("invalid ed25519 signature")
+	// ErrSigInvalid is returned, wrapped with the scheme name, when a signature
+	// or the public key it is checked against is invalid.
+	ErrSigInvalid = errors.New("invalid signature")
 )
 
 // PQVerifier verifies a signature for one account authorization scheme.
@@ -100,7 +101,7 @@ func (ed25519Scheme) Verify(message Hashable, publicKey, signature []byte) error
 		return err
 	}
 	if !verifier.Verify(message, sig) {
-		return ErrPQEd25519SigInvalid
+		return fmt.Errorf("ed25519 %w", ErrSigInvalid)
 	}
 	return nil
 }
@@ -116,10 +117,10 @@ func (ed25519Scheme) BatchPrep(message Hashable, publicKey, signature []byte, ba
 
 func parseEd25519Signature(publicKey, signature []byte) (SignatureVerifier, Signature, error) {
 	if len(publicKey) != len(PublicKey{}) {
-		return SignatureVerifier{}, Signature{}, fmt.Errorf("%w: public key size %d, want %d", ErrPQEd25519SigInvalid, len(publicKey), len(PublicKey{}))
+		return SignatureVerifier{}, Signature{}, fmt.Errorf("ed25519 %w: public key size %d, want %d", ErrSigInvalid, len(publicKey), len(PublicKey{}))
 	}
 	if len(signature) != len(Signature{}) {
-		return SignatureVerifier{}, Signature{}, fmt.Errorf("%w: signature size %d, want %d", ErrPQEd25519SigInvalid, len(signature), len(Signature{}))
+		return SignatureVerifier{}, Signature{}, fmt.Errorf("ed25519 %w: signature size %d, want %d", ErrSigInvalid, len(signature), len(Signature{}))
 	}
 	return SignatureVerifier(publicKey), Signature(signature), nil
 }

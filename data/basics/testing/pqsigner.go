@@ -89,7 +89,7 @@ func (s ed25519Signer) Verify(message crypto.Hashable, sig []byte) error {
 }
 func (s ed25519Signer) VerifyBytes(data []byte, sig []byte) error {
 	if len(sig) != len(crypto.Signature{}) || !s.SignatureVerifier.VerifyBytes(data, crypto.Signature(sig)) {
-		return crypto.ErrPQEd25519SigInvalid
+		return crypto.ErrSigInvalid
 	}
 	return nil
 }
@@ -102,7 +102,6 @@ type PQTestScheme struct {
 	// Name is a human-readable scheme name, suitable for subtest names.
 	Name             string
 	Scheme           protocol.PQScheme
-	ErrSigInvalid    error
 	MaxSignatureSize int
 }
 
@@ -112,19 +111,16 @@ var PQTestSchemes = []PQTestScheme{
 	{
 		Name:             "falcon-1024",
 		Scheme:           protocol.PQSchemeFalcon1024,
-		ErrSigInvalid:    crypto.ErrPQFalcon1024SigInvalid,
 		MaxSignatureSize: crypto.Falcon1024MaxSignatureSize,
 	},
 	{
 		Name:             "falcon-512",
 		Scheme:           protocol.PQSchemeFalcon512,
-		ErrSigInvalid:    crypto.ErrPQFalcon512SigInvalid,
 		MaxSignatureSize: crypto.Falcon512MaxSignatureSize,
 	},
 	{
 		Name:             "ed25519",
 		Scheme:           protocol.PQSchemeEd25519,
-		ErrSigInvalid:    crypto.ErrPQEd25519SigInvalid,
 		MaxSignatureSize: len(crypto.Signature{}),
 	},
 }

@@ -41,7 +41,6 @@ type pqSigTestFixture struct {
 	txn              Transaction
 	authorizer       basics.Address
 	pqSig            PQSig
-	errSigInvalid    error
 	maxSignatureSize int
 }
 
@@ -94,7 +93,6 @@ func makePQSigTestFixture(t *testing.T, firstSeedByte byte, scheme protocol.PQSc
 			PublicKey: acct.PublicKey,
 			Signature: signature,
 		},
-		errSigInvalid:    schemeInfo.ErrSigInvalid,
 		maxSignatureSize: schemeInfo.MaxSignatureSize,
 	}
 }
@@ -227,7 +225,7 @@ func TestPQSigValidateEnvelope(t *testing.T) {
 			malformedPublicKey := fixture.pqSig
 			malformedPublicKey.PublicKey = malformedPublicKey.PublicKey[:len(malformedPublicKey.PublicKey)-1]
 			require.NoError(t, malformedPublicKey.ValidateEnvelope(fixture.proto, malformedPublicKey.Address()))
-			require.ErrorIs(t, malformedPublicKey.Verify(fixture.proto, fixture.txn, malformedPublicKey.Address()), fixture.errSigInvalid)
+			require.ErrorIs(t, malformedPublicKey.Verify(fixture.proto, fixture.txn, malformedPublicKey.Address()), crypto.ErrSigInvalid)
 
 			var wrongAuthorizer basics.Address
 			wrongAuthorizer[0] = 1
@@ -337,7 +335,7 @@ func TestPQSigVerifyAcceptsSignatureOverRawTxn(t *testing.T) {
 			require.False(t, bytes.Equal(txidSignature, rawTxnSignature))
 
 			pqSig.Signature = txidSignature
-			require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer), fixture.errSigInvalid)
+			require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer), crypto.ErrSigInvalid)
 		})
 	}
 }
@@ -430,7 +428,7 @@ func TestPQSigVerifyRejectsMalformedSignature(t *testing.T) {
 			pqSig.Signature = make([]byte, fixture.maxSignatureSize+1)
 
 			err := pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer)
-			require.ErrorIs(t, err, fixture.errSigInvalid)
+			require.ErrorIs(t, err, crypto.ErrSigInvalid)
 		})
 	}
 }
@@ -443,7 +441,7 @@ func TestPQSigVerifyRejectsChangedTransaction(t *testing.T) {
 			txn := fixture.txn
 			txn.Note = []byte("changed")
 
-			require.ErrorIs(t, fixture.pqSig.Verify(fixture.proto, txn, fixture.authorizer), fixture.errSigInvalid)
+			require.ErrorIs(t, fixture.pqSig.Verify(fixture.proto, txn, fixture.authorizer), crypto.ErrSigInvalid)
 		})
 	}
 }
@@ -457,7 +455,7 @@ func TestPQSigVerifyRejectsChangedSignature(t *testing.T) {
 			pqSig.Signature = slices.Clone(pqSig.Signature)
 			pqSig.Signature[len(pqSig.Signature)-1] ^= 1
 
-			require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer), fixture.errSigInvalid)
+			require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer), crypto.ErrSigInvalid)
 		})
 	}
 }

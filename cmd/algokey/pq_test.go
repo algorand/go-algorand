@@ -394,13 +394,12 @@ func TestPQSignProducesVerifiablePQEnvelope(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range []struct {
-		name       string
-		scheme     protocol.PQScheme
-		errInvalid error
+		name   string
+		scheme protocol.PQScheme
 	}{
-		{"falcon-1024", protocol.PQSchemeFalcon1024, crypto.ErrPQFalcon1024SigInvalid},
-		{"falcon-512", protocol.PQSchemeFalcon512, crypto.ErrPQFalcon512SigInvalid},
-		{"ed25519", protocol.PQSchemeEd25519, crypto.ErrPQEd25519SigInvalid},
+		{"falcon-1024", protocol.PQSchemeFalcon1024},
+		{"falcon-512", protocol.PQSchemeFalcon512},
+		{"ed25519", protocol.PQSchemeEd25519},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -440,7 +439,7 @@ func TestPQSignProducesVerifiablePQEnvelope(t *testing.T) {
 
 			changed := signed
 			changed.Txn.Note = []byte("changed")
-			require.ErrorIs(t, changed.PQsig.Verify(config.Consensus[protocol.ConsensusFuture], changed.Txn, changed.Authorizer()), tc.errInvalid)
+			require.ErrorIs(t, changed.PQsig.Verify(config.Consensus[protocol.ConsensusFuture], changed.Txn, changed.Authorizer()), crypto.ErrSigInvalid)
 		})
 	}
 }

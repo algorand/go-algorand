@@ -17,18 +17,9 @@
 package crypto
 
 import (
-	"errors"
 	"fmt"
 
 	cfalcon "github.com/algorand/falcon"
-)
-
-var (
-	// ErrPQFalcon1024SigInvalid is returned when Falcon-1024 signature verification fails.
-	ErrPQFalcon1024SigInvalid = errors.New("invalid falcon-1024 signature")
-
-	// ErrPQFalcon512SigInvalid is returned when Falcon-512 signature verification fails.
-	ErrPQFalcon512SigInvalid = errors.New("invalid falcon-512 signature")
 )
 
 // FalconSeedSize is the size in bytes of a Falcon keygen seed: 32 bytes
@@ -160,14 +151,14 @@ func (s Falcon1024Signature) IsSaltVersionEqual(version byte) bool {
 // VerifyFalcon1024 verifies a Falcon-1024 signature over message.
 func VerifyFalcon1024(message Hashable, publicKey []byte, signature []byte) error {
 	if len(publicKey) != Falcon1024PublicKeySize {
-		return fmt.Errorf("%w: public key size %d, want %d", ErrPQFalcon1024SigInvalid, len(publicKey), Falcon1024PublicKeySize)
+		return fmt.Errorf("falcon-1024 %w: public key size %d, want %d", ErrSigInvalid, len(publicKey), Falcon1024PublicKeySize)
 	}
 	// No signature size checks needed: cfalcon rejects empty, undersized, and
 	// oversized signatures itself before doing any work.
 	var fv Falcon1024Verifier
 	copy(fv.PublicKey[:], publicKey)
 	if err := fv.Verify(message, Falcon1024Signature(signature)); err != nil {
-		return fmt.Errorf("%w: %w", ErrPQFalcon1024SigInvalid, err)
+		return fmt.Errorf("falcon-1024 %w: %w", ErrSigInvalid, err)
 	}
 	return nil
 }
@@ -287,14 +278,14 @@ func (s Falcon512Signature) IsSaltVersionEqual(version byte) bool {
 // VerifyFalcon512 verifies a Falcon-512 signature over message.
 func VerifyFalcon512(message Hashable, publicKey []byte, signature []byte) error {
 	if len(publicKey) != Falcon512PublicKeySize {
-		return fmt.Errorf("%w: public key size %d, want %d", ErrPQFalcon512SigInvalid, len(publicKey), Falcon512PublicKeySize)
+		return fmt.Errorf("falcon-512 %w: public key size %d, want %d", ErrSigInvalid, len(publicKey), Falcon512PublicKeySize)
 	}
 	// No signature size checks needed: cfalcon rejects empty, undersized, and
 	// oversized signatures itself before doing any work.
 	var fv Falcon512Verifier
 	copy(fv.PublicKey[:], publicKey)
 	if err := fv.Verify(message, Falcon512Signature(signature)); err != nil {
-		return fmt.Errorf("%w: %w", ErrPQFalcon512SigInvalid, err)
+		return fmt.Errorf("falcon-512 %w: %w", ErrSigInvalid, err)
 	}
 	return nil
 }

@@ -128,11 +128,11 @@ func makePQSignedTxnForScheme(t *testing.T, firstSeedByte byte, scheme protocol.
 }
 
 // invalidPQSigErrText is the verification failure message for pqSig's scheme.
-func invalidPQSigErrText(t *testing.T, pqSig transactions.PQSig) string {
+func invalidPQSigErrText(pqSig transactions.PQSig) string {
 	if pqSig.Batched() {
 		return crypto.ErrBatchHasFailedSigs.Error()
 	}
-	return basics_testing.PQTestSchemeInfo(t, pqSig.Scheme).ErrSigInvalid.Error()
+	return crypto.ErrSigInvalid.Error()
 }
 
 func makePQSigForTxn(t *testing.T, firstSeedByte byte, txn *transactions.Transaction) (basics.Address, transactions.PQSig) {
@@ -500,7 +500,7 @@ func TestTxnValidationEd25519PQSigRejectsWrongLengths(t *testing.T) {
 			test.mutate(&stxn)
 			_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &DummyLedgerForSignature{})
 			require.ErrorContains(t, err, "pq signature validation failed")
-			require.ErrorIs(t, err, crypto.ErrPQEd25519SigInvalid)
+			require.ErrorIs(t, err, crypto.ErrSigInvalid)
 			requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
 		})
 	}
@@ -695,7 +695,7 @@ func TestTxnValidationPQDelegatedLogicSigRejectsInvalidProof(t *testing.T) {
 		stxn.Lsig.Logic = ops.Program
 
 		_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-		requireLogicPQSigError(t, err, invalidPQSigErrText(t, stxn.Lsig.PQsig))
+		requireLogicPQSigError(t, err, invalidPQSigErrText(stxn.Lsig.PQsig))
 	})
 
 	t.Run("wrong-signature", func(t *testing.T) {
@@ -703,7 +703,7 @@ func TestTxnValidationPQDelegatedLogicSigRejectsInvalidProof(t *testing.T) {
 		stxn.Lsig.PQsig.Signature[0] ^= 1
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-		requireLogicPQSigError(t, err, invalidPQSigErrText(t, stxn.Lsig.PQsig))
+		requireLogicPQSigError(t, err, invalidPQSigErrText(stxn.Lsig.PQsig))
 	})
 
 	t.Run("malformed-public-key", func(t *testing.T) {
@@ -727,7 +727,7 @@ func TestTxnValidationPQDelegatedLogicSigRejectsInvalidProof(t *testing.T) {
 		stxn.Lsig.PQsig.Signature = make([]byte, crypto.MaxPQSignatureSize+1)
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-		requireLogicPQSigError(t, err, basics_testing.PQTestSchemeInfo(t, stxn.Lsig.PQsig.Scheme).ErrSigInvalid.Error())
+		requireLogicPQSigError(t, err, crypto.ErrSigInvalid.Error())
 	})
 
 	t.Run("disabled-scheme", func(t *testing.T) {
@@ -746,7 +746,7 @@ func TestTxnValidationPQDelegatedLogicSigRejectsInvalidProof(t *testing.T) {
 		require.NotEqual(t, originalAuthorizer, stxn.Txn.Sender)
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-		requireLogicPQSigError(t, err, invalidPQSigErrText(t, stxn.Lsig.PQsig))
+		requireLogicPQSigError(t, err, invalidPQSigErrText(stxn.Lsig.PQsig))
 	})
 }
 
@@ -792,7 +792,7 @@ func TestTxnValidationPQDelegatedLogicSigSignsRawProgram(t *testing.T) {
 	stxn.Lsig.PQsig.Signature = digestSignature
 	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 	requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
-	require.ErrorContains(t, err, invalidPQSigErrText(t, pqSig))
+	require.ErrorContains(t, err, invalidPQSigErrText(pqSig))
 }
 
 func TestTxnValidationEmptySig(t *testing.T) {

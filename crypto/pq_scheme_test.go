@@ -86,12 +86,12 @@ func TestPQVerifierEd25519(t *testing.T) {
 	sig := signer.Sign(msg)
 
 	require.NoError(t, verifier.Verify(msg, signer.SignatureVerifier[:], sig[:]))
-	require.ErrorIs(t, verifier.Verify(msg, signer.SignatureVerifier[:len(signer.SignatureVerifier)-1], sig[:]), ErrPQEd25519SigInvalid)
-	require.ErrorIs(t, verifier.Verify(msg, signer.SignatureVerifier[:], sig[:len(sig)-1]), ErrPQEd25519SigInvalid)
-	require.ErrorIs(t, verifier.Verify(TestingHashable{data: []byte("wrong message")}, signer.SignatureVerifier[:], sig[:]), ErrPQEd25519SigInvalid)
+	require.ErrorIs(t, verifier.Verify(msg, signer.SignatureVerifier[:len(signer.SignatureVerifier)-1], sig[:]), ErrSigInvalid)
+	require.ErrorIs(t, verifier.Verify(msg, signer.SignatureVerifier[:], sig[:len(sig)-1]), ErrSigInvalid)
+	require.ErrorIs(t, verifier.Verify(TestingHashable{data: []byte("wrong message")}, signer.SignatureVerifier[:], sig[:]), ErrSigInvalid)
 
 	otherSigner := GenerateSignatureSecrets(Seed{2})
-	require.ErrorIs(t, verifier.Verify(msg, otherSigner.SignatureVerifier[:], sig[:]), ErrPQEd25519SigInvalid)
+	require.ErrorIs(t, verifier.Verify(msg, otherSigner.SignatureVerifier[:], sig[:]), ErrSigInvalid)
 }
 
 // TestPQVerifierFalconRoundTrip exercises the interface wiring; the
