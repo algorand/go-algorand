@@ -18,6 +18,7 @@ package crypto
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -29,15 +30,25 @@ var (
 	// ErrPQSchemeNotEnabled is returned when a PQScheme is not enabled under the protocol.
 	ErrPQSchemeNotEnabled = errors.New("pq signature scheme not enabled")
 
+	// ErrSigInvalid is returned, wrapped with the scheme name, when a signature
+	// or the public key it is checked against is invalid.
+	ErrSigInvalid = errors.New("invalid signature")
+
 	// ErrPQLogicSigNotEvaluated is returned by the ls scheme's verifier, which
 	// must never be called. Reaching it means a caller took the generic PQ
 	// signature path for a logic signature instead of evaluating its program.
 	ErrPQLogicSigNotEvaluated = errors.New("logic signature must be verified by evaluating its program, not by checking signature bytes")
 )
 
-// PQVerifier verifies a post-quantum signature for one scheme.
+// PQVerifier verifies a signature for one account authorization scheme.
 type PQVerifier interface {
 	Verify(message Hashable, publicKey, signature []byte) error
+}
+
+// PQBatchPreparer is implemented by schemes verified through the batch
+// verifier (Ed25519 only).
+type PQBatchPreparer interface {
+	BatchPrep(message Hashable, publicKey, signature []byte, batch BatchEnqueuer) error
 }
 
 // maxPQLogicSigSize is the largest program, or largest set of program
@@ -55,8 +66,8 @@ const maxPQLogicSigSize = 16000
 // signature means growing these; TestPQBoundsCoverFalcon and
 // TestPQBoundsCoverLogicSig guard against undersizing the current schemes.
 const (
-	MaxPQPublicKeySize = max(Falcon1024PublicKeySize, Falcon512PublicKeySize, maxPQLogicSigSize)
-	MaxPQSignatureSize = max(Falcon1024MaxSignatureSize, Falcon512MaxSignatureSize, maxPQLogicSigSize)
+	MaxPQPublicKeySize = max(Falcon1024PublicKeySize, Falcon512PublicKeySize, len(PublicKey{}), maxPQLogicSigSize)
+	MaxPQSignatureSize = max(Falcon1024MaxSignatureSize, Falcon512MaxSignatureSize, len(Signature{}), maxPQLogicSigSize)
 )
 
 // LookupPQScheme returns the verifier for a PQ scheme tag. Every scheme is
@@ -71,6 +82,8 @@ const (
 //   - add a case here returning its PQVerifier,
 //   - add its config.ConsensusParams.PQSchemeEnabled case and PQSchemeFeeContribution,
 //   - add the signing/private-key ops in cmd/algokey,
+//   - add it to basics_testing.PQTestSchemes,
+//   - implement PQBatchPreparer if the scheme is batch-verified,
 //   - grow MaxPQPublicKeySize/MaxPQSignatureSize if its public key or signature is larger.
 func LookupPQScheme(s protocol.PQScheme) (PQVerifier, bool) {
 	switch s {
@@ -78,6 +91,8 @@ func LookupPQScheme(s protocol.PQScheme) (PQVerifier, bool) {
 		return falcon1024{}, true
 	case protocol.PQSchemeFalcon512:
 		return falcon512{}, true
+	case protocol.PQSchemeEd25519:
+		return ed25519Scheme{}, true
 	case protocol.PQSchemeLogicSig:
 		return logicSig{}, true
 	}
@@ -98,6 +113,39 @@ func (falcon512) Verify(message Hashable, publicKey, signature []byte) error {
 	return VerifyFalcon512(message, publicKey, signature)
 }
 
+// ed25519Scheme is the classical Ed25519 (ed) scheme.
+type ed25519Scheme struct{}
+
+func (ed25519Scheme) Verify(message Hashable, publicKey, signature []byte) error {
+	verifier, sig, err := parseEd25519Signature(publicKey, signature)
+	if err != nil {
+		return err
+	}
+	if !verifier.Verify(message, sig) {
+		return fmt.Errorf("ed25519 %w", ErrSigInvalid)
+	}
+	return nil
+}
+
+func (ed25519Scheme) BatchPrep(message Hashable, publicKey, signature []byte, batch BatchEnqueuer) error {
+	verifier, sig, err := parseEd25519Signature(publicKey, signature)
+	if err != nil {
+		return err
+	}
+	batch.EnqueueSignature(verifier, message, sig)
+	return nil
+}
+
+func parseEd25519Signature(publicKey, signature []byte) (SignatureVerifier, Signature, error) {
+	if len(publicKey) != len(PublicKey{}) {
+		return SignatureVerifier{}, Signature{}, fmt.Errorf("ed25519 %w: public key size %d, want %d", ErrSigInvalid, len(publicKey), len(PublicKey{}))
+	}
+	if len(signature) != len(Signature{}) {
+		return SignatureVerifier{}, Signature{}, fmt.Errorf("ed25519 %w: signature size %d, want %d", ErrSigInvalid, len(signature), len(Signature{}))
+	}
+	return SignatureVerifier(publicKey), Signature(signature), nil
+}
+
 // logicSig is the LogicSig (ls) scheme. A logic signature is authorized by
 // evaluating its program against the transaction group, which needs a ledger
 // and an opcode budget that PQVerifier does not supply and this package cannot
@@ -108,3 +156,7 @@ type logicSig struct{}
 func (logicSig) Verify(message Hashable, publicKey, signature []byte) error {
 	return ErrPQLogicSigNotEvaluated
 }
+
+// logicsig does not have a BatchPrep method. The `ls` scheme does not support
+// delegation, so there's no crypto that can be batch varified. (Top-level lsigs
+// _could_ contribute signatures to a batch, but we don't handle that case yet.)

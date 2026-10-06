@@ -625,6 +625,10 @@ type ConsensusParams struct {
 	// authorization for the f5 PQ scheme.
 	EnablePQSchemeFalcon512 bool
 
+	// EnablePQSchemeEd25519 enables Ed25519 transaction authorization for the
+	// ed scheme's hashed-address profile.
+	EnablePQSchemeEd25519 bool
+
 	// RequireLogicSigArgAccess requires that a LogicSig carry no argument it did
 	// not read: nothing above the highest index it read, and nothing unread
 	// below that index unless it is empty. Args are covered by no signature, and
@@ -723,7 +727,7 @@ func (proto ConsensusParams) MinFee() basics.MicroAlgos {
 	return basics.MicroAlgos{Raw: proto.MinTxnFee}
 }
 
-// PQSchemeEnabled returns whether a post-quantum signature scheme is enabled
+// PQSchemeEnabled returns whether an account authorization scheme is enabled in PQsig
 // under these consensus parameters.
 func (proto ConsensusParams) PQSchemeEnabled(scheme protocol.PQScheme) bool {
 	switch scheme {
@@ -731,18 +735,13 @@ func (proto ConsensusParams) PQSchemeEnabled(scheme protocol.PQScheme) bool {
 		return proto.EnablePQSchemeFalcon1024
 	case protocol.PQSchemeFalcon512:
 		return proto.EnablePQSchemeFalcon512
+	case protocol.PQSchemeEd25519:
+		return proto.EnablePQSchemeEd25519
 	case protocol.PQSchemeLogicSig:
 		return proto.EnablePQSchemeLogicSig
 	default:
 		return false
 	}
-}
-
-// PQSigEnabled returns whether any post-quantum signatures are enabled
-// under these consensus parameters.
-func (proto ConsensusParams) PQSigEnabled() bool {
-	return proto.EnablePQSchemeFalcon1024 || proto.EnablePQSchemeFalcon512 ||
-		proto.EnablePQSchemeLogicSig
 }
 
 // PQSchemeFeeContribution is the additional fee factor charged for a transaction
@@ -755,11 +754,10 @@ func (proto ConsensusParams) PQSchemeFeeContribution(scheme protocol.PQScheme) b
 		return 2e6
 	case protocol.PQSchemeFalcon512:
 		return 1e6 // it is half of the Falcon-1024 contribution
+	case protocol.PQSchemeEd25519:
+		return 0 // we consider a single Ed25519 signature to be part of min fee
 	case protocol.PQSchemeLogicSig:
-		// No surcharge. The Falcon contributions price signature verification
-		// that nothing else accounts for. An ls account costs one hash plus AVM
-		// execution, and both the opcode budget and PerByteTxnSurcharge already
-		// charge for those. A surcharge here would make the off-curve form cost
+		// No surcharge. A surcharge here would make the off-curve form cost
 		// more than the on-curve SignedTxn.Lsig form it exists to replace.
 		return 0
 	default:
@@ -1595,6 +1593,7 @@ func initConsensusProtocols() {
 
 	vFuture.LogicSigVersion = 14 // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.EnablePQSchemeFalcon512 = true
+	vFuture.EnablePQSchemeEd25519 = true
 	vFuture.RequireLogicSigArgAccess = true
 	vFuture.AllowGroupedHeartbeats = true
 

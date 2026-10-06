@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
@@ -6755,38 +6756,18 @@ func TestOptionalSignatures(t *testing.T) {
 func makePlaceholderPQSigForSimulation(t *testing.T, scheme protocol.PQScheme, seedByte byte) (basics.Address, transactions.PQSig) {
 	t.Helper()
 
-	var seed crypto.FalconSeed
-	seed[0] = seedByte
-
-	var publicKey []byte
-	switch scheme {
-	case protocol.PQSchemeFalcon1024:
-		signer, err := crypto.GenerateFalcon1024Signer(seed)
-		require.NoError(t, err)
-		publicKey = slices.Clone(signer.PublicKey[:])
-	case protocol.PQSchemeFalcon512:
-		signer, err := crypto.GenerateFalcon512Signer(seed)
-		require.NoError(t, err)
-		publicKey = slices.Clone(signer.PublicKey[:])
-	default:
-		t.Fatalf("unsupported PQ scheme %s", scheme)
-	}
-
-	salt, authorizer, err := basics.CanonicalPQAddressSalt(scheme, publicKey)
-	require.NoError(t, err)
-
-	return authorizer, transactions.PQSig{
-		Scheme:    scheme,
-		Salt:      salt,
-		PublicKey: publicKey,
+	acct := basics_testing.MakePQTestAccount(t, seedByte, scheme)
+	return acct.Address, transactions.PQSig{
+		Scheme:    acct.Scheme,
+		Salt:      acct.Salt,
+		PublicKey: acct.PublicKey,
 	}
 }
 
 // pqPlaceholderFeeUsage returns the fee usage of a transaction authorized by a
 // PQ signature of the given scheme (base transaction usage plus the scheme's
-// surcharge), and the fee that exactly covers it. Falcon-512's surcharge is half
-// of Falcon-1024's, so the tests below derive their expectations from these
-// rather than hardcoding multiples of the min fee.
+// surcharge), and the fee that exactly covers it. Tests derive their expectations
+// from the configured fee policy rather than hardcoding multiples of the min fee.
 func pqPlaceholderFeeUsage(t *testing.T, proto config.ConsensusParams, scheme protocol.PQScheme) (basics.MicroAlgos, basics.Micros) {
 	t.Helper()
 
@@ -6859,10 +6840,10 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	for _, scheme := range []protocol.PQScheme{protocol.PQSchemeFalcon1024, protocol.PQSchemeFalcon512} {
-		t.Run(scheme.String(), func(t *testing.T) {
+	for _, tc := range basics_testing.PQTestSchemes {
+		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
-			testPlaceholderPQSignatures(t, scheme)
+			testPlaceholderPQSignatures(t, tc.Scheme)
 		})
 	}
 }
@@ -7254,6 +7235,12 @@ func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 			proto := env.TxnInfo.CurrentProtocolParams()
 			_, pqUsage := pqPlaceholderFeeUsage(t, proto, scheme)
 			txgroup, pqAuthorizer := makePlaceholderPQFixSignersGroup(t, env, scheme, proto.MinTxnFee)
+			var expectedError string
+			var failedAt simulation.TxnPath
+			if pqUsage > 1e6 {
+				expectedError = fmt.Sprintf("usage=%s", 1e6+pqUsage)
+				failedAt = simulation.TxnPath{1}
+			}
 
 			return simulationTestCase{
 				input: simulation.Request{
@@ -7261,7 +7248,7 @@ func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 					AllowEmptySignatures: true,
 					FixSigners:           true,
 				},
-				expectedError: fmt.Sprintf("usage=%s", 1e6+pqUsage),
+				expectedError: expectedError,
 				expected: simulation.Result{
 					Version:   simulation.ResultLatestVersion,
 					LastRound: env.TxnInfo.LatestRound(),
@@ -7271,7 +7258,7 @@ func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 					},
 					TxnGroups: []simulation.TxnGroupResult{
 						{
-							FailedAt: simulation.TxnPath{1},
+							FailedAt: failedAt,
 							Txns: []simulation.TxnResult{
 								{FeesPaid: txgroup[0].Txn.Fee},
 								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: pqAuthorizer},

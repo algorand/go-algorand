@@ -81,9 +81,6 @@ func TestPQSchemeLogicSigParams(t *testing.T) {
 		}
 
 		if params.EnablePQSchemeLogicSig {
-			if !params.PQSigEnabled() {
-				t.Errorf("Protocol %s: ls enabled but PQSigEnabled is false", proto)
-			}
 			// A delegating ls account runs two programs against one budget. The
 			// unpooled fallback in EvalContext.remainingBudget would hand each a
 			// full LogicSigMaxCost instead.
