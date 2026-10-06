@@ -389,6 +389,39 @@ func TestPQCommandFlagShorthands(t *testing.T) {
 	require.Equal(t, "o", pqSignProgramCmd.Flags().Lookup("outfile").Shorthand)
 }
 
+func TestPQSchemeFlagHasNoDefault(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	require.Empty(t, pqGenerateCmd.Flags().Lookup("scheme").DefValue)
+	require.Empty(t, pqImportCmd.Flags().Lookup("scheme").DefValue)
+	require.Empty(t, pqSignCmd.Flags().Lookup("scheme").DefValue)
+	require.Empty(t, pqSignProgramCmd.Flags().Lookup("scheme").DefValue)
+}
+
+func TestPQSchemeMustMatchKeySource(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var entropy crypto.Seed
+	mnemonic, err := mnemonicFromSeed(entropy)
+	require.NoError(t, err)
+
+	_, err = resolvePQSigningContext("", mnemonic, "")
+	require.ErrorIs(t, err, errPQSchemeRequired)
+	require.ErrorIs(t, runPQImportWithOptions(mnemonic, "", filepath.Join(t.TempDir(), "imported.pq")), errPQSchemeRequired)
+
+	keyfile := filepath.Join(t.TempDir(), "account.pq")
+	require.NoError(t, writePQPrivateKeyFile(keyfile, pqTestSigning(t, 0)))
+
+	_, err = resolvePQSigningContext(keyfile, "", "falcon-1024")
+	require.ErrorIs(t, err, errPQSchemeWithKeyfile)
+
+	pqctx, err := resolvePQSigningContext(keyfile, "", "")
+	require.NoError(t, err)
+	require.Equal(t, protocol.PQSchemeFalcon1024, pqctx.signing.Public.Scheme)
+}
+
 func TestPQSignProducesVerifiablePQEnvelope(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

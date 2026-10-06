@@ -22,8 +22,7 @@ ${gcmd} clerk compile pq-true.teal -o pq-true.tok
 # Fund accounts below one reward unit to avoid unexpected balance drift from rewards.
 FUNDING=900000
 
-# Falcon-1024 is the default scheme, so no need to specify it explicitly.
-algokey pq generate -k pq.sk > generate.out
+algokey pq generate -S falcon-1024 -k pq.sk > generate.out
 
 PQMNEMONIC=$(grep 'PQ private key mnemonic:' < generate.out | sed 's/PQ private key mnemonic: //')
 PQPUBKEY=$(grep 'PQ public key:' < generate.out | sed 's/PQ public key: //')
@@ -34,7 +33,7 @@ echo "$PQPUBKEY"
 echo "$PQADDRESS"
 
 # Restoring from mnemonic reproduces the key file.
-algokey pq import -m "$PQMNEMONIC" -k pq-restored.sk
+algokey pq import -m "$PQMNEMONIC" -S falcon-1024 -k pq-restored.sk
 cmp pq.sk pq-restored.sk
 
 ${gcmd} clerk send -a "${FUNDING}" -f "${ACCOUNT}" -t "${PQADDRESS}"
