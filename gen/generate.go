@@ -434,10 +434,7 @@ func loadPartKeys(filename string) (part account.PersistedParticipation, partDB 
 		return
 	}
 
-	// The key is only read here, so read it as-is: RestoreParticipation would
-	// migrate an older file in place, and this accessor has no secure_delete
-	// to erase what the migration frees.
-	part, err = account.RestoreParticipationUnmigrated(partDB)
+	part, err = account.RestoreParticipation(partDB)
 	if err == nil {
 		return //nolint:nilerr // intentional
 	}

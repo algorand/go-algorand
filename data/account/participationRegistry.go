@@ -416,11 +416,19 @@ const (
 		WHERE r.pk IN (SELECT pk FROM Keysets WHERE participationID=?)`
 	selectVotingBatches   = `SELECT batch, data FROM VotingBatches WHERE pk=? ORDER BY batch`
 	selectVotingOffsets   = `SELECT off, data FROM VotingOffsets WHERE pk=? ORDER BY off`
+	selectVotingHeaderPK  = `SELECT votingHeader FROM Rolling WHERE pk=?`
 	deleteKeysets         = `DELETE FROM Keysets WHERE pk=?`
 	deleteRolling         = `DELETE FROM Rolling WHERE pk=?`
 	deleteStateProofByPK  = `DELETE FROM StateProofKeys WHERE pk=?`
 	deleteVotingBatchesPK = `DELETE FROM VotingBatches WHERE pk=?`
 	deleteVotingOffsetsPK = `DELETE FROM VotingOffsets WHERE pk=?`
+
+	// per-round voting subkey maintenance (see votingRows.go)
+	insertVotingBatch        = `INSERT INTO VotingBatches (pk, batch, data) VALUES (?, ?, ?)`
+	insertVotingOffset       = `INSERT INTO VotingOffsets (pk, off, data) VALUES (?, ?, ?)`
+	deleteVotingBatchesBelow = `DELETE FROM VotingBatches WHERE pk=? AND batch<?`
+	deleteVotingOffsetsBelow = `DELETE FROM VotingOffsets WHERE pk=? AND off<?`
+	updateVotingHeaderPK     = `UPDATE Rolling SET votingHeader=? WHERE pk=?`
 
 	// insert-time clearing of any pre-existing rows for a participation ID
 	// (child tables first — their subqueries depend on Keysets)
@@ -563,11 +571,10 @@ func convertLegacyVotingBlob(tx *sql.Tx, pk int64, rawVoting []byte) error {
 	if _, err := tx.Exec("SAVEPOINT convert_record"); err != nil {
 		return err
 	}
-	target := registryVotingTarget(pk)
 	// freshly decoded and unshared: no lock is needed for the snapshot
-	err := rewriteVotingRows(tx, target, voting.OneTimeSignatureSecretsPersistent)
+	err := rewriteVotingRows(tx, pk, voting.OneTimeSignatureSecretsPersistent)
 	if err == nil {
-		err = verifyVotingRowsMatch(tx, target, voting)
+		err = verifyVotingRowsMatch(tx, pk, voting)
 	}
 	if err != nil {
 		if _, rerr := tx.Exec("ROLLBACK TO SAVEPOINT convert_record"); rerr != nil {
@@ -1096,7 +1103,7 @@ func (db *participationDB) getAllFromDB() (records []ParticipationRecord, corrup
 		// than blocking the whole registry (and with it the node) from loading
 		records = make([]ParticipationRecord, 0, len(scanned))
 		for _, sr := range scanned {
-			batches, offsets, err := readVotingRows(tx, registryVotingTarget(sr.pk))
+			batches, offsets, err := readVotingRows(tx, sr.pk)
 			if err != nil {
 				return fmt.Errorf("unable to read the voting subkeys of pk %d: %w", sr.pk, err)
 			}
@@ -1333,7 +1340,7 @@ func updateRollingFields(ctx context.Context, tx *sql.Tx, record ParticipationRe
 			return false, fmt.Errorf("stored voting header for key %s is undecodable; refusing to rewrite voting rows from memory (copy its .partkey file aside, delete the key, and install the copy; or delete %s and restart to rebuild the registry from the key files): %v",
 				record.ParticipationID, config.ParticipationRegistryFilename, herr)
 		}
-		newHeader, err = syncVotingRows(tx, registryVotingTarget(pk), stored, snap)
+		newHeader, err = syncVotingRows(tx, pk, stored, snap)
 		if err != nil {
 			return false, err
 		}

@@ -186,8 +186,7 @@ func run(params keyregCmdParams) error {
 			return fmt.Errorf("cannot open keyfile %s: %v", params.partkeyFile, err)
 		}
 
-		// read-only: do not migrate the file as a side effect of building a txn
-		partkey, err := account.RestoreParticipationUnmigrated(partDB)
+		partkey, err := account.RestoreParticipation(partDB)
 		if err != nil {
 			return fmt.Errorf("cannot load keyfile %s: %v", params.partkeyFile, err)
 		}

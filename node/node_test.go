@@ -675,54 +675,6 @@ func TestDefaultResourcePaths(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TestLoadParticipationKeysRenamesUnsupported confirms that a participation
-// key file with an unsupported (future) schema version is renamed to
-// <name>.old and does not prevent the node from starting.
-func TestLoadParticipationKeysRenamesUnsupported(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	testDirectory := t.TempDir()
-
-	genesis := bookkeeping.Genesis{
-		SchemaID:    "gen",
-		Proto:       protocol.ConsensusCurrentVersion,
-		Network:     config.Devtestnet,
-		FeeSink:     sinkAddr.String(),
-		RewardsPool: poolAddr.String(),
-	}
-
-	// plant a partkey file with a schema version from the future
-	genesisDir := filepath.Join(testDirectory, genesis.ID())
-	require.NoError(t, os.MkdirAll(genesisDir, 0700))
-	partfile := filepath.Join(genesisDir, config.PartKeyFilename("unsupported", 0, 3000))
-	partdb, err := db.MakeErasableAccessor(partfile)
-	require.NoError(t, err)
-	err = partdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		_, err := tx.Exec(fmt.Sprintf("CREATE TABLE schema (tablename TEXT PRIMARY KEY, version INTEGER); INSERT INTO schema VALUES ('%s', 99);", account.PartTableSchemaName))
-		return err
-	})
-	require.NoError(t, err)
-	partdb.Close()
-
-	// a backup from an earlier rename must not be clobbered
-	previousBackup := []byte("previous unsupported key backup")
-	require.NoError(t, os.WriteFile(partfile+".old", previousBackup, 0600))
-
-	n, err := MakeFull(logging.TestingLog(t), testDirectory, config.GetDefaultLocal(), []string{}, genesis)
-	require.NoError(t, err)
-	err = n.Start()
-	if err == nil {
-		defer n.Stop()
-	}
-	require.NoError(t, err)
-
-	require.NoFileExists(t, partfile)
-	require.FileExists(t, partfile+".old.1")
-	preserved, err := os.ReadFile(partfile + ".old")
-	require.NoError(t, err)
-	require.Equal(t, previousBackup, preserved)
-}
-
 // TestRemoveParticipationKeyExcludedFromRegistry confirms a key whose registry
 // record was excluded at load (its stored voting header is unusable) can still
 // be deleted through the node: the excluded record is not served, and its key

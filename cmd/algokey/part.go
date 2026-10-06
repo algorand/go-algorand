@@ -115,8 +115,7 @@ var partInfoCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// read-only: do not migrate the file as a side effect of printing info
-		partkey, err := account.RestoreParticipationUnmigrated(partdb)
+		partkey, err := account.RestoreParticipation(partdb)
 		partdb.Close()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot load partkey database %s: %v\n", partKeyfile, err)

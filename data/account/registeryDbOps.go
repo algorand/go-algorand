@@ -303,7 +303,7 @@ func (i *insertOp) apply(db *participationDB) (err error) {
 
 		if i.record.Voting != nil {
 			// per-subkey voting rows (a mid-life key carries offsets too)
-			if err2 = insertVotingRows(tx, registryVotingTarget(pk), voting); err2 != nil {
+			if err2 = insertVotingRows(tx, pk, voting); err2 != nil {
 				return fmt.Errorf("unable to insert voting subkeys: %w", err2)
 			}
 		}
