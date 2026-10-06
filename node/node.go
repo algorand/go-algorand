@@ -907,22 +907,14 @@ func (node *AlgorandFullNode) RemoveParticipationKey(partKeyID account.Participa
 	// Let's first get the recorded information from the registry so we can lookup the file
 
 	partRecord := node.accountManager.Registry().Get(partKeyID)
-	firstValid, lastValid := partRecord.FirstValid, partRecord.LastValid
 
 	if partRecord.IsZero() {
-		// a key excluded from the registry at load (corrupt voting data) is
-		// not served by Get, but deleting it is exactly the operator's
-		// remedy, so it must be reachable here
-		var excluded bool
-		firstValid, lastValid, excluded = node.accountManager.Registry().GetExcluded(partKeyID)
-		if !excluded {
-			return account.ErrParticipationIDNotFound
-		}
+		return account.ErrParticipationIDNotFound
 	}
 
 	outDir := node.genesisDirs.RootGenesisDir
 
-	filename := config.PartKeyFilename(partKeyID.String(), uint64(firstValid), uint64(lastValid))
+	filename := config.PartKeyFilename(partRecord.ParticipationID.String(), uint64(partRecord.FirstValid), uint64(partRecord.LastValid))
 	fullyQualifiedFilename := filepath.Join(outDir, filepath.Base(filename))
 
 	err := node.accountManager.Registry().Delete(partKeyID)
@@ -1017,10 +1009,7 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 
 	// Tell the AccountManager about the Participation (dupes don't matter) so we ignore the return value
 	// This is ephemeral since we are deleting the file after this function is done
-	added, err := node.accountManager.AddParticipation(partkey, true)
-	if err != nil {
-		return account.ParticipationID{}, err
-	}
+	added := node.accountManager.AddParticipation(partkey, true)
 	if !added {
 		return account.ParticipationID{}, fmt.Errorf("ParticipationRegistry: cannot register duplicate participation key")
 	}
@@ -1092,8 +1081,8 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 			// are being store to the registry in that point
 			// These files are not ephemeral and must be deleted eventually since
 			// this function is called to load files located in the node on startup
-			added, err := node.accountManager.AddParticipation(part, false)
-			if err != nil || !added {
+			added := node.accountManager.AddParticipation(part, false)
+			if !added {
 				part.Close()
 				continue
 			}

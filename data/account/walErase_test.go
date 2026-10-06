@@ -221,11 +221,13 @@ func TestRegistryWALHoldsNoRetiredSubkeys(t *testing.T) {
 	a.Greater(len(tr.retired), 60)
 	a.Greater(tr.erased, 4, "rollovers and shrinking rounds should have overwritten the log")
 
-	// deleting a live key retires every subkey it had; the insert's erase
-	// runs before Insert returns, the deletion's before the flush returns
+	// deleting a live key retires every subkey it had; the insert is written
+	// asynchronously, so a flush waits for it (and its erase) to land, and
+	// the deletion's erase runs before the next flush returns
 	p2 := makeTestParticipation(a, 2, 1, 309, dilution)
 	id2, err := registry.Insert(p2)
 	a.NoError(err)
+	a.NoError(registry.Flush(defaultTimeout))
 	seeds2 := seedSet(a, votingSnapshot(p2.Voting))
 	a.Equal(len(seeds2), seedsIn(readFileOrEmpty(a, dbfile), seeds2))
 	a.Equal(1, tr.probe.requireOverwritten(a, seeds2, "insert"))

@@ -59,11 +59,6 @@ func (m *MockParticipationRegistry) Get(id account.ParticipationID) account.Part
 	return account.ParticipationRecord{}
 }
 
-// GetExcluded reports whether a stored key was excluded at load.
-func (m *MockParticipationRegistry) GetExcluded(id account.ParticipationID) (firstValid, lastValid basics.Round, excluded bool) {
-	return 0, 0, false
-}
-
 // GetAll of the participation records.
 func (m *MockParticipationRegistry) GetAll() []account.ParticipationRecord {
 	return []account.ParticipationRecord{}

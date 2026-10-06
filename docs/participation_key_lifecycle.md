@@ -122,22 +122,15 @@ service that wraps a SQLite file for storage. The registry stores each
 ephemeral voting subkey as its own row (tables
 **VotingBatches**/**VotingOffsets**) described by a **votingHeader** column, so
 the per-round deletion of used keys writes only the consumed rows and the
-header instead of rewriting the whole keyset; the header alone determines which
-rows must exist, so missing rows are detected as corruption. A stored key whose
-voting data fails validation at startup is logged
-as an error and excluded: it cannot vote, its voting subkeys and state proof
-keys are erased at once, and it is removed when it expires or when deleted. If
-its stored voting header is intact and its `.partkey` file is still present,
-the key is re-installed from the file during the same startup. Otherwise
-either copy the `.partkey` file aside, delete the key, and install the copy
-(deleting a key through the API also removes its file from the node's
-directory, so without a copy the key would have to be generated and
-registered anew), or stop the node, delete **partregistry.sqlite**, and
-restart: the key files are kept and re-installed. The registry uses SQLite's
-write-ahead log, which keeps the image of every page a transaction wrote until
-the log is refilled or truncated, so the image of a page from before a subkey
-was deleted would otherwise stay readable in the log for a while. After every
-write the node checkpoints the log and, whenever it
+header. A stored key whose voting data fails validation at startup prevents
+the node from starting, as it always has; the log names the key. Stop the
+node, delete **partregistry.sqlite**, and restart: the key files are kept and
+re-installed, and keys installed through the API have to be installed again.
+The registry uses SQLite's
+write-ahead log, which keeps the image of every page a
+transaction wrote until the log is refilled or truncated, so the image of a
+page from before a subkey was deleted would otherwise stay readable in the log
+for a while. After every write the node checkpoints the log and, whenever it
 holds anything but the last transaction's images or the write stored subkeys
 wholesale (an install, a migration, a batch rollover), overwrites the whole
 log in place with zero pages and truncates it. Like `secure_delete`, this
