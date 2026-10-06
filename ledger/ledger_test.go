@@ -1541,8 +1541,33 @@ func benchLedgerCache(b *testing.B, startRound basics.Round) {
 	}
 }
 
+// stopLedgerCommitSyncer stops the commitSyncer of a real Ledger so a test can
+// drive commits synchronously with triggerTrackerFlush.
+//
+// Unlike the mock-ledger tests, a Ledger has a blockQueue syncer that keeps
+// calling notifyCommit -> scheduleCommit after every block flush. With the
+// commitSyncer gone, each commit it schedules would increment accountsWriting
+// and sit in deferredCommits forever, so a later accountsWriting.Wait (for
+// example in trackerRegistry.close after reloadLedger) would hang. Setting
+// deferredCommits to nil makes the non-blocking send in scheduleCommit take its
+// default branch, which calls Done immediately. trackerMu is held because
+// notifyCommit calls scheduleCommit under it.
+func stopLedgerCommitSyncer(l *Ledger) {
+	l.trackerMu.Lock()
+	defer l.trackerMu.Unlock()
+	stopCommitSyncer(&l.trackers)
+	l.trackers.deferredCommits = nil
+}
+
 // triggerTrackerFlush is based in the commit flow but executed it in a single (this) goroutine.
+//
+// The scheduling half mirrors notifyCommit, which holds trackerMu while it
+// calls the trackers' committedUpTo and scheduleCommit. Holding it here keeps
+// the blockQueue syncer from running those same tracker methods concurrently
+// with this goroutine. The commit half runs without trackerMu, exactly as
+// commitRound does on the commitSyncer goroutine.
 func triggerTrackerFlush(t *testing.T, l *Ledger) {
+	l.trackerMu.Lock()
 	rnd := l.Latest()
 	minBlock := rnd
 	maxLookback := basics.Round(0)
@@ -1571,6 +1596,7 @@ func triggerTrackerFlush(t *testing.T, l *Ledger) {
 		dcc = nil
 	}
 	l.trackers.mu.RUnlock()
+	l.trackerMu.Unlock()
 	if dcc != nil {
 		l.trackers.accountsWriting.Add(1)
 		l.trackers.commitRound(dcc)
@@ -1755,7 +1781,7 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	defer backlogPool.Shutdown()
 
 	// quit the commitSyncer goroutine: this test flushes manually with triggerTrackerFlush
-	stopCommitSyncer(&l.trackers)
+	stopLedgerCommitSyncer(l)
 
 	triggerTrackerFlush(t, l)
 	l.WaitForCommit(l.Latest())
@@ -3038,7 +3064,7 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 	defer l.Close()
 
 	// quit the commitSyncer goroutine: this test flushes manually with triggerTrackerFlush
-	stopCommitSyncer(&l.trackers)
+	stopLedgerCommitSyncer(l)
 
 	blk := genesisInitState.Block
 
@@ -3092,17 +3118,6 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 	}()
 
 	t.Log("reloading ledger")
-	// drain any deferred commits since AddBlock above triggered scheduleCommit
-outer:
-	for {
-		select {
-		case <-l.trackers.deferredCommits:
-			l.trackers.accountsWriting.Done()
-		default:
-			break outer
-		}
-	}
-
 	err = l.reloadLedger()
 	require.NoError(t, err)
 
