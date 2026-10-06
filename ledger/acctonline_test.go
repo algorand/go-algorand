@@ -1979,10 +1979,7 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 	defer oa.close()
 
 	// close commitSyncer goroutine to prevent possible race between commitSyncer and commitSync
-	ml.trackers.ctxCancel()
-	ml.trackers.ctxCancel = nil
-	<-ml.trackers.commitSyncerClosed
-	ml.trackers.commitSyncerClosed = nil
+	stopCommitSyncer(&ml.trackers)
 
 	// initial precondition checks on online stake
 	_, totals, err := au.LatestTotals()

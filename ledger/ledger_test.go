@@ -1754,16 +1754,8 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	// wait all pending commits to finish and quit the commitSyncer goroutine: this test flushes
-	// manually with triggerTrackerFlush. Hold trackerMu (as Ledger.Close does) so the blockQueue
-	// syncer cannot call notifyCommit -> scheduleCommit -> accountsWriting.Add concurrently with Wait.
-	l.trackerMu.Lock()
-	l.trackers.waitAccountsWriting()
-	l.trackers.ctxCancel()
-	l.trackers.ctxCancel = nil
-	<-l.trackers.commitSyncerClosed
-	l.trackers.commitSyncerClosed = nil
-	l.trackerMu.Unlock()
+	// quit the commitSyncer goroutine: this test flushes manually with triggerTrackerFlush
+	stopCommitSyncer(&l.trackers)
 
 	triggerTrackerFlush(t, l)
 	l.WaitForCommit(l.Latest())
@@ -3046,10 +3038,7 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 	defer l.Close()
 
 	// quit the commitSyncer goroutine: this test flushes manually with triggerTrackerFlush
-	l.trackers.ctxCancel()
-	l.trackers.ctxCancel = nil
-	<-l.trackers.commitSyncerClosed
-	l.trackers.commitSyncerClosed = nil
+	stopCommitSyncer(&l.trackers)
 
 	blk := genesisInitState.Block
 
