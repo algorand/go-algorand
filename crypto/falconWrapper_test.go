@@ -45,7 +45,6 @@ type falconTestScheme struct {
 	name               string
 	maxSignatureSize   int
 	currentSaltVersion byte
-	errSigInvalid      error
 	generate           func(seed FalconSeed) (falconTestKey, error)
 	verify             func(message Hashable, publicKey, signature []byte) error
 	// convertToCT converts a compressed signature to CT form via the falcon
@@ -60,7 +59,6 @@ var falconTestSchemes = []falconTestScheme{
 		name:               "falcon-1024",
 		maxSignatureSize:   Falcon1024MaxSignatureSize,
 		currentSaltVersion: falcon.CurrentSaltVersion,
-		errSigInvalid:      ErrPQFalcon1024SigInvalid,
 		generate: func(seed FalconSeed) (falconTestKey, error) {
 			key, err := GenerateFalcon1024Signer(seed)
 			if err != nil {
@@ -93,7 +91,6 @@ var falconTestSchemes = []falconTestScheme{
 		name:               "falcon-512",
 		maxSignatureSize:   Falcon512MaxSignatureSize,
 		currentSaltVersion: falcon.Det512CurrentSaltVersion,
-		errSigInvalid:      ErrPQFalcon512SigInvalid,
 		generate: func(seed FalconSeed) (falconTestKey, error) {
 			key, err := GenerateFalcon512Signer(seed)
 			if err != nil {
@@ -220,7 +217,7 @@ func TestVerifyFalconRejectsMalformedInputs(t *testing.T) {
 					t.Parallel()
 
 					err := scheme.verify(msg, test.publicKey, test.signature)
-					require.ErrorIs(t, err, scheme.errSigInvalid)
+					require.ErrorIs(t, err, ErrSigInvalid)
 				})
 			}
 		})

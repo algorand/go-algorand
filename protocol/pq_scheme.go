@@ -16,9 +16,9 @@
 
 package protocol
 
-// PQScheme is a 2-byte ASCII identifier of a post-quantum account authorization scheme.
-// Conventionally, the first byte is the PQ-DSA family, and the second byte is a version
-// or variant identifier.
+// PQScheme is a 2-byte ASCII identifier of an account authorization scheme.
+// Conventionally, the first byte identifies the DSA family, and the second
+// identifies the version or variant.
 //
 //msgp:test ignore PQScheme
 type PQScheme [2]byte
@@ -27,8 +27,11 @@ func (s PQScheme) String() string {
 	return string(s[:])
 }
 
-// Supported post-quantum signature schemes.
+// Supported account authorization schemes.
 var (
+	// PQSchemeEd25519 - ed: classical Ed25519 with a hashed-address profile.
+	PQSchemeEd25519 = PQScheme{'e', 'd'}
+
 	// PQSchemeFalcon1024 - f1: Falcon-1024 using a deterministic signing profile.
 	PQSchemeFalcon1024 = PQScheme{'f', '1'}
 
