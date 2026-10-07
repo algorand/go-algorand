@@ -116,125 +116,62 @@ func (z *ParticipationKeyIdentity) UnmarshalMsgWithState(bts []byte, st msgp.Unm
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = ParticipationKeyIdentity{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "addr":
 			bts, err = (*z).Parent.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Parent")
+				err = msgp.WrapError(err, "Parent")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "vrfsk":
 			bts, err = (*z).VRFSK.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "VRFSK")
+				err = msgp.WrapError(err, "VRFSK")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "vote-id":
 			bts, err = (*z).VoteID.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "VoteID")
+				err = msgp.WrapError(err, "VoteID")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "fv":
 			bts, err = (*z).FirstValid.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "FirstValid")
+				err = msgp.WrapError(err, "FirstValid")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "lv":
 			bts, err = (*z).LastValid.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "LastValid")
+				err = msgp.WrapError(err, "LastValid")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "kd":
 			(*z).KeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "KeyDilution")
+				err = msgp.WrapError(err, "KeyDilution")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = ParticipationKeyIdentity{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "addr":
-				bts, err = (*z).Parent.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Parent")
-					return
-				}
-			case "vrfsk":
-				bts, err = (*z).VRFSK.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "VRFSK")
-					return
-				}
-			case "vote-id":
-				bts, err = (*z).VoteID.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "VoteID")
-					return
-				}
-			case "fv":
-				bts, err = (*z).FirstValid.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "FirstValid")
-					return
-				}
-			case "lv":
-				bts, err = (*z).LastValid.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "LastValid")
-					return
-				}
-			case "kd":
-				(*z).KeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "KeyDilution")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
