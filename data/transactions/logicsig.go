@@ -34,10 +34,12 @@ const MaxLogicSigArgSize = config.MaxAVMBytesSize
 // LogicSigArgs are arguments to a program that is not carried in a LogicSig,
 // which is how an ls-scheme PQSig holds the arguments to its own program. They
 // are the same thing as LogicSig.Args, in a place that has no room for a
-// structured field, so they carry the same bounds. The total encoded size is
-// bounded by whatever holds them.
+// structured field, so they carry the same bounds. The maxtotalbytes directive
+// requires an msgp newer than v1.1.64; older versions ignore it and fall back to
+// the much looser EvalMaxArgs * MaxLogicSigArgSize product.
 //
 //msgp:allocbound LogicSigArgs EvalMaxArgs,MaxLogicSigArgSize
+//msgp:maxtotalbytes LogicSigArgs (EvalMaxArgs*msgp.BytesPrefixSize) + bounds.MaxLogicSigMaxSize
 type LogicSigArgs [][]byte
 
 // errLogicSigArgsNotCanonical is returned for arguments that decode correctly
@@ -100,7 +102,7 @@ type LogicSig struct {
 	PQsig PQSig              `codec:"pqsig"`
 
 	// Args are not signed, but checked by Logic
-	Args [][]byte `codec:"arg,allocbound=EvalMaxArgs,allocbound=MaxLogicSigArgSize,maxtotalbytes=bounds.MaxLogicSigMaxSize"`
+	Args [][]byte `codec:"arg,allocbound=EvalMaxArgs,allocbound=MaxLogicSigArgSize,maxtotalbytes=(EvalMaxArgs*msgp.BytesPrefixSize) + bounds.MaxLogicSigMaxSize"`
 }
 
 // Blank returns true if the LogicSig is entirely empty.

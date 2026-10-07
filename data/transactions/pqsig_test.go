@@ -195,7 +195,7 @@ func TestPQDecodeBoundsFeedSignedTxnMaxSize(t *testing.T) {
 	require.Equal(t, expectedPQSigMaxSize, PQSigMaxSize())
 
 	expectedLogicSigMaxSize := 1 +
-		4 + msgp.ArrayHeaderSize + bounds.MaxLogicSigMaxSize +
+		4 + msgp.ArrayHeaderSize + EvalMaxArgs*msgp.BytesPrefixSize + bounds.MaxLogicSigMaxSize +
 		2 + msgp.BytesPrefixSize + bounds.MaxLogicSigMaxSize +
 		6 + crypto.MultisigSigMaxSize() +
 		5 + crypto.MultisigSigMaxSize() +

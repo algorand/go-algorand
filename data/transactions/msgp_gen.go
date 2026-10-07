@@ -1255,7 +1255,7 @@ func (z *ApplicationCallTxnFields) MsgIsZero() bool {
 func ApplicationCallTxnFieldsMaxSize() (s int) {
 	s = 1 + 5 + basics.AppIndexMaxSize() + 5 + msgp.Uint64Size + 5
 	// Calculating size of slice: z.ApplicationArgs
-	s += msgp.ArrayHeaderSize + bounds.MaxAppTotalArgLen + 5
+	s += msgp.ArrayHeaderSize + (encodedMaxApplicationArgs * msgp.BytesPrefixSize) + bounds.MaxAppTotalArgLen + 5
 	// Calculating size of slice: z.Accounts
 	s += msgp.ArrayHeaderSize + ((encodedMaxAccounts) * (basics.AddressMaxSize()))
 	s += 5
@@ -4182,7 +4182,7 @@ func (z *LogicSig) MsgIsZero() bool {
 func LogicSigMaxSize() (s int) {
 	s = 1 + 2 + msgp.BytesPrefixSize + bounds.MaxLogicSigMaxSize + 4 + crypto.SignatureMaxSize() + 5 + crypto.MultisigSigMaxSize() + 6 + crypto.MultisigSigMaxSize() + 6 + PQSigMaxSize() + 4
 	// Calculating size of slice: z.Args
-	s += msgp.ArrayHeaderSize + bounds.MaxLogicSigMaxSize
+	s += msgp.ArrayHeaderSize + (EvalMaxArgs * msgp.BytesPrefixSize) + bounds.MaxLogicSigMaxSize
 	return
 }
 
@@ -8724,7 +8724,7 @@ func TransactionMaxSize() (s int) {
 	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	s += 6 + basics.AddressMaxSize() + 8 + crypto.OneTimeSignatureVerifierMaxSize() + 7 + crypto.VRFVerifierMaxSize() + 8 + merklesignature.CommitmentMaxSize() + 8 + basics.RoundMaxSize() + 8 + basics.RoundMaxSize() + 7 + msgp.Uint64Size + 8 + msgp.BoolSize + 4 + basics.AddressMaxSize() + 4 + basics.MicroAlgosMaxSize() + 6 + basics.AddressMaxSize() + 5 + basics.AssetIndexMaxSize() + 5 + basics.AssetParamsMaxSize() + 5 + basics.AssetIndexMaxSize() + 5 + msgp.Uint64Size + 5 + basics.AddressMaxSize() + 5 + basics.AddressMaxSize() + 7 + basics.AddressMaxSize() + 5 + basics.AddressMaxSize() + 5 + basics.AssetIndexMaxSize() + 5 + msgp.BoolSize + 5 + basics.AppIndexMaxSize() + 5 + msgp.Uint64Size + 5
 	// Calculating size of slice: z.ApplicationCallTxnFields.ApplicationArgs
-	s += msgp.ArrayHeaderSize + bounds.MaxAppTotalArgLen + 5
+	s += msgp.ArrayHeaderSize + (encodedMaxApplicationArgs * msgp.BytesPrefixSize) + bounds.MaxAppTotalArgLen + 5
 	// Calculating size of slice: z.ApplicationCallTxnFields.Accounts
 	s += msgp.ArrayHeaderSize + ((encodedMaxAccounts) * (basics.AddressMaxSize()))
 	s += 5
