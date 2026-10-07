@@ -158,7 +158,6 @@ type AlgorandFullNode struct {
 	tracer messagetracer.MessageTracer
 
 	stateProofWorker *stateproof.Worker
-	partHandles      []db.Accessor
 
 	heartbeatService *heartbeat.Service
 }
@@ -494,9 +493,6 @@ func (node *AlgorandFullNode) Stop() {
 
 		// oldKeyDeletionThread uses accountManager registry so must be stopped before accountManager is closed
 		node.accountManager.Registry().Close()
-		for h := range node.partHandles {
-			node.partHandles[h].Close()
-		}
 	}()
 
 	node.net.ClearHandlers()
@@ -902,35 +898,18 @@ func (node *AlgorandFullNode) GetParticipationKey(partKeyID account.Participatio
 
 // RemoveParticipationKey given a participation id, remove the records from the node
 func (node *AlgorandFullNode) RemoveParticipationKey(partKeyID account.ParticipationID) error {
-
-	// Need to remove the file and then remove the entry in the registry
-	// Let's first get the recorded information from the registry so we can lookup the file
-
 	partRecord := node.accountManager.Registry().Get(partKeyID)
 
 	if partRecord.IsZero() {
 		return account.ErrParticipationIDNotFound
 	}
 
-	outDir := node.genesisDirs.RootGenesisDir
-
-	filename := config.PartKeyFilename(partRecord.ParticipationID.String(), uint64(partRecord.FirstValid), uint64(partRecord.LastValid))
-	fullyQualifiedFilename := filepath.Join(outDir, filepath.Base(filename))
-
 	err := node.accountManager.Registry().Delete(partKeyID)
 	if err != nil {
 		return err
 	}
 
-	err = node.accountManager.Registry().Flush(participationRegistryFlushMaxWaitDuration)
-	if err != nil {
-		return err
-	}
-
-	// Only after deleting and flushing do we want to remove the file
-	_ = os.Remove(fullyQualifiedFilename)
-
-	return nil
+	return node.accountManager.Registry().Flush(participationRegistryFlushMaxWaitDuration)
 }
 
 // AppendParticipationKeys given a participation id, remove the records from the node
@@ -1007,9 +986,7 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 		return account.ParticipationID{}, fmt.Errorf("cannot install partkey with missing (zero) parent address")
 	}
 
-	// Tell the AccountManager about the Participation (dupes don't matter) so we ignore the return value
-	// This is ephemeral since we are deleting the file after this function is done
-	added := node.accountManager.AddParticipation(partkey, true)
+	added := node.accountManager.AddParticipation(partkey.Participation)
 	if !added {
 		return account.ParticipationID{}, fmt.Errorf("ParticipationRegistry: cannot register duplicate participation key")
 	}
@@ -1027,6 +1004,11 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 	return partkey.ID(), nil
 }
 
+// loadParticipationKeys imports the participation key files found in the
+// genesis directory into the participation registry and then deletes them. The
+// registry is the only copy of the keys the node maintains: a file left behind
+// would keep voting keys for rounds the registry has already erased, and would
+// bring a key back on the next start after it was deleted through the REST API.
 func (node *AlgorandFullNode) loadParticipationKeys() error {
 	// Generate a list of all potential participation key files
 	genesisDir := node.genesisDirs.RootGenesisDir
@@ -1035,6 +1017,7 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 		return fmt.Errorf("AlgorandFullNode.loadPartitipationKeys: could not read directory %v: %v", genesisDir, err)
 	}
 
+	var imported []string
 	// For each of these files
 	for _, info := range files {
 		// If it can't be a participation key database, skip it
@@ -1076,23 +1059,37 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 				return fmt.Errorf("AlgorandFullNode.loadParticipationKeys: cannot load account at %v: %v", info.Name(), err)
 			}
 		} else {
-			// Tell the AccountManager about the Participation (dupes don't matter)
-			// make sure that all stateproof data (with are not the keys per round)
-			// are being store to the registry in that point
-			// These files are not ephemeral and must be deleted eventually since
-			// this function is called to load files located in the node on startup
-			added := node.accountManager.AddParticipation(part, false)
-			if !added {
-				part.Close()
-				continue
+			// If the registry already has this key, its copy is the one the
+			// node has been updating, so the file is removed in that case too.
+			if node.accountManager.AddParticipation(part.Participation) {
+				node.log.Infof("Loaded participation keys from storage: %s %s", part.Address(), info.Name())
+				err = insertStateProofToRegistry(part, node)
 			}
-			node.log.Infof("Loaded participation keys from storage: %s %s", part.Address(), info.Name())
-			node.partHandles = append(node.partHandles, handle)
-			err = insertStateProofToRegistry(part, node)
+			part.Close()
 			if err != nil {
 				return err
 			}
+			imported = append(imported, filepath.Join(genesisDir, filename))
 		}
+	}
+
+	if len(imported) == 0 {
+		return nil
+	}
+	// Leave the files in place if their keys may not have reached the
+	// registry database, so the next start imports them again.
+	err = node.accountManager.Registry().Flush(participationRegistryFlushMaxWaitDuration)
+	if err != nil {
+		node.log.Warnf("loadParticipationKeys: not removing imported participation key files, registry flush failed: %v", err)
+		return nil
+	}
+	for _, fullname := range imported {
+		err = os.Remove(fullname)
+		if err != nil {
+			node.log.Warnf("loadParticipationKeys: failed to remove imported participation key file '%s': %v", fullname, err)
+			continue
+		}
+		node.log.Infof("loadParticipationKeys: removed participation key file '%s' after importing it into the participation registry", fullname)
 	}
 
 	return nil

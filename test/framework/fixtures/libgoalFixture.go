@@ -139,6 +139,7 @@ func (f *LibGoalFixture) setup(test TestingTB, testName string, templateFile str
 	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, file, f.binDir, importKeys, f.nodeExitWithError, f.consensus, extraOverrides...)
 	f.failOnError(err, "CreateNetworkFromTemplate failed: %v")
 	f.network = network
+	f.recordParticipationOnlyAccounts()
 
 	if startNetwork {
 		f.Start()
@@ -189,9 +190,6 @@ func (f *LibGoalFixture) importRootKeys(lg *libgoal.Client, dataDir string) {
 		return
 	}
 
-	accountsWithRootKeys := make(map[string]bool)
-	var allPartKeys []account.Participation
-
 	// For each of these files
 	for _, info := range files {
 		var handle db.Accessor
@@ -221,38 +219,61 @@ func (f *LibGoalFixture) importRootKeys(lg *libgoal.Client, dataDir string) {
 			if err1 != nil && !strings.Contains(err1.Error(), "key already exists") {
 				f.failOnError(err1, "couldn't import secret: %v")
 			}
-			accountsWithRootKeys[root.Address().String()] = true
 			handle.Close()
-		} else if config.IsPartKeyFilename(filename) {
-			// Fetch a handle to this database
-			handle, err = db.MakeErasableAccessor(filepath.Join(keyDir, filename))
-			if err != nil {
-				// Couldn't open it, skip it
-				continue
-			}
-
-			// Fetch an account.Participation from the database
-			participation, err := account.RestoreParticipation(handle)
-			if err != nil {
-				// Couldn't read it, skip it
-				handle.Close()
-				continue
-			}
-
-			// Early reject partkeys if we already have a rootkey for the account
-			if !accountsWithRootKeys[participation.Address().String()] {
-				allPartKeys = append(allPartKeys, participation.Participation)
-			}
-
-			// close the database handle.
-			participation.Close()
 		}
 	}
+}
 
-	// Go through final set of non-filtered part keys and add the partkey-only keys to our collection
-	for _, part := range allPartKeys {
-		if !accountsWithRootKeys[part.Address().String()] {
-			f.addParticipationForClient(*lg, part)
+// recordParticipationOnlyAccounts finds, for each node, the accounts that have
+// a participation key file but no root key file in its genesis directory. It
+// must run before the nodes start, because algod deletes participation key
+// files once it has imported them into its participation registry.
+func (f *LibGoalFixture) recordParticipationOnlyAccounts() {
+	f.clientPartKeys = make(map[string][]account.Participation)
+	for _, dataDir := range append(f.network.RelayDataDirs(), f.network.NodeDataDirs()...) {
+		keyDir, err := f.GetNodeControllerForDataDir(dataDir).GetGenesisDir()
+		if err != nil {
+			continue
+		}
+		files, err := os.ReadDir(keyDir)
+		if err != nil {
+			continue
+		}
+
+		accountsWithRootKeys := make(map[basics.Address]bool)
+		var partKeys []account.Participation
+		for _, info := range files {
+			filename := info.Name()
+			if config.IsRootKeyFilename(filename) {
+				handle, err := db.MakeAccessor(filepath.Join(keyDir, filename), false, false)
+				if err != nil {
+					continue
+				}
+				root, err := account.RestoreRoot(handle)
+				handle.Close()
+				if err != nil {
+					continue
+				}
+				accountsWithRootKeys[root.Address()] = true
+			} else if config.IsPartKeyFilename(filename) {
+				handle, err := db.MakeErasableAccessor(filepath.Join(keyDir, filename))
+				if err != nil {
+					continue
+				}
+				participation, err := account.RestoreParticipation(handle)
+				if err != nil {
+					handle.Close()
+					continue
+				}
+				partKeys = append(partKeys, participation.Participation)
+				participation.Close()
+			}
+		}
+
+		for _, part := range partKeys {
+			if !accountsWithRootKeys[part.Address()] {
+				f.clientPartKeys[dataDir] = append(f.clientPartKeys[dataDir], part)
+			}
 		}
 	}
 }
@@ -301,10 +322,6 @@ func (f *LibGoalFixture) GetLibGoalClientForNamedNodeNoKeys(nodeName string) lib
 	return client
 }
 
-func (f *LibGoalFixture) addParticipationForClient(lg libgoal.Client, part account.Participation) {
-	f.clientPartKeys[lg.DataDir()] = append(f.clientPartKeys[lg.DataDir()], part)
-}
-
 // GetNodeControllerForDataDir returns a NodeController for the specified nodeDataDir
 func (f *LibGoalFixture) GetNodeControllerForDataDir(nodeDataDir string) nodecontrol.NodeController {
 	return nodecontrol.MakeNodeController(f.binDir, nodeDataDir)
@@ -321,7 +338,6 @@ func (f *LibGoalFixture) Start() {
 	f.NC = nodecontrol.MakeNodeController(f.binDir, f.network.PrimaryDataDir())
 	algodKmdPath, _ := filepath.Abs(filepath.Join(f.PrimaryDataDir(), libgoal.DefaultKMDDataDir))
 	f.NC.SetKMDDataDir(algodKmdPath)
-	f.clientPartKeys = make(map[string][]account.Participation)
 	f.importRootKeys(&f.LibGoalClient, f.PrimaryDataDir())
 }
 

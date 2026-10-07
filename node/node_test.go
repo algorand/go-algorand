@@ -1476,3 +1476,77 @@ func TestNodeMakeFullHybrid(t *testing.T) {
 	require.Contains(t, messages, "could not create hybrid p2p node: P2PHybridMode requires both NetAddress")
 	require.Contains(t, messages, "Falling back to WS network")
 }
+
+// TestLoadParticipationKeysRemovesFiles checks that a participation key file in
+// the genesis directory is imported into the participation registry and then
+// deleted, so the registry holds the only copy of its secrets.
+func TestLoadParticipationKeysRemovesFiles(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	rootDir := t.TempDir()
+	genesis := bookkeeping.Genesis{
+		SchemaID:    "go-test-node-genesis",
+		Proto:       protocol.ConsensusCurrentVersion,
+		Network:     config.Devtestnet,
+		FeeSink:     sinkAddr.String(),
+		RewardsPool: poolAddr.String(),
+	}
+	genesisDir := filepath.Join(rootDir, genesis.ID())
+	require.NoError(t, os.Mkdir(genesisDir, 0700))
+
+	var addr basics.Address
+	crypto.RandBytes(addr[:])
+	partFile := filepath.Join(genesisDir, config.PartKeyFilename(addr.String(), 0, 200))
+	access, err := db.MakeAccessor(partFile, false, false)
+	require.NoError(t, err)
+	// A key dilution of 10 makes each voting key batch cover 10 rounds.
+	part, err := account.FillDBWithParticipationKeys(access, addr, 0, 200, 10)
+	require.NoError(t, err)
+	partID := part.ID()
+	access.Close()
+	// Older versions left the file in place after importing it; keep a copy
+	// to put back later, as such a node would have after upgrading.
+	leftoverFile := filepath.Join(t.TempDir(), "leftover.partkey")
+	_, err = util.CopyFile(partFile, leftoverFile)
+	require.NoError(t, err)
+
+	makeNode := func() *AlgorandFullNode {
+		node, err := MakeFull(logging.TestingLog(t), rootDir, config.GetDefaultLocal(), nil, genesis)
+		require.NoError(t, err)
+		return node
+	}
+	stopNode := func(node *AlgorandFullNode) {
+		require.NoError(t, node.Start())
+		node.Stop()
+	}
+	firstBatch := func(node *AlgorandFullNode) uint64 {
+		record := node.accountManager.Registry().Get(partID)
+		require.False(t, record.IsZero())
+		return record.Voting.FirstBatch
+	}
+
+	node := makeNode()
+	require.NoFileExists(t, partFile)
+	require.Equal(t, uint64(0), firstBatch(node))
+	// Round 50 needs keys for round 51, in batch 5. Batch 5 is expanded into
+	// per-round keys, leaving batch 6 as the first whole batch.
+	node.accountManager.DeleteOldKeys(bookkeeping.BlockHeader{Round: 50}, config.Consensus[protocol.ConsensusCurrentVersion])
+	require.NoError(t, node.accountManager.Registry().Flush(10*time.Second))
+	require.Equal(t, uint64(6), firstBatch(node))
+	stopNode(node)
+
+	// The leftover file is deleted, and the registry keeps its own copy rather
+	// than getting back the erased keys still in the file.
+	_, err = util.CopyFile(leftoverFile, partFile)
+	require.NoError(t, err)
+	node = makeNode()
+	require.NoFileExists(t, partFile)
+	require.Equal(t, uint64(6), firstBatch(node))
+
+	// With no file left to import, a deleted key stays deleted after a restart.
+	require.NoError(t, node.RemoveParticipationKey(partID))
+	stopNode(node)
+	node = makeNode()
+	require.True(t, node.accountManager.Registry().Get(partID).IsZero())
+	stopNode(node)
+}
