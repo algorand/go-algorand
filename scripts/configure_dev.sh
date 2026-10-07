@@ -153,14 +153,16 @@ elif [ "${OS}" = "darwin" ]; then
     fi
 
     brew update
-    # Some images (e.g. GitHub Actions macOS runners) ship a linked openssl@1.1, whose
-    # bin/openssl symlink blocks linking openssl@3 when it's pulled in as a dependency
-    # (e.g. by python3). Unlink it for the installs below; relink it afterwards if
-    # openssl@3 didn't end up installed.
-    unlinked_openssl11=false
-    if brew list --versions openssl@1.1 >/dev/null 2>&1; then
-        brew unlink openssl@1.1
-        unlinked_openssl11=true
+    # Some images (e.g. GitHub Actions macOS runners) install openssl@1.1 and hand-link
+    # bin/openssl to it outside of `brew link` (so `brew unlink` won't remove it). That
+    # symlink blocks linking openssl@3 when it's pulled in as a dependency (e.g. by
+    # python3). Move it aside for the installs below; restore it afterwards if openssl@3
+    # didn't end up installed.
+    openssl_link="$(brew --prefix)/bin/openssl"
+    openssl11_target=""
+    if [ -L "$openssl_link" ] && [[ "$(readlink "$openssl_link")" == *openssl@1.1* ]]; then
+        openssl11_target=$(readlink "$openssl_link")
+        rm "$openssl_link"
     fi
     brew_version=$(brew --version | head -1 | cut -d' ' -f2)
     major_version=$(echo $brew_version | cut -d. -f1)
@@ -178,9 +180,9 @@ elif [ "${OS}" = "darwin" ]; then
         done
         lnav -i "$SCRIPTPATH/algorand_node_log.json"
     fi
-    # If we previously unlinked openssl11 and did not upgrade openssl, then re-link it
-    if $unlinked_openssl11 && ! brew list --versions openssl@3 >/dev/null 2>&1; then
-        brew link openssl@1.1
+    # If we removed the openssl@1.1 symlink and nothing took its place, restore it
+    if [ -n "$openssl11_target" ] && [ ! -e "$openssl_link" ] && [ ! -L "$openssl_link" ]; then
+        ln -s "$openssl11_target" "$openssl_link"
     fi
 elif [ "${OS}" = "windows" ]; then
     if ! $msys2 pacman -S --disable-download-timeout --noconfirm git automake autoconf m4 libtool make mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-python mingw-w64-ucrt-x86_64-jq unzip procps; then
