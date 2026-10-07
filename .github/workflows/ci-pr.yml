@@ -82,7 +82,7 @@ jobs:
         if: ${{ !cancelled() && !github.event.repository.private }}
         uses: codecov/test-results-action@v1
         with:
-          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_test/${{ matrix.partition_id }}/results.xml
+          file: ${{ matrix.platform == 'macos-15' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_test/${{ matrix.partition_id }}/results.xml
           token: ${{ env.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
@@ -136,7 +136,7 @@ jobs:
         if: ${{ !cancelled() && !github.event.repository.private }}
         uses: codecov/test-results-action@v1
         with:
-          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_integration/${{ matrix.partition_id }}/results.xml
+          file: ${{ matrix.platform == 'macos-15' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_integration/${{ matrix.partition_id }}/results.xml
           token: ${{ env.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
@@ -192,7 +192,7 @@ jobs:
         if: ${{ !cancelled() && !github.event.repository.private }}
         uses: codecov/test-results-action@v1
         with:
-          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_e2e_expect/${{ matrix.partition_id }}/results.xml
+          file: ${{ matrix.platform == 'macos-15' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_e2e_expect/${{ matrix.partition_id }}/results.xml
           token: ${{ env.CODECOV_TOKEN }}
           fail_ci_if_error: false
 

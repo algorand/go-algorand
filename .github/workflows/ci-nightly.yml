@@ -39,7 +39,7 @@ jobs:
   build:
     strategy:
       matrix:
-        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-15"]
     runs-on: ${{ matrix.platform }}
     steps:
     - name: Checkout code
@@ -82,7 +82,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-15"]
         partition_id: [0, 1] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
@@ -147,7 +147,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
         with:
-          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_test_nightly/${{ matrix.partition_id }}/results.xml
+          file: ${{ matrix.platform == 'macos-15' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_test_nightly/${{ matrix.partition_id }}/results.xml
           token: ${{ env.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
@@ -185,7 +185,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-15"]
         partition_id: [0, 1] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
@@ -232,7 +232,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
         with:
-          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_integration_nightly/${{ matrix.partition_id }}/results.xml
+          file: ${{ matrix.platform == 'macos-15' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_integration_nightly/${{ matrix.partition_id }}/results.xml
           token: ${{ env.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
@@ -241,7 +241,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-15"]
         partition_id: [0, 1]
     runs-on: ${{ matrix.platform }}
     env:
@@ -288,7 +288,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
         with:
-          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_e2e_expect_nightly/${{ matrix.partition_id }}/results.xml
+          file: ${{ matrix.platform == 'macos-15' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_e2e_expect_nightly/${{ matrix.partition_id }}/results.xml
           token: ${{ env.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
@@ -297,7 +297,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-15"]
     runs-on: ${{ matrix.platform }}
     env:
       E2E_TEST_FILTER: SCRIPTS
@@ -362,7 +362,7 @@ jobs:
       fail-fast: false
       matrix:
         test_type: ["test", "integration", "e2e_expect"]
-        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-15"]
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -393,7 +393,7 @@ jobs:
     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/rel/')
     strategy:
       matrix:
-        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-15"]
     runs-on: ${{ matrix.platform }}
     steps:
       - name: Download workspace archive
