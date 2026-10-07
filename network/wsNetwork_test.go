@@ -5082,3 +5082,158 @@ func TestNumOutgoingPending(t *testing.T) {
 	require.Equal(t, 0, len(netA.tryConnectAddrs), "map should be empty after all releases")
 	netA.tryConnectLock.Unlock()
 }
+
+// TestWebsocketNetworkThrottleSlotNotLeakedOnIdentityDedup checks that an outgoing peer
+// rejected by identity deduplication does not keep an outgoing throttle slot.
+// netA's identity tracker already holds netB's identity, as it would with an existing
+// connection to netB, so netA's outgoing connection to netB is rejected as a duplicate.
+func TestWebsocketNetworkThrottleSlotNotLeakedOnIdentityDedup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
+	netA.config.PublicAddress = "testing"
+	netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
+	netB.config.PublicAddress = "testing"
+
+	require.NoError(t, netA.Start())
+	defer netA.Stop()
+	require.NoError(t, netB.Start())
+	defer netB.Stop()
+
+	schemeB, ok := netB.identityScheme.(*identityChallengePublicKeyScheme)
+	require.True(t, ok)
+	require.NotNil(t, schemeB.identityKeys)
+	existing := &wsPeer{identity: schemeB.identityKeys.PublicKey()}
+	require.True(t, netA.identityTracker.setIdentity(existing))
+
+	slots := netA.throttledOutgoingConnections.Load()
+	require.Positive(t, slots)
+	dedupsBefore := networkPeerIdentityDisconnect.GetUint64Value()
+
+	addrB, ok := netB.Address()
+	require.True(t, ok)
+	gossipB, err := netB.addrToGossipAddr(addrB)
+	require.NoError(t, err)
+	addrB = hostAndPort(addrB)
+	_, ok = netA.tryConnectReserveAddr(addrB)
+	require.True(t, ok)
+	netA.wg.Add(1)
+	netA.tryConnect(addrB, gossipB)
+
+	require.Greater(t, networkPeerIdentityDisconnect.GetUint64Value(), dedupsBefore, "netA did not reject the duplicate connection to netB")
+	require.Empty(t, netA.GetPeers(PeersConnectedOut))
+	require.Equal(t, slots, netA.throttledOutgoingConnections.Load(), "the identity dedup rejection leaked an outgoing throttle slot")
+
+	// without the existing identity the connection is registered and claims a slot,
+	// and disconnecting it gives the slot back
+	netA.identityTracker.removeIdentity(existing)
+	_, ok = netA.tryConnectReserveAddr(addrB)
+	require.True(t, ok)
+	netA.wg.Add(1)
+	netA.tryConnect(addrB, gossipB)
+	outPeers := netA.GetPeers(PeersConnectedOut)
+	require.Len(t, outPeers, 1)
+	require.True(t, outPeers[0].(*wsPeer).throttledOutgoingConnection)
+	require.Equal(t, slots-1, netA.throttledOutgoingConnections.Load())
+
+	netA.disconnect(outPeers[0], disconnectReasonNone)
+	require.Eventually(t, func() bool {
+		return netA.throttledOutgoingConnections.Load() == slots
+	}, 5*time.Second, 50*time.Millisecond, "disconnecting a registered peer did not give its throttle slot back")
+}
+
+// TestWebsocketNetworkNoPeerRegisteredAfterInnerStop reproduces the shutdown window in
+// WebsocketNetwork.Stop: innerStop has swept wn.peers but the listener and the mesh thread
+// are still running, so a connection that completes now must not register a peer that
+// nothing will ever close.
+func TestWebsocketNetworkNoPeerRegisteredAfterInnerStop(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	makeNetA := func(t *testing.T) (*WebsocketNetwork, *logNeedleWriter) {
+		netA := makeTestWebsocketNode(t)
+		rejected := &logNeedleWriter{needle: "network is stopping, dropping peer"}
+		logA := logging.NewLogger()
+		logA.SetOutput(rejected)
+		logA.SetLevel(logging.Debug)
+		netA.log = logA
+		return netA, rejected
+	}
+
+	t.Run("incoming", func(t *testing.T) {
+		netA, rejected := makeNetA(t)
+		require.NoError(t, netA.Start())
+		defer netA.Stop()
+		// the first step of netA.Stop: the peer list is swept, the listener keeps running
+		netA.innerStop()
+
+		netB := makeTestWebsocketNode(t)
+		addrA, ok := netA.Address()
+		require.True(t, ok)
+		netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
+		require.NoError(t, netB.Start())
+		defer netB.Stop()
+
+		require.Eventually(t, rejected.seen.Load, 10*time.Second, 50*time.Millisecond, "netA did not drop a peer that arrived after innerStop")
+		require.Zero(t, netA.NumPeers())
+		// netA closed the connection rather than leaving it open
+		require.Eventually(t, func() bool { return netB.NumPeers() == 0 }, 5*time.Second, 50*time.Millisecond)
+	})
+
+	t.Run("outgoing", func(t *testing.T) {
+		netB := makeTestWebsocketNode(t)
+		require.NoError(t, netB.Start())
+		defer netB.Stop()
+		addrB, ok := netB.Address()
+		require.True(t, ok)
+
+		netA, rejected := makeNetA(t)
+		require.NoError(t, netA.Start())
+		defer netA.Stop()
+		slots := netA.throttledOutgoingConnections.Load()
+		require.Positive(t, slots)
+		// the first step of netA.Stop: the peer list is swept, the mesh thread keeps running
+		netA.innerStop()
+
+		netA.phonebook.ReplacePeerList([]string{addrB}, "default", phonebook.RelayRole)
+		netA.RequestConnectOutgoing(false, nil)
+
+		require.Eventually(t, rejected.seen.Load, 10*time.Second, 50*time.Millisecond, "netA did not drop a peer it dialed after innerStop")
+		require.Zero(t, netA.NumPeers())
+		require.Equal(t, slots, netA.throttledOutgoingConnections.Load(), "the dropped peer kept its throttle slot")
+		require.Eventually(t, func() bool { return netB.NumPeers() == 0 }, 5*time.Second, 50*time.Millisecond)
+	})
+}
+
+func TestWebsocketPeerAdmission(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	for _, state := range []string{"stopped", "closing", "open"} {
+		for _, outgoing := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/outgoing=%v", state, outgoing), func(t *testing.T) {
+				n := makeTestWebsocketNode(t)
+				defer n.ctxCancel()
+				n.ready.Store(1)
+				n.throttledOutgoingConnections.Store(2)
+				if state == "stopped" {
+					n.innerStop()
+				}
+				p := &wsPeer{conn: &nopConnSingleton, outgoing: outgoing}
+				p.identity[0] = 1
+				require.True(t, n.identityTracker.setIdentity(p))
+				if state == "closing" {
+					p.didSignalClose.Store(1)
+				}
+				accepted := state == "open"
+				require.Equal(t, accepted, n.addPeer(p))
+				require.Equal(t, accepted, len(n.peers) == 1)
+				reserved := accepted && outgoing
+				require.Equal(t, reserved, p.throttledOutgoingConnection)
+				slots := int32(2)
+				if reserved {
+					slots--
+				}
+				require.Equal(t, slots, n.throttledOutgoingConnections.Load())
+				require.Equal(t, !accepted, n.identityTracker.setIdentity(&wsPeer{identity: p.identity}))
+			})
+		}
+	}
+}

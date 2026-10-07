@@ -182,6 +182,9 @@ type WebsocketNetwork struct {
 	peersLock          deadlock.RWMutex
 	peers              []*wsPeer
 	peersChangeCounter atomic.Int32 // peersChangeCounter is an atomic variable that increases on each change to the peers. It helps avoiding taking the peersLock when checking if the peers list was modified.
+	// peersClosed is set by innerStop under peersLock. Once it is set, addPeer
+	// must not register new peers, because nothing would close them.
+	peersClosed bool
 
 	broadcaster msgBroadcaster
 	handler     msgHandler
@@ -788,6 +791,7 @@ func (wn *WebsocketNetwork) httpdThread() {
 func (wn *WebsocketNetwork) innerStop() {
 	wn.peersLock.Lock()
 	defer wn.peersLock.Unlock()
+	wn.peersClosed = true
 	wn.wg.Add(len(wn.peers))
 	// this method is called only during node shutdown. In this case, we want to send the
 	// shutdown message, but we don't want to wait for a long time - since we might not be lucky
@@ -1186,7 +1190,10 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	peer.TelemetryGUID = trackedRequest.otherTelemetryGUID
 	wn.log.Debugf("Server: client features '%s', decoded %x, our response '%s'", request.Header.Get(PeerFeaturesHeader), peer.features, responseHeader.Get(PeerFeaturesHeader))
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
-	wn.addPeer(peer)
+	if !wn.addPeer(peer) {
+		peer.CloseAndWait(time.Now().Add(peerShutdownDisconnectionAckDuration))
+		return
+	}
 	wn.log.With("event", "ConnectedIn").With("remote", trackedRequest.remoteAddress()).With("local", localAddr).Infof("Accepted incoming connection from peer %s", trackedRequest.remoteAddr)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
 		telemetryspec.PeerEventDetails{
@@ -2163,27 +2170,19 @@ func (wn *WebsocketNetwork) tryConnect(netAddr, gossipAddr string) {
 		}
 	}
 
-	throttledConnection := false
-	if wn.throttledOutgoingConnections.Add(int32(-1)) >= 0 {
-		throttledConnection = true
-	} else {
-		wn.throttledOutgoingConnections.Add(int32(1))
-	}
-
 	client, _ := wn.GetHTTPClient(netAddr)
 	peer := &wsPeer{
-		wsPeerCore:                  makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, netAddr, client, "" /* origin */),
-		conn:                        wsPeerWebsocketConnImpl{conn},
-		outgoing:                    true,
-		incomingMsgFilter:           wn.incomingMsgFilter,
-		createTime:                  time.Now(),
-		connMonitor:                 wn.connPerfMonitor,
-		throttledOutgoingConnection: throttledConnection,
-		version:                     matchingVersion,
-		identity:                    peerID,
-		features:                    decodePeerFeatures(matchingVersion, response.Header.Get(PeerFeaturesHeader)),
-		enableVoteCompression:       wn.config.EnableVoteCompression,
-		voteCompressionTableSize:    wn.voteCompressionTableSize,
+		wsPeerCore:               makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, netAddr, client, "" /* origin */),
+		conn:                     wsPeerWebsocketConnImpl{conn},
+		outgoing:                 true,
+		incomingMsgFilter:        wn.incomingMsgFilter,
+		createTime:               time.Now(),
+		connMonitor:              wn.connPerfMonitor,
+		version:                  matchingVersion,
+		identity:                 peerID,
+		features:                 decodePeerFeatures(matchingVersion, response.Header.Get(PeerFeaturesHeader)),
+		enableVoteCompression:    wn.config.EnableVoteCompression,
+		voteCompressionTableSize: wn.voteCompressionTableSize,
 	}
 	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
 	wn.log.Debugf("Client: server features '%s', decoded %x", response.Header.Get(PeerFeaturesHeader), peer.features)
@@ -2203,7 +2202,10 @@ func (wn *WebsocketNetwork) tryConnect(netAddr, gossipAddr string) {
 		}
 	}
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
-	wn.addPeer(peer)
+	if !wn.addPeer(peer) {
+		peer.CloseAndWait(time.Now().Add(peerShutdownDisconnectionAckDuration))
+		return
+	}
 
 	wn.log.With("event", "ConnectedOut").With("remote", netAddr).With("local", localAddr).Infof("Made outgoing connection to peer %v", netAddr)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
@@ -2386,20 +2388,34 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 	wn.countPeersSetGauges()
 }
 
-func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
+// addPeer registers peer and reports whether it is in wn.peers when addPeer returns.
+// When it returns false the caller must close the peer, because nothing else will.
+func (wn *WebsocketNetwork) addPeer(peer *wsPeer) bool {
 	wn.peersLock.Lock()
 	defer wn.peersLock.Unlock()
 	// guard against peers which are closed or closing
 	if peer.didSignalClose.Load() == 1 {
+		wn.identityTracker.removeIdentity(peer)
 		networkPeerAlreadyClosed.Inc(nil)
 		wn.log.Debugf("peer closing %s", peer.conn.RemoteAddrString())
-		return
+		return false
+	}
+	if wn.peersClosed {
+		// innerStop has already swept wn.peers. The peer never made it into the list,
+		// so removePeer will not clean up its identity.
+		wn.identityTracker.removeIdentity(peer)
+		wn.log.Debugf("network is stopping, dropping peer %s", peer.conn.RemoteAddrString())
+		return false
 	}
 	// simple duplicate *pointer* check. should never trigger given the callers to addPeer
 	// TODO: remove this after making sure it is safe to do so
 	if slices.Contains(wn.peers, peer) {
 		wn.log.Errorf("dup peer added %#v", peer)
-		return
+		return true
+	}
+	// Reserve a slot only for a registered peer, so removePeer owns its release.
+	if peer.outgoing {
+		peer.throttledOutgoingConnection = claimThrottleSlot(&wn.throttledOutgoingConnections)
 	}
 	heap.Push(peersHeap{wn}, peer)
 	wn.prioTracker.setPriority(peer, peer.prioAddress, peer.prioWeight)
@@ -2416,6 +2432,7 @@ func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
 		wn.wg.Add(1)
 		go wn.eventualReady()
 	}
+	return true
 }
 
 func (wn *WebsocketNetwork) eventualReady() {
