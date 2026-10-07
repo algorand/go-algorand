@@ -153,6 +153,15 @@ elif [ "${OS}" = "darwin" ]; then
     fi
 
     brew update
+    # Some images (e.g. GitHub Actions macOS runners) ship a linked openssl@1.1, whose
+    # bin/openssl symlink blocks linking openssl@3 when it's pulled in as a dependency
+    # (e.g. by python3). Unlink it for the installs below; relink it afterwards if
+    # openssl@3 didn't end up installed.
+    unlinked_openssl11=false
+    if brew list --versions openssl@1.1 >/dev/null 2>&1; then
+        brew unlink openssl@1.1
+        unlinked_openssl11=true
+    fi
     brew_version=$(brew --version | head -1 | cut -d' ' -f2)
     major_version=$(echo $brew_version | cut -d. -f1)
     minor_version=$(echo $brew_version | cut -d. -f2)
@@ -168,6 +177,10 @@ elif [ "${OS}" = "darwin" ]; then
             install_or_upgrade "$pkg"
         done
         lnav -i "$SCRIPTPATH/algorand_node_log.json"
+    fi
+    # If we previously unlinked openssl11 and did not upgrade openssl, then re-link it
+    if $unlinked_openssl11 && ! brew list --versions openssl@3 >/dev/null 2>&1; then
+        brew link openssl@1.1
     fi
 elif [ "${OS}" = "windows" ]; then
     if ! $msys2 pacman -S --disable-download-timeout --noconfirm git automake autoconf m4 libtool make mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-python mingw-w64-ucrt-x86_64-jq unzip procps; then
