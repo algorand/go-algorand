@@ -188,6 +188,7 @@ func TestFlushWithoutVotingSecrets(t *testing.T) {
 	id, err := registry.Insert(p)
 	a.NoError(err)
 	a.NoError(registry.Register(id, 1))
+	a.NoError(registry.Flush(defaultTimeout))
 	a.Empty(registryReadRawVotingHeader(a, registry, id))
 
 	// the per-round deletion pass hands the flush a zero-value Voting
@@ -388,6 +389,3 @@ func TestDeleteExpiredMergesOnlyVoting(t *testing.T) {
 	registry.mutex.Unlock()
 	a.True(registry.Get(id).IsZero())
 }
-
-// blockingOp parks the registry's write thread until released, so a test can
-// hold an insert in its pending window.
