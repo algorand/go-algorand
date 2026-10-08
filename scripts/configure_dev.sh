@@ -160,8 +160,14 @@ elif [ "${OS}" = "darwin" ]; then
     # didn't end up installed.
     openssl_link="$(brew --prefix)/bin/openssl"
     openssl11_target=""
+    restore_openssl11_link() {
+        if [ -n "$openssl11_target" ] && [ ! -e "$openssl_link" ] && [ ! -L "$openssl_link" ]; then
+            ln -s "$openssl11_target" "$openssl_link"
+        fi
+    }
     if [ -L "$openssl_link" ] && [[ "$(readlink "$openssl_link")" == *openssl@1.1* ]]; then
         openssl11_target=$(readlink "$openssl_link")
+        trap restore_openssl11_link EXIT
         rm "$openssl_link"
     fi
     brew_version=$(brew --version | head -1 | cut -d' ' -f2)
