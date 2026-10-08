@@ -7,8 +7,6 @@ import (
 	_ "runtime/cgo"
 	_ "unsafe"
 
-	"C"
-
 	"github.com/algorand/msgp/msgp"
 )
 
