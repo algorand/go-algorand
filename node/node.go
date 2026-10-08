@@ -54,6 +54,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/stateproof"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -963,7 +964,7 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 
 	// Explicitly ignore the error with a closure
 	defer func(name string) {
-		_ = os.Remove(name)
+		_, _ = util.EraseFile(name)
 	}(fullyQualifiedTempFile)
 
 	if err != nil {
@@ -1084,12 +1085,15 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 		return nil
 	}
 	for _, fullname := range imported {
-		err = os.Remove(fullname)
-		if err != nil {
-			node.log.Warnf("loadParticipationKeys: failed to remove imported participation key file '%s': %v", fullname, err)
-			continue
+		erased, err := util.EraseFile(fullname)
+		switch {
+		case err != nil:
+			node.log.Warnf("loadParticipationKeys: failed to erase imported participation key file '%s': %v", fullname, err)
+		case !erased:
+			node.log.Warnf("loadParticipationKeys: removed '%s' without overwriting it, since it is a link or its contents have other links", fullname)
+		default:
+			node.log.Infof("loadParticipationKeys: erased participation key file '%s' after importing it into the participation registry", fullname)
 		}
-		node.log.Infof("loadParticipationKeys: removed participation key file '%s' after importing it into the participation registry", fullname)
 	}
 
 	return nil

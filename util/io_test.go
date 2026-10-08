@@ -17,6 +17,7 @@
 package util
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -198,4 +199,66 @@ func TestMoveFileDestinationIsADirectory(t *testing.T) {
 
 	err = MoveFile(src, dst)
 	require.ErrorContains(t, err, fmt.Sprintf("cannot move source file '%s' to destination '%s': destination is a directory", src, dst))
+}
+
+func TestEraseFile(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Longer than one buffer of zeros, and not a multiple of it.
+	contents := make([]byte, 2*eraseChunkBytes+123)
+	for i := range contents {
+		contents[i] = byte(i%255 + 1)
+	}
+
+	tests := []struct {
+		name string
+		// makePath returns the path to erase, given a regular file holding contents.
+		makePath func(t *testing.T, target string) string
+		erased   bool
+	}{
+		{"regular file", func(t *testing.T, target string) string { return target }, true},
+		{"symbolic link", func(t *testing.T, target string) string {
+			path := target + ".symlink"
+			require.NoError(t, os.Symlink(target, path))
+			return path
+		}, false},
+		{"hard link", func(t *testing.T, target string) string {
+			path := target + ".link"
+			require.NoError(t, os.Link(target, path))
+			return path
+		}, false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			target := filepath.Join(t.TempDir(), "file")
+			require.NoError(t, os.WriteFile(target, contents, 0600))
+			path := test.makePath(t, target)
+			want := contents
+			if test.erased {
+				want = make([]byte, len(contents))
+			}
+
+			// Overwrite without removing first, so the result can be read back.
+			erased, err := overwriteWithZeros(path)
+			require.NoError(t, err)
+			require.Equal(t, test.erased, erased)
+			got, err := os.ReadFile(target)
+			require.NoError(t, err)
+			require.Len(t, got, len(want))
+			require.True(t, bytes.Equal(want, got), "unexpected file contents")
+
+			erased, err = EraseFile(path)
+			require.NoError(t, err)
+			require.Equal(t, test.erased, erased)
+			require.NoFileExists(t, path)
+			if !test.erased {
+				// The other name still leads to the original contents.
+				got, err = os.ReadFile(target)
+				require.NoError(t, err)
+				require.True(t, bytes.Equal(contents, got), "contents behind the other name changed")
+			}
+		})
+	}
 }
