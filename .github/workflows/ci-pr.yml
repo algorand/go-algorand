@@ -36,7 +36,7 @@ jobs:
       CIRCLECI: true
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Set up Go
@@ -60,7 +60,7 @@ jobs:
           details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_tests.name }}`"
       - name: Upload test logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-logs-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: |
@@ -68,7 +68,7 @@ jobs:
           retention-days: 30
       - name: Upload test artifacts to GitHub
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: ~/test_results
@@ -97,7 +97,7 @@ jobs:
       SHORTTEST: "-short"
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Set up Go
@@ -122,7 +122,7 @@ jobs:
           details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_integration_tests.name }}`"
       - name: Upload test artifacts to GitHub
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: integration-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: ~/test_results
@@ -151,7 +151,7 @@ jobs:
       SHORTTEST: "-short"
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Set up Go
@@ -178,7 +178,7 @@ jobs:
           details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_e2e_expect_tests.name }}`"
       - name: Upload test artifacts to GitHub
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e_expect-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: ~/test_results
@@ -206,7 +206,7 @@ jobs:
       SHORTTEST: "-short"
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Set up Go
@@ -231,7 +231,7 @@ jobs:
           details: "• Test Suite: `${{ matrix.testsuite }}`\n• Failed Step: `${{ steps.run_e2e_expect_tests.name }}`"
       - name: Upload test artifacts to GitHub
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e_subs-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.testsuite }}
           path: ~/test_results
@@ -246,8 +246,8 @@ jobs:
         platform: ["${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}"]
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
         with:
           pattern: ${{ matrix.test_type }}-results-${{ matrix.platform }}-*
           path: ~/test_results
@@ -274,7 +274,7 @@ jobs:
     if: always()
     runs-on: ${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           pattern: "*-results-*"
           path: ~/test_results

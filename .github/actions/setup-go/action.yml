@@ -13,7 +13,7 @@ runs:
       run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
       shell: bash
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v7
       with:
         go-version: ${{ env.GO_VERSION }}
         cache: ${{ inputs.cache-prefix == '' }}
@@ -29,7 +29,7 @@ runs:
         echo "GOCACHE=$(go env GOCACHE)" >> $GITHUB_ENV
     - name: Cache Go modules
       if: inputs.cache-prefix != ''
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: ${{ env.GOMODCACHE }}
         key: ${{ inputs.cache-prefix }}-${{ runner.os }}-${{ runner.arch }}-go-mod-${{ github.ref_name }}-${{ hashFiles('**/go.sum') }}-${{ env.GO_CACHE_DATE }}
@@ -40,7 +40,7 @@ runs:
           ${{ inputs.cache-prefix }}-${{ runner.os }}-${{ runner.arch }}-go-mod-
     - name: Cache Go build cache
       if: inputs.cache-prefix != ''
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: ${{ env.GOCACHE }}
         key: ${{ inputs.cache-prefix }}-${{ runner.os }}-${{ runner.arch }}-go-build-${{ github.ref_name }}-${{ hashFiles('**/go.sum') }}-${{ env.GO_CACHE_DATE }}

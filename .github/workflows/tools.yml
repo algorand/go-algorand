@@ -16,9 +16,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Cache libsodium
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: crypto/libs
           key: libsodium-ubuntu-latest-${{ hashFiles('crypto/libsodium-fork/**') }}

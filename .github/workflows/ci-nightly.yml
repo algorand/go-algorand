@@ -39,7 +39,7 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         ref: ${{ github.event.inputs.branch || github.ref }}
         fetch-depth: 0
@@ -48,7 +48,7 @@ jobs:
       with:
         cache-prefix: buildsrc
     - name: Cache libsodium
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: crypto/libs
         key: libsodium-${{ matrix.platform }}-${{ hashFiles('crypto/libsodium-fork/**') }}
@@ -60,7 +60,7 @@ jobs:
         tar -czf /tmp/workspace-${{ matrix.platform }}.tar.gz .
       shell: bash
     - name: Upload workspace archive
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: workspace-${{ matrix.platform }}-${{ github.run_id }}
         path: /tmp/workspace-${{ matrix.platform }}.tar.gz
@@ -87,7 +87,7 @@ jobs:
       CIRCLECI: true
     steps:
       - name: Download workspace archive
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: workspace-${{ matrix.platform }}-${{ github.run_id }}
           path: /tmp/
@@ -119,21 +119,21 @@ jobs:
           details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_tests.name }}`"
       - name: Upload test logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-logs-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: |
             **/*.log
           retention-days: 30
       - name: Upload test artifacts to GitHub
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: ~/test_results
           retention-days: 7
       - name: Keep this partition's coverage data
         if: ${{ matrix.platform == 'ubuntu-24.04' && success() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: covdata-${{ matrix.partition_id }}
           path: ${{ steps.tests.outputs.covdata-dir }}
@@ -151,11 +151,11 @@ jobs:
     needs: test_nightly
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Set up Go
         uses: ./.github/actions/setup-go
       - name: Collect every partition's coverage data
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: covdata-*
           path: covdata
@@ -192,7 +192,7 @@ jobs:
       PARALLEL_FLAG: "-p 1"
     steps:
       - name: Download workspace archive
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: workspace-${{ matrix.platform }}-${{ github.run_id }}
           path: /tmp/
@@ -219,7 +219,7 @@ jobs:
           build-type: "Nightly Build"
           details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_integration_tests.name }}`"
       - name: Upload test artifacts to GitHub
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: integration-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: ~/test_results
@@ -248,7 +248,7 @@ jobs:
       PARALLEL_FLAG: "-p 1"
     steps:
       - name: Download workspace archive
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: workspace-${{ matrix.platform }}-${{ github.run_id }}
           path: /tmp/
@@ -275,7 +275,7 @@ jobs:
           build-type: "Nightly Build"
           details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_e2e_expect_tests.name }}`"
       - name: Upload test artifacts to GitHub
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e_expect-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: ~/test_results
@@ -312,7 +312,7 @@ jobs:
           MODIFIED_BRANCH_NAME="${SANITIZED_BRANCH_NAME//\//-}"
           echo "CI_E2E_FILENAME=${MODIFIED_BRANCH_NAME}" >> "$GITHUB_ENV"
       - name: Download workspace archive
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: workspace-${{ matrix.platform }}-${{ github.run_id }}
           path: /tmp/
@@ -346,7 +346,7 @@ jobs:
           build-type: "Nightly Build"
           details: "• Failed Step: `${{ steps.run_e2e_expect_tests.name }}`"
       - name: Upload test artifacts to GitHub
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e_subs-results-${{ matrix.platform }}-${{ github.run_id }}
           path: ~/test_results
@@ -361,8 +361,8 @@ jobs:
         platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-15"]
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
         with:
           pattern: ${{ matrix.test_type }}-results-${{ matrix.platform }}-${{ github.run_id }}-*
           path: ~/test_results
@@ -393,7 +393,7 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - name: Download workspace archive
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: workspace-${{ matrix.platform }}-${{ github.run_id }}
           path: /tmp/
