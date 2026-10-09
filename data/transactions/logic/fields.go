@@ -26,7 +26,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate go tool -modfile=../../../tool.mod stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,EcGroup,MimcConfig,Poseidon2Config,FalconConfig,Base64Encoding,JSONRefType,VoterParamsField,VrfStandard,BlockField -output=fields_string.go
+//go:generate go tool -modfile=../../../tool.mod stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,EcGroup,MimcConfig,Poseidon2Config,FalconConfig,RsaScheme,Base64Encoding,JSONRefType,VoterParamsField,VrfStandard,BlockField -output=fields_string.go
 
 // FieldSpec unifies the various specs for assembly, disassembly, and doc generation.
 type FieldSpec interface {
@@ -1062,6 +1062,78 @@ var FalconConfigs = FieldGroup{
 	falconConfigSpecByName,
 }
 
+// RsaScheme is an enum for the `rsa_verify` opcode
+type RsaScheme int
+
+const (
+	// PKCS1v15_SHA256 is RSASSA-PKCS1-v1_5 over a SHA-256 digest
+	PKCS1v15_SHA256 RsaScheme = iota //nolint:revive // the TEAL field name is taken from the identifier
+	// PKCS1v15_SHA512 is RSASSA-PKCS1-v1_5 over a SHA-512 digest
+	PKCS1v15_SHA512 //nolint:revive // the TEAL field name is taken from the identifier
+	// PSS_SHA256 is RSASSA-PSS over a SHA-256 digest, with MGF1-SHA-256 and a 32 byte salt
+	PSS_SHA256 //nolint:revive // the TEAL field name is taken from the identifier
+	// PSS_SHA512 is RSASSA-PSS over a SHA-512 digest, with MGF1-SHA-512 and a 64 byte salt
+	PSS_SHA512       //nolint:revive // the TEAL field name is taken from the identifier
+	invalidRsaScheme // compile-time constant for number of fields
+)
+
+var rsaSchemeNames [invalidRsaScheme]string
+
+type rsaSchemeSpec struct {
+	field   RsaScheme
+	version uint64
+	doc     string
+}
+
+func (fs rsaSchemeSpec) Field() byte {
+	return byte(fs.field)
+}
+func (fs rsaSchemeSpec) Type() StackType {
+	return StackNone // Will not show, since all are untyped
+}
+func (fs rsaSchemeSpec) OpVersion() uint64 {
+	return rsaVersion
+}
+func (fs rsaSchemeSpec) Version() uint64 {
+	return fs.version
+}
+func (fs rsaSchemeSpec) Note() string {
+	return fs.doc
+}
+func (fs rsaSchemeSpec) Modes() RunMode {
+	return modeAny
+}
+
+var rsaSchemeSpecs = [...]rsaSchemeSpec{
+	{PKCS1v15_SHA256, rsaVersion, "RSASSA-PKCS1-v1_5 with a 32 byte SHA-256 digest"},
+	{PKCS1v15_SHA512, rsaVersion, "RSASSA-PKCS1-v1_5 with a 64 byte SHA-512 digest"},
+	{PSS_SHA256, rsaVersion, "RSASSA-PSS with a 32 byte SHA-256 digest, MGF1 with SHA-256, and a 32 byte salt"},
+	{PSS_SHA512, rsaVersion, "RSASSA-PSS with a 64 byte SHA-512 digest, MGF1 with SHA-512, and a 64 byte salt"},
+}
+
+func rsaSchemeSpecByField(s RsaScheme) (rsaSchemeSpec, bool) {
+	if int(s) >= len(rsaSchemeSpecs) {
+		return rsaSchemeSpec{}, false
+	}
+	return rsaSchemeSpecs[s], true
+}
+
+var rsaSchemeSpecByName = make(rsaSchemeNameSpecMap, len(rsaSchemeNames))
+
+type rsaSchemeNameSpecMap map[string]rsaSchemeSpec
+
+func (s rsaSchemeNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+// RsaSchemes collects details about the constants used to describe RsaSchemes
+var RsaSchemes = FieldGroup{
+	"RSA", "Schemes",
+	rsaSchemeNames[:],
+	rsaSchemeSpecByName,
+}
+
 // Base64Encoding is an enum for the `base64decode` opcode
 type Base64Encoding int
 
@@ -1958,6 +2030,13 @@ func init() {
 		equal(int(s.field), i)
 		falconConfigNames[s.field] = s.field.String()
 		falconConfigSpecByName[s.field.String()] = s
+	}
+
+	equal(len(rsaSchemeSpecs), len(rsaSchemeNames))
+	for i, s := range rsaSchemeSpecs {
+		equal(int(s.field), i)
+		rsaSchemeNames[s.field] = s.field.String()
+		rsaSchemeSpecByName[s.field.String()] = s
 	}
 
 	equal(len(base64EncodingSpecs), len(base64EncodingNames))

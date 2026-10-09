@@ -75,6 +75,12 @@ var opDescByName = map[string]OpDesc{
 	"ecdsa_pk_decompress": {"decompress pubkey A into components X, Y", "The 33 byte public key in a compressed form to be decompressed into X and Y (top) components. All values are big-endian encoded.", []string{"curve index"}, ""},
 	"ecdsa_pk_recover":    {"for (data A, recovery id B, signature C, D) recover a public key", "S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to derive a public key. All values are big-endian encoded. The signed data must be 32 bytes long.", []string{"curve index"}, ""},
 
+	"rsa_verify": {"for (digest A, signature B, modulus C, exponent D) verify the RSA signature of the digest against the public key => {0 or 1}", "" +
+		"A is the digest of the signed message, not the message. The PKCS1v15 schemes build the DigestInfo that is signed. The PSS schemes use MGF1 with the digest's hash, and a salt as long as the digest. B and C are big-endian, and D is the public exponent. " +
+		"Fail if A is not the digest length of scheme S, if C is longer than 512 bytes, or if B is not exactly as long as C: leading zero bytes are never added or removed. " +
+		"Return 0 if C has a leading zero byte, the modulus is shorter than 1024 bits (1034 bits for PSS_SHA512, the shortest that fits its encoding) or even, D is even, below 3 or above 65537, B is not less than the modulus, or the padding or digest does not match.",
+		[]string{"scheme index"}, ""},
+
 	"ec_add": {"for curve points A and B, return the curve point A + B", "" +
 		"A and B are curve points in affine representation: field element X concatenated with field element Y. " +
 		"Field element `Z` is encoded as follows.\n" +
@@ -387,7 +393,7 @@ var OpGroups = map[string][]string{
 	"Byte Array Manipulation": {"getbit", "setbit", "getbyte", "setbyte", "concat", "len", "substring", "substring3", "extract", "extract3", "extract_uint16", "extract_uint32", "extract_uint64", "replace2", "replace3", "base64_decode", "json_ref"},
 	"Byte Array Arithmetic":   {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%", "bsqrt"},
 	"Byte Array Logic":        {"b|", "b&", "b^", "b~"},
-	"Cryptography":            {"sha256", "keccak256", "sha512_256", "sha3_256", "sha512", "sumhash512", "falcon_verify", "ed25519verify", "ed25519verify_bare", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "vrf_verify", "ec_add", "ec_scalar_mul", "ec_pairing_check", "ec_multi_scalar_mul", "ec_subgroup_check", "ec_map_to", "mimc", "poseidon2"},
+	"Cryptography":            {"sha256", "keccak256", "sha512_256", "sha3_256", "sha512", "sumhash512", "falcon_verify", "ed25519verify", "ed25519verify_bare", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "rsa_verify", "vrf_verify", "ec_add", "ec_scalar_mul", "ec_pairing_check", "ec_multi_scalar_mul", "ec_subgroup_check", "ec_map_to", "mimc", "poseidon2"},
 	"Loading Values":          {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "pushints", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "pushbytess", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gloadss", "gaid", "gaids"},
 	"Flow Control":            {"err", "bnz", "bz", "b", "return", "pop", "popn", "dup", "dup2", "dupn", "dig", "bury", "cover", "uncover", "frame_dig", "frame_bury", "swap", "select", "assert", "callsub", "proto", "retsub", "switch", "match"},
 	"Block Access":            {"online_stake", "log", "block"},
