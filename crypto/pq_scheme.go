@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/msgp/msgp"
 )
 
 var (
@@ -58,6 +59,12 @@ type PQBatchPreparer interface {
 // TestPQBoundsCoverLogicSig checks the two against each other.
 const maxPQLogicSigSize = 16000
 
+// The rule is that the bytes in the args must not exceed maxPQLogicSigSize, so
+// we need more room than that to account for putting the args in up to 256
+// arguments.  I would like this to come from transactions.LogicSigArgsMaxSize,
+// but that's a circular dependency.
+const maxPQEncodedLogicSigsArgsSize = maxPQLogicSigSize + 256*msgp.BytesPrefixSize
+
 // MaxPQPublicKeySize and MaxPQSignatureSize are the largest public-key and
 // signature sizes over all supported PQ schemes; they are the PQ wire/decode
 // bounds (used for msgp allocbounds). The ls scheme is the largest of them, and
@@ -67,7 +74,7 @@ const maxPQLogicSigSize = 16000
 // TestPQBoundsCoverLogicSig guard against undersizing the current schemes.
 const (
 	MaxPQPublicKeySize = max(Falcon1024PublicKeySize, Falcon512PublicKeySize, len(PublicKey{}), maxPQLogicSigSize)
-	MaxPQSignatureSize = max(Falcon1024MaxSignatureSize, Falcon512MaxSignatureSize, len(Signature{}), maxPQLogicSigSize)
+	MaxPQSignatureSize = max(Falcon1024MaxSignatureSize, Falcon512MaxSignatureSize, len(Signature{}), maxPQEncodedLogicSigsArgsSize)
 )
 
 // LookupPQScheme returns the verifier for a PQ scheme tag. Every scheme is
