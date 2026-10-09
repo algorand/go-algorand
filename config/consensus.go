@@ -611,6 +611,12 @@ type ConsensusParams struct {
 	// authorization for the f1 PQ scheme.
 	EnablePQSchemeFalcon1024 bool
 
+	// EnablePQSchemeLogicSig enables transaction authorization by a LogicSig
+	// carried in a PQSig under the ls scheme, whose address commits to the
+	// program and a salt. Unlike the LogicSig in SignedTxn.Lsig, such an account
+	// can choose an address that is not an Edwards25519 point.
+	EnablePQSchemeLogicSig bool
+
 	// EnableSelectF128 changes the sortition algorithm to use a 128-bit software
 	// floating point binomial CDF implementation for committee selection.
 	EnableSelectF128 bool
@@ -731,6 +737,8 @@ func (proto ConsensusParams) PQSchemeEnabled(scheme protocol.PQScheme) bool {
 		return proto.EnablePQSchemeFalcon512
 	case protocol.PQSchemeEd25519:
 		return proto.EnablePQSchemeEd25519
+	case protocol.PQSchemeLogicSig:
+		return proto.EnablePQSchemeLogicSig
 	default:
 		return false
 	}
@@ -748,6 +756,10 @@ func (proto ConsensusParams) PQSchemeFeeContribution(scheme protocol.PQScheme) b
 		return 1e6 // it is half of the Falcon-1024 contribution
 	case protocol.PQSchemeEd25519:
 		return 0 // we consider a single Ed25519 signature to be part of min fee
+	case protocol.PQSchemeLogicSig:
+		// No surcharge. A surcharge here would make the off-curve form cost
+		// more than the on-curve SignedTxn.Lsig form it exists to replace.
+		return 0
 	default:
 		return 0
 	}
@@ -1584,6 +1596,8 @@ func initConsensusProtocols() {
 	vFuture.EnablePQSchemeEd25519 = true
 	vFuture.RequireLogicSigArgAccess = true
 	vFuture.AllowGroupedHeartbeats = true
+
+	vFuture.EnablePQSchemeLogicSig = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

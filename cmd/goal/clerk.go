@@ -62,6 +62,7 @@ var (
 	msigParams    string
 
 	skipPqAddressCheck bool
+	saltedProgram      bool
 
 	noProgramOutput bool
 	writeSourceMap  bool
@@ -114,6 +115,7 @@ func init() {
 	sendCmd.Flags().StringSliceVar(&argB64Strings, "argb64", nil, "Base64 encoded args to pass to transaction logic")
 	sendCmd.Flags().StringVarP(&logicSigFile, "logic-sig", "L", "", "LogicSig to apply to transaction")
 	sendCmd.Flags().StringVar(&msigParams, "msig-params", "", "Multisig preimage parameters - [threshold] [Address 1] [Address 2] ...\nUsed to add the necessary fields in case the account was rekeyed to a multisig account")
+	sendCmd.Flags().BoolVar(&saltedProgram, "salted", false, "Authorize from the program's salted address, which no Ed25519 key can claim, rather than its program hash")
 	sendCmd.MarkFlagRequired("to")
 	sendCmd.MarkFlagRequired("amount")
 
@@ -134,6 +136,7 @@ func init() {
 	signCmd.Flags().StringVarP(&logicSigFile, "logic-sig", "L", "", "LogicSig to apply to transaction")
 	signCmd.Flags().StringSliceVar(&argB64Strings, "argb64", nil, "Base64 encoded args to pass to transaction logic")
 	signCmd.Flags().StringVarP(&protoVersion, "proto", "P", "", "Consensus protocol version id string")
+	signCmd.Flags().BoolVar(&saltedProgram, "salted", false, "Authorize from the program's salted address, which no Ed25519 key can claim, rather than its program hash")
 	signCmd.MarkFlagRequired("infile")
 	signCmd.MarkFlagRequired("outfile")
 
@@ -299,6 +302,53 @@ func getProgramArgs() [][]byte {
 	return getB64Args(argB64Strings)
 }
 
+// saltedProgramAuthorizer returns the salt and address a program authorizes
+// from under the ls scheme, whose salt makes it an address no Ed25519 key can
+// ever claim.
+func saltedProgramAuthorizer(program []byte) (basics.PQAddressSalt, basics.Address) {
+	salt, addr, err := basics.PQLogicSigAddress(program)
+	if err != nil {
+		reportErrorf("Could not derive salted address for program: %s", err)
+	}
+	return salt, addr
+}
+
+// programAuthorizer returns the address a program authorizes from, in whichever
+// of its two forms was asked for.
+func programAuthorizer(program []byte, salted bool) basics.Address {
+	if salted {
+		_, addr := saltedProgramAuthorizer(program)
+		return addr
+	}
+	return basics.Address(logic.HashProgram(program))
+}
+
+// authorizeWithProgram attaches a program and its arguments to stxn. A program
+// has two account addresses, so which form to use is settled in this order:
+// --salted if given, otherwise whichever address the transaction's authorizer
+// already matches, otherwise the legacy program hash, so that uses predating
+// the salted form keep the address they had.
+func authorizeWithProgram(stxn *transactions.SignedTxn, lsig transactions.LogicSig, salted bool) {
+	salt, addr := saltedProgramAuthorizer(lsig.Logic)
+	if !salted && stxn.Authorizer() == addr {
+		salted = true
+	}
+	if !salted {
+		stxn.Lsig = lsig
+		return
+	}
+
+	if authorizer := stxn.Authorizer(); authorizer != addr {
+		reportErrorf("program authorizes %s, but the transaction is authorized by %s", addr, authorizer)
+	}
+	stxn.PQsig = transactions.PQSig{
+		Scheme:    protocol.PQSchemeLogicSig,
+		Salt:      salt,
+		PublicKey: lsig.Logic,
+		Signature: transactions.EncodeLogicSigArgs(lsig.Args),
+	}
+}
+
 func parseNoteField(cmd *cobra.Command) []byte {
 	if cmd.Flags().Changed("noteb64") {
 		noteBytes, err := base64.StdEncoding.DecodeString(noteBase64)
@@ -376,9 +426,7 @@ var sendCmd = &cobra.Command{
 		}
 		if program != nil {
 			if account == "" {
-				ph := logic.HashProgram(program)
-				pha := basics.Address(ph)
-				account = pha.String()
+				account = programAuthorizer(program, saltedProgram).String()
 			}
 			programArgs = getProgramArgs()
 		} else {
@@ -445,9 +493,10 @@ var sendCmd = &cobra.Command{
 			}
 			proto := protocol.ConsensusVersion(params.ConsensusVersion)
 			uncheckedTxn := transactions.SignedTxn{
-				Txn:  payment,
-				Lsig: lsig,
+				Txn:      payment,
+				AuthAddr: authAddr,
 			}
+			authorizeWithProgram(&uncheckedTxn, lsig, saltedProgram)
 			blockHeader := bookkeeping.BlockHeader{
 				UpgradeState: bookkeeping.UpgradeState{
 					CurrentProtocol: proto,
@@ -463,13 +512,13 @@ var sendCmd = &cobra.Command{
 			stx = uncheckedTxn
 		} else if program != nil {
 			stx = transactions.SignedTxn{
-				Txn: payment,
-				Lsig: transactions.LogicSig{
-					Logic: program,
-					Args:  programArgs,
-				},
+				Txn:      payment,
 				AuthAddr: authAddr,
 			}
+			authorizeWithProgram(&stx, transactions.LogicSig{
+				Logic: program,
+				Args:  programArgs,
+			}, saltedProgram)
 		} else {
 			signTx := sign || (outFilename == "")
 			if signerAddress != "" {
@@ -841,13 +890,16 @@ var signCmd = &cobra.Command{
 			txnGroup := []transactions.SignedTxn{}
 			for _, txn := range txnGroups[group] {
 				if lsig.Logic != nil {
-					txn.Lsig = lsig
+					// The authorizer has to be settled before the program is
+					// attached, since which of its two addresses the program
+					// authorizes from is read off the authorizer.
 					if signerAddress != "" {
 						if authAddr == txn.Txn.Sender {
 							reportErrorf("AuthAddr cannot be the same as the transaction sender")
 						}
 						txn.AuthAddr = authAddr
 					}
+					authorizeWithProgram(txn, lsig, saltedProgram)
 				}
 				txnGroup = append(txnGroup, *txn)
 			}
@@ -1132,7 +1184,14 @@ var compileCmd = &cobra.Command{
 			if !signProgram && shouldPrintAdditionalInfo {
 				pd := logic.HashProgram(program)
 				addr := basics.Address(pd)
-				fmt.Printf("%s: %s\n", fname, addr.String())
+				// The ls address is appended to this line rather than printed on
+				// one of its own, so that scripts reading the first address by
+				// field or by word keep working.
+				_, pqAddr, err := basics.PQLogicSigAddress(program)
+				if err != nil {
+					reportErrorf("Could not derive pq address: %s", err)
+				}
+				fmt.Printf("%s: %s (pq: %s)\n", fname, addr.String(), pqAddr.String())
 			}
 		}
 	},

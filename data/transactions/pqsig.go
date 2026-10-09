@@ -71,6 +71,25 @@ func (p PQSig) Address() basics.Address {
 	return basics.PQAddress(p.Scheme, p.Salt, p.PublicKey)
 }
 
+// IsLogicSig reports whether p authorizes by evaluating a program rather than
+// by verifying signature bytes. Callers that verify a PQSig must ask this
+// first: the ls scheme's PQVerifier exists only to fail.
+func (p PQSig) IsLogicSig() bool {
+	return p.Scheme == protocol.PQSchemeLogicSig
+}
+
+// Lsig returns the logic signature an ls-scheme PQSig carries: the program
+// stands in for the public key, and its encoded arguments for the signature.
+// Returning a LogicSig lets a program authorizing from a PQSig be measured and
+// evaluated exactly like one in SignedTxn.Lsig.
+func (p PQSig) Lsig() (LogicSig, error) {
+	args, err := DecodeLogicSigArgs(p.Signature)
+	if err != nil {
+		return LogicSig{}, err
+	}
+	return LogicSig{Logic: p.PublicKey, Args: args}, nil
+}
+
 func (p PQSig) validateScheme(proto config.ConsensusParams) (crypto.PQVerifier, error) {
 	if p.Blank() {
 		return nil, errPQSigBlank

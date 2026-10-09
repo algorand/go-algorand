@@ -131,9 +131,15 @@ func MakeSimulator(ledger *data.Ledger, developerAPI bool) *Simulator {
 // category set. There are two placeholders forms:
 // - Scheme-only placeholder: Scheme set, PublicKey empty, Signature empty, for fee surcharge calculation
 // - Full placeholder: Scheme, Salt, and PublicKey set, Signature empty, for authorizer address derivation
+// An ls-scheme PQSig with a program is never a placeholder. Empty Signature
+// bytes there mean a program that takes no arguments, which is a complete
+// authorization: the program must be evaluated and traced, not swapped for a
+// proxy signature. Nothing is missing from it, either, since the address
+// commits to the program and the program is what the fee is charged for.
 func isPlaceholderPQSig(txn transactions.SignedTxn) bool {
 	return txn.Sig.Blank() && txn.Msig.Blank() && txn.Lsig.Blank() &&
-		!txn.PQsig.Blank() && len(txn.PQsig.Signature) == 0
+		!txn.PQsig.Blank() && len(txn.PQsig.Signature) == 0 &&
+		!txn.PQsig.IsLogicSig()
 }
 
 func validatePlaceholderPQSig(proto config.ConsensusParams, pqSig transactions.PQSig, authorizer basics.Address, fixSigners bool) error {
