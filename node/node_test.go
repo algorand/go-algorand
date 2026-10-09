@@ -1510,6 +1510,19 @@ func TestLoadParticipationKeysRemovesFiles(t *testing.T) {
 	_, err = util.CopyFile(partFile, leftoverFile)
 	require.NoError(t, err)
 
+	// A key file with a newer schema version, as a newer algod would write,
+	// is not imported. It is renamed to *.old instead of being erased.
+	var newerAddr basics.Address
+	crypto.RandBytes(newerAddr[:])
+	newerFile := filepath.Join(genesisDir, config.PartKeyFilename(newerAddr.String(), 0, 200))
+	access, err = db.MakeAccessor(newerFile, false, false)
+	require.NoError(t, err)
+	newerPart, err := account.FillDBWithParticipationKeys(access, newerAddr, 0, 200, 10)
+	require.NoError(t, err)
+	_, err = access.Handle.Exec("UPDATE schema SET version = ? WHERE tablename = ?", account.PartTableSchemaVersion+1, account.PartTableSchemaName)
+	require.NoError(t, err)
+	access.Close()
+
 	makeNode := func() *AlgorandFullNode {
 		node, err := MakeFull(logging.TestingLog(t), rootDir, config.GetDefaultLocal(), nil, genesis)
 		require.NoError(t, err)
@@ -1528,6 +1541,9 @@ func TestLoadParticipationKeysRemovesFiles(t *testing.T) {
 	node := makeNode()
 	require.NoFileExists(t, partFile)
 	require.Equal(t, uint64(0), firstBatch(node))
+	require.NoFileExists(t, newerFile)
+	require.FileExists(t, newerFile+".old")
+	require.True(t, node.accountManager.Registry().Get(newerPart.ID()).IsZero())
 	// Round 50 needs keys for round 51, in batch 5. Batch 5 is expanded into
 	// per-round keys, leaving batch 6 as the first whole batch.
 	node.accountManager.DeleteOldKeys(bookkeeping.BlockHeader{Round: 50}, config.Consensus[protocol.ConsensusCurrentVersion])
@@ -1549,4 +1565,5 @@ func TestLoadParticipationKeysRemovesFiles(t *testing.T) {
 	node = makeNode()
 	require.True(t, node.accountManager.Registry().Get(partID).IsZero())
 	stopNode(node)
+	require.FileExists(t, newerFile+".old")
 }

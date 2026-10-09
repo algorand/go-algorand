@@ -1051,7 +1051,7 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 				node.log.Infof("Loaded participation keys from storage: %s %s", part.Address(), info.Name())
 				node.log.Warnf("loadParticipationKeys: not loading unsupported participation key: %s; renaming to *.old", info.Name())
 				fullname := filepath.Join(genesisDir, info.Name())
-				renamedFileName := filepath.Join(fullname, ".old")
+				renamedFileName := fullname + ".old"
 				err = os.Rename(fullname, renamedFileName)
 				if err != nil {
 					node.log.Warnf("loadParticipationKeys: failed to rename unsupported participation key file '%s' to '%s': %v", fullname, renamedFileName, err)
