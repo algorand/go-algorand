@@ -5082,3 +5082,25 @@ func TestNumOutgoingPending(t *testing.T) {
 	require.Equal(t, 0, len(netA.tryConnectAddrs), "map should be empty after all releases")
 	netA.tryConnectLock.Unlock()
 }
+
+// TestWebsocketNetworkStopEndsMessagesOfInterestThread checks that
+// postMessagesOfInterestThread exits when the network stops. Stop waits on
+// wn.wg, so once it returns nothing drains messagesOfInterestRefresh any more:
+// the buffer fills up and stays full.
+func TestWebsocketNetworkStopEndsMessagesOfInterestThread(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t)
+	require.NoError(t, netA.Start())
+	netA.Stop()
+
+	for i := 0; i <= cap(netA.messagesOfInterestRefresh); i++ {
+		select {
+		case netA.messagesOfInterestRefresh <- struct{}{}:
+		default:
+		}
+	}
+	require.Never(t, func() bool {
+		return len(netA.messagesOfInterestRefresh) < cap(netA.messagesOfInterestRefresh)
+	}, 200*time.Millisecond, 10*time.Millisecond, "messagesOfInterestRefresh was drained after Stop, so postMessagesOfInterestThread is still running")
+}

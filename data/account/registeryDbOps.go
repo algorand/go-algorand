@@ -24,6 +24,7 @@ import (
 	"maps"
 	"strings"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -37,7 +38,18 @@ type opRequest struct {
 	errChannel chan error
 }
 
-type flushOp struct{} // does nothing but flushes the latest error.
+// flushOp writes the dirty records and flushes the latest error.
+type flushOp struct {
+	// wroteBulk is set when a record's voting transition wrote subkey rows
+	// wholesale (a batch rollover)
+	wroteBulk bool
+}
+
+func (f *flushOp) bulk() bool { return f.wroteBulk }
+
+func (i *insertOp) bulk() bool { return true }
+
+func (a *appendKeysOp) bulk() bool { return true }
 
 type registerOp struct {
 	updated map[ParticipationID]updatingParticipationRecord
@@ -104,7 +116,7 @@ func (r *registerOp) apply(db *participationDB) error {
 	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// Disable active key if there is one
 		for id, record := range r.updated {
-			err := updateRollingFields(ctx, tx, record.ParticipationRecord)
+			err := updateRegistrationFields(ctx, tx, record.ParticipationRecord)
 			// Repair the case when no keys were updated
 			if err == ErrNoKeyForID {
 				db.log.Warn("participationDB unable to update key in cache. Removing from cache.")
@@ -134,23 +146,24 @@ func (r *registerOp) apply(db *participationDB) error {
 
 func (i *insertOp) apply(db *participationDB) (err error) {
 	var rawVRF []byte
-	var rawVoting []byte
 	var rawStateProofContext []byte
 
 	if i.record.VRF != nil {
 		rawVRF = protocol.Encode(i.record.VRF)
 	}
-	if i.record.Voting != nil {
-		voting := i.record.Voting.Snapshot()
-		rawVoting = protocol.Encode(&voting)
-	}
-
 	// This contains all the state proof data except for the actual secret keys (stored in a different table)
 	if i.record.StateProofSecrets != nil {
 		rawStateProofContext = protocol.Encode(&i.record.StateProofSecrets.SignerContext)
 	}
 
 	err = db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		var rawVotingHeader []byte
+		var voting crypto.OneTimeSignatureSecretsPersistent
+		if i.record.Voting != nil {
+			voting = votingSnapshot(i.record.Voting)
+			rawVotingHeader = encodeVotingHeader(voting.Header())
+		}
+
 		result, err2 := tx.Exec(
 			insertKeysetQuery,
 			i.id[:],
@@ -169,8 +182,18 @@ func (i *insertOp) apply(db *participationDB) (err error) {
 		}
 
 		// Create Rolling entry
-		result, err2 = tx.Exec(insertRollingQuery, pk, rawVoting)
-		return verifyExecWithOneRowEffected(err2, result, "insert rolling")
+		result, err2 = tx.Exec(insertRollingQuery, pk, rawVotingHeader)
+		if err2 = verifyExecWithOneRowEffected(err2, result, "insert rolling"); err2 != nil {
+			return err2
+		}
+
+		if i.record.Voting != nil {
+			// per-subkey voting rows (a mid-life key carries offsets too)
+			if err2 = insertVotingRows(tx, pk, voting); err2 != nil {
+				return fmt.Errorf("unable to insert voting subkeys: %w", err2)
+			}
+		}
+		return nil
 	})
 	return err
 }
@@ -201,6 +224,16 @@ func (d *deleteOp) apply(db *participationDB) error {
 		}
 
 		_, err = tx.Exec(deleteStateProofByPK, pk)
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.Exec(deleteVotingBatchesPK, pk)
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.Exec(deleteVotingOffsetsPK, pk)
 		if err != nil {
 			return err
 		}
@@ -240,7 +273,10 @@ func (f *flushOp) apply(db *participationDB) error {
 	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var errorStr strings.Builder
 		for _, record := range needsUpdate {
-			err := updateRollingFields(ctx, tx, record)
+			bulk, err := updateRollingFields(ctx, tx, record)
+			if err == nil && bulk {
+				f.wroteBulk = true
+			}
 			// This should only be updating key usage so ignoring missing keys is not a problem.
 			if err != nil && err != ErrNoKeyForID {
 				if errorStr.Len() > 0 {
