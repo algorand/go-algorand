@@ -37,3 +37,12 @@ var Channel string
 // DefaultDeadlock is the default setting to use for EnableDeadlockDetection.  It's computed for the build
 // based on the current branch being built - intending to disable deadlock detection in 'production' builds.
 var DefaultDeadlock string
+
+// VersionMajorOverride allows overriding the major version number via -ldflags.
+// If set, it takes precedence over the VersionMajor constant in version.go.
+// This enables setting the full semantic version at build time (e.g., VERSION=1.2.3).
+var VersionMajorOverride string
+
+// VersionMinorOverride allows overriding the minor version number via -ldflags.
+// If set, it takes precedence over the VersionMinor constant in version.go.
+var VersionMinorOverride string
