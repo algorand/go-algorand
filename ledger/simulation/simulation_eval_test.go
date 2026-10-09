@@ -29,8 +29,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
@@ -6751,30 +6753,35 @@ func TestOptionalSignatures(t *testing.T) {
 	}
 }
 
-func makePlaceholderPQSigForSimulation(t *testing.T, seedByte byte) (basics.Address, transactions.PQSig) {
+func makePlaceholderPQSigForSimulation(t *testing.T, scheme protocol.PQScheme, seedByte byte) (basics.Address, transactions.PQSig) {
 	t.Helper()
 
-	var seed crypto.FalconSeed
-	seed[0] = seedByte
-	signer, err := crypto.GenerateFalconSigner(seed)
-	require.NoError(t, err)
-
-	publicKey := slices.Clone(signer.PublicKey[:])
-	salt, authorizer, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
-	require.NoError(t, err)
-
-	return authorizer, transactions.PQSig{
-		Scheme:    protocol.PQSchemeFalcon1024,
-		Salt:      salt,
-		PublicKey: publicKey,
+	acct := basics_testing.MakePQTestAccount(t, seedByte, scheme)
+	return acct.Address, transactions.PQSig{
+		Scheme:    acct.Scheme,
+		Salt:      acct.Salt,
+		PublicKey: acct.PublicKey,
 	}
 }
 
-func makePlaceholderPQFixSignersGroup(t *testing.T, env simulationtesting.Environment, placeholderFee uint64) ([]transactions.SignedTxn, basics.Address) {
+// pqPlaceholderFeeUsage returns the fee usage of a transaction authorized by a
+// PQ signature of the given scheme (base transaction usage plus the scheme's
+// surcharge), and the fee that exactly covers it. Tests derive their expectations
+// from the configured fee policy rather than hardcoding multiples of the min fee.
+func pqPlaceholderFeeUsage(t *testing.T, proto config.ConsensusParams, scheme protocol.PQScheme) (basics.MicroAlgos, basics.Micros) {
+	t.Helper()
+
+	usage := basics.Micros(1e6) + proto.PQSchemeFeeContribution(scheme)
+	fee, _, overflow := proto.MinFee().FeeForUsage(usage, 1e6, 0)
+	require.False(t, overflow)
+	return fee, usage
+}
+
+func makePlaceholderPQFixSignersGroup(t *testing.T, env simulationtesting.Environment, scheme protocol.PQScheme, placeholderFee uint64) ([]transactions.SignedTxn, basics.Address) {
 	t.Helper()
 
 	sender := env.Accounts[0]
-	pqAuthorizer, pqSig := makePlaceholderPQSigForSimulation(t, 0)
+	pqAuthorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 0)
 	minFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
 
 	rekey := env.TxnInfo.NewTxn(txntest.Txn{
@@ -6809,18 +6816,19 @@ func makeAppThenPlaceholderPQFixSignersGroup(t *testing.T, env *simulationtestin
 	})
 	env.Rekey(sender.Addr, pqAuthorizer)
 
-	minFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
+	proto := env.TxnInfo.CurrentProtocolParams()
+	pqFee, _ := pqPlaceholderFeeUsage(t, proto, pqSig.Scheme)
 	appCall := env.TxnInfo.NewTxn(txntest.Txn{
 		Type:          protocol.ApplicationCallTx,
 		Sender:        appCaller.Addr,
 		ApplicationID: appID,
-		Fee:           minFee,
+		Fee:           proto.MinTxnFee,
 	})
 	pqPay := env.TxnInfo.NewTxn(txntest.Txn{
 		Type:     protocol.PaymentTx,
 		Sender:   sender.Addr,
 		Receiver: sender.Addr,
-		Fee:      minFee * 3,
+		Fee:      pqFee.Raw,
 	})
 	txgroup := txntest.Group(&appCall, &pqPay)
 	txgroup[0] = txgroup[0].Txn.Sign(appCaller.Sk)
@@ -6832,10 +6840,20 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
+	for _, tc := range basics_testing.PQTestSchemes {
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+			testPlaceholderPQSignatures(t, tc.Scheme)
+		})
+	}
+}
+
+func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 	t.Run("invalid public key", func(t *testing.T) {
 		t.Parallel()
 		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
-			_, pqSig := makePlaceholderPQSigForSimulation(t, 1)
+			_, pqUsage := pqPlaceholderFeeUsage(t, env.TxnInfo.CurrentProtocolParams(), scheme)
+			_, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 1)
 			pqSig.PublicKey = pqSig.PublicKey[:len(pqSig.PublicKey)-1]
 			authorizer := pqSig.Address()
 			txn := env.TxnInfo.NewTxn(txntest.Txn{
@@ -6862,7 +6880,7 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 						{
 							FailedAt:      simulation.TxnPath{0},
 							Txns:          []simulation.TxnResult{{FeesPaid: stxn.Txn.Fee}},
-							GroupUsage:    3e6,
+							GroupUsage:    pqUsage,
 							GroupFeesPaid: stxn.Txn.Fee,
 						},
 					},
@@ -6874,7 +6892,8 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 	t.Run("wrong salt", func(t *testing.T) {
 		t.Parallel()
 		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
-			authorizer, pqSig := makePlaceholderPQSigForSimulation(t, 2)
+			_, pqUsage := pqPlaceholderFeeUsage(t, env.TxnInfo.CurrentProtocolParams(), scheme)
+			authorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 2)
 			pqSig.Salt ^= 1
 			txn := env.TxnInfo.NewTxn(txntest.Txn{
 				Type:     protocol.PaymentTx,
@@ -6900,7 +6919,7 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 						{
 							FailedAt:      simulation.TxnPath{0},
 							Txns:          []simulation.TxnResult{{FeesPaid: stxn.Txn.Fee}},
-							GroupUsage:    3e6,
+							GroupUsage:    pqUsage,
 							GroupFeesPaid: stxn.Txn.Fee,
 						},
 					},
@@ -6912,8 +6931,8 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 	t.Run("FixSigners fixes placeholder AuthAddr", func(t *testing.T) {
 		t.Parallel()
 		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
-			minFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
-			txgroup, pqAuthorizer := makePlaceholderPQFixSignersGroup(t, env, minFee*3)
+			pqFee, pqUsage := pqPlaceholderFeeUsage(t, env.TxnInfo.CurrentProtocolParams(), scheme)
+			txgroup, pqAuthorizer := makePlaceholderPQFixSignersGroup(t, env, scheme, pqFee.Raw)
 
 			return simulationTestCase{
 				input: simulation.Request{
@@ -6934,7 +6953,7 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 								{FeesPaid: txgroup[0].Txn.Fee},
 								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: pqAuthorizer},
 							},
-							GroupUsage:    4e6,
+							GroupUsage:    1e6 + pqUsage,
 							GroupFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
 						},
 					},
@@ -6947,10 +6966,12 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 		t.Parallel()
 		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 			sender := env.Accounts[0]
-			authorizer, pqSig := makePlaceholderPQSigForSimulation(t, 3)
+			authorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 3)
 			ops, err := logic.AssembleStringWithVersion("int 1", 2)
 			require.NoError(t, err)
-			minFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
+			proto := env.TxnInfo.CurrentProtocolParams()
+			minFee := proto.MinTxnFee
+			pqFee, pqUsage := pqPlaceholderFeeUsage(t, proto, scheme)
 
 			rekey := env.TxnInfo.NewTxn(txntest.Txn{
 				Type:     protocol.PaymentTx,
@@ -6963,7 +6984,7 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 				Type:     protocol.PaymentTx,
 				Sender:   sender.Addr,
 				Receiver: sender.Addr,
-				Fee:      minFee * 3,
+				Fee:      pqFee.Raw,
 			})
 			txgroup := txntest.Group(&rekey, &delegatedPay)
 			txgroup[0] = txgroup[0].Txn.Sign(sender.Sk)
@@ -6992,7 +7013,7 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 								{FeesPaid: txgroup[0].Txn.Fee},
 								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: authorizer, LogicSigBudgetConsumed: 2},
 							},
-							GroupUsage:    4e6,
+							GroupUsage:    1e6 + pqUsage,
 							GroupFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
 						},
 					},
@@ -7005,10 +7026,12 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 		t.Parallel()
 		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 			sender := env.Accounts[0]
-			authorizer, pqSig := makePlaceholderPQSigForSimulation(t, 4)
+			authorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 4)
 			ops, err := logic.AssembleStringWithVersion("int 0", 2)
 			require.NoError(t, err)
-			minFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
+			proto := env.TxnInfo.CurrentProtocolParams()
+			minFee := proto.MinTxnFee
+			pqFee, pqUsage := pqPlaceholderFeeUsage(t, proto, scheme)
 
 			rekey := env.TxnInfo.NewTxn(txntest.Txn{
 				Type:     protocol.PaymentTx,
@@ -7021,7 +7044,7 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 				Type:     protocol.PaymentTx,
 				Sender:   sender.Addr,
 				Receiver: sender.Addr,
-				Fee:      minFee * 3,
+				Fee:      pqFee.Raw,
 			})
 			txgroup := txntest.Group(&rekey, &delegatedPay)
 			txgroup[0] = txgroup[0].Txn.Sign(sender.Sk)
@@ -7054,7 +7077,7 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: authorizer, LogicSigBudgetConsumed: 2},
 							},
 							FailedAt:      simulation.TxnPath{1},
-							GroupUsage:    4e6,
+							GroupUsage:    1e6 + pqUsage,
 							GroupFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
 						},
 					},
@@ -7069,11 +7092,13 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 		defer env.Close()
 
 		sender := env.Accounts[0]
-		authorizer, pqSig := makePlaceholderPQSigForSimulation(t, 5)
+		authorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 5)
 		pqSig.Salt ^= 1
 		ops, err := logic.AssembleStringWithVersion("int 1", 2)
 		require.NoError(t, err)
-		minFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
+		proto := env.TxnInfo.CurrentProtocolParams()
+		minFee := proto.MinTxnFee
+		pqFee, _ := pqPlaceholderFeeUsage(t, proto, scheme)
 
 		rekey := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
@@ -7086,7 +7111,7 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
 			Receiver: sender.Addr,
-			Fee:      minFee * 3,
+			Fee:      pqFee.Raw,
 		})
 		txgroup := txntest.Group(&rekey, &delegatedPay)
 		txgroup[0] = txgroup[0].Txn.Sign(sender.Sk)
@@ -7110,7 +7135,8 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 	t.Run("FixSigners validates full placeholder after app signer fix", func(t *testing.T) {
 		t.Parallel()
 		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
-			pqAuthorizer, pqSig := makePlaceholderPQSigForSimulation(t, 3)
+			_, pqUsage := pqPlaceholderFeeUsage(t, env.TxnInfo.CurrentProtocolParams(), scheme)
+			pqAuthorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 3)
 			txgroup := makeAppThenPlaceholderPQFixSignersGroup(t, &env, pqAuthorizer, pqSig)
 
 			return simulationTestCase{
@@ -7137,7 +7163,7 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 							},
 							AppBudgetAdded:    700,
 							AppBudgetConsumed: ignoreAppBudgetConsumed,
-							GroupUsage:        4e6,
+							GroupUsage:        1e6 + pqUsage,
 							GroupFeesPaid:     basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
 						},
 					},
@@ -7151,7 +7177,7 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 		env := simulationtesting.PrepareSimulatorTest(t)
 		defer env.Close()
 
-		pqAuthorizer, pqSig := makePlaceholderPQSigForSimulation(t, 4)
+		pqAuthorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 4)
 		pqSig.Salt ^= 1
 		txgroup := makeAppThenPlaceholderPQFixSignersGroup(t, &env, pqAuthorizer, pqSig)
 
@@ -7169,16 +7195,16 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 	t.Run("scheme-only placeholder pays PQ surcharge", func(t *testing.T) {
 		t.Parallel()
 		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
-			minFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
+			pqFee, pqUsage := pqPlaceholderFeeUsage(t, env.TxnInfo.CurrentProtocolParams(), scheme)
 			sender := env.Accounts[0]
 			txn := env.TxnInfo.NewTxn(txntest.Txn{
 				Type:     protocol.PaymentTx,
 				Sender:   sender.Addr,
 				Receiver: sender.Addr,
-				Fee:      minFee * 3,
+				Fee:      pqFee.Raw,
 			})
 			stxn := txn.SignedTxn()
-			stxn.PQsig = transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024}
+			stxn.PQsig = transactions.PQSig{Scheme: scheme}
 
 			return simulationTestCase{
 				input: simulation.Request{
@@ -7194,7 +7220,7 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 					TxnGroups: []simulation.TxnGroupResult{
 						{
 							Txns:          []simulation.TxnResult{{FeesPaid: stxn.Txn.Fee}},
-							GroupUsage:    3e6,
+							GroupUsage:    pqUsage,
 							GroupFeesPaid: stxn.Txn.Fee,
 						},
 					},
@@ -7206,8 +7232,15 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 	t.Run("placeholder pays PQ surcharge", func(t *testing.T) {
 		t.Parallel()
 		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
-			minFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
-			txgroup, pqAuthorizer := makePlaceholderPQFixSignersGroup(t, env, minFee)
+			proto := env.TxnInfo.CurrentProtocolParams()
+			_, pqUsage := pqPlaceholderFeeUsage(t, proto, scheme)
+			txgroup, pqAuthorizer := makePlaceholderPQFixSignersGroup(t, env, scheme, proto.MinTxnFee)
+			var expectedError string
+			var failedAt simulation.TxnPath
+			if pqUsage > 1e6 {
+				expectedError = fmt.Sprintf("usage=%s", 1e6+pqUsage)
+				failedAt = simulation.TxnPath{1}
+			}
 
 			return simulationTestCase{
 				input: simulation.Request{
@@ -7215,7 +7248,7 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 					AllowEmptySignatures: true,
 					FixSigners:           true,
 				},
-				expectedError: "usage=4.000000",
+				expectedError: expectedError,
 				expected: simulation.Result{
 					Version:   simulation.ResultLatestVersion,
 					LastRound: env.TxnInfo.LatestRound(),
@@ -7225,12 +7258,12 @@ func TestPlaceholderPQSignatures(t *testing.T) {
 					},
 					TxnGroups: []simulation.TxnGroupResult{
 						{
-							FailedAt: simulation.TxnPath{1},
+							FailedAt: failedAt,
 							Txns: []simulation.TxnResult{
 								{FeesPaid: txgroup[0].Txn.Fee},
 								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: pqAuthorizer},
 							},
-							GroupUsage:    4e6,
+							GroupUsage:    1e6 + pqUsage,
 							GroupFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
 						},
 					},

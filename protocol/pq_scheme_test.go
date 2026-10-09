@@ -29,6 +29,7 @@ func TestPQSchemes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	schemes := []PQScheme{
+		PQSchemeEd25519,
 		PQSchemeFalcon1024,
 		PQSchemeFalcon512,
 	}

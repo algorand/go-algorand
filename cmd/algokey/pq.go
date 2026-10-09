@@ -33,28 +33,37 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-var errPQTxnAlreadySigned = errors.New("transaction already has a signature")
+var (
+	errPQTxnAlreadySigned  = errors.New("transaction already has a signature")
+	errPQSchemeRequired    = errors.New("--scheme is required with --mnemonic")
+	errPQSchemeWithKeyfile = errors.New("--scheme cannot be used with --keyfile, which records its scheme")
+)
+
+const (
+	schemeUsage         = "Signature scheme: falcon-1024 (f1), falcon-512 (f5), ed25519 (ed)"
+	schemeMnemonicUsage = "Scheme key mnemonic"
+)
 
 var (
-	pqGenerateScheme  = pqSchemeFalcon1024Name
+	pqGenerateScheme  string
 	pqGenerateKeyfile string
 
 	pqInfoKeyfile string
 
 	pqImportMnemonic string
-	pqImportScheme   = pqSchemeFalcon1024Name
+	pqImportScheme   string
 	pqImportKeyfile  string
 
 	pqSignKeyfile   string
 	pqSignMnemonic  string
-	pqSignScheme    = pqSchemeFalcon1024Name
+	pqSignScheme    string
 	pqSignTxfile    string
 	pqSignOutfile   string
 	pqSignOverwrite bool
 
 	pqSignProgramKeyfile  string
 	pqSignProgramMnemonic string
-	pqSignProgramScheme   = pqSchemeFalcon1024Name
+	pqSignProgramScheme   string
 	pqSignProgramProgram  string
 	pqSignProgramOutfile  string
 )
@@ -152,22 +161,24 @@ func init() {
 	pqCmd.AddCommand(pqSignProgramCmd)
 	pqCmd.AddCommand(pqCheckAddressCmd)
 
-	pqGenerateCmd.Flags().StringVarP(&pqGenerateScheme, "scheme", "S", pqGenerateScheme, "Post-quantum signature scheme: falcon-1024 (f1)")
+	pqGenerateCmd.Flags().StringVarP(&pqGenerateScheme, "scheme", "S", "", schemeUsage+"; required")
 	pqGenerateCmd.Flags().StringVarP(&pqGenerateKeyfile, "keyfile", "k", "", "Private key filename")
+	mustMarkFlagRequired(pqGenerateCmd, "scheme")
 	mustMarkFlagRequired(pqGenerateCmd, "keyfile")
 
 	pqInfoCmd.Flags().StringVarP(&pqInfoKeyfile, "keyfile", "k", "", "Private key filename")
 	mustMarkFlagRequired(pqInfoCmd, "keyfile")
 
-	pqImportCmd.Flags().StringVarP(&pqImportMnemonic, "mnemonic", "m", "", "Private key mnemonic")
-	pqImportCmd.Flags().StringVarP(&pqImportScheme, "scheme", "S", pqImportScheme, "Post-quantum signature scheme: falcon-1024 (f1)")
+	pqImportCmd.Flags().StringVarP(&pqImportMnemonic, "mnemonic", "m", "", schemeMnemonicUsage)
+	pqImportCmd.Flags().StringVarP(&pqImportScheme, "scheme", "S", "", schemeUsage+"; required")
 	pqImportCmd.Flags().StringVarP(&pqImportKeyfile, "keyfile", "k", "", "Private key filename")
 	mustMarkFlagRequired(pqImportCmd, "mnemonic")
+	mustMarkFlagRequired(pqImportCmd, "scheme")
 	mustMarkFlagRequired(pqImportCmd, "keyfile")
 
 	pqSignCmd.Flags().StringVarP(&pqSignKeyfile, "keyfile", "k", "", "Private key filename")
-	pqSignCmd.Flags().StringVarP(&pqSignMnemonic, "mnemonic", "m", "", "Private key mnemonic")
-	pqSignCmd.Flags().StringVarP(&pqSignScheme, "scheme", "S", pqSignScheme, "Post-quantum signature scheme: falcon-1024 (f1); used with --mnemonic")
+	pqSignCmd.Flags().StringVarP(&pqSignMnemonic, "mnemonic", "m", "", schemeMnemonicUsage)
+	pqSignCmd.Flags().StringVarP(&pqSignScheme, "scheme", "S", "", schemeUsage+"; required with --mnemonic, not allowed with --keyfile")
 	pqSignCmd.Flags().StringVarP(&pqSignTxfile, "txfile", "t", "", "Transaction input filename")
 	pqSignCmd.Flags().StringVarP(&pqSignOutfile, "outfile", "o", "", "Transaction output filename")
 	pqSignCmd.Flags().BoolVar(&pqSignOverwrite, "overwrite", false, "Overwrite any existing signature category")
@@ -175,8 +186,8 @@ func init() {
 	mustMarkFlagRequired(pqSignCmd, "outfile")
 
 	pqSignProgramCmd.Flags().StringVarP(&pqSignProgramKeyfile, "keyfile", "k", "", "Private key filename")
-	pqSignProgramCmd.Flags().StringVarP(&pqSignProgramMnemonic, "mnemonic", "m", "", "Private key mnemonic")
-	pqSignProgramCmd.Flags().StringVarP(&pqSignProgramScheme, "scheme", "S", pqSignProgramScheme, "Post-quantum signature scheme: falcon-1024 (f1); used with --mnemonic")
+	pqSignProgramCmd.Flags().StringVarP(&pqSignProgramMnemonic, "mnemonic", "m", "", schemeMnemonicUsage)
+	pqSignProgramCmd.Flags().StringVarP(&pqSignProgramScheme, "scheme", "S", "", schemeUsage+"; required with --mnemonic, not allowed with --keyfile")
 	pqSignProgramCmd.Flags().StringVarP(&pqSignProgramProgram, "program", "p", "", "Compiled LogicSig program input filename")
 	pqSignProgramCmd.Flags().StringVarP(&pqSignProgramOutfile, "outfile", "o", "", "LogicSig output filename")
 	mustMarkFlagRequired(pqSignProgramCmd, "program")
@@ -222,6 +233,9 @@ func runPQImport() error {
 }
 
 func runPQImportWithOptions(mnemonic, schemeName, keyfile string) error {
+	if schemeName == "" {
+		return errPQSchemeRequired
+	}
 	entropy, err := seedFromMnemonic(mnemonic)
 	if err != nil {
 		return fmt.Errorf("cannot recover PQ key entropy from mnemonic: %w", err)
@@ -315,19 +329,22 @@ func resolvePQSigningContext(keyfile, mnemonic, schemeName string) (pqSigningCon
 	case keyfile != "" && mnemonic != "":
 		return pqSigningContext{}, errors.New("cannot specify both --keyfile and --mnemonic")
 	case mnemonic != "":
+		if schemeName == "" {
+			return pqSigningContext{}, errPQSchemeRequired
+		}
 		entropy, seedErr := seedFromMnemonic(mnemonic)
 		if seedErr != nil {
 			return pqSigningContext{}, fmt.Errorf("cannot recover PQ key entropy from mnemonic: %w", seedErr)
 		}
-		scheme := protocol.PQSchemeFalcon1024
-		if schemeName != "" {
-			scheme, err = parsePQScheme(schemeName)
-			if err != nil {
-				return pqSigningContext{}, err
-			}
+		scheme, parseErr := parsePQScheme(schemeName)
+		if parseErr != nil {
+			return pqSigningContext{}, parseErr
 		}
 		signing, err = derivePQSigningMaterialFromEntropy(scheme, entropy)
 	case keyfile != "":
+		if schemeName != "" {
+			return pqSigningContext{}, errPQSchemeWithKeyfile
+		}
 		signing, err = readPQSigningMaterial(keyfile)
 	default:
 		return pqSigningContext{}, errors.New("must specify --keyfile or --mnemonic")

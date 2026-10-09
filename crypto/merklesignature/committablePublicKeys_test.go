@@ -35,7 +35,7 @@ func hashBytes(hash hash.Hash, m []byte) []byte {
 	return outhash
 }
 
-func calculateHashOnKeyLeaf(key *crypto.FalconSigner, round uint64) []byte {
+func calculateHashOnKeyLeaf(key *crypto.Falcon1024Signer, round uint64) []byte {
 	binaryRound := make([]byte, 8)
 	binary.LittleEndian.PutUint64(binaryRound, round)
 

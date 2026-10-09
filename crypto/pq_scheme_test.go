@@ -29,7 +29,15 @@ func TestLookupPQScheme(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	v, ok := LookupPQScheme(protocol.PQSchemeFalcon1024)
+	v, ok := LookupPQScheme(protocol.PQSchemeEd25519)
+	require.True(t, ok)
+	require.NotNil(t, v)
+
+	v, ok = LookupPQScheme(protocol.PQSchemeFalcon1024)
+	require.True(t, ok)
+	require.NotNil(t, v)
+
+	v, ok = LookupPQScheme(protocol.PQSchemeFalcon512)
 	require.True(t, ok)
 	require.NotNil(t, v)
 
@@ -37,40 +45,83 @@ func TestLookupPQScheme(t *testing.T) {
 	require.False(t, ok)
 }
 
-// TestPQBoundsCoverFalcon1024 guards against MaxPQ*Size being smaller than a
-// real Falcon-1024 public key or signature.
-func TestPQBoundsCoverFalcon1024(t *testing.T) {
+// TestPQBoundsCoverSchemes guards against MaxPQ*Size being smaller than a
+// real public key or signature from any supported scheme.
+func TestPQBoundsCoverSchemes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
+
+	msg := TestingHashable{data: []byte("pq bounds")}
+	edSigner := GenerateSignatureSecrets(Seed{1})
+	edSig := edSigner.Sign(msg)
+	require.LessOrEqual(t, uint64(len(edSigner.SignatureVerifier)), uint64(MaxPQPublicKeySize))
+	require.LessOrEqual(t, uint64(len(edSig)), uint64(MaxPQSignatureSize))
 
 	var seed FalconSeed
 	seed[0] = 1
-	signer, err := GenerateFalconSigner(seed)
+	signer1024, err := GenerateFalcon1024Signer(seed)
 	require.NoError(t, err)
-	require.LessOrEqual(t, uint64(len(signer.PublicKey)), uint64(MaxPQPublicKeySize))
+	require.LessOrEqual(t, uint64(len(signer1024.PublicKey)), uint64(MaxPQPublicKeySize))
+	signer512, err := GenerateFalcon512Signer(seed)
+	require.NoError(t, err)
+	require.LessOrEqual(t, uint64(len(signer512.PublicKey)), uint64(MaxPQPublicKeySize))
 
-	sig, err := signer.Sign(TestingHashable{data: []byte("pq bounds")})
+	sig1, err := signer1024.Sign(msg)
 	require.NoError(t, err)
-	require.LessOrEqual(t, uint64(len(sig)), uint64(MaxPQSignatureSize))
+	require.LessOrEqual(t, uint64(len(sig1)), uint64(MaxPQSignatureSize))
+	sig5, err := signer512.Sign(msg)
+	require.NoError(t, err)
+	require.LessOrEqual(t, uint64(len(sig5)), uint64(MaxPQSignatureSize))
 }
 
-// TestPQVerifierFalcon1024RoundTrip exercises the interface wiring; the
-// underlying verification is covered by the VerifyFalcon1024 tests.
-func TestPQVerifierFalcon1024RoundTrip(t *testing.T) {
+func TestPQVerifierEd25519(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	v, ok := LookupPQScheme(protocol.PQSchemeFalcon1024)
+	verifier, ok := LookupPQScheme(protocol.PQSchemeEd25519)
+	require.True(t, ok)
+
+	msg := TestingHashable{data: []byte("pq verifier round trip")}
+	signer := GenerateSignatureSecrets(Seed{1})
+	sig := signer.Sign(msg)
+
+	require.NoError(t, verifier.Verify(msg, signer.SignatureVerifier[:], sig[:]))
+	require.ErrorIs(t, verifier.Verify(msg, signer.SignatureVerifier[:len(signer.SignatureVerifier)-1], sig[:]), ErrSigInvalid)
+	require.ErrorIs(t, verifier.Verify(msg, signer.SignatureVerifier[:], sig[:len(sig)-1]), ErrSigInvalid)
+	require.ErrorIs(t, verifier.Verify(TestingHashable{data: []byte("wrong message")}, signer.SignatureVerifier[:], sig[:]), ErrSigInvalid)
+
+	otherSigner := GenerateSignatureSecrets(Seed{2})
+	require.ErrorIs(t, verifier.Verify(msg, otherSigner.SignatureVerifier[:], sig[:]), ErrSigInvalid)
+}
+
+// TestPQVerifierFalconRoundTrip exercises the interface wiring; the
+// underlying verification is covered by the VerifyFalcon1024/512 tests.
+func TestPQVerifierFalconRoundTrip(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	v1, ok := LookupPQScheme(protocol.PQSchemeFalcon1024)
+	require.True(t, ok)
+	v5, ok := LookupPQScheme(protocol.PQSchemeFalcon512)
 	require.True(t, ok)
 
 	msg := TestingHashable{data: []byte("pq verifier round trip")}
 	var seed FalconSeed
 	seed[0] = 1
-	signer, err := GenerateFalconSigner(seed)
+
+	signer1, err := GenerateFalcon1024Signer(seed)
 	require.NoError(t, err)
-	sig, err := signer.Sign(msg)
+	sig1, err := signer1.Sign(msg)
 	require.NoError(t, err)
 
-	require.NoError(t, v.Verify(msg, signer.PublicKey[:], sig))
-	require.Error(t, v.Verify(msg, signer.PublicKey[:], nil))
+	require.NoError(t, v1.Verify(msg, signer1.PublicKey[:], sig1))
+	require.Error(t, v1.Verify(msg, signer1.PublicKey[:], nil))
+
+	signer5, err := GenerateFalcon512Signer(seed)
+	require.NoError(t, err)
+	sig5, err := signer5.Sign(msg)
+	require.NoError(t, err)
+
+	require.NoError(t, v5.Verify(msg, signer5.PublicKey[:], sig5))
+	require.Error(t, v5.Verify(msg, signer5.PublicKey[:], nil))
 }

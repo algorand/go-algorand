@@ -763,6 +763,7 @@ func (wn *WebsocketNetwork) Start() error {
 		go wn.prioWeightRefresh()
 	}
 
+	wn.wg.Add(1)
 	go wn.postMessagesOfInterestThread()
 
 	wn.log.Infof("serving genesisID=%s on %#v with RandomID=%s", wn.genesisInfo.GenesisID, wn.PublicAddress(), wn.randomID)
@@ -2510,8 +2511,13 @@ func (wn *WebsocketNetwork) updateMessagesOfInterestEnc() {
 }
 
 func (wn *WebsocketNetwork) postMessagesOfInterestThread() {
+	defer wn.wg.Done()
 	for {
-		<-wn.messagesOfInterestRefresh
+		select {
+		case <-wn.messagesOfInterestRefresh:
+		case <-wn.ctx.Done():
+			return
+		}
 		// if we're not a relay, and not participating, we don't need txn pool
 		wantTXGossip := wn.nodeInfo.IsParticipating()
 		if wantTXGossip && (wn.wantTXGossip.Load() != wantTXGossipYes) {

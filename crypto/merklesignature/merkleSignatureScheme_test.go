@@ -198,7 +198,7 @@ func TestNonEmptyDisposableKeys(t *testing.T) {
 
 	signer := generateTestSigner(0, 100, 1, a)
 
-	s := crypto.FalconSigner{}
+	s := crypto.Falcon1024Signer{}
 	for i := uint64(1); i <= 100; i++ {
 		key := signer.GetKey(i)
 		a.NotNil(key)
@@ -207,7 +207,7 @@ func TestNonEmptyDisposableKeys(t *testing.T) {
 
 	signer = generateTestSigner(0, 100, 1, a)
 
-	s = crypto.FalconSigner{}
+	s = crypto.Falcon1024Signer{}
 	for i := uint64(1); i <= 100; i++ {
 		key := signer.GetKey(i)
 		a.NotNil(key)

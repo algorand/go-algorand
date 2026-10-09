@@ -356,6 +356,22 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	require.Equal(t, uint64(0), batchSigs)
 }
 
+func TestGetNumberOfBatchablePQSigs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	edJob := UnverifiedTxnSigJob{TxnGroup: []transactions.SignedTxn{makePQSignedTxnForScheme(t, 5, protocol.PQSchemeEd25519)}}
+	batchSigs, err := edJob.GetNumberOfBatchableItems()
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), batchSigs)
+
+	falconJob := UnverifiedTxnSigJob{TxnGroup: []transactions.SignedTxn{
+		makePQSignedTxnForScheme(t, 6, protocol.PQSchemeFalcon1024),
+	}}
+	batchSigs, err = falconJob.GetNumberOfBatchableItems()
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), batchSigs)
+}
+
 // TestStreamToBatchPoolShutdown tests what happens when the exec pool shuts down
 func TestStreamToBatchPoolShutdown(t *testing.T) { //nolint:paralleltest // Not parallel because it depends on the default logger
 	partitiontest.PartitionTest(t)
@@ -1113,4 +1129,44 @@ func TestProcessBatchSkippedGroupDoesNotMisattributeSigs(t *testing.T) {
 			require.NoError(t, results["good-last"], "good-last should verify")
 		})
 	}
+}
+
+func TestProcessBatchEd25519PQSigAttribution(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	_, regular, _, _ := generateTestObjects(1, 1, 0, 0)
+	goodEd := makePQSignedTxnForScheme(t, 7, protocol.PQSchemeEd25519)
+	badEd := makePQSignedTxnForScheme(t, 8, protocol.PQSchemeEd25519)
+	badEd.PQsig.Signature = bytes.Clone(badEd.PQsig.Signature)
+	badEd.PQsig.Signature[0] ^= 1
+
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	resultChan := make(chan *VerificationResult, 3)
+	droppedChan := make(chan *UnverifiedTxnSigJob, 3)
+	tbp := &txnSigBatchProcessor{
+		TxnGroupBatchSigVerifier: TxnGroupBatchSigVerifier{
+			cache:  MakeVerifiedTransactionCache(1000),
+			nbw:    MakeNewBlockWatcher(blkHdr),
+			ledger: &DummyLedgerForSignature{},
+		},
+		resultChan:  resultChan,
+		droppedChan: droppedChan,
+	}
+	// The failing group sits between two good ones, so a leak in either
+	// direction would show.
+	tbp.ProcessBatch([]execpool.InputJob{
+		&UnverifiedTxnSigJob{TxnGroup: regular, BacklogMessage: "regular"},
+		&UnverifiedTxnSigJob{TxnGroup: []transactions.SignedTxn{badEd}, BacklogMessage: "bad-ed"},
+		&UnverifiedTxnSigJob{TxnGroup: []transactions.SignedTxn{goodEd}, BacklogMessage: "good-ed"},
+	})
+
+	require.Empty(t, droppedChan)
+	results := make(map[string]error, 3)
+	for i := 0; i < 3; i++ {
+		result := <-resultChan
+		results[result.BacklogMessage.(string)] = result.Err
+	}
+	require.NoError(t, results["regular"])
+	require.NoError(t, results["good-ed"])
+	require.ErrorIs(t, results["bad-ed"], crypto.ErrBatchHasFailedSigs)
 }

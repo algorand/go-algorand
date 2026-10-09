@@ -309,8 +309,16 @@ func (s *serviceImpl) Start() error {
 
 // Close shuts down the P2P service
 func (s *serviceImpl) Close() error {
+	// stop receiving Connected/Disconnected callbacks: StopNotify blocks until
+	// any in-flight notification has returned.
 	s.host.Network().StopNotify(s.streams)
-	return s.host.Close()
+	// closing the host closes all connections and streams, which unblocks any
+	// stream I/O in progress in the stream handlers.
+	err := s.host.Close()
+	// wait (bounded) for the handler goroutines spawned by streamManager to finish
+	// so that nothing logs or touches state after Close returns.
+	s.streams.close()
+	return err
 }
 
 // ID returns the peer.ID for self
@@ -355,9 +363,10 @@ func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) bool {
 				for _, conn := range conns {
 					if conn.Stat().Direction == network.DirOutbound {
 						s.host.ConnManager().Protect(peerInfo.ID, cnmgrTag)
-						go s.streams.handleConnected(conn)
-						numOutgoingConns++
-						break
+						if s.streams.goHandleConnected(conn) {
+							numOutgoingConns++
+							break
+						}
 					}
 				}
 			}
