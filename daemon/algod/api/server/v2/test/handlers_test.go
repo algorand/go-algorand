@@ -19,6 +19,7 @@ package test
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -3217,4 +3218,363 @@ func TestGetConfigEndpoint(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &responseConfig))
 
 	require.Equal(t, handler.Node.Config(), responseConfig)
+}
+
+func TestSimulateTransactionStateOverrides(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// prepare node and handler
+	opts := testEnvOptions{
+		numAccounts:     5,
+		numTransactions: 1,
+		offlineAccounts: true,
+		minMoneyAtStart: 999_998,
+		maxMoneyAtStart: 999_999,
+	}
+	mockLedger, roots, _, _, releasefunc := testingenvWithOptions(t, opts)
+	defer releasefunc()
+	dummyShutdownChan := make(chan struct{})
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
+	handler := v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: dummyShutdownChan,
+	}
+
+	hdr, err := mockLedger.BlockHdr(mockLedger.Latest())
+	require.NoError(t, err)
+	txnInfo := simulationtesting.TxnInfo{LatestHeader: hdr}
+
+	sender := roots[0]
+	receiver := roots[1]
+	creator := roots[2]
+	// Well clear of IDs that may be assigned during simulation
+	appID := basics.AppIndex(1_000_000)
+	assetID := basics.AssetIndex(2_000_000)
+
+	approval, err := logic.AssembleString(`#pragma version 8
+byte "gkey"
+app_global_get
+int 42
+==
+assert
+txn Sender
+byte "lkey"
+app_local_get
+int 5
+==
+assert
+byte "bname"
+box_get
+assert
+byte "bvalue"
+==`)
+	require.NoError(t, err)
+	clearState, err := logic.AssembleString("#pragma version 8\nint 1")
+	require.NoError(t, err)
+
+	// The sender cannot afford this payment without a balance override
+	payTxn := txnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Address(),
+		Receiver: receiver.Address(),
+		Amount:   5_000_000,
+	})
+	// The app only exists because of the app override
+	appCallTxn := txnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        sender.Address(),
+		ApplicationID: appID,
+		Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("bname")}},
+	})
+	// The asset, and the sender's holding of it, only exist because of the asset overrides
+	axferTxn := txnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.AssetTransferTx,
+		Sender:        sender.Address(),
+		AssetReceiver: creator.Address(),
+		XferAsset:     assetID,
+		AssetAmount:   7,
+	})
+	txntest.Group(&payTxn, &appCallTxn, &axferTxn)
+	stxns := []transactions.SignedTxn{
+		payTxn.Txn().Sign(sender.Secrets()),
+		appCallTxn.Txn().Sign(sender.Secrets()),
+		axferTxn.Txn().Sign(sender.Secrets()),
+	}
+
+	validOverrides := func() *model.SimulateStateOverrides {
+		return &model.SimulateStateOverrides{
+			Accounts: &[]model.SimulateAccountOverride{
+				{
+					Address: sender.Address().String(),
+					Balance: omitEmpty(uint64(10_000_000)),
+					// Not rekeyed, as the sender signs
+					AuthAddr:          omitEmpty(basics.Address{}.String()),
+					Status:            omitEmpty("Offline"),
+					IncentiveEligible: omitEmpty(true),
+					Assets:            &[]model.SimulateAssetHoldingOverride{{AssetID: assetID, Amount: omitEmpty(uint64(10))}},
+					Apps: &[]model.SimulateAppLocalStateOverride{{
+						AppID: appID,
+						KeyValue: &model.TealKeyValueStore{{
+							Key:   base64.StdEncoding.EncodeToString([]byte("lkey")),
+							Value: model.TealValue{Type: uint64(basics.TealUintType), Uint: 5},
+						}},
+					}},
+				},
+			},
+			Assets: &[]model.SimulateAssetOverride{{
+				Id:           assetID,
+				Creator:      omitEmpty(creator.Address().String()),
+				Total:        omitEmpty(uint64(100)),
+				UnitName:     omitEmpty("UNIT"),
+				NameB64:      &[]byte{0xff, 0xfe},
+				MetadataHash: &[]byte{31: 1},
+				Manager:      omitEmpty(creator.Address().String()),
+			}},
+			Apps: &[]model.SimulateAppOverride{{
+				Id:                appID,
+				Creator:           omitEmpty(creator.Address().String()),
+				ApprovalProgram:   &approval.Program,
+				ClearStateProgram: &clearState.Program,
+				GlobalStateSchema: &model.ApplicationStateSchema{NumUint: 1},
+				LocalStateSchema:  &model.ApplicationStateSchema{NumUint: 1},
+				GlobalState: &model.TealKeyValueStore{{
+					Key:   base64.StdEncoding.EncodeToString([]byte("gkey")),
+					Value: model.TealValue{Type: uint64(basics.TealUintType), Uint: 42},
+				}},
+				Boxes: &[]model.SimulateBoxOverride{{Name: []byte("bname"), Value: []byte("bvalue")}},
+			}},
+			Blocks: &[]model.SimulateBlockOverride{{
+				Round:          hdr.Round,
+				Timestamp:      omitEmpty(int64(1_700_000_000)),
+				Seed:           &[]byte{31: 1},
+				Proposer:       omitEmpty(creator.Address().String()),
+				FeeSink:        omitEmpty(hdr.FeeSink.String()),
+				FeesCollected:  omitEmpty(uint64(1)),
+				Bonus:          omitEmpty(uint64(2)),
+				ProposerPayout: omitEmpty(uint64(3)),
+			}},
+		}
+	}
+
+	simulate := func(t *testing.T, overrides *model.SimulateStateOverrides, encode func(any) []byte) (int, v2.PreEncodedSimulateResponse, string) {
+		request := v2.PreEncodedSimulateRequest{
+			TxnGroups:      []v2.PreEncodedSimulateRequestTransactionGroup{{Txns: stxns}},
+			StateOverrides: overrides,
+		}
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(encode(&request)))
+		rec := httptest.NewRecorder()
+		c := echo.New().NewContext(req, rec)
+
+		msgpackFormat := model.SimulateTransactionParamsFormatMsgpack
+		err := handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: &msgpackFormat})
+		require.NoError(t, err)
+
+		var response v2.PreEncodedSimulateResponse
+		if rec.Code == http.StatusOK {
+			err = protocol.DecodeReflect(rec.Body.Bytes(), &response)
+			require.NoError(t, err)
+		}
+		return rec.Code, response, rec.Body.String()
+	}
+
+	encodings := []struct {
+		name   string
+		encode func(any) []byte
+	}{
+		{"msgpack", protocol.EncodeReflect},
+		{"json", protocol.EncodeJSONStrict},
+	}
+
+	for _, encoding := range encodings {
+		t.Run(encoding.name, func(t *testing.T) { //nolint:paralleltest // Uses shared testing env
+			t.Run("without overrides", func(t *testing.T) { //nolint:paralleltest // Uses shared testing env
+				code, response, body := simulate(t, nil, encoding.encode)
+				require.Equal(t, http.StatusOK, code, body)
+				require.Len(t, response.TxnGroups, 1)
+				require.NotNil(t, response.TxnGroups[0].FailureMessage)
+				require.Contains(t, *response.TxnGroups[0].FailureMessage, "overspend")
+			})
+
+			t.Run("with overrides", func(t *testing.T) { //nolint:paralleltest // Uses shared testing env
+				code, response, body := simulate(t, validOverrides(), encoding.encode)
+				require.Equal(t, http.StatusOK, code, body)
+				require.Len(t, response.TxnGroups, 1)
+				require.Nil(t, response.TxnGroups[0].FailureMessage)
+				require.Nil(t, response.TxnGroups[0].FailedAt)
+			})
+
+			invalid := []struct {
+				name     string
+				modify   func(*model.SimulateStateOverrides)
+				expected string
+			}{
+				{
+					name: "bad address",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*o.Accounts)[0].Address = "not an address"
+					},
+					expected: "account address",
+				},
+				{
+					name: "bad status",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*o.Accounts)[0].Status = omitEmpty("Asleep")
+					},
+					expected: "unknown account status",
+				},
+				{
+					name: "duplicate account",
+					modify: func(o *model.SimulateStateOverrides) {
+						*o.Accounts = append(*o.Accounts, (*o.Accounts)[0])
+					},
+					expected: "duplicate account",
+				},
+				{
+					name: "duplicate app",
+					modify: func(o *model.SimulateStateOverrides) {
+						*o.Apps = append(*o.Apps, (*o.Apps)[0])
+					},
+					expected: "duplicate app",
+				},
+				{
+					name: "bad global state key",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*(*o.Apps)[0].GlobalState)[0].Key = "not base64!"
+					},
+					expected: "global state key",
+				},
+				{
+					name: "duplicate box",
+					modify: func(o *model.SimulateStateOverrides) {
+						boxes := (*o.Apps)[0].Boxes
+						*boxes = append(*boxes, (*boxes)[0])
+					},
+					expected: "duplicate box",
+				},
+				{
+					name: "duplicate asset",
+					modify: func(o *model.SimulateStateOverrides) {
+						*o.Assets = append(*o.Assets, (*o.Assets)[0])
+					},
+					expected: "duplicate asset 2000000",
+				},
+				{
+					name: "duplicate asset holding",
+					modify: func(o *model.SimulateStateOverrides) {
+						holdings := (*o.Accounts)[0].Assets
+						*holdings = append(*holdings, (*holdings)[0])
+					},
+					expected: "duplicate asset 2000000",
+				},
+				{
+					name: "asset unit name and unit name b64",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*o.Assets)[0].UnitNameB64 = &[]byte{1}
+					},
+					expected: "unit-name and unit-name-b64 cannot both be set",
+				},
+				{
+					name: "short metadata hash",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*o.Assets)[0].MetadataHash = &[]byte{1}
+					},
+					expected: "metadata hash must be 32 bytes",
+				},
+				{
+					name: "bad asset manager",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*o.Assets)[0].Manager = omitEmpty("not an address")
+					},
+					expected: "manager",
+				},
+				{
+					name: "duplicate local state app",
+					modify: func(o *model.SimulateStateOverrides) {
+						apps := (*o.Accounts)[0].Apps
+						*apps = append(*apps, (*apps)[0])
+					},
+					expected: "duplicate app 1000000",
+				},
+				{
+					name: "bad local state key",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*(*(*o.Accounts)[0].Apps)[0].KeyValue)[0].Key = "not base64!"
+					},
+					expected: "local state key",
+				},
+				{
+					name: "duplicate deleted local state key",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*(*o.Accounts)[0].Apps)[0].DeleteKeyValue = &[][]byte{[]byte("k"), []byte("k")}
+					},
+					expected: "local state has duplicate deleted key",
+				},
+				{
+					name: "duplicate block",
+					modify: func(o *model.SimulateStateOverrides) {
+						*o.Blocks = append(*o.Blocks, (*o.Blocks)[0])
+					},
+					expected: "duplicate block",
+				},
+				{
+					name: "short seed",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*o.Blocks)[0].Seed = &[]byte{1}
+					},
+					expected: "seed must be 32 bytes",
+				},
+				{
+					name: "bad proposer",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*o.Blocks)[0].Proposer = omitEmpty("not an address")
+					},
+					expected: "proposer",
+				},
+				{
+					// Rejected by the simulator rather than during conversion
+					name: "future block",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*o.Blocks)[0].Round = hdr.Round + 1
+					},
+					expected: "after the start round",
+				},
+				{
+					// Rejected by the simulator rather than during conversion
+					name: "opt out and modify local state",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*(*o.Accounts)[0].Apps)[0].OptOut = omitEmpty(true)
+					},
+					expected: "cannot be both modified and opted out",
+				},
+				{
+					// Rejected by the simulator rather than during conversion
+					name: "new asset without creator",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*o.Assets)[0].Creator = nil
+					},
+					expected: "creator is required",
+				},
+				{
+					// Rejected by the simulator rather than during conversion
+					name: "new app without creator",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*o.Apps)[0].Creator = nil
+					},
+					expected: "creator is required",
+				},
+			}
+			for _, tc := range invalid {
+				t.Run(tc.name, func(t *testing.T) { //nolint:paralleltest // Uses shared testing env
+					overrides := validOverrides()
+					tc.modify(overrides)
+					code, _, body := simulate(t, overrides, encoding.encode)
+					require.Equal(t, http.StatusBadRequest, code, body)
+					require.Contains(t, body, "invalid state override")
+					require.Contains(t, body, tc.expected)
+				})
+			}
+		})
+	}
 }

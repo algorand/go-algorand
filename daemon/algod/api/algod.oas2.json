@@ -3310,6 +3310,422 @@
         "fix-signers": {
           "description": "If true, signers for transactions that are missing signatures will be fixed during evaluation.",
           "type": "boolean"
+        },
+        "state-overrides": {
+          "$ref": "#/definitions/SimulateStateOverrides"
+        }
+      }
+    },
+    "SimulateStateOverrides": {
+      "description": "Modifications to ledger state that are applied before simulation begins. Overrides are only visible to the simulation and are never persisted.",
+      "type": "object",
+      "properties": {
+        "accounts": {
+          "description": "Account state overrides. Each address may appear at most once.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulateAccountOverride"
+          }
+        },
+        "apps": {
+          "description": "Application state overrides. Each application ID may appear at most once.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulateAppOverride"
+          }
+        },
+        "assets": {
+          "description": "Asset state overrides. Each asset ID may appear at most once.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulateAssetOverride"
+          }
+        },
+        "blocks": {
+          "description": "Block header overrides. Each round may appear at most once.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulateBlockOverride"
+          }
+        }
+      }
+    },
+    "SimulateBlockOverride": {
+      "description": "Modifications to the header of a block at or before the round that simulation starts from. Omitted fields are left unchanged. Overridden headers are visible to the block opcode. The header of the round that simulation starts from is the previous header of the simulated block, so its overrides also affect that block: global LatestTimestamp is its timestamp, the simulated block's timestamp is no earlier than it, the simulated block's bonus is derived from its bonus, and fees are paid to its fee sink.",
+      "type": "object",
+      "required": ["round"],
+      "properties": {
+        "round": {
+          "description": "The round of the block to override. It must be at or before the round that simulation starts from.",
+          "type": "integer",
+          "x-go-type": "basics.Round"
+        },
+        "timestamp": {
+          "description": "If set, replaces the block's timestamp, in seconds since the epoch. It must not be negative.",
+          "type": "integer",
+          "format": "int64"
+        },
+        "seed": {
+          "description": "If set, replaces the block's 32 byte seed.",
+          "type": "string",
+          "format": "byte"
+        },
+        "proposer": {
+          "description": "If set, replaces the block's proposer.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
+        "fee-sink": {
+          "description": "If set, replaces the block's fee sink.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
+        "fees-collected": {
+          "description": "If set, replaces the fees collected in the block, in microAlgos.",
+          "type": "integer",
+          "format": "uint64",
+          "x-algorand-format": "uint64"
+        },
+        "bonus": {
+          "description": "If set, replaces the block's bonus, in microAlgos.",
+          "type": "integer",
+          "format": "uint64",
+          "x-algorand-format": "uint64"
+        },
+        "proposer-payout": {
+          "description": "If set, replaces the amount paid to the block's proposer, in microAlgos.",
+          "type": "integer",
+          "format": "uint64",
+          "x-algorand-format": "uint64"
+        }
+      }
+    },
+    "SimulateAccountOverride": {
+      "description": "Modifications to a single account's state. Omitted fields are left unchanged. Pending rewards cannot be overridden.",
+      "type": "object",
+      "required": ["address"],
+      "properties": {
+        "address": {
+          "description": "The address of the account to override.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
+        "balance": {
+          "description": "If set, replaces the account's balance in microAlgos. Pending rewards are forfeited. If balance or any consensus participation field (status, participation keys and validity, incentive-eligible, last-proposed, last-heartbeat) is set, agreement treats the account as though it has been in its overridden state since the balance round, so its online stake and the online circulation reflect the override.",
+          "type": "integer",
+          "format": "uint64",
+          "x-algorand-format": "uint64"
+        },
+        "auth-addr": {
+          "description": "If set, replaces the address against which signing should be checked. The zero address means the account is not rekeyed.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
+        "status": {
+          "description": "If set, replaces the account's participation status, which is one of Offline, Online, or NotParticipating. The account's balance moves between the corresponding totals, and agreement uses the overridden status.",
+          "type": "string"
+        },
+        "vote-participation-key": {
+          "description": "If set, replaces the 32 byte root participation public key.",
+          "type": "string",
+          "format": "byte"
+        },
+        "selection-participation-key": {
+          "description": "If set, replaces the 32 byte selection public key.",
+          "type": "string",
+          "format": "byte"
+        },
+        "state-proof-key": {
+          "description": "If set, replaces the 64 byte root of the state proof key.",
+          "type": "string",
+          "format": "byte"
+        },
+        "vote-first-valid": {
+          "description": "If set, replaces the first round for which the participation key is valid.",
+          "type": "integer",
+          "x-go-type": "basics.Round"
+        },
+        "vote-last-valid": {
+          "description": "If set, replaces the last round for which the participation key is valid.",
+          "type": "integer",
+          "x-go-type": "basics.Round"
+        },
+        "vote-key-dilution": {
+          "description": "If set, replaces the number of subkeys in each batch of participation keys.",
+          "type": "integer",
+          "x-go-type": "uint64"
+        },
+        "incentive-eligible": {
+          "description": "If set, replaces whether the account can receive block incentives.",
+          "type": "boolean"
+        },
+        "last-proposed": {
+          "description": "If set, replaces the round in which the account last proposed a block.",
+          "type": "integer",
+          "x-go-type": "basics.Round"
+        },
+        "last-heartbeat": {
+          "description": "If set, replaces the round in which the account last sent a heartbeat.",
+          "type": "integer",
+          "x-go-type": "basics.Round"
+        },
+        "assets": {
+          "description": "Asset holding overrides. If the account is not opted in to an asset, it is opted in. Each asset ID may appear at most once.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulateAssetHoldingOverride"
+          }
+        },
+        "apps": {
+          "description": "Application local state overrides. If the account is not opted in to an application, it is opted in, unless the override opts it out. Each application ID may appear at most once.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulateAppLocalStateOverride"
+          }
+        }
+      }
+    },
+    "SimulateAppLocalStateOverride": {
+      "description": "Modifications to an account's local state for an application. Omitted fields are left unchanged. For a new opt-in, the schema defaults to the application's local-state-schema.",
+      "type": "object",
+      "required": ["app-id"],
+      "properties": {
+        "app-id": {
+          "description": "The ID of the application. It must exist, either on the ledger or by an application override.",
+          "type": "integer",
+          "x-go-type": "basics.AppIndex",
+          "x-go-name": "AppID"
+        },
+        "schema": {
+          "description": "If set, replaces the local state schema recorded when the account opted in, which determines how much local state the account may hold, and its minimum balance.",
+          "$ref": "#/definitions/ApplicationStateSchema"
+        },
+        "key-value": {
+          "description": "Local state entries to set, replacing any existing value for the same key. Other existing keys are left unchanged.",
+          "$ref": "#/definitions/TealKeyValueStore"
+        },
+        "delete-key-value": {
+          "description": "Local state keys to delete. Each key must exist and must not also be set in key-value.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "opt-out": {
+          "description": "If true, removes the account's local state. The account must be opted in, and no other field may be set.",
+          "type": "boolean"
+        }
+      }
+    },
+    "SimulateAssetHoldingOverride": {
+      "description": "Modifications to an account's holding of an asset. Omitted fields are left unchanged. For a new holding, they default to an amount of zero and the asset's default-frozen.",
+      "type": "object",
+      "required": ["asset-id"],
+      "properties": {
+        "asset-id": {
+          "description": "The ID of the asset. It must exist, either on the ledger or by an asset override.",
+          "type": "integer",
+          "x-go-type": "basics.AssetIndex",
+          "x-go-name": "AssetID"
+        },
+        "amount": {
+          "description": "If set, replaces the number of units held.",
+          "type": "integer",
+          "format": "uint64",
+          "x-algorand-format": "uint64"
+        },
+        "is-frozen": {
+          "description": "If set, replaces whether the holding is frozen.",
+          "type": "boolean"
+        }
+      }
+    },
+    "SimulateAssetOverride": {
+      "description": "Modifications to a single asset's params. If the asset does not exist, it is created, in which case creator is required, and the creator is opted in with a holding of the asset's total. Omitted fields are left unchanged. Holdings are not checked against the asset's total.",
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "description": "The ID of the asset to override. A new asset's ID must not be in the range of IDs that may be assigned to creatables made during simulation.",
+          "type": "integer",
+          "x-go-type": "basics.AssetIndex"
+        },
+        "creator": {
+          "description": "The asset's creator. Required when creating an asset. For an existing asset, it must be omitted or match the existing creator.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
+        "total": {
+          "description": "If set, replaces the total number of units of the asset.",
+          "type": "integer",
+          "format": "uint64",
+          "x-algorand-format": "uint64"
+        },
+        "decimals": {
+          "description": "If set, replaces the number of digits to use after the decimal point when displaying the asset.",
+          "type": "integer",
+          "x-go-type": "uint32"
+        },
+        "default-frozen": {
+          "description": "If set, replaces whether holdings of the asset are frozen by default.",
+          "type": "boolean"
+        },
+        "unit-name": {
+          "description": "If set, replaces the name of a unit of the asset. Use unit-name-b64 instead for a value that is not valid utf-8. At most one of unit-name and unit-name-b64 may be set.",
+          "type": "string"
+        },
+        "unit-name-b64": {
+          "description": "If set, replaces the name of a unit of the asset, base64 encoded.",
+          "type": "string",
+          "format": "byte"
+        },
+        "name": {
+          "description": "If set, replaces the name of the asset. Use name-b64 instead for a value that is not valid utf-8. At most one of name and name-b64 may be set.",
+          "type": "string"
+        },
+        "name-b64": {
+          "description": "If set, replaces the name of the asset, base64 encoded.",
+          "type": "string",
+          "format": "byte"
+        },
+        "url": {
+          "description": "If set, replaces the URL where more information about the asset can be retrieved. Use url-b64 instead for a value that is not valid utf-8. At most one of url and url-b64 may be set.",
+          "type": "string"
+        },
+        "url-b64": {
+          "description": "If set, replaces the URL where more information about the asset can be retrieved, base64 encoded.",
+          "type": "string",
+          "format": "byte"
+        },
+        "metadata-hash": {
+          "description": "If set, replaces the 32 byte commitment to the asset's metadata.",
+          "type": "string",
+          "format": "byte"
+        },
+        "manager": {
+          "description": "If set, replaces the address of the account used to manage the asset. The zero address means there is no manager.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
+        "reserve": {
+          "description": "If set, replaces the address of the account holding reserve units of the asset.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
+        "freeze": {
+          "description": "If set, replaces the address of the account used to freeze holdings of the asset. The zero address means freezing is not permitted.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
+        "clawback": {
+          "description": "If set, replaces the address of the account used to clawback holdings of the asset. The zero address means clawback is not permitted.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        }
+      }
+    },
+    "SimulateAppOverride": {
+      "description": "Modifications to a single application's state. If the application does not exist, it is created, in which case creator, approval-program, and clear-state-program are required. Omitted fields are left unchanged. Minimum balance requirements of affected accounts are updated, but their balances are not.",
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "description": "The ID of the application to override. A new application's ID must not be in the range of IDs that may be assigned to creatables made during simulation.",
+          "type": "integer",
+          "x-go-type": "basics.AppIndex"
+        },
+        "creator": {
+          "description": "The application's creator. Required when creating an application. For an existing application, it must be omitted or match the existing creator.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
+        "approval-program": {
+          "description": "If set, replaces the approval program.",
+          "type": "string",
+          "format": "byte",
+          "x-algorand-format": "TEALProgram"
+        },
+        "clear-state-program": {
+          "description": "If set, replaces the clear state program.",
+          "type": "string",
+          "format": "byte",
+          "x-algorand-format": "TEALProgram"
+        },
+        "global-state-schema": {
+          "description": "If set, replaces the global state schema.",
+          "$ref": "#/definitions/ApplicationStateSchema"
+        },
+        "local-state-schema": {
+          "description": "If set, replaces the local state schema. This only applies to accounts that opt in during simulation, or by an application local state override.",
+          "$ref": "#/definitions/ApplicationStateSchema"
+        },
+        "extra-program-pages": {
+          "description": "If set, replaces the number of extra program pages.",
+          "type": "integer",
+          "x-go-type": "uint32"
+        },
+        "version": {
+          "description": "If set, replaces the number of updates to the application programs.",
+          "type": "integer",
+          "x-go-type": "uint64"
+        },
+        "size-sponsor": {
+          "description": "If set, replaces the account responsible for extra pages and global state minimum balance. The zero address makes the creator responsible.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
+        "foreign-box-reads": {
+          "description": "If set, replaces whether any app may read this app's boxes.",
+          "type": "boolean"
+        },
+        "family-box-access": {
+          "description": "If set, replaces whether apps with the same creator may read and write this app's boxes.",
+          "type": "boolean"
+        },
+        "global-state": {
+          "description": "Global state entries to set, replacing any existing value for the same key. Other existing keys are left unchanged.",
+          "$ref": "#/definitions/TealKeyValueStore"
+        },
+        "delete-global-state": {
+          "description": "Global state keys to delete. Each key must exist and must not also be set in global-state.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "boxes": {
+          "description": "Boxes to create, or replace if they already exist. Other existing boxes are left unchanged.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulateBoxOverride"
+          }
+        },
+        "delete-boxes": {
+          "description": "Names of boxes to delete. Each box must exist and must not also be set in boxes.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "byte"
+          }
+        }
+      }
+    },
+    "SimulateBoxOverride": {
+      "description": "A box to create or replace during simulation.",
+      "type": "object",
+      "required": ["name", "value"],
+      "properties": {
+        "name": {
+          "description": "The box name, base64 encoded.",
+          "type": "string",
+          "format": "byte"
+        },
+        "value": {
+          "description": "The box value, base64 encoded.",
+          "type": "string",
+          "format": "byte"
         }
       }
     },
