@@ -1854,6 +1854,95 @@ int 1`,
 	})
 }
 
+func TestExtraFeesWithInner(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	sender := env.Accounts[0]
+	minFee := env.TxnInfo.CurrentProtocolParams().MinFee().Raw
+	futureAppID := basics.AppIndex(1002)
+
+	fund := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Addr,
+		Receiver: futureAppID.Address(),
+		Amount:   100_001,
+	})
+	appCall := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:   protocol.ApplicationCallTx,
+		Sender: sender.Addr,
+		ApprovalProgram: `#pragma version 6
+itxn_begin
+int pay
+itxn_field TypeEnum
+txn Sender
+itxn_field Receiver
+int 1
+itxn_field Amount
+int 0
+itxn_field Fee
+itxn_submit
+int 1`,
+		ClearStateProgram: `#pragma version 6
+int 1`,
+	})
+	txntest.Group(&fund, &appCall)
+	group := []transactions.SignedTxn{
+		fund.Txn().Sign(sender.Sk),
+		appCall.Txn().Sign(sender.Sk),
+	}
+
+	result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+		TxnGroups: [][]transactions.SignedTxn{group},
+	})
+	require.NoError(t, err)
+	require.Contains(t, result.TxnGroups[0].FailureMessage, "group fee 0.0A too small")
+
+	result, err = simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+		TxnGroups: [][]transactions.SignedTxn{group},
+		ExtraFees: minFee,
+	})
+	require.NoError(t, err)
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+	require.Equal(t, minFee, result.EvalOverrides.ExtraFees)
+	require.Equal(t, basics.MicroAlgos{Raw: 2 * minFee}, result.TxnGroups[0].GroupFeesPaid)
+	require.Len(t, result.TxnGroups[0].Txns[1].Txn.ApplyData.EvalDelta.InnerTxns, 1)
+	require.Zero(t, result.TxnGroups[0].Txns[1].Txn.ApplyData.EvalDelta.InnerTxns[0].Txn.Fee.Raw)
+}
+
+func TestExtraFeesCoverOuterFee(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	sender := env.Accounts[0]
+	minFee := env.TxnInfo.CurrentProtocolParams().MinFee().Raw
+	appCall := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:   protocol.ApplicationCallTx,
+		Sender: sender.Addr,
+		Fee:    0,
+		ApprovalProgram: `#pragma version 6
+int 1`,
+		ClearStateProgram: `#pragma version 6
+int 1`,
+	})
+	group := []transactions.SignedTxn{appCall.Txn().Sign(sender.Sk)}
+
+	result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+		TxnGroups: [][]transactions.SignedTxn{group},
+		ExtraFees: minFee,
+	})
+	require.NoError(t, err)
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+	require.Equal(t, minFee, result.EvalOverrides.ExtraFees)
+	require.Zero(t, result.TxnGroups[0].GroupFeesPaid.Raw)
+}
+
 func TestStartRound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
