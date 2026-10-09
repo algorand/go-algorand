@@ -143,8 +143,7 @@ func testAccountManagerKeys(t *testing.T, registry account.ParticipationRegistry
 		databaseFiles = append(databaseFiles, rootFilename)
 		databaseFiles = append(databaseFiles, partFilename)
 
-		// Not ephemeral to be backwards compatible with the test
-		acctManager.AddParticipation(part, false)
+		acctManager.AddParticipation(part.Participation)
 	}
 	if _, mocked := acctManager.Registry().(*mocks.MockParticipationRegistry); !mocked {
 		require.Len(t, acctManager.Keys(basics.Round(1)), numPartKeys, "incorrect number of keys, can happen if test crashes and leaves SQLite files")
