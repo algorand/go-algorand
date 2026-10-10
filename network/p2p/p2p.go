@@ -363,10 +363,13 @@ func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) bool {
 				for _, conn := range conns {
 					if conn.Stat().Direction == network.DirOutbound {
 						s.host.ConnManager().Protect(peerInfo.ID, cnmgrTag)
-						if s.streams.goHandleConnected(conn) {
-							numOutgoingConns++
-							break
+						if !s.streams.goHandleConnected(conn) {
+							// the service is shutting down: undo the protection and stop dialing
+							s.host.ConnManager().Unprotect(peerInfo.ID, cnmgrTag)
+							return numOutgoingConns > preExistingConns
 						}
+						numOutgoingConns++
+						break
 					}
 				}
 			}
