@@ -153,6 +153,24 @@ elif [ "${OS}" = "darwin" ]; then
     fi
 
     brew update
+    # Older GitHub Actions macOS runner images install openssl@1.1 and hand-link bin/openssl
+    # to it outside of `brew link` (so `brew unlink` won't remove it). That symlink
+    # blocks linking openssl@3 when it's pulled in as a dependency (e.g. by python3).
+    # Move it aside for the installs below; restore it afterwards if nothing took its
+    # place. Scoped to GitHub Actions so we don't touch developer machines.
+    openssl_link="$(brew --prefix)/bin/openssl"
+    openssl11_target=""
+    restore_openssl11_link() {
+        if [ -n "$openssl11_target" ] && [ ! -e "$openssl_link" ] && [ ! -L "$openssl_link" ]; then
+            ln -s "$openssl11_target" "$openssl_link"
+        fi
+    }
+    if [ "$GITHUB_ACTIONS" = "true" ] && [ -L "$openssl_link" ] &&
+        [[ "$(readlink "$openssl_link")" == *openssl@1.1* ]]; then
+        openssl11_target=$(readlink "$openssl_link")
+        trap restore_openssl11_link EXIT
+        rm "$openssl_link"
+    fi
     brew_version=$(brew --version | head -1 | cut -d' ' -f2)
     major_version=$(echo $brew_version | cut -d. -f1)
     minor_version=$(echo $brew_version | cut -d. -f2)
@@ -168,6 +186,10 @@ elif [ "${OS}" = "darwin" ]; then
             install_or_upgrade "$pkg"
         done
         lnav -i "$SCRIPTPATH/algorand_node_log.json"
+    fi
+    # If we removed the openssl@1.1 symlink and nothing took its place, restore it
+    if [ -n "$openssl11_target" ] && [ ! -e "$openssl_link" ] && [ ! -L "$openssl_link" ]; then
+        ln -s "$openssl11_target" "$openssl_link"
     fi
 elif [ "${OS}" = "windows" ]; then
     if ! $msys2 pacman -S --disable-download-timeout --noconfirm git automake autoconf m4 libtool make mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-python mingw-w64-ucrt-x86_64-jq unzip procps; then
