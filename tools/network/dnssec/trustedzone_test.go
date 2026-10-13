@@ -53,15 +53,21 @@ func TestTrustedZone(t *testing.T) {
 	rrSig[sig.KeyTag] = sig
 
 	tz := trustedZone{
-		name:  "com.",
-		zsk:   zsk,
-		ksk:   ksk,
-		rrSig: rrSig,
+		name:       "com.",
+		zsk:        zsk,
+		ksk:        ksk,
+		rrSig:      rrSig,
+		cacheUntil: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC),
 	}
 	tt, _ := time.Parse(time.RFC3339, "2020-02-12T00:00:00Z")
 	a.False(tz.isExpired(tt))
 	tt, _ = time.Parse(time.RFC3339, "2020-02-22T00:00:00Z")
 	a.True(tz.isExpired(tt))
+
+	// The TTL limit expires the zone even while its DNSKEY signature is valid.
+	tz.cacheUntil = time.Date(2020, 2, 15, 0, 0, 0, 0, time.UTC)
+	a.False(tz.isExpired(tz.cacheUntil.Add(-time.Second)))
+	a.True(tz.isExpired(tz.cacheUntil))
 
 	a.True(tz.checkKeys([]uint16{zk.KeyTag()}))
 	a.False(tz.checkKeys([]uint16{kk.KeyTag()}))
@@ -231,6 +237,25 @@ func TestMakeTrustedZoneIgnoresRSAMD5Key(t *testing.T) {
 	}
 	a.Equal(2, keyCount)
 	a.Len(tz.ksk, 1)
+}
+
+func TestMinTTL(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+
+	rrSet := []dns.RR{
+		&dns.DNSKEY{Hdr: dns.RR_Header{Ttl: 7200}},
+		&dns.DNSKEY{Hdr: dns.RR_Header{Ttl: 3600}},
+	}
+	rrSig := map[uint16]dns.RRSIG{1: {Hdr: dns.RR_Header{Ttl: 7200}, OrigTtl: 7200}}
+	a.Equal(uint32(3600), minTTL(rrSet, rrSig))
+
+	rrSig[2] = dns.RRSIG{Hdr: dns.RR_Header{Ttl: 600}, OrigTtl: 7200}
+	a.Equal(uint32(600), minTTL(rrSet, rrSig))
+
+	rrSig[3] = dns.RRSIG{Hdr: dns.RR_Header{Ttl: 7200}, OrigTtl: 300}
+	a.Equal(uint32(300), minTTL(rrSet, rrSig))
 }
 
 func TestVerifyRRSig(t *testing.T) {

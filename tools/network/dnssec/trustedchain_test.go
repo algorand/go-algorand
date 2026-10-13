@@ -528,6 +528,64 @@ func TestSameTagKeyRotation(t *testing.T) {
 	a.Equal([]dns.DNSKEY{*oldZSK}, tch.getDNSKeys("test.", keyTag))
 }
 
+// TestTrustChainTTL checks that cached zones are refreshed once their DNSKEY RRset TTL runs out.
+func TestTrustChainTTL(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+
+	r := &countingResolver{testResolver: makeEmptyTestResolver(), dnskeyQueries: make(map[string]int)}
+
+	rootKSK, rootKSKsk := getKey(".", dns.ZONE|dns.SEP)
+	rootZSK, rootZSKsk := getKey(".", dns.ZONE)
+	a.NoError(r.updateDSRecord(".", &[]dns.DS{*rootKSK.ToDS(dns.SHA256)}, time.Time{}))
+	a.NoError(r.updateDNSKeyRecord(".", rootKSK, rootKSKsk, time.Time{}))
+	a.NoError(r.updateDNSKeyRecord(".", rootZSK, rootZSKsk, time.Time{}))
+
+	testKSK, testKSKsk := getKey("test.", dns.ZONE|dns.SEP)
+	testZSK, testZSKsk := getKey("test.", dns.ZONE)
+	a.NoError(r.updateDSRecord("test.", &[]dns.DS{*testKSK.ToDS(dns.SHA256)}, time.Time{}))
+	a.NoError(r.updateDNSKeyRecord("test.", testKSK, testKSKsk, time.Time{}))
+	a.NoError(r.updateDNSKeyRecord("test.", testZSK, testZSKsk, time.Time{}))
+
+	tch := makeTrustChain(r)
+	refreshed, err := tch.ensure(context.Background(), "test.", []uint16{testZSK.KeyTag()})
+	a.NoError(err)
+	a.True(refreshed)
+	a.Equal(1, r.dnskeyQueries["test."])
+	a.WithinDuration(time.Now().Add(time.Duration(testZSK.Hdr.Ttl)*time.Second), tch.trustedZones["test."].cacheUntil, time.Minute)
+
+	// The cached zone is used while its TTL lasts.
+	refreshed, err = tch.ensure(context.Background(), "test.", []uint16{testZSK.KeyTag()})
+	a.NoError(err)
+	a.False(refreshed)
+	a.Equal(1, r.dnskeyQueries["test."])
+
+	// Once the TTL runs out, the zone is fetched again even though its DNSKEY signature is valid.
+	tz := tch.trustedZones["test."]
+	tz.cacheUntil = time.Now().Add(-time.Second)
+	tch.trustedZones["test."] = tz
+	refreshed, err = tch.ensure(context.Background(), "test.", []uint16{testZSK.KeyTag()})
+	a.NoError(err)
+	a.True(refreshed)
+	a.Equal(2, r.dnskeyQueries["test."])
+
+	// A zero TTL zone can be used by the call that fetched it, and is fetched again by the next one.
+	zeroKSK, zeroKSKsk := getKey("zero.test.", dns.ZONE|dns.SEP)
+	zeroZSK, zeroZSKsk := getKey("zero.test.", dns.ZONE)
+	zeroKSK.Hdr.Ttl = 0
+	zeroZSK.Hdr.Ttl = 0
+	a.NoError(r.updateDSRecord("zero.test.", &[]dns.DS{*zeroKSK.ToDS(dns.SHA256)}, time.Time{}))
+	a.NoError(r.updateDNSKeyRecord("zero.test.", zeroKSK, zeroKSKsk, time.Time{}))
+	a.NoError(r.updateDNSKeyRecord("zero.test.", zeroZSK, zeroZSKsk, time.Time{}))
+	for i := 1; i <= 2; i++ {
+		refreshed, err = tch.ensure(context.Background(), "zero.test.", []uint16{zeroZSK.KeyTag()})
+		a.NoError(err)
+		a.True(refreshed)
+		a.Equal(i, r.dnskeyQueries["zero.test."])
+	}
+}
+
 func TestQueryWrapper(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

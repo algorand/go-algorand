@@ -19,6 +19,7 @@ package dnssec
 import (
 	"context"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -27,11 +28,12 @@ import (
 )
 
 type trustedZone struct {
-	name  string
-	zsk   dnskeysByTag         // authenticated keys eligible to sign zone records
-	ksk   dnskeysByTag         // keys authenticated by a DS record or trust anchor
-	rrSig map[uint16]dns.RRSIG // DNSKEY RR signature(s), used for validity
-	dss   []dns.DS             // DS or root anchor authenticating this zone in DS format
+	name       string
+	zsk        dnskeysByTag         // authenticated keys eligible to sign zone records
+	ksk        dnskeysByTag         // keys authenticated by a DS record or trust anchor
+	rrSig      map[uint16]dns.RRSIG // DNSKEY RR signature(s), used for validity
+	dss        []dns.DS             // DS or root anchor authenticating this zone in DS format
+	cacheUntil time.Time            // TTL limit for caching the DNSKEY RRset
 }
 
 // DNSSEC key tags are checksums and are not unique, so every key with a given
@@ -47,6 +49,9 @@ func (keys dnskeysByTag) add(key dns.DNSKEY) {
 }
 
 func (tz *trustedZone) isExpired(t time.Time) bool {
+	if !t.Before(tz.cacheUntil) {
+		return true
+	}
 	for _, sig := range tz.rrSig {
 		if !sig.ValidityPeriod(t) {
 			return true
@@ -162,13 +167,28 @@ func makeTrustedZone(ctx context.Context, fqZoneName string, parent trustedZone,
 
 	// zone and keys are authenticated, create a new zone
 	tz = trustedZone{
-		name:  fqZoneName,
-		zsk:   zoneKeys,
-		ksk:   verifiedKSK,
-		rrSig: verifiedSig,
-		dss:   matchedDS,
+		name:       fqZoneName,
+		zsk:        zoneKeys,
+		ksk:        verifiedKSK,
+		rrSig:      verifiedSig,
+		dss:        matchedDS,
+		cacheUntil: t.Add(time.Duration(minTTL(rrSet, verifiedSig)) * time.Second),
 	}
 	return
+}
+
+// minTTL returns the TTL limit for caching an authenticated RRset: the minimum of the
+// RRset TTL, the RRSIG TTL and the RRSIG Original TTL (RFC 4035, Section 5.3.3).
+// Signature expiration is checked separately by isExpired.
+func minTTL(rrSet []dns.RR, rrSig map[uint16]dns.RRSIG) uint32 {
+	ttl := uint32(math.MaxUint32)
+	for _, rr := range rrSet {
+		ttl = min(ttl, rr.Header().Ttl)
+	}
+	for _, sig := range rrSig {
+		ttl = min(ttl, sig.Hdr.Ttl, sig.OrigTtl)
+	}
+	return ttl
 }
 
 // verifyRRSig takes an RRset, signatures, time, and candidate DNSKEYs.

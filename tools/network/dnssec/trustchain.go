@@ -89,7 +89,7 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 	// 1. no cached key in parent zone verifies newly obtained DS
 	// Explanation: DS is stored in parent and signed with one of its DNSKEYs. If no cached key verifies it then key rotation happened.
 	// Key tags are not unique, so the signing key may share a tag with a cached key.
-	// 2. DNSKEY signature (RRSIG) expired
+	// 2. DNSKEY signature (RRSIG) or TTL expired
 	// 3. no matching key in the last zone in cache
 	// Explanation: the server rotated keys and the cache does not have the key needed to authenticate the response.
 	//
@@ -135,7 +135,8 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 			t.trustedZones[zone] = tz
 			refreshedZones[zoneIdx] = true
 		}
-		if tz.isExpired(time.Now()) {
+		// A zone fetched by this call is current even if its TTL is zero or has just run out.
+		if !refreshedZones[zoneIdx] && tz.isExpired(time.Now()) {
 			// remove current and all child zones and restart with the same zone
 			t.removeSelfAndChildren(zone)
 			continue

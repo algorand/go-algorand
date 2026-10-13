@@ -243,6 +243,8 @@ func (r *testResolver) signWithValidity(rrset []dns.RR, signer string, keytag ui
 	default:
 		err = fmt.Errorf("unsupported private key type %T", sk)
 	}
+	// like a real zone, serve the RRSIG with the TTL of the RRset it covers
+	sig.Hdr.Ttl = sig.OrigTtl
 	return
 }
 
