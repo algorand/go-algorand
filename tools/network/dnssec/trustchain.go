@@ -168,7 +168,7 @@ func (t *trustChain) getDNSKeys(fqZoneName string, keyTag uint16) []dns.DNSKEY {
 // Authenticate verifies a given rrset and its signatures validity down to the trusted root.
 // Following steps are done:
 // 1. Ensure the trust chain is valid. This requires keys' signature check back to the root if not cached
-// 2. Check the signature using authenticated DNSKEY
+// 2. Check the signature validity period and verify it using an authenticated DNSKEY
 func (t *trustChain) Authenticate(ctx context.Context, rrSet []dns.RR, rrSig []dns.RRSIG) (err error) {
 	if len(rrSig) == 0 {
 		return fmt.Errorf("empty RRSIG")
@@ -184,8 +184,19 @@ func (t *trustChain) Authenticate(ctx context.Context, rrSet []dns.RR, rrSig []d
 
 	fqdn := dns.Fqdn(signer)
 
-	keytags := make([]uint16, 0, len(rrSig))
+	now := time.Now()
+	validSignatures := make([]dns.RRSIG, 0, len(rrSig))
 	for _, sig := range rrSig {
+		if sig.ValidityPeriod(now) {
+			validSignatures = append(validSignatures, sig)
+		}
+	}
+	if len(validSignatures) == 0 {
+		return fmt.Errorf("no currently valid RRSIG for %s", rrSig[0].Hdr.Name)
+	}
+
+	keytags := make([]uint16, 0, len(validSignatures))
+	for _, sig := range validSignatures {
 		keytags = append(keytags, sig.KeyTag)
 	}
 
@@ -197,7 +208,7 @@ func (t *trustChain) Authenticate(ctx context.Context, rrSet []dns.RR, rrSig []d
 	}
 
 	err = fmt.Errorf("no authenticated DNSKEY verifies the RRSet for %s", fqdn)
-	for _, sig := range rrSig {
+	for _, sig := range validSignatures {
 		// Get an already authenticated key for this zone.
 		keys := t.getDNSKeys(fqdn, sig.KeyTag)
 		for i := range keys {
