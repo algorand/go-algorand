@@ -198,6 +198,45 @@ func TestMakeTrustedZone(t *testing.T) {
 	a.False(cacheOutdated)
 	a.Empty(tzTest)
 }
+
+func TestMakeTrustedZoneIgnoresRSAMD5Key(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	r := makeEmptyTestResolver()
+
+	rootKSK, rootKSKsk := getKey(".", dns.ZONE|dns.SEP)
+	rootZSK, rootZSKsk := getKey(".", dns.ZONE)
+	a.NoError(r.updateDSRecord(".", &[]dns.DS{*rootKSK.ToDS(dns.SHA256)}, time.Time{}))
+	a.NoError(r.updateDNSKeyRecord(".", rootKSK, rootKSKsk, time.Time{}))
+	a.NoError(r.updateDNSKeyRecord(".", rootZSK, rootZSKsk, time.Time{}))
+
+	malformedKey := &dns.DNSKEY{
+		Hdr:       dns.RR_Header{Name: ".", Rrtype: dns.TypeDNSKEY, Class: dns.ClassINET},
+		Flags:     dns.ZONE,
+		Protocol:  3,
+		Algorithm: dns.RSAMD5,
+		PublicKey: "AQI=",
+	}
+	dnskeyRRSet := append(r.entries["."][dns.TypeDNSKEY].rr, malformedKey)
+	dnskeySig, err := r.sign(dnskeyRRSet, ".", rootKSK.KeyTag(), time.Time{}, rootKSKsk)
+	a.NoError(err)
+	r.entries["."][dns.TypeDNSKEY] = rrRec{rr: dnskeyRRSet, sig: []dns.RRSIG{dnskeySig}}
+
+	tz, cacheOutdated, err := makeTrustedZone(context.Background(), ".", trustedZone{}, r, time.Now())
+	a.NoError(err)
+	a.False(cacheOutdated)
+	keyCount := 0
+	for _, keys := range tz.zsk {
+		keyCount += len(keys)
+		for _, key := range keys {
+			a.NotEqual(uint8(dns.RSAMD5), key.Algorithm)
+		}
+	}
+	a.Equal(2, keyCount)
+	a.Len(tz.ksk, 1)
+}
+
 func TestVerifyRRSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

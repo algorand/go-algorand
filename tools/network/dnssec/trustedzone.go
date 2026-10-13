@@ -149,6 +149,11 @@ func makeTrustedZone(ctx context.Context, fqZoneName string, parent trustedZone,
 	for _, rr := range rrSet {
 		switch obj := rr.(type) {
 		case *dns.DNSKEY:
+			// RSAMD5 is not allowed for DNSSEC validation. Reject it before KeyTag,
+			// which can panic on malformed RSAMD5 public keys in miekg/dns v1.
+			if obj.Algorithm == dns.RSAMD5 {
+				continue
+			}
 			if obj.Flags&dns.ZONE != 0 && obj.Flags&dns.REVOKE == 0 {
 				// Collect all non-revoked zone keys. Validators must not use the SEP flag
 				// to decide which signatures a key may verify (RFC 4034, Section 2.1.1).
