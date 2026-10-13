@@ -175,6 +175,7 @@ func (t *trustChain) Authenticate(ctx context.Context, rrSet []dns.RR, rrSig []d
 	}
 
 	signer := rrSig[0].SignerName
+	owner := rrSig[0].Hdr.Name
 	// sanity check: ensure all RRSIG contain the same signer, it must be the parent zone
 	for i := 1; i < len(rrSig); i++ {
 		if signer != rrSig[i].SignerName {
@@ -192,7 +193,7 @@ func (t *trustChain) Authenticate(ctx context.Context, rrSet []dns.RR, rrSig []d
 		}
 	}
 	if len(validSignatures) == 0 {
-		return fmt.Errorf("no currently valid RRSIG for %s", rrSig[0].Hdr.Name)
+		return fmt.Errorf("no currently valid RRSIG for %s", owner)
 	}
 
 	keytags := make([]uint16, 0, len(validSignatures))
