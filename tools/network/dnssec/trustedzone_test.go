@@ -337,6 +337,22 @@ func TestMatchKSKDigest(t *testing.T) {
 	matchedDS, verifiedKSK = matchKSKDigest([]dns.DS{unsupportedDS, matchingDS}, ksk)
 	a.Equal([]dns.DNSKEY{ksks[0]}, verifiedKSK[ksks[0].KeyTag()])
 	a.Equal([]dns.DS{matchingDS}, matchedDS)
+
+	// A DS whose algorithm differs from the DNSKEY algorithm does not match,
+	// even when its digest does.
+	a.Equal(uint8(dns.RSASHA256), ksks[0].Algorithm)
+	for _, alg := range []uint8{dns.ECDSAP256SHA256, 255} {
+		mismatchedDS := matchingDS
+		mismatchedDS.Algorithm = alg
+		matchedDS, verifiedKSK = matchKSKDigest([]dns.DS{mismatchedDS}, ksk)
+		a.Empty(verifiedKSK)
+		a.Empty(matchedDS)
+
+		// A mismatched algorithm must not prevent a later valid DS from matching.
+		matchedDS, verifiedKSK = matchKSKDigest([]dns.DS{mismatchedDS, matchingDS}, ksk)
+		a.Equal([]dns.DNSKEY{ksks[0]}, verifiedKSK[ksks[0].KeyTag()])
+		a.Equal([]dns.DS{matchingDS}, matchedDS)
+	}
 }
 
 func sameTagKey(t *testing.T, key dns.DNSKEY) dns.DNSKEY {

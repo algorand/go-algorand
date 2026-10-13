@@ -213,6 +213,10 @@ func matchKSKDigest(dss []dns.DS, keys dnskeysByTag) ([]dns.DS, dnskeysByTag) {
 
 	for _, ds := range dss {
 		for _, key := range keys[ds.KeyTag] {
+			// The DS algorithm must match the DNSKEY algorithm (RFC 4035, Section 5.2).
+			if ds.Algorithm != key.Algorithm {
+				continue
+			}
 			keyDS := key.ToDS(ds.DigestType)
 			if keyDS == nil {
 				continue
