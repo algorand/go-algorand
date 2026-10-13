@@ -64,6 +64,7 @@ const (
 //   - add its config.ConsensusParams.PQSchemeEnabled case and PQSchemeFeeContribution,
 //   - add the signing/private-key ops in cmd/algokey,
 //   - add it to basics_testing.PQTestSchemes,
+//   - add its verify_txn_sig cost to verifyTxnSigCosts in data/transactions/logic,
 //   - implement PQBatchPreparer if the scheme is batch-verified,
 //   - grow MaxPQPublicKeySize/MaxPQSignatureSize if its public key or signature is larger.
 func LookupPQScheme(s protocol.PQScheme) (PQVerifier, bool) {

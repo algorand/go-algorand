@@ -1735,7 +1735,7 @@ func (cx *EvalContext) step() error {
 	// though Cost() tries to exit fast. Use BenchmarkUintMath to test changes.
 	opcost := deets.FullCost.compute(cx.Stack)
 	if opcost <= 0 {
-		opcost = deets.Cost(cx.program, cx.pc, cx.Stack)
+		opcost = deets.Cost(cx, cx.Stack)
 		if opcost <= 0 {
 			return fmt.Errorf("%s returned 0 cost", spec.Name)
 		}
@@ -1861,7 +1861,13 @@ func (cx *EvalContext) checkStep() (cost int, err error) {
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
 		return 0, fmt.Errorf("program ends without immediate value(s)")
 	}
-	cost = deets.Cost(cx.program, cx.pc, blankStack)
+	// A dynamic cost depends on run-time state, so it has no static value. Such
+	// opcodes postdate the enforcement of static costs, so any positive cost
+	// will do.
+	cost = 1
+	if deets.dynamicCost == nil {
+		cost = deets.Cost(cx, blankStack)
+	}
 	if cost <= 0 {
 		return 0, fmt.Errorf("%s reported non-positive cost", spec.Name)
 	}

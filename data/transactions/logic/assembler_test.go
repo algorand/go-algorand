@@ -446,6 +446,12 @@ dup; dup
 falcon_verify FalconDet512
 `
 
+const verifyTxnSigNonsense = `
+pushbytes 0xabcd
+txn Sender
+verify_txn_sig
+`
+
 const sumhashNonsense = `
 pushbytes 0x0123
 sumhash512
@@ -486,8 +492,9 @@ const v13Extras = sha512Nonsense + poseidon2Nonsense + foreignBoxNonsense
 const v13Nonsense = v12Nonsense + v13Extras
 
 // sumhash512 is experimental, held back to v14 while v13 is released. v14 also
-// substitutes falcon_verify's configurable form for the bare one.
-const v14Nonsense = v11Nonsense + fvConfigNonsense + v13Extras + sumhashNonsense
+// substitutes falcon_verify's configurable form for the bare one, and adds
+// verify_txn_sig.
+const v14Nonsense = v11Nonsense + fvConfigNonsense + v13Extras + sumhashNonsense + verifyTxnSigNonsense
 
 const foreignBoxNonsense = `
 pushint 1
@@ -530,6 +537,7 @@ const fvCompiled = "8002abcd494985"
 const v12Compiled = v11Compiled + fvCompiled
 
 const sumhashCompiled = "8002012386"
+const verifyTxnSigCompiled = "8002abcd3100e8"
 const sha512Compiled = "8002012387"
 const poseidon2Compiled = "802011223344556677889900aabbccddeeff11223344556677889900aabbccddeeffe700"
 const foreignBoxCompiled = "8101760bd401d402d403d404d405d406d407d408d409"
@@ -552,7 +560,7 @@ var v13PreFvCompiled = strings.TrimSuffix(v13BaseCompiled, fvCompiled)
 // v14 adds no encoding changes over v13, so its base is v13's program with the
 // experimental sumhash512 opcode (held back from the v13 release) appended.
 var v14Compiled = v13PreFvCompiled + fvConfigCompiled +
-	sha512Compiled + poseidon2Compiled + foreignBoxCompiled + sumhashCompiled
+	sha512Compiled + poseidon2Compiled + foreignBoxCompiled + sumhashCompiled + verifyTxnSigCompiled
 
 var nonsense = map[uint64]string{
 	1:  v1Nonsense,

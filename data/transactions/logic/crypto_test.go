@@ -35,7 +35,9 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/secp256k1"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -1199,4 +1201,280 @@ pop
 int 1`
 		benchmarkEcdsa(b, source, Secp256k1)
 	})
+}
+
+// enablePQSchemes turns on every PQ scheme, which the logic test protos
+// otherwise leave disabled.
+func enablePQSchemes(ep *EvalParams) *EvalParams {
+	ep.Proto.EnablePQSchemeFalcon1024 = true
+	ep.Proto.EnablePQSchemeFalcon512 = true
+	ep.Proto.EnablePQSchemeEd25519 = true
+	return ep
+}
+
+// verifyTxnSigTxn is a transaction for verify_txn_sig tests to sign.
+func verifyTxnSigTxn(sender basics.Address) transactions.Transaction {
+	var txn transactions.Transaction
+	txn.Type = protocol.ApplicationCallTx
+	txn.Sender = sender
+	txn.ApplicationID = 888
+	txn.Fee = basics.MicroAlgos{Raw: 1000}
+	txn.FirstValid = 100
+	txn.LastValid = 200
+	txn.ApplicationArgs = [][]byte{[]byte("hello")}
+	return txn
+}
+
+// TestVerifyTxnSig confirms that verify_txn_sig accepts a signature over the
+// current transaction's bytes to sign by the given address, and rejects it once
+// the transaction or address changes, in both modes and for each scheme
+// (including every scheme a pqsig envelope can carry).
+func TestVerifyTxnSig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	type tcase struct {
+		name string
+		addr basics.Address
+		sig  func(transactions.Transaction) []byte
+	}
+
+	var cases []tcase
+	for i, pq := range basics_testing.PQTestSchemes {
+		acct := basics_testing.MakePQTestAccount(t, byte(i+1), pq.Scheme)
+		cases = append(cases, tcase{
+			name: "pqsig/" + pq.Name,
+			addr: acct.Address,
+			sig: func(txn transactions.Transaction) []byte {
+				sig, err := acct.Signer.Sign(txn)
+				require.NoError(t, err)
+				return protocol.Encode(&transactions.PQSig{
+					Scheme:    acct.Scheme,
+					Salt:      acct.Salt,
+					PublicKey: acct.PublicKey,
+					Signature: sig,
+				})
+			},
+		})
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			txn := verifyTxnSigTxn(tc.addr)
+			altered := txn
+			altered.Fee = basics.MicroAlgos{Raw: 1001}
+
+			src := fmt.Sprintf("byte 0x%x; byte 0x%x; verify_txn_sig",
+				tc.sig(txn), tc.addr[:])
+			ops := testProg(t, src, verifyTxnSigVersion)
+
+			// LogicSig mode
+			stxn := transactions.SignedTxn{Txn: txn}
+			testLogicBytes(t, ops.Program, enablePQSchemes(defaultSigParams(stxn)))
+			stxn.Txn = altered
+			testLogicBytes(t, ops.Program, enablePQSchemes(defaultSigParams(stxn)), "REJECT")
+
+			// App mode, with extra app calls in the group to pool enough
+			// budget. testAppFull (unlike testAppBytes) does not reset the
+			// pool down to a single app's budget.
+			pad := transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.ApplicationCallTx}}
+			stxn.Txn = txn
+			testAppFull(t, ops.Program, 0, txn.ApplicationID,
+				enablePQSchemes(defaultAppParams(stxn, pad, pad)))
+			stxn.Txn = altered
+			testAppFull(t, ops.Program, 0, altered.ApplicationID,
+				enablePQSchemes(defaultAppParams(stxn, pad, pad)), "REJECT")
+
+			// A valid signature over the txn, claimed for another address, fails.
+			other := tc.addr
+			other[0] ^= 0x01
+			src = fmt.Sprintf("byte 0x%x; byte 0x%x; verify_txn_sig",
+				tc.sig(txn), other[:])
+			stxn.Txn = txn
+			testLogicBytes(t, testProg(t, src, verifyTxnSigVersion).Program,
+				enablePQSchemes(defaultSigParams(stxn)), "REJECT")
+
+			// Salt is part of the address binding, not the signed message.
+			var envelope transactions.PQSig
+			require.NoError(t, protocol.Decode(tc.sig(txn), &envelope))
+			envelope.Salt ^= 0x01
+			src = fmt.Sprintf("byte 0x%x; byte 0x%x; verify_txn_sig",
+				protocol.Encode(&envelope), tc.addr[:])
+			testLogicBytes(t, testProg(t, src, verifyTxnSigVersion).Program,
+				enablePQSchemes(defaultSigParams(stxn)), "REJECT")
+		})
+	}
+}
+
+// TestVerifyTxnSigErrors confirms the assembly and runtime checks of
+// verify_txn_sig's arguments.
+func TestVerifyTxnSigErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testProg(t, "arg 0; arg 1; verify_txn_sig pqsig", verifyTxnSigVersion,
+		exp(1, "verify_txn_sig expects 0 immediate arguments"))
+	testProg(t, "arg 0; arg 1; verify_txn_sig", verifyTxnSigVersion-1,
+		exp(1, "verify_txn_sig opcode was introduced in v14"))
+	// A known-length address of the wrong size is caught by the assembler.
+	testProg(t, "arg 0; byte 0x1234; verify_txn_sig", verifyTxnSigVersion,
+		exp(1, "...wanted type address got [2]byte"))
+
+	pq := testProg(t, "arg 0; arg 1; verify_txn_sig", verifyTxnSigVersion)
+
+	var stxn transactions.SignedTxn
+	stxn.Lsig.Args = [][]byte{make([]byte, 64), make([]byte, 31)}
+	testLogicBytes(t, pq.Program, defaultSigParams(stxn), "invalid address size 31 != 32")
+
+	// A pqsig envelope that does not decode, or decodes with trailing bytes, fails.
+	stxn.Lsig.Args = [][]byte{{0x01, 0x02}, make([]byte, 32)}
+	testLogicBytes(t, pq.Program, enablePQSchemes(defaultSigParams(stxn)), "invalid pqsig")
+
+	acct := basics_testing.MakePQTestAccount(t, 1, protocol.PQSchemeFalcon1024)
+	txn := verifyTxnSigTxn(acct.Address)
+	sig, err := acct.Signer.Sign(txn)
+	require.NoError(t, err)
+	envelope := protocol.Encode(&transactions.PQSig{
+		Scheme: acct.Scheme, Salt: acct.Salt, PublicKey: acct.PublicKey, Signature: sig,
+	})
+	stxn = transactions.SignedTxn{Txn: txn}
+	stxn.Lsig.Args = [][]byte{append(slices.Clone(envelope), 0x00), acct.Address[:]}
+	testLogicBytes(t, pq.Program, enablePQSchemes(defaultSigParams(stxn)), "invalid pqsig: 1 trailing bytes")
+
+	// The well-formed envelope passes, but only while its scheme is enabled.
+	stxn.Lsig.Args = [][]byte{envelope, acct.Address[:]}
+	testLogicBytes(t, pq.Program, enablePQSchemes(defaultSigParams(stxn)))
+	testLogicBytes(t, pq.Program, defaultSigParams(stxn), "pq signature scheme not enabled")
+
+	// An empty envelope names no scheme.
+	stxn.Lsig.Args = [][]byte{protocol.Encode(&transactions.PQSig{}), acct.Address[:]}
+	testLogicBytes(t, pq.Program, enablePQSchemes(defaultSigParams(stxn)), "pq signature is blank")
+	// An envelope with an unknown scheme.
+	stxn.Lsig.Args = [][]byte{protocol.Encode(&transactions.PQSig{
+		Scheme: protocol.PQScheme{'z', 'z'}, Salt: acct.Salt, PublicKey: acct.PublicKey, Signature: sig,
+	}), acct.Address[:]}
+	testLogicBytes(t, pq.Program, enablePQSchemes(defaultSigParams(stxn)), "pq signature scheme not supported")
+	// An empty signature in a valid envelope just fails to verify.
+	stxn.Lsig.Args = [][]byte{protocol.Encode(&transactions.PQSig{
+		Scheme: acct.Scheme, Salt: acct.Salt, PublicKey: acct.PublicKey,
+	}), acct.Address[:]}
+	testLogicBytes(t, pq.Program, enablePQSchemes(defaultSigParams(stxn)), "REJECT")
+}
+
+// TestVerifyTxnSigCostsCoverSchemes confirms that verifyTxnSigCosts prices
+// exactly the schemes crypto.LookupPQScheme knows, by checking every possible
+// scheme tag.
+func TestVerifyTxnSigCostsCoverSchemes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for i := range 1 << 16 {
+		s := protocol.PQScheme{byte(i >> 8), byte(i)}
+		_, known := crypto.LookupPQScheme(s)
+		priced := slices.ContainsFunc(verifyTxnSigCosts, func(c pqSchemeCost) bool { return c.scheme == s })
+		require.Equal(t, known, priced, "scheme %s", s)
+	}
+}
+
+// TestVerifyTxnSigCost confirms that verify_txn_sig is charged by the scheme
+// its envelope names plus the length of the transaction's bytes to sign, that
+// every scheme has an explicit cost, and that an envelope the op would reject
+// costs 1.
+func TestVerifyTxnSigCost(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	base := map[protocol.PQScheme]int{
+		protocol.PQSchemeEd25519:    1900,
+		protocol.PQSchemeFalcon1024: 1700,
+		protocol.PQSchemeFalcon512:  850,
+	}
+	require.Len(t, verifyTxnSigCosts, len(basics_testing.PQTestSchemes))
+
+	spec := OpsByName[verifyTxnSigVersion]["verify_txn_sig"]
+	require.Equal(t, "ed=1900; f1=1700; f5=850; plus 4 per 32 bytes of the transaction's bytes to sign and the public key",
+		spec.DocCost(verifyTxnSigVersion))
+
+	// lengthCost is the charge for txn's bytes to sign, "TX" || msgpack(txn),
+	// and for the public key that is hashed to derive the address.
+	lengthCost := func(txn transactions.Transaction, pk []byte) int {
+		return 4 * basics.DivCeil(2+len(protocol.Encode(&txn))+len(pk), 32)
+	}
+	cost := func(txn transactions.Transaction, envelope []byte) int {
+		cx := &EvalContext{
+			EvalParams: enablePQSchemes(defaultSigParams()),
+			txn:        &transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: txn}},
+		}
+		return spec.OpDetails.Cost(cx, []stackValue{{Bytes: envelope}, {Bytes: make([]byte, 32)}})
+	}
+
+	for i, pq := range basics_testing.PQTestSchemes {
+		t.Run(pq.Name, func(t *testing.T) {
+			want, ok := base[pq.Scheme]
+			require.True(t, ok, "no expected verify_txn_sig cost for %s", pq.Name)
+			// Every scheme needs an entry; an unpriced scheme makes the op fail.
+			require.True(t, slices.ContainsFunc(verifyTxnSigCosts,
+				func(c pqSchemeCost) bool { return c.scheme == pq.Scheme }))
+
+			acct := basics_testing.MakePQTestAccount(t, byte(i+1), pq.Scheme)
+			txn := verifyTxnSigTxn(acct.Address)
+			envelope := func(txn transactions.Transaction) []byte {
+				sig, err := acct.Signer.Sign(txn)
+				require.NoError(t, err)
+				return protocol.Encode(&transactions.PQSig{
+					Scheme: acct.Scheme, Salt: acct.Salt, PublicKey: acct.PublicKey, Signature: sig,
+				})
+			}
+			pk := acct.PublicKey
+			require.Equal(t, want+lengthCost(txn, pk), cost(txn, envelope(txn)))
+
+			// A bigger transaction costs more, by its length alone.
+			big := txn
+			big.Note = make([]byte, 1024)
+			// The note's msgpack key and header may spill into one more chunk.
+			grown := lengthCost(big, pk) - lengthCost(txn, pk)
+			require.GreaterOrEqual(t, grown, 4*1024/32)
+			require.LessOrEqual(t, grown, 4*1024/32+4)
+			require.Equal(t, want+lengthCost(big, pk), cost(big, envelope(big)))
+
+			// The charge in a real evaluation matches, including the two pushes.
+			// autosalt is off so that no salting intcblock adds to the cost.
+			src := fmt.Sprintf("#pragma autosalt false\nbyte 0x%x; byte 0x%x; verify_txn_sig", envelope(big), acct.Address[:])
+			pad := transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.ApplicationCallTx}}
+			ep := enablePQSchemes(defaultAppParams(transactions.SignedTxn{Txn: big}, pad, pad))
+			before := *ep.PooledApplicationBudget
+			testAppFull(t, testProg(t, src, verifyTxnSigVersion).Program, 0, big.ApplicationID, ep)
+			require.Equal(t, 2+want+lengthCost(big, pk), before-*ep.PooledApplicationBudget)
+
+			// Two app calls pool 1400, which covers only the cheaper schemes.
+			src = fmt.Sprintf("byte 0x%x; byte 0x%x; verify_txn_sig", envelope(txn), acct.Address[:])
+			ep = enablePQSchemes(defaultAppParams(transactions.SignedTxn{Txn: txn}, pad))
+			var problems []string
+			if 2+want+lengthCost(txn, pk) > 2*700 {
+				problems = []string{"dynamic cost budget exceeded, executing verify_txn_sig"}
+			}
+			testAppFull(t, testProg(t, src, verifyTxnSigVersion).Program, 0, txn.ApplicationID, ep, problems...)
+		})
+	}
+
+	// An envelope the op would reject costs 1.
+	for _, envelope := range [][]byte{
+		nil,
+		{0x01, 0x02},
+		append(protocol.Encode(&transactions.PQSig{Scheme: protocol.PQSchemeFalcon512}), 0x00),
+		protocol.Encode(&transactions.PQSig{}),
+		protocol.Encode(&transactions.PQSig{Scheme: protocol.PQScheme{'z', 'z'}}),
+	} {
+		require.Equal(t, 1, cost(transactions.Transaction{}, envelope))
+	}
+	// So is a known scheme that is not enabled.
+	cx := &EvalContext{EvalParams: defaultSigParams(), txn: &transactions.SignedTxnWithAD{}}
+	require.Equal(t, 1, spec.OpDetails.Cost(cx, []stackValue{
+		{Bytes: protocol.Encode(&transactions.PQSig{Scheme: protocol.PQSchemeFalcon512})}, {Bytes: make([]byte, 32)}}))
+
+	// In a real evaluation, the op's error surfaces even when the budget could
+	// not have covered a valid envelope.
+	src := "#pragma autosalt false\nbyte 0x0102; byte 0x" + strings.Repeat("33", 32) + "; verify_txn_sig"
+	testAppBytes(t, testProg(t, src, verifyTxnSigVersion).Program,
+		enablePQSchemes(defaultAppParams()), "invalid pqsig")
 }

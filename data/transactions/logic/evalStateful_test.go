@@ -3386,6 +3386,9 @@ func TestReturnTypes(t *testing.T) {
 		// falcon_verify's required pubkey length comes from its configuration
 		// immediate, so it can't be inferred from the opcode's proto.
 		"falcon_verify": ": byte 0x3456; byte 0x3456; byte 0x" + strings.Repeat("33", 1793) + "; falcon_verify FalconDet1024",
+		// A known PQSig scheme with a mismatched address returns false.
+		"verify_txn_sig": fmt.Sprintf(": byte 0x%x; byte 0x%s; verify_txn_sig",
+			protocol.Encode(&transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024}), strings.Repeat("33", 32)),
 	}
 
 	/* Make sure the specialCmd tests the opcode in question */
@@ -3498,6 +3501,10 @@ func TestReturnTypes(t *testing.T) {
 				tx1 := tx0
 
 				sep, aep := defaultEvalParams(tx0, tx1)
+				if name == "verify_txn_sig" {
+					enablePQSchemes(sep)
+					enablePQSchemes(aep)
+				}
 				ledger := aep.Ledger.(*Ledger)
 
 				tx := tx0.Txn
