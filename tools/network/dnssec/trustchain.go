@@ -74,19 +74,21 @@ func (t *trustChain) removeSelfAndChildren(zone string) {
 // It also performs cache invalidation: if child-parent authentication fails because of keys mismatch
 // then parent zone is updated from the network and the process repeats.
 // For example, example.com. is represented by 3 trusted zones: [".", "com.", "example.com."]
-func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []uint16) error {
+// It reports whether fqZoneName was fetched from the network rather than taken from the cache.
+func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []uint16) (refreshed bool, err error) {
 	// get zones from . to fqZoneName
 	zones, err := splitToZones(fqZoneName)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	zoneIdx := 0
 	refreshedZones := make([]bool, len(zones)) // indexes of refreshed zones during the loop iterations
 	// the loop goes over zones and cached trust chain and creates new entries if needed.
 	// cache invalidation happens in these three cases:
-	// 1. no key in parent zone to check newly obtained DS
-	// Explanation: DS is stored in parent and signed with one of its DNSKEYs. If no such key is cached then key rotation happened.
+	// 1. no cached key in parent zone verifies newly obtained DS
+	// Explanation: DS is stored in parent and signed with one of its DNSKEYs. If no cached key verifies it then key rotation happened.
+	// Key tags are not unique, so the signing key may share a tag with a cached key.
 	// 2. DNSKEY signature (RRSIG) expired
 	// 3. no matching key in the last zone in cache
 	// Explanation: the server rotated keys and the cache does not have the key needed to authenticate the response.
@@ -104,7 +106,7 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 		tz, ok := t.trustedZones[zone]
 		if !ok {
 			if refreshedZones[zoneIdx] {
-				return fmt.Errorf("cache outdated for already updated zone %s", zone)
+				return false, fmt.Errorf("cache outdated for already updated zone %s", zone)
 			}
 			var cacheOutdated bool
 			parentZone := trustedZone{}
@@ -112,14 +114,18 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 				parentZone = t.trustedZones[zones[zoneIdx-1]]
 			}
 			if tz, cacheOutdated, err = makeTrustedZone(ctx, zone, parentZone, t.client, time.Now()); err != nil {
-				return err
+				return false, err
 			}
 			if cacheOutdated {
 				// Failed to validate DS using cached parent's keys
 				// restart loop from parent
 				zoneIdx--
 				if zoneIdx < 0 {
-					return fmt.Errorf("logic error: cache outdated for root zone")
+					return false, fmt.Errorf("logic error: cache outdated for root zone")
+				}
+				if refreshedZones[zoneIdx] {
+					// the parent keys are already fresh, so refreshing them again would not help
+					return false, fmt.Errorf("DS signature verification failed for %s", zone)
 				}
 				parentZoneName := zones[zoneIdx]
 				t.removeSelfAndChildren(parentZoneName)
@@ -138,7 +144,7 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 			// For the last zone, ensure that a key used to sign the requested RRset is present.
 			if !tz.checkKeys(keytags) {
 				if refreshedZones[zoneIdx] {
-					return fmt.Errorf("DNSKEY %v not found in zone %s", keytags, fqZoneName)
+					return false, fmt.Errorf("DNSKEY %v not found in zone %s", keytags, fqZoneName)
 				}
 				// seems like the latest zone
 				t.removeSelfAndChildren(zone)
@@ -151,7 +157,7 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 			break
 		}
 	}
-	return nil
+	return refreshedZones[len(zones)-1], nil
 }
 
 func (t *trustChain) getDNSKeys(fqZoneName string, keyTag uint16) []dns.DNSKEY {
@@ -165,10 +171,26 @@ func (t *trustChain) getDNSKeys(fqZoneName string, keyTag uint16) []dns.DNSKEY {
 	return append([]dns.DNSKEY(nil), trustedZone.zsk[keyTag]...)
 }
 
+// verifyRRSet verifies rrSet with an authenticated DNSKEY of the signer zone.
+func (t *trustChain) verifyRRSet(fqZoneName string, rrSet []dns.RR, rrSig []dns.RRSIG) (err error) {
+	err = fmt.Errorf("no authenticated DNSKEY verifies the RRSet for %s", fqZoneName)
+	for _, sig := range rrSig {
+		// Get an already authenticated key for this zone.
+		keys := t.getDNSKeys(fqZoneName, sig.KeyTag)
+		for i := range keys {
+			if err = sig.Verify(&keys[i], rrSet); err == nil {
+				return nil
+			}
+		}
+	}
+	return err
+}
+
 // Authenticate verifies a given rrset and its signatures validity down to the trusted root.
 // Following steps are done:
 // 1. Ensure the trust chain is valid. This requires keys' signature check back to the root if not cached
 // 2. Check the signature validity period and verify it using an authenticated DNSKEY
+// 3. If verification fails with cached keys, refresh the signer zone and verify once more
 func (t *trustChain) Authenticate(ctx context.Context, rrSet []dns.RR, rrSig []dns.RRSIG) (err error) {
 	if len(rrSig) == 0 {
 		return fmt.Errorf("empty RRSIG")
@@ -208,20 +230,22 @@ func (t *trustChain) Authenticate(ctx context.Context, rrSet []dns.RR, rrSig []d
 
 	// 1. ensure trust from the root to the signer
 	// 2. check the keys are in place
-	err = t.ensure(ctx, fqdn, keytags)
+	refreshed, err := t.ensure(ctx, fqdn, keytags)
 	if err != nil {
 		return err
 	}
-
-	err = fmt.Errorf("no authenticated DNSKEY verifies the RRSet for %s", fqdn)
-	for _, sig := range validSignatures {
-		// Get an already authenticated key for this zone.
-		keys := t.getDNSKeys(fqdn, sig.KeyTag)
-		for i := range keys {
-			if err = sig.Verify(&keys[i], rrSet); err == nil {
-				return nil
-			}
-		}
+	err = t.verifyRRSet(fqdn, rrSet, validSignatures)
+	if err == nil || refreshed {
+		return err
 	}
-	return err
+
+	// Key tags are not unique, so the cached DNSKEY RRset may hold an older key with
+	// the same tag as the signing key. Refresh the signer zone and verify once more.
+	t.mu.Lock()
+	t.removeSelfAndChildren(fqdn)
+	t.mu.Unlock()
+	if _, err = t.ensure(ctx, fqdn, keytags); err != nil {
+		return err
+	}
+	return t.verifyRRSet(fqdn, rrSet, validSignatures)
 }

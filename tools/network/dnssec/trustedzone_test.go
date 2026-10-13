@@ -84,23 +84,18 @@ func TestTrustedZone(t *testing.T) {
 	tt, _ = time.Parse(time.RFC3339, "2020-02-12T00:00:00Z")
 
 	rrsDS, rrsigsDS, _ := r.QueryRRSet(context.Background(), "com.", dns.TypeDS)
-	cacheOutdated, err := tzRoot.verifyDS(rrsDS, rrsigsDS, tt)
-	a.NoError(err)
-	a.False(cacheOutdated)
+	a.True(tzRoot.verifyDS(rrsDS, rrsigsDS, tt))
 
 	tzRoot.zsk = make(dnskeysByTag)
-	cacheOutdated, err = tzRoot.verifyDS(rrsDS, rrsigsDS, tt)
-	a.NoError(err)
-	a.True(cacheOutdated)
+	a.False(tzRoot.verifyDS(rrsDS, rrsigsDS, tt))
 
-	// modify copy ZSK and expect failure
+	// A cached key with the signer's key tag that does not verify the DS also fails,
+	// since a newer key may share the tag.
 	tzRoot.zsk = zskRoot
 	zk = zsks[0]
 	zk.PublicKey = ksks[0].PublicKey
 	tzRoot.zsk[zsks[0].KeyTag()] = []dns.DNSKEY{zk}
-	cacheOutdated, err = tzRoot.verifyDS(rrsDS, rrsigsDS, tt)
-	a.Error(err)
-	a.False(cacheOutdated)
+	a.False(tzRoot.verifyDS(rrsDS, rrsigsDS, tt))
 }
 
 func TestMakeTrustedZone(t *testing.T) {
@@ -151,10 +146,11 @@ func TestMakeTrustedZone(t *testing.T) {
 			break
 		}
 	}
+	// A cached parent key with the DS signer's tag that does not verify the DS means the
+	// parent's cached DNSKEY RRset may be outdated.
 	tzCom, cacheOutdated, err = makeTrustedZone(context.Background(), "com.", tzRoot, r, tt)
-	a.Error(err)
-	a.Contains(err.Error(), "DS signature verification failed")
-	a.False(cacheOutdated)
+	a.NoError(err)
+	a.True(cacheOutdated)
 	a.Empty(tzCom)
 
 	tzRoot.zsk = backup

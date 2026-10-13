@@ -19,7 +19,10 @@ package dnssec
 import (
 	"context"
 	"crypto"
+	"crypto/ed25519"
 	"crypto/rsa"
+	"encoding/base64"
+	"encoding/binary"
 	"fmt"
 	"net"
 	"strings"
@@ -230,8 +233,16 @@ func (r *testResolver) signWithValidity(rrset []dns.RR, signer string, keytag ui
 	sig.Expiration = uint32(expTime.Unix())
 	sig.KeyTag = keytag
 	sig.SignerName = signer
-	sig.Algorithm = dns.RSASHA256
-	err = sig.Sign(sk.(*rsa.PrivateKey), rrset)
+	switch k := sk.(type) {
+	case *rsa.PrivateKey:
+		sig.Algorithm = dns.RSASHA256
+		err = sig.Sign(k, rrset)
+	case ed25519.PrivateKey:
+		sig.Algorithm = dns.ED25519
+		err = sig.Sign(k, rrset)
+	default:
+		err = fmt.Errorf("unsupported private key type %T", sk)
+	}
 	return
 }
 
@@ -384,7 +395,11 @@ func (r *testResolver) updateDNSKeyRecord(zone string, key *dns.DNSKEY, sk crypt
 	for k, v := range r.entries {
 		if k != "." {
 			if z, err := getParentZone(k); err == nil && z == zone {
-				dsEntry := v[dns.TypeDS]
+				dsEntry, ok := v[dns.TypeDS]
+				if !ok {
+					// not a delegated zone, e.g. a www. record of this zone
+					continue
+				}
 				if sig, err = r.sign(dsEntry.rr, zone, key.KeyTag(), expTime, sk); err != nil {
 					return err
 				}
@@ -501,4 +516,29 @@ func getKey(zone string, flags uint16) (*dns.DNSKEY, crypto.PrivateKey) {
 	rootKSK.Algorithm = dns.RSASHA256
 	rootKSKsk, _ := rootKSK.Generate(1024)
 	return rootKSK, rootKSKsk
+}
+
+// getSameTagKeys returns two distinct Ed25519 keys for zone that share a key tag.
+// Key tags are 16-bit checksums, so a collision shows up after a few hundred keys.
+func getSameTagKeys(zone string, flags uint16) (keys [2]*dns.DNSKEY, sks [2]crypto.PrivateKey) {
+	keysByTag := make(map[uint16]*dns.DNSKEY)
+	sksByTag := make(map[uint16]ed25519.PrivateKey)
+	seed := make([]byte, ed25519.SeedSize)
+	for i := uint32(0); ; i++ {
+		binary.BigEndian.PutUint32(seed, i)
+		sk := ed25519.NewKeyFromSeed(seed)
+		key := &dns.DNSKEY{
+			Hdr:       dns.RR_Header{Name: zone, Rrtype: dns.TypeDNSKEY, Class: dns.ClassINET, Ttl: 86400},
+			Flags:     flags,
+			Protocol:  3,
+			Algorithm: dns.ED25519,
+			PublicKey: base64.StdEncoding.EncodeToString(sk.Public().(ed25519.PublicKey)),
+		}
+		keyTag := key.KeyTag()
+		if other, ok := keysByTag[keyTag]; ok {
+			return [2]*dns.DNSKEY{other, key}, [2]crypto.PrivateKey{sksByTag[keyTag], sk}
+		}
+		keysByTag[keyTag] = key
+		sksByTag[keyTag] = sk
+	}
 }

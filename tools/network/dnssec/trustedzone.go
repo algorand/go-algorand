@@ -65,29 +65,12 @@ func (tz *trustedZone) checkKeys(keytags []uint16) bool {
 	return false
 }
 
-// verifyDS checks a DS RRSIG using an authenticated key from this zone.
-// cacheOutdated indicates that this zone has no key that can verify the RRSIG.
-func (tz *trustedZone) verifyDS(rrSet []dns.RR, rrSig []dns.RRSIG, t time.Time) (cacheOutdated bool, err error) {
-	// parent zone's DNSKEY RRSET is cached but DS is just came from the network
-	// and might be signed by newer key
-	kt := make([]uint16, len(rrSig))
-	for i, sig := range rrSig {
-		kt[i] = sig.KeyTag
-	}
-	// so if no such keys in a cache return cache outdated that must force this zone update
-	if !tz.checkKeys(kt) {
-		cacheOutdated = true
-		return
-	}
-
-	// at least one signature must be valid
-	verifiedSig := verifyRRSig(rrSet, rrSig, t, tz.zsk)
-	if len(verifiedSig) == 0 {
-		requestedZone := (rrSig)[0].Hdr.Name
-		err = fmt.Errorf("DS signature verification failed for '%s'", requestedZone)
-	}
-
-	return
+// verifyDS reports whether an authenticated key from this zone verifies a DS RRSIG.
+// This zone's DNSKEY RRset is cached but the DS just came from the network, so a
+// failure can mean the DS is signed by a newer key, possibly one whose key tag
+// collides with a cached key. Callers treat a failure as an outdated cache.
+func (tz *trustedZone) verifyDS(rrSet []dns.RR, rrSig []dns.RRSIG, t time.Time) bool {
+	return len(verifyRRSig(rrSet, rrSig, t, tz.zsk)) > 0
 }
 
 func getParentDS(ctx context.Context, fqZoneName string, c Querier, parent trustedZone, t time.Time) (dss []dns.DS, cacheOutdated bool, err error) {
@@ -99,8 +82,8 @@ func getParentDS(ctx context.Context, fqZoneName string, c Querier, parent trust
 	}
 	// since a new zone is being created its DS is always fetched from the network
 	// but parent zone is cached and cache outdated error possbile
-	cacheOutdated, err = parent.verifyDS(rrSet, rrSig, t)
-	if err != nil || cacheOutdated {
+	if !parent.verifyDS(rrSet, rrSig, t) {
+		cacheOutdated = true
 		return
 	}
 	for _, rr := range rrSet {
@@ -117,7 +100,7 @@ func getParentDS(ctx context.Context, fqZoneName string, c Querier, parent trust
 // **parent** for DS verification using cached keys.
 // returns:
 // 1. newly created trustedZone in case of success
-// 2. cacheOutdated if cached parent does not have a key for DS validation
+// 2. cacheOutdated if no cached parent key verifies the DS
 // 3. error in all other cases
 //
 // Note 1: the function should never return cacheOutdated for the root zone
