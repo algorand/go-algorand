@@ -41,10 +41,14 @@ func TestTrustChainBasic(t *testing.T) {
 	tch.trustedZones["example.org."] = trustedZone{}
 	tch.trustedZones["com."] = trustedZone{}
 	tch.trustedZones["example.com."] = trustedZone{}
+	tch.trustedZones["www.example.com."] = trustedZone{}
+	tch.trustedZones["notexample.com."] = trustedZone{}
 	tch.removeSelfAndChildren("example.com.")
-	a.Equal(4, len(tch.trustedZones))
+	a.Equal(5, len(tch.trustedZones))
+	// zones that only share a string suffix are not children
+	a.Contains(tch.trustedZones, "notexample.com.")
 	tch.removeSelfAndChildren("org.")
-	a.Equal(2, len(tch.trustedZones))
+	a.Equal(3, len(tch.trustedZones))
 	tch.removeSelfAndChildren(".")
 	a.Equal(0, len(tch.trustedZones))
 }

@@ -19,7 +19,6 @@ package dnssec
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/miekg/dns"
@@ -64,7 +63,7 @@ func (qw QueryWrapper) GetRootAnchorDS() (dss []dns.DS, err error) {
 // must be called with the lock taken
 func (t *trustChain) removeSelfAndChildren(zone string) {
 	for k := range t.trustedZones {
-		if strings.HasSuffix(k, zone) {
+		if dns.IsSubDomain(zone, k) {
 			delete(t.trustedZones, k)
 		}
 	}
