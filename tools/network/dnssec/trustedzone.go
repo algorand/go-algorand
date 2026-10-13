@@ -19,6 +19,7 @@ package dnssec
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -39,10 +40,8 @@ type dnskeysByTag map[uint16][]dns.DNSKEY
 
 func (keys dnskeysByTag) add(key dns.DNSKEY) {
 	keyTag := key.KeyTag()
-	for _, candidate := range keys[keyTag] {
-		if candidate == key {
-			return
-		}
+	if slices.Contains(keys[keyTag], key) {
+		return
 	}
 	keys[keyTag] = append(keys[keyTag], key)
 }
