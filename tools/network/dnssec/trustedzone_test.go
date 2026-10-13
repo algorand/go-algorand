@@ -18,6 +18,7 @@ package dnssec
 
 import (
 	"context"
+	"maps"
 	"testing"
 	"time"
 
@@ -137,9 +138,7 @@ func TestMakeTrustedZone(t *testing.T) {
 
 	tzRoot.ksk = backup
 	backup = make(map[uint16]dns.DNSKEY, len(tzRoot.zsk))
-	for keyTag, key := range tzRoot.zsk {
-		backup[keyTag] = key
-	}
+	maps.Copy(backup, tzRoot.zsk)
 
 	_, dsSigs, queryErr := r.QueryRRSet(context.Background(), "com.", dns.TypeDS)
 	a.NoError(queryErr)
