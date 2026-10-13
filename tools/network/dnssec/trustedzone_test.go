@@ -252,6 +252,17 @@ func TestMatchKSKDigest(t *testing.T) {
 	a.Equal(1, len(verifiedKSK))
 	a.Equal(1, len(matchedDS))
 
+	// An unsupported digest type must not prevent a supported DS from matching.
+	unsupportedDS := dss[0]
+	unsupportedDS.DigestType = 0
+	matchedDS, verifiedKSK = matchKSKDigest([]dns.DS{unsupportedDS, dss[0]}, ksk)
+	a.Equal(1, len(verifiedKSK))
+	a.Equal([]dns.DS{dss[0]}, matchedDS)
+
+	matchedDS, verifiedKSK = matchKSKDigest([]dns.DS{unsupportedDS}, ksk)
+	a.Empty(verifiedKSK)
+	a.Empty(matchedDS)
+
 	// add a random key and ensure matches
 	ksk[zsks[0].KeyTag()] = zsks[0]
 	matchedDS, verifiedKSK = matchKSKDigest(dss, ksk)

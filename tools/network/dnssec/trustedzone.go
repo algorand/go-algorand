@@ -197,7 +197,11 @@ func matchKSKDigest(dss []dns.DS, ksk map[uint16]dns.DNSKEY) ([]dns.DS, map[uint
 
 	for _, ds := range dss {
 		if key, ok := ksk[ds.KeyTag]; ok {
-			keyDigest := strings.ToLower(key.ToDS(ds.DigestType).Digest)
+			keyDS := key.ToDS(ds.DigestType)
+			if keyDS == nil {
+				continue
+			}
+			keyDigest := strings.ToLower(keyDS.Digest)
 			if keyDigest == strings.ToLower(ds.Digest) {
 				verifiedKSK[ds.KeyTag] = key
 				matchedDS = append(matchedDS, ds)
