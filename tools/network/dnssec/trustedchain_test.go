@@ -443,11 +443,13 @@ func TestAuthenticate(t *testing.T) {
 type countingResolver struct {
 	*testResolver
 	dnskeyQueries map[string]int
+	dnskeyDelays  map[string]time.Duration
 }
 
 func (r *countingResolver) QueryRRSet(ctx context.Context, domain string, qtype uint16) ([]dns.RR, []dns.RRSIG, error) {
 	if qtype == dns.TypeDNSKEY {
 		r.dnskeyQueries[domain]++
+		time.Sleep(r.dnskeyDelays[domain])
 	}
 	return r.testResolver.QueryRRSet(ctx, domain, qtype)
 }
@@ -584,6 +586,17 @@ func TestTrustChainTTL(t *testing.T) {
 		a.True(refreshed)
 		a.Equal(i, r.dnskeyQueries["zero.test."])
 	}
+
+	// The DNSKEY signatures of a zone fetched by this call are checked again after the
+	// fetch, so a signature that expires while the response is in flight is rejected.
+	slowKSK, slowKSKsk := getKey("slow.test.", dns.ZONE|dns.SEP)
+	slowZSK, slowZSKsk := getKey("slow.test.", dns.ZONE)
+	a.NoError(r.updateDSRecord("slow.test.", &[]dns.DS{*slowKSK.ToDS(dns.SHA256)}, time.Time{}))
+	a.NoError(r.updateDNSKeyRecord("slow.test.", slowKSK, slowKSKsk, time.Time{}))
+	a.NoError(r.updateDNSKeyRecord("slow.test.", slowZSK, slowZSKsk, time.Now().Add(time.Second)))
+	r.dnskeyDelays = map[string]time.Duration{"slow.test.": 2 * time.Second}
+	_, err = tch.ensure(context.Background(), "slow.test.", []uint16{slowZSK.KeyTag()})
+	a.ErrorContains(err, "cache outdated for already updated zone slow.test.")
 }
 
 func TestQueryWrapper(t *testing.T) {

@@ -48,10 +48,13 @@ func (keys dnskeysByTag) add(key dns.DNSKEY) {
 	keys[keyTag] = append(keys[keyTag], key)
 }
 
+// ttlExpired reports whether the zone has been cached longer than its TTL allows.
+func (tz *trustedZone) ttlExpired(t time.Time) bool {
+	return !t.Before(tz.cacheUntil)
+}
+
+// isExpired reports whether a DNSKEY RRSIG of the zone is no longer valid.
 func (tz *trustedZone) isExpired(t time.Time) bool {
-	if !t.Before(tz.cacheUntil) {
-		return true
-	}
 	for _, sig := range tz.rrSig {
 		if !sig.ValidityPeriod(t) {
 			return true

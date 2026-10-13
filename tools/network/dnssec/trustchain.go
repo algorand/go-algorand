@@ -135,8 +135,10 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 			t.trustedZones[zone] = tz
 			refreshedZones[zoneIdx] = true
 		}
-		// A zone fetched by this call is current even if its TTL is zero or has just run out.
-		if !refreshedZones[zoneIdx] && tz.isExpired(time.Now()) {
+		// A zone fetched by this call stays usable for it even if its TTL is zero or has
+		// just run out, but its DNSKEY signatures must still be valid.
+		now := time.Now()
+		if tz.isExpired(now) || (!refreshedZones[zoneIdx] && tz.ttlExpired(now)) {
 			// remove current and all child zones and restart with the same zone
 			t.removeSelfAndChildren(zone)
 			continue

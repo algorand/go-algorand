@@ -64,10 +64,11 @@ func TestTrustedZone(t *testing.T) {
 	tt, _ = time.Parse(time.RFC3339, "2020-02-22T00:00:00Z")
 	a.True(tz.isExpired(tt))
 
-	// The TTL limit expires the zone even while its DNSKEY signature is valid.
+	// The TTL limit is reached independently of the DNSKEY signature validity.
 	tz.cacheUntil = time.Date(2020, 2, 15, 0, 0, 0, 0, time.UTC)
-	a.False(tz.isExpired(tz.cacheUntil.Add(-time.Second)))
-	a.True(tz.isExpired(tz.cacheUntil))
+	a.False(tz.ttlExpired(tz.cacheUntil.Add(-time.Second)))
+	a.True(tz.ttlExpired(tz.cacheUntil))
+	a.False(tz.isExpired(tz.cacheUntil))
 
 	a.True(tz.checkKeys([]uint16{zk.KeyTag()}))
 	a.False(tz.checkKeys([]uint16{kk.KeyTag()}))
