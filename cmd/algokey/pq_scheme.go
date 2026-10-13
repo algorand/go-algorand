@@ -22,6 +22,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -32,9 +33,8 @@ const (
 )
 
 // pqSchemeOps holds the signing-side, private-key operations for one PQ
-// scheme. The consensus-relevant scheme behavior (signature verification,
-// sizes) lives in crypto.LookupPQScheme, and fee policy in
-// config.ConsensusParams.PQSchemeFeeContribution.
+// scheme. The consensus-relevant scheme behavior (verification, enablement,
+// fees, sizes) lives in the scheme table in data/transactions.
 type pqSchemeOps interface {
 	deriveSigning(seed crypto.Digest) (pqSigningMaterial, error)
 	sign(privateKey []byte, message crypto.Hashable) ([]byte, error)
@@ -66,7 +66,7 @@ func parsePQScheme(value string) (protocol.PQScheme, error) {
 
 	var scheme protocol.PQScheme
 	if len(value) != len(scheme) {
-		return protocol.PQScheme{}, fmt.Errorf("%w: %q", crypto.ErrPQSchemeNotSupported, value)
+		return protocol.PQScheme{}, fmt.Errorf("%w: %q", transactions.ErrPQSchemeNotSupported, value)
 	}
 	copy(scheme[:], value)
 	return scheme, nil
@@ -96,7 +96,7 @@ func generatePQSigningMaterial(scheme protocol.PQScheme, rng crypto.RNG) (crypto
 func derivePQSigningMaterialFromEntropy(scheme protocol.PQScheme, entropy crypto.Seed) (pqSigningMaterial, error) {
 	ops, ok := pqSchemeOpsByScheme[scheme]
 	if !ok {
-		return pqSigningMaterial{}, fmt.Errorf("%w: %q", crypto.ErrPQSchemeNotSupported, scheme)
+		return pqSigningMaterial{}, fmt.Errorf("%w: %q", transactions.ErrPQSchemeNotSupported, scheme)
 	}
 
 	seed := derivePQKeySeed(scheme, entropy)

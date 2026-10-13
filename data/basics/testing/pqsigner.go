@@ -84,8 +84,7 @@ func (s ed25519Signer) SignBytes(data []byte) ([]byte, error) {
 	return sig[:], nil
 }
 func (s ed25519Signer) Verify(message crypto.Hashable, sig []byte) error {
-	verifier, _ := crypto.LookupPQScheme(protocol.PQSchemeEd25519)
-	return verifier.Verify(message, s.PublicKey(), sig)
+	return crypto.PQEd25519{}.Verify(message, s.PublicKey(), sig)
 }
 func (s ed25519Signer) VerifyBytes(data []byte, sig []byte) error {
 	if len(sig) != len(crypto.Signature{}) || !s.SignatureVerifier.VerifyBytes(data, crypto.Signature(sig)) {

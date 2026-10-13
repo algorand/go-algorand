@@ -6771,7 +6771,7 @@ func makePlaceholderPQSigForSimulation(t *testing.T, scheme protocol.PQScheme, s
 func pqPlaceholderFeeUsage(t *testing.T, proto config.ConsensusParams, scheme protocol.PQScheme) (basics.MicroAlgos, basics.Micros) {
 	t.Helper()
 
-	usage := basics.Micros(1e6) + proto.PQSchemeFeeContribution(scheme)
+	usage := basics.Micros(1e6) + transactions.PQSchemeFeeContribution(proto, scheme)
 	fee, _, overflow := proto.MinFee().FeeForUsage(usage, 1e6, 0)
 	require.False(t, overflow)
 	return fee, usage

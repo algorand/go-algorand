@@ -79,7 +79,7 @@ func makePQSigTestFixture(t *testing.T, firstSeedByte byte, scheme protocol.PQSc
 	require.NoError(t, err)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-	require.True(t, proto.PQSchemeEnabled(scheme))
+	require.True(t, PQSchemeEnabled(proto, scheme))
 
 	return pqSigTestFixture{
 		name:       schemeInfo.Name,
@@ -111,8 +111,8 @@ func TestPQDecodeBoundsFeedSignedTxnMaxSize(t *testing.T) {
 	expectedPQSigMaxSize := 1 +
 		4 + protocol.PQSchemeMaxSize() +
 		4 + basics.PQAddressSaltMaxSize() +
-		3 + msgp.BytesPrefixSize + crypto.MaxPQPublicKeySize +
-		4 + msgp.BytesPrefixSize + crypto.MaxPQSignatureSize
+		3 + msgp.BytesPrefixSize + maxPQPublicKeySize() +
+		4 + msgp.BytesPrefixSize + maxPQSignatureSize()
 	require.Equal(t, expectedPQSigMaxSize, PQSigMaxSize())
 
 	expectedLogicSigMaxSize := 1 +
@@ -214,13 +214,13 @@ func TestPQSigValidateEnvelope(t *testing.T) {
 			require.NoError(t, noSignature.ValidateEnvelope(fixture.proto, fixture.authorizer))
 
 			disabledProto := fixture.protoWithSchemeDisabled(t)
-			require.ErrorIs(t, fixture.pqSig.ValidateScheme(disabledProto), crypto.ErrPQSchemeNotEnabled)
-			require.ErrorIs(t, fixture.pqSig.ValidateEnvelope(disabledProto, fixture.authorizer), crypto.ErrPQSchemeNotEnabled)
+			require.ErrorIs(t, fixture.pqSig.ValidateScheme(disabledProto), ErrPQSchemeNotEnabled)
+			require.ErrorIs(t, fixture.pqSig.ValidateEnvelope(disabledProto, fixture.authorizer), ErrPQSchemeNotEnabled)
 
 			unknownScheme := fixture.pqSig
 			unknownScheme.Scheme = protocol.PQScheme{'x', '1'}
-			require.ErrorIs(t, unknownScheme.ValidateScheme(fixture.proto), crypto.ErrPQSchemeNotSupported)
-			require.ErrorIs(t, unknownScheme.ValidateEnvelope(fixture.proto, unknownScheme.Address()), crypto.ErrPQSchemeNotSupported)
+			require.ErrorIs(t, unknownScheme.ValidateScheme(fixture.proto), ErrPQSchemeNotSupported)
+			require.ErrorIs(t, unknownScheme.ValidateEnvelope(fixture.proto, unknownScheme.Address()), ErrPQSchemeNotSupported)
 
 			malformedPublicKey := fixture.pqSig
 			malformedPublicKey.PublicKey = malformedPublicKey.PublicKey[:len(malformedPublicKey.PublicKey)-1]
@@ -293,8 +293,8 @@ func TestPQSigBatchPrepMatchesVerifyEnvelopeErrors(t *testing.T) {
 		expected   error
 	}{
 		{"blank", PQSig{}, proto, authorizer, errPQSigBlank},
-		{"unsupported", unsupported, proto, authorizer, crypto.ErrPQSchemeNotSupported},
-		{"disabled", valid, disabledProto, authorizer, crypto.ErrPQSchemeNotEnabled},
+		{"unsupported", unsupported, proto, authorizer, ErrPQSchemeNotSupported},
+		{"disabled", valid, disabledProto, authorizer, ErrPQSchemeNotEnabled},
 		{"authorizer-mismatch", valid, proto, wrongAuthorizer, errPQSigAuthorizerMismatch},
 		{"empty-signature", emptySignature, proto, authorizer, errPQSigEmpty},
 	}
@@ -348,7 +348,7 @@ func TestPQSigVerifyChecksConsensusParams(t *testing.T) {
 			require.NoError(t, fixture.pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer))
 
 			disabledProto := fixture.protoWithSchemeDisabled(t)
-			require.ErrorIs(t, fixture.pqSig.Verify(disabledProto, fixture.txn, fixture.authorizer), crypto.ErrPQSchemeNotEnabled)
+			require.ErrorIs(t, fixture.pqSig.Verify(disabledProto, fixture.txn, fixture.authorizer), ErrPQSchemeNotEnabled)
 		})
 	}
 }
@@ -385,7 +385,7 @@ func TestPQSigVerifyRejectsUnsupportedScheme(t *testing.T) {
 			pqSig.Scheme = protocol.PQScheme{'x', '1'}
 			pqSig.Signature = []byte{1}
 
-			require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, pqSig.Address()), crypto.ErrPQSchemeNotSupported)
+			require.ErrorIs(t, pqSig.Verify(fixture.proto, fixture.txn, pqSig.Address()), ErrPQSchemeNotSupported)
 		})
 	}
 }

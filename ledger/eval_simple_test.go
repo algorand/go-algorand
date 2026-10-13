@@ -1458,8 +1458,8 @@ func TestPQRekeyedAddressAuthorization(t *testing.T) {
 			pqAcct := basics_testing.MakePQTestAccount(t, 0, tc.Scheme)
 
 			proto := config.Consensus[protocol.ConsensusFuture]
-			require.True(t, proto.PQSchemeEnabled(pqAcct.Scheme))
-			pqFee, _, overflow := proto.MinFee().FeeForUsage(basics.Micros(1e6)+proto.PQSchemeFeeContribution(pqAcct.Scheme), 1e6, 0)
+			require.True(t, transactions.PQSchemeEnabled(proto, pqAcct.Scheme))
+			pqFee, _, overflow := proto.MinFee().FeeForUsage(basics.Micros(1e6)+transactions.PQSchemeFeeContribution(proto, pqAcct.Scheme), 1e6, 0)
 			require.False(t, overflow)
 
 			genesisInitState.Accounts[pqAcct.Address] = basics.AccountData{
@@ -1552,7 +1552,7 @@ func TestPQChallengedAccountCanHeartbeatForZeroFee(t *testing.T) {
 			const keyDilution = 777
 			otss := crypto.GenerateOneTimeSignatureSecrets(1, 10)
 			pqAcct := basics_testing.MakePQTestAccount(t, 1, tc.Scheme)
-			require.True(t, proto.PQSchemeEnabled(pqAcct.Scheme))
+			require.True(t, transactions.PQSchemeEnabled(proto, pqAcct.Scheme))
 
 			genBalances, _, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
 				cfg.OnlineCount = 5
