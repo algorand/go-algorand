@@ -115,6 +115,10 @@ func (r *Resolver) lookup(ctx context.Context, name string, qt uint16) (rrSet []
 	if err != nil {
 		return
 	}
+	rrSet, rrSig, err = selectRRSet(name, qt, false, rrSet, rrSig)
+	if err != nil {
+		return nil, err
+	}
 	err = r.trustChain.Authenticate(ctx, rrSet, rrSig)
 	return
 }
@@ -128,42 +132,13 @@ func (r *Resolver) lookupCnameAware(ctx context.Context, name string, qt uint16)
 	if err != nil {
 		return
 	}
-
-	// As https://tools.ietf.org/html/rfc1034 section 3.6.2 says
-	// NS can return CNAME for A request if there are no A but CNAME
-	// in real world such A-response can also have second-level CNAME alias and A records with signatures
-	//
-	// so that we leave only CNAME RR matching to requested name to verify signature and return the filtered set
-	if qt == dns.TypeA || qt == dns.TypeAAAA {
-		newRRSig := make([]dns.RRSIG, 0, len(rrSig))
-		for _, sig := range rrSig {
-			if sig.Hdr.Name == name {
-				if sig.TypeCovered == dns.TypeCNAME || sig.TypeCovered == dns.TypeA || sig.TypeCovered == dns.TypeAAAA {
-					if len(newRRSig) == 0 {
-						newRRSig = append(newRRSig, sig)
-					} else if sig.TypeCovered == newRRSig[len(newRRSig)-1].TypeCovered {
-						newRRSig = append(newRRSig, sig)
-					}
-				}
-			}
-		}
-		if len(newRRSig) > 0 {
-			newRRSet := make([]dns.RR, 0, len(rrSet))
-			for _, rr := range rrSet {
-				if rr.Header().Name == name && rr.Header().Rrtype == newRRSig[0].TypeCovered {
-					newRRSet = append(newRRSet, rr)
-				}
-			}
-			if len(newRRSet) == 0 {
-				return nil, fmt.Errorf("no RR in A response mathing signature with type %d", newRRSig[0].TypeCovered)
-			}
-			if newRRSig[0].TypeCovered == dns.TypeCNAME && len(newRRSet) > 1 {
-				// RFC 1034 section 3.6.2 requires a single CNAME RR per name
-				return nil, fmt.Errorf("multiple CNAME RR detected")
-			}
-			rrSet = newRRSet
-			rrSig = newRRSig
-		}
+	rrSet, rrSig, err = selectRRSet(name, qt, true, rrSet, rrSig)
+	if err != nil {
+		return nil, err
+	}
+	if rrSet[0].Header().Rrtype == dns.TypeCNAME && len(rrSet) > 1 {
+		// RFC 1034 section 3.6.2 requires a single CNAME RR per name.
+		return nil, fmt.Errorf("multiple CNAME RR detected")
 	}
 	err = r.trustChain.Authenticate(ctx, rrSet, rrSig)
 	return

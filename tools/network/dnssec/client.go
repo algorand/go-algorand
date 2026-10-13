@@ -134,5 +134,56 @@ func (r *dnsClient) QueryRRSet(ctx context.Context, name string, qtype uint16) (
 	if len(rrSig) == 0 {
 		return nil, nil, fmt.Errorf("no signature in DNS response for %s", name)
 	}
-	return rrSet, rrSig, nil
+	return selectRRSet(name, qtype, qtype == dns.TypeA || qtype == dns.TypeAAAA, rrSet, rrSig)
+}
+
+// selectRRSet returns the signed RRset belonging to the queried name and type.
+// A and AAAA queries may instead return a CNAME at the queried name; its target
+// is resolved and authenticated by a separate query.
+func selectRRSet(name string, qtype uint16, allowCNAME bool, rrSet []dns.RR, rrSig []dns.RRSIG) ([]dns.RR, []dns.RRSIG, error) {
+	expectedName := dns.CanonicalName(name)
+	var selectedType uint16
+	selectedSigs := make([]dns.RRSIG, 0, len(rrSig))
+	for _, sig := range rrSig {
+		if sig.Hdr.Class != dns.ClassINET {
+			continue
+		}
+		if dns.CanonicalName(sig.Hdr.Name) != expectedName {
+			continue
+		}
+		if sig.TypeCovered != qtype && !(allowCNAME && sig.TypeCovered == dns.TypeCNAME) {
+			continue
+		}
+		if !dns.IsSubDomain(dns.CanonicalName(sig.SignerName), expectedName) {
+			continue
+		}
+		// A smaller label count denotes a wildcard-expanded signature. The RRSIG
+		// authenticates the wildcard RRset, but proving that the wildcard applies
+		// to this name also requires authenticated NSEC/NSEC3 denial proofs. The
+		// go-algorand DNSSEC validation path does not retain those proofs, so reject
+		// wildcard-expanded answers.
+		if int(sig.Labels) < dns.CountLabel(expectedName) {
+			continue
+		}
+		if selectedType != 0 && selectedType != sig.TypeCovered {
+			return nil, nil, fmt.Errorf("multiple signed RRsets for %s in DNS response", expectedName)
+		}
+		selectedType = sig.TypeCovered
+		selectedSigs = append(selectedSigs, sig)
+	}
+	if len(selectedSigs) == 0 {
+		return nil, nil, fmt.Errorf("no signature for %s type %s in DNS response", expectedName, dns.TypeToString[qtype])
+	}
+
+	selectedRRs := make([]dns.RR, 0, len(rrSet))
+	for _, rr := range rrSet {
+		header := rr.Header()
+		if header.Class == dns.ClassINET && dns.CanonicalName(header.Name) == expectedName && header.Rrtype == selectedType {
+			selectedRRs = append(selectedRRs, rr)
+		}
+	}
+	if len(selectedRRs) == 0 {
+		return nil, nil, fmt.Errorf("no records for %s type %s in DNS response", expectedName, dns.TypeToString[selectedType])
+	}
+	return selectedRRs, selectedSigs, nil
 }

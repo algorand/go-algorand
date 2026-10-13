@@ -174,16 +174,21 @@ func (t *trustChain) Authenticate(ctx context.Context, rrSet []dns.RR, rrSig []d
 		return fmt.Errorf("empty RRSIG")
 	}
 
-	signer := rrSig[0].SignerName
-	owner := rrSig[0].Hdr.Name
+	signer := dns.CanonicalName(rrSig[0].SignerName)
+	owner := dns.CanonicalName(rrSig[0].Hdr.Name)
 	// sanity check: ensure all RRSIG contain the same signer, it must be the parent zone
-	for i := 1; i < len(rrSig); i++ {
-		if signer != rrSig[i].SignerName {
-			return fmt.Errorf("signer name mismatch: %s vs %s", signer, rrSig[i].SignerName)
+	for i := range rrSig {
+		sigSigner := dns.CanonicalName(rrSig[i].SignerName)
+		if signer != sigSigner {
+			return fmt.Errorf("signer name mismatch: %s vs %s", signer, sigSigner)
+		}
+		sigOwner := dns.CanonicalName(rrSig[i].Hdr.Name)
+		if !dns.IsSubDomain(signer, sigOwner) {
+			return fmt.Errorf("RRSIG signer %s is not an ancestor of owner %s", signer, sigOwner)
 		}
 	}
 
-	fqdn := dns.Fqdn(signer)
+	fqdn := signer
 
 	now := time.Now()
 	validSignatures := make([]dns.RRSIG, 0, len(rrSig))

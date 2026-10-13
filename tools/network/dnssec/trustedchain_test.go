@@ -355,6 +355,17 @@ func TestAuthenticate(t *testing.T) {
 	a.Error(err)
 	a.Contains(err.Error(), "signer name mismatch")
 
+	// Authenticate must check every signer/owner relationship even if a caller
+	// bypasses the response filtering performed by Resolver. A valid first
+	// relationship must not hide a later non-ancestor owner.
+	sig = rrsig[0]
+	sig.SignerName = "rand.test."
+	sig.Hdr.Name = "rand.test."
+	nonAncestorSig := sig
+	nonAncestorSig.Hdr.Name = "algorand.test."
+	err = tch.Authenticate(context.Background(), rrset, []dns.RRSIG{sig, nonAncestorSig})
+	a.EqualError(err, "RRSIG signer rand.test. is not an ancestor of owner algorand.test.")
+
 	testKSK, testKSKsk := getKey("test.", dns.ZONE|dns.SEP)
 	testZSK, testZSKsk := getKey("test.", dns.ZONE)
 

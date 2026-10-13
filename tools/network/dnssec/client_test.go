@@ -73,7 +73,10 @@ func TestMockedClient(t *testing.T) {
 	a.Empty(rr)
 	a.Empty(rsig)
 
-	var answer = []dns.RR{&dns.DNSKEY{}, &dns.RRSIG{}}
+	var answer = []dns.RR{
+		&dns.DNSKEY{Hdr: dns.RR_Header{Name: "test.", Rrtype: dns.TypeDNSKEY, Class: dns.ClassINET}},
+		&dns.RRSIG{Hdr: dns.RR_Header{Name: "test.", Rrtype: dns.TypeRRSIG, Class: dns.ClassINET}, TypeCovered: dns.TypeDNSKEY, Labels: 1, SignerName: "test."},
+	}
 	qs = ttr{msg: dns.Msg{MsgHdr: dns.MsgHdr{Rcode: dns.RcodeServerFailure}, Answer: answer}}
 	c = dnsClient{[]ResolverAddress{"test"}, time.Second, qs}
 	rr, rsig, err = c.QueryRRSet(context.Background(), "test", 0)
@@ -84,10 +87,101 @@ func TestMockedClient(t *testing.T) {
 
 	qs = ttr{msg: dns.Msg{Answer: answer}}
 	c = dnsClient{[]ResolverAddress{"test"}, time.Second, qs}
-	rr, rsig, err = c.QueryRRSet(context.Background(), "test", 0)
+	rr, rsig, err = c.QueryRRSet(context.Background(), "test", dns.TypeDNSKEY)
 	a.NoError(err)
 	a.Equal(1, len(rr))
 	a.Equal(1, len(rsig))
+}
+
+func TestQueryRRSetBindsAnswerToQuestion(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	wantedTXT := &dns.TXT{
+		Hdr: dns.RR_Header{Name: "wanted.test.", Rrtype: dns.TypeTXT, Class: dns.ClassINET},
+		Txt: []string{"wanted"},
+	}
+	wantedSig := &dns.RRSIG{
+		Hdr:         dns.RR_Header{Name: "wanted.test.", Rrtype: dns.TypeRRSIG, Class: dns.ClassINET},
+		TypeCovered: dns.TypeTXT,
+		Labels:      2,
+		SignerName:  "test.",
+	}
+	foreignTXT := &dns.TXT{
+		Hdr: dns.RR_Header{Name: "foreign.test.", Rrtype: dns.TypeTXT, Class: dns.ClassINET},
+		Txt: []string{"foreign"},
+	}
+	foreignSig := &dns.RRSIG{
+		Hdr:         dns.RR_Header{Name: "foreign.test.", Rrtype: dns.TypeRRSIG, Class: dns.ClassINET},
+		TypeCovered: dns.TypeTXT,
+		Labels:      2,
+		SignerName:  "test.",
+	}
+
+	client := func(answer []dns.RR) dnsClient {
+		return dnsClient{
+			servers:     []ResolverAddress{"test"},
+			readTimeout: time.Second,
+			transport:   ttr{msg: dns.Msg{Answer: answer}},
+		}
+	}
+
+	c := client([]dns.RR{foreignTXT, foreignSig})
+	rr, sig, err := c.QueryRRSet(context.Background(), "wanted.test", dns.TypeTXT)
+	require.ErrorContains(t, err, "no signature for wanted.test.")
+	require.Empty(t, rr)
+	require.Empty(t, sig)
+
+	c = client([]dns.RR{foreignTXT, foreignSig, wantedTXT, wantedSig})
+	rr, sig, err = c.QueryRRSet(context.Background(), "WANTED.TEST", dns.TypeTXT)
+	require.NoError(t, err)
+	require.Equal(t, []dns.RR{wantedTXT}, rr)
+	require.Equal(t, []dns.RRSIG{*wantedSig}, sig)
+
+	chaosTXT := dns.Copy(wantedTXT).(*dns.TXT)
+	chaosTXT.Hdr.Class = dns.ClassCHAOS
+	chaosTXT.Txt = []string{"chaos"}
+	chaosSig := *wantedSig
+	chaosSig.Hdr.Class = dns.ClassCHAOS
+	c = client([]dns.RR{chaosTXT, &chaosSig, wantedTXT, wantedSig})
+	rr, sig, err = c.QueryRRSet(context.Background(), "wanted.test", dns.TypeTXT)
+	require.NoError(t, err)
+	require.Equal(t, []dns.RR{wantedTXT}, rr)
+	require.Equal(t, []dns.RRSIG{*wantedSig}, sig)
+}
+
+func TestQueryRRSetSelectsCNAMEAtQueriedName(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cname := &dns.CNAME{
+		Hdr:    dns.RR_Header{Name: "alias.test.", Rrtype: dns.TypeCNAME, Class: dns.ClassINET},
+		Target: "target.test.",
+	}
+	cnameSig := &dns.RRSIG{
+		Hdr:         dns.RR_Header{Name: "alias.test.", Rrtype: dns.TypeRRSIG, Class: dns.ClassINET},
+		TypeCovered: dns.TypeCNAME,
+		Labels:      2,
+		SignerName:  "test.",
+	}
+	target := &dns.A{
+		Hdr: dns.RR_Header{Name: "target.test.", Rrtype: dns.TypeA, Class: dns.ClassINET},
+		A:   net.IPv4(1, 2, 3, 4),
+	}
+	targetSig := &dns.RRSIG{
+		Hdr:         dns.RR_Header{Name: "target.test.", Rrtype: dns.TypeRRSIG, Class: dns.ClassINET},
+		TypeCovered: dns.TypeA,
+		Labels:      2,
+		SignerName:  "test.",
+	}
+	c := dnsClient{
+		servers:     []ResolverAddress{"test"},
+		readTimeout: time.Second,
+		transport:   ttr{msg: dns.Msg{Answer: []dns.RR{cname, cnameSig, target, targetSig}}},
+	}
+
+	rr, sig, err := c.QueryRRSet(context.Background(), "alias.test", dns.TypeA)
+	require.NoError(t, err)
+	require.Equal(t, []dns.RR{cname}, rr)
+	require.Equal(t, []dns.RRSIG{*cnameSig}, sig)
 }
 
 // startTestDNSServer starts a miekg/dns server with handler on network ("udp"

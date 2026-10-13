@@ -97,6 +97,10 @@ func getParentDS(ctx context.Context, fqZoneName string, c Querier, parent trust
 	if err != nil {
 		return
 	}
+	rrSet, rrSig, err = selectRRSet(fqZoneName, dns.TypeDS, false, rrSet, rrSig)
+	if err != nil {
+		return
+	}
 	// since a new zone is being created its DS is always fetched from the network
 	// but parent zone is cached and cache outdated error possbile
 	cacheOutdated, err = parent.verifyDS(rrSet, rrSig, t)
@@ -128,6 +132,10 @@ func getParentDS(ctx context.Context, fqZoneName string, c Querier, parent trust
 // then its digest is propagated to parent DS and used to sign child's DNSKEY
 func makeTrustedZone(ctx context.Context, fqZoneName string, parent trustedZone, c TrustQuerier, t time.Time) (tz trustedZone, cacheOutdated bool, err error) {
 	rrSet, rrSig, err := c.QueryRRSet(ctx, fqZoneName, dns.TypeDNSKEY)
+	if err != nil {
+		return
+	}
+	rrSet, rrSig, err = selectRRSet(fqZoneName, dns.TypeDNSKEY, false, rrSet, rrSig)
 	if err != nil {
 		return
 	}
