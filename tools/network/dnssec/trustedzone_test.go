@@ -136,16 +136,21 @@ func TestMakeTrustedZone(t *testing.T) {
 	a.NotEmpty(tzCom)
 
 	tzRoot.ksk = backup
-	backup = tzRoot.zsk
+	backup = make(map[uint16]dns.DNSKEY, len(tzRoot.zsk))
+	for keyTag, key := range tzRoot.zsk {
+		backup[keyTag] = key
+	}
 
-	var zk, ks dns.DNSKEY
-	for _, zk = range tzRoot.zsk {
-		break
+	_, dsSigs, queryErr := r.QueryRRSet(context.Background(), "com.", dns.TypeDS)
+	a.NoError(queryErr)
+	a.NotEmpty(dsSigs)
+	dsSignerTag := dsSigs[0].KeyTag
+	for keyTag, key := range tzRoot.zsk {
+		if keyTag != dsSignerTag {
+			tzRoot.zsk[dsSignerTag] = key
+			break
+		}
 	}
-	for _, ks = range tzRoot.ksk {
-		break
-	}
-	tzRoot.zsk[zk.KeyTag()] = ks
 	tzCom, cacheOutdated, err = makeTrustedZone(context.Background(), "com.", tzRoot, r, tt)
 	a.Error(err)
 	a.Contains(err.Error(), "DS signature verification failed")

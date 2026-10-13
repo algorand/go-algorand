@@ -302,7 +302,7 @@ func TestEnsureTrustChainError(t *testing.T) {
 	// test non-existing ZSK
 	err = newCh.ensure(context.Background(), ".", []uint16{})
 	a.Error(err)
-	a.Contains(err.Error(), "ZSK [] not found in zone .")
+	a.Contains(err.Error(), "DNSKEY [] not found in zone .")
 
 	testKSK, testKSKsk := getKey("test.", dns.ZONE|dns.SEP)
 	testZSK, testZSKsk := getKey("test.", dns.ZONE)
@@ -374,10 +374,10 @@ func TestAuthenticate(t *testing.T) {
 	err = tch.Authenticate(context.Background(), rrset, rrsig)
 	a.NoError(err)
 
-	// DNSKEY is signed with KSK so authenticate will fail looking up KSK in ZSK
+	// SEP-marked keys remain valid candidates when authenticating an RRset.
 	rrset, rrsig, err = r.QueryRRSet(context.Background(), "test.", dns.TypeDNSKEY)
 	err = tch.Authenticate(context.Background(), rrset, rrsig)
-	a.Error(err)
+	a.NoError(err)
 
 	err = tch.Authenticate(context.Background(), rrset, nil)
 	a.Error(err)

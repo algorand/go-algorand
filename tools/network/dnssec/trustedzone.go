@@ -27,7 +27,7 @@ import (
 
 type trustedZone struct {
 	name  string
-	zsk   map[uint16]dns.DNSKEY // zone signing keys
+	zsk   map[uint16]dns.DNSKEY // authenticated keys eligible to sign zone records
 	ksk   map[uint16]dns.DNSKEY // key signing keys
 	rrSig map[uint16]dns.RRSIG  // DNSKEY RR signature(s), used for validity
 	dss   []dns.DS              // DS or root anchor authenticating this zone in DS format
@@ -42,7 +42,7 @@ func (tz *trustedZone) isExpired(t time.Time) bool {
 	return false
 }
 
-// ensure at least one of the keytags in ZSK of this zone
+// checkKeys reports whether this zone has at least one of the requested keys.
 func (tz *trustedZone) checkKeys(keytags []uint16) bool {
 	for _, kt := range keytags {
 		if _, ok := tz.zsk[kt]; ok {
@@ -52,8 +52,8 @@ func (tz *trustedZone) checkKeys(keytags []uint16) bool {
 	return false
 }
 
-// verifyDS checks DS RRSIG using this zone ZSK
-// cacheOutdated indicates no ZSK in this zone to verify the provided RRSIG
+// verifyDS checks a DS RRSIG using an authenticated key from this zone.
+// cacheOutdated indicates that this zone has no key that can verify the RRSIG.
 func (tz *trustedZone) verifyDS(rrSet []dns.RR, rrSig []dns.RRSIG, t time.Time) (cacheOutdated bool, err error) {
 	// parent zone's DNSKEY RRSET is cached but DS is just came from the network
 	// and might be signed by newer key
@@ -104,7 +104,7 @@ func getParentDS(ctx context.Context, fqZoneName string, c Querier, parent trust
 // **parent** for DS verification using cached keys.
 // returns:
 // 1. newly created trustedZone in case of success
-// 2. cacheOutdated if cached parent does not have ZSK for DS validation
+// 2. cacheOutdated if cached parent does not have a key for DS validation
 // 3. error in all other cases
 //
 // Note 1: the function should never return cacheOutdated for the root zone
@@ -131,24 +131,21 @@ func makeTrustedZone(ctx context.Context, fqZoneName string, parent trustedZone,
 		}
 	}
 
-	zsk := make(map[uint16]dns.DNSKEY)
-	ksk := make(map[uint16]dns.DNSKEY)
+	zoneKeys := make(map[uint16]dns.DNSKEY)
 	for _, rr := range rrSet {
 		switch obj := rr.(type) {
 		case *dns.DNSKEY:
-			if obj.Flags&dns.ZONE != 0 { // 256
-				if obj.Flags&dns.SEP != 0 { // 257
-					ksk[obj.KeyTag()] = *obj
-				} else {
-					zsk[obj.KeyTag()] = *obj
-				}
+			if obj.Flags&dns.ZONE != 0 && obj.Flags&dns.REVOKE == 0 {
+				// Collect all non-revoked zone keys. Validators must not use the SEP flag
+				// to decide which signatures a key may verify (RFC 4034, Section 2.1.1).
+				zoneKeys[obj.KeyTag()] = *obj
 			}
 		default:
 		}
 	}
 
 	// find DNSKEY matched to RS retrieved from parent zone or from a trust anchor
-	matchedDS, verifiedKSK := matchKSKDigest(dss, ksk)
+	matchedDS, verifiedKSK := matchKSKDigest(dss, zoneKeys)
 	if len(verifiedKSK) == 0 {
 		err = fmt.Errorf("failed to verify %s KSK against digest in parent DS", fqZoneName)
 		return
@@ -165,7 +162,7 @@ func makeTrustedZone(ctx context.Context, fqZoneName string, parent trustedZone,
 	// zone and keys are authenticated, create a new zone
 	tz = trustedZone{
 		name:  fqZoneName,
-		zsk:   zsk,
+		zsk:   zoneKeys,
 		ksk:   verifiedKSK,
 		rrSig: verifiedSig,
 		dss:   matchedDS,
@@ -173,7 +170,7 @@ func makeTrustedZone(ctx context.Context, fqZoneName string, parent trustedZone,
 	return
 }
 
-// verifyRRSig takes RRSET, array of RRSIG, time and ZSKs in form of map
+// verifyRRSig takes an RRset, signatures, time, and candidate DNSKEYs.
 // and returns a map of matched signatures by keytag
 func verifyRRSig(rrSet []dns.RR, rrSig []dns.RRSIG, t time.Time, keys map[uint16]dns.DNSKEY) map[uint16]dns.RRSIG {
 	verifiedSig := make(map[uint16]dns.RRSIG)
