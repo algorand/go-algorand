@@ -373,6 +373,34 @@ func TestAuthenticate(t *testing.T) {
 	rrset, rrsig, err = r.QueryRRSet(context.Background(), "www.test.", dns.TypeA)
 	err = tch.Authenticate(context.Background(), rrset, rrsig)
 	a.NoError(err)
+	validSig := rrsig[0]
+
+	// The final record signature must be valid at the time it is authenticated.
+	err = r.updateARecord("www.test.", net.IPv4(1, 2, 3, 4), time.Now().Add(-time.Hour))
+	a.NoError(err)
+	rrset, rrsig, err = r.QueryRRSet(context.Background(), "www.test.", dns.TypeA)
+	a.NoError(err)
+	err = tch.Authenticate(context.Background(), rrset, rrsig)
+	a.EqualError(err, "no currently valid RRSIG for www.test.")
+	expiredSig := rrsig[0]
+
+	// An expired signature must not prevent a second, valid signature from authenticating the record.
+	err = tch.Authenticate(context.Background(), rrset, []dns.RRSIG{expiredSig, validSig})
+	a.NoError(err)
+
+	// An expired signature from a known key must not authenticate a record whose only valid
+	// signature uses an unknown key.
+	unknownZSK, unknownZSKsk := getKey("test.", dns.ZONE)
+	unknownSig, err := r.sign(rrset, "test.", unknownZSK.KeyTag(), time.Time{}, unknownZSKsk)
+	a.NoError(err)
+	err = tch.Authenticate(context.Background(), rrset, []dns.RRSIG{expiredSig, unknownSig})
+	a.Error(err)
+
+	futureStart := time.Now().Add(time.Hour)
+	futureSig, err := r.signWithValidity(rrset, "test.", testZSK.KeyTag(), futureStart, futureStart.Add(time.Hour), testZSKsk)
+	a.NoError(err)
+	err = tch.Authenticate(context.Background(), rrset, []dns.RRSIG{futureSig})
+	a.EqualError(err, "no currently valid RRSIG for www.test.")
 
 	// DNSKEY is signed with KSK so authenticate will fail looking up KSK in ZSK
 	rrset, rrsig, err = r.QueryRRSet(context.Background(), "test.", dns.TypeDNSKEY)
