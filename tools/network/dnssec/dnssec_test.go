@@ -278,6 +278,45 @@ func TestLookupCombinedSigningKey(t *testing.T) {
 	a.Contains(err.Error(), "not found in zone test.")
 }
 
+func TestLookupCollidingDNSKEYTags(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	r := makeEmptyTestResolver()
+
+	rootKSK, rootKSKsk := getKey(".", dns.ZONE|dns.SEP)
+	rootZSK, rootZSKsk := getKey(".", dns.ZONE)
+	a.NoError(r.updateDSRecord(".", &[]dns.DS{*rootKSK.ToDS(dns.SHA256)}, time.Time{}))
+	a.NoError(r.updateDNSKeyRecord(".", rootKSK, rootKSKsk, time.Time{}))
+	a.NoError(r.updateDNSKeyRecord(".", rootZSK, rootZSKsk, time.Time{}))
+
+	ksk, kskSK := getKey("test.", dns.ZONE|dns.SEP)
+	zsk, zskSK := getKey("test.", dns.ZONE)
+	a.NoError(r.updateDSRecord("test.", &[]dns.DS{*ksk.ToDS(dns.SHA256)}, time.Time{}))
+
+	decoyZSK := sameTagKey(t, *zsk)
+	decoyKSK := sameTagKey(t, *ksk)
+	dnskeyRRSet := []dns.RR{&decoyZSK, zsk, ksk, &decoyKSK}
+	dnskeySig, err := r.sign(dnskeyRRSet, "test.", ksk.KeyTag(), time.Time{}, kskSK)
+	a.NoError(err)
+	r.entries["test."][dns.TypeDNSKEY] = rrRec{rr: dnskeyRRSet, sig: []dns.RRSIG{dnskeySig}}
+
+	record := &dns.A{
+		Hdr: dns.RR_Header{Name: "www.test.", Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 60},
+		A:   net.IPv4(1, 2, 3, 4),
+	}
+	recordSig, err := r.sign([]dns.RR{record}, "test.", zsk.KeyTag(), time.Time{}, zskSK)
+	a.NoError(err)
+	r.entries["www.test."] = map[uint16]rrRec{
+		dns.TypeA: {rr: []dns.RR{record}, sig: []dns.RRSIG{recordSig}},
+	}
+
+	resolver := Resolver{client: r, trustChain: makeTrustChain(r), maxHops: DefaultMaxHops}
+	addrs, err := resolver.LookupIPAddr(context.Background(), "www.test.")
+	a.NoError(err)
+	a.Equal([]net.IPAddr{{IP: net.IPv4(1, 2, 3, 4)}}, addrs)
+}
+
 func TestLookupAux(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

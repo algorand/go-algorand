@@ -48,16 +48,14 @@ func TestTrustChainBasic(t *testing.T) {
 	a.Equal(0, len(tch.trustedZones))
 
 	tch.trustedZones["com."] = trustedZone{
-		zsk: make(map[uint16]dns.DNSKEY),
+		zsk: make(dnskeysByTag),
 	}
-	tch.trustedZones["com."].zsk[123] = dns.DNSKEY{Algorithm: 1}
-	key, found := tch.getDNSKey("com.", 123)
-	a.True(found)
-	a.NotEmpty(key)
+	tch.trustedZones["com."].zsk[123] = []dns.DNSKEY{{Algorithm: 1}, {Algorithm: 2}}
+	keys := tch.getDNSKeys("com.", 123)
+	a.Len(keys, 2)
 
-	key, found = tch.getDNSKey(".", 123)
-	a.False(found)
-	a.Empty(key)
+	keys = tch.getDNSKeys(".", 123)
+	a.Empty(keys)
 }
 
 func TestEnsureTrustChain(t *testing.T) {
@@ -272,7 +270,7 @@ func TestEnsureTrustChain(t *testing.T) {
 	newCh = makeTrustChain(r)
 	err = newCh.ensure(context.Background(), "algo.test.", []uint16{algoTestZSK.KeyTag()})
 	a.Error(err)
-	a.Contains(err.Error(), "failed to verify test. KSK against digest in parent DS")
+	a.Contains(err.Error(), "no DNSKEY for test. matches a parent DS record or trust anchor")
 }
 
 func TestEnsureTrustChainError(t *testing.T) {

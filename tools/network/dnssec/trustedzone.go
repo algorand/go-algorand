@@ -27,10 +27,24 @@ import (
 
 type trustedZone struct {
 	name  string
-	zsk   map[uint16]dns.DNSKEY // authenticated keys eligible to sign zone records
-	ksk   map[uint16]dns.DNSKEY // key signing keys
-	rrSig map[uint16]dns.RRSIG  // DNSKEY RR signature(s), used for validity
-	dss   []dns.DS              // DS or root anchor authenticating this zone in DS format
+	zsk   dnskeysByTag         // authenticated keys eligible to sign zone records
+	ksk   dnskeysByTag         // keys authenticated by a DS record or trust anchor
+	rrSig map[uint16]dns.RRSIG // DNSKEY RR signature(s), used for validity
+	dss   []dns.DS             // DS or root anchor authenticating this zone in DS format
+}
+
+// DNSSEC key tags are checksums and are not unique, so every key with a given
+// tag must remain available as a verification candidate.
+type dnskeysByTag map[uint16][]dns.DNSKEY
+
+func (keys dnskeysByTag) add(key dns.DNSKEY) {
+	keyTag := key.KeyTag()
+	for _, candidate := range keys[keyTag] {
+		if candidate == key {
+			return
+		}
+	}
+	keys[keyTag] = append(keys[keyTag], key)
 }
 
 func (tz *trustedZone) isExpired(t time.Time) bool {
@@ -45,7 +59,7 @@ func (tz *trustedZone) isExpired(t time.Time) bool {
 // checkKeys reports whether this zone has at least one of the requested keys.
 func (tz *trustedZone) checkKeys(keytags []uint16) bool {
 	for _, kt := range keytags {
-		if _, ok := tz.zsk[kt]; ok {
+		if len(tz.zsk[kt]) > 0 {
 			return true
 		}
 	}
@@ -131,23 +145,23 @@ func makeTrustedZone(ctx context.Context, fqZoneName string, parent trustedZone,
 		}
 	}
 
-	zoneKeys := make(map[uint16]dns.DNSKEY)
+	zoneKeys := make(dnskeysByTag)
 	for _, rr := range rrSet {
 		switch obj := rr.(type) {
 		case *dns.DNSKEY:
 			if obj.Flags&dns.ZONE != 0 && obj.Flags&dns.REVOKE == 0 {
 				// Collect all non-revoked zone keys. Validators must not use the SEP flag
 				// to decide which signatures a key may verify (RFC 4034, Section 2.1.1).
-				zoneKeys[obj.KeyTag()] = *obj
+				zoneKeys.add(*obj)
 			}
 		default:
 		}
 	}
 
-	// find DNSKEY matched to RS retrieved from parent zone or from a trust anchor
+	// Find DNSKEYs matching DS records from the parent zone or a trust anchor.
 	matchedDS, verifiedKSK := matchKSKDigest(dss, zoneKeys)
 	if len(verifiedKSK) == 0 {
-		err = fmt.Errorf("failed to verify %s KSK against digest in parent DS", fqZoneName)
+		err = fmt.Errorf("no DNSKEY for %s matches a parent DS record or trust anchor", fqZoneName)
 		return
 	}
 
@@ -155,7 +169,7 @@ func makeTrustedZone(ctx context.Context, fqZoneName string, parent trustedZone,
 	// DNSKEY RRSET is self-signed so makes sense to check this signature at the very end with authenticated via parent DS
 	verifiedSig := verifyRRSig(rrSet, rrSig, t, verifiedKSK)
 	if len(verifiedSig) == 0 {
-		err = fmt.Errorf("no KSK to verify DNSKEY RRSet of %s", fqZoneName)
+		err = fmt.Errorf("no DS-matched DNSKEY verifies the DNSKEY RRSet for %s", fqZoneName)
 		return
 	}
 
@@ -172,32 +186,38 @@ func makeTrustedZone(ctx context.Context, fqZoneName string, parent trustedZone,
 
 // verifyRRSig takes an RRset, signatures, time, and candidate DNSKEYs.
 // and returns a map of matched signatures by keytag
-func verifyRRSig(rrSet []dns.RR, rrSig []dns.RRSIG, t time.Time, keys map[uint16]dns.DNSKEY) map[uint16]dns.RRSIG {
+func verifyRRSig(rrSet []dns.RR, rrSig []dns.RRSIG, t time.Time, keys dnskeysByTag) map[uint16]dns.RRSIG {
 	verifiedSig := make(map[uint16]dns.RRSIG)
 	for _, sig := range rrSig {
 		if !sig.ValidityPeriod(t) {
 			continue
 		}
-		ksk := keys[sig.KeyTag]
-		if err := sig.Verify(&ksk, rrSet); err == nil {
-			verifiedSig[sig.KeyTag] = sig
+		for i := range keys[sig.KeyTag] {
+			if err := sig.Verify(&keys[sig.KeyTag][i], rrSet); err == nil {
+				verifiedSig[sig.KeyTag] = sig
+				break
+			}
 		}
 	}
 	return verifiedSig
 }
 
-// matchKSKDigest takes array of DS and KSKs in form of map
-// and returns an array of matched DS records and verified keys
-func matchKSKDigest(dss []dns.DS, ksk map[uint16]dns.DNSKEY) ([]dns.DS, map[uint16]dns.DNSKEY) {
-	verifiedKSK := make(map[uint16]dns.DNSKEY)
+// matchKSKDigest returns the DS records and DNSKEYs whose digests match.
+func matchKSKDigest(dss []dns.DS, keys dnskeysByTag) ([]dns.DS, dnskeysByTag) {
+	verifiedKSK := make(dnskeysByTag)
 	matchedDS := make([]dns.DS, 0, len(dss))
 
 	for _, ds := range dss {
-		if key, ok := ksk[ds.KeyTag]; ok {
-			keyDigest := strings.ToLower(key.ToDS(ds.DigestType).Digest)
+		for _, key := range keys[ds.KeyTag] {
+			keyDS := key.ToDS(ds.DigestType)
+			if keyDS == nil {
+				continue
+			}
+			keyDigest := strings.ToLower(keyDS.Digest)
 			if keyDigest == strings.ToLower(ds.Digest) {
-				verifiedKSK[ds.KeyTag] = key
+				verifiedKSK.add(key)
 				matchedDS = append(matchedDS, ds)
+				break
 			}
 		}
 	}

@@ -154,15 +154,15 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 	return nil
 }
 
-func (t *trustChain) getDNSKey(fqZoneName string, keyTag uint16) (key *dns.DNSKEY, found bool) {
+func (t *trustChain) getDNSKeys(fqZoneName string, keyTag uint16) []dns.DNSKEY {
 	t.mu.RLock()
+	defer t.mu.RUnlock()
+
 	trustedZone, ok := t.trustedZones[fqZoneName]
-	t.mu.RUnlock()
 	if !ok {
-		return
+		return nil
 	}
-	k, found := trustedZone.zsk[keyTag]
-	return &k, found
+	return append([]dns.DNSKEY(nil), trustedZone.zsk[keyTag]...)
 }
 
 // Authenticate verifies a given rrset and its signatures validity down to the trusted root.
@@ -196,15 +196,14 @@ func (t *trustChain) Authenticate(ctx context.Context, rrSet []dns.RR, rrSig []d
 		return err
 	}
 
+	err = fmt.Errorf("no authenticated DNSKEY verifies the RRSet for %s", fqdn)
 	for _, sig := range rrSig {
 		// Get an already authenticated key for this zone.
-		key, ok := t.getDNSKey(fqdn, sig.KeyTag)
-		if !ok {
-			// skip, trustChain.ensure checks that at least one keytag is available
-			continue
-		}
-		if err = sig.Verify(key, rrSet); err == nil {
-			return nil
+		keys := t.getDNSKeys(fqdn, sig.KeyTag)
+		for i := range keys {
+			if err = sig.Verify(&keys[i], rrSet); err == nil {
+				return nil
+			}
 		}
 	}
 	return err
