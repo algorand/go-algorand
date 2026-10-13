@@ -332,6 +332,11 @@ func TestMatchKSKDigest(t *testing.T) {
 	matchedDS, verifiedKSK = matchKSKDigest([]dns.DS{unsupportedDS}, ksk)
 	a.Empty(verifiedKSK)
 	a.Empty(matchedDS)
+
+	// An unsupported digest must not prevent a later supported DS from matching.
+	matchedDS, verifiedKSK = matchKSKDigest([]dns.DS{unsupportedDS, matchingDS}, ksk)
+	a.Equal([]dns.DNSKEY{ksks[0]}, verifiedKSK[ksks[0].KeyTag()])
+	a.Equal([]dns.DS{matchingDS}, matchedDS)
 }
 
 func sameTagKey(t *testing.T, key dns.DNSKEY) dns.DNSKEY {
