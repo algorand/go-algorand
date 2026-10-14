@@ -216,6 +216,107 @@ func TestLookup(t *testing.T) {
 	a.Contains(err.Error(), ". not found")
 }
 
+func TestLookupCombinedSigningKey(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	r := makeEmptyTestResolver()
+	dnssecResolver := Resolver{
+		client:     r,
+		trustChain: makeTrustChain(r),
+		maxHops:    DefaultMaxHops,
+	}
+
+	rootKey, rootKeySK := getKey(".", dns.ZONE|dns.SEP)
+	rootAnchor := rootKey.ToDS(dns.SHA256)
+	a.NoError(r.updateDSRecord(".", &[]dns.DS{*rootAnchor}, time.Time{}))
+	a.NoError(r.updateDNSKeyRecord(".", rootKey, rootKeySK, time.Time{}))
+
+	combinedKey, combinedKeySK := getKey("test.", dns.ZONE|dns.SEP)
+	testDS := combinedKey.ToDS(dns.SHA256)
+	dsRRSet := []dns.RR{testDS}
+	dsSig, err := r.sign(dsRRSet, ".", rootKey.KeyTag(), time.Time{}, rootKeySK)
+	a.NoError(err)
+	r.entries["test."] = map[uint16]rrRec{
+		dns.TypeDS: {rr: dsRRSet, sig: []dns.RRSIG{dsSig}},
+	}
+	a.NoError(r.updateKSKNoCheck("test.", combinedKey, combinedKeySK, time.Time{}))
+
+	aRecord := dns.A{
+		Hdr: dns.RR_Header{Name: "www.test.", Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 3600},
+		A:   net.IPv4(1, 2, 3, 4),
+	}
+	rrSet := []dns.RR{&aRecord}
+	sig, err := r.sign(rrSet, "test.", combinedKey.KeyTag(), time.Time{}, combinedKeySK)
+	a.NoError(err)
+	r.entries["www.test."] = map[uint16]rrRec{
+		dns.TypeA: {rr: rrSet, sig: []dns.RRSIG{sig}},
+	}
+
+	addrs, err := dnssecResolver.LookupIPAddr(context.Background(), "www.test.")
+	a.NoError(err)
+	a.Equal([]net.IPAddr{{IP: net.IPv4(1, 2, 3, 4)}}, addrs)
+
+	// A revoked key may remain published during rollover, but must not be used
+	// to authenticate DNS data.
+	revokedKey, revokedKeySK := getKey("test.", dns.ZONE|dns.SEP|dns.REVOKE)
+	dnskeyRRSet := []dns.RR{combinedKey, revokedKey}
+	dnskeySig, err := r.sign(dnskeyRRSet, "test.", combinedKey.KeyTag(), time.Time{}, combinedKeySK)
+	a.NoError(err)
+	r.entries["test."][dns.TypeDNSKEY] = rrRec{rr: dnskeyRRSet, sig: []dns.RRSIG{dnskeySig}}
+	dnssecResolver.trustChain = makeTrustChain(r)
+	addrs, err = dnssecResolver.LookupIPAddr(context.Background(), "www.test.")
+	a.NoError(err)
+	a.Equal([]net.IPAddr{{IP: net.IPv4(1, 2, 3, 4)}}, addrs)
+
+	revokedSig, err := r.sign(rrSet, "test.", revokedKey.KeyTag(), time.Time{}, revokedKeySK)
+	a.NoError(err)
+	r.entries["www.test."][dns.TypeA] = rrRec{rr: rrSet, sig: []dns.RRSIG{revokedSig}}
+
+	_, err = dnssecResolver.LookupIPAddr(context.Background(), "www.test.")
+	a.Error(err)
+	a.Contains(err.Error(), "not found in zone test.")
+}
+
+func TestLookupCollidingDNSKEYTags(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	r := makeEmptyTestResolver()
+
+	rootKSK, rootKSKsk := getKey(".", dns.ZONE|dns.SEP)
+	rootZSK, rootZSKsk := getKey(".", dns.ZONE)
+	a.NoError(r.updateDSRecord(".", &[]dns.DS{*rootKSK.ToDS(dns.SHA256)}, time.Time{}))
+	a.NoError(r.updateDNSKeyRecord(".", rootKSK, rootKSKsk, time.Time{}))
+	a.NoError(r.updateDNSKeyRecord(".", rootZSK, rootZSKsk, time.Time{}))
+
+	ksk, kskSK := getKey("test.", dns.ZONE|dns.SEP)
+	zsk, zskSK := getKey("test.", dns.ZONE)
+	a.NoError(r.updateDSRecord("test.", &[]dns.DS{*ksk.ToDS(dns.SHA256)}, time.Time{}))
+
+	decoyZSK := sameTagKey(t, *zsk)
+	decoyKSK := sameTagKey(t, *ksk)
+	dnskeyRRSet := []dns.RR{&decoyZSK, zsk, ksk, &decoyKSK}
+	dnskeySig, err := r.sign(dnskeyRRSet, "test.", ksk.KeyTag(), time.Time{}, kskSK)
+	a.NoError(err)
+	r.entries["test."][dns.TypeDNSKEY] = rrRec{rr: dnskeyRRSet, sig: []dns.RRSIG{dnskeySig}}
+
+	record := &dns.A{
+		Hdr: dns.RR_Header{Name: "www.test.", Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 60},
+		A:   net.IPv4(1, 2, 3, 4),
+	}
+	recordSig, err := r.sign([]dns.RR{record}, "test.", zsk.KeyTag(), time.Time{}, zskSK)
+	a.NoError(err)
+	r.entries["www.test."] = map[uint16]rrRec{
+		dns.TypeA: {rr: []dns.RR{record}, sig: []dns.RRSIG{recordSig}},
+	}
+
+	resolver := Resolver{client: r, trustChain: makeTrustChain(r), maxHops: DefaultMaxHops}
+	addrs, err := resolver.LookupIPAddr(context.Background(), "www.test.")
+	a.NoError(err)
+	a.Equal([]net.IPAddr{{IP: net.IPv4(1, 2, 3, 4)}}, addrs)
+}
+
 func TestLookupAux(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
