@@ -35,13 +35,12 @@ import (
 )
 
 type pqSigTestFixture struct {
-	name             string
-	signer           basics_testing.PQSigner
-	proto            config.ConsensusParams
-	txn              Transaction
-	authorizer       basics.Address
-	pqSig            PQSig
-	maxSignatureSize int
+	name       string
+	signer     basics_testing.PQSigner
+	proto      config.ConsensusParams
+	txn        Transaction
+	authorizer basics.Address
+	pqSig      PQSig
 }
 
 // protoWithSchemeDisabled returns a copy of the fixture's consensus params
@@ -93,7 +92,6 @@ func makePQSigTestFixture(t *testing.T, firstSeedByte byte, scheme protocol.PQSc
 			PublicKey: acct.PublicKey,
 			Signature: signature,
 		},
-		maxSignatureSize: schemeInfo.MaxSignatureSize,
 	}
 }
 
@@ -425,7 +423,7 @@ func TestPQSigVerifyRejectsMalformedSignature(t *testing.T) {
 	for _, fixture := range makePQSigTestFixtures(t, 0) {
 		t.Run(fixture.name, func(t *testing.T) {
 			pqSig := fixture.pqSig
-			pqSig.Signature = make([]byte, fixture.maxSignatureSize+1)
+			pqSig.Signature = make([]byte, pqSchemes[pqSig.Scheme].maxSignatureSize()+1)
 
 			err := pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer)
 			require.ErrorIs(t, err, crypto.ErrSigInvalid)

@@ -99,28 +99,24 @@ func (s ed25519Signer) PublicKey() []byte {
 // PQTestScheme carries one PQ scheme's test metadata.
 type PQTestScheme struct {
 	// Name is a human-readable scheme name, suitable for subtest names.
-	Name             string
-	Scheme           protocol.PQScheme
-	MaxSignatureSize int
+	Name   string
+	Scheme protocol.PQScheme
 }
 
 // PQTestSchemes lists the supported PQ schemes with their test metadata, for
 // tests that exercise every scheme.
 var PQTestSchemes = []PQTestScheme{
 	{
-		Name:             "falcon-1024",
-		Scheme:           protocol.PQSchemeFalcon1024,
-		MaxSignatureSize: crypto.Falcon1024MaxSignatureSize,
+		Name:   "falcon-1024",
+		Scheme: protocol.PQSchemeFalcon1024,
 	},
 	{
-		Name:             "falcon-512",
-		Scheme:           protocol.PQSchemeFalcon512,
-		MaxSignatureSize: crypto.Falcon512MaxSignatureSize,
+		Name:   "falcon-512",
+		Scheme: protocol.PQSchemeFalcon512,
 	},
 	{
-		Name:             "ed25519",
-		Scheme:           protocol.PQSchemeEd25519,
-		MaxSignatureSize: len(crypto.Signature{}),
+		Name:   "ed25519",
+		Scheme: protocol.PQSchemeEd25519,
 	},
 }
 

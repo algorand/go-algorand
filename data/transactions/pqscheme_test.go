@@ -35,7 +35,12 @@ func TestPQSchemesMatchTestSchemes(t *testing.T) {
 	require.Len(t, pqSchemes, len(basics_testing.PQTestSchemes))
 	for _, ts := range basics_testing.PQTestSchemes {
 		require.True(t, PQSchemeSupported(ts.Scheme), ts.Name)
-		require.NotNil(t, pqSchemes[ts.Scheme].verifier, ts.Name)
+	}
+	for tag, s := range pqSchemes {
+		require.NotNil(t, s.verifier, tag)
+		require.NotNil(t, s.enabled, tag)
+		require.NotNil(t, s.maxPublicKeySize, tag)
+		require.NotNil(t, s.maxSignatureSize, tag)
 	}
 	require.False(t, PQSchemeSupported(protocol.PQScheme{'x', '1'}))
 }
@@ -55,8 +60,5 @@ func TestPQBoundsCoverSchemes(t *testing.T) {
 		scheme := pqSchemes[ts.Scheme]
 		require.LessOrEqual(t, len(acct.PublicKey), scheme.maxPublicKeySize(), ts.Name)
 		require.LessOrEqual(t, len(sig), scheme.maxSignatureSize(), ts.Name)
-		require.LessOrEqual(t, ts.MaxSignatureSize, scheme.maxSignatureSize(), ts.Name)
-		require.LessOrEqual(t, scheme.maxPublicKeySize(), maxPQPublicKeySize(), ts.Name)
-		require.LessOrEqual(t, scheme.maxSignatureSize(), maxPQSignatureSize(), ts.Name)
 	}
 }

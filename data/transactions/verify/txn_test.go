@@ -637,7 +637,7 @@ func TestTxnValidationPQSigRejectsMalformedProof(t *testing.T) {
 
 	t.Run("signature", func(t *testing.T) {
 		stxn := makePQSignedTxn(t, 3)
-		stxn.PQsig.Signature = make([]byte, transactions.PQSigMaxSize())
+		stxn.PQsig.Signature = make([]byte, transactions.PQSigMaxSize()+1)
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 		requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
@@ -723,7 +723,7 @@ func TestTxnValidationPQDelegatedLogicSigRejectsInvalidProof(t *testing.T) {
 
 	t.Run("malformed-signature", func(t *testing.T) {
 		stxn := makePQDelegatedLogicSigTxn(t, 17)
-		stxn.Lsig.PQsig.Signature = make([]byte, transactions.PQSigMaxSize())
+		stxn.Lsig.PQsig.Signature = make([]byte, transactions.PQSigMaxSize()+1)
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 		requireLogicPQSigError(t, err, crypto.ErrSigInvalid.Error())
