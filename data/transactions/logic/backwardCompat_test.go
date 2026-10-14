@@ -295,13 +295,13 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	}
 
 	// Cost should stay exactly 2140 for v1, even as future changes are made
-	err = CheckSignature(0, optSigParams(maxCost(2139), stxn))
+	err = CheckSignature(program, optSigParams(maxCost(2139), stxn))
 	require.ErrorContains(t, err, "static cost")
 	ep := optSigParams(maxCost(2140), stxn)
-	err = CheckSignature(0, ep)
+	err = CheckSignature(program, ep)
 	require.NoError(t, err)
 
-	pass, err := EvalSignature(0, ep)
+	pass, _, err := EvalSignatureProgram(program, stxn.Lsig.Args, 0, ep)
 	if err != nil || !pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(ep.Trace.String())
@@ -362,17 +362,17 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 		stxn.Txn.RekeyTo = basics.Address{} // would mess up minavmversion
 		stxn.Lsig.Logic = ops.Program
 		ep := defaultSigParamsWithVersion(1, stxn)
-		_, err := EvalSignature(0, ep)
+		_, _, err := EvalSignatureProgram(ops.Program, nil, 0, ep)
 		require.ErrorContains(t, err, "greater than protocol supported version")
 
 		// check opcodes failures
 		ep.TxnGroup[0].Lsig.Logic[0] = 1 // set version to 1
-		_, err = EvalSignature(0, ep)
+		_, _, err = EvalSignatureProgram(ops.Program, nil, 0, ep)
 		require.ErrorContains(t, err, "invalid global field")
 
 		// check opcodes failures
 		ep.TxnGroup[0].Lsig.Logic[0] = 0 // set version to 0
-		_, err = EvalSignature(0, ep)
+		_, _, err = EvalSignatureProgram(ops.Program, nil, 0, ep)
 		require.ErrorContains(t, err, "invalid global field")
 	}
 }
@@ -424,17 +424,17 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			ep.TxnGroup[0].Lsig.Logic = ops.Program
 
 			// check failure with version check
-			_, err = EvalSignature(0, ep)
+			_, _, err = EvalSignatureProgram(ops.Program, nil, 0, ep)
 			require.ErrorContains(t, err, "greater than protocol supported version")
 
 			// check opcodes failures
 			ops.Program[0] = 1 // set version to 1
-			_, err = EvalSignature(0, ep)
+			_, _, err = EvalSignatureProgram(ops.Program, nil, 0, ep)
 			require.ErrorContains(t, err, "invalid txn field")
 
 			// check opcodes failures
 			ops.Program[0] = 0 // set version to 0
-			_, err = EvalSignature(0, ep)
+			_, _, err = EvalSignatureProgram(ops.Program, nil, 0, ep)
 			require.ErrorContains(t, err, "invalid txn field")
 		}
 	}

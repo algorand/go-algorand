@@ -103,6 +103,121 @@ func makePQSigTestFixtures(t *testing.T, firstSeedByte byte) []pqSigTestFixture 
 	return fixtures
 }
 
+func TestLogicSigArgsRoundTrip(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	for _, args := range []LogicSigArgs{
+		nil,
+		{{}},
+		{{1}},
+		{{1, 2, 3}, {}, {4}},
+		{make([]byte, MaxLogicSigArgSize)},
+		make(LogicSigArgs, EvalMaxArgs),
+	} {
+		decoded, err := DecodeLogicSigArgs(EncodeLogicSigArgs(args))
+		require.NoError(t, err)
+		require.Equal(t, args.Len(), decoded.Len())
+		if len(args) == 0 {
+			require.Empty(t, decoded)
+			continue
+		}
+		require.Len(t, decoded, len(args))
+	}
+
+	// No arguments must be no bytes, so that "absent" and "present but empty"
+	// cannot both appear on the wire.
+	require.Empty(t, EncodeLogicSigArgs(nil))
+	require.Empty(t, EncodeLogicSigArgs(LogicSigArgs{}))
+}
+
+func TestLogicSigArgsRejectsNonCanonical(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	canonical := EncodeLogicSigArgs(LogicSigArgs{{1, 2, 3}})
+	decoded, err := DecodeLogicSigArgs(canonical)
+	require.NoError(t, err)
+	require.Equal(t, LogicSigArgs{{1, 2, 3}}, decoded)
+
+	// An empty array spells no arguments, which must be spelled as no bytes.
+	_, err = DecodeLogicSigArgs([]byte{0x90})
+	require.ErrorIs(t, err, errLogicSigArgsNotCanonical)
+
+	// Trailing bytes are not part of the arguments, so they are not canonical
+	// either, whatever they hold.
+	_, err = DecodeLogicSigArgs(append(slices.Clone(canonical), 0x00))
+	require.ErrorIs(t, err, errLogicSigArgsNotCanonical)
+
+	// array16 spelling of a length that fits in a fixarray.
+	wide := append([]byte{0xdc, 0x00, 0x01}, canonical[1:]...)
+	_, err = DecodeLogicSigArgs(wide)
+	require.ErrorIs(t, err, errLogicSigArgsNotCanonical)
+
+	_, err = DecodeLogicSigArgs([]byte{0xc1})
+	require.Error(t, err)
+}
+
+func TestLogicSigArgsDecodeBounds(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	tooMany := make(LogicSigArgs, EvalMaxArgs+1)
+	_, err := DecodeLogicSigArgs(protocol.Encode(tooMany))
+	require.Error(t, err)
+
+	tooBig := LogicSigArgs{make([]byte, MaxLogicSigArgSize+1)}
+	_, err = DecodeLogicSigArgs(protocol.Encode(tooBig))
+	require.Error(t, err)
+}
+
+// TestPQSigSchemeSizeLimits checks that ValidateEnvelope holds each scheme to
+// its own size limits, which are tighter than the wire bounds for every scheme
+// but the largest. For ls, it also checks that the largest program and the
+// largest set of arguments that LogicSig allows still fit.
+func TestPQSigSchemeSizeLimits(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+
+	edAcct := basics_testing.MakePQTestAccount(t, 1, protocol.PQSchemeEd25519)
+	edSig := PQSig{
+		Scheme:    protocol.PQSchemeEd25519,
+		Salt:      edAcct.Salt,
+		PublicKey: edAcct.PublicKey,
+		Signature: make([]byte, len(crypto.Signature{})),
+	}
+	require.NoError(t, edSig.ValidateEnvelope(proto, edAcct.Address))
+	long := edSig
+	long.Signature = make([]byte, len(crypto.Signature{})+1)
+	require.ErrorIs(t, long.ValidateEnvelope(proto, edAcct.Address), errPQSigTooLarge)
+
+	program := make([]byte, bounds.MaxLogicSigMaxSize)
+	program[0] = 0x0e // #pragma version 14
+	salt, authorizer, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeLogicSig, program)
+	require.NoError(t, err)
+
+	// 255 arguments sharing the whole LogicSig size budget.
+	args := make(LogicSigArgs, EvalMaxArgs)
+	remaining := bounds.MaxLogicSigMaxSize
+	for i := range args {
+		n := remaining / (len(args) - i)
+		args[i] = make([]byte, n)
+		remaining -= n
+	}
+	lsSig := PQSig{
+		Scheme:    protocol.PQSchemeLogicSig,
+		Salt:      salt,
+		PublicKey: program,
+		Signature: EncodeLogicSigArgs(args),
+	}
+	require.NoError(t, lsSig.ValidateEnvelope(proto, authorizer))
+
+	long = lsSig
+	long.PublicKey = append(program, 0x01)
+	salt, authorizer, err = basics.CanonicalPQAddressSalt(protocol.PQSchemeLogicSig, long.PublicKey)
+	require.NoError(t, err)
+	long.Salt = salt
+	require.ErrorIs(t, long.ValidateEnvelope(proto, authorizer), errPQSigTooLarge)
+}
+
 func TestPQDecodeBoundsFeedSignedTxnMaxSize(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -114,7 +229,7 @@ func TestPQDecodeBoundsFeedSignedTxnMaxSize(t *testing.T) {
 	require.Equal(t, expectedPQSigMaxSize, PQSigMaxSize())
 
 	expectedLogicSigMaxSize := 1 +
-		4 + msgp.ArrayHeaderSize + bounds.MaxLogicSigMaxSize +
+		4 + msgp.ArrayHeaderSize + EvalMaxArgs*msgp.BytesPrefixSize + bounds.MaxLogicSigMaxSize +
 		2 + msgp.BytesPrefixSize + bounds.MaxLogicSigMaxSize +
 		6 + crypto.MultisigSigMaxSize() +
 		5 + crypto.MultisigSigMaxSize() +
@@ -239,6 +354,52 @@ func TestPQSigValidateEnvelope(t *testing.T) {
 			require.ErrorIs(t, (PQSig{}).ValidateScheme(fixture.proto), errPQSigBlank)
 		})
 	}
+}
+
+// TestPQSigLogicSigScheme pins the split that the ls scheme depends on: its
+// envelope validates like any other PQ scheme, so the address check is shared,
+// but the generic Verify path refuses it. Callers must dispatch on the scheme
+// and evaluate the program instead.
+func TestPQSigLogicSigScheme(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	require.True(t, proto.EnablePQSchemeLogicSig)
+
+	program := []byte{0x0e, 0x81, 0x01} // #pragma version 14; pushint 1
+	salt, authorizer, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeLogicSig, program)
+	require.NoError(t, err)
+	require.True(t, authorizer.IsPQCompliant())
+
+	pqSig := PQSig{
+		Scheme:    protocol.PQSchemeLogicSig,
+		Salt:      salt,
+		PublicKey: program,
+	}
+	require.Equal(t, authorizer, pqSig.Address())
+
+	// The address check must be reachable for ls, since that is the whole
+	// authorization other than evaluating the program.
+	require.NoError(t, pqSig.ValidateEnvelope(proto, authorizer))
+
+	var wrongAuthorizer basics.Address
+	wrongAuthorizer[0] = 1
+	require.ErrorIs(t, pqSig.ValidateEnvelope(proto, wrongAuthorizer), errPQSigAuthorizerMismatch)
+
+	disabledProto := proto
+	disabledProto.EnablePQSchemeLogicSig = false
+	require.ErrorIs(t, pqSig.ValidateEnvelope(disabledProto, authorizer), ErrPQSchemeNotEnabled)
+
+	// A program's args are not signature bytes. Whatever they hold, no caller
+	// may authorize an ls account by handing them to a signature verifier.
+	withArgs := pqSig
+	withArgs.Signature = []byte("args")
+	txn := Transaction{
+		Type:             protocol.PaymentTx,
+		Header:           Header{Sender: authorizer},
+		PaymentTxnFields: PaymentTxnFields{Receiver: authorizer},
+	}
+	require.ErrorIs(t, withArgs.Verify(proto, txn, authorizer), errPQLogicSigNotEvaluated)
 }
 
 func TestPQSigVerify(t *testing.T) {
@@ -422,10 +583,15 @@ func TestPQSigVerifyRejectsMalformedSignature(t *testing.T) {
 
 	for _, fixture := range makePQSigTestFixtures(t, 0) {
 		t.Run(fixture.name, func(t *testing.T) {
+			// A signature too long for the scheme never reaches its verifier.
 			pqSig := fixture.pqSig
 			pqSig.Signature = make([]byte, pqSchemes[pqSig.Scheme].maxSignatureSize()+1)
-
 			err := pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer)
+			require.ErrorIs(t, err, errPQSigTooLarge)
+
+			// One that fits, but is garbage, is rejected by the verifier.
+			pqSig.Signature = make([]byte, pqSchemes[pqSig.Scheme].maxSignatureSize())
+			err = pqSig.Verify(fixture.proto, fixture.txn, fixture.authorizer)
 			require.ErrorIs(t, err, crypto.ErrSigInvalid)
 		})
 	}

@@ -611,6 +611,12 @@ type ConsensusParams struct {
 	// authorization for the f1 PQ scheme.
 	EnablePQSchemeFalcon1024 bool
 
+	// EnablePQSchemeLogicSig enables transaction authorization by a LogicSig
+	// carried in a PQSig under the ls scheme, whose address commits to the
+	// program and a salt. Unlike the LogicSig in SignedTxn.Lsig, such an account
+	// can choose an address that is not an Edwards25519 point.
+	EnablePQSchemeLogicSig bool
+
 	// EnableSelectF128 changes the sortition algorithm to use a 128-bit software
 	// floating point binomial CDF implementation for committee selection.
 	EnableSelectF128 bool
@@ -1552,6 +1558,8 @@ func initConsensusProtocols() {
 	vFuture.EnablePQSchemeEd25519 = true
 	vFuture.RequireLogicSigArgAccess = true
 	vFuture.AllowGroupedHeartbeats = true
+
+	vFuture.EnablePQSchemeLogicSig = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

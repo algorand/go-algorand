@@ -19,7 +19,10 @@ package transactions
 import (
 	"errors"
 
+	"github.com/algorand/msgp/msgp"
+
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
@@ -35,6 +38,8 @@ var (
 
 // pqScheme is everything the protocol knows about one PQSig scheme.
 type pqScheme struct {
+	// verifier checks the scheme's signature bytes. It is nil for ls, which
+	// authorizes by evaluating a program, so callers must ask IsLogicSig first.
 	verifier crypto.PQVerifier
 
 	// enabled reports the consensus parameter that turns the scheme on. The
@@ -59,7 +64,8 @@ func constSize(n int) func() int { return func() int { return n } }
 // pqSchemes lists every PQSig scheme. To add one:
 //   - add its protocol.PQScheme tag,
 //   - add an entry here, with a crypto.PQVerifier (implementing
-//     crypto.PQBatchPreparer if the scheme is batch-verified),
+//     crypto.PQBatchPreparer if the scheme is batch-verified) unless, like ls,
+//     it does not authorize by checking signature bytes,
 //   - add its config.ConsensusParams enable flag,
 //   - add the signing/private-key ops in cmd/algokey,
 //   - add it to basics_testing.PQTestSchemes.
@@ -84,6 +90,18 @@ var pqSchemes = map[protocol.PQScheme]pqScheme{
 		fee:              0, // a single Ed25519 signature is part of the min fee
 		maxPublicKeySize: constSize(len(crypto.PublicKey{})),
 		maxSignatureSize: constSize(len(crypto.Signature{})),
+	},
+	protocol.PQSchemeLogicSig: {
+		enabled: func(proto config.ConsensusParams) bool { return proto.EnablePQSchemeLogicSig },
+		// No surcharge. A surcharge here would make the off-curve form cost
+		// more than the on-curve SignedTxn.Lsig form it exists to replace.
+		fee: 0,
+		// The public key is a program, and the signature its encoded arguments,
+		// so they are bounded like LogicSig.Logic and LogicSig.Args.
+		maxPublicKeySize: func() int { return bounds.MaxLogicSigMaxSize },
+		maxSignatureSize: func() int {
+			return msgp.ArrayHeaderSize + EvalMaxArgs*msgp.BytesPrefixSize + bounds.MaxLogicSigMaxSize
+		},
 	},
 }
 
