@@ -154,8 +154,8 @@ func makeTrustedZone(ctx context.Context, fqZoneName string, parent trustedZone,
 				continue
 			}
 			if obj.Flags&dns.ZONE != 0 && obj.Flags&dns.REVOKE == 0 {
-				// Collect all non-revoked zone keys. Validators must not use the SEP flag
-				// to decide which signatures a key may verify (RFC 4034, Section 2.1.1).
+				// Only zone keys may verify RRSIGs (RFC 4034, Section 2.1.1), and revoked
+				// keys must not be used for validation (RFC 5011, Section 2.1).
 				zoneKeys.add(*obj)
 			}
 		default:
