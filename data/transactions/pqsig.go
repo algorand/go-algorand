@@ -34,17 +34,17 @@ var (
 )
 
 // PQSig is a scheme-tagged transaction authorization proof. Its public key and
-// signature are wire/decode-bounded by crypto.MaxPQPublicKeySize and
-// crypto.MaxPQSignatureSize (the largest sizes over all supported PQSig schemes),
-// which feed msgp allocation bounds and therefore PQSigMaxSize, SignedTxnMaxSize,
-// and the SignedTxn wire bound.
+// signature are wire/decode-bounded by maxPQPublicKeySize and
+// maxPQSignatureSize (the largest sizes over all schemes in pqSchemes), which
+// feed msgp allocation bounds and therefore PQSigMaxSize, SignedTxnMaxSize, and
+// the SignedTxn wire bound.
 type PQSig struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Scheme    protocol.PQScheme    `codec:"sch"`
 	Salt      basics.PQAddressSalt `codec:"slt"`
-	PublicKey []byte               `codec:"pk,allocbound=crypto.MaxPQPublicKeySize"`
-	Signature []byte               `codec:"sig,allocbound=crypto.MaxPQSignatureSize"`
+	PublicKey []byte               `codec:"pk,allocbound=maxPQPublicKeySize()"`
+	Signature []byte               `codec:"sig,allocbound=maxPQSignatureSize()"`
 }
 
 // Blank returns true if the PQ authorization envelope is absent.
@@ -76,16 +76,16 @@ func (p PQSig) validateScheme(proto config.ConsensusParams) (crypto.PQVerifier, 
 		return nil, errPQSigBlank
 	}
 
-	verifier, ok := crypto.LookupPQScheme(p.Scheme)
+	scheme, ok := pqSchemes[p.Scheme]
 	if !ok {
-		return nil, crypto.ErrPQSchemeNotSupported
+		return nil, ErrPQSchemeNotSupported
 	}
 
-	if !proto.PQSchemeEnabled(p.Scheme) {
-		return nil, crypto.ErrPQSchemeNotEnabled
+	if !scheme.enabled(proto) {
+		return nil, ErrPQSchemeNotEnabled
 	}
 
-	return verifier, nil
+	return scheme.verifier, nil
 }
 
 // ValidateScheme validates that the PQSig carries a known scheme enabled under
@@ -164,10 +164,10 @@ func (p PQSig) BatchPrep(proto config.ConsensusParams, message crypto.Hashable, 
 
 // Batched reports whether p's scheme supports batch verification.
 func (p PQSig) Batched() bool {
-	verifier, ok := crypto.LookupPQScheme(p.Scheme)
+	scheme, ok := pqSchemes[p.Scheme]
 	if !ok {
 		return false
 	}
-	_, ok = verifier.(crypto.PQBatchPreparer)
+	_, ok = scheme.verifier.(crypto.PQBatchPreparer)
 	return ok
 }

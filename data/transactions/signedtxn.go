@@ -117,14 +117,12 @@ func (s SignedTxn) HasSignature() bool {
 }
 
 // signatureFeeContribution dispatches the fee contribution of the signature type.
-// An unknown PQ scheme contributes zero, which is safe because the transaction
-// will be rejected during verification.
 func (s SignedTxn) signatureFeeContribution(proto config.ConsensusParams) basics.Micros {
 	if !s.PQsig.Blank() {
-		return proto.PQSchemeFeeContribution(s.PQsig.Scheme)
+		return PQSchemeFeeContribution(proto, s.PQsig.Scheme)
 	}
 	if !s.Lsig.PQsig.Blank() {
-		return proto.PQSchemeFeeContribution(s.Lsig.PQsig.Scheme)
+		return PQSchemeFeeContribution(proto, s.Lsig.PQsig.Scheme)
 	}
 	return 0
 }

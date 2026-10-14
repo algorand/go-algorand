@@ -21,65 +21,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
-
-func TestLookupPQScheme(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	v, ok := LookupPQScheme(protocol.PQSchemeEd25519)
-	require.True(t, ok)
-	require.NotNil(t, v)
-
-	v, ok = LookupPQScheme(protocol.PQSchemeFalcon1024)
-	require.True(t, ok)
-	require.NotNil(t, v)
-
-	v, ok = LookupPQScheme(protocol.PQSchemeFalcon512)
-	require.True(t, ok)
-	require.NotNil(t, v)
-
-	_, ok = LookupPQScheme(protocol.PQScheme{'x', '1'})
-	require.False(t, ok)
-}
-
-// TestPQBoundsCoverSchemes guards against MaxPQ*Size being smaller than a
-// real public key or signature from any supported scheme.
-func TestPQBoundsCoverSchemes(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	msg := TestingHashable{data: []byte("pq bounds")}
-	edSigner := GenerateSignatureSecrets(Seed{1})
-	edSig := edSigner.Sign(msg)
-	require.LessOrEqual(t, uint64(len(edSigner.SignatureVerifier)), uint64(MaxPQPublicKeySize))
-	require.LessOrEqual(t, uint64(len(edSig)), uint64(MaxPQSignatureSize))
-
-	var seed FalconSeed
-	seed[0] = 1
-	signer1024, err := GenerateFalcon1024Signer(seed)
-	require.NoError(t, err)
-	require.LessOrEqual(t, uint64(len(signer1024.PublicKey)), uint64(MaxPQPublicKeySize))
-	signer512, err := GenerateFalcon512Signer(seed)
-	require.NoError(t, err)
-	require.LessOrEqual(t, uint64(len(signer512.PublicKey)), uint64(MaxPQPublicKeySize))
-
-	sig1, err := signer1024.Sign(msg)
-	require.NoError(t, err)
-	require.LessOrEqual(t, uint64(len(sig1)), uint64(MaxPQSignatureSize))
-	sig5, err := signer512.Sign(msg)
-	require.NoError(t, err)
-	require.LessOrEqual(t, uint64(len(sig5)), uint64(MaxPQSignatureSize))
-}
 
 func TestPQVerifierEd25519(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	verifier, ok := LookupPQScheme(protocol.PQSchemeEd25519)
-	require.True(t, ok)
+	verifier := PQEd25519{}
 
 	msg := TestingHashable{data: []byte("pq verifier round trip")}
 	signer := GenerateSignatureSecrets(Seed{1})
@@ -100,10 +49,8 @@ func TestPQVerifierFalconRoundTrip(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	v1, ok := LookupPQScheme(protocol.PQSchemeFalcon1024)
-	require.True(t, ok)
-	v5, ok := LookupPQScheme(protocol.PQSchemeFalcon512)
-	require.True(t, ok)
+	v1 := PQFalcon1024{}
+	v5 := PQFalcon512{}
 
 	msg := TestingHashable{data: []byte("pq verifier round trip")}
 	var seed FalconSeed

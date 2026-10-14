@@ -721,38 +721,6 @@ func (proto ConsensusParams) MinFee() basics.MicroAlgos {
 	return basics.MicroAlgos{Raw: proto.MinTxnFee}
 }
 
-// PQSchemeEnabled returns whether an account authorization scheme is enabled in PQsig
-// under these consensus parameters.
-func (proto ConsensusParams) PQSchemeEnabled(scheme protocol.PQScheme) bool {
-	switch scheme {
-	case protocol.PQSchemeFalcon1024:
-		return proto.EnablePQSchemeFalcon1024
-	case protocol.PQSchemeFalcon512:
-		return proto.EnablePQSchemeFalcon512
-	case protocol.PQSchemeEd25519:
-		return proto.EnablePQSchemeEd25519
-	default:
-		return false
-	}
-}
-
-// PQSchemeFeeContribution is the additional fee factor charged for a transaction
-// authorized with the given PQ scheme, as a fixed-point multiple of the basic
-// min fee (1e6 == one basic min fee). Making it a method (rather than exported
-// constants) leaves room to vary it by proto later without changing call sites.
-func (proto ConsensusParams) PQSchemeFeeContribution(scheme protocol.PQScheme) basics.Micros {
-	switch scheme {
-	case protocol.PQSchemeFalcon1024:
-		return 2e6
-	case protocol.PQSchemeFalcon512:
-		return 1e6 // it is half of the Falcon-1024 contribution
-	case protocol.PQSchemeEd25519:
-		return 0 // we consider a single Ed25519 signature to be part of min fee
-	default:
-		return 0
-	}
-}
-
 // TxnSizePricingEnabled reports whether transactions can exceed size limits by
 // paying a per-byte surcharge.
 func (proto ConsensusParams) TxnSizePricingEnabled() bool {

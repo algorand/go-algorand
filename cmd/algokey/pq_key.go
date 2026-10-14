@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -47,7 +47,7 @@ func (m pqPublicMaterial) address() basics.Address {
 func (m pqPublicMaterial) validate() error {
 	ops, ok := pqSchemeOpsByScheme[m.Scheme]
 	if !ok {
-		return fmt.Errorf("%w: %q", crypto.ErrPQSchemeNotSupported, m.Scheme)
+		return fmt.Errorf("%w: %q", transactions.ErrPQSchemeNotSupported, m.Scheme)
 	}
 	if uint64(len(m.PublicKey)) != ops.publicKeySize() {
 		return fmt.Errorf("%w: got public key size %d, want %d", errPQKeyMalformed, len(m.PublicKey), ops.publicKeySize())
