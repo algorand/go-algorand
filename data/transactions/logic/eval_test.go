@@ -4802,6 +4802,8 @@ func TestLinearOpcodes(t *testing.T) {
 	for _, spec := range OpSpecs {
 		if spec.Version < backBranchEnabledVersion {
 			require.Zero(t, spec.OpDetails.FullCost.chunkCost, spec)
+			// checkStep can't compute a static dynamicCost
+			require.Nil(t, spec.OpDetails.dynamicCost, spec.Name)
 		}
 	}
 }

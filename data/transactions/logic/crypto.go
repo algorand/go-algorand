@@ -24,7 +24,10 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+	"math"
 	"math/big"
+	"slices"
+	"strings"
 
 	bls12_381mimc "github.com/consensys/gnark-crypto/ecc/bls12-381/fr/mimc"
 	bls12_381poseidon2 "github.com/consensys/gnark-crypto/ecc/bls12-381/fr/poseidon2"
@@ -36,6 +39,8 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/secp256k1"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -218,6 +223,105 @@ func opFalcon1024Verify(cx *EvalContext) error {
 
 func opFalconVerify(cx *EvalContext) error {
 	return falconVerify(cx, FalconConfig(cx.program[cx.pc+1]))
+}
+
+type pqSchemeCost struct {
+	scheme protocol.PQScheme
+	cost   int
+}
+
+// verifyTxnSigCosts are the base costs of verify_txn_sig for each PQSig scheme,
+// matching the costs of the standalone opcodes that verify the same schemes.
+// Every scheme in crypto.LookupPQScheme must appear here.
+var verifyTxnSigCosts = []pqSchemeCost{
+	{protocol.PQSchemeEd25519, 1900},    // ed25519verify
+	{protocol.PQSchemeFalcon1024, 1700}, // falcon_verify FalconDet1024
+	{protocol.PQSchemeFalcon512, 850},   // falcon_verify FalconDet512
+}
+
+// Every scheme hashes the whole signed message, and deriving the address from
+// the envelope hashes the whole public key, so verify_txn_sig also charges
+// verifyTxnSigChunkCost per verifyTxnSigChunkSize bytes of the transaction's
+// bytes to sign and of the public key. Benchmarks put the marginal hashing cost
+// of every scheme at about 40ns per 32 bytes.
+const verifyTxnSigChunkCost = 4
+const verifyTxnSigChunkSize = 32
+
+// verifyTxnSigArgs decodes and validates verify_txn_sig's arguments, the PQSig
+// envelope and address at the top of stack. An envelope that is malformed, or
+// names an unknown or disabled scheme, is a malformed argument, not merely a
+// signature that fails to verify.
+func verifyTxnSigArgs(cx *EvalContext, stack []stackValue) (transactions.PQSig, basics.Address, error) {
+	last := len(stack) - 1 // index of address
+	prev := last - 1       // index of signature
+
+	var pqsig transactions.PQSig
+	var addr basics.Address
+	if len(stack[last].Bytes) != len(addr) {
+		return pqsig, addr, fmt.Errorf("invalid address size %d != %d", len(stack[last].Bytes), len(addr))
+	}
+	copy(addr[:], stack[last].Bytes)
+
+	rem, err := pqsig.UnmarshalMsg(stack[prev].Bytes)
+	if err != nil {
+		return pqsig, addr, fmt.Errorf("invalid pqsig: %w", err)
+	}
+	if len(rem) != 0 {
+		return pqsig, addr, fmt.Errorf("invalid pqsig: %d trailing bytes", len(rem))
+	}
+	if err := pqsig.ValidateScheme(*cx.Proto); err != nil {
+		return pqsig, addr, fmt.Errorf("invalid pqsig: %w", err)
+	}
+	return pqsig, addr, nil
+}
+
+// unpricedVerifyTxnSigCost is charged for a valid scheme missing from
+// verifyTxnSigCosts, which the op would go on to verify. It exceeds any budget,
+// so such an omission fails rather than undercharging a heavier scheme.
+// TestVerifyTxnSigCostsCoverSchemes ensures it is never charged.
+const unpricedVerifyTxnSigCost = math.MaxInt
+
+// verifyTxnSigCost charges verify_txn_sig by the scheme named in its PQSig
+// envelope, plus the length of the transaction's bytes to sign and of the
+// envelope's public key. Invalid arguments cost 1, because opVerifyTxnSig
+// rejects exactly the same arguments, so the program fails immediately.
+func verifyTxnSigCost(cx *EvalContext, stack []stackValue) int {
+	pqsig, _, err := verifyTxnSigArgs(cx, stack)
+	if err != nil {
+		return 1
+	}
+	i := slices.IndexFunc(verifyTxnSigCosts, func(c pqSchemeCost) bool { return c.scheme == pqsig.Scheme })
+	if i < 0 {
+		return unpricedVerifyTxnSigCost
+	}
+	hashed := len(protocol.Transaction) + len(protocol.Encode(&cx.txn.Txn)) + len(pqsig.PublicKey)
+	return verifyTxnSigCosts[i].cost + verifyTxnSigChunkCost*basics.DivCeil(hashed, verifyTxnSigChunkSize)
+}
+
+func verifyTxnSigCostDoc() string {
+	costs := make([]string, len(verifyTxnSigCosts))
+	for i, c := range verifyTxnSigCosts {
+		costs[i] = fmt.Sprintf("%s=%d", c.scheme, c.cost)
+	}
+	return fmt.Sprintf("%s; plus %d per %d bytes of the transaction's bytes to sign and the public key",
+		strings.Join(costs, "; "), verifyTxnSigChunkCost, verifyTxnSigChunkSize)
+}
+
+// opVerifyTxnSig verifies a PQSig envelope over the current transaction, as it
+// would be signed for submission (crypto.HashRep, "TX" || msgpack(txn)), by
+// the address on top of the stack. The signed bytes are computed internally
+// and never placed on the stack.
+func opVerifyTxnSig(cx *EvalContext) error {
+	last := len(cx.Stack) - 1 // index of address
+	prev := last - 1          // index of signature
+
+	pqsig, addr, err := verifyTxnSigArgs(cx, cx.Stack)
+	if err != nil {
+		return err
+	}
+	cx.Stack[prev] = boolToSV(pqsig.Verify(*cx.Proto, cx.txn.Txn, addr) == nil)
+	cx.Stack = cx.Stack[:last]
+	return nil
 }
 
 // Msg is data meant to be signed and then verified with the

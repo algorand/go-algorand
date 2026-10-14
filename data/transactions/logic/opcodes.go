@@ -87,6 +87,7 @@ const foreignBoxVersion = 13 // app_params_set, foreign app box access
 // their version, and fixup TestAssemble() in assembler_test.go.
 const sumhashVersion = 14
 const f512Version = 14
+const verifyTxnSigVersion = 14
 
 // LogicSigOffCurveVersion is the first AVM version where LogicSig programs
 // assembled by this package are expected to hash to an off-curve address.
@@ -155,6 +156,12 @@ type OpDetails struct {
 	Size       int         // if non-zero, the known size of opcode. if 0, check() determines.
 	Immediates []immediate // details of each immediate arg to opcode
 
+	// dynamicCost, if non-nil, computes the cost of the opcode from the running
+	// context, such as the contents of its stack arguments or the transaction
+	// being evaluated. dynamicCostDoc describes that cost for documentation.
+	dynamicCost    func(cx *EvalContext, stack []stackValue) int
+	dynamicCostDoc string
+
 	trusted bool // if `trusted`, don't check stack effects. they are more complicated than simply checking the opcode prototype.
 
 	// SubOpcode, when non-zero, indicates this OpSpec belongs to a multi-byte
@@ -168,6 +175,9 @@ type OpDetails struct {
 }
 
 func (d *OpDetails) docCost(argLen int, version uint64) string {
+	if d.dynamicCost != nil {
+		return d.dynamicCostDoc
+	}
 	cost := d.FullCost.docCost(argLen)
 	if cost != "" {
 		return cost
@@ -199,11 +209,15 @@ func (d *OpDetails) docCost(argLen int, version uint64) string {
 // supplied), and dynamic (the stack, which can be used to find the run-time
 // arguments supplied). Cost is used at run-time. docCost returns similar
 // information in human-readable form.
-func (d *OpDetails) Cost(program []byte, pc int, stack []stackValue) int {
+func (d *OpDetails) Cost(cx *EvalContext, stack []stackValue) int {
+	if d.dynamicCost != nil {
+		return d.dynamicCost(cx, stack)
+	}
 	cost := d.FullCost.compute(stack)
 	if cost != 0 {
 		return cost
 	}
+	program, pc := cx.program, cx.pc
 	if d.SubOpcode != 0 { // Look for immediates after SubOpcode
 		pc++
 	}
@@ -217,11 +231,11 @@ func (d *OpDetails) Cost(program []byte, pc int, stack []stackValue) int {
 }
 
 func detDefault() OpDetails {
-	return OpDetails{asmDefault, nil, nil, modeAny, linearCost{baseCost: 1}, 1, nil, false, 0, nil}
+	return OpDetails{asmDefault, nil, nil, modeAny, linearCost{baseCost: 1}, 1, nil, nil, "", false, 0, nil}
 }
 
 func constants(asm asmFunc, checker checkFunc, name string, kind immKind) OpDetails {
-	return OpDetails{asm, checker, nil, modeAny, linearCost{baseCost: 1}, 0, []immediate{imm(name, kind)}, false, 0, nil}
+	return OpDetails{asm, checker, nil, modeAny, linearCost{baseCost: 1}, 0, []immediate{imm(name, kind)}, nil, "", false, 0, nil}
 }
 
 // detBranch2B describes a branch that always has a two-byte branch offset
@@ -374,6 +388,19 @@ func costByFieldAndLength(immediate string, group *FieldGroup, costs []linearCos
 	}
 	opd.Immediates[0].fieldCosts = full
 	return opd
+}
+
+// costDynamic describes an opcode whose cost depends on the running context,
+// such as the contents of its stack arguments or the transaction being
+// evaluated. Such a cost cannot be known statically, so it may only be used by opcodes
+// introduced at or after backBranchEnabledVersion, when static costs stopped
+// being enforced. TestLinearOpcodes ensures.
+func costDynamic(cost func(cx *EvalContext, stack []stackValue) int, doc string) OpDetails {
+	d := detDefault()
+	d.FullCost = linearCost{} // zero FullCost is what causes eval to look deeper
+	d.dynamicCost = cost
+	d.dynamicCostDoc = doc
+	return d
 }
 
 func costByLength(initial, perChunk, chunkSize, depth int) OpDetails {
@@ -890,6 +917,8 @@ var OpSpecs = []OpSpec{
 			chunkCost: 350,
 			chunkSize: 32,
 		}})},
+	{0xe8, "verify_txn_sig", opVerifyTxnSig, proto("bA:T"), verifyTxnSigVersion,
+		costDynamic(verifyTxnSigCost, verifyTxnSigCostDoc())},
 }
 
 // OpcodesByVersion returns list of opcodes available in a specific version of TEAL
