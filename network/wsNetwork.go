@@ -1406,6 +1406,7 @@ func (wn *msgBroadcaster) broadcastThread(wg *sync.WaitGroup, net networkPeerMan
 		// select with a default into a more efficient non-blocking receive, instead of compiling it to the general-purpose selectgo
 		select {
 		case request := <-wn.broadcastQueueHighPrio:
+			updatePeers()
 			wn.innerBroadcast(request, true, peers)
 			continue
 		default:
@@ -1414,9 +1415,11 @@ func (wn *msgBroadcaster) broadcastThread(wg *sync.WaitGroup, net networkPeerMan
 		// if nothing high prio, try to sample from either queques in a non-blocking fashion.
 		select {
 		case request := <-wn.broadcastQueueHighPrio:
+			updatePeers()
 			wn.innerBroadcast(request, true, peers)
 			continue
 		case request := <-wn.broadcastQueueBulk:
+			updatePeers()
 			wn.innerBroadcast(request, false, peers)
 			continue
 		case <-wn.ctx.Done():
