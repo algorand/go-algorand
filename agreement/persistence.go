@@ -61,9 +61,6 @@ func persistent(as []action) bool {
 // after consensus release, so no node can roll back to a binary that cannot decode it.
 const snapshotCompressionLevel = 3
 
-// compressSnapshots is whether encode compresses the state; see above.
-const compressSnapshots = false
-
 // zstdFrameMagic starts every zstd frame.  A state persisted uncompressed
 // starts with a msgpack map header, which cannot be this.
 var zstdFrameMagic = []byte{0x28, 0xb5, 0x2f, 0xfd}
@@ -78,8 +75,7 @@ func compressSnapshot(raw []byte) []byte {
 	return compressed
 }
 
-// encode serializes the current state into a byte array, compressed when
-// compressSnapshots is set.
+// encode serializes the current state into a compressed byte array.
 func encode(t timers.Clock[TimeoutType], rr rootRouter, p player, a []action, reflect bool) (raw []byte) {
 	var s diskState
 
@@ -118,9 +114,7 @@ func encode(t timers.Clock[TimeoutType], rr rootRouter, p player, a []action, re
 	} else {
 		raw = protocol.Encode(&s)
 	}
-	if compressSnapshots {
-		raw = compressSnapshot(raw)
-	}
+	raw = compressSnapshot(raw)
 	return
 }
 
