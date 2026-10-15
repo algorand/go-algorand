@@ -5013,27 +5013,39 @@ func ProposalValueMaxSize() (s int) {
 // MarshalMsg implements msgp.Marshaler
 func (z *proposalVoteCounter) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 2
-	// string "Count"
-	o = append(o, 0x82, 0xa5, 0x43, 0x6f, 0x75, 0x6e, 0x74)
-	o = msgp.AppendUint64(o, (*z).Count)
-	// string "Votes"
-	o = append(o, 0xa5, 0x56, 0x6f, 0x74, 0x65, 0x73)
-	if (*z).Votes == nil {
-		o = msgp.AppendNil(o)
-	} else {
-		o = msgp.AppendMapHeader(o, uint32(len((*z).Votes)))
+	// omitempty: check for empty values
+	zb0003Len := uint32(2)
+	var zb0003Mask uint8 /* 3 bits */
+	if len((*z).Votes) == 0 {
+		zb0003Len--
+		zb0003Mask |= 0x2
 	}
-	zb0001_keys := make([]basics.Address, 0, len((*z).Votes))
-	for zb0001 := range (*z).Votes {
-		zb0001_keys = append(zb0001_keys, zb0001)
-	}
-	sort.Sort(SortAddress(zb0001_keys))
-	for _, zb0001 := range zb0001_keys {
-		zb0002 := (*z).Votes[zb0001]
-		_ = zb0002
-		o = zb0001.MarshalMsg(o)
-		o = zb0002.MarshalMsg(o)
+	// variable map header, size zb0003Len
+	o = append(o, 0x80|uint8(zb0003Len))
+	if zb0003Len != 0 {
+		// string "Count"
+		o = append(o, 0xa5, 0x43, 0x6f, 0x75, 0x6e, 0x74)
+		o = msgp.AppendUint64(o, (*z).Count)
+		if (zb0003Mask & 0x2) == 0 { // if not empty
+			// string "Votes"
+			o = append(o, 0xa5, 0x56, 0x6f, 0x74, 0x65, 0x73)
+			if (*z).Votes == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendMapHeader(o, uint32(len((*z).Votes)))
+			}
+			zb0001_keys := make([]basics.Address, 0, len((*z).Votes))
+			for zb0001 := range (*z).Votes {
+				zb0001_keys = append(zb0001_keys, zb0001)
+			}
+			sort.Sort(SortAddress(zb0001_keys))
+			for _, zb0001 := range zb0001_keys {
+				zb0002 := (*z).Votes[zb0001]
+				_ = zb0002
+				o = zb0001.MarshalMsg(o)
+				o = zb0002.MarshalMsg(o)
+			}
+		}
 	}
 	return
 }

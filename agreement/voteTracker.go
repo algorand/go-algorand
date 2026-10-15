@@ -33,13 +33,12 @@ type proposalVoteCounter struct {
 	// Count is the total weight of the votes for the proposal.
 	Count uint64
 
-	// Votes holds the votes for the proposal by sender.  They are the
-	// entries of voteTracker.Voters for the proposal, and bundles are
-	// generated from Voters, so that a persisted state without Votes
-	// restores; Votes is maintained so that a state persisted by this
-	// release restores on the previous one, which generates bundles from
-	// Votes.
-	Votes map[basics.Address]vote `codec:"Votes,allocbound=-"`
+	// Votes is not maintained: the votes are in voteTracker.Voters, each
+	// under its sender, and a bundle is generated from the ones for the
+	// proposal.  The field remains, omitted when empty, so that a state
+	// persisted while it was still maintained decodes (an unknown field is
+	// a decoding error).
+	Votes map[basics.Address]vote `codec:"Votes,omitempty,allocbound=-"`
 }
 
 // A voteTracker is a voteMachineStep which handles duplication and
@@ -57,9 +56,9 @@ type voteTracker struct {
 	Voters map[basics.Address]vote `codec:"Voters,allocbound=-"`
 
 	// Counts holds the weighted sum of the votes for a given proposal.
-	// it also hold the individual votes.
 	// preconditions :
-	// Any proposalValue in Counts is gurenteed to contain at least one vote
+	// Any proposalValue in Counts is gurenteed to have at least one vote
+	// for it in Voters
 	Counts map[proposalValue]proposalVoteCounter `codec:"Counts,allocbound=-"`
 
 	// Equivocators holds the set of voters which have already equivocated
@@ -155,14 +154,8 @@ func (tracker *voteTracker) handle(r routerHandle, p player, e0 event) event {
 
 			// if we never seen this proposal before, the following would return the default proposalVote
 			proposalVote := tracker.Counts[e.Vote.R.Proposal]
-			// if we received the default proposalVote, we need to initialize the Votes map.
-			if proposalVote.Votes == nil {
-				proposalVote.Votes = make(map[basics.Address]vote)
-			}
 			// add the count for the given vote
 			proposalVote.Count += e.Vote.Cred.Weight
-			// store the vote by the sender
-			proposalVote.Votes[sender] = e.Vote
 			tracker.Counts[e.Vote.R.Proposal] = proposalVote
 		} else {
 
@@ -208,7 +201,6 @@ func (tracker *voteTracker) handle(r routerHandle, p player, e0 event) event {
 			} else {
 				proposalVote := tracker.Counts[oldVote.R.Proposal]
 				proposalVote.Count -= oldVote.Cred.Weight
-				delete(proposalVote.Votes, sender)
 				tracker.Counts[oldVote.R.Proposal] = proposalVote
 			}
 

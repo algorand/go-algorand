@@ -700,13 +700,14 @@ func TestVoteTrackerRejectsUnknownEvent(t *testing.T) {
 	require.NoErrorf(t, res, "VoteTracker did not reject unknown event")
 }
 
-// A threshold event's bundle is generated from the votes in Voters, whether
-// or not the per-proposal vote maps in Counts hold them: a tracker restored
-// from a persisted state without those maps still proves its thresholds.
+// A threshold event's bundle is generated from the votes in Voters; the
+// per-proposal vote maps in Counts are not maintained, and a tracker restored
+// from a state persisted while they were (the previous release's) proves its
+// thresholds the same way.
 func TestVoteTrackerBundleFromVoters(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for _, restoredWithoutVotes := range []bool{false, true} {
+	for _, restoredWithVotes := range []bool{false, true} {
 		helper := voteMakerHelper{}
 		helper.Setup()
 		proto := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -735,14 +736,32 @@ func TestVoteTrackerBundleFromVoters(t *testing.T) {
 		require.Equal(t, uint64(2), tracker.Counts[proposalB].Count)
 		require.Equal(t, uint64(1), tracker.EquivocatorsCount)
 		require.NoError(t, tracker.validate())
+		for _, counter := range tracker.Counts {
+			require.Empty(t, counter.Votes)
+		}
+		encoded := protocol.Encode(tracker)
+		require.NotContains(t, string(encoded), "Votes", "an empty vote map was persisted")
 
-		if restoredWithoutVotes {
-			// as restored from a state persisted without the vote maps
+		if restoredWithVotes {
+			// as persisted by the previous release, which maintained the maps:
+			// restoring it keeps them, which changes nothing
 			for pv, counter := range tracker.Counts {
-				counter.Votes = nil
+				counter.Votes = make(map[basics.Address]vote)
+				for sender, v := range tracker.Voters {
+					if v.R.Proposal == pv {
+						counter.Votes[sender] = v
+					}
+				}
 				tracker.Counts[pv] = counter
 			}
-			require.NoError(t, tracker.validate())
+			encoded = protocol.Encode(tracker)
+			require.Contains(t, string(encoded), "Votes")
+			restored := new(voteTracker)
+			require.NoError(t, protocol.Decode(encoded, restored))
+			require.NoError(t, restored.validate())
+			require.Len(t, restored.Counts[proposalA].Votes, threshold-2)
+			tracker = restored
+			automata = &ioAutomataConcrete{listener: checkedListener{listener: tracker, listenerContract: new(voteTrackerContract)}}
 		}
 
 		// the vote that completes the quorum for A
