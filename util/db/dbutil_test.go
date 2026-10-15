@@ -433,6 +433,69 @@ func TestSetSynchronousMode(t *testing.T) {
 	}
 }
 
+// TestLongWALAccessor checks that the checkpoint interval of a long-WAL
+// accessor is set on every connection of its pool, and that its log is
+// checkpointed only once it reaches the interval: the same writes that make a
+// default accessor checkpoint its log leave the log of a long-WAL accessor
+// intact.
+func TestLongWALAccessor(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	ctx := context.Background()
+
+	autoCheckpoint := func(acc Accessor) (settings []int64) {
+		// two connections open at once are two distinct connections
+		var conns []*sql.Conn
+		for i := 0; i < 2; i++ {
+			conn, err := acc.Handle.Conn(ctx)
+			require.NoError(t, err)
+			conns = append(conns, conn)
+		}
+		for _, conn := range conns {
+			var n int64
+			require.NoError(t, conn.QueryRowContext(ctx, "PRAGMA wal_autocheckpoint").Scan(&n))
+			settings = append(settings, n)
+			require.NoError(t, conn.Close())
+		}
+		return settings
+	}
+	// frames appended since the log last restarted: an automatic checkpoint
+	// makes the next transaction restart it
+	logFrames := func(acc Accessor) int64 {
+		_, frames, _, err := acc.walCheckpoint(ctx, "PASSIVE")
+		require.NoError(t, err)
+		return frames
+	}
+	// commits 100 transactions of a 64 KiB blob each: at least 17 frames per
+	// transaction, 1700 in all, more than SQLite's default interval
+	fill := func(acc Accessor) {
+		require.NoError(t, acc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			_, err := tx.Exec("CREATE TABLE t (v BLOB)")
+			return err
+		}))
+		blob := make([]byte, 64<<10)
+		for i := 0; i < 100; i++ {
+			require.NoError(t, acc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+				_, err := tx.Exec("INSERT INTO t (v) VALUES (?)", blob)
+				return err
+			}))
+		}
+	}
+
+	byDefault, err := MakeAccessor(filepath.Join(t.TempDir(), "default.sqlite"), false, false)
+	require.NoError(t, err)
+	defer byDefault.Close()
+	require.Equal(t, []int64{1000, 1000}, autoCheckpoint(byDefault))
+	fill(byDefault)
+	require.Less(t, logFrames(byDefault), int64(1700), "the default interval did not checkpoint the log")
+
+	longWAL, err := MakeLongWALAccessor(filepath.Join(t.TempDir(), "longwal.sqlite"), false, false)
+	require.NoError(t, err)
+	defer longWAL.Close()
+	require.Equal(t, []int64{LongWALAutoCheckpoint, LongWALAutoCheckpoint}, autoCheckpoint(longWAL))
+	fill(longWAL)
+	require.GreaterOrEqual(t, logFrames(longWAL), int64(1700), "the log was checkpointed before reaching the interval")
+}
+
 // TestErasableAccessorTempStoreInMemory checks that erasable connections keep
 // SQLite's temporary journals in memory, so a journal holding the original
 // content of a securely deleted page never spills to a temp file on disk.
