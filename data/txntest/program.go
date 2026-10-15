@@ -19,8 +19,22 @@ package txntest
 import (
 	"fmt"
 
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
+
+// MakeLogicSigArgs returns zero-filled LogicSig args totaling totalSize bytes,
+// split into arguments of at most transactions.MaxLogicSigArgSize bytes.
+// totalSize must be nonnegative; zero returns no arguments.
+func MakeLogicSigArgs(totalSize int) [][]byte {
+	var args [][]byte
+	for remaining := totalSize; remaining > 0; {
+		argSize := min(remaining, transactions.MaxLogicSigArgSize)
+		args = append(args, make([]byte, argSize))
+		remaining -= argSize
+	}
+	return args
+}
 
 // GenerateUnsaltedProgramOfSize returns a TEAL bytecode of `size` bytes which always succeeds.
 // `size` must be at least 5 bytes.

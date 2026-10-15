@@ -3502,9 +3502,7 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 	case OnCompletion:
 		sv.Uint = uint64(txn.OnCompletion)
 	case RejectVersion:
-		sv.Uint = txn.RejectVersion
-	case MaxLogicSigArgsTotalSize:
-		sv.Uint = txn.MaxLogicSigArgsTotalSize
+		sv.Uint = uint64(txn.RejectVersion)
 
 	case ApplicationArgs:
 		if arrayFieldIdx >= uint64(len(txn.ApplicationArgs)) {
@@ -4109,8 +4107,6 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 		sv.Uint = cx.Proto.Payouts.MinBalance
 	case PayoutsMaxBalance:
 		sv.Uint = cx.Proto.Payouts.MaxBalance
-	case LogicSigArgsTotalSize:
-		sv.Uint = uint64(cx.txn.Lsig.ArgsLen())
 	default:
 		return sv, fmt.Errorf("invalid global field %s", fs.field)
 	}

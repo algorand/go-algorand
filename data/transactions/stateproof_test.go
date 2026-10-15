@@ -35,14 +35,13 @@ import (
 type stateproofTxnTestCase struct {
 	expectedError error
 
-	StateProofInterval       uint64
-	fee                      basics.MicroAlgos
-	note                     []byte
-	group                    crypto.Digest
-	lease                    [32]byte
-	rekeyValue               basics.Address
-	maxLogicSigArgsTotalSize uint64
-	sender                   basics.Address
+	StateProofInterval uint64
+	fee                basics.MicroAlgos
+	note               []byte
+	group              crypto.Digest
+	lease              [32]byte
+	rekeyValue         basics.Address
+	sender             basics.Address
 }
 
 func basicStateProofTxnFieldsForTest() StateProofTxnFields {
@@ -82,13 +81,12 @@ func (s *stateproofTxnTestCase) runIsWellFormedForTestCase() error {
 	return Transaction{
 		Type: protocol.StateProofTx,
 		Header: Header{
-			Sender:                   s.sender,
-			Fee:                      s.fee,
-			Note:                     s.note,
-			Group:                    s.group,
-			Lease:                    s.lease,
-			RekeyTo:                  s.rekeyValue,
-			MaxLogicSigArgsTotalSize: s.maxLogicSigArgsTotalSize,
+			Sender:  s.sender,
+			Fee:     s.fee,
+			Note:    s.note,
+			Group:   s.group,
+			Lease:   s.lease,
+			RekeyTo: s.rekeyValue,
 		},
 		StateProofTxnFields: basicStateProofTxnFieldsForTest(),
 	}.WellFormed(SpecialAddresses{}, curProto)
@@ -104,8 +102,7 @@ func TestWellFormedStateProofTxn(t *testing.T) {
 		/* 3 */ {expectedError: errGroupMustBeZeroInStateproofTxn, sender: StateProofSender, group: crypto.Digest{1, 2, 3}},
 		/* 4 */ {expectedError: errRekeyToMustBeZeroInStateproofTxn, sender: StateProofSender, rekeyValue: basics.Address{1, 2, 3, 4}},
 		/* 5 */ {expectedError: errLeaseMustBeZeroInStateproofTxn, sender: StateProofSender, lease: [32]byte{1, 2, 3, 4}},
-		/* 6 */ {expectedError: errMaxLogicSigArgsTotalSizeMustBeZeroInStateproofTxn, sender: StateProofSender, maxLogicSigArgsTotalSize: 1},
-		/* 7 */ {expectedError: nil, fee: basics.MicroAlgos{Raw: 0}, note: nil, group: crypto.Digest{}, lease: [32]byte{}, rekeyValue: basics.Address{}, sender: StateProofSender},
+		/* 6 */ {expectedError: nil, fee: basics.MicroAlgos{Raw: 0}, note: nil, group: crypto.Digest{}, lease: [32]byte{}, rekeyValue: basics.Address{}, sender: StateProofSender},
 	}
 	for i, testCase := range cases {
 		t.Run(fmt.Sprintf("case %d", i), func(t *testing.T) {

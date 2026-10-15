@@ -24,6 +24,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -102,6 +103,8 @@ func TestPopulateFeeUsageIncludesBigLogicSigProgram(t *testing.T) {
 func TestPopulateFeeUsageIncludesBigLogicSigArgs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	program, err := logic.AssembleString("#pragma version 1\narg 0; pop; int 1")
+	require.NoError(t, err)
 	proto := config.Consensus[protocol.ConsensusFuture]
 	argsSize := int(proto.LogicSigMaxSize) + 10
 	fee := basics.MicroAlgos{Raw: proto.MinTxnFee}
@@ -113,13 +116,14 @@ func TestPopulateFeeUsageIncludesBigLogicSigArgs(t *testing.T) {
 						Txn: transactions.SignedTxnWithAD{
 							SignedTxn: transactions.SignedTxn{
 								Txn: transactions.Transaction{
+									Type: protocol.PaymentTx,
 									Header: transactions.Header{
-										Fee:                      fee,
-										MaxLogicSigArgsTotalSize: uint64(argsSize + 100),
+										Fee: fee,
 									},
 								},
 								Lsig: transactions.LogicSig{
-									Args: [][]byte{make([]byte, argsSize)},
+									Logic: program.Program,
+									Args:  [][]byte{make([]byte, argsSize)},
 								},
 							},
 						},

@@ -230,9 +230,9 @@ type ConsensusParams struct {
 	// 0 for no support, otherwise highest version supported
 	LogicSigVersion uint64
 
-	// LogicSigMaxSize is the legacy LogicSig size unit used for the per-LogicSig
-	// args allowance and to compute group size pools and free program-byte
-	// allowance.
+	// LogicSigMaxSize is the legacy LogicSig size limit and the per-transaction
+	// contribution to group size pools and free allowances for program and
+	// argument bytes.
 	LogicSigMaxSize uint64
 
 	// MaxAbsoluteLogicSigProgramSize is the absolute maximum size of a LogicSig
@@ -240,7 +240,8 @@ type ConsensusParams struct {
 	MaxAbsoluteLogicSigProgramSize uint64
 
 	// MaxAbsoluteLogicSigArgsSize is the absolute maximum total size of the
-	// arguments carried by one LogicSig.
+	// arguments carried by one LogicSig when args beyond the group allowance
+	// can be purchased. Zero retains the legacy unpriced args pooling rules.
 	MaxAbsoluteLogicSigArgsSize uint64
 
 	// sum of estimated op cost must be less than this
@@ -1055,7 +1056,6 @@ func initConsensusProtocols() {
 	v18.LogicSigVersion = 1
 	v18.LogicSigMaxSize = 1000
 	v18.MaxAbsoluteLogicSigProgramSize = 1000
-	v18.MaxAbsoluteLogicSigArgsSize = 1000
 	v18.LogicSigMaxCost = 20000
 	v18.LogicSigMsig = true
 	v18.MaxAssetsPerAccount = 1000
@@ -1478,7 +1478,6 @@ func initConsensusProtocols() {
 
 	v40.LogicSigVersion = 11
 	v40.MaxAbsoluteLogicSigProgramSize = 16000
-	v40.MaxAbsoluteLogicSigArgsSize = 16000
 
 	v40.Payouts.Enabled = true
 	v40.Payouts.Percent = 50
@@ -1558,6 +1557,7 @@ func initConsensusProtocols() {
 	vFuture.EnablePQSchemeFalcon512 = true
 	vFuture.EnablePQSchemeEd25519 = true
 	vFuture.RequireLogicSigArgAccess = true
+	vFuture.MaxAbsoluteLogicSigArgsSize = 16000
 	vFuture.AllowGroupedHeartbeats = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture

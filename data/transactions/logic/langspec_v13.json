@@ -1147,8 +1147,7 @@
         "StateProofPK",
         "NumApprovalProgramPages",
         "NumClearStateProgramPages",
-        "RejectVersion",
-        "MaxLogicSigArgsTotalSize"
+        "RejectVersion"
       ],
       "ArgEnumTypes": [
         "address",
@@ -1210,7 +1209,6 @@
         "uint64",
         "[]byte",
         "[64]byte",
-        "uint64",
         "uint64",
         "uint64",
         "uint64"
@@ -1678,8 +1676,7 @@
         "PayoutsGoOnlineFee",
         "PayoutsPercent",
         "PayoutsMinBalance",
-        "PayoutsMaxBalance",
-        "LogicSigArgsTotalSize"
+        "PayoutsMaxBalance"
       ],
       "ArgEnumTypes": [
         "uint64",
@@ -1701,7 +1698,6 @@
         "uint64",
         "[32]byte",
         "bool",
-        "uint64",
         "uint64",
         "uint64",
         "uint64",
@@ -1957,8 +1953,7 @@
         "StateProofPK",
         "NumApprovalProgramPages",
         "NumClearStateProgramPages",
-        "RejectVersion",
-        "MaxLogicSigArgsTotalSize"
+        "RejectVersion"
       ],
       "ArgEnumTypes": [
         "address",
@@ -2020,7 +2015,6 @@
         "uint64",
         "[]byte",
         "[64]byte",
-        "uint64",
         "uint64",
         "uint64",
         "uint64"
@@ -2781,8 +2775,7 @@
         "StateProofPK",
         "NumApprovalProgramPages",
         "NumClearStateProgramPages",
-        "RejectVersion",
-        "MaxLogicSigArgsTotalSize"
+        "RejectVersion"
       ],
       "ArgEnumTypes": [
         "address",
@@ -2844,7 +2837,6 @@
         "uint64",
         "[]byte",
         "[64]byte",
-        "uint64",
         "uint64",
         "uint64",
         "uint64"
@@ -6469,8 +6461,7 @@
         "StateProofPK",
         "NumApprovalProgramPages",
         "NumClearStateProgramPages",
-        "RejectVersion",
-        "MaxLogicSigArgsTotalSize"
+        "RejectVersion"
       ],
       "ArgEnumTypes": [
         "address",
@@ -6532,7 +6523,6 @@
         "uint64",
         "[]byte",
         "[64]byte",
-        "uint64",
         "uint64",
         "uint64",
         "uint64"
@@ -7145,8 +7135,7 @@
         "StateProofPK",
         "NumApprovalProgramPages",
         "NumClearStateProgramPages",
-        "RejectVersion",
-        "MaxLogicSigArgsTotalSize"
+        "RejectVersion"
       ],
       "ArgEnumTypes": [
         "address",
@@ -7208,7 +7197,6 @@
         "uint64",
         "[]byte",
         "[64]byte",
-        "uint64",
         "uint64",
         "uint64",
         "uint64"

@@ -186,9 +186,8 @@ func WrapSignedTxnsWithAD(txgroup []SignedTxn) []SignedTxnWithAD {
 // logicSigProgramFeeContribution accounts for priced LogicSig program bytes.
 // This cannot live in Transaction.FeeFactor: the LogicSig is carried by
 // SignedTxn, outside the committed Transaction, and the priced byte count can
-// depend on the group-level LogicSig size allowance. LogicSig args are
-// intentionally ignored here because they can be supplied or padded
-// independently of the LogicSig program signer.
+// depend on the group-level LogicSig size allowance. LogicSig args have a
+// separate allowance, accounted for by logicSigArgsFeeContribution.
 func logicSigProgramFeeContribution(txgroup []SignedTxnWithAD, proto config.ConsensusParams) basics.Micros {
 	programBytes := 0
 	for _, txad := range txgroup {
@@ -202,7 +201,7 @@ func logicSigProgramFeeContribution(txgroup []SignedTxnWithAD, proto config.Cons
 // logicSigArgsFeeContribution accounts for all LogicSig args bytes beyond the
 // group allowance.
 func logicSigArgsFeeContribution(txgroup []SignedTxnWithAD, proto config.ConsensusParams) basics.Micros {
-	if !proto.TxnSizePricingEnabled() {
+	if proto.MaxAbsoluteLogicSigArgsSize == 0 {
 		return 0
 	}
 
