@@ -1,0 +1,73 @@
+name: DNSSEC Root Anchor
+# Checks the embedded DNSSEC root trust anchor (tools/network/dnssec/anchor.go)
+# against IANA's root-anchors.xml and the live root DNSKEY RRset, so a root KSK
+# rollover is noticed long before it breaks DNSSEC bootstrap resolution.
+# Not a required check: on PRs a failure is a visible signal, not a merge blocker.
+on:
+  pull_request:
+    branches:
+      - master
+      - 'rel/**'
+  schedule:
+    - cron: '17 6 * * 1' # Mondays 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dnssec-root-anchor-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  root_anchor:
+    name: Root anchor (${{ matrix.ref || 'PR' }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # PRs check their own tree; scheduled and manual runs check every branch that ships.
+        ref: ${{ fromJSON(github.event_name == 'pull_request' && '[""]' || '["master", "rel/stable", "rel/beta"]') }}
+    runs-on: ubuntu-24.04
+    env:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      # On PRs an unreachable IANA or root server only skips, to avoid flaky reds.
+      # Elsewhere it fails, so a moved URL or blocked DNS doesn't silently disable the check.
+      DNSSEC_LIVE_ANCHOR_CHECK: ${{ github.event_name == 'pull_request' && '1' || 'strict' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ matrix.ref }}
+      - name: Use this workflow's version of the live anchor test
+        # Release branches may predate the test; it only needs the anchor parser, which they all have.
+        if: matrix.ref != ''
+        run: |
+          git fetch --no-tags --depth=1 origin ${{ github.sha }}
+          git checkout FETCH_HEAD -- tools/network/dnssec/anchor_live_test.go
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+      - name: Check embedded root anchor against live sources
+        run: |
+          set +e
+          go test -count=1 -v -run '^TestLiveRootAnchor$' ./tools/network/dnssec/ 2>&1 | tee test.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if ! grep -qx '=== RUN   TestLiveRootAnchor' test.log; then
+            echo "::error title=DNSSEC root anchor::TestLiveRootAnchor did not run"
+            exit 1
+          fi
+          sed -n 's/^[[:space:]]*Messages:[[:space:]]*/::error title=DNSSEC root anchor out of date::/p' test.log
+          if [ "$DNSSEC_LIVE_ANCHOR_CHECK" = strict ]; then
+            unavailable='::error title=DNSSEC root anchor source unreachable::'
+          else
+            unavailable='::warning title=DNSSEC root anchor check skipped::'
+          fi
+          sed -n "s/^[[:space:]]*anchor_live_test\.go:[0-9]*: \(live source unavailable: \)/${unavailable}\1/p" test.log
+          exit "$status"
+      - name: Notify Slack on failure
+        if: failure() && github.event_name != 'pull_request'
+        uses: ./.github/actions/slack-notify
+        with:
+          job-type: "DNSSEC Root Anchor"
+          build-type: ${{ github.event_name == 'schedule' && 'Scheduled Check' || 'Manual Check' }}
+          details: "• Branch: `${{ matrix.ref }}`"
