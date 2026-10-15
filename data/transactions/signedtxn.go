@@ -186,9 +186,8 @@ func WrapSignedTxnsWithAD(txgroup []SignedTxn) []SignedTxnWithAD {
 // logicSigProgramFeeContribution accounts for priced LogicSig program bytes.
 // This cannot live in Transaction.FeeFactor: the LogicSig is carried by
 // SignedTxn, outside the committed Transaction, and the priced byte count can
-// depend on the group-level LogicSig size allowance. LogicSig args are
-// intentionally ignored here because they can be supplied or padded
-// independently of the LogicSig program signer.
+// depend on the group-level LogicSig size allowance. LogicSig args have a
+// separate allowance, accounted for by logicSigArgsFeeContribution.
 func logicSigProgramFeeContribution(txgroup []SignedTxnWithAD, proto config.ConsensusParams) basics.Micros {
 	programBytes := 0
 	for _, txad := range txgroup {
@@ -196,6 +195,23 @@ func logicSigProgramFeeContribution(txgroup []SignedTxnWithAD, proto config.Cons
 	}
 	freeProgramBytes := len(txgroup) * int(proto.LogicSigMaxSize)
 	surcharge, _ := proto.PerByteTxnSurcharge.MulInt(programBytes - freeProgramBytes)
+	return surcharge
+}
+
+// logicSigArgsFeeContribution accounts for all LogicSig args bytes beyond the
+// group allowance.
+func logicSigArgsFeeContribution(txgroup []SignedTxnWithAD, proto config.ConsensusParams) basics.Micros {
+	if proto.MaxAbsoluteLogicSigArgsSize == 0 {
+		return 0
+	}
+
+	argsBytes := 0
+	for _, txad := range txgroup {
+		argsBytes += txad.SignedTxn.Lsig.ArgsLen()
+	}
+
+	freeArgsBytes := len(txgroup) * int(proto.LogicSigMaxSize)
+	surcharge, _ := proto.PerByteTxnSurcharge.MulInt(argsBytes - freeArgsBytes)
 	return surcharge
 }
 
@@ -213,5 +229,6 @@ func SummarizeFees(txgroup []SignedTxnWithAD, proto config.ConsensusParams) (usa
 		paid = paid.AddSaturate(txad.SignedTxn.Txn.Fee)
 	}
 	usage = basics.AddSaturate(usage, logicSigProgramFeeContribution(txgroup, proto))
+	usage = basics.AddSaturate(usage, logicSigArgsFeeContribution(txgroup, proto))
 	return usage, paid
 }
