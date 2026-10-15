@@ -17,6 +17,7 @@
 package util
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -114,6 +115,55 @@ func CopyFile(src, dst string) (int64, error) {
 	defer destination.Close()
 	nBytes, err := io.Copy(destination, source)
 	return nBytes, err
+}
+
+// eraseChunkBytes is the size of the buffer of zeros EraseFile writes at a time.
+const eraseChunkBytes = 1 << 20
+
+// EraseFile overwrites the contents of the file at path with zeros, flushes
+// them to storage, and removes the file, reporting whether the contents were
+// overwritten. A path that is not a regular file, such as a symbolic link, or
+// a file with other hard links, is only removed: overwriting it would also
+// destroy the contents reachable through its other names. If overwriting
+// fails, the file is still removed and the error is returned.
+// Overwriting in place erases the previous contents on file systems that
+// write in place; copy-on-write file systems, snapshots and flash translation
+// layers may keep the old blocks.
+func EraseFile(path string) (bool, error) {
+	erased, err := overwriteWithZeros(path)
+	return erased, errors.Join(err, os.Remove(path))
+}
+
+// overwriteWithZeros overwrites the contents of a regular file that has no
+// other hard links with zeros and syncs it, reporting whether it did.
+func overwriteWithZeros(path string) (bool, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return false, err
+	}
+	if !info.Mode().IsRegular() {
+		return false, nil
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		return false, err
+	}
+	links, err := hardLinkCount(f)
+	if err != nil || links != 1 {
+		return false, errors.Join(err, f.Close())
+	}
+
+	size := info.Size()
+	zeros := make([]byte, min(eraseChunkBytes, size))
+	for off := int64(0); off < size && err == nil; off += int64(len(zeros)) {
+		_, err = f.WriteAt(zeros[:min(int64(len(zeros)), size-off)], off)
+	}
+	if err == nil {
+		// The file system may discard writes that have not reached storage
+		// when the file is removed.
+		err = f.Sync()
+	}
+	return err == nil, errors.Join(err, f.Close())
 }
 
 // FileExists checks to see if the specified file (or directory) exists

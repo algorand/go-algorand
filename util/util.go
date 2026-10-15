@@ -20,6 +20,7 @@ package util
 
 import (
 	"fmt"
+	"os"
 	"syscall"
 )
 
@@ -67,6 +68,19 @@ func SetFdSoftLimit(newLimit uint64) error {
 		return fmt.Errorf("SetFdSoftLimit() err: %w", err)
 	}
 	return nil
+}
+
+// hardLinkCount returns the number of hard links to the open file f.
+func hardLinkCount(f *os.File) (uint64, error) {
+	info, err := f.Stat()
+	if err != nil {
+		return 0, err
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return 0, fmt.Errorf("no link count available for %s", f.Name())
+	}
+	return uint64(stat.Nlink), nil
 }
 
 // Getrusage gets file descriptors usage statistics
