@@ -3072,7 +3072,7 @@ func (z LogicSigArgs) MsgIsZero() bool {
 // LogicSigArgsMaxSize returns a maximum valid message size for this message type
 func LogicSigArgsMaxSize() (s int) {
 	// Calculating size of slice: z
-	s += msgp.ArrayHeaderSize + ((EvalMaxArgs) * (msgp.BytesPrefixSize + MaxLogicSigArgSize))
+	s += msgp.ArrayHeaderSize + (EvalMaxArgs * msgp.BytesPrefixSize) + bounds.MaxLogicSigMaxSize
 	return
 }
 
