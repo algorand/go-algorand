@@ -55,21 +55,18 @@ func persistent(as []action) bool {
 	return false
 }
 
-// The persisted state can be compressed with zstd.  Most of it is the votes
-// of the round's steps, and the state holds their content several times
-// over: every vote carries the proposal value, the bundle that proved a
-// threshold repeats the signatures of the votes that formed it, and msgpack
-// writes the field names of every struct.  zstd replaces those repeats with
-// references and leaves the signatures and proofs, which cannot be
-// compressed; a mainnet snapshot shrinks about four times.
+// The persisted state is compressed with zstd.  Most of it is the votes of
+// the round's steps, and the state holds their content several times over:
+// every vote carries the proposal value, the bundle that proved a threshold
+// repeats the signatures of the votes that formed it, and msgpack writes the
+// field names of every struct.  zstd replaces those repeats with references
+// and leaves the signatures and proofs, which cannot be compressed; a
+// mainnet snapshot shrinks about four times.
 //
-// A compressed state is restored since this release and persisted from the
-// next one, so that the release before this one, which does not decompress,
-// restores what this one persists.
+// A compressed state has been restored since the previous release, which
+// persisted the uncompressed form, so that a rollback to it restores what
+// this release persists.
 const snapshotCompressionLevel = 3
-
-// compressSnapshots is whether encode compresses the state; see above.
-const compressSnapshots = false
 
 // zstdFrameMagic starts every zstd frame.  A state persisted uncompressed
 // starts with a msgpack map header, which cannot be this.
@@ -85,8 +82,7 @@ func compressSnapshot(raw []byte) []byte {
 	return compressed
 }
 
-// encode serializes the current state into a byte array, compressed when
-// compressSnapshots is set.
+// encode serializes the current state into a compressed byte array.
 func encode(t timers.Clock[TimeoutType], rr rootRouter, p player, a []action, reflect bool) (raw []byte) {
 	var s diskState
 
@@ -125,9 +121,7 @@ func encode(t timers.Clock[TimeoutType], rr rootRouter, p player, a []action, re
 	} else {
 		raw = protocol.Encode(&s)
 	}
-	if compressSnapshots {
-		raw = compressSnapshot(raw)
-	}
+	raw = compressSnapshot(raw)
 	return
 }
 

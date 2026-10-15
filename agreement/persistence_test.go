@@ -231,10 +231,10 @@ func TestRandomizedEncodingFullDiskState(t *testing.T) {
 
 }
 
-// TestAgreementSnapshotCompression checks that this release persists the
-// state uncompressed, and restores it compressed as the next release will
-// persist it: a compressed state decodes to the same state, through the
-// crash database as well, and a damaged one is rejected.
+// TestAgreementSnapshotCompression checks that the persisted state is a zstd
+// frame that decodes to the state, through the crash database as well, that
+// the uncompressed form the previous release persisted decodes to the same
+// state, and that a damaged frame is rejected.
 func TestAgreementSnapshotCompression(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -242,14 +242,12 @@ func TestAgreementSnapshotCompression(t *testing.T) {
 	clock := timers.MakeMonotonicClock[TimeoutType](time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
 	log := makeServiceLogger(logging.Base())
 
-	uncompressed := encode(clock, router, player, []action{}, false)
-	require.False(t, bytes.HasPrefix(uncompressed, zstdFrameMagic), "this release persists the state compressed")
-	compressed := compressSnapshot(uncompressed)
-	require.True(t, bytes.HasPrefix(compressed, zstdFrameMagic))
-	require.Less(t, len(compressed), len(uncompressed))
-	roundTrip, err := zstd.Decompress(nil, compressed)
+	compressed := encode(clock, router, player, []action{}, false)
+	require.True(t, bytes.HasPrefix(compressed, zstdFrameMagic), "the state is persisted uncompressed")
+	uncompressed, err := zstd.Decompress(nil, compressed)
 	require.NoError(t, err)
-	require.Equal(t, uncompressed, roundTrip)
+	require.False(t, bytes.HasPrefix(uncompressed, zstdFrameMagic))
+	require.Less(t, len(compressed), len(uncompressed))
 
 	_, rr1, p1, _, err := decode(compressed, clock, log, false)
 	require.NoError(t, err)
