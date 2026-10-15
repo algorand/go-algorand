@@ -18,6 +18,7 @@ package agreement
 
 import (
 	"bytes"
+	"fmt"
 	"sort"
 
 	"github.com/algorand/go-algorand/config"
@@ -29,7 +30,15 @@ import (
 type proposalVoteCounter struct {
 	_struct struct{} `codec:","`
 
+	// Count is the total weight of the votes for the proposal.
 	Count uint64
+
+	// Votes holds the votes for the proposal by sender.  They are the
+	// entries of voteTracker.Voters for the proposal, and bundles are
+	// generated from Voters, so that a persisted state without Votes
+	// restores; Votes is maintained so that a state persisted by this
+	// release restores on the previous one, which generates bundles from
+	// Votes.
 	Votes map[basics.Address]vote `codec:"Votes,allocbound=-"`
 }
 
@@ -237,8 +246,6 @@ func (tracker *voteTracker) handle(r routerHandle, p player, e0 event) event {
 		}
 
 		// overThreshold is gurentee to return a valid proposal when overAfter is true
-		proposalVote := tracker.Counts[prop]
-
 		round := e.Vote.R.Round
 		period := e.Vote.R.Period
 		step := e.Vote.R.Step
@@ -251,7 +258,7 @@ func (tracker *voteTracker) handle(r routerHandle, p player, e0 event) event {
 			res = thresholdEvent{T: nextThreshold, Round: round, Period: period, Step: step, Proposal: prop, Proto: e.Proto}
 		}
 
-		res.Bundle = tracker.genBundle(proto, proposalVote)
+		res.Bundle = tracker.genBundle(proto, prop)
 
 		return res
 	case voteFilterRequest:
@@ -314,17 +321,17 @@ func (tracker *voteTracker) overThreshold(proto config.ConsensusParams, step ste
 
 // genBundle generates a bundle which proves that a quorum of votes exists for
 // the given proposal-value.
-func (tracker *voteTracker) genBundle(proto config.ConsensusParams, proposalVotes proposalVoteCounter) (b unauthenticatedBundle) {
-	// allocate votes array, with the same size as the proposal votes length.
-	votes := make([]vote, len(proposalVotes.Votes))
+func (tracker *voteTracker) genBundle(proto config.ConsensusParams, proposal proposalValue) (b unauthenticatedBundle) {
+	// collect the votes for the proposal
+	var votes []vote
+	for _, v := range tracker.Voters {
+		if v.R.Proposal == proposal {
+			votes = append(votes, v)
+		}
+	}
 
 	// pack the votes into the bundle
 	// we pack votes in descending order and stop after packing enough votes to reach a quorum
-	i := 0
-	for _, v := range proposalVotes.Votes {
-		votes[i] = v
-		i++
-	}
 	sort.SliceStable(votes, func(i, j int) bool {
 		return votes[i].Cred.Weight > votes[j].Cred.Weight || (votes[i].Cred.Weight == votes[j].Cred.Weight && bytes.Compare(votes[i].R.Sender[:], votes[j].R.Sender[:]) > 0)
 	})
@@ -338,7 +345,7 @@ func (tracker *voteTracker) genBundle(proto config.ConsensusParams, proposalVote
 	// pack equivocation votes into the bundle
 	// similarly to regular votes, we pack them in descending order and stop if we reach a quorum.
 	equiPairs := make([]equivocationVote, len(tracker.Equivocators))
-	i = 0
+	i := 0
 	for _, vPair := range tracker.Equivocators {
 		equiPairs[i] = vPair
 		i++
@@ -352,4 +359,41 @@ func (tracker *voteTracker) genBundle(proto config.ConsensusParams, proposalVote
 	equiPairs = equiPairs[:cutoff]
 
 	return makeBundle(proto, votes[0].R.Proposal, votes, equiPairs)
+}
+
+// validate checks the relations between the tracker's maps that handle and
+// genBundle rely on, for a tracker restored from persisted state: the
+// counts are the weights of the votes in Voters, the equivocators count is
+// the weight of Equivocators, and a sender is in one of the maps, under its
+// own address.  A persisted state that violates them is not restored.
+func (tracker *voteTracker) validate() error {
+	weights := make(map[proposalValue]uint64, len(tracker.Counts))
+	for sender, v := range tracker.Voters {
+		if v.R.Sender != sender {
+			return fmt.Errorf("voteTracker: vote of %v stored under %v", v.R.Sender, sender)
+		}
+		if _, equivocator := tracker.Equivocators[sender]; equivocator {
+			return fmt.Errorf("voteTracker: %v is both a voter and an equivocator", sender)
+		}
+		weights[v.R.Proposal] += v.Cred.Weight
+	}
+	if len(weights) != len(tracker.Counts) {
+		return fmt.Errorf("voteTracker: votes for %d proposals but counts for %d", len(weights), len(tracker.Counts))
+	}
+	for proposal, counter := range tracker.Counts {
+		if weights[proposal] != counter.Count {
+			return fmt.Errorf("voteTracker: proposal %v counts %d but its votes weigh %d", proposal.BlockDigest, counter.Count, weights[proposal])
+		}
+	}
+	var equivocating uint64
+	for sender, ev := range tracker.Equivocators {
+		if ev.Sender != sender {
+			return fmt.Errorf("voteTracker: equivocation of %v stored under %v", ev.Sender, sender)
+		}
+		equivocating += ev.Cred.Weight
+	}
+	if equivocating != tracker.EquivocatorsCount {
+		return fmt.Errorf("voteTracker: equivocators count %d but the equivocators weigh %d", tracker.EquivocatorsCount, equivocating)
+	}
+	return nil
 }
