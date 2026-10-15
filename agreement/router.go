@@ -17,6 +17,8 @@
 package agreement
 
 import (
+	"fmt"
+
 	"github.com/algorand/go-algorand/config"
 )
 
@@ -140,6 +142,30 @@ type stepRouter struct {
 	VoteTracker voteTracker
 
 	VoteTrackerContract voteTrackerContract
+}
+
+// validate checks the invariants of the state machines of a restored router;
+// see voteTracker.validate.
+func (router *rootRouter) validate() error {
+	for r, rr := range router.Children {
+		if rr == nil {
+			continue
+		}
+		for p, pr := range rr.Children {
+			if pr == nil {
+				continue
+			}
+			for s, sr := range pr.Children {
+				if sr == nil {
+					continue
+				}
+				if err := sr.VoteTracker.validate(); err != nil {
+					return fmt.Errorf("round %d period %d step %d: %w", r, p, s, err)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func makeRootRouter(p player) (res rootRouter) {

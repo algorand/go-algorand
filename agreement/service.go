@@ -224,6 +224,11 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 	raw, err := restore(s.log, s.Accessor)
 	if err == nil {
 		clock, router, status, a, err = decode(raw, s.Clock, s.log, false)
+		if err == nil {
+			if err = router.validate(); err != nil {
+				s.log.Errorf("restore (agreement): persisted state is inconsistent, not restoring it: %v", err)
+			}
+		}
 		if err != nil {
 			reset(s.log, s.Accessor)
 		} else {

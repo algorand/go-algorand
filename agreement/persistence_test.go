@@ -19,6 +19,7 @@ package agreement
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"testing"
 	"time"
 
@@ -335,5 +336,72 @@ func TestDecodeErrs(t *testing.T) {
 		dse := protocol.EncodeReflect(ds)
 		_, _, _, _, err := decode(dse, clock, log, false)
 		require.ErrorContains(t, err, "UnexpectedRouterField")
+	}
+}
+
+// TestRestoreRejectsInconsistentState checks that a persisted state whose
+// vote tracker fails validation is not restored: the node starts the round
+// fresh and the state is deleted, while a consistent state is restored.
+func TestRestoreRejectsInconsistentState(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	helper := voteMakerHelper{}
+	helper.Setup()
+	ledger := makeTestLedger(nil)
+	clock := timers.MakeMonotonicClock[TimeoutType](time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
+	log := serviceLogger{Logger: logging.TestingLog(t)}
+
+	for _, consistent := range []bool{true, false} {
+		accessor, err := db.MakeAccessor(fmt.Sprintf("%s_%v_crash.db", t.Name(), consistent), false, true)
+		require.NoError(t, err)
+		require.NoError(t, accessor.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			return agreeInstallDatabase(tx)
+		}))
+
+		// the state of a node between persisting its cert vote and sending
+		// it, with one soft vote in the soft step's tracker; the inconsistent
+		// state counts weight no voter accounts for
+		status := player{Round: ledger.NextRound(), Period: 0, Step: next}
+		v := helper.MakeVerifiedVote(t, 0, status.Round, 0, soft, *helper.proposal)
+		tracker := voteTracker{
+			Voters: map[basics.Address]vote{v.R.Sender: v},
+			Counts: map[proposalValue]proposalVoteCounter{v.R.Proposal: {Count: v.Cred.Weight, Votes: map[basics.Address]vote{v.R.Sender: v}}},
+		}
+		if !consistent {
+			counter := tracker.Counts[v.R.Proposal]
+			counter.Count++
+			tracker.Counts[v.R.Proposal] = counter
+		}
+		router := makeRootRouter(status)
+		router.Children = map[round]*roundRouter{status.Round: {Children: map[period]*periodRouter{0: {Children: map[step]*stepRouter{soft: {VoteTracker: tracker}}}}}}
+		pending := []action{pseudonodeAction{T: attest, Round: status.Round, Period: 0, Step: cert}}
+		require.NoError(t, persist(log, accessor, status.Round, 0, cert, encode(clock, router, status, pending, false)))
+
+		s := &Service{log: log}
+		s.Ledger = ledger
+		s.Clock = clock
+		s.Accessor = accessor
+		input := make(chan externalEvent)
+		output := make(chan []action)
+		ready := make(chan externalDemuxSignals)
+		s.wg.Add(1)
+		go s.mainLoop(input, output, ready)
+		a := <-output
+		signals := <-ready
+		close(input)
+		s.wg.Wait()
+
+		_, restoreErr := restore(log, accessor)
+		if consistent {
+			require.True(t, persistent(a), "the restored batch does not carry the pending attest")
+			require.Equal(t, status.Round, signals.CurrentRound)
+			require.NoError(t, restoreErr, "the restored state was deleted")
+		} else {
+			require.False(t, persistent(a), "the inconsistent state was restored")
+			require.Len(t, a, 2) // assemble and rezero: the fresh start
+			require.Equal(t, ledger.NextRound(), signals.CurrentRound)
+			require.ErrorIs(t, restoreErr, errNoCrashStateAvailable, "the inconsistent state was not deleted")
+		}
+		accessor.Close()
 	}
 }
