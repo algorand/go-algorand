@@ -80,6 +80,29 @@ type GroupContext struct {
 	consensusParams config.ConsensusParams
 	signedGroupTxns []transactions.SignedTxn
 	evalParams      *logic.EvalParams
+
+	// pqLsigs holds, by group index, the LogicSig each ls-scheme PQSig carries,
+	// filled in by pqLsig. Its args sit encoded in the PQSig, and decoding them
+	// includes a canonical-encoding check that re-encodes them, so the group
+	// size check and evaluation share one decode rather than paying twice.
+	pqLsigs []*transactions.LogicSig
+}
+
+// pqLsig returns the LogicSig carried by the ls-scheme PQSig of the gith
+// transaction, decoding it on first use.
+func (g *GroupContext) pqLsig(gi int) (transactions.LogicSig, error) {
+	if g.pqLsigs == nil {
+		g.pqLsigs = make([]*transactions.LogicSig, len(g.signedGroupTxns))
+	}
+	if lsig := g.pqLsigs[gi]; lsig != nil {
+		return *lsig, nil
+	}
+	lsig, err := g.signedGroupTxns[gi].PQsig.Lsig()
+	if err != nil {
+		return transactions.LogicSig{}, err
+	}
+	g.pqLsigs[gi] = &lsig
+	return lsig, nil
 }
 
 var errTxnSigHasNoSig = errors.New("signedtxn has no sig")
@@ -234,7 +257,7 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 		return nil, &TxGroupError{err: err, GroupIndex: groupIndex, Reason: TxGroupErrorReasonNotWellFormed}
 	}
 
-	if err := logicSigGroupSizeCheck(stxs, groupCtx); err != nil {
+	if err := logicSigGroupSizeCheck(groupCtx); err != nil {
 		return nil, err
 	}
 
@@ -254,7 +277,8 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 // handling of content attached to program-less LogicSigs: ignored before
 // LogicSig size pooling, args counted in the size pool once pooling exists, and
 // any content rejected after transaction size pricing.
-func logicSigGroupSizeCheck(stxs []transactions.SignedTxn, groupCtx *GroupContext) *TxGroupError {
+func logicSigGroupSizeCheck(groupCtx *GroupContext) *TxGroupError {
+	stxs := groupCtx.signedGroupTxns
 	lSigPooledSize := 0
 	lSigArgsSize := 0
 	lSigArgsNeedSizePooling := false
@@ -284,8 +308,8 @@ func logicSigGroupSizeCheck(stxs []transactions.SignedTxn, groupCtx *GroupContex
 		// A program authorizing from an ls-scheme PQSig costs the group what one
 		// in a LogicSig costs. Malformed args are rejected here rather than
 		// counted, since there is no honest size to charge for them.
-		if pqsig := stxs[i].PQsig; pqsig.IsLogicSig() {
-			pqLsig, err := pqsig.Lsig()
+		if stxs[i].PQsig.IsLogicSig() {
+			pqLsig, err := groupCtx.pqLsig(i)
 			if err != nil {
 				return &TxGroupError{err: err, GroupIndex: i, Reason: TxGroupErrorReasonNotWellFormed}
 			}
@@ -501,7 +525,7 @@ func pqLogicSigSanityCheckPrep(gi int, groupCtx *GroupContext) (transactions.Log
 		return transactions.LogicSig{}, err
 	}
 
-	lsig, err := txn.PQsig.Lsig()
+	lsig, err := groupCtx.pqLsig(gi)
 	if err != nil {
 		return transactions.LogicSig{}, err
 	}
