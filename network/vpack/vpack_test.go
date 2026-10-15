@@ -17,6 +17,7 @@
 package vpack
 
 import (
+	"bytes"
 	"encoding/json"
 	"reflect"
 	"slices"
@@ -104,6 +105,61 @@ func TestEncodingTest(t *testing.T) {
 		require.Equal(t, *v0, v1) // vote objects match
 	}
 	t.Logf("TestEncodingTest: %d expected errors out of %d iterations", errorCount, iters)
+}
+
+// legacyPsEncoding rewrites a vote encoded by the current codec, which omits the
+// zero-valued sig.ps field, into the form produced by nodes that encode
+// crypto.OneTimeSignature without omitempty: a 6-entry sig map with ps present
+// as 64 zero bytes. Keys are sorted, so ps goes between p2s and s.
+func legacyPsEncoding(t *testing.T, modern []byte) []byte {
+	sigHdr := append([]byte(msgpFixstrSig), msgpFixMapMask|5)
+	i := bytes.LastIndex(modern, sigHdr)
+	require.GreaterOrEqual(t, i, 0, "modern vote must contain a 5-entry sig map")
+	sTag := []byte(msgpFixstrS + msgpBin8Len64)
+	j := bytes.LastIndex(modern, sTag)
+	require.Greater(t, j, i)
+
+	return slices.Concat(
+		modern[:i],
+		[]byte(msgpFixstrSig), []byte{msgpFixMapMask | 6},
+		modern[i+len(sigHdr):j],
+		[]byte(msgpFixstrPs), []byte(msgpBin8Len64), make([]byte, 64),
+		modern[j:],
+	)
+}
+
+// TestLegacyPsRoundTrip checks that a vote carrying the legacy zero-valued
+// sig.ps field compresses to the same bytes as one without it, and that
+// decompression always yields the form without ps.
+func TestLegacyPsRoundTrip(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	voteGen := generateRandomVote()
+	enc := NewStatelessEncoder()
+	dec := NewStatelessDecoder()
+
+	for i := range 100 {
+		v0 := voteGen.Example(i)
+		modern := protocol.EncodeMsgp(v0)
+		legacy := legacyPsEncoding(t, modern)
+		require.Equal(t, len(modern)+len(msgpFixstrPs)+msgpBin8Len64Size, len(legacy))
+		require.LessOrEqual(t, len(legacy), MaxMsgpackVoteSize)
+
+		// both encodings decode to the same vote
+		var v1 agreement.UnauthenticatedVote
+		require.NoError(t, protocol.Decode(legacy, &v1))
+		require.Equal(t, *v0, v1)
+
+		modernComp, err := enc.CompressVote(nil, modern)
+		require.NoError(t, err)
+		legacyComp, err := enc.CompressVote(nil, legacy)
+		require.NoError(t, err)
+		require.Equal(t, modernComp, legacyComp)
+
+		out, err := dec.DecompressVote(nil, legacyComp)
+		require.NoError(t, err)
+		require.Equal(t, modern, out)
+	}
 }
 
 func TestStatelessDecoderErrors(t *testing.T) {

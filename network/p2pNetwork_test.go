@@ -1818,13 +1818,13 @@ func TestP2PVoteCompression(t *testing.T) {
 			require.NoError(t, err)
 			defer netB.Stop()
 
-			// ps is empty, so this is a valid vote
+			// ps is omitted (always-zero legacy field), so this is a valid vote
 			vote1 := map[string]any{
 				"cred": map[string]any{"pf": algocrypto.VrfProof{1}},
 				"r":    map[string]any{"rnd": uint64(2), "snd": [32]byte{3}},
 				"sig": map[string]any{
 					"p": [32]byte{4}, "p1s": [64]byte{5}, "p2": [32]byte{6},
-					"p2s": [64]byte{7}, "ps": [64]byte{}, "s": [64]byte{9},
+					"p2s": [64]byte{7}, "s": [64]byte{9},
 				},
 			}
 			// ps is not empty: vpack compression will fail, but it will still be sent through

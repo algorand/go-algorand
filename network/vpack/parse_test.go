@@ -101,9 +101,20 @@ var parseVoteTestCases = []struct {
 	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{1}}, "r": map[string]any{"rnd": 1}, "sig": []int{1, 2, 3}},
 		"reading map for OneTimeSignature"},
 	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{1}}, "r": map[string]any{"rnd": 1}, "sig": map[string]any{}},
-		"expected fixed map size 6 for OneTimeSignature, got 0"},
+		"expected fixed map size 5 or 6 for OneTimeSignature, got 0"},
 	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{1}}, "r": map[string]any{"rnd": 1}, "sig": map[string]any{"p": []int{1}}},
-		"expected fixed map size 6 for OneTimeSignature, got 1"},
+		"expected fixed map size 5 or 6 for OneTimeSignature, got 1"},
+	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{1}}, "r": map[string]any{"rnd": 1}, "sig": map[string]any{
+		"p": [32]byte{}, "p1s": [64]byte{}, "p2": [32]byte{}, "p2s": [64]byte{}, "ps": [64]byte{}, "s": [64]byte{}, "t": [64]byte{}}},
+		"expected fixed map size 5 or 6 for OneTimeSignature, got 7"},
+	// 5 keys must be the omitempty form: ps may not stand in for s
+	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{1}}, "r": map[string]any{"rnd": 1}, "sig": map[string]any{
+		"p": [32]byte{}, "p1s": [64]byte{}, "p2": [32]byte{}, "p2s": [64]byte{}, "ps": [64]byte{}}},
+		"expected string s, got ps"},
+	// 6 keys must be the legacy form: ps is required
+	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{1}}, "r": map[string]any{"rnd": 1}, "sig": map[string]any{
+		"p": [32]byte{}, "p1s": [64]byte{}, "p2": [32]byte{}, "p2s": [64]byte{}, "s": [64]byte{}, "t": [64]byte{}}},
+		"expected string ps, got s"},
 	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{1}}, "r": map[string]any{"rnd": 1}, "sig": map[string]any{
 		gtFixMapString: "1", "a": 1, "b": 2, "c": 3, "d": 4, "e": 5}},
 		"readString: expected fixstr, got 0xd9"},
