@@ -23,9 +23,14 @@ import (
 
 // A vote is made up of 14 values, some of which are optional.
 // The required values are: cred.pf, r.rnd, r.snd, sig.p, sig.p1s, sig.p2,
-// sig.p2s, sig.s (sig.ps is always zero).
+// sig.p2s, sig.s.
 // The remaining 6 optional values are either present or omitted, and their
 // presence is indicated in a 1-byte bitmask in the header.
+//
+// sig.ps is always zero and is never carried in the compressed form. Votes
+// from nodes that predate omitempty on that field carry it as 64 zero bytes;
+// the encoder accepts that form, and the decoder always produces the form
+// without it. Both decode to the same vote.
 const (
 	bitPer    uint8 = 1 << iota // r.per
 	bitDig                      // r.prop.dig
@@ -48,7 +53,8 @@ const (
 	msgpFixMapMarkerSize = 1
 
 	// MaxMsgpackVoteSize is the maximum size of a vote, including msgpack control characters
-	// and all required and optional data fields.
+	// and all required and optional data fields. It includes the legacy zero-valued sig.ps,
+	// which votes from older nodes still carry.
 	MaxMsgpackVoteSize = msgpFixMapMarkerSize + // top-level fixmap
 		len(msgpFixstrCred) + msgpFixMapMarkerSize + // cred: fixmap
 		len(msgpFixstrPf) + msgpBin8Len80Size + // cred.pf: bin8(80)
@@ -322,12 +328,11 @@ func (d *StatelessDecoder) decompressVote(dst, src []byte) ([]byte, error) {
 		}
 	}
 
-	// crypto.OneTimeSignature does not use omitempty; all fields are required
-	// and always present.
-
-	// sig: fixmap(6) { p, p1s, p2, p2s, ps, s }
+	// sig: fixmap(5) { p, p1s, p2, p2s, s }
+	// All signature fields are required. The always-zero sig.ps is omitted,
+	// even if the compressed vote came from a legacy encoding that carried it.
 	d.dst = append(d.dst, msgpFixstrSig...)
-	d.dst = append(d.dst, msgpFixMapMask|6)
+	d.dst = append(d.dst, msgpFixMapMask|5)
 	// sig.p
 	if err := d.bin32(msgpFixstrP); err != nil {
 		return nil, err
@@ -344,10 +349,6 @@ func (d *StatelessDecoder) decompressVote(dst, src []byte) ([]byte, error) {
 	if err := d.bin64(msgpFixstrP2s); err != nil {
 		return nil, err
 	}
-	// sig.ps is always zero
-	d.dst = append(d.dst, msgpFixstrPs...)
-	d.dst = append(d.dst, msgpBin8Len64...)
-	d.dst = append(d.dst, make([]byte, 64)...)
 	// sig.s
 	if err := d.bin64(msgpFixstrS); err != nil {
 		return nil, err
