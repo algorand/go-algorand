@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -697,4 +698,165 @@ func TestVoteTrackerRejectsUnknownEvent(t *testing.T) {
 	res, err := testCase.Validate(voteTrackerAutomata)
 	require.NoError(t, err)
 	require.NoErrorf(t, res, "VoteTracker did not reject unknown event")
+}
+
+// A threshold event's bundle is generated from the votes in Voters; the
+// per-proposal vote maps in Counts are not maintained, and a tracker restored
+// from a state persisted while they were (the previous release's) proves its
+// thresholds the same way.
+func TestVoteTrackerBundleFromVoters(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	for _, restoredWithVotes := range []bool{false, true} {
+		helper := voteMakerHelper{}
+		helper.Setup()
+		proto := config.Consensus[protocol.ConsensusCurrentVersion]
+		threshold := int(soft.threshold(proto))
+		proposalA := *helper.proposal
+		proposalB := *helper.MakeRandomProposalValue()
+
+		tracker := new(voteTracker)
+		automata := &ioAutomataConcrete{listener: checkedListener{listener: tracker, listenerContract: new(voteTrackerContract)}}
+		feed := func(e event) event {
+			out, err := automata.callHandler(e)
+			require.NoError(t, err)
+			return out
+		}
+
+		// one vote short of a quorum for A, two votes for B, and voter 0
+		// equivocating between them: its weight counts for any proposal
+		for i := 0; i < threshold-1; i++ {
+			require.Equal(t, thresholdEvent{T: none}, feed(helper.MakeValidVoteAcceptedVal(t, i, soft, proposalA)))
+		}
+		for i := threshold; i < threshold+2; i++ {
+			require.Equal(t, thresholdEvent{T: none}, feed(helper.MakeValidVoteAcceptedVal(t, i, soft, proposalB)))
+		}
+		require.Equal(t, thresholdEvent{T: none}, feed(helper.MakeValidVoteAcceptedVal(t, 0, soft, proposalB)))
+		require.Equal(t, uint64(threshold-2), tracker.Counts[proposalA].Count)
+		require.Equal(t, uint64(2), tracker.Counts[proposalB].Count)
+		require.Equal(t, uint64(1), tracker.EquivocatorsCount)
+		require.NoError(t, tracker.validate())
+		for _, counter := range tracker.Counts {
+			require.Empty(t, counter.Votes)
+		}
+		encoded := protocol.Encode(tracker)
+		require.NotContains(t, string(encoded), "Votes", "an empty vote map was persisted")
+
+		if restoredWithVotes {
+			// as persisted by the previous release, which maintained the maps:
+			// restoring it keeps them, which changes nothing
+			for pv, counter := range tracker.Counts {
+				counter.Votes = make(map[basics.Address]vote)
+				for sender, v := range tracker.Voters {
+					if v.R.Proposal == pv {
+						counter.Votes[sender] = v
+					}
+				}
+				tracker.Counts[pv] = counter
+			}
+			encoded = protocol.Encode(tracker)
+			require.Contains(t, string(encoded), "Votes")
+			restored := new(voteTracker)
+			require.NoError(t, protocol.Decode(encoded, restored))
+			require.NoError(t, restored.validate())
+			require.Len(t, restored.Counts[proposalA].Votes, threshold-2)
+			tracker = restored
+			automata = &ioAutomataConcrete{listener: checkedListener{listener: tracker, listenerContract: new(voteTrackerContract)}}
+		}
+
+		// the vote that completes the quorum for A
+		out := feed(helper.MakeValidVoteAcceptedVal(t, threshold-1, soft, proposalA))
+		res, ok := out.(thresholdEvent)
+		require.True(t, ok, "%+v", out)
+		require.Equal(t, softThreshold, res.T)
+		require.Equal(t, proposalA, res.Proposal)
+
+		// the bundle holds every vote for A (all are needed, the equivocator
+		// completes the quorum), none for B, and the equivocation
+		votersForA := make(map[basics.Address]bool)
+		for sender, v := range tracker.Voters {
+			if v.R.Proposal == proposalA {
+				votersForA[sender] = true
+			}
+		}
+		require.Len(t, votersForA, threshold-1)
+		bundled := make(map[basics.Address]bool)
+		for _, va := range res.Bundle.Votes {
+			require.True(t, votersForA[va.Sender], "bundle holds a vote not for %v from %v", proposalA, va.Sender)
+			bundled[va.Sender] = true
+		}
+		require.Equal(t, votersForA, bundled)
+		require.Len(t, res.Bundle.EquivocationVotes, 1)
+		require.Equal(t, helper.addresses[0], res.Bundle.EquivocationVotes[0].Sender)
+		require.Equal(t, proposalA, res.Bundle.Proposal)
+	}
+}
+
+// TestVoteTrackerValidate checks that validate accepts the state the tracker
+// builds and rejects each relation between its maps being broken.
+func TestVoteTrackerValidate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	helper := voteMakerHelper{}
+	helper.Setup()
+	proposalA := *helper.proposal
+	proposalB := *helper.MakeRandomProposalValue()
+
+	// a tracker with votes for two proposals and an equivocator
+	build := func() *voteTracker {
+		tracker := new(voteTracker)
+		automata := &ioAutomataConcrete{listener: checkedListener{listener: tracker, listenerContract: new(voteTrackerContract)}}
+		for i, pv := range []proposalValue{proposalA, proposalA, proposalB, proposalA} {
+			_, err := automata.callHandler(helper.MakeValidVoteAcceptedVal(t, i, soft, pv))
+			require.NoError(t, err)
+		}
+		_, err := automata.callHandler(helper.MakeValidVoteAcceptedVal(t, 0, soft, proposalB))
+		require.NoError(t, err)
+		require.Len(t, tracker.Voters, 3)
+		require.Len(t, tracker.Equivocators, 1)
+		return tracker
+	}
+	require.NoError(t, build().validate())
+
+	stranger := helper.MakeVerifiedVote(t, 100, round(0), period(8), soft, proposalA)
+	for name, damage := range map[string]func(tracker *voteTracker){
+		"count too high": func(tracker *voteTracker) {
+			counter := tracker.Counts[proposalA]
+			counter.Count++
+			tracker.Counts[proposalA] = counter
+		},
+		"count too low": func(tracker *voteTracker) {
+			counter := tracker.Counts[proposalB]
+			counter.Count--
+			tracker.Counts[proposalB] = counter
+		},
+		"voter without a count": func(tracker *voteTracker) {
+			tracker.Voters[stranger.R.Sender] = stranger
+		},
+		"count without voters": func(tracker *voteTracker) {
+			tracker.Counts[*helper.MakeRandomProposalValue()] = proposalVoteCounter{Count: 1}
+		},
+		"vote under another sender": func(tracker *voteTracker) {
+			tracker.Voters[stranger.R.Sender] = tracker.Voters[helper.addresses[1]]
+			delete(tracker.Voters, helper.addresses[1])
+		},
+		"voter also an equivocator": func(tracker *voteTracker) {
+			ev := tracker.Equivocators[helper.addresses[0]]
+			ev.Sender = helper.addresses[1]
+			ev.Cred.Weight = 0
+			tracker.Equivocators[helper.addresses[1]] = ev
+		},
+		"equivocators count wrong": func(tracker *voteTracker) {
+			tracker.EquivocatorsCount++
+		},
+		"equivocation under another sender": func(tracker *voteTracker) {
+			ev := tracker.Equivocators[helper.addresses[0]]
+			delete(tracker.Equivocators, helper.addresses[0])
+			tracker.Equivocators[stranger.R.Sender] = ev
+		},
+	} {
+		tracker := build()
+		damage(tracker)
+		require.Error(t, tracker.validate(), name)
+	}
 }
