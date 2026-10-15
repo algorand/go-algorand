@@ -396,10 +396,10 @@ func TestTxnValidationPQSig(t *testing.T) {
 	require.NoError(t, err)
 
 	disabledBlkHdr := createDummyBlockHeader(protocol.ConsensusV41)
-	require.False(t, config.Consensus[disabledBlkHdr.CurrentProtocol].PQSchemeEnabled(stxn.PQsig.Scheme))
+	require.False(t, transactions.PQSchemeEnabled(config.Consensus[disabledBlkHdr.CurrentProtocol], stxn.PQsig.Scheme))
 
 	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &disabledBlkHdr, nil, &dummyLedger)
-	require.ErrorIs(t, err, crypto.ErrPQSchemeNotEnabled)
+	require.ErrorIs(t, err, transactions.ErrPQSchemeNotEnabled)
 	requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
 }
 
@@ -512,9 +512,9 @@ func TestTxnValidationPQSigSchemeBoundary(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	v42 := config.Consensus[protocol.ConsensusV42]
-	require.True(t, v42.PQSchemeEnabled(protocol.PQSchemeFalcon1024))
-	require.False(t, v42.PQSchemeEnabled(protocol.PQSchemeFalcon512))
-	require.False(t, v42.PQSchemeEnabled(protocol.PQSchemeEd25519))
+	require.True(t, transactions.PQSchemeEnabled(v42, protocol.PQSchemeFalcon1024))
+	require.False(t, transactions.PQSchemeEnabled(v42, protocol.PQSchemeFalcon512))
+	require.False(t, transactions.PQSchemeEnabled(v42, protocol.PQSchemeEd25519))
 
 	blkHdr := createDummyBlockHeader(protocol.ConsensusV42)
 	dummyLedger := DummyLedgerForSignature{}
@@ -540,7 +540,7 @@ func TestTxnValidationPQSigSchemeBoundary(t *testing.T) {
 
 			_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 			require.ErrorContains(t, err, "pq signature validation failed")
-			require.ErrorIs(t, err, crypto.ErrPQSchemeNotEnabled)
+			require.ErrorIs(t, err, transactions.ErrPQSchemeNotEnabled)
 			requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
 		})
 
@@ -549,7 +549,7 @@ func TestTxnValidationPQSigSchemeBoundary(t *testing.T) {
 
 			_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 			require.ErrorContains(t, err, "pq delegated logic signature validation failed")
-			require.ErrorIs(t, err, crypto.ErrPQSchemeNotEnabled)
+			require.ErrorIs(t, err, transactions.ErrPQSchemeNotEnabled)
 			requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
 		})
 	}
@@ -637,7 +637,7 @@ func TestTxnValidationPQSigRejectsMalformedProof(t *testing.T) {
 
 	t.Run("signature", func(t *testing.T) {
 		stxn := makePQSignedTxn(t, 3)
-		stxn.PQsig.Signature = make([]byte, crypto.MaxPQSignatureSize+1)
+		stxn.PQsig.Signature = make([]byte, transactions.PQSigMaxSize()+1)
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 		requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
@@ -723,7 +723,7 @@ func TestTxnValidationPQDelegatedLogicSigRejectsInvalidProof(t *testing.T) {
 
 	t.Run("malformed-signature", func(t *testing.T) {
 		stxn := makePQDelegatedLogicSigTxn(t, 17)
-		stxn.Lsig.PQsig.Signature = make([]byte, crypto.MaxPQSignatureSize+1)
+		stxn.Lsig.PQsig.Signature = make([]byte, transactions.PQSigMaxSize()+1)
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 		requireLogicPQSigError(t, err, crypto.ErrSigInvalid.Error())
@@ -733,7 +733,7 @@ func TestTxnValidationPQDelegatedLogicSigRejectsInvalidProof(t *testing.T) {
 		stxn := makePQDelegatedLogicSigTxn(t, 18)
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &disabledBlkHdr, nil, &dummyLedger)
-		requireLogicPQSigError(t, err, crypto.ErrPQSchemeNotEnabled.Error())
+		requireLogicPQSigError(t, err, transactions.ErrPQSchemeNotEnabled.Error())
 	})
 
 	t.Run("replay-different-salt", func(t *testing.T) {
@@ -1408,7 +1408,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	/////  before PQ schemes exist, the same LogicSig.PQsig fails the scheme check
 	prePQBlkHdr := createDummyBlockHeader(protocol.ConsensusV41)
 	_, err = TxnGroup(txnGroups[0], &prePQBlkHdr, nil, &dummyLedger)
-	require.ErrorIs(t, err, crypto.ErrPQSchemeNotEnabled)
+	require.ErrorIs(t, err, transactions.ErrPQSchemeNotEnabled)
 }
 
 func TestTxnGroupPQSigMixedSignatures(t *testing.T) {

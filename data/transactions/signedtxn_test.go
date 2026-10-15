@@ -183,9 +183,9 @@ func TestSignedTxnFeeFactorPQSignatureContribution(t *testing.T) {
 	for _, stxn := range []SignedTxn{baseTxn, regularSigned, msigSigned, lsigSigned} {
 		require.Equal(t, basics.Micros(1e6), stxn.FeeFactor(proto))
 	}
-	require.Equal(t, basics.Micros(2e6), proto.PQSchemeFeeContribution(protocol.PQSchemeFalcon1024))
-	require.Equal(t, basics.Micros(1e6), proto.PQSchemeFeeContribution(protocol.PQSchemeFalcon512))
-	require.Equal(t, basics.Micros(0), proto.PQSchemeFeeContribution(protocol.PQSchemeEd25519))
+	require.Equal(t, basics.Micros(2e6), PQSchemeFeeContribution(proto, protocol.PQSchemeFalcon1024))
+	require.Equal(t, basics.Micros(1e6), PQSchemeFeeContribution(proto, protocol.PQSchemeFalcon512))
+	require.Equal(t, basics.Micros(0), PQSchemeFeeContribution(proto, protocol.PQSchemeEd25519))
 	require.Equal(t, basics.Micros(1e6), unknownPQSigned.FeeFactor(proto))
 	require.Equal(t, basics.Micros(1e6), unknownDelegatedPQSigned.FeeFactor(proto))
 	require.Equal(t, basics.Micros(1e6), edPQSigned.FeeFactor(proto))

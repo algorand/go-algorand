@@ -355,7 +355,7 @@ func resolvePQSigningContext(keyfile, mnemonic, schemeName string) (pqSigningCon
 
 	ops, ok := pqSchemeOpsByScheme[signing.Public.Scheme]
 	if !ok {
-		return pqSigningContext{}, fmt.Errorf("%w: %q", crypto.ErrPQSchemeNotSupported, signing.Public.Scheme)
+		return pqSigningContext{}, fmt.Errorf("%w: %q", transactions.ErrPQSchemeNotSupported, signing.Public.Scheme)
 	}
 
 	return pqSigningContext{

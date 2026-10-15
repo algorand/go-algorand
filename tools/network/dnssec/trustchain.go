@@ -85,13 +85,13 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 	refreshedZones := make([]bool, len(zones)) // indexes of refreshed zones during the loop iterations
 	// the loop goes over zones and cached trust chain and creates new entries if needed.
 	// cache invalidation happens in these three cases:
-	// 1. no ZSK in parent zone to check newly obtained DS
-	// Explanation: DS is stored in parent and signed with its ZSK. If no such keys in the cache then ZSK rotation happened.
+	// 1. no key in parent zone to check newly obtained DS
+	// Explanation: DS is stored in parent and signed with one of its DNSKEYs. If no such key is cached then key rotation happened.
 	// 2. DNSKEY signature (RRSIG) expired
-	// 3. no ZSK in the last zone in cache
-	// Explanation: server rotated ZSK and the cache does not have key to authenticate response.
+	// 3. no matching key in the last zone in cache
+	// Explanation: the server rotated keys and the cache does not have the key needed to authenticate the response.
 	//
-	// worst case: the last zone fails to find ZSK, it triggers refreshing back to root
+	// worst case: the last zone fails to find the key, which triggers refreshing back to root
 	// causing 2 * len(zones) iterations
 	// makeTrustedZone does not return cacheOutdated and refreshedZones has indication that the root was already updated
 	// and the second fallback to the root zone will fail
@@ -135,10 +135,10 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 			continue
 		}
 		if zoneIdx == len(zones)-1 {
-			// for the last zone also ensure that ZSK used to sign user-requested RR are also in place
+			// For the last zone, ensure that a key used to sign the requested RRset is present.
 			if !tz.checkKeys(keytags) {
 				if refreshedZones[zoneIdx] {
-					return fmt.Errorf("ZSK %v not found in zone %s", keytags, fqZoneName)
+					return fmt.Errorf("DNSKEY %v not found in zone %s", keytags, fqZoneName)
 				}
 				// seems like the latest zone
 				t.removeSelfAndChildren(zone)
@@ -154,27 +154,28 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 	return nil
 }
 
-func (t *trustChain) getDNSKey(fqZoneName string, keyTag uint16) (key *dns.DNSKEY, found bool) {
+func (t *trustChain) getDNSKeys(fqZoneName string, keyTag uint16) []dns.DNSKEY {
 	t.mu.RLock()
+	defer t.mu.RUnlock()
+
 	trustedZone, ok := t.trustedZones[fqZoneName]
-	t.mu.RUnlock()
 	if !ok {
-		return
+		return nil
 	}
-	k, found := trustedZone.zsk[keyTag]
-	return &k, found
+	return append([]dns.DNSKEY(nil), trustedZone.zsk[keyTag]...)
 }
 
 // Authenticate verifies a given rrset and its signatures validity down to the trusted root.
 // Following steps are done:
 // 1. Ensure the trust chain is valid. This requires keys' signature check back to the root if not cached
-// 2. Check the signature using authenticated DNSKEY
+// 2. Check the signature validity period and verify it using an authenticated DNSKEY
 func (t *trustChain) Authenticate(ctx context.Context, rrSet []dns.RR, rrSig []dns.RRSIG) (err error) {
 	if len(rrSig) == 0 {
 		return fmt.Errorf("empty RRSIG")
 	}
 
 	signer := rrSig[0].SignerName
+	owner := rrSig[0].Hdr.Name
 	// sanity check: ensure all RRSIG contain the same signer, it must be the parent zone
 	for i := 1; i < len(rrSig); i++ {
 		if signer != rrSig[i].SignerName {
@@ -184,8 +185,19 @@ func (t *trustChain) Authenticate(ctx context.Context, rrSet []dns.RR, rrSig []d
 
 	fqdn := dns.Fqdn(signer)
 
-	keytags := make([]uint16, 0, len(rrSig))
+	now := time.Now()
+	validSignatures := make([]dns.RRSIG, 0, len(rrSig))
 	for _, sig := range rrSig {
+		if sig.ValidityPeriod(now) {
+			validSignatures = append(validSignatures, sig)
+		}
+	}
+	if len(validSignatures) == 0 {
+		return fmt.Errorf("no currently valid RRSIG for %s", owner)
+	}
+
+	keytags := make([]uint16, 0, len(validSignatures))
+	for _, sig := range validSignatures {
 		keytags = append(keytags, sig.KeyTag)
 	}
 
@@ -196,15 +208,14 @@ func (t *trustChain) Authenticate(ctx context.Context, rrSet []dns.RR, rrSig []d
 		return err
 	}
 
-	for _, sig := range rrSig {
-		// get already authenticated ZSK
-		key, ok := t.getDNSKey(fqdn, sig.KeyTag)
-		if !ok {
-			// skip, trustChain.ensure checks that at least one keytag is available
-			continue
-		}
-		if err = sig.Verify(key, rrSet); err == nil {
-			return nil
+	err = fmt.Errorf("no authenticated DNSKEY verifies the RRSet for %s", fqdn)
+	for _, sig := range validSignatures {
+		// Get an already authenticated key for this zone.
+		keys := t.getDNSKeys(fqdn, sig.KeyTag)
+		for i := range keys {
+			if err = sig.Verify(&keys[i], rrSet); err == nil {
+				return nil
+			}
 		}
 	}
 	return err

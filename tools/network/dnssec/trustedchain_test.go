@@ -48,16 +48,14 @@ func TestTrustChainBasic(t *testing.T) {
 	a.Equal(0, len(tch.trustedZones))
 
 	tch.trustedZones["com."] = trustedZone{
-		zsk: make(map[uint16]dns.DNSKEY),
+		zsk: make(dnskeysByTag),
 	}
-	tch.trustedZones["com."].zsk[123] = dns.DNSKEY{Algorithm: 1}
-	key, found := tch.getDNSKey("com.", 123)
-	a.True(found)
-	a.NotEmpty(key)
+	tch.trustedZones["com."].zsk[123] = []dns.DNSKEY{{Algorithm: 1}, {Algorithm: 2}}
+	keys := tch.getDNSKeys("com.", 123)
+	a.Len(keys, 2)
 
-	key, found = tch.getDNSKey(".", 123)
-	a.False(found)
-	a.Empty(key)
+	keys = tch.getDNSKeys(".", 123)
+	a.Empty(keys)
 }
 
 func TestEnsureTrustChain(t *testing.T) {
@@ -272,7 +270,7 @@ func TestEnsureTrustChain(t *testing.T) {
 	newCh = makeTrustChain(r)
 	err = newCh.ensure(context.Background(), "algo.test.", []uint16{algoTestZSK.KeyTag()})
 	a.Error(err)
-	a.Contains(err.Error(), "failed to verify test. KSK against digest in parent DS")
+	a.Contains(err.Error(), "no DNSKEY for test. matches a parent DS record or trust anchor")
 }
 
 func TestEnsureTrustChainError(t *testing.T) {
@@ -302,7 +300,7 @@ func TestEnsureTrustChainError(t *testing.T) {
 	// test non-existing ZSK
 	err = newCh.ensure(context.Background(), ".", []uint16{})
 	a.Error(err)
-	a.Contains(err.Error(), "ZSK [] not found in zone .")
+	a.Contains(err.Error(), "DNSKEY [] not found in zone .")
 
 	testKSK, testKSKsk := getKey("test.", dns.ZONE|dns.SEP)
 	testZSK, testZSKsk := getKey("test.", dns.ZONE)
@@ -373,11 +371,46 @@ func TestAuthenticate(t *testing.T) {
 	rrset, rrsig, err = r.QueryRRSet(context.Background(), "www.test.", dns.TypeA)
 	err = tch.Authenticate(context.Background(), rrset, rrsig)
 	a.NoError(err)
+	validSig := rrsig[0]
 
-	// DNSKEY is signed with KSK so authenticate will fail looking up KSK in ZSK
+	// The final record signature must be valid at the time it is authenticated.
+	err = r.updateARecord("www.test.", net.IPv4(1, 2, 3, 4), time.Now().Add(-time.Hour))
+	a.NoError(err)
+	rrset, rrsig, err = r.QueryRRSet(context.Background(), "www.test.", dns.TypeA)
+	a.NoError(err)
+	err = tch.Authenticate(context.Background(), rrset, rrsig)
+	a.EqualError(err, "no currently valid RRSIG for www.test.")
+	expiredSig := rrsig[0]
+
+	// An expired signature must not prevent a second, valid signature from authenticating the record.
+	err = tch.Authenticate(context.Background(), rrset, []dns.RRSIG{expiredSig, validSig})
+	a.NoError(err)
+
+	// An expired signature from a known key must not authenticate a record whose only valid
+	// signature uses an unknown key.
+	unknownZSK, unknownZSKsk := getKey("test.", dns.ZONE)
+	unknownSig, err := r.sign(rrset, "test.", unknownZSK.KeyTag(), time.Time{}, unknownZSKsk)
+	a.NoError(err)
+	err = tch.Authenticate(context.Background(), rrset, []dns.RRSIG{expiredSig, unknownSig})
+	a.Error(err)
+
+	// A currently valid signature that falsely claims a trusted key tag must not make an
+	// expired signature eligible for cryptographic verification.
+	forgedSig, err := r.sign(rrset, "test.", testZSK.KeyTag(), time.Time{}, unknownZSKsk)
+	a.NoError(err)
+	err = tch.Authenticate(context.Background(), rrset, []dns.RRSIG{expiredSig, forgedSig})
+	a.Error(err)
+
+	futureStart := time.Now().Add(time.Hour)
+	futureSig, err := r.signWithValidity(rrset, "test.", testZSK.KeyTag(), futureStart, futureStart.Add(time.Hour), testZSKsk)
+	a.NoError(err)
+	err = tch.Authenticate(context.Background(), rrset, []dns.RRSIG{futureSig})
+	a.EqualError(err, "no currently valid RRSIG for www.test.")
+
+	// SEP-marked keys remain valid candidates when authenticating an RRset.
 	rrset, rrsig, err = r.QueryRRSet(context.Background(), "test.", dns.TypeDNSKEY)
 	err = tch.Authenticate(context.Background(), rrset, rrsig)
-	a.Error(err)
+	a.NoError(err)
 
 	err = tch.Authenticate(context.Background(), rrset, nil)
 	a.Error(err)

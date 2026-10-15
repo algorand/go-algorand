@@ -4265,7 +4265,10 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 			"blockData",
 			[]byte("b")),
 	}
-	// Send a request for a block and cancel it after the handler has been registered
+	// Send a request for a block and cancel it after it has been sent.
+	// Request registers the response channel before sending, so wait for the
+	// outstanding counter too: cancelling before the send would let Request
+	// return early without sending or counting it.
 	go func() {
 		netC.peers[0].Request(ctx, protocol.UniEnsBlockReqTag, topics)
 	}()
@@ -4275,7 +4278,7 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 			netC.peersLock.RLock()
 			defer netC.peersLock.RUnlock()
 			require.NotEmpty(t, netC.peers)
-			return netC.peers[0].lenResponseChannels() > 0
+			return netC.peers[0].lenResponseChannels() > 0 && netC.peers[0].outstandingTopicRequests.Load() == 1
 		},
 		1*time.Second,
 		50*time.Millisecond,
@@ -4289,7 +4292,7 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 		500*time.Millisecond,
 		20*time.Millisecond,
 	)
-	require.Equal(t, netC.peers[0].outstandingTopicRequests.Load(), int64(1))
+	require.Equal(t, int64(1), netC.peers[0].outstandingTopicRequests.Load())
 
 	// Create a buffer to monitor log output from netC
 	logBuffer := bytes.NewBuffer(nil)

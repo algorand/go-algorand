@@ -19,23 +19,16 @@ package crypto
 import (
 	"errors"
 	"fmt"
-
-	"github.com/algorand/go-algorand/protocol"
 )
 
-var (
-	// ErrPQSchemeNotSupported is returned when a PQScheme is not supported.
-	ErrPQSchemeNotSupported = errors.New("pq signature scheme not supported")
+// ErrSigInvalid is returned, wrapped with the scheme name, when a signature
+// or the public key it is checked against is invalid.
+var ErrSigInvalid = errors.New("invalid signature")
 
-	// ErrPQSchemeNotEnabled is returned when a PQScheme is not enabled under the protocol.
-	ErrPQSchemeNotEnabled = errors.New("pq signature scheme not enabled")
-
-	// ErrSigInvalid is returned, wrapped with the scheme name, when a signature
-	// or the public key it is checked against is invalid.
-	ErrSigInvalid = errors.New("invalid signature")
-)
-
-// PQVerifier verifies a signature for one account authorization scheme.
+// PQVerifier verifies a signature for one account authorization scheme. The
+// implementations here know only how to check bytes; which schemes exist, when
+// they are enabled, what they cost, and how large their keys and signatures may
+// be on the wire is decided by transactions.PQSig.
 type PQVerifier interface {
 	Verify(message Hashable, publicKey, signature []byte) error
 }
@@ -46,56 +39,27 @@ type PQBatchPreparer interface {
 	BatchPrep(message Hashable, publicKey, signature []byte, batch BatchEnqueuer) error
 }
 
-// MaxPQPublicKeySize and MaxPQSignatureSize are the largest public-key and
-// signature sizes over all supported PQ schemes; they are the PQ wire/decode
-// bounds (used for msgp allocbounds). Adding a scheme with a larger key or
-// signature means growing these; TestPQBoundsCoverSchemes guards against
-// undersizing the current schemes.
-const (
-	MaxPQPublicKeySize = max(Falcon1024PublicKeySize, Falcon512PublicKeySize, len(PublicKey{}))
-	MaxPQSignatureSize = max(Falcon1024MaxSignatureSize, Falcon512MaxSignatureSize, len(Signature{}))
-)
+// PQFalcon1024 verifies Falcon-1024 signatures.
+type PQFalcon1024 struct{}
 
-// LookupPQScheme returns the verifier for a PQ scheme tag.
-//
-// To add a scheme:
-//   - add its protocol.PQScheme tag,
-//   - add a case here returning its PQVerifier,
-//   - add its config.ConsensusParams.PQSchemeEnabled case and PQSchemeFeeContribution,
-//   - add the signing/private-key ops in cmd/algokey,
-//   - add it to basics_testing.PQTestSchemes,
-//   - implement PQBatchPreparer if the scheme is batch-verified,
-//   - grow MaxPQPublicKeySize/MaxPQSignatureSize if its public key or signature is larger.
-func LookupPQScheme(s protocol.PQScheme) (PQVerifier, bool) {
-	switch s {
-	case protocol.PQSchemeFalcon1024:
-		return falcon1024{}, true
-	case protocol.PQSchemeFalcon512:
-		return falcon512{}, true
-	case protocol.PQSchemeEd25519:
-		return ed25519Scheme{}, true
-	}
-	return nil, false
-}
-
-// falcon1024 is the Falcon-1024 (f1) scheme.
-type falcon1024 struct{}
-
-func (falcon1024) Verify(message Hashable, publicKey, signature []byte) error {
+// Verify implements PQVerifier.
+func (PQFalcon1024) Verify(message Hashable, publicKey, signature []byte) error {
 	return VerifyFalcon1024(message, publicKey, signature)
 }
 
-// falcon512 is the Falcon-512 (f5) scheme.
-type falcon512 struct{}
+// PQFalcon512 verifies Falcon-512 signatures.
+type PQFalcon512 struct{}
 
-func (falcon512) Verify(message Hashable, publicKey, signature []byte) error {
+// Verify implements PQVerifier.
+func (PQFalcon512) Verify(message Hashable, publicKey, signature []byte) error {
 	return VerifyFalcon512(message, publicKey, signature)
 }
 
-// ed25519Scheme is the classical Ed25519 (ed) scheme.
-type ed25519Scheme struct{}
+// PQEd25519 verifies classical Ed25519 signatures carried in a PQSig.
+type PQEd25519 struct{}
 
-func (ed25519Scheme) Verify(message Hashable, publicKey, signature []byte) error {
+// Verify implements PQVerifier.
+func (PQEd25519) Verify(message Hashable, publicKey, signature []byte) error {
 	verifier, sig, err := parseEd25519Signature(publicKey, signature)
 	if err != nil {
 		return err
@@ -106,7 +70,8 @@ func (ed25519Scheme) Verify(message Hashable, publicKey, signature []byte) error
 	return nil
 }
 
-func (ed25519Scheme) BatchPrep(message Hashable, publicKey, signature []byte, batch BatchEnqueuer) error {
+// BatchPrep implements PQBatchPreparer.
+func (PQEd25519) BatchPrep(message Hashable, publicKey, signature []byte, batch BatchEnqueuer) error {
 	verifier, sig, err := parseEd25519Signature(publicKey, signature)
 	if err != nil {
 		return err
