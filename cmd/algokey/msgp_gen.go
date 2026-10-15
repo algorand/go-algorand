@@ -64,83 +64,44 @@ func (z *pqPublicMaterial) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSt
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = pqPublicMaterial{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "scheme":
 			bts, err = (*z).Scheme.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Scheme")
+				err = msgp.WrapError(err, "Scheme")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "salt":
 			bts, err = (*z).Salt.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Salt")
+				err = msgp.WrapError(err, "Salt")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "public-key":
 			(*z).PublicKey, bts, err = msgp.ReadBytesBytes(bts, (*z).PublicKey)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PublicKey")
+				err = msgp.WrapError(err, "PublicKey")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = pqPublicMaterial{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "scheme":
-				bts, err = (*z).Scheme.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Scheme")
-					return
-				}
-			case "salt":
-				bts, err = (*z).Salt.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Salt")
-					return
-				}
-			case "public-key":
-				(*z).PublicKey, bts, err = msgp.ReadBytesBytes(bts, (*z).PublicKey)
-				if err != nil {
-					err = msgp.WrapError(err, "PublicKey")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -203,69 +164,38 @@ func (z *pqSigningMaterial) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalS
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = pqSigningMaterial{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "public":
 			bts, err = (*z).Public.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Public")
+				err = msgp.WrapError(err, "Public")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "private-key":
 			(*z).PrivateKey, bts, err = msgp.ReadBytesBytes(bts, (*z).PrivateKey)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PrivateKey")
+				err = msgp.WrapError(err, "PrivateKey")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = pqSigningMaterial{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "public":
-				bts, err = (*z).Public.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Public")
-					return
-				}
-			case "private-key":
-				(*z).PrivateKey, bts, err = msgp.ReadBytesBytes(bts, (*z).PrivateKey)
-				if err != nil {
-					err = msgp.WrapError(err, "PrivateKey")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
