@@ -251,195 +251,92 @@ func (z *CatchpointFileHeader) UnmarshalMsgWithState(bts []byte, st msgp.Unmarsh
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = CatchpointFileHeader{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "version":
 			(*z).Version, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Version")
+				err = msgp.WrapError(err, "Version")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "balancesRound":
 			bts, err = (*z).BalancesRound.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "BalancesRound")
+				err = msgp.WrapError(err, "BalancesRound")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "blocksRound":
 			bts, err = (*z).BlocksRound.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "BlocksRound")
+				err = msgp.WrapError(err, "BlocksRound")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "accountTotals":
 			bts, err = (*z).Totals.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Totals")
+				err = msgp.WrapError(err, "Totals")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "accountsCount":
 			(*z).TotalAccounts, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "TotalAccounts")
+				err = msgp.WrapError(err, "TotalAccounts")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "chunksCount":
 			(*z).TotalChunks, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "TotalChunks")
+				err = msgp.WrapError(err, "TotalChunks")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "kvsCount":
 			(*z).TotalKVs, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "TotalKVs")
+				err = msgp.WrapError(err, "TotalKVs")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "onlineAccountsCount":
 			(*z).TotalOnlineAccounts, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "TotalOnlineAccounts")
+				err = msgp.WrapError(err, "TotalOnlineAccounts")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "onlineRoundParamsCount":
 			(*z).TotalOnlineRoundParams, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "TotalOnlineRoundParams")
+				err = msgp.WrapError(err, "TotalOnlineRoundParams")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "catchpoint":
 			(*z).Catchpoint, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Catchpoint")
+				err = msgp.WrapError(err, "Catchpoint")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "blockHeaderDigest":
 			bts, err = (*z).BlockHeaderDigest.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "BlockHeaderDigest")
+				err = msgp.WrapError(err, "BlockHeaderDigest")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = CatchpointFileHeader{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "version":
-				(*z).Version, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Version")
-					return
-				}
-			case "balancesRound":
-				bts, err = (*z).BalancesRound.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "BalancesRound")
-					return
-				}
-			case "blocksRound":
-				bts, err = (*z).BlocksRound.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "BlocksRound")
-					return
-				}
-			case "accountTotals":
-				bts, err = (*z).Totals.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Totals")
-					return
-				}
-			case "accountsCount":
-				(*z).TotalAccounts, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "TotalAccounts")
-					return
-				}
-			case "chunksCount":
-				(*z).TotalChunks, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "TotalChunks")
-					return
-				}
-			case "kvsCount":
-				(*z).TotalKVs, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "TotalKVs")
-					return
-				}
-			case "onlineAccountsCount":
-				(*z).TotalOnlineAccounts, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "TotalOnlineAccounts")
-					return
-				}
-			case "onlineRoundParamsCount":
-				(*z).TotalOnlineRoundParams, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "TotalOnlineRoundParams")
-					return
-				}
-			case "catchpoint":
-				(*z).Catchpoint, bts, err = msgp.ReadStringBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Catchpoint")
-					return
-				}
-			case "blockHeaderDigest":
-				bts, err = (*z).BlockHeaderDigest.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "BlockHeaderDigest")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -518,24 +415,32 @@ func (z *CatchpointSnapshotChunkV5) UnmarshalMsgWithState(bts []byte, st msgp.Un
 	var zb0002 int
 	var zb0003 bool
 	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0003 {
+		(*z) = CatchpointSnapshotChunkV5{}
+	}
+	for zb0002 > 0 {
+		zb0002--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0002 > 0 {
-			zb0002--
+		switch string(field) {
+		case "bl":
 			var zb0004 int
 			var zb0005 bool
 			zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Balances")
+				err = msgp.WrapError(err, "Balances")
 				return
 			}
 			if zb0004 > BalancesPerCatchpointFileChunk {
 				err = msgp.ErrOverflow(uint64(zb0004), uint64(BalancesPerCatchpointFileChunk))
-				err = msgp.WrapError(err, "struct-from-array", "Balances")
+				err = msgp.WrapError(err, "Balances")
 				return
 			}
 			if zb0005 {
@@ -548,67 +453,15 @@ func (z *CatchpointSnapshotChunkV5) UnmarshalMsgWithState(bts []byte, st msgp.Un
 			for zb0001 := range (*z).Balances {
 				bts, err = (*z).Balances[zb0001].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Balances", zb0001)
+					err = msgp.WrapError(err, "Balances", zb0001)
 					return
 				}
 			}
-		}
-		if zb0002 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0002)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0003 {
-			(*z) = CatchpointSnapshotChunkV5{}
-		}
-		for zb0002 > 0 {
-			zb0002--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "bl":
-				var zb0006 int
-				var zb0007 bool
-				zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Balances")
-					return
-				}
-				if zb0006 > BalancesPerCatchpointFileChunk {
-					err = msgp.ErrOverflow(uint64(zb0006), uint64(BalancesPerCatchpointFileChunk))
-					err = msgp.WrapError(err, "Balances")
-					return
-				}
-				if zb0007 {
-					(*z).Balances = nil
-				} else if (*z).Balances != nil && cap((*z).Balances) >= zb0006 {
-					(*z).Balances = ((*z).Balances)[:zb0006]
-				} else {
-					(*z).Balances = make([]encoded.BalanceRecordV5, zb0006)
-				}
-				for zb0001 := range (*z).Balances {
-					bts, err = (*z).Balances[zb0001].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Balances", zb0001)
-						return
-					}
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -740,24 +593,32 @@ func (z *CatchpointSnapshotChunkV6) UnmarshalMsgWithState(bts []byte, st msgp.Un
 	var zb0005 int
 	var zb0006 bool
 	zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0006 {
+		(*z) = CatchpointSnapshotChunkV6{}
+	}
+	for zb0005 > 0 {
+		zb0005--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0005 > 0 {
-			zb0005--
+		switch string(field) {
+		case "bl":
 			var zb0007 int
 			var zb0008 bool
 			zb0007, zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Balances")
+				err = msgp.WrapError(err, "Balances")
 				return
 			}
 			if zb0007 > BalancesPerCatchpointFileChunk {
 				err = msgp.ErrOverflow(uint64(zb0007), uint64(BalancesPerCatchpointFileChunk))
-				err = msgp.WrapError(err, "struct-from-array", "Balances")
+				err = msgp.WrapError(err, "Balances")
 				return
 			}
 			if zb0008 {
@@ -770,23 +631,21 @@ func (z *CatchpointSnapshotChunkV6) UnmarshalMsgWithState(bts []byte, st msgp.Un
 			for zb0001 := range (*z).Balances {
 				bts, err = (*z).Balances[zb0001].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Balances", zb0001)
+					err = msgp.WrapError(err, "Balances", zb0001)
 					return
 				}
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "kv":
 			var zb0009 int
 			var zb0010 bool
 			zb0009, zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "KVs")
+				err = msgp.WrapError(err, "KVs")
 				return
 			}
 			if zb0009 > BalancesPerCatchpointFileChunk {
 				err = msgp.ErrOverflow(uint64(zb0009), uint64(BalancesPerCatchpointFileChunk))
-				err = msgp.WrapError(err, "struct-from-array", "KVs")
+				err = msgp.WrapError(err, "KVs")
 				return
 			}
 			if zb0010 {
@@ -799,23 +658,21 @@ func (z *CatchpointSnapshotChunkV6) UnmarshalMsgWithState(bts []byte, st msgp.Un
 			for zb0002 := range (*z).KVs {
 				bts, err = (*z).KVs[zb0002].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "KVs", zb0002)
+					err = msgp.WrapError(err, "KVs", zb0002)
 					return
 				}
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "oa":
 			var zb0011 int
 			var zb0012 bool
 			zb0011, zb0012, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "OnlineAccounts")
+				err = msgp.WrapError(err, "OnlineAccounts")
 				return
 			}
 			if zb0011 > BalancesPerCatchpointFileChunk {
 				err = msgp.ErrOverflow(uint64(zb0011), uint64(BalancesPerCatchpointFileChunk))
-				err = msgp.WrapError(err, "struct-from-array", "OnlineAccounts")
+				err = msgp.WrapError(err, "OnlineAccounts")
 				return
 			}
 			if zb0012 {
@@ -828,23 +685,21 @@ func (z *CatchpointSnapshotChunkV6) UnmarshalMsgWithState(bts []byte, st msgp.Un
 			for zb0003 := range (*z).OnlineAccounts {
 				bts, err = (*z).OnlineAccounts[zb0003].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "OnlineAccounts", zb0003)
+					err = msgp.WrapError(err, "OnlineAccounts", zb0003)
 					return
 				}
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "orp":
 			var zb0013 int
 			var zb0014 bool
 			zb0013, zb0014, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "OnlineRoundParams")
+				err = msgp.WrapError(err, "OnlineRoundParams")
 				return
 			}
 			if zb0013 > BalancesPerCatchpointFileChunk {
 				err = msgp.ErrOverflow(uint64(zb0013), uint64(BalancesPerCatchpointFileChunk))
-				err = msgp.WrapError(err, "struct-from-array", "OnlineRoundParams")
+				err = msgp.WrapError(err, "OnlineRoundParams")
 				return
 			}
 			if zb0014 {
@@ -857,148 +712,15 @@ func (z *CatchpointSnapshotChunkV6) UnmarshalMsgWithState(bts []byte, st msgp.Un
 			for zb0004 := range (*z).OnlineRoundParams {
 				bts, err = (*z).OnlineRoundParams[zb0004].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "OnlineRoundParams", zb0004)
+					err = msgp.WrapError(err, "OnlineRoundParams", zb0004)
 					return
 				}
 			}
-		}
-		if zb0005 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0005)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0006 {
-			(*z) = CatchpointSnapshotChunkV6{}
-		}
-		for zb0005 > 0 {
-			zb0005--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "bl":
-				var zb0015 int
-				var zb0016 bool
-				zb0015, zb0016, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Balances")
-					return
-				}
-				if zb0015 > BalancesPerCatchpointFileChunk {
-					err = msgp.ErrOverflow(uint64(zb0015), uint64(BalancesPerCatchpointFileChunk))
-					err = msgp.WrapError(err, "Balances")
-					return
-				}
-				if zb0016 {
-					(*z).Balances = nil
-				} else if (*z).Balances != nil && cap((*z).Balances) >= zb0015 {
-					(*z).Balances = ((*z).Balances)[:zb0015]
-				} else {
-					(*z).Balances = make([]encoded.BalanceRecordV6, zb0015)
-				}
-				for zb0001 := range (*z).Balances {
-					bts, err = (*z).Balances[zb0001].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Balances", zb0001)
-						return
-					}
-				}
-			case "kv":
-				var zb0017 int
-				var zb0018 bool
-				zb0017, zb0018, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "KVs")
-					return
-				}
-				if zb0017 > BalancesPerCatchpointFileChunk {
-					err = msgp.ErrOverflow(uint64(zb0017), uint64(BalancesPerCatchpointFileChunk))
-					err = msgp.WrapError(err, "KVs")
-					return
-				}
-				if zb0018 {
-					(*z).KVs = nil
-				} else if (*z).KVs != nil && cap((*z).KVs) >= zb0017 {
-					(*z).KVs = ((*z).KVs)[:zb0017]
-				} else {
-					(*z).KVs = make([]encoded.KVRecordV6, zb0017)
-				}
-				for zb0002 := range (*z).KVs {
-					bts, err = (*z).KVs[zb0002].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "KVs", zb0002)
-						return
-					}
-				}
-			case "oa":
-				var zb0019 int
-				var zb0020 bool
-				zb0019, zb0020, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "OnlineAccounts")
-					return
-				}
-				if zb0019 > BalancesPerCatchpointFileChunk {
-					err = msgp.ErrOverflow(uint64(zb0019), uint64(BalancesPerCatchpointFileChunk))
-					err = msgp.WrapError(err, "OnlineAccounts")
-					return
-				}
-				if zb0020 {
-					(*z).OnlineAccounts = nil
-				} else if (*z).OnlineAccounts != nil && cap((*z).OnlineAccounts) >= zb0019 {
-					(*z).OnlineAccounts = ((*z).OnlineAccounts)[:zb0019]
-				} else {
-					(*z).OnlineAccounts = make([]encoded.OnlineAccountRecordV6, zb0019)
-				}
-				for zb0003 := range (*z).OnlineAccounts {
-					bts, err = (*z).OnlineAccounts[zb0003].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "OnlineAccounts", zb0003)
-						return
-					}
-				}
-			case "orp":
-				var zb0021 int
-				var zb0022 bool
-				zb0021, zb0022, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "OnlineRoundParams")
-					return
-				}
-				if zb0021 > BalancesPerCatchpointFileChunk {
-					err = msgp.ErrOverflow(uint64(zb0021), uint64(BalancesPerCatchpointFileChunk))
-					err = msgp.WrapError(err, "OnlineRoundParams")
-					return
-				}
-				if zb0022 {
-					(*z).OnlineRoundParams = nil
-				} else if (*z).OnlineRoundParams != nil && cap((*z).OnlineRoundParams) >= zb0021 {
-					(*z).OnlineRoundParams = ((*z).OnlineRoundParams)[:zb0021]
-				} else {
-					(*z).OnlineRoundParams = make([]encoded.OnlineRoundParamsRecordV6, zb0021)
-				}
-				for zb0004 := range (*z).OnlineRoundParams {
-					bts, err = (*z).OnlineRoundParams[zb0004].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "OnlineRoundParams", zb0004)
-						return
-					}
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -1103,24 +825,32 @@ func (z *catchpointStateProofVerificationContext) UnmarshalMsgWithState(bts []by
 	var zb0002 int
 	var zb0003 bool
 	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0003 {
+		(*z) = catchpointStateProofVerificationContext{}
+	}
+	for zb0002 > 0 {
+		zb0002--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0002 > 0 {
-			zb0002--
+		switch string(field) {
+		case "spd":
 			var zb0004 int
 			var zb0005 bool
 			zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Data")
+				err = msgp.WrapError(err, "Data")
 				return
 			}
 			if zb0004 > SPContextPerCatchpointFile {
 				err = msgp.ErrOverflow(uint64(zb0004), uint64(SPContextPerCatchpointFile))
-				err = msgp.WrapError(err, "struct-from-array", "Data")
+				err = msgp.WrapError(err, "Data")
 				return
 			}
 			if zb0005 {
@@ -1133,67 +863,15 @@ func (z *catchpointStateProofVerificationContext) UnmarshalMsgWithState(bts []by
 			for zb0001 := range (*z).Data {
 				bts, err = (*z).Data[zb0001].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Data", zb0001)
+					err = msgp.WrapError(err, "Data", zb0001)
 					return
 				}
 			}
-		}
-		if zb0002 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0002)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0003 {
-			(*z) = catchpointStateProofVerificationContext{}
-		}
-		for zb0002 > 0 {
-			zb0002--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "spd":
-				var zb0006 int
-				var zb0007 bool
-				zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Data")
-					return
-				}
-				if zb0006 > SPContextPerCatchpointFile {
-					err = msgp.ErrOverflow(uint64(zb0006), uint64(SPContextPerCatchpointFile))
-					err = msgp.WrapError(err, "Data")
-					return
-				}
-				if zb0007 {
-					(*z).Data = nil
-				} else if (*z).Data != nil && cap((*z).Data) >= zb0006 {
-					(*z).Data = ((*z).Data)[:zb0006]
-				} else {
-					(*z).Data = make([]ledgercore.StateProofVerificationContext, zb0006)
-				}
-				for zb0001 := range (*z).Data {
-					bts, err = (*z).Data[zb0001].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Data", zb0001)
-						return
-					}
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}

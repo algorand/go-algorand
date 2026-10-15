@@ -96,18 +96,26 @@ func (z *Message) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o [
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = Message{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "b":
 			var zb0003 int
 			zb0003, err = msgp.ReadBytesBytesHeader(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "BlockHeadersCommitment")
+				err = msgp.WrapError(err, "BlockHeadersCommitment")
 				return
 			}
 			if zb0003 > crypto.Sha256Size {
@@ -116,16 +124,14 @@ func (z *Message) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o [
 			}
 			(*z).BlockHeadersCommitment, bts, err = msgp.ReadBytesBytes(bts, (*z).BlockHeadersCommitment)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "BlockHeadersCommitment")
+				err = msgp.WrapError(err, "BlockHeadersCommitment")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "v":
 			var zb0004 int
 			zb0004, err = msgp.ReadBytesBytesHeader(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "VotersCommitment")
+				err = msgp.WrapError(err, "VotersCommitment")
 				return
 			}
 			if zb0004 > crypto.SumhashDigestSize {
@@ -134,113 +140,32 @@ func (z *Message) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o [
 			}
 			(*z).VotersCommitment, bts, err = msgp.ReadBytesBytes(bts, (*z).VotersCommitment)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "VotersCommitment")
+				err = msgp.WrapError(err, "VotersCommitment")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "P":
 			(*z).LnProvenWeight, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "LnProvenWeight")
+				err = msgp.WrapError(err, "LnProvenWeight")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "f":
 			bts, err = (*z).FirstAttestedRound.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "FirstAttestedRound")
+				err = msgp.WrapError(err, "FirstAttestedRound")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "l":
 			bts, err = (*z).LastAttestedRound.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "LastAttestedRound")
+				err = msgp.WrapError(err, "LastAttestedRound")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = Message{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "b":
-				var zb0005 int
-				zb0005, err = msgp.ReadBytesBytesHeader(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "BlockHeadersCommitment")
-					return
-				}
-				if zb0005 > crypto.Sha256Size {
-					err = msgp.ErrOverflow(uint64(zb0005), uint64(crypto.Sha256Size))
-					return
-				}
-				(*z).BlockHeadersCommitment, bts, err = msgp.ReadBytesBytes(bts, (*z).BlockHeadersCommitment)
-				if err != nil {
-					err = msgp.WrapError(err, "BlockHeadersCommitment")
-					return
-				}
-			case "v":
-				var zb0006 int
-				zb0006, err = msgp.ReadBytesBytesHeader(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "VotersCommitment")
-					return
-				}
-				if zb0006 > crypto.SumhashDigestSize {
-					err = msgp.ErrOverflow(uint64(zb0006), uint64(crypto.SumhashDigestSize))
-					return
-				}
-				(*z).VotersCommitment, bts, err = msgp.ReadBytesBytes(bts, (*z).VotersCommitment)
-				if err != nil {
-					err = msgp.WrapError(err, "VotersCommitment")
-					return
-				}
-			case "P":
-				(*z).LnProvenWeight, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "LnProvenWeight")
-					return
-				}
-			case "f":
-				bts, err = (*z).FirstAttestedRound.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "FirstAttestedRound")
-					return
-				}
-			case "l":
-				bts, err = (*z).LastAttestedRound.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "LastAttestedRound")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
