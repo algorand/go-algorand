@@ -228,6 +228,32 @@ func TestLookupRejectsUnprovedWildcardExpansion(t *testing.T) {
 	require.ErrorContains(t, err, "wildcard-expanded answer for wanted.test. type TXT is not supported")
 }
 
+func TestLookupIPAddrIPv6Only(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	r := makeSignedTestZone(t)
+	ip := net.ParseIP("2001:db8::1")
+	aaaa := &dns.AAAA{
+		Hdr:  dns.RR_Header{Name: "v6only.test.", Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: 3600},
+		AAAA: ip,
+	}
+	require.NoError(t, r.updateRegRecord("v6only.test.", "test.", dns.TypeAAAA, []dns.RR{aaaa}, time.Time{}))
+	cname := &dns.CNAME{
+		Hdr:    dns.RR_Header{Name: "alias.test.", Rrtype: dns.TypeCNAME, Class: dns.ClassINET, Ttl: 3600},
+		Target: "v6only.test.",
+	}
+	require.NoError(t, r.updateRegRecord("alias.test.", "test.", dns.TypeCNAME, []dns.RR{cname}, time.Time{}))
+
+	// The A query fails for v6only.test., and its error must not be returned
+	// alongside the addresses from the AAAA fallback.
+	resolver := Resolver{client: r, trustChain: makeTrustChain(r), maxHops: DefaultMaxHops}
+	for _, host := range []string{"v6only.test.", "alias.test."} {
+		addrs, err := resolver.LookupIPAddr(context.Background(), host)
+		require.NoError(t, err, host)
+		require.Equal(t, []net.IPAddr{{IP: ip}}, addrs, host)
+	}
+}
+
 func TestLookup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

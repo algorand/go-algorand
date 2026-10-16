@@ -136,6 +136,7 @@ func (r *Resolver) lookupIPAddr(ctx context.Context, hostname string) (cname str
 			if rrSet, err2 = r.lookup(ctx, nextName, dns.TypeAAAA); err2 != nil {
 				return // return original error
 			}
+			err = nil // the AAAA fallback succeeded
 		}
 		seen[nextName] = true
 		addrs = make([]net.IPAddr, 0, len(rrSet))
