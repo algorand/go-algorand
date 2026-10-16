@@ -5105,6 +5105,12 @@ func TestWebsocketNetworkStopEndsMessagesOfInterestThread(t *testing.T) {
 	}, 200*time.Millisecond, 10*time.Millisecond, "messagesOfInterestRefresh was drained after Stop, so postMessagesOfInterestThread is still running")
 }
 
+func (wn *WebsocketNetwork) availableThrottleSlots() int {
+	wn.peersLock.RLock()
+	defer wn.peersLock.RUnlock()
+	return wn.throttledOutgoingConnections
+}
+
 // TestWebsocketNetworkThrottleSlotNotLeakedOnIdentityDedup checks that an outgoing peer
 // rejected by identity deduplication does not keep an outgoing throttle slot.
 // netA's identity tracker already holds netB's identity, as it would with an existing
@@ -5128,7 +5134,7 @@ func TestWebsocketNetworkThrottleSlotNotLeakedOnIdentityDedup(t *testing.T) {
 	existing := &wsPeer{identity: schemeB.identityKeys.PublicKey()}
 	require.True(t, netA.identityTracker.setIdentity(existing))
 
-	slots := netA.throttledOutgoingConnections.Load()
+	slots := netA.availableThrottleSlots()
 	require.Positive(t, slots)
 	dedupsBefore := networkPeerIdentityDisconnect.GetUint64Value()
 
@@ -5144,7 +5150,7 @@ func TestWebsocketNetworkThrottleSlotNotLeakedOnIdentityDedup(t *testing.T) {
 
 	require.Greater(t, networkPeerIdentityDisconnect.GetUint64Value(), dedupsBefore, "netA did not reject the duplicate connection to netB")
 	require.Empty(t, netA.GetPeers(PeersConnectedOut))
-	require.Equal(t, slots, netA.throttledOutgoingConnections.Load(), "the identity dedup rejection leaked an outgoing throttle slot")
+	require.Equal(t, slots, netA.availableThrottleSlots(), "the identity dedup rejection leaked an outgoing throttle slot")
 
 	// without the existing identity the connection is registered and claims a slot,
 	// and disconnecting it gives the slot back
@@ -5156,10 +5162,10 @@ func TestWebsocketNetworkThrottleSlotNotLeakedOnIdentityDedup(t *testing.T) {
 	outPeers := netA.GetPeers(PeersConnectedOut)
 	require.Len(t, outPeers, 1)
 	require.True(t, outPeers[0].(*wsPeer).throttledOutgoingConnection)
-	require.Equal(t, slots-1, netA.throttledOutgoingConnections.Load())
+	require.Equal(t, slots-1, netA.availableThrottleSlots())
 
 	netA.disconnect(outPeers[0], disconnectReasonNone)
 	require.Eventually(t, func() bool {
-		return netA.throttledOutgoingConnections.Load() == slots
+		return netA.availableThrottleSlots() == slots
 	}, 5*time.Second, 50*time.Millisecond, "disconnecting a registered peer did not give its throttle slot back")
 }

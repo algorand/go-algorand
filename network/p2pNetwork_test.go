@@ -58,6 +58,12 @@ func (n *P2PNetwork) hasPeers() bool {
 	return len(n.wsPeers) > 0
 }
 
+func (n *P2PNetwork) availableThrottleSlots() int {
+	n.wsPeersLock.RLock()
+	defer n.wsPeersLock.RUnlock()
+	return n.throttledOutgoingConnections
+}
+
 func (n *P2PNetwork) hasPeer(peerID peer.ID) bool {
 	n.wsPeersLock.RLock()
 	defer n.wsPeersLock.RUnlock()
@@ -1910,7 +1916,7 @@ func TestP2PThrottleSlotNotLeakedOnIdentityDedup(t *testing.T) {
 	require.NoError(t, err)
 	// netA is not a relay, so Start gives it one throttle slot per GossipFanout
 	require.False(t, netA.relayMessages)
-	slots := int32(cfg.GossipFanout)
+	slots := cfg.GossipFanout
 
 	dedupsBefore := networkPeerIdentityDisconnect.GetUint64Value()
 	require.NoError(t, netA.Start())
@@ -1920,7 +1926,7 @@ func TestP2PThrottleSlotNotLeakedOnIdentityDedup(t *testing.T) {
 		return networkPeerIdentityDisconnect.GetUint64Value() > dedupsBefore
 	}, 10*time.Second, 50*time.Millisecond, "netA never rejected the duplicate connection to netB")
 	require.False(t, netA.hasPeers())
-	require.Equal(t, slots, netA.throttledOutgoingConnections.Load(), "the identity dedup rejection leaked an outgoing throttle slot")
+	require.Equal(t, slots, netA.availableThrottleSlots(), "the identity dedup rejection leaked an outgoing throttle slot")
 
 	// Allow registration, then check that disconnecting returns the claimed slot.
 	tracker.removeIdentity(existing)
@@ -1931,8 +1937,8 @@ func TestP2PThrottleSlotNotLeakedOnIdentityDedup(t *testing.T) {
 	outPeers := netA.GetPeers(PeersConnectedOut)
 	require.Len(t, outPeers, 1)
 	require.True(t, outPeers[0].(*wsPeer).throttledOutgoingConnection)
-	require.Equal(t, slots-1, netA.throttledOutgoingConnections.Load())
+	require.Equal(t, slots-1, netA.availableThrottleSlots())
 
 	netA.disconnect(outPeers[0], disconnectReasonNone)
-	require.Equal(t, slots, netA.throttledOutgoingConnections.Load(), "disconnecting a registered peer did not give its throttle slot back")
+	require.Equal(t, slots, netA.availableThrottleSlots(), "disconnecting a registered peer did not give its throttle slot back")
 }

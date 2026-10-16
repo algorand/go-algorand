@@ -239,7 +239,8 @@ type WebsocketNetwork struct {
 	outgoingConnsCloser *outgoingConnsCloser
 
 	// number of throttled outgoing connections "slots" needed to be populated.
-	throttledOutgoingConnections atomic.Int32
+	// Start sets it before any outgoing peer can register; after that, peersLock guards it.
+	throttledOutgoingConnections int
 
 	// dialer is customized to limit the number of
 	// connection in compliance with connectionsRateLimitingCount.
@@ -703,13 +704,13 @@ func (wn *WebsocketNetwork) Start() error {
 		wn.log.Debugf("listening on %s", wn.listener.Addr().String())
 	}
 	if wn.relayMessages {
-		wn.throttledOutgoingConnections.Store(int32(wn.config.GossipFanout / 2))
+		wn.throttledOutgoingConnections = wn.config.GossipFanout / 2
 	} else {
 		// on non-relay, all the outgoing connections are throttled.
-		wn.throttledOutgoingConnections.Store(int32(wn.config.GossipFanout))
+		wn.throttledOutgoingConnections = wn.config.GossipFanout
 	}
 	if wn.config.DisableOutgoingConnectionThrottling {
-		wn.throttledOutgoingConnections.Store(0)
+		wn.throttledOutgoingConnections = 0
 	}
 	if wn.config.TLSCertFile != "" && wn.config.TLSKeyFile != "" {
 		wn.scheme = "https"
@@ -2372,7 +2373,7 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 		wn.prioTracker.removePeer(peer)
 		wn.identityTracker.removeIdentity(peer)
 		if peer.throttledOutgoingConnection {
-			wn.throttledOutgoingConnections.Add(int32(1))
+			wn.throttledOutgoingConnections++
 		}
 		wn.peersChangeCounter.Add(1)
 	}
