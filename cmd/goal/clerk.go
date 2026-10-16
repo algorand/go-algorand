@@ -334,6 +334,7 @@ func authorizeWithProgram(stxn *transactions.SignedTxn, lsig transactions.LogicS
 		salted = true
 	}
 	if !salted {
+		stxn.PQsig = transactions.PQSig{}
 		stxn.Lsig = lsig
 		return
 	}
@@ -341,6 +342,7 @@ func authorizeWithProgram(stxn *transactions.SignedTxn, lsig transactions.LogicS
 	if authorizer := stxn.Authorizer(); authorizer != addr {
 		reportErrorf("program authorizes %s, but the transaction is authorized by %s", addr, authorizer)
 	}
+	stxn.Lsig = transactions.LogicSig{}
 	stxn.PQsig = transactions.PQSig{
 		Scheme:    protocol.PQSchemeLogicSig,
 		Salt:      salt,
