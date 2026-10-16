@@ -80,6 +80,29 @@ type GroupContext struct {
 	consensusParams config.ConsensusParams
 	signedGroupTxns []transactions.SignedTxn
 	evalParams      *logic.EvalParams
+
+	// pqLsigs holds, by group index, the LogicSig each ls-scheme PQSig carries,
+	// filled in by pqLsig. Its args sit encoded in the PQSig, and decoding them
+	// includes a canonical-encoding check that re-encodes them, so the group
+	// size check and evaluation share one decode rather than paying twice.
+	pqLsigs []*transactions.LogicSig
+}
+
+// pqLsig returns the LogicSig carried by the ls-scheme PQSig of the gith
+// transaction, decoding it on first use.
+func (g *GroupContext) pqLsig(gi int) (transactions.LogicSig, error) {
+	if g.pqLsigs == nil {
+		g.pqLsigs = make([]*transactions.LogicSig, len(g.signedGroupTxns))
+	}
+	if lsig := g.pqLsigs[gi]; lsig != nil {
+		return *lsig, nil
+	}
+	lsig, err := g.signedGroupTxns[gi].PQsig.Lsig()
+	if err != nil {
+		return transactions.LogicSig{}, err
+	}
+	g.pqLsigs[gi] = &lsig
+	return lsig, nil
 }
 
 var errTxnSigHasNoSig = errors.New("signedtxn has no sig")
@@ -234,7 +257,7 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 		return nil, &TxGroupError{err: err, GroupIndex: groupIndex, Reason: TxGroupErrorReasonNotWellFormed}
 	}
 
-	if err := logicSigGroupSizeCheck(stxs, groupCtx); err != nil {
+	if err := logicSigGroupSizeCheck(groupCtx); err != nil {
 		return nil, err
 	}
 
@@ -254,7 +277,8 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 // handling of content attached to program-less LogicSigs: ignored before
 // LogicSig size pooling, args counted in the size pool once pooling exists, and
 // any content rejected after transaction size pricing.
-func logicSigGroupSizeCheck(stxs []transactions.SignedTxn, groupCtx *GroupContext) *TxGroupError {
+func logicSigGroupSizeCheck(groupCtx *GroupContext) *TxGroupError {
+	stxs := groupCtx.signedGroupTxns
 	lSigPooledSize := 0
 	lSigArgsSize := 0
 	lSigArgsNeedSizePooling := false
@@ -264,6 +288,7 @@ func logicSigGroupSizeCheck(stxs []transactions.SignedTxn, groupCtx *GroupContex
 
 	for i := range stxs {
 		lsig := &stxs[i].Lsig
+		countLsig := true
 		if !lsig.HasProgram() {
 			if !lsig.Blank() && rejectOrphanLSigContent {
 				return &TxGroupError{
@@ -272,13 +297,27 @@ func logicSigGroupSizeCheck(stxs []transactions.SignedTxn, groupCtx *GroupContex
 					Reason:     TxGroupErrorReasonNotWellFormed,
 				}
 			}
-			if !poolOrphanLSigArgs {
-				continue
-			}
+			countLsig = poolOrphanLSigArgs
 		}
 
-		argsLen := lsig.ArgsLen()
-		lSigPooledSize += len(lsig.Logic) + argsLen
+		programLen, argsLen := 0, 0
+		if countLsig {
+			programLen += len(lsig.Logic)
+			argsLen += lsig.ArgsLen()
+		}
+		// A program authorizing from an ls-scheme PQSig costs the group what one
+		// in a LogicSig costs. Malformed args are rejected here rather than
+		// counted, since there is no honest size to charge for them.
+		if stxs[i].PQsig.IsLogicSig() {
+			pqLsig, err := groupCtx.pqLsig(i)
+			if err != nil {
+				return &TxGroupError{err: err, GroupIndex: i, Reason: TxGroupErrorReasonNotWellFormed}
+			}
+			programLen += len(pqLsig.Logic)
+			argsLen += pqLsig.ArgsLen()
+		}
+
+		lSigPooledSize += programLen + argsLen
 		lSigArgsSize += argsLen
 		if uint64(argsLen) > groupCtx.consensusParams.LogicSigMaxSize {
 			lSigArgsNeedSizePooling = true
@@ -391,6 +430,12 @@ func stxnCoreChecks(gi int, groupCtx *GroupContext, batch crypto.BatchEnqueuer) 
 		return nil
 
 	case pqSig:
+		if s.PQsig.IsLogicSig() {
+			if err := pqLogicSigVerify(gi, groupCtx); err != nil {
+				return &TxGroupError{err: err, GroupIndex: gi, Reason: TxGroupErrorReasonLogicSigFailed}
+			}
+			return nil
+		}
 		if err := s.PQsig.BatchPrep(groupCtx.consensusParams, s.Txn, s.Authorizer(), batch); err != nil {
 			return &TxGroupError{err: fmt.Errorf("pq signature validation failed: %w", err), GroupIndex: gi, Reason: TxGroupErrorReasonSigNotWellFormed}
 		}
@@ -405,14 +450,101 @@ func stxnCoreChecks(gi int, groupCtx *GroupContext, batch crypto.BatchEnqueuer) 
 }
 
 // LogicSigSanityCheck checks that the signature is valid and that the program is basically well formed.
-// It does not evaluate the logic.
+// It does not evaluate the logic. It covers both the program in a LogicSig and
+// the one an ls-scheme PQSig carries.
 func LogicSigSanityCheck(gi int, groupCtx *GroupContext) error {
+	if groupCtx.signedGroupTxns[gi].PQsig.IsLogicSig() {
+		_, err := pqLogicSigSanityCheckPrep(gi, groupCtx)
+		return err
+	}
+
 	batchVerifier := crypto.MakeBatchVerifier()
 
 	if err := logicSigSanityCheckBatchPrep(gi, groupCtx, batchVerifier); err != nil {
 		return err
 	}
 	return batchVerifier.Verify()
+}
+
+// sigProgramSanityCheck checks that a program which authorizes a transaction by
+// being evaluated is basically well formed: present, within the per-program
+// size cap, of a version this protocol runs, and statically valid. name says
+// where the program came from, since it need not be a LogicSig's. Args and
+// pooling checks need the whole group and are handled in txnGroupBatchPrep.
+func sigProgramSanityCheck(program []byte, name string, groupCtx *GroupContext) error {
+	if len(program) == 0 {
+		return fmt.Errorf("%s empty", name)
+	}
+	if uint64(len(program)) > groupCtx.consensusParams.MaxAbsoluteLogicSigProgramSize {
+		return fmt.Errorf("%s too long. max size is %d bytes", name, groupCtx.consensusParams.MaxAbsoluteLogicSigProgramSize)
+	}
+	version, vlen := binary.Uvarint(program)
+	if vlen <= 0 {
+		return fmt.Errorf("%s bad version", name)
+	}
+	if version > groupCtx.consensusParams.LogicSigVersion {
+		return fmt.Errorf("%s version too new", name)
+	}
+
+	return logic.CheckSignature(program, groupCtx.evalParams)
+}
+
+// evalSigProgram evaluates a program that authorizes the ith transaction, and
+// reports whether it approved.
+func evalSigProgram(gi int, groupCtx *GroupContext, lsig transactions.LogicSig) error {
+	pass, cx, err := logic.EvalSignatureProgram(lsig.Logic, lsig.Args, gi, groupCtx.evalParams)
+	if err != nil {
+		logicErrTotal.Inc(nil)
+		return fmt.Errorf("transaction %v: %w", groupCtx.signedGroupTxns[gi].ID(), err)
+	}
+	if !pass {
+		logicRejTotal.Inc(nil)
+		return fmt.Errorf("transaction %v: rejected by logic", groupCtx.signedGroupTxns[gi].ID())
+	}
+	if groupCtx.consensusParams.RequireLogicSigArgAccess {
+		if i, bad := cx.UnaccountedArg(); bad {
+			logicRejTotal.Inc(nil)
+			return fmt.Errorf("transaction %v: LogicSig arg[%d] of %d was not accessed",
+				groupCtx.signedGroupTxns[gi].ID(), i, len(lsig.Args))
+		}
+	}
+	logicGoodTotal.Inc(nil)
+	logicCostTotal.AddUint64(uint64(cx.Cost()), nil)
+	return nil
+}
+
+// pqLogicSigSanityCheckPrep checks an ls-scheme PQSig as far as can be done
+// without evaluating its program, and returns the logic signature it carries.
+func pqLogicSigSanityCheckPrep(gi int, groupCtx *GroupContext) (transactions.LogicSig, error) {
+	if groupCtx.consensusParams.LogicSigVersion == 0 {
+		return transactions.LogicSig{}, errors.New("LogicSig not enabled")
+	}
+	txn := &groupCtx.signedGroupTxns[gi]
+
+	if err := txn.PQsig.ValidateEnvelope(groupCtx.consensusParams, txn.Authorizer()); err != nil {
+		return transactions.LogicSig{}, err
+	}
+
+	lsig, err := groupCtx.pqLsig(gi)
+	if err != nil {
+		return transactions.LogicSig{}, err
+	}
+	if err := sigProgramSanityCheck(lsig.Logic, "PQsig LogicSig", groupCtx); err != nil {
+		return transactions.LogicSig{}, err
+	}
+	return lsig, nil
+}
+
+// pqLogicSigVerify authorizes a transaction with an ls-scheme PQSig. The
+// address commits to the program, so once the envelope establishes that the
+// authorizer is that program's address, evaluating it is the whole
+// authorization: there are no signature bytes to check.
+func pqLogicSigVerify(gi int, groupCtx *GroupContext) error {
+	lsig, err := pqLogicSigSanityCheckPrep(gi, groupCtx)
+	if err != nil {
+		return err
+	}
+	return evalSigProgram(gi, groupCtx, lsig)
 }
 
 // logicSigSanityCheckBatchPrep checks that the signature is valid and that the program is basically well formed.
@@ -423,30 +555,10 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batch crypto.B
 		return errors.New("LogicSig not enabled")
 	}
 
-	if gi < 0 {
-		return errors.New("negative group index")
-	}
 	txn := &groupCtx.signedGroupTxns[gi]
 	lsig := txn.Lsig
 
-	if !lsig.HasProgram() {
-		return errors.New("LogicSig.Logic empty")
-	}
-	// This absolute program cap is per LogicSig. Args and pooling checks need
-	// the whole group and are handled in txnGroupBatchPrep.
-	if uint64(len(lsig.Logic)) > groupCtx.consensusParams.MaxAbsoluteLogicSigProgramSize {
-		return fmt.Errorf("LogicSig.Logic too long. max size is %d bytes", groupCtx.consensusParams.MaxAbsoluteLogicSigProgramSize)
-	}
-	version, vlen := binary.Uvarint(lsig.Logic)
-	if vlen <= 0 {
-		return errors.New("LogicSig.Logic bad version")
-	}
-	if version > groupCtx.consensusParams.LogicSigVersion {
-		return errors.New("LogicSig.Logic version too new")
-	}
-
-	err := logic.CheckSignature(gi, groupCtx.evalParams)
-	if err != nil {
+	if err := sigProgramSanityCheck(lsig.Logic, "LogicSig.Logic", groupCtx); err != nil {
 		return err
 	}
 
@@ -529,26 +641,7 @@ func logicSigVerify(gi int, groupCtx *GroupContext) error {
 		return err
 	}
 
-	pass, cx, err := logic.EvalSignatureFull(gi, groupCtx.evalParams)
-	if err != nil {
-		logicErrTotal.Inc(nil)
-		return fmt.Errorf("transaction %v: %w", groupCtx.signedGroupTxns[gi].ID(), err)
-	}
-	if !pass {
-		logicRejTotal.Inc(nil)
-		return fmt.Errorf("transaction %v: rejected by logic", groupCtx.signedGroupTxns[gi].ID())
-	}
-	if groupCtx.consensusParams.RequireLogicSigArgAccess {
-		if i, bad := cx.UnaccountedArg(); bad {
-			logicRejTotal.Inc(nil)
-			return fmt.Errorf("transaction %v: LogicSig arg[%d] of %d was not accessed",
-				groupCtx.signedGroupTxns[gi].ID(), i, len(groupCtx.signedGroupTxns[gi].Lsig.Args))
-		}
-	}
-	logicGoodTotal.Inc(nil)
-	logicCostTotal.AddUint64(uint64(cx.Cost()), nil)
-	return nil
-
+	return evalSigProgram(gi, groupCtx, groupCtx.signedGroupTxns[gi].Lsig)
 }
 
 // PaysetGroups verifies that the payset have a good signature and that the underlying
