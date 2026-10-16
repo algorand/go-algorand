@@ -1842,7 +1842,7 @@ func (cx *EvalContext) step() error {
 
 // blankStack is a boring stack provided to deets.Cost during checkStep. It is
 // good enough to allow Cost() to not crash. It would be incorrect to provide
-// this stack if there were linear cost opcodes before backBranchEnabledVersion,
+// this stack if there were linear or bracket cost opcodes before backBranchEnabledVersion,
 // because the static cost would be wrong. But then again, a static cost model
 // wouldn't work before backBranchEnabledVersion, so such an opcode is already
 // unacceptable. TestLinearOpcodes ensures.
