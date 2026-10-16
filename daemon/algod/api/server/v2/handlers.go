@@ -1536,6 +1536,7 @@ type PreEncodedSimulateRequest struct {
 	ExtraOpcodeBudget     int                                         `codec:"extra-opcode-budget,omitempty"`
 	ExecTraceConfig       simulation.ExecTraceConfig                  `codec:"exec-trace-config,omitempty"`
 	FixSigners            bool                                        `codec:"fix-signers,omitempty"`
+	StateOverrides        *model.SimulateStateOverrides               `codec:"state-overrides,omitempty"`
 }
 
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
@@ -1578,8 +1579,12 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
 	}
+	request, err := convertSimulationRequest(simulateRequest)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
 	// Simulate transaction
-	simulationResult, err := v2.Node.Simulate(convertSimulationRequest(simulateRequest))
+	simulationResult, err := v2.Node.Simulate(request)
 	if err != nil {
 		var invalidTxErr simulation.InvalidRequestError
 		switch {
