@@ -302,8 +302,8 @@ recreateNetwork:
 	rpcs.RegisterTxService(node.transactionPool, p2pNode, node.genesisID, cfg.TxPoolSize, cfg.TxSyncServeResponseSize)
 
 	// crash data is stored in the cold data directory unless otherwise specified;
-	// the database holds one row, the agreement state, replaced on every vote,
-	// which a long-WAL accessor checkpoints rarely
+	// the database holds one row, the agreement state, replaced each time the
+	// node attests, which a long-WAL accessor checkpoints rarely
 	crashPathname := filepath.Join(node.genesisDirs.CrashGenesisDir, config.CrashFilename)
 	crashAccess, err := db.MakeLongWALAccessor(crashPathname, false, false)
 	if err != nil {
