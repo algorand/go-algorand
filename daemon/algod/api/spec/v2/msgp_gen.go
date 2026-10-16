@@ -86,14 +86,22 @@ func (z *AccountApplicationModel) UnmarshalMsgWithState(bts []byte, st msgp.Unma
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = AccountApplicationModel{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "app-local-state":
 			if msgp.IsNil(bts) {
 				bts, err = msgp.ReadNilBytes(bts)
 				if err != nil {
@@ -106,13 +114,11 @@ func (z *AccountApplicationModel) UnmarshalMsgWithState(bts []byte, st msgp.Unma
 				}
 				bts, err = (*z).AppLocalState.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "AppLocalState")
+					err = msgp.WrapError(err, "AppLocalState")
 					return
 				}
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "app-params":
 			if msgp.IsNil(bts) {
 				bts, err = msgp.ReadNilBytes(bts)
 				if err != nil {
@@ -125,74 +131,15 @@ func (z *AccountApplicationModel) UnmarshalMsgWithState(bts []byte, st msgp.Unma
 				}
 				bts, err = (*z).AppParams.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "AppParams")
+					err = msgp.WrapError(err, "AppParams")
 					return
 				}
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = AccountApplicationModel{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "app-local-state":
-				if msgp.IsNil(bts) {
-					bts, err = msgp.ReadNilBytes(bts)
-					if err != nil {
-						return
-					}
-					(*z).AppLocalState = nil
-				} else {
-					if (*z).AppLocalState == nil {
-						(*z).AppLocalState = new(basics.AppLocalState)
-					}
-					bts, err = (*z).AppLocalState.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "AppLocalState")
-						return
-					}
-				}
-			case "app-params":
-				if msgp.IsNil(bts) {
-					bts, err = msgp.ReadNilBytes(bts)
-					if err != nil {
-						return
-					}
-					(*z).AppParams = nil
-				} else {
-					if (*z).AppParams == nil {
-						(*z).AppParams = new(basics.AppParams)
-					}
-					bts, err = (*z).AppParams.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "AppParams")
-						return
-					}
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -295,14 +242,22 @@ func (z *AccountAssetModel) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalS
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = AccountAssetModel{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "asset-params":
 			if msgp.IsNil(bts) {
 				bts, err = msgp.ReadNilBytes(bts)
 				if err != nil {
@@ -315,13 +270,11 @@ func (z *AccountAssetModel) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalS
 				}
 				bts, err = (*z).AssetParams.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "AssetParams")
+					err = msgp.WrapError(err, "AssetParams")
 					return
 				}
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "asset-holding":
 			if msgp.IsNil(bts) {
 				bts, err = msgp.ReadNilBytes(bts)
 				if err != nil {
@@ -334,74 +287,15 @@ func (z *AccountAssetModel) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalS
 				}
 				bts, err = (*z).AssetHolding.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "AssetHolding")
+					err = msgp.WrapError(err, "AssetHolding")
 					return
 				}
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = AccountAssetModel{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "asset-params":
-				if msgp.IsNil(bts) {
-					bts, err = msgp.ReadNilBytes(bts)
-					if err != nil {
-						return
-					}
-					(*z).AssetParams = nil
-				} else {
-					if (*z).AssetParams == nil {
-						(*z).AssetParams = new(basics.AssetParams)
-					}
-					bts, err = (*z).AssetParams.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "AssetParams")
-						return
-					}
-				}
-			case "asset-holding":
-				if msgp.IsNil(bts) {
-					bts, err = msgp.ReadNilBytes(bts)
-					if err != nil {
-						return
-					}
-					(*z).AssetHolding = nil
-				} else {
-					if (*z).AssetHolding == nil {
-						(*z).AssetHolding = new(basics.AssetHolding)
-					}
-					bts, err = (*z).AssetHolding.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "AssetHolding")
-						return
-					}
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
