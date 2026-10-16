@@ -355,9 +355,9 @@ func TestAuthenticate(t *testing.T) {
 	a.Error(err)
 	a.Contains(err.Error(), "signer name mismatch")
 
-	// Authenticate must check every signer/owner relationship even if a caller
-	// bypasses the response filtering performed by Resolver. A valid first
-	// relationship must not hide a later non-ancestor owner.
+	// Authenticate checks the signer/owner relationship of every RRSIG, so a
+	// valid first relationship must not hide a later non-ancestor owner.
+	// Binding the answer to the query itself is left to selectRRSet.
 	sig = rrsig[0]
 	sig.SignerName = "rand.test."
 	sig.Hdr.Name = "rand.test."
@@ -383,6 +383,15 @@ func TestAuthenticate(t *testing.T) {
 	err = tch.Authenticate(context.Background(), rrset, rrsig)
 	a.NoError(err)
 	validSig := rrsig[0]
+
+	// Signer names are case-insensitive: they are compared, and their trusted
+	// zones cached, in canonical form.
+	upperSig := validSig
+	upperSig.SignerName = "TEST."
+	err = tch.Authenticate(context.Background(), rrset, []dns.RRSIG{upperSig})
+	a.NoError(err)
+	err = tch.Authenticate(context.Background(), rrset, []dns.RRSIG{upperSig, validSig})
+	a.NoError(err)
 
 	// The final record signature must be valid at the time it is authenticated.
 	err = r.updateARecord("www.test.", net.IPv4(1, 2, 3, 4), time.Now().Add(-time.Hour))

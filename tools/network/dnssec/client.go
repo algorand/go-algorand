@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/miekg/dns"
@@ -111,7 +112,8 @@ func (r *dnsClient) query(ctx context.Context, name string, qtype uint16) (resp 
 	return nil, fmt.Errorf("no answer for (%s, %d) from DNS servers %v", name, qtype, r.servers)
 }
 
-// QueryRRSet returns resource records of qtype for name and its signatures
+// QueryRRSet returns the records and signatures in the answer section of a qtype query for name.
+// The answer is not filtered: it may hold records for other names, such as a CNAME target.
 func (r *dnsClient) QueryRRSet(ctx context.Context, name string, qtype uint16) ([]dns.RR, []dns.RRSIG, error) {
 	msg, err := r.query(ctx, name, qtype)
 	if err != nil {
@@ -134,16 +136,33 @@ func (r *dnsClient) QueryRRSet(ctx context.Context, name string, qtype uint16) (
 	if len(rrSig) == 0 {
 		return nil, nil, fmt.Errorf("no signature in DNS response for %s", name)
 	}
-	return selectRRSet(name, qtype, qtype == dns.TypeA || qtype == dns.TypeAAAA, rrSet, rrSig)
+	return rrSet, rrSig, nil
+}
+
+// querySelectedRRSet queries name for qtype and returns the signed RRset that
+// answers the query, as chosen by selectRRSet. The RRset is not authenticated.
+func querySelectedRRSet(ctx context.Context, c Querier, name string, qtype uint16) ([]dns.RR, []dns.RRSIG, error) {
+	rrSet, rrSig, err := c.QueryRRSet(ctx, name, qtype)
+	if err != nil {
+		return nil, nil, err
+	}
+	return selectRRSet(name, qtype, rrSet, rrSig)
 }
 
 // selectRRSet returns the signed RRset belonging to the queried name and type.
 // A and AAAA queries may instead return a CNAME at the queried name; its target
 // is resolved and authenticated by a separate query.
-func selectRRSet(name string, qtype uint16, allowCNAME bool, rrSet []dns.RR, rrSig []dns.RRSIG) ([]dns.RR, []dns.RRSIG, error) {
+func selectRRSet(name string, qtype uint16, rrSet []dns.RR, rrSig []dns.RRSIG) ([]dns.RR, []dns.RRSIG, error) {
 	expectedName := dns.CanonicalName(name)
+	// RFC 4034 section 3.1.3: the Labels field does not count a leading wildcard label.
+	expectedLabels := dns.CountLabel(expectedName)
+	if strings.HasPrefix(expectedName, "*.") {
+		expectedLabels--
+	}
+	allowCNAME := qtype == dns.TypeA || qtype == dns.TypeAAAA
 	var selectedType uint16
 	selectedSigs := make([]dns.RRSIG, 0, len(rrSig))
+	var rejectErr error
 	for _, sig := range rrSig {
 		if sig.Hdr.Class != dns.ClassINET {
 			continue
@@ -154,7 +173,9 @@ func selectRRSet(name string, qtype uint16, allowCNAME bool, rrSet []dns.RR, rrS
 		if sig.TypeCovered != qtype && !(allowCNAME && sig.TypeCovered == dns.TypeCNAME) {
 			continue
 		}
-		if !dns.IsSubDomain(dns.CanonicalName(sig.SignerName), expectedName) {
+		signer := dns.CanonicalName(sig.SignerName)
+		if !dns.IsSubDomain(signer, expectedName) {
+			rejectErr = fmt.Errorf("RRSIG for %s type %s has non-ancestor signer %s", expectedName, dns.Type(sig.TypeCovered), signer)
 			continue
 		}
 		// A smaller label count denotes a wildcard-expanded signature. The RRSIG
@@ -162,7 +183,8 @@ func selectRRSet(name string, qtype uint16, allowCNAME bool, rrSet []dns.RR, rrS
 		// to this name also requires authenticated NSEC/NSEC3 denial proofs. The
 		// go-algorand DNSSEC validation path does not retain those proofs, so reject
 		// wildcard-expanded answers.
-		if int(sig.Labels) < dns.CountLabel(expectedName) {
+		if int(sig.Labels) < expectedLabels {
+			rejectErr = fmt.Errorf("wildcard-expanded answer for %s type %s is not supported", expectedName, dns.Type(sig.TypeCovered))
 			continue
 		}
 		if selectedType != 0 && selectedType != sig.TypeCovered {
@@ -172,7 +194,10 @@ func selectRRSet(name string, qtype uint16, allowCNAME bool, rrSet []dns.RR, rrS
 		selectedSigs = append(selectedSigs, sig)
 	}
 	if len(selectedSigs) == 0 {
-		return nil, nil, fmt.Errorf("no signature for %s type %s in DNS response", expectedName, dns.TypeToString[qtype])
+		if rejectErr != nil {
+			return nil, nil, rejectErr
+		}
+		return nil, nil, fmt.Errorf("no signature for %s type %s in DNS response", expectedName, dns.Type(qtype))
 	}
 
 	selectedRRs := make([]dns.RR, 0, len(rrSet))
@@ -183,7 +208,11 @@ func selectRRSet(name string, qtype uint16, allowCNAME bool, rrSet []dns.RR, rrS
 		}
 	}
 	if len(selectedRRs) == 0 {
-		return nil, nil, fmt.Errorf("no records for %s type %s in DNS response", expectedName, dns.TypeToString[selectedType])
+		return nil, nil, fmt.Errorf("no records for %s type %s in DNS response", expectedName, dns.Type(selectedType))
+	}
+	if selectedType == dns.TypeCNAME && len(selectedRRs) > 1 {
+		// RFC 1034 section 3.6.2 requires a single CNAME RR per name.
+		return nil, nil, fmt.Errorf("multiple CNAME RR detected")
 	}
 	return selectedRRs, selectedSigs, nil
 }

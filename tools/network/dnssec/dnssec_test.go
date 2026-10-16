@@ -58,32 +58,33 @@ func (w wildcardExpandingQuerier) QueryRRSet(ctx context.Context, name string, q
 	if err != nil {
 		return nil, nil, err
 	}
+	expanded := make([]dns.RR, len(rrSet))
 	for i, rr := range rrSet {
-		rrSet[i] = dns.Copy(rr)
-		rrSet[i].Header().Name = name
+		expanded[i] = dns.Copy(rr)
+		expanded[i].Header().Name = name
 	}
 	expandedSig := append([]dns.RRSIG(nil), rrSig...)
 	for i := range expandedSig {
 		expandedSig[i].Hdr.Name = name
 	}
-	return rrSet, expandedSig, nil
+	return expanded, expandedSig, nil
+}
+
+// addSignedTestZone adds zone with a fresh KSK and ZSK and publishes the KSK's DS record.
+func addSignedTestZone(t *testing.T, r *testResolver, zone string) {
+	t.Helper()
+	ksk, kskSK := getKey(zone, dns.ZONE|dns.SEP)
+	zsk, zskSK := getKey(zone, dns.ZONE)
+	require.NoError(t, r.updateDSRecord(zone, &[]dns.DS{*ksk.ToDS(dns.SHA256)}, time.Time{}))
+	require.NoError(t, r.updateDNSKeyRecord(zone, ksk, kskSK, time.Time{}))
+	require.NoError(t, r.updateDNSKeyRecord(zone, zsk, zskSK, time.Time{}))
 }
 
 func makeSignedTestZone(t *testing.T) *testResolver {
 	t.Helper()
 	r := makeEmptyTestResolver()
-
-	rootKSK, rootKSKsk := getKey(".", dns.ZONE|dns.SEP)
-	rootZSK, rootZSKsk := getKey(".", dns.ZONE)
-	require.NoError(t, r.updateDSRecord(".", &[]dns.DS{*rootKSK.ToDS(dns.SHA256)}, time.Time{}))
-	require.NoError(t, r.updateDNSKeyRecord(".", rootKSK, rootKSKsk, time.Time{}))
-	require.NoError(t, r.updateDNSKeyRecord(".", rootZSK, rootZSKsk, time.Time{}))
-
-	testKSK, testKSKsk := getKey("test.", dns.ZONE|dns.SEP)
-	testZSK, testZSKsk := getKey("test.", dns.ZONE)
-	require.NoError(t, r.updateDSRecord("test.", &[]dns.DS{*testKSK.ToDS(dns.SHA256)}, time.Time{}))
-	require.NoError(t, r.updateDNSKeyRecord("test.", testKSK, testKSKsk, time.Time{}))
-	require.NoError(t, r.updateDNSKeyRecord("test.", testZSK, testZSKsk, time.Time{}))
+	addSignedTestZone(t, r, ".")
+	addSignedTestZone(t, r, "test.")
 	return r
 }
 
@@ -108,15 +109,28 @@ func TestLookupRejectsSignedRRSetFromAnotherName(t *testing.T) {
 	require.ErrorContains(t, err, "no signature for wanted.test.")
 }
 
+func TestLookupIPAddrRejectsSignedRRSetFromAnotherName(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	r := makeSignedTestZone(t)
+	require.NoError(t, r.updateARecord("foreign.test.", net.IPv4(6, 6, 6, 6), time.Time{}))
+
+	client := substitutingQuerier{
+		TrustQuerier: r,
+		queryName:    "wanted.test.",
+		queryType:    dns.TypeA,
+		answerName:   "foreign.test.",
+	}
+	resolver := Resolver{client: client, trustChain: makeTrustChain(client), maxHops: DefaultMaxHops}
+	_, err := resolver.LookupIPAddr(context.Background(), "wanted.test.")
+	require.ErrorContains(t, err, "no signature for wanted.test. type A")
+}
+
 func TestLookupRejectsSignerOutsideOwnerZone(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	r := makeSignedTestZone(t)
-	attackerKSK, attackerKSKsk := getKey("rand.test.", dns.ZONE|dns.SEP)
-	attackerZSK, attackerZSKsk := getKey("rand.test.", dns.ZONE)
-	require.NoError(t, r.updateDSRecord("rand.test.", &[]dns.DS{*attackerKSK.ToDS(dns.SHA256)}, time.Time{}))
-	require.NoError(t, r.updateDNSKeyRecord("rand.test.", attackerKSK, attackerKSKsk, time.Time{}))
-	require.NoError(t, r.updateDNSKeyRecord("rand.test.", attackerZSK, attackerZSKsk, time.Time{}))
+	addSignedTestZone(t, r, "rand.test.")
 
 	forged := &dns.TXT{
 		Hdr: dns.RR_Header{Name: "algorand.test.", Rrtype: dns.TypeTXT, Class: dns.ClassINET, Ttl: 3600},
@@ -126,7 +140,15 @@ func TestLookupRejectsSignerOutsideOwnerZone(t *testing.T) {
 
 	resolver := Resolver{client: r, trustChain: makeTrustChain(r), maxHops: DefaultMaxHops}
 	_, err := resolver.LookupTXT(context.Background(), "algorand.test.")
-	require.ErrorContains(t, err, "no signature for algorand.test.")
+	require.ErrorContains(t, err, "RRSIG for algorand.test. type TXT has non-ancestor signer rand.test.")
+
+	// The forged signature verifies with rand.test.'s keys, and miekg/dns only
+	// checks that the signer is a string suffix of the owner, so Authenticate
+	// must reject it on its own as well.
+	rrSet, rrSig, err := r.QueryRRSet(context.Background(), "algorand.test.", dns.TypeTXT)
+	require.NoError(t, err)
+	err = resolver.trustChain.Authenticate(context.Background(), rrSet, rrSig)
+	require.EqualError(t, err, "RRSIG signer rand.test. is not an ancestor of owner algorand.test.")
 }
 
 func TestLookupRejectsDSFromAnotherName(t *testing.T) {
@@ -162,6 +184,29 @@ func TestLookupRejectsDSFromAnotherName(t *testing.T) {
 	require.ErrorContains(t, err, "no signature for victim.test. type DS")
 }
 
+func TestLookupRejectsDNSKEYFromAnotherName(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	r := makeSignedTestZone(t)
+	addSignedTestZone(t, r, "other.test.")
+	txt := &dns.TXT{
+		Hdr: dns.RR_Header{Name: "www.test.", Rrtype: dns.TypeTXT, Class: dns.ClassINET, Ttl: 3600},
+		Txt: []string{"www"},
+	}
+	require.NoError(t, r.updateRegRecord("www.test.", "test.", dns.TypeTXT, []dns.RR{txt}, time.Time{}))
+
+	// other.test.'s DNSKEY RRset is validly signed, but it does not belong to test.
+	client := substitutingQuerier{
+		TrustQuerier: r,
+		queryName:    "test.",
+		queryType:    dns.TypeDNSKEY,
+		answerName:   "other.test.",
+	}
+	resolver := Resolver{client: client, trustChain: makeTrustChain(client), maxHops: DefaultMaxHops}
+	_, err := resolver.LookupTXT(context.Background(), "www.test.")
+	require.ErrorContains(t, err, "no signature for test. type DNSKEY")
+}
+
 func TestLookupRejectsUnprovedWildcardExpansion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -180,7 +225,7 @@ func TestLookupRejectsUnprovedWildcardExpansion(t *testing.T) {
 	}
 	resolver := Resolver{client: client, trustChain: makeTrustChain(client), maxHops: DefaultMaxHops}
 	_, err := resolver.LookupTXT(context.Background(), "wanted.test.")
-	require.ErrorContains(t, err, "no signature for wanted.test.")
+	require.ErrorContains(t, err, "wildcard-expanded answer for wanted.test. type TXT is not supported")
 }
 
 func TestLookup(t *testing.T) {

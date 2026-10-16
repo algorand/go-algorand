@@ -109,36 +109,12 @@ type TLSARec struct {
 	Certificate  string `dns:"hex"`
 }
 
-// lookup makes DNS request for a zone and verifies response signature
+// lookup makes DNS request for a zone and verifies response signature.
+// For A and AAAA requests the verified RRset may be a CNAME at name instead.
 func (r *Resolver) lookup(ctx context.Context, name string, qt uint16) (rrSet []dns.RR, err error) {
-	rrSet, rrSig, err := r.client.QueryRRSet(ctx, name, qt)
+	rrSet, rrSig, err := querySelectedRRSet(ctx, r.client, name, qt)
 	if err != nil {
 		return
-	}
-	rrSet, rrSig, err = selectRRSet(name, qt, false, rrSet, rrSig)
-	if err != nil {
-		return nil, err
-	}
-	err = r.trustChain.Authenticate(ctx, rrSet, rrSig)
-	return
-}
-
-// lookupCnameAware requests a zone and verifies response signature similarly to lookup,
-// but also it is aware about possible A/CNAME entries for A-requests and supposed to be used for CNAME alias resolution.
-// if CNAME signature presents for requested domain name, then consider the response as CNAME
-// and extract CNAME record(s) and its RRSIG
-func (r *Resolver) lookupCnameAware(ctx context.Context, name string, qt uint16) (rrSet []dns.RR, err error) {
-	rrSet, rrSig, err := r.client.QueryRRSet(ctx, name, qt)
-	if err != nil {
-		return
-	}
-	rrSet, rrSig, err = selectRRSet(name, qt, true, rrSet, rrSig)
-	if err != nil {
-		return nil, err
-	}
-	if rrSet[0].Header().Rrtype == dns.TypeCNAME && len(rrSet) > 1 {
-		// RFC 1034 section 3.6.2 requires a single CNAME RR per name.
-		return nil, fmt.Errorf("multiple CNAME RR detected")
 	}
 	err = r.trustChain.Authenticate(ctx, rrSet, rrSig)
 	return
@@ -155,9 +131,9 @@ func (r *Resolver) lookupIPAddr(ctx context.Context, hostname string) (cname str
 			return
 		}
 
-		if rrSet, err = r.lookupCnameAware(ctx, nextName, dns.TypeA); err != nil {
+		if rrSet, err = r.lookup(ctx, nextName, dns.TypeA); err != nil {
 			var err2 error
-			if rrSet, err2 = r.lookupCnameAware(ctx, nextName, dns.TypeAAAA); err2 != nil {
+			if rrSet, err2 = r.lookup(ctx, nextName, dns.TypeAAAA); err2 != nil {
 				return // return original error
 			}
 		}
