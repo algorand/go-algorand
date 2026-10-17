@@ -34,19 +34,19 @@ func TestEmptyClient(t *testing.T) {
 
 	a := require.New(t)
 
-	c := MakeDNSClient(nil, time.Second)
+	c := makeClient(nil, time.Second)
 	rr, rsig, err := c.QueryRRSet(context.Background(), "test", 0)
 	a.Error(err)
 	a.Empty(rr)
 	a.Empty(rsig)
 
-	c = MakeDNSClient([]ResolverAddress{}, time.Second)
+	c = makeClient([]ResolverAddress{}, time.Second)
 	rr, rsig, err = c.QueryRRSet(context.Background(), "test", 0)
 	a.Error(err)
 	a.Empty(rr)
 	a.Empty(rsig)
 
-	c = MakeDNSClient([]ResolverAddress{"example.com"}, time.Millisecond)
+	c = makeClient([]ResolverAddress{"example.com"}, time.Millisecond)
 	rr, rsig, err = c.QueryRRSet(context.Background(), "test", 0)
 	a.Error(err)
 	a.Empty(rr)
@@ -88,6 +88,104 @@ func TestMockedClient(t *testing.T) {
 	a.NoError(err)
 	a.Equal(1, len(rr))
 	a.Equal(1, len(rsig))
+}
+
+func TestSelectRRSet(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	txt := func(owner string) dns.RR {
+		return &dns.TXT{Hdr: dns.RR_Header{Name: owner, Rrtype: dns.TypeTXT, Class: dns.ClassINET}, Txt: []string{owner}}
+	}
+	aRecord := func(owner string) dns.RR {
+		return &dns.A{Hdr: dns.RR_Header{Name: owner, Rrtype: dns.TypeA, Class: dns.ClassINET}, A: net.IPv4(1, 2, 3, 4)}
+	}
+	cname := func(owner, target string) dns.RR {
+		return &dns.CNAME{Hdr: dns.RR_Header{Name: owner, Rrtype: dns.TypeCNAME, Class: dns.ClassINET}, Target: target}
+	}
+	sig := func(owner string, covered uint16, labels uint8, signer string) dns.RRSIG {
+		return dns.RRSIG{Hdr: dns.RR_Header{Name: owner, Rrtype: dns.TypeRRSIG, Class: dns.ClassINET}, TypeCovered: covered, Labels: labels, SignerName: signer}
+	}
+
+	wanted, wantedSig := txt("wanted.test."), sig("wanted.test.", dns.TypeTXT, 2, "test.")
+	foreign, foreignSig := txt("foreign.test."), sig("foreign.test.", dns.TypeTXT, 2, "test.")
+	chaos, chaosSig := txt("wanted.test."), sig("wanted.test.", dns.TypeTXT, 2, "test.")
+	chaos.Header().Class = dns.ClassCHAOS
+	chaosSig.Hdr.Class = dns.ClassCHAOS
+	mixedCase, mixedCaseSig := txt("Wanted.TEST."), sig("WANTED.test.", dns.TypeTXT, 2, "Test.")
+	alias, aliasSig := cname("alias.test.", "target.test."), sig("alias.test.", dns.TypeCNAME, 2, "test.")
+	target, targetSig := aRecord("target.test."), sig("target.test.", dns.TypeA, 2, "test.")
+	literalWildcard, literalWildcardSig := txt("*.test."), sig("*.test.", dns.TypeTXT, 1, "test.")
+
+	tests := []struct {
+		name    string
+		qname   string
+		qtype   uint16
+		rrSet   []dns.RR
+		rrSig   []dns.RRSIG
+		wantSet []dns.RR
+		wantSig []dns.RRSIG
+		wantErr string
+	}{
+		{name: "selects the queried name", qname: "wanted.test", qtype: dns.TypeTXT,
+			rrSet: []dns.RR{foreign, wanted}, rrSig: []dns.RRSIG{foreignSig, wantedSig},
+			wantSet: []dns.RR{wanted}, wantSig: []dns.RRSIG{wantedSig}},
+		{name: "rejects another name", qname: "wanted.test", qtype: dns.TypeTXT,
+			rrSet: []dns.RR{foreign}, rrSig: []dns.RRSIG{foreignSig},
+			wantErr: "no signature for wanted.test. type TXT in DNS response"},
+		{name: "ignores query name case", qname: "WANTED.Test", qtype: dns.TypeTXT,
+			rrSet: []dns.RR{wanted}, rrSig: []dns.RRSIG{wantedSig},
+			wantSet: []dns.RR{wanted}, wantSig: []dns.RRSIG{wantedSig}},
+		{name: "ignores response name case", qname: "wanted.test.", qtype: dns.TypeTXT,
+			rrSet: []dns.RR{mixedCase}, rrSig: []dns.RRSIG{mixedCaseSig},
+			wantSet: []dns.RR{mixedCase}, wantSig: []dns.RRSIG{mixedCaseSig}},
+		{name: "ignores other classes", qname: "wanted.test.", qtype: dns.TypeTXT,
+			rrSet: []dns.RR{chaos, wanted}, rrSig: []dns.RRSIG{chaosSig, wantedSig},
+			wantSet: []dns.RR{wanted}, wantSig: []dns.RRSIG{wantedSig}},
+		{name: "rejects a signature for another type", qname: "wanted.test.", qtype: dns.TypeTXT,
+			rrSet: []dns.RR{aRecord("wanted.test.")}, rrSig: []dns.RRSIG{sig("wanted.test.", dns.TypeA, 2, "test.")},
+			wantErr: "no signature for wanted.test. type TXT in DNS response"},
+		{name: "selects a CNAME for an A query", qname: "alias.test.", qtype: dns.TypeA,
+			rrSet: []dns.RR{alias, target}, rrSig: []dns.RRSIG{aliasSig, targetSig},
+			wantSet: []dns.RR{alias}, wantSig: []dns.RRSIG{aliasSig}},
+		{name: "rejects a CNAME for a TXT query", qname: "alias.test.", qtype: dns.TypeTXT,
+			rrSet: []dns.RR{alias}, rrSig: []dns.RRSIG{aliasSig},
+			wantErr: "no signature for alias.test. type TXT in DNS response"},
+		{name: "rejects a CNAME signed next to A records", qname: "alias.test.", qtype: dns.TypeA,
+			rrSet: []dns.RR{alias, aRecord("alias.test.")}, rrSig: []dns.RRSIG{aliasSig, sig("alias.test.", dns.TypeA, 2, "test.")},
+			wantErr: "multiple signed RRsets for alias.test. in DNS response"},
+		{name: "rejects multiple CNAMEs", qname: "alias.test.", qtype: dns.TypeA,
+			rrSet: []dns.RR{alias, cname("alias.test.", "other.test.")}, rrSig: []dns.RRSIG{aliasSig},
+			wantErr: "multiple CNAME RR detected"},
+		{name: "rejects a signature without records", qname: "wanted.test.", qtype: dns.TypeTXT,
+			rrSig:   []dns.RRSIG{wantedSig},
+			wantErr: "no records for wanted.test. type TXT in DNS response"},
+		{name: "rejects a signer that is only a string suffix", qname: "algorand.test.", qtype: dns.TypeTXT,
+			rrSet: []dns.RR{txt("algorand.test.")}, rrSig: []dns.RRSIG{sig("algorand.test.", dns.TypeTXT, 2, "rand.test.")},
+			wantErr: "RRSIG for algorand.test. type TXT has non-ancestor signer rand.test."},
+		{name: "rejects a wildcard expansion", qname: "wanted.test.", qtype: dns.TypeTXT,
+			rrSet: []dns.RR{wanted}, rrSig: []dns.RRSIG{sig("wanted.test.", dns.TypeTXT, 1, "test.")},
+			wantErr: "wildcard-expanded answer for wanted.test. type TXT is not supported"},
+		{name: "accepts a literal wildcard owner", qname: "*.test.", qtype: dns.TypeTXT,
+			rrSet: []dns.RR{literalWildcard}, rrSig: []dns.RRSIG{literalWildcardSig},
+			wantSet: []dns.RR{literalWildcard}, wantSig: []dns.RRSIG{literalWildcardSig}},
+		{name: "names unknown types", qname: "wanted.test.", qtype: 65280,
+			rrSet: []dns.RR{wanted}, rrSig: []dns.RRSIG{wantedSig},
+			wantErr: "no signature for wanted.test. type TYPE65280 in DNS response"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rrSet, rrSig, err := selectRRSet(tc.qname, tc.qtype, tc.rrSet, tc.rrSig)
+			if tc.wantErr != "" {
+				require.EqualError(t, err, tc.wantErr)
+				require.Empty(t, rrSet)
+				require.Empty(t, rrSig)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tc.wantSet, rrSet)
+			require.Equal(t, tc.wantSig, rrSig)
+		})
+	}
 }
 
 // startTestDNSServer starts a miekg/dns server with handler on network ("udp"
