@@ -43,9 +43,31 @@ type dnsClient struct {
 	transport   queryServerIf
 }
 
-// MakeDNSClient creates a new instance of dnsClient
-func MakeDNSClient(servers []ResolverAddress, timeout time.Duration) Querier {
+// makeClient creates a new instance of dnsClient.
+func makeClient(servers []ResolverAddress, timeout time.Duration) *dnsClient {
 	return &dnsClient{servers: servers, readTimeout: timeout, transport: qsi{}}
+}
+
+// filteredClient binds answers from a TrustQuerier to the requested name,
+// type, and class before either the resolver or trust chain can use them.
+type filteredClient struct {
+	client TrustQuerier
+}
+
+func makeFilteredClient(client TrustQuerier) *filteredClient {
+	return &filteredClient{client: client}
+}
+
+func (c *filteredClient) QueryRRSet(ctx context.Context, name string, qtype uint16) ([]dns.RR, []dns.RRSIG, error) {
+	rrSet, rrSig, err := c.client.QueryRRSet(ctx, name, qtype)
+	if err != nil {
+		return nil, nil, err
+	}
+	return selectRRSet(name, qtype, rrSet, rrSig)
+}
+
+func (c *filteredClient) GetRootAnchorDS() ([]dns.DS, error) {
+	return c.client.GetRootAnchorDS()
 }
 
 // queryServerIf abstracts network communication layer in DNSClient
@@ -139,16 +161,6 @@ func (r *dnsClient) QueryRRSet(ctx context.Context, name string, qtype uint16) (
 	return rrSet, rrSig, nil
 }
 
-// querySelectedRRSet queries name for qtype and returns the signed RRset that
-// answers the query, as chosen by selectRRSet. The RRset is not authenticated.
-func querySelectedRRSet(ctx context.Context, c Querier, name string, qtype uint16) ([]dns.RR, []dns.RRSIG, error) {
-	rrSet, rrSig, err := c.QueryRRSet(ctx, name, qtype)
-	if err != nil {
-		return nil, nil, err
-	}
-	return selectRRSet(name, qtype, rrSet, rrSig)
-}
-
 // selectRRSet returns the signed RRset belonging to the queried name and type.
 // A and AAAA queries may instead return a CNAME at the queried name; its target
 // is resolved and authenticated by a separate query.
@@ -164,6 +176,7 @@ func selectRRSet(name string, qtype uint16, rrSet []dns.RR, rrSig []dns.RRSIG) (
 	selectedSigs := make([]dns.RRSIG, 0, len(rrSig))
 	var rejectErr error
 	for _, sig := range rrSig {
+		// RFC 4035 section 5.3.1 requires an RRSIG and its RRset to have the same class.
 		if sig.Hdr.Class != dns.ClassINET {
 			continue
 		}
@@ -203,6 +216,8 @@ func selectRRSet(name string, qtype uint16, rrSet []dns.RR, rrSig []dns.RRSIG) (
 	selectedRRs := make([]dns.RR, 0, len(rrSet))
 	for _, rr := range rrSet {
 		header := rr.Header()
+		// RFC 2181 section 5 defines an RRset by owner, class, and type.
+		// DNS queries made by dnsClient use the IN class.
 		if header.Class == dns.ClassINET && dns.CanonicalName(header.Name) == expectedName && header.Rrtype == selectedType {
 			selectedRRs = append(selectedRRs, rr)
 		}

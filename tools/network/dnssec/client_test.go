@@ -34,19 +34,19 @@ func TestEmptyClient(t *testing.T) {
 
 	a := require.New(t)
 
-	c := MakeDNSClient(nil, time.Second)
+	c := makeClient(nil, time.Second)
 	rr, rsig, err := c.QueryRRSet(context.Background(), "test", 0)
 	a.Error(err)
 	a.Empty(rr)
 	a.Empty(rsig)
 
-	c = MakeDNSClient([]ResolverAddress{}, time.Second)
+	c = makeClient([]ResolverAddress{}, time.Second)
 	rr, rsig, err = c.QueryRRSet(context.Background(), "test", 0)
 	a.Error(err)
 	a.Empty(rr)
 	a.Empty(rsig)
 
-	c = MakeDNSClient([]ResolverAddress{"example.com"}, time.Millisecond)
+	c = makeClient([]ResolverAddress{"example.com"}, time.Millisecond)
 	rr, rsig, err = c.QueryRRSet(context.Background(), "test", 0)
 	a.Error(err)
 	a.Empty(rr)

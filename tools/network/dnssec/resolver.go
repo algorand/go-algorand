@@ -62,16 +62,22 @@ type ResolverIf interface {
 
 // Resolver provides DNSSEC resolution
 type Resolver struct {
-	client     Querier
+	client     *filteredClient
 	trustChain *trustChain
 	maxHops    int
+	servers    []ResolverAddress
+}
+
+func makeResolver(client TrustQuerier) *Resolver {
+	filtered := makeFilteredClient(client)
+	return &Resolver{client: filtered, trustChain: makeTrustChain(filtered), maxHops: DefaultMaxHops}
 }
 
 // MakeDnssecResolver return resolver from given NS servers and timeout duration
 func MakeDnssecResolver(servers []ResolverAddress, timeout time.Duration) ResolverIf {
-	dc := MakeDNSClient(servers, timeout)
-	tc := &QueryWrapper{dc}
-	return &Resolver{client: dc, trustChain: makeTrustChain(tc), maxHops: DefaultMaxHops}
+	r := makeResolver(&QueryWrapper{makeClient(servers, timeout)})
+	r.servers = servers
+	return r
 }
 
 // MakeDefaultDnssecResolver returns a resolver with all possible DNS servers:
@@ -98,7 +104,7 @@ func MakeDefaultDnssecResolver(fallbackAddress string, log logging.Logger) Resol
 
 // EffectiveResolverDNS return list of active DNS servers
 func (r *Resolver) EffectiveResolverDNS() (servers []ResolverAddress) {
-	return r.client.(*dnsClient).servers
+	return r.servers
 }
 
 // TLSARec represents TLSA record content
@@ -112,7 +118,7 @@ type TLSARec struct {
 // lookup makes DNS request for a zone and verifies response signature.
 // For A and AAAA requests the verified RRset may be a CNAME at name instead.
 func (r *Resolver) lookup(ctx context.Context, name string, qt uint16) (rrSet []dns.RR, err error) {
-	rrSet, rrSig, err := querySelectedRRSet(ctx, r.client, name, qt)
+	rrSet, rrSig, err := r.client.QueryRRSet(ctx, name, qt)
 	if err != nil {
 		return
 	}

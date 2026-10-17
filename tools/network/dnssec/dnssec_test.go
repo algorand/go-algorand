@@ -104,7 +104,7 @@ func TestLookupRejectsSignedRRSetFromAnotherName(t *testing.T) {
 		queryType:    dns.TypeTXT,
 		answerName:   "foreign.test.",
 	}
-	resolver := Resolver{client: client, trustChain: makeTrustChain(client), maxHops: DefaultMaxHops}
+	resolver := makeResolver(client)
 	_, err := resolver.LookupTXT(context.Background(), "wanted.test.")
 	require.ErrorContains(t, err, "no signature for wanted.test.")
 }
@@ -121,7 +121,7 @@ func TestLookupIPAddrRejectsSignedRRSetFromAnotherName(t *testing.T) {
 		queryType:    dns.TypeA,
 		answerName:   "foreign.test.",
 	}
-	resolver := Resolver{client: client, trustChain: makeTrustChain(client), maxHops: DefaultMaxHops}
+	resolver := makeResolver(client)
 	_, err := resolver.LookupIPAddr(context.Background(), "wanted.test.")
 	require.ErrorContains(t, err, "no signature for wanted.test. type A")
 }
@@ -138,7 +138,7 @@ func TestLookupRejectsSignerOutsideOwnerZone(t *testing.T) {
 	}
 	require.NoError(t, r.updateRegRecord("algorand.test.", "rand.test.", dns.TypeTXT, []dns.RR{forged}, time.Time{}))
 
-	resolver := Resolver{client: r, trustChain: makeTrustChain(r), maxHops: DefaultMaxHops}
+	resolver := makeResolver(r)
 	_, err := resolver.LookupTXT(context.Background(), "algorand.test.")
 	require.ErrorContains(t, err, "RRSIG for algorand.test. type TXT has non-ancestor signer rand.test.")
 
@@ -179,7 +179,7 @@ func TestLookupRejectsDSFromAnotherName(t *testing.T) {
 		queryType:    dns.TypeDS,
 		answerName:   "attacker.test.",
 	}
-	resolver := Resolver{client: client, trustChain: makeTrustChain(client), maxHops: DefaultMaxHops}
+	resolver := makeResolver(client)
 	_, err := resolver.LookupTXT(context.Background(), "victim.test.")
 	require.ErrorContains(t, err, "no signature for victim.test. type DS")
 }
@@ -202,7 +202,7 @@ func TestLookupRejectsDNSKEYFromAnotherName(t *testing.T) {
 		queryType:    dns.TypeDNSKEY,
 		answerName:   "other.test.",
 	}
-	resolver := Resolver{client: client, trustChain: makeTrustChain(client), maxHops: DefaultMaxHops}
+	resolver := makeResolver(client)
 	_, err := resolver.LookupTXT(context.Background(), "www.test.")
 	require.ErrorContains(t, err, "no signature for test. type DNSKEY")
 }
@@ -223,7 +223,7 @@ func TestLookupRejectsUnprovedWildcardExpansion(t *testing.T) {
 		queryType:    dns.TypeTXT,
 		wildcardName: "*.test.",
 	}
-	resolver := Resolver{client: client, trustChain: makeTrustChain(client), maxHops: DefaultMaxHops}
+	resolver := makeResolver(client)
 	_, err := resolver.LookupTXT(context.Background(), "wanted.test.")
 	require.ErrorContains(t, err, "wildcard-expanded answer for wanted.test. type TXT is not supported")
 }
@@ -246,7 +246,7 @@ func TestLookupIPAddrIPv6Only(t *testing.T) {
 
 	// The A query fails for v6only.test., and its error must not be returned
 	// alongside the addresses from the AAAA fallback.
-	resolver := Resolver{client: r, trustChain: makeTrustChain(r), maxHops: DefaultMaxHops}
+	resolver := makeResolver(r)
 	for _, host := range []string{"v6only.test.", "alias.test."} {
 		addrs, err := resolver.LookupIPAddr(context.Background(), host)
 		require.NoError(t, err, host)
@@ -260,11 +260,7 @@ func TestLookup(t *testing.T) {
 	a := require.New(t)
 
 	r := makeEmptyTestResolver()
-	dnssec := Resolver{
-		client:     r,
-		trustChain: makeTrustChain(r),
-		maxHops:    DefaultMaxHops,
-	}
+	dnssec := makeResolver(r)
 
 	var err error
 	rootKSK, rootKSKsk := getKey(".", dns.ZONE|dns.SEP)
@@ -431,11 +427,7 @@ func TestLookup(t *testing.T) {
 	// delete root and expect error on broken chain
 	delete(r.entries, ".")
 
-	dnssec = Resolver{
-		client:     r,
-		trustChain: makeTrustChain(r),
-		maxHops:    DefaultMaxHops,
-	}
+	dnssec = makeResolver(r)
 	addrs, err = dnssec.LookupIPAddr(context.Background(), "www.test.")
 	a.Error(err)
 	a.Contains(err.Error(), ". not found")
@@ -446,11 +438,7 @@ func TestLookupCombinedSigningKey(t *testing.T) {
 
 	a := require.New(t)
 	r := makeEmptyTestResolver()
-	dnssecResolver := Resolver{
-		client:     r,
-		trustChain: makeTrustChain(r),
-		maxHops:    DefaultMaxHops,
-	}
+	dnssecResolver := makeResolver(r)
 
 	rootKey, rootKeySK := getKey(".", dns.ZONE|dns.SEP)
 	rootAnchor := rootKey.ToDS(dns.SHA256)
@@ -489,7 +477,7 @@ func TestLookupCombinedSigningKey(t *testing.T) {
 	dnskeySig, err := r.sign(dnskeyRRSet, "test.", combinedKey.KeyTag(), time.Time{}, combinedKeySK)
 	a.NoError(err)
 	r.entries["test."][dns.TypeDNSKEY] = rrRec{rr: dnskeyRRSet, sig: []dns.RRSIG{dnskeySig}}
-	dnssecResolver.trustChain = makeTrustChain(r)
+	dnssecResolver = makeResolver(r)
 	addrs, err = dnssecResolver.LookupIPAddr(context.Background(), "www.test.")
 	a.NoError(err)
 	a.Equal([]net.IPAddr{{IP: net.IPv4(1, 2, 3, 4)}}, addrs)
@@ -536,7 +524,7 @@ func TestLookupCollidingDNSKEYTags(t *testing.T) {
 		dns.TypeA: {rr: []dns.RR{record}, sig: []dns.RRSIG{recordSig}},
 	}
 
-	resolver := Resolver{client: r, trustChain: makeTrustChain(r), maxHops: DefaultMaxHops}
+	resolver := makeResolver(r)
 	addrs, err := resolver.LookupIPAddr(context.Background(), "www.test.")
 	a.NoError(err)
 	a.Equal([]net.IPAddr{{IP: net.IPv4(1, 2, 3, 4)}}, addrs)
@@ -548,11 +536,7 @@ func TestLookupAux(t *testing.T) {
 	a := require.New(t)
 
 	r := makeEmptyTestResolver()
-	dnssec := Resolver{
-		client:     r,
-		trustChain: makeTrustChain(r),
-		maxHops:    DefaultMaxHops,
-	}
+	dnssec := makeResolver(r)
 
 	var err error
 	rootKSK, rootKSKsk := getKey(".", dns.ZONE|dns.SEP)
