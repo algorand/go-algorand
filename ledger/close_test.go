@@ -32,8 +32,8 @@ import (
 
 // TestCloseMinBalancePolicy checks that, while generating (pool admission and
 // block assembly), a close-out of an account whose minimum balance is still
-// above the base amount is refused, while a block that carries such a close is
-// still accepted during validation.
+// above the base amount is refused. Validation accepts such a close only before
+// CloseRequiresBaseMinBalance is enabled.
 func TestCloseMinBalancePolicy(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -84,6 +84,7 @@ func TestCloseMinBalancePolicy(t *testing.T) {
 			ApplicationID:     appID,
 			OnCompletion:      transactions.UpdateApplicationOC,
 			ApprovalProgram:   app(appID).ApprovalProgram,
+			ExtraProgramPages: 1,
 			GlobalStateSchema: basics.StateSchema{NumUint: 1},
 		})
 		a.Equal(sponsor, app(appID).SizeSponsor)
@@ -112,17 +113,30 @@ func TestCloseMinBalancePolicy(t *testing.T) {
 		})
 		deleted(dl.generator, addrs[2])
 
-		// Validating: the same close inside a block is accepted. Build the
-		// block with the generate flag off so the policy does not run, then
-		// let the validator ledger check the result as any other node would.
+		// Disable the generation policy to check the consensus rule. Older
+		// protocols accept the close; CloseRequiresBaseMinBalance rejects it
+		// even during validation.
 		dl.beginBlock()
 		dl.eval.SetGenerateForTesting(false)
-		txn(t, dl.generator, dl.eval, &close)
+		if proto.CloseRequiresBaseMinBalance {
+			txn(t, dl.generator, dl.eval, &close, "cannot close: min balance")
+		} else {
+			txn(t, dl.generator, dl.eval, &close)
+		}
 		dl.eval.SetGenerateForTesting(true)
 		dl.endBlock()
 
-		deleted(dl.generator, sponsor)
-		deleted(dl.validator, sponsor)
+		if proto.CloseRequiresBaseMinBalance {
+			for _, l := range []*Ledger{dl.generator, dl.validator} {
+				acct := lookup(t, l, sponsor)
+				a.Equal(rec.MicroAlgos, acct.MicroAlgos)
+				a.Equal(rec.TotalAppSchema, acct.TotalAppSchema)
+				a.Equal(rec.TotalExtraAppPages, acct.TotalExtraAppPages)
+			}
+		} else {
+			deleted(dl.generator, sponsor)
+			deleted(dl.validator, sponsor)
+		}
 		a.Equal(basics.StateSchema{NumUint: 1}, app(appID).GlobalStateSchema)
 		a.Equal(sponsor, app(appID).SizeSponsor)
 
