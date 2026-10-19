@@ -610,6 +610,14 @@ type ConsensusParams struct {
 	// EnableSelectF128 changes the sortition algorithm to use a 128-bit software
 	// floating point binomial CDF implementation for committee selection.
 	EnableSelectF128 bool
+
+	// CloseRequiresBaseMinBalance allows an account to be closed only if its
+	// minimum balance requirement is exactly the base MinBalance. Before this,
+	// closing was guarded by checks of specific resource counters, which
+	// became insufficient once AppSizeUpdates allowed an account to hold MBR
+	// for global state and extra pages of apps it neither created nor opted
+	// into.
+	CloseRequiresBaseMinBalance bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -1554,9 +1562,22 @@ func initConsensusProtocols() {
 	// our current max is 250000
 	v41.ApprovedUpgrades[protocol.ConsensusV42] = 208000
 
+	// v43 is a fix-only release, so it keeps v42's LogicSigVersion.
+	v43 := v42
+	v43.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	v43.CloseRequiresBaseMinBalance = true
+
+	Consensus[protocol.ConsensusV43] = v43
+
+	// v42 can be upgraded to v43, with an update delay of 7d:
+	// 208000 = (7 * 24 * 60 * 60 / 2.9 ballpark round times)
+	// our current max is 250000
+	v42.ApprovedUpgrades[protocol.ConsensusV43] = 208000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v42
+	vFuture := v43
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 14 // When moving this to a release, put a new higher LogicSigVersion here
