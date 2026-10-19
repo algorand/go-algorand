@@ -17,11 +17,13 @@
 package agreement
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"testing"
 	"time"
 
+	"github.com/DataDog/zstd"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -227,6 +229,54 @@ func TestRandomizedEncodingFullDiskState(t *testing.T) {
 		require.Equalf(t, p1, p2, "players decoded differently")
 	}
 
+}
+
+// TestAgreementSnapshotCompression checks that this release persists the
+// state uncompressed, and restores it compressed as the next release will
+// persist it: a compressed state decodes to the same state, through the
+// crash database as well, and a damaged one is rejected.
+func TestAgreementSnapshotCompression(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	router, player := randomizeDiskState()
+	clock := timers.MakeMonotonicClock[TimeoutType](time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
+	log := makeServiceLogger(logging.Base())
+
+	uncompressed := encode(clock, router, player, []action{}, false)
+	require.False(t, bytes.HasPrefix(uncompressed, zstdFrameMagic), "this release persists the state compressed")
+	compressed := compressSnapshot(uncompressed)
+	require.True(t, bytes.HasPrefix(compressed, zstdFrameMagic))
+	roundTrip, err := zstd.Decompress(nil, compressed)
+	require.NoError(t, err)
+	require.Equal(t, uncompressed, roundTrip)
+
+	_, rr1, p1, _, err := decode(compressed, clock, log, false)
+	require.NoError(t, err)
+	_, rr2, p2, _, err := decode(uncompressed, clock, log, false)
+	require.NoError(t, err)
+	require.Equal(t, rr2, rr1)
+	require.Equal(t, p2, p1)
+	require.Equal(t, player.Round, p1.Round)
+
+	// through the crash database
+	accessor, err := db.MakeAccessor(t.Name()+"_crash.db", false, true)
+	require.NoError(t, err)
+	defer accessor.Close()
+	require.NoError(t, accessor.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return agreeInstallDatabase(tx)
+	}))
+	require.NoError(t, persist(log, accessor, player.Round, player.Period, player.Step, compressed))
+	restored, err := restore(log, accessor)
+	require.NoError(t, err)
+	require.Equal(t, compressed, restored)
+	_, rr3, p3, _, err := decode(restored, clock, log, false)
+	require.NoError(t, err)
+	require.Equal(t, rr2, rr3)
+	require.Equal(t, p2, p3)
+
+	// a truncated frame does not decode
+	_, _, _, _, err = decode(compressed[:len(compressed)/2], clock, log, false)
+	require.Error(t, err)
 }
 
 func TestCredentialHistoryAllocated(t *testing.T) {

@@ -4,6 +4,7 @@ on:
     branches:
       - master
       - 'rel/**'
+      - 'rel*'
   workflow_dispatch:
     inputs:
       full_coverage:
