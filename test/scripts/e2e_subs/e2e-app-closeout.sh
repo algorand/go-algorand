@@ -29,7 +29,7 @@ APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog <(printf '#pragm
 ${gcmd} app optin --app-id $APPID --from $ACCOUNTB
 
 # Closing out the account should fail
-EXPERROR='outstanding applications'
+EXPERROR='1 opted-in apps'
 RES=$(${gcmd} clerk send --from $ACCOUNTB --close-to $ACCOUNT --to $ACCOUNT -a 0 2>&1 || true)
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date "+${scriptname} FAIL closing out account should fail if still opted in to app %Y%m%d_%H%M%S"
@@ -55,7 +55,7 @@ ${gcmd} app closeout --app-id $APPID --from $ACCOUNTB
 ${gcmd} clerk send --from $ACCOUNTB --close-to $ACCOUNT --to $ACCOUNT -a 0
 
 # Closing out the creator's account should fail
-EXPERROR='outstanding created applications'
+EXPERROR='1 created apps'
 RES=$(${gcmd} clerk send --from $ACCOUNT --close-to $ACCOUNTB --to $ACCOUNTB -a 0 2>&1 || true)
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date "+${scriptname} FAIL closing out account should fail if created app still exists %Y%m%d_%H%M%S"
