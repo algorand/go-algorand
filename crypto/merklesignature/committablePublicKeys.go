@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,7 +29,7 @@ type (
 	// committablePublicKeyArray used to arrange the keys so a merkle tree could be build on them.
 	//msgp:ignore committablePublicKeyArray
 	committablePublicKeyArray struct {
-		keys        []crypto.FalconSigner
+		keys        []crypto.Falcon1024Signer
 		firstValid  uint64
 		keyLifetime uint64
 	}
@@ -37,7 +37,7 @@ type (
 	// CommittablePublicKey is used to create a binary representation of public keys in the merkle
 	// signature scheme.
 	CommittablePublicKey struct {
-		VerifyingKey crypto.FalconVerifier
+		VerifyingKey crypto.Falcon1024Verifier
 		Round        uint64
 	}
 )

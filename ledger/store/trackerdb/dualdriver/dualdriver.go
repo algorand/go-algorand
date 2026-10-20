@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,12 +24,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
-	"github.com/google/go-cmp/cmp"
 )
 
 // ErrInconsistentResult is returned when the two stores return different results.
@@ -278,8 +279,8 @@ func (*reader) MakeKVsIter(ctx context.Context) (trackerdb.KVsIter, error) {
 	return nil, nil
 }
 
-// MakeOnlineAccountsIter implements trackerdb.Reader
-func (*reader) MakeOnlineAccountsIter(context.Context, bool, basics.Round) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
+// MakeOrderedOnlineAccountsIter implements trackerdb.Reader
+func (*reader) MakeOrderedOnlineAccountsIter(context.Context, bool, basics.Round) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
 	// TODO: catchpoint
 	return nil, nil
 }

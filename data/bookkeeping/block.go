@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,9 +18,11 @@ package bookkeeping
 
 import (
 	"fmt"
+	"iter"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/committee"
@@ -29,243 +31,317 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-type (
-	// BlockHash represents the hash of a block
-	BlockHash crypto.Digest
+// BlockHash represents the hash of a block
+type BlockHash crypto.Digest
 
-	// A BlockHeader represents the metadata and commitments to the state of a Block.
-	// The Algorand Ledger may be defined minimally as a cryptographically authenticated series of BlockHeader objects.
-	BlockHeader struct {
-		_struct struct{} `codec:",omitempty,omitemptyarray"`
+// A BlockHeader represents the metadata and commitments to the state of a Block.
+// The Algorand Ledger may be defined minimally as a cryptographically authenticated series of BlockHeader objects.
+type BlockHeader struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-		Round basics.Round `codec:"rnd"`
+	Round basics.Round `codec:"rnd"`
 
-		// The hash of the previous block
-		Branch BlockHash `codec:"prev"`
+	// The hash of the previous block
+	Branch BlockHash `codec:"prev"`
 
-		// Sortition seed
-		Seed committee.Seed `codec:"seed"`
+	// The hash of the previous block, using SHA-512
+	Branch512 crypto.Sha512Digest `codec:"prev512"`
 
-		// TxnCommitments authenticates the set of transactions appearing in the block.
-		TxnCommitments
+	// Sortition seed
+	Seed committee.Seed `codec:"seed"`
 
-		// TimeStamp in seconds since epoch
-		TimeStamp int64 `codec:"ts"`
+	// TxnCommitments authenticates the set of transactions appearing in the block.
+	TxnCommitments
 
-		// Genesis ID to which this block belongs.
-		GenesisID string `codec:"gen,allocbound=config.MaxGenesisIDLen"`
+	// TimeStamp in seconds since epoch
+	TimeStamp int64 `codec:"ts"`
 
-		// Genesis hash to which this block belongs.
-		GenesisHash crypto.Digest `codec:"gh"`
+	// Genesis ID to which this block belongs.
+	GenesisID string `codec:"gen,allocbound=bounds.MaxGenesisIDLen"`
 
-		// Proposer is the proposer of this block. Like the Seed, agreement adds
-		// this after the block is assembled by the transaction pool, so that the same block can be prepared
-		// for multiple participating accounts in the same node. Therefore, it can not be used
-		// to influence block evaluation. Populated if proto.Payouts.Enabled
-		Proposer basics.Address `codec:"prp"`
+	// Genesis hash to which this block belongs.
+	GenesisHash crypto.Digest `codec:"gh"`
 
-		// FeesCollected is the sum of all fees paid by transactions in this
-		// block. Populated if proto.Payouts.Enabled
-		FeesCollected basics.MicroAlgos `codec:"fc"`
+	// Proposer is the proposer of this block. Like the Seed, agreement adds
+	// this after the block is assembled by the transaction pool, so that the same block can be prepared
+	// for multiple participating accounts in the same node. Therefore, it can not be used
+	// to influence block evaluation. Populated if proto.Payouts.Enabled
+	Proposer basics.Address `codec:"prp"`
 
-		// Bonus is the bonus incentive to be paid for proposing this block.  It
-		// begins as a consensus parameter value, and decays periodically.
-		Bonus basics.MicroAlgos `codec:"bi"`
+	// FeesCollected is the sum of all fees paid by transactions in this
+	// block. Populated if proto.Payouts.Enabled
+	FeesCollected basics.MicroAlgos `codec:"fc"`
 
-		// ProposerPayout is the amount that is moved from the FeeSink to
-		// the Proposer in this block.  It is basically the
-		// bonus + the payouts percent of FeesCollected, but may be zero'd by
-		// proposer ineligibility.
-		ProposerPayout basics.MicroAlgos `codec:"pp"`
+	// Bonus is the bonus incentive to be paid for proposing this block.  It
+	// begins as a consensus parameter value, and decays periodically.
+	Bonus basics.MicroAlgos `codec:"bi"`
 
-		// Rewards.
-		//
-		// When a block is applied, some amount of rewards are accrued to
-		// every account with AccountData.Status=/=NotParticipating.  The
-		// amount is (thisBlock.RewardsLevel-prevBlock.RewardsLevel) of
-		// MicroAlgos for every whole config.Protocol.RewardUnit of MicroAlgos in
-		// that account's AccountData.MicroAlgos.
-		//
-		// Rewards are not compounded (i.e., not added to AccountData.MicroAlgos)
-		// until some other transaction is executed on that account.
-		//
-		// Not compounding rewards allows us to precisely know how many algos
-		// of rewards will be distributed without having to examine every
-		// account to determine if it should get one more algo of rewards
-		// because compounding formed another whole config.Protocol.RewardUnit
-		// of algos.
-		RewardsState
+	// ProposerPayout is the amount that is moved from the FeeSink to
+	// the Proposer in this block.  It is basically the
+	// bonus + the payouts percent of FeesCollected, but may be zero'd by
+	// proposer ineligibility.
+	ProposerPayout basics.MicroAlgos `codec:"pp"`
 
-		// Consensus protocol versioning.
-		//
-		// Each block is associated with a version of the consensus protocol,
-		// stored under UpgradeState.CurrentProtocol.  The protocol version
-		// for a block can be determined without having to first decode the
-		// block and its CurrentProtocol field, and this field is present for
-		// convenience and explicitness.  Block.Valid() checks that this field
-		// correctly matches the expected protocol version.
-		//
-		// Each block is associated with at most one active upgrade proposal
-		// (a new version of the protocol).  An upgrade proposal can be made
-		// by a block proposer, as long as no other upgrade proposal is active.
-		// The upgrade proposal lasts for many rounds (UpgradeVoteRounds), and
-		// in each round, that round's block proposer votes to support (or not)
-		// the proposed upgrade.
-		//
-		// If enough votes are collected, the proposal is approved, and will
-		// definitely take effect.  The proposal lingers for some number of
-		// rounds to give clients a chance to notify users about an approved
-		// upgrade, if the client doesn't support it, so the user has a chance
-		// to download updated client software.
-		//
-		// Block proposers influence this upgrade machinery through two fields
-		// in UpgradeVote: UpgradePropose, which proposes an upgrade to a new
-		// protocol, and UpgradeApprove, which signals approval of the current
-		// proposal.
-		//
-		// Once a block proposer determines its UpgradeVote, then UpdateState
-		// is updated deterministically based on the previous UpdateState and
-		// the new block's UpgradeVote.
-		UpgradeState
-		UpgradeVote
+	// Rewards.
+	//
+	// When a block is applied, some amount of rewards are accrued to
+	// every account with AccountData.Status=/=NotParticipating.  The
+	// amount is (thisBlock.RewardsLevel-prevBlock.RewardsLevel) of
+	// MicroAlgos for every whole config.Protocol.RewardUnit of MicroAlgos in
+	// that account's AccountData.MicroAlgos.
+	//
+	// Rewards are not compounded (i.e., not added to AccountData.MicroAlgos)
+	// until some other transaction is executed on that account.
+	//
+	// Not compounding rewards allows us to precisely know how many algos
+	// of rewards will be distributed without having to examine every
+	// account to determine if it should get one more algo of rewards
+	// because compounding formed another whole config.Protocol.RewardUnit
+	// of algos.
+	RewardsState
 
-		// TxnCounter is the number of the next transaction that will be
-		// committed after this block.  Genesis blocks can start at either
-		// 0 or 1000, depending on a consensus parameter (AppForbidLowResources).
-		TxnCounter uint64 `codec:"tc"`
+	// Consensus protocol versioning.
+	//
+	// Each block is associated with a version of the consensus protocol,
+	// stored under UpgradeState.CurrentProtocol.  The protocol version
+	// for a block can be determined without having to first decode the
+	// block and its CurrentProtocol field, and this field is present for
+	// convenience and explicitness.  Block.Valid() checks that this field
+	// correctly matches the expected protocol version.
+	//
+	// Each block is associated with at most one active upgrade proposal
+	// (a new version of the protocol).  An upgrade proposal can be made
+	// by a block proposer, as long as no other upgrade proposal is active.
+	// The upgrade proposal lasts for consensus.UpgradeVoteRounds, and
+	// in each round, that round's block proposer votes to support (or not)
+	// the proposed upgrade.
+	//
+	// If enough votes are collected, the proposal is approved, and will
+	// definitely take effect.  The proposal lingers for some number of
+	// rounds to give clients a chance to notify users about an approved
+	// upgrade, if the client doesn't support it, so the user has a chance
+	// to download updated client software.
+	//
+	// Block proposers influence this upgrade machinery through two fields
+	// in UpgradeVote: UpgradePropose, which proposes an upgrade to a new
+	// protocol, and UpgradeApprove, which signals approval of the current
+	// proposal.
+	//
+	// Once a block proposer determines its UpgradeVote, then UpdateState
+	// is updated deterministically based on the previous UpdateState and
+	// the new block's UpgradeVote.
+	UpgradeState
+	UpgradeVote
 
-		// StateProofTracking tracks the status of the state proofs, potentially
-		// for multiple types of ASPs (Algorand's State Proofs).
-		//msgp:sort protocol.StateProofType protocol.SortStateProofType
-		StateProofTracking map[protocol.StateProofType]StateProofTrackingData `codec:"spt,allocbound=protocol.NumStateProofTypes"`
+	// TxnCounter is the number of the next transaction that will be
+	// committed after this block.  Genesis blocks can start at either
+	// 0 or 1000, depending on a consensus parameter (AppForbidLowResources).
+	TxnCounter uint64 `codec:"tc"`
 
-		// ParticipationUpdates contains the information needed to mark
-		// certain accounts offline because their participation keys expired
-		ParticipationUpdates
+	// StateProofTracking tracks the status of the state proofs, potentially
+	// for multiple types of ASPs (Algorand's State Proofs).
+	//msgp:sort protocol.StateProofType protocol.SortStateProofType
+	StateProofTracking map[protocol.StateProofType]StateProofTrackingData `codec:"spt,allocbound=protocol.NumStateProofTypes"`
+
+	// ParticipationUpdates contains the information needed to mark
+	// certain accounts offline because their participation keys expired
+	ParticipationUpdates
+
+	// Load is the degree to which a block is full. Currently, it is based on
+	// the number of bytes in the final block, compared to the maximum allowed.
+	// It is expressed as a fixed-point integer with 6 digits of precision.  So,
+	// 1,000,000 is a completely full block.
+	Load basics.Micros `codec:"ld"`
+
+	// CongestionTax fee required, beyond the MinFee, for "normal"
+	// transactions in this block.
+	CongestionTax basics.Micros `codec:"ct"`
+}
+
+// TxnCommitments represents the commitments computed from the transactions in the block.
+// It contains multiple commitments based on different algorithms and hash functions, to support different use cases.
+type TxnCommitments struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	// Root of transaction Merkle tree using the SHA-512/256 hash function.
+	// This commitment is computed based on the PaysetCommit type specified in the block's consensus protocol.
+	NativeSha512_256Commitment crypto.Digest `codec:"txn"`
+
+	// Root of transaction vector commitment Merkle tree using the SHA-256 hash function.
+	Sha256Commitment crypto.Digest `codec:"txn256"`
+
+	// Root of transaction vector commitment Merkle tree using the SHA-512 hash function.
+	Sha512Commitment crypto.Sha512Digest `codec:"txn512"`
+}
+
+// ParticipationUpdates represents participation account data that
+// needs to be checked/acted on by the network
+type ParticipationUpdates struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	// ExpiredParticipationAccounts contains a list of online accounts
+	// that needs to be converted to offline since their
+	// participation key expired.
+	ExpiredParticipationAccounts []basics.Address `codec:"partupdrmv,allocbound=bounds.MaxProposedExpiredOnlineAccounts"`
+
+	// AbsentParticipationAccounts contains a list of online accounts that
+	// needs to be converted to offline since they are not proposing.
+	AbsentParticipationAccounts []basics.Address `codec:"partupdabs,allocbound=bounds.MaxMarkAbsent"`
+}
+
+// RewardsState represents the global parameters controlling the rate
+// at which accounts accrue rewards.
+type RewardsState struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	// The FeeSink accepts transaction fees. It can only spend to
+	// the incentive pool.
+	FeeSink basics.Address `codec:"fees"`
+
+	// The RewardsPool accepts periodic injections from the
+	// FeeSink and continually redistributes them to addresses as
+	// rewards.
+	RewardsPool basics.Address `codec:"rwd"`
+
+	// RewardsLevel specifies how many rewards, in MicroAlgos,
+	// have been distributed to each config.Protocol.RewardUnit
+	// of MicroAlgos since genesis.
+	RewardsLevel uint64 `codec:"earn"`
+
+	// The number of new MicroAlgos added to the participation stake from rewards at the next round.
+	RewardsRate uint64 `codec:"rate"`
+
+	// The number of leftover MicroAlgos after the distribution of RewardsRate/rewardUnits
+	// MicroAlgos for every reward unit in the next round.
+	RewardsResidue uint64 `codec:"frac"`
+
+	// The round at which the RewardsRate will be recalculated.
+	RewardsRecalculationRound basics.Round `codec:"rwcalr"`
+}
+
+// UpgradeVote represents the vote of the block proposer with
+// respect to protocol upgrades.
+type UpgradeVote struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	// UpgradePropose indicates a proposed upgrade
+	UpgradePropose protocol.ConsensusVersion `codec:"upgradeprop"`
+
+	// UpgradeDelay indicates the time between acceptance and execution
+	UpgradeDelay basics.Round `codec:"upgradedelay"`
+
+	// UpgradeApprove indicates a yes vote for the current proposal
+	UpgradeApprove bool `codec:"upgradeyes"`
+}
+
+// UpgradeState tracks the protocol upgrade state machine.  It is,
+// strictly speaking, computable from the history of all UpgradeVotes
+// but we keep it in the block for explicitness and convenience
+// (instead of materializing it separately, like balances).
+//
+//msgp:ignore UpgradeState
+type UpgradeState struct {
+	CurrentProtocol protocol.ConsensusVersion `codec:"proto"`
+	NextProtocol    protocol.ConsensusVersion `codec:"nextproto"`
+	// NextProtocolApprovals is the number of approvals for the next protocol proposal. It is expressed in basics.Round because it is a count of rounds.
+	NextProtocolApprovals basics.Round `codec:"nextyes"`
+	// NextProtocolVoteBefore specifies the last voting round for the next protocol proposal. If there is no voting for
+	// an upgrade taking place, this would be zero.
+	NextProtocolVoteBefore basics.Round `codec:"nextbefore"`
+	// NextProtocolSwitchOn specify the round number at which the next protocol would be adopted. If there is no upgrade taking place,
+	// nor a wait for the next protocol, this would be zero.
+	NextProtocolSwitchOn basics.Round `codec:"nextswitch"`
+}
+
+// StateProofTrackingData tracks the status of state proofs.
+type StateProofTrackingData struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	// StateProofVotersCommitment is the root of a vector commitment containing the
+	// online accounts that will help sign a state proof.  The
+	// VC root, and the state proof, happen on blocks that
+	// are a multiple of ConsensusParams.StateProofRounds.  For blocks
+	// that are not a multiple of ConsensusParams.StateProofRounds,
+	// this value is zero.
+	StateProofVotersCommitment crypto.GenericDigest `codec:"v"`
+
+	// StateProofOnlineTotalWeight is the total number of microalgos held by the online accounts
+	// during the StateProof round (or zero, if the merkle root is zero - no commitment for StateProof voters).
+	// This is intended for computing the threshold of votes to expect from StateProofVotersCommitment.
+	StateProofOnlineTotalWeight basics.MicroAlgos `codec:"t"`
+
+	// StateProofNextRound is the next round for which we will accept
+	// a StateProof transaction.
+	StateProofNextRound basics.Round `codec:"n"`
+}
+
+// A Block contains the Payset and metadata corresponding to a given Round.
+type Block struct {
+	BlockHeader
+	Payset transactions.Payset `codec:"txns,maxtotalbytes=bounds.MaxTxnBytesPerBlock"`
+}
+
+// TxnDeadError defines an error type which indicates a transaction is outside of the
+// round validity window.
+type TxnDeadError struct {
+	Round      basics.Round
+	FirstValid basics.Round
+	LastValid  basics.Round
+	Early      bool
+}
+
+func (err *TxnDeadError) Error() string {
+	return fmt.Sprintf("txn dead: round %d outside of %d--%d", err.Round, err.FirstValid, err.LastValid)
+}
+
+// Alive checks to see if the transaction is still alive (can be applied) at the specified Round.
+func (bh BlockHeader) Alive(tx transactions.Header) error {
+	// Check round validity
+	round := bh.Round
+	if round < tx.FirstValid || round > tx.LastValid {
+		return &TxnDeadError{
+			Round:      round,
+			FirstValid: tx.FirstValid,
+			LastValid:  tx.LastValid,
+			Early:      round < tx.FirstValid,
+		}
 	}
 
-	// TxnCommitments represents the commitments computed from the transactions in the block.
-	// It contains multiple commitments based on different algorithms and hash functions, to support different use cases.
-	TxnCommitments struct {
-		_struct struct{} `codec:",omitempty,omitemptyarray"`
-		// Root of transaction merkle tree using SHA512_256 hash function.
-		// This commitment is computed based on the PaysetCommit type specified in the block's consensus protocol.
-		NativeSha512_256Commitment crypto.Digest `codec:"txn"`
-
-		// Root of transaction vector commitment merkle tree using SHA256 hash function
-		Sha256Commitment crypto.Digest `codec:"txn256"`
+	// Check genesis ID
+	proto := config.Consensus[bh.CurrentProtocol]
+	genesisID := bh.GenesisID
+	if tx.GenesisID != "" && tx.GenesisID != genesisID {
+		return fmt.Errorf("tx.GenesisID <%s> does not match expected <%s>",
+			tx.GenesisID, genesisID)
 	}
 
-	// ParticipationUpdates represents participation account data that
-	// needs to be checked/acted on by the network
-	ParticipationUpdates struct {
-		_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-		// ExpiredParticipationAccounts contains a list of online accounts
-		// that needs to be converted to offline since their
-		// participation key expired.
-		ExpiredParticipationAccounts []basics.Address `codec:"partupdrmv,allocbound=config.MaxProposedExpiredOnlineAccounts"`
-
-		// AbsentParticipationAccounts contains a list of online accounts that
-		// needs to be converted to offline since they are not proposing.
-		AbsentParticipationAccounts []basics.Address `codec:"partupdabs,allocbound=config.MaxMarkAbsent"`
+	// Check genesis hash
+	if proto.SupportGenesisHash {
+		genesisHash := bh.GenesisHash
+		if tx.GenesisHash != (crypto.Digest{}) && tx.GenesisHash != genesisHash {
+			return fmt.Errorf("tx.GenesisHash <%s> does not match expected <%s>",
+				tx.GenesisHash, genesisHash)
+		}
+		if proto.RequireGenesisHash && tx.GenesisHash == (crypto.Digest{}) {
+			return fmt.Errorf("required tx.GenesisHash is missing")
+		}
+	} else {
+		if tx.GenesisHash != (crypto.Digest{}) {
+			return fmt.Errorf("tx.GenesisHash <%s> not allowed", tx.GenesisHash)
+		}
 	}
 
-	// RewardsState represents the global parameters controlling the rate
-	// at which accounts accrue rewards.
-	RewardsState struct {
-		_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-		// The FeeSink accepts transaction fees. It can only spend to
-		// the incentive pool.
-		FeeSink basics.Address `codec:"fees"`
-
-		// The RewardsPool accepts periodic injections from the
-		// FeeSink and continually redistributes them to addresses as
-		// rewards.
-		RewardsPool basics.Address `codec:"rwd"`
-
-		// RewardsLevel specifies how many rewards, in MicroAlgos,
-		// have been distributed to each config.Protocol.RewardUnit
-		// of MicroAlgos since genesis.
-		RewardsLevel uint64 `codec:"earn"`
-
-		// The number of new MicroAlgos added to the participation stake from rewards at the next round.
-		RewardsRate uint64 `codec:"rate"`
-
-		// The number of leftover MicroAlgos after the distribution of RewardsRate/rewardUnits
-		// MicroAlgos for every reward unit in the next round.
-		RewardsResidue uint64 `codec:"frac"`
-
-		// The round at which the RewardsRate will be recalculated.
-		RewardsRecalculationRound basics.Round `codec:"rwcalr"`
-	}
-
-	// UpgradeVote represents the vote of the block proposer with
-	// respect to protocol upgrades.
-	UpgradeVote struct {
-		_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-		// UpgradePropose indicates a proposed upgrade
-		UpgradePropose protocol.ConsensusVersion `codec:"upgradeprop"`
-
-		// UpgradeDelay indicates the time between acceptance and execution
-		UpgradeDelay basics.Round `codec:"upgradedelay"`
-
-		// UpgradeApprove indicates a yes vote for the current proposal
-		UpgradeApprove bool `codec:"upgradeyes"`
-	}
-
-	// UpgradeState tracks the protocol upgrade state machine.  It is,
-	// strictly speaking, computable from the history of all UpgradeVotes
-	// but we keep it in the block for explicitness and convenience
-	// (instead of materializing it separately, like balances).
-	//msgp:ignore UpgradeState
-	UpgradeState struct {
-		CurrentProtocol       protocol.ConsensusVersion `codec:"proto"`
-		NextProtocol          protocol.ConsensusVersion `codec:"nextproto"`
-		NextProtocolApprovals uint64                    `codec:"nextyes"`
-		// NextProtocolVoteBefore specify the last voting round for the next protocol proposal. If there is no voting for
-		// an upgrade taking place, this would be zero.
-		NextProtocolVoteBefore basics.Round `codec:"nextbefore"`
-		// NextProtocolSwitchOn specify the round number at which the next protocol would be adopted. If there is no upgrade taking place,
-		// nor a wait for the next protocol, this would be zero.
-		NextProtocolSwitchOn basics.Round `codec:"nextswitch"`
-	}
-
-	// StateProofTrackingData tracks the status of state proofs.
-	StateProofTrackingData struct {
-		_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-		// StateProofVotersCommitment is the root of a vector commitment containing the
-		// online accounts that will help sign a state proof.  The
-		// VC root, and the state proof, happen on blocks that
-		// are a multiple of ConsensusParams.StateProofRounds.  For blocks
-		// that are not a multiple of ConsensusParams.StateProofRounds,
-		// this value is zero.
-		StateProofVotersCommitment crypto.GenericDigest `codec:"v"`
-
-		// StateProofOnlineTotalWeight is the total number of microalgos held by the online accounts
-		// during the StateProof round (or zero, if the merkle root is zero - no commitment for StateProof voters).
-		// This is intended for computing the threshold of votes to expect from StateProofVotersCommitment.
-		StateProofOnlineTotalWeight basics.MicroAlgos `codec:"t"`
-
-		// StateProofNextRound is the next round for which we will accept
-		// a StateProof transaction.
-		StateProofNextRound basics.Round `codec:"n"`
-	}
-
-	// A Block contains the Payset and metadata corresponding to a given Round.
-	Block struct {
-		BlockHeader
-		Payset transactions.Payset `codec:"txns,maxtotalbytes=config.MaxTxnBytesPerBlock"`
-	}
-)
+	return nil
+}
 
 // Hash returns the hash of a block header.
 // The hash of a block is the hash of its header.
 func (bh BlockHeader) Hash() BlockHash {
 	return BlockHash(crypto.HashObj(bh))
+}
+
+// Hash512 returns the hash of a block header using SHA-512.
+func (bh BlockHeader) Hash512() crypto.Sha512Digest {
+	return crypto.Sha512Digest(crypto.GenericHashObj(crypto.HashFactory{HashType: crypto.Sha512}.NewHash(), bh))
 }
 
 // ToBeHashed implements the crypto.Hashable interface
@@ -453,7 +529,7 @@ func (s UpgradeState) applyUpgradeVote(r basics.Round, vote UpgradeVote) (res Up
 	}
 
 	// Clear out failed proposal
-	if r == s.NextProtocolVoteBefore && s.NextProtocolApprovals < params.UpgradeThreshold {
+	if r == s.NextProtocolVoteBefore && s.NextProtocolApprovals < basics.Round(params.UpgradeThreshold) {
 		s.NextProtocol = ""
 		s.NextProtocolApprovals = 0
 		s.NextProtocolVoteBefore = basics.Round(0)
@@ -539,6 +615,37 @@ func computeBonus(current uint64, prevBonus basics.MicroAlgos, curPlan config.Bo
 	return prevBonus
 }
 
+// NextCongestionTax calculates the congestion tax for the next block based on
+// the previous block's load and congestion tax.
+func NextCongestionTax(prevLoad basics.Micros, prevConTax basics.Micros) basics.Micros {
+	const perBlockMaxChange basics.Micros = 100_000 // 10%
+	const half = 500_000                            // 50%
+	// Target load is half full (500,000)
+	// At 0% load: multiply tax by (1-perBlockMaxChange)
+	// At 100% load: multiply tax by (1+perBlockMaxChange)
+	if prevLoad <= half {
+		// Decrease congestion tax (or maintain, if 500_000 exactly)
+
+		// We can't overflow because prevLoad <= half
+		downFactor, _ := basics.Muldiv(perBlockMaxChange, half-prevLoad, half)
+		// downFactor is ensured to be less than 1 because pbmc is 0.1, and p/h < 1
+
+		// For an empty block, downFactor is perBlockMaxChange (10%)
+
+		// overflow impossible in subtraction because df < 1, in Mul because factor < 1
+		taxDecrease, _ := prevConTax.Mul(1e6 - downFactor)
+		return basics.SubSaturate(taxDecrease, downFactor)
+	}
+	// Increase congestion tax
+
+	// We can't overflow because prevLoad-half <= half (since Load < 1)
+	upFactor, _ := basics.Muldiv(perBlockMaxChange, prevLoad-half, half)
+
+	// overflow is _possible_, but Mul saturates, which is what we want
+	taxIncrease, _ := prevConTax.Mul(1e6 + upFactor)
+	return basics.AddSaturate(taxIncrease, upFactor)
+}
+
 // MakeBlock constructs a new valid block with an empty payset and an unset Seed.
 func MakeBlock(prev BlockHeader) Block {
 	upgradeVote, upgradeState, err := ProcessUpgradeParams(prev)
@@ -560,20 +667,22 @@ func MakeBlock(prev BlockHeader) Block {
 		}
 	}
 
-	bonus := NextBonus(prev, &params)
-
 	// the merkle root of TXs will update when fillpayset is called
 	blk := Block{
 		BlockHeader: BlockHeader{
-			Round:        prev.Round + 1,
-			Branch:       prev.Hash(),
-			TimeStamp:    timestamp,
-			GenesisID:    prev.GenesisID,
-			GenesisHash:  prev.GenesisHash,
-			UpgradeVote:  upgradeVote,
-			UpgradeState: upgradeState,
-			Bonus:        bonus,
+			Round:         prev.Round + 1,
+			Branch:        prev.Hash(),
+			TimeStamp:     timestamp,
+			GenesisID:     prev.GenesisID,
+			GenesisHash:   prev.GenesisHash,
+			UpgradeVote:   upgradeVote,
+			UpgradeState:  upgradeState,
+			Bonus:         NextBonus(prev, &params),
+			CongestionTax: NextCongestionTax(prev.Load, prev.CongestionTax),
 		},
+	}
+	if params.EnableSha512BlockHash {
+		blk.Branch512 = prev.Hash512()
 	}
 	blk.TxnCommitments, err = blk.PaysetCommit()
 	if err != nil {
@@ -607,9 +716,18 @@ func (block Block) PaysetCommit() (TxnCommitments, error) {
 		}
 	}
 
+	var digestSHA512 crypto.Sha512Digest
+	if params.EnableSha512BlockHash {
+		digestSHA512, err = block.paysetCommitSHA512()
+		if err != nil {
+			return TxnCommitments{}, err
+		}
+	}
+
 	return TxnCommitments{
 		Sha256Commitment:           digestSHA256,
 		NativeSha512_256Commitment: digestSHA512_256,
+		Sha512Commitment:           digestSHA512,
 	}, nil
 }
 
@@ -647,6 +765,18 @@ func (block Block) paysetCommitSHA256() (crypto.Digest, error) {
 	return rootAsByteArray, nil
 }
 
+func (block Block) paysetCommitSHA512() (crypto.Sha512Digest, error) {
+	tree, err := block.TxnMerkleTreeSHA512()
+	if err != nil {
+		return crypto.Sha512Digest{}, err
+	}
+
+	rootSlice := tree.Root()
+	var rootAsByteArray crypto.Sha512Digest
+	copy(rootAsByteArray[:], rootSlice)
+	return rootAsByteArray, nil
+}
+
 // PreCheck checks if the block header bh is a valid successor to
 // the previous block's header, prev.
 func (bh BlockHeader) PreCheck(prev BlockHeader) error {
@@ -665,6 +795,12 @@ func (bh BlockHeader) PreCheck(prev BlockHeader) error {
 	// check the pointer to the previous block
 	if bh.Branch != prev.Hash() {
 		return fmt.Errorf("block branch incorrect %v != %v", bh.Branch, prev.Hash())
+	}
+
+	if params.EnableSha512BlockHash && bh.Branch512 != prev.Hash512() {
+		return fmt.Errorf("block branch512 incorrect %v != %v", bh.Branch512, prev.Hash512())
+	} else if !params.EnableSha512BlockHash && bh.Branch512 != (crypto.Sha512Digest{}) {
+		return fmt.Errorf("block branch512 not allowed: %v", bh.Branch512)
 	}
 
 	// check upgrade state
@@ -691,7 +827,17 @@ func (bh BlockHeader) PreCheck(prev BlockHeader) error {
 	// check bonus
 	expectedBonus := NextBonus(prev, &params)
 	if bh.Bonus != expectedBonus {
-		return fmt.Errorf("bad bonus: %d != %d ", bh.Bonus, expectedBonus)
+		return fmt.Errorf("bad bonus: %s != %s ", bh.Bonus, expectedBonus)
+	}
+
+	// check congestion tax
+	expectedConTax := NextCongestionTax(prev.Load, prev.CongestionTax)
+	if bh.CongestionTax != expectedConTax {
+		return fmt.Errorf("bad congestion tax: %s != %s", bh.CongestionTax, expectedConTax)
+	}
+
+	if !params.LoadTracking && bh.Load != 0 {
+		return fmt.Errorf("load should be zero when congestion measurement is disabled, got %s", bh.Load)
 	}
 
 	// Check genesis ID value against previous block, if set
@@ -737,26 +883,46 @@ func (block Block) ContentsMatchHeader() bool {
 // the transactions in groups.
 func (block Block) DecodePaysetGroups() ([][]transactions.SignedTxnWithAD, error) {
 	var res [][]transactions.SignedTxnWithAD
-	var lastGroup []transactions.SignedTxnWithAD
-	for _, txib := range block.Payset {
-		var err error
-		var stxnad transactions.SignedTxnWithAD
-		stxnad.SignedTxn, stxnad.ApplyData, err = block.DecodeSignedTxn(txib)
+	for group, err := range block.PaysetGroups() {
 		if err != nil {
 			return nil, err
 		}
-
-		if lastGroup != nil && (lastGroup[0].SignedTxn.Txn.Group != stxnad.SignedTxn.Txn.Group || lastGroup[0].SignedTxn.Txn.Group.IsZero()) {
-			res = append(res, lastGroup)
-			lastGroup = nil
-		}
-
-		lastGroup = append(lastGroup, stxnad)
-	}
-	if lastGroup != nil {
-		res = append(res, lastGroup)
+		res = append(res, group)
 	}
 	return res, nil
+}
+
+// PaysetGroups decodes block.Payset using DecodeSignedTxn and yields
+// one transaction group at a time. It stops after yielding an error.
+func (block Block) PaysetGroups() iter.Seq2[[]transactions.SignedTxnWithAD, error] {
+	return func(yield func([]transactions.SignedTxnWithAD, error) bool) {
+		var lastGroup []transactions.SignedTxnWithAD
+		for _, txib := range block.Payset {
+			var err error
+			var stxnad transactions.SignedTxnWithAD
+			stxnad.SignedTxn, stxnad.ApplyData, err = block.DecodeSignedTxn(txib)
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+
+			if lastGroup != nil && (lastGroup[0].SignedTxn.Txn.Group != stxnad.SignedTxn.Txn.Group || lastGroup[0].SignedTxn.Txn.Group.IsZero()) {
+				if !yield(lastGroup, nil) {
+					return
+				}
+				lastGroup = nil
+			}
+
+			if len(lastGroup) >= bounds.MaxTxGroupSize {
+				yield(nil, fmt.Errorf("group size %d exceeds maximum %d", len(lastGroup)+1, bounds.MaxTxGroupSize))
+				return
+			}
+			lastGroup = append(lastGroup, stxnad)
+		}
+		if lastGroup != nil {
+			yield(lastGroup, nil)
+		}
+	}
 }
 
 // DecodePaysetFlat decodes block.Payset using DecodeSignedTxn, and

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -87,11 +87,13 @@ func TestRateLimiting(t *testing.T) {
 	// This test is conducted locally, so we want to treat all hosts the same for counting incoming requests.
 	testConfig.DisableLocalhostConnectionRateLimit = false
 	wn := &WebsocketNetwork{
-		log:             log,
-		config:          testConfig,
-		phonebook:       phonebook.MakePhonebook(1, 1),
-		GenesisID:       "go-test-network-genesis",
-		NetworkID:       config.Devtestnet,
+		log:       log,
+		config:    testConfig,
+		phonebook: phonebook.MakePhonebook(1, 1),
+		genesisInfo: GenesisInfo{
+			GenesisID: "go-test-network-genesis",
+			NetworkID: config.Devtestnet,
+		},
 		peerStater:      peerConnectionStater{log: log},
 		identityTracker: noopIdentityTracker{},
 	}
@@ -124,9 +126,9 @@ func TestRateLimiting(t *testing.T) {
 		networks[i].config.GossipFanout = 1
 		phonebooks[i] = phonebook.MakePhonebook(networks[i].config.ConnectionsRateLimitingCount,
 			time.Duration(networks[i].config.ConnectionsRateLimitingWindowSeconds)*time.Second)
-		phonebooks[i].ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
+		phonebooks[i].ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
 		networks[i].phonebook = phonebook.MakePhonebook(1, 1*time.Millisecond)
-		networks[i].phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
+		networks[i].phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
 		defer func(net *WebsocketNetwork, i int) {
 			t.Logf("stopping network %d", i)
 			net.Stop()
@@ -156,7 +158,7 @@ func TestRateLimiting(t *testing.T) {
 			case <-readyCh:
 				// it's closed, so this client got connected.
 				connectedClients++
-				phonebookLen := len(phonebooks[i].GetAddresses(1, phonebook.PhoneBookEntryRelayRole))
+				phonebookLen := len(phonebooks[i].GetAddresses(1, phonebook.RelayRole))
 				// if this channel is ready, than we should have an address, since it didn't get blocked.
 				require.Equal(t, 1, phonebookLen)
 			default:

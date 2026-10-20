@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -44,6 +45,8 @@ var proto2 = protocol.ConsensusVersion("Test2")
 var proto3 = protocol.ConsensusVersion("Test3")
 var protoUnsupported = protocol.ConsensusVersion("TestUnsupported")
 var protoDelay = protocol.ConsensusVersion("TestDelay")
+var protoCongestion = protocol.ConsensusVersion("TestCongestion")
+var protoNoCongestion = protocol.ConsensusVersion("TestNoCongestion")
 
 func init() {
 	verBeforeBonus := protocol.ConsensusV39
@@ -76,6 +79,15 @@ func init() {
 		proto1: 5,
 	}
 	config.Consensus[protoDelay] = paramsDelay
+
+	paramsCongestion := config.Consensus[protocol.ConsensusCurrentVersion]
+	paramsCongestion.LoadTracking = true
+	paramsCongestion.MinTxnFee = 1000
+	config.Consensus[protoCongestion] = paramsCongestion
+
+	paramsNoCongestion := config.Consensus[protocol.ConsensusCurrentVersion]
+	paramsNoCongestion.LoadTracking = false
+	config.Consensus[protoNoCongestion] = paramsNoCongestion
 }
 
 func TestUpgradeVote(t *testing.T) {
@@ -100,9 +112,9 @@ func TestUpgradeVote(t *testing.T) {
 	s = UpgradeState{
 		CurrentProtocol:        proto1,
 		NextProtocol:           proto2,
-		NextProtocolApprovals:  config.Consensus[protocol.ConsensusCurrentVersion].UpgradeThreshold - 1,
-		NextProtocolVoteBefore: basics.Round(20),
-		NextProtocolSwitchOn:   basics.Round(30),
+		NextProtocolApprovals:  basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].UpgradeThreshold) - 1,
+		NextProtocolVoteBefore: 20,
+		NextProtocolSwitchOn:   30,
 	}
 
 	// Check that applyUpgradeVote rejects concurrent proposal
@@ -122,9 +134,9 @@ func TestUpgradeVote(t *testing.T) {
 	s1, err = s.applyUpgradeVote(basics.Round(20), UpgradeVote{})
 	require.NoError(t, err)
 	require.Equal(t, s1.NextProtocol, protocol.ConsensusVersion(""))
-	require.Equal(t, s1.NextProtocolApprovals, uint64(0))
-	require.Equal(t, s1.NextProtocolVoteBefore, basics.Round(0))
-	require.Equal(t, s1.NextProtocolSwitchOn, basics.Round(0))
+	require.Zero(t, s1.NextProtocolApprovals)
+	require.Zero(t, s1.NextProtocolVoteBefore)
+	require.Zero(t, s1.NextProtocolSwitchOn)
 
 	// Check that proposal gets approved with sufficient votes
 	s.NextProtocolApprovals++
@@ -137,9 +149,9 @@ func TestUpgradeVote(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, s1.CurrentProtocol, proto2)
 	require.Equal(t, s1.NextProtocol, protocol.ConsensusVersion(""))
-	require.Equal(t, s1.NextProtocolApprovals, uint64(0))
-	require.Equal(t, s1.NextProtocolVoteBefore, basics.Round(0))
-	require.Equal(t, s1.NextProtocolSwitchOn, basics.Round(0))
+	require.Zero(t, s1.NextProtocolApprovals)
+	require.Zero(t, s1.NextProtocolVoteBefore)
+	require.Zero(t, s1.NextProtocolSwitchOn)
 }
 
 func TestUpgradeVariableDelay(t *testing.T) {
@@ -282,7 +294,7 @@ func TestBonus(t *testing.T) {
 
 	// proto1 has no bonuses
 	b.Bonus.Raw++
-	require.ErrorContains(t, b.PreCheck(prev.BlockHeader), "bad bonus: {1} != {0}")
+	require.ErrorContains(t, b.PreCheck(prev.BlockHeader), "bad bonus")
 
 	prev.CurrentProtocol = proto2
 	prev.Bonus = basics.Algos(5)
@@ -290,7 +302,7 @@ func TestBonus(t *testing.T) {
 	require.NoError(t, b.PreCheck(prev.BlockHeader))
 
 	b.Bonus.Raw++
-	require.ErrorContains(t, b.PreCheck(prev.BlockHeader), "bad bonus: {5000001} != {5000000}")
+	require.ErrorContains(t, b.PreCheck(prev.BlockHeader), "bad bonus")
 
 	prev.BlockHeader.Round = 10_000_000 - 1
 	b = MakeBlock(prev.BlockHeader)
@@ -298,7 +310,7 @@ func TestBonus(t *testing.T) {
 
 	// since current block is 0 mod decayInterval, bonus goes down to 4,950,000
 	b.Bonus.Raw++
-	require.ErrorContains(t, b.PreCheck(prev.BlockHeader), "bad bonus: {4950001} != {4950000}")
+	require.ErrorContains(t, b.PreCheck(prev.BlockHeader), "bad bonus")
 }
 
 func TestRewardsLevel(t *testing.T) {
@@ -507,6 +519,95 @@ func TestDecodeMalformedSignedTxn(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestPaysetGroups(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	block := Block{BlockHeader: BlockHeader{
+		GenesisHash: crypto.Hash([]byte("payset-groups-test")),
+		UpgradeState: UpgradeState{
+			CurrentProtocol: protocol.ConsensusCurrentVersion,
+		},
+	}}
+	groupID := crypto.Hash([]byte("group"))
+	for i, txn := range []transactions.Transaction{
+		{Header: transactions.Header{Group: groupID}},
+		{Header: transactions.Header{Group: groupID}},
+		{},
+		{},
+		{Header: transactions.Header{Group: groupID}},
+	} {
+		txn.GenesisHash = block.BlockHeader.GenesisHash
+		txn.Note = []byte{byte(i)}
+		stib, err := block.EncodeSignedTxn(transactions.SignedTxn{Txn: txn}, transactions.ApplyData{})
+		require.NoError(t, err)
+		block.Payset = append(block.Payset, stib)
+	}
+
+	var groupSizes []int
+	for group, err := range block.PaysetGroups() {
+		require.NoError(t, err)
+		groupSizes = append(groupSizes, len(group))
+	}
+	require.Equal(t, []int{2, 1, 1, 1}, groupSizes)
+
+	yielded := 0
+	for range block.PaysetGroups() {
+		yielded++
+		break
+	}
+	require.Equal(t, 1, yielded)
+
+	maxGroupSize := bounds.MaxTxGroupSize
+	oversized := Block{BlockHeader: block.BlockHeader}
+	for i := range maxGroupSize + 1 {
+		txn := transactions.Transaction{Header: transactions.Header{
+			Group:       groupID,
+			GenesisHash: block.GenesisHash(),
+			Note:        []byte{byte(i)},
+		}}
+		stib, err := oversized.EncodeSignedTxn(transactions.SignedTxn{Txn: txn}, transactions.ApplyData{})
+		require.NoError(t, err)
+		oversized.Payset = append(oversized.Payset, stib)
+	}
+
+	var exactGroup []transactions.SignedTxnWithAD
+	for group, err := range (Block{BlockHeader: oversized.BlockHeader, Payset: oversized.Payset[:maxGroupSize]}).PaysetGroups() {
+		require.NoError(t, err)
+		exactGroup = group
+	}
+	require.Len(t, exactGroup, maxGroupSize)
+
+	yielded = 0
+	for group, err := range oversized.PaysetGroups() {
+		yielded++
+		require.Nil(t, group)
+		require.ErrorContains(t, err, fmt.Sprintf("group size %d exceeds maximum %d", maxGroupSize+1, maxGroupSize))
+	}
+	require.Equal(t, 1, yielded)
+	groups, err := oversized.DecodePaysetGroups()
+	require.Nil(t, groups)
+	require.ErrorContains(t, err, fmt.Sprintf("group size %d exceeds maximum %d", maxGroupSize+1, maxGroupSize))
+
+	adjacent := Block{BlockHeader: oversized.BlockHeader, Payset: append([]transactions.SignedTxnInBlock(nil), oversized.Payset...)}
+	adjacent.Payset[maxGroupSize].SignedTxn.Txn.Group = crypto.Hash([]byte("next-group"))
+	groupSizes = nil
+	for group, err := range adjacent.PaysetGroups() {
+		require.NoError(t, err)
+		groupSizes = append(groupSizes, len(group))
+	}
+	require.Equal(t, []int{maxGroupSize, 1}, groupSizes)
+
+	block.CurrentProtocol = protocol.ConsensusVersion("missing")
+	yielded = 0
+	for group, err := range block.PaysetGroups() {
+		yielded++
+		require.Nil(t, group)
+		require.ErrorContains(t, err, "consensus protocol missing not found")
+	}
+	require.Equal(t, 1, yielded)
+}
+
 // TestInitialRewardsRateCalculation perform positive and negative testing for the InitialRewardsRateCalculation fix by
 // running the rounds in the same way eval() is executing them over RewardsRateRefreshInterval rounds.
 func TestInitialRewardsRateCalculation(t *testing.T) {
@@ -562,7 +663,7 @@ func TestInitialRewardsRateCalculation(t *testing.T) {
 		return true
 	}
 
-	// test expected failuire
+	// test expected failure
 	consensusParams.InitialRewardsRateCalculation = false
 	require.False(t, runTest())
 
@@ -658,7 +759,7 @@ func TestNextRewardsRateWithFix(t *testing.T) {
 	}
 }
 
-func TestNextRewardsRateFailsWithoutFix(t *testing.T) {
+func TestNextRewardsRateErrsWithoutFix(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -842,11 +943,26 @@ func TestNextRewardsRateWithFixNextRewardLevelOverflow(t *testing.T) {
 func TestBlock_ContentsMatchHeader(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	a := require.New(t)
+	for _, cv := range []struct {
+		name string
+		ver  protocol.ConsensusVersion
+	}{
+		{"v32", protocol.ConsensusV32},
+		{"v34", protocol.ConsensusV34},
+		{"current", protocol.ConsensusCurrentVersion},
+		{"future", protocol.ConsensusFuture},
+	} {
+		t.Run(cv.name, func(t *testing.T) {
+			testBlockContentsMatchHeader(t, cv.ver)
+		})
+	}
+}
 
+func testBlockContentsMatchHeader(t *testing.T, cv protocol.ConsensusVersion) {
+	a := require.New(t)
 	// Create a block without SHA256 TxnCommitments
 	var block Block
-	block.CurrentProtocol = protocol.ConsensusV32
+	block.CurrentProtocol = cv
 	crypto.RandBytes(block.BlockHeader.GenesisHash[:])
 
 	for i := 0; i < 1024; i++ {
@@ -880,51 +996,93 @@ func TestBlock_ContentsMatchHeader(t *testing.T) {
 	a.NoError(err)
 	rootSliceSHA256 := tree.Root()
 
+	tree, err = block.TxnMerkleTreeSHA512()
+	a.NoError(err)
+	rootSliceSHA512 := tree.Root()
+
 	badDigestSlice := []byte("(>^-^)>")
 
-	/* Test V32 */
+	// Get consensus parameters for this version
+	params, ok := config.Consensus[cv]
+	a.True(ok)
+
+	// Initially all roots empty, should fail
+	block.BlockHeader.TxnCommitments = TxnCommitments{}
 	a.False(block.ContentsMatchHeader())
 
+	// Copy the appropriate txn roots based on consensus version
 	copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
-	block.BlockHeader.TxnCommitments.Sha256Commitment = crypto.Digest{}
+	if params.EnableSHA256TxnCommitmentHeader {
+		copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
+	}
+	if params.EnableSha512BlockHash {
+		copy(block.BlockHeader.TxnCommitments.Sha512Commitment[:], rootSliceSHA512)
+	}
 	a.True(block.ContentsMatchHeader())
 
-	copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
-	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
-	a.False(block.ContentsMatchHeader())
+	// Test with SHA256 set when it shouldn't be
+	if !params.EnableSHA256TxnCommitmentHeader {
+		copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
+		a.False(block.ContentsMatchHeader())
+		block.BlockHeader.TxnCommitments.Sha256Commitment = crypto.Digest{}
+	}
 
+	// Test with SHA512 set when it shouldn't be
+	if !params.EnableSha512BlockHash {
+		copy(block.BlockHeader.TxnCommitments.Sha512Commitment[:], rootSliceSHA512)
+		a.False(block.ContentsMatchHeader())
+		block.BlockHeader.TxnCommitments.Sha512Commitment = crypto.Sha512Digest{}
+	}
+
+	// Test with bad NativeSha512_256Commitment (should fail for all protocols)
 	copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], badDigestSlice)
-	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
 	a.False(block.ContentsMatchHeader())
 
+	// Test with missing NativeSha512_256Commitment
 	block.BlockHeader.TxnCommitments.NativeSha512_256Commitment = crypto.Digest{}
-	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
+	if params.EnableSHA256TxnCommitmentHeader {
+		copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
+	}
+	if params.EnableSha512BlockHash {
+		copy(block.BlockHeader.TxnCommitments.Sha512Commitment[:], rootSliceSHA512)
+	}
 	a.False(block.ContentsMatchHeader())
 
-	/* Test Consensus Current */
-	// Create a block with SHA256 TxnCommitments
-	block.CurrentProtocol = protocol.ConsensusCurrentVersion
+	// For protocols with SHA256 enabled, test with bad/missing SHA256 commitment
+	if params.EnableSHA256TxnCommitmentHeader {
+		copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
+		copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], badDigestSlice)
+		if params.EnableSha512BlockHash {
+			copy(block.BlockHeader.TxnCommitments.Sha512Commitment[:], rootSliceSHA512)
+		}
+		a.False(block.ContentsMatchHeader())
 
-	block.BlockHeader.TxnCommitments.NativeSha512_256Commitment = crypto.Digest{}
-	block.BlockHeader.TxnCommitments.Sha256Commitment = crypto.Digest{}
-	a.False(block.ContentsMatchHeader())
+		// Test with missing SHA256 commitment
+		copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
+		block.BlockHeader.TxnCommitments.Sha256Commitment = crypto.Digest{}
+		if params.EnableSha512BlockHash {
+			copy(block.BlockHeader.TxnCommitments.Sha512Commitment[:], rootSliceSHA512)
+		}
+		a.False(block.ContentsMatchHeader())
+	}
 
-	// Now update the SHA256 header to its correct value
-	copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
-	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
-	a.True(block.ContentsMatchHeader())
+	// For protocols with SHA512 enabled, test with bad/missing SHA512 commitment
+	if params.EnableSha512BlockHash {
+		copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
+		if params.EnableSHA256TxnCommitmentHeader {
+			copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
+		}
+		copy(block.BlockHeader.TxnCommitments.Sha512Commitment[:], badDigestSlice)
+		a.False(block.ContentsMatchHeader())
 
-	copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], badDigestSlice)
-	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
-	a.False(block.ContentsMatchHeader())
-
-	copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
-	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], badDigestSlice)
-	a.False(block.ContentsMatchHeader())
-
-	block.BlockHeader.TxnCommitments.NativeSha512_256Commitment = crypto.Digest{}
-	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
-	a.False(block.ContentsMatchHeader())
+		// Test with missing SHA512 commitment
+		copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
+		if params.EnableSHA256TxnCommitmentHeader {
+			copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
+		}
+		block.BlockHeader.TxnCommitments.Sha512Commitment = crypto.Sha512Digest{}
+		a.False(block.ContentsMatchHeader())
+	}
 }
 
 func TestBlockHeader_Serialization(t *testing.T) {
@@ -943,6 +1101,54 @@ func TestBlockHeader_Serialization(t *testing.T) {
 
 	a.Equal(crypto.Digest{}, blkHdr.TxnCommitments.Sha256Commitment)
 	a.NotEqual(crypto.Digest{}, blkHdr.TxnCommitments.NativeSha512_256Commitment)
+	a.Equal(crypto.Sha512Digest{}, blkHdr.TxnCommitments.Sha512Commitment)
+	a.Equal(crypto.Sha512Digest{}, blkHdr.Branch512)
+}
+
+// TestBlockHeader_PreCheck_Branch512 tests the Branch512 validation in PreCheck
+func TestBlockHeader_PreCheck_Branch512(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	a := require.New(t)
+
+	// Test consensus v40 (no EnableSha512BlockHash)
+	cv := protocol.ConsensusV40
+	prevHeader := BlockHeader{Round: 1, GenesisID: "test"}
+	prevHeader.CurrentProtocol = cv
+	crypto.RandBytes(prevHeader.GenesisHash[:])
+	// Make round 2 block that references block 1 as prev
+	currentHeader := BlockHeader{
+		Round: prevHeader.Round + 1, GenesisID: prevHeader.GenesisID, GenesisHash: prevHeader.GenesisHash,
+		Branch: prevHeader.Hash(),
+	}
+	currentHeader.CurrentProtocol = cv
+	// empty Branch512 passes
+	a.NoError(currentHeader.PreCheck(prevHeader))
+	// correct Branch512 fails
+	currentHeader.Branch512 = prevHeader.Hash512()
+	a.ErrorContains(currentHeader.PreCheck(prevHeader), "block branch512 not allowed")
+	// non-empty Branch512 fails
+	crypto.RandBytes(currentHeader.Branch512[:])
+	a.ErrorContains(currentHeader.PreCheck(prevHeader), "block branch512 not allowed")
+
+	// Test consensus future (EnableSha512BlockHash set)
+	cv = protocol.ConsensusFuture
+	prevHeader = BlockHeader{Round: 1, GenesisID: "test"}
+	prevHeader.CurrentProtocol = cv
+	crypto.RandBytes(prevHeader.GenesisHash[:])
+	currentHeader = BlockHeader{
+		Round: prevHeader.Round + 1, GenesisID: prevHeader.GenesisID, GenesisHash: prevHeader.GenesisHash,
+		Branch: prevHeader.Hash(),
+	}
+	currentHeader.CurrentProtocol = cv
+	// empty Branch512 fails
+	a.ErrorContains(currentHeader.PreCheck(prevHeader), "block branch512 incorrect")
+	// correct Branch512 passes
+	currentHeader.Branch512 = prevHeader.Hash512()
+	a.NoError(currentHeader.PreCheck(prevHeader))
+	// incorrect Branch512 fails
+	crypto.RandBytes(currentHeader.Branch512[:])
+	a.ErrorContains(currentHeader.PreCheck(prevHeader), "block branch512 incorrect")
 }
 
 func TestBonusUpgrades(t *testing.T) {
@@ -1015,7 +1221,7 @@ func TestFirstYearsBonus(t *testing.T) {
 		r++
 		sum += bonus
 		if r%interval == 0 {
-			bonus, _ = basics.Muldiv(bonus, 99, 100)
+			bonus, _ = basics.Muldiv(bonus, uint64(99), 100)
 		}
 	}
 	suma := sum / 1_000_000 // micro to Algos
@@ -1034,7 +1240,7 @@ func TestFirstYearsBonus(t *testing.T) {
 		r++
 		sum += bonus
 		if r%interval == 0 {
-			bonus, _ = basics.Muldiv(bonus, 99, 100)
+			bonus, _ = basics.Muldiv(bonus, uint64(99), 100)
 		}
 	}
 
@@ -1054,7 +1260,7 @@ func TestFirstYearsBonus(t *testing.T) {
 		r++
 		sum += bonus
 		if r%interval == 0 {
-			bonus, _ = basics.Muldiv(bonus, 99, 100)
+			bonus, _ = basics.Muldiv(bonus, uint64(99), 100)
 		}
 	}
 
@@ -1068,4 +1274,364 @@ func TestFirstYearsBonus(t *testing.T) {
 
 	// declined to about 72% (but foundation funding probably gone anyway)
 	a.InDelta(0.72, float64(bonus)/float64(plan.BaseAmount), 0.01)
+}
+
+func TestAlive(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	bh := BlockHeader{
+		Round:       0,
+		GenesisHash: crypto.Digest{0x42},
+	}
+	bh.CurrentProtocol = protocol.ConsensusCurrentVersion
+
+	header := transactions.Header{
+		FirstValid:  5000,
+		LastValid:   5050,
+		GenesisID:   bh.GenesisID,
+		GenesisHash: bh.GenesisHash,
+	}
+
+	bh.Round = header.FirstValid + 1
+	if err := bh.Alive(header); err != nil {
+		t.Errorf("transaction not alive during lifetime %v", err)
+	}
+
+	bh.Round = header.FirstValid
+	if err := bh.Alive(header); err != nil {
+		t.Errorf("transaction not alive at issuance %v", err)
+	}
+
+	bh.Round = header.LastValid
+	if err := bh.Alive(header); err != nil {
+		t.Errorf("transaction not alive at expiry %v", err)
+	}
+
+	bh.Round = header.FirstValid - 1
+	if bh.Alive(header) == nil {
+		t.Errorf("premature transaction alive %v", header)
+	}
+
+	bh.Round = header.LastValid + 1
+	if bh.Alive(header) == nil {
+		t.Errorf("expired transaction alive %v", header)
+	}
+}
+
+func TestBlockHeaderCongestionValidation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Test with congestion fees enabled
+	t.Run("congestion_fees_enabled", func(t *testing.T) {
+		prev := BlockHeader{
+			Round:         1,
+			GenesisID:     "test",
+			GenesisHash:   crypto.Digest{0x02, 0x02},
+			Load:          750_000,
+			CongestionTax: 2 * 1e6, // 2 as Micros. That is 200% tax rate.
+		}
+		prev.CurrentProtocol = protoCongestion
+
+		current := BlockHeader{
+			Round:         prev.Round + 1,
+			GenesisID:     prev.GenesisID,
+			GenesisHash:   prev.GenesisHash,
+			Branch:        prev.Hash(),
+			Branch512:     prev.Hash512(),
+			Load:          500_000, // irrelevant
+			CongestionTax: NextCongestionTax(prev.Load, prev.CongestionTax),
+		}
+		current.CurrentProtocol = protoCongestion
+
+		// 200% tax rate was causing an actual price of 3,000uA. 75% load should
+		// cause a 5% increase, so we want a tax rate that generates 3,150uA
+		// price. So we need a tax to generate 2,150 on 1000uA base fee. 215%
+
+		require.EqualValues(t, 2_150_000, current.CongestionTax) // 75% load causes 5% growth of the minFee+conFee sum
+
+		// Should pass with correct CongestionTax
+		require.NoError(t, current.PreCheck(prev))
+
+		// Should fail with incorrect CongestionTax
+		current.CongestionTax++
+		require.ErrorContains(t, current.PreCheck(prev), "bad congestion tax")
+	})
+
+	// Test with congestion fees disabled
+	t.Run("congestion_fees_disabled", func(t *testing.T) {
+		prev := BlockHeader{
+			Round:         1,
+			GenesisID:     "test",
+			GenesisHash:   crypto.Digest{0x02, 0x02},
+			Load:          0,
+			CongestionTax: 0,
+		}
+		prev.CurrentProtocol = protoNoCongestion
+
+		current := BlockHeader{
+			Round:         prev.Round + 1,
+			GenesisID:     prev.GenesisID,
+			GenesisHash:   prev.GenesisHash,
+			Branch:        prev.Hash(),
+			Branch512:     prev.Hash512(),
+			Load:          0,
+			CongestionTax: 0,
+		}
+		current.CurrentProtocol = protoNoCongestion
+
+		// Should pass with 0 CongestionTax
+		require.NoError(t, current.PreCheck(prev))
+		current.CongestionTax++
+		require.ErrorContains(t, current.PreCheck(prev), "bad congestion tax")
+		current.CongestionTax--
+
+		// Should fail with non-zero Load
+		current.Load = 500_000
+		require.ErrorContains(t, current.PreCheck(prev), "load should be zero when congestion measurement is disabled")
+		current.Load = 0
+
+		prev = BlockHeader{
+			Round:         1,
+			GenesisID:     "test",
+			GenesisHash:   crypto.Digest{0x02, 0x02},
+			Load:          0,
+			CongestionTax: 2_000_000, // Weird, but allowed (maybe there was a downgrade?)
+		}
+		prev.CurrentProtocol = protoNoCongestion
+
+		current = BlockHeader{
+			Round:         prev.Round + 1,
+			GenesisID:     prev.GenesisID,
+			GenesisHash:   prev.GenesisHash,
+			Branch:        prev.Hash(),
+			Branch512:     prev.Hash512(),
+			Load:          0,
+			CongestionTax: 1_700_000, // Tapers from above.  (3*.9)-1=1.7
+		}
+		current.CurrentProtocol = protoNoCongestion
+
+		// Should pass with only the correct CongestionTax
+		require.NoError(t, current.PreCheck(prev))
+		current.CongestionTax++
+		require.ErrorContains(t, current.PreCheck(prev), "bad congestion tax")
+		current.CongestionTax--
+
+		// Should fail with non-zero Load
+		current.Load = 500_000
+		require.ErrorContains(t, current.PreCheck(prev), "load should be zero when congestion measurement is disabled")
+		current.Load = 0
+	})
+
+	// Ensure that the upgrade to congestion fees is handled correctly
+	t.Run("congestion_tracking_upgrade", func(t *testing.T) {
+		prev := BlockHeader{
+			Round:       10,
+			GenesisID:   "test",
+			GenesisHash: crypto.Digest{0x02, 0x02},
+			UpgradeState: UpgradeState{
+				CurrentProtocol:      protoNoCongestion,
+				NextProtocol:         protoCongestion,
+				NextProtocolSwitchOn: 11,
+			},
+		}
+
+		current := BlockHeader{
+			Round:         prev.Round + 1,
+			GenesisID:     prev.GenesisID,
+			GenesisHash:   prev.GenesisHash,
+			Branch:        prev.Hash(),
+			Branch512:     prev.Hash512(),
+			Load:          750_000, // half-way between mid-point and full, so causes 5% fee bump
+			CongestionTax: NextCongestionTax(prev.Load, prev.CongestionTax),
+		}
+		current.CurrentProtocol = protoCongestion
+
+		// Should pass with zero values. Tax will be 0 in the first round after
+		// upgrade, because previous round Load appears to be zero (though
+		// actually it simply wasn't measured).
+		require.NoError(t, current.PreCheck(prev))
+		require.Zero(t, current.CongestionTax)
+
+		// Should fail with non-zero CongestionTax, but now the complaint is
+		// that Tax is wrong, not that it shouldn't appear.
+		current.CongestionTax = 1
+		require.ErrorContains(t, current.PreCheck(prev), "bad congestion tax: 0.000001 != 0.000000")
+		current.CongestionTax = 0
+
+		// current's Load wants to make the next basic fee = 1.05 * minfee. So
+		// next tax should be 50,000 micros.
+		next := BlockHeader{
+			Round:         current.Round + 1,
+			GenesisID:     prev.GenesisID,
+			GenesisHash:   prev.GenesisHash,
+			Branch:        current.Hash(),
+			Branch512:     current.Hash512(),
+			Load:          10, // irrelevant
+			CongestionTax: NextCongestionTax(current.Load, current.CongestionTax),
+		}
+		next.CurrentProtocol = protoCongestion
+		require.NoError(t, next.PreCheck(current))
+		require.EqualValues(t, 50_000, next.CongestionTax)
+
+	})
+
+	// Show that turning off congestion tracking leads to blocks w/o Load or Tax
+	t.Run("congestion_tracking_downgrade", func(t *testing.T) {
+		prev := BlockHeader{
+			Round:       10,
+			GenesisID:   "test",
+			GenesisHash: crypto.Digest{0x02, 0x02},
+			UpgradeState: UpgradeState{
+				CurrentProtocol:      protoCongestion,
+				NextProtocol:         protoNoCongestion,
+				NextProtocolSwitchOn: 11,
+			},
+			Load:          750_000, // but give the pre-upgrade block some Load
+			CongestionTax: 200_000, // and current tax level
+		}
+
+		// We're no longer tracking load, so it goes to 0. But CongestionTax is
+		// still allowed, but it will naturally fall after this block (no load measured)
+		current := BlockHeader{
+			Round:         prev.Round + 1,
+			GenesisID:     prev.GenesisID,
+			GenesisHash:   prev.GenesisHash,
+			Branch:        prev.Hash(),
+			Branch512:     prev.Hash512(),
+			CongestionTax: 260_000, // (1.2*1.05)-1 = 0.26
+		}
+		current.CurrentProtocol = protoNoCongestion
+
+		// Should pass with only the correct CongestionTax
+		require.NoError(t, current.PreCheck(prev))
+		current.CongestionTax++
+		require.ErrorContains(t, current.PreCheck(prev), "bad congestion tax")
+		current.CongestionTax--
+
+		// Should fail with non-zero Load
+		current.Load = 1
+		require.ErrorContains(t, current.PreCheck(prev), "load should be zero")
+		current.Load = 0
+
+		next := BlockHeader{
+			Round:         current.Round + 1,
+			GenesisID:     prev.GenesisID,
+			GenesisHash:   prev.GenesisHash,
+			Branch:        current.Hash(),
+			Branch512:     current.Hash512(),
+			CongestionTax: 134_000, // (1.26*0.9)-1 = 0.134
+		}
+		next.CurrentProtocol = protoNoCongestion
+		require.NoError(t, next.PreCheck(current))
+	})
+
+}
+
+func TestBlockHeaderCongestionCreation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	t.Run("congestion_fees_enabled", func(t *testing.T) {
+		prev := BlockHeader{
+			Round:         10,
+			GenesisID:     "test",
+			GenesisHash:   crypto.Digest{0x02, 0x02},
+			Load:          600_000,
+			CongestionTax: 100_000,
+		}
+		prev.CurrentProtocol = protoCongestion
+
+		block := MakeBlock(prev)
+
+		// tax should be calculated from previous load
+		expectedTax := NextCongestionTax(prev.Load, prev.CongestionTax)
+		require.EqualValues(t, 122_000, expectedTax) // 1.100 * 1.02 - 1 = 1.22
+		require.Equal(t, expectedTax, block.CongestionTax)
+
+		// Load should be 0 for empty block (will be set during block evaluation)
+		require.Zero(t, block.Load)
+	})
+
+	t.Run("congestion_fees_disabled", func(t *testing.T) {
+		prev := BlockHeader{
+			Round:         10,
+			GenesisID:     "test",
+			GenesisHash:   crypto.Digest{0x02, 0x02},
+			Load:          0,
+			CongestionTax: 0,
+		}
+		prev.CurrentProtocol = protoNoCongestion
+
+		block := MakeBlock(prev)
+		require.Zero(t, block.CongestionTax)
+		require.Zero(t, block.Load)
+
+		// If there is still congestion tax (maybe downgrade to no load tracking) tax tapers
+		prev = BlockHeader{
+			Round:         10,
+			GenesisID:     "test",
+			GenesisHash:   crypto.Digest{0x02, 0x02},
+			Load:          0,
+			CongestionTax: 2_000_000,
+		}
+		prev.CurrentProtocol = protoNoCongestion
+
+		block = MakeBlock(prev)
+		require.Equal(t, basics.Micros(1_700_000), block.CongestionTax)
+		require.Zero(t, block.Load)
+	})
+}
+
+func TestNextCongestionTax(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Test different load levels and their effect on various tax rates
+	tests := []struct {
+		load        basics.Micros
+		prevTax     basics.Micros
+		expectedTax basics.Micros
+	}{
+		// An empty block want to decrease final price by 10%. So unless the
+		// previous tax rate was > 10%, it zeros it out.
+		{0, 0, 0},
+		{0, 1, 0},
+		{0, 1000, 0},
+		{0, 99_999, 0},
+		{0, 100_000, 0},
+
+		{0, 200_000, 80_000}, // 1.2*0.9 = 1.08 -> 8% tax
+
+		// A quarter full block wants to decrease final price by 5%
+		{250_000, 50_000, 0},   // 1.05*0.95 = 0.9975 -> 0% tax
+		{250_000, 51_000, 0},   // 1.051*0.95 = 0.99845 -> 0% tax
+		{250_000, 52_000, 0},   // 1.052*0.95 = 0.9994 -> 0% tax
+		{250_000, 53_000, 350}, // 1.053*0.95 = 1.00035 -> 350 micros tax
+
+		{250_000, 1_000e6, 949_950_000}, // 1001*0.95 = 950.95
+
+		// A half full block wants to keep the final price the same
+		{500_000, 0, 0},
+		{500_000, 1, 1},
+		{500_000, math.MaxUint64, math.MaxUint64},
+
+		// A 3/4 full block increases final price by 5%
+		{750_000, 0, 50_000},
+		{750_000, 1, 50_001},
+		{750_000, math.MaxUint64 - 10, math.MaxUint64}, // Saturate
+		{750_000, math.MaxUint64, math.MaxUint64},      // Saturate
+
+		{1_000_000, 0, 100_000},
+		{1_000_000, 2e6, 2.3e6},
+		{1_000_000, math.MaxUint64 - 10, math.MaxUint64}, // Saturate
+		{1_000_000, math.MaxUint64, math.MaxUint64},      // Saturate
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("load_%s_%s", test.load, test.prevTax), func(t *testing.T) {
+			nextTax := NextCongestionTax(test.load, test.prevTax)
+			assert.Equal(t, int(test.expectedTax), int(nextTax))
+		})
+	}
 }

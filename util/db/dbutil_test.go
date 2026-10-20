@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -351,11 +351,11 @@ type WarningLogCounter struct {
 	warningsCounter int
 }
 
-func (wlc *WarningLogCounter) Warnf(string, ...interface{}) {
+func (wlc *WarningLogCounter) Warnf(string, ...any) {
 	wlc.warningsCounter++
 }
 
-func (wlc *WarningLogCounter) With(key string, value interface{}) logging.Logger {
+func (wlc *WarningLogCounter) With(key string, value any) logging.Logger {
 	return wlc
 }
 
@@ -417,8 +417,8 @@ func TestSetSynchronousMode(t *testing.T) {
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	cancelFunc()
 
-	require.Error(t, context.Canceled, setSynchrounousModeHelper(true, ctx, SynchronousModeOff, false))
-	require.Error(t, context.Canceled, setSynchrounousModeHelper(false, ctx, SynchronousModeOff, false))
+	require.ErrorIs(t, setSynchrounousModeHelper(true, ctx, SynchronousModeOff, false), context.Canceled)
+	require.ErrorIs(t, setSynchrounousModeHelper(false, ctx, SynchronousModeOff, false), context.Canceled)
 
 	require.Contains(t, setSynchrounousModeHelper(false, context.Background(), SynchronousModeOff-1, false).Error(), "invalid value")
 	require.Contains(t, setSynchrounousModeHelper(false, context.Background(), SynchronousModeExtra+1, false).Error(), "invalid value")
@@ -431,6 +431,24 @@ func TestSetSynchronousMode(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestErasableAccessorTempStoreInMemory checks that erasable connections keep
+// SQLite's temporary journals in memory, so a journal holding the original
+// content of a securely deleted page never spills to a temp file on disk.
+func TestErasableAccessorTempStoreInMemory(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	acc, err := MakeErasableAccessor(filepath.Join(t.TempDir(), "erasable.sqlite"))
+	require.NoError(t, err)
+	defer acc.Close()
+
+	var tempStore int
+	err = acc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return tx.QueryRow("PRAGMA temp_store").Scan(&tempStore)
+	})
+	require.NoError(t, err)
+	require.Equal(t, 2, tempStore) // 2 is MEMORY
 }
 
 // TestReadingWhileWriting tests the SQLite behaviour when we're using two transactions, writing with one and reading from the other.
@@ -481,11 +499,13 @@ func TestReadingWhileWriting(t *testing.T) {
 
 // using Write-Ahead Logging (WAL)
 func TestLockingTableWhileWritingWAL(t *testing.T) {
+	// partitiontest.PartitionTest(t) // partition handled inside testLockingTableWhileWriting
 	testLockingTableWhileWriting(t, true)
 }
 
 // using the default Rollback Journal
 func TestLockingTableWhileWritingJournal(t *testing.T) {
+	// partitiontest.PartitionTest(t) // partition handled inside testLockingTableWhileWriting
 	testLockingTableWhileWriting(t, false)
 }
 
@@ -508,7 +528,7 @@ func testLockingTableWhileWriting(t *testing.T, useWAL bool) {
 
 	dbName := strings.Replace(t.Name(), "/", "_", -1) + ".sqlite3"
 
-	writeAcc, err := makeAccessorImpl(dbName, false, false, dbParams)
+	writeAcc, err := makeAccessorImpl(erasableDriverName, dbName, false, false, dbParams)
 	a.NoError(err)
 	defer os.Remove(dbName)
 	defer os.Remove(dbName + "-shm")
@@ -534,7 +554,7 @@ func testLockingTableWhileWriting(t *testing.T, useWAL bool) {
 	}
 
 	go func() { // Goroutine reading periodically from a table different from the one being written to.
-		readAcc, err := makeAccessorImpl(dbName, true, false, dbParams)
+		readAcc, err := makeAccessorImpl(erasableDriverName, dbName, true, false, dbParams)
 		a.NoError(err)
 		defer readAcc.Close()
 

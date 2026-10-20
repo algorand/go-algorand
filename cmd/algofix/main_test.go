@@ -22,18 +22,6 @@ type testCase struct {
 
 var testCases []testCase
 
-func addTestCases(t []testCase, fn func(*ast.File) bool) {
-	// Fill in fn to avoid repetition in definitions.
-	if fn != nil {
-		for i := range t {
-			if t[i].Fn == nil {
-				t[i].Fn = fn
-			}
-		}
-	}
-	testCases = append(testCases, t...)
-}
-
 func fnop(*ast.File) bool { return false }
 
 func parseFixPrint(t *testing.T, fn func(*ast.File) bool, desc, in string, mustBeGofmt bool) (out string, fixed, ok bool) {

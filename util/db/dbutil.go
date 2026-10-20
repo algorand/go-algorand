@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -46,7 +46,19 @@ import (
 // is not covered by the busy timeout.  We rely on sqlite_unlock_notify()
 // to wait for the shared cache lock to be released.  This is enabled in
 // go-sqlite3 with the "sqlite_unlock_notify" Go build tag.
-const busy = 1000
+//
+// Set to 5000ms to reduce flaky "database table is locked" errors caused by
+// lock contention between concurrent readers (e.g., block evaluation querying
+// acctrounds) and the background tracker commit writer (updating acctrounds).
+// This is especially relevant for in-memory shared-cache databases used in
+// tests, where the tight timing of operations like rapid block generation can
+// exhaust retry limits under the previous 1s timeout. The SQLite documentation
+// (https://www.sqlite.org/c3ref/busy_timeout.html) notes that the busy handler
+// is advisory and recommends applications set a timeout that is "at least a few
+// seconds" to accommodate transient lock contention in multi-connection setups.
+// In production, algod is typically the sole writer to its database files, so
+// this timeout rarely triggers, but the higher value provides a safer margin.
+const busy = 5000
 
 // enableFullfsyncStatements is a list of statements we execute to enable a fullfsync.
 // Currently, it's only supported by MacOSX.
@@ -56,9 +68,14 @@ var sqliteInitOnce sync.Once
 // An Accessor manages a sqlite database handle and any outstanding batching operations.
 type Accessor struct {
 	Handle   *sql.DB
+	filename string
 	readOnly bool
 	inMemory bool
 	log      logging.Logger
+
+	// eraseWALAfterOverwrite, when set (tests only), runs inside EraseWAL
+	// once the log has been overwritten and before it is truncated.
+	eraseWALAfterOverwrite func()
 }
 
 // VacuumStats returns the database statistics before and after a vacuum operation
@@ -80,24 +97,44 @@ type txExecutionContext struct {
 	deadline time.Time
 }
 
-// MakeAccessor creates a new Accessor.
-func MakeAccessor(dbfilename string, readOnly bool, inMemory bool) (Accessor, error) {
-	return makeAccessorImpl(dbfilename, readOnly, inMemory, []string{"_journal_mode=wal"})
+// erasableDriverName is the sqlite3 driver behind the erasable accessors.  Its
+// connections keep SQLite's temporary files in memory: with secure_delete on,
+// zeroing a freed page first saves the page's original content in the
+// statement or savepoint journal, and a journal that spills to disk would
+// leave that content in an unlinked, never-overwritten temp file outside the
+// database.  temp_store is set when each connection opens because SQLite
+// fixes where a transaction's journals live when the transaction begins.
+const erasableDriverName = "sqlite3_erasable"
+
+func init() {
+	sql.Register(erasableDriverName, &sqlite3.SQLiteDriver{
+		ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+			_, err := conn.Exec("PRAGMA temp_store=MEMORY", nil)
+			return err
+		},
+	})
 }
 
-// MakeErasableAccessor creates a new Accessor with the secure_delete pragma set;
-// see https://www.sqlite.org/pragma.html#pragma_secure_delete
+// MakeAccessor creates a new Accessor.
+func MakeAccessor(dbfilename string, readOnly bool, inMemory bool) (Accessor, error) {
+	return makeAccessorImpl("sqlite3", dbfilename, readOnly, inMemory, []string{"_journal_mode=wal"})
+}
+
+// MakeErasableAccessor creates a new Accessor with the secure_delete pragma set
+// and temporary files kept in memory; see
+// https://www.sqlite.org/pragma.html#pragma_secure_delete
 // It is not read-only and not in-memory (otherwise, erasability doesn't matter)
 func MakeErasableAccessor(dbfilename string) (Accessor, error) {
 	return makeErasableAccessor(dbfilename, false)
 }
 
 func makeErasableAccessor(dbfilename string, readOnly bool) (Accessor, error) {
-	return makeAccessorImpl(dbfilename, readOnly, false, []string{"_secure_delete=on", "_journal_mode=wal"})
+	return makeAccessorImpl(erasableDriverName, dbfilename, readOnly, false, []string{"_secure_delete=on", "_journal_mode=wal"})
 }
 
-func makeAccessorImpl(dbfilename string, readOnly bool, inMemory bool, params []string) (Accessor, error) {
+func makeAccessorImpl(driverName string, dbfilename string, readOnly bool, inMemory bool, params []string) (Accessor, error) {
 	var db Accessor
+	db.filename = dbfilename
 	db.readOnly = readOnly
 	db.inMemory = inMemory
 
@@ -110,7 +147,7 @@ func makeAccessorImpl(dbfilename string, readOnly bool, inMemory bool, params []
 	// The connection goes to a connection pool inside Go's sql package and will be re-used when needed.
 	// See https://github.com/algorand/go-algorand/issues/846 for more details.
 	var err error
-	db.Handle, err = sql.Open("sqlite3", URI(dbfilename, readOnly, inMemory)+"&"+strings.Join(params, "&"))
+	db.Handle, err = sql.Open(driverName, URI(dbfilename, readOnly, inMemory)+"&"+strings.Join(params, "&"))
 
 	if err == nil {
 		// create a connection to safely initialize SQLite once
@@ -184,7 +221,7 @@ func Retry(fn func() error) (err error) {
 }
 
 // getDecoratedLogger returns a decorated logger that includes the readonly true/false, caller and extra fields.
-func (db *Accessor) getDecoratedLogger(fn idemFn, extras ...interface{}) logging.Logger {
+func (db *Accessor) getDecoratedLogger(fn idemFn, extras ...any) logging.Logger {
 	log := db.logger().With("readonly", db.readOnly)
 	_, file, line, ok := runtime.Caller(3)
 	if ok {
@@ -211,22 +248,16 @@ func (db *Accessor) IsSharedCacheConnection() bool {
 // For transactions where readOnly is false, sync determines whether or not to wait for the result.
 // The return error of fn should be a native sqlite3.Error type or an error wrapping it.
 // DO NOT return a custom error - the internal logic of Atomic expects an sqlite error and uses that value.
-func (db *Accessor) Atomic(fn idemFn, extras ...interface{}) (err error) {
-	return db.AtomicContext(context.Background(), fn, extras...)
+func (db *Accessor) Atomic(fn idemFn, extras ...any) (err error) {
+	return db.AtomicContext(context.Background(), fn, nil, extras...)
 }
 
 // AtomicContext executes a piece of code with respect to the database atomically.
 // For transactions where readOnly is false, sync determines whether or not to wait for the result.
 // Like for Atomic, the return error of fn should be a native sqlite3.Error type or an error wrapping it.
-func (db *Accessor) AtomicContext(ctx context.Context, fn idemFn, extras ...interface{}) (err error) {
-
-	return db.AtomicContextWithRetryClearFn(ctx, fn, nil, extras...)
-}
-
-// AtomicContextWithRetryClearFn is like AtomicContext, but calls retryClearFn if the database
-// txn was rolled back, due to error or in between retries. This helps a caller that
-// might change in-memory state inside fn.
-func (db *Accessor) AtomicContextWithRetryClearFn(ctx context.Context, fn idemFn, retryClearFn func(context.Context), extras ...interface{}) (err error) {
+// If retryClearFn is provided, it will be called in between retries of calls to fn, if the error is a
+// temporary error that will be retried. This helps a caller that might change in-memory state inside fn.
+func (db *Accessor) AtomicContext(ctx context.Context, fn idemFn, retryClearFn func(context.Context), extras ...any) (err error) {
 	atomicDeadline := time.Now().Add(time.Second)
 
 	// note that the sql library will drop panics inside an active transaction
@@ -337,7 +368,7 @@ func (db *Accessor) AtomicContextWithRetryClearFn(ctx context.Context, fn idemFn
 // however, the transaction context and transaction object can be used to uniquely associate the request
 // with a particular deadline.
 // the function fails if the given transaction is not on the stack of the provided context.
-func ResetTransactionWarnDeadline(ctx context.Context, tx interface{}, deadline time.Time) (prevDeadline time.Time, err error) {
+func ResetTransactionWarnDeadline(ctx context.Context, tx any, deadline time.Time) (prevDeadline time.Time, err error) {
 	txContextData, ok := ctx.Value(tx).(*txExecutionContext)
 	if !ok {
 		// it's not a valid call. just return an error.

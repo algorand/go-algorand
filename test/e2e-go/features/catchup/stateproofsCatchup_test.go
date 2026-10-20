@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -45,7 +45,7 @@ func applyCatchpointStateProofConsensusChanges(consensusParams *config.Consensus
 }
 
 func getStateProofNextRound(a *require.Assertions, goalClient *libgoal.Client, round basics.Round) basics.Round {
-	block, err := goalClient.BookkeepingBlock(uint64(round))
+	block, err := goalClient.BookkeepingBlock(round)
 	a.NoError(err)
 	return block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
 }
@@ -93,6 +93,10 @@ func TestStateProofInReplayCatchpoint(t *testing.T) {
 
 	catchpointLabel := waitForCatchpointGeneration(t, fixture, primaryNodeRestClient, targetCatchpointRound)
 
+	chunks := downloadCatchpointFile(t, a, primaryNodeAddr, targetCatchpointRound)
+	a.NotEmpty(chunks)
+	validateCatchpointChunks(t, a, chunks, consensusParams)
+
 	_, err = usingNodeRestClient.Catchup(catchpointLabel, 0)
 	a.NoError(err)
 
@@ -115,7 +119,7 @@ func TestStateProofInReplayCatchpoint(t *testing.T) {
 	}
 
 	// wait for fastcatchup to complete and the node is synced
-	err = usingNodeRestClient.WaitForRoundWithTimeout(uint64(targetCatchpointRound + 1))
+	err = usingNodeRestClient.WaitForRoundWithTimeout(targetCatchpointRound + 1)
 	a.NoError(err)
 
 	primaryLibGoal := fixture.GetLibGoalClientFromNodeController(primaryNode)
@@ -169,12 +173,16 @@ func TestStateProofAfterCatchpoint(t *testing.T) {
 
 	catchpointLabel := waitForCatchpointGeneration(t, fixture, primaryNodeRestClient, targetCatchpointRound)
 
+	chunks := downloadCatchpointFile(t, a, primaryNodeAddr, targetCatchpointRound)
+	a.NotEmpty(chunks)
+	validateCatchpointChunks(t, a, chunks, consensusParams)
+
 	_, err = usingNodeRestClient.Catchup(catchpointLabel, 0)
 	a.NoError(err)
 
 	roundAfterSPGeneration := targetCatchpointRound.RoundUpToMultipleOf(basics.Round(consensusParams.StateProofInterval)) +
 		basics.Round(consensusParams.StateProofInterval/2)
-	err = usingNodeRestClient.WaitForRoundWithTimeout(uint64(roundAfterSPGeneration))
+	err = usingNodeRestClient.WaitForRoundWithTimeout(roundAfterSPGeneration)
 	a.NoError(err)
 
 	primaryLibGoal := fixture.GetLibGoalClientFromNodeController(primaryNode)
@@ -267,7 +275,11 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 	_, err = usingNodeRestClient.Catchup(catchpointLabel, 0)
 	a.NoError(err)
 
-	err = usingNodeRestClient.WaitForRoundWithTimeout(uint64(targetCatchpointRound) + 1)
+	chunks := downloadCatchpointFile(t, a, primaryNodeAddr, targetCatchpointRound)
+	a.NotEmpty(chunks)
+	validateCatchpointChunks(t, a, chunks, consensusParams)
+
+	err = usingNodeRestClient.WaitForRoundWithTimeout(targetCatchpointRound + 1)
 	a.NoError(err)
 
 	lastNormalRound, err := fixture.GetLibGoalClientFromNodeController(normalNode).CurrentRound()
@@ -280,7 +292,7 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 	lastNormalNodeSignedRound := basics.Round(lastNormalRound).RoundDownToMultipleOf(basics.Round(consensusParams.StateProofInterval))
 	lastNormalNextStateProofRound := lastNormalNodeSignedRound + basics.Round(consensusParams.StateProofInterval)
 	targetRound := lastNormalNextStateProofRound + basics.Round(consensusParams.StateProofInterval*2)
-	err = usingNodeRestClient.WaitForRoundWithTimeout(uint64(targetRound))
+	err = usingNodeRestClient.WaitForRoundWithTimeout(targetRound)
 	a.NoError(err)
 
 	primaryClient := fixture.GetLibGoalClientFromNodeController(primaryNode)

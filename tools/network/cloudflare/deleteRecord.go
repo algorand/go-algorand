@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -42,8 +42,8 @@ func deleteDNSRecordRequest(zoneID string, authToken string, recordID string) (*
 // DeleteDNSRecordResponse is the JSON response for a DNS delete request
 type DeleteDNSRecordResponse struct {
 	Success  bool                  `json:"success"`
-	Errors   []interface{}         `json:"errors"`
-	Messages []interface{}         `json:"messages"`
+	Errors   []any                 `json:"errors"`
+	Messages []any                 `json:"messages"`
 	Result   DeleteDNSRecordResult `json:"result"`
 }
 
@@ -52,7 +52,7 @@ type DeleteDNSRecordResult struct {
 	ID string `json:"id"`
 }
 
-// ParseDeleteDNSRecordResponse parses the response that was received as a result of a ListDNSRecordRequest
+// parseDeleteDNSRecordResponse parses the response that was received as a result of a ListDNSRecordRequest
 func parseDeleteDNSRecordResponse(response *http.Response) (*DeleteDNSRecordResponse, error) {
 	defer response.Body.Close()
 	body, err := io.ReadAll(response.Body)

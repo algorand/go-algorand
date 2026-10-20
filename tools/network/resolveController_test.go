@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -60,6 +60,28 @@ func TestFallbackResolver(t *testing.T) {
 	r = c.FallbackResolver()
 	a.IsType(&dnssec.Resolver{}, r)
 	a.Equal(r.(*dnssec.Resolver).EffectiveResolverDNS(), []dnssec.ResolverAddress{dnssec.MakeResolverAddress("127.0.0.1", "53")})
+}
+
+func TestFallbackResolverInvalidAddress(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	log := logging.Base()
+
+	// An unresolvable fallback address (consecutive dots form an empty, syntactically
+	// invalid label, so this fails locally without a network lookup) must degrade to the
+	// default resolver rather than panic on a nil *net.IPAddr.
+	const badAddr = "invalid..fallback..address"
+
+	c := NewResolveController(false, badAddr, log)
+	r := c.FallbackResolver()
+	a.IsType(&Resolver{}, r)
+	a.Equal(defaultDNSAddress, r.(*Resolver).EffectiveResolverDNS())
+
+	c = NewResolveController(true, badAddr, log)
+	r = c.FallbackResolver()
+	a.IsType(&dnssec.Resolver{}, r)
+	a.Equal(dnssec.DefaultDnssecAwareNSServers, r.(*dnssec.Resolver).EffectiveResolverDNS())
 }
 
 func TestDefaultResolver(t *testing.T) {

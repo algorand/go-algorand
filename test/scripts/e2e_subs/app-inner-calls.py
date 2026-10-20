@@ -14,7 +14,8 @@ goal = Goal(sys.argv[1], autosend=True)
 
 joe = goal.new_account()
 
-_, err = goal.pay(goal.account, joe, amt=500_000)
+# Fund joe with extra to cover higher fees (was 500_000)
+_, err = goal.pay(goal.account, joe, amt=600_000)
 assert not err, err
 
 # Turn off rewards for precise balance checking
@@ -134,7 +135,9 @@ assert asa_id+1 == app_id
 app_account = logic.get_application_address(app_id)
 
 # Check balance on app account is right (1m - 1 optin fee)
-assert 1_000_000-1000 == goal.balance(app_account), goal.balance(app_account)
+# Get the network's minimum fee from suggested params
+min_fee = goal.params().min_fee
+assert 1_000_000-min_fee == goal.balance(app_account), goal.balance(app_account)
 assert 0 == goal.balance(app_account, asa_id)
 # Check min-balance on app account is right (base + 1 asa)
 assert 200_000 == goal.min_balance(app_account), goal.min_balance(app_account)

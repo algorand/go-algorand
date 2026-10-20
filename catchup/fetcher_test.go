@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -71,6 +71,12 @@ func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, 
 		t.Fatal("couldn't build ledger", err)
 		return
 	}
+	// The ledger's tracker goroutines log through log, which is bound to t: if the
+	// ledger outlives the test, they keep calling t.Log() after the test has
+	// completed. Closing the ledger makes the tracker syncher goroutine exit.
+	// It is safe to call ledger.Close() in tests as well.
+	t.Cleanup(ledger.Close)
+
 	next = ledger.NextRound()
 	tx := transactions.Transaction{
 		Type: protocol.PaymentTx,
@@ -109,15 +115,15 @@ func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, 
 	return
 }
 
-func addBlocks(t *testing.T, ledger *data.Ledger, blk bookkeeping.Block, numBlocks int) {
-	var err error
-	for i := 0; i < numBlocks; i++ {
+func addBlocks(t *testing.T, ledger *data.Ledger, blk bookkeeping.Block, numBlocks basics.Round) {
+	for range numBlocks {
+		var err error
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		blk.TxnCommitments, err = blk.PaysetCommit()
 		require.NoError(t, err)
 
-		err := ledger.AddBlock(blk, agreement.Certificate{Round: blk.BlockHeader.Round})
+		err = ledger.AddBlock(blk, agreement.Certificate{Round: blk.BlockHeader.Round})
 		require.NoError(t, err)
 
 		hdr, err := ledger.BlockHdr(blk.BlockHeader.Round)
@@ -256,6 +262,11 @@ func (p *testUnicastPeer) RoutingAddr() []byte {
 }
 
 func (p *testUnicastPeer) Request(ctx context.Context, tag protocol.Tag, topics network.Topics) (resp *network.Response, e error) {
+	select {
+	case <-ctx.Done():
+		return resp, ctx.Err()
+	default:
+	}
 
 	responseChannel := make(chan *network.Response, 1)
 	p.responseChannels[0] = responseChannel
@@ -287,33 +298,14 @@ func (p *testUnicastPeer) Request(ctx context.Context, tag protocol.Tag, topics 
 func (p *testUnicastPeer) Respond(ctx context.Context, reqMsg network.IncomingMessage, outMsg network.OutgoingMessage) (e error) {
 
 	hashKey := uint64(0)
-	channel, found := p.responseChannels[hashKey]
-	if !found {
-	}
+	require.Contains(p.t, p.responseChannels, hashKey)
+	channel := p.responseChannels[hashKey]
 
 	select {
 	case channel <- &network.Response{Topics: outMsg.Topics}:
 	default:
 	}
 
-	return nil
-}
-
-func (p *testUnicastPeer) Version() string {
-	return p.version
-}
-
-func (p *testUnicastPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) error {
-	ps := p.gn.(*httpTestPeerSource)
-	var dispather network.MessageHandler
-	for _, v := range ps.dispatchHandlers {
-		if v.Tag == tag {
-			dispather = v.MessageHandler
-			break
-		}
-	}
-	require.NotNil(p.t, dispather)
-	dispather.Handle(network.IncomingMessage{Tag: tag, Data: msg, Sender: p, Net: p.gn})
 	return nil
 }
 

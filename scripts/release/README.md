@@ -50,13 +50,13 @@ This section briefly describes the expected outcomes of the current build pipeli
 
 1. build
 
-    1. Build (compile) the binaries in a Centos 9 docker container that will then be used by both `deb` and `rpm` packaging.
+    1. Build (compile) the binaries in a Centos 10 docker container that will then be used by both `deb` and `rpm` packaging.
 
-    1. Docker containers will package `deb` and `rpm` artifacts inside of Ubuntu 20.04 and Centos 7 & 8, respectively.
+    1. Docker containers will package `deb` and `rpm` artifacts inside of Ubuntu 24.04 and Centos 10, respectively.
 
     1. Jenkins will then pause to wait for [the only manual part of the build/package/test phase], which is to forward the `gpg-agent` that establishes a direct between the local machine that contains the signing keys and the remote ec2 instance.
 
-    1. Once the signatures have been verified, the all the build artificats (tarballs, `rpm` and `deb` packages, signatures) to an `s3` bucket.  Included in the bucket are the build logs.
+    1. Once the signatures have been verified, the all the build artifacts (tarballs, `rpm` and `deb` packages, signatures) to an `s3` bucket.  Included in the bucket are the build logs.
 
 1. test
 
@@ -70,10 +70,11 @@ This section briefly describes the expected outcomes of the current build pipeli
     - The packages are built from the correct branch and channel and are the correct version.  This done by running `algod -v`.
         + This is done for the following docker containers:
             - quay.io/centos/centos:stream9
-            - fedora:39
-            - fedora:40
-            - ubuntu:20.04
+            - quay.io/centos/centos:stream10
+            - fedora:41
+            - fedora:42
             - ubuntu:22.04
+            - ubuntu:24.04
 
     - Creates a test network using `goal`.
     - et. al.

@@ -1,6 +1,8 @@
 #!/bin/bash
 
-date '+app-stateful-local-test start %Y%m%d_%H%M%S'
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
 
 set -e
 set -x
@@ -24,7 +26,7 @@ APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog ${DIR}/tealprogs
 EXPERROR='invalid ApplicationArgs index 0'
 RES=$(${gcmd} app call --app-id $APPID --from $ACCOUNT 2>&1 || true)
 if [[ $RES != *"${EXPERROR}"* ]]; then
-    date '+app-create-test FAIL call with no args should fail %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL call with no args should fail %Y%m%d_%H%M%S"
     false
 fi
 
@@ -32,7 +34,7 @@ fi
 RES=$(${gcmd} app call --app-id $APPID --app-arg "str:write" --from $ACCOUNT 2>&1 || true)
 EXPERROR='not opted in'
 if [[ $RES != *"${EXPERROR}"* ]]; then
-    date '+app-create-test FAIL writing state should fail if account has not opted in %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL writing state should fail if account has not opted in %Y%m%d_%H%M%S"
     false
 fi
 
@@ -61,7 +63,7 @@ ${gcmd} app delete --app-id $APPID --app-arg "str:hello" --from $ACCOUNT
 RES=$(${gcmd} app call --app-id $APPID --app-arg "str:check" --app-arg "str:bar" --from $ACCOUNT 2>&1 || true)
 EXPERROR='only ClearState is supported'
 if [[ $RES != *"${EXPERROR}"* ]]; then
-    date '+app-create-test FAIL app call should fail if app has been deleted %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL app call should fail if app has been deleted %Y%m%d_%H%M%S"
     false
 fi
 

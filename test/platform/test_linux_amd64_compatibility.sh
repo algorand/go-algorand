@@ -8,10 +8,11 @@ END_FG_COLOR=$(tput sgr0 2>/dev/null)
 
 OS_LIST=(
     quay.io/centos/centos:stream9
-    fedora:39
-    fedora:40
-    ubuntu:20.04
+    quay.io/centos/centos:stream10
+    fedora:41
+    fedora:42
     ubuntu:22.04
+    ubuntu:24.04
 )
 
 FAILED=()

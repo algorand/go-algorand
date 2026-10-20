@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,9 +30,8 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/algorand/go-codec/codec"
-
 	"github.com/algorand/go-deadlock"
+	"github.com/algorand/msgp/msgp"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -120,12 +119,13 @@ type EncodedBlockCert struct {
 }
 
 // PreEncodedBlockCert defines how GetBlockBytes encodes a block and its certificate,
-// using a pre-encoded Block and Certificate in msgpack format.
-//
-//msgp:ignore PreEncodedBlockCert
+// using a pre-encoded Block and Certificate in msgpack format. It must encode to the
+// same bytes as EncodedBlockCert, which is what the fetching side decodes into.
 type PreEncodedBlockCert struct {
-	Block       codec.Raw `codec:"block"`
-	Certificate codec.Raw `codec:"cert"`
+	_struct struct{} `codec:""`
+
+	Block       msgp.Raw `codec:"block"`
+	Certificate msgp.Raw `codec:"cert"`
 }
 
 type fallbackEndpoints struct {
@@ -490,7 +490,7 @@ func RawBlockBytes(l LedgerForBlockService, round basics.Round) ([]byte, error) 
 		return nil, ledgercore.ErrNoEntry{Round: round}
 	}
 
-	return protocol.EncodeReflect(PreEncodedBlockCert{
+	return protocol.Encode(&PreEncodedBlockCert{
 		Block:       blk,
 		Certificate: cert,
 	}), nil
@@ -505,8 +505,8 @@ func makeFallbackEndpoints(log logging.Logger, customFallbackEndpoints string) (
 	if customFallbackEndpoints == "" {
 		return
 	}
-	endpoints := strings.Split(customFallbackEndpoints, ",")
-	for _, ep := range endpoints {
+	endpoints := strings.SplitSeq(customFallbackEndpoints, ",")
+	for ep := range endpoints {
 		if addr.IsMultiaddr(ep) {
 			fe.endpoints = append(fe.endpoints, ep)
 		} else {

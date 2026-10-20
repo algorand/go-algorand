@@ -52,7 +52,7 @@ grp2 = goal.app_call(joe, app_id,
 # Won't work, because v8 can't modify an account (goal.account) that
 # isn't in the `grp2` txn
 assert err
-assert "invalid Account reference "+goal.account in str(err)
+assert "unavailable Account "+goal.account in str(err)
 
 # Now, upgrade program to same thing, but v9
 

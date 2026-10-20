@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,9 +18,11 @@ package catchup
 
 import (
 	"errors"
-	"github.com/algorand/go-algorand/network"
-	"github.com/algorand/go-deadlock"
 	"time"
+
+	"github.com/algorand/go-deadlock"
+
+	"github.com/algorand/go-algorand/network"
 )
 
 // classBasedPeerSelector is a rankPooledPeerSelector that tracks and ranks classes of peers based on their response behavior.
@@ -56,8 +58,13 @@ func (c *classBasedPeerSelector) rankPeer(psp *peerSelectorPeer, rank int) (int,
 		}
 
 		// Peer was in this class, if there was any kind of download issue, we increment the failure count
-		if rank >= peerRankNoBlockForRound {
+		failure := rank >= peerRankNoBlockForRound
+		if failure {
 			wp.downloadFailures++
+		} else {
+			// class usually multiple peers and we do not want to punish the entire class for one peer's failure
+			// by decrementing the downloadFailures
+			wp.downloadFailures = max(wp.downloadFailures-1, 0)
 		}
 
 		break

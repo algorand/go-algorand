@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -114,7 +114,9 @@ func opDupN(cx *EvalContext) error {
 
 	n := int(cx.program[cx.pc+1])
 	finalLen := len(cx.Stack) + n
-	cx.ensureStackCap(finalLen)
+	if err := cx.ensureStackCap(finalLen); err != nil {
+		return err
+	}
 	for i := 0; i < n; i++ {
 		// There will be enough room that this will not allocate
 		cx.Stack = append(cx.Stack, cx.Stack[last])

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,21 +19,24 @@ package ledger
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sort"
 	"strconv"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 func commitSync(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracker, rnd basics.Round) {
@@ -303,7 +306,7 @@ func TestAcctOnline(t *testing.T) {
 				require.NoError(t, err)
 				require.Empty(t, oad)
 			}
-			// check next next account
+			// check next-next account
 			// for the account 2, it set to Offline at round 3
 			// at round 1 + 1 = 2 it online and should te correctly retrieved from DB and lookup
 			nextNextAcctIdx := nextAcctIdx + 1
@@ -870,9 +873,7 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 	copyGenesisAccts := func() []map[basics.Address]basics.AccountData {
 		accounts := []map[basics.Address]basics.AccountData{{}}
 		accounts[0] = make(map[basics.Address]basics.AccountData, numAccts)
-		for addr, ad := range genesisAccts[0] {
-			accounts[0][addr] = ad
-		}
+		maps.Copy(accounts[0], genesisAccts[0])
 		return accounts
 	}
 
@@ -1334,7 +1335,7 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	var foundCount int
 	err = oa.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) error {
 		// read staging = false, excludeBefore = excludeRound
-		it, err2 := tx.MakeOnlineAccountsIter(ctx, false, excludeRound)
+		it, err2 := tx.MakeOrderedOnlineAccountsIter(ctx, false, excludeRound)
 		require.NoError(t, err2)
 		defer it.Close()
 
@@ -1391,7 +1392,7 @@ func compareTopAccounts(a *require.Assertions, testingResult []*ledgercore.Onlin
 			Address:                 expectedAccountsBalances[i].Addr,
 			MicroAlgos:              expectedAccountsBalances[i].MicroAlgos,
 			RewardsBase:             0,
-			NormalizedOnlineBalance: expectedAccountsBalances[i].NormalizedOnlineBalance(config.Consensus[protocol.ConsensusCurrentVersion]),
+			NormalizedOnlineBalance: expectedAccountsBalances[i].AccountData.NormalizedOnlineBalance(config.Consensus[protocol.ConsensusCurrentVersion].RewardUnit),
 			VoteFirstValid:          expectedAccountsBalances[i].VoteFirstValid,
 			VoteLastValid:           expectedAccountsBalances[i].VoteLastValid})
 	}
@@ -1978,10 +1979,7 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 	defer oa.close()
 
 	// close commitSyncer goroutine to prevent possible race between commitSyncer and commitSync
-	ml.trackers.ctxCancel()
-	ml.trackers.ctxCancel = nil
-	<-ml.trackers.commitSyncerClosed
-	ml.trackers.commitSyncerClosed = nil
+	stopCommitSyncer(&ml.trackers)
 
 	// initial precondition checks on online stake
 	_, totals, err := au.LatestTotals()
@@ -2021,12 +2019,12 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 	stakeA := allAccts[0].MicroAlgos
 	statesA := map[acctState]ledgercore.AccountData{
 		acctStateOffline: {AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline, MicroAlgos: stakeA}, VotingData: basics.VotingData{}},
-		acctStateOnline:  {AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online, MicroAlgos: stakeA}, VotingData: basics.VotingData(allAccts[0].OnlineAccountData().VotingData)},
+		acctStateOnline:  {AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online, MicroAlgos: stakeA}, VotingData: basics.VotingData(basics_testing.OnlineAccountData(allAccts[0].AccountData).VotingData)},
 	}
 
 	addrB := allAccts[1].Addr
 	stakeB := allAccts[1].MicroAlgos
-	votingDataB := allAccts[1].OnlineAccountData().VotingData
+	votingDataB := basics_testing.OnlineAccountData(allAccts[1].AccountData).VotingData
 	statesB := map[acctState]ledgercore.AccountData{
 		acctStateOffline: {AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline, MicroAlgos: stakeB}, VotingData: basics.VotingData{}},
 		acctStateOnline:  {AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online, MicroAlgos: stakeB}, VotingData: basics.VotingData(votingDataB)},
@@ -2157,7 +2155,7 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				expiredAccts, err = reader.ExpiredOnlineAccountsForRound(rnd-1, targetVoteRnd, params, 0)
+				expiredAccts, err = reader.ExpiredOnlineAccountsForRound(rnd-1, targetVoteRnd, params.RewardUnit, 0)
 				if err != nil {
 					return err
 				}

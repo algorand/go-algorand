@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
@@ -34,12 +36,11 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/simulation"
+	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
+	helper "github.com/algorand/go-algorand/test/e2e-go/restAPI"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
-
-	helper "github.com/algorand/go-algorand/test/e2e-go/restAPI"
 )
 
 func TestSimulateTxnTracerDevMode(t *testing.T) {
@@ -103,17 +104,25 @@ func TestSimulateTxnTracerDevMode(t *testing.T) {
 	a.Equal(result.LastRound, currentAfterAfterSimulate)
 
 	closingAmount := senderBalance - txn.Fee.Raw - txn.Amount.Raw
+	stat, err := testClient.Status()
+	a.NoError(err)
+	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
+	usage := uint64(stxn.FeeFactor(proto))
+	feesPaid := stxn.Txn.Fee.Raw
 	expectedResult := v2.PreEncodedSimulateResponse{
 		Version:   2,
 		LastRound: result.LastRound, // checked above
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
+				GroupUsage:    &usage,
+				GroupFeesPaid: &feesPaid,
 				Txns: []v2.PreEncodedSimulateTxnResult{
 					{
 						Txn: v2.PreEncodedTxInfo{
 							Txn:           stxn,
 							ClosingAmount: &closingAmount,
 						},
+						FeesPaid: &feesPaid,
 					},
 				},
 			},
@@ -191,17 +200,25 @@ func TestSimulateTransaction(t *testing.T) {
 	a.LessOrEqual(result.LastRound, currentAfterAfterSimulate)
 
 	closingAmount := senderBalance - txn.Fee.Raw - txn.Amount.Raw
+	stat, err := testClient.Status()
+	a.NoError(err)
+	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
+	usage := uint64(stxn.FeeFactor(proto))
+	feesPaid := stxn.Txn.Fee.Raw
 	expectedResult := v2.PreEncodedSimulateResponse{
 		Version:   2,
 		LastRound: result.LastRound, // checked above
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
+				GroupUsage:    &usage,
+				GroupFeesPaid: &feesPaid,
 				Txns: []v2.PreEncodedSimulateTxnResult{
 					{
 						Txn: v2.PreEncodedTxInfo{
 							Txn:           stxn,
 							ClosingAmount: &closingAmount,
 						},
+						FeesPaid: &feesPaid,
 					},
 				},
 			},
@@ -263,9 +280,8 @@ int 1`
 	clearState := ops.Program
 
 	txn, err := testClient.MakeUnsignedApplicationCallTx(
-		0, nil, nil, nil,
-		nil, nil, transactions.NoOpOC,
-		approval, clearState, basics.StateSchema{}, basics.StateSchema{}, 0,
+		0, nil, libgoal.RefBundle{}, transactions.NoOpOC,
+		approval, clearState, basics.StateSchema{}, basics.StateSchema{}, 0, 0,
 	)
 	a.NoError(err)
 	txn, err = testClient.FillUnsignedTxTemplate(senderAddress, 1, 1001, 0, txn)
@@ -279,7 +295,7 @@ int 1`
 	followClient := fixture.GetAlgodClientForController(followControl)
 
 	// Set sync round on follower
-	followerSyncRound := uint64(4)
+	const followerSyncRound basics.Round = 4
 	err = followClient.SetSyncRound(followerSyncRound)
 	a.NoError(err)
 
@@ -288,11 +304,11 @@ int 1`
 
 	// Let the primary node make some progress
 	primaryClient := fixture.GetAlgodClientForController(nc)
-	err = primaryClient.WaitForRoundWithTimeout(followerSyncRound + uint64(cfg.MaxAcctLookback))
+	err = primaryClient.WaitForRoundWithTimeout(followerSyncRound + basics.Round(cfg.MaxAcctLookback))
 	a.NoError(err)
 
 	// Let follower node progress as far as it can
-	err = followClient.WaitForRoundWithTimeout(followerSyncRound + uint64(cfg.MaxAcctLookback) - 1)
+	err = followClient.WaitForRoundWithTimeout(followerSyncRound + basics.Round(cfg.MaxAcctLookback) - 1)
 	a.NoError(err)
 
 	simulateRequest := v2.PreEncodedSimulateRequest{
@@ -323,11 +339,11 @@ int 1`
 	a.Len(result.TxnGroups[0].Txns, 1)
 	a.NotNil(result.TxnGroups[0].Txns[0].Txn.Logs)
 	a.Len(*result.TxnGroups[0].Txns[0].Txn.Logs, 1)
-	a.Equal(followerSyncRound+uint64(cfg.MaxAcctLookback), binary.BigEndian.Uint64((*result.TxnGroups[0].Txns[0].Txn.Logs)[0]))
+	a.EqualValues(followerSyncRound+basics.Round(cfg.MaxAcctLookback), binary.BigEndian.Uint64((*result.TxnGroups[0].Txns[0].Txn.Logs)[0]))
 
 	// Test with previous rounds
-	for i := uint64(0); i < cfg.MaxAcctLookback; i++ {
-		simulateRequest.Round = basics.Round(followerSyncRound + i)
+	for i := range basics.Round(cfg.MaxAcctLookback) {
+		simulateRequest.Round = followerSyncRound + i
 		result, err = simulateTransactions(simulateRequest)
 		a.NoError(err)
 		a.Len(result.TxnGroups, 1)
@@ -339,7 +355,7 @@ int 1`
 	}
 
 	// If the round is too far back, we should get an error saying so.
-	simulateRequest.Round = basics.Round(followerSyncRound - 3)
+	simulateRequest.Round = followerSyncRound - 3
 	endTime := time.Now().Add(6 * time.Second)
 	for {
 		result, err = simulateTransactions(simulateRequest)
@@ -388,28 +404,36 @@ func TestSimulateWithOptionalSignatures(t *testing.T) {
 	txn, err := testClient.ConstructPayment(senderAddress, senderAddress, 0, 1, nil, "", [32]byte{}, 0, 0)
 	a.NoError(err)
 
+	unsignedStxn := transactions.SignedTxn{Txn: txn} // no signature, but must be SignedTxn type
+
 	simulateRequest := v2.PreEncodedSimulateRequest{
-		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
-			{
-				Txns: []transactions.SignedTxn{{Txn: txn}}, // no signature
-			},
-		},
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{{
+			Txns: []transactions.SignedTxn{unsignedStxn},
+		}},
 		AllowEmptySignatures: true,
 	}
 	result, err := testClient.SimulateTransactions(simulateRequest)
 	a.NoError(err)
 
 	allowEmptySignatures := true
+	stat, err := testClient.Status()
+	a.NoError(err)
+	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
+	usage := uint64(unsignedStxn.FeeFactor(proto))
+	feesPaid := txn.Fee.Raw
 	expectedResult := v2.PreEncodedSimulateResponse{
 		Version:   2,
 		LastRound: result.LastRound,
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
+				GroupUsage:    &usage,
+				GroupFeesPaid: &feesPaid,
 				Txns: []v2.PreEncodedSimulateTxnResult{
 					{
 						Txn: v2.PreEncodedTxInfo{
 							Txn: transactions.SignedTxn{Txn: txn},
 						},
+						FeesPaid: &feesPaid,
 					},
 				},
 			},
@@ -452,7 +476,7 @@ int 0
 ==
 bnz final
 `
-	for i := 0; i < 17; i++ {
+	for range 17 {
 		prog += `byte "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 log
 `
@@ -471,9 +495,8 @@ int 1`
 
 	// create app
 	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(
-		0, nil, nil, nil,
-		nil, nil, transactions.NoOpOC,
-		approval, clearState, gl, lc, 0,
+		0, nil, libgoal.RefBundle{}, transactions.NoOpOC,
+		approval, clearState, gl, lc, 0, 0,
 	)
 	a.NoError(err)
 	appCreateTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCreateTxn)
@@ -501,8 +524,7 @@ int 1`
 
 	// construct app call
 	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		uint64(createdAppID), [][]byte{[]byte("first-arg")},
-		nil, nil, nil, nil,
+		createdAppID, [][]byte{[]byte("first-arg")}, libgoal.RefBundle{}, 0,
 	)
 	a.NoError(err)
 	appCallTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCallTxn)
@@ -521,12 +543,17 @@ int 1`
 	a.NoError(err)
 
 	var logs [][]byte
-	for i := 0; i < 17; i++ {
+	for range 17 {
 		logs = append(logs, []byte("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
 	}
 
-	budgetAdded, budgetUsed := uint64(700), uint64(40)
-	maxLogSize, maxLogCalls := uint64(65536), uint64(2048)
+	budgetAdded, budgetUsed := 700, 40
+	maxLogSize, maxLogCalls := 65536, 2048
+	stat, err := testClient.Status()
+	a.NoError(err)
+	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
+	usage := uint64(appCallTxnSigned.FeeFactor(proto))
+	feesPaid := appCallTxnSigned.Txn.Fee.Raw
 
 	expectedResult := v2.PreEncodedSimulateResponse{
 		Version:   2,
@@ -537,6 +564,8 @@ int 1`
 		},
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
+				GroupUsage:    &usage,
+				GroupFeesPaid: &feesPaid,
 				Txns: []v2.PreEncodedSimulateTxnResult{
 					{
 						Txn: v2.PreEncodedTxInfo{
@@ -544,6 +573,7 @@ int 1`
 							Logs: &logs,
 						},
 						AppBudgetConsumed: &budgetUsed,
+						FeesPaid:          &feesPaid,
 					},
 				},
 				AppBudgetAdded:    &budgetAdded,
@@ -599,9 +629,8 @@ int 1`
 
 	// create app
 	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(
-		0, nil, nil, nil,
-		nil, nil, transactions.NoOpOC,
-		approval, clearState, gl, lc, 0,
+		0, nil, libgoal.RefBundle{}, transactions.NoOpOC,
+		approval, clearState, gl, lc, 0, 0,
 	)
 	a.NoError(err)
 	appCreateTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCreateTxn)
@@ -629,7 +658,7 @@ int 1`
 
 	// construct app call
 	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		uint64(createdAppID), nil, nil, nil, nil, nil,
+		createdAppID, nil, libgoal.RefBundle{}, 0,
 	)
 	a.NoError(err)
 	appCallTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCallTxn)
@@ -637,7 +666,7 @@ int 1`
 	appCallTxnSigned, err := testClient.SignTransactionWithWallet(wh, nil, appCallTxn)
 	a.NoError(err)
 
-	extraBudget := uint64(704)
+	extraBudget := 704
 	resp, err := testClient.SimulateTransactions(v2.PreEncodedSimulateRequest{
 		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
 			{
@@ -648,7 +677,12 @@ int 1`
 	})
 	a.NoError(err)
 
-	budgetAdded, budgetUsed := uint64(1404), uint64(1404)
+	budgetAdded, budgetUsed := 1404, 1404
+	stat, err := testClient.Status()
+	a.NoError(err)
+	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
+	usage := uint64(appCallTxnSigned.FeeFactor(proto))
+	feesPaid := appCallTxnSigned.Txn.Fee.Raw
 
 	expectedResult := v2.PreEncodedSimulateResponse{
 		Version:       2,
@@ -656,10 +690,13 @@ int 1`
 		EvalOverrides: &model.SimulationEvalOverrides{ExtraOpcodeBudget: &extraBudget},
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
+				GroupUsage:    &usage,
+				GroupFeesPaid: &feesPaid,
 				Txns: []v2.PreEncodedSimulateTxnResult{
 					{
 						Txn:               v2.PreEncodedTxInfo{Txn: appCallTxnSigned},
 						AppBudgetConsumed: &budgetUsed,
+						FeesPaid:          &feesPaid,
 					},
 				},
 				AppBudgetAdded:    &budgetAdded,
@@ -772,7 +809,7 @@ main_l6:
 int 1
 return`
 
-func goValuesToAvmValues(goValues ...interface{}) *[]model.AvmValue {
+func goValuesToAvmValues(goValues ...any) *[]model.AvmValue {
 	if len(goValues) == 0 {
 		return nil
 	}
@@ -816,7 +853,7 @@ func goValuesToAvmValues(goValues ...interface{}) *[]model.AvmValue {
 				Uint: valToNil(&converted),
 			}
 		default:
-			panic("unexpected type inferred from interface{}")
+			panic("unexpected type inferred from any")
 		}
 	}
 	return &modelValues
@@ -868,7 +905,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 	// create app and get the application ID
 	appCreateTxn, err := testClient.MakeUnsignedAppCreateTx(
 		transactions.NoOpOC, approval, clearState, gl,
-		lc, nil, nil, nil, nil, nil, 0)
+		lc, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	appCreateTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCreateTxn)
 	a.NoError(err)
@@ -894,7 +931,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 
 	// construct app calls
 	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		uint64(futureAppID), [][]byte{uint64ToBytes(uint64(MaxDepth))}, nil, nil, nil, nil,
+		futureAppID, [][]byte{uint64ToBytes(uint64(MaxDepth))}, libgoal.RefBundle{}, 0,
 	)
 	a.NoError(err)
 	appCallTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee*uint64(3*MaxDepth+2), appCallTxn)
@@ -960,13 +997,13 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 		// ==
 		{
 			Pc:             9,
-			StackPopCount:  toPtr[uint64](2),
+			StackPopCount:  toPtr(2),
 			StackAdditions: goValuesToAvmValues(1),
 		},
 		// bnz main_l6
 		{
 			Pc:            10,
-			StackPopCount: toPtr[uint64](1),
+			StackPopCount: toPtr(1),
 		},
 		// int 1
 		{
@@ -977,7 +1014,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 		{
 			Pc:             150,
 			StackAdditions: goValuesToAvmValues(1),
-			StackPopCount:  toPtr[uint64](1),
+			StackPopCount:  toPtr(1),
 		},
 	}
 
@@ -1002,12 +1039,12 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             9,
 				StackAdditions: goValuesToAvmValues(false),
-				StackPopCount:  toPtr[uint64](2),
+				StackPopCount:  toPtr(2),
 			},
 			// bnz main_l6
 			{
 				Pc:            10,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// txn NumAppArgs
 			{
@@ -1022,13 +1059,13 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// ==
 			{
 				Pc:             16,
-				StackPopCount:  toPtr[uint64](2),
+				StackPopCount:  toPtr(2),
 				StackAdditions: goValuesToAvmValues(true),
 			},
 			// bnz main_l3
 			{
 				Pc:            17,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// global CurrentApplicationID
 			{
@@ -1039,17 +1076,17 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             23,
 				StackAdditions: goValuesToAvmValues(approval, 1),
-				StackPopCount:  toPtr[uint64](1),
+				StackPopCount:  toPtr(1),
 			},
 			// store 1
 			{
 				Pc:            25,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// store 0
 			{
 				Pc:            27,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// global CurrentApplicationID
 			{
@@ -1060,17 +1097,17 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             31,
 				StackAdditions: goValuesToAvmValues(clearState, 1),
-				StackPopCount:  toPtr[uint64](1),
+				StackPopCount:  toPtr(1),
 			},
 			// store 3
 			{
 				Pc:            33,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// store 2
 			{
 				Pc:            35,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// global CurrentApplicationAddress
 			{
@@ -1081,17 +1118,17 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             39,
 				StackAdditions: goValuesToAvmValues(uint64(3-layer)*MinBalance, 1),
-				StackPopCount:  toPtr[uint64](1),
+				StackPopCount:  toPtr(1),
 			},
 			// store 5
 			{
 				Pc:            41,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// store 4
 			{
 				Pc:            43,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// load 1
 			{
@@ -1101,7 +1138,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// assert
 			{
 				Pc:            47,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// load 3
 			{
@@ -1111,7 +1148,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// assert
 			{
 				Pc:            50,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// load 5
 			{
@@ -1121,7 +1158,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// assert
 			{
 				Pc:            53,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// int 2
 			{
@@ -1137,24 +1174,24 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             59,
 				StackAdditions: goValuesToAvmValues(uint64(MaxDepth - layer)),
-				StackPopCount:  toPtr[uint64](1),
+				StackPopCount:  toPtr(1),
 			},
 			// exp
 			{
 				Pc:             60,
 				StackAdditions: goValuesToAvmValues(1 << (MaxDepth - layer)),
-				StackPopCount:  toPtr[uint64](2),
+				StackPopCount:  toPtr(2),
 			},
 			// itob
 			{
 				Pc:             61,
 				StackAdditions: goValuesToAvmValues(uint64ToBytes(1 << uint64(MaxDepth-layer))),
-				StackPopCount:  toPtr[uint64](1),
+				StackPopCount:  toPtr(1),
 			},
 			// log
 			{
 				Pc:            62,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// txna ApplicationArgs 0
 			{
@@ -1165,7 +1202,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             66,
 				StackAdditions: goValuesToAvmValues(MaxDepth - layer),
-				StackPopCount:  toPtr[uint64](1),
+				StackPopCount:  toPtr(1),
 			},
 			// int 0
 			{
@@ -1176,12 +1213,12 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             68,
 				StackAdditions: goValuesToAvmValues(MaxDepth-layer > 0),
-				StackPopCount:  toPtr[uint64](2),
+				StackPopCount:  toPtr(2),
 			},
 			// bnz main_l5
 			{
 				Pc:            69,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// itxn_begin
 			{
@@ -1195,7 +1232,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// itxn_field TypeEnum
 			{
 				Pc:            76,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// int 0
 			{
@@ -1205,7 +1242,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// itxn_field Fee
 			{
 				Pc:            79,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// load 0
 			{
@@ -1215,7 +1252,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// itxn_field ApprovalProgram
 			{
 				Pc:            83,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// load 2
 			{
@@ -1225,12 +1262,12 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// itxn_field ClearStateProgram
 			{
 				Pc:            87,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// itxn_submit
 			{
 				Pc:            89,
-				SpawnedInners: &[]uint64{0},
+				SpawnedInners: &[]int{0},
 			},
 			// itxn_begin
 			{
@@ -1244,7 +1281,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// itxn_field TypeEnum
 			{
 				Pc:            92,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// int 0
 			{
@@ -1254,7 +1291,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// itxn_field Fee
 			{
 				Pc:            95,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// load 4
 			{
@@ -1269,13 +1306,13 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// -
 			{
 				Pc:             103,
-				StackPopCount:  toPtr[uint64](2),
+				StackPopCount:  toPtr(2),
 				StackAdditions: goValuesToAvmValues(uint64(2-layer) * MinBalance),
 			},
 			// itxn_field Amount
 			{
 				Pc:            104,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// byte "appID"
 			{
@@ -1291,24 +1328,24 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             116,
 				StackAdditions: goValuesToAvmValues(uint64ToBytes(uint64(appID) + 3)),
-				StackPopCount:  toPtr[uint64](1),
+				StackPopCount:  toPtr(1),
 			},
 			// concat
 			{
 				Pc:             117,
 				StackAdditions: goValuesToAvmValues([]byte("appID" + string(uint64ToBytes(uint64(appID)+3)))),
-				StackPopCount:  toPtr[uint64](2),
+				StackPopCount:  toPtr(2),
 			},
 			// sha512_256
 			{
 				Pc:             118,
-				StackAdditions: goValuesToAvmValues(crypto.Digest(basics.AppIndex(uint64(appID) + 3).Address()).ToSlice()),
-				StackPopCount:  toPtr[uint64](1),
+				StackAdditions: goValuesToAvmValues(crypto.Digest((appID + 3).Address()).ToSlice()),
+				StackPopCount:  toPtr(1),
 			},
 			// itxn_field Receiver
 			{
 				Pc:            119,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			{
 				Pc: 121,
@@ -1321,7 +1358,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// itxn_field TypeEnum
 			{
 				Pc:            123,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// txna ApplicationArgs 0
 			{
@@ -1332,7 +1369,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             128,
 				StackAdditions: goValuesToAvmValues(MaxDepth - layer),
-				StackPopCount:  toPtr[uint64](1),
+				StackPopCount:  toPtr(1),
 			},
 			// int 1
 			{
@@ -1343,18 +1380,18 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             130,
 				StackAdditions: goValuesToAvmValues(MaxDepth - layer - 1),
-				StackPopCount:  toPtr[uint64](2),
+				StackPopCount:  toPtr(2),
 			},
 			// itob
 			{
 				Pc:             131,
 				StackAdditions: goValuesToAvmValues(uint64ToBytes(uint64(MaxDepth - layer - 1))),
-				StackPopCount:  toPtr[uint64](1),
+				StackPopCount:  toPtr(1),
 			},
 			// itxn_field ApplicationArgs
 			{
 				Pc:            132,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// itxn CreatedApplicationID
 			{
@@ -1364,7 +1401,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// itxn_field ApplicationID
 			{
 				Pc:            136,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// int 0
 			{
@@ -1374,7 +1411,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// itxn_field Fee
 			{
 				Pc:            139,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// int DeleteApplication
 			{
@@ -1384,12 +1421,12 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// itxn_field OnCompletion
 			{
 				Pc:            143,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// itxn_submit
 			{
 				Pc:            145,
-				SpawnedInners: &[]uint64{1, 2},
+				SpawnedInners: &[]int{1, 2},
 			},
 			// b main_l4
 			{
@@ -1404,7 +1441,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             73,
 				StackAdditions: goValuesToAvmValues(1),
-				StackPopCount:  toPtr[uint64](1),
+				StackPopCount:  toPtr(1),
 			},
 		}
 	}
@@ -1428,12 +1465,12 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             9,
 				StackAdditions: goValuesToAvmValues(false),
-				StackPopCount:  toPtr[uint64](2),
+				StackPopCount:  toPtr(2),
 			},
 			// bnz main_l6
 			{
 				Pc:            10,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// txn NumAppArgs
 			{
@@ -1448,13 +1485,13 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// ==
 			{
 				Pc:             16,
-				StackPopCount:  toPtr[uint64](2),
+				StackPopCount:  toPtr(2),
 				StackAdditions: goValuesToAvmValues(true),
 			},
 			// bnz main_l3
 			{
 				Pc:            17,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// global CurrentApplicationID
 			{
@@ -1465,17 +1502,17 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             23,
 				StackAdditions: goValuesToAvmValues(approval, 1),
-				StackPopCount:  toPtr[uint64](1),
+				StackPopCount:  toPtr(1),
 			},
 			// store 1
 			{
 				Pc:            25,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// store 0
 			{
 				Pc:            27,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// global CurrentApplicationID
 			{
@@ -1486,17 +1523,17 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             31,
 				StackAdditions: goValuesToAvmValues(clearState, 1),
-				StackPopCount:  toPtr[uint64](1),
+				StackPopCount:  toPtr(1),
 			},
 			// store 3
 			{
 				Pc:            33,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// store 2
 			{
 				Pc:            35,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// global CurrentApplicationAddress
 			{
@@ -1507,17 +1544,17 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             39,
 				StackAdditions: goValuesToAvmValues(uint64(3-layer)*MinBalance, 1),
-				StackPopCount:  toPtr[uint64](1),
+				StackPopCount:  toPtr(1),
 			},
 			// store 5
 			{
 				Pc:            41,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// store 4
 			{
 				Pc:            43,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// load 1
 			{
@@ -1527,7 +1564,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// assert
 			{
 				Pc:            47,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// load 3
 			{
@@ -1537,7 +1574,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// assert
 			{
 				Pc:            50,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// load 5
 			{
@@ -1547,7 +1584,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// assert
 			{
 				Pc:            53,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// int 2
 			{
@@ -1563,24 +1600,24 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             59,
 				StackAdditions: goValuesToAvmValues(uint64(MaxDepth - layer)),
-				StackPopCount:  toPtr[uint64](1),
+				StackPopCount:  toPtr(1),
 			},
 			// exp
 			{
 				Pc:             60,
 				StackAdditions: goValuesToAvmValues(1 << (MaxDepth - layer)),
-				StackPopCount:  toPtr[uint64](2),
+				StackPopCount:  toPtr(2),
 			},
 			// itob
 			{
 				Pc:             61,
 				StackAdditions: goValuesToAvmValues(uint64ToBytes(1 << uint64(MaxDepth-layer))),
-				StackPopCount:  toPtr[uint64](1),
+				StackPopCount:  toPtr(1),
 			},
 			// log
 			{
 				Pc:            62,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// txna ApplicationArgs 0
 			{
@@ -1591,7 +1628,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             66,
 				StackAdditions: goValuesToAvmValues(MaxDepth - layer),
-				StackPopCount:  toPtr[uint64](1),
+				StackPopCount:  toPtr(1),
 			},
 			// int 0
 			{
@@ -1602,12 +1639,12 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             68,
 				StackAdditions: goValuesToAvmValues(MaxDepth-layer > 0),
-				StackPopCount:  toPtr[uint64](2),
+				StackPopCount:  toPtr(2),
 			},
 			// bnz main_l5
 			{
 				Pc:            69,
-				StackPopCount: toPtr[uint64](1),
+				StackPopCount: toPtr(1),
 			},
 			// int 1
 			{
@@ -1618,7 +1655,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             73,
 				StackAdditions: goValuesToAvmValues(1),
-				StackPopCount:  toPtr[uint64](1),
+				StackPopCount:  toPtr(1),
 			},
 		}
 	}
@@ -1716,7 +1753,7 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 	// create app and get the application ID
 	appCreateTxn, err := testClient.MakeUnsignedAppCreateTx(
 		transactions.NoOpOC, approval, clearState, gl,
-		lc, nil, nil, nil, nil, nil, 0)
+		lc, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	appCreateTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCreateTxn)
 	a.NoError(err)
@@ -1736,7 +1773,7 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 
 	// construct app calls
 	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		uint64(futureAppID), [][]byte{}, nil, nil, nil, nil,
+		futureAppID, [][]byte{}, libgoal.RefBundle{}, 0,
 	)
 	a.NoError(err)
 	appCallTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appCallTxn)
@@ -1910,7 +1947,7 @@ end:
 	// create app and get the application ID
 	appCreateTxn, err := testClient.MakeUnsignedAppCreateTx(
 		transactions.NoOpOC, approval, clearState, gl,
-		lc, nil, nil, nil, nil, nil, 0)
+		lc, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	appCreateTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCreateTxn)
 	a.NoError(err)
@@ -1930,18 +1967,18 @@ end:
 
 	// construct app call "global"
 	appCallGlobalTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		uint64(futureAppID), [][]byte{[]byte("global")}, nil, nil, nil, nil,
+		futureAppID, [][]byte{[]byte("global")}, libgoal.RefBundle{}, 0,
 	)
 	a.NoError(err)
 	appCallGlobalTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appCallGlobalTxn)
 	a.NoError(err)
 	// construct app optin
-	appOptInTxn, err := testClient.MakeUnsignedAppOptInTx(uint64(futureAppID), nil, nil, nil, nil, nil)
+	appOptInTxn, err := testClient.MakeUnsignedAppOptInTx(futureAppID, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	appOptInTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appOptInTxn)
 	// construct app call "global"
 	appCallLocalTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		uint64(futureAppID), [][]byte{[]byte("local")}, nil, nil, nil, nil,
+		futureAppID, [][]byte{[]byte("local")}, libgoal.RefBundle{}, 0,
 	)
 	a.NoError(err)
 	appCallLocalTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appCallLocalTxn)
@@ -1991,7 +2028,7 @@ end:
 	a.Nil(resp.TxnGroups[0].FailureMessage)
 	a.Len(resp.TxnGroups[0].Txns, 3)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		a.NotNil(resp.TxnGroups[0].Txns[i].TransactionTrace.ApprovalProgramHash)
 		a.Equal(approvalHash.ToSlice(), *resp.TxnGroups[0].Txns[i].TransactionTrace.ApprovalProgramHash)
 	}
@@ -2192,7 +2229,7 @@ end:
 	// create app and get the application ID
 	appCreateTxn, err := testClient.MakeUnsignedAppCreateTx(
 		transactions.NoOpOC, approval, clearState, gl,
-		lc, nil, nil, nil, nil, nil, 0)
+		lc, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	appCreateTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCreateTxn)
 	a.NoError(err)
@@ -2212,18 +2249,18 @@ end:
 
 	// construct app call "global"
 	appCallGlobalTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		uint64(futureAppID), [][]byte{[]byte("global")}, nil, nil, nil, nil,
+		futureAppID, [][]byte{[]byte("global")}, libgoal.RefBundle{}, 0,
 	)
 	a.NoError(err)
 	appCallGlobalTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appCallGlobalTxn)
 	a.NoError(err)
 	// construct app optin
-	appOptInTxn, err := testClient.MakeUnsignedAppOptInTx(uint64(futureAppID), nil, nil, nil, nil, nil)
+	appOptInTxn, err := testClient.MakeUnsignedAppOptInTx(futureAppID, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	appOptInTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appOptInTxn)
 	// construct app call "local"
 	appCallLocalTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		uint64(futureAppID), [][]byte{[]byte("local")}, nil, nil, nil, nil,
+		futureAppID, [][]byte{[]byte("local")}, libgoal.RefBundle{}, 0,
 	)
 	a.NoError(err)
 	appCallLocalTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appCallLocalTxn)
@@ -2520,7 +2557,7 @@ func TestSimulateWithUnnamedResources(t *testing.T) {
 	lc := basics.StateSchema{}
 
 	// create app
-	txn, err = testClient.MakeUnsignedAppCreateTx(transactions.OptInOC, alwaysApprove, alwaysApprove, gl, lc, nil, nil, nil, nil, nil, 0)
+	txn, err = testClient.MakeUnsignedAppCreateTx(transactions.OptInOC, alwaysApprove, alwaysApprove, gl, lc, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	txn, err = testClient.FillUnsignedTxTemplate(otherAddress, 0, 0, 0, txn)
 	a.NoError(err)
@@ -2585,7 +2622,7 @@ assert
 
 // Box access
 byte "A"
-int 1025
+int 2049						// need three refs with old quota, two after the bump (we only test latest)
 box_create
 assert
 
@@ -2598,7 +2635,7 @@ int 1
 	approval := ops.Program
 
 	// create app
-	txn, err = testClient.MakeUnsignedAppCreateTx(transactions.NoOpOC, approval, alwaysApprove, gl, lc, nil, nil, nil, nil, nil, 0)
+	txn, err = testClient.MakeUnsignedAppCreateTx(transactions.NoOpOC, approval, alwaysApprove, gl, lc, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	txn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, txn)
 	a.NoError(err)
@@ -2624,7 +2661,7 @@ int 1
 
 	// construct app call
 	txn, err = testClient.MakeUnsignedAppNoOpTx(
-		uint64(testAppID), nil, nil, nil, nil, nil,
+		testAppID, nil, libgoal.RefBundle{}, 0,
 	)
 	a.NoError(err)
 	txn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, txn)
@@ -2642,8 +2679,8 @@ int 1
 		AllowUnnamedResources: false,
 	})
 	a.NoError(err)
-	a.Contains(*resp.TxnGroups[0].FailureMessage, "logic eval error: invalid Account reference "+otherAddress)
-	a.Equal([]uint64{0}, *resp.TxnGroups[0].FailedAt)
+	a.Contains(*resp.TxnGroups[0].FailureMessage, "logic eval error: unavailable Account "+otherAddress)
+	a.Equal([]int{0}, *resp.TxnGroups[0].FailedAt)
 
 	// It should work with AllowUnnamedResources=true
 	resp, err = testClient.SimulateTransactions(v2.PreEncodedSimulateRequest{
@@ -2658,20 +2695,25 @@ int 1
 
 	expectedUnnamedGroupResources := model.SimulateUnnamedResourcesAccessed{
 		Accounts:     &[]string{otherAddress},
-		Assets:       &[]uint64{assetID},
-		Apps:         &[]uint64{uint64(otherAppID)},
-		Boxes:        &[]model.BoxReference{{App: uint64(testAppID), Name: []byte("A")}},
-		ExtraBoxRefs: toPtr[uint64](1),
+		Assets:       &[]basics.AssetIndex{assetID},
+		Apps:         &[]basics.AppIndex{otherAppID},
+		Boxes:        &[]model.BoxReference{{App: testAppID, Name: []byte("A")}},
+		ExtraBoxRefs: toPtr(1),
 		AssetHoldings: &[]model.AssetHoldingReference{
 			{Account: otherAddress, Asset: assetID},
 		},
 		AppLocals: &[]model.ApplicationLocalReference{
-			{Account: otherAddress, App: uint64(otherAppID)},
+			{Account: otherAddress, App: otherAppID},
 		},
 	}
 
-	budgetAdded, budgetUsed := uint64(700), uint64(40)
+	budgetAdded, budgetUsed := 700, 40
 	allowUnnamedResources := true
+	stat, err := testClient.Status()
+	a.NoError(err)
+	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
+	usage := uint64(stxn.FeeFactor(proto))
+	feesPaid := stxn.Txn.Fee.Raw
 
 	expectedResult := v2.PreEncodedSimulateResponse{
 		Version:   2,
@@ -2681,10 +2723,13 @@ int 1
 		},
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
+				GroupUsage:    &usage,
+				GroupFeesPaid: &feesPaid,
 				Txns: []v2.PreEncodedSimulateTxnResult{
 					{
 						Txn:               v2.PreEncodedTxInfo{Txn: stxn},
 						AppBudgetConsumed: &budgetUsed,
+						FeesPaid:          &feesPaid,
 					},
 				},
 				AppBudgetAdded:           &budgetAdded,
@@ -2736,12 +2781,15 @@ func TestSimulateWithFixSigners(t *testing.T) {
 	rekeyTxn.Group = gid
 	txn.Group = gid
 
+	// Snapshot after RekeyTo and Group are set, so the submitted (and expected)
+	// SignedTxns carry the group id and rekey.
+	rekeyStxn := transactions.SignedTxn{Txn: rekeyTxn} // not actually signed
+	stxn := transactions.SignedTxn{Txn: txn}           // not actually signed
+
 	simulateRequest := v2.PreEncodedSimulateRequest{
-		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
-			{
-				Txns: []transactions.SignedTxn{{Txn: rekeyTxn}, {Txn: txn}},
-			},
-		},
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{{
+			Txns: []transactions.SignedTxn{rekeyStxn, stxn},
+		}},
 		AllowEmptySignatures: true,
 		FixSigners:           true,
 	}
@@ -2751,22 +2799,31 @@ func TestSimulateWithFixSigners(t *testing.T) {
 	allowEmptySignatures := true
 	fixSigners := true
 	authAddrStr := authAddr.String()
+	stat, err := testClient.Status()
+	a.NoError(err)
+	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
+	rekeyUsage := uint64(rekeyStxn.FeeFactor(proto))
+	rekeyFeesPaid := rekeyTxn.Fee.Raw
+	txnUsage := uint64(stxn.FeeFactor(proto))
+	txnFeesPaid := txn.Fee.Raw
+	totalUsage := rekeyUsage + txnUsage
+	totalFeesPaid := rekeyFeesPaid + txnFeesPaid
 	expectedResult := v2.PreEncodedSimulateResponse{
 		Version:   2,
 		LastRound: result.LastRound,
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
+				GroupUsage:    &totalUsage,
+				GroupFeesPaid: &totalFeesPaid,
 				Txns: []v2.PreEncodedSimulateTxnResult{
 					{
-						Txn: v2.PreEncodedTxInfo{
-							Txn: transactions.SignedTxn{Txn: rekeyTxn},
-						},
+						Txn:      v2.PreEncodedTxInfo{Txn: rekeyStxn},
+						FeesPaid: &rekeyFeesPaid,
 					},
 					{
-						Txn: v2.PreEncodedTxInfo{
-							Txn: transactions.SignedTxn{Txn: txn},
-						},
+						Txn:         v2.PreEncodedTxInfo{Txn: stxn},
 						FixedSigner: &authAddrStr,
+						FeesPaid:    &txnFeesPaid,
 					},
 				},
 			},

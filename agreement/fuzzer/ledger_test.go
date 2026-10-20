@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,16 +19,19 @@ package fuzzer
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math/rand"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-deadlock"
 )
 
 const randseed = 0
@@ -151,11 +154,8 @@ func makeTestLedger(state map[basics.Address]basics.AccountData, sync testLedger
 	l.certs = make(map[basics.Round]agreement.Certificate)
 	l.nextRound = 1
 
-	// deep copy of state
 	l.state = make(map[basics.Address]basics.AccountData)
-	for k, v := range state {
-		l.state[k] = v
-	}
+	maps.Copy(l.state, state)
 
 	l.notifications = make(map[basics.Round]signal)
 	l.EnsuringDigestStartCh = make(chan struct{})
@@ -241,7 +241,7 @@ func (l *testLedger) LookupAgreement(r basics.Round, a basics.Address) (basics.O
 		err := fmt.Errorf("Lookup called on future round: %d >= %d! (this is probably a bug)", r, l.nextRound)
 		panic(err)
 	}
-	return l.state[a].OnlineAccountData(), nil
+	return basics_testing.OnlineAccountData(l.state[a]), nil
 }
 
 func (l *testLedger) Circulation(r basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
@@ -256,7 +256,7 @@ func (l *testLedger) Circulation(r basics.Round, voteRnd basics.Round) (basics.M
 	var sum basics.MicroAlgos
 	var overflowed bool
 	for _, rec := range l.state {
-		sum, overflowed = basics.OAddA(sum, rec.OnlineAccountData().VotingStake())
+		sum, overflowed = basics.OAddA(sum, basics_testing.OnlineAccountData(rec).VotingStake())
 		if overflowed {
 			panic("circulation computation overflowed")
 		}

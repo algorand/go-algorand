@@ -1,4 +1,4 @@
-FROM ubuntu:20.04
+FROM ubuntu:24.04
 ARG GOLANG_VERSION
 
 RUN apt-get update && apt-get install -y git wget autoconf build-essential shellcheck

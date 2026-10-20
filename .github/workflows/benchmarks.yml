@@ -17,13 +17,14 @@ jobs:
     name: Performance regression check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: 'go.mod'
+      - uses: actions/checkout@v7
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
       - run: go version
       - name: Build go-algorand
-        run: scripts/travis/build.sh
+        run: |
+          export SKIP_GO_INSTALLATION=True
+          scripts/travis/build.sh
       # BenchmarkUintMath - Serves as a proxy for AVM `eval` performance.
       # Performance degradations suggest either or both:  (1) op code
       # degradation, (2) `eval` degradation.  (2) suggests a broader performance
@@ -51,7 +52,7 @@ jobs:
           comment-on-alert: true
       - name: Slack Notification
         env:
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          curl -X POST --data-urlencode "payload={\"text\": \"Benchmark workflow failed. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \"}" $SLACK_WEBHOOK
+          curl -X POST --data-urlencode "payload={\"text\": \"Benchmark workflow failed. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \"}" $SLACK_WEBHOOK_URL
         if: ${{ failure() && (contains(github.ref_name, 'rel/nightly') || contains(github.ref_name, 'rel/beta') || contains(github.ref_name, 'rel/stable') || contains(github.ref_name, 'master')) }}

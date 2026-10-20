@@ -1,5 +1,6 @@
 {
     "algorand_node_log" : {
+        "$schema": "https://lnav.org/schemas/format-v1.schema.json",
         "title" : "Algorand Node Log Format",
         "description" : "Log format for logrus, used by go-algorand.",
         "url" : "https://github.com/sirupsen/logrus",

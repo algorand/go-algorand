@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,13 +20,11 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/protocol"
-
-	//"github.com/algorand/go-algorand/data/bookkeeping"
-
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
@@ -176,11 +174,12 @@ func RandomAppParams() basics.AppParams {
 	}
 
 	ap := basics.AppParams{
-		ApprovalProgram:   make([]byte, int(crypto.RandUint63())%config.MaxAppProgramLen),
-		ClearStateProgram: make([]byte, int(crypto.RandUint63())%config.MaxAppProgramLen),
+		ApprovalProgram:   make([]byte, int(crypto.RandUint63())%bounds.MaxAppProgramLen),
+		ClearStateProgram: make([]byte, int(crypto.RandUint63())%bounds.MaxAppProgramLen),
 		GlobalState:       make(basics.TealKeyValue),
 		StateSchemas:      schemas,
 		ExtraProgramPages: uint32(crypto.RandUint64() % 4),
+		Version:           crypto.RandUint64() % 10,
 	}
 	if len(ap.ApprovalProgram) > 0 {
 		crypto.RandBytes(ap.ApprovalProgram[:])
@@ -192,6 +191,16 @@ func RandomAppParams() basics.AppParams {
 	} else {
 		ap.ClearStateProgram = nil
 	}
+
+	// The can only be a sponsor if there's extra storage
+	if ap.ExtraProgramPages > 0 && !ap.StateSchemas.GlobalStateSchema.Empty() {
+		if crypto.RandUint63()%2 == 0 {
+			crypto.RandBytes(ap.SizeSponsor[:])
+		}
+	}
+
+	ap.ForeignBoxReads = crypto.RandUint64()%3 == 1
+	ap.FamilyBoxAccess = crypto.RandUint64()%4 == 1
 
 	for i := uint64(0); i < ap.StateSchemas.GlobalStateSchema.NumUint; i++ {
 		var keyName string
@@ -215,7 +224,7 @@ func RandomAppParams() basics.AppParams {
 
 		var bytes []byte
 		if crypto.RandUint64()%5 != 0 {
-			bytes = make([]byte, crypto.RandUint64()%uint64(config.MaxBytesKeyValueLen-len(keyName)))
+			bytes = make([]byte, crypto.RandUint64()%uint64(bounds.MaxBytesKeyValueLen-len(keyName)))
 			crypto.RandBytes(bytes[:])
 		}
 
@@ -227,7 +236,6 @@ func RandomAppParams() basics.AppParams {
 	if len(ap.GlobalState) == 0 {
 		ap.GlobalState = nil
 	}
-	ap.ExtraProgramPages = uint32(crypto.RandUint64() % 4)
 	return ap
 }
 
@@ -262,7 +270,7 @@ func RandomAppLocalState() basics.AppLocalState {
 		}
 		var bytes []byte
 		if crypto.RandUint64()%5 != 0 {
-			bytes = make([]byte, crypto.RandUint64()%uint64(config.MaxBytesKeyValueLen-len(keyName)))
+			bytes = make([]byte, crypto.RandUint64()%uint64(bounds.MaxBytesKeyValueLen-len(keyName)))
 			crypto.RandBytes(bytes[:])
 		}
 
@@ -336,7 +344,7 @@ func RandomFullAccountData(rewardsLevel uint64, lastCreatableID *basics.Creatabl
 					break
 				}
 			}
-			data.AppLocalStates[basics.AppIndex(aidx)] = ap
+			data.AppLocalStates[aidx] = ap
 		}
 	}
 
@@ -390,7 +398,7 @@ func RandomDeltasFull(niter int, base map[basics.Address]basics.AccountData, rew
 
 // RandomDeltasImpl generates a random set of accounts delta
 func RandomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, simple bool, lastCreatableID *basics.CreatableIndex) (updates ledgercore.AccountDeltas, totals map[basics.Address]ledgercore.AccountData, imbalance int64) {
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	rewardUnit := config.Consensus[protocol.ConsensusCurrentVersion].RewardUnit
 	totals = make(map[basics.Address]ledgercore.AccountData)
 
 	updates = ledgercore.MakeAccountDeltas(len(base))
@@ -509,7 +517,7 @@ func RandomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rew
 					updates.UpsertAssetResource(addr, aidx, res.Params, res.Holding)
 				}
 			}
-			imbalance += int64(old.WithUpdatedRewards(proto, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)
+			imbalance += int64(old.WithUpdatedRewards(rewardUnit, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)
 			totals[addr] = new
 		}
 	}
@@ -563,7 +571,7 @@ func RandomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rew
 				updates.UpsertAssetResource(addr, aidx, res.Params, res.Holding)
 			}
 		}
-		imbalance += int64(old.WithUpdatedRewards(proto, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)
+		imbalance += int64(old.WithUpdatedRewards(rewardUnit, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)
 		totals[addr] = new
 	}
 

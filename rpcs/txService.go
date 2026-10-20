@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -136,7 +136,7 @@ func (txs *TxService) ServeHTTP(response http.ResponseWriter, request *http.Requ
 		return
 	}
 	txns := txs.getFilteredTxns(filter)
-	txblob := protocol.EncodeReflect(txns)
+	txblob := protocol.Encode(txns)
 	txs.log.Debugf("sending %d txns in %d bytes", len(txns), len(txblob))
 	response.Header().Set("Content-Length", strconv.Itoa(len(txblob)))
 	response.Header().Set("Content-Type", responseContentType)
@@ -147,7 +147,7 @@ func (txs *TxService) ServeHTTP(response http.ResponseWriter, request *http.Requ
 	}
 }
 
-func (txs *TxService) getFilteredTxns(bloom *bloom.Filter) (txns []transactions.SignedTxn) {
+func (txs *TxService) getFilteredTxns(bloom *bloom.Filter) (txns txSyncResponse) {
 	pendingTxGroups := txs.updateTxCache()
 
 	missingTxns := make([]transactions.SignedTxn, 0)
@@ -166,9 +166,7 @@ func (txs *TxService) getFilteredTxns(bloom *bloom.Filter) (txns []transactions.
 			if encodedLength+txGroupLength > txs.responseSizeLimit {
 				break
 			}
-			for _, tx := range txgroup {
-				missingTxns = append(missingTxns, tx)
-			}
+			missingTxns = append(missingTxns, txgroup...)
 			encodedLength += txGroupLength
 		}
 	}

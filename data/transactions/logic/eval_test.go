@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,8 +32,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"pgregory.net/rapid"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -41,8 +43,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-
-	"pgregory.net/rapid"
+	"github.com/algorand/go-algorand/util"
 )
 
 type protoOpt func(*config.ConsensusParams)
@@ -88,15 +89,15 @@ func makeTestProto(opts ...protoOpt) *config.ConsensusParams {
 
 		// With the addition of itxn_field, itxn_submit, which rely on
 		// machinery outside logic package for validity checking, we
-		// need a more realistic set of consensus paramaters.
-		Asset:                 true,
-		MaxAssetNameBytes:     12,
-		MaxAssetUnitNameBytes: 6,
-		MaxAssetURLBytes:      32,
-		MaxAssetDecimals:      4,
-		SupportRekeying:       true,
-		MaxTxnNoteBytes:       500,
-		EnableFeePooling:      true,
+		// need a more realistic set of consensus parameters.
+		Asset:                   true,
+		MaxAssetNameBytes:       12,
+		MaxAssetUnitNameBytes:   6,
+		MaxAssetURLBytes:        32,
+		MaxAssetDecimals:        4,
+		SupportRekeying:         true,
+		MaxTxnNoteBytes:         500,
+		MaxAbsoluteTxnNoteBytes: 550,
 
 		// Chosen to be different from one another and from normal proto
 		MaxAppBoxReferences:      2,
@@ -105,12 +106,14 @@ func makeTestProto(opts ...protoOpt) *config.ConsensusParams {
 		MaxAppTxnForeignAssets:   6,
 		MaxAppTotalTxnReferences: 7,
 
-		MaxAppArgs:        12,
-		MaxAppTotalArgLen: 800,
+		MaxAppArgs:             12,
+		MaxAppTotalArgLen:      800,
+		MaxAbsoluteTotalArgLen: 2000,
 
-		MaxAppProgramLen:        900,
-		MaxAppTotalProgramLen:   1200, // Weird, but better tests
-		MaxExtraAppProgramPages: 2,
+		MaxAppProgramLen:             800,
+		MaxAppTotalProgramLen:        1200, // Weird, but better tests
+		MaxExtraAppProgramPages:      2,
+		MaxAbsoluteExtraProgramPages: 4,
 
 		MaxGlobalSchemaEntries: 30,
 		MaxLocalSchemaEntries:  13,
@@ -135,6 +138,11 @@ func makeTestProto(opts ...protoOpt) *config.ConsensusParams {
 			MinBalance:  5,
 			MaxBalance:  6,
 		},
+
+		EnableAppVersioning: true,
+		AppSizeUpdates:      true,
+
+		PerByteTxnSurcharge: 1000,
 	}
 	for _, opt := range opts {
 		if opt != nil { // so some callsites can take one arg and pass it in
@@ -166,7 +174,7 @@ func optSigParams(opt protoOpt, txns ...transactions.SignedTxn) *EvalParams {
 	}
 	// Make it non-Blank so NewSigEval does not short-circuit (but try to avoid
 	// manipulating txns if they were actually supplied with other sigs.)
-	if txns[0].Sig.Blank() && txns[0].Msig.Blank() && txns[0].Lsig.Blank() {
+	if txns[0].Sig.Blank() && txns[0].Msig.Blank() && !txns[0].Lsig.HasProgram() {
 		txns[0].Lsig.Logic = []byte{LogicVersion + 1} // make sure it fails if used
 	}
 
@@ -185,7 +193,8 @@ func defaultAppParamsWithVersion(version uint64, txns ...transactions.SignedTxn)
 			Txn: transactions.Transaction{Type: protocol.ApplicationCallTx},
 		}}
 	}
-	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(txns), makeTestProtoV(version), &transactions.SpecialAddresses{})
+	proto := makeTestProtoV(version)
+	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(txns), proto, &transactions.SpecialAddresses{})
 	if ep != nil { // If supplied no apps, ep is nil.
 		ep.Trace = &strings.Builder{}
 		ledger := NewLedger(nil)
@@ -219,6 +228,10 @@ func (ep *EvalParams) reset() {
 			ep.PooledLogicSigBudget = &budget
 		}
 	case ModeApp:
+		if ep.FeeCredit != nil {
+			*ep.FeeCredit, ep.feeResidue = feeCredit(ep.TxnGroup, *ep.Proto)
+		}
+
 		if ep.Proto.EnableAppCostPooling {
 			budget := ep.Proto.MaxAppProgramCost
 			ep.PooledApplicationBudget = &budget
@@ -278,6 +291,109 @@ func TestArgTooLarge(t *testing.T) {
 
 }
 
+// TestUnaccountedArg checks the rule that a LogicSig may carry no argument it
+// did not read: nothing above the highest index it read, and nothing unread
+// below that index unless the argument is empty. Args are covered by no
+// signature, so anything unread is material a third party could have appended.
+func TestUnaccountedArg(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		minVer uint64
+		source string
+		args   []string
+		bad    bool
+		index  int // the offending arg, when bad
+	}{
+		{"none supplied", 1, "int 1", nil, false, 0},
+		{"all read", 1, "arg 0; arg 1; ==", []string{"a", "a"}, false, 0},
+		{"unread above", 1, "arg 0; len; int 1; ==", []string{"a", "b"}, true, 1},
+		// A trailing arg is unaccounted even when empty: it is still bytes on the
+		// wire, and ArgsLen does not count it.
+		{"empty above", 1, "arg 0; len; int 1; ==", []string{"a", ""}, true, 1},
+		// Holes below the high water mark are the tealsign padding pattern.
+		{"empty holes below", 1, "arg 2; len; int 1; ==", []string{"", "", "x"}, false, 0},
+		{"filled hole below", 1, "arg 2; len; int 1; ==", []string{"j", "", "x"}, true, 0},
+		{"empty arg read", 1, "arg 0; len; !", []string{""}, false, 0},
+		// Reading arg 0 twice must not be mistaken for reading two args.
+		{"same arg twice", 1, "arg 0; arg 0; ==", []string{"x", "y"}, true, 1},
+		{"dynamic access", 5, "int 0; args; int 1; args; !=", []string{"x", "y"}, false, 0},
+		// 255 args reads the top word of the argsRead mask.
+		{"all of EvalMaxArgs", 5,
+			"int 0; loop: dup; args; pop; int 1; +; dup; int 255; <; bnz loop; pop; int 1",
+			make([]string, 255), false, 0},
+	}
+
+	// An empty arg reaches eval as either a zero-length slice or a nil, and
+	// LogicSig.Equal deliberately tells them apart. This rule must not: only the
+	// byte count matters. So every case runs both ways.
+	blanks := []struct {
+		name  string
+		empty []byte
+	}{
+		{"zero-length", []byte{}},
+		{"nil", nil},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			for _, blank := range blanks {
+				t.Run(blank.name, func(t *testing.T) {
+					a := require.New(t)
+
+					var args [][]byte
+					for _, arg := range test.args {
+						if arg == "" {
+							args = append(args, blank.empty)
+						} else {
+							args = append(args, []byte(arg))
+						}
+					}
+
+					for v := test.minVer; v <= AssemblerMaxVersion; v++ {
+						ops := testProg(t, test.source, v)
+						var txn transactions.SignedTxn
+						txn.Lsig.Logic = ops.Program
+						txn.Lsig.Args = args
+
+						pass, cx, err := EvalSignatureFull(0, defaultSigParams(txn))
+						a.NoError(err, "v=%d", v)
+						a.True(pass, "v=%d", v)
+
+						index, bad := cx.UnaccountedArg()
+						a.Equal(test.bad, bad, "v=%d", v)
+						if test.bad {
+							a.Equal(test.index, index, "v=%d", v)
+						}
+					}
+				})
+			}
+		})
+	}
+}
+
+// TestUnaccountedArgFailedRead confirms that an out of range read does not mark
+// the index it failed on, which matters because the mask is consulted after a
+// program that approved, and a program can recover from nothing.
+func TestUnaccountedArgFailedRead(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	a := require.New(t)
+
+	ops := testProg(t, "arg_1", AssemblerMaxVersion)
+	var txn transactions.SignedTxn
+	txn.Lsig.Logic = ops.Program
+	txn.Lsig.Args = [][]byte{[]byte("x")}
+
+	pass, _, err := EvalSignatureFull(0, defaultSigParams(txn))
+	a.ErrorContains(err, "cannot load arg[1] from 1 arg")
+	a.False(pass)
+}
+
 func TestEmptyProgram(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -285,7 +401,7 @@ func TestEmptyProgram(t *testing.T) {
 	testLogicBytes(t, nil, nil, "invalid", "invalid program (empty)")
 }
 
-// TestMinAvmVersionParamEval tests eval/check reading the minAvmVersion from the param
+// TestMinAvmVersionParamEvalCheckSignature tests eval/check reading the minAvmVersion from the param
 func TestMinAvmVersionParamEvalCheckSignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1139,7 +1255,7 @@ func TestTxnBadField(t *testing.T) {
 	testLogicBytes(t, program, nil, "invalid txn field")
 	// TODO: Check should know the type stack was wrong
 
-	// test txn does not accept ApplicationArgs and Accounts
+	// test that `txn` does not accept ApplicationArgs and Accounts, `txna` is necessary
 	txnOpcode := OpsByName[LogicVersion]["txn"].Opcode
 	txnaOpcode := OpsByName[LogicVersion]["txna"].Opcode
 
@@ -1321,6 +1437,13 @@ global PayoutsMaxBalance; int 6; ==; assert
 const globalV12TestProgram = globalV11TestProgram + `
 `
 
+const globalV13TestProgram = globalV12TestProgram + `
+`
+
+// v14 adds no new global fields.
+const globalV14TestProgram = globalV13TestProgram + `
+`
+
 func TestAllGlobals(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1344,6 +1467,8 @@ func TestAllGlobals(t *testing.T) {
 		10: {GenesisHash, globalV10TestProgram},
 		11: {PayoutsMaxBalance, globalV11TestProgram},
 		12: {PayoutsMaxBalance, globalV12TestProgram},
+		13: {PayoutsMaxBalance, globalV13TestProgram},
+		14: {PayoutsMaxBalance, globalV14TestProgram},
 	}
 	// tests keys are versions so they must be in a range 1..AssemblerMaxVersion plus zero version
 	require.LessOrEqual(t, len(tests), AssemblerMaxVersion+1)
@@ -1445,7 +1570,7 @@ func TestOnCompletionConstants(t *testing.T) {
 	}
 	require.Less(t, last, max, "too many OnCompletion constants, adjust max limit")
 	require.Equal(t, int(invalidOnCompletionConst), last)
-	require.Equal(t, len(onCompletionMap), len(onCompletionDescriptions))
+	require.Equal(t, len(onCompletionMap), len(OnCompletionDescriptions))
 	require.Equal(t, len(OnCompletionNames), last)
 	for v := NoOp; v < invalidOnCompletionConst; v++ {
 		require.Equal(t, v.String(), OnCompletionNames[int(v)])
@@ -1857,8 +1982,16 @@ int 1
 
 const testTxnProgramTextV12 = testTxnProgramTextV11 + `
 assert
-int 1
+txn RejectVersion
+!
 `
+
+const testTxnProgramTextV13 = testTxnProgramTextV12 + `
+assert
+int 1`
+
+// v14 adds no new txn fields.
+const testTxnProgramTextV14 = testTxnProgramTextV13
 
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
@@ -1886,8 +2019,7 @@ func makeSampleTxn() transactions.SignedTxn {
 	txn.Txn.AssetReceiver = txn.Txn.CloseRemainderTo
 	txn.Txn.AssetCloseTo = txn.Txn.Sender
 	txn.Txn.ApplicationID = basics.AppIndex(888)
-	txn.Txn.Accounts = make([]basics.Address, 1)
-	txn.Txn.Accounts[0] = txn.Txn.Receiver
+	txn.Txn.Accounts = []basics.Address{txn.Txn.Receiver}
 	rekeyToAddr := []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui05")
 	metadata := []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeuiHH")
 	managerAddr := []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui06")
@@ -1975,6 +2107,8 @@ func TestTxn(t *testing.T) {
 		10: testTxnProgramTextV10,
 		11: testTxnProgramTextV11,
 		12: testTxnProgramTextV12,
+		13: testTxnProgramTextV13,
+		14: testTxnProgramTextV14,
 	}
 
 	for i, txnField := range TxnFieldNames {
@@ -2314,6 +2448,18 @@ func testLogicFull(t *testing.T, program []byte, gi int, ep *EvalParams, problem
 
 func testLogics(t *testing.T, programs []string, txgroup []transactions.SignedTxn, opt protoOpt, expected ...expect) error {
 	t.Helper()
+	return testLogicsWithAssembler(t, programs, txgroup, opt, func(t testing.TB, program string, version uint64) []byte {
+		return testProg(t, program, version).Program
+	}, expected...)
+}
+
+func testLogicsWithoutAutomaticSalt(t *testing.T, programs []string, txgroup []transactions.SignedTxn, opt protoOpt, expected ...expect) error {
+	t.Helper()
+	return testLogicsWithAssembler(t, programs, txgroup, opt, assembleProgramWithoutAutomaticSalt, expected...)
+}
+
+func testLogicsWithAssembler(t *testing.T, programs []string, txgroup []transactions.SignedTxn, opt protoOpt, assemble func(testing.TB, string, uint64) []byte, expected ...expect) error {
+	t.Helper()
 	proto := makeTestProto(opt)
 
 	if txgroup == nil {
@@ -2324,8 +2470,7 @@ func testLogics(t *testing.T, programs []string, txgroup []transactions.SignedTx
 	// Place the logicsig code first, so NewSigEvalParams calcs budget
 	for i, program := range programs {
 		if program != "" {
-			code := testProg(t, program, proto.LogicSigVersion).Program
-			txgroup[i].Lsig.Logic = code
+			txgroup[i].Lsig.Logic = assemble(t, program, proto.LogicSigVersion)
 		}
 	}
 	ep := NewSigEvalParams(txgroup, proto, &NoHeaderLedger{})
@@ -2862,7 +3007,7 @@ int 100; byte 0x0201; == // types mismatch so this will fail
 	err := testPanics(t, badsource, 1, "cannot compare")
 	attrs := basics.Attributes(err)
 	zeros := [256]int{}
-	scratch := convertSlice(zeros[:], func(i int) any { return uint64(i) })
+	scratch := util.Map(zeros[:], func(i int) any { return uint64(i) })
 	scratch[10] = uint64(5)
 	scratch[15] = []byte{0x01, 0x02, 0x03, 0x00}
 	require.Equal(t, map[string]any{
@@ -2881,7 +3026,7 @@ int 4; store 2			// store an int
 byte "jj"; store 3		// store a bytes
 int 1
 `
-	gscratch := convertSlice(zeros[:], func(i int) any { return uint64(i) })
+	gscratch := util.Map(zeros[:], func(i int) any { return uint64(i) })
 	gscratch[2] = uint64(4)
 	gscratch[3] = []byte("jj")
 
@@ -3015,6 +3160,20 @@ func TestGload(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestGloadNoProgram covers gload reading a sibling app-call txn that never ran a program.
+func TestGloadNoProgram(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	appcall := transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.ApplicationCallTx}}
+	ep := defaultAppParams(appcall, appcall)
+	// Evaluate gi=1 while gi=0's program was never run, so pastScratch[0] is nil.
+	cx := &EvalContext{EvalParams: ep, groupIndex: 1}
+
+	_, err := opGloadImpl(cx, 0, 0, "gload")
+	require.ErrorContains(t, err, "gload lookup of txn 0 that did not run a program")
 }
 
 // TestGloads tests gloads and gloadss
@@ -3190,13 +3349,13 @@ int %d
 `, budget-1, budget-5)
 	}
 	b := testLogicBudget
-	testLogic(t, source(b), LogicVersion, nil)
+	testLogicBytes(t, assembleProgramWithoutAutomaticSalt(t, source(b), LogicVersion), nil)
 
-	testLogics(t, []string{source(2 * b), source(2*b - 7)}, nil, nil)
+	testLogicsWithoutAutomaticSalt(t, []string{source(2 * b), source(2*b - 7)}, nil, nil)
 
-	testLogics(t, []string{source(3 * b), source(3*b - 7), ""}, nil, nil)
+	testLogicsWithoutAutomaticSalt(t, []string{source(3 * b), source(3*b - 7), ""}, nil, nil)
 
-	testLogics(t, []string{source(b), source(b)}, nil,
+	testLogicsWithoutAutomaticSalt(t, []string{source(b), source(b)}, nil,
 		func(p *config.ConsensusParams) { p.EnableLogicSigCostPooling = false })
 }
 
@@ -3299,10 +3458,12 @@ func TestShortSimple(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, `int 8; store 7`, v)
-			testLogicBytes(t, ops.Program[:len(ops.Program)-1], nil,
-				"program ends short of immediate values",
-				"program ends short of immediate values")
+			source := `int 8; store 7`
+			ops := testProg(t, source, v)
+			end := programEndBeforeTrailingIntcSalt(t, source, v, ops.Program)
+			testLogicBytes(t, ops.Program[:end-1], nil,
+				"program ends without immediate value(s)",
+				"program ends without immediate value(s)")
 		})
 	}
 }
@@ -3320,7 +3481,27 @@ int 1
 `, v)
 			// cut two last bytes - intc_1 and last byte of bnz
 			testLogicBytes(t, ops.Program[:len(ops.Program)-2], nil,
-				"bnz program ends short", "bnz program ends short")
+				"program ends without", "program ends without")
+		})
+	}
+}
+
+func TestEvalBadSubOp(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	for v := uint64(foreignBoxVersion); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			ops := testProg(t, `int 1; byte 0xaabbcc; app_box_len`, v)
+			// cut last byte, leaving only the app_box_len initial opcode, no subop
+			testLogicBytes(t, ops.Program[:len(ops.Program)-1], nil,
+				"missing sub-opcode", "missing sub-opcode")
+			ops.Program[len(ops.Program)-1] = 0x00
+			testLogicBytes(t, ops.Program, nil,
+				"improper sub-opcode 0x00", "improper sub-opcode 0x00")
+			ops.Program[len(ops.Program)-1] = 0x55 // way too big
+			testLogicBytes(t, ops.Program, nil,
+				"improper sub-opcode 0x55", "improper sub-opcode 0x55")
 		})
 	}
 }
@@ -3525,23 +3706,41 @@ func TestMisalignedBranch(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, `int 1
+			source := `int 1
 bnz done
 bytecblock 0x01234576 0xababcdcd 0xf000baad
 done:
-int 1`, v)
+int 1`
+			ops := testProg(t, source, v)
+			ops.Program = assembleProgramWithoutAutomaticSalt(t, source, v)
 			//t.Log(hex.EncodeToString(program))
-			canonicalProgramString := mutateProgVersion(v, "01200101224000112603040123457604ababcdcd04f000baad22")
+			offsetHex := "0011"
+			if v >= varintBranchVersion {
+				// offset +17 as 1-byte varint: zigzag(17)=34=0x22
+				offsetHex = "22"
+			}
+			canonicalProgramString := mutateProgVersion(v, "012001012240"+offsetHex+"2603040123457604ababcdcd04f000baad22")
 			canonicalProgramBytes, err := hex.DecodeString(canonicalProgramString)
 			require.NoError(t, err)
-			require.Equal(t, ops.Program, canonicalProgramBytes)
-			ops.Program[7] = 3 // clobber the branch offset to be in the middle of the bytecblock
+			require.Equal(t, canonicalProgramBytes, ops.Program)
+			if v >= varintBranchVersion {
+				// offset=3 as 1-byte varint: zigzag(3)=6=0x06; target lands in middle of bytecblock
+				ops.Program[6] = 0x06
+			} else {
+				ops.Program[7] = 3 // clobber the branch offset to be in the middle of the bytecblock
+			}
 			// Since Eval() doesn't know the jump is bad, we reject "by luck"
 			testLogicBytes(t, ops.Program, nil, "aligned", "REJECT")
 
 			// back branches are checked differently, so test misaligned back branch
-			ops.Program[6] = 0xff // Clobber the two bytes of offset with 0xff 0xff = -1
-			ops.Program[7] = 0xff // That jumps into the offset itself (pc + 3 -1)
+			if v >= varintBranchVersion {
+				// offset=-2 as 1-byte varint: zigzag(-2)=3=0x03; target is bnz.pc-2,
+				// the value byte inside intcblock (not an instruction start)
+				ops.Program[6] = 0x03
+			} else {
+				ops.Program[6] = 0xff // Clobber the two bytes of offset with 0xff 0xff = -1
+				ops.Program[7] = 0xff // That jumps into the offset itself (pc + 3 -1)
+			}
 			if v < backBranchEnabledVersion {
 				testLogicBytes(t, ops.Program, nil, "negative branch", "negative branch")
 			} else {
@@ -3558,17 +3757,29 @@ func TestBranchTooFar(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, `int 1
+			source := `int 1
 bnz done
 bytecblock 0x01234576 0xababcdcd 0xf000baad
 done:
-int 1`, v)
+int 1`
+			ops := testProg(t, source, v)
+			ops.Program = assembleProgramWithoutAutomaticSalt(t, source, v)
 			//t.Log(hex.EncodeToString(ops.Program))
-			canonicalProgramString := mutateProgVersion(v, "01200101224000112603040123457604ababcdcd04f000baad22")
+			offsetHex := "0011"
+			if v >= varintBranchVersion {
+				// offset +17 as 1-byte varint: zigzag(17)=34=0x22
+				offsetHex = "22"
+			}
+			canonicalProgramString := mutateProgVersion(v, "012001012240"+offsetHex+"2603040123457604ababcdcd04f000baad22")
 			canonicalProgramBytes, err := hex.DecodeString(canonicalProgramString)
 			require.NoError(t, err)
-			require.Equal(t, ops.Program, canonicalProgramBytes)
-			ops.Program[7] = 200 // clobber the branch offset to be beyond the end of the program
+			require.Equal(t, canonicalProgramBytes, ops.Program)
+			if v >= varintBranchVersion {
+				// 0x7e = 1-byte varint encoding jump +63, outside the program
+				ops.Program[6] = 0x7e
+			} else {
+				ops.Program[7] = 200 // clobber the branch offset to be beyond the end of the program
+			}
 			testLogicBytes(t, ops.Program, nil, "outside of program", "outside of program")
 		})
 	}
@@ -3580,17 +3791,24 @@ func TestBranchTooLarge(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, `int 1
+			source := `int 1
 bnz done
 bytecblock 0x01234576 0xababcdcd 0xf000baad
 done:
-int 1`, v)
+int 1`
+			ops := testProg(t, source, v)
+			ops.Program = assembleProgramWithoutAutomaticSalt(t, source, v)
 			//t.Log(hex.EncodeToString(ops.Program))
-			// (br)anch byte, (hi)gh byte of offset,  (lo)w byte:     brhilo
-			canonicalProgramString := mutateProgVersion(v, "01200101224000112603040123457604ababcdcd04f000baad22")
+			// (br)anch byte, offset bytes (big-endian int16 pre-v13, varint v13+)
+			// offset +17 as big-endian: 00 11; as 1-byte varint: 22 (zigzag(17)=34=0x22)
+			offsetHex := "0011"
+			if v >= varintBranchVersion {
+				offsetHex = "22"
+			}
+			canonicalProgramString := mutateProgVersion(v, "012001012240"+offsetHex+"2603040123457604ababcdcd04f000baad22")
 			canonicalProgramBytes, err := hex.DecodeString(canonicalProgramString)
 			require.NoError(t, err)
-			require.Equal(t, ops.Program, canonicalProgramBytes)
+			require.Equal(t, canonicalProgramBytes, ops.Program)
 			ops.Program[6] = 0x70 // clobber hi byte of branch offset
 			testLogicBytes(t, ops.Program, nil, "outside", "outside")
 		})
@@ -3611,8 +3829,8 @@ intc_1
 			source := fmt.Sprintf(template, line)
 			ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 			require.NoError(t, err)
-			ops.Program[7] = 0xf0 // clobber the branch offset - highly negative
-			ops.Program[8] = 0xff // clobber the branch offset
+			// 0x7f encodes jump -64 as a 1-byte varint (zigzag(-64)=127=0x7f), outside program
+			ops.Program[7] = 0x7f
 			testLogicBytes(t, ops.Program, nil, "outside of program", "outside of program")
 		})
 	}
@@ -4608,7 +4826,7 @@ func TestAllowedOpcodesV2(t *testing.T) {
 			require.Contains(t, source, spec.Name)
 			ops := testProg(t, source, 2)
 			// all opcodes allowed in stateful mode so use CheckStateful/EvalContract
-			err := CheckContract(ops.Program, aep)
+			err := CheckContract(ops.Program, 0, aep)
 			require.NoError(t, err, source)
 			_, err = EvalApp(ops.Program, 0, 0, aep)
 			if spec.Name != "return" {
@@ -4692,7 +4910,7 @@ func TestLinearOpcodes(t *testing.T) {
 	}
 }
 
-func TestRekeyFailsOnOldVersion(t *testing.T) {
+func TestRekeyErrsOnOldVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -5131,7 +5349,9 @@ main:
 
 	testPanics(t, "int 1; retsub", 4)
 
-	testPanics(t, "int 1; recur: callsub recur; int 1", 4)
+	// recur: labels the dup instruction so callsub recur is a back-jump to a
+	// different instruction (not jump-to-self, which is disallowed in v13+).
+	testPanics(t, "int 1; callsub recur; int 1; recur: dup; pop; callsub recur", 4)
 }
 
 func TestShifts(t *testing.T) {
@@ -5429,14 +5649,14 @@ func TestBytesModExp(t *testing.T) {
 				tc.Base, tc.Exponent, tc.Modulus, tc.Result)
 			switch tc.TestOutcome {
 			case Accept:
-				testAccepts(t, progText, 12)
-				testCost(t, progText, tc.LogicCost+5, 12) // 4 pushbytes, and ==
+				testAccepts(t, progText, fullByteMathVersion)
+				testCost(t, progText, tc.LogicCost+5, fullByteMathVersion) // 4 pushbytes, and ==
 			case Reject:
-				testRejects(t, progText, 12)
+				testRejects(t, progText, fullByteMathVersion)
 				// ensure nobody thinks they are testing a cost here
 				require.Zero(t, tc.LogicCost)
 			case Panic:
-				testPanics(t, progText, 12)
+				testPanics(t, progText, fullByteMathVersion)
 				// ensure nobody thinks they are testing a cost here
 				require.Zero(t, tc.LogicCost)
 			}
@@ -5451,7 +5671,7 @@ func TestBytesMath(t *testing.T) {
 
 	testAccepts(t, "byte 0x01; byte 0x01; b+; byte 0x02; ==", 4)
 	testCost(t, "byte 0x01; byte 0x02; b+; byte 0x03; ==", 2+10+2, 6)
-	testCost(t, "byte 0x01; byte 0x02; b+; byte 0x03; ==", 2+2+2, 12)
+	testCost(t, "byte 0x01; byte 0x02; b+; byte 0x03; ==", 2+2+2, fullByteMathVersion)
 	testAccepts(t, "byte 0x01FF; byte 0x01; b+; byte 0x0200; ==", 4)
 
 	effs := strings.Repeat("ff", 64)
@@ -5459,11 +5679,11 @@ func TestBytesMath(t *testing.T) {
 	testAccepts(t, fmt.Sprintf("byte 0x%s; byte 0x10; b+; len; int 65; ==", effs), 4)
 	// 4096 byte inputs that sum to 4097 byte outputs panic, no matter the version.
 	testPanics(t, notrack(fmt.Sprintf("byte 0x%s; byte 0x10; b+; len; int 4097; ==", strings.Repeat("ff", 4096))), 4)
-	// 65 byte inputs are not ok for b+ until v12.
+	// 65 byte inputs are not ok for b+ until fullByteMathVersion.
 	p := fmt.Sprintf("byte 0x%s00; byte 0x10; b+; len; int 65; ==", effs)
-	testPanicRange(t, notrack(p), 4, 11)
-	testAcceptRange(t, p, 12, AssemblerMaxVersion)
-	testCost(t, p, 2+6+3, 12)
+	testPanicRange(t, notrack(p), 4, fullByteMathVersion-1)
+	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
+	testCost(t, p, 2+6+3, fullByteMathVersion)
 
 	testAccepts(t, `byte 0x01; byte 0x01; b-; byte ""; ==`, 4)
 	testAccepts(t, "byte 0x0200; byte 0x01; b-; byte 0x01FF; ==", 4)
@@ -5471,42 +5691,42 @@ func TestBytesMath(t *testing.T) {
 	testAccepts(t, "byte 0x0100; byte 0x01; b-; byte 0xFF; ==", 4)
 	testPanics(t, "byte 0x01; byte 0x02; b-; int 1; return", 4)
 
-	// 65 byte inputs are not ok for b- until v12.
+	// 65 byte inputs are not ok for b- until fullByteMathVersion.
 	p = fmt.Sprintf("byte 0x%s00; byte 0x10; b-; len; int 65; ==", effs)
-	testPanicRange(t, notrack(p), 4, 11)
-	testAcceptRange(t, p, 12, AssemblerMaxVersion)
-	testCost(t, p, 2+6+3, 12)
+	testPanicRange(t, notrack(p), 4, fullByteMathVersion-1)
+	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
+	testCost(t, p, 2+6+3, fullByteMathVersion)
 
 	testAccepts(t, "byte 0x10; byte 0x10; b*; byte 0x0100; ==", 4)
 	testAccepts(t, "byte 0x100000000000; byte 0x00; b*; byte b64(); ==", 4)
 	testCost(t, "byte 0x100000000000; byte 0x00; b*; byte b64(); ==", 20+4, 6)
-	testCost(t, "byte 0x100000000000; byte 0x2000; b*; byte 0x0200000000000000; ==", 5+4, 12)
+	testCost(t, "byte 0x100000000000; byte 0x2000; b*; byte 0x0200000000000000; ==", 5+4, fullByteMathVersion)
 
 	testAccepts(t, "byte 0x01; byte 0x01; b/; byte 0x01; ==", 4)
 	testPanics(t, "byte 0x0200; byte b64(); b/; int 1; return", 4)
 	testPanics(t, "byte 0x01; byte 0x00; b/; int 1; return", 4)
 	p = "int 65; bzero; byte 0x01; b/; byte 0x; =="
-	testPanicRange(t, p, 4, 11)
-	testAcceptRange(t, p, 12, AssemblerMaxVersion)
+	testPanicRange(t, p, 4, fullByteMathVersion-1)
+	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
 
 	testAccepts(t, "byte 0x10; byte 0x07; b%; byte 0x02; ==; return", 4)
 	testPanics(t, "byte 0x01; byte 0x00; b%; int 1; return", 4)
 	p = "byte 0x01; int 64; bzero; concat; byte 0x10; b%; byte 0x00; b=="
-	testPanicRange(t, p, 4, 11)
-	testAcceptRange(t, p, 12, AssemblerMaxVersion)
+	testPanicRange(t, p, 4, fullByteMathVersion-1)
+	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
 
 	// Even 128 byte outputs are ok
 	p = fmt.Sprintf("byte 0x%s; byte 0x%s; b*; len; int 128; ==", effs, effs)
 	testAccepts(t, p, 4)
 	testCost(t, p, 26, 6) // 20 + 6 (5 obvious instructions plus bytecblock)
 	assert.Equal(t, 12, mulComplexity(64, 64))
-	testCost(t, p, 18, 12) // 12 + 6
-	// But not 65 byte inputs (until v12)
+	testCost(t, p, 18, fullByteMathVersion) // 12 + 6
+	// But not 65 byte inputs (until fullByteMathVersion)
 	p = fmt.Sprintf("byte 0x%s; byte 0xff; concat; byte 0xff; b*; len; int 66; ==", effs)
-	testPanicRange(t, p, 4, 11)
-	testAcceptRange(t, p, 12, AssemblerMaxVersion)
+	testPanicRange(t, p, 4, fullByteMathVersion-1)
+	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
 	assert.Equal(t, 8, mulComplexity(65, 1))
-	testCost(t, p, 16, 12) // 8 + 8 (7 obvious instructions, plus bytecblock)
+	testCost(t, p, 16, fullByteMathVersion) // 8 + 8 (7 obvious instructions, plus bytecblock)
 
 	testAccepts(t, "byte 0x01; bsqrt; byte 0x01; ==; return", 6)
 	testAccepts(t, "byte 0x00; bsqrt; byte 0x; ==; return", 6)
@@ -5517,18 +5737,18 @@ func TestBytesMath(t *testing.T) {
 	p = fmt.Sprintf("byte 0x%s; bsqrt; len; int 32; ==", effs)
 	testAccepts(t, p, 6)
 	testCost(t, p, 44, 6)  // 40 + 4
-	testCost(t, p, 73, 12) // 69 + 4
-	// 65 byte inputs are not ok until v12 (no track allows assembly)
+	testCost(t, p, 73, fullByteMathVersion) // 69 + 4
+	// 65 byte inputs are not ok until fullByteMathVersion (no track allows assembly)
 	p = notrack(fmt.Sprintf("byte 0x%s00; bsqrt; len; int 33; ==", effs))
-	testPanicRange(t, p, 6, 11)
-	testAcceptRange(t, p, 12, AssemblerMaxVersion)
-	testCost(t, p, 74, 12) // 70 + 4
+	testPanicRange(t, p, 6, fullByteMathVersion-1)
+	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
+	testCost(t, p, 74, fullByteMathVersion) // 70 + 4
 
 	// 128, mostly for cost test
 	p = notrack(fmt.Sprintf("byte 0x%s%s; bsqrt; len; int 64; ==", effs, effs))
-	testPanicRange(t, p, 6, 11)
-	testAcceptRange(t, p, 12, AssemblerMaxVersion)
-	testCost(t, p, 145, 12) // 141 + 4
+	testPanicRange(t, p, 6, fullByteMathVersion-1)
+	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
+	testCost(t, p, 145, fullByteMathVersion) // 141 + 4
 }
 
 func TestMulComplexity(t *testing.T) {
@@ -5574,14 +5794,14 @@ func TestBytesCompare(t *testing.T) {
 
 	p := "byte 0x10; int 65; bzero; b<="
 	testPreexist(t, p, 4)
-	testPanicRange(t, p, 4, 11)
-	testRejectRange(t, p, 12, AssemblerMaxVersion)
+	testPanicRange(t, p, 4, fullByteMathVersion-1)
+	testRejectRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
 
 	testAccepts(t, "byte 0x10; int 64; bzero; b>", 4)
 	p = "byte 0x10; int 65; bzero; b>"
 	testPreexist(t, p, 4)
-	testPanicRange(t, p, 4, 11)
-	testAcceptRange(t, p, 12, AssemblerMaxVersion)
+	testPanicRange(t, p, 4, fullByteMathVersion-1)
+	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
 	testAccepts(t, "byte 0x1010; byte 0x10; b<; !", 4)
 
 	testAccepts(t, "byte 0x2000; byte 0x70; b<; !", 4)
@@ -5604,8 +5824,8 @@ func TestBytesCompare(t *testing.T) {
 	testAccepts(t, "byte 0x11; byte 0x0011; b>=", 4)
 	p = "byte 0x10; int 65; bzero; b>="
 	testPreexist(t, p, 4)
-	testPanicRange(t, p, 4, 11)
-	testAcceptRange(t, p, 12, AssemblerMaxVersion)
+	testPanicRange(t, p, 4, fullByteMathVersion-1)
+	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
 
 	testAccepts(t, "byte 0x11; byte 0x11; b==", 4)
 	testAccepts(t, "byte 0x0011; byte 0x11; b==", 4)
@@ -5613,16 +5833,16 @@ func TestBytesCompare(t *testing.T) {
 	testAccepts(t, "byte 0x00; int 64; bzero; b==", 4)
 	p = "byte 0x00; int 65; bzero; b=="
 	testPreexist(t, p, 4)
-	testPanicRange(t, p, 4, 11)
-	testAcceptRange(t, p, 12, AssemblerMaxVersion)
+	testPanicRange(t, p, 4, fullByteMathVersion-1)
+	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
 
 	testAccepts(t, "byte 0x11; byte 0x00; b!=", 4)
 	testAccepts(t, "byte 0x0011; byte 0x1100; b!=", 4)
 	testPanics(t, notrack("byte 0x11; int 17; b!="), 4)
 	p = "byte 0x10; int 65; bzero; b!="
 	testPreexist(t, p, 4)
-	testPanicRange(t, p, 4, 11)
-	testAcceptRange(t, p, 12, AssemblerMaxVersion)
+	testPanicRange(t, p, 4, fullByteMathVersion-1)
+	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
 }
 
 func TestBytesBits(t *testing.T) {
@@ -5675,7 +5895,7 @@ func TestPcDetails(t *testing.T) {
 		{"int 1; int 2; -", 5, "pushint 1; pushint 2; -"},
 		{"int 1; err", 3, "pushint 1; err"},
 		{"int 1; dup; int 2; -; +", 6, "dup; pushint 2; -"},
-		{"b end; end:", 4, ""},
+		{"b end; end:", 3, ""},
 	}
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
@@ -5689,10 +5909,16 @@ func TestPcDetails(t *testing.T) {
 			require.False(t, pass)
 			require.NotNil(t, cx) // cx comes back nil if we couldn't even run
 
-			assert.Equal(t, test.pc, cx.pc, ep.Trace.String())
+			expectedPC := test.pc
+			// Empty details mean the failure is at EOF, so a trailing salt suffix
+			// moves the expected PC. Failures at concrete opcodes are unchanged.
+			if test.det == "" {
+				expectedPC += trailingIntcSaltLen(t, test.source, LogicVersion, ops.Program)
+			}
+			assert.Equal(t, expectedPC, cx.pc, ep.Trace.String())
 
 			pc, det := cx.pcDetails()
-			assert.Equal(t, test.pc, pc)
+			assert.Equal(t, expectedPC, pc)
 			assert.Equal(t, test.det, det)
 		})
 	}
@@ -6129,6 +6355,36 @@ func TestOpJSONRef(t *testing.T) {
 		{
 			source:             `byte  "{\"key0\": 1}"; byte "key0"; json_ref JSONObject;`,
 			error:              "json: cannot unmarshal number into Go value of type map[string]json.RawMessage",
+			previousVersErrors: []expect{exp(1, "unknown opcode: json_ref")},
+		},
+		{
+			source:             `byte  "{\"key0\": true }"; byte "key0"; json_ref JSONString;`,
+			error:              "json: cannot unmarshal bool into Go value of type string",
+			previousVersErrors: []expect{exp(1, "unknown opcode: json_ref")},
+		},
+		{
+			source:             `byte  "{\"key0\": false }"; byte "key0"; json_ref JSONUint64;`,
+			error:              "json: cannot unmarshal bool into Go value of type uint64",
+			previousVersErrors: []expect{exp(1, "unknown opcode: json_ref")},
+		},
+		{
+			source:             `byte  "{\"key0\": true }"; byte "key0"; json_ref JSONObject;`,
+			error:              "json: cannot unmarshal bool into Go value of type map[string]json.RawMessage",
+			previousVersErrors: []expect{exp(1, "unknown opcode: json_ref")},
+		},
+		{
+			source:             `byte  "{\"key0\": null }"; byte "key0"; json_ref JSONString;`,
+			error:              "unexpected end of JSON input",
+			previousVersErrors: []expect{exp(1, "unknown opcode: json_ref")},
+		},
+		{
+			source:             `byte  "{\"key0\": null }"; byte "key0"; json_ref JSONUint64;`,
+			error:              "unexpected end of JSON input",
+			previousVersErrors: []expect{exp(1, "unknown opcode: json_ref")},
+		},
+		{
+			source:             `byte  "{\"key0\": null }"; byte "key0"; json_ref JSONObject;`,
+			error:              "unexpected end of JSON input",
 			previousVersErrors: []expect{exp(1, "unknown opcode: json_ref")},
 		},
 		{
@@ -6650,6 +6906,162 @@ int 1
 `, 8)
 }
 
+func TestPushBytessSize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const legacyVersion = 12
+	legacy := func() *EvalParams { return optSigParams(protoVer(legacyVersion)) }
+
+	pushbytess := OpsByName[LogicVersion]["pushbytess"].Opcode
+	pop := OpsByName[LogicVersion]["pop"].Opcode
+
+	imm := func(version byte, lengths ...int) []byte {
+		program := []byte{version, pushbytess}
+		program = binary.AppendUvarint(program, uint64(len(lengths)))
+		for _, n := range lengths {
+			program = binary.AppendUvarint(program, uint64(n))
+			program = append(program, make([]byte, n)...)
+		}
+		return program
+	}
+	tail := func(program []byte, pushed int) []byte {
+		for range pushed {
+			program = append(program, pop)
+		}
+		return append(program, 0x81, 0x01)
+	}
+	tooBigErr := "pushbytess arg 0 is too big (4097 bytes, limit 4096)"
+
+	testLogicBytes(t, tail(imm(legacyVersion, maxStringSize), 1), legacy())
+	testLogicBytes(t, tail(imm(LogicVersion, maxStringSize), 1), nil)
+
+	testLogicBytes(t, tail(imm(legacyVersion, maxStringSize+1), 1), legacy())
+	testLogicBytes(t, tail(imm(LogicVersion, maxStringSize+1), 1), nil, tooBigErr, tooBigErr)
+
+	testLogicBytes(t, tail(imm(legacyVersion, 1, maxStringSize+1), 2), legacy())
+	testLogicBytes(t, tail(imm(LogicVersion, 1, maxStringSize+1), 2), nil,
+		"pushbytess arg 1 is too big", "pushbytess arg 1 is too big")
+
+	observable := func(version byte) []byte {
+		program := imm(version, maxStringSize+1)
+		program = append(program, OpsByName[LogicVersion]["len"].Opcode, 0x81)
+		program = binary.AppendUvarint(program, maxStringSize+1)
+		return append(program, OpsByName[LogicVersion]["=="].Opcode)
+	}
+	testLogicBytes(t, observable(legacyVersion), legacy())
+	testLogicBytes(t, observable(LogicVersion), nil, tooBigErr, tooBigErr)
+
+	dupn := func(version byte) []byte {
+		program := imm(version, maxStringSize+1)
+		program = append(program, OpsByName[LogicVersion]["dupn"].Opcode, 0x02)
+		return tail(program, 3)
+	}
+	testLogicBytes(t, dupn(legacyVersion), legacy())
+	testLogicBytes(t, dupn(LogicVersion), nil, tooBigErr, tooBigErr)
+
+	testLogicBytes(t, tail(imm(legacyVersion, maxStringSize+1), 1), nil, tooBigErr, tooBigErr)
+
+	bytecblock := OpsByName[LogicVersion]["bytecblock"].Opcode
+	unpushed := func(version byte) []byte {
+		program := []byte{version, bytecblock}
+		program = binary.AppendUvarint(program, 1)
+		program = binary.AppendUvarint(program, maxStringSize+1)
+		program = append(program, make([]byte, maxStringSize+1)...)
+		return append(program, 0x81, 0x01)
+	}
+	tooBigBcb := "bytecblock arg 0 is too big (4097 bytes, limit 4096)"
+	testLogicBytes(t, unpushed(legacyVersion), legacy())
+	testLogicBytes(t, unpushed(LogicVersion), nil, tooBigBcb, tooBigBcb)
+	testLogicBytes(t, unpushed(legacyVersion), nil, tooBigBcb, tooBigBcb)
+
+	tooBigBytec := "bytec_0 produced a too big (4097) byte-array"
+	pushed := func(version byte) []byte {
+		program := unpushed(version)
+		return append(program[:len(program)-2],
+			OpsByName[LogicVersion]["bytec_0"].Opcode, OpsByName[LogicVersion]["len"].Opcode)
+	}
+	testLogicBytes(t, pushed(legacyVersion), legacy(), "", tooBigBytec)
+	testLogicBytes(t, pushed(LogicVersion), nil, tooBigBcb, tooBigBcb)
+}
+
+func TestTrailingEmptyByteImm(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const legacyVersion = 12
+	legacy := func() *EvalParams { return optSigParams(protoVer(legacyVersion)) }
+	ran := "const bytes list ran past end of program"
+
+	pop := OpsByName[LogicVersion]["pop"].Opcode
+	for _, v := range []struct {
+		name string
+		tail []byte
+	}{
+		{"pushbytess", []byte{pop, pop, 0x81, 0x01}},
+		{"bytecblock", []byte{0x81, 0x01}},
+	} {
+		opcode := OpsByName[LogicVersion][v.name].Opcode
+
+		trailing := func(version byte) []byte {
+			return []byte{version, 0x81, 0x01, 0x43, opcode, 0x01, 0x00}
+		}
+		testLogicBytes(t, trailing(legacyVersion), legacy(), ran, "")
+		testLogicBytes(t, trailing(LogicVersion), nil)
+
+		testLogicBytes(t, trailing(legacyVersion), nil)
+
+		short := func(version byte) []byte {
+			return []byte{version, opcode, 0x01, 0x05, 0x01, 0x02}
+		}
+		testLogicBytes(t, short(legacyVersion), legacy(), ran, ran)
+		testLogicBytes(t, short(LogicVersion), nil, ran, ran)
+
+		mid := func(version byte) []byte {
+			return append([]byte{version, opcode, 0x02, 0x00, 0x01, 0x61}, v.tail...)
+		}
+		testLogicBytes(t, mid(legacyVersion), legacy())
+		testLogicBytes(t, mid(LogicVersion), nil)
+	}
+
+	pushbytess := OpsByName[LogicVersion]["pushbytess"].Opcode
+
+	assembled := testProg(t, `int 1; return; pushbytess ""`, LogicVersion).Program
+	require.Equal(t, []byte{LogicVersion, 0x81, 0x01, 0x43, pushbytess, 0x01, 0x00}, assembled)
+	_, err := Disassemble(assembled)
+	require.NoError(t, err)
+
+	testLogicBytes(t, []byte{LogicVersion, pushbytess, 0x01, 0x00}, nil,
+		"", "stack finished with bytes not int")
+}
+
+func TestBulkPushStackDepth(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	bulk := func(name string, n int) []byte {
+		program := []byte{LogicVersion, OpsByName[LogicVersion][name].Opcode}
+		program = binary.AppendUvarint(program, uint64(n))
+		for range n {
+			if name == "pushbytess" {
+				program = append(program, 0x01, 0xaa)
+			} else {
+				program = append(program, 0x01)
+			}
+		}
+		return program
+	}
+
+	for _, name := range []string{"pushbytess", "pushints"} {
+		testLogicBytes(t, bulk(name, maxStackDepth), nil,
+			"", fmt.Sprintf("stack len is %d instead of 1", maxStackDepth))
+
+		testLogicBytes(t, bulk(name, maxStackDepth+1), nil, "", "stack overflow")
+
+		testLogicBytes(t, bulk(name, 8000), nil, "", "stack overflow")
+	}
+}
+
 func TestNoHeaderLedger(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -6664,5 +7076,5 @@ func TestMaxTxGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	require.Equal(t, config.MaxTxGroupSize, maxTxGroupSize)
+	require.Equal(t, bounds.MaxTxGroupSize, maxTxGroupSize)
 }

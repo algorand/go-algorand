@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -116,7 +117,7 @@ func (m *mockNode) RemoveParticipationKey(id account.ParticipationID) error {
 	panic("implement me")
 }
 
-func (m *mockNode) SetSyncRound(rnd uint64) error {
+func (m *mockNode) SetSyncRound(rnd basics.Round) error {
 	args := m.Called(rnd)
 	return args.Error(0)
 }
@@ -124,9 +125,9 @@ func (m *mockNode) SetSyncRound(rnd uint64) error {
 func (m *mockNode) UnsetSyncRound() {
 }
 
-func (m *mockNode) GetSyncRound() uint64 {
+func (m *mockNode) GetSyncRound() basics.Round {
 	args := m.Called()
-	return uint64(args.Int(0))
+	return basics.Round(args.Int(0))
 }
 
 func (m *mockNode) AppendParticipationKeys(id account.ParticipationID, keys account.StateProofKeys) error {
@@ -196,6 +197,29 @@ func (m *mockNode) Config() config.Local {
 	return m.config
 }
 
+// mockPeer implements network.PeerConnectionInfo
+type mockPeer struct {
+	addr        string
+	networkType network.PeerNetworkType
+}
+
+func (p mockPeer) GetAddress() string                      { return p.addr }
+func (p mockPeer) GetNetworkType() network.PeerNetworkType { return p.networkType }
+
+func (m *mockNode) GetPeers() (inboundPeers []network.Peer, outboundPeers []network.Peer, err error) {
+	if m.err != nil {
+		return nil, nil, m.err
+	}
+	inboundPeers = []network.Peer{
+		mockPeer{addr: "192.168.10.2:4160", networkType: network.PeerNetworkTypeWebsocket},
+	}
+	outboundPeers = []network.Peer{
+		mockPeer{addr: "/ip4/192.168.10.3/tcp/4190", networkType: network.PeerNetworkTypeLibP2P},
+		mockPeer{addr: "192.168.10.4:4160", networkType: network.PeerNetworkTypeWebsocket},
+	}
+	return inboundPeers, outboundPeers, nil
+}
+
 func (m *mockNode) StartCatchup(catchpoint string) error {
 	return m.err
 }
@@ -231,13 +255,39 @@ var retOneProgram = []byte{2, 0x20, 1, 1, 0x22}
 
 var proto = config.Consensus[protocol.ConsensusFuture]
 
-func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*data.Ledger, []account.Root, []account.Participation, []transactions.SignedTxn, func()) {
-	minMoneyAtStart := 100000  // min money start
-	maxMoneyAtStart := 1000000 // max money start
-	return testingenvWithBalances(t, minMoneyAtStart, maxMoneyAtStart, numAccounts, numTxs, offlineAccounts)
+// testEnvOptions defines customizable options for the testing environment
+type testEnvOptions struct {
+	numAccounts          int      // Number of accounts to create
+	numTransactions      int      // Number of transactions to create
+	offlineAccounts      bool     // Whether to make some accounts offline
+	minMoneyAtStart      int      // Minimum starting money (used if accountBalances is nil)
+	maxMoneyAtStart      int      // Maximum starting money (used if accountBalances is nil)
+	numExpiredOnline     int      // Number of online accounts to expire early
+	expiredVoteLastValid uint64   // VoteLastValid to use for expired online accounts
+	accountBalances      []uint64 // Optional: specific balance for each account (length must match numAccounts if provided)
 }
 
-func testingenvWithBalances(t testing.TB, minMoneyAtStart, maxMoneyAtStart, numAccounts, numTxs int, offlineAccounts bool) (*data.Ledger, []account.Root, []account.Participation, []transactions.SignedTxn, func()) {
+func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*data.Ledger, []account.Root, []account.Participation, []transactions.SignedTxn, func()) {
+	opts := testEnvOptions{
+		numAccounts:     numAccounts,
+		numTransactions: numTxs,
+		offlineAccounts: offlineAccounts,
+		minMoneyAtStart: 100000,
+		maxMoneyAtStart: 1000000,
+	}
+	return testingenvWithOptions(t, opts)
+}
+
+// testingenvWithOptions creates a test environment with customizable options
+func testingenvWithOptions(t testing.TB, opts testEnvOptions) (*data.Ledger, []account.Root, []account.Participation, []transactions.SignedTxn, func()) {
+	numAccounts := opts.numAccounts
+	numTxs := opts.numTransactions
+	offlineAccounts := opts.offlineAccounts
+	minMoneyAtStart := opts.minMoneyAtStart
+	maxMoneyAtStart := opts.maxMoneyAtStart
+	numExpiredOnline := opts.numExpiredOnline
+	expiredVoteLastValid := opts.expiredVoteLastValid
+
 	P := numAccounts               // n accounts
 	TXs := numTxs                  // n txns
 	transferredMoney := 100        // max money/txn
@@ -284,7 +334,12 @@ func testingenvWithBalances(t testing.TB, minMoneyAtStart, maxMoneyAtStart, numA
 		roots[i] = root
 		parts[i] = part.Participation
 
-		startamt := basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))}
+		var startamt basics.MicroAlgos
+		if i < len(opts.accountBalances) {
+			startamt = basics.MicroAlgos{Raw: opts.accountBalances[i]}
+		} else {
+			startamt = basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))}
+		}
 		short := root.Address()
 
 		if offlineAccounts && i > P/2 {
@@ -293,6 +348,12 @@ func testingenvWithBalances(t testing.TB, minMoneyAtStart, maxMoneyAtStart, numA
 			data := basics_testing.MakeAccountData(basics.Online, startamt)
 			data.SelectionID = parts[i].VRFSecrets().PK
 			data.VoteID = parts[i].VotingSecrets().OneTimeSignatureVerifier
+			if numExpiredOnline > 0 && i < numExpiredOnline {
+				if expiredVoteLastValid == 0 {
+					expiredVoteLastValid = 50 // default if zero
+				}
+				data.VoteLastValid = basics.Round(expiredVoteLastValid)
+			}
 			genesis[short] = data
 		}
 		part.Close()

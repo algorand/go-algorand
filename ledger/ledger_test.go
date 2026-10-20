@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,7 +19,6 @@ package ledger
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -29,14 +28,19 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -50,7 +54,6 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
-	"github.com/algorand/go-deadlock"
 )
 
 const preReleaseDBVersion = 6
@@ -105,13 +108,23 @@ func initNextBlockHeader(correctHeader *bookkeeping.BlockHeader, lastBlock bookk
 // endOfBlock is simplified implementation of BlockEvaluator.endOfBlock so that
 // our test blocks can pass validation.
 func endOfBlock(blk *bookkeeping.Block) error {
-	if blk.ConsensusProtocol().Payouts.Enabled {
+	proto := blk.ConsensusProtocol()
+	if proto.Payouts.Enabled {
 		// This won't work for inner fees, and it's not bothering with overflow
 		for _, txn := range blk.Payset {
 			blk.FeesCollected.Raw += txn.Txn.Fee.Raw
 		}
 		// blk.ProposerPayout is allowed to be zero, so don't reproduce the calc here.
 		blk.BlockHeader.Proposer = basics.Address{0x01} // Must be set to _something_.
+	}
+	if proto.LoadTracking {
+		// Mirror BlockEvaluator: Load is computed from the total encoded txn
+		// bytes relative to the block size cap.
+		blockTxBytes := 0
+		for i := range blk.Payset {
+			blockTxBytes += blk.Payset[i].GetEncodedLength()
+		}
+		blk.BlockHeader.Load = eval.ComputeLoad(blockTxBytes, proto.MaxTxnBytesPerBlock)
 	}
 	var err error
 	blk.TxnCommitments, err = blk.PaysetCommit()
@@ -131,7 +144,7 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 		require.NotNil(t, initAccounts)
 		for _, acctdata := range initAccounts {
 			if acctdata.Status != basics.NotParticipating {
-				totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
+				totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto.RewardUnit)
 			}
 		}
 	} else {
@@ -153,10 +166,15 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 		UpgradeState: lastBlock.UpgradeState,
 		// UpgradeVote: empty,
+		CongestionTax: bookkeeping.NextCongestionTax(lastBlock.Load, lastBlock.CongestionTax),
+		Load:          0, // Begins empty
 	}
 
 	if proto.Payouts.Enabled {
 		blk.BlockHeader.Proposer = basics.Address{0x01} // Must be set to _something_.
+	}
+	if proto.EnableSha512BlockHash {
+		blk.BlockHeader.Branch512 = lastBlock.Hash512()
 	}
 
 	blk.TxnCommitments, err = blk.PaysetCommit()
@@ -197,6 +215,9 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 	if proto.TxnCounter {
 		blk.TxnCounter = blk.TxnCounter + 1
 	}
+	if proto.LoadTracking {
+		blk.Load = eval.ComputeLoad(txib.GetEncodedLength(), proto.MaxTxnBytesPerBlock)
+	}
 	require.NoError(t, endOfBlock(&blk))
 	return l.appendUnvalidated(blk)
 }
@@ -204,15 +225,20 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 func (l *Ledger) addBlockTxns(t *testing.T, accounts map[basics.Address]basics.AccountData, stxns []transactions.SignedTxn, ad transactions.ApplyData) error {
 	blk := makeNewEmptyBlock(t, l, t.Name(), accounts)
 	proto := config.Consensus[blk.CurrentProtocol]
+	blkSize := 0
 	for _, stx := range stxns {
 		txib, err := blk.EncodeSignedTxn(stx, ad)
 		if err != nil {
 			return fmt.Errorf("could not sign txn: %s", err.Error())
 		}
-		if proto.TxnCounter {
-			blk.TxnCounter = blk.TxnCounter + 1
-		}
+		blkSize += txib.GetEncodedLength()
 		blk.Payset = append(blk.Payset, txib)
+	}
+	if proto.TxnCounter {
+		blk.TxnCounter += uint64(len(stxns))
+	}
+	if proto.LoadTracking {
+		blk.Load = eval.ComputeLoad(blkSize, proto.MaxTxnBytesPerBlock)
 	}
 	var err error
 	blk.TxnCommitments, err = blk.PaysetCommit()
@@ -240,163 +266,196 @@ func TestLedgerBasic(t *testing.T) {
 func TestLedgerBlockHeaders(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	a := require.New(t)
+	a := assert.New(t)
 
-	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
-	const inMem = true
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, cfg)
-	a.NoError(err, "could not open ledger")
-	defer l.Close()
+	for _, cv := range []protocol.ConsensusVersion{
+		protocol.ConsensusV25, // some oldish version to test against backward compatibility
+		protocol.ConsensusCurrentVersion,
+		protocol.ConsensusFuture,
+	} {
+		genesisInitState, _ := ledgertesting.GenerateInitState(t, cv, 100)
+		const inMem = true
+		cfg := config.GetDefaultLocal()
+		cfg.Archival = true
+		l, err := OpenLedger(logging.Base(), t.Name()+string(cv), inMem, genesisInitState, cfg)
+		a.NoError(err, "could not open ledger")
+		defer l.Close()
 
-	lastBlock, err := l.Block(l.Latest())
-	a.NoError(err, "could not get last block")
+		lastBlock, err := l.Block(l.Latest())
+		a.NoError(err, "could not get last block")
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	poolAddr := testPoolAddr
-	var totalRewardUnits uint64
-	for _, acctdata := range genesisInitState.Accounts {
-		totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
-	}
-	poolBal, _, _, err := l.LookupLatest(poolAddr)
-	a.NoError(err, "could not get incentive pool balance")
-
-	correctHeader := bookkeeping.BlockHeader{
-		Round:  l.Latest() + 1,
-		Branch: lastBlock.Hash(),
-		// Seed:       does not matter,
-		Bonus:        bookkeeping.NextBonus(lastBlock.BlockHeader, &proto),
-		Proposer:     basics.Address{0x01}, // Must be set to _something_.
-		TimeStamp:    0,
-		GenesisID:    t.Name(),
-		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
-		UpgradeState: lastBlock.UpgradeState,
-		// UpgradeVote: empty,
-	}
-
-	emptyBlock := bookkeeping.Block{
-		BlockHeader: correctHeader,
-	}
-	correctHeader.TxnCommitments, err = emptyBlock.PaysetCommit()
-	require.NoError(t, err)
-
-	correctHeader.RewardsPool = testPoolAddr
-	correctHeader.FeeSink = testSinkAddr
-
-	if proto.SupportGenesisHash {
-		correctHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
-	}
-
-	initNextBlockHeader(&correctHeader, lastBlock, proto)
-
-	var badBlock bookkeeping.Block
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.Round++
-	a.ErrorContains(l.appendUnvalidated(badBlock), "ledger does not have entry")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.Round--
-	a.ErrorIs(l.appendUnvalidated(badBlock), eval.ErrRoundZero)
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.Round = 0
-	a.ErrorIs(l.appendUnvalidated(badBlock), eval.ErrRoundZero)
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.GenesisID = ""
-	a.ErrorContains(l.appendUnvalidated(badBlock), "genesis ID missing")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.GenesisID = "incorrect"
-	a.ErrorContains(l.appendUnvalidated(badBlock), "genesis ID mismatch")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.UpgradePropose = "invalid"
-	a.ErrorContains(l.appendUnvalidated(badBlock), "proposed upgrade wait rounds 0")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.UpgradePropose = "invalid"
-	badBlock.BlockHeader.UpgradeDelay = 20000
-	a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.UpgradeApprove = true
-	a.ErrorContains(l.appendUnvalidated(badBlock), "approval without an active proposal")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.CurrentProtocol = "incorrect"
-	a.ErrorContains(l.appendUnvalidated(badBlock), "protocol not supported")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.CurrentProtocol = ""
-	a.ErrorContains(l.appendUnvalidated(badBlock), "protocol not supported", "header with empty current protocol")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	var wrongVersion protocol.ConsensusVersion
-	for ver := range config.Consensus {
-		if ver != correctHeader.CurrentProtocol {
-			wrongVersion = ver
-			break
+		proto := config.Consensus[genesisInitState.Block.CurrentProtocol]
+		poolAddr := testPoolAddr
+		var totalRewardUnits uint64
+		for _, acctdata := range genesisInitState.Accounts {
+			totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto.RewardUnit)
 		}
+		poolBal, _, _, err := l.LookupLatest(poolAddr)
+		a.NoError(err, "could not get incentive pool balance")
+
+		correctHeader := bookkeeping.BlockHeader{
+			Round:  l.Latest() + 1,
+			Branch: lastBlock.Hash(),
+			// Seed:       does not matter,
+			Bonus:        bookkeeping.NextBonus(lastBlock.BlockHeader, &proto),
+			TimeStamp:    0,
+			GenesisID:    t.Name(),
+			RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
+			UpgradeState: lastBlock.UpgradeState,
+			// UpgradeVote: empty,
+			CongestionTax: bookkeeping.NextCongestionTax(lastBlock.Load, lastBlock.CongestionTax),
+		}
+		if proto.Payouts.Enabled {
+			correctHeader.Proposer = basics.Address{0x01} // Must be set to _something_.
+		}
+
+		emptyBlock := bookkeeping.Block{
+			BlockHeader: correctHeader,
+		}
+		correctHeader.TxnCommitments, err = emptyBlock.PaysetCommit()
+		require.NoError(t, err)
+
+		correctHeader.RewardsPool = testPoolAddr
+		correctHeader.FeeSink = testSinkAddr
+
+		if proto.SupportGenesisHash {
+			correctHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
+		}
+		if proto.EnableSha512BlockHash {
+			correctHeader.Branch512 = lastBlock.Hash512()
+		}
+
+		initNextBlockHeader(&correctHeader, lastBlock, proto)
+
+		var badBlock bookkeeping.Block
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.Round++
+		a.ErrorContains(l.appendUnvalidated(badBlock), "ledger does not have entry")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.Round--
+		a.ErrorIs(l.appendUnvalidated(badBlock), eval.ErrRoundZero)
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.Round = 0
+		a.ErrorIs(l.appendUnvalidated(badBlock), eval.ErrRoundZero)
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.GenesisID = ""
+		a.ErrorContains(l.appendUnvalidated(badBlock), "genesis ID missing")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.GenesisID = "incorrect"
+		a.ErrorContains(l.appendUnvalidated(badBlock), "genesis ID mismatch")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.UpgradePropose = "invalid"
+		a.ErrorContains(l.appendUnvalidated(badBlock), "proposed upgrade wait rounds 0")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.UpgradePropose = "invalid"
+		badBlock.BlockHeader.UpgradeDelay = 20000
+		a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.UpgradeApprove = true
+		a.ErrorContains(l.appendUnvalidated(badBlock), "approval without an active proposal")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.CurrentProtocol = "incorrect"
+		a.ErrorContains(l.appendUnvalidated(badBlock), "protocol not supported")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.CurrentProtocol = ""
+		a.ErrorContains(l.appendUnvalidated(badBlock), "protocol not supported", "header with empty current protocol")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		var wrongVersion protocol.ConsensusVersion
+		for ver := range config.Consensus {
+			if ver != correctHeader.CurrentProtocol {
+				wrongVersion = ver
+				break
+			}
+		}
+		a.NotEmpty(wrongVersion)
+		badBlock.BlockHeader.CurrentProtocol = wrongVersion
+		// Handle Branch512 field mismatch between correctHeader and wrongVersion's expectations
+		// We want to set the Branch512 header to match wrongVersion so that PreCheck will reach
+		// the intended "UpgradeState mismatch" error, which happens after the Branch512 check.
+		if !proto.EnableSha512BlockHash && config.Consensus[wrongVersion].EnableSha512BlockHash {
+			// correctHeader has empty Branch512, but wrongVersion expects it during validation
+			badBlock.BlockHeader.Branch512 = lastBlock.Hash512()
+		} else if proto.EnableSha512BlockHash && !config.Consensus[wrongVersion].EnableSha512BlockHash {
+			// correctHeader has non-zero Branch512, but wrongVersion doesn't support it
+			badBlock.BlockHeader.Branch512 = crypto.Sha512Digest{}
+		}
+		// Otherwise, Branch512 is already correct (both support or both don't support SHA512)
+		a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.NextProtocol = "incorrect"
+		a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch", "added block header with incorrect next protocol")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.NextProtocolApprovals++
+		a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch", "added block header with incorrect number of upgrade approvals")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.NextProtocolVoteBefore++
+		a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch", "added block header with incorrect next protocol vote deadline")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.NextProtocolSwitchOn++
+		a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch", "added block header with incorrect next protocol switch round")
+
+		// TODO test upgrade cases with a valid upgrade in progress
+
+		// TODO test timestamp bounds
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.Branch = bookkeeping.BlockHash{}
+		a.ErrorContains(l.appendUnvalidated(badBlock), "block branch incorrect")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.Branch[0]++
+		a.ErrorContains(l.appendUnvalidated(badBlock), "block branch incorrect")
+
+		if proto.EnableSha512BlockHash {
+			badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+			badBlock.BlockHeader.Branch512 = crypto.Sha512Digest{}
+			a.ErrorContains(l.appendUnvalidated(badBlock), "block branch512 incorrect")
+
+			badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+			badBlock.BlockHeader.Branch512[0]++
+			a.ErrorContains(l.appendUnvalidated(badBlock), "block branch512 incorrect")
+		}
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.RewardsLevel++
+		a.ErrorContains(l.appendUnvalidated(badBlock), "bad rewards state")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.RewardsRate++
+		a.ErrorContains(l.appendUnvalidated(badBlock), "bad rewards state")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.RewardsResidue++
+		a.ErrorContains(l.appendUnvalidated(badBlock), "bad rewards state")
+
+		// TODO test rewards cases with changing poolAddr money, with changing round, and with changing total reward units
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.TxnCommitments.NativeSha512_256Commitment = crypto.Hash([]byte{0})
+		a.ErrorContains(l.appendUnvalidated(badBlock), "txn root wrong")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.TxnCommitments.NativeSha512_256Commitment[0]++
+		a.ErrorContains(l.appendUnvalidated(badBlock), "txn root wrong")
+
+		correctBlock := bookkeeping.Block{BlockHeader: correctHeader}
+		a.NoError(l.appendUnvalidated(correctBlock), "could not add block with correct header")
 	}
-	a.NotEmpty(wrongVersion)
-	badBlock.BlockHeader.CurrentProtocol = wrongVersion
-	a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.NextProtocol = "incorrect"
-	a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch", "added block header with incorrect next protocol")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.NextProtocolApprovals++
-	a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch", "added block header with incorrect number of upgrade approvals")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.NextProtocolVoteBefore++
-	a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch", "added block header with incorrect next protocol vote deadline")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.NextProtocolSwitchOn++
-	a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch", "added block header with incorrect next protocol switch round")
-
-	// TODO test upgrade cases with a valid upgrade in progress
-
-	// TODO test timestamp bounds
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.Branch = bookkeeping.BlockHash{}
-	a.ErrorContains(l.appendUnvalidated(badBlock), "block branch incorrect")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.Branch[0]++
-	a.ErrorContains(l.appendUnvalidated(badBlock), "block branch incorrect")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.RewardsLevel++
-	a.ErrorContains(l.appendUnvalidated(badBlock), "bad rewards state")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.RewardsRate++
-	a.ErrorContains(l.appendUnvalidated(badBlock), "bad rewards state")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.RewardsResidue++
-	a.ErrorContains(l.appendUnvalidated(badBlock), "bad rewards state")
-
-	// TODO test rewards cases with changing poolAddr money, with changing round, and with changing total reward units
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.TxnCommitments.NativeSha512_256Commitment = crypto.Hash([]byte{0})
-	a.ErrorContains(l.appendUnvalidated(badBlock), "txn root wrong")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.TxnCommitments.NativeSha512_256Commitment[0]++
-	a.ErrorContains(l.appendUnvalidated(badBlock), "txn root wrong")
-
-	correctBlock := bookkeeping.Block{BlockHeader: correctHeader}
-	a.NoError(l.appendUnvalidated(correctBlock), "could not add block with correct header")
 }
 
 func TestLedgerSingleTx(t *testing.T) {
@@ -532,7 +591,7 @@ func TestLedgerSingleTx(t *testing.T) {
 
 	badTx = correctPay
 	badTx.Fee = basics.MicroAlgos{}
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with zero fee")
+	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx send with zero fee")
 
 	badTx = correctPay
 	badTx.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee - 1}
@@ -1092,7 +1151,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 
 	correctTxHeader := transactions.Header{
 		Sender:      addrList[0],
-		Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+		Fee:         proto.MinFee(),
 		FirstValid:  l.Latest() + 1,
 		LastValid:   l.Latest() + 10,
 		GenesisID:   t.Name(),
@@ -1132,7 +1191,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 		VoteLast:        10000,
 	}
 
-	// depends on what the concensus is need to generate correct KeyregTxnFields.
+	// depends on what the consensus is need to generate correct KeyregTxnFields.
 	if proto.EnableStateProofKeyregCheck {
 		frst, lst := uint64(correctKeyregFields.VoteFirst), uint64(correctKeyregFields.VoteLast)
 		store, err := db.MakeAccessor("test-DB", false, true)
@@ -1195,7 +1254,12 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 
 	badTx = correctPay
 	badTx.Note = make([]byte, proto.MaxTxnNoteBytes+1)
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with overly large note field")
+	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with overly large note field, with extra fee")
+
+	badTx = correctPay
+	badTx.Note = make([]byte, proto.MaxAbsoluteTxnNoteBytes+1)
+	badTx.Fee, _ = proto.MinFee().MulMicros(10e6) // 10x the fee, just to show it's not a fee problem
+	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with very very large note field")
 
 	badTx = correctPay
 	badTx.Sender = basics.Address{}
@@ -1271,7 +1335,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 
 			var totalRewardUnits uint64
 			for _, acctdata := range initAccounts {
-				totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
+				totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto.RewardUnit)
 			}
 			poolBal, _, _, err := l.LookupLatest(testPoolAddr)
 			a.NoError(err, "could not get incentive pool balance")
@@ -1288,12 +1352,16 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 				RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 				UpgradeState: lastBlock.UpgradeState,
 				// UpgradeVote: empty,
+				CongestionTax: bookkeeping.NextCongestionTax(lastBlock.Load, lastBlock.CongestionTax),
 			}
 			correctHeader.RewardsPool = testPoolAddr
 			correctHeader.FeeSink = testSinkAddr
 
 			if proto.SupportGenesisHash {
 				correctHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
+			}
+			if proto.EnableSha512BlockHash {
+				correctHeader.Branch512 = lastBlock.Hash512()
 			}
 
 			initNextBlockHeader(&correctHeader, lastBlock, proto)
@@ -1473,12 +1541,33 @@ func benchLedgerCache(b *testing.B, startRound basics.Round) {
 	}
 }
 
-// triggerTrackerFlush is based in the commit flow but executed it in a single (this) goroutine.
-func triggerTrackerFlush(t *testing.T, l *Ledger) {
-	l.trackers.mu.Lock()
-	dbRound := l.trackers.dbRound
-	l.trackers.mu.Unlock()
+// stopLedgerCommitSyncer stops the commitSyncer of a real Ledger so a test can
+// drive commits synchronously with triggerTrackerFlush.
+//
+// Unlike the mock-ledger tests, a Ledger has a blockQueue syncer that keeps
+// calling notifyCommit -> scheduleCommit after every block flush. With the
+// commitSyncer gone, each commit it schedules would increment accountsWriting
+// and sit in deferredCommits forever, so a later accountsWriting.Wait (for
+// example in trackerRegistry.close after reloadLedger) would hang. Setting
+// deferredCommits to nil makes the non-blocking send in scheduleCommit take its
+// default branch, which calls Done immediately. trackerMu is held because
+// notifyCommit calls scheduleCommit under it.
+func stopLedgerCommitSyncer(l *Ledger) {
+	l.trackerMu.Lock()
+	defer l.trackerMu.Unlock()
+	stopCommitSyncer(&l.trackers)
+	l.trackers.deferredCommits = nil
+}
 
+// triggerTrackerFlush is based in the commit flow but executed it in a single (this) goroutine.
+//
+// The scheduling half mirrors notifyCommit, which holds trackerMu while it
+// calls the trackers' committedUpTo and scheduleCommit. Holding it here keeps
+// the blockQueue syncer from running those same tracker methods concurrently
+// with this goroutine. The commit half runs without trackerMu, exactly as
+// commitRound does on the commitSyncer goroutine.
+func triggerTrackerFlush(t *testing.T, l *Ledger) {
+	l.trackerMu.Lock()
 	rnd := l.Latest()
 	minBlock := rnd
 	maxLookback := basics.Round(0)
@@ -1499,6 +1588,7 @@ func triggerTrackerFlush(t *testing.T, l *Ledger) {
 	}
 
 	l.trackers.mu.RLock()
+	dbRound := l.trackers.dbRound
 	cdr := l.trackers.produceCommittingTask(rnd, dbRound, &dcc.deferredCommitRange)
 	if cdr != nil {
 		dcc.deferredCommitRange = *cdr
@@ -1506,6 +1596,7 @@ func triggerTrackerFlush(t *testing.T, l *Ledger) {
 		dcc = nil
 	}
 	l.trackers.mu.RUnlock()
+	l.trackerMu.Unlock()
 	if dcc != nil {
 		l.trackers.accountsWriting.Add(1)
 		l.trackers.commitRound(dcc)
@@ -1689,14 +1780,8 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	// wait all pending commits to finish
-	l.trackers.accountsWriting.Wait()
-
 	// quit the commitSyncer goroutine: this test flushes manually with triggerTrackerFlush
-	l.trackers.ctxCancel()
-	l.trackers.ctxCancel = nil
-	<-l.trackers.commitSyncerClosed
-	l.trackers.commitSyncerClosed = nil
+	stopLedgerCommitSyncer(l)
 
 	triggerTrackerFlush(t, l)
 	l.WaitForCommit(l.Latest())
@@ -1721,7 +1806,7 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	_, err = l.BlockHdr(basics.Round(proto.StateProofInterval))
 	require.Error(t, err)
 	expectedErr := &ledgercore.ErrNoEntry{}
-	require.True(t, errors.As(err, expectedErr), fmt.Sprintf("got error %s", err))
+	require.ErrorAs(t, err, expectedErr, fmt.Sprintf("got error %s", err))
 
 	l.acctsOnline.voters.votersMu.Lock()
 	for k := range l.acctsOnline.voters.votersForRoundCache {
@@ -1736,7 +1821,16 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 }
 
 func createBlkWithStateproof(t *testing.T, maxBlocks int, proto config.ConsensusParams, genesisInitState ledgercore.InitState, l *Ledger, accounts map[basics.Address]basics.AccountData) bookkeeping.Block {
-	sp := stateproof.StateProof{SignedWeight: 5000000000000000}
+	sp := stateproof.StateProof{
+		SigCommit:    make(crypto.GenericDigest, stateproof.HashSize),
+		SignedWeight: 5000000000000000,
+		SigProofs: merklearray.Proof{
+			HashFactory: crypto.HashFactory{HashType: stateproof.HashType},
+		},
+		PartProofs: merklearray.Proof{
+			HashFactory: crypto.HashFactory{HashType: stateproof.HashType},
+		},
+	}
 	var stxn transactions.SignedTxn
 	stxn.Txn.Type = protocol.StateProofTx
 	stxn.Txn.Sender = transactions.StateProofSender
@@ -1973,7 +2067,7 @@ func TestLookupAgreement(t *testing.T) {
 	ad, _, _, err := ledger.LookupLatest(addrOnline)
 	require.NoError(t, err)
 	require.NotEmpty(t, ad)
-	require.Equal(t, oad, ad.OnlineAccountData())
+	require.Equal(t, oad, basics_testing.OnlineAccountData(ad))
 
 	require.NoError(t, err)
 	oad, err = ledger.LookupAgreement(0, addrOffline)
@@ -1982,7 +2076,7 @@ func TestLookupAgreement(t *testing.T) {
 	ad, _, _, err = ledger.LookupLatest(addrOffline)
 	require.NoError(t, err)
 	require.NotEmpty(t, ad)
-	require.Equal(t, oad, ad.OnlineAccountData())
+	require.Equal(t, oad, basics_testing.OnlineAccountData(ad))
 }
 
 func TestGetKnockOfflineCandidates(t *testing.T) {
@@ -2007,7 +2101,7 @@ func TestGetKnockOfflineCandidates(t *testing.T) {
 	for addr, ad := range genesisInitState.Accounts {
 		if ad.Status == basics.Online {
 			onlineCnt++
-			onlineAddrs[addr] = ad.OnlineAccountData()
+			onlineAddrs[addr] = basics_testing.OnlineAccountData(ad)
 		}
 	}
 	require.Len(t, accts, onlineCnt)
@@ -2228,7 +2322,7 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 }
 
 func resetAccountDBToV6(t *testing.T, l *Ledger) {
-	// reset tables and re-init again, similary to the catchpount apply code
+	// reset tables and re-init again, similarly to the catchpount apply code
 	// since the ledger has only genesis accounts, this recreates them
 	err := l.trackerDBs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
 		arw, err := tx.MakeAccountsWriter()
@@ -2254,7 +2348,7 @@ func resetAccountDBToV6(t *testing.T, l *Ledger) {
 			return err0
 		}
 
-		if err0 := tx.Testing().AccountsUpdateSchemaTest(ctx); err != nil {
+		if err0 := tx.Testing().AccountsUpdateSchemaTest(ctx); err0 != nil {
 			return err0
 		}
 
@@ -2288,7 +2382,7 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 		l.Close()
 	}()
 
-	// reset tables and re-init again, similary to the catchpount apply code
+	// reset tables and re-init again, similarly to the catchpount apply code
 	// since the ledger has only genesis accounts, this recreates them
 	err = l.trackerDBs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
 		arw, err := tx.MakeAccountsWriter()
@@ -2417,9 +2511,14 @@ int %d // 10001000
 	}
 
 	commitRoundLookback(basics.Round(cfg.MaxAcctLookback), l)
+	// read dbRound out before asserting: a failing require calls t.FailNow, and running
+	// the deferred l.Close() while still holding trackers.mu deadlocks against the
+	// commitSyncer goroutine that Close waits on.
 	l.trackers.mu.RLock()
-	require.Equal(t, programRound, l.trackers.dbRound+1) // programRound is next to be replayed
+	dbRound := l.trackers.dbRound
 	l.trackers.mu.RUnlock()
+	require.Equal(t, programRound, dbRound+1) // programRound is next to be replayed
+
 	err = l.reloadLedger()
 	require.NoError(t, err)
 }
@@ -2512,7 +2611,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 
 	onlineTotals := make([]basics.MicroAlgos, maxBlocks+1)
 	curAddressIdx := 0
-	maxValidity := basics.Round(20) // some number different from number of txns in blocks
+	const maxValidity = basics.Round(20) // some number different from number of txns in blocks
 	txnIDs := make(map[basics.Round]map[transactions.Txid]struct{})
 	// run for maxBlocks rounds with random payment transactions
 	// generate numTxns txn per block
@@ -2585,6 +2684,8 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	triggerTrackerFlush(t, l)
+
 	latest := l.Latest()
 	nextRound := latest + 1
 	balancesRound := nextRound.SubSaturate(basics.Round(proto.MaxBalLookback))
@@ -2631,7 +2732,13 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 
 	// check an error latest-1
 	for txid := range txnIDs[latest-1] {
-		require.Error(t, l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
+		var missingRoundErr *errTxTailMissingRound
+		require.ErrorAs(
+			t,
+			l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}),
+			&missingRoundErr,
+		)
+		require.Equal(t, latest-1, missingRoundErr.round)
 	}
 
 	shorterLookback := config.GetDefaultLocal().MaxAcctLookback
@@ -2685,7 +2792,13 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 
 	// check an error latest-1
 	for txid := range txnIDs[latest-1] {
-		require.Error(t, l2.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
+		var missingRoundErr *errTxTailMissingRound
+		require.ErrorAs(
+			t,
+			l2.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}),
+			&missingRoundErr,
+		)
+		require.Equal(t, latest-1, missingRoundErr.round)
 	}
 }
 
@@ -2951,10 +3064,7 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 	defer l.Close()
 
 	// quit the commitSyncer goroutine: this test flushes manually with triggerTrackerFlush
-	l.trackers.ctxCancel()
-	l.trackers.ctxCancel = nil
-	<-l.trackers.commitSyncerClosed
-	l.trackers.commitSyncerClosed = nil
+	stopLedgerCommitSyncer(l)
 
 	blk := genesisInitState.Block
 
@@ -3008,17 +3118,6 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 	}()
 
 	t.Log("reloading ledger")
-	// drain any deferred commits since AddBlock above triggered scheduleCommit
-outer:
-	for {
-		select {
-		case <-l.trackers.deferredCommits:
-			l.trackers.accountsWriting.Done()
-		default:
-			break outer
-		}
-	}
-
 	err = l.reloadLedger()
 	require.NoError(t, err)
 

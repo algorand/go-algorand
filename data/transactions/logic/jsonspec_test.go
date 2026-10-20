@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,10 +22,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/text/encoding/unicode"
 	"golang.org/x/text/encoding/unicode/utf32"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // As of go1.10, json implements encoding and decoding of JSON as defined in RFC 7159. https://pkg.go.dev/encoding/json
@@ -327,6 +328,15 @@ func TestParseRawNonUnicodeChar(t *testing.T) {
 	text := `{"key0": "πζθ"}`
 	_, err := parseJSON([]byte(text))
 	require.NoError(t, err)
+	// raw bytes that are not valid utf-8 parse, and become the replacement
+	// character (U+FFFD) when a string value containing them is extracted
+	text = "{\"key0\": \"ab\xffcd\"}"
+	msg, err := parseJSON([]byte(text))
+	require.NoError(t, err)
+	var value string
+	err = json.Unmarshal(msg["key0"], &value)
+	require.NoError(t, err)
+	require.Equal(t, "ab\uFFFDcd", value)
 	text = `{"key0": "\uFF"}`
 	_, err = parseJSON([]byte(text))
 	require.Error(t, err)

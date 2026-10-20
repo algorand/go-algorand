@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,11 +17,16 @@
 package catchup
 
 import (
+	"archive/tar"
+	"bytes"
 	"fmt"
+	"io"
 	"net/http"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -34,6 +39,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
@@ -46,7 +52,7 @@ import (
 const basicTestCatchpointInterval = 4
 
 func waitForCatchpointGeneration(t *testing.T, fixture *fixtures.RestClientFixture, client client.RestClient, catchpointRound basics.Round) string {
-	err := client.WaitForRoundWithTimeout(uint64(catchpointRound + 1))
+	err := client.WaitForRoundWithTimeout(catchpointRound + 1)
 	if err != nil {
 		return ""
 	}
@@ -165,23 +171,19 @@ func (ec *nodeExitErrorCollector) nodeExitWithError(nc *nodecontrol.NodeControll
 
 	exitError, ok := err.(*exec.ExitError)
 	if !ok {
-		if err != nil {
-			ec.mu.Lock()
-			ec.errors = append(ec.errors, err)
-			ec.messages = append(ec.messages, "Node at %s has terminated with an error", nc.GetDataDir())
-			ec.mu.Unlock()
-		}
+		ec.mu.Lock()
+		ec.errors = append(ec.errors, err)
+		ec.messages = append(ec.messages, fmt.Sprintf("Node at %s has terminated with an error", nc.GetDataDir()))
+		ec.mu.Unlock()
 		return
 	}
 	ws := exitError.Sys().(syscall.WaitStatus)
 	exitCode := ws.ExitStatus()
 
-	if err != nil {
-		ec.mu.Lock()
-		ec.errors = append(ec.errors, err)
-		ec.messages = append(ec.messages, fmt.Sprintf("Node at %s has terminated with error code %d", nc.GetDataDir(), exitCode))
-		ec.mu.Unlock()
-	}
+	ec.mu.Lock()
+	ec.errors = append(ec.errors, err)
+	ec.messages = append(ec.messages, fmt.Sprintf("Node at %s has terminated with error code %d", nc.GetDataDir(), exitCode))
+	ec.mu.Unlock()
 }
 
 func (ec *nodeExitErrorCollector) Print() {
@@ -279,7 +281,7 @@ func getFixture(consensusParams *config.ConsensusParams) *fixtures.RestClientFix
 	return &fixture
 }
 
-func TestCatchpointCatchupFailure(t *testing.T) {
+func TestCatchpointCatchupErr(t *testing.T) {
 	// Overview of this test:
 	// Start a two-node network (primary has 100%, using has 0%)
 	// create a web proxy, have the using node use it as a peer, blocking all requests for round #2. ( and allowing everything else )
@@ -365,11 +367,11 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	_, err = usingNodeRestClient.Catchup(catchpointLabel, 0)
 	a.NoError(err)
 
-	err = usingNodeRestClient.WaitForRoundWithTimeout(uint64(targetCatchpointRound + 1))
+	err = usingNodeRestClient.WaitForRoundWithTimeout(targetCatchpointRound + 1)
 	a.NoError(err)
 
 	// ensure the raw block can be downloaded (including cert)
-	_, err = usingNodeRestClient.RawBlock(uint64(targetCatchpointRound))
+	_, err = usingNodeRestClient.RawBlock(targetCatchpointRound)
 	a.NoError(err)
 }
 
@@ -433,8 +435,8 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 			defer primaryNode.StopAlgod()
 
 			// Let the network make some progress
-			currentRound := uint64(1)
-			targetRound := uint64(21)
+			currentRound := basics.Round(1)
+			targetRound := basics.Round(21)
 			primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
 			log.Infof("Building ledger history..")
 			for {
@@ -455,8 +457,149 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 			} else {
 				a.Empty(*primaryNodeStatus.LastCatchpoint)
 			}
+
+			// download and inspect catchpoint file
+			if tc.expectLabels {
+				round, _, err := ledgercore.ParseCatchpointLabel(*primaryNodeStatus.LastCatchpoint)
+				a.NoError(err)
+
+				primaryNodeAddr, err := primaryNode.GetListeningAddress()
+				a.NoError(err)
+
+				chunks := downloadCatchpointFile(t, a, primaryNodeAddr, round)
+				a.NotEmpty(chunks)
+				validateCatchpointChunks(t, a, chunks, catchpointCatchupProtocol)
+			}
 		})
 	}
+}
+
+func validateCatchpointChunks(t *testing.T, a *require.Assertions, chunks []ledger.CatchpointSnapshotChunkV6, params config.ConsensusParams) {
+	// each chunk will contain only accounts, KVs, online accounts, and online round params
+	// KVs will be skipped if there are none in ledger
+	// online accounts and online round params only appear if params.EnableCatchpointsWithOnlineAccounts is true
+
+	var sawAccounts, sawKVs, sawOnlineAccounts, sawOnlineRoundParams bool
+	var numAccounts, numKVs, numOnlineAccounts, numOnlineRoundParams int
+	for _, c := range chunks {
+		if len(c.Balances) > 0 {
+			sawAccounts = true
+			numAccounts += len(c.Balances)
+			a.Empty(c.KVs)
+			a.Empty(c.OnlineAccounts)
+			a.Empty(c.OnlineRoundParams)
+		}
+		if len(c.KVs) > 0 {
+			a.True(sawAccounts)
+			a.False(sawOnlineAccounts)
+			a.False(sawOnlineRoundParams)
+			sawKVs = true
+			numKVs += len(c.KVs)
+			a.Empty(c.Balances)
+			a.Empty(c.OnlineAccounts)
+			a.Empty(c.OnlineRoundParams)
+		}
+		if len(c.OnlineAccounts) > 0 {
+			a.True(sawAccounts)
+			a.False(sawOnlineRoundParams)
+			sawOnlineAccounts = true
+			numOnlineAccounts += len(c.OnlineAccounts)
+			a.Empty(c.Balances)
+			a.Empty(c.KVs)
+			a.Empty(c.OnlineRoundParams)
+		}
+		if len(c.OnlineRoundParams) > 0 {
+			a.True(sawAccounts)
+			a.True(sawOnlineAccounts)
+			a.False(sawOnlineRoundParams) // should only be one chunk with online round params
+			sawOnlineRoundParams = true
+			numOnlineRoundParams += len(c.OnlineRoundParams)
+			a.Empty(c.Balances)
+			a.Empty(c.KVs)
+			a.Empty(c.OnlineAccounts)
+		}
+	}
+	if params.EnableCatchpointsWithOnlineAccounts {
+		a.True(sawOnlineAccounts)
+		a.True(sawOnlineRoundParams)
+		a.EqualValues(int(params.MaxBalLookback), numOnlineRoundParams,
+			"online round params chunk should be same size as lookback %d", params.MaxBalLookback)
+	}
+	// could also add assertions on # of accounts, etc, more about data contents
+	_ = sawKVs
+}
+
+func downloadCatchpointFile(t *testing.T, a *require.Assertions, baseURL string, round basics.Round) []ledger.CatchpointSnapshotChunkV6 {
+	// download the catchpoint file
+	url := fmt.Sprintf("%s/v1/test-v1/ledger/%s", baseURL, strconv.FormatUint(uint64(round), 36))
+	t.Logf("Downloading catchpoint file for round %d from %s", round, url)
+	resp, err := http.Get(url)
+	a.NoError(err)
+	a.Equal(200, resp.StatusCode)
+	body, err := io.ReadAll(resp.Body)
+	a.NoError(err)
+	t.Logf("Downloaded catchpoint file for round %d, size %d bytes", round, len(body))
+
+	// decode in-memory: should be small (a few KB) for these test networks
+	tarReader := tar.NewReader(bytes.NewReader(body))
+	tarData := readCatchpointContent(t, tarReader)
+	var chunks []ledger.CatchpointSnapshotChunkV6
+	for _, d := range tarData {
+		t.Logf("tar filename: %s, size %d", d.headerName, len(d.data))
+		if after, ok := strings.CutPrefix(d.headerName, "balances."); ok { // chunk file
+			idxStr := strings.TrimSuffix(after, ".msgpack")
+			idx, err := strconv.Atoi(idxStr)
+			a.NoError(err)
+			var c ledger.CatchpointSnapshotChunkV6
+			err = protocol.Decode(d.data, &c)
+			a.NoError(err)
+			t.Logf("chunk %d has balances: %d, kvs: %d, online accounts: %d, onlineroundparams: %d",
+				idx, len(c.Balances), len(c.KVs), len(c.OnlineAccounts), len(c.OnlineRoundParams))
+			chunks = append(chunks, c)
+		}
+	}
+	return chunks
+}
+
+// copied from catchpointfilewriter_test.go
+type decodedCatchpointChunkData struct {
+	headerName string
+	data       []byte
+}
+
+// copied from catchpointfilewriter_test.go
+func readCatchpointContent(t *testing.T, tarReader *tar.Reader) []decodedCatchpointChunkData {
+	result := make([]decodedCatchpointChunkData, 0)
+	for {
+		header, err := tarReader.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			require.NoError(t, err)
+			break
+		}
+		data := make([]byte, header.Size)
+		readComplete := int64(0)
+
+		for readComplete < header.Size {
+			bytesRead, err := tarReader.Read(data[readComplete:])
+			readComplete += int64(bytesRead)
+			if err != nil {
+				if err == io.EOF {
+					if readComplete == header.Size {
+						break
+					}
+					require.NoError(t, err)
+				}
+				break
+			}
+		}
+
+		result = append(result, decodedCatchpointChunkData{headerName: header.Name, data: data})
+	}
+
+	return result
 }
 
 // TestNodeTxHandlerRestart starts a two-node and one relay network
@@ -532,8 +675,11 @@ func TestNodeTxHandlerRestart(t *testing.T) {
 	addrs2, err := client2.ListAddresses(wallet2)
 	a.NoError(err)
 
+	params, err := client2.SuggestedParams()
+	a.NoError(err)
+
 	// let the second node have insufficient stake for proposing a block
-	tx, err := client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], 1000, 4999999999000000, nil)
+	tx, err := client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], params.MinFee, 4999999999000000, nil)
 	a.NoError(err)
 	status, err := client1.Status()
 	a.NoError(err)
@@ -557,7 +703,7 @@ func TestNodeTxHandlerRestart(t *testing.T) {
 	a.NoError(err)
 
 	// let the 2nd client send a transaction
-	tx, err = client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], 1000, 50000, nil)
+	tx, err = client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], params.MinFee, 50000, nil)
 	a.NoError(err)
 
 	status, err = client2.Status()
@@ -639,8 +785,11 @@ func TestReadyEndpoint(t *testing.T) {
 	addrs2, err := client2.ListAddresses(wallet2)
 	a.NoError(err)
 
+	params, err := client2.SuggestedParams()
+	a.NoError(err)
+
 	// let the second node have insufficient stake for proposing a block
-	tx, err := client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], 1000, 4999999999000000, nil)
+	tx, err := client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], params.MinFee, 4999999999000000, nil)
 	a.NoError(err)
 	status, err := client1.Status()
 	a.NoError(err)
@@ -697,7 +846,7 @@ func TestReadyEndpoint(t *testing.T) {
 
 		status1, err = client1.Status()
 		a.NoError(err)
-		a.Equal(status1.CatchupTime, uint64(0))
+		a.Equal(status1.CatchupTime, int64(0))
 		a.Empty(status1.Catchpoint)
 		break
 	}
@@ -777,8 +926,11 @@ func TestNodeTxSyncRestart(t *testing.T) {
 	addrs2, err := client2.ListAddresses(wallet2)
 	a.NoError(err)
 
+	params, err := client2.SuggestedParams()
+	a.NoError(err)
+
 	// let the second node have insufficient stake for proposing a block
-	tx, err := client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], 1000, 4999999999000000, nil)
+	tx, err := client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], params.MinFee, 4999999999000000, nil)
 	a.NoError(err)
 	status, err := client1.Status()
 	a.NoError(err)
@@ -793,7 +945,7 @@ func TestNodeTxSyncRestart(t *testing.T) {
 	client1.FullStop()
 
 	// let the 2nd client send a transaction
-	tx, err = client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], 1000, 50000, nil)
+	tx, err = client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], params.MinFee, 50000, nil)
 	a.NoError(err)
 
 	// now that the primary missed the transaction, start it, and let it catchup

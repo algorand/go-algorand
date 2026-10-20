@@ -45,8 +45,8 @@ agents:
     workDir: $HOME/projects/go-algorand
 
   - name: rpm
-    dockerFilePath: docker/build/cicd.centos9.Dockerfile
-    image: algorand/go-algorand-ci-linux-centos9
+    dockerFilePath: docker/build/cicd.centos10.Dockerfile
+    image: algorand/go-algorand-ci-linux-centos10
     version: scripts/configure_dev-deps.sh
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`

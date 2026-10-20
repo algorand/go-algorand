@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,8 +19,11 @@ package ledger
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -36,7 +39,6 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/stretchr/testify/require"
 )
 
 type simpleLedgerCfg struct {
@@ -74,8 +76,10 @@ func newSimpleLedgerFull(t testing.TB, balances bookkeeping.GenesisBalances, cv 
 	require.NoError(t, err)
 	require.False(t, genBlock.FeeSink.IsZero())
 	require.False(t, genBlock.RewardsPool.IsZero())
+	tempDir := t.TempDir()
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	dbName = strings.Replace(dbName, "/", "_", -1)
+	dbName = filepath.Join(tempDir, dbName)
 	cfg.Archival = !slCfg.notArchival
 	log := slCfg.logger
 	if log == nil {
@@ -108,17 +112,20 @@ func nextBlock(t testing.TB, ledger *Ledger) *eval.BlockEvaluator {
 }
 
 func fillDefaults(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txn *txntest.Txn) {
-	if txn.GenesisHash.IsZero() && ledger.GenesisProto().SupportGenesisHash {
+	proto := eval.ConsensusParams()
+	if txn.GenesisHash.IsZero() && proto.SupportGenesisHash {
 		txn.GenesisHash = ledger.GenesisHash()
 	}
 	if txn.FirstValid == 0 {
 		txn.FirstValid = eval.Round()
 	}
-	if txn.Type == protocol.KeyRegistrationTx && txn.VoteFirst == 0 {
+	if txn.Type == protocol.KeyRegistrationTx && txn.VoteFirst == 0 &&
+		// check this is not an offline txn
+		(!txn.VotePK.IsEmpty() || !txn.SelectionPK.IsEmpty()) {
 		txn.VoteFirst = eval.Round()
 	}
 
-	txn.FillDefaults(ledger.GenesisProto())
+	txn.FillDefaults(proto)
 }
 
 func txns(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*txntest.Txn) {
@@ -131,7 +138,13 @@ func txns(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*txnt
 func txn(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txn *txntest.Txn, problem ...string) {
 	t.Helper()
 	fillDefaults(t, ledger, eval, txn)
-	err := eval.Transaction(txn.SignedTxn(), transactions.ApplyData{})
+	txgroup := []transactions.SignedTxn{txn.SignedTxn()}
+
+	err := eval.TestTransactionGroup(txgroup)
+	if err == nil {
+		err = eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup)...)
+	}
+
 	if err != nil {
 		if len(problem) == 1 && problem[0] != "" {
 			require.Contains(t, err.Error(), problem[0])
@@ -143,14 +156,23 @@ func txn(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txn *txntest.T
 	require.True(t, len(problem) == 0 || problem[0] == "", "Transaction did not fail. Expected: %v", problem)
 }
 
-func txgroup(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*txntest.Txn) error {
+func makeGroup(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*txntest.Txn) []transactions.SignedTxn {
 	t.Helper()
 	for _, txn := range txns {
 		fillDefaults(t, ledger, eval, txn)
 	}
-	txgroup := txntest.Group(txns...)
+	return txntest.Group(txns...)
+}
 
-	return eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup))
+func txgroup(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*txntest.Txn) error {
+	t.Helper()
+	txgroup := makeGroup(t, ledger, eval, txns...)
+
+	if err := eval.TestTransactionGroup(txgroup); err != nil {
+		return err
+	}
+
+	return eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup)...)
 }
 
 // endBlock completes the block being created, returning the ValidatedBlock for

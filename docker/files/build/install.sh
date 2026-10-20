@@ -87,6 +87,6 @@ BUILD_NUMBER="" BRANCH="$BRANCH" make build
 
 shopt -s extglob
 
-cd "$BINDIR" && rm -vrf !(algocfg|algod|algokey|diagcfg|goal|kmd|msgpacktool|node_exporter|tealdbg|update.sh|updater|COPYING)
+cd "$BINDIR" && rm -vrf !(algocfg|algod|algokey|diagcfg|goal|kmd|msgpacktool|node_exporter|update.sh|updater|COPYING)
 
 "$BINDIR"/algod -v

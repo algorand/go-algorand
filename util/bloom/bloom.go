@@ -50,10 +50,7 @@ func Optimal(numElements int, falsePositiveRate float64) (sizeBits int, numHashe
 	m := -(n+0.5)*math.Log(p)/math.Pow(math.Log(2), 2) + 1
 	k := -math.Log(p) / math.Log(2)
 
-	numHashes = uint32(math.Ceil(k))
-	if numHashes > maxHashes {
-		numHashes = maxHashes
-	}
+	numHashes = min(uint32(math.Ceil(k)), maxHashes)
 
 	return int(math.Ceil(m)), numHashes
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -248,7 +248,7 @@ type KeyManager interface {
 // MessageHandle is an ID referring to a specific message.
 //
 // A MessageHandle of nil denotes that a message is "sourceless".
-type MessageHandle interface{}
+type MessageHandle any
 
 // Network is an abstraction over the interface expected by the agreement
 // protocol.

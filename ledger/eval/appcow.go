@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,12 +19,9 @@ package eval
 import (
 	"fmt"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -93,7 +90,10 @@ type storageDelta struct {
 	action storageAction
 	kvCow  stateDelta
 
-	counts, maxCounts *basics.StateSchema
+	// counts represents the number of each value type currently used
+	counts basics.StateSchema
+	// maxCounts is the maximum allowed counts (it comes from the app's schema)
+	maxCounts basics.StateSchema
 
 	// account index for an address that was first referenced as in app_local_get/app_local_put/app_local_del
 	// this is for backward compatibility with original implementation of applications
@@ -125,8 +125,8 @@ func (cb *roundCowState) ensureStorageDelta(addr basics.Address, aidx basics.App
 	lsd = &storageDelta{
 		action:    defaultAction,
 		kvCow:     make(stateDelta),
-		counts:    &counts,
-		maxCounts: &maxCounts,
+		counts:    counts,
+		maxCounts: maxCounts,
 	}
 
 	if cb.compatibilityMode && !global {
@@ -148,6 +148,19 @@ func (cb *roundCowState) ensureStorageDelta(addr basics.Address, aidx basics.App
 	return lsd, nil
 }
 
+// SetAppGlobalSchema sets the maximum allowed counts for app globals. It can
+// be changed during evaluation by an app update.
+func (cb *roundCowState) SetAppGlobalSchema(addr basics.Address, aidx basics.AppIndex, limits basics.StateSchema) error {
+	// Obtain a storageDelta to record the schema change
+	lsd, err := cb.ensureStorageDelta(addr, aidx, true, remainAllocAction, 0)
+	if err != nil {
+		return err
+	}
+
+	lsd.maxCounts = limits
+	return lsd.checkCounts()
+}
+
 // getStorageCounts returns current storage usage for a given {addr, aidx, global} as basics.StateSchema
 func (cb *roundCowState) getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
 	// If we haven't allocated storage, then our used storage count is zero
@@ -163,7 +176,7 @@ func (cb *roundCowState) getStorageCounts(addr basics.Address, aidx basics.AppIn
 	aapp := storagePtr{aidx, global}
 	lsd, ok := cb.sdeltas[addr][aapp]
 	if ok {
-		return *lsd.counts, nil
+		return lsd.counts, nil
 	}
 
 	// Otherwise, check our parent
@@ -185,7 +198,7 @@ func (cb *roundCowState) getStorageLimits(addr basics.Address, aidx basics.AppIn
 	aapp := storagePtr{aidx, global}
 	lsd, ok := cb.sdeltas[addr][aapp]
 	if ok {
-		return *lsd.maxCounts, nil
+		return lsd.maxCounts, nil
 	}
 
 	// Otherwise, check our parent
@@ -223,7 +236,7 @@ func errAlreadyStorage(addr basics.Address, aidx basics.AppIndex, global bool) e
 	return fmt.Errorf("%v has already opted in to app %d", addr, aidx)
 }
 
-// Allocate creates kv storage for a given {addr, aidx, global}. It is called on app creation (global) or opting in (local)
+// AllocateApp creates kv storage for a given {addr, aidx, global}. It is called on app creation (global) or opting in (local)
 func (cb *roundCowState) AllocateApp(addr basics.Address, aidx basics.AppIndex, global bool, space basics.StateSchema) error {
 	// Check that account is not already opted in
 	allocated, err := cb.allocated(addr, aidx, global)
@@ -241,7 +254,7 @@ func (cb *roundCowState) AllocateApp(addr basics.Address, aidx basics.AppIndex, 
 	}
 
 	lsd.action = allocAction
-	lsd.maxCounts = &space
+	lsd.maxCounts = space
 
 	if global {
 		cb.mods.AddCreatable(basics.CreatableIndex(aidx), ledgercore.ModifiedCreatable{
@@ -253,7 +266,7 @@ func (cb *roundCowState) AllocateApp(addr basics.Address, aidx basics.AppIndex, 
 	return nil
 }
 
-// Deallocate clears storage for {addr, aidx, global}. It happens on app deletion (global) or closing out (local)
+// DeallocateApp clears storage for {addr, aidx, global}. It happens on app deletion (global) or closing out (local)
 func (cb *roundCowState) DeallocateApp(addr basics.Address, aidx basics.AppIndex, global bool) error {
 	// Check that account has allocated storage
 	allocated, err := cb.allocated(addr, aidx, global)
@@ -271,8 +284,8 @@ func (cb *roundCowState) DeallocateApp(addr basics.Address, aidx basics.AppIndex
 	}
 
 	lsd.action = deallocAction
-	lsd.counts = &basics.StateSchema{}
-	lsd.maxCounts = &basics.StateSchema{}
+	lsd.counts = basics.StateSchema{}
+	lsd.maxCounts = basics.StateSchema{}
 	lsd.kvCow = make(stateDelta)
 
 	if global {
@@ -415,7 +428,7 @@ func (cb *roundCowState) delKey(addr basics.Address, aidx basics.AppIndex, globa
 	// Write the value delta associated with deleting this key
 	lsd, err := cb.ensureStorageDelta(addr, aidx, global, remainAllocAction, accountIdx)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	vdelta, ok := lsd.kvCow[key]
@@ -435,20 +448,6 @@ func (cb *roundCowState) delKey(addr basics.Address, aidx basics.AppIndex, globa
 	}
 
 	return nil // note: deletion cannot cause us to violate maxCount
-}
-
-// MakeDebugBalances creates a ledger suitable for dryrun and debugger
-func MakeDebugBalances(l LedgerForCowBase, round basics.Round, proto protocol.ConsensusVersion, prevTimestamp int64) apply.Balances {
-	base := makeRoundCowBase(l, round-1, 0, basics.Round(0), config.Consensus[proto])
-
-	hdr := bookkeeping.BlockHeader{
-		Round:        round,
-		UpgradeState: bookkeeping.UpgradeState{CurrentProtocol: proto},
-	}
-	hint := 2
-	// passing an empty AccountTotals here is fine since it's only being used by the top level cow state object.
-	cb := makeRoundCowState(base, hdr, config.Consensus[proto], prevTimestamp, ledgercore.AccountTotals{}, hint)
-	return cb
 }
 
 // StatefulEval runs application.  Execution happens in a child cow and all
@@ -597,33 +596,29 @@ func (lsd *storageDelta) applyChild(child *storageDelta) {
 		// completely overwrite those of the parent.
 		lsd.action = child.action
 		lsd.kvCow = child.kvCow
-		lsd.counts = child.counts
-		lsd.maxCounts = child.maxCounts
 	} else {
-		// Otherwise, the child's deltas get merged with those of the
-		// parent, and we keep whatever the parent's state was.
-		for key := range child.kvCow {
+		// Otherwise, the child's new values get merged into the delta of the
+		// parent, but we keep the parent's old/oldExists values.
+		for key, childVal := range child.kvCow {
 			delta, ok := lsd.kvCow[key]
 			if !ok {
-				lsd.kvCow[key] = child.kvCow[key]
+				lsd.kvCow[key] = childVal
 				continue
 			}
 
-			delta.new = child.kvCow[key].new
-			delta.newExists = child.kvCow[key].newExists
+			delta.new = childVal.new
+			delta.newExists = childVal.newExists
 			lsd.kvCow[key] = delta
 		}
-
-		// counts can just get overwritten because they are absolute
-		// see ensureStorageDelta: child.counts is initialized from parent cow
-		lsd.counts = child.counts
 	}
+	// counts can just get overwritten because they are absolute
+	// see ensureStorageDelta: counts are initialized from parent cow
+	lsd.counts = child.counts       // propagate addition/deletion of globals
+	lsd.maxCounts = child.maxCounts // propagate updates to global schema
 
 	// sanity checks
-	if lsd.action == deallocAction {
-		if len(lsd.kvCow) > 0 {
-			panic("dealloc state delta, but nonzero kv change")
-		}
+	if lsd.action == deallocAction && len(lsd.kvCow) > 0 {
+		panic("dealloc state delta, but nonzero kv change")
 	}
 }
 

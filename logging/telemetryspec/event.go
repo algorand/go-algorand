@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -34,7 +34,7 @@ const StartupEvent Event = "Startup"
 // NameValue defines a named value, for use in an array reported to telemetry.
 type NameValue struct {
 	Name  string
-	Value interface{}
+	Value any
 }
 
 // StartupEventDetails contains details for the StartupEvent

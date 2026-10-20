@@ -7,7 +7,6 @@ CURRENT_YEAR=$(date +"%Y")
 LICENSE=$(sed "s/{DATE_Y}/$CURRENT_YEAR/" "$LICENSE_LOCATION")
 VERSIONED_GO_FILES=$(git ls-tree --full-tree --name-only -r HEAD | grep "\.go$")
 EXTRA_FILES=(
-    cmd/tealdbg/bundle_home_html.sh
     crypto/memcpy_chk_windows.c
     tools/x-repo-types/typeAnalyzer/main.tmpl
     test/heapwatch/block_history.py
@@ -82,7 +81,7 @@ for FILE in $VERSIONED_GO_FILES; do
 
             if ! $VERBOSE; then
                 if $UPDATE; then
-                    sed -i.orig s/Copyright\ \(C\)\ 2019-....\ Algorand,\ Inc\./Copyright\ \(C\)\ 2019-$CURRENT_YEAR\ Algorand,\ Inc./ "$PROJECT_ROOT/$FILE" && \
+                    sed -i.orig s/Copyright\ \(C\)\ 2019-....\ Algorand\ Foundation\ Ltd\./Copyright\ \(C\)\ 2019-$CURRENT_YEAR\ Algorand\ Foundation\ Ltd./ "$PROJECT_ROOT/$FILE" && \
                         rm "$PROJECT_ROOT/$FILE".orig
                     ((MOD_COUNT++))
                 elif $INPLACE; then
@@ -102,11 +101,11 @@ done
 
 # non-go files that include a license header
 for FILE in "${EXTRA_FILES[@]}"; do
-    if ! grep -qs "Copyright (C) 2019-$CURRENT_YEAR Algorand, Inc." "$PROJECT_ROOT/$FILE"; then
+    if ! grep -qs "Copyright (C) 2019-$CURRENT_YEAR Algorand Foundation Ltd." "$PROJECT_ROOT/$FILE"; then
         RETURN_VALUE=1
         if ! $VERBOSE; then
             if $UPDATE; then
-                sed -i.orig s/Copyright\ \(C\)\ 2019-....\ Algorand,\ Inc\./Copyright\ \(C\)\ 2019-$CURRENT_YEAR\ Algorand,\ Inc./ "$PROJECT_ROOT/$FILE" && \
+                sed -i.orig s/Copyright\ \(C\)\ 2019-....\ Algorand\ Foundation\ Ltd\./Copyright\ \(C\)\ 2019-$CURRENT_YEAR\ Algorand\ Foundation\ Ltd./ "$PROJECT_ROOT/$FILE" && \
                     rm "$PROJECT_ROOT/$FILE".orig
                 ((MOD_COUNT++))
             fi
@@ -121,12 +120,12 @@ for FILE in "${EXTRA_FILES[@]}"; do
 done
 
 # check the README.md file.
-READMECOPYRIGHT="Copyright (C) 2019-$CURRENT_YEAR, Algorand Inc."
+READMECOPYRIGHT="Copyright (C) 2019-$CURRENT_YEAR, Algorand Foundation Ltd."
 if [ "$(<README.md grep -c "${READMECOPYRIGHT}" | tr -d ' ')" = "0" ]; then
     RETURN_VALUE=1
     if ! $VERBOSE; then
         if $UPDATE; then
-            sed -i.orig s/Copyright\ \(C\)\ 2019-....,\ Algorand\ Inc\./Copyright\ \(C\)\ 2019-$CURRENT_YEAR,\ Algorand\ Inc./ README.md &&
+            sed -i.orig s/Copyright\ \(C\)\ 2019-....,\ Algorand\ Foundation\ Ltd\./Copyright\ \(C\)\ 2019-$CURRENT_YEAR,\ Algorand\ Foundation\ Ltd./ README.md &&
                 rm README.md.orig
             ((MOD_COUNT++))
         fi

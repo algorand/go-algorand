@@ -25,6 +25,7 @@ if [[ $(echo "$OUTPUT" | cut -d' ' -f 6) != 3000 ]];    then echo "Last round sh
 #
 #Participation ID:          4UPT6AQCFZU5ZDN3WKVPCFYOH2SFJ7SPHK7XPWI2CIDYKK7K3WMQ
 #Parent address:            LFMTCXCY6WGSFSGLSNTFH532KVERJVNRD7W5H7GIQ4MPGM7SSVYMQYRHJQ
+#Registered:                yes
 #Last vote round:           3
 #Last block proposal round: 4
 #Effective first round:     0
@@ -89,6 +90,11 @@ verify_registered_state () {
       echo "info_temp_file contents:"
       cat "${info_temp_file}"
       fail_test "Key $SEARCH_KEY was not installed properly for cmd '$SEARCH_INVOKE_CONTEXT'"
+  fi
+  if ! grep -A2 -F "$SEARCH_KEY" "${info_temp_file}" | grep -q "Registered:[[:space:]]*$SEARCH_STATE"; then
+      echo "info_temp_file contents:"
+      cat "${info_temp_file}"
+      fail_test "Unexpected partkeyinfo key $SEARCH_KEY state (looked for $SEARCH_STATE ) for cmd '$SEARCH_INVOKE_CONTEXT'"
   fi
 
   # looking for yes/no, and the 8 character head of participation id in this line:

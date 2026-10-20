@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -95,9 +95,9 @@ type StatusReport struct {
 	CatchpointCatchupAcquiredBlocks    uint64
 	UpgradePropose                     protocol.ConsensusVersion
 	UpgradeApprove                     bool
-	UpgradeDelay                       uint64
+	UpgradeDelay                       basics.Round
 	NextProtocolVoteBefore             basics.Round
-	NextProtocolApprovals              uint64
+	NextProtocolApprovals              basics.Round
 }
 
 // TimeSinceLastRound returns the time since the last block was approved (locally), or 0 if no blocks seen
@@ -152,6 +152,9 @@ type AlgorandFullNode struct {
 	oldKeyDeletionNotify        chan struct{}
 	monitoringRoutinesWaitGroup sync.WaitGroup
 
+	hybridError                 string // whether the MakeFull switched to non-hybrid mode due to a P2PHybridConfigError and needs to be logged periodically
+	hybridErrorRoutineWaitGroup sync.WaitGroup
+
 	tracer messagetracer.MessageTracer
 
 	stateProofWorker *stateproof.Worker
@@ -202,21 +205,40 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	// tie network, block fetcher, and agreement services together
 	var p2pNode network.GossipNode
+	var genesisInfo = network.GenesisInfo{
+		GenesisID: genesis.ID(),
+		NetworkID: genesis.Network,
+	}
+recreateNetwork:
 	if cfg.EnableP2PHybridMode {
-		p2pNode, err = network.NewHybridP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesis.ID(), genesis.Network, node)
+		p2pNode, err = network.NewHybridP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesisInfo, node, nil)
 		if err != nil {
-			log.Errorf("could not create hybrid p2p node: %v", err)
-			return nil, err
+			if _, ok := err.(config.P2PHybridConfigError); !ok {
+				log.Errorf("could not create hybrid p2p node: %v", err)
+				return nil, err
+			}
+			// it was P2PHybridConfigError error so fallback to non-hybrid mode (either P2P or WS)
+			cfg.EnableP2PHybridMode = false
+
+			// indicate we need to start logging the error into the log periodically
+			fallbackNetName := "WS"
+			if cfg.EnableP2P {
+				fallbackNetName = "P2P"
+			}
+			node.hybridError = fmt.Sprintf("could not create hybrid p2p node: %v. Falling back to %s network", err, fallbackNetName)
+			log.Error(node.hybridError)
+
+			goto recreateNetwork
 		}
 	} else if cfg.EnableP2P {
-		p2pNode, err = network.NewP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesis.ID(), genesis.Network, node, nil)
+		p2pNode, err = network.NewP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesisInfo, node, nil, nil)
 		if err != nil {
 			log.Errorf("could not create p2p node: %v", err)
 			return nil, err
 		}
 	} else {
 		var wsNode *network.WebsocketNetwork
-		wsNode, err = network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network, node, nil)
+		wsNode, err = network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesisInfo, node, nil, nil)
 		if err != nil {
 			log.Errorf("could not create websocket node: %v", err)
 			return nil, err
@@ -262,8 +284,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		ExecutionPool: node.lowPriorityCryptoVerificationPool,
 		Ledger:        node.ledger,
 		Net:           node.net,
-		GenesisID:     node.genesisID,
-		GenesisHash:   node.genesisHash,
 		Config:        cfg,
 	}
 	node.txHandler, err = data.MakeTxHandler(txHandlerOpts)
@@ -273,7 +293,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	}
 
 	// The health service registers itself with the network
-	if cfg.IsGossipServer() {
+	if cfg.IsListenServer() {
 		rpcs.MakeHealthService(node.net)
 	}
 
@@ -374,9 +394,31 @@ func (node *AlgorandFullNode) Start() error {
 		return nil
 	}
 
+	if node.hybridError != "" {
+		node.hybridErrorRoutineWaitGroup.Add(1)
+		go func() {
+			defer node.hybridErrorRoutineWaitGroup.Done()
+			ticker := time.NewTicker(6 * time.Hour)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-node.ctx.Done():
+					return
+				case <-ticker.C:
+					// continue logging the error periodically
+					node.log.Error(node.hybridError)
+				}
+			}
+		}()
+	}
+
 	if node.catchpointCatchupService != nil {
-		startNetwork()
-		node.catchpointCatchupService.Start(node.ctx)
+		if err := startNetwork(); err != nil {
+			return err
+		}
+		if err := node.catchpointCatchupService.Start(node.ctx); err != nil {
+			return err
+		}
 	} else {
 		node.catchupService.Start()
 		node.agreementService.Start()
@@ -386,8 +428,7 @@ func (node *AlgorandFullNode) Start() error {
 		node.txHandler.Start()
 		node.stateProofWorker.Start()
 		node.heartbeatService.Start()
-		err := startNetwork()
-		if err != nil {
+		if err := startNetwork(); err != nil {
 			return err
 		}
 
@@ -399,13 +440,13 @@ func (node *AlgorandFullNode) Start() error {
 // Capabilities returns the node's capabilities for advertising to other nodes.
 func (node *AlgorandFullNode) Capabilities() []p2p.Capability {
 	var caps []p2p.Capability
-	if node.config.Archival && node.config.IsGossipServer() {
+	if node.config.Archival && node.config.IsListenServer() {
 		caps = append(caps, p2p.Archival)
 	}
-	if node.config.StoresCatchpoints() && node.config.IsGossipServer() {
+	if node.config.StoresCatchpoints() && node.config.IsListenServer() {
 		caps = append(caps, p2p.Catchpoints)
 	}
-	if node.config.EnableGossipService && node.config.IsGossipServer() {
+	if node.config.EnableGossipService && node.config.IsListenServer() {
 		caps = append(caps, p2p.Gossip)
 	}
 	return caps
@@ -449,6 +490,7 @@ func (node *AlgorandFullNode) Stop() {
 	defer func() {
 		node.mu.Unlock()
 		node.waitMonitoringRoutines()
+		node.hybridErrorRoutineWaitGroup.Wait()
 
 		// oldKeyDeletionThread uses accountManager registry so must be stopped before accountManager is closed
 		node.accountManager.Registry().Close()
@@ -525,6 +567,10 @@ func (node *AlgorandFullNode) writeDevmodeBlock() (err error) {
 		blk.TimeStamp = prev.TimeStamp + *node.timestampOffset
 	}
 	blk.BlockHeader.Seed = committee.Seed(prev.Hash())
+	// Zero out payouts if Proposer not set
+	if (blk.BlockHeader.Proposer == basics.Address{}) {
+		blk.BlockHeader.ProposerPayout = basics.MicroAlgos{}
+	}
 	vb2 := ledgercore.MakeValidatedBlock(blk, vb.UnfinishedDeltas())
 
 	// add the newly generated block to the ledger
@@ -720,6 +766,13 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 	return res, found
 }
 
+// GetPeers returns the node's peers
+func (node *AlgorandFullNode) GetPeers() (inboundPeers []network.Peer, outboundPeers []network.Peer, err error) {
+	inboundPeers = node.net.GetPeers(network.PeersTransportConnectionsIn)
+	outboundPeers = node.net.GetPeers(network.PeersTransportConnectionsOut)
+	return inboundPeers, outboundPeers, nil
+}
+
 // Status returns a StatusReport structure reporting our status as Active and with our ledger's LastRound
 func (node *AlgorandFullNode) Status() (StatusReport, error) {
 	node.syncStatusMu.Lock()
@@ -786,7 +839,7 @@ func latestBlockStatus(ledger *data.Ledger, catchupService *catchup.Service) (s 
 
 	s.UpgradePropose = b.UpgradeVote.UpgradePropose
 	s.UpgradeApprove = b.UpgradeApprove
-	s.UpgradeDelay = uint64(b.UpgradeVote.UpgradeDelay)
+	s.UpgradeDelay = b.UpgradeVote.UpgradeDelay
 	s.NextProtocolVoteBefore = b.NextProtocolVoteBefore
 	s.NextProtocolApprovals = b.UpgradeState.NextProtocolApprovals
 
@@ -1177,6 +1230,7 @@ func (node *AlgorandFullNode) StartCatchup(catchpoint string) error {
 	}
 	err = node.catchpointCatchupService.Start(node.ctx)
 	if err != nil {
+		node.catchpointCatchupService = nil
 		node.log.Warn(err.Error())
 		return MakeStartCatchpointError(catchpoint, err)
 	}
@@ -1204,7 +1258,7 @@ func (node *AlgorandFullNode) AbortCatchup(catchpoint string) error {
 // channel which contains the updated node context. This function need to work asynchronously so that the caller could
 // detect and handle the use case where the node is being shut down while we're switching to/from catchup mode without
 // deadlocking on the shared node mutex.
-func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode bool) (outCtxCh <-chan context.Context) {
+func (node *AlgorandFullNode) SetCatchpointCatchupMode(enable bool) (outCtxCh <-chan context.Context) {
 	// create a non-buffered channel to return the newly created context. The fact that it's non-buffered here
 	// is important, as it allows us to synchronize the "receiving" of the new context before canceling of the previous
 	// one.
@@ -1219,7 +1273,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 			node.mu.Unlock()
 			return
 		}
-		if catchpointCatchupMode {
+		if enable {
 			// stop..
 			defer func() {
 				node.mu.Unlock()
@@ -1446,12 +1500,12 @@ func (node *AlgorandFullNode) IsParticipating() bool {
 }
 
 // SetSyncRound no-ops
-func (node *AlgorandFullNode) SetSyncRound(_ uint64) error {
+func (node *AlgorandFullNode) SetSyncRound(_ basics.Round) error {
 	return nil
 }
 
 // GetSyncRound returns 0 (not set) in the base node implementation
-func (node *AlgorandFullNode) GetSyncRound() uint64 {
+func (node *AlgorandFullNode) GetSyncRound() basics.Round {
 	return 0
 }
 

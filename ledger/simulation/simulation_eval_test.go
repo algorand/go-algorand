@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package simulation_test
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -25,8 +26,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
@@ -38,9 +44,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func uint64ToBytes(num uint64) []byte {
@@ -136,7 +139,7 @@ func validateSimulationResult(t *testing.T, result simulation.Result) {
 	}
 }
 
-const ignoreAppBudgetConsumed = math.MaxUint64
+const ignoreAppBudgetConsumed = math.MaxInt
 
 func simulationTest(t *testing.T, f func(env simulationtesting.Environment) simulationTestCase) {
 	t.Helper()
@@ -149,8 +152,16 @@ func simulationTest(t *testing.T, f func(env simulationtesting.Environment) simu
 }
 
 func runSimulationTestCase(t *testing.T, env simulationtesting.Environment, testcase simulationTestCase) {
+	t.Helper()
+
 	actual, err := simulation.MakeSimulator(env.Ledger, testcase.developerAPI).Simulate(testcase.input)
 	require.NoError(t, err)
+
+	for i := range actual.TxnGroups {
+		if actual.TxnGroups[i].UnnamedResourcesAccessed != nil {
+			actual.TxnGroups[i].UnnamedResourcesAccessed.Simplify()
+		}
+	}
 
 	validateSimulationResult(t, actual)
 
@@ -174,7 +185,7 @@ func runSimulationTestCase(t *testing.T, env simulationtesting.Environment, test
 		if testcase.expected.TxnGroups[i].AppBudgetConsumed == ignoreAppBudgetConsumed {
 			// This test does not care about the app budget consumed. Replace it with the actual value.
 			// But let's still ensure it's the sum of budgets consumed in this group.
-			var sum uint64
+			var sum int
 			for _, txn := range actual.TxnGroups[i].Txns {
 				sum += txn.AppBudgetConsumed
 			}
@@ -213,6 +224,44 @@ func TestPayTxn(t *testing.T) {
 
 			return simulationTestCase{
 				input: simulation.Request{
+					TxnGroups:             [][]transactions.SignedTxn{{txn}},
+					AllowUnnamedResources: true, // exercises i/o quota handline, though irrelevant here
+				},
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							Txns:          []simulation.TxnResult{{FeesPaid: txn.Txn.Fee}},
+							GroupUsage:    1e6,
+							GroupFeesPaid: txn.Txn.Fee,
+						},
+					},
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowUnnamedResources: true,
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("big txn", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			sender := env.Accounts[0]
+			receiver := env.Accounts[1]
+
+			txn := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   sender.Addr,
+				Receiver: receiver.Addr,
+				Amount:   1_000_000,
+				Note:     bytes.Repeat([]byte{1}, 1025), // make the txn big enough to require more than the minimum fee
+			}).Txn().Sign(sender.Sk)
+
+			require.EqualValues(t, 1001, txn.Txn.Fee.Raw, "big note should have increased the fee")
+			return simulationTestCase{
+				input: simulation.Request{
 					TxnGroups: [][]transactions.SignedTxn{{txn}},
 				},
 				expected: simulation.Result{
@@ -220,7 +269,9 @@ func TestPayTxn(t *testing.T) {
 					LastRound: env.TxnInfo.LatestRound(),
 					TxnGroups: []simulation.TxnGroupResult{
 						{
-							Txns: []simulation.TxnResult{{}},
+							Txns:          []simulation.TxnResult{{FeesPaid: txn.Txn.Fee}},
+							GroupUsage:    1e6 + 100,
+							GroupFeesPaid: txn.Txn.Fee,
 						},
 					},
 				},
@@ -256,8 +307,11 @@ func TestPayTxn(t *testing.T) {
 					LastRound: env.TxnInfo.LatestRound(),
 					TxnGroups: []simulation.TxnGroupResult{
 						{
+							GroupUsage:    1e6,
+							GroupFeesPaid: txn.Txn.Fee,
 							Txns: []simulation.TxnResult{
 								{
+									FeesPaid: txn.Txn.Fee,
 									Txn: transactions.SignedTxnWithAD{
 										ApplyData: transactions.ApplyData{
 											ClosingAmount: basics.MicroAlgos{Raw: expectedClosingAmount},
@@ -277,7 +331,7 @@ func TestPayTxn(t *testing.T) {
 		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 			sender := env.Accounts[0]
 			receiver := env.Accounts[1]
-			amount := sender.AcctData.MicroAlgos.Raw + 100
+			amount := basics.MicroAlgos{Raw: sender.AcctData.MicroAlgos.Raw + 100}
 
 			txn := env.TxnInfo.NewTxn(txntest.Txn{
 				Type:     protocol.PaymentTx,
@@ -290,14 +344,16 @@ func TestPayTxn(t *testing.T) {
 				input: simulation.Request{
 					TxnGroups: [][]transactions.SignedTxn{{txn}},
 				},
-				expectedError: fmt.Sprintf("tried to spend {%d}", amount),
+				expectedError: fmt.Sprintf("tried to spend %s", amount),
 				expected: simulation.Result{
 					Version:   simulation.ResultLatestVersion,
 					LastRound: env.TxnInfo.LatestRound(),
 					TxnGroups: []simulation.TxnGroupResult{
 						{
-							Txns:     []simulation.TxnResult{{}},
-							FailedAt: simulation.TxnPath{0},
+							Txns:          []simulation.TxnResult{{FeesPaid: txn.Txn.Fee}},
+							GroupUsage:    1e6,
+							GroupFeesPaid: txn.Txn.Fee,
+							FailedAt:      simulation.TxnPath{0},
 						},
 					},
 				},
@@ -393,8 +449,10 @@ func TestWrongAuthorizerTxn(t *testing.T) {
 						LastRound: env.TxnInfo.LatestRound(),
 						TxnGroups: []simulation.TxnGroupResult{
 							{
-								Txns:     []simulation.TxnResult{{}},
-								FailedAt: simulation.TxnPath{0},
+								Txns:          []simulation.TxnResult{{FeesPaid: txn.Txn.Fee}},
+								FailedAt:      simulation.TxnPath{0},
+								GroupUsage:    1e6,
+								GroupFeesPaid: txn.Txn.Fee,
 							},
 						},
 						EvalOverrides: simulation.ResultEvalOverrides{
@@ -445,9 +503,11 @@ func TestRekey(t *testing.T) {
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
-							{},
-							{},
+							{FeesPaid: stxn1.Txn.Fee},
+							{FeesPaid: stxn2.Txn.Fee},
 						},
+						GroupUsage:    2e6,
+						GroupFeesPaid: stxn1.Txn.Fee.AddSaturate(stxn2.Txn.Fee),
 					},
 				},
 			},
@@ -486,7 +546,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 	sender2 := env.Accounts[1]
 	sender2Balance := env.Accounts[1].AcctData.MicroAlgos
 
-	// Send money back and forth
+	// Send money both ways. Of course, ledger will not change since this is simulated.
 	txn1 := env.TxnInfo.NewTxn(txntest.Txn{
 		Type:     protocol.PaymentTx,
 		Sender:   sender1.Addr,
@@ -497,7 +557,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 		Type:     protocol.PaymentTx,
 		Sender:   sender2.Addr,
 		Receiver: sender1.Addr,
-		Amount:   0,
+		Amount:   10,
 	})
 
 	request := simulation.Request{
@@ -515,6 +575,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 	require.Len(t, result.TxnGroups, 1)
 	require.Len(t, result.TxnGroups[0].Txns, 2)
 	require.Contains(t, result.TxnGroups[0].FailureMessage, "had zero Group but was submitted in a group of 2")
+	require.Equal(t, simulation.TxnPath{0}, result.TxnGroups[0].FailedAt)
 
 	// Add group parameter and sign again
 	txntest.Group(&txn1, &txn2)
@@ -566,7 +627,7 @@ btoi`)
 		name          string
 		arguments     [][]byte
 		expectedError string
-		cost          uint64
+		cost          int
 	}{
 		{
 			name:          "approval",
@@ -583,7 +644,7 @@ btoi`)
 		{
 			name:          "error",
 			arguments:     [][]byte{},
-			expectedError: "rejected by logic err=cannot load arg[0] of 0",
+			expectedError: "rejected by logic err=cannot load arg[0] from 0 args",
 			cost:          1,
 		},
 	}
@@ -623,7 +684,7 @@ int 1`,
 				expectedSuccess := len(testCase.expectedError) == 0
 				var expectedAppCallAD transactions.ApplyData
 				expectedFailedAt := simulation.TxnPath{1}
-				var AppBudgetConsumed, AppBudgetAdded uint64
+				var AppBudgetConsumed, AppBudgetAdded int
 				if expectedSuccess {
 					expectedAppCallAD = transactions.ApplyData{
 						ApplicationID: 1002,
@@ -649,18 +710,21 @@ int 1`,
 						TxnGroups: []simulation.TxnGroupResult{
 							{
 								Txns: []simulation.TxnResult{
-									{},
+									{FeesPaid: signedPayTxn.Txn.Fee},
 									{
 										Txn: transactions.SignedTxnWithAD{
 											ApplyData: expectedAppCallAD,
 										},
 										AppBudgetConsumed:      AppBudgetConsumed,
 										LogicSigBudgetConsumed: testCase.cost,
+										FeesPaid:               signedAppCallTxn.Txn.Fee,
 									},
 								},
 								FailedAt:          expectedFailedAt,
 								AppBudgetAdded:    AppBudgetAdded,
 								AppBudgetConsumed: AppBudgetConsumed,
+								GroupUsage:        2e6,
+								GroupFeesPaid:     basics.MicroAlgos{Raw: 2 * signedPayTxn.Txn.Fee.Raw},
 							},
 						},
 					},
@@ -731,6 +795,7 @@ int 0
 									},
 								},
 								AppBudgetConsumed: 5,
+								FeesPaid:          signedCreateTxn.Txn.Fee,
 							},
 							{
 								Txn: transactions.SignedTxnWithAD{
@@ -741,10 +806,13 @@ int 0
 									},
 								},
 								AppBudgetConsumed: 6,
+								FeesPaid:          signedCallTxn.Txn.Fee,
 							},
 						},
 						AppBudgetAdded:    1400,
 						AppBudgetConsumed: 11,
+						GroupUsage:        2e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 2 * signedCreateTxn.Txn.Fee.Raw},
 					},
 				},
 			},
@@ -795,11 +863,14 @@ int 0
 									},
 								},
 								AppBudgetConsumed: 3,
+								FeesPaid:          signedCreateTxn.Txn.Fee,
 							},
 						},
 						FailedAt:          simulation.TxnPath{0},
 						AppBudgetAdded:    700,
 						AppBudgetConsumed: 3,
+						GroupUsage:        1e6,
+						GroupFeesPaid:     signedCreateTxn.Txn.Fee,
 					},
 				},
 			},
@@ -850,11 +921,14 @@ int 0
 									},
 								},
 								AppBudgetConsumed: 3,
+								FeesPaid:          signedCreateTxn.Txn.Fee,
 							},
 						},
 						FailedAt:          simulation.TxnPath{0},
 						AppBudgetAdded:    700,
 						AppBudgetConsumed: 3,
+						GroupUsage:        1e6,
+						GroupFeesPaid:     signedCreateTxn.Txn.Fee,
 					},
 				},
 			},
@@ -934,6 +1008,7 @@ func TestClearStateRejection(t *testing.T) {
 							{
 								// No EvalDelta changes because the clear state failed
 								AppBudgetConsumed: 16,
+								FeesPaid:          signedClearStateTxn.Txn.Fee,
 							},
 							{
 								Txn: transactions.SignedTxnWithAD{
@@ -949,10 +1024,13 @@ func TestClearStateRejection(t *testing.T) {
 									},
 								},
 								AppBudgetConsumed: 16,
+								FeesPaid:          signedOtherAppCall.Txn.Fee,
 							},
 						},
 						AppBudgetAdded:    1400,
 						AppBudgetConsumed: 32,
+						GroupUsage:        2e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 2 * signedClearStateTxn.Txn.Fee.Raw},
 					},
 				},
 			},
@@ -1008,6 +1086,7 @@ func TestClearStateError(t *testing.T) {
 							{
 								// No EvalDelta changes because the clear state failed
 								AppBudgetConsumed: 14,
+								FeesPaid:          signedClearStateTxn.Txn.Fee,
 							},
 							{
 								Txn: transactions.SignedTxnWithAD{
@@ -1023,10 +1102,13 @@ func TestClearStateError(t *testing.T) {
 									},
 								},
 								AppBudgetConsumed: 16,
+								FeesPaid:          signedOtherAppCall.Txn.Fee,
 							},
 						},
 						AppBudgetAdded:    1400,
 						AppBudgetConsumed: 30,
+						GroupUsage:        2e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 2 * signedClearStateTxn.Txn.Fee.Raw},
 					},
 				},
 			},
@@ -1083,6 +1165,7 @@ func TestErrorAfterClearStateError(t *testing.T) {
 							{
 								// No EvalDelta changes because the clear state failed
 								AppBudgetConsumed: 14,
+								FeesPaid:          signedClearStateTxn.Txn.Fee,
 							},
 							{
 								Txn: transactions.SignedTxnWithAD{
@@ -1098,11 +1181,14 @@ func TestErrorAfterClearStateError(t *testing.T) {
 									},
 								},
 								AppBudgetConsumed: 16,
+								FeesPaid:          signedOtherAppCall.Txn.Fee,
 							},
 						},
 						AppBudgetAdded:    1400,
 						AppBudgetConsumed: 30,
 						FailedAt:          simulation.TxnPath{1},
+						GroupUsage:        2e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 2 * signedClearStateTxn.Txn.Fee.Raw},
 					},
 				},
 			},
@@ -1170,14 +1256,18 @@ int 0
 									},
 								},
 								AppBudgetConsumed: 4,
+								FeesPaid:          signedCreateTxn.Txn.Fee,
 							},
 							{
 								AppBudgetConsumed: 1396,
+								FeesPaid:          signedExpensiveTxn.Txn.Fee,
 							},
 						},
 						FailedAt:          simulation.TxnPath{1},
 						AppBudgetAdded:    1400,
 						AppBudgetConsumed: 1400,
+						GroupUsage:        2e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 2 * signedCreateTxn.Txn.Fee.Raw},
 					},
 				},
 			},
@@ -1219,7 +1309,7 @@ func TestAppCallWithExtraBudget(t *testing.T) {
 
 		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
 		signedExpensiveTxn := expensiveTxn.Txn().Sign(sender.Sk)
-		extraOpcodeBudget := uint64(100)
+		extraOpcodeBudget := 100
 
 		return simulationTestCase{
 			input: simulation.Request{
@@ -1241,13 +1331,17 @@ func TestAppCallWithExtraBudget(t *testing.T) {
 									},
 								},
 								AppBudgetConsumed: 4,
+								FeesPaid:          signedCreateTxn.Txn.Fee,
 							},
 							{
 								AppBudgetConsumed: 1404,
+								FeesPaid:          signedExpensiveTxn.Txn.Fee,
 							},
 						},
 						AppBudgetAdded:    1500,
 						AppBudgetConsumed: 1408,
+						GroupUsage:        2e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 2 * signedCreateTxn.Txn.Fee.Raw},
 					},
 				},
 				EvalOverrides: simulation.ResultEvalOverrides{ExtraOpcodeBudget: extraOpcodeBudget},
@@ -1293,7 +1387,7 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 
 		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
 		signedExpensiveTxn := expensiveTxn.Txn().Sign(sender.Sk)
-		extraOpcodeBudget := uint64(100)
+		extraOpcodeBudget := 100
 
 		commonLeadingSteps := []simulation.OpcodeTraceUnit{
 			{PC: 1}, {PC: 4}, {PC: 6},
@@ -1308,7 +1402,7 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 		secondTrace := make([]simulation.OpcodeTraceUnit, len(commonLeadingSteps))
 		copy(secondTrace, commonLeadingSteps[:])
 		for i := 9; i <= 1409; i++ {
-			secondTrace = append(secondTrace, simulation.OpcodeTraceUnit{PC: uint64(i)})
+			secondTrace = append(secondTrace, simulation.OpcodeTraceUnit{PC: i})
 		}
 
 		return simulationTestCase{
@@ -1335,6 +1429,7 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 									},
 								},
 								AppBudgetConsumed: 4,
+								FeesPaid:          signedCreateTxn.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: firstTrace,
 									ApprovalProgramHash:  approvalHash,
@@ -1342,6 +1437,7 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 							},
 							{
 								AppBudgetConsumed: 1404,
+								FeesPaid:          signedExpensiveTxn.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: secondTrace,
 									ApprovalProgramHash:  approvalHash,
@@ -1350,6 +1446,8 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 						},
 						AppBudgetAdded:    1500,
 						AppBudgetConsumed: 1408,
+						GroupUsage:        2e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 2 * signedCreateTxn.Txn.Fee.Raw},
 					},
 				},
 				EvalOverrides: simulation.ResultEvalOverrides{ExtraOpcodeBudget: extraOpcodeBudget},
@@ -1396,7 +1494,7 @@ func TestAppCallWithExtraBudgetOverBudget(t *testing.T) {
 		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
 		signedExpensiveTxn := expensiveTxn.Txn().Sign(sender.Sk)
 		// Add a small bit of extra budget, but not enough
-		extraBudget := uint64(5)
+		extraBudget := 5
 
 		return simulationTestCase{
 			input: simulation.Request{
@@ -1419,14 +1517,18 @@ func TestAppCallWithExtraBudgetOverBudget(t *testing.T) {
 									},
 								},
 								AppBudgetConsumed: 4,
+								FeesPaid:          signedCreateTxn.Txn.Fee,
 							},
 							{
 								AppBudgetConsumed: 1401,
+								FeesPaid:          signedExpensiveTxn.Txn.Fee,
 							},
 						},
 						FailedAt:          simulation.TxnPath{1},
 						AppBudgetAdded:    1405,
 						AppBudgetConsumed: 1405,
+						GroupUsage:        2e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 2 * signedCreateTxn.Txn.Fee.Raw},
 					},
 				},
 				EvalOverrides: simulation.ResultEvalOverrides{ExtraOpcodeBudget: extraBudget},
@@ -1544,18 +1646,21 @@ int 1`,
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
-							{},
+							{FeesPaid: signedPayTxn.Txn.Fee},
 							{
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: expectedAppCallAD,
 								},
 								AppBudgetConsumed:      0,
 								LogicSigBudgetConsumed: 39998,
+								FeesPaid:               signedAppCallTxn.Txn.Fee,
 							},
 						},
 						FailedAt:          expectedFailedAt,
 						AppBudgetAdded:    0,
 						AppBudgetConsumed: 0,
+						GroupUsage:        2e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 2 * signedPayTxn.Txn.Fee.Raw},
 					},
 				},
 			},
@@ -1621,7 +1726,7 @@ int 1`,
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
-							{},
+							{FeesPaid: signedFundTxn.Txn.Fee},
 							{
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
@@ -1638,10 +1743,110 @@ int 1`,
 									},
 								},
 								AppBudgetConsumed: 701,
+								FeesPaid:          basics.MicroAlgos{Raw: 2 * signedAppCall.Txn.Fee.Raw},
 							},
 						},
 						AppBudgetAdded:    1400,
 						AppBudgetConsumed: 701,
+						GroupUsage:        3e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 3 * signedFundTxn.Txn.Fee.Raw},
+					},
+				},
+			},
+		}
+	})
+}
+
+// TestExtraBudgetWithInner checks that a requested ExtraOpcodeBudget is granted
+// once for the whole group, not again for every inner group. Inner groups share
+// the one pool, so re-applying it would hand out a multiple of what was asked
+// for, and let simulate approve a group that would run out of budget on chain.
+func TestExtraBudgetWithInner(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Costs 700 and invokes an inner transaction, so the group has two app calls
+	// granting 700 each, and exactly one inner group to be tempted by.
+	exactly700AndCallInner := fmt.Sprintf(`#pragma version 6
+pushint 1
+cover 0 // This is a noop, just to fix an odd number of ops
+%s
+itxn_begin
+int appl
+itxn_field TypeEnum
+byte 0x068101
+dup
+itxn_field ClearStateProgram
+itxn_field ApprovalProgram
+itxn_submit
+`, strings.Repeat(`pushint 1
+pop
+`, 345))
+
+	const extraBudget = 1000
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		futureAppID := basics.AppIndex(1002)
+		fund := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: futureAppID.Address(),
+			Amount:   401_000,
+		})
+		appCall := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          sender.Addr,
+			ApprovalProgram: exactly700AndCallInner,
+			ClearStateProgram: `#pragma version 6
+int 1`,
+		})
+
+		txntest.Group(&fund, &appCall)
+
+		signedFundTxn := fund.Txn().Sign(sender.Sk)
+		signedAppCall := appCall.Txn().Sign(sender.Sk)
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedFundTxn, signedAppCall},
+				},
+				ExtraOpcodeBudget: extraBudget,
+			},
+			expected: simulation.Result{
+				Version:       simulation.ResultLatestVersion,
+				LastRound:     env.TxnInfo.LatestRound(),
+				EvalOverrides: simulation.ResultEvalOverrides{ExtraOpcodeBudget: extraBudget},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{FeesPaid: signedFundTxn.Txn.Fee},
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+										EvalDelta: transactions.EvalDelta{
+											InnerTxns: []transactions.SignedTxnWithAD{
+												{
+													ApplyData: transactions.ApplyData{
+														ApplicationID: futureAppID + 1,
+													},
+												},
+											},
+										},
+									},
+								},
+								AppBudgetConsumed: 701,
+								FeesPaid:          basics.MicroAlgos{Raw: 2 * signedAppCall.Txn.Fee.Raw},
+							},
+						},
+						// 700 per app call, plus the extra once, not once per group
+						AppBudgetAdded:    1400 + extraBudget,
+						AppBudgetConsumed: 701,
+						GroupUsage:        3e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 3 * signedFundTxn.Txn.Fee.Raw},
 					},
 				},
 			},
@@ -1777,8 +1982,10 @@ func TestInvalidTxGroup(t *testing.T) {
 				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
-						FailedAt: simulation.TxnPath{0},
-						Txns:     []simulation.TxnResult{{}},
+						FailedAt:      simulation.TxnPath{0},
+						Txns:          []simulation.TxnResult{{FeesPaid: txn.Txn.Fee}},
+						GroupUsage:    1e6,
+						GroupFeesPaid: txn.Txn.Fee,
 					},
 				},
 			},
@@ -1832,9 +2039,9 @@ int 1`
 		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
 		signedCallsABunchLogs := callsABunchLogs.Txn().Sign(sender.Sk)
 
-		expectedMaxLogCalls, expectedMaxLogSize := uint64(2048), uint64(65536)
+		expectedMaxLogCalls, expectedMaxLogSize := 2048, 65536
 		expectedLog := make([]string, LogTimes)
-		for i := 0; i < LogTimes; i++ {
+		for i := range LogTimes {
 			expectedLog[i] = LogLongLine
 		}
 		return simulationTestCase{
@@ -1849,6 +2056,8 @@ int 1`
 				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
+						GroupUsage:    2e6,
+						GroupFeesPaid: basics.MicroAlgos{Raw: 2 * signedCreateTxn.Txn.Fee.Raw},
 						Txns: []simulation.TxnResult{
 							{
 								Txn: transactions.SignedTxnWithAD{
@@ -1857,6 +2066,7 @@ int 1`
 									},
 								},
 								AppBudgetConsumed: 6,
+								FeesPaid:          signedCreateTxn.Txn.Fee,
 							},
 							{
 								Txn: transactions.SignedTxnWithAD{
@@ -1867,6 +2077,7 @@ int 1`
 									},
 								},
 								AppBudgetConsumed: 86,
+								FeesPaid:          signedCallsABunchLogs.Txn.Fee,
 							},
 						},
 						AppBudgetAdded:    1400,
@@ -1924,10 +2135,10 @@ int 1`
 		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
 		signedCallsABunchLogs := callsABunchLogs.Txn().Sign(sender.Sk)
 
-		expectedMaxLogCalls, expectedMaxLogSize := uint64(2048), uint64(65536)
+		expectedMaxLogCalls, expectedMaxLogSize := 2048, 65536
 		actualLogTimes := 65536 / len(LogLongLine)
 		expectedLog := make([]string, actualLogTimes)
-		for i := 0; i < actualLogTimes; i++ {
+		for i := range actualLogTimes {
 			expectedLog[i] = LogLongLine
 		}
 		return simulationTestCase{
@@ -1942,9 +2153,12 @@ int 1`
 				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
-						FailedAt: simulation.TxnPath{1},
+						FailedAt:      simulation.TxnPath{1},
+						GroupUsage:    2e6,
+						GroupFeesPaid: signedCreateTxn.Txn.Fee.AddSaturate(signedCallsABunchLogs.Txn.Fee),
 						Txns: []simulation.TxnResult{
 							{
+								FeesPaid: signedCreateTxn.Txn.Fee,
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
 										ApplicationID: futureAppID,
@@ -1953,6 +2167,7 @@ int 1`
 								AppBudgetConsumed: 6,
 							},
 							{
+								FeesPaid: signedCallsABunchLogs.Txn.Fee,
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
 										EvalDelta: transactions.EvalDelta{
@@ -2137,7 +2352,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 			Sender:          sender.Addr,
 			ApplicationID:   futureAppID,
 			ApplicationArgs: [][]byte{{byte(MaxDepth)}},
-			Fee:             MinFee * uint64(MaxDepth*5+2),
+			Fee:             MinFee * uint64(MaxDepth*5+1),
 		})
 
 		txntest.Group(&createTxn, &paymentTxn, &callsMaxDepth)
@@ -2341,6 +2556,9 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
+						GroupUsage:    13e6,
+						GroupFeesPaid: basics.MicroAlgos{Raw: 13 * signedPaymentTxn.Txn.Fee.Raw},
+
 						Txns: []simulation.TxnResult{
 							{
 								Txn: transactions.SignedTxnWithAD{
@@ -2351,11 +2569,14 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 									ApprovalProgramTrace: creationOpcodeTrace,
 									ApprovalProgramHash:  approvalDigest,
 								},
+								FeesPaid: signedCreateTxn.Txn.Fee,
 							},
 							{
-								Trace: &simulation.TransactionTrace{},
+								Trace:    &simulation.TransactionTrace{},
+								FeesPaid: signedPaymentTxn.Txn.Fee,
 							},
 							{
+								FeesPaid: basics.MicroAlgos{Raw: 11 * signedPaymentTxn.Txn.Fee.Raw},
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
 										ApplicationID: 0,
@@ -2439,7 +2660,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 								},
 							},
 						},
-						AppBudgetAdded:    4200,
+						AppBudgetAdded:    7000, // 2 top-level app calls plus 8 inner app calls
 						AppBudgetConsumed: 385,
 					},
 				},
@@ -2451,7 +2672,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	})
 }
 
-func goValuesToTealValues(goValues ...interface{}) []basics.TealValue {
+func goValuesToTealValues(goValues ...any) []basics.TealValue {
 	if len(goValues) == 0 {
 		return nil
 	}
@@ -2497,7 +2718,7 @@ func goValuesToTealValues(goValues ...interface{}) []basics.TealValue {
 				Uint: convertedValue,
 			}
 		default:
-			panic("unexpected type inferred from interface{}")
+			panic("unexpected type inferred from any")
 		}
 	}
 	return modelValues
@@ -2566,11 +2787,15 @@ byte "hello"; log; int 1`,
 				},
 				TxnGroups: []simulation.TxnGroupResult{
 					{
+						GroupUsage:    2e6,
+						GroupFeesPaid: signedPayTxn.Txn.Fee.AddSaturate(signedAppCallTxn.Txn.Fee),
 						Txns: []simulation.TxnResult{
 							{
-								Trace: &simulation.TransactionTrace{},
+								FeesPaid: signedPayTxn.Txn.Fee,
+								Trace:    &simulation.TransactionTrace{},
 							},
 							{
+								FeesPaid: signedAppCallTxn.Txn.Fee,
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
 										ApplicationID: 1002,
@@ -2647,7 +2872,7 @@ byte "hello"; log; int 1`,
 	})
 }
 
-func TestFailingLogicSigPCandStack(t *testing.T) {
+func TestInvalidLogicSigPCandStack(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -2705,10 +2930,15 @@ byte "hello"; log; int 1`,
 				},
 				TxnGroups: []simulation.TxnGroupResult{
 					{
-						FailedAt: simulation.TxnPath{1},
+						FailedAt:      simulation.TxnPath{1},
+						GroupUsage:    2e6,
+						GroupFeesPaid: signedPayTxn.Txn.Fee.AddSaturate(signedAppCallTxn.Txn.Fee),
 						Txns: []simulation.TxnResult{
-							{},
 							{
+								FeesPaid: signedPayTxn.Txn.Fee,
+							},
+							{
+								FeesPaid: signedAppCallTxn.Txn.Fee,
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{},
 								},
@@ -2768,7 +2998,7 @@ byte "hello"; log; int 1`,
 	})
 }
 
-func TestFailingApp(t *testing.T) {
+func TestInvalidApp(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -2829,7 +3059,8 @@ byte "hello"; log; int 0`,
 						FailedAt: simulation.TxnPath{1},
 						Txns: []simulation.TxnResult{
 							{
-								Trace: &simulation.TransactionTrace{},
+								Trace:    &simulation.TransactionTrace{},
+								FeesPaid: signedPayTxn.Txn.Fee,
 							},
 							{
 								Txn: transactions.SignedTxnWithAD{
@@ -2840,6 +3071,7 @@ byte "hello"; log; int 0`,
 								},
 								AppBudgetConsumed:      3,
 								LogicSigBudgetConsumed: 266,
+								FeesPaid:               signedAppCallTxn.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 										{PC: 1},
@@ -2863,6 +3095,8 @@ byte "hello"; log; int 0`,
 						},
 						AppBudgetAdded:    700,
 						AppBudgetConsumed: 3,
+						GroupUsage:        2e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 2 * signedPayTxn.Txn.Fee.Raw},
 					},
 				},
 			},
@@ -2988,6 +3222,7 @@ int 1`,
 									},
 								},
 								AppBudgetConsumed: 5,
+								FeesPaid:          signedCreate.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 										{
@@ -3015,7 +3250,8 @@ int 1`,
 								},
 							},
 							{
-								Trace: &simulation.TransactionTrace{},
+								Trace:    &simulation.TransactionTrace{},
+								FeesPaid: signedPay.Txn.Fee,
 							},
 							{
 								Txn: transactions.SignedTxnWithAD{
@@ -3028,6 +3264,7 @@ int 1`,
 									},
 								},
 								AppBudgetConsumed: 39,
+								FeesPaid:          signedAppCall.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 										{
@@ -3254,6 +3491,8 @@ int 1`,
 						},
 						AppBudgetAdded:    1400,
 						AppBudgetConsumed: 44,
+						GroupUsage:        3e6,
+						GroupFeesPaid:     signedCreate.Txn.Fee.AddSaturate(signedPay.Txn.Fee.AddSaturate(signedAppCall.Txn.Fee)),
 					},
 				},
 			},
@@ -3450,6 +3689,7 @@ int 1`,
 									},
 								},
 								AppBudgetConsumed: 3,
+								FeesPaid:          signedCreate.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 										{
@@ -3479,11 +3719,13 @@ int 1`,
 							},
 							// Payment
 							{
-								Trace: &simulation.TransactionTrace{},
+								Trace:    &simulation.TransactionTrace{},
+								FeesPaid: signedPay.Txn.Fee,
 							},
 							// BoxCreation
 							{
 								AppBudgetConsumed: 15,
+								FeesPaid:          signedCreateBox.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: boxStateChangeTraceTemplate("create",
 										simulation.OpcodeTraceUnit{
@@ -3550,6 +3792,7 @@ int 1`,
 							// BoxWrite
 							{
 								AppBudgetConsumed: 13,
+								FeesPaid:          signedWriteBox.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: boxStateChangeTraceTemplate("write",
 										simulation.OpcodeTraceUnit{
@@ -3601,6 +3844,7 @@ int 1`,
 							// BoxDelete
 							{
 								AppBudgetConsumed: 13,
+								FeesPaid:          signedDelBox.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: boxStateChangeTraceTemplate("delete",
 										simulation.OpcodeTraceUnit{
@@ -3644,6 +3888,8 @@ int 1`,
 						},
 						AppBudgetAdded:    2800,
 						AppBudgetConsumed: 44,
+						GroupUsage:        5e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 5 * signedCreate.Txn.Fee.Raw},
 					},
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
@@ -3768,6 +4014,7 @@ int 1`,
 							// Optin
 							{
 								AppBudgetConsumed: 8,
+								FeesPaid:          signedOptin.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 										{
@@ -3850,6 +4097,7 @@ int 1`,
 									},
 								},
 								AppBudgetConsumed: 19,
+								FeesPaid:          signedGlobalStateCall.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 										{
@@ -4032,6 +4280,7 @@ int 1`,
 									},
 								},
 								AppBudgetConsumed: 21,
+								FeesPaid:          signedLocalStateCall.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 										{
@@ -4215,6 +4464,8 @@ int 1`,
 						},
 						AppBudgetAdded:    2100,
 						AppBudgetConsumed: 48,
+						GroupUsage:        3e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 3 * signedOptin.Txn.Fee.Raw},
 					},
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
@@ -4408,6 +4659,7 @@ app_local_put
 								Txns: []simulation.TxnResult{
 									{
 										AppBudgetConsumed: 8,
+										FeesPaid:          signedClearStateTxn.Txn.Fee,
 										Trace: &simulation.TransactionTrace{
 											ClearStateProgramTrace:  clearStateProgramTrace,
 											ClearStateProgramHash:   progHash,
@@ -4418,6 +4670,8 @@ app_local_put
 								},
 								AppBudgetAdded:    700,
 								AppBudgetConsumed: 8,
+								GroupUsage:        1e6,
+								GroupFeesPaid:     signedClearStateTxn.Txn.Fee,
 							},
 						},
 						InitialStates: &simulation.ResourcesInitialStates{
@@ -4448,7 +4702,7 @@ app_local_put
 	}
 }
 
-func TestGlobalStateTypeChangeFailure(t *testing.T) {
+func TestGlobalStateTypeChangeErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -4527,6 +4781,7 @@ int 1`,
 									},
 								},
 								AppBudgetConsumed: 3,
+								FeesPaid:          signedCreate.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 										{
@@ -4569,6 +4824,7 @@ int 1`,
 									},
 								},
 								AppBudgetConsumed: 5,
+								FeesPaid:          signedGlobalStateCall.Txn.Fee,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 										{
@@ -4621,6 +4877,8 @@ int 1`,
 						},
 						AppBudgetAdded:    1400,
 						AppBudgetConsumed: 8,
+						GroupUsage:        2e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 2 * signedCreate.Txn.Fee.Raw},
 					},
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
@@ -4826,8 +5084,9 @@ int 1`,
 		txnResults := make([]simulation.TxnResult, len(testcase.boxOpsForSimulate))
 		for i, boxOp := range testcase.boxOpsForSimulate {
 			txnResults[i] = boxOpToSimResult(boxOp)
+			txnResults[i].FeesPaid = signedTxns[i].Txn.Fee
 		}
-		totalConsumed := uint64(0)
+		totalConsumed := 0
 		for _, txnResult := range txnResults {
 			totalConsumed += txnResult.AppBudgetConsumed
 		}
@@ -4871,8 +5130,10 @@ int 1`,
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns:              txnResults,
-						AppBudgetAdded:    700 * uint64(len(txnResults)),
+						AppBudgetAdded:    700 * len(txnResults),
 						AppBudgetConsumed: totalConsumed,
+						GroupUsage:        basics.Micros(len(txnResults) * 1e6),
+						GroupFeesPaid:     basics.MicroAlgos{Raw: uint64(len(txnResults)) * signedTxns[0].Txn.Fee.Raw},
 					},
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
@@ -5173,8 +5434,9 @@ int 1
 		txnResults := make([]simulation.TxnResult, len(testcase.boxOpsForSimulate))
 		for i, boxOp := range testcase.boxOpsForSimulate {
 			txnResults[i] = boxOpToSimResult(boxOp)
+			txnResults[i].FeesPaid = signedTxns[i].Txn.Fee
 		}
-		totalConsumed := uint64(0)
+		totalConsumed := 0
 		for _, txnResult := range txnResults {
 			totalConsumed += txnResult.AppBudgetConsumed
 		}
@@ -5218,8 +5480,10 @@ int 1
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns:              txnResults,
-						AppBudgetAdded:    700 * uint64(len(txnResults)),
+						AppBudgetAdded:    700 * len(txnResults),
 						AppBudgetConsumed: totalConsumed,
+						GroupUsage:        basics.Micros(len(txnResults) * 1e6),
+						GroupFeesPaid:     basics.MicroAlgos{Raw: uint64(len(txnResults)) * signedTxns[0].Txn.Fee.Raw},
 					},
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
@@ -5277,6 +5541,116 @@ func TestAppInitialBoxStatesAboutBoxPut(t *testing.T) {
 		},
 		initialBoxStates: simulation.AppKVPairs{},
 	})
+}
+
+// TestForeignAppBoxStateChangeTrace exercises the foreign-app box opcodes
+// (app_box_*), which manipulate a box belonging to an app other than the one
+// executing. It confirms that both the exec-trace StateChanges and the reported
+// InitialStates are attributed to the foreign box owner rather than the running
+// app. That attribution is the distinguishing behavior of appBoxExplain's
+// foreign path, which reads the target app from the top of the stack instead of
+// using cx.appID -- a path the non-foreign box_* tests never cover, since there
+// the reported app is always the executing one.
+func TestForeignAppBoxStateChangeTrace(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	// Both apps share creator, putting them in the same family so the writer may
+	// write the owner's box once the owner opts into FamilyBoxAccess.
+	creator := env.Accounts[0]
+
+	// owner (app in Applications 1) creates box "b" holding "IIII" and opts into
+	// FamilyBoxAccess so a same-creator family member may write its boxes.
+	owner := env.CreateApp(creator.Addr, simulationtesting.AppParams{
+		ApprovalProgram: `#pragma version 13
+txn ApplicationID
+bz end
+byte "b"
+byte "IIII"
+box_put
+int 1
+app_params_set AppFamilyBoxAccess
+end:
+int 1`,
+		ClearStateProgram: `#pragma version 13
+int 1`,
+	})
+
+	// writer replaces the whole contents of box "b" owned by the app in
+	// Applications 1 (the owner) with "WWWW".
+	writer := env.CreateApp(creator.Addr, simulationtesting.AppParams{
+		ApprovalProgram: `#pragma version 13
+txn ApplicationID
+bz end
+txn Applications 1
+byte "b"
+byte "WWWW"
+app_box_put
+end:
+int 1`,
+		ClearStateProgram: `#pragma version 13
+int 1`,
+	})
+
+	// Fund the owner so it can carry box "b"'s minimum balance, then run it once
+	// to create the box and opt into family box access.
+	env.TransferAlgos(env.Accounts[1].Addr, owner.Address(), 1_000_000)
+	env.Txn(env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        creator.Addr,
+		ApplicationID: owner,
+		Boxes:         []transactions.BoxRef{{Name: []byte("b")}},
+	}).SignedTxn())
+
+	// Simulate a top-level call to the writer that touches the owner's box.
+	callTxn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        creator.Addr,
+		ApplicationID: writer,
+		ForeignApps:   []basics.AppIndex{owner},
+		Boxes:         []transactions.BoxRef{{Index: 1, Name: []byte("b")}},
+	}).Txn().Sign(creator.Sk)
+
+	result, err := simulation.MakeSimulator(env.Ledger, true).Simulate(simulation.Request{
+		TxnGroups: [][]transactions.SignedTxn{{callTxn}},
+		TraceConfig: simulation.ExecTraceConfig{
+			Enable: true,
+			State:  true,
+		},
+	})
+	require.NoError(t, err)
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+
+	// The write's state change must be attributed to the foreign owner (not the
+	// writer), keyed by the correct box name, with the post-write value.
+	var stateChanges []simulation.StateOperation
+	for _, unit := range result.TxnGroups[0].Txns[0].Trace.ApprovalProgramTrace {
+		stateChanges = append(stateChanges, unit.StateChanges...)
+	}
+	require.Equal(t, []simulation.StateOperation{
+		{
+			AppStateOp: logic.AppStateWrite,
+			AppState:   logic.BoxState,
+			AppID:      owner,
+			Key:        "b",
+			NewValue: basics.TealValue{
+				Type:  basics.TealBytesType,
+				Bytes: "WWWW",
+			},
+		},
+	}, stateChanges)
+
+	// The pre-simulation box value is recorded under the owner, and the writer
+	// contributes no box initial state of its own.
+	require.Contains(t, result.InitialStates.AllAppsInitialStates, owner)
+	require.Equal(t, basics.TealValue{
+		Type:  basics.TealBytesType,
+		Bytes: "IIII",
+	}, result.InitialStates.AllAppsInitialStates[owner].AppBoxes["b"])
+	require.NotContains(t, result.InitialStates.AllAppsInitialStates, writer)
 }
 
 type GlobalInitialStatesTestCase struct {
@@ -5455,6 +5829,7 @@ int 1`,
 		txnResults := make([]simulation.TxnResult, len(testcase.txnsArgs))
 		for i, txnArgs := range testcase.txnsArgs {
 			txnResults[i] = txnArgsToResult(txnArgs)
+			txnResults[i].FeesPaid = signedTxns[i].Txn.Fee
 		}
 
 		prepareKeys := make(util.Set[string])
@@ -5472,7 +5847,7 @@ int 1`,
 			newlyCreatedGlobalKeySet.Add(string(txnArgs[1]))
 		}
 
-		totalConsumed := uint64(0)
+		totalConsumed := 0
 		for _, txnResult := range txnResults {
 			totalConsumed += txnResult.AppBudgetConsumed
 		}
@@ -5498,8 +5873,10 @@ int 1`,
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns:              txnResults,
-						AppBudgetAdded:    700 * uint64(len(txnResults)),
+						AppBudgetAdded:    700 * len(txnResults),
 						AppBudgetConsumed: totalConsumed,
+						GroupUsage:        basics.Micros(len(txnResults) * 1e6),
+						GroupFeesPaid:     basics.MicroAlgos{Raw: uint64(len(txnResults)) * signedTxns[0].Txn.Fee.Raw},
 					},
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
@@ -5814,6 +6191,7 @@ int 1`,
 		txnResults := make([]simulation.TxnResult, len(testcase.simulateInstructions))
 		for i, txnArgs := range testcase.simulateInstructions {
 			txnResults[i] = txnArgsToResult(txnArgs)
+			txnResults[i].FeesPaid = signedTxns[i].Txn.Fee
 		}
 
 		prepareInitialStates := make(map[basics.Address]util.Set[string])
@@ -5839,7 +6217,7 @@ int 1`,
 			newlyCreatedLocalStates[acctAddress].Add(string(instruction.appArgs[1]))
 		}
 
-		totalConsumed := uint64(0)
+		totalConsumed := 0
 		for _, txnResult := range txnResults {
 			totalConsumed += txnResult.AppBudgetConsumed
 		}
@@ -5870,8 +6248,10 @@ int 1`,
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns:              txnResults,
-						AppBudgetAdded:    700 * uint64(len(txnResults)),
+						AppBudgetAdded:    700 * len(txnResults),
 						AppBudgetConsumed: totalConsumed,
+						GroupUsage:        basics.Micros(len(txnResults) * 1e6),
+						GroupFeesPaid:     basics.MicroAlgos{Raw: uint64(len(txnResults)) * signedTxns[0].Txn.Fee.Raw},
 					},
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
@@ -6150,8 +6530,11 @@ int 1`,
 				},
 			},
 		}
+		for i := range txnResults {
+			txnResults[i].FeesPaid = signedTxns[i].Txn.Fee
+		}
 
-		totalConsumed := uint64(0)
+		totalConsumed := 0
 		for _, txnResult := range txnResults {
 			totalConsumed += txnResult.AppBudgetConsumed
 		}
@@ -6177,8 +6560,10 @@ int 1`,
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns:              txnResults,
-						AppBudgetAdded:    700 * uint64(len(txnResults)),
+						AppBudgetAdded:    700 * len(txnResults),
 						AppBudgetConsumed: totalConsumed,
+						GroupUsage:        basics.Micros(len(txnResults) * 1e6),
+						GroupFeesPaid:     basics.MicroAlgos{Raw: uint64(len(txnResults)) * signedTxns[0].Txn.Fee.Raw},
 					},
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
@@ -6295,17 +6680,22 @@ int 1`,
 									},
 								},
 								AppBudgetConsumed: 4,
+								FeesPaid:          signedCreateTxn.Txn.Fee,
 							},
 							{
 								AppBudgetConsumed: 10,
+								FeesPaid:          signedCheckStartingBalanceTxn.Txn.Fee,
 							},
-							{},
+							{FeesPaid: signedPaymentTxn.Txn.Fee},
 							{
 								AppBudgetConsumed: 10,
+								FeesPaid:          signedCheckEndingBalanceTxn.Txn.Fee,
 							},
 						},
 						AppBudgetAdded:    2100,
 						AppBudgetConsumed: 24,
+						GroupUsage:        4e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 4 * signedCreateTxn.Txn.Fee.Raw},
 					},
 				},
 			},
@@ -6348,7 +6738,9 @@ func TestOptionalSignatures(t *testing.T) {
 						LastRound: env.TxnInfo.LatestRound(),
 						TxnGroups: []simulation.TxnGroupResult{
 							{
-								Txns: []simulation.TxnResult{{}},
+								Txns:          []simulation.TxnResult{{FeesPaid: stxn.Txn.Fee}},
+								GroupUsage:    1e6,
+								GroupFeesPaid: stxn.Txn.Fee,
 							},
 						},
 						EvalOverrides: simulation.ResultEvalOverrides{
@@ -6359,6 +6751,526 @@ func TestOptionalSignatures(t *testing.T) {
 			})
 		})
 	}
+}
+
+func makePlaceholderPQSigForSimulation(t *testing.T, scheme protocol.PQScheme, seedByte byte) (basics.Address, transactions.PQSig) {
+	t.Helper()
+
+	acct := basics_testing.MakePQTestAccount(t, seedByte, scheme)
+	return acct.Address, transactions.PQSig{
+		Scheme:    acct.Scheme,
+		Salt:      acct.Salt,
+		PublicKey: acct.PublicKey,
+	}
+}
+
+// pqPlaceholderFeeUsage returns the fee usage of a transaction authorized by a
+// PQ signature of the given scheme (base transaction usage plus the scheme's
+// surcharge), and the fee that exactly covers it. Tests derive their expectations
+// from the configured fee policy rather than hardcoding multiples of the min fee.
+func pqPlaceholderFeeUsage(t *testing.T, proto config.ConsensusParams, scheme protocol.PQScheme) (basics.MicroAlgos, basics.Micros) {
+	t.Helper()
+
+	usage := basics.Micros(1e6) + transactions.PQSchemeFeeContribution(proto, scheme)
+	fee, _, overflow := proto.MinFee().FeeForUsage(usage, 1e6, 0)
+	require.False(t, overflow)
+	return fee, usage
+}
+
+func makePlaceholderPQFixSignersGroup(t *testing.T, env simulationtesting.Environment, scheme protocol.PQScheme, placeholderFee uint64) ([]transactions.SignedTxn, basics.Address) {
+	t.Helper()
+
+	sender := env.Accounts[0]
+	pqAuthorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 0)
+	minFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
+
+	rekey := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Addr,
+		Receiver: sender.Addr,
+		RekeyTo:  pqAuthorizer,
+		Fee:      minFee,
+	})
+	pqPay := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Addr,
+		Receiver: sender.Addr,
+		Fee:      placeholderFee,
+	})
+	txgroup := txntest.Group(&rekey, &pqPay)
+	txgroup[0] = txgroup[0].Txn.Sign(sender.Sk)
+	txgroup[1].AuthAddr = sender.Addr
+	txgroup[1].PQsig = pqSig
+
+	return txgroup, pqAuthorizer
+}
+
+func makeAppThenPlaceholderPQFixSignersGroup(t *testing.T, env *simulationtesting.Environment, pqAuthorizer basics.Address, pqSig transactions.PQSig) []transactions.SignedTxn {
+	t.Helper()
+
+	sender := env.Accounts[0]
+	appCaller := env.Accounts[1]
+	appID := env.CreateApp(appCaller.Addr, simulationtesting.AppParams{
+		ApprovalProgram:   "#pragma version 2\nint 1",
+		ClearStateProgram: "#pragma version 2\nint 1",
+	})
+	env.Rekey(sender.Addr, pqAuthorizer)
+
+	proto := env.TxnInfo.CurrentProtocolParams()
+	pqFee, _ := pqPlaceholderFeeUsage(t, proto, pqSig.Scheme)
+	appCall := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        appCaller.Addr,
+		ApplicationID: appID,
+		Fee:           proto.MinTxnFee,
+	})
+	pqPay := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Addr,
+		Receiver: sender.Addr,
+		Fee:      pqFee.Raw,
+	})
+	txgroup := txntest.Group(&appCall, &pqPay)
+	txgroup[0] = txgroup[0].Txn.Sign(appCaller.Sk)
+	txgroup[1].PQsig = pqSig
+	return txgroup
+}
+
+func TestPlaceholderPQSignatures(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, tc := range basics_testing.PQTestSchemes {
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+			testPlaceholderPQSignatures(t, tc.Scheme)
+		})
+	}
+}
+
+func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
+	t.Run("invalid public key", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			_, pqUsage := pqPlaceholderFeeUsage(t, env.TxnInfo.CurrentProtocolParams(), scheme)
+			_, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 1)
+			pqSig.PublicKey = pqSig.PublicKey[:len(pqSig.PublicKey)-1]
+			authorizer := pqSig.Address()
+			txn := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   authorizer,
+				Receiver: authorizer,
+			})
+			stxn := txn.SignedTxn()
+			stxn.PQsig = pqSig
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{{stxn}},
+					AllowEmptySignatures: true,
+				},
+				expectedError: "overspend",
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							FailedAt:      simulation.TxnPath{0},
+							Txns:          []simulation.TxnResult{{FeesPaid: stxn.Txn.Fee}},
+							GroupUsage:    pqUsage,
+							GroupFeesPaid: stxn.Txn.Fee,
+						},
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("wrong salt", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			_, pqUsage := pqPlaceholderFeeUsage(t, env.TxnInfo.CurrentProtocolParams(), scheme)
+			authorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 2)
+			pqSig.Salt ^= 1
+			txn := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   authorizer,
+				Receiver: authorizer,
+			})
+			stxn := txn.SignedTxn()
+			stxn.PQsig = pqSig
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{{stxn}},
+					AllowEmptySignatures: true,
+				},
+				expectedError: "pq signature authorizer mismatch",
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							FailedAt:      simulation.TxnPath{0},
+							Txns:          []simulation.TxnResult{{FeesPaid: stxn.Txn.Fee}},
+							GroupUsage:    pqUsage,
+							GroupFeesPaid: stxn.Txn.Fee,
+						},
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("FixSigners fixes placeholder AuthAddr", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			pqFee, pqUsage := pqPlaceholderFeeUsage(t, env.TxnInfo.CurrentProtocolParams(), scheme)
+			txgroup, pqAuthorizer := makePlaceholderPQFixSignersGroup(t, env, scheme, pqFee.Raw)
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{txgroup},
+					AllowEmptySignatures: true,
+					FixSigners:           true,
+				},
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+						FixSigners:           true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							Txns: []simulation.TxnResult{
+								{FeesPaid: txgroup[0].Txn.Fee},
+								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: pqAuthorizer},
+							},
+							GroupUsage:    1e6 + pqUsage,
+							GroupFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
+						},
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("delegated placeholder", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			sender := env.Accounts[0]
+			authorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 3)
+			ops, err := logic.AssembleStringWithVersion("int 1", 2)
+			require.NoError(t, err)
+			proto := env.TxnInfo.CurrentProtocolParams()
+			minFee := proto.MinTxnFee
+			pqFee, pqUsage := pqPlaceholderFeeUsage(t, proto, scheme)
+
+			rekey := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   sender.Addr,
+				Receiver: sender.Addr,
+				RekeyTo:  authorizer,
+				Fee:      minFee,
+			})
+			delegatedPay := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   sender.Addr,
+				Receiver: sender.Addr,
+				Fee:      pqFee.Raw,
+			})
+			txgroup := txntest.Group(&rekey, &delegatedPay)
+			txgroup[0] = txgroup[0].Txn.Sign(sender.Sk)
+			txgroup[1].AuthAddr = sender.Addr
+			txgroup[1].Lsig = transactions.LogicSig{
+				Logic: ops.Program,
+				PQsig: pqSig,
+			}
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{txgroup},
+					AllowEmptySignatures: true,
+					FixSigners:           true,
+				},
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+						FixSigners:           true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							Txns: []simulation.TxnResult{
+								{FeesPaid: txgroup[0].Txn.Fee},
+								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: authorizer, LogicSigBudgetConsumed: 2},
+							},
+							GroupUsage:    1e6 + pqUsage,
+							GroupFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
+						},
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("delegated placeholder rejecting program", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			sender := env.Accounts[0]
+			authorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 4)
+			ops, err := logic.AssembleStringWithVersion("int 0", 2)
+			require.NoError(t, err)
+			proto := env.TxnInfo.CurrentProtocolParams()
+			minFee := proto.MinTxnFee
+			pqFee, pqUsage := pqPlaceholderFeeUsage(t, proto, scheme)
+
+			rekey := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   sender.Addr,
+				Receiver: sender.Addr,
+				RekeyTo:  authorizer,
+				Fee:      minFee,
+			})
+			delegatedPay := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   sender.Addr,
+				Receiver: sender.Addr,
+				Fee:      pqFee.Raw,
+			})
+			txgroup := txntest.Group(&rekey, &delegatedPay)
+			txgroup[0] = txgroup[0].Txn.Sign(sender.Sk)
+			txgroup[1].AuthAddr = sender.Addr
+			txgroup[1].Lsig = transactions.LogicSig{
+				Logic: ops.Program,
+				PQsig: pqSig,
+			}
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{txgroup},
+					AllowEmptySignatures: true,
+					FixSigners:           true,
+				},
+				// The placeholder delegated program is actually evaluated, so a
+				// rejecting program fails simulation exactly as consensus would.
+				expectedError: "rejected by logic",
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+						FixSigners:           true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							Txns: []simulation.TxnResult{
+								{FeesPaid: txgroup[0].Txn.Fee},
+								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: authorizer, LogicSigBudgetConsumed: 2},
+							},
+							FailedAt:      simulation.TxnPath{1},
+							GroupUsage:    1e6 + pqUsage,
+							GroupFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
+						},
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("FixSigners rejects delegated full placeholder mismatch", func(t *testing.T) {
+		t.Parallel()
+		env := simulationtesting.PrepareSimulatorTest(t)
+		defer env.Close()
+
+		sender := env.Accounts[0]
+		authorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 5)
+		pqSig.Salt ^= 1
+		ops, err := logic.AssembleStringWithVersion("int 1", 2)
+		require.NoError(t, err)
+		proto := env.TxnInfo.CurrentProtocolParams()
+		minFee := proto.MinTxnFee
+		pqFee, _ := pqPlaceholderFeeUsage(t, proto, scheme)
+
+		rekey := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: sender.Addr,
+			RekeyTo:  authorizer,
+			Fee:      minFee,
+		})
+		delegatedPay := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: sender.Addr,
+			Fee:      pqFee.Raw,
+		})
+		txgroup := txntest.Group(&rekey, &delegatedPay)
+		txgroup[0] = txgroup[0].Txn.Sign(sender.Sk)
+		txgroup[1].AuthAddr = sender.Addr
+		txgroup[1].Lsig = transactions.LogicSig{
+			Logic: ops.Program,
+			PQsig: pqSig,
+		}
+
+		result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+			TxnGroups:            [][]transactions.SignedTxn{txgroup},
+			AllowEmptySignatures: true,
+			FixSigners:           true,
+		})
+		require.NoError(t, err)
+		require.Contains(t, result.TxnGroups[0].FailureMessage, "pq signature authorizer mismatch")
+		require.Equal(t, simulation.TxnPath{1}, result.TxnGroups[0].FailedAt)
+		require.Nil(t, result.Block)
+	})
+
+	t.Run("FixSigners validates full placeholder after app signer fix", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			_, pqUsage := pqPlaceholderFeeUsage(t, env.TxnInfo.CurrentProtocolParams(), scheme)
+			pqAuthorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 3)
+			txgroup := makeAppThenPlaceholderPQFixSignersGroup(t, &env, pqAuthorizer, pqSig)
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{txgroup},
+					AllowEmptySignatures: true,
+					FixSigners:           true,
+				},
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+						FixSigners:           true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							Txns: []simulation.TxnResult{
+								{
+									AppBudgetConsumed: ignoreAppBudgetConsumed,
+									FeesPaid:          txgroup[0].Txn.Fee,
+								},
+								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: pqAuthorizer},
+							},
+							AppBudgetAdded:    700,
+							AppBudgetConsumed: ignoreAppBudgetConsumed,
+							GroupUsage:        1e6 + pqUsage,
+							GroupFeesPaid:     basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
+						},
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("FixSigners rejects full placeholder mismatch after app signer fix", func(t *testing.T) {
+		t.Parallel()
+		env := simulationtesting.PrepareSimulatorTest(t)
+		defer env.Close()
+
+		pqAuthorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 4)
+		pqSig.Salt ^= 1
+		txgroup := makeAppThenPlaceholderPQFixSignersGroup(t, &env, pqAuthorizer, pqSig)
+
+		result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+			TxnGroups:            [][]transactions.SignedTxn{txgroup},
+			AllowEmptySignatures: true,
+			FixSigners:           true,
+		})
+		require.NoError(t, err)
+		require.Contains(t, result.TxnGroups[0].FailureMessage, "pq signature authorizer mismatch")
+		require.Equal(t, simulation.TxnPath{1}, result.TxnGroups[0].FailedAt)
+		require.Nil(t, result.Block)
+	})
+
+	t.Run("scheme-only placeholder pays PQ surcharge", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			pqFee, pqUsage := pqPlaceholderFeeUsage(t, env.TxnInfo.CurrentProtocolParams(), scheme)
+			sender := env.Accounts[0]
+			txn := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   sender.Addr,
+				Receiver: sender.Addr,
+				Fee:      pqFee.Raw,
+			})
+			stxn := txn.SignedTxn()
+			stxn.PQsig = transactions.PQSig{Scheme: scheme}
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{{stxn}},
+					AllowEmptySignatures: true,
+				},
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							Txns:          []simulation.TxnResult{{FeesPaid: stxn.Txn.Fee}},
+							GroupUsage:    pqUsage,
+							GroupFeesPaid: stxn.Txn.Fee,
+						},
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("placeholder pays PQ surcharge", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			proto := env.TxnInfo.CurrentProtocolParams()
+			_, pqUsage := pqPlaceholderFeeUsage(t, proto, scheme)
+			txgroup, pqAuthorizer := makePlaceholderPQFixSignersGroup(t, env, scheme, proto.MinTxnFee)
+			var expectedError string
+			var failedAt simulation.TxnPath
+			if pqUsage > 1e6 {
+				expectedError = fmt.Sprintf("usage=%s", 1e6+pqUsage)
+				failedAt = simulation.TxnPath{1}
+			}
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{txgroup},
+					AllowEmptySignatures: true,
+					FixSigners:           true,
+				},
+				expectedError: expectedError,
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+						FixSigners:           true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							FailedAt: failedAt,
+							Txns: []simulation.TxnResult{
+								{FeesPaid: txgroup[0].Txn.Fee},
+								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: pqAuthorizer},
+							},
+							GroupUsage:    1e6 + pqUsage,
+							GroupFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
+						},
+					},
+				},
+			}
+		})
+	})
 }
 
 // TestOptionalSignaturesIncorrect tests that an incorrect signature still fails when
@@ -6384,6 +7296,32 @@ func TestOptionalSignaturesIncorrect(t *testing.T) {
 	_, err := s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{{stxn}}})
 	require.ErrorAs(t, err, &simulation.InvalidRequestError{})
 	require.ErrorContains(t, err, "one signature didn't pass")
+}
+
+func TestOptionalSignaturesProgramlessLogicSigContent(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+	s := simulation.MakeSimulator(env.Ledger, false)
+	sender := env.Accounts[0]
+
+	stxn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Addr,
+		Receiver: sender.Addr,
+		Amount:   0,
+	}).SignedTxn()
+	stxn.Lsig.Args = [][]byte{{1}}
+
+	result, err := s.Simulate(simulation.Request{
+		TxnGroups:            [][]transactions.SignedTxn{{stxn}},
+		AllowEmptySignatures: true,
+	})
+	require.NoError(t, err)
+	require.Len(t, result.TxnGroups, 1)
+	require.Contains(t, result.TxnGroups[0].FailureMessage, "LogicSig fields without LogicSig program")
 }
 
 // TestPartialMissingSignatures tests that a group of transactions with some signatures missing is
@@ -6433,14 +7371,18 @@ func TestPartialMissingSignatures(t *testing.T) {
 				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
+						GroupUsage:    2e6,
+						GroupFeesPaid: basics.MicroAlgos{Raw: 2 * signedTxn1.Txn.Fee.Raw},
 						Txns: []simulation.TxnResult{
 							{
+								FeesPaid: signedTxn1.Txn.Fee,
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
 										ConfigAsset: 1001,
 									},
 								},
 							}, {
+								FeesPaid: signedTxn2.Txn.Fee,
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
 										ConfigAsset: 1002,
@@ -6504,9 +7446,13 @@ func TestPooledFeesAcrossSignedAndUnsigned(t *testing.T) {
 				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
-						Txns: []simulation.TxnResult{
-							{}, {},
-						},
+						Txns: []simulation.TxnResult{{
+							FeesPaid: signedPay1.Txn.Fee,
+						}, {
+							FeesPaid: signedPay2.Txn.Fee,
+						}},
+						GroupUsage:    2e6,
+						GroupFeesPaid: signedPay1.Txn.Fee.AddSaturate(signedPay2.Txn.Fee),
 					},
 				},
 				EvalOverrides: simulation.ResultEvalOverrides{
@@ -6561,7 +7507,7 @@ func makeProgramToCallInner(t *testing.T, program string) string {
 	return wrapCodeWithVersionAndReturn(itxnSubmitCode)
 }
 
-func TestAppCallInnerTxnApplyDataOnFail(t *testing.T) {
+func TestAppCallInnerTxnApplyDataOnErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -6614,10 +7560,17 @@ int 1`,
 				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
+						GroupUsage:    5 * 1e6,
+						GroupFeesPaid: basics.MicroAlgos{Raw: 5 * txgroup[0].Txn.Fee.Raw},
 						Txns: []simulation.TxnResult{
-							{},
-							{},
 							{
+								FeesPaid: txgroup[0].Txn.Fee,
+							},
+							{
+								FeesPaid: txgroup[1].Txn.Fee,
+							},
+							{
+								FeesPaid: basics.MicroAlgos{Raw: 3 * txgroup[2].Txn.Fee.Raw}, // top-level + two inners
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
 										ApplicationID: futureOuterAppID,
@@ -6671,7 +7624,7 @@ byte "finished asset create"
 log
 `
 
-func TestNonAppCallInnerTxnApplyDataOnFail(t *testing.T) {
+func TestNonAppCallInnerTxnApplyDataOnErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -6716,9 +7669,14 @@ int 1`,
 				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
+						GroupUsage:    4e6,
+						GroupFeesPaid: basics.MicroAlgos{Raw: 4 * txgroup[0].Txn.Fee.Raw},
 						Txns: []simulation.TxnResult{
-							{},
 							{
+								FeesPaid: txgroup[0].Txn.Fee,
+							},
+							{
+								FeesPaid: basics.MicroAlgos{Raw: 3 * txgroup[1].Txn.Fee.Raw}, // The app pays 2 more
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
 										ApplicationID: futureAppID,
@@ -6745,7 +7703,7 @@ int 1`,
 								AppBudgetConsumed: 23,
 							},
 						},
-						AppBudgetAdded:    2100,
+						AppBudgetAdded:    1400, // only the app calls grant budget; the inner acfg grants none
 						AppBudgetConsumed: 23,
 						FailedAt:          simulation.TxnPath{1, 1},
 					},
@@ -6769,7 +7727,7 @@ byte "finished asset config"
 log
 `
 
-func TestInnerTxnNonAppCallFailure(t *testing.T) {
+func TestInnerTxnNonAppCallErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
@@ -6814,9 +7772,14 @@ int 1`,
 				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
+						GroupUsage:    4e6,
+						GroupFeesPaid: basics.MicroAlgos{Raw: 4 * txgroup[0].Txn.Fee.Raw},
 						Txns: []simulation.TxnResult{
-							{},
 							{
+								FeesPaid: txgroup[0].Txn.Fee,
+							},
+							{
+								FeesPaid: basics.MicroAlgos{Raw: 3 * txgroup[0].Txn.Fee.Raw},
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
 										ApplicationID: futureAppID,
@@ -6836,7 +7799,7 @@ int 1`,
 								AppBudgetConsumed: 17,
 							},
 						},
-						AppBudgetAdded:    2100,
+						AppBudgetAdded:    700, // the inner acfg txns grant no opcode budget
 						AppBudgetConsumed: 17,
 						FailedAt:          simulation.TxnPath{1, 1},
 					},
@@ -6888,6 +7851,17 @@ func TestMockTracerScenarios(t *testing.T) {
 					// The mocktracer scenario txn is second in our group, so add 1 to the top-level index
 					expectedFailedAt[0]++
 				}
+				// Each top-level and inner txn contributes one fee unit (1e6 micros) of usage. The
+				// group is the pay txn plus the app call and all of its inners.
+				var countTxnAndInners func(ad transactions.ApplyData) int
+				countTxnAndInners = func(ad transactions.ApplyData) int {
+					count := 1
+					for _, inner := range ad.EvalDelta.InnerTxns {
+						count += countTxnAndInners(inner.ApplyData)
+					}
+					return count
+				}
+				groupTxnCount := 1 + countTxnAndInners(scenario.ExpectedSimulationAD)
 				expected := simulation.Result{
 					Version:   simulation.ResultLatestVersion,
 					LastRound: env.TxnInfo.LatestRound(),
@@ -6896,15 +7870,19 @@ func TestMockTracerScenarios(t *testing.T) {
 							AppBudgetAdded:    scenario.AppBudgetAdded,
 							AppBudgetConsumed: scenario.AppBudgetConsumed,
 							FailedAt:          expectedFailedAt,
+							GroupUsage:        basics.Micros(groupTxnCount * 1e6),
+							GroupFeesPaid:     basics.MicroAlgos{Raw: uint64(groupTxnCount) * signedPayTxn.Txn.Fee.Raw},
 							Txns: []simulation.TxnResult{
 								{
 									AppBudgetConsumed: scenario.TxnAppBudgetConsumed[0],
+									FeesPaid:          signedPayTxn.Txn.Fee,
 								},
 								{
 									Txn: transactions.SignedTxnWithAD{
 										ApplyData: scenario.ExpectedSimulationAD,
 									},
 									AppBudgetConsumed: scenario.TxnAppBudgetConsumed[1],
+									FeesPaid:          basics.MicroAlgos{Raw: uint64(groupTxnCount-1) * signedAppCallTxn.Txn.Fee.Raw},
 								},
 							},
 						},
@@ -6990,6 +7968,9 @@ func TestUnnamedResources(t *testing.T) {
 				}
 
 				var innerCount int
+				// Only inner app calls grant opcode budget, so they are counted
+				// separately from the pay and axfer inners.
+				var innerAppCount int
 
 				program := fmt.Sprintf("#pragma version %d\n", v)
 
@@ -7053,6 +8034,7 @@ func TestUnnamedResources(t *testing.T) {
 				if v >= 6 { // contract to contract itxn calls introduced
 					program += fmt.Sprintf("itxn_begin; int appl; itxn_field TypeEnum; int %d; itxn_field ApplicationID; itxn_submit;", otherAppID)
 					innerCount++
+					innerAppCount++
 				}
 				expectedResources.Accounts[otherAppUser] = struct{}{}
 				if v >= 9 {
@@ -7067,9 +8049,9 @@ func TestUnnamedResources(t *testing.T) {
 				if v >= 8 { // boxes introduced
 					program += `byte "A"; int 64; box_create; assert;`
 					program += `byte "B"; box_len; !; assert; !; assert;`
-					expectedUnnamedResourceGroupAssignment.Boxes = map[logic.BoxRef]uint64{
-						{App: 0, Name: "A"}: 0,
-						{App: 0, Name: "B"}: 0,
+					expectedUnnamedResourceGroupAssignment.Boxes = map[basics.BoxRef]simulation.BoxStat{
+						{App: 0, Name: "A"}: {},
+						{App: 0, Name: "B"}: {},
 					}
 				}
 
@@ -7107,7 +8089,7 @@ func TestUnnamedResources(t *testing.T) {
 					local.Address = testAppID.Address()
 					expectedUnnamedResourceGroupAssignment.AppLocals[local] = struct{}{}
 				}
-				var boxesToFix []logic.BoxRef
+				var boxesToFix []basics.BoxRef
 				for box := range expectedUnnamedResourceGroupAssignment.Boxes {
 					if box.App == 0 {
 						// replace with app ID
@@ -7157,8 +8139,11 @@ func TestUnnamedResources(t *testing.T) {
 						LastRound: env.TxnInfo.LatestRound(),
 						TxnGroups: []simulation.TxnGroupResult{
 							{
+								GroupUsage:    1e6 + basics.Micros(innerCount*1e6),
+								GroupFeesPaid: basics.MicroAlgos{Raw: uint64(innerCount+1) * stxn.Txn.Fee.Raw},
 								Txns: []simulation.TxnResult{
 									{
+										FeesPaid: basics.MicroAlgos{Raw: uint64(innerCount+1) * stxn.Txn.Fee.Raw},
 										Txn: transactions.SignedTxnWithAD{
 											ApplyData: transactions.ApplyData{
 												EvalDelta: transactions.EvalDelta{
@@ -7170,7 +8155,7 @@ func TestUnnamedResources(t *testing.T) {
 										UnnamedResourcesAccessed: expectedUnnamedResourceTxnAssignment,
 									},
 								},
-								AppBudgetAdded:           700 + 700*uint64(innerCount),
+								AppBudgetAdded:           700 + 700*innerAppCount,
 								AppBudgetConsumed:        ignoreAppBudgetConsumed,
 								UnnamedResourcesAccessed: expectedUnnamedResourceGroupAssignment,
 							},
@@ -7317,12 +8302,15 @@ int 1
 										},
 										AppBudgetConsumed:        ignoreAppBudgetConsumed,
 										UnnamedResourcesAccessed: expectedUnnamedResourceTxnAssignment,
+										FeesPaid:                 stxn.Txn.Fee,
 									},
 								},
 								FailedAt:                 expectedFailedAt,
 								AppBudgetAdded:           700,
 								AppBudgetConsumed:        ignoreAppBudgetConsumed,
 								UnnamedResourcesAccessed: expectedUnnamedResourceAssignment,
+								GroupUsage:               1e6,
+								GroupFeesPaid:            stxn.Txn.Fee,
 							},
 						},
 						EvalOverrides: simulation.ResultEvalOverrides{
@@ -7482,8 +8470,11 @@ int 1
 						LastRound: env.TxnInfo.LatestRound(),
 						TxnGroups: []simulation.TxnGroupResult{
 							{
+								GroupUsage:    3e6,
+								GroupFeesPaid: basics.MicroAlgos{Raw: 3 * assetCreateStxn.Txn.Fee.Raw},
 								Txns: []simulation.TxnResult{
 									{
+										FeesPaid: assetCreateStxn.Txn.Fee,
 										Txn: transactions.SignedTxnWithAD{
 											ApplyData: transactions.ApplyData{
 												ConfigAsset: basics.AssetIndex(testAppID) + 1,
@@ -7491,6 +8482,7 @@ int 1
 										},
 									},
 									{
+										FeesPaid: appCreateStxn.Txn.Fee,
 										Txn: transactions.SignedTxnWithAD{
 											ApplyData: transactions.ApplyData{
 												ApplicationID: testAppID + 2,
@@ -7499,6 +8491,7 @@ int 1
 										AppBudgetConsumed: ignoreAppBudgetConsumed,
 									},
 									{
+										FeesPaid:          appCallStxn.Txn.Fee,
 										AppBudgetConsumed: ignoreAppBudgetConsumed,
 									},
 								},
@@ -7517,10 +8510,14 @@ int 1
 	}
 }
 
-const boxTestProgram = `#pragma version %d
-txn ApplicationID
-bz end // Do nothing during create
+const verPragma = "#pragma version %d\n"
 
+const bailOnCreate = `
+txn ApplicationID
+bz end
+`
+
+const mainBoxTestProgram = `
 byte "create"
 byte "delete"
 byte "read"
@@ -7560,12 +8557,22 @@ end:
 int 1
 `
 
+// boxTestProgram executes the operations defined by boxOperation
+const boxTestProgram = verPragma + bailOnCreate + mainBoxTestProgram
+
+// boxDuringCreateProgram will even try to operate during the app creation.
+const boxDuringCreateProgram = verPragma + mainBoxTestProgram
+
+// boxOperation is used to describe something we want done to a box. A
+// transaction doing it will be created and run in a test.
 type boxOperation struct {
 	op            logic.BoxOperation
 	name          string
 	createSize    uint64
 	contents      []byte
 	otherRefCount int
+	withBoxRefs   int  // Add this many box refs to the generated transaction
+	duringCreate  bool // If true, instantiate `boxDuringCreateProgram` to execute the op
 }
 
 func (o boxOperation) appArgs() [][]byte {
@@ -7602,13 +8609,16 @@ func (o boxOperation) boxRefs() []transactions.BoxRef {
 }
 
 type boxTestResult struct {
-	Boxes           map[logic.BoxRef]uint64
+	Boxes           map[basics.BoxRef]uint64 // maps observed boxes to their size when read
 	NumEmptyBoxRefs int
 
 	FailureMessage string
 	FailingIndex   int
 }
 
+// testUnnamedBoxOperations creates a group with one transaction per boxOp,
+// calling `app` with arguments meant to effect the boxOps.  The results must
+// match `expected`.
 func testUnnamedBoxOperations(t *testing.T, env simulationtesting.Environment, app basics.AppIndex, boxOps []boxOperation, expected boxTestResult) {
 	t.Helper()
 
@@ -7616,6 +8626,7 @@ func testUnnamedBoxOperations(t *testing.T, env simulationtesting.Environment, a
 	require.LessOrEqual(t, len(boxOps), maxGroupSize)
 
 	otherAssets := 0
+	boxRefs := 0
 	txns := make([]*txntest.Txn, maxGroupSize)
 	for i, op := range boxOps {
 		txn := env.TxnInfo.NewTxn(txntest.Txn{
@@ -7624,10 +8635,18 @@ func testUnnamedBoxOperations(t *testing.T, env simulationtesting.Environment, a
 			ApplicationID:   app,
 			ApplicationArgs: op.appArgs(),
 			ForeignAssets:   make([]basics.AssetIndex, op.otherRefCount),
+			Boxes:           slices.Repeat(op.boxRefs(), op.withBoxRefs),
 			Note:            []byte{byte(i)}, // Make each txn unique
 		})
+		if op.duringCreate {
+			txn.ApplicationID = 0
+			v := env.TxnInfo.CurrentProtocolParams().LogicSigVersion
+			txn.ApprovalProgram = fmt.Sprintf(boxDuringCreateProgram, v)
+			txn.ClearStateProgram = fmt.Sprintf("#pragma version %d\n int 1", v)
+		}
 		txns[i] = &txn
 		otherAssets += op.otherRefCount
+		boxRefs += op.withBoxRefs
 	}
 	for i := len(boxOps); i < maxGroupSize; i++ {
 		// Fill out the rest of the group with non-app transactions. This reduces the amount of
@@ -7649,11 +8668,17 @@ func testUnnamedBoxOperations(t *testing.T, env simulationtesting.Environment, a
 	expectedTxnResults := make([]simulation.TxnResult, len(stxns))
 	for i := range expectedTxnResults {
 		expectedTxnResults[i].AppBudgetConsumed = ignoreAppBudgetConsumed
+		expectedTxnResults[i].FeesPaid = stxns[i].Txn.Fee
+		if i < len(boxOps) && boxOps[i].duringCreate {
+			// 1007 here is because of the number of transactions we used to
+			// setup the env.  See explanation in: TestUnnamedResourcesBoxIOBudget
+			expectedTxnResults[i].Txn.ApplyData.ApplicationID = 1007 + basics.AppIndex(i)
+		}
 	}
 
 	var failedAt simulation.TxnPath
 	if expected.FailureMessage != "" {
-		failedAt = simulation.TxnPath{uint64(expected.FailingIndex)}
+		failedAt = simulation.TxnPath{expected.FailingIndex}
 	}
 
 	proto := env.TxnInfo.CurrentProtocolParams()
@@ -7661,13 +8686,18 @@ func testUnnamedBoxOperations(t *testing.T, env simulationtesting.Environment, a
 		MaxAccounts:  len(boxOps) * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
 		MaxAssets:    len(boxOps)*proto.MaxAppTxnForeignAssets - otherAssets,
 		MaxApps:      len(boxOps) * proto.MaxAppTxnForeignApps,
-		MaxBoxes:     len(boxOps) * proto.MaxAppBoxReferences,
-		MaxTotalRefs: len(boxOps)*proto.MaxAppTotalTxnReferences - otherAssets,
+		MaxBoxes:     len(boxOps)*proto.MaxAppBoxReferences - boxRefs,
+		MaxTotalRefs: len(boxOps)*proto.MaxAppTotalTxnReferences - otherAssets - boxRefs,
 
-		Boxes:           expected.Boxes,
 		NumEmptyBoxRefs: expected.NumEmptyBoxRefs,
 
 		MaxCrossProductReferences: len(boxOps) * proto.MaxAppTxnForeignApps * (proto.MaxAppTxnForeignApps + 2),
+	}
+	if expected.Boxes != nil {
+		expectedUnnamedResources.Boxes = make(map[basics.BoxRef]simulation.BoxStat, len(expected.Boxes))
+		for key, size := range expected.Boxes {
+			expectedUnnamedResources.Boxes[key] = simulation.BoxStat{ReadSize: size}
+		}
 	}
 
 	if !expectedUnnamedResources.HasResources() {
@@ -7686,10 +8716,12 @@ func testUnnamedBoxOperations(t *testing.T, env simulationtesting.Environment, a
 			TxnGroups: []simulation.TxnGroupResult{
 				{
 					Txns:                     expectedTxnResults,
-					AppBudgetAdded:           uint64(700 * len(boxOps)),
+					AppBudgetAdded:           700 * len(boxOps),
 					AppBudgetConsumed:        ignoreAppBudgetConsumed,
 					UnnamedResourcesAccessed: expectedUnnamedResources,
 					FailedAt:                 failedAt,
+					GroupUsage:               basics.Micros(len(stxns) * 1e6),
+					GroupFeesPaid:            basics.MicroAlgos{Raw: uint64(len(stxns)) * stxns[0].Txn.Fee.Raw},
 				},
 			},
 			EvalOverrides: simulation.ResultEvalOverrides{
@@ -7726,8 +8758,12 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 			})
 
 			// MBR is needed for boxes.
-			transferable := env.Accounts[1].AcctData.MicroAlgos.Raw - proto.MinBalance - proto.MinTxnFee
-			env.TransferAlgos(env.Accounts[1].Addr, appID.Address(), transferable)
+			transferable := env.Accounts[1].AcctData.MicroAlgos.Raw - proto.MinBalance - 2*proto.MinTxnFee
+			env.TransferAlgos(env.Accounts[1].Addr, appID.Address(), transferable/2)
+			// we're also going to make new boxes in a new app, which will be
+			// the sixth txns after the appID creation (because of two
+			// TrsnaferAlgos and 3 env.Txn, below)
+			env.TransferAlgos(env.Accounts[1].Addr, (appID + 6).Address(), transferable/2)
 
 			// Set up boxes A, B, C for testing.
 			// A is a box with a size of exactly BytesPerBoxReference
@@ -7776,27 +8812,33 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 			// in separate simulations, so we can reuse the same environment and not have to worry
 			// about the effects of one test interfering with another.
 
-			// Reading exisitng boxes
+			// Reading existing boxes
 			testBoxOps([]boxOperation{
 				{op: logic.BoxReadOperation, name: "A"},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
 				},
 			})
 			testBoxOps([]boxOperation{
 				{op: logic.BoxReadOperation, name: "B"},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "B"}: 1,
 				},
 			})
 			testBoxOps([]boxOperation{
 				{op: logic.BoxReadOperation, name: "C"},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "C"}: 2*proto.BytesPerBoxReference - 1,
 				},
+				// We need an additional empty box ref because the size of C exceeds BytesPerBoxReference
+				NumEmptyBoxRefs: 1,
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxReadOperation, name: "C", withBoxRefs: 1},
+			}, boxTestResult{
 				// We need an additional empty box ref because the size of C exceeds BytesPerBoxReference
 				NumEmptyBoxRefs: 1,
 			})
@@ -7804,7 +8846,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 				{op: logic.BoxReadOperation, name: "A"},
 				{op: logic.BoxReadOperation, name: "B"},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
 					{App: appID, Name: "B"}: 1,
 				},
@@ -7813,7 +8855,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 				{op: logic.BoxReadOperation, name: "A"},
 				{op: logic.BoxReadOperation, name: "C"},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
 					{App: appID, Name: "C"}: 2*proto.BytesPerBoxReference - 1,
 				},
@@ -7824,17 +8866,19 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 				{op: logic.BoxReadOperation, name: "B"},
 				{op: logic.BoxReadOperation, name: "C"},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
 					{App: appID, Name: "B"}: 1,
 					{App: appID, Name: "C"}: 2*proto.BytesPerBoxReference - 1,
 				},
 				// No empty box refs needed because we have perfectly reached 3 * BytesPerBoxReference
 			})
+
+			// non-existent box
 			testBoxOps([]boxOperation{
 				{op: logic.BoxReadOperation, name: "Q"},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "Q"}: 0,
 				},
 			})
@@ -7843,14 +8887,14 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 			testBoxOps([]boxOperation{
 				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "D"}: 0,
 				},
 			})
 			testBoxOps([]boxOperation{
 				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference + 1},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "D"}: 0,
 				},
 				NumEmptyBoxRefs: 1,
@@ -7858,7 +8902,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 			testBoxOps([]boxOperation{
 				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference * 3},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "D"}: 0,
 				},
 				NumEmptyBoxRefs: 2,
@@ -7867,10 +8911,34 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 				{op: logic.BoxCreateOperation, name: "D", createSize: 1},
 				{op: logic.BoxCreateOperation, name: "E", createSize: 1},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "D"}: 0,
 					{App: appID, Name: "E"}: 0,
 				},
+			})
+
+			// Try to read during a new app create. These boxes _can't_ exist, so no need for extra read quota
+			testBoxOps([]boxOperation{
+				{op: logic.BoxReadOperation, name: "X", duringCreate: true},
+			}, boxTestResult{
+				NumEmptyBoxRefs: 1,
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxReadOperation, name: "X", duringCreate: true},
+				{op: logic.BoxReadOperation, name: "Y", duringCreate: true},
+			}, boxTestResult{
+				NumEmptyBoxRefs: 2,
+			})
+			// now try to create, which can cause enough dirty bytes to require empty refs
+			testBoxOps([]boxOperation{
+				{op: logic.BoxCreateOperation, name: "small", createSize: proto.BytesPerBoxReference, duringCreate: true},
+			}, boxTestResult{
+				NumEmptyBoxRefs: 1,
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxCreateOperation, name: "big", createSize: proto.BytesPerBoxReference + 1, duringCreate: true},
+			}, boxTestResult{
+				NumEmptyBoxRefs: 2,
 			})
 
 			// Creating new boxes and reading existing ones
@@ -7878,7 +8946,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference + 2},
 				{op: logic.BoxReadOperation, name: "A"},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "D"}: 0,
 					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
 				},
@@ -7889,7 +8957,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 				{op: logic.BoxReadOperation, name: "A"},
 				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference + 2},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "D"}: 0,
 					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
 				},
@@ -7901,7 +8969,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference + 2},
 				{op: logic.BoxWriteOperation, name: "A", contents: []byte{1}},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "D"}: 0,
 					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
 				},
@@ -7911,7 +8979,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference + 2},
 				{op: logic.BoxWriteOperation, name: "B", contents: []byte{1}},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "D"}: 0,
 					{App: appID, Name: "B"}: 1,
 				},
@@ -7924,7 +8992,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 				{op: logic.BoxCreateOperation, name: "D", createSize: 4 * proto.BytesPerBoxReference},
 				{op: logic.BoxDeleteOperation, name: "D"},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "D"}: 0,
 				},
 				// Still need 3 empty box refs because we went over the write budget before deletion.
@@ -7937,7 +9005,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 				{op: logic.BoxDeleteOperation, name: "D"},
 				{op: logic.BoxReadOperation, name: "C"},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "D"}: 0,
 					{App: appID, Name: "C"}: 2*proto.BytesPerBoxReference - 1,
 				},
@@ -7956,7 +9024,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 					otherRefCount: proto.MaxAppBoxReferences - 1,
 				},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
 				},
 			})
@@ -7987,7 +9055,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 					otherRefCount: proto.MaxAppBoxReferences,
 				},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "C"}: 2*proto.BytesPerBoxReference - 1,
 					{App: appID, Name: "X"}: 0,
 				},
@@ -8002,7 +9070,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 					otherRefCount: proto.MaxAppBoxReferences - 1,
 				},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "X"}: 0,
 				},
 			})
@@ -8016,10 +9084,10 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 					otherRefCount: proto.MaxAppBoxReferences - 1,
 				},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "X"}: 0,
 				},
-				FailureMessage: fmt.Sprintf("logic eval error: write budget (%d) exceeded %d", proto.BytesPerBoxReference, proto.BytesPerBoxReference+1),
+				FailureMessage: fmt.Sprintf("logic eval error: write budget exceeded (%d > %d)", proto.BytesPerBoxReference+1, proto.BytesPerBoxReference),
 				FailingIndex:   0,
 			})
 
@@ -8037,7 +9105,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 					otherRefCount: proto.MaxAppBoxReferences,
 				},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "X"}: 0,
 					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
 				},
@@ -8056,7 +9124,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 					otherRefCount: proto.MaxAppBoxReferences,
 				},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
 				},
 				FailureMessage: fmt.Sprintf("logic eval error: invalid Box reference %#x", "B"),
@@ -8064,6 +9132,215 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestUnnamedResourcesBigProgramReadBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	proto := env.TxnInfo.CurrentProtocolParams()
+
+	sender := env.Accounts[0]
+	appID := createAppWithBoxRefs(t, &env, sender, simulationtesting.AppParams{
+		ApprovalProgram: strings.Repeat("pushint 1; return;\n", 1400),
+	}, []transactions.BoxRef{{}})
+
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        sender.Addr,
+		ApplicationID: appID,
+	}).Txn().Sign(sender.Sk)
+
+	result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+		TxnGroups:             [][]transactions.SignedTxn{{txn}},
+		AllowUnnamedResources: true,
+	})
+	require.NoError(t, err)
+
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+	require.NotNil(t, result.TxnGroups[0].UnnamedResourcesAccessed)
+	require.Equal(t, 1, result.TxnGroups[0].UnnamedResourcesAccessed.NumEmptyBoxRefs)
+
+	// Referencing a second large app should also contribute to read budget, even if it isn't called.
+	biggerID := createAppWithBoxRefs(t, &env, sender, simulationtesting.AppParams{
+		ApprovalProgram: strings.Repeat("pushint 1; return;\n", 2000),
+	}, []transactions.BoxRef{{}, {}})
+	txn = env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        sender.Addr,
+		ApplicationID: appID,
+		Boxes:         []transactions.BoxRef{{}},
+		ForeignApps:   []basics.AppIndex{biggerID},
+	}).Txn().Sign(sender.Sk)
+
+	result, err = simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+		TxnGroups:             [][]transactions.SignedTxn{{txn}},
+		AllowUnnamedResources: true,
+	})
+	require.NoError(t, err)
+
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+	require.NotNil(t, result.TxnGroups[0].UnnamedResourcesAccessed)
+	require.Equal(t, 1, result.TxnGroups[0].UnnamedResourcesAccessed.NumEmptyBoxRefs)
+
+	// If exactly one reference slot remains, simulation should still be able to
+	// suggest exactly one extra box ref.
+	txn = env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        sender.Addr,
+		ApplicationID: appID,
+		ForeignAssets: make([]basics.AssetIndex, proto.MaxAppTotalTxnReferences-1),
+	}).Txn().Sign(sender.Sk)
+
+	result, err = simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+		TxnGroups:             [][]transactions.SignedTxn{{txn}},
+		AllowUnnamedResources: true,
+	})
+	require.NoError(t, err)
+
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+	require.NotNil(t, result.TxnGroups[0].UnnamedResourcesAccessed)
+	require.Equal(t, 1, result.TxnGroups[0].UnnamedResourcesAccessed.NumEmptyBoxRefs)
+}
+
+// TestUnnamedResourcesLargeUnnamedAppReadBudget ensures that simulation suggests
+// empty box refs when a dynamically discovered unnamed app has a large program.
+func TestUnnamedResourcesLargeUnnamedAppReadBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	proto := env.TxnInfo.CurrentProtocolParams()
+	version := uint64(proto.LogicSigVersion)
+	sender := env.Accounts[0]
+	basicProgramLimit := proto.MaxAppProgramLen * (1 + proto.MaxExtraAppProgramPages)
+	clearSize := 6
+	approvalSize := basicProgramLimit + int(proto.BytesPerBoxReference)/2 - clearSize
+	require.LessOrEqual(t, approvalSize, proto.MaxAppProgramLen*(1+proto.MaxAbsoluteExtraProgramPages))
+
+	largeID := createAppWithBoxRefs(t, &env, sender, simulationtesting.AppParams{
+		ApprovalProgram:   assembleSizedPassingProgram(t, version, approvalSize),
+		ClearStateProgram: assembleSizedPassingProgram(t, version, clearSize),
+		ExtraProgramPages: uint32(proto.MaxAbsoluteExtraProgramPages),
+	}, []transactions.BoxRef{{}})
+
+	accessorID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+		ApprovalProgram: fmt.Sprintf(`#pragma version %d
+txn ApplicationID
+bz end
+txna ApplicationArgs 0
+btoi
+app_params_get AppGlobalNumUint
+assert
+pop
+end:
+int 1`, version),
+	})
+
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:            protocol.ApplicationCallTx,
+		Sender:          sender.Addr,
+		ApplicationID:   accessorID,
+		ApplicationArgs: [][]byte{uint64ToBytes(uint64(largeID))},
+	}).Txn().Sign(sender.Sk)
+
+	result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+		TxnGroups:             [][]transactions.SignedTxn{{txn}},
+		AllowUnnamedResources: true,
+	})
+	require.NoError(t, err)
+
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+	require.NotNil(t, result.TxnGroups[0].UnnamedResourcesAccessed)
+	require.Contains(t, result.TxnGroups[0].UnnamedResourcesAccessed.Apps, largeID)
+	require.Equal(t, 1, result.TxnGroups[0].UnnamedResourcesAccessed.NumEmptyBoxRefs)
+}
+
+func assembleSizedPassingProgram(t testing.TB, version uint64, size int) []byte {
+	t.Helper()
+
+	// the unreachable "app_global_get" at the end is used to avoid autosalt insertion
+	const overhead = 5 // version byte + "pushint 1" + "return" + unreachable "app_global_get"
+	require.GreaterOrEqual(t, size, overhead)
+
+	var source strings.Builder
+	fmt.Fprintf(&source, "#pragma version %d\n", version)
+	source.WriteString("pushint 1; return\n")
+	source.WriteString("app_global_get\n")
+	source.WriteString(strings.Repeat("err\n", size-overhead))
+
+	ops, err := logic.AssembleString(source.String())
+	require.NoError(t, err)
+	require.Len(t, ops.Program, size)
+	return ops.Program
+}
+
+func createAppWithBoxRefs(t testing.TB, env *simulationtesting.Environment, creator simulationtesting.Account, params simulationtesting.AppParams, boxes []transactions.BoxRef) basics.AppIndex {
+	t.Helper()
+
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            creator.Addr,
+		ApprovalProgram:   params.ApprovalProgram,
+		ClearStateProgram: params.ClearStateProgram,
+		GlobalStateSchema: params.GlobalStateSchema,
+		LocalStateSchema:  params.LocalStateSchema,
+		ExtraProgramPages: params.ExtraProgramPages,
+		Boxes:             boxes,
+	})
+
+	ad := env.Txn(txn.SignedTxn())
+	require.NotZero(t, ad.ApplicationID)
+	return ad.ApplicationID
+}
+
+// TestUnnamedResourcesLargeProgramCreateWriteBudget ensures that simulation
+// suggests empty box refs for the write budget needed by large app creation.
+func TestUnnamedResourcesLargeProgramCreateWriteBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	proto := env.TxnInfo.CurrentProtocolParams()
+	version := uint64(proto.LogicSigVersion)
+	sender := env.Accounts[0]
+	basicProgramLimit := proto.MaxAppProgramLen * (1 + proto.MaxExtraAppProgramPages)
+	clearSize := 6
+	approvalSize := basicProgramLimit + int(proto.BytesPerBoxReference)/2 - clearSize
+	require.LessOrEqual(t, approvalSize, proto.MaxAppProgramLen*(1+proto.MaxAbsoluteExtraProgramPages))
+
+	create := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            sender.Addr,
+		ApprovalProgram:   assembleSizedPassingProgram(t, version, approvalSize),
+		ClearStateProgram: assembleSizedPassingProgram(t, version, clearSize),
+		ExtraProgramPages: uint32(proto.MaxAbsoluteExtraProgramPages),
+	})
+	create.Boxes = nil // txntest adds empty refs for large creates; we want to show effect of not having any
+	txn := create.Txn().Sign(sender.Sk)
+
+	result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+		TxnGroups: [][]transactions.SignedTxn{{txn}},
+	})
+	require.NoError(t, err)
+	require.Contains(t, result.TxnGroups[0].FailureMessage, "write budget exceeded (1024 > 0)")
+
+	result, err = simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+		TxnGroups:             [][]transactions.SignedTxn{{txn}},
+		AllowUnnamedResources: true,
+	})
+	require.NoError(t, err)
+
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+	require.NotNil(t, result.TxnGroups[0].UnnamedResourcesAccessed)
+	require.Equal(t, 1, result.TxnGroups[0].UnnamedResourcesAccessed.NumEmptyBoxRefs)
 }
 
 const resourceLimitsTestProgramBase = `#pragma version %d
@@ -8422,10 +9699,11 @@ func (resources unnamedResourceArguments) addToTxn(txn *txntest.Txn) {
 		}
 	}
 	txn.ApplicationArgs = encodedArgs
-	txn.Note = make([]byte, 32*len(crossProductAccountsOrder))
+	note := make([]byte, 32*len(crossProductAccountsOrder))
 	for i, account := range crossProductAccountsOrder {
-		copy(txn.Note[32*i:], account[:])
+		copy(note[32*i:], account[:])
 	}
+	txn.Note = note
 }
 
 func mapWithKeys[K comparable, V any](keys []K, defaultValue V) map[K]V {
@@ -8440,14 +9718,14 @@ func mapWithKeys[K comparable, V any](keys []K, defaultValue V) map[K]V {
 	return m
 }
 
-func boxNamesToRefs(app basics.AppIndex, names []string) []logic.BoxRef {
+func boxNamesToRefs(app basics.AppIndex, names []string) []basics.BoxRef {
 	if names == nil {
 		return nil
 	}
 
-	refs := make([]logic.BoxRef, len(names))
+	refs := make([]basics.BoxRef, len(names))
 	for i, name := range names {
-		refs[i] = logic.BoxRef{
+		refs[i] = basics.BoxRef{
 			App:  app,
 			Name: name,
 		}
@@ -8455,7 +9733,7 @@ func boxNamesToRefs(app basics.AppIndex, names []string) []logic.BoxRef {
 	return refs
 }
 
-func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, appVersion int, app basics.AppIndex, resources unnamedResourceArguments, otherTxns []txntest.Txn, extraBudget uint64, expectedError string) {
+func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, appVersion int, app basics.AppIndex, resources unnamedResourceArguments, otherTxns []txntest.Txn, extraBudget int, expectedError string) {
 	t.Helper()
 	maxGroupSize := env.TxnInfo.CurrentProtocolParams().MaxTxGroupSize
 	txns := make([]*txntest.Txn, maxGroupSize)
@@ -8490,6 +9768,7 @@ func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, 
 	expectedTxnResults := make([]simulation.TxnResult, len(stxns))
 	for i := range expectedTxnResults {
 		expectedTxnResults[i].AppBudgetConsumed = ignoreAppBudgetConsumed
+		expectedTxnResults[i].FeesPaid = stxns[i].Txn.Fee
 	}
 
 	var failedAt simulation.TxnPath
@@ -8506,7 +9785,7 @@ func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, 
 		MaxBoxes:     proto.MaxAppBoxReferences,
 		MaxTotalRefs: proto.MaxAppTotalTxnReferences,
 
-		Boxes: mapWithKeys(boxNamesToRefs(app, resources.boxes()), uint64(0)),
+		Boxes: mapWithKeys(boxNamesToRefs(app, resources.boxes()), simulation.BoxStat{}),
 
 		MaxCrossProductReferences: proto.MaxAppTxnForeignApps * (proto.MaxAppTxnForeignApps + 2),
 	}
@@ -8574,10 +9853,12 @@ func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, 
 			TxnGroups: []simulation.TxnGroupResult{
 				{
 					Txns:                     expectedTxnResults,
-					AppBudgetAdded:           uint64(700) + extraBudget,
+					AppBudgetAdded:           700 + extraBudget,
 					AppBudgetConsumed:        ignoreAppBudgetConsumed,
 					UnnamedResourcesAccessed: expectedGroupResources,
 					FailedAt:                 failedAt,
+					GroupUsage:               basics.Micros(len(stxns) * 1e6),
+					GroupFeesPaid:            basics.MicroAlgos{Raw: uint64(len(stxns)) * stxns[0].Txn.Fee.Raw},
 				},
 			},
 			EvalOverrides: simulation.ResultEvalOverrides{
@@ -8660,7 +9941,7 @@ func TestUnnamedResourcesLimits(t *testing.T) {
 				unnamedResourceArguments{}.
 					addAccounts(otherAccounts[:proto.MaxAppTotalTxnReferences+1]...).
 					markLimitExceeded(),
-				fmt.Sprintf("logic eval error: invalid Account reference %s", otherAccounts[proto.MaxAppTotalTxnReferences]),
+				fmt.Sprintf("logic eval error: unavailable Account %s", otherAccounts[proto.MaxAppTotalTxnReferences]),
 			)
 
 			// Exactly at asset limit
@@ -8706,7 +9987,7 @@ func TestUnnamedResourcesLimits(t *testing.T) {
 				numResourceTypes++ // boxes
 			}
 			var atLimit unnamedResourceArguments
-			for i := 0; i < proto.MaxAppTotalTxnReferences; i++ {
+			for i := range proto.MaxAppTotalTxnReferences {
 				switch i % numResourceTypes {
 				case 0:
 					atLimit = atLimit.addAccounts(otherAccounts[i/numResourceTypes])
@@ -8726,7 +10007,7 @@ func TestUnnamedResourcesLimits(t *testing.T) {
 			// Adding 1 more of any is over the limit
 			testResourceAccess(
 				atLimit.addAccounts(otherAccounts[len(otherAccounts)-1]).markLimitExceeded(),
-				fmt.Sprintf("logic eval error: invalid Account reference %s", otherAccounts[len(otherAccounts)-1]),
+				fmt.Sprintf("logic eval error: unavailable Account %s", otherAccounts[len(otherAccounts)-1]),
 			)
 			testResourceAccess(
 				atLimit.addAssets(assets[len(assets)-1]).markLimitExceeded(),
@@ -8877,7 +10158,7 @@ func TestUnnamedResourcesCrossProductLimits(t *testing.T) {
 				atAssetHoldingLimit.
 					addAssetHoldings(assets[assetHoldingLimitIndex], otherAccounts[0]).
 					markLimitExceeded(),
-				fmt.Sprintf("logic eval error: unavailable Holding %s x %d", otherAccounts[0], assets[assetHoldingLimitIndex]),
+				fmt.Sprintf("logic eval error: unavailable Holding %d+%s", assets[assetHoldingLimitIndex], otherAccounts[0]),
 			)
 
 			// Over app local limit
@@ -8885,7 +10166,7 @@ func TestUnnamedResourcesCrossProductLimits(t *testing.T) {
 				atAppLocalLimit.
 					addAppLocals(appID, otherAccounts[0]).
 					markLimitExceeded(),
-				fmt.Sprintf("logic eval error: unavailable Local State %s x %d", otherAccounts[0], appID),
+				fmt.Sprintf("logic eval error: unavailable Local State %d+%s", appID, otherAccounts[0]),
 			)
 
 			// Over total cross-product limit with asset holding
@@ -8893,7 +10174,7 @@ func TestUnnamedResourcesCrossProductLimits(t *testing.T) {
 				atCombinedLimit.
 					addAssetHoldings(assets[1], otherAccounts[0]).
 					markLimitExceeded(),
-				fmt.Sprintf("logic eval error: unavailable Holding %s x %d", otherAccounts[0], assets[1]),
+				fmt.Sprintf("logic eval error: unavailable Holding %d+%s", assets[1], otherAccounts[0]),
 			)
 
 			// Over total cross-product limit with app local
@@ -8901,7 +10182,7 @@ func TestUnnamedResourcesCrossProductLimits(t *testing.T) {
 				atCombinedLimit.
 					addAppLocals(appID, otherAccounts[0]).
 					markLimitExceeded(),
-				fmt.Sprintf("logic eval error: unavailable Local State %s x %d", otherAccounts[0], appID),
+				fmt.Sprintf("logic eval error: unavailable Local State %d+%s", appID, otherAccounts[0]),
 			)
 		})
 	}
@@ -8952,7 +10233,7 @@ func TestFixSigners(t *testing.T) {
 		innerProgram := fmt.Sprintf(`#pragma version 9
 		txn ApplicationID
 		bz end
-		
+
 		// Rekey to the the innerRekeyAddr
 		itxn_begin
 		int pay
@@ -8962,7 +10243,7 @@ func TestFixSigners(t *testing.T) {
 		addr %s
 		itxn_field RekeyTo
 		itxn_submit
-		
+
 		end:
 		int 1
 		`, innerRekeyAddr)
@@ -9055,9 +10336,11 @@ func TestFixSigners(t *testing.T) {
 	// Convenience function for getting the expected app call result. This is a function instead of
 	// a variable because it's used by multiple tests, and the expected result is modified with the
 	// input transactions before comparison by each test.
-	expectedAppCallResultFn := func() simulation.TxnResult {
+	expectedAppCallResultFn := func(appCallFee basics.MicroAlgos) simulation.TxnResult {
 		return simulation.TxnResult{
 			AppBudgetConsumed: ignoreAppBudgetConsumed,
+			// One top-level app call plus three inner transactions.
+			FeesPaid: basics.MicroAlgos{Raw: 4 * appCallFee.Raw},
 			Txn: transactions.SignedTxnWithAD{
 				ApplyData: transactions.ApplyData{
 					EvalDelta: transactions.EvalDelta{
@@ -9102,19 +10385,23 @@ func TestFixSigners(t *testing.T) {
 					TxnGroups: []simulation.TxnGroupResult{
 						{
 							Txns: []simulation.TxnResult{
-								{}, // pay0
+								{FeesPaid: inputs.txgroup[0].Txn.Fee}, // pay0
 								{ // pay1
 									FixedSigner: inputs.other.Addr,
+									FeesPaid:    inputs.txgroup[1].Txn.Fee,
 								},
 								// appCall
-								expectedAppCallResultFn(),
+								expectedAppCallResultFn(inputs.txgroup[2].Txn.Fee),
 								{ // pay2
 									FixedSigner: inputs.innerRekeyAddr,
+									FeesPaid:    inputs.txgroup[3].Txn.Fee,
 								},
-								{}, // pay3
+								{FeesPaid: inputs.txgroup[4].Txn.Fee}, // pay3
 							},
 							AppBudgetConsumed: ignoreAppBudgetConsumed,
-							AppBudgetAdded:    2800,
+							AppBudgetAdded:    1400,
+							GroupUsage:        8e6,
+							GroupFeesPaid:     basics.MicroAlgos{Raw: 8 * inputs.txgroup[0].Txn.Fee.Raw},
 						},
 					},
 				},
@@ -9149,16 +10436,18 @@ func TestFixSigners(t *testing.T) {
 						{
 							FailedAt: simulation.TxnPath{1},
 							Txns: []simulation.TxnResult{
-								{}, // pay0
-								{}, // pay1, does NOT contain FixedSigner
-								{}, // appCall
-								{}, // pay2
-								{}, // pay3
+								{FeesPaid: inputs.txgroup[0].Txn.Fee}, // pay0
+								{FeesPaid: inputs.txgroup[1].Txn.Fee}, // pay1, does NOT contain FixedSigner
+								{FeesPaid: inputs.txgroup[2].Txn.Fee}, // appCall
+								{FeesPaid: inputs.txgroup[3].Txn.Fee}, // pay2
+								{FeesPaid: inputs.txgroup[4].Txn.Fee}, // pay3
 							},
 							AppBudgetConsumed: 0,
 							// This is here even though we don't make it to the app call because
 							// pooled app budget is determined before the group is evaluated.
 							AppBudgetAdded: 700,
+							GroupUsage:     5e6,
+							GroupFeesPaid:  basics.MicroAlgos{Raw: 5 * inputs.txgroup[0].Txn.Fee.Raw},
 						},
 					},
 				},
@@ -9193,17 +10482,20 @@ func TestFixSigners(t *testing.T) {
 						{
 							FailedAt: simulation.TxnPath{3},
 							Txns: []simulation.TxnResult{
-								{}, // pay0
+								{FeesPaid: inputs.txgroup[0].Txn.Fee}, // pay0
 								{ // pay1
 									FixedSigner: inputs.other.Addr,
+									FeesPaid:    inputs.txgroup[1].Txn.Fee,
 								},
 								// appCall
-								expectedAppCallResultFn(),
-								{}, // pay2, does NOT contained FixedSigner
-								{}, // pay3
+								expectedAppCallResultFn(inputs.txgroup[2].Txn.Fee),
+								{FeesPaid: inputs.txgroup[3].Txn.Fee}, // pay2, does NOT contained FixedSigner
+								{FeesPaid: inputs.txgroup[4].Txn.Fee}, // pay3
 							},
 							AppBudgetConsumed: ignoreAppBudgetConsumed,
-							AppBudgetAdded:    2800,
+							AppBudgetAdded:    1400,
+							GroupUsage:        8e6,
+							GroupFeesPaid:     basics.MicroAlgos{Raw: 8 * inputs.txgroup[0].Txn.Fee.Raw},
 						},
 					},
 				},
@@ -9251,7 +10543,7 @@ func TestFixSigners(t *testing.T) {
 			})
 			txgroup := txntest.Group(&noBalPay1, &appCall, &noBalPay2)
 
-			// Testing that our ledger lookup of accounts to retreive their AuthAddr does not crash
+			// Testing that our ledger lookup of accounts to retrieve their AuthAddr does not crash
 			// and burn when the account is empty.
 
 			return simulationTestCase{
@@ -9270,14 +10562,17 @@ func TestFixSigners(t *testing.T) {
 					TxnGroups: []simulation.TxnGroupResult{
 						{
 							Txns: []simulation.TxnResult{
-								{}, // noBalPay1
+								{FeesPaid: txgroup[0].Txn.Fee}, // noBalPay1
 								{ // appCall
 									AppBudgetConsumed: ignoreAppBudgetConsumed,
+									FeesPaid:          txgroup[1].Txn.Fee,
 								},
-								{}, // noBalPay2
+								{FeesPaid: txgroup[2].Txn.Fee}, // noBalPay2
 							},
 							AppBudgetAdded:    700,
 							AppBudgetConsumed: ignoreAppBudgetConsumed,
+							GroupUsage:        3e6,
+							GroupFeesPaid:     txgroup[0].Txn.Fee.AddSaturate(txgroup[1].Txn.Fee).AddSaturate(txgroup[2].Txn.Fee),
 						},
 					},
 				},
@@ -9337,16 +10632,21 @@ func TestFixSigners(t *testing.T) {
 							Txns: []simulation.TxnResult{
 								{ // pay1
 									FixedSigner: acct1.Addr,
+									FeesPaid:    txgroup[0].Txn.Fee,
 								},
 								{ // appCall
 									AppBudgetConsumed: ignoreAppBudgetConsumed,
+									FeesPaid:          txgroup[1].Txn.Fee,
 								},
 								{ // pay2
 									FixedSigner: acct1.Addr,
+									FeesPaid:    txgroup[2].Txn.Fee,
 								},
 							},
 							AppBudgetAdded:    700,
 							AppBudgetConsumed: ignoreAppBudgetConsumed,
+							GroupUsage:        3e6,
+							GroupFeesPaid:     basics.MicroAlgos{Raw: 3 * txgroup[0].Txn.Fee.Raw},
 						},
 					},
 				},

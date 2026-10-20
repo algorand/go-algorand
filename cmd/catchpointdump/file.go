@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,6 +33,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/avm-abi/apps"
+
 	cmdutil "github.com/algorand/go-algorand/cmd/util"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -40,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -50,6 +52,8 @@ var catchpointFile string
 var outFileName string
 var excludedFields = cmdutil.MakeCobraStringSliceValue(nil, []string{"version", "catchpoint"})
 var printDigests bool
+var onlineOnly bool
+var rawDump bool
 
 func init() {
 	fileCmd.Flags().StringVarP(&catchpointFile, "tar", "t", "", "Specify the catchpoint file (either .tar or .tar.gz) to process")
@@ -57,6 +61,8 @@ func init() {
 	fileCmd.Flags().BoolVarP(&loadOnly, "load", "l", false, "Load only, do not dump")
 	fileCmd.Flags().BoolVarP(&printDigests, "digest", "d", false, "Print balances and spver digests")
 	fileCmd.Flags().VarP(excludedFields, "exclude-fields", "e", "List of fields to exclude from the dump: ["+excludedFields.AllowedString()+"]")
+	fileCmd.Flags().BoolVarP(&rawDump, "raw", "R", false, "Dump raw catchpoint data, ignoring ledger database operations")
+	fileCmd.Flags().BoolVarP(&onlineOnly, "online-only", "O", false, "Only print online accounts and online round params data")
 }
 
 var fileCmd = &cobra.Command{
@@ -67,6 +73,13 @@ var fileCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		if catchpointFile == "" {
 			cmd.HelpFunc()(cmd, args)
+			return
+		}
+		if rawDump {
+			err := rawDumpCatchpointFile(catchpointFile, outFileName)
+			if err != nil {
+				reportErrorf("Error dumping raw catchpoint file: %v", err)
+			}
 			return
 		}
 		stats, err := os.Stat(catchpointFile)
@@ -130,18 +143,22 @@ var fileCmd = &cobra.Command{
 				}
 				defer outFile.Close()
 			}
-			err = printAccountsDatabase("./ledger.tracker.sqlite", true, fileHeader, outFile, excludedFields.GetSlice())
-			if err != nil {
-				reportErrorf("Unable to print account database : %v", err)
+			if !onlineOnly {
+				err = printAccountsDatabase("./ledger.tracker.sqlite", true, fileHeader, outFile, excludedFields.GetSlice())
+				if err != nil {
+					reportErrorf("Unable to print account database : %v", err)
+				}
+				err = printKeyValueStore("./ledger.tracker.sqlite", true, outFile)
+				if err != nil {
+					reportErrorf("Unable to print key value store : %v", err)
+				}
+				err = printStateProofVerificationContext("./ledger.tracker.sqlite", true, outFile)
+				if err != nil {
+					reportErrorf("Unable to print state proof verification database : %v", err)
+				}
 			}
-			err = printKeyValueStore("./ledger.tracker.sqlite", true, outFile)
-			if err != nil {
-				reportErrorf("Unable to print key value store : %v", err)
-			}
-			err = printStateProofVerificationContext("./ledger.tracker.sqlite", true, outFile)
-			if err != nil {
-				reportErrorf("Unable to print state proof verification database : %v", err)
-			}
+
+			// Always print online accounts and online round params
 			err = printOnlineAccounts("./ledger.tracker.sqlite", true, outFile)
 			if err != nil {
 				reportErrorf("Unable to print online accounts : %v", err)
@@ -179,6 +196,167 @@ func isGzipCompressed(catchpointReader *bufio.Reader, catchpointFileSize int64) 
 	}
 
 	return prefixBytes[0] == gzipPrefix[0] && prefixBytes[1] == gzipPrefix[1]
+}
+
+func rawDumpCatchpointFile(catchpointFile string, outFileName string) error {
+	stat, err := os.Stat(catchpointFile)
+	if err != nil {
+		return fmt.Errorf("unable to stat '%s': %v", catchpointFile, err)
+	}
+	if stat.Size() == 0 {
+		return fmt.Errorf("file '%s' is empty", catchpointFile)
+	}
+
+	f, err := os.Open(catchpointFile)
+	if err != nil {
+		return fmt.Errorf("unable to open file '%s': %v", catchpointFile, err)
+	}
+	defer f.Close()
+
+	outFile := os.Stdout
+	if outFileName != "" {
+		outFile, err = os.OpenFile(outFileName, os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0644)
+		if err != nil {
+			return fmt.Errorf("unable to create file '%s': %v", outFileName, err)
+		}
+		defer outFile.Close()
+	}
+
+	return rawDumpCatchpointStream(f, stat.Size(), outFile)
+}
+
+func rawDumpCatchpointStream(r io.Reader, fileSize int64, outFile *os.File) error {
+	bufRd := bufio.NewReader(r)
+	tarReader, _, err := getCatchpointTarReader(bufRd, fileSize)
+	if err != nil {
+		return err
+	}
+	var fileHeader ledger.CatchpointFileHeader
+	var fileHeaderFound bool
+	var version uint64
+
+	for {
+		hdr, err := tarReader.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+		fname := hdr.Name
+
+		chunkData := make([]byte, hdr.Size)
+		_, readErr := io.ReadFull(tarReader, chunkData)
+		if readErr != nil && readErr != io.EOF {
+			return readErr
+		}
+
+		switch fname {
+		case ledger.CatchpointContentFileName:
+			err = protocol.Decode(chunkData, &fileHeader)
+			if err != nil {
+				return err
+			}
+			fileHeaderFound = true
+			version = fileHeader.Version
+			printHeaderFields(fileHeader)
+
+		case "stateProofVerificationContext.msgpack":
+			// skip decoding state proof verification context
+
+		default:
+			// it might be balances.*.msgpack or something else
+			if strings.HasPrefix(fname, "balances.") && strings.HasSuffix(fname, ".msgpack") {
+				if !fileHeaderFound {
+					fmt.Fprintf(outFile, "Warning: found a balances chunk %s before content.json\n", fname)
+				}
+				if version == ledger.CatchpointFileVersionV5 {
+					var chunk ledger.CatchpointSnapshotChunkV5
+					err = protocol.Decode(chunkData, &chunk)
+					if err != nil {
+						fmt.Fprintf(outFile, "Error decoding chunk %s: %v\n", fname, err)
+						return err
+					}
+					for _, brec := range chunk.Balances {
+						// decode accountData
+						var ad basics.AccountData
+						err = protocol.Decode(brec.AccountData, &ad)
+						if err != nil {
+							fmt.Fprintf(outFile, "Error decoding account data %s: %v\n", brec.Address.String(), err)
+							return err
+						}
+						adJSON, _ := json.Marshal(ad)
+						fmt.Fprintf(outFile, "%s : %s\n", brec.Address.String(), string(adJSON))
+						// v5 has no resources map
+					}
+				} else {
+					var chunk ledger.CatchpointSnapshotChunkV6
+					err = protocol.Decode(chunkData, &chunk)
+					if err != nil {
+						fmt.Fprintf(outFile, "Error decoding chunk %s: %v\n", fname, err)
+						return err
+					}
+					// Balances - only print if not onlineOnly
+					if !onlineOnly {
+						for _, brec := range chunk.Balances {
+							var ad trackerdb.BaseAccountData
+							err = protocol.Decode(brec.AccountData, &ad)
+							if err != nil {
+								fmt.Fprintf(outFile, "Error decoding account data %s: %v\n", brec.Address.String(), err)
+								return err
+							}
+							adJSON, _ := json.Marshal(ad)
+							fmt.Fprintf(outFile, "%s : %s\n", brec.Address.String(), string(adJSON))
+
+							// Now print each resource
+							for k, rawRes := range brec.Resources {
+								// decode as a generic object
+								var resDecoded trackerdb.ResourcesData
+								err = protocol.Decode(rawRes, &resDecoded)
+								if err != nil {
+									fmt.Fprintf(outFile, "Error decoding resource %s: %v\n", brec.Address.String(), err)
+									return err
+								}
+								resJSON, _ := json.Marshal(resDecoded)
+								fmt.Fprintf(outFile, "%s resource %d : %s\n", brec.Address.String(), k, string(resJSON))
+							}
+						}
+						// KVs
+						for _, kv := range chunk.KVs {
+							printKeyValue(bufio.NewWriterSize(outFile, 1024), kv.Key, kv.Value)
+						}
+					}
+					// OnlineAccounts
+					for _, oa := range chunk.OnlineAccounts {
+						var dataDecoded trackerdb.BaseOnlineAccountData
+						err = protocol.Decode(oa.Data, &dataDecoded)
+						if err != nil {
+							fmt.Fprintf(outFile, "Error decoding online account %s: %v\n", oa.Address.String(), err)
+							return err
+						}
+						dataJSON, _ := json.Marshal(dataDecoded)
+						fmt.Fprintf(outFile, "onlineaccount: %s %d %d %d %s\n",
+							oa.Address.String(), oa.UpdateRound, oa.NormalizedOnlineBalance, oa.VoteLastValid, string(dataJSON))
+					}
+					// OnlineRoundParams
+					for _, rp := range chunk.OnlineRoundParams {
+						var dataDecoded ledgercore.OnlineRoundParamsData
+						err = protocol.Decode(rp.Data, &dataDecoded)
+						if err != nil {
+							fmt.Fprintf(outFile, "Error decoding online round params %d: %v\n", rp.Round, err)
+							return err
+						}
+						dataJSON, _ := json.Marshal(dataDecoded)
+						fmt.Fprintf(outFile, "onlineroundparams: %d %s\n", rp.Round, string(dataJSON))
+					}
+				}
+			} else {
+				// unknown chunk name => ignore or just mention
+				fmt.Fprintf(outFile, "Unknown tar filename %s\n", fname)
+			}
+		}
+	}
+	return nil
 }
 
 func getCatchpointTarReader(catchpointReader *bufio.Reader, catchpointFileSize int64) (*tar.Reader, bool, error) {
@@ -247,17 +425,17 @@ func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.Catc
 		readComplete := int64(0)
 
 		for readComplete < header.Size {
-			bytesRead, err := tarReader.Read(balancesBlockBytes[readComplete:])
+			bytesRead, err1 := tarReader.Read(balancesBlockBytes[readComplete:])
 			readComplete += int64(bytesRead)
 			progress += uint64(bytesRead)
-			if err != nil {
-				if err == io.EOF {
+			if err1 != nil {
+				if err1 == io.EOF {
 					if readComplete == header.Size {
 						break
 					}
-					err = fmt.Errorf("getPeerLedger received io.EOF while reading from tar file stream prior of reaching chunk size %d / %d", readComplete, header.Size)
+					err1 = fmt.Errorf("getPeerLedger received io.EOF while reading from tar file stream prior of reaching chunk size %d / %d", readComplete, header.Size)
 				}
-				return fileHeader, err
+				return fileHeader, err1
 			}
 		}
 		err = catchupAccessor.ProcessStagingBalances(ctx, header.Name, balancesBlockBytes, &downloadProgress)
@@ -270,10 +448,7 @@ func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.Catc
 		}
 		if time.Since(lastProgressUpdate) > 50*time.Millisecond && catchpointFileSize > 0 {
 			lastProgressUpdate = time.Now()
-			progressRatio := int(float64(progress) * barLength / float64(catchpointFileSize))
-			if progressRatio > barLength {
-				progressRatio = barLength
-			}
+			progressRatio := min(int(float64(progress)*barLength/float64(catchpointFileSize)), barLength)
 			printLoadCatchpointProgressLine(progressRatio, barLength, int64(progress))
 		}
 	}
@@ -289,7 +464,7 @@ func printDumpingCatchpointProgressLine(progress int, barLength int, dld int64) 
 	if dld > 0 {
 		outString = fmt.Sprintf(outString+" %d", dld)
 	}
-	fmt.Printf(escapeCursorUp + escapeDeleteLine + outString + "\n")
+	fmt.Print(escapeCursorUp + escapeDeleteLine + outString + "\n")
 }
 
 func printAccountsDatabase(databaseName string, stagingTables bool, fileHeader ledger.CatchpointFileHeader, outFile *os.File, excludeFields []string) error {
@@ -317,7 +492,7 @@ func printAccountsDatabase(databaseName string, stagingTables bool, fileHeader l
 			"Total Online Round Params: %d",
 			"Total Chunks: %d",
 		}
-		var headerValues = []interface{}{
+		var headerValues = []any{
 			fileHeader.Version,
 			fileHeader.BalancesRound,
 			fileHeader.BlocksRound,
@@ -335,13 +510,13 @@ func printAccountsDatabase(databaseName string, stagingTables bool, fileHeader l
 		}
 
 		var actualFields []string
-		var actualValues []interface{}
+		var actualValues []any
 		if len(excludeFields) == 0 {
 			actualFields = headerFields
 			actualValues = headerValues
 		} else {
 			actualFields = make([]string, 0, len(headerFields)-len(excludeFields))
-			actualValues = make([]interface{}, 0, len(headerFields)-len(excludeFields))
+			actualValues = make([]any, 0, len(headerFields)-len(excludeFields))
 			for i, field := range headerFields {
 				lower := strings.ToLower(field)
 				excluded := false
@@ -407,7 +582,7 @@ func printAccountsDatabase(databaseName string, stagingTables bool, fileHeader l
 			return
 		}
 
-		printer := func(addr basics.Address, data interface{}, progress uint64) (err error) {
+		printer := func(addr basics.Address, data any, progress uint64) (err error) {
 			jsonData, err := json.Marshal(data)
 			if err != nil {
 				return err
@@ -591,7 +766,7 @@ func printOnlineAccounts(databaseName string, stagingTables bool, outFile *os.Fi
 	}
 
 	return dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		rows, err := sqlitedriver.MakeOnlineAccountsIter(ctx, tx, stagingTables, 0)
+		rows, err := sqlitedriver.MakeOrderedOnlineAccountsIter(ctx, tx, stagingTables, 0)
 		if err != nil {
 			return err
 		}

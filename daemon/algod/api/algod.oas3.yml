@@ -1,69 +1,41 @@
 {
   "components": {
     "parameters": {
-      "account-id": {
-        "description": "account string",
+      "address": {
+        "description": "An account public key.",
         "in": "path",
-        "name": "account-id",
+        "name": "address",
         "required": true,
         "schema": {
+          "pattern": "[A-Z0-9]{58}",
           "type": "string",
-          "x-go-name": "AccountID"
+          "x-go-type": "basics.Address"
         },
-        "x-go-name": "AccountID"
+        "x-go-type": "basics.Address"
       },
-      "address": {
-        "description": "Only include transactions with this address in one of the transaction fields.",
-        "in": "query",
-        "name": "address",
+      "application-id": {
+        "description": "An application identifier.",
+        "in": "path",
+        "name": "application-id",
+        "required": true,
         "schema": {
-          "type": "string"
-        }
-      },
-      "address-role": {
-        "description": "Combine with the address parameter to define what type of address to search for.",
-        "in": "query",
-        "name": "address-role",
-        "schema": {
-          "enum": [
-            "sender",
-            "receiver",
-            "freeze-target"
-          ],
-          "type": "string"
-        }
-      },
-      "after-time": {
-        "description": "Include results after the given time. Must be an RFC 3339 formatted string.",
-        "in": "query",
-        "name": "after-time",
-        "schema": {
-          "format": "date-time",
-          "type": "string",
-          "x-algorand-format": "RFC3339 String"
+          "minimum": 0,
+          "type": "integer",
+          "x-go-type": "basics.AppIndex"
         },
-        "x-algorand-format": "RFC3339 String"
+        "x-go-type": "basics.AppIndex"
       },
       "asset-id": {
-        "description": "Asset ID",
-        "in": "query",
+        "description": "An asset identifier.",
+        "in": "path",
         "name": "asset-id",
+        "required": true,
         "schema": {
+          "minimum": 0,
           "type": "integer",
-          "x-go-name": "AssetID"
+          "x-go-type": "basics.AssetIndex"
         },
-        "x-go-name": "AssetID"
-      },
-      "before-time": {
-        "description": "Include results before the given time. Must be an RFC 3339 formatted string.",
-        "in": "query",
-        "name": "before-time",
-        "schema": {
-          "format": "date-time",
-          "type": "string",
-          "x-algorand-format": "RFC3339 String"
-        },
-        "x-algorand-format": "RFC3339 String"
+        "x-go-type": "basics.AssetIndex"
       },
       "catchpoint": {
         "description": "A catch point",
@@ -78,30 +50,6 @@
         },
         "x-algorand-format": "Catchpoint String"
       },
-      "currency-greater-than": {
-        "description": "Results should have an amount greater than this value. MicroAlgos are the default currency unless an asset-id is provided, in which case the asset will be used.",
-        "in": "query",
-        "name": "currency-greater-than",
-        "schema": {
-          "type": "integer"
-        }
-      },
-      "currency-less-than": {
-        "description": "Results should have an amount less than this value. MicroAlgos are the default currency unless an asset-id is provided, in which case the asset will be used.",
-        "in": "query",
-        "name": "currency-less-than",
-        "schema": {
-          "type": "integer"
-        }
-      },
-      "exclude-close-to": {
-        "description": "Combine with address and address-role parameters to define what type of address to search for. The close to fields are normally treated as a receiver, if you would like to exclude them set this parameter to true.",
-        "in": "query",
-        "name": "exclude-close-to",
-        "schema": {
-          "type": "boolean"
-        }
-      },
       "format": {
         "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
         "in": "query",
@@ -114,37 +62,41 @@
           "type": "string"
         }
       },
+      "include": {
+        "description": "Include additional items in the response. Use `params` to include full application parameters (global state, schema, etc.). Multiple values can be comma-separated. Defaults to returning only application IDs and local state.",
+        "explode": false,
+        "in": "query",
+        "name": "include",
+        "schema": {
+          "items": {
+            "enum": [
+              "params"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "style": "form"
+      },
       "limit": {
         "description": "Maximum number of results to return.",
         "in": "query",
         "name": "limit",
         "schema": {
-          "type": "integer"
-        }
+          "type": "integer",
+          "x-go-type": "uint64"
+        },
+        "x-go-type": "uint64"
       },
       "max": {
         "description": "Truncated number of transactions to display. If max=0, returns all pending txns.",
         "in": "query",
         "name": "max",
         "schema": {
-          "type": "integer"
-        }
-      },
-      "max-round": {
-        "description": "Include results at or before the specified max-round.",
-        "in": "query",
-        "name": "max-round",
-        "schema": {
-          "type": "integer"
-        }
-      },
-      "min-round": {
-        "description": "Include results at or after the specified min-round.",
-        "in": "query",
-        "name": "min-round",
-        "schema": {
-          "type": "integer"
-        }
+          "type": "integer",
+          "x-go-type": "uint64"
+        },
+        "x-go-type": "uint64"
       },
       "next": {
         "description": "The next page of results. Use the next token provided by the previous results.",
@@ -154,42 +106,28 @@
           "type": "string"
         }
       },
-      "note-prefix": {
-        "description": "Specifies a prefix which must be contained in the note field.",
-        "in": "query",
-        "name": "note-prefix",
-        "schema": {
-          "type": "string",
-          "x-algorand-format": "base64"
-        },
-        "x-algorand-format": "base64"
-      },
       "round": {
-        "description": "Include results for the specified round.",
-        "in": "query",
-        "name": "round",
-        "schema": {
-          "type": "integer"
-        }
-      },
-      "round-number": {
-        "description": "Round number",
+        "description": "A round number.",
         "in": "path",
-        "name": "round-number",
+        "name": "round",
         "required": true,
         "schema": {
-          "type": "integer"
-        }
+          "minimum": 0,
+          "type": "integer",
+          "x-go-type": "basics.Round"
+        },
+        "x-go-type": "basics.Round"
       },
       "sig-type": {
-        "description": "SigType filters just results using the specified type of signature:\n* sig - Standard\n* msig - MultiSig\n* lsig - LogicSig",
+        "description": "SigType filters just results using the specified type of signature:\n* sig - Standard\n* msig - MultiSig\n* lsig - LogicSig\n* pqsig - Post-Quantum",
         "in": "query",
         "name": "sig-type",
         "schema": {
           "enum": [
             "sig",
             "msig",
-            "lsig"
+            "lsig",
+            "pqsig"
           ],
           "type": "string"
         }
@@ -237,7 +175,8 @@
                 },
                 "round": {
                   "description": "The round for which this information is relevant.",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "basics.Round"
                 }
               },
               "required": [
@@ -248,6 +187,36 @@
           }
         },
         "description": "AccountApplicationResponse describes the account's application local state and global state (AppLocalState and AppParams, if either exists) for a specific application ID. Global state will only be returned if the provided address is the application's creator."
+      },
+      "AccountApplicationsInformationResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "application-resources": {
+                  "items": {
+                    "$ref": "#/components/schemas/AccountApplicationResource"
+                  },
+                  "type": "array"
+                },
+                "next-token": {
+                  "description": "Used for pagination, when making another request provide this token with the next parameter. The next token is the next application ID to use as the pagination cursor.",
+                  "type": "string"
+                },
+                "round": {
+                  "description": "The round for which this information is relevant.",
+                  "type": "integer",
+                  "x-go-type": "basics.Round"
+                }
+              },
+              "required": [
+                "round"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "AccountApplicationsInformationResponse contains a list of application resources for an account."
       },
       "AccountAssetResponse": {
         "content": {
@@ -262,7 +231,8 @@
                 },
                 "round": {
                   "description": "The round for which this information is relevant.",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "basics.Round"
                 }
               },
               "required": [
@@ -291,7 +261,8 @@
                 },
                 "round": {
                   "description": "The round for which this information is relevant.",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "basics.Round"
                 }
               },
               "required": [
@@ -351,27 +322,6 @@
           }
         },
         "description": "Hash of a block header."
-      },
-      "BlockHeaderResponse": {
-        "content": {
-          "application/json": {
-            "schema": {
-              "properties": {
-                "blockHeader": {
-                  "description": "Block header data.",
-                  "properties": {},
-                  "type": "object",
-                  "x-algorand-format": "BlockHeader"
-                }
-              },
-              "required": [
-                "blockHeader"
-              ],
-              "type": "object"
-            }
-          }
-        },
-        "description": "Block header."
       },
       "BlockLogsResponse": {
         "content": {
@@ -463,6 +413,15 @@
                     "$ref": "#/components/schemas/BoxDescriptor"
                   },
                   "type": "array"
+                },
+                "next-token": {
+                  "description": "Used for pagination, when making another request provide this token with the next parameter. The next token is the box name to use as the pagination cursor, encoded in the goal app call arg form.",
+                  "type": "string"
+                },
+                "round": {
+                  "description": "The round for which this information is relevant.",
+                  "type": "integer",
+                  "x-go-type": "basics.Round"
                 }
               },
               "required": [
@@ -472,7 +431,7 @@
             }
           }
         },
-        "description": "Box names of an application"
+        "description": "Boxes of an application"
       },
       "CatchpointAbortResponse": {
         "content": {
@@ -570,36 +529,6 @@
         },
         "description": "Teal disassembly Result"
       },
-      "DryrunResponse": {
-        "content": {
-          "application/json": {
-            "schema": {
-              "properties": {
-                "error": {
-                  "type": "string"
-                },
-                "protocol-version": {
-                  "description": "Protocol version is the protocol version Dryrun was operated under.",
-                  "type": "string"
-                },
-                "txns": {
-                  "items": {
-                    "$ref": "#/components/schemas/DryrunTxnResult"
-                  },
-                  "type": "array"
-                }
-              },
-              "required": [
-                "error",
-                "protocol-version",
-                "txns"
-              ],
-              "type": "object"
-            }
-          }
-        },
-        "description": "DryrunResponse contains per-txn debug information from a dryrun."
-      },
       "GetBlockTimeStampOffsetResponse": {
         "content": {
           "application/json": {
@@ -607,7 +536,8 @@
               "properties": {
                 "offset": {
                   "description": "Timestamp offset in seconds.",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "uint64"
                 }
               },
               "required": [
@@ -619,6 +549,27 @@
         },
         "description": "Response containing the timestamp offset in seconds"
       },
+      "GetPeersResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "Peers": {
+                  "items": {
+                    "$ref": "#/components/schemas/PeerStatus"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "Peers"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Response containing the network peers of the node"
+      },
       "GetSyncRoundResponse": {
         "content": {
           "application/json": {
@@ -626,7 +577,8 @@
               "properties": {
                 "round": {
                   "description": "The minimum sync round for the ledger.",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "basics.Round"
                 }
               },
               "required": [
@@ -680,39 +632,48 @@
                 },
                 "catchpoint-acquired-blocks": {
                   "description": "The number of blocks that have already been obtained by the node as part of the catchup",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "uint64"
                 },
                 "catchpoint-processed-accounts": {
                   "description": "The number of accounts from the current catchpoint that have been processed so far as part of the catchup",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "uint64"
                 },
                 "catchpoint-processed-kvs": {
                   "description": "The number of key-values (KVs) from the current catchpoint that have been processed so far as part of the catchup",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "uint64"
                 },
                 "catchpoint-total-accounts": {
                   "description": "The total number of accounts included in the current catchpoint",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "uint64"
                 },
                 "catchpoint-total-blocks": {
                   "description": "The total number of blocks that are required to complete the current catchpoint catchup",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "uint64"
                 },
                 "catchpoint-total-kvs": {
                   "description": "The total number of key-values (KVs) included in the current catchpoint",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "uint64"
                 },
                 "catchpoint-verified-accounts": {
                   "description": "The number of accounts from the current catchpoint that have been verified so far as part of the catchup",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "uint64"
                 },
                 "catchpoint-verified-kvs": {
                   "description": "The number of key-values (KVs) from the current catchpoint that have been verified so far as part of the catchup",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "uint64"
                 },
                 "catchup-time": {
                   "description": "CatchupTime in nanoseconds",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "int64"
                 },
                 "last-catchpoint": {
                   "description": "The last catchpoint seen by the node",
@@ -720,7 +681,8 @@
                 },
                 "last-round": {
                   "description": "LastRound indicates the last round seen",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "basics.Round"
                 },
                 "last-version": {
                   "description": "LastVersion indicates the last consensus version supported",
@@ -732,7 +694,8 @@
                 },
                 "next-version-round": {
                   "description": "NextVersionRound is the round at which the next consensus version will apply",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "basics.Round"
                 },
                 "next-version-supported": {
                   "description": "NextVersionSupported indicates whether the next consensus version is supported by this node",
@@ -744,19 +707,23 @@
                 },
                 "time-since-last-round": {
                   "description": "TimeSinceLastRound in nanoseconds",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "int64"
                 },
                 "upgrade-delay": {
                   "description": "Upgrade delay",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "basics.Round"
                 },
                 "upgrade-next-protocol-vote-before": {
                   "description": "Next protocol round",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "basics.Round"
                 },
                 "upgrade-no-votes": {
                   "description": "No votes cast for consensus upgrade",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "basics.Round"
                 },
                 "upgrade-node-vote": {
                   "description": "This node's upgrade vote",
@@ -764,19 +731,23 @@
                 },
                 "upgrade-vote-rounds": {
                   "description": "Total voting rounds for current upgrade",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "basics.Round"
                 },
                 "upgrade-votes": {
                   "description": "Total votes cast for consensus upgrade",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "basics.Round"
                 },
                 "upgrade-votes-required": {
                   "description": "Yes votes required for consensus upgrade",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "basics.Round"
                 },
                 "upgrade-yes-votes": {
                   "description": "Yes votes cast for consensus upgrade",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "basics.Round"
                 }
               },
               "required": [
@@ -901,7 +872,8 @@
                 },
                 "last-round": {
                   "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "basics.Round"
                 },
                 "txn-groups": {
                   "description": "A result object for each transaction group that was simulated.",
@@ -912,7 +884,8 @@
                 },
                 "version": {
                   "description": "The version of this response object.",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "uint64"
                 }
               },
               "required": [
@@ -944,20 +917,29 @@
               "properties": {
                 "current_round": {
                   "description": "Round",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "basics.Round"
                 },
                 "online-money": {
-                  "description": "OnlineMoney",
-                  "type": "integer"
+                  "description": "Total stake held by accounts with status Online at current_round, including those whose participation keys have expired but have not yet been marked offline.",
+                  "type": "integer",
+                  "x-go-type": "uint64"
+                },
+                "online-stake": {
+                  "description": "Online stake used by agreement to vote for current_round, excluding accounts whose participation keys have expired.",
+                  "type": "integer",
+                  "x-go-type": "uint64"
                 },
                 "total-money": {
                   "description": "TotalMoney",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "uint64"
                 }
               },
               "required": [
                 "current_round",
                 "online-money",
+                "online-stake",
                 "total-money"
               ],
               "type": "object"
@@ -999,7 +981,8 @@
                 },
                 "fee": {
                   "description": "Fee is the suggested transaction fee\nFee is in units of micro-Algos per byte.\nFee may fall to zero but transactions must still have a fee of\nat least MinTxnFee for the current network protocol.",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "uint64"
                 },
                 "genesis-hash": {
                   "description": "GenesisHash is the hash of the genesis block.",
@@ -1013,11 +996,13 @@
                 },
                 "last-round": {
                   "description": "LastRound indicates the last round seen",
-                  "type": "integer"
+                  "type": "integer",
+                  "x-go-type": "basics.Round"
                 },
                 "min-fee": {
-                  "description": "The minimum transaction fee (not per byte) required for the\ntxn to validate for the current network protocol.",
-                  "type": "integer"
+                  "description": "The minimum transaction fee (not per byte) required for the txn to validate for the current network protocol.",
+                  "type": "integer",
+                  "x-go-type": "uint64"
                 }
               },
               "required": [
@@ -1038,44 +1023,7 @@
         "content": {
           "application/json": {
             "schema": {
-              "properties": {
-                "hashtype": {
-                  "description": "The type of hash function used to create the proof, must be one of: \n* sha512_256 \n* sha256",
-                  "enum": [
-                    "sha512_256",
-                    "sha256"
-                  ],
-                  "type": "string"
-                },
-                "idx": {
-                  "description": "Index of the transaction in the block's payset.",
-                  "type": "integer"
-                },
-                "proof": {
-                  "description": "Proof of transaction membership.",
-                  "format": "byte",
-                  "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-                  "type": "string"
-                },
-                "stibhash": {
-                  "description": "Hash of SignedTxnInBlock for verifying proof.",
-                  "format": "byte",
-                  "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-                  "type": "string"
-                },
-                "treedepth": {
-                  "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "hashtype",
-                "idx",
-                "proof",
-                "stibhash",
-                "treedepth"
-              ],
-              "type": "object"
+              "$ref": "#/components/schemas/TransactionProof"
             }
           }
         },
@@ -1102,10 +1050,12 @@
           },
           "amount": {
             "description": "\\[algo\\] total number of MicroAlgos in the account",
+            "format": "uint64",
             "type": "integer"
           },
           "amount-without-pending-rewards": {
             "description": "specifies the amount of MicroAlgos in the account, without the pending rewards.",
+            "format": "uint64",
             "type": "integer"
           },
           "apps-local-state": {
@@ -1117,6 +1067,7 @@
           },
           "apps-total-extra-pages": {
             "description": "\\[teap\\] the sum of all extra application program pages for this account.",
+            "format": "uint64",
             "type": "integer"
           },
           "apps-total-schema": {
@@ -1154,14 +1105,17 @@
           },
           "last-heartbeat": {
             "description": "The round in which this account last went online, or explicitly renewed their online status.",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "basics.Round"
           },
           "last-proposed": {
             "description": "The round in which this account last proposed the block.",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "basics.Round"
           },
           "min-balance": {
             "description": "MicroAlgo balance required by the account.\n\nThe requirement grows based on asset and application usage.",
+            "format": "uint64",
             "type": "integer"
           },
           "participation": {
@@ -1169,19 +1123,23 @@
           },
           "pending-rewards": {
             "description": "amount of MicroAlgos of pending rewards in this account.",
+            "format": "uint64",
             "type": "integer"
           },
           "reward-base": {
             "description": "\\[ebase\\] used as part of the rewards computation. Only applicable to accounts which are participating.",
+            "format": "uint64",
             "type": "integer"
           },
           "rewards": {
             "description": "\\[ern\\] total rewards of MicroAlgos the account has received, including pending rewards.",
+            "format": "uint64",
             "type": "integer"
           },
           "round": {
             "description": "The round for which this information is relevant.",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "basics.Round"
           },
           "sig-type": {
             "description": "Indicates what type of signature is used by this account, must be one of:\n* sig\n* msig\n* lsig",
@@ -1198,26 +1156,32 @@
           },
           "total-apps-opted-in": {
             "description": "The count of all applications that have been opted in, equivalent to the count of application local data (AppLocalState objects) stored in this account.",
+            "format": "uint64",
             "type": "integer"
           },
           "total-assets-opted-in": {
             "description": "The count of all assets that have been opted in, equivalent to the count of AssetHolding objects held by this account.",
+            "format": "uint64",
             "type": "integer"
           },
           "total-box-bytes": {
             "description": "\\[tbxb\\] The total number of bytes used by this account's app's box keys and values.",
+            "format": "uint64",
             "type": "integer"
           },
           "total-boxes": {
             "description": "\\[tbx\\] The number of existing boxes created by this account's app.",
+            "format": "uint64",
             "type": "integer"
           },
           "total-created-apps": {
             "description": "The count of all apps (AppParams objects) created by this account.",
+            "format": "uint64",
             "type": "integer"
           },
           "total-created-assets": {
             "description": "The count of all assets (AssetParams objects) created by this account.",
+            "format": "uint64",
             "type": "integer"
           }
         },
@@ -1234,6 +1198,35 @@
           "total-assets-opted-in",
           "total-created-apps",
           "total-created-assets"
+        ],
+        "type": "object"
+      },
+      "AccountApplicationResource": {
+        "description": "AccountApplicationResource describes the account's application resource (local state and params if the account is the creator) for a specific application ID.",
+        "properties": {
+          "app-local-state": {
+            "$ref": "#/components/schemas/ApplicationLocalState"
+          },
+          "created-at-round": {
+            "description": "Round when the account opted into or created the application.",
+            "type": "integer",
+            "x-go-type": "basics.Round"
+          },
+          "deleted": {
+            "description": "Whether the application has been deleted.",
+            "type": "boolean"
+          },
+          "id": {
+            "description": "The application ID.",
+            "type": "integer",
+            "x-go-type": "basics.AppIndex"
+          },
+          "params": {
+            "$ref": "#/components/schemas/ApplicationParams"
+          }
+        },
+        "required": [
+          "id"
         ],
         "type": "object"
       },
@@ -1269,15 +1262,18 @@
           },
           "vote-first-valid": {
             "description": "\\[voteFst\\] First round for which this participation is valid.",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "basics.Round"
           },
           "vote-key-dilution": {
             "description": "\\[voteKD\\] Number of subkeys in each batch of participation keys.",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "uint64"
           },
           "vote-last-valid": {
             "description": "\\[voteLst\\] Last round for which this participation is valid.",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "basics.Round"
           },
           "vote-participation-key": {
             "description": "\\[vote\\] root participation public key (if any) currently registered for this round.",
@@ -1316,7 +1312,8 @@
         "properties": {
           "application-index": {
             "description": "The application from which the logs were generated",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "basics.AppIndex"
           },
           "logs": {
             "description": "An array of logs",
@@ -1344,15 +1341,15 @@
         "properties": {
           "id": {
             "description": "\\[appidx\\] application index.",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "basics.AppIndex"
           },
           "params": {
             "$ref": "#/components/schemas/ApplicationParams"
           }
         },
         "required": [
-          "id",
-          "params"
+          "id"
         ],
         "type": "object"
       },
@@ -1375,7 +1372,8 @@
           "id": {
             "description": "Application index.",
             "type": "integer",
-            "x-algorand-format": "uint64"
+            "x-algorand-format": "uint64",
+            "x-go-type": "basics.AppIndex"
           }
         },
         "required": [
@@ -1415,7 +1413,8 @@
           "app": {
             "description": "Application ID of the local state application.",
             "type": "integer",
-            "x-algorand-format": "uint64"
+            "x-algorand-format": "uint64",
+            "x-go-type": "basics.AppIndex"
           }
         },
         "required": [
@@ -1429,7 +1428,8 @@
         "properties": {
           "id": {
             "description": "The application which this local state is for.",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "basics.AppIndex"
           },
           "key-value": {
             "$ref": "#/components/schemas/TealKeyValueStore"
@@ -1468,7 +1468,16 @@
           },
           "extra-program-pages": {
             "description": "\\[epp\\] the amount of extra program pages available to this app.",
+            "format": "uint64",
             "type": "integer"
+          },
+          "family-box-access": {
+            "description": "\\[fba\\] if true, apps with the same creator may read and write this app's boxes",
+            "type": "boolean"
+          },
+          "foreign-box-reads": {
+            "description": "\\[fbr\\] if true, any app may read this app's boxes",
+            "type": "boolean"
           },
           "global-state": {
             "$ref": "#/components/schemas/TealKeyValueStore"
@@ -1478,6 +1487,16 @@
           },
           "local-state-schema": {
             "$ref": "#/components/schemas/ApplicationStateSchema"
+          },
+          "size-sponsor": {
+            "description": "\\[ss\\] the account responsible for extra pages and global state MBR",
+            "type": "string",
+            "x-algorand-format": "Address"
+          },
+          "version": {
+            "description": "\\[v\\] the number of updates to the application programs",
+            "type": "integer",
+            "x-go-type": "uint64"
           }
         },
         "required": [
@@ -1525,10 +1544,12 @@
         "properties": {
           "num-byte-slice": {
             "description": "\\[nbs\\] num of byte slices.",
+            "format": "uint64",
             "type": "integer"
           },
           "num-uint": {
             "description": "\\[nui\\] num of uints.",
+            "format": "uint64",
             "type": "integer"
           }
         },
@@ -1543,15 +1564,15 @@
         "properties": {
           "index": {
             "description": "unique asset identifier",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "basics.AssetIndex"
           },
           "params": {
             "$ref": "#/components/schemas/AssetParams"
           }
         },
         "required": [
-          "index",
-          "params"
+          "index"
         ],
         "type": "object"
       },
@@ -1560,13 +1581,15 @@
         "properties": {
           "amount": {
             "description": "\\[a\\] number of units held.",
+            "format": "uint64",
             "type": "integer",
             "x-algorand-format": "uint64"
           },
           "asset-id": {
             "description": "Asset ID of the holding.",
             "type": "integer",
-            "x-go-name": "AssetID"
+            "x-go-name": "AssetID",
+            "x-go-type": "basics.AssetIndex"
           },
           "is-frozen": {
             "description": "\\[f\\] whether or not the holding is frozen.",
@@ -1591,7 +1614,8 @@
           "asset": {
             "description": "Asset ID of the holding.",
             "type": "integer",
-            "x-algorand-format": "uint64"
+            "x-algorand-format": "uint64",
+            "x-go-type": "basics.AssetIndex"
           }
         },
         "required": [
@@ -1613,6 +1637,7 @@
           },
           "decimals": {
             "description": "\\[dc\\] The number of digits to use after the decimal point when displaying this asset. If 0, the asset is not divisible. If 1, the base unit of the asset is in tenths. If 2, the base unit of the asset is in hundredths, and so on. This value must be between 0 and 19 (inclusive).",
+            "format": "uint64",
             "maximum": 19,
             "minimum": 0,
             "type": "integer"
@@ -1651,6 +1676,7 @@
           },
           "total": {
             "description": "\\[t\\] The total number of units of this asset.",
+            "format": "uint64",
             "type": "integer",
             "x-algorand-format": "uint64"
           },
@@ -1711,10 +1737,12 @@
           },
           "type": {
             "description": "value type. Value `1` refers to **bytes**, value `2` refers to **uint64**",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "uint64"
           },
           "uint": {
             "description": "uint value.",
+            "format": "uint64",
             "type": "integer",
             "x-algorand-format": "uint64"
           }
@@ -1728,17 +1756,18 @@
         "description": "Box name and its content.",
         "properties": {
           "name": {
-            "description": "\\[name\\] box name, base64 encoded",
+            "description": "The box name, base64 encoded",
             "format": "byte",
             "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
             "type": "string"
           },
           "round": {
             "description": "The round for which this information is relevant",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "basics.Round"
           },
           "value": {
-            "description": "\\[value\\] box value, base64 encoded.",
+            "description": "The box value, base64 encoded.",
             "format": "byte",
             "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
             "type": "string"
@@ -1759,6 +1788,12 @@
             "format": "byte",
             "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
             "type": "string"
+          },
+          "value": {
+            "description": "Base64 encoded box value. Present only when the `values` query parameter is set to true.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
           }
         },
         "required": [
@@ -1771,7 +1806,8 @@
         "properties": {
           "app": {
             "description": "Application ID which this box belongs to",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "basics.AppIndex"
           },
           "name": {
             "description": "Base64 encoded box name",
@@ -1792,7 +1828,6 @@
             "type": "string"
           },
           "build_number": {
-            "format": "int64",
             "type": "integer"
           },
           "channel": {
@@ -1802,11 +1837,9 @@
             "type": "string"
           },
           "major": {
-            "format": "int64",
             "type": "integer"
           },
           "minor": {
-            "format": "int64",
             "type": "integer"
           }
         },
@@ -1827,204 +1860,17 @@
           "block-rate": {
             "description": "The rate of blocking events. The profiler aims to sample an average of one blocking event per rate nanoseconds spent blocked. To turn off profiling entirely, pass rate 0.",
             "example": 1000,
+            "format": "uint64",
             "type": "integer"
           },
           "mutex-rate": {
             "description": "The rate of mutex events. On average 1/rate events are reported. To turn off profiling entirely, pass rate 0",
             "example": 1000,
+            "format": "uint64",
             "type": "integer"
           }
         },
         "title": "algod mutex and blocking profiling state.",
-        "type": "object"
-      },
-      "DryrunRequest": {
-        "description": "Request data type for dryrun endpoint. Given the Transactions and simulated ledger state upload, run TEAL scripts and return debugging information.",
-        "properties": {
-          "accounts": {
-            "items": {
-              "$ref": "#/components/schemas/Account"
-            },
-            "type": "array"
-          },
-          "apps": {
-            "items": {
-              "$ref": "#/components/schemas/Application"
-            },
-            "type": "array"
-          },
-          "latest-timestamp": {
-            "description": "LatestTimestamp is available to some TEAL scripts. Defaults to the latest confirmed timestamp this algod is attached to.",
-            "format": "int64",
-            "type": "integer"
-          },
-          "protocol-version": {
-            "description": "ProtocolVersion specifies a specific version string to operate under, otherwise whatever the current protocol of the network this algod is running in.",
-            "type": "string"
-          },
-          "round": {
-            "description": "Round is available to some TEAL scripts. Defaults to the current round on the network this algod is attached to.",
-            "type": "integer",
-            "x-algorand-format": "uint64"
-          },
-          "sources": {
-            "items": {
-              "$ref": "#/components/schemas/DryrunSource"
-            },
-            "type": "array"
-          },
-          "txns": {
-            "items": {
-              "description": "SignedTxn object. Must be canonically encoded.",
-              "format": "json",
-              "type": "string",
-              "x-algorand-format": "SignedTransaction"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "accounts",
-          "apps",
-          "latest-timestamp",
-          "protocol-version",
-          "round",
-          "sources",
-          "txns"
-        ],
-        "type": "object"
-      },
-      "DryrunSource": {
-        "description": "DryrunSource is TEAL source text that gets uploaded, compiled, and inserted into transactions or application state.",
-        "properties": {
-          "app-index": {
-            "type": "integer",
-            "x-algorand-format": "uint64"
-          },
-          "field-name": {
-            "description": "FieldName is what kind of sources this is. If lsig then it goes into the transactions[this.TxnIndex].LogicSig. If approv or clearp it goes into the Approval Program or Clear State Program of application[this.AppIndex].",
-            "type": "string"
-          },
-          "source": {
-            "type": "string"
-          },
-          "txn-index": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "app-index",
-          "field-name",
-          "source",
-          "txn-index"
-        ],
-        "type": "object"
-      },
-      "DryrunState": {
-        "description": "Stores the TEAL eval step data",
-        "properties": {
-          "error": {
-            "description": "Evaluation error if any",
-            "type": "string"
-          },
-          "line": {
-            "description": "Line number",
-            "type": "integer"
-          },
-          "pc": {
-            "description": "Program counter",
-            "type": "integer"
-          },
-          "scratch": {
-            "items": {
-              "$ref": "#/components/schemas/TealValue"
-            },
-            "type": "array"
-          },
-          "stack": {
-            "items": {
-              "$ref": "#/components/schemas/TealValue"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "line",
-          "pc",
-          "stack"
-        ],
-        "type": "object"
-      },
-      "DryrunTxnResult": {
-        "description": "DryrunTxnResult contains any LogicSig or ApplicationCall program debug information and state updates from a dryrun.",
-        "properties": {
-          "app-call-messages": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "app-call-trace": {
-            "items": {
-              "$ref": "#/components/schemas/DryrunState"
-            },
-            "type": "array"
-          },
-          "budget-added": {
-            "description": "Budget added during execution of app call transaction.",
-            "type": "integer"
-          },
-          "budget-consumed": {
-            "description": "Budget consumed during execution of app call transaction.",
-            "type": "integer"
-          },
-          "disassembly": {
-            "description": "Disassembled program line by line.",
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "global-delta": {
-            "$ref": "#/components/schemas/StateDelta"
-          },
-          "local-deltas": {
-            "items": {
-              "$ref": "#/components/schemas/AccountStateDelta"
-            },
-            "type": "array"
-          },
-          "logic-sig-disassembly": {
-            "description": "Disassembled lsig program line by line.",
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "logic-sig-messages": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "logic-sig-trace": {
-            "items": {
-              "$ref": "#/components/schemas/DryrunState"
-            },
-            "type": "array"
-          },
-          "logs": {
-            "items": {
-              "format": "byte",
-              "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-              "type": "string"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "disassembly"
-        ],
         "type": "object"
       },
       "ErrorResponse": {
@@ -2048,6 +1894,7 @@
         "properties": {
           "action": {
             "description": "\\[at\\] delta action.",
+            "format": "uint64",
             "type": "integer"
           },
           "bytes": {
@@ -2056,6 +1903,7 @@
           },
           "uint": {
             "description": "\\[ui\\] uint value.",
+            "format": "uint64",
             "type": "integer",
             "x-algorand-format": "uint64"
           }
@@ -2081,22 +1929,104 @@
         ],
         "type": "object"
       },
-      "KvDelta": {
-        "description": "A single Delta containing the key, the previous value and the current value for a single round.",
+      "Genesis": {
         "properties": {
-          "key": {
-            "description": "The key, base64 encoded.",
-            "format": "byte",
-            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+          "alloc": {
+            "items": {
+              "$ref": "#/components/schemas/GenesisAllocation"
+            },
+            "type": "array"
+          },
+          "comment": {
             "type": "string"
           },
-          "value": {
-            "description": "The new value of the KV store entry, base64 encoded.",
-            "format": "byte",
-            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+          "devmode": {
+            "type": "boolean"
+          },
+          "fees": {
             "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "network": {
+            "type": "string"
+          },
+          "proto": {
+            "type": "string"
+          },
+          "rwd": {
+            "type": "string"
+          },
+          "timestamp": {
+            "format": "int64",
+            "type": "integer"
           }
         },
+        "required": [
+          "alloc",
+          "fees",
+          "id",
+          "network",
+          "proto",
+          "rwd",
+          "timestamp"
+        ],
+        "title": "Genesis File in JSON",
+        "type": "object"
+      },
+      "GenesisAllocation": {
+        "properties": {
+          "addr": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "state": {
+            "properties": {
+              "algo": {
+                "format": "uint64",
+                "type": "integer"
+              },
+              "onl": {
+                "type": "integer"
+              },
+              "sel": {
+                "type": "string"
+              },
+              "stprf": {
+                "type": "string"
+              },
+              "vote": {
+                "type": "string"
+              },
+              "voteFst": {
+                "format": "uint64",
+                "type": "integer"
+              },
+              "voteKD": {
+                "format": "uint64",
+                "type": "integer"
+              },
+              "voteLst": {
+                "format": "uint64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "algo",
+              "onl"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "addr",
+          "comment",
+          "state"
+        ],
+        "title": "Allocations for Genesis File",
         "type": "object"
       },
       "LedgerStateDelta": {
@@ -2128,7 +2058,8 @@
         "properties": {
           "index": {
             "description": "The index of the light block header in the vector commitment tree",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "uint64"
           },
           "proof": {
             "description": "The encoded proof.",
@@ -2159,12 +2090,14 @@
           "effective-first-valid": {
             "description": "When registered, this is the first round it may be used.",
             "type": "integer",
-            "x-algorand-format": "uint64"
+            "x-algorand-format": "uint64",
+            "x-go-type": "basics.Round"
           },
           "effective-last-valid": {
             "description": "When registered, this is the last round it may be used.",
             "type": "integer",
-            "x-algorand-format": "uint64"
+            "x-algorand-format": "uint64",
+            "x-go-type": "basics.Round"
           },
           "id": {
             "description": "The key's ParticipationID.",
@@ -2175,15 +2108,18 @@
           },
           "last-block-proposal": {
             "description": "Round when this key was last used to propose a block.",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "basics.Round"
           },
           "last-state-proof": {
             "description": "Round when this key was last used to generate a state proof.",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "basics.Round"
           },
           "last-vote": {
             "description": "Round when this key was last used to vote.",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "basics.Round"
           }
         },
         "required": [
@@ -2193,20 +2129,54 @@
         ],
         "type": "object"
       },
+      "PeerStatus": {
+        "description": "The status of a connected peer in the P2P network",
+        "properties": {
+          "connection-type": {
+            "description": "Connection type",
+            "enum": [
+              "inbound",
+              "outbound"
+            ],
+            "type": "string"
+          },
+          "network-address": {
+            "description": "Network address of the peer",
+            "type": "string"
+          },
+          "network-type": {
+            "description": "Network type",
+            "enum": [
+              "p2p",
+              "ws"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "connection-type",
+          "network-address",
+          "network-type"
+        ],
+        "type": "object"
+      },
       "PendingTransactionResponse": {
         "description": "Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.",
         "properties": {
           "application-index": {
             "description": "The application index if the transaction was found and it created an application.",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "basics.AppIndex"
           },
           "asset-closing-amount": {
             "description": "The number of the asset's unit that were transferred to the close-to address.",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "uint64"
           },
           "asset-index": {
             "description": "The asset index if the transaction was found and it created an asset.",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "basics.AssetIndex"
           },
           "close-rewards": {
             "description": "Rewards in microalgos applied to the close remainder to account.",
@@ -2214,11 +2184,13 @@
           },
           "closing-amount": {
             "description": "Closing amount for the transaction.",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "uint64"
           },
           "confirmed-round": {
             "description": "The round where this transaction was confirmed, if present.",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "basics.Round"
           },
           "global-state-delta": {
             "$ref": "#/components/schemas/StateDelta"
@@ -2252,11 +2224,13 @@
           },
           "receiver-rewards": {
             "description": "Rewards in microalgos applied to the receiver account.",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "uint64"
           },
           "sender-rewards": {
             "description": "Rewards in microalgos applied to the sender account.",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "uint64"
           },
           "txn": {
             "description": "The raw signed transaction.",
@@ -2329,7 +2303,8 @@
           },
           "round": {
             "description": "If provided, specifies the round preceding the simulation. State changes through this round will be used to run this simulation. Usually only the 4 most recent rounds will be available (controlled by the node config value MaxAcctLookback). If not specified, defaults to the latest available round.",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "basics.Round"
           },
           "txn-groups": {
             "description": "The transaction groups to simulate.",
@@ -2407,6 +2382,16 @@
             "description": "If present, indicates that the transaction group failed and specifies why that happened",
             "type": "string"
           },
+          "group-fees-paid": {
+            "description": "Total fees paid by the transaction group and all of its descendant inner transaction groups.",
+            "type": "integer",
+            "x-go-type": "uint64"
+          },
+          "group-usage": {
+            "description": "Fee usage for the transaction group, including all descendant inner transactions, in millionths of a basic transaction fee unit.",
+            "type": "integer",
+            "x-go-type": "basics.Micros"
+          },
           "txn-results": {
             "description": "Simulation result for individual transactions",
             "items": {
@@ -2432,6 +2417,11 @@
           },
           "exec-trace": {
             "$ref": "#/components/schemas/SimulationTransactionExecTrace"
+          },
+          "fees-paid": {
+            "description": "Total fees paid by this transaction and all of its descendant inner transactions.",
+            "type": "integer",
+            "x-go-type": "uint64"
           },
           "fixed-signer": {
             "description": "The account that needed to sign this transaction when no signature was provided and the provided signer was incorrect.",
@@ -2476,7 +2466,8 @@
             "description": "The unnamed applications that were referenced. The order of this array is arbitrary.",
             "items": {
               "type": "integer",
-              "x-algorand-format": "uint64"
+              "x-algorand-format": "uint64",
+              "x-go-type": "basics.AppIndex"
             },
             "type": "array"
           },
@@ -2491,7 +2482,8 @@
             "description": "The unnamed assets that were referenced. The order of this array is arbitrary.",
             "items": {
               "type": "integer",
-              "x-algorand-format": "uint64"
+              "x-algorand-format": "uint64",
+              "x-go-type": "basics.AssetIndex"
             },
             "type": "array"
           },
@@ -2682,15 +2674,18 @@
           "FirstAttestedRound": {
             "description": "The first round the message attests to.",
             "type": "integer",
-            "x-algorand-format": "uint64"
+            "x-algorand-format": "uint64",
+            "x-go-type": "basics.Round"
           },
           "LastAttestedRound": {
             "description": "The last round the message attests to.",
             "type": "integer",
-            "x-algorand-format": "uint64"
+            "x-algorand-format": "uint64",
+            "x-go-type": "basics.Round"
           },
           "LnProvenWeight": {
             "description": "An integer value representing the natural log of the proven weight with 16 bits of precision. This value would be used to verify the next state proof.",
+            "format": "uint64",
             "type": "integer",
             "x-algorand-format": "uint64"
           },
@@ -2742,10 +2737,12 @@
           },
           "type": {
             "description": "\\[tt\\] value type. Value `1` refers to **bytes**, value `2` refers to **uint**",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "uint64"
           },
           "uint": {
             "description": "\\[ui\\] uint value.",
+            "format": "uint64",
             "type": "integer",
             "x-algorand-format": "uint64"
           }
@@ -2754,6 +2751,49 @@
           "bytes",
           "type",
           "uint"
+        ],
+        "type": "object"
+      },
+      "TransactionProof": {
+        "description": "Proof of transaction in a block.",
+        "properties": {
+          "hashtype": {
+            "description": "The type of hash function used to create the proof, must be one of: \n* sha512_256 \n* sha256",
+            "enum": [
+              "sha512_256",
+              "sha256"
+            ],
+            "type": "string"
+          },
+          "idx": {
+            "description": "Index of the transaction in the block's payset.",
+            "type": "integer",
+            "x-go-type": "uint64"
+          },
+          "proof": {
+            "description": "Proof of transaction membership.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
+          },
+          "stibhash": {
+            "description": "Hash of SignedTxnInBlock for verifying proof.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
+          },
+          "treedepth": {
+            "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
+            "type": "integer",
+            "x-go-type": "uint64"
+          }
+        },
+        "required": [
+          "hashtype",
+          "idx",
+          "proof",
+          "stibhash",
+          "treedepth"
         ],
         "type": "object"
       },
@@ -2884,7 +2924,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/Genesis"
                 }
               }
             },
@@ -3003,6 +3043,37 @@
         "operationId": "AccountInformation",
         "parameters": [
           {
+            "description": "An account public key.",
+            "in": "path",
+            "name": "address",
+            "required": true,
+            "schema": {
+              "pattern": "[A-Z0-9]{58}",
+              "type": "string",
+              "x-go-type": "basics.Address"
+            },
+            "x-go-type": "basics.Address"
+          },
+          {
+            "description": "Exclude additional items from the account. Use `all` to exclude asset holdings, application local state, created asset parameters, and created application parameters. Use `created-apps-params` to exclude only the parameters of created applications (returns only application IDs). Use `created-assets-params` to exclude only the parameters of created assets (returns only asset IDs). Multiple values can be comma-separated (e.g., `created-apps-params,created-assets-params`). Note: `all` and `none` cannot be combined with other values. Defaults to `none`.",
+            "explode": false,
+            "in": "query",
+            "name": "exclude",
+            "schema": {
+              "items": {
+                "enum": [
+                  "all",
+                  "none",
+                  "created-apps-params",
+                  "created-assets-params"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "style": "form"
+          },
+          {
             "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
@@ -3010,28 +3081,6 @@
               "enum": [
                 "json",
                 "msgpack"
-              ],
-              "type": "string"
-            }
-          },
-          {
-            "description": "An account public key",
-            "in": "path",
-            "name": "address",
-            "required": true,
-            "schema": {
-              "pattern": "[A-Z0-9]{58}",
-              "type": "string"
-            }
-          },
-          {
-            "description": "When set to `all` will exclude asset holdings, application local state, created asset parameters, any created application parameters. Defaults to `none`.",
-            "in": "query",
-            "name": "exclude",
-            "schema": {
-              "enum": [
-                "all",
-                "none"
               ],
               "type": "string"
             }
@@ -3110,11 +3159,160 @@
         ]
       }
     },
+    "/v2/accounts/{address}/applications": {
+      "get": {
+        "description": "Lookup an account's application holdings (local state and params if the account is the creator).",
+        "operationId": "AccountApplicationsInformation",
+        "parameters": [
+          {
+            "description": "An account public key.",
+            "in": "path",
+            "name": "address",
+            "required": true,
+            "schema": {
+              "pattern": "[A-Z0-9]{58}",
+              "type": "string",
+              "x-go-type": "basics.Address"
+            },
+            "x-go-type": "basics.Address"
+          },
+          {
+            "description": "Maximum number of results to return.",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "x-go-type": "uint64"
+            },
+            "x-go-type": "uint64"
+          },
+          {
+            "description": "The next page of results. Use the next token provided by the previous results.",
+            "in": "query",
+            "name": "next",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Include additional items in the response. Use `params` to include full application parameters (global state, schema, etc.). Multiple values can be comma-separated. Defaults to returning only application IDs and local state.",
+            "explode": false,
+            "in": "query",
+            "name": "include",
+            "schema": {
+              "items": {
+                "enum": [
+                  "params"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "application-resources": {
+                      "items": {
+                        "$ref": "#/components/schemas/AccountApplicationResource"
+                      },
+                      "type": "array"
+                    },
+                    "next-token": {
+                      "description": "Used for pagination, when making another request provide this token with the next parameter. The next token is the next application ID to use as the pagination cursor.",
+                      "type": "string"
+                    },
+                    "round": {
+                      "description": "The round for which this information is relevant.",
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
+                    }
+                  },
+                  "required": [
+                    "round"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "AccountApplicationsInformationResponse contains a list of application resources for an account."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed address"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Get a list of applications held by an account.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
+      }
+    },
     "/v2/accounts/{address}/applications/{application-id}": {
       "get": {
         "description": "Given a specific account public key and application ID, this call returns the account's application local state and global state (AppLocalState and AppParams, if either exists). Global state will only be returned if the provided address is the application's creator.",
         "operationId": "AccountApplicationInformation",
         "parameters": [
+          {
+            "description": "An account public key.",
+            "in": "path",
+            "name": "address",
+            "required": true,
+            "schema": {
+              "pattern": "[A-Z0-9]{58}",
+              "type": "string",
+              "x-go-type": "basics.Address"
+            },
+            "x-go-type": "basics.Address"
+          },
+          {
+            "description": "An application identifier.",
+            "in": "path",
+            "name": "application-id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer",
+              "x-go-type": "basics.AppIndex"
+            },
+            "x-go-type": "basics.AppIndex"
+          },
           {
             "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
@@ -3125,25 +3323,6 @@
                 "msgpack"
               ],
               "type": "string"
-            }
-          },
-          {
-            "description": "An account public key",
-            "in": "path",
-            "name": "address",
-            "required": true,
-            "schema": {
-              "pattern": "[A-Z0-9]{58}",
-              "type": "string"
-            }
-          },
-          {
-            "description": "An application identifier",
-            "in": "path",
-            "name": "application-id",
-            "required": true,
-            "schema": {
-              "type": "integer"
             }
           }
         ],
@@ -3161,7 +3340,8 @@
                     },
                     "round": {
                       "description": "The round for which this information is relevant.",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     }
                   },
                   "required": [
@@ -3181,7 +3361,8 @@
                     },
                     "round": {
                       "description": "The round for which this information is relevant.",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     }
                   },
                   "required": [
@@ -3256,22 +3437,26 @@
         "operationId": "AccountAssetsInformation",
         "parameters": [
           {
-            "description": "An account public key",
+            "description": "An account public key.",
             "in": "path",
             "name": "address",
             "required": true,
             "schema": {
               "pattern": "[A-Z0-9]{58}",
-              "type": "string"
-            }
+              "type": "string",
+              "x-go-type": "basics.Address"
+            },
+            "x-go-type": "basics.Address"
           },
           {
             "description": "Maximum number of results to return.",
             "in": "query",
             "name": "limit",
             "schema": {
-              "type": "integer"
-            }
+              "type": "integer",
+              "x-go-type": "uint64"
+            },
+            "x-go-type": "uint64"
           },
           {
             "description": "The next page of results. Use the next token provided by the previous results.",
@@ -3300,7 +3485,8 @@
                     },
                     "round": {
                       "description": "The round for which this information is relevant.",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     }
                   },
                   "required": [
@@ -3350,7 +3536,7 @@
         "summary": "Get a list of assets held by an account, inclusive of asset params.",
         "tags": [
           "public",
-          "experimental"
+          "nonparticipating"
         ]
       }
     },
@@ -3359,6 +3545,30 @@
         "description": "Given a specific account public key and asset ID, this call returns the account's asset holding and asset parameters (if either exist). Asset parameters will only be returned if the provided address is the asset's creator.",
         "operationId": "AccountAssetInformation",
         "parameters": [
+          {
+            "description": "An account public key.",
+            "in": "path",
+            "name": "address",
+            "required": true,
+            "schema": {
+              "pattern": "[A-Z0-9]{58}",
+              "type": "string",
+              "x-go-type": "basics.Address"
+            },
+            "x-go-type": "basics.Address"
+          },
+          {
+            "description": "An asset identifier.",
+            "in": "path",
+            "name": "asset-id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer",
+              "x-go-type": "basics.AssetIndex"
+            },
+            "x-go-type": "basics.AssetIndex"
+          },
           {
             "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
@@ -3369,25 +3579,6 @@
                 "msgpack"
               ],
               "type": "string"
-            }
-          },
-          {
-            "description": "An account public key",
-            "in": "path",
-            "name": "address",
-            "required": true,
-            "schema": {
-              "pattern": "[A-Z0-9]{58}",
-              "type": "string"
-            }
-          },
-          {
-            "description": "An asset identifier",
-            "in": "path",
-            "name": "asset-id",
-            "required": true,
-            "schema": {
-              "type": "integer"
             }
           }
         ],
@@ -3405,7 +3596,8 @@
                     },
                     "round": {
                       "description": "The round for which this information is relevant.",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     }
                   },
                   "required": [
@@ -3425,7 +3617,8 @@
                     },
                     "round": {
                       "description": "The round for which this information is relevant.",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     }
                   },
                   "required": [
@@ -3496,26 +3689,30 @@
     },
     "/v2/accounts/{address}/transactions/pending": {
       "get": {
-        "description": "Get the list of pending transactions by address, sorted by priority, in decreasing order, truncated at the end at MAX. If MAX = 0, returns all pending transactions.\n",
+        "description": "Get the list of pending transactions by address, sorted by priority, in decreasing order, truncated at the end at MAX. If MAX = 0, returns all pending transactions.",
         "operationId": "GetPendingTransactionsByAddress",
         "parameters": [
           {
-            "description": "An account public key",
+            "description": "An account public key.",
             "in": "path",
             "name": "address",
             "required": true,
             "schema": {
               "pattern": "[A-Z0-9]{58}",
-              "type": "string"
-            }
+              "type": "string",
+              "x-go-type": "basics.Address"
+            },
+            "x-go-type": "basics.Address"
           },
           {
             "description": "Truncated number of transactions to display. If max=0, returns all pending txns.",
             "in": "query",
             "name": "max",
             "schema": {
-              "type": "integer"
-            }
+              "type": "integer",
+              "x-go-type": "uint64"
+            },
+            "x-go-type": "uint64"
           },
           {
             "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
@@ -3664,13 +3861,16 @@
         "operationId": "GetApplicationByID",
         "parameters": [
           {
-            "description": "An application identifier",
+            "description": "An application identifier.",
             "in": "path",
             "name": "application-id",
             "required": true,
             "schema": {
-              "type": "integer"
-            }
+              "minimum": 0,
+              "type": "integer",
+              "x-go-type": "basics.AppIndex"
+            },
+            "x-go-type": "basics.AppIndex"
           }
         ],
         "responses": {
@@ -3742,13 +3942,16 @@
         "operationId": "GetApplicationBoxByName",
         "parameters": [
           {
-            "description": "An application identifier",
+            "description": "An application identifier.",
             "in": "path",
             "name": "application-id",
             "required": true,
             "schema": {
-              "type": "integer"
-            }
+              "minimum": 0,
+              "type": "integer",
+              "x-go-type": "basics.AppIndex"
+            },
+            "x-go-type": "basics.AppIndex"
           },
           {
             "description": "A box name, in the goal app call arg form 'encoding:value'. For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.",
@@ -3825,25 +4028,83 @@
     },
     "/v2/applications/{application-id}/boxes": {
       "get": {
-        "description": "Given an application ID, return all Box names. No particular ordering is guaranteed. Request fails when client or server-side configured limits prevent returning all Box names.",
+        "description": "Given an application ID, return all box names. No particular ordering is guaranteed. Request fails when client or server-side configured limits prevent returning all box names.\n\nPagination mode is enabled when any of the following parameters are provided: limit, next, prefix, include, or round. In pagination mode box values can be requested and results are returned in sorted order.\n\nTo paginate: use the next-token from a previous response as the next parameter in the following request. Pin the round parameter to the round value from the first page's response to ensure consistent results across pages. The server enforces a per-response byte limit, so fewer results than limit may be returned even when more exist; the presence of next-token is the only reliable signal that more data is available.",
         "operationId": "GetApplicationBoxes",
         "parameters": [
           {
-            "description": "An application identifier",
+            "description": "An application identifier.",
             "in": "path",
             "name": "application-id",
             "required": true,
             "schema": {
-              "type": "integer"
-            }
+              "minimum": 0,
+              "type": "integer",
+              "x-go-type": "basics.AppIndex"
+            },
+            "x-go-type": "basics.AppIndex"
           },
           {
             "description": "Max number of box names to return. If max is not set, or max == 0, returns all box-names.",
             "in": "query",
             "name": "max",
             "schema": {
-              "type": "integer"
+              "type": "integer",
+              "x-go-type": "uint64"
+            },
+            "x-go-type": "uint64"
+          },
+          {
+            "description": "Maximum number of boxes to return per page.",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "x-go-type": "uint64"
+            },
+            "x-go-type": "uint64"
+          },
+          {
+            "description": "A box name, in the goal app call arg form 'encoding:value', representing the earliest box name to include in results. Use the next-token from a previous response.",
+            "in": "query",
+            "name": "next",
+            "schema": {
+              "type": "string"
             }
+          },
+          {
+            "description": "A box name prefix, in the goal app call arg form 'encoding:value', to filter results by. Only boxes whose names start with this prefix will be returned.",
+            "in": "query",
+            "name": "prefix",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Include additional items in the response. Use `values` to include box values. Multiple values can be comma-separated.",
+            "explode": false,
+            "in": "query",
+            "name": "include",
+            "schema": {
+              "items": {
+                "enum": [
+                  "values"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "style": "form"
+          },
+          {
+            "description": "Return box data from the given round. The round must be within the node's available range.",
+            "in": "query",
+            "name": "round",
+            "schema": {
+              "format": "uint64",
+              "type": "integer",
+              "x-go-type": "basics.Round"
+            },
+            "x-go-type": "basics.Round"
           }
         ],
         "responses": {
@@ -3857,6 +4118,15 @@
                         "$ref": "#/components/schemas/BoxDescriptor"
                       },
                       "type": "array"
+                    },
+                    "next-token": {
+                      "description": "Used for pagination, when making another request provide this token with the next parameter. The next token is the box name to use as the pagination cursor, encoded in the goal app call arg form.",
+                      "type": "string"
+                    },
+                    "round": {
+                      "description": "The round for which this information is relevant.",
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     }
                   },
                   "required": [
@@ -3866,7 +4136,7 @@
                 }
               }
             },
-            "description": "Box names of an application"
+            "description": "Boxes of an application"
           },
           "400": {
             "content": {
@@ -3916,13 +4186,16 @@
         "operationId": "GetAssetByID",
         "parameters": [
           {
-            "description": "An asset identifier",
+            "description": "An asset identifier.",
             "in": "path",
             "name": "asset-id",
             "required": true,
             "schema": {
-              "type": "integer"
-            }
+              "minimum": 0,
+              "type": "integer",
+              "x-go-type": "basics.AssetIndex"
+            },
+            "x-go-type": "basics.AssetIndex"
           }
         ],
         "responses": {
@@ -3993,6 +4266,26 @@
         "operationId": "GetBlock",
         "parameters": [
           {
+            "description": "A round number.",
+            "in": "path",
+            "name": "round",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer",
+              "x-go-type": "basics.Round"
+            },
+            "x-go-type": "basics.Round"
+          },
+          {
+            "description": "If true, only the block header (exclusive of payset or certificate) may be included in response.",
+            "in": "query",
+            "name": "header-only",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
@@ -4002,16 +4295,6 @@
                 "msgpack"
               ],
               "type": "string"
-            }
-          },
-          {
-            "description": "The round from which to fetch block information.",
-            "in": "path",
-            "name": "round",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
             }
           }
         ],
@@ -4142,14 +4425,16 @@
         "operationId": "GetBlockHash",
         "parameters": [
           {
-            "description": "The round from which to fetch block hash information.",
+            "description": "A round number.",
             "in": "path",
             "name": "round",
             "required": true,
             "schema": {
               "minimum": 0,
-              "type": "integer"
-            }
+              "type": "integer",
+              "x-go-type": "basics.Round"
+            },
+            "x-go-type": "basics.Round"
           }
         ],
         "responses": {
@@ -4224,156 +4509,21 @@
         ]
       }
     },
-    "/v2/blocks/{round}/header": {
-      "get": {
-        "operationId": "GetBlockHeader",
-        "parameters": [
-          {
-            "description": "The round from which to fetch block header information.",
-            "in": "path",
-            "name": "round",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
-            "in": "query",
-            "name": "format",
-            "schema": {
-              "enum": [
-                "json",
-                "msgpack"
-              ],
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "blockHeader": {
-                      "description": "Block header data.",
-                      "properties": {},
-                      "type": "object",
-                      "x-algorand-format": "BlockHeader"
-                    }
-                  },
-                  "required": [
-                    "blockHeader"
-                  ],
-                  "type": "object"
-                }
-              },
-              "application/msgpack": {
-                "schema": {
-                  "properties": {
-                    "blockHeader": {
-                      "description": "Block header data.",
-                      "properties": {},
-                      "type": "object",
-                      "x-algorand-format": "BlockHeader"
-                    }
-                  },
-                  "required": [
-                    "blockHeader"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Block header."
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              },
-              "application/msgpack": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request - Non integer number"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              },
-              "application/msgpack": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid API Token"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              },
-              "application/msgpack": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "None existing block "
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              },
-              "application/msgpack": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Error"
-          },
-          "default": {
-            "content": {},
-            "description": "Unknown Error"
-          }
-        },
-        "summary": "Get the block header for the block on the given round.",
-        "tags": [
-          "public",
-          "nonparticipating"
-        ]
-      }
-    },
     "/v2/blocks/{round}/lightheader/proof": {
       "get": {
         "operationId": "GetLightBlockHeaderProof",
         "parameters": [
           {
-            "description": "The round to which the light block header belongs.",
+            "description": "A round number.",
             "in": "path",
             "name": "round",
             "required": true,
             "schema": {
               "minimum": 0,
-              "type": "integer"
-            }
+              "type": "integer",
+              "x-go-type": "basics.Round"
+            },
+            "x-go-type": "basics.Round"
           }
         ],
         "responses": {
@@ -4455,14 +4605,16 @@
         "operationId": "GetBlockLogs",
         "parameters": [
           {
-            "description": "The round from which to fetch block log information.",
+            "description": "A round number.",
             "in": "path",
             "name": "round",
             "required": true,
             "schema": {
               "minimum": 0,
-              "type": "integer"
-            }
+              "type": "integer",
+              "x-go-type": "basics.Round"
+            },
+            "x-go-type": "basics.Round"
           }
         ],
         "responses": {
@@ -4540,13 +4692,16 @@
         "operationId": "GetTransactionProof",
         "parameters": [
           {
-            "description": "The round in which the transaction appears.",
+            "description": "A round number.",
             "in": "path",
             "name": "round",
             "required": true,
             "schema": {
-              "type": "integer"
-            }
+              "minimum": 0,
+              "type": "integer",
+              "x-go-type": "basics.Round"
+            },
+            "x-go-type": "basics.Round"
           },
           {
             "description": "The transaction ID for which to generate a proof.",
@@ -4588,44 +4743,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "hashtype": {
-                      "description": "The type of hash function used to create the proof, must be one of: \n* sha512_256 \n* sha256",
-                      "enum": [
-                        "sha512_256",
-                        "sha256"
-                      ],
-                      "type": "string"
-                    },
-                    "idx": {
-                      "description": "Index of the transaction in the block's payset.",
-                      "type": "integer"
-                    },
-                    "proof": {
-                      "description": "Proof of transaction membership.",
-                      "format": "byte",
-                      "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-                      "type": "string"
-                    },
-                    "stibhash": {
-                      "description": "Hash of SignedTxnInBlock for verifying proof.",
-                      "format": "byte",
-                      "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-                      "type": "string"
-                    },
-                    "treedepth": {
-                      "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "hashtype",
-                    "idx",
-                    "proof",
-                    "stibhash",
-                    "treedepth"
-                  ],
-                  "type": "object"
+                  "$ref": "#/components/schemas/TransactionProof"
                 }
               }
             },
@@ -4688,14 +4806,16 @@
         "operationId": "GetBlockTxids",
         "parameters": [
           {
-            "description": "The round from which to fetch block transaction IDs.",
+            "description": "A round number.",
             "in": "path",
             "name": "round",
             "required": true,
             "schema": {
               "minimum": 0,
-              "type": "integer"
-            }
+              "type": "integer",
+              "x-go-type": "basics.Round"
+            },
+            "x-go-type": "basics.Round"
           }
         ],
         "responses": {
@@ -4875,8 +4995,10 @@
             "in": "query",
             "name": "min",
             "schema": {
-              "type": "integer"
-            }
+              "type": "integer",
+              "x-go-type": "basics.Round"
+            },
+            "x-go-type": "basics.Round"
           }
         ],
         "responses": {
@@ -5107,14 +5229,16 @@
         "operationId": "GetLedgerStateDelta",
         "parameters": [
           {
-            "description": "The round for which the deltas are desired.",
+            "description": "A round number.",
             "in": "path",
             "name": "round",
             "required": true,
             "schema": {
               "minimum": 0,
-              "type": "integer"
-            }
+              "type": "integer",
+              "x-go-type": "basics.Round"
+            },
+            "x-go-type": "basics.Round"
           },
           {
             "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
@@ -5238,14 +5362,16 @@
         "operationId": "GetTransactionGroupLedgerStateDeltasForRound",
         "parameters": [
           {
-            "description": "The round for which the deltas are desired.",
+            "description": "A round number.",
             "in": "path",
             "name": "round",
             "required": true,
             "schema": {
               "minimum": 0,
-              "type": "integer"
-            }
+              "type": "integer",
+              "x-go-type": "basics.Round"
+            },
+            "x-go-type": "basics.Round"
           },
           {
             "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
@@ -5397,7 +5523,8 @@
                   "properties": {
                     "offset": {
                       "description": "Timestamp offset in seconds.",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "uint64"
                     }
                   },
                   "required": [
@@ -5443,8 +5570,10 @@
             "required": true,
             "schema": {
               "minimum": 0,
-              "type": "integer"
-            }
+              "type": "integer",
+              "x-go-type": "uint64"
+            },
+            "x-go-type": "uint64"
           }
         ],
         "responses": {
@@ -5530,20 +5659,29 @@
                   "properties": {
                     "current_round": {
                       "description": "Round",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     },
                     "online-money": {
-                      "description": "OnlineMoney",
-                      "type": "integer"
+                      "description": "Total stake held by accounts with status Online at current_round, including those whose participation keys have expired but have not yet been marked offline.",
+                      "type": "integer",
+                      "x-go-type": "uint64"
+                    },
+                    "online-stake": {
+                      "description": "Online stake used by agreement to vote for current_round, excluding accounts whose participation keys have expired.",
+                      "type": "integer",
+                      "x-go-type": "uint64"
                     },
                     "total-money": {
                       "description": "TotalMoney",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "uint64"
                     }
                   },
                   "required": [
                     "current_round",
                     "online-money",
+                    "online-stake",
                     "total-money"
                   ],
                   "type": "object"
@@ -5644,7 +5782,8 @@
                   "properties": {
                     "round": {
                       "description": "The minimum sync round for the ledger.",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     }
                   },
                   "required": [
@@ -5714,14 +5853,16 @@
         "operationId": "SetSyncRound",
         "parameters": [
           {
-            "description": "The round for which the deltas are desired.",
+            "description": "A round number.",
             "in": "path",
             "name": "round",
             "required": true,
             "schema": {
               "minimum": 0,
-              "type": "integer"
-            }
+              "type": "integer",
+              "x-go-type": "basics.Round"
+            },
+            "x-go-type": "basics.Round"
           }
         ],
         "responses": {
@@ -5777,6 +5918,69 @@
         "tags": [
           "public",
           "data"
+        ]
+      }
+    },
+    "/v2/node/peers": {
+      "get": {
+        "description": "Get information about connected peers.",
+        "operationId": "GetPeers",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "Peers": {
+                      "items": {
+                        "$ref": "#/components/schemas/PeerStatus"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "Peers"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Response containing the network peers of the node"
+          }
+        },
+        "tags": [
+          "private"
+        ]
+      }
+    },
+    "/v2/node/shutdown": {
+      "post": {
+        "description": "Special management endpoint to shutdown the node. Optionally provide a timeout parameter to indicate that the node should begin shutting down after a number of seconds.",
+        "operationId": "ShutdownNode2",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "timeout",
+            "schema": {
+              "default": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "private",
+          "nonparticipating"
         ]
       }
     },
@@ -5951,19 +6155,23 @@
         "operationId": "GenerateParticipationKeys",
         "parameters": [
           {
-            "description": "An account public key",
+            "description": "An account public key.",
             "in": "path",
             "name": "address",
             "required": true,
             "schema": {
-              "type": "string"
-            }
+              "pattern": "[A-Z0-9]{58}",
+              "type": "string",
+              "x-go-type": "basics.Address"
+            },
+            "x-go-type": "basics.Address"
           },
           {
             "description": "Key dilution for two-level participation keys (defaults to sqrt of validity window).",
             "in": "query",
             "name": "dilution",
             "schema": {
+              "format": "uint64",
               "type": "integer"
             }
           },
@@ -5973,8 +6181,11 @@
             "name": "first",
             "required": true,
             "schema": {
-              "type": "integer"
-            }
+              "format": "uint64",
+              "type": "integer",
+              "x-go-type": "basics.Round"
+            },
+            "x-go-type": "basics.Round"
           },
           {
             "description": "Last round for participation key.",
@@ -5982,8 +6193,11 @@
             "name": "last",
             "required": true,
             "schema": {
-              "type": "integer"
-            }
+              "format": "uint64",
+              "type": "integer",
+              "x-go-type": "basics.Round"
+            },
+            "x-go-type": "basics.Round"
           }
         ],
         "responses": {
@@ -6285,7 +6499,8 @@
     },
     "/v2/shutdown": {
       "post": {
-        "description": "Special management endpoint to shutdown the node. Optionally provide a timeout parameter to indicate that the node should begin shutting down after a number of seconds.",
+        "deprecated": true,
+        "description": "Special management endpoint to shutdown the node. Optionally provide a timeout parameter to indicate that the node should begin shutting down after a number of seconds. This endpoint is deprecated, use `POST /v2/node/shutdown` instead",
         "operationId": "ShutdownNode",
         "parameters": [
           {
@@ -6319,14 +6534,16 @@
         "operationId": "GetStateProof",
         "parameters": [
           {
-            "description": "The round for which a state proof is desired.",
+            "description": "A round number.",
             "in": "path",
             "name": "round",
             "required": true,
             "schema": {
               "minimum": 0,
-              "type": "integer"
-            }
+              "type": "integer",
+              "x-go-type": "basics.Round"
+            },
+            "x-go-type": "basics.Round"
           }
         ],
         "responses": {
@@ -6418,39 +6635,48 @@
                     },
                     "catchpoint-acquired-blocks": {
                       "description": "The number of blocks that have already been obtained by the node as part of the catchup",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "uint64"
                     },
                     "catchpoint-processed-accounts": {
                       "description": "The number of accounts from the current catchpoint that have been processed so far as part of the catchup",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "uint64"
                     },
                     "catchpoint-processed-kvs": {
                       "description": "The number of key-values (KVs) from the current catchpoint that have been processed so far as part of the catchup",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "uint64"
                     },
                     "catchpoint-total-accounts": {
                       "description": "The total number of accounts included in the current catchpoint",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "uint64"
                     },
                     "catchpoint-total-blocks": {
                       "description": "The total number of blocks that are required to complete the current catchpoint catchup",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "uint64"
                     },
                     "catchpoint-total-kvs": {
                       "description": "The total number of key-values (KVs) included in the current catchpoint",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "uint64"
                     },
                     "catchpoint-verified-accounts": {
                       "description": "The number of accounts from the current catchpoint that have been verified so far as part of the catchup",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "uint64"
                     },
                     "catchpoint-verified-kvs": {
                       "description": "The number of key-values (KVs) from the current catchpoint that have been verified so far as part of the catchup",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "uint64"
                     },
                     "catchup-time": {
                       "description": "CatchupTime in nanoseconds",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "int64"
                     },
                     "last-catchpoint": {
                       "description": "The last catchpoint seen by the node",
@@ -6458,7 +6684,8 @@
                     },
                     "last-round": {
                       "description": "LastRound indicates the last round seen",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     },
                     "last-version": {
                       "description": "LastVersion indicates the last consensus version supported",
@@ -6470,7 +6697,8 @@
                     },
                     "next-version-round": {
                       "description": "NextVersionRound is the round at which the next consensus version will apply",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     },
                     "next-version-supported": {
                       "description": "NextVersionSupported indicates whether the next consensus version is supported by this node",
@@ -6482,19 +6710,23 @@
                     },
                     "time-since-last-round": {
                       "description": "TimeSinceLastRound in nanoseconds",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "int64"
                     },
                     "upgrade-delay": {
                       "description": "Upgrade delay",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     },
                     "upgrade-next-protocol-vote-before": {
                       "description": "Next protocol round",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     },
                     "upgrade-no-votes": {
                       "description": "No votes cast for consensus upgrade",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     },
                     "upgrade-node-vote": {
                       "description": "This node's upgrade vote",
@@ -6502,19 +6734,23 @@
                     },
                     "upgrade-vote-rounds": {
                       "description": "Total voting rounds for current upgrade",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     },
                     "upgrade-votes": {
                       "description": "Total votes cast for consensus upgrade",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     },
                     "upgrade-votes-required": {
                       "description": "Yes votes required for consensus upgrade",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     },
                     "upgrade-yes-votes": {
                       "description": "Yes votes cast for consensus upgrade",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     }
                   },
                   "required": [
@@ -6570,14 +6806,16 @@
         "operationId": "WaitForBlock",
         "parameters": [
           {
-            "description": "The round to wait until returning status",
+            "description": "A round number.",
             "in": "path",
             "name": "round",
             "required": true,
             "schema": {
               "minimum": 0,
-              "type": "integer"
-            }
+              "type": "integer",
+              "x-go-type": "basics.Round"
+            },
+            "x-go-type": "basics.Round"
           }
         ],
         "responses": {
@@ -6593,39 +6831,48 @@
                     },
                     "catchpoint-acquired-blocks": {
                       "description": "The number of blocks that have already been obtained by the node as part of the catchup",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "uint64"
                     },
                     "catchpoint-processed-accounts": {
                       "description": "The number of accounts from the current catchpoint that have been processed so far as part of the catchup",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "uint64"
                     },
                     "catchpoint-processed-kvs": {
                       "description": "The number of key-values (KVs) from the current catchpoint that have been processed so far as part of the catchup",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "uint64"
                     },
                     "catchpoint-total-accounts": {
                       "description": "The total number of accounts included in the current catchpoint",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "uint64"
                     },
                     "catchpoint-total-blocks": {
                       "description": "The total number of blocks that are required to complete the current catchpoint catchup",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "uint64"
                     },
                     "catchpoint-total-kvs": {
                       "description": "The total number of key-values (KVs) included in the current catchpoint",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "uint64"
                     },
                     "catchpoint-verified-accounts": {
                       "description": "The number of accounts from the current catchpoint that have been verified so far as part of the catchup",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "uint64"
                     },
                     "catchpoint-verified-kvs": {
                       "description": "The number of key-values (KVs) from the current catchpoint that have been verified so far as part of the catchup",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "uint64"
                     },
                     "catchup-time": {
                       "description": "CatchupTime in nanoseconds",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "int64"
                     },
                     "last-catchpoint": {
                       "description": "The last catchpoint seen by the node",
@@ -6633,7 +6880,8 @@
                     },
                     "last-round": {
                       "description": "LastRound indicates the last round seen",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     },
                     "last-version": {
                       "description": "LastVersion indicates the last consensus version supported",
@@ -6645,7 +6893,8 @@
                     },
                     "next-version-round": {
                       "description": "NextVersionRound is the round at which the next consensus version will apply",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     },
                     "next-version-supported": {
                       "description": "NextVersionSupported indicates whether the next consensus version is supported by this node",
@@ -6657,19 +6906,23 @@
                     },
                     "time-since-last-round": {
                       "description": "TimeSinceLastRound in nanoseconds",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "int64"
                     },
                     "upgrade-delay": {
                       "description": "Upgrade delay",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     },
                     "upgrade-next-protocol-vote-before": {
                       "description": "Next protocol round",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     },
                     "upgrade-no-votes": {
                       "description": "No votes cast for consensus upgrade",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     },
                     "upgrade-node-vote": {
                       "description": "This node's upgrade vote",
@@ -6677,19 +6930,23 @@
                     },
                     "upgrade-vote-rounds": {
                       "description": "Total voting rounds for current upgrade",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     },
                     "upgrade-votes": {
                       "description": "Total votes cast for consensus upgrade",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     },
                     "upgrade-votes-required": {
                       "description": "Yes votes required for consensus upgrade",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     },
                     "upgrade-yes-votes": {
                       "description": "Yes votes cast for consensus upgrade",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     }
                   },
                   "required": [
@@ -6945,107 +7202,19 @@
         "x-codegen-request-body-name": "source"
       }
     },
-    "/v2/teal/dryrun": {
-      "post": {
-        "description": "Executes TEAL program(s) in context and returns debugging information about the execution. This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
-        "operationId": "TealDryrun",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DryrunRequest"
-              }
-            },
-            "application/msgpack": {
-              "schema": {
-                "$ref": "#/components/schemas/DryrunRequest"
-              }
-            }
-          },
-          "description": "Transaction (or group) and any accompanying state-simulation data.",
-          "required": false
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "protocol-version": {
-                      "description": "Protocol version is the protocol version Dryrun was operated under.",
-                      "type": "string"
-                    },
-                    "txns": {
-                      "items": {
-                        "$ref": "#/components/schemas/DryrunTxnResult"
-                      },
-                      "type": "array"
-                    }
-                  },
-                  "required": [
-                    "error",
-                    "protocol-version",
-                    "txns"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "DryrunResponse contains per-txn debug information from a dryrun."
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid API Token"
-          },
-          "404": {
-            "content": {},
-            "description": "Developer API not enabled"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Error"
-          },
-          "default": {
-            "content": {},
-            "description": "Unknown Error"
-          }
-        },
-        "summary": "Provide debugging information for a transaction (or group).",
-        "tags": [
-          "public",
-          "nonparticipating"
-        ],
-        "x-codegen-request-body-name": "request"
-      }
-    },
     "/v2/transactions": {
       "post": {
         "operationId": "RawTransaction",
+        "parameters": [
+          {
+            "description": "Skip post-quantum address checks, including the check that rejects PQ authorizer and LogicSig escrow (TEAL v13 or later) whose address is an Edwards25519 curve point. This should only be used if you understand the risks and know what you are doing.",
+            "in": "query",
+            "name": "skip-pq-address-check",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/x-binary": {
@@ -7134,6 +7303,16 @@
     "/v2/transactions/async": {
       "post": {
         "operationId": "RawTransactionAsync",
+        "parameters": [
+          {
+            "description": "Skip post-quantum address checks, including the check that rejects PQ authorizer and LogicSig escrow (TEAL v13 or later) whose address is an Edwards25519 curve point. This should only be used if you understand the risks and know what you are doing.",
+            "in": "query",
+            "name": "skip-pq-address-check",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/x-binary": {
@@ -7223,7 +7402,8 @@
                     },
                     "fee": {
                       "description": "Fee is the suggested transaction fee\nFee is in units of micro-Algos per byte.\nFee may fall to zero but transactions must still have a fee of\nat least MinTxnFee for the current network protocol.",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "uint64"
                     },
                     "genesis-hash": {
                       "description": "GenesisHash is the hash of the genesis block.",
@@ -7237,11 +7417,13 @@
                     },
                     "last-round": {
                       "description": "LastRound indicates the last round seen",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     },
                     "min-fee": {
-                      "description": "The minimum transaction fee (not per byte) required for the\ntxn to validate for the current network protocol.",
-                      "type": "integer"
+                      "description": "The minimum transaction fee (not per byte) required for the txn to validate for the current network protocol.",
+                      "type": "integer",
+                      "x-go-type": "uint64"
                     }
                   },
                   "required": [
@@ -7302,7 +7484,7 @@
     },
     "/v2/transactions/pending": {
       "get": {
-        "description": "Get the list of pending transactions, sorted by priority, in decreasing order, truncated at the end at MAX. If MAX = 0, returns all pending transactions.\n",
+        "description": "Get the list of pending transactions, sorted by priority, in decreasing order, truncated at the end at MAX. If MAX = 0, returns all pending transactions.",
         "operationId": "GetPendingTransactions",
         "parameters": [
           {
@@ -7310,8 +7492,10 @@
             "in": "query",
             "name": "max",
             "schema": {
-              "type": "integer"
-            }
+              "type": "integer",
+              "x-go-type": "uint64"
+            },
+            "x-go-type": "uint64"
           },
           {
             "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
@@ -7441,7 +7625,7 @@
     },
     "/v2/transactions/pending/{txid}": {
       "get": {
-        "description": "Given a transaction ID of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round > 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.\n",
+        "description": "Given a transaction ID of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round > 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.",
         "operationId": "PendingTransactionInformation",
         "parameters": [
           {
@@ -7590,7 +7774,8 @@
                     },
                     "last-round": {
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     },
                     "txn-groups": {
                       "description": "A result object for each transaction group that was simulated.",
@@ -7601,7 +7786,8 @@
                     },
                     "version": {
                       "description": "The version of this response object.",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "uint64"
                     }
                   },
                   "required": [
@@ -7626,7 +7812,8 @@
                     },
                     "last-round": {
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
                     },
                     "txn-groups": {
                       "description": "A result object for each transaction group that was simulated.",
@@ -7637,7 +7824,8 @@
                     },
                     "version": {
                       "description": "The version of this response object.",
-                      "type": "integer"
+                      "type": "integer",
+                      "x-go-type": "uint64"
                     }
                   },
                   "required": [

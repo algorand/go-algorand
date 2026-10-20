@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package transcode
 
 import (
 	"encoding/base32"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"testing"
@@ -58,7 +59,8 @@ func testIdempotentRoundtrip(t *testing.T, mpdata []byte) {
 	res, err := io.ReadAll(p3out)
 
 	require.NoError(t, err)
-	require.Equal(t, mpdata, res)
+	require.Equal(t, mpdata, res,
+		"%v != %v", base64.StdEncoding.EncodeToString(mpdata), base64.StdEncoding.EncodeToString(res))
 }
 
 type objectType int
@@ -81,7 +83,7 @@ const (
 	objectTypeMax
 )
 
-func randomObjectOfType(randtype uint64, width int, depth int) interface{} {
+func randomObjectOfType(randtype uint64, width int, depth int) any {
 	if depth == 0 {
 		return 0
 	}
@@ -116,28 +118,40 @@ func randomObjectOfType(randtype uint64, width int, depth int) interface{} {
 		crypto.RandBytes(buf[:])
 		return base32.StdEncoding.EncodeToString(buf[:])
 	case objectArray:
-		var arr [2]interface{}
-		for i := 0; i < len(arr); i++ {
+		var arr [2]any
+		if crypto.RandUint64()%2 == 0 { // half the time, make the slice a uniform type
 			t := crypto.RandUint64()
-			if t%uint64(objectTypeMax) == uint64(objectBytes) {
-				// We cannot cleanly pass through an array of
-				// binary blobs.
-				t++
+			for i := range arr {
+				arr[i] = randomObjectOfType(t, width, depth-1)
 			}
-			arr[i] = randomObjectOfType(t, width, depth-1)
+		} else {
+			for i := range arr {
+				t := crypto.RandUint64()
+				if t%uint64(objectTypeMax) == uint64(objectBytes) {
+					// We cannot cleanly handle binary blobs unless the entire array is.
+					t++
+				}
+				arr[i] = randomObjectOfType(t, width, depth-1)
+			}
 		}
 		return arr
 	case objectSlice:
-		slice := make([]interface{}, 0)
+		slice := make([]any, 0)
 		sz := crypto.RandUint64() % uint64(width)
-		for i := 0; i < int(sz); i++ {
+		if crypto.RandUint64()%2 == 0 { // half the time, make the slice a uniform type
 			t := crypto.RandUint64()
-			if t%uint64(objectTypeMax) == uint64(objectBytes) {
-				// We cannot cleanly pass through an array of
-				// binary blobs.
-				t++
+			for range sz {
+				slice = append(slice, randomObjectOfType(t, width, depth-1))
 			}
-			slice = append(slice, randomObjectOfType(t, width, depth-1))
+		} else {
+			for range sz {
+				t := crypto.RandUint64()
+				if t%uint64(objectTypeMax) == uint64(objectBytes) {
+					// We cannot cleanly handle binary blobs unless the entire slice is.
+					t++
+				}
+				slice = append(slice, randomObjectOfType(t, width, depth-1))
+			}
 		}
 		return slice
 	case objectMap:
@@ -147,12 +161,12 @@ func randomObjectOfType(randtype uint64, width int, depth int) interface{} {
 	}
 }
 
-func randomObject(width int, depth int) interface{} {
+func randomObject(width int, depth int) any {
 	return randomObjectOfType(crypto.RandUint64(), width, depth)
 }
 
-func randomMap(width int, depth int) interface{} {
-	r := make(map[string]interface{})
+func randomMap(width int, depth int) any {
+	r := make(map[string]any)
 
 	for i := 0; i < width; i++ {
 		var k [8]byte
@@ -172,7 +186,7 @@ func TestIdempotence(t *testing.T) {
 	}
 
 	for i := 0; i < niter; i++ {
-		o := randomMap(6, 3)
+		o := randomMap(i%7, i%3)
 		testIdempotentRoundtrip(t, protocol.EncodeReflect(o))
 	}
 }
@@ -189,7 +203,7 @@ func TestIdempotenceMultiobject(t *testing.T) {
 		nobj := crypto.RandUint64() % 8
 		buf := []byte{}
 		for j := 0; j < int(nobj); j++ {
-			buf = append(buf, protocol.EncodeReflect(randomMap(6, 3))...)
+			buf = append(buf, protocol.EncodeReflect(randomMap(i%7, i%3))...)
 		}
 		testIdempotentRoundtrip(t, buf)
 	}

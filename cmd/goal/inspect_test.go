@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -90,4 +90,39 @@ func TestInspect(t *testing.T) {
 	crypto.RandBytes(full.Txn.CloseRemainderTo[:])
 	_, err = inspectTxn(full)
 	require.NoError(t, err)
+
+	var pqSigned transactions.SignedTxn
+	pqSigned.Txn.Type = protocol.PaymentTx
+	crypto.RandBytes(pqSigned.Txn.Sender[:])
+	crypto.RandBytes(pqSigned.Txn.Receiver[:])
+	pqSigned.PQsig = transactions.PQSig{
+		Scheme:    protocol.PQSchemeFalcon1024,
+		Salt:      7,
+		PublicKey: []byte{1, 2, 3},
+		Signature: []byte{4, 5, 6},
+	}
+	_, err = inspectTxn(pqSigned)
+	require.NoError(t, err)
+
+	var delegated transactions.SignedTxn
+	delegated.Txn.Type = protocol.PaymentTx
+	crypto.RandBytes(delegated.Txn.Sender[:])
+	delegated.Lsig.Logic = []byte{1}
+	delegated.Lsig.LMsig.Version = uint8(crypto.RandUint64())
+	delegated.Lsig.LMsig.Threshold = uint8(crypto.RandUint64())
+	delegated.Lsig.LMsig.Subsigs = make([]crypto.MultisigSubsig, 1)
+	crypto.RandBytes(delegated.Lsig.LMsig.Subsigs[0].Key[:])
+	crypto.RandBytes(delegated.Lsig.LMsig.Subsigs[0].Sig[:])
+	delegated.Lsig.PQsig = transactions.PQSig{
+		Scheme:    protocol.PQSchemeFalcon1024,
+		Salt:      2,
+		PublicKey: []byte{7, 8, 9},
+		Signature: []byte{10, 11, 12},
+	}
+	sti, err := inspectTxn(delegated)
+	require.NoError(t, err)
+	encoded := string(protocol.EncodeJSON(sti))
+	require.Contains(t, encoded, `"lmsig"`)
+	require.Contains(t, encoded, `"pqsig"`)
+	require.Contains(t, encoded, `"sch": "ZjE="`)
 }

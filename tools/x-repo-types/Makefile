@@ -1,7 +1,7 @@
 all: clean goal-v-sdk goal-v-spv
 
 clean:
-	rm x-repo-types
+	rm -f x-repo-types
 
 x-repo-types:
 	go build
@@ -11,44 +11,44 @@ x-repo-types:
 goal-v-sdk: goal-v-sdk-state-delta goal-v-sdk-genesis goal-v-sdk-block goal-v-sdk-blockheader goal-v-sdk-stateproof
 
 goal-v-sdk-state-delta: x-repo-types
-	x-repo-types --x-package "github.com/algorand/go-algorand/ledger/ledgercore" \
+	./x-repo-types --x-package "github.com/algorand/go-algorand/ledger/ledgercore" \
 		--x-type "StateDelta" \
-		--y-branch "develop" \
+		--y-branch "main" \
 		--y-package "github.com/algorand/go-algorand-sdk/v2/types" \
 		--y-type "LedgerStateDelta"
 
 goal-v-sdk-genesis: x-repo-types
-	x-repo-types --x-package "github.com/algorand/go-algorand/data/bookkeeping" \
+	./x-repo-types --x-package "github.com/algorand/go-algorand/data/bookkeeping" \
 		--x-type "Genesis" \
-		--y-branch "develop" \
+		--y-branch "main" \
 		--y-package "github.com/algorand/go-algorand-sdk/v2/types" \
 		--y-type "Genesis"
 
 goal-v-sdk-block: x-repo-types
-	x-repo-types --x-package "github.com/algorand/go-algorand/data/bookkeeping" \
+	./x-repo-types --x-package "github.com/algorand/go-algorand/data/bookkeeping" \
 		--x-type "Block" \
-		--y-branch "develop" \
+		--y-branch "main" \
 		--y-package "github.com/algorand/go-algorand-sdk/v2/types" \
 		--y-type "Block"
 
 goal-v-sdk-blockheader: x-repo-types
-	x-repo-types --x-package "github.com/algorand/go-algorand/data/bookkeeping" \
+	./x-repo-types --x-package "github.com/algorand/go-algorand/data/bookkeeping" \
 		--x-type "BlockHeader" \
-		--y-branch "develop" \
+		--y-branch "main" \
 		--y-package "github.com/algorand/go-algorand-sdk/v2/types" \
 		--y-type "BlockHeader"
 
 goal-v-sdk-consensus: x-repo-types
-	x-repo-types --x-package "github.com/algorand/go-algorand/config" \
+	./x-repo-types --x-package "github.com/algorand/go-algorand/config" \
 		--x-type "ConsensusParams" \
-		--y-branch "develop" \
+		--y-branch "main" \
 		--y-package "github.com/algorand/go-algorand-sdk/v2/protocol/config" \
 		--y-type "ConsensusParams"
 
 goal-v-sdk-stateproof: x-repo-types
-	x-repo-types --x-package "github.com/algorand/go-algorand/crypto/stateproof" \
+	./x-repo-types --x-package "github.com/algorand/go-algorand/crypto/stateproof" \
 		--x-type "StateProof" \
-		--y-branch "develop" \
+		--y-branch "main" \
 		--y-package "github.com/algorand/go-algorand-sdk/v2/types" \
 		--y-type "StateProof"
 
@@ -57,7 +57,7 @@ goal-v-sdk-stateproof: x-repo-types
 goal-v-spv: goal-v-spv-stateproof
 
 goal-v-spv-stateproof:
-	x-repo-types --x-package "github.com/algorand/go-algorand/crypto/stateproof" \
+	./x-repo-types --x-package "github.com/algorand/go-algorand/crypto/stateproof" \
 		--x-type "StateProof" \
 		--y-package "github.com/algorand/go-stateproof-verification/stateproof" \
 		--y-type "StateProof"
@@ -65,7 +65,7 @@ goal-v-spv-stateproof:
 # reset typeAnalyzer/main.go for passing checks:
 
 reset-dummy-main:
-	x-repo-types --x-package "github.com/algorand/go-algorand/ledger/ledgercore" \
+	./x-repo-types --x-package "github.com/algorand/go-algorand/ledger/ledgercore" \
 		--x-type "StateDelta" \
 		--y-package "github.com/algorand/go-algorand/data/bookkeeping" \
 		--y-type "Genesis"

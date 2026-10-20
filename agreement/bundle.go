@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -36,8 +36,8 @@ type unauthenticatedBundle struct {
 	Step     step          `codec:"step"`
 	Proposal proposalValue `codec:"prop"`
 
-	Votes             []voteAuthenticator             `codec:"vote,allocbound=config.MaxVoteThreshold"`
-	EquivocationVotes []equivocationVoteAuthenticator `codec:"eqv,allocbound=config.MaxVoteThreshold"`
+	Votes             []voteAuthenticator             `codec:"vote,allocbound=bounds.MaxVoteThreshold"`
+	EquivocationVotes []equivocationVoteAuthenticator `codec:"eqv,allocbound=bounds.MaxVoteThreshold"`
 }
 
 // bundle is a set of votes, all from the same round, period, and step, and from distinct senders, that reaches quorum.
@@ -48,11 +48,11 @@ type bundle struct {
 
 	U unauthenticatedBundle `codec:"u"`
 
-	Votes             []vote             `codec:"vote,allocbound=config.MaxVoteThreshold"`
-	EquivocationVotes []equivocationVote `codec:"eqv,allocbound=config.MaxVoteThreshold"`
+	Votes             []vote             `codec:"vote,allocbound=bounds.MaxVoteThreshold"`
+	EquivocationVotes []equivocationVote `codec:"eqv,allocbound=bounds.MaxVoteThreshold"`
 }
 
-// voteAuthenticators omit the Round, Period, Step, and Proposal for compression
+// voteAuthenticator omits the Round, Period, Step, and Proposal for compression
 // and to simplify checking logic.
 type voteAuthenticator struct {
 	_struct struct{} `codec:""` // not omitempty
@@ -134,6 +134,14 @@ func makeBundle(proto config.ConsensusParams, targetProposal proposalValue, vote
 	}
 }
 
+// wellFormed performs stateless checks on a bundle received from the network.
+func (b unauthenticatedBundle) wellFormed() error {
+	if b.Step > down { // down is the largest step defined by the protocol.
+		return fmt.Errorf("unauthenticatedBundle.wellFormed: step %d exceeds max step %d", b.Step, down)
+	}
+	return nil
+}
+
 // verify checks that the bundle is valid, i.e.:
 //
 // - all the votes in the bundle are valid
@@ -153,10 +161,14 @@ func (b unauthenticatedBundle) verifyAsync(ctx context.Context, l LedgerReader, 
 	}
 
 	// termFmtErrorFn is like termErrorFn but runs fmt.Errorf on its input.
-	termFmtErrorFn := func(format string, a ...interface{}) func() (bundle, error) {
+	termFmtErrorFn := func(format string, a ...any) func() (bundle, error) {
 		return func() (bundle, error) {
 			return bundle{}, fmt.Errorf(format, a...)
 		}
+	}
+
+	if err := b.wellFormed(); err != nil {
+		return termErrorFn(err)
 	}
 
 	if b.Step == propose {

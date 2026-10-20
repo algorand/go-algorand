@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -279,13 +279,14 @@ func voteFresh(proto protocol.ConsensusVersion, freshData freshnessData, vote un
 }
 
 // bundleFresh determines whether a bundle satisfies freshness rules.
+//
+// Per the spec bundle relay rule, a bundle is discarded unless it is for the
+// current round and no more than one period behind the current period. Cert
+// bundles are not exempt: a late cert for an already-collected period is
+// discarded here, and the block is recovered through catchup.
 func bundleFresh(freshData freshnessData, b unauthenticatedBundle) error {
 	if freshData.PlayerRound != b.Round {
 		return fmt.Errorf("filtered bundle from different round: round %d != %d", freshData.PlayerRound, b.Round)
-	}
-
-	if b.Step == cert {
-		return nil
 	}
 
 	if freshData.PlayerPeriod != 0 && freshData.PlayerPeriod-1 > b.Period {

@@ -38,7 +38,9 @@ if { [catch {
     # send 1000 messages and wait for them to get applied.
     set EXPECTED_BALANCE $INITIAL_ACCOUNT_BALANCE
     set TRANSFER_AMOUNT_BASE 1000000
-    set FEE_AMOUNT 1000
+    # Get suggested fee from network
+    set FEE_AMOUNT [::AlgorandGoal::GetSuggestedFee $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+    puts "Network suggested fee: $FEE_AMOUNT"
     set TRANSACTION_COUNT 10
     for {set txIdx 0} {$txIdx < $TRANSACTION_COUNT} {incr txIdx 1} {
         set TRANSFER_AMOUNT [expr $TRANSFER_AMOUNT_BASE+$txIdx]

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,14 +18,18 @@ package p2p
 
 import (
 	"context"
+	"errors"
+	randv1 "math/rand"
 	"sync"
 	"time"
 
 	dht "github.com/libp2p/go-libp2p-kad-dht"
+	kbucket "github.com/libp2p/go-libp2p-kbucket"
 	"github.com/libp2p/go-libp2p/core/discovery"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	libpeerstore "github.com/libp2p/go-libp2p/core/peerstore"
+	"github.com/libp2p/go-libp2p/p2p/discovery/backoff"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
@@ -108,47 +112,84 @@ func (c *CapabilitiesDiscovery) PeersForCapability(capability Capability, n int)
 	return peers, nil
 }
 
+const capAdvertisementInitialDelay = time.Second / 10000
+
 // AdvertiseCapabilities periodically runs the Advertiser interface on the DHT
-// If a capability fails to advertise we will retry every 10 seconds until full success
+// If a capability fails to advertise we will retry every 100 seconds until full success
 // This gets rerun every at the minimum ttl or the maxAdvertisementInterval.
 func (c *CapabilitiesDiscovery) AdvertiseCapabilities(capabilities ...Capability) {
 	c.wg.Add(1)
 	go func() {
 		// Run the initial Advertisement immediately
-		nextExecution := time.After(time.Second / 10000)
+		nextExecution := time.After(capAdvertisementInitialDelay)
 		defer func() {
 			c.wg.Done()
 		}()
+		// Create a exp jitter backoff strategy to use for retrying failed advertisements
+		ebf := backoff.NewExponentialDecorrelatedJitter(1*time.Second, 100*time.Second, 3.0, randv1.NewSource(randv1.Int63()))
+		eb := ebf()
 
 		for {
 			select {
 			case <-c.dht.Context().Done():
 				return
 			case <-nextExecution:
-				var err error
-				advertisementInterval := maxAdvertisementInterval
-				for _, capa := range capabilities {
-					ttl, err0 := c.advertise(c.dht.Context(), string(capa))
-					if err0 != nil {
-						err = err0
-						c.log.Errorf("failed to advertise for capability %s: %v", capa, err0)
-						break
-					}
-					if ttl < advertisementInterval {
-						advertisementInterval = ttl
-					}
-					c.log.Infof("advertised capability %s", capa)
+				advertisementInterval, err := c.advertiseCaps(capabilities)
+				if c.dht.Context().Err() != nil {
+					return
 				}
-				// If we failed to advertise, retry every 10 seconds until successful
+				// If any capability failed to advertise, retry according to exp jitter delays
 				if err != nil {
-					nextExecution = time.After(time.Second * 10)
+					nextExecution = time.After(eb.Delay())
 				} else {
 					// Otherwise, ensure we're at the correct interval
 					nextExecution = time.After(advertisementInterval)
+					eb.Reset()
 				}
 			}
 		}
 	}()
+}
+
+// advertiseCaps advertises all capabilities concurrently and returns
+// the minimum re-advertisement interval and the first error encountered (if any)
+func (c *CapabilitiesDiscovery) advertiseCaps(capabilities []Capability) (time.Duration, error) {
+	type result struct {
+		capa Capability
+		ttl  time.Duration
+		err  error
+	}
+	results := make(chan result, len(capabilities))
+	for _, capa := range capabilities {
+		go func(cap Capability) {
+			ttl, err := c.advertise(c.dht.Context(), string(cap))
+			results <- result{capa: cap, ttl: ttl, err: err}
+		}(capa)
+	}
+
+	var aggErr error
+	advertisementInterval := maxAdvertisementInterval
+	for range capabilities {
+		r := <-results
+		if r.err != nil {
+			if c.dht.Context().Err() != nil {
+				continue
+			}
+			aggErr = errors.Join(aggErr, r.err)
+			loggerFn := c.log.Warnf
+			if r.err == kbucket.ErrLookupFailure {
+				// No peers in a routing table, it is typical for startup and not an error
+				loggerFn = c.log.Debugf
+			}
+			loggerFn("failed to advertise for capability %s: %v", r.capa, r.err)
+			continue
+		}
+		if r.ttl < advertisementInterval {
+			advertisementInterval = r.ttl
+		}
+		c.log.Infof("advertised capability %s", r.capa)
+	}
+	return advertisementInterval, aggErr
 }
 
 // Sizer exposes the Size method

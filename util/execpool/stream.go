@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -204,7 +204,7 @@ func (sv *StreamToBatch) addBatchToThePoolNow(unprocessed []InputJob) error {
 	// copy the ctx here so that when the StreamToBatch is started again, and a new context
 	// is created, this task still gets canceled due to the ctx at the time of this task
 	taskCtx := sv.ctx
-	function := func(arg interface{}) interface{} {
+	function := func(arg any) any {
 		uJobs := arg.([]InputJob)
 		if taskCtx.Err() != nil {
 			// ctx is canceled. the results will be returned

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,8 +17,10 @@
 package transactions
 
 import (
+	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -70,7 +72,7 @@ func TestAlgosEncoding(t *testing.T) {
 	}
 }
 
-func TestCheckSpender(t *testing.T) {
+func TestPaymentWellFormed(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	v7 := config.Consensus[protocol.ConsensusV7]
@@ -105,30 +107,71 @@ func TestCheckSpender(t *testing.T) {
 	}
 
 	tx.Sender = feeSink
-	require.ErrorContains(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, v7),
+	require.ErrorContains(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, v7),
 		"to non incentive pool address")
-	require.ErrorContains(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, v39),
+	require.ErrorContains(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, v39),
 		"to non incentive pool address")
-	require.ErrorContains(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, vFuture),
+	require.ErrorContains(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, vFuture),
 		"cannot spend from fee sink")
 
 	tx.Receiver = poolAddr
-	require.NoError(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, v7))
-	require.NoError(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, v39))
-	require.ErrorContains(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, vFuture),
+	require.NoError(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, v7))
+	require.NoError(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, v39))
+	require.ErrorContains(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, vFuture),
 		"cannot spend from fee sink")
 
 	tx.CloseRemainderTo = poolAddr
-	require.ErrorContains(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, v7),
+	require.ErrorContains(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, v7),
 		"cannot close fee sink")
-	require.ErrorContains(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, v39),
+	require.ErrorContains(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, v39),
 		"cannot close fee sink")
-	require.ErrorContains(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, vFuture),
+	require.ErrorContains(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, vFuture),
 		"cannot spend from fee sink")
 
 	// When not sending from fee sink, everything's fine
 	tx.Sender = src
-	require.NoError(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, v7))
-	require.NoError(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, v39))
-	require.NoError(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, vFuture))
+	require.NoError(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, v7))
+	require.NoError(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, v39))
+	require.NoError(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, vFuture))
+}
+
+func TestWellFormedPaymentErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
+	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
+	require.NoError(t, err)
+	usecases := []struct {
+		tx            Transaction
+		proto         config.ConsensusParams
+		expectedError error
+	}{
+		{
+			tx: Transaction{
+				Type: protocol.PaymentTx,
+				Header: Header{
+					Sender: addr1,
+					Fee:    basics.MicroAlgos{Raw: 100}, // Low fee ok b/c fees can be pooled
+				},
+			},
+			proto: curProto,
+		},
+		{
+			tx: Transaction{
+				Type: protocol.PaymentTx,
+				Header: Header{
+					Sender:     addr1,
+					Fee:        basics.MicroAlgos{Raw: 1000},
+					LastValid:  100,
+					FirstValid: 105,
+				},
+			},
+			proto:         curProto,
+			expectedError: fmt.Errorf("transaction invalid range (%d--%d)", 105, 100),
+		},
+	}
+	for _, usecase := range usecases {
+		err := usecase.tx.WellFormed(SpecialAddresses{}, usecase.proto)
+		assert.Equal(t, usecase.expectedError, err)
+	}
 }

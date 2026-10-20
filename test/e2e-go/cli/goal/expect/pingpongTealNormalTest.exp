@@ -1,0 +1,5 @@
+#!/usr/bin/expect -f
+set TEST_ALGO_DIR [lindex $argv 0]
+set TEST_DATA_DIR [lindex $argv 1]
+source pingpongCommon.exp
+pingpongTestMain "TealNormal" "teal_normal_transaction" "--teal=normal --tps 200 --refresh 10 --numaccounts 50"

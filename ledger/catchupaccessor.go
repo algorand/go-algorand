@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -253,10 +253,10 @@ const (
 	CatchpointCatchupStateBlocksDownload
 	// CatchpointCatchupStateSwitch indicates that we're switching to use the downloaded ledger/blocks content
 	CatchpointCatchupStateSwitch
-
-	// catchpointCatchupStateLast is the last entry in the CatchpointCatchupState enumeration.
-	catchpointCatchupStateLast = CatchpointCatchupStateSwitch
 )
+
+// catchpointCatchupStateLast is the last entry in the CatchpointCatchupState enumeration.
+const catchpointCatchupStateLast = CatchpointCatchupStateSwitch
 
 // CatchupAccessorClientLedger represents ledger interface needed for catchpoint accessor clients
 type CatchupAccessorClientLedger interface {
@@ -454,7 +454,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 
 	// the following fields are now going to be ignored. We could add these to the database and validate these
 	// later on:
-	// TotalAccounts, TotalAccounts, Catchpoint, BlockHeaderDigest, BalancesRound
+	// TotalAccounts, Catchpoint, BlockHeaderDigest, BalancesRound
 	start := time.Now()
 	ledgerProcessstagingcontentCount.Inc(nil)
 	err = c.ledger.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
@@ -521,7 +521,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		// we won't get to this point, since we've already verified the version in processStagingContent
 		return errors.New("unsupported version")
 	case CatchpointFileVersionV5:
-		var balances catchpointFileBalancesChunkV5
+		var balances CatchpointSnapshotChunkV5
 		err = protocol.Decode(bytes, &balances)
 		if err != nil {
 			return err
@@ -531,7 +531,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 			return fmt.Errorf("processStagingBalances received a chunk with no accounts")
 		}
 
-		normalizedAccountBalances, err = prepareNormalizedBalancesV5(balances.Balances, c.ledger.GenesisProto())
+		normalizedAccountBalances, err = prepareNormalizedBalancesV5(balances.Balances, c.ledger.GenesisProto().RewardUnit)
 		expectingMoreEntries = make([]bool, len(balances.Balances))
 
 	case CatchpointFileVersionV6:
@@ -542,7 +542,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		fallthrough
 	case CatchpointFileVersionV8:
 		// V8 added online accounts and online round params data + hashes, and added them to the v6 chunk format
-		var chunk catchpointFileChunkV6
+		var chunk CatchpointSnapshotChunkV6
 		err = protocol.Decode(bytes, &chunk)
 		if err != nil {
 			return err
@@ -814,7 +814,13 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 	wg.Add(2)
 	errChan := make(chan error, 2)
 
-	writerQueue := make(chan [][]byte, 16)
+	// workCtx lets the writer tell the reader it has stopped consuming. Without it, a writer
+	// that exits early leaves the reader blocked forever on a send into writerQueue, so
+	// wg.Wait never returns.
+	workCtx, workCancel := context.WithCancel(ctx)
+	defer workCancel()
+
+	writerQueue := make(chan [][]byte, trieRebuildQueueDepth)
 	c.ledger.setSynchronousMode(ctx, c.ledger.accountsRebuildSynchronousMode)
 	defer c.ledger.setSynchronousMode(ctx, c.ledger.synchronousMode)
 
@@ -827,18 +833,26 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 		dbErr := dbs.Snapshot(func(transactionCtx context.Context, tx trackerdb.SnapshotScope) (err error) {
 			it := tx.MakeCatchpointPendingHashesIterator(trieRebuildAccountChunkSize)
 			var hashes [][]byte
+		scan:
 			for {
 				hashes, err = it.Next(transactionCtx)
 				if err != nil {
 					break
 				}
 				if len(hashes) > 0 {
-					writerQueue <- hashes
+					select {
+					case writerQueue <- hashes:
+					case <-workCtx.Done():
+						// Nobody is draining the queue. Report no error of our own, so
+						// the writer's reason for stopping reaches the caller.
+						it.Close()
+						break scan
+					}
 				}
 				if len(hashes) != trieRebuildAccountChunkSize {
 					break
 				}
-				if ctx.Err() != nil {
+				if workCtx.Err() != nil {
 					it.Close()
 					break
 				}
@@ -856,6 +870,9 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 	// starts the merkle trie writer
 	go func() {
 		defer wg.Done()
+		// Deferred so every exit path releases a parked reader, including the trie-creation
+		// failure below that returns before the receive loop starts.
+		defer workCancel()
 		var trie *merkletrie.Trie
 		uncommitedHashesCount := 0
 		keepWriting := true
@@ -978,8 +995,8 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 	wg.Wait()
 
 	select {
-	case err := <-errChan:
-		return err
+	case err1 := <-errChan:
+		return err1
 	default:
 	}
 
@@ -1031,7 +1048,7 @@ func (c *catchpointCatchupAccessorImpl) GetVerifyData(ctx context.Context) (bala
 			return fmt.Errorf("unable to get state proof verification data: %v", err)
 		}
 
-		onlineAccountsHash, _, err = calculateVerificationHash(ctx, tx.MakeOnlineAccountsIter, 0, true)
+		onlineAccountsHash, _, err = calculateVerificationHash(ctx, tx.MakeOrderedOnlineAccountsIter, 0, true)
 		if err != nil {
 			return fmt.Errorf("unable to get online accounts verification data: %v", err)
 		}

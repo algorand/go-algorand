@@ -34,10 +34,10 @@ The following config.json overrides are applied:
 
 The following environment variables can be supplied. Except when noted, it is possible to reconfigure deployments even after the data directory has been initialized.
 
-| Variable | Description |
-| -------- | ----------- |
+| Variable        | Description                                                                                                                                         |
+|-----------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
 | NETWORK         | Leave blank for a private network, otherwise specify one of mainnet, betanet, testnet, or devnet. Only used during a data directory initialization. |
-| PROFILE         | If set, initializes the config.json file according to the given profile. |
+| PROFILE         | If set, initializes the config.json file according to the given profile.                                                                            |
 | DEV_MODE        | If set to 1 on a private network, enable dev mode. Only used during data directory initialization.                                                  |
 | START_KMD       | When set to 1, start kmd service with no timeout. THIS SHOULD NOT BE USED IN PRODUCTION.                                                            |
 | FAST_CATCHUP    | If set to 1 on a public network, attempt to start fast-catchup during initial config.                                                               |
@@ -45,10 +45,11 @@ The following environment variables can be supplied. Except when noted, it is po
 | ADMIN_TOKEN     | If set, overrides the REST API admin token.                                                                                                         |
 | KMD_TOKEN       | If set along with `START_KMD`, override the KMD REST API token.                                                                                     |
 | TELEMETRY_NAME  | If set on a public network, telemetry is reported with this name.                                                                                   |
+| TELEMETRY_URL   | The URL to send telemetry to if enabled (TELEMETRY_NAME is also required).  Defaults to sending to Algorand.                                        |
 | NUM_ROUNDS      | If set on a private network, override default of 30000 participation keys.                                                                          |
-| GENESIS_ADDRESS | If set, use this API address to initialize the genesis file. |
+| GENESIS_ADDRESS | If set, use this API address to initialize the genesis file.                                                                                        |
 | PEER_ADDRESS    | If set, override phonebook with peer ip:port (or semicolon separated list: ip:port;ip:port;ip:port...)                                              |
-| GOSSIP_PORT     | If set, configure the node to listen for external connections on this address. For example "4161" |
+| GOSSIP_PORT     | If set, configure the node to listen for external connections on this address. For example "4161"                                                   |
 
 ### Special Files
 

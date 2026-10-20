@@ -6,7 +6,7 @@ set +e
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 OS=$("${SCRIPTPATH}/../ostype.sh")
 ARCH=$("${SCRIPTPATH}/../archtype.sh")
-
+export DEBIAN_FRONTEND="noninteractive"
 if [[ "${OS}" == "linux" ]]; then
     if [[ "${ARCH}" == "arm64" ]]; then
         set -e

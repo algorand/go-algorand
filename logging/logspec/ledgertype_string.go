@@ -17,8 +17,9 @@ const _LedgerType_name = "WroteBlocknumLedgerTypes"
 var _LedgerType_index = [...]uint8{0, 10, 24}
 
 func (i LedgerType) String() string {
-	if i < 0 || i >= LedgerType(len(_LedgerType_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_LedgerType_index)-1 {
 		return "LedgerType(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _LedgerType_name[_LedgerType_index[i]:_LedgerType_index[i+1]]
+	return _LedgerType_name[_LedgerType_index[idx]:_LedgerType_index[idx+1]]
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -42,8 +42,8 @@ func getZonesRequest(authToken string) (*http.Request, error) {
 // GetZonesResult is the JSON response for a DNS create request
 type GetZonesResult struct {
 	Success    bool                 `json:"success"`
-	Errors     []interface{}        `json:"errors"`
-	Messages   []interface{}        `json:"messages"`
+	Errors     []any                `json:"errors"`
+	Messages   []any                `json:"messages"`
 	Result     []GetZonesResultItem `json:"result"`
 	ResultInfo GetZonesResultPage   `json:"result_info"`
 }

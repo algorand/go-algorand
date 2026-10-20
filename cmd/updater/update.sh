@@ -492,9 +492,11 @@ function run_systemd_action() {
 function backup_binaries() {
     echo "Backing up current binary files..."
     mkdir -p "${BINDIR}/backup"
-    BACKUPFILES="algod kmd carpenter doberman goal update.sh updater diagcfg"
+    BACKUPFILES="algod kmd goal update.sh updater diagcfg"
     # add node_exporter to the files list we're going to backup, but only we if had it previously deployed.
     [ -f "${BINDIR}/node_exporter" ] && BACKUPFILES="${BACKUPFILES} node_exporter"
+    # If we have algotmpl, we should back it up too
+    [ -f "${BINDIR}/algotmpl" ] && BACKUPFILES="${BACKUPFILES} algotmpl"
     tar -zcf "${BINDIR}/backup/bin-v${CURRENTVER}.tar.gz" -C "${BINDIR}" ${BACKUPFILES} >/dev/null 2>&1
 }
 
@@ -688,6 +690,16 @@ function apply_fixups() {
 
     # Delete obsolete algorand binary - renamed to 'goal'
     rm "${BINDIR}/algorand" >/dev/null 2>&1
+
+    # Delete obsolete binaries removed in go-algorand
+    rm "${BINDIR}/carpenter" >/dev/null 2>&1
+    rm "${BINDIR}/catchupsrv" >/dev/null 2>&1
+    rm "${BINDIR}/doberman" >/dev/null 2>&1
+    rm "${BINDIR}/ddconfig.sh" >/dev/null 2>&1
+    rm "${BINDIR}/tealcut" >/dev/null 2>&1
+    rm "${BINDIR}/cc_service" >/dev/null 2>&1
+    rm "${BINDIR}/cc_agent" >/dev/null 2>&1
+    rm "${BINDIR}/cc_client" >/dev/null 2>&1
 
     for DD in ${DATADIRS[@]}; do
         clean_legacy_logs "${DD}"

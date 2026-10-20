@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,9 +26,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -168,10 +169,10 @@ func TestServiceFetchBlocksSameRange(t *testing.T) {
 
 type periodicSyncLogger struct {
 	logging.Logger
-	WarnfCallback func(string, ...interface{})
+	WarnfCallback func(string, ...any)
 }
 
-func (cl *periodicSyncLogger) Warnf(s string, args ...interface{}) {
+func (cl *periodicSyncLogger) Warnf(s string, args ...any) {
 	// filter out few non-interesting warnings.
 	switch s {
 	case "fetchAndWrite(%v): lookback block doesn't exist, cannot authenticate new block":
@@ -188,7 +189,7 @@ type periodicSyncDebugLogger struct {
 	debugMsgs      atomic.Uint32
 }
 
-func (cl *periodicSyncDebugLogger) Debugf(s string, args ...interface{}) {
+func (cl *periodicSyncDebugLogger) Debugf(s string, args ...any) {
 	// save debug messages for later inspection.
 	if len(cl.debugMsgFilter) > 0 {
 		for _, filter := range cl.debugMsgFilter {
@@ -261,7 +262,7 @@ func TestSyncRound(t *testing.T) {
 	}
 	// Assert that the last block is the one we expect--i.e. disableSyncRound - 1
 	rnd := s.GetDisableSyncRound()
-	rr, lr := basics.Round(rnd-1), local.LastRound()
+	rr, lr := rnd-1, local.LastRound()
 	require.Equal(t, rr, lr)
 
 	for r := basics.Round(1); r < rr; r++ {
@@ -361,7 +362,7 @@ func TestServiceFetchBlocksOneBlock(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Make Ledger
-	numBlocks := 10
+	const numBlocks = 10
 	local := new(mockedLedger)
 	local.blocks = append(local.blocks, bookkeeping.Block{})
 	lastRoundAtStart := local.LastRound()
@@ -397,7 +398,7 @@ func TestServiceFetchBlocksOneBlock(t *testing.T) {
 	s.sync()
 
 	// Asserts that the last block is the one we expect
-	require.Equal(t, lastRoundAtStart+basics.Round(numBlocks), local.LastRound())
+	require.Equal(t, lastRoundAtStart+numBlocks, local.LastRound())
 
 	// Get the same block we wrote
 	block, _, _, err := makeUniversalBlockFetcher(logging.Base(),
@@ -418,7 +419,7 @@ func TestServiceFetchBlocksOneBlock(t *testing.T) {
 func TestAbruptWrites(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	numberOfBlocks := 100
+	numberOfBlocks := basics.Round(100)
 
 	if testing.Short() {
 		numberOfBlocks = 10
@@ -456,7 +457,7 @@ func TestAbruptWrites(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for i := basics.Round(lastRound + 1); i <= basics.Round(numberOfBlocks); i++ {
+		for i := lastRound + 1; i <= numberOfBlocks; i++ {
 			time.Sleep(time.Duration(rand.Uint32()%5) * time.Millisecond)
 			blk, err := remote.Block(i)
 			require.NoError(t, err)
@@ -493,7 +494,7 @@ func TestServiceFetchBlocksMultiBlocks(t *testing.T) {
 		t.Fatal(err)
 		return
 	}
-	addBlocks(t, remote, blk, int(numberOfBlocks)-1)
+	addBlocks(t, remote, blk, numberOfBlocks-1)
 
 	// Create a network and block service
 	blockServiceConfig := config.GetDefaultLocal()
@@ -536,7 +537,7 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Make Ledger
-	numBlocks := 10
+	const numBlocks = 10
 	local := new(mockedLedger)
 	local.blocks = append(local.blocks, bookkeeping.Block{})
 
@@ -591,7 +592,6 @@ func TestOnSwitchToUnSupportedProtocol1(t *testing.T) {
 	// i.e. rounds 1 and 2 may be simultaneously fetched.
 	require.Less(t, int(local.LastRound()), 3)
 	require.Equal(t, lastRoundRemote, int(remote.LastRound()))
-	remote.Ledger.Close()
 }
 
 // Test the interruption in "the rest" loop
@@ -609,7 +609,6 @@ func TestOnSwitchToUnSupportedProtocol2(t *testing.T) {
 	}
 	require.Equal(t, lastRoundLocal, int(local.LastRound()))
 	require.Equal(t, lastRoundRemote, int(remote.LastRound()))
-	remote.Ledger.Close()
 }
 
 // Test the interruption with short notice (less than
@@ -634,7 +633,6 @@ func TestOnSwitchToUnSupportedProtocol3(t *testing.T) {
 	// fetched.
 	require.Less(t, int(local.LastRound()), lastRoundLocal+2)
 	require.Equal(t, lastRoundRemote, int(remote.LastRound()))
-	remote.Ledger.Close()
 }
 
 // Test the interruption with short notice (less than
@@ -667,7 +665,6 @@ func TestOnSwitchToUnSupportedProtocol4(t *testing.T) {
 	// ledger, round 8 will not be fetched.
 	require.Equal(t, int(local.LastRound()), lastRoundLocal)
 	require.Equal(t, lastRoundRemote, int(remote.LastRound()))
-	remote.Ledger.Close()
 }
 
 func helperTestOnSwitchToUnSupportedProtocol(
@@ -731,6 +728,9 @@ type mockedLedger struct {
 	mu     deadlock.Mutex
 	blocks []bookkeeping.Block
 	chans  map[basics.Round]chan struct{}
+
+	writingCatchpoint bool
+	behindDeltas      bool
 }
 
 func (m *mockedLedger) NextRound() basics.Round {
@@ -848,19 +848,15 @@ func (m *mockedLedger) LookupAgreement(basics.Round, basics.Address) (basics.Onl
 }
 
 func (m *mockedLedger) IsWritingCatchpointDataFile() bool {
-	return false
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.writingCatchpoint
 }
 
 func (m *mockedLedger) IsBehindCommittingDeltas() bool {
-	return false
-}
-
-type mockedBehindDeltasLedger struct {
-	mockedLedger
-}
-
-func (m *mockedBehindDeltasLedger) IsBehindCommittingDeltas() bool {
-	return true
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.behindDeltas
 }
 
 func testingenvWithUpgrade(
@@ -913,7 +909,7 @@ func TestCatchupUnmatchedCertificate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Make Ledger
-	numBlocks := 10
+	const numBlocks = 10
 	local := new(mockedLedger)
 	local.blocks = append(local.blocks, bookkeeping.Block{})
 	lastRoundAtStart := local.LastRound()
@@ -923,7 +919,6 @@ func TestCatchupUnmatchedCertificate(t *testing.T) {
 		t.Fatal(err)
 		return
 	}
-	defer remote.Close()
 	addBlocks(t, remote, blk, numBlocks-1)
 
 	// Create a network and block service
@@ -1046,16 +1041,18 @@ func TestDownloadBlocksToSupportStateProofs(t *testing.T) {
 func TestServiceLedgerUnavailable(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// Make Ledger
-	local := new(mockedBehindDeltasLedger)
+	// Make Ledger that is always behind committing deltas, so catchup cannot
+	// keep up with the remote.
+	local := new(mockedLedger)
 	local.blocks = append(local.blocks, bookkeeping.Block{})
+	local.behindDeltas = true
 
 	remote, _, blk, err := buildTestLedger(t, bookkeeping.Block{})
 	if err != nil {
 		t.Fatal(err)
 		return
 	}
-	numBlocks := 10
+	const numBlocks = 10
 	addBlocks(t, remote, blk, numBlocks)
 
 	// Create a network and block service
@@ -1088,7 +1085,7 @@ func TestServiceLedgerUnavailable(t *testing.T) {
 	require.Less(t, local.LastRound(), remote.LastRound())
 }
 
-// TestServiceNoBlockForRound checks if fetchAndWrite does not repeats 500 times if a block not avaialble
+// TestServiceNoBlockForRound checks if fetchAndWrite does not repeats 500 times if a block not available
 func TestServiceNoBlockForRound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1101,7 +1098,7 @@ func TestServiceNoBlockForRound(t *testing.T) {
 		t.Fatal(err)
 		return
 	}
-	numBlocks := 10
+	const numBlocks = 10
 	addBlocks(t, remote, blk, numBlocks)
 
 	// Create a network and block service
@@ -1135,4 +1132,139 @@ func TestServiceNoBlockForRound(t *testing.T) {
 	// without the fix there are about 2k messages (4x catchupRetryLimit)
 	// with the fix expect less than catchupRetryLimit
 	require.Less(t, int(pl.debugMsgs.Load()), catchupRetryLimit)
+}
+
+// TestPipelinedFetchExitReason checks the exit-reason error returned by pipelinedFetch
+// (and fetchAndWrite), which sync() surfaces in the "finished catching up" log line,
+// so the cause of a catchup termination is visible at Info level.
+func TestPipelinedFetchExitReason(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// newLocal returns a mockedLedger holding a single (genesis) block.
+	newLocal := func() *mockedLedger {
+		local := new(mockedLedger)
+		local.blocks = append(local.blocks, bookkeeping.Block{})
+		return local
+	}
+
+	// startService builds a started catchup.Service backed by the given local
+	// ledger, fetching from a remote ledger of numBlocks blocks served over HTTP by
+	// nodeA. Every subtest shares this wiring even when it never fetches a block; a
+	// subtest calls net.addPeer(peerURL) when it wants fetches to find the remote,
+	// and noPeer leaves net empty to exercise the no-peer path.
+	const numBlocks = 10
+	startService := func(t *testing.T, local Ledger) (s *Service, remote *data.Ledger, net *httpTestPeerSource, peerURL string) {
+		remote, _, blk, err := buildTestLedger(t, bookkeeping.Block{})
+		require.NoError(t, err)
+		addBlocks(t, remote, blk, numBlocks)
+
+		net = &httpTestPeerSource{}
+		ls := rpcs.MakeBlockService(logging.Base(), config.GetDefaultLocal(), remote, net, "test genesisID")
+		nodeA := &basicRPCNode{}
+		ls.RegisterHandlers(nodeA)
+		nodeA.start()
+		t.Cleanup(nodeA.stop)
+
+		s = MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: -1}, nil, nil)
+		s.testStart()
+		return s, remote, net, nodeA.rootURL()
+	}
+
+	// noPeer: with no peers available, pipelinedFetch returns errCatchupNoPeer
+	// before touching the ledger.
+	t.Run("noPeer", func(t *testing.T) {
+		s, _, _, _ := startService(t, newLocal()) // peer not added
+
+		err := s.pipelinedFetch(2)
+		require.ErrorIs(t, err, errCatchupNoPeer)
+	})
+
+	// stalled: once the local ledger has caught up to the remote tip, the
+	// leading-edge fetch can no longer find a block, and pipelinedFetch returns a
+	// reason that wraps the fetch-stall cause (no block from peers, or the retry
+	// limit).
+	t.Run("stalled", func(t *testing.T) {
+		local := newLocal()
+		s, remote, net, peerURL := startService(t, local)
+		net.addPeer(peerURL)
+
+		// One pipelinedFetch invocation catches local up to the remote tip and then
+		// stalls trying to fetch the next (nonexistent) round.
+		err := s.pipelinedFetch(2)
+		require.Equal(t, remote.LastRound(), local.LastRound(), "should have caught up to the remote tip")
+		require.True(t,
+			errors.Is(err, errFetchNoBlock) || errors.Is(err, errFetchRetryLimit),
+			"expected a fetch-stall exit reason, got: %v", err)
+	})
+
+	// contextCanceled: a cancelled service context terminates the pipeline with a
+	// context-related reason (either errCatchupStopping from the ctx.Done select
+	// branch, or a wrapped context.Canceled from the in-flight fetch that observed
+	// the cancellation first -- both are valid, the select races).
+	t.Run("contextCanceled", func(t *testing.T) {
+		s, _, net, peerURL := startService(t, newLocal())
+		net.addPeer(peerURL) // a real peer, but never contacted: the cancelled ctx returns from fetchAndWrite's first select
+
+		s.cancel() // cancel the service context before fetching
+
+		err := s.pipelinedFetch(2)
+		require.Error(t, err)
+		require.True(t,
+			errors.Is(err, errCatchupStopping) || errors.Is(err, context.Canceled),
+			"expected a context-cancellation exit reason, got: %v", err)
+	})
+
+	// behindDeltas: after a successful fetch, pipelinedFetch checks the ledger's
+	// commit backpressure; a ledger that is behind committing deltas stops catchup
+	// with errCatchupBehindDeltas. roundTimeEstimate is shrunk so the busy-wait that
+	// precedes the check returns immediately instead of pausing for real.
+	t.Run("behindDeltas", func(t *testing.T) {
+		local := newLocal()
+		local.behindDeltas = true
+		s, _, net, peerURL := startService(t, local)
+		net.addPeer(peerURL)
+		s.roundTimeEstimate = time.Nanosecond
+
+		err := s.pipelinedFetch(2)
+		require.ErrorIs(t, err, errCatchupBehindDeltas)
+		require.NotZero(t, local.LastRound(), "should have written a block before stopping on backpressure")
+	})
+
+	// writingCatchpoint: same post-fetch backpressure check, but for a ledger that
+	// is writing a catchpoint file, which stops catchup with errCatchupWritingCatchpoint.
+	t.Run("writingCatchpoint", func(t *testing.T) {
+		local := newLocal()
+		local.writingCatchpoint = true
+		s, _, net, peerURL := startService(t, local)
+		net.addPeer(peerURL)
+		s.roundTimeEstimate = time.Nanosecond
+
+		err := s.pipelinedFetch(2)
+		require.ErrorIs(t, err, errCatchupWritingCatchpoint)
+		require.NotZero(t, local.LastRound(), "should have written a block before stopping on backpressure")
+	})
+
+	// syncDisabled: when a disable-sync round is set, fetchAndWrite refuses to fetch
+	// rounds at or beyond it, returning an error naming the cutoff rather than fetching.
+	t.Run("syncDisabled", func(t *testing.T) {
+		s, _, _, _ := startService(t, newLocal())
+		require.NoError(t, s.SetDisableSyncRound(1))
+
+		// no peer needed: the disable-sync check is the first thing fetchAndWrite does.
+		err := s.fetchAndWrite(s.ctx, basics.Round(1), nil, nil, nil)
+		require.ErrorContains(t, err, "syncing disabled")
+	})
+
+	// fetchAndWriteContextCanceled: fetchAndWrite returns the context error (not
+	// nil) when its context is already cancelled, so the cancellation propagates up
+	// as a real reason rather than a silent stop.
+	t.Run("fetchAndWriteContextCanceled", func(t *testing.T) {
+		s, _, _, _ := startService(t, newLocal())
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		// peerSelector/channels are not reached: the first select returns on ctx.Done.
+		err := s.fetchAndWrite(ctx, basics.Round(1), nil, nil, nil)
+		require.ErrorIs(t, err, context.Canceled)
+	})
 }

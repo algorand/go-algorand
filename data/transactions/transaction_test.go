@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,9 +17,7 @@
 package transactions
 
 import (
-	"flag"
-	"fmt"
-	"strings"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,14 +25,19 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklesignature"
-	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/committee"
-	"github.com/algorand/go-algorand/data/stateproofmsg"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util"
 )
+
+func surchargeForBytes(t *testing.T, proto config.ConsensusParams, bytes int) basics.Micros {
+	t.Helper()
+	surcharge, overflow := proto.PerByteTxnSurcharge.MulInt(bytes)
+	require.False(t, overflow)
+	return surcharge
+}
 
 func TestTransaction_EstimateEncodedSize(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -64,688 +67,6 @@ func TestTransaction_EstimateEncodedSize(t *testing.T) {
 	require.Equal(t, 200, tx.EstimateEncodedSize())
 }
 
-func generateDummyGoNonparticpatingTransaction(addr basics.Address) (tx Transaction) {
-	buf := make([]byte, 10)
-	crypto.RandBytes(buf[:])
-
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	tx = Transaction{
-		Type: protocol.KeyRegistrationTx,
-		Header: Header{
-			Sender:     addr,
-			Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee},
-			FirstValid: 1,
-			LastValid:  300,
-		},
-		KeyregTxnFields: KeyregTxnFields{
-			Nonparticipation: true,
-			VoteFirst:        0,
-			VoteLast:         0,
-		},
-	}
-
-	tx.KeyregTxnFields.Nonparticipation = true
-	return tx
-}
-
-func TestGoOnlineGoNonparticipatingContradiction(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	// addr has no significance here other than being a normal valid address
-	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
-	require.NoError(t, err)
-
-	tx := generateDummyGoNonparticpatingTransaction(addr)
-	// Generate keys, they don't need to be good or secure, just present
-	v := crypto.GenerateOneTimeSignatureSecrets(1, 1)
-	// Also generate a new VRF key
-	vrf := crypto.GenerateVRFSecrets()
-	tx.KeyregTxnFields = KeyregTxnFields{
-		VotePK:           v.OneTimeSignatureVerifier,
-		SelectionPK:      vrf.PK,
-		VoteKeyDilution:  1,
-		VoteFirst:        1,
-		VoteLast:         100,
-		Nonparticipation: true,
-	}
-	// this tx tries to both register keys to go online, and mark an account as non-participating.
-	// it is not well-formed.
-	err = tx.WellFormed(SpecialAddresses{}, config.Consensus[protocol.ConsensusCurrentVersion])
-	require.ErrorContains(t, err, "tries to register keys to go online, but nonparticipatory flag is set")
-}
-
-func TestGoNonparticipatingWellFormed(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	// addr has no significance here other than being a normal valid address
-	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
-	require.NoError(t, err)
-
-	tx := generateDummyGoNonparticpatingTransaction(addr)
-	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
-
-	if !curProto.SupportBecomeNonParticipatingTransactions {
-		t.Skipf("Skipping rest of test because current protocol version %v does not support become-nonparticipating transactions", protocol.ConsensusCurrentVersion)
-	}
-
-	// this tx is well-formed
-	err = tx.WellFormed(SpecialAddresses{}, curProto)
-	require.NoError(t, err)
-	// but it should stop being well-formed if the protocol does not support it
-	curProto.SupportBecomeNonParticipatingTransactions = false
-	err = tx.WellFormed(SpecialAddresses{}, curProto)
-	require.ErrorContains(t, err, "mark an account as nonparticipating, but")
-}
-
-func TestAppCallCreateWellFormed(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
-	futureProto := config.Consensus[protocol.ConsensusFuture]
-	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
-	require.NoError(t, err)
-	v5 := []byte{0x05}
-	v6 := []byte{0x06}
-
-	usecases := []struct {
-		tx            Transaction
-		proto         config.ConsensusParams
-		expectedError string
-	}{
-		{
-			tx: Transaction{
-				Type: protocol.ApplicationCallTx,
-				Header: Header{
-					Sender:     addr1,
-					Fee:        basics.MicroAlgos{Raw: 1000},
-					LastValid:  105,
-					FirstValid: 100,
-				},
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     0,
-					ApprovalProgram:   v5,
-					ClearStateProgram: v5,
-					ApplicationArgs: [][]byte{
-						[]byte("write"),
-					},
-				},
-			},
-			proto: curProto,
-		},
-		{
-			tx: Transaction{
-				Type: protocol.ApplicationCallTx,
-				Header: Header{
-					Sender:     addr1,
-					Fee:        basics.MicroAlgos{Raw: 1000},
-					LastValid:  105,
-					FirstValid: 100,
-				},
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     0,
-					ApprovalProgram:   v5,
-					ClearStateProgram: v5,
-					ApplicationArgs: [][]byte{
-						[]byte("write"),
-					},
-					ExtraProgramPages: 0,
-				},
-			},
-			proto: curProto,
-		},
-		{
-			tx: Transaction{
-				Type: protocol.ApplicationCallTx,
-				Header: Header{
-					Sender:     addr1,
-					Fee:        basics.MicroAlgos{Raw: 1000},
-					LastValid:  105,
-					FirstValid: 100,
-				},
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     0,
-					ApprovalProgram:   v5,
-					ClearStateProgram: v5,
-					ApplicationArgs: [][]byte{
-						[]byte("write"),
-					},
-					ExtraProgramPages: 3,
-				},
-			},
-			proto: futureProto,
-		},
-		{
-			tx: Transaction{
-				Type: protocol.ApplicationCallTx,
-				Header: Header{
-					Sender:     addr1,
-					Fee:        basics.MicroAlgos{Raw: 1000},
-					LastValid:  105,
-					FirstValid: 100,
-				},
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     0,
-					ApprovalProgram:   v5,
-					ClearStateProgram: v5,
-					ApplicationArgs: [][]byte{
-						[]byte("write"),
-					},
-					ExtraProgramPages: 0,
-				},
-			},
-			proto: futureProto,
-		},
-		{
-			tx: Transaction{
-				Type: protocol.ApplicationCallTx,
-				Header: Header{
-					Sender:     addr1,
-					Fee:        basics.MicroAlgos{Raw: 1000},
-					LastValid:  105,
-					FirstValid: 100,
-				},
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApprovalProgram:   v5,
-					ClearStateProgram: v6,
-				},
-			},
-			proto:         futureProto,
-			expectedError: "mismatch",
-		},
-	}
-	for i, usecase := range usecases {
-		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
-			err := usecase.tx.WellFormed(SpecialAddresses{}, usecase.proto)
-			if usecase.expectedError != "" {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), usecase.expectedError)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestWellFormedErrors(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
-	futureProto := config.Consensus[protocol.ConsensusFuture]
-	protoV27 := config.Consensus[protocol.ConsensusV27]
-	protoV28 := config.Consensus[protocol.ConsensusV28]
-	protoV32 := config.Consensus[protocol.ConsensusV32]
-	protoV36 := config.Consensus[protocol.ConsensusV36]
-	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
-	require.NoError(t, err)
-	v5 := []byte{0x05}
-	okHeader := Header{
-		Sender:     addr1,
-		Fee:        basics.MicroAlgos{Raw: 1000},
-		LastValid:  105,
-		FirstValid: 100,
-	}
-	usecases := []struct {
-		tx            Transaction
-		proto         config.ConsensusParams
-		expectedError error
-	}{
-		{
-			tx: Transaction{
-				Type: protocol.PaymentTx,
-				Header: Header{
-					Sender: addr1,
-					Fee:    basics.MicroAlgos{Raw: 100},
-				},
-			},
-			proto:         protoV27,
-			expectedError: makeMinFeeErrorf("transaction had fee %d, which is less than the minimum %d", 100, curProto.MinTxnFee),
-		},
-		{
-			tx: Transaction{
-				Type: protocol.PaymentTx,
-				Header: Header{
-					Sender: addr1,
-					Fee:    basics.MicroAlgos{Raw: 100},
-				},
-			},
-			proto: curProto,
-		},
-		{
-			tx: Transaction{
-				Type: protocol.PaymentTx,
-				Header: Header{
-					Sender:     addr1,
-					Fee:        basics.MicroAlgos{Raw: 1000},
-					LastValid:  100,
-					FirstValid: 105,
-				},
-			},
-			proto:         curProto,
-			expectedError: fmt.Errorf("transaction invalid range (%d--%d)", 105, 100),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     0, // creation
-					ApprovalProgram:   v5,
-					ClearStateProgram: v5,
-					ApplicationArgs: [][]byte{
-						[]byte("write"),
-					},
-					ExtraProgramPages: 1,
-				},
-			},
-			proto:         protoV27,
-			expectedError: fmt.Errorf("tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = %d", protoV27.MaxExtraAppProgramPages),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     0, // creation
-					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
-					ClearStateProgram: []byte("Xjunk"),
-				},
-			},
-			proto:         protoV27,
-			expectedError: fmt.Errorf("approval program too long. max len 1024 bytes"),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     0, // creation
-					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
-					ClearStateProgram: []byte("Xjunk"),
-				},
-			},
-			proto: futureProto,
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     0, // creation
-					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
-					ClearStateProgram: []byte(strings.Repeat("X", 1025)),
-				},
-			},
-			proto:         futureProto,
-			expectedError: fmt.Errorf("app programs too long. max total len 2048 bytes"),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     0, // creation
-					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
-					ClearStateProgram: []byte(strings.Repeat("X", 1025)),
-					ExtraProgramPages: 1,
-				},
-			},
-			proto: futureProto,
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID: 1,
-					ApplicationArgs: [][]byte{
-						[]byte("write"),
-					},
-					ExtraProgramPages: 1,
-				},
-			},
-			proto:         futureProto,
-			expectedError: fmt.Errorf("tx.ExtraProgramPages is immutable"),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     0,
-					ApprovalProgram:   v5,
-					ClearStateProgram: v5,
-					ApplicationArgs: [][]byte{
-						[]byte("write"),
-					},
-					ExtraProgramPages: 4,
-				},
-			},
-			proto:         futureProto,
-			expectedError: fmt.Errorf("tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = %d", futureProto.MaxExtraAppProgramPages),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID: 1,
-					ForeignApps:   []basics.AppIndex{10, 11},
-				},
-			},
-			proto: protoV27,
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID: 1,
-					ForeignApps:   []basics.AppIndex{10, 11, 12},
-				},
-			},
-			proto:         protoV27,
-			expectedError: fmt.Errorf("tx.ForeignApps too long, max number of foreign apps is 2"),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID: 1,
-					ForeignApps:   []basics.AppIndex{10, 11, 12, 13, 14, 15, 16, 17},
-				},
-			},
-			proto: futureProto,
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID: 1,
-					ForeignAssets: []basics.AssetIndex{14, 15, 16, 17, 18, 19, 20, 21, 22},
-				},
-			},
-			proto:         futureProto,
-			expectedError: fmt.Errorf("tx.ForeignAssets too long, max number of foreign assets is 8"),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID: 1,
-					Accounts:      []basics.Address{{}, {}, {}},
-					ForeignApps:   []basics.AppIndex{14, 15, 16, 17},
-					ForeignAssets: []basics.AssetIndex{14, 15, 16, 17},
-				},
-			},
-			proto:         futureProto,
-			expectedError: fmt.Errorf("tx references exceed MaxAppTotalTxnReferences = 8"),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     1,
-					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
-					ClearStateProgram: []byte(strings.Repeat("X", 1025)),
-					ExtraProgramPages: 0,
-					OnCompletion:      UpdateApplicationOC,
-				},
-			},
-			proto:         protoV28,
-			expectedError: fmt.Errorf("app programs too long. max total len %d bytes", curProto.MaxAppProgramLen),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     1,
-					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
-					ClearStateProgram: []byte(strings.Repeat("X", 1025)),
-					ExtraProgramPages: 0,
-					OnCompletion:      UpdateApplicationOC,
-				},
-			},
-			proto: futureProto,
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     1,
-					ApprovalProgram:   v5,
-					ClearStateProgram: v5,
-					ApplicationArgs: [][]byte{
-						[]byte("write"),
-					},
-					ExtraProgramPages: 1,
-					OnCompletion:      UpdateApplicationOC,
-				},
-			},
-			proto:         protoV28,
-			expectedError: fmt.Errorf("tx.ExtraProgramPages is immutable"),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID: 1,
-					Boxes:         []BoxRef{{Index: 1, Name: []byte("junk")}},
-				},
-			},
-			proto:         futureProto,
-			expectedError: fmt.Errorf("tx.Boxes[0].Index is 1. Exceeds len(tx.ForeignApps)"),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID: 1,
-					Boxes:         []BoxRef{{Index: 1, Name: []byte("junk")}},
-					ForeignApps:   []basics.AppIndex{1},
-				},
-			},
-			proto: futureProto,
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID: 1,
-					Boxes:         []BoxRef{{Index: 1, Name: []byte("junk")}},
-					ForeignApps:   []basics.AppIndex{1},
-				},
-			},
-			proto:         protoV32,
-			expectedError: fmt.Errorf("tx.Boxes too long, max number of box references is 0"),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID: 1,
-					Boxes:         []BoxRef{{Index: 1, Name: make([]byte, 65)}},
-					ForeignApps:   []basics.AppIndex{1},
-				},
-			},
-			proto:         futureProto,
-			expectedError: fmt.Errorf("tx.Boxes[0].Name too long, max len 64 bytes"),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID: 1,
-					Boxes:         []BoxRef{{Index: 1, Name: make([]byte, 65)}},
-					ForeignApps:   []basics.AppIndex{1},
-				},
-			},
-			proto:         protoV36,
-			expectedError: nil,
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.HeartbeatTx,
-				Header: okHeader,
-			},
-			proto:         protoV36,
-			expectedError: fmt.Errorf("heartbeat transaction not supported"),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.HeartbeatTx,
-				Header: okHeader,
-				HeartbeatTxnFields: &HeartbeatTxnFields{
-					HbSeed:        committee.Seed{0x02},
-					HbVoteID:      crypto.OneTimeSignatureVerifier{0x03},
-					HbKeyDilution: 10,
-				},
-			},
-			proto:         futureProto,
-			expectedError: fmt.Errorf("tx.HbProof is empty"),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.HeartbeatTx,
-				Header: okHeader,
-				HeartbeatTxnFields: &HeartbeatTxnFields{
-					HbProof: crypto.HeartbeatProof{
-						Sig: [64]byte{0x01},
-					},
-					HbVoteID:      crypto.OneTimeSignatureVerifier{0x03},
-					HbKeyDilution: 10,
-				},
-			},
-			proto:         futureProto,
-			expectedError: fmt.Errorf("tx.HbSeed is empty"),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.HeartbeatTx,
-				Header: okHeader,
-				HeartbeatTxnFields: &HeartbeatTxnFields{
-					HbProof: crypto.HeartbeatProof{
-						Sig: [64]byte{0x01},
-					},
-					HbSeed:        committee.Seed{0x02},
-					HbKeyDilution: 10,
-				},
-			},
-			proto:         futureProto,
-			expectedError: fmt.Errorf("tx.HbVoteID is empty"),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.HeartbeatTx,
-				Header: okHeader,
-				HeartbeatTxnFields: &HeartbeatTxnFields{
-					HbProof: crypto.HeartbeatProof{
-						Sig: [64]byte{0x01},
-					},
-					HbSeed:   committee.Seed{0x02},
-					HbVoteID: crypto.OneTimeSignatureVerifier{0x03},
-				},
-			},
-			proto:         futureProto,
-			expectedError: fmt.Errorf("tx.HbKeyDilution is zero"),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.HeartbeatTx,
-				Header: okHeader,
-				HeartbeatTxnFields: &HeartbeatTxnFields{
-					HbProof: crypto.HeartbeatProof{
-						Sig: [64]byte{0x01},
-					},
-					HbSeed:        committee.Seed{0x02},
-					HbVoteID:      crypto.OneTimeSignatureVerifier{0x03},
-					HbKeyDilution: 10,
-				},
-			},
-			proto: futureProto,
-		},
-		{
-			tx: Transaction{
-				Type: protocol.HeartbeatTx,
-				Header: Header{
-					Sender:     addr1,
-					Fee:        basics.MicroAlgos{Raw: 100},
-					LastValid:  105,
-					FirstValid: 100,
-					Note:       []byte{0x01},
-				},
-				HeartbeatTxnFields: &HeartbeatTxnFields{
-					HbProof: crypto.HeartbeatProof{
-						Sig: [64]byte{0x01},
-					},
-					HbSeed:        committee.Seed{0x02},
-					HbVoteID:      crypto.OneTimeSignatureVerifier{0x03},
-					HbKeyDilution: 10,
-				},
-			},
-			proto:         futureProto,
-			expectedError: fmt.Errorf("tx.Note is set in cheap heartbeat"),
-		},
-		{
-			tx: Transaction{
-				Type: protocol.HeartbeatTx,
-				Header: Header{
-					Sender:     addr1,
-					Fee:        basics.MicroAlgos{Raw: 100},
-					LastValid:  105,
-					FirstValid: 100,
-					Lease:      [32]byte{0x01},
-				},
-				HeartbeatTxnFields: &HeartbeatTxnFields{
-					HbProof: crypto.HeartbeatProof{
-						Sig: [64]byte{0x01},
-					},
-					HbSeed:        committee.Seed{0x02},
-					HbVoteID:      crypto.OneTimeSignatureVerifier{0x03},
-					HbKeyDilution: 10,
-				},
-			},
-			proto:         futureProto,
-			expectedError: fmt.Errorf("tx.Lease is set in cheap heartbeat"),
-		},
-		{
-			tx: Transaction{
-				Type: protocol.HeartbeatTx,
-				Header: Header{
-					Sender:     addr1,
-					LastValid:  105,
-					FirstValid: 100,
-					RekeyTo:    [32]byte{0x01},
-				},
-				HeartbeatTxnFields: &HeartbeatTxnFields{
-					HbProof: crypto.HeartbeatProof{
-						Sig: [64]byte{0x01},
-					},
-					HbSeed:        committee.Seed{0x02},
-					HbVoteID:      crypto.OneTimeSignatureVerifier{0x03},
-					HbKeyDilution: 10,
-				},
-			},
-			proto:         futureProto,
-			expectedError: fmt.Errorf("tx.RekeyTo is set in free heartbeat"),
-		},
-	}
-	for _, usecase := range usecases {
-		err := usecase.tx.WellFormed(SpecialAddresses{}, usecase.proto)
-		assert.Equal(t, usecase.expectedError, err)
-	}
-}
-
 // TestTransactionHash checks that Transaction.ID() is equivalent to the old simpler crypto.HashObj() implementation.
 func TestTransactionHash(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -764,780 +85,1048 @@ func TestTransactionHash(t *testing.T) {
 	require.Equal(t, txid3, txid2)
 }
 
-var generateFlag = flag.Bool("generate", false, "")
+func TestTransactionIDChanges(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-// running test with -generate would generate the matrix used in the test ( without the "correct" errors )
-func TestWellFormedKeyRegistrationTx(t *testing.T) {
+	txn := Transaction{
+		Type: "pay",
+		Header: Header{
+			Sender:     [32]byte{0x01},
+			Fee:        basics.MicroAlgos{Raw: 10_000},
+			FirstValid: 100,
+			LastValid:  200,
+			Note:       []byte{0x02},
+		},
+		PaymentTxnFields: PaymentTxnFields{
+			Receiver:         [32]byte{0x03},
+			Amount:           basics.MicroAlgos{Raw: 200_000},
+			CloseRemainderTo: [32]byte{0x04},
+		},
+	}
+
+	// Make a copy of txn, change some fields, be sure the TXID changes. This is not exhaustive.
+	txn2 := txn
+	txn2.Note = []byte{42}
+	if txn2.ID() == txn.ID() {
+		t.Errorf("txid does not depend on note")
+	}
+	txn2 = txn
+	txn2.Amount.Raw++
+	if txn2.ID() == txn.ID() {
+		t.Errorf("txid does not depend on amount")
+	}
+	txn2 = txn
+	txn2.Fee.Raw++
+	if txn2.ID() == txn.ID() {
+		t.Errorf("txid does not depend on fee")
+	}
+	txn2 = txn
+	txn2.LastValid++
+	if txn2.ID() == txn.ID() {
+		t.Errorf("txid does not depend on lastvalid")
+	}
+}
+
+func TestApplyDataEquality(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var empty ApplyData
+	for _, ad := range basics_testing.NearZeros(t, ApplyData{}) {
+		assert.False(t, ad.Equal(empty), "Equal() seems to be disregarding something %+v", ad)
+	}
+
+}
+
+func TestEvalDataEquality(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var empty EvalDelta
+	for _, ed := range basics_testing.NearZeros(t, EvalDelta{}) {
+		assert.False(t, ed.Equal(empty), "Equal() seems to be disregarding something %+v", ed)
+	}
+
+}
+
+func TestLogicSigEquality(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var empty LogicSig
+	for _, ls := range basics_testing.NearZeros(t, LogicSig{}) {
+		assert.False(t, ls.Equal(&empty), "Equal() seems to be disregarding something %+v", ls)
+	}
+
+}
+
+// TestHeaderWellFormed tests WellFormed for things that are not transaction
+// specific (which get tested for the specific transactions).
+func TestHeaderWellFormed(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	correctTxn := Transaction{
+		Type: protocol.PaymentTx,
+		Header: Header{
+			Sender:     basics.Address{0x01},
+			Fee:        basics.MicroAlgos{Raw: 1000},
+			FirstValid: 100,
+			LastValid:  200,
+			Note:       []byte{0x02},
+		},
+		PaymentTxnFields: PaymentTxnFields{
+			Receiver: basics.Address{0x03},
+			Amount:   basics.MicroAlgos{Raw: 1000},
+		},
+	}
+
+	sp := SpecialAddresses{
+		RewardsPool: basics.Address{0xEE},
+		FeeSink:     basics.Address{0xFF},
+	}
+
+	current := config.Consensus[protocol.ConsensusCurrentVersion]
+	future := config.Consensus[protocol.ConsensusFuture]
+
+	a := assert.New(t)
+
+	testGood := func(msg string, fn func(tx *Transaction), protos ...config.ConsensusParams) {
+		for _, p := range protos {
+			t.Helper()
+			copy := correctTxn
+			fn(&correctTxn)
+			defer func() { correctTxn = copy }()
+			err := correctTxn.WellFormed(sp, p)
+			a.NoError(err, msg)
+		}
+	}
+
+	testGood("base case", func(tx *Transaction) {}, current, future)
+
+	testBad := func(msg string, fn func(tx *Transaction), protos ...config.ConsensusParams) {
+		for _, p := range protos {
+			t.Helper()
+			copy := correctTxn
+			fn(&correctTxn)
+			defer func() { correctTxn = copy }()
+			err := correctTxn.WellFormed(sp, p)
+			a.ErrorContains(err, msg)
+		}
+	}
+	testBad("invalid range", func(tx *Transaction) {
+		tx.FirstValid = tx.LastValid + 1
+	}, current, future)
+	testBad("window size excessive", func(tx *Transaction) {
+		tx.LastValid = tx.FirstValid + 10_000
+	}, current, future)
+	testBad("note too big", func(tx *Transaction) {
+		tx.Note = make([]byte, 10_000)
+	}, current, future)
+	testBad("from incentive pool is invalid", func(tx *Transaction) {
+		tx.Sender = sp.RewardsPool
+	}, current, future)
+	testBad("cannot have zero sender", func(tx *Transaction) {
+		tx.CloseRemainderTo = basics.Address{0x88} // to avoid the early error that sender != closeTo
+		tx.Sender = basics.Address{}
+	}, current, future)
+
+	// Now test some fields that were added in certain releases
+	testAdded := func(msg string, fn func(tx *Transaction), lastBad protocol.ConsensusVersion) {
+		t.Helper()
+		testBad(msg, fn, config.Consensus[lastBad])
+		if lastBad != protocol.ConsensusFuture {
+			testGood(msg, fn, future)
+		}
+	}
+	testAdded("tried to acquire lease", func(tx *Transaction) {
+		tx.Lease = [32]byte{0x77}
+	}, protocol.ConsensusV17)
+	testAdded("groups not yet enabled", func(tx *Transaction) {
+		tx.Group = crypto.Digest{0x11}
+	}, protocol.ConsensusV17)
+	testAdded("rekeying not yet enabled", func(tx *Transaction) {
+		tx.RekeyTo = basics.Address{0x22}
+	}, protocol.ConsensusV23)
+}
+
+func TestHeaderFieldCount(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// When a field is added to the transaction header, this test will fail as
+	// a reminder to consider whether the field should be banned from use by
+	// stateproofs and/or free heartbeats. Adjust their wellFormed methods and
+	// then change the value in the test.
+
+	// Such a new field should probably also be consensus flagged at the end of
+	// transaction.WellFormed()
+	assert.Equal(t, 11, reflect.TypeFor[Header]().NumField())
+}
+
+// TestFeeFactor_BigNotes tests the FeeFactor calculation with various Note sizes
+func TestFeeFactor_BigNotes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	flag.Parse()
+	v41 := config.Consensus[protocol.ConsensusV41]
+	vFuture := config.Consensus[protocol.ConsensusFuture]
 
-	// addr has no significance here other than being a normal valid address
+	tests := []struct {
+		name           string
+		proto          config.ConsensusParams
+		noteSize       int
+		expectedFactor basics.Micros
+	}{
+		// v41: MaxAbsoluteTxnNoteBytes = MaxTxnNoteBytes = 1024
+		{
+			name:           "v41: standard note size (1024 bytes)",
+			proto:          v41,
+			noteSize:       1024,
+			expectedFactor: 1e6,
+		},
+		// vFuture: MaxAbsoluteTxnNoteBytes = 4096, so larger notes are allowed
+		{
+			name:           "vFuture: standard note size (1024 bytes)",
+			proto:          vFuture,
+			noteSize:       1024,
+			expectedFactor: 1e6,
+		},
+		{
+			name:           "vFuture: 1 extra byte (1025 bytes)",
+			proto:          vFuture,
+			noteSize:       1025,
+			expectedFactor: 1e6 + 100,
+		},
+		{
+			name:           "vFuture: 100 extra bytes (1124 bytes)",
+			proto:          vFuture,
+			noteSize:       1124,
+			expectedFactor: 1e6 + 10000,
+		},
+		{
+			name:           "vFuture: 1024 extra bytes (2048 bytes)",
+			proto:          vFuture,
+			noteSize:       2048,
+			expectedFactor: 1e6 + 102400,
+		},
+		{
+			name:           "vFuture: maximum allowed (4096 bytes)",
+			proto:          vFuture,
+			noteSize:       4096,
+			expectedFactor: 1e6 + (4096-1024)*100,
+		},
+	}
+
 	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
 
-	tx := generateDummyGoNonparticpatingTransaction(addr)
-	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
-	if !curProto.SupportBecomeNonParticipatingTransactions {
-		t.Skipf("Skipping rest of test because current protocol version %v does not support become-nonparticipating transactions", protocol.ConsensusCurrentVersion)
-	}
-
-	// this tx is well-formed
-	err = tx.WellFormed(SpecialAddresses{}, curProto)
-	require.NoError(t, err)
-
-	type keyRegTestCase struct {
-		votePK                                    crypto.OneTimeSignatureVerifier
-		selectionPK                               crypto.VRFVerifier
-		stateProofPK                              merklesignature.Commitment
-		voteFirst                                 basics.Round
-		voteLast                                  basics.Round
-		lastValid                                 basics.Round
-		voteKeyDilution                           uint64
-		nonParticipation                          bool
-		supportBecomeNonParticipatingTransactions bool
-		enableKeyregCoherencyCheck                bool
-		enableStateProofKeyregCheck               bool
-		err                                       error
-	}
-	votePKValue := crypto.OneTimeSignatureVerifier{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
-	selectionPKValue := crypto.VRFVerifier{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
-
-	stateProofPK := merklesignature.Commitment([merklesignature.MerkleSignatureSchemeRootSize]byte{1})
-	maxValidPeriod := config.Consensus[protocol.ConsensusCurrentVersion].MaxKeyregValidPeriod
-
-	runTestCase := func(testCase keyRegTestCase) error {
-
-		tx.KeyregTxnFields.VotePK = testCase.votePK
-		tx.KeyregTxnFields.SelectionPK = testCase.selectionPK
-		tx.KeyregTxnFields.VoteFirst = testCase.voteFirst
-		tx.KeyregTxnFields.VoteLast = testCase.voteLast
-		tx.KeyregTxnFields.VoteKeyDilution = testCase.voteKeyDilution
-		tx.KeyregTxnFields.Nonparticipation = testCase.nonParticipation
-		tx.LastValid = testCase.lastValid
-		tx.KeyregTxnFields.StateProofPK = testCase.stateProofPK
-
-		curProto.SupportBecomeNonParticipatingTransactions = testCase.supportBecomeNonParticipatingTransactions
-		curProto.EnableKeyregCoherencyCheck = testCase.enableKeyregCoherencyCheck
-		curProto.EnableStateProofKeyregCheck = testCase.enableStateProofKeyregCheck
-		curProto.MaxKeyregValidPeriod = maxValidPeriod // TODO: remove this when MaxKeyregValidPeriod is in CurrentVersion
-		return tx.WellFormed(SpecialAddresses{}, curProto)
-	}
-
-	if *generateFlag == true {
-		fmt.Printf("keyRegTestCases := []keyRegTestCase{\n")
-		idx := 0
-		for _, votePK := range []crypto.OneTimeSignatureVerifier{crypto.OneTimeSignatureVerifier{}, votePKValue} {
-			for _, selectionPK := range []crypto.VRFVerifier{crypto.VRFVerifier{}, selectionPKValue} {
-				for _, voteFirst := range []basics.Round{basics.Round(0), basics.Round(5)} {
-					for _, voteLast := range []basics.Round{basics.Round(0), basics.Round(10)} {
-						for _, lastValid := range []basics.Round{basics.Round(4), basics.Round(3)} {
-							for _, voteKeyDilution := range []uint64{0, 10000} {
-								for _, nonParticipation := range []bool{false, true} {
-									for _, supportBecomeNonParticipatingTransactions := range []bool{false, true} {
-										for _, enableKeyregCoherencyCheck := range []bool{false, true} {
-											for _, enableStateProofKeyregCheck := range []bool{false, true} {
-												outcome := runTestCase(keyRegTestCase{
-													votePK,
-													selectionPK,
-													stateProofPK,
-													voteFirst,
-													voteLast,
-													lastValid,
-													voteKeyDilution,
-													nonParticipation,
-													supportBecomeNonParticipatingTransactions,
-													enableKeyregCoherencyCheck,
-													enableStateProofKeyregCheck,
-													nil})
-												errStr := "nil"
-												switch outcome {
-												case errKeyregTxnUnsupportedSwitchToNonParticipating:
-													errStr = "errKeyregTxnUnsupportedSwitchToNonParticipating"
-												case errKeyregTxnGoingOnlineWithNonParticipating:
-													errStr = "errKeyregTxnGoingOnlineWithNonParticipating"
-												case errKeyregTxnNonCoherentVotingKeys:
-													errStr = "errKeyregTxnNonCoherentVotingKeys"
-												case errKeyregTxnOfflineTransactionHasVotingRounds:
-													errStr = "errKeyregTxnOfflineTransactionHasVotingRounds"
-												case errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound:
-													errStr = "errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound"
-												case errKeyregTxnGoingOnlineWithZeroVoteLast:
-													errStr = "errKeyregTxnGoingOnlineWithZeroVoteLast"
-												case errKeyregTxnGoingOnlineWithNonParticipating:
-													errStr = "errKeyregTxnGoingOnlineWithNonParticipating"
-												case errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid:
-													errStr = "errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid"
-												default:
-													require.Nil(t, outcome)
-
-												}
-												s := "/* %3d */ keyRegTestCase{votePK:"
-												if votePK == votePKValue {
-													s += "votePKValue"
-												} else {
-													s += "crypto.OneTimeSignatureVerifier{}"
-												}
-												s += ", selectionPK:"
-												if selectionPK == selectionPKValue {
-													s += "selectionPKValue"
-												} else {
-													s += "crypto.VRFVerifier{}"
-												}
-												s = fmt.Sprintf("%s, voteFirst:basics.Round(%2d), voteLast:basics.Round(%2d), lastValid:basics.Round(%2d), voteKeyDilution: %5d, nonParticipation: %v,supportBecomeNonParticipatingTransactions:%v, enableKeyregCoherencyCheck:%v, err:%s},\n",
-													s, voteFirst, voteLast, lastValid, voteKeyDilution, nonParticipation, supportBecomeNonParticipatingTransactions, enableKeyregCoherencyCheck, errStr)
-												fmt.Printf(s, idx)
-												idx++
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-				}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tx := Transaction{
+				Type: protocol.PaymentTx,
+				Header: Header{
+					Sender:     addr,
+					Fee:        basics.MicroAlgos{Raw: 1000},
+					FirstValid: 100,
+					LastValid:  200,
+					Note:       make([]byte, tt.noteSize),
+				},
+				PaymentTxnFields: PaymentTxnFields{
+					Receiver: addr,
+					Amount:   basics.MicroAlgos{Raw: 1000},
+				},
 			}
-		}
-		fmt.Printf("}\n")
-		return
-	}
-	keyRegTestCases := []keyRegTestCase{
-		/*   0 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/*   1 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: nil},
-		/*   2 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/*   3 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: nil},
-		/*   4 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/*   5 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/*   6 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/*   7 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: nil},
-		/*   8 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/*   9 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/*  10 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/*  11 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/*  12 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/*  13 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/*  14 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/*  15 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/*  16 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/*  17 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: nil},
-		/*  18 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/*  19 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: nil},
-		/*  20 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/*  21 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/*  22 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/*  23 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: nil},
-		/*  24 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/*  25 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/*  26 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/*  27 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/*  28 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/*  29 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/*  30 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/*  31 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/*  32 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/*  33 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnOfflineTransactionHasVotingRounds},
-		/*  34 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/*  35 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnOfflineTransactionHasVotingRounds},
-		/*  36 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/*  37 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnOfflineTransactionHasVotingRounds},
-		/*  38 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/*  39 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnOfflineTransactionHasVotingRounds},
-		/*  40 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/*  41 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/*  42 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/*  43 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/*  44 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/*  45 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/*  46 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/*  47 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/*  48 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/*  49 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnOfflineTransactionHasVotingRounds},
-		/*  50 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/*  51 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnOfflineTransactionHasVotingRounds},
-		/*  52 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/*  53 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnOfflineTransactionHasVotingRounds},
-		/*  54 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/*  55 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnOfflineTransactionHasVotingRounds},
-		/*  56 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/*  57 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/*  58 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/*  59 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/*  60 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/*  61 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/*  62 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/*  63 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/*  64 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/*  65 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/*  66 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/*  67 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/*  68 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/*  69 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/*  70 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/*  71 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/*  72 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/*  73 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/*  74 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/*  75 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/*  76 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/*  77 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/*  78 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/*  79 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/*  80 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/*  81 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/*  82 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/*  83 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/*  84 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/*  85 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/*  86 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/*  87 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/*  88 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/*  89 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/*  90 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/*  91 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/*  92 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/*  93 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/*  94 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/*  95 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/*  96 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/*  97 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnOfflineTransactionHasVotingRounds},
-		/*  98 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/*  99 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnOfflineTransactionHasVotingRounds},
-		/* 100 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 101 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnOfflineTransactionHasVotingRounds},
-		/* 102 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 103 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnOfflineTransactionHasVotingRounds},
-		/* 104 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 105 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 106 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 107 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 108 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 109 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 110 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 111 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 112 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 113 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnOfflineTransactionHasVotingRounds},
-		/* 114 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 115 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnOfflineTransactionHasVotingRounds},
-		/* 116 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 117 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnOfflineTransactionHasVotingRounds},
-		/* 118 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 119 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnOfflineTransactionHasVotingRounds},
-		/* 120 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 121 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 122 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 123 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 124 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 125 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 126 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 127 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 128 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 129 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 130 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 131 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 132 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 133 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 134 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 135 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 136 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 137 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 138 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 139 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 140 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 141 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 142 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 143 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 144 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 145 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 146 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 147 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 148 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 149 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 150 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 151 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 152 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 153 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 154 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 155 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 156 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 157 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 158 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 159 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 160 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 161 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 162 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 163 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 164 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 165 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 166 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 167 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 168 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 169 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 170 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 171 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 172 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 173 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 174 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 175 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 176 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 177 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 178 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 179 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 180 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 181 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 182 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 183 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 184 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 185 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 186 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 187 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 188 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 189 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 190 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 191 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 192 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 193 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 194 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 195 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 196 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 197 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 198 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 199 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 200 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 201 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 202 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 203 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 204 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 205 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 206 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 207 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 208 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 209 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 210 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 211 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 212 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 213 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 214 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 215 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 216 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 217 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 218 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 219 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 220 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 221 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 222 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 223 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 224 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 225 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 226 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 227 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 228 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 229 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 230 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 231 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 232 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 233 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 234 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 235 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 236 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 237 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 238 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 239 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 240 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 241 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 242 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 243 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 244 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 245 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 246 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 247 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 248 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 249 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 250 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 251 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 252 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 253 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 254 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 255 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 256 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 257 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 258 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 259 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 260 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 261 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 262 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 263 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 264 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 265 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 266 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 267 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 268 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 269 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 270 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 271 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 272 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 273 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 274 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 275 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 276 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 277 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 278 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 279 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 280 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 281 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 282 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 283 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 284 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 285 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 286 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 287 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 288 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 289 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 290 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 291 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 292 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 293 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 294 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 295 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 296 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 297 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 298 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 299 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 300 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 301 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 302 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 303 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 304 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 305 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 306 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 307 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 308 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 309 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 310 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 311 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 312 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 313 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 314 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 315 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 316 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 317 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 318 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 319 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 320 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 321 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 322 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 323 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 324 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 325 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 326 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 327 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 328 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 329 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 330 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 331 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 332 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 333 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 334 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 335 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 336 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 337 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 338 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 339 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 340 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 341 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 342 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 343 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 344 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 345 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 346 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 347 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 348 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 349 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 350 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 351 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 352 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 353 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 354 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 355 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 356 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 357 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 358 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 359 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 360 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 361 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 362 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 363 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 364 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 365 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 366 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 367 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 368 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 369 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 370 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 371 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 372 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 373 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 374 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 375 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 376 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 377 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 378 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 379 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 380 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 381 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 382 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 383 */ keyRegTestCase{votePK: votePKValue, selectionPK: crypto.VRFVerifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 384 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 385 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 386 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 387 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 388 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 389 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 390 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: errKeyregTxnGoingOnlineWithNonParticipating},
-		/* 391 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 392 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 393 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnGoingOnlineWithZeroVoteLast},
-		/* 394 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 395 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnGoingOnlineWithZeroVoteLast},
-		/* 396 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 397 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnGoingOnlineWithZeroVoteLast},
-		/* 398 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: errKeyregTxnGoingOnlineWithNonParticipating},
-		/* 399 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnGoingOnlineWithZeroVoteLast},
-		/* 400 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 401 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 402 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 403 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 404 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 405 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 406 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: errKeyregTxnGoingOnlineWithNonParticipating},
-		/* 407 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 408 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 409 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnGoingOnlineWithZeroVoteLast},
-		/* 410 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 411 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnGoingOnlineWithZeroVoteLast},
-		/* 412 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 413 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnGoingOnlineWithZeroVoteLast},
-		/* 414 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: errKeyregTxnGoingOnlineWithNonParticipating},
-		/* 415 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnGoingOnlineWithZeroVoteLast},
-		/* 416 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 417 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 418 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 419 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 420 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 421 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 422 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: errKeyregTxnGoingOnlineWithNonParticipating},
-		/* 423 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 424 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 425 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: nil},
-		/* 426 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 427 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: nil},
-		/* 428 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 429 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 430 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: errKeyregTxnGoingOnlineWithNonParticipating},
-		/* 431 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnGoingOnlineWithNonParticipating},
-		/* 432 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 433 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 434 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 435 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 436 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 437 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 438 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: errKeyregTxnGoingOnlineWithNonParticipating},
-		/* 439 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 440 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 441 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: nil},
-		/* 442 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 443 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: nil},
-		/* 444 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 445 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 446 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: errKeyregTxnGoingOnlineWithNonParticipating},
-		/* 447 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(0), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnGoingOnlineWithNonParticipating},
-		/* 448 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 449 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 450 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 451 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 452 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 453 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 454 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: errKeyregTxnGoingOnlineWithNonParticipating},
-		/* 455 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 456 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 457 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 458 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 459 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 460 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 461 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 462 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: errKeyregTxnGoingOnlineWithNonParticipating},
-		/* 463 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 464 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 465 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 466 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 467 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 468 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 469 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 470 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: errKeyregTxnGoingOnlineWithNonParticipating},
-		/* 471 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 472 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 473 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 474 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 475 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 476 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 477 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 478 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: errKeyregTxnGoingOnlineWithNonParticipating},
-		/* 479 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(0), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound},
-		/* 480 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 481 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 482 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 483 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 484 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 485 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 486 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: errKeyregTxnGoingOnlineWithNonParticipating},
-		/* 487 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 488 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 489 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: nil},
-		/* 490 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 491 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: nil},
-		/* 492 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 493 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 494 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: errKeyregTxnGoingOnlineWithNonParticipating},
-		/* 495 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(4), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnGoingOnlineWithNonParticipating},
-		/* 496 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 497 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 498 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 499 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 500 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 501 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 502 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: errKeyregTxnGoingOnlineWithNonParticipating},
-		/* 503 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnNonCoherentVotingKeys},
-		/* 504 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: nil},
-		/* 505 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid},
-		/* 506 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: nil},
-		/* 507 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid},
-		/* 508 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: false, err: errKeyregTxnUnsupportedSwitchToNonParticipating},
-		/* 509 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid},
-		/* 510 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: errKeyregTxnGoingOnlineWithNonParticipating},
-		/* 511 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid},
-		/* 512 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, stateProofPK: stateProofPK, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: false, err: errKeyregTxnNotEmptyStateProofPK},
-		/* 513 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, stateProofPK: merklesignature.Commitment{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: false, err: nil},
-		/* 514 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, stateProofPK: stateProofPK, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: nil},
-		/* 515 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, stateProofPK: merklesignature.Commitment{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: errKeyRegEmptyStateProofPK},
-		/* 516 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: stateProofPK, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: errKeyregTxnNonParticipantShouldBeEmptyStateProofPK},
-		/* 517 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklesignature.Commitment{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: nil},
-		/* 518 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: stateProofPK, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: errKeyregTxnOfflineShouldBeEmptyStateProofPK},
-		/* 519 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklesignature.Commitment{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: nil},
-		/* 520 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklesignature.Commitment{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: nil},
-		/* 521 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklesignature.Commitment{}, voteFirst: basics.Round(10), voteLast: basics.Round(10 + maxValidPeriod), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: nil},
-		/* 522 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklesignature.Commitment{}, voteFirst: basics.Round(10), voteLast: basics.Round(10000 + maxValidPeriod), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: errKeyRegTxnValidityPeriodTooLong},
-		/* 523 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklesignature.Commitment{}, voteFirst: basics.Round(10), voteLast: basics.Round(10000 + maxValidPeriod), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: false, err: nil},
-	}
-	for testcaseIdx, testCase := range keyRegTestCases {
-		err := runTestCase(testCase)
 
-		require.Equalf(t, testCase.err, err, "index: %d\ntest case: %#v", testcaseIdx, testCase)
-	}
-}
-
-type stateproofTxnTestCase struct {
-	expectedError error
-
-	StateProofInterval uint64
-	fee                basics.MicroAlgos
-	note               []byte
-	group              crypto.Digest
-	lease              [32]byte
-	rekeyValue         basics.Address
-	sender             basics.Address
-}
-
-func (s *stateproofTxnTestCase) runIsWellFormedForTestCase() error {
-	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
-	curProto.StateProofInterval = s.StateProofInterval
-
-	// edit txn params. wanted
-	return Transaction{
-		Type: protocol.StateProofTx,
-		Header: Header{
-			Sender:      s.sender,
-			Fee:         s.fee,
-			FirstValid:  0,
-			LastValid:   0,
-			Note:        s.note,
-			GenesisID:   "",
-			GenesisHash: crypto.Digest{},
-			Group:       s.group,
-			Lease:       s.lease,
-			RekeyTo:     s.rekeyValue,
-		},
-		StateProofTxnFields: StateProofTxnFields{},
-	}.WellFormed(SpecialAddresses{}, curProto)
-}
-
-func TestWellFormedStateProofTxn(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	// want to create different Txns, run on all of these cases the check, and have an expected result
-	cases := []stateproofTxnTestCase{
-		/* 0 */ {expectedError: errStateProofNotSupported}, // StateProofInterval == 0 leads to error
-		/* 1 */ {expectedError: errBadSenderInStateProofTxn, StateProofInterval: 256, sender: basics.Address{1, 2, 3, 4}},
-		/* 2 */ {expectedError: errFeeMustBeZeroInStateproofTxn, StateProofInterval: 256, sender: StateProofSender, fee: basics.MicroAlgos{Raw: 1}},
-		/* 3 */ {expectedError: errNoteMustBeEmptyInStateproofTxn, StateProofInterval: 256, sender: StateProofSender, note: []byte{1, 2, 3}},
-		/* 4 */ {expectedError: errGroupMustBeZeroInStateproofTxn, StateProofInterval: 256, sender: StateProofSender, group: crypto.Digest{1, 2, 3}},
-		/* 5 */ {expectedError: errRekeyToMustBeZeroInStateproofTxn, StateProofInterval: 256, sender: StateProofSender, rekeyValue: basics.Address{1, 2, 3, 4}},
-		/* 6 */ {expectedError: errLeaseMustBeZeroInStateproofTxn, StateProofInterval: 256, sender: StateProofSender, lease: [32]byte{1, 2, 3, 4}},
-		/* 7 */ {expectedError: nil, StateProofInterval: 256, fee: basics.MicroAlgos{Raw: 0}, note: nil, group: crypto.Digest{}, lease: [32]byte{}, rekeyValue: basics.Address{}, sender: StateProofSender},
-	}
-	for i, testCase := range cases {
-		cpyTestCase := testCase
-		t.Run(fmt.Sprintf("case %d", i), func(t *testing.T) {
-			t.Parallel()
-			require.Equal(t, cpyTestCase.expectedError, cpyTestCase.runIsWellFormedForTestCase())
+			factor := tx.feeFactor(tt.proto)
+			assert.Equal(t, tt.expectedFactor, factor, "FeeFactor mismatch for note size %d", tt.noteSize)
 		})
 	}
 }
 
-func TestStateProofTxnShouldBeZero(t *testing.T) {
+// TestFeeFactor_StateProofAndHeartbeat tests that StateProof and Heartbeat transactions
+// maintain their special fee behavior even with large Notes
+func TestFeeFactor_StateProofAndHeartbeat(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	vFuture := config.Consensus[protocol.ConsensusFuture]
+	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
+	require.NoError(t, err)
+
+	// StateProof transactions should always be free. (Notes aren't actually
+	// allowed, but that's up to WellFormed to deal with.)
+	stateProofTx := Transaction{
+		Type: protocol.StateProofTx,
+		Header: Header{
+			Sender:     addr,
+			FirstValid: 100,
+			LastValid:  200,
+			Note:       make([]byte, 2048), // Large note
+		},
+	}
+	assert.Equal(t, basics.Micros(0), stateProofTx.feeFactor(vFuture), "StateProof should be free")
+
+	// With the explicit-discount rule a plain heartbeat pays the normal fee whether or not
+	// it is a singleton; only a challenged heartbeat is discounted.
+	singletonHeartbeat := Transaction{
+		Type: protocol.HeartbeatTx,
+		Header: Header{
+			Sender:     addr,
+			FirstValid: 100,
+			LastValid:  200,
+		},
+		HeartbeatTxnFields: &HeartbeatTxnFields{},
+	}
+	assert.Equal(t, basics.Micros(1e6), singletonHeartbeat.feeFactor(vFuture), "plain singleton heartbeat pays base fee")
+
+	// A challenged heartbeat owes one less min fee. WellFormed forbids extras
+	// (like a Note) on it, so the base fee is all there is, and it drops to 0.
+	challengedHeartbeat := singletonHeartbeat
+	challengedHeartbeat.HeartbeatTxnFields = &HeartbeatTxnFields{HbChallengeDiscount: true}
+	assert.Zero(t, challengedHeartbeat.feeFactor(vFuture))
+
+	// The discount applies inside a group too.
+	challengedGrouped := challengedHeartbeat
+	challengedGrouped.Group = crypto.Digest{1}
+	assert.Zero(t, challengedGrouped.feeFactor(vFuture))
+
+	// Grouped (non-challenged) heartbeat should have normal fee
+	groupedHeartbeat := Transaction{
+		Type: protocol.HeartbeatTx,
+		Header: Header{
+			Sender:     addr,
+			FirstValid: 100,
+			LastValid:  200,
+			Note:       make([]byte, 1024),
+			Group:      crypto.Digest{1}, // Has a group
+		},
+		HeartbeatTxnFields: &HeartbeatTxnFields{},
+	}
+	assert.Equal(t, basics.Micros(1e6), groupedHeartbeat.feeFactor(vFuture), "Grouped heartbeat should have base fee")
+
+	// Grouped heartbeat with big note should have the extra charge for it
+	groupedHeartbeatBigNote := groupedHeartbeat
+	groupedHeartbeatBigNote.Note = make([]byte, 1124)
+	assert.Equal(t, basics.Micros(1_010_000), groupedHeartbeatBigNote.feeFactor(vFuture), "Grouped heartbeat should have extra fee")
+
+	// before the explicit-discount rule, any singleton heartbeat is free, even
+	// with a big note. (though it will fail at wellFormed and apply time)
+	v41 := config.Consensus[protocol.ConsensusV41]
+	oldSingletonHeartbeat := Transaction{
+		Type: protocol.HeartbeatTx,
+		Header: Header{
+			Sender:     addr,
+			FirstValid: 100,
+			LastValid:  200,
+			Note:       make([]byte, 2048), // Large note
+		},
+		HeartbeatTxnFields: &HeartbeatTxnFields{},
+	}
+	assert.Zero(t, oldSingletonHeartbeat.feeFactor(v41))
+}
+
+// TestWellFormed_BigNotes tests Note size validation with MaxAbsoluteTxnNoteBytes
+func TestWellFormed_BigNotes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
+	v41 := config.Consensus[protocol.ConsensusV41]
+	vFuture := config.Consensus[protocol.ConsensusFuture]
+
+	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
 
-	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
-	curProto.StateProofInterval = 256
-	txn := Transaction{
-		Type: protocol.PaymentTx,
-		Header: Header{
-			Sender:      addr1,
-			Fee:         basics.MicroAlgos{Raw: 100},
-			FirstValid:  0,
-			LastValid:   0,
-			Note:        []byte{0, 1},
-			GenesisID:   "",
-			GenesisHash: crypto.Digest{},
-		},
-		StateProofTxnFields: StateProofTxnFields{},
+	spec := SpecialAddresses{
+		FeeSink:     basics.Address{0x01},
+		RewardsPool: basics.Address{0x02},
 	}
 
-	const erroMsg = "type pay has non-zero fields for type stpf"
-	txn.StateProofType = 1
-	err = txn.WellFormed(SpecialAddresses{}, curProto)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), erroMsg)
+	tests := []struct {
+		name     string
+		proto    config.ConsensusParams
+		noteSize int
+		errorMsg string
+	}{
+		// v41: MaxAbsoluteTxnNoteBytes = MaxTxnNoteBytes = 1024
+		{
+			name:     "v41: note at limit (1024 bytes) - pass",
+			proto:    v41,
+			noteSize: 1024,
+		},
+		{
+			name:     "v41: note over limit (1025 bytes) - fail",
+			proto:    v41,
+			noteSize: 1025,
+			errorMsg: "transaction note too big: 1025 > 1024",
+		},
+		{
+			name:     "v41: large note (2048 bytes) - fail",
+			proto:    v41,
+			noteSize: 2048,
+			errorMsg: "transaction note too big: 2048 > 1024",
+		},
+		// vFuture: MaxAbsoluteTxnNoteBytes = 4096, allows larger notes
+		{
+			name:     "vFuture: note at standard limit (1024 bytes) - pass",
+			proto:    vFuture,
+			noteSize: 1024,
+		},
+		{
+			name:     "vFuture: note over standard limit (1025 bytes) - pass",
+			proto:    vFuture,
+			noteSize: 1025,
+		},
+		{
+			name:     "vFuture: large note (2048 bytes) - pass",
+			proto:    vFuture,
+			noteSize: 2048,
+		},
+		{
+			name:     "vFuture: note at absolute limit (4096 bytes) - pass",
+			proto:    vFuture,
+			noteSize: 4096,
+		},
+		{
+			name:     "vFuture: note over absolute limit (4097 bytes) - fail",
+			proto:    vFuture,
+			noteSize: 4097,
+			errorMsg: "transaction note too big: 4097 > 4096",
+		},
+	}
 
-	txn.StateProofType = 0
-	txn.Message = stateproofmsg.Message{FirstAttestedRound: 1}
-	err = txn.WellFormed(SpecialAddresses{}, curProto)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), erroMsg)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tx := Transaction{
+				Type: protocol.PaymentTx,
+				Header: Header{
+					Sender:     addr,
+					Fee:        basics.MicroAlgos{Raw: 100000}, // High enough for any test
+					FirstValid: 100,
+					LastValid:  200,
+					Note:       make([]byte, tt.noteSize),
+				},
+				PaymentTxnFields: PaymentTxnFields{
+					Receiver: addr,
+					Amount:   basics.MicroAlgos{Raw: 1000},
+				},
+			}
 
-	txn.Message = stateproofmsg.Message{}
-	txn.StateProof = stateproof.StateProof{SignedWeight: 100}
-	err = txn.WellFormed(SpecialAddresses{}, curProto)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), erroMsg)
+			err := tx.WellFormed(spec, tt.proto)
+			if tt.errorMsg != "" {
+				require.ErrorContains(t, err, tt.errorMsg)
+			} else {
+				require.NoError(t, err, "Unexpected error for note size %d", tt.noteSize)
+			}
+		})
+	}
+}
 
-	txn.StateProof = stateproof.StateProof{}
-	txn.Message.LastAttestedRound = 512
-	err = txn.WellFormed(SpecialAddresses{}, curProto)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), erroMsg)
+// TestSummarizeFees_BigNotes tests fee summarization with large Notes
+func TestSummarizeFees_BigNotes(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
-	txn.Message.LastAttestedRound = 0
-	err = txn.WellFormed(SpecialAddresses{}, curProto)
+	v41 := config.Consensus[protocol.ConsensusV41]
+	vFuture := config.Consensus[protocol.ConsensusFuture]
+
+	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
+
+	// Test case 1: Single transaction with large note in vFuture
+	t.Run("vFuture: single txn with 2KB note", func(t *testing.T) {
+		tx := Transaction{
+			Type: protocol.PaymentTx,
+			Header: Header{
+				Sender:     addr,
+				Fee:        basics.MicroAlgos{Raw: 10000},
+				FirstValid: 100,
+				LastValid:  200,
+				Note:       make([]byte, 2048),
+			},
+			PaymentTxnFields: PaymentTxnFields{
+				Receiver: addr,
+				Amount:   basics.MicroAlgos{Raw: 1000},
+			},
+		}
+
+		stxn := SignedTxn{Txn: tx}
+		stxnAD := SignedTxnWithAD{SignedTxn: stxn}
+
+		usage, paid := SummarizeFees([]SignedTxnWithAD{stxnAD}, vFuture)
+
+		// Expected: 1e6 + (2048-1024)*100 = 1e6 + 102400 = 1102400
+		assert.Equal(t, basics.Micros(1102400), usage, "Usage calculation incorrect")
+		assert.Equal(t, basics.MicroAlgos{Raw: 10000}, paid, "Paid amount incorrect")
+	})
+
+	// Test case 2: Transaction group with mixed note sizes in vFuture
+	t.Run("vFuture: group with mixed note sizes", func(t *testing.T) {
+		// Transaction 1: standard note (1024 bytes)
+		tx1 := Transaction{
+			Type: protocol.PaymentTx,
+			Header: Header{
+				Sender:     addr,
+				Fee:        basics.MicroAlgos{Raw: 1000},
+				FirstValid: 100,
+				LastValid:  200,
+				Note:       make([]byte, 1024),
+			},
+			PaymentTxnFields: PaymentTxnFields{
+				Receiver: addr,
+				Amount:   basics.MicroAlgos{Raw: 1000},
+			},
+		}
+
+		// Transaction 2: large note (2048 bytes)
+		tx2 := Transaction{
+			Type: protocol.PaymentTx,
+			Header: Header{
+				Sender:     addr,
+				Fee:        basics.MicroAlgos{Raw: 2024},
+				FirstValid: 100,
+				LastValid:  200,
+				Note:       make([]byte, 2048),
+			},
+			PaymentTxnFields: PaymentTxnFields{
+				Receiver: addr,
+				Amount:   basics.MicroAlgos{Raw: 1000},
+			},
+		}
+
+		stxn1 := SignedTxn{Txn: tx1}
+		stxn2 := SignedTxn{Txn: tx2}
+		group := []SignedTxnWithAD{
+			{SignedTxn: stxn1},
+			{SignedTxn: stxn2},
+		}
+
+		usage, paid := SummarizeFees(group, vFuture)
+
+		// Expected usage: 1e6 + (1e6 + 102400) = 2102400
+		assert.Equal(t, basics.Micros(2102400), usage, "Group usage calculation incorrect")
+		assert.Equal(t, basics.MicroAlgos{Raw: 3024}, paid, "Group paid amount incorrect")
+	})
+
+	// Test case 3: Transaction in v41 (MaxAbsoluteTxnNoteBytes = 1024)
+	t.Run("v41: standard note has base fee", func(t *testing.T) {
+		tx := Transaction{
+			Type: protocol.PaymentTx,
+			Header: Header{
+				Sender:     addr,
+				Fee:        basics.MicroAlgos{Raw: 1000},
+				FirstValid: 100,
+				LastValid:  200,
+				Note:       make([]byte, 1024), // At the limit in v41
+			},
+			PaymentTxnFields: PaymentTxnFields{
+				Receiver: addr,
+				Amount:   basics.MicroAlgos{Raw: 1000},
+			},
+		}
+
+		stxn := SignedTxn{Txn: tx}
+		stxnAD := SignedTxnWithAD{SignedTxn: stxn}
+
+		usage, paid := SummarizeFees([]SignedTxnWithAD{stxnAD}, v41)
+
+		// Expected: just base fee of 1e6, no extra charge since at MaxTxnNoteBytes
+		assert.Equal(t, basics.Micros(1e6), usage, "Usage should be base fee only in v41")
+		assert.Equal(t, basics.MicroAlgos{Raw: 1000}, paid, "Paid amount incorrect")
+	})
+}
+
+func TestLogicSigProgramFeeContribution(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	v41 := config.Consensus[protocol.ConsensusV41]
+	vFuture := config.Consensus[protocol.ConsensusFuture]
+
+	freeSize := int(vFuture.LogicSigMaxSize)
+
+	tests := []struct {
+		name                 string
+		proto                config.ConsensusParams
+		logicSizes           []int
+		argSizes             []int
+		expectedContribution basics.Micros
+	}{
+		{
+			name:                 "v41: oversized LogicSig program has no surcharge before per-byte fee is set",
+			proto:                v41,
+			logicSizes:           []int{freeSize + 500},
+			expectedContribution: 0,
+		},
+		{
+			name:                 "vFuture: LogicSig program at free limit",
+			proto:                vFuture,
+			logicSizes:           []int{freeSize},
+			expectedContribution: 0,
+		},
+		{
+			name:                 "vFuture: one extra LogicSig program byte",
+			proto:                vFuture,
+			logicSizes:           []int{freeSize + 1},
+			expectedContribution: surchargeForBytes(t, vFuture, 1),
+		},
+		{
+			name:                 "vFuture: large LogicSig program",
+			proto:                vFuture,
+			logicSizes:           []int{freeSize + 500},
+			expectedContribution: surchargeForBytes(t, vFuture, 500),
+		},
+		{
+			name:                 "vFuture: LogicSig args do not reduce the free program size pool",
+			proto:                vFuture,
+			logicSizes:           []int{freeSize},
+			argSizes:             []int{500},
+			expectedContribution: 0,
+		},
+		{
+			name:                 "vFuture: LogicSig args do not affect charged program bytes",
+			proto:                vFuture,
+			logicSizes:           []int{freeSize + 100},
+			argSizes:             []int{500},
+			expectedContribution: surchargeForBytes(t, vFuture, 100),
+		},
+		{
+			name:                 "vFuture: size pooling covers large LogicSig program",
+			proto:                vFuture,
+			logicSizes:           []int{freeSize + 500, 0},
+			expectedContribution: 0,
+		},
+		{
+			name:                 "vFuture: size pooling charges aggregate program bytes beyond the pool",
+			proto:                vFuture,
+			logicSizes:           []int{freeSize + 250, freeSize + 250},
+			expectedContribution: surchargeForBytes(t, vFuture, 500),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			txgroup := make([]SignedTxnWithAD, len(tt.logicSizes))
+			for i, logicSize := range tt.logicSizes {
+				txgroup[i].SignedTxn.Lsig.Logic = make([]byte, logicSize)
+				if i < len(tt.argSizes) {
+					txgroup[i].SignedTxn.Lsig.Args = [][]byte{make([]byte, tt.argSizes[i])}
+				}
+			}
+
+			assert.Equal(t, tt.expectedContribution, logicSigProgramFeeContribution(txgroup, tt.proto))
+		})
+	}
+}
+
+func TestSummarizeFees_BigLogicSigProgram(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	vFuture := config.Consensus[protocol.ConsensusFuture]
+
+	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
+	require.NoError(t, err)
+
+	makeTxn := func(fee uint64) Transaction {
+		return Transaction{
+			Type: protocol.PaymentTx,
+			Header: Header{
+				Sender:     addr,
+				Fee:        basics.MicroAlgos{Raw: fee},
+				FirstValid: 100,
+				LastValid:  200,
+			},
+			PaymentTxnFields: PaymentTxnFields{
+				Receiver: addr,
+				Amount:   basics.MicroAlgos{Raw: 1000},
+			},
+		}
+	}
+
+	freeSize := int(vFuture.LogicSigMaxSize)
+
+	t.Run("vFuture: single txn with large LogicSig program", func(t *testing.T) {
+		stxn := SignedTxn{
+			Txn: makeTxn(2000),
+			Lsig: LogicSig{
+				Logic: make([]byte, freeSize+500),
+			},
+		}
+
+		usage, paid := SummarizeFees([]SignedTxnWithAD{{SignedTxn: stxn}}, vFuture)
+
+		assert.Equal(t, basics.Micros(1e6)+surchargeForBytes(t, vFuture, 500), usage)
+		assert.Equal(t, basics.MicroAlgos{Raw: 2000}, paid)
+	})
+
+	t.Run("vFuture: size pooling can cover LogicSig program bytes", func(t *testing.T) {
+		stxn1 := SignedTxn{
+			Txn: makeTxn(1000),
+			Lsig: LogicSig{
+				Logic: make([]byte, freeSize+500),
+			},
+		}
+		stxn2 := SignedTxn{
+			Txn: makeTxn(1050),
+		}
+
+		usage, paid := SummarizeFees([]SignedTxnWithAD{
+			{SignedTxn: stxn1},
+			{SignedTxn: stxn2},
+		}, vFuture)
+
+		assert.Equal(t, basics.Micros(2e6), usage)
+		assert.Equal(t, basics.MicroAlgos{Raw: 2050}, paid)
+	})
+
+	t.Run("vFuture: LogicSig program bytes beyond size pool increase usage", func(t *testing.T) {
+		stxn1 := SignedTxn{
+			Txn: makeTxn(1000),
+			Lsig: LogicSig{
+				Logic: make([]byte, freeSize*2+500),
+			},
+		}
+		stxn2 := SignedTxn{
+			Txn: makeTxn(1050),
+		}
+
+		usage, paid := SummarizeFees([]SignedTxnWithAD{
+			{SignedTxn: stxn1},
+			{SignedTxn: stxn2},
+		}, vFuture)
+
+		assert.Equal(t, basics.Micros(2e6)+surchargeForBytes(t, vFuture, 500), usage)
+		assert.Equal(t, basics.MicroAlgos{Raw: 2050}, paid)
+	})
+
+	t.Run("vFuture: LogicSig args do not affect program surcharge", func(t *testing.T) {
+		stxn1 := SignedTxn{
+			Txn: makeTxn(1000),
+			Lsig: LogicSig{
+				Logic: make([]byte, freeSize+500),
+				Args:  [][]byte{make([]byte, 600)},
+			},
+		}
+		stxn2 := SignedTxn{
+			Txn: makeTxn(1000),
+		}
+
+		usage, paid := SummarizeFees([]SignedTxnWithAD{
+			{SignedTxn: stxn1},
+			{SignedTxn: stxn2},
+		}, vFuture)
+
+		assert.Equal(t, basics.Micros(2e6), usage)
+		assert.Equal(t, basics.MicroAlgos{Raw: 2000}, paid)
+	})
+}
+
+// TestFeeFactor_BigPrograms tests the FeeFactor calculation with large application programs
+func TestFeeFactor_BigPrograms(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	v41 := config.Consensus[protocol.ConsensusV41]
+	vFuture := config.Consensus[protocol.ConsensusFuture]
+
+	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
+	require.NoError(t, err)
+
+	// v41: MaxExtraAppProgramPages = MaxAbsoluteExtraProgramPages = 3
+	// MaxAppProgramLen = 2048, MaxAppTotalProgramLen = 2048
+	// Standard total limit: (1 + 3) * 2048 = 8192 bytes
+
+	// vFuture: MaxAbsoluteExtraProgramPages = 7 (larger)
+	// Standard limit stays the same though
+
+	tests := []struct {
+		name           string
+		proto          config.ConsensusParams
+		approvalSize   int
+		clearSize      int
+		appArgSizes    []int
+		expectedFactor basics.Micros
+	}{
+		{
+			name:           "v41: standard programs (4KB + 4KB = 8KB)",
+			proto:          v41,
+			approvalSize:   4096,
+			clearSize:      4096,
+			expectedFactor: 1e6,
+		},
+		{
+			name:           "vFuture: standard programs (4KB + 4KB = 8KB)",
+			proto:          vFuture,
+			approvalSize:   4096,
+			clearSize:      4096,
+			appArgSizes:    []int{1024, 1024}, // existing limit
+			expectedFactor: 1e6,
+		},
+		{
+			name:           "vFuture: 1 extra arg byte",
+			proto:          vFuture,
+			approvalSize:   4096,
+			clearSize:      4096,
+			appArgSizes:    []int{1020, 1020, 9},
+			expectedFactor: 1e6 + 100,
+		},
+		{
+			name:           "vFuture: 1 extra program byte (8193 total)",
+			proto:          vFuture,
+			approvalSize:   4096,
+			clearSize:      4097,
+			expectedFactor: 1e6 + 100,
+		},
+		{
+			name:           "vFuture: 100 extra bytes (8292 total)",
+			proto:          vFuture,
+			approvalSize:   4096,
+			clearSize:      4196,
+			expectedFactor: 1e6 + 10000,
+		},
+		{
+			name:           "vFuture: 1024 extra bytes (9216 total)",
+			proto:          vFuture,
+			approvalSize:   4096,
+			clearSize:      5120,
+			expectedFactor: 1e6 + 102400,
+		},
+		{
+			name:           "vFuture: maximum allowed (16KB total with 7 extra pages)",
+			proto:          vFuture,
+			approvalSize:   8192,
+			clearSize:      8192,
+			expectedFactor: 1e6 + (16384-8192)*100,
+		},
+		{
+			name:           "vFuture: oversized app args",
+			proto:          vFuture,
+			appArgSizes:    []int{12000, 3000}, // 15000 total; 12952 bytes over 2048 standard
+			expectedFactor: 1e6 + (15000-2048)*100,
+		},
+		{
+			name:           "vFuture: oversized programs and app args both contribute",
+			proto:          vFuture,
+			approvalSize:   5000,
+			clearSize:      5000,              // 1808 over 8192 standard
+			appArgSizes:    []int{8000, 2000}, // 7952 over 2048 standard
+			expectedFactor: 1e6 + (1808+7952)*100,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tx := Transaction{
+				Type: protocol.ApplicationCallTx,
+				Header: Header{
+					Sender:     addr,
+					Fee:        basics.MicroAlgos{Raw: 100000},
+					FirstValid: 100,
+					LastValid:  200,
+				},
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     0, // App creation
+					ApprovalProgram:   make([]byte, tt.approvalSize),
+					ClearStateProgram: make([]byte, tt.clearSize),
+				},
+			}
+			tx.ApplicationCallTxnFields.ApplicationArgs = util.Map(tt.appArgSizes, func(size int) []byte {
+				return make([]byte, size)
+			})
+
+			factor := tx.feeFactor(tt.proto)
+			assert.Equal(t, tt.expectedFactor, factor, "feeFactor mismatch for approval=%d, clear=%d", tt.approvalSize, tt.clearSize)
+		})
+	}
+}
+
+// TestWellFormed_BigPrograms tests application program size validation
+func TestWellFormed_BigPrograms(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	v41 := config.Consensus[protocol.ConsensusV41]
+	vFuture := config.Consensus[protocol.ConsensusFuture]
+
+	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
+	require.NoError(t, err)
+
+	spec := SpecialAddresses{
+		FeeSink:     basics.Address{0x01},
+		RewardsPool: basics.Address{0x02},
+	}
+
+	tests := []struct {
+		name         string
+		proto        config.ConsensusParams
+		approvalSize int
+		clearSize    int
+		extraPages   uint32
+		errorMsg     string
+	}{
+		// v41: MaxAbsoluteExtraProgramPages = 3
+		{
+			name:         "v41: at limit with 3 extra pages",
+			proto:        v41,
+			approvalSize: 8190,
+			clearSize:    2, // Two bytes: version 6, return
+			extraPages:   3,
+		},
+		{
+			name:         "v41: exceeds extra pages limit",
+			proto:        v41,
+			approvalSize: 8190,
+			clearSize:    2,
+			extraPages:   4,
+			errorMsg:     "tx.ExtraProgramPages exceeds MaxAbsoluteExtraProgramPages = 3",
+		},
+		// vFuture: MaxAbsoluteExtraProgramPages = 7
+		{
+			name:         "vFuture: at limit with 7 extra pages",
+			proto:        vFuture,
+			approvalSize: 16382,
+			clearSize:    2,
+			extraPages:   7,
+		},
+		{
+			name:         "vFuture: exceeds extra pages limit",
+			proto:        vFuture,
+			approvalSize: 16382,
+			clearSize:    2,
+			extraPages:   8,
+			errorMsg:     "tx.ExtraProgramPages exceeds MaxAbsoluteExtraProgramPages = 7",
+		},
+		{
+			name:         "vFuture: total program size exceeds limit for given pages",
+			proto:        vFuture,
+			approvalSize: 8192,
+			clearSize:    8193,
+			extraPages:   7,
+			errorMsg:     "app programs too long",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create programs with valid TEAL opcodes (version 6, padded with int 1)
+			approval := make([]byte, tt.approvalSize)
+			clear := make([]byte, tt.clearSize)
+			if tt.approvalSize > 0 {
+				approval[0] = 6 // Version 6
+				for i := 1; i < tt.approvalSize; i++ {
+					approval[i] = 0x81 // pushint 1
+				}
+			}
+			if tt.clearSize > 0 {
+				clear[0] = 6 // Version 6
+				for i := 1; i < tt.clearSize; i++ {
+					clear[i] = 0x81 // pushint 1
+				}
+			}
+
+			tx := Transaction{
+				Type: protocol.ApplicationCallTx,
+				Header: Header{
+					Sender:     addr,
+					Fee:        basics.MicroAlgos{Raw: 100000},
+					FirstValid: 100,
+					LastValid:  200,
+				},
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     0, // App creation
+					ApprovalProgram:   approval,
+					ClearStateProgram: clear,
+					ExtraProgramPages: tt.extraPages,
+				},
+			}
+
+			err := tx.WellFormed(spec, tt.proto)
+			if tt.errorMsg != "" {
+				require.ErrorContains(t, err, tt.errorMsg)
+			} else {
+				require.NoError(t, err, "Unexpected error for %s", tt.name)
+			}
+		})
+	}
+}
+
+// TestSummarizeFees_BigPrograms tests fee summarization with large programs
+func TestSummarizeFees_BigPrograms(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	vFuture := config.Consensus[protocol.ConsensusFuture]
+
+	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
+	require.NoError(t, err)
+
+	t.Run("vFuture: single app create with large programs", func(t *testing.T) {
+		// Standard limit: 8192 bytes, using 9216 bytes (1024 extra)
+		tx := Transaction{
+			Type: protocol.ApplicationCallTx,
+			Header: Header{
+				Sender:     addr,
+				Fee:        basics.MicroAlgos{Raw: 10000},
+				FirstValid: 100,
+				LastValid:  200,
+			},
+			ApplicationCallTxnFields: ApplicationCallTxnFields{
+				ApplicationID:     0,
+				ApprovalProgram:   make([]byte, 5120),
+				ClearStateProgram: make([]byte, 4096),
+				ExtraProgramPages: 4,
+			},
+		}
+
+		stxn := SignedTxn{Txn: tx}
+		stxnAD := SignedTxnWithAD{SignedTxn: stxn}
+
+		usage, paid := SummarizeFees([]SignedTxnWithAD{stxnAD}, vFuture)
+
+		// Expected: 1e6 + 1024*100 = 1102400
+		assert.Equal(t, basics.Micros(1102400), usage, "Usage calculation incorrect")
+		assert.Equal(t, basics.MicroAlgos{Raw: 10000}, paid, "Paid amount incorrect")
+	})
+
+	t.Run("vFuture: group with mixed transaction types", func(t *testing.T) {
+		// Transaction 1: payment with large note
+		tx1 := Transaction{
+			Type: protocol.PaymentTx,
+			Header: Header{
+				Sender:     addr,
+				Fee:        basics.MicroAlgos{Raw: 2024},
+				FirstValid: 100,
+				LastValid:  200,
+				Note:       make([]byte, 2048), // 1024 extra bytes
+			},
+			PaymentTxnFields: PaymentTxnFields{
+				Receiver: addr,
+				Amount:   basics.MicroAlgos{Raw: 1000},
+			},
+		}
+
+		// Transaction 2: app create with large programs
+		tx2 := Transaction{
+			Type: protocol.ApplicationCallTx,
+			Header: Header{
+				Sender:     addr,
+				Fee:        basics.MicroAlgos{Raw: 2024},
+				FirstValid: 100,
+				LastValid:  200,
+			},
+			ApplicationCallTxnFields: ApplicationCallTxnFields{
+				ApplicationID:     0,
+				ApprovalProgram:   make([]byte, 4608), // Total 9216 bytes = 1024 extra
+				ClearStateProgram: make([]byte, 4608),
+				ExtraProgramPages: 4,
+			},
+		}
+
+		stxn1 := SignedTxn{Txn: tx1}
+		stxn2 := SignedTxn{Txn: tx2}
+		group := []SignedTxnWithAD{
+			{SignedTxn: stxn1},
+			{SignedTxn: stxn2},
+		}
+
+		usage, paid := SummarizeFees(group, vFuture)
+
+		// Expected usage: (1e6 + 1024*100) + (1e6 + 1024*100) = 2204800
+		assert.Equal(t, basics.Micros(2204800), usage, "Group usage calculation incorrect")
+		assert.Equal(t, basics.MicroAlgos{Raw: 4048}, paid, "Group paid amount incorrect")
+	})
 }

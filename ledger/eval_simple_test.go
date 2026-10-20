@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,9 +32,11 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -78,7 +80,7 @@ func TestBlockEvaluator(t *testing.T) {
 
 	// Correct signature should work
 	st := txn.Sign(keys[0])
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.TransactionGroup(st.WithAD())
 	require.NoError(t, err)
 
 	// Broken signature should fail
@@ -92,7 +94,7 @@ func TestBlockEvaluator(t *testing.T) {
 	txgroup = []transactions.SignedTxn{st}
 	err = eval.TestTransactionGroup(txgroup)
 	require.Error(t, err)
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.TransactionGroup(st.WithAD())
 	require.Error(t, err)
 
 	// out of range should fail
@@ -103,7 +105,7 @@ func TestBlockEvaluator(t *testing.T) {
 	txgroup = []transactions.SignedTxn{st}
 	err = eval.TestTransactionGroup(txgroup)
 	require.Error(t, err)
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.TransactionGroup(st.WithAD())
 	require.Error(t, err)
 
 	// bogus group should fail
@@ -113,7 +115,7 @@ func TestBlockEvaluator(t *testing.T) {
 	txgroup = []transactions.SignedTxn{st}
 	err = eval.TestTransactionGroup(txgroup)
 	require.Error(t, err)
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.TransactionGroup(st.WithAD())
 	require.Error(t, err)
 
 	// mixed fields should fail
@@ -148,7 +150,7 @@ func TestBlockEvaluator(t *testing.T) {
 	err = eval.TestTransactionGroup(txgroup)
 	require.NoError(t, err)
 
-	err = eval.Transaction(stxn, transactions.ApplyData{})
+	err = eval.TransactionGroup(stxn.WithAD())
 	require.NoError(t, err)
 
 	t3 := txn
@@ -163,7 +165,7 @@ func TestBlockEvaluator(t *testing.T) {
 	err = eval.TestTransactionGroup(txgroup)
 	require.Error(t, err)
 	txgroupad := transactions.WrapSignedTxnsWithAD(txgroup)
-	err = eval.TransactionGroup(txgroupad)
+	err = eval.TransactionGroup(txgroupad...)
 	require.Error(t, err)
 
 	// Test a group that should work
@@ -185,7 +187,7 @@ func TestBlockEvaluator(t *testing.T) {
 	err = eval.TestTransactionGroup(txgroup)
 	require.Error(t, err)
 	txgroupad = transactions.WrapSignedTxnsWithAD(txgroup)
-	err = eval.TransactionGroup(txgroupad)
+	err = eval.TransactionGroup(txgroupad...)
 	require.Error(t, err)
 
 	// missing part of the group should fail
@@ -222,10 +224,19 @@ func TestPayoutFees(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// Lots of balance checks that would be messed up by rewards
-	genBalances, addrs, _ := ledgertesting.NewTestGenesis(ledgertesting.TurnOffRewards)
 	payoutsBegin := 40
 	ledgertesting.TestConsensusRange(t, payoutsBegin-1, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		proto := config.Consensus[cv]
+		// Lots of balance checks that would be messed up by rewards
+		opts := []ledgertesting.TestGenesisOption{ledgertesting.TurnOffRewards}
+		// When payouts are enabled, set a starting feesink balance to ensure it drains by the end of the test
+		if ver >= payoutsBegin {
+			initialBalance := uint64(19_000_000 - 2*proto.MinTxnFee)
+			opts = append(opts, ledgertesting.InitialFeeSinkBalance(initialBalance))
+		}
+
+		// Create genesis with the appropriate options
+		genBalances, addrs, _ := ledgertesting.NewTestGenesis(opts...)
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
@@ -240,13 +251,14 @@ func TestPayoutFees(t *testing.T) {
 		require.False(t, prp.IncentiveEligible)
 
 		dl.txn(&txntest.Txn{
-			Type:         "keyreg",
-			Sender:       proposer,
-			Fee:          eFee,
-			VotePK:       crypto.OneTimeSignatureVerifier{0x01},
-			SelectionPK:  crypto.VRFVerifier{0x02},
-			StateProofPK: merklesignature.Commitment{0x03},
-			VoteFirst:    1, VoteLast: 1000,
+			Type:            "keyreg",
+			Sender:          proposer,
+			Fee:             eFee,
+			VotePK:          crypto.OneTimeSignatureVerifier{0x01},
+			SelectionPK:     crypto.VRFVerifier{0x02},
+			StateProofPK:    merklesignature.Commitment{0x03},
+			VoteKeyDilution: 1000,
+			VoteFirst:       1, VoteLast: 1000,
 		})
 
 		prp = lookup(dl.t, dl.generator, proposer)
@@ -265,7 +277,7 @@ func TestPayoutFees(t *testing.T) {
 			Receiver: addrs[2],
 			Amount:   100000,
 		}
-		dl.txns(&pay, pay.Args("again"))
+		dl.txns(&pay, pay.Noted("again"))
 		vb := dl.endBlock(proposer)
 
 		postsink := micros(dl.t, dl.generator, genBalances.FeeSink)
@@ -280,17 +292,17 @@ func TestPayoutFees(t *testing.T) {
 			require.True(t, dl.generator.GenesisProto().Payouts.Enabled)    // version sanity check
 			require.NotZero(t, dl.generator.GenesisProto().Payouts.Percent) // version sanity check
 			// new fields are in the header
-			require.EqualValues(t, 2000, vb.Block().FeesCollected.Raw)
+			require.EqualValues(t, 2*proto.MinTxnFee, vb.Block().FeesCollected.Raw)
 			require.EqualValues(t, bonus1, vb.Block().Bonus.Raw)
-			require.EqualValues(t, bonus1+1_000, vb.Block().ProposerPayout().Raw)
+			require.EqualValues(t, bonus1+proto.MinTxnFee, vb.Block().ProposerPayout().Raw)
 			// This last one is really only testing the "fake" agreement that
 			// happens in dl.endBlock().
 			require.EqualValues(t, proposer, vb.Block().Proposer())
 
 			// At the end of the block, part of the fees + bonus have been moved to
 			// the proposer.
-			require.EqualValues(t, bonus1+1_000, postprop-preprop) // based on 75% in config/consensus.go
-			require.EqualValues(t, bonus1-1_000, presink-postsink)
+			require.EqualValues(t, bonus1+proto.MinTxnFee, postprop-preprop) // based on 75% in config/consensus.go
+			require.EqualValues(t, bonus1-proto.MinTxnFee, presink-postsink)
 			require.Equal(t, prp.LastProposed, dl.generator.Latest())
 		} else {
 			require.False(t, dl.generator.GenesisProto().Payouts.Enabled)
@@ -317,13 +329,9 @@ func TestPayoutFees(t *testing.T) {
 
 		// Get the feesink down low, then drain it by proposing.
 		feesink := vb.Block().FeeSink
-		data := lookup(t, dl.generator, feesink)
-		dl.txn(&txntest.Txn{
-			Type:     "pay",
-			Sender:   feesink,
-			Receiver: addrs[1],
-			Amount:   data.MicroAlgos.Raw - 12_000_000,
-		})
+		dl.beginBlock()
+		dl.endBlock()
+
 		dl.beginBlock()
 		dl.endBlock(proposer)
 		require.EqualValues(t, micros(t, dl.generator, feesink), 2_000_000)
@@ -335,6 +343,92 @@ func TestPayoutFees(t *testing.T) {
 		dl.beginBlock()
 		dl.endBlock(proposer)
 		require.EqualValues(t, micros(t, dl.generator, feesink), 100_000)
+	})
+}
+
+// TestFeePooling checks that fees are sufficient across a group to pay for the group
+func TestFeePooling(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// FeePooling was added in v28, but we have now removed the consensus flag,
+	// as we can pretend it was always allowed. Test from v27 to show.
+	ledgertesting.TestConsensusRange(t, 27, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		proto := config.Consensus[cv]
+
+		// A basic transaction has to pay enough!
+		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: proto.MinBalance, Fee: 1},
+			"fees is less than") // avoid using the exact values in the string
+		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: proto.MinBalance, Fee: proto.MinFee()})
+
+		// Two txns need two min fees
+		dl.txgroup("fees is less than",
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: proto.MinBalance, Fee: proto.MinFee()},
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: 1, Fee: 1},
+		)
+		dl.txgroup("",
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: proto.MinBalance, Fee: proto.MinFee()},
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: 1, Fee: proto.MinFee()},
+		)
+		dl.txgroup("",
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: proto.MinBalance, Fee: 2 * proto.MinTxnFee},
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: 1, Fee: 1},
+		)
+		dl.txgroup("",
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: 1, Fee: 1},
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: proto.MinBalance, Fee: 2 * proto.MinTxnFee})
+	})
+}
+
+// TestGroupChecks checks that the group checks are working
+func TestGroupChecks(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// FeePooling was added in v28, but we have now removed the consensus flag,
+	// as we can pretend it was always allowed. Test from v27 to show.
+	ledgertesting.TestConsensusRange(t, 27, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		proto := config.Consensus[cv]
+
+		tx0 := txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   addrs[0],
+			Fee:      basics.MicroAlgos{Raw: proto.MinTxnFee},
+			Receiver: addrs[1],
+		}
+
+		// txgroup sets up the Group properly, so it works, but it doesn't let
+		// us test what happens when the group isn't made properly.
+		dl.txgroup("", &tx0, tx0.Noted("again"))
+
+		// so here we make the group and tweak it to see the errors
+
+		showFail := func(txgroup []transactions.SignedTxn, msg string) {
+			t.Helper()
+			err := dl.eval.TestTransactionGroup(txgroup)
+			require.ErrorContains(t, err, msg)
+
+			err = dl.eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup)...)
+			require.ErrorContains(t, err, msg)
+		}
+
+		dl.beginBlock()
+		g := makeGroup(t, dl.generator, dl.eval, tx0.Noted("x"), tx0.Noted("y"))
+		g[0].Txn.Group = crypto.Digest{}
+		showFail(g, "[0] had zero Group")
+		g[0].Txn.Group = g[1].Txn.Group
+		g[0].Txn.Group[0]++
+		showFail(g, "inconsistent group values")
+		g[1].Txn.Group[0]++
+		showFail(g, "incomplete group")
 	})
 }
 
@@ -377,11 +471,12 @@ func TestIncentiveEligible(t *testing.T) {
 
 		// Keyreg to get online with various fees. Sufficient fee gets `smallest` eligible
 		keyreg := txntest.Txn{
-			Type:         "keyreg",
-			VotePK:       crypto.OneTimeSignatureVerifier{0x01},
-			SelectionPK:  crypto.VRFVerifier{0x02},
-			StateProofPK: merklesignature.Commitment{0x03},
-			VoteFirst:    1, VoteLast: 1000,
+			Type:            "keyreg",
+			VotePK:          crypto.OneTimeSignatureVerifier{0x01},
+			SelectionPK:     crypto.VRFVerifier{0x02},
+			StateProofPK:    merklesignature.Commitment{0x03},
+			VoteKeyDilution: 1000,
+			VoteFirst:       1, VoteLast: 1000,
 		}
 		tooSmallKR := keyreg
 		tooSmallKR.Sender = tooSmall
@@ -404,7 +499,6 @@ func TestIncentiveEligible(t *testing.T) {
 // properly.
 func TestAbsentTracking(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
 		cfg.OnlineCount = 2 // So we know proposer should propose every 2 rounds, on average
@@ -485,11 +579,15 @@ func TestAbsentTracking(t *testing.T) {
 		// have addrs[1] go online explicitly, which makes it eligible for suspension.
 		// use a large fee, so we can see IncentiveEligible change
 		vb := dl.fullBlock(&txntest.Txn{ // #2
-			Type:        "keyreg",
-			Fee:         10_000_000,
-			Sender:      addrs[1],
-			VotePK:      [32]byte{1},
-			SelectionPK: [32]byte{1},
+			Type:            "keyreg",
+			Fee:             10_000_000,
+			Sender:          addrs[1],
+			VotePK:          [32]byte{1},
+			SelectionPK:     [32]byte{1},
+			VoteKeyDilution: 1,
+			StateProofPK:    merklesignature.Commitment{1},
+			VoteFirst:       1,
+			VoteLast:        1000,
 		})
 		addr1Keyreg := vb.Block().Round()
 		require.EqualValues(t, 2, addr1Keyreg) // sanity check
@@ -500,11 +598,14 @@ func TestAbsentTracking(t *testing.T) {
 		require.True(t, lookup(t, dl.generator, addrs[0]).Status == basics.Online)
 		require.True(t, lookup(t, dl.generator, addrs[1]).Status == basics.Online)
 		require.False(t, lookup(t, dl.generator, addrs[2]).Status == basics.Online)
-		checkState(addrs[0], true, false, 833_333_333_333_333) // #3
-		require.Equal(t, int(lookup(t, dl.generator, addrs[0]).MicroAlgos.Raw), 833_333_333_332_333)
+		proto := config.Consensus[cv]
+		initialBalance := uint64(833_333_333_333_333)
+		checkState(addrs[0], true, false, initialBalance) // #3
+		// addr[0] paid one MinTxnFee for checkState transaction
+		require.Equal(t, int(lookup(t, dl.generator, addrs[0]).MicroAlgos.Raw), int(initialBalance-proto.MinTxnFee))
 		// although addr[1] just paid to be eligible, it won't be for 320 rounds
-		checkState(addrs[1], true, false, 833_333_333_333_333) // #4
-		checkState(addrs[2], false, false, 0)                  // #5
+		checkState(addrs[1], true, false, initialBalance) // #4
+		checkState(addrs[2], false, false, 0)             // #5
 
 		// genesis accounts don't begin IncentiveEligible, even if online
 		require.False(t, lookup(t, dl.generator, addrs[0]).IncentiveEligible)
@@ -538,7 +639,7 @@ func TestAbsentTracking(t *testing.T) {
 		newtotals, err := dl.generator.Totals(dl.generator.Latest())
 		require.NoError(t, err)
 		// payment and fee left the online account
-		require.Equal(t, totals.Online.Money.Raw-100_000-1000, newtotals.Online.Money.Raw)
+		require.Equal(t, totals.Online.Money.Raw-100_000-proto.MinTxnFee, newtotals.Online.Money.Raw)
 		totals = newtotals
 
 		printAbsent(dl.fullBlock())
@@ -558,10 +659,12 @@ func TestAbsentTracking(t *testing.T) {
 
 		// ONLINE keyreg without extra fee
 		vb = dl.fullBlock(&txntest.Txn{
-			Type:        "keyreg",
-			Sender:      addrs[2],
-			VotePK:      [32]byte{1},
-			SelectionPK: [32]byte{1},
+			Type:            "keyreg",
+			Sender:          addrs[2],
+			VotePK:          [32]byte{1},
+			SelectionPK:     [32]byte{1},
+			VoteKeyDilution: 1,
+			StateProofPK:    merklesignature.Commitment{1},
 		}) // #10
 		printAbsent(vb)
 		// online totals have grown, addr[2] was added
@@ -574,20 +677,22 @@ func TestAbsentTracking(t *testing.T) {
 		require.True(t, regger.Status == basics.Online)
 
 		// But nothing has changed for voter_params_get, since we're not past 320
-		checkState(addrs[0], true, false, 833_333_333_333_333) // #11
-		checkState(addrs[1], true, false, 833_333_333_333_333) // #12
-		checkState(addrs[2], false, false, 0)                  // #13
+		checkState(addrs[0], true, false, initialBalance) // #11
+		checkState(addrs[1], true, false, initialBalance) // #12
+		checkState(addrs[2], false, false, 0)             // #13
 
 		require.NotZero(t, regger.LastHeartbeat) // online keyreg caused update
 		require.False(t, regger.IncentiveEligible)
 
 		// ONLINE keyreg with extra fee
 		vb = dl.fullBlock(&txntest.Txn{
-			Type:        "keyreg",
-			Fee:         2_000_000,
-			Sender:      addrs[2],
-			VotePK:      [32]byte{1},
-			SelectionPK: [32]byte{1},
+			Type:            "keyreg",
+			Fee:             2_000_000,
+			Sender:          addrs[2],
+			VotePK:          [32]byte{1},
+			SelectionPK:     [32]byte{1},
+			VoteKeyDilution: 1,
+			StateProofPK:    merklesignature.Commitment{1},
 		}) // #14
 		printAbsent(vb)
 		addr2Eligible := vb.Block().Round()
@@ -630,20 +735,21 @@ func TestAbsentTracking(t *testing.T) {
 
 			if rnd < 100 {
 				// `vote_params_get` sees no changes in the early going, because it looks back 320
-				checkState(addrs[1], true, false, 833_333_333_333_333) // this also advances a round!
+				checkState(addrs[1], true, false, initialBalance) // this also advances a round!
 				// to avoid complications from advancing an extra round, we only do this check for 100 rounds
 			}
 
 			// addr[1] spent 10A on a fee in rnd 1, so online stake and eligibility adjusted in 323
 			if rnd == addr1Keyreg-2+lookback {
-				checkState(addrs[1], true, false, 833_333_333_333_333) // check occurs during reg+lookback-1
-				checkState(addrs[1], true, true, 833_333_323_333_333)  // check occurs during reg+lookback
+				checkState(addrs[1], true, false, initialBalance)           // check occurs during reg+lookback-1
+				checkState(addrs[1], true, true, initialBalance-10_000_000) // check occurs during reg+lookback
 			}
 
 			// watch the change across the round that addr2 becomes eligible (by spending 2A in keyreg)
+			// addr[2] received 100_000 from addr[1] at line 531, and paid fees for multiple checkState and keyreg txns
 			if rnd == addr2Eligible-2+lookback {
-				checkState(addrs[2], true, false, 833_333_333_429_333)
-				checkState(addrs[2], true, true, 833_333_331_429_333) // after keyreg w/ 2A is effective
+				checkState(addrs[2], true, false, initialBalance+100_000-4*proto.MinTxnFee)
+				checkState(addrs[2], true, true, initialBalance+100_000-4*proto.MinTxnFee-2_000_000) // after keyreg w/ 2A is effective
 			}
 
 			if rnd > 20+lookback+skip {
@@ -674,14 +780,35 @@ func TestAbsentTracking(t *testing.T) {
 
 			// observe addr1 stake going to zero 320 rounds after knockoff
 			if rnd == addr1off+lookback-2 {
-				checkState(addrs[1], true, true, 833_333_323_188_333)
+				// addr[1]: initial - 10M fee (keyreg) - 100k payment - MinTxnFee (pay) - checkState fees
+				// checkState calls for addrs[1]:
+				//   - 1 at round 4 (line 510)
+				//   - 1 at round 12 (line 582)
+				//   - 40-41 from loop at line 637, rounds 20-98, called every other round (line advances after checkState)
+				//   - 2 at rounds 320-321 (lines 643-644)
+				// Total: 44-45 checkState calls. Before this checkState call, 44 fees have been paid.
+				numCheckStates := uint64(44)
+				checkState(addrs[1], true, true, initialBalance-10_000_000-100_000-proto.MinTxnFee-numCheckStates*proto.MinTxnFee)
 				checkState(addrs[1], false, false, 0)
 				addr1check = true
 			}
 
 			// observe addr2 stake going to zero 320 rounds after knockoff
 			if rnd == addr2off+lookback-2 {
-				checkState(addrs[2], true, true, 833_333_331_427_333) // still "online"
+				// addr[2]: initial + 100k received - 2M fee (keyreg with high fee) - MinTxnFee (keyreg #10) - checkState fees
+				// checkState fees: 1 at round 5 (line 511)
+				//                  80 from rounds 20-99 (line 637, addr[2] not checked there)
+				//                  2 at addr2Eligible+lookback-2 and addr2Eligible+lookback-1 (lines 650-651)
+				// Note: addr[2] also pays MinTxnFee for the offline keyreg at line 551
+				// Actually, let's count addr[2] checkState calls more carefully:
+				// - Line 511: 1 checkState
+				// - Line 583: 1 checkState
+				// - Lines 650-651: 2 checkState
+				// Total checkState fees before this call: 4
+				// Plus 2 keyreg fees: offline keyreg (line 551) and online keyreg #10 (line 564)
+				numCheckStates := uint64(4)
+				numKeyregs := uint64(2)                                                                                                      // offline keyreg at 551, online keyreg at 564
+				checkState(addrs[2], true, true, initialBalance+100_000-2_000_000-numKeyregs*proto.MinTxnFee-numCheckStates*proto.MinTxnFee) // still "online"
 				checkState(addrs[2], false, false, 0)
 				addr2check = true
 			}
@@ -694,7 +821,8 @@ func TestAbsentTracking(t *testing.T) {
 		require.True(t, addr1check)
 		require.True(t, addr2check)
 
-		checkState(addrs[0], true, false, 833_333_333_331_333) // addr 0 didn't get suspended (genesis)
+		// addr[0]: initial - 2 checkState fees (lines 506, 581)
+		checkState(addrs[0], true, false, initialBalance-2*proto.MinTxnFee) // addr 0 didn't get suspended (genesis)
 	}
 
 	ledgertesting.TestConsensusRange(t, checkingBegins, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
@@ -737,11 +865,13 @@ func TestAbsenteeChallenges(t *testing.T) {
 				Receiver: guy,
 				Amount:   10_000_000,
 			}, &txntest.Txn{
-				Type:        "keyreg",
-				Fee:         5_000_000, // enough to be incentive eligible
-				Sender:      guy,
-				VotePK:      [32]byte{byte(i + 1)},
-				SelectionPK: [32]byte{byte(i + 1)},
+				Type:            "keyreg",
+				Fee:             5_000_000, // enough to be incentive eligible
+				Sender:          guy,
+				VotePK:          [32]byte{byte(i + 1)},
+				SelectionPK:     [32]byte{byte(i + 1)},
+				VoteKeyDilution: uint64(i + 1),
+				StateProofPK:    merklesignature.Commitment{byte(i + 1)},
 			})
 			acct := lookup(t, dl.generator, guy)
 			require.Equal(t, basics.Online, acct.Status)
@@ -768,10 +898,12 @@ func TestAbsenteeChallenges(t *testing.T) {
 
 		// regguy keyregs before he's caught, which is a heartbeat, he stays on as well
 		vb := dl.fullBlock(&txntest.Txn{
-			Type:        "keyreg", // Does not pay extra fee, since he's still eligible
-			Sender:      regguy,
-			VotePK:      [32]byte{1},
-			SelectionPK: [32]byte{1},
+			Type:            "keyreg", // Does not pay extra fee, since he's still eligible
+			Sender:          regguy,
+			VotePK:          [32]byte{1},
+			SelectionPK:     [32]byte{1},
+			VoteKeyDilution: 1,
+			StateProofPK:    merklesignature.Commitment{1},
 		})
 		require.Equal(t, basics.Round(1200), vb.Block().Round())
 		require.Empty(t, vb.Block().AbsentParticipationAccounts)
@@ -834,10 +966,7 @@ func TestDoubleLedgerGetKnockoffCandidates(t *testing.T) {
 	})
 	payoutsBegin := 40
 
-	// txn to send in round 1, to change the balances to be different from genesis
-	payTxn := &txntest.Txn{Type: "pay", Sender: addrs[1], Receiver: addrs[2], Amount: 1_000_000}
-
-	checkAccts := func(l *Ledger, rnd basics.Round, cv protocol.ConsensusVersion) {
+	checkAccts := func(l *Ledger, rnd basics.Round, cv protocol.ConsensusVersion, payTxnSender, payTxnReceiver basics.Address, payTxnAmount uint64) {
 		accts, err := l.GetKnockOfflineCandidates(rnd, config.Consensus[cv])
 		require.NoError(t, err)
 		require.NotEmpty(t, accts)
@@ -849,18 +978,10 @@ func TestDoubleLedgerGetKnockoffCandidates(t *testing.T) {
 		for addr, ad := range genBalances.Balances {
 			if ad.Status == basics.Online {
 				onlineCnt++
-				genesisOnlineAccts[addr] = ad.OnlineAccountData()
-				afterPayTxnOnlineAccts[addr] = ad.OnlineAccountData()
+				genesisOnlineAccts[addr] = basics_testing.OnlineAccountData(ad)
+				afterPayTxnOnlineAccts[addr] = basics_testing.OnlineAccountData(ad)
 			}
 		}
-
-		// calculate expected balances after applying payTxn
-		payTxnReceiver := afterPayTxnOnlineAccts[payTxn.Receiver]
-		payTxnReceiver.MicroAlgosWithRewards.Raw += payTxn.Amount
-		payTxnSender := afterPayTxnOnlineAccts[payTxn.Sender]
-		payTxnSender.MicroAlgosWithRewards.Raw -= (payTxn.Amount + config.Consensus[cv].MinTxnFee)
-		afterPayTxnOnlineAccts[payTxn.Receiver] = payTxnReceiver
-		afterPayTxnOnlineAccts[payTxn.Sender] = payTxnSender
 
 		require.Equal(t, onlineCount, onlineCnt)
 		require.Len(t, accts, onlineCnt)
@@ -868,6 +989,13 @@ func TestDoubleLedgerGetKnockoffCandidates(t *testing.T) {
 			// balances should be same as genesis
 			require.Equal(t, genesisOnlineAccts, accts)
 		} else {
+			// calculate expected balances after applying payTxn
+			receiver := afterPayTxnOnlineAccts[payTxnReceiver]
+			receiver.MicroAlgosWithRewards.Raw += payTxnAmount
+			sender := afterPayTxnOnlineAccts[payTxnSender]
+			sender.MicroAlgosWithRewards.Raw -= (payTxnAmount + config.Consensus[cv].MinTxnFee)
+			afterPayTxnOnlineAccts[payTxnReceiver] = receiver
+			afterPayTxnOnlineAccts[payTxnSender] = sender
 			// balances > rnd 1 should reflect payTxn change
 			require.Equal(t, afterPayTxnOnlineAccts, accts, "rnd %d", rnd)
 		}
@@ -878,11 +1006,12 @@ func TestDoubleLedgerGetKnockoffCandidates(t *testing.T) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
-		checkAccts(dl.generator, basics.Round(0), cv)
-		checkAccts(dl.validator, basics.Round(0), cv)
+		checkAccts(dl.generator, basics.Round(0), cv, basics.Address{}, basics.Address{}, 0)
+		checkAccts(dl.validator, basics.Round(0), cv, basics.Address{}, basics.Address{}, 0)
 
 		// change two accounts' balances to be different from genesis
-		payTxn.GenesisHash = crypto.Digest{} // clear if set from previous run
+		// Create the pay transaction fresh for each consensus version so it uses the correct fee
+		payTxn := &txntest.Txn{Type: "pay", Sender: addrs[1], Receiver: addrs[2], Amount: 1_000_000}
 		dl.fullBlock(payTxn)
 
 		// run up to round 240
@@ -890,8 +1019,8 @@ func TestDoubleLedgerGetKnockoffCandidates(t *testing.T) {
 		upToRound := basics.Round(proto.StateProofInterval - proto.StateProofVotersLookback)
 		require.Equal(t, basics.Round(240), upToRound)
 		for rnd := dl.fullBlock().Block().Round(); rnd < upToRound; rnd = dl.fullBlock().Block().Round() {
-			checkAccts(dl.generator, rnd, cv)
-			checkAccts(dl.validator, rnd, cv)
+			checkAccts(dl.generator, rnd, cv, addrs[1], addrs[2], 1_000_000)
+			checkAccts(dl.validator, rnd, cv, addrs[1], addrs[2], 1_000_000)
 		}
 	})
 }
@@ -914,6 +1043,8 @@ func TestVoterAccess(t *testing.T) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
+		proto := config.Consensus[cv]
+		initialBalance := uint64(833_333_333_333_333)
 		stib := dl.txn(&txntest.Txn{
 			Type:            "appl",
 			Sender:          addrs[0],
@@ -924,11 +1055,14 @@ func TestVoterAccess(t *testing.T) {
 
 		// have addrs[1] go online, though it won't be visible right away
 		dl.txn(&txntest.Txn{
-			Type:        "keyreg",
-			Sender:      addrs[1],
-			VotePK:      [32]byte{0xaa},
-			SelectionPK: [32]byte{0xbb},
+			Type:            "keyreg",
+			Sender:          addrs[1],
+			VotePK:          [32]byte{0xaa},
+			SelectionPK:     [32]byte{0xbb},
+			VoteKeyDilution: 1000,
+			StateProofPK:    merklesignature.Commitment{0xcc},
 		})
+		roundAfterAddr1Keyreg := dl.generator.Latest()
 
 		one := basics.Address{0xaa, 0x11}
 		two := basics.Address{0xaa, 0x22}
@@ -956,11 +1090,11 @@ func TestVoterAccess(t *testing.T) {
 			require.Equal(t, int(total), int(binary.BigEndian.Uint64([]byte(logs[2]))))
 		}
 
-		checkState(addrs[0], true, 833_333_333_333_333, 833_333_333_333_333)
+		checkState(addrs[0], true, initialBalance, initialBalance)
 		// checking again because addrs[0] just paid a fee, but we show online balance hasn't changed yet
-		checkState(addrs[0], true, 833_333_333_333_333, 833_333_333_333_333)
+		checkState(addrs[0], true, initialBalance, initialBalance)
 		for i := 1; i < 10; i++ {
-			checkState(addrs[i], false, 0, 833_333_333_333_333)
+			checkState(addrs[i], false, 0, initialBalance)
 		}
 
 		// Fund the new accounts and have them go online.
@@ -971,26 +1105,39 @@ func TestVoterAccess(t *testing.T) {
 				Receiver: addr,
 				Amount:   (uint64(i) + 1) * 1_000_000_000,
 			}, &txntest.Txn{
-				Type:        "keyreg",
-				Sender:      addr,
-				VotePK:      [32]byte{byte(i + 1)},
-				SelectionPK: [32]byte{byte(i + 1)},
+				Type:            "keyreg",
+				Sender:          addr,
+				VotePK:          [32]byte{byte(i + 1)},
+				SelectionPK:     [32]byte{byte(i + 1)},
+				VoteKeyDilution: uint64(1000 + i),
+				StateProofPK:    merklesignature.Commitment{byte(i + 1)},
 			})
 		}
+		roundAfterOneTwoThreeKeyreg := dl.generator.Latest()
 		// they don't have online stake yet
 		for _, addr := range []basics.Address{one, two, three} {
-			checkState(addr, false, 0, 833_333_333_333_333)
+			checkState(addr, false, 0, initialBalance)
 		}
+		roundBeforeWait := dl.generator.Latest()
 		for i := 0; i < 320; i++ {
 			dl.fullBlock()
 		}
-		// addr[1] is now visibly online. the total is across all five that are now online, minus various fees paid
-		checkState(addrs[1], true, 833_333_333_333_333-2000, 2*833_333_333_333_333-14000)
+		roundAfterWait := dl.generator.Latest()
+		// At this round, we look back 320 rounds for balance
+		balanceRound := roundAfterWait - 320
+		t.Logf("Rounds: addr1 keyreg=%d, one/two/three keyreg=%d, before wait=%d, after wait=%d, balance round=%d",
+			roundAfterAddr1Keyreg, roundAfterOneTwoThreeKeyreg, roundBeforeWait, roundAfterWait, balanceRound)
+		// At round 339, looking back 320 rounds to round 19 for balance/stake.
+		// addrs[1] registered at round 2, so it IS counted (registered 17 rounds before lookback).
+		// one/two/three registered at round 16, so they are NOT counted yet (only 3 rounds before lookback).
+		// Accounts need 320 rounds after keyreg before being included in online stake calculations.
+		checkState(addrs[1], true, initialBalance-2*proto.MinTxnFee, 2*initialBalance-14*proto.MinTxnFee)
 		for i := 2; i < 10; i++ { // addrs[2-9] never came online
-			checkState(addrs[i], false, 0, 2*833_333_333_333_333-14000)
+			checkState(addrs[i], false, 0, 2*initialBalance-14*proto.MinTxnFee)
 		}
+		// one/two/three show as individually online, but aren't in total stake yet (need 320 rounds from keyreg)
 		for i, addr := range []basics.Address{one, two, three} {
-			checkState(addr, true, (uint64(i)+1)*1_000_000_000-2000, 2*833_333_333_333_333-14000)
+			checkState(addr, true, (uint64(i)+1)*1_000_000_000-2*proto.MinTxnFee, 2*initialBalance-14*proto.MinTxnFee)
 		}
 	})
 }
@@ -1230,7 +1377,7 @@ func TestRekeying(t *testing.T) {
 		require.NoError(t, err)
 
 		for _, stxn := range stxns {
-			err = eval.Transaction(stxn, transactions.ApplyData{})
+			err = eval.TransactionGroup(stxn.WithAD())
 			if err != nil {
 				return err
 			}
@@ -1280,6 +1427,226 @@ func TestRekeying(t *testing.T) {
 	// TODO: More tests
 }
 
+func signPQRekeyTestTxn(t *testing.T, acct basics_testing.PQTestAccount, txn transactions.Transaction, authAddr basics.Address) transactions.SignedTxn {
+	t.Helper()
+
+	signature, err := acct.Signer.Sign(txn)
+	require.NoError(t, err)
+
+	return transactions.SignedTxn{
+		Txn:      txn,
+		AuthAddr: authAddr,
+		PQsig: transactions.PQSig{
+			Scheme:    acct.Scheme,
+			Salt:      acct.Salt,
+			PublicKey: acct.PublicKey,
+			Signature: signature,
+		},
+	}
+}
+
+func TestPQRekeyedAddressAuthorization(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, tc := range basics_testing.PQTestSchemes {
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+
+			genesisInitState, addrs, keys := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
+
+			pqAcct := basics_testing.MakePQTestAccount(t, 0, tc.Scheme)
+
+			proto := config.Consensus[protocol.ConsensusFuture]
+			require.True(t, transactions.PQSchemeEnabled(proto, pqAcct.Scheme))
+			pqFee, _, overflow := proto.MinFee().FeeForUsage(basics.Micros(1e6)+transactions.PQSchemeFeeContribution(proto, pqAcct.Scheme), 1e6, 0)
+			require.False(t, overflow)
+
+			genesisInitState.Accounts[pqAcct.Address] = basics.AccountData{
+				MicroAlgos: basics.MicroAlgos{Raw: 10_000_000},
+				Status:     basics.Offline,
+			}
+
+			l, err := OpenLedger(logging.TestingLog(t), t.Name(), true, genesisInitState, config.GetDefaultLocal())
+			require.NoError(t, err)
+			defer l.Close()
+
+			nextRound := l.Latest() + basics.Round(1)
+			genHash := l.GenesisHash()
+
+			makePayTxn := func(sender, receiver basics.Address, fee basics.MicroAlgos, rekeyTo basics.Address, uniq uint8) transactions.Transaction {
+				return transactions.Transaction{
+					Type: protocol.PaymentTx,
+					Header: transactions.Header{
+						Sender:      sender,
+						Fee:         fee,
+						FirstValid:  nextRound,
+						LastValid:   nextRound,
+						GenesisHash: genHash,
+						RekeyTo:     rekeyTo,
+						Note:        []byte{uniq},
+					},
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver: receiver,
+						Amount:   basics.MicroAlgos{Raw: 1},
+					},
+				}
+			}
+
+			tryBlock := func(stxns []transactions.SignedTxn) error {
+				genesisHdr, err := l.BlockHdr(basics.Round(0))
+				require.NoError(t, err)
+				newBlock := bookkeeping.MakeBlock(genesisHdr)
+				eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
+				require.NoError(t, err)
+
+				for _, stxn := range stxns {
+					err = eval.TransactionGroup(stxn.WithAD())
+					if err != nil {
+						return err
+					}
+				}
+				unfinishedBlock, err := eval.GenerateBlock(nil)
+				if err != nil {
+					return err
+				}
+				fb := unfinishedBlock.FinishBlock(committee.Seed{0x01}, basics.Address{0x01}, false)
+
+				backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+				defer backlogPool.Shutdown()
+				_, err = l.Validate(context.Background(), fb, backlogPool)
+				return err
+			}
+
+			edRekeyToPQ := makePayTxn(addrs[0], addrs[0], minFee, pqAcct.Address, 1).Sign(keys[0])
+			edSpendByPQTxn := makePayTxn(addrs[0], addrs[1], pqFee, basics.Address{}, 2)
+			edSpendByPQ := signPQRekeyTestTxn(t, pqAcct, edSpendByPQTxn, pqAcct.Address)
+
+			require.NoError(t, tryBlock([]transactions.SignedTxn{edRekeyToPQ, edSpendByPQ}))
+			require.ErrorContains(t, tryBlock([]transactions.SignedTxn{edSpendByPQ}), "should have been authorized by")
+
+			pqRekeyToEdTxn := makePayTxn(pqAcct.Address, addrs[1], pqFee, addrs[2], 3)
+			pqRekeyToEd := signPQRekeyTestTxn(t, pqAcct, pqRekeyToEdTxn, basics.Address{})
+			pqSpendByEd := makePayTxn(pqAcct.Address, addrs[1], minFee, basics.Address{}, 4).Sign(keys[2])
+
+			require.NoError(t, tryBlock([]transactions.SignedTxn{pqRekeyToEd, pqSpendByEd}))
+			require.ErrorContains(t, tryBlock([]transactions.SignedTxn{pqSpendByEd}), "should have been authorized by")
+		})
+	}
+}
+
+func TestPQChallengedAccountCanHeartbeatForZeroFee(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	require.True(t, proto.Heartbeat)
+	require.True(t, proto.Payouts.Enabled)
+	require.NotZero(t, proto.Payouts.ChallengeInterval)
+	require.NotZero(t, proto.Payouts.ChallengeGracePeriod)
+
+	for _, tc := range basics_testing.PQTestSchemes {
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+
+			const keyDilution = 777
+			otss := crypto.GenerateOneTimeSignatureSecrets(1, 10)
+			pqAcct := basics_testing.MakePQTestAccount(t, 1, tc.Scheme)
+			require.True(t, transactions.PQSchemeEnabled(proto, pqAcct.Scheme))
+
+			genBalances, _, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
+				cfg.OnlineCount = 5
+			})
+			genBalances.Balances[pqAcct.Address] = basics.AccountData{
+				MicroAlgos:        basics.MicroAlgos{Raw: 100_000_000},
+				Status:            basics.Online,
+				VoteID:            otss.OneTimeSignatureVerifier,
+				SelectionID:       crypto.VRFVerifier{1},
+				StateProofID:      merklesignature.Commitment{1},
+				VoteFirstValid:    0,
+				VoteLastValid:     1_000_000,
+				VoteKeyDilution:   keyDilution,
+				IncentiveEligible: true,
+			}
+
+			seedAndProp := pqAcct.Address
+			seedAndProp[31] ^= 1
+			require.NotEqual(t, pqAcct.Address, seedAndProp)
+			genBalances.Balances[seedAndProp] = basics.AccountData{
+				MicroAlgos:        basics.MicroAlgos{Raw: 100_000_000},
+				Status:            basics.Online,
+				VoteID:            crypto.OneTimeSignatureVerifier{1},
+				SelectionID:       crypto.VRFVerifier{1},
+				StateProofID:      merklesignature.Commitment{1},
+				VoteFirstValid:    0,
+				VoteLastValid:     1_000_000,
+				VoteKeyDilution:   1,
+				IncentiveEligible: true,
+			}
+
+			dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, config.GetDefaultLocal())
+			defer dl.Close()
+
+			challengeRound := basics.Round(proto.Payouts.ChallengeInterval)
+			for vb := dl.fullBlock(); vb.Block().Round() < challengeRound-1; vb = dl.fullBlock() {
+				// Advance to the round before the challenge.
+			}
+			dl.beginBlock()
+			dl.endBlock(seedAndProp)
+
+			heartbeatRound := challengeRound + basics.Round(proto.Payouts.ChallengeGracePeriod)/2 + 1
+			for vb := dl.fullBlock(); vb.Block().Round() < heartbeatRound-1; vb = dl.fullBlock() {
+				// Advance into the risky challenge period, before suspension is active.
+			}
+
+			lastHdr, err := dl.generator.BlockHdr(dl.generator.Latest())
+			require.NoError(t, err)
+			eval := dl.beginBlock()
+			require.Equal(t, heartbeatRound, eval.Round())
+
+			// A PQ account never pays for a PQ signature on its heartbeat. A heartbeat's
+			// sender is irrelevant to what it proves (onlineness is proven by HbProof,
+			// signed with the account's participation key), so it is sent by the same
+			// ordinary accepting logicsig everyone uses. That sender carries no PQ
+			// surcharge, and the challenge discount covers the base fee, so the account
+			// stays online for free despite authorizing spends with an expensive PQ key.
+			acceptingProgram := logic.MustAssemble(`#pragma version 11
+int 1`)
+			sender := basics.Address(logic.HashProgram(acceptingProgram))
+
+			lastValid := eval.Round() + 10
+			id := basics.OneTimeIDForRound(lastValid, keyDilution)
+			txn := transactions.Transaction{
+				Type: protocol.HeartbeatTx,
+				Header: transactions.Header{
+					Sender:      sender,
+					FirstValid:  lastHdr.Round,
+					LastValid:   lastValid,
+					GenesisHash: dl.generator.GenesisHash(),
+				},
+				HeartbeatTxnFields: &transactions.HeartbeatTxnFields{
+					HbAddress:           pqAcct.Address,
+					HbProof:             otss.Sign(id, lastHdr.Seed).ToHeartbeatProof(),
+					HbSeed:              lastHdr.Seed,
+					HbVoteID:            otss.OneTimeSignatureVerifier,
+					HbKeyDilution:       keyDilution,
+					HbChallengeDiscount: true,
+				},
+			}
+			stxn := transactions.SignedTxn{Txn: txn, Lsig: transactions.LogicSig{Logic: acceptingProgram}}
+			txgroup := []transactions.SignedTxn{stxn}
+
+			require.NoError(t, eval.TestTransactionGroup(txgroup))
+			require.NoError(t, eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup)...))
+			vb := dl.endBlock()
+			require.Equal(t, heartbeatRound, vb.Block().Round())
+
+			after := lookup(t, dl.generator, pqAcct.Address)
+			require.Equal(t, heartbeatRound, after.LastHeartbeat)
+		})
+	}
+}
+
 func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalProgram string, consensusVersion protocol.ConsensusVersion) error {
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	cfg := config.GetDefaultLocal()
@@ -1298,13 +1665,13 @@ func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalPr
 	appcall2 := txntest.Txn{
 		Sender:        addrs[0],
 		Type:          protocol.ApplicationCallTx,
-		ApplicationID: basics.AppIndex(1),
+		ApplicationID: 1,
 	}
 
 	appcall3 := txntest.Txn{
 		Sender:        addrs[1],
 		Type:          protocol.ApplicationCallTx,
-		ApplicationID: basics.AppIndex(1),
+		ApplicationID: 1,
 	}
 
 	return txgroup(t, l, eval, &appcall1, &appcall2, &appcall3)
@@ -1337,14 +1704,14 @@ func TestEvalAppPooledBudgetWithTxnGroup(t *testing.T) {
 			"",
 			""},
 		{source(5, 48), false, true,
-			"pc=157 dynamic cost budget exceeded, executing pushint",
+			"dynamic cost budget exceeded, executing pushint",
 			""},
 		{source(16, 17), false, true,
-			"pc= 12 dynamic cost budget exceeded, executing keccak256",
+			"dynamic cost budget exceeded, executing keccak256",
 			""},
 		{source(16, 18), false, false,
-			"pc= 12 dynamic cost budget exceeded, executing keccak256",
-			"pc= 78 dynamic cost budget exceeded, executing pushint"},
+			"dynamic cost budget exceeded, executing keccak256",
+			"dynamic cost budget exceeded, executing pushint"},
 	}
 
 	for i, param := range params {
@@ -1352,11 +1719,9 @@ func TestEvalAppPooledBudgetWithTxnGroup(t *testing.T) {
 			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
 				err := testEvalAppPoolingGroup(t, basics.StateSchema{NumByteSlice: 3}, testCase.prog, param)
 				if !testCase.isSuccessV29 && reflect.DeepEqual(param, protocol.ConsensusV29) {
-					require.Error(t, err)
-					require.Contains(t, err.Error(), testCase.expectedErrorV29)
+					require.ErrorContains(t, err, testCase.expectedErrorV29)
 				} else if !testCase.isSuccessVFuture && reflect.DeepEqual(param, protocol.ConsensusFuture) {
-					require.Error(t, err)
-					require.Contains(t, err.Error(), testCase.expectedErrorVFuture)
+					require.ErrorContains(t, err, testCase.expectedErrorVFuture)
 				}
 			})
 		}
@@ -1408,10 +1773,11 @@ func TestMinBalanceChanges(t *testing.T) {
 
 	proto := l.GenesisProto()
 	// Check balance and min balance requirement changes
-	require.Equal(t, ad0init.MicroAlgos.Raw, ad0new.MicroAlgos.Raw+1000)                   // fee
-	require.Equal(t, ad0init.MinBalance(&proto).Raw, ad0new.MinBalance(&proto).Raw-100000) // create
-	require.Equal(t, ad5init.MicroAlgos.Raw, ad5new.MicroAlgos.Raw+1000)                   // fee
-	require.Equal(t, ad5init.MinBalance(&proto).Raw, ad5new.MinBalance(&proto).Raw-100000) // optin
+	require.Equal(t, ad0init.MicroAlgos.Raw, ad0new.MicroAlgos.Raw+proto.MinTxnFee) // fee
+	reqs := proto.BalanceRequirements()
+	require.Equal(t, ad0init.MinBalance(reqs).Raw, ad0new.MinBalance(reqs).Raw-100000) // create
+	require.Equal(t, ad5init.MicroAlgos.Raw, ad5new.MicroAlgos.Raw+proto.MinTxnFee)    // fee
+	require.Equal(t, ad5init.MinBalance(reqs).Raw, ad5new.MinBalance(reqs).Raw-100000) // optin
 
 	optOutTxn := txntest.Txn{
 		Type:          "axfer",
@@ -1436,8 +1802,8 @@ func TestMinBalanceChanges(t *testing.T) {
 	ad5final, _, _, err := l.LookupLatest(addrs[5])
 	require.NoError(t, err)
 	// Check we got our balance "back"
-	require.Equal(t, ad0final.MinBalance(&proto), ad0init.MinBalance(&proto))
-	require.Equal(t, ad5final.MinBalance(&proto), ad5init.MinBalance(&proto))
+	require.Equal(t, ad0final.MinBalance(reqs), ad0init.MinBalance(reqs))
+	require.Equal(t, ad5final.MinBalance(reqs), ad5init.MinBalance(reqs))
 }
 
 // TestAppInsMinBalance checks that accounts with MaxAppsOptedIn are accepted by block evaluator

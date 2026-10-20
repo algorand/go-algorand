@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,18 +31,35 @@ func Heartbeat(hb transactions.HeartbeatTxnFields, header transactions.Header, b
 		return err
 	}
 
-	// In txnGroupBatchPrep, we do not charge for singleton (Group.IsZero)
-	// heartbeats. But we only _want_ to allow free heartbeats if the account is
-	// under challenge. If this is an underpaid singleton heartbeat, reject it
-	// unless the account is under challenge.
-
 	proto := balances.ConsensusParams()
-	if header.Fee.Raw < proto.MinTxnFee && header.Group.IsZero() {
-		kind := "free"
-		if header.Fee.Raw > 0 {
-			kind = "cheap"
-		}
 
+	// A heartbeat may claim the challenge fee discount (see feeFactor). When it
+	// does, we allow the discount only if the account really is under challenge:
+	// online, incentive eligible, and failing a current challenge. kind
+	// describes how the discount was claimed (for error messages); an empty kind
+	// means no discount, so no verification is needed.
+	var kind string
+	if proto.TxnSizePricingEnabled() {
+		if hb.HbChallengeDiscount {
+			kind = "discounted"
+		}
+	} else {
+		// Before the explicit-discount rule the discount is inferred: SummarizeFees
+		// does not charge for a singleton (Group.IsZero) heartbeat, so an underpaying
+		// singleton is the one claiming to be under challenge.
+		headerFactor := basics.AddSaturate(header.FeeContribution(proto), 1e6)
+		// Fee a normal (non-cheap) heartbeat owes, computed the same way as a
+		// top-level group: no cost multiplier (1e6), no prior residue. FeeForUsage saturates.
+		requiredFee, _, _ := proto.MinFee().FeeForUsage(headerFactor, 1e6, 0)
+		if header.Fee.LessThan(requiredFee) && header.Group.IsZero() {
+			kind = "free"
+			if !header.Fee.IsZero() {
+				kind = "cheap"
+			}
+		}
+	}
+
+	if kind != "" {
 		if account.Status != basics.Online {
 			return fmt.Errorf("%s heartbeat is not allowed for %s %+v", kind, account.Status, hb.HbAddress)
 		}

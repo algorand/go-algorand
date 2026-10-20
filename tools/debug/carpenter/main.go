@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -69,12 +69,12 @@ const (
 // var colors = []color.Attribute{black, red, green, yellow, blue, magenta, cyan, white}
 var colors = []color.Attribute{red, green, yellow, blue, magenta, cyan}
 
-func errorf(s string, a ...interface{}) {
+func errorf(s string, a ...any) {
 	fmt.Fprintf(os.Stderr, s+"\n", a...)
 	os.Exit(1)
 }
 
-func warnf(s string, a ...interface{}) {
+func warnf(s string, a ...any) {
 	fmt.Fprintf(os.Stderr, s+"\n", a...)
 }
 
@@ -182,7 +182,7 @@ func setupInputStream() io.ReadCloser {
 }
 
 func filter(line string) bool {
-	var obj map[string]interface{}
+	var obj map[string]any
 	line = strings.TrimSpace(line)
 	if len(line) == 0 {
 		return false
@@ -305,10 +305,7 @@ func outputTableFormat(out string, event logspec.Event, columns []string, colPos
 	maxLen := len(out)
 	for i := 0; i < rowCount; i++ {
 		start := i * columnWidth
-		end := start + columnWidth
-		if end > maxLen {
-			end = maxLen
-		}
+		end := min(start+columnWidth, maxLen)
 		if start < len(out) {
 			row := strings.TrimSpace(out[start:end])
 			output := ""
@@ -321,8 +318,6 @@ func outputTableFormat(out string, event logspec.Event, columns []string, colPos
 			outputRow(bodyTabWriter, output)
 		}
 	}
-
-	return
 }
 
 func outputRow(tabWriter *tabwriter.Writer, rowContent string) {

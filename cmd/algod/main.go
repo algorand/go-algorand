@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -27,6 +28,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/gofrs/flock"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -40,9 +45,6 @@ import (
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-algorand/util/tokens"
-	"github.com/gofrs/flock"
-
-	"github.com/algorand/go-deadlock"
 )
 
 var dataDirectory = flag.String("d", "", "Root Algorand daemon data path")
@@ -59,6 +61,11 @@ var sessionGUID = flag.String("s", "", "Telemetry Session GUID to use")
 var telemetryOverride = flag.String("t", "", `Override telemetry setting if supported (Use "true", "false", "0" or "1")`)
 var seed = flag.String("seed", "", "input to math/rand.Seed()")
 
+const (
+	defaultStaticTelemetryStartupTimeout = 5 * time.Second
+	defaultStaticTelemetryBGDialRetry    = 1 * time.Minute
+)
+
 func main() {
 	flag.Parse()
 	exitCode := run()
@@ -68,7 +75,7 @@ func main() {
 func run() int {
 	dataDir := resolveDataDir()
 	absolutePath, absPathErr := filepath.Abs(dataDir)
-	config.UpdateVersionDataDir(absolutePath)
+	config.DataDirectory = absolutePath
 
 	if *seed != "" {
 		seedVal, err := strconv.ParseInt(*seed, 10, 64)
@@ -131,7 +138,7 @@ func run() int {
 	}
 
 	// If data directory doesn't exist, we can't run. Don't bother trying.
-	if _, err := os.Stat(absolutePath); err != nil {
+	if _, err1 := os.Stat(absolutePath); err1 != nil {
 		fmt.Fprintf(os.Stderr, "Data directory %s does not appear to be valid\n", dataDir)
 		return 1
 	}
@@ -169,7 +176,7 @@ func run() int {
 	checkAndDeleteIndexerFile("indexer.sqlite-shm")
 	checkAndDeleteIndexerFile("indexer.sqlite-wal")
 
-	cfg, err := config.LoadConfigFromDisk(absolutePath)
+	cfg, migrationResults, err := config.LoadConfigFromDiskWithMigrations(absolutePath)
 	if err != nil && !os.IsNotExist(err) {
 		// log is not setup yet, this will log to stderr
 		log.Fatalf("Cannot load config: %v", err)
@@ -204,17 +211,27 @@ func run() int {
 		log.Fatalf("Unable to load optional consensus protocols file: %v", err)
 	}
 
+	// Configure batch verifier implementation based on config
+	crypto.SetEd25519BatchVerifier(cfg.EnableBatchVerification)
+
 	// Enable telemetry hook in daemon to send logs to cloud
 	// If ALGOTEST env variable is set, telemetry is disabled - allows disabling telemetry for tests
 	isTest := os.Getenv("ALGOTEST") != ""
 	remoteTelemetryEnabled := false
 	if !isTest {
-		telemetryConfig, err := logging.EnsureTelemetryConfig(&dataDir, genesis.ID())
-		if err != nil {
-			fmt.Fprintln(os.Stdout, "error loading telemetry config", err)
+		root, err1 := config.GetGlobalConfigFileRoot()
+		var cfgDir *string
+		if err1 == nil {
+			cfgDir = &root
 		}
-		if os.IsPermission(err) {
-			fmt.Fprintf(os.Stderr, "Permission error on accessing telemetry config: %v", err)
+		telemetryConfig, err1 := logging.EnsureTelemetryConfig(&dataDir, cfgDir)
+		config.AnnotateTelemetry(&telemetryConfig, genesis.ID())
+		if err1 != nil {
+			if os.IsPermission(err1) {
+				fmt.Fprintf(os.Stderr, "permission error on accessing telemetry config: %v", err1)
+			} else {
+				fmt.Fprintf(os.Stderr, "error loading telemetry config: %v", err1)
+			}
 			return 1
 		}
 		fmt.Fprintf(os.Stdout, "Telemetry configured from '%s'\n", telemetryConfig.FilePath)
@@ -232,9 +249,28 @@ func run() int {
 					telemetryConfig.SessionGUID = *sessionGUID
 				}
 			}
-			err = log.EnableTelemetry(telemetryConfig)
-			if err != nil {
-				fmt.Fprintln(os.Stdout, "error creating telemetry hook", err)
+			// Try to enable remote telemetry now when URI is defined. Skip for DNS based telemetry.
+			ctx, telemetryCancelFn := context.WithTimeout(context.Background(), defaultStaticTelemetryStartupTimeout)
+			err1 = log.EnableTelemetryContext(ctx, telemetryConfig)
+			telemetryCancelFn()
+			if err1 != nil {
+				fmt.Fprintln(os.Stdout, "error creating telemetry hook", err1)
+
+				// Remote telemetry init loop
+				go func() {
+					for {
+						time.Sleep(defaultStaticTelemetryBGDialRetry)
+						// Try to enable remote telemetry now when URI is defined. Skip for DNS based telemetry.
+						err1 := log.EnableTelemetryContext(context.Background(), telemetryConfig)
+						// Error occurs only if URI is defined and we need to retry later
+						if err1 == nil {
+							// Remote telemetry enabled or empty static URI, stop retrying
+							return
+						}
+						fmt.Fprintln(os.Stdout, "error creating telemetry hook", err1)
+						// Try to reenable every minute
+					}
+				}()
 			}
 		}
 	}
@@ -318,18 +354,18 @@ func run() int {
 	if peerOverrideArray != nil {
 		phonebookAddresses = peerOverrideArray
 	} else {
-		ex, err := os.Executable()
-		if err != nil {
-			log.Errorf("cannot locate node executable: %s", err)
+		ex, err1 := os.Executable()
+		if err1 != nil {
+			log.Errorf("cannot locate node executable: %s", err1)
 		} else {
 			phonebookDirs := []string{filepath.Dir(ex), dataDir}
 			for _, phonebookDir := range phonebookDirs {
-				phonebookAddresses, err = config.LoadPhonebook(phonebookDir)
-				if err == nil {
+				phonebookAddresses, err1 = config.LoadPhonebook(phonebookDir)
+				if err1 == nil {
 					log.Debugf("Static phonebook loaded from %s", phonebookDir)
 					break
 				} else {
-					log.Debugf("Cannot load static phonebook from %s dir: %v", phonebookDir, err)
+					log.Debugf("Cannot load static phonebook from %s dir: %v", phonebookDir, err1)
 				}
 			}
 		}
@@ -339,7 +375,7 @@ func run() int {
 		cfg.LogSizeLimit = 0
 	}
 
-	err = s.Initialize(cfg, phonebookAddresses, string(genesisText))
+	err = s.Initialize(cfg, phonebookAddresses, string(genesisText), migrationResults)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		log.Error(err)

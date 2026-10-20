@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"runtime"
 	"strings"
@@ -31,6 +32,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/avm-abi/apps"
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -44,7 +47,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
-	"github.com/algorand/go-deadlock"
 )
 
 var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
@@ -87,7 +89,7 @@ func accumulateTotals(t testing.TB, consensusVersion protocol.ConsensusVersion, 
 	totals.RewardsLevel = rewardLevel
 	for _, ar := range accts {
 		for _, data := range ar {
-			totals.AddAccount(proto, data, &ot)
+			totals.AddAccount(proto.RewardUnit, data, &ot)
 		}
 	}
 	require.False(t, ot.Overflowed)
@@ -109,7 +111,7 @@ func setupAccts(niter int) []map[basics.Address]basics.AccountData {
 	return accts
 }
 
-func makeMockLedgerForTrackerWithLogger(t testing.TB, inMemory bool, initialBlocksCount int, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData, l logging.Logger) *mockLedgerForTracker {
+func makeMockLedgerForTrackerWithLogger(t testing.TB, inMemory bool, initialBlocksCount basics.Round, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData, l logging.Logger) *mockLedgerForTracker {
 	dbs, fileName := sqlitedriver.OpenForTesting(t, inMemory)
 
 	blocks := randomInitChain(consensusVersion, initialBlocksCount)
@@ -145,7 +147,7 @@ func makeMockLedgerForTrackerWithLogger(t testing.TB, inMemory bool, initialBloc
 
 }
 
-func makeMockLedgerForTracker(t testing.TB, inMemory bool, initialBlocksCount int, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData) *mockLedgerForTracker {
+func makeMockLedgerForTracker(t testing.TB, inMemory bool, initialBlocksCount basics.Round, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData) *mockLedgerForTracker {
 	dblogger := logging.TestingLog(t)
 	dblogger.SetLevel(logging.Info)
 
@@ -167,14 +169,11 @@ func (ml *mockLedgerForTracker) fork(t testing.TB) *mockLedgerForTracker {
 		log:              dblogger,
 		blocks:           make([]blockEntry, len(ml.blocks)),
 		deltas:           make([]ledgercore.StateDelta, len(ml.deltas)),
-		accts:            make(map[basics.Address]basics.AccountData),
+		accts:            maps.Clone(ml.accts),
 		filename:         fn,
 		consensusParams:  ml.consensusParams,
 		consensusVersion: ml.consensusVersion,
 		trackers:         trackerRegistry{log: dblogger},
-	}
-	for k, v := range ml.accts {
-		newLedgerTracker.accts[k] = v
 	}
 	copy(newLedgerTracker.blocks, ml.blocks)
 	copy(newLedgerTracker.deltas, ml.deltas)
@@ -356,7 +355,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 	var validThrough basics.Round
 	_, validThrough, err = au.LookupWithoutRewards(latest+1, ledgertesting.RandomAddress())
 	require.Error(t, err)
-	require.Equal(t, basics.Round(0), validThrough)
+	require.Zero(t, validThrough)
 
 	if base > 0 && base >= basics.Round(ao.maxBalLookback()) {
 		rnd := base - basics.Round(ao.maxBalLookback())
@@ -365,7 +364,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 
 		_, validThrough, err = au.LookupWithoutRewards(base-1, ledgertesting.RandomAddress())
 		require.Error(t, err)
-		require.Equal(t, basics.Round(0), validThrough)
+		require.Zero(t, validThrough)
 	}
 
 	roundsRanges := []struct {
@@ -548,7 +547,7 @@ func testAcctUpdates(t *testing.T, conf config.Local) {
 
 			accts := setupAccts(20)
 			rewardsLevels := []uint64{0}
-			initialBlocksCount := int(lookback)
+			initialBlocksCount := basics.Round(lookback)
 			ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusCurrentVersion, accts)
 			defer ml.Close()
 
@@ -557,12 +556,12 @@ func testAcctUpdates(t *testing.T, conf config.Local) {
 
 			// cover 10 genesis blocks
 			rewardLevel := uint64(0)
-			for i := 1; i < initialBlocksCount; i++ {
+			for i := 1; i < int(initialBlocksCount); i++ {
 				accts = append(accts, accts[0])
 				rewardsLevels = append(rewardsLevels, rewardLevel)
 			}
 
-			checkAcctUpdates(t, au, ao, 0, basics.Round(initialBlocksCount-1), accts, rewardsLevels, proto)
+			checkAcctUpdates(t, au, ao, 0, initialBlocksCount-1, accts, rewardsLevels, proto)
 
 			// lastCreatableID stores asset or app max used index to get rid of conflicts
 			lastCreatableID := basics.CreatableIndex(crypto.RandUint64() % 512)
@@ -672,16 +671,16 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	}
 	protocolVersion := protocol.ConsensusCurrentVersion
 
-	initialRounds := uint64(1)
+	const initialRounds basics.Round = 1
 	accountsCount := 5000
 	accts := setupAccts(accountsCount)
 	rewardsLevels := []uint64{0}
 
-	ml := makeMockLedgerForTracker(b, true, int(initialRounds), protocolVersion, accts)
+	ml := makeMockLedgerForTracker(b, true, initialRounds, protocolVersion, accts)
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	maxAcctLookback := conf.MaxAcctLookback
+	maxAcctLookback := basics.Round(conf.MaxAcctLookback)
 	au, _ := newAcctUpdates(b, ml, conf)
 	// accountUpdates and onlineAccounts are closed via: ml.Close() -> ml.trackers.close()
 
@@ -692,12 +691,12 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 
-	for i := basics.Round(initialRounds); i < basics.Round(maxAcctLookback+uint64(b.N)); i++ {
+	for i := initialRounds; i < maxAcctLookback+basics.Round(b.N); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		accountChanges := 0
-		if i <= basics.Round(initialRounds)+basics.Round(b.N) {
-			accountChanges = accountsCount - 2 - int(basics.Round(maxAcctLookback+uint64(b.N))+i)
+		if i <= initialRounds+basics.Round(b.N) {
+			accountChanges = accountsCount - 2 - int(maxAcctLookback+basics.Round(b.N)+i)
 		}
 
 		updates, totals := ledgertesting.RandomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
@@ -733,10 +732,10 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	ml.trackers.waitAccountsWriting()
 	b.ResetTimer()
 	startTime := time.Now()
-	for i := maxAcctLookback + initialRounds; i < maxAcctLookback+uint64(b.N); i++ {
+	for i := maxAcctLookback + initialRounds; i < maxAcctLookback+basics.Round(b.N); i++ {
 		// Clear the timer to ensure a flush
 		ml.trackers.lastFlushTime = time.Time{}
-		ml.trackers.committedUpTo(basics.Round(i))
+		ml.trackers.committedUpTo(i)
 	}
 	ml.trackers.waitAccountsWriting()
 	deltaTime := time.Since(startTime)
@@ -744,7 +743,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		return
 	}
 	// we want to fake the N to reflect the time it took us, if we were to wait an entire second.
-	singleIterationTime := deltaTime / time.Duration(uint64(b.N)-initialRounds)
+	singleIterationTime := deltaTime / time.Duration(uint64(basics.Round(b.N)-initialRounds))
 	b.N = int(time.Second / singleIterationTime)
 	// and now, wait for the reminder of the second.
 	time.Sleep(time.Second - deltaTime)
@@ -877,7 +876,7 @@ func testAcctUpdatesUpdatesCorrectness(t *testing.T, cfg config.Local) {
 					// we might get an error like "round 2 before dbRound 5", which is the success case, so we'll ignore it.
 					roundOffsetError := &RoundOffsetError{}
 					if errors.As(err, &roundOffsetError) {
-						require.Equal(t, basics.Round(0), validThrough)
+						require.Zero(t, validThrough)
 						// verify it's the expected error and not anything else.
 						require.Less(t, int64(roundOffsetError.round), int64(roundOffsetError.dbRound))
 						if testback > 1 {
@@ -936,7 +935,7 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	initialBlocksCount := 1
+	const initialBlocksCount = 1
 	accts := make(map[basics.Address]basics.AccountData)
 
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -1058,7 +1057,7 @@ func TestKVCache(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	initialBlocksCount := 1
+	const initialBlocksCount = 1
 	accts := make(map[basics.Address]basics.AccountData)
 
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -1119,7 +1118,7 @@ func TestKVCache(t *testing.T) {
 			require.False(t, has)
 		}
 
-		// verify commited kvs appear in the kv cache
+		// verify committed kvs appear in the kv cache
 		for ; currentDBRound <= au.cachedDBRound; currentDBRound++ {
 			startKV := (currentDBRound - 1) * basics.Round(kvsPerBlock)
 			for j := 0; j < kvsPerBlock; j++ {
@@ -1163,7 +1162,7 @@ func TestKVCache(t *testing.T) {
 			}
 		}
 
-		// verify commited updated kv values appear in the kv cache
+		// verify committed updated kv values appear in the kv cache
 		for ; currentDBRound <= au.cachedDBRound; currentDBRound++ {
 			lookback := basics.Round(kvCnt/kvsPerBlock + int(conf.MaxAcctLookback) + 1)
 			if currentDBRound < lookback {
@@ -1215,7 +1214,7 @@ func TestKVCache(t *testing.T) {
 			}
 		}
 
-		// verify commited updated kv values appear in the kv cache
+		// verify committed updated kv values appear in the kv cache
 		for ; currentDBRound <= au.cachedDBRound; currentDBRound++ {
 			lookback := basics.Round(2*(kvCnt/kvsPerBlock+int(conf.MaxAcctLookback)) + 1)
 			if currentDBRound < lookback {
@@ -1327,7 +1326,7 @@ func TestCompactDeltas(t *testing.T) {
 	stateDeltas[0].Creatables[100] = ledgercore.ModifiedCreatable{Creator: addrs[2], Created: true}
 	var baseAccounts lruAccounts
 	baseAccounts.init(nil, 100, 80)
-	outAccountDeltas := makeCompactAccountDeltas(stateDeltas, basics.Round(1), true, baseAccounts)
+	outAccountDeltas := makeCompactAccountDeltas(stateDeltas, 1, true, baseAccounts)
 	outCreatableDeltas := compactCreatableDeltas(stateDeltas)
 
 	require.Equal(t, stateDeltas[0].Accts.Len(), outAccountDeltas.len())
@@ -1360,7 +1359,7 @@ func TestCompactDeltas(t *testing.T) {
 
 	baseAccounts.write(trackerdb.PersistedAccountData{Addr: addrs[0], AccountData: trackerdb.BaseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}})
 	baseAccounts.write(trackerdb.PersistedAccountData{Addr: addrs[3], AccountData: trackerdb.BaseAccountData{}})
-	outAccountDeltas = makeCompactAccountDeltas(stateDeltas, basics.Round(1), true, baseAccounts)
+	outAccountDeltas = makeCompactAccountDeltas(stateDeltas, 1, true, baseAccounts)
 	outCreatableDeltas = compactCreatableDeltas(stateDeltas)
 
 	require.Equal(t, 2, outAccountDeltas.len())
@@ -1449,7 +1448,7 @@ func TestCompactDeltasResources(t *testing.T) {
 
 	baseResources.init(nil, 100, 80)
 
-	outResourcesDeltas = makeCompactResourceDeltas(stateDeltas, basics.Round(1), true, baseAccounts, baseResources)
+	outResourcesDeltas = makeCompactResourceDeltas(stateDeltas, 1, true, baseAccounts, baseResources)
 	// 6 entries are missing: same app (asset) params and local state are combined into a single entry
 	require.Equal(t, 6, len(outResourcesDeltas.misses))
 	require.Equal(t, 6, len(outResourcesDeltas.deltas))
@@ -1509,7 +1508,7 @@ func TestCompactDeltasResources(t *testing.T) {
 		}
 	}
 
-	outResourcesDeltas = makeCompactResourceDeltas(stateDeltas, basics.Round(1), true, baseAccounts, baseResources)
+	outResourcesDeltas = makeCompactResourceDeltas(stateDeltas, 1, true, baseAccounts, baseResources)
 	require.Equal(t, 0, len(outResourcesDeltas.misses))
 	require.Equal(t, 6, len(outResourcesDeltas.deltas))
 
@@ -1564,12 +1563,12 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 
 	protocolVersion := protocol.ConsensusCurrentVersion
 
-	initialRounds := uint64(1)
+	const initialRounds = 1
 	accountsCount := 5
 	rewardsLevels := []uint64{0}
 	accts := setupAccts(accountsCount)
 
-	ml := makeMockLedgerForTracker(t, true, int(initialRounds), protocolVersion, accts)
+	ml := makeMockLedgerForTracker(t, true, initialRounds, protocolVersion, accts)
 	ml.log.SetLevel(logging.Warn)
 	defer ml.Close()
 
@@ -1611,7 +1610,7 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 		delta.Accts.MergeAccounts(updates)
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		ml.addBlock(blockEntry{block: blk}, delta)
-		ml.trackers.committedUpTo(basics.Round(i))
+		ml.trackers.committedUpTo(i)
 		ml.trackers.waitAccountsWriting()
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
@@ -1622,7 +1621,7 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 	accts = []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(accountsCount, true)}
 
 	// create another mocked ledger, but this time with a fresh new tracker database.
-	ml2 := makeMockLedgerForTracker(t, true, int(initialRounds), protocolVersion, accts)
+	ml2 := makeMockLedgerForTracker(t, true, initialRounds, protocolVersion, accts)
 	ml2.log.SetLevel(logging.Warn)
 	defer ml2.Close()
 
@@ -1648,13 +1647,13 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 
 	initProtocolVersion := protocol.ConsensusV20
 
-	initialRounds := uint64(1)
+	const initialRounds = 1
 
 	accountsCount := 5
 	rewardsLevels := []uint64{0}
 	accts := setupAccts(accountsCount)
 
-	ml := makeMockLedgerForTracker(t, true, int(initialRounds), initProtocolVersion, accts)
+	ml := makeMockLedgerForTracker(t, true, initialRounds, initProtocolVersion, accts)
 	ml.log.SetLevel(logging.Warn)
 	defer ml.Close()
 
@@ -1669,7 +1668,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 
-	extraRounds := uint64(39)
+	extraRounds := basics.Round(39)
 
 	// write the extraRounds rounds so that we will fill up the queue.
 	for i := basics.Round(initialRounds); i < basics.Round(initialRounds+extraRounds); i++ {
@@ -1690,7 +1689,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
+				Round: i,
 			},
 		}
 		blk.RewardsLevel = rewardLevel
@@ -1704,12 +1703,12 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 
-	newVersionBlocksCount := uint64(47)
+	newVersionBlocksCount := basics.Round(47)
 	newVersion := protocol.ConsensusV21
-	maxAcctLookback := conf.MaxAcctLookback
+	maxAcctLookback := basics.Round(conf.MaxAcctLookback)
 	// add 47 more rounds that contains blocks using a newer consensus version, and stuff it with maxAcctLookback
-	lastRoundToWrite := basics.Round(initialRounds + maxAcctLookback + extraRounds + newVersionBlocksCount)
-	for i := basics.Round(initialRounds + extraRounds); i < lastRoundToWrite; i++ {
+	lastRoundToWrite := initialRounds + maxAcctLookback + extraRounds + newVersionBlocksCount
+	for i := initialRounds + extraRounds; i < lastRoundToWrite; i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		accountChanges := 2
@@ -1727,7 +1726,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
+				Round: i,
 			},
 		}
 		blk.RewardsLevel = rewardLevel
@@ -1754,12 +1753,12 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 
 	initProtocolVersion := protocol.ConsensusV20
 
-	initialRounds := uint64(1)
+	const initialRounds basics.Round = 1
 	accountsCount := 5
 	rewardsLevels := []uint64{0}
 	accts := setupAccts(accountsCount)
 
-	ml := makeMockLedgerForTracker(t, true, int(initialRounds), initProtocolVersion, accts)
+	ml := makeMockLedgerForTracker(t, true, initialRounds, initProtocolVersion, accts)
 	ml.log.SetLevel(logging.Warn)
 	defer ml.Close()
 
@@ -1774,10 +1773,10 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 
-	extraRounds := uint64(39)
+	const extraRounds basics.Round = 39
 
 	// write extraRounds rounds so that we will fill up the queue.
-	for i := basics.Round(initialRounds); i < basics.Round(initialRounds+extraRounds); i++ {
+	for i := initialRounds; i < initialRounds+extraRounds; i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		accountChanges := 2
@@ -1810,10 +1809,10 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 	}
 
 	newVersion := protocol.ConsensusV21
-	maxAcctLockback := conf.MaxAcctLookback
+	maxAcctLockback := basics.Round(conf.MaxAcctLookback)
 	// add maxAcctLockback-extraRounds more rounds that contains blocks using a newer consensus version.
-	endOfFirstNewProtocolSegment := basics.Round(initialRounds + extraRounds + maxAcctLockback)
-	for i := basics.Round(initialRounds + extraRounds); i <= endOfFirstNewProtocolSegment; i++ {
+	endOfFirstNewProtocolSegment := initialRounds + extraRounds + maxAcctLockback
+	for i := initialRounds + extraRounds; i <= endOfFirstNewProtocolSegment; i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		accountChanges := 2
@@ -1831,7 +1830,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
+				Round: i,
 			},
 		}
 		blk.RewardsLevel = rewardLevel
@@ -1850,7 +1849,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 	require.Equal(t, basics.Round(initialRounds+extraRounds)-1, au.cachedDBRound)
 
 	// write additional extraRounds elements and verify these can be flushed.
-	for i := endOfFirstNewProtocolSegment + 1; i <= basics.Round(initialRounds+2*extraRounds+maxAcctLockback); i++ {
+	for i := endOfFirstNewProtocolSegment + 1; i <= initialRounds+2*extraRounds+maxAcctLockback; i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		accountChanges := 2
@@ -1868,7 +1867,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
+				Round: i,
 			},
 		}
 		blk.RewardsLevel = rewardLevel
@@ -1883,7 +1882,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 	}
 	ml.trackers.committedUpTo(endOfFirstNewProtocolSegment + basics.Round(extraRounds))
 	ml.trackers.waitAccountsWriting()
-	require.Equal(t, basics.Round(initialRounds+2*extraRounds), au.cachedDBRound)
+	require.Equal(t, initialRounds+2*extraRounds, au.cachedDBRound)
 }
 
 // TestAcctUpdatesResources checks that created, deleted, and created resource keep
@@ -1948,7 +1947,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 			updates.UpsertAssetResource(addr1, aidx, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 200}})
 		}
 
-		// test 2: send back to creator creator
+		// test 2: send back to creator
 		// expect matching balances at the end
 		creatorParams := ledgercore.AssetParamsDelta{Params: &basics.AssetParams{Total: 1000}}
 		if i == 4 {
@@ -1996,7 +1995,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
+				Round: i,
 			},
 		}
 		blk.RewardsLevel = rewardLevel
@@ -2137,7 +2136,7 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 	rewardsLevels := []uint64{0}
 
 	conf := config.GetDefaultLocal()
-	initialBlocksCount := int(conf.MaxAcctLookback)
+	initialBlocksCount := basics.Round(conf.MaxAcctLookback)
 	ml := makeMockLedgerForTracker(t, false, initialBlocksCount, testProtocolVersion, accts)
 	defer ml.Close()
 
@@ -2146,7 +2145,7 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 
 	// cover 10 genesis blocks
 	rewardLevel := uint64(0)
-	for i := 1; i < initialBlocksCount; i++ {
+	for i := basics.Round(1); i < initialBlocksCount; i++ {
 		accts = append(accts, accts[0])
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
@@ -2157,7 +2156,7 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 	lastCreatableID := basics.CreatableIndex(crypto.RandUint64() % 512)
 	knownCreatables := make(map[basics.CreatableIndex]bool)
 
-	for i := basics.Round(initialBlocksCount); i < basics.Round(conf.MaxAcctLookback+15); i++ {
+	for i := initialBlocksCount; i < basics.Round(conf.MaxAcctLookback+15); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		var updates ledgercore.AccountDeltas
@@ -2177,7 +2176,7 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
+				Round: i,
 			},
 		}
 		blk.RewardsLevel = rewardLevel
@@ -2203,8 +2202,8 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 	}
 
 	// flush a couple of rounds (indirectly schedules commitSyncer)
-	flushRound(basics.Round(0))
-	flushRound(basics.Round(1))
+	flushRound(0)
+	flushRound(1)
 
 	// add stallingTracker to list of trackers
 	stallingTracker := &blockingTracker{
@@ -2263,7 +2262,7 @@ func TestAcctUpdatesLookupLatestRetry(t *testing.T) {
 			// issue a LookupWithoutRewards while persistedData.round != au.cachedDBRound
 			d, validThrough, withoutRewards, err := au.lookupLatest(addr)
 			require.NoError(t, err)
-			require.Equal(t, accts[validThrough][addr].WithUpdatedRewards(proto, rewardsLevels[validThrough]), d)
+			require.Equal(t, accts[validThrough][addr].WithUpdatedRewards(proto.RewardUnit, rewardsLevels[validThrough]), d)
 			require.Equal(t, accts[validThrough][addr].MicroAlgos, withoutRewards)
 			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), "validThrough: %v rnd :%v", validThrough, rnd)
 		})
@@ -2494,6 +2493,7 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 // and checks au.resources with deleted resources are not counted toward totals
 func TestAcctUpdatesLookupResources(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	// t.Parallel() config.Consensus is modified
 
 	accts := setupAccts(1)
 
@@ -2573,8 +2573,9 @@ func TestAcctUpdatesLookupResources(t *testing.T) {
 // validating that a StateDelta can be retrieved for expected rounds containing the same updates.
 func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	// t.Parallel() config.Consensus is modified
 
-	initialBlocksCount := 1
+	const initialBlocksCount = 1
 	accts := setupAccts(1)
 
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesLookupStateDelta")
@@ -2670,21 +2671,21 @@ func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 		rnd := au.latest()
 		require.Equal(t, currentRound, rnd)
 		if uint64(currentRound) > conf.MaxAcctLookback {
-			require.Equal(t, basics.Round(uint64(currentRound)-conf.MaxAcctLookback), au.cachedDBRound)
+			require.Equal(t, currentRound-basics.Round(conf.MaxAcctLookback), au.cachedDBRound)
 		} else {
 			require.Equal(t, basics.Round(0), au.cachedDBRound)
 		}
 
 		// Iterate backwards through deltas, ensuring proper data exists in StateDelta
-		for j := uint64(rnd); j > uint64(au.cachedDBRound); j-- {
+		for j := rnd; j > au.cachedDBRound; j-- {
 			// fetch StateDelta
-			actualDelta, err := au.lookupStateDelta(basics.Round(j))
+			actualDelta, err := au.lookupStateDelta(j)
 			require.NoError(t, err)
 			actualAccountDeltas := actualDelta.Accts
 			actualKvDeltas := actualDelta.KvMods
 
 			// Make sure we know about the expected changes for the delta's round
-			expectedAccountDeltas, has := updatesI[basics.Round(j)]
+			expectedAccountDeltas, has := updatesI[j]
 			require.True(t, has)
 			// Do basic checking on the size and existence of accounts in deltas
 			require.Equal(t, expectedAccountDeltas.Len(), actualAccountDeltas.Len())
@@ -2702,8 +2703,8 @@ func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 			require.Equal(t, len(expectedAccountDeltas.AppResources), len(actualAccountDeltas.AppResources))
 
 			// Validate KvDeltas contains updates w/ new/old values.
-			startKV := (j - 1) * uint64(kvsPerBlock)
-			expectedKvDeltas, has := roundMods[basics.Round(j)]
+			startKV := (uint64(j) - 1) * uint64(kvsPerBlock)
+			expectedKvDeltas, has := roundMods[j]
 			require.True(t, has)
 			for kv := 0; kv < kvsPerBlock; kv++ {
 				name := fmt.Sprintf("%d", startKV+uint64(kv))
@@ -2726,4 +2727,213 @@ func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 	require.Contains(t, data.Assets, aidx1)
 	require.Contains(t, data.Assets, aidx3)
 	require.NotContains(t, data.Assets, aidx2)
+}
+
+// TestLookupKvPairsByPrefix tests the delta-walking + DB merge logic in
+// accountUpdates.LookupKvPairsByPrefix. It sets up KV pairs in the DB
+// (round 1, committed) and overlapping modifications in an uncommitted
+// delta (round 2): an update, a delete, and a new key.
+func TestLookupKvPairsByPrefix(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	// t.Parallel() config.Consensus is modified
+
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestLookupKvPairsByPrefix")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.MaxBalLookback = 2
+	protoParams.SeedLookback = 1
+	protoParams.SeedRefreshInterval = 1
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+
+	accts := setupAccts(1)
+	ml := makeMockLedgerForTracker(t, true, 1, testProtocolVersion, accts)
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	au, _ := newAcctUpdates(t, ml, conf)
+
+	knownCreatables := make(map[basics.CreatableIndex]bool)
+	base := accts[0]
+
+	// Round 1: insert KV pairs into DB.
+	kvRound1 := map[string]ledgercore.KvValueDelta{
+		"pfx-A":   {Data: []byte("valA")},
+		"pfx-B":   {Data: []byte("valB")},
+		"pfx-C":   {Data: []byte("valC")},
+		"pfx-D":   {Data: []byte("valD")},
+		"pfx-E":   {Data: []byte("valE")},
+		"other-X": {Data: []byte("valX")},
+	}
+	var emptyUpdates ledgercore.AccountDeltas
+	opts := auNewBlockOpts{emptyUpdates, testProtocolVersion, protoParams, knownCreatables}
+	auNewBlock(t, 1, au, base, opts, kvRound1)
+	auCommitSync(t, 1, au, ml)
+
+	// Round 2: delta-only modifications (NOT committed).
+	// - "pfx-B" updated to "valB2"
+	// - "pfx-C" deleted (Data == nil)
+	// - "pfx-F" new key
+	kvRound2 := map[string]ledgercore.KvValueDelta{
+		"pfx-B": {Data: []byte("valB2"), OldData: []byte("valB")},
+		"pfx-C": {Data: nil, OldData: []byte("valC")},
+		"pfx-F": {Data: []byte("valF")},
+	}
+	auNewBlock(t, 2, au, base, opts, kvRound2)
+	// No auCommitSync — round 2 stays in memory deltas.
+
+	latestRound := au.latest()
+	require.Equal(t, basics.Round(2), latestRound)
+
+	// Helper to find a result by key.
+	findKey := func(results []ledgercore.KvPairResult, key string) *ledgercore.KvPairResult {
+		for i := range results {
+			if results[i].Key == key {
+				return &results[i]
+			}
+		}
+		return nil
+	}
+
+	t.Run("BasicMerge", func(t *testing.T) {
+		results, rnd, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 100, 1000, true)
+		require.NoError(t, err)
+		require.Equal(t, latestRound, rnd)
+		require.Len(t, results, 5) // A, B(updated), D, E, F — C deleted
+
+		require.Equal(t, "pfx-A", results[0].Key)
+		require.Equal(t, "pfx-B", results[1].Key)
+		require.Equal(t, "pfx-D", results[2].Key)
+		require.Equal(t, "pfx-E", results[3].Key)
+		require.Equal(t, "pfx-F", results[4].Key)
+	})
+
+	t.Run("DeltaNewKeyMergedIn", func(t *testing.T) {
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 100, 1000, true)
+		require.NoError(t, err)
+		f := findKey(results, "pfx-F")
+		require.NotNil(t, f)
+		require.Equal(t, []byte("valF"), f.Value)
+	})
+
+	t.Run("DeltaDeleteRemovesDbKey", func(t *testing.T) {
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 100, 1000, true)
+		require.NoError(t, err)
+		require.Nil(t, findKey(results, "pfx-C"))
+	})
+
+	t.Run("DeltaUpdateOverridesDbValue", func(t *testing.T) {
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 100, 1000, true)
+		require.NoError(t, err)
+		b := findKey(results, "pfx-B")
+		require.NotNil(t, b)
+		require.Equal(t, []byte("valB2"), b.Value)
+	})
+
+	t.Run("WithCursor", func(t *testing.T) {
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "pfx-B", 100, 1000, true)
+		require.NoError(t, err)
+		// Should skip A and B; C deleted; D, E, F remain
+		require.Len(t, results, 3)
+		require.Equal(t, "pfx-D", results[0].Key)
+		require.Equal(t, "pfx-E", results[1].Key)
+		require.Equal(t, "pfx-F", results[2].Key)
+	})
+
+	t.Run("WithLimit", func(t *testing.T) {
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 2, 1000, false)
+		require.NoError(t, err)
+		require.Len(t, results, 2)
+		require.Equal(t, "pfx-A", results[0].Key)
+		require.Equal(t, "pfx-B", results[1].Key)
+	})
+
+	t.Run("CutoffSkipsDeltaBeyondPage", func(t *testing.T) {
+		// limit=3: DB returns A, B, D (C excluded via delta). Cutoff="pfx-D".
+		// Delta key F > cutoff, so F should be trimmed.
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 3, 1000, true)
+		require.NoError(t, err)
+		require.Len(t, results, 3)
+		require.Equal(t, "pfx-A", results[0].Key)
+		require.Equal(t, "pfx-B", results[1].Key)
+		require.Equal(t, []byte("valB2"), results[1].Value)
+		require.Equal(t, "pfx-D", results[2].Key)
+		// F should NOT be present
+		require.Nil(t, findKey(results, "pfx-F"))
+	})
+
+	t.Run("FullPageCutoffWithCursorExcludesDelta", func(t *testing.T) {
+		// cursor="pfx-A", limit=2: deltaResults has pfx-B (below cutoff)
+		// and pfx-F (above cutoff). DB (excl B,C,F) returns [pfx-D, pfx-E]
+		// (full page). cutoff="pfx-E".
+		// pfx-B <= cutoff → merged in. pfx-F > cutoff → excluded.
+		// [pfx-D, pfx-E, pfx-B] → sorted [pfx-B, pfx-D, pfx-E] → trimmed to 2.
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "pfx-A", 2, 1000, true)
+		require.NoError(t, err)
+		require.Len(t, results, 2)
+		require.Equal(t, "pfx-B", results[0].Key)
+		require.Equal(t, []byte("valB2"), results[0].Value)
+		require.Equal(t, "pfx-D", results[1].Key)
+		require.Nil(t, findKey(results, "pfx-F"))
+	})
+
+	t.Run("PartialPageNoCutoffIncludesDelta", func(t *testing.T) {
+		// Same cursor but limit=4: DB returns [pfx-D, pfx-E] (2 < 4,
+		// partial page). No cutoff → delta key pfx-F is also merged in.
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "pfx-A", 4, 1000, true)
+		require.NoError(t, err)
+		require.Len(t, results, 4)
+		require.Equal(t, "pfx-B", results[0].Key)
+		require.Equal(t, []byte("valB2"), results[0].Value)
+		require.Equal(t, "pfx-D", results[1].Key)
+		require.Equal(t, "pfx-E", results[2].Key)
+		require.Equal(t, "pfx-F", results[3].Key)
+		require.Equal(t, []byte("valF"), results[3].Value)
+	})
+
+	t.Run("IncludeValuesFalse", func(t *testing.T) {
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 100, 1000, false)
+		require.NoError(t, err)
+		require.Len(t, results, 5)
+		for _, r := range results {
+			require.Nil(t, r.Value, "expected nil value for key %s", r.Key)
+		}
+	})
+
+	t.Run("PrefixFiltering", func(t *testing.T) {
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "other-", "", 100, 1000, true)
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+		require.Equal(t, "other-X", results[0].Key)
+		require.Equal(t, []byte("valX"), results[0].Value)
+	})
+
+	t.Run("DeltaPriorityLaterRoundWins", func(t *testing.T) {
+		// Add round 3 delta that updates pfx-D.
+		kvRound3 := map[string]ledgercore.KvValueDelta{
+			"pfx-D": {Data: []byte("valD3"), OldData: []byte("valD")},
+		}
+		auNewBlock(t, 3, au, base, opts, kvRound3)
+		rnd3 := au.latest()
+		require.Equal(t, basics.Round(3), rnd3)
+
+		results, _, _, err := au.LookupKvPairsByPrefix(rnd3, "pfx-", "", 100, 1000, true)
+		require.NoError(t, err)
+		d := findKey(results, "pfx-D")
+		require.NotNil(t, d)
+		require.Equal(t, []byte("valD3"), d.Value)
+	})
+
+	t.Run("EmptyResults", func(t *testing.T) {
+		rnd := au.latest()
+		results, _, _, err := au.LookupKvPairsByPrefix(rnd, "nonexistent-", "", 100, 1000, true)
+		require.NoError(t, err)
+		require.Len(t, results, 0)
+	})
+
+	t.Run("InvalidRound", func(t *testing.T) {
+		_, _, _, err := au.LookupKvPairsByPrefix(basics.Round(999), "pfx-", "", 100, 1000, true)
+		require.Error(t, err)
+	})
 }

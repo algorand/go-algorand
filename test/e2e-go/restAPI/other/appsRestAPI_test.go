@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,17 +26,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/libgoal"
+	helper "github.com/algorand/go-algorand/test/e2e-go/restAPI"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
-
-	helper "github.com/algorand/go-algorand/test/e2e-go/restAPI"
 )
 
 func TestPendingTransactionInfoInnerTxnAssetCreate(t *testing.T) {
@@ -95,7 +96,7 @@ return
 	lc := basics.StateSchema{}
 
 	// create app
-	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(0, nil, nil, nil, nil, nil, transactions.NoOpOC, approv, clst, gl, lc, 0)
+	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(0, nil, libgoal.RefBundle{}, transactions.NoOpOC, approv, clst, gl, lc, 0, 0)
 	a.NoError(err)
 	appCreateTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCreateTxn)
 	a.NoError(err)
@@ -119,7 +120,7 @@ return
 	a.NoError(err)
 
 	// call app, which will issue an ASA create inner txn
-	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(uint64(createdAppID), nil, nil, nil, nil, nil)
+	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(createdAppID, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	appCallTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCallTxn)
 	a.NoError(err)
@@ -231,9 +232,8 @@ end:
 
 	// create app
 	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(
-		0, nil, nil, nil,
-		nil, nil, transactions.NoOpOC,
-		approval, clearState, gl, lc, 0,
+		0, nil, libgoal.RefBundle{}, transactions.NoOpOC,
+		approval, clearState, gl, lc, 0, 0,
 	)
 	a.NoError(err)
 	appCreateTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCreateTxn)
@@ -274,15 +274,10 @@ end:
 				[]byte(boxNames[i]),
 				[]byte(boxValues[i]),
 			}
-			boxRef := transactions.BoxRef{
-				Name:  []byte(boxNames[i]),
-				Index: 0,
-			}
+			refs := libgoal.RefBundle{Boxes: []basics.BoxRef{{App: 0, Name: boxNames[i]}}}
 
 			txns[i], err = testClient.MakeUnsignedAppNoOpTx(
-				uint64(createdAppID), appArgs,
-				nil, nil, nil,
-				[]transactions.BoxRef{boxRef},
+				createdAppID, appArgs, refs, 0,
 			)
 			a.NoError(err)
 			txns[i], err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, txns[i])
@@ -330,21 +325,21 @@ end:
 	// `assertBoxCount` sanity checks that the REST API respects `expectedCount` through different queries against app ID = `createdAppID`.
 	assertBoxCount := func(expectedCount uint64) {
 		// Query without client-side limit.
-		resp, err := testClient.ApplicationBoxes(uint64(createdAppID), 0)
+		resp, err := testClient.ApplicationBoxes(createdAppID, 0)
 		a.NoError(err)
 		a.Len(resp.Boxes, int(expectedCount))
 
 		// Query with requested max < expected expectedCount.
-		_, err = testClient.ApplicationBoxes(uint64(createdAppID), expectedCount-1)
+		_, err = testClient.ApplicationBoxes(createdAppID, expectedCount-1)
 		assertErrorResponse(err, expectedCount, expectedCount-1)
 
 		// Query with requested max == expected expectedCount.
-		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), expectedCount)
+		resp, err = testClient.ApplicationBoxes(createdAppID, expectedCount)
 		a.NoError(err)
 		a.Len(resp.Boxes, int(expectedCount))
 
 		// Query with requested max > expected expectedCount.
-		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), expectedCount+1)
+		resp, err = testClient.ApplicationBoxes(createdAppID, expectedCount+1)
 		a.NoError(err)
 		a.Len(resp.Boxes, int(expectedCount))
 	}
@@ -385,7 +380,7 @@ end:
 		}
 
 		var resp model.BoxesResponse
-		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), 0)
+		resp, err = testClient.ApplicationBoxes(createdAppID, 0)
 		a.NoError(err)
 
 		expectedCreatedBoxes := make([]string, 0, createdBoxCount)
@@ -444,7 +439,7 @@ end:
 	}
 
 	// Happy Vanilla paths:
-	resp, err := testClient.ApplicationBoxes(uint64(createdAppID), 0)
+	resp, err := testClient.ApplicationBoxes(createdAppID, 0)
 	a.NoError(err)
 	a.Empty(resp.Boxes)
 
@@ -454,7 +449,7 @@ end:
 	// querying it for boxes _DOES NOT ERROR_. There is no easy way to tell
 	// the difference between non-existing boxes for an app that once existed
 	// vs. an app the NEVER existed.
-	nonexistantAppIndex := uint64(1337)
+	nonexistantAppIndex := basics.AppIndex(1337)
 	_, err = testClient.ApplicationInformation(nonexistantAppIndex)
 	a.ErrorContains(err, "application does not exist")
 	resp, err = testClient.ApplicationBoxes(nonexistantAppIndex, 0)
@@ -487,7 +482,7 @@ end:
 		operateAndMatchRes("delete", strSliceTest)
 	}
 
-	resp, err = testClient.ApplicationBoxes(uint64(createdAppID), 0)
+	resp, err = testClient.ApplicationBoxes(createdAppID, 0)
 	a.NoError(err)
 	a.Empty(resp.Boxes)
 
@@ -515,7 +510,7 @@ end:
 
 		currentRoundBeforeBoxes, err := testClient.CurrentRound()
 		a.NoError(err)
-		boxResponse, err := testClient.GetApplicationBoxByName(uint64(createdAppID), boxTest.encodedName)
+		boxResponse, err := testClient.GetApplicationBoxByName(createdAppID, boxTest.encodedName)
 		a.NoError(err)
 		currentRoundAfterBoxes, err := testClient.CurrentRound()
 		a.NoError(err)
@@ -536,7 +531,7 @@ end:
 	a.Equal(uint64(30), appAccountData.TotalBoxBytes)
 
 	// delete the app
-	appDeleteTxn, err := testClient.MakeUnsignedAppDeleteTx(uint64(createdAppID), nil, nil, nil, nil, nil)
+	appDeleteTxn, err := testClient.MakeUnsignedAppDeleteTx(createdAppID, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	appDeleteTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appDeleteTxn)
 	a.NoError(err)
@@ -545,10 +540,154 @@ end:
 	_, err = helper.WaitForTransaction(t, testClient, appDeleteTxID, 30*time.Second)
 	a.NoError(err)
 
-	_, err = testClient.ApplicationInformation(uint64(createdAppID))
+	_, err = testClient.ApplicationInformation(createdAppID)
 	a.ErrorContains(err, "application does not exist")
 
 	assertBoxCount(numberOfBoxesRemaining)
+}
+
+func TestBoxPagination(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	defer localFixture.Shutdown()
+
+	testClient := localFixture.LibGoalClient
+
+	testClient.WaitForRound(1)
+
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err := testClient.ListAddresses(wh)
+	a.NoError(err)
+	_, someAddress := helper.GetMaxBalAddr(t, testClient, addresses)
+	a.NotEmpty(someAddress)
+
+	prog := `#pragma version 8
+    txn ApplicationID
+    bz end
+    txn ApplicationArgs 0
+    byte "create"
+    ==
+    bz end
+    int 5
+    txn ApplicationArgs 1
+    swap
+    box_create
+    assert
+end:
+    int 1
+`
+	ops, err := logic.AssembleString(prog)
+	a.NoError(err)
+	approval := ops.Program
+	ops, err = logic.AssembleString("#pragma version 8\nint 1")
+	a.NoError(err)
+	clearState := ops.Program
+
+	// Create app
+	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(
+		0, nil, libgoal.RefBundle{}, transactions.NoOpOC,
+		approval, clearState, basics.StateSchema{}, basics.StateSchema{}, 0, 0,
+	)
+	a.NoError(err)
+	appCreateTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCreateTxn)
+	a.NoError(err)
+	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
+	a.NoError(err)
+	_, err = helper.WaitForTransaction(t, testClient, appCreateTxID, 30*time.Second)
+	a.NoError(err)
+
+	submittedAppCreateTxn, err := testClient.PendingTransactionInformation(appCreateTxID)
+	a.NoError(err)
+	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
+	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
+
+	// Fund app
+	appFundTxn, err := testClient.SendPaymentFromWallet(
+		wh, nil, someAddress, createdAppID.Address().String(),
+		0, 10_000_000, nil, "", 0, 0,
+	)
+	a.NoError(err)
+	_, err = helper.WaitForTransaction(t, testClient, appFundTxn.ID().String(), 30*time.Second)
+	a.NoError(err)
+
+	// Create 8 boxes with predictable names
+	boxNames := []string{"box_a", "box_b", "box_c", "box_d", "box_e", "box_f", "box_g", "box_h"}
+	for _, name := range boxNames {
+		appArgs := [][]byte{[]byte("create"), []byte(name)}
+		refs := libgoal.RefBundle{Boxes: []basics.BoxRef{{App: 0, Name: name}}}
+		tx, err := testClient.MakeUnsignedAppNoOpTx(createdAppID, appArgs, refs, 0)
+		a.NoError(err)
+		tx, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, tx)
+		a.NoError(err)
+		txID, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
+		a.NoError(err)
+		_, err = helper.WaitForTransaction(t, testClient, txID, 30*time.Second)
+		a.NoError(err)
+	}
+
+	// Test paginated listing
+	var allBoxNames []string
+	next := ""
+	pageCount := 0
+	for {
+		resp, err := testClient.ApplicationBoxesPage(createdAppID, 3, next, "", false, 0)
+		a.NoError(err)
+		a.NotNil(resp.Round, "paginated response should include round")
+
+		for _, box := range resp.Boxes {
+			allBoxNames = append(allBoxNames, string(box.Name))
+		}
+
+		pageCount++
+		if resp.NextToken == nil || *resp.NextToken == "" {
+			break
+		}
+		next = *resp.NextToken
+	}
+
+	sort.Strings(boxNames) // expected order
+	a.Equal(boxNames, allBoxNames, "paginated results should arrive in sorted order")
+	a.GreaterOrEqual(pageCount, 2, "should have paginated across multiple pages")
+
+	// Test with values=true
+	resp, err := testClient.ApplicationBoxesPage(createdAppID, 2, "", "", true, 0)
+	a.NoError(err)
+	a.Len(resp.Boxes, 2)
+	for _, box := range resp.Boxes {
+		a.NotNil(box.Value, "values should be included when requested")
+	}
+
+	// Test with prefix filter
+	resp, err = testClient.ApplicationBoxesPage(createdAppID, 100, "", "str:box_", false, 0)
+	a.NoError(err)
+	a.Len(resp.Boxes, 8, "prefix filter should match all boxes")
+
+	// Test round-pinning: fetch page 1 without round, then page 2 with pinned round
+	resp, err = testClient.ApplicationBoxesPage(createdAppID, 3, "", "", false, 0)
+	a.NoError(err)
+	a.NotNil(resp.Round, "first page should include round")
+	pinnedRound := basics.Round(*resp.Round)
+	a.NotZero(pinnedRound)
+	a.NotNil(resp.NextToken, "should have more pages")
+
+	resp, err = testClient.ApplicationBoxesPage(createdAppID, 3, *resp.NextToken, "", false, pinnedRound)
+	a.NoError(err)
+	a.NotNil(resp.Round, "second page should include round")
+	a.Equal(basics.Round(pinnedRound), *resp.Round, "pinned round should match across pages")
+
+	// Test round too far in the future returns an error
+	_, err = testClient.ApplicationBoxesPage(createdAppID, 3, "", "", false, pinnedRound+1_000_000)
+	a.Error(err, "round far in the future should fail")
+
+	// Test legacy (no pagination) still works
+	legacyResp, err := testClient.ApplicationBoxes(createdAppID, 0)
+	a.NoError(err)
+	a.Len(legacyResp.Boxes, 8)
 }
 
 func TestBlockLogs(t *testing.T) {
@@ -617,9 +756,8 @@ func TestBlockLogs(t *testing.T) {
 
 	// create app
 	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(
-		0, nil, nil, nil,
-		nil, nil, transactions.NoOpOC,
-		outerApproval, clearState, gl, lc, 0,
+		0, nil, libgoal.RefBundle{}, transactions.NoOpOC,
+		outerApproval, clearState, gl, lc, 0, 0,
 	)
 	a.NoError(err)
 	appCreateTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCreateTxn)
@@ -648,8 +786,7 @@ func TestBlockLogs(t *testing.T) {
 
 	// call app twice
 	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		uint64(createdAppID), nil, nil, nil,
-		nil, nil,
+		createdAppID, nil, libgoal.RefBundle{}, 0,
 	)
 	a.NoError(err)
 	appCallTxn0, err := testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCallTxn)
@@ -692,22 +829,22 @@ func TestBlockLogs(t *testing.T) {
 	expected = model.BlockLogsResponse{
 		Logs: []model.AppCallLogs{
 			{
-				ApplicationIndex: uint64(createdAppID),
+				ApplicationIndex: createdAppID,
 				TxId:             stxn0.ID().String(),
 				Logs:             [][]byte{dd0000dd, {}, deadDood},
 			},
 			{
-				ApplicationIndex: uint64(createdAppID + 3),
+				ApplicationIndex: createdAppID + 3,
 				TxId:             stxn0.ID().String(),
 				Logs:             [][]byte{deadBeef},
 			},
 			{
-				ApplicationIndex: uint64(createdAppID),
+				ApplicationIndex: createdAppID,
 				TxId:             stxn1.ID().String(),
 				Logs:             [][]byte{dd0000dd, {}, deadDood},
 			},
 			{
-				ApplicationIndex: uint64(createdAppID + 5),
+				ApplicationIndex: createdAppID + 5,
 				TxId:             stxn1.ID().String(),
 				Logs:             [][]byte{deadBeef},
 			},

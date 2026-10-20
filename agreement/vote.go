@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -93,9 +93,20 @@ type (
 	UnauthenticatedVote = unauthenticatedVote
 )
 
+// wellFormed performs stateless checks on a vote received from the network.
+func (uv unauthenticatedVote) wellFormed() error {
+	if uv.R.Step > down { // down is the largest step defined by the protocol.
+		return fmt.Errorf("unauthenticatedVote.wellFormed: step %d exceeds max step %d", uv.R.Step, down)
+	}
+	return nil
+}
+
 // verify verifies that a vote that was received from the network is valid.
 func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 	rv := uv.R
+	if err := uv.wellFormed(); err != nil {
+		return vote{}, err
+	}
 	m, err := membership(l, rv.Sender, rv.Round, rv.Period, rv.Step)
 	if err != nil {
 		return vote{}, fmt.Errorf("unauthenticatedVote.verify: could not get membership parameters: %w", err)
@@ -132,7 +143,7 @@ func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 		return vote{}, fmt.Errorf("unauthenticatedVote.verify: vote by %v in round %d after VoteLastValid %d: %+v", rv.Sender, rv.Round, m.Record.VoteLastValid, uv)
 	}
 
-	ephID := basics.OneTimeIDForRound(rv.Round, m.Record.KeyDilution(proto))
+	ephID := basics.OneTimeIDForRound(rv.Round, proto.EffectiveKeyDilution(m.Record.OnlineAccountData.VoteKeyDilution))
 	voteID := m.Record.VoteID
 	if !voteID.Verify(ephID, rv, uv.Sig) {
 		return vote{}, fmt.Errorf("unauthenticatedVote.verify: could not verify FS signature on vote by %v given %v: %+v", rv.Sender, voteID, uv)
@@ -145,6 +156,12 @@ func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 
 	return vote{R: rv, Cred: cred, Sig: uv.Sig}, nil
 }
+
+var (
+	// testMakeVoteCheck is a function that can be set to check every
+	// unauthenticatedVote before it is returned by makeVote. It is only set by tests.
+	testMakeVoteCheck func(*unauthenticatedVote) error
+)
 
 // makeVote creates a new unauthenticated vote from its constituent components.
 //
@@ -178,7 +195,15 @@ func makeVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecr
 	}
 
 	cred := committee.MakeCredential(&selection.SK, m.Selector)
-	return unauthenticatedVote{R: rv, Cred: cred, Sig: sig}, nil
+	ret := unauthenticatedVote{R: rv, Cred: cred, Sig: sig}
+
+	// for use when running in tests
+	if testMakeVoteCheck != nil {
+		if testErr := testMakeVoteCheck(&ret); testErr != nil {
+			return unauthenticatedVote{}, fmt.Errorf("makeVote: testMakeVoteCheck failed: %w", testErr)
+		}
+	}
+	return ret, nil
 }
 
 // ToBeHashed implements the Hashable interface.

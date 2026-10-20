@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,7 +26,7 @@ import (
 )
 
 // Peer opaque interface for referring to a neighbor in the network
-type Peer interface{}
+type Peer any
 
 // DisconnectablePeer is a Peer with a long-living connection to a network that can be disconnected
 type DisconnectablePeer interface {
@@ -58,7 +58,70 @@ const (
 	PeersPhonebookRelays PeerOption = iota
 	// PeersPhonebookArchivalNodes specifies all archival nodes (relay or p2p)
 	PeersPhonebookArchivalNodes PeerOption = iota
+	// PeersTransportConnectionsOut specifies all transport-level connections dialed
+	// by this node, regardless of the gossip protocol state. For the WebsocketNetwork
+	// this is every connected outgoing peer; for the libp2p-based P2PNetwork it is
+	// every outgoing libp2p connection, including peers that do not run the websocket
+	// gossip protocol (e.g. pubsub- or DHT-only peers). Peers are returned as proxy
+	// values implementing PeerConnectionInfo.
+	PeersTransportConnectionsOut PeerOption = iota
+	// PeersTransportConnectionsIn specifies all transport-level connections dialed
+	// by the remote peer, regardless of the gossip protocol state. For the
+	// WebsocketNetwork this is every connected incoming peer; for the libp2p-based
+	// P2PNetwork it is every incoming libp2p connection, including peers that do not
+	// run the websocket gossip protocol (e.g. pubsub- or DHT-only peers). Peers are
+	// returned as proxy values implementing PeerConnectionInfo.
+	PeersTransportConnectionsIn PeerOption = iota
 )
+
+func (po PeerOption) String() string {
+	switch po {
+	case PeersConnectedOut:
+		return "ConnectedOut"
+	case PeersConnectedIn:
+		return "ConnectedIn"
+	case PeersPhonebookRelays:
+		return "PhonebookRelays"
+	case PeersPhonebookArchivalNodes:
+		return "PhonebookArchivalNodes"
+	case PeersTransportConnectionsOut:
+		return "TransportConnectionsOut"
+	case PeersTransportConnectionsIn:
+		return "TransportConnectionsIn"
+	default:
+		return "Unknown PeerOption"
+	}
+}
+
+// PeerNetworkType describes the transport protocol of a peer connection.
+//
+//msgp:ignore PeerNetworkType
+type PeerNetworkType string
+
+const (
+	// PeerNetworkTypeWebsocket is a peer connected over a websocket connection
+	PeerNetworkTypeWebsocket PeerNetworkType = "ws"
+	// PeerNetworkTypeLibP2P is a peer connected over a libp2p connection
+	PeerNetworkTypeLibP2P PeerNetworkType = "p2p"
+)
+
+// PeerConnectionInfo is implemented by connected peers that can report the
+// remote address and transport type of their connection.
+type PeerConnectionInfo interface {
+	GetAddress() string
+	GetNetworkType() PeerNetworkType
+}
+
+// transportPeer is a proxy for a transport-level connection to a remote peer,
+// which is not necessarily running the gossip protocol. It is returned by
+// GetPeers for the PeersTransportConnectionsIn/Out options.
+type transportPeer struct {
+	addr        string
+	networkType PeerNetworkType
+}
+
+func (p transportPeer) GetAddress() string              { return p.addr }
+func (p transportPeer) GetNetworkType() PeerNetworkType { return p.networkType }
 
 // GossipNode represents a node in the gossip network
 type GossipNode interface {
@@ -138,6 +201,11 @@ type IncomingMessage struct {
 	// Received is time.Time.UnixNano()
 	Received int64
 
+	// Outgoing indicates whether this was received on an outgoing (trusted) connection.
+	// Added to let knowing transaction handler's rate limiters more details about the peer.
+	// Set only for ws net peers since p2p network does not really have trusted outgoing connections.
+	Outgoing bool
+
 	// processing is a channel that is used by messageHandlerThread
 	// to indicate that it has started processing this message.  It
 	// is used to ensure fairness across peers in terms of processing
@@ -148,11 +216,9 @@ type IncomingMessage struct {
 // Tag is a short string (2 bytes) marking a type of message
 type Tag = protocol.Tag
 
-func highPriorityTag(tags []protocol.Tag) bool {
-	for _, tag := range tags {
-		if tag == protocol.AgreementVoteTag || tag == protocol.ProposalPayloadTag {
-			return true
-		}
+func highPriorityTag(tag protocol.Tag) bool {
+	if tag == protocol.AgreementVoteTag || tag == protocol.ProposalPayloadTag {
+		return true
 	}
 	return false
 }
@@ -211,7 +277,7 @@ func (f HandlerFunc) Handle(message IncomingMessage) OutgoingMessage {
 // MessageValidatorHandler takes a IncomingMessage (e.g., vote, transaction), processes it, and returns what (if anything)
 // to send to the network in response.
 // it supposed to perform synchronous validation and return the result of the validation
-// so that network knows immediately if the message should be be broadcasted or not.
+// so that network knows immediately if the message should be broadcasted or not.
 type MessageValidatorHandler interface {
 	ValidateHandle(message IncomingMessage) OutgoingMessage
 }
@@ -244,5 +310,5 @@ func Propagate(msg IncomingMessage) OutgoingMessage {
 
 // SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
 func SubstituteGenesisID(net GossipNode, rawURL string) string {
-	return strings.Replace(rawURL, "{genesisID}", net.GetGenesisID(), -1)
+	return strings.ReplaceAll(rawURL, "{genesisID}", net.GetGenesisID())
 }

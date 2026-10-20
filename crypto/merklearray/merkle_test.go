@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -185,7 +185,7 @@ func TestErrorInMarshal(t *testing.T) {
 
 	a := nonmarshalable{1}
 	_, err := Build(&a, crypto.HashFactory{})
-	require.Error(t, err)
+	require.ErrorContains(t, err, `can't be marshaled`)
 }
 
 func TestMerkleBuildEdgeCases(t *testing.T) {
@@ -235,7 +235,6 @@ func TestMerkleProveEdgeCases(t *testing.T) {
 	a.NoError(err)
 
 	_, err = tree.Prove([]uint64{4})
-	a.Error(err)
 	require.ErrorIs(t, err, ErrPosOutOfBound)
 
 	// prove on nothing
@@ -249,7 +248,6 @@ func TestMerkleProveEdgeCases(t *testing.T) {
 	a.NoError(err)
 
 	_, err = tree.Prove([]uint64{0})
-	a.Error(err)
 	require.ErrorIs(t, err, ErrProvingZeroCommitment)
 
 	// prove on nothing - now the tree is empty as well
@@ -272,12 +270,10 @@ func TestMerkleVCProveEdgeCases(t *testing.T) {
 
 	// element in the out of the inner array
 	_, err = tree.Prove([]uint64{5})
-	a.Error(err)
 	require.ErrorIs(t, err, ErrPosOutOfBound)
 
 	// element in the padded array - bottom leaf
 	_, err = tree.Prove([]uint64{8})
-	a.Error(err)
 	require.ErrorIs(t, err, ErrPosOutOfBound)
 
 	// prove on nothing
@@ -291,7 +287,6 @@ func TestMerkleVCProveEdgeCases(t *testing.T) {
 	a.NoError(err)
 
 	_, err = tree.Prove([]uint64{0})
-	a.Error(err)
 	require.ErrorIs(t, err, ErrProvingZeroCommitment)
 
 	// prove on nothing - now the tree is empty as well
@@ -318,15 +313,12 @@ func TestMerkleVerifyEdgeCases(t *testing.T) {
 	root := tree.Root()
 
 	err = Verify(root, map[uint64]crypto.Hashable{4: arr[3]}, proof)
-	a.Error(err)
 	require.ErrorIs(t, err, ErrPosOutOfBound)
 
 	err = Verify(root, map[uint64]crypto.Hashable{3: arr[3], 4: arr[3]}, proof)
-	a.Error(err)
 	require.ErrorIs(t, err, ErrPosOutOfBound)
 
 	err = Verify(root, nil, nil)
-	a.Error(err)
 	a.ErrorIs(ErrProofIsNil, err)
 
 	trivialProof := Proof{TreeDepth: 2, HashFactory: crypto.HashFactory{HashType: crypto.Sha512_256}}
@@ -334,7 +326,6 @@ func TestMerkleVerifyEdgeCases(t *testing.T) {
 	a.NoError(err)
 
 	err = Verify(root, nil, proof)
-	a.Error(err)
 	a.ErrorIs(ErrNonEmptyProofForEmptyElements, err)
 
 	err = Verify(root, nil, &trivialProof)
@@ -352,6 +343,46 @@ func TestMerkleVerifyEdgeCases(t *testing.T) {
 	a.Equal(trivialProof.Path, []crypto.GenericDigest(nil))
 	err = Verify(tree.Root(), map[uint64]crypto.Hashable{0: arr[0]}, proof)
 	a.NoError(err)
+}
+
+// TestVerifyRejectsOversizedPathElement checks path element size validation.
+func TestVerifyRejectsOversizedPathElement(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const size = 8
+	a := make(TestArray, size)
+	for i := range a {
+		crypto.RandBytes(a[i][:])
+	}
+
+	tree, err := Build(a, crypto.HashFactory{HashType: crypto.Sha256})
+	require.NoError(t, err)
+	root := tree.Root()
+
+	proof, err := tree.Prove([]uint64{0})
+	require.NoError(t, err)
+
+	// A valid proof is accepted.
+	require.NoError(t, Verify(root, map[uint64]crypto.Hashable{0: a[0]}, proof))
+
+	// Select a present path element.
+	tampered := -1
+	for i := range proof.Path {
+		if len(proof.Path[i]) != 0 {
+			tampered = i
+			break
+		}
+	}
+	require.GreaterOrEqual(t, tampered, 0, "expected at least one non-empty path element")
+
+	digestSize := proof.HashFactory.NewHash().Size()
+	oversized := make(crypto.GenericDigest, 2*digestSize)
+	copy(oversized, proof.Path[tampered])
+	proof.Path[tampered] = oversized
+
+	err = Verify(root, map[uint64]crypto.Hashable{0: a[0]}, proof)
+	require.ErrorIs(t, err, ErrPathElementSizeMismatch)
 }
 
 func TestProveDuplicateLeaves(t *testing.T) {
@@ -402,15 +433,12 @@ func TestMerkleVCVerifyEdgeCases(t *testing.T) {
 	root := tree.Root()
 
 	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{4: arr[3]}, proof)
-	a.Error(err)
 	require.ErrorIs(t, err, ErrPosOutOfBound)
 
 	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{3: arr[3], 4: arr[3]}, proof)
-	a.Error(err)
 	require.ErrorIs(t, err, ErrPosOutOfBound)
 
 	err = VerifyVectorCommitment(root, nil, nil)
-	a.Error(err)
 	a.ErrorIs(ErrProofIsNil, err)
 
 	trivialProof := Proof{TreeDepth: 2, HashFactory: crypto.HashFactory{HashType: crypto.Sha512_256}}
@@ -418,7 +446,6 @@ func TestMerkleVCVerifyEdgeCases(t *testing.T) {
 	a.NoError(err)
 
 	err = VerifyVectorCommitment(root, nil, proof)
-	a.Error(err)
 	a.ErrorIs(ErrNonEmptyProofForEmptyElements, err)
 
 	err = VerifyVectorCommitment(root, nil, &trivialProof)
@@ -447,7 +474,7 @@ func TestGenericDigest(t *testing.T) {
 	require.NoError(t, err)
 
 	err = testWithSize(t, crypto.MaxHashDigestSize+1)
-	require.Error(t, err)
+	require.ErrorContains(t, err, `msgp: length overflow: 65 > 64 at Path/0`)
 }
 
 func testWithSize(t *testing.T, size int) error {
@@ -485,7 +512,7 @@ func TestSizeLimitsMerkle(t *testing.T) {
 	for depth := uint64(0); depth < uint64(18); depth = depth + increment {
 		size := uint64(1) << depth
 
-		// eltCoefficient is the coefficent to determine how many elements are in the proof.
+		// eltCoefficient is the coefficient to determine how many elements are in the proof.
 		// There will be 1/eltCoefficient elements of all possible element (2^treeDepth)
 		// numElts = 2^(depth-eltCoefficient)
 
@@ -856,6 +883,30 @@ func TestMerkleTreeInternalNodeFullTree(t *testing.T) {
 	root2 := tree.Root()
 	require.Equal(t, rootHash, []byte(root2))
 
+}
+
+// TestToBeHashedDoesNotEraseSibling checks fixed-width child placement.
+func TestToBeHashedDoesNotEraseSibling(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const digestSize = 32
+
+	right := make(crypto.GenericDigest, digestSize)
+	right[0] = 0xAA
+
+	oversizedLeft := make(crypto.GenericDigest, 2*digestSize)
+	for i := range oversizedLeft {
+		oversizedLeft[i] = 0xFF
+	}
+
+	p := pair{l: oversizedLeft, r: right, hashDigestSize: digestSize}
+	_, buf := p.ToBeHashed()
+
+	require.Len(t, buf, 2*digestSize)
+	// Each child occupies its digest-sized slot.
+	require.Equal(t, []byte(right), buf[digestSize:])
+	require.Equal(t, oversizedLeft[:digestSize], crypto.GenericDigest(buf[:digestSize]))
 }
 
 func hashInternalNode(h hash.Hash, firstLeafHash []byte, secondLeafHash []byte) []byte {

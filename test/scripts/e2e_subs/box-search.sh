@@ -28,7 +28,7 @@ ${gcmd} clerk send --to "$APP_ACCOUNT" --from "$ACCOUNT" --amount 10000000
 
 # Confirm that we are informed if no application boxes exist
 BOX_LIST=$(${gcmd} app box list --app-id "$APPID" 2>&1 || true)
-EXPECTED="No boxes found for appid $APPID"
+EXPECTED="No matching boxes found"
 
 [ "$BOX_LIST" = "$EXPECTED" ]
 
@@ -93,8 +93,8 @@ b64:AQIDBA=="
 [ "$(printf "$BOX_LIST" | sort)" = "$(printf "$EXPECTED" | sort)" ]
 
 # Confirm that we can limit the number of boxes returned
-BOX_LIST=$(${gcmd} app box list --app-id "$APPID" --max 4)
-[ "$(echo "$BOX_LIST" | wc -l)" -eq 4 ] # only one line
+BOX_LIST=$(${gcmd} app box list --app-id "$APPID" --limit 4)
+[ "$(echo "$BOX_LIST" | wc -l)" -eq 4 ] # exactly four lines returned
 # shellcheck disable=SC2143
 [ "$(grep -w "$BOX_LIST" <<< "$EXPECTED")" ] # actual box is in the expected list
 

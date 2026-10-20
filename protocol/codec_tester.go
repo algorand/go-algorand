@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,19 +20,19 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"path"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-deadlock"
-
 	"github.com/algorand/msgp/msgp"
-	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 const debugCodecTester = false
@@ -42,41 +42,87 @@ type msgpMarshalUnmarshal interface {
 	msgp.Unmarshaler
 }
 
-var rawMsgpType = reflect.TypeOf(msgp.Raw{})
+var rawMsgpType = reflect.TypeFor[msgp.Raw]()
 var errSkipRawMsgpTesting = fmt.Errorf("skipping msgp.Raw serializing, since it won't be the same across go-codec and msgp")
 
 func oneOf(n int) bool {
 	return (rand.Int() % n) == 0
 }
 
+type randomizeObjectCfg struct {
+	// ZeroesEveryN will increase the chance of zero values being generated.
+	ZeroesEveryN int
+	// AllUintSizes will be equally likely to generate 8-bit, 16-bit, 32-bit, or 64-bit uints.
+	AllUintSizes bool
+	// MaxCollectionLen bounds randomized slice/map lengths when positive.
+	MaxCollectionLen int
+	// SilenceAllocWarnings suppresses allocbound warning prints.
+	SilenceAllocWarnings bool
+}
+
+// RandomizeObjectOption is an option for RandomizeObject
+type RandomizeObjectOption func(*randomizeObjectCfg)
+
+// RandomizeObjectWithZeroesEveryN sets the chance of zero values being generated (one in n)
+func RandomizeObjectWithZeroesEveryN(n int) RandomizeObjectOption {
+	return func(cfg *randomizeObjectCfg) { cfg.ZeroesEveryN = n }
+}
+
+// RandomizeObjectWithAllUintSizes will be equally likely to generate 8-bit, 16-bit, 32-bit, or 64-bit uints.
+func RandomizeObjectWithAllUintSizes() RandomizeObjectOption {
+	return func(cfg *randomizeObjectCfg) { cfg.AllUintSizes = true }
+}
+
+// RandomizeObjectSilenceAllocWarnings silences allocbound warning prints.
+func RandomizeObjectSilenceAllocWarnings() RandomizeObjectOption {
+	return func(cfg *randomizeObjectCfg) { cfg.SilenceAllocWarnings = true }
+}
+
+// RandomizeObjectWithMaxCollectionLen limits randomized slice/map lengths to n (when n>0).
+func RandomizeObjectWithMaxCollectionLen(n int) RandomizeObjectOption {
+	return func(cfg *randomizeObjectCfg) {
+		if n > 0 {
+			cfg.MaxCollectionLen = n
+		}
+	}
+}
+
 // RandomizeObject returns a random object of the same type as template
-func RandomizeObject(template interface{}) (interface{}, error) {
+func RandomizeObject(template any, opts ...RandomizeObjectOption) (any, error) {
+	cfg := randomizeObjectCfg{}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
 	tt := reflect.TypeOf(template)
 	if tt.Kind() != reflect.Ptr {
 		return nil, fmt.Errorf("RandomizeObject: must be ptr")
 	}
 	v := reflect.New(tt.Elem())
 	changes := int(^uint(0) >> 1)
-	err := randomizeValue(v.Elem(), tt.String(), "", &changes, make(map[reflect.Type]bool))
+	err := randomizeValue(v.Elem(), 0, tt.String(), "", &changes, cfg, make(map[reflect.Type]bool))
 	return v.Interface(), err
 }
 
 // RandomizeObjectField returns a random object of the same type as template where a single field was modified.
-func RandomizeObjectField(template interface{}) (interface{}, error) {
+func RandomizeObjectField(template any, opts ...RandomizeObjectOption) (any, error) {
+	cfg := randomizeObjectCfg{}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
 	tt := reflect.TypeOf(template)
 	if tt.Kind() != reflect.Ptr {
 		return nil, fmt.Errorf("RandomizeObject: must be ptr")
 	}
 	v := reflect.New(tt.Elem())
 	changes := 1
-	err := randomizeValue(v.Elem(), tt.String(), "", &changes, make(map[reflect.Type]bool))
+	err := randomizeValue(v.Elem(), 0, tt.String(), "", &changes, cfg, make(map[reflect.Type]bool))
 	return v.Interface(), err
 }
 
 func parseStructTags(structTag string) map[string]string {
 	tagsMap := map[string]string{}
 
-	for _, tag := range strings.Split(reflect.StructTag(structTag).Get("codec"), ",") {
+	for tag := range strings.SplitSeq(reflect.StructTag(structTag).Get("codec"), ",") {
 		elements := strings.Split(tag, "=")
 		if len(elements) != 2 {
 			continue
@@ -84,6 +130,15 @@ func parseStructTags(structTag string) map[string]string {
 		tagsMap[elements[0]] = elements[1]
 	}
 	return tagsMap
+}
+
+func isRequiredField(structTag string) bool {
+	for opt := range strings.SplitSeq(reflect.StructTag(structTag).Get("codec"), ",") {
+		if opt == "required" {
+			return true
+		}
+	}
+	return false
 }
 
 var printWarningOnce deadlock.Mutex
@@ -103,61 +158,82 @@ func printWarning(warnMsg string) {
 
 var testedDatatypesForAllocBound = map[string]bool{}
 var testedDatatypesForAllocBoundMu = deadlock.Mutex{}
+var moduleRootFromGoMod = sync.OnceValues(findModuleRootFromGoMod)
+
+// Walk upward from this source file until we find the containing module root.
+func findModuleRootFromGoMod() (string, error) {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		return "", fmt.Errorf("runtime.Caller failed")
+	}
+
+	for dir := filepath.Dir(file); ; {
+		goModPath := filepath.Join(dir, "go.mod")
+		_, err := os.Stat(goModPath)
+		if err == nil {
+			return dir, nil
+		}
+		if !os.IsNotExist(err) {
+			return "", fmt.Errorf("stat %s: %w", goModPath, err)
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("could not find module root from %s", file)
+		}
+		dir = parent
+	}
+}
 
 func checkMsgpAllocBoundDirective(dataType reflect.Type) bool {
-	// does any of the go files in the package directory has the msgp:allocbound defined for that datatype ?
-	gopath := os.Getenv("GOPATH")
-	const repositoryRoot = "go-algorand/"
-	const thisFile = "protocol/codec_tester.go"
-	packageFilesPath := path.Join(gopath, "src", dataType.PkgPath())
+	return hasMsgpAllocBoundDirective(dataType.PkgPath(), dataType.Name())
+}
 
-	if _, err := os.Stat(packageFilesPath); os.IsNotExist(err) {
-		// no such directory. Try to assemble the path based on the current working directory.
-		cwd, err := os.Getwd()
-		if err != nil {
-			return false
-		}
-		if cwdPaths := strings.SplitAfter(cwd, repositoryRoot); len(cwdPaths) == 2 {
-			cwd = cwdPaths[0]
-		} else {
-			// try to assemble the project directory based on the current stack frame
-			_, file, _, ok := runtime.Caller(0)
-			if !ok {
-				return false
-			}
-			cwd = strings.TrimSuffix(file, thisFile)
-		}
+// hasMsgpAllocBoundDirective checks whether any of the go files in the package directory
+// have the msgp:allocbound defined for the given datatype.
+func hasMsgpAllocBoundDirective(pkgPath, typeName string) bool {
+	const repositoryModulePath = "github.com/algorand/go-algorand"
 
-		relPkdPath := strings.SplitAfter(dataType.PkgPath(), repositoryRoot)
-		if len(relPkdPath) != 2 {
-			return false
-		}
-		packageFilesPath = path.Join(cwd, relPkdPath[1])
-		if _, err := os.Stat(packageFilesPath); os.IsNotExist(err) {
-			return false
-		}
+	moduleRoot, err := moduleRootFromGoMod()
+	if err != nil {
+		return false
 	}
-	packageFiles := []string{}
-	filepath.Walk(packageFilesPath, func(path string, info os.FileInfo, err error) error {
-		if filepath.Ext(path) == ".go" {
-			packageFiles = append(packageFiles, path)
+
+	relPkgPath, ok := strings.CutPrefix(pkgPath, repositoryModulePath+"/")
+	if !ok {
+		return false
+	}
+
+	packageFilesPath := filepath.Join(moduleRoot, filepath.FromSlash(relPkgPath))
+	if _, statErr := os.Stat(packageFilesPath); os.IsNotExist(statErr) {
+		return false
+	}
+	packageEntries, err := os.ReadDir(packageFilesPath)
+	if err != nil {
+		return false
+	}
+	for _, entry := range packageEntries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".go" {
+			continue
 		}
-		return nil
-	})
-	for _, packageFile := range packageFiles {
+		packageFile := filepath.Join(packageFilesPath, entry.Name())
 		fileBytes, err := os.ReadFile(packageFile)
 		if err != nil {
 			continue
 		}
-		if strings.Contains(string(fileBytes), fmt.Sprintf("msgp:allocbound %s", dataType.Name())) {
-			// message pack alloc bound definition was found.
-			return true
+		for line := range strings.SplitSeq(string(fileBytes), "\n") {
+			line = strings.TrimSpace(line)
+			fields := strings.Fields(line)
+			if len(fields) >= 2 && fields[0] == "//msgp:allocbound" && fields[1] == typeName {
+				// message pack alloc bound definition was found.
+				return true
+			}
 		}
 	}
 	return false
 }
 
-func checkBoundsLimitingTag(val reflect.Value, datapath string, structTag string) (hasAllocBound bool) {
+func checkBoundsLimitingTag(val reflect.Value, datapath string, structTag string, cfg randomizeObjectCfg) (hasAllocBound bool) {
 	var objType string
 	if val.Kind() == reflect.Slice {
 		objType = "slice"
@@ -171,7 +247,9 @@ func checkBoundsLimitingTag(val reflect.Value, datapath string, structTag string
 		tagsMap := parseStructTags(structTag)
 
 		if tagsMap["allocbound"] == "-" {
-			printWarning(fmt.Sprintf("%s %s have an unbounded allocbound defined", objType, datapath))
+			if !cfg.SilenceAllocWarnings {
+				printWarning(fmt.Sprintf("%s %s have an unbounded allocbound defined", objType, datapath))
+			}
 			return
 		}
 
@@ -206,19 +284,21 @@ func checkBoundsLimitingTag(val reflect.Value, datapath string, structTag string
 	}
 
 	if val.Type().Kind() == reflect.Slice || val.Type().Kind() == reflect.Map || val.Type().Kind() == reflect.Array {
-		printWarning(fmt.Sprintf("%s %s does not have an allocbound defined for %s %s", objType, datapath, val.Type().String(), val.Type().PkgPath()))
+		if !cfg.SilenceAllocWarnings {
+			printWarning(fmt.Sprintf("%s %s does not have an allocbound defined for %s %s", objType, datapath, val.Type().String(), val.Type().PkgPath()))
+		}
 	}
 	return
 }
 
-func randomizeValue(v reflect.Value, datapath string, tag string, remainingChanges *int, seenTypes map[reflect.Type]bool) error {
+func randomizeValue(v reflect.Value, depth int, datapath string, tag string, remainingChanges *int, cfg randomizeObjectCfg, seenTypes map[reflect.Type]bool) error {
 	if *remainingChanges == 0 {
 		return nil
 	}
-	/*if oneOf(5) {
+	if depth != 0 && cfg.ZeroesEveryN > 0 && oneOf(cfg.ZeroesEveryN) {
 		// Leave zero value
 		return nil
-	}*/
+	}
 
 	/* Consider cutting off recursive structures by stopping at some datapath depth.
 
@@ -235,14 +315,35 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 			// generate value that will avoid protocol.ErrInvalidObject from HashType.Validate()
 			v.SetUint(rand.Uint64() % 3) // 3 is crypto.MaxHashType
 		} else {
-			v.SetUint(rand.Uint64())
+			var num uint64
+			if cfg.AllUintSizes {
+				switch rand.Intn(4) {
+				case 0: // fewer than 8 bits
+					num = uint64(rand.Intn(1 << 8)) // 0 to 255
+				case 1: // fewer than 16 bits
+					num = uint64(rand.Intn(1 << 16)) // 0 to 65535
+				case 2: // fewer than 32 bits
+					num = uint64(rand.Uint32()) // 0 to 2^32-1
+				case 3: // fewer than 64 bits
+					num = rand.Uint64() // 0 to 2^64-1
+				}
+			} else {
+				num = rand.Uint64()
+			}
+			v.SetUint(num)
+		}
+		if isRequiredField(tag) && v.Uint() == 0 {
+			v.SetUint(1)
 		}
 		*remainingChanges--
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		v.SetInt(int64(rand.Uint64()))
+		if isRequiredField(tag) && v.Int() == 0 {
+			v.SetInt(1)
+		}
 		*remainingChanges--
 	case reflect.String:
-		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag)
+		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag, cfg)
 		var buf []byte
 		var len int
 		if strings.HasSuffix(v.Type().PkgPath(), "go-algorand/agreement") && v.Type().Name() == "serializableError" {
@@ -264,7 +365,7 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 		*remainingChanges--
 	case reflect.Ptr:
 		v.Set(reflect.New(v.Type().Elem()))
-		err := randomizeValue(reflect.Indirect(v), datapath, tag, remainingChanges, seenTypes)
+		err := randomizeValue(reflect.Indirect(v), depth+1, datapath, tag, remainingChanges, cfg, seenTypes)
 		if err != nil {
 			return err
 		}
@@ -292,7 +393,7 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 			if rawMsgpType == f.Type {
 				return errSkipRawMsgpTesting
 			}
-			err := randomizeValue(v.Field(fieldIdx), datapath+"/"+f.Name, string(tag), remainingChanges, seenTypes)
+			err := randomizeValue(v.Field(fieldIdx), depth+1, datapath+"/"+f.Name, string(tag), remainingChanges, cfg, seenTypes)
 			if err != nil {
 				return err
 			}
@@ -304,7 +405,7 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 	case reflect.Array:
 		indicesOrder := rand.Perm(v.Len())
 		for i := 0; i < v.Len(); i++ {
-			err := randomizeValue(v.Index(indicesOrder[i]), fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges, seenTypes)
+			err := randomizeValue(v.Index(indicesOrder[i]), depth+1, fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges, cfg, seenTypes)
 			if err != nil {
 				return err
 			}
@@ -314,18 +415,25 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 			*remainingChanges--
 		}
 	case reflect.Slice:
+		if elem := v.Type().Elem(); elem.Kind() == reflect.Struct && seenTypes[elem] {
+			return nil
+		}
 		// we don't want to allocate a slice with size of 0. This is because decoding and encoding this slice
 		// will result in nil and not slice of size 0
-		l := rand.Int()%31 + 1
+		maxLen := 31
+		if cfg.MaxCollectionLen > 0 {
+			maxLen = min(maxLen, cfg.MaxCollectionLen)
+		}
+		l := rand.Intn(maxLen) + 1
 
-		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag)
+		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag, cfg)
 		if hasAllocBound {
 			l = 1
 		}
 		s := reflect.MakeSlice(v.Type(), l, l)
 		indicesOrder := rand.Perm(l)
 		for i := 0; i < l; i++ {
-			err := randomizeValue(s.Index(indicesOrder[i]), fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges, seenTypes)
+			err := randomizeValue(s.Index(indicesOrder[i]), depth+1, fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges, cfg, seenTypes)
 			if err != nil {
 				return err
 			}
@@ -339,23 +447,28 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 		v.SetBool(rand.Uint32()%2 == 0)
 		*remainingChanges--
 	case reflect.Map:
-		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag)
+		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag, cfg)
 		mt := v.Type()
 		v.Set(reflect.MakeMap(mt))
-		l := rand.Int() % 32
+		maxLen := 32
+		if cfg.MaxCollectionLen > 0 {
+			// preserve possibility of zero entries while capping positive lengths
+			maxLen = min(maxLen, cfg.MaxCollectionLen+1)
+		}
+		l := rand.Intn(maxLen)
 		if hasAllocBound {
 			l = 1
 		}
 		indicesOrder := rand.Perm(l)
 		for i := 0; i < l; i++ {
 			mk := reflect.New(mt.Key())
-			err := randomizeValue(mk.Elem(), fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges, seenTypes)
+			err := randomizeValue(mk.Elem(), depth+1, fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges, cfg, seenTypes)
 			if err != nil {
 				return err
 			}
 
 			mv := reflect.New(mt.Elem())
-			err = randomizeValue(mv.Elem(), fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges, seenTypes)
+			err = randomizeValue(mv.Elem(), depth+1, fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges, cfg, seenTypes)
 			if err != nil {
 				return err
 			}

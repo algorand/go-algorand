@@ -118,7 +118,7 @@ heap_get_top2(batch_heap *heap, heap_index_t *max1, heap_index_t *max2, size_t l
 
 /* */
 void ge25519_multi_scalarmult_vartime_final(ge25519_p3 *r, ge25519_p3 *point, sc25519 scalar) { 
-    const sc25519_element_t topbit = ((sc25519_element_t)1 << (SC25519_LIMB_SIZE - 1));
+    const sc25519_element_t topbit = ((sc25519_element_t)1 << (SC25519_BITS_PER_LIMB - 1));
     size_t limb = limb128bits;
     sc25519_element_t flag;
     ge25519_p1p1 p1p1_r;

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,8 +33,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/golang/snappy"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -54,6 +55,8 @@ const (
 	trieRebuildAccountChunkSize = 16384
 	// trieRebuildCommitFrequency defines the number of accounts that would get added before we call evict to commit the changes and adjust the memory cache.
 	trieRebuildCommitFrequency = 65536
+	// trieRebuildQueueDepth defines how many chunks the hash reader may run ahead of the trie writer during trie construction.
+	trieRebuildQueueDepth = 16
 
 	// CatchpointFileVersionV5 is the catchpoint file version that was used when the database schema was V0-V5.
 	CatchpointFileVersionV5 = uint64(0200)
@@ -183,10 +186,7 @@ func (ct *catchpointTracker) initialize(cfg config.Local, paths DirsAndPrefix) {
 		ct.enableGeneratingCatchpointFiles = true
 	}
 
-	ct.catchpointFileHistoryLength = cfg.CatchpointFileHistoryLength
-	if cfg.CatchpointFileHistoryLength < -1 {
-		ct.catchpointFileHistoryLength = -1
-	}
+	ct.catchpointFileHistoryLength = max(cfg.CatchpointFileHistoryLength, -1)
 }
 
 // GetLastCatchpointLabel retrieves the last catchpoint label that was stored to the database.
@@ -229,7 +229,7 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 	// but if votersTracker needs more state, it can set lowestRound to be earlier than that.
 	// We want to only write MaxBalLookback rounds of history to the catchpoint file.
 	var onlineExcludeBefore basics.Round
-	if normalOnlineHorizon := (dbRound + 1).SubSaturate(basics.Round(params.MaxBalLookback)); normalOnlineHorizon == onlineAccountsForgetBefore {
+	if normalOnlineHorizon := catchpointLookbackHorizonForNextRound(dbRound, params); normalOnlineHorizon == onlineAccountsForgetBefore {
 		// this is the common case, so we pass 0 so the DB dumps the full table, as is
 		onlineExcludeBefore = 0
 	} else if normalOnlineHorizon > onlineAccountsForgetBefore {
@@ -256,7 +256,7 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 		// Generate hashes of the onlineaccounts and onlineroundparams tables.
 		err := ct.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) error {
 			var dbErr error
-			onlineAccountsHash, _, dbErr = calculateVerificationHash(ctx, tx.MakeOnlineAccountsIter, onlineExcludeBefore, false)
+			onlineAccountsHash, _, dbErr = calculateVerificationHash(ctx, makeCatchpointOrderedOnlineAccountsIterFactory(tx.MakeOrderedOnlineAccountsIter, dbRound, params), onlineExcludeBefore, false)
 			if dbErr != nil {
 				return dbErr
 
@@ -326,10 +326,12 @@ func (ct *catchpointTracker) finishFirstStageAfterCrash(dbRound basics.Round, bl
 		return err
 	}
 
-	// pass dbRound+1-maxBalLookback as the onlineAccountsForgetBefore parameter: since we can't be sure whether
+	// pass 0 as the onlineAccountsForgetBefore parameter: since we can't be sure whether
 	// there are more than 320 rounds of history in the online accounts tables, this ensures the catchpoint
 	// will only contain the most recent 320 rounds.
-	onlineAccountsForgetBefore := (dbRound + 1).SubSaturate(basics.Round(config.Consensus[blockProto].MaxBalLookback))
+	// Inside finishFirstStage, this has the same effect as the voters tracker returning a "lowestRound" of 0,
+	// which causes finishFirstStage to calculate the correct horizon and filter out data older than dbround+1-320.
+	onlineAccountsForgetBefore := basics.Round(0)
 	return ct.finishFirstStage(context.Background(), dbRound, onlineAccountsForgetBefore, blockProto, 0)
 }
 
@@ -1255,7 +1257,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, params 
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
 	err = ct.dbs.SnapshotContext(ctx, func(dbCtx context.Context, tx trackerdb.SnapshotScope) (err error) {
-		catchpointWriter, err = makeCatchpointFileWriter(dbCtx, params, catchpointDataFilePath, tx, ResourcesPerCatchpointFileChunk, onlineExcludeBefore)
+		catchpointWriter, err = makeCatchpointFileWriter(dbCtx, params, catchpointDataFilePath, tx, ResourcesPerCatchpointFileChunk, accountsRound, onlineExcludeBefore)
 		if err != nil {
 			return
 		}

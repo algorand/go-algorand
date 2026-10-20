@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/encoded"
@@ -109,6 +108,12 @@ type AccountsReader interface {
 
 	LookupKeyValue(key string) (pv PersistedKVData, err error)
 	LookupKeysByPrefix(prefix string, maxKeyNum uint64, results map[string]bool, resultCount uint64) (round basics.Round, err error)
+	// LookupKeysByPrefixCursor returns a page of key-value pairs matching prefix, starting after cursor.
+	// Keys present in exclude are skipped. Only key membership is checked; the map values are ignored.
+	// The type is map[string][]byte so the caller can pass the delta map directly without allocating
+	// a separate key set. maxBytes limits the total byte size of returned results (0 = unlimited).
+	// The returned bool indicates whether more qualifying rows exist beyond what was returned.
+	LookupKeysByPrefixCursor(prefix string, cursor string, limit uint64, maxBytes uint64, includeValues bool, exclude map[string][]byte) (basics.Round, []ledgercore.KvPairResult, bool, error)
 
 	LookupCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (addr basics.Address, ok bool, dbRound basics.Round, err error)
 
@@ -130,9 +135,9 @@ type AccountsReaderExt interface {
 	TotalOnlineRoundParams(ctx context.Context) (total uint64, err error)
 	AccountsRound() (rnd basics.Round, err error)
 	LookupOnlineAccountDataByAddress(addr basics.Address) (ref OnlineAccountRef, data []byte, err error)
-	AccountsOnlineTop(rnd basics.Round, offset uint64, n uint64, proto config.ConsensusParams) (map[basics.Address]*ledgercore.OnlineAccount, error)
+	AccountsOnlineTop(rnd basics.Round, offset uint64, n uint64, rewardUnit uint64) (map[basics.Address]*ledgercore.OnlineAccount, error)
 	AccountsOnlineRoundParams() (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, endRound basics.Round, err error)
-	ExpiredOnlineAccountsForRound(rnd, voteRnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) (map[basics.Address]*basics.OnlineAccountData, error)
+	ExpiredOnlineAccountsForRound(rnd, voteRnd basics.Round, rewardUnit uint64, rewardsLevel uint64) (map[basics.Address]*basics.OnlineAccountData, error)
 	OnlineAccountsAll(maxAccounts uint64) ([]PersistedOnlineAccountData, error)
 	LoadTxTail(ctx context.Context, dbRound basics.Round) (roundData []*TxTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error)
 	LoadAllFullAccounts(ctx context.Context, balancesTable string, resourcesTable string, acctCb func(basics.Address, basics.AccountData)) (count int, err error)

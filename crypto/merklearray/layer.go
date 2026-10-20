@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -42,8 +42,9 @@ func (p pair) ToBeHashed() (protocol.HashID, []byte) {
 	// If one of the children is missing we use [0...0].
 	// The size of the slice is based on the relevant hash function output size
 	buf := make([]byte, 2*p.hashDigestSize)
-	copy(buf[:], p.l[:])
-	copy(buf[len(p.l):], p.r[:])
+	// Place each child in its digest-sized slot.
+	copy(buf[:p.hashDigestSize], p.l[:])
+	copy(buf[p.hashDigestSize:], p.r[:])
 	return protocol.MerkleArrayNode, buf
 }
 

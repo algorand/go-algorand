@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -137,3 +138,7 @@ func (m *mockNode) Status() (s node.StatusReport, err error) {
 func (m *mockNode) GenesisID() string { panic("not implemented") }
 
 func (m *mockNode) GenesisHash() crypto.Digest { panic("not implemented") }
+
+func (m *mockNode) GetPeers() (inboundPeers []network.Peer, outboundPeers []network.Peer, err error) {
+	panic("not implemented")
+}

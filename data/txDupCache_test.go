@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,12 +25,12 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/blake2b"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/go-deadlock"
-
-	"golang.org/x/crypto/blake2b"
 )
 
 func TestTxHandlerDigestCache(t *testing.T) {
@@ -45,10 +45,10 @@ func TestTxHandlerDigestCache(t *testing.T) {
 	var ds [size]crypto.Digest
 	for i := 0; i < size; i++ {
 		crypto.RandBytes([]byte(ds[i][:]))
-		exist := cache.CheckAndPut(&ds[i])
+		exist := cache.CheckAndPut(ds[i])
 		require.False(t, exist)
 
-		exist = cache.check(&ds[i])
+		exist = cache.check(ds[i])
 		require.True(t, exist)
 	}
 
@@ -56,7 +56,7 @@ func TestTxHandlerDigestCache(t *testing.T) {
 
 	// try to re-add, ensure not added
 	for i := 0; i < size; i++ {
-		exist := cache.CheckAndPut(&ds[i])
+		exist := cache.CheckAndPut(ds[i])
 		require.True(t, exist)
 	}
 
@@ -66,10 +66,10 @@ func TestTxHandlerDigestCache(t *testing.T) {
 	var ds2 [size]crypto.Digest
 	for i := 0; i < size; i++ {
 		crypto.RandBytes(ds2[i][:])
-		exist := cache.CheckAndPut(&ds2[i])
+		exist := cache.CheckAndPut(ds2[i])
 		require.False(t, exist)
 
-		exist = cache.check(&ds2[i])
+		exist = cache.check(ds2[i])
 		require.True(t, exist)
 	}
 
@@ -77,34 +77,34 @@ func TestTxHandlerDigestCache(t *testing.T) {
 
 	var d crypto.Digest
 	crypto.RandBytes(d[:])
-	exist := cache.CheckAndPut(&d)
+	exist := cache.CheckAndPut(d)
 	require.False(t, exist)
-	exist = cache.check(&d)
+	exist = cache.check(d)
 	require.True(t, exist)
 
 	require.Equal(t, size+1, cache.Len())
 
 	// ensure hashes from the prev batch are still there
 	for i := 0; i < size; i++ {
-		exist := cache.check(&ds2[i])
+		exist := cache.check(ds2[i])
 		require.True(t, exist)
 	}
 
 	// ensure hashes from the first batch are gone
 	for i := 0; i < size; i++ {
-		exist := cache.check(&ds[i])
+		exist := cache.check(ds[i])
 		require.False(t, exist)
 	}
 
 	// check deletion works
 	for i := 0; i < size; i++ {
-		cache.Delete(&ds[i])
-		cache.Delete(&ds2[i])
+		cache.Delete(ds[i])
+		cache.Delete(ds2[i])
 	}
 
 	require.Equal(t, 1, cache.Len())
 
-	cache.Delete(&d)
+	cache.Delete(d)
 	require.Equal(t, 0, cache.Len())
 }
 
@@ -125,7 +125,7 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 
 	// add some unique random
 	var ds [size][8]byte
-	var ks [size]*crypto.Digest
+	var ks [size]crypto.Digest
 	var exist bool
 	for i := 0; i < size; i++ {
 		crypto.RandBytes([]byte(ds[i][:]))
@@ -150,7 +150,7 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 
 	// add some more and ensure capacity switch
 	var ds2 [size][8]byte
-	var ks2 [size]*crypto.Digest
+	var ks2 [size]crypto.Digest
 	for i := 0; i < size; i++ {
 		crypto.RandBytes(ds2[i][:])
 		ks2[i], exist = cache.CheckAndPut(ds2[i][:])
@@ -203,8 +203,13 @@ func TestTxHandlerSaltedCacheScheduled(t *testing.T) {
 
 	const size = 20
 	updateInterval := 1000 * time.Microsecond
+	ctx, cancel := context.WithCancel(context.Background())
 	cache := makeSaltedCache(size)
-	cache.Start(context.Background(), updateInterval)
+	cache.Start(ctx, updateInterval)
+	defer func() {
+		cancel()
+		cache.WaitForStop()
+	}()
 	require.Zero(t, cache.Len())
 
 	// add some unique random
@@ -220,7 +225,10 @@ func TestTxHandlerSaltedCacheScheduled(t *testing.T) {
 		}
 	}
 
-	require.Less(t, cache.Len(), size)
+	// Two scheduled rotations evict everything inserted above. Do not require them to land
+	// inside the loop: on a busy machine the salter goroutine can be starved for longer than
+	// the whole loop and ticker ticks coalesce, leaving Len() == size at this point.
+	require.Eventually(t, func() bool { return cache.Len() < size }, 10*time.Second, updateInterval)
 }
 
 func TestTxHandlerSaltedCacheManual(t *testing.T) {
@@ -309,7 +317,7 @@ func (p *digestCachePusher) push() {
 	var d [crypto.DigestSize]byte
 	crypto.RandBytes(d[:])
 	h := crypto.Digest(blake2b.Sum256(d[:])) // digestCache does not hashes so calculate hash here
-	p.c.CheckAndPut(&h)
+	p.c.CheckAndPut(h)
 }
 
 func (p *saltedCachePusher) push() {
@@ -342,6 +350,7 @@ func BenchmarkDigestCaches(b *testing.B) {
 	}
 	for _, bench := range benchmarks {
 		b.Run(fmt.Sprintf("%T/threads=%d", bench.maker, bench.numThreads), func(b *testing.B) {
+			b.ReportAllocs()
 			benchmarkDigestCache(b, bench.maker, bench.numThreads)
 		})
 	}

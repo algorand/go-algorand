@@ -1,5 +1,9 @@
 #!/bin/bash
 
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
+
 set -e
 set -x
 set -o pipefail
@@ -32,7 +36,7 @@ echo "Minimum Balance --> $MINBAL"
 
 EXPECTED="100000"
 if [[ ${MINBAL} != ${EXPECTED} ]]; then
-    date '+min_balance FAIL goal account info should return expected Minimum Ballance %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL goal account info should return expected Minimum Balance %Y%m%d_%H%M%S"
     false
 fi
 

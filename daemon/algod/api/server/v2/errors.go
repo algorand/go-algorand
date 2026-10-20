@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,6 +32,7 @@ var (
 	errFailedRetrievingSyncRound               = "failed retrieving sync round from ledger"
 	errFailedSettingSyncRound                  = "failed to set sync round on the ledger"
 	errFailedParsingFormatOption               = "failed to parse the format option"
+	errFailedToGetPeers                        = "failed to get connected peers from node"
 	errFailedToParseAddress                    = "failed to parse the address"
 	errFailedToParseExclude                    = "failed to parse exclude"
 	errFailedToEncodeResponse                  = "failed to encode response"
@@ -48,5 +49,6 @@ var (
 	errOperationNotAvailableDuringCatchup      = "operation not available during catchup"
 	errRESTPayloadZeroLength                   = "payload was of zero length"
 	errRoundGreaterThanTheLatest               = "given round is greater than the latest round"
+	errRoundTooOld                             = "given round is no longer available; use a more recent round"
 	errFailedRetrievingTracer                  = "failed retrieving the expected tracer from ledger"
 )

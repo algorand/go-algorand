@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -42,7 +42,7 @@ import (
 
 var nroutines = runtime.NumCPU() * 2
 
-func maybefail(err error, msg string, args ...interface{}) {
+func maybefail(err error, msg string, args ...any) {
 	if err == nil {
 		return
 	}
@@ -163,11 +163,11 @@ func main() {
 	os.Exit(0)
 }
 
-func isSpendRound(cfg config, round uint64) bool {
+func isSpendRound(cfg config, round basics.Round) bool {
 	return cfg.RoundModulator == 0 || ((round+cfg.RoundOffset)%cfg.RoundModulator == 0)
 }
 
-func nextSpendRound(cfg config, round uint64) uint64 {
+func nextSpendRound(cfg config, round basics.Round) basics.Round {
 	if cfg.RoundModulator == 0 {
 		return round
 	}
@@ -248,8 +248,8 @@ func generateTransactions(restClient client.RestClient, cfg config, privateKeys 
 			Header: transactions.Header{
 				Sender:      publicKeys[i%len(publicKeys)],
 				Fee:         basics.MicroAlgos{Raw: cfg.Fee},
-				FirstValid:  basics.Round(nodeStatus.LastRound),
-				LastValid:   basics.Round(nodeStatus.LastRound + 2),
+				FirstValid:  nodeStatus.LastRound,
+				LastValid:   nodeStatus.LastRound + 2,
 				Note:        make([]byte, 4),
 				GenesisID:   vers.GenesisID,
 				GenesisHash: genesisHash,
@@ -268,7 +268,7 @@ func generateTransactions(restClient client.RestClient, cfg config, privateKeys 
 	// each thread makes new HTTP connections per API call
 	var sendWaitGroup sync.WaitGroup
 	sendWaitGroup.Add(nroutines)
-	sent := make([]int, nroutines, nroutines)
+	sent := make([]int, nroutines)
 	for i := 0; i < nroutines; i++ {
 		go func(base int) {
 			defer sendWaitGroup.Done()

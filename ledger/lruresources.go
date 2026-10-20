@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -178,17 +178,14 @@ func (m *lruResources) prune(newSize int) (removed int) {
 	if m.resources == nil {
 		return
 	}
-	for {
-		if len(m.resources) <= newSize {
-			break
-		}
+	for len(m.resources) > newSize {
+
 		back := m.resourcesList.Back()
 		delete(m.resources, accountCreatable{address: back.Value.address, index: back.Value.Aidx})
 		m.resourcesList.Remove(back)
 		removed++
 	}
 
-	// clear the notFound list
-	m.notFound = make(map[accountCreatable]struct{}, len(m.notFound))
+	clear(m.notFound)
 	return
 }

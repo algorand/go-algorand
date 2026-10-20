@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -384,7 +384,7 @@ func (a *Autopsy) extractNextCdv(ch chan<- autopsyTrace) (bounds AutopsyBounds, 
 				close(pch)
 			}
 
-			pch = make(chan autopsyPair, 0)
+			pch = make(chan autopsyPair)
 			acc = autopsyTrace{m: acc.m, p: pch}
 			err = protocol.DecodeStream(a, &acc.x)
 			if err != nil {

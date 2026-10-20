@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,17 +25,20 @@ import (
 	"io"
 	"net"
 	"path/filepath"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/metrics"
-	"github.com/stretchr/testify/require"
 )
 
 func TestCheckSlowWritingPeer(t *testing.T) {
@@ -132,17 +135,18 @@ func TestVersionToMajorMinor(t *testing.T) {
 	require.Equal(t, int64(2), mi)
 
 	ma, mi, err = versionToMajorMinor("1.2.3")
-	require.Error(t, err)
+	require.ErrorContains(t, err, `version 1.2.3 does not have two components`)
 	require.Zero(t, ma)
 	require.Zero(t, mi)
 
 	ma, mi, err = versionToMajorMinor("1")
-	require.Error(t, err)
+	require.ErrorContains(t, err, `version 1 does not have two components`)
 	require.Zero(t, ma)
 	require.Zero(t, mi)
 
 	ma, mi, err = versionToMajorMinor("a.b")
-	require.Error(t, err)
+	var numErr *strconv.NumError
+	require.ErrorAs(t, err, &numErr)
 	require.Zero(t, ma)
 	require.Zero(t, mi)
 }
@@ -159,14 +163,16 @@ func TestVersionToFeature(t *testing.T) {
 		{"1.2.3", "", peerFeatureFlag(0)},
 		{"a.b", "", peerFeatureFlag(0)},
 		{"2.1", "", peerFeatureFlag(0)},
-		{"2.1", PeerFeatureProposalCompression, peerFeatureFlag(0)},
+		{"2.1", peerFeatureProposalCompression, peerFeatureFlag(0)},
 		{"2.2", "", peerFeatureFlag(0)},
 		{"2.2", "test", peerFeatureFlag(0)},
 		{"2.2", strings.Join([]string{"a", "b"}, ","), peerFeatureFlag(0)},
-		{"2.2", PeerFeatureProposalCompression, pfCompressedProposal},
-		{"2.2", strings.Join([]string{PeerFeatureProposalCompression, "test"}, ","), pfCompressedProposal},
-		{"2.2", strings.Join([]string{PeerFeatureProposalCompression, "test"}, ", "), pfCompressedProposal},
-		{"2.3", PeerFeatureProposalCompression, pfCompressedProposal},
+		{"2.2", peerFeatureProposalCompression, pfCompressedProposal},
+		{"2.2", strings.Join([]string{peerFeatureProposalCompression, "test"}, ","), pfCompressedProposal},
+		{"2.2", strings.Join([]string{peerFeatureProposalCompression, "test"}, ", "), pfCompressedProposal},
+		{"2.2", strings.Join([]string{peerFeatureProposalCompression, peerFeatureVoteVpackCompression}, ","), pfCompressedVoteVpack | pfCompressedProposal},
+		{"2.2", peerFeatureVoteVpackCompression, pfCompressedVoteVpack},
+		{"2.3", peerFeatureProposalCompression, pfCompressedProposal},
 	}
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
@@ -231,6 +237,8 @@ func TestPeerReadLoopSwitchAllTags(t *testing.T) {
 	})
 	require.True(t, readLoopFound)
 	require.NotEmpty(t, foundTags)
+	// Filter out VP, it's normalized to AV before the switch statement
+	allTags = slices.DeleteFunc(allTags, func(tag string) bool { return tag == "VotePackedTag" })
 	sort.Strings(allTags)
 	sort.Strings(foundTags)
 	require.Equal(t, allTags, foundTags)

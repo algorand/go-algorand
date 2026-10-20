@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,13 +23,15 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -127,7 +129,14 @@ func (f *LibGoalFixture) setup(test TestingTB, testName string, templateFile str
 	importKeys := false // Don't automatically import root keys when creating folders, we'll import on-demand
 	file, err := os.Open(templateFile)
 	f.failOnError(err, "Template file could not be opened: %v")
-	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, file, f.binDir, importKeys, f.nodeExitWithError, f.consensus, overrides...)
+	defer file.Close()
+
+	// Override the kmd session lifetime to 5 minutes to prevent kmd wallet handles from expiring
+	kmdConfOverride := netdeploy.OverrideKmdConfig(netdeploy.TemplateKMDConfig{SessionLifetimeSecs: 300})
+	// copy overrides to prevent caller's data from being modified
+	extraOverrides := append(slices.Clone(overrides), kmdConfOverride)
+
+	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, file, f.binDir, importKeys, f.nodeExitWithError, f.consensus, extraOverrides...)
 	f.failOnError(err, "CreateNetworkFromTemplate failed: %v")
 	f.network = network
 
@@ -199,18 +208,18 @@ func (f *LibGoalFixture) importRootKeys(lg *libgoal.Client, dataDir string) {
 			}
 
 			// Fetch an account.Root from the database
-			root, err := account.RestoreRoot(handle)
-			if err != nil {
+			root, err1 := account.RestoreRoot(handle)
+			if err1 != nil {
 				// Couldn't read it, skip it
 				continue
 			}
 
 			secretKey := root.Secrets().SK
-			wh, err := lg.GetUnencryptedWalletHandle()
-			f.failOnError(err, "couldn't get default wallet handle: %v")
-			_, err = lg.ImportKey(wh, secretKey[:])
-			if err != nil && !strings.Contains(err.Error(), "key already exists") {
-				f.failOnError(err, "couldn't import secret: %v")
+			wh, err1 := lg.GetUnencryptedWalletHandle()
+			f.failOnError(err1, "couldn't get default wallet handle: %v")
+			_, err1 = lg.ImportKey(wh, secretKey[:])
+			if err1 != nil && !strings.Contains(err1.Error(), "key already exists") {
+				f.failOnError(err1, "couldn't import secret: %v")
 			}
 			accountsWithRootKeys[root.Address().String()] = true
 			handle.Close()
@@ -468,7 +477,7 @@ func (f *LibGoalFixture) CurrentConsensusParams() (consensus config.ConsensusPar
 }
 
 // ConsensusParams returns the consensus parameters for the protocol from the specified round
-func (f *LibGoalFixture) ConsensusParams(round uint64) (config.ConsensusParams, error) {
+func (f *LibGoalFixture) ConsensusParams(round basics.Round) (config.ConsensusParams, error) {
 	block, err := f.LibGoalClient.BookkeepingBlock(round)
 	if err != nil {
 		return config.ConsensusParams{}, err
@@ -503,7 +512,7 @@ func (f *LibGoalFixture) CurrentMinFeeAndBalance() (minFee, minBalance uint64, e
 // MinFeeAndBalance returns the MinTxnFee and MinBalance for the protocol from the specified round
 // If MinBalance is 0, we provide a resonable default of 1000 to ensure accounts have funds when
 // MinBalance is used to fund new accounts
-func (f *LibGoalFixture) MinFeeAndBalance(round uint64) (minFee, minBalance uint64, err error) {
+func (f *LibGoalFixture) MinFeeAndBalance(round basics.Round) (minFee, minBalance uint64, err error) {
 	params, err := f.ConsensusParams(round)
 	if err != nil {
 		return
@@ -516,7 +525,7 @@ func (f *LibGoalFixture) MinFeeAndBalance(round uint64) (minFee, minBalance uint
 }
 
 // TransactionProof returns a proof for usage in merkle array verification for the provided transaction.
-func (f *LibGoalFixture) TransactionProof(txid string, round uint64, hashType crypto.HashType) (model.TransactionProofResponse, merklearray.SingleLeafProof, error) {
+func (f *LibGoalFixture) TransactionProof(txid string, round basics.Round, hashType crypto.HashType) (model.TransactionProofResponse, merklearray.SingleLeafProof, error) {
 	proofResp, err := f.LibGoalClient.TransactionProof(txid, round, hashType)
 	if err != nil {
 		return model.TransactionProofResponse{}, merklearray.SingleLeafProof{}, err
@@ -531,7 +540,7 @@ func (f *LibGoalFixture) TransactionProof(txid string, round uint64, hashType cr
 }
 
 // LightBlockHeaderProof returns a proof for usage in merkle array verification for the provided block's light block header.
-func (f *LibGoalFixture) LightBlockHeaderProof(round uint64) (model.LightBlockHeaderProofResponse, merklearray.SingleLeafProof, error) {
+func (f *LibGoalFixture) LightBlockHeaderProof(round basics.Round) (model.LightBlockHeaderProofResponse, merklearray.SingleLeafProof, error) {
 	proofResp, err := f.LibGoalClient.LightBlockHeaderProof(round)
 
 	if err != nil {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,15 +24,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 var boxAppSource = main(`
@@ -127,7 +129,14 @@ var passThruSource = main(`
   itxn_submit
 `)
 
-const boxVersion = 36
+const (
+	boxVersion          = 36
+	accessVersion       = 41
+	boxQuotaBumpVersion = 41
+	// familyBoxVersion is the consensus index for AVM v13, which adds
+	// app_params_set and foreign/family box access.
+	familyBoxVersion = 42
+)
 
 func boxFee(p config.ConsensusParams, nameAndValueSize uint64) uint64 {
 	return p.BoxFlatMinBalance + p.BoxByteMinBalance*(nameAndValueSize)
@@ -340,7 +349,7 @@ func TestBoxCreateAvailability(t *testing.T) {
              itxn_field TypeEnum
             itxn_submit
 
-            // Now invoke it, so it can intialize (and create the "hello" box)
+            // Now invoke it, so it can initialize (and create the "hello" box)
             itxn_begin
              itxn_field ApplicationID
              int appl
@@ -508,9 +517,10 @@ assert
 		for i := 0; i < 330; i++ {
 			dl.fullBlock()
 		}
-		time.Sleep(5 * time.Second) // balancesFlushInterval, so commit happens
 		dl.fullBlock(call.Args("check", "x", string(make([]byte, 16))))
-		time.Sleep(100 * time.Millisecond) // give commit time to run, and prune au caches
+		// commit au deltas so the box app is executed on of data from ledger, not trackers
+		commitRoundLookback(0, dl.generator)
+		commitRoundLookback(0, dl.validator)
 		dl.fullBlock(call.Args("check", "x", string(make([]byte, 16))))
 
 		// Still the same after caches are flushed
@@ -539,50 +549,77 @@ func TestBoxIOBudgets(t *testing.T) {
 			ApplicationID: appID,
 			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("x")}},
 		}
+		if ver < boxQuotaBumpVersion {
+			dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
+				"write budget exceeded (4096 > 1024)")
+			call.Boxes = append(call.Boxes, transactions.BoxRef{})
+		}
 		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
-			"write budget (1024) exceeded")
+			"write budget exceeded (4096 > 2048)")
 		call.Boxes = append(call.Boxes, transactions.BoxRef{})
-		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
-			"write budget (2048) exceeded")
-		call.Boxes = append(call.Boxes, transactions.BoxRef{})
-		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
-			"write budget (3072) exceeded")
-		call.Boxes = append(call.Boxes, transactions.BoxRef{})
-		dl.txn(call.Args("create", "x", "\x10\x00"), // now there are 4 box refs
+		if ver < boxQuotaBumpVersion {
+			dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
+				"write budget exceeded (4096 > 3072)")
+			call.Boxes = append(call.Boxes, transactions.BoxRef{})
+		}
+		dl.txn(call.Args("create", "x", "\x10\x00"), // now there are enough box refs
 			"below min") // big box would need more balance
 		dl.txn(call.Args("create", "x", "\x10\x01"), // 4097
-			"write budget (4096) exceeded")
+			"write budget exceeded (4097 > 4096)")
 
 		// Create 4,096 byte box
 		proto := config.Consensus[cv]
+		amount := proto.MinBalance + boxFee(proto, 4096+1) // remember key len!
 		fundApp := txntest.Txn{
 			Type:     "pay",
 			Sender:   addrs[0],
 			Receiver: appID.Address(),
-			Amount:   proto.MinBalance + boxFee(proto, 4096+1), // remember key len!
+			Amount:   amount,
 		}
 		create := call.Args("create", "x", "\x10\x00")
 
 		// Slight detour - Prove insufficient funding fails creation.
-		fundApp.Amount--
+		fundApp.Amount = amount - 1
 		dl.txgroup("below min", &fundApp, create)
-		fundApp.Amount++
+		fundApp.Amount = amount
 
 		// Confirm desired creation happens.
 		dl.txgroup("", &fundApp, create)
 
 		// Now that we've created a 4,096 byte box, test READ budget
-		// It works at the start, because call still has 4 brs.
+		// It works at the start, because call still has enough brs.
 		dl.txn(call.Args("check", "x", "\x00"))
-		call.Boxes = call.Boxes[:3]
-		dl.txn(call.Args("check", "x", "\x00"),
-			"box read budget (3072) exceeded")
+		call.Boxes = call.Boxes[:len(call.Boxes)-1] // remove one ref
+		dl.txn(call.Args("check", "x", "\x00"), "read budget")
 
 		// Give a budget over 32768, confirm failure anyway
-		empties := [32]transactions.BoxRef{}
-		// These tests skip WellFormed, so the huge Boxes is ok
-		call.Boxes = append(call.Boxes, empties[:]...)
-		dl.txn(call.Args("create", "x", "\x80\x01"), "box size too large") // 32769
+		// Use a transaction group with 5 txns, each with 8 box refs (except the last one)
+		// to accumulate enough box references (33 total) for the quota test
+		txns := make([]*txntest.Txn, 5)
+		for i := 0; i < 4; i++ {
+			// Create 8 valid box references to the existing box "x"
+			boxes := make([]transactions.BoxRef, 8)
+			for j := 0; j < 8; j++ {
+				boxes[j] = transactions.BoxRef{Index: 0, Name: []byte("x")}
+			}
+			txns[i] = &txntest.Txn{
+				Type:            "appl",
+				Sender:          addrs[0],
+				ApplicationID:   appID,
+				Boxes:           boxes,
+				ApplicationArgs: [][]byte{[]byte("check"), []byte("x"), []byte("\x00")}, // box contains zeros
+				Note:            []byte{byte(i)},                                        // vary the note to make txns unique
+			}
+		}
+		// Last transaction tries to create a box > 32K, which should fail even with enough quota
+		txns[4] = &txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			ApplicationID:   appID,
+			Boxes:           []transactions.BoxRef{{Index: 0, Name: []byte("y")}},        // 1 ref, total 33 refs in group
+			ApplicationArgs: [][]byte{[]byte("create"), []byte("y"), []byte("\x80\x01")}, // 32769 bytes
+		}
+		dl.txgroup("box size too large", txns...)
 	})
 }
 
@@ -595,6 +632,7 @@ func TestBoxInners(t *testing.T) {
 	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
+		proto := config.Consensus[cv]
 
 		// Advance the creatable counter, so we don't have very low app ids that
 		// could be mistaken for indices into ForeignApps.
@@ -603,8 +641,8 @@ func TestBoxInners(t *testing.T) {
 		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
 		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
 
-		boxID := dl.fundedApp(addrs[0], 2_000_000, boxAppSource)  // there are some big boxes made
-		passID := dl.fundedApp(addrs[0], 120_000, passThruSource) // lowish, show it's not paying for boxes
+		boxID := dl.fundedApp(addrs[0], 4_000_000, boxAppSource)                     // there are some big boxes made
+		passID := dl.fundedApp(addrs[0], 100_000+20*proto.MinTxnFee, passThruSource) // lowish, show it's not paying for boxes
 		call := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[0],
@@ -621,11 +659,19 @@ func TestBoxInners(t *testing.T) {
 		require.Error(t, call.Txn().WellFormed(transactions.SpecialAddresses{}, dl.generator.genesisProto))
 
 		call.Boxes = []transactions.BoxRef{{Index: 1, Name: []byte("x")}}
-		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
-			"write budget (1024) exceeded")
-		dl.txn(call.Args("create", "x", "\x04\x00")) // 1024
-		call.Boxes = append(call.Boxes, transactions.BoxRef{Index: 1, Name: []byte("y")})
-		dl.txn(call.Args("create", "y", "\x08\x00")) // 2048
+		if ver < boxQuotaBumpVersion {
+			dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
+				"write budget exceeded (4096 > 1024)")
+			dl.txn(call.Args("create", "x", "\x04\x00")) // 1024
+			call.Boxes = append(call.Boxes, transactions.BoxRef{Index: 1, Name: []byte("y")})
+			dl.txn(call.Args("create", "y", "\x08\x00")) // 2048
+		} else {
+			dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
+				"write budget exceeded (4096 > 2048)")
+			dl.txn(call.Args("create", "x", "\x08\x00")) // 2048
+			call.Boxes = append(call.Boxes, transactions.BoxRef{Index: 1, Name: []byte("y")})
+			dl.txn(call.Args("create", "y", "\x10\x00")) // 4096
+		}
 
 		require.Len(t, call.Boxes, 2)
 		setX := call.Args("set", "x", "A")
@@ -651,7 +697,7 @@ func TestBoxInners(t *testing.T) {
 		checkY := call.Args("check", "y", "B")
 		require.Len(t, checkY.Boxes, 2)
 		// can't see x and y because read budget is only 2*1024
-		dl.txgroup("box read budget", checkX, checkY)
+		dl.txgroup("read budget", checkX, checkY)
 		checkY.Boxes = append(checkY.Boxes, transactions.BoxRef{})
 		dl.txgroup("", checkX, checkY)
 
@@ -683,5 +729,707 @@ func TestBoxInners(t *testing.T) {
 		// good change
 		dl.txn(call.Args("put", "x", "mark doe"))
 		dl.txn(call.Args("check", "x", "mark d"))
+	})
+}
+
+// Create the app with bytecode in txn.ApplicationArgs[0], pass my arg[1] as created arg[0]
+var passThruCreator = main(`
+  itxn_begin
+  txn TypeEnum; itxn_field TypeEnum
+  txn ApplicationArgs 0; itxn_field ApprovalProgram
+  txn ApplicationArgs 0; itxn_field ClearStateProgram // need something, won't be used
+  txn ApplicationArgs 1; itxn_field ApplicationArgs
+  itxn_submit
+`)
+
+// TestNewAppBoxCreate exercises the creation of boxes in newly created apps
+func TestNewAppBoxCreate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	t.Run("current", func(t *testing.T) { testNewAppBoxCreate(t, 0) })
+	t.Run("tealv9", func(t *testing.T) { testNewAppBoxCreate(t, 9) })
+	t.Run("tealv12", func(t *testing.T) { testNewAppBoxCreate(t, 12) })
+}
+
+func testNewAppBoxCreate(t *testing.T, requestedTealVersion int) {
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		proto := config.Consensus[cv]
+
+		tealVersion := requestedTealVersion
+		if tealVersion == 0 {
+			tealVersion = int(proto.LogicSigVersion)
+		}
+
+		// Skip for combinations of tealVersion and cv that aren't possible
+		if uint64(tealVersion) > proto.LogicSigVersion {
+			t.Skipf("TEAL v%d not available in %s (LogicSigVersion=%d)", tealVersion, cv, proto.LogicSigVersion)
+		}
+
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		// We're going to create an app that will, during its own creation,
+		// create a box.  That requires two tricks.
+
+		// 1) Figure out the appID it will have and prefund it.  This _could_ be
+		// done within the group itself - an early transaction deduces the
+		// transaction counter, so it can know what the later create will be,
+		// and compute it's app address.
+
+		// 2) a) Use the predicted appID to name the box ref.
+		// or b) Use 0 as the app in the box ref, meaning "this app"
+		// or c) v41 (accessVersion) will allow it if there are empty box refs.
+
+		// 2a is pretty much impossible in practice, we can only do it here
+		// because our blockchain is "quiet" we know the upcoming appID.
+
+		// 2b won't work for inner app creates, since the 0 appID gets replaced
+		// with the _top-level_ app's ID.
+
+		// 2c would allow newly created apps, even if inners, to create boxes.
+		// It also has the nice property of not needing to know the box's
+		// name. So it can be computed in app.  We don't need the name because
+		// we can short-circuit the lookup - the box _must_ be empty.
+
+		// boxCreate is an app that tries to make a box from its first argument, even during its own creation.
+		boxCreate := "txn ApplicationArgs 0; int 24; box_create;" // Succeeds if the box is created and did not already exist
+
+		// boxPut is an app that tries to make a box from its first argument, even during its own creation (but using box_put)
+		boxPut := "txn ApplicationArgs 0; int 24; bzero; box_put; int 1;"
+
+		for _, createSrc := range []string{boxCreate, boxPut} {
+			// createSrcVer is the versioned source for the current test's TEAL version
+			createSrcVer := fmt.Sprintf("#pragma version %d\n%s", tealVersion, createSrc)
+
+			// doubleSrc tries to create TWO boxes. The second is always named by ApplicationArgs 1
+			doubleSrc := createSrcVer + `txn ApplicationArgs 1; int 24; box_create; pop;` // return result of FIRST box_create
+			// need to call one inner txn, and have mbr for itself and inner created app
+			passID := dl.fundedApp(addrs[0], 200_000+proto.MinTxnFee, passThruCreator) // Will be used to show inners have same power
+
+			// Since we used fundedApp, the next app created would be passID+2.
+			// We'll prefund a whole bunch of the next apps that we can then create
+			// at will below.
+
+			var testTxns = basics.AppIndex(20)
+			for i := range testTxns {
+				dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: (passID + 2 + testTxns + i).Address(), Amount: 500_000})
+			}
+
+			// Try to create it. It will fail because there's no box ref. (does not increment txncounter)
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: createSrcVer, ApplicationArgs: [][]byte{{0x01}}},
+				"invalid Box reference 0x01")
+
+			// 2a. Create it with a box ref of the predicted appID
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: createSrcVer, ApplicationArgs: [][]byte{{0x01}},
+				ForeignApps: []basics.AppIndex{passID + testTxns + 2},
+				Boxes:       []transactions.BoxRef{{Index: 1, Name: []byte{0x01}}}})
+
+			// 2a. Create it with a box ref of the predicted appID (Access list)
+			if proto.MaxAppAccess > 0 {
+				dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+					ApprovalProgram: createSrcVer, ApplicationArgs: [][]byte{{0x01}},
+					Access: []transactions.ResourceRef{
+						{App: passID + testTxns + 3},
+						{Box: transactions.BoxRef{Index: 1, Name: []byte{0x01}}}}})
+			}
+
+			// 2b. Create it with a box ref of 0, which means "this app"
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: createSrcVer, ApplicationArgs: [][]byte{{0x01}},
+				Boxes: []transactions.BoxRef{{Index: 0, Name: []byte{0x01}}}})
+
+			// 2b. Create it with a box ref of 0, which means "this app" (Access List)
+			if proto.MaxAppAccess > 0 {
+				dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+					ApprovalProgram: createSrcVer, ApplicationArgs: [][]byte{{0x01}},
+					Access: []transactions.ResourceRef{
+						{Box: transactions.BoxRef{Index: 0, Name: []byte{0x01}}}}})
+			}
+
+			// you can manipulate it twice if you want (this tries to create it twice)
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: doubleSrc, ApplicationArgs: [][]byte{{0x01}, {0x01}},
+				Boxes: []transactions.BoxRef{{Index: 0, Name: []byte{0x01}}}})
+
+			// but you still can't make a second box
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: doubleSrc, ApplicationArgs: [][]byte{{0x01}, {0x02}},
+				Boxes: []transactions.BoxRef{{Index: 0, Name: []byte{0x01}}}},
+				"invalid Box reference 0x02")
+
+			// until you list it as well
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: doubleSrc, ApplicationArgs: [][]byte{{0x01}, {0x02}},
+				Boxes: []transactions.BoxRef{
+					{Index: 0, Name: []byte{0x01}},
+					{Index: 0, Name: []byte{0x02}},
+				}})
+
+			// 2c. Create it with an empty box ref
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: createSrcVer, ApplicationArgs: [][]byte{{0x01}},
+				Boxes: []transactions.BoxRef{{}}})
+
+			if ver >= accessVersion {
+				// 2c. Create it with an empty box ref
+				dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+					ApprovalProgram: createSrcVer, ApplicationArgs: [][]byte{{0x01}},
+					Access: []transactions.ResourceRef{{Box: transactions.BoxRef{}}}})
+			}
+
+			// but you can't do a second create
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: doubleSrc, ApplicationArgs: [][]byte{{0x01}, {0x02}},
+				Boxes: []transactions.BoxRef{{}}},
+				"invalid Box reference 0x02")
+
+			// until you add a second box ref
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: doubleSrc, ApplicationArgs: [][]byte{{0x01}, {0x02}},
+				Boxes: []transactions.BoxRef{{}, {}}})
+
+			// Now confirm that 2c also works for an inner created app
+			ops, err := logic.AssembleString("#pragma version 8\n" + createSrc)
+			require.NoError(t, err, ops.Errors)
+			createSrcByteCode := ops.Program
+			// create app as an inner, fails w/o empty box ref
+			dl.txn(&txntest.Txn{Sender: addrs[0],
+				Type:            "appl",
+				ApplicationID:   passID,
+				ApplicationArgs: [][]byte{createSrcByteCode, {0x01}},
+			}, "invalid Box reference 0x01")
+			// create app as an inner, succeeds w/ empty box ref
+			dl.txn(&txntest.Txn{Sender: addrs[0],
+				Type:            "appl",
+				ApplicationID:   passID,
+				ApplicationArgs: [][]byte{createSrcByteCode, {0x01}},
+				Boxes:           []transactions.BoxRef{{}},
+			})
+		}
+	})
+}
+
+// Apps with the same creator form a "family" and, once a box owner opts into
+// FamilyBoxAccess, can read and write each other's boxes. That makes such a box
+// behave like state shared across the family, so it gets a family-scoped
+// reentrancy guard: a family member may not write family-shared state while a
+// foreign app on the call stack separates it from another family member that
+// has already touched (read or written) family-shared state.
+
+// familyInitiator (app A) optionally touches its own box "b", then calls onward.
+// It is invoked with args [touch, route]:
+//
+//	touch: "write" replaces in the box, "read" reads it, "sharelate" replaces in
+//	       the box and only then opts into FamilyBoxAccess, else leaves it untouched
+//	route: "viaX" calls Applications 1 (a foreign app) forwarding Applications 2,3
+//	       "direct" calls Applications 2 forwarding Applications 3
+//	       "delegate" first calls Applications 2 directly (a family member, which
+//	                  touches the shared box on A's behalf), then does the "viaX"
+//	                  call, modeling A delegating its touch to a family member
+//	                  before re-entering the family through a foreign app
+//
+// A separate ["optin"] invocation opts A into FamilyBoxAccess and creates "b",
+// and ["optout"] turns both box-sharing flags back off.
+var familyInitiator = main(`
+  txn ApplicationArgs 0; byte "optin"; ==; bz notoptin
+    int 1; app_params_set AppFamilyBoxAccess
+    byte "b"; int 4; box_create; assert
+    b done
+  notoptin:
+
+  txn ApplicationArgs 0; byte "optout"; ==; bz nosetup
+    int 0; app_params_set AppFamilyBoxAccess
+    int 0; app_params_set AppForeignBoxReads
+    b done
+  nosetup:
+
+  txn ApplicationArgs 0; byte "write"; ==; bz nowrite
+    byte "b"; int 0; byte "AA"; box_replace
+  nowrite:
+
+  txn ApplicationArgs 0; byte "read"; ==; bz noread
+    byte "b"; box_get; assert; pop
+  noread:
+
+  txn ApplicationArgs 0; byte "sharelate"; ==; bz nosharelate
+    byte "b"; int 0; byte "AA"; box_replace
+    int 1; app_params_set AppFamilyBoxAccess
+  nosharelate:
+
+  txn ApplicationArgs 1; byte "viaX"; ==; bz trydirect
+    itxn_begin
+    int appl; itxn_field TypeEnum
+    txn Applications 1; itxn_field ApplicationID
+    txn Applications 2; itxn_field Applications
+    txn Applications 3; itxn_field Applications
+    itxn_submit
+    b done
+  trydirect:
+  txn ApplicationArgs 1; byte "direct"; ==; bz trydelegate
+    itxn_begin
+    int appl; itxn_field TypeEnum
+    txn Applications 2; itxn_field ApplicationID
+    txn Applications 3; itxn_field Applications
+    itxn_submit
+    b done
+  trydelegate:
+  txn ApplicationArgs 1; byte "delegate"; ==; bz done
+    // Delegate the touch to a family member (Applications 2), which writes A's
+    // shared box and returns, leaving A relying on that state.
+    itxn_begin
+    int appl; itxn_field TypeEnum
+    txn Applications 2; itxn_field ApplicationID
+    txn Applications 3; itxn_field Applications
+    itxn_submit
+    // Now re-enter the family through the foreign app, as in "viaX".
+    itxn_begin
+    int appl; itxn_field TypeEnum
+    txn Applications 1; itxn_field ApplicationID
+    txn Applications 2; itxn_field Applications
+    txn Applications 3; itxn_field Applications
+    itxn_submit
+  done:
+`)
+
+// familyForeign (app X) is a foreign passthrough: it calls Applications 1,
+// forwarding Applications 2 so the callee can reach the box owner.
+var familyForeign = main(`
+  itxn_begin
+  int appl; itxn_field TypeEnum
+  txn Applications 1; itxn_field ApplicationID
+  txn Applications 2; itxn_field Applications
+  itxn_submit
+`)
+
+// crossWriter (app C) writes box "b" owned by Applications 1 (app A).
+var crossWriter = main(`
+  txn Applications 1; byte "b"; int 0; byte "CC"; app_box_replace
+`)
+
+// crossReader (app C) reads box "b" owned by Applications 1 (app A).
+var crossReader = main(`
+  txn Applications 1; byte "b"; app_box_get; assert; pop
+`)
+
+func TestFamilyBoxReentrancy(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// addrs[0] is the family creator; addrs[1] creates the foreign app, so it
+	// has a different creator and is outside the family.
+	ledgertesting.TestConsensusRange(t, familyBoxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		// Advance the creatable counter so app ids aren't tiny.
+		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
+		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
+
+		a := dl.fundedApp(addrs[0], 1_000_000, familyInitiator) // family, box owner
+		x := dl.fundedApp(addrs[1], 1_000_000, familyForeign)   // foreign (different creator)
+		cw := dl.fundedApp(addrs[0], 1_000_000, crossWriter)    // family, writes A's box
+		cr := dl.fundedApp(addrs[0], 1_000_000, crossReader)    // family, reads A's box
+
+		// A opts into FamilyBoxAccess and creates its box "b".
+		dl.txn(&txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			ApplicationID:   a,
+			Boxes:           []transactions.BoxRef{{Index: 0, Name: []byte("b")}},
+			ApplicationArgs: [][]byte{[]byte("optin")},
+		})
+
+		// call builds a top-level invocation of A. ForeignApps is threaded so that
+		// inside A: Applications 1=x, 2=c, 3=a.
+		call := func(touch, route string, c basics.AppIndex) *txntest.Txn {
+			return &txntest.Txn{
+				Type:            "appl",
+				Sender:          addrs[0],
+				ApplicationID:   a,
+				ForeignApps:     []basics.AppIndex{x, c, a},
+				Boxes:           []transactions.BoxRef{{Index: 0, Name: []byte("b")}},
+				ApplicationArgs: [][]byte{[]byte(touch), []byte(route)},
+			}
+		}
+
+		const reentry = "may not write family-shared box"
+
+		// Write then write across a foreign app: A writes its box, A->X->C, C
+		// writes A's box. Blocked: A's update would be clobbered on return.
+		dl.txn(call("write", "viaX", cw), reentry)
+
+		// Read then write across a foreign app: A reads its box, A->X->C, C writes
+		// A's box. Blocked: the value A read would go stale on return.
+		dl.txn(call("read", "viaX", cw), reentry)
+
+		// No prior touch: A->X->C with A never touching its box. C may write,
+		// because no frame on the stack holds an assumption about family state.
+		dl.txn(call("none", "viaX", cw))
+
+		// Write then read across a foreign app: A writes, A->X->C, C only reads A's
+		// box. Allowed: reads never trigger the guard (same as reading globals).
+		dl.txn(call("write", "viaX", cr))
+
+		// Intra-family (no foreign frame): A writes, A->C directly, C writes A's
+		// box. Allowed: the family is co-designed and trusts itself.
+		dl.txn(call("write", "direct", cw))
+
+		// Delegated touch then write across a foreign app: A never touches its box
+		// directly, but calls family member C which writes it, then A->X->C writes
+		// again. Blocked: C's write on A's behalf leaves A relying on family state,
+		// so the mark must survive C's return to catch the re-entry. This is the
+		// case that a per-frame-only touch mark would miss.
+		dl.txn(call("none", "delegate", cw), reentry)
+	})
+}
+
+// familyOptOutInitiator (app A) reads the family-shared box owned by
+// Applications 2 (app B), then calls foreign app Applications 1 (app X),
+// forwarding Applications 2 and 3 so X can complete the A->X->B re-entry.
+var familyOptOutInitiator = main(`
+  txn Applications 2; byte "b"; app_box_get; assert; pop
+  itxn_begin
+  int appl; itxn_field TypeEnum
+  txn Applications 1; itxn_field ApplicationID
+  txn Applications 2; itxn_field Applications
+  txn Applications 3; itxn_field Applications
+  itxn_submit
+`)
+
+// familyOptOutOwner (app B) opts into FamilyBoxAccess and creates its box when
+// called with an argument. On the argument-less callback it opts out first, then
+// writes its own box.
+var familyOptOutOwner = main(`
+  txn NumAppArgs; bz callback
+    int 1; app_params_set AppFamilyBoxAccess
+    byte "b"; int 4; box_create; assert
+    b done
+  callback:
+    int 0; app_params_set AppFamilyBoxAccess
+    byte "b"; int 0; byte "BB"; box_replace
+  done:
+`)
+
+// familyStayOwner (app B') is familyOptOutOwner without the opt-out: it keeps
+// FamilyBoxAccess set while writing its own box on the callback. It is the
+// control showing that clearing the flag is what removes the protection.
+var familyStayOwner = main(`
+  txn NumAppArgs; bz callback
+    int 1; app_params_set AppFamilyBoxAccess
+    byte "b"; int 4; box_create; assert
+    b done
+  callback:
+    byte "b"; int 0; byte "BB"; box_replace
+  done:
+`)
+
+// TestFamilyBoxReentrancyToggling pins what the guard does when FamilyBoxAccess is
+// toggled mid-chain: both writes are permitted, because a box is family-shared
+// only for the accesses made while the flag is true. Each case has a control
+// showing the chain really does reach the write. Tightening this would change
+// which programs succeed, so it needs a new consensus version.
+func TestFamilyBoxReentrancyToggling(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// addrs[0] is the family creator; addrs[1] creates the foreign app.
+	ledgertesting.TestConsensusRange(t, familyBoxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		a := dl.fundedApp(addrs[0], 1_000_000, familyInitiator)        // family, box owner
+		x := dl.fundedApp(addrs[1], 1_000_000, familyForeign)          // foreign
+		cw := dl.fundedApp(addrs[0], 1_000_000, crossWriter)           // family, writes A's box
+		oi := dl.fundedApp(addrs[0], 1_000_000, familyOptOutInitiator) // family, reads B's box
+		ob := dl.fundedApp(addrs[0], 1_000_000, familyOptOutOwner)     // family, box owner
+		sb := dl.fundedApp(addrs[0], 1_000_000, familyStayOwner)       // family, box owner
+
+		boxRef := func(index uint64) []transactions.BoxRef {
+			return []transactions.BoxRef{{Index: index, Name: []byte("b")}}
+		}
+
+		// Enable after the touch. First A creates box "b" and turns sharing back off,
+		// leaving the box in place and unshared.
+		dl.txn(&txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			ApplicationID:   a,
+			Boxes:           boxRef(0),
+			ApplicationArgs: [][]byte{[]byte("optin")},
+		})
+		dl.txn(&txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			ApplicationID:   a,
+			ApplicationArgs: [][]byte{[]byte("optout")},
+		})
+
+		// Control: with sharing off C is refused outright, so the route does reach it.
+		dl.txn(&txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			ApplicationID:   a,
+			ForeignApps:     []basics.AppIndex{x, cw, a},
+			Boxes:           boxRef(0),
+			ApplicationArgs: [][]byte{[]byte("write"), []byte("viaX")},
+		}, "may not write box")
+
+		// A writes its box unshared, so A is never marked, then enables sharing and
+		// re-enters through X. C's write is allowed and A resumes on a stale box.
+		dl.txn(&txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			ApplicationID:   a,
+			ForeignApps:     []basics.AppIndex{x, cw, a},
+			Boxes:           boxRef(0),
+			ApplicationArgs: [][]byte{[]byte("sharelate"), []byte("viaX")},
+		})
+
+		// Disable before the write. Both owners opt in and create their box.
+		dl.txn(&txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			ApplicationID:   ob,
+			Boxes:           boxRef(0),
+			ApplicationArgs: [][]byte{[]byte("setup")},
+		})
+
+		// Control: the same chain against an owner that keeps sharing on is blocked, so
+		// the chain shape is right and the opt-out is the only difference.
+		dl.txn(&txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			ApplicationID:   sb,
+			Boxes:           boxRef(0),
+			ApplicationArgs: [][]byte{[]byte("setup")},
+		})
+		dl.txn(&txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[0],
+			ApplicationID: oi,
+			ForeignApps:   []basics.AppIndex{x, sb, oi},
+			Boxes:         boxRef(2),
+		}, "may not write family-shared box")
+
+		// B clears its flag before writing its own box, so that write is no longer
+		// family-shared and the guard never runs, though A relies on what it read.
+		dl.txn(&txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[0],
+			ApplicationID: oi,
+			ForeignApps:   []basics.AppIndex{x, ob, oi},
+			Boxes:         boxRef(2),
+		})
+	})
+}
+
+// flagBoxOwner (app A) creates its box "b" and opts into the box-sharing flag
+// named by ApplicationArgs 0: "foreign" sets ForeignBoxReads, "family" sets
+// FamilyBoxAccess, anything else leaves both off.
+var flagBoxOwner = main(`
+  byte "b"; int 4; box_create; pop
+  txn ApplicationArgs 0; byte "foreign"; ==; bz tryfamily
+    int 1; app_params_set AppForeignBoxReads
+    b done
+ tryfamily:
+  txn ApplicationArgs 0; byte "family"; ==; bz tryoptout
+    int 1; app_params_set AppFamilyBoxAccess
+ tryoptout:
+  txn ApplicationArgs 0; byte "optout"; ==; bz done
+    int 0; app_params_set AppForeignBoxReads
+    int 0; app_params_set AppFamilyBoxAccess
+ done:
+`)
+
+// TestForeignBoxAccess checks the cross-creator permission gating in
+// authorizeBoxAccess. It reuses familyReader/familyWriter, which read/write box
+// "b" owned by Applications 1.
+func TestForeignBoxAccess(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// addrs[0] creates the box owners; addrs[1] creates the callers, so the
+	// callers are outside the owners' family (a different creator).
+	ledgertesting.TestConsensusRange(t, familyBoxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		// Advance the creatable counter so app ids aren't tiny.
+		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
+		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
+
+		// One owner per flag configuration, all created by addrs[0].
+		noFlags := dl.fundedApp(addrs[0], 1_000_000, flagBoxOwner)
+		foreign := dl.fundedApp(addrs[0], 1_000_000, flagBoxOwner)
+		family := dl.fundedApp(addrs[0], 1_000_000, flagBoxOwner)
+
+		// Callers created by addrs[1] -- a different creator, so foreign to the owners.
+		reader := dl.fundedApp(addrs[1], 1_000_000, crossReader)
+		writer := dl.fundedApp(addrs[1], 1_000_000, crossWriter)
+		readerInFamily := dl.fundedApp(addrs[0], 1_000_000, crossReader)
+		writerInFamily := dl.fundedApp(addrs[0], 1_000_000, crossWriter)
+
+		// setup makes an owner create box "b" and opt into the named flag.
+		setup := func(owner basics.AppIndex, flag string) *txntest.Txn {
+			return &txntest.Txn{
+				Type:            "appl",
+				Sender:          addrs[0],
+				ApplicationID:   owner,
+				Boxes:           []transactions.BoxRef{{Name: []byte("b")}},
+				ApplicationArgs: [][]byte{[]byte(flag)},
+			}
+		}
+		dl.txn(setup(noFlags, "none"))
+		dl.txn(setup(foreign, "foreign"))
+		dl.txn(setup(family, "family"))
+
+		// access invokes a caller against owner's box "b" (Applications 1 == owner,
+		// box ref index 1 == owner).
+		access := func(caller, owner basics.AppIndex) *txntest.Txn {
+			return &txntest.Txn{
+				Type:          "appl",
+				Sender:        addrs[1],
+				ApplicationID: caller,
+				ForeignApps:   []basics.AppIndex{owner},
+				Boxes:         []transactions.BoxRef{{Index: 1, Name: []byte("b")}},
+			}
+		}
+
+		const noRead = "may not read"
+		const noWrite = "may not write"
+
+		// No flags: a foreign app (whether in family or not) may not read or write the box.
+		dl.txn(access(reader, noFlags), noRead)
+		dl.txn(access(writer, noFlags), noWrite)
+		dl.txn(access(readerInFamily, noFlags), noRead)
+		dl.txn(access(writerInFamily, noFlags), noWrite)
+
+		// ForeignBoxReads: a foreign app may read but not write, again, no regard for family
+		dl.txn(access(reader, foreign))
+		dl.txn(access(writer, foreign), noWrite)
+		dl.txn(access(readerInFamily, foreign))
+		dl.txn(access(writerInFamily, foreign), noWrite)
+
+		// FamilyBoxAccess with a different creator confers nothing: the caller
+		// is not in the family, so a foreign write is still denied. Infamily
+		// can read and write.
+		dl.txn(access(reader, family), noRead)
+		dl.txn(access(writer, family), noWrite)
+		dl.txn(access(readerInFamily, family))
+		dl.txn(access(writerInFamily, family))
+
+		// optout turns off both flags
+		dl.txn(setup(foreign, "optout"))
+		dl.txn(setup(family, "optout"))
+
+		// Everything that was allowed isn't anymore
+		dl.txn(access(reader, foreign), noRead)
+		dl.txn(access(readerInFamily, foreign), noRead)
+		dl.txn(access(readerInFamily, family), noRead)
+		dl.txn(access(writerInFamily, family), noWrite)
+	})
+}
+
+// familyBoxMBRApp (app A) manipulates a box named "x" owned by the app in
+// Applications 1 (a same-creator family member B). Invoked with [op, name?,
+// sizeArg?]: "create"/"resize" take name (arg1) and an 8-or-1-byte size (arg2),
+// "del" takes just the name.
+var familyBoxMBRApp = main(`
+  txn ApplicationArgs 0; byte "create"; ==; bz tryresize
+    txn Applications 1; txn ApplicationArgs 1; txn ApplicationArgs 2; btoi; app_box_create; assert
+    b done
+  tryresize:
+  txn ApplicationArgs 0; byte "resize"; ==; bz trydel
+    txn Applications 1; txn ApplicationArgs 1; txn ApplicationArgs 2; btoi; app_box_resize
+    b done
+  trydel:
+  txn ApplicationArgs 0; byte "del"; ==; bz done
+    txn Applications 1; txn ApplicationArgs 1; app_box_del; assert
+  done:
+`)
+
+// familyBoxOwner (app B) opts into FamilyBoxAccess when called, so a family
+// member may create/resize/delete its boxes.
+var familyBoxOwner = main(`int 1; app_params_set AppFamilyBoxAccess`)
+
+// TestFamilyBoxMBR checks that when app A creates, resizes, or deletes the boxes
+// of a same-creator family member B, the box minimum-balance accounting lands on
+// B's account, not on the initiator A.
+func TestFamilyBoxMBR(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	ledgertesting.TestConsensusRange(t, familyBoxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+		proto := config.Consensus[cv]
+
+		// A and B share creator addrs[0], so they are in the same family.
+		a := dl.fundedApp(addrs[0], 200_000, familyBoxMBRApp) // A never holds boxes itself
+		b := dl.fundedApp(addrs[0], 1_000_000, familyBoxOwner)
+
+		// B opts in so A may write (and create/delete) its boxes.
+		dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0], ApplicationID: b})
+
+		// A call targeting B's box "x" (Applications 1 == B; box ref index 1 == B).
+		call := func(args ...string) *txntest.Txn {
+			return txntest.Txn{
+				Type:          "appl",
+				Sender:        addrs[0],
+				ApplicationID: a,
+				ForeignApps:   []basics.AppIndex{b},
+				Boxes:         []transactions.BoxRef{{Index: 1, Name: []byte("x")}},
+			}.Args(args...)
+		}
+
+		// Baseline: neither account holds a box, and note A's balance.
+		require.Zero(t, lookup(t, dl.generator, a.Address()).TotalBoxes)
+		require.Zero(t, lookup(t, dl.generator, b.Address()).TotalBoxes)
+		aMicros := micros(t, dl.generator, a.Address())
+
+		// A creates a 16-byte box "x" in B: B's box accounting grows.
+		dl.txn(call("create", "x", "\x10")) // 16 bytes
+		bAcct := lookup(t, dl.generator, b.Address())
+		require.EqualValues(t, 1, bAcct.TotalBoxes)
+		require.EqualValues(t, len("x")+16, bAcct.TotalBoxBytes)
+		// A is not charged: no boxes attributed to it and its balance is untouched
+		// (the txn sender addrs[0] pays the fee, not A's account).
+		require.Zero(t, lookup(t, dl.generator, a.Address()).TotalBoxes)
+		require.Equal(t, aMicros, micros(t, dl.generator, a.Address()))
+
+		// A resizes B's box to 64 bytes: only TotalBoxBytes moves, still on B.
+		dl.txn(call("resize", "x", "\x40")) // 64 bytes
+		bAcct = lookup(t, dl.generator, b.Address())
+		require.EqualValues(t, 1, bAcct.TotalBoxes)
+		require.EqualValues(t, len("x")+64, bAcct.TotalBoxBytes)
+		require.Zero(t, lookup(t, dl.generator, a.Address()).TotalBoxes)
+
+		// A deletes B's box: B's box accounting returns to zero (MBR refunded).
+		dl.txn(call("del", "x"))
+		bAcct = lookup(t, dl.generator, b.Address())
+		require.Zero(t, bAcct.TotalBoxes)
+		require.Zero(t, bAcct.TotalBoxBytes)
+
+		// Enforcement: a family member funded with only its base MinBalance can't
+		// cover a new box, so A's create-in-B2 fails on B2's MinBalance -- proving
+		// the requirement is charged to (and checked against) the owner.
+		b2 := dl.fundedApp(addrs[0], proto.MinBalance, familyBoxOwner)
+		dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0], ApplicationID: b2})
+		underfunded := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[0],
+			ApplicationID: a,
+			ForeignApps:   []basics.AppIndex{b2},
+			Boxes:         []transactions.BoxRef{{Index: 1, Name: []byte("x")}},
+		}.Args("create", "x", "\x10")
+		dl.txn(underfunded, "below min")
 	})
 }

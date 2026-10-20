@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -161,7 +161,7 @@ func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNo
 func (cs *CatchpointCatchupService) Start(ctx context.Context) error {
 	// Only check catchpoint ledger validity if we're starting new
 	if cs.stage == ledger.CatchpointCatchupStateInactive {
-		err := cs.checkLedgerDownload()
+		err := cs.checkLedgerDownload(ctx)
 		if err != nil {
 			return fmt.Errorf("aborting catchup Start(): %s", err)
 		}
@@ -317,7 +317,7 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() error {
 		start := time.Now()
 		err0 = lf.downloadLedger(cs.ctx, peer, round)
 		if err0 == nil {
-			cs.log.Infof("ledger downloaded in %d seconds", time.Since(start)/time.Second)
+			cs.log.Infof("ledger downloaded from %s in %d seconds", peerAddress(peer), time.Since(start)/time.Second)
 			start = time.Now()
 			err0 = cs.ledgerAccessor.BuildMerkleTrie(cs.ctx, cs.updateVerifiedCounts)
 			if err0 == nil {
@@ -325,8 +325,10 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() error {
 				break
 			}
 			// failed to build the merkle trie for the above catchpoint file.
+			cs.log.Infof("failed to build merkle trie for catchpoint file from %s: %v", peerAddress(peer), err0)
 			cs.blocksDownloadPeerSelector.rankPeer(psp, peerRankInvalidDownload)
 		} else {
+			cs.log.Infof("failed to download catchpoint ledger from peer %s: %v", peerAddress(peer), err0)
 			cs.blocksDownloadPeerSelector.rankPeer(psp, peerRankDownloadFailed)
 		}
 
@@ -523,10 +525,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	// 2. replay starts from X-CatchpointLookback+1
 	// 3. transaction evaluation at Y requires block up to MaxTxnLife+DeeperBlockHeaderHistory back from Y
 	proto := config.Consensus[topBlock.CurrentProtocol]
-	lookback := proto.MaxTxnLife + proto.DeeperBlockHeaderHistory + proto.CatchpointLookback
-	if lookback < proto.MaxBalLookback {
-		lookback = proto.MaxBalLookback
-	}
+	lookback := max(proto.MaxTxnLife+proto.DeeperBlockHeaderHistory+proto.CatchpointLookback, proto.MaxBalLookback)
 
 	lookbackForStateProofSupport := lookbackForStateproofsSupport(&topBlock)
 	if lookback < lookbackForStateProofSupport {
@@ -550,7 +549,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	var blk *bookkeeping.Block
 	var cert *agreement.Certificate
 	for retryCount := uint64(1); blocksFetched <= lookback; {
-		if err := cs.ctx.Err(); err != nil {
+		if err1 := cs.ctx.Err(); err1 != nil {
 			return cs.stopOrAbort()
 		}
 
@@ -761,9 +760,8 @@ func (cs *CatchpointCatchupService) updateNodeCatchupMode(catchupModeEnabled boo
 	case newCtx, open := <-newCtxCh:
 		if open {
 			cs.ctx, cs.cancelCtxFunc = context.WithCancel(newCtx)
-		} else {
-			// channel is closed, this means that the node is stopping
 		}
+		// if channel is closed, this means that the node is stopping
 	case <-cs.ctx.Done():
 		// the node context was canceled before the SetCatchpointCatchupMode goroutine had
 		// the chance of completing. We At this point, the service is shutting down. However,
@@ -812,7 +810,7 @@ func (cs *CatchpointCatchupService) initDownloadPeerSelector() {
 // checkLedgerDownload sends a HEAD request to the ledger endpoint of peers to validate the catchpoint's availability
 // before actually starting the catchup process.
 // The error returned is either from an unsuccessful request or a successful request that did not return a 200.
-func (cs *CatchpointCatchupService) checkLedgerDownload() error {
+func (cs *CatchpointCatchupService) checkLedgerDownload(ctx context.Context) error {
 	round, _, err := ledgercore.ParseCatchpointLabel(cs.stats.CatchpointLabel)
 	if err != nil {
 		return fmt.Errorf("failed to parse catchpoint label : %v", err)
@@ -821,12 +819,14 @@ func (cs *CatchpointCatchupService) checkLedgerDownload() error {
 	for i := 0; i < cs.config.CatchupLedgerDownloadRetryAttempts; i++ {
 		psp, peerError := cs.blocksDownloadPeerSelector.getNextPeer()
 		if peerError != nil {
-			return err
+			cs.log.Debugf("checkLedgerDownload: error on getNextPeer: %s", peerError.Error())
+			return peerError
 		}
-		err = ledgerFetcher.headLedger(context.Background(), psp.Peer, round)
+		err = ledgerFetcher.headLedger(ctx, psp.Peer, round)
 		if err == nil {
 			return nil
 		}
+		cs.log.Debugf("checkLedgerDownload: failed to headLedger from peer %s: %v", peerAddress(psp.Peer), err)
 		// a non-nil error means that the catchpoint is not available, so we should rank it accordingly
 		cs.blocksDownloadPeerSelector.rankPeer(psp, peerRankNoCatchpointForRound)
 	}

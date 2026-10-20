@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -275,7 +275,7 @@ func (p *player) issueFastVote(r routerHandle) (actions []action) {
 
 func (p *player) handleCheckpointEvent(r routerHandle, e checkpointEvent) []action {
 	return []action{
-		checkpointAction{
+		checkpointAction{ //nolint:staticcheck // explicit assignment for clarity
 			Round:  e.Round,
 			Period: e.Period,
 			Step:   e.Step,
@@ -331,13 +331,7 @@ func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *t
 	dynamicTimeout := p.lowestCredentialArrivals.orderStatistics(dynamicFilterTimeoutCredentialArrivalHistoryIdx) + dynamicFilterTimeoutGraceInterval
 
 	// Make sure the dynamic filter timeout is not too small nor too large
-	clampedTimeout := dynamicTimeout
-	if clampedTimeout < dynamicFilterTimeoutLowerBound {
-		clampedTimeout = dynamicFilterTimeoutLowerBound
-	}
-	if clampedTimeout > defaultTimeout {
-		clampedTimeout = defaultTimeout
-	}
+	clampedTimeout := min(max(dynamicTimeout, dynamicFilterTimeoutLowerBound), defaultTimeout)
 	tracer.log.Debugf("round %d, period %d: dynamicTimeout = %d, clamped timeout = %d", p.Round, p.Period, dynamicTimeout, clampedTimeout)
 	// store dynamicFilterTimeout on the player for debugging & reporting
 	p.dynamicFilterTimeout = dynamicTimeout
@@ -526,7 +520,7 @@ func (p *player) partitionPolicy(r routerHandle) (actions []action) {
 		// TODO do we want to authenticate our own bundles?
 		b := bundleResponse.Event.Bundle
 		r.t.logBundleBroadcast(*p, b)
-		a0 := broadcastAction(protocol.VoteBundleTag, b)
+		a0 := broadcastBundleAction(b)
 		actions = append(actions, a0)
 	}
 
@@ -556,7 +550,7 @@ func (p *player) partitionPolicy(r routerHandle) (actions []action) {
 		if resStaged.Committable {
 			transmit := compoundMessage{Proposal: resStaged.Payload.u()}
 			r.t.logProposalRepropagate(resStaged.Proposal, bundleRound, bundlePeriod)
-			a1 := broadcastAction(protocol.ProposalPayloadTag, transmit)
+			a1 := broadcastCompoundAction(transmit)
 			actions = append(actions, a1)
 		} else {
 			// even if there is no staged value, there may be a pinned value
@@ -564,7 +558,7 @@ func (p *player) partitionPolicy(r routerHandle) (actions []action) {
 			if resPinned.PayloadOK {
 				transmit := compoundMessage{Proposal: resPinned.Payload.u()}
 				r.t.logProposalRepropagate(resPinned.Proposal, bundleRound, bundlePeriod)
-				a1 := broadcastAction(protocol.ProposalPayloadTag, transmit)
+				a1 := broadcastCompoundAction(transmit)
 				actions = append(actions, a1)
 			}
 		}
@@ -634,7 +628,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 				// Dynamic filter timeout feature enabled, and current message
 				// updated the best credential arrival time
 				v := e.Input.Vote
-				return append(actions, relayAction(e, protocol.AgreementVoteTag, v.u()))
+				return append(actions, relayVoteAction(e, v.u()))
 			case NoLateCredentialTrackingImpact:
 				// Dynamic filter timeout feature enabled, but current message
 				// may not update the best credential arrival time, so we should
@@ -655,14 +649,14 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			return append(actions, verifyVoteAction(e, uv.R.Round, uv.R.Period, seq))
 		}
 		v := e.Input.Vote
-		a := relayAction(e, protocol.AgreementVoteTag, v.u())
+		a := relayVoteAction(e, v.u())
 		ep := ef.(proposalAcceptedEvent)
 		if ep.PayloadOk {
 			transmit := compoundMessage{
 				Proposal: ep.Payload.u(),
 				Vote:     v.u(),
 			}
-			a = broadcastAction(protocol.ProposalPayloadTag, transmit)
+			a = broadcastCompoundAction(transmit)
 		}
 		return append(actions, a)
 	}
@@ -683,7 +677,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			uv := ef.(payloadProcessedEvent).Vote.u()
 
 			// relay proposal if it has been pipelined
-			ra := relayAction(e, protocol.ProposalPayloadTag, compoundMessage{Proposal: up, Vote: uv})
+			ra := relayCompoundAction(e, compoundMessage{Proposal: up, Vote: uv})
 
 			if ep.Round == p.Round {
 				vpa := verifyPayloadAction(e, ep.Round, ep.Period, ep.Pinned)
@@ -704,7 +698,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			}
 			up := e.Input.UnauthenticatedProposal
 
-			a := relayAction(e, protocol.ProposalPayloadTag, compoundMessage{Proposal: up, Vote: uv})
+			a := relayCompoundAction(e, compoundMessage{Proposal: up, Vote: uv})
 			actions = append(actions, a)
 		}
 
@@ -746,7 +740,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			return append(actions, verifyVoteAction(e, uv.R.Round, uv.R.Period, 0))
 		} // else e.t() == voteVerified
 		v := e.Input.Vote
-		actions = append(actions, relayAction(e, protocol.AgreementVoteTag, v.u()))
+		actions = append(actions, relayVoteAction(e, v.u()))
 		a1 := p.handle(r, ef)
 		return append(actions, a1...)
 
@@ -764,7 +758,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			ub := e.Input.UnauthenticatedBundle
 			return append(actions, verifyBundleAction(e, ub.Round, ub.Period, ub.Step))
 		}
-		a0 := relayAction(e, protocol.VoteBundleTag, ef.(thresholdEvent).Bundle)
+		a0 := relayBundleAction(e, ef.(thresholdEvent).Bundle)
 		a1 := p.handle(r, ef)
 		return append(append(actions, a0), a1...)
 	}

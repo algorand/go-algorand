@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,7 +26,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate stringer -type=actionType
+//go:generate go tool -modfile=../tool.mod stringer -type=actionType
 type actionType uint8
 
 const (
@@ -221,7 +221,7 @@ func (a cryptoAction) do(ctx context.Context, s *Service) {
 	case verifyPayload:
 		s.demux.verifyPayload(ctx, a.M, a.Round, a.Period, a.Pinned)
 	case verifyBundle:
-		s.demux.verifyBundle(ctx, a.M, a.Round, a.Period, a.Step)
+		s.demux.verifyBundle(ctx, a.M, a.Round)
 	}
 }
 
@@ -464,34 +464,28 @@ func disconnectAction(e messageEvent, err *serializableError) action {
 	return networkAction{T: disconnect, Err: err, h: e.Input.messageHandle}
 }
 
-func broadcastAction(tag protocol.Tag, o interface{}) action {
-	a := networkAction{T: broadcast, Tag: tag}
-	// TODO would be good to have compiler check this (and related) type switch
-	// by specializing one method per type
-	switch tag {
-	case protocol.AgreementVoteTag:
-		a.UnauthenticatedVote = o.(unauthenticatedVote)
-	case protocol.VoteBundleTag:
-		a.UnauthenticatedBundle = o.(unauthenticatedBundle)
-	case protocol.ProposalPayloadTag:
-		a.CompoundMessage = o.(compoundMessage)
-	}
-	return a
+// note, there is no broadcastVoteAction
+// because when a participant makes a vote, it is processed as voteVerified / handleMessageEvent events
+// and then processed like any other votes, resulting in a relayVoteAction instead of a broadcast
+
+func broadcastBundleAction(b unauthenticatedBundle) action {
+	return networkAction{T: broadcast, Tag: protocol.VoteBundleTag, UnauthenticatedBundle: b}
 }
 
-func relayAction(e messageEvent, tag protocol.Tag, o interface{}) action {
-	a := networkAction{T: relay, h: e.Input.messageHandle, Tag: tag}
-	// TODO would be good to have compiler check this (and related) type switch
-	// by specializing one method per type
-	switch tag {
-	case protocol.AgreementVoteTag:
-		a.UnauthenticatedVote = o.(unauthenticatedVote)
-	case protocol.VoteBundleTag:
-		a.UnauthenticatedBundle = o.(unauthenticatedBundle)
-	case protocol.ProposalPayloadTag:
-		a.CompoundMessage = o.(compoundMessage)
-	}
-	return a
+func broadcastCompoundAction(msg compoundMessage) action {
+	return networkAction{T: broadcast, Tag: protocol.ProposalPayloadTag, CompoundMessage: msg}
+}
+
+func relayVoteAction(e messageEvent, v unauthenticatedVote) action {
+	return networkAction{T: relay, h: e.Input.messageHandle, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: v}
+}
+
+func relayBundleAction(e messageEvent, b unauthenticatedBundle) action {
+	return networkAction{T: relay, h: e.Input.messageHandle, Tag: protocol.VoteBundleTag, UnauthenticatedBundle: b}
+}
+
+func relayCompoundAction(e messageEvent, msg compoundMessage) action {
+	return networkAction{T: relay, h: e.Input.messageHandle, Tag: protocol.ProposalPayloadTag, CompoundMessage: msg}
 }
 
 func verifyVoteAction(e messageEvent, r round, p period, taskIndex uint64) action {
@@ -566,7 +560,6 @@ func (c checkpointAction) do(ctx context.Context, s *Service) {
 		// we don't expect this to happen in recovery
 		s.log.with(logEvent).Errorf("checkpoint action for (%v, %v, %v) reached with nil completion channel", c.Round, c.Period, c.Step)
 	}
-	return
 }
 
 func (c checkpointAction) String() string {

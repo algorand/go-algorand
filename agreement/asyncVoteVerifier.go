@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -54,7 +54,7 @@ type AsyncVoteVerifier struct {
 	wg              sync.WaitGroup
 	workerWaitCh    chan struct{}
 	backlogExecPool execpool.BacklogPool
-	execpoolOut     chan interface{}
+	execpoolOut     chan any
 	ctx             context.Context
 	ctxCancel       context.CancelFunc
 }
@@ -74,7 +74,7 @@ func MakeAsyncVoteVerifier(verificationPool execpool.BacklogPool) *AsyncVoteVeri
 	// input channel, plus all the content of the currently-executing tasks. That would prevent the
 	// pool from getting stuck by client enqueuing messages, as long as these clients keep pulling from the
 	// output queue at the same rate.
-	verifier.execpoolOut = make(chan interface{}, 3*verificationPool.GetParallelism())
+	verifier.execpoolOut = make(chan any, 3*verificationPool.GetParallelism())
 
 	verifier.ctx, verifier.ctxCancel = context.WithCancel(context.Background())
 
@@ -94,7 +94,7 @@ func (avv *AsyncVoteVerifier) worker() {
 	}
 }
 
-func (avv *AsyncVoteVerifier) executeVoteVerification(task interface{}) interface{} {
+func (avv *AsyncVoteVerifier) executeVoteVerification(task any) any {
 	req := task.(asyncVerifyVoteRequest)
 
 	select {
@@ -113,7 +113,7 @@ func (avv *AsyncVoteVerifier) executeVoteVerification(task interface{}) interfac
 	}
 }
 
-func (avv *AsyncVoteVerifier) executeEqVoteVerification(task interface{}) interface{} {
+func (avv *AsyncVoteVerifier) executeEqVoteVerification(task any) any {
 	req := task.(asyncVerifyVoteRequest)
 
 	select {

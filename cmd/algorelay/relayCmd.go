@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -39,12 +39,12 @@ var (
 	defaultPortArg  uint16
 	dnsBootstrapArg string // e.g. mainnet or testnet
 	recordIDArg     int64
+	ttlArg          uint
 
 	cfToken string
 )
 
 var nameRecordTypes = []string{"A", "CNAME", "SRV"}
-var srvRecordTypes = []string{"SRV"}
 
 const metricsPort = uint16(9100)
 
@@ -89,6 +89,7 @@ func init() {
 	updateCmd.MarkFlagRequired("defaultport")
 	updateCmd.Flags().StringVarP(&dnsBootstrapArg, "dnsbootstrap", "b", "", "Bootstrap name for SRV records (eg mainnet)")
 	updateCmd.MarkFlagRequired("dnsbootstrap")
+	updateCmd.Flags().UintVar(&ttlArg, "ttl", 60, "TTL (seconds) for created DNS/SRV records; pass 1 to use Cloudflare's Automatic TTL (~300s); values 2-59 are clamped to 60 seconds")
 }
 
 func loadRelays(file string) []eb.Relay {
@@ -356,6 +357,7 @@ func ensureRelayStatus(checkOnly bool, relay eb.Relay, nameDomain string, srvDom
 	// Error if target has another name entry - target should be relay provider's domain so shouldn't be possible
 	if mapsTo, has := ctx.nameEntries[target]; has {
 		err = fmt.Errorf("relay target has a DNS Name entry and should not (%s -> %s)", target, mapsTo)
+		return
 	}
 
 	names, err := getTargetDNSChain(ctx.nameEntries, target)
@@ -375,6 +377,7 @@ func ensureRelayStatus(checkOnly bool, relay eb.Relay, nameDomain string, srvDom
 
 	if relay.DNSAlias == "" {
 		err = fmt.Errorf("missing DNSAlias name")
+		return
 	}
 
 	targetDomainAlias := relay.DNSAlias + "." + nameDomain
@@ -523,9 +526,6 @@ func ensureRelayStatus(checkOnly bool, relay eb.Relay, nameDomain string, srvDom
 // Returns an array of names starting with the target ip/name and ending with the outermost reference
 func getTargetDNSChain(nameEntries map[string]string, target string) (names []string, err error) {
 	target = strings.ToLower(target)
-	if err != nil {
-		return
-	}
 
 	names = append(names, target)
 	for {
@@ -614,7 +614,7 @@ func addDNSRecord(from string, to string, cfZoneID string) error {
 	} else {
 		recordType = "CNAME"
 	}
-	return cloudflareDNS.SetDNSRecord(context.Background(), recordType, from, to, cloudflare.AutomaticTTL, priority, proxied)
+	return cloudflareDNS.SetDNSRecord(context.Background(), recordType, from, to, ttlArg, priority, proxied)
 }
 
 func addSRVRecord(srvNetwork string, target string, port uint16, serviceShortName string, cfZoneID string) error {
@@ -623,7 +623,7 @@ func addSRVRecord(srvNetwork string, target string, port uint16, serviceShortNam
 	const priority = 1
 	const weight = 1
 
-	return cloudflareDNS.SetSRVRecord(context.Background(), srvNetwork, target, cloudflare.AutomaticTTL, priority, uint(port), serviceShortName, "_tcp", weight)
+	return cloudflareDNS.SetSRVRecord(context.Background(), srvNetwork, target, ttlArg, priority, uint(port), serviceShortName, "_tcp", weight)
 }
 
 func clearSRVRecord(srvNetwork string, target string, serviceShortName string, cfZoneID string) error {

@@ -53,7 +53,7 @@ if { [catch {
     # start hosted node in the background
     spawn algoh -d $TEST_NODE_DIR -p $PRIMARY_ADDR
     expect {
-        "^Logging to: *" {puts "algoh startup successful"}
+        "^algoh logging to: *" {puts "algoh startup successful"}
         timeout {::Algoh::Abort "algoh failed to start";}
         eof { ::Algoh::CheckEOF "algoh failed to start" }
     }

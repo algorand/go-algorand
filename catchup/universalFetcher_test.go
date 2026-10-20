@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -58,6 +58,7 @@ func TestUGetBlockWs(t *testing.T) {
 	up := makeTestUnicastPeer(net, t)
 	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, ledger, net, "test genesisID")
 	ls.Start()
+	defer ls.Stop()
 
 	fetcher := makeUniversalBlockFetcher(logging.TestingLog(t), net, cfg)
 
@@ -74,7 +75,8 @@ func TestUGetBlockWs(t *testing.T) {
 	block, cert, duration, err = fetcher.fetchBlock(context.Background(), next+1, up)
 
 	require.Error(t, err)
-	require.Error(t, noBlockForRoundError{}, err)
+	var noBlockErr noBlockForRoundError
+	require.ErrorAs(t, err, &noBlockErr)
 	require.Equal(t, next+1, err.(noBlockForRoundError).round)
 	require.Equal(t, next, err.(noBlockForRoundError).latest)
 	require.Nil(t, block)
@@ -120,7 +122,8 @@ func TestUGetBlockHTTP(t *testing.T) {
 
 	block, cert, duration, err = fetcher.fetchBlock(context.Background(), next+1, net.GetPeers()[0])
 
-	require.Error(t, noBlockForRoundError{}, err)
+	var noBlockErr noBlockForRoundError
+	require.ErrorAs(t, err, &noBlockErr)
 	require.Equal(t, next+1, err.(noBlockForRoundError).round)
 	require.Equal(t, next, err.(noBlockForRoundError).latest)
 	require.Contains(t, err.Error(), "no block available for given round")
@@ -154,7 +157,7 @@ func TestProcessBlockBytesErrors(t *testing.T) {
 	}
 
 	blkData := protocol.Encode(&blk)
-	bc := protocol.EncodeReflect(rpcs.PreEncodedBlockCert{
+	bc := protocol.Encode(&rpcs.PreEncodedBlockCert{
 		Block: blkData,
 	})
 
@@ -186,7 +189,6 @@ func TestRequestBlockBytesErrors(t *testing.T) {
 		t.Fatal(err)
 		return
 	}
-	defer ledger.Ledger.Close()
 
 	blockServiceConfig := config.GetDefaultLocal()
 	blockServiceConfig.EnableBlockService = true

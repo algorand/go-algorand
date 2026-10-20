@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -44,7 +44,7 @@ func (s *LaggedStdIo) write(writer io.Writer, p []byte) (n int, err error) {
 	lines := strings.Split(string(p), "\n")
 	totalBytes := 0
 	for _, outputLine := range lines {
-		// avoid outputing empty lines.
+		// avoid outputting empty lines.
 		if len(outputLine) == 0 {
 			continue
 		}
@@ -57,7 +57,7 @@ func (s *LaggedStdIo) write(writer io.Writer, p []byte) (n int, err error) {
 		totalBytes += n + 1
 	}
 	// if we success, output the original len(p), so that the caller won't know
-	// we've diced and splited the original string.
+	// we've diced and split the original string.
 	return len(p), nil
 }
 
@@ -73,7 +73,7 @@ func (s *LaggedStdIo) Write(p []byte) (n int, err error) {
 	return 0, nil
 }
 
-// Read implmenents the io.Reader interface and redirecting the read request to the
+// Read implements the io.Reader interface and redirects the read request to the
 // correct stdin pipe.
 func (s *LaggedStdIo) Read(p []byte) (n int, err error) {
 	if s.ioClass == 0 {
@@ -89,7 +89,7 @@ func (s *LaggedStdIo) SetLinePrefix(linePrefix string) {
 
 // NewLaggedStdIo creates a new instance of the LaggedStdIo.
 // allowed stdio are limited to os.Stdin, os.Stdout and os.Stderr
-func NewLaggedStdIo(stdio interface{}, linePrefix string) *LaggedStdIo {
+func NewLaggedStdIo(stdio any, linePrefix string) *LaggedStdIo {
 	lio := &LaggedStdIo{}
 	lio.LinePrefix.Store(linePrefix)
 	switch stdio {

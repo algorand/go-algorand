@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,24 +18,17 @@ package p2p
 
 import (
 	"context"
-	"encoding/base32"
 	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"runtime"
 	"strings"
 	"time"
 
-	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/network/limitcaller"
-	pstore "github.com/algorand/go-algorand/network/p2p/peerstore"
-	"github.com/algorand/go-algorand/network/phonebook"
-	"github.com/algorand/go-algorand/util/metrics"
-	"github.com/algorand/go-deadlock"
-
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	connmgrcore "github.com/libp2p/go-libp2p/core/connmgr"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -43,10 +36,20 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
+	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
+
+	"github.com/algorand/go-deadlock"
+
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network/limitcaller"
+	pstore "github.com/algorand/go-algorand/network/p2p/peerstore"
+	"github.com/algorand/go-algorand/network/phonebook"
+	"github.com/algorand/go-algorand/util/metrics"
 )
 
 // SubNextCancellable is an abstraction for pubsub.Subscription
@@ -62,9 +65,12 @@ type Service interface {
 	ID() peer.ID // return peer.ID for self
 	IDSigner() *PeerIDChallengeSigner
 	AddrInfo() peer.AddrInfo // return addrInfo for self
+	NetworkNotify(network.Notifiee)
+	NetworkStopNotify(network.Notifiee)
 
-	DialPeersUntilTargetCount(targetConnCount int)
+	DialPeersUntilTargetCount(targetConnCount int) bool
 	ClosePeer(peer.ID) error
+	UnprotectPeer(peer.ID)
 
 	Conns() []network.Conn
 	ListPeersForTopic(topic string) []peer.ID
@@ -82,21 +88,23 @@ type serviceImpl struct {
 	host       host.Host
 	streams    *streamManager
 	pubsub     *pubsub.PubSub
-	pubsubCtx  context.Context
 	privKey    crypto.PrivKey
 
 	topics   map[string]*pubsub.Topic
 	topicsMu deadlock.RWMutex
 }
 
-// AlgorandWsProtocol defines a libp2p protocol name for algorand's websockets messages
-const AlgorandWsProtocol = "/algorand-ws/1.0.0"
+// AlgorandWsProtocolV1 defines a libp2p protocol name for algorand's websockets messages
+// as the very initial release
+const AlgorandWsProtocolV1 = "/algorand-ws/1.0.0"
 
-// algorandGUIDProtocolPrefix defines a libp2p protocol name for algorand node telemetry GUID exchange
-const algorandGUIDProtocolPrefix = "/algorand-telemetry/1.0.0/"
-const algorandGUIDProtocolTemplate = algorandGUIDProtocolPrefix + "%s/%s"
+// AlgorandWsProtocolV22 defines a libp2p protocol name for algorand's websockets messages
+// as a version supporting peer metadata and wsnet v2.2 protocol features
+const AlgorandWsProtocolV22 = "/algorand-ws/2.2.0"
 
 const dialTimeout = 30 * time.Second
+
+const cnmgrTag = "algorand-ws-mesh"
 
 // MakeHost creates a libp2p host but does not start listening.
 // Use host.Network().Listen() on the returned address to start listening.
@@ -133,6 +141,9 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 		logging.Base().Debug("p2p NetAddress is not set, not listening")
 		listenAddr = ""
 	}
+	if cfg.IncomingConnectionsLimit == 0 {
+		listenAddr = ""
+	}
 
 	var enableMetrics = func(cfg *libp2p.Config) error { cfg.DisableMetrics = false; return nil }
 	metrics.DefaultRegistry().Register(&metrics.PrometheusDefaultMetrics)
@@ -143,7 +154,12 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 		addrFactory = addressFilter
 	}
 
-	rm, err := configureResourceManager(cfg)
+	connLimits := deriveConnLimits(cfg)
+	rm, err := configureResourceManager(connLimits)
+	if err != nil {
+		return nil, "", err
+	}
+	cm, err := configureConnManager(connLimits)
 	if err != nil {
 		return nil, "", err
 	}
@@ -158,21 +174,76 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 		libp2p.Security(noise.ID, noise.New),
 		enableMetrics,
 		libp2p.ResourceManager(rm),
+		libp2p.ConnectionManager(cm),
 		libp2p.AddrsFactory(addrFactory),
 	)
 	return host, listenAddr, err
 }
 
-func configureResourceManager(cfg config.Local) (network.ResourceManager, error) {
+// connLimitConfig holds derived connection limits for both the connmgr and rcmgr.
+type connLimitConfig struct {
+	connMgrLow         int
+	connMgrHigh        int
+	rcmgrConns         int
+	rcmgrConnsInbound  int
+	rcmgrConnsOutbound int
+}
+
+// deriveConnLimits computes connection manager and resource manager limits
+// from the node configuration. Listen servers use IncomingConnectionsLimit;
+// client nodes use tighter limits based on GossipFanout.
+func deriveConnLimits(cfg config.Local) connLimitConfig {
+	var low, high, rcmgrConns, rcmgrConnsInbound, rcmgrConnsOutbound int
+	rcmgrConnsOutbound = cfg.GossipFanout * 3
+	if cfg.EnableDHTProviders {
+		rcmgrConnsOutbound += cfg.GossipFanout * 3
+	}
+	if cfg.IsListenServer() {
+		if cfg.IncomingConnectionsLimit < 0 {
+			rcmgrConns = math.MaxInt
+			rcmgrConnsInbound = math.MaxInt
+			high = 0
+			low = 0
+		} else {
+			rcmgrConns = rcmgrConnsOutbound + cfg.IncomingConnectionsLimit
+			rcmgrConnsInbound = cfg.IncomingConnectionsLimit
+			high = rcmgrConns
+			low = high * 96 / 100
+		}
+	} else {
+		rcmgrConns = rcmgrConnsOutbound + cfg.GossipFanout*3
+		high = rcmgrConnsOutbound
+		low = cfg.GossipFanout * 2
+	}
+
+	return connLimitConfig{
+		connMgrLow:         low,
+		connMgrHigh:        high,
+		rcmgrConns:         rcmgrConns,
+		rcmgrConnsInbound:  rcmgrConnsInbound,
+		rcmgrConnsOutbound: rcmgrConnsOutbound,
+	}
+}
+
+func configureResourceManager(limits connLimitConfig) (network.ResourceManager, error) {
 	// see https://github.com/libp2p/go-libp2p/tree/master/p2p/host/resource-manager for more details
 	scalingLimits := rcmgr.DefaultLimits
 	libp2p.SetDefaultServiceLimits(&scalingLimits)
 	scaledDefaultLimits := scalingLimits.AutoScale()
 
+	systemLimits := rcmgr.ResourceLimits{}
+	if limits.rcmgrConns > 0 {
+		systemLimits.Conns = rcmgr.LimitVal(limits.rcmgrConns)
+	}
+	if limits.rcmgrConnsInbound > 0 {
+		systemLimits.ConnsInbound = rcmgr.LimitVal(limits.rcmgrConnsInbound)
+	}
+	if limits.rcmgrConnsOutbound > 0 {
+		systemLimits.ConnsOutbound = rcmgr.LimitVal(limits.rcmgrConnsOutbound)
+	}
+
 	limitConfig := rcmgr.PartialLimitConfig{
-		System: rcmgr.ResourceLimits{
-			Conns: rcmgr.LimitVal(cfg.IncomingConnectionsLimit),
-		},
+		System: systemLimits,
 		// Everything else is default. The exact values will come from `scaledDefaultLimits` above.
 	}
 	limiter := rcmgr.NewFixedLimiter(limitConfig.Build(scaledDefaultLimits))
@@ -180,20 +251,32 @@ func configureResourceManager(cfg config.Local) (network.ResourceManager, error)
 	return rm, err
 }
 
+func configureConnManager(limits connLimitConfig) (connmgrcore.ConnManager, error) {
+	// connMgrLow = 0 and connMgrHigh = 0 mean disabled conns trimming
+	return connmgr.NewConnManager(limits.connMgrLow, limits.connMgrHigh,
+		connmgr.WithGracePeriod(20*time.Second))
+}
+
+// StreamHandlerPair is a struct that contains a protocol ID and a StreamHandler
+type StreamHandlerPair struct {
+	ProtoID protocol.ID
+	Handler StreamHandler
+}
+
+// StreamHandlers is an ordered list of StreamHandlerPair
+type StreamHandlers []StreamHandlerPair
+
 // MakeService creates a P2P service instance
-func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandler StreamHandler, metricsTracer pubsub.RawTracer) (*serviceImpl, error) {
+func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandlers StreamHandlers, pubsubOptions ...PubSubOption) (*serviceImpl, error) {
 
-	sm := makeStreamManager(ctx, log, h, wsStreamHandler, cfg.EnableGossipService)
+	sm := makeStreamManager(ctx, log, h, wsStreamHandlers, cfg.EnableGossipService)
 	h.Network().Notify(sm)
-	h.SetStreamHandler(AlgorandWsProtocol, sm.streamHandler)
 
-	// set an empty handler for telemetryID/telemetryInstance protocol in order to allow other peers to know our telemetryID
-	telemetryID := log.GetTelemetryGUID()
-	telemetryInstance := log.GetInstanceName()
-	telemetryProtoInfo := formatPeerTelemetryInfoProtocolName(telemetryID, telemetryInstance)
-	h.SetStreamHandler(protocol.ID(telemetryProtoInfo), func(s network.Stream) { s.Close() })
+	for _, pair := range wsStreamHandlers {
+		h.SetStreamHandler(pair.ProtoID, sm.streamHandler)
+	}
 
-	ps, err := makePubSub(ctx, cfg, h, metricsTracer)
+	ps, err := makePubSub(ctx, h, cfg.GossipFanout, pubsubOptions...)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +286,6 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h ho
 		host:       h,
 		streams:    sm,
 		pubsub:     ps,
-		pubsubCtx:  ctx,
 		privKey:    h.Peerstore().PrivKey(h.ID()),
 		topics:     make(map[string]*pubsub.Topic),
 	}, nil
@@ -227,7 +309,16 @@ func (s *serviceImpl) Start() error {
 
 // Close shuts down the P2P service
 func (s *serviceImpl) Close() error {
-	return s.host.Close()
+	// stop receiving Connected/Disconnected callbacks: StopNotify blocks until
+	// any in-flight notification has returned.
+	s.host.Network().StopNotify(s.streams)
+	// closing the host closes all connections and streams, which unblocks any
+	// stream I/O in progress in the stream handlers.
+	err := s.host.Close()
+	// wait (bounded) for the handler goroutines spawned by streamManager to finish
+	// so that nothing logs or touches state after Close returns.
+	s.streams.close()
+	return err
 }
 
 // ID returns the peer.ID for self
@@ -241,30 +332,57 @@ func (s *serviceImpl) IDSigner() *PeerIDChallengeSigner {
 }
 
 // DialPeersUntilTargetCount attempts to establish connections to the provided phonebook addresses
-func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) {
+func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) bool {
 	ps := s.host.Peerstore().(*pstore.PeerStore)
-	addrInfos := ps.GetAddresses(targetConnCount, phonebook.PhoneBookEntryRelayRole)
+	addrInfos := ps.GetAddresses(targetConnCount, phonebook.RelayRole)
 	conns := s.host.Network().Conns()
 	var numOutgoingConns int
 	for _, conn := range conns {
 		if conn.Stat().Direction == network.DirOutbound {
-			numOutgoingConns++
+			remotePeer := conn.RemotePeer()
+			if s.host.ConnManager().IsProtected(remotePeer, cnmgrTag) {
+				numOutgoingConns++
+			}
 		}
 	}
+	preExistingConns := numOutgoingConns
 	for _, peerInfo := range addrInfos {
 		// if we are at our target count stop trying to connect
 		if numOutgoingConns >= targetConnCount {
-			return
+			return numOutgoingConns > preExistingConns
 		}
-		// if we are already connected to this peer, skip it
-		if len(s.host.Network().ConnsToPeer(peerInfo.ID)) > 0 {
+		// if we are already connected to this peer, ensure it's properly handled
+		if conns := s.host.Network().ConnsToPeer(peerInfo.ID); len(conns) > 0 {
+			if !s.host.ConnManager().IsProtected(peerInfo.ID, cnmgrTag) {
+				// outbound connection was established by DHT/pubsub before the mesh thread
+				// could protect it, so handleConnected skipped stream creation.
+				// protect and re-trigger stream setup now.
+				// inbound connections are not re-triggered: streamManager.Connected already
+				// applied the peer ID ordering to them, and opening another stream here
+				// would duplicate the one opened by Connected or by the remote peer.
+				for _, conn := range conns {
+					if conn.Stat().Direction == network.DirOutbound {
+						s.host.ConnManager().Protect(peerInfo.ID, cnmgrTag)
+						if !s.streams.goHandleConnected(conn) {
+							// the service is shutting down: undo the protection and stop dialing
+							s.host.ConnManager().Unprotect(peerInfo.ID, cnmgrTag)
+							return numOutgoingConns > preExistingConns
+						}
+						numOutgoingConns++
+						break
+					}
+				}
+			}
 			continue
 		}
 		err := s.dialNode(context.Background(), peerInfo) // leaving the calls as blocking for now, to not over-connect beyond fanout
 		if err != nil {
 			s.log.Warnf("failed to connect to peer %s: %v", peerInfo.ID, err)
+		} else {
+			numOutgoingConns++
 		}
 	}
+	return numOutgoingConns > preExistingConns
 }
 
 // dialNode attempts to establish a connection to the provided peer
@@ -275,7 +393,13 @@ func (s *serviceImpl) dialNode(ctx context.Context, peer *peer.AddrInfo) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, dialTimeout)
 	defer cancel()
-	return s.host.Connect(ctx, *peer)
+	// protect before attempting to connect so that checks in Connected handler have up-to-date information
+	s.host.ConnManager().Protect(peer.ID, cnmgrTag)
+	err := s.host.Connect(ctx, *peer)
+	if err != nil {
+		s.host.ConnManager().Unprotect(peer.ID, cnmgrTag)
+	}
+	return err
 }
 
 // AddrInfo returns the peer.AddrInfo for self
@@ -300,6 +424,12 @@ func (s *serviceImpl) ClosePeer(peer peer.ID) error {
 	return s.host.Network().ClosePeer(peer)
 }
 
+// UnprotectPeer removes the protection from a peer, allowing
+// the connection manager to trim it if needed.
+func (s *serviceImpl) UnprotectPeer(id peer.ID) {
+	s.host.ConnManager().Unprotect(id, cnmgrTag)
+}
+
 // netAddressToListenAddress converts a netAddress in "ip:port" format to a listen address
 // that can be passed in to libp2p.ListenAddrStrings
 func netAddressToListenAddress(netAddress string) (string, error) {
@@ -318,35 +448,6 @@ func netAddressToListenAddress(netAddress string) (string, error) {
 	}
 
 	return fmt.Sprintf("/ip4/%s/tcp/%s", ip, parts[1]), nil
-}
-
-// GetPeerTelemetryInfo returns the telemetry ID of a peer by looking at its protocols
-func GetPeerTelemetryInfo(peerProtocols []protocol.ID) (telemetryID string, telemetryInstance string) {
-	for _, protocol := range peerProtocols {
-		if strings.HasPrefix(string(protocol), algorandGUIDProtocolPrefix) {
-			telemetryInfo := string(protocol[len(algorandGUIDProtocolPrefix):])
-			telemetryInfoParts := strings.Split(telemetryInfo, "/")
-			if len(telemetryInfoParts) == 2 {
-				telemetryIDBytes, err := base32.StdEncoding.DecodeString(telemetryInfoParts[0])
-				if err == nil {
-					telemetryID = string(telemetryIDBytes)
-				}
-				telemetryInstanceBytes, err := base32.StdEncoding.DecodeString(telemetryInfoParts[1])
-				if err == nil {
-					telemetryInstance = string(telemetryInstanceBytes)
-				}
-				return telemetryID, telemetryInstance
-			}
-		}
-	}
-	return "", ""
-}
-
-func formatPeerTelemetryInfoProtocolName(telemetryID string, telemetryInstance string) string {
-	return fmt.Sprintf(algorandGUIDProtocolTemplate,
-		base32.StdEncoding.EncodeToString([]byte(telemetryID)),
-		base32.StdEncoding.EncodeToString([]byte(telemetryInstance)),
-	)
 }
 
 var private6 = parseCIDR([]string{
@@ -423,4 +524,14 @@ func addressFilter(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
 // GetHTTPClient returns a libp2p-streaming http client that can be used to make requests to the given peer
 func (s *serviceImpl) GetHTTPClient(addrInfo *peer.AddrInfo, connTimeStore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration) (*http.Client, error) {
 	return makeHTTPClientWithRateLimit(addrInfo, s, connTimeStore, queueingTimeout)
+}
+
+// NetworkNotify registers a notifiee with the host's network
+func (s *serviceImpl) NetworkNotify(n network.Notifiee) {
+	s.host.Network().Notify(n)
+}
+
+// NetworkStopNotify unregisters a notifiee with the host's network
+func (s *serviceImpl) NetworkStopNotify(n network.Notifiee) {
+	s.host.Network().StopNotify(n)
 }

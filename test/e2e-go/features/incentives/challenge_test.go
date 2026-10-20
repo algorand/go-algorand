@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -67,10 +67,12 @@ func testChallengesOnce(t *testing.T, a *require.Assertions) (retry bool) {
 	const grace = 10
 	const mask = 0x80
 
+	consensusVersion := protocol.ConsensusFuture
+
 	var fixture fixtures.RestClientFixture
 	// Speed up rounds, keep lookback > 2 * grace period
-	fixture.FasterConsensus(protocol.ConsensusFuture, time.Second, lookback)
-	fixture.AlterConsensus(protocol.ConsensusFuture,
+	fixture.FasterConsensus(consensusVersion, time.Second, lookback)
+	fixture.AlterConsensus(consensusVersion,
 		func(cp config.ConsensusParams) config.ConsensusParams {
 			cp.Payouts.ChallengeInterval = 50
 			cp.Payouts.ChallengeGracePeriod = 10
@@ -95,13 +97,14 @@ func testChallengesOnce(t *testing.T, a *require.Assertions) (retry bool) {
 	err := fixture.WaitForRoundWithTimeout(interval - lookback) // Make all LastHeartbeats > interval, < 2*interval
 	a.NoError(err)
 
+	proto := config.Consensus[consensusVersion]
 	// eligible accounts1 will get challenged with node offline, and suspended
 	for _, account := range accounts1 {
-		rekeyreg(a, c1, account.Address, eligible(account.Address))
+		rekeyreg(a, c1, proto, account.Address, eligible(account.Address))
 	}
 	// eligible accounts2 will get challenged, but node2 will heartbeat for them
 	for _, account := range accounts2 {
-		rekeyreg(a, c2, account.Address, eligible(account.Address))
+		rekeyreg(a, c2, proto, account.Address, eligible(account.Address))
 	}
 
 	// turn off node 1, so it can't heartbeat
@@ -123,9 +126,7 @@ func testChallengesOnce(t *testing.T, a *require.Assertions) (retry bool) {
 	t.Logf("current %d lastPossible %d challengeRound %d", current, lastPossible, challengeRound)
 
 	// Advance to challenge round, check the blockseed
-	err = fixture.WaitForRoundWithTimeout(challengeRound)
-	a.NoError(err)
-	blk, err := c2.BookkeepingBlock(challengeRound)
+	blk, err := fixture.WaitForBlockWithTimeout(challengeRound)
 	a.NoError(err)
 	challenge := blk.BlockHeader.Seed[0] & mask // high bit
 
@@ -179,6 +180,7 @@ func testChallengesOnce(t *testing.T, a *require.Assertions) (retry bool) {
 	// Watch the first half grace period for proposals from challenged nodes, since they won't have to heartbeat.
 	lucky := util.MakeSet[basics.Address]()
 	fixture.WithEveryBlock(challengeRound, challengeRound+grace/2, func(block bookkeeping.Block) {
+		t.Logf("1st half Block %d, proposed by %s\n", block.Round(), block.Proposer())
 		if eligible2.Contains(block.Proposer()) {
 			lucky.Add(block.Proposer())
 		}
@@ -188,10 +190,7 @@ func testChallengesOnce(t *testing.T, a *require.Assertions) (retry bool) {
 	// In the second half of the grace period, Node 2 should heartbeat for its eligible accounts
 	beated := util.MakeSet[basics.Address]()
 	fixture.WithEveryBlock(challengeRound+grace/2+1, challengeRound+grace, func(block bookkeeping.Block) {
-		t.Logf("2nd half Block %d\n", block.Round())
-		if eligible2.Contains(block.Proposer()) {
-			lucky.Add(block.Proposer())
-		}
+		t.Logf("2nd half Block %d, proposed by %s\n", block.Round(), block.Proposer())
 		for i, txn := range block.Payset {
 			hb := txn.Txn.HeartbeatTxnFields
 			t.Logf("Heartbeat txn %v in position %d round %d\n", hb, i, block.Round())
@@ -201,6 +200,9 @@ func testChallengesOnce(t *testing.T, a *require.Assertions) (retry bool) {
 			beated.Add(hb.HbAddress)
 			a.NotContains(lucky, hb.HbAddress, "unneeded %s", hb.HbAddress) // we should not see a heartbeat from an account that proposed
 		}
+		if eligible2.Contains(block.Proposer()) {
+			lucky.Add(block.Proposer())
+		}
 		a.Empty(block.AbsentParticipationAccounts) // nobody suspended during grace
 	})
 	a.Equal(eligible2, util.Union(beated, lucky))
@@ -208,6 +210,7 @@ func testChallengesOnce(t *testing.T, a *require.Assertions) (retry bool) {
 	blk, err = fixture.WaitForBlockWithTimeout(challengeRound + grace + 1)
 	a.NoError(err)
 	a.Equal(eligible1, util.MakeSet(blk.AbsentParticipationAccounts...))
+	c2.WaitForRound(challengeRound + grace + 1) // synch with c2 so next loop is trustworthy
 
 	// node 1 challenged (eligible) accounts are suspended because node 1 is off
 	for address := range match1 {
@@ -217,7 +220,8 @@ func testChallengesOnce(t *testing.T, a *require.Assertions) (retry bool) {
 			a.Equal(basics.Offline, data.Status, "%v was not offline in round %d. (%d and %d)",
 				address, challengeRound+grace+1, data.LastHeartbeat, data.LastProposed)
 		} else {
-			a.Equal(basics.Online, data.Status, address) // not eligible, so not suspended
+			a.Equal(basics.Online, data.Status, "%v was not online in round %d. (%d and %d)",
+				address, challengeRound+grace+1, data.LastHeartbeat, data.LastProposed) // not eligible, so not suspended
 		}
 		a.NotZero(data.VoteID, address)
 		a.False(data.IncentiveEligible, address) // suspension turns off flag

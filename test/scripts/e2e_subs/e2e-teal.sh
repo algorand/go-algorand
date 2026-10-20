@@ -1,6 +1,8 @@
 #!/bin/bash
 
-date '+e2e_teal start %Y%m%d_%H%M%S'
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
 
 set -e
 set -x
@@ -89,8 +91,6 @@ ${gcmd} clerk sign -L ${TEMPDIR}/true.lsig -i ${TEMPDIR}/one.tx -o ${TEMPDIR}/on
 
 ${gcmd} clerk rawsend -f ${TEMPDIR}/one.stx
 
-${gcmd} clerk dryrun -t ${TEMPDIR}/one.stx
-
 ACCOUNT_TRUE=$(${gcmd} clerk compile -n ${TEMPDIR}/true.teal|awk '{ print $2 }')
 
 ${gcmd} clerk send --amount 1000000 --from ${ACCOUNT} --to ${ACCOUNT_TRUE}
@@ -119,6 +119,28 @@ ${gcmd} clerk multisig signprogram -L ${TEMPDIR}/mtrue.lsig -a ${ACCOUNTC}
 ${gcmd} clerk send --amount 1000000 --from ${ACCOUNT} --to ${ACCOUNTM}
 
 ${gcmd} clerk send --amount 200000 --from ${ACCOUNTM} --to ${ACCOUNTC} -L ${TEMPDIR}/mtrue.lsig
+
+# Test new multisig mode (e2e using vFuture)
+echo "Testing multisig mode..."
+${gcmd} clerk multisig signprogram --legacy-msig=false -p ${TEMPDIR}/true.teal -a ${ACCOUNT} -A ${ACCOUNTM} -o ${TEMPDIR}/mtrue_new.lsig
+${gcmd} clerk multisig signprogram --legacy-msig=false -L ${TEMPDIR}/mtrue_new.lsig -a ${ACCOUNTB} -o ${TEMPDIR}/mtrue_new2.lsig
+${gcmd} clerk send --amount 100000 --from ${ACCOUNTM} --to ${ACCOUNTB} -L ${TEMPDIR}/mtrue_new2.lsig
+
+# Test that mixing modes fails: since this is vFuture, mtrue.lsig has LMsig field
+# Try to use it with --legacy-msig=true (which expects Msig field)
+set +e
+OUTPUT=$(${gcmd} clerk multisig signprogram --legacy-msig=true -L ${TEMPDIR}/mtrue.lsig -a ${ACCOUNTB} -o ${TEMPDIR}/mtrue_mixed.lsig 2>&1)
+if [ $? -eq 0 ]; then
+    echo "ERROR: Expected failure when mixing new signature with legacy mode, but command succeeded"
+    exit 1
+fi
+echo "$OUTPUT" | grep -q "LogicSig file contains LMsig field"
+if [ $? -ne 0 ]; then
+    echo "ERROR: Expected error message about LMsig field, got: $OUTPUT"
+    exit 1
+fi
+echo "Correctly rejected mixing new signature with legacy mode"
+set -e
 
 echo "#pragma version 1" | ${gcmd} clerk compile -
 echo "#pragma version 2" | ${gcmd} clerk compile -
@@ -178,4 +200,4 @@ ${gcmd} clerk send --amount 10 --from-program-bytes ${TEMPDIR}/true2.lsig --to $
 set -o pipefail
 
 
-date '+e2e_teal OK %Y%m%d_%H%M%S'
+date "+${scriptname} OK %Y%m%d_%H%M%S"

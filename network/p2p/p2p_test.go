@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,11 +19,12 @@ package p2p
 import (
 	"context"
 	"fmt"
+	"math"
 	"net"
 	"testing"
+	"time"
 
-	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p/core/network"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-multiaddr"
@@ -31,7 +32,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network/p2p/peerstore"
+	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -77,102 +80,13 @@ func TestNetAddressToListenAddress(t *testing.T) {
 		t.Run(fmt.Sprintf("input: %s", test.input), func(t *testing.T) {
 			res, err := netAddressToListenAddress(test.input)
 			if test.err {
-				require.Error(t, err)
+				require.ErrorContains(t, err, `invalid netAddress`)
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, test.output, res)
 			}
 		})
 	}
-}
-
-// TestP2PGetPeerTelemetryInfo tests the GetPeerTelemetryInfo function
-func TestP2PGetPeerTelemetryInfo(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	testCases := []struct {
-		name                      string
-		peerProtocols             []protocol.ID
-		expectedTelemetryID       string
-		expectedTelemetryInstance string
-	}{
-		{
-			name:                      "Valid Telemetry Info",
-			peerProtocols:             []protocol.ID{protocol.ID(formatPeerTelemetryInfoProtocolName("telemetryID", "telemetryInstance"))},
-			expectedTelemetryID:       "telemetryID",
-			expectedTelemetryInstance: "telemetryInstance",
-		},
-		{
-			name:                      "Partial Telemetry Info 1",
-			peerProtocols:             []protocol.ID{protocol.ID(formatPeerTelemetryInfoProtocolName("telemetryID", ""))},
-			expectedTelemetryID:       "telemetryID",
-			expectedTelemetryInstance: "",
-		},
-		{
-			name:                      "Partial Telemetry Info 2",
-			peerProtocols:             []protocol.ID{protocol.ID(formatPeerTelemetryInfoProtocolName("", "telemetryInstance"))},
-			expectedTelemetryID:       "",
-			expectedTelemetryInstance: "telemetryInstance",
-		},
-		{
-			name:                      "No Telemetry Info",
-			peerProtocols:             []protocol.ID{protocol.ID("/some-other-protocol/1.0.0/otherID/otherInstance")},
-			expectedTelemetryID:       "",
-			expectedTelemetryInstance: "",
-		},
-		{
-			name:                      "Invalid Telemetry Info Format",
-			peerProtocols:             []protocol.ID{protocol.ID("/algorand-telemetry/1.0.0/invalidFormat")},
-			expectedTelemetryID:       "",
-			expectedTelemetryInstance: "",
-		},
-		{
-			name:                      "Special Characters Telemetry Info Format",
-			peerProtocols:             []protocol.ID{protocol.ID(formatPeerTelemetryInfoProtocolName("telemetry/ID", "123-//11-33"))},
-			expectedTelemetryID:       "telemetry/ID",
-			expectedTelemetryInstance: "123-//11-33",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			telemetryID, telemetryInstance := GetPeerTelemetryInfo(tc.peerProtocols)
-			if telemetryID != tc.expectedTelemetryID || telemetryInstance != tc.expectedTelemetryInstance {
-				t.Errorf("Expected telemetry ID: %s, telemetry instance: %s, but got telemetry ID: %s, telemetry instance: %s",
-					tc.expectedTelemetryID, tc.expectedTelemetryInstance, telemetryID, telemetryInstance)
-			}
-		})
-	}
-}
-
-func TestP2PProtocolAsMeta(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	h1, err := libp2p.New(libp2p.ListenAddrStrings("/ip4/127.0.0.1/tcp/0"))
-	require.NoError(t, err)
-	defer h1.Close()
-
-	h1TID := "telemetryID1"
-	h1Inst := "telemetryInstance2"
-	telemetryProtoInfo := formatPeerTelemetryInfoProtocolName(h1TID, h1Inst)
-	h1.SetStreamHandler(protocol.ID(telemetryProtoInfo), func(s network.Stream) { s.Close() })
-
-	h2, err := libp2p.New(libp2p.ListenAddrStrings("/ip4/127.0.0.1/tcp/0"))
-	require.NoError(t, err)
-	defer h2.Close()
-
-	err = h2.Connect(ctx, peer.AddrInfo{ID: h1.ID(), Addrs: h1.Addrs()})
-	require.NoError(t, err)
-
-	protos, err := h2.Peerstore().GetProtocols(h1.ID())
-	require.NoError(t, err)
-
-	tid, inst := GetPeerTelemetryInfo(protos)
-	require.Equal(t, h1TID, tid)
-	require.Equal(t, h1Inst, inst)
 }
 
 func TestP2PPrivateAddresses(t *testing.T) {
@@ -334,4 +248,199 @@ func TestP2PMakeHostAddressFilter(t *testing.T) {
 		require.NotEmpty(t, host.Addrs())
 		host.Close()
 	}
+}
+
+func TestP2PServiceStartZeroIncomingDoesNotListen(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.NetAddress = "127.0.0.1:0"
+	cfg.IncomingConnectionsLimit = 0
+
+	td := t.TempDir()
+	pstore, err := peerstore.NewPeerStore(nil, "test")
+	require.NoError(t, err)
+
+	host, la, err := MakeHost(cfg, td, pstore)
+	require.NoError(t, err)
+
+	svc, err := MakeService(context.Background(), logging.TestingLog(t), cfg, host, la, StreamHandlers{})
+	require.NoError(t, err)
+	defer svc.Close()
+
+	require.NoError(t, svc.Start())
+	require.Empty(t, host.Network().ListenAddresses())
+}
+
+func TestP2PPubSubOptions(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var opts []pubsub.Option
+	option := DisablePubSubPeerExchange()
+	option(&opts, nil)
+	require.Len(t, opts, 1)
+
+	tracer := &mockRawTracer{}
+	option = SetPubSubMetricsTracer(tracer)
+	option(&opts, nil)
+	require.Len(t, opts, 2)
+
+	filterFunc := func(roleChecker peerstore.RoleChecker, pid peer.ID) bool {
+		return roleChecker.HasRole(pid, phonebook.RelayRole)
+	}
+	checker := &mockRoleChecker{}
+	option = SetPubSubPeerFilter(filterFunc, checker)
+	option(&opts, nil)
+	require.Len(t, opts, 3)
+
+	option = SetPubSubHeartbeatInterval(100 * time.Millisecond)
+	params := &pubsub.GossipSubParams{}
+	option(&opts, params)
+	require.Len(t, opts, 3) // SetPubSubHeartbeatInterval does not add to opts but updates params
+	require.Equal(t, 100*time.Millisecond, params.HeartbeatInterval)
+}
+
+type mockRawTracer struct{}
+
+func (m *mockRawTracer) AddPeer(p peer.ID, proto protocol.ID)             {}
+func (m *mockRawTracer) RemovePeer(p peer.ID)                             {}
+func (m *mockRawTracer) Join(topic string)                                {}
+func (m *mockRawTracer) Leave(topic string)                               {}
+func (m *mockRawTracer) Graft(p peer.ID, topic string)                    {}
+func (m *mockRawTracer) Prune(p peer.ID, topic string)                    {}
+func (m *mockRawTracer) ValidateMessage(msg *pubsub.Message)              {}
+func (m *mockRawTracer) DeliverMessage(msg *pubsub.Message)               {}
+func (m *mockRawTracer) RejectMessage(msg *pubsub.Message, reason string) {}
+func (m *mockRawTracer) DuplicateMessage(msg *pubsub.Message)             {}
+func (m *mockRawTracer) ThrottlePeer(p peer.ID)                           {}
+func (m *mockRawTracer) RecvRPC(rpc *pubsub.RPC)                          {}
+func (m *mockRawTracer) SendRPC(rpc *pubsub.RPC, p peer.ID)               {}
+func (m *mockRawTracer) DropRPC(rpc *pubsub.RPC, p peer.ID)               {}
+func (m *mockRawTracer) UndeliverableMessage(msg *pubsub.Message)         {}
+
+type mockRoleChecker struct{}
+
+func (m *mockRoleChecker) HasRole(pid peer.ID, role phonebook.Role) bool {
+	return true
+}
+
+func TestDeriveConnLimits_Server(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.NetAddress = ":4160"
+	cfg.IncomingConnectionsLimit = 2400
+	cfg.GossipFanout = 4
+	limits := deriveConnLimits(cfg)
+	require.Equal(t, 2400+12, limits.rcmgrConns)
+	require.Equal(t, 2400, limits.rcmgrConnsInbound)
+	require.Equal(t, 12, limits.rcmgrConnsOutbound)
+	require.Equal(t, 2412, limits.connMgrHigh)
+	require.Equal(t, 2315, limits.connMgrLow) // 2412 * 96 / 100
+	require.LessOrEqual(t, limits.connMgrHigh, limits.rcmgrConns)
+}
+
+func TestDeriveConnLimits_UnboundedServer(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.NetAddress = ":4160"
+	cfg.IncomingConnectionsLimit = -1
+	cfg.GossipFanout = 4
+	limits := deriveConnLimits(cfg)
+	require.Equal(t, math.MaxInt, limits.rcmgrConns)
+	require.Equal(t, math.MaxInt, limits.rcmgrConnsInbound)
+	require.Equal(t, 12, limits.rcmgrConnsOutbound)
+	require.Equal(t, 0, limits.connMgrHigh)
+	require.Equal(t, 0, limits.connMgrLow)
+}
+
+func TestDeriveConnLimits_DHTProviders(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.NetAddress = ":4160"
+	cfg.IncomingConnectionsLimit = 2400
+	cfg.GossipFanout = 4
+	cfg.EnableDHTProviders = true
+	limits := deriveConnLimits(cfg)
+	require.Equal(t, 2400+12+12, limits.rcmgrConns)
+	require.Equal(t, 2400, limits.rcmgrConnsInbound)
+	require.Equal(t, 24, limits.rcmgrConnsOutbound)
+	require.Equal(t, 2424, limits.connMgrHigh)
+	require.Equal(t, 2327, limits.connMgrLow) // 2424 * 96 / 100
+}
+
+func TestDeriveConnLimits_Client(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.GossipFanout = 4
+	limits := deriveConnLimits(cfg)
+	require.Equal(t, 24, limits.rcmgrConns) // 4 * 6
+	require.Equal(t, 0, limits.rcmgrConnsInbound)
+	require.Equal(t, 12, limits.rcmgrConnsOutbound) // 4 * 3
+	require.Equal(t, 12, limits.connMgrHigh)        // 4 * 3
+	require.Equal(t, 8, limits.connMgrLow)          // 4 * 2
+	require.LessOrEqual(t, limits.connMgrHigh, limits.rcmgrConns)
+
+	// ensure cfg.IncomingConnectionsLimit = -1 does not affect client limits
+	cfg.IncomingConnectionsLimit = -1
+	newLimits := deriveConnLimits(cfg)
+	require.Equal(t, limits, newLimits)
+}
+
+func TestDeriveConnLimits_HybridClient(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Hybrid client: EnableP2PHybridMode but no listen addresses
+	cfg := config.GetDefaultLocal()
+	cfg.EnableP2PHybridMode = true
+	cfg.GossipFanout = 4
+	limits := deriveConnLimits(cfg)
+	require.Equal(t, 24, limits.rcmgrConns)
+	require.Equal(t, 0, limits.rcmgrConnsInbound)
+	require.Equal(t, 12, limits.rcmgrConnsOutbound)
+	require.Equal(t, 12, limits.connMgrHigh)
+	require.Equal(t, 8, limits.connMgrLow)
+	require.LessOrEqual(t, limits.connMgrHigh, limits.rcmgrConns)
+}
+
+func TestDeriveConnLimits_HybridServer(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.EnableP2PHybridMode = true
+	cfg.NetAddress = ":4160"
+	cfg.P2PHybridNetAddress = ":4190"
+	cfg.IncomingConnectionsLimit = 2400
+	limits := deriveConnLimits(cfg)
+	require.Equal(t, 2412, limits.rcmgrConns)
+	require.Equal(t, 2400, limits.rcmgrConnsInbound)
+	require.Equal(t, 12, limits.rcmgrConnsOutbound)
+	require.Equal(t, 2412, limits.connMgrHigh)
+	require.Equal(t, 2315, limits.connMgrLow)
+	require.LessOrEqual(t, limits.connMgrHigh, limits.rcmgrConns)
+}
+
+func TestDeriveConnLimits_ZeroFanout(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.GossipFanout = 0
+	limits := deriveConnLimits(cfg)
+	require.GreaterOrEqual(t, limits.connMgrLow, 0) // zero means zero
+	require.GreaterOrEqual(t, limits.connMgrHigh, limits.connMgrLow)
+	require.GreaterOrEqual(t, limits.rcmgrConns, limits.connMgrHigh)
+	require.Equal(t, 0, limits.rcmgrConnsInbound)
+	require.Equal(t, 0, limits.rcmgrConnsOutbound)
 }

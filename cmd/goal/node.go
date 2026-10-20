@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -77,6 +77,7 @@ func init() {
 	nodeCmd.AddCommand(waitCmd)
 	nodeCmd.AddCommand(createCmd)
 	nodeCmd.AddCommand(catchupCmd)
+	nodeCmd.AddCommand(peersCmd)
 	// Once the server-side implementation of the shutdown command is ready, we should enable this one.
 	//nodeCmd.AddCommand(shutdownCmd)
 	nodeCmd.AddCommand(p2pID)
@@ -99,12 +100,6 @@ func init() {
 	createCmd.Flags().StringVar(&newNodeDestination, "destination", "", "Destination path for the new node")
 	createCmd.Flags().BoolVarP(&newNodeArchival, "archival", "a", localDefaults.Archival, "Make the new node archival, storing all blocks")
 	createCmd.Flags().BoolVarP(&runUnderHost, "hosted", "H", localDefaults.RunHosted, "Configure the new node to run hosted by algoh")
-
-	// The flag for enabling an internal indexer is now deprecated, but we keep it for backwards compatibility for now.
-	indexerFlagName := "indexer"
-	_ = createCmd.Flags().BoolP(indexerFlagName, "i", false, "")
-	createCmd.Flags().MarkDeprecated(indexerFlagName, "no longer used, please remove from your scripts")
-	createCmd.Flags().MarkShorthandDeprecated(indexerFlagName, "no longer used, please remove from your scripts")
 
 	createCmd.Flags().StringVar(&newNodeRelay, "relay", localDefaults.NetAddress, "Configure as a relay with specified listening address (NetAddress)")
 	createCmd.Flags().StringVar(&listenIP, "api", "", "REST API Endpoint")
@@ -198,7 +193,7 @@ var catchupCmd = &cobra.Command{
 					fmt.Printf(nodeConfirmImplicitCatchpoint, catchpoint)
 					reader := bufio.NewReader(os.Stdin)
 					text, _ := reader.ReadString('\n')
-					text = strings.Replace(text, "\n", "", -1)
+					text = strings.ReplaceAll(text, "\n", "")
 					if text != "yes" {
 						reportErrorf(errorAbortedPerUserRequest)
 					}
@@ -277,28 +272,6 @@ var startCmd = &cobra.Command{
 				} else {
 					reportInfoln(infoNodeStart)
 				}
-			}
-		})
-	},
-}
-
-var shutdownCmd = &cobra.Command{
-	Use:   "shutdown",
-	Short: "Shut down the node",
-	Args:  validateNoPosArgsFn,
-	Run: func(cmd *cobra.Command, _ []string) {
-		binDir, err := util.ExeDir()
-		if err != nil {
-			panic(err)
-		}
-		datadir.OnDataDirs(func(dataDir string) {
-			nc := nodecontrol.MakeNodeController(binDir, dataDir)
-			err := nc.Shutdown()
-
-			if err == nil {
-				reportInfoln(infoNodeShuttingDown)
-			} else {
-				reportErrorf(errorNodeFailedToShutdown, err)
 			}
 		})
 	},
@@ -437,6 +410,32 @@ var generateTokenCmd = &cobra.Command{
 	},
 }
 
+var peersCmd = &cobra.Command{
+	Use:   "peers",
+	Short: "Get peers",
+	Long:  `Show the Algorand node's current peers`,
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, _ []string) {
+		datadir.OnDataDirs(getPeers)
+	},
+}
+
+func getPeers(dataDir string) {
+
+	client := ensureAlgodClient(dataDir)
+	response, err := client.GetPeers()
+	if err != nil {
+		reportErrorf(errorNodePeers, err)
+	}
+
+	rowFormat := "%-9s  %-7s  %s\n"
+	fmt.Printf(rowFormat, "CONN TYPE", "NETWORK", "ADDRESS")
+	for _, peer := range response.Peers {
+		fmt.Printf(rowFormat, peer.ConnectionType, peer.NetworkType, peer.NetworkAddress)
+	}
+
+}
+
 var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Get the current node status",
@@ -504,28 +503,13 @@ func makeStatusString(stat model.NodeStatusResponse) string {
 			statusString = statusString + "\n" + fmt.Sprintf(catchupStoppedOnUnsupported, stat.LastRound)
 		}
 
-		upgradeNextProtocolVoteBefore := uint64(0)
-		if stat.UpgradeNextProtocolVoteBefore != nil {
-			upgradeNextProtocolVoteBefore = *stat.UpgradeNextProtocolVoteBefore
-		}
+		upgradeNextProtocolVoteBefore := nilToZero(stat.UpgradeNextProtocolVoteBefore)
 
 		if upgradeNextProtocolVoteBefore > stat.LastRound {
-			upgradeVotesRequired := uint64(0)
-			upgradeNoVotes := uint64(0)
-			upgradeYesVotes := uint64(0)
-			upgradeVoteRounds := uint64(0)
-			if stat.UpgradeVotesRequired != nil {
-				upgradeVotesRequired = *stat.UpgradeVotesRequired
-			}
-			if stat.UpgradeNoVotes != nil {
-				upgradeNoVotes = *stat.UpgradeNoVotes
-			}
-			if stat.UpgradeYesVotes != nil {
-				upgradeYesVotes = *stat.UpgradeYesVotes
-			}
-			if stat.UpgradeVoteRounds != nil {
-				upgradeVoteRounds = *stat.UpgradeVoteRounds
-			}
+			upgradeVotesRequired := nilToZero(stat.UpgradeVotesRequired)
+			upgradeNoVotes := nilToZero(stat.UpgradeNoVotes)
+			upgradeYesVotes := nilToZero(stat.UpgradeYesVotes)
+			upgradeVoteRounds := nilToZero(stat.UpgradeVoteRounds)
 			statusString = statusString + "\n" + fmt.Sprintf(
 				infoNodeStatusConsensusUpgradeVoting,
 				upgradeYesVotes,
@@ -751,7 +735,7 @@ func verifyPeerDialArg() bool {
 	}
 
 	// make sure that the format of each entry is valid:
-	for _, peer := range strings.Split(peerDial, ";") {
+	for peer := range strings.SplitSeq(peerDial, ";") {
 		_, err := naddr.ParseHostOrURLOrMultiaddr(peer)
 		if err != nil {
 			reportErrorf("Provided peer '%s' is not a valid peer address : %v", peer, err)

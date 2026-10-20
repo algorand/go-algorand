@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -43,7 +43,9 @@ var versionCheck bool
 func init() {
 	rootCmd.AddCommand(fileCmd)
 	rootCmd.AddCommand(netCmd)
+	rootCmd.AddCommand(benchCmd)
 	rootCmd.AddCommand(databaseCmd)
+	rootCmd.AddCommand(infoCmd)
 }
 
 var rootCmd = &cobra.Command{
@@ -102,34 +104,17 @@ func main() {
 	}
 }
 
-func reportInfoln(args ...interface{}) {
-	fmt.Println(args...)
-	// log.Infoln(args...)
-}
-
-func reportInfof(format string, args ...interface{}) {
+func reportInfof(format string, args ...any) {
 	fmt.Printf(format+"\n", args...)
 	// log.Infof(format, args...)
 }
 
-func reportWarnln(args ...interface{}) {
-	fmt.Print("Warning: ")
-	fmt.Println(args...)
-	// log.Warnln(args...)
-}
-
-func reportWarnf(format string, args ...interface{}) {
+func reportWarnf(format string, args ...any) {
 	fmt.Printf("Warning: "+format+"\n", args...)
 	// log.Warnf(format, args...)
 }
 
-func reportErrorln(args ...interface{}) {
-	fmt.Fprintln(os.Stderr, args...)
-	// log.Warnln(args...)
-	os.Exit(1)
-}
-
-func reportErrorf(format string, args ...interface{}) {
+func reportErrorf(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
 	// log.Warnf(format, args...)
 	os.Exit(1)

@@ -1,6 +1,11 @@
 #!/bin/bash
 
-date '+dynamic-fee-teal-test start %Y%m%d_%H%M%S'
+my_dir="$(dirname "$0")"
+source "$my_dir/rest.sh" "$@"
+
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
 
 set -e
 set -x
@@ -16,6 +21,10 @@ ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')
 ACCOUNTC=$(${gcmd} account new|awk '{ print $6 }')
 ACCOUNTD=$(${gcmd} account new|awk '{ print $6 }')
 LEASE=uImiLf+mqOqs0BFsqIUHBh436N/z964X50e3P9Ii4ac=
+
+# Get network's minimum fee
+MIN_FEE=$(get_min_fee)
+echo "Network MinFee: $MIN_FEE"
 
 # Fund ACCOUNTB
 ${gcmd} clerk send -a 100000000 -f ${ACCOUNT} -t ${ACCOUNTB}
@@ -36,14 +45,14 @@ ${gcmd} clerk compile -a ${ACCOUNTB} -s ${TEMPDIR}/dynamic.teal -o ${TEMPDIR}/dy
 ${gcmd} account delete -a ${ACCOUNTB}
 
 # Create first transaction to spend fee (can't sign yet, no group)
-${gcmd} clerk send -f ${ACCOUNT} -t ${ACCOUNTB} -a 1234 -o ${TEMPDIR}/feefund.txn
+${gcmd} clerk send -f ${ACCOUNT} -t ${ACCOUNTB} -a ${MIN_FEE} -o ${TEMPDIR}/feefund.txn
 
 #
 # First test (negative)
 #
 
-# Create second transaction mostly as per template, but pay wrong fee
-${gcmd} clerk send --fee=1235 --lease=${LEASE} --firstvalid=1 --lastvalid=1001 -f ${ACCOUNTB} -a=1000000 -t=${ACCOUNTD} --close-to=${ACCOUNTC} -o ${TEMPDIR}/fundedpayment.txn
+# Create second transaction mostly as per template, but pay wrong fee (off by 1)
+${gcmd} clerk send --fee=$((MIN_FEE + 1)) --lease=${LEASE} --firstvalid=1 --lastvalid=1001 -f ${ACCOUNTB} -a=1000000 -t=${ACCOUNTD} --close-to=${ACCOUNTC} -o ${TEMPDIR}/fundedpayment.txn
 
 # Cat txns together
 cat ${TEMPDIR}/feefund.txn ${TEMPDIR}/fundedpayment.txn > ${TEMPDIR}/group.txn
@@ -67,7 +76,7 @@ cat ${TEMPDIR}/gtxn-0.stxn ${TEMPDIR}/gtxn-1.stxn > ${TEMPDIR}/finalgroup.stxn
 RES=$(${gcmd} clerk rawsend -f ${TEMPDIR}/finalgroup.stxn 2>&1 || true)
 EXPERROR='rejected by logic'
 if [[ $RES != *"${EXPERROR}"* ]]; then
-    date '+dynamic-fee-teal-test FAIL txn with wrong fee should be rejected %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL txn with wrong fee should be rejected %Y%m%d_%H%M%S"
     false
 fi
 
@@ -75,8 +84,8 @@ fi
 # Second test (positive)
 #
 
-# Create second transaction as per template
-${gcmd} clerk send --fee=1234 --lease=${LEASE} --firstvalid=1 --lastvalid=1001 -f ${ACCOUNTB} -a=1000000 -t=${ACCOUNTD} --close-to=${ACCOUNTC} -o ${TEMPDIR}/fundedpayment.txn
+# Create second transaction as per template with correct fee
+${gcmd} clerk send --fee=${MIN_FEE} --lease=${LEASE} --firstvalid=1 --lastvalid=1001 -f ${ACCOUNTB} -a=1000000 -t=${ACCOUNTD} --close-to=${ACCOUNTC} -o ${TEMPDIR}/fundedpayment.txn
 
 # Cat txns together
 cat ${TEMPDIR}/feefund.txn ${TEMPDIR}/fundedpayment.txn > ${TEMPDIR}/group.txn
@@ -102,8 +111,8 @@ ${gcmd} clerk rawsend -f ${TEMPDIR}/finalgroup.stxn
 # Check balance of recipient
 BALANCED=$(${gcmd} account balance -a ${ACCOUNTD}|awk '{ print $1 }')
 if [ $BALANCED -ne 1000000 ]; then
-    date '+dynamic-fee-teal-test FAIL wanted balance=1000000 but got ${BALANCED} %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL wanted balance=1000000 but got ${BALANCED} %Y%m%d_%H%M%S"
     false
 fi
 
-date '+dynamic-fee-teal-test OK %Y%m%d_%H%M%S'
+date "+${scriptname} OK %Y%m%d_%H%M%S"

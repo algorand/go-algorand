@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -44,7 +44,7 @@ func makeRequestLogger(downsteamHandler http.Handler, log logging.Logger) *Reque
 		log:              log,
 	}
 	rl.trackingWritersPool = sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			return &trackingResponseWriter{}
 		},
 	}

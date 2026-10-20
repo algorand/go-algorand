@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,7 +33,7 @@ const (
 	stateDeltaTargetOptimizationThreshold = uint64(50000000)
 )
 
-// ModifiedCreatable defines the changes to a single single creatable state
+// ModifiedCreatable defines the changes to a single creatable state
 type ModifiedCreatable struct {
 	// Type of the creatable: app or asset
 	Ctype basics.CreatableType
@@ -164,12 +164,32 @@ type AppResourceRecord struct {
 	State  AppLocalStateDelta
 }
 
+// AffectsParams returns true if this record has changes to app params
+func (ad AppResourceRecord) AffectsParams() bool {
+	return ad.Params.Deleted || ad.Params.Params != nil
+}
+
+// AffectsLocals returns true if this record has changes to app local state
+func (ad AppResourceRecord) AffectsLocals() bool {
+	return ad.State.Deleted || ad.State.LocalState != nil
+}
+
 // AssetResourceRecord represents AssetParams and AssetHolding in deltas
 type AssetResourceRecord struct {
 	Aidx    basics.AssetIndex
 	Addr    basics.Address
 	Params  AssetParamsDelta
 	Holding AssetHoldingDelta
+}
+
+// AffectsParams returns true if this record has changes to asset params
+func (ad AssetResourceRecord) AffectsParams() bool {
+	return ad.Params.Deleted || ad.Params.Params != nil
+}
+
+// AffectsHolding returns true if this record has changes to a holding
+func (ad AssetResourceRecord) AffectsHolding() bool {
+	return ad.Holding.Deleted || ad.Holding.Holding != nil
 }
 
 // AccountDeltas stores ordered accounts and allows fast lookup by address
@@ -764,9 +784,7 @@ func (ad AccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev basic
 
 	if acct.TotalAppParams > 0 || prev.AppParams != nil {
 		result.AppParams = make(map[basics.AppIndex]basics.AppParams)
-		for aidx, params := range prev.AppParams {
-			result.AppParams[aidx] = params
-		}
+		maps.Copy(result.AppParams, prev.AppParams)
 		for aapp, idx := range ad.appResourcesCache {
 			if aapp.Address == addr {
 				rec := ad.AppResources[idx]
@@ -784,9 +802,7 @@ func (ad AccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev basic
 
 	if acct.TotalAppLocalStates > 0 || prev.AppLocalStates != nil {
 		result.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
-		for aidx, state := range prev.AppLocalStates {
-			result.AppLocalStates[aidx] = state
-		}
+		maps.Copy(result.AppLocalStates, prev.AppLocalStates)
 		for aapp, idx := range ad.appResourcesCache {
 			if aapp.Address == addr {
 				rec := ad.AppResources[idx]
@@ -804,9 +820,7 @@ func (ad AccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev basic
 
 	if acct.TotalAssetParams > 0 || prev.AssetParams != nil {
 		result.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
-		for aidx, params := range prev.AssetParams {
-			result.AssetParams[aidx] = params
-		}
+		maps.Copy(result.AssetParams, prev.AssetParams)
 		for aapp, idx := range ad.assetResourcesCache {
 			if aapp.Address == addr {
 				rec := ad.AssetResources[idx]
@@ -824,9 +838,7 @@ func (ad AccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev basic
 
 	if acct.TotalAssets > 0 || prev.Assets != nil {
 		result.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
-		for aidx, params := range prev.Assets {
-			result.Assets[aidx] = params
-		}
+		maps.Copy(result.Assets, prev.Assets)
 		for aapp, idx := range ad.assetResourcesCache {
 			if aapp.Address == addr {
 				rec := ad.AssetResources[idx]

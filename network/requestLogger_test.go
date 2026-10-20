@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,10 +32,10 @@ import (
 type eventsDetailsLogger struct {
 	logging.Logger
 	eventIdentifier telemetryspec.Event
-	eventReceived   chan interface{}
+	eventReceived   chan any
 }
 
-func (dl eventsDetailsLogger) EventWithDetails(category telemetryspec.Category, identifier telemetryspec.Event, details interface{}) {
+func (dl eventsDetailsLogger) EventWithDetails(category telemetryspec.Category, identifier telemetryspec.Event, details any) {
 	if category == telemetryspec.Network && identifier == dl.eventIdentifier {
 		dl.eventReceived <- details
 
@@ -47,14 +47,16 @@ func TestRequestLogger(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	log := logging.TestingLog(t)
-	dl := eventsDetailsLogger{Logger: log, eventReceived: make(chan interface{}, 1), eventIdentifier: telemetryspec.HTTPRequestEvent}
+	dl := eventsDetailsLogger{Logger: log, eventReceived: make(chan any, 1), eventIdentifier: telemetryspec.HTTPRequestEvent}
 	log.SetLevel(logging.Level(defaultConfig.BaseLoggerDebugLevel))
 	netA := &WebsocketNetwork{
-		log:             dl,
-		config:          defaultConfig,
-		phonebook:       phonebook.MakePhonebook(1, 1*time.Millisecond),
-		GenesisID:       "go-test-network-genesis",
-		NetworkID:       config.Devtestnet,
+		log:       dl,
+		config:    defaultConfig,
+		phonebook: phonebook.MakePhonebook(1, 1*time.Millisecond),
+		genesisInfo: GenesisInfo{
+			GenesisID: "go-test-network-genesis",
+			NetworkID: config.Devtestnet,
+		},
 		peerStater:      peerConnectionStater{log: log},
 		identityTracker: noopIdentityTracker{},
 	}
@@ -71,7 +73,7 @@ func TestRequestLogger(t *testing.T) {
 	require.True(t, postListen)
 	t.Log(addrA)
 	netB.phonebook = phonebook.MakePhonebook(1, 1*time.Millisecond)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 

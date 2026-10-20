@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,8 +26,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -207,7 +208,7 @@ func (l *testLedger) LookupAgreement(r basics.Round, a basics.Address) (basics.O
 		err := fmt.Errorf("Lookup called on future round: %v > %v! (this is probably a bug)", r, l.nextRound)
 		panic(err)
 	}
-	return l.state[a].OnlineAccountData(), nil
+	return basics_testing.OnlineAccountData(l.state[a]), nil
 }
 
 func (l *testLedger) Circulation(r basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
@@ -222,7 +223,7 @@ func (l *testLedger) Circulation(r basics.Round, voteRnd basics.Round) (basics.M
 	var sum basics.MicroAlgos
 	var overflowed bool
 	for _, rec := range l.state {
-		sum, overflowed = basics.OAddA(sum, rec.OnlineAccountData().VotingStake())
+		sum, overflowed = basics.OAddA(sum, basics_testing.OnlineAccountData(rec).VotingStake())
 		if overflowed {
 			panic("circulation computation overflowed")
 		}

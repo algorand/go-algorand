@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -61,9 +61,9 @@ func (tracer *cursorEvalTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledg
 func (tracer *cursorEvalTracer) absolutePath() TxnPath {
 	path := make(TxnPath, len(tracer.relativeCursor))
 	for i, relativeGroupIndex := range tracer.relativeCursor {
-		absoluteIndex := uint64(relativeGroupIndex)
+		absoluteIndex := relativeGroupIndex
 		if i > 0 {
-			absoluteIndex += uint64(tracer.previousInnerTxns[i-1])
+			absoluteIndex += tracer.previousInnerTxns[i-1]
 		}
 		path[i] = absoluteIndex
 	}
@@ -97,7 +97,7 @@ type evalTracer struct {
 
 	// scratchSlots are the scratch slots changed on current opcode (currently either `store` or `stores`).
 	// NOTE: this field scratchSlots is used only for scratch change exposure.
-	scratchSlots []uint64
+	scratchSlots []int
 
 	groups [][]transactions.SignedTxnWithAD
 }
@@ -126,7 +126,7 @@ func (tracer *evalTracer) getApplyDataAtPath(path TxnPath) (*transactions.ApplyD
 
 	for _, index := range path[1:] {
 		innerTxns := applyDataCursor.EvalDelta.InnerTxns
-		if index >= uint64(len(innerTxns)) {
+		if index >= len(innerTxns) {
 			return nil, fmt.Errorf("simulator debugger error: index %d out of range with length %d. Full path: %v", index, len(innerTxns), path)
 		}
 		applyDataCursor = &innerTxns[index].ApplyData
@@ -153,19 +153,29 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 	if ep.GetCaller() != nil {
 		// If this is an inner txn group, save the txns
 		tracer.populateInnerTransactions(ep.TxnGroup)
-		tracer.result.TxnGroups[0].AppBudgetAdded += uint64(ep.Proto.MaxAppProgramCost)
+		// Report a grant for each app call, not one for the whole group. The AVM
+		// grants budget per inner app call, so a group of payments adds nothing,
+		// while a group of several app calls adds several grants.
+		for i := range ep.TxnGroup {
+			if ep.TxnGroup[i].Txn.Type == protocol.ApplicationCallTx {
+				tracer.result.TxnGroups[0].AppBudgetAdded += ep.Proto.MaxAppProgramCost
+			}
+		}
 	}
 	tracer.cursorEvalTracer.BeforeTxnGroup(ep)
 
 	// Currently only supports one (first) txn group
 	if ep.PooledApplicationBudget != nil && tracer.result.TxnGroups[0].AppBudgetAdded == 0 {
-		tracer.result.TxnGroups[0].AppBudgetAdded = uint64(*ep.PooledApplicationBudget)
+		tracer.result.TxnGroups[0].AppBudgetAdded = *ep.PooledApplicationBudget
 	}
 
-	// Override transaction group budget if specified in request, retrieve from tracer.result
-	if ep.PooledApplicationBudget != nil {
+	// Override transaction group budget if specified in request, retrieve from
+	// tracer.result. Only for the top-level group: inner groups share the same
+	// pool, so granting the extra again for each of them would hand out a
+	// multiple of what was asked for.
+	if ep.PooledApplicationBudget != nil && ep.GetCaller() == nil {
 		tracer.result.TxnGroups[0].AppBudgetAdded += tracer.result.EvalOverrides.ExtraOpcodeBudget
-		*ep.PooledApplicationBudget += int(tracer.result.EvalOverrides.ExtraOpcodeBudget)
+		*ep.PooledApplicationBudget += tracer.result.EvalOverrides.ExtraOpcodeBudget
 	}
 
 	if ep.GetCaller() == nil {
@@ -249,6 +259,13 @@ func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 
 func (tracer *evalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, evalError error) {
 	tracer.handleError(evalError)
+	if evalError == nil && tracer.unnamedResourcePolicy != nil {
+		if err := tracer.unnamedResourcePolicy.tracker.reconcileWriteBudget(ep.DirtyByteCount(), ep.Proto.BytesPerBoxReference); err != nil {
+			// This should never happen, since simulation sets the IO budget to the maximum
+			// achievable budget before large program writes are checked.
+			panic(err.Error())
+		}
+	}
 	tracer.saveApplyData(ad, evalError != nil)
 	// if the current transaction + simulation condition would lead to exec trace making
 	// we should clean them up from tracer.execTraceStack.
@@ -270,12 +287,12 @@ func (tracer *evalTracer) saveEvalDelta(evalDelta transactions.EvalDelta, appIDT
 }
 
 func (tracer *evalTracer) makeOpcodeTraceUnit(cx *logic.EvalContext) OpcodeTraceUnit {
-	return OpcodeTraceUnit{PC: uint64(cx.PC())}
+	return OpcodeTraceUnit{PC: cx.PC()}
 }
 
 func (o *OpcodeTraceUnit) computeStackValueDeletions(cx *logic.EvalContext, tracer *evalTracer) {
 	tracer.popCount, tracer.addCount = cx.GetOpSpec().StackExplain(cx)
-	o.StackPopCount = uint64(tracer.popCount)
+	o.StackPopCount = tracer.popCount
 
 	stackHeight := len(cx.Stack)
 	tracer.stackHeightAfterDeletion = stackHeight - int(o.StackPopCount)
@@ -330,10 +347,11 @@ func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *e
 }
 
 func (o *OpcodeTraceUnit) appendStateOperations(cx *logic.EvalContext) {
-	if cx.GetOpSpec().AppStateExplain == nil {
+	spec := cx.GetOpSpec()
+	if spec.AppStateExplain == nil {
 		return
 	}
-	appState, stateOp, appID, acctAddr, stateKey := cx.GetOpSpec().AppStateExplain(cx)
+	appState, stateOp, appID, acctAddr, stateKey := spec.AppStateExplain(cx)
 	// If the operation is not write or delete, return without
 	if stateOp == logic.AppStateRead {
 		return
@@ -354,8 +372,8 @@ func (tracer *evalTracer) recordChangedScratchSlots(cx *logic.EvalContext) {
 
 	switch currentOpcodeName {
 	case "store":
-		slot := uint64(cx.GetProgram()[cx.PC()+1])
-		tracer.scratchSlots = append(tracer.scratchSlots, slot)
+		slot := cx.GetProgram()[cx.PC()+1]
+		tracer.scratchSlots = append(tracer.scratchSlots, int(slot))
 	case "stores":
 		prev := last - 1
 		slot := cx.Stack[prev].Uint
@@ -365,7 +383,7 @@ func (tracer *evalTracer) recordChangedScratchSlots(cx *logic.EvalContext) {
 		if slot >= uint64(len(cx.Scratch)) {
 			return
 		}
-		tracer.scratchSlots = append(tracer.scratchSlots, slot)
+		tracer.scratchSlots = append(tracer.scratchSlots, int(slot))
 	}
 }
 
@@ -420,14 +438,14 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 			tracer.handleError(evalError)
 		}
 		if evalError == nil && tracer.unnamedResourcePolicy != nil {
-			if err := tracer.unnamedResourcePolicy.tracker.reconcileBoxWriteBudget(cx.BoxDirtyBytes(), cx.Proto.BytesPerBoxReference); err != nil {
-				// This should never happen, since we limit the IO budget to tracer.unnamedResourcePolicy.assignment.maxPossibleBoxIOBudget
-				// (as shown below), so we should never have to reconcile an unachievable budget.
+			if err := tracer.unnamedResourcePolicy.tracker.reconcileWriteBudget(cx.DirtyByteCount(), cx.Proto.BytesPerBoxReference); err != nil {
+				// This should never happen, since simulation sets the IO budget to the maximum
+				// achievable budget before dirty bytes are checked.
 				panic(err.Error())
 			}
 
-			// Update box budget. It will decrease if an additional non-box resource has been accessed.
-			cx.SetIOBudget(tracer.unnamedResourcePolicy.tracker.maxPossibleBoxIOBudget(cx.Proto.BytesPerBoxReference))
+			// Update budget. It will decrease if an additional non-box resource has been accessed.
+			cx.SetIOBudget(tracer.unnamedResourcePolicy.tracker.maxPossibleIOBudget(cx.Proto.BytesPerBoxReference))
 		}
 	}
 }
@@ -482,7 +500,7 @@ func (tracer *evalTracer) BeforeProgram(cx *logic.EvalContext) {
 				s := cx.SurplusReadBudget
 				tracer.unnamedResourcePolicy.initialBoxSurplusReadBudget = &s
 			}
-			cx.SetIOBudget(tracer.unnamedResourcePolicy.tracker.maxPossibleBoxIOBudget(cx.Proto.BytesPerBoxReference))
+			cx.SetIOBudget(tracer.unnamedResourcePolicy.tracker.maxPossibleIOBudget(cx.Proto.BytesPerBoxReference))
 		}
 	}
 }
@@ -492,7 +510,7 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, pass bool, evalErr
 
 	if cx.RunMode() == logic.ModeSig {
 		// Report cost for LogicSig program and exit
-		tracer.result.TxnGroups[0].Txns[groupIndex].LogicSigBudgetConsumed = uint64(cx.Cost())
+		tracer.result.TxnGroups[0].Txns[groupIndex].LogicSigBudgetConsumed = cx.Cost()
 		if tracer.result.ReturnTrace() {
 			tracer.result.TxnGroups[0].Txns[groupIndex].Trace.programTraceRef = nil
 		}
@@ -501,7 +519,7 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, pass bool, evalErr
 
 	// Report cost of this program.
 	// If it is an inner app call, roll up its cost to the top level transaction.
-	tracer.result.TxnGroups[0].Txns[tracer.relativeCursor[0]].AppBudgetConsumed += uint64(cx.Cost())
+	tracer.result.TxnGroups[0].Txns[tracer.relativeCursor[0]].AppBudgetConsumed += cx.Cost()
 
 	if cx.TxnGroup[groupIndex].Txn.ApplicationCallTxnFields.OnCompletion == transactions.ClearStateOC {
 		if tracer.result.ReturnTrace() && (!pass || evalError != nil) {
@@ -536,7 +554,7 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, pass bool, evalErr
 			}
 
 			// Fix the current auth addr if this txn doesn't have a signature
-			if txnHasNoSignature(stxn.SignedTxn) {
+			if txnNeedsSyntheticSignature(stxn.SignedTxn) {
 				stxn.AuthAddr = knownAuthAddrs[sender]
 				if stxn.AuthAddr == sender {
 					stxn.AuthAddr = basics.Address{}

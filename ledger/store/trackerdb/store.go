@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -67,7 +67,8 @@ type Reader interface {
 	MakeCatchpointReader() (CatchpointReader, error)
 	MakeEncodedAccountsBatchIter() EncodedAccountsBatchIter
 	MakeKVsIter(ctx context.Context) (KVsIter, error)
-	MakeOnlineAccountsIter(ctx context.Context, useStaging bool, excludeBefore basics.Round) (TableIterator[*encoded.OnlineAccountRecordV6], error)
+	// MakeOrderedOnlineAccountsIter orders by (address, updround).
+	MakeOrderedOnlineAccountsIter(ctx context.Context, useStaging bool, excludeBefore basics.Round) (TableIterator[*encoded.OnlineAccountRecordV6], error)
 	MakeOnlineRoundParamsIter(ctx context.Context, useStaging bool, excludeBefore basics.Round) (TableIterator[*encoded.OnlineRoundParamsRecordV6], error)
 }
 

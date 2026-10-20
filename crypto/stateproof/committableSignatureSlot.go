@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -62,8 +63,11 @@ func buildCommittableSignature(sigCommit sigslotCommit) (*committableSignatureSl
 	if sigCommit.Sig.MsgIsZero() { // Empty merkle signature
 		return &committableSignatureSlot{isEmptySlot: true}, nil
 	}
-	if sigCommit.Sig.Signature == nil { // Merkle signature is not empty, but falcon signature is (invalid case)
-		return nil, fmt.Errorf("buildCommittableSignature: Falcon signature is nil")
+	if len(sigCommit.Sig.Signature) == 0 { // Merkle signature is not empty, but Falcon signature is missing/empty (invalid case)
+		return nil, fmt.Errorf("buildCommittableSignature: empty Falcon signature")
+	}
+	if sigCommit.Sig.Proof.TreeDepth > merklearray.MaxEncodedTreeDepth {
+		return nil, fmt.Errorf("buildCommittableSignature: proof tree depth %d exceeds maximum %d", sigCommit.Sig.Proof.TreeDepth, merklearray.MaxEncodedTreeDepth)
 	}
 	sigBytes, err := sigCommit.Sig.GetFixedLengthHashableRepresentation()
 	if err != nil {

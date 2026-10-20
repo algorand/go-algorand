@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -67,6 +67,15 @@ func TestBundleCreation(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+}
+
+func TestBundleVerifyRejectsStepAboveDown(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ub := unauthenticatedBundle{Step: down + 1}
+	_, err := ub.verify(context.Background(), nil, nil) // should never dereference ledger or verifier
+	require.ErrorContains(t, err, "exceeds max step")
 }
 
 // Test Bundle validation with Zero Votes
