@@ -2331,9 +2331,13 @@ func opBytesDiv(cx *EvalContext) error {
 		putBig(lhs)
 		return errors.New("division by zero")
 	}
-	lhs.Div(lhs, rhs)
+	// QuoRem rather than Div, because Div allocates a temporary for the
+	// remainder. They agree because the operands are non-negative.
+	quo, rem := getBig().QuoRem(lhs, rhs, getBig())
+	putBig(lhs)
 	putBig(rhs)
-	return byteMathResult(cx, lhs)
+	putBig(rem)
+	return byteMathResult(cx, quo)
 }
 
 func bdivCost(stack []stackValue) int {
@@ -2552,9 +2556,13 @@ func opBytesModulo(cx *EvalContext) error {
 		putBig(lhs)
 		return errors.New("modulo by zero")
 	}
-	lhs.Mod(lhs, rhs)
+	// QuoRem rather than Mod, because Mod allocates a temporary for the
+	// quotient. They agree because the operands are non-negative.
+	quo, rem := getBig().QuoRem(lhs, rhs, getBig())
+	putBig(lhs)
 	putBig(rhs)
-	return byteMathResult(cx, lhs)
+	putBig(quo)
+	return byteMathResult(cx, rem)
 }
 
 func zpad(smaller []byte, size int) []byte {
