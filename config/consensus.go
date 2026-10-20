@@ -230,14 +230,19 @@ type ConsensusParams struct {
 	// 0 for no support, otherwise highest version supported
 	LogicSigVersion uint64
 
-	// LogicSigMaxSize is the legacy LogicSig size unit used for the per-LogicSig
-	// args allowance and to compute group size pools and free program-byte
-	// allowance.
+	// LogicSigMaxSize is the legacy LogicSig size limit and the per-transaction
+	// contribution to group size pools and free allowances for program and
+	// argument bytes.
 	LogicSigMaxSize uint64
 
 	// MaxAbsoluteLogicSigProgramSize is the absolute maximum size of a LogicSig
 	// program.
 	MaxAbsoluteLogicSigProgramSize uint64
+
+	// MaxAbsoluteLogicSigArgsSize is the absolute maximum total size of the
+	// arguments carried by one LogicSig when args beyond the group allowance
+	// can be purchased. Zero retains the legacy unpriced args pooling rules.
+	MaxAbsoluteLogicSigArgsSize uint64
 
 	// sum of estimated op cost must be less than this
 	LogicSigMaxCost uint64
@@ -808,6 +813,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxAppProgramLen, &bounds.MaxAppProgramLen)
 	checkSetMax((int(p.LogicSigMaxSize) * p.MaxTxGroupSize), &bounds.MaxLogicSigMaxSize)
 	checkSetMax(int(p.MaxAbsoluteLogicSigProgramSize), &bounds.MaxLogicSigMaxSize)
+	checkSetMax(int(p.MaxAbsoluteLogicSigArgsSize), &bounds.MaxLogicSigMaxSize)
 	checkSetMax(p.MaxAbsoluteTxnNoteBytes, &bounds.MaxTxnNoteBytes)
 	checkSetMax(p.MaxTxGroupSize, &bounds.MaxTxGroupSize)
 	// MaxBytesKeyValueLen is max of MaxAppKeyLen and MaxAppBytesValueLen
@@ -1572,6 +1578,7 @@ func initConsensusProtocols() {
 	vFuture.EnablePQSchemeFalcon512 = true
 	vFuture.EnablePQSchemeEd25519 = true
 	vFuture.RequireLogicSigArgAccess = true
+	vFuture.MaxAbsoluteLogicSigArgsSize = 16000
 	vFuture.AllowGroupedHeartbeats = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
