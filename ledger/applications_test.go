@@ -1845,10 +1845,16 @@ func TestSponsorCannotClose(t *testing.T) {
 		a.Greater(acct.MinBalance(proto.BalanceRequirements()).Raw, proto.MinBalance)
 
 		if !proto.CloseRequiresBaseMinBalance {
-			dl.txn(&closeOut, "cannot close: account")
-		} else {
-			dl.txn(&closeOut, "cannot close: min balance")
+			// The legacy checks allow the close, discarding the sponsor's
+			// TotalAppSchema and TotalExtraAppPages.
+			dl.txn(&closeOut)
+			acct = lookup(t, dl.generator, sponsor)
+			a.Zero(acct.TotalAppSchema)
+			a.Zero(acct.TotalExtraAppPages)
+			return
 		}
+
+		dl.txn(&closeOut, "cannot close: min balance")
 
 		// Deleting the app releases the sponsor's MBR, so it may now close.
 		dl.txn(&txntest.Txn{
