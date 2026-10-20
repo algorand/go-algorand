@@ -88,7 +88,8 @@ type P2PNetwork struct {
 	outgoingConnsCloser *outgoingConnsCloser
 
 	// number of throttled outgoing connections "slots" needed to be populated.
-	throttledOutgoingConnections atomic.Int32
+	// Start sets it before any outgoing peer can register; after that, wsPeersLock guards it.
+	throttledOutgoingConnections int
 
 	meshUpdateRequests chan meshRequest
 	mesher             mesher
@@ -434,13 +435,13 @@ func (n *P2PNetwork) Start() error {
 	}
 
 	if n.relayMessages {
-		n.throttledOutgoingConnections.Store(int32(n.config.GossipFanout / 2))
+		n.throttledOutgoingConnections = n.config.GossipFanout / 2
 	} else {
 		// on non-relay, all the outgoing connections are throttled.
-		n.throttledOutgoingConnections.Store(int32(n.config.GossipFanout))
+		n.throttledOutgoingConnections = n.config.GossipFanout
 	}
 	if n.config.DisableOutgoingConnectionThrottling {
-		n.throttledOutgoingConnections.Store(0)
+		n.throttledOutgoingConnections = 0
 	}
 
 	wantTXGossip := n.relayMessages || n.config.ForceFetchTransactions || n.nodeInfo.IsParticipating()
@@ -1015,15 +1016,7 @@ func (n *P2PNetwork) baseWsStreamHandler(ctx context.Context, p2pPeer peer.ID, s
 		voteCompressionTableSize: n.voteCompressionTableSize,
 	}
 	if !incoming {
-		throttledConnection := false
-		if n.throttledOutgoingConnections.Add(int32(-1)) >= 0 {
-			throttledConnection = true
-		} else {
-			n.throttledOutgoingConnections.Add(int32(1))
-		}
-
 		wsp.connMonitor = n.connPerfMonitor
-		wsp.throttledOutgoingConnection = throttledConnection
 	}
 
 	localAddr, has := n.Address()
@@ -1045,6 +1038,9 @@ func (n *P2PNetwork) baseWsStreamHandler(ctx context.Context, p2pPeer peer.ID, s
 		networkPeerAlreadyClosed.Inc(nil)
 		n.wsPeersLock.Unlock()
 		return &p2p.StreamHandlerLoggedError{Level: logging.Debug, Err: fmt.Errorf("peer closing %s", addr)}
+	}
+	if !incoming {
+		wsp.throttledOutgoingConnection = claimThrottleSlot(&n.throttledOutgoingConnections)
 	}
 	n.wsPeers[p2pPeer] = wsp
 	n.wsPeersToIDs[wsp] = p2pPeer
@@ -1099,13 +1095,12 @@ func (n *P2PNetwork) removePeer(peer *wsPeer, remotePeerID peer.ID, reason disco
 	if removed {
 		n.service.UnprotectPeer(remotePeerID)
 	}
-	n.wsPeersLock.Unlock()
-
 	// Throttle slots are per-wsPeer, not per map entry: release for any
 	// known wsPeer on its first cleanup, even if it was already replaced.
 	if knownPeer && peer.throttledOutgoingConnection {
-		n.throttledOutgoingConnections.Add(int32(1))
+		n.throttledOutgoingConnections++
 	}
+	n.wsPeersLock.Unlock()
 
 	if !removed {
 		// stale close from an old stream/wsPeer that was already replaced; skip

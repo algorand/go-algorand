@@ -269,6 +269,7 @@ type wsPeer struct {
 
 	// throttledOutgoingConnection determines if this outgoing connection will be throttled based on it's
 	// performance or not. Throttled connections are more likely to be short-lived connections.
+	// It is set by claimThrottleSlot when the peer is registered, under the network's peer lock.
 	throttledOutgoingConnection bool
 
 	// clientDataStore is a generic key/value store used to store client-side data entries associated with a particular peer.
@@ -991,6 +992,19 @@ L:
 	for _, f := range wp.closers {
 		f()
 	}
+}
+
+// claimThrottleSlot takes one of the free outgoing throttle slots in slots and reports
+// whether it got one. Call it only when registering an outgoing peer, holding the network's
+// peer lock in the same critical section that inserts the peer into the network's peer map.
+// That lock guards slots. removePeer gives the slot back only for a registered peer, so a
+// slot claimed any earlier leaks when the peer is rejected.
+func claimThrottleSlot(slots *int) bool {
+	if *slots <= 0 {
+		return false
+	}
+	*slots--
+	return true
 }
 
 // CloseAndWait internally calls Close() then waits for all peer activity to stop
