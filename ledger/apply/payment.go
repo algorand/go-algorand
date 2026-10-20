@@ -21,6 +21,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
 // Payment changes the balances according to this transaction.
@@ -61,39 +62,25 @@ func Payment(payment transactions.PaymentTxnFields, header transactions.Header, 
 			return fmt.Errorf("balance %d still not zero after CloseRemainderTo", rec.MicroAlgos.Raw)
 		}
 
-		// Confirm that there is no asset-related state in the account
-		totalAssets := rec.TotalAssets
-		if totalAssets > 0 {
-			return fmt.Errorf("cannot close: %d outstanding assets", totalAssets)
-		}
-
-		totalAssetParams := rec.TotalAssetParams
-		if totalAssetParams > 0 {
-			// This should be impossible because every asset created
-			// by an account (in AssetParams) must also appear in Assets,
-			// which we checked above.
-			return fmt.Errorf("cannot close: %d outstanding created assets", totalAssetParams)
-		}
-
-		// Confirm that there is no application-related state remaining
-		totalAppLocalStates := rec.TotalAppLocalStates
-		if totalAppLocalStates > 0 {
-			return fmt.Errorf("cannot close: %d outstanding applications opted in. Please opt out or clear them", totalAppLocalStates)
-		}
-
-		// Confirm that there is no box-related state in the account
-		if rec.TotalBoxes > 0 {
-			return fmt.Errorf("cannot close: %d outstanding boxes", rec.TotalBoxes)
-		}
-		if rec.TotalBoxBytes > 0 {
-			// This should be impossible because every box byte comes from the existence of a box.
-			return fmt.Errorf("cannot close: %d outstanding box bytes", rec.TotalBoxBytes)
-		}
-
-		// Can't have created apps remaining either
-		totalAppParams := rec.TotalAppParams
-		if totalAppParams > 0 {
-			return fmt.Errorf("cannot close: %d outstanding created applications", totalAppParams)
+		proto := balances.ConsensusParams()
+		// AppSizeUpdates allows an account to be an app's SizeSponsor, holding
+		// MBR for globals and extra pages without having created or opted into
+		// the app, which the legacy checks miss. The legacy checks remain for
+		// older protocols so that historical blocks evaluate as they did.
+		if proto.CloseRequiresBaseMinBalance {
+			// Anything the account owes MBR for would be unaccounted for after
+			// CloseAccount, so the MBR must be just the account base MBR.
+			if mbr := rec.MinBalance(&proto); mbr.Raw != proto.MinBalance {
+				return fmt.Errorf("cannot close: min balance %d exceeds base %d: "+
+					"%d outstanding assets, %d created apps, %d opted-in apps, "+
+					"%d boxes, %d extra pages, %d/%d globals/locals (uint/bytes)",
+					mbr.Raw, proto.MinBalance,
+					rec.TotalAssets, rec.TotalAppParams, rec.TotalAppLocalStates,
+					rec.TotalBoxes, rec.TotalExtraAppPages,
+					rec.TotalAppSchema.NumUint, rec.TotalAppSchema.NumByteSlice)
+			}
+		} else if err = legacyCloseChecks(rec); err != nil {
+			return err
 		}
 
 		// Clear out entire account record, to allow the DB to GC it
@@ -103,5 +90,48 @@ func Payment(payment transactions.PaymentTxnFields, header transactions.Header, 
 		}
 	}
 
+	return nil
+}
+
+// legacyCloseChecks enforces the rules for closing an account before
+// CloseRequiresBaseMinBalance.  There may be old transactions that closed an account with a
+// positive MBR because of the old ExtraPages bug gated on
+// EnableProperExtraPageAccounting, so these checks cannot be replaced by a
+// MinBalance comparison without breaking replay of those blocks.
+func legacyCloseChecks(rec ledgercore.AccountData) error {
+	// Confirm that there is no asset-related state in the account
+	totalAssets := rec.TotalAssets
+	if totalAssets > 0 {
+		return fmt.Errorf("cannot close: %d outstanding assets", totalAssets)
+	}
+
+	totalAssetParams := rec.TotalAssetParams
+	if totalAssetParams > 0 {
+		// This should be impossible because every asset created
+		// by an account (in AssetParams) must also appear in Assets,
+		// which we checked above.
+		return fmt.Errorf("cannot close: %d outstanding created assets", totalAssetParams)
+	}
+
+	// Confirm that there is no application-related state remaining
+	totalAppLocalStates := rec.TotalAppLocalStates
+	if totalAppLocalStates > 0 {
+		return fmt.Errorf("cannot close: %d outstanding applications opted in. Please opt out or clear them", totalAppLocalStates)
+	}
+
+	// Confirm that there is no box-related state in the account
+	if rec.TotalBoxes > 0 {
+		return fmt.Errorf("cannot close: %d outstanding boxes", rec.TotalBoxes)
+	}
+	if rec.TotalBoxBytes > 0 {
+		// This should be impossible because every box byte comes from the existence of a box.
+		return fmt.Errorf("cannot close: %d outstanding box bytes", rec.TotalBoxBytes)
+	}
+
+	// Can't have created apps remaining either
+	totalAppParams := rec.TotalAppParams
+	if totalAppParams > 0 {
+		return fmt.Errorf("cannot close: %d outstanding created applications", totalAppParams)
+	}
 	return nil
 }
