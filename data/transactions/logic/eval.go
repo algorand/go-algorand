@@ -1973,7 +1973,7 @@ func opAddw(cx *EvalContext) error {
 // stack because even if you manage it, their internal slice of Words must have
 // a backing store that ends up allocated on the heap.
 var bigIntPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return new(big.Int)
 	},
 }
@@ -2466,10 +2466,15 @@ func opBytesPlus(cx *EvalContext) error {
 	return byteMathResult(cx, lhs)
 }
 
+const bplusCostDoc = "4 + 1 per 16 bytes of the longer of A and B"
+
+// bplusCost is used for both b+ and b-. It charges for the longer input even in
+// b-, where B can only be longer than A if it has leading zeros, because those
+// zeros must still be parsed.
 func bplusCost(stack []stackValue) int {
 	last := len(stack) - 1
 	prev := last - 1
-	return 1 + basics.DivCeil(max(len(stack[last].Bytes), len(stack[prev].Bytes)), 16)
+	return 4 + basics.DivCeil(max(len(stack[last].Bytes), len(stack[prev].Bytes)), 16)
 }
 
 func opBytesMinus(cx *EvalContext) error {
@@ -2505,12 +2510,22 @@ func opBytesDiv(cx *EvalContext) error {
 	return byteMathResult(cx, quo)
 }
 
+const bdivCostDoc = "10 + (1 + Q/16) * (8 + D/16) / 2 + 1 per 32 bytes of the longer of A and B, where Q = max(len(A) - len(B), 0) and D = min(len(A), len(B))"
+
+// bdivCost is used for both b/ and b%. Long division does work proportional to
+// the length of the quotient times the length of the divisor, so dividing
+// equal-length numbers is cheap, and the worst case is a divisor half as long as
+// the dividend. The linear term covers parsing and allocation.
 func bdivCost(stack []stackValue) int {
 	last := len(stack) - 1
 	prev := last - 1
-	l := len(stack[prev].Bytes)
-	chunks := l / 96
-	return 10 + chunks*chunks + l/10
+	return divComplexity(len(stack[prev].Bytes), len(stack[last].Bytes))
+}
+
+func divComplexity(la, lb int) int {
+	quotient := max(la-lb, 0)
+	divisor := min(la, lb)
+	return 10 + (1+quotient/16)*(8+divisor/16)/2 + basics.DivCeil(max(la, lb), 32)
 }
 
 func opBytesMul(cx *EvalContext) error {
@@ -2524,6 +2539,8 @@ func opBytesMul(cx *EvalContext) error {
 	return byteMathResult(cx, result)
 }
 
+const bmulCostDoc = "(8 + len(A)/16) * (8 + len(B)/16) / 6. If both A and B are at least 512 bytes: 4 * max(len(A), len(B)) / 16 + (8 + len(A)/16) * (8 + len(B)/16) / 12"
+
 func bmulCost(stack []stackValue) int {
 	last := len(stack) - 1
 	prev := last - 1
@@ -2533,10 +2550,13 @@ func bmulCost(stack []stackValue) int {
 func mulComplexity(la, lb int) int {
 	const chunk = 16
 	linear := 0
-	factor := 12
+	factor := 6
 	if min(la, lb) >= 512 {
-		factor = 24
-		linear = 2 * max(la, lb) / chunk
+		// math/big uses Karatsuba multiplication for long inputs, so their
+		// cost grows more slowly than quadratically. The linear term keeps the
+		// cost continuous at the switch to the smaller quadratic term.
+		factor = 12
+		linear = 4 * max(la, lb) / chunk
 	}
 	return linear + (8+la/chunk)*(8+lb/chunk)/factor
 }
@@ -2671,44 +2691,67 @@ func opBytesModExp(cx *EvalContext) error {
 	return nil
 }
 
-func bmodexpCostFloat(stack []stackValue) int {
-	last := len(stack) - 1 // mod
-	prev := last - 1       // exp
-	pprev := last - 2      // base
-
-	// Empirically estimated cost function constants
-	const (
-		exponentFactor = 1.63   // Adjusts cost of base & mod multiplication in the modexp by squaring algorithm
-		scalingFactor  = 15 * 8 // Normalization factor
-		baseCost       = 200    // Minimum cost of bmodexp
-	)
-
-	expLength := float64(bitlen(stack[prev].Bytes))
-	modLength := len(stack[last].Bytes)
-	baseLength := len(stack[pprev].Bytes)
-
-	// Derived from the asymptotic time complexity of the exponentiation by squaring algorithm
-	cost := baseCost + (math.Pow(float64(max(baseLength, modLength)), exponentFactor) * expLength / scalingFactor)
-
-	return int(cost)
+// onesCount returns the number of set bits in a byte slice
+func onesCount(bytes []byte) int {
+	n := 0
+	for _, b := range bytes {
+		n += bits.OnesCount8(b)
+	}
+	return n
 }
 
-// bmodexpCost approximates the cost of bmodexp, which works by repeated
-// squaring. There are bitlen(`exp`) steps, and at each step there is a
-// squaring, possibly an addition, and the result can be reduced modulo `mod`.
+// modMulComplexity is the cost of one step of modular exponentiation (roughly,
+// a modular multiplication) with a modulus of length lm. It is quadratic in the
+// number of words because math/big's Montgomery multiplication does not use
+// Karatsuba.
+func modMulComplexity(lm int) int {
+	w := basics.DivCeil(lm, 8)
+	return 2 + 2*w + w*w/10
+}
+
+const bmodexpCostDoc = "10 + 1 per 32 bytes of A, B, and C, plus a cost that depends on bitlen(B). Let S = 2 + 2W + W^2/10, where W = len(C)/8, rounded up. " +
+	"If bitlen(B) <= 1, the cost of A b% C. " +
+	"If bitlen(B) <= 64, (bitlen(B) + popcount(B)) * S, plus, if len(A) > len(C), popcount(B) * (1 + (len(A)-len(C))/8) * (1 + len(C)/8) / 2 + 3 * (A b* A) + (2*len(A) b% C). " +
+	"Otherwise, (64 * ceil(bitlen(B)/64) + 16) * S + (A b% C). " +
+	"Costs in parentheses are the costs of those operations on inputs of those lengths."
+
+// bmodexpCost follows the algorithms used by math/big's Int.Exp. For
+// exponents of a single word, it squares and reduces for each bit of the
+// exponent, and multiplies by the base for each set bit. The base is not
+// reduced first, so a base longer than the modulus is expensive. For longer
+// exponents, it reduces the base, then uses windowed Montgomery
+// multiplication, which processes every bit of each exponent word, after
+// precomputing 16 powers of the base.
 func bmodexpCost(stack []stackValue) int {
 	mod := len(stack) - 1
 	exp := mod - 1
 	base := mod - 2
 
-	// EIP-198 uses max(base,mod) here, but I don't really understand why. If
-	// each step reduces module `mod`, it seems as though we should just use
-	// len(mod).  If len(base) is bigger than len(mod), bmodexp ought to be
-	// reducing ahead of each step, so it _never_ multiplies numbers wider than
-	// `exp`.
-	m := max(len(stack[base].Bytes), len(stack[mod].Bytes))
+	lb := len(stack[base].Bytes)
+	le := len(stack[exp].Bytes)
+	lm := len(stack[mod].Bytes)
+	expBits := bitlen(stack[exp].Bytes)
 
-	return bitlen(stack[exp].Bytes) * mulComplexity(m, m)
+	cost := 10 + basics.DivCeil(lb+le+lm, 32)
+	switch {
+	case expBits == 0:
+		return cost
+	case expBits == 1:
+		return cost + divComplexity(lb, lm)
+	case expBits <= 64:
+		ones := onesCount(stack[exp].Bytes)
+		cost += (expBits + ones) * (2 + modMulComplexity(lm))
+		if lb > lm {
+			// The first step squares the full base, and every set bit
+			// multiplies by it.
+			cost += 3*mulComplexity(lb, lb) + divComplexity(2*lb, lm)
+			cost += ones * (1 + (lb-lm)/8) * (1 + lm/8) / 2
+		}
+		return cost
+	default:
+		steps := 64*basics.DivCeil(expBits, 64) + 16
+		return cost + divComplexity(lb, lm) + steps*modMulComplexity(lm)
+	}
 }
 
 func opBytesModulo(cx *EvalContext) error {
