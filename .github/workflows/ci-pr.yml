@@ -4,6 +4,14 @@ on:
     branches:
       - master
       - 'rel/**'
+      - 'rel*'
+  workflow_dispatch:
+    inputs:
+      full_coverage:
+        description: 'Run with -coverpkg to measure cross-package coverage (slower)'
+        required: false
+        type: boolean
+        default: false
 
 env:
   CODECOV_TOKEN: "8b4a1f91-f154-4c26-b84c-c9aaa90159c6"  # Same public token from CircleCI config

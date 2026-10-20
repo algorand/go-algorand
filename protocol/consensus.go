@@ -235,6 +235,12 @@ const ConsensusV42 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/268b63433a907455d439995bf916f6b296018f4f",
 )
 
+// ConsensusV43 prevents closing an account whose minimum balance requirement
+// exceeds the base, such as an app's size sponsor.
+const ConsensusV43 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/73c43b4a9699390884c51e2a9598d49e28373d10",
+)
+
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
@@ -284,7 +290,7 @@ const ConsensusVFnet5 = ConsensusVersion("fnet5")
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV42
+const ConsensusCurrentVersion = ConsensusV43
 
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion
