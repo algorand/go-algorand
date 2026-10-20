@@ -779,17 +779,17 @@ var OpSpecs = []OpSpec{
 	/* Will end up following keccak256 -
 	{0x98, "sha3_256", opSHA3_256, proto("b:b{32}"), ?, costByLength(...)},},
 	*/
-	{0x99, "bmodexp", opBytesModExp, proto("bbb:b"), fullByteMathVersion, costByFn(bmodexpCost, "((bitlen(B) * max(len(A), len(C)) ^ 1.63) / 120) + 200")},
+	{0x99, "bmodexp", opBytesModExp, proto("bbb:b"), fullByteMathVersion, costByFn(bmodexpCost, bmodexpCostDoc)},
 
 	// Byteslice math.
 	{0xa0, "b+", opBytesPlus, proto("II:b"), 4, costly(10).typed(typeByteMath(maxByteMathSize + 1))},
-	{0xa0, "b+", opBytesPlus, proto("bb:b"), fullByteMathVersion, costByFn(bplusCost, "1 + max(len(A), len(B))//16")},
+	{0xa0, "b+", opBytesPlus, proto("bb:b"), fullByteMathVersion, costByFn(bplusCost, bplusCostDoc)},
 	{0xa1, "b-", opBytesMinus, proto("II:I"), 4, costly(10)},
-	{0xa1, "b-", opBytesMinus, proto("bb:b"), fullByteMathVersion, costByLength(1, 1, 16, 1)},
+	{0xa1, "b-", opBytesMinus, proto("bb:b"), fullByteMathVersion, costByFn(bplusCost, bplusCostDoc)},
 	{0xa2, "b/", opBytesDiv, proto("II:I"), 4, costly(20)},
-	{0xa2, "b/", opBytesDiv, proto("bb:b"), fullByteMathVersion, costByFn(bdivCost, "hmm")},
+	{0xa2, "b/", opBytesDiv, proto("bb:b"), fullByteMathVersion, costByFn(bdivCost, bdivCostDoc)},
 	{0xa3, "b*", opBytesMul, proto("II:b"), 4, costly(20).typed(typeByteMath(maxByteMathSize * 2))},
-	{0xa3, "b*", opBytesMul, proto("bb:b"), fullByteMathVersion, costByFn(bmulCost, "hmm")},
+	{0xa3, "b*", opBytesMul, proto("bb:b"), fullByteMathVersion, costByFn(bmulCost, bmulCostDoc)},
 	{0xa4, "b<", opBytesLt, proto("II:T"), 4, detDefault()},
 	{0xa4, "b<", opBytesLt, proto("bb:T"), fullByteMathVersion, detDefault()},
 	{0xa5, "b>", opBytesGt, proto("II:T"), 4, detDefault()},
@@ -803,7 +803,7 @@ var OpSpecs = []OpSpec{
 	{0xa9, "b!=", opBytesNeq, proto("II:T"), 4, detDefault()},
 	{0xa9, "b!=", opBytesNeq, proto("bb:T"), fullByteMathVersion, detDefault()},
 	{0xaa, "b%", opBytesModulo, proto("II:I"), 4, costly(20)},
-	{0xaa, "b%", opBytesModulo, proto("bb:b"), fullByteMathVersion, costByFn(bdivCost, "hmm")},
+	{0xaa, "b%", opBytesModulo, proto("bb:b"), fullByteMathVersion, costByFn(bdivCost, bdivCostDoc)},
 	{0xab, "b|", opBytesBitOr, proto("bb:b"), 4, costly(6)},
 	{0xab, "b|", opBytesBitOr, proto("bb:b"), fullByteMathVersion, costByLength(1, 1, 32, 0)},
 	{0xac, "b&", opBytesBitAnd, proto("bb:b"), 4, costly(6)},
