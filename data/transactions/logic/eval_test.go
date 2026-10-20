@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/big"
 	"strconv"
 	"strings"
 	"testing"
@@ -850,20 +851,63 @@ func TestDivw(t *testing.T) {
 	testAccepts(t, "int 0; int 90; int 30; divw; int 3; ==", 6)
 }
 
-func TestUint128(t *testing.T) {
-	partitiontest.PartitionTest(t)
+func bigUint128(hi uint64, lo uint64) *big.Int {
+	x := new(big.Int).SetUint64(hi)
+	x.Lsh(x, 64)
+	return x.Or(x, new(big.Int).SetUint64(lo))
+}
 
+// drawWideUint64 draws values of every bit width, since the divmodw and expw
+// implementations branch on leading zeros, and rapid.Uint64 favors small values.
+func drawWideUint64(r *rapid.T, label string) uint64 {
+	return rapid.Uint64().Draw(r, label) >> rapid.IntRange(0, 63).Draw(r, label+"Shift")
+}
+
+// TestRapidDivModw checks the math/bits implementation of divmodw against big.Int
+func TestRapidDivModw(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
-	x := uint128(0, 3)
-	require.Equal(t, x.String(), "3")
-	x = uint128(0, 0)
-	require.Equal(t, x.String(), "0")
-	x = uint128(1, 3)
-	require.Equal(t, x.String(), "18446744073709551619")
-	x = uint128(1, 5)
-	require.Equal(t, x.String(), "18446744073709551621")
-	x = uint128(^uint64(0), ^uint64(0)) // maximum uint128 = 2^64-1
-	require.Equal(t, x.String(), "340282366920938463463374607431768211455")
+
+	rapid.Check(t, func(r *rapid.T) {
+		hiNum := rapid.OneOf(rapid.Just(uint64(0)), rapid.Custom(func(r *rapid.T) uint64 { return drawWideUint64(r, "hiNum") })).Draw(r, "hiNumChoice")
+		loNum := rapid.Uint64().Draw(r, "loNum")
+		hiDen := rapid.OneOf(rapid.Just(uint64(0)), rapid.Custom(func(r *rapid.T) uint64 { return drawWideUint64(r, "hiDen") })).Draw(r, "hiDenChoice")
+		loDen := drawWideUint64(r, "loDen")
+		if hiDen == 0 && loDen == 0 {
+			return
+		}
+
+		hiQuo, loQuo, hiRem, loRem := opDivModwImpl(hiNum, loNum, hiDen, loDen)
+		quo, rem := new(big.Int).QuoRem(bigUint128(hiNum, loNum), bigUint128(hiDen, loDen), new(big.Int))
+		require.Equal(t, quo.String(), bigUint128(hiQuo, loQuo).String(), "%d:%d / %d:%d", hiNum, loNum, hiDen, loDen)
+		require.Equal(t, rem.String(), bigUint128(hiRem, loRem).String(), "%d:%d %% %d:%d", hiNum, loNum, hiDen, loDen)
+	})
+}
+
+// TestRapidExpw checks the math/bits implementation of expw against big.Int
+func TestRapidExpw(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	limit := bigUint128(1, 0)
+	limit.Lsh(limit, 64)
+	rapid.Check(t, func(r *rapid.T) {
+		base := drawWideUint64(r, "base")
+		exp := rapid.Uint64Range(0, 140).Draw(r, "exp")
+
+		hi, lo, err := opExpwImpl(base, exp)
+		if base == 0 && exp == 0 {
+			require.Error(t, err)
+			return
+		}
+		want := new(big.Int).Exp(new(big.Int).SetUint64(base), new(big.Int).SetUint64(exp), nil)
+		if want.Cmp(limit) >= 0 {
+			require.Error(t, err, "%d^%d", base, exp)
+			return
+		}
+		require.NoError(t, err, "%d^%d", base, exp)
+		require.Equal(t, want.String(), bigUint128(hi, lo).String(), "%d^%d", base, exp)
+	})
 }
 
 func TestDivModw(t *testing.T) {
@@ -909,6 +953,11 @@ func TestDivModw(t *testing.T) {
 	// 10:0 / 0:0 ==> panic
 	testPanics(t, `int 10; int 0; int 0; int 0; divmodw;
 	               pop; pop; pop; pop; int 1`, 4)
+
+	// 9 cost 1 ops, plus divmodw
+	costCheck := "pushint 1; pushint 10; pushint 0; pushint 3; pushint 0; divmodw; pop; pop; pop; pop"
+	testCost(t, costCheck, 9+20, fullByteMathVersion-1)
+	testCost(t, costCheck, 9+2, fullByteMathVersion)
 }
 
 func TestWideMath(t *testing.T) {
@@ -5167,6 +5216,11 @@ func TestExpw(t *testing.T) {
 	testPanics(t, "int 2; int 128; expw; pop; pop; int 1", 4) // 2^128 is too big
 	// looks the same, but different code path
 	testPanics(t, "int 4; int 64; expw; pop; pop; int 1", 4) // 2^128 is too big
+
+	// 5 cost 1 ops, plus expw
+	costCheck := "pushint 1; pushint 2; pushint 127; expw; pop; pop"
+	testCost(t, costCheck, 5+10, fullByteMathVersion-1)
+	testCost(t, costCheck, 5+1, fullByteMathVersion)
 }
 
 func TestBitLen(t *testing.T) {

@@ -578,6 +578,7 @@ var OpSpecs = []OpSpec{
 	{0x1d, "mulw", opMulw, proto("ii:ii"), 1, detDefault()},
 	{0x1e, "addw", opAddw, proto("ii:ii"), 2, detDefault()},
 	{0x1f, "divmodw", opDivModw, proto("iiii:iiii"), 4, costly(20)},
+	{0x1f, "divmodw", opDivModw, proto("iiii:iiii"), fullByteMathVersion, costly(2)},
 
 	{0x20, "intcblock", opIntConstBlock, proto(":"), 1, constants(asmIntCBlock, checkIntImmArgs, "uint ...", immInts)},
 	{0x21, "intc", opIntConstLoad, proto(":i"), 1, immediates("i").assembler(asmIntC)},
@@ -708,6 +709,7 @@ var OpSpecs = []OpSpec{
 	{0x93, "bitlen", opBitLen, proto("a:i"), 4, detDefault()},
 	{0x94, "exp", opExp, proto("ii:i"), 4, detDefault()},
 	{0x95, "expw", opExpw, proto("ii:ii"), 4, costly(10)},
+	{0x95, "expw", opExpw, proto("ii:ii"), fullByteMathVersion, detDefault()},
 	{0x96, "bsqrt", opBytesSqrt, proto("I:I"), 6, costly(40)},
 	{0x96, "bsqrt", opBytesSqrt, proto("b:b"), fullByteMathVersion, costByFn(bsqrtCost, "5 + (len(A) // 96)^2*bitlen(len(A)) + len(A)")},
 	{0x97, "divw", opDivw, proto("iii:i"), 6, detDefault()},

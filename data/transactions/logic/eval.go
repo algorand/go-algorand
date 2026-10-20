@@ -53,7 +53,8 @@ const maxStringSize = 4096
 const maxByteMathSize = 64
 
 // fullByteMathVersion is the first version for which operators like `b==` and
-// `b<` are unconstrained by maxByteMathSize
+// `b<` are unconstrained by maxByteMathSize, there are also several
+// optimizations that allow lower costs for operations using bytemath.
 const fullByteMathVersion = 12
 
 // maxLogSize is the limit of total log size from n log calls in a program
@@ -1811,62 +1812,47 @@ func putBig(b *big.Int) {
 	bigIntPool.Put(b)
 }
 
-// uint128 returns a big.Int constructed from the two uint64s supplied.
-func uint128(hi uint64, lo uint64) *big.Int {
-	// directly manipulate the words of the big.Int if they are uint64. big.Word
-	// is a `uint`, not `uint64`, so it might only be 32 bits. The words are
-	// LITTLE endian (lowest order bits are in words[0])
-	if bits.UintSize == 64 {
-		// this saves about 17% of the time in divmodw
-		b := getBig()
-		// reuse the existing Bits() slice to avoid allocation (it usually
-		// exists because this big.Int came from the pool)
-		words := append(b.Bits()[:0], big.Word(lo), big.Word(hi))
-		return b.SetBits(words)
-	}
-	// slowpath for non 64-bit systems
-	whole := getBig().SetUint64(hi)
-	whole.Lsh(whole, 64)
-	low := getBig().SetUint64(lo)
-	whole.Add(whole, low)
-	putBig(low)
-	return whole
-}
-
-// uint64s returns the high and low words of a big.Int. The big.Int MUST be no
-// larger than 128 bits.
-func uint64s(bi *big.Int) (hi uint64, lo uint64) {
-	// this is barely worth it. saves the cost of 1 opcode, roughly. But, since
-	// `uint128` has already peeked behind the big.Int curtain, why not?
-	if bits.UintSize == 64 {
-		words := bi.Bits()
-		if l := len(words); l > 0 {
-			lo = uint64(words[0])
-			if l > 1 {
-				hi = uint64(words[1])
-			}
-		}
-		return
-	}
-	// slowpath for non 64-bit systems
-	lo = bi.Uint64() // take lo first, so bi can be modified - avoid an allocation
-	hi = bi.Rsh(bi, 64).Uint64()
-	return
-}
-
+// opDivModwImpl divides one 128-bit number by another. The divisor must be
+// non-zero.
 func opDivModwImpl(hiNum, loNum, hiDen, loDen uint64) (hiQuo uint64, loQuo uint64, hiRem uint64, loRem uint64) {
-	dividend := uint128(hiNum, loNum)
-	divisor := uint128(hiDen, loDen)
+	if hiDen == 0 {
+		// Long division by a single word. bits.Div64 panics unless its high
+		// input is less than the divisor, so divide the high word first and
+		// carry its remainder into the low word's division.
+		var rem uint64
+		hiQuo, rem = bits.Div64(0, hiNum, loDen)
+		loQuo, loRem = bits.Div64(rem, loNum, loDen)
+		return hiQuo, loQuo, 0, loRem
+	}
 
-	quo, rem := getBig().QuoRem(dividend, divisor, getBig())
-	putBig(divisor)
-	putBig(dividend)
+	// The divisor is at least 2^64, so the quotient fits in one word. Estimate
+	// it by dividing by the divisor's top 64 bits (Hacker's Delight, divlu2).
+	// The estimate is at most one too large, so take one off, and fix it if
+	// that left it one too small.
+	shift := uint(bits.LeadingZeros64(hiDen))
+	topDen := hiDen<<shift | loDen>>(64-shift) // loDen>>64 is 0 in Go, so shift == 0 is fine
+	// Halving the dividend guarantees its high word is less than topDen, which
+	// has its top bit set, as bits.Div64 requires.
+	q, _ := bits.Div64(hiNum>>1, hiNum<<63|loNum>>1, topDen)
+	q >>= 63 - shift
+	if q != 0 {
+		q--
+	}
 
-	hiQuo, loQuo = uint64s(quo)
-	hiRem, loRem = uint64s(rem)
-	putBig(quo)
-	putBig(rem)
-	return
+	// Since q <= the true quotient, q * divisor < 2^128 and the subtraction
+	// can't go negative.
+	prodHi, prodLo := bits.Mul64(q, loDen)
+	prodHi += q * hiDen
+	var borrow uint64
+	loRem, borrow = bits.Sub64(loNum, prodLo, 0)
+	hiRem, _ = bits.Sub64(hiNum, prodHi, borrow)
+
+	if hiRem > hiDen || (hiRem == hiDen && loRem >= loDen) {
+		q++
+		loRem, borrow = bits.Sub64(loRem, loDen, 0)
+		hiRem, _ = bits.Sub64(hiRem, hiDen, borrow)
+	}
+	return 0, q, hiRem, loRem
 }
 
 func opDivModw(cx *EvalContext) error {
@@ -2217,36 +2203,43 @@ func opExp(cx *EvalContext) error {
 	return nil
 }
 
-func opExpwImpl(base uint64, exp uint64) (*big.Int, error) {
+func opExpwImpl(base uint64, exp uint64) (hi uint64, lo uint64, err error) {
 	// These checks are slightly repetive but the clarity of
 	// avoiding nested checks seems worth it.
 	if exp == 0 && base == 0 {
-		return nil, errors.New("0^0 is undefined")
+		return 0, 0, errors.New("0^0 is undefined")
 	}
 	if base == 0 {
-		return getBig().SetUint64(0), nil
+		return 0, 0, nil
 	}
 	if exp == 0 || base == 1 {
-		return getBig().SetUint64(1), nil
+		return 0, 1, nil
 	}
 	// base is now at least 2, so exp can not be 128
 	if exp >= 128 {
-		return nil, fmt.Errorf("%d^%d overflow", base, exp)
+		return 0, 0, fmt.Errorf("%d^%d overflow", base, exp)
 	}
 
-	answer := getBig().SetUint64(base)
-	bigbase := getBig().SetUint64(base)
-	// safe to cast exp, because it is known to fit in int (it's < 128)
-	for i := 1; i < int(exp); i++ {
-		answer.Mul(answer, bigbase)
-		if answer.BitLen() > 128 {
-			putBig(answer)
-			putBig(bigbase)
-			return nil, fmt.Errorf("%d^%d overflow", base, exp)
+	// Left-to-right square-and-multiply. Each intermediate value is base raised
+	// to a prefix of exp's bits, which is no larger than base^exp, so any
+	// intermediate overflow means the final answer overflows too.
+	lo = 1
+	for i := bits.Len64(exp) - 1; i >= 0; i-- {
+		if hi != 0 { // squaring a value >= 2^64 can't fit in 128 bits
+			return 0, 0, fmt.Errorf("%d^%d overflow", base, exp)
+		}
+		hi, lo = bits.Mul64(lo, lo)
+		if exp&(1<<i) != 0 {
+			loCarry, newLo := bits.Mul64(lo, base)
+			top, hiProduct := bits.Mul64(hi, base)
+			newHi, carry := bits.Add64(hiProduct, loCarry, 0)
+			if top != 0 || carry != 0 {
+				return 0, 0, fmt.Errorf("%d^%d overflow", base, exp)
+			}
+			hi, lo = newHi, newLo
 		}
 	}
-	putBig(bigbase)
-	return answer, nil
+	return hi, lo, nil
 }
 
 func opExpw(cx *EvalContext) error {
@@ -2255,12 +2248,10 @@ func opExpw(cx *EvalContext) error {
 
 	exp := cx.Stack[last].Uint
 	base := cx.Stack[prev].Uint
-	val, err := opExpwImpl(base, exp)
+	hi, lo, err := opExpwImpl(base, exp)
 	if err != nil {
 		return err
 	}
-	hi, lo := uint64s(val)
-	putBig(val)
 
 	cx.Stack[prev].Uint = hi
 	cx.Stack[last].Uint = lo
