@@ -161,8 +161,6 @@ type poolAsmResults struct {
 	// skipped means no local accounts could propose when recomputation started.
 	// An explicit assembly request must build a fallback instead of returning blk.
 	skipped bool
-	// proposers is the snapshot of possible proposers for this recomputation.
-	proposers []basics.Address
 	// roundStartedEvaluating is the round which we were attempted to evaluate last. It's a good measure for
 	// which round we started evaluating, but not a measure to whether the evaluation is complete.
 	roundStartedEvaluating basics.Round
@@ -643,7 +641,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 				}
 
 				blockGenerationStarts := time.Now()
-				lvb, gerr := pool.pendingBlockEvaluator.GenerateBlock(pool.assemblyResults.proposers)
+				lvb, gerr := pool.pendingBlockEvaluator.GenerateBlock(pool.getVotingAccountsForRound(evalRnd))
 				if gerr != nil {
 					pool.assemblyResults.err = fmt.Errorf("could not generate block for %d: %v", pool.assemblyResults.roundStartedEvaluating, gerr)
 				} else {
@@ -712,7 +710,6 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 	pool.assemblyMu.Lock()
 	pool.assemblyResults = poolAsmResults{
 		roundStartedEvaluating:       prev.Round + 1,
-		proposers:                    proposers,
 		skipped:                      skipAssembly,
 		ok:                           skipAssembly,
 		assemblyCompletedOrAbandoned: skipAssembly,
@@ -815,7 +812,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 		pool.assemblyResults.ok = true
 		pool.assemblyResults.assemblyCompletedOrAbandoned = true // this is not strictly needed, since the value would only get inspected by this go-routine, but we'll adjust it along with "ok" for consistency
 		blockGenerationStarts := time.Now()
-		lvb, err := pool.pendingBlockEvaluator.GenerateBlock(pool.assemblyResults.proposers)
+		lvb, err := pool.pendingBlockEvaluator.GenerateBlock(pool.getVotingAccountsForRound(evalRnd))
 		if err != nil {
 			pool.assemblyResults.err = fmt.Errorf("could not generate block for %d (end): %v", pool.assemblyResults.roundStartedEvaluating, err)
 		} else {

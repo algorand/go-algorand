@@ -129,7 +129,13 @@ func TestPoolSpeculativeBlockGeneration(t *testing.T) {
 					require.Positive(t, pool.numPendingWholeBlocks)
 				}
 				if supplier != "unspecified" {
-					require.Equal(t, 1, queries, "participation is sampled once per recomputation")
+					// The prologue looks up keys to decide whether to skip. Generation
+					// looks them up again, so it also covers keys installed mid-recompute.
+					expectedQueries := 1
+					if supplier == "voting" {
+						expectedQueries = 2
+					}
+					require.Equal(t, expectedQueries, queries)
 				}
 				if supplier == "noKeys" {
 					require.Zero(t, tracer.generated)
