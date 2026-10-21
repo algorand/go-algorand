@@ -356,6 +356,8 @@ func TestIdentityTrackerSetIdentity(t *testing.T) {
 
 	// Ensure a different peer cannot take the map entry
 	otherP := wsPeer{identity: id}
+	require.False(t, tracker.claimedByOther(&p))
+	require.True(t, tracker.claimedByOther(&otherP))
 	require.False(t, tracker.setIdentity(&otherP))
 
 	// Ensure the entry in the map wasn't changed

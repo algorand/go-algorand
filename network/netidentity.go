@@ -450,14 +450,16 @@ var identityHandlers = []TaggedMessageHandler{
 type identityTracker interface {
 	removeIdentity(p *wsPeer)
 	setIdentity(p *wsPeer) bool
+	claimedByOther(p *wsPeer) bool
 }
 
 // noopIdentityTracker implements identityTracker by doing nothing.
 // Intended for pure p2p mode when libp2p is handling identities itself.
 type noopIdentityTracker struct{}
 
-func (noopIdentityTracker) setIdentity(p *wsPeer) bool { return true }
-func (noopIdentityTracker) removeIdentity(p *wsPeer)   {}
+func (noopIdentityTracker) setIdentity(p *wsPeer) bool    { return true }
+func (noopIdentityTracker) removeIdentity(p *wsPeer)      {}
+func (noopIdentityTracker) claimedByOther(p *wsPeer) bool { return false }
 
 // publicKeyIdentTracker implements identityTracker by
 // mapping from PublicKeys exchanged in identity challenges to a peer
@@ -490,6 +492,15 @@ func (t *publicKeyIdentTracker) setIdentity(p *wsPeer) bool {
 	// the identity is occupied, so return false if it is occupied by some *other* peer
 	// or true if it is occupied by this peer
 	return existingPeer == p
+}
+
+// claimedByOther reports whether a peer other than p holds p's identity. It claims nothing,
+// so callers use it only to skip work for a peer that setIdentity would reject.
+func (t *publicKeyIdentTracker) claimedByOther(p *wsPeer) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	existingPeer, exists := t.peersByID[p.identity]
+	return exists && existingPeer != p
 }
 
 // removeIdentity removes the entry in the peersByID map if it exists

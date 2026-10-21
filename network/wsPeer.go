@@ -446,6 +446,14 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, outMsg Ou
 	return nil
 }
 
+//msgp:ignore peerAdmission
+type peerAdmission uint8
+
+const (
+	peerAdmitted peerAdmission = iota
+	peerRejectedDuplicateIdentity
+)
+
 // setup values not trivially assigned
 func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 	wp.log.Debugf("wsPeer init outgoing=%v %#v", wp.outgoing, wp.GetAddress())
@@ -472,7 +480,12 @@ func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 
 	// Initialize message codec for compression/decompression
 	wp.msgCodec = makeWsPeerMsgCodec(wp)
+}
 
+// start launches the peer's read and write loops. Call it only once the peer has been admitted
+// to the network's peer collection (while holding the network's peer lock so wg.Add(2) precedes
+// any concurrent CloseAndWait).
+func (wp *wsPeer) start() {
 	wp.wg.Add(2)
 	go wp.readLoop()
 	go wp.writeLoop()

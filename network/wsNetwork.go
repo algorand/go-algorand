@@ -1189,7 +1189,6 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	}
 	peer.TelemetryGUID = trackedRequest.otherTelemetryGUID
 	wn.log.Debugf("Server: client features '%s', decoded %x, our response '%s'", request.Header.Get(PeerFeaturesHeader), peer.features, responseHeader.Get(PeerFeaturesHeader))
-	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.addPeer(peer)
 	wn.log.With("event", "ConnectedIn").With("remote", trackedRequest.remoteAddress()).With("local", localAddr).Infof("Accepted incoming connection from peer %s", trackedRequest.remoteAddr)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
@@ -2187,22 +2186,17 @@ func (wn *WebsocketNetwork) tryConnect(netAddr, gossipAddr string) {
 	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
 	wn.log.Debugf("Client: server features '%s', decoded %x", response.Header.Get(PeerFeaturesHeader), peer.features)
 
-	// if there is a final verification message to send, it means this peer has a verified identity,
-	// attempt to set the peer and identityTracker
+	// if there is a final verification message to send, it means this peer has a verified identity
 	if len(idVerificationMessage) > 0 {
 		peer.identityVerified.Store(uint32(1))
-		wn.peersLock.Lock()
-		ok := wn.identityTracker.setIdentity(peer)
-		wn.peersLock.Unlock()
-		if !ok {
-			networkPeerIdentityDisconnect.Inc(nil)
-			wn.log.With("remote", netAddr).With("local", localAddr).Warn("peer deduplicated before adding because the identity is already known")
-			closeEarly("Duplicate connection")
-			return
-		}
 	}
-	peer.init(wn.config, wn.outgoingMessagesBufferSize)
-	wn.addPeer(peer)
+	switch wn.addPeer(peer) {
+	case peerAdmitted:
+	case peerRejectedDuplicateIdentity:
+		wn.log.With("remote", netAddr).With("local", localAddr).Warn("peer deduplicated before adding because the identity is already known")
+		closeEarly("Duplicate connection")
+		return
+	}
 
 	wn.log.With("event", "ConnectedOut").With("remote", netAddr).With("local", localAddr).Infof("Made outgoing connection to peer %v", netAddr)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
@@ -2385,26 +2379,29 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 	wn.countPeersSetGauges()
 }
 
-func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
+// addPeer initializes and registers peer in wn.peers, claims its identity (when verified) and throttle slot,
+// and starts its read/write loops.
+// When it returns anything other than peerAdmitted, the caller must close the peer/connection.
+func (wn *WebsocketNetwork) addPeer(peer *wsPeer) peerAdmission {
+	verified := peer.identityVerified.Load() == 1
+	// init allocates the send queues, so skip it for a duplicate; setIdentity below is the real claim
+	if verified && wn.identityTracker.claimedByOther(peer) {
+		networkPeerIdentityDisconnect.Inc(nil)
+		return peerRejectedDuplicateIdentity
+	}
+	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.peersLock.Lock()
 	defer wn.peersLock.Unlock()
-	// guard against peers which are closed or closing
-	if peer.didSignalClose.Load() == 1 {
-		networkPeerAlreadyClosed.Inc(nil)
-		wn.log.Debugf("peer closing %s", peer.conn.RemoteAddrString())
-		return
-	}
-	// simple duplicate *pointer* check. should never trigger given the callers to addPeer
-	// TODO: remove this after making sure it is safe to do so
-	if slices.Contains(wn.peers, peer) {
-		wn.log.Errorf("dup peer added %#v", peer)
-		return
+	if verified && !wn.identityTracker.setIdentity(peer) {
+		networkPeerIdentityDisconnect.Inc(nil)
+		return peerRejectedDuplicateIdentity
 	}
 	if peer.outgoing {
 		peer.throttledOutgoingConnection = claimThrottleSlot(&wn.throttledOutgoingConnections)
 	}
 	heap.Push(peersHeap{wn}, peer)
 	wn.prioTracker.setPriority(peer, peer.prioAddress, peer.prioWeight)
+	peer.start()
 	wn.peersChangeCounter.Add(1)
 	wn.countPeersSetGauges()
 	if len(wn.peers) >= wn.config.GossipFanout {
@@ -2418,6 +2415,7 @@ func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
 		wn.wg.Add(1)
 		go wn.eventualReady()
 	}
+	return peerAdmitted
 }
 
 func (wn *WebsocketNetwork) eventualReady() {

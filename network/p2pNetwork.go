@@ -1023,29 +1023,12 @@ func (n *P2PNetwork) baseWsStreamHandler(ctx context.Context, p2pPeer peer.ID, s
 	if !has {
 		n.log.Warn("Could not get local address")
 	}
-	n.wsPeersLock.Lock()
-	ok := n.identityTracker.setIdentity(wsp)
-	n.wsPeersLock.Unlock()
-	if !ok {
-		networkPeerIdentityDisconnect.Inc(nil)
+	switch n.addPeer(p2pPeer, wsp) {
+	case peerAdmitted:
+	case peerRejectedDuplicateIdentity:
 		stream.Close()
 		return &p2p.StreamHandlerLoggedError{Level: logging.Warn, Err: fmt.Errorf("peer deduplicated before adding because the identity is already known: remote %s, local %s", addr, localAddr)}
 	}
-
-	wsp.init(n.config, outgoingMessagesBufferSize)
-	n.wsPeersLock.Lock()
-	if wsp.didSignalClose.Load() == 1 {
-		networkPeerAlreadyClosed.Inc(nil)
-		n.wsPeersLock.Unlock()
-		return &p2p.StreamHandlerLoggedError{Level: logging.Debug, Err: fmt.Errorf("peer closing %s", addr)}
-	}
-	if !incoming {
-		wsp.throttledOutgoingConnection = claimThrottleSlot(&n.throttledOutgoingConnections)
-	}
-	n.wsPeers[p2pPeer] = wsp
-	n.wsPeersToIDs[wsp] = p2pPeer
-	n.wsPeersLock.Unlock()
-	n.wsPeersChangeCounter.Add(1)
 
 	event := "ConnectedOut"
 	msg := "Made outgoing connection to peer %s"
@@ -1069,6 +1052,32 @@ func (n *P2PNetwork) baseWsStreamHandler(ctx context.Context, p2pPeer peer.ID, s
 			InstanceName:  wsp.InstanceName,
 		})
 	return nil
+}
+
+// addPeer initializes and registers wsp, claims its identity and throttle slot, and starts its read/write loops,
+// unless the identity is already in use.
+// The caller must close the stream/peer when addPeer returns anything other than peerAdmitted.
+func (n *P2PNetwork) addPeer(id peer.ID, wsp *wsPeer) peerAdmission {
+	// init allocates the send queues, so skip it for a duplicate; setIdentity below is the real claim
+	if n.identityTracker.claimedByOther(wsp) {
+		networkPeerIdentityDisconnect.Inc(nil)
+		return peerRejectedDuplicateIdentity
+	}
+	wsp.init(n.config, outgoingMessagesBufferSize)
+	n.wsPeersLock.Lock()
+	defer n.wsPeersLock.Unlock()
+	if !n.identityTracker.setIdentity(wsp) {
+		networkPeerIdentityDisconnect.Inc(nil)
+		return peerRejectedDuplicateIdentity
+	}
+	if wsp.outgoing {
+		wsp.throttledOutgoingConnection = claimThrottleSlot(&n.throttledOutgoingConnections)
+	}
+	n.wsPeers[id] = wsp
+	n.wsPeersToIDs[wsp] = id
+	wsp.start()
+	n.wsPeersChangeCounter.Add(1)
+	return peerAdmitted
 }
 
 // peerRemoteClose called from wsPeer to report that it has closed
