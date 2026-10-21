@@ -1986,15 +1986,18 @@ func putBig(b *big.Int) {
 	bigIntPool.Put(b)
 }
 
-// opDivModwImpl divides one 128-bit number by another. The divisor must be
+// divModwImpl divides one 128-bit number by another. The divisor must be
 // non-zero.
-func opDivModwImpl(hiNum, loNum, hiDen, loDen uint64) (hiQuo uint64, loQuo uint64, hiRem uint64, loRem uint64) {
+func divModwImpl(hiNum, loNum, hiDen, loDen uint64) (hiQuo uint64, loQuo uint64, hiRem uint64, loRem uint64) {
 	if hiDen == 0 {
 		// Long division by a single word. bits.Div64 panics unless its high
 		// input is less than the divisor, so divide the high word first and
-		// carry its remainder into the low word's division.
-		var rem uint64
-		hiQuo, rem = bits.Div64(0, hiNum, loDen)
+		// carry its remainder into the low word's division. That first
+		// division is unneeded when the high word is already smaller.
+		rem := hiNum
+		if hiNum >= loDen {
+			hiQuo, rem = bits.Div64(0, hiNum, loDen)
+		}
 		loQuo, loRem = bits.Div64(rem, loNum, loDen)
 		return hiQuo, loQuo, 0, loRem
 	}
@@ -2038,7 +2041,7 @@ func opDivModw(cx *EvalContext) error {
 	loNum := loDen - 2
 	hiNum := loDen - 3
 	hiQuo, loQuo, hiRem, loRem :=
-		opDivModwImpl(cx.Stack[hiNum].Uint, cx.Stack[loNum].Uint, cx.Stack[hiDen].Uint, cx.Stack[loDen].Uint)
+		divModwImpl(cx.Stack[hiNum].Uint, cx.Stack[loNum].Uint, cx.Stack[hiDen].Uint, cx.Stack[loDen].Uint)
 	cx.Stack[hiNum].Uint = hiQuo
 	cx.Stack[loNum].Uint = loQuo
 	cx.Stack[hiDen].Uint = hiRem
@@ -2333,7 +2336,7 @@ func opBitLen(cx *EvalContext) error {
 	return nil
 }
 
-func opExpImpl(base uint64, exp uint64) (uint64, error) {
+func expImpl(base uint64, exp uint64) (uint64, error) {
 	// These checks are slightly repetive but the clarity of
 	// avoiding nested checks seems worth it.
 	if exp == 0 && base == 0 {
@@ -2367,7 +2370,7 @@ func opExp(cx *EvalContext) error {
 
 	exp := cx.Stack[last].Uint
 	base := cx.Stack[prev].Uint
-	val, err := opExpImpl(base, exp)
+	val, err := expImpl(base, exp)
 	if err != nil {
 		return err
 	}
@@ -2376,7 +2379,7 @@ func opExp(cx *EvalContext) error {
 	return nil
 }
 
-func opExpwImpl(base uint64, exp uint64) (hi uint64, lo uint64, err error) {
+func expwImpl(base uint64, exp uint64) (hi uint64, lo uint64, err error) {
 	// These checks are slightly repetive but the clarity of
 	// avoiding nested checks seems worth it.
 	if exp == 0 && base == 0 {
@@ -2421,7 +2424,7 @@ func opExpw(cx *EvalContext) error {
 
 	exp := cx.Stack[last].Uint
 	base := cx.Stack[prev].Uint
-	hi, lo, err := opExpwImpl(base, exp)
+	hi, lo, err := expwImpl(base, exp)
 	if err != nil {
 		return err
 	}
@@ -2511,10 +2514,10 @@ func opBytesDiv(cx *EvalContext) error {
 
 const bdivCostDoc = "10 + (1 + Q/16) * (8 + D/16) / 2 + 1 per 32 bytes of the longer of A and B, where Q = max(len(A) - len(B), 0) and D = min(len(A), len(B))"
 
-// bdivCost is used for both b/ and b%. Long division does work proportional to
-// the length of the quotient times the length of the divisor, so dividing
-// equal-length numbers is cheap, and the worst case is a divisor half as long as
-// the dividend. The linear term covers parsing and allocation.
+// bdivCost is used for b/, b%, and within bmodexp. Long division does work
+// proportional to the length of the quotient times the length of the divisor,
+// so dividing equal-length numbers is cheap, and the worst case is a divisor
+// half as long as the dividend. The linear term covers parsing and allocation.
 func bdivCost(stack []stackValue) int {
 	last := len(stack) - 1
 	prev := last - 1
@@ -3910,11 +3913,11 @@ const (
 	srcInnerGroup
 )
 
-// opTxnImpl implements all of the txn variants.  Each form of txn opcode should
+// txnImpl implements all of the txn variants.  Each form of txn opcode should
 // be able to get its work done with one call here, after collecting the args in
 // the most straightforward way possible. They ought to do no error checking, so
 // that it is all collected here.
-func (cx *EvalContext) opTxnImpl(gi uint64, src txnSource, field TxnField, ai uint64, expectArray bool) (sv stackValue, err error) {
+func (cx *EvalContext) txnImpl(gi uint64, src txnSource, field TxnField, ai uint64, expectArray bool) (sv stackValue, err error) {
 	fs, err := cx.fetchField(field, expectArray)
 	if err != nil {
 		return sv, err
@@ -3956,7 +3959,7 @@ func opTxn(cx *EvalContext) error {
 	gi := uint64(cx.groupIndex)
 	field := TxnField(cx.program[cx.pc+1])
 
-	sv, err := cx.opTxnImpl(gi, srcGroup, field, 0, false)
+	sv, err := cx.txnImpl(gi, srcGroup, field, 0, false)
 	if err != nil {
 		return err
 	}
@@ -3970,7 +3973,7 @@ func opTxna(cx *EvalContext) error {
 	field := TxnField(cx.program[cx.pc+1])
 	ai := uint64(cx.program[cx.pc+2])
 
-	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
+	sv, err := cx.txnImpl(gi, srcGroup, field, ai, true)
 	if err != nil {
 		return err
 	}
@@ -3986,7 +3989,7 @@ func opTxnas(cx *EvalContext) error {
 	field := TxnField(cx.program[cx.pc+1])
 	ai := cx.Stack[last].Uint
 
-	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
+	sv, err := cx.txnImpl(gi, srcGroup, field, ai, true)
 	if err != nil {
 		return err
 	}
@@ -3999,7 +4002,7 @@ func opGtxn(cx *EvalContext) error {
 	gi := uint64(cx.program[cx.pc+1])
 	field := TxnField(cx.program[cx.pc+2])
 
-	sv, err := cx.opTxnImpl(gi, srcGroup, field, 0, false)
+	sv, err := cx.txnImpl(gi, srcGroup, field, 0, false)
 	if err != nil {
 		return err
 	}
@@ -4013,7 +4016,7 @@ func opGtxna(cx *EvalContext) error {
 	field := TxnField(cx.program[cx.pc+2])
 	ai := uint64(cx.program[cx.pc+3])
 
-	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
+	sv, err := cx.txnImpl(gi, srcGroup, field, ai, true)
 	if err != nil {
 		return err
 	}
@@ -4029,7 +4032,7 @@ func opGtxnas(cx *EvalContext) error {
 	field := TxnField(cx.program[cx.pc+2])
 	ai := cx.Stack[last].Uint
 
-	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
+	sv, err := cx.txnImpl(gi, srcGroup, field, ai, true)
 	if err != nil {
 		return err
 	}
@@ -4044,7 +4047,7 @@ func opGtxns(cx *EvalContext) error {
 	gi := cx.Stack[last].Uint
 	field := TxnField(cx.program[cx.pc+1])
 
-	sv, err := cx.opTxnImpl(gi, srcGroup, field, 0, false)
+	sv, err := cx.txnImpl(gi, srcGroup, field, 0, false)
 	if err != nil {
 		return err
 	}
@@ -4060,7 +4063,7 @@ func opGtxnsa(cx *EvalContext) error {
 	field := TxnField(cx.program[cx.pc+1])
 	ai := uint64(cx.program[cx.pc+2])
 
-	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
+	sv, err := cx.txnImpl(gi, srcGroup, field, ai, true)
 	if err != nil {
 		return err
 	}
@@ -4077,7 +4080,7 @@ func opGtxnsas(cx *EvalContext) error {
 	field := TxnField(cx.program[cx.pc+1])
 	ai := cx.Stack[last].Uint
 
-	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
+	sv, err := cx.txnImpl(gi, srcGroup, field, ai, true)
 	if err != nil {
 		return err
 	}
@@ -4090,7 +4093,7 @@ func opGtxnsas(cx *EvalContext) error {
 func opItxn(cx *EvalContext) error {
 	field := TxnField(cx.program[cx.pc+1])
 
-	sv, err := cx.opTxnImpl(0, srcInner, field, 0, false)
+	sv, err := cx.txnImpl(0, srcInner, field, 0, false)
 	if err != nil {
 		return err
 	}
@@ -4102,7 +4105,7 @@ func opItxna(cx *EvalContext) error {
 	field := TxnField(cx.program[cx.pc+1])
 	ai := uint64(cx.program[cx.pc+2])
 
-	sv, err := cx.opTxnImpl(0, srcInner, field, ai, true)
+	sv, err := cx.txnImpl(0, srcInner, field, ai, true)
 	if err != nil {
 		return err
 	}
@@ -4117,7 +4120,7 @@ func opItxnas(cx *EvalContext) error {
 	field := TxnField(cx.program[cx.pc+1])
 	ai := cx.Stack[last].Uint
 
-	sv, err := cx.opTxnImpl(0, srcInner, field, ai, true)
+	sv, err := cx.txnImpl(0, srcInner, field, ai, true)
 	if err != nil {
 		return err
 	}
@@ -4160,7 +4163,7 @@ func opGitxn(cx *EvalContext) error {
 	gi := uint64(cx.program[cx.pc+1])
 	field := TxnField(cx.program[cx.pc+2])
 
-	sv, err := cx.opTxnImpl(gi, srcInnerGroup, field, 0, false)
+	sv, err := cx.txnImpl(gi, srcInnerGroup, field, 0, false)
 	if err != nil {
 		return err
 	}
@@ -4174,7 +4177,7 @@ func opGitxna(cx *EvalContext) error {
 	field := TxnField(cx.program[cx.pc+2])
 	ai := uint64(cx.program[cx.pc+3])
 
-	sv, err := cx.opTxnImpl(gi, srcInnerGroup, field, ai, true)
+	sv, err := cx.txnImpl(gi, srcInnerGroup, field, ai, true)
 	if err != nil {
 		return err
 	}
@@ -4190,7 +4193,7 @@ func opGitxnas(cx *EvalContext) error {
 	field := TxnField(cx.program[cx.pc+2])
 	ai := cx.Stack[last].Uint
 
-	sv, err := cx.opTxnImpl(gi, srcInnerGroup, field, ai, true)
+	sv, err := cx.txnImpl(gi, srcInnerGroup, field, ai, true)
 	if err != nil {
 		return err
 	}
@@ -4199,7 +4202,7 @@ func opGitxnas(cx *EvalContext) error {
 	return nil
 }
 
-func opGaidImpl(cx *EvalContext, giw uint64, opName string) (sv stackValue, err error) {
+func gaidImpl(cx *EvalContext, giw uint64, opName string) (sv stackValue, err error) {
 	if giw >= uint64(len(cx.TxnGroup)) {
 		return sv, fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, giw, len(cx.TxnGroup))
 	}
@@ -4226,7 +4229,7 @@ func opGaidImpl(cx *EvalContext, giw uint64, opName string) (sv stackValue, err 
 
 func opGaid(cx *EvalContext) error {
 	gi := uint64(cx.program[cx.pc+1])
-	sv, err := opGaidImpl(cx, gi, "gaid")
+	sv, err := gaidImpl(cx, gi, "gaid")
 	if err != nil {
 		return err
 	}
@@ -4239,7 +4242,7 @@ func opGaids(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	gi := cx.Stack[last].Uint
 
-	sv, err := opGaidImpl(cx, gi, "gaids")
+	sv, err := gaidImpl(cx, gi, "gaids")
 	if err != nil {
 		return err
 	}
@@ -4418,7 +4421,7 @@ func opStores(cx *EvalContext) error {
 	return nil
 }
 
-func opGloadImpl(cx *EvalContext, gi int, scratchIdx byte, opName string) (stackValue, error) {
+func gloadImpl(cx *EvalContext, gi int, scratchIdx byte, opName string) (stackValue, error) {
 	var none stackValue
 	if gi >= len(cx.TxnGroup) {
 		return none, fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, gi, len(cx.TxnGroup))
@@ -4448,7 +4451,7 @@ func opGloadImpl(cx *EvalContext, gi int, scratchIdx byte, opName string) (stack
 func opGload(cx *EvalContext) error {
 	gi := int(cx.program[cx.pc+1])
 	scratchIdx := cx.program[cx.pc+2]
-	scratchValue, err := opGloadImpl(cx, gi, scratchIdx, "gload")
+	scratchValue, err := gloadImpl(cx, gi, scratchIdx, "gload")
 	if err != nil {
 		return err
 	}
@@ -4464,7 +4467,7 @@ func opGloads(cx *EvalContext) error {
 		return fmt.Errorf("gloads lookup TxnGroup[%d] but it only has %d", gi, len(cx.TxnGroup))
 	}
 	scratchIdx := cx.program[cx.pc+1]
-	scratchValue, err := opGloadImpl(cx, int(gi), scratchIdx, "gloads")
+	scratchValue, err := gloadImpl(cx, int(gi), scratchIdx, "gloads")
 	if err != nil {
 		return err
 	}
@@ -4485,7 +4488,7 @@ func opGloadss(cx *EvalContext) error {
 	if scratchIdx >= 256 {
 		return fmt.Errorf("gloadss scratch index >= 256 (%d)", scratchIdx)
 	}
-	scratchValue, err := opGloadImpl(cx, int(gi), byte(scratchIdx), "gloadss")
+	scratchValue, err := gloadImpl(cx, int(gi), byte(scratchIdx), "gloadss")
 	if err != nil {
 		return err
 	}
@@ -4995,7 +4998,7 @@ func opAppLocalGet(cx *EvalContext) error {
 
 	key := cx.Stack[last].Bytes
 
-	result, _, err := opAppLocalGetImpl(cx, 0, key, cx.Stack[prev])
+	result, _, err := appLocalGetImpl(cx, 0, key, cx.Stack[prev])
 	if err != nil {
 		return err
 	}
@@ -5013,7 +5016,7 @@ func opAppLocalGetEx(cx *EvalContext) error {
 	key := cx.Stack[last].Bytes
 	appID := cx.Stack[prev].Uint
 
-	result, ok, err := opAppLocalGetImpl(cx, appID, key, cx.Stack[pprev])
+	result, ok, err := appLocalGetImpl(cx, appID, key, cx.Stack[pprev])
 	if err != nil {
 		return err
 	}
@@ -5024,7 +5027,7 @@ func opAppLocalGetEx(cx *EvalContext) error {
 	return nil
 }
 
-func opAppLocalGetImpl(cx *EvalContext, appID uint64, key []byte, acct stackValue) (result stackValue, ok bool, err error) {
+func appLocalGetImpl(cx *EvalContext, appID uint64, key []byte, acct stackValue) (result stackValue, ok bool, err error) {
 	addr, app, accountIdx, err := cx.localsReference(acct, appID)
 	if err != nil {
 		return
@@ -5041,7 +5044,7 @@ func opAppLocalGetImpl(cx *EvalContext, appID uint64, key []byte, acct stackValu
 	return
 }
 
-func opAppGetGlobalStateImpl(cx *EvalContext, appIndex uint64, key []byte) (result stackValue, ok bool, err error) {
+func appGetGlobalStateImpl(cx *EvalContext, appIndex uint64, key []byte) (result stackValue, ok bool, err error) {
 	app, err := cx.appReference(appIndex, true)
 	if err != nil {
 		return
@@ -5063,7 +5066,7 @@ func opAppGlobalGet(cx *EvalContext) error {
 
 	key := cx.Stack[last].Bytes
 
-	result, _, err := opAppGetGlobalStateImpl(cx, 0, key)
+	result, _, err := appGetGlobalStateImpl(cx, 0, key)
 	if err != nil {
 		return err
 	}
@@ -5078,7 +5081,7 @@ func opAppGlobalGetEx(cx *EvalContext) error {
 
 	key := cx.Stack[last].Bytes
 
-	result, ok, err := opAppGetGlobalStateImpl(cx, cx.Stack[prev].Uint, key)
+	result, ok, err := appGetGlobalStateImpl(cx, cx.Stack[prev].Uint, key)
 	if err != nil {
 		return err
 	}

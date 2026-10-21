@@ -198,9 +198,10 @@ type OpDetails struct {
 
 func (d *OpDetails) docCost(argLen int, version uint64) string {
 	cost := d.FullCost.docCost(argLen)
-	if cost != "" { // costs must be based on the immediates
+	if cost != "" {
 		return cost
 	}
+	// FullCost is empty, so exactly one immediate must have field-dependent costs
 	found := false
 	for _, imm := range d.Immediates {
 		if imm.fieldCosts != nil {

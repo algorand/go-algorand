@@ -993,7 +993,7 @@ func TestRapidDivModw(t *testing.T) {
 			return
 		}
 
-		hiQuo, loQuo, hiRem, loRem := opDivModwImpl(hiNum, loNum, hiDen, loDen)
+		hiQuo, loQuo, hiRem, loRem := divModwImpl(hiNum, loNum, hiDen, loDen)
 		quo, rem := new(big.Int).QuoRem(bigUint128(hiNum, loNum), bigUint128(hiDen, loDen), new(big.Int))
 		require.Equal(t, quo.String(), bigUint128(hiQuo, loQuo).String(), "%d:%d / %d:%d", hiNum, loNum, hiDen, loDen)
 		require.Equal(t, rem.String(), bigUint128(hiRem, loRem).String(), "%d:%d %% %d:%d", hiNum, loNum, hiDen, loDen)
@@ -1011,7 +1011,7 @@ func TestRapidExpw(t *testing.T) {
 		base := drawWideUint64(r, "base")
 		exp := rapid.Uint64Range(0, 140).Draw(r, "exp")
 
-		hi, lo, err := opExpwImpl(base, exp)
+		hi, lo, err := expwImpl(base, exp)
 		if base == 0 && exp == 0 {
 			require.Error(t, err)
 			return
@@ -3172,7 +3172,7 @@ func TestGloadNoProgram(t *testing.T) {
 	// Evaluate gi=1 while gi=0's program was never run, so pastScratch[0] is nil.
 	cx := &EvalContext{EvalParams: ep, groupIndex: 1}
 
-	_, err := opGloadImpl(cx, 0, 0, "gload")
+	_, err := gloadImpl(cx, 0, 0, "gload")
 	require.ErrorContains(t, err, "gload lookup of txn 0 that did not run a program")
 }
 
