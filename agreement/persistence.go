@@ -17,11 +17,14 @@
 package agreement
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"sync"
+
+	"github.com/DataDog/zstd"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
@@ -52,7 +55,31 @@ func persistent(as []action) bool {
 	return false
 }
 
-// encode serializes the current state into a byte array.
+// The persisted state can be compressed with zstd, which is very effective for votes
+// and bundles that repeat the same proposal values, signatures, and msgpack field
+// names. Support for decoding is added first, so compressSnapshots can be enabled
+// after consensus release, so no node can roll back to a binary that cannot decode it.
+const snapshotCompressionLevel = 3
+
+// compressSnapshots is whether encode compresses the state; see above.
+const compressSnapshots = false
+
+// zstdFrameMagic starts every zstd frame.  A state persisted uncompressed
+// starts with a msgpack map header, which cannot be this.
+var zstdFrameMagic = []byte{0x28, 0xb5, 0x2f, 0xfd}
+
+// compressSnapshot compresses an encoded state.  Compressing a buffer cannot
+// fail; should it, the state is returned as it is, which decode reads too.
+func compressSnapshot(raw []byte) []byte {
+	compressed, err := zstd.CompressLevel(nil, raw, snapshotCompressionLevel)
+	if err != nil {
+		return raw
+	}
+	return compressed
+}
+
+// encode serializes the current state into a byte array, compressed when
+// compressSnapshots is set.
 func encode(t timers.Clock[TimeoutType], rr rootRouter, p player, a []action, reflect bool) (raw []byte) {
 	var s diskState
 
@@ -90,6 +117,9 @@ func encode(t timers.Clock[TimeoutType], rr rootRouter, p player, a []action, re
 		raw = protocol.EncodeReflect(s)
 	} else {
 		raw = protocol.Encode(&s)
+	}
+	if compressSnapshots {
+		raw = compressSnapshot(raw)
 	}
 	return
 }
@@ -207,6 +237,7 @@ func restore(log logging.Logger, crash db.Accessor) (raw []byte, err error) {
 }
 
 // decode process the incoming raw bytes array and attempt to reconstruct the agreement state objects.
+// The state may be compressed (see compressSnapshot) or not.
 //
 // In all decoding errors, it returns the error code in err
 func decode(raw []byte, t0 timers.Clock[TimeoutType], log serviceLogger, reflect bool) (t timers.Clock[TimeoutType], rr rootRouter, p player, a []action, err error) {
@@ -215,6 +246,15 @@ func decode(raw []byte, t0 timers.Clock[TimeoutType], log serviceLogger, reflect
 	var p2 player
 	a2 := []action{}
 	var s diskState
+	if bytes.HasPrefix(raw, zstdFrameMagic) {
+		var uncompressed []byte
+		uncompressed, err = zstd.Decompress(nil, raw)
+		if err != nil {
+			log.Errorf("decode (agreement): error decompressing retrieved state (len = %v): %v", len(raw), err)
+			return
+		}
+		raw = uncompressed
+	}
 	if reflect {
 		err = protocol.DecodeReflect(raw, &s)
 		if err != nil {
