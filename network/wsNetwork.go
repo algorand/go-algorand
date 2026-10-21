@@ -459,15 +459,17 @@ func closeWaiter(wg *sync.WaitGroup, peer *wsPeer, deadline time.Time) {
 
 // DisconnectPeers shuts down all connections
 func (wn *WebsocketNetwork) DisconnectPeers() {
-	wn.peersLock.Lock()
-	defer wn.peersLock.Unlock()
 	closeGroup := sync.WaitGroup{}
+	wn.peersLock.Lock()
 	closeGroup.Add(len(wn.peers))
 	deadline := time.Now().Add(peerDisconnectionAckDuration)
 	for _, peer := range wn.peers {
 		go closeWaiter(&closeGroup, peer, deadline)
 	}
 	wn.peers = wn.peers[:0]
+	// wait without peersLock: a peer whose read loop already failed blocks in removePeer
+	// until it gets the lock, and closeWaiter waits for that read loop
+	wn.peersLock.Unlock()
 	closeGroup.Wait()
 }
 

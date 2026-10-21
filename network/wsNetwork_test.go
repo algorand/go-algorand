@@ -5172,3 +5172,35 @@ func TestWebsocketNetworkThrottleSlotNotLeakedOnIdentityDedup(t *testing.T) {
 		return netA.availableThrottleSlots() == slots
 	}, 5*time.Second, 50*time.Millisecond, "disconnecting a registered peer did not give its throttle slot back")
 }
+
+// TestWebsocketPeerSweep checks that DisconnectPeers does not wait for a swept peer while it
+// holds peersLock. The peer's read loop fails as the peer closes and needs that lock to call
+// removePeer.
+func TestWebsocketPeerSweep(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	wn := makeTestWebsocketNode(t)
+	defer wn.ctxCancel()
+	wn.ready.Store(1)
+	p := &wsPeer{conn: &nopConnSingleton, closing: make(chan struct{})}
+	wn.addPeer(p)
+	// stand in for a read loop that fails as the peer closes and reports it through removePeer
+	p.wg.Add(1)
+	go func() {
+		defer p.wg.Done()
+		<-p.closing
+		wn.removePeer(p, disconnectReasonNone)
+	}()
+
+	swept := make(chan struct{})
+	go func() {
+		wn.DisconnectPeers()
+		close(swept)
+	}()
+	select {
+	case <-swept:
+	case <-time.After(10 * time.Second):
+		require.FailNow(t, "DisconnectPeers deadlocked with a peer that was removing itself")
+	}
+	require.Zero(t, wn.NumPeers())
+}
