@@ -204,8 +204,11 @@ type wsPeer struct {
 
 	wg sync.WaitGroup
 
+	// didSignalClose is set once anything starts closing the peer or drops it from the network's
+	// peer list. After that the peer reports no close to the network and no read or write errors.
 	didSignalClose atomic.Int32
-	didInnerClose  atomic.Int32
+	// didInnerClose is set by the first Close, which closes the connection.
+	didInnerClose atomic.Int32
 
 	TelemetryGUID string
 	InstanceName  string
@@ -498,8 +501,8 @@ func (wp *wsPeer) OriginAddress() string {
 }
 
 func (wp *wsPeer) reportReadErr(err error) {
-	// only report error if we haven't already closed the peer
-	if wp.didInnerClose.Load() == 0 {
+	// only report error if nothing has started closing the peer
+	if wp.didSignalClose.Load() == 0 {
 		_, _, line, _ := runtime.Caller(1)
 		wp.log.Warnf("peer[%s] line=%d read err: %s", wp.conn.RemoteAddrString(), line, err)
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "reader err"})
@@ -873,7 +876,7 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 	defer wp.intermittentOutgoingMessageEnqueueTime.Store(0)
 	err := wp.conn.WriteMessage(websocket.BinaryMessage, dataToSend)
 	if err != nil {
-		if wp.didInnerClose.Load() == 0 {
+		if wp.didSignalClose.Load() == 0 {
 			wp.log.Warn("peer write error ", err)
 			networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "write err"})
 		}

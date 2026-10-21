@@ -470,7 +470,9 @@ func (wn *WebsocketNetwork) DisconnectPeers() {
 		wn.unregisterPeerLocked(peer)
 		go closeWaiter(&closeGroup, peer, deadline)
 	}
+	clear(wn.peers)
 	wn.peers = wn.peers[:0]
+	wn.countPeersSetGauges()
 	// wait without peersLock: a peer whose read loop already failed blocks in removePeer
 	// until it gets the lock, and closeWaiter waits for that read loop
 	wn.peersLock.Unlock()
@@ -806,7 +808,9 @@ func (wn *WebsocketNetwork) innerStop() {
 		wn.unregisterPeerLocked(peer)
 		go closeWaiter(&wn.wg, peer, deadline)
 	}
+	clear(wn.peers)
 	wn.peers = wn.peers[:0]
+	wn.countPeersSetGauges()
 }
 
 // Stop closes network connections and stops threads.
