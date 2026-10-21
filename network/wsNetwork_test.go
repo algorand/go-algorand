@@ -5207,9 +5207,10 @@ func TestWebsocketNetworkThrottleSlotNotLeakedOnIdentityDedup(t *testing.T) {
 	}, 5*time.Second, 50*time.Millisecond, "disconnecting a registered peer did not give its throttle slot back")
 }
 
-// TestWebsocketPeerSweep checks that DisconnectPeers does not wait for a swept peer while it
-// holds peersLock. The peer's read loop fails as the peer closes and needs that lock to call
-// removePeer. After innerStop, addPeer must reject a new peer without claiming anything for it.
+// TestWebsocketPeerSweep checks that innerStop and DisconnectPeers give back each swept peer's
+// identity and throttle slot, and that the peer's own removePeer gives back nothing more.
+// DisconnectPeers must also not wait for that removePeer while it holds peersLock. After
+// innerStop, addPeer must reject a new peer without claiming anything for it.
 // addPeer must also reject a duplicate of a registered peer before it allocates anything.
 func TestWebsocketPeerSweep(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -5227,10 +5228,11 @@ func TestWebsocketPeerSweep(t *testing.T) {
 			defer wn.ctxCancel()
 			wn.ready.Store(1)
 			wn.throttledOutgoingConnections = 2
-			p := makeTestPeer(t, wn, false)
+			p := makeTestPeer(t, wn, true)
 			p.identity[0] = 1
 			p.identityVerified.Store(1)
 			require.Equal(t, peerAdmitted, wn.addPeer(p))
+			require.Equal(t, 1, wn.availableThrottleSlots())
 			dup := makeTestPeer(t, wn, false)
 			dup.identity = p.identity
 			dup.identityVerified.Store(1)
@@ -5255,6 +5257,8 @@ func TestWebsocketPeerSweep(t *testing.T) {
 				require.FailNow(t, name+" deadlocked with a peer that was removing itself")
 			}
 			require.Zero(t, wn.NumPeers())
+			require.Equal(t, 2, wn.availableThrottleSlots())
+			require.True(t, wn.identityTracker.setIdentity(&wsPeer{identity: p.identity}), "the sweep kept the peer's identity")
 
 			late := makeTestPeer(t, wn, true)
 			defer late.CloseAndWait(time.Now())

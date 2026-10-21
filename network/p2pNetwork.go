@@ -521,18 +521,20 @@ func (n *P2PNetwork) innerStop() {
 	closeGroup := sync.WaitGroup{}
 	n.wsPeersLock.Lock()
 	n.wsPeersClosed = true
-	closeGroup.Add(len(n.wsPeers))
+	closeGroup.Add(len(n.wsPeersToIDs))
 	deadline := time.Now().Add(peerDisconnectionAckDuration)
-	for peerID, peer := range n.wsPeers {
+	// wsPeersToIDs also holds wsPeers replaced in wsPeers by a newer stream from the same peer
+	for peer, peerID := range n.wsPeersToIDs {
+		n.unregisterPeerLocked(peer)
 		// we need to both close the wsPeer and close the p2p connection
 		go closeWaiter(&closeGroup, peer, deadline)
 		err := n.service.ClosePeer(peerID)
 		if err != nil {
 			n.log.Warnf("Error closing peer %s: %v", peerID, err)
 		}
-		delete(n.wsPeers, peerID)
-		delete(n.wsPeersToIDs, peer)
 	}
+	clear(n.wsPeers)
+	n.wsPeersChangeCounter.Add(1)
 	n.wsPeersLock.Unlock()
 	closeGroup.Wait()
 }
@@ -1091,6 +1093,21 @@ func (n *P2PNetwork) addPeer(id peer.ID, wsp *wsPeer) peerAdmission {
 	return peerAdmitted
 }
 
+// unregisterPeerLocked marks peer closing and gives back its identity, reverse-map entry,
+// and outgoing throttle slot. Call it under wsPeersLock.
+func (n *P2PNetwork) unregisterPeerLocked(peer *wsPeer) {
+	peer.didSignalClose.Store(1)
+	n.identityTracker.removeIdentity(peer) // safe: removeIdentity only deletes if the stored identity matches this exact wsPeer
+	if _, knownPeer := n.wsPeersToIDs[peer]; knownPeer {
+		delete(n.wsPeersToIDs, peer)
+		// Throttle slots are per-wsPeer, not per map entry: release for any
+		// known wsPeer on its first cleanup, even if it was already replaced.
+		if peer.throttledOutgoingConnection {
+			n.throttledOutgoingConnections++
+		}
+	}
+}
+
 // peerRemoteClose called from wsPeer to report that it has closed
 func (n *P2PNetwork) peerRemoteClose(peer *wsPeer, reason disconnectReason) {
 	remotePeerID := peer.conn.(*wsPeerConnP2P).stream.Conn().RemotePeer()
@@ -1101,24 +1118,17 @@ func (n *P2PNetwork) removePeer(peer *wsPeer, remotePeerID peer.ID, reason disco
 	removed := false
 
 	n.wsPeersLock.Lock()
-	n.identityTracker.removeIdentity(peer) // safe: removeIdentity only deletes if the stored identity matches this exact wsPeer
 	if cur, ok := n.wsPeers[remotePeerID]; ok && cur == peer {
 		delete(n.wsPeers, remotePeerID)
 		removed = true
 	}
-	_, knownPeer := n.wsPeersToIDs[peer]
-	delete(n.wsPeersToIDs, peer) // always delete reverse entry for this exact wsPeer
+	n.unregisterPeerLocked(peer)
 
 	// Unprotect while still holding wsPeersLock so we can't race with a new
 	// wsPeer insertion for the same remotePeerID between map deletion and
 	// unprotect.
 	if removed {
 		n.service.UnprotectPeer(remotePeerID)
-	}
-	// Throttle slots are per-wsPeer, not per map entry: release for any
-	// known wsPeer on its first cleanup, even if it was already replaced.
-	if knownPeer && peer.throttledOutgoingConnection {
-		n.throttledOutgoingConnections++
 	}
 	n.wsPeersLock.Unlock()
 

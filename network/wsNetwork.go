@@ -467,6 +467,7 @@ func (wn *WebsocketNetwork) DisconnectPeers() {
 	closeGroup.Add(len(wn.peers))
 	deadline := time.Now().Add(peerDisconnectionAckDuration)
 	for _, peer := range wn.peers {
+		wn.unregisterPeerLocked(peer)
 		go closeWaiter(&closeGroup, peer, deadline)
 	}
 	wn.peers = wn.peers[:0]
@@ -802,6 +803,7 @@ func (wn *WebsocketNetwork) innerStop() {
 	// to get a response.
 	deadline := time.Now().Add(peerShutdownDisconnectionAckDuration)
 	for _, peer := range wn.peers {
+		wn.unregisterPeerLocked(peer)
 		go closeWaiter(&wn.wg, peer, deadline)
 	}
 	wn.peers = wn.peers[:0]
@@ -2379,14 +2381,22 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 	defer wn.peersLock.Unlock()
 	if peer.peerIndex < len(wn.peers) && wn.peers[peer.peerIndex] == peer {
 		heap.Remove(peersHeap{wn}, peer.peerIndex)
-		wn.prioTracker.removePeer(peer)
-		wn.identityTracker.removeIdentity(peer)
-		if peer.throttledOutgoingConnection {
-			wn.throttledOutgoingConnections++
-		}
-		wn.peersChangeCounter.Add(1)
+		wn.unregisterPeerLocked(peer)
 	}
 	wn.countPeersSetGauges()
+}
+
+// unregisterPeerLocked gives back the priority entry, identity and throttle slot of a peer
+// that the caller removes from wn.peers in the same peersLock critical section. It also marks
+// the peer closing, so identityVerificationHandler cannot claim the identity again.
+func (wn *WebsocketNetwork) unregisterPeerLocked(peer *wsPeer) {
+	peer.didSignalClose.Store(1)
+	wn.prioTracker.removePeer(peer)
+	wn.identityTracker.removeIdentity(peer)
+	if peer.throttledOutgoingConnection {
+		wn.throttledOutgoingConnections++
+	}
+	wn.peersChangeCounter.Add(1)
 }
 
 // addPeer initializes and registers peer in wn.peers, claims its identity (when verified) and throttle slot,

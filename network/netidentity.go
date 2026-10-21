@@ -432,6 +432,12 @@ func identityVerificationHandler(message IncomingMessage) OutgoingMessage {
 	peer.identityVerified.Store(1)
 	// if the identity could not be claimed by this peer, it means the identity is in use
 	wn.peersLock.Lock()
+	// didSignalClose is set by the time a peer leaves wn.peers, so a peer that passes this check
+	// has its identity given back by removePeer or a sweep
+	if peer.didSignalClose.Load() == 1 {
+		wn.peersLock.Unlock()
+		return OutgoingMessage{}
+	}
 	ok := wn.identityTracker.setIdentity(peer)
 	wn.peersLock.Unlock()
 	if !ok {
