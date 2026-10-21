@@ -5678,6 +5678,8 @@ func TestBytesModExp(t *testing.T) {
 		p := fmt.Sprintf("pushbytes %s; pushbytes %s; pushbytes %s; bmodexp; pushbytes %s; ==", base, exp, mod, result)
 		testCost(t, p, uint64(5+cost), fullByteMathVersion)
 	}
+	// 5^0 mod 3 = 1. bitlen(B) is 0, so nothing beyond 10 + 1
+	modexpCost("0x05", "0x00", "0x03", "0x01", 11)
 	// 5^1 mod 3 = 2. bitlen(B) is 1, so just A b% C: 10 + 1 + (10 + (1+0)*(8+0)/2 + 1)
 	modexpCost("0x05", "0x01", "0x03", "0x02", 26)
 	// 2^11 mod 13 = 7. 11 is 0b1011: bitlen 4, popcount 3. 10 + 1 + (4+3)*(2+4)

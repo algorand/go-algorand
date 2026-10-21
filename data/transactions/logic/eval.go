@@ -2710,8 +2710,9 @@ func modMulComplexity(lm int) int {
 }
 
 const bmodexpCostDoc = "10 + 1 per 32 bytes of A, B, and C, plus a cost that depends on bitlen(B). Let S = 2 + 2W + W^2/10, where W = len(C)/8, rounded up. " +
-	"If bitlen(B) <= 1, the cost of A b% C. " +
-	"If bitlen(B) <= 64, (bitlen(B) + popcount(B)) * S, plus, if len(A) > len(C), popcount(B) * (1 + (len(A)-len(C))/8) * (1 + len(C)/8) / 2 + 3 * (A b* A) + (2*len(A) b% C). " +
+	"If bitlen(B) == 0, nothing more. " +
+	"If bitlen(B) == 1, the cost of A b% C. " +
+	"If bitlen(B) <= 64, (bitlen(B) + popcount(B)) * (S + 2), plus, if len(A) > len(C), popcount(B) * (1 + (len(A)-len(C))/8) * (1 + len(C)/8) / 2 + 3 * (A b* A) + (2*len(A) b% C). " +
 	"Otherwise, (64 * ceil(bitlen(B)/64) + 16) * S + (A b% C). " +
 	"Costs in parentheses are the costs of those operations on inputs of those lengths."
 
