@@ -80,6 +80,10 @@ type P2PNetwork struct {
 	wsPeersConnectivityCheckTicker *time.Ticker
 	peerStater                     peerConnectionStater
 
+	// wsPeersClosed is set by innerStop under wsPeersLock. Once it is set, stream
+	// handlers must not register new wsPeers, because nothing would close them.
+	wsPeersClosed bool
+
 	// connPerfMonitor is used on outgoing connections to measure their relative message timing
 	connPerfMonitor *connectionPerformanceMonitor
 
@@ -516,6 +520,7 @@ func (n *P2PNetwork) Stop() {
 func (n *P2PNetwork) innerStop() {
 	closeGroup := sync.WaitGroup{}
 	n.wsPeersLock.Lock()
+	n.wsPeersClosed = true
 	closeGroup.Add(len(n.wsPeers))
 	deadline := time.Now().Add(peerDisconnectionAckDuration)
 	for peerID, peer := range n.wsPeers {
@@ -1028,6 +1033,9 @@ func (n *P2PNetwork) baseWsStreamHandler(ctx context.Context, p2pPeer peer.ID, s
 	case peerRejectedDuplicateIdentity:
 		stream.Close()
 		return &p2p.StreamHandlerLoggedError{Level: logging.Warn, Err: fmt.Errorf("peer deduplicated before adding because the identity is already known: remote %s, local %s", addr, localAddr)}
+	default:
+		wsp.CloseAndWait(time.Now().Add(peerDisconnectionAckDuration))
+		return &p2p.StreamHandlerLoggedError{Level: logging.Debug, Err: fmt.Errorf("network is stopping, dropping peer %s", addr)}
 	}
 
 	event := "ConnectedOut"
@@ -1055,7 +1063,7 @@ func (n *P2PNetwork) baseWsStreamHandler(ctx context.Context, p2pPeer peer.ID, s
 }
 
 // addPeer initializes and registers wsp, claims its identity and throttle slot, and starts its read/write loops,
-// unless the identity is already in use.
+// unless the network has stopped or the identity is already in use.
 // The caller must close the stream/peer when addPeer returns anything other than peerAdmitted.
 func (n *P2PNetwork) addPeer(id peer.ID, wsp *wsPeer) peerAdmission {
 	// init allocates the send queues, so skip it for a duplicate; setIdentity below is the real claim
@@ -1066,6 +1074,9 @@ func (n *P2PNetwork) addPeer(id peer.ID, wsp *wsPeer) peerAdmission {
 	wsp.init(n.config, outgoingMessagesBufferSize)
 	n.wsPeersLock.Lock()
 	defer n.wsPeersLock.Unlock()
+	if n.wsPeersClosed {
+		return peerRejectedStopped
+	}
 	if !n.identityTracker.setIdentity(wsp) {
 		networkPeerIdentityDisconnect.Inc(nil)
 		return peerRejectedDuplicateIdentity

@@ -5209,40 +5209,65 @@ func TestWebsocketNetworkThrottleSlotNotLeakedOnIdentityDedup(t *testing.T) {
 
 // TestWebsocketPeerSweep checks that DisconnectPeers does not wait for a swept peer while it
 // holds peersLock. The peer's read loop fails as the peer closes and needs that lock to call
-// removePeer.
+// removePeer. After innerStop, addPeer must reject a new peer without claiming anything for it.
 // addPeer must also reject a duplicate of a registered peer before it allocates anything.
 func TestWebsocketPeerSweep(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	wn := makeTestWebsocketNode(t)
-	defer wn.ctxCancel()
-	wn.ready.Store(1)
-	p := makeTestPeer(t, wn, false)
-	p.identity[0] = 1
-	p.identityVerified.Store(1)
-	require.Equal(t, peerAdmitted, wn.addPeer(p))
-	dup := makeTestPeer(t, wn, false)
-	dup.identity = p.identity
-	dup.identityVerified.Store(1)
-	require.Equal(t, peerRejectedDuplicateIdentity, wn.addPeer(dup))
-	require.Nil(t, dup.sendBufferBulk, "addPeer initialized a duplicate")
-	// stand in for a read loop that fails as the peer closes and reports it through removePeer
-	p.wg.Add(1)
-	go func() {
-		defer p.wg.Done()
-		<-p.closing
-		wn.removePeer(p, disconnectReasonNone)
-	}()
-
-	swept := make(chan struct{})
-	go func() {
-		wn.DisconnectPeers()
-		close(swept)
-	}()
-	select {
-	case <-swept:
-	case <-time.After(10 * time.Second):
-		require.FailNow(t, "DisconnectPeers deadlocked with a peer that was removing itself")
+	sweeps := map[string]func(*WebsocketNetwork){
+		"innerStop": func(wn *WebsocketNetwork) {
+			wn.innerStop()
+			wn.wg.Wait()
+		},
+		"DisconnectPeers": (*WebsocketNetwork).DisconnectPeers,
 	}
-	require.Zero(t, wn.NumPeers())
+	for name, sweep := range sweeps {
+		t.Run(name, func(t *testing.T) {
+			wn := makeTestWebsocketNode(t)
+			defer wn.ctxCancel()
+			wn.ready.Store(1)
+			wn.throttledOutgoingConnections = 2
+			p := makeTestPeer(t, wn, false)
+			p.identity[0] = 1
+			p.identityVerified.Store(1)
+			require.Equal(t, peerAdmitted, wn.addPeer(p))
+			dup := makeTestPeer(t, wn, false)
+			dup.identity = p.identity
+			dup.identityVerified.Store(1)
+			require.Equal(t, peerRejectedDuplicateIdentity, wn.addPeer(dup))
+			require.Nil(t, dup.sendBufferBulk, "addPeer initialized a duplicate")
+			// stand in for a read loop that fails as the peer closes and reports it through removePeer
+			p.wg.Add(1)
+			go func() {
+				defer p.wg.Done()
+				<-p.closing
+				wn.removePeer(p, disconnectReasonNone)
+			}()
+
+			swept := make(chan struct{})
+			go func() {
+				sweep(wn)
+				close(swept)
+			}()
+			select {
+			case <-swept:
+			case <-time.After(10 * time.Second):
+				require.FailNow(t, name+" deadlocked with a peer that was removing itself")
+			}
+			require.Zero(t, wn.NumPeers())
+
+			late := makeTestPeer(t, wn, true)
+			defer late.CloseAndWait(time.Now())
+			late.identity[0] = 2
+			late.identityVerified.Store(1)
+			expected := peerAdmitted
+			if name == "innerStop" {
+				expected = peerRejectedStopped
+			}
+			admitted := expected == peerAdmitted
+			require.Equal(t, expected, wn.addPeer(late))
+			require.Equal(t, admitted, late.throttledOutgoingConnection)
+			require.Equal(t, !admitted, wn.identityTracker.setIdentity(&wsPeer{identity: late.identity}))
+		})
+	}
 }

@@ -182,6 +182,9 @@ type WebsocketNetwork struct {
 	peersLock          deadlock.RWMutex
 	peers              []*wsPeer
 	peersChangeCounter atomic.Int32 // peersChangeCounter is an atomic variable that increases on each change to the peers. It helps avoiding taking the peersLock when checking if the peers list was modified.
+	// peersClosed is set by innerStop under peersLock. Once it is set, addPeer
+	// must not register new peers, because nothing would close them.
+	peersClosed bool
 
 	broadcaster msgBroadcaster
 	handler     msgHandler
@@ -792,6 +795,7 @@ func (wn *WebsocketNetwork) httpdThread() {
 func (wn *WebsocketNetwork) innerStop() {
 	wn.peersLock.Lock()
 	defer wn.peersLock.Unlock()
+	wn.peersClosed = true
 	wn.wg.Add(len(wn.peers))
 	// this method is called only during node shutdown. In this case, we want to send the
 	// shutdown message, but we don't want to wait for a long time - since we might not be lucky
@@ -1189,7 +1193,10 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	}
 	peer.TelemetryGUID = trackedRequest.otherTelemetryGUID
 	wn.log.Debugf("Server: client features '%s', decoded %x, our response '%s'", request.Header.Get(PeerFeaturesHeader), peer.features, responseHeader.Get(PeerFeaturesHeader))
-	wn.addPeer(peer)
+	if wn.addPeer(peer) != peerAdmitted {
+		peer.CloseAndWait(time.Now().Add(peerShutdownDisconnectionAckDuration))
+		return
+	}
 	wn.log.With("event", "ConnectedIn").With("remote", trackedRequest.remoteAddress()).With("local", localAddr).Infof("Accepted incoming connection from peer %s", trackedRequest.remoteAddr)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
 		telemetryspec.PeerEventDetails{
@@ -2196,6 +2203,9 @@ func (wn *WebsocketNetwork) tryConnect(netAddr, gossipAddr string) {
 		wn.log.With("remote", netAddr).With("local", localAddr).Warn("peer deduplicated before adding because the identity is already known")
 		closeEarly("Duplicate connection")
 		return
+	default:
+		peer.CloseAndWait(time.Now().Add(peerShutdownDisconnectionAckDuration))
+		return
 	}
 
 	wn.log.With("event", "ConnectedOut").With("remote", netAddr).With("local", localAddr).Infof("Made outgoing connection to peer %v", netAddr)
@@ -2392,6 +2402,11 @@ func (wn *WebsocketNetwork) addPeer(peer *wsPeer) peerAdmission {
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.peersLock.Lock()
 	defer wn.peersLock.Unlock()
+	if wn.peersClosed {
+		// innerStop has already swept wn.peers, so nothing would close this peer
+		wn.log.Debugf("network is stopping, dropping peer %s", peer.conn.RemoteAddrString())
+		return peerRejectedStopped
+	}
 	if verified && !wn.identityTracker.setIdentity(peer) {
 		networkPeerIdentityDisconnect.Inc(nil)
 		return peerRejectedDuplicateIdentity

@@ -451,6 +451,7 @@ type peerAdmission uint8
 
 const (
 	peerAdmitted peerAdmission = iota
+	peerRejectedStopped
 	peerRejectedDuplicateIdentity
 )
 
