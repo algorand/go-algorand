@@ -2312,15 +2312,14 @@ func opSqrt(cx *EvalContext) error {
 }
 
 // bitlen returns the 1 based index of the highest set bit in the byte slice,
-// when thinking of the byteslize as a big-endian integer. (If the slice is
+// when thinking of the byteslice as a big-endian integer. (If the slice is
 // all zeros, it returns 0.)
 func bitlen(bytes []byte) int {
-	for i, b := range bytes {
-		if b != 0 {
-			return bits.Len8(b) + (8 * (len(bytes) - i - 1))
-		}
+	nz := nonzero(bytes)
+	if len(nz) == 0 {
+		return 0
 	}
-	return 0
+	return bits.Len8(nz[0]) + 8*(len(nz)-1)
 }
 
 func opBitLen(cx *EvalContext) error {
@@ -2586,7 +2585,15 @@ func bsqrtCost(stack []stackValue) int {
 	return 5 + chunks*chunks*bits.Len(uint(l)) + l
 }
 
+var zeroChunk [64]byte
+
+// nonzero returns b without its leading zero bytes, or nil if b is all zeros.
+// Byte strings may be 4096 bytes long, and comparing whole chunks with
+// bytes.Equal is several times faster than checking a byte at a time.
 func nonzero(b []byte) []byte {
+	for len(b) >= len(zeroChunk) && bytes.Equal(b[:len(zeroChunk)], zeroChunk[:]) {
+		b = b[len(zeroChunk):]
+	}
 	for i := range b {
 		if b[i] != 0 {
 			return b[i:]

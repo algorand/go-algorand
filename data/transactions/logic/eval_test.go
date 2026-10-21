@@ -5828,6 +5828,34 @@ func TestMulComplexity(t *testing.T) {
 	}
 }
 
+// TestRapidNonzero checks the chunked implementation of nonzero, and bitlen
+// which uses it, against simple implementations.
+func TestRapidNonzero(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	rapid.Check(t, func(r *rapid.T) {
+		// Leading zeros of every length, so that the chunked loop stops at
+		// each position within a chunk, followed by an arbitrary tail.
+		zeros := rapid.IntRange(0, maxStringSize).Draw(r, "zeros")
+		tail := rapid.SliceOfN(rapid.Byte(), 0, 130).Draw(r, "tail")
+		in := append(make([]byte, zeros), tail...)
+
+		want := []byte(nil)
+		for i := range in {
+			if in[i] != 0 {
+				want = in[i:]
+				break
+			}
+		}
+		got := nonzero(in)
+		require.Equal(t, want, got)
+		require.Equal(t, want == nil, got == nil)
+
+		require.Equal(t, new(big.Int).SetBytes(in).BitLen(), bitlen(in))
+	})
+}
+
 func TestBytesCompare(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
