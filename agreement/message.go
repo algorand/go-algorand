@@ -18,7 +18,6 @@ package agreement
 
 import (
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -63,11 +62,6 @@ type compoundMessage struct {
 // deserializing from some stream.
 type streamTokenizer func([]byte) (any, error)
 
-// clearLegacyPKSig zeroes the unused field PKSigOld on signatures received from the network.
-func clearLegacyPKSig(sig *crypto.OneTimeSignature) {
-	clear(sig.PKSigOld[:])
-}
-
 // decodeVote reads a vote from the given stream.
 //
 // It returns an error on failure.
@@ -80,7 +74,7 @@ func decodeVote(data []byte) (any, error) {
 	if err := uv.wellFormed(); err != nil {
 		return nil, err
 	}
-	clearLegacyPKSig(&uv.Sig)
+	clear(uv.Sig.PKSigOld[:])
 	return uv, nil
 }
 
@@ -97,11 +91,11 @@ func decodeBundle(data []byte) (any, error) {
 		return nil, err
 	}
 	for i := range b.Votes {
-		clearLegacyPKSig(&b.Votes[i].Sig)
+		clear(b.Votes[i].Sig.PKSigOld[:])
 	}
 	for i := range b.EquivocationVotes {
 		for j := range b.EquivocationVotes[i].Sigs {
-			clearLegacyPKSig(&b.EquivocationVotes[i].Sigs[j])
+			clear(b.EquivocationVotes[i].Sigs[j].PKSigOld[:])
 		}
 	}
 	return b, nil
@@ -119,7 +113,7 @@ func decodeProposal(data []byte) (any, error) {
 	if err := p.PriorVote.wellFormed(); err != nil {
 		return nil, err
 	}
-	clearLegacyPKSig(&p.PriorVote.Sig)
+	clear(p.PriorVote.Sig.PKSigOld[:])
 
 	return compoundMessage{
 		Vote:     p.PriorVote,
