@@ -75,7 +75,7 @@ func makeGenerationTestPool(t testing.TB, version protocol.ConsensusVersion, cou
 	return pool, addresses
 }
 
-func TestPoolSpeculativeBlockGeneration(t *testing.T) {
+func TestPoolBlockGeneration(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	// No t.Parallel: the small block limit exercises overflow without thousands of transactions.
 	version := protocol.ConsensusVersion(t.Name())
@@ -341,8 +341,8 @@ func TestPoolAssemblyTimeoutClearsDeadline(t *testing.T) {
 	require.Len(t, blk.UnfinishedBlock().Payset, 3)
 }
 
-// BenchmarkPoolBlockGeneration compares actual pool recomputation with and
-// without speculative generation, keeping transaction evaluation in both cases.
+// BenchmarkPoolBlockGeneration compares pool recomputation with and without
+// calling GenerateBlock. Transactions are evaluated in both cases.
 func BenchmarkPoolBlockGeneration(b *testing.B) {
 	for _, count := range []int{0, 1000, 10000} {
 		for _, generate := range []bool{true, false} {

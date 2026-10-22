@@ -115,15 +115,15 @@ type BlockEvaluator interface {
 }
 
 // VotingAccountSupplier provides a list of possible participating account addresses valid for a given round.
-// An empty list disables speculative block generation for that round.
+// If the list is empty, the pool does not call GenerateBlock for that round.
 type VotingAccountSupplier interface {
 	VotingAccountsForRound(basics.Round) []basics.Address
 }
 
 var errPoolShutdown = errors.New("transaction pool is shutting down")
 
-// MakeTransactionPool makes a transaction pool. A nil VotingAccountSupplier leaves
-// speculative block generation enabled, for callers that do not use participation keys.
+// MakeTransactionPool makes a transaction pool. With a nil VotingAccountSupplier the pool
+// calls GenerateBlock every round, for callers that do not use participation keys.
 func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Logger, vac VotingAccountSupplier) *TransactionPool {
 	if cfg.TxPoolExponentialIncreaseFactor < 1 {
 		cfg.TxPoolExponentialIncreaseFactor = 1
@@ -153,13 +153,14 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 // poolAsmResults is used to syncronize the state of the block assembly process. The structure reading/writing is syncronized
 // via the pool.assemblyMu lock.
 type poolAsmResults struct {
-	// ok indicates that assembly is complete, skipped, or abandoned, rather than still in progress.
+	// the ok variable indicates whether the assembly for the block roundStartedEvaluating was complete ( i.e. ok == true ) or
+	// whether it's still in-progress.
 	ok    bool
 	blk   *ledgercore.UnfinishedBlock
 	stats telemetryspec.AssembleBlockMetrics
 	err   error
 	// skipped means no local accounts could propose when recomputation started.
-	// An explicit assembly request must build a fallback instead of returning blk.
+	// ok is also set but blk is nil, so AssembleBlock must build an empty block.
 	skipped bool
 	// roundStartedEvaluating is the round which we were attempted to evaluate last. It's a good measure for
 	// which round we started evaluating, but not a measure to whether the evaluation is complete.
@@ -706,17 +707,16 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 	pool.pendingMu.RUnlock()
 
 	proposers := pool.getVotingAccountsForRound(prev.Round + 1)
-	skipAssembly := !forceAssembly && pool.vac != nil && len(proposers) == 0
 	pool.assemblyMu.Lock()
 	pool.assemblyResults = poolAsmResults{
-		roundStartedEvaluating:       prev.Round + 1,
-		skipped:                      skipAssembly,
-		ok:                           skipAssembly,
-		assemblyCompletedOrAbandoned: skipAssembly,
+		roundStartedEvaluating: prev.Round + 1,
 	}
-	if skipAssembly {
-		// Wake any assembly request already waiting for this round. Transaction
-		// evaluation continues, but neither speculative generation path will run.
+	if !forceAssembly && pool.vac != nil && len(proposers) == 0 {
+		pool.assemblyResults.skipped = true
+		pool.assemblyResults.ok = true
+		pool.assemblyResults.assemblyCompletedOrAbandoned = true
+		// Wake any AssembleBlock already waiting for this round. Transactions are
+		// still evaluated, but GenerateBlock will not be called.
 		pool.assemblyCond.Broadcast()
 	}
 	pool.assemblyMu.Unlock()
@@ -931,8 +931,8 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 
 	pool.assemblyDeadline = deadline
 	pool.assemblyRound = round
-	// A timed-out request must not leave a deadline that truncates a later
-	// round's block, including after rounds with no speculative assembly.
+	// Reset the deadline on return so that a later round's recompute does not
+	// see an expired deadline and cut its block short.
 	defer func() { pool.assemblyDeadline = time.Time{} }()
 
 	for time.Now().Before(deadline) && (!pool.assemblyResults.ok || pool.assemblyResults.roundStartedEvaluating != round) {
@@ -993,9 +993,10 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 	}
 
 	if pool.assemblyResults.skipped {
-		// Keys may have been installed after recomputation started. Use a fresh
-		// evaluator: the pool's evaluator can now contain multiple blocks' worth
-		// of transactions. The next round will resume speculative generation.
+		// Agreement only calls AssembleBlock when it has voting keys for this round,
+		// so this rare case only happens if a key was added between the pool's
+		// recompute calling node.VotingAccountsForRound and agreement calling
+		// node.VotingKeys.
 		stats.StopReason = telemetryspec.AssembleBlockNoProposers
 		// Ledger work can be slow; let recomputation proceed while building the fallback.
 		pool.assemblyMu.Unlock()

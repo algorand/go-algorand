@@ -103,8 +103,8 @@ const AssembleBlockAbandon = "block-abandon"
 // evaluator could not generate one.
 const AssembleBlockGenerationError = "generation-error"
 
-// AssembleBlockNoProposers represents an empty fallback after speculative generation
-// was skipped because there were no possible local proposers for the round.
+// AssembleBlockNoProposers represents an empty block being assembled because the pool
+// found no local accounts that could propose in the round and skipped GenerateBlock.
 const AssembleBlockNoProposers = "no-proposers"
 
 const assembleBlockMetricsIdentifier Metric = "AssembleBlock"
