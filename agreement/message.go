@@ -21,11 +21,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util/metrics"
 )
-
-var legacyPKSigClearedCounter = metrics.MakeCounter(
-	metrics.MetricName{Name: "algod_agreement_legacy_pksig_cleared", Description: "Number of gossip vote signatures whose unused PKSigOld field was set and has been cleared"})
 
 // A message represents an internal message which is passed between components
 // of the agreement service.
@@ -69,10 +65,7 @@ type streamTokenizer func([]byte) (any, error)
 
 // clearLegacyPKSig zeroes the unused field PKSigOld on signatures received from the network.
 func clearLegacyPKSig(sig *crypto.OneTimeSignature) {
-	if !sig.PKSigOld.MsgIsZero() {
-		clear(sig.PKSigOld[:])
-		legacyPKSigClearedCounter.Inc(nil)
-	}
+	clear(sig.PKSigOld[:])
 }
 
 // decodeVote reads a vote from the given stream.
