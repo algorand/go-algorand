@@ -19,6 +19,7 @@ package dnssec
 import (
 	"context"
 	"crypto/ed25519"
+	"maps"
 	"net"
 	"testing"
 	"time"
@@ -28,30 +29,6 @@ import (
 
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
-
-func TestTrustChainBasic(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	a := require.New(t)
-
-	r := makeTestResolver()
-	tch := makeTrustChain(r)
-	tch.trustedZones["."] = trustedZone{}
-	tch.trustedZones["org."] = trustedZone{}
-	tch.trustedZones["example.org."] = trustedZone{}
-	tch.trustedZones["com."] = trustedZone{}
-	tch.trustedZones["example.com."] = trustedZone{}
-	tch.trustedZones["www.example.com."] = trustedZone{}
-	tch.trustedZones["notexample.com."] = trustedZone{}
-	tch.removeSelfAndChildren("example.com.")
-	a.Equal(5, len(tch.trustedZones))
-	// zones that only share a string suffix are not children
-	a.Contains(tch.trustedZones, "notexample.com.")
-	tch.removeSelfAndChildren("org.")
-	a.Equal(3, len(tch.trustedZones))
-	tch.removeSelfAndChildren(".")
-	a.Equal(0, len(tch.trustedZones))
-}
 
 func TestEnsureTrustChain(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -85,7 +62,7 @@ func TestEnsureTrustChain(t *testing.T) {
 	a.NoError(err)
 
 	tch := makeTrustChain(r)
-	_, _, err = tch.ensure(context.Background(), "test.", []uint16{testZSK.KeyTag()})
+	_, _, _, err = tch.ensure(context.Background(), "test.", []uint16{testZSK.KeyTag()})
 	a.NoError(err)
 
 	// ensure test harness works
@@ -102,11 +79,11 @@ func TestEnsureTrustChain(t *testing.T) {
 
 	// check a brand new trust chain (no caches)
 	newCh := makeTrustChain(r)
-	_, _, err = newCh.ensure(context.Background(), "test.", []uint16{testZSK.KeyTag()})
+	_, _, _, err = newCh.ensure(context.Background(), "test.", []uint16{testZSK.KeyTag()})
 	a.NoError(err)
 
 	// check an old trust chain (with cached entires)
-	_, _, err = tch.ensure(context.Background(), "test.", []uint16{testZSK.KeyTag()})
+	_, _, _, err = tch.ensure(context.Background(), "test.", []uint16{testZSK.KeyTag()})
 	a.NoError(err)
 
 	algoTestKSK, algoTestKSKsk := getKey("algo.test.", dns.ZONE|dns.SEP)
@@ -121,7 +98,7 @@ func TestEnsureTrustChain(t *testing.T) {
 	a.NoError(err)
 
 	// check an old trust chain (with cached entires)
-	_, _, err = tch.ensure(context.Background(), "algo.test.", []uint16{algoTestZSK.KeyTag()})
+	_, _, _, err = tch.ensure(context.Background(), "algo.test.", []uint16{algoTestZSK.KeyTag()})
 	a.NoError(err)
 
 	// ZSK rotation test
@@ -145,9 +122,9 @@ func TestEnsureTrustChain(t *testing.T) {
 	err = r.updateDNSKeyRecord("rand.test.", randTestZSK, randTestZSKsk, time.Time{})
 	a.NoError(err)
 
-	_, _, err = tch.ensure(context.Background(), "algo.test.", []uint16{algoTestZSK.KeyTag()})
+	_, _, _, err = tch.ensure(context.Background(), "algo.test.", []uint16{algoTestZSK.KeyTag()})
 	a.NoError(err)
-	_, _, err = tch.ensure(context.Background(), "rand.test.", []uint16{randTestZSK.KeyTag()})
+	_, _, _, err = tch.ensure(context.Background(), "rand.test.", []uint16{randTestZSK.KeyTag()})
 	a.NoError(err)
 
 	// invalid signature test
@@ -174,14 +151,13 @@ func TestEnsureTrustChain(t *testing.T) {
 	a.NoError(err)
 
 	// this is cached and still valid
-	_, _, err = tch.ensure(context.Background(), "rand.test.", []uint16{randTestZSK.KeyTag()})
+	_, _, _, err = tch.ensure(context.Background(), "rand.test.", []uint16{randTestZSK.KeyTag()})
 	a.NoError(err)
-	// this was removed during last cache re-validation
-	// triggers the cache update and the chain is broken
-	_, _, err = tch.ensure(context.Background(), "algo.test.", []uint16{algoTestZSK.KeyTag()})
-	a.Error(err)
+	// This child stays cached when its parent is refreshed.
+	_, _, _, err = tch.ensure(context.Background(), "algo.test.", []uint16{algoTestZSK.KeyTag()})
+	a.NoError(err)
 	// this is a new, triggers the cache update and the chain is broken
-	_, _, err = tch.ensure(context.Background(), "cow.test.", []uint16{cowTestZSK.KeyTag()})
+	_, _, _, err = tch.ensure(context.Background(), "cow.test.", []uint16{cowTestZSK.KeyTag()})
 	a.Error(err)
 
 	// DNSKEY expiration test
@@ -193,7 +169,7 @@ func TestEnsureTrustChain(t *testing.T) {
 	testZSK, testZSKsk = getKey("test.", dns.ZONE)
 	err = r.updateDNSKeyRecord("test.", testZSK, testZSKsk, time.Time{})
 	a.NoError(err)
-	_, _, err = tch.ensure(context.Background(), "cow.test.", []uint16{cowTestZSK.KeyTag()})
+	_, _, _, err = tch.ensure(context.Background(), "cow.test.", []uint16{cowTestZSK.KeyTag()})
 	a.NoError(err)
 
 	// get a new signature
@@ -204,7 +180,7 @@ func TestEnsureTrustChain(t *testing.T) {
 	sig, err := r.sign(rrset, "test.", testKSK.KeyTag(), tt, testKSKsk)
 	tch.trustedZones["test."].rrSig[testKSK.KeyTag()] = sig
 	a.Equal(1, len(tch.trustedZones["test."].rrSig))
-	_, _, err = tch.ensure(context.Background(), "algo.test.", []uint16{algoTestZSK.KeyTag()})
+	_, _, _, err = tch.ensure(context.Background(), "algo.test.", []uint16{algoTestZSK.KeyTag()})
 	a.NoError(err)
 
 	// ZSK on the last zone rotation for all zones in cache
@@ -218,7 +194,7 @@ func TestEnsureTrustChain(t *testing.T) {
 	err = r.updateDNSKeyRecord("algo.test.", algoTestZSK, algoTestZSKsk, time.Time{})
 	a.NoError(err)
 	// request cached algo.test. with a new ZSK
-	_, _, err = tch.ensure(context.Background(), "algo.test.", []uint16{algoTestZSK.KeyTag()})
+	_, _, _, err = tch.ensure(context.Background(), "algo.test.", []uint16{algoTestZSK.KeyTag()})
 	a.NoError(err)
 
 	// KSK rotation tests
@@ -251,7 +227,7 @@ func TestEnsureTrustChain(t *testing.T) {
 	err = r.updateDNSKeyRecord("cow.test.", cowTestZSK, cowTestZSKsk, time.Time{})
 	a.NoError(err)
 
-	_, _, err = tch.ensure(context.Background(), "cow.test.", []uint16{cowTestZSK.KeyTag()})
+	_, _, _, err = tch.ensure(context.Background(), "cow.test.", []uint16{cowTestZSK.KeyTag()})
 	a.NoError(err)
 
 	// Trust chain failure test
@@ -263,7 +239,7 @@ func TestEnsureTrustChain(t *testing.T) {
 	err = r.updateKSKNoCheck("test.", testKSK, testKSKsk, time.Time{})
 	a.NoError(err)
 	newCh = makeTrustChain(r)
-	_, _, err = newCh.ensure(context.Background(), "algo.test.", []uint16{algoTestZSK.KeyTag()})
+	_, _, _, err = newCh.ensure(context.Background(), "algo.test.", []uint16{algoTestZSK.KeyTag()})
 	a.Error(err)
 	a.Contains(err.Error(), "no DNSKEY for test. matches a parent DS record or trust anchor")
 }
@@ -290,10 +266,10 @@ func TestEnsureTrustChainError(t *testing.T) {
 
 	// test error on empty zone
 	newCh := makeTrustChain(r)
-	_, _, err = newCh.ensure(context.Background(), "", []uint16{})
+	_, _, _, err = newCh.ensure(context.Background(), "", []uint16{})
 	a.Error(err)
 	// test non-existing ZSK
-	_, _, err = newCh.ensure(context.Background(), ".", []uint16{})
+	_, _, _, err = newCh.ensure(context.Background(), ".", []uint16{})
 	a.Error(err)
 	a.Contains(err.Error(), "DNSKEY [] not found in zone .")
 
@@ -314,7 +290,7 @@ func TestEnsureTrustChainError(t *testing.T) {
 	a.NoError(err)
 
 	tch := makeTrustChain(r)
-	_, _, err = tch.ensure(context.Background(), "test.", []uint16{testZSK.KeyTag()})
+	_, _, _, err = tch.ensure(context.Background(), "test.", []uint16{testZSK.KeyTag()})
 	a.Error(err)
 	a.Contains(err.Error(), "DS signature verification failed for test.")
 }
@@ -437,13 +413,15 @@ func TestAuthenticate(t *testing.T) {
 type countingResolver struct {
 	*testResolver
 	dnskeyQueries map[string]int
-	dnskeyDelays  map[string]time.Duration
+	onQuery       func(string, uint16)
 }
 
 func (r *countingResolver) QueryRRSet(ctx context.Context, domain string, qtype uint16) ([]dns.RR, []dns.RRSIG, error) {
 	if qtype == dns.TypeDNSKEY {
 		r.dnskeyQueries[domain]++
-		time.Sleep(r.dnskeyDelays[domain])
+	}
+	if r.onQuery != nil {
+		r.onQuery(domain, qtype)
 	}
 	return r.testResolver.QueryRRSet(ctx, domain, qtype)
 }
@@ -523,15 +501,14 @@ func TestSameTagKeyRotation(t *testing.T) {
 	a.Equal(keyTag, dsSig[0].KeyTag)
 
 	queries = r.dnskeyQueries["test."]
-	keys, refreshed, err := tch.ensure(context.Background(), "cow.test.", []uint16{cowZSK.KeyTag()})
+	keys, refreshed, _, err := tch.ensure(context.Background(), "cow.test.", []uint16{cowZSK.KeyTag()})
 	a.NoError(err)
 	a.True(refreshed)
 	a.Equal([]dns.DNSKEY{*cowZSK}, keys[cowZSK.KeyTag()])
 	a.Equal(queries+1, r.dnskeyQueries["test."])
 	a.Equal([]dns.DNSKEY{*oldZSK}, tch.trustedZones["test."].zsk[keyTag])
 
-	// A forged DS signature refreshes the parent once and then fails. The child DNSKEY
-	// RRset is fetched before and after the parent refresh.
+	// A forged DS signature refreshes the parent once and then fails before fetching child keys.
 	badKSK, badKSKsk := getKey("bad.test.", dns.ZONE|dns.SEP)
 	badZSK, badZSKsk := getKey("bad.test.", dns.ZONE)
 	a.NoError(r.updateDSRecord("bad.test.", &[]dns.DS{*badKSK.ToDS(dns.SHA256)}, time.Time{}))
@@ -544,10 +521,10 @@ func TestSameTagKeyRotation(t *testing.T) {
 	r.entries["bad.test."][dns.TypeDS] = dsEntry
 
 	parentQueries, childQueries := r.dnskeyQueries["test."], r.dnskeyQueries["bad.test."]
-	_, _, err = tch.ensure(context.Background(), "bad.test.", []uint16{badZSK.KeyTag()})
+	_, _, _, err = tch.ensure(context.Background(), "bad.test.", []uint16{badZSK.KeyTag()})
 	a.ErrorContains(err, "DS signature verification failed for bad.test.")
 	a.Equal(parentQueries+1, r.dnskeyQueries["test."])
-	a.Equal(childQueries+2, r.dnskeyQueries["bad.test."])
+	a.Equal(childQueries, r.dnskeyQueries["bad.test."])
 }
 
 // TestTrustChainTTL checks that cached zones are refreshed once their DNSKEY RRset TTL runs out.
@@ -570,24 +547,26 @@ func TestTrustChainTTL(t *testing.T) {
 	a.NoError(r.updateDNSKeyRecord("test.", testKSK, testKSKsk, time.Time{}))
 	a.NoError(r.updateDNSKeyRecord("test.", testZSK, testZSKsk, time.Time{}))
 
+	now := time.Now().Truncate(time.Second)
 	tch := makeTrustChain(r)
-	_, refreshed, err := tch.ensure(context.Background(), "test.", []uint16{testZSK.KeyTag()})
+	tch.now = func() time.Time { return now }
+	_, refreshed, _, err := tch.ensure(context.Background(), "test.", []uint16{testZSK.KeyTag()})
 	a.NoError(err)
 	a.True(refreshed)
 	a.Equal(1, r.dnskeyQueries["test."])
-	a.WithinDuration(time.Now().Add(time.Duration(testZSK.Hdr.Ttl)*time.Second), tch.trustedZones["test."].cacheUntil, time.Minute)
+	a.Equal(now.Add(time.Duration(testZSK.Hdr.Ttl)*time.Second), tch.trustedZones["test."].cacheUntil)
 
 	// The cached zone is used while its TTL lasts.
-	_, refreshed, err = tch.ensure(context.Background(), "test.", []uint16{testZSK.KeyTag()})
+	_, refreshed, _, err = tch.ensure(context.Background(), "test.", []uint16{testZSK.KeyTag()})
 	a.NoError(err)
 	a.False(refreshed)
 	a.Equal(1, r.dnskeyQueries["test."])
 
 	// Once the TTL runs out, the zone is fetched again even though its DNSKEY signature is valid.
 	tz := tch.trustedZones["test."]
-	tz.cacheUntil = time.Now().Add(-time.Second)
+	tz.cacheUntil = now.Add(-time.Second)
 	tch.trustedZones["test."] = tz
-	_, refreshed, err = tch.ensure(context.Background(), "test.", []uint16{testZSK.KeyTag()})
+	_, refreshed, _, err = tch.ensure(context.Background(), "test.", []uint16{testZSK.KeyTag()})
 	a.NoError(err)
 	a.True(refreshed)
 	a.Equal(2, r.dnskeyQueries["test."])
@@ -601,7 +580,7 @@ func TestTrustChainTTL(t *testing.T) {
 	a.NoError(r.updateDNSKeyRecord("zero.test.", zeroKSK, zeroKSKsk, time.Time{}))
 	a.NoError(r.updateDNSKeyRecord("zero.test.", zeroZSK, zeroZSKsk, time.Time{}))
 	for i := 1; i <= 2; i++ {
-		_, refreshed, err = tch.ensure(context.Background(), "zero.test.", []uint16{zeroZSK.KeyTag()})
+		_, refreshed, _, err = tch.ensure(context.Background(), "zero.test.", []uint16{zeroZSK.KeyTag()})
 		a.NoError(err)
 		a.True(refreshed)
 		a.Equal(i, r.dnskeyQueries["zero.test."])
@@ -613,10 +592,14 @@ func TestTrustChainTTL(t *testing.T) {
 	slowZSK, slowZSKsk := getKey("slow.test.", dns.ZONE)
 	a.NoError(r.updateDSRecord("slow.test.", &[]dns.DS{*slowKSK.ToDS(dns.SHA256)}, time.Time{}))
 	a.NoError(r.updateDNSKeyRecord("slow.test.", slowKSK, slowKSKsk, time.Time{}))
-	a.NoError(r.updateDNSKeyRecord("slow.test.", slowZSK, slowZSKsk, time.Now().Add(time.Second)))
-	r.dnskeyDelays = map[string]time.Duration{"slow.test.": 2 * time.Second}
-	_, _, err = tch.ensure(context.Background(), "slow.test.", []uint16{slowZSK.KeyTag()})
-	a.ErrorContains(err, "cache outdated for already updated zone slow.test.")
+	a.NoError(r.updateDNSKeyRecord("slow.test.", slowZSK, slowZSKsk, now.Add(time.Second)))
+	r.onQuery = func(zone string, qtype uint16) {
+		if zone == "slow.test." && qtype == dns.TypeDNSKEY {
+			now = now.Add(2 * time.Second)
+		}
+	}
+	_, _, _, err = tch.ensure(context.Background(), "slow.test.", []uint16{slowZSK.KeyTag()})
+	a.ErrorContains(err, "DNSKEY RRSIG expired during validation for slow.test.")
 }
 
 func TestQueryWrapper(t *testing.T) {
@@ -657,4 +640,310 @@ func TestQueryWrapper(t *testing.T) {
 	a.NoError(err)
 	a.Equal(2, len(rrset))
 	a.Equal(1, len(rrsig))
+}
+
+func addTestZone(t *testing.T, r *testResolver, zone string) {
+	t.Helper()
+
+	ksk, kskSK := getKey(zone, dns.ZONE|dns.SEP)
+	zsk, zskSK := getKey(zone, dns.ZONE)
+	require.NoError(t, r.updateDSRecord(zone, &[]dns.DS{*ksk.ToDS(dns.SHA256)}, time.Time{}))
+	require.NoError(t, r.updateDNSKeyRecord(zone, ksk, kskSK, time.Time{}))
+	require.NoError(t, r.updateDNSKeyRecord(zone, zsk, zskSK, time.Time{}))
+}
+
+func TestAuthenticateInvalidStructure(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	r := &countingResolver{testResolver: makeEmptyTestResolver(), dnskeyQueries: make(map[string]int)}
+	addTestZone(t, r.testResolver, ".")
+	addTestZone(t, r.testResolver, "test.")
+	a.NoError(r.updateARecord("www.test.", net.IPv4(1, 2, 3, 4), time.Time{}))
+	rrSet, rrSig, err := r.QueryRRSet(context.Background(), "www.test.", dns.TypeA)
+	a.NoError(err)
+	tch := makeTrustChain(r)
+	a.NoError(tch.Authenticate(context.Background(), rrSet, rrSig))
+
+	root := tch.trustedZones["."]
+	root.cacheUntil = time.Now().Add(-time.Second)
+	tch.trustedZones["."] = root
+	zones, queries := maps.Clone(tch.trustedZones), maps.Clone(r.dnskeyQueries)
+	for _, field := range []string{"owner", "type", "class", "empty"} {
+		t.Run("rrset/"+field, func(t *testing.T) {
+			other := dns.Copy(rrSet[0])
+			invalid := []dns.RR{rrSet[0], other}
+			switch field {
+			case "owner":
+				other.Header().Name = "other.test."
+			case "type":
+				other.Header().Rrtype = dns.TypeAAAA
+			case "class":
+				other.Header().Class = dns.ClassCHAOS
+			case "empty":
+				invalid = nil
+			}
+			require.ErrorIs(t, tch.Authenticate(context.Background(), invalid, rrSig), dns.ErrRRset)
+			require.Equal(t, queries, r.dnskeyQueries)
+			require.Equal(t, zones, tch.trustedZones)
+		})
+	}
+	for _, field := range []string{"owner", "type", "class", "labels", "algorithm"} {
+		t.Run("rrsig/"+field, func(t *testing.T) {
+			sig := rrSig[0]
+			switch field {
+			case "owner":
+				sig.Hdr.Name = "other.test."
+			case "type":
+				sig.TypeCovered = dns.TypeAAAA
+			case "class":
+				sig.Hdr.Class = dns.ClassCHAOS
+			case "labels":
+				sig.Labels++
+			case "algorithm":
+				sig.Algorithm = dns.DSA
+			}
+			require.ErrorContains(t, tch.Authenticate(context.Background(), rrSet, []dns.RRSIG{sig}), "no currently valid RRSIG")
+			require.Equal(t, queries, r.dnskeyQueries)
+			require.Equal(t, zones, tch.trustedZones)
+		})
+	}
+}
+
+func TestExpiredDSDoesNotRefreshParent(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	r := &countingResolver{testResolver: makeEmptyTestResolver(), dnskeyQueries: make(map[string]int)}
+	for _, zone := range []string{".", "test.", "sibling.test.", "bad.test."} {
+		addTestZone(t, r.testResolver, zone)
+	}
+	zsk, err := r.getKey("sibling.test.", dns.ZONE)
+	a.NoError(err)
+	tch := makeTrustChain(r)
+	_, _, _, err = tch.ensure(context.Background(), "sibling.test.", []uint16{zsk.KeyTag()})
+	a.NoError(err)
+	entry := r.entries["bad.test."][dns.TypeDS]
+	entry.sig[0].Expiration = uint32(time.Now().Add(-time.Hour).Unix())
+	zones, queries := maps.Clone(tch.trustedZones), maps.Clone(r.dnskeyQueries)
+	for i := 0; i < 2; i++ {
+		_, _, _, err = tch.ensure(context.Background(), "bad.test.", nil)
+		a.ErrorContains(err, "no eligible DS RRSIG for bad.test.")
+		a.Equal(queries, r.dnskeyQueries)
+		a.Equal(zones, tch.trustedZones)
+	}
+}
+
+func TestTrustChainGeneration(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	r := &countingResolver{testResolver: makeEmptyTestResolver(), dnskeyQueries: make(map[string]int)}
+	addTestZone(t, r.testResolver, ".")
+	zsk, err := r.getKey(".", dns.ZONE)
+	a.NoError(err)
+	tch := makeTrustChain(r)
+	_, _, gen, err := tch.ensure(context.Background(), ".", []uint16{zsk.KeyTag()})
+	a.NoError(err)
+	tz := tch.trustedZones["."]
+	tz.cacheUntil = time.Now().Add(-time.Second)
+	tch.trustedZones["."] = tz
+	_, _, nextGen, err := tch.ensure(context.Background(), ".", []uint16{zsk.KeyTag()})
+	a.NoError(err)
+	a.Greater(nextGen, gen)
+	tch.invalidate(".", gen)
+	a.Equal(nextGen, tch.trustedZones["."].gen)
+	tch.invalidate(".", nextGen)
+	a.Empty(tch.trustedZones)
+	tch.invalidate(".", gen)
+	_, _, lastGen, err := tch.ensure(context.Background(), ".", []uint16{zsk.KeyTag()})
+	a.NoError(err)
+	a.Greater(lastGen, nextGen)
+}
+
+func TestTrustChainSelfOnlyEviction(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	r := &countingResolver{testResolver: makeEmptyTestResolver(), dnskeyQueries: make(map[string]int)}
+	for _, zone := range []string{".", "test.", "child.test."} {
+		addTestZone(t, r.testResolver, zone)
+	}
+	a.NoError(r.updateARecord("www.test.", net.IPv4(1, 2, 3, 4), time.Time{}))
+	zsk, err := r.getKey("child.test.", dns.ZONE)
+	a.NoError(err)
+	tch := makeTrustChain(r)
+	_, _, _, err = tch.ensure(context.Background(), "child.test.", []uint16{zsk.KeyTag()})
+	a.NoError(err)
+	child, parent := tch.trustedZones["child.test."], tch.trustedZones["test."]
+
+	// A forwarder serving zero TTLs should only cause root to be fetched again.
+	for _, rr := range r.entries["."][dns.TypeDNSKEY].rr {
+		rr.Header().Ttl = 0
+	}
+	root := tch.trustedZones["."]
+	root.cacheUntil = time.Now().Add(-time.Second)
+	tch.trustedZones["."] = root
+	for i := 2; i <= 3; i++ {
+		_, refreshed, _, ensureErr := tch.ensure(context.Background(), "child.test.", []uint16{zsk.KeyTag()})
+		a.NoError(ensureErr)
+		a.False(refreshed)
+		a.Equal(i, r.dnskeyQueries["."])
+		a.Equal(1, r.dnskeyQueries["test."])
+		a.Equal(1, r.dnskeyQueries["child.test."])
+		a.Equal(parent, tch.trustedZones["test."])
+		a.Equal(child, tch.trustedZones["child.test."])
+	}
+
+	// A failed answer signature refreshes its signer but preserves cached children.
+	rrSet, rrSig, err := r.QueryRRSet(context.Background(), "www.test.", dns.TypeA)
+	a.NoError(err)
+	rrSig[0].Signature = "AA=="
+	a.ErrorContains(tch.Authenticate(context.Background(), rrSet, rrSig), "RRSIG with key tag")
+	a.Greater(tch.trustedZones["test."].gen, parent.gen)
+	a.Equal(child, tch.trustedZones["child.test."])
+	a.Equal(1, r.dnskeyQueries["child.test."])
+}
+
+func TestTrustChainValidationTime(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	for _, scenario := range []string{"answer", "answer retry", "DS arrival", "DS after DNSKEY", "TTL start"} {
+		t.Run(scenario, func(t *testing.T) {
+			a := require.New(t)
+			r := &countingResolver{testResolver: makeEmptyTestResolver(), dnskeyQueries: make(map[string]int)}
+			addTestZone(t, r.testResolver, ".")
+			addTestZone(t, r.testResolver, "test.")
+			now := time.Now().Truncate(time.Second)
+			tch := makeTrustChain(r)
+			tch.now = func() time.Time { return now }
+			expires := now.Add(time.Second)
+			if scenario == "answer" || scenario == "answer retry" {
+				a.NoError(r.updateARecord("www.test.", net.IPv4(1, 2, 3, 4), expires))
+				rrSet, rrSig, err := r.QueryRRSet(context.Background(), "www.test.", dns.TypeA)
+				a.NoError(err)
+				queries := 0
+				if scenario == "answer retry" {
+					a.NoError(tch.Authenticate(context.Background(), rrSet, rrSig))
+					queries = r.dnskeyQueries["test."]
+					rrSig[0].Signature = "AA=="
+				}
+				r.onQuery = func(zone string, qtype uint16) {
+					if zone == "test." && qtype == dns.TypeDNSKEY {
+						now = now.Add(2 * time.Second)
+					}
+				}
+				a.ErrorContains(tch.Authenticate(context.Background(), rrSet, rrSig), "RRSIG expired during validation for www.test.")
+				a.Equal(queries+1, r.dnskeyQueries["test."])
+				a.Equal(1, r.dnskeyQueries["."])
+				return
+			}
+
+			zsk, err := r.getKey("test.", dns.ZONE)
+			a.NoError(err)
+			if scenario == "TTL start" {
+				start := now
+				r.onQuery = func(zone string, qtype uint16) {
+					if zone == "test." {
+						if qtype == dns.TypeDS {
+							now = now.Add(5 * time.Second)
+						} else if qtype == dns.TypeDNSKEY {
+							now = now.Add(2 * time.Second)
+						}
+					}
+				}
+				_, _, _, err = tch.ensure(context.Background(), "test.", []uint16{zsk.KeyTag()})
+				a.NoError(err)
+				a.Equal(start.Add(5*time.Second+time.Duration(zsk.Hdr.Ttl)*time.Second), tch.trustedZones["test."].cacheUntil)
+				return
+			}
+			ds := r.entries["test."][dns.TypeDS]
+			parentZSK, err := r.getKey(".", dns.ZONE)
+			a.NoError(err)
+			ds.sig[0], err = r.sign(ds.rr, ".", parentZSK.KeyTag(), expires, r.entries["."][dns.TypeDNSKEY].sk[parentZSK.KeyTag()])
+			a.NoError(err)
+			r.onQuery = func(zone string, qtype uint16) {
+				if zone == "test." && ((scenario == "DS arrival" && qtype == dns.TypeDS) ||
+					(scenario == "DS after DNSKEY" && qtype == dns.TypeDNSKEY)) {
+					now = now.Add(2 * time.Second)
+				}
+			}
+			_, _, _, err = tch.ensure(context.Background(), "test.", []uint16{zsk.KeyTag()})
+			if scenario == "DS arrival" {
+				a.ErrorContains(err, "no eligible DS RRSIG for test.")
+				a.Zero(r.dnskeyQueries["test."])
+			} else {
+				a.ErrorContains(err, "DS RRSIG expired during validation for test.")
+				a.Equal(1, r.dnskeyQueries["test."])
+			}
+			a.Equal(1, r.dnskeyQueries["."])
+			a.Contains(tch.trustedZones, ".")
+			a.NotContains(tch.trustedZones, "test.")
+		})
+	}
+}
+
+func TestFreshZoneDNSKEYExpiresAfterFetch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	r := &countingResolver{testResolver: makeEmptyTestResolver(), dnskeyQueries: make(map[string]int)}
+	addTestZone(t, r.testResolver, ".")
+	addTestZone(t, r.testResolver, "test.")
+	zsk, err := r.getKey("test.", dns.ZONE)
+	a.NoError(err)
+	now := time.Now().Truncate(time.Second)
+	a.NoError(r.updateDNSKeyRecord("test.", zsk, r.entries["test."][dns.TypeDNSKEY].sk[zsk.KeyTag()], now.Add(time.Second)))
+	tch := makeTrustChain(r)
+	responseArrived := false
+	r.onQuery = func(zone string, qtype uint16) {
+		if zone == "test." && qtype == dns.TypeDNSKEY {
+			responseArrived = true
+		}
+	}
+	tch.now = func() time.Time {
+		sampled := now
+		if responseArrived {
+			// Cross the expiry boundary between DNSKEY verification and cache use.
+			now = now.Add(2 * time.Second)
+			responseArrived = false
+		}
+		return sampled
+	}
+	_, _, _, err = tch.ensure(context.Background(), "test.", []uint16{zsk.KeyTag()})
+	a.ErrorContains(err, "DNSKEY RRSIG expired during validation for test.")
+	a.Equal(1, r.dnskeyQueries["test."])
+	a.NotContains(tch.trustedZones, "test.")
+}
+
+func TestParentDNSKEYExpiresDuringDSQuery(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	r := &countingResolver{testResolver: makeEmptyTestResolver(), dnskeyQueries: make(map[string]int)}
+	addTestZone(t, r.testResolver, ".")
+	addTestZone(t, r.testResolver, "test.")
+	rootZSK, err := r.getKey(".", dns.ZONE)
+	a.NoError(err)
+	now := time.Now().Truncate(time.Second)
+	a.NoError(r.updateDNSKeyRecord(".", rootZSK, r.entries["."][dns.TypeDNSKEY].sk[rootZSK.KeyTag()], now.Add(time.Second)))
+	tch := makeTrustChain(r)
+	tch.now = func() time.Time { return now }
+	_, _, _, err = tch.ensure(context.Background(), ".", []uint16{rootZSK.KeyTag()})
+	a.NoError(err)
+	// The server has a renewed DNSKEY signature while the cached one expires.
+	a.NoError(r.updateDNSKeyRecord(".", rootZSK, r.entries["."][dns.TypeDNSKEY].sk[rootZSK.KeyTag()], time.Time{}))
+	advanced := false
+	r.onQuery = func(zone string, qtype uint16) {
+		if zone == "test." && qtype == dns.TypeDS && !advanced {
+			now = now.Add(2 * time.Second)
+			advanced = true
+		}
+	}
+	zsk, err := r.getKey("test.", dns.ZONE)
+	a.NoError(err)
+	_, _, _, err = tch.ensure(context.Background(), "test.", []uint16{zsk.KeyTag()})
+	a.NoError(err)
+	a.Equal(2, r.dnskeyQueries["."])
+	a.Equal(1, r.dnskeyQueries["test."])
 }

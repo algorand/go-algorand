@@ -91,10 +91,16 @@ func TestTrustedZone(t *testing.T) {
 	tt, _ = time.Parse(time.RFC3339, "2020-02-12T00:00:00Z")
 
 	rrsDS, rrsigsDS, _ := r.QueryRRSet(context.Background(), "com.", dns.TypeDS)
-	a.True(tzRoot.verifyDS(rrsDS, rrsigsDS, tt))
+	verified, cacheOutdated, err := tzRoot.verifyDS(rrsDS, rrsigsDS, tt)
+	a.NoError(err)
+	a.False(cacheOutdated)
+	a.NotEmpty(verified)
 
 	tzRoot.zsk = make(dnskeysByTag)
-	a.False(tzRoot.verifyDS(rrsDS, rrsigsDS, tt))
+	verified, cacheOutdated, err = tzRoot.verifyDS(rrsDS, rrsigsDS, tt)
+	a.NoError(err)
+	a.True(cacheOutdated)
+	a.Empty(verified)
 
 	// A cached key with the signer's key tag that does not verify the DS also fails,
 	// since a newer key may share the tag.
@@ -102,7 +108,10 @@ func TestTrustedZone(t *testing.T) {
 	zk = zsks[0]
 	zk.PublicKey = ksks[0].PublicKey
 	tzRoot.zsk[zsks[0].KeyTag()] = []dns.DNSKEY{zk}
-	a.False(tzRoot.verifyDS(rrsDS, rrsigsDS, tt))
+	verified, cacheOutdated, err = tzRoot.verifyDS(rrsDS, rrsigsDS, tt)
+	a.NoError(err)
+	a.True(cacheOutdated)
+	a.Empty(verified)
 }
 
 func TestMakeTrustedZone(t *testing.T) {
@@ -112,12 +121,13 @@ func TestMakeTrustedZone(t *testing.T) {
 
 	tt, _ := time.Parse(time.RFC3339, "2020-02-12T00:00:00Z")
 	r := makeTestResolver()
-	tzRoot, cacheOutdated, err := makeTrustedZone(context.Background(), ".", trustedZone{}, r, tt)
+	now := func() time.Time { return tt }
+	tzRoot, cacheOutdated, err := makeTrustedZone(context.Background(), ".", trustedZone{}, r, now)
 	a.NoError(err)
 	a.False(cacheOutdated)
 	a.NotEmpty(tzRoot)
 
-	tzCom, cacheOutdated, err := makeTrustedZone(context.Background(), "com.", tzRoot, r, tt)
+	tzCom, cacheOutdated, err := makeTrustedZone(context.Background(), "com.", tzRoot, r, now)
 	a.NoError(err)
 	a.False(cacheOutdated)
 	a.NotEmpty(tzCom)
@@ -125,7 +135,7 @@ func TestMakeTrustedZone(t *testing.T) {
 	// remove ZSK from root and expect cache outdated error (newer key in com. than in cached root)
 	backup := tzRoot.zsk
 	tzRoot.zsk = make(dnskeysByTag)
-	tzCom, cacheOutdated, err = makeTrustedZone(context.Background(), "com.", tzRoot, r, tt)
+	tzCom, cacheOutdated, err = makeTrustedZone(context.Background(), "com.", tzRoot, r, now)
 	a.NoError(err)
 	a.True(cacheOutdated)
 	a.Empty(tzCom)
@@ -134,7 +144,7 @@ func TestMakeTrustedZone(t *testing.T) {
 	tzRoot.zsk = backup
 	backup = tzRoot.ksk
 	tzRoot.ksk = make(dnskeysByTag)
-	tzCom, cacheOutdated, err = makeTrustedZone(context.Background(), "com.", tzRoot, r, tt)
+	tzCom, cacheOutdated, err = makeTrustedZone(context.Background(), "com.", tzRoot, r, now)
 	a.NoError(err)
 	a.False(cacheOutdated)
 	a.NotEmpty(tzCom)
@@ -155,7 +165,7 @@ func TestMakeTrustedZone(t *testing.T) {
 	}
 	// A cached parent key with the DS signer's tag that does not verify the DS means the
 	// parent's cached DNSKEY RRset may be outdated.
-	tzCom, cacheOutdated, err = makeTrustedZone(context.Background(), "com.", tzRoot, r, tt)
+	tzCom, cacheOutdated, err = makeTrustedZone(context.Background(), "com.", tzRoot, r, now)
 	a.NoError(err)
 	a.True(cacheOutdated)
 	a.Empty(tzCom)
@@ -163,7 +173,7 @@ func TestMakeTrustedZone(t *testing.T) {
 	tzRoot.zsk = backup
 
 	// test non-existing zone
-	tzOrg, cacheOutdated, err := makeTrustedZone(context.Background(), "ttt.", tzRoot, r, tt)
+	tzOrg, cacheOutdated, err := makeTrustedZone(context.Background(), "ttt.", tzRoot, r, now)
 	a.Error(err)
 	a.False(cacheOutdated)
 	a.Empty(tzOrg)
@@ -179,7 +189,7 @@ func TestMakeTrustedZone(t *testing.T) {
 	err = re.updateDNSKeyRecord(".", rootZSK, rootZSKsk, time.Time{})
 	a.NoError(err)
 
-	tzRoot, cacheOutdated, err = makeTrustedZone(context.Background(), ".", trustedZone{}, re, tt)
+	tzRoot, cacheOutdated, err = makeTrustedZone(context.Background(), ".", trustedZone{}, re, now)
 	a.Error(err)
 	a.Contains(err.Error(), "EOF")
 	a.False(cacheOutdated)
@@ -195,7 +205,7 @@ func TestMakeTrustedZone(t *testing.T) {
 	err = re.updateDNSKeyRecord("test.", testZSK, testZSKsk, time.Time{})
 	a.NoError(err)
 
-	tzTest, cacheOutdated, err := makeTrustedZone(context.Background(), "test.", trustedZone{}, re, tt)
+	tzTest, cacheOutdated, err := makeTrustedZone(context.Background(), "test.", trustedZone{}, re, now)
 	a.Error(err)
 	a.Contains(err.Error(), "test. not found")
 	a.False(cacheOutdated)
@@ -226,7 +236,7 @@ func TestMakeTrustedZoneIgnoresRSAMD5Key(t *testing.T) {
 	a.NoError(err)
 	r.entries["."][dns.TypeDNSKEY] = rrRec{rr: dnskeyRRSet, sig: []dns.RRSIG{dnskeySig}}
 
-	tz, cacheOutdated, err := makeTrustedZone(context.Background(), ".", trustedZone{}, r, time.Now())
+	tz, cacheOutdated, err := makeTrustedZone(context.Background(), ".", trustedZone{}, r, time.Now)
 	a.NoError(err)
 	a.False(cacheOutdated)
 	keyCount := 0
@@ -257,6 +267,23 @@ func TestMinTTL(t *testing.T) {
 
 	rrSig[3] = dns.RRSIG{Hdr: dns.RR_Header{Ttl: 7200}, OrigTtl: 300}
 	a.Equal(uint32(300), minTTL(rrSet, rrSig))
+
+	// RFC 2181 treats any TTL with the high bit set as zero.
+	for _, field := range []string{"record", "signature", "original"} {
+		t.Run(field, func(t *testing.T) {
+			record := &dns.DNSKEY{Hdr: dns.RR_Header{Ttl: 60}}
+			sig := dns.RRSIG{Hdr: dns.RR_Header{Ttl: 60}, OrigTtl: 60}
+			switch field {
+			case "record":
+				record.Hdr.Ttl |= 1 << 31
+			case "signature":
+				sig.Hdr.Ttl |= 1 << 31
+			case "original":
+				sig.OrigTtl |= 1 << 31
+			}
+			require.Zero(t, minTTL([]dns.RR{record}, map[uint16]dns.RRSIG{1: sig}))
+		})
+	}
 }
 
 func TestVerifyRRSig(t *testing.T) {
@@ -396,4 +423,91 @@ func sameTagKey(t *testing.T, key dns.DNSKEY) dns.DNSKEY {
 	}
 	require.FailNow(t, "could not construct a different key with the same key tag")
 	return dns.DNSKEY{}
+}
+
+func TestDSSignatureEligibility(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	r := makeTestResolver()
+	now := time.Date(2020, 2, 12, 0, 0, 0, 0, time.UTC)
+	parent, outdated, err := makeTrustedZone(context.Background(), ".", trustedZone{}, r, func() time.Time { return now })
+	a.NoError(err)
+	a.False(outdated)
+	rrSet, rrSig, err := r.QueryRRSet(context.Background(), "com.", dns.TypeDS)
+	a.NoError(err)
+	for _, field := range []string{"empty", "expired", "future", "class", "type", "owner", "labels", "algorithm", "signer", "intersection", "rrset", "parent expired", "bad signature", "valid"} {
+		t.Run(field, func(t *testing.T) {
+			sig := rrSig[0]
+			signatures := []dns.RRSIG{sig}
+			records := rrSet
+			tz := parent
+			switch field {
+			case "empty":
+				signatures = nil
+			case "expired":
+				signatures[0].Expiration = uint32(now.Add(-time.Hour).Unix())
+			case "future":
+				signatures[0].Inception = uint32(now.Add(time.Hour).Unix())
+			case "class":
+				signatures[0].Hdr.Class = dns.ClassCHAOS
+			case "type":
+				signatures[0].TypeCovered = dns.TypeA
+			case "owner":
+				signatures[0].Hdr.Name = "other."
+			case "labels":
+				signatures[0].Labels++
+			case "algorithm":
+				signatures[0].Algorithm = dns.DSA
+			case "signer":
+				signatures[0].SignerName = "com."
+			case "intersection":
+				signatures[0].Expiration = uint32(now.Add(-time.Hour).Unix())
+				sig.TypeCovered = dns.TypeA
+				signatures = append(signatures, sig)
+			case "rrset":
+				other := dns.Copy(rrSet[0])
+				other.Header().Name = "other."
+				records = []dns.RR{rrSet[0], other}
+			case "parent expired":
+				tz.rrSig = map[uint16]dns.RRSIG{1: {Inception: uint32(now.Add(-time.Hour).Unix()), Expiration: uint32(now.Add(-time.Second).Unix())}}
+			case "bad signature":
+				signatures[0].Signature = "AA=="
+			}
+			verified, cacheOutdated, verifyErr := tz.verifyDS(records, signatures, now)
+			switch field {
+			case "valid":
+				require.NoError(t, verifyErr)
+				require.False(t, cacheOutdated)
+				require.NotEmpty(t, verified)
+			case "parent expired", "bad signature":
+				require.NoError(t, verifyErr)
+				require.True(t, cacheOutdated)
+				require.Empty(t, verified)
+			case "rrset":
+				require.ErrorIs(t, verifyErr, dns.ErrRRset)
+				require.False(t, cacheOutdated)
+			default:
+				require.ErrorContains(t, verifyErr, "no eligible DS RRSIG")
+				require.False(t, cacheOutdated)
+				require.Empty(t, verified)
+			}
+		})
+	}
+}
+
+func TestVerifyRRSetErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	r := makeTestResolver()
+	rrSet, rrSig, err := r.QueryRRSet(context.Background(), "com.", dns.TypeDS)
+	require.NoError(t, err)
+	zsks, _, _ := r.queryDNSKeyRRSet(".")
+	keys := make(dnskeysByTag)
+	keys.add(sameTagKey(t, zsks[0]))
+	missing := rrSig[0]
+	missing.KeyTag++
+	err = verifyRRSet(".", rrSet, append(rrSig, missing), keys)
+	require.ErrorContains(t, err, "RRSIG with key tag 33853")
+	require.ErrorContains(t, err, "no authenticated DNSKEY with tag 33854")
 }

@@ -34,6 +34,7 @@ type trustedZone struct {
 	rrSig      map[uint16]dns.RRSIG // DNSKEY RR signature(s), used for validity
 	dss        []dns.DS             // DS or root anchor authenticating this zone in DS format
 	cacheUntil time.Time            // TTL limit for caching the DNSKEY RRset
+	gen        uint64               // cache generation, so a stale lookup does not evict a newer copy
 }
 
 // DNSSEC key tags are checksums and are not unique, so every key with a given
@@ -73,25 +74,41 @@ func (tz *trustedZone) checkKeys(keytags []uint16) bool {
 	return false
 }
 
-// verifyDS reports whether an authenticated key from this zone verifies a DS RRSIG.
-// This zone's DNSKEY RRset is cached but the DS just came from the network, so a
-// failure can mean the DS is signed by a newer key, possibly one whose key tag
-// collides with a cached key. Callers treat a failure as an outdated cache.
-func (tz *trustedZone) verifyDS(rrSet []dns.RR, rrSig []dns.RRSIG, t time.Time) bool {
-	return len(verifyRRSig(rrSet, rrSig, t, tz.zsk)) > 0
+// verifyDS only requests a refresh when a usable signature fails with cached keys.
+func (tz *trustedZone) verifyDS(rrSet []dns.RR, rrSig []dns.RRSIG, t time.Time) (verified []dns.RRSIG, cacheOutdated bool, err error) {
+	if !dns.IsRRset(rrSet) {
+		return nil, false, dns.ErrRRset
+	}
+	eligible := make([]dns.RRSIG, 0, len(rrSig))
+	for _, sig := range rrSig {
+		if signatureMatchesRRSet(sig, rrSet[0].Header()) &&
+			dns.CanonicalName(sig.SignerName) == dns.CanonicalName(tz.name) && sig.ValidityPeriod(t) {
+			eligible = append(eligible, sig)
+		}
+	}
+	if len(eligible) == 0 {
+		return nil, false, fmt.Errorf("no eligible DS RRSIG for %s", rrSet[0].Header().Name)
+	}
+	if tz.isExpired(t) {
+		return nil, true, nil
+	}
+	for _, sig := range eligible {
+		if verifyRRSet(tz.name, rrSet, []dns.RRSIG{sig}, tz.zsk) == nil {
+			verified = append(verified, sig)
+		}
+	}
+	return verified, len(verified) == 0, nil
 }
 
-func getParentDS(ctx context.Context, fqZoneName string, c Querier, parent trustedZone, t time.Time) (dss []dns.DS, cacheOutdated bool, err error) {
+func getParentDS(ctx context.Context, fqZoneName string, c Querier, parent trustedZone, now func() time.Time) (dss []dns.DS, verified []dns.RRSIG, cacheOutdated bool, err error) {
 	var rrSet []dns.RR
 	var rrSig []dns.RRSIG
 	rrSet, rrSig, err = c.QueryRRSet(ctx, fqZoneName, dns.TypeDS) // physically stored in parent zone of fqZoneName zone
 	if err != nil {
 		return
 	}
-	// since a new zone is being created its DS is always fetched from the network
-	// but parent zone is cached and cache outdated error possbile
-	if !parent.verifyDS(rrSet, rrSig, t) {
-		cacheOutdated = true
+	verified, cacheOutdated, err = parent.verifyDS(rrSet, rrSig, now())
+	if err != nil || cacheOutdated {
 		return
 	}
 	for _, rr := range rrSet {
@@ -117,22 +134,29 @@ func getParentDS(ctx context.Context, fqZoneName string, c Querier, parent trust
 // Note2: the function requests both DNSKEY (from child) and DS (from parent)
 // and this allows to tolerate KSK rotation: if child zone refreshed KSK
 // then its digest is propagated to parent DS and used to sign child's DNSKEY
-func makeTrustedZone(ctx context.Context, fqZoneName string, parent trustedZone, c TrustQuerier, t time.Time) (tz trustedZone, cacheOutdated bool, err error) {
-	rrSet, rrSig, err := c.QueryRRSet(ctx, fqZoneName, dns.TypeDNSKEY)
-	if err != nil {
-		return
-	}
-
+func makeTrustedZone(ctx context.Context, fqZoneName string, parent trustedZone, c TrustQuerier, now func() time.Time) (tz trustedZone, cacheOutdated bool, err error) {
 	var dss []dns.DS
+	var dsSignatures []dns.RRSIG
 	if fqZoneName == "." {
 		if dss, err = c.GetRootAnchorDS(); err != nil {
 			return
 		}
 	} else {
-		dss, cacheOutdated, err = getParentDS(ctx, fqZoneName, c, parent, t)
+		dss, dsSignatures, cacheOutdated, err = getParentDS(ctx, fqZoneName, c, parent, now)
 		if err != nil || cacheOutdated {
 			return
 		}
+	}
+
+	queryTime := now()
+	rrSet, rrSig, err := c.QueryRRSet(ctx, fqZoneName, dns.TypeDNSKEY)
+	if err != nil {
+		return
+	}
+	verificationTime := now()
+	if fqZoneName != "." && len(signaturesAt(dsSignatures, verificationTime)) == 0 {
+		err = fmt.Errorf("DS RRSIG expired during validation for %s", fqZoneName)
+		return
 	}
 
 	zoneKeys := make(dnskeysByTag)
@@ -162,9 +186,12 @@ func makeTrustedZone(ctx context.Context, fqZoneName string, parent trustedZone,
 
 	// validate DNSKEY RRSIG using matched (verified) keys
 	// DNSKEY RRSET is self-signed so makes sense to check this signature at the very end with authenticated via parent DS
-	verifiedSig := verifyRRSig(rrSet, rrSig, t, verifiedKSK)
+	verifiedSig := verifyRRSig(rrSet, rrSig, verificationTime, verifiedKSK)
 	if len(verifiedSig) == 0 {
 		err = fmt.Errorf("no DS-matched DNSKEY verifies the DNSKEY RRSet for %s", fqZoneName)
+		if len(signaturesAt(rrSig, queryTime)) > 0 && len(signaturesAt(rrSig, verificationTime)) == 0 {
+			err = fmt.Errorf("DNSKEY RRSIG expired during validation for %s", fqZoneName)
+		}
 		return
 	}
 
@@ -175,23 +202,57 @@ func makeTrustedZone(ctx context.Context, fqZoneName string, parent trustedZone,
 		ksk:        verifiedKSK,
 		rrSig:      verifiedSig,
 		dss:        matchedDS,
-		cacheUntil: t.Add(time.Duration(minTTL(rrSet, verifiedSig)) * time.Second),
+		cacheUntil: queryTime.Add(time.Duration(minTTL(rrSet, verifiedSig)) * time.Second),
 	}
 	return
 }
 
 // minTTL returns the TTL limit for caching an authenticated RRset: the minimum of the
 // RRset TTL, the RRSIG TTL and the RRSIG Original TTL (RFC 4035, Section 5.3.3).
+// TTLs with the high bit set count as zero (RFC 2181, Section 8).
 // Signature expiration is checked separately by isExpired.
 func minTTL(rrSet []dns.RR, rrSig map[uint16]dns.RRSIG) uint32 {
 	ttl := uint32(math.MaxUint32)
 	for _, rr := range rrSet {
+		if rr.Header().Ttl&(1<<31) != 0 {
+			return 0
+		}
 		ttl = min(ttl, rr.Header().Ttl)
 	}
 	for _, sig := range rrSig {
+		if (sig.Hdr.Ttl|sig.OrigTtl)&(1<<31) != 0 {
+			return 0
+		}
 		ttl = min(ttl, sig.Hdr.Ttl, sig.OrigTtl)
 	}
 	return ttl
+}
+
+// signatureMatchesRRSet checks the parts of verification that do not depend on a key.
+// The caller must first check dns.IsRRset.
+func signatureMatchesRRSet(sig dns.RRSIG, hdr *dns.RR_Header) bool {
+	if sig.Hdr.Class != hdr.Class || sig.TypeCovered != hdr.Rrtype ||
+		dns.CanonicalName(sig.Hdr.Name) != dns.CanonicalName(hdr.Name) || int(sig.Labels) > dns.CountLabel(hdr.Name) {
+		return false
+	}
+	switch sig.Algorithm {
+	case dns.RSASHA1, dns.RSASHA1NSEC3SHA1, dns.RSASHA256, dns.RSASHA512,
+		dns.ECDSAP256SHA256, dns.ECDSAP384SHA384, dns.ED25519:
+		return true
+	default:
+		return false
+	}
+}
+
+// signaturesAt returns the signatures that are within their validity period at t.
+func signaturesAt(signatures []dns.RRSIG, t time.Time) []dns.RRSIG {
+	valid := make([]dns.RRSIG, 0, len(signatures))
+	for _, sig := range signatures {
+		if sig.ValidityPeriod(t) {
+			valid = append(valid, sig)
+		}
+	}
+	return valid
 }
 
 // verifyRRSig takes an RRset, signatures, time, and candidate DNSKEYs.
