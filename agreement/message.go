@@ -18,9 +18,14 @@ package agreement
 
 import (
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/metrics"
 )
+
+var legacyPKSigClearedCounter = metrics.MakeCounter(
+	metrics.MetricName{Name: "algod_agreement_legacy_pksig_cleared", Description: "Number of gossip vote signatures whose unused PKSigOld field was set and has been cleared"})
 
 // A message represents an internal message which is passed between components
 // of the agreement service.
@@ -62,6 +67,20 @@ type compoundMessage struct {
 // deserializing from some stream.
 type streamTokenizer func([]byte) (any, error)
 
+// clearLegacyPKSig zeroes PKSigOld in a signature received over gossip.
+// Nothing has verified the field since consensus v3, so a sender can fill it
+// with arbitrary bytes that relays would re-encode and pack into
+// certificates, and that vpack's parseMsgpVote rejects. Clearing the field
+// rather than dropping the vote keeps the sender's weight counted on every
+// node. Only the gossip decoders clear it: unauthenticatedVote.verify ignores
+// the field, so certificates from any era still authenticate during catchup.
+func clearLegacyPKSig(sig *crypto.OneTimeSignature) {
+	if !sig.PKSigOld.MsgIsZero() {
+		clear(sig.PKSigOld[:])
+		legacyPKSigClearedCounter.Inc(nil)
+	}
+}
+
 // decodeVote reads a vote from the given stream.
 //
 // It returns an error on failure.
@@ -74,6 +93,7 @@ func decodeVote(data []byte) (any, error) {
 	if err := uv.wellFormed(); err != nil {
 		return nil, err
 	}
+	clearLegacyPKSig(&uv.Sig)
 	return uv, nil
 }
 
@@ -88,6 +108,14 @@ func decodeBundle(data []byte) (any, error) {
 	}
 	if err := b.wellFormed(); err != nil {
 		return nil, err
+	}
+	for i := range b.Votes {
+		clearLegacyPKSig(&b.Votes[i].Sig)
+	}
+	for i := range b.EquivocationVotes {
+		for j := range b.EquivocationVotes[i].Sigs {
+			clearLegacyPKSig(&b.EquivocationVotes[i].Sigs[j])
+		}
 	}
 	return b, nil
 }
@@ -104,6 +132,7 @@ func decodeProposal(data []byte) (any, error) {
 	if err := p.PriorVote.wellFormed(); err != nil {
 		return nil, err
 	}
+	clearLegacyPKSig(&p.PriorVote.Sig)
 
 	return compoundMessage{
 		Vote:     p.PriorVote,

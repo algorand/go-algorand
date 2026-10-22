@@ -115,6 +115,16 @@ func TestVoteValidation(t *testing.T) {
 			_, err = noSig.verify(ledger)
 			require.Error(t, err)
 
+			// A set PKSigOld is zeroed at the gossip decoder, and verification
+			// ignores the field so certificates from any era still authenticate.
+			legacySig := unauthenticatedVote
+			legacySig.Sig.PKSigOld[0] = 1
+			_, err = legacySig.verify(ledger)
+			require.NoError(t, err)
+			decoded, err := decodeVote(protocol.Encode(&legacySig))
+			require.NoError(t, err)
+			require.Equal(t, unauthenticatedVote, decoded)
+
 			noCred := unauthenticatedVote
 			noCred.Cred = committee.UnauthenticatedCredential{}
 			_, err = noCred.verify(ledger)
