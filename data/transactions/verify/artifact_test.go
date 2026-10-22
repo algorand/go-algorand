@@ -48,10 +48,10 @@ func BenchmarkTinyMan(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			proto := config.Consensus[protocol.ConsensusCurrentVersion]
 			ep := logic.NewSigEvalParams(stxns, &proto, &logic.NoHeaderLedger{})
-			pass, err := logic.EvalSignature(1, ep)
+			pass, _, err := logic.EvalSignatureProgram(stxns[1].Lsig.Logic, stxns[1].Lsig.Args, 1, ep)
 			require.NoError(b, err)
 			require.True(b, pass)
-			pass, err = logic.EvalSignature(3, ep)
+			pass, _, err = logic.EvalSignatureProgram(stxns[3].Lsig.Logic, stxns[3].Lsig.Args, 3, ep)
 			require.NoError(b, err)
 			require.True(b, pass)
 		}
