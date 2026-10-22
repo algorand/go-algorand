@@ -55,10 +55,10 @@ func persistent(as []action) bool {
 	return false
 }
 
-// The persisted state can be compressed with zstd, which is very effective for votes
+// The persisted state is compressed with zstd, which is very effective for votes
 // and bundles that repeat the same proposal values, signatures, and msgpack field
-// names. Support for decoding is added first, so compressSnapshots can be enabled
-// after consensus release, so no node can roll back to a binary that cannot decode it.
+// names. Support for decoding was added in a prior release, allowing both compressed
+// and uncompressed snapshots to be read.
 const snapshotCompressionLevel = 3
 
 // zstdFrameMagic starts every zstd frame.  A state persisted uncompressed
