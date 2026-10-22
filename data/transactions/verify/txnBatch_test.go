@@ -546,10 +546,12 @@ func TestStreamToBatchBlockWatcher(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	count := 100
+	writerDone := make(chan struct{})
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		defer close(writerDone)
 		for x := 0; x < 100; x++ {
 			blkHdr.Round++
 			nbw.OnNewBlock(bookkeeping.Block{BlockHeader: blkHdr}, ledgercore.StateDelta{})
@@ -565,8 +567,12 @@ func TestStreamToBatchBlockWatcher(t *testing.T) {
 		for {
 			bh := nbw.getBlockHeader()
 			bhStore[bh.Round] = bh
-			if bh.Round == startingRound+10 {
-				break
+			// The reader can miss individual rounds, so stop when the writer finishes.
+			select {
+			case <-writerDone:
+				return
+			default:
+				time.Sleep(time.Millisecond)
 			}
 		}
 	}()
