@@ -95,7 +95,7 @@ func (s StateProof) stringBuild() (b strings.Builder) {
 		return
 	}
 
-	b.WriteString(fmt.Sprintf("%v", s.SigCommit))
+	fmt.Fprintf(&b, "%v", s.SigCommit)
 	b.WriteString(", ")
 	b.WriteString(strconv.FormatUint(s.SignedWeight, 10))
 	b.WriteString(", ")

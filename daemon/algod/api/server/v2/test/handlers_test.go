@@ -1281,7 +1281,7 @@ func postTransactionTest(t *testing.T, txnToUse int, expectedCode int, method st
 	results := reflect.ValueOf(&handler).MethodByName(method).Call(args)
 	require.Equal(t, 1, len(results))
 	// if the method returns nil, the cast would fail so use type assertion test
-	err, _ := results[0].Interface().(error)
+	err, _ := reflect.TypeAssert[error](results[0])
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
 }

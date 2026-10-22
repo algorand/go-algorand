@@ -43,7 +43,7 @@ GOTAGSLIST += ${GOTAGSCUSTOM}
 
 # Absolute path so recipes that cd elsewhere (make cover PACKAGE=X) find it.
 GOTESTCOMMAND := go tool -modfile=$(CURDIR)/tool.mod gotestsum --format pkgname --jsonfile testresults.json --
-GOLINTCOMMAND := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.8.0 -c .golangci.yml
+GOLINTCOMMAND := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 -c .golangci.yml
 
 ifeq ($(OS_TYPE), darwin)
 # M1 Mac--homebrew install location in /opt/homebrew
@@ -107,8 +107,11 @@ fmt:
 fix: build
 	$(GOBIN)/algofix */
 
+# embedlit, newexpr, errorsastype and stditerators started reporting when the
+# go directive moved to 1.27, and would rewrite ~150 files. They are disabled to
+# keep that change small; enable them in their own PRs.
 modernize:
-	GOTOOLCHAIN=auto go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@v0.46.0 -v -atomictypes=false -rangeint=false -waitgroupgo=false -slicesbackward=false -stringsbuilder=false -omitzero=false -stringscut=false -fix ./...
+	GOTOOLCHAIN=auto go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@v0.52.0 -v -atomictypes=false -rangeint=false -waitgroupgo=false -slicesbackward=false -stringsbuilder=false -omitzero=false -stringscut=false -embedlit=false -newexpr=false -errorsastype=false -stditerators=false -fix ./...
 
 lint:
 	$(GOLINTCOMMAND) run

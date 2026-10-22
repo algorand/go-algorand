@@ -115,7 +115,7 @@ func makeTagGraph(rootType reflect.Type, seen map[reflect.Type]*tagNode) *tagNod
 	case reflect.Array, reflect.Slice:
 		valueGraph := makeTagGraph(rootType.Elem(), seen)
 		node.addChild("<value>", valueGraph)
-	case reflect.Ptr:
+	case reflect.Pointer:
 		// Directly embed value type graph
 		node = makeTagGraph(rootType.Elem(), seen)
 		// the node in seen for rootType should be refreshed from calculation.
