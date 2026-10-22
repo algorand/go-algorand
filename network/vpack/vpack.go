@@ -27,10 +27,8 @@ import (
 // The remaining 6 optional values are either present or omitted, and their
 // presence is indicated in a 1-byte bitmask in the header.
 //
-// sig.ps is always zero and is never carried in the compressed form. Votes
-// from nodes that predate omitempty on that field carry it as 64 zero bytes;
-// the encoder accepts that form, and the decoder always produces the form
-// without it. Both decode to the same vote.
+// sig.ps is always zero and is not compressed. The encoder accepts votes with
+// or without it (older nodes encode it as 64 zero bytes); the decoder omits it.
 const (
 	bitPer    uint8 = 1 << iota // r.per
 	bitDig                      // r.prop.dig
@@ -53,8 +51,7 @@ const (
 	msgpFixMapMarkerSize = 1
 
 	// MaxMsgpackVoteSize is the maximum size of a vote, including msgpack control characters
-	// and all required and optional data fields. It includes the legacy zero-valued sig.ps,
-	// which votes from older nodes still carry.
+	// and all required and optional data fields, including sig.ps from older nodes.
 	MaxMsgpackVoteSize = msgpFixMapMarkerSize + // top-level fixmap
 		len(msgpFixstrCred) + msgpFixMapMarkerSize + // cred: fixmap
 		len(msgpFixstrPf) + msgpBin8Len80Size + // cred.pf: bin8(80)
@@ -328,9 +325,7 @@ func (d *StatelessDecoder) decompressVote(dst, src []byte) ([]byte, error) {
 		}
 	}
 
-	// sig: fixmap(5) { p, p1s, p2, p2s, s }
-	// All signature fields are required. The always-zero sig.ps is omitted,
-	// even if the compressed vote came from a legacy encoding that carried it.
+	// sig: fixmap(5) { p, p1s, p2, p2s, s }; sig.ps is always zero and omitted
 	d.dst = append(d.dst, msgpFixstrSig...)
 	d.dst = append(d.dst, msgpFixMapMask|5)
 	// sig.p

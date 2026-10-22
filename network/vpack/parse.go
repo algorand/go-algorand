@@ -176,10 +176,8 @@ func parseMsgpVote(msgpData []byte, c *StatelessEncoder) error {
 		return fmt.Errorf("expected string sig, got %s: %w", s, rErr)
 	}
 
-	// Parse OneTimeSignature fixmap. Older nodes always include the
-	// zero-valued ps field (6 keys); newer nodes omit it (5 keys). All other
-	// fields are required. ps is validated but not written to the compressed
-	// output, so both forms compress identically.
+	// Parse OneTimeSignature fixmap: 5 fields, or 6 when ps is present
+	// (older nodes encode it as 64 zero bytes). ps is checked but not written.
 	cnt, err = p.readFixMap()
 	if err != nil {
 		return fmt.Errorf("reading map for OneTimeSignature: %w", err)

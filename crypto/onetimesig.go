@@ -45,11 +45,11 @@ type OneTimeSignature struct {
 	PK  ed25519PublicKey `codec:"p"`
 
 	// Old-style signature that does not use proper domain separation.
-	// PKSigOld is unused, but it was originally encoded without omitempty, so
-	// it appears with a zero value in every certificate written since. The
-	// decoder rejects unknown keys, so the field cannot be deleted without
-	// breaking catchup. omitempty affects only the encoder; the decoder
-	// accepts the key whether it is present or absent.
+	// PKSigOld is unused; however, unfortunately we originally forgot to mark it
+	// `codec:omitempty` and so it appears (with zero value) in certs.
+	// This means we can't delete the field without breaking catchup.
+	// Marking it omitempty tells the msgp encoder to skip it, but is not
+	// enforced by the msgp decoder.
 	PKSigOld ed25519Signature `codec:"ps,omitempty,omitemptyarray"`
 
 	// Used to verify a new-style two-level ephemeral signature.
