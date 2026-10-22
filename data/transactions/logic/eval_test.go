@@ -5691,6 +5691,10 @@ func TestBytesModExp(t *testing.T) {
 	// 2^(2^64) mod 13 = 3. bitlen(B) is 65, so two exponent words are
 	// processed: 10 + 1 + divComplexity(1,1) + (64*2 + 16)*4
 	modexpCost("0x02", "0x010000000000000000", "0x0d", "0x03", 602)
+	// (2^512-1)^1 mod (2^256-1) = 0, with the modulus padded to 64 bytes with
+	// leading zeros. The b% term is charged as a 64/32 division, 27, not as a
+	// 64/64 one, 18. 10 + (1 per 32 bytes of 129 = 5) + 27
+	modexpCost("0x"+strings.Repeat("ff", 64), "0x01", "0x"+strings.Repeat("00", 32)+strings.Repeat("ff", 32), "0x", 42)
 }
 
 func TestBytesMath(t *testing.T) {
@@ -5757,6 +5761,14 @@ func TestBytesMath(t *testing.T) {
 	// A long divisor of 4095 leading zeros and a 1. 10 + (1+0)*(8+8/16)/2 + 4096/32
 	testCost(t, "pushbytes 0x0102030405060708; pushint 4095; bzero; pushbytes 0x01; concat; b/; len; pushint 8; ==",
 		8+142, fullByteMathVersion)
+
+	// Padding the divisor with leading zeros to the dividend's length does not
+	// make the division cheaper. Costs are the same 27 as the unpadded 64/32
+	// case above. Charging by the padded length would give 10 + 1*(8+64/16)/2 +
+	// 64/32 = 18.
+	padded32 := "0x" + strings.Repeat("00", 32) + strings.Repeat("ff", 32)
+	testCost(t, fmt.Sprintf("pushbytes %s; pushbytes %s; b/; len; pushint 33; ==", ff64, padded32), 5+27, fullByteMathVersion)
+	testCost(t, fmt.Sprintf("pushbytes %s; pushbytes %s; b%%; len; pushint 0; ==", ff64, padded32), 5+27, fullByteMathVersion)
 
 	// Even 128 byte outputs are ok
 	p = fmt.Sprintf("byte 0x%s; byte 0x%s; b*; len; int 128; ==", effs, effs)

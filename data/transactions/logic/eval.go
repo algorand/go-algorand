@@ -2501,7 +2501,8 @@ func opBytesDiv(cx *EvalContext) error {
 	return byteMathResult(cx, quo)
 }
 
-const bdivCostDoc = "10 + (1 + Q/16) * (8 + D/16) / 2 + 1 per 32 bytes of the longer of A and B, where Q = max(len(A) - len(B), 0) and D = min(len(A), len(B))"
+const bdivCostDoc = "10 + (1 + Q/16) * (8 + D/16) / 2 + 1 per 32 bytes of the longer of A and B, where Q = max(a - b, 0) and D = min(a, b), " +
+	"and a and b are the lengths of A and B without their leading zero bytes"
 
 // bdivCost is used for b/, b%, and within bmodexp. Long division does work
 // proportional to the length of the quotient times the length of the divisor,
@@ -2510,13 +2511,23 @@ const bdivCostDoc = "10 + (1 + Q/16) * (8 + D/16) / 2 + 1 per 32 bytes of the lo
 func bdivCost(stack []stackValue) int {
 	last := len(stack) - 1
 	prev := last - 1
-	return divComplexity(len(stack[prev].Bytes), len(stack[last].Bytes))
+	return divCost(stack[prev].Bytes, stack[last].Bytes)
 }
 
-func divComplexity(la, lb int) int {
+// divCost is the cost of dividing a by b. Leading zeros do not make the
+// division any harder, so they count only toward the bytes parsed. If they
+// counted toward the divisor's length, padding the divisor with zeros to the
+// dividend's length would make an expensive division look cheap.
+func divCost(a, b []byte) int {
+	return divComplexity(len(nonzero(a)), len(nonzero(b)), max(len(a), len(b)))
+}
+
+// divComplexity is the cost of dividing a number of la significant bytes by
+// one of lb significant bytes, having parsed `parsed` bytes to get them.
+func divComplexity(la, lb, parsed int) int {
 	quotient := max(la-lb, 0)
 	divisor := min(la, lb)
-	return 10 + (1+quotient/16)*(8+divisor/16)/2 + basics.DivCeil(max(la, lb), 32)
+	return 10 + (1+quotient/16)*(8+divisor/16)/2 + basics.DivCeil(parsed, 32)
 }
 
 func opBytesMul(cx *EvalContext) error {
@@ -2713,7 +2724,8 @@ const bmodexpCostDoc = "10 + 1 per 32 bytes of A, B, and C, plus a cost that dep
 	"If bitlen(B) == 1, the cost of A b% C. " +
 	"If bitlen(B) <= 64, (bitlen(B) + popcount(B)) * (S + 2), plus, if len(A) > len(C), popcount(B) * (1 + (len(A)-len(C))/8) * (1 + len(C)/8) / 2 + 3 * (A b* A) + (2*len(A) b% C). " +
 	"Otherwise, (64 * ceil(bitlen(B)/64) + 16) * S + (A b% C). " +
-	"Costs in parentheses are the costs of those operations on inputs of those lengths."
+	"Costs in parentheses are the costs of those operations on inputs of those lengths. " +
+	"Like b% itself, the b% terms are based on the lengths of A and C without their leading zero bytes."
 
 // bmodexpCost follows the algorithms used by math/big's Int.Exp. For
 // exponents of a single word, it squares and reduces for each bit of the
@@ -2737,20 +2749,22 @@ func bmodexpCost(stack []stackValue) int {
 	case expBits == 0:
 		return cost
 	case expBits == 1:
-		return cost + divComplexity(lb, lm)
+		return cost + divCost(stack[base].Bytes, stack[mod].Bytes)
 	case expBits <= 64:
 		ones := onesCount(stack[exp].Bytes)
 		cost += (expBits + ones) * (2 + modMulComplexity(lm))
 		if lb > lm {
 			// The first step squares the full base, and every set bit
-			// multiplies by it.
-			cost += 3*mulComplexity(lb, lb) + divComplexity(2*lb, lm)
+			// multiplies by it. As in divCost, the division is charged by
+			// significant lengths.
+			sigBase, sigMod := len(nonzero(stack[base].Bytes)), len(nonzero(stack[mod].Bytes))
+			cost += 3*mulComplexity(lb, lb) + divComplexity(2*sigBase, sigMod, 2*lb)
 			cost += ones * (1 + (lb-lm)/8) * (1 + lm/8) / 2
 		}
 		return cost
 	default:
 		steps := 64*basics.DivCeil(expBits, 64) + 16
-		return cost + divComplexity(lb, lm) + steps*modMulComplexity(lm)
+		return cost + divCost(stack[base].Bytes, stack[mod].Bytes) + steps*modMulComplexity(lm)
 	}
 }
 
