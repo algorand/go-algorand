@@ -2468,17 +2468,6 @@ func opBytesPlus(cx *EvalContext) error {
 	return byteMathResult(cx, lhs)
 }
 
-const bplusCostDoc = "4 + 1 per 16 bytes of the longer of A and B"
-
-// bplusCost is used for both b+ and b-. It charges for the longer input even in
-// b-, where B can only be longer than A if it has leading zeros, because those
-// zeros must still be parsed.
-func bplusCost(stack []stackValue) int {
-	last := len(stack) - 1
-	prev := last - 1
-	return 4 + basics.DivCeil(max(len(stack[last].Bytes), len(stack[prev].Bytes)), 16)
-}
-
 func opBytesMinus(cx *EvalContext) error {
 	lhs, rhs, err := byteMathOperands(cx)
 	if err != nil {

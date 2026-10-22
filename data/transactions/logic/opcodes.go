@@ -101,11 +101,20 @@ const LogicSigOffCurveVersion = 13
 const boxVersion = 8 // box_*
 
 type costFn func(stack []stackValue) int
+
+// costDescriptor uses narrow fields to stay compact, since there is one in every
+// OpSpec, and 256 for each immediate with field-dependent costs.
 type costDescriptor struct {
 	baseCost  int
 	chunkCost int
-	chunkSize int
-	depth     int
+	chunkSize uint16
+	depth     uint8
+	// longestOf charges for the longest of this many arguments, starting at
+	// depth. Zero means just the argument at depth.
+	longestOf uint8
+	// dynamic is set by check(), so compute can tell with one test whether the
+	// cost depends on the stack.
+	dynamic bool
 	// fn allows arbitrary cost functions. It _adds_ to costs from other fields
 	fn costFn
 	// doc replaces the generated documentation of the cost, for use with `compute`
@@ -118,12 +127,13 @@ func (cd costDescriptor) Empty() bool {
 		cd.chunkCost == 0 &&
 		cd.chunkSize == 0 &&
 		cd.depth == 0 &&
+		cd.longestOf == 0 &&
 		cd.fn == nil &&
 		cd.doc == ""
 }
 
 func (cd costDescriptor) check() costDescriptor {
-	if (cd.fn == nil && cd.baseCost < 1) || cd.chunkCost < 0 || cd.chunkSize < 0 || cd.chunkSize > maxStringSize || cd.depth < 0 {
+	if (cd.fn == nil && cd.baseCost < 1) || cd.chunkCost < 0 || cd.chunkSize > maxStringSize {
 		panic(fmt.Sprintf("bad cost configuration %+v", cd))
 	}
 	if cd.chunkCost > 0 && cd.chunkSize == 0 {
@@ -132,18 +142,35 @@ func (cd costDescriptor) check() costDescriptor {
 	if cd.chunkCost == 0 && cd.chunkSize > 0 {
 		panic(fmt.Sprintf("no chunk cost with positive chunk size %+v", cd))
 	}
+	if cd.longestOf > 0 && cd.chunkCost == 0 {
+		panic(fmt.Sprintf("longestOf without a chunk cost %+v", cd))
+	}
 	if cd.fn != nil && cd.doc == "" {
 		panic(fmt.Sprintf("Cost fn is used without adding doc %+v", cd))
 	}
+	cd.dynamic = cd.chunkCost != 0 || cd.fn != nil
 	return cd
 }
 
+// compute is called for every opcode executed, so it handles the common case,
+// a flat cost, in a way that is small enough to be inlined.
 func (cd *costDescriptor) compute(stack []stackValue) int {
+	if !cd.dynamic {
+		return cd.baseCost
+	}
+	return cd.computeDynamic(stack)
+}
+
+func (cd *costDescriptor) computeDynamic(stack []stackValue) int {
 	cost := cd.baseCost
 	if cd.chunkCost != 0 && cd.chunkSize != 0 {
+		top := len(stack) - 1 - int(cd.depth)
+		count := len(stack[top].Bytes)
+		for i := 1; i < int(cd.longestOf); i++ {
+			count = max(count, len(stack[top-i].Bytes))
+		}
 		// Uses basics.DivCeil rather than (count/chunkSize) to match how Ethereum discretizes hashing costs.
-		count := len(stack[len(stack)-1-cd.depth].Bytes)
-		cost += cd.chunkCost * basics.DivCeil(count, cd.chunkSize)
+		cost += cd.chunkCost * basics.DivCeil(count, int(cd.chunkSize))
 	}
 	if cd.fn != nil {
 		cost += cd.fn(stack)
@@ -161,12 +188,24 @@ func (cd *costDescriptor) docCost(argLen int) string {
 	if cd.chunkCost == 0 {
 		return strconv.Itoa(cd.baseCost)
 	}
-	idxFromStart := argLen - cd.depth - 1
-	stackArg := rune(int('A') + idxFromStart)
-	if cd.chunkSize == 1 {
-		return fmt.Sprintf("%d + %d per byte of %c", cd.baseCost, cd.chunkCost, stackArg)
+	idxFromStart := argLen - int(cd.depth) - 1
+	stackArg := string(rune(int('A') + idxFromStart))
+	if cd.longestOf > 1 {
+		names := make([]string, cd.longestOf)
+		for i := range names {
+			names[i] = string(rune(int('A') + idxFromStart - int(cd.longestOf) + 1 + i))
+		}
+		last := len(names) - 1
+		which := "the longer of "
+		if cd.longestOf > 2 {
+			which = "the longest of "
+		}
+		stackArg = which + strings.Join(names[:last], ", ") + " and " + names[last]
 	}
-	return fmt.Sprintf("%d + %d per %d bytes of %c", cd.baseCost, cd.chunkCost, cd.chunkSize, stackArg)
+	if cd.chunkSize == 1 {
+		return fmt.Sprintf("%d + %d per byte of %s", cd.baseCost, cd.chunkCost, stackArg)
+	}
+	return fmt.Sprintf("%d + %d per %d bytes of %s", cd.baseCost, cd.chunkCost, cd.chunkSize, stackArg)
 }
 
 // OpDetails records details such as non-standard costs, immediate arguments, or
@@ -417,7 +456,25 @@ func costByFieldAndLength(immediate string, group *FieldGroup, costs []costDescr
 
 func costByLength(initial, perChunk, chunkSize, depth int) OpDetails {
 	d := detDefault()
-	d.FullCost = costDescriptor{baseCost: initial, chunkCost: perChunk, chunkSize: chunkSize, depth: depth}.check()
+	d.FullCost = costDescriptor{baseCost: initial, chunkCost: perChunk, chunkSize: narrow[uint16](chunkSize), depth: narrow[uint8](depth)}.check()
+	return d
+}
+
+// narrow converts a cost parameter to the narrower type used in costDescriptor,
+// panicking rather than wrapping if it does not fit.
+func narrow[T uint8 | uint16](v int) T {
+	n := T(v)
+	if v < 0 || int(n) != v {
+		panic(fmt.Sprintf("cost parameter %d out of range", v))
+	}
+	return n
+}
+
+// costByLongest is like costByLength, but charges for the longest of the top
+// `args` stack values.
+func costByLongest(initial, perChunk, chunkSize, args int) OpDetails {
+	d := detDefault()
+	d.FullCost = costDescriptor{baseCost: initial, chunkCost: perChunk, chunkSize: narrow[uint16](chunkSize), longestOf: narrow[uint8](args)}.check()
 	return d
 }
 
@@ -784,9 +841,10 @@ var OpSpecs = []OpSpec{
 
 	// Byteslice math.
 	{0xa0, "b+", opBytesPlus, proto("II:b"), 4, costly(10).typed(typeByteMath(maxByteMathSize + 1))},
-	{0xa0, "b+", opBytesPlus, proto("bb:b"), fullByteMathVersion, costByFn(bplusCost, bplusCostDoc)},
+	{0xa0, "b+", opBytesPlus, proto("bb:b"), fullByteMathVersion, costByLongest(4, 1, 16, 2)},
 	{0xa1, "b-", opBytesMinus, proto("II:I"), 4, costly(10)},
-	{0xa1, "b-", opBytesMinus, proto("bb:b"), fullByteMathVersion, costByFn(bplusCost, bplusCostDoc)},
+	// B can only be longer than A if it has leading zeros, but they must still be parsed.
+	{0xa1, "b-", opBytesMinus, proto("bb:b"), fullByteMathVersion, costByLongest(4, 1, 16, 2)},
 	{0xa2, "b/", opBytesDiv, proto("II:I"), 4, costly(20)},
 	{0xa2, "b/", opBytesDiv, proto("bb:b"), fullByteMathVersion, costByFn(bdivCost, bdivCostDoc)},
 	{0xa3, "b*", opBytesMul, proto("II:b"), 4, costly(20).typed(typeByteMath(maxByteMathSize * 2))},
@@ -806,11 +864,11 @@ var OpSpecs = []OpSpec{
 	{0xaa, "b%", opBytesModulo, proto("II:I"), 4, costly(20)},
 	{0xaa, "b%", opBytesModulo, proto("bb:b"), fullByteMathVersion, costByFn(bdivCost, bdivCostDoc)},
 	{0xab, "b|", opBytesBitOr, proto("bb:b"), 4, costly(6)},
-	{0xab, "b|", opBytesBitOr, proto("bb:b"), fullByteMathVersion, costByLength(1, 1, 32, 0)},
+	{0xab, "b|", opBytesBitOr, proto("bb:b"), fullByteMathVersion, costByLongest(1, 1, 32, 2)},
 	{0xac, "b&", opBytesBitAnd, proto("bb:b"), 4, costly(6)},
-	{0xac, "b&", opBytesBitAnd, proto("bb:b"), fullByteMathVersion, costByLength(1, 1, 32, 0)},
+	{0xac, "b&", opBytesBitAnd, proto("bb:b"), fullByteMathVersion, costByLongest(1, 1, 32, 2)},
 	{0xad, "b^", opBytesBitXor, proto("bb:b"), 4, costly(6)},
-	{0xad, "b^", opBytesBitXor, proto("bb:b"), fullByteMathVersion, costByLength(1, 1, 32, 0)},
+	{0xad, "b^", opBytesBitXor, proto("bb:b"), fullByteMathVersion, costByLongest(1, 1, 32, 2)},
 	{0xae, "b~", opBytesBitNot, proto("b:b"), 4, costly(4)},
 	{0xae, "b~", opBytesBitNot, proto("b:b"), fullByteMathVersion, costByLength(1, 1, 32, 0)},
 	{0xaf, "bzero", opBytesZero, proto("i:b"), 4, detDefault().typed(typeBzero)},

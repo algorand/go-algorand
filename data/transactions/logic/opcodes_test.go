@@ -37,6 +37,26 @@ func TestOpSpecs(t *testing.T) {
 	}
 }
 
+// TestCostDynamic ensures that every cost that depends on the stack is marked
+// as dynamic, which requires that it went through check(). Otherwise compute
+// would charge only its baseCost.
+func TestCostDynamic(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	checkDynamic := func(cd costDescriptor, name string) {
+		require.Equal(t, cd.chunkCost != 0 || cd.fn != nil, cd.dynamic, name)
+	}
+	for _, spec := range OpSpecs {
+		checkDynamic(spec.OpDetails.FullCost, spec.Name)
+		for _, imm := range spec.OpDetails.Immediates {
+			for _, cd := range imm.fieldCosts {
+				checkDynamic(cd, spec.Name+" "+imm.Name)
+			}
+		}
+	}
+}
+
 func (os *OpSpec) equals(oso *OpSpec) bool {
 	if os.Opcode != oso.Opcode {
 		return false
@@ -178,12 +198,13 @@ func TestOpcodesVersioningV2(t *testing.T) {
 	require.Equal(t, 52, cntv1)
 
 	cdEqual := func(a, b costDescriptor) bool {
-		return a.baseCost == b.baseCost &&
-			a.chunkCost == b.chunkCost &&
-			a.chunkSize == b.chunkSize &&
-			a.depth == b.depth &&
-			reflect.ValueOf(a.fn).Pointer() == reflect.ValueOf(b.fn).Pointer() &&
-			a.doc == b.doc
+		if reflect.ValueOf(a.fn).Pointer() != reflect.ValueOf(b.fn).Pointer() {
+			return false
+		}
+		// With the funcs cleared, DeepEqual compares every other field, even
+		// ones added later.
+		a.fn, b.fn = nil, nil
+		return reflect.DeepEqual(a, b)
 	}
 
 	eqButVersion := func(a *OpSpec, b *OpSpec) (eq bool) {

@@ -5794,6 +5794,38 @@ func TestBytesMath(t *testing.T) {
 	testCost(t, p, 145, fullByteMathVersion) // 141 + 4
 }
 
+// TestCostByLongest shows that ops costed with costByLongest charge the same
+// regardless of which argument is long.
+func TestCostByLongest(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Each program has 6 cost-1 opcodes besides the one being tested
+	for _, op := range []string{"b|", "b&", "b^"} {
+		// 1 + 1 per 32 bytes of 100 = 1 + 4
+		testCost(t, "pushbytes 0x01; pushint 100; bzero; "+op+"; len; pushint 100; ==", 6+5, fullByteMathVersion)
+		testCost(t, "pushint 100; bzero; pushbytes 0x01; "+op+"; len; pushint 100; ==", 6+5, fullByteMathVersion)
+	}
+	// 4 + 1 per 16 bytes of 100 = 4 + 7
+	testCost(t, "pushbytes 0x01; pushint 100; bzero; b+; len; pushint 1; ==", 6+11, fullByteMathVersion)
+	testCost(t, "pushint 100; bzero; pushbytes 0x01; b+; len; pushint 1; ==", 6+11, fullByteMathVersion)
+	testCost(t, "pushbytes 0x01; pushint 100; bzero; b-; len; pushint 1; ==", 6+11, fullByteMathVersion)
+
+	a := assert.New(t)
+	bor, bplus := OpsByName[fullByteMathVersion]["b|"], OpsByName[fullByteMathVersion]["b+"]
+	a.Equal("1 + 1 per 32 bytes of the longer of A and B", bor.OpDetails.docCost(2, fullByteMathVersion))
+	a.Equal("4 + 1 per 16 bytes of the longer of A and B", bplus.OpDetails.docCost(2, fullByteMathVersion))
+	three := costDescriptor{baseCost: 2, chunkCost: 3, chunkSize: 8, longestOf: 3}.check()
+	a.Equal("2 + 3 per 8 bytes of the longest of A, B and C", three.docCost(3))
+	a.Equal(2+3*2, three.compute([]stackValue{{Bytes: make([]byte, 9)}, {Bytes: make([]byte, 1)}, {}}))
+
+	a.Panics(func() { costDescriptor{baseCost: 1, longestOf: 2}.check() })
+	// the constructors take ints, but must not let them wrap in the narrow fields
+	a.Panics(func() { costByLongest(1, 1, 32, -1) })
+	a.Panics(func() { costByLongest(1, 1, 70_000, 2) })
+	a.Panics(func() { costByLength(1, 1, 32, 256) })
+}
+
 func TestMulComplexity(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
