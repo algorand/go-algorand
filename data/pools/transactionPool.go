@@ -122,8 +122,8 @@ type VotingAccountSupplier interface {
 
 var errPoolShutdown = errors.New("transaction pool is shutting down")
 
-// MakeTransactionPool makes a transaction pool. With a nil VotingAccountSupplier the pool
-// calls GenerateBlock every round, for callers that do not use participation keys.
+// MakeTransactionPool makes a transaction pool. With a nil VotingAccountSupplier (used by
+// tools and tests that call AssembleBlock directly) the pool calls GenerateBlock every round.
 func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Logger, vac VotingAccountSupplier) *TransactionPool {
 	if cfg.TxPoolExponentialIncreaseFactor < 1 {
 		cfg.TxPoolExponentialIncreaseFactor = 1
@@ -998,14 +998,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 		// recompute calling node.VotingAccountsForRound and agreement calling
 		// node.VotingKeys.
 		stats.StopReason = telemetryspec.AssembleBlockNoProposers
-		// Ledger work can be slow; let recomputation proceed while building the fallback.
-		pool.assemblyMu.Unlock()
-		emptyBlock, emptyBlockErr := pool.assembleEmptyBlock(round)
-		pool.assemblyMu.Lock()
-		if pool.assemblyResults.roundStartedEvaluating > round {
-			return nil, ErrStaleBlockAssemblyRequest
-		}
-		return emptyBlock, emptyBlockErr
+		return pool.assembleEmptyBlock(round)
 	}
 
 	stats = pool.assemblyResults.stats
