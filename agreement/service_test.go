@@ -26,6 +26,7 @@ import (
 	"reflect"
 	"runtime"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -416,6 +417,12 @@ func (n *testingNetwork) ignoredDisconnectCount() int {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	return n.ignoredDisconnects
+}
+
+func (n *testingNetwork) restoreDisconnects() {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.disconnectsIgnored = false
 }
 
 // Set the given list of nodes as a partition; heal whatever previous
@@ -2628,6 +2635,18 @@ func TestAgreementFutureBundlesDoNotCancelPayloadVerification(t *testing.T) {
 	for i := 0; i < numNodes; i++ {
 		services[i].Start()
 	}
+	// Shutdown waits for the crypto verifier workers, so it must run after any
+	// suspended validation has been released (see the deferred resume below)
+	// and before cleanupFn closes the databases, including on a failed assertion.
+	var shutdownOnce sync.Once
+	shutdown := func() {
+		shutdownOnce.Do(func() {
+			for i := 0; i < numNodes; i++ {
+				services[i].Shutdown()
+			}
+		})
+	}
+	defer shutdown()
 	activityMonitor.waitForActivity()
 	activityMonitor.waitForQuiet()
 	zeroes := expectNewPeriod(t, clocks, 0)
@@ -2641,6 +2660,10 @@ func TestAgreementFutureBundlesDoNotCancelPayloadVerification(t *testing.T) {
 	// starts with its proposal votes known but no payload delivered yet.
 	pocket := make(chan multicastParams, 100)
 	resumeValidation := validator.suspend()
+	var resumeOnce sync.Once
+	resume := func() { resumeOnce.Do(func() { close(resumeValidation) }) }
+	// Deferred after shutdown, so it runs first and unblocks the verifier workers.
+	defer resume()
 	closeFn := baseNetwork.pocketAllCompound(pocket) // (takes effect next round)
 	triggerGlobalTimeout(FilterTimeout(0, version), TimeoutFilter, clocks, activityMonitor)
 	zeroes = expectNewPeriod(t, clocks, zeroes)
@@ -2684,9 +2707,13 @@ func TestAgreementFutureBundlesDoNotCancelPayloadVerification(t *testing.T) {
 		return baseNetwork.ignoredDisconnectCount() == expectedDisconnects && settled()
 	}, 10*time.Second, 10*time.Millisecond, "bundle injection did not settle")
 
+	// The injected bundles are fully processed, so the recovery below runs with
+	// ordinary disconnect handling.
+	baseNetwork.restoreDisconnects()
+
 	// Resume validation. With the payload verifications intact, the filter
 	// timeout leads to soft and cert thresholds and the round ends.
-	close(resumeValidation)
+	resume()
 	activityMonitor.waitForQuiet()
 	triggerGlobalTimeout(FilterTimeout(0, version), TimeoutFilter, clocks, activityMonitor)
 	zeroes = expectNewPeriod(t, clocks, zeroes)
@@ -2694,9 +2721,7 @@ func TestAgreementFutureBundlesDoNotCancelPayloadVerification(t *testing.T) {
 	// one more ordinary round to show the network is healthy afterwards
 	zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 
-	for i := 0; i < numNodes; i++ {
-		services[i].Shutdown()
-	}
+	shutdown()
 
 	const expectNumRounds = 5
 	for i := 0; i < numNodes; i++ {

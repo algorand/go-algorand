@@ -743,10 +743,14 @@ func TestDemuxTokenizerRejectsStepAboveDown(t *testing.T) {
 		bad        []byte
 		good       []byte
 		disconnect bool
+		decoded    func(message) step // the step carried by the emitted message
 	}{
-		{name: "vote", tag: protocol.AgreementVoteTag, tokenize: decodeVote, bad: protocol.Encode(&badVote), good: protocol.Encode(&goodVote), disconnect: true},
-		{name: "bundle", tag: protocol.VoteBundleTag, tokenize: decodeBundle, bad: protocol.Encode(&badBundle), good: protocol.Encode(&goodBundle), disconnect: true},
-		{name: "proposal", tag: protocol.ProposalPayloadTag, tokenize: decodeProposal, bad: protocol.Encode(&badProposal), good: protocol.Encode(&goodProposal), disconnect: false},
+		{name: "vote", tag: protocol.AgreementVoteTag, tokenize: decodeVote, bad: protocol.Encode(&badVote), good: protocol.Encode(&goodVote), disconnect: true,
+			decoded: func(m message) step { return m.UnauthenticatedVote.R.Step }},
+		{name: "bundle", tag: protocol.VoteBundleTag, tokenize: decodeBundle, bad: protocol.Encode(&badBundle), good: protocol.Encode(&goodBundle), disconnect: true,
+			decoded: func(m message) step { return m.UnauthenticatedBundle.Step }},
+		{name: "proposal", tag: protocol.ProposalPayloadTag, tokenize: decodeProposal, bad: protocol.Encode(&badProposal), good: protocol.Encode(&goodProposal), disconnect: false,
+			decoded: func(m message) step { return m.CompoundMessage.Vote.R.Step }},
 	}
 
 	for _, tc := range tests {
@@ -755,19 +759,34 @@ func TestDemuxTokenizerRejectsStepAboveDown(t *testing.T) {
 			net := &tokenizerTestNetwork{messages: make(chan Message, 2)}
 			net.messages <- Message{MessageHandle: badPeer, Data: tc.bad}
 			net.messages <- Message{MessageHandle: goodPeer, Data: tc.good}
+			// Closing the input makes the tokenizer close its output once both
+			// messages are consumed, so draining it also checks termination.
+			close(net.messages)
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			d := &demux{ledger: &demuxTester{T: t}, log: logging.TestingLog(t)}
 			decoded := d.tokenizeMessages(ctx, net, tc.tag, tc.tokenize)
 
-			select {
-			case msg := <-decoded:
-				require.Equal(t, goodPeer, msg.messageHandle, "the malformed message must not be emitted")
-				require.Equal(t, tc.tag, msg.Tag)
-			case <-time.After(10 * time.Second):
-				t.Fatal("tokenizer did not emit the well-formed message")
+			var emitted []message
+			timeout := time.After(10 * time.Second)
+		drain:
+			for {
+				select {
+				case msg, ok := <-decoded:
+					if !ok {
+						break drain
+					}
+					emitted = append(emitted, msg)
+				case <-timeout:
+					t.Fatal("tokenizer did not terminate after its input closed")
+				}
 			}
+
+			require.Len(t, emitted, 1, "exactly the well-formed message must be emitted")
+			require.Equal(t, goodPeer, emitted[0].messageHandle)
+			require.Equal(t, tc.tag, emitted[0].Tag)
+			require.Equal(t, down, tc.decoded(emitted[0]), "emitted message must carry its decoded contents")
 
 			if tc.disconnect {
 				require.Equal(t, []MessageHandle{badPeer}, net.disconnectedHandles())
