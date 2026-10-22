@@ -27,8 +27,7 @@ import (
 // The remaining 6 optional values are either present or omitted, and their
 // presence is indicated in a 1-byte bitmask in the header.
 //
-// sig.ps is always zero and is not compressed. The encoder accepts votes with
-// or without it (older nodes encode it as 64 zero bytes); the decoder omits it.
+// sig.ps is always zero and omitted.
 const (
 	bitPer    uint8 = 1 << iota // r.per
 	bitDig                      // r.prop.dig
@@ -51,7 +50,7 @@ const (
 	msgpFixMapMarkerSize = 1
 
 	// MaxMsgpackVoteSize is the maximum size of a vote, including msgpack control characters
-	// and all required and optional data fields, including sig.ps from older nodes.
+	// and all required and optional data fields.
 	MaxMsgpackVoteSize = msgpFixMapMarkerSize + // top-level fixmap
 		len(msgpFixstrCred) + msgpFixMapMarkerSize + // cred: fixmap
 		len(msgpFixstrPf) + msgpBin8Len80Size + // cred.pf: bin8(80)

@@ -101,65 +101,49 @@ var parseVoteTestCases = []struct {
 	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{1}}, "r": map[string]any{"rnd": 1}, "sig": []int{1, 2, 3}},
 		"reading map for OneTimeSignature"},
 	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{1}}, "r": map[string]any{"rnd": 1}, "sig": map[string]any{}},
-		"expected fixed map size 5 or 6 for OneTimeSignature, got 0"},
+		"expected fixed map size 5 for OneTimeSignature, got 0"},
 	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{1}}, "r": map[string]any{"rnd": 1}, "sig": map[string]any{"p": []int{1}}},
-		"expected fixed map size 5 or 6 for OneTimeSignature, got 1"},
+		"expected fixed map size 5 for OneTimeSignature, got 1"},
+	// ps is omitted by the encoder; a vote that carries it is not compressed
 	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{1}}, "r": map[string]any{"rnd": 1}, "sig": map[string]any{
-		"p": [32]byte{}, "p1s": [64]byte{}, "p2": [32]byte{}, "p2s": [64]byte{}, "ps": [64]byte{}, "s": [64]byte{}, "t": [64]byte{}}},
-		"expected fixed map size 5 or 6 for OneTimeSignature, got 7"},
-	// 5 keys must be the omitempty form: ps may not stand in for s
+		"p": [32]byte{}, "p1s": [64]byte{}, "p2": [32]byte{}, "p2s": [64]byte{}, "ps": [64]byte{}, "s": [64]byte{}}},
+		"expected fixed map size 5 for OneTimeSignature, got 6"},
 	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{1}}, "r": map[string]any{"rnd": 1}, "sig": map[string]any{
-		"p": [32]byte{}, "p1s": [64]byte{}, "p2": [32]byte{}, "p2s": [64]byte{}, "ps": [64]byte{}}},
-		"expected string s, got ps"},
-	// 6 keys must be the legacy form: ps is required
-	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{1}}, "r": map[string]any{"rnd": 1}, "sig": map[string]any{
-		"p": [32]byte{}, "p1s": [64]byte{}, "p2": [32]byte{}, "p2s": [64]byte{}, "s": [64]byte{}, "t": [64]byte{}}},
-		"expected string ps, got s"},
-	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{1}}, "r": map[string]any{"rnd": 1}, "sig": map[string]any{
-		gtFixMapString: "1", "a": 1, "b": 2, "c": 3, "d": 4, "e": 5}},
+		gtFixMapString: "1", "a": 1, "b": 2, "c": 3, "d": 4}},
 		"readString: expected fixstr, got 0xd9"},
 	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{1}}, "r": map[string]any{"rnd": 1}, "sig": map[string]any{
-		"a": 1, "b": 2, "c": 3, "d": 4, "e": 5, "f": 6}},
+		"a": 1, "b": 2, "c": 3, "d": 4, "e": 5}},
 		"expected string p, got a"},
 	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{1}}, "r": map[string]any{"rnd": 1}, "sig": map[string]any{
-		"p": []int{1}, "p1s": [64]byte{}, "p2": [32]byte{}, "p2s": [64]byte{}, "ps": [64]byte{}, "s": [64]byte{}}},
+		"p": []int{1}, "p1s": [64]byte{}, "p2": [32]byte{}, "p2s": [64]byte{}, "s": [64]byte{}}},
 		"reading p: expected bin8 length 32"},
 	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{1}}, "r": map[string]any{"rnd": 1}, "sig": map[string]any{
-		"p": [32]byte{}, "p1s": []int{1}, "p2": [32]byte{}, "p2s": [64]byte{}, "ps": [64]byte{}, "s": [64]byte{}}},
+		"p": [32]byte{}, "p1s": []int{1}, "p2": [32]byte{}, "p2s": [64]byte{}, "s": [64]byte{}}},
 		"reading p1s: expected bin8 length 64"},
 	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{1}}, "r": map[string]any{"rnd": 1}, "sig": map[string]any{
-		"p": [32]byte{}, "p1s": [64]byte{}, "p2": []int{1}, "p2s": [64]byte{}, "ps": [64]byte{}, "s": [64]byte{}}},
+		"p": [32]byte{}, "p1s": [64]byte{}, "p2": []int{1}, "p2s": [64]byte{}, "s": [64]byte{}}},
 		"reading p2: expected bin8 length 32"},
 	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{1}}, "r": map[string]any{"rnd": 1}, "sig": map[string]any{
-		"p": [32]byte{}, "p1s": [64]byte{}, "p2": [32]byte{}, "p2s": []int{1}, "ps": [64]byte{}, "s": [64]byte{}}},
+		"p": [32]byte{}, "p1s": [64]byte{}, "p2": [32]byte{}, "p2s": []int{1}, "s": [64]byte{}}},
 		"reading p2s: expected bin8 length 64"},
 	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{1}}, "r": map[string]any{"rnd": 1}, "sig": map[string]any{
-		"p": [32]byte{}, "p1s": [64]byte{}, "p2": [32]byte{}, "p2s": [64]byte{}, "ps": []int{1}, "s": [64]byte{}}},
-		"reading ps: expected bin8 length 64"},
-	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{1}}, "r": map[string]any{"rnd": 1}, "sig": map[string]any{
-		"p": [32]byte{}, "p1s": [64]byte{}, "p2": [32]byte{}, "p2s": [64]byte{}, "ps": [64]byte{}, "s": []int{1}}},
+		"p": [32]byte{}, "p1s": [64]byte{}, "p2": [32]byte{}, "p2s": [64]byte{}, "s": []int{1}}},
 		"reading s: unexpected EOF"},
 	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{}}, "ra": 1, "sig": map[string]any{}},
 		"expected string r"},
 	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{}}, "r": map[string]any{"rnd": uint64(1)}, "snd": 1},
 		"expected string sig, got snd"},
 	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{}}, "r": map[string]any{"rnd": uint64(1)}, "sig": map[string]any{
-		"p": [32]byte{}, "p1x": [64]byte{}, "p2": [32]byte{}, "p2s": [64]byte{}, "ps": [64]byte{}, "s": [64]byte{}}},
+		"p": [32]byte{}, "p1x": [64]byte{}, "p2": [32]byte{}, "p2s": [64]byte{}, "s": [64]byte{}}},
 		"expected string p1s, got p1x"},
 	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{}}, "r": map[string]any{"rnd": uint64(1)}, "sig": map[string]any{
-		"p": [32]byte{}, "p1s": [64]byte{}, "p2": [32]byte{}, "p2x": [64]byte{}, "ps": [64]byte{}, "s": [64]byte{}}},
+		"p": [32]byte{}, "p1s": [64]byte{}, "p2": [32]byte{}, "p2x": [64]byte{}, "s": [64]byte{}}},
 		"expected string p2s, got p2x"},
 	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{}}, "r": map[string]any{"rnd": uint64(1)}, "sig": map[string]any{
-		"p": [32]byte{}, "p1s": [64]byte{}, "p1x": [64]byte{}, "p2": [32]byte{}, "ps": [64]byte{}, "s": [64]byte{}}},
+		"p": [32]byte{}, "p1s": [64]byte{}, "p1x": [64]byte{}, "p2": [32]byte{}, "s": [64]byte{}}},
 		"expected string p2, got p1x"},
 	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{}}, "r": map[string]any{"rnd": uint64(1)}, "sig": map[string]any{
-		"p": [32]byte{}, "p1s": [64]byte{}, "p2": [32]byte{}, "p2s": [64]byte{}, "pt": [64]byte{}, "s": [64]byte{}}},
-		"expected string ps, got pt"},
-	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{}}, "r": map[string]any{"rnd": uint64(1)}, "sig": map[string]any{
-		"p": [32]byte{}, "p1s": [64]byte{}, "p2": [32]byte{}, "p2s": [64]byte{}, "ps": [64]byte{1}, "s": [64]byte{}}},
-		"expected empty array for ps"},
-	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{}}, "r": map[string]any{"rnd": uint64(1)}, "sig": map[string]any{
-		"p": [32]byte{}, "p1s": [64]byte{}, "p2": [32]byte{}, "p2s": [64]byte{}, "ps": [64]byte{}, "sa": [64]byte{}}},
+		"p": [32]byte{}, "p1s": [64]byte{}, "p2": [32]byte{}, "p2s": [64]byte{}, "sa": [64]byte{}}},
 		"expected string s, got sa"},
 }
 
@@ -189,7 +173,6 @@ func TestParseVoteTrailingDataErr(t *testing.T) {
 			"p1s": [64]byte{},
 			"p2":  [32]byte{},
 			"p2s": [64]byte{},
-			"ps":  [64]byte{},
 			"s":   [64]byte{},
 		},
 	}
@@ -223,7 +206,6 @@ func TestUncompressedMsgpackDetection(t *testing.T) {
 			"p2":  [32]byte{16, 17, 18},
 			"p1s": [64]byte{22, 23, 24},
 			"p2s": [64]byte{25, 26, 27},
-			"ps":  [64]byte{},
 		},
 	}
 

@@ -176,14 +176,14 @@ func parseMsgpVote(msgpData []byte, c *StatelessEncoder) error {
 		return fmt.Errorf("expected string sig, got %s: %w", s, rErr)
 	}
 
-	// Parse OneTimeSignature fixmap: 5 fields, or 6 when ps is present
-	// (older nodes encode it as 64 zero bytes). ps is checked but not written.
+	// Parse OneTimeSignature fixmap
 	cnt, err = p.readFixMap()
 	if err != nil {
 		return fmt.Errorf("reading map for OneTimeSignature: %w", err)
 	}
-	if cnt != 5 && cnt != 6 {
-		return fmt.Errorf("expected fixed map size 5 or 6 for OneTimeSignature, got %d", cnt)
+	// Assert OneTimeSignature struct has 5 fields (ps is always zero and omitted)
+	if cnt != 5 {
+		return fmt.Errorf("expected fixed map size 5 for OneTimeSignature, got %d", cnt)
 	}
 	// Required field for OneTimeSignature: p
 	if s, rErr := p.readString(); rErr != nil || string(s) != "p" {
@@ -224,20 +224,6 @@ func parseMsgpVote(msgpData []byte, c *StatelessEncoder) error {
 		return fmt.Errorf("reading p2s: %w", err)
 	}
 	c.writeBin64(sigP2sVoteValue, val64)
-
-	if cnt == 6 {
-		// Legacy encoding: ps is present and must be zero
-		if s, rErr := p.readString(); rErr != nil || string(s) != "ps" {
-			return fmt.Errorf("expected string ps, got %s: %w", s, rErr)
-		}
-		val64, err = p.readBin64()
-		if err != nil {
-			return fmt.Errorf("reading ps: %w", err)
-		}
-		if val64 != [64]byte{} {
-			return fmt.Errorf("expected empty array for ps, got %v", val64)
-		}
-	}
 
 	// Required field for OneTimeSignature: s
 	if s, rErr := p.readString(); rErr != nil || string(s) != "s" {
