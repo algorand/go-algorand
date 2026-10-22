@@ -724,7 +724,7 @@ func (wn *WebsocketNetwork) Start() error {
 		if ok {
 			url, err := url.Parse(addr)
 			if err == nil {
-				wn.config.PublicAddress = fmt.Sprintf("%s:%s", url.Hostname(), url.Port())
+				wn.config.PublicAddress = url.Host
 			}
 		}
 	}
