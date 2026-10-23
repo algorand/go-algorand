@@ -45,6 +45,7 @@ jobs:
           cd "$RUNNER_TEMP/benchmark-base"
           make libsodium
           go test ./data/transactions/logic -bench 'BenchmarkUintMath' -run=^$ | tee "$RUNNER_TEMP/benchmark-base.txt"
+          printf '{"entries":{}}\n' > "$RUNNER_TEMP/benchmark-base.json"
       - name: Record base benchmark
         if: github.event_name == 'pull_request'
         uses: benchmark-action/github-action-benchmark@v1
