@@ -1942,3 +1942,51 @@ func TestP2PThrottleSlotNotLeakedOnIdentityDedup(t *testing.T) {
 	netA.disconnect(outPeers[0], disconnectReasonNone)
 	require.Equal(t, slots, netA.availableThrottleSlots(), "disconnecting a registered peer did not give its throttle slot back")
 }
+
+// TestP2PPeerSweep checks that innerStop closes every wsPeer and gives back its
+// identity and throttle slot. That includes a wsPeer that a newer stream from the same peer
+// replaced in wsPeers, which only wsPeersToIDs still holds. After innerStop, addPeer must
+// reject a new wsPeer without claiming anything for it.
+// addPeer must also reject a duplicate of a registered wsPeer before it allocates anything.
+func TestP2PPeerSweep(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := config.GetDefaultLocal()
+	cfg.DNSBootstrapID = ""
+	n, err := NewP2PNetwork(logging.TestingLog(t), cfg, "", nil, GenesisInfo{genesisID, config.Devtestnet}, &nopeNodeInfo{}, &identityOpts{tracker: NewIdentityTracker()}, nil)
+	require.NoError(t, err)
+	require.NoError(t, n.Start())
+	defer n.Stop()
+	n.wsPeersLock.Lock()
+	n.throttledOutgoingConnections = 2
+	n.wsPeersLock.Unlock()
+
+	id := peer.ID("test")
+	old := makeTestPeer(t, n, true)
+	old.identity[0] = 1
+	require.Equal(t, peerAdmitted, n.addPeer(id, old))
+	dup := makeTestPeer(t, n, false)
+	dup.identity = old.identity
+	require.Equal(t, peerRejectedDuplicateIdentity, n.addPeer(id, dup))
+	require.Nil(t, dup.sendBufferBulk, "addPeer initialized a duplicate")
+	replacement := makeTestPeer(t, n, true)
+	require.Equal(t, peerAdmitted, n.addPeer(id, replacement))
+	require.Equal(t, 0, n.availableThrottleSlots())
+
+	n.innerStop()
+	require.False(t, n.hasPeers())
+	require.Empty(t, n.wsPeersToIDs)
+	require.Equal(t, 2, n.availableThrottleSlots(), "innerStop kept a throttle slot")
+	require.True(t, n.identityTracker.setIdentity(&wsPeer{identity: old.identity}), "innerStop kept a peer's identity")
+	for _, p := range []*wsPeer{old, replacement} {
+		require.EqualValues(t, 1, p.didInnerClose.Load(), "innerStop did not close a wsPeer")
+	}
+
+	late := makeTestPeer(t, n, true)
+	defer late.CloseAndWait(time.Now())
+	late.identity[0] = 2
+	require.Equal(t, peerRejectedStopped, n.addPeer(id, late))
+	require.False(t, n.hasPeers())
+	require.False(t, late.throttledOutgoingConnection)
+	require.True(t, n.identityTracker.setIdentity(&wsPeer{identity: late.identity}))
+}
