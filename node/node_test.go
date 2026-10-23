@@ -1552,11 +1552,37 @@ func TestLoadParticipationKeysRemovesFiles(t *testing.T) {
 	stopNode(node)
 
 	// The leftover file is deleted, and the registry keeps its own copy rather
-	// than getting back the erased keys still in the file.
+	// than getting back the erased keys still in the file. A file left behind
+	// by a crash while it was being overwritten is erased as well.
+	_, err = util.CopyFile(leftoverFile, partFile)
+	require.NoError(t, err)
+	erasingFile := filepath.Join(genesisDir, config.PartKeyFilename("crashed", 0, 200)+erasingPartKeySuffix)
+	require.NoError(t, os.WriteFile(erasingFile, make([]byte, 4096), 0600))
+	node = makeNode()
+	require.NoFileExists(t, partFile)
+	require.NoFileExists(t, erasingFile)
+	require.Equal(t, uint64(6), firstBatch(node))
+
+	// Drop the state proof keys from the registry, as a start that crashed
+	// between storing the record and its keys leaves it. The leftover file is
+	// then the only copy of the keys, and they are imported before it is erased.
+	spKeys := part.StateProofSecrets.GetAllKeys()
+	require.NotEmpty(t, spKeys)
+	lastKeyRound := basics.Round(spKeys[len(spKeys)-1].Round)
+	registry := node.accountManager.Registry()
+	_, err = registry.GetStateProofSecretsForRound(partID, lastKeyRound)
+	require.NoError(t, err)
+	require.NoError(t, registry.DeleteStateProofKeys(partID, lastKeyRound+1))
+	require.NoError(t, registry.Flush(10*time.Second))
+	_, err = registry.GetStateProofSecretsForRound(partID, lastKeyRound)
+	require.ErrorIs(t, err, account.ErrSecretNotFound)
+	stopNode(node)
 	_, err = util.CopyFile(leftoverFile, partFile)
 	require.NoError(t, err)
 	node = makeNode()
 	require.NoFileExists(t, partFile)
+	_, err = node.accountManager.Registry().GetStateProofSecretsForRound(partID, lastKeyRound)
+	require.NoError(t, err)
 	require.Equal(t, uint64(6), firstBatch(node))
 
 	// With no file left to import, a deleted key stays deleted after a restart.

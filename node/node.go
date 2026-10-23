@@ -1021,6 +1021,11 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 	var imported []string
 	// For each of these files
 	for _, info := range files {
+		// Finish erasing a file that a crash interrupted on an earlier start.
+		if strings.HasSuffix(info.Name(), erasingPartKeySuffix) {
+			node.erasePartKeyFile(filepath.Join(genesisDir, info.Name()))
+			continue
+		}
 		// If it can't be a participation key database, skip it
 		if !config.IsPartKeyFilename(info.Name()) {
 			continue
@@ -1065,6 +1070,13 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 			if node.accountManager.AddParticipation(part.Participation) {
 				node.log.Infof("Loaded participation keys from storage: %s %s", part.Address(), info.Name())
 				err = insertStateProofToRegistry(part, node)
+			} else if !node.registryHasStateProofKeys(part) {
+				// The record and its state proof keys are written in separate
+				// transactions, so an earlier start can have stored the record
+				// without the keys. The file is their only copy; import them
+				// before it is erased.
+				node.log.Warnf("loadParticipationKeys: participation registry has %s %s without its state proof keys, importing them", part.Address(), info.Name())
+				err = insertStateProofToRegistry(part, node)
 			}
 			part.Close()
 			if err != nil {
@@ -1085,18 +1097,52 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 		return nil
 	}
 	for _, fullname := range imported {
-		erased, err := util.EraseFile(fullname)
-		switch {
-		case err != nil:
-			node.log.Warnf("loadParticipationKeys: failed to erase imported participation key file '%s': %v", fullname, err)
-		case !erased:
-			node.log.Warnf("loadParticipationKeys: removed '%s' without overwriting it, since it is a link or its contents have other links", fullname)
-		default:
-			node.log.Infof("loadParticipationKeys: erased participation key file '%s' after importing it into the participation registry", fullname)
+		// Rename the file first: a crash while it is being overwritten would
+		// otherwise leave a corrupt key file that fails the next start.
+		erasing := fullname + erasingPartKeySuffix
+		if err := os.Rename(fullname, erasing); err != nil {
+			node.log.Warnf("loadParticipationKeys: failed to rename imported participation key file '%s' to '%s': %v", fullname, erasing, err)
+			continue
 		}
+		node.erasePartKeyFile(erasing)
 	}
 
 	return nil
+}
+
+// erasingPartKeySuffix is appended to an imported participation key file's
+// name before it is overwritten, so that a file left behind by a crash during
+// the overwrite is erased on the next start instead of being read as a key.
+const erasingPartKeySuffix = ".erasing"
+
+// erasePartKeyFile overwrites and removes a participation key file that has
+// already been imported into the participation registry.
+func (node *AlgorandFullNode) erasePartKeyFile(fullname string) {
+	erased, err := util.EraseFile(fullname)
+	switch {
+	case err != nil:
+		node.log.Warnf("loadParticipationKeys: failed to erase imported participation key file '%s': %v", fullname, err)
+	case !erased:
+		node.log.Warnf("loadParticipationKeys: removed '%s' without overwriting it, since it is a link or its contents have other links", fullname)
+	default:
+		node.log.Infof("loadParticipationKeys: erased participation key file '%s' after importing it into the participation registry", fullname)
+	}
+}
+
+// registryHasStateProofKeys reports whether the participation registry holds
+// the state proof keys stored in part, or part has none. Keys are appended in
+// one transaction and deleted from the earliest round up, so the registry has
+// all of them that it has not yet deleted if it has the last one.
+func (node *AlgorandFullNode) registryHasStateProofKeys(part account.PersistedParticipation) bool {
+	if part.StateProofSecrets == nil {
+		return true
+	}
+	keys := part.StateProofSecrets.GetAllKeys()
+	if len(keys) == 0 {
+		return true
+	}
+	_, err := node.accountManager.Registry().GetStateProofSecretsForRound(part.ID(), basics.Round(keys[len(keys)-1].Round))
+	return err == nil
 }
 
 func insertStateProofToRegistry(part account.PersistedParticipation, node *AlgorandFullNode) error {
