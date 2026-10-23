@@ -20,12 +20,13 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -699,7 +700,7 @@ func (t *demuxTester) TestUsecase(testcase demuxTestUsecase) bool {
 type tokenizerTestNetwork struct {
 	messages chan Message
 
-	mu           sync.Mutex
+	mu           deadlock.Mutex
 	disconnected []MessageHandle
 }
 
@@ -763,10 +764,8 @@ func TestDemuxTokenizerRejectsStepAboveDown(t *testing.T) {
 			// messages are consumed, so draining it also checks termination.
 			close(net.messages)
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 			d := &demux{ledger: &demuxTester{T: t}, log: logging.TestingLog(t)}
-			decoded := d.tokenizeMessages(ctx, net, tc.tag, tc.tokenize)
+			decoded := d.tokenizeMessages(t.Context(), net, tc.tag, tc.tokenize)
 
 			var emitted []message
 			timeout := time.After(10 * time.Second)
