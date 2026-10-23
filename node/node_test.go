@@ -1538,8 +1538,16 @@ func TestLoadParticipationKeysRemovesFiles(t *testing.T) {
 		return record.Voting.FirstBatch
 	}
 
+	// A second file holding the same key, as a copy under a wallet name would.
+	// Its state proof keys must not be queued again while the first file's
+	// are still being written.
+	dupFile := filepath.Join(genesisDir, config.PartKeyFilename("wallet", 0, 200))
+	_, err = util.CopyFile(partFile, dupFile)
+	require.NoError(t, err)
+
 	node := makeNode()
 	require.NoFileExists(t, partFile)
+	require.NoFileExists(t, dupFile)
 	require.Equal(t, uint64(0), firstBatch(node))
 	require.NoFileExists(t, newerFile)
 	require.FileExists(t, newerFile+".old")

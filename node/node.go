@@ -1018,6 +1018,7 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 	}
 
 	var imported []string
+	added := make(map[account.ParticipationID]bool)
 	// For each of these files
 	for _, info := range files {
 		// If it can't be a participation key database, skip it
@@ -1063,12 +1064,14 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 			// node has been updating, so the file is removed in that case too.
 			if node.accountManager.AddParticipation(part.Participation) {
 				node.log.Infof("Loaded participation keys from storage: %s %s", part.Address(), info.Name())
+				added[part.ID()] = true
 				err = insertStateProofToRegistry(part, node)
-			} else if !node.registryHasStateProofKeys(part) {
+			} else if !added[part.ID()] && !node.registryHasStateProofKeys(part) {
 				// The record and its state proof keys are written in separate
 				// transactions, so an earlier start can have stored the record
 				// without the keys. The file is their only copy; import them
-				// before it is removed.
+				// before it is removed. Keys added on this start are still
+				// being written and must not be queued a second time.
 				node.log.Warnf("loadParticipationKeys: participation registry has %s %s without its state proof keys, importing them", part.Address(), info.Name())
 				err = insertStateProofToRegistry(part, node)
 			}
