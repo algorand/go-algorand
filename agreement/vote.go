@@ -146,7 +146,7 @@ func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 	ephID := basics.OneTimeIDForRound(rv.Round, proto.EffectiveKeyDilution(m.Record.OnlineAccountData.VoteKeyDilution))
 	voteID := m.Record.VoteID
 	if !voteID.Verify(ephID, rv, uv.Sig) {
-		return vote{}, fmt.Errorf("unauthenticatedVote.verify: could not verify FS signature on vote by %v given %v: %+v", rv.Sender, voteID, uv)
+		return vote{}, fmt.Errorf("unauthenticatedVote.verify: could not verify FS signature on vote by %v given %x: %+v", rv.Sender, voteID[:], uv)
 	}
 
 	cred, err := uv.Cred.Verify(proto, m)
