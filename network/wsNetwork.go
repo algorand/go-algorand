@@ -2407,6 +2407,9 @@ func (wn *WebsocketNetwork) unregisterPeerLocked(peer *wsPeer) {
 // and starts its read/write loops.
 // When it returns anything other than peerAdmitted, the caller must close the peer/connection.
 func (wn *WebsocketNetwork) addPeer(peer *wsPeer) peerAdmission {
+	// An outgoing peer arrives verified, because tryConnect checked its identity in the HTTP upgrade
+	// response. An incoming peer proves its identity later in a websocket message, if at all, and
+	// identityVerificationHandler claims the identity then.
 	verified := peer.identityVerified.Load() == 1
 	// init allocates the send queues, so skip it for a duplicate; setIdentity below is the real claim
 	if verified && wn.identityTracker.claimedByOther(peer) {
