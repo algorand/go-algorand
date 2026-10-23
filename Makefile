@@ -8,7 +8,9 @@ else
 export GOPATH := $(shell go env GOPATH)
 GOPATH1 := $(firstword $(subst :, ,$(GOPATH)))
 endif
-GOBIN := $(if $(shell go env GOBIN),$(shell go env GOBIN),$(GOPATH1)/bin)
+# Since Go 1.27 `go env GOBIN` reports the $GOPATH/bin default, so check
+# whether GOBIN was set explicitly.
+GOBIN := $(if $(shell go env -changed GOBIN),$(shell go env GOBIN),$(GOPATH1)/bin)
 SRCPATH     := $(shell pwd)
 ARCH        := $(shell ./scripts/archtype.sh)
 OS_TYPE     := $(shell ./scripts/ostype.sh)
