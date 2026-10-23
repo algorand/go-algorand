@@ -435,11 +435,7 @@ func TestSameTagKeyRotation(t *testing.T) {
 
 	r := &countingResolver{testResolver: makeEmptyTestResolver(), dnskeyQueries: make(map[string]int)}
 
-	rootKSK, rootKSKsk := getKey(".", dns.ZONE|dns.SEP)
-	rootZSK, rootZSKsk := getKey(".", dns.ZONE)
-	a.NoError(r.updateDSRecord(".", &[]dns.DS{*rootKSK.ToDS(dns.SHA256)}, time.Time{}))
-	a.NoError(r.updateDNSKeyRecord(".", rootKSK, rootKSKsk, time.Time{}))
-	a.NoError(r.updateDNSKeyRecord(".", rootZSK, rootZSKsk, time.Time{}))
+	addTestZone(t, r.testResolver, ".")
 
 	sameTagZSKs, sameTagZSKsks := getSameTagKeys("test.", dns.ZONE)
 	oldZSK, newZSK := sameTagZSKs[0], sameTagZSKs[1]
@@ -447,7 +443,11 @@ func TestSameTagKeyRotation(t *testing.T) {
 	a.Equal(keyTag, newZSK.KeyTag())
 	a.NotEqual(oldZSK.PublicKey, newZSK.PublicKey)
 
+	// The harness stores private keys by tag, so the KSK must not share the ZSK tag.
 	testKSK, testKSKsk := getKey("test.", dns.ZONE|dns.SEP)
+	for testKSK.KeyTag() == keyTag {
+		testKSK, testKSKsk = getKey("test.", dns.ZONE|dns.SEP)
+	}
 	a.NoError(r.updateDSRecord("test.", &[]dns.DS{*testKSK.ToDS(dns.SHA256)}, time.Time{}))
 	a.NoError(r.updateDNSKeyRecord("test.", testKSK, testKSKsk, time.Time{}))
 	a.NoError(r.updateDNSKeyRecord("test.", oldZSK, sameTagZSKsks[0], time.Time{}))
@@ -491,11 +491,9 @@ func TestSameTagKeyRotation(t *testing.T) {
 	// The same rotation in a parent zone: the DS of a new child zone is signed by a key
 	// with the same tag as the cached test. ZSK, so the cached test. zone must be refreshed.
 	a.NoError(r.updateDNSKeyRecord("test.", oldZSK, sameTagZSKsks[0], time.Time{}))
-	cowKSK, cowKSKsk := getKey("cow.test.", dns.ZONE|dns.SEP)
-	cowZSK, cowZSKsk := getKey("cow.test.", dns.ZONE)
-	a.NoError(r.updateDSRecord("cow.test.", &[]dns.DS{*cowKSK.ToDS(dns.SHA256)}, time.Time{}))
-	a.NoError(r.updateDNSKeyRecord("cow.test.", cowKSK, cowKSKsk, time.Time{}))
-	a.NoError(r.updateDNSKeyRecord("cow.test.", cowZSK, cowZSKsk, time.Time{}))
+	addTestZone(t, r.testResolver, "cow.test.")
+	cowZSK, err := r.getKey("cow.test.", dns.ZONE)
+	a.NoError(err)
 	_, dsSig, err := r.queryDSRRSet("cow.test.")
 	a.NoError(err)
 	a.Equal(keyTag, dsSig[0].KeyTag)
@@ -509,11 +507,9 @@ func TestSameTagKeyRotation(t *testing.T) {
 	a.Equal([]dns.DNSKEY{*oldZSK}, tch.trustedZones["test."].zsk[keyTag])
 
 	// A forged DS signature refreshes the parent once and then fails before fetching child keys.
-	badKSK, badKSKsk := getKey("bad.test.", dns.ZONE|dns.SEP)
-	badZSK, badZSKsk := getKey("bad.test.", dns.ZONE)
-	a.NoError(r.updateDSRecord("bad.test.", &[]dns.DS{*badKSK.ToDS(dns.SHA256)}, time.Time{}))
-	a.NoError(r.updateDNSKeyRecord("bad.test.", badKSK, badKSKsk, time.Time{}))
-	a.NoError(r.updateDNSKeyRecord("bad.test.", badZSK, badZSKsk, time.Time{}))
+	addTestZone(t, r.testResolver, "bad.test.")
+	badZSK, err := r.getKey("bad.test.", dns.ZONE)
+	a.NoError(err)
 	dsEntry := r.entries["bad.test."][dns.TypeDS]
 	forgedDSSig, err := r.sign(dsEntry.rr, "test.", keyTag, time.Time{}, forgedSK)
 	a.NoError(err)

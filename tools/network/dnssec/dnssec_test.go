@@ -782,6 +782,9 @@ func TestLookupSameTagRotationAlgorithms(t *testing.T) {
 			} else {
 				// Not every tag can be given to this RSA modulus, so try Ed25519 keys until
 				// one can. About half of all tags or more can, so this takes few attempts.
+				// The harness stores private keys by tag, so skip the KSK's tag.
+				ksk, err := r.getKey("test.", dns.ZONE|dns.SEP)
+				a.NoError(err)
 				seed := make([]byte, ed25519.SeedSize)
 				for i := uint32(0); ; i++ {
 					binary.BigEndian.PutUint32(seed, i)
@@ -792,6 +795,9 @@ func TestLookupSameTagRotationAlgorithms(t *testing.T) {
 						Protocol:  3,
 						Algorithm: dns.ED25519,
 						PublicKey: base64.StdEncoding.EncodeToString(edSK.Public().(ed25519.PublicKey)),
+					}
+					if edKey.KeyTag() == ksk.KeyTag() {
+						continue
 					}
 					if rsaKey, rsaSK, ok := rsaKeyWithTag(t, oldKey, oldSK, edKey.KeyTag()); ok {
 						oldKey, oldSK, newKey, newSK = rsaKey, rsaSK, edKey, edSK
