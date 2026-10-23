@@ -647,6 +647,10 @@ func addTestZone(t *testing.T, r *testResolver, zone string) {
 
 	ksk, kskSK := getKey(zone, dns.ZONE|dns.SEP)
 	zsk, zskSK := getKey(zone, dns.ZONE)
+	// The harness stores private keys by tag, so a collision would overwrite the KSK.
+	for zsk.KeyTag() == ksk.KeyTag() {
+		zsk, zskSK = getKey(zone, dns.ZONE)
+	}
 	require.NoError(t, r.updateDSRecord(zone, &[]dns.DS{*ksk.ToDS(dns.SHA256)}, time.Time{}))
 	require.NoError(t, r.updateDNSKeyRecord(zone, ksk, kskSK, time.Time{}))
 	require.NoError(t, r.updateDNSKeyRecord(zone, zsk, zskSK, time.Time{}))
@@ -805,6 +809,55 @@ func TestTrustChainSelfOnlyEviction(t *testing.T) {
 	a.Equal(1, r.dnskeyQueries["child.test."])
 }
 
+func TestTrustChainSweepsExpiredZones(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	r := makeEmptyTestResolver()
+	for _, zone := range []string{".", "test.", "ttl.test.", "other.test.", "expired.test.", "live.test."} {
+		addTestZone(t, r, zone)
+	}
+	for _, zone := range []string{"ttl.test.", "other.test."} {
+		for _, rr := range r.entries[zone][dns.TypeDNSKEY].rr {
+			rr.Header().Ttl = 1
+		}
+	}
+	now := time.Now().Truncate(time.Second)
+	ksk, err := r.getKey("expired.test.", dns.ZONE|dns.SEP)
+	a.NoError(err)
+	a.NoError(r.updateDNSKeyRecord("expired.test.", ksk, r.entries["expired.test."][dns.TypeDNSKEY].sk[ksk.KeyTag()], now.Add(time.Second)))
+	tch := makeTrustChain(r)
+	tch.now = func() time.Time { return now }
+	for _, zone := range []string{"ttl.test.", "other.test.", "expired.test.", "live.test."} {
+		zsk, keyErr := r.getKey(zone, dns.ZONE)
+		a.NoError(keyErr)
+		_, _, _, err = tch.ensure(context.Background(), zone, []uint16{zsk.KeyTag()})
+		a.NoError(err)
+	}
+	a.Len(tch.trustedZones, 6)
+	unexpired := map[string]trustedZone{
+		".":          tch.trustedZones["."],
+		"test.":      tch.trustedZones["test."],
+		"live.test.": tch.trustedZones["live.test."],
+	}
+	rootZSK, err := r.getKey(".", dns.ZONE)
+	a.NoError(err)
+	now = now.Add(2 * time.Second)
+	_, refreshed, _, err := tch.ensure(context.Background(), ".", []uint16{rootZSK.KeyTag()})
+	a.NoError(err)
+	a.False(refreshed)
+	a.Equal(unexpired, tch.trustedZones)
+
+	now = now.Add(24 * time.Hour)
+	_, refreshed, _, err = tch.ensure(context.Background(), ".", []uint16{rootZSK.KeyTag()})
+	a.NoError(err)
+	a.True(refreshed)
+	a.Len(tch.trustedZones, 1)
+	root := tch.trustedZones["."]
+	a.False(root.isExpired(now))
+	a.False(root.ttlExpired(now))
+}
+
 func TestTrustChainValidationTime(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -946,4 +999,40 @@ func TestParentDNSKEYExpiresDuringDSQuery(t *testing.T) {
 	a.NoError(err)
 	a.Equal(2, r.dnskeyQueries["."])
 	a.Equal(1, r.dnskeyQueries["test."])
+}
+
+func TestFreshParentDNSKEYExpiresDuringDSQuery(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	for _, parent := range []string{".", "test."} {
+		t.Run(parent, func(t *testing.T) {
+			a := require.New(t)
+			r := &countingResolver{testResolver: makeEmptyTestResolver(), dnskeyQueries: make(map[string]int)}
+			addTestZone(t, r.testResolver, ".")
+			child := "test."
+			if parent != "." {
+				addTestZone(t, r.testResolver, parent)
+				child = "child." + parent
+			}
+			addTestZone(t, r.testResolver, child)
+			now := time.Now().Truncate(time.Second)
+			ksk, err := r.getKey(parent, dns.ZONE|dns.SEP)
+			a.NoError(err)
+			// Only the DNSKEY signature expires; the child's DS remains valid.
+			a.NoError(r.updateDNSKeyRecord(parent, ksk, r.entries[parent][dns.TypeDNSKEY].sk[ksk.KeyTag()], now.Add(time.Second)))
+			r.onQuery = func(zone string, qtype uint16) {
+				if zone == child && qtype == dns.TypeDS {
+					now = now.Add(2 * time.Second)
+				}
+			}
+			tch := makeTrustChain(r)
+			tch.now = func() time.Time { return now }
+			zsk, err := r.getKey(child, dns.ZONE)
+			a.NoError(err)
+			_, _, _, err = tch.ensure(context.Background(), child, []uint16{zsk.KeyTag()})
+			a.EqualError(err, "DNSKEY RRSIG expired during validation for "+parent)
+			a.Equal(1, r.dnskeyQueries[parent])
+			a.Zero(r.dnskeyQueries[child])
+		})
+	}
 }

@@ -105,6 +105,14 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 	// this would not survive after granular locks and concurrent underlying zones removal
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	// Evicting a zone keeps its children cached, so drop every expired zone here to
+	// keep zones that are no longer looked up from piling up.
+	now := t.now()
+	for zone, tz := range t.trustedZones {
+		if tz.isExpired(now) || tz.ttlExpired(now) {
+			delete(t.trustedZones, zone)
+		}
+	}
 	for {
 		zone := zones[zoneIdx]
 		tz, ok := t.trustedZones[zone]
@@ -127,11 +135,14 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 				if zoneIdx < 0 {
 					return nil, false, 0, fmt.Errorf("logic error: cache outdated for root zone")
 				}
+				parentZoneName := zones[zoneIdx]
 				if refreshedZones[zoneIdx] {
+					if parentZone.isExpired(t.now()) {
+						return nil, false, 0, fmt.Errorf("DNSKEY RRSIG expired during validation for %s", parentZoneName)
+					}
 					// the parent keys are already fresh, so refreshing them again would not help
 					return nil, false, 0, fmt.Errorf("DS signature verification failed for %s", zone)
 				}
-				parentZoneName := zones[zoneIdx]
 				delete(t.trustedZones, parentZoneName)
 				continue
 			}
@@ -143,7 +154,7 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 		}
 		// A zone fetched by this call stays usable for it even if its TTL is zero or has
 		// just run out, but its DNSKEY signatures must still be valid.
-		now := t.now()
+		now = t.now()
 		if tz.isExpired(now) || (!refreshedZones[zoneIdx] && tz.ttlExpired(now)) {
 			delete(t.trustedZones, zone)
 			if refreshedZones[zoneIdx] {

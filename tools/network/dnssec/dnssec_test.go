@@ -81,6 +81,10 @@ func addSignedTestZone(t *testing.T, r *testResolver, zone string) {
 	t.Helper()
 	ksk, kskSK := getKey(zone, dns.ZONE|dns.SEP)
 	zsk, zskSK := getKey(zone, dns.ZONE)
+	// The harness stores private keys by tag, so a collision would overwrite the KSK.
+	for zsk.KeyTag() == ksk.KeyTag() {
+		zsk, zskSK = getKey(zone, dns.ZONE)
+	}
 	require.NoError(t, r.updateDSRecord(zone, &[]dns.DS{*ksk.ToDS(dns.SHA256)}, time.Time{}))
 	require.NoError(t, r.updateDNSKeyRecord(zone, ksk, kskSK, time.Time{}))
 	require.NoError(t, r.updateDNSKeyRecord(zone, zsk, zskSK, time.Time{}))
