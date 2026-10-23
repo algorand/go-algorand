@@ -37,7 +37,7 @@ type trustChain struct {
 	client       TrustQuerier
 	trustedZones map[string]trustedZone
 	mu           deadlock.RWMutex
-	now          func() time.Time
+	now          func() time.Time // nil means time.Now; tests set a fake clock
 	nextGen      uint64
 }
 
@@ -45,7 +45,6 @@ func makeTrustChain(c TrustQuerier) *trustChain {
 	return &trustChain{
 		client:       c,
 		trustedZones: make(map[string]trustedZone),
-		now:          time.Now,
 	}
 }
 
@@ -62,6 +61,15 @@ func (qw QueryWrapper) GetRootAnchorDS() (dss []dns.DS, err error) {
 		return
 	}
 	return a.ToDS(), nil
+}
+
+// currentTime returns the time from the injected clock, or time.Now when none is set.
+// Leaving the clock nil keeps a new trustChain comparable with reflect.DeepEqual.
+func (t *trustChain) currentTime() time.Time {
+	if t.now != nil {
+		return t.now()
+	}
+	return time.Now()
 }
 
 // invalidate removes zone from the cache unless another lookup has already replaced it.
@@ -107,7 +115,7 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 	defer t.mu.Unlock()
 	// Evicting a zone keeps its children cached, so drop every expired zone here to
 	// keep zones that are no longer looked up from piling up.
-	now := t.now()
+	now := t.currentTime()
 	for zone, tz := range t.trustedZones {
 		if tz.isExpired(now) || tz.ttlExpired(now) {
 			delete(t.trustedZones, zone)
@@ -125,7 +133,7 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 			if zoneIdx > 0 {
 				parentZone = t.trustedZones[zones[zoneIdx-1]]
 			}
-			if tz, cacheOutdated, err = makeTrustedZone(ctx, zone, parentZone, t.client, t.now); err != nil {
+			if tz, cacheOutdated, err = makeTrustedZone(ctx, zone, parentZone, t.client, t.currentTime); err != nil {
 				return nil, false, 0, err
 			}
 			if cacheOutdated {
@@ -137,7 +145,7 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 				}
 				parentZoneName := zones[zoneIdx]
 				if refreshedZones[zoneIdx] {
-					if parentZone.isExpired(t.now()) {
+					if parentZone.isExpired(t.currentTime()) {
 						return nil, false, 0, fmt.Errorf("DNSKEY RRSIG expired during validation for %s", parentZoneName)
 					}
 					// the parent keys are already fresh, so refreshing them again would not help
@@ -154,7 +162,7 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 		}
 		// A zone fetched by this call stays usable for it even if its TTL is zero or has
 		// just run out, but its DNSKEY signatures must still be valid.
-		now = t.now()
+		now = t.currentTime()
 		if tz.isExpired(now) || (!refreshedZones[zoneIdx] && tz.ttlExpired(now)) {
 			delete(t.trustedZones, zone)
 			if refreshedZones[zoneIdx] {
@@ -237,7 +245,7 @@ func (t *trustChain) Authenticate(ctx context.Context, rrSet []dns.RR, rrSig []d
 
 	fqdn := signer
 
-	now := t.now()
+	now := t.currentTime()
 	validSignatures := make([]dns.RRSIG, 0, len(rrSig))
 	for _, sig := range rrSig {
 		if signatureMatchesRRSet(sig, rrSet[0].Header()) && sig.ValidityPeriod(now) {
@@ -262,7 +270,7 @@ func (t *trustChain) Authenticate(ctx context.Context, rrSet []dns.RR, rrSig []d
 		return err
 	}
 	for attempt := 0; ; attempt++ {
-		validSignatures = signaturesAt(validSignatures, t.now())
+		validSignatures = signaturesAt(validSignatures, t.currentTime())
 		if len(validSignatures) == 0 {
 			return fmt.Errorf("RRSIG expired during validation for %s", owner)
 		}
