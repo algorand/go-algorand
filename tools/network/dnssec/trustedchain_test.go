@@ -443,7 +443,7 @@ func TestSameTagKeyRotation(t *testing.T) {
 	a.Equal(keyTag, newZSK.KeyTag())
 	a.NotEqual(oldZSK.PublicKey, newZSK.PublicKey)
 
-	// The harness stores private keys by tag, so the KSK must not share the ZSK tag.
+	// The test checks the cached keys for keyTag, so the KSK must not share it.
 	testKSK, testKSKsk := getKey("test.", dns.ZONE|dns.SEP)
 	for testKSK.KeyTag() == keyTag {
 		testKSK, testKSKsk = getKey("test.", dns.ZONE|dns.SEP)
@@ -643,7 +643,7 @@ func addTestZone(t *testing.T, r *testResolver, zone string) {
 
 	ksk, kskSK := getKey(zone, dns.ZONE|dns.SEP)
 	zsk, zskSK := getKey(zone, dns.ZONE)
-	// The harness stores private keys by tag, so a collision would overwrite the KSK.
+	// Tests check a zone's cached keys by tag, so keep the KSK and ZSK tags distinct.
 	for zsk.KeyTag() == ksk.KeyTag() {
 		zsk, zskSK = getKey(zone, dns.ZONE)
 	}
@@ -821,7 +821,7 @@ func TestTrustChainSweepsExpiredZones(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 	ksk, err := r.getKey("expired.test.", dns.ZONE|dns.SEP)
 	a.NoError(err)
-	a.NoError(r.updateDNSKeyRecord("expired.test.", ksk, r.entries["expired.test."][dns.TypeDNSKEY].sk[ksk.KeyTag()], now.Add(time.Second)))
+	a.NoError(r.updateDNSKeyRecord("expired.test.", ksk, r.entries["expired.test."][dns.TypeDNSKEY].sk[ksk.Flags], now.Add(time.Second)))
 	tch := makeTrustChain(r)
 	tch.now = func() time.Time { return now }
 	for _, zone := range []string{"ttl.test.", "other.test.", "expired.test.", "live.test."} {
@@ -909,7 +909,7 @@ func TestTrustChainValidationTime(t *testing.T) {
 			ds := r.entries["test."][dns.TypeDS]
 			parentZSK, err := r.getKey(".", dns.ZONE)
 			a.NoError(err)
-			ds.sig[0], err = r.sign(ds.rr, ".", parentZSK.KeyTag(), expires, r.entries["."][dns.TypeDNSKEY].sk[parentZSK.KeyTag()])
+			ds.sig[0], err = r.sign(ds.rr, ".", parentZSK.KeyTag(), expires, r.entries["."][dns.TypeDNSKEY].sk[parentZSK.Flags])
 			a.NoError(err)
 			r.onQuery = func(zone string, qtype uint16) {
 				if zone == "test." && ((scenario == "DS arrival" && qtype == dns.TypeDS) ||
@@ -942,7 +942,7 @@ func TestFreshZoneDNSKEYExpiresAfterFetch(t *testing.T) {
 	zsk, err := r.getKey("test.", dns.ZONE)
 	a.NoError(err)
 	now := time.Now().Truncate(time.Second)
-	a.NoError(r.updateDNSKeyRecord("test.", zsk, r.entries["test."][dns.TypeDNSKEY].sk[zsk.KeyTag()], now.Add(time.Second)))
+	a.NoError(r.updateDNSKeyRecord("test.", zsk, r.entries["test."][dns.TypeDNSKEY].sk[zsk.Flags], now.Add(time.Second)))
 	tch := makeTrustChain(r)
 	responseArrived := false
 	r.onQuery = func(zone string, qtype uint16) {
@@ -975,13 +975,13 @@ func TestParentDNSKEYExpiresDuringDSQuery(t *testing.T) {
 	rootZSK, err := r.getKey(".", dns.ZONE)
 	a.NoError(err)
 	now := time.Now().Truncate(time.Second)
-	a.NoError(r.updateDNSKeyRecord(".", rootZSK, r.entries["."][dns.TypeDNSKEY].sk[rootZSK.KeyTag()], now.Add(time.Second)))
+	a.NoError(r.updateDNSKeyRecord(".", rootZSK, r.entries["."][dns.TypeDNSKEY].sk[rootZSK.Flags], now.Add(time.Second)))
 	tch := makeTrustChain(r)
 	tch.now = func() time.Time { return now }
 	_, _, _, err = tch.ensure(context.Background(), ".", []uint16{rootZSK.KeyTag()})
 	a.NoError(err)
 	// The server has a renewed DNSKEY signature while the cached one expires.
-	a.NoError(r.updateDNSKeyRecord(".", rootZSK, r.entries["."][dns.TypeDNSKEY].sk[rootZSK.KeyTag()], time.Time{}))
+	a.NoError(r.updateDNSKeyRecord(".", rootZSK, r.entries["."][dns.TypeDNSKEY].sk[rootZSK.Flags], time.Time{}))
 	advanced := false
 	r.onQuery = func(zone string, qtype uint16) {
 		if zone == "test." && qtype == dns.TypeDS && !advanced {
@@ -1015,7 +1015,7 @@ func TestFreshParentDNSKEYExpiresDuringDSQuery(t *testing.T) {
 			ksk, err := r.getKey(parent, dns.ZONE|dns.SEP)
 			a.NoError(err)
 			// Only the DNSKEY signature expires; the child's DS remains valid.
-			a.NoError(r.updateDNSKeyRecord(parent, ksk, r.entries[parent][dns.TypeDNSKEY].sk[ksk.KeyTag()], now.Add(time.Second)))
+			a.NoError(r.updateDNSKeyRecord(parent, ksk, r.entries[parent][dns.TypeDNSKEY].sk[ksk.Flags], now.Add(time.Second)))
 			r.onQuery = func(zone string, qtype uint16) {
 				if zone == child && qtype == dns.TypeDS {
 					now = now.Add(2 * time.Second)

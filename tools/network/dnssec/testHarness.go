@@ -34,7 +34,7 @@ import (
 type rrRec struct {
 	rr  []dns.RR
 	sig []dns.RRSIG
-	sk  map[uint16]crypto.PrivateKey // DNSKEY's secret keys, for signing, rotating and etc
+	sk  map[uint16]crypto.PrivateKey // DNSKEY secret keys by flags; key tags can collide, and a zone has one key per flags value
 }
 
 type testResolver struct {
@@ -255,7 +255,7 @@ func (r *testResolver) updateDNSKEYRRSet(zone string, key *dns.DNSKEY, sk crypto
 		// no entry, create a new one
 		rr := []dns.RR{key}
 		secretKeys := make(map[uint16]crypto.PrivateKey)
-		secretKeys[key.KeyTag()] = sk
+		secretKeys[key.Flags] = sk
 		return rr, secretKeys
 	}
 	// filter out keys of the same time as the key provided
@@ -266,11 +266,11 @@ func (r *testResolver) updateDNSKEYRRSet(zone string, key *dns.DNSKEY, sk crypto
 		if k.Flags != key.Flags {
 			rrsetNew = append(rrsetNew, rr)
 		} else {
-			delete(secretKeys, k.KeyTag())
+			delete(secretKeys, k.Flags)
 		}
 	}
 	rrsetNew = append(rrsetNew, key)
-	secretKeys[key.KeyTag()] = sk
+	secretKeys[key.Flags] = sk
 	return rrsetNew, secretKeys
 }
 
@@ -332,7 +332,7 @@ func (r *testResolver) updateZSK(zone string, key *dns.DNSKEY, sk crypto.Private
 
 	// update ZSK and sign DNSKEY RR with KSK
 	rrset, secretKeys := r.updateDNSKEYRRSet(zone, key, sk)
-	skKSK := secretKeys[ksk.KeyTag()]
+	skKSK := secretKeys[ksk.Flags]
 	var sig dns.RRSIG
 	if sig, err = r.sign(rrset, zone, ksk.KeyTag(), expTime, skKSK); err != nil {
 		return err
@@ -430,7 +430,7 @@ func (r *testResolver) updateDSRecord(zone string, dss *[]dns.DS, expTime time.T
 	if zsk, err = r.getKey(parent, dns.ZONE); err != nil {
 		return
 	}
-	sk := r.entries[parent][dns.TypeDNSKEY].sk[zsk.KeyTag()]
+	sk := r.entries[parent][dns.TypeDNSKEY].sk[zsk.Flags]
 
 	rrset := make([]dns.RR, len(*dss))
 	for i := range *dss {
@@ -474,7 +474,7 @@ func (r *testResolver) updateRegRecord(domain string, signer string, tp uint16, 
 	if zsk, err = r.getKey(signer, dns.ZONE); err != nil {
 		return
 	}
-	sk := r.entries[signer][dns.TypeDNSKEY].sk[zsk.KeyTag()]
+	sk := r.entries[signer][dns.TypeDNSKEY].sk[zsk.Flags]
 
 	var sig dns.RRSIG
 	if sig, err = r.sign(rrset, signer, zsk.KeyTag(), expTime, sk); err != nil {

@@ -81,7 +81,7 @@ func addSignedTestZone(t *testing.T, r *testResolver, zone string) {
 	t.Helper()
 	ksk, kskSK := getKey(zone, dns.ZONE|dns.SEP)
 	zsk, zskSK := getKey(zone, dns.ZONE)
-	// The harness stores private keys by tag, so a collision would overwrite the KSK.
+	// Tests check a zone's cached keys by tag, so keep the KSK and ZSK tags distinct.
 	for zsk.KeyTag() == ksk.KeyTag() {
 		zsk, zskSK = getKey(zone, dns.ZONE)
 	}
@@ -770,7 +770,7 @@ func TestLookupSameTagRotationAlgorithms(t *testing.T) {
 			addTestZone(t, r.testResolver, "test.")
 			oldKey, err := r.getKey("test.", dns.ZONE)
 			a.NoError(err)
-			oldSK := r.entries["test."][dns.TypeDNSKEY].sk[oldKey.KeyTag()]
+			oldSK := r.entries["test."][dns.TypeDNSKEY].sk[oldKey.Flags]
 			var newKey *dns.DNSKEY
 			var newSK crypto.PrivateKey
 			if algorithm == "RSA" {
@@ -782,7 +782,7 @@ func TestLookupSameTagRotationAlgorithms(t *testing.T) {
 			} else {
 				// Not every tag can be given to this RSA modulus, so try Ed25519 keys until
 				// one can. About half of all tags or more can, so this takes few attempts.
-				// The harness stores private keys by tag, so skip the KSK's tag.
+				// The test checks the cached keys for this tag, so skip the KSK's tag.
 				ksk, err := r.getKey("test.", dns.ZONE|dns.SEP)
 				a.NoError(err)
 				seed := make([]byte, ed25519.SeedSize)
