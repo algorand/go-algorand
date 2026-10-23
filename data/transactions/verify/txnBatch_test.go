@@ -585,6 +585,98 @@ func TestStreamToBatchBlockWatcher(t *testing.T) {
 	}
 }
 
+// TestNewBlockWatcher checks that OnNewBlock ignores rounds that are not newer.
+// Blocks still queued in the ledger notifier when the watcher registers can be
+// at or below the round it started from.
+func TestNewBlockWatcher(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// A distinct TimeStamp per header makes a same-round replacement visible.
+	hdrAt := func(rnd basics.Round, ts int64) bookkeeping.BlockHeader {
+		h := createDummyBlockHeader()
+		h.Round = rnd
+		h.TimeStamp = ts
+		return h
+	}
+	notify := func(nbw *NewBlockWatcher, h bookkeeping.BlockHeader) {
+		nbw.OnNewBlock(bookkeeping.Block{BlockHeader: h}, ledgercore.StateDelta{})
+	}
+
+	start := createDummyBlockHeader().Round
+	initial := hdrAt(start, 1)
+	nbw := MakeNewBlockWatcher(initial)
+	require.Equal(t, initial, *nbw.getBlockHeader())
+
+	next := hdrAt(start+1, 2)
+	notify(nbw, next)
+	require.Equal(t, next, *nbw.getBlockHeader())
+	held := nbw.getBlockHeader()
+
+	// equal and older rounds are ignored
+	notify(nbw, hdrAt(start+1, 3))
+	require.Equal(t, next, *nbw.getBlockHeader())
+	notify(nbw, hdrAt(start, 4))
+	require.Equal(t, next, *nbw.getBlockHeader())
+
+	// a later block does not modify a header handed out earlier
+	later := hdrAt(start+2, 5)
+	notify(nbw, later)
+	require.Equal(t, later, *nbw.getBlockHeader())
+	require.Equal(t, next, *held)
+}
+
+// TestNewBlockWatcherConcurrent is mainly for -race: readers overlap a writer
+// advancing through many rounds, so a non-atomic header swap gets reported.
+func TestNewBlockWatcherConcurrent(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// The writer sets each TimeStamp to its round, so a reader seeing them
+	// differ has a header mixing fields from two blocks.
+	hdr := createDummyBlockHeader()
+	start := hdr.Round
+	hdr.TimeStamp = int64(start)
+	nbw := MakeNewBlockWatcher(hdr)
+
+	const readers = 4
+	const rounds = 1000
+	done := make(chan struct{})
+	torn := make([]*bookkeeping.BlockHeader, readers)
+	var wg sync.WaitGroup
+	for i := range readers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				bh := nbw.getBlockHeader()
+				if bh.TimeStamp != int64(bh.Round) {
+					torn[i] = bh
+					return
+				}
+				select {
+				case <-done:
+					return
+				default:
+				}
+			}
+		}()
+	}
+
+	for r := start + 1; r <= start+rounds; r++ {
+		hdr.Round = r
+		hdr.TimeStamp = int64(r)
+		nbw.OnNewBlock(bookkeeping.Block{BlockHeader: hdr}, ledgercore.StateDelta{})
+	}
+	close(done)
+	wg.Wait()
+
+	require.Equal(t, start+rounds, nbw.getBlockHeader().Round)
+	for i, bh := range torn {
+		require.Nil(t, bh, "reader %d saw a torn header", i)
+	}
+}
+
 func getSaturatedExecPool(t *testing.T) (execpool.BacklogPool, chan any) {
 	verificationPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, t)
 	_, buffLen := verificationPool.BufferSize()
