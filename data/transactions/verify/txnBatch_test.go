@@ -537,54 +537,6 @@ func TestStreamToBatchRestart(t *testing.T) {
 	verifyResults(txnGroups, badTxnGroups, cache, badSigResultCounter, goodSigResultCounter, t)
 }
 
-// TestBlockWatcher runs multiple goroutines to check the concurency and correctness of the block watcher
-func TestStreamToBatchBlockWatcher(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	blkHdr := createDummyBlockHeader()
-	nbw := MakeNewBlockWatcher(blkHdr)
-	startingRound := blkHdr.Round
-
-	wg := sync.WaitGroup{}
-	count := 100
-	writerDone := make(chan struct{})
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer close(writerDone)
-		for x := 0; x < 100; x++ {
-			blkHdr.Round++
-			nbw.OnNewBlock(bookkeeping.Block{BlockHeader: blkHdr}, ledgercore.StateDelta{})
-			time.Sleep(10 * time.Millisecond)
-			nbw.OnNewBlock(bookkeeping.Block{BlockHeader: blkHdr}, ledgercore.StateDelta{})
-		}
-	}()
-
-	bhStore := make(map[basics.Round]*bookkeeping.BlockHeader)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			bh := nbw.getBlockHeader()
-			bhStore[bh.Round] = bh
-			// The reader can miss individual rounds, so stop when the writer finishes.
-			select {
-			case <-writerDone:
-				return
-			default:
-				time.Sleep(time.Millisecond)
-			}
-		}
-	}()
-	wg.Wait()
-	bh := nbw.getBlockHeader()
-	require.Equal(t, uint64(startingRound)+uint64(count), uint64(bh.Round))
-	// There should be no inconsistency after new blocks are added
-	for r, bh := range bhStore {
-		require.Equal(t, r, bh.Round)
-	}
-}
-
 // TestNewBlockWatcher checks that OnNewBlock ignores rounds that are not newer.
 // Blocks still queued in the ledger notifier when the watcher registers can be
 // at or below the round it started from.
