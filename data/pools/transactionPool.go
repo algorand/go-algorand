@@ -115,13 +115,15 @@ type BlockEvaluator interface {
 }
 
 // VotingAccountSupplier provides a list of possible participating account addresses valid for a given round.
+// If the list is empty, the pool does not call GenerateBlock for that round.
 type VotingAccountSupplier interface {
 	VotingAccountsForRound(basics.Round) []basics.Address
 }
 
 var errPoolShutdown = errors.New("transaction pool is shutting down")
 
-// MakeTransactionPool makes a transaction pool.
+// MakeTransactionPool makes a transaction pool. With a nil VotingAccountSupplier (used by
+// tools and tests that call AssembleBlock directly) the pool calls GenerateBlock every round.
 func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Logger, vac VotingAccountSupplier) *TransactionPool {
 	if cfg.TxPoolExponentialIncreaseFactor < 1 {
 		cfg.TxPoolExponentialIncreaseFactor = 1
@@ -144,7 +146,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	}
 	pool.cond.L = &pool.mu
 	pool.assemblyCond.L = &pool.assemblyMu
-	pool.recomputeBlockEvaluator(nil, 0)
+	pool.recomputeBlockEvaluator(nil, 0, false)
 	return &pool
 }
 
@@ -157,6 +159,9 @@ type poolAsmResults struct {
 	blk   *ledgercore.UnfinishedBlock
 	stats telemetryspec.AssembleBlockMetrics
 	err   error
+	// skipped means no local accounts could propose when recomputation started.
+	// ok is also set but blk is nil, so AssembleBlock must build an empty block.
+	skipped bool
 	// roundStartedEvaluating is the round which we were attempted to evaluate last. It's a good measure for
 	// which round we started evaluating, but not a measure to whether the evaluation is complete.
 	roundStartedEvaluating basics.Round
@@ -195,7 +200,7 @@ func (pool *TransactionPool) Reset() {
 	pool.numPendingWholeBlocks = 0
 	pool.pendingBlockEvaluator = nil
 	pool.statusCache.reset()
-	pool.recomputeBlockEvaluator(nil, 0)
+	pool.recomputeBlockEvaluator(nil, 0, false)
 }
 
 func (pool *TransactionPool) getVotingAccountsForRound(rnd basics.Round) []basics.Address {
@@ -561,7 +566,7 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercor
 		// Recompute the pool by starting from the new latest block.
 		// This has the side-effect of discarding transactions that
 		// have been committed (or that are otherwise no longer valid).
-		stats = pool.recomputeBlockEvaluator(committedTxids, knownCommitted)
+		stats = pool.recomputeBlockEvaluator(committedTxids, knownCommitted, false)
 	}
 
 	stats.KnownCommittedCount = knownCommitted
@@ -668,7 +673,8 @@ func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.S
 // recomputeBlockEvaluator constructs a new BlockEvaluator and feeds all
 // in-pool transactions to it (removing any transactions that are rejected
 // by the BlockEvaluator). Expects that the pool.mu mutex would be already taken.
-func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transactions.Txid]ledgercore.IncludedTransactions, knownCommitted uint) (stats telemetryspec.ProcessBlockMetrics) {
+// forceAssembly generates a block even without possible proposers, for dev mode.
+func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transactions.Txid]ledgercore.IncludedTransactions, knownCommitted uint, forceAssembly bool) (stats telemetryspec.ProcessBlockMetrics) {
 	pool.pendingBlockEvaluator = nil
 
 	latest := pool.ledger.Latest()
@@ -700,9 +706,18 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 	pendingCount := pool.pendingCountNoLock()
 	pool.pendingMu.RUnlock()
 
+	proposers := pool.getVotingAccountsForRound(prev.Round + 1)
 	pool.assemblyMu.Lock()
 	pool.assemblyResults = poolAsmResults{
 		roundStartedEvaluating: prev.Round + 1,
+	}
+	if !forceAssembly && pool.vac != nil && len(proposers) == 0 {
+		pool.assemblyResults.skipped = true
+		pool.assemblyResults.ok = true
+		pool.assemblyResults.assemblyCompletedOrAbandoned = true
+		// Wake any AssembleBlock already waiting for this round. Transactions are
+		// still evaluated, but GenerateBlock will not be called.
+		pool.assemblyCond.Broadcast()
 	}
 	pool.assemblyMu.Unlock()
 
@@ -916,6 +931,9 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 
 	pool.assemblyDeadline = deadline
 	pool.assemblyRound = round
+	// Reset the deadline on return so that a later round's recompute does not
+	// see an expired deadline and cut its block short.
+	defer func() { pool.assemblyDeadline = time.Time{} }()
 
 	for time.Now().Before(deadline) && (!pool.assemblyResults.ok || pool.assemblyResults.roundStartedEvaluating != round) {
 		condvar.TimedWait(&pool.assemblyCond, time.Until(deadline))
@@ -953,7 +971,6 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 			return emptyBlock, emptyBlockErr
 		}
 	}
-	pool.assemblyDeadline = time.Time{}
 
 	if pool.assemblyResults.err != nil {
 		pool.log.Warnf("AssembleBlock: encountered error for round %d, assembling empty block instead: %v", round, pool.assemblyResults.err)
@@ -973,6 +990,15 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 	} else if pool.assemblyResults.roundStartedEvaluating < round {
 		return nil, fmt.Errorf("AssembleBlock: assembled block round much behind requested round: %d != %d",
 			pool.assemblyResults.roundStartedEvaluating, round)
+	}
+
+	if pool.assemblyResults.skipped {
+		// Agreement only calls AssembleBlock when it has voting keys for this round,
+		// so this rare case only happens if a key was added between the pool's
+		// recompute calling node.VotingAccountsForRound and agreement calling
+		// node.VotingKeys.
+		stats.StopReason = telemetryspec.AssembleBlockNoProposers
+		return pool.assembleEmptyBlock(round)
 	}
 
 	stats = pool.assemblyResults.stats
@@ -1011,7 +1037,7 @@ func (pool *TransactionPool) AssembleDevModeBlock() (assembled *ledgercore.Unfin
 	defer pool.mu.Unlock()
 
 	// drop the current block evaluator and start with a new one.
-	pool.recomputeBlockEvaluator(nil, 0)
+	pool.recomputeBlockEvaluator(nil, 0, true)
 
 	// The above was already pregenerating the entire block,
 	// so there won't be any waiting on this call.
