@@ -16,6 +16,9 @@ jobs:
   benchmark:
     name: Performance regression check
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v7
       - name: Set up Go
@@ -31,6 +34,34 @@ jobs:
       # issue. 
       - name: Run benchmark
         run: go test ./data/transactions/logic -bench 'BenchmarkUintMath' -run=^$ | tee benchmark_output.txt
+      # Compare PRs with their base on the same hardware and Go toolchain.
+      - name: Run base benchmark
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git fetch --depth=1 origin "$BASE_SHA"
+          git worktree add --detach "$RUNNER_TEMP/benchmark-base" "$BASE_SHA"
+          cd "$RUNNER_TEMP/benchmark-base"
+          make libsodium
+          go test ./data/transactions/logic -bench 'BenchmarkUintMath' -run=^$ | tee "$RUNNER_TEMP/benchmark-base.txt"
+      - name: Record base benchmark
+        if: github.event_name == 'pull_request'
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Go Benchmark
+          tool: 'go'
+          output-file-path: ${{ runner.temp }}/benchmark-base.txt
+          external-data-json-path: ${{ runner.temp }}/benchmark-base.json
+      - name: Set baseline commit
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          # The action labels every result with the PR head, even with ref set.
+          # Give the baseline its own commit so the action compares the results.
+          jq --arg sha "$BASE_SHA" '.entries["Go Benchmark"][0].commit.id = $sha' \
+            "$RUNNER_TEMP/benchmark-base.json" > "$RUNNER_TEMP/benchmark-comparison.json"
       - name: Push benchmark result to gh-pages branch
         if: github.event_name == 'push'
         uses: benchmark-action/github-action-benchmark@v1
@@ -41,18 +72,20 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
       - name: Evaluate benchmark on PR branch
-        if: github.event.pull_request
+        if: github.event_name == 'pull_request'
         uses: benchmark-action/github-action-benchmark@v1
         with:
           name: Go Benchmark
           tool: 'go'
           output-file-path: benchmark_output.txt
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          external-data-json-path: ${{ runner.temp }}/benchmark-comparison.json
+          save-data-file: false
           alert-threshold: '200%'
-          comment-on-alert: true
+          fail-on-alert: true
+          summary-always: true
       - name: Slack Notification
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          curl -X POST --data-urlencode "payload={\"text\": \"Benchmark workflow failed. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \"}" $SLACK_WEBHOOK_URL
+          curl -X POST --data-urlencode "payload={\"text\": \"Benchmark workflow failed. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \"}" "$SLACK_WEBHOOK_URL"
         if: ${{ failure() && (contains(github.ref_name, 'rel/nightly') || contains(github.ref_name, 'rel/beta') || contains(github.ref_name, 'rel/stable') || contains(github.ref_name, 'master')) }}
