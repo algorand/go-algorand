@@ -289,10 +289,10 @@ if __name__ == "__main__":
     export_type("TealKeyValue", "data/basics/teal.go", "statedelta")
     export_type("TealValue", "data/basics/teal.go", "statedelta")
 
-    # Post-quantum scheme
-    export_type("PQScheme", "protocol/pq_scheme.go", "transaction")
-    export_type("PQAddressSalt", "data/basics/pq_address.go", "transaction")
+    # Signature scheme tag and address salt
+    export_type("SigScheme", "protocol/sig_scheme.go", "transaction")
+    export_type("AddressSalt", "data/basics/salted_address.go", "transaction")
 
     # Signature types
-    export_type("PQSig", "data/transactions/pqsig.go", "signature")
-    export_func("(p PQSig) Blank", "data/transactions/pqsig.go", "signature")
+    export_type("HashedKeySig", "data/transactions/hsig.go", "signature")
+    export_func("(p HashedKeySig) Blank", "data/transactions/hsig.go", "signature")

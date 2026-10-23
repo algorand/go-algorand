@@ -453,9 +453,9 @@ func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.Sign
 func NewSigEvalParams(txgroup []transactions.SignedTxn, proto *config.ConsensusParams, ls LedgerForSignature) *EvalParams {
 	lsigs := 0
 	for _, tx := range txgroup {
-		// An ls-scheme PQSig carries its program in place of a public key, so a
+		// An ls-scheme HashedKeySig carries its program in place of a public key, so a
 		// transaction can have a signature program with nothing in its Lsig.
-		if tx.Lsig.HasProgram() || tx.PQsig.IsLogicSig() {
+		if tx.Lsig.HasProgram() || tx.Hsig.IsLogicSig() {
 			lsigs++
 		}
 	}
@@ -775,8 +775,8 @@ type EvalContext struct {
 	instructionStarts []bool
 
 	// sigArgs are the arguments the arg opcodes read in ModeSig: those of the
-	// program running now, which are not always Lsig.Args. An ls-scheme PQSig
-	// carries its program's arguments in PQsig.Signature.
+	// program running now, which are not always Lsig.Args. An ls-scheme HashedKeySig
+	// carries its program's arguments in Hsig.Signature.
 	sigArgs [][]byte
 
 	// argsRead records which sigArgs opArgN has pushed, one bit per index. It
@@ -1408,7 +1408,7 @@ func EvalApp(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (b
 
 // EvalSignatureProgram evaluates program, with args as the arguments its arg
 // opcodes read, as a signature authorizing the ith transaction in params. The
-// program need not be that transaction's Lsig: an ls-scheme PQSig carries a
+// program need not be that transaction's Lsig: an ls-scheme HashedKeySig carries a
 // program and arguments of its own.
 // A program passes successfully if it finishes with one int element on the stack that is non-zero.
 // It returns EvalContext suitable for obtaining additional info about the execution.
@@ -1553,7 +1553,7 @@ func CheckContract(program []byte, gi int, params *EvalParams) error {
 // include a cost estimate that must be low enough (controlled by params.Proto).
 //
 // It names no transaction. A signature program is not always the Lsig of one,
-// since an ls-scheme PQSig carries a program of its own, and nothing in a
+// since an ls-scheme HashedKeySig carries a program of its own, and nothing in a
 // ModeSig check consults the transaction anyway. Callers pass the program they
 // are about to evaluate, so the check and the evaluation cannot disagree about
 // which bytes run.

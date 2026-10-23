@@ -6753,59 +6753,59 @@ func TestOptionalSignatures(t *testing.T) {
 	}
 }
 
-func makePlaceholderPQSigForSimulation(t *testing.T, scheme protocol.PQScheme, seedByte byte) (basics.Address, transactions.PQSig) {
+func makePlaceholderHashedKeySigForSimulation(t *testing.T, scheme protocol.SigScheme, seedByte byte) (basics.Address, transactions.HashedKeySig) {
 	t.Helper()
 
-	acct := basics_testing.MakePQTestAccount(t, seedByte, scheme)
-	return acct.Address, transactions.PQSig{
+	acct := basics_testing.MakeHashedKeySigTestAccount(t, seedByte, scheme)
+	return acct.Address, transactions.HashedKeySig{
 		Scheme:    acct.Scheme,
 		Salt:      acct.Salt,
 		PublicKey: acct.PublicKey,
 	}
 }
 
-// pqPlaceholderFeeUsage returns the fee usage of a transaction authorized by a
-// PQ signature of the given scheme (base transaction usage plus the scheme's
+// hashedKeySigPlaceholderFeeUsage returns the fee usage of a transaction authorized by a
+// hashed-key signature of the given scheme (base transaction usage plus the scheme's
 // surcharge), and the fee that exactly covers it. Tests derive their expectations
 // from the configured fee policy rather than hardcoding multiples of the min fee.
-func pqPlaceholderFeeUsage(t *testing.T, proto config.ConsensusParams, scheme protocol.PQScheme) (basics.MicroAlgos, basics.Micros) {
+func hashedKeySigPlaceholderFeeUsage(t *testing.T, proto config.ConsensusParams, scheme protocol.SigScheme) (basics.MicroAlgos, basics.Micros) {
 	t.Helper()
 
-	usage := basics.Micros(1e6) + transactions.PQSchemeFeeContribution(proto, scheme)
+	usage := basics.Micros(1e6) + transactions.SigSchemeFeeContribution(proto, scheme)
 	fee, _, overflow := proto.MinFee().FeeForUsage(usage, 1e6, 0)
 	require.False(t, overflow)
 	return fee, usage
 }
 
-func makePlaceholderPQFixSignersGroup(t *testing.T, env simulationtesting.Environment, scheme protocol.PQScheme, placeholderFee uint64) ([]transactions.SignedTxn, basics.Address) {
+func makePlaceholderHashedKeySigFixSignersGroup(t *testing.T, env simulationtesting.Environment, scheme protocol.SigScheme, placeholderFee uint64) ([]transactions.SignedTxn, basics.Address) {
 	t.Helper()
 
 	sender := env.Accounts[0]
-	pqAuthorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 0)
+	saltedAuthorizer, hsig := makePlaceholderHashedKeySigForSimulation(t, scheme, 0)
 	minFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
 
 	rekey := env.TxnInfo.NewTxn(txntest.Txn{
 		Type:     protocol.PaymentTx,
 		Sender:   sender.Addr,
 		Receiver: sender.Addr,
-		RekeyTo:  pqAuthorizer,
+		RekeyTo:  saltedAuthorizer,
 		Fee:      minFee,
 	})
-	pqPay := env.TxnInfo.NewTxn(txntest.Txn{
+	hashedPay := env.TxnInfo.NewTxn(txntest.Txn{
 		Type:     protocol.PaymentTx,
 		Sender:   sender.Addr,
 		Receiver: sender.Addr,
 		Fee:      placeholderFee,
 	})
-	txgroup := txntest.Group(&rekey, &pqPay)
+	txgroup := txntest.Group(&rekey, &hashedPay)
 	txgroup[0] = txgroup[0].Txn.Sign(sender.Sk)
 	txgroup[1].AuthAddr = sender.Addr
-	txgroup[1].PQsig = pqSig
+	txgroup[1].Hsig = hsig
 
-	return txgroup, pqAuthorizer
+	return txgroup, saltedAuthorizer
 }
 
-func makeAppThenPlaceholderPQFixSignersGroup(t *testing.T, env *simulationtesting.Environment, pqAuthorizer basics.Address, pqSig transactions.PQSig) []transactions.SignedTxn {
+func makeAppThenPlaceholderHashedKeySigFixSignersGroup(t *testing.T, env *simulationtesting.Environment, saltedAuthorizer basics.Address, hsig transactions.HashedKeySig) []transactions.SignedTxn {
 	t.Helper()
 
 	sender := env.Accounts[0]
@@ -6814,55 +6814,55 @@ func makeAppThenPlaceholderPQFixSignersGroup(t *testing.T, env *simulationtestin
 		ApprovalProgram:   "#pragma version 2\nint 1",
 		ClearStateProgram: "#pragma version 2\nint 1",
 	})
-	env.Rekey(sender.Addr, pqAuthorizer)
+	env.Rekey(sender.Addr, saltedAuthorizer)
 
 	proto := env.TxnInfo.CurrentProtocolParams()
-	pqFee, _ := pqPlaceholderFeeUsage(t, proto, pqSig.Scheme)
+	schemeFee, _ := hashedKeySigPlaceholderFeeUsage(t, proto, hsig.Scheme)
 	appCall := env.TxnInfo.NewTxn(txntest.Txn{
 		Type:          protocol.ApplicationCallTx,
 		Sender:        appCaller.Addr,
 		ApplicationID: appID,
 		Fee:           proto.MinTxnFee,
 	})
-	pqPay := env.TxnInfo.NewTxn(txntest.Txn{
+	hashedPay := env.TxnInfo.NewTxn(txntest.Txn{
 		Type:     protocol.PaymentTx,
 		Sender:   sender.Addr,
 		Receiver: sender.Addr,
-		Fee:      pqFee.Raw,
+		Fee:      schemeFee.Raw,
 	})
-	txgroup := txntest.Group(&appCall, &pqPay)
+	txgroup := txntest.Group(&appCall, &hashedPay)
 	txgroup[0] = txgroup[0].Txn.Sign(appCaller.Sk)
-	txgroup[1].PQsig = pqSig
+	txgroup[1].Hsig = hsig
 	return txgroup
 }
 
-func TestPlaceholderPQSignatures(t *testing.T) {
+func TestPlaceholderHashedKeySignatures(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	for _, tc := range basics_testing.PQTestSchemes {
+	for _, tc := range basics_testing.SigSchemeTests {
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
-			testPlaceholderPQSignatures(t, tc.Scheme)
+			testPlaceholderHashedKeySignatures(t, tc.Scheme)
 		})
 	}
 }
 
-func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
+func testPlaceholderHashedKeySignatures(t *testing.T, scheme protocol.SigScheme) {
 	t.Run("invalid public key", func(t *testing.T) {
 		t.Parallel()
 		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
-			_, pqUsage := pqPlaceholderFeeUsage(t, env.TxnInfo.CurrentProtocolParams(), scheme)
-			_, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 1)
-			pqSig.PublicKey = pqSig.PublicKey[:len(pqSig.PublicKey)-1]
-			authorizer := pqSig.Address()
+			_, schemeUsage := hashedKeySigPlaceholderFeeUsage(t, env.TxnInfo.CurrentProtocolParams(), scheme)
+			_, hsig := makePlaceholderHashedKeySigForSimulation(t, scheme, 1)
+			hsig.PublicKey = hsig.PublicKey[:len(hsig.PublicKey)-1]
+			authorizer := hsig.Address()
 			txn := env.TxnInfo.NewTxn(txntest.Txn{
 				Type:     protocol.PaymentTx,
 				Sender:   authorizer,
 				Receiver: authorizer,
 			})
 			stxn := txn.SignedTxn()
-			stxn.PQsig = pqSig
+			stxn.Hsig = hsig
 
 			return simulationTestCase{
 				input: simulation.Request{
@@ -6880,7 +6880,7 @@ func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 						{
 							FailedAt:      simulation.TxnPath{0},
 							Txns:          []simulation.TxnResult{{FeesPaid: stxn.Txn.Fee}},
-							GroupUsage:    pqUsage,
+							GroupUsage:    schemeUsage,
 							GroupFeesPaid: stxn.Txn.Fee,
 						},
 					},
@@ -6892,23 +6892,23 @@ func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 	t.Run("wrong salt", func(t *testing.T) {
 		t.Parallel()
 		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
-			_, pqUsage := pqPlaceholderFeeUsage(t, env.TxnInfo.CurrentProtocolParams(), scheme)
-			authorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 2)
-			pqSig.Salt ^= 1
+			_, schemeUsage := hashedKeySigPlaceholderFeeUsage(t, env.TxnInfo.CurrentProtocolParams(), scheme)
+			authorizer, hsig := makePlaceholderHashedKeySigForSimulation(t, scheme, 2)
+			hsig.Salt ^= 1
 			txn := env.TxnInfo.NewTxn(txntest.Txn{
 				Type:     protocol.PaymentTx,
 				Sender:   authorizer,
 				Receiver: authorizer,
 			})
 			stxn := txn.SignedTxn()
-			stxn.PQsig = pqSig
+			stxn.Hsig = hsig
 
 			return simulationTestCase{
 				input: simulation.Request{
 					TxnGroups:            [][]transactions.SignedTxn{{stxn}},
 					AllowEmptySignatures: true,
 				},
-				expectedError: "pq signature authorizer mismatch",
+				expectedError: "hashed-key signature authorizer mismatch",
 				expected: simulation.Result{
 					Version:   simulation.ResultLatestVersion,
 					LastRound: env.TxnInfo.LatestRound(),
@@ -6919,7 +6919,7 @@ func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 						{
 							FailedAt:      simulation.TxnPath{0},
 							Txns:          []simulation.TxnResult{{FeesPaid: stxn.Txn.Fee}},
-							GroupUsage:    pqUsage,
+							GroupUsage:    schemeUsage,
 							GroupFeesPaid: stxn.Txn.Fee,
 						},
 					},
@@ -6931,8 +6931,8 @@ func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 	t.Run("FixSigners fixes placeholder AuthAddr", func(t *testing.T) {
 		t.Parallel()
 		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
-			pqFee, pqUsage := pqPlaceholderFeeUsage(t, env.TxnInfo.CurrentProtocolParams(), scheme)
-			txgroup, pqAuthorizer := makePlaceholderPQFixSignersGroup(t, env, scheme, pqFee.Raw)
+			schemeFee, schemeUsage := hashedKeySigPlaceholderFeeUsage(t, env.TxnInfo.CurrentProtocolParams(), scheme)
+			txgroup, saltedAuthorizer := makePlaceholderHashedKeySigFixSignersGroup(t, env, scheme, schemeFee.Raw)
 
 			return simulationTestCase{
 				input: simulation.Request{
@@ -6951,9 +6951,9 @@ func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 						{
 							Txns: []simulation.TxnResult{
 								{FeesPaid: txgroup[0].Txn.Fee},
-								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: pqAuthorizer},
+								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: saltedAuthorizer},
 							},
-							GroupUsage:    1e6 + pqUsage,
+							GroupUsage:    1e6 + schemeUsage,
 							GroupFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
 						},
 					},
@@ -6966,12 +6966,12 @@ func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 		t.Parallel()
 		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 			sender := env.Accounts[0]
-			authorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 3)
+			authorizer, hsig := makePlaceholderHashedKeySigForSimulation(t, scheme, 3)
 			ops, err := logic.AssembleStringWithVersion("int 1", 2)
 			require.NoError(t, err)
 			proto := env.TxnInfo.CurrentProtocolParams()
 			minFee := proto.MinTxnFee
-			pqFee, pqUsage := pqPlaceholderFeeUsage(t, proto, scheme)
+			schemeFee, schemeUsage := hashedKeySigPlaceholderFeeUsage(t, proto, scheme)
 
 			rekey := env.TxnInfo.NewTxn(txntest.Txn{
 				Type:     protocol.PaymentTx,
@@ -6984,14 +6984,14 @@ func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 				Type:     protocol.PaymentTx,
 				Sender:   sender.Addr,
 				Receiver: sender.Addr,
-				Fee:      pqFee.Raw,
+				Fee:      schemeFee.Raw,
 			})
 			txgroup := txntest.Group(&rekey, &delegatedPay)
 			txgroup[0] = txgroup[0].Txn.Sign(sender.Sk)
 			txgroup[1].AuthAddr = sender.Addr
 			txgroup[1].Lsig = transactions.LogicSig{
 				Logic: ops.Program,
-				PQsig: pqSig,
+				Hsig:  hsig,
 			}
 
 			return simulationTestCase{
@@ -7013,7 +7013,7 @@ func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 								{FeesPaid: txgroup[0].Txn.Fee},
 								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: authorizer, LogicSigBudgetConsumed: 2},
 							},
-							GroupUsage:    1e6 + pqUsage,
+							GroupUsage:    1e6 + schemeUsage,
 							GroupFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
 						},
 					},
@@ -7026,12 +7026,12 @@ func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 		t.Parallel()
 		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 			sender := env.Accounts[0]
-			authorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 4)
+			authorizer, hsig := makePlaceholderHashedKeySigForSimulation(t, scheme, 4)
 			ops, err := logic.AssembleStringWithVersion("int 0", 2)
 			require.NoError(t, err)
 			proto := env.TxnInfo.CurrentProtocolParams()
 			minFee := proto.MinTxnFee
-			pqFee, pqUsage := pqPlaceholderFeeUsage(t, proto, scheme)
+			schemeFee, schemeUsage := hashedKeySigPlaceholderFeeUsage(t, proto, scheme)
 
 			rekey := env.TxnInfo.NewTxn(txntest.Txn{
 				Type:     protocol.PaymentTx,
@@ -7044,14 +7044,14 @@ func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 				Type:     protocol.PaymentTx,
 				Sender:   sender.Addr,
 				Receiver: sender.Addr,
-				Fee:      pqFee.Raw,
+				Fee:      schemeFee.Raw,
 			})
 			txgroup := txntest.Group(&rekey, &delegatedPay)
 			txgroup[0] = txgroup[0].Txn.Sign(sender.Sk)
 			txgroup[1].AuthAddr = sender.Addr
 			txgroup[1].Lsig = transactions.LogicSig{
 				Logic: ops.Program,
-				PQsig: pqSig,
+				Hsig:  hsig,
 			}
 
 			return simulationTestCase{
@@ -7077,7 +7077,7 @@ func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: authorizer, LogicSigBudgetConsumed: 2},
 							},
 							FailedAt:      simulation.TxnPath{1},
-							GroupUsage:    1e6 + pqUsage,
+							GroupUsage:    1e6 + schemeUsage,
 							GroupFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
 						},
 					},
@@ -7092,13 +7092,13 @@ func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 		defer env.Close()
 
 		sender := env.Accounts[0]
-		authorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 5)
-		pqSig.Salt ^= 1
+		authorizer, hsig := makePlaceholderHashedKeySigForSimulation(t, scheme, 5)
+		hsig.Salt ^= 1
 		ops, err := logic.AssembleStringWithVersion("int 1", 2)
 		require.NoError(t, err)
 		proto := env.TxnInfo.CurrentProtocolParams()
 		minFee := proto.MinTxnFee
-		pqFee, _ := pqPlaceholderFeeUsage(t, proto, scheme)
+		schemeFee, _ := hashedKeySigPlaceholderFeeUsage(t, proto, scheme)
 
 		rekey := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
@@ -7111,14 +7111,14 @@ func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
 			Receiver: sender.Addr,
-			Fee:      pqFee.Raw,
+			Fee:      schemeFee.Raw,
 		})
 		txgroup := txntest.Group(&rekey, &delegatedPay)
 		txgroup[0] = txgroup[0].Txn.Sign(sender.Sk)
 		txgroup[1].AuthAddr = sender.Addr
 		txgroup[1].Lsig = transactions.LogicSig{
 			Logic: ops.Program,
-			PQsig: pqSig,
+			Hsig:  hsig,
 		}
 
 		result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
@@ -7127,7 +7127,7 @@ func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 			FixSigners:           true,
 		})
 		require.NoError(t, err)
-		require.Contains(t, result.TxnGroups[0].FailureMessage, "pq signature authorizer mismatch")
+		require.Contains(t, result.TxnGroups[0].FailureMessage, "hashed-key signature authorizer mismatch")
 		require.Equal(t, simulation.TxnPath{1}, result.TxnGroups[0].FailedAt)
 		require.Nil(t, result.Block)
 	})
@@ -7135,9 +7135,9 @@ func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 	t.Run("FixSigners validates full placeholder after app signer fix", func(t *testing.T) {
 		t.Parallel()
 		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
-			_, pqUsage := pqPlaceholderFeeUsage(t, env.TxnInfo.CurrentProtocolParams(), scheme)
-			pqAuthorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 3)
-			txgroup := makeAppThenPlaceholderPQFixSignersGroup(t, &env, pqAuthorizer, pqSig)
+			_, schemeUsage := hashedKeySigPlaceholderFeeUsage(t, env.TxnInfo.CurrentProtocolParams(), scheme)
+			saltedAuthorizer, hsig := makePlaceholderHashedKeySigForSimulation(t, scheme, 3)
+			txgroup := makeAppThenPlaceholderHashedKeySigFixSignersGroup(t, &env, saltedAuthorizer, hsig)
 
 			return simulationTestCase{
 				input: simulation.Request{
@@ -7159,11 +7159,11 @@ func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 									AppBudgetConsumed: ignoreAppBudgetConsumed,
 									FeesPaid:          txgroup[0].Txn.Fee,
 								},
-								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: pqAuthorizer},
+								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: saltedAuthorizer},
 							},
 							AppBudgetAdded:    700,
 							AppBudgetConsumed: ignoreAppBudgetConsumed,
-							GroupUsage:        1e6 + pqUsage,
+							GroupUsage:        1e6 + schemeUsage,
 							GroupFeesPaid:     basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
 						},
 					},
@@ -7177,9 +7177,9 @@ func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 		env := simulationtesting.PrepareSimulatorTest(t)
 		defer env.Close()
 
-		pqAuthorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 4)
-		pqSig.Salt ^= 1
-		txgroup := makeAppThenPlaceholderPQFixSignersGroup(t, &env, pqAuthorizer, pqSig)
+		saltedAuthorizer, hsig := makePlaceholderHashedKeySigForSimulation(t, scheme, 4)
+		hsig.Salt ^= 1
+		txgroup := makeAppThenPlaceholderHashedKeySigFixSignersGroup(t, &env, saltedAuthorizer, hsig)
 
 		result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
 			TxnGroups:            [][]transactions.SignedTxn{txgroup},
@@ -7187,24 +7187,24 @@ func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 			FixSigners:           true,
 		})
 		require.NoError(t, err)
-		require.Contains(t, result.TxnGroups[0].FailureMessage, "pq signature authorizer mismatch")
+		require.Contains(t, result.TxnGroups[0].FailureMessage, "hashed-key signature authorizer mismatch")
 		require.Equal(t, simulation.TxnPath{1}, result.TxnGroups[0].FailedAt)
 		require.Nil(t, result.Block)
 	})
 
-	t.Run("scheme-only placeholder pays PQ surcharge", func(t *testing.T) {
+	t.Run("scheme-only placeholder pays scheme surcharge", func(t *testing.T) {
 		t.Parallel()
 		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
-			pqFee, pqUsage := pqPlaceholderFeeUsage(t, env.TxnInfo.CurrentProtocolParams(), scheme)
+			schemeFee, schemeUsage := hashedKeySigPlaceholderFeeUsage(t, env.TxnInfo.CurrentProtocolParams(), scheme)
 			sender := env.Accounts[0]
 			txn := env.TxnInfo.NewTxn(txntest.Txn{
 				Type:     protocol.PaymentTx,
 				Sender:   sender.Addr,
 				Receiver: sender.Addr,
-				Fee:      pqFee.Raw,
+				Fee:      schemeFee.Raw,
 			})
 			stxn := txn.SignedTxn()
-			stxn.PQsig = transactions.PQSig{Scheme: scheme}
+			stxn.Hsig = transactions.HashedKeySig{Scheme: scheme}
 
 			return simulationTestCase{
 				input: simulation.Request{
@@ -7220,7 +7220,7 @@ func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 					TxnGroups: []simulation.TxnGroupResult{
 						{
 							Txns:          []simulation.TxnResult{{FeesPaid: stxn.Txn.Fee}},
-							GroupUsage:    pqUsage,
+							GroupUsage:    schemeUsage,
 							GroupFeesPaid: stxn.Txn.Fee,
 						},
 					},
@@ -7229,16 +7229,16 @@ func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 		})
 	})
 
-	t.Run("placeholder pays PQ surcharge", func(t *testing.T) {
+	t.Run("placeholder pays scheme surcharge", func(t *testing.T) {
 		t.Parallel()
 		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 			proto := env.TxnInfo.CurrentProtocolParams()
-			_, pqUsage := pqPlaceholderFeeUsage(t, proto, scheme)
-			txgroup, pqAuthorizer := makePlaceholderPQFixSignersGroup(t, env, scheme, proto.MinTxnFee)
+			_, schemeUsage := hashedKeySigPlaceholderFeeUsage(t, proto, scheme)
+			txgroup, saltedAuthorizer := makePlaceholderHashedKeySigFixSignersGroup(t, env, scheme, proto.MinTxnFee)
 			var expectedError string
 			var failedAt simulation.TxnPath
-			if pqUsage > 1e6 {
-				expectedError = fmt.Sprintf("usage=%s", 1e6+pqUsage)
+			if schemeUsage > 1e6 {
+				expectedError = fmt.Sprintf("usage=%s", 1e6+schemeUsage)
 				failedAt = simulation.TxnPath{1}
 			}
 
@@ -7261,9 +7261,9 @@ func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 							FailedAt: failedAt,
 							Txns: []simulation.TxnResult{
 								{FeesPaid: txgroup[0].Txn.Fee},
-								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: pqAuthorizer},
+								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: saltedAuthorizer},
 							},
-							GroupUsage:    1e6 + pqUsage,
+							GroupUsage:    1e6 + schemeUsage,
 							GroupFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
 						},
 					},
@@ -7273,30 +7273,30 @@ func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 	})
 }
 
-// TestDelegatedLogicSigPQSigNotPlaceholder ensures that a LogicSig "delegated"
-// by an ls-scheme PQSig is not treated as a placeholder. Consensus never
+// TestDelegatedLogicSigHashedKeySigNotPlaceholder ensures that a LogicSig "delegated"
+// by an ls-scheme HashedKeySig is not treated as a placeholder. Consensus never
 // accepts such a delegation, so simulation must not succeed by running the
 // program as an escrow.
-func TestDelegatedLogicSigPQSigNotPlaceholder(t *testing.T) {
+func TestDelegatedLogicSigHashedKeySigNotPlaceholder(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	require.True(t, env.TxnInfo.CurrentProtocolParams().EnablePQSchemeLogicSig)
+	require.True(t, env.TxnInfo.CurrentProtocolParams().EnableSigSchemeLogicSig)
 
 	sender := env.Accounts[0]
 	ops, err := logic.AssembleStringWithVersion("int 1", 2)
 	require.NoError(t, err)
-	salt, lsAddr, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeLogicSig, ops.Program)
+	salt, lsAddr, err := basics.CanonicalAddressSalt(protocol.SigSchemeLogicSig, ops.Program)
 	require.NoError(t, err)
 
 	for _, tc := range []struct {
-		name  string
-		pqSig transactions.PQSig
+		name string
+		hsig transactions.HashedKeySig
 	}{
-		{"scheme only", transactions.PQSig{Scheme: protocol.PQSchemeLogicSig}},
-		{"full", transactions.PQSig{Scheme: protocol.PQSchemeLogicSig, Salt: salt, PublicKey: ops.Program}},
+		{"scheme only", transactions.HashedKeySig{Scheme: protocol.SigSchemeLogicSig}},
+		{"full", transactions.HashedKeySig{Scheme: protocol.SigSchemeLogicSig, Salt: salt, PublicKey: ops.Program}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			stxn := env.TxnInfo.NewTxn(txntest.Txn{
@@ -7307,7 +7307,7 @@ func TestDelegatedLogicSigPQSigNotPlaceholder(t *testing.T) {
 			stxn.AuthAddr = lsAddr
 			stxn.Lsig = transactions.LogicSig{
 				Logic: ops.Program,
-				PQsig: tc.pqSig,
+				Hsig:  tc.hsig,
 			}
 
 			result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
@@ -7315,7 +7315,7 @@ func TestDelegatedLogicSigPQSigNotPlaceholder(t *testing.T) {
 				AllowEmptySignatures: true,
 			})
 			require.NoError(t, err)
-			require.Contains(t, result.TxnGroups[0].FailureMessage, "pq delegated logic signature validation failed")
+			require.Contains(t, result.TxnGroups[0].FailureMessage, "hashed-key signature delegation validation failed")
 			require.Equal(t, simulation.TxnPath{0}, result.TxnGroups[0].FailedAt)
 			require.Nil(t, result.Block)
 		})

@@ -46,23 +46,23 @@ func TestAuthorizeWithProgram(t *testing.T) {
 	legacyAddr := basics.Address(logic.HashProgram(program))
 	saltedSalt, saltedAddr := saltedProgramAuthorizer(program)
 	require.NotEqual(t, legacyAddr, saltedAddr)
-	require.True(t, saltedAddr.IsPQCompliant())
+	require.True(t, saltedAddr.IsOffEd25519Curve())
 
 	// Without the flag, a program authorizes from its hash, as it always has.
 	legacy := transactions.SignedTxn{Txn: transactions.Transaction{Header: transactions.Header{Sender: legacyAddr}}}
 	authorizeWithProgram(&legacy, lsig, false)
 	require.Equal(t, lsig, legacy.Lsig)
-	require.True(t, legacy.PQsig.Blank())
+	require.True(t, legacy.Hsig.Blank())
 
 	// The flag moves it to the salted form, which carries the args in place of
 	// signature bytes.
 	salted := transactions.SignedTxn{Txn: transactions.Transaction{Header: transactions.Header{Sender: saltedAddr}}}
 	authorizeWithProgram(&salted, lsig, true)
 	require.True(t, salted.Lsig.Blank())
-	require.Equal(t, protocol.PQSchemeLogicSig, salted.PQsig.Scheme)
-	require.Equal(t, saltedSalt, salted.PQsig.Salt)
-	require.Equal(t, program, salted.PQsig.PublicKey)
-	decoded, err := salted.PQsig.Lsig()
+	require.Equal(t, protocol.SigSchemeLogicSig, salted.Hsig.Scheme)
+	require.Equal(t, saltedSalt, salted.Hsig.Salt)
+	require.Equal(t, program, salted.Hsig.PublicKey)
+	decoded, err := salted.Hsig.Lsig()
 	require.NoError(t, err)
 	require.Equal(t, lsig.Args, [][]byte(decoded.Args))
 
@@ -70,7 +70,7 @@ func TestAuthorizeWithProgram(t *testing.T) {
 	// so a caller who knows the account need not say which form it uses.
 	inferred := transactions.SignedTxn{Txn: transactions.Transaction{Header: transactions.Header{Sender: saltedAddr}}}
 	authorizeWithProgram(&inferred, lsig, false)
-	require.Equal(t, salted.PQsig, inferred.PQsig)
+	require.Equal(t, salted.Hsig, inferred.Hsig)
 
 	// Rekeying names the authorizer somewhere other than the sender, and that is
 	// what the form is read from.
@@ -79,7 +79,7 @@ func TestAuthorizeWithProgram(t *testing.T) {
 		AuthAddr: saltedAddr,
 	}
 	authorizeWithProgram(&rekeyed, lsig, false)
-	require.Equal(t, salted.PQsig, rekeyed.PQsig)
+	require.Equal(t, salted.Hsig, rekeyed.Hsig)
 }
 
 func TestDeterminePathToSourceFromSourceMap(t *testing.T) {

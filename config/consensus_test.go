@@ -60,14 +60,14 @@ func TestConsensusParams(t *testing.T) {
 	}
 }
 
-// TestPQSchemeLogicSigParams pins the consensus-parameter invariants of the ls
+// TestSigSchemeLogicSigParams pins the consensus-parameter invariants of the ls
 // scheme, which differs from the DSA-backed schemes in ways that are easy to
 // undo by accident.
-func TestPQSchemeLogicSigParams(t *testing.T) {
+func TestSigSchemeLogicSigParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	for proto, params := range Consensus {
-		if params.EnablePQSchemeLogicSig {
+		if params.EnableSigSchemeLogicSig {
 			// A delegating ls account runs two programs against one budget. The
 			// unpooled fallback in EvalContext.remainingBudget would hand each a
 			// full LogicSigMaxCost instead.

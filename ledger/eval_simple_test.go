@@ -1427,7 +1427,7 @@ func TestRekeying(t *testing.T) {
 	// TODO: More tests
 }
 
-func signPQRekeyTestTxn(t *testing.T, acct basics_testing.PQTestAccount, txn transactions.Transaction, authAddr basics.Address) transactions.SignedTxn {
+func signHashedKeyRekeyTestTxn(t *testing.T, acct basics_testing.HashedKeySigTestAccount, txn transactions.Transaction, authAddr basics.Address) transactions.SignedTxn {
 	t.Helper()
 
 	signature, err := acct.Signer.Sign(txn)
@@ -1436,7 +1436,7 @@ func signPQRekeyTestTxn(t *testing.T, acct basics_testing.PQTestAccount, txn tra
 	return transactions.SignedTxn{
 		Txn:      txn,
 		AuthAddr: authAddr,
-		PQsig: transactions.PQSig{
+		Hsig: transactions.HashedKeySig{
 			Scheme:    acct.Scheme,
 			Salt:      acct.Salt,
 			PublicKey: acct.PublicKey,
@@ -1445,24 +1445,24 @@ func signPQRekeyTestTxn(t *testing.T, acct basics_testing.PQTestAccount, txn tra
 	}
 }
 
-func TestPQRekeyedAddressAuthorization(t *testing.T) {
+func TestSaltedRekeyedAddressAuthorization(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	for _, tc := range basics_testing.PQTestSchemes {
+	for _, tc := range basics_testing.SigSchemeTests {
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
 
 			genesisInitState, addrs, keys := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
 
-			pqAcct := basics_testing.MakePQTestAccount(t, 0, tc.Scheme)
+			saltedAcct := basics_testing.MakeHashedKeySigTestAccount(t, 0, tc.Scheme)
 
 			proto := config.Consensus[protocol.ConsensusFuture]
-			require.True(t, transactions.PQSchemeEnabled(proto, pqAcct.Scheme))
-			pqFee, _, overflow := proto.MinFee().FeeForUsage(basics.Micros(1e6)+transactions.PQSchemeFeeContribution(proto, pqAcct.Scheme), 1e6, 0)
+			require.True(t, transactions.SigSchemeEnabled(proto, saltedAcct.Scheme))
+			hsigFee, _, overflow := proto.MinFee().FeeForUsage(basics.Micros(1e6)+transactions.SigSchemeFeeContribution(proto, saltedAcct.Scheme), 1e6, 0)
 			require.False(t, overflow)
 
-			genesisInitState.Accounts[pqAcct.Address] = basics.AccountData{
+			genesisInitState.Accounts[saltedAcct.Address] = basics.AccountData{
 				MicroAlgos: basics.MicroAlgos{Raw: 10_000_000},
 				Status:     basics.Offline,
 			}
@@ -1518,39 +1518,39 @@ func TestPQRekeyedAddressAuthorization(t *testing.T) {
 				return err
 			}
 
-			edRekeyToPQ := makePayTxn(addrs[0], addrs[0], minFee, pqAcct.Address, 1).Sign(keys[0])
-			edSpendByPQTxn := makePayTxn(addrs[0], addrs[1], pqFee, basics.Address{}, 2)
-			edSpendByPQ := signPQRekeyTestTxn(t, pqAcct, edSpendByPQTxn, pqAcct.Address)
+			edRekeyToSalted := makePayTxn(addrs[0], addrs[0], minFee, saltedAcct.Address, 1).Sign(keys[0])
+			edSpendByHashedKeyTxn := makePayTxn(addrs[0], addrs[1], hsigFee, basics.Address{}, 2)
+			edSpendByHashedKey := signHashedKeyRekeyTestTxn(t, saltedAcct, edSpendByHashedKeyTxn, saltedAcct.Address)
 
-			require.NoError(t, tryBlock([]transactions.SignedTxn{edRekeyToPQ, edSpendByPQ}))
-			require.ErrorContains(t, tryBlock([]transactions.SignedTxn{edSpendByPQ}), "should have been authorized by")
+			require.NoError(t, tryBlock([]transactions.SignedTxn{edRekeyToSalted, edSpendByHashedKey}))
+			require.ErrorContains(t, tryBlock([]transactions.SignedTxn{edSpendByHashedKey}), "should have been authorized by")
 
-			pqRekeyToEdTxn := makePayTxn(pqAcct.Address, addrs[1], pqFee, addrs[2], 3)
-			pqRekeyToEd := signPQRekeyTestTxn(t, pqAcct, pqRekeyToEdTxn, basics.Address{})
-			pqSpendByEd := makePayTxn(pqAcct.Address, addrs[1], minFee, basics.Address{}, 4).Sign(keys[2])
+			saltedRekeyToEdTxn := makePayTxn(saltedAcct.Address, addrs[1], hsigFee, addrs[2], 3)
+			saltedRekeyToEd := signHashedKeyRekeyTestTxn(t, saltedAcct, saltedRekeyToEdTxn, basics.Address{})
+			saltedSpendByEd := makePayTxn(saltedAcct.Address, addrs[1], minFee, basics.Address{}, 4).Sign(keys[2])
 
-			require.NoError(t, tryBlock([]transactions.SignedTxn{pqRekeyToEd, pqSpendByEd}))
-			require.ErrorContains(t, tryBlock([]transactions.SignedTxn{pqSpendByEd}), "should have been authorized by")
+			require.NoError(t, tryBlock([]transactions.SignedTxn{saltedRekeyToEd, saltedSpendByEd}))
+			require.ErrorContains(t, tryBlock([]transactions.SignedTxn{saltedSpendByEd}), "should have been authorized by")
 		})
 	}
 }
 
-// TestPQLogicSigRekeyedAddressAuthorization is TestPQRekeyedAddressAuthorization
-// for the ls scheme, which has no key: an ls PQsig authorizes by running the
+// TestSaltedLogicSigRekeyedAddressAuthorization is TestSaltedRekeyedAddressAuthorization
+// for the ls scheme, which has no key: an ls Hsig authorizes by running the
 // program its address commits to.
-func TestPQLogicSigRekeyedAddressAuthorization(t *testing.T) {
+func TestSaltedLogicSigRekeyedAddressAuthorization(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	genesisInitState, addrs, keys := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-	require.True(t, proto.EnablePQSchemeLogicSig)
+	require.True(t, proto.EnableSigSchemeLogicSig)
 	minFee := proto.MinFee()
 
 	// #pragma version 14; pushbytes "open sesame"; arg_0; ==
 	program := []byte{0x0e, 0x80, 0x0b, 'o', 'p', 'e', 'n', ' ', 's', 'e', 's', 'a', 'm', 'e', 0x2d, 0x12}
-	salt, lsAddr, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeLogicSig, program)
+	salt, lsAddr, err := basics.CanonicalAddressSalt(protocol.SigSchemeLogicSig, program)
 	require.NoError(t, err)
 
 	genesisInitState.Accounts[lsAddr] = basics.AccountData{
@@ -1588,8 +1588,8 @@ func TestPQLogicSigRekeyedAddressAuthorization(t *testing.T) {
 		return transactions.SignedTxn{
 			Txn:      txn,
 			AuthAddr: authAddr,
-			PQsig: transactions.PQSig{
-				Scheme:    protocol.PQSchemeLogicSig,
+			Hsig: transactions.HashedKeySig{
+				Scheme:    protocol.SigSchemeLogicSig,
 				Salt:      salt,
 				PublicKey: program,
 				Signature: transactions.EncodeLogicSigArgs(transactions.LogicSigArgs{[]byte(arg)}),
@@ -1645,7 +1645,7 @@ func TestPQLogicSigRekeyedAddressAuthorization(t *testing.T) {
 	require.ErrorContains(t, tryBlock([]transactions.SignedTxn{lsRekeyToEd, lsSpendByLs}), "should have been authorized by")
 }
 
-func TestPQChallengedAccountCanHeartbeatForZeroFee(t *testing.T) {
+func TestSaltedChallengedAccountCanHeartbeatForZeroFee(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -1655,19 +1655,19 @@ func TestPQChallengedAccountCanHeartbeatForZeroFee(t *testing.T) {
 	require.NotZero(t, proto.Payouts.ChallengeInterval)
 	require.NotZero(t, proto.Payouts.ChallengeGracePeriod)
 
-	for _, tc := range basics_testing.PQTestSchemes {
+	for _, tc := range basics_testing.SigSchemeTests {
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
 
 			const keyDilution = 777
 			otss := crypto.GenerateOneTimeSignatureSecrets(1, 10)
-			pqAcct := basics_testing.MakePQTestAccount(t, 1, tc.Scheme)
-			require.True(t, transactions.PQSchemeEnabled(proto, pqAcct.Scheme))
+			saltedAcct := basics_testing.MakeHashedKeySigTestAccount(t, 1, tc.Scheme)
+			require.True(t, transactions.SigSchemeEnabled(proto, saltedAcct.Scheme))
 
 			genBalances, _, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
 				cfg.OnlineCount = 5
 			})
-			genBalances.Balances[pqAcct.Address] = basics.AccountData{
+			genBalances.Balances[saltedAcct.Address] = basics.AccountData{
 				MicroAlgos:        basics.MicroAlgos{Raw: 100_000_000},
 				Status:            basics.Online,
 				VoteID:            otss.OneTimeSignatureVerifier,
@@ -1679,9 +1679,9 @@ func TestPQChallengedAccountCanHeartbeatForZeroFee(t *testing.T) {
 				IncentiveEligible: true,
 			}
 
-			seedAndProp := pqAcct.Address
+			seedAndProp := saltedAcct.Address
 			seedAndProp[31] ^= 1
-			require.NotEqual(t, pqAcct.Address, seedAndProp)
+			require.NotEqual(t, saltedAcct.Address, seedAndProp)
 			genBalances.Balances[seedAndProp] = basics.AccountData{
 				MicroAlgos:        basics.MicroAlgos{Raw: 100_000_000},
 				Status:            basics.Online,
@@ -1714,12 +1714,12 @@ func TestPQChallengedAccountCanHeartbeatForZeroFee(t *testing.T) {
 			eval := dl.beginBlock()
 			require.Equal(t, heartbeatRound, eval.Round())
 
-			// A PQ account never pays for a PQ signature on its heartbeat. A heartbeat's
+			// A salted account never pays a scheme surcharge on its heartbeat. A heartbeat's
 			// sender is irrelevant to what it proves (onlineness is proven by HbProof,
 			// signed with the account's participation key), so it is sent by the same
-			// ordinary accepting logicsig everyone uses. That sender carries no PQ
+			// ordinary accepting logicsig everyone uses. That sender carries no scheme
 			// surcharge, and the challenge discount covers the base fee, so the account
-			// stays online for free despite authorizing spends with an expensive PQ key.
+			// stays online for free despite authorizing spends with an expensive scheme key.
 			acceptingProgram := logic.MustAssemble(`#pragma version 11
 int 1`)
 			sender := basics.Address(logic.HashProgram(acceptingProgram))
@@ -1735,7 +1735,7 @@ int 1`)
 					GenesisHash: dl.generator.GenesisHash(),
 				},
 				HeartbeatTxnFields: &transactions.HeartbeatTxnFields{
-					HbAddress:           pqAcct.Address,
+					HbAddress:           saltedAcct.Address,
 					HbProof:             otss.Sign(id, lastHdr.Seed).ToHeartbeatProof(),
 					HbSeed:              lastHdr.Seed,
 					HbVoteID:            otss.OneTimeSignatureVerifier,
@@ -1751,7 +1751,7 @@ int 1`)
 			vb := dl.endBlock()
 			require.Equal(t, heartbeatRound, vb.Block().Round())
 
-			after := lookup(t, dl.generator, pqAcct.Address)
+			after := lookup(t, dl.generator, saltedAcct.Address)
 			require.Equal(t, heartbeatRound, after.LastHeartbeat)
 		})
 	}

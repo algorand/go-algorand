@@ -49,7 +49,7 @@ import (
 //     |-----> MsgIsZero
 //     |-----> NetworkIDMaxSize()
 //
-// PQScheme
+// SigScheme
 //     |-----> (*) MarshalMsg
 //     |-----> (*) CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
@@ -57,7 +57,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
-//     |-----> PQSchemeMaxSize()
+//     |-----> SigSchemeMaxSize()
 //
 // StateProofType
 //        |-----> MarshalMsg
@@ -338,19 +338,19 @@ func NetworkIDMaxSize() (s int) {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *PQScheme) MarshalMsg(b []byte) (o []byte) {
+func (z *SigScheme) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
 	return
 }
 
-func (_ *PQScheme) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*PQScheme)
+func (_ *SigScheme) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*SigScheme)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *PQScheme) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+func (z *SigScheme) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
 	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
@@ -365,27 +365,27 @@ func (z *PQScheme) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o 
 	return
 }
 
-func (z *PQScheme) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *SigScheme) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
 }
-func (_ *PQScheme) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*PQScheme)
+func (_ *SigScheme) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*SigScheme)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *PQScheme) Msgsize() (s int) {
+func (z *SigScheme) Msgsize() (s int) {
 	s = msgp.ArrayHeaderSize + (2 * (msgp.ByteSize))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *PQScheme) MsgIsZero() bool {
-	return (*z) == (PQScheme{})
+func (z *SigScheme) MsgIsZero() bool {
+	return (*z) == (SigScheme{})
 }
 
-// PQSchemeMaxSize returns a maximum valid message size for this message type
-func PQSchemeMaxSize() (s int) {
+// SigSchemeMaxSize returns a maximum valid message size for this message type
+func SigSchemeMaxSize() (s int) {
 	// Calculating size of array: z
 	s = msgp.ArrayHeaderSize + ((2) * (msgp.ByteSize))
 	return

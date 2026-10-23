@@ -121,7 +121,7 @@ The base64 encoding of the signature will always be printed to stdout. Optionall
 		var progHash crypto.Digest
 		var stxn transactions.SignedTxn
 		// lsig is the program authorizing stxn and its arguments, which an
-		// ls-scheme PQsig carries instead of stxn.Lsig.
+		// ls-scheme Hsig carries instead of stxn.Lsig.
 		var lsig transactions.LogicSig
 		if lsigTxnFilename != "" {
 			// If passed a SignedTxn with a logic sig, compute
@@ -137,8 +137,8 @@ The base64 encoding of the signature will always be printed to stdout. Optionall
 			}
 
 			lsig = stxn.Lsig
-			if stxn.PQsig.IsLogicSig() {
-				lsig, err2 = stxn.PQsig.Lsig()
+			if stxn.Hsig.IsLogicSig() {
+				lsig, err2 = stxn.Hsig.Lsig()
 				if err2 != nil {
 					reportErrorf(txDecodeError, lsigTxnFilename, err2)
 				}
@@ -228,8 +228,8 @@ The base64 encoding of the signature will always be printed to stdout. Optionall
 				lsig.Args = append(lsig.Args, nil)
 			}
 			lsig.Args[setLsigArg] = signature[:]
-			if stxn.PQsig.IsLogicSig() {
-				stxn.PQsig.Signature = transactions.EncodeLogicSigArgs(lsig.Args)
+			if stxn.Hsig.IsLogicSig() {
+				stxn.Hsig.Signature = transactions.EncodeLogicSigArgs(lsig.Args)
 			} else {
 				stxn.Lsig.Args = lsig.Args
 			}

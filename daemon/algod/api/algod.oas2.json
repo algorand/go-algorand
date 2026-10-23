@@ -1231,7 +1231,7 @@
             }
           },
           {
-            "description": "Skip post-quantum address checks, including the check that rejects PQ authorizer and LogicSig escrow (TEAL v13 or later) whose address is an Edwards25519 curve point. This should only be used if you understand the risks and know what you are doing.",
+            "description": "Skip off-curve address checks, including the check that rejects hashed-key signature authorizer and LogicSig escrow (TEAL v13 or later) whose address is an Edwards25519 curve point. This should only be used if you understand the risks and know what you are doing.",
             "name": "skip-pq-address-check",
             "in": "query",
             "type": "boolean"
@@ -1290,7 +1290,7 @@
             }
           },
           {
-            "description": "Skip post-quantum address checks, including the check that rejects PQ authorizer and LogicSig escrow (TEAL v13 or later) whose address is an Edwards25519 curve point. This should only be used if you understand the risks and know what you are doing.",
+            "description": "Skip off-curve address checks, including the check that rejects hashed-key signature authorizer and LogicSig escrow (TEAL v13 or later) whose address is an Edwards25519 curve point. This should only be used if you understand the risks and know what you are doing.",
             "name": "skip-pq-address-check",
             "in": "query",
             "type": "boolean"
@@ -4162,7 +4162,7 @@
     "sig-type": {
       "enum": ["sig", "msig", "lsig", "pqsig"],
       "type": "string",
-      "description": "SigType filters just results using the specified type of signature:\n* sig - Standard\n* msig - MultiSig\n* lsig - LogicSig\n* pqsig - Post-Quantum",
+      "description": "SigType filters just results using the specified type of signature:\n* sig - Standard\n* msig - MultiSig\n* lsig - LogicSig\n* pqsig - Hashed-key authorization",
       "name": "sig-type",
       "in": "query"
     },

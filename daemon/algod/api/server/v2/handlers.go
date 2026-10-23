@@ -1206,7 +1206,7 @@ func isEscrowLogicSig(stxn transactions.SignedTxn) bool {
 	return stxn.Lsig.Sig.Blank() &&
 		stxn.Lsig.Msig.Blank() &&
 		stxn.Lsig.LMsig.Blank() &&
-		stxn.Lsig.PQsig.Blank() &&
+		stxn.Lsig.Hsig.Blank() &&
 		stxn.Authorizer() == basics.Address(logic.HashProgram(stxn.Lsig.Logic))
 }
 
@@ -1226,18 +1226,18 @@ func rejectOnCurveLogicSigPrograms(txgroup []transactions.SignedTxn) error {
 	return nil
 }
 
-func enforcePQAuthorizerCompliance(txgroup []transactions.SignedTxn) error {
+func enforceOffCurveAuthorizers(txgroup []transactions.SignedTxn) error {
 	for txnIdx, stxn := range txgroup {
-		pqSig := stxn.PQsig
-		if pqSig.Blank() && stxn.Lsig.HasProgram() {
-			pqSig = stxn.Lsig.PQsig
+		hsig := stxn.Hsig
+		if hsig.Blank() && stxn.Lsig.HasProgram() {
+			hsig = stxn.Lsig.Hsig
 		}
-		if pqSig.Blank() || len(pqSig.PublicKey) == 0 {
+		if hsig.Blank() || len(hsig.PublicKey) == 0 {
 			continue
 		}
-		authorizer := pqSig.Address()
-		if !authorizer.IsPQCompliant() {
-			return fmt.Errorf("transaction %d: pq signature authorizer address %s is an Edwards25519 curve point (non PQ-compliant)", txnIdx, authorizer)
+		authorizer := hsig.Address()
+		if !authorizer.IsOffEd25519Curve() {
+			return fmt.Errorf("transaction %d: hashed-key signature authorizer address %s is an Edwards25519 curve point", txnIdx, authorizer)
 		}
 	}
 	return nil
@@ -1262,7 +1262,7 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context, params model.RawTransaction
 	}
 
 	if !shouldSkipPqAddressCheck(params.SkipPqAddressCheck) {
-		if err = enforcePQAuthorizerCompliance(txgroup); err != nil {
+		if err = enforceOffCurveAuthorizers(txgroup); err != nil {
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
 		if err = rejectOnCurveLogicSigPrograms(txgroup); err != nil {
@@ -1295,7 +1295,7 @@ func (v2 *Handlers) RawTransactionAsync(ctx echo.Context, params model.RawTransa
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 	if !shouldSkipPqAddressCheck(params.SkipPqAddressCheck) {
-		if err = enforcePQAuthorizerCompliance(txgroup); err != nil {
+		if err = enforceOffCurveAuthorizers(txgroup); err != nil {
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
 		if err = rejectOnCurveLogicSigPrograms(txgroup); err != nil {

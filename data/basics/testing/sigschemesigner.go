@@ -27,9 +27,9 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// PQSigner adapts a PQ scheme's concrete signer to a byte-oriented API so tests
+// SigSchemeSigner adapts a signature scheme's concrete signer to a byte-oriented API so tests
 // can treat all schemes uniformly.
-type PQSigner interface {
+type SigSchemeSigner interface {
 	Sign(message crypto.Hashable) ([]byte, error)
 	SignBytes(data []byte) ([]byte, error)
 	Verify(message crypto.Hashable, sig []byte) error
@@ -84,7 +84,7 @@ func (s ed25519Signer) SignBytes(data []byte) ([]byte, error) {
 	return sig[:], nil
 }
 func (s ed25519Signer) Verify(message crypto.Hashable, sig []byte) error {
-	return crypto.PQEd25519{}.Verify(message, s.PublicKey(), sig)
+	return crypto.Ed25519SchemeVerifier{}.Verify(message, s.PublicKey(), sig)
 }
 func (s ed25519Signer) VerifyBytes(data []byte, sig []byte) error {
 	if len(sig) != len(crypto.Signature{}) || !s.SignatureVerifier.VerifyBytes(data, crypto.Signature(sig)) {
@@ -96,96 +96,96 @@ func (s ed25519Signer) PublicKey() []byte {
 	return slices.Clone(s.SignatureVerifier[:])
 }
 
-// PQTestScheme carries one PQ scheme's test metadata.
-type PQTestScheme struct {
+// SigSchemeTest carries one signature scheme's test metadata.
+type SigSchemeTest struct {
 	// Name is a human-readable scheme name, suitable for subtest names.
 	Name   string
-	Scheme protocol.PQScheme
+	Scheme protocol.SigScheme
 }
 
-// PQTestSchemes lists the supported PQ schemes with their test metadata, for
-// tests that exercise every scheme.
-var PQTestSchemes = []PQTestScheme{
+// SigSchemeTests lists the supported signature schemes with their test metadata, for
+// tests that exercise every scheme. It leaves out ls, which has no key to sign with.
+var SigSchemeTests = []SigSchemeTest{
 	{
 		Name:   "falcon-1024",
-		Scheme: protocol.PQSchemeFalcon1024,
+		Scheme: protocol.SigSchemeFalcon1024,
 	},
 	{
 		Name:   "falcon-512",
-		Scheme: protocol.PQSchemeFalcon512,
+		Scheme: protocol.SigSchemeFalcon512,
 	},
 	{
 		Name:   "ed25519",
-		Scheme: protocol.PQSchemeEd25519,
+		Scheme: protocol.SigSchemeEd25519,
 	},
 }
 
-// PQTestSchemeInfo returns the PQTestSchemes entry for scheme, failing the
+// SigSchemeTestInfo returns the SigSchemeTests entry for scheme, failing the
 // test on an unknown scheme.
-func PQTestSchemeInfo(t testing.TB, scheme protocol.PQScheme) PQTestScheme {
+func SigSchemeTestInfo(t testing.TB, scheme protocol.SigScheme) SigSchemeTest {
 	t.Helper()
 
-	for _, tc := range PQTestSchemes {
+	for _, tc := range SigSchemeTests {
 		if tc.Scheme == scheme {
 			return tc
 		}
 	}
 	t.Fatalf("unknown scheme %s", scheme)
-	return PQTestScheme{}
+	return SigSchemeTest{}
 }
 
-// RandomPQTestScheme randomly picks one of PQTestSchemes.
-func RandomPQTestScheme() PQTestScheme {
+// RandomSigSchemeTest randomly picks one of SigSchemeTests.
+func RandomSigSchemeTest() SigSchemeTest {
 	var selector [1]byte
 	crypto.RandBytes(selector[:])
-	return PQTestSchemes[int(selector[0])%len(PQTestSchemes)]
+	return SigSchemeTests[int(selector[0])%len(SigSchemeTests)]
 }
 
-// MakePQSigner builds a wrapped signer for the given scheme from a
+// MakeSigSchemeSigner builds a wrapped signer for the given scheme from a
 // deterministic seed.
-func MakePQSigner(t testing.TB, firstSeedByte byte, scheme protocol.PQScheme) PQSigner {
+func MakeSigSchemeSigner(t testing.TB, firstSeedByte byte, scheme protocol.SigScheme) SigSchemeSigner {
 	t.Helper()
 
 	var seed crypto.FalconSeed
 	seed[0] = firstSeedByte
 	switch scheme {
-	case protocol.PQSchemeFalcon1024:
+	case protocol.SigSchemeFalcon1024:
 		signer, err := crypto.GenerateFalcon1024Signer(seed)
 		require.NoError(t, err)
 		return falcon1024Signer{signer}
-	case protocol.PQSchemeFalcon512:
+	case protocol.SigSchemeFalcon512:
 		signer, err := crypto.GenerateFalcon512Signer(seed)
 		require.NoError(t, err)
 		return falcon512Signer{signer}
-	case protocol.PQSchemeEd25519:
+	case protocol.SigSchemeEd25519:
 		return ed25519Signer{crypto.GenerateSignatureSecrets(crypto.Seed{firstSeedByte})}
 	}
 	t.Fatalf("unknown scheme %s", scheme)
 	return nil
 }
 
-// PQTestAccount is a PQ-addressed test account: a wrapped signer plus its
-// canonical PQ address derivation.
-type PQTestAccount struct {
-	Signer    PQSigner
-	Scheme    protocol.PQScheme
+// HashedKeySigTestAccount is a test account authorized through HashedKeySig: a wrapped signer plus its
+// canonical salted address derivation.
+type HashedKeySigTestAccount struct {
+	Signer    SigSchemeSigner
+	Scheme    protocol.SigScheme
 	Address   basics.Address
-	Salt      basics.PQAddressSalt
+	Salt      basics.AddressSalt
 	PublicKey []byte
 }
 
-// MakePQTestAccount builds a PQTestAccount for the given scheme from a
+// MakeHashedKeySigTestAccount builds a HashedKeySigTestAccount for the given scheme from a
 // deterministic seed, deriving the canonical salt and address for its public
 // key.
-func MakePQTestAccount(t testing.TB, firstSeedByte byte, scheme protocol.PQScheme) PQTestAccount {
+func MakeHashedKeySigTestAccount(t testing.TB, firstSeedByte byte, scheme protocol.SigScheme) HashedKeySigTestAccount {
 	t.Helper()
 
-	signer := MakePQSigner(t, firstSeedByte, scheme)
+	signer := MakeSigSchemeSigner(t, firstSeedByte, scheme)
 	publicKey := signer.PublicKey()
-	salt, address, err := basics.CanonicalPQAddressSalt(scheme, publicKey)
+	salt, address, err := basics.CanonicalAddressSalt(scheme, publicKey)
 	require.NoError(t, err)
 
-	return PQTestAccount{
+	return HashedKeySigTestAccount{
 		Signer:    signer,
 		Scheme:    scheme,
 		Address:   address,

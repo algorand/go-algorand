@@ -88,9 +88,9 @@ type verifiedTransactionCache struct {
 type txnAuth struct {
 	sig      crypto.Signature
 	authAddr basics.Address
-	lsig     *transactions.LogicSig // 232B struct that is almost always nil
-	msig     *crypto.MultisigSig    // 32B struct
-	pqsig    *transactions.PQSig    // 56B struct
+	lsig     *transactions.LogicSig     // 232B struct that is almost always nil
+	msig     *crypto.MultisigSig        // 32B struct
+	hsig     *transactions.HashedKeySig // 56B struct
 }
 
 // emptyLogicSig is the emptiness test for the out-of-line LogicSig. It is deliberately
@@ -127,10 +127,10 @@ func (v *verifiedTxnCtx) matches(vctx unique.Handle[verificationContext], txn *t
 	}
 
 	txnLsigEmpty := txn.Lsig.Equal(&emptyLogicSig)
-	txnPQsigBlank := txn.PQsig.Blank()
+	txnHsigBlank := txn.Hsig.Blank()
 	txnMsigBlank := txn.Msig.Blank()
 	lsigNotNil := v.sigs.lsig != nil
-	pqsigNotNil := v.sigs.pqsig != nil
+	hsigNotNil := v.sigs.hsig != nil
 	msigNotNil := v.sigs.msig != nil
 
 	if lsigNotNil && txnLsigEmpty || !lsigNotNil && !txnLsigEmpty {
@@ -147,12 +147,12 @@ func (v *verifiedTxnCtx) matches(vctx unique.Handle[verificationContext], txn *t
 		isEqual = isEqual && v.sigs.msig.Equal(txn.Msig)
 	}
 
-	if pqsigNotNil && txnPQsigBlank || !pqsigNotNil && !txnPQsigBlank {
+	if hsigNotNil && txnHsigBlank || !hsigNotNil && !txnHsigBlank {
 		return false
 	}
 
-	if pqsigNotNil {
-		isEqual = isEqual && v.sigs.pqsig.Equal(txn.PQsig)
+	if hsigNotNil {
+		isEqual = isEqual && v.sigs.hsig.Equal(txn.Hsig)
 	}
 	return isEqual
 }
@@ -338,9 +338,9 @@ func (v *verifiedTransactionCache) add(groupCtx *GroupContext) {
 			msig := txn.Msig
 			entry.sigs.msig = &msig
 		}
-		if !txn.PQsig.Blank() {
-			pqsig := txn.PQsig
-			entry.sigs.pqsig = &pqsig
+		if !txn.Hsig.Blank() {
+			hsig := txn.Hsig
+			entry.sigs.hsig = &hsig
 		}
 		currentBucket[txn.ID()] = entry
 	}

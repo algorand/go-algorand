@@ -32,7 +32,7 @@ const EvalMaxArgs = 255
 const MaxLogicSigArgSize = config.MaxAVMBytesSize
 
 // LogicSigArgs are arguments to a program that is not carried in a LogicSig,
-// which is how an ls-scheme PQSig holds the arguments to its own program. They
+// which is how an ls-scheme HashedKeySig holds the arguments to its own program. They
 // are the same thing as LogicSig.Args, in a place that has no room for a
 // structured field, so they carry the same bounds. The maxtotalbytes directive
 // requires an msgp newer than v1.1.64; older versions ignore it and fall back to
@@ -99,7 +99,7 @@ type LogicSig struct {
 	Sig   crypto.Signature   `codec:"sig"`
 	Msig  crypto.MultisigSig `codec:"msig"`
 	LMsig crypto.MultisigSig `codec:"lmsig"`
-	PQsig PQSig              `codec:"pqsig"`
+	Hsig  HashedKeySig       `codec:"pqsig"`
 
 	// Args are not signed, but checked by Logic
 	Args [][]byte `codec:"arg,allocbound=EvalMaxArgs,allocbound=MaxLogicSigArgSize,maxtotalbytes=(EvalMaxArgs*msgp.BytesPrefixSize) + bounds.MaxLogicSigMaxSize"`
@@ -108,7 +108,7 @@ type LogicSig struct {
 // Blank returns true if the LogicSig is entirely empty.
 func (lsig *LogicSig) Blank() bool {
 	return len(lsig.Logic) == 0 && len(lsig.Args) == 0 &&
-		lsig.Sig.Blank() && lsig.Msig.Blank() && lsig.LMsig.Blank() && lsig.PQsig.Blank()
+		lsig.Sig.Blank() && lsig.Msig.Blank() && lsig.LMsig.Blank() && lsig.Hsig.Blank()
 }
 
 // HasProgram returns true if the LogicSig carries a program.
@@ -144,7 +144,7 @@ func (lsig *LogicSig) Equal(b *LogicSig) bool {
 	sigs := lsig.Sig == b.Sig &&
 		lsig.Msig.Equal(b.Msig) &&
 		lsig.LMsig.Equal(b.LMsig) &&
-		lsig.PQsig.Equal(b.PQsig)
+		lsig.Hsig.Equal(b.Hsig)
 	if !sigs {
 		return false
 	}
