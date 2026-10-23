@@ -34,7 +34,7 @@ func TestLogicSigBlankAndHasProgram(t *testing.T) {
 	nonblankSig := crypto.Signature{}
 	nonblankSig[0] = 1
 
-	pqFixture := makePQSigTestFixture(t, 13, protocol.PQSchemeFalcon1024)
+	hsigFixture := makeHashedKeySigTestFixture(t, 13, protocol.SigSchemeFalcon1024)
 
 	tests := []struct {
 		name       string
@@ -69,7 +69,7 @@ func TestLogicSigBlankAndHasProgram(t *testing.T) {
 		},
 		{
 			name: "pqsig",
-			lsig: LogicSig{PQsig: pqFixture.pqSig},
+			lsig: LogicSig{Hsig: hsigFixture.hsig},
 		},
 	}
 
@@ -81,15 +81,15 @@ func TestLogicSigBlankAndHasProgram(t *testing.T) {
 	}
 }
 
-func TestLogicSigPQSigMsgpackRoundTrip(t *testing.T) {
+func TestLogicSigHashedKeySigMsgpackRoundTrip(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for _, fixture := range makePQSigTestFixtures(t, 11) {
+	for _, fixture := range makeHashedKeySigTestFixtures(t, 11) {
 		t.Run(fixture.name, func(t *testing.T) {
 			lsig := LogicSig{
 				Logic: []byte{1, 32, 1},
 				Args:  [][]byte{{2, 3}},
-				PQsig: fixture.pqSig,
+				Hsig:  fixture.hsig,
 			}
 
 			var decoded LogicSig
@@ -101,7 +101,7 @@ func TestLogicSigPQSigMsgpackRoundTrip(t *testing.T) {
 	}
 }
 
-func TestLogicSigBlankPQSigOmitted(t *testing.T) {
+func TestLogicSigBlankHashedKeySigOmitted(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	lsig := LogicSig{Logic: []byte{1}}

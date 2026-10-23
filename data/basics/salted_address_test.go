@@ -26,19 +26,19 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func publicKeyForPQAddressTest(t *testing.T, scheme protocol.PQScheme, firstSeedByte byte) []byte {
+func publicKeyForSaltedAddressTest(t *testing.T, scheme protocol.SigScheme, firstSeedByte byte) []byte {
 	var seed crypto.FalconSeed
 	seed[0] = firstSeedByte
 	switch scheme {
-	case protocol.PQSchemeFalcon1024:
+	case protocol.SigSchemeFalcon1024:
 		signer, err := crypto.GenerateFalcon1024Signer(seed)
 		require.NoError(t, err)
 		return signer.PublicKey[:]
-	case protocol.PQSchemeFalcon512:
+	case protocol.SigSchemeFalcon512:
 		signer, err := crypto.GenerateFalcon512Signer(seed)
 		require.NoError(t, err)
 		return signer.PublicKey[:]
-	case protocol.PQSchemeEd25519:
+	case protocol.SigSchemeEd25519:
 		signer := crypto.GenerateSignatureSecrets(crypto.Seed{firstSeedByte})
 		return signer.SignatureVerifier[:]
 	}
@@ -46,36 +46,36 @@ func publicKeyForPQAddressTest(t *testing.T, scheme protocol.PQScheme, firstSeed
 	return nil
 }
 
-func TestPQAddressPreimage(t *testing.T) {
+func TestSaltedAddressPreimage(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	testCases := []struct {
 		name            string
-		scheme          protocol.PQScheme
+		scheme          protocol.SigScheme
 		expectedPayload []byte
 	}{
 		{
 			name:            "falcon-1024",
-			scheme:          protocol.PQSchemeFalcon1024,
+			scheme:          protocol.SigSchemeFalcon1024,
 			expectedPayload: []byte{'f', '1', 0x7f, 0xab, 0xcd, 0xef},
 		},
 		{
 			name:            "falcon-512",
-			scheme:          protocol.PQSchemeFalcon512,
+			scheme:          protocol.SigSchemeFalcon512,
 			expectedPayload: []byte{'f', '5', 0x7f, 0xab, 0xcd, 0xef},
 		},
 		{
 			name:            "ed25519",
-			scheme:          protocol.PQSchemeEd25519,
+			scheme:          protocol.SigSchemeEd25519,
 			expectedPayload: []byte{'e', 'd', 0x7f, 0xab, 0xcd, 0xef},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			preimage := pqAddressPreimage{
+			preimage := saltedAddressPreimage{
 				scheme: tc.scheme,
-				salt:   PQAddressSalt(0x7f),
+				salt:   AddressSalt(0x7f),
 				pk:     []byte{0xab, 0xcd, 0xef},
 			}
 
@@ -86,25 +86,25 @@ func TestPQAddressPreimage(t *testing.T) {
 	}
 }
 
-func TestPQAddressKnownAnswers(t *testing.T) {
+func TestSaltedAddressKnownAnswers(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	type knownAnswer struct {
 		name            string
 		firstSeedByte   byte
-		salt            PQAddressSalt
+		salt            AddressSalt
 		expectedAddress string
 		compliant       bool
 	}
 
 	testCases := []struct {
 		name    string
-		scheme  protocol.PQScheme
+		scheme  protocol.SigScheme
 		answers []knownAnswer
 	}{
 		{
 			name:   "falcon-1024",
-			scheme: protocol.PQSchemeFalcon1024,
+			scheme: protocol.SigSchemeFalcon1024,
 			answers: []knownAnswer{
 				{
 					name:            "zero salt",
@@ -152,7 +152,7 @@ func TestPQAddressKnownAnswers(t *testing.T) {
 		},
 		{
 			name:   "falcon-512",
-			scheme: protocol.PQSchemeFalcon512,
+			scheme: protocol.SigSchemeFalcon512,
 			answers: []knownAnswer{
 				{
 					name:            "zero salt",
@@ -200,7 +200,7 @@ func TestPQAddressKnownAnswers(t *testing.T) {
 		},
 		{
 			name:   "ed25519",
-			scheme: protocol.PQSchemeEd25519,
+			scheme: protocol.SigSchemeEd25519,
 			answers: []knownAnswer{
 				{
 					name:            "zero salt",
@@ -252,14 +252,14 @@ func TestPQAddressKnownAnswers(t *testing.T) {
 		t.Run(sc.name, func(t *testing.T) {
 			for _, tc := range sc.answers {
 				t.Run(tc.name, func(t *testing.T) {
-					publicKey := publicKeyForPQAddressTest(t, sc.scheme, tc.firstSeedByte)
+					publicKey := publicKeyForSaltedAddressTest(t, sc.scheme, tc.firstSeedByte)
 
-					addr := PQAddress(sc.scheme, tc.salt, publicKey)
+					addr := SaltedAddress(sc.scheme, tc.salt, publicKey)
 					require.Equal(t, tc.expectedAddress, addr.String())
-					require.Equal(t, tc.compliant, addr.IsPQCompliant())
+					require.Equal(t, tc.compliant, addr.IsOffEd25519Curve())
 					require.Equal(t, !tc.compliant, crypto.IsEdwards25519Point(addr[:]))
 
-					addrAgain := PQAddress(sc.scheme, tc.salt, publicKey)
+					addrAgain := SaltedAddress(sc.scheme, tc.salt, publicKey)
 					require.Equal(t, addr, addrAgain)
 				})
 			}
@@ -267,30 +267,30 @@ func TestPQAddressKnownAnswers(t *testing.T) {
 	}
 }
 
-func TestCanonicalPQAddressSalt(t *testing.T) {
+func TestCanonicalAddressSalt(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	testCases := []struct {
 		name            string
-		scheme          protocol.PQScheme
-		expectedSalt    PQAddressSalt
+		scheme          protocol.SigScheme
+		expectedSalt    AddressSalt
 		expectedAddress string
 	}{
 		{
 			name:            "falcon-1024",
-			scheme:          protocol.PQSchemeFalcon1024,
+			scheme:          protocol.SigSchemeFalcon1024,
 			expectedSalt:    1,
 			expectedAddress: "GYBWVYVQIQF6CO7BUMG4UQ66DQYHASFOCA2P7PBYOIPKGWUZIBX4KA3TP4",
 		},
 		{
 			name:            "falcon-512",
-			scheme:          protocol.PQSchemeFalcon512,
+			scheme:          protocol.SigSchemeFalcon512,
 			expectedSalt:    1,
 			expectedAddress: "NQHOCVCR45XKZ5LMJSBDWGPZ6QZQIDKQU26KNQ3O4A3EGIRR7BPIX4CW3A",
 		},
 		{
 			name:            "ed25519",
-			scheme:          protocol.PQSchemeEd25519,
+			scheme:          protocol.SigSchemeEd25519,
 			expectedSalt:    0,
 			expectedAddress: "52TWNOHFPAIAQPARIGBF3SXBHZ6NEX6QURSOTXYBUI5JXIO4DEBMZEF5AQ",
 		},
@@ -298,54 +298,54 @@ func TestCanonicalPQAddressSalt(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			publicKey := publicKeyForPQAddressTest(t, tc.scheme, 1)
+			publicKey := publicKeyForSaltedAddressTest(t, tc.scheme, 1)
 
-			salt, addr, err := CanonicalPQAddressSalt(tc.scheme, publicKey)
+			salt, addr, err := CanonicalAddressSalt(tc.scheme, publicKey)
 			require.NoError(t, err)
 			require.Equal(t, tc.expectedSalt, salt)
 			require.Equal(t, tc.expectedAddress, addr.String())
-			require.True(t, addr.IsPQCompliant())
+			require.True(t, addr.IsOffEd25519Curve())
 
 			for lowerSalt := 0; lowerSalt < int(salt); lowerSalt++ {
-				lowerAddr := PQAddress(tc.scheme, PQAddressSalt(lowerSalt), publicKey)
-				require.False(t, lowerAddr.IsPQCompliant())
+				lowerAddr := SaltedAddress(tc.scheme, AddressSalt(lowerSalt), publicKey)
+				require.False(t, lowerAddr.IsOffEd25519Curve())
 			}
 		})
 	}
 }
 
-func TestPQLogicSigAddress(t *testing.T) {
+func TestLogicSigSaltedAddress(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	program := []byte{0x02, 0x81, 0x01} // #pragma version 2; int 1
 
-	salt, addr, err := CanonicalPQAddressSalt(protocol.PQSchemeLogicSig, program)
+	salt, addr, err := CanonicalAddressSalt(protocol.SigSchemeLogicSig, program)
 	require.NoError(t, err)
-	require.True(t, addr.IsPQCompliant())
-	require.Equal(t, PQAddress(protocol.PQSchemeLogicSig, salt, program), addr)
+	require.True(t, addr.IsOffEd25519Curve())
+	require.Equal(t, SaltedAddress(protocol.SigSchemeLogicSig, salt, program), addr)
 
 	// The salt is derived from the program, so the address can always be
 	// recovered from the program alone.
-	againSalt, againAddr, err := CanonicalPQAddressSalt(protocol.PQSchemeLogicSig, program)
+	againSalt, againAddr, err := CanonicalAddressSalt(protocol.SigSchemeLogicSig, program)
 	require.NoError(t, err)
 	require.Equal(t, salt, againSalt)
 	require.Equal(t, addr, againAddr)
 
 	for lowerSalt := 0; lowerSalt < int(salt); lowerSalt++ {
-		lowerAddr := PQAddress(protocol.PQSchemeLogicSig, PQAddressSalt(lowerSalt), program)
-		require.False(t, lowerAddr.IsPQCompliant())
+		lowerAddr := SaltedAddress(protocol.SigSchemeLogicSig, AddressSalt(lowerSalt), program)
+		require.False(t, lowerAddr.IsOffEd25519Curve())
 	}
 
 	// The scheme is part of the preimage, so a program's address cannot collide
 	// with the address a Falcon key of the same bytes would derive.
-	require.NotEqual(t, PQAddress(protocol.PQSchemeFalcon1024, salt, program), addr)
+	require.NotEqual(t, SaltedAddress(protocol.SigSchemeFalcon1024, salt, program), addr)
 
 	// Known answers pin the derivation, since an ls address is the account a
 	// program's funds live in.
 	knownAnswers := []struct {
 		name    string
 		program []byte
-		salt    PQAddressSalt
+		salt    AddressSalt
 		address string
 	}{
 		{"salt 0", []byte{0x02, 0x81, 0x00}, 0, "ZTVEN2GVT6W3DYVZT5KO4PSY7AXRSFGUIKLH4YD4KGZTFYKBP2RWDRXDIQ"},
@@ -356,7 +356,7 @@ func TestPQLogicSigAddress(t *testing.T) {
 	}
 	for _, ka := range knownAnswers {
 		t.Run(ka.name, func(t *testing.T) {
-			salt, addr, err := CanonicalPQAddressSalt(protocol.PQSchemeLogicSig, ka.program)
+			salt, addr, err := CanonicalAddressSalt(protocol.SigSchemeLogicSig, ka.program)
 			require.NoError(t, err)
 			require.Equal(t, ka.salt, salt)
 			require.Equal(t, ka.address, addr.String())
@@ -364,19 +364,19 @@ func TestPQLogicSigAddress(t *testing.T) {
 	}
 }
 
-func TestCanonicalPQAddressSaltDoesNotRequireRegisteredSchemeOrValidatedKey(t *testing.T) {
+func TestCanonicalAddressSaltDoesNotRequireRegisteredSchemeOrValidatedKey(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	publicKey := []byte{0xab, 0xcd, 0xef}
-	scheme := protocol.PQScheme{'x', '1'}
+	scheme := protocol.SigScheme{'x', '1'}
 
-	salt, addr, err := CanonicalPQAddressSalt(scheme, publicKey)
+	salt, addr, err := CanonicalAddressSalt(scheme, publicKey)
 	require.NoError(t, err)
-	require.Equal(t, PQAddress(scheme, salt, publicKey), addr)
-	require.True(t, addr.IsPQCompliant())
+	require.Equal(t, SaltedAddress(scheme, salt, publicKey), addr)
+	require.True(t, addr.IsOffEd25519Curve())
 
 	for lowerSalt := 0; lowerSalt < int(salt); lowerSalt++ {
-		lowerAddr := PQAddress(scheme, PQAddressSalt(lowerSalt), publicKey)
-		require.False(t, lowerAddr.IsPQCompliant())
+		lowerAddr := SaltedAddress(scheme, AddressSalt(lowerSalt), publicKey)
+		require.False(t, lowerAddr.IsOffEd25519Curve())
 	}
 }

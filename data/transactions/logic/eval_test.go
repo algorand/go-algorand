@@ -620,7 +620,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 
 // TestEvalSignatureProgramArgs checks that a signature program reads the
 // arguments it was evaluated with, rather than the ones on the transaction's
-// LogicSig. An ls-scheme PQSig carries a program and its arguments together,
+// LogicSig. An ls-scheme HashedKeySig carries a program and its arguments together,
 // with nothing in Lsig at all, so the two cannot be assumed to be the same.
 func TestEvalSignatureProgramArgs(t *testing.T) {
 	partitiontest.PartitionTest(t)

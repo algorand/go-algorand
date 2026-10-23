@@ -33,12 +33,12 @@ import (
 type inspectSignedTxn struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Sig      crypto.Signature         `codec:"sig"`
-	Msig     inspectMultisigSig       `codec:"msig"`
-	Lsig     inspectLogicSig          `codec:"lsig"`
-	PQsig    transactions.PQSig       `codec:"pqsig"`
-	Txn      transactions.Transaction `codec:"txn"`
-	AuthAddr basics.Address           `codec:"sgnr"`
+	Sig      crypto.Signature          `codec:"sig"`
+	Msig     inspectMultisigSig        `codec:"msig"`
+	Lsig     inspectLogicSig           `codec:"lsig"`
+	Hsig     transactions.HashedKeySig `codec:"pqsig"`
+	Txn      transactions.Transaction  `codec:"txn"`
+	AuthAddr basics.Address            `codec:"sgnr"`
 }
 
 // inspectMultisigSig is isomorphic to MultisigSig but uses different
@@ -69,10 +69,10 @@ type inspectLogicSig struct {
 	// hashed to be the Address of an account.
 	Logic inspectProgram `codec:"l"`
 
-	Sig   crypto.Signature   `codec:"sig"`
-	Msig  inspectMultisigSig `codec:"msig"`
-	LMsig inspectMultisigSig `codec:"lmsig"`
-	PQsig transactions.PQSig `codec:"pqsig"`
+	Sig   crypto.Signature          `codec:"sig"`
+	Msig  inspectMultisigSig        `codec:"msig"`
+	LMsig inspectMultisigSig        `codec:"lmsig"`
+	Hsig  transactions.HashedKeySig `codec:"pqsig"`
 
 	// Args are not signed, but checked by Logic
 	Args [][]byte `codec:"arg"`
@@ -124,7 +124,7 @@ func stxnToInspect(stxn transactions.SignedTxn) inspectSignedTxn {
 		Sig:      stxn.Sig,
 		Msig:     msigToInspect(stxn.Msig),
 		Lsig:     lsigToInspect(stxn.Lsig),
-		PQsig:    stxn.PQsig,
+		Hsig:     stxn.Hsig,
 		AuthAddr: stxn.AuthAddr,
 	}
 }
@@ -135,7 +135,7 @@ func stxnFromInspect(sti inspectSignedTxn) transactions.SignedTxn {
 		Sig:      sti.Sig,
 		Msig:     msigFromInspect(sti.Msig),
 		Lsig:     lsigFromInspect(sti.Lsig),
-		PQsig:    sti.PQsig,
+		Hsig:     sti.Hsig,
 		AuthAddr: sti.AuthAddr,
 	}
 }
@@ -178,7 +178,7 @@ func lsigToInspect(lsig transactions.LogicSig) inspectLogicSig {
 		Sig:   lsig.Sig,
 		Msig:  msigToInspect(lsig.Msig),
 		LMsig: msigToInspect(lsig.LMsig),
-		PQsig: lsig.PQsig,
+		Hsig:  lsig.Hsig,
 		Args:  lsig.Args,
 	}
 }
@@ -189,7 +189,7 @@ func lsigFromInspect(lsig inspectLogicSig) transactions.LogicSig {
 		Sig:   lsig.Sig,
 		Msig:  msigFromInspect(lsig.Msig),
 		LMsig: msigFromInspect(lsig.LMsig),
-		PQsig: lsig.PQsig,
+		Hsig:  lsig.Hsig,
 		Args:  lsig.Args,
 	}
 }

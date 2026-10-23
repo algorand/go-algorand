@@ -4,7 +4,8 @@ An Algorand transaction may be signed one of four ways:
 
 - by one signature corresponding to the public key that is the transaction's authorizer
 - by several signatures that are components of a MultiSig address
-- by a post-quantum signature
+- by a hashed-key signature: a scheme-tagged authorization proof for an address
+  derived from the salted scheme's public key
 - by a program that is part of a LogicSig data structure
 
 The _authorizer_ is the transaction's AuthAddr if the sending account has been
@@ -17,10 +18,10 @@ LogicSig has these parts:
 - Sig: an optional signature of the program bytes
 - Msig: an optional MultiSig signature of the program bytes (legacy, see below)
 - LMsig: an optional address-bound MultiSig signature of the program bytes
-- PQsig: an optional post-quantum signature of the program bytes
+- Hsig: an optional hashed-key signature of the program bytes
 - Args: an optional array of byte strings the program can use
 
-At most one of Sig, Msig, LMsig and PQsig may be present.
+At most one of Sig, Msig, LMsig and Hsig may be present.
 
 A LogicSig is valid if one of the following is true:
 
@@ -28,12 +29,12 @@ A LogicSig is valid if one of the following is true:
 - Msig is a valid MultiSig signature of the program by the authorizer
 - LMsig is a valid MultiSig signature, by the authorizer, of the program
   together with the authorizer's address
-- PQsig is a valid post-quantum signature, by the authorizer, of the program
+- Hsig is a valid hashed-key signature, by the authorizer, of the program
   together with the authorizer's address
 - The hash of the program is equal to the authorizer
 
 Sig and Msig sign only the program bytes, so the same signed program is valid
-for any account that authorized it. LMsig and PQsig bind the authorizer's
+for any account that authorized it. LMsig and Hsig bind the authorizer's
 address into the signed message, so a signature made for one account cannot be
 replayed against another. Msig is superseded by LMsig and is rejected from
 consensus v41 onward; new multisig-delegated LogicSigs must use LMsig.

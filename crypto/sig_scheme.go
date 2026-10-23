@@ -25,41 +25,41 @@ import (
 // or the public key it is checked against is invalid.
 var ErrSigInvalid = errors.New("invalid signature")
 
-// PQVerifier verifies a signature for one account authorization scheme. The
+// SigSchemeVerifier verifies a signature for one account authorization scheme. The
 // implementations here know only how to check bytes; which schemes exist, when
 // they are enabled, what they cost, and how large their keys and signatures may
-// be on the wire is decided by transactions.PQSig.
-type PQVerifier interface {
+// be on the wire is decided by transactions.HashedKeySig.
+type SigSchemeVerifier interface {
 	Verify(message Hashable, publicKey, signature []byte) error
 }
 
-// PQBatchPreparer is implemented by schemes verified through the batch
+// SigSchemeBatchPreparer is implemented by schemes verified through the batch
 // verifier (Ed25519 only).
-type PQBatchPreparer interface {
+type SigSchemeBatchPreparer interface {
 	BatchPrep(message Hashable, publicKey, signature []byte, batch BatchEnqueuer) error
 }
 
-// PQFalcon1024 verifies Falcon-1024 signatures.
-type PQFalcon1024 struct{}
+// Falcon1024SchemeVerifier verifies Falcon-1024 signatures.
+type Falcon1024SchemeVerifier struct{}
 
-// Verify implements PQVerifier.
-func (PQFalcon1024) Verify(message Hashable, publicKey, signature []byte) error {
+// Verify implements SigSchemeVerifier.
+func (Falcon1024SchemeVerifier) Verify(message Hashable, publicKey, signature []byte) error {
 	return VerifyFalcon1024(message, publicKey, signature)
 }
 
-// PQFalcon512 verifies Falcon-512 signatures.
-type PQFalcon512 struct{}
+// Falcon512SchemeVerifier verifies Falcon-512 signatures.
+type Falcon512SchemeVerifier struct{}
 
-// Verify implements PQVerifier.
-func (PQFalcon512) Verify(message Hashable, publicKey, signature []byte) error {
+// Verify implements SigSchemeVerifier.
+func (Falcon512SchemeVerifier) Verify(message Hashable, publicKey, signature []byte) error {
 	return VerifyFalcon512(message, publicKey, signature)
 }
 
-// PQEd25519 verifies classical Ed25519 signatures carried in a PQSig.
-type PQEd25519 struct{}
+// Ed25519SchemeVerifier verifies classical Ed25519 signatures carried in a HashedKeySig.
+type Ed25519SchemeVerifier struct{}
 
-// Verify implements PQVerifier.
-func (PQEd25519) Verify(message Hashable, publicKey, signature []byte) error {
+// Verify implements SigSchemeVerifier.
+func (Ed25519SchemeVerifier) Verify(message Hashable, publicKey, signature []byte) error {
 	verifier, sig, err := parseEd25519Signature(publicKey, signature)
 	if err != nil {
 		return err
@@ -70,8 +70,8 @@ func (PQEd25519) Verify(message Hashable, publicKey, signature []byte) error {
 	return nil
 }
 
-// BatchPrep implements PQBatchPreparer.
-func (PQEd25519) BatchPrep(message Hashable, publicKey, signature []byte, batch BatchEnqueuer) error {
+// BatchPrep implements SigSchemeBatchPreparer.
+func (Ed25519SchemeVerifier) BatchPrep(message Hashable, publicKey, signature []byte, batch BatchEnqueuer) error {
 	verifier, sig, err := parseEd25519Signature(publicKey, signature)
 	if err != nil {
 		return err

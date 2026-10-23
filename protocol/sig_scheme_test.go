@@ -24,25 +24,25 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestPQSchemes(t *testing.T) {
+func TestSigSchemes(t *testing.T) {
 	t.Parallel()
 	partitiontest.PartitionTest(t)
 
-	schemes := []PQScheme{
-		PQSchemeEd25519,
-		PQSchemeFalcon1024,
-		PQSchemeFalcon512,
-		PQSchemeLogicSig,
+	schemes := []SigScheme{
+		SigSchemeEd25519,
+		SigSchemeFalcon1024,
+		SigSchemeFalcon512,
+		SigSchemeLogicSig,
 	}
 
-	seen := make(map[PQScheme]struct{}, len(schemes))
+	seen := make(map[SigScheme]struct{}, len(schemes))
 	for _, scheme := range schemes {
 		for _, b := range scheme {
-			require.Truef(t, b >= 0x20 && b < 0x7f, "PQScheme %q must be printable ASCII", scheme)
+			require.Truef(t, b >= 0x20 && b < 0x7f, "SigScheme %q must be printable ASCII", scheme)
 		}
 
 		_, ok := seen[scheme]
-		require.False(t, ok, "PQScheme %q is repeated", scheme)
+		require.False(t, ok, "SigScheme %q is repeated", scheme)
 		seen[scheme] = struct{}{}
 	}
 }

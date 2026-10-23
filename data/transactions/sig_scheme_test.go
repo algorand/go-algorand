@@ -27,20 +27,20 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// TestPQSchemesMatchTestSchemes keeps the scheme table and the schemes that
+// TestSigSchemesMatchTestSchemes keeps the scheme table and the schemes that
 // tests exercise in step, so that every scheme gets tested.
-func TestPQSchemesMatchTestSchemes(t *testing.T) {
+func TestSigSchemesMatchTestSchemes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// PQTestSchemes holds the signing schemes, so it lacks only ls.
-	require.Len(t, pqSchemes, len(basics_testing.PQTestSchemes)+1)
-	for _, ts := range basics_testing.PQTestSchemes {
-		require.True(t, PQSchemeSupported(ts.Scheme), ts.Name)
+	// SigSchemeTests holds the signing schemes, so it lacks only ls.
+	require.Len(t, sigSchemes, len(basics_testing.SigSchemeTests)+1)
+	for _, ts := range basics_testing.SigSchemeTests {
+		require.True(t, SigSchemeSupported(ts.Scheme), ts.Name)
 	}
-	require.True(t, PQSchemeSupported(protocol.PQSchemeLogicSig))
-	for tag, s := range pqSchemes {
-		if tag == protocol.PQSchemeLogicSig {
+	require.True(t, SigSchemeSupported(protocol.SigSchemeLogicSig))
+	for tag, s := range sigSchemes {
+		if tag == protocol.SigSchemeLogicSig {
 			require.Nil(t, s.verifier)
 		} else {
 			require.NotNil(t, s.verifier, tag)
@@ -49,37 +49,37 @@ func TestPQSchemesMatchTestSchemes(t *testing.T) {
 		require.NotNil(t, s.maxPublicKeySize, tag)
 		require.NotNil(t, s.maxSignatureSize, tag)
 	}
-	require.False(t, PQSchemeSupported(protocol.PQScheme{'x', '1'}))
+	require.False(t, SigSchemeSupported(protocol.SigScheme{'x', '1'}))
 }
 
-// TestPQBoundsCoverSchemes guards against a scheme's size bounds being smaller
+// TestSigSchemeBoundsCoverSchemes guards against a scheme's size bounds being smaller
 // than a real public key or signature from it.
-func TestPQBoundsCoverSchemes(t *testing.T) {
+func TestSigSchemeBoundsCoverSchemes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	var msg Transaction
-	for _, ts := range basics_testing.PQTestSchemes {
-		acct := basics_testing.MakePQTestAccount(t, 1, ts.Scheme)
+	for _, ts := range basics_testing.SigSchemeTests {
+		acct := basics_testing.MakeHashedKeySigTestAccount(t, 1, ts.Scheme)
 		sig, err := acct.Signer.Sign(msg)
 		require.NoError(t, err)
 
-		scheme := pqSchemes[ts.Scheme]
+		scheme := sigSchemes[ts.Scheme]
 		require.LessOrEqual(t, len(acct.PublicKey), scheme.maxPublicKeySize(), ts.Name)
 		require.LessOrEqual(t, len(sig), scheme.maxSignatureSize(), ts.Name)
 	}
 }
 
-// TestPQSchemeLogicSigFee pins the ls scheme's lack of a surcharge. An ls
+// TestSigSchemeLogicSigFee pins the ls scheme's lack of a surcharge. An ls
 // account costs a hash plus AVM execution, both of which are priced or
 // constrained anyway. Charging a Falcon-style surcharge would make the
 // off-curve form more expensive than the on-curve SignedTxn.Lsig form it exists
 // to replace.
-func TestPQSchemeLogicSigFee(t *testing.T) {
+func TestSigSchemeLogicSigFee(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	for proto, params := range config.Consensus {
-		require.Zero(t, PQSchemeFeeContribution(params, protocol.PQSchemeLogicSig), proto)
+		require.Zero(t, SigSchemeFeeContribution(params, protocol.SigSchemeLogicSig), proto)
 	}
 }

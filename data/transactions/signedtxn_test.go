@@ -89,12 +89,12 @@ func TestSignedTxnInBlockHash(t *testing.T) {
 }
 
 // TestSignedTxnHasSignature pins that every signature category counts as a
-// signature, including a PQ envelope nested in the LogicSig, which relies on
-// LogicSig.Blank covering the PQsig field.
+// signature, including a hashed-key signature nested in the LogicSig, which relies on
+// LogicSig.Blank covering the Hsig field.
 func TestSignedTxnHasSignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	fixture := makePQSigTestFixture(t, 14, protocol.PQSchemeFalcon1024)
+	fixture := makeHashedKeySigTestFixture(t, 14, protocol.SigSchemeFalcon1024)
 	nonblankSig := crypto.Signature{}
 	nonblankSig[0] = 1
 
@@ -106,9 +106,9 @@ func TestSignedTxnHasSignature(t *testing.T) {
 		{name: "unsigned"},
 		{name: "sig", stxn: SignedTxn{Sig: nonblankSig}, hasSignature: true},
 		{name: "msig", stxn: SignedTxn{Msig: crypto.MultisigSig{Version: 1}}, hasSignature: true},
-		{name: "pqsig", stxn: SignedTxn{PQsig: fixture.pqSig}, hasSignature: true},
+		{name: "pqsig", stxn: SignedTxn{Hsig: fixture.hsig}, hasSignature: true},
 		{name: "lsig program", stxn: SignedTxn{Lsig: LogicSig{Logic: []byte{1}}}, hasSignature: true},
-		{name: "lsig nested pqsig only", stxn: SignedTxn{Lsig: LogicSig{PQsig: fixture.pqSig}}, hasSignature: true},
+		{name: "lsig nested hsig only", stxn: SignedTxn{Lsig: LogicSig{Hsig: fixture.hsig}}, hasSignature: true},
 	}
 
 	for _, test := range tests {
@@ -118,11 +118,11 @@ func TestSignedTxnHasSignature(t *testing.T) {
 	}
 }
 
-func TestSignedTxnFeeFactorPQSignatureContribution(t *testing.T) {
+func TestSignedTxnFeeFactorHashedKeySignatureContribution(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-	fixture := makePQSigTestFixture(t, 0, protocol.PQSchemeFalcon1024)
+	fixture := makeHashedKeySigTestFixture(t, 0, protocol.SigSchemeFalcon1024)
 
 	baseTxn := SignedTxn{Txn: fixture.txn}
 	regularSigned := baseTxn
@@ -131,104 +131,105 @@ func TestSignedTxnFeeFactorPQSignatureContribution(t *testing.T) {
 	msigSigned.Msig = crypto.MultisigSig{Version: 1}
 	lsigSigned := baseTxn
 	lsigSigned.Lsig = LogicSig{Logic: []byte{1}}
-	unknownPQSigned := baseTxn
-	unknownPQSigned.PQsig = PQSig{Scheme: protocol.PQScheme{'x', '1'}}
-	pqSigned := SignedTxn{Txn: fixture.txn, PQsig: fixture.pqSig}
-	delegatedPQSigned := baseTxn
-	delegatedPQSigned.Lsig = LogicSig{Logic: []byte{1}, PQsig: fixture.pqSig}
-	edPQSig := PQSig{Scheme: protocol.PQSchemeEd25519}
-	edPQSigned := SignedTxn{Txn: fixture.txn, PQsig: edPQSig}
-	edDelegatedPQSigned := baseTxn
-	edDelegatedPQSigned.Lsig = LogicSig{Logic: []byte{1}, PQsig: edPQSig}
-	unknownDelegatedPQSigned := baseTxn
-	unknownDelegatedPQSigned.Lsig = LogicSig{Logic: []byte{1}, PQsig: PQSig{Scheme: protocol.PQScheme{'x', '1'}}}
-	rekeyedDelegatedPQSigned := delegatedPQSigned
-	rekeyedDelegatedPQSigned.AuthAddr = basics.Address{2}
-	programlessLsigPQSigned := regularSigned
-	programlessLsigPQSigned.Lsig = LogicSig{PQsig: fixture.pqSig}
-	pqAndRegularSigned := pqSigned
-	pqAndRegularSigned.Sig[0] = 1
+	unknownHsigSigned := baseTxn
+	unknownHsigSigned.Hsig = HashedKeySig{Scheme: protocol.SigScheme{'x', '1'}}
+	hsigSigned := SignedTxn{Txn: fixture.txn, Hsig: fixture.hsig}
+	delegatedHsigSigned := baseTxn
+	delegatedHsigSigned.Lsig = LogicSig{Logic: []byte{1}, Hsig: fixture.hsig}
+	edHashedKeySig := HashedKeySig{Scheme: protocol.SigSchemeEd25519}
+	edHsigSigned := SignedTxn{Txn: fixture.txn, Hsig: edHashedKeySig}
+	edDelegatedHsigSigned := baseTxn
+	edDelegatedHsigSigned.Lsig = LogicSig{Logic: []byte{1}, Hsig: edHashedKeySig}
+	unknownDelegatedHsigSigned := baseTxn
+	unknownDelegatedHsigSigned.Lsig = LogicSig{Logic: []byte{1}, Hsig: HashedKeySig{Scheme: protocol.SigScheme{'x', '1'}}}
+	rekeyedDelegatedHsigSigned := delegatedHsigSigned
+	rekeyedDelegatedHsigSigned.AuthAddr = basics.Address{2}
+	programlessLsigHsigSigned := regularSigned
+	programlessLsigHsigSigned.Lsig = LogicSig{Hsig: fixture.hsig}
+	hsigAndRegularSigned := hsigSigned
+	hsigAndRegularSigned.Sig[0] = 1
 	regularSingletonHeartbeat := regularSigned
 	regularSingletonHeartbeat.Txn.Type = protocol.HeartbeatTx
 	regularSingletonHeartbeat.Txn.HeartbeatTxnFields = &HeartbeatTxnFields{}
 	regularSingletonHeartbeat.Txn.PaymentTxnFields = PaymentTxnFields{}
-	pqSingletonHeartbeat := pqSigned
-	pqSingletonHeartbeat.Txn.Type = protocol.HeartbeatTx
-	pqSingletonHeartbeat.Txn.HeartbeatTxnFields = &HeartbeatTxnFields{}
-	pqSingletonHeartbeat.Txn.PaymentTxnFields = PaymentTxnFields{}
-	mixedSingletonHeartbeat := pqAndRegularSigned
+	hsigSingletonHeartbeat := hsigSigned
+	hsigSingletonHeartbeat.Txn.Type = protocol.HeartbeatTx
+	hsigSingletonHeartbeat.Txn.HeartbeatTxnFields = &HeartbeatTxnFields{}
+	hsigSingletonHeartbeat.Txn.PaymentTxnFields = PaymentTxnFields{}
+	mixedSingletonHeartbeat := hsigAndRegularSigned
 	mixedSingletonHeartbeat.Txn.Type = protocol.HeartbeatTx
 	mixedSingletonHeartbeat.Txn.HeartbeatTxnFields = &HeartbeatTxnFields{}
 	mixedSingletonHeartbeat.Txn.PaymentTxnFields = PaymentTxnFields{}
-	pqPaidSingletonHeartbeat := pqSingletonHeartbeat
-	pqPaidSingletonHeartbeat.Txn.Fee = proto.MinFee()
-	pqGroupedHeartbeat := pqSingletonHeartbeat
-	pqGroupedHeartbeat.Txn.Group = crypto.Digest{1}
+	hsigPaidSingletonHeartbeat := hsigSingletonHeartbeat
+	hsigPaidSingletonHeartbeat.Txn.Fee = proto.MinFee()
+	hsigGroupedHeartbeat := hsigSingletonHeartbeat
+	hsigGroupedHeartbeat.Txn.Group = crypto.Digest{1}
 	// A challenged heartbeat gets one min fee off, but still owes any signature
 	// surcharge: only the base fee is discounted.
 	challengedHeartbeat := regularSingletonHeartbeat
 	challengedHeartbeat.Txn.HeartbeatTxnFields = &HeartbeatTxnFields{HbChallengeDiscount: true}
-	pqChallengedHeartbeat := pqSingletonHeartbeat
-	pqChallengedHeartbeat.Txn.HeartbeatTxnFields = &HeartbeatTxnFields{HbChallengeDiscount: true}
-	pqChallengedGrouped := pqChallengedHeartbeat
-	pqChallengedGrouped.Txn.Group = crypto.Digest{1}
-	delegatedPQSingletonHeartbeat := pqSingletonHeartbeat
-	delegatedPQSingletonHeartbeat.PQsig = PQSig{}
-	delegatedPQSingletonHeartbeat.Lsig = delegatedPQSigned.Lsig
-	delegatedPQPaidSingletonHeartbeat := delegatedPQSingletonHeartbeat
-	delegatedPQPaidSingletonHeartbeat.Txn.Fee = proto.MinFee()
-	delegatedPQGroupedHeartbeat := delegatedPQSingletonHeartbeat
-	delegatedPQGroupedHeartbeat.Txn.Group = crypto.Digest{1}
+	hsigChallengedHeartbeat := hsigSingletonHeartbeat
+	hsigChallengedHeartbeat.Txn.HeartbeatTxnFields = &HeartbeatTxnFields{HbChallengeDiscount: true}
+	hsigChallengedGrouped := hsigChallengedHeartbeat
+	hsigChallengedGrouped.Txn.Group = crypto.Digest{1}
+	delegatedHsigSingletonHeartbeat := hsigSingletonHeartbeat
+	delegatedHsigSingletonHeartbeat.Hsig = HashedKeySig{}
+	delegatedHsigSingletonHeartbeat.Lsig = delegatedHsigSigned.Lsig
+	delegatedHsigPaidSingletonHeartbeat := delegatedHsigSingletonHeartbeat
+	delegatedHsigPaidSingletonHeartbeat.Txn.Fee = proto.MinFee()
+	delegatedHsigGroupedHeartbeat := delegatedHsigSingletonHeartbeat
+	delegatedHsigGroupedHeartbeat.Txn.Group = crypto.Digest{1}
 
 	for _, stxn := range []SignedTxn{baseTxn, regularSigned, msigSigned, lsigSigned} {
 		require.Equal(t, basics.Micros(1e6), stxn.FeeFactor(proto))
 	}
-	require.Equal(t, basics.Micros(2e6), PQSchemeFeeContribution(proto, protocol.PQSchemeFalcon1024))
-	require.Equal(t, basics.Micros(1e6), PQSchemeFeeContribution(proto, protocol.PQSchemeFalcon512))
-	require.Equal(t, basics.Micros(0), PQSchemeFeeContribution(proto, protocol.PQSchemeEd25519))
-	require.Equal(t, basics.Micros(1e6), unknownPQSigned.FeeFactor(proto))
-	require.Equal(t, basics.Micros(1e6), unknownDelegatedPQSigned.FeeFactor(proto))
-	require.Equal(t, basics.Micros(1e6), edPQSigned.FeeFactor(proto))
-	require.Equal(t, basics.Micros(1e6), edDelegatedPQSigned.FeeFactor(proto))
-	require.Equal(t, basics.Micros(3e6), pqSigned.FeeFactor(proto))
-	require.Equal(t, basics.Micros(3e6), delegatedPQSigned.FeeFactor(proto))
-	require.Equal(t, pqSigned.FeeFactor(proto), delegatedPQSigned.FeeFactor(proto))
-	require.Equal(t, delegatedPQSigned.FeeFactor(proto), rekeyedDelegatedPQSigned.FeeFactor(proto))
-	require.Equal(t, basics.Micros(3e6), programlessLsigPQSigned.FeeFactor(proto))
-	require.Equal(t, basics.Micros(3e6), pqAndRegularSigned.FeeFactor(proto))
+	require.Equal(t, basics.Micros(2e6), SigSchemeFeeContribution(proto, protocol.SigSchemeFalcon1024))
+	require.Equal(t, basics.Micros(1e6), SigSchemeFeeContribution(proto, protocol.SigSchemeFalcon512))
+	require.Equal(t, basics.Micros(0), SigSchemeFeeContribution(proto, protocol.SigSchemeEd25519))
+	require.Equal(t, basics.Micros(1e6), unknownHsigSigned.FeeFactor(proto))
+	require.Equal(t, basics.Micros(1e6), unknownDelegatedHsigSigned.FeeFactor(proto))
+	require.Equal(t, basics.Micros(1e6), edHsigSigned.FeeFactor(proto))
+	require.Equal(t, basics.Micros(1e6), edDelegatedHsigSigned.FeeFactor(proto))
+	require.Equal(t, basics.Micros(3e6), hsigSigned.FeeFactor(proto))
+	require.Equal(t, basics.Micros(3e6), delegatedHsigSigned.FeeFactor(proto))
+	require.Equal(t, hsigSigned.FeeFactor(proto), delegatedHsigSigned.FeeFactor(proto))
+	require.Equal(t, delegatedHsigSigned.FeeFactor(proto), rekeyedDelegatedHsigSigned.FeeFactor(proto))
+	require.Equal(t, basics.Micros(3e6), programlessLsigHsigSigned.FeeFactor(proto))
+	require.Equal(t, basics.Micros(3e6), hsigAndRegularSigned.FeeFactor(proto))
 	// With the explicit-discount rule a plain heartbeat pays the base fee (plus surcharges),
 	// whether or not it is a singleton.
 	require.Equal(t, basics.Micros(1e6), regularSingletonHeartbeat.FeeFactor(proto))
-	require.Equal(t, basics.Micros(3e6), pqSingletonHeartbeat.FeeFactor(proto))
+	require.Equal(t, basics.Micros(3e6), hsigSingletonHeartbeat.FeeFactor(proto))
 	require.Equal(t, basics.Micros(3e6), mixedSingletonHeartbeat.FeeFactor(proto))
-	require.Equal(t, basics.Micros(3e6), pqPaidSingletonHeartbeat.FeeFactor(proto))
-	// A delegated PQ lsig owes the same surcharge as a native PQ sig, so its
-	// heartbeat behaves like pqSingletonHeartbeat regardless of fee.
-	require.Equal(t, basics.Micros(3e6), delegatedPQSingletonHeartbeat.FeeFactor(proto))
-	require.Equal(t, basics.Micros(3e6), delegatedPQPaidSingletonHeartbeat.FeeFactor(proto))
-	require.Equal(t, basics.Micros(3e6), pqGroupedHeartbeat.FeeFactor(proto))
-	require.Equal(t, basics.Micros(3e6), delegatedPQGroupedHeartbeat.FeeFactor(proto))
+	require.Equal(t, basics.Micros(3e6), hsigPaidSingletonHeartbeat.FeeFactor(proto))
+	// A LogicSig delegated by a hashed-key signature owes the same surcharge as a
+	// top-level hashed-key signature, so its heartbeat behaves like
+	// hsigSingletonHeartbeat regardless of fee.
+	require.Equal(t, basics.Micros(3e6), delegatedHsigSingletonHeartbeat.FeeFactor(proto))
+	require.Equal(t, basics.Micros(3e6), delegatedHsigPaidSingletonHeartbeat.FeeFactor(proto))
+	require.Equal(t, basics.Micros(3e6), hsigGroupedHeartbeat.FeeFactor(proto))
+	require.Equal(t, basics.Micros(3e6), delegatedHsigGroupedHeartbeat.FeeFactor(proto))
 	// The challenge discount removes exactly one min fee, leaving surcharges.
 	require.Equal(t, basics.Micros(0), challengedHeartbeat.FeeFactor(proto))
-	require.Equal(t, basics.Micros(2e6), pqChallengedHeartbeat.FeeFactor(proto))
-	require.Equal(t, basics.Micros(2e6), pqChallengedGrouped.FeeFactor(proto))
+	require.Equal(t, basics.Micros(2e6), hsigChallengedHeartbeat.FeeFactor(proto))
+	require.Equal(t, basics.Micros(2e6), hsigChallengedGrouped.FeeFactor(proto))
 
-	requiredFee, _, overflow := proto.MinFee().FeeForUsage(pqSigned.FeeFactor(proto), 1e6, 0)
+	requiredFee, _, overflow := proto.MinFee().FeeForUsage(hsigSigned.FeeFactor(proto), 1e6, 0)
 	require.False(t, overflow)
 	require.Equal(t, proto.MinFee().Raw*3, requiredFee.Raw)
 
-	requiredDelegatedFee, _, overflow := proto.MinFee().FeeForUsage(delegatedPQSigned.FeeFactor(proto), 1e6, 0)
+	requiredDelegatedFee, _, overflow := proto.MinFee().FeeForUsage(delegatedHsigSigned.FeeFactor(proto), 1e6, 0)
 	require.False(t, overflow)
 	require.Equal(t, requiredFee, requiredDelegatedFee)
 
-	usage, _ := SummarizeFees(WrapSignedTxnsWithAD([]SignedTxn{regularSigned, delegatedPQSigned}), proto)
+	usage, _ := SummarizeFees(WrapSignedTxnsWithAD([]SignedTxn{regularSigned, delegatedHsigSigned}), proto)
 	require.Equal(t, basics.Micros(4e6), usage)
 }
 
-// TestLogicSigPQSigFee checks that a program authorizing from an ls-scheme
-// PQSig is priced by the byte like one in a LogicSig, and carries no scheme
+// TestLogicSigHashedKeySigFee checks that a program authorizing from an ls-scheme
+// HashedKeySig is priced by the byte like one in a LogicSig, and carries no scheme
 // surcharge of its own.
-func TestLogicSigPQSigFee(t *testing.T) {
+func TestLogicSigHashedKeySigFee(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
@@ -236,22 +237,22 @@ func TestLogicSigPQSigFee(t *testing.T) {
 
 	// Charging the Falcon surcharge here would make the off-curve form cost
 	// more than the on-curve LogicSig it exists to replace.
-	lsPQSigned := SignedTxn{PQsig: PQSig{
-		Scheme:    protocol.PQSchemeLogicSig,
+	lsHsigSigned := SignedTxn{Hsig: HashedKeySig{
+		Scheme:    protocol.SigSchemeLogicSig,
 		PublicKey: make([]byte, proto.LogicSigMaxSize),
 	}}
-	require.Equal(t, basics.Micros(1e6), lsPQSigned.FeeFactor(proto))
+	require.Equal(t, basics.Micros(1e6), lsHsigSigned.FeeFactor(proto))
 
 	// A program is free up to the group's per-transaction allowance, whether it
-	// sits in the Lsig or stands in for a PQ public key.
-	group := WrapSignedTxnsWithAD([]SignedTxn{lsPQSigned})
+	// sits in the Lsig or stands in for a hashed-key signature's public key.
+	group := WrapSignedTxnsWithAD([]SignedTxn{lsHsigSigned})
 	usage, _ := SummarizeFees(group, proto)
 	require.Equal(t, basics.Micros(1e6), usage)
 
 	// Beyond it, the bytes are surcharged exactly as a LogicSig's are.
 	overBy := 500
-	lsOver := lsPQSigned
-	lsOver.PQsig.PublicKey = make([]byte, int(proto.LogicSigMaxSize)+overBy)
+	lsOver := lsHsigSigned
+	lsOver.Hsig.PublicKey = make([]byte, int(proto.LogicSigMaxSize)+overBy)
 	lsigOver := SignedTxn{Lsig: LogicSig{Logic: make([]byte, int(proto.LogicSigMaxSize)+overBy)}}
 
 	lsUsage, _ := SummarizeFees(WrapSignedTxnsWithAD([]SignedTxn{lsOver}), proto)

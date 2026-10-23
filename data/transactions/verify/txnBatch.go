@@ -306,8 +306,8 @@ func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn, groupIndex int) 
 		return 0, nil
 	case stateProofTxn:
 		return 0, nil
-	case pqSig:
-		if stx.PQsig.Batched() {
+	case hashedKeySig:
+		if stx.Hsig.Batched() {
 			return 1, nil
 		}
 		return 0, nil

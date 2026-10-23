@@ -126,7 +126,7 @@ func init() {
 	rawsendCmd.Flags().StringVarP(&txFilename, "filename", "f", "", "Filename of file containing raw transactions")
 	rawsendCmd.Flags().StringVarP(&rejectsFilename, "rejects", "r", "", "Filename for writing rejects to (default is txFilename.rej)")
 	rawsendCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transactions to commit")
-	rawsendCmd.Flags().BoolVar(&skipPqAddressCheck, "skip-pq-address-check", false, "Skip post-quantum address checks for submitted transactions. This should only be used if you understand the risks.")
+	rawsendCmd.Flags().BoolVar(&skipPqAddressCheck, "skip-pq-address-check", false, "Skip off-curve address checks for submitted transactions. This should only be used if you understand the risks.")
 	rawsendCmd.MarkFlagRequired("filename")
 
 	signCmd.Flags().StringVarP(&txFilename, "infile", "i", "", "Partially-signed transaction file to add signature to")
@@ -305,8 +305,8 @@ func getProgramArgs() [][]byte {
 // saltedProgramAuthorizer returns the salt and address a program authorizes
 // from under the ls scheme, whose salt makes it an address no Ed25519 key can
 // ever claim.
-func saltedProgramAuthorizer(program []byte) (basics.PQAddressSalt, basics.Address) {
-	salt, addr, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeLogicSig, program)
+func saltedProgramAuthorizer(program []byte) (basics.AddressSalt, basics.Address) {
+	salt, addr, err := basics.CanonicalAddressSalt(protocol.SigSchemeLogicSig, program)
 	if err != nil {
 		reportErrorf("Could not derive salted address for program: %s", err)
 	}
@@ -334,7 +334,7 @@ func authorizeWithProgram(stxn *transactions.SignedTxn, lsig transactions.LogicS
 		salted = true
 	}
 	if !salted {
-		stxn.PQsig = transactions.PQSig{}
+		stxn.Hsig = transactions.HashedKeySig{}
 		stxn.Lsig = lsig
 		return
 	}
@@ -343,8 +343,8 @@ func authorizeWithProgram(stxn *transactions.SignedTxn, lsig transactions.LogicS
 		reportErrorf("program authorizes %s, but the transaction is authorized by %s", addr, authorizer)
 	}
 	stxn.Lsig = transactions.LogicSig{}
-	stxn.PQsig = transactions.PQSig{
-		Scheme:    protocol.PQSchemeLogicSig,
+	stxn.Hsig = transactions.HashedKeySig{
+		Scheme:    protocol.SigSchemeLogicSig,
 		Salt:      salt,
 		PublicKey: lsig.Logic,
 		Signature: transactions.EncodeLogicSigArgs(lsig.Args),
@@ -972,7 +972,7 @@ var groupCmd = &cobra.Command{
 
 			// A program authorization is kept, as an Lsig is, since grouping
 			// does not invalidate it.
-			if !stxn.Sig.Blank() || !stxn.Msig.Blank() || (!stxn.PQsig.Blank() && !stxn.PQsig.IsLogicSig()) {
+			if !stxn.Sig.Blank() || !stxn.Msig.Blank() || (!stxn.Hsig.Blank() && !stxn.Hsig.IsLogicSig()) {
 				reportErrorf("Transaction #%d with ID of %s is already signed", transactionIdx, stxn.ID().String())
 			}
 
@@ -1094,7 +1094,7 @@ func disassembleFile(fname, outname string) {
 	if err == nil {
 		// success, extract program to disassemble
 		program = lsig.Logic
-		if !lsig.Sig.Blank() || !lsig.Msig.Blank() || !lsig.LMsig.Blank() || !lsig.PQsig.Blank() || len(lsig.Args) > 0 {
+		if !lsig.Sig.Blank() || !lsig.Msig.Blank() || !lsig.LMsig.Blank() || !lsig.Hsig.Blank() || len(lsig.Args) > 0 {
 			nologic := lsig
 			nologic.Logic = nil
 			ilsig := lsigToInspect(nologic)
@@ -1191,11 +1191,11 @@ var compileCmd = &cobra.Command{
 				// The ls address is appended to this line rather than printed on
 				// one of its own, so that scripts reading the first address by
 				// field or by word keep working.
-				_, pqAddr, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeLogicSig, program)
+				_, saltedAddr, err := basics.CanonicalAddressSalt(protocol.SigSchemeLogicSig, program)
 				if err != nil {
-					reportErrorf("Could not derive pq address: %s", err)
+					reportErrorf("Could not derive salted address: %s", err)
 				}
-				fmt.Printf("%s: %s (pq: %s)\n", fname, addr.String(), pqAddr.String())
+				fmt.Printf("%s: %s (salted: %s)\n", fname, addr.String(), saltedAddr.String())
 			}
 		}
 	},

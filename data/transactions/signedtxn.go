@@ -33,10 +33,10 @@ import (
 type SignedTxn struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Sig   crypto.Signature   `codec:"sig"`
-	Msig  crypto.MultisigSig `codec:"msig"`
-	Lsig  LogicSig           `codec:"lsig"`
-	PQsig PQSig              `codec:"pqsig"`
+	Sig  crypto.Signature   `codec:"sig"`
+	Msig crypto.MultisigSig `codec:"msig"`
+	Lsig LogicSig           `codec:"lsig"`
+	Hsig HashedKeySig       `codec:"pqsig"`
 
 	Txn      Transaction    `codec:"txn,required"`
 	AuthAddr basics.Address `codec:"sgnr"`
@@ -113,16 +113,16 @@ func (s SignedTxn) Authorizer() basics.Address {
 
 // HasSignature reports whether any signature category is present.
 func (s SignedTxn) HasSignature() bool {
-	return !s.Sig.Blank() || !s.Msig.Blank() || !s.Lsig.Blank() || !s.PQsig.Blank()
+	return !s.Sig.Blank() || !s.Msig.Blank() || !s.Lsig.Blank() || !s.Hsig.Blank()
 }
 
 // signatureFeeContribution dispatches the fee contribution of the signature type.
 func (s SignedTxn) signatureFeeContribution(proto config.ConsensusParams) basics.Micros {
-	if !s.PQsig.Blank() {
-		return PQSchemeFeeContribution(proto, s.PQsig.Scheme)
+	if !s.Hsig.Blank() {
+		return SigSchemeFeeContribution(proto, s.Hsig.Scheme)
 	}
-	if !s.Lsig.PQsig.Blank() {
-		return PQSchemeFeeContribution(proto, s.Lsig.PQsig.Scheme)
+	if !s.Lsig.Hsig.Blank() {
+		return SigSchemeFeeContribution(proto, s.Lsig.Hsig.Scheme)
 	}
 	return 0
 }
@@ -193,10 +193,10 @@ func logicSigProgramFeeContribution(txgroup []SignedTxnWithAD, proto config.Cons
 	programBytes := 0
 	for _, txad := range txgroup {
 		programBytes += len(txad.SignedTxn.Lsig.Logic)
-		// An ls-scheme PQSig carries its program in place of a public key. Those
+		// An ls-scheme HashedKeySig carries its program in place of a public key. Those
 		// bytes are priced like any other program's.
-		if pqsig := txad.SignedTxn.PQsig; pqsig.IsLogicSig() {
-			programBytes += len(pqsig.PublicKey)
+		if hsig := txad.SignedTxn.Hsig; hsig.IsLogicSig() {
+			programBytes += len(hsig.PublicKey)
 		}
 	}
 	freeProgramBytes := len(txgroup) * int(proto.LogicSigMaxSize)

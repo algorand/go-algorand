@@ -878,9 +878,9 @@ func TestMaxSizesCorrect(t *testing.T) {
 	maxCombinedTxnSize := uint64(transactions.SignedTxnMaxSize())
 	// subtract out the two smaller signature sizes (logicsig is biggest, it can *contain* the others)
 	maxCombinedTxnSize -= uint64(crypto.SignatureMaxSize() + crypto.MultisigSigMaxSize())
-	// a transaction carries at most one effective PQSig (top-level OR nested in the
+	// a transaction carries at most one effective HashedKeySig (top-level OR nested in the
 	// logicsig), but SignedTxnMaxSize counts both, so subtract one.
-	maxCombinedTxnSize -= uint64(transactions.PQSigMaxSize())
+	maxCombinedTxnSize -= uint64(transactions.HashedKeySigMaxSize())
 	// Note that the logicsig program and its args are *not* double counted. Once
 	// transaction size pricing exists, they are bounded separately, each up to
 	// MaxLogicSigMaxSize, so a single logicsig really can carry both in full.
