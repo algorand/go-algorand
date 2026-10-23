@@ -37,4 +37,10 @@ var (
 
 	// PQSchemeFalcon512 - f5: Falcon-512 using a deterministic signing profile.
 	PQSchemeFalcon512 = PQScheme{'f', '5'}
+
+	// PQSchemeLogicSig - ls: a LogicSig account. The program bytes take the place
+	// of the public key, so the account address commits to the program, and the
+	// salt selects among the addresses a single program can have. Authorization is
+	// the program's own evaluation rather than a signature check.
+	PQSchemeLogicSig = PQScheme{'l', 's'}
 )

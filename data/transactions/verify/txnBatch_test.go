@@ -107,7 +107,7 @@ func processResults(ctx context.Context, errChan chan<- error, resultChan <-chan
 			if _, has := badTxnGroups[u]; has {
 				(*badSigResultCounter)++
 				if result.Err == nil {
-					err := fmt.Errorf("%dth (%d)transaction varified with a bad sig", x, u)
+					err := fmt.Errorf("%dth (%d)transaction verified with a bad sig", x, u)
 					errChan <- err
 					return
 				}

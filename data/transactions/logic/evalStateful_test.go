@@ -3542,7 +3542,7 @@ func TestReturnTypes(t *testing.T) {
 				if m == ModeApp {
 					_, cx, err = EvalContract(ops.Program, 1, 300, aep)
 				} else {
-					_, cx, err = EvalSignatureFull(1, sep)
+					_, cx, err = EvalSignatureProgram(ops.Program, tx1.Lsig.Args, 1, sep)
 				}
 				// These little programs need not pass. We are just trying to
 				// examine cx.Stack for proper types/size after executing the

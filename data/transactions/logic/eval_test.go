@@ -264,7 +264,7 @@ func TestTooManyArgs(t *testing.T) {
 			txn.Lsig.Logic = ops.Program
 			args := [transactions.EvalMaxArgs + 1][]byte{}
 			txn.Lsig.Args = args[:]
-			pass, err := EvalSignature(0, defaultSigParams(txn))
+			pass, _, err := EvalSignatureProgram(txn.Lsig.Logic, txn.Lsig.Args, 0, defaultSigParams(txn))
 			require.Error(t, err)
 			require.False(t, pass)
 		})
@@ -281,7 +281,7 @@ func TestArgTooLarge(t *testing.T) {
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			txn.Lsig.Args = [][]byte{make([]byte, transactions.MaxLogicSigArgSize+1)}
-			pass, err := EvalSignature(0, defaultSigParams(txn))
+			pass, _, err := EvalSignatureProgram(txn.Lsig.Logic, txn.Lsig.Args, 0, defaultSigParams(txn))
 			require.Error(t, err)
 			require.False(t, pass)
 		})
@@ -357,7 +357,7 @@ func TestUnaccountedArg(t *testing.T) {
 						txn.Lsig.Logic = ops.Program
 						txn.Lsig.Args = args
 
-						pass, cx, err := EvalSignatureFull(0, defaultSigParams(txn))
+						pass, cx, err := EvalSignatureProgram(txn.Lsig.Logic, txn.Lsig.Args, 0, defaultSigParams(txn))
 						a.NoError(err, "v=%d", v)
 						a.True(pass, "v=%d", v)
 
@@ -387,7 +387,7 @@ func TestUnaccountedArgFailedRead(t *testing.T) {
 	txn.Lsig.Logic = ops.Program
 	txn.Lsig.Args = [][]byte{[]byte("x")}
 
-	pass, _, err := EvalSignatureFull(0, defaultSigParams(txn))
+	pass, _, err := EvalSignatureProgram(txn.Lsig.Logic, txn.Lsig.Args, 0, defaultSigParams(txn))
 	a.ErrorContains(err, "cannot load arg[1] from 1 arg")
 	a.False(pass)
 }
@@ -608,14 +608,54 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 			txn.Lsig.Logic = ops.Program
 			txn.Lsig.Args = [][]byte{[]byte("=0\x97S\x85H\xe9\x91B\xfd\xdb;1\xf5Z\xaec?\xae\xf2I\x93\x08\x12\x94\xaa~\x06\x08\x849b")}
 			ep := defaultSigParams(txn)
-			err := CheckSignature(0, ep)
+			err := CheckSignature(ops.Program, ep)
 			require.NoError(t, err)
-			pass, cx, err := EvalSignatureFull(0, ep)
+			pass, cx, err := EvalSignatureProgram(txn.Lsig.Logic, txn.Lsig.Args, 0, ep)
 			require.True(t, pass)
 			require.NoError(t, err)
 			require.Greater(t, cx.Cost(), 0)
 		})
 	}
+}
+
+// TestEvalSignatureProgramArgs checks that a signature program reads the
+// arguments it was evaluated with, rather than the ones on the transaction's
+// LogicSig. An ls-scheme PQSig carries a program and its arguments together,
+// with nothing in Lsig at all, so the two cannot be assumed to be the same.
+func TestEvalSignatureProgramArgs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ops := testProg(t, `arg 0
+byte "expected"
+==
+arg 1
+btoi
+&&`, AssemblerMaxVersion)
+
+	args := [][]byte{[]byte("expected"), {1}}
+
+	// The transaction carries a decoy program and misleading arguments, so a
+	// passing evaluation can only have come from what was passed in.
+	var txn transactions.SignedTxn
+	txn.Lsig.Logic = testProg(t, "int 0", AssemblerMaxVersion).Program
+	txn.Lsig.Args = [][]byte{[]byte("wrong"), {0}, []byte("extra")}
+
+	ep := defaultSigParams(txn)
+	require.NoError(t, CheckSignature(ops.Program, ep))
+	pass, _, err := EvalSignatureProgram(ops.Program, args, 0, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	// Reading past the arguments it was given fails, even though the
+	// transaction's LogicSig has an argument at that index.
+	reads2 := testProg(t, "arg 2; len; int 5; ==", AssemblerMaxVersion)
+	_, _, err = EvalSignatureProgram(reads2.Program, args, 0, ep)
+	require.ErrorContains(t, err, "cannot load arg[2] from 2 args")
+
+	// With no arguments at all, arg 0 has nothing to read.
+	_, _, err = EvalSignatureProgram(ops.Program, nil, 0, ep)
+	require.ErrorContains(t, err, "cannot load arg[0] from 0 args")
 }
 
 func TestBranchEnd(t *testing.T) {
@@ -630,7 +670,7 @@ end:
 `, v)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
-			err := CheckSignature(0, defaultSigParams(txn))
+			err := CheckSignature(ops.Program, defaultSigParams(txn))
 			require.NoError(t, err)
 		})
 	}
@@ -642,7 +682,7 @@ return
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			ep := defaultSigParams(txn)
-			err := CheckSignature(0, ep)
+			err := CheckSignature(ops.Program, ep)
 			require.NoError(t, err)
 		})
 	}
@@ -652,7 +692,7 @@ return
 	pushint := OpsByName[LogicVersion]["pushint"]
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = []byte{LogicVersion, pushint.Opcode, 0x01}
-	err := CheckSignature(0, defaultSigParams(txn))
+	err := CheckSignature(txn.Lsig.Logic, defaultSigParams(txn))
 	require.NoError(t, err)
 }
 
@@ -708,13 +748,13 @@ func TestTLHC(t *testing.T) {
 			txn.Txn.FirstValid = 999999
 			block := bookkeeping.Block{}
 			ep := defaultSigParams(txn)
-			err := CheckSignature(0, ep)
+			err := CheckSignature(ops.Program, ep)
 			if err != nil {
 				t.Log(hex.EncodeToString(ops.Program))
 				t.Log(ep.Trace.String())
 			}
 			require.NoError(t, err)
-			pass, cx, err := EvalSignatureFull(0, ep)
+			pass, cx, err := EvalSignatureProgram(txn.Lsig.Logic, txn.Lsig.Args, 0, ep)
 			if pass {
 				t.Log(hex.EncodeToString(ops.Program))
 				t.Log(ep.Trace.String())
@@ -727,7 +767,7 @@ func TestTLHC(t *testing.T) {
 			txn.Txn.Receiver = a2
 			txn.Txn.CloseRemainderTo = a2
 			ep = defaultSigParams(txn)
-			pass, err = EvalSignature(0, ep)
+			pass, _, err = EvalSignatureProgram(txn.Lsig.Logic, txn.Lsig.Args, 0, ep)
 			if !pass {
 				t.Log(hex.EncodeToString(ops.Program))
 				t.Log(ep.Trace.String())
@@ -739,7 +779,7 @@ func TestTLHC(t *testing.T) {
 			txn.Txn.CloseRemainderTo = a2
 			txn.Txn.FirstValid = 1
 			ep = defaultSigParams(txn)
-			pass, err = EvalSignature(0, ep)
+			pass, _, err = EvalSignatureProgram(txn.Lsig.Logic, txn.Lsig.Args, 0, ep)
 			if pass {
 				t.Log(hex.EncodeToString(ops.Program))
 				t.Log(ep.Trace.String())
@@ -751,7 +791,7 @@ func TestTLHC(t *testing.T) {
 			txn.Txn.CloseRemainderTo = a1
 			txn.Txn.FirstValid = 999999
 			ep = defaultSigParams(txn)
-			pass, err = EvalSignature(0, ep)
+			pass, _, err = EvalSignatureProgram(txn.Lsig.Logic, txn.Lsig.Args, 0, ep)
 			if !pass {
 				t.Log(hex.EncodeToString(ops.Program))
 				t.Log(ep.Trace.String())
@@ -763,7 +803,7 @@ func TestTLHC(t *testing.T) {
 			txn.Lsig.Args = [][]byte{[]byte("=0\x97S\x85H\xe9\x91B\xfd\xdb;1\xf5Z\xaec?\xae\xf2I\x93\x08\x12\x94\xaa~\x06\x08\x849a")}
 			block.BlockHeader.Round = 1
 			ep = defaultSigParams(txn)
-			pass, err = EvalSignature(0, ep)
+			pass, _, err = EvalSignatureProgram(txn.Lsig.Logic, txn.Lsig.Args, 0, ep)
 			if pass {
 				t.Log(hex.EncodeToString(ops.Program))
 				t.Log(ep.Trace.String())
@@ -2365,7 +2405,7 @@ func testLogicFull(t *testing.T, program []byte, gi int, ep *EvalParams, problem
 	ep.Trace = &strings.Builder{}
 
 	ep.TxnGroup[gi].Lsig.Logic = program
-	err := CheckSignature(gi, ep)
+	err := CheckSignature(program, ep)
 	if checkProblem == "" {
 		require.NoError(t, err, "Error in CheckSignature %v", ep.Trace)
 	} else {
@@ -2377,7 +2417,7 @@ func testLogicFull(t *testing.T, program []byte, gi int, ep *EvalParams, problem
 	// may mean that the problems argument is often duplicated, but this seems
 	// the best way to be concise about all sorts of tests.
 
-	pass, err := EvalSignature(gi, ep)
+	pass, _, err := EvalSignatureProgram(program, ep.TxnGroup[gi].Lsig.Args, gi, ep)
 	if evalProblem == "" {
 		require.NoError(t, err, "Eval\n%sExpected: PASS", ep.Trace)
 		assert.True(t, pass, "Eval\n%sExpected: PASS", ep.Trace)
@@ -2389,7 +2429,7 @@ func testLogicFull(t *testing.T, program []byte, gi int, ep *EvalParams, problem
 	if evalProblem == "REJECT" {
 		require.True(t, err != nil || !pass, "Eval\n%sExpected: REJECT", ep.Trace)
 	} else {
-		require.ErrorContains(t, err, evalProblem, "Wrong error in EvalSignature %v", ep.Trace)
+		require.ErrorContains(t, err, evalProblem, "Wrong error in EvalSignatureProgram %v", ep.Trace)
 	}
 	return err
 }
@@ -3580,7 +3620,7 @@ func TestPanic(t *testing.T) { //nolint:paralleltest // Uses withPanicOpcode
 				ep := defaultSigParams()
 				ep.logger = logSink
 				ep.TxnGroup[0].Lsig.Logic = ops.Program
-				err := CheckSignature(0, ep)
+				err := CheckSignature(ops.Program, ep)
 				var pe panicError
 				require.ErrorAs(t, err, &pe)
 				require.Equal(t, panicString, pe.PanicValue)
@@ -3590,7 +3630,7 @@ func TestPanic(t *testing.T) { //nolint:paralleltest // Uses withPanicOpcode
 				txn.Lsig.Logic = ops.Program
 				ep = defaultSigParams(txn)
 				ep.logger = logSink
-				pass, err := EvalSignature(0, ep)
+				pass, _, err := EvalSignatureProgram(txn.Lsig.Logic, nil, 0, ep)
 				if pass {
 					t.Log(hex.EncodeToString(ops.Program))
 					t.Log(ep.Trace.String())
@@ -4073,12 +4113,12 @@ func evalLoop(b *testing.B, runs int, programs ...[]byte) {
 		if i == runs-1 {
 			txn.Lsig.Logic = final
 		}
-		pass, err := EvalSignature(0, benchmarkSigParams(txn))
+		pass, _, err := EvalSignatureProgram(txn.Lsig.Logic, txn.Lsig.Args, 0, benchmarkSigParams(txn))
 		if !pass {
 			// rerun to trace it.  tracing messes up timing too much
 			ep := benchmarkSigParams(txn)
 			ep.Trace = &strings.Builder{}
-			pass, err = EvalSignature(0, ep)
+			pass, _, err = EvalSignatureProgram(txn.Lsig.Logic, txn.Lsig.Args, 0, ep)
 			b.Log(ep.Trace.String())
 		}
 		// require is super slow but makes useful error messages, wrap it in a check that makes the benchmark run a bunch faster
@@ -4395,7 +4435,7 @@ func BenchmarkCheckx5(b *testing.B) {
 		for _, program := range programs {
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = program
-			err := CheckSignature(0, defaultSigParams(txn))
+			err := CheckSignature(program, defaultSigParams(txn))
 			if err != nil {
 				require.NoError(b, err)
 			}
@@ -4856,13 +4896,13 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 					var txn transactions.SignedTxn
 					txn.Lsig.Logic = ops.Program
 					ep := defaultSigParamsWithVersion(lv, txn)
-					err := CheckSignature(0, ep)
+					err := CheckSignature(ops.Program, ep)
 					if err != nil {
 						t.Log(ep.Trace.String())
 					}
 					require.NoError(t, err)
 					ep = defaultSigParamsWithVersion(lv, txn)
-					pass, err := EvalSignature(0, ep)
+					pass, _, err := EvalSignatureProgram(txn.Lsig.Logic, txn.Lsig.Args, 0, ep)
 					ok := tester(t, pass, err)
 					if !ok {
 						t.Log(ep.Trace.String())
