@@ -91,7 +91,7 @@ func (cred UnauthenticatedCredential) Verify(proto config.ConsensusParams, m Mem
 	}
 
 	if !ok {
-		err = fmt.Errorf("UnauthenticatedCredential.Verify: could not verify VRF Proof with %v (parameters = %+v, proof = %#v)", selectionKey, m, cred.Proof)
+		err = fmt.Errorf("UnauthenticatedCredential.Verify: could not verify VRF Proof with %x (parameters = %+v, proof = %#v)", selectionKey[:], m, cred.Proof)
 		return
 	}
 

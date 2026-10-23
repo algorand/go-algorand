@@ -798,9 +798,10 @@ func (bh BlockHeader) PreCheck(prev BlockHeader) error {
 	}
 
 	if params.EnableSha512BlockHash && bh.Branch512 != prev.Hash512() {
-		return fmt.Errorf("block branch512 incorrect %v != %v", bh.Branch512, prev.Hash512())
+		want := prev.Hash512()
+		return fmt.Errorf("block branch512 incorrect %x != %x", bh.Branch512[:], want[:])
 	} else if !params.EnableSha512BlockHash && bh.Branch512 != (crypto.Sha512Digest{}) {
-		return fmt.Errorf("block branch512 not allowed: %v", bh.Branch512)
+		return fmt.Errorf("block branch512 not allowed: %x", bh.Branch512[:])
 	}
 
 	// check upgrade state
