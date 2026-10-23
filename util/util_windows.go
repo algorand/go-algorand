@@ -19,7 +19,6 @@ package util
 import (
 	"errors"
 	"math"
-	"os"
 	"syscall"
 	"time"
 	"unsafe"
@@ -40,15 +39,6 @@ func RaiseFdSoftLimit(_ uint64) error {
 // SetFdSoftLimit sets a new file descriptors soft limit.
 func SetFdSoftLimit(_ uint64) error {
 	return nil
-}
-
-// hardLinkCount returns the number of hard links to the open file f.
-func hardLinkCount(f *os.File) (uint64, error) {
-	var info syscall.ByHandleFileInformation
-	if err := syscall.GetFileInformationByHandle(syscall.Handle(f.Fd()), &info); err != nil {
-		return 0, err
-	}
-	return uint64(info.NumberOfLinks), nil
 }
 
 // Getrusage gets file descriptors usage statistics

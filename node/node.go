@@ -54,7 +54,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/stateproof"
-	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -964,7 +963,7 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 
 	// Explicitly ignore the error with a closure
 	defer func(name string) {
-		_, _ = util.EraseFile(name)
+		_ = os.Remove(name)
 	}(fullyQualifiedTempFile)
 
 	if err != nil {
@@ -1021,11 +1020,6 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 	var imported []string
 	// For each of these files
 	for _, info := range files {
-		// Finish erasing a file that a crash interrupted on an earlier start.
-		if strings.HasSuffix(info.Name(), erasingPartKeySuffix) {
-			node.erasePartKeyFile(filepath.Join(genesisDir, info.Name()))
-			continue
-		}
 		// If it can't be a participation key database, skip it
 		if !config.IsPartKeyFilename(info.Name()) {
 			continue
@@ -1074,7 +1068,7 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 				// The record and its state proof keys are written in separate
 				// transactions, so an earlier start can have stored the record
 				// without the keys. The file is their only copy; import them
-				// before it is erased.
+				// before it is removed.
 				node.log.Warnf("loadParticipationKeys: participation registry has %s %s without its state proof keys, importing them", part.Address(), info.Name())
 				err = insertStateProofToRegistry(part, node)
 			}
@@ -1097,36 +1091,14 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 		return nil
 	}
 	for _, fullname := range imported {
-		// Rename the file first: a crash while it is being overwritten would
-		// otherwise leave a corrupt key file that fails the next start.
-		erasing := fullname + erasingPartKeySuffix
-		if err := os.Rename(fullname, erasing); err != nil {
-			node.log.Warnf("loadParticipationKeys: failed to rename imported participation key file '%s' to '%s': %v", fullname, erasing, err)
-			continue
+		if err := os.Remove(fullname); err != nil {
+			node.log.Warnf("loadParticipationKeys: failed to remove imported participation key file '%s': %v", fullname, err)
+		} else {
+			node.log.Infof("loadParticipationKeys: removed participation key file '%s' after importing it into the participation registry", fullname)
 		}
-		node.erasePartKeyFile(erasing)
 	}
 
 	return nil
-}
-
-// erasingPartKeySuffix is appended to an imported participation key file's
-// name before it is overwritten, so that a file left behind by a crash during
-// the overwrite is erased on the next start instead of being read as a key.
-const erasingPartKeySuffix = ".erasing"
-
-// erasePartKeyFile overwrites and removes a participation key file that has
-// already been imported into the participation registry.
-func (node *AlgorandFullNode) erasePartKeyFile(fullname string) {
-	erased, err := util.EraseFile(fullname)
-	switch {
-	case err != nil:
-		node.log.Warnf("loadParticipationKeys: failed to erase imported participation key file '%s': %v", fullname, err)
-	case !erased:
-		node.log.Warnf("loadParticipationKeys: removed '%s' without overwriting it, since it is a link or its contents have other links", fullname)
-	default:
-		node.log.Infof("loadParticipationKeys: erased participation key file '%s' after importing it into the participation registry", fullname)
-	}
 }
 
 // registryHasStateProofKeys reports whether the participation registry holds

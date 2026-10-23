@@ -1511,7 +1511,7 @@ func TestLoadParticipationKeysRemovesFiles(t *testing.T) {
 	require.NoError(t, err)
 
 	// A key file with a newer schema version, as a newer algod would write,
-	// is not imported. It is renamed to *.old instead of being erased.
+	// is not imported. It is renamed to *.old instead of being removed.
 	var newerAddr basics.Address
 	crypto.RandBytes(newerAddr[:])
 	newerFile := filepath.Join(genesisDir, config.PartKeyFilename(newerAddr.String(), 0, 200))
@@ -1552,20 +1552,16 @@ func TestLoadParticipationKeysRemovesFiles(t *testing.T) {
 	stopNode(node)
 
 	// The leftover file is deleted, and the registry keeps its own copy rather
-	// than getting back the erased keys still in the file. A file left behind
-	// by a crash while it was being overwritten is erased as well.
+	// than getting back the erased keys still in the file.
 	_, err = util.CopyFile(leftoverFile, partFile)
 	require.NoError(t, err)
-	erasingFile := filepath.Join(genesisDir, config.PartKeyFilename("crashed", 0, 200)+erasingPartKeySuffix)
-	require.NoError(t, os.WriteFile(erasingFile, make([]byte, 4096), 0600))
 	node = makeNode()
 	require.NoFileExists(t, partFile)
-	require.NoFileExists(t, erasingFile)
 	require.Equal(t, uint64(6), firstBatch(node))
 
 	// Drop the state proof keys from the registry, as a start that crashed
 	// between storing the record and its keys leaves it. The leftover file is
-	// then the only copy of the keys, and they are imported before it is erased.
+	// then the only copy of the keys, and they are imported before it is removed.
 	spKeys := part.StateProofSecrets.GetAllKeys()
 	require.NotEmpty(t, spKeys)
 	lastKeyRound := basics.Round(spKeys[len(spKeys)-1].Round)
