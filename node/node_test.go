@@ -1583,8 +1583,12 @@ func TestLoadParticipationKeysRemovesFiles(t *testing.T) {
 	stopNode(node)
 	_, err = util.CopyFile(leftoverFile, partFile)
 	require.NoError(t, err)
+	// A second copy must not queue the keys again while the first is importing them.
+	_, err = util.CopyFile(leftoverFile, dupFile)
+	require.NoError(t, err)
 	node = makeNode()
 	require.NoFileExists(t, partFile)
+	require.NoFileExists(t, dupFile)
 	_, err = node.accountManager.Registry().GetStateProofSecretsForRound(partID, lastKeyRound)
 	require.NoError(t, err)
 	require.Equal(t, uint64(6), firstBatch(node))
