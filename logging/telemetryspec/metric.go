@@ -103,6 +103,10 @@ const AssembleBlockAbandon = "block-abandon"
 // evaluator could not generate one.
 const AssembleBlockGenerationError = "generation-error"
 
+// AssembleBlockNoProposers represents an empty block being assembled because the pool
+// found no local accounts that could propose in the round and skipped GenerateBlock.
+const AssembleBlockNoProposers = "no-proposers"
+
 const assembleBlockMetricsIdentifier Metric = "AssembleBlock"
 
 // AssembleBlockMetrics is the set of metrics captured when we compute AssembleBlock
