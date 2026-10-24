@@ -1534,6 +1534,7 @@ type PreEncodedSimulateRequest struct {
 	AllowMoreLogging      bool                                        `codec:"allow-more-logging,omitempty"`
 	AllowUnnamedResources bool                                        `codec:"allow-unnamed-resources,omitempty"`
 	ExtraOpcodeBudget     int                                         `codec:"extra-opcode-budget,omitempty"`
+	ExtraFees             uint64                                      `codec:"extra-fees,omitempty"`
 	ExecTraceConfig       simulation.ExecTraceConfig                  `codec:"exec-trace-config,omitempty"`
 	FixSigners            bool                                        `codec:"fix-signers,omitempty"`
 }

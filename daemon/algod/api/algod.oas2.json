@@ -3304,6 +3304,10 @@
           "description": "Applies extra opcode budget during simulation for each transaction group.",
           "type": "integer"
         },
+        "extra-fees": {
+          "description": "Applies additional fee credit during simulation for each transaction group. This amount is not deducted from any account.",
+          "type": "integer"
+        },
         "exec-trace-config": {
           "$ref": "#/definitions/SimulateTraceConfig"
         },
@@ -3745,6 +3749,10 @@
         },
         "extra-opcode-budget": {
           "description": "The extra opcode budget added to each transaction group during simulation",
+          "type": "integer"
+        },
+        "extra-fees": {
+          "description": "The additional fee credit applied to each transaction group during simulation without deducting it from any account.",
           "type": "integer"
         },
         "fix-signers": {
