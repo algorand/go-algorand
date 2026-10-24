@@ -325,8 +325,8 @@ bucketloop:
 		}
 		start := base + time.Duration(i-offset)*mul
 		end := base + time.Duration(i+1-offset)*mul
-		out.WriteString(fmt.Sprintf("%s - %s: %d\n", start, end, val))
+		fmt.Fprintf(&out, "%s - %s: %d\n", start, end, val)
 	}
-	out.WriteString(fmt.Sprintf(">1s: %d\n", t.transactionBuckets[37]))
+	fmt.Fprintf(&out, ">1s: %d\n", t.transactionBuckets[37])
 	return out.String()
 }

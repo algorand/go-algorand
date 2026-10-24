@@ -42,12 +42,13 @@ fi
 
 # Setup GOBIN
 # If env var GOBIN is set, use it
-# Otherwise, use go env GOBIN if set
+# Otherwise, use go env GOBIN if set explicitly (since Go 1.27 it reports the
+# $GOPATH/bin default when unset)
 # Otherwise default to $GOPATH1/bin
 
 if [[ -n "${GOBIN}" ]]; then
     export GOBIN=${GOBIN}
-elif [[ -n "$(go env GOBIN)" ]]; then
+elif [[ -n "$(go env -changed GOBIN)" ]]; then
     export GOBIN=$(go env GOBIN)
 else
     export GOBIN=${GOPATH1}/bin

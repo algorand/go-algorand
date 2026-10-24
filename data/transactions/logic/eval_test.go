@@ -5950,12 +5950,12 @@ func TestOpJSONRef(t *testing.T) {
 		},
 		{
 			source:             `byte  "{\"key0\": [1]}"; byte "key0"; json_ref JSONObject;`,
-			error:              "json: cannot unmarshal array into Go value of type map[string]json.RawMessage",
+			error:              "json: cannot unmarshal array into Go value of type map[string]",
 			previousVersErrors: []expect{exp(1, "unknown opcode: json_ref")},
 		},
 		{
 			source:             `byte  "{\"key0\": 1}"; byte "key0"; json_ref JSONObject;`,
-			error:              "json: cannot unmarshal number into Go value of type map[string]json.RawMessage",
+			error:              "json: cannot unmarshal number into Go value of type map[string]",
 			previousVersErrors: []expect{exp(1, "unknown opcode: json_ref")},
 		},
 		{
@@ -5970,7 +5970,7 @@ func TestOpJSONRef(t *testing.T) {
 		},
 		{
 			source:             `byte  "{\"key0\": true }"; byte "key0"; json_ref JSONObject;`,
-			error:              "json: cannot unmarshal bool into Go value of type map[string]json.RawMessage",
+			error:              "json: cannot unmarshal bool into Go value of type map[string]",
 			previousVersErrors: []expect{exp(1, "unknown opcode: json_ref")},
 		},
 		{
@@ -5990,7 +5990,7 @@ func TestOpJSONRef(t *testing.T) {
 		},
 		{
 			source:             `byte  "{\"key0\": \"1\"}"; byte "key0"; json_ref JSONObject;`,
-			error:              "json: cannot unmarshal string into Go value of type map[string]json.RawMessage",
+			error:              "json: cannot unmarshal string into Go value of type map[string]",
 			previousVersErrors: []expect{exp(1, "unknown opcode: json_ref")},
 		},
 		{

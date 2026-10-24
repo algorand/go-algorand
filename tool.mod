@@ -1,6 +1,6 @@
 module github.com/algorand/go-algorand/tools
 
-go 1.25.3
+go 1.27.0
 
 tool (
 	golang.org/x/tools/cmd/stringer
@@ -15,11 +15,11 @@ require (
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	golang.org/x/mod v0.29.0 // indirect
-	golang.org/x/sync v0.17.0 // indirect
-	golang.org/x/sys v0.37.0 // indirect
+	golang.org/x/mod v0.42.0 // indirect
+	golang.org/x/sync v0.24.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/term v0.35.0 // indirect
 	golang.org/x/text v0.17.0 // indirect
-	golang.org/x/tools v0.38.0 // indirect
+	golang.org/x/tools v0.52.0 // indirect
 	gotest.tools/gotestsum v1.13.0 // indirect
 )
