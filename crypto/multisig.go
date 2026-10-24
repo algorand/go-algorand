@@ -201,7 +201,7 @@ func MultisigAssemble(unisig []MultisigSig) (msig MultisigSig, err error) {
 			return
 		}
 		for j := 0; j < len(unisig[0].Subsigs); j++ {
-			if unisig[0].Subsigs[j].Key != unisig[i].Subsigs[j].Key {
+			if unisig[0].Subsigs[j].Key != unisig[i].Subsigs[j].Key { //nolint:gosec // the subsig lengths are checked equal above, and j is bounded by that length
 				err = errKeysNotMatch
 				return
 			}

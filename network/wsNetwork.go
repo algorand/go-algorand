@@ -1094,7 +1094,7 @@ func (wn *WebsocketNetwork) checkIncomingConnectionVariables(response http.Respo
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "matching random ID header"})
 		message = fmt.Sprintf("Request included matching %s=%s header", NodeRandomHeader, otherRandom)
 		response.WriteHeader(http.StatusLoopDetected)
-		n, err := response.Write([]byte(message))
+		n, err := response.Write([]byte(message)) //nolint:gosec // otherRandom equals our locally generated base64 randomID in this branch
 		if err != nil {
 			wn.log.Warnf("ws failed to write response '%s' : n = %d err = %v", message, n, err)
 		}
