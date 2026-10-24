@@ -87,6 +87,7 @@ const foreignBoxVersion = 13 // app_params_set, foreign app box access
 // their version, and fixup TestAssemble() in assembler_test.go.
 const sumhashVersion = 14
 const f512Version = 14
+const rsaVersion = 14 // rsa_verify
 
 // LogicSigOffCurveVersion is the first AVM version where LogicSig programs
 // assembled by this package are expected to hash to an off-curve address.
@@ -140,6 +141,53 @@ func (lc *linearCost) docCost(argLen int) string {
 	return fmt.Sprintf("%d + %d per %d bytes of %c", lc.baseCost, lc.chunkCost, lc.chunkSize, stackArg)
 }
 
+// bracketCost charges a flat cost chosen by the length of one byte-slice
+// argument. It suits operations whose time grows much faster than linearly in
+// their input, such as modular exponentiation, where a linearCost would
+// overcharge short inputs.
+type bracketCost struct {
+	depth  int
+	limits []int // strictly increasing, inclusive upper bounds on the argument's length
+	costs  []int // costs[i] applies when the length is <= limits[i], costs[len(limits)] beyond
+}
+
+func (bc bracketCost) check() bracketCost {
+	if bc.depth < 0 || len(bc.limits) == 0 || len(bc.costs) != len(bc.limits)+1 {
+		panic(fmt.Sprintf("bad cost configuration %+v", bc))
+	}
+	for i, limit := range bc.limits {
+		if limit < 0 || limit > maxStringSize || (i > 0 && limit <= bc.limits[i-1]) {
+			panic(fmt.Sprintf("bad cost limits %+v", bc))
+		}
+	}
+	for _, cost := range bc.costs {
+		if cost < 1 {
+			panic(fmt.Sprintf("bad cost %+v", bc))
+		}
+	}
+	return bc
+}
+
+func (bc *bracketCost) compute(stack []stackValue) int {
+	length := len(stack[len(stack)-1-bc.depth].Bytes)
+	for i, limit := range bc.limits {
+		if length <= limit {
+			return bc.costs[i]
+		}
+	}
+	return bc.costs[len(bc.limits)]
+}
+
+func (bc *bracketCost) docCost(argLen int) string {
+	stackArg := rune(int('A') + argLen - bc.depth - 1)
+	parts := make([]string, 0, len(bc.costs))
+	for i, limit := range bc.limits {
+		parts = append(parts, fmt.Sprintf("%d if len(%c) <= %d", bc.costs[i], stackArg, limit))
+	}
+	parts = append(parts, fmt.Sprintf("%d otherwise", bc.costs[len(bc.limits)]))
+	return strings.Join(parts, "; ")
+}
+
 // OpDetails records details such as non-standard costs, immediate arguments, or
 // dynamic layout controlled by a check function. These objects are mostly built
 // with constructor functions, so it's cleaner to have defaults set here, rather
@@ -151,9 +199,10 @@ type OpDetails struct {
 
 	Modes RunMode // all modes that opcode can run in. i.e (cx.mode & Modes) != 0 allows
 
-	FullCost   linearCost  // if non-zero, the cost of the opcode, no immediates matter
-	Size       int         // if non-zero, the known size of opcode. if 0, check() determines.
-	Immediates []immediate // details of each immediate arg to opcode
+	FullCost   linearCost   // if non-zero, the cost of the opcode, no immediates matter
+	Size       int          // if non-zero, the known size of opcode. if 0, check() determines.
+	Immediates []immediate  // details of each immediate arg to opcode
+	brackets   *bracketCost // if non-nil, the cost of the opcode, set by the length of an arg
 
 	trusted bool // if `trusted`, don't check stack effects. they are more complicated than simply checking the opcode prototype.
 
@@ -171,6 +220,9 @@ func (d *OpDetails) docCost(argLen int, version uint64) string {
 	cost := d.FullCost.docCost(argLen)
 	if cost != "" {
 		return cost
+	}
+	if d.brackets != nil {
+		return d.brackets.docCost(argLen)
 	}
 	found := false
 	for _, imm := range d.Immediates {
@@ -204,6 +256,9 @@ func (d *OpDetails) Cost(program []byte, pc int, stack []stackValue) int {
 	if cost != 0 {
 		return cost
 	}
+	if d.brackets != nil {
+		return d.brackets.compute(stack)
+	}
 	if d.SubOpcode != 0 { // Look for immediates after SubOpcode
 		pc++
 	}
@@ -217,11 +272,11 @@ func (d *OpDetails) Cost(program []byte, pc int, stack []stackValue) int {
 }
 
 func detDefault() OpDetails {
-	return OpDetails{asmDefault, nil, nil, modeAny, linearCost{baseCost: 1}, 1, nil, false, 0, nil}
+	return OpDetails{asmDefault, nil, nil, modeAny, linearCost{baseCost: 1}, 1, nil, nil, false, 0, nil}
 }
 
 func constants(asm asmFunc, checker checkFunc, name string, kind immKind) OpDetails {
-	return OpDetails{asm, checker, nil, modeAny, linearCost{baseCost: 1}, 0, []immediate{imm(name, kind)}, false, 0, nil}
+	return OpDetails{asm, checker, nil, modeAny, linearCost{baseCost: 1}, 0, []immediate{imm(name, kind)}, nil, false, 0, nil}
 }
 
 // detBranch2B describes a branch that always has a two-byte branch offset
@@ -268,6 +323,9 @@ func costly(cost int) OpDetails {
 }
 
 func (d OpDetails) costs(cost int) OpDetails {
+	if d.brackets != nil {
+		panic("costs() on an opcode with bracket costs")
+	}
 	d.FullCost = linearCost{baseCost: cost}.check()
 	return d
 }
@@ -284,7 +342,24 @@ func (d OpDetails) only(m RunMode) OpDetails {
 }
 
 func (d OpDetails) costByLength(initial, perChunk, chunkSize, depth int) OpDetails {
+	if d.brackets != nil {
+		panic("costByLength() on an opcode with bracket costs")
+	}
 	d.FullCost = costByLength(initial, perChunk, chunkSize, depth).FullCost
+	return d
+}
+
+// costByBracket makes the cost of the opcode a flat cost chosen by the length
+// of the argument at depth. See bracketCost.
+func (d OpDetails) costByBracket(depth int, limits []int, costs []int) OpDetails {
+	for _, imm := range d.Immediates {
+		if imm.fieldCosts != nil {
+			panic("costByBracket() on an opcode with field costs")
+		}
+	}
+	d.FullCost = linearCost{} // zero FullCost is what causes eval to look deeper
+	bc := bracketCost{depth, limits, costs}.check()
+	d.brackets = &bc
 	return d
 }
 
@@ -890,6 +965,11 @@ var OpSpecs = []OpSpec{
 			chunkCost: 350,
 			chunkSize: 32,
 		}})},
+	// The cost of rsa_verify is set by the length of the modulus, in brackets of
+	// 1024 bits, each charged at the largest modulus and the slowest exponent in
+	// it, plus 10%.
+	{0xe8, "rsa_verify", opRsaVerify, proto("bbbi:T"), rsaVersion,
+		field("s", &RsaSchemes).costByBracket(1, []int{128, 256, 384}, []int{1050, 2650, 5200, 8250})},
 }
 
 // OpcodesByVersion returns list of opcodes available in a specific version of TEAL
