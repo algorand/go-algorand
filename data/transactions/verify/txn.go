@@ -283,7 +283,8 @@ func logicSigGroupSizeCheck(groupCtx *GroupContext) *TxGroupError {
 	stxs := groupCtx.signedGroupTxns
 	proto := &groupCtx.consensusParams
 	maxArgsSize := proto.MaxAbsoluteLogicSigArgsSize
-	argsPricingEnabled := maxArgsSize != 0
+	// Paid args require the rule that prevents appending unread arguments.
+	argsPricingEnabled := proto.RequireLogicSigArgAccess
 	txnSizePricingEnabled := proto.TxnSizePricingEnabled()
 	poolOrphanArgs := proto.MaxAbsoluteLogicSigProgramSize > proto.LogicSigMaxSize
 
@@ -308,16 +309,8 @@ func logicSigGroupSizeCheck(groupCtx *GroupContext) *TxGroupError {
 			programSize = len(lsig.Logic)
 			argsSize = lsig.ArgsLen()
 		}
-		if argsPricingEnabled && uint64(argsSize) > maxArgsSize {
-			return &TxGroupError{
-				err:        fmt.Errorf("LogicSig had %d bytes of args, more than the absolute maximum of %d bytes", argsSize, maxArgsSize),
-				GroupIndex: i,
-				Reason:     TxGroupErrorReasonNotWellFormed,
-			}
-		}
-		// A program authorizing from an ls-scheme SaltedKeySig costs the group what one
-		// in a LogicSig costs. Malformed args are rejected here rather than
-		// counted, since there is no honest size to charge for them.
+		// An ls-scheme SaltedKeySig contributes its program and decoded argument
+		// bytes to the same limits and pools as a LogicSig. Reject malformed args.
 		if stxs[i].SKsig.IsLogicSig() {
 			sksigLsig, err := groupCtx.sksigLsig(i)
 			if err != nil {
@@ -325,6 +318,13 @@ func logicSigGroupSizeCheck(groupCtx *GroupContext) *TxGroupError {
 			}
 			programSize += len(sksigLsig.Logic)
 			argsSize += sksigLsig.ArgsLen()
+		}
+		if uint64(argsSize) > maxArgsSize {
+			return &TxGroupError{
+				err:        fmt.Errorf("LogicSig had %d bytes of args, more than the absolute maximum of %d bytes", argsSize, maxArgsSize),
+				GroupIndex: i,
+				Reason:     TxGroupErrorReasonNotWellFormed,
+			}
 		}
 		totalSize += programSize + argsSize
 		totalArgsSize += argsSize
@@ -341,9 +341,9 @@ func logicSigGroupSizeCheck(groupCtx *GroupContext) *TxGroupError {
 		}
 	}
 
-	// Before args pricing, args must fit within the group size pool even when program bytes can be purchased.
-	// 	With args pricing, SummarizeFees charges
-	// args beyond the pool instead.
+	// Before args pricing, args must fit within the group pool, even once program
+	// bytes can be purchased. With args pricing, SummarizeFees charges for args
+	// beyond the pool instead.
 	if !argsPricingEnabled && totalArgsSize > availablePool {
 		return &TxGroupError{
 			err:        fmt.Errorf("txgroup had %d bytes of LogicSig args, more than the available pool of %d bytes", totalArgsSize, availablePool),
