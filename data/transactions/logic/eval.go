@@ -6120,14 +6120,14 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		// Limit the capacity because ApprovalProgramPages appends to this
 		// slice, which would overwrite the bytes beyond sv.Bytes if it was
 		// sliced from a longer value. With no spare capacity, append copies.
-		txn.ApprovalProgram = sv.Bytes[:len(sv.Bytes):len(sv.Bytes)]
+		txn.ApprovalProgram = slices.Clip(sv.Bytes)
 	case ClearStateProgram:
 		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxAbsoluteExtraProgramPages)
 		if len(sv.Bytes) > maxPossible {
 			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
 		}
 		// Limit the capacity for the same reason as ApprovalProgram
-		txn.ClearStateProgram = sv.Bytes[:len(sv.Bytes):len(sv.Bytes)]
+		txn.ClearStateProgram = slices.Clip(sv.Bytes)
 	case ApprovalProgramPages:
 		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxAbsoluteExtraProgramPages)
 		txn.ApprovalProgram = append(txn.ApprovalProgram, sv.Bytes...)
