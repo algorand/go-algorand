@@ -17,8 +17,6 @@
 package data
 
 import (
-	"fmt"
-
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
@@ -32,9 +30,6 @@ import (
 // AccountManager loads and manages accounts for the node
 type AccountManager struct {
 	mu deadlock.Mutex
-
-	// syncronized by mu
-	partKeys map[account.ParticipationKeyIdentity]account.PersistedParticipation
 
 	// Map to keep track of accounts for which we've sent
 	// AccountRegistered telemetry events
@@ -55,7 +50,6 @@ func (manager *AccountManager) DeleteStateProofKey(id account.ParticipationID, r
 func MakeAccountManager(log logging.Logger, registry account.ParticipationRegistry) *AccountManager {
 	manager := &AccountManager{}
 	manager.log = log
-	manager.partKeys = make(map[account.ParticipationKeyIdentity]account.PersistedParticipation)
 	manager.registeredAccounts = make(map[string]bool)
 	manager.registry = registry
 
@@ -101,15 +95,13 @@ func (manager *AccountManager) HasLiveKeys(from, to basics.Round) bool {
 	return manager.registry.HasLiveKeys(from, to)
 }
 
-// AddParticipation adds a new account.Participation to be managed.
-// The return value indicates if the key has been added (true) or
+// AddParticipation adds a new account.Participation to the participation
+// registry. The return value indicates if the key has been added (true) or
 // if this is a duplicate key (false).
-// if ephemeral is true then the key is not stored in the internal hashmap and
-// will not be deleted by DeleteOldKeys()
-func (manager *AccountManager) AddParticipation(participation account.PersistedParticipation, ephemeral bool) bool {
+func (manager *AccountManager) AddParticipation(participation account.Participation) bool {
 	// Tell the ParticipationRegistry about the Participation. Duplicate entries
 	// are ignored.
-	pid, err := manager.registry.Insert(participation.Participation)
+	pid, err := manager.registry.Insert(participation)
 	if err != nil && err != account.ErrAlreadyInserted {
 		manager.log.Warnf("Failed to insert participation key.")
 	}
@@ -127,24 +119,6 @@ func (manager *AccountManager) AddParticipation(participation account.PersistedP
 	address := participation.Address()
 
 	first, last := participation.ValidInterval()
-	partkeyID := account.ParticipationKeyIdentity{
-		Parent:      address,
-		FirstValid:  first,
-		LastValid:   last,
-		VRFSK:       participation.VRF.SK,
-		VoteID:      participation.Voting.OneTimeSignatureVerifier,
-		KeyDilution: participation.KeyDilution,
-	}
-
-	// Check if we already have participation keys for this address in this interval
-	_, alreadyPresent := manager.partKeys[partkeyID]
-	if alreadyPresent {
-		return false
-	}
-
-	if !ephemeral {
-		manager.partKeys[partkeyID] = participation
-	}
 
 	addressString := address.String()
 	manager.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.PartKeyRegisteredEvent, telemetryspec.PartKeyRegisteredEventDetails{
@@ -168,36 +142,6 @@ func (manager *AccountManager) AddParticipation(participation account.PersistedP
 // DeleteOldKeys deletes all accounts' ephemeral keys strictly older than the
 // next round needed for each account.
 func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, agreementProto config.ConsensusParams) {
-	manager.mu.Lock()
-	pendingItems := make(map[string]<-chan error, len(manager.partKeys))
-
-	partKeys := make([]account.PersistedParticipation, 0, len(manager.partKeys))
-	for _, part := range manager.partKeys {
-		partKeys = append(partKeys, part)
-	}
-	manager.mu.Unlock()
-	for _, part := range partKeys {
-		// We need a key for round r+1 for agreement.
-		nextRound := latestHdr.Round + 1
-
-		// we pre-create the reported error string here, so that we won't need to have the participation key object if error is detected.
-		first, last := part.ValidInterval()
-		errString := fmt.Sprintf("AccountManager.DeleteOldKeys(): key for %s (%d-%d), nextRound %d",
-			part.Address().String(), first, last, nextRound)
-		errCh := part.DeleteOldKeys(nextRound, agreementProto)
-
-		pendingItems[errString] = errCh
-	}
-
-	// wait for all disk flushes, and report errors as they appear.
-	for errString, errCh := range pendingItems {
-		err := <-errCh
-		if err != nil {
-			logging.Base().Warnf("%s: %v", errString, err)
-		}
-	}
-
-	// Delete expired records from participation registry.
 	if err := manager.registry.DeleteExpired(latestHdr.Round, agreementProto); err != nil {
 		manager.log.Warnf("error while deleting expired records from participation registry: %v", err)
 	}
