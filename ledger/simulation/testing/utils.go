@@ -130,6 +130,15 @@ func (env *Environment) Txn(txn transactions.SignedTxn) transactions.ApplyData {
 	return newBlock.Payset[0].ApplyData
 }
 
+// AdvanceRounds adds n empty blocks to the ledger
+func (env *Environment) AdvanceRounds(n int) {
+	env.t.Helper()
+	for range n {
+		block := env.endBlock(env.nextBlock()).Block()
+		env.TxnInfo.LatestHeader = block.BlockHeader
+	}
+}
+
 // CreateAsset creates an asset with the given parameters and returns its ID
 func (env *Environment) CreateAsset(creator basics.Address, params basics.AssetParams) basics.AssetIndex {
 	env.t.Helper()
