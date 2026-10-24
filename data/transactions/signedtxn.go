@@ -204,15 +204,20 @@ func logicSigProgramFeeContribution(txgroup []SignedTxnWithAD, proto config.Cons
 }
 
 // logicSigArgsFeeContribution accounts for all LogicSig args bytes beyond the
-// group allowance.
+// group allowance. Before args pricing, protocols either have no per-byte
+// surcharge or require args to fit within the allowance during verification.
 func logicSigArgsFeeContribution(txgroup []SignedTxnWithAD, proto config.ConsensusParams) basics.Micros {
-	if proto.MaxAbsoluteLogicSigArgsSize == 0 {
-		return 0
-	}
-
 	argsBytes := 0
 	for _, txad := range txgroup {
 		argsBytes += txad.SignedTxn.Lsig.ArgsLen()
+		if pqsig := txad.SignedTxn.PQsig; pqsig.IsLogicSig() {
+			// Charge the payload, excluding msgpack framing. Verification rejects
+			// malformed args, so they contribute nothing to this fee calculation.
+			args, err := DecodeLogicSigArgs(pqsig.Signature)
+			if err == nil {
+				argsBytes += args.Len()
+			}
+		}
 	}
 
 	freeArgsBytes := len(txgroup) * int(proto.LogicSigMaxSize)

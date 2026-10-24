@@ -230,9 +230,10 @@ type ConsensusParams struct {
 	// 0 for no support, otherwise highest version supported
 	LogicSigVersion uint64
 
-	// LogicSigMaxSize is the legacy LogicSig size limit and the per-transaction
-	// contribution to group size pools and free allowances for program and
-	// argument bytes.
+	// LogicSigMaxSize is the legacy per-LogicSig size limit and each transaction's
+	// contribution to the group's size allowance. Before transaction size pricing,
+	// program and argument bytes share one pool; with pricing, each has a separate
+	// allowance of len(group) * LogicSigMaxSize.
 	LogicSigMaxSize uint64
 
 	// MaxAbsoluteLogicSigProgramSize is the absolute maximum size of a LogicSig
@@ -240,8 +241,8 @@ type ConsensusParams struct {
 	MaxAbsoluteLogicSigProgramSize uint64
 
 	// MaxAbsoluteLogicSigArgsSize is the absolute maximum total size of the
-	// arguments carried by one LogicSig when args beyond the group allowance
-	// can be purchased. Zero retains the legacy unpriced args pooling rules.
+	// arguments carried by one LogicSig, including an ls-scheme PQSig. It counts
+	// decoded argument bytes, excluding encoding overhead.
 	MaxAbsoluteLogicSigArgsSize uint64
 
 	// sum of estimated op cost must be less than this
@@ -639,7 +640,8 @@ type ConsensusParams struct {
 	// below that index unless it is empty. Args are covered by no signature, and
 	// are part of neither the transaction ID nor the group hash, so without this
 	// rule a third party can append bytes to a transaction in flight, and the
-	// program has no way to detect it.
+	// program has no way to detect it. This also enables purchasing argument
+	// bytes beyond the group's allowance through the per-byte surcharge.
 	RequireLogicSigArgAccess bool
 
 	// CloseRequiresBaseMinBalance allows an account to be closed only if its
@@ -1070,6 +1072,7 @@ func initConsensusProtocols() {
 	v18.LogicSigVersion = 1
 	v18.LogicSigMaxSize = 1000
 	v18.MaxAbsoluteLogicSigProgramSize = 1000
+	v18.MaxAbsoluteLogicSigArgsSize = 1000
 	v18.LogicSigMaxCost = 20000
 	v18.LogicSigMsig = true
 	v18.MaxAssetsPerAccount = 1000
@@ -1492,6 +1495,7 @@ func initConsensusProtocols() {
 
 	v40.LogicSigVersion = 11
 	v40.MaxAbsoluteLogicSigProgramSize = 16000
+	v40.MaxAbsoluteLogicSigArgsSize = 16000
 
 	v40.Payouts.Enabled = true
 	v40.Payouts.Percent = 50
@@ -1584,7 +1588,6 @@ func initConsensusProtocols() {
 	vFuture.EnablePQSchemeFalcon512 = true
 	vFuture.EnablePQSchemeEd25519 = true
 	vFuture.RequireLogicSigArgAccess = true
-	vFuture.MaxAbsoluteLogicSigArgsSize = 16000
 	vFuture.AllowGroupedHeartbeats = true
 
 	vFuture.EnablePQSchemeLogicSig = true

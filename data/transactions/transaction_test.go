@@ -731,7 +731,7 @@ func TestLogicSigArgsFeeContribution(t *testing.T) {
 		charged  int
 	}{
 		{"v41: unpriced transactions", v41, [][]int{{freeSize + 1}}, 0},
-		{"v42: args remain unpriced", v42, [][]int{{freeSize + 1}}, 0},
+		{"v42: args at allowance remain unpriced", v42, [][]int{{freeSize}}, 0},
 		{"v42: pooled args remain unpriced", v42, [][]int{{freeSize + 1}, nil}, 0},
 		{"no args", vFuture, [][]int{nil}, 0},
 		{"below allowance", vFuture, [][]int{{freeSize - 1}}, 0},

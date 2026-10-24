@@ -226,8 +226,8 @@ func TestSignedTxnFeeFactorPQSignatureContribution(t *testing.T) {
 }
 
 // TestLogicSigPQSigFee checks that a program authorizing from an ls-scheme
-// PQSig is priced by the byte like one in a LogicSig, and carries no scheme
-// surcharge of its own.
+// PQSig and its args are priced by the byte like those in a LogicSig, and carry
+// no scheme surcharge or charge for argument encoding overhead.
 func TestLogicSigPQSigFee(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -260,6 +260,64 @@ func TestLogicSigPQSigFee(t *testing.T) {
 
 	surcharge, _ := proto.PerByteTxnSurcharge.MulInt(overBy)
 	require.Equal(t, basics.AddSaturate(basics.Micros(1e6), surcharge), lsUsage)
+
+	freeSize := int(proto.LogicSigMaxSize)
+	for _, test := range []struct {
+		name    string
+		sizes   []int
+		charged int
+	}{
+		{"args at allowance exclude framing", []int{freeSize / 2, freeSize / 2}, 0},
+		{"args above allowance", []int{freeSize / 2, freeSize/2 + 1}, 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var args LogicSigArgs
+			for _, size := range test.sizes {
+				args = append(args, make([]byte, size))
+			}
+			pq := lsPQSigned
+			pq.PQsig.Signature = EncodeLogicSigArgs(args)
+			require.Greater(t, len(pq.PQsig.Signature), args.Len())
+			legacy := SignedTxn{Lsig: LogicSig{Logic: pq.PQsig.PublicKey, Args: args}}
+
+			pqGroup := WrapSignedTxnsWithAD([]SignedTxn{pq})
+			legacyGroup := WrapSignedTxnsWithAD([]SignedTxn{legacy})
+			expected := surchargeForBytes(t, proto, test.charged)
+			require.Equal(t, expected, logicSigArgsFeeContribution(pqGroup, proto))
+			require.Equal(t, expected, logicSigArgsFeeContribution(legacyGroup, proto))
+			pqUsage, _ := SummarizeFees(pqGroup, proto)
+			legacyUsage, _ := SummarizeFees(legacyGroup, proto)
+			require.Equal(t, legacyUsage, pqUsage)
+			require.Equal(t, basics.AddSaturate(basics.Micros(1e6), expected), pqUsage)
+		})
+	}
+
+	t.Run("legacy and PQ args share the allowance", func(t *testing.T) {
+		legacy := SignedTxn{Lsig: LogicSig{Logic: lsPQSigned.PQsig.PublicKey, Args: LogicSigArgs{make([]byte, freeSize/2)}}}
+		pq := lsPQSigned
+		pq.PQsig.Signature = EncodeLogicSigArgs(LogicSigArgs{make([]byte, freeSize+freeSize/2+1)})
+		mixed := WrapSignedTxnsWithAD([]SignedTxn{legacy, pq})
+		expected := surchargeForBytes(t, proto, 1)
+		require.Equal(t, expected, logicSigArgsFeeContribution(mixed, proto))
+		mixedUsage, _ := SummarizeFees(mixed, proto)
+		require.Equal(t, basics.AddSaturate(basics.Micros(2e6), expected), mixedUsage)
+	})
+
+	for _, test := range []struct {
+		name      string
+		signature []byte
+	}{
+		{"malformed args", []byte{0xc1}},
+		{"noncanonical empty args", []byte{0x90}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			pq := lsPQSigned
+			pq.PQsig.Signature = test.signature
+			// Verification rejects these encodings; fee calculation must remain
+			// safe for invalid inputs and charge no undecodable argument bytes.
+			require.Zero(t, logicSigArgsFeeContribution(WrapSignedTxnsWithAD([]SignedTxn{pq}), proto))
+		})
+	}
 }
 
 //TODO: test multisig

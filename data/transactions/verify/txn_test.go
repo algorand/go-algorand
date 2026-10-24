@@ -578,7 +578,13 @@ func makeLogicSigPQTxn(t *testing.T, source string, args transactions.LogicSigAr
 	ops, err := logic.AssembleString(source)
 	require.NoError(t, err)
 
-	salt, authorizer, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeLogicSig, ops.Program)
+	return makeLogicSigPQTxnWithProgram(t, ops.Program, args)
+}
+
+func makeLogicSigPQTxnWithProgram(t *testing.T, program []byte, args transactions.LogicSigArgs) transactions.SignedTxn {
+	t.Helper()
+
+	salt, authorizer, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeLogicSig, program)
 	require.NoError(t, err)
 
 	return transactions.SignedTxn{
@@ -586,7 +592,7 @@ func makeLogicSigPQTxn(t *testing.T, source string, args transactions.LogicSigAr
 		PQsig: transactions.PQSig{
 			Scheme:    protocol.PQSchemeLogicSig,
 			Salt:      salt,
-			PublicKey: ops.Program,
+			PublicKey: program,
 			Signature: transactions.EncodeLogicSigArgs(args),
 		},
 	}
@@ -2385,11 +2391,24 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("v18: singleton args still limited by the legacy size pool", func(t *testing.T) {
+	t.Run("v18: singleton args cannot exceed the absolute limit", func(t *testing.T) {
 		program := makeProgram(v18, 0)
 		args := txntest.MakeLogicSigArgs(int(v18.LogicSigMaxSize) + 1)
 		err := verifyGroupForProtocol(protocol.ConsensusV18, []transactions.SignedTxn{makeLogicSigTxn(program, args)})
-		require.ErrorContains(t, err, "more than the available pool")
+		require.ErrorContains(t, err, "more than the absolute maximum")
+	})
+
+	t.Run("v18: group allowance cannot increase the absolute args limit", func(t *testing.T) {
+		program := makeArgProgram(v18, 0, 1)
+		group := amendTxGroupID([]transactions.SignedTxn{
+			makeLogicSigTxnForReceiver(program, txntest.MakeLogicSigArgs(int(v18.MaxAbsoluteLogicSigArgsSize)+1), basics.Address{1}),
+			makeLogicSigTxnForReceiver(makeProgram(v18, 0), nil, basics.Address{2}),
+		})
+		// The group fits the combined pool, but historically each v18 LogicSig
+		// had to fit in 1000 bytes. Its args cannot borrow the group's allowance.
+		require.Less(t, group[0].Lsig.Len()+group[1].Lsig.Len(), len(group)*int(v18.LogicSigMaxSize))
+		err := verifyGroupForProtocol(protocol.ConsensusV18, group)
+		require.ErrorContains(t, err, "more than the absolute maximum")
 	})
 
 	t.Run("v41: args can exceed the pre-pooling limit using the group pool", func(t *testing.T) {
@@ -2439,6 +2458,27 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{makeLogicSigTxn(program, args)})
 		require.ErrorContains(t, err, "more than the absolute maximum")
 	})
+
+	for _, test := range []struct {
+		name  string
+		extra int
+	}{
+		{"vFuture: PQ args at absolute limit", 0},
+		{"vFuture: PQ args above absolute limit", 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			args := txntest.MakeLogicSigArgs(int(vFuture.MaxAbsoluteLogicSigArgsSize) + test.extra)
+			program := makeArgProgram(vFuture, 0, uint(len(args)))
+			stxn := makeLogicSigPQTxnWithProgram(t, program, args)
+			err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{stxn})
+			if test.extra == 0 {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, "more than the absolute maximum")
+				requireTxGroupErrorReason(t, err, TxGroupErrorReasonNotWellFormed)
+			}
+		})
+	}
 
 	t.Run("vFuture: every group member can use the absolute args limit", func(t *testing.T) {
 		args := txntest.MakeLogicSigArgs(int(vFuture.MaxAbsoluteLogicSigArgsSize))
