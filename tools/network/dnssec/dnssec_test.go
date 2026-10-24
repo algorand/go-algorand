@@ -18,6 +18,12 @@ package dnssec
 
 import (
 	"context"
+	"crypto"
+	"crypto/ed25519"
+	"crypto/rsa"
+	"encoding/base64"
+	"encoding/binary"
+	"math/big"
 	"net"
 	"testing"
 	"time"
@@ -75,6 +81,10 @@ func addSignedTestZone(t *testing.T, r *testResolver, zone string) {
 	t.Helper()
 	ksk, kskSK := getKey(zone, dns.ZONE|dns.SEP)
 	zsk, zskSK := getKey(zone, dns.ZONE)
+	// Tests check a zone's cached keys by tag, so keep the KSK and ZSK tags distinct.
+	for zsk.KeyTag() == ksk.KeyTag() {
+		zsk, zskSK = getKey(zone, dns.ZONE)
+	}
 	require.NoError(t, r.updateDSRecord(zone, &[]dns.DS{*ksk.ToDS(dns.SHA256)}, time.Time{}))
 	require.NoError(t, r.updateDNSKeyRecord(zone, ksk, kskSK, time.Time{}))
 	require.NoError(t, r.updateDNSKeyRecord(zone, zsk, zskSK, time.Time{}))
@@ -705,4 +715,120 @@ func TestDefaultResolver(t *testing.T) {
 	provided := len(DefaultDnssecAwareNSServers) + 1
 	actual := len(r.(*Resolver).EffectiveResolverDNS())
 	a.GreaterOrEqual(actual, provided)
+}
+
+// rsaKeyWithTag reuses the modulus and varies only the 3-byte exponent, avoiding RSA key
+// generation per candidate. The exponent occupies RDATA offsets 5 to 7, so the key tag
+// (RFC 4034, Appendix B) is updated arithmetically instead of re-encoding the key.
+// Every exponent giving a tag is congruent to the same value modulo 255 (= 3*5*17), so
+// for some moduli a tag has no exponent coprime to φ(N), and ok is false.
+func rsaKeyWithTag(t *testing.T, key *dns.DNSKEY, sk crypto.PrivateKey, tag uint16) (_ *dns.DNSKEY, _ crypto.PrivateKey, ok bool) {
+	t.Helper()
+
+	original := sk.(*rsa.PrivateKey)
+	phi := new(big.Int).Mul(new(big.Int).Sub(original.Primes[0], big.NewInt(1)),
+		new(big.Int).Sub(original.Primes[1], big.NewInt(1)))
+	rdata := append([]byte{byte(key.Flags >> 8), byte(key.Flags), key.Protocol, key.Algorithm, 3, 0, 0, 0}, original.N.Bytes()...)
+	base := 0
+	for i, v := range rdata {
+		if i&1 != 0 {
+			base += int(v)
+		} else {
+			base += int(v) << 8
+		}
+	}
+	for exponent := 0x10001; exponent < 1<<24; exponent += 2 {
+		if exponent == original.E {
+			continue
+		}
+		sum := base + exponent>>16 + (exponent>>8&0xff)<<8 + exponent&0xff
+		if uint16(sum+sum>>16&0xffff) != tag {
+			continue
+		}
+		d := new(big.Int).ModInverse(big.NewInt(int64(exponent)), phi)
+		if d == nil {
+			continue
+		}
+		candidate := *key
+		candidate.PublicKey = base64.StdEncoding.EncodeToString(append([]byte{3, byte(exponent >> 16), byte(exponent >> 8), byte(exponent)}, original.N.Bytes()...))
+		require.Equal(t, tag, candidate.KeyTag())
+		private := &rsa.PrivateKey{PublicKey: rsa.PublicKey{N: original.N, E: exponent}, D: d, Primes: original.Primes}
+		require.NoError(t, private.Validate())
+		return &candidate, private, true
+	}
+	return nil, nil, false
+}
+
+func TestLookupSameTagRotationAlgorithms(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	for _, algorithm := range []string{"RSA", "cross algorithm"} {
+		t.Run(algorithm, func(t *testing.T) {
+			a := require.New(t)
+			r := &countingResolver{testResolver: makeEmptyTestResolver(), dnskeyQueries: make(map[string]int)}
+			addTestZone(t, r.testResolver, ".")
+			addTestZone(t, r.testResolver, "test.")
+			oldKey, err := r.getKey("test.", dns.ZONE)
+			a.NoError(err)
+			oldSK := r.entries["test."][dns.TypeDNSKEY].sk[oldKey.Flags]
+			var newKey *dns.DNSKEY
+			var newSK crypto.PrivateKey
+			if algorithm == "RSA" {
+				// The original exponent 65537 gives this tag and is congruent to 2 modulo 255,
+				// so every candidate exponent is coprime to 3, 5 and 17 and one is always found.
+				var ok bool
+				newKey, newSK, ok = rsaKeyWithTag(t, oldKey, oldSK, oldKey.KeyTag())
+				a.True(ok)
+			} else {
+				// Not every tag can be given to this RSA modulus, so try Ed25519 keys until
+				// one can. About half of all tags or more can, so this takes few attempts.
+				// The test checks the cached keys for this tag, so skip the KSK's tag.
+				ksk, err := r.getKey("test.", dns.ZONE|dns.SEP)
+				a.NoError(err)
+				seed := make([]byte, ed25519.SeedSize)
+				for i := uint32(0); ; i++ {
+					binary.BigEndian.PutUint32(seed, i)
+					edSK := ed25519.NewKeyFromSeed(seed)
+					edKey := &dns.DNSKEY{
+						Hdr:       oldKey.Hdr,
+						Flags:     oldKey.Flags,
+						Protocol:  3,
+						Algorithm: dns.ED25519,
+						PublicKey: base64.StdEncoding.EncodeToString(edSK.Public().(ed25519.PublicKey)),
+					}
+					if edKey.KeyTag() == ksk.KeyTag() {
+						continue
+					}
+					if rsaKey, rsaSK, ok := rsaKeyWithTag(t, oldKey, oldSK, edKey.KeyTag()); ok {
+						oldKey, oldSK, newKey, newSK = rsaKey, rsaSK, edKey, edSK
+						break
+					}
+				}
+			}
+			a.Equal(oldKey.KeyTag(), newKey.KeyTag())
+			a.NoError(r.updateDNSKeyRecord("test.", oldKey, oldSK, time.Time{}))
+			rrSet := []dns.RR{&dns.A{Hdr: dns.RR_Header{Name: "www.test.", Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 60}, A: net.IPv4(1, 2, 3, 4)}}
+			a.NoError(r.updateRegRecord("www.test.", "test.", dns.TypeA, rrSet, time.Time{}))
+			resolver := makeResolver(r)
+			addrs, err := resolver.LookupIPAddr(context.Background(), "www.test.")
+			a.NoError(err)
+			a.Equal([]net.IPAddr{{IP: net.IPv4(1, 2, 3, 4)}}, addrs)
+
+			a.NoError(r.updateDNSKeyRecord("test.", newKey, newSK, time.Time{}))
+			a.NoError(r.updateRegRecord("www.test.", "test.", dns.TypeA, rrSet, time.Time{}))
+			rrSet, rrSig, err := r.QueryRRSet(context.Background(), "www.test.", dns.TypeA)
+			a.NoError(err)
+			if algorithm == "RSA" {
+				a.ErrorIs(rrSig[0].Verify(oldKey, rrSet), rsa.ErrVerification)
+			} else {
+				a.ErrorIs(rrSig[0].Verify(oldKey, rrSet), dns.ErrKey)
+			}
+			queries := r.dnskeyQueries["test."]
+			addrs, err = resolver.LookupIPAddr(context.Background(), "www.test.")
+			a.NoError(err)
+			a.Equal([]net.IPAddr{{IP: net.IPv4(1, 2, 3, 4)}}, addrs)
+			a.Equal(queries+1, r.dnskeyQueries["test."])
+			a.Equal([]dns.DNSKEY{*newKey}, resolver.trustChain.trustedZones["test."].zsk[newKey.KeyTag()])
+		})
+	}
 }
