@@ -37,7 +37,7 @@ func (m *Frozen[TimeoutType]) Zero() Clock[TimeoutType] {
 	return MakeFrozenClock[TimeoutType]()
 }
 
-// TimeoutAt returns a channel that will signal when the duration has elapsed.
+// TimeoutAt returns a channel that never signals, regardless of delta or timeoutType.
 func (m *Frozen[TimeoutType]) TimeoutAt(delta time.Duration, timeoutType TimeoutType) <-chan time.Time {
 	return m.timeoutCh
 }
