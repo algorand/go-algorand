@@ -41,7 +41,7 @@ type SError struct {
 func New(msg string, pairs ...any) *SError {
 	attrs := make(map[string]any, len(pairs)/2)
 	for i := 0; i < len(pairs); i += 2 {
-		attrs[pairs[i].(string)] = pairs[i+1]
+		attrs[pairs[i].(string)] = pairs[i+1] //nolint:gosec // callers must supply complete key/value pairs, making len(pairs) even
 	}
 	return &SError{Msg: msg, Attrs: attrs}
 }
@@ -86,7 +86,7 @@ func Annotate(err error, pairs ...any) error {
 	var serr *SError
 	if ok := errors.As(err, &serr); ok {
 		for i := 0; i < len(pairs); i += 2 {
-			serr.Attrs[pairs[i].(string)] = pairs[i+1]
+			serr.Attrs[pairs[i].(string)] = pairs[i+1] //nolint:gosec // callers must supply complete key/value pairs, making len(pairs) even
 		}
 		return err
 	}
@@ -102,7 +102,7 @@ func Annotate(err error, pairs ...any) error {
 func Wrap(err error, msg string, field string, pairs ...any) error {
 	serr := New(msg, field+"-msg", err.Error())
 	for i := 0; i < len(pairs); i += 2 {
-		serr.Attrs[pairs[i].(string)] = pairs[i+1]
+		serr.Attrs[pairs[i].(string)] = pairs[i+1] //nolint:gosec // callers must supply complete key/value pairs, making len(pairs) even
 	}
 	serr.Wrapped = err
 

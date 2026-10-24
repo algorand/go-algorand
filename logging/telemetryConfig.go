@@ -74,7 +74,7 @@ func createTelemetryConfig() TelemetryConfig {
 
 // Save saves the TelemetryConfig to the config file
 func (cfg TelemetryConfig) Save(configPath string) error {
-	f, err := os.Create(configPath)
+	f, err := os.Create(configPath) //nolint:gosec // callers select the telemetry config path from operator-controlled data or global config directories
 	if err != nil {
 		return err
 	}
@@ -134,7 +134,7 @@ func SanitizeTelemetryString(input string, maxParts int) string {
 // LoadTelemetryConfig loads the TelemetryConfig from the config file. It
 // returns err if os.Open fails or if config is mal-formed
 func LoadTelemetryConfig(path string) (TelemetryConfig, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(path) //nolint:gosec // callers select the telemetry config path from operator-controlled data or global config directories
 	if err != nil {
 		return createTelemetryConfig(), err
 	}

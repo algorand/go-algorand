@@ -145,13 +145,11 @@ func makeNibbles(data []byte, oddLength bool) Nibbles {
 	}
 	ns := make([]byte, length)
 
-	j := 0
 	for i := 0; i < length; i++ {
 		if i%2 == 0 {
-			ns[i] = data[j] >> 4
+			ns[i] = data[i/2] >> 4
 		} else {
-			ns[i] = data[j] & 0x0f
-			j++
+			ns[i] = data[i/2] & 0x0f
 		}
 	}
 	return ns
