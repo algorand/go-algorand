@@ -24,6 +24,9 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -690,4 +693,105 @@ func (t *demuxTester) TestUsecase(testcase demuxTestUsecase) bool {
 	}
 
 	return true
+}
+
+// tokenizerTestNetwork is the smallest Network that can drive tokenizeMessages.
+// It serves one channel for every tag and records disconnect hints.
+type tokenizerTestNetwork struct {
+	messages chan Message
+
+	mu           deadlock.Mutex
+	disconnected []MessageHandle
+}
+
+func (n *tokenizerTestNetwork) Messages(protocol.Tag) <-chan Message            { return n.messages }
+func (n *tokenizerTestNetwork) Broadcast(protocol.Tag, []byte) error            { return nil }
+func (n *tokenizerTestNetwork) Relay(MessageHandle, protocol.Tag, []byte) error { return nil }
+func (n *tokenizerTestNetwork) Start()                                          {}
+
+func (n *tokenizerTestNetwork) Disconnect(h MessageHandle) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.disconnected = append(n.disconnected, h)
+}
+
+func (n *tokenizerTestNetwork) disconnectedHandles() []MessageHandle {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return append([]MessageHandle(nil), n.disconnected...)
+}
+
+// TestDemuxTokenizerRejectsStepAboveDown feeds the tokenizer encoded messages
+// whose step exceeds the largest protocol step. Votes and bundles that fail to
+// decode disconnect the peer that sent them; proposals are dropped without a
+// disconnect. A well-formed message queued behind each bad one shows that the
+// bad message was consumed without being emitted and that the tokenizer keeps
+// running afterwards.
+func TestDemuxTokenizerRejectsStepAboveDown(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	badVote := unauthenticatedVote{R: rawVote{Round: 1, Period: 1, Step: down + 1}}
+	goodVote := unauthenticatedVote{R: rawVote{Round: 1, Period: 1, Step: down}}
+	badBundle := unauthenticatedBundle{Round: 1, Period: 1, Step: down + 1}
+	goodBundle := unauthenticatedBundle{Round: 1, Period: 1, Step: down}
+	badProposal := transmittedPayload{PriorVote: badVote}
+	goodProposal := transmittedPayload{PriorVote: goodVote}
+
+	tests := []struct {
+		name       string
+		tag        protocol.Tag
+		tokenize   streamTokenizer
+		bad        []byte
+		good       []byte
+		disconnect bool
+		decoded    func(message) step // the step carried by the emitted message
+	}{
+		{name: "vote", tag: protocol.AgreementVoteTag, tokenize: decodeVote, bad: protocol.Encode(&badVote), good: protocol.Encode(&goodVote), disconnect: true,
+			decoded: func(m message) step { return m.UnauthenticatedVote.R.Step }},
+		{name: "bundle", tag: protocol.VoteBundleTag, tokenize: decodeBundle, bad: protocol.Encode(&badBundle), good: protocol.Encode(&goodBundle), disconnect: true,
+			decoded: func(m message) step { return m.UnauthenticatedBundle.Step }},
+		{name: "proposal", tag: protocol.ProposalPayloadTag, tokenize: decodeProposal, bad: protocol.Encode(&badProposal), good: protocol.Encode(&goodProposal), disconnect: false,
+			decoded: func(m message) step { return m.CompoundMessage.Vote.R.Step }},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			const badPeer, goodPeer = "bad peer", "good peer"
+			net := &tokenizerTestNetwork{messages: make(chan Message, 2)}
+			net.messages <- Message{MessageHandle: badPeer, Data: tc.bad}
+			net.messages <- Message{MessageHandle: goodPeer, Data: tc.good}
+			// Closing the input makes the tokenizer close its output once both
+			// messages are consumed, so draining it also checks termination.
+			close(net.messages)
+
+			d := &demux{ledger: &demuxTester{T: t}, log: logging.TestingLog(t)}
+			decoded := d.tokenizeMessages(t.Context(), net, tc.tag, tc.tokenize)
+
+			var emitted []message
+			timeout := time.After(10 * time.Second)
+		drain:
+			for {
+				select {
+				case msg, ok := <-decoded:
+					if !ok {
+						break drain
+					}
+					emitted = append(emitted, msg)
+				case <-timeout:
+					t.Fatal("tokenizer did not terminate after its input closed")
+				}
+			}
+
+			require.Len(t, emitted, 1, "exactly the well-formed message must be emitted")
+			require.Equal(t, goodPeer, emitted[0].messageHandle)
+			require.Equal(t, tc.tag, emitted[0].Tag)
+			require.Equal(t, down, tc.decoded(emitted[0]), "emitted message must carry its decoded contents")
+
+			if tc.disconnect {
+				require.Equal(t, []MessageHandle{badPeer}, net.disconnectedHandles())
+			} else {
+				require.Empty(t, net.disconnectedHandles())
+			}
+		})
+	}
 }
