@@ -566,7 +566,7 @@ func TestSimpleMath(t *testing.T) {
 	testAccepts(t, "int  8; int 7; * ; int 56; ==", 1)
 	testAccepts(t, "int 21; int 7; / ; int  3; ==", 1)
 
-	testPanics(t, "int 1; int 2; - ; int 0; ==", 1)
+	testPanics(t, "int 1; int 2; - ; int 0; ==", 1, "negative")
 
 	testCost(t, "int 1; int 2; + ; int 3; ==", 5, 6)
 }
@@ -582,7 +582,7 @@ func TestRapidMath(t *testing.T) {
 		sum := a + b
 		test := fmt.Sprintf("int %d; int %d; +; int %d; ==", a, b, sum)
 		if sum < a {
-			testPanics(t, test, 1)
+			testPanics(t, test, 1, "overflowed")
 		} else {
 			testAccepts(t, test, 1)
 		}
@@ -590,7 +590,7 @@ func TestRapidMath(t *testing.T) {
 		diff := a - b
 		test = fmt.Sprintf("int %d; int %d; -; int %d; ==", a, b, diff)
 		if a < b {
-			testPanics(t, test, 1)
+			testPanics(t, test, 1, "negative")
 		} else {
 			testAccepts(t, test, 1)
 		}
@@ -809,7 +809,7 @@ func TestBtoiTooLong(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	testPanics(t, "int 0x1234567812345678; byte 0x1234567812345678aa; btoi; ==", 1)
+	testPanics(t, "int 0x1234567812345678; byte 0x1234567812345678aa; btoi; ==", 1, "btoi arg too long")
 }
 
 func TestBnz(t *testing.T) {
@@ -884,21 +884,21 @@ func TestSubUnderflow(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	testPanics(t, "int 1; int 10; -; pop; int 1", 1)
+	testPanics(t, "int 1; int 10; -; pop; int 1", 1, "- would result negative")
 }
 
 func TestAddOverflow(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	testPanics(t, "int 0xf000000000000000; int 0x1111111111111111; +; pop; int 1", 1)
+	testPanics(t, "int 0xf000000000000000; int 0x1111111111111111; +; pop; int 1", 1, "+ overflowed")
 }
 
 func TestMulOverflow(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	testPanics(t, "int 0x111111111; int 0x222222222; *; pop; int 1", 1)
+	testPanics(t, "int 0x111111111; int 0x222222222; *; pop; int 1", 1, "* overflowed")
 }
 
 func TestMulw(t *testing.T) {
@@ -958,9 +958,9 @@ func TestDivw(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	testPanics(t, "int 1; int 2; int 0; divw; assert;", 6)
-	testPanics(t, "int 2; int 1; int 1; divw; assert;", 6)
-	testPanics(t, "int 2; int 0; int 2; divw; assert", 6)
+	testPanics(t, "int 1; int 2; int 0; divw; assert;", 6, "divw 0")
+	testPanics(t, "int 2; int 1; int 1; divw; assert;", 6, "divw overflow")
+	testPanics(t, "int 2; int 0; int 2; divw; assert", 6, "divw overflow")
 	testAccepts(t, "int 1; int 2; int 2; divw;", 6)
 
 	testAccepts(t, "int 1; int 0; int 2; divw; int 0x8000000000000000; ==", 6)
@@ -1068,7 +1068,7 @@ func TestDivModw(t *testing.T) {
 
 	// 10:0 / 0:0 ==> panic
 	testPanics(t, `int 10; int 0; int 0; int 0; divmodw;
-	               pop; pop; pop; pop; int 1`, 4)
+	               pop; pop; pop; pop; int 1`, 4, "/ 0")
 
 	// 9 cost 1 ops, plus divmodw
 	costCheck := "pushint 1; pushint 10; pushint 0; pushint 3; pushint 0; divmodw; pop; pop; pop; pop"
@@ -1159,21 +1159,21 @@ func TestDivZero(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	testPanics(t, "int 0x11; int 0; /; pop; int 1", 1)
+	testPanics(t, "int 0x11; int 0; /; pop; int 1", 1, "/ 0")
 }
 
 func TestModZero(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	testPanics(t, "int 0x111111111; int 0; %; pop; int 1", 1)
+	testPanics(t, "int 0x111111111; int 0; %; pop; int 1", 1, "% 0")
 }
 
 func TestErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	testPanics(t, "err; int 1", 1)
+	testPanics(t, "err; int 1", 1, "err opcode")
 }
 
 func TestModSubMulOk(t *testing.T) {
@@ -1194,28 +1194,28 @@ func TestStackLeftover(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	testPanics(t, "int 1; int 1", 1)
+	testPanics(t, "int 1; int 1", 1, "stack len is 2 instead of 1")
 }
 
 func TestStackBytesLeftover(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	testPanics(t, "byte 0x10101010", 1)
+	testPanics(t, "byte 0x10101010", 1, "stack finished with bytes not int")
 }
 
 func TestStackEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	testPanics(t, "int 1; int 1; pop; pop", 1)
+	testPanics(t, "int 1; int 1; pop; pop", 1, "stack len is 0 instead of 1")
 }
 
 func TestArgTooFar(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	testPanics(t, "arg_1; btoi", 1)
+	testPanics(t, "arg_1; btoi", 1, "cannot load arg[1] from 0 args")
 }
 
 func TestIntcTooFar(t *testing.T) {
@@ -2773,7 +2773,7 @@ dup; concat				// 2048
 dup; concat				// 4096
 `
 	testAccepts(t, justfits+"len", 2)
-	testPanics(t, justfits+"byte 0x11; concat; len", 2)
+	testPanics(t, justfits+"byte 0x11; concat; len", 2, "concat produced a too big (4097) byte-array")
 }
 
 func TestSubstringFlop(t *testing.T) {
@@ -2800,7 +2800,7 @@ len`, 2, exp(2, "substring end is before start"))
 int 4
 int 2
 substring3
-len`, 2)
+len`, 2, "substring end before start")
 
 	// fails at runtime
 	testPanics(t, `byte 0xf000000000000000
@@ -2816,7 +2816,7 @@ func TestSubstringRange(t *testing.T) {
 	t.Parallel()
 	testPanics(t, `byte 0xf000000000000000
 substring 2 99
-len`, 2)
+len`, 2, "substring range beyond length of string")
 }
 
 func TestExtractOp(t *testing.T) {
@@ -2900,12 +2900,12 @@ func TestReplace(t *testing.T) {
 	testAccepts(t, `byte 0x11111111; byte 0x2222; replace2 0; byte 0x22221111; ==`, 7)
 	testAccepts(t, `byte 0x11111111; byte 0x2222; replace2 1; byte 0x11222211; ==`, 7)
 	testAccepts(t, `byte 0x11111111; byte 0x2222; replace2 2; byte 0x11112222; ==`, 7)
-	testPanics(t, `byte 0x11111111; byte 0x2222; replace2 3; byte 0x11112222; ==`, 7)
+	testPanics(t, `byte 0x11111111; byte 0x2222; replace2 3; byte 0x11112222; ==`, 7, "replacement end 5 beyond original length: 4")
 
 	testAccepts(t, `byte 0x11111111; int 0; byte 0x2222; replace3; byte 0x22221111; ==`, 7)
 	testAccepts(t, `byte 0x11111111; int 1; byte 0x2222; replace3; byte 0x11222211; ==`, 7)
 	testAccepts(t, `byte 0x11111111; int 2; byte 0x2222; replace3; byte 0x11112222; ==`, 7)
-	testPanics(t, `byte 0x11111111; int 3; byte 0x2222; replace3; byte 0x11112222; ==`, 7)
+	testPanics(t, `byte 0x11111111; int 3; byte 0x2222; replace3; byte 0x11112222; ==`, 7, "replacement end 5 beyond original length: 4")
 
 	testAccepts(t, `byte 0x11111111; int 0; byte 0x; replace3; byte 0x11111111; ==`, 7)
 	testAccepts(t, `byte 0x11111111; int 1; byte 0x; replace3; byte 0x11111111; ==`, 7)
@@ -2914,9 +2914,9 @@ func TestReplace(t *testing.T) {
 	// unusual, perhaps, but legal. inserts 0 bytes at len(A)
 	testAccepts(t, `byte 0x11111111; int 4; byte 0x; replace3; byte 0x11111111; ==`, 7)
 	// but can't replace a byte there
-	testPanics(t, `byte 0x11111111; int 4; byte 0x22; replace3; len`, 7)
+	testPanics(t, `byte 0x11111111; int 4; byte 0x22; replace3; len`, 7, "replacement end 5 beyond original length: 4")
 	// even a zero byte replace fails after len(A)
-	testPanics(t, `byte 0x11111111; int 5; byte 0x; replace3; len`, 7)
+	testPanics(t, `byte 0x11111111; int 5; byte 0x; replace3; len`, 7, "replacement start 5 beyond length: 4")
 
 	testAccepts(t, `byte 0x; byte 0x; replace2 0; byte 0x; ==`, 7)
 	testAccepts(t, `byte 0x; int 0; byte 0x; replace3; byte 0x; ==`, 7)
@@ -4623,7 +4623,7 @@ func TestStackOverflow(t *testing.T) {
 		source += "dup2; "
 	}
 	testAccepts(t, source+"return", 2)
-	testPanics(t, source+"dup2; return", 2)
+	testPanics(t, source+"dup2; return", 2, "stack overflow")
 }
 
 func TestDup(t *testing.T) {
@@ -4660,7 +4660,7 @@ int 1
 `
 	testAccepts(t, text, 2)
 	testAccepts(t, "int 1; int 2; dup2; pop; pop; pop", 2)
-	testPanics(t, "int 1; int 2; dup2; pop; pop", 2)
+	testPanics(t, "int 1; int 2; dup2; pop; pop", 2, "stack len is 2 instead of 1")
 }
 
 func TestStringLiteral(t *testing.T) {
@@ -5026,10 +5026,12 @@ func testRejectRange(t *testing.T, program string, start uint64, stop uint64) {
 	})
 }
 
-func testPanics(t *testing.T, program string, introduced uint64, pattern ...string) error {
+// testPanics requires a pattern, so that every test documents why the program
+// should fail, and can't pass because it fails for some other reason.
+func testPanics(t *testing.T, program string, introduced uint64, pattern string, more ...string) error {
 	t.Helper()
 	testPreexist(t, program, introduced)
-	return testPanicRange(t, program, introduced, AssemblerMaxVersion)
+	return testPanicRange(t, program, introduced, AssemblerMaxVersion, pattern, more...)
 }
 
 func testPreexist(t *testing.T, program string, introduced uint64) {
@@ -5041,8 +5043,12 @@ func testPreexist(t *testing.T, program string, introduced uint64) {
 	}
 }
 
-func testPanicRange(t *testing.T, program string, start uint64, stop uint64, pattern ...string) error {
+// testPanicRange requires a pattern for the same reason as testPanics.
+func testPanicRange(t *testing.T, program string, start uint64, stop uint64, pattern string, more ...string) error {
 	t.Helper()
+	// An empty pattern would match any error.
+	require.NotEmpty(t, pattern)
+	patterns := append([]string{pattern}, more...)
 	return testEvaluation(t, program, start, stop, func(t *testing.T, pass bool, err error) bool {
 		t.Helper()
 		// TEAL panic! not just reject at exit
@@ -5053,7 +5059,7 @@ func testPanicRange(t *testing.T, program string, start uint64, stop uint64, pat
 			t.Log("program rejected rather panicked")
 			return false
 		}
-		for _, p := range pattern {
+		for _, p := range patterns {
 			if !strings.Contains(err.Error(), p) {
 				t.Log(err, "does not contain", p)
 				return false
@@ -5069,9 +5075,9 @@ func TestAssert(t *testing.T) {
 	t.Parallel()
 	testAccepts(t, "int 1; assert; int 1", 3)
 	testRejects(t, "int 1; assert; int 0", 3)
-	testPanics(t, "int 0; assert; int 1", 3)
-	testPanics(t, notrack("assert; int 1"), 3)
-	testPanics(t, notrack(`byte "john"; assert; int 1`), 3)
+	testPanics(t, "int 0; assert; int 1", 3, "assert failed")
+	testPanics(t, notrack("assert; int 1"), 3, "stack underflow in assert")
+	testPanics(t, notrack(`byte "john"; assert; int 1`), 3, "assert arg 0 wanted")
 }
 
 func TestBits(t *testing.T) {
@@ -5082,10 +5088,10 @@ func TestBits(t *testing.T) {
 	testAccepts(t, "int 1; int 1; getbit; int 0; ==", 3)
 
 	testAccepts(t, "int 1; int 63; getbit; int 0; ==", 3)
-	testPanics(t, "int 1; int 64; getbit; int 0; ==", 3)
+	testPanics(t, "int 1; int 64; getbit; int 0; ==", 3, "getbit index > 63 with Uint")
 
 	testAccepts(t, "int 0; int 3; int 1; setbit; int 8; ==", 3)
-	testPanics(t, "int 0; int 3; int 2; setbit; pop; int 1", 3)
+	testPanics(t, "int 0; int 3; int 2; setbit; pop; int 1", 3, "setbit value > 1")
 	testAccepts(t, "int 8; int 3; getbit; int 1; ==", 3)
 
 	testAccepts(t, "int 15; int 3; int 0; setbit; int 7; ==", 3)
@@ -5093,11 +5099,11 @@ func TestBits(t *testing.T) {
 	// bit 10 is the 3rd bit (from the high end) in the second byte
 	testAccepts(t, "byte 0xfff0; int 10; getbit; int 1; ==", 3)
 	testAccepts(t, "byte 0xfff0; int 12; getbit; int 0; ==", 3)
-	testPanics(t, "byte 0xfff0; int 16; getbit; int 0; ==", 3)
+	testPanics(t, "byte 0xfff0; int 16; getbit; int 0; ==", 3, "getbit index beyond byteslice")
 
 	testAccepts(t, "byte 0xfffff0; int 21; int 1; setbit; byte 0xfffff4; ==", 3)
 	testAccepts(t, "byte 0xfffff4; int 1; int 0; setbit; byte 0xbffff4; ==", 3)
-	testPanics(t, "byte 0xfffff4; int 24; int 0; setbit; byte 0xbf; ==", 3)
+	testPanics(t, "byte 0xfffff4; int 24; int 0; setbit; byte 0xbf; ==", 3, "setbit index beyond byteslice")
 
 	testAccepts(t, "byte 0x0000; int 3; int 1; setbit; byte 0x1000; ==", 3)
 	testAccepts(t, "byte 0x0000; int 15; int 1; setbit; byte 0x0001; ==", 3)
@@ -5118,18 +5124,18 @@ func TestBytes(t *testing.T) {
 
 	t.Parallel()
 	testAccepts(t, "byte 0x12345678; int 2; getbyte; int 0x56; ==", 3)
-	testPanics(t, "byte 0x12345678; int 4; getbyte; int 0x56; ==", 3)
+	testPanics(t, "byte 0x12345678; int 4; getbyte; int 0x56; ==", 3, "getbyte index beyond array length")
 
-	testAccepts(t, `byte "john"; int 0; getbyte; int 106; ==`, 3) // ascii j
-	testAccepts(t, `byte "john"; int 1; getbyte; int 111; ==`, 3) // ascii o
-	testAccepts(t, `byte "john"; int 2; getbyte; int 104; ==`, 3) // ascii h
-	testAccepts(t, `byte "john"; int 3; getbyte; int 110; ==`, 3) // ascii n
-	testPanics(t, `byte "john"; int 4; getbyte; int 1; ==`, 3)    // past end
+	testAccepts(t, `byte "john"; int 0; getbyte; int 106; ==`, 3)                                   // ascii j
+	testAccepts(t, `byte "john"; int 1; getbyte; int 111; ==`, 3)                                   // ascii o
+	testAccepts(t, `byte "john"; int 2; getbyte; int 104; ==`, 3)                                   // ascii h
+	testAccepts(t, `byte "john"; int 3; getbyte; int 110; ==`, 3)                                   // ascii n
+	testPanics(t, `byte "john"; int 4; getbyte; int 1; ==`, 3, "getbyte index beyond array length") // past end
 
 	testAccepts(t, `byte "john"; int 2; int 105; setbyte; byte "join"; ==`, 3)
-	testPanics(t, `byte "john"; int 2; int 256; setbyte; pop; int 1;`, 3)
+	testPanics(t, `byte "john"; int 2; int 256; setbyte; pop; int 1;`, 3, "setbyte value > 255")
 
-	testPanics(t, `global ZeroAddress; dup; concat; int 64; int 7; setbyte; int 1; return`, 3)
+	testPanics(t, `global ZeroAddress; dup; concat; int 64; int 7; setbyte; int 1; return`, 3, "setbyte index beyond array length")
 	testAccepts(t, `global ZeroAddress; dup; concat; int 63; int 7; setbyte; int 1; return`, 3)
 
 	// These test that setbyte is not modifying a shared value.
@@ -5156,7 +5162,7 @@ func TestSwap(t *testing.T) {
 
 	t.Parallel()
 	testAccepts(t, "int 1; byte 0x1234; swap; int 1; ==; assert; byte 0x1234; ==", 3)
-	testPanics(t, notrack("int 1; swap; int 1; return"), 3)
+	testPanics(t, notrack("int 1; swap; int 1; return"), 3, "stack underflow in swap")
 }
 
 func TestSelect(t *testing.T) {
@@ -5167,8 +5173,8 @@ func TestSelect(t *testing.T) {
 	testAccepts(t, "int 1; byte 0x1231; int 0; select", 3) // selects the 1
 	testRejects(t, "int 0; byte 0x1232; int 0; select", 3) // selects the 0
 
-	testAccepts(t, "int 0; int 1; int 1; select", 3)      // selects the 1
-	testPanics(t, "int 1; byte 0x1233; int 1; select", 3) // selects the bytes
+	testAccepts(t, "int 0; int 1; int 1; select", 3)                                           // selects the 1
+	testPanics(t, "int 1; byte 0x1233; int 1; select", 3, "stack finished with bytes not int") // selects the bytes
 }
 
 func TestDig(t *testing.T) {
@@ -5176,7 +5182,7 @@ func TestDig(t *testing.T) {
 
 	t.Parallel()
 	testAccepts(t, "int 3; int 2; int 1; dig 1; int 2; ==; return", 3)
-	testPanics(t, notrack("int 3; int 2; int 1; dig 11; int 2; ==; return"), 3)
+	testPanics(t, notrack("int 3; int 2; int 1; dig 11; int 2; ==; return"), 3, "dig 11 with stack size = 3")
 }
 
 func TestBury(t *testing.T) {
@@ -5209,8 +5215,8 @@ func TestCover(t *testing.T) {
 	testAccepts(t, "int 4; int 3; int 2; int 1; cover 1; int 2; ==; return", 5)
 	testAccepts(t, "int 4; int 3; int 2; int 1; cover 2; int 2; ==; return", 5)
 	testAccepts(t, "int 4; int 3; int 2; int 1; cover 2; pop; pop; int 1; ==; return", 5)
-	testPanics(t, notrack("int 4; int 3; int 2; int 1; cover 11; int 2; ==; return"), 5)
-	testPanics(t, notrack("int 4; int 3; int 2; int 1; cover 4; int 2; ==; return"), 5)
+	testPanics(t, notrack("int 4; int 3; int 2; int 1; cover 11; int 2; ==; return"), 5, "cover 11 with stack size = 4")
+	testPanics(t, notrack("int 4; int 3; int 2; int 1; cover 4; int 2; ==; return"), 5, "cover 4 with stack size = 4")
 }
 
 func TestUncover(t *testing.T) {
@@ -5222,8 +5228,8 @@ func TestUncover(t *testing.T) {
 	testAccepts(t, "int 4; int 3; int 2; int 1; uncover 3; pop; int 1; ==; return", 5)
 	testAccepts(t, "int 4; int 3; int 2; int 1; uncover 3; pop; pop; int 2; ==; return", 5)
 	testAccepts(t, "int 1; int 3; int 2; int 1; uncover 3; pop; pop; int 2; ==; return", 5)
-	testPanics(t, notrack("int 4; int 3; int 2; int 1; uncover 11; int 3; ==; return"), 5)
-	testPanics(t, notrack("int 4; int 3; int 2; int 1; uncover 4; int 2; ==; return"), 5)
+	testPanics(t, notrack("int 4; int 3; int 2; int 1; uncover 11; int 3; ==; return"), 5, "uncover 11 with stack size = 4")
+	testPanics(t, notrack("int 4; int 3; int 2; int 1; uncover 4; int 2; ==; return"), 5, "uncover 4 with stack size = 4")
 }
 
 func TestPush(t *testing.T) {
@@ -5265,7 +5271,7 @@ func TestLoop(t *testing.T) {
 	testAccepts(t, "int 1; loop: int 2; *; dup; int 10; <; bnz loop; int 16; ==", 4)
 
 	// Infinite loop because multiply by one instead of two
-	testPanics(t, "int 1; loop:; int 1; *; dup; int 10; <; bnz loop; int 16; ==", 4)
+	testPanics(t, "int 1; loop:; int 1; *; dup; int 10; <; bnz loop; int 16; ==", 4, "dynamic cost budget exceeded")
 }
 
 func TestSubroutine(t *testing.T) {
@@ -5347,11 +5353,11 @@ main:
   int 1
 `, 4)
 
-	testPanics(t, "int 1; retsub", 4)
+	testPanics(t, "int 1; retsub", 4, "retsub with empty callstack")
 
 	// recur: labels the dup instruction so callsub recur is a back-jump to a
 	// different instruction (not jump-to-self, which is disallowed in v13+).
-	testPanics(t, "int 1; callsub recur; int 1; recur: dup; pop; callsub recur", 4)
+	testPanics(t, "int 1; callsub recur; int 1; recur: dup; pop; callsub recur", 4, "dynamic cost budget exceeded")
 }
 
 func TestShifts(t *testing.T) {
@@ -5371,8 +5377,8 @@ func TestShifts(t *testing.T) {
 	testAccepts(t, "int 96; int 3; shr; int 12; ==", 4)
 	testAccepts(t, "int 8756675; int 63; shr; int 0; ==", 4)
 
-	testPanics(t, "int 8756675; int 64; shr; int 0; ==", 4)
-	testPanics(t, "int 8756675; int 64; shl; int 0; ==", 4)
+	testPanics(t, "int 8756675; int 64; shr; int 0; ==", 4, "shr arg too big, (64)")
+	testPanics(t, "int 8756675; int 64; shl; int 0; ==", 4, "shl arg too big, (64)")
 }
 
 func TestSqrt(t *testing.T) {
@@ -5405,37 +5411,37 @@ func TestExp(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	testPanics(t, "int 0; int 0; exp; int 1; ==", 4)
+	testPanics(t, "int 0; int 0; exp; int 1; ==", 4, "0^0 is undefined")
 	testAccepts(t, "int 0; int 200; exp; int 0; ==", 4)
 	testAccepts(t, "int 1000; int 0; exp; int 1; ==", 4)
 	testAccepts(t, "int 1; int 2; exp; int 1; ==", 4)
 	testAccepts(t, "int 3; int 1; exp; int 3; ==", 4)
 	testAccepts(t, "int 96; int 3; exp; int 884736; ==", 4)
-	testPanics(t, "int 96; int 15; exp; int 884736; >", 4)
+	testPanics(t, "int 96; int 15; exp; int 884736; >", 4, "96^15 overflow")
 
 	// These seem the same but check different code paths
-	testPanics(t, "int 2; int 64; exp; pop; int 1", 4)
-	testPanics(t, "int 4; int 32; exp; pop; int 1", 4)
+	testPanics(t, "int 2; int 64; exp; pop; int 1", 4, "2^64 overflow")
+	testPanics(t, "int 4; int 32; exp; pop; int 1", 4, "4^32 overflow")
 }
 
 func TestExpw(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	testPanics(t, "int 0; int 0; expw; int 1; ==; assert; int 0; ==", 4)
+	testPanics(t, "int 0; int 0; expw; int 1; ==; assert; int 0; ==", 4, "0^0 is undefined")
 	testAccepts(t, "int 0; int 200; expw; int 0; ==; assert; int 0; ==", 4)
 	testAccepts(t, "int 1000; int 0; expw; int 1; ==; assert; int 0; ==", 4)
 	testAccepts(t, "int 1; int 2; expw; int 1; ==; assert; int 0; ==", 4)
 	testAccepts(t, "int 3; int 1; expw; int 3; ==; assert; int 0; ==", 4)
 	testAccepts(t, "int 96; int 3; expw; int 884736; ==; assert; int 0; ==", 4)
-	testAccepts(t, "int 64; int 21; expw; pop; pop; int 1", 4) // (2^6)^21 = 2^126
-	testPanics(t, "int 64; int 22; expw; pop; pop; int 1", 4)  // (2^6)^22 = 2^132
+	testAccepts(t, "int 64; int 21; expw; pop; pop; int 1", 4)                  // (2^6)^21 = 2^126
+	testPanics(t, "int 64; int 22; expw; pop; pop; int 1", 4, "64^22 overflow") // (2^6)^22 = 2^132
 
 	testAccepts(t, "int 97; int 15; expw; int 10271255586529954209; ==; assert; int 34328615749; ==;", 4)
 
-	testPanics(t, "int 2; int 128; expw; pop; pop; int 1", 4) // 2^128 is too big
+	testPanics(t, "int 2; int 128; expw; pop; pop; int 1", 4, "2^128 overflow") // 2^128 is too big
 	// looks the same, but different code path
-	testPanics(t, "int 4; int 64; expw; pop; pop; int 1", 4) // 2^128 is too big
+	testPanics(t, "int 4; int 64; expw; pop; pop; int 1", 4, "4^64 overflow") // 2^128 is too big
 
 	// 5 cost 1 ops, plus expw
 	costCheck := "pushint 1; pushint 2; pushint 127; expw; pop; pop"
@@ -5663,7 +5669,7 @@ func TestBytesModExp(t *testing.T) {
 				// ensure nobody thinks they are testing a cost here
 				require.Zero(t, tc.LogicCost)
 			case Panic:
-				testPanics(t, progText, fullByteMathVersion)
+				testPanics(t, progText, fullByteMathVersion, "modulo by zero")
 				// ensure nobody thinks they are testing a cost here
 				require.Zero(t, tc.LogicCost)
 			}
@@ -5709,11 +5715,15 @@ func TestBytesMath(t *testing.T) {
 	effs := strings.Repeat("ff", 64)
 	// 64 byte long inputs are accepted, even if they produce longer outputs
 	testAccepts(t, fmt.Sprintf("byte 0x%s; byte 0x10; b+; len; int 65; ==", effs), 4)
-	// 4096 byte inputs that sum to 4097 byte outputs panic, no matter the version.
-	testPanics(t, notrack(fmt.Sprintf("byte 0x%s; byte 0x10; b+; len; int 4097; ==", strings.Repeat("ff", 4096))), 4)
+	// 4096 byte inputs that sum to 4097 byte outputs panic, no matter the
+	// version. Before fullByteMathVersion, the inputs are already too big.
+	tooBig := notrack(fmt.Sprintf("byte 0x%s; byte 0x10; b+; len; int 4097; ==", strings.Repeat("ff", 4096)))
+	testPreexist(t, tooBig, 4)
+	testPanicRange(t, tooBig, 4, fullByteMathVersion-1, "math attempted on large byte-array")
+	testPanicRange(t, tooBig, fullByteMathVersion, AssemblerMaxVersion, "b+ produced a too big (4097) byte-array")
 	// 65 byte inputs are not ok for b+ until fullByteMathVersion.
 	p := fmt.Sprintf("byte 0x%s00; byte 0x10; b+; len; int 65; ==", effs)
-	testPanicRange(t, notrack(p), 4, fullByteMathVersion-1)
+	testPanicRange(t, notrack(p), 4, fullByteMathVersion-1, "math attempted on large byte-array")
 	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
 	testCost(t, p, 2+9+3, fullByteMathVersion)
 
@@ -5721,11 +5731,11 @@ func TestBytesMath(t *testing.T) {
 	testAccepts(t, "byte 0x0200; byte 0x01; b-; byte 0x01FF; ==", 4)
 	// returns are smallest possible
 	testAccepts(t, "byte 0x0100; byte 0x01; b-; byte 0xFF; ==", 4)
-	testPanics(t, "byte 0x01; byte 0x02; b-; int 1; return", 4)
+	testPanics(t, "byte 0x01; byte 0x02; b-; int 1; return", 4, "byte math would have negative result")
 
 	// 65 byte inputs are not ok for b- until fullByteMathVersion.
 	p = fmt.Sprintf("byte 0x%s00; byte 0x10; b-; len; int 65; ==", effs)
-	testPanicRange(t, notrack(p), 4, fullByteMathVersion-1)
+	testPanicRange(t, notrack(p), 4, fullByteMathVersion-1, "math attempted on large byte-array")
 	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
 	testCost(t, p, 2+9+3, fullByteMathVersion)
 
@@ -5735,16 +5745,16 @@ func TestBytesMath(t *testing.T) {
 	testCost(t, "byte 0x100000000000; byte 0x2000; b*; byte 0x0200000000000000; ==", 10+4, fullByteMathVersion)
 
 	testAccepts(t, "byte 0x01; byte 0x01; b/; byte 0x01; ==", 4)
-	testPanics(t, "byte 0x0200; byte b64(); b/; int 1; return", 4)
-	testPanics(t, "byte 0x01; byte 0x00; b/; int 1; return", 4)
+	testPanics(t, "byte 0x0200; byte b64(); b/; int 1; return", 4, "division by zero")
+	testPanics(t, "byte 0x01; byte 0x00; b/; int 1; return", 4, "division by zero")
 	p = "int 65; bzero; byte 0x01; b/; byte 0x; =="
-	testPanicRange(t, p, 4, fullByteMathVersion-1)
+	testPanicRange(t, p, 4, fullByteMathVersion-1, "math attempted on large byte-array")
 	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
 
 	testAccepts(t, "byte 0x10; byte 0x07; b%; byte 0x02; ==; return", 4)
-	testPanics(t, "byte 0x01; byte 0x00; b%; int 1; return", 4)
+	testPanics(t, "byte 0x01; byte 0x00; b%; int 1; return", 4, "modulo by zero")
 	p = "byte 0x01; int 64; bzero; concat; byte 0x10; b%; byte 0x00; b=="
-	testPanicRange(t, p, 4, fullByteMathVersion-1)
+	testPanicRange(t, p, 4, fullByteMathVersion-1, "math attempted on large byte-array")
 	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
 
 	// b- charges for the longer input, even when it's B (with leading zeros)
@@ -5778,7 +5788,7 @@ func TestBytesMath(t *testing.T) {
 	testCost(t, p, 30, fullByteMathVersion) // 24 + 6
 	// But not 65 byte inputs (until fullByteMathVersion)
 	p = fmt.Sprintf("byte 0x%s; byte 0xff; concat; byte 0xff; b*; len; int 66; ==", effs)
-	testPanicRange(t, p, 4, fullByteMathVersion-1)
+	testPanicRange(t, p, 4, fullByteMathVersion-1, "math attempted on large byte-array")
 	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
 	assert.Equal(t, 16, mulComplexity(65, 1))
 	testCost(t, p, 24, fullByteMathVersion) // 16 + 8 (7 obvious instructions, plus bytecblock)
@@ -5795,13 +5805,13 @@ func TestBytesMath(t *testing.T) {
 	testCost(t, p, 73, fullByteMathVersion) // 69 + 4
 	// 65 byte inputs are not ok until fullByteMathVersion (no track allows assembly)
 	p = notrack(fmt.Sprintf("byte 0x%s00; bsqrt; len; int 33; ==", effs))
-	testPanicRange(t, p, 6, fullByteMathVersion-1)
+	testPanicRange(t, p, 6, fullByteMathVersion-1, "math attempted on large byte-array")
 	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
 	testCost(t, p, 74, fullByteMathVersion) // 70 + 4
 
 	// 128, mostly for cost test
 	p = notrack(fmt.Sprintf("byte 0x%s%s; bsqrt; len; int 64; ==", effs, effs))
-	testPanicRange(t, p, 6, fullByteMathVersion-1)
+	testPanicRange(t, p, 6, fullByteMathVersion-1, "math attempted on large byte-array")
 	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
 	testCost(t, p, 145, fullByteMathVersion) // 141 + 4
 }
@@ -5909,13 +5919,13 @@ func TestBytesCompare(t *testing.T) {
 
 	p := "byte 0x10; int 65; bzero; b<="
 	testPreexist(t, p, 4)
-	testPanicRange(t, p, 4, fullByteMathVersion-1)
+	testPanicRange(t, p, 4, fullByteMathVersion-1, "math attempted on large byte-array")
 	testRejectRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
 
 	testAccepts(t, "byte 0x10; int 64; bzero; b>", 4)
 	p = "byte 0x10; int 65; bzero; b>"
 	testPreexist(t, p, 4)
-	testPanicRange(t, p, 4, fullByteMathVersion-1)
+	testPanicRange(t, p, 4, fullByteMathVersion-1, "math attempted on large byte-array")
 	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
 	testAccepts(t, "byte 0x1010; byte 0x10; b<; !", 4)
 
@@ -5939,7 +5949,7 @@ func TestBytesCompare(t *testing.T) {
 	testAccepts(t, "byte 0x11; byte 0x0011; b>=", 4)
 	p = "byte 0x10; int 65; bzero; b>="
 	testPreexist(t, p, 4)
-	testPanicRange(t, p, 4, fullByteMathVersion-1)
+	testPanicRange(t, p, 4, fullByteMathVersion-1, "math attempted on large byte-array")
 	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
 
 	testAccepts(t, "byte 0x11; byte 0x11; b==", 4)
@@ -5948,15 +5958,15 @@ func TestBytesCompare(t *testing.T) {
 	testAccepts(t, "byte 0x00; int 64; bzero; b==", 4)
 	p = "byte 0x00; int 65; bzero; b=="
 	testPreexist(t, p, 4)
-	testPanicRange(t, p, 4, fullByteMathVersion-1)
+	testPanicRange(t, p, 4, fullByteMathVersion-1, "math attempted on large byte-array")
 	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
 
 	testAccepts(t, "byte 0x11; byte 0x00; b!=", 4)
 	testAccepts(t, "byte 0x0011; byte 0x1100; b!=", 4)
-	testPanics(t, notrack("byte 0x11; int 17; b!="), 4)
+	testPanics(t, notrack("byte 0x11; int 17; b!="), 4, "b!= arg 1 wanted")
 	p = "byte 0x10; int 65; bzero; b!="
 	testPreexist(t, p, 4)
-	testPanicRange(t, p, 4, fullByteMathVersion-1)
+	testPanicRange(t, p, 4, fullByteMathVersion-1, "math attempted on large byte-array")
 	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
 }
 
@@ -5987,7 +5997,7 @@ func TestBytesBits(t *testing.T) {
 	testAccepts(t, "int 33; bzero; byte 0x000000000000000000000000000000000000000000000000000000000000000000; ==", 4)
 
 	testAccepts(t, "int 4096; bzero; len; int 4096; ==", 4)
-	testPanics(t, notrack("int 4097; bzero; len; int 4097; =="), 4)
+	testPanics(t, notrack("int 4097; bzero; len; int 4097; =="), 4, "bzero attempted to create a too large string")
 }
 
 func TestBytesConversions(t *testing.T) {
@@ -6735,7 +6745,7 @@ switch
 int 1
 `, 8)
 
-	testPanics(t, notrack("switch; int 1"), 8)
+	testPanics(t, notrack("switch; int 1"), 8, "stack underflow in switch")
 
 	// make the switch the final instruction
 	testAccepts(t, `
@@ -6878,7 +6888,7 @@ match
 int 1
 `, 8)
 
-	testPanics(t, notrack("match; int 1"), 8)
+	testPanics(t, notrack("match; int 1"), 8, "stack underflow in match")
 
 	// make the match the final instruction
 	testAccepts(t, `
