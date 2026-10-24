@@ -2152,6 +2152,7 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 
 	v18 := config.Consensus[protocol.ConsensusV18]
 	v41 := config.Consensus[protocol.ConsensusV41]
+	v42 := config.Consensus[protocol.ConsensusV42]
 	vFuture := config.Consensus[protocol.ConsensusFuture]
 
 	makeProgram := func(proto config.ConsensusParams, minSize int) []byte {
@@ -2169,14 +2170,11 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 	// supplies args and expects success needs a program that reads them. Seven
 	// bytes is the smallest program with room for one arg read.
 	makeArgProgram := func(proto config.ConsensusParams, minSize int, args uint) []byte {
-		if minSize < 7 {
-			minSize = 7
-		}
+		minSize = max(minSize, 5+2*int(args))
 		program, err := txntest.GenerateUnsaltedArgReadingProgramOfSize(uint(minSize), uint(proto.LogicSigVersion), args)
 		require.NoError(t, err)
 		return program
 	}
-
 	makeLogicSigTxnForReceiver := func(program []byte, args [][]byte, receiver basics.Address) transactions.SignedTxn {
 		stxn := txntest.Txn{
 			Type:     protocol.PaymentTx,
@@ -2354,12 +2352,12 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("vFuture: singleton LogicSig args above allowance require size pooling", func(t *testing.T) {
-		program := makeProgram(vFuture, 0)
+	t.Run("vFuture: singleton LogicSig args above allowance need no size pooling", func(t *testing.T) {
+		program := makeArgProgram(vFuture, 0, 1)
 		args := [][]byte{make([]byte, int(vFuture.LogicSigMaxSize)+1)}
 
 		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{makeLogicSigTxn(program, args)})
-		require.ErrorContains(t, err, "more than the available size pool")
+		require.NoError(t, err)
 	})
 
 	t.Run("vFuture: LogicSig args above allowance can use size pooling", func(t *testing.T) {
@@ -2376,15 +2374,88 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("vFuture: LogicSig args pool counts args from every LogicSig", func(t *testing.T) {
-		program := makeProgram(vFuture, 0)
+	t.Run("vFuture: total args can exceed the group allowance", func(t *testing.T) {
+		program := makeArgProgram(vFuture, 0, 1)
 
 		stxns := amendTxGroupID([]transactions.SignedTxn{
 			makeLogicSigTxnForReceiver(program, [][]byte{make([]byte, int(vFuture.LogicSigMaxSize))}, basics.Address{1}),
 			makeLogicSigTxnForReceiver(program, [][]byte{make([]byte, int(vFuture.LogicSigMaxSize)+1)}, basics.Address{2}),
 		})
 		err := verifyGroupForProtocol(protocol.ConsensusFuture, stxns)
-		require.ErrorContains(t, err, "more than the available size pool")
+		require.NoError(t, err)
+	})
+
+	t.Run("v18: singleton args still limited by the legacy size pool", func(t *testing.T) {
+		program := makeProgram(v18, 0)
+		args := txntest.MakeLogicSigArgs(int(v18.LogicSigMaxSize) + 1)
+		err := verifyGroupForProtocol(protocol.ConsensusV18, []transactions.SignedTxn{makeLogicSigTxn(program, args)})
+		require.ErrorContains(t, err, "more than the available pool")
+	})
+
+	t.Run("v41: args can exceed the pre-pooling limit using the group pool", func(t *testing.T) {
+		program := makeProgram(v41, 0)
+		stxns := amendTxGroupID([]transactions.SignedTxn{
+			makeLogicSigTxnForReceiver(program, txntest.MakeLogicSigArgs(int(v41.LogicSigMaxSize)+1), basics.Address{1}),
+			makeLogicSigTxnForReceiver(program, nil, basics.Address{2}),
+		})
+		err := verifyGroupForProtocol(protocol.ConsensusV41, stxns)
+		require.NoError(t, err)
+	})
+
+	t.Run("v42: large args still require size pooling", func(t *testing.T) {
+		program := makeArgProgram(v42, 0, 1)
+		args := txntest.MakeLogicSigArgs(int(v42.LogicSigMaxSize) + 1)
+		stxn := makeLogicSigTxn(program, args)
+		// Even an overpayment cannot purchase args before args pricing.
+		stxn.Txn.Fee.Raw = 1_000_000
+		err := verifyGroupForProtocol(protocol.ConsensusV42, []transactions.SignedTxn{stxn})
+		require.ErrorContains(t, err, "more than the available pool")
+
+		group := amendTxGroupID([]transactions.SignedTxn{
+			stxn,
+			makeLogicSigTxnForReceiver(makeProgram(v42, 0), nil, basics.Address{2}),
+		})
+		err = verifyGroupForProtocol(protocol.ConsensusV42, group)
+		require.NoError(t, err)
+	})
+
+	t.Run("vFuture: singleton args at absolute limit", func(t *testing.T) {
+		args := txntest.MakeLogicSigArgs(int(vFuture.MaxAbsoluteLogicSigArgsSize))
+		program := makeArgProgram(vFuture, 0, uint(len(args)))
+		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{makeLogicSigTxn(program, args)})
+		require.NoError(t, err)
+	})
+
+	t.Run("vFuture: v1 LogicSig can use large args", func(t *testing.T) {
+		args := txntest.MakeLogicSigArgs(int(vFuture.MaxAbsoluteLogicSigArgsSize))
+		program := makeArgProgram(v18, 0, uint(len(args)))
+		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{makeLogicSigTxn(program, args)})
+		require.NoError(t, err)
+	})
+
+	t.Run("vFuture: args above absolute limit", func(t *testing.T) {
+		args := txntest.MakeLogicSigArgs(int(vFuture.MaxAbsoluteLogicSigArgsSize) + 1)
+		program := makeArgProgram(vFuture, 0, uint(len(args)))
+		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{makeLogicSigTxn(program, args)})
+		require.ErrorContains(t, err, "more than the absolute maximum")
+	})
+
+	t.Run("vFuture: every group member can use the absolute args limit", func(t *testing.T) {
+		args := txntest.MakeLogicSigArgs(int(vFuture.MaxAbsoluteLogicSigArgsSize))
+		program := makeArgProgram(vFuture, 0, uint(len(args)))
+		group := make([]transactions.SignedTxn, vFuture.MaxTxGroupSize)
+		for i := range group {
+			group[i] = makeLogicSigTxnForReceiver(program, args, basics.Address{byte(i + 1)})
+		}
+		err := verifyGroupForProtocol(protocol.ConsensusFuture, amendTxGroupID(group))
+		require.NoError(t, err)
+	})
+
+	t.Run("vFuture: large args must still be read", func(t *testing.T) {
+		program := makeProgram(vFuture, 0)
+		args := txntest.MakeLogicSigArgs(int(vFuture.LogicSigMaxSize) + 1)
+		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{makeLogicSigTxn(program, args)})
+		require.ErrorContains(t, err, "was not accessed")
 	})
 
 	t.Run("vFuture: program bytes can exceed legacy group size pool", func(t *testing.T) {

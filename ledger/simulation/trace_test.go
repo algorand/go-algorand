@@ -24,6 +24,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -97,4 +98,46 @@ func TestPopulateFeeUsageIncludesBigLogicSigProgram(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPopulateFeeUsageIncludesBigLogicSigArgs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	program, err := logic.AssembleString("#pragma version 1\narg 0; pop; int 1")
+	require.NoError(t, err)
+	proto := config.Consensus[protocol.ConsensusFuture]
+	argsSize := int(proto.LogicSigMaxSize) + 10
+	fee := basics.MicroAlgos{Raw: proto.MinTxnFee}
+	result := Result{
+		TxnGroups: []TxnGroupResult{
+			{
+				Txns: []TxnResult{
+					{
+						Txn: transactions.SignedTxnWithAD{
+							SignedTxn: transactions.SignedTxn{
+								Txn: transactions.Transaction{
+									Type: protocol.PaymentTx,
+									Header: transactions.Header{
+										Fee: fee,
+									},
+								},
+								Lsig: transactions.LogicSig{
+									Logic: program.Program,
+									Args:  [][]byte{make([]byte, argsSize)},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	populateFeeUsage(&result, proto)
+
+	surcharge, overflow := proto.PerByteTxnSurcharge.MulInt(10)
+	require.False(t, overflow)
+	require.Equal(t, basics.AddSaturate(basics.Micros(1e6), surcharge), result.TxnGroups[0].GroupUsage)
+	require.Equal(t, fee, result.TxnGroups[0].GroupFeesPaid)
+	require.Equal(t, fee, result.TxnGroups[0].Txns[0].FeesPaid)
 }

@@ -716,7 +716,46 @@ func TestLogicSigProgramFeeContribution(t *testing.T) {
 	}
 }
 
-func TestSummarizeFees_BigLogicSigProgram(t *testing.T) {
+func TestLogicSigArgsFeeContribution(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	v41 := config.Consensus[protocol.ConsensusV41]
+	v42 := config.Consensus[protocol.ConsensusV42]
+	vFuture := config.Consensus[protocol.ConsensusFuture]
+	freeSize := int(vFuture.LogicSigMaxSize)
+
+	tests := []struct {
+		name     string
+		proto    config.ConsensusParams
+		argSizes [][]int
+		charged  int
+	}{
+		{"v41: unpriced transactions", v41, [][]int{{freeSize + 1}}, 0},
+		{"v42: args remain unpriced", v42, [][]int{{freeSize + 1}}, 0},
+		{"v42: pooled args remain unpriced", v42, [][]int{{freeSize + 1}, nil}, 0},
+		{"no args", vFuture, [][]int{nil}, 0},
+		{"below allowance", vFuture, [][]int{{freeSize - 1}}, 0},
+		{"at allowance", vFuture, [][]int{{freeSize}}, 0},
+		{"one extra byte", vFuture, [][]int{{freeSize + 1}}, 1},
+		{"multiple args", vFuture, [][]int{{500, 501}}, 1},
+		{"unused group allowance", vFuture, [][]int{{freeSize + 500}, nil}, 0},
+		{"all args share allowance", vFuture, [][]int{{freeSize + 500}, {freeSize}}, 500},
+		{"multiple large args", vFuture, [][]int{{freeSize + 3}, {freeSize + 4}}, 7},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			group := make([]SignedTxnWithAD, len(test.argSizes))
+			for i, sizes := range test.argSizes {
+				for _, size := range sizes {
+					group[i].Lsig.Args = append(group[i].Lsig.Args, make([]byte, size))
+				}
+			}
+			require.Equal(t, surchargeForBytes(t, test.proto, test.charged), logicSigArgsFeeContribution(group, test.proto))
+		})
+	}
+}
+
+func TestSummarizeFees_BigLogicSigSizes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	vFuture := config.Consensus[protocol.ConsensusFuture]
@@ -814,6 +853,20 @@ func TestSummarizeFees_BigLogicSigProgram(t *testing.T) {
 		}, vFuture)
 
 		assert.Equal(t, basics.Micros(2e6), usage)
+		assert.Equal(t, basics.MicroAlgos{Raw: 2000}, paid)
+	})
+
+	t.Run("vFuture: program and args have independent free allowances", func(t *testing.T) {
+		stxn := SignedTxn{
+			Txn: makeTxn(2000),
+			Lsig: LogicSig{
+				Logic: make([]byte, freeSize+100),
+				Args:  [][]byte{make([]byte, freeSize+200)},
+			},
+		}
+
+		usage, paid := SummarizeFees([]SignedTxnWithAD{stxn.WithAD()}, vFuture)
+		assert.Equal(t, basics.Micros(1e6)+surchargeForBytes(t, vFuture, 300), usage)
 		assert.Equal(t, basics.MicroAlgos{Raw: 2000}, paid)
 	})
 }
