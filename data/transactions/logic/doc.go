@@ -302,7 +302,7 @@ var opDescByName = map[string]OpDesc{
 	"b~":  {"A with all bits inverted", "", nil, ""},
 
 	"bsqrt":   {"The largest integer I such that I^2 <= A. A and I are interpreted as big-endian unsigned integers", "", nil, ""},
-	"bmodexp": {"A raised to the Bth power modulo C. A, B and C are interpreted as big-endian unsigned integers limited to 4096 bytes. Fail if C is zero.", "", nil, ""},
+	"bmodexp": {"A raised to the Bth power modulo C. A, B and C are interpreted as big-endian unsigned integers limited to 4096 bytes. Fail if C is zero, or if A and B are both zero.", "", nil, ""},
 
 	"log":         {"write A to log state of the current application", fmt.Sprintf("`log` fails if called more than MaxLogCalls times in a program, or if the sum of logged bytes exceeds %d bytes.", maxLogSize), nil, ""},
 	"itxn_begin":  {"begin preparation of a new inner transaction in a new transaction group", "`itxn_begin` initializes Sender to the application address; Fee to a default, described below; FirstValid/LastValid to the values in the invoking transaction, and all other fields to zero or empty values.\n\nThe default Fee is the additional amount that would make the group's fees sufficient so far: MinTxnFee times the fee usage of the transactions already in the group plus one base fee for this new transaction, less the fees already set and any credit from overpaying in earlier transactions. Because the new transaction's own cost is counted as a single base fee, extra costs from fields set later, such as a large note or program, are not reflected in the default. The group fee is checked and charged at `itxn_submit`, so changing Fee, setting fields that cost more, or adding transactions with `itxn_next` all change what is owed.", nil, ""},

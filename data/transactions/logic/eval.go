@@ -2487,7 +2487,7 @@ func opBytesDiv(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-	if rhs.BitLen() == 0 {
+	if rhs.Sign() == 0 {
 		putBig(rhs)
 		putBig(lhs)
 		return errors.New("division by zero")
@@ -2684,12 +2684,19 @@ func opBytesModExp(cx *EvalContext) error {
 	pprev := last - 2         // x
 
 	z := getBig().SetBytes(cx.Stack[last].Bytes)
-	if z.BitLen() == 0 {
+	if z.Sign() == 0 {
 		putBig(z)
 		return errors.New("modulo by zero")
 	}
 	y := getBig().SetBytes(cx.Stack[prev].Bytes)
 	x := getBig().SetBytes(cx.Stack[pprev].Bytes)
+	// big.Int.Exp treats 0^0 as 1, but exp and expw consider it undefined.
+	if x.Sign() == 0 && y.Sign() == 0 {
+		putBig(x)
+		putBig(y)
+		putBig(z)
+		return errors.New("0^0 is undefined")
+	}
 	result := getBig().Exp(x, y, z)
 	putBig(x)
 	putBig(y)
@@ -2773,7 +2780,7 @@ func opBytesModulo(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-	if rhs.BitLen() == 0 {
+	if rhs.Sign() == 0 {
 		putBig(rhs)
 		putBig(lhs)
 		return errors.New("modulo by zero")
