@@ -60,7 +60,7 @@ func isStructOrPtrToStruct(typ reflect.Type) bool {
 	if typ.Kind() == reflect.Struct {
 		return true
 	}
-	if typ.Kind() == reflect.Ptr && typ.Elem().Kind() == reflect.Struct {
+	if typ.Kind() == reflect.Pointer && typ.Elem().Kind() == reflect.Struct {
 		return true
 	}
 	return false
@@ -75,10 +75,10 @@ func verifyStructCompatibility(t *testing.T, bkType, modelType reflect.Type) {
 		return
 	}
 
-	if bkType.Kind() == reflect.Ptr {
+	if bkType.Kind() == reflect.Pointer {
 		bkType = bkType.Elem()
 	}
-	if modelType.Kind() == reflect.Ptr {
+	if modelType.Kind() == reflect.Pointer {
 		modelType = modelType.Elem()
 	}
 
@@ -179,7 +179,7 @@ func verifyTypeCompatibility(t *testing.T, bkType, modelType reflect.Type, tag s
 			return
 		}
 
-	case reflect.Ptr:
+	case reflect.Pointer:
 		switch modelType.Elem().Kind() {
 		case reflect.String:
 			// Special case: if the model uses *string for string or crypto types, that's okay
@@ -215,7 +215,7 @@ func verifyTypeCompatibility(t *testing.T, bkType, modelType reflect.Type, tag s
 
 		default:
 			// For other pointer types, check the underlying type
-			if bkType.Kind() == reflect.Ptr {
+			if bkType.Kind() == reflect.Pointer {
 				verifyTypeCompatibility(t, bkType.Elem(), modelType.Elem(), tag)
 				return
 			}

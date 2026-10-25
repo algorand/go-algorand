@@ -421,8 +421,8 @@ func (n *P2PNetwork) PeerID() p2p.PeerID {
 	return p2p.PeerID(n.service.ID())
 }
 
-// PeerIDSigner returns an identityChallengeSigner that uses the libp2p peer ID's private key.
-func (n *P2PNetwork) PeerIDSigner() identityChallengeSigner {
+// peerIDSigner returns an identityChallengeSigner that uses the libp2p peer ID's private key.
+func (n *P2PNetwork) peerIDSigner() identityChallengeSigner {
 	return n.service.IDSigner()
 }
 

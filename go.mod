@@ -1,8 +1,8 @@
 module github.com/algorand/go-algorand
 
-go 1.25.0
+go 1.27.0
 
-toolchain go1.25.3
+toolchain go1.27.3
 
 require (
 	filippo.io/edwards25519 v1.2.0
