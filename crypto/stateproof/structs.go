@@ -89,9 +89,7 @@ func (s StateProof) String() string {
 	if s.MsgIsZero() {
 		return "StateProof: {}"
 	}
-	// Convert to a plain []byte so fmt takes its fast path. A named slice
-	// type such as GenericDigest goes through reflection instead.
-	return fmt.Sprintf("StateProof: {%x, %d, %d}", []byte(s.SigCommit), s.SignedWeight, len(s.PositionsToReveal))
+	return fmt.Sprintf("StateProof: {%v, %d, %d}", s.SigCommit, s.SignedWeight, len(s.PositionsToReveal))
 }
 
 // SortUint64 implements sorting by uint64 keys for

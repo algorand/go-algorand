@@ -95,12 +95,12 @@ func Heartbeat(hb transactions.HeartbeatTxnFields, header transactions.Header, b
 		return err
 	}
 	if hdr.Seed != hb.HbSeed {
-		return fmt.Errorf("provided seed %x does not match round %d's seed %x",
-			hb.HbSeed[:], header.FirstValid, hdr.Seed[:])
+		return fmt.Errorf("provided seed %v does not match round %d's seed %v",
+			hb.HbSeed, header.FirstValid, hdr.Seed)
 	}
 	if account.VotingData.VoteID != hb.HbVoteID {
-		return fmt.Errorf("provided voter ID %x does not match %v's voter ID %x",
-			hb.HbVoteID[:], hb.HbAddress, account.VotingData.VoteID[:])
+		return fmt.Errorf("provided voter ID %v does not match %v's voter ID %v",
+			hb.HbVoteID, hb.HbAddress, account.VotingData.VoteID)
 	}
 	if account.VotingData.VoteKeyDilution != hb.HbKeyDilution {
 		return fmt.Errorf("provided key dilution %d does not match %v's key dilution %d",

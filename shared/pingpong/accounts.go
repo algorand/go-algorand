@@ -405,7 +405,7 @@ func (pps *WorkerState) makeNewAssets(client *libgoal.Client) (err error) {
 		}
 		tx, createErr := client.MakeUnsignedAssetCreateTx(totalSupply, false, addr, addr, addr, addr, "ping", assetName, "", meta[:], 0)
 		if createErr != nil {
-			fmt.Printf("Cannot make asset create txn with meta %x\n", meta[:])
+			fmt.Printf("Cannot make asset create txn with meta %x\n", meta)
 			err = createErr
 			return
 		}

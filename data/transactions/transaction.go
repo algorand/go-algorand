@@ -18,6 +18,7 @@ package transactions
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -503,7 +504,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		return fmt.Errorf("transaction cannot have zero sender")
 	}
 	if !proto.SupportTransactionLeases && (tx.Lease != [32]byte{}) {
-		return fmt.Errorf("transaction tried to acquire lease %x but protocol does not support transaction leases", tx.Lease[:])
+		return fmt.Errorf("transaction tried to acquire lease %s but protocol does not support transaction leases", base64.StdEncoding.EncodeToString(tx.Lease[:]))
 	}
 	if !proto.SupportTxGroups && (tx.Group != crypto.Digest{}) {
 		return fmt.Errorf("transaction has group but groups not yet enabled")

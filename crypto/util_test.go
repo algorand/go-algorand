@@ -18,6 +18,7 @@ package crypto
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -76,5 +77,41 @@ func TestHashRepToBuff(t *testing.T) {
 		data := HashRep(tbh)
 		require.Equal(t, data, buffer[pos:pos+len(data)])
 		pos = pos + len(data)
+	}
+}
+
+// TestByteTypesFormatAsHex checks that %v and %s print these types as hex
+// rather than as one decimal number per byte.
+func TestByteTypesFormatAsHex(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var pk VrfPubkey
+	pk[0], pk[1] = 0x01, 0xab
+	var proof VrfProof
+	proof[0], proof[1] = 0x01, 0xab
+	var d512 Sha512Digest
+	d512[0], d512[1] = 0x01, 0xab
+	var otsv OneTimeSignatureVerifier
+	otsv[0], otsv[1] = 0x01, 0xab
+	gd := GenericDigest{0x01, 0xab, 0x00}
+
+	tests := []struct {
+		name string
+		v    any
+		want string
+	}{
+		{"VrfPubkey", pk, "01ab" + strings.Repeat("00", 30)},
+		{"VRFVerifier", VRFVerifier(pk), "01ab" + strings.Repeat("00", 30)},
+		{"VrfProof", proof, "01ab" + strings.Repeat("00", 78)},
+		{"Sha512Digest", d512, "01ab" + strings.Repeat("00", 62)},
+		{"OneTimeSignatureVerifier", otsv, "01ab" + strings.Repeat("00", 30)},
+		{"GenericDigest", gd, "01ab00"},
+		{"empty GenericDigest", GenericDigest(nil), ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, fmt.Sprintf("%v", tc.v))
+			require.Equal(t, tc.want, fmt.Sprintf("%s", tc.v))
+		})
 	}
 }

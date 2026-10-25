@@ -1575,7 +1575,7 @@ func (eval *BlockEvaluator) endOfBlock(participating ...basics.Address) error {
 			return err2
 		}
 		if !eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment.IsEqual(expectedVoters) {
-			return fmt.Errorf("StateProofVotersCommitment wrong: %x != %x", []byte(eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment), []byte(expectedVoters))
+			return fmt.Errorf("StateProofVotersCommitment wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment, expectedVoters)
 		}
 		if eval.proto.ExcludeExpiredCirculation {
 			if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != expectedVotersWeight {
