@@ -94,6 +94,8 @@ func TestByteTypesFormatAsHex(t *testing.T) {
 	var otsv OneTimeSignatureVerifier
 	otsv[0], otsv[1] = 0x01, 0xab
 	gd := GenericDigest{0x01, 0xab, 0x00}
+	var sig Signature
+	sig[0], sig[1] = 0x01, 0xab
 
 	tests := []struct {
 		name string
@@ -107,6 +109,10 @@ func TestByteTypesFormatAsHex(t *testing.T) {
 		{"OneTimeSignatureVerifier", otsv, "01ab" + strings.Repeat("00", 30)},
 		{"GenericDigest", gd, "01ab00"},
 		{"empty GenericDigest", GenericDigest(nil), ""},
+		{"PublicKey", PublicKey(otsv), "01ab" + strings.Repeat("00", 30)},
+		{"ed25519PublicKey", ed25519PublicKey(otsv), "01ab" + strings.Repeat("00", 30)},
+		{"Signature", sig, "01ab" + strings.Repeat("00", 62)},
+		{"ed25519Signature", ed25519Signature(sig), "01ab" + strings.Repeat("00", 62)},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

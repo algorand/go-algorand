@@ -36,6 +36,7 @@ package crypto
 import "C"
 
 import (
+	"encoding/hex"
 	"fmt"
 	"unsafe"
 
@@ -104,6 +105,9 @@ type ed25519PublicKey [32]byte
 type ed25519PrivateKey [64]byte
 type ed25519Seed [32]byte
 
+func (s ed25519Signature) String() string  { return hex.EncodeToString(s[:]) }
+func (pk ed25519PublicKey) String() string { return hex.EncodeToString(pk[:]) }
+
 // MasterDerivationKey is used to derive ed25519 keys for use in wallets
 type MasterDerivationKey [masterDerivationKeyLenBytes]byte
 
@@ -112,6 +116,9 @@ type PrivateKey ed25519PrivateKey
 
 // PublicKey is an exported ed25519PublicKey
 type PublicKey ed25519PublicKey
+
+// String returns the public key in hex.
+func (pk PublicKey) String() string { return hex.EncodeToString(pk[:]) }
 
 // IsEdwards25519Point reports whether encoded can be decoded as an
 // Edwards25519 curve point. This follows edwards25519.Point.SetBytes decoding,
@@ -167,6 +174,9 @@ func ed25519Verify(public ed25519PublicKey, data []byte, sig ed25519Signature) b
 // A Signature is a cryptographic signature. It proves that a message was
 // produced by a holder of a cryptographic secret.
 type Signature ed25519Signature
+
+// String returns the signature in hex.
+func (s Signature) String() string { return hex.EncodeToString(s[:]) }
 
 // BlankSignature is an empty signature structure, containing nothing but zeroes
 var BlankSignature = Signature{}
