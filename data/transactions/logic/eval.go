@@ -2952,6 +2952,10 @@ func branchTargetVarint(cx *EvalContext) (target int, instrSize int, err error) 
 		}
 		return 0, 0, fmt.Errorf("branch offset varint overflows int64")
 	}
+	// Reject offsets outside program, considering potential 32-bit int.
+	if offset > int64(len(cx.program)) || offset < -int64(len(cx.program)) {
+		return 0, 0, fmt.Errorf("branch offset %d outside of program", offset)
+	}
 	instrSize = 1 + bytesRead
 	// Negative offsets are back-jumps measured from the start of the
 	// instruction; non-negative offsets are forward-jumps from the end.

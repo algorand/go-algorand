@@ -775,7 +775,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 				asmStats.CommittedCount++
 				stats.RemovedInvalidCount++
 			case *bookkeeping.TxnDeadError:
-				if int(terr.LastValid-terr.FirstValid) > 20 {
+				if terr.LastValid.SubSaturate(terr.FirstValid) > 20 {
 					// cutoff value  here is picked as a somewhat arbitrary cutoff trying to separate longer lived transactions from very short lived ones
 					asmStats.ExpiredLongLivedCount++
 				}

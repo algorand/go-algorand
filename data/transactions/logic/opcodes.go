@@ -903,12 +903,12 @@ func OpcodesByVersion(version uint64) []OpSpec {
 	}
 
 	// for updated opcodes use the lowest version opcode was introduced in
-	updated := make(map[uint16]int)
+	updated := make(map[uint16]uint64)
 	for idx := range OpSpecs {
 		k := key(OpSpecs[idx])
 		cv, ok := updated[k]
-		if !ok || int(OpSpecs[idx].Version) < cv {
-			cv = int(OpSpecs[idx].Version)
+		if !ok || OpSpecs[idx].Version < cv {
+			cv = OpSpecs[idx].Version
 		}
 		updated[k] = cv
 	}
@@ -920,9 +920,9 @@ func OpcodesByVersion(version uint64) []OpSpec {
 			subv[k] = OpSpecs[idx]
 			// if the opcode was updated then assume backward compatibility
 			// and set version to minimum available
-			if updated[k] < int(OpSpecs[idx].Version) {
+			if updated[k] < OpSpecs[idx].Version {
 				copy := OpSpecs[idx]
-				copy.Version = uint64(updated[k])
+				copy.Version = updated[k]
 				subv[k] = copy
 			}
 		}

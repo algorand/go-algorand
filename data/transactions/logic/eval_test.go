@@ -3824,6 +3824,38 @@ intc_1
 	}
 }
 
+// TestBranchOffsetTruncation ensures that varint branch offsets too large for a
+// 32-bit int are rejected by both the evaluator and the disassembler, rather
+// than being truncated into a valid target.
+// Each offset's low 32 bits form a valid target, so a 32-bit node that
+// truncated with int(offset) would accept a program that 64-bit nodes reject.
+func TestBranchOffsetTruncation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	offsets := []int64{
+		1 << 32,       // truncates to 0: falls through to the next instruction
+		1<<32 + 2,     // truncates to 2: skips the pushint
+		-(1 << 32),    // truncates to 0: branches to itself
+		math.MaxInt64, // large enough to overflow cx.pc + offset on 64-bit
+		math.MinInt64,
+	}
+	for _, op := range []string{"b", "bz", "bnz", "callsub"} {
+		for _, offset := range offsets {
+			t.Run(fmt.Sprintf("%s/%d", op, offset), func(t *testing.T) {
+				t.Parallel()
+				// pushint 0; <op> <offset>; pushint 1; pushint 1
+				program := []byte{varintBranchVersion, 0x81, 0x00, OpsByName[varintBranchVersion][op].Opcode}
+				program = binary.AppendVarint(program, offset)
+				program = append(program, 0x81, 0x01, 0x81, 0x01)
+				testLogicBytes(t, program, nil, "outside of program", "outside of program")
+				_, err := Disassemble(program)
+				require.ErrorContains(t, err, "outside of program")
+			})
+		}
+	}
+}
+
 /*
 import random
 
