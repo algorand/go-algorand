@@ -1135,7 +1135,11 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup ...transactions.SignedTxnWi
 		txibs = append(txibs, txib)
 
 		if eval.validate {
-			groupTxBytes += txib.GetEncodedLength()
+			txBytes, encErr := txib.GetEncodedLength(eval.generate)
+			if encErr != nil {
+				return fmt.Errorf("transaction %v: %w", txad.ID(), encErr)
+			}
+			groupTxBytes += txBytes
 			if eval.blockTxBytes+groupTxBytes > eval.maxTxnBytesPerBlock {
 				return ledgercore.ErrNoSpace
 			}
