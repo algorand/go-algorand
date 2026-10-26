@@ -218,3 +218,27 @@ func TestSignedTxnFeeFactorPQSignatureContribution(t *testing.T) {
 }
 
 //TODO: test multisig
+
+func TestGetEncodedLengthDecode(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var stib SignedTxnInBlock
+	stib.Txn.Type = protocol.PaymentTx
+	stib.Txn.Sender = basics.Address{1}
+	plain, err := stib.GetEncodedLength(false)
+	require.NoError(t, err)
+	require.Equal(t, len(protocol.Encode(&stib)), plain)
+	checked, err := stib.GetEncodedLength(true)
+	require.NoError(t, err)
+	require.Equal(t, plain, checked)
+
+	// Without its required sender, the transaction still encodes but no
+	// longer decodes.
+	stib.Txn.Sender = basics.Address{}
+	plain, err = stib.GetEncodedLength(false)
+	require.NoError(t, err)
+	require.Equal(t, len(protocol.Encode(&stib)), plain)
+	_, err = stib.GetEncodedLength(true)
+	require.ErrorContains(t, err, "missing required field")
+}
