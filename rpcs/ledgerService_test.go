@@ -28,7 +28,6 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
@@ -42,7 +41,7 @@ import (
 
 type fakeNetwork struct {
 	network.GossipNode
-	router *mux.Router
+	router *http.ServeMux
 	*mock.Mock
 }
 
@@ -79,7 +78,7 @@ func TestLedgerService(t *testing.T) {
 	genesisID := "testGenesisID"
 	cfg := config.GetDefaultLocal()
 	l := fakeLedger{Mock: &mock.Mock{}}
-	fnet := fakeNetwork{router: mux.NewRouter(), Mock: &mock.Mock{}}
+	fnet := fakeNetwork{router: http.NewServeMux(), Mock: &mock.Mock{}}
 
 	// Test LedgerService not enabled
 	cfg.EnableLedgerService = false
@@ -103,13 +102,12 @@ func TestLedgerService(t *testing.T) {
 	ledgerService.Start()
 	require.Equal(t, int32(1), ledgerService.running.Load())
 
-	// Test GET 400 Bad Version String
+	// Test GET 404 Unsupported Version: only /v1/ is registered
 	rr = httptest.NewRecorder()
 	req, err = http.NewRequest("GET", "/v2/foobar/ledger/23", nil)
 	require.NoError(t, err)
 	fnet.router.ServeHTTP(rr, req)
-	require.Equal(t, http.StatusBadRequest, rr.Code)
-	require.Contains(t, rr.Body.String(), "unsupported version '2'")
+	require.Equal(t, http.StatusNotFound, rr.Code)
 
 	// Test Get 400 Bad Genesis ID
 	rr = httptest.NewRecorder()
@@ -195,7 +193,7 @@ func TestLedgerServiceVersionErrors(t *testing.T) {
 
 			query := url.Values{"r": {"1"}, "v": tc.versions}
 			request := httptest.NewRequest(http.MethodGet, "/?"+query.Encode(), nil)
-			request = mux.SetURLVars(request, map[string]string{"genesisID": service.genesisID})
+			request.SetPathValue("genesisID", service.genesisID)
 			recorder := httptest.NewRecorder()
 			service.ServeHTTP(recorder, request)
 
@@ -251,8 +249,6 @@ func TestLedgerServiceP2P(t *testing.T) {
 	ledgerService := MakeLedgerService(cfg, &l, nodeA, genesisID)
 	ledgerService.Start()
 	defer ledgerService.Stop()
-
-	nodeA.RegisterHTTPHandler(LedgerServiceLedgerPath, ledgerService)
 
 	httpPeer := nodeA.GetHTTPPeer().(network.HTTPPeer)
 

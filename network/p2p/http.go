@@ -25,7 +25,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -45,7 +44,7 @@ const algorandP2pHTTPProtocol = "/algorand-http/1.0.0"
 // HTTPServer is a wrapper around libp2phttp.Host that allows registering http handlers with path parameters.
 type HTTPServer struct {
 	libp2phttp.Host
-	p2phttpMux              *mux.Router
+	p2phttpMux              *http.ServeMux
 	p2phttpMuxRegistrarOnce sync.Once
 }
 
@@ -53,8 +52,11 @@ type HTTPServer struct {
 func MakeHTTPServer(streamHost host.Host) *HTTPServer {
 	httpServer := HTTPServer{
 		Host:       libp2phttp.Host{StreamHost: streamHost},
-		p2phttpMux: mux.NewRouter(),
+		p2phttpMux: http.NewServeMux(),
 	}
+	// Every request matches at least this catch-all, so ServeMux returns 404
+	// without first searching all methods to decide between 404 and 405.
+	httpServer.p2phttpMux.Handle("/", http.NotFoundHandler())
 	// libp2phttp server requires either explicit ListenAddrs or streamHost.Addrs() to be non-empty.
 	// If streamHost.Addrs() is empty (that happens when NetAddress is set to ":0" and private address filtering is automatically enabled),
 	// we will listen on localhost to satisfy libp2phttp.Host.Serve() requirements.
