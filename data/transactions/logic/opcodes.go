@@ -841,10 +841,10 @@ var OpSpecs = []OpSpec{
 
 	// Byteslice math.
 	{0xa0, "b+", opBytesPlus, proto("II:b"), 4, costly(10).typed(typeByteMath(maxByteMathSize + 1))},
-	{0xa0, "b+", opBytesPlus, proto("bb:b"), fullByteMathVersion, costByLongest(4, 1, 16, 2)},
+	{0xa0, "b+", opBytesPlus, proto("bb:b"), fullByteMathVersion, costByLongest(2, 1, 32, 2)},
 	{0xa1, "b-", opBytesMinus, proto("II:I"), 4, costly(10)},
 	// B can only be longer than A if it has leading zeros, but they must still be parsed.
-	{0xa1, "b-", opBytesMinus, proto("bb:b"), fullByteMathVersion, costByLongest(4, 1, 16, 2)},
+	{0xa1, "b-", opBytesMinus, proto("bb:b"), fullByteMathVersion, costByLongest(2, 1, 32, 2)},
 	{0xa2, "b/", opBytesDiv, proto("II:I"), 4, costly(20)},
 	{0xa2, "b/", opBytesDiv, proto("bb:b"), fullByteMathVersion, costByFn(bdivCost, bdivCostDoc)},
 	{0xa3, "b*", opBytesMul, proto("II:b"), 4, costly(20).typed(typeByteMath(maxByteMathSize * 2))},

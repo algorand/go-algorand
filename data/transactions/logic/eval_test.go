@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/binary"
@@ -5788,7 +5789,7 @@ func TestBytesMath(t *testing.T) {
 
 	testAccepts(t, "byte 0x01; byte 0x01; b+; byte 0x02; ==", 4)
 	testCost(t, "byte 0x01; byte 0x02; b+; byte 0x03; ==", 2+10+2, 6)
-	testCost(t, "byte 0x01; byte 0x02; b+; byte 0x03; ==", 2+5+2, fullByteMathVersion)
+	testCost(t, "byte 0x01; byte 0x02; b+; byte 0x03; ==", 2+3+2, fullByteMathVersion)
 	testAccepts(t, "byte 0x01FF; byte 0x01; b+; byte 0x0200; ==", 4)
 
 	effs := strings.Repeat("ff", 64)
@@ -5804,7 +5805,7 @@ func TestBytesMath(t *testing.T) {
 	p := fmt.Sprintf("byte 0x%s00; byte 0x10; b+; len; int 65; ==", effs)
 	testPanicRange(t, notrack(p), 4, fullByteMathVersion-1, "math attempted on large byte-array")
 	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
-	testCost(t, p, 2+9+3, fullByteMathVersion)
+	testCost(t, p, 2+5+3, fullByteMathVersion)
 
 	testAccepts(t, `byte 0x01; byte 0x01; b-; byte ""; ==`, 4)
 	testAccepts(t, "byte 0x0200; byte 0x01; b-; byte 0x01FF; ==", 4)
@@ -5816,7 +5817,7 @@ func TestBytesMath(t *testing.T) {
 	p = fmt.Sprintf("byte 0x%s00; byte 0x10; b-; len; int 65; ==", effs)
 	testPanicRange(t, notrack(p), 4, fullByteMathVersion-1, "math attempted on large byte-array")
 	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
-	testCost(t, p, 2+9+3, fullByteMathVersion)
+	testCost(t, p, 2+5+3, fullByteMathVersion)
 
 	testAccepts(t, "byte 0x10; byte 0x10; b*; byte 0x0100; ==", 4)
 	testAccepts(t, "byte 0x100000000000; byte 0x00; b*; byte b64(); ==", 4)
@@ -5837,7 +5838,7 @@ func TestBytesMath(t *testing.T) {
 	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
 
 	// b- charges for the longer input, even when it's B (with leading zeros)
-	testCost(t, "pushbytes 0x05; pushint 100; bzero; b-; pushbytes 0x05; b==", 5+(4+7), fullByteMathVersion)
+	testCost(t, "pushbytes 0x05; pushint 100; bzero; b-; pushbytes 0x05; b==", 5+(2+4), fullByteMathVersion)
 
 	// Division is charged by the lengths of the quotient and divisor, so
 	// equal-length operands are cheaper than a half-length divisor.
@@ -5907,15 +5908,15 @@ func TestCostByLongest(t *testing.T) {
 		testCost(t, "pushbytes 0x01; pushint 100; bzero; "+op+"; len; pushint 100; ==", 6+5, fullByteMathVersion)
 		testCost(t, "pushint 100; bzero; pushbytes 0x01; "+op+"; len; pushint 100; ==", 6+5, fullByteMathVersion)
 	}
-	// 4 + 1 per 16 bytes of 100 = 4 + 7
-	testCost(t, "pushbytes 0x01; pushint 100; bzero; b+; len; pushint 1; ==", 6+11, fullByteMathVersion)
-	testCost(t, "pushint 100; bzero; pushbytes 0x01; b+; len; pushint 1; ==", 6+11, fullByteMathVersion)
-	testCost(t, "pushbytes 0x01; pushint 100; bzero; b-; len; pushint 1; ==", 6+11, fullByteMathVersion)
+	// 2 + 1 per 32 bytes of 100 = 2 + 4
+	testCost(t, "pushbytes 0x01; pushint 100; bzero; b+; len; pushint 1; ==", 6+6, fullByteMathVersion)
+	testCost(t, "pushint 100; bzero; pushbytes 0x01; b+; len; pushint 1; ==", 6+6, fullByteMathVersion)
+	testCost(t, "pushbytes 0x01; pushint 100; bzero; b-; len; pushint 1; ==", 6+6, fullByteMathVersion)
 
 	a := assert.New(t)
 	bor, bplus := OpsByName[fullByteMathVersion]["b|"], OpsByName[fullByteMathVersion]["b+"]
 	a.Equal("1 + 1 per 32 bytes of the longer of A and B", bor.OpDetails.docCost(2, fullByteMathVersion))
-	a.Equal("4 + 1 per 16 bytes of the longer of A and B", bplus.OpDetails.docCost(2, fullByteMathVersion))
+	a.Equal("2 + 1 per 32 bytes of the longer of A and B", bplus.OpDetails.docCost(2, fullByteMathVersion))
 	three := costDescriptor{baseCost: 2, chunkCost: 3, chunkSize: 8, longestOf: 3}.check()
 	a.Equal("2 + 3 per 8 bytes of the longest of A, B and C", three.docCost(3))
 	a.Equal(2+3*2, three.compute([]stackValue{{Bytes: make([]byte, 9)}, {Bytes: make([]byte, 1)}, {}}))
@@ -5959,6 +5960,94 @@ func TestMulComplexity(t *testing.T) {
 			a.Equal(mulComplexity(la, lb), mulComplexity(lb, la))
 		}
 	}
+}
+
+// TestRapidAddSubBytes checks the word-at-a-time implementations of b+ and b-
+// against big.Int.
+func TestRapidAddSubBytes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Inputs of assorted lengths, made of runs that stress the code: leading
+	// zeros, long carries (0xff), long borrows (0x00), and arbitrary bytes.
+	draw := func(r *rapid.T, label string) []byte {
+		var out []byte
+		runs := rapid.IntRange(0, 4).Draw(r, label+"Runs")
+		for i := range runs {
+			n := rapid.IntRange(0, 70).Draw(r, fmt.Sprintf("%sLen%d", label, i))
+			switch rapid.IntRange(0, 2).Draw(r, fmt.Sprintf("%sKind%d", label, i)) {
+			case 0:
+				out = append(out, make([]byte, n)...)
+			case 1:
+				out = append(out, bytes.Repeat([]byte{0xff}, n)...)
+			default:
+				out = append(out, rapid.SliceOfN(rapid.Byte(), n, n).Draw(r, fmt.Sprintf("%sBytes%d", label, i))...)
+			}
+		}
+		return out
+	}
+
+	rapid.Check(t, func(r *rapid.T) {
+		a, b := draw(r, "a"), draw(r, "b")
+		x, y := new(big.Int).SetBytes(a), new(big.Int).SetBytes(b)
+
+		sum := addBytes(a, b)
+		require.NotNil(t, sum)
+		require.Equal(t, new(big.Int).Add(x, y).Bytes(), sum, "%x + %x", a, b)
+
+		diff, ok := subBytes(a, b)
+		want := new(big.Int).Sub(x, y)
+		require.Equal(t, want.Sign() >= 0, ok, "%x - %x", a, b)
+		if ok {
+			require.NotNil(t, diff)
+			require.Equal(t, want.Bytes(), diff, "%x - %x", a, b)
+		}
+	})
+}
+
+// TestRapidBitwise checks the word-at-a-time implementations of b|, b&, b^,
+// and b~ against byte-at-a-time versions.
+func TestRapidBitwise(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// pad left-pads x with zeros to n bytes, as the opcodes do
+	pad := func(x []byte, n int) []byte {
+		return append(make([]byte, n-len(x)), x...)
+	}
+
+	rapid.Check(t, func(r *rapid.T) {
+		a := rapid.SliceOfN(rapid.Byte(), 0, 100).Draw(r, "a")
+		b := rapid.SliceOfN(rapid.Byte(), 0, 100).Draw(r, "b")
+		n := max(len(a), len(b))
+		pa, pb := pad(a, n), pad(b, n)
+
+		for _, op := range []struct {
+			name string
+			fn   func(*EvalContext) error
+			byte func(x, y byte) byte
+		}{
+			{"b|", opBytesBitOr, func(x, y byte) byte { return x | y }},
+			{"b&", opBytesBitAnd, func(x, y byte) byte { return x & y }},
+			{"b^", opBytesBitXor, func(x, y byte) byte { return x ^ y }},
+		} {
+			want := make([]byte, n)
+			for i := range want {
+				want[i] = op.byte(pa[i], pb[i])
+			}
+			cx := &EvalContext{version: fullByteMathVersion, Stack: []stackValue{{Bytes: a}, {Bytes: b}}}
+			require.NoError(t, op.fn(cx))
+			require.Equal(t, want, cx.Stack[0].Bytes, "%x %s %x", a, op.name, b)
+		}
+
+		want := make([]byte, len(a))
+		for i := range want {
+			want[i] = ^a[i]
+		}
+		cx := &EvalContext{version: fullByteMathVersion, Stack: []stackValue{{Bytes: a}}}
+		require.NoError(t, opBytesBitNot(cx))
+		require.Equal(t, want, cx.Stack[0].Bytes, "b~ %x", a)
+	})
 }
 
 // TestRapidNonzero checks the chunked implementation of nonzero, and bitlen

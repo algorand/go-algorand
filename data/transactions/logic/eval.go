@@ -2456,16 +2456,26 @@ func opExpw(cx *EvalContext) error {
 	return nil
 }
 
-func byteMathOperands(cx *EvalContext) (*big.Int, *big.Int, error) {
+// checkByteMathOperands enforces the limit on operand length that applies
+// before fullByteMathVersion.
+func checkByteMathOperands(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	prev := last - 1
 
 	if cx.version < fullByteMathVersion {
 		if len(cx.Stack[last].Bytes) > maxByteMathSize || len(cx.Stack[prev].Bytes) > maxByteMathSize {
-			return nil, nil, errors.New("math attempted on large byte-array")
+			return errors.New("math attempted on large byte-array")
 		}
 	}
+	return nil
+}
 
+func byteMathOperands(cx *EvalContext) (*big.Int, *big.Int, error) {
+	if err := checkByteMathOperands(cx); err != nil {
+		return nil, nil, err
+	}
+	last := len(cx.Stack) - 1
+	prev := last - 1
 	rhs := getBig().SetBytes(cx.Stack[last].Bytes)
 	lhs := getBig().SetBytes(cx.Stack[prev].Bytes)
 	return lhs, rhs, nil
@@ -2480,28 +2490,135 @@ func byteMathResult(cx *EvalContext, result *big.Int) error {
 	return nil
 }
 
+// b+ and b- work directly on the big-endian bytes, a word at a time, rather
+// than converting to and from big.Int, which takes several times as long.
+// Their results match big.Int's Bytes(): no leading zeros, and empty (but not
+// nil) for zero.
+
 func opBytesPlus(cx *EvalContext) error {
-	lhs, rhs, err := byteMathOperands(cx)
-	if err != nil {
+	if err := checkByteMathOperands(cx); err != nil {
 		return err
 	}
-	lhs.Add(lhs, rhs)
-	putBig(rhs)
-	return byteMathResult(cx, lhs)
+	last := len(cx.Stack) - 1
+	prev := last - 1
+	cx.Stack[prev].Bytes = addBytes(cx.Stack[prev].Bytes, cx.Stack[last].Bytes)
+	cx.Stack = cx.Stack[:last]
+	return nil
 }
 
 func opBytesMinus(cx *EvalContext) error {
-	lhs, rhs, err := byteMathOperands(cx)
-	if err != nil {
+	if err := checkByteMathOperands(cx); err != nil {
 		return err
 	}
-	lhs.Sub(lhs, rhs)
-	putBig(rhs)
-	if lhs.Sign() < 0 {
-		putBig(lhs)
+	last := len(cx.Stack) - 1
+	prev := last - 1
+	diff, ok := subBytes(cx.Stack[prev].Bytes, cx.Stack[last].Bytes)
+	if !ok {
 		return errors.New("byte math would have negative result")
 	}
-	return byteMathResult(cx, lhs)
+	cx.Stack[prev].Bytes = diff
+	cx.Stack = cx.Stack[:last]
+	return nil
+}
+
+// addBytes returns the sum of the big-endian unsigned integers a and b.
+func addBytes(a, b []byte) []byte {
+	// The inputs may have leading zeros. They are processed like any other bytes,
+	// rather than skipped first: costs are based on the inputs' full lengths, so
+	// skipping them would only speed up cases that are already paid for. The
+	// results are trimmed at the end.
+
+	if len(a) < len(b) {
+		a, b = b, a
+	}
+	sum := make([]byte, len(a)+1) // room for a final carry
+	out := sum[1:]
+
+	// The loops consume a, b, and out from their ends, the low-order bytes.
+	// Taking each word from the end of a shrinking slice lets the compiler
+	// drop the bounds checks. The extra length tests in the loop conditions
+	// are always true, since len(out) == len(a) >= len(b), but the compiler
+	// needs them for the same reason.
+	var carry uint64
+	for len(b) >= 8 && len(a) >= 8 && len(out) >= 8 {
+		s, c := bits.Add64(binary.BigEndian.Uint64(a[len(a)-8:]), binary.BigEndian.Uint64(b[len(b)-8:]), carry)
+		binary.BigEndian.PutUint64(out[len(out)-8:], s)
+		carry = c
+		a, b, out = a[:len(a)-8], b[:len(b)-8], out[:len(out)-8]
+	}
+	for len(b) > 0 && len(a) > 0 && len(out) > 0 {
+		s := uint64(a[len(a)-1]) + uint64(b[len(b)-1]) + carry
+		out[len(out)-1] = byte(s)
+		carry = s >> 8
+		a, b, out = a[:len(a)-1], b[:len(b)-1], out[:len(out)-1]
+	}
+	// Only a remains. Propagate the carry into it, then copy the rest.
+	for carry != 0 && len(a) >= 8 && len(out) >= 8 {
+		s, c := bits.Add64(binary.BigEndian.Uint64(a[len(a)-8:]), 0, carry)
+		binary.BigEndian.PutUint64(out[len(out)-8:], s)
+		carry = c
+		a, out = a[:len(a)-8], out[:len(out)-8]
+	}
+	for carry != 0 && len(a) > 0 && len(out) > 0 {
+		s := uint64(a[len(a)-1]) + carry
+		out[len(out)-1] = byte(s)
+		carry = s >> 8
+		a, out = a[:len(a)-1], out[:len(out)-1]
+	}
+	copy(out, a)
+	sum[0] = byte(carry)
+	return trimZeros(sum)
+}
+
+// subBytes returns a - b for the big-endian unsigned integers a and b, or false
+// if b > a.
+func subBytes(a, b []byte) ([]byte, bool) {
+	diff := make([]byte, max(len(a), len(b)))
+	out := diff[len(diff)-len(a):] // a's part of diff
+
+	// As in addBytes, consume the slices from their low-order ends.
+	var borrow uint64
+	for len(b) >= 8 && len(a) >= 8 && len(out) >= 8 {
+		d, br := bits.Sub64(binary.BigEndian.Uint64(a[len(a)-8:]), binary.BigEndian.Uint64(b[len(b)-8:]), borrow)
+		binary.BigEndian.PutUint64(out[len(out)-8:], d)
+		borrow = br
+		a, b, out = a[:len(a)-8], b[:len(b)-8], out[:len(out)-8]
+	}
+	for len(b) > 0 && len(a) > 0 && len(out) > 0 {
+		d := uint64(a[len(a)-1]) - uint64(b[len(b)-1]) - borrow
+		out[len(out)-1] = byte(d)
+		borrow = (d >> 8) & 1
+		a, b, out = a[:len(a)-1], b[:len(b)-1], out[:len(out)-1]
+	}
+	for borrow != 0 && len(a) >= 8 && len(out) >= 8 {
+		d, br := bits.Sub64(binary.BigEndian.Uint64(a[len(a)-8:]), 0, borrow)
+		binary.BigEndian.PutUint64(out[len(out)-8:], d)
+		borrow = br
+		a, out = a[:len(a)-8], out[:len(out)-8]
+	}
+	for borrow != 0 && len(a) > 0 && len(out) > 0 {
+		d := uint64(a[len(a)-1]) - borrow
+		out[len(out)-1] = byte(d)
+		borrow = (d >> 8) & 1
+		a, out = a[:len(a)-1], out[:len(out)-1]
+	}
+	copy(out, a)
+
+	// A remaining borrow, or any nonzero byte of b beyond a's length, means
+	// b > a.
+	if borrow != 0 || nonzero(b) != nil {
+		return nil, false
+	}
+	return trimZeros(diff), true
+}
+
+// trimZeros removes leading zeros, returning an empty, but not nil, slice for
+// zero, as big.Int's Bytes() does. A nil slice would be a uint64 on the stack.
+func trimZeros(b []byte) []byte {
+	if trimmed := nonzero(b); trimmed != nil {
+		return trimmed
+	}
+	return b[:0]
 }
 
 func opBytesDiv(cx *EvalContext) error {
@@ -2847,25 +2964,19 @@ func opBytesBinaryLogicPrep(cx *EvalContext) ([]byte, []byte) {
 
 func opBytesBitOr(cx *EvalContext) error {
 	a, b := opBytesBinaryLogicPrep(cx)
-	for i := range a {
-		a[i] = a[i] | b[i]
-	}
+	orInto(a, b)
 	return nil
 }
 
 func opBytesBitAnd(cx *EvalContext) error {
 	a, b := opBytesBinaryLogicPrep(cx)
-	for i := range a {
-		a[i] = a[i] & b[i]
-	}
+	andInto(a, b)
 	return nil
 }
 
 func opBytesBitXor(cx *EvalContext) error {
 	a, b := opBytesBinaryLogicPrep(cx)
-	for i := range a {
-		a[i] = a[i] ^ b[i]
-	}
+	xorInto(a, b)
 	return nil
 }
 
@@ -2873,11 +2984,61 @@ func opBytesBitNot(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 
 	fresh := make([]byte, len(cx.Stack[last].Bytes))
-	for i, b := range cx.Stack[last].Bytes {
-		fresh[i] = ^b
-	}
+	notInto(fresh, cx.Stack[last].Bytes)
 	cx.Stack[last].Bytes = fresh
 	return nil
+}
+
+// The bitwise helpers below combine src into dst, which have the same length,
+// eight bytes at a time. Byte order does not matter for bitwise operations, so
+// they use little-endian loads and stores, which are plain loads and stores on
+// the usual platforms. They advance shrinking slices, so that the compiler can
+// drop bounds checks. Each is written out, rather than taking the operation as
+// a function, to avoid a function call per word.
+
+func orInto(dst, src []byte) {
+	for len(dst) >= 8 && len(src) >= 8 {
+		binary.LittleEndian.PutUint64(dst, binary.LittleEndian.Uint64(dst)|binary.LittleEndian.Uint64(src))
+		dst, src = dst[8:], src[8:]
+	}
+	for len(dst) > 0 && len(src) > 0 {
+		dst[0] |= src[0]
+		dst, src = dst[1:], src[1:]
+	}
+}
+
+func andInto(dst, src []byte) {
+	for len(dst) >= 8 && len(src) >= 8 {
+		binary.LittleEndian.PutUint64(dst, binary.LittleEndian.Uint64(dst)&binary.LittleEndian.Uint64(src))
+		dst, src = dst[8:], src[8:]
+	}
+	for len(dst) > 0 && len(src) > 0 {
+		dst[0] &= src[0]
+		dst, src = dst[1:], src[1:]
+	}
+}
+
+func xorInto(dst, src []byte) {
+	for len(dst) >= 8 && len(src) >= 8 {
+		binary.LittleEndian.PutUint64(dst, binary.LittleEndian.Uint64(dst)^binary.LittleEndian.Uint64(src))
+		dst, src = dst[8:], src[8:]
+	}
+	for len(dst) > 0 && len(src) > 0 {
+		dst[0] ^= src[0]
+		dst, src = dst[1:], src[1:]
+	}
+}
+
+// notInto sets dst to the bitwise inverse of src.
+func notInto(dst, src []byte) {
+	for len(dst) >= 8 && len(src) >= 8 {
+		binary.LittleEndian.PutUint64(dst, ^binary.LittleEndian.Uint64(src))
+		dst, src = dst[8:], src[8:]
+	}
+	for len(dst) > 0 && len(src) > 0 {
+		dst[0] = ^src[0]
+		dst, src = dst[1:], src[1:]
+	}
 }
 
 func opBytesZero(cx *EvalContext) error {
