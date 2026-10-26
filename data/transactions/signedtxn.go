@@ -92,12 +92,20 @@ func (s SignedTxn) GetEncodedLength() int {
 	return len(enc)
 }
 
-// GetEncodedLength returns the length in bytes of the encoded transaction
-func (s SignedTxnInBlock) GetEncodedLength() int {
+// GetEncodedLength returns the length in bytes of the encoded transaction. If
+// decode is set, it also checks that the encoding decodes, returning the
+// decode error if not.
+func (s SignedTxnInBlock) GetEncodedLength(decode bool) (int, error) {
 	buf := protocol.GetEncodingBuf()
 	enc := s.MarshalMsg(buf.Bytes())
 	defer protocol.PutEncodingBuf(buf.Update(enc))
-	return len(enc)
+	if decode {
+		var decoded SignedTxnInBlock
+		if err := protocol.Decode(enc, &decoded); err != nil {
+			return 0, err
+		}
+	}
+	return len(enc), nil
 }
 
 // Authorizer returns the address against which the signature/msig/lsig should be checked,
