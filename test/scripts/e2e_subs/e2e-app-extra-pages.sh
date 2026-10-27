@@ -79,7 +79,7 @@ fi
 
 # App create with extra pages, v4 teal
 RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${BIG_TEAL_V4_FILE}" --clear-prog "${BIG_TEAL_V4_FILE}" --extra-pages 3 --global-byteslices 1 2>&1 || true)
-EXPERROR="dynamic cost budget exceeded, executing intc_0: local program cost was 700"
+EXPERROR="dynamic cost budget exceeded, executing intc_0 (1): local program cost was 700"
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date "+${scriptname} FAIL the dynamic over budget application creation should fail %Y%m%d_%H%M%S"
     false

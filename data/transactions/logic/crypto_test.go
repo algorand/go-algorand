@@ -149,24 +149,24 @@ func TestMimc(t *testing.T) {
 	t.Parallel()
 
 	type PreImageTestVector struct {
-		PreImage      string
-		ShouldSucceed bool
+		PreImage string
+		Error    string // expected in the panic, or empty if the hash should succeed
 	}
 	preImageTestVectors := []PreImageTestVector{
 		{"0x",
-			false}, // zero-length input
+			"the input data cannot be empty"}, // zero-length input
 		{"0x23a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b5042535",
-			true}, // 32 bytes, less than modulus
+			""}, // 32 bytes, less than modulus
 		{"0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000002",
-			false}, // 32 bytes, more than modulus
+			"invalid mimc input"}, // 32 bytes, more than modulus
 		{"0xdeadf00d",
-			false}, // less than 32 byte
+			"the input data must be a multiple of 32 bytes"}, // less than 32 byte
 		{"0x183de351a72141d79c51a27d10405549c98302cb2536c5968deeb3cba635121723a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b504253530644e72e131a029b85045b68181585d2833e84879b9709143e1f593ef676981",
-			true}, // 32 bytes, less than modulus | 32 bytes, less than modulus | 32 bytes, less than modulus
+			""}, // 32 bytes, less than modulus | 32 bytes, less than modulus | 32 bytes, less than modulus
 		{"0x183de351a72141d79c51a27d10405549c98302cb2536c5968deeb3cba635121723a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b504253573eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000002",
-			false}, //  32 bytes, less than modulus | 32 bytes, less than modulus | 32 bytes, more than modulus
+			"invalid mimc input"}, //  32 bytes, less than modulus | 32 bytes, less than modulus | 32 bytes, more than modulus
 		{"0x183de351a72141d79c51a27d10405549c98302cb2536c5968deeb3cba635121723a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b5042535abba",
-			false}, // 32 bytes, less than modulus | 32 bytes, less than modulus | less than 32 bytes
+			"the input data must be a multiple of 32 bytes"}, // 32 bytes, less than modulus | 32 bytes, less than modulus | less than 32 bytes
 	}
 
 	circuitHashTestVectors := map[string][]string{
@@ -199,10 +199,10 @@ func TestMimc(t *testing.T) {
 mimc %s
 byte 0x%x
 ==`, preImageTestVector.PreImage, config, circuitHash)
-			if preImageTestVector.ShouldSucceed {
+			if preImageTestVector.Error == "" {
 				testAccepts(t, progText, 11)
 			} else {
-				testPanics(t, progText, 11)
+				testPanics(t, progText, 11, preImageTestVector.Error)
 			}
 		}
 	}
@@ -227,24 +227,24 @@ func TestPoseidon2(t *testing.T) {
 	t.Parallel()
 
 	type PreImageTestVector struct {
-		PreImage      string
-		ShouldSucceed bool
+		PreImage string
+		Error    string // expected in the panic, or empty if the hash should succeed
 	}
 	preImageTestVectors := []PreImageTestVector{
 		{"0x",
-			false}, // zero-length input
+			"the input data cannot be empty"}, // zero-length input
 		{"0x23a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b5042535",
-			true}, // 32 bytes, less than modulus
+			""}, // 32 bytes, less than modulus
 		{"0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000002",
-			false}, // 32 bytes, more than modulus
+			"invalid poseidon2 input"}, // 32 bytes, more than modulus
 		{"0xdeadf00d",
-			false}, // less than 32 byte
+			"the input data must be a multiple of 32 bytes"}, // less than 32 byte
 		{"0x183de351a72141d79c51a27d10405549c98302cb2536c5968deeb3cba635121723a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b504253530644e72e131a029b85045b68181585d2833e84879b9709143e1f593ef676981",
-			true}, // 32 bytes, less than modulus | 32 bytes, less than modulus | 32 bytes, less than modulus
+			""}, // 32 bytes, less than modulus | 32 bytes, less than modulus | 32 bytes, less than modulus
 		{"0x183de351a72141d79c51a27d10405549c98302cb2536c5968deeb3cba635121723a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b504253573eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000002",
-			false}, //  32 bytes, less than modulus | 32 bytes, less than modulus | 32 bytes, more than modulus
+			"invalid poseidon2 input"}, //  32 bytes, less than modulus | 32 bytes, less than modulus | 32 bytes, more than modulus
 		{"0x183de351a72141d79c51a27d10405549c98302cb2536c5968deeb3cba635121723a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b5042535abba",
-			false}, // 32 bytes, less than modulus | 32 bytes, less than modulus | less than 32 bytes
+			"the input data must be a multiple of 32 bytes"}, // 32 bytes, less than modulus | 32 bytes, less than modulus | less than 32 bytes
 	}
 
 	circuitHashTestVectors := map[string][]string{
@@ -277,10 +277,10 @@ func TestPoseidon2(t *testing.T) {
 poseidon2 %s
 byte 0x%x
 ==`, preImageTestVector.PreImage, config, circuitHash)
-			if preImageTestVector.ShouldSucceed {
+			if preImageTestVector.Error == "" {
 				testAccepts(t, progText, poseidon2Version)
 			} else {
-				testPanics(t, progText, poseidon2Version)
+				testPanics(t, progText, poseidon2Version, preImageTestVector.Error)
 			}
 		}
 	}
@@ -656,23 +656,23 @@ byte 0x%s
 	copy(pkTampered2, pk)
 
 	var decompressTests = []struct {
-		key  []byte
-		pass bool
+		key []byte
+		err string // expected in the panic, or empty if decompression should succeed
 	}{
-		{pk, true},
-		{pkTampered1, false},
-		{pkTampered2, false},
+		{pk, ""},
+		{pkTampered1, "invalid pubkey"},
+		{pkTampered2, "invalid pubkey"},
 	}
 	for i, test := range decompressTests {
 		innerSource := source
-		t.Run(fmt.Sprintf("decompress/pass=%v", test.pass), func(t *testing.T) {
+		t.Run(fmt.Sprintf("decompress/pass=%v", test.err == ""), func(t *testing.T) {
 			t.Parallel()
 			t.Log("decompressTests i", i)
 			src := fmt.Sprintf(innerSource, hex.EncodeToString(test.key), hex.EncodeToString(x), hex.EncodeToString(y))
-			if test.pass {
+			if test.err == "" {
 				testAccepts(t, src, 5)
 			} else {
-				testPanics(t, notrack(src), 5)
+				testPanics(t, notrack(src), 5, test.err)
 			}
 		})
 	}
@@ -811,23 +811,23 @@ byte 0x%s
 	copy(pkTampered2, pk)
 
 	var decompressTests = []struct {
-		key  []byte
-		pass bool
+		key []byte
+		err string // expected in the panic, or empty if decompression should succeed
 	}{
-		{pk, true},
-		{pkTampered1, false},
-		{pkTampered2, false},
+		{pk, ""},
+		{pkTampered1, "invalid compressed pubkey"},
+		{pkTampered2, "invalid compressed pubkey"},
 	}
 	for i, test := range decompressTests {
 		innerSource := source
-		t.Run(fmt.Sprintf("decompress/pass=%v", test.pass), func(t *testing.T) {
+		t.Run(fmt.Sprintf("decompress/pass=%v", test.err == ""), func(t *testing.T) {
 			t.Parallel()
 			t.Log("decompressTests i", i)
 			src := fmt.Sprintf(innerSource, hex.EncodeToString(test.key), hex.EncodeToString(x), hex.EncodeToString(y))
-			if test.pass {
+			if test.err == "" {
 				testAccepts(t, src, fidoVersion)
 			} else {
-				testPanics(t, notrack(src), fidoVersion)
+				testPanics(t, notrack(src), fidoVersion, test.err)
 			}
 		})
 	}

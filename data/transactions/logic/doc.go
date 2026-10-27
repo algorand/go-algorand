@@ -301,7 +301,8 @@ var opDescByName = map[string]OpDesc{
 	"b^":  {"A bitwise-xor B. A and B are zero-left extended to the greater of their lengths", "", nil, ""},
 	"b~":  {"A with all bits inverted", "", nil, ""},
 
-	"bsqrt": {"The largest integer I such that I^2 <= A. A and I are interpreted as big-endian unsigned integers", "", nil, ""},
+	"bsqrt":   {"The largest integer I such that I^2 <= A. A and I are interpreted as big-endian unsigned integers", "", nil, ""},
+	"bmodexp": {"A raised to the Bth power modulo C. A, B and C are interpreted as big-endian unsigned integers limited to 4096 bytes. Fail if C is zero, or if A and B are both zero.", "", nil, ""},
 
 	"log":         {"write A to log state of the current application", fmt.Sprintf("`log` fails if called more than MaxLogCalls times in a program, or if the sum of logged bytes exceeds %d bytes.", maxLogSize), nil, ""},
 	"itxn_begin":  {"begin preparation of a new inner transaction in a new transaction group", "`itxn_begin` initializes Sender to the application address; Fee to a default, described below; FirstValid/LastValid to the values in the invoking transaction, and all other fields to zero or empty values.\n\nThe default Fee is the additional amount that would make the group's fees sufficient so far: MinTxnFee times the fee usage of the transactions already in the group plus one base fee for this new transaction, less the fees already set and any credit from overpaying in earlier transactions. Because the new transaction's own cost is counted as a single base fee, extra costs from fields set later, such as a large note or program, are not reflected in the default. The group fee is checked and charged at `itxn_submit`, so changing Fee, setting fields that cost more, or adding transactions with `itxn_next` all change what is owed.", nil, ""},
@@ -385,7 +386,7 @@ func OpImmediateDetailsFromSpec(spec OpSpec) []OpImmediateDetails {
 var OpGroups = map[string][]string{
 	"Arithmetic":              {"+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divw", "divmodw", "expw"},
 	"Byte Array Manipulation": {"getbit", "setbit", "getbyte", "setbyte", "concat", "len", "substring", "substring3", "extract", "extract3", "extract_uint16", "extract_uint32", "extract_uint64", "replace2", "replace3", "base64_decode", "json_ref"},
-	"Byte Array Arithmetic":   {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%", "bsqrt"},
+	"Byte Array Arithmetic":   {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%", "bsqrt", "bmodexp"},
 	"Byte Array Logic":        {"b|", "b&", "b^", "b~"},
 	"Cryptography":            {"sha256", "keccak256", "sha512_256", "sha3_256", "sha512", "sumhash512", "falcon_verify", "ed25519verify", "ed25519verify_bare", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "vrf_verify", "ec_add", "ec_scalar_mul", "ec_pairing_check", "ec_multi_scalar_mul", "ec_subgroup_check", "ec_map_to", "mimc", "poseidon2"},
 	"Loading Values":          {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "pushints", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "pushbytess", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gloadss", "gaid", "gaids"},

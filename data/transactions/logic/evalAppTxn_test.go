@@ -1377,6 +1377,12 @@ func TestBigApplCreation(t *testing.T) {
                   int 1000; bzero; `+pages+`
                   int 901; bzero; `+pages+`
                  `+s, ep, "may not exceed 4000")
+
+			// Appending pages must not write into the bytes after a program
+			// that was sliced from a longer value.
+			TestApp(t, p+`byte 0x0102030405; dup; extract 0 2; `+basic+`
+                  byte 0xffff; `+pages+`
+                  pushbytes 0x0102030405; ==`, ep)
 		})
 	}
 }
