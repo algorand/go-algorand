@@ -1756,7 +1756,7 @@ func (cx *EvalContext) step() error {
 	// It's something like a 5-10% overhead on our simplest instructions to make
 	// the Cost() call without the FullCost.compute() short-circuit, even
 	// though Cost() tries to exit fast. Use BenchmarkUintMath to test changes.
-	opcost := deets.FullCost.compute(cx.Stack)
+	opcost := deets.FullCost.compute(cx.program, cx.pc, cx.Stack)
 	if opcost <= 0 {
 		opcost = deets.Cost(cx.program, cx.pc, cx.Stack)
 		if opcost <= 0 {
@@ -3041,13 +3041,20 @@ func notInto(dst, src []byte) {
 	}
 }
 
+// zeroes backs every bzero result. AVM byte-arrays are never modified in place,
+// so they can share it, which makes bzero O(1) and allocation free. It must
+// never be written.
+var zeroes [maxStringSize]byte
+
 func opBytesZero(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	length := cx.Stack[last].Uint
 	if length > maxStringSize {
 		return fmt.Errorf("bzero attempted to create a too large string")
 	}
-	cx.Stack[last].Bytes = make([]byte, length)
+	// Clipped so that an append to the result must reallocate, rather than
+	// write into zeroes.
+	cx.Stack[last].Bytes = slices.Clip(zeroes[:length])
 	return nil
 }
 

@@ -93,6 +93,15 @@ const f512Version = 14
 // is available. expw and divmodw also become cheaper.
 const fullByteMathVersion = 14
 
+// copyCostVersion is the first version in which opcodes that copy a whole
+// byte-array to modify part of it (setbyte, setbit, replace2, replace3) charge
+// for its length.
+const copyCostVersion = 14
+
+// matchCostVersion is the first version in which match charges for each of its
+// cases, since it may compare B to every one of them.
+const matchCostVersion = 14
+
 // LogicSigOffCurveVersion is the first AVM version where LogicSig programs
 // assembled by this package are expected to hash to an off-curve address.
 const LogicSigOffCurveVersion = 13
@@ -112,8 +121,11 @@ type costDescriptor struct {
 	// longestOf charges for the longest of this many arguments, starting at
 	// depth. Zero means just the argument at depth.
 	longestOf uint8
+	// countCost is charged for each unit of the count in the opcode's first
+	// immediate byte, such as the number of labels of a match.
+	countCost uint8
 	// dynamic is set by check(), so compute can tell with one test whether the
-	// cost depends on the stack.
+	// cost depends on the stack or immediates.
 	dynamic bool
 	// fn allows arbitrary cost functions. It _adds_ to costs from other fields
 	fn costFn
@@ -128,6 +140,7 @@ func (cd costDescriptor) Empty() bool {
 		cd.chunkSize == 0 &&
 		cd.depth == 0 &&
 		cd.longestOf == 0 &&
+		cd.countCost == 0 &&
 		cd.fn == nil &&
 		cd.doc == ""
 }
@@ -148,21 +161,27 @@ func (cd costDescriptor) check() costDescriptor {
 	if cd.fn != nil && cd.doc == "" {
 		panic(fmt.Sprintf("Cost fn is used without adding doc %+v", cd))
 	}
-	cd.dynamic = cd.chunkCost != 0 || cd.fn != nil
+	cd.dynamic = cd.chunkCost != 0 || cd.countCost != 0 || cd.fn != nil
 	return cd
 }
 
 // compute is called for every opcode executed, so it handles the common case,
-// a flat cost, in a way that is small enough to be inlined.
-func (cd *costDescriptor) compute(stack []stackValue) int {
+// a flat cost, in a way that is small enough to be inlined. pc locates the
+// opcode in program, so that its immediates can be found.
+func (cd *costDescriptor) compute(program []byte, pc int, stack []stackValue) int {
 	if !cd.dynamic {
 		return cd.baseCost
 	}
-	return cd.computeDynamic(stack)
+	return cd.computeDynamic(program, pc, stack)
 }
 
-func (cd *costDescriptor) computeDynamic(stack []stackValue) int {
+func (cd *costDescriptor) computeDynamic(program []byte, pc int, stack []stackValue) int {
 	cost := cd.baseCost
+	// The count may be missing, because cost is computed before checking that
+	// the immediates fit in the program. The error will be reported then.
+	if cd.countCost != 0 && pc+1 < len(program) {
+		cost += int(cd.countCost) * int(program[pc+1])
+	}
 	if cd.chunkCost != 0 && cd.chunkSize != 0 {
 		top := len(stack) - 1 - int(cd.depth)
 		count := len(stack[top].Bytes)
@@ -178,16 +197,26 @@ func (cd *costDescriptor) computeDynamic(stack []stackValue) int {
 	return cost
 }
 
-func (cd *costDescriptor) docCost(argLen int) string {
+// docCost describes the cost of an opcode with argLen stack arguments.
+// countName names what is counted by the opcode's first immediate.
+func (cd *costDescriptor) docCost(argLen int, countName string) string {
 	if cd.doc != "" {
 		return cd.doc
 	}
 	if cd.Empty() {
 		return ""
 	}
-	if cd.chunkCost == 0 {
-		return strconv.Itoa(cd.baseCost)
+	cost := strconv.Itoa(cd.baseCost)
+	if cd.chunkCost != 0 {
+		cost += " + " + cd.chunkDoc(argLen)
 	}
+	if cd.countCost != 0 {
+		cost += fmt.Sprintf(" + %d per %s", cd.countCost, countName)
+	}
+	return cost
+}
+
+func (cd *costDescriptor) chunkDoc(argLen int) string {
 	idxFromStart := argLen - int(cd.depth) - 1
 	stackArg := string(rune(int('A') + idxFromStart))
 	if cd.longestOf > 1 {
@@ -203,9 +232,9 @@ func (cd *costDescriptor) docCost(argLen int) string {
 		stackArg = which + strings.Join(names[:last], ", ") + " and " + names[last]
 	}
 	if cd.chunkSize == 1 {
-		return fmt.Sprintf("%d + %d per byte of %s", cd.baseCost, cd.chunkCost, stackArg)
+		return fmt.Sprintf("%d per byte of %s", cd.chunkCost, stackArg)
 	}
-	return fmt.Sprintf("%d + %d per %d bytes of %s", cd.baseCost, cd.chunkCost, cd.chunkSize, stackArg)
+	return fmt.Sprintf("%d per %d bytes of %s", cd.chunkCost, cd.chunkSize, stackArg)
 }
 
 // OpDetails records details such as non-standard costs, immediate arguments, or
@@ -236,7 +265,14 @@ type OpDetails struct {
 }
 
 func (d *OpDetails) docCost(argLen int, version uint64) string {
-	cost := d.FullCost.docCost(argLen)
+	countName := ""
+	if len(d.Immediates) > 0 {
+		countName = d.Immediates[0].Name
+		if d.Immediates[0].kind == immLabels {
+			countName = "label"
+		}
+	}
+	cost := d.FullCost.docCost(argLen, countName)
 	if cost != "" {
 		return cost
 	}
@@ -255,7 +291,7 @@ func (d *OpDetails) docCost(argLen int, version uint64) string {
 				if !ok || fs.Version() > version {
 					continue
 				}
-				fieldCostStrings = append(fieldCostStrings, fmt.Sprintf("%s=%s", name, imm.fieldCosts[fs.Field()].docCost(argLen)))
+				fieldCostStrings = append(fieldCostStrings, fmt.Sprintf("%s=%s", name, imm.fieldCosts[fs.Field()].docCost(argLen, "")))
 			}
 			cost = strings.Join(fieldCostStrings, "; ")
 		}
@@ -272,7 +308,7 @@ func (d *OpDetails) docCost(argLen int, version uint64) string {
 // arguments supplied). Cost is used at run-time. docCost returns similar
 // information in human-readable form.
 func (d *OpDetails) Cost(program []byte, pc int, stack []stackValue) int {
-	cost := d.FullCost.compute(stack)
+	cost := d.FullCost.compute(program, pc, stack)
 	if cost != 0 {
 		return cost
 	}
@@ -282,7 +318,7 @@ func (d *OpDetails) Cost(program []byte, pc int, stack []stackValue) int {
 	for i := range d.Immediates {
 		if d.Immediates[i].fieldCosts != nil {
 			lc := d.Immediates[i].fieldCosts[program[pc+1+i]]
-			cost += lc.compute(stack)
+			cost += lc.compute(program, pc, stack)
 		}
 	}
 	return cost
@@ -344,6 +380,13 @@ func (d OpDetails) costs(cost int) OpDetails {
 	return d
 }
 
+// costDoc replaces the generated documentation of the cost, for when the
+// generated text would be misleading.
+func (d OpDetails) costDoc(doc string) OpDetails {
+	d.FullCost.doc = doc
+	return d
+}
+
 func costByFn(cost costFn, doc string) OpDetails {
 	d := detDefault()
 	d.FullCost = costDescriptor{fn: cost, doc: doc}.check()
@@ -363,6 +406,13 @@ func (d OpDetails) only(m RunMode) OpDetails {
 
 func (d OpDetails) costByLength(initial, perChunk, chunkSize, depth int) OpDetails {
 	d.FullCost = costByLength(initial, perChunk, chunkSize, depth).FullCost
+	return d
+}
+
+// costByCount charges perCount for each unit of the count in the opcode's
+// first immediate byte.
+func (d OpDetails) costByCount(initial, perCount int) OpDetails {
+	d.FullCost = costDescriptor{baseCost: initial, countCost: narrow[uint8](perCount)}.check()
 	return d
 }
 
@@ -757,15 +807,20 @@ var OpSpecs = []OpSpec{
 	{0x52, "substring3", opSubstring3, proto("bii:b"), 2, detDefault()},
 	{0x53, "getbit", opGetBit, proto("ai:i"), 3, detDefault()},
 	{0x54, "setbit", opSetBit, proto("aii:a"), 3, typed(typeSetBit)},
+	{0x54, "setbit", opSetBit, proto("aii:a"), copyCostVersion,
+		typed(typeSetBit).costByLength(1, 1, 32, 2).costDoc("1 + 1 per 32 bytes of A, or 1 if A is a uint64")},
 	{0x55, "getbyte", opGetByte, proto("bi:i"), 3, detDefault()},
 	{0x56, "setbyte", opSetByte, proto("bii:b"), 3, detDefault()},
+	{0x56, "setbyte", opSetByte, proto("bii:b"), copyCostVersion, costByLength(1, 1, 32, 2)},
 	{0x57, "extract", opExtract, proto("b:b"), 5, immediates("s", "l")},
 	{0x58, "extract3", opExtract3, proto("bii:b"), 5, detDefault()},
 	{0x59, "extract_uint16", opExtract16Bits, proto("bi:i"), 5, detDefault()},
 	{0x5a, "extract_uint32", opExtract32Bits, proto("bi:i"), 5, detDefault()},
 	{0x5b, "extract_uint64", opExtract64Bits, proto("bi:i"), 5, detDefault()},
 	{0x5c, "replace2", opReplace2, proto("bb:b"), 7, immediates("s")},
+	{0x5c, "replace2", opReplace2, proto("bb:b"), copyCostVersion, immediates("s").costByLength(1, 1, 32, 1)},
 	{0x5d, "replace3", opReplace3, proto("bib:b"), 7, detDefault()},
+	{0x5d, "replace3", opReplace3, proto("bib:b"), copyCostVersion, costByLength(1, 1, 32, 2)},
 	{0x5e, "base64_decode", opBase64Decode, proto("b:b"), fidoVersion, field("e", &Base64Encodings).costByLength(1, 1, 16, 0)},
 	{0x5f, "json_ref", opJSONRef, proto("bb:a"), fidoVersion, field("r", &JSONRefTypes).costByLength(25, 2, 7, 1)},
 
@@ -821,12 +876,16 @@ var OpSpecs = []OpSpec{
 	{0x8c, "frame_bury", opFrameBury, proto("a:").stackExplain(opFrameBuryStackChange), fpVersion, immKinded(immInt8, "i").typed(typeFrameBury)},
 	{0x8d, "switch", opSwitch, proto("i:"), 8, detSwitch()},
 	{0x8e, "match", opMatch, proto("a:", "[A1, A2, ..., AN], B", "").stackExplain(opMatchStackChange), 8, detSwitch().typed(typeMatch).trust()},
+	{0x8e, "match", opMatch, proto("a:", "[A1, A2, ..., AN], B", "").stackExplain(opMatchStackChange), matchCostVersion,
+		detSwitch().typed(typeMatch).trust().costByCount(1, 2)},
 
 	// More math
 	{0x90, "shl", opShiftLeft, proto("ii:i"), 4, detDefault()},
 	{0x91, "shr", opShiftRight, proto("ii:i"), 4, detDefault()},
 	{0x92, "sqrt", opSqrt, proto("i:i"), 4, costly(4)},
 	{0x93, "bitlen", opBitLen, proto("a:i"), 4, detDefault()},
+	{0x93, "bitlen", opBitLen, proto("a:i"), fullByteMathVersion,
+		costByLength(1, 1, 32, 0).costDoc("1 + 1 per 32 bytes of A, or 1 if A is a uint64")},
 	{0x94, "exp", opExp, proto("ii:i"), 4, detDefault()},
 	{0x95, "expw", opExpw, proto("ii:ii"), 4, costly(10)},
 	{0x95, "expw", opExpw, proto("ii:ii"), fullByteMathVersion, detDefault()},
@@ -850,17 +909,17 @@ var OpSpecs = []OpSpec{
 	{0xa3, "b*", opBytesMul, proto("II:b"), 4, costly(20).typed(typeByteMath(maxByteMathSize * 2))},
 	{0xa3, "b*", opBytesMul, proto("bb:b"), fullByteMathVersion, costByFn(bmulCost, bmulCostDoc)},
 	{0xa4, "b<", opBytesLt, proto("II:T"), 4, detDefault()},
-	{0xa4, "b<", opBytesLt, proto("bb:T"), fullByteMathVersion, detDefault()},
+	{0xa4, "b<", opBytesLt, proto("bb:T"), fullByteMathVersion, costByLongest(1, 1, 32, 2)},
 	{0xa5, "b>", opBytesGt, proto("II:T"), 4, detDefault()},
-	{0xa5, "b>", opBytesGt, proto("bb:T"), fullByteMathVersion, detDefault()},
+	{0xa5, "b>", opBytesGt, proto("bb:T"), fullByteMathVersion, costByLongest(1, 1, 32, 2)},
 	{0xa6, "b<=", opBytesLe, proto("II:T"), 4, detDefault()},
-	{0xa6, "b<=", opBytesLe, proto("bb:T"), fullByteMathVersion, detDefault()},
+	{0xa6, "b<=", opBytesLe, proto("bb:T"), fullByteMathVersion, costByLongest(1, 1, 32, 2)},
 	{0xa7, "b>=", opBytesGe, proto("II:T"), 4, detDefault()},
-	{0xa7, "b>=", opBytesGe, proto("bb:T"), fullByteMathVersion, detDefault()},
+	{0xa7, "b>=", opBytesGe, proto("bb:T"), fullByteMathVersion, costByLongest(1, 1, 32, 2)},
 	{0xa8, "b==", opBytesEq, proto("II:T"), 4, detDefault()},
-	{0xa8, "b==", opBytesEq, proto("bb:T"), fullByteMathVersion, detDefault()},
+	{0xa8, "b==", opBytesEq, proto("bb:T"), fullByteMathVersion, costByLongest(1, 1, 32, 2)},
 	{0xa9, "b!=", opBytesNeq, proto("II:T"), 4, detDefault()},
-	{0xa9, "b!=", opBytesNeq, proto("bb:T"), fullByteMathVersion, detDefault()},
+	{0xa9, "b!=", opBytesNeq, proto("bb:T"), fullByteMathVersion, costByLongest(1, 1, 32, 2)},
 	{0xaa, "b%", opBytesModulo, proto("II:I"), 4, costly(20)},
 	{0xaa, "b%", opBytesModulo, proto("bb:b"), fullByteMathVersion, costByFn(bdivCost, bdivCostDoc)},
 	{0xab, "b|", opBytesBitOr, proto("bb:b"), 4, costly(6)},
@@ -1056,6 +1115,11 @@ var opsByOpcode [LogicVersion + 1][256]OpSpec
 // Callers must ensure the prefix entry's SubOps slice is not shared with
 // another version before calling (see the version-copy loop in init).
 func addToSubOps(table *[256]OpSpec, oi OpSpec) {
+	// compute() looks for the count right after the opcode byte, where a
+	// sub-opcode's own byte would be.
+	if oi.FullCost.countCost != 0 {
+		panic(fmt.Sprintf("%s: sub-opcodes cannot have count costs", oi.Name))
+	}
 	prefix := &table[oi.Opcode]
 	sub := int(oi.SubOpcode)
 	for sub >= len(prefix.SubOps) {
