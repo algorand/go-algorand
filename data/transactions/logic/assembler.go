@@ -1543,6 +1543,24 @@ func typeFalconVerify(pgm *ProgramKnowledge, args []token) (StackTypes, StackTyp
 	return StackTypes{StackBytes, StackBytes, NewStackType(avmBytes, static(uint64(fs.pubKeyLen)))}, nil, nil
 }
 
+// typeMLDSAVerify pins the signature and public key arguments to the lengths
+// required by the named parameter set, and bounds the context length.
+func typeMLDSAVerify(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, error) {
+	if len(args) != 1 {
+		return nil, nil, nil
+	}
+	fs, ok := mldsaConfigSpecByName[args[0].str]
+	if !ok {
+		return nil, nil, nil
+	}
+	return StackTypes{
+		StackBytes,
+		NewStackType(avmBytes, static(uint64(fs.params.SignatureSize()))),
+		NewStackType(avmBytes, static(uint64(fs.params.PublicKeySize()))),
+		NewStackType(avmBytes, bound(0, mldsaMaxContextSize)),
+	}, nil, nil
+}
+
 func typeTxField(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, error) {
 	if len(args) != 1 {
 		return nil, nil, nil
