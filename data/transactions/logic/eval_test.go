@@ -1102,10 +1102,10 @@ int 1
 
 	testAccepts(t, fmt.Sprintf(pattern, 1000, 8192378), 4)
 	testAccepts(t, fmt.Sprintf(pattern, 1082734200, 8192378), 4)
-	testAccepts(t, fmt.Sprintf(pattern, 1000, 8129387292378), 4)
-	testAccepts(t, fmt.Sprintf(pattern, 10278362800, 8192378), 4)
-	for i := 1; i < 100; i++ {
-		for j := 1; i < 100; i++ {
+	testAccepts(t, fmt.Sprintf(pattern, 1000, uint64(8129387292378)), 4)
+	testAccepts(t, fmt.Sprintf(pattern, uint64(10278362800), 8192378), 4)
+	for i := uint64(1); i < 100; i += 7 {
+		for j := uint64(1); j < 100; j += 11 {
 			testAccepts(t, fmt.Sprintf(pattern, i+j<<40, (i*j)<<40+j), 4)
 		}
 	}
