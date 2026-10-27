@@ -71,7 +71,7 @@ func TestPayAction(t *testing.T) {
 			Type:     "pay",
 			Sender:   addrs[7],
 			Receiver: proposer,
-			Amount:   1_000_000 * 1_000_000, // 1 million algos is surely an eligible amount
+			Amount:   uint64(1_000_000 * 1_000_000), // 1 million algos is surely an eligible amount
 		}, &txntest.Txn{
 			Type:            "keyreg",
 			Sender:          proposer,
@@ -177,7 +177,7 @@ func TestPayAction(t *testing.T) {
 			Type:     "pay",
 			Sender:   addrs[0],
 			Receiver: ai.Address(),
-			Amount:   10 * 1000 * 1000000, // account min balance, plus fees
+			Amount:   uint64(10 * 1000 * 1000000), // account min balance, plus fees
 		}
 		dl.fullBlock(&tenkalgos)
 		beforepay := micros(dl.t, dl.validator, ai.Address())

@@ -716,6 +716,9 @@ func doRepackCatchpoint(ctx context.Context, header CatchpointFileHeader, bigges
 			return err
 		}
 
+		if header.Size > int64(len(buf)) {
+			return fmt.Errorf("chunk %s is larger than the biggest chunk (%d bytes)", header.Name, len(buf))
+		}
 		n, err := io.ReadAtLeast(in, buf, int(header.Size))
 		if (err != nil) && (err != io.EOF) {
 			return err

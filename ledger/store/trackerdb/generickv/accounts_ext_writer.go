@@ -49,7 +49,7 @@ func (w *accountsWriter) TxtailNewRound(ctx context.Context, baseRound basics.Ro
 
 	// insert the new txTail's
 	for i, data := range roundData {
-		rnd := basics.Round(int(baseRound) + i)
+		rnd := baseRound + basics.Round(i)
 		key := txTailKey(rnd)
 		err := w.kvw.Set(key[:], data)
 		if err != nil {
@@ -231,7 +231,7 @@ func (w *accountsWriter) AccountsPutOnlineRoundParams(onlineRoundParamsData []le
 
 	// insert the round params
 	for i := range onlineRoundParamsData {
-		rnd := basics.Round(int(startRound) + i)
+		rnd := startRound + basics.Round(i)
 		raw := protocol.Encode(&onlineRoundParamsData[i])
 		key := onlineAccountRoundParamsKey(rnd)
 		err := w.kvw.Set(key[:], raw)

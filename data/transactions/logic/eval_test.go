@@ -1102,10 +1102,10 @@ int 1
 
 	testAccepts(t, fmt.Sprintf(pattern, 1000, 8192378), 4)
 	testAccepts(t, fmt.Sprintf(pattern, 1082734200, 8192378), 4)
-	testAccepts(t, fmt.Sprintf(pattern, 1000, 8129387292378), 4)
-	testAccepts(t, fmt.Sprintf(pattern, 10278362800, 8192378), 4)
-	for i := 1; i < 100; i++ {
-		for j := 1; i < 100; i++ {
+	testAccepts(t, fmt.Sprintf(pattern, 1000, uint64(8129387292378)), 4)
+	testAccepts(t, fmt.Sprintf(pattern, uint64(10278362800), 8192378), 4)
+	for i := uint64(1); i < 100; i += 7 {
+		for j := uint64(1); j < 100; j += 11 {
 			testAccepts(t, fmt.Sprintf(pattern, i+j<<40, (i*j)<<40+j), 4)
 		}
 	}
@@ -3821,6 +3821,38 @@ intc_1
 			ops.Program[7] = 0x7f
 			testLogicBytes(t, ops.Program, nil, "outside of program", "outside of program")
 		})
+	}
+}
+
+// TestBranchOffsetTruncation ensures that varint branch offsets too large for a
+// 32-bit int are rejected by both the evaluator and the disassembler, rather
+// than being truncated into a valid target.
+// Each offset's low 32 bits form a valid target, so a 32-bit node that
+// truncated with int(offset) would accept a program that 64-bit nodes reject.
+func TestBranchOffsetTruncation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	offsets := []int64{
+		1 << 32,       // truncates to 0: falls through to the next instruction
+		1<<32 + 2,     // truncates to 2: skips the pushint
+		-(1 << 32),    // truncates to 0: branches to itself
+		math.MaxInt64, // large enough to overflow cx.pc + offset on 64-bit
+		math.MinInt64,
+	}
+	for _, op := range []string{"b", "bz", "bnz", "callsub"} {
+		for _, offset := range offsets {
+			t.Run(fmt.Sprintf("%s/%d", op, offset), func(t *testing.T) {
+				t.Parallel()
+				// pushint 0; <op> <offset>; pushint 1; pushint 1
+				program := []byte{varintBranchVersion, 0x81, 0x00, OpsByName[varintBranchVersion][op].Opcode}
+				program = binary.AppendVarint(program, offset)
+				program = append(program, 0x81, 0x01, 0x81, 0x01)
+				testLogicBytes(t, program, nil, "outside of program", "outside of program")
+				_, err := Disassemble(program)
+				require.ErrorContains(t, err, "outside of program")
+			})
+		}
 	}
 }
 
