@@ -31,6 +31,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/config/bounds"
@@ -1764,8 +1765,8 @@ func (cx *EvalContext) step() error {
 	}
 
 	if opcost > cx.remainingBudget() {
-		return fmt.Errorf("dynamic cost budget exceeded, executing %s: local program cost was %d",
-			spec.Name, cx.cost)
+		return fmt.Errorf("dynamic cost budget exceeded, executing %s (%d): local program cost was %d",
+			spec.Name, opcost, cx.cost)
 	}
 
 	cx.cost += opcost
@@ -1885,7 +1886,7 @@ func (cx *EvalContext) checkStep() (cost int, err error) {
 	}
 	cost = deets.Cost(cx.program, cx.pc, blankStack)
 	if cost <= 0 {
-		return 0, fmt.Errorf("%s reported non-positive cost", spec.Name)
+		return 0, fmt.Errorf("%s reported non-positive cost %d", spec.Name, cost)
 	}
 	prevpc := cx.pc
 	if deets.check != nil {
@@ -1989,22 +1990,68 @@ func opAddw(cx *EvalContext) error {
 	return nil
 }
 
-func uint128(hi uint64, lo uint64) *big.Int {
-	whole := new(big.Int).SetUint64(hi)
-	whole.Lsh(whole, 64)
-	whole.Add(whole, new(big.Int).SetUint64(lo))
-	return whole
+// We always use big.Ints for a short time (one opcode) and then return them to
+// the pool. It is a fool's errand to try to get big.Ints to be allocated on the
+// stack because even if you manage it, their internal slice of Words must have
+// a backing store that ends up allocated on the heap.
+var bigIntPool = sync.Pool{
+	New: func() any {
+		return new(big.Int)
+	},
 }
 
-func opDivModwImpl(hiNum, loNum, hiDen, loDen uint64) (hiQuo uint64, loQuo uint64, hiRem uint64, loRem uint64) {
-	dividend := uint128(hiNum, loNum)
-	divisor := uint128(hiDen, loDen)
+func getBig() *big.Int {
+	return bigIntPool.Get().(*big.Int)
+}
 
-	quo, rem := new(big.Int).QuoRem(dividend, divisor, new(big.Int))
-	return new(big.Int).Rsh(quo, 64).Uint64(),
-		quo.Uint64(),
-		new(big.Int).Rsh(rem, 64).Uint64(),
-		rem.Uint64()
+func putBig(b *big.Int) {
+	bigIntPool.Put(b)
+}
+
+// divModwImpl divides one 128-bit number by another. The divisor must be
+// non-zero.
+func divModwImpl(hiNum, loNum, hiDen, loDen uint64) (hiQuo uint64, loQuo uint64, hiRem uint64, loRem uint64) {
+	if hiDen == 0 {
+		// Long division by a single word. bits.Div64 panics unless its high
+		// input is less than the divisor, so divide the high word first and
+		// carry its remainder into the low word's division. That first
+		// division is unneeded when the high word is already smaller.
+		rem := hiNum
+		if hiNum >= loDen {
+			hiQuo, rem = bits.Div64(0, hiNum, loDen)
+		}
+		loQuo, loRem = bits.Div64(rem, loNum, loDen)
+		return hiQuo, loQuo, 0, loRem
+	}
+
+	// The divisor is at least 2^64, so the quotient fits in one word. Estimate
+	// it by dividing by the divisor's top 64 bits (Hacker's Delight, divlu2).
+	// The estimate is at most one too large, so take one off, and fix it if
+	// that left it one too small.
+	shift := uint(bits.LeadingZeros64(hiDen))
+	topDen := hiDen<<shift | loDen>>(64-shift) // loDen>>64 is 0 in Go, so shift == 0 is fine
+	// Halving the dividend guarantees its high word is less than topDen, which
+	// has its top bit set, as bits.Div64 requires.
+	q, _ := bits.Div64(hiNum>>1, hiNum<<63|loNum>>1, topDen)
+	q >>= 63 - shift
+	if q != 0 {
+		q--
+	}
+
+	// Since q <= the true quotient, q * divisor < 2^128 and the subtraction
+	// can't go negative.
+	prodHi, prodLo := bits.Mul64(q, loDen)
+	prodHi += q * hiDen
+	var borrow uint64
+	loRem, borrow = bits.Sub64(loNum, prodLo, 0)
+	hiRem, _ = bits.Sub64(hiNum, prodHi, borrow)
+
+	if hiRem > hiDen || (hiRem == hiDen && loRem >= loDen) {
+		q++
+		loRem, borrow = bits.Sub64(loRem, loDen, 0)
+		hiRem, _ = bits.Sub64(hiRem, hiDen, borrow)
+	}
+	return 0, q, hiRem, loRem
 }
 
 func opDivModw(cx *EvalContext) error {
@@ -2016,7 +2063,7 @@ func opDivModw(cx *EvalContext) error {
 	loNum := loDen - 2
 	hiNum := loDen - 3
 	hiQuo, loQuo, hiRem, loRem :=
-		opDivModwImpl(cx.Stack[hiNum].Uint, cx.Stack[loNum].Uint, cx.Stack[hiDen].Uint, cx.Stack[loDen].Uint)
+		divModwImpl(cx.Stack[hiNum].Uint, cx.Stack[loNum].Uint, cx.Stack[hiDen].Uint, cx.Stack[loDen].Uint)
 	cx.Stack[hiNum].Uint = hiQuo
 	cx.Stack[loNum].Uint = loQuo
 	cx.Stack[hiDen].Uint = hiRem
@@ -2289,27 +2336,29 @@ func opSqrt(cx *EvalContext) error {
 	return nil
 }
 
+// bitlen returns the 1 based index of the highest set bit in the byte slice,
+// when thinking of the byteslice as a big-endian integer. (If the slice is
+// all zeros, it returns 0.)
+func bitlen(bytes []byte) int {
+	nz := nonzero(bytes)
+	if len(nz) == 0 {
+		return 0
+	}
+	return bits.Len8(nz[0]) + 8*(len(nz)-1)
+}
+
 func opBitLen(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	if cx.Stack[last].avmType() == avmUint64 {
 		cx.Stack[last].Uint = uint64(bits.Len64(cx.Stack[last].Uint))
 		return nil
 	}
-	length := len(cx.Stack[last].Bytes)
-	idx := 0
-	for i, b := range cx.Stack[last].Bytes {
-		if b != 0 {
-			idx = bits.Len8(b) + (8 * (length - i - 1))
-			break
-		}
-
-	}
+	cx.Stack[last].Uint = uint64(bitlen(cx.Stack[last].Bytes))
 	cx.Stack[last].Bytes = nil
-	cx.Stack[last].Uint = uint64(idx)
 	return nil
 }
 
-func opExpImpl(base uint64, exp uint64) (uint64, error) {
+func expImpl(base uint64, exp uint64) (uint64, error) {
 	// These checks are slightly repetive but the clarity of
 	// avoiding nested checks seems worth it.
 	if exp == 0 && base == 0 {
@@ -2343,7 +2392,7 @@ func opExp(cx *EvalContext) error {
 
 	exp := cx.Stack[last].Uint
 	base := cx.Stack[prev].Uint
-	val, err := opExpImpl(base, exp)
+	val, err := expImpl(base, exp)
 	if err != nil {
 		return err
 	}
@@ -2352,33 +2401,43 @@ func opExp(cx *EvalContext) error {
 	return nil
 }
 
-func opExpwImpl(base uint64, exp uint64) (*big.Int, error) {
+func expwImpl(base uint64, exp uint64) (hi uint64, lo uint64, err error) {
 	// These checks are slightly repetive but the clarity of
 	// avoiding nested checks seems worth it.
 	if exp == 0 && base == 0 {
-		return &big.Int{}, errors.New("0^0 is undefined")
+		return 0, 0, errors.New("0^0 is undefined")
 	}
 	if base == 0 {
-		return &big.Int{}, nil
+		return 0, 0, nil
 	}
 	if exp == 0 || base == 1 {
-		return new(big.Int).SetUint64(1), nil
+		return 0, 1, nil
 	}
 	// base is now at least 2, so exp can not be 128
 	if exp >= 128 {
-		return &big.Int{}, fmt.Errorf("%d^%d overflow", base, exp)
+		return 0, 0, fmt.Errorf("%d^%d overflow", base, exp)
 	}
 
-	answer := new(big.Int).SetUint64(base)
-	bigbase := new(big.Int).SetUint64(base)
-	// safe to cast exp, because it is known to fit in int (it's < 128)
-	for i := 1; i < int(exp); i++ {
-		answer.Mul(answer, bigbase)
-		if answer.BitLen() > 128 {
-			return &big.Int{}, fmt.Errorf("%d^%d overflow", base, exp)
+	// Left-to-right square-and-multiply. Each intermediate value is base raised
+	// to a prefix of exp's bits, which is no larger than base^exp, so any
+	// intermediate overflow means the final answer overflows too.
+	lo = 1
+	for i := bits.Len64(exp) - 1; i >= 0; i-- {
+		if hi != 0 { // squaring a value >= 2^64 can't fit in 128 bits
+			return 0, 0, fmt.Errorf("%d^%d overflow", base, exp)
+		}
+		hi, lo = bits.Mul64(lo, lo)
+		if exp&(1<<i) != 0 {
+			loCarry, newLo := bits.Mul64(lo, base)
+			top, hiProduct := bits.Mul64(hi, base)
+			newHi, carry := bits.Add64(hiProduct, loCarry, 0)
+			if top != 0 || carry != 0 {
+				return 0, 0, fmt.Errorf("%d^%d overflow", base, exp)
+			}
+			hi, lo = newHi, newLo
 		}
 	}
-	return answer, nil
+	return hi, lo, nil
 }
 
 func opExpw(cx *EvalContext) error {
@@ -2387,83 +2446,179 @@ func opExpw(cx *EvalContext) error {
 
 	exp := cx.Stack[last].Uint
 	base := cx.Stack[prev].Uint
-	val, err := opExpwImpl(base, exp)
+	hi, lo, err := expwImpl(base, exp)
 	if err != nil {
 		return err
 	}
-	hi := new(big.Int).Rsh(val, 64).Uint64()
-	lo := val.Uint64()
 
 	cx.Stack[prev].Uint = hi
 	cx.Stack[last].Uint = lo
 	return nil
 }
 
-func opBytesBinOp(cx *EvalContext, result *big.Int, op func(x, y *big.Int) *big.Int) error {
+func byteMathOperands(cx *EvalContext) (*big.Int, *big.Int, error) {
 	last := len(cx.Stack) - 1
 	prev := last - 1
 
-	if len(cx.Stack[last].Bytes) > maxByteMathSize || len(cx.Stack[prev].Bytes) > maxByteMathSize {
-		return errors.New("math attempted on large byte-array")
+	if cx.version < fullByteMathVersion {
+		if len(cx.Stack[last].Bytes) > maxByteMathSize || len(cx.Stack[prev].Bytes) > maxByteMathSize {
+			return nil, nil, errors.New("math attempted on large byte-array")
+		}
 	}
 
-	rhs := new(big.Int).SetBytes(cx.Stack[last].Bytes)
-	lhs := new(big.Int).SetBytes(cx.Stack[prev].Bytes)
-	op(lhs, rhs) // op's receiver has already been bound to result
-	if result.Sign() < 0 {
-		return errors.New("byte math would have negative result")
-	}
+	rhs := getBig().SetBytes(cx.Stack[last].Bytes)
+	lhs := getBig().SetBytes(cx.Stack[prev].Bytes)
+	return lhs, rhs, nil
+}
+
+func byteMathResult(cx *EvalContext, result *big.Int) error {
+	last := len(cx.Stack) - 1
+	prev := last - 1
 	cx.Stack[prev].Bytes = result.Bytes()
+	putBig(result)
 	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
 func opBytesPlus(cx *EvalContext) error {
-	result := new(big.Int)
-	return opBytesBinOp(cx, result, result.Add)
-}
-
-func opBytesMinus(cx *EvalContext) error {
-	result := new(big.Int)
-	return opBytesBinOp(cx, result, result.Sub)
-}
-
-func opBytesDiv(cx *EvalContext) error {
-	result := new(big.Int)
-	var inner error
-	checkDiv := func(x, y *big.Int) *big.Int {
-		if y.BitLen() == 0 {
-			inner = errors.New("division by zero")
-			return new(big.Int)
-		}
-		return result.Div(x, y)
-	}
-	err := opBytesBinOp(cx, result, checkDiv)
+	lhs, rhs, err := byteMathOperands(cx)
 	if err != nil {
 		return err
 	}
-	return inner
+	lhs.Add(lhs, rhs)
+	putBig(rhs)
+	return byteMathResult(cx, lhs)
+}
+
+func opBytesMinus(cx *EvalContext) error {
+	lhs, rhs, err := byteMathOperands(cx)
+	if err != nil {
+		return err
+	}
+	lhs.Sub(lhs, rhs)
+	putBig(rhs)
+	if lhs.Sign() < 0 {
+		putBig(lhs)
+		return errors.New("byte math would have negative result")
+	}
+	return byteMathResult(cx, lhs)
+}
+
+func opBytesDiv(cx *EvalContext) error {
+	lhs, rhs, err := byteMathOperands(cx)
+	if err != nil {
+		return err
+	}
+	if rhs.Sign() == 0 {
+		putBig(rhs)
+		putBig(lhs)
+		return errors.New("division by zero")
+	}
+	// QuoRem rather than Div, because Div allocates a temporary for the
+	// remainder. They agree because the operands are non-negative.
+	quo, rem := getBig().QuoRem(lhs, rhs, getBig())
+	putBig(lhs)
+	putBig(rhs)
+	putBig(rem)
+	return byteMathResult(cx, quo)
+}
+
+const bdivCostDoc = "10 + (1 + Q/16) * (8 + D/16) / 2 + 1 per 32 bytes of the longer of A and B, where Q = max(a - b, 0) and D = min(a, b), " +
+	"and a and b are the lengths of A and B without their leading zero bytes"
+
+// bdivCost is used for b/, b%, and within bmodexp. Long division does work
+// proportional to the length of the quotient times the length of the divisor,
+// so dividing equal-length numbers is cheap, and the worst case is a divisor
+// half as long as the dividend. The linear term covers parsing and allocation.
+func bdivCost(stack []stackValue) int {
+	last := len(stack) - 1
+	prev := last - 1
+	return divCost(stack[prev].Bytes, stack[last].Bytes)
+}
+
+// divCost is the cost of dividing a by b. Leading zeros do not make the
+// division any harder, so they count only toward the bytes parsed. If they
+// counted toward the divisor's length, padding the divisor with zeros to the
+// dividend's length would make an expensive division look cheap.
+func divCost(a, b []byte) int {
+	return divComplexity(len(nonzero(a)), len(nonzero(b)), max(len(a), len(b)))
+}
+
+// divComplexity is the cost of dividing a number of la significant bytes by
+// one of lb significant bytes, having parsed `parsed` bytes to get them.
+func divComplexity(la, lb, parsed int) int {
+	quotient := max(la-lb, 0)
+	divisor := min(la, lb)
+	return 10 + (1+quotient/16)*(8+divisor/16)/2 + basics.DivCeil(parsed, 32)
 }
 
 func opBytesMul(cx *EvalContext) error {
-	result := new(big.Int)
-	return opBytesBinOp(cx, result, result.Mul)
+	lhs, rhs, err := byteMathOperands(cx)
+	if err != nil {
+		return err
+	}
+	result := getBig().Mul(lhs, rhs) // lhs.Mul(lhs, rhs) would cause internal allocation
+	putBig(rhs)
+	putBig(lhs)
+	return byteMathResult(cx, result)
+}
+
+const bmulCostDoc = "(8 + len(A)/16) * (8 + len(B)/16) / 6. If both A and B are at least 512 bytes: 4 * max(len(A), len(B)) / 16 + (8 + len(A)/16) * (8 + len(B)/16) / 12"
+
+func bmulCost(stack []stackValue) int {
+	last := len(stack) - 1
+	prev := last - 1
+	return mulComplexity(len(stack[last].Bytes), len(stack[prev].Bytes))
+}
+
+func mulComplexity(la, lb int) int {
+	const chunk = 16
+	linear := 0
+	factor := 6
+	if min(la, lb) >= 512 {
+		// math/big uses Karatsuba multiplication for long inputs, so their
+		// cost grows more slowly than quadratically. The linear term keeps the
+		// cost continuous at the switch to the smaller quadratic term.
+		factor = 12
+		linear = 4 * max(la, lb) / chunk
+	}
+	return linear + (8+la/chunk)*(8+lb/chunk)/factor
 }
 
 func opBytesSqrt(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 
-	if len(cx.Stack[last].Bytes) > maxByteMathSize {
-		return errors.New("math attempted on large byte-array")
+	if cx.version < fullByteMathVersion {
+		if len(cx.Stack[last].Bytes) > maxByteMathSize {
+			return errors.New("math attempted on large byte-array")
+		}
 	}
 
-	val := new(big.Int).SetBytes(cx.Stack[last].Bytes)
-	val.Sqrt(val)
-	cx.Stack[last].Bytes = val.Bytes()
+	val := getBig().SetBytes(cx.Stack[last].Bytes)
+	result := getBig().Sqrt(val) // val.Sqrt(val) would cause internal allocation
+	putBig(val)
+	cx.Stack[last].Bytes = result.Bytes()
+	putBig(result)
 	return nil
 }
 
+func bsqrtCost(stack []stackValue) int {
+	last := len(stack) - 1
+	bytes := stack[last].Bytes
+	l := len(bytes)
+	chunks := l / 96
+	return 5 + chunks*chunks*bits.Len(uint(l)) + l
+}
+
+var zeroChunk [64]byte
+
+// nonzero returns b without its leading zero bytes, or nil if b is all zeros.
+// Byte strings may be 4096 bytes long, and comparing whole chunks with
+// bytes.Equal is several times faster than checking a byte at a time.
 func nonzero(b []byte) []byte {
+	for len(b) >= len(zeroChunk) && bytes.Equal(b[:len(zeroChunk)], zeroChunk[:]) {
+		b = b[len(zeroChunk):]
+	}
 	for i := range b {
 		if b[i] != 0 {
 			return b[i:]
@@ -2476,8 +2631,10 @@ func opBytesLt(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	prev := last - 1
 
-	if len(cx.Stack[last].Bytes) > maxByteMathSize || len(cx.Stack[prev].Bytes) > maxByteMathSize {
-		return errors.New("math attempted on large byte-array")
+	if cx.version < fullByteMathVersion {
+		if len(cx.Stack[last].Bytes) > maxByteMathSize || len(cx.Stack[prev].Bytes) > maxByteMathSize {
+			return errors.New("math attempted on large byte-array")
+		}
 	}
 
 	rhs := nonzero(cx.Stack[last].Bytes)
@@ -2521,8 +2678,10 @@ func opBytesEq(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	prev := last - 1
 
-	if len(cx.Stack[last].Bytes) > maxByteMathSize || len(cx.Stack[prev].Bytes) > maxByteMathSize {
-		return errors.New("math attempted on large byte-array")
+	if cx.version < fullByteMathVersion {
+		if len(cx.Stack[last].Bytes) > maxByteMathSize || len(cx.Stack[prev].Bytes) > maxByteMathSize {
+			return errors.New("math attempted on large byte-array")
+		}
 	}
 
 	rhs := nonzero(cx.Stack[last].Bytes)
@@ -2541,21 +2700,120 @@ func opBytesNeq(cx *EvalContext) error {
 	return opNot(cx)
 }
 
-func opBytesModulo(cx *EvalContext) error {
-	result := new(big.Int)
-	var inner error
-	checkMod := func(x, y *big.Int) *big.Int {
-		if y.BitLen() == 0 {
-			inner = errors.New("modulo by zero")
-			return new(big.Int)
-		}
-		return result.Mod(x, y)
+func opBytesModExp(cx *EvalContext) error {
+	last := len(cx.Stack) - 1 // z
+	prev := last - 1          // y
+	pprev := last - 2         // x
+
+	z := getBig().SetBytes(cx.Stack[last].Bytes)
+	if z.Sign() == 0 {
+		putBig(z)
+		return errors.New("modulo by zero")
 	}
-	err := opBytesBinOp(cx, result, checkMod)
+	y := getBig().SetBytes(cx.Stack[prev].Bytes)
+	x := getBig().SetBytes(cx.Stack[pprev].Bytes)
+	// big.Int.Exp treats 0^0 as 1, but exp and expw consider it undefined.
+	if x.Sign() == 0 && y.Sign() == 0 {
+		putBig(x)
+		putBig(y)
+		putBig(z)
+		return errors.New("0^0 is undefined")
+	}
+	result := getBig().Exp(x, y, z)
+	putBig(x)
+	putBig(y)
+	putBig(z)
+	cx.Stack[pprev].Bytes = result.Bytes()
+	putBig(result)
+
+	cx.Stack = cx.Stack[:prev]
+	return nil
+}
+
+// onesCount returns the number of set bits in a byte slice
+func onesCount(bytes []byte) int {
+	n := 0
+	for _, b := range bytes {
+		n += bits.OnesCount8(b)
+	}
+	return n
+}
+
+// modMulComplexity is the cost of one step of modular exponentiation (roughly,
+// a modular multiplication) with a modulus of length lm. It is quadratic in the
+// number of words because math/big's Montgomery multiplication does not use
+// Karatsuba.
+func modMulComplexity(lm int) int {
+	w := basics.DivCeil(lm, 8)
+	return 2 + 2*w + w*w/10
+}
+
+const bmodexpCostDoc = "10 + 1 per 32 bytes of A, B, and C, plus a cost that depends on bitlen(B). Let S = 2 + 2W + W^2/10, where W = len(C)/8, rounded up. " +
+	"If bitlen(B) == 0, nothing more. " +
+	"If bitlen(B) == 1, the cost of A b% C. " +
+	"If bitlen(B) <= 64, (bitlen(B) + popcount(B)) * (S + 2), plus, if len(A) > len(C), popcount(B) * (1 + (len(A)-len(C))/8) * (1 + len(C)/8) / 2 + 3 * (A b* A) + (2*len(A) b% C). " +
+	"Otherwise, (64 * ceil(bitlen(B)/64) + 16) * S + (A b% C). " +
+	"Costs in parentheses are the costs of those operations on inputs of those lengths. " +
+	"Like b% itself, the b% terms are based on the lengths of A and C without their leading zero bytes."
+
+// bmodexpCost follows the algorithms used by math/big's Int.Exp. For
+// exponents of a single word, it squares and reduces for each bit of the
+// exponent, and multiplies by the base for each set bit. The base is not
+// reduced first, so a base longer than the modulus is expensive. For longer
+// exponents, it reduces the base, then uses windowed Montgomery
+// multiplication, which processes every bit of each exponent word, after
+// precomputing 16 powers of the base.
+func bmodexpCost(stack []stackValue) int {
+	mod := len(stack) - 1
+	exp := mod - 1
+	base := mod - 2
+
+	lb := len(stack[base].Bytes)
+	le := len(stack[exp].Bytes)
+	lm := len(stack[mod].Bytes)
+	expBits := bitlen(stack[exp].Bytes)
+
+	cost := 10 + basics.DivCeil(lb+le+lm, 32)
+	switch {
+	case expBits == 0:
+		return cost
+	case expBits == 1:
+		return cost + divCost(stack[base].Bytes, stack[mod].Bytes)
+	case expBits <= 64:
+		ones := onesCount(stack[exp].Bytes)
+		cost += (expBits + ones) * (2 + modMulComplexity(lm))
+		if lb > lm {
+			// The first step squares the full base, and every set bit
+			// multiplies by it. As in divCost, the division is charged by
+			// significant lengths.
+			sigBase, sigMod := len(nonzero(stack[base].Bytes)), len(nonzero(stack[mod].Bytes))
+			cost += 3*mulComplexity(lb, lb) + divComplexity(2*sigBase, sigMod, 2*lb)
+			cost += ones * (1 + (lb-lm)/8) * (1 + lm/8) / 2
+		}
+		return cost
+	default:
+		steps := 64*basics.DivCeil(expBits, 64) + 16
+		return cost + divCost(stack[base].Bytes, stack[mod].Bytes) + steps*modMulComplexity(lm)
+	}
+}
+
+func opBytesModulo(cx *EvalContext) error {
+	lhs, rhs, err := byteMathOperands(cx)
 	if err != nil {
 		return err
 	}
-	return inner
+	if rhs.Sign() == 0 {
+		putBig(rhs)
+		putBig(lhs)
+		return errors.New("modulo by zero")
+	}
+	// QuoRem rather than Mod, because Mod allocates a temporary for the
+	// quotient. They agree because the operands are non-negative.
+	quo, rem := getBig().QuoRem(lhs, rhs, getBig())
+	putBig(lhs)
+	putBig(rhs)
+	putBig(quo)
+	return byteMathResult(cx, rem)
 }
 
 func zpad(smaller []byte, size int) []byte {
@@ -2951,6 +3209,10 @@ func branchTargetVarint(cx *EvalContext) (target int, instrSize int, err error) 
 			return 0, 0, fmt.Errorf("program ends without branch target")
 		}
 		return 0, 0, fmt.Errorf("branch offset varint overflows int64")
+	}
+	// Reject offsets outside program, considering potential 32-bit int.
+	if offset > int64(len(cx.program)) || offset < -int64(len(cx.program)) {
+		return 0, 0, fmt.Errorf("branch offset %d outside of program", offset)
 	}
 	instrSize = 1 + bytesRead
 	// Negative offsets are back-jumps measured from the start of the
@@ -3687,11 +3949,11 @@ const (
 	srcInnerGroup
 )
 
-// opTxnImpl implements all of the txn variants.  Each form of txn opcode should
+// txnImpl implements all of the txn variants.  Each form of txn opcode should
 // be able to get its work done with one call here, after collecting the args in
 // the most straightforward way possible. They ought to do no error checking, so
 // that it is all collected here.
-func (cx *EvalContext) opTxnImpl(gi uint64, src txnSource, field TxnField, ai uint64, expectArray bool) (sv stackValue, err error) {
+func (cx *EvalContext) txnImpl(gi uint64, src txnSource, field TxnField, ai uint64, expectArray bool) (sv stackValue, err error) {
 	fs, err := cx.fetchField(field, expectArray)
 	if err != nil {
 		return sv, err
@@ -3733,7 +3995,7 @@ func opTxn(cx *EvalContext) error {
 	gi := uint64(cx.groupIndex)
 	field := TxnField(cx.program[cx.pc+1])
 
-	sv, err := cx.opTxnImpl(gi, srcGroup, field, 0, false)
+	sv, err := cx.txnImpl(gi, srcGroup, field, 0, false)
 	if err != nil {
 		return err
 	}
@@ -3747,7 +4009,7 @@ func opTxna(cx *EvalContext) error {
 	field := TxnField(cx.program[cx.pc+1])
 	ai := uint64(cx.program[cx.pc+2])
 
-	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
+	sv, err := cx.txnImpl(gi, srcGroup, field, ai, true)
 	if err != nil {
 		return err
 	}
@@ -3763,7 +4025,7 @@ func opTxnas(cx *EvalContext) error {
 	field := TxnField(cx.program[cx.pc+1])
 	ai := cx.Stack[last].Uint
 
-	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
+	sv, err := cx.txnImpl(gi, srcGroup, field, ai, true)
 	if err != nil {
 		return err
 	}
@@ -3776,7 +4038,7 @@ func opGtxn(cx *EvalContext) error {
 	gi := uint64(cx.program[cx.pc+1])
 	field := TxnField(cx.program[cx.pc+2])
 
-	sv, err := cx.opTxnImpl(gi, srcGroup, field, 0, false)
+	sv, err := cx.txnImpl(gi, srcGroup, field, 0, false)
 	if err != nil {
 		return err
 	}
@@ -3790,7 +4052,7 @@ func opGtxna(cx *EvalContext) error {
 	field := TxnField(cx.program[cx.pc+2])
 	ai := uint64(cx.program[cx.pc+3])
 
-	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
+	sv, err := cx.txnImpl(gi, srcGroup, field, ai, true)
 	if err != nil {
 		return err
 	}
@@ -3806,7 +4068,7 @@ func opGtxnas(cx *EvalContext) error {
 	field := TxnField(cx.program[cx.pc+2])
 	ai := cx.Stack[last].Uint
 
-	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
+	sv, err := cx.txnImpl(gi, srcGroup, field, ai, true)
 	if err != nil {
 		return err
 	}
@@ -3821,7 +4083,7 @@ func opGtxns(cx *EvalContext) error {
 	gi := cx.Stack[last].Uint
 	field := TxnField(cx.program[cx.pc+1])
 
-	sv, err := cx.opTxnImpl(gi, srcGroup, field, 0, false)
+	sv, err := cx.txnImpl(gi, srcGroup, field, 0, false)
 	if err != nil {
 		return err
 	}
@@ -3837,7 +4099,7 @@ func opGtxnsa(cx *EvalContext) error {
 	field := TxnField(cx.program[cx.pc+1])
 	ai := uint64(cx.program[cx.pc+2])
 
-	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
+	sv, err := cx.txnImpl(gi, srcGroup, field, ai, true)
 	if err != nil {
 		return err
 	}
@@ -3854,7 +4116,7 @@ func opGtxnsas(cx *EvalContext) error {
 	field := TxnField(cx.program[cx.pc+1])
 	ai := cx.Stack[last].Uint
 
-	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
+	sv, err := cx.txnImpl(gi, srcGroup, field, ai, true)
 	if err != nil {
 		return err
 	}
@@ -3867,7 +4129,7 @@ func opGtxnsas(cx *EvalContext) error {
 func opItxn(cx *EvalContext) error {
 	field := TxnField(cx.program[cx.pc+1])
 
-	sv, err := cx.opTxnImpl(0, srcInner, field, 0, false)
+	sv, err := cx.txnImpl(0, srcInner, field, 0, false)
 	if err != nil {
 		return err
 	}
@@ -3879,7 +4141,7 @@ func opItxna(cx *EvalContext) error {
 	field := TxnField(cx.program[cx.pc+1])
 	ai := uint64(cx.program[cx.pc+2])
 
-	sv, err := cx.opTxnImpl(0, srcInner, field, ai, true)
+	sv, err := cx.txnImpl(0, srcInner, field, ai, true)
 	if err != nil {
 		return err
 	}
@@ -3894,7 +4156,7 @@ func opItxnas(cx *EvalContext) error {
 	field := TxnField(cx.program[cx.pc+1])
 	ai := cx.Stack[last].Uint
 
-	sv, err := cx.opTxnImpl(0, srcInner, field, ai, true)
+	sv, err := cx.txnImpl(0, srcInner, field, ai, true)
 	if err != nil {
 		return err
 	}
@@ -3937,7 +4199,7 @@ func opGitxn(cx *EvalContext) error {
 	gi := uint64(cx.program[cx.pc+1])
 	field := TxnField(cx.program[cx.pc+2])
 
-	sv, err := cx.opTxnImpl(gi, srcInnerGroup, field, 0, false)
+	sv, err := cx.txnImpl(gi, srcInnerGroup, field, 0, false)
 	if err != nil {
 		return err
 	}
@@ -3951,7 +4213,7 @@ func opGitxna(cx *EvalContext) error {
 	field := TxnField(cx.program[cx.pc+2])
 	ai := uint64(cx.program[cx.pc+3])
 
-	sv, err := cx.opTxnImpl(gi, srcInnerGroup, field, ai, true)
+	sv, err := cx.txnImpl(gi, srcInnerGroup, field, ai, true)
 	if err != nil {
 		return err
 	}
@@ -3967,7 +4229,7 @@ func opGitxnas(cx *EvalContext) error {
 	field := TxnField(cx.program[cx.pc+2])
 	ai := cx.Stack[last].Uint
 
-	sv, err := cx.opTxnImpl(gi, srcInnerGroup, field, ai, true)
+	sv, err := cx.txnImpl(gi, srcInnerGroup, field, ai, true)
 	if err != nil {
 		return err
 	}
@@ -3976,7 +4238,7 @@ func opGitxnas(cx *EvalContext) error {
 	return nil
 }
 
-func opGaidImpl(cx *EvalContext, giw uint64, opName string) (sv stackValue, err error) {
+func gaidImpl(cx *EvalContext, giw uint64, opName string) (sv stackValue, err error) {
 	if giw >= uint64(len(cx.TxnGroup)) {
 		return sv, fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, giw, len(cx.TxnGroup))
 	}
@@ -4003,7 +4265,7 @@ func opGaidImpl(cx *EvalContext, giw uint64, opName string) (sv stackValue, err 
 
 func opGaid(cx *EvalContext) error {
 	gi := uint64(cx.program[cx.pc+1])
-	sv, err := opGaidImpl(cx, gi, "gaid")
+	sv, err := gaidImpl(cx, gi, "gaid")
 	if err != nil {
 		return err
 	}
@@ -4016,7 +4278,7 @@ func opGaids(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	gi := cx.Stack[last].Uint
 
-	sv, err := opGaidImpl(cx, gi, "gaids")
+	sv, err := gaidImpl(cx, gi, "gaids")
 	if err != nil {
 		return err
 	}
@@ -4195,7 +4457,7 @@ func opStores(cx *EvalContext) error {
 	return nil
 }
 
-func opGloadImpl(cx *EvalContext, gi int, scratchIdx byte, opName string) (stackValue, error) {
+func gloadImpl(cx *EvalContext, gi int, scratchIdx byte, opName string) (stackValue, error) {
 	var none stackValue
 	if gi >= len(cx.TxnGroup) {
 		return none, fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, gi, len(cx.TxnGroup))
@@ -4225,7 +4487,7 @@ func opGloadImpl(cx *EvalContext, gi int, scratchIdx byte, opName string) (stack
 func opGload(cx *EvalContext) error {
 	gi := int(cx.program[cx.pc+1])
 	scratchIdx := cx.program[cx.pc+2]
-	scratchValue, err := opGloadImpl(cx, gi, scratchIdx, "gload")
+	scratchValue, err := gloadImpl(cx, gi, scratchIdx, "gload")
 	if err != nil {
 		return err
 	}
@@ -4241,7 +4503,7 @@ func opGloads(cx *EvalContext) error {
 		return fmt.Errorf("gloads lookup TxnGroup[%d] but it only has %d", gi, len(cx.TxnGroup))
 	}
 	scratchIdx := cx.program[cx.pc+1]
-	scratchValue, err := opGloadImpl(cx, int(gi), scratchIdx, "gloads")
+	scratchValue, err := gloadImpl(cx, int(gi), scratchIdx, "gloads")
 	if err != nil {
 		return err
 	}
@@ -4262,7 +4524,7 @@ func opGloadss(cx *EvalContext) error {
 	if scratchIdx >= 256 {
 		return fmt.Errorf("gloadss scratch index >= 256 (%d)", scratchIdx)
 	}
-	scratchValue, err := opGloadImpl(cx, int(gi), byte(scratchIdx), "gloadss")
+	scratchValue, err := gloadImpl(cx, int(gi), byte(scratchIdx), "gloadss")
 	if err != nil {
 		return err
 	}
@@ -4772,7 +5034,7 @@ func opAppLocalGet(cx *EvalContext) error {
 
 	key := cx.Stack[last].Bytes
 
-	result, _, err := opAppLocalGetImpl(cx, 0, key, cx.Stack[prev])
+	result, _, err := appLocalGetImpl(cx, 0, key, cx.Stack[prev])
 	if err != nil {
 		return err
 	}
@@ -4790,7 +5052,7 @@ func opAppLocalGetEx(cx *EvalContext) error {
 	key := cx.Stack[last].Bytes
 	appID := cx.Stack[prev].Uint
 
-	result, ok, err := opAppLocalGetImpl(cx, appID, key, cx.Stack[pprev])
+	result, ok, err := appLocalGetImpl(cx, appID, key, cx.Stack[pprev])
 	if err != nil {
 		return err
 	}
@@ -4801,7 +5063,7 @@ func opAppLocalGetEx(cx *EvalContext) error {
 	return nil
 }
 
-func opAppLocalGetImpl(cx *EvalContext, appID uint64, key []byte, acct stackValue) (result stackValue, ok bool, err error) {
+func appLocalGetImpl(cx *EvalContext, appID uint64, key []byte, acct stackValue) (result stackValue, ok bool, err error) {
 	addr, app, accountIdx, err := cx.localsReference(acct, appID)
 	if err != nil {
 		return
@@ -4818,7 +5080,7 @@ func opAppLocalGetImpl(cx *EvalContext, appID uint64, key []byte, acct stackValu
 	return
 }
 
-func opAppGetGlobalStateImpl(cx *EvalContext, appIndex uint64, key []byte) (result stackValue, ok bool, err error) {
+func appGetGlobalStateImpl(cx *EvalContext, appIndex uint64, key []byte) (result stackValue, ok bool, err error) {
 	app, err := cx.appReference(appIndex, true)
 	if err != nil {
 		return
@@ -4840,7 +5102,7 @@ func opAppGlobalGet(cx *EvalContext) error {
 
 	key := cx.Stack[last].Bytes
 
-	result, _, err := opAppGetGlobalStateImpl(cx, 0, key)
+	result, _, err := appGetGlobalStateImpl(cx, 0, key)
 	if err != nil {
 		return err
 	}
@@ -4855,7 +5117,7 @@ func opAppGlobalGetEx(cx *EvalContext) error {
 
 	key := cx.Stack[last].Bytes
 
-	result, ok, err := opAppGetGlobalStateImpl(cx, cx.Stack[prev].Uint, key)
+	result, ok, err := appGetGlobalStateImpl(cx, cx.Stack[prev].Uint, key)
 	if err != nil {
 		return err
 	}
@@ -5635,6 +5897,9 @@ func (cx *EvalContext) availableAsset(aid basics.AssetIndex) bool {
 	if slices.Contains(cx.txn.Txn.ForeignAssets, aid) {
 		return true
 	}
+	if slices.Contains(cx.txn.Txn.ForeignAssets, aid) {
+		return true
+	}
 	// or was created in group
 	if cx.version >= createdResourcesVersion {
 		if _, ok := cx.available.createdAsas[aid]; ok {
@@ -5878,13 +6143,17 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		if len(sv.Bytes) > maxPossible {
 			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
 		}
-		txn.ApprovalProgram = slices.Clone(sv.Bytes)
+		// Limit the capacity because ApprovalProgramPages appends to this
+		// slice, which would overwrite the bytes beyond sv.Bytes if it was
+		// sliced from a longer value. With no spare capacity, append copies.
+		txn.ApprovalProgram = slices.Clip(sv.Bytes)
 	case ClearStateProgram:
 		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxAbsoluteExtraProgramPages)
 		if len(sv.Bytes) > maxPossible {
 			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
 		}
-		txn.ClearStateProgram = slices.Clone(sv.Bytes)
+		// Limit the capacity for the same reason as ApprovalProgram
+		txn.ClearStateProgram = slices.Clip(sv.Bytes)
 	case ApprovalProgramPages:
 		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxAbsoluteExtraProgramPages)
 		txn.ApprovalProgram = append(txn.ApprovalProgram, sv.Bytes...)

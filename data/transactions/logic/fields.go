@@ -547,7 +547,7 @@ var OnCompletionNames [invalidOnCompletionConst]string
 var onCompletionMap = make(map[string]uint64)
 
 // GlobalField is an enum for `global` opcode
-type GlobalField uint64
+type GlobalField int
 
 const (
 	// MinTxnFee ConsensusParams.MinTxnFee

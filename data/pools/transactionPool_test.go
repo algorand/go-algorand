@@ -1057,7 +1057,7 @@ func BenchmarkTransactionPoolRecompute(b *testing.B) {
 				},
 				PaymentTxnFields: transactions.PaymentTxnFields{
 					Receiver: addresses[rand.Intn(numOfAccounts)],
-					Amount:   basics.MicroAlgos{Raw: proto.MinBalance + uint64(rand.Intn(1<<32))},
+					Amount:   basics.MicroAlgos{Raw: proto.MinBalance + uint64(rand.Int63n(1<<32))},
 				},
 			}
 

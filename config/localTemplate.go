@@ -1037,14 +1037,14 @@ func (cfg *Local) AdjustConnectionLimits(requiredFDs, maxFDs uint64) bool {
 			splitRatio = 2
 		}
 		if cfg.IsWsListenServer() || cfg.IsP2PListenServer() {
-			if cfg.IncomingConnectionsLimit > int(restDelta) {
+			if cfg.IncomingConnectionsLimit > 0 && uint64(cfg.IncomingConnectionsLimit) > restDelta {
 				cfg.IncomingConnectionsLimit -= int(restDelta) / splitRatio
 			} else {
 				cfg.IncomingConnectionsLimit = 0
 			}
 		}
 		if cfg.IsHybridServer() {
-			if cfg.P2PHybridIncomingConnectionsLimit > int(restDelta) {
+			if cfg.P2PHybridIncomingConnectionsLimit > 0 && uint64(cfg.P2PHybridIncomingConnectionsLimit) > restDelta {
 				cfg.P2PHybridIncomingConnectionsLimit -= int(restDelta) / splitRatio
 			} else {
 				cfg.P2PHybridIncomingConnectionsLimit = 0

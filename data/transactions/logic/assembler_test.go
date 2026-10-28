@@ -461,6 +461,13 @@ pushbytes 0x11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff
 poseidon2 BN254t2
 `
 
+const bmodexpNonsense = `
+pushbytes 0x0123456789abcd
+pushbytes 0x0123456789abcd
+pushbytes 0x0123456789abcd
+bmodexp
+`
+
 const mimcNonsense = `
 pushbytes 0x11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff
 mimc BLS12_381Mp111
@@ -487,7 +494,7 @@ const v13Nonsense = v12Nonsense + v13Extras
 
 // sumhash512 is experimental, held back to v14 while v13 is released. v14 also
 // substitutes falcon_verify's configurable form for the bare one.
-const v14Nonsense = v11Nonsense + fvConfigNonsense + v13Extras + sumhashNonsense
+const v14Nonsense = v11Nonsense + fvConfigNonsense + v13Extras + sumhashNonsense + bmodexpNonsense
 
 const foreignBoxNonsense = `
 pushint 1
@@ -533,6 +540,7 @@ const sumhashCompiled = "8002012386"
 const sha512Compiled = "8002012387"
 const poseidon2Compiled = "802011223344556677889900aabbccddeeff11223344556677889900aabbccddeeffe700"
 const foreignBoxCompiled = "8101760bd401d402d403d404d405d406d407d408d409"
+const bmodexpCompiled = "80070123456789abcd80070123456789abcd80070123456789abcd99"
 
 // v13BaseCompiled is the v12 nonsense reassembled at version 13. It is not a
 // simple bytecode-level transform of v12Compiled because v13 encodes branch
@@ -552,7 +560,7 @@ var v13PreFvCompiled = strings.TrimSuffix(v13BaseCompiled, fvCompiled)
 // v14 adds no encoding changes over v13, so its base is v13's program with the
 // experimental sumhash512 opcode (held back from the v13 release) appended.
 var v14Compiled = v13PreFvCompiled + fvConfigCompiled +
-	sha512Compiled + poseidon2Compiled + foreignBoxCompiled + sumhashCompiled
+	sha512Compiled + poseidon2Compiled + foreignBoxCompiled + sumhashCompiled + bmodexpCompiled
 
 var nonsense = map[uint64]string{
 	1:  v1Nonsense,

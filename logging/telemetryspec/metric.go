@@ -290,7 +290,8 @@ func (t *transactionProcessingTimeDistribution) UnmarshalJSON(data []byte) error
 		return fmt.Errorf("array has %d buckets, should have %d", len(arr), len(t.transactionBuckets))
 	}
 	for i := range t.transactionBuckets {
-		val, err := arr[i].Int64()
+		// bitSize 0 rejects values that don't fit in int on this platform.
+		val, err := strconv.ParseInt(arr[i].String(), 10, 0)
 		if err != nil {
 			return fmt.Errorf("bucket has invalid value %s", arr[i])
 		}

@@ -1801,10 +1801,10 @@ func unknownOpcodeComplaint(name string, v uint64) (OpSpec, error) {
 			last = i
 		}
 	}
-	if first > int(v) {
+	if first != -1 && uint64(first) > v {
 		return standin, fmt.Errorf("%s opcode was introduced in v%d", name, first)
 	}
-	if last != -1 && last < int(v) {
+	if last != -1 && uint64(last) < v {
 		return standin, fmt.Errorf("%s opcode was removed in v%d", name, last+1)
 	}
 	return OpSpec{}, fmt.Errorf("unknown opcode: %s", name)
@@ -3118,6 +3118,9 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 				if bytesRead <= 0 {
 					return "", fmt.Errorf("could not decode label for %s", spec.Name)
 				}
+				if v > int64(len(dis.program)) || v < -int64(len(dis.program)) {
+					return "", fmt.Errorf("branch offset %d outside of program for %s", v, spec.Name)
+				}
 				offset = int(v)
 				offsetLen = bytesRead
 			} else {
@@ -3311,8 +3314,8 @@ func parseByteImmArgs(program []byte, pos int) (bytec [][]byte, nextpc int, err 
 			err = errShortByteImmArgs
 			return
 		}
-		bytec[i] = program[pos : pos+int(itemLen)]
-		pos += int(itemLen)
+		bytec[i] = program[pos:end]
+		pos = int(end)
 	}
 	nextpc = pos
 	return
