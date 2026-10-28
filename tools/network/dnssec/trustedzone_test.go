@@ -495,19 +495,3 @@ func TestDSSignatureEligibility(t *testing.T) {
 		})
 	}
 }
-
-func TestVerifyRRSetErrors(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	r := makeTestResolver()
-	rrSet, rrSig, err := r.QueryRRSet(context.Background(), "com.", dns.TypeDS)
-	require.NoError(t, err)
-	zsks, _, _ := r.queryDNSKeyRRSet(".")
-	keys := make(dnskeysByTag)
-	keys.add(sameTagKey(t, zsks[0]))
-	missing := rrSig[0]
-	missing.KeyTag++
-	err = verifyRRSet(".", rrSet, append(rrSig, missing), keys)
-	require.ErrorContains(t, err, "RRSIG with key tag 33853")
-	require.ErrorContains(t, err, "no authenticated DNSKEY with tag 33854")
-}

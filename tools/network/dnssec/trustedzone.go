@@ -34,7 +34,7 @@ type trustedZone struct {
 	rrSig      map[uint16]dns.RRSIG // DNSKEY RR signature(s), used for validity
 	dss        []dns.DS             // DS or root anchor authenticating this zone in DS format
 	cacheUntil time.Time            // TTL limit for caching the DNSKEY RRset
-	gen        uint64               // cache generation, so a stale lookup does not evict a newer copy
+	gen        uint64               // fetch generation: orders fetches by start, and lets a lookup evict only the copy it saw
 }
 
 // DNSSEC key tags are checksums and are not unique, so every key with a given

@@ -81,14 +81,33 @@ func (t *trustChain) invalidate(zone string, gen uint64) {
 	}
 }
 
+// startFetch returns the generation of a zone fetch that is about to start.
+func (t *trustChain) startFetch() uint64 {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.nextGen++
+	return t.nextGen
+}
+
+// store caches tz unless a fetch that started later has already cached the zone.
+// The caller keeps using tz either way.
+func (t *trustChain) store(tz trustedZone) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if cached, ok := t.trustedZones[tz.name]; !ok || cached.gen < tz.gen {
+		t.trustedZones[tz.name] = tz
+	}
+}
+
 // ensure checks that all zones from root till fqZoneName are valid and places them into a cache.
 // It also performs cache invalidation: if child-parent authentication fails because of keys mismatch
 // then parent zone is updated from the network and the process repeats.
 // For example, example.com. is represented by 3 trusted zones: [".", "com.", "example.com."]
+// If fetchSigner is set, fqZoneName is fetched from the network even if it is cached.
 // It returns the authenticated keys of fqZoneName, which must not be modified, and reports
 // whether the zone was fetched from the network rather than taken from the cache,
 // along with the generation of that snapshot.
-func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []uint16) (keys dnskeysByTag, refreshed bool, gen uint64, err error) {
+func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []uint16, fetchSigner bool) (keys dnskeysByTag, refreshed bool, gen uint64, err error) {
 	// get zones from . to fqZoneName
 	zones, err := splitToZones(fqZoneName)
 	if err != nil {
@@ -96,7 +115,14 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 	}
 
 	zoneIdx := 0
-	refreshedZones := make([]bool, len(zones)) // indexes of refreshed zones during the loop iterations
+	refreshedZones := make([]bool, len(zones)) // zones this call fetched from the network
+	// Zones this call must fetch rather than take from the cache, because their
+	// cached copy failed. Another lookup may cache a stale copy again meanwhile.
+	fetchZones := make([]bool, len(zones))
+	fetchZones[len(zones)-1] = fetchSigner
+	// Copies of the zones this call has accepted. Other lookups may evict or
+	// replace the cached ones while this call waits on the network.
+	chain := make([]trustedZone, len(zones))
 	// the loop goes over zones and cached trust chain and creates new entries if needed.
 	// cache invalidation happens in these three cases:
 	// 1. no cached key in parent zone verifies newly obtained DS
@@ -106,24 +132,32 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 	// 3. no matching key in the last zone in cache
 	// Explanation: the server rotated keys and the cache does not have the key needed to authenticate the response.
 	//
-	// worst case: the last zone fails to find the key, which triggers refreshing back to root
-	// causing 2 * len(zones) iterations
-	// makeTrustedZone cannot return cacheOutdated for root, and refreshedZones prevents a second refresh
+	// Termination: a zone that fails is fetched on the next visit unless this call
+	// fetched it already, in which case the call fails. The loop never steps back to a
+	// zone this call fetched, so each zone is fetched successfully at most once.
+	// makeTrustedZone cannot return cacheOutdated for root.
 
-	// this would not survive after granular locks and concurrent underlying zones removal
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	// The lock guards only the cache. DNS queries run without it, so a slow server
+	// does not stall lookups that the cache can answer.
 	// Evicting a zone keeps its children cached, so drop every expired zone here to
 	// keep zones that are no longer looked up from piling up.
+	t.mu.Lock()
 	now := t.currentTime()
 	for zone, tz := range t.trustedZones {
 		if tz.isExpired(now) || tz.ttlExpired(now) {
 			delete(t.trustedZones, zone)
 		}
 	}
+	t.mu.Unlock()
 	for {
 		zone := zones[zoneIdx]
-		tz, ok := t.trustedZones[zone]
+		var tz trustedZone
+		ok := false
+		if !fetchZones[zoneIdx] {
+			t.mu.RLock()
+			tz, ok = t.trustedZones[zone]
+			t.mu.RUnlock()
+		}
 		if !ok {
 			if refreshedZones[zoneIdx] {
 				return nil, false, 0, fmt.Errorf("cache outdated for already updated zone %s", zone)
@@ -131,8 +165,9 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 			var cacheOutdated bool
 			parentZone := trustedZone{}
 			if zoneIdx > 0 {
-				parentZone = t.trustedZones[zones[zoneIdx-1]]
+				parentZone = chain[zoneIdx-1]
 			}
+			fetchGen := t.startFetch()
 			if tz, cacheOutdated, err = makeTrustedZone(ctx, zone, parentZone, t.client, t.currentTime); err != nil {
 				return nil, false, 0, err
 			}
@@ -151,23 +186,25 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 					// the parent keys are already fresh, so refreshing them again would not help
 					return nil, false, 0, fmt.Errorf("DS signature verification failed for %s", zone)
 				}
-				delete(t.trustedZones, parentZoneName)
+				t.invalidate(parentZoneName, parentZone.gen)
+				fetchZones[zoneIdx] = true
 				continue
 			}
 			// successfully created a new zone, record it
-			t.nextGen++
-			tz.gen = t.nextGen
-			t.trustedZones[zone] = tz
+			tz.gen = fetchGen
+			t.store(tz)
 			refreshedZones[zoneIdx] = true
 		}
+		chain[zoneIdx] = tz
 		// A zone fetched by this call stays usable for it even if its TTL is zero or has
 		// just run out, but its DNSKEY signatures must still be valid.
 		now = t.currentTime()
 		if tz.isExpired(now) || (!refreshedZones[zoneIdx] && tz.ttlExpired(now)) {
-			delete(t.trustedZones, zone)
+			t.invalidate(zone, tz.gen)
 			if refreshedZones[zoneIdx] {
 				return nil, false, 0, fmt.Errorf("DNSKEY RRSIG expired during validation for %s", zone)
 			}
+			fetchZones[zoneIdx] = true
 			continue
 		}
 		if zoneIdx == len(zones)-1 {
@@ -177,7 +214,8 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 					return nil, false, 0, fmt.Errorf("DNSKEY %v not found in zone %s", keytags, fqZoneName)
 				}
 				// seems like the latest zone
-				delete(t.trustedZones, zone)
+				t.invalidate(zone, tz.gen)
+				fetchZones[zoneIdx] = true
 				continue
 			}
 			keys = tz.zsk
@@ -265,7 +303,7 @@ func (t *trustChain) Authenticate(ctx context.Context, rrSet []dns.RR, rrSig []d
 	// 2. check the keys are in place
 	// Verification uses the keys returned by ensure, so a concurrent cache update
 	// cannot remove them in between.
-	keys, refreshed, gen, err := t.ensure(ctx, fqdn, keytags)
+	keys, refreshed, gen, err := t.ensure(ctx, fqdn, keytags, false)
 	if err != nil {
 		return err
 	}
@@ -280,9 +318,10 @@ func (t *trustChain) Authenticate(ctx context.Context, rrSet []dns.RR, rrSig []d
 		}
 
 		// A same-tag rotation only becomes visible when verification fails. Keep a
-		// snapshot another goroutine has already refreshed.
+		// snapshot another goroutine has already refreshed, and fetch the signer zone
+		// rather than take a copy another lookup may have cached from before the rotation.
 		t.invalidate(fqdn, gen)
-		if keys, _, _, err = t.ensure(ctx, fqdn, keytags); err != nil {
+		if keys, _, _, err = t.ensure(ctx, fqdn, keytags, true); err != nil {
 			return err
 		}
 	}
