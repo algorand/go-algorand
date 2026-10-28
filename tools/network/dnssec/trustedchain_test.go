@@ -29,6 +29,8 @@ import (
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -983,7 +985,7 @@ func TestFreshParentDNSKEYExpiresDuringDSQuery(t *testing.T) {
 // onQuery runs before each query; it may block, or replace the answer.
 type concurrentResolver struct {
 	*testResolver
-	mu            sync.Mutex
+	mu            deadlock.Mutex
 	dnskeyQueries map[string]int
 	onQuery       func(zone string, qtype uint16) (rr []dns.RR, sig []dns.RRSIG, replaced bool)
 }
