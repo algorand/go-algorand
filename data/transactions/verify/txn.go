@@ -292,7 +292,6 @@ func logicSigGroupSizeCheck(groupCtx *GroupContext) *TxGroupError {
 	totalArgsSize := 0
 	for i := range stxs {
 		lsig := &stxs[i].Lsig
-		countLsig := true
 		if !lsig.HasProgram() {
 			if !lsig.Blank() && txnSizePricingEnabled {
 				return &TxGroupError{
@@ -301,11 +300,10 @@ func logicSigGroupSizeCheck(groupCtx *GroupContext) *TxGroupError {
 					Reason:     TxGroupErrorReasonNotWellFormed,
 				}
 			}
-			countLsig = poolOrphanArgs
 		}
 
 		programSize, argsSize := 0, 0
-		if countLsig {
+		if lsig.HasProgram() || poolOrphanArgs {
 			programSize = len(lsig.Logic)
 			argsSize = lsig.ArgsLen()
 		}
