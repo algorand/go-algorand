@@ -31,48 +31,53 @@ type Resolver interface {
 	Resolve(ctx context.Context, maddr multiaddr.Multiaddr) ([]multiaddr.Multiaddr, error)
 }
 
-// ResolveController is an interface for cycling through resolvers
+// ResolveController is an interface for cycling through resolvers.
+// Resolver starts a pass through the resolvers and returns the first one.
+// NextResolver returns the next one in the pass, or nil once all have been tried.
 type ResolveController interface {
 	Resolver() Resolver
 	NextResolver() Resolver
 }
 
-// MultiaddrDNSResolveController returns a madns.Resolver, cycling through underlying net.Resolvers
+// MultiaddrDNSResolveController returns a madns.Resolver, cycling through underlying net.Resolvers.
+// Each lookup starts a new pass, so a resolver that failed in an earlier lookup is tried again.
+// Resolvers are created on first use and then kept, so a DNSSEC resolver keeps its trust chain
+// cache across lookups. It is not safe for concurrent use.
 type MultiaddrDNSResolveController struct {
-	resolver      Resolver
-	nextResolvers []func() *madns.Resolver
-	controller    network.ResolveController
+	newResolvers []func() *madns.Resolver // in order of preference
+	resolvers    []*madns.Resolver        // the resolvers created so far
+	next         int                      // index of the resolver NextResolver returns
+	controller   network.ResolveController
 }
 
 // NewMultiaddrDNSResolveController constructs a MultiaddrDNSResolveController
 func NewMultiaddrDNSResolveController(secure bool, fallbackDNSResolverAddress string) *MultiaddrDNSResolveController {
 	controller := network.NewResolveController(secure, fallbackDNSResolverAddress, log.Base())
-	nextResolvers := []func() *madns.Resolver{controller.SystemDnsaddrResolver}
+	newResolvers := []func() *madns.Resolver{controller.SystemDnsaddrResolver}
 	if fallbackDNSResolverAddress != "" {
-		nextResolvers = append(nextResolvers, controller.FallbackDnsaddrResolver)
+		newResolvers = append(newResolvers, controller.FallbackDnsaddrResolver)
 	}
 	return &MultiaddrDNSResolveController{
-		resolver:      nil,
-		nextResolvers: append(nextResolvers, controller.DefaultDnsaddrResolver),
-		controller:    controller,
+		newResolvers: append(newResolvers, controller.DefaultDnsaddrResolver),
+		controller:   controller,
 	}
 }
 
-// NextResolver applies the nextResolvers functions in order and returns the most recent result
+// NextResolver returns the next resolver in this pass, or nil once all have been tried.
 func (c *MultiaddrDNSResolveController) NextResolver() Resolver {
-	if len(c.nextResolvers) == 0 {
-		c.resolver = nil
-	} else {
-		c.resolver = c.nextResolvers[0]()
-		c.nextResolvers = c.nextResolvers[1:]
+	if c.next >= len(c.newResolvers) {
+		return nil
 	}
-	return c.resolver
+	if c.next == len(c.resolvers) {
+		c.resolvers = append(c.resolvers, c.newResolvers[c.next]())
+	}
+	resolver := c.resolvers[c.next]
+	c.next++
+	return resolver
 }
 
-// Resolver returns the current resolver, invokes NextResolver if the resolver is nil
+// Resolver starts a new pass through the resolvers and returns the first one.
 func (c *MultiaddrDNSResolveController) Resolver() Resolver {
-	if c.resolver == nil {
-		c.resolver = c.NextResolver()
-	}
-	return c.resolver
+	c.next = 0
+	return c.NextResolver()
 }
