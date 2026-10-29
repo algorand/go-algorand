@@ -2963,12 +2963,12 @@ func TestReplace(t *testing.T) {
 	testAccepts(t, `byte 0x; int 0; byte 0x; replace3; byte 0x; ==`, 7)
 
 	// Both copy all of A, so they are charged for its length.
-	testCost(t, "pushint 4096; bzero; byte 0x01; replace2 0; pop; pushint 1", 6, copyCostVersion-1)
-	testCost(t, "pushint 4096; bzero; byte 0x01; replace2 0; pop; pushint 1", 5+(1+128), copyCostVersion)
-	testCost(t, "byte 0x01; byte 0x02; replace2 0; pop; pushint 1", 4+(1+1), copyCostVersion)
-	testCost(t, "pushint 4096; bzero; pushint 0; byte 0x01; replace3; pop; pushint 1", 7, copyCostVersion-1)
-	testCost(t, "pushint 4096; bzero; pushint 0; byte 0x01; replace3; pop; pushint 1", 6+(1+128), copyCostVersion)
-	testCost(t, "byte 0x01; pushint 0; byte 0x02; replace3; pop; pushint 1", 5+(1+1), copyCostVersion)
+	testCost(t, "pushint 4096; bzero; byte 0x01; replace2 0; pop; pushint 1", 6, lengthCostVersion-1)
+	testCost(t, "pushint 4096; bzero; byte 0x01; replace2 0; pop; pushint 1", 5+(1+128), lengthCostVersion)
+	testCost(t, "byte 0x01; byte 0x02; replace2 0; pop; pushint 1", 4+(1+1), lengthCostVersion)
+	testCost(t, "pushint 4096; bzero; pushint 0; byte 0x01; replace3; pop; pushint 1", 7, lengthCostVersion-1)
+	testCost(t, "pushint 4096; bzero; pushint 0; byte 0x01; replace3; pop; pushint 1", 6+(1+128), lengthCostVersion)
+	testCost(t, "byte 0x01; pushint 0; byte 0x02; replace3; pop; pushint 1", 5+(1+1), lengthCostVersion)
 }
 
 func TestLoadStore(t *testing.T) {
@@ -5200,10 +5200,10 @@ func TestBits(t *testing.T) {
 
 	// setbit copies all of a byte-array A, so it is charged for its length.
 	// Uints are always cheap.
-	testCost(t, "pushint 4096; bzero; pushint 3; pushint 1; setbit; pop; pushint 1", 7, copyCostVersion-1)
-	testCost(t, "pushint 4096; bzero; pushint 3; pushint 1; setbit; pop; pushint 1", 6+(1+128), copyCostVersion)
-	testCost(t, "byte 0x01; pushint 3; pushint 1; setbit; pop; pushint 1", 5+(1+1), copyCostVersion)
-	testCost(t, "pushint 8; pushint 3; pushint 1; setbit; pop; pushint 1", 6, copyCostVersion)
+	testCost(t, "pushint 4096; bzero; pushint 3; pushint 1; setbit; pop; pushint 1", 7, lengthCostVersion-1)
+	testCost(t, "pushint 4096; bzero; pushint 3; pushint 1; setbit; pop; pushint 1", 6+(1+128), lengthCostVersion)
+	testCost(t, "byte 0x01; pushint 3; pushint 1; setbit; pop; pushint 1", 5+(1+1), lengthCostVersion)
+	testCost(t, "pushint 8; pushint 3; pushint 1; setbit; pop; pushint 1", 6, lengthCostVersion)
 
 }
 
@@ -5234,9 +5234,9 @@ func TestBytes(t *testing.T) {
 	testAccepts(t, `byte "jo"; byte "hn"; concat; dup; int 2; int 105; setbyte; pop; byte "john"; ==`, 3)
 
 	// setbyte copies all of A, so it is charged for its length.
-	testCost(t, "pushint 4096; bzero; pushint 3; pushint 1; setbyte; pop; pushint 1", 7, copyCostVersion-1)
-	testCost(t, "pushint 4096; bzero; pushint 3; pushint 1; setbyte; pop; pushint 1", 6+(1+128), copyCostVersion)
-	testCost(t, "byte 0x01; pushint 0; pushint 1; setbyte; pop; pushint 1", 5+(1+1), copyCostVersion)
+	testCost(t, "pushint 4096; bzero; pushint 3; pushint 1; setbyte; pop; pushint 1", 7, lengthCostVersion-1)
+	testCost(t, "pushint 4096; bzero; pushint 3; pushint 1; setbyte; pop; pushint 1", 6+(1+128), lengthCostVersion)
+	testCost(t, "byte 0x01; pushint 0; pushint 1; setbyte; pop; pushint 1", 5+(1+1), lengthCostVersion)
 
 	testAccepts(t, `byte "john"; byte "john"; ==`, 1)
 }
@@ -7221,9 +7221,9 @@ one:  int 0;
 
 	// match may compare B to every case, so it charges for each. Nothing
 	// matches here, so each falls through to the next instruction.
-	testCost(t, "pushint 1; pushint 2; pushint 3; match l0 l1\nl0:\nl1:\npushint 1", 5, matchCostVersion-1)
-	testCost(t, "pushint 1; pushint 2; pushint 3; match l0 l1\nl0:\nl1:\npushint 1", 4+(1+2*2), matchCostVersion)
-	testCost(t, "pushint 3; match; pushint 1", 2+1, matchCostVersion)
+	testCost(t, "pushint 1; pushint 2; pushint 3; match l0 l1\nl0:\nl1:\npushint 1", 5, lengthCostVersion-1)
+	testCost(t, "pushint 1; pushint 2; pushint 3; match l0 l1\nl0:\nl1:\npushint 1", 4+(1+2*2), lengthCostVersion)
+	testCost(t, "pushint 3; match; pushint 1", 2+1, lengthCostVersion)
 }
 
 // TestShortMatch ensures a clean error when a match ends early

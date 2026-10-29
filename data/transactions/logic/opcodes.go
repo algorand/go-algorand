@@ -93,14 +93,11 @@ const f512Version = 14
 // is available. expw and divmodw also become cheaper.
 const fullByteMathVersion = 14
 
-// copyCostVersion is the first version in which opcodes that copy a whole
+// lengthCostVersion is the first version in which opcodes that copy a whole
 // byte-array to modify part of it (setbyte, setbit, replace2, replace3) charge
-// for its length.
-const copyCostVersion = 14
-
-// matchCostVersion is the first version in which match charges for each of its
-// cases, since it may compare B to every one of them.
-const matchCostVersion = 14
+// for its length, and match charges for each of its cases, since it may compare
+// B to every one of them.
+const lengthCostVersion = 14
 
 // LogicSigOffCurveVersion is the first AVM version where LogicSig programs
 // assembled by this package are expected to hash to an off-curve address.
@@ -807,20 +804,20 @@ var OpSpecs = []OpSpec{
 	{0x52, "substring3", opSubstring3, proto("bii:b"), 2, detDefault()},
 	{0x53, "getbit", opGetBit, proto("ai:i"), 3, detDefault()},
 	{0x54, "setbit", opSetBit, proto("aii:a"), 3, typed(typeSetBit)},
-	{0x54, "setbit", opSetBit, proto("aii:a"), copyCostVersion,
+	{0x54, "setbit", opSetBit, proto("aii:a"), lengthCostVersion,
 		typed(typeSetBit).costByLength(1, 1, 32, 2).costDoc("1 + 1 per 32 bytes of A, or 1 if A is a uint64")},
 	{0x55, "getbyte", opGetByte, proto("bi:i"), 3, detDefault()},
 	{0x56, "setbyte", opSetByte, proto("bii:b"), 3, detDefault()},
-	{0x56, "setbyte", opSetByte, proto("bii:b"), copyCostVersion, costByLength(1, 1, 32, 2)},
+	{0x56, "setbyte", opSetByte, proto("bii:b"), lengthCostVersion, costByLength(1, 1, 32, 2)},
 	{0x57, "extract", opExtract, proto("b:b"), 5, immediates("s", "l")},
 	{0x58, "extract3", opExtract3, proto("bii:b"), 5, detDefault()},
 	{0x59, "extract_uint16", opExtract16Bits, proto("bi:i"), 5, detDefault()},
 	{0x5a, "extract_uint32", opExtract32Bits, proto("bi:i"), 5, detDefault()},
 	{0x5b, "extract_uint64", opExtract64Bits, proto("bi:i"), 5, detDefault()},
 	{0x5c, "replace2", opReplace2, proto("bb:b"), 7, immediates("s")},
-	{0x5c, "replace2", opReplace2, proto("bb:b"), copyCostVersion, immediates("s").costByLength(1, 1, 32, 1)},
+	{0x5c, "replace2", opReplace2, proto("bb:b"), lengthCostVersion, immediates("s").costByLength(1, 1, 32, 1)},
 	{0x5d, "replace3", opReplace3, proto("bib:b"), 7, detDefault()},
-	{0x5d, "replace3", opReplace3, proto("bib:b"), copyCostVersion, costByLength(1, 1, 32, 2)},
+	{0x5d, "replace3", opReplace3, proto("bib:b"), lengthCostVersion, costByLength(1, 1, 32, 2)},
 	{0x5e, "base64_decode", opBase64Decode, proto("b:b"), fidoVersion, field("e", &Base64Encodings).costByLength(1, 1, 16, 0)},
 	{0x5f, "json_ref", opJSONRef, proto("bb:a"), fidoVersion, field("r", &JSONRefTypes).costByLength(25, 2, 7, 1)},
 
@@ -876,7 +873,7 @@ var OpSpecs = []OpSpec{
 	{0x8c, "frame_bury", opFrameBury, proto("a:").stackExplain(opFrameBuryStackChange), fpVersion, immKinded(immInt8, "i").typed(typeFrameBury)},
 	{0x8d, "switch", opSwitch, proto("i:"), 8, detSwitch()},
 	{0x8e, "match", opMatch, proto("a:", "[A1, A2, ..., AN], B", "").stackExplain(opMatchStackChange), 8, detSwitch().typed(typeMatch).trust()},
-	{0x8e, "match", opMatch, proto("a:", "[A1, A2, ..., AN], B", "").stackExplain(opMatchStackChange), matchCostVersion,
+	{0x8e, "match", opMatch, proto("a:", "[A1, A2, ..., AN], B", "").stackExplain(opMatchStackChange), lengthCostVersion,
 		detSwitch().typed(typeMatch).trust().costByCount(1, 2)},
 
 	// More math
