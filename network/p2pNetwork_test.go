@@ -612,6 +612,39 @@ func TestP2PBootstrapFunc(t *testing.T) {
 	require.GreaterOrEqual(t, len(addr.Addrs), 1)
 }
 
+// TestP2PBootstrapPhonebook checks that the bootstrap phonebook holds only the
+// configured peers. The peerstore also holds the host's own ID, and a phonebook with
+// it would keep the bootstrapper from looking up bootstrap peers in DNS.
+func TestP2PBootstrapPhonebook(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.NetAddress = "127.0.0.1:0"
+	cfg.DNSBootstrapID = ""
+	log := logging.TestingLog(t)
+	genesisInfo := GenesisInfo{genesisID, config.Devtestnet}
+
+	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisInfo, &nopeNodeInfo{}, nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, netA.Start())
+	defer netA.Stop()
+	require.Empty(t, netA.bootstrapper.phonebookPeers)
+
+	// Two configured addresses of the same peer give one phonebook entry with both.
+	peerInfoA := netA.service.AddrInfo()
+	addrsA, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
+	require.NoError(t, err)
+	otherAddrA := "/ip4/127.0.0.1/tcp/1/p2p/" + peerInfoA.ID.String()
+	netB, err := NewP2PNetwork(log, cfg, "", []string{addrsA[0].String(), otherAddrA}, genesisInfo, &nopeNodeInfo{}, nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, netB.Start())
+	defer netB.Stop()
+	require.Len(t, netB.bootstrapper.phonebookPeers, 1)
+	require.Equal(t, peerInfoA.ID, netB.bootstrapper.phonebookPeers[0].ID)
+	require.Len(t, netB.bootstrapper.phonebookPeers[0].Addrs, 2)
+}
+
 func TestP2PdnsLookupBootstrapPeersErr(t *testing.T) {
 	t.Parallel()
 	partitiontest.PartitionTest(t)
