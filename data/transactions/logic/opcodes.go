@@ -87,6 +87,7 @@ const foreignBoxVersion = 13 // app_params_set, foreign app box access
 // their version, and fixup TestAssemble() in assembler_test.go.
 const sumhashVersion = 14
 const f512Version = 14
+const mldsaVersion = 14
 
 // fullByteMathVersion is the first version for which byte math operators are
 // unconstrained by maxByteMathSize, have length-dependent costs, and bmodexp
@@ -1006,6 +1007,20 @@ var OpSpecs = []OpSpec{
 			chunkCost: 350,
 			chunkSize: 32,
 		}})},
+	{0xe8, "mldsa_verify", opMLDSAVerify, proto("bbbb:T"), mldsaVersion,
+		costByFieldAndLength("p", &MLDSAConfigs, []costDescriptor{
+			MLDSA44: {
+				baseCost:  3700,
+				chunkCost: 5,
+				chunkSize: 64,
+				depth:     3,
+			},
+			MLDSA65: {
+				baseCost:  5850,
+				chunkCost: 5,
+				chunkSize: 64,
+				depth:     3,
+			}}).typed(typeMLDSAVerify)},
 }
 
 // OpcodesByVersion returns list of opcodes available in a specific version of TEAL
