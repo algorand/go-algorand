@@ -928,3 +928,39 @@ func TestProposalStoreRegressionWrongPipelinePeriodBug_39387501(t *testing.T) {
 		require.Equal(t, res.(payloadProcessedEvent).Period, period(1))
 	}
 }
+
+// Binding a validated proposal drops the pipelined copy of it: the assembler
+// is part of the persisted state and must hold the block once.  A pipelined
+// proposal that is already validated is still reported on newRound.
+func TestBlockAssemblerBindKeepsOneCopy(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	player, router, accounts, factory, ledger := testPlayerSetup()
+	testBlockFactory, err := factory.AssembleBlock(player.Round, accounts.addresses)
+	require.NoError(t, err)
+	proposalPayload, proposalV, _ := proposalForBlock(accounts.addresses[0], accounts.vrfs[0], testBlockFactory, player.Period, ledger)
+
+	filled, err := blockAssembler{}.pipeline(proposalPayload.u())
+	require.NoError(t, err)
+	require.True(t, filled.Filled)
+	require.Equal(t, proposalPayload.u(), filled.Pipeline)
+
+	bound, err := filled.bind(proposalPayload)
+	require.NoError(t, err)
+	require.True(t, bound.Filled)
+	require.True(t, bound.Assembled)
+	require.Equal(t, proposalPayload, bound.Payload)
+	require.Equal(t, unauthenticatedProposal{}, bound.Pipeline)
+	// the encoded assembler holds the block once, like the filled one
+	require.Less(t, len(protocol.Encode(&bound)), len(protocol.Encode(&filled))+len(protocol.Encode(&proposalPayload))/2)
+
+	store := proposalStore{
+		Relevant:   map[period]proposalValue{player.Period: proposalV},
+		Assemblers: map[proposalValue]blockAssembler{proposalV: bound},
+	}
+	rHandle := routerHandle{t: &proposalStoreTracer, r: &router, src: proposalMachinePeriod}
+	out := store.handle(rHandle, player, newRoundEvent{})
+	require.Equal(t, payloadPipelined, out.(payloadProcessedEvent).T)
+	require.Equal(t, proposalV, out.(payloadProcessedEvent).Proposal)
+	require.Equal(t, proposalPayload.u(), out.(payloadProcessedEvent).UnauthenticatedPayload)
+}
