@@ -17,6 +17,8 @@
 package committee
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -30,4 +32,14 @@ func TestEmptyEncoding(t *testing.T) {
 
 	var c Credential
 	require.Equal(t, 1, len(protocol.Encode(&c)))
+}
+
+func TestSeedFormatsAsHex(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var s Seed
+	s[0], s[1] = 0x01, 0xab
+	want := "01ab" + strings.Repeat("00", 30)
+	require.Equal(t, want, fmt.Sprintf("%v", s))
+	require.Equal(t, want, fmt.Sprintf("%s", s))
 }

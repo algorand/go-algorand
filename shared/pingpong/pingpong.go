@@ -1312,7 +1312,7 @@ func (pps *WorkerState) constructNFTGenTxn(from, to string, fee uint64, client *
 	const totalSupply = 1
 	txn, err = client.MakeUnsignedAssetCreateTx(totalSupply, false, sender, sender, sender, sender, "ping", assetName, "", meta[:], 0)
 	if err != nil {
-		fmt.Printf("Cannot make asset create txn with meta %v\n", meta)
+		fmt.Printf("Cannot make asset create txn with meta %x\n", meta)
 		return
 	}
 	txn, err = client.FillUnsignedTxTemplate(sender, 0, 0, fee, txn)

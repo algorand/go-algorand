@@ -16,7 +16,10 @@
 
 package crypto
 
-import "bytes"
+import (
+	"bytes"
+	"encoding/hex"
+)
 
 // GenericDigest is a digest that implements CustomSizeDigest, and can be used as hash output.
 //
@@ -35,3 +38,6 @@ func (d GenericDigest) IsEqual(other GenericDigest) bool {
 func (d GenericDigest) IsEmpty() bool {
 	return len(d) == 0
 }
+
+// String returns the digest in hex.
+func (d GenericDigest) String() string { return hex.EncodeToString(d) }

@@ -18,6 +18,7 @@ package crypto
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/algorand/go-deadlock"
@@ -171,6 +172,9 @@ func (id OneTimeSignatureIdentifier) BatchBytes() []byte {
 // OneTimeSignatureSecrets and prove the authenticity of OneTimeSignatures
 // against some OneTimeSignatureIdentifier.
 type OneTimeSignatureVerifier ed25519PublicKey
+
+// String returns the verifier in hex.
+func (v OneTimeSignatureVerifier) String() string { return hex.EncodeToString(v[:]) }
 
 // OneTimeSignatureSecrets are used to produced unforgeable signatures over a
 // message.
