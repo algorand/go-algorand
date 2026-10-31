@@ -57,6 +57,11 @@ func TestConsensusParams(t *testing.T) {
 		if params.MaxAbsoluteLogicSigProgramSize < params.LogicSigMaxSize {
 			t.Errorf("Protocol %s: MaxAbsoluteLogicSigProgramSize is smaller than LogicSigMaxSize", proto)
 		}
+		if params.RequireLogicSigArgAccess {
+			require.True(t, params.TxnSizePricingEnabled(), "Protocol %s: priced LogicSig args require transaction size pricing", proto)
+		}
+
+		require.GreaterOrEqual(t, params.MaxAbsoluteLogicSigArgsSize, params.LogicSigMaxSize, "Protocol %s", proto)
 	}
 }
 

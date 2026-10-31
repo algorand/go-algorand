@@ -230,14 +230,20 @@ type ConsensusParams struct {
 	// 0 for no support, otherwise highest version supported
 	LogicSigVersion uint64
 
-	// LogicSigMaxSize is the legacy LogicSig size unit used for the per-LogicSig
-	// args allowance and to compute group size pools and free program-byte
-	// allowance.
+	// LogicSigMaxSize is the legacy per-LogicSig size limit and each transaction's
+	// contribution to the group's size allowance. Before transaction size pricing,
+	// program and argument bytes share one pool; with pricing, each has a separate
+	// allowance of len(group) * LogicSigMaxSize.
 	LogicSigMaxSize uint64
 
 	// MaxAbsoluteLogicSigProgramSize is the absolute maximum size of a LogicSig
 	// program.
 	MaxAbsoluteLogicSigProgramSize uint64
+
+	// MaxAbsoluteLogicSigArgsSize is the absolute maximum total size of the
+	// arguments carried by one LogicSig, including an ls-scheme PQSig. It counts
+	// decoded argument bytes, excluding encoding overhead.
+	MaxAbsoluteLogicSigArgsSize uint64
 
 	// sum of estimated op cost must be less than this
 	LogicSigMaxCost uint64
@@ -634,7 +640,8 @@ type ConsensusParams struct {
 	// below that index unless it is empty. Args are covered by no signature, and
 	// are part of neither the transaction ID nor the group hash, so without this
 	// rule a third party can append bytes to a transaction in flight, and the
-	// program has no way to detect it.
+	// program has no way to detect it. This also enables purchasing argument
+	// bytes beyond the group's allowance through the per-byte surcharge.
 	RequireLogicSigArgAccess bool
 
 	// CloseRequiresBaseMinBalance allows an account to be closed only if its
@@ -814,6 +821,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxAppProgramLen, &bounds.MaxAppProgramLen)
 	checkSetMax((int(p.LogicSigMaxSize) * p.MaxTxGroupSize), &bounds.MaxLogicSigMaxSize)
 	checkSetMax(int(p.MaxAbsoluteLogicSigProgramSize), &bounds.MaxLogicSigMaxSize)
+	checkSetMax(int(p.MaxAbsoluteLogicSigArgsSize), &bounds.MaxLogicSigMaxSize)
 	checkSetMax(p.MaxAbsoluteTxnNoteBytes, &bounds.MaxTxnNoteBytes)
 	checkSetMax(p.MaxTxGroupSize, &bounds.MaxTxGroupSize)
 	// MaxBytesKeyValueLen is max of MaxAppKeyLen and MaxAppBytesValueLen
@@ -1064,6 +1072,7 @@ func initConsensusProtocols() {
 	v18.LogicSigVersion = 1
 	v18.LogicSigMaxSize = 1000
 	v18.MaxAbsoluteLogicSigProgramSize = 1000
+	v18.MaxAbsoluteLogicSigArgsSize = 1000
 	v18.LogicSigMaxCost = 20000
 	v18.LogicSigMsig = true
 	v18.MaxAssetsPerAccount = 1000
@@ -1486,6 +1495,7 @@ func initConsensusProtocols() {
 
 	v40.LogicSigVersion = 11
 	v40.MaxAbsoluteLogicSigProgramSize = 16000
+	v40.MaxAbsoluteLogicSigArgsSize = 16000
 
 	v40.Payouts.Enabled = true
 	v40.Payouts.Percent = 50
