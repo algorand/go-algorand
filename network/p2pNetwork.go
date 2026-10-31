@@ -692,7 +692,7 @@ func (n *P2PNetwork) DisconnectPeers() {
 	}
 }
 
-// RegisterHTTPHandler path accepts gorilla/mux path annotations
+// RegisterHTTPHandler path accepts http.ServeMux patterns
 func (n *P2PNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
 	n.httpServer.RegisterHTTPHandler(path, handler)
 }

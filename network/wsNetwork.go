@@ -38,8 +38,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gorilla/mux"
-
 	"github.com/algorand/go-deadlock"
 	"github.com/algorand/websocket"
 
@@ -126,10 +124,10 @@ const peerDisconnectionAckDuration = 5 * time.Second
 const peerShutdownDisconnectionAckDuration = 50 * time.Millisecond
 
 // GossipNetworkPath is the URL path to connect to the websocket gossip node at.
-// Contains {genesisID} param to be handled by gorilla/mux
+// Contains {genesisID} param to be handled by http.ServeMux
 const GossipNetworkPath = "/v1/{genesisID}/gossip"
 
-// HealthServiceStatusPath is the path to register HealthService as a handler for when using gorilla/mux
+// HealthServiceStatusPath is the path to register HealthService as a handler
 const HealthServiceStatusPath = "/status"
 
 // NodeInfo helps the network get information about the node it is running on
@@ -161,7 +159,7 @@ type GenesisInfo struct {
 type WebsocketNetwork struct {
 	listener net.Listener
 	server   http.Server
-	router   *mux.Router
+	router   *http.ServeMux
 	scheme   string // are we serving http or https ?
 
 	upgrader websocket.Upgrader
@@ -476,12 +474,12 @@ func (wn *WebsocketNetwork) Ready() chan struct{} {
 	return wn.readyChan
 }
 
-// RegisterHTTPHandler path accepts gorilla/mux path annotations
+// RegisterHTTPHandler path accepts http.ServeMux patterns
 func (wn *WebsocketNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
 	wn.router.Handle(path, handler)
 }
 
-// RegisterHTTPHandlerFunc path accepts gorilla/mux path annotations
+// RegisterHTTPHandlerFunc path accepts http.ServeMux patterns
 func (wn *WebsocketNetwork) RegisterHTTPHandlerFunc(path string, handler func(http.ResponseWriter, *http.Request)) {
 	wn.router.HandleFunc(path, handler)
 }
@@ -583,7 +581,10 @@ func (wn *WebsocketNetwork) setup() error {
 	wn.upgrader.ReadBufferSize = 4096
 	wn.upgrader.WriteBufferSize = 4096
 	wn.upgrader.EnableCompression = false
-	wn.router = mux.NewRouter()
+	wn.router = http.NewServeMux()
+	// Every request matches at least this catch-all, so ServeMux returns 404
+	// without first searching all methods to decide between 404 and 405.
+	wn.router.Handle("/", http.NotFoundHandler())
 	if wn.config.EnableGossipService {
 		wn.router.Handle(GossipNetworkPath, wn)
 	}
@@ -1054,9 +1055,8 @@ func checkProtocolVersionMatch(otherHeaders http.Header, ourSupportedProtocolVer
 // and returns the http status.
 func (wn *WebsocketNetwork) checkIncomingConnectionVariables(response http.ResponseWriter, request *http.Request, remoteAddrForLogging string) int {
 	// check to see that the genesisID in the request URI is valid and matches the supported one.
-	pathVars := mux.Vars(request)
-	otherGenesisID, hasGenesisID := pathVars["genesisID"]
-	if !hasGenesisID || otherGenesisID == "" {
+	otherGenesisID := request.PathValue("genesisID")
+	if otherGenesisID == "" {
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "missing genesis-id"})
 		response.WriteHeader(http.StatusNotFound)
 		return http.StatusNotFound
