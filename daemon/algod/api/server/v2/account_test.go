@@ -90,15 +90,17 @@ func TestAccount(t *testing.T) {
 			appIdx1: {
 				Schema: basics.StateSchema{NumUint: 10},
 				KeyValue: basics.TealKeyValue{
-					"uint":  basics.TealValue{Type: basics.TealUintType, Uint: 1},
-					"bytes": basics.TealValue{Type: basics.TealBytesType, Bytes: "value1"},
+					"uint":    basics.TealValue{Type: basics.TealUintType, Uint: 1},
+					"bytes":   basics.TealValue{Type: basics.TealBytesType, Bytes: "value1"},
+					"counter": basics.TealValue{Type: basics.TealUintType, Uint: 10},
 				},
 			},
 			appIdx2: {
 				Schema: basics.StateSchema{NumUint: 10},
 				KeyValue: basics.TealKeyValue{
-					"uint":  basics.TealValue{Type: basics.TealUintType, Uint: 2},
-					"bytes": basics.TealValue{Type: basics.TealBytesType, Bytes: "value2"},
+					"uint":    basics.TealValue{Type: basics.TealUintType, Uint: 2},
+					"bytes":   basics.TealValue{Type: basics.TealBytesType, Bytes: "value2"},
+					"counter": basics.TealValue{Type: basics.TealUintType, Uint: 20},
 				},
 			},
 		},
@@ -180,8 +182,8 @@ func TestAccount(t *testing.T) {
 
 	require.NotNil(t, conv.AppsLocalState)
 	require.Equal(t, 2, len(*conv.AppsLocalState))
-	verifyAppLocalState(0, appIdx1, 10, 0, model.TealKeyValueStore{makeTKV("bytes", "value1"), makeTKV("uint", 1)})
-	verifyAppLocalState(1, appIdx2, 10, 0, model.TealKeyValueStore{makeTKV("bytes", "value2"), makeTKV("uint", 2)})
+	verifyAppLocalState(0, appIdx1, 10, 0, model.TealKeyValueStore{makeTKV("bytes", "value1"), makeTKV("counter", 10), makeTKV("uint", 1)})
+	verifyAppLocalState(1, appIdx2, 10, 0, model.TealKeyValueStore{makeTKV("bytes", "value2"), makeTKV("counter", 20), makeTKV("uint", 2)})
 
 	verifyCreatedAsset := func(index int, assetIdx basics.AssetIndex, params basics.AssetParams) {
 		require.Equal(t, assetIdx, (*conv.CreatedAssets)[index].Index)
