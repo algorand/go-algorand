@@ -182,6 +182,9 @@ type WebsocketNetwork struct {
 	peersLock          deadlock.RWMutex
 	peers              []*wsPeer
 	peersChangeCounter atomic.Int32 // peersChangeCounter is an atomic variable that increases on each change to the peers. It helps avoiding taking the peersLock when checking if the peers list was modified.
+	// peersClosed is set by innerStop under peersLock. Once it is set, addPeer
+	// must not register new peers, because nothing would close them.
+	peersClosed bool
 
 	broadcaster msgBroadcaster
 	handler     msgHandler
@@ -459,15 +462,20 @@ func closeWaiter(wg *sync.WaitGroup, peer *wsPeer, deadline time.Time) {
 
 // DisconnectPeers shuts down all connections
 func (wn *WebsocketNetwork) DisconnectPeers() {
-	wn.peersLock.Lock()
-	defer wn.peersLock.Unlock()
 	closeGroup := sync.WaitGroup{}
+	wn.peersLock.Lock()
 	closeGroup.Add(len(wn.peers))
 	deadline := time.Now().Add(peerDisconnectionAckDuration)
 	for _, peer := range wn.peers {
+		wn.unregisterPeerLocked(peer)
 		go closeWaiter(&closeGroup, peer, deadline)
 	}
+	clear(wn.peers)
 	wn.peers = wn.peers[:0]
+	wn.countPeersSetGauges()
+	// wait without peersLock: a peer whose read loop already failed blocks in removePeer
+	// until it gets the lock, and closeWaiter waits for that read loop
+	wn.peersLock.Unlock()
 	closeGroup.Wait()
 }
 
@@ -790,15 +798,19 @@ func (wn *WebsocketNetwork) httpdThread() {
 func (wn *WebsocketNetwork) innerStop() {
 	wn.peersLock.Lock()
 	defer wn.peersLock.Unlock()
+	wn.peersClosed = true
 	wn.wg.Add(len(wn.peers))
 	// this method is called only during node shutdown. In this case, we want to send the
 	// shutdown message, but we don't want to wait for a long time - since we might not be lucky
 	// to get a response.
 	deadline := time.Now().Add(peerShutdownDisconnectionAckDuration)
 	for _, peer := range wn.peers {
+		wn.unregisterPeerLocked(peer)
 		go closeWaiter(&wn.wg, peer, deadline)
 	}
+	clear(wn.peers)
 	wn.peers = wn.peers[:0]
+	wn.countPeersSetGauges()
 }
 
 // Stop closes network connections and stops threads.
@@ -1187,8 +1199,10 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	}
 	peer.TelemetryGUID = trackedRequest.otherTelemetryGUID
 	wn.log.Debugf("Server: client features '%s', decoded %x, our response '%s'", request.Header.Get(PeerFeaturesHeader), peer.features, responseHeader.Get(PeerFeaturesHeader))
-	peer.init(wn.config, wn.outgoingMessagesBufferSize)
-	wn.addPeer(peer)
+	if wn.addPeer(peer) != peerAdmitted {
+		peer.CloseAndWait(time.Now().Add(peerShutdownDisconnectionAckDuration))
+		return
+	}
 	wn.log.With("event", "ConnectedIn").With("remote", trackedRequest.remoteAddress()).With("local", localAddr).Infof("Accepted incoming connection from peer %s", trackedRequest.remoteAddr)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
 		telemetryspec.PeerEventDetails{
@@ -2185,22 +2199,20 @@ func (wn *WebsocketNetwork) tryConnect(netAddr, gossipAddr string) {
 	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
 	wn.log.Debugf("Client: server features '%s', decoded %x", response.Header.Get(PeerFeaturesHeader), peer.features)
 
-	// if there is a final verification message to send, it means this peer has a verified identity,
-	// attempt to set the peer and identityTracker
+	// if there is a final verification message to send, it means this peer has a verified identity
 	if len(idVerificationMessage) > 0 {
 		peer.identityVerified.Store(uint32(1))
-		wn.peersLock.Lock()
-		ok := wn.identityTracker.setIdentity(peer)
-		wn.peersLock.Unlock()
-		if !ok {
-			networkPeerIdentityDisconnect.Inc(nil)
-			wn.log.With("remote", netAddr).With("local", localAddr).Warn("peer deduplicated before adding because the identity is already known")
-			closeEarly("Duplicate connection")
-			return
-		}
 	}
-	peer.init(wn.config, wn.outgoingMessagesBufferSize)
-	wn.addPeer(peer)
+	switch wn.addPeer(peer) {
+	case peerAdmitted:
+	case peerRejectedDuplicateIdentity:
+		wn.log.With("remote", netAddr).With("local", localAddr).Warn("peer deduplicated before adding because the identity is already known")
+		closeEarly("Duplicate connection")
+		return
+	default:
+		peer.CloseAndWait(time.Now().Add(peerShutdownDisconnectionAckDuration))
+		return
+	}
 
 	wn.log.With("event", "ConnectedOut").With("remote", netAddr).With("local", localAddr).Infof("Made outgoing connection to peer %v", netAddr)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
@@ -2373,36 +2385,55 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 	defer wn.peersLock.Unlock()
 	if peer.peerIndex < len(wn.peers) && wn.peers[peer.peerIndex] == peer {
 		heap.Remove(peersHeap{wn}, peer.peerIndex)
-		wn.prioTracker.removePeer(peer)
-		wn.identityTracker.removeIdentity(peer)
-		if peer.throttledOutgoingConnection {
-			wn.throttledOutgoingConnections++
-		}
-		wn.peersChangeCounter.Add(1)
+		wn.unregisterPeerLocked(peer)
 	}
 	wn.countPeersSetGauges()
 }
 
-func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
+// unregisterPeerLocked gives back the priority entry, identity and throttle slot of a peer
+// that the caller removes from wn.peers in the same peersLock critical section. It also marks
+// the peer closing, so identityVerificationHandler cannot claim the identity again.
+func (wn *WebsocketNetwork) unregisterPeerLocked(peer *wsPeer) {
+	peer.didSignalClose.Store(1)
+	wn.prioTracker.removePeer(peer)
+	wn.identityTracker.removeIdentity(peer)
+	if peer.throttledOutgoingConnection {
+		wn.throttledOutgoingConnections++
+	}
+	wn.peersChangeCounter.Add(1)
+}
+
+// addPeer initializes and registers peer in wn.peers, claims its identity (when verified) and throttle slot,
+// and starts its read/write loops.
+// When it returns anything other than peerAdmitted, the caller must close the peer/connection.
+func (wn *WebsocketNetwork) addPeer(peer *wsPeer) peerAdmission {
+	// An outgoing peer arrives verified, because tryConnect checked its identity in the HTTP upgrade
+	// response. An incoming peer proves its identity later in a websocket message, if at all, and
+	// identityVerificationHandler claims the identity then.
+	verified := peer.identityVerified.Load() == 1
+	// init allocates the send queues, so skip it for a duplicate; setIdentity below is the real claim
+	if verified && wn.identityTracker.claimedByOther(peer) {
+		networkPeerIdentityDisconnect.Inc(nil)
+		return peerRejectedDuplicateIdentity
+	}
+	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.peersLock.Lock()
 	defer wn.peersLock.Unlock()
-	// guard against peers which are closed or closing
-	if peer.didSignalClose.Load() == 1 {
-		networkPeerAlreadyClosed.Inc(nil)
-		wn.log.Debugf("peer closing %s", peer.conn.RemoteAddrString())
-		return
+	if wn.peersClosed {
+		// innerStop has already swept wn.peers, so nothing would close this peer
+		wn.log.Debugf("network is stopping, dropping peer %s", peer.conn.RemoteAddrString())
+		return peerRejectedStopped
 	}
-	// simple duplicate *pointer* check. should never trigger given the callers to addPeer
-	// TODO: remove this after making sure it is safe to do so
-	if slices.Contains(wn.peers, peer) {
-		wn.log.Errorf("dup peer added %#v", peer)
-		return
+	if verified && !wn.identityTracker.setIdentity(peer) {
+		networkPeerIdentityDisconnect.Inc(nil)
+		return peerRejectedDuplicateIdentity
 	}
 	if peer.outgoing {
 		peer.throttledOutgoingConnection = claimThrottleSlot(&wn.throttledOutgoingConnections)
 	}
 	heap.Push(peersHeap{wn}, peer)
 	wn.prioTracker.setPriority(peer, peer.prioAddress, peer.prioWeight)
+	peer.start()
 	wn.peersChangeCounter.Add(1)
 	wn.countPeersSetGauges()
 	if len(wn.peers) >= wn.config.GossipFanout {
@@ -2416,6 +2447,7 @@ func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
 		wn.wg.Add(1)
 		go wn.eventualReady()
 	}
+	return peerAdmitted
 }
 
 func (wn *WebsocketNetwork) eventualReady() {

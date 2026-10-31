@@ -80,6 +80,10 @@ type P2PNetwork struct {
 	wsPeersConnectivityCheckTicker *time.Ticker
 	peerStater                     peerConnectionStater
 
+	// wsPeersClosed is set by innerStop under wsPeersLock. Once it is set, stream
+	// handlers must not register new wsPeers, because nothing would close them.
+	wsPeersClosed bool
+
 	// connPerfMonitor is used on outgoing connections to measure their relative message timing
 	connPerfMonitor *connectionPerformanceMonitor
 
@@ -516,18 +520,21 @@ func (n *P2PNetwork) Stop() {
 func (n *P2PNetwork) innerStop() {
 	closeGroup := sync.WaitGroup{}
 	n.wsPeersLock.Lock()
-	closeGroup.Add(len(n.wsPeers))
+	n.wsPeersClosed = true
+	closeGroup.Add(len(n.wsPeersToIDs))
 	deadline := time.Now().Add(peerDisconnectionAckDuration)
-	for peerID, peer := range n.wsPeers {
+	// wsPeersToIDs also holds wsPeers replaced in wsPeers by a newer stream from the same peer
+	for peer, peerID := range n.wsPeersToIDs {
+		n.unregisterPeerLocked(peer)
 		// we need to both close the wsPeer and close the p2p connection
 		go closeWaiter(&closeGroup, peer, deadline)
 		err := n.service.ClosePeer(peerID)
 		if err != nil {
 			n.log.Warnf("Error closing peer %s: %v", peerID, err)
 		}
-		delete(n.wsPeers, peerID)
-		delete(n.wsPeersToIDs, peer)
 	}
+	clear(n.wsPeers)
+	n.wsPeersChangeCounter.Add(1)
 	n.wsPeersLock.Unlock()
 	closeGroup.Wait()
 }
@@ -1023,29 +1030,15 @@ func (n *P2PNetwork) baseWsStreamHandler(ctx context.Context, p2pPeer peer.ID, s
 	if !has {
 		n.log.Warn("Could not get local address")
 	}
-	n.wsPeersLock.Lock()
-	ok := n.identityTracker.setIdentity(wsp)
-	n.wsPeersLock.Unlock()
-	if !ok {
-		networkPeerIdentityDisconnect.Inc(nil)
+	switch n.addPeer(p2pPeer, wsp) {
+	case peerAdmitted:
+	case peerRejectedDuplicateIdentity:
 		stream.Close()
 		return &p2p.StreamHandlerLoggedError{Level: logging.Warn, Err: fmt.Errorf("peer deduplicated before adding because the identity is already known: remote %s, local %s", addr, localAddr)}
+	default:
+		wsp.CloseAndWait(time.Now().Add(peerDisconnectionAckDuration))
+		return &p2p.StreamHandlerLoggedError{Level: logging.Debug, Err: fmt.Errorf("network is stopping, dropping peer %s", addr)}
 	}
-
-	wsp.init(n.config, outgoingMessagesBufferSize)
-	n.wsPeersLock.Lock()
-	if wsp.didSignalClose.Load() == 1 {
-		networkPeerAlreadyClosed.Inc(nil)
-		n.wsPeersLock.Unlock()
-		return &p2p.StreamHandlerLoggedError{Level: logging.Debug, Err: fmt.Errorf("peer closing %s", addr)}
-	}
-	if !incoming {
-		wsp.throttledOutgoingConnection = claimThrottleSlot(&n.throttledOutgoingConnections)
-	}
-	n.wsPeers[p2pPeer] = wsp
-	n.wsPeersToIDs[wsp] = p2pPeer
-	n.wsPeersLock.Unlock()
-	n.wsPeersChangeCounter.Add(1)
 
 	event := "ConnectedOut"
 	msg := "Made outgoing connection to peer %s"
@@ -1071,6 +1064,50 @@ func (n *P2PNetwork) baseWsStreamHandler(ctx context.Context, p2pPeer peer.ID, s
 	return nil
 }
 
+// addPeer initializes and registers wsp, claims its identity and throttle slot, and starts its read/write loops,
+// unless the network has stopped or the identity is already in use.
+// The caller must close the stream/peer when addPeer returns anything other than peerAdmitted.
+func (n *P2PNetwork) addPeer(id peer.ID, wsp *wsPeer) peerAdmission {
+	// init allocates the send queues, so skip it for a duplicate; setIdentity below is the real claim
+	if n.identityTracker.claimedByOther(wsp) {
+		networkPeerIdentityDisconnect.Inc(nil)
+		return peerRejectedDuplicateIdentity
+	}
+	wsp.init(n.config, outgoingMessagesBufferSize)
+	n.wsPeersLock.Lock()
+	defer n.wsPeersLock.Unlock()
+	if n.wsPeersClosed {
+		return peerRejectedStopped
+	}
+	if !n.identityTracker.setIdentity(wsp) {
+		networkPeerIdentityDisconnect.Inc(nil)
+		return peerRejectedDuplicateIdentity
+	}
+	if wsp.outgoing {
+		wsp.throttledOutgoingConnection = claimThrottleSlot(&n.throttledOutgoingConnections)
+	}
+	n.wsPeers[id] = wsp
+	n.wsPeersToIDs[wsp] = id
+	wsp.start()
+	n.wsPeersChangeCounter.Add(1)
+	return peerAdmitted
+}
+
+// unregisterPeerLocked marks peer closing and gives back its identity, reverse-map entry,
+// and outgoing throttle slot. Call it under wsPeersLock.
+func (n *P2PNetwork) unregisterPeerLocked(peer *wsPeer) {
+	peer.didSignalClose.Store(1)
+	n.identityTracker.removeIdentity(peer) // safe: removeIdentity only deletes if the stored identity matches this exact wsPeer
+	if _, knownPeer := n.wsPeersToIDs[peer]; knownPeer {
+		delete(n.wsPeersToIDs, peer)
+		// Throttle slots are per-wsPeer, not per map entry: release for any
+		// known wsPeer on its first cleanup, even if it was already replaced.
+		if peer.throttledOutgoingConnection {
+			n.throttledOutgoingConnections++
+		}
+	}
+}
+
 // peerRemoteClose called from wsPeer to report that it has closed
 func (n *P2PNetwork) peerRemoteClose(peer *wsPeer, reason disconnectReason) {
 	remotePeerID := peer.conn.(*wsPeerConnP2P).stream.Conn().RemotePeer()
@@ -1081,24 +1118,17 @@ func (n *P2PNetwork) removePeer(peer *wsPeer, remotePeerID peer.ID, reason disco
 	removed := false
 
 	n.wsPeersLock.Lock()
-	n.identityTracker.removeIdentity(peer) // safe: removeIdentity only deletes if the stored identity matches this exact wsPeer
 	if cur, ok := n.wsPeers[remotePeerID]; ok && cur == peer {
 		delete(n.wsPeers, remotePeerID)
 		removed = true
 	}
-	_, knownPeer := n.wsPeersToIDs[peer]
-	delete(n.wsPeersToIDs, peer) // always delete reverse entry for this exact wsPeer
+	n.unregisterPeerLocked(peer)
 
 	// Unprotect while still holding wsPeersLock so we can't race with a new
 	// wsPeer insertion for the same remotePeerID between map deletion and
 	// unprotect.
 	if removed {
 		n.service.UnprotectPeer(remotePeerID)
-	}
-	// Throttle slots are per-wsPeer, not per map entry: release for any
-	// known wsPeer on its first cleanup, even if it was already replaced.
-	if knownPeer && peer.throttledOutgoingConnection {
-		n.throttledOutgoingConnections++
 	}
 	n.wsPeersLock.Unlock()
 
