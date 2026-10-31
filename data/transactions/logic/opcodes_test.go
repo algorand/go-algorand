@@ -37,15 +37,15 @@ func TestOpSpecs(t *testing.T) {
 	}
 }
 
-// TestCostDynamic ensures that every cost that depends on the stack is marked
-// as dynamic, which requires that it went through check(). Otherwise compute
-// would charge only its baseCost.
+// TestCostDynamic ensures that every cost that depends on the stack or
+// immediates is marked as dynamic, which requires that it went through check().
+// Otherwise compute would charge only its baseCost.
 func TestCostDynamic(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	checkDynamic := func(cd costDescriptor, name string) {
-		require.Equal(t, cd.chunkCost != 0 || cd.fn != nil, cd.dynamic, name)
+		require.Equal(t, cd.chunkCost != 0 || cd.countCost != 0 || cd.fn != nil, cd.dynamic, name)
 	}
 	for _, spec := range OpSpecs {
 		checkDynamic(spec.OpDetails.FullCost, spec.Name)
