@@ -181,9 +181,9 @@ func parseMsgpVote(msgpData []byte, c *StatelessEncoder) error {
 	if err != nil {
 		return fmt.Errorf("reading map for OneTimeSignature: %w", err)
 	}
-	// Assert OneTimeSignature struct has 6 fields
-	if cnt != 6 {
-		return fmt.Errorf("expected fixed map size 6 for OneTimeSignature, got %d", cnt)
+	// Assert OneTimeSignature struct has 5 fields (ps is always zero and omitted)
+	if cnt != 5 {
+		return fmt.Errorf("expected fixed map size 5 for OneTimeSignature, got %d", cnt)
 	}
 	// Required field for OneTimeSignature: p
 	if s, rErr := p.readString(); rErr != nil || string(s) != "p" {
@@ -224,18 +224,6 @@ func parseMsgpVote(msgpData []byte, c *StatelessEncoder) error {
 		return fmt.Errorf("reading p2s: %w", err)
 	}
 	c.writeBin64(sigP2sVoteValue, val64)
-
-	// Required field for OneTimeSignature: ps
-	if s, rErr := p.readString(); rErr != nil || string(s) != "ps" {
-		return fmt.Errorf("expected string ps, got %s: %w", s, rErr)
-	}
-	val64, err = p.readBin64()
-	if err != nil {
-		return fmt.Errorf("reading ps: %w", err)
-	}
-	if val64 != [64]byte{} {
-		return fmt.Errorf("expected empty array for ps, got %v", val64)
-	}
 
 	// Required field for OneTimeSignature: s
 	if s, rErr := p.readString(); rErr != nil || string(s) != "s" {

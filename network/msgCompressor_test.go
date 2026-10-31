@@ -42,7 +42,7 @@ var (
 		"r":    map[string]any{"rnd": uint64(2), "snd": [32]byte{3}},
 		"sig": map[string]any{
 			"p": [32]byte{4}, "p1s": [64]byte{5}, "p2": [32]byte{6},
-			"p2s": [64]byte{7}, "ps": [64]byte{}, "s": [64]byte{9},
+			"p2s": [64]byte{7}, "s": [64]byte{9},
 		},
 	}
 	sampleVote2 = map[string]any{
@@ -50,7 +50,7 @@ var (
 		"r":    map[string]any{"rnd": uint64(3), "snd": [32]byte{4}},
 		"sig": map[string]any{
 			"p": [32]byte{5}, "p1s": [64]byte{6}, "p2": [32]byte{7},
-			"p2s": [64]byte{8}, "ps": [64]byte{}, "s": [64]byte{10},
+			"p2s": [64]byte{8}, "s": [64]byte{10},
 		},
 	}
 	sampleVote3 = map[string]any{
@@ -58,7 +58,7 @@ var (
 		"r":    map[string]any{"rnd": uint64(4), "snd": [32]byte{5}},
 		"sig": map[string]any{
 			"p": [32]byte{6}, "p1s": [64]byte{7}, "p2": [32]byte{8},
-			"p2s": [64]byte{9}, "ps": [64]byte{}, "s": [64]byte{11},
+			"p2s": [64]byte{9}, "s": [64]byte{11},
 		},
 	}
 )

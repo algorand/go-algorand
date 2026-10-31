@@ -74,6 +74,7 @@ func decodeVote(data []byte) (any, error) {
 	if err := uv.wellFormed(); err != nil {
 		return nil, err
 	}
+	clear(uv.Sig.PKSigOld[:])
 	return uv, nil
 }
 
@@ -88,6 +89,14 @@ func decodeBundle(data []byte) (any, error) {
 	}
 	if err := b.wellFormed(); err != nil {
 		return nil, err
+	}
+	for i := range b.Votes {
+		clear(b.Votes[i].Sig.PKSigOld[:])
+	}
+	for i := range b.EquivocationVotes {
+		for j := range b.EquivocationVotes[i].Sigs {
+			clear(b.EquivocationVotes[i].Sigs[j].PKSigOld[:])
+		}
 	}
 	return b, nil
 }
@@ -104,6 +113,7 @@ func decodeProposal(data []byte) (any, error) {
 	if err := p.PriorVote.wellFormed(); err != nil {
 		return nil, err
 	}
+	clear(p.PriorVote.Sig.PKSigOld[:])
 
 	return compoundMessage{
 		Vote:     p.PriorVote,
