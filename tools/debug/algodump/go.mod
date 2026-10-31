@@ -8,7 +8,7 @@ require (
 	github.com/DataDog/zstd v1.5.7
 	github.com/algorand/go-algorand v0.0.0
 	github.com/algorand/go-deadlock v0.2.5
-	github.com/klauspost/compress v1.18.0
+	github.com/klauspost/compress v1.18.7
 	github.com/valyala/gozstd v1.21.2
 )
 
