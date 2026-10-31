@@ -100,11 +100,10 @@ type P2PNetwork struct {
 
 	capabilitiesDiscovery *p2p.CapabilitiesDiscovery
 
-	bootstrapperStart func()
-	bootstrapperStop  func()
-	nodeInfo          NodeInfo
-	pstore            *peerstore.PeerStore
-	httpServer        *p2p.HTTPServer
+	bootstrapper *bootstrapper
+	nodeInfo     NodeInfo
+	pstore       *peerstore.PeerStore
+	httpServer   *p2p.HTTPServer
 
 	identityTracker identityTracker
 
@@ -336,6 +335,10 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 	peerIDs := pstore.Peers()
 	addrInfos := make([]*peer.AddrInfo, 0, len(peerIDs))
 	for _, peerID := range peerIDs {
+		// The peerstore also holds this host's own keys, and the host is not a bootstrap peer.
+		if peerID == h.ID() {
+			continue
+		}
 		addrInfo := pstore.PeerInfo(peerID)
 		addrInfos = append(addrInfos, &addrInfo)
 	}
@@ -346,8 +349,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		resolveController: dnsaddr.NewMultiaddrDNSResolveController(cfg.DNSSecurityTXTEnforced(), ""),
 		log:               net.log,
 	}
-	net.bootstrapperStart = bootstrapper.start
-	net.bootstrapperStop = bootstrapper.stop
+	net.bootstrapper = bootstrapper
 
 	if cfg.EnableDHTProviders {
 		disc, err0 := p2p.MakeCapabilitiesDiscovery(net.ctx, cfg, h, net.genesisInfo.NetworkID, net.log, bootstrapper.BootstrapFunc)
@@ -428,7 +430,7 @@ func (n *P2PNetwork) peerIDSigner() identityChallengeSigner {
 
 // Start threads, listen on sockets.
 func (n *P2PNetwork) Start() error {
-	n.bootstrapperStart()
+	n.bootstrapper.start()
 	err := n.service.Start()
 	if err != nil {
 		return err
@@ -506,7 +508,7 @@ func (n *P2PNetwork) Stop() {
 	n.ctxCancel()
 
 	n.service.Close()
-	n.bootstrapperStop()
+	n.bootstrapper.stop()
 	n.httpServer.Close()
 	n.mesher.stop()
 	n.wg.Wait()
