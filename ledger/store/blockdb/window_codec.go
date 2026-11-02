@@ -185,14 +185,6 @@ func (e *Encoder) EncodeRow(r basics.Round, payload []byte) ([]byte, basics.Roun
 	return delta, e.anchorRound, nil
 }
 
-// maxDecodedPayloadBytes bounds the per-row decompressed payload size
-// decodeWindow will allocate. Without it, a corrupt or tampered row could
-// encode a uvarint length close to 2^64 and OOM-panic before any error
-// surfaces. 10 MiB is comfortably above the largest protocol
-// MaxTxnBytesPerBlock (currently 5 MiB) plus certificate overhead; bump
-// it alongside any future MaxTxnBytesPerBlock increase.
-const maxDecodedPayloadBytes = 10 << 20
-
 // decodeWindow decodes the per-row chunks for an in-order range of rounds
 // in the same window (all sharing one zstd frame) and returns the payload
 // for the highest round (the last entry in chunks). The first chunk is
@@ -200,7 +192,11 @@ const maxDecodedPayloadBytes = 10 << 20
 // of that frame. The unified read path in blockGetEncoded passes exactly
 // this slice (the SELECT range starts at window_start), so callers do not
 // need to do any anchor detection themselves.
-func decodeWindow(chunks [][]byte) ([]byte, error) {
+//
+// maxPayload bounds each payload's length prefix, so a corrupt or tampered
+// row cannot make decodeWindow allocate up to 2^64 bytes. Callers pass the
+// generated MaxSize of the column's msgp type.
+func decodeWindow(chunks [][]byte, maxPayload int) ([]byte, error) {
 	if len(chunks) == 0 {
 		return nil, fmt.Errorf("blockdb codec: empty window")
 	}
@@ -221,9 +217,9 @@ func decodeWindow(chunks [][]byte) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("blockdb codec: read uvarint #%d: %w", i, err)
 		}
-		if plen > maxDecodedPayloadBytes {
-			return nil, fmt.Errorf("blockdb codec: payload #%d length %d exceeds maxDecodedPayloadBytes=%d (corrupt row?)",
-				i, plen, maxDecodedPayloadBytes)
+		if plen > uint64(maxPayload) {
+			return nil, fmt.Errorf("blockdb codec: payload #%d length %d exceeds maximum %d (corrupt row?)",
+				i, plen, maxPayload)
 		}
 		buf := make([]byte, plen)
 		if _, err := io.ReadFull(r, buf); err != nil {

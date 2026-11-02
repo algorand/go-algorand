@@ -30,6 +30,10 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+// testMaxPayload is the decodeWindow limit for these tests, whose payloads
+// are at most a few hundred bytes.
+const testMaxPayload = 1 << 20
+
 // makePayload returns a deterministic-but-varied byte slice that has both a
 // random prefix (incompressible) and a repeating tail (highly compressible
 // across rows), mimicking the structure of a real block where the body
@@ -90,7 +94,7 @@ func TestWindowCodec_Roundtrip(t *testing.T) {
 	// of chunks from its window's anchor through that row.
 	for i := range total {
 		windowStart := (i / N) * N
-		got, err := decodeWindow(chunks[windowStart : i+1])
+		got, err := decodeWindow(chunks[windowStart:i+1], testMaxPayload)
 		require.NoError(t, err, "row %d", i)
 		require.Equal(t, payloads[i], got, "row %d", i)
 	}
@@ -132,7 +136,7 @@ func TestWindowCodec_RestartMidWindow(t *testing.T) {
 	// Rows [0..4] form one window with anchor at 0.
 	for r := 0; r < 5; r++ {
 		require.Equal(t, basics.Round(0), anchors[r], "row %d", r)
-		got, err := decodeWindow(chunks[0 : r+1])
+		got, err := decodeWindow(chunks[0:r+1], testMaxPayload)
 		require.NoError(t, err, "row %d", r)
 		require.Equal(t, payloads[r], got, "row %d", r)
 	}
@@ -141,14 +145,14 @@ func TestWindowCodec_RestartMidWindow(t *testing.T) {
 	// the restart). Each row's anchor must report 5, not 0.
 	for r := 5; r < 8; r++ {
 		require.Equal(t, basics.Round(5), anchors[r], "row %d", r)
-		got, err := decodeWindow(chunks[5 : r+1])
+		got, err := decodeWindow(chunks[5:r+1], testMaxPayload)
 		require.NoError(t, err, "row %d", r)
 		require.Equal(t, payloads[r], got, "row %d", r)
 	}
 
 	// Round 8 starts a regular new window aligned at the configured boundary.
 	require.Equal(t, basics.Round(8), anchors[8])
-	got, err := decodeWindow(chunks[8:9])
+	got, err := decodeWindow(chunks[8:9], testMaxPayload)
 	require.NoError(t, err)
 	require.Equal(t, payloads[8], got)
 }
@@ -225,21 +229,21 @@ func TestWriterCloseLeavesReusable(t *testing.T) {
 }
 
 // TestWindowCodec_RejectsHugeUvarint ensures that a corrupt or tampered
-// row whose decoded uvarint length exceeds maxDecodedPayloadBytes is
+// row whose decoded uvarint length exceeds decodeWindow's maxPayload is
 // rejected with an error rather than triggering an out-of-memory panic.
 func TestWindowCodec_RejectsHugeUvarint(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Construct a single-chunk window whose decompressed contents start
-	// with a uvarint length well above maxDecodedPayloadBytes.
+	// with a uvarint length one above maxPayload.
 	var huge bytes.Buffer
 	w := zstd.NewWriterLevel(&huge, 1)
 	var lb [binary.MaxVarintLen64]byte
-	n := binary.PutUvarint(lb[:], uint64(maxDecodedPayloadBytes+1))
+	n := binary.PutUvarint(lb[:], testMaxPayload+1)
 	_, err := w.Write(lb[:n])
 	require.NoError(t, err)
 	require.NoError(t, w.Close())
 
-	_, err = decodeWindow([][]byte{huge.Bytes()})
-	require.ErrorContains(t, err, "exceeds maxDecodedPayloadBytes")
+	_, err = decodeWindow([][]byte{huge.Bytes()}, testMaxPayload)
+	require.ErrorContains(t, err, "exceeds maximum")
 }

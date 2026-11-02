@@ -155,14 +155,14 @@ func blockGetEncodedWindowed(tx *sql.Tx, rnd basics.Round, blkOnly bool) ([]byte
 		return blkChunks[0], certChunks[0], nil
 	}
 
-	blk, err := decodeWindow(blkChunks)
+	blk, err := decodeWindow(blkChunks, bookkeeping.BlockMaxSize())
 	if err != nil {
 		return nil, nil, fmt.Errorf("blockdb: decode blkdata at round %d: %w", rnd, err)
 	}
 	if blkOnly {
 		return blk, nil, nil
 	}
-	cert, err := decodeWindow(certChunks)
+	cert, err := decodeWindow(certChunks, agreement.CertificateMaxSize())
 	if err != nil {
 		return nil, nil, fmt.Errorf("blockdb: decode certdata at round %d: %w", rnd, err)
 	}
