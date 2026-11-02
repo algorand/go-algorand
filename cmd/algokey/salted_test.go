@@ -434,7 +434,7 @@ func TestSigSchemeMustMatchKeySource(t *testing.T) {
 	require.Equal(t, protocol.SigSchemeFalcon1024, hctx.signing.Public.Scheme)
 }
 
-func TestSaltedSignProducesVerifiableHashedKeySig(t *testing.T) {
+func TestSaltedSignProducesVerifiableSaltedKeySig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -474,17 +474,17 @@ func TestSaltedSignProducesVerifiableHashedKeySig(t *testing.T) {
 			require.True(t, signed.Sig.Blank())
 			require.True(t, signed.Msig.Blank())
 			require.True(t, signed.Lsig.Blank())
-			require.False(t, signed.Hsig.Blank())
+			require.False(t, signed.SKsig.Blank())
 			require.True(t, signed.AuthAddr.IsZero())
 			require.Equal(t, signing.Public.address(), signed.Authorizer())
-			require.Equal(t, signing.Public.Scheme, signed.Hsig.Scheme)
-			require.Equal(t, signing.Public.Salt, signed.Hsig.Salt)
-			require.Equal(t, signing.Public.PublicKey, signed.Hsig.PublicKey)
-			require.NoError(t, signed.Hsig.Verify(config.Consensus[protocol.ConsensusFuture], signed.Txn, signed.Authorizer()))
+			require.Equal(t, signing.Public.Scheme, signed.SKsig.Scheme)
+			require.Equal(t, signing.Public.Salt, signed.SKsig.Salt)
+			require.Equal(t, signing.Public.PublicKey, signed.SKsig.PublicKey)
+			require.NoError(t, signed.SKsig.Verify(config.Consensus[protocol.ConsensusFuture], signed.Txn, signed.Authorizer()))
 
 			changed := signed
 			changed.Txn.Note = []byte("changed")
-			require.ErrorIs(t, changed.Hsig.Verify(config.Consensus[protocol.ConsensusFuture], changed.Txn, changed.Authorizer()), crypto.ErrSigInvalid)
+			require.ErrorIs(t, changed.SKsig.Verify(config.Consensus[protocol.ConsensusFuture], changed.Txn, changed.Authorizer()), crypto.ErrSigInvalid)
 		})
 	}
 }
@@ -520,8 +520,8 @@ func TestSaltedSignAcceptsMnemonic(t *testing.T) {
 			require.NoError(t, err)
 			var signed transactions.SignedTxn
 			require.NoError(t, protocol.Decode(signedBytes, &signed))
-			require.Equal(t, signing.Public.PublicKey, signed.Hsig.PublicKey)
-			require.NoError(t, signed.Hsig.Verify(config.Consensus[protocol.ConsensusFuture], signed.Txn, signed.Authorizer()))
+			require.Equal(t, signing.Public.PublicKey, signed.SKsig.PublicKey)
+			require.NoError(t, signed.SKsig.Verify(config.Consensus[protocol.ConsensusFuture], signed.Txn, signed.Authorizer()))
 		})
 	}
 }
@@ -622,7 +622,7 @@ func TestSaltedSignSetsAndClearsAuthAddr(t *testing.T) {
 	var resigned transactions.SignedTxn
 	require.NoError(t, protocol.Decode(data, &resigned))
 	require.True(t, resigned.AuthAddr.IsZero())
-	require.False(t, resigned.Hsig.Blank())
+	require.False(t, resigned.SKsig.Blank())
 }
 
 func TestSaltedSignRejectsMixedSignaturesUnlessOverwrite(t *testing.T) {
@@ -658,14 +658,14 @@ func TestSaltedSignRejectsMixedSignaturesUnlessOverwrite(t *testing.T) {
 	var signed transactions.SignedTxn
 	require.NoError(t, protocol.Decode(data, &signed))
 	require.True(t, signed.Sig.Blank())
-	require.False(t, signed.Hsig.Blank())
+	require.False(t, signed.SKsig.Blank())
 }
 
-func TestSaltedSignRejectsNonCompliantSalt(t *testing.T) {
+func TestSaltedSignRejectsOnCurveSalt(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// A key file tampered with a non-compliant salt is refused at sign.
+	// A key file tampered with a salt that puts the address on the Ed25519 curve is refused at sign.
 	signing := saltedTestSigning(t, 1)
 	signing.Public = onCurveSaltedPublic(t, signing.Public)
 
@@ -723,14 +723,14 @@ func TestSaltedSignProgramProducesVerifiableDelegatedLogicSig(t *testing.T) {
 	require.True(t, lsig.Sig.Blank())
 	require.True(t, lsig.Msig.Blank())
 	require.True(t, lsig.LMsig.Blank())
-	require.False(t, lsig.Hsig.Blank())
-	require.Equal(t, signing.Public.Scheme, lsig.Hsig.Scheme)
-	require.Equal(t, signing.Public.Salt, lsig.Hsig.Salt)
-	require.Equal(t, signing.Public.PublicKey, lsig.Hsig.PublicKey)
+	require.False(t, lsig.SKsig.Blank())
+	require.Equal(t, signing.Public.Scheme, lsig.SKsig.Scheme)
+	require.Equal(t, signing.Public.Salt, lsig.SKsig.Salt)
+	require.Equal(t, signing.Public.PublicKey, lsig.SKsig.PublicKey)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-	payload := logic.HsigDelegatedProgram{Addr: signing.Public.address(), Program: lsig.Logic}
-	require.NoError(t, lsig.Hsig.Verify(proto, payload, signing.Public.address()))
+	payload := logic.SKsigDelegatedProgram{Addr: signing.Public.address(), Program: lsig.Logic}
+	require.NoError(t, lsig.SKsig.Verify(proto, payload, signing.Public.address()))
 
 	hdr := bookkeeping.BlockHeader{UpgradeState: bookkeeping.UpgradeState{CurrentProtocol: protocol.ConsensusFuture}}
 	stxn := saltedTestTxn(signing.Public.address())
@@ -741,7 +741,7 @@ func TestSaltedSignProgramProducesVerifiableDelegatedLogicSig(t *testing.T) {
 	wrongAuthorizerTxn := stxn
 	wrongAuthorizerTxn.Txn.Sender[0] ^= 1
 	_, err = verify.TxnGroup([]transactions.SignedTxn{wrongAuthorizerTxn}, &hdr, nil, logic.NoHeaderLedger{})
-	require.ErrorContains(t, err, "hashed-key signature authorizer mismatch")
+	require.ErrorContains(t, err, "salted-key signature authorizer mismatch")
 }
 
 func TestSaltedSignProgramAcceptsMnemonic(t *testing.T) {
@@ -777,9 +777,9 @@ func TestSaltedSignProgramAcceptsMnemonic(t *testing.T) {
 			require.NoError(t, err)
 			var lsig transactions.LogicSig
 			require.NoError(t, protocol.Decode(lsigBytes, &lsig))
-			require.Equal(t, signing.Public.PublicKey, lsig.Hsig.PublicKey)
-			payload := logic.HsigDelegatedProgram{Addr: signing.Public.address(), Program: lsig.Logic}
-			require.NoError(t, lsig.Hsig.Verify(config.Consensus[protocol.ConsensusFuture], payload, signing.Public.address()))
+			require.Equal(t, signing.Public.PublicKey, lsig.SKsig.PublicKey)
+			payload := logic.SKsigDelegatedProgram{Addr: signing.Public.address(), Program: lsig.Logic}
+			require.NoError(t, lsig.SKsig.Verify(config.Consensus[protocol.ConsensusFuture], payload, signing.Public.address()))
 		})
 	}
 }

@@ -60,7 +60,7 @@ func TestSigSchemeBoundsCoverSchemes(t *testing.T) {
 
 	var msg Transaction
 	for _, ts := range basics_testing.SigSchemeTests {
-		acct := basics_testing.MakeHashedKeySigTestAccount(t, 1, ts.Scheme)
+		acct := basics_testing.MakeSaltedKeySigTestAccount(t, 1, ts.Scheme)
 		sig, err := acct.Signer.Sign(msg)
 		require.NoError(t, err)
 

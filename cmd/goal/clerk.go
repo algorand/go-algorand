@@ -334,7 +334,7 @@ func authorizeWithProgram(stxn *transactions.SignedTxn, lsig transactions.LogicS
 		salted = true
 	}
 	if !salted {
-		stxn.Hsig = transactions.HashedKeySig{}
+		stxn.SKsig = transactions.SaltedKeySig{}
 		stxn.Lsig = lsig
 		return
 	}
@@ -343,7 +343,7 @@ func authorizeWithProgram(stxn *transactions.SignedTxn, lsig transactions.LogicS
 		reportErrorf("program authorizes %s, but the transaction is authorized by %s", addr, authorizer)
 	}
 	stxn.Lsig = transactions.LogicSig{}
-	stxn.Hsig = transactions.HashedKeySig{
+	stxn.SKsig = transactions.SaltedKeySig{
 		Scheme:    protocol.SigSchemeLogicSig,
 		Salt:      salt,
 		PublicKey: lsig.Logic,
@@ -972,7 +972,7 @@ var groupCmd = &cobra.Command{
 
 			// A program authorization is kept, as an Lsig is, since grouping
 			// does not invalidate it.
-			if !stxn.Sig.Blank() || !stxn.Msig.Blank() || (!stxn.Hsig.Blank() && !stxn.Hsig.IsLogicSig()) {
+			if !stxn.Sig.Blank() || !stxn.Msig.Blank() || (!stxn.SKsig.Blank() && !stxn.SKsig.IsLogicSig()) {
 				reportErrorf("Transaction #%d with ID of %s is already signed", transactionIdx, stxn.ID().String())
 			}
 
@@ -1094,7 +1094,7 @@ func disassembleFile(fname, outname string) {
 	if err == nil {
 		// success, extract program to disassemble
 		program = lsig.Logic
-		if !lsig.Sig.Blank() || !lsig.Msig.Blank() || !lsig.LMsig.Blank() || !lsig.Hsig.Blank() || len(lsig.Args) > 0 {
+		if !lsig.Sig.Blank() || !lsig.Msig.Blank() || !lsig.LMsig.Blank() || !lsig.SKsig.Blank() || len(lsig.Args) > 0 {
 			nologic := lsig
 			nologic.Logic = nil
 			ilsig := lsigToInspect(nologic)

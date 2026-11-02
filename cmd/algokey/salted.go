@@ -302,12 +302,12 @@ func runSaltedSignWithOptions(opts saltedSignOptions) error {
 			clearSignedTxnAuthorization(&stxn)
 		}
 
-		hsig, signErr := signSalted(hctx, stxn.Txn)
+		sksig, signErr := signSalted(hctx, stxn.Txn)
 		if signErr != nil {
 			return fmt.Errorf("cannot sign transaction: %w", signErr)
 		}
 
-		stxn.Hsig = hsig
+		stxn.SKsig = sksig
 		if stxn.Txn.Sender != public.address() {
 			stxn.AuthAddr = public.address()
 		}
@@ -366,13 +366,13 @@ func resolveSaltedSigningContext(keyfile, mnemonic, schemeName string) (saltedSi
 	}, nil
 }
 
-func signSalted(hctx saltedSigningContext, message crypto.Hashable) (transactions.HashedKeySig, error) {
+func signSalted(hctx saltedSigningContext, message crypto.Hashable) (transactions.SaltedKeySig, error) {
 	signature, err := hctx.ops.sign(hctx.signing.PrivateKey, message)
 	if err != nil {
-		return transactions.HashedKeySig{}, err
+		return transactions.SaltedKeySig{}, err
 	}
 
-	return transactions.HashedKeySig{
+	return transactions.SaltedKeySig{
 		Scheme:    hctx.signing.Public.Scheme,
 		Salt:      hctx.signing.Public.Salt,
 		PublicKey: hctx.signing.Public.PublicKey,
@@ -409,14 +409,14 @@ func runSaltedSignProgramWithOptions(opts saltedSignProgramOptions) error {
 	if looksLikeTealSource(program) {
 		return errors.New("program is not compiled bytecode; compile it first (e.g. goal clerk compile) and don't use the .teal extension")
 	}
-	hsig, err := signSalted(hctx, logic.HsigDelegatedProgram{Addr: hctx.signing.Public.address(), Program: program})
+	sksig, err := signSalted(hctx, logic.SKsigDelegatedProgram{Addr: hctx.signing.Public.address(), Program: program})
 	if err != nil {
 		return fmt.Errorf("cannot sign program: %w", err)
 	}
 
 	lsig := transactions.LogicSig{
 		Logic: program,
-		Hsig:  hsig,
+		SKsig: sksig,
 	}
 	if err = writeFile(opts.outfile, protocol.Encode(&lsig), 0600); err != nil {
 		return fmt.Errorf("cannot write LogicSig to %s: %w", opts.outfile, err)
@@ -451,7 +451,7 @@ func clearSignedTxnAuthorization(stxn *transactions.SignedTxn) {
 	stxn.Sig = crypto.Signature{}
 	stxn.Msig = crypto.MultisigSig{}
 	stxn.Lsig = transactions.LogicSig{}
-	stxn.Hsig = transactions.HashedKeySig{}
+	stxn.SKsig = transactions.SaltedKeySig{}
 	stxn.AuthAddr = basics.Address{}
 }
 

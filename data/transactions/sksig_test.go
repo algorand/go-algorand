@@ -34,20 +34,20 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-type hashedKeySigTestFixture struct {
+type saltedKeySigTestFixture struct {
 	name       string
 	signer     basics_testing.SigSchemeSigner
 	proto      config.ConsensusParams
 	txn        Transaction
 	authorizer basics.Address
-	hsig       HashedKeySig
+	sksig      SaltedKeySig
 }
 
 // protoWithSchemeDisabled returns a copy of the fixture's consensus params
 // with the fixture's scheme turned off.
-func (f hashedKeySigTestFixture) protoWithSchemeDisabled(t *testing.T) config.ConsensusParams {
+func (f saltedKeySigTestFixture) protoWithSchemeDisabled(t *testing.T) config.ConsensusParams {
 	proto := f.proto
-	switch f.hsig.Scheme {
+	switch f.sksig.Scheme {
 	case protocol.SigSchemeFalcon1024:
 		proto.EnablePQSchemeFalcon1024 = false
 	case protocol.SigSchemeFalcon512:
@@ -57,14 +57,14 @@ func (f hashedKeySigTestFixture) protoWithSchemeDisabled(t *testing.T) config.Co
 	case protocol.SigSchemeLogicSig:
 		proto.EnableSigSchemeLogicSig = false
 	default:
-		t.Fatalf("unknown scheme %s", f.hsig.Scheme)
+		t.Fatalf("unknown scheme %s", f.sksig.Scheme)
 	}
 	return proto
 }
 
-func makeHashedKeySigTestFixture(t *testing.T, firstSeedByte byte, scheme protocol.SigScheme) hashedKeySigTestFixture {
+func makeSaltedKeySigTestFixture(t *testing.T, firstSeedByte byte, scheme protocol.SigScheme) saltedKeySigTestFixture {
 	schemeInfo := basics_testing.SigSchemeTestInfo(t, scheme)
-	acct := basics_testing.MakeHashedKeySigTestAccount(t, firstSeedByte, scheme)
+	acct := basics_testing.MakeSaltedKeySigTestAccount(t, firstSeedByte, scheme)
 
 	txn := Transaction{
 		Type: protocol.PaymentTx,
@@ -82,13 +82,13 @@ func makeHashedKeySigTestFixture(t *testing.T, firstSeedByte byte, scheme protoc
 	proto := config.Consensus[protocol.ConsensusFuture]
 	require.True(t, SigSchemeEnabled(proto, scheme))
 
-	return hashedKeySigTestFixture{
+	return saltedKeySigTestFixture{
 		name:       schemeInfo.Name,
 		signer:     acct.Signer,
 		proto:      proto,
 		txn:        txn,
 		authorizer: acct.Address,
-		hsig: HashedKeySig{
+		sksig: SaltedKeySig{
 			Scheme:    acct.Scheme,
 			Salt:      acct.Salt,
 			PublicKey: acct.PublicKey,
@@ -97,10 +97,10 @@ func makeHashedKeySigTestFixture(t *testing.T, firstSeedByte byte, scheme protoc
 	}
 }
 
-func makeHashedKeySigTestFixtures(t *testing.T, firstSeedByte byte) []hashedKeySigTestFixture {
-	fixtures := make([]hashedKeySigTestFixture, 0, len(basics_testing.SigSchemeTests))
+func makeSaltedKeySigTestFixtures(t *testing.T, firstSeedByte byte) []saltedKeySigTestFixture {
+	fixtures := make([]saltedKeySigTestFixture, 0, len(basics_testing.SigSchemeTests))
 	for _, scheme := range basics_testing.SigSchemeTests {
-		fixtures = append(fixtures, makeHashedKeySigTestFixture(t, firstSeedByte, scheme.Scheme))
+		fixtures = append(fixtures, makeSaltedKeySigTestFixture(t, firstSeedByte, scheme.Scheme))
 	}
 	return fixtures
 }
@@ -170,17 +170,17 @@ func TestLogicSigArgsDecodeBounds(t *testing.T) {
 	require.Error(t, err)
 }
 
-// TestHashedKeySigSchemeSizeLimits checks that ValidateEnvelope holds each scheme to
+// TestSaltedKeySigSchemeSizeLimits checks that ValidateEnvelope holds each scheme to
 // its own size limits, which are tighter than the wire bounds for every scheme
 // but the largest. For ls, it also checks that the largest program and the
 // largest set of arguments that LogicSig allows still fit.
-func TestHashedKeySigSchemeSizeLimits(t *testing.T) {
+func TestSaltedKeySigSchemeSizeLimits(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
 
-	edAcct := basics_testing.MakeHashedKeySigTestAccount(t, 1, protocol.SigSchemeEd25519)
-	edSig := HashedKeySig{
+	edAcct := basics_testing.MakeSaltedKeySigTestAccount(t, 1, protocol.SigSchemeEd25519)
+	edSig := SaltedKeySig{
 		Scheme:    protocol.SigSchemeEd25519,
 		Salt:      edAcct.Salt,
 		PublicKey: edAcct.PublicKey,
@@ -189,7 +189,7 @@ func TestHashedKeySigSchemeSizeLimits(t *testing.T) {
 	require.NoError(t, edSig.ValidateEnvelope(proto, edAcct.Address))
 	long := edSig
 	long.Signature = make([]byte, len(crypto.Signature{})+1)
-	require.ErrorIs(t, long.ValidateEnvelope(proto, edAcct.Address), errHashedKeySigTooLarge)
+	require.ErrorIs(t, long.ValidateEnvelope(proto, edAcct.Address), errSaltedKeySigTooLarge)
 
 	program := make([]byte, bounds.MaxLogicSigMaxSize)
 	program[0] = 0x0e // #pragma version 14
@@ -204,7 +204,7 @@ func TestHashedKeySigSchemeSizeLimits(t *testing.T) {
 		args[i] = make([]byte, n)
 		remaining -= n
 	}
-	lsSig := HashedKeySig{
+	lsSig := SaltedKeySig{
 		Scheme:    protocol.SigSchemeLogicSig,
 		Salt:      salt,
 		PublicKey: program,
@@ -217,152 +217,152 @@ func TestHashedKeySigSchemeSizeLimits(t *testing.T) {
 	salt, authorizer, err = basics.CanonicalAddressSalt(protocol.SigSchemeLogicSig, long.PublicKey)
 	require.NoError(t, err)
 	long.Salt = salt
-	require.ErrorIs(t, long.ValidateEnvelope(proto, authorizer), errHashedKeySigTooLarge)
+	require.ErrorIs(t, long.ValidateEnvelope(proto, authorizer), errSaltedKeySigTooLarge)
 }
 
-func TestHashedKeySigDecodeBoundsFeedSignedTxnMaxSize(t *testing.T) {
+func TestSaltedKeySigDecodeBoundsFeedSignedTxnMaxSize(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	expectedHashedKeySigMaxSize := 1 +
+	expectedSaltedKeySigMaxSize := 1 +
 		4 + protocol.SigSchemeMaxSize() +
 		4 + basics.AddressSaltMaxSize() +
 		3 + msgp.BytesPrefixSize + maxSigSchemePublicKeySize() +
 		4 + msgp.BytesPrefixSize + maxSigSchemeSignatureSize()
-	require.Equal(t, expectedHashedKeySigMaxSize, HashedKeySigMaxSize())
+	require.Equal(t, expectedSaltedKeySigMaxSize, SaltedKeySigMaxSize())
 
 	expectedLogicSigMaxSize := 1 +
 		4 + msgp.ArrayHeaderSize + EvalMaxArgs*msgp.BytesPrefixSize + bounds.MaxLogicSigMaxSize +
 		2 + msgp.BytesPrefixSize + bounds.MaxLogicSigMaxSize +
 		6 + crypto.MultisigSigMaxSize() +
 		5 + crypto.MultisigSigMaxSize() +
-		6 + expectedHashedKeySigMaxSize +
+		6 + expectedSaltedKeySigMaxSize +
 		4 + crypto.SignatureMaxSize()
 	require.Equal(t, expectedLogicSigMaxSize, LogicSigMaxSize())
 
-	// HashedKeySigMaxSize is part of the network-facing SignedTxn bound. Growing
-	// MaxSigScheme* intentionally increases HashedKeySigMaxSize and therefore SignedTxnMaxSize.
+	// SaltedKeySigMaxSize is part of the network-facing SignedTxn bound. Growing
+	// MaxSigScheme* intentionally increases SaltedKeySigMaxSize and therefore SignedTxnMaxSize.
 	expectedSignedTxnMaxSize := 1 +
 		4 + crypto.SignatureMaxSize() +
 		5 + crypto.MultisigSigMaxSize() +
 		5 + LogicSigMaxSize() +
-		6 + expectedHashedKeySigMaxSize +
+		6 + expectedSaltedKeySigMaxSize +
 		4 + TransactionMaxSize() +
 		5 + basics.AddressMaxSize()
 	require.Equal(t, expectedSignedTxnMaxSize, SignedTxnMaxSize())
 }
 
-func TestHashedKeySigBlank(t *testing.T) {
+func TestSaltedKeySigBlank(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	require.True(t, (HashedKeySig{}).Blank())
-	require.True(t, (HashedKeySig{Salt: 0}).Blank())
+	require.True(t, (SaltedKeySig{}).Blank())
+	require.True(t, (SaltedKeySig{Salt: 0}).Blank())
 
-	require.False(t, (HashedKeySig{Salt: 1}).Blank())
-	require.False(t, (HashedKeySig{Scheme: protocol.SigSchemeFalcon1024}).Blank())
-	require.False(t, (HashedKeySig{Scheme: protocol.SigSchemeFalcon512}).Blank())
-	require.False(t, (HashedKeySig{Scheme: protocol.SigSchemeEd25519}).Blank())
-	require.False(t, (HashedKeySig{PublicKey: []byte{1}}).Blank())
-	require.False(t, (HashedKeySig{Signature: []byte{1}}).Blank())
+	require.False(t, (SaltedKeySig{Salt: 1}).Blank())
+	require.False(t, (SaltedKeySig{Scheme: protocol.SigSchemeFalcon1024}).Blank())
+	require.False(t, (SaltedKeySig{Scheme: protocol.SigSchemeFalcon512}).Blank())
+	require.False(t, (SaltedKeySig{Scheme: protocol.SigSchemeEd25519}).Blank())
+	require.False(t, (SaltedKeySig{PublicKey: []byte{1}}).Blank())
+	require.False(t, (SaltedKeySig{Signature: []byte{1}}).Blank())
 }
 
-func TestHashedKeySigEqual(t *testing.T) {
+func TestSaltedKeySigEqual(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for _, fixture := range makeHashedKeySigTestFixtures(t, 0) {
+	for _, fixture := range makeSaltedKeySigTestFixtures(t, 0) {
 		t.Run(fixture.name, func(t *testing.T) {
-			same := fixture.hsig
+			same := fixture.sksig
 			same.PublicKey = slices.Clone(same.PublicKey)
 			same.Signature = slices.Clone(same.Signature)
 
-			require.True(t, fixture.hsig.Equal(same))
+			require.True(t, fixture.sksig.Equal(same))
 
-			changedScheme := fixture.hsig
+			changedScheme := fixture.sksig
 			changedScheme.Scheme = protocol.SigScheme{'x', '1'}
-			require.False(t, fixture.hsig.Equal(changedScheme))
+			require.False(t, fixture.sksig.Equal(changedScheme))
 
-			changedSalt := fixture.hsig
+			changedSalt := fixture.sksig
 			changedSalt.Salt++
-			require.False(t, fixture.hsig.Equal(changedSalt))
+			require.False(t, fixture.sksig.Equal(changedSalt))
 
-			changedPublicKey := fixture.hsig
+			changedPublicKey := fixture.sksig
 			changedPublicKey.PublicKey = slices.Clone(changedPublicKey.PublicKey)
 			changedPublicKey.PublicKey[0] ^= 1
-			require.False(t, fixture.hsig.Equal(changedPublicKey))
+			require.False(t, fixture.sksig.Equal(changedPublicKey))
 
-			changedSignature := fixture.hsig
+			changedSignature := fixture.sksig
 			changedSignature.Signature = slices.Clone(changedSignature.Signature)
 			changedSignature.Signature[0] ^= 1
-			require.False(t, fixture.hsig.Equal(changedSignature))
+			require.False(t, fixture.sksig.Equal(changedSignature))
 
-			blank := HashedKeySig{}
-			require.True(t, blank.Equal(HashedKeySig{}))
-			require.False(t, blank.Equal(fixture.hsig))
+			blank := SaltedKeySig{}
+			require.True(t, blank.Equal(SaltedKeySig{}))
+			require.False(t, blank.Equal(fixture.sksig))
 		})
 	}
 }
 
-func TestHashedKeySigAuthorizerAddress(t *testing.T) {
+func TestSaltedKeySigAuthorizerAddress(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for _, fixture := range makeHashedKeySigTestFixtures(t, 0) {
+	for _, fixture := range makeSaltedKeySigTestFixtures(t, 0) {
 		t.Run(fixture.name, func(t *testing.T) {
-			require.Equal(t, fixture.authorizer, fixture.hsig.Address())
-			require.Equal(t, basics.SaltedAddress(fixture.hsig.Scheme, fixture.hsig.Salt, fixture.hsig.PublicKey), fixture.hsig.Address())
+			require.Equal(t, fixture.authorizer, fixture.sksig.Address())
+			require.Equal(t, basics.SaltedAddress(fixture.sksig.Scheme, fixture.sksig.Salt, fixture.sksig.PublicKey), fixture.sksig.Address())
 		})
 	}
 }
 
-func TestHashedKeySigValidateEnvelope(t *testing.T) {
+func TestSaltedKeySigValidateEnvelope(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for _, fixture := range makeHashedKeySigTestFixtures(t, 0) {
+	for _, fixture := range makeSaltedKeySigTestFixtures(t, 0) {
 		t.Run(fixture.name, func(t *testing.T) {
-			require.NoError(t, fixture.hsig.ValidateScheme(fixture.proto))
+			require.NoError(t, fixture.sksig.ValidateScheme(fixture.proto))
 
-			schemeOnly := HashedKeySig{Scheme: fixture.hsig.Scheme}
+			schemeOnly := SaltedKeySig{Scheme: fixture.sksig.Scheme}
 			require.NoError(t, schemeOnly.ValidateScheme(fixture.proto))
 
-			require.NoError(t, fixture.hsig.ValidateEnvelope(fixture.proto, fixture.authorizer))
+			require.NoError(t, fixture.sksig.ValidateEnvelope(fixture.proto, fixture.authorizer))
 
-			noSignature := fixture.hsig
+			noSignature := fixture.sksig
 			noSignature.Signature = nil
 			require.NoError(t, noSignature.ValidateEnvelope(fixture.proto, fixture.authorizer))
 
 			disabledProto := fixture.protoWithSchemeDisabled(t)
-			require.ErrorIs(t, fixture.hsig.ValidateScheme(disabledProto), ErrSigSchemeNotEnabled)
-			require.ErrorIs(t, fixture.hsig.ValidateEnvelope(disabledProto, fixture.authorizer), ErrSigSchemeNotEnabled)
+			require.ErrorIs(t, fixture.sksig.ValidateScheme(disabledProto), ErrSigSchemeNotEnabled)
+			require.ErrorIs(t, fixture.sksig.ValidateEnvelope(disabledProto, fixture.authorizer), ErrSigSchemeNotEnabled)
 
-			unknownScheme := fixture.hsig
+			unknownScheme := fixture.sksig
 			unknownScheme.Scheme = protocol.SigScheme{'x', '1'}
 			require.ErrorIs(t, unknownScheme.ValidateScheme(fixture.proto), ErrSigSchemeNotSupported)
 			require.ErrorIs(t, unknownScheme.ValidateEnvelope(fixture.proto, unknownScheme.Address()), ErrSigSchemeNotSupported)
 
-			malformedPublicKey := fixture.hsig
+			malformedPublicKey := fixture.sksig
 			malformedPublicKey.PublicKey = malformedPublicKey.PublicKey[:len(malformedPublicKey.PublicKey)-1]
 			require.NoError(t, malformedPublicKey.ValidateEnvelope(fixture.proto, malformedPublicKey.Address()))
 			require.ErrorIs(t, malformedPublicKey.Verify(fixture.proto, fixture.txn, malformedPublicKey.Address()), crypto.ErrSigInvalid)
 
 			var wrongAuthorizer basics.Address
 			wrongAuthorizer[0] = 1
-			require.ErrorIs(t, fixture.hsig.ValidateEnvelope(fixture.proto, wrongAuthorizer), errHashedKeySigAuthorizerMismatch)
+			require.ErrorIs(t, fixture.sksig.ValidateEnvelope(fixture.proto, wrongAuthorizer), errSaltedKeySigAuthorizerMismatch)
 
-			corruptSignature := fixture.hsig
+			corruptSignature := fixture.sksig
 			corruptSignature.Signature = slices.Clone(corruptSignature.Signature)
 			corruptSignature.Signature[0] ^= 1
 			require.NoError(t, corruptSignature.ValidateEnvelope(fixture.proto, fixture.authorizer))
 			require.Error(t, corruptSignature.Verify(fixture.proto, fixture.txn, fixture.authorizer))
 
-			require.ErrorIs(t, (HashedKeySig{}).ValidateEnvelope(fixture.proto, fixture.authorizer), errHashedKeySigBlank)
-			require.ErrorIs(t, (HashedKeySig{}).ValidateScheme(fixture.proto), errHashedKeySigBlank)
+			require.ErrorIs(t, (SaltedKeySig{}).ValidateEnvelope(fixture.proto, fixture.authorizer), errSaltedKeySigBlank)
+			require.ErrorIs(t, (SaltedKeySig{}).ValidateScheme(fixture.proto), errSaltedKeySigBlank)
 		})
 	}
 }
 
-// TestHashedKeySigLogicSigScheme pins the split that the ls scheme depends on: its
+// TestSaltedKeySigLogicSigScheme pins the split that the ls scheme depends on: its
 // envelope validates like any other authorization scheme, so the address check is shared,
 // but the generic Verify path refuses it. Callers must dispatch on the scheme
 // and evaluate the program instead.
-func TestHashedKeySigLogicSigScheme(t *testing.T) {
+func TestSaltedKeySigLogicSigScheme(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
@@ -373,28 +373,28 @@ func TestHashedKeySigLogicSigScheme(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, authorizer.IsOffEd25519Curve())
 
-	hsig := HashedKeySig{
+	sksig := SaltedKeySig{
 		Scheme:    protocol.SigSchemeLogicSig,
 		Salt:      salt,
 		PublicKey: program,
 	}
-	require.Equal(t, authorizer, hsig.Address())
+	require.Equal(t, authorizer, sksig.Address())
 
 	// The address check must be reachable for ls, since that is the whole
 	// authorization other than evaluating the program.
-	require.NoError(t, hsig.ValidateEnvelope(proto, authorizer))
+	require.NoError(t, sksig.ValidateEnvelope(proto, authorizer))
 
 	var wrongAuthorizer basics.Address
 	wrongAuthorizer[0] = 1
-	require.ErrorIs(t, hsig.ValidateEnvelope(proto, wrongAuthorizer), errHashedKeySigAuthorizerMismatch)
+	require.ErrorIs(t, sksig.ValidateEnvelope(proto, wrongAuthorizer), errSaltedKeySigAuthorizerMismatch)
 
 	disabledProto := proto
 	disabledProto.EnableSigSchemeLogicSig = false
-	require.ErrorIs(t, hsig.ValidateEnvelope(disabledProto, authorizer), ErrSigSchemeNotEnabled)
+	require.ErrorIs(t, sksig.ValidateEnvelope(disabledProto, authorizer), ErrSigSchemeNotEnabled)
 
 	// A program's args are not signature bytes. Whatever they hold, no caller
 	// may authorize an ls account by handing them to a signature verifier.
-	withArgs := hsig
+	withArgs := sksig
 	withArgs.Signature = []byte("args")
 	txn := Transaction{
 		Type:             protocol.PaymentTx,
@@ -404,39 +404,39 @@ func TestHashedKeySigLogicSigScheme(t *testing.T) {
 	require.ErrorIs(t, withArgs.Verify(proto, txn, authorizer), errLogicSigNotEvaluated)
 }
 
-func TestHashedKeySigVerify(t *testing.T) {
+func TestSaltedKeySigVerify(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for _, fixture := range makeHashedKeySigTestFixtures(t, 0) {
+	for _, fixture := range makeSaltedKeySigTestFixtures(t, 0) {
 		t.Run(fixture.name, func(t *testing.T) {
-			require.NoError(t, fixture.hsig.Verify(fixture.proto, fixture.txn, fixture.authorizer))
+			require.NoError(t, fixture.sksig.Verify(fixture.proto, fixture.txn, fixture.authorizer))
 		})
 	}
 }
 
-func TestHashedKeySigBatchPrep(t *testing.T) {
+func TestSaltedKeySigBatchPrep(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	ed := makeHashedKeySigTestFixture(t, 1, protocol.SigSchemeEd25519)
+	ed := makeSaltedKeySigTestFixture(t, 1, protocol.SigSchemeEd25519)
 	edBatch := crypto.MakeBatchVerifier()
-	require.True(t, ed.hsig.Batched())
-	require.NoError(t, ed.hsig.BatchPrep(ed.proto, ed.txn, ed.authorizer, edBatch))
+	require.True(t, ed.sksig.Batched())
+	require.NoError(t, ed.sksig.BatchPrep(ed.proto, ed.txn, ed.authorizer, edBatch))
 	require.Equal(t, 1, edBatch.GetNumberOfEnqueuedSignatures())
 	require.NoError(t, edBatch.Verify())
 
-	falcon := makeHashedKeySigTestFixture(t, 1, protocol.SigSchemeFalcon1024)
+	falcon := makeSaltedKeySigTestFixture(t, 1, protocol.SigSchemeFalcon1024)
 	falconBatch := crypto.MakeBatchVerifier()
-	require.False(t, falcon.hsig.Batched())
-	require.NoError(t, falcon.hsig.BatchPrep(falcon.proto, falcon.txn, falcon.authorizer, falconBatch))
+	require.False(t, falcon.sksig.Batched())
+	require.NoError(t, falcon.sksig.BatchPrep(falcon.proto, falcon.txn, falcon.authorizer, falconBatch))
 	require.Zero(t, falconBatch.GetNumberOfEnqueuedSignatures())
-	require.False(t, (HashedKeySig{Scheme: protocol.SigScheme{'x', '1'}}).Batched())
+	require.False(t, (SaltedKeySig{Scheme: protocol.SigScheme{'x', '1'}}).Batched())
 }
 
-func TestHashedKeySigBatchPrepMatchesVerifyEnvelopeErrors(t *testing.T) {
+func TestSaltedKeySigBatchPrepMatchesVerifyEnvelopeErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	fixture := makeHashedKeySigTestFixture(t, 2, protocol.SigSchemeEd25519)
-	proto, txn, valid, authorizer := fixture.proto, fixture.txn, fixture.hsig, fixture.authorizer
+	fixture := makeSaltedKeySigTestFixture(t, 2, protocol.SigSchemeEd25519)
+	proto, txn, valid, authorizer := fixture.proto, fixture.txn, fixture.sksig, fixture.authorizer
 	disabledProto := proto
 	disabledProto.EnableSigSchemeEd25519 = false
 	unsupported := valid
@@ -448,21 +448,21 @@ func TestHashedKeySigBatchPrepMatchesVerifyEnvelopeErrors(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		hsig       HashedKeySig
+		sksig      SaltedKeySig
 		proto      config.ConsensusParams
 		authorizer basics.Address
 		expected   error
 	}{
-		{"blank", HashedKeySig{}, proto, authorizer, errHashedKeySigBlank},
+		{"blank", SaltedKeySig{}, proto, authorizer, errSaltedKeySigBlank},
 		{"unsupported", unsupported, proto, authorizer, ErrSigSchemeNotSupported},
 		{"disabled", valid, disabledProto, authorizer, ErrSigSchemeNotEnabled},
-		{"authorizer-mismatch", valid, proto, wrongAuthorizer, errHashedKeySigAuthorizerMismatch},
-		{"empty-signature", emptySignature, proto, authorizer, errHashedKeySigEmpty},
+		{"authorizer-mismatch", valid, proto, wrongAuthorizer, errSaltedKeySigAuthorizerMismatch},
+		{"empty-signature", emptySignature, proto, authorizer, errSaltedKeySigEmpty},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			verifyErr := test.hsig.Verify(test.proto, txn, test.authorizer)
-			batchErr := test.hsig.BatchPrep(test.proto, txn, test.authorizer, crypto.MakeBatchVerifier())
+			verifyErr := test.sksig.Verify(test.proto, txn, test.authorizer)
+			batchErr := test.sksig.BatchPrep(test.proto, txn, test.authorizer, crypto.MakeBatchVerifier())
 			require.ErrorIs(t, verifyErr, test.expected)
 			require.ErrorIs(t, batchErr, test.expected)
 			require.EqualError(t, batchErr, verifyErr.Error())
@@ -470,20 +470,20 @@ func TestHashedKeySigBatchPrepMatchesVerifyEnvelopeErrors(t *testing.T) {
 	}
 }
 
-func TestHashedKeySigVerifyAcceptsSignatureOverRawTxn(t *testing.T) {
+func TestSaltedKeySigVerifyAcceptsSignatureOverRawTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for _, fixture := range makeHashedKeySigTestFixtures(t, 0) { // fixture uses signer.sign()
+	for _, fixture := range makeSaltedKeySigTestFixtures(t, 0) { // fixture uses signer.sign()
 		t.Run(fixture.name, func(t *testing.T) {
 			rawTxnSignature, err := fixture.signer.SignBytes(crypto.HashRep(fixture.txn))
 			require.NoError(t, err)
 
 			// Sign(txn) applies HashRep internally, so it must produce the same sig as SignBytes(HashRep(txn))
-			require.Equal(t, fixture.hsig.Signature, rawTxnSignature)
+			require.Equal(t, fixture.sksig.Signature, rawTxnSignature)
 
-			hsig := fixture.hsig
-			hsig.Signature = rawTxnSignature
-			require.NoError(t, hsig.Verify(fixture.proto, fixture.txn, fixture.authorizer))
+			sksig := fixture.sksig
+			sksig.Signature = rawTxnSignature
+			require.NoError(t, sksig.Verify(fixture.proto, fixture.txn, fixture.authorizer))
 
 			require.NoError(t, fixture.signer.Verify(fixture.txn, rawTxnSignature))
 			require.NoError(t, fixture.signer.VerifyBytes(crypto.HashRep(fixture.txn), rawTxnSignature))
@@ -495,133 +495,133 @@ func TestHashedKeySigVerifyAcceptsSignatureOverRawTxn(t *testing.T) {
 			require.NoError(t, err)
 			require.False(t, bytes.Equal(txidSignature, rawTxnSignature))
 
-			hsig.Signature = txidSignature
-			require.ErrorIs(t, hsig.Verify(fixture.proto, fixture.txn, fixture.authorizer), crypto.ErrSigInvalid)
+			sksig.Signature = txidSignature
+			require.ErrorIs(t, sksig.Verify(fixture.proto, fixture.txn, fixture.authorizer), crypto.ErrSigInvalid)
 		})
 	}
 }
 
-func TestHashedKeySigVerifyChecksConsensusParams(t *testing.T) {
+func TestSaltedKeySigVerifyChecksConsensusParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for _, fixture := range makeHashedKeySigTestFixtures(t, 0) {
+	for _, fixture := range makeSaltedKeySigTestFixtures(t, 0) {
 		t.Run(fixture.name, func(t *testing.T) {
-			require.NoError(t, fixture.hsig.Verify(fixture.proto, fixture.txn, fixture.authorizer))
+			require.NoError(t, fixture.sksig.Verify(fixture.proto, fixture.txn, fixture.authorizer))
 
 			disabledProto := fixture.protoWithSchemeDisabled(t)
-			require.ErrorIs(t, fixture.hsig.Verify(disabledProto, fixture.txn, fixture.authorizer), ErrSigSchemeNotEnabled)
+			require.ErrorIs(t, fixture.sksig.Verify(disabledProto, fixture.txn, fixture.authorizer), ErrSigSchemeNotEnabled)
 		})
 	}
 }
 
-func TestHashedKeySigVerifyRejectsBlank(t *testing.T) {
+func TestSaltedKeySigVerifyRejectsBlank(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for _, fixture := range makeHashedKeySigTestFixtures(t, 0) {
+	for _, fixture := range makeSaltedKeySigTestFixtures(t, 0) {
 		t.Run(fixture.name, func(t *testing.T) {
-			require.ErrorIs(t, (HashedKeySig{}).Verify(fixture.proto, fixture.txn, fixture.authorizer), errHashedKeySigBlank)
+			require.ErrorIs(t, (SaltedKeySig{}).Verify(fixture.proto, fixture.txn, fixture.authorizer), errSaltedKeySigBlank)
 		})
 	}
 }
 
-func TestHashedKeySigVerifyRejectsEmptySignature(t *testing.T) {
+func TestSaltedKeySigVerifyRejectsEmptySignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for _, fixture := range makeHashedKeySigTestFixtures(t, 0) {
+	for _, fixture := range makeSaltedKeySigTestFixtures(t, 0) {
 		t.Run(fixture.name, func(t *testing.T) {
-			hsig := fixture.hsig
-			hsig.Signature = nil
+			sksig := fixture.sksig
+			sksig.Signature = nil
 
-			require.ErrorIs(t, hsig.Verify(fixture.proto, fixture.txn, fixture.authorizer), errHashedKeySigEmpty)
+			require.ErrorIs(t, sksig.Verify(fixture.proto, fixture.txn, fixture.authorizer), errSaltedKeySigEmpty)
 		})
 	}
 }
 
-func TestHashedKeySigVerifyRejectsUnsupportedScheme(t *testing.T) {
+func TestSaltedKeySigVerifyRejectsUnsupportedScheme(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for _, fixture := range makeHashedKeySigTestFixtures(t, 0) {
+	for _, fixture := range makeSaltedKeySigTestFixtures(t, 0) {
 		t.Run(fixture.name, func(t *testing.T) {
-			hsig := fixture.hsig
-			hsig.Scheme = protocol.SigScheme{'x', '1'}
-			hsig.Signature = []byte{1}
+			sksig := fixture.sksig
+			sksig.Scheme = protocol.SigScheme{'x', '1'}
+			sksig.Signature = []byte{1}
 
-			require.ErrorIs(t, hsig.Verify(fixture.proto, fixture.txn, hsig.Address()), ErrSigSchemeNotSupported)
+			require.ErrorIs(t, sksig.Verify(fixture.proto, fixture.txn, sksig.Address()), ErrSigSchemeNotSupported)
 		})
 	}
 }
 
-func TestHashedKeySigVerifyRejectsAuthorizerMismatch(t *testing.T) {
+func TestSaltedKeySigVerifyRejectsAuthorizerMismatch(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for _, fixture := range makeHashedKeySigTestFixtures(t, 0) {
+	for _, fixture := range makeSaltedKeySigTestFixtures(t, 0) {
 		t.Run(fixture.name, func(t *testing.T) {
 			var wrongAuthorizer basics.Address
 			wrongAuthorizer[0] = 1
 			require.NotEqual(t, fixture.authorizer, wrongAuthorizer)
 
-			require.ErrorIs(t, fixture.hsig.Verify(fixture.proto, fixture.txn, wrongAuthorizer), errHashedKeySigAuthorizerMismatch)
+			require.ErrorIs(t, fixture.sksig.Verify(fixture.proto, fixture.txn, wrongAuthorizer), errSaltedKeySigAuthorizerMismatch)
 		})
 	}
 }
 
-func TestHashedKeySigVerifyRejectsMalformedPublicKey(t *testing.T) {
+func TestSaltedKeySigVerifyRejectsMalformedPublicKey(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for _, fixture := range makeHashedKeySigTestFixtures(t, 0) {
+	for _, fixture := range makeSaltedKeySigTestFixtures(t, 0) {
 		t.Run(fixture.name, func(t *testing.T) {
-			hsig := fixture.hsig
-			hsig.PublicKey = hsig.PublicKey[:len(hsig.PublicKey)-1]
+			sksig := fixture.sksig
+			sksig.PublicKey = sksig.PublicKey[:len(sksig.PublicKey)-1]
 
-			err := hsig.Verify(fixture.proto, fixture.txn, hsig.Address())
+			err := sksig.Verify(fixture.proto, fixture.txn, sksig.Address())
 			require.Error(t, err)
-			require.NotErrorIs(t, err, errHashedKeySigAuthorizerMismatch)
+			require.NotErrorIs(t, err, errSaltedKeySigAuthorizerMismatch)
 		})
 	}
 }
 
-func TestHashedKeySigVerifyRejectsMalformedSignature(t *testing.T) {
+func TestSaltedKeySigVerifyRejectsMalformedSignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for _, fixture := range makeHashedKeySigTestFixtures(t, 0) {
+	for _, fixture := range makeSaltedKeySigTestFixtures(t, 0) {
 		t.Run(fixture.name, func(t *testing.T) {
 			// A signature too long for the scheme never reaches its verifier.
-			hsig := fixture.hsig
-			hsig.Signature = make([]byte, sigSchemes[hsig.Scheme].maxSignatureSize()+1)
-			err := hsig.Verify(fixture.proto, fixture.txn, fixture.authorizer)
-			require.ErrorIs(t, err, errHashedKeySigTooLarge)
+			sksig := fixture.sksig
+			sksig.Signature = make([]byte, sigSchemes[sksig.Scheme].maxSignatureSize()+1)
+			err := sksig.Verify(fixture.proto, fixture.txn, fixture.authorizer)
+			require.ErrorIs(t, err, errSaltedKeySigTooLarge)
 
 			// One that fits, but is garbage, is rejected by the verifier.
-			hsig.Signature = make([]byte, sigSchemes[hsig.Scheme].maxSignatureSize())
-			err = hsig.Verify(fixture.proto, fixture.txn, fixture.authorizer)
+			sksig.Signature = make([]byte, sigSchemes[sksig.Scheme].maxSignatureSize())
+			err = sksig.Verify(fixture.proto, fixture.txn, fixture.authorizer)
 			require.ErrorIs(t, err, crypto.ErrSigInvalid)
 		})
 	}
 }
 
-func TestHashedKeySigVerifyRejectsChangedTransaction(t *testing.T) {
+func TestSaltedKeySigVerifyRejectsChangedTransaction(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for _, fixture := range makeHashedKeySigTestFixtures(t, 0) {
+	for _, fixture := range makeSaltedKeySigTestFixtures(t, 0) {
 		t.Run(fixture.name, func(t *testing.T) {
 			txn := fixture.txn
 			txn.Note = []byte("changed")
 
-			require.ErrorIs(t, fixture.hsig.Verify(fixture.proto, txn, fixture.authorizer), crypto.ErrSigInvalid)
+			require.ErrorIs(t, fixture.sksig.Verify(fixture.proto, txn, fixture.authorizer), crypto.ErrSigInvalid)
 		})
 	}
 }
 
-func TestHashedKeySigVerifyRejectsChangedSignature(t *testing.T) {
+func TestSaltedKeySigVerifyRejectsChangedSignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for _, fixture := range makeHashedKeySigTestFixtures(t, 0) {
+	for _, fixture := range makeSaltedKeySigTestFixtures(t, 0) {
 		t.Run(fixture.name, func(t *testing.T) {
-			hsig := fixture.hsig
-			hsig.Signature = slices.Clone(hsig.Signature)
-			hsig.Signature[len(hsig.Signature)-1] ^= 1
+			sksig := fixture.sksig
+			sksig.Signature = slices.Clone(sksig.Signature)
+			sksig.Signature[len(sksig.Signature)-1] ^= 1
 
-			require.ErrorIs(t, hsig.Verify(fixture.proto, fixture.txn, fixture.authorizer), crypto.ErrSigInvalid)
+			require.ErrorIs(t, sksig.Verify(fixture.proto, fixture.txn, fixture.authorizer), crypto.ErrSigInvalid)
 		})
 	}
 }

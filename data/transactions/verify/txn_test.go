@@ -102,16 +102,16 @@ func keypair() *crypto.SignatureSecrets {
 	return s
 }
 
-func makeHsigSignedTxn(t *testing.T, firstSeedByte byte) transactions.SignedTxn {
+func makeSKsigSignedTxn(t *testing.T, firstSeedByte byte) transactions.SignedTxn {
 	t.Helper()
 
-	return makeHsigSignedTxnForScheme(t, firstSeedByte, basics_testing.RandomSigSchemeTest().Scheme)
+	return makeSKsigSignedTxnForScheme(t, firstSeedByte, basics_testing.RandomSigSchemeTest().Scheme)
 }
 
-func makeHsigSignedTxnForScheme(t *testing.T, firstSeedByte byte, scheme protocol.SigScheme) transactions.SignedTxn {
+func makeSKsigSignedTxnForScheme(t *testing.T, firstSeedByte byte, scheme protocol.SigScheme) transactions.SignedTxn {
 	t.Helper()
 
-	signer, authorizer, hsig := makeHashedKeySigFieldsForScheme(t, firstSeedByte, scheme)
+	signer, authorizer, sksig := makeSaltedKeySigFieldsForScheme(t, firstSeedByte, scheme)
 
 	var receiver basics.Address
 	receiver[0] = 1
@@ -119,26 +119,26 @@ func makeHsigSignedTxnForScheme(t *testing.T, firstSeedByte byte, scheme protoco
 
 	signature, err := signer.Sign(txn)
 	require.NoError(t, err)
-	hsig.Signature = signature
+	sksig.Signature = signature
 
 	return transactions.SignedTxn{
-		Txn:  txn,
-		Hsig: hsig,
+		Txn:   txn,
+		SKsig: sksig,
 	}
 }
 
-// invalidHashedKeySigErrText is the verification failure message for hsig's scheme.
-func invalidHashedKeySigErrText(hsig transactions.HashedKeySig) string {
-	if hsig.Batched() {
+// invalidSaltedKeySigErrText is the verification failure message for sksig's scheme.
+func invalidSaltedKeySigErrText(sksig transactions.SaltedKeySig) string {
+	if sksig.Batched() {
 		return crypto.ErrBatchHasFailedSigs.Error()
 	}
 	return crypto.ErrSigInvalid.Error()
 }
 
-func makeHashedKeySigForTxn(t *testing.T, firstSeedByte byte, txn *transactions.Transaction) (basics.Address, transactions.HashedKeySig) {
+func makeSaltedKeySigForTxn(t *testing.T, firstSeedByte byte, txn *transactions.Transaction) (basics.Address, transactions.SaltedKeySig) {
 	t.Helper()
 
-	signer, authorizer, hsig := makeHashedKeySigFields(t, firstSeedByte)
+	signer, authorizer, sksig := makeSaltedKeySigFields(t, firstSeedByte)
 
 	var signature []byte
 	var err error
@@ -146,52 +146,52 @@ func makeHashedKeySigForTxn(t *testing.T, firstSeedByte byte, txn *transactions.
 		signature, err = signer.Sign(*txn)
 		require.NoError(t, err)
 	}
-	hsig.Signature = signature
+	sksig.Signature = signature
 
-	return authorizer, hsig
+	return authorizer, sksig
 }
 
-func makeHashedKeySigFields(t *testing.T, firstSeedByte byte) (basics_testing.SigSchemeSigner, basics.Address, transactions.HashedKeySig) {
+func makeSaltedKeySigFields(t *testing.T, firstSeedByte byte) (basics_testing.SigSchemeSigner, basics.Address, transactions.SaltedKeySig) {
 	t.Helper()
 
 	// Randomly choose a supported scheme for the test.
-	return makeHashedKeySigFieldsForScheme(t, firstSeedByte, basics_testing.RandomSigSchemeTest().Scheme)
+	return makeSaltedKeySigFieldsForScheme(t, firstSeedByte, basics_testing.RandomSigSchemeTest().Scheme)
 }
 
-func makeHashedKeySigFieldsForScheme(t *testing.T, firstSeedByte byte, scheme protocol.SigScheme) (basics_testing.SigSchemeSigner, basics.Address, transactions.HashedKeySig) {
+func makeSaltedKeySigFieldsForScheme(t *testing.T, firstSeedByte byte, scheme protocol.SigScheme) (basics_testing.SigSchemeSigner, basics.Address, transactions.SaltedKeySig) {
 	t.Helper()
 
-	acct := basics_testing.MakeHashedKeySigTestAccount(t, firstSeedByte, scheme)
+	acct := basics_testing.MakeSaltedKeySigTestAccount(t, firstSeedByte, scheme)
 
-	return acct.Signer, acct.Address, transactions.HashedKeySig{
+	return acct.Signer, acct.Address, transactions.SaltedKeySig{
 		Scheme:    acct.Scheme,
 		Salt:      acct.Salt,
 		PublicKey: acct.PublicKey,
 	}
 }
 
-func makeHashedKeySigDelegatedLogicSigTxn(t *testing.T, firstSeedByte byte) transactions.SignedTxn {
+func makeSaltedKeySigDelegatedLogicSigTxn(t *testing.T, firstSeedByte byte) transactions.SignedTxn {
 	t.Helper()
 
-	return makeHashedKeySigDelegatedLogicSigTxnForScheme(t, firstSeedByte, basics_testing.RandomSigSchemeTest().Scheme)
+	return makeSaltedKeySigDelegatedLogicSigTxnForScheme(t, firstSeedByte, basics_testing.RandomSigSchemeTest().Scheme)
 }
 
-func makeHashedKeySigDelegatedLogicSigTxnForScheme(t *testing.T, firstSeedByte byte, scheme protocol.SigScheme) transactions.SignedTxn {
+func makeSaltedKeySigDelegatedLogicSigTxnForScheme(t *testing.T, firstSeedByte byte, scheme protocol.SigScheme) transactions.SignedTxn {
 	t.Helper()
 
-	signer, authorizer, hsig := makeHashedKeySigFieldsForScheme(t, firstSeedByte, scheme)
+	signer, authorizer, sksig := makeSaltedKeySigFieldsForScheme(t, firstSeedByte, scheme)
 	ops, err := logic.AssembleStringWithVersion("int 1", 1)
 	require.NoError(t, err)
 
-	signature, err := signer.Sign(logic.HsigDelegatedProgram{Addr: authorizer, Program: ops.Program})
+	signature, err := signer.Sign(logic.SKsigDelegatedProgram{Addr: authorizer, Program: ops.Program})
 	require.NoError(t, err)
-	hsig.Signature = signature
+	sksig.Signature = signature
 
 	return transactions.SignedTxn{
 		Txn: createPayTransaction(config.Consensus[protocol.ConsensusFuture].MinTxnFee, 40, 60, 1, authorizer, basics.Address{1}),
 		Lsig: transactions.LogicSig{
 			Logic: ops.Program,
-			Hsig:  hsig,
+			SKsig: sksig,
 		},
 	}
 }
@@ -385,10 +385,10 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 	}
 }
 
-func TestTxnValidationHashedKeySig(t *testing.T) {
+func TestTxnValidationSaltedKeySig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	stxn := makeHsigSignedTxn(t, 0)
+	stxn := makeSKsigSignedTxn(t, 0)
 	dummyLedger := DummyLedgerForSignature{}
 	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
 
@@ -396,41 +396,41 @@ func TestTxnValidationHashedKeySig(t *testing.T) {
 	require.NoError(t, err)
 
 	disabledBlkHdr := createDummyBlockHeader(protocol.ConsensusV41)
-	require.False(t, transactions.SigSchemeEnabled(config.Consensus[disabledBlkHdr.CurrentProtocol], stxn.Hsig.Scheme))
+	require.False(t, transactions.SigSchemeEnabled(config.Consensus[disabledBlkHdr.CurrentProtocol], stxn.SKsig.Scheme))
 
 	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &disabledBlkHdr, nil, &dummyLedger)
 	require.ErrorIs(t, err, transactions.ErrSigSchemeNotEnabled)
 	requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
 }
 
-func TestTxnValidationEd25519HashedKeySig(t *testing.T) {
+func TestTxnValidationEd25519SaltedKeySig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
 	dummyLedger := DummyLedgerForSignature{}
-	stxn := makeHsigSignedTxnForScheme(t, 0, protocol.SigSchemeEd25519)
+	stxn := makeSKsigSignedTxnForScheme(t, 0, protocol.SigSchemeEd25519)
 
 	_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 	require.NoError(t, err)
 
-	stxn.Hsig.Signature = slices.Clone(stxn.Hsig.Signature)
-	stxn.Hsig.Signature[0] ^= 1
+	stxn.SKsig.Signature = slices.Clone(stxn.SKsig.Signature)
+	stxn.SKsig.Signature[0] ^= 1
 	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 	require.ErrorIs(t, err, crypto.ErrBatchHasFailedSigs)
 }
 
-func TestTxnValidationEd25519HashedKeySigDelegatedLogicSig(t *testing.T) {
+func TestTxnValidationEd25519SaltedKeySigDelegatedLogicSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
 	dummyLedger := DummyLedgerForSignature{}
-	stxn := makeHashedKeySigDelegatedLogicSigTxnForScheme(t, 1, protocol.SigSchemeEd25519)
+	stxn := makeSaltedKeySigDelegatedLogicSigTxnForScheme(t, 1, protocol.SigSchemeEd25519)
 
 	_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 	require.NoError(t, err)
 
-	stxn.Lsig.Hsig.Signature = slices.Clone(stxn.Lsig.Hsig.Signature)
-	stxn.Lsig.Hsig.Signature[0] ^= 1
+	stxn.Lsig.SKsig.Signature = slices.Clone(stxn.Lsig.SKsig.Signature)
+	stxn.Lsig.SKsig.Signature[0] ^= 1
 	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 	require.ErrorIs(t, err, crypto.ErrBatchHasFailedSigs)
 	requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
@@ -440,8 +440,8 @@ func TestTxnValidationMixedEd25519Batch(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	regularSigner := keypair()
-	edSigner, edAuthorizer, edHashedKeySig := makeHashedKeySigFieldsForScheme(t, 2, protocol.SigSchemeEd25519)
-	falconSigner, falconAuthorizer, falconHashedKeySig := makeHashedKeySigFieldsForScheme(t, 3, protocol.SigSchemeFalcon1024)
+	edSigner, edAuthorizer, edSaltedKeySig := makeSaltedKeySigFieldsForScheme(t, 2, protocol.SigSchemeEd25519)
+	falconSigner, falconAuthorizer, falconSaltedKeySig := makeSaltedKeySigFieldsForScheme(t, 3, protocol.SigSchemeFalcon1024)
 	minFee := config.Consensus[protocol.ConsensusFuture].MinTxnFee
 	txns := []transactions.Transaction{
 		createPayTransaction(minFee, 40, 60, 1, basics.Address(regularSigner.SignatureVerifier), basics.Address{1}),
@@ -459,26 +459,26 @@ func TestTxnValidationMixedEd25519Batch(t *testing.T) {
 
 	edSignature, err := edSigner.Sign(txns[1])
 	require.NoError(t, err)
-	edHashedKeySig.Signature = edSignature
+	edSaltedKeySig.Signature = edSignature
 	falconSignature, err := falconSigner.Sign(txns[2])
 	require.NoError(t, err)
-	falconHashedKeySig.Signature = falconSignature
+	falconSaltedKeySig.Signature = falconSignature
 	stxns := []transactions.SignedTxn{
 		txns[0].Sign(regularSigner),
-		{Txn: txns[1], Hsig: edHashedKeySig},
-		{Txn: txns[2], Hsig: falconHashedKeySig},
+		{Txn: txns[1], SKsig: edSaltedKeySig},
+		{Txn: txns[2], SKsig: falconSaltedKeySig},
 	}
 
 	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
 	_, err = TxnGroup(stxns, &blkHdr, nil, &DummyLedgerForSignature{})
 	require.NoError(t, err)
 
-	stxns[1].Hsig.Signature[0] ^= 1
+	stxns[1].SKsig.Signature[0] ^= 1
 	_, err = TxnGroup(stxns, &blkHdr, nil, &DummyLedgerForSignature{})
 	require.ErrorIs(t, err, crypto.ErrBatchHasFailedSigs)
 }
 
-func TestTxnValidationEd25519HashedKeySigRejectsWrongLengths(t *testing.T) {
+func TestTxnValidationEd25519SaltedKeySigRejectsWrongLengths(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	tests := []struct {
@@ -486,29 +486,29 @@ func TestTxnValidationEd25519HashedKeySigRejectsWrongLengths(t *testing.T) {
 		mutate func(*transactions.SignedTxn)
 	}{
 		{"public-key", func(stxn *transactions.SignedTxn) {
-			stxn.Hsig.PublicKey = slices.Clone(stxn.Hsig.PublicKey[:len(stxn.Hsig.PublicKey)-1])
-			stxn.Txn.Sender = stxn.Hsig.Address()
+			stxn.SKsig.PublicKey = slices.Clone(stxn.SKsig.PublicKey[:len(stxn.SKsig.PublicKey)-1])
+			stxn.Txn.Sender = stxn.SKsig.Address()
 		}},
 		{"signature", func(stxn *transactions.SignedTxn) {
-			stxn.Hsig.Signature = slices.Clone(stxn.Hsig.Signature[:len(stxn.Hsig.Signature)-1])
+			stxn.SKsig.Signature = slices.Clone(stxn.SKsig.Signature[:len(stxn.SKsig.Signature)-1])
 		}},
 	}
 	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			stxn := makeHsigSignedTxnForScheme(t, 4, protocol.SigSchemeEd25519)
+			stxn := makeSKsigSignedTxnForScheme(t, 4, protocol.SigSchemeEd25519)
 			test.mutate(&stxn)
 			_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &DummyLedgerForSignature{})
-			require.ErrorContains(t, err, "hashed-key signature validation failed")
+			require.ErrorContains(t, err, "salted-key signature validation failed")
 			require.ErrorIs(t, err, crypto.ErrSigInvalid)
 			requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
 		})
 	}
 }
 
-// TestTxnValidationHashedKeySigSchemeBoundary pins the per-scheme enablement boundary
+// TestTxnValidationSaltedKeySigSchemeBoundary pins the per-scheme enablement boundary
 // at the released ConsensusV42, where only falcon-1024 is enabled.
-func TestTxnValidationHashedKeySigSchemeBoundary(t *testing.T) {
+func TestTxnValidationSaltedKeySigSchemeBoundary(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	v42 := config.Consensus[protocol.ConsensusV42]
@@ -521,14 +521,14 @@ func TestTxnValidationHashedKeySigSchemeBoundary(t *testing.T) {
 
 	// Falcon-1024 is the positive control; the loop below covers schemes disabled in v42.
 	t.Run("falcon-1024-txn", func(t *testing.T) {
-		stxn := makeHsigSignedTxnForScheme(t, 0, protocol.SigSchemeFalcon1024)
+		stxn := makeSKsigSignedTxnForScheme(t, 0, protocol.SigSchemeFalcon1024)
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 		require.NoError(t, err)
 	})
 
 	t.Run("falcon-1024-lsig", func(t *testing.T) {
-		stxn := makeHashedKeySigDelegatedLogicSigTxnForScheme(t, 1, protocol.SigSchemeFalcon1024)
+		stxn := makeSaltedKeySigDelegatedLogicSigTxnForScheme(t, 1, protocol.SigSchemeFalcon1024)
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 		require.NoError(t, err)
@@ -536,19 +536,19 @@ func TestTxnValidationHashedKeySigSchemeBoundary(t *testing.T) {
 
 	for i, scheme := range []protocol.SigScheme{protocol.SigSchemeFalcon512, protocol.SigSchemeEd25519} {
 		t.Run(scheme.String()+"-txn", func(t *testing.T) {
-			stxn := makeHsigSignedTxnForScheme(t, byte(i+2), scheme)
+			stxn := makeSKsigSignedTxnForScheme(t, byte(i+2), scheme)
 
 			_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-			require.ErrorContains(t, err, "hashed-key signature validation failed")
+			require.ErrorContains(t, err, "salted-key signature validation failed")
 			require.ErrorIs(t, err, transactions.ErrSigSchemeNotEnabled)
 			requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
 		})
 
 		t.Run(scheme.String()+"-lsig", func(t *testing.T) {
-			stxn := makeHashedKeySigDelegatedLogicSigTxnForScheme(t, byte(i+4), scheme)
+			stxn := makeSaltedKeySigDelegatedLogicSigTxnForScheme(t, byte(i+4), scheme)
 
 			_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-			require.ErrorContains(t, err, "hashed-key signature delegation validation failed")
+			require.ErrorContains(t, err, "salted-key signature delegation validation failed")
 			require.ErrorIs(t, err, transactions.ErrSigSchemeNotEnabled)
 			requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
 		})
@@ -569,7 +569,7 @@ func amendTxGroupID(stxns []transactions.SignedTxn) []transactions.SignedTxn {
 	return stxns
 }
 
-// makeSaltedLogicSigTxn builds a transaction authorized by an ls-scheme HashedKeySig: the
+// makeSaltedLogicSigTxn builds a transaction authorized by an ls-scheme SaltedKeySig: the
 // program stands in for the public key, its encoded arguments for the
 // signature, and the address commits to both scheme and program.
 func makeSaltedLogicSigTxn(t *testing.T, source string, args transactions.LogicSigArgs) transactions.SignedTxn {
@@ -583,7 +583,7 @@ func makeSaltedLogicSigTxn(t *testing.T, source string, args transactions.LogicS
 
 	return transactions.SignedTxn{
 		Txn: createPayTransaction(config.Consensus[protocol.ConsensusFuture].MinTxnFee, 40, 60, 1, authorizer, basics.Address{1}),
-		Hsig: transactions.HashedKeySig{
+		SKsig: transactions.SaltedKeySig{
 			Scheme:    protocol.SigSchemeLogicSig,
 			Salt:      salt,
 			PublicKey: ops.Program,
@@ -592,7 +592,7 @@ func makeSaltedLogicSigTxn(t *testing.T, source string, args transactions.LogicS
 	}
 }
 
-func TestTxnValidationLogicSigHashedKeySig(t *testing.T) {
+func TestTxnValidationLogicSigSaltedKeySig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	dummyLedger := DummyLedgerForSignature{}
@@ -601,7 +601,7 @@ func TestTxnValidationLogicSigHashedKeySig(t *testing.T) {
 	// A program with no arguments authorizes on its own. Its empty Signature is
 	// a complete proof, not a missing one.
 	stxn := makeSaltedLogicSigTxn(t, "int 1", nil)
-	require.Empty(t, stxn.Hsig.Signature)
+	require.Empty(t, stxn.SKsig.Signature)
 	_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 	require.NoError(t, err)
 
@@ -613,15 +613,15 @@ func TestTxnValidationLogicSigHashedKeySig(t *testing.T) {
 	// Anyone may rewrite the arguments, since nothing signs them, but only the
 	// ones the program accepts get it to approve.
 	wrongArgs := withArgs
-	wrongArgs.Hsig.Signature = transactions.EncodeLogicSigArgs(transactions.LogicSigArgs{[]byte("shut")})
+	wrongArgs.SKsig.Signature = transactions.EncodeLogicSigArgs(transactions.LogicSigArgs{[]byte("shut")})
 	_, err = TxnGroup([]transactions.SignedTxn{wrongArgs}, &blkHdr, nil, &dummyLedger)
 	require.ErrorContains(t, err, "rejected by logic")
 	requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
 
-	// HashedKeySig lsig args, are paddable like Lsig.Args and the rule against unread
+	// SaltedKeySig lsig args, are paddable like Lsig.Args and the rule against unread
 	// arguments applies to them too.
 	padded := withArgs
-	padded.Hsig.Signature = transactions.EncodeLogicSigArgs(transactions.LogicSigArgs{[]byte("open"), []byte("junk")})
+	padded.SKsig.Signature = transactions.EncodeLogicSigArgs(transactions.LogicSigArgs{[]byte("open"), []byte("junk")})
 	require.Equal(t, withArgs.ID(), padded.ID())
 	_, err = TxnGroup([]transactions.SignedTxn{padded}, &blkHdr, nil, &dummyLedger)
 	require.ErrorContains(t, err, "arg[1] of 2 was not accessed")
@@ -631,7 +631,7 @@ func TestTxnValidationLogicSigHashedKeySig(t *testing.T) {
 	skips := makeSaltedLogicSigTxn(t, `arg 1; byte "open"; ==`, transactions.LogicSigArgs{{}, []byte("open")})
 	_, err = TxnGroup([]transactions.SignedTxn{skips}, &blkHdr, nil, &dummyLedger)
 	require.NoError(t, err)
-	skips.Hsig.Signature = transactions.EncodeLogicSigArgs(transactions.LogicSigArgs{[]byte("junk"), []byte("open")})
+	skips.SKsig.Signature = transactions.EncodeLogicSigArgs(transactions.LogicSigArgs{[]byte("junk"), []byte("open")})
 	_, err = TxnGroup([]transactions.SignedTxn{skips}, &blkHdr, nil, &dummyLedger)
 	require.ErrorContains(t, err, "arg[0] of 2 was not accessed")
 
@@ -644,20 +644,20 @@ func TestTxnValidationLogicSigHashedKeySig(t *testing.T) {
 	swapped := stxn
 	other, err := logic.AssembleString("int 1; int 1; &&")
 	require.NoError(t, err)
-	swapped.Hsig.PublicKey = other.Program
+	swapped.SKsig.PublicKey = other.Program
 	_, err = TxnGroup([]transactions.SignedTxn{swapped}, &blkHdr, nil, &dummyLedger)
 	require.ErrorContains(t, err, "authorizer mismatch")
 
 	// Nor does the same program under a different salt.
 	resalted := stxn
-	resalted.Hsig.Salt++
+	resalted.SKsig.Salt++
 	_, err = TxnGroup([]transactions.SignedTxn{resalted}, &blkHdr, nil, &dummyLedger)
 	require.ErrorContains(t, err, "authorizer mismatch")
 
 	// Arguments must be canonically encoded, since nothing signs them and one
 	// set of arguments must not have several spellings.
 	noncanonical := stxn
-	noncanonical.Hsig.Signature = []byte{0x90} // an empty array, which is no args
+	noncanonical.SKsig.Signature = []byte{0x90} // an empty array, which is no args
 	_, err = TxnGroup([]transactions.SignedTxn{noncanonical}, &blkHdr, nil, &dummyLedger)
 	require.ErrorContains(t, err, "not canonically encoded")
 
@@ -667,12 +667,12 @@ func TestTxnValidationLogicSigHashedKeySig(t *testing.T) {
 	require.ErrorContains(t, err, "not enabled")
 }
 
-// TestLogicSigHashedKeySigArgAccessGating checks that the rule against unread
-// arguments applies to an ls-scheme HashedKeySig only where consensus requires it. The
+// TestLogicSigSaltedKeySigArgAccessGating checks that the rule against unread
+// arguments applies to an ls-scheme SaltedKeySig only where consensus requires it. The
 // two are enabled together in vFuture, but they are separate parameters, so a
 // version that enabled ls without the rule would let its arguments be padded,
 // just as Lsig.Args could be before the rule.
-func TestLogicSigHashedKeySigArgAccessGating(t *testing.T) {
+func TestLogicSigSaltedKeySigArgAccessGating(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	// Not parallel: this registers a consensus version, and parallel tests read
 	// config.Consensus.
@@ -699,11 +699,11 @@ func TestLogicSigHashedKeySigArgAccessGating(t *testing.T) {
 	requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
 }
 
-// TestLogicSigHashedKeySigBudget checks that an ls-scheme program draws on the group's
+// TestLogicSigSaltedKeySigBudget checks that an ls-scheme program draws on the group's
 // pooled LogicSig budget. NewSigEvalParams decides whether to allocate that pool
 // by looking for programs, and an ls transaction carries one with an empty Lsig,
 // so a pool it does not count would leave each program a fresh unpooled budget.
-func TestLogicSigHashedKeySigBudget(t *testing.T) {
+func TestLogicSigSaltedKeySigBudget(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	dummyLedger := DummyLedgerForSignature{}
@@ -735,7 +735,7 @@ func TestLogicSigHashedKeySigBudget(t *testing.T) {
 	require.ErrorContains(t, err, "rejected by logic")
 }
 
-func TestTxnValidationHashedKeySigWithAuthAddr(t *testing.T) {
+func TestTxnValidationSaltedKeySigWithAuthAddr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	_, addrs, _ := generateAccounts(3)
@@ -743,12 +743,12 @@ func TestTxnValidationHashedKeySigWithAuthAddr(t *testing.T) {
 	dummyLedger := DummyLedgerForSignature{}
 
 	txn := createPayTransaction(config.Consensus[protocol.ConsensusFuture].MinTxnFee, 40, 60, 1, addrs[0], addrs[1])
-	saltedAuthorizer, hsig := makeHashedKeySigForTxn(t, 8, &txn)
+	saltedAuthorizer, sksig := makeSaltedKeySigForTxn(t, 8, &txn)
 
 	stxn := transactions.SignedTxn{
 		Txn:      txn,
 		AuthAddr: saltedAuthorizer,
-		Hsig:     hsig,
+		SKsig:    sksig,
 	}
 
 	_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
@@ -757,7 +757,7 @@ func TestTxnValidationHashedKeySigWithAuthAddr(t *testing.T) {
 	stxn.AuthAddr = basics.Address{}
 	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 	requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
-	require.ErrorContains(t, err, "hashed-key signature authorizer mismatch")
+	require.ErrorContains(t, err, "salted-key signature authorizer mismatch")
 }
 
 func TestTxnValidationEd25519SigWithSaltedSenderAuthAddr(t *testing.T) {
@@ -767,7 +767,7 @@ func TestTxnValidationEd25519SigWithSaltedSenderAuthAddr(t *testing.T) {
 	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
 	dummyLedger := DummyLedgerForSignature{}
 
-	saltedSender, _ := makeHashedKeySigForTxn(t, 9, nil)
+	saltedSender, _ := makeSaltedKeySigForTxn(t, 9, nil)
 	txn := createPayTransaction(config.Consensus[protocol.ConsensusFuture].MinTxnFee, 40, 60, 1, saltedSender, addrs[1])
 
 	stxn := txn.Sign(secrets[0])
@@ -781,10 +781,10 @@ func TestTxnValidationEd25519SigWithSaltedSenderAuthAddr(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestTxnValidationHashedKeySigEncodeDecode(t *testing.T) {
+func TestTxnValidationSaltedKeySigEncodeDecode(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	stxn := makeHsigSignedTxn(t, 1)
+	stxn := makeSKsigSignedTxn(t, 1)
 	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
 	dummyLedger := DummyLedgerForSignature{}
 
@@ -793,152 +793,152 @@ func TestTxnValidationHashedKeySigEncodeDecode(t *testing.T) {
 	var decoded transactions.SignedTxn
 	require.NoError(t, protocol.Decode(encoded, &decoded))
 	require.Equal(t, stxn.Txn, decoded.Txn)
-	require.True(t, stxn.Hsig.Equal(decoded.Hsig))
+	require.True(t, stxn.SKsig.Equal(decoded.SKsig))
 
 	_, err := TxnGroup([]transactions.SignedTxn{decoded}, &blkHdr, nil, &dummyLedger)
 	require.NoError(t, err)
 }
 
-func TestTxnValidationHashedKeySigRejectsMalformedProof(t *testing.T) {
+func TestTxnValidationSaltedKeySigRejectsMalformedProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
 	dummyLedger := DummyLedgerForSignature{}
 
 	t.Run("public-key", func(t *testing.T) {
-		stxn := makeHsigSignedTxn(t, 2)
-		stxn.Hsig.PublicKey = slices.Clone(stxn.Hsig.PublicKey[:len(stxn.Hsig.PublicKey)-1])
-		stxn.Txn.Sender = stxn.Hsig.Address()
+		stxn := makeSKsigSignedTxn(t, 2)
+		stxn.SKsig.PublicKey = slices.Clone(stxn.SKsig.PublicKey[:len(stxn.SKsig.PublicKey)-1])
+		stxn.Txn.Sender = stxn.SKsig.Address()
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 		requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
-		require.ErrorContains(t, err, "hashed-key signature validation failed")
+		require.ErrorContains(t, err, "salted-key signature validation failed")
 	})
 
 	t.Run("signature", func(t *testing.T) {
-		stxn := makeHsigSignedTxn(t, 3)
-		stxn.Hsig.Signature = make([]byte, transactions.HashedKeySigMaxSize()+1)
+		stxn := makeSKsigSignedTxn(t, 3)
+		stxn.SKsig.Signature = make([]byte, transactions.SaltedKeySigMaxSize()+1)
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 		requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
-		require.ErrorContains(t, err, "hashed-key signature validation failed")
+		require.ErrorContains(t, err, "salted-key signature validation failed")
 	})
 }
 
-func TestTxnValidationHashedKeySigDelegatedLogicSig(t *testing.T) {
+func TestTxnValidationSaltedKeySigDelegatedLogicSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
 	dummyLedger := DummyLedgerForSignature{}
 
-	stxn := makeHashedKeySigDelegatedLogicSigTxn(t, 10)
+	stxn := makeSaltedKeySigDelegatedLogicSigTxn(t, 10)
 	_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 	require.NoError(t, err)
 
-	stxn = makeHashedKeySigDelegatedLogicSigTxn(t, 11)
+	stxn = makeSaltedKeySigDelegatedLogicSigTxn(t, 11)
 	_, addrs, _ := generateAccounts(1)
 	stxn.Txn.Sender = addrs[0]
-	stxn.AuthAddr = stxn.Lsig.Hsig.Address()
+	stxn.AuthAddr = stxn.Lsig.SKsig.Address()
 	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 	require.NoError(t, err)
 }
 
-func TestTxnValidationHashedKeySigDelegatedLogicSigRejectsInvalidProof(t *testing.T) {
+func TestTxnValidationSaltedKeySigDelegatedLogicSigRejectsInvalidProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
 	disabledBlkHdr := createDummyBlockHeader(protocol.ConsensusV41)
 	dummyLedger := DummyLedgerForSignature{}
 
-	requireLogicHashedKeySigError := func(t *testing.T, err error, contains string) {
+	requireLogicSaltedKeySigError := func(t *testing.T, err error, contains string) {
 		t.Helper()
 		requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
 		if !errors.Is(err, crypto.ErrBatchHasFailedSigs) {
-			require.ErrorContains(t, err, "hashed-key signature delegation validation failed")
+			require.ErrorContains(t, err, "salted-key signature delegation validation failed")
 		}
 		require.ErrorContains(t, err, contains)
 	}
 
 	t.Run("wrong-authorizer", func(t *testing.T) {
-		stxn := makeHashedKeySigDelegatedLogicSigTxn(t, 12)
+		stxn := makeSaltedKeySigDelegatedLogicSigTxn(t, 12)
 		stxn.Txn.Sender = basics.Address{2}
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-		requireLogicHashedKeySigError(t, err, "hashed-key signature authorizer mismatch")
+		requireLogicSaltedKeySigError(t, err, "salted-key signature authorizer mismatch")
 	})
 
 	t.Run("wrong-program", func(t *testing.T) {
-		stxn := makeHashedKeySigDelegatedLogicSigTxn(t, 13)
+		stxn := makeSaltedKeySigDelegatedLogicSigTxn(t, 13)
 		ops, err := logic.AssembleStringWithVersion("int 2", 1)
 		require.NoError(t, err)
 		stxn.Lsig.Logic = ops.Program
 
 		_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-		requireLogicHashedKeySigError(t, err, invalidHashedKeySigErrText(stxn.Lsig.Hsig))
+		requireLogicSaltedKeySigError(t, err, invalidSaltedKeySigErrText(stxn.Lsig.SKsig))
 	})
 
 	t.Run("wrong-signature", func(t *testing.T) {
-		stxn := makeHashedKeySigDelegatedLogicSigTxn(t, 14)
-		stxn.Lsig.Hsig.Signature[0] ^= 1
+		stxn := makeSaltedKeySigDelegatedLogicSigTxn(t, 14)
+		stxn.Lsig.SKsig.Signature[0] ^= 1
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-		requireLogicHashedKeySigError(t, err, invalidHashedKeySigErrText(stxn.Lsig.Hsig))
+		requireLogicSaltedKeySigError(t, err, invalidSaltedKeySigErrText(stxn.Lsig.SKsig))
 	})
 
 	t.Run("malformed-public-key", func(t *testing.T) {
-		stxn := makeHashedKeySigDelegatedLogicSigTxn(t, 15)
-		stxn.Lsig.Hsig.PublicKey = slices.Clone(stxn.Lsig.Hsig.PublicKey[:len(stxn.Lsig.Hsig.PublicKey)-1])
+		stxn := makeSaltedKeySigDelegatedLogicSigTxn(t, 15)
+		stxn.Lsig.SKsig.PublicKey = slices.Clone(stxn.Lsig.SKsig.PublicKey[:len(stxn.Lsig.SKsig.PublicKey)-1])
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-		requireLogicHashedKeySigError(t, err, "hashed-key signature authorizer mismatch")
+		requireLogicSaltedKeySigError(t, err, "salted-key signature authorizer mismatch")
 	})
 
 	t.Run("empty-signature", func(t *testing.T) {
-		stxn := makeHashedKeySigDelegatedLogicSigTxn(t, 16)
-		stxn.Lsig.Hsig.Signature = nil
+		stxn := makeSaltedKeySigDelegatedLogicSigTxn(t, 16)
+		stxn.Lsig.SKsig.Signature = nil
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-		requireLogicHashedKeySigError(t, err, "hashed-key signature is empty")
+		requireLogicSaltedKeySigError(t, err, "salted-key signature is empty")
 	})
 
 	t.Run("malformed-signature", func(t *testing.T) {
-		stxn := makeHashedKeySigDelegatedLogicSigTxn(t, 17)
-		stxn.Lsig.Hsig.Signature = make([]byte, transactions.HashedKeySigMaxSize()+1)
+		stxn := makeSaltedKeySigDelegatedLogicSigTxn(t, 17)
+		stxn.Lsig.SKsig.Signature = make([]byte, transactions.SaltedKeySigMaxSize()+1)
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-		requireLogicHashedKeySigError(t, err, "too large for scheme")
+		requireLogicSaltedKeySigError(t, err, "too large for scheme")
 	})
 
 	t.Run("disabled-scheme", func(t *testing.T) {
-		stxn := makeHashedKeySigDelegatedLogicSigTxn(t, 18)
+		stxn := makeSaltedKeySigDelegatedLogicSigTxn(t, 18)
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &disabledBlkHdr, nil, &dummyLedger)
-		requireLogicHashedKeySigError(t, err, transactions.ErrSigSchemeNotEnabled.Error())
+		requireLogicSaltedKeySigError(t, err, transactions.ErrSigSchemeNotEnabled.Error())
 	})
 
 	t.Run("replay-different-salt", func(t *testing.T) {
-		stxn := makeHashedKeySigDelegatedLogicSigTxn(t, 19)
-		originalAuthorizer := stxn.Lsig.Hsig.Address()
-		stxn.Lsig.Hsig.Salt++
-		stxn.Txn.Sender = stxn.Lsig.Hsig.Address()
+		stxn := makeSaltedKeySigDelegatedLogicSigTxn(t, 19)
+		originalAuthorizer := stxn.Lsig.SKsig.Address()
+		stxn.Lsig.SKsig.Salt++
+		stxn.Txn.Sender = stxn.Lsig.SKsig.Address()
 		require.NotEqual(t, originalAuthorizer, stxn.Txn.Sender)
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-		requireLogicHashedKeySigError(t, err, invalidHashedKeySigErrText(stxn.Lsig.Hsig))
+		requireLogicSaltedKeySigError(t, err, invalidSaltedKeySigErrText(stxn.Lsig.SKsig))
 	})
 }
 
-func TestTxnValidationHashedKeySigDelegatedLogicSigSignsRawProgram(t *testing.T) {
+func TestTxnValidationSaltedKeySigDelegatedLogicSigSignsRawProgram(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
 	dummyLedger := DummyLedgerForSignature{}
 
-	signer, authorizer, hsig := makeHashedKeySigFields(t, 20)
+	signer, authorizer, sksig := makeSaltedKeySigFields(t, 20)
 	ops, err := logic.AssembleStringWithVersion("int 1", 1)
 	require.NoError(t, err)
 
-	delegation := logic.HsigDelegatedProgram{Addr: authorizer, Program: ops.Program}
+	delegation := logic.SKsigDelegatedProgram{Addr: authorizer, Program: ops.Program}
 	rawSignature, err := signer.SignBytes(crypto.HashRep(delegation))
 	require.NoError(t, err)
 
@@ -948,12 +948,12 @@ func TestTxnValidationHashedKeySigDelegatedLogicSigSignsRawProgram(t *testing.T)
 	require.NoError(t, err)
 	require.Equal(t, viaSign, rawSignature)
 
-	hsig.Signature = rawSignature
+	sksig.Signature = rawSignature
 	stxn := transactions.SignedTxn{
 		Txn: createPayTransaction(config.Consensus[protocol.ConsensusFuture].MinTxnFee, 40, 60, 1, authorizer, basics.Address{1}),
 		Lsig: transactions.LogicSig{
 			Logic: ops.Program,
-			Hsig:  hsig,
+			SKsig: sksig,
 		},
 	}
 	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
@@ -967,10 +967,10 @@ func TestTxnValidationHashedKeySigDelegatedLogicSigSignsRawProgram(t *testing.T)
 	require.NoError(t, err)
 	require.NotEqual(t, digestSignature, rawSignature)
 
-	stxn.Lsig.Hsig.Signature = digestSignature
+	stxn.Lsig.SKsig.Signature = digestSignature
 	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 	requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
-	require.ErrorContains(t, err, invalidHashedKeySigErrText(hsig))
+	require.ErrorContains(t, err, invalidSaltedKeySigErrText(sksig))
 }
 
 func TestTxnValidationEmptySig(t *testing.T) {
@@ -1550,48 +1550,48 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	txnGroups[0][0].Lsig.Msig.Subsigs = nil
 	txnGroups[0][0].Lsig.LMsig.Subsigs = nil
 
-	// The remaining cases carry a LogicSig.Hsig, so they need a consensus
+	// The remaining cases carry a LogicSig.SKsig, so they need a consensus
 	// version with signature schemes enabled to reach the checks under test.
-	hashedKeySigBlkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	saltedKeySigBlkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
 
-	/////  logic with sig and Hsig
+	/////  logic with sig and SKsig
 	txnGroups[0][0].Lsig.Sig = tmpSig
-	txnGroups[0][0].Lsig.Hsig = transactions.HashedKeySig{Scheme: protocol.SigSchemeFalcon1024}
-	_, err = TxnGroup(txnGroups[0], &hashedKeySigBlkHdr, nil, &dummyLedger)
+	txnGroups[0][0].Lsig.SKsig = transactions.SaltedKeySig{Scheme: protocol.SigSchemeFalcon1024}
+	_, err = TxnGroup(txnGroups[0], &saltedKeySigBlkHdr, nil, &dummyLedger)
 	require.ErrorContains(t, err, "should have only one type of delegation signature")
 	txnGroups[0][0].Lsig.Sig = crypto.Signature{}
 
-	/////  logic with Msig and Hsig
+	/////  logic with Msig and SKsig
 	txnGroups[0][0].Lsig.Msig.Subsigs = make([]crypto.MultisigSubsig, 1)
 	txnGroups[0][0].Lsig.Msig.Subsigs[0] = crypto.MultisigSubsig{
 		Key: crypto.PublicKey{0x1},
 		Sig: crypto.Signature{0x2},
 	}
-	_, err = TxnGroup(txnGroups[0], &hashedKeySigBlkHdr, nil, &dummyLedger)
+	_, err = TxnGroup(txnGroups[0], &saltedKeySigBlkHdr, nil, &dummyLedger)
 	require.ErrorContains(t, err, "should have only one type of delegation signature")
 	txnGroups[0][0].Lsig.Msig.Subsigs = nil
 
-	/////  logic with LMsig and Hsig
+	/////  logic with LMsig and SKsig
 	txnGroups[0][0].Lsig.LMsig.Subsigs = make([]crypto.MultisigSubsig, 1)
 	txnGroups[0][0].Lsig.LMsig.Subsigs[0] = crypto.MultisigSubsig{
 		Key: crypto.PublicKey{0x1},
 		Sig: crypto.Signature{0x2},
 	}
-	_, err = TxnGroup(txnGroups[0], &hashedKeySigBlkHdr, nil, &dummyLedger)
+	_, err = TxnGroup(txnGroups[0], &saltedKeySigBlkHdr, nil, &dummyLedger)
 	require.ErrorContains(t, err, "should have only one type of delegation signature")
 	txnGroups[0][0].Lsig.LMsig.Subsigs = nil
 
-	/////  logic with Hsig only is classified as a LogicSig authorization proof
-	_, err = TxnGroup(txnGroups[0], &hashedKeySigBlkHdr, nil, &dummyLedger)
-	require.ErrorContains(t, err, "hashed-key signature delegation validation failed")
+	/////  logic with SKsig only is classified as a LogicSig authorization proof
+	_, err = TxnGroup(txnGroups[0], &saltedKeySigBlkHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "salted-key signature delegation validation failed")
 
-	/////  before any signature scheme exists, the same LogicSig.Hsig fails the scheme check
-	preHashedKeySigBlkHdr := createDummyBlockHeader(protocol.ConsensusV41)
-	_, err = TxnGroup(txnGroups[0], &preHashedKeySigBlkHdr, nil, &dummyLedger)
+	/////  before any signature scheme exists, the same LogicSig.SKsig fails the scheme check
+	preSaltedKeySigBlkHdr := createDummyBlockHeader(protocol.ConsensusV41)
+	_, err = TxnGroup(txnGroups[0], &preSaltedKeySigBlkHdr, nil, &dummyLedger)
 	require.ErrorIs(t, err, transactions.ErrSigSchemeNotEnabled)
 }
 
-func TestTxnGroupHashedKeySigMixedSignatures(t *testing.T) {
+func TestTxnGroupSaltedKeySigMixedSignatures(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
@@ -1600,17 +1600,17 @@ func TestTxnGroupHashedKeySigMixedSignatures(t *testing.T) {
 	op, err := logic.AssembleString("int 1")
 	require.NoError(t, err)
 
-	t.Run("empty-hsig-no-other-signature", func(t *testing.T) {
-		stxn := makeHsigSignedTxn(t, 4)
-		stxn.Hsig = transactions.HashedKeySig{}
+	t.Run("empty-sksig-no-other-signature", func(t *testing.T) {
+		stxn := makeSKsigSignedTxn(t, 4)
+		stxn.SKsig = transactions.SaltedKeySig{}
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
 		require.ErrorIs(t, err, errTxnSigHasNoSig)
 		requireTxGroupErrorReason(t, err, TxGroupErrorReasonHasNoSig)
 	})
 
-	t.Run("hsig-plus-sig", func(t *testing.T) {
-		stxn := makeHsigSignedTxn(t, 5)
+	t.Run("sksig-plus-sig", func(t *testing.T) {
+		stxn := makeSKsigSignedTxn(t, 5)
 		stxn.Sig = keypair().Sign(stxn.Txn)
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
@@ -1618,8 +1618,8 @@ func TestTxnGroupHashedKeySigMixedSignatures(t *testing.T) {
 		requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
 	})
 
-	t.Run("hsig-plus-msig", func(t *testing.T) {
-		stxn := makeHsigSignedTxn(t, 6)
+	t.Run("sksig-plus-msig", func(t *testing.T) {
+		stxn := makeSKsigSignedTxn(t, 6)
 		stxn.Msig.Subsigs = []crypto.MultisigSubsig{{
 			Key: crypto.PublicKey{0x1},
 			Sig: crypto.Signature{0x2},
@@ -1630,8 +1630,8 @@ func TestTxnGroupHashedKeySigMixedSignatures(t *testing.T) {
 		requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
 	})
 
-	t.Run("hsig-plus-lsig", func(t *testing.T) {
-		stxn := makeHsigSignedTxn(t, 7)
+	t.Run("sksig-plus-lsig", func(t *testing.T) {
+		stxn := makeSKsigSignedTxn(t, 7)
 		stxn.Lsig.Logic = op.Program
 
 		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
@@ -1651,7 +1651,7 @@ func TestTxnGroupLogicOnlyAccountRemainsUnchanged(t *testing.T) {
 		Txn: createPayTransaction(config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee, 40, 60, 1, sender, basics.Address{1}),
 		Lsig: transactions.LogicSig{
 			Logic: ops.Program,
-			Hsig:  transactions.HashedKeySig{},
+			SKsig: transactions.SaltedKeySig{},
 		},
 	}
 
@@ -2287,7 +2287,7 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 			{name: "sig", lsig: transactions.LogicSig{Sig: lsigSig}},
 			{name: "msig", lsig: transactions.LogicSig{Msig: crypto.MultisigSig{Version: 1}}},
 			{name: "lmsig", lsig: transactions.LogicSig{LMsig: crypto.MultisigSig{Version: 1}}},
-			{name: "pqsig", lsig: transactions.LogicSig{Hsig: transactions.HashedKeySig{Scheme: protocol.SigSchemeFalcon1024}}},
+			{name: "pqsig", lsig: transactions.LogicSig{SKsig: transactions.SaltedKeySig{Scheme: protocol.SigSchemeFalcon1024}}},
 		}
 
 		for _, test := range tests {

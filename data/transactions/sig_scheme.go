@@ -36,7 +36,7 @@ var (
 	ErrSigSchemeNotEnabled = errors.New("signature scheme not enabled")
 )
 
-// sigScheme is everything the protocol knows about one HashedKeySig scheme.
+// sigScheme is everything the protocol knows about one SaltedKeySig scheme.
 type sigScheme struct {
 	// verifier checks the scheme's signature bytes. It is nil for ls, which
 	// authorizes by evaluating a program, so callers must ask IsLogicSig first.
@@ -61,7 +61,7 @@ type sigScheme struct {
 
 func constSize(n int) func() int { return func() int { return n } }
 
-// sigSchemes lists every HashedKeySig scheme. To add one:
+// sigSchemes lists every SaltedKeySig scheme. To add one:
 //   - add its protocol.SigScheme tag,
 //   - add an entry here, with a crypto.SigSchemeVerifier (implementing
 //     crypto.SigSchemeBatchPreparer if the scheme is batch-verified) unless, like ls,
@@ -105,7 +105,7 @@ var sigSchemes = map[protocol.SigScheme]sigScheme{
 	},
 }
 
-// SigSchemeSupported reports whether scheme is a known HashedKeySig scheme, enabled or
+// SigSchemeSupported reports whether scheme is a known SaltedKeySig scheme, enabled or
 // not.
 func SigSchemeSupported(scheme protocol.SigScheme) bool {
 	_, ok := sigSchemes[scheme]
@@ -129,7 +129,7 @@ func SigSchemeFeeContribution(_ config.ConsensusParams, scheme protocol.SigSchem
 }
 
 // maxSigSchemePublicKeySize and maxSigSchemeSignatureSize are the largest sizes over all
-// schemes, and bound HashedKeySig's byte fields on the wire.
+// schemes, and bound SaltedKeySig's byte fields on the wire.
 func maxSigSchemePublicKeySize() int {
 	n := 0
 	for _, s := range sigSchemes {

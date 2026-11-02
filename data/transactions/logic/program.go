@@ -41,15 +41,15 @@ func (mp MultisigProgram) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.MultisigProgram, append(mp.Addr[:], mp.Program...)
 }
 
-// HsigDelegatedProgram is a wrapper for signing programs with address-bound
-// hashed-key signature delegation proof in LogicSig.Hsig.
-type HsigDelegatedProgram struct {
+// SKsigDelegatedProgram is a wrapper for signing programs with address-bound
+// salted-key signature delegation proof in LogicSig.SKsig.
+type SKsigDelegatedProgram struct {
 	Addr    basics.Address
 	Program []byte
 }
 
-// ToBeHashed implements crypto.Hashable for HsigDelegatedProgram
-func (dp HsigDelegatedProgram) ToBeHashed() (protocol.HashID, []byte) {
+// ToBeHashed implements crypto.Hashable for SKsigDelegatedProgram
+func (dp SKsigDelegatedProgram) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.PostQuantumDelegatedProgram, append(dp.Addr[:], dp.Program...)
 }
 

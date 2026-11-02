@@ -28,7 +28,7 @@ var ErrSigInvalid = errors.New("invalid signature")
 // SigSchemeVerifier verifies a signature for one account authorization scheme. The
 // implementations here know only how to check bytes; which schemes exist, when
 // they are enabled, what they cost, and how large their keys and signatures may
-// be on the wire is decided by transactions.HashedKeySig.
+// be on the wire is decided by transactions.SaltedKeySig.
 type SigSchemeVerifier interface {
 	Verify(message Hashable, publicKey, signature []byte) error
 }
@@ -55,7 +55,7 @@ func (Falcon512SchemeVerifier) Verify(message Hashable, publicKey, signature []b
 	return VerifyFalcon512(message, publicKey, signature)
 }
 
-// Ed25519SchemeVerifier verifies classical Ed25519 signatures carried in a HashedKeySig.
+// Ed25519SchemeVerifier verifies classical Ed25519 signatures carried in a SaltedKeySig.
 type Ed25519SchemeVerifier struct{}
 
 // Verify implements SigSchemeVerifier.

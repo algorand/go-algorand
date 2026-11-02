@@ -36,7 +36,7 @@ type inspectSignedTxn struct {
 	Sig      crypto.Signature          `codec:"sig"`
 	Msig     inspectMultisigSig        `codec:"msig"`
 	Lsig     inspectLogicSig           `codec:"lsig"`
-	Hsig     transactions.HashedKeySig `codec:"pqsig"`
+	SKsig    transactions.SaltedKeySig `codec:"pqsig"`
 	Txn      transactions.Transaction  `codec:"txn"`
 	AuthAddr basics.Address            `codec:"sgnr"`
 }
@@ -72,7 +72,7 @@ type inspectLogicSig struct {
 	Sig   crypto.Signature          `codec:"sig"`
 	Msig  inspectMultisigSig        `codec:"msig"`
 	LMsig inspectMultisigSig        `codec:"lmsig"`
-	Hsig  transactions.HashedKeySig `codec:"pqsig"`
+	SKsig transactions.SaltedKeySig `codec:"pqsig"`
 
 	// Args are not signed, but checked by Logic
 	Args [][]byte `codec:"arg"`
@@ -124,7 +124,7 @@ func stxnToInspect(stxn transactions.SignedTxn) inspectSignedTxn {
 		Sig:      stxn.Sig,
 		Msig:     msigToInspect(stxn.Msig),
 		Lsig:     lsigToInspect(stxn.Lsig),
-		Hsig:     stxn.Hsig,
+		SKsig:    stxn.SKsig,
 		AuthAddr: stxn.AuthAddr,
 	}
 }
@@ -135,7 +135,7 @@ func stxnFromInspect(sti inspectSignedTxn) transactions.SignedTxn {
 		Sig:      sti.Sig,
 		Msig:     msigFromInspect(sti.Msig),
 		Lsig:     lsigFromInspect(sti.Lsig),
-		Hsig:     sti.Hsig,
+		SKsig:    sti.SKsig,
 		AuthAddr: sti.AuthAddr,
 	}
 }
@@ -178,7 +178,7 @@ func lsigToInspect(lsig transactions.LogicSig) inspectLogicSig {
 		Sig:   lsig.Sig,
 		Msig:  msigToInspect(lsig.Msig),
 		LMsig: msigToInspect(lsig.LMsig),
-		Hsig:  lsig.Hsig,
+		SKsig: lsig.SKsig,
 		Args:  lsig.Args,
 	}
 }
@@ -189,7 +189,7 @@ func lsigFromInspect(lsig inspectLogicSig) transactions.LogicSig {
 		Sig:   lsig.Sig,
 		Msig:  msigFromInspect(lsig.Msig),
 		LMsig: msigFromInspect(lsig.LMsig),
-		Hsig:  lsig.Hsig,
+		SKsig: lsig.SKsig,
 		Args:  lsig.Args,
 	}
 }

@@ -624,7 +624,7 @@ type ConsensusParams struct {
 	EnableSigSchemeEd25519 bool
 
 	// EnableSigSchemeLogicSig enables transaction authorization by a LogicSig
-	// carried in a HashedKeySig under the ls scheme, whose address commits to the
+	// carried in a SaltedKeySig under the ls scheme, whose address commits to the
 	// program and a salt. Unlike the LogicSig in SignedTxn.Lsig, such an account
 	// can choose an address that is not an Edwards25519 point.
 	EnableSigSchemeLogicSig bool

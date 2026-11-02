@@ -91,17 +91,17 @@ func TestInspect(t *testing.T) {
 	_, err = inspectTxn(full)
 	require.NoError(t, err)
 
-	var hsigSigned transactions.SignedTxn
-	hsigSigned.Txn.Type = protocol.PaymentTx
-	crypto.RandBytes(hsigSigned.Txn.Sender[:])
-	crypto.RandBytes(hsigSigned.Txn.Receiver[:])
-	hsigSigned.Hsig = transactions.HashedKeySig{
+	var sksigSigned transactions.SignedTxn
+	sksigSigned.Txn.Type = protocol.PaymentTx
+	crypto.RandBytes(sksigSigned.Txn.Sender[:])
+	crypto.RandBytes(sksigSigned.Txn.Receiver[:])
+	sksigSigned.SKsig = transactions.SaltedKeySig{
 		Scheme:    protocol.SigSchemeFalcon1024,
 		Salt:      7,
 		PublicKey: []byte{1, 2, 3},
 		Signature: []byte{4, 5, 6},
 	}
-	_, err = inspectTxn(hsigSigned)
+	_, err = inspectTxn(sksigSigned)
 	require.NoError(t, err)
 
 	var delegated transactions.SignedTxn
@@ -113,7 +113,7 @@ func TestInspect(t *testing.T) {
 	delegated.Lsig.LMsig.Subsigs = make([]crypto.MultisigSubsig, 1)
 	crypto.RandBytes(delegated.Lsig.LMsig.Subsigs[0].Key[:])
 	crypto.RandBytes(delegated.Lsig.LMsig.Subsigs[0].Sig[:])
-	delegated.Lsig.Hsig = transactions.HashedKeySig{
+	delegated.Lsig.SKsig = transactions.SaltedKeySig{
 		Scheme:    protocol.SigSchemeFalcon1024,
 		Salt:      2,
 		PublicKey: []byte{7, 8, 9},

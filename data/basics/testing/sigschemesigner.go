@@ -164,9 +164,9 @@ func MakeSigSchemeSigner(t testing.TB, firstSeedByte byte, scheme protocol.SigSc
 	return nil
 }
 
-// HashedKeySigTestAccount is a test account authorized through HashedKeySig: a wrapped signer plus its
+// SaltedKeySigTestAccount is a test account authorized through SaltedKeySig: a wrapped signer plus its
 // canonical salted address derivation.
-type HashedKeySigTestAccount struct {
+type SaltedKeySigTestAccount struct {
 	Signer    SigSchemeSigner
 	Scheme    protocol.SigScheme
 	Address   basics.Address
@@ -174,10 +174,10 @@ type HashedKeySigTestAccount struct {
 	PublicKey []byte
 }
 
-// MakeHashedKeySigTestAccount builds a HashedKeySigTestAccount for the given scheme from a
+// MakeSaltedKeySigTestAccount builds a SaltedKeySigTestAccount for the given scheme from a
 // deterministic seed, deriving the canonical salt and address for its public
 // key.
-func MakeHashedKeySigTestAccount(t testing.TB, firstSeedByte byte, scheme protocol.SigScheme) HashedKeySigTestAccount {
+func MakeSaltedKeySigTestAccount(t testing.TB, firstSeedByte byte, scheme protocol.SigScheme) SaltedKeySigTestAccount {
 	t.Helper()
 
 	signer := MakeSigSchemeSigner(t, firstSeedByte, scheme)
@@ -185,7 +185,7 @@ func MakeHashedKeySigTestAccount(t testing.TB, firstSeedByte byte, scheme protoc
 	salt, address, err := basics.CanonicalAddressSalt(scheme, publicKey)
 	require.NoError(t, err)
 
-	return HashedKeySigTestAccount{
+	return SaltedKeySigTestAccount{
 		Signer:    signer,
 		Scheme:    scheme,
 		Address:   address,

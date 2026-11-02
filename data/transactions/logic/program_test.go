@@ -26,13 +26,13 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestHsigDelegatedProgramToBeHashed(t *testing.T) {
+func TestSKsigDelegatedProgramToBeHashed(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	saltedAddress := basics.Address{1, 2, 3}
 	program := []byte{4, 5, 6}
 
-	hashID, bytes := (HsigDelegatedProgram{Addr: saltedAddress, Program: program}).ToBeHashed()
+	hashID, bytes := (SKsigDelegatedProgram{Addr: saltedAddress, Program: program}).ToBeHashed()
 	require.Equal(t, protocol.PostQuantumDelegatedProgram, hashID)
 	require.Equal(t, protocol.HashID("PQProgram"), hashID)
 	require.NotEqual(t, protocol.Program, hashID)

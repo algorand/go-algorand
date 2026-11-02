@@ -69,14 +69,14 @@ func TestAddingToCache(t *testing.T) {
 				authAddr: txn.AuthAddr,
 				msig:     nil,
 				lsig:     nil,
-				hsig:     nil,
+				sksig:    nil,
 			},
 		})
 	}
 }
 
 // TestAddingToCacheOutOfLineSigs covers the authorization material the cache keeps out of
-// line. Lsig and Hsig are stored behind pointers because almost no transaction carries
+// line. Lsig and SKsig are stored behind pointers because almost no transaction carries
 // either, so both the present and the absent case need checking.
 func TestAddingToCacheOutOfLineSigs(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -94,8 +94,8 @@ func TestAddingToCacheOutOfLineSigs(t *testing.T) {
 		stxn transactions.SignedTxn
 	}{
 		{"lsig", contractLsig},
-		{"pqsig", makeHsigSignedTxn(t, 20)},
-		{"lsig-delegated-by-pqsig", makeHashedKeySigDelegatedLogicSigTxn(t, 21)},
+		{"pqsig", makeSKsigSignedTxn(t, 20)},
+		{"lsig-delegated-by-pqsig", makeSaltedKeySigDelegatedLogicSigTxn(t, 21)},
 	}
 
 	for _, test := range tests {
@@ -117,23 +117,23 @@ func TestAddingToCacheOutOfLineSigs(t *testing.T) {
 				require.NotNil(t, ctx.sigs.lsig, "a present Lsig must be stored")
 				require.Equal(t, test.stxn.Lsig, *ctx.sigs.lsig)
 			}
-			if test.stxn.Hsig.Blank() {
-				require.Nil(t, ctx.sigs.hsig)
+			if test.stxn.SKsig.Blank() {
+				require.Nil(t, ctx.sigs.sksig)
 			} else {
-				require.NotNil(t, ctx.sigs.hsig, "a present Hsig must be stored")
-				require.Equal(t, test.stxn.Hsig, *ctx.sigs.hsig)
+				require.NotNil(t, ctx.sigs.sksig, "a present SKsig must be stored")
+				require.Equal(t, test.stxn.SKsig, *ctx.sigs.sksig)
 			}
 
 			// the entry keeps its own copy: PrepareGroupContext retains the caller's
 			// slice, so storing a pointer into it would let later edits rewrite history
 			group[0].Lsig.Sig[0]++
 			group[0].Lsig.Logic = []byte{0xff}
-			group[0].Hsig.Salt++
+			group[0].SKsig.Salt++
 			if ctx.sigs.lsig != nil {
 				require.Equal(t, test.stxn.Lsig, *ctx.sigs.lsig, "cached Lsig aliases the caller")
 			}
-			if ctx.sigs.hsig != nil {
-				require.Equal(t, test.stxn.Hsig, *ctx.sigs.hsig, "cached Hsig aliases the caller")
+			if ctx.sigs.sksig != nil {
+				require.Equal(t, test.stxn.SKsig, *ctx.sigs.sksig, "cached SKsig aliases the caller")
 			}
 		})
 	}
@@ -199,14 +199,14 @@ func TestGetUnverifiedTransactionGroups50(t *testing.T) {
 	require.Equal(t, len(expectedUnverifiedGroups), len(unverifiedGroups))
 }
 
-func TestGetUnverifiedTransactionGroupsHashedKeySigProofChanges(t *testing.T) {
+func TestGetUnverifiedTransactionGroupsSaltedKeySigProofChanges(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
 	cache := MakeVerifiedTransactionCache(10)
 	dummyLedger := DummyLedgerForSignature{}
 
-	stxn := makeHsigSignedTxn(t, 20)
+	stxn := makeSKsigSignedTxn(t, 20)
 	group := []transactions.SignedTxn{stxn}
 	_, err := TxnGroup(group, &blkHdr, cache, &dummyLedger)
 	require.NoError(t, err)
@@ -215,8 +215,8 @@ func TestGetUnverifiedTransactionGroupsHashedKeySigProofChanges(t *testing.T) {
 	require.Empty(t, unverifiedGroups)
 
 	clone := func(stxn transactions.SignedTxn) transactions.SignedTxn {
-		stxn.Hsig.PublicKey = slices.Clone(stxn.Hsig.PublicKey)
-		stxn.Hsig.Signature = slices.Clone(stxn.Hsig.Signature)
+		stxn.SKsig.PublicKey = slices.Clone(stxn.SKsig.PublicKey)
+		stxn.SKsig.Signature = slices.Clone(stxn.SKsig.Signature)
 		return stxn
 	}
 
@@ -227,25 +227,25 @@ func TestGetUnverifiedTransactionGroupsHashedKeySigProofChanges(t *testing.T) {
 		{
 			name: "signature",
 			mutate: func(stxn *transactions.SignedTxn) {
-				stxn.Hsig.Signature[0] ^= 1
+				stxn.SKsig.Signature[0] ^= 1
 			},
 		},
 		{
 			name: "public-key",
 			mutate: func(stxn *transactions.SignedTxn) {
-				stxn.Hsig.PublicKey[0] ^= 1
+				stxn.SKsig.PublicKey[0] ^= 1
 			},
 		},
 		{
 			name: "salt",
 			mutate: func(stxn *transactions.SignedTxn) {
-				stxn.Hsig.Salt ^= 1
+				stxn.SKsig.Salt ^= 1
 			},
 		},
 		{
 			name: "scheme",
 			mutate: func(stxn *transactions.SignedTxn) {
-				stxn.Hsig.Scheme = protocol.SigScheme{'x', '1'}
+				stxn.SKsig.Scheme = protocol.SigScheme{'x', '1'}
 			},
 		},
 	}
@@ -263,11 +263,11 @@ func TestGetUnverifiedTransactionGroupsHashedKeySigProofChanges(t *testing.T) {
 	}
 }
 
-// TestGetUnverifiedTransactionGroupsLogicSigHashedKeySigChanges checks that rewriting
+// TestGetUnverifiedTransactionGroupsLogicSigSaltedKeySigChanges checks that rewriting
 // an ls-scheme program or its arguments misses the cache. Neither is signed, and
 // neither is part of the transaction ID, so a hit here would report a program as
 // verified when what ran was something else.
-func TestGetUnverifiedTransactionGroupsLogicSigHashedKeySigChanges(t *testing.T) {
+func TestGetUnverifiedTransactionGroupsLogicSigSaltedKeySigChanges(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
@@ -288,20 +288,20 @@ func TestGetUnverifiedTransactionGroupsLogicSigHashedKeySigChanges(t *testing.T)
 		{
 			name: "args",
 			mutate: func(stxn *transactions.SignedTxn) {
-				stxn.Hsig.Signature = transactions.EncodeLogicSigArgs(transactions.LogicSigArgs{[]byte("shut")})
+				stxn.SKsig.Signature = transactions.EncodeLogicSigArgs(transactions.LogicSigArgs{[]byte("shut")})
 			},
 		},
 		{
 			name: "no-args",
 			mutate: func(stxn *transactions.SignedTxn) {
-				stxn.Hsig.Signature = nil
+				stxn.SKsig.Signature = nil
 			},
 		},
 		{
 			name: "program",
 			mutate: func(stxn *transactions.SignedTxn) {
-				stxn.Hsig.PublicKey = slices.Clone(stxn.Hsig.PublicKey)
-				stxn.Hsig.PublicKey[len(stxn.Hsig.PublicKey)-1] ^= 1
+				stxn.SKsig.PublicKey = slices.Clone(stxn.SKsig.PublicKey)
+				stxn.SKsig.PublicKey[len(stxn.SKsig.PublicKey)-1] ^= 1
 			},
 		},
 	}

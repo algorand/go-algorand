@@ -1206,7 +1206,7 @@ func isEscrowLogicSig(stxn transactions.SignedTxn) bool {
 	return stxn.Lsig.Sig.Blank() &&
 		stxn.Lsig.Msig.Blank() &&
 		stxn.Lsig.LMsig.Blank() &&
-		stxn.Lsig.Hsig.Blank() &&
+		stxn.Lsig.SKsig.Blank() &&
 		stxn.Authorizer() == basics.Address(logic.HashProgram(stxn.Lsig.Logic))
 }
 
@@ -1228,16 +1228,16 @@ func rejectOnCurveLogicSigPrograms(txgroup []transactions.SignedTxn) error {
 
 func enforceOffCurveAuthorizers(txgroup []transactions.SignedTxn) error {
 	for txnIdx, stxn := range txgroup {
-		hsig := stxn.Hsig
-		if hsig.Blank() && stxn.Lsig.HasProgram() {
-			hsig = stxn.Lsig.Hsig
+		sksig := stxn.SKsig
+		if sksig.Blank() && stxn.Lsig.HasProgram() {
+			sksig = stxn.Lsig.SKsig
 		}
-		if hsig.Blank() || len(hsig.PublicKey) == 0 {
+		if sksig.Blank() || len(sksig.PublicKey) == 0 {
 			continue
 		}
-		authorizer := hsig.Address()
+		authorizer := sksig.Address()
 		if !authorizer.IsOffEd25519Curve() {
-			return fmt.Errorf("transaction %d: hashed-key signature authorizer address %s is an Edwards25519 curve point", txnIdx, authorizer)
+			return fmt.Errorf("transaction %d: salted-key signature authorizer address %s is an Edwards25519 curve point", txnIdx, authorizer)
 		}
 	}
 	return nil

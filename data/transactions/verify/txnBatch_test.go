@@ -356,16 +356,16 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	require.Equal(t, uint64(0), batchSigs)
 }
 
-func TestGetNumberOfBatchableHashedKeySigs(t *testing.T) {
+func TestGetNumberOfBatchableSaltedKeySigs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	edJob := UnverifiedTxnSigJob{TxnGroup: []transactions.SignedTxn{makeHsigSignedTxnForScheme(t, 5, protocol.SigSchemeEd25519)}}
+	edJob := UnverifiedTxnSigJob{TxnGroup: []transactions.SignedTxn{makeSKsigSignedTxnForScheme(t, 5, protocol.SigSchemeEd25519)}}
 	batchSigs, err := edJob.GetNumberOfBatchableItems()
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), batchSigs)
 
 	falconJob := UnverifiedTxnSigJob{TxnGroup: []transactions.SignedTxn{
-		makeHsigSignedTxnForScheme(t, 6, protocol.SigSchemeFalcon1024),
+		makeSKsigSignedTxnForScheme(t, 6, protocol.SigSchemeFalcon1024),
 	}}
 	batchSigs, err = falconJob.GetNumberOfBatchableItems()
 	require.NoError(t, err)
@@ -1131,14 +1131,14 @@ func TestProcessBatchSkippedGroupDoesNotMisattributeSigs(t *testing.T) {
 	}
 }
 
-func TestProcessBatchEd25519HashedKeySigAttribution(t *testing.T) {
+func TestProcessBatchEd25519SaltedKeySigAttribution(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	_, regular, _, _ := generateTestObjects(1, 1, 0, 0)
-	goodEd := makeHsigSignedTxnForScheme(t, 7, protocol.SigSchemeEd25519)
-	badEd := makeHsigSignedTxnForScheme(t, 8, protocol.SigSchemeEd25519)
-	badEd.Hsig.Signature = bytes.Clone(badEd.Hsig.Signature)
-	badEd.Hsig.Signature[0] ^= 1
+	goodEd := makeSKsigSignedTxnForScheme(t, 7, protocol.SigSchemeEd25519)
+	badEd := makeSKsigSignedTxnForScheme(t, 8, protocol.SigSchemeEd25519)
+	badEd.SKsig.Signature = bytes.Clone(badEd.SKsig.Signature)
+	badEd.SKsig.Signature[0] ^= 1
 
 	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
 	resultChan := make(chan *VerificationResult, 3)

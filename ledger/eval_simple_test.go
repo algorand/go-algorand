@@ -1427,7 +1427,7 @@ func TestRekeying(t *testing.T) {
 	// TODO: More tests
 }
 
-func signHashedKeyRekeyTestTxn(t *testing.T, acct basics_testing.HashedKeySigTestAccount, txn transactions.Transaction, authAddr basics.Address) transactions.SignedTxn {
+func signSaltedKeyRekeyTestTxn(t *testing.T, acct basics_testing.SaltedKeySigTestAccount, txn transactions.Transaction, authAddr basics.Address) transactions.SignedTxn {
 	t.Helper()
 
 	signature, err := acct.Signer.Sign(txn)
@@ -1436,7 +1436,7 @@ func signHashedKeyRekeyTestTxn(t *testing.T, acct basics_testing.HashedKeySigTes
 	return transactions.SignedTxn{
 		Txn:      txn,
 		AuthAddr: authAddr,
-		Hsig: transactions.HashedKeySig{
+		SKsig: transactions.SaltedKeySig{
 			Scheme:    acct.Scheme,
 			Salt:      acct.Salt,
 			PublicKey: acct.PublicKey,
@@ -1455,11 +1455,11 @@ func TestSaltedRekeyedAddressAuthorization(t *testing.T) {
 
 			genesisInitState, addrs, keys := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
 
-			saltedAcct := basics_testing.MakeHashedKeySigTestAccount(t, 0, tc.Scheme)
+			saltedAcct := basics_testing.MakeSaltedKeySigTestAccount(t, 0, tc.Scheme)
 
 			proto := config.Consensus[protocol.ConsensusFuture]
 			require.True(t, transactions.SigSchemeEnabled(proto, saltedAcct.Scheme))
-			hsigFee, _, overflow := proto.MinFee().FeeForUsage(basics.Micros(1e6)+transactions.SigSchemeFeeContribution(proto, saltedAcct.Scheme), 1e6, 0)
+			schemeFee, _, overflow := proto.MinFee().FeeForUsage(basics.Micros(1e6)+transactions.SigSchemeFeeContribution(proto, saltedAcct.Scheme), 1e6, 0)
 			require.False(t, overflow)
 
 			genesisInitState.Accounts[saltedAcct.Address] = basics.AccountData{
@@ -1519,14 +1519,14 @@ func TestSaltedRekeyedAddressAuthorization(t *testing.T) {
 			}
 
 			edRekeyToSalted := makePayTxn(addrs[0], addrs[0], minFee, saltedAcct.Address, 1).Sign(keys[0])
-			edSpendByHashedKeyTxn := makePayTxn(addrs[0], addrs[1], hsigFee, basics.Address{}, 2)
-			edSpendByHashedKey := signHashedKeyRekeyTestTxn(t, saltedAcct, edSpendByHashedKeyTxn, saltedAcct.Address)
+			edSpendBySaltedKeyTxn := makePayTxn(addrs[0], addrs[1], schemeFee, basics.Address{}, 2)
+			edSpendBySaltedKey := signSaltedKeyRekeyTestTxn(t, saltedAcct, edSpendBySaltedKeyTxn, saltedAcct.Address)
 
-			require.NoError(t, tryBlock([]transactions.SignedTxn{edRekeyToSalted, edSpendByHashedKey}))
-			require.ErrorContains(t, tryBlock([]transactions.SignedTxn{edSpendByHashedKey}), "should have been authorized by")
+			require.NoError(t, tryBlock([]transactions.SignedTxn{edRekeyToSalted, edSpendBySaltedKey}))
+			require.ErrorContains(t, tryBlock([]transactions.SignedTxn{edSpendBySaltedKey}), "should have been authorized by")
 
-			saltedRekeyToEdTxn := makePayTxn(saltedAcct.Address, addrs[1], hsigFee, addrs[2], 3)
-			saltedRekeyToEd := signHashedKeyRekeyTestTxn(t, saltedAcct, saltedRekeyToEdTxn, basics.Address{})
+			saltedRekeyToEdTxn := makePayTxn(saltedAcct.Address, addrs[1], schemeFee, addrs[2], 3)
+			saltedRekeyToEd := signSaltedKeyRekeyTestTxn(t, saltedAcct, saltedRekeyToEdTxn, basics.Address{})
 			saltedSpendByEd := makePayTxn(saltedAcct.Address, addrs[1], minFee, basics.Address{}, 4).Sign(keys[2])
 
 			require.NoError(t, tryBlock([]transactions.SignedTxn{saltedRekeyToEd, saltedSpendByEd}))
@@ -1536,7 +1536,7 @@ func TestSaltedRekeyedAddressAuthorization(t *testing.T) {
 }
 
 // TestSaltedLogicSigRekeyedAddressAuthorization is TestSaltedRekeyedAddressAuthorization
-// for the ls scheme, which has no key: an ls Hsig authorizes by running the
+// for the ls scheme, which has no key: an ls SKsig authorizes by running the
 // program its address commits to.
 func TestSaltedLogicSigRekeyedAddressAuthorization(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -1588,7 +1588,7 @@ func TestSaltedLogicSigRekeyedAddressAuthorization(t *testing.T) {
 		return transactions.SignedTxn{
 			Txn:      txn,
 			AuthAddr: authAddr,
-			Hsig: transactions.HashedKeySig{
+			SKsig: transactions.SaltedKeySig{
 				Scheme:    protocol.SigSchemeLogicSig,
 				Salt:      salt,
 				PublicKey: program,
@@ -1661,7 +1661,7 @@ func TestSaltedChallengedAccountCanHeartbeatForZeroFee(t *testing.T) {
 
 			const keyDilution = 777
 			otss := crypto.GenerateOneTimeSignatureSecrets(1, 10)
-			saltedAcct := basics_testing.MakeHashedKeySigTestAccount(t, 1, tc.Scheme)
+			saltedAcct := basics_testing.MakeSaltedKeySigTestAccount(t, 1, tc.Scheme)
 			require.True(t, transactions.SigSchemeEnabled(proto, saltedAcct.Scheme))
 
 			genBalances, _, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {

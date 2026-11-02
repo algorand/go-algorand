@@ -52,17 +52,17 @@ func TestAuthorizeWithProgram(t *testing.T) {
 	legacy := transactions.SignedTxn{Txn: transactions.Transaction{Header: transactions.Header{Sender: legacyAddr}}}
 	authorizeWithProgram(&legacy, lsig, false)
 	require.Equal(t, lsig, legacy.Lsig)
-	require.True(t, legacy.Hsig.Blank())
+	require.True(t, legacy.SKsig.Blank())
 
 	// The flag moves it to the salted form, which carries the args in place of
 	// signature bytes.
 	salted := transactions.SignedTxn{Txn: transactions.Transaction{Header: transactions.Header{Sender: saltedAddr}}}
 	authorizeWithProgram(&salted, lsig, true)
 	require.True(t, salted.Lsig.Blank())
-	require.Equal(t, protocol.SigSchemeLogicSig, salted.Hsig.Scheme)
-	require.Equal(t, saltedSalt, salted.Hsig.Salt)
-	require.Equal(t, program, salted.Hsig.PublicKey)
-	decoded, err := salted.Hsig.Lsig()
+	require.Equal(t, protocol.SigSchemeLogicSig, salted.SKsig.Scheme)
+	require.Equal(t, saltedSalt, salted.SKsig.Salt)
+	require.Equal(t, program, salted.SKsig.PublicKey)
+	decoded, err := salted.SKsig.Lsig()
 	require.NoError(t, err)
 	require.Equal(t, lsig.Args, [][]byte(decoded.Args))
 
@@ -70,7 +70,7 @@ func TestAuthorizeWithProgram(t *testing.T) {
 	// so a caller who knows the account need not say which form it uses.
 	inferred := transactions.SignedTxn{Txn: transactions.Transaction{Header: transactions.Header{Sender: saltedAddr}}}
 	authorizeWithProgram(&inferred, lsig, false)
-	require.Equal(t, salted.Hsig, inferred.Hsig)
+	require.Equal(t, salted.SKsig, inferred.SKsig)
 
 	// Rekeying names the authorizer somewhere other than the sender, and that is
 	// what the form is read from.
@@ -79,7 +79,7 @@ func TestAuthorizeWithProgram(t *testing.T) {
 		AuthAddr: saltedAddr,
 	}
 	authorizeWithProgram(&rekeyed, lsig, false)
-	require.Equal(t, salted.Hsig, rekeyed.Hsig)
+	require.Equal(t, salted.SKsig, rekeyed.SKsig)
 }
 
 func TestDeterminePathToSourceFromSourceMap(t *testing.T) {

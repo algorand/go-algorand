@@ -33,10 +33,10 @@ import (
 type SignedTxn struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Sig  crypto.Signature   `codec:"sig"`
-	Msig crypto.MultisigSig `codec:"msig"`
-	Lsig LogicSig           `codec:"lsig"`
-	Hsig HashedKeySig       `codec:"pqsig"`
+	Sig   crypto.Signature   `codec:"sig"`
+	Msig  crypto.MultisigSig `codec:"msig"`
+	Lsig  LogicSig           `codec:"lsig"`
+	SKsig SaltedKeySig       `codec:"pqsig"`
 
 	Txn      Transaction    `codec:"txn,required"`
 	AuthAddr basics.Address `codec:"sgnr"`
@@ -113,16 +113,16 @@ func (s SignedTxn) Authorizer() basics.Address {
 
 // HasSignature reports whether any signature category is present.
 func (s SignedTxn) HasSignature() bool {
-	return !s.Sig.Blank() || !s.Msig.Blank() || !s.Lsig.Blank() || !s.Hsig.Blank()
+	return !s.Sig.Blank() || !s.Msig.Blank() || !s.Lsig.Blank() || !s.SKsig.Blank()
 }
 
 // signatureFeeContribution dispatches the fee contribution of the signature type.
 func (s SignedTxn) signatureFeeContribution(proto config.ConsensusParams) basics.Micros {
-	if !s.Hsig.Blank() {
-		return SigSchemeFeeContribution(proto, s.Hsig.Scheme)
+	if !s.SKsig.Blank() {
+		return SigSchemeFeeContribution(proto, s.SKsig.Scheme)
 	}
-	if !s.Lsig.Hsig.Blank() {
-		return SigSchemeFeeContribution(proto, s.Lsig.Hsig.Scheme)
+	if !s.Lsig.SKsig.Blank() {
+		return SigSchemeFeeContribution(proto, s.Lsig.SKsig.Scheme)
 	}
 	return 0
 }
@@ -193,10 +193,10 @@ func logicSigProgramFeeContribution(txgroup []SignedTxnWithAD, proto config.Cons
 	programBytes := 0
 	for _, txad := range txgroup {
 		programBytes += len(txad.SignedTxn.Lsig.Logic)
-		// An ls-scheme HashedKeySig carries its program in place of a public key. Those
+		// An ls-scheme SaltedKeySig carries its program in place of a public key. Those
 		// bytes are priced like any other program's.
-		if hsig := txad.SignedTxn.Hsig; hsig.IsLogicSig() {
-			programBytes += len(hsig.PublicKey)
+		if sksig := txad.SignedTxn.SKsig; sksig.IsLogicSig() {
+			programBytes += len(sksig.PublicKey)
 		}
 	}
 	freeProgramBytes := len(txgroup) * int(proto.LogicSigMaxSize)
