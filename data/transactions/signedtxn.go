@@ -33,11 +33,13 @@ import (
 type SignedTxn struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Sig      crypto.Signature   `codec:"sig"`
-	Msig     crypto.MultisigSig `codec:"msig"`
-	Lsig     LogicSig           `codec:"lsig"`
-	Txn      Transaction        `codec:"txn,required"`
-	AuthAddr basics.Address     `codec:"sgnr"`
+	Sig   crypto.Signature   `codec:"sig"`
+	Msig  crypto.MultisigSig `codec:"msig"`
+	Lsig  LogicSig           `codec:"lsig"`
+	PQsig PQSig              `codec:"pqsig"`
+
+	Txn      Transaction    `codec:"txn,required"`
+	AuthAddr basics.Address `codec:"sgnr"`
 }
 
 // SignedTxnInBlock is how a signed transaction is encoded in a block.
@@ -109,16 +111,29 @@ func (s SignedTxn) Authorizer() basics.Address {
 	return s.AuthAddr
 }
 
+// HasSignature reports whether any signature category is present.
+func (s SignedTxn) HasSignature() bool {
+	return !s.Sig.Blank() || !s.Msig.Blank() || !s.Lsig.Blank() || !s.PQsig.Blank()
+}
+
+// signatureFeeContribution dispatches the fee contribution of the signature type.
+func (s SignedTxn) signatureFeeContribution(proto config.ConsensusParams) basics.Micros {
+	if !s.PQsig.Blank() {
+		return PQSchemeFeeContribution(proto, s.PQsig.Scheme)
+	}
+	if !s.Lsig.PQsig.Blank() {
+		return PQSchemeFeeContribution(proto, s.Lsig.PQsig.Scheme)
+	}
+	return 0
+}
+
 // FeeFactor is the factor by which the base transaction fee is multiplied. Some
 // transactions are free, others might cost more because they use extra
 // expensive features (e.g., large Note fields, large app programs, quantum
 // sigs).  It is expressed as a fixed-point integer with 6 digits of
 // precision. So 1e6 is a normal base fee transaction.
 func (s SignedTxn) FeeFactor(proto config.ConsensusParams) basics.Micros {
-	factor := s.Txn.feeFactor(proto)
-	// There are currently no signature fee contributions.
-	// factor = basics.AddSaturate(factor, s.signatureFeeContribution())
-	return factor
+	return basics.AddSaturate(s.signatureFeeContribution(proto), s.Txn.feeFactor(proto))
 }
 
 // AssembleSignedTxn assembles a multisig-signed transaction from a transaction an optional sig, and an optional multisig.
@@ -168,6 +183,27 @@ func WrapSignedTxnsWithAD(txgroup []SignedTxn) []SignedTxnWithAD {
 	return txgroupad
 }
 
+// logicSigProgramFeeContribution accounts for priced LogicSig program bytes.
+// This cannot live in Transaction.FeeFactor: the LogicSig is carried by
+// SignedTxn, outside the committed Transaction, and the priced byte count can
+// depend on the group-level LogicSig size allowance. LogicSig args are
+// intentionally ignored here because they can be supplied or padded
+// independently of the LogicSig program signer.
+func logicSigProgramFeeContribution(txgroup []SignedTxnWithAD, proto config.ConsensusParams) basics.Micros {
+	programBytes := 0
+	for _, txad := range txgroup {
+		programBytes += len(txad.SignedTxn.Lsig.Logic)
+		// An ls-scheme PQSig carries its program in place of a public key. Those
+		// bytes are priced like any other program's.
+		if pqsig := txad.SignedTxn.PQsig; pqsig.IsLogicSig() {
+			programBytes += len(pqsig.PublicKey)
+		}
+	}
+	freeProgramBytes := len(txgroup) * int(proto.LogicSigMaxSize)
+	surcharge, _ := proto.PerByteTxnSurcharge.MulInt(programBytes - freeProgramBytes)
+	return surcharge
+}
+
 // SummarizeFees takes a group and returns the required fee usage and the total
 // amount paid. The returned `usage` expresses how many basic transaction fees
 // must be paid by the group.
@@ -181,5 +217,6 @@ func SummarizeFees(txgroup []SignedTxnWithAD, proto config.ConsensusParams) (usa
 		usage = basics.AddSaturate(usage, txad.SignedTxn.FeeFactor(proto))
 		paid = paid.AddSaturate(txad.SignedTxn.Txn.Fee)
 	}
+	usage = basics.AddSaturate(usage, logicSigProgramFeeContribution(txgroup, proto))
 	return usage, paid
 }

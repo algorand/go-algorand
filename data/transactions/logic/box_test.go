@@ -384,6 +384,9 @@ func TestBoxAvailability(t *testing.T) {
 
 	ledger := NewLedger(nil)
 	ledger.NewApp(basics.Address{}, 888, basics.AppParams{})
+	// 10000 runs the second program in the groups below; an executing app
+	// always has a params record on chain, so register it here.
+	ledger.NewApp(basics.Address{}, 10000, basics.AppParams{})
 
 	// B is not available (recall that "self" is set up by MakeSampleEnv, in TestApps)
 	TestApps(t, []string{

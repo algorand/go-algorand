@@ -168,11 +168,11 @@ func TestLRUAccountsPendingWrites(t *testing.T) {
 
 type lruAccountsTestLogger struct {
 	logging.Logger
-	WarnfCallback func(string, ...interface{})
+	WarnfCallback func(string, ...any)
 	warnMsgCount  int
 }
 
-func (cl *lruAccountsTestLogger) Warnf(s string, args ...interface{}) {
+func (cl *lruAccountsTestLogger) Warnf(s string, args ...any) {
 	cl.warnMsgCount++
 }
 

@@ -79,14 +79,12 @@ func TestHeartbeat(t *testing.T) {
 	tx := test.Txn()
 
 	rnd := basics.Round(150)
-	// no fee
+	// Claiming the challenge discount when no challenge is active is rejected.
+	// (rnd 150 is well before the first ChallengeInterval.)
+	tx.HeartbeatTxnFields.HbChallengeDiscount = true
 	err := Heartbeat(*tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)
-	require.ErrorContains(t, err, "free heartbeat")
-
-	// just as bad: cheap
-	tx.Fee = basics.MicroAlgos{Raw: 10}
-	err = Heartbeat(*tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)
-	require.ErrorContains(t, err, "cheap heartbeat")
+	require.ErrorContains(t, err, "discounted heartbeat")
+	tx.HeartbeatTxnFields.HbChallengeDiscount = false
 
 	// address fee
 	testProto := config.Consensus[testConsensusVersion]
@@ -126,7 +124,6 @@ func TestCheapRules(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	testConsensusVersion := protocol.ConsensusFuture
 	type tcase struct {
 		rnd              basics.Round
 		addrStart        byte
@@ -154,60 +151,67 @@ func TestCheapRules(t *testing.T) {
 		{1000 + half + 1, 0x01, basics.Offline, true, nil, empty, empty, "not allowed for Offline"},
 		{1000 + half + 1, 0x01, basics.Online, false, nil, empty, empty, "not allowed when not IncentiveEligible"},
 	}
-	for _, tc := range cases {
-		const keyDilution = 777
+	// The challenge-eligibility rules are identical before and after the
+	// explicit-discount rule; only how the discount is claimed differs. Before,
+	// it is inferred from a singleton that underpays (low Fee); after, it is
+	// claimed explicitly with HbChallengeDiscount.
+	for _, testConsensusVersion := range []protocol.ConsensusVersion{protocol.ConsensusV41, protocol.ConsensusFuture} {
+		explicit := config.Consensus[testConsensusVersion].TxnSizePricingEnabled()
+		for _, tc := range cases {
+			const keyDilution = 777
 
-		lv := basics.Round(tc.rnd + 10)
+			lv := basics.Round(tc.rnd + 10)
 
-		id := basics.OneTimeIDForRound(lv, keyDilution)
-		otss := crypto.GenerateOneTimeSignatureSecrets(1, 10) // This will cover rounds 1-10*777
+			id := basics.OneTimeIDForRound(lv, keyDilution)
+			otss := crypto.GenerateOneTimeSignatureSecrets(1, 10) // This will cover rounds 1-10*777
 
-		// Make sender in each test unique, but all with same first byte
-		sender := basics.Address{0x01}
-		voter := basics.Address{tc.addrStart}
-		mockBal := makeMockBalancesWithAccounts(testConsensusVersion, map[basics.Address]basics.AccountData{
-			sender: {
-				MicroAlgos: basics.MicroAlgos{Raw: 10_000_000},
-			},
-			voter: {
-				Status:            tc.status,
-				MicroAlgos:        basics.MicroAlgos{Raw: 100_000_000},
-				VoteID:            otss.OneTimeSignatureVerifier,
-				VoteKeyDilution:   keyDilution,
-				IncentiveEligible: tc.incentiveEligble,
-			},
-		})
+			sender := basics.Address{0x01}
+			voter := basics.Address{tc.addrStart}
+			mockBal := makeMockBalancesWithAccounts(testConsensusVersion, map[basics.Address]basics.AccountData{
+				sender: {
+					MicroAlgos: basics.MicroAlgos{Raw: 10_000_000},
+				},
+				voter: {
+					Status:            tc.status,
+					MicroAlgos:        basics.MicroAlgos{Raw: 100_000_000},
+					VoteID:            otss.OneTimeSignatureVerifier,
+					VoteKeyDilution:   keyDilution,
+					IncentiveEligible: tc.incentiveEligble,
+				},
+			})
 
-		seed := committee.Seed{0x01, 0x02, 0x03}
-		mockHdr := makeMockHeaders()
-		mockHdr.setFallback(bookkeeping.BlockHeader{
-			UpgradeState: bookkeeping.UpgradeState{
-				CurrentProtocol: testConsensusVersion,
-			},
-			Seed: seed,
-		})
-		txn := txntest.Txn{
-			Type:          protocol.HeartbeatTx,
-			Sender:        sender,
-			Fee:           basics.MicroAlgos{Raw: 1},
-			FirstValid:    tc.rnd - 10,
-			LastValid:     tc.rnd + 10,
-			Lease:         tc.lease,
-			Note:          tc.note,
-			RekeyTo:       tc.rekey,
-			HbAddress:     voter,
-			HbProof:       otss.Sign(id, seed).ToHeartbeatProof(),
-			HbSeed:        seed,
-			HbVoteID:      otss.OneTimeSignatureVerifier,
-			HbKeyDilution: keyDilution,
-		}
+			seed := committee.Seed{0x01, 0x02, 0x03}
+			mockHdr := makeMockHeaders()
+			mockHdr.setFallback(bookkeeping.BlockHeader{
+				UpgradeState: bookkeeping.UpgradeState{
+					CurrentProtocol: testConsensusVersion,
+				},
+				Seed: seed,
+			})
+			txn := txntest.Txn{
+				Type:                protocol.HeartbeatTx,
+				Sender:              sender,
+				Fee:                 basics.MicroAlgos{Raw: 1},
+				FirstValid:          tc.rnd - 10,
+				LastValid:           tc.rnd + 10,
+				Lease:               tc.lease,
+				Note:                tc.note,
+				RekeyTo:             tc.rekey,
+				HbAddress:           voter,
+				HbProof:             otss.Sign(id, seed).ToHeartbeatProof(),
+				HbSeed:              seed,
+				HbVoteID:            otss.OneTimeSignatureVerifier,
+				HbKeyDilution:       keyDilution,
+				HbChallengeDiscount: explicit,
+			}
 
-		tx := txn.Txn()
-		err := Heartbeat(*tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, tc.rnd)
-		if tc.err == "" {
-			assert.NoError(t, err)
-		} else {
-			assert.ErrorContains(t, err, tc.err, "%+v", tc)
+			tx := txn.Txn()
+			err := Heartbeat(*tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, tc.rnd)
+			if tc.err == "" {
+				assert.NoError(t, err, "%s %+v", testConsensusVersion, tc)
+			} else {
+				assert.ErrorContains(t, err, tc.err, "%s %+v", testConsensusVersion, tc)
+			}
 		}
 	}
 }

@@ -120,7 +120,7 @@ func init() {
 }
 
 // encode interface{} => msgpack blob
-func msgpackEncode(obj interface{}) []byte {
+func msgpackEncode(obj any) []byte {
 	var b []byte
 	enc := codec.NewEncoderBytes(&b, codecHandle)
 	enc.MustEncode(obj)
@@ -128,7 +128,7 @@ func msgpackEncode(obj interface{}) []byte {
 }
 
 // decode msgpack blob => interface{}
-func msgpackDecode(b []byte, objptr interface{}) error {
+func msgpackDecode(b []byte, objptr any) error {
 	dec := codec.NewDecoderBytes(b, codecHandle)
 	return dec.Decode(objptr)
 }

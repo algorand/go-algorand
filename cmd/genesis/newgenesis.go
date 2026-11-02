@@ -74,6 +74,6 @@ func main() {
 	}
 }
 
-func reportErrorf(format string, args ...interface{}) {
+func reportErrorf(format string, args ...any) {
 	log.Fatalf(format, args...)
 }

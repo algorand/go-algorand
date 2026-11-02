@@ -229,7 +229,7 @@ func iterateReferencedTypes(seen map[reflect.Type]bool, path TypePath, typeStack
 		newStack := append(typeStack, currentType.Key())
 		iterateReferencedTypes(seen, newPath, newStack, action)
 		fallthrough
-	case reflect.Array, reflect.Slice, reflect.Ptr:
+	case reflect.Array, reflect.Slice, reflect.Pointer:
 		newPath := path.AddValue()
 		newStack := append(typeStack, currentType.Elem())
 		iterateReferencedTypes(seen, newPath, newStack, action)

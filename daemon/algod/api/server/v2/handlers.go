@@ -58,6 +58,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/libgoal/participation"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
@@ -71,10 +72,8 @@ import (
 // in the source TEAL. We have some indication that real TEAL programs with comments are about 20 times bigger than the bytecode they produce, and we may soon allow 16,000 byte logicsigs, implying a maximum of 320kb. Let's call it half a meg for a little room to spare.
 const MaxTealSourceBytes = 512 * 1024
 
-// MaxTealDryrunBytes sets a size limit for dryrun requests
-// With the ability to hold unlimited assets DryrunRequests can
-// become quite large, so we allow up to 1MB
-const MaxTealDryrunBytes = 1_000_000
+// MaxSimulateBytes sets a size limit for simulate requests
+const MaxSimulateBytes = 1_000_000
 
 // MaxAssetResults sets a size limit for the number of assets returned in a single request to the
 // /v2/accounts/{address}/assets endpoint
@@ -154,6 +153,7 @@ type NodeInterface interface {
 	BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
 	AsyncBroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
 	Simulate(request simulation.Request) (result simulation.Result, err error)
+	GetPeers() (inboundPeers []network.Peer, outboundPeers []network.Peer, err error)
 	GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool)
 	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
 	SuggestedFee() basics.MicroAlgos
@@ -423,7 +423,14 @@ func (v2 *Handlers) AppendKeys(ctx echo.Context, participationID string) error {
 
 // ShutdownNode shuts down the node.
 // (POST /v2/shutdown)
+// Deprecated: use ShutdownNode2 instead.
 func (v2 *Handlers) ShutdownNode(ctx echo.Context, params model.ShutdownNodeParams) error {
+	return v2.ShutdownNode2(ctx, (model.ShutdownNode2Params)(params))
+}
+
+// ShutdownNode2 shuts down the node.
+// (POST /v2/node/shutdown)
+func (v2 *Handlers) ShutdownNode2(ctx echo.Context, params model.ShutdownNode2Params) error {
 	// TODO: shutdown endpoint
 	return ctx.String(http.StatusNotImplemented, "Endpoint not implemented.")
 }
@@ -1013,6 +1020,49 @@ func (v2 *Handlers) GetSupply(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, supply)
 }
 
+// GetPeers returns the list of connected peers.
+// (GET /v2/node/peers)
+func (v2 *Handlers) GetPeers(ctx echo.Context) error {
+	inboundPeers, outboundPeers, err := v2.Node.GetPeers()
+	if err != nil {
+		return internalError(ctx, err, errFailedToGetPeers, v2.Log)
+	}
+
+	peers := convertPeers(inboundPeers, model.PeerStatusConnectionTypeInbound)
+	peers = append(peers, convertPeers(outboundPeers, model.PeerStatusConnectionTypeOutbound)...)
+	return ctx.JSON(http.StatusOK, model.GetPeersResponse{Peers: peers})
+}
+
+// peerStatusNetworkTypes maps network transport types onto the API enum.
+var peerStatusNetworkTypes = map[network.PeerNetworkType]model.PeerStatusNetworkType{
+	network.PeerNetworkTypeWebsocket: model.PeerStatusNetworkTypeWs,
+	network.PeerNetworkTypeLibP2P:    model.PeerStatusNetworkTypeP2p,
+}
+
+// convertPeers converts connected network peers into API peer statuses, sorted by address.
+func convertPeers(peers []network.Peer, connType model.PeerStatusConnectionType) []model.PeerStatus {
+	statuses := make([]model.PeerStatus, 0, len(peers))
+	for _, p := range peers {
+		info, ok := p.(network.PeerConnectionInfo)
+		if !ok {
+			continue
+		}
+		networkType, ok := peerStatusNetworkTypes[info.GetNetworkType()]
+		if !ok {
+			networkType = model.PeerStatusNetworkTypeWs
+		}
+		statuses = append(statuses, model.PeerStatus{
+			ConnectionType: connType,
+			NetworkAddress: info.GetAddress(),
+			NetworkType:    networkType,
+		})
+	}
+	slices.SortFunc(statuses, func(a, b model.PeerStatus) int {
+		return strings.Compare(a.NetworkAddress, b.NetworkAddress)
+	})
+	return statuses
+}
+
 // GetStatus gets the current node status.
 // (GET /v2/status)
 func (v2 *Handlers) GetStatus(ctx echo.Context) error {
@@ -1156,12 +1206,13 @@ func isEscrowLogicSig(stxn transactions.SignedTxn) bool {
 	return stxn.Lsig.Sig.Blank() &&
 		stxn.Lsig.Msig.Blank() &&
 		stxn.Lsig.LMsig.Blank() &&
+		stxn.Lsig.PQsig.Blank() &&
 		stxn.Authorizer() == basics.Address(logic.HashProgram(stxn.Lsig.Logic))
 }
 
 func rejectOnCurveLogicSigPrograms(txgroup []transactions.SignedTxn) error {
 	for i, stxn := range txgroup {
-		if len(stxn.Lsig.Logic) == 0 {
+		if !stxn.Lsig.HasProgram() {
 			continue
 		}
 		version, _, err := transactions.ProgramVersion(stxn.Lsig.Logic)
@@ -1170,6 +1221,23 @@ func rejectOnCurveLogicSigPrograms(txgroup []transactions.SignedTxn) error {
 		}
 		if isEscrowLogicSig(stxn) && logic.ProgramHashIsEdwards25519Point(stxn.Lsig.Logic) {
 			return fmt.Errorf("transaction %d: TEAL v%d LogicSig program hash is an Edwards25519 point and should not be used; set %s=true to submit anyway if you understand the risks and know what you are doing", i, version, skipPqAddressCheckParam)
+		}
+	}
+	return nil
+}
+
+func enforcePQAuthorizerCompliance(txgroup []transactions.SignedTxn) error {
+	for txnIdx, stxn := range txgroup {
+		pqSig := stxn.PQsig
+		if pqSig.Blank() && stxn.Lsig.HasProgram() {
+			pqSig = stxn.Lsig.PQsig
+		}
+		if pqSig.Blank() || len(pqSig.PublicKey) == 0 {
+			continue
+		}
+		authorizer := pqSig.Address()
+		if !authorizer.IsPQCompliant() {
+			return fmt.Errorf("transaction %d: pq signature authorizer address %s is an Edwards25519 curve point (non PQ-compliant)", txnIdx, authorizer)
 		}
 	}
 	return nil
@@ -1194,6 +1262,9 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context, params model.RawTransaction
 	}
 
 	if !shouldSkipPqAddressCheck(params.SkipPqAddressCheck) {
+		if err = enforcePQAuthorizerCompliance(txgroup); err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
 		if err = rejectOnCurveLogicSigPrograms(txgroup); err != nil {
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
@@ -1218,11 +1289,15 @@ func (v2 *Handlers) RawTransactionAsync(ctx echo.Context, params model.RawTransa
 	if !v2.Node.Config().EnableDeveloperAPI {
 		return ctx.String(http.StatusNotFound, "/transactions/async was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
 	}
+
 	txgroup, err := decodeTxGroup(ctx.Request().Body, bounds.MaxTxGroupSize)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 	if !shouldSkipPqAddressCheck(params.SkipPqAddressCheck) {
+		if err = enforcePQAuthorizerCompliance(txgroup); err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
 		if err = rejectOnCurveLogicSigPrograms(txgroup); err != nil {
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
@@ -1477,7 +1552,7 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 	proto := config.Consensus[stat.LastVersion]
 
 	requestBuffer := new(bytes.Buffer)
-	requestBodyReader := http.MaxBytesReader(nil, ctx.Request().Body, MaxTealDryrunBytes)
+	requestBodyReader := http.MaxBytesReader(nil, ctx.Request().Body, MaxSimulateBytes)
 	_, err = requestBuffer.ReadFrom(requestBodyReader)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
@@ -1503,7 +1578,6 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
 	}
-
 	// Simulate transaction
 	simulationResult, err := v2.Node.Simulate(convertSimulationRequest(simulateRequest))
 	if err != nil {
@@ -1528,74 +1602,6 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 	}
 
 	return ctx.Blob(http.StatusOK, contentType, responseData)
-}
-
-// TealDryrun takes transactions and additional simulated ledger state and returns debugging information.
-// (POST /v2/teal/dryrun)
-func (v2 *Handlers) TealDryrun(ctx echo.Context) error {
-	if !v2.Node.Config().EnableDeveloperAPI {
-		return ctx.String(http.StatusNotFound, "/teal/dryrun was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
-	}
-	req := ctx.Request()
-	buf := new(bytes.Buffer)
-	req.Body = http.MaxBytesReader(nil, req.Body, MaxTealDryrunBytes)
-	_, err := buf.ReadFrom(ctx.Request().Body)
-	if err != nil {
-		return badRequest(ctx, err, err.Error(), v2.Log)
-	}
-	data := buf.Bytes()
-
-	var dr DryrunRequest
-	var gdr model.DryrunRequest
-	err = decode(protocol.JSONStrictHandle, data, &gdr)
-	if err == nil {
-		dr, err = DryrunRequestFromGenerated(&gdr)
-		if err != nil {
-			return badRequest(ctx, err, err.Error(), v2.Log)
-		}
-	} else {
-		err = decode(protocol.CodecHandle, data, &dr)
-		if err != nil {
-			return badRequest(ctx, err, err.Error(), v2.Log)
-		}
-	}
-
-	// fetch previous block header just once to prevent racing with network
-	var hdr bookkeeping.BlockHeader
-	if dr.ProtocolVersion == "" || dr.Round == 0 || dr.LatestTimestamp == 0 {
-		actualLedger := v2.Node.LedgerForAPI()
-		hdr, err = actualLedger.BlockHdr(actualLedger.Latest())
-		if err != nil {
-			return internalError(ctx, err, "current block error", v2.Log)
-		}
-	}
-
-	var response model.DryrunResponse
-
-	var protocolVersion protocol.ConsensusVersion
-	if dr.ProtocolVersion != "" {
-		var ok bool
-		_, ok = config.Consensus[protocol.ConsensusVersion(dr.ProtocolVersion)]
-		if !ok {
-			return badRequest(ctx, nil, "unsupported protocol version", v2.Log)
-		}
-		protocolVersion = protocol.ConsensusVersion(dr.ProtocolVersion)
-	} else {
-		protocolVersion = hdr.CurrentProtocol
-	}
-	dr.ProtocolVersion = string(protocolVersion)
-
-	if dr.Round == 0 {
-		dr.Round = hdr.Round + 1
-	}
-
-	if dr.LatestTimestamp == 0 {
-		dr.LatestTimestamp = hdr.TimeStamp
-	}
-
-	doDryrunRequest(&dr, &response)
-	response.ProtocolVersion = string(protocolVersion)
-	return ctx.JSON(http.StatusOK, response)
 }
 
 // UnsetSyncRound removes the sync round restriction from the ledger.

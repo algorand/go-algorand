@@ -159,11 +159,11 @@ func TestLRUKVPendingWrites(t *testing.T) {
 
 type lruKVTestLogger struct {
 	logging.Logger
-	WarnfCallback func(string, ...interface{})
+	WarnfCallback func(string, ...any)
 	warnMsgCount  int
 }
 
-func (cl *lruKVTestLogger) Infof(s string, args ...interface{}) {
+func (cl *lruKVTestLogger) Infof(s string, args ...any) {
 	if strings.Contains(s, "exceed the warning threshold of") {
 		cl.warnMsgCount++
 	}

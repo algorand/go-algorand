@@ -312,6 +312,7 @@ func TestCowChildReflect(t *testing.T) {
 		"compatibilityGetKeyCache": {},
 		"prevTotals":               {},
 		"feesCollected":            {},
+		"generate":                 {},
 	}
 
 	cow := roundCowState{}

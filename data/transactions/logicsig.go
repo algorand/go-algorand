@@ -18,9 +18,11 @@ package transactions
 
 import (
 	"bytes"
+	"errors"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // EvalMaxArgs is the maximum number of arguments to an LSig
@@ -29,6 +31,60 @@ const EvalMaxArgs = 255
 // MaxLogicSigArgSize is the maximum size of an argument to an LSig
 const MaxLogicSigArgSize = config.MaxAVMBytesSize
 
+// LogicSigArgs are arguments to a program that is not carried in a LogicSig,
+// which is how an ls-scheme PQSig holds the arguments to its own program. They
+// are the same thing as LogicSig.Args, in a place that has no room for a
+// structured field, so they carry the same bounds. The maxtotalbytes directive
+// requires an msgp newer than v1.1.64; older versions ignore it and fall back to
+// the much looser EvalMaxArgs * MaxLogicSigArgSize product.
+//
+//msgp:allocbound LogicSigArgs EvalMaxArgs,MaxLogicSigArgSize
+//msgp:maxtotalbytes LogicSigArgs (EvalMaxArgs*msgp.BytesPrefixSize) + bounds.MaxLogicSigMaxSize
+type LogicSigArgs [][]byte
+
+// errLogicSigArgsNotCanonical is returned for arguments that decode correctly
+// but were not encoded the way EncodeLogicSigArgs would encode them.
+var errLogicSigArgsNotCanonical = errors.New("logicsig args are not canonically encoded")
+
+// EncodeLogicSigArgs encodes program arguments for carrying somewhere that has
+// only room for bytes. No arguments encode to no bytes, so that "absent" and
+// "present but empty" have one representation between them rather than two.
+func EncodeLogicSigArgs(args LogicSigArgs) []byte {
+	if len(args) == 0 {
+		return nil
+	}
+	return protocol.Encode(args)
+}
+
+// DecodeLogicSigArgs decodes program arguments encoded by EncodeLogicSigArgs.
+// It insists on that exact encoding, by re-encoding what it decoded and
+// requiring the bytes back. Nothing signs these bytes, so without that rule one
+// set of arguments would have many equally valid wire forms, differing in how
+// msgpack spelled the lengths.
+func DecodeLogicSigArgs(encoded []byte) (LogicSigArgs, error) {
+	if len(encoded) == 0 {
+		return nil, nil
+	}
+	var args LogicSigArgs
+	if err := protocol.Decode(encoded, &args); err != nil {
+		return nil, err
+	}
+	if !bytes.Equal(EncodeLogicSigArgs(args), encoded) {
+		return nil, errLogicSigArgsNotCanonical
+	}
+	return args, nil
+}
+
+// Len returns the total size of the arguments, which is what the LogicSig size
+// pool measures. It does not count the bytes msgpack spends framing them.
+func (args LogicSigArgs) Len() int {
+	size := 0
+	for _, arg := range args {
+		size += len(arg)
+	}
+	return size
+}
+
 // LogicSig contains logic for validating a transaction.
 // LogicSig is signed by an account, allowing delegation of operations.
 // OR
@@ -36,30 +92,43 @@ const MaxLogicSigArgSize = config.MaxAVMBytesSize
 type LogicSig struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	// Logic signed by Sig or Msig, OR hashed to be the Address of an account.
+	// Logic signed by one of the delegation signature categories below, OR
+	// hashed to be the Address of an account.
 	Logic []byte `codec:"l,allocbound=bounds.MaxLogicSigMaxSize"`
 
 	Sig   crypto.Signature   `codec:"sig"`
 	Msig  crypto.MultisigSig `codec:"msig"`
 	LMsig crypto.MultisigSig `codec:"lmsig"`
+	PQsig PQSig              `codec:"pqsig"`
 
 	// Args are not signed, but checked by Logic
-	Args [][]byte `codec:"arg,allocbound=EvalMaxArgs,allocbound=MaxLogicSigArgSize,maxtotalbytes=bounds.MaxLogicSigMaxSize"`
+	Args [][]byte `codec:"arg,allocbound=EvalMaxArgs,allocbound=MaxLogicSigArgSize,maxtotalbytes=(EvalMaxArgs*msgp.BytesPrefixSize) + bounds.MaxLogicSigMaxSize"`
 }
 
-// Blank returns true if there is no content in this LogicSig
+// Blank returns true if the LogicSig is entirely empty.
 func (lsig *LogicSig) Blank() bool {
-	return len(lsig.Logic) == 0
+	return len(lsig.Logic) == 0 && len(lsig.Args) == 0 &&
+		lsig.Sig.Blank() && lsig.Msig.Blank() && lsig.LMsig.Blank() && lsig.PQsig.Blank()
 }
 
-// Len returns the length of Logic plus the length of the Args
-// This is limited by config.ConsensusParams.LogicSigMaxSize
+// HasProgram returns true if the LogicSig carries a program.
+func (lsig *LogicSig) HasProgram() bool {
+	return len(lsig.Logic) != 0
+}
+
+// Len returns the total byte length of a logicSig program and arguments
 func (lsig *LogicSig) Len() int {
 	lsiglen := len(lsig.Logic)
+	return lsiglen + lsig.ArgsLen()
+}
+
+// ArgsLen returns the total byte length of the LogicSig arguments
+func (lsig *LogicSig) ArgsLen() int {
+	argsLen := 0
 	for _, arg := range lsig.Args {
-		lsiglen += len(arg)
+		argsLen += len(arg)
 	}
-	return lsiglen
+	return argsLen
 }
 
 // Equal returns true if both LogicSig are equivalent.
@@ -68,8 +137,14 @@ func (lsig *LogicSig) Len() int {
 // from byte slice-typed nil values as they may have subtly
 // different behaviors within the evaluation of a LogicSig,
 // due to differences in msgpack encoding behavior.
+//
+// Comparing Args is important since the verified transaction cache is keyed by Txid,
+// which does not cover Args.
 func (lsig *LogicSig) Equal(b *LogicSig) bool {
-	sigs := lsig.Sig == b.Sig && lsig.Msig.Equal(b.Msig) && lsig.LMsig.Equal(b.LMsig)
+	sigs := lsig.Sig == b.Sig &&
+		lsig.Msig.Equal(b.Msig) &&
+		lsig.LMsig.Equal(b.LMsig) &&
+		lsig.PQsig.Equal(b.PQsig)
 	if !sigs {
 		return false
 	}

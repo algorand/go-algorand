@@ -19,8 +19,10 @@ package verify
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/rand"
+	"slices"
 	"testing"
 	"time"
 
@@ -28,7 +30,10 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -60,6 +65,12 @@ var spec = transactions.SpecialAddresses{
 	RewardsPool: poolAddr,
 }
 
+func init() {
+	useEd25519Consensus := crypto.RandUint64()%2 == 0
+	fmt.Printf("Using Ed25519ConsensusBatchVerifier: %v\n", useEd25519Consensus)
+	crypto.SetEd25519BatchVerifier(useEd25519Consensus)
+}
+
 func verifyTxnGroup(stxs []transactions.SignedTxn, contextHdr *bookkeeping.BlockHeader) error {
 	_, err := txnGroup(stxs, contextHdr, nil, nil, nil)
 	return err
@@ -89,6 +100,108 @@ func keypair() *crypto.SignatureSecrets {
 	crypto.RandBytes(seed[:])
 	s := crypto.GenerateSignatureSecrets(seed)
 	return s
+}
+
+func makePQSignedTxn(t *testing.T, firstSeedByte byte) transactions.SignedTxn {
+	t.Helper()
+
+	return makePQSignedTxnForScheme(t, firstSeedByte, basics_testing.RandomPQTestScheme().Scheme)
+}
+
+func makePQSignedTxnForScheme(t *testing.T, firstSeedByte byte, scheme protocol.PQScheme) transactions.SignedTxn {
+	t.Helper()
+
+	signer, authorizer, pqSig := makePQSigFieldsForScheme(t, firstSeedByte, scheme)
+
+	var receiver basics.Address
+	receiver[0] = 1
+	txn := createPayTransaction(config.Consensus[protocol.ConsensusFuture].MinTxnFee, 40, 60, 1, authorizer, receiver)
+
+	signature, err := signer.Sign(txn)
+	require.NoError(t, err)
+	pqSig.Signature = signature
+
+	return transactions.SignedTxn{
+		Txn:   txn,
+		PQsig: pqSig,
+	}
+}
+
+// invalidPQSigErrText is the verification failure message for pqSig's scheme.
+func invalidPQSigErrText(pqSig transactions.PQSig) string {
+	if pqSig.Batched() {
+		return crypto.ErrBatchHasFailedSigs.Error()
+	}
+	return crypto.ErrSigInvalid.Error()
+}
+
+func makePQSigForTxn(t *testing.T, firstSeedByte byte, txn *transactions.Transaction) (basics.Address, transactions.PQSig) {
+	t.Helper()
+
+	signer, authorizer, pqSig := makePQSigFields(t, firstSeedByte)
+
+	var signature []byte
+	var err error
+	if txn != nil {
+		signature, err = signer.Sign(*txn)
+		require.NoError(t, err)
+	}
+	pqSig.Signature = signature
+
+	return authorizer, pqSig
+}
+
+func makePQSigFields(t *testing.T, firstSeedByte byte) (basics_testing.PQSigner, basics.Address, transactions.PQSig) {
+	t.Helper()
+
+	// Randomly choose a supported scheme for the test.
+	return makePQSigFieldsForScheme(t, firstSeedByte, basics_testing.RandomPQTestScheme().Scheme)
+}
+
+func makePQSigFieldsForScheme(t *testing.T, firstSeedByte byte, scheme protocol.PQScheme) (basics_testing.PQSigner, basics.Address, transactions.PQSig) {
+	t.Helper()
+
+	acct := basics_testing.MakePQTestAccount(t, firstSeedByte, scheme)
+
+	return acct.Signer, acct.Address, transactions.PQSig{
+		Scheme:    acct.Scheme,
+		Salt:      acct.Salt,
+		PublicKey: acct.PublicKey,
+	}
+}
+
+func makePQDelegatedLogicSigTxn(t *testing.T, firstSeedByte byte) transactions.SignedTxn {
+	t.Helper()
+
+	return makePQDelegatedLogicSigTxnForScheme(t, firstSeedByte, basics_testing.RandomPQTestScheme().Scheme)
+}
+
+func makePQDelegatedLogicSigTxnForScheme(t *testing.T, firstSeedByte byte, scheme protocol.PQScheme) transactions.SignedTxn {
+	t.Helper()
+
+	signer, authorizer, pqSig := makePQSigFieldsForScheme(t, firstSeedByte, scheme)
+	ops, err := logic.AssembleStringWithVersion("int 1", 1)
+	require.NoError(t, err)
+
+	signature, err := signer.Sign(logic.PQDelegatedProgram{Addr: authorizer, Program: ops.Program})
+	require.NoError(t, err)
+	pqSig.Signature = signature
+
+	return transactions.SignedTxn{
+		Txn: createPayTransaction(config.Consensus[protocol.ConsensusFuture].MinTxnFee, 40, 60, 1, authorizer, basics.Address{1}),
+		Lsig: transactions.LogicSig{
+			Logic: ops.Program,
+			PQsig: pqSig,
+		},
+	}
+}
+
+func requireTxGroupErrorReason(t *testing.T, err error, reason TxGroupErrorReason) {
+	t.Helper()
+
+	var txGroupErr *TxGroupError
+	require.ErrorAs(t, err, &txGroupErr)
+	require.Equal(t, reason, txGroupErr.Reason)
 }
 
 func createHeartbeatTxn(fv basics.Round, t *testing.T) transactions.SignedTxn {
@@ -272,6 +385,594 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 	}
 }
 
+func TestTxnValidationPQSig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	stxn := makePQSignedTxn(t, 0)
+	dummyLedger := DummyLedgerForSignature{}
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+
+	_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+	require.NoError(t, err)
+
+	disabledBlkHdr := createDummyBlockHeader(protocol.ConsensusV41)
+	require.False(t, transactions.PQSchemeEnabled(config.Consensus[disabledBlkHdr.CurrentProtocol], stxn.PQsig.Scheme))
+
+	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &disabledBlkHdr, nil, &dummyLedger)
+	require.ErrorIs(t, err, transactions.ErrPQSchemeNotEnabled)
+	requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
+}
+
+func TestTxnValidationEd25519PQSig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	dummyLedger := DummyLedgerForSignature{}
+	stxn := makePQSignedTxnForScheme(t, 0, protocol.PQSchemeEd25519)
+
+	_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+	require.NoError(t, err)
+
+	stxn.PQsig.Signature = slices.Clone(stxn.PQsig.Signature)
+	stxn.PQsig.Signature[0] ^= 1
+	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+	require.ErrorIs(t, err, crypto.ErrBatchHasFailedSigs)
+}
+
+func TestTxnValidationEd25519PQDelegatedLogicSig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	dummyLedger := DummyLedgerForSignature{}
+	stxn := makePQDelegatedLogicSigTxnForScheme(t, 1, protocol.PQSchemeEd25519)
+
+	_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+	require.NoError(t, err)
+
+	stxn.Lsig.PQsig.Signature = slices.Clone(stxn.Lsig.PQsig.Signature)
+	stxn.Lsig.PQsig.Signature[0] ^= 1
+	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+	require.ErrorIs(t, err, crypto.ErrBatchHasFailedSigs)
+	requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
+}
+
+func TestTxnValidationMixedEd25519Batch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	regularSigner := keypair()
+	edSigner, edAuthorizer, edPQSig := makePQSigFieldsForScheme(t, 2, protocol.PQSchemeEd25519)
+	falconSigner, falconAuthorizer, falconPQSig := makePQSigFieldsForScheme(t, 3, protocol.PQSchemeFalcon1024)
+	minFee := config.Consensus[protocol.ConsensusFuture].MinTxnFee
+	txns := []transactions.Transaction{
+		createPayTransaction(minFee, 40, 60, 1, basics.Address(regularSigner.SignatureVerifier), basics.Address{1}),
+		createPayTransaction(minFee, 40, 60, 1, edAuthorizer, basics.Address{2}),
+		createPayTransaction(minFee, 40, 60, 1, falconAuthorizer, basics.Address{3}),
+	}
+	var txGroup transactions.TxGroup
+	for i := range txns {
+		txGroup.TxGroupHashes = append(txGroup.TxGroupHashes, crypto.HashObj(txns[i]))
+	}
+	groupHash := crypto.HashObj(txGroup)
+	for i := range txns {
+		txns[i].Group = groupHash
+	}
+
+	edSignature, err := edSigner.Sign(txns[1])
+	require.NoError(t, err)
+	edPQSig.Signature = edSignature
+	falconSignature, err := falconSigner.Sign(txns[2])
+	require.NoError(t, err)
+	falconPQSig.Signature = falconSignature
+	stxns := []transactions.SignedTxn{
+		txns[0].Sign(regularSigner),
+		{Txn: txns[1], PQsig: edPQSig},
+		{Txn: txns[2], PQsig: falconPQSig},
+	}
+
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	_, err = TxnGroup(stxns, &blkHdr, nil, &DummyLedgerForSignature{})
+	require.NoError(t, err)
+
+	stxns[1].PQsig.Signature[0] ^= 1
+	_, err = TxnGroup(stxns, &blkHdr, nil, &DummyLedgerForSignature{})
+	require.ErrorIs(t, err, crypto.ErrBatchHasFailedSigs)
+}
+
+func TestTxnValidationEd25519PQSigRejectsWrongLengths(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	tests := []struct {
+		name   string
+		mutate func(*transactions.SignedTxn)
+	}{
+		{"public-key", func(stxn *transactions.SignedTxn) {
+			stxn.PQsig.PublicKey = slices.Clone(stxn.PQsig.PublicKey[:len(stxn.PQsig.PublicKey)-1])
+			stxn.Txn.Sender = stxn.PQsig.Address()
+		}},
+		{"signature", func(stxn *transactions.SignedTxn) {
+			stxn.PQsig.Signature = slices.Clone(stxn.PQsig.Signature[:len(stxn.PQsig.Signature)-1])
+		}},
+	}
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			stxn := makePQSignedTxnForScheme(t, 4, protocol.PQSchemeEd25519)
+			test.mutate(&stxn)
+			_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &DummyLedgerForSignature{})
+			require.ErrorContains(t, err, "pq signature validation failed")
+			require.ErrorIs(t, err, crypto.ErrSigInvalid)
+			requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
+		})
+	}
+}
+
+// TestTxnValidationPQSigSchemeBoundary pins the per-scheme enablement boundary
+// at the released ConsensusV42, where only falcon-1024 is enabled.
+func TestTxnValidationPQSigSchemeBoundary(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	v42 := config.Consensus[protocol.ConsensusV42]
+	require.True(t, transactions.PQSchemeEnabled(v42, protocol.PQSchemeFalcon1024))
+	require.False(t, transactions.PQSchemeEnabled(v42, protocol.PQSchemeFalcon512))
+	require.False(t, transactions.PQSchemeEnabled(v42, protocol.PQSchemeEd25519))
+
+	blkHdr := createDummyBlockHeader(protocol.ConsensusV42)
+	dummyLedger := DummyLedgerForSignature{}
+
+	// Falcon-1024 is the positive control; the loop below covers schemes disabled in v42.
+	t.Run("falcon-1024-txn", func(t *testing.T) {
+		stxn := makePQSignedTxnForScheme(t, 0, protocol.PQSchemeFalcon1024)
+
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		require.NoError(t, err)
+	})
+
+	t.Run("falcon-1024-lsig", func(t *testing.T) {
+		stxn := makePQDelegatedLogicSigTxnForScheme(t, 1, protocol.PQSchemeFalcon1024)
+
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		require.NoError(t, err)
+	})
+
+	for i, scheme := range []protocol.PQScheme{protocol.PQSchemeFalcon512, protocol.PQSchemeEd25519} {
+		t.Run(scheme.String()+"-txn", func(t *testing.T) {
+			stxn := makePQSignedTxnForScheme(t, byte(i+2), scheme)
+
+			_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+			require.ErrorContains(t, err, "pq signature validation failed")
+			require.ErrorIs(t, err, transactions.ErrPQSchemeNotEnabled)
+			requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
+		})
+
+		t.Run(scheme.String()+"-lsig", func(t *testing.T) {
+			stxn := makePQDelegatedLogicSigTxnForScheme(t, byte(i+4), scheme)
+
+			_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+			require.ErrorContains(t, err, "pq delegated logic signature validation failed")
+			require.ErrorIs(t, err, transactions.ErrPQSchemeNotEnabled)
+			requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
+		})
+	}
+}
+
+// amendTxGroupID sets the group ID that a group of more than one transaction
+// must carry.
+func amendTxGroupID(stxns []transactions.SignedTxn) []transactions.SignedTxn {
+	var group transactions.TxGroup
+	for i := range stxns {
+		group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(stxns[i].ID()))
+	}
+	groupID := crypto.HashObj(group)
+	for i := range stxns {
+		stxns[i].Txn.Group = groupID
+	}
+	return stxns
+}
+
+// makeLogicSigPQTxn builds a transaction authorized by an ls-scheme PQSig: the
+// program stands in for the public key, its encoded arguments for the
+// signature, and the address commits to both scheme and program.
+func makeLogicSigPQTxn(t *testing.T, source string, args transactions.LogicSigArgs) transactions.SignedTxn {
+	t.Helper()
+
+	ops, err := logic.AssembleString(source)
+	require.NoError(t, err)
+
+	salt, authorizer, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeLogicSig, ops.Program)
+	require.NoError(t, err)
+
+	return transactions.SignedTxn{
+		Txn: createPayTransaction(config.Consensus[protocol.ConsensusFuture].MinTxnFee, 40, 60, 1, authorizer, basics.Address{1}),
+		PQsig: transactions.PQSig{
+			Scheme:    protocol.PQSchemeLogicSig,
+			Salt:      salt,
+			PublicKey: ops.Program,
+			Signature: transactions.EncodeLogicSigArgs(args),
+		},
+	}
+}
+
+func TestTxnValidationLogicSigPQSig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dummyLedger := DummyLedgerForSignature{}
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+
+	// A program with no arguments authorizes on its own. Its empty Signature is
+	// a complete proof, not a missing one.
+	stxn := makeLogicSigPQTxn(t, "int 1", nil)
+	require.Empty(t, stxn.PQsig.Signature)
+	_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+	require.NoError(t, err)
+
+	// The arguments reach the program's arg opcodes.
+	withArgs := makeLogicSigPQTxn(t, `arg 0; byte "open"; ==`, transactions.LogicSigArgs{[]byte("open")})
+	_, err = TxnGroup([]transactions.SignedTxn{withArgs}, &blkHdr, nil, &dummyLedger)
+	require.NoError(t, err)
+
+	// Anyone may rewrite the arguments, since nothing signs them, but only the
+	// ones the program accepts get it to approve.
+	wrongArgs := withArgs
+	wrongArgs.PQsig.Signature = transactions.EncodeLogicSigArgs(transactions.LogicSigArgs{[]byte("shut")})
+	_, err = TxnGroup([]transactions.SignedTxn{wrongArgs}, &blkHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "rejected by logic")
+	requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
+
+	// PQSig lsig args, are paddable like Lsig.Args and the rule against unread
+	// arguments applies to them too.
+	padded := withArgs
+	padded.PQsig.Signature = transactions.EncodeLogicSigArgs(transactions.LogicSigArgs{[]byte("open"), []byte("junk")})
+	require.Equal(t, withArgs.ID(), padded.ID())
+	_, err = TxnGroup([]transactions.SignedTxn{padded}, &blkHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "arg[1] of 2 was not accessed")
+	requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
+
+	// An unread argument below the highest one read must be empty.
+	skips := makeLogicSigPQTxn(t, `arg 1; byte "open"; ==`, transactions.LogicSigArgs{{}, []byte("open")})
+	_, err = TxnGroup([]transactions.SignedTxn{skips}, &blkHdr, nil, &dummyLedger)
+	require.NoError(t, err)
+	skips.PQsig.Signature = transactions.EncodeLogicSigArgs(transactions.LogicSigArgs{[]byte("junk"), []byte("open")})
+	_, err = TxnGroup([]transactions.SignedTxn{skips}, &blkHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "arg[0] of 2 was not accessed")
+
+	// A rejecting program authorizes nothing, even though its address is right.
+	reject := makeLogicSigPQTxn(t, "int 0", nil)
+	_, err = TxnGroup([]transactions.SignedTxn{reject}, &blkHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "rejected by logic")
+
+	// The address commits to the program, so another program cannot spend here.
+	swapped := stxn
+	other, err := logic.AssembleString("int 1; int 1; &&")
+	require.NoError(t, err)
+	swapped.PQsig.PublicKey = other.Program
+	_, err = TxnGroup([]transactions.SignedTxn{swapped}, &blkHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "authorizer mismatch")
+
+	// Nor does the same program under a different salt.
+	resalted := stxn
+	resalted.PQsig.Salt++
+	_, err = TxnGroup([]transactions.SignedTxn{resalted}, &blkHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "authorizer mismatch")
+
+	// Arguments must be canonically encoded, since nothing signs them and one
+	// set of arguments must not have several spellings.
+	noncanonical := stxn
+	noncanonical.PQsig.Signature = []byte{0x90} // an empty array, which is no args
+	_, err = TxnGroup([]transactions.SignedTxn{noncanonical}, &blkHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "not canonically encoded")
+
+	disabledBlkHdr := createDummyBlockHeader(protocol.ConsensusV42)
+	require.False(t, config.Consensus[disabledBlkHdr.CurrentProtocol].EnablePQSchemeLogicSig)
+	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &disabledBlkHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "not enabled")
+}
+
+// TestLogicSigPQSigArgAccessGating checks that the rule against unread
+// arguments applies to an ls-scheme PQSig only where consensus requires it. The
+// two are enabled together in vFuture, but they are separate parameters, so a
+// version that enabled ls without the rule would let its arguments be padded,
+// just as Lsig.Args could be before the rule.
+func TestLogicSigPQSigArgAccessGating(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	// Not parallel: this registers a consensus version, and parallel tests read
+	// config.Consensus.
+
+	lenient := config.Consensus[protocol.ConsensusFuture]
+	require.True(t, lenient.EnablePQSchemeLogicSig)
+	require.True(t, lenient.RequireLogicSigArgAccess)
+	lenient.RequireLogicSigArgAccess = false
+	lenientVersion := protocol.ConsensusVersion("test-ls-without-arg-access")
+	config.Consensus[lenientVersion] = lenient
+	defer delete(config.Consensus, lenientVersion)
+
+	dummyLedger := DummyLedgerForSignature{}
+	padded := makeLogicSigPQTxn(t, `arg 0; byte "open"; ==`,
+		transactions.LogicSigArgs{[]byte("open"), []byte("junk")})
+
+	lenientHdr := createDummyBlockHeader(lenientVersion)
+	_, err := TxnGroup([]transactions.SignedTxn{padded}, &lenientHdr, nil, &dummyLedger)
+	require.NoError(t, err)
+
+	strictHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	_, err = TxnGroup([]transactions.SignedTxn{padded}, &strictHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "arg[1] of 2 was not accessed")
+	requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
+}
+
+// TestLogicSigPQSigBudget checks that an ls-scheme program draws on the group's
+// pooled LogicSig budget. NewSigEvalParams decides whether to allocate that pool
+// by looking for programs, and an ls transaction carries one with an empty Lsig,
+// so a pool it does not count would leave each program a fresh unpooled budget.
+func TestLogicSigPQSigBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dummyLedger := DummyLedgerForSignature{}
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	proto := config.Consensus[protocol.ConsensusFuture]
+	require.True(t, proto.EnableLogicSigCostPooling)
+
+	budget := func(cost uint64) transactions.SignedTxn {
+		return makeLogicSigPQTxn(t, fmt.Sprintf("#pragma version 6\nglobal OpcodeBudget; int %d; ==", cost), nil)
+	}
+
+	// In a group of two the pool is twice LogicSigMaxCost, less the cost of the
+	// global opcode itself. The first program sees the whole pool and the second
+	// sees what the first left, three opcodes later.
+	pooled := 2*proto.LogicSigMaxCost - 1
+	group := amendTxGroupID([]transactions.SignedTxn{budget(pooled), budget(pooled - 3)})
+	_, err := TxnGroup(group, &blkHdr, nil, &dummyLedger)
+	require.NoError(t, err)
+
+	// Had the pool not been allocated, each program would have started from a
+	// fresh LogicSigMaxCost of its own.
+	// The note keeps the two otherwise identical transactions from being
+	// rejected as duplicates before either program runs.
+	unpooled := proto.LogicSigMaxCost - 1
+	second := budget(unpooled)
+	second.Txn.Note = []byte{1}
+	group = amendTxGroupID([]transactions.SignedTxn{budget(unpooled), second})
+	_, err = TxnGroup(group, &blkHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "rejected by logic")
+}
+
+func TestTxnValidationPQSigWithAuthAddr(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	_, addrs, _ := generateAccounts(3)
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	dummyLedger := DummyLedgerForSignature{}
+
+	txn := createPayTransaction(config.Consensus[protocol.ConsensusFuture].MinTxnFee, 40, 60, 1, addrs[0], addrs[1])
+	pqAuthorizer, pqSig := makePQSigForTxn(t, 8, &txn)
+
+	stxn := transactions.SignedTxn{
+		Txn:      txn,
+		AuthAddr: pqAuthorizer,
+		PQsig:    pqSig,
+	}
+
+	_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+	require.NoError(t, err)
+
+	stxn.AuthAddr = basics.Address{}
+	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+	requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
+	require.ErrorContains(t, err, "pq signature authorizer mismatch")
+}
+
+func TestTxnValidationEd25519SigWithPQSenderAuthAddr(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	secrets, addrs, _ := generateAccounts(2)
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	dummyLedger := DummyLedgerForSignature{}
+
+	pqSender, _ := makePQSigForTxn(t, 9, nil)
+	txn := createPayTransaction(config.Consensus[protocol.ConsensusFuture].MinTxnFee, 40, 60, 1, pqSender, addrs[1])
+
+	stxn := txn.Sign(secrets[0])
+	require.Equal(t, addrs[0], stxn.AuthAddr)
+
+	_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+	require.NoError(t, err)
+
+	stxn.AuthAddr = basics.Address{}
+	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+	require.Error(t, err)
+}
+
+func TestTxnValidationPQSigEncodeDecode(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	stxn := makePQSignedTxn(t, 1)
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	dummyLedger := DummyLedgerForSignature{}
+
+	encoded := protocol.Encode(&stxn)
+
+	var decoded transactions.SignedTxn
+	require.NoError(t, protocol.Decode(encoded, &decoded))
+	require.Equal(t, stxn.Txn, decoded.Txn)
+	require.True(t, stxn.PQsig.Equal(decoded.PQsig))
+
+	_, err := TxnGroup([]transactions.SignedTxn{decoded}, &blkHdr, nil, &dummyLedger)
+	require.NoError(t, err)
+}
+
+func TestTxnValidationPQSigRejectsMalformedProof(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	dummyLedger := DummyLedgerForSignature{}
+
+	t.Run("public-key", func(t *testing.T) {
+		stxn := makePQSignedTxn(t, 2)
+		stxn.PQsig.PublicKey = slices.Clone(stxn.PQsig.PublicKey[:len(stxn.PQsig.PublicKey)-1])
+		stxn.Txn.Sender = stxn.PQsig.Address()
+
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
+		require.ErrorContains(t, err, "pq signature validation failed")
+	})
+
+	t.Run("signature", func(t *testing.T) {
+		stxn := makePQSignedTxn(t, 3)
+		stxn.PQsig.Signature = make([]byte, transactions.PQSigMaxSize()+1)
+
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
+		require.ErrorContains(t, err, "pq signature validation failed")
+	})
+}
+
+func TestTxnValidationPQDelegatedLogicSig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	dummyLedger := DummyLedgerForSignature{}
+
+	stxn := makePQDelegatedLogicSigTxn(t, 10)
+	_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+	require.NoError(t, err)
+
+	stxn = makePQDelegatedLogicSigTxn(t, 11)
+	_, addrs, _ := generateAccounts(1)
+	stxn.Txn.Sender = addrs[0]
+	stxn.AuthAddr = stxn.Lsig.PQsig.Address()
+	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+	require.NoError(t, err)
+}
+
+func TestTxnValidationPQDelegatedLogicSigRejectsInvalidProof(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	disabledBlkHdr := createDummyBlockHeader(protocol.ConsensusV41)
+	dummyLedger := DummyLedgerForSignature{}
+
+	requireLogicPQSigError := func(t *testing.T, err error, contains string) {
+		t.Helper()
+		requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
+		if !errors.Is(err, crypto.ErrBatchHasFailedSigs) {
+			require.ErrorContains(t, err, "pq delegated logic signature validation failed")
+		}
+		require.ErrorContains(t, err, contains)
+	}
+
+	t.Run("wrong-authorizer", func(t *testing.T) {
+		stxn := makePQDelegatedLogicSigTxn(t, 12)
+		stxn.Txn.Sender = basics.Address{2}
+
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		requireLogicPQSigError(t, err, "pq signature authorizer mismatch")
+	})
+
+	t.Run("wrong-program", func(t *testing.T) {
+		stxn := makePQDelegatedLogicSigTxn(t, 13)
+		ops, err := logic.AssembleStringWithVersion("int 2", 1)
+		require.NoError(t, err)
+		stxn.Lsig.Logic = ops.Program
+
+		_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		requireLogicPQSigError(t, err, invalidPQSigErrText(stxn.Lsig.PQsig))
+	})
+
+	t.Run("wrong-signature", func(t *testing.T) {
+		stxn := makePQDelegatedLogicSigTxn(t, 14)
+		stxn.Lsig.PQsig.Signature[0] ^= 1
+
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		requireLogicPQSigError(t, err, invalidPQSigErrText(stxn.Lsig.PQsig))
+	})
+
+	t.Run("malformed-public-key", func(t *testing.T) {
+		stxn := makePQDelegatedLogicSigTxn(t, 15)
+		stxn.Lsig.PQsig.PublicKey = slices.Clone(stxn.Lsig.PQsig.PublicKey[:len(stxn.Lsig.PQsig.PublicKey)-1])
+
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		requireLogicPQSigError(t, err, "pq signature authorizer mismatch")
+	})
+
+	t.Run("empty-signature", func(t *testing.T) {
+		stxn := makePQDelegatedLogicSigTxn(t, 16)
+		stxn.Lsig.PQsig.Signature = nil
+
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		requireLogicPQSigError(t, err, "pq signature is empty")
+	})
+
+	t.Run("malformed-signature", func(t *testing.T) {
+		stxn := makePQDelegatedLogicSigTxn(t, 17)
+		stxn.Lsig.PQsig.Signature = make([]byte, transactions.PQSigMaxSize()+1)
+
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		requireLogicPQSigError(t, err, "too large for scheme")
+	})
+
+	t.Run("disabled-scheme", func(t *testing.T) {
+		stxn := makePQDelegatedLogicSigTxn(t, 18)
+
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &disabledBlkHdr, nil, &dummyLedger)
+		requireLogicPQSigError(t, err, transactions.ErrPQSchemeNotEnabled.Error())
+	})
+
+	t.Run("replay-different-salt", func(t *testing.T) {
+		stxn := makePQDelegatedLogicSigTxn(t, 19)
+		originalAuthorizer := stxn.Lsig.PQsig.Address()
+		stxn.Lsig.PQsig.Salt++
+		stxn.Txn.Sender = stxn.Lsig.PQsig.Address()
+		require.NotEqual(t, originalAuthorizer, stxn.Txn.Sender)
+
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		requireLogicPQSigError(t, err, invalidPQSigErrText(stxn.Lsig.PQsig))
+	})
+}
+
+func TestTxnValidationPQDelegatedLogicSigSignsRawProgram(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	dummyLedger := DummyLedgerForSignature{}
+
+	signer, authorizer, pqSig := makePQSigFields(t, 20)
+	ops, err := logic.AssembleStringWithVersion("int 1", 1)
+	require.NoError(t, err)
+
+	delegation := logic.PQDelegatedProgram{Addr: authorizer, Program: ops.Program}
+	rawSignature, err := signer.SignBytes(crypto.HashRep(delegation))
+	require.NoError(t, err)
+
+	// Sign(delegation) applies HashRep internally, so it must produce the same
+	// deterministic signature as SignBytes(HashRep(delegation))
+	viaSign, err := signer.Sign(delegation)
+	require.NoError(t, err)
+	require.Equal(t, viaSign, rawSignature)
+
+	pqSig.Signature = rawSignature
+	stxn := transactions.SignedTxn{
+		Txn: createPayTransaction(config.Consensus[protocol.ConsensusFuture].MinTxnFee, 40, 60, 1, authorizer, basics.Address{1}),
+		Lsig: transactions.LogicSig{
+			Logic: ops.Program,
+			PQsig: pqSig,
+		},
+	}
+	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+	require.NoError(t, err)
+
+	// A signature over the SHA-512/256 digest of the delegation payload (the
+	// pre-hashed form) must not verify: the payload is the raw
+	// "PQProgram" || authorizer || program bytes, not their digest.
+	digest := crypto.HashObj(delegation)
+	digestSignature, err := signer.SignBytes(digest[:])
+	require.NoError(t, err)
+	require.NotEqual(t, digestSignature, rawSignature)
+
+	stxn.Lsig.PQsig.Signature = digestSignature
+	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+	requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
+	require.ErrorContains(t, err, invalidPQSigErrText(pqSig))
+}
+
 func TestTxnValidationEmptySig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -291,6 +992,21 @@ func TestTxnValidationEmptySig(t *testing.T) {
 	}
 }
 
+// stateProofForTxnValidation returns the minimum StateProofBasic structure
+// accepted by CheckTxnGroup. These tests exercise outer transaction
+// validation, not cryptographic proof validity.
+func stateProofForTxnValidation() stateproof.StateProof {
+	return stateproof.StateProof{
+		SigCommit: make(crypto.GenericDigest, stateproof.HashSize),
+		SigProofs: merklearray.Proof{
+			HashFactory: crypto.HashFactory{HashType: stateproof.HashType},
+		},
+		PartProofs: merklearray.Proof{
+			HashFactory: crypto.HashFactory{HashType: stateproof.HashType},
+		},
+	}
+}
+
 func TestTxnValidationStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -304,6 +1020,9 @@ func TestTxnValidationStateProof(t *testing.T) {
 				Sender:     transactions.StateProofSender,
 				FirstValid: 0,
 				LastValid:  10,
+			},
+			StateProofTxnFields: transactions.StateProofTxnFields{
+				StateProof: stateProofForTxnValidation(),
 			},
 		},
 	}
@@ -675,8 +1394,10 @@ func TestLsigSize(t *testing.T) {
 	// From consensus version 18, we have lsigs with a maximum size of 1000 bytes.
 	// We need to use pragma 1 for teal in v18
 	pragma := uint(1)
-	consensusVersionPreSizePooling := protocol.ConsensusV18
-	consensusVersionPostSizePooling := protocol.ConsensusFuture
+	consensusVersionLegacy := protocol.ConsensusV18
+	consensusVersionPooled := protocol.ConsensusV41
+	consensusVersionBigLogicSig := protocol.ConsensusFuture
+	maxBigLogicSigSize := uint(config.Consensus[consensusVersionBigLogicSig].MaxAbsoluteLogicSigProgramSize)
 
 	// We will do tests based on a transaction group of 2 payment transactions,
 	// the first signed by a lsig and the second a vanilla payment transaction.
@@ -685,17 +1406,22 @@ func TestLsigSize(t *testing.T) {
 		lsigSize         uint
 		success          bool
 	}{
-		{consensusVersionPreSizePooling, 1000, true},
-		{consensusVersionPreSizePooling, 1001, false},
-		{consensusVersionPostSizePooling, 2000, true},
-		{consensusVersionPostSizePooling, 2001, false},
+		{consensusVersionLegacy, 1000, true},
+		{consensusVersionLegacy, 1001, false},
+		{consensusVersionPooled, 2000, true},
+		{consensusVersionPooled, 2001, false},
+		{consensusVersionBigLogicSig, maxBigLogicSigSize, true},
+		{consensusVersionBigLogicSig, maxBigLogicSigSize + 1, false},
 	}
 
+	// PaysetGroups exercises signature, LogicSig evaluation, and size checks. It
+	// does not run ledger fee checks, so we are just paying the minimum fee here,
+	// even if it might not be enough for the larger lsigs.
 	blkHdr := createDummyBlockHeader()
 	for _, test := range testCases {
 		blkHdr.UpgradeState.CurrentProtocol = test.consensusVersion
 
-		lsig, err := txntest.GenerateProgramOfSize(test.lsigSize, pragma)
+		lsig, err := txntest.GenerateUnsaltedProgramOfSize(test.lsigSize, pragma)
 		require.NoError(t, err)
 
 		lsigPay := txntest.Txn{
@@ -751,8 +1477,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	tmpSig := txnGroups[0][0].Sig
 	txnGroups[0][0].Sig = crypto.Signature{}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "has no sig")
+	require.ErrorContains(t, err, "has no sig")
 	txnGroups[0][0].Sig = tmpSig
 
 	///// Sig + multiSig
@@ -762,15 +1487,13 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Sig: crypto.Signature{0x2},
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "should only have one of Sig or Msig or LogicSig")
+	require.ErrorContains(t, err, errTxnSigNotWellFormed.Error())
 	txnGroups[0][0].Msig.Subsigs = nil
 
 	///// Sig + logic
 	txnGroups[0][0].Lsig.Logic = op.Program
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "should only have one of Sig or Msig or LogicSig")
+	require.ErrorContains(t, err, errTxnSigNotWellFormed.Error())
 	txnGroups[0][0].Lsig.Logic = []byte{}
 
 	///// MultiSig + logic
@@ -782,8 +1505,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Sig: crypto.Signature{0x2},
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "should only have one of Sig or Msig or LogicSig")
+	require.ErrorContains(t, err, errTxnSigNotWellFormed.Error())
 	txnGroups[0][0].Lsig.Logic = []byte{}
 	txnGroups[0][0].Sig = tmpSig
 	txnGroups[0][0].Msig.Subsigs = nil
@@ -798,8 +1520,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Sig: crypto.Signature{0x2},
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "should only have one of Sig, Msig, or LMsig")
+	require.ErrorContains(t, err, "should have only one type of delegation signature")
 	txnGroups[0][0].Lsig.Msig.Subsigs = nil
 
 	/////  logic with sig and LMsig
@@ -809,8 +1530,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Sig: crypto.Signature{0x2},
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "should only have one of Sig, Msig, or LMsig")
+	require.ErrorContains(t, err, "should have only one type of delegation signature")
 	txnGroups[0][0].Lsig.Sig = crypto.Signature{}
 	txnGroups[0][0].Lsig.LMsig.Subsigs = nil
 
@@ -826,9 +1546,118 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Sig: crypto.Signature{0x4},
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "should only have one of Sig, Msig, or LMsig")
+	require.ErrorContains(t, err, "should have only one type of delegation signature")
+	txnGroups[0][0].Lsig.Msig.Subsigs = nil
+	txnGroups[0][0].Lsig.LMsig.Subsigs = nil
 
+	// The remaining cases carry a LogicSig.PQsig, so they need a consensus
+	// version with PQ schemes enabled to reach the checks under test.
+	pqBlkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+
+	/////  logic with sig and PQsig
+	txnGroups[0][0].Lsig.Sig = tmpSig
+	txnGroups[0][0].Lsig.PQsig = transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024}
+	_, err = TxnGroup(txnGroups[0], &pqBlkHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "should have only one type of delegation signature")
+	txnGroups[0][0].Lsig.Sig = crypto.Signature{}
+
+	/////  logic with Msig and PQsig
+	txnGroups[0][0].Lsig.Msig.Subsigs = make([]crypto.MultisigSubsig, 1)
+	txnGroups[0][0].Lsig.Msig.Subsigs[0] = crypto.MultisigSubsig{
+		Key: crypto.PublicKey{0x1},
+		Sig: crypto.Signature{0x2},
+	}
+	_, err = TxnGroup(txnGroups[0], &pqBlkHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "should have only one type of delegation signature")
+	txnGroups[0][0].Lsig.Msig.Subsigs = nil
+
+	/////  logic with LMsig and PQsig
+	txnGroups[0][0].Lsig.LMsig.Subsigs = make([]crypto.MultisigSubsig, 1)
+	txnGroups[0][0].Lsig.LMsig.Subsigs[0] = crypto.MultisigSubsig{
+		Key: crypto.PublicKey{0x1},
+		Sig: crypto.Signature{0x2},
+	}
+	_, err = TxnGroup(txnGroups[0], &pqBlkHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "should have only one type of delegation signature")
+	txnGroups[0][0].Lsig.LMsig.Subsigs = nil
+
+	/////  logic with PQsig only is classified as a LogicSig authorization proof
+	_, err = TxnGroup(txnGroups[0], &pqBlkHdr, nil, &dummyLedger)
+	require.ErrorContains(t, err, "pq delegated logic signature validation failed")
+
+	/////  before PQ schemes exist, the same LogicSig.PQsig fails the scheme check
+	prePQBlkHdr := createDummyBlockHeader(protocol.ConsensusV41)
+	_, err = TxnGroup(txnGroups[0], &prePQBlkHdr, nil, &dummyLedger)
+	require.ErrorIs(t, err, transactions.ErrPQSchemeNotEnabled)
+}
+
+func TestTxnGroupPQSigMixedSignatures(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	dummyLedger := DummyLedgerForSignature{}
+
+	op, err := logic.AssembleString("int 1")
+	require.NoError(t, err)
+
+	t.Run("empty-pq-no-other-signature", func(t *testing.T) {
+		stxn := makePQSignedTxn(t, 4)
+		stxn.PQsig = transactions.PQSig{}
+
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		require.ErrorIs(t, err, errTxnSigHasNoSig)
+		requireTxGroupErrorReason(t, err, TxGroupErrorReasonHasNoSig)
+	})
+
+	t.Run("pq-plus-sig", func(t *testing.T) {
+		stxn := makePQSignedTxn(t, 5)
+		stxn.Sig = keypair().Sign(stxn.Txn)
+
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		require.ErrorIs(t, err, errTxnSigNotWellFormed)
+		requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
+	})
+
+	t.Run("pq-plus-msig", func(t *testing.T) {
+		stxn := makePQSignedTxn(t, 6)
+		stxn.Msig.Subsigs = []crypto.MultisigSubsig{{
+			Key: crypto.PublicKey{0x1},
+			Sig: crypto.Signature{0x2},
+		}}
+
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		require.ErrorIs(t, err, errTxnSigNotWellFormed)
+		requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
+	})
+
+	t.Run("pq-plus-lsig", func(t *testing.T) {
+		stxn := makePQSignedTxn(t, 7)
+		stxn.Lsig.Logic = op.Program
+
+		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+		require.ErrorIs(t, err, errTxnSigNotWellFormed)
+		requireTxGroupErrorReason(t, err, TxGroupErrorReasonSigNotWellFormed)
+	})
+}
+
+func TestTxnGroupLogicOnlyAccountRemainsUnchanged(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	ops, err := logic.AssembleString("int 1")
+	require.NoError(t, err)
+
+	sender := basics.Address(logic.HashProgram(ops.Program))
+	stxn := transactions.SignedTxn{
+		Txn: createPayTransaction(config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee, 40, 60, 1, sender, basics.Address{1}),
+		Lsig: transactions.LogicSig{
+			Logic: ops.Program,
+			PQsig: transactions.PQSig{},
+		},
+	}
+
+	blkHdr := createDummyBlockHeader()
+	_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &DummyLedgerForSignature{})
+	require.NoError(t, err)
 }
 
 func generateTransactionGroups(maxGroupSize int, signedTxns []transactions.SignedTxn,
@@ -1126,6 +1955,74 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	verifyGroup(t, txnGroups, &blkHdr, breakSignatureFunc, restoreSignatureFunc, "rejected by logic")
 }
 
+// TestLogicSigArgAccess checks the consensus rule that a LogicSig may carry no
+// argument it did not read: none above the highest index it read, and none
+// unread below that index unless it is empty. The program used here is a v1
+// program, which demonstrates that the rule is gated on consensus rather than on
+// the program's LogicSig version.
+func TestLogicSigArgAccess(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Reads args 0 and 2, deliberately skipping 1.
+	ops, err := logic.AssembleString("arg 0; len; int 1; ==; arg 2; len; int 1; ==; &&")
+	require.NoError(t, err)
+	programAddr := basics.Address(logic.HashProgram(ops.Program))
+
+	signed := func(args ...[]byte) transactions.SignedTxn {
+		pay := txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   programAddr,
+			Receiver: poolAddr,
+			Fee:      config.Consensus[protocol.ConsensusFuture].MinTxnFee,
+		}
+		return transactions.SignedTxn{
+			Lsig: transactions.LogicSig{Logic: ops.Program, Args: args},
+			Txn:  pay.Txn(),
+		}
+	}
+
+	x := []byte("x")
+
+	// Padding an lsig alters nothing that any signature or hash covers. This is
+	// the property the rule exists to compensate for, so pin it here.
+	t.Run("padding does not change the txid", func(t *testing.T) {
+		require.Equal(t, signed(x, nil, x).ID(), signed(x, nil, x, []byte("junk")).ID())
+	})
+
+	cases := []struct {
+		name string
+		args [][]byte
+		bad  bool
+	}{
+		{"exactly what is read", [][]byte{x, nil, x}, false},
+		{"empty hole below the mark", [][]byte{x, {}, x}, false},
+		{"filled hole below the mark", [][]byte{x, []byte("junk"), x}, true},
+		{"junk appended", [][]byte{x, nil, x, []byte("junk")}, true},
+		{"empty appended", [][]byte{x, nil, x, {}}, true},
+	}
+
+	dummyLedger := DummyLedgerForSignature{}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Without the consensus rule every shape is accepted, which is what
+			// makes the padding undetectable today.
+			permissive := createDummyBlockHeader(protocol.ConsensusV42)
+			_, err := TxnGroup([]transactions.SignedTxn{signed(tc.args...)}, &permissive, nil, &dummyLedger)
+			require.NoError(t, err)
+
+			strict := createDummyBlockHeader(protocol.ConsensusFuture)
+			_, err = TxnGroup([]transactions.SignedTxn{signed(tc.args...)}, &strict, nil, &dummyLedger)
+			if !tc.bad {
+				require.NoError(t, err)
+				return
+			}
+			requireTxGroupErrorReason(t, err, TxGroupErrorReasonLogicSigFailed)
+			require.ErrorContains(t, err, "was not accessed")
+		})
+	}
+}
+
 func createDummyBlockHeader(optVer ...protocol.ConsensusVersion) bookkeeping.BlockHeader {
 	// Most tests in this file were written to use current.  Future is probably
 	// the better test, but I don't want to make that choice now, so optVer.
@@ -1173,8 +2070,7 @@ func verifyGroup(t *testing.T, txnGroups [][]transactions.SignedTxn, blkHdr *boo
 
 	dummyLedger := DummyLedgerForSignature{}
 	_, err := TxnGroup(txnGroups[0], blkHdr, cache, &dummyLedger)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), errorString)
+	require.ErrorContains(t, err, errorString)
 
 	// The txns should not be in the cache
 	unverifiedGroups := cache.GetUnverifiedTransactionGroups(txnGroups[:1], spec, blkHdr.CurrentProtocol)
@@ -1211,8 +2107,7 @@ func verifyGroup(t *testing.T, txnGroups [][]transactions.SignedTxn, blkHdr *boo
 	for _, txng := range txnGroups {
 		_, err = TxnGroup(txng, blkHdr, cache, &dummyLedger)
 		if err != nil {
-			require.Error(t, err)
-			require.Contains(t, err.Error(), errorString)
+			require.ErrorContains(t, err, errorString)
 			numFailed++
 		}
 	}
@@ -1250,6 +2145,259 @@ func TestLogicSigMultisigValidation(t *testing.T) {
 	t.Run("v40", func(t *testing.T) { testLogicSigMultisigValidation(t, protocol.ConsensusV40, false) })
 	t.Run("v41", func(t *testing.T) { testLogicSigMultisigValidation(t, protocol.ConsensusV41, true) })
 	t.Run("future", func(t *testing.T) { testLogicSigMultisigValidation(t, protocol.ConsensusFuture, true) })
+}
+
+func TestBigLogicSigProgramSize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	v18 := config.Consensus[protocol.ConsensusV18]
+	v41 := config.Consensus[protocol.ConsensusV41]
+	vFuture := config.Consensus[protocol.ConsensusFuture]
+
+	makeProgram := func(proto config.ConsensusParams, minSize int) []byte {
+		// GenerateUnsaltedProgramOfSize needs at least 5 bytes for a valid
+		// always-succeeding program.
+		if minSize < 5 {
+			minSize = 5
+		}
+		program, err := txntest.GenerateUnsaltedProgramOfSize(uint(minSize), uint(proto.LogicSigVersion))
+		require.NoError(t, err)
+		return program
+	}
+
+	// A LogicSig may carry no argument it does not read, so any case below that
+	// supplies args and expects success needs a program that reads them. Seven
+	// bytes is the smallest program with room for one arg read.
+	makeArgProgram := func(proto config.ConsensusParams, minSize int, args uint) []byte {
+		if minSize < 7 {
+			minSize = 7
+		}
+		program, err := txntest.GenerateUnsaltedArgReadingProgramOfSize(uint(minSize), uint(proto.LogicSigVersion), args)
+		require.NoError(t, err)
+		return program
+	}
+
+	makeLogicSigTxnForReceiver := func(program []byte, args [][]byte, receiver basics.Address) transactions.SignedTxn {
+		stxn := txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   basics.Address(logic.HashProgram(program)),
+			Receiver: receiver,
+			// we are not testing fee validation here, so min fee is enough even when program is big
+			Fee:    config.Consensus[protocol.ConsensusFuture].MinTxnFee,
+			Amount: uint64(1000),
+		}.SignedTxn()
+		stxn.Lsig = transactions.LogicSig{
+			Logic: program,
+			Args:  args,
+		}
+		return stxn
+	}
+	makeLogicSigTxn := func(program []byte, args [][]byte) transactions.SignedTxn {
+		return makeLogicSigTxnForReceiver(program, args, basics.Address{1})
+	}
+
+	verifyGroupForProtocol := func(consensusVer protocol.ConsensusVersion, group []transactions.SignedTxn) error {
+		blkHdr := createDummyBlockHeader(consensusVer)
+		_, err := TxnGroup(group, &blkHdr, nil, &DummyLedgerForSignature{})
+		return err
+	}
+	makeSignedTxn := func(proto config.ConsensusParams) transactions.SignedTxn {
+		secrets := keypair()
+		sender := basics.Address(secrets.SignatureVerifier)
+		txn := txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender,
+			Receiver: basics.Address{1},
+			Fee:      proto.MinTxnFee,
+			Amount:   uint64(1000),
+		}.Txn()
+		return transactions.SignedTxn{
+			Txn: txn,
+			Sig: secrets.Sign(txn),
+		}
+	}
+	makeSignedTxnWithOrphanLsig := func(proto config.ConsensusParams, lsig transactions.LogicSig) transactions.SignedTxn {
+		stxn := makeSignedTxn(proto)
+		stxn.Lsig = lsig
+		return stxn
+	}
+	makeSignedTxnWithOrphanArgs := func(proto config.ConsensusParams, args [][]byte) transactions.SignedTxn {
+		return makeSignedTxnWithOrphanLsig(proto, transactions.LogicSig{Args: args})
+	}
+
+	t.Run("v18: singleton still limited by legacy size pool", func(t *testing.T) {
+		program := makeProgram(v18, int(v18.LogicSigMaxSize)+1)
+		err := verifyGroupForProtocol(protocol.ConsensusV18, []transactions.SignedTxn{makeLogicSigTxn(program, nil)})
+		require.ErrorContains(t, err, "more than the available pool")
+	})
+
+	t.Run("v18: orphan LogicSig args on signed txn are ignored", func(t *testing.T) {
+		stxn := makeSignedTxnWithOrphanArgs(v18, [][]byte{make([]byte, int(v18.LogicSigMaxSize)+1)})
+
+		err := verifyGroupForProtocol(protocol.ConsensusV18, []transactions.SignedTxn{stxn})
+		require.NoError(t, err)
+	})
+
+	t.Run("v41: orphan LogicSig args on signed txn use the current pool", func(t *testing.T) {
+		stxn := makeSignedTxnWithOrphanArgs(v41, [][]byte{make([]byte, int(v41.LogicSigMaxSize)+500)})
+
+		err := verifyGroupForProtocol(protocol.ConsensusV41, []transactions.SignedTxn{stxn})
+		require.ErrorContains(t, err, "more than the available pool")
+	})
+
+	t.Run("v41: orphan LogicSig args on signed txn can use size pooling", func(t *testing.T) {
+		secrets1 := keypair()
+		secrets2 := keypair()
+		stxn1 := makeSignedTxnWithOrphanArgs(v41, [][]byte{make([]byte, int(v41.LogicSigMaxSize)+500)})
+		stxn2 := makeSignedTxn(v41)
+		// makeSignedTxnWithOrphanArgs and makeSignedTxn use it is own Sender,
+		// so replace and resign to have group id to be valid
+		stxn1.Txn.Sender = basics.Address(secrets1.SignatureVerifier)
+		stxn2.Txn.Sender = basics.Address(secrets2.SignatureVerifier)
+
+		// inject groupID and re-sign
+		stxns := amendTxGroupID([]transactions.SignedTxn{
+			stxn1,
+			stxn2,
+		})
+		stxns[0].Sig = secrets1.Sign(stxns[0].Txn)
+		stxns[1].Sig = secrets2.Sign(stxns[1].Txn)
+
+		err := verifyGroupForProtocol(protocol.ConsensusV41, stxns)
+		require.NoError(t, err)
+	})
+
+	t.Run("vFuture: orphan LogicSig args on signed txn are rejected", func(t *testing.T) {
+		stxn := makeSignedTxnWithOrphanArgs(vFuture, [][]byte{make([]byte, int(vFuture.LogicSigMaxSize))})
+
+		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{stxn})
+		require.ErrorContains(t, err, "LogicSig fields without LogicSig program")
+	})
+
+	t.Run("orphan LogicSig delegation signature on signed txn", func(t *testing.T) {
+		lsigSig := crypto.Signature{}
+		lsigSig[0] = 1
+
+		// Content on a program-less LogicSig is ignored before transaction size
+		// pricing, and rejected outright from then on.
+		tests := []struct {
+			name string
+			lsig transactions.LogicSig
+		}{
+			{name: "sig", lsig: transactions.LogicSig{Sig: lsigSig}},
+			{name: "msig", lsig: transactions.LogicSig{Msig: crypto.MultisigSig{Version: 1}}},
+			{name: "lmsig", lsig: transactions.LogicSig{LMsig: crypto.MultisigSig{Version: 1}}},
+			{name: "pqsig", lsig: transactions.LogicSig{PQsig: transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024}}},
+		}
+
+		for _, test := range tests {
+			t.Run(test.name, func(t *testing.T) {
+				stxn := makeSignedTxnWithOrphanLsig(v18, test.lsig)
+				err := verifyGroupForProtocol(protocol.ConsensusV18, []transactions.SignedTxn{stxn})
+				require.NoError(t, err)
+
+				stxn = makeSignedTxnWithOrphanLsig(v41, test.lsig)
+				err = verifyGroupForProtocol(protocol.ConsensusV41, []transactions.SignedTxn{stxn})
+				require.NoError(t, err)
+
+				stxn = makeSignedTxnWithOrphanLsig(vFuture, test.lsig)
+				err = verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{stxn})
+				require.ErrorContains(t, err, "LogicSig fields without LogicSig program")
+			})
+		}
+	})
+
+	t.Run("v41: singleton cannot exceed current pool without pricing", func(t *testing.T) {
+		program := makeProgram(v41, int(v41.LogicSigMaxSize)+1)
+		err := verifyGroupForProtocol(protocol.ConsensusV41, []transactions.SignedTxn{makeLogicSigTxn(program, nil)})
+		require.ErrorContains(t, err, "more than the available pool")
+	})
+
+	t.Run("v41: singleton program and args share the current pool", func(t *testing.T) {
+		program := makeProgram(v41, int(v41.LogicSigMaxSize))
+		err := verifyGroupForProtocol(protocol.ConsensusV41, []transactions.SignedTxn{
+			makeLogicSigTxn(program, [][]byte{make([]byte, int(v41.LogicSigMaxSize))}),
+		})
+		require.ErrorContains(t, err, "more than the available pool")
+	})
+
+	t.Run("v41: ordinary size pooling is still allowed", func(t *testing.T) {
+		program := makeProgram(v41, int(v41.LogicSigMaxSize)+1)
+
+		stxns := amendTxGroupID([]transactions.SignedTxn{
+			makeLogicSigTxnForReceiver(program, nil, basics.Address{1}),
+			makeLogicSigTxnForReceiver(makeProgram(v41, 0), nil, basics.Address{2}),
+		})
+		err := verifyGroupForProtocol(protocol.ConsensusV41, stxns)
+		require.NoError(t, err)
+	})
+
+	t.Run("vFuture: singleton can use more than one legacy size unit", func(t *testing.T) {
+		program := makeProgram(vFuture, int(vFuture.LogicSigMaxSize)+1)
+		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{makeLogicSigTxn(program, nil)})
+		require.NoError(t, err)
+	})
+
+	t.Run("vFuture: LogicSig program cannot exceed absolute limit", func(t *testing.T) {
+		program := make([]byte, int(vFuture.MaxAbsoluteLogicSigProgramSize)+1)
+		program[0] = byte(vFuture.LogicSigVersion)
+
+		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{makeLogicSigTxn(program, nil)})
+		require.ErrorContains(t, err, "LogicSig.Logic too long")
+	})
+
+	t.Run("vFuture: singleton program and args have independent allowances", func(t *testing.T) {
+		program := makeArgProgram(vFuture, int(vFuture.LogicSigMaxSize), 1)
+		args := [][]byte{make([]byte, int(vFuture.LogicSigMaxSize))}
+
+		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{makeLogicSigTxn(program, args)})
+		require.NoError(t, err)
+	})
+
+	t.Run("vFuture: singleton LogicSig args above allowance require size pooling", func(t *testing.T) {
+		program := makeProgram(vFuture, 0)
+		args := [][]byte{make([]byte, int(vFuture.LogicSigMaxSize)+1)}
+
+		err := verifyGroupForProtocol(protocol.ConsensusFuture, []transactions.SignedTxn{makeLogicSigTxn(program, args)})
+		require.ErrorContains(t, err, "more than the available size pool")
+	})
+
+	t.Run("vFuture: LogicSig args above allowance can use size pooling", func(t *testing.T) {
+		program := makeProgram(vFuture, 0)
+		argProgram := makeArgProgram(vFuture, 0, 1)
+		args := [][]byte{make([]byte, int(vFuture.LogicSigMaxSize)+1)}
+
+		stxns := amendTxGroupID([]transactions.SignedTxn{
+			makeLogicSigTxnForReceiver(argProgram, args, basics.Address{1}),
+			makeLogicSigTxnForReceiver(program, nil, basics.Address{2}),
+			makeLogicSigTxnForReceiver(program, nil, basics.Address{3}),
+		})
+		err := verifyGroupForProtocol(protocol.ConsensusFuture, stxns)
+		require.NoError(t, err)
+	})
+
+	t.Run("vFuture: LogicSig args pool counts args from every LogicSig", func(t *testing.T) {
+		program := makeProgram(vFuture, 0)
+
+		stxns := amendTxGroupID([]transactions.SignedTxn{
+			makeLogicSigTxnForReceiver(program, [][]byte{make([]byte, int(vFuture.LogicSigMaxSize))}, basics.Address{1}),
+			makeLogicSigTxnForReceiver(program, [][]byte{make([]byte, int(vFuture.LogicSigMaxSize)+1)}, basics.Address{2}),
+		})
+		err := verifyGroupForProtocol(protocol.ConsensusFuture, stxns)
+		require.ErrorContains(t, err, "more than the available size pool")
+	})
+
+	t.Run("vFuture: program bytes can exceed legacy group size pool", func(t *testing.T) {
+		program := makeProgram(vFuture, int(vFuture.MaxAbsoluteLogicSigProgramSize))
+
+		stxns := amendTxGroupID([]transactions.SignedTxn{
+			makeLogicSigTxnForReceiver(program, nil, basics.Address{1}),
+			makeLogicSigTxnForReceiver(program, nil, basics.Address{2}),
+		})
+		err := verifyGroupForProtocol(protocol.ConsensusFuture, stxns)
+		require.NoError(t, err)
+	})
+
 }
 
 func testLogicSigMultisigValidation(t *testing.T, consensusVer protocol.ConsensusVersion, useLMsig bool) {
@@ -1428,7 +2576,7 @@ func testLogicSigMultisigValidation(t *testing.T, consensusVer protocol.Consensu
 		// Test with both fields - should fail
 		stxn.Lsig = transactions.LogicSig{Logic: program, Msig: msig, LMsig: msig}
 		err = verifyLogicSig(t, stxn)
-		require.ErrorContains(t, err, "LogicSig should only have one of Sig, Msig, or LMsig but has more than one")
+		require.ErrorContains(t, err, "LogicSig should have only one type of delegation signature")
 	})
 }
 
@@ -1504,7 +2652,7 @@ func TestLogicSigMsigBothFlags(t *testing.T) {
 	// Test with both fields - should fail
 	stxn.Lsig = transactions.LogicSig{Logic: program, Msig: msig, LMsig: lmsig}
 	err = verifyLogicSig()
-	require.ErrorContains(t, err, "LogicSig should only have one of Sig, Msig, or LMsig but has more than one")
+	require.ErrorContains(t, err, "LogicSig should have only one type of delegation signature")
 }
 
 func TestAuthAddrSenderDiff(t *testing.T) {

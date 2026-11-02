@@ -430,7 +430,7 @@ type Local struct {
 	// CatchupBlockDownloadRetryAttempts controls the number of attempts the block fetcher would make before giving up on a provided catchpoint.
 	CatchupBlockDownloadRetryAttempts int `version[9]:"1000"`
 
-	// EnableDeveloperAPI enables teal/compile and teal/dryrun API endpoints.
+	// EnableDeveloperAPI enables teal/compile API endpoint.
 	// This functionality is disabled by default.
 	EnableDeveloperAPI bool `version[9]:"false"`
 
@@ -889,8 +889,8 @@ func (cfg *Local) ResolveLogPaths(rootDir string) (liveLog, archive string) {
 }
 
 type logger interface {
-	Infof(format string, args ...interface{})
-	Warnf(format string, args ...interface{})
+	Infof(format string, args ...any)
+	Warnf(format string, args ...any)
 }
 
 // EnsureAndResolveGenesisDirs will resolve the supplied config paths to absolute paths, and will create the genesis directories of each
@@ -989,13 +989,25 @@ func (cfg *Local) EnsureAndResolveGenesisDirs(rootDir, genesisID string, logger 
 }
 
 func moveDirIfExists(logger logger, srcdir, dstdir string, files ...string) error {
-	// first, check if any files already exist in dstdir, and quit if so
+	// first, check if any files exist in srcdir; if none do, there is nothing to migrate
+	// (e.g. the files were already moved to dstdir on a previous startup)
+	srcExists := false
+	for _, file := range files {
+		if _, err := os.Stat(filepath.Join(srcdir, file)); err == nil {
+			srcExists = true
+			break
+		}
+	}
+	if !srcExists {
+		return nil
+	}
+	// then, check if any files already exist in dstdir, and quit if so
 	for _, file := range files {
 		if _, err := os.Stat(filepath.Join(dstdir, file)); err == nil {
 			return fmt.Errorf("destination file %s already exists, not overwriting", filepath.Join(dstdir, file))
 		}
 	}
-	// then, check if any files exist in srcdir, and move them to dstdir
+	// finally, move the files that exist in srcdir to dstdir
 	for _, file := range files {
 		if _, err := os.Stat(filepath.Join(srcdir, file)); err == nil {
 			if err := util.MoveFile(filepath.Join(srcdir, file), filepath.Join(dstdir, file)); err != nil {
@@ -1025,14 +1037,14 @@ func (cfg *Local) AdjustConnectionLimits(requiredFDs, maxFDs uint64) bool {
 			splitRatio = 2
 		}
 		if cfg.IsWsListenServer() || cfg.IsP2PListenServer() {
-			if cfg.IncomingConnectionsLimit > int(restDelta) {
+			if cfg.IncomingConnectionsLimit > 0 && uint64(cfg.IncomingConnectionsLimit) > restDelta {
 				cfg.IncomingConnectionsLimit -= int(restDelta) / splitRatio
 			} else {
 				cfg.IncomingConnectionsLimit = 0
 			}
 		}
 		if cfg.IsHybridServer() {
-			if cfg.P2PHybridIncomingConnectionsLimit > int(restDelta) {
+			if cfg.P2PHybridIncomingConnectionsLimit > 0 && uint64(cfg.P2PHybridIncomingConnectionsLimit) > restDelta {
 				cfg.P2PHybridIncomingConnectionsLimit -= int(restDelta) / splitRatio
 			} else {
 				cfg.P2PHybridIncomingConnectionsLimit = 0

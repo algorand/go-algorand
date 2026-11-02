@@ -1,0 +1,37 @@
+name: DNSSEC Root Anchor
+# Compares the embedded DNSSEC root trust anchor (tools/network/dnssec/root-anchors.xml)
+# with IANA's published copy, so a root KSK rollover is noticed long before it
+# breaks DNSSEC bootstrap resolution.
+on:
+  schedule:
+    - cron: '17 6 * * 1' # Mondays 06:17 UTC
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - tools/network/dnssec/root-anchors.xml
+      - .github/workflows/dnssec-root-anchor.yml
+
+permissions:
+  contents: read
+
+jobs:
+  root_anchor:
+    runs-on: ubuntu-24.04
+    env:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Compare embedded root anchor with IANA
+        run: |
+          curl -fsSL --retry 3 --retry-all-errors -o "$RUNNER_TEMP/root-anchors.xml" https://data.iana.org/root-anchors/root-anchors.xml
+          if ! diff -u tools/network/dnssec/root-anchors.xml "$RUNNER_TEMP/root-anchors.xml"; then
+            echo "::error title=DNSSEC root anchor out of date::tools/network/dnssec/root-anchors.xml differs from https://data.iana.org/root-anchors/root-anchors.xml"
+            exit 1
+          fi
+      - name: Notify Slack on failure
+        if: failure() && github.event_name != 'pull_request'
+        uses: ./.github/actions/slack-notify
+        with:
+          job-type: "DNSSEC Root Anchor"
+          build-type: ${{ github.event_name == 'schedule' && 'Scheduled Check' || 'Manual Check' }}

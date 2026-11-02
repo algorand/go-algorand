@@ -191,7 +191,7 @@ func (n *SchedulerFilterSchedule) Evaluate(timepoint int, nodeID int) bool {
 func (n *SchedulerFilter) Unmarshal(b []byte) NetworkFilterFactory {
 	type schedulerFilterConfigJSON struct {
 		Name         string
-		Filters      []interface{}
+		Filters      []any
 		Schedule     []SchedulerFilterSchedule
 		ScheduleName string
 	}

@@ -31,6 +31,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/stretchr/testify/require"
 
@@ -1381,9 +1382,9 @@ func getTransactionGroups(N, numUsers, maxGroupSize int, addresses []basics.Addr
 }
 
 func signTransactionGroups(txnGroups [][]transactions.Transaction, secrets []*crypto.SignatureSecrets, invalidProb float32) (
-	ret [][]transactions.SignedTxn, badTxnGroups map[uint64]interface{}) {
+	ret [][]transactions.SignedTxn, badTxnGroups map[uint64]any) {
 	numUsers := len(secrets)
-	badTxnGroups = make(map[uint64]interface{})
+	badTxnGroups = make(map[uint64]any)
 	for tg := range txnGroups {
 		grpSize := len(txnGroups[tg])
 		signedTxGroup := make([]transactions.SignedTxn, 0, grpSize)
@@ -1404,13 +1405,13 @@ func signTransactionGroups(txnGroups [][]transactions.Transaction, secrets []*cr
 }
 
 func signMSigTransactionGroups(txnGroups [][]transactions.Transaction, secrets []*crypto.SignatureSecrets,
-	invalidProb float32, msigSize int) (ret [][]transactions.SignedTxn, badTxnGroups map[uint64]interface{}, err error) {
+	invalidProb float32, msigSize int) (ret [][]transactions.SignedTxn, badTxnGroups map[uint64]any, err error) {
 	ret = make([][]transactions.SignedTxn, len(txnGroups))
 	numUsers := len(secrets)
-	badTxnGroups = make(map[uint64]interface{})
+	badTxnGroups = make(map[uint64]any)
 	badTxnGroupsMU := deadlock.Mutex{}
 	// process them using multiple threads
-	workers := make(chan interface{}, runtime.NumCPU()-1)
+	workers := make(chan any, runtime.NumCPU()-1)
 	wg := sync.WaitGroup{}
 	errChan := make(chan error, 1)
 	for tg := range txnGroups {
@@ -1488,7 +1489,7 @@ func signMSigTransactionGroups(txnGroups [][]transactions.Transaction, secrets [
 // invalid signatures of a given probability (invalidProb)
 func makeSignedTxnGroups(N, numUsers, maxGroupSize int, invalidProb float32, addresses []basics.Address,
 	secrets []*crypto.SignatureSecrets) (ret [][]transactions.SignedTxn,
-	badTxnGroups map[uint64]interface{}) {
+	badTxnGroups map[uint64]any) {
 
 	txnGroups := getTransactionGroups(N, numUsers, maxGroupSize, addresses)
 	ret, badTxnGroups = signTransactionGroups(txnGroups, secrets, invalidProb)
@@ -1597,7 +1598,7 @@ func BenchmarkHandleLsigTxnGroups(b *testing.B) {
 
 type txGenIf interface {
 	makeLedger(tb testing.TB, cfg config.Local, log logging.Logger, namePrefix string) *Ledger
-	createSignedTxGroups(tb testing.TB, txgCount int) ([][]transactions.SignedTxn, map[uint64]interface{})
+	createSignedTxGroups(tb testing.TB, txgCount int) ([][]transactions.SignedTxn, map[uint64]any)
 }
 
 type txGenerator struct {
@@ -1652,7 +1653,7 @@ func makeSigGenerator(tb testing.TB, numUsers, maxGroupSize int, invalidRate flo
 	}
 }
 
-func (g *sigGenerator) createSignedTxGroups(tb testing.TB, txgCount int) ([][]transactions.SignedTxn, map[uint64]interface{}) {
+func (g *sigGenerator) createSignedTxGroups(tb testing.TB, txgCount int) ([][]transactions.SignedTxn, map[uint64]any) {
 	return makeSignedTxnGroups(txgCount, g.numUsers, g.maxGroupSize, g.invalidRate, g.addresses, g.secrets)
 }
 
@@ -1663,7 +1664,7 @@ func makeMsigGenerator(tb testing.TB, numUsers, maxGroupSize int, invalidRate fl
 	}
 }
 
-func (g *msigGenerator) createSignedTxGroups(tb testing.TB, txgCount int) ([][]transactions.SignedTxn, map[uint64]interface{}) {
+func (g *msigGenerator) createSignedTxGroups(tb testing.TB, txgCount int) ([][]transactions.SignedTxn, map[uint64]any) {
 	txnGroups := getTransactionGroups(txgCount, g.numUsers, g.maxGroupSize, g.addresses)
 	signedTransactionGroups, badTxnGroups, err := signMSigTransactionGroups(txnGroups, g.secrets, g.invalidRate, g.msigSize)
 	require.NoError(tb, err)
@@ -1676,9 +1677,9 @@ func makeLsigGenerator(tb testing.TB, numUsers, maxGroupSize int, invalidRate fl
 	}
 }
 
-func (g *lsigGenerator) createSignedTxGroups(tb testing.TB, txgCount int) ([][]transactions.SignedTxn, map[uint64]interface{}) {
+func (g *lsigGenerator) createSignedTxGroups(tb testing.TB, txgCount int) ([][]transactions.SignedTxn, map[uint64]any) {
 	stxns := make([][]transactions.SignedTxn, txgCount)
-	badTxnGroups := make(map[uint64]interface{})
+	badTxnGroups := make(map[uint64]any)
 	for i := 0; i < txgCount; i++ {
 		txns := txntest.CreateTinyManTxGroup(tb, true)
 		stxns[i], _ = txntest.CreateTinyManSignedTxGroup(tb, txns)
@@ -1831,7 +1832,7 @@ func runHandlerBenchmarkWithBacklog(b *testing.B, txGen txGenIf, tps int, useBac
 			handler.Stop() // cancel the handler ctx
 		}()
 		counterMutex := deadlock.Mutex{}
-		stopChan := make(chan interface{})
+		stopChan := make(chan any)
 		// monitor the counters to tell when everything is processed and the checker should stop
 		wg.Add(1)
 		go func() {
@@ -3259,4 +3260,55 @@ func TestTxHandlerNilTxPool(t *testing.T) {
 		TxPool: &mockTxPool{},
 	})
 	require.NotErrorIs(t, err, ErrInvalidTxPool)
+}
+
+// TestTxHandlerDecodeMsgNoStaleFields checks that decoding does not leak fields from a previously decoded message.
+func TestTxHandlerDecodeMsgNoStaleFields(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// a full-size "dirty" message: makeRandomTransactions populates the optional Note and
+	// AuthAddr fields, so every slot of the scratch buffer ends up holding them
+	_, dirty := makeRandomTransactions(bounds.MaxTxGroupSize)
+
+	// ...and a single-transaction "clean" message that omits both
+	cleanTxns, _ := makeRandomTransactions(1)
+	cleanTxns[0].Txn.Note = nil
+	cleanTxns[0].AuthAddr = basics.Address{}
+	clean := protocol.Encode(&cleanTxns[0])
+
+	// the scratch buffer comes from a sync.Pool, so repeat enough times to be confident
+	// the same buffer is handed to both decodes
+	for i := 0; i < 100; i++ {
+		_, _, invalid := decodeMsg(dirty)
+		require.False(t, invalid)
+
+		group, _, invalid := decodeMsg(clean)
+		require.False(t, invalid)
+		require.Equal(t, cleanTxns, group, "iteration %d decoded stale fields", i)
+	}
+}
+
+const sizeofSignedTxn = int(unsafe.Sizeof(transactions.SignedTxn{}))
+
+// BenchmarkTxHandlerDecodeMsg measures decodeMsg across the legal group sizes.
+func BenchmarkTxHandlerDecodeMsg(b *testing.B) {
+	for _, n := range []int{1, 2, 4, 8, bounds.MaxTxGroupSize} {
+		b.Run(fmt.Sprintf("group-%d", n), func(b *testing.B) {
+			_, blob := makeRandomTransactions(n)
+
+			b.ReportAllocs()
+			b.SetBytes(int64(len(blob)))
+			b.ResetTimer()
+
+			var retained int64
+			for i := 0; i < b.N; i++ {
+				group, _, invalid := decodeMsg(blob)
+				if invalid {
+					b.Fatal("decodeMsg reported invalid")
+				}
+				retained += int64(cap(group) * sizeofSignedTxn)
+			}
+			b.ReportMetric(float64(retained)/float64(b.N), "retained-B/op")
+		})
+	}
 }

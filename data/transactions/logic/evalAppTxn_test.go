@@ -1073,15 +1073,16 @@ txn Sender; itxn_field Receiver;
 	// Note size 540 increases fee by 1.040_000 factor. But the first problem is
 	// that the default fee population mechanism can't know about the big Note,
 	// so it tries to populate for 2 basic transactions, which is 2002-401=1601.
-	// The "need" is 1.642 because one of the transaction's costs goes from 1001
-	// to ceil(1001*1.040) = 1042.
+	// The requirement is 2.043 because one of the transaction's costs goes from
+	// 1001 to ceil(1001*1.040) = 1042. After the 401 fee credit, paying 1601
+	// leaves the group 41uA short.
 	ledger.NewAccount(appAddr(888), 1000+2*minFee-401) // replenish
 	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+
 		"int 540; bzero; itxn_field Note; itxn_submit; int 1", ep,
-		"group fee 1.601mA too small (needs 1.642mA more)")
+		"group fee 1.601mA too small (needs 41uA more)")
 	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+
 		"int 540; bzero; itxn_field Note; int 1041; itxn_field Fee; itxn_submit; int 1", ep,
-		"group fee 1.641mA too small (needs 1.642mA more)")
+		"group fee 1.641mA too small (needs 1uA more)")
 	ledger.NewAccount(appAddr(888), 1000+2*minFee-401+41) // replenish
 	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+
 		"int 540; bzero; itxn_field Note; int 1042; itxn_field Fee; itxn_submit; int 1", ep)
@@ -1376,6 +1377,12 @@ func TestBigApplCreation(t *testing.T) {
                   int 1000; bzero; `+pages+`
                   int 901; bzero; `+pages+`
                  `+s, ep, "may not exceed 4000")
+
+			// Appending pages must not write into the bytes after a program
+			// that was sliced from a longer value.
+			TestApp(t, p+`byte 0x0102030405; dup; extract 0 2; `+basic+`
+                  byte 0xffff; `+pages+`
+                  pushbytes 0x0102030405; ==`, ep)
 		})
 	}
 }
@@ -1730,7 +1737,10 @@ func TestInnerBudgetIncrement(t *testing.T) {
 	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
-	gasup := TestProg(t, "pushint 1", AssemblerMaxVersion)
+	// autosalt off: as an app program this stateless snippet would otherwise
+	// get a salt intcblock at v14 (on-curve hash), adding an opcode of cost and
+	// skewing the budget assertions below.
+	gasup := TestProg(t, "#pragma autosalt false\npushint 1", AssemblerMaxVersion)
 	ledger.NewApp(tx.Receiver, 222, basics.AppParams{
 		ApprovalProgram: gasup.Program,
 	})
@@ -1760,7 +1770,10 @@ func TestIncrementCheck(t *testing.T) {
 	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
-	gasup := TestProg(t, "pushint 1", AssemblerMaxVersion)
+	// autosalt off: as an app program this stateless snippet would otherwise
+	// get a salt intcblock at v14 (on-curve hash), adding an opcode of cost and
+	// skewing the budget assertions below.
+	gasup := TestProg(t, "#pragma autosalt false\npushint 1", AssemblerMaxVersion)
 	ledger.NewApp(tx.Receiver, 222, basics.AppParams{
 		ApprovalProgram: gasup.Program,
 	})

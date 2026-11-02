@@ -88,13 +88,13 @@ func RandomizeObjectWithMaxCollectionLen(n int) RandomizeObjectOption {
 }
 
 // RandomizeObject returns a random object of the same type as template
-func RandomizeObject(template interface{}, opts ...RandomizeObjectOption) (interface{}, error) {
+func RandomizeObject(template any, opts ...RandomizeObjectOption) (any, error) {
 	cfg := randomizeObjectCfg{}
 	for _, opt := range opts {
 		opt(&cfg)
 	}
 	tt := reflect.TypeOf(template)
-	if tt.Kind() != reflect.Ptr {
+	if tt.Kind() != reflect.Pointer {
 		return nil, fmt.Errorf("RandomizeObject: must be ptr")
 	}
 	v := reflect.New(tt.Elem())
@@ -104,7 +104,7 @@ func RandomizeObject(template interface{}, opts ...RandomizeObjectOption) (inter
 }
 
 // RandomizeObjectField returns a random object of the same type as template where a single field was modified.
-func RandomizeObjectField(template interface{}, opts ...RandomizeObjectOption) (interface{}, error) {
+func RandomizeObjectField(template any, opts ...RandomizeObjectOption) (any, error) {
 	cfg := randomizeObjectCfg{}
 	for _, opt := range opts {
 		opt(&cfg)
@@ -363,7 +363,7 @@ func randomizeValue(v reflect.Value, depth int, datapath string, tag string, rem
 		}
 		v.SetString(string(buf))
 		*remainingChanges--
-	case reflect.Ptr:
+	case reflect.Pointer:
 		v.Set(reflect.New(v.Type().Elem()))
 		err := randomizeValue(reflect.Indirect(v), depth+1, datapath, tag, remainingChanges, cfg, seenTypes)
 		if err != nil {

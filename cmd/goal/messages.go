@@ -74,6 +74,7 @@ const (
 	errorNodeCreationIPFailure              = "Parsing passed IP %v failed: need a valid IPv4 or IPv6 address with a specified port number"
 	errorNodeNotDetected                    = "Algorand node does not appear to be running: %s"
 	errorNodeStatus                         = "Cannot contact Algorand node: %s"
+	errorNodePeers                          = "Cannot retrieve node peers: %s"
 	errorNodeFailedToStart                  = "Algorand node failed to start: %s"
 	errorNodeRunning                        = "Node must be stopped before writing APIToken"
 	errorNodeFailGenToken                   = "Cannot generate API token: %s"

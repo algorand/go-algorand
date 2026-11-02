@@ -485,11 +485,11 @@ var runCmd = &cobra.Command{
 	},
 }
 
-func reportErrorf(format string, args ...interface{}) {
+func reportErrorf(format string, args ...any) {
 	fmt.Printf(format, args...)
 	os.Exit(1)
 }
 
-func reportInfof(format string, args ...interface{}) {
+func reportInfof(format string, args ...any) {
 	fmt.Printf(format, args...)
 }

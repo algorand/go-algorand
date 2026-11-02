@@ -204,7 +204,7 @@ func (t *telemetryState) wrapOutput(out io.Writer) io.Writer {
 	return t.history.wrapOutput(out)
 }
 
-func (t *telemetryState) logMetrics(l logger, category telemetryspec.Category, metrics telemetryspec.MetricDetails, details interface{}) {
+func (t *telemetryState) logMetrics(l logger, category telemetryspec.Category, metrics telemetryspec.MetricDetails, details any) {
 	if metrics == nil {
 		return
 	}
@@ -215,7 +215,7 @@ func (t *telemetryState) logMetrics(l logger, category telemetryspec.Category, m
 	t.logTelemetry(l, buildMessage(string(category), string(metrics.Identifier())), details)
 }
 
-func (t *telemetryState) logEvent(l logger, category telemetryspec.Category, identifier telemetryspec.Event, details interface{}) {
+func (t *telemetryState) logEvent(l logger, category telemetryspec.Category, identifier telemetryspec.Event, details any) {
 	t.logTelemetry(l, buildMessage(string(category), string(identifier)), details)
 }
 
@@ -225,7 +225,7 @@ func buildMessage(args ...string) string {
 }
 
 // logTelemetry explicitly only sends telemetry events to the cloud.
-func (t *telemetryState) logTelemetry(l logger, message string, details interface{}) {
+func (t *telemetryState) logTelemetry(l logger, message string, details any) {
 	if details != nil {
 		l = l.WithFields(logrus.Fields{
 			"details": details,

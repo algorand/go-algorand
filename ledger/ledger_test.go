@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -107,13 +108,23 @@ func initNextBlockHeader(correctHeader *bookkeeping.BlockHeader, lastBlock bookk
 // endOfBlock is simplified implementation of BlockEvaluator.endOfBlock so that
 // our test blocks can pass validation.
 func endOfBlock(blk *bookkeeping.Block) error {
-	if blk.ConsensusProtocol().Payouts.Enabled {
+	proto := blk.ConsensusProtocol()
+	if proto.Payouts.Enabled {
 		// This won't work for inner fees, and it's not bothering with overflow
 		for _, txn := range blk.Payset {
 			blk.FeesCollected.Raw += txn.Txn.Fee.Raw
 		}
 		// blk.ProposerPayout is allowed to be zero, so don't reproduce the calc here.
 		blk.BlockHeader.Proposer = basics.Address{0x01} // Must be set to _something_.
+	}
+	if proto.LoadTracking {
+		// Mirror BlockEvaluator: Load is computed from the total encoded txn
+		// bytes relative to the block size cap.
+		blockTxBytes := 0
+		for i := range blk.Payset {
+			blockTxBytes += blk.Payset[i].GetEncodedLength()
+		}
+		blk.BlockHeader.Load = eval.ComputeLoad(blockTxBytes, proto.MaxTxnBytesPerBlock)
 	}
 	var err error
 	blk.TxnCommitments, err = blk.PaysetCommit()
@@ -1530,8 +1541,33 @@ func benchLedgerCache(b *testing.B, startRound basics.Round) {
 	}
 }
 
+// stopLedgerCommitSyncer stops the commitSyncer of a real Ledger so a test can
+// drive commits synchronously with triggerTrackerFlush.
+//
+// Unlike the mock-ledger tests, a Ledger has a blockQueue syncer that keeps
+// calling notifyCommit -> scheduleCommit after every block flush. With the
+// commitSyncer gone, each commit it schedules would increment accountsWriting
+// and sit in deferredCommits forever, so a later accountsWriting.Wait (for
+// example in trackerRegistry.close after reloadLedger) would hang. Setting
+// deferredCommits to nil makes the non-blocking send in scheduleCommit take its
+// default branch, which calls Done immediately. trackerMu is held because
+// notifyCommit calls scheduleCommit under it.
+func stopLedgerCommitSyncer(l *Ledger) {
+	l.trackerMu.Lock()
+	defer l.trackerMu.Unlock()
+	stopCommitSyncer(&l.trackers)
+	l.trackers.deferredCommits = nil
+}
+
 // triggerTrackerFlush is based in the commit flow but executed it in a single (this) goroutine.
+//
+// The scheduling half mirrors notifyCommit, which holds trackerMu while it
+// calls the trackers' committedUpTo and scheduleCommit. Holding it here keeps
+// the blockQueue syncer from running those same tracker methods concurrently
+// with this goroutine. The commit half runs without trackerMu, exactly as
+// commitRound does on the commitSyncer goroutine.
 func triggerTrackerFlush(t *testing.T, l *Ledger) {
+	l.trackerMu.Lock()
 	rnd := l.Latest()
 	minBlock := rnd
 	maxLookback := basics.Round(0)
@@ -1560,6 +1596,7 @@ func triggerTrackerFlush(t *testing.T, l *Ledger) {
 		dcc = nil
 	}
 	l.trackers.mu.RUnlock()
+	l.trackerMu.Unlock()
 	if dcc != nil {
 		l.trackers.accountsWriting.Add(1)
 		l.trackers.commitRound(dcc)
@@ -1587,10 +1624,8 @@ func testLedgerReload(t *testing.T, cfg config.Local) {
 			err = l.reloadLedger()
 			require.NoError(t, err)
 
-			// if we reloaded it before it got committed, we need to roll back the round counter.
-			if latestCommitted, _ := l.LatestCommitted(); latestCommitted != blk.BlockHeader.Round {
-				blk.BlockHeader.Round = latestCommitted
-			}
+			// Reloading preserves queued blocks, even if they have not been committed yet.
+			require.Equal(t, blk.Round(), l.Latest())
 		}
 		if i%13 == 0 {
 			l.WaitForCommit(blk.Round())
@@ -1743,14 +1778,8 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	// wait all pending commits to finish
-	l.trackers.accountsWriting.Wait()
-
 	// quit the commitSyncer goroutine: this test flushes manually with triggerTrackerFlush
-	l.trackers.ctxCancel()
-	l.trackers.ctxCancel = nil
-	<-l.trackers.commitSyncerClosed
-	l.trackers.commitSyncerClosed = nil
+	stopLedgerCommitSyncer(l)
 
 	triggerTrackerFlush(t, l)
 	l.WaitForCommit(l.Latest())
@@ -1790,7 +1819,16 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 }
 
 func createBlkWithStateproof(t *testing.T, maxBlocks int, proto config.ConsensusParams, genesisInitState ledgercore.InitState, l *Ledger, accounts map[basics.Address]basics.AccountData) bookkeeping.Block {
-	sp := stateproof.StateProof{SignedWeight: 5000000000000000}
+	sp := stateproof.StateProof{
+		SigCommit:    make(crypto.GenericDigest, stateproof.HashSize),
+		SignedWeight: 5000000000000000,
+		SigProofs: merklearray.Proof{
+			HashFactory: crypto.HashFactory{HashType: stateproof.HashType},
+		},
+		PartProofs: merklearray.Proof{
+			HashFactory: crypto.HashFactory{HashType: stateproof.HashType},
+		},
+	}
 	var stxn transactions.SignedTxn
 	stxn.Txn.Type = protocol.StateProofTx
 	stxn.Txn.Sender = transactions.StateProofSender
@@ -2471,9 +2509,14 @@ int %d // 10001000
 	}
 
 	commitRoundLookback(basics.Round(cfg.MaxAcctLookback), l)
+	// read dbRound out before asserting: a failing require calls t.FailNow, and running
+	// the deferred l.Close() while still holding trackers.mu deadlocks against the
+	// commitSyncer goroutine that Close waits on.
 	l.trackers.mu.RLock()
-	require.Equal(t, programRound, l.trackers.dbRound+1) // programRound is next to be replayed
+	dbRound := l.trackers.dbRound
 	l.trackers.mu.RUnlock()
+	require.Equal(t, programRound, dbRound+1) // programRound is next to be replayed
+
 	err = l.reloadLedger()
 	require.NoError(t, err)
 }
@@ -3019,10 +3062,7 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 	defer l.Close()
 
 	// quit the commitSyncer goroutine: this test flushes manually with triggerTrackerFlush
-	l.trackers.ctxCancel()
-	l.trackers.ctxCancel = nil
-	<-l.trackers.commitSyncerClosed
-	l.trackers.commitSyncerClosed = nil
+	stopLedgerCommitSyncer(l)
 
 	blk := genesisInitState.Block
 
@@ -3076,17 +3116,6 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 	}()
 
 	t.Log("reloading ledger")
-	// drain any deferred commits since AddBlock above triggered scheduleCommit
-outer:
-	for {
-		select {
-		case <-l.trackers.deferredCommits:
-			l.trackers.accountsWriting.Done()
-		default:
-			break outer
-		}
-	}
-
 	err = l.reloadLedger()
 	require.NoError(t, err)
 

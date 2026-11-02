@@ -226,7 +226,7 @@ func (a cryptoAction) do(ctx context.Context, s *Service) {
 	case verifyPayload:
 		s.demux.verifyPayload(ctx, a.M, a.Round, a.Period, a.Pinned)
 	case verifyBundle:
-		s.demux.verifyBundle(ctx, a.M, a.Round, a.Period, a.Step)
+		s.demux.verifyBundle(ctx, a.M, a.Round)
 	}
 }
 
@@ -554,7 +554,8 @@ func encodeAction(a action) []byte {
 	case checkpointAction:
 		return protocol.Encode(&v)
 	default:
-		// matches the panic in protocol.Encode for a non-marshalable object
+		// decodeAction could not read this type back from the crash database, so
+		// fail loudly rather than persist state that cannot be restored.
 		panic(fmt.Errorf("encodeAction: unsupported action type %T", a))
 	}
 }

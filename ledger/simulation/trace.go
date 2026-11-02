@@ -153,11 +153,18 @@ type Result struct {
 	InitialStates *ResourcesInitialStates
 }
 
-func summarizeTxnFeeUsage(txn transactions.SignedTxnWithAD, proto config.ConsensusParams) (usage basics.Micros, feesPaid basics.MicroAlgos) {
-	usage = txn.SignedTxn.FeeFactor(proto)
+func summarizeTxnFeesPaid(txn transactions.SignedTxnWithAD) (feesPaid basics.MicroAlgos) {
 	feesPaid = txn.Txn.Fee
 	for _, inner := range txn.ApplyData.EvalDelta.InnerTxns {
-		innerUsage, innerFeesPaid := summarizeTxnFeeUsage(inner, proto)
+		feesPaid = feesPaid.AddSaturate(summarizeTxnFeesPaid(inner))
+	}
+	return feesPaid
+}
+
+func summarizeTxnGroupFeeUsage(txgroup []transactions.SignedTxnWithAD, proto config.ConsensusParams) (usage basics.Micros, feesPaid basics.MicroAlgos) {
+	usage, feesPaid = transactions.SummarizeFees(txgroup, proto)
+	for _, txn := range txgroup {
+		innerUsage, innerFeesPaid := summarizeTxnGroupFeeUsage(txn.ApplyData.EvalDelta.InnerTxns, proto)
 		usage = basics.AddSaturate(usage, innerUsage)
 		feesPaid = feesPaid.AddSaturate(innerFeesPaid)
 	}
@@ -167,22 +174,17 @@ func summarizeTxnFeeUsage(txn transactions.SignedTxnWithAD, proto config.Consens
 func populateFeeUsage(result *Result, proto config.ConsensusParams) {
 	for gi := range result.TxnGroups {
 		group := &result.TxnGroups[gi]
-		var groupUsage basics.Micros
-		var groupFeesPaid basics.MicroAlgos
+		txgroup := make([]transactions.SignedTxnWithAD, len(group.Txns))
 
 		for ti := range group.Txns {
-			usage, feesPaid := summarizeTxnFeeUsage(group.Txns[ti].Txn, proto)
+			txgroup[ti] = group.Txns[ti].Txn
 			// Per-transaction usage is intentionally not reported: fees pool across
 			// the group and round up once for the whole tree, so usage is only
 			// actionable at the group level. FeesPaid is just a factual report of
 			// what the transaction (and its inners) actually paid.
-			group.Txns[ti].FeesPaid = feesPaid
-			groupUsage = basics.AddSaturate(groupUsage, usage)
-			groupFeesPaid = groupFeesPaid.AddSaturate(feesPaid)
+			group.Txns[ti].FeesPaid = summarizeTxnFeesPaid(group.Txns[ti].Txn)
 		}
-
-		group.GroupUsage = groupUsage
-		group.GroupFeesPaid = groupFeesPaid
+		group.GroupUsage, group.GroupFeesPaid = summarizeTxnGroupFeeUsage(txgroup, proto)
 	}
 }
 

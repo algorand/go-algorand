@@ -107,7 +107,7 @@ func processResults(ctx context.Context, errChan chan<- error, resultChan <-chan
 			if _, has := badTxnGroups[u]; has {
 				(*badSigResultCounter)++
 				if result.Err == nil {
-					err := fmt.Errorf("%dth (%d)transaction varified with a bad sig", x, u)
+					err := fmt.Errorf("%dth (%d)transaction verified with a bad sig", x, u)
 					errChan <- err
 					return
 				}
@@ -217,6 +217,7 @@ func TestStreamToBatchCases(t *testing.T) {
 	txnGroups[mod][0].Txn.Header.Fee = basics.MicroAlgos{Raw: 0}
 	txnGroups[mod][0].Txn.Header.Sender = transactions.StateProofSender
 	txnGroups[mod][0].Txn.PaymentTxnFields = transactions.PaymentTxnFields{}
+	txnGroups[mod][0].Txn.StateProof = stateProofForTxnValidation()
 	sv = streamVerifierTestCore(txnGroups, badTxnGroups, nil, t)
 	sv.WaitForStop()
 	mod++
@@ -355,6 +356,22 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	require.Equal(t, uint64(0), batchSigs)
 }
 
+func TestGetNumberOfBatchablePQSigs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	edJob := UnverifiedTxnSigJob{TxnGroup: []transactions.SignedTxn{makePQSignedTxnForScheme(t, 5, protocol.PQSchemeEd25519)}}
+	batchSigs, err := edJob.GetNumberOfBatchableItems()
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), batchSigs)
+
+	falconJob := UnverifiedTxnSigJob{TxnGroup: []transactions.SignedTxn{
+		makePQSignedTxnForScheme(t, 6, protocol.PQSchemeFalcon1024),
+	}}
+	batchSigs, err = falconJob.GetNumberOfBatchableItems()
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), batchSigs)
+}
+
 // TestStreamToBatchPoolShutdown tests what happens when the exec pool shuts down
 func TestStreamToBatchPoolShutdown(t *testing.T) { //nolint:paralleltest // Not parallel because it depends on the default logger
 	partitiontest.PartitionTest(t)
@@ -376,10 +393,10 @@ func TestStreamToBatchPoolShutdown(t *testing.T) { //nolint:paralleltest // Not 
 	_, buffLen := verificationPool.BufferSize()
 
 	// make sure the pool is shut down and the buffer is full
-	holdTasks := make(chan interface{})
+	holdTasks := make(chan any)
 	for x := 0; x < buffLen+runtime.NumCPU(); x++ {
 		verificationPool.EnqueueBacklog(context.Background(),
-			func(arg interface{}) interface{} { <-holdTasks; return nil }, nil, nil)
+			func(arg any) any { <-holdTasks; return nil }, nil, nil)
 	}
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -395,13 +412,13 @@ func TestStreamToBatchPoolShutdown(t *testing.T) { //nolint:paralleltest // Not 
 	// Send more tasks to fill the queueof the backlog worker after the consumer shuts down
 	for x := 0; x < 100; x++ {
 		verificationPool.EnqueueBacklog(context.Background(),
-			func(arg interface{}) interface{} { <-holdTasks; return nil }, nil, nil)
+			func(arg any) any { <-holdTasks; return nil }, nil, nil)
 	}
 
 	// make sure the EnqueueBacklogis returning err
 	for x := 0; x < 10; x++ {
 		err := verificationPool.EnqueueBacklog(context.Background(),
-			func(arg interface{}) interface{} { return nil }, nil, nil)
+			func(arg any) any { return nil }, nil, nil)
 		require.Error(t, err, fmt.Sprintf("x = %d", x))
 	}
 
@@ -520,57 +537,107 @@ func TestStreamToBatchRestart(t *testing.T) {
 	verifyResults(txnGroups, badTxnGroups, cache, badSigResultCounter, goodSigResultCounter, t)
 }
 
-// TestBlockWatcher runs multiple goroutines to check the concurency and correctness of the block watcher
-func TestStreamToBatchBlockWatcher(t *testing.T) {
+// TestNewBlockWatcher checks that OnNewBlock ignores rounds that are not newer.
+// Blocks still queued in the ledger notifier when the watcher registers can be
+// at or below the round it started from.
+func TestNewBlockWatcher(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	blkHdr := createDummyBlockHeader()
-	nbw := MakeNewBlockWatcher(blkHdr)
-	startingRound := blkHdr.Round
+	t.Parallel()
 
-	wg := sync.WaitGroup{}
-	count := 100
+	// A distinct TimeStamp per header makes a same-round replacement visible.
+	hdrAt := func(rnd basics.Round, ts int64) bookkeeping.BlockHeader {
+		h := createDummyBlockHeader()
+		h.Round = rnd
+		h.TimeStamp = ts
+		return h
+	}
+	notify := func(nbw *NewBlockWatcher, h bookkeeping.BlockHeader) {
+		nbw.OnNewBlock(bookkeeping.Block{BlockHeader: h}, ledgercore.StateDelta{})
+	}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for x := 0; x < 100; x++ {
-			blkHdr.Round++
-			nbw.OnNewBlock(bookkeeping.Block{BlockHeader: blkHdr}, ledgercore.StateDelta{})
-			time.Sleep(10 * time.Millisecond)
-			nbw.OnNewBlock(bookkeeping.Block{BlockHeader: blkHdr}, ledgercore.StateDelta{})
-		}
-	}()
+	start := createDummyBlockHeader().Round
+	initial := hdrAt(start, 1)
+	nbw := MakeNewBlockWatcher(initial)
+	require.Equal(t, initial, *nbw.getBlockHeader())
 
-	bhStore := make(map[basics.Round]*bookkeeping.BlockHeader)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			bh := nbw.getBlockHeader()
-			bhStore[bh.Round] = bh
-			if bh.Round == startingRound+10 {
-				break
+	next := hdrAt(start+1, 2)
+	notify(nbw, next)
+	require.Equal(t, next, *nbw.getBlockHeader())
+	held := nbw.getBlockHeader()
+
+	// equal and older rounds are ignored
+	notify(nbw, hdrAt(start+1, 3))
+	require.Equal(t, next, *nbw.getBlockHeader())
+	notify(nbw, hdrAt(start, 4))
+	require.Equal(t, next, *nbw.getBlockHeader())
+
+	// a later block does not modify a header handed out earlier
+	later := hdrAt(start+2, 5)
+	notify(nbw, later)
+	require.Equal(t, later, *nbw.getBlockHeader())
+	require.Equal(t, next, *held)
+}
+
+// TestNewBlockWatcherConcurrent is mainly for -race: readers overlap a writer
+// advancing through many rounds, so a non-atomic header swap gets reported.
+func TestNewBlockWatcherConcurrent(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// The writer sets each TimeStamp to its round, so a reader seeing them
+	// differ has a header mixing fields from two blocks.
+	hdr := createDummyBlockHeader()
+	start := hdr.Round
+	hdr.TimeStamp = int64(start)
+	nbw := MakeNewBlockWatcher(hdr)
+
+	const readers = 4
+	const rounds = 1000
+	done := make(chan struct{})
+	torn := make([]*bookkeeping.BlockHeader, readers)
+	var wg sync.WaitGroup
+	for i := range readers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				bh := nbw.getBlockHeader()
+				if bh.TimeStamp != int64(bh.Round) {
+					torn[i] = bh
+					return
+				}
+				select {
+				case <-done:
+					return
+				default:
+				}
 			}
-		}
-	}()
+		}()
+	}
+
+	for r := start + 1; r <= start+rounds; r++ {
+		hdr.Round = r
+		hdr.TimeStamp = int64(r)
+		nbw.OnNewBlock(bookkeeping.Block{BlockHeader: hdr}, ledgercore.StateDelta{})
+	}
+	close(done)
 	wg.Wait()
-	bh := nbw.getBlockHeader()
-	require.Equal(t, uint64(startingRound)+uint64(count), uint64(bh.Round))
-	// There should be no inconsistency after new blocks are added
-	for r, bh := range bhStore {
-		require.Equal(t, r, bh.Round)
+
+	require.Equal(t, start+rounds, nbw.getBlockHeader().Round)
+	for i, bh := range torn {
+		require.Nil(t, bh, "reader %d saw a torn header", i)
 	}
 }
 
-func getSaturatedExecPool(t *testing.T) (execpool.BacklogPool, chan interface{}) {
+func getSaturatedExecPool(t *testing.T) (execpool.BacklogPool, chan any) {
 	verificationPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, t)
 	_, buffLen := verificationPool.BufferSize()
 
 	// make the buffer full to control when the tasks get executed
-	holdTasks := make(chan interface{})
+	holdTasks := make(chan any)
 	for x := 0; x < buffLen+runtime.NumCPU()+1; x++ {
 		verificationPool.EnqueueBacklog(context.Background(),
-			func(arg interface{}) interface{} {
+			func(arg any) any {
 				<-holdTasks
 				return nil
 			}, nil, nil)
@@ -1112,4 +1179,44 @@ func TestProcessBatchSkippedGroupDoesNotMisattributeSigs(t *testing.T) {
 			require.NoError(t, results["good-last"], "good-last should verify")
 		})
 	}
+}
+
+func TestProcessBatchEd25519PQSigAttribution(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	_, regular, _, _ := generateTestObjects(1, 1, 0, 0)
+	goodEd := makePQSignedTxnForScheme(t, 7, protocol.PQSchemeEd25519)
+	badEd := makePQSignedTxnForScheme(t, 8, protocol.PQSchemeEd25519)
+	badEd.PQsig.Signature = bytes.Clone(badEd.PQsig.Signature)
+	badEd.PQsig.Signature[0] ^= 1
+
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	resultChan := make(chan *VerificationResult, 3)
+	droppedChan := make(chan *UnverifiedTxnSigJob, 3)
+	tbp := &txnSigBatchProcessor{
+		TxnGroupBatchSigVerifier: TxnGroupBatchSigVerifier{
+			cache:  MakeVerifiedTransactionCache(1000),
+			nbw:    MakeNewBlockWatcher(blkHdr),
+			ledger: &DummyLedgerForSignature{},
+		},
+		resultChan:  resultChan,
+		droppedChan: droppedChan,
+	}
+	// The failing group sits between two good ones, so a leak in either
+	// direction would show.
+	tbp.ProcessBatch([]execpool.InputJob{
+		&UnverifiedTxnSigJob{TxnGroup: regular, BacklogMessage: "regular"},
+		&UnverifiedTxnSigJob{TxnGroup: []transactions.SignedTxn{badEd}, BacklogMessage: "bad-ed"},
+		&UnverifiedTxnSigJob{TxnGroup: []transactions.SignedTxn{goodEd}, BacklogMessage: "good-ed"},
+	})
+
+	require.Empty(t, droppedChan)
+	results := make(map[string]error, 3)
+	for i := 0; i < 3; i++ {
+		result := <-resultChan
+		results[result.BacklogMessage.(string)] = result.Err
+	}
+	require.NoError(t, results["regular"])
+	require.NoError(t, results["good-ed"])
+	require.ErrorIs(t, results["bad-ed"], crypto.ErrBatchHasFailedSigs)
 }

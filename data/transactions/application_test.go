@@ -463,10 +463,6 @@ func TestAppCallCreateWellFormed(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			// test the same thing for update, unless test has epp, which is illegal in update
-			if tc.ac.ExtraProgramPages != 0 {
-				return
-			}
 			tc.ac.OnCompletion = UpdateApplicationOC
 			tc.ac.ApplicationID = 1
 			err = tc.ac.wellFormed(config.Consensus[cv])
@@ -840,6 +836,19 @@ func TestWellFormedErrors(t *testing.T) {
 				GlobalStateSchema: basics.StateSchema{NumByteSlice: 1},
 				OnCompletion:      UpdateApplicationOC,
 			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     1,
+				ApprovalProgram:   v5,
+				ClearStateProgram: v5,
+				// Local schema is fixed at creation, so it stays illegal even in
+				// an update that is allowed to set the other sizing fields.
+				LocalStateSchema:  basics.StateSchema{NumUint: 1},
+				ExtraProgramPages: 1,
+				OnCompletion:      UpdateApplicationOC,
+			},
+			expectedError: "inappropriate non-zero tx.LocalStateSchema",
 		},
 		{
 			ac: ApplicationCallTxnFields{

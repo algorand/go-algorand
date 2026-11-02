@@ -309,8 +309,16 @@ func (s *serviceImpl) Start() error {
 
 // Close shuts down the P2P service
 func (s *serviceImpl) Close() error {
+	// stop receiving Connected/Disconnected callbacks: StopNotify blocks until
+	// any in-flight notification has returned.
 	s.host.Network().StopNotify(s.streams)
-	return s.host.Close()
+	// closing the host closes all connections and streams, which unblocks any
+	// stream I/O in progress in the stream handlers.
+	err := s.host.Close()
+	// wait (bounded) for the handler goroutines spawned by streamManager to finish
+	// so that nothing logs or touches state after Close returns.
+	s.streams.close()
+	return err
 }
 
 // ID returns the peer.ID for self
@@ -346,13 +354,23 @@ func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) bool {
 		// if we are already connected to this peer, ensure it's properly handled
 		if conns := s.host.Network().ConnsToPeer(peerInfo.ID); len(conns) > 0 {
 			if !s.host.ConnManager().IsProtected(peerInfo.ID, cnmgrTag) {
-				// connection was established by DHT/pubsub before the mesh thread
+				// outbound connection was established by DHT/pubsub before the mesh thread
 				// could protect it, so handleConnected skipped stream creation.
 				// protect and re-trigger stream setup now.
-				s.host.ConnManager().Protect(peerInfo.ID, cnmgrTag)
-				go s.streams.handleConnected(conns[0])
-				if conns[0].Stat().Direction == network.DirOutbound {
-					numOutgoingConns++
+				// inbound connections are not re-triggered: streamManager.Connected already
+				// applied the peer ID ordering to them, and opening another stream here
+				// would duplicate the one opened by Connected or by the remote peer.
+				for _, conn := range conns {
+					if conn.Stat().Direction == network.DirOutbound {
+						s.host.ConnManager().Protect(peerInfo.ID, cnmgrTag)
+						if !s.streams.goHandleConnected(conn) {
+							// the service is shutting down: undo the protection and stop dialing
+							s.host.ConnManager().Unprotect(peerInfo.ID, cnmgrTag)
+							return numOutgoingConns > preExistingConns
+						}
+						numOutgoingConns++
+						break
+					}
 				}
 			}
 			continue

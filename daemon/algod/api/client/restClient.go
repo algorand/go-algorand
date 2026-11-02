@@ -54,7 +54,6 @@ const (
 var rawRequestPaths = map[string]bool{
 	"/v2/transactions":          true,
 	"/v2/transactions/async":    true,
-	"/v2/teal/dryrun":           true,
 	"/v2/teal/compile":          true,
 	"/v2/participation":         true,
 	"/v2/transactions/simulate": true,
@@ -170,7 +169,7 @@ func mergeRawQueries(q1, q2 string) string {
 // submitForm is a helper used for submitting (ex.) GETs and POSTs to the server
 // if expectNoContent is true, then it is expected that the response received will have a content length of zero
 func (client RestClient) submitForm(
-	response interface{}, path string, params interface{}, body interface{},
+	response any, path string, params any, body any,
 	requestMethod string, encodeJSON bool, decodeJSON bool, expectNoContent bool) error {
 
 	var err error
@@ -255,27 +254,33 @@ func (client RestClient) submitForm(
 }
 
 // get performs a GET request to the specific path against the server
-func (client RestClient) get(response interface{}, path string, request interface{}) error {
+func (client RestClient) get(response any, path string, request any) error {
 	return client.submitForm(response, path, request, nil, "GET", false /* encodeJSON */, true /* decodeJSON */, false)
 }
 
 // delete performs a DELETE request to the specific path against the server
 // when expectNoContent is true, then no content is expected to be returned from the endpoint
-func (client RestClient) delete(response interface{}, path string, request interface{}, expectNoContent bool) error {
+func (client RestClient) delete(response any, path string, request any, expectNoContent bool) error {
 	return client.submitForm(response, path, request, nil, "DELETE", false /* encodeJSON */, true /* decodeJSON */, expectNoContent)
 }
 
 // getRaw behaves identically to get but doesn't json decode the response, and
 // the response must implement the RawResponse interface
-func (client RestClient) getRaw(response RawResponse, path string, request interface{}) error {
+func (client RestClient) getRaw(response RawResponse, path string, request any) error {
 	return client.submitForm(response, path, request, nil, "GET", false /* encodeJSON */, false /* decodeJSON */, false)
 }
 
 // post sends a POST request to the given path with the given request object.
 // No query parameters will be sent if request is nil.
 // response must be a pointer to an object as post writes the response there.
-func (client RestClient) post(response interface{}, path string, params interface{}, body interface{}, expectNoContent bool) error {
+func (client RestClient) post(response any, path string, params any, body any, expectNoContent bool) error {
 	return client.submitForm(response, path, params, body, "POST", true /* encodeJSON */, true /* decodeJSON */, expectNoContent)
+}
+
+// GetPeers retrieves the node's peers.
+func (client RestClient) GetPeers() (response model.GetPeersResponse, err error) {
+	err = client.get(&response, "/v2/node/peers", nil)
+	return
 }
 
 // Status retrieves the StatusResponse from the running node
@@ -396,7 +401,7 @@ type rawTransactionParams struct {
 	SkipPqAddressCheck bool `url:"skip-pq-address-check,omitempty"`
 }
 
-func rawTransactionQueryParams(skipPqAddressCheck bool) interface{} {
+func rawTransactionQueryParams(skipPqAddressCheck bool) any {
 	if skipPqAddressCheck {
 		return rawTransactionParams{SkipPqAddressCheck: true}
 	}
@@ -703,7 +708,7 @@ func (client RestClient) EncodedBlockCert(round basics.Round) (blockCert rpcs.En
 // Shutdown requests the node to shut itself down
 func (client RestClient) Shutdown() (err error) {
 	response := 1
-	err = client.post(&response, "/v2/shutdown", nil, nil, false)
+	err = client.post(&response, "/v2/node/shutdown", nil, nil, false)
 	return
 }
 
@@ -812,14 +817,6 @@ func (client RestClient) doGetWithQuery(ctx context.Context, path string, queryA
 		return
 	}
 	result = string(bytes)
-	return
-}
-
-// RawDryrun gets the raw DryrunResponse associated with the passed address
-func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
-	var blob Blob
-	err = client.submitForm(&blob, "/v2/teal/dryrun", nil, data, "POST", false /* encodeJSON */, false /* decodeJSON */, false)
-	response = blob
 	return
 }
 

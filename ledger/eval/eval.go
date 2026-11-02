@@ -803,6 +803,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 	}
 	// set the eval state with the current header
 	eval.state = makeRoundCowState(base, eval.block.BlockHeader, proto, eval.prevHeader.TimeStamp, prevTotals, evalOpts.PaysetHint)
+	eval.state.generate = evalOpts.Generate
 
 	if evalOpts.Validate {
 		preCheckErr := eval.block.BlockHeader.PreCheck(eval.prevHeader)
@@ -1242,6 +1243,37 @@ func (eval *BlockEvaluator) checkMinBalance(cow *roundCowState) error {
 	return nil
 }
 
+// closingRecord returns the sender's record when txn would close its account
+// and this evaluation is generating, so that checkCloseMinBalance can inspect
+// it once the transaction has been applied. It returns nil when there is
+// nothing to check. Inner transactions use it too, through Perform.
+func (cs *roundCowState) closingRecord(txn *transactions.Transaction) (*ledgercore.AccountData, error) {
+	if !cs.generate || txn.Type != protocol.PaymentTx || txn.CloseRemainderTo.IsZero() {
+		return nil, nil
+	}
+	rec, err := cs.lookup(txn.Sender)
+	if err != nil {
+		return nil, err
+	}
+	return &rec, nil
+}
+
+// checkCloseMinBalance refuses to assemble a close-out of an account that
+// still carried a minimum balance requirement above the base amount.
+// apply.Payment checks the individual counters by hand; this catches anything
+// those checks do not. It runs only while generating (pool admission, block
+// assembly, simulation) and never while validating, so it cannot cause this
+// node to vote differently from its peers.
+func checkCloseMinBalance(closing *ledgercore.AccountData, sender basics.Address, proto *config.ConsensusParams) error {
+	if closing == nil {
+		return nil
+	}
+	if mbr := closing.MinBalance(proto); mbr.Raw > proto.MinBalance {
+		return fmt.Errorf("cannot close: account %v requires a minimum balance of %d", sender, mbr.Raw)
+	}
+	return nil
+}
+
 // transaction tentatively executes a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
@@ -1278,6 +1310,11 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 		}
 	}
 
+	closing, err := cow.closingRecord(&txn.Txn)
+	if err != nil {
+		return err
+	}
+
 	// Apply the transaction, updating the cow balances
 	applyData, err := eval.applyTransaction(txn.Txn, cow, evalParams, gi, cow.Counter())
 	if err != nil {
@@ -1285,6 +1322,10 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 			// If there is a tracer, save the ApplyData so that it's viewable by the tracer
 			txib.ApplyData = applyData
 		}
+		return fmt.Errorf("transaction %v: %w", txid, err)
+	}
+
+	if err = checkCloseMinBalance(closing, txn.Txn.Sender, &eval.proto); err != nil {
 		return fmt.Errorf("transaction %v: %w", txid, err)
 	}
 
@@ -2099,6 +2140,7 @@ func (eval *BlockEvaluator) GenerateBlock(participating []basics.Address) (*ledg
 	eval.state = makeRoundCowState(
 		eval.state, eval.block.BlockHeader, proto, eval.prevHeader.TimeStamp, eval.state.mods.Totals,
 		len(eval.block.Payset))
+	eval.state.generate = eval.generate
 	return &vb, nil
 }
 
@@ -2106,6 +2148,7 @@ func (eval *BlockEvaluator) GenerateBlock(participating []basics.Address) (*ledg
 // force a block evalator to create a block and compare it to another.
 func (eval *BlockEvaluator) SetGenerateForTesting(g bool) {
 	eval.generate = g
+	eval.state.generate = g
 }
 
 type evalTxValidator struct {

@@ -91,8 +91,6 @@ ${gcmd} clerk sign -L ${TEMPDIR}/true.lsig -i ${TEMPDIR}/one.tx -o ${TEMPDIR}/on
 
 ${gcmd} clerk rawsend -f ${TEMPDIR}/one.stx
 
-${gcmd} clerk dryrun -t ${TEMPDIR}/one.stx
-
 ACCOUNT_TRUE=$(${gcmd} clerk compile -n ${TEMPDIR}/true.teal|awk '{ print $2 }')
 
 ${gcmd} clerk send --amount 1000000 --from ${ACCOUNT} --to ${ACCOUNT_TRUE}

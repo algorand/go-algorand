@@ -29,8 +29,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
@@ -573,6 +575,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 	require.Len(t, result.TxnGroups, 1)
 	require.Len(t, result.TxnGroups[0].Txns, 2)
 	require.Contains(t, result.TxnGroups[0].FailureMessage, "had zero Group but was submitted in a group of 2")
+	require.Equal(t, simulation.TxnPath{0}, result.TxnGroups[0].FailedAt)
 
 	// Add group parameter and sign again
 	txntest.Group(&txn1, &txn2)
@@ -641,7 +644,7 @@ btoi`)
 		{
 			name:          "error",
 			arguments:     [][]byte{},
-			expectedError: "rejected by logic err=cannot load arg[0] of 0",
+			expectedError: "rejected by logic err=cannot load arg[0] from 0 args",
 			cost:          1,
 		},
 	}
@@ -1754,6 +1757,103 @@ int 1`,
 	})
 }
 
+// TestExtraBudgetWithInner checks that a requested ExtraOpcodeBudget is granted
+// once for the whole group, not again for every inner group. Inner groups share
+// the one pool, so re-applying it would hand out a multiple of what was asked
+// for, and let simulate approve a group that would run out of budget on chain.
+func TestExtraBudgetWithInner(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Costs 700 and invokes an inner transaction, so the group has two app calls
+	// granting 700 each, and exactly one inner group to be tempted by.
+	exactly700AndCallInner := fmt.Sprintf(`#pragma version 6
+pushint 1
+cover 0 // This is a noop, just to fix an odd number of ops
+%s
+itxn_begin
+int appl
+itxn_field TypeEnum
+byte 0x068101
+dup
+itxn_field ClearStateProgram
+itxn_field ApprovalProgram
+itxn_submit
+`, strings.Repeat(`pushint 1
+pop
+`, 345))
+
+	const extraBudget = 1000
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		futureAppID := basics.AppIndex(1002)
+		fund := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: futureAppID.Address(),
+			Amount:   401_000,
+		})
+		appCall := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          sender.Addr,
+			ApprovalProgram: exactly700AndCallInner,
+			ClearStateProgram: `#pragma version 6
+int 1`,
+		})
+
+		txntest.Group(&fund, &appCall)
+
+		signedFundTxn := fund.Txn().Sign(sender.Sk)
+		signedAppCall := appCall.Txn().Sign(sender.Sk)
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedFundTxn, signedAppCall},
+				},
+				ExtraOpcodeBudget: extraBudget,
+			},
+			expected: simulation.Result{
+				Version:       simulation.ResultLatestVersion,
+				LastRound:     env.TxnInfo.LatestRound(),
+				EvalOverrides: simulation.ResultEvalOverrides{ExtraOpcodeBudget: extraBudget},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{FeesPaid: signedFundTxn.Txn.Fee},
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+										EvalDelta: transactions.EvalDelta{
+											InnerTxns: []transactions.SignedTxnWithAD{
+												{
+													ApplyData: transactions.ApplyData{
+														ApplicationID: futureAppID + 1,
+													},
+												},
+											},
+										},
+									},
+								},
+								AppBudgetConsumed: 701,
+								FeesPaid:          basics.MicroAlgos{Raw: 2 * signedAppCall.Txn.Fee.Raw},
+							},
+						},
+						// 700 per app call, plus the extra once, not once per group
+						AppBudgetAdded:    1400 + extraBudget,
+						AppBudgetConsumed: 701,
+						GroupUsage:        3e6,
+						GroupFeesPaid:     basics.MicroAlgos{Raw: 3 * signedFundTxn.Txn.Fee.Raw},
+					},
+				},
+			},
+		}
+	})
+}
+
 func TestStartRound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -2560,7 +2660,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 								},
 							},
 						},
-						AppBudgetAdded:    4200,
+						AppBudgetAdded:    7000, // 2 top-level app calls plus 8 inner app calls
 						AppBudgetConsumed: 385,
 					},
 				},
@@ -5443,6 +5543,116 @@ func TestAppInitialBoxStatesAboutBoxPut(t *testing.T) {
 	})
 }
 
+// TestForeignAppBoxStateChangeTrace exercises the foreign-app box opcodes
+// (app_box_*), which manipulate a box belonging to an app other than the one
+// executing. It confirms that both the exec-trace StateChanges and the reported
+// InitialStates are attributed to the foreign box owner rather than the running
+// app. That attribution is the distinguishing behavior of appBoxExplain's
+// foreign path, which reads the target app from the top of the stack instead of
+// using cx.appID -- a path the non-foreign box_* tests never cover, since there
+// the reported app is always the executing one.
+func TestForeignAppBoxStateChangeTrace(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	// Both apps share creator, putting them in the same family so the writer may
+	// write the owner's box once the owner opts into FamilyBoxAccess.
+	creator := env.Accounts[0]
+
+	// owner (app in Applications 1) creates box "b" holding "IIII" and opts into
+	// FamilyBoxAccess so a same-creator family member may write its boxes.
+	owner := env.CreateApp(creator.Addr, simulationtesting.AppParams{
+		ApprovalProgram: `#pragma version 13
+txn ApplicationID
+bz end
+byte "b"
+byte "IIII"
+box_put
+int 1
+app_params_set AppFamilyBoxAccess
+end:
+int 1`,
+		ClearStateProgram: `#pragma version 13
+int 1`,
+	})
+
+	// writer replaces the whole contents of box "b" owned by the app in
+	// Applications 1 (the owner) with "WWWW".
+	writer := env.CreateApp(creator.Addr, simulationtesting.AppParams{
+		ApprovalProgram: `#pragma version 13
+txn ApplicationID
+bz end
+txn Applications 1
+byte "b"
+byte "WWWW"
+app_box_put
+end:
+int 1`,
+		ClearStateProgram: `#pragma version 13
+int 1`,
+	})
+
+	// Fund the owner so it can carry box "b"'s minimum balance, then run it once
+	// to create the box and opt into family box access.
+	env.TransferAlgos(env.Accounts[1].Addr, owner.Address(), 1_000_000)
+	env.Txn(env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        creator.Addr,
+		ApplicationID: owner,
+		Boxes:         []transactions.BoxRef{{Name: []byte("b")}},
+	}).SignedTxn())
+
+	// Simulate a top-level call to the writer that touches the owner's box.
+	callTxn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        creator.Addr,
+		ApplicationID: writer,
+		ForeignApps:   []basics.AppIndex{owner},
+		Boxes:         []transactions.BoxRef{{Index: 1, Name: []byte("b")}},
+	}).Txn().Sign(creator.Sk)
+
+	result, err := simulation.MakeSimulator(env.Ledger, true).Simulate(simulation.Request{
+		TxnGroups: [][]transactions.SignedTxn{{callTxn}},
+		TraceConfig: simulation.ExecTraceConfig{
+			Enable: true,
+			State:  true,
+		},
+	})
+	require.NoError(t, err)
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+
+	// The write's state change must be attributed to the foreign owner (not the
+	// writer), keyed by the correct box name, with the post-write value.
+	var stateChanges []simulation.StateOperation
+	for _, unit := range result.TxnGroups[0].Txns[0].Trace.ApprovalProgramTrace {
+		stateChanges = append(stateChanges, unit.StateChanges...)
+	}
+	require.Equal(t, []simulation.StateOperation{
+		{
+			AppStateOp: logic.AppStateWrite,
+			AppState:   logic.BoxState,
+			AppID:      owner,
+			Key:        "b",
+			NewValue: basics.TealValue{
+				Type:  basics.TealBytesType,
+				Bytes: "WWWW",
+			},
+		},
+	}, stateChanges)
+
+	// The pre-simulation box value is recorded under the owner, and the writer
+	// contributes no box initial state of its own.
+	require.Contains(t, result.InitialStates.AllAppsInitialStates, owner)
+	require.Equal(t, basics.TealValue{
+		Type:  basics.TealBytesType,
+		Bytes: "IIII",
+	}, result.InitialStates.AllAppsInitialStates[owner].AppBoxes["b"])
+	require.NotContains(t, result.InitialStates.AllAppsInitialStates, writer)
+}
+
 type GlobalInitialStatesTestCase struct {
 	prepareInstruction  [][][]byte
 	txnsArgs            [][][]byte
@@ -6543,6 +6753,575 @@ func TestOptionalSignatures(t *testing.T) {
 	}
 }
 
+func makePlaceholderPQSigForSimulation(t *testing.T, scheme protocol.PQScheme, seedByte byte) (basics.Address, transactions.PQSig) {
+	t.Helper()
+
+	acct := basics_testing.MakePQTestAccount(t, seedByte, scheme)
+	return acct.Address, transactions.PQSig{
+		Scheme:    acct.Scheme,
+		Salt:      acct.Salt,
+		PublicKey: acct.PublicKey,
+	}
+}
+
+// pqPlaceholderFeeUsage returns the fee usage of a transaction authorized by a
+// PQ signature of the given scheme (base transaction usage plus the scheme's
+// surcharge), and the fee that exactly covers it. Tests derive their expectations
+// from the configured fee policy rather than hardcoding multiples of the min fee.
+func pqPlaceholderFeeUsage(t *testing.T, proto config.ConsensusParams, scheme protocol.PQScheme) (basics.MicroAlgos, basics.Micros) {
+	t.Helper()
+
+	usage := basics.Micros(1e6) + transactions.PQSchemeFeeContribution(proto, scheme)
+	fee, _, overflow := proto.MinFee().FeeForUsage(usage, 1e6, 0)
+	require.False(t, overflow)
+	return fee, usage
+}
+
+func makePlaceholderPQFixSignersGroup(t *testing.T, env simulationtesting.Environment, scheme protocol.PQScheme, placeholderFee uint64) ([]transactions.SignedTxn, basics.Address) {
+	t.Helper()
+
+	sender := env.Accounts[0]
+	pqAuthorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 0)
+	minFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
+
+	rekey := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Addr,
+		Receiver: sender.Addr,
+		RekeyTo:  pqAuthorizer,
+		Fee:      minFee,
+	})
+	pqPay := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Addr,
+		Receiver: sender.Addr,
+		Fee:      placeholderFee,
+	})
+	txgroup := txntest.Group(&rekey, &pqPay)
+	txgroup[0] = txgroup[0].Txn.Sign(sender.Sk)
+	txgroup[1].AuthAddr = sender.Addr
+	txgroup[1].PQsig = pqSig
+
+	return txgroup, pqAuthorizer
+}
+
+func makeAppThenPlaceholderPQFixSignersGroup(t *testing.T, env *simulationtesting.Environment, pqAuthorizer basics.Address, pqSig transactions.PQSig) []transactions.SignedTxn {
+	t.Helper()
+
+	sender := env.Accounts[0]
+	appCaller := env.Accounts[1]
+	appID := env.CreateApp(appCaller.Addr, simulationtesting.AppParams{
+		ApprovalProgram:   "#pragma version 2\nint 1",
+		ClearStateProgram: "#pragma version 2\nint 1",
+	})
+	env.Rekey(sender.Addr, pqAuthorizer)
+
+	proto := env.TxnInfo.CurrentProtocolParams()
+	pqFee, _ := pqPlaceholderFeeUsage(t, proto, pqSig.Scheme)
+	appCall := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        appCaller.Addr,
+		ApplicationID: appID,
+		Fee:           proto.MinTxnFee,
+	})
+	pqPay := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Addr,
+		Receiver: sender.Addr,
+		Fee:      pqFee.Raw,
+	})
+	txgroup := txntest.Group(&appCall, &pqPay)
+	txgroup[0] = txgroup[0].Txn.Sign(appCaller.Sk)
+	txgroup[1].PQsig = pqSig
+	return txgroup
+}
+
+func TestPlaceholderPQSignatures(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, tc := range basics_testing.PQTestSchemes {
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+			testPlaceholderPQSignatures(t, tc.Scheme)
+		})
+	}
+}
+
+func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
+	t.Run("invalid public key", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			_, pqUsage := pqPlaceholderFeeUsage(t, env.TxnInfo.CurrentProtocolParams(), scheme)
+			_, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 1)
+			pqSig.PublicKey = pqSig.PublicKey[:len(pqSig.PublicKey)-1]
+			authorizer := pqSig.Address()
+			txn := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   authorizer,
+				Receiver: authorizer,
+			})
+			stxn := txn.SignedTxn()
+			stxn.PQsig = pqSig
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{{stxn}},
+					AllowEmptySignatures: true,
+				},
+				expectedError: "overspend",
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							FailedAt:      simulation.TxnPath{0},
+							Txns:          []simulation.TxnResult{{FeesPaid: stxn.Txn.Fee}},
+							GroupUsage:    pqUsage,
+							GroupFeesPaid: stxn.Txn.Fee,
+						},
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("wrong salt", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			_, pqUsage := pqPlaceholderFeeUsage(t, env.TxnInfo.CurrentProtocolParams(), scheme)
+			authorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 2)
+			pqSig.Salt ^= 1
+			txn := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   authorizer,
+				Receiver: authorizer,
+			})
+			stxn := txn.SignedTxn()
+			stxn.PQsig = pqSig
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{{stxn}},
+					AllowEmptySignatures: true,
+				},
+				expectedError: "pq signature authorizer mismatch",
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							FailedAt:      simulation.TxnPath{0},
+							Txns:          []simulation.TxnResult{{FeesPaid: stxn.Txn.Fee}},
+							GroupUsage:    pqUsage,
+							GroupFeesPaid: stxn.Txn.Fee,
+						},
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("FixSigners fixes placeholder AuthAddr", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			pqFee, pqUsage := pqPlaceholderFeeUsage(t, env.TxnInfo.CurrentProtocolParams(), scheme)
+			txgroup, pqAuthorizer := makePlaceholderPQFixSignersGroup(t, env, scheme, pqFee.Raw)
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{txgroup},
+					AllowEmptySignatures: true,
+					FixSigners:           true,
+				},
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+						FixSigners:           true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							Txns: []simulation.TxnResult{
+								{FeesPaid: txgroup[0].Txn.Fee},
+								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: pqAuthorizer},
+							},
+							GroupUsage:    1e6 + pqUsage,
+							GroupFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
+						},
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("delegated placeholder", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			sender := env.Accounts[0]
+			authorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 3)
+			ops, err := logic.AssembleStringWithVersion("int 1", 2)
+			require.NoError(t, err)
+			proto := env.TxnInfo.CurrentProtocolParams()
+			minFee := proto.MinTxnFee
+			pqFee, pqUsage := pqPlaceholderFeeUsage(t, proto, scheme)
+
+			rekey := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   sender.Addr,
+				Receiver: sender.Addr,
+				RekeyTo:  authorizer,
+				Fee:      minFee,
+			})
+			delegatedPay := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   sender.Addr,
+				Receiver: sender.Addr,
+				Fee:      pqFee.Raw,
+			})
+			txgroup := txntest.Group(&rekey, &delegatedPay)
+			txgroup[0] = txgroup[0].Txn.Sign(sender.Sk)
+			txgroup[1].AuthAddr = sender.Addr
+			txgroup[1].Lsig = transactions.LogicSig{
+				Logic: ops.Program,
+				PQsig: pqSig,
+			}
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{txgroup},
+					AllowEmptySignatures: true,
+					FixSigners:           true,
+				},
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+						FixSigners:           true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							Txns: []simulation.TxnResult{
+								{FeesPaid: txgroup[0].Txn.Fee},
+								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: authorizer, LogicSigBudgetConsumed: 2},
+							},
+							GroupUsage:    1e6 + pqUsage,
+							GroupFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
+						},
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("delegated placeholder rejecting program", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			sender := env.Accounts[0]
+			authorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 4)
+			ops, err := logic.AssembleStringWithVersion("int 0", 2)
+			require.NoError(t, err)
+			proto := env.TxnInfo.CurrentProtocolParams()
+			minFee := proto.MinTxnFee
+			pqFee, pqUsage := pqPlaceholderFeeUsage(t, proto, scheme)
+
+			rekey := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   sender.Addr,
+				Receiver: sender.Addr,
+				RekeyTo:  authorizer,
+				Fee:      minFee,
+			})
+			delegatedPay := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   sender.Addr,
+				Receiver: sender.Addr,
+				Fee:      pqFee.Raw,
+			})
+			txgroup := txntest.Group(&rekey, &delegatedPay)
+			txgroup[0] = txgroup[0].Txn.Sign(sender.Sk)
+			txgroup[1].AuthAddr = sender.Addr
+			txgroup[1].Lsig = transactions.LogicSig{
+				Logic: ops.Program,
+				PQsig: pqSig,
+			}
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{txgroup},
+					AllowEmptySignatures: true,
+					FixSigners:           true,
+				},
+				// The placeholder delegated program is actually evaluated, so a
+				// rejecting program fails simulation exactly as consensus would.
+				expectedError: "rejected by logic",
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+						FixSigners:           true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							Txns: []simulation.TxnResult{
+								{FeesPaid: txgroup[0].Txn.Fee},
+								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: authorizer, LogicSigBudgetConsumed: 2},
+							},
+							FailedAt:      simulation.TxnPath{1},
+							GroupUsage:    1e6 + pqUsage,
+							GroupFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
+						},
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("FixSigners rejects delegated full placeholder mismatch", func(t *testing.T) {
+		t.Parallel()
+		env := simulationtesting.PrepareSimulatorTest(t)
+		defer env.Close()
+
+		sender := env.Accounts[0]
+		authorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 5)
+		pqSig.Salt ^= 1
+		ops, err := logic.AssembleStringWithVersion("int 1", 2)
+		require.NoError(t, err)
+		proto := env.TxnInfo.CurrentProtocolParams()
+		minFee := proto.MinTxnFee
+		pqFee, _ := pqPlaceholderFeeUsage(t, proto, scheme)
+
+		rekey := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: sender.Addr,
+			RekeyTo:  authorizer,
+			Fee:      minFee,
+		})
+		delegatedPay := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: sender.Addr,
+			Fee:      pqFee.Raw,
+		})
+		txgroup := txntest.Group(&rekey, &delegatedPay)
+		txgroup[0] = txgroup[0].Txn.Sign(sender.Sk)
+		txgroup[1].AuthAddr = sender.Addr
+		txgroup[1].Lsig = transactions.LogicSig{
+			Logic: ops.Program,
+			PQsig: pqSig,
+		}
+
+		result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+			TxnGroups:            [][]transactions.SignedTxn{txgroup},
+			AllowEmptySignatures: true,
+			FixSigners:           true,
+		})
+		require.NoError(t, err)
+		require.Contains(t, result.TxnGroups[0].FailureMessage, "pq signature authorizer mismatch")
+		require.Equal(t, simulation.TxnPath{1}, result.TxnGroups[0].FailedAt)
+		require.Nil(t, result.Block)
+	})
+
+	t.Run("FixSigners validates full placeholder after app signer fix", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			_, pqUsage := pqPlaceholderFeeUsage(t, env.TxnInfo.CurrentProtocolParams(), scheme)
+			pqAuthorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 3)
+			txgroup := makeAppThenPlaceholderPQFixSignersGroup(t, &env, pqAuthorizer, pqSig)
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{txgroup},
+					AllowEmptySignatures: true,
+					FixSigners:           true,
+				},
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+						FixSigners:           true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							Txns: []simulation.TxnResult{
+								{
+									AppBudgetConsumed: ignoreAppBudgetConsumed,
+									FeesPaid:          txgroup[0].Txn.Fee,
+								},
+								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: pqAuthorizer},
+							},
+							AppBudgetAdded:    700,
+							AppBudgetConsumed: ignoreAppBudgetConsumed,
+							GroupUsage:        1e6 + pqUsage,
+							GroupFeesPaid:     basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
+						},
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("FixSigners rejects full placeholder mismatch after app signer fix", func(t *testing.T) {
+		t.Parallel()
+		env := simulationtesting.PrepareSimulatorTest(t)
+		defer env.Close()
+
+		pqAuthorizer, pqSig := makePlaceholderPQSigForSimulation(t, scheme, 4)
+		pqSig.Salt ^= 1
+		txgroup := makeAppThenPlaceholderPQFixSignersGroup(t, &env, pqAuthorizer, pqSig)
+
+		result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+			TxnGroups:            [][]transactions.SignedTxn{txgroup},
+			AllowEmptySignatures: true,
+			FixSigners:           true,
+		})
+		require.NoError(t, err)
+		require.Contains(t, result.TxnGroups[0].FailureMessage, "pq signature authorizer mismatch")
+		require.Equal(t, simulation.TxnPath{1}, result.TxnGroups[0].FailedAt)
+		require.Nil(t, result.Block)
+	})
+
+	t.Run("scheme-only placeholder pays PQ surcharge", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			pqFee, pqUsage := pqPlaceholderFeeUsage(t, env.TxnInfo.CurrentProtocolParams(), scheme)
+			sender := env.Accounts[0]
+			txn := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   sender.Addr,
+				Receiver: sender.Addr,
+				Fee:      pqFee.Raw,
+			})
+			stxn := txn.SignedTxn()
+			stxn.PQsig = transactions.PQSig{Scheme: scheme}
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{{stxn}},
+					AllowEmptySignatures: true,
+				},
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							Txns:          []simulation.TxnResult{{FeesPaid: stxn.Txn.Fee}},
+							GroupUsage:    pqUsage,
+							GroupFeesPaid: stxn.Txn.Fee,
+						},
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("placeholder pays PQ surcharge", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			proto := env.TxnInfo.CurrentProtocolParams()
+			_, pqUsage := pqPlaceholderFeeUsage(t, proto, scheme)
+			txgroup, pqAuthorizer := makePlaceholderPQFixSignersGroup(t, env, scheme, proto.MinTxnFee)
+			var expectedError string
+			var failedAt simulation.TxnPath
+			if pqUsage > 1e6 {
+				expectedError = fmt.Sprintf("usage=%s", 1e6+pqUsage)
+				failedAt = simulation.TxnPath{1}
+			}
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{txgroup},
+					AllowEmptySignatures: true,
+					FixSigners:           true,
+				},
+				expectedError: expectedError,
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+						FixSigners:           true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							FailedAt: failedAt,
+							Txns: []simulation.TxnResult{
+								{FeesPaid: txgroup[0].Txn.Fee},
+								{FeesPaid: txgroup[1].Txn.Fee, FixedSigner: pqAuthorizer},
+							},
+							GroupUsage:    1e6 + pqUsage,
+							GroupFeesPaid: basics.MicroAlgos{Raw: txgroup[0].Txn.Fee.Raw + txgroup[1].Txn.Fee.Raw},
+						},
+					},
+				},
+			}
+		})
+	})
+}
+
+// TestDelegatedLogicSigPQSigNotPlaceholder ensures that a LogicSig "delegated"
+// by an ls-scheme PQSig is not treated as a placeholder. Consensus never
+// accepts such a delegation, so simulation must not succeed by running the
+// program as an escrow.
+func TestDelegatedLogicSigPQSigNotPlaceholder(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+	require.True(t, env.TxnInfo.CurrentProtocolParams().EnablePQSchemeLogicSig)
+
+	sender := env.Accounts[0]
+	ops, err := logic.AssembleStringWithVersion("int 1", 2)
+	require.NoError(t, err)
+	salt, lsAddr, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeLogicSig, ops.Program)
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name  string
+		pqSig transactions.PQSig
+	}{
+		{"scheme only", transactions.PQSig{Scheme: protocol.PQSchemeLogicSig}},
+		{"full", transactions.PQSig{Scheme: protocol.PQSchemeLogicSig, Salt: salt, PublicKey: ops.Program}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stxn := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   sender.Addr,
+				Receiver: sender.Addr,
+			}).SignedTxn()
+			stxn.AuthAddr = lsAddr
+			stxn.Lsig = transactions.LogicSig{
+				Logic: ops.Program,
+				PQsig: tc.pqSig,
+			}
+
+			result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+				TxnGroups:            [][]transactions.SignedTxn{{stxn}},
+				AllowEmptySignatures: true,
+			})
+			require.NoError(t, err)
+			require.Contains(t, result.TxnGroups[0].FailureMessage, "pq delegated logic signature validation failed")
+			require.Equal(t, simulation.TxnPath{0}, result.TxnGroups[0].FailedAt)
+			require.Nil(t, result.Block)
+		})
+	}
+}
+
 // TestOptionalSignaturesIncorrect tests that an incorrect signature still fails when
 // AllowEmptySignatures is enabled.
 func TestOptionalSignaturesIncorrect(t *testing.T) {
@@ -6566,6 +7345,32 @@ func TestOptionalSignaturesIncorrect(t *testing.T) {
 	_, err := s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{{stxn}}})
 	require.ErrorAs(t, err, &simulation.InvalidRequestError{})
 	require.ErrorContains(t, err, "one signature didn't pass")
+}
+
+func TestOptionalSignaturesProgramlessLogicSigContent(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+	s := simulation.MakeSimulator(env.Ledger, false)
+	sender := env.Accounts[0]
+
+	stxn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Addr,
+		Receiver: sender.Addr,
+		Amount:   0,
+	}).SignedTxn()
+	stxn.Lsig.Args = [][]byte{{1}}
+
+	result, err := s.Simulate(simulation.Request{
+		TxnGroups:            [][]transactions.SignedTxn{{stxn}},
+		AllowEmptySignatures: true,
+	})
+	require.NoError(t, err)
+	require.Len(t, result.TxnGroups, 1)
+	require.Contains(t, result.TxnGroups[0].FailureMessage, "LogicSig fields without LogicSig program")
 }
 
 // TestPartialMissingSignatures tests that a group of transactions with some signatures missing is
@@ -6947,7 +7752,7 @@ int 1`,
 								AppBudgetConsumed: 23,
 							},
 						},
-						AppBudgetAdded:    2100,
+						AppBudgetAdded:    1400, // only the app calls grant budget; the inner acfg grants none
 						AppBudgetConsumed: 23,
 						FailedAt:          simulation.TxnPath{1, 1},
 					},
@@ -7043,7 +7848,7 @@ int 1`,
 								AppBudgetConsumed: 17,
 							},
 						},
-						AppBudgetAdded:    2100,
+						AppBudgetAdded:    700, // the inner acfg txns grant no opcode budget
 						AppBudgetConsumed: 17,
 						FailedAt:          simulation.TxnPath{1, 1},
 					},
@@ -7212,6 +8017,9 @@ func TestUnnamedResources(t *testing.T) {
 				}
 
 				var innerCount int
+				// Only inner app calls grant opcode budget, so they are counted
+				// separately from the pay and axfer inners.
+				var innerAppCount int
 
 				program := fmt.Sprintf("#pragma version %d\n", v)
 
@@ -7275,6 +8083,7 @@ func TestUnnamedResources(t *testing.T) {
 				if v >= 6 { // contract to contract itxn calls introduced
 					program += fmt.Sprintf("itxn_begin; int appl; itxn_field TypeEnum; int %d; itxn_field ApplicationID; itxn_submit;", otherAppID)
 					innerCount++
+					innerAppCount++
 				}
 				expectedResources.Accounts[otherAppUser] = struct{}{}
 				if v >= 9 {
@@ -7395,7 +8204,7 @@ func TestUnnamedResources(t *testing.T) {
 										UnnamedResourcesAccessed: expectedUnnamedResourceTxnAssignment,
 									},
 								},
-								AppBudgetAdded:           700 + 700*innerCount,
+								AppBudgetAdded:           700 + 700*innerAppCount,
 								AppBudgetConsumed:        ignoreAppBudgetConsumed,
 								UnnamedResourcesAccessed: expectedUnnamedResourceGroupAssignment,
 							},
@@ -9639,7 +10448,7 @@ func TestFixSigners(t *testing.T) {
 								{FeesPaid: inputs.txgroup[4].Txn.Fee}, // pay3
 							},
 							AppBudgetConsumed: ignoreAppBudgetConsumed,
-							AppBudgetAdded:    2800,
+							AppBudgetAdded:    1400,
 							GroupUsage:        8e6,
 							GroupFeesPaid:     basics.MicroAlgos{Raw: 8 * inputs.txgroup[0].Txn.Fee.Raw},
 						},
@@ -9733,7 +10542,7 @@ func TestFixSigners(t *testing.T) {
 								{FeesPaid: inputs.txgroup[4].Txn.Fee}, // pay3
 							},
 							AppBudgetConsumed: ignoreAppBudgetConsumed,
-							AppBudgetAdded:    2800,
+							AppBudgetAdded:    1400,
 							GroupUsage:        8e6,
 							GroupFeesPaid:     basics.MicroAlgos{Raw: 8 * inputs.txgroup[0].Txn.Fee.Raw},
 						},

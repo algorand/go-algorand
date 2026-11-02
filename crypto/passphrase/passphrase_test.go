@@ -158,3 +158,9 @@ func TestUint11Array(t *testing.T) {
 		require.True(t, len(b)*8 >= len(a)*11)
 	}
 }
+
+func TestWordlist(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	require.Equal(t, 2048, len(wordlist))
+}

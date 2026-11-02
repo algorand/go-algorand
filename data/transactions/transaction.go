@@ -182,6 +182,10 @@ func (tx Transaction) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Transaction, protocol.Encode(&tx)
 }
 
+func (tx Transaction) isSingletonHeartbeat() bool {
+	return tx.Type == protocol.HeartbeatTx && tx.Group.IsZero()
+}
+
 // feeFactor is the factor by which the base transaction fee is multiplied. Some
 // transactions are free, others might cost more because they use extra
 // expensive features (e.g., large Note fields, large app programs).  It is
@@ -195,12 +199,18 @@ func (tx Transaction) feeFactor(proto config.ConsensusParams) basics.Micros {
 	case protocol.StateProofTx:
 		return 0
 	case protocol.HeartbeatTx:
-		if tx.Group.IsZero() {
-			// Not every such heartbeat is free. We confirm a
-			// low/no fee singleton heartbeat is legal in heartbeat's
-			// wellFormed() and in apply/heartbeat.go (for the dynamic check for
-			// challenge).
-			return 0
+		// A heartbeat that claims the challenge discount owes one less min fee.
+		// wellFormed() forbids extras (Note, etc.) on such a heartbeat, so factor
+		// is 1e6 for it and this drops it to 0. apply/heartbeat.go verifies the
+		// account is actually under challenge. The explicit discount rule shares
+		// the transaction-size-pricing upgrade; before it, the same discount is
+		// inferred from an underpaid singleton heartbeat instead.
+		if proto.TxnSizePricingEnabled() {
+			if tx.HeartbeatTxnFields != nil && tx.HeartbeatTxnFields.HbChallengeDiscount {
+				factor = basics.SubSaturate(factor, basics.Micros(1e6))
+			}
+		} else if tx.isSingletonHeartbeat() {
+			factor = basics.SubSaturate(factor, basics.Micros(1e6))
 		}
 	case protocol.ApplicationCallTx:
 		factor = basics.AddSaturate(factor, tx.ApplicationCallTxnFields.feeContribution(proto))
@@ -229,7 +239,7 @@ func txAllocSize() int {
 // txEncodingPool holds temporary byte slice buffers used for encoding transaction messages.
 // Note, it prepends protocol.Transaction tag to the buffer economizing on subsequent append ops.
 var txEncodingPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		size := txAllocSize() + len(protocol.Transaction)
 		buf := make([]byte, len(protocol.Transaction), size)
 		copy(buf, []byte(protocol.Transaction))

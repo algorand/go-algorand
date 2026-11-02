@@ -66,7 +66,7 @@ func (sp StateProofTxnFields) wellFormed(header Header) error {
 	if header.Lease != [32]byte{} {
 		return errLeaseMustBeZeroInStateproofTxn
 	}
-	return nil
+	return checkStateProof(sp.StateProofType, &sp.StateProof)
 }
 
 // specialAddr is used to form a unique address that will send out state proofs.

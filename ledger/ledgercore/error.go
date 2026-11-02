@@ -179,31 +179,22 @@ func (err EvalPanicError) Error() string {
 }
 
 // TxGroupMalformedErrorReasonCode is a reason code for TxGroupMalformed
-//
-//msgp:ignore TxGroupMalformedErrorReasonCode
-type TxGroupMalformedErrorReasonCode int
+type TxGroupMalformedErrorReasonCode = transactions.TxGroupMalformedErrorReasonCode
 
 const (
 	// TxGroupMalformedErrorReasonGeneric is a generic (not specific) reason code
-	TxGroupMalformedErrorReasonGeneric TxGroupMalformedErrorReasonCode = iota
+	TxGroupMalformedErrorReasonGeneric = transactions.TxGroupMalformedErrorReasonGeneric
 	// TxGroupMalformedErrorReasonExceedMaxSize indicates too large txgroup
-	TxGroupMalformedErrorReasonExceedMaxSize
+	TxGroupMalformedErrorReasonExceedMaxSize = transactions.TxGroupMalformedErrorReasonExceedMaxSize
 	// TxGroupMalformedErrorReasonInconsistentGroupID indicates different group IDs in a txgroup
-	TxGroupMalformedErrorReasonInconsistentGroupID
+	TxGroupMalformedErrorReasonInconsistentGroupID = transactions.TxGroupMalformedErrorReasonInconsistentGroupID
 	// TxGroupMalformedErrorReasonEmptyGroupID is for empty group ID but multiple transactions in a txgroup
-	TxGroupMalformedErrorReasonEmptyGroupID
+	TxGroupMalformedErrorReasonEmptyGroupID = transactions.TxGroupMalformedErrorReasonEmptyGroupID
 	// TxGroupMalformedErrorReasonIncompleteGroup indicates expected group ID does not match to provided
-	TxGroupMalformedErrorReasonIncompleteGroup
+	TxGroupMalformedErrorReasonIncompleteGroup = transactions.TxGroupMalformedErrorReasonIncompleteGroup
 	// TxGroupErrorReasonInvalidFee indicates a group with improper fees
-	TxGroupErrorReasonInvalidFee
+	TxGroupErrorReasonInvalidFee = transactions.TxGroupErrorReasonInvalidFee
 )
 
 // TxGroupMalformedError indicates txgroup violates a group-wide rule (size, group hash, etc)
-type TxGroupMalformedError struct {
-	Msg    string
-	Reason TxGroupMalformedErrorReasonCode
-}
-
-func (e *TxGroupMalformedError) Error() string {
-	return e.Msg
-}
+type TxGroupMalformedError = transactions.TxGroupMalformedError

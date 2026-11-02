@@ -119,7 +119,8 @@ type EncodedBlockCert struct {
 }
 
 // PreEncodedBlockCert defines how GetBlockBytes encodes a block and its certificate,
-// using a pre-encoded Block and Certificate in msgpack format.
+// using a pre-encoded Block and Certificate in msgpack format. It must encode to the
+// same bytes as EncodedBlockCert, which is what the fetching side decodes into.
 type PreEncodedBlockCert struct {
 	_struct struct{} `codec:""`
 

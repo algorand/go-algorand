@@ -20,5 +20,5 @@ import "github.com/algorand/go-algorand/logging/telemetryspec"
 
 // EventSender is a simple abstraction for easier mocking.
 type EventSender interface {
-	EventWithDetails(category telemetryspec.Category, identifier telemetryspec.Event, details interface{})
+	EventWithDetails(category telemetryspec.Category, identifier telemetryspec.Event, details any)
 }

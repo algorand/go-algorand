@@ -40,8 +40,6 @@ ${gcmd} clerk sign -i ${TEMPDIR}/gx-0.tx -p ${TEMPDIR}/split.teal -o ${TEMPDIR}/
 ${gcmd} clerk sign -i ${TEMPDIR}/gx-1.tx -p ${TEMPDIR}/split.teal -o ${TEMPDIR}/gx-1.stx
 cat ${TEMPDIR}/gx-0.stx ${TEMPDIR}/gx-1.stx > ${TEMPDIR}/group.stx
 
-${gcmd} clerk dryrun -t ${TEMPDIR}/group.stx
-
 ${gcmd} clerk send -a 110000000 -f ${ACCOUNT} -t ${ACCOUNT_SPLIT}
 
 ${gcmd} clerk rawsend -f ${TEMPDIR}/group.stx

@@ -32,7 +32,7 @@ type backlog struct {
 	buffer    chan backlogItemTask
 	ctx       context.Context
 	ctxCancel context.CancelFunc
-	owner     interface{}
+	owner     any
 	priority  Priority
 }
 
@@ -44,12 +44,12 @@ type backlogItemTask struct {
 // BacklogPool supports all the ExecutionPool functions plus few more that tests the pending tasks.
 type BacklogPool interface {
 	ExecutionPool
-	EnqueueBacklog(enqueueCtx context.Context, t ExecFunc, arg interface{}, out chan interface{}) error
+	EnqueueBacklog(enqueueCtx context.Context, t ExecFunc, arg any, out chan any) error
 	BufferSize() (length, capacity int)
 }
 
 // MakeBacklog creates a backlog
-func MakeBacklog(execPool ExecutionPool, backlogSize int, priority Priority, owner interface{}, profLabels ...string) BacklogPool {
+func MakeBacklog(execPool ExecutionPool, backlogSize int, priority Priority, owner any, profLabels ...string) BacklogPool {
 	if backlogSize < 0 {
 		return nil
 	}
@@ -79,7 +79,7 @@ func (b *backlog) GetParallelism() int {
 }
 
 // Enqueue enqueues a single task into the backlog
-func (b *backlog) Enqueue(enqueueCtx context.Context, t ExecFunc, arg interface{}, priority Priority, out chan interface{}) error {
+func (b *backlog) Enqueue(enqueueCtx context.Context, t ExecFunc, arg any, priority Priority, out chan any) error {
 	select {
 	case b.buffer <- backlogItemTask{
 		enqueuedTask: enqueuedTask{
@@ -103,7 +103,7 @@ func (b *backlog) BufferSize() (length, capacity int) {
 }
 
 // EnqueueBacklog enqueues a single task into the backlog
-func (b *backlog) EnqueueBacklog(enqueueCtx context.Context, t ExecFunc, arg interface{}, out chan interface{}) error {
+func (b *backlog) EnqueueBacklog(enqueueCtx context.Context, t ExecFunc, arg any, out chan any) error {
 	select {
 	case b.buffer <- backlogItemTask{
 		enqueuedTask: enqueuedTask{
@@ -155,6 +155,6 @@ func (b *backlog) worker(profLabels []string) {
 	}
 }
 
-func (b *backlog) GetOwner() interface{} {
+func (b *backlog) GetOwner() any {
 	return b.owner
 }

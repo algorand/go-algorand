@@ -20,11 +20,6 @@ env:
   ALGOTEST: 1
   SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   SKIP_GO_INSTALLATION: True
-  # Force Xcode SDK on macOS 14 to work around a MacOSX14.sdk bug in CLT 16.x
-  # where IOHIDLibObsolete.h fails to include CFPlugInCOM.h, leaving
-  # IUNKNOWN_C_GUTS undefined and breaking karalabe/hid CGo builds.
-  # See: https://github.com/libusb/hidapi/issues/735
-  DEVELOPER_DIR: /Applications/Xcode_15.4.app/Contents/Developer
 
 concurrency:
   group: nightly-${{ github.ref }}
@@ -39,11 +34,11 @@ jobs:
   build:
     strategy:
       matrix:
-        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-15"]
     runs-on: ${{ matrix.platform }}
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         ref: ${{ github.event.inputs.branch || github.ref }}
         fetch-depth: 0
@@ -52,7 +47,7 @@ jobs:
       with:
         cache-prefix: buildsrc
     - name: Cache libsodium
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: crypto/libs
         key: libsodium-${{ matrix.platform }}-${{ hashFiles('crypto/libsodium-fork/**') }}
@@ -64,7 +59,7 @@ jobs:
         tar -czf /tmp/workspace-${{ matrix.platform }}.tar.gz .
       shell: bash
     - name: Upload workspace archive
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: workspace-${{ matrix.platform }}-${{ github.run_id }}
         path: /tmp/workspace-${{ matrix.platform }}.tar.gz
@@ -82,7 +77,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-15"]
         partition_id: [0, 1] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
@@ -91,7 +86,7 @@ jobs:
       CIRCLECI: true
     steps:
       - name: Download workspace archive
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: workspace-${{ matrix.platform }}-${{ github.run_id }}
           path: /tmp/
@@ -104,20 +99,16 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           cache-prefix: test
+      - name: Configure development environment
+        run: ./scripts/configure_dev.sh
       - name: Run tests
-        run: |
-          ./scripts/configure_dev.sh
-          PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
-          export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
-          COVERPACKAGES="$(go list ./... | grep -E -v '/go-algorand/(test|debug|cmd|config/defaultsGenerator|tools)' | grep -E -v '(test|testing|mock|mocks)$' | paste -sd ',' -)"
-          mkdir -p test_results/${{ matrix.platform }}_test_nightly/${PARTITION_ID}
-          go tool -modfile=tool.mod gotestsum --format standard-quiet \
-            --junitfile ~/test_results/${{ matrix.platform }}_test_nightly/${PARTITION_ID}/results.xml \
-            --jsonfile ~/test_results/${{ matrix.platform }}_test_nightly/${PARTITION_ID}/testresults.json \
-            -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" \
-            -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 \
-            -coverpkg=$COVERPACKAGES \
-            $PACKAGE_NAMES
+        id: tests
+        uses: ./.github/actions/unit-tests
+        with:
+          parallel: '1'
+          test-results-path: ${{ matrix.platform }}_test_nightly/${{ matrix.partition_id }}
+          # Only this platform's coverage is uploaded, so only it is measured.
+          coverage: ${{ matrix.platform == 'ubuntu-24.04' }}
       - name: Notify Slack on failure
         if: failure()
         uses: ./.github/actions/slack-notify
@@ -127,44 +118,69 @@ jobs:
           details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_tests.name }}`"
       - name: Upload test logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-logs-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: |
             **/*.log
           retention-days: 30
       - name: Upload test artifacts to GitHub
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: ~/test_results
           retention-days: 7
-      - name: Upload coverage
-        # Only upload coverage from ubuntu-24.04 platform
-        if: ${{ matrix.platform == 'ubuntu-24.04' && !cancelled() }}
-        uses: codecov/codecov-action@v4
-        env:
-          GITHUB_ACTIONS: True
-          CIRCLECI: ""
+      - name: Keep this partition's coverage data
+        if: ${{ matrix.platform == 'ubuntu-24.04' && success() }}
+        uses: actions/upload-artifact@v7
         with:
-          token: ${{ env.CODECOV_TOKEN }}
-          file: ./coverage.txt
-          flags: full_coverage
-          fail_ci_if_error: false
+          name: covdata-${{ matrix.partition_id }}
+          path: ${{ steps.tests.outputs.covdata-dir }}
+          if-no-files-found: error
+          retention-days: 1
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
         with:
-          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_test_nightly/${{ matrix.partition_id }}/results.xml
+          file: ${{ matrix.platform == 'macos-15' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_test_nightly/${{ matrix.partition_id }}/results.xml
           token: ${{ env.CODECOV_TOKEN }}
           fail_ci_if_error: false
+
+  coverage_nightly:
+    needs: test_nightly
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+      - name: Collect every partition's coverage data
+        uses: actions/download-artifact@v7
+        with:
+          pattern: covdata-*
+          path: covdata
+      - name: Build one profile from all of them
+        # This job only runs when every partition succeeded, so whatever the
+        # download produced is the whole run.
+        run: |
+          mapfile -t DIRS < <(find covdata -mindepth 1 -maxdepth 1 -type d | sort)
+          ./scripts/merge_coverage.sh ./coverage.txt "${DIRS[@]}"
+      - name: Upload coverage
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ env.CODECOV_TOKEN }}
+          files: ./coverage.txt
+          disable_search: true  # coverage.txt is the only report we want
+          flags: unit
+          # This is the baseline every pull request is compared against, so a
+          # failed upload fails the job rather than leaving a commit uncovered.
+          fail_ci_if_error: true
 
   integration_nightly:
     needs: [build]
     strategy:
       fail-fast: false
       matrix:
-        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-15"]
         partition_id: [0, 1] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
@@ -175,7 +191,7 @@ jobs:
       PARALLEL_FLAG: "-p 1"
     steps:
       - name: Download workspace archive
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: workspace-${{ matrix.platform }}-${{ github.run_id }}
           path: /tmp/
@@ -202,7 +218,7 @@ jobs:
           build-type: "Nightly Build"
           details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_integration_tests.name }}`"
       - name: Upload test artifacts to GitHub
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: integration-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: ~/test_results
@@ -211,7 +227,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
         with:
-          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_integration_nightly/${{ matrix.partition_id }}/results.xml
+          file: ${{ matrix.platform == 'macos-15' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_integration_nightly/${{ matrix.partition_id }}/results.xml
           token: ${{ env.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
@@ -220,7 +236,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-15"]
         partition_id: [0, 1]
     runs-on: ${{ matrix.platform }}
     env:
@@ -231,7 +247,7 @@ jobs:
       PARALLEL_FLAG: "-p 1"
     steps:
       - name: Download workspace archive
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: workspace-${{ matrix.platform }}-${{ github.run_id }}
           path: /tmp/
@@ -258,7 +274,7 @@ jobs:
           build-type: "Nightly Build"
           details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_e2e_expect_tests.name }}`"
       - name: Upload test artifacts to GitHub
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e_expect-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: ~/test_results
@@ -267,7 +283,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
         with:
-          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_e2e_expect_nightly/${{ matrix.partition_id }}/results.xml
+          file: ${{ matrix.platform == 'macos-15' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_e2e_expect_nightly/${{ matrix.partition_id }}/results.xml
           token: ${{ env.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
@@ -276,7 +292,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-15"]
     runs-on: ${{ matrix.platform }}
     env:
       E2E_TEST_FILTER: SCRIPTS
@@ -286,13 +302,16 @@ jobs:
       AWS_ROLE: ${{ secrets.AWS_ROLE }}
     steps:
       - name: Set CI_E2E_FILENAME for e2e test data publishing
+        env:
+          BRANCH_NAME: ${{ github.event.inputs.branch || github.ref_name }}
         run: |
           # Set CI_E2E_FILENAME based on branch name, replacing '/' with '-' - used when publishing e2e test data to S3 (e2e.sh) for indexer tests
-          BRANCH_NAME="${{ github.event.inputs.branch || github.ref_name }}"
-          MODIFIED_BRANCH_NAME="${BRANCH_NAME//\//-}"
-          echo "CI_E2E_FILENAME=${MODIFIED_BRANCH_NAME}" >> $GITHUB_ENV
+          # Drop CR/LF first: workflow_dispatch inputs are free-form, and a newline here would append extra entries to the $GITHUB_ENV file
+          SANITIZED_BRANCH_NAME="${BRANCH_NAME//[$'\r\n']/}"
+          MODIFIED_BRANCH_NAME="${SANITIZED_BRANCH_NAME//\//-}"
+          echo "CI_E2E_FILENAME=${MODIFIED_BRANCH_NAME}" >> "$GITHUB_ENV"
       - name: Download workspace archive
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: workspace-${{ matrix.platform }}-${{ github.run_id }}
           path: /tmp/
@@ -326,7 +345,7 @@ jobs:
           build-type: "Nightly Build"
           details: "• Failed Step: `${{ steps.run_e2e_expect_tests.name }}`"
       - name: Upload test artifacts to GitHub
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e_subs-results-${{ matrix.platform }}-${{ github.run_id }}
           path: ~/test_results
@@ -338,11 +357,11 @@ jobs:
       fail-fast: false
       matrix:
         test_type: ["test", "integration", "e2e_expect"]
-        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-15"]
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
         with:
           pattern: ${{ matrix.test_type }}-results-${{ matrix.platform }}-${{ github.run_id }}-*
           path: ~/test_results
@@ -355,8 +374,7 @@ jobs:
             --ignored-tests \
               TestAlgodWithExpect \
               TestAlgohWithExpect \
-              TestGoalWithExpect \
-              TestTealdbgWithExpect
+              TestGoalWithExpect
       - name: Notify Slack on failure
         if: failure()
         uses: ./.github/actions/slack-notify
@@ -370,11 +388,11 @@ jobs:
     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/rel/')
     strategy:
       matrix:
-        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-15"]
     runs-on: ${{ matrix.platform }}
     steps:
       - name: Download workspace archive
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: workspace-${{ matrix.platform }}-${{ github.run_id }}
           path: /tmp/
@@ -396,10 +414,11 @@ jobs:
           S3_RELEASE_BUCKET: ${{ secrets.S3_RELEASE_BUCKET }}
         timeout-minutes: 20
         run: |
-          if [[ "${{ github.ref }}" == "refs/heads/rel/nightly" ]]; then
+          # GITHUB_REF/GITHUB_REF_NAME are runner-provided defaults, so the ref never reaches the shell as interpolated text
+          if [[ "$GITHUB_REF" == "refs/heads/rel/nightly" ]]; then
             export NIGHTLY_BUILD="true"
           fi
-          export TRAVIS_BRANCH="${{ github.ref_name }}"
+          export TRAVIS_BRANCH="$GITHUB_REF_NAME"
           scripts/travis/deploy_packages.sh
         shell: bash
       - name: Notify Slack on failure

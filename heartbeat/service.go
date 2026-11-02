@@ -191,6 +191,13 @@ func (s *Service) prepareHeartbeat(pr account.ParticipationRecordForRound, lates
 		HbSeed:        latest.Seed,
 		HbVoteID:      pr.Voting.OneTimeSignatureVerifier,
 		HbKeyDilution: pr.KeyDilution,
+		// Once the explicit-discount rule is active (gated on transaction size
+		// pricing), claim the challenge discount so the zero-fee heartbeat covers
+		// its own (nonexistent) fee. The service only heartbeats accounts it
+		// found under challenge, so this is legitimate. Before then the zero fee
+		// alone signals the claim, and the flag must stay unset (WellFormed
+		// rejects it).
+		HbChallengeDiscount: config.Consensus[latest.CurrentProtocol].TxnSizePricingEnabled(),
 	}
 
 	return stxn

@@ -118,10 +118,6 @@ type ConsensusParams struct {
 	// group. The total available is len(group) * LogicSigMaxCost
 	EnableLogicSigCostPooling bool
 
-	// EnableLogicSigSizePooling specifies LogicSig sizes are pooled across a
-	// group. The total available is len(group) * LogicSigMaxSize
-	EnableLogicSigSizePooling bool
-
 	// RewardUnit specifies the number of MicroAlgos corresponding to one reward
 	// unit.
 	//
@@ -234,8 +230,14 @@ type ConsensusParams struct {
 	// 0 for no support, otherwise highest version supported
 	LogicSigVersion uint64
 
-	// len(LogicSig.Logic) + len(LogicSig.Args[*]) must be less than this (unless pooling is enabled)
+	// LogicSigMaxSize is the legacy LogicSig size unit used for the per-LogicSig
+	// args allowance and to compute group size pools and free program-byte
+	// allowance.
 	LogicSigMaxSize uint64
+
+	// MaxAbsoluteLogicSigProgramSize is the absolute maximum size of a LogicSig
+	// program.
+	MaxAbsoluteLogicSigProgramSize uint64
 
 	// sum of estimated op cost must be less than this
 	LogicSigMaxCost uint64
@@ -577,6 +579,10 @@ type ConsensusParams struct {
 	// Heartbeat support
 	Heartbeat bool
 
+	// AllowGroupedHeartbeats lets a heartbeat share a transaction group with
+	// an application call or an asset creation.
+	AllowGroupedHeartbeats bool
+
 	// EnableSha512BlockHash adds an additional SHA-512 hash to the block header.
 	EnableSha512BlockHash bool
 
@@ -600,6 +606,44 @@ type ConsensusParams struct {
 	// the basic Max sizes (they allow up to the "Absolute" Maxes). It is
 	// expressed in fraction of a basic min fee.
 	PerByteTxnSurcharge basics.Micros
+
+	// EnableSelectF128 changes the sortition algorithm to use a 128-bit software
+	// floating point binomial CDF implementation for committee selection.
+	EnableSelectF128 bool
+
+	// EnablePQSchemeFalcon1024 enables native Falcon-1024 transaction
+	// authorization for the f1 PQ scheme.
+	EnablePQSchemeFalcon1024 bool
+
+	// EnablePQSchemeFalcon512 enables native Falcon-512 transaction
+	// authorization for the f5 PQ scheme.
+	EnablePQSchemeFalcon512 bool
+
+	// EnablePQSchemeEd25519 enables Ed25519 transaction authorization for the
+	// ed scheme's hashed-address profile.
+	EnablePQSchemeEd25519 bool
+
+	// EnablePQSchemeLogicSig enables transaction authorization by a LogicSig
+	// carried in a PQSig under the ls scheme, whose address commits to the
+	// program and a salt. Unlike the LogicSig in SignedTxn.Lsig, such an account
+	// can choose an address that is not an Edwards25519 point.
+	EnablePQSchemeLogicSig bool
+
+	// RequireLogicSigArgAccess requires that a LogicSig carry no argument it did
+	// not read: nothing above the highest index it read, and nothing unread
+	// below that index unless it is empty. Args are covered by no signature, and
+	// are part of neither the transaction ID nor the group hash, so without this
+	// rule a third party can append bytes to a transaction in flight, and the
+	// program has no way to detect it.
+	RequireLogicSigArgAccess bool
+
+	// CloseRequiresBaseMinBalance allows an account to be closed only if its
+	// minimum balance requirement is exactly the base MinBalance. Before this,
+	// closing was guarded by checks of specific resource counters, which
+	// became insufficient once AppSizeUpdates allowed an account to hold MBR
+	// for global state and extra pages of apps it neither created nor opted
+	// into.
+	CloseRequiresBaseMinBalance bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -691,6 +735,12 @@ func (proto ConsensusParams) MinFee() basics.MicroAlgos {
 	return basics.MicroAlgos{Raw: proto.MinTxnFee}
 }
 
+// TxnSizePricingEnabled reports whether transactions can exceed size limits by
+// paying a per-byte surcharge.
+func (proto ConsensusParams) TxnSizePricingEnabled() bool {
+	return proto.PerByteTxnSurcharge != 0
+}
+
 // EffectiveKeyDilution returns the key dilution for this account,
 // returning the default key dilution if not explicitly specified.
 func (proto ConsensusParams) EffectiveKeyDilution(kd uint64) uint64 {
@@ -763,6 +813,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxAppProgramLen, &bounds.MaxEvalDeltaAccounts)
 	checkSetMax(p.MaxAppProgramLen, &bounds.MaxAppProgramLen)
 	checkSetMax((int(p.LogicSigMaxSize) * p.MaxTxGroupSize), &bounds.MaxLogicSigMaxSize)
+	checkSetMax(int(p.MaxAbsoluteLogicSigProgramSize), &bounds.MaxLogicSigMaxSize)
 	checkSetMax(p.MaxAbsoluteTxnNoteBytes, &bounds.MaxTxnNoteBytes)
 	checkSetMax(p.MaxTxGroupSize, &bounds.MaxTxGroupSize)
 	// MaxBytesKeyValueLen is max of MaxAppKeyLen and MaxAppBytesValueLen
@@ -1012,6 +1063,7 @@ func initConsensusProtocols() {
 	v18.Asset = true
 	v18.LogicSigVersion = 1
 	v18.LogicSigMaxSize = 1000
+	v18.MaxAbsoluteLogicSigProgramSize = 1000
 	v18.LogicSigMaxCost = 20000
 	v18.LogicSigMsig = true
 	v18.MaxAssetsPerAccount = 1000
@@ -1433,8 +1485,7 @@ func initConsensusProtocols() {
 	v40.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	v40.LogicSigVersion = 11
-
-	v40.EnableLogicSigSizePooling = true
+	v40.MaxAbsoluteLogicSigProgramSize = 16000
 
 	v40.Payouts.Enabled = true
 	v40.Payouts.Percent = 50
@@ -1483,20 +1534,53 @@ func initConsensusProtocols() {
 	// our current max is 250000
 	v40.ApprovedUpgrades[protocol.ConsensusV41] = 208000
 
+	v42 := v41
+	v42.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	v42.LogicSigVersion = 13
+	v42.AppSizeUpdates = true
+	v42.AllowZeroLocalAppRef = true
+	v42.EnforceAuthAddrSenderDiff = true
+	v42.EnablePQSchemeFalcon1024 = true
+	v42.LoadTracking = true
+	v42.MaxAbsoluteTxnNoteBytes = 4096   // same as largest AVM value
+	v42.MaxAbsoluteExtraProgramPages = 7 // Allow larger programs with extra fees
+	v42.MaxAbsoluteTotalArgLen = 16384   // We _could_ make this as high as 16*4k
+	v42.PerByteTxnSurcharge = 100        // Each charged byte adds 0.000100 of min fee
+	v42.EnableSelectF128 = true
+
+	Consensus[protocol.ConsensusV42] = v42
+
+	// v41 can be upgraded to v42, with an update delay of 7d:
+	// 208000 = (7 * 24 * 60 * 60 / 2.9 ballpark round times)
+	// our current max is 250000
+	v41.ApprovedUpgrades[protocol.ConsensusV42] = 208000
+
+	// v43 is a fix-only release, so it keeps v42's LogicSigVersion.
+	v43 := v42
+	v43.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	v43.CloseRequiresBaseMinBalance = true
+
+	Consensus[protocol.ConsensusV43] = v43
+
+	// v42 can be upgraded to v43, with an update delay of 7d:
+	// 208000 = (7 * 24 * 60 * 60 / 2.9 ballpark round times)
+	// our current max is 250000
+	v42.ApprovedUpgrades[protocol.ConsensusV43] = 208000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v41
+	vFuture := v43
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	vFuture.LogicSigVersion = 13 // When moving this to a release, put a new higher LogicSigVersion here
-	vFuture.AppSizeUpdates = true
-	vFuture.AllowZeroLocalAppRef = true
-	vFuture.EnforceAuthAddrSenderDiff = true
-	vFuture.LoadTracking = true
-	vFuture.MaxAbsoluteTxnNoteBytes = 4096   // same as largest AVM value
-	vFuture.MaxAbsoluteExtraProgramPages = 7 // Allow larger programs with extra fees
-	vFuture.MaxAbsoluteTotalArgLen = 16384   // We _could_ make this as high as 16*4k
-	vFuture.PerByteTxnSurcharge = 100        // Each charged byte adds 0.000100 of min fee
+	vFuture.LogicSigVersion = 14 // When moving this to a release, put a new higher LogicSigVersion here
+	vFuture.EnablePQSchemeFalcon512 = true
+	vFuture.EnablePQSchemeEd25519 = true
+	vFuture.RequireLogicSigArgAccess = true
+	vFuture.AllowGroupedHeartbeats = true
+
+	vFuture.EnablePQSchemeLogicSig = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
@@ -1530,6 +1614,65 @@ func initConsensusProtocols() {
 	vAlpha5.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusVAlpha5] = vAlpha5
 	vAlpha4.ApprovedUpgrades[protocol.ConsensusVAlpha5] = 10000
+
+	// vFnetX are like vAlphaX but for AF's FNet. These are the genesis and
+	// historical protocols for the FNet network; a mainline node needs them to
+	// open the FNet genesis ledger (proto fnet1) and to replay the pre-V40 chain.
+	// The on-chain upgrade path was fnet1->fnet2->fnet3->fnet4->V40.
+	vFnet1 := v39
+	vFnet1.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	vFnet1.LogicSigVersion = 11 // When moving this to a release, put a new higher LogicSigVersion here
+	vFnet1.Payouts.Enabled = true
+	vFnet1.Payouts.Percent = 75
+	vFnet1.Payouts.GoOnlineFee = 2_000_000         // 2 algos
+	vFnet1.Payouts.MinBalance = 30_000_000_000     // 30,000 algos
+	vFnet1.Payouts.MaxBalance = 70_000_000_000_000 // 70M algos
+	vFnet1.Payouts.MaxMarkAbsent = 32
+	vFnet1.Payouts.ChallengeInterval = 1000
+	vFnet1.Payouts.ChallengeGracePeriod = 200
+	vFnet1.Payouts.ChallengeBits = 5
+	vFnet1.Bonus.BaseAmount = 10_000_000 // 10 Algos
+	vFnet1.Bonus.DecayInterval = 250_000 // .99^(10.8/0.25) ~ .648. So 35% decay per year
+	Consensus[protocol.ConsensusVFnet1] = vFnet1
+
+	// vFnet2 guards against a future change in block opcodes that the fnet1 client did not support. No change in parameters
+	vFnet2 := vFnet1
+	vFnet2.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	Consensus[protocol.ConsensusVFnet2] = vFnet2
+	vFnet1.ApprovedUpgrades[protocol.ConsensusVFnet2] = 10000
+
+	// vFnet3 disabled challenges - without heartbeats, participating accounts are being evicted
+	vFnet3 := vFnet2
+	vFnet3.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	vFnet3.Payouts.ChallengeInterval = 0
+	Consensus[protocol.ConsensusVFnet3] = vFnet3
+	vFnet2.ApprovedUpgrades[protocol.ConsensusVFnet3] = 10000
+
+	// vFnet4: replacing challenges and heartbeats, back to vFnet1 parameters, with a new upgrade path to V40
+	vFnet4 := vFnet1
+	vFnet4.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	Consensus[protocol.ConsensusVFnet4] = vFnet4
+	vFnet3.ApprovedUpgrades[protocol.ConsensusVFnet4] = 10000
+
+	vFnet4.ApprovedUpgrades[protocol.ConsensusV40] = 10000
+
+	// vFnet5 was the v42 preview on FNet
+	vFnet5 := v41
+	vFnet5.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	vFnet5.LogicSigVersion = 13
+	vFnet5.AppSizeUpdates = true
+	vFnet5.AllowZeroLocalAppRef = true
+	vFnet5.EnforceAuthAddrSenderDiff = true
+	vFnet5.EnablePQSchemeFalcon1024 = true
+	vFnet5.LoadTracking = true
+	vFnet5.MaxAbsoluteTxnNoteBytes = 4096   // same as largest AVM value
+	vFnet5.MaxAbsoluteExtraProgramPages = 7 // Allow larger programs with extra fees
+	vFnet5.MaxAbsoluteTotalArgLen = 16384   // We _could_ make this as high as 16*4k
+	vFnet5.PerByteTxnSurcharge = 100        // Each charged byte adds 0.000100 of min fee
+	vFnet5.EnableSelectF128 = true
+
+	Consensus[protocol.ConsensusVFnet5] = vFnet5
 }
 
 // Global defines global Algorand protocol parameters which should not be overridden.

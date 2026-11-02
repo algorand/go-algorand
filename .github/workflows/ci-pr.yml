@@ -4,6 +4,7 @@ on:
     branches:
       - master
       - 'rel/**'
+      - 'rel*'
   workflow_dispatch:
     inputs:
       full_coverage:
@@ -20,11 +21,6 @@ env:
   ALGOTEST: 1
   SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   SKIP_GO_INSTALLATION: True
-  # Force Xcode SDK on macOS 14 to work around a MacOSX14.sdk bug in CLT 16.x
-  # where IOHIDLibObsolete.h fails to include CFPlugInCOM.h, leaving
-  # IUNKNOWN_C_GUTS undefined and breaking karalabe/hid CGo builds.
-  # See: https://github.com/libusb/hidapi/issues/735
-  DEVELOPER_DIR: /Applications/Xcode_15.4.app/Contents/Developer
 
 concurrency:
   group: pr-${{ github.event.pull_request.number || github.ref }}
@@ -46,10 +42,9 @@ jobs:
       PARTITION_ID: ${{ matrix.partition_id }}
       PARTITION_TOTAL: 6
       CIRCLECI: true
-      SHORTTEST: "-short"
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Set up Go
@@ -59,22 +54,11 @@ jobs:
       - name: Setup test environment
         uses: ./.github/actions/setup-test
       - name: Run tests
-        run: |
-          PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
-          export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
-          COVERPKG_FLAG=""
-          if [[ "${{ inputs.full_coverage }}" == "true" ]]; then
-            COVERPACKAGES="$(go list ./... | grep -E -v '/go-algorand/(test|debug|cmd|config/defaultsGenerator|tools)' | grep -E -v '(test|testing|mock|mocks)$' | paste -sd ',' -)"
-            COVERPKG_FLAG="-coverpkg=$COVERPACKAGES"
-          fi
-          mkdir -p test_results/${{ matrix.platform }}_test/${PARTITION_ID}
-          go tool -modfile=tool.mod gotestsum --format standard-quiet \
-            --junitfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/results.xml \
-            --jsonfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/testresults.json \
-            -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" $SHORTTEST \
-            -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 4 \
-            $COVERPKG_FLAG \
-            $PACKAGE_NAMES
+        uses: ./.github/actions/unit-tests
+        with:
+          short: 'true'
+          parallel: '4'
+          test-results-path: ${{ matrix.platform }}_test/${{ matrix.partition_id }}
       - name: Notify Slack on failure
         if: failure()
         uses: ./.github/actions/slack-notify
@@ -84,7 +68,7 @@ jobs:
           details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_tests.name }}`"
       - name: Upload test logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-logs-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: |
@@ -92,28 +76,16 @@ jobs:
           retention-days: 30
       - name: Upload test artifacts to GitHub
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: ~/test_results
           retention-days: 7
-      - name: Upload coverage
-        # Only upload coverage from ubuntu-24.04 platform
-        if: ${{ matrix.platform == 'ubuntu-24.04' && !cancelled() }}
-        uses: codecov/codecov-action@v4
-        env:
-          GITHUB_ACTIONS: True
-          CIRCLECI: ""
-        with:
-          token: ${{ env.CODECOV_TOKEN }}
-          file: ./coverage.txt
-          flags: ${{ inputs.full_coverage && 'full_coverage' || '' }}
-          fail_ci_if_error: false
       - name: Upload test results to Codecov
         if: ${{ !cancelled() && !github.event.repository.private }}
         uses: codecov/test-results-action@v1
         with:
-          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_test/${{ matrix.partition_id }}/results.xml
+          file: ${{ matrix.platform == 'macos-15' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_test/${{ matrix.partition_id }}/results.xml
           token: ${{ env.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
@@ -133,7 +105,7 @@ jobs:
       SHORTTEST: "-short"
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Set up Go
@@ -158,7 +130,7 @@ jobs:
           details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_integration_tests.name }}`"
       - name: Upload test artifacts to GitHub
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: integration-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: ~/test_results
@@ -167,7 +139,7 @@ jobs:
         if: ${{ !cancelled() && !github.event.repository.private }}
         uses: codecov/test-results-action@v1
         with:
-          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_integration/${{ matrix.partition_id }}/results.xml
+          file: ${{ matrix.platform == 'macos-15' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_integration/${{ matrix.partition_id }}/results.xml
           token: ${{ env.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
@@ -187,7 +159,7 @@ jobs:
       SHORTTEST: "-short"
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Set up Go
@@ -214,7 +186,7 @@ jobs:
           details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_e2e_expect_tests.name }}`"
       - name: Upload test artifacts to GitHub
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e_expect-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: ~/test_results
@@ -223,7 +195,7 @@ jobs:
         if: ${{ !cancelled() && !github.event.repository.private }}
         uses: codecov/test-results-action@v1
         with:
-          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_e2e_expect/${{ matrix.partition_id }}/results.xml
+          file: ${{ matrix.platform == 'macos-15' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_e2e_expect/${{ matrix.partition_id }}/results.xml
           token: ${{ env.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
@@ -242,7 +214,7 @@ jobs:
       SHORTTEST: "-short"
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Set up Go
@@ -267,7 +239,7 @@ jobs:
           details: "• Test Suite: `${{ matrix.testsuite }}`\n• Failed Step: `${{ steps.run_e2e_expect_tests.name }}`"
       - name: Upload test artifacts to GitHub
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e_subs-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.testsuite }}
           path: ~/test_results
@@ -282,8 +254,8 @@ jobs:
         platform: ["${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}"]
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
         with:
           pattern: ${{ matrix.test_type }}-results-${{ matrix.platform }}-*
           path: ~/test_results
@@ -296,8 +268,7 @@ jobs:
             --ignored-tests \
               TestAlgodWithExpect \
               TestAlgohWithExpect \
-              TestGoalWithExpect \
-              TestTealdbgWithExpect
+              TestGoalWithExpect
       - name: Notify Slack on failure
         if: failure()
         uses: ./.github/actions/slack-notify
@@ -311,7 +282,7 @@ jobs:
     if: always()
     runs-on: ${{ github.event.repository.private && 'ubuntu-24.04-4c16m' || 'ubuntu-24.04' }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           pattern: "*-results-*"
           path: ~/test_results

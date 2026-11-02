@@ -1163,7 +1163,15 @@ func TestAtMostOneSPFullPoolWithLoad(t *testing.T) {
 func getWellformedSPTransaction(round basics.Round, genesisHash crypto.Digest, consensusParams config.ConsensusParams, t *testing.T) (stxn transactions.SignedTxn) {
 
 	msg := stateproofmsg.Message{}
-	proof := &sp.StateProof{}
+	proof := &sp.StateProof{
+		SigCommit: make(crypto.GenericDigest, sp.HashSize),
+		SigProofs: merklearray.Proof{
+			HashFactory: crypto.HashFactory{HashType: sp.HashType},
+		},
+		PartProofs: merklearray.Proof{
+			HashFactory: crypto.HashFactory{HashType: sp.HashType},
+		},
+	}
 	proto := consensusParams
 
 	stxn.Txn.Type = protocol.StateProofTx

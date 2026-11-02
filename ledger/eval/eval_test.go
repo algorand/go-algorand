@@ -50,6 +50,127 @@ import (
 var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 var testSinkAddr = basics.Address{0x2c, 0x2a, 0x6c, 0xe9, 0xa9, 0xa7, 0xc2, 0x8c, 0x22, 0x95, 0xfd, 0x32, 0x4f, 0x77, 0xa5, 0x4, 0x8b, 0x42, 0xc2, 0xb7, 0xa8, 0x54, 0x84, 0xb6, 0x80, 0xb1, 0xe1, 0x3d, 0x59, 0x9b, 0xeb, 0x36}
 
+func TestCheckGroupFeesBigLogicSigProgram(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	freeSize := int(proto.LogicSigMaxSize)
+
+	tests := []struct {
+		name        string
+		programSize int
+		fees        []uint64
+		wantErr     bool
+	}{
+		{
+			name:        "singleton underpaid",
+			programSize: freeSize + 1,
+			fees:        []uint64{proto.MinTxnFee},
+			wantErr:     true,
+		},
+		{
+			name:        "singleton paid",
+			programSize: freeSize + 1,
+			fees:        []uint64{proto.MinTxnFee + 1},
+		},
+		{
+			name:        "pooled surcharge underpaid",
+			programSize: 2*freeSize + 1,
+			fees:        []uint64{proto.MinTxnFee, proto.MinTxnFee},
+			wantErr:     true,
+		},
+		{
+			name:        "pooled surcharge paid by another group member",
+			programSize: 2*freeSize + 1,
+			fees:        []uint64{proto.MinTxnFee, proto.MinTxnFee + 1},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			program := make([]byte, tt.programSize)
+			logicSigSender := basics.Address(logic.HashProgram(program))
+
+			genesisInitState, addrs, _ := ledgertesting.Genesis(10)
+			genesisInitState.Accounts[logicSigSender] = basics.AccountData{
+				MicroAlgos: basics.MicroAlgos{Raw: 1_000_000_000},
+				Status:     basics.Offline,
+			}
+
+			l := newTestLedger(t, bookkeeping.GenesisBalances{
+				Balances:    genesisInitState.Accounts,
+				FeeSink:     testSinkAddr,
+				RewardsPool: testPoolAddr,
+			})
+			genesisBlockHeader, err := l.BlockHdr(basics.Round(0))
+			require.NoError(t, err)
+			newBlock := bookkeeping.MakeBlock(genesisBlockHeader)
+			eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
+			require.NoError(t, err)
+
+			txns := []transactions.SignedTxn{{
+				Txn: transactions.Transaction{
+					Type: protocol.PaymentTx,
+					Header: transactions.Header{
+						Sender:      logicSigSender,
+						Fee:         basics.MicroAlgos{Raw: tt.fees[0]},
+						FirstValid:  newBlock.Round(),
+						LastValid:   newBlock.Round(),
+						GenesisHash: l.GenesisHash(),
+					},
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver: addrs[0],
+					},
+				},
+				Lsig: transactions.LogicSig{
+					Logic: program,
+				},
+			}}
+
+			for i, fee := range tt.fees[1:] {
+				txns = append(txns, transactions.SignedTxn{
+					Txn: transactions.Transaction{
+						Type: protocol.PaymentTx,
+						Header: transactions.Header{
+							Sender:      addrs[i],
+							Fee:         basics.MicroAlgos{Raw: fee},
+							FirstValid:  newBlock.Round(),
+							LastValid:   newBlock.Round(),
+							GenesisHash: l.GenesisHash(),
+						},
+						PaymentTxnFields: transactions.PaymentTxnFields{
+							Receiver: addrs[i+1],
+						},
+					},
+				})
+			}
+
+			if len(txns) > 1 {
+				var group transactions.TxGroup
+				for _, stxn := range txns {
+					txn := stxn.Txn
+					txn.Group = crypto.Digest{}
+					group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(txn.ID()))
+				}
+				groupID := crypto.HashObj(group)
+				for i := range txns {
+					txns[i].Txn.Group = groupID
+				}
+			}
+
+			err = eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txns)...)
+			if tt.wantErr {
+				require.ErrorContains(t, err, "fees is less than")
+				var groupErr *ledgercore.TxGroupMalformedError
+				require.ErrorAs(t, err, &groupErr)
+				require.Equal(t, ledgercore.TxGroupErrorReasonInvalidFee, groupErr.Reason)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
 func TestBlockEvaluatorFeeSink(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1842,5 +1963,97 @@ func TestComputeLoad(t *testing.T) {
 	for _, tt := range tests {
 		result := ComputeLoad(tt.blockSize, tt.maxSize)
 		require.Equal(t, tt.expected, result)
+	}
+}
+
+// TestGroupChecksAgreeWithVerify pins that eval and verify reject the same
+// malformed groups. They are separate implementations and report different
+// errors -- eval catches a repeated transaction ID through checkDup -- so each
+// side has its own expected message. The cache is mocked as always-verified,
+// leaving only eval's own checks.
+func TestGroupChecksAgreeWithVerify(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genesisInitState, addrs, _ := ledgertesting.Genesis(10)
+	l := newTestLedger(t, bookkeeping.GenesisBalances{
+		Balances:    genesisInitState.Accounts,
+		FeeSink:     testSinkAddr,
+		RewardsPool: testPoolAddr,
+		Timestamp:   0,
+	})
+
+	// left out of the ledger so every case is evaluated against the same round
+	blkEval := l.nextBlock(t)
+	unfinished, err := blkEval.GenerateBlock(nil)
+	require.NoError(t, err)
+	vb := ledgercore.MakeValidatedBlock(
+		unfinished.UnfinishedBlock().WithProposer(committee.Seed{}, testPoolAddr, true),
+		unfinished.UnfinishedDeltas())
+	empty := vb.Block()
+
+	mkTxn := func(sender basics.Address) transactions.Transaction {
+		return transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      sender,
+				Fee:         basics.MicroAlgos{Raw: 1000},
+				FirstValid:  empty.Round() - 1,
+				LastValid:   empty.Round() + 100,
+				GenesisHash: l.GenesisHash(),
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: addrs[1],
+				Amount:   basics.MicroAlgos{Raw: 100},
+			},
+		}
+	}
+	regroup := func(txns []transactions.Transaction) {
+		var group transactions.TxGroup
+		for i := range txns {
+			txns[i].Group = crypto.Digest{}
+			group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(txns[i].ID()))
+		}
+		groupID := crypto.HashObj(group)
+		for i := range txns {
+			txns[i].Group = groupID
+		}
+	}
+
+	a, b, c := mkTxn(addrs[0]), mkTxn(addrs[2]), mkTxn(addrs[3])
+	abc := []transactions.Transaction{a, b, c}
+	regroup(abc)
+	// [A, A] needs a group ID committing to both, so only the duplicate
+	// check can reject it
+	dup := []transactions.Transaction{a, a}
+	regroup(dup)
+
+	for _, test := range []struct {
+		name      string
+		group     []transactions.Transaction
+		verifyErr string
+		evalErr   string
+	}{
+		{"duplicate", dup, "duplicate transaction", "transaction already in ledger"},
+		{"permutation", []transactions.Transaction{abc[1], abc[0], abc[2]}, "incomplete group", "incomplete group"},
+		{"prefix", []transactions.Transaction{abc[0], abc[1]}, "incomplete group", "incomplete group"},
+		{"superset", []transactions.Transaction{abc[0], abc[1], abc[2], abc[2]}, "duplicate transaction", "transaction already in ledger"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			stxns := make([]transactions.SignedTxn, len(test.group))
+			blk := empty
+			blk.Payset = nil
+			for i, txn := range test.group {
+				stxns[i] = transactions.SignedTxn{Txn: txn}
+				stib, err := blk.EncodeSignedTxn(stxns[i], transactions.ApplyData{})
+				require.NoError(t, err)
+				blk.Payset = append(blk.Payset, stib)
+			}
+
+			require.ErrorContains(t, transactions.CheckTxnGroup(stxns, config.Consensus[protocol.ConsensusCurrentVersion].AllowGroupedHeartbeats), test.verifyErr)
+
+			_, err := Eval(context.Background(), l, blk, true, verify.GetMockedCache(true), nil, nil)
+			require.ErrorContains(t, err, test.evalErr)
+		})
 	}
 }

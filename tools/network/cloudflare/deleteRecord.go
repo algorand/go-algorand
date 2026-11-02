@@ -42,8 +42,8 @@ func deleteDNSRecordRequest(zoneID string, authToken string, recordID string) (*
 // DeleteDNSRecordResponse is the JSON response for a DNS delete request
 type DeleteDNSRecordResponse struct {
 	Success  bool                  `json:"success"`
-	Errors   []interface{}         `json:"errors"`
-	Messages []interface{}         `json:"messages"`
+	Errors   []any                 `json:"errors"`
+	Messages []any                 `json:"messages"`
 	Result   DeleteDNSRecordResult `json:"result"`
 }
 

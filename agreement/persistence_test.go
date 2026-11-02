@@ -17,11 +17,13 @@
 package agreement
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"testing"
 	"time"
 
+	"github.com/DataDog/zstd"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -263,16 +265,70 @@ func TestRandomizedEncodingFullDiskState(t *testing.T) {
 		clock := timers.MakeMonotonicClock[TimeoutType](time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
 		log := makeServiceLogger(logging.Base())
 		e1 := encodeDiskStateReflect(clock, router, player, a)
-		e2 := encode(clock, router, player, a)
+		// encode compresses its output, so compare the msgpack inside the zstd frame
+		compressed := encode(clock, router, player, a)
+		e2, err := zstd.Decompress(nil, compressed)
+		require.NoError(t, err)
 		require.Equalf(t, e1, e2, "msgp and go-codec encodings differ: len(reflect)=%v, len(msgp)=%v", len(e1), len(e2))
+		// the uncompressed bytes past releases wrote must decode to the original actions
 		_, rr2, p2, a2, err := decode(e1, clock, log)
 		require.NoErrorf(t, err, "decoding failed")
 		require.Equalf(t, a, a2, "decoded actions differ from the originals")
+		_, _, _, a3, err := decode(compressed, clock, log)
+		require.NoErrorf(t, err, "decoding compressed state failed")
+		require.Equalf(t, a, a3, "decoded actions from compressed state differ from the originals")
 		// the decoded state must re-encode to the same canonical bytes
-		e3 := encode(clock, rr2, p2, a2)
+		e3, err := zstd.Decompress(nil, encode(clock, rr2, p2, a2))
+		require.NoError(t, err)
 		require.Equalf(t, e1, e3, "re-encoding of decoded state differs")
 	}
 
+}
+
+// TestAgreementSnapshotCompression checks that the persisted state is a zstd
+// frame that decodes to the state, through the crash database as well, that
+// the uncompressed form the previous release persisted decodes to the same
+// state, and that a damaged frame is rejected.
+func TestAgreementSnapshotCompression(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	router, player := randomizeDiskState()
+	clock := timers.MakeMonotonicClock[TimeoutType](time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
+	log := makeServiceLogger(logging.Base())
+
+	compressed := encode(clock, router, player, []action{})
+	require.True(t, bytes.HasPrefix(compressed, zstdFrameMagic), "the state is persisted uncompressed")
+	uncompressed, err := zstd.Decompress(nil, compressed)
+	require.NoError(t, err)
+	require.False(t, bytes.HasPrefix(uncompressed, zstdFrameMagic))
+
+	_, rr1, p1, _, err := decode(compressed, clock, log)
+	require.NoError(t, err)
+	_, rr2, p2, _, err := decode(uncompressed, clock, log)
+	require.NoError(t, err)
+	require.Equal(t, rr2, rr1)
+	require.Equal(t, p2, p1)
+	require.Equal(t, player.Round, p1.Round)
+
+	// through the crash database
+	accessor, err := db.MakeAccessor(t.Name()+"_crash.db", false, true)
+	require.NoError(t, err)
+	defer accessor.Close()
+	require.NoError(t, accessor.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return agreeInstallDatabase(tx)
+	}))
+	require.NoError(t, persist(log, accessor, player.Round, player.Period, player.Step, compressed))
+	restored, err := restore(log, accessor)
+	require.NoError(t, err)
+	require.Equal(t, compressed, restored)
+	_, rr3, p3, _, err := decode(restored, clock, log)
+	require.NoError(t, err)
+	require.Equal(t, rr2, rr3)
+	require.Equal(t, p2, p3)
+
+	// a truncated frame does not decode
+	_, _, _, _, err = decode(compressed[:len(compressed)/2], clock, log)
+	require.Error(t, err)
 }
 
 func TestCredentialHistoryAllocated(t *testing.T) {
@@ -376,4 +432,20 @@ func TestDecodeErrs(t *testing.T) {
 		_, _, _, _, err := decode(dse, clock, log)
 		require.ErrorContains(t, err, "UnexpectedRouterField")
 	}
+}
+
+// TestDecodeActionCoversAllActionTypes checks that decodeAction has a case for
+// every actionType, so a newly added type cannot be persisted without a way to
+// restore it.
+func TestDecodeActionCoversAllActionTypes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// An empty msgpack map decodes to the zero value of any action struct.
+	emptyMap := []byte{0x80}
+	for at := noop; at <= checkpoint; at++ {
+		_, err := decodeAction(at, emptyMap)
+		require.NoError(t, err, "decodeAction does not handle %v", at)
+	}
+	_, err := decodeAction(checkpoint+1, emptyMap)
+	require.Error(t, err)
 }

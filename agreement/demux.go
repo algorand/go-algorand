@@ -194,10 +194,10 @@ func (d *demux) verifyPayload(ctx context.Context, m message, r round, p period,
 }
 
 // verifyBundle enqueues a bundle message to be verified.
-func (d *demux) verifyBundle(ctx context.Context, m message, r round, p period, s step) {
+func (d *demux) verifyBundle(ctx context.Context, m message, r round) {
 	d.UpdateEventsQueue(eventQueueCryptoVerifierBundle, 1)
 	d.monitor.inc(cryptoVerifierCoserviceType)
-	d.crypto.VerifyBundle(ctx, cryptoBundleRequest{message: m, Round: r, Period: p, Certify: s == cert})
+	d.crypto.VerifyBundle(ctx, cryptoBundleRequest{message: m, Round: r})
 }
 
 // next blocks until it observes an external input event of interest for the state machine.

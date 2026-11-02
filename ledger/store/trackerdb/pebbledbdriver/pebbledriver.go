@@ -21,6 +21,7 @@ package pebbledbdriver
 import (
 	"context"
 	"io"
+	"math"
 	"runtime"
 	"time"
 
@@ -70,7 +71,7 @@ func Open(dbdir string, inMem bool, proto config.ConsensusParams, log logging.Lo
 	// The max memtable size is limited by the uint32 offsets stored in
 	// internal/arenaskl.node, DeferredBatchOp, and flushableBatchEntry.
 	// Taken from https://github.com/cockroachdb/pebble/blob/master/open.go#L38
-	maxMemTableSize := 4<<30 - 1 // Capped by 4 GB
+	maxMemTableSize := min(4<<30-1, math.MaxInt) // Capped by 4 GB, or by int on 32-bit platforms
 
 	memTableLimit := 2 // default: 2
 	memTableSize := min(cache*1024*1024/2/memTableLimit, maxMemTableSize)

@@ -42,8 +42,8 @@ func getZonesRequest(authToken string) (*http.Request, error) {
 // GetZonesResult is the JSON response for a DNS create request
 type GetZonesResult struct {
 	Success    bool                 `json:"success"`
-	Errors     []interface{}        `json:"errors"`
-	Messages   []interface{}        `json:"messages"`
+	Errors     []any                `json:"errors"`
+	Messages   []any                `json:"messages"`
 	Result     []GetZonesResultItem `json:"result"`
 	ResultInfo GetZonesResultPage   `json:"result_info"`
 }
