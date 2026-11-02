@@ -27,10 +27,9 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// tableHasColumn reports whether tx's table has a column named column. It
-// is used to detect the window_start schema bit (NewReader caches the
-// result on the Reader so the hot path never introspects per read) and to
-// mirror the blocks schema onto catchpointblocks in BlockStartCatchupStaging.
+// tableHasColumn reports whether tx's table has a column named column.
+// NewReader uses it to detect window_start once and caches the result on
+// the Reader, so reads never introspect the schema.
 func tableHasColumn(tx *sql.Tx, table, column string) (bool, error) {
 	rows, err := tx.Query("PRAGMA table_info(" + table + ")")
 	if err != nil {
@@ -106,7 +105,7 @@ func (r *Reader) blockGetEncoded(tx *sql.Tx, rnd basics.Round, blkOnly bool) (bl
 
 // blockGetEncodedWindowed runs the unified windowed SELECT and decodes the
 // result. It requires the blocks table to have the window_start column.
-func blockGetEncodedWindowed(tx *sql.Tx, rnd basics.Round, blkOnly bool) (blk []byte, cert []byte, err error) {
+func blockGetEncodedWindowed(tx *sql.Tx, rnd basics.Round, blkOnly bool) ([]byte, []byte, error) {
 	const queryBlk = `SELECT b.blkdata FROM blocks b,
 	  (SELECT window_start FROM blocks WHERE rnd = ?1) t
 	  WHERE b.rnd >= IFNULL(t.window_start, ?1) AND b.rnd <= ?1
@@ -122,7 +121,7 @@ func blockGetEncodedWindowed(tx *sql.Tx, rnd basics.Round, blkOnly bool) (blk []
 	}
 	rows, err := tx.Query(q, rnd)
 	if err != nil {
-		return
+		return nil, nil, err
 	}
 	defer rows.Close()
 
@@ -135,7 +134,7 @@ func blockGetEncodedWindowed(tx *sql.Tx, rnd basics.Round, blkOnly bool) (blk []
 			err = rows.Scan(&b, &c)
 		}
 		if err != nil {
-			return
+			return nil, nil, err
 		}
 		blkChunks = append(blkChunks, b)
 		if !blkOnly {
@@ -143,46 +142,48 @@ func blockGetEncodedWindowed(tx *sql.Tx, rnd basics.Round, blkOnly bool) (blk []
 		}
 	}
 	if err = rows.Err(); err != nil {
-		return
+		return nil, nil, err
 	}
 	if len(blkChunks) == 0 {
-		err = ledgercore.ErrNoEntry{Round: rnd}
-		return
+		return nil, nil, ledgercore.ErrNoEntry{Round: rnd}
 	}
 
 	if len(blkChunks) == 1 && !isCompressedChunk(blkChunks[0]) {
-		blk = blkChunks[0]
-		if !blkOnly {
-			cert = certChunks[0]
+		if blkOnly {
+			return blkChunks[0], nil, nil
 		}
-		return
+		return blkChunks[0], certChunks[0], nil
 	}
 
-	blk, err = decodeWindow(blkChunks)
+	blk, err := decodeWindow(blkChunks)
 	if err != nil {
-		err = fmt.Errorf("blockdb: decode blkdata at round %d: %w", rnd, err)
-		return
+		return nil, nil, fmt.Errorf("blockdb: decode blkdata at round %d: %w", rnd, err)
 	}
-	if !blkOnly {
-		cert, err = decodeWindow(certChunks)
-		if err != nil {
-			err = fmt.Errorf("blockdb: decode certdata at round %d: %w", rnd, err)
-			return
-		}
+	if blkOnly {
+		return blk, nil, nil
 	}
-	return
+	cert, err := decodeWindow(certChunks)
+	if err != nil {
+		return nil, nil, fmt.Errorf("blockdb: decode certdata at round %d: %w", rnd, err)
+	}
+	return blk, cert, nil
 }
 
 // blockGetEncodedSimple is the pre-compression read path: every row is its
 // own self-contained raw msgp blob, no window decode needed.
-func blockGetEncodedSimple(tx *sql.Tx, rnd basics.Round, blkOnly bool) (blk []byte, cert []byte, err error) {
+func blockGetEncodedSimple(tx *sql.Tx, rnd basics.Round, blkOnly bool) ([]byte, []byte, error) {
+	var blk, cert []byte
+	var err error
 	if blkOnly {
 		err = tx.QueryRow("SELECT blkdata FROM blocks WHERE rnd=?", rnd).Scan(&blk)
 	} else {
 		err = tx.QueryRow("SELECT blkdata, certdata FROM blocks WHERE rnd=?", rnd).Scan(&blk, &cert)
 	}
 	if err == sql.ErrNoRows {
-		err = ledgercore.ErrNoEntry{Round: rnd}
+		return nil, nil, ledgercore.ErrNoEntry{Round: rnd}
 	}
-	return
+	if err != nil {
+		return nil, nil, err
+	}
+	return blk, cert, nil
 }

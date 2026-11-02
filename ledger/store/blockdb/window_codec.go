@@ -102,9 +102,6 @@ func (w *Writer) Codec() WindowCodec { return w.codec }
 // Encoder.Reset releases the underlying C-allocated zstd writer too, so
 // this also serves as the resource-cleanup path.
 func (w *Writer) Reset() {
-	if w == nil {
-		return
-	}
 	w.blk.Reset()
 	w.cert.Reset()
 }
@@ -144,7 +141,7 @@ func (e *Encoder) closeWriter() {
 
 // EncodeRow encodes payload for round r and returns the per-row chunk plus
 // the round that opened the chunk's zstd frame (the anchor). When compression
-// is disabled the chunk is a fresh copy of payload, byte-identical to the
+// is disabled the chunk is payload itself, not a copy, so it matches the
 // pre-compression on-disk layout, and the returned anchor is 0 (the caller
 // will bind window_start to NULL in that case). When compression is active
 // the chunk holds the streaming-zstd delta for r; rows that begin a new frame
@@ -153,7 +150,7 @@ func (e *Encoder) closeWriter() {
 // anchor round of the frame they belong to.
 func (e *Encoder) EncodeRow(r basics.Round, payload []byte) ([]byte, basics.Round, error) {
 	if e.c.Disabled() {
-		return slices.Clone(payload), 0, nil
+		return payload, 0, nil
 	}
 
 	if e.started && r != e.expectedNext {

@@ -836,10 +836,10 @@ func (e P2PHybridConfigError) Error() string {
 // the block database accepts.
 const MaxBlockDBCompressionWindow = 32
 
-// validBlockDBCompressionWindows enumerates the BlockDBCompressionWindow
+// ValidBlockDBCompressionWindows enumerates the BlockDBCompressionWindow
 // values the block database supports. Allowed values are the divisors of
 // MaxBlockDBCompressionWindow.
-var validBlockDBCompressionWindows = []uint64{0, 1, 2, 4, 8, 16, 32}
+var ValidBlockDBCompressionWindows = []uint64{0, 1, 2, 4, 8, 16, 32}
 
 // GetNormalizedBlockDBCompressionWindow returns the supported compression
 // window value nearest to (but not above) the configured
@@ -850,19 +850,19 @@ var validBlockDBCompressionWindows = []uint64{0, 1, 2, 4, 8, 16, 32}
 // VerifiedTranscationsCacheSize in OpenLedger.
 func (cfg Local) GetNormalizedBlockDBCompressionWindow(log logging.Logger) uint64 {
 	raw := cfg.BlockDBCompressionWindow
-	for _, v := range validBlockDBCompressionWindows {
+	for _, v := range ValidBlockDBCompressionWindows {
 		if raw == v {
 			return v
 		}
 	}
 	var picked uint64
-	for _, v := range validBlockDBCompressionWindows {
+	for _, v := range ValidBlockDBCompressionWindows {
 		if v <= raw && v >= picked {
 			picked = v
 		}
 	}
 	log.Warnf("BlockDBCompressionWindow was adjusted from %d to %d (allowed values: %v)",
-		raw, picked, validBlockDBCompressionWindows)
+		raw, picked, ValidBlockDBCompressionWindows)
 	return picked
 }
 

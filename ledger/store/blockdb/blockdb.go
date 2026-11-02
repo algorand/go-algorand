@@ -44,42 +44,20 @@ var blockResetExprs = []string{
 	`DROP TABLE IF EXISTS blocks`,
 }
 
-// addWindowStartColumn applies the ALTER TABLE migration that brings a
-// pre-compression schema up to date on databases created by earlier
-// releases. SQLite has no ADD COLUMN IF NOT EXISTS, and a duplicate-column
-// ALTER is reported as the generic SQLITE_ERROR (its only distinguishing
-// signal is the message text), so we check the table's columns first via
-// PRAGMA table_info. If the table does not exist (PRAGMA returns no rows)
-// the function is a no-op so callers can invoke it unconditionally.
-func addWindowStartColumn(tx *sql.Tx, table string) error {
-	// Determine column presence and table existence in one PRAGMA.
-	rows, err := tx.Query("PRAGMA table_info(" + table + ")")
+// addWindowStartColumn adds the window_start column to a blocks table
+// created by an earlier release. SQLite has no ADD COLUMN IF NOT EXISTS, and
+// a duplicate-column ALTER is reported as the generic SQLITE_ERROR, so check
+// the existing columns first.
+func addWindowStartColumn(tx *sql.Tx) error {
+	has, err := tableHasColumn(tx, "blocks", "window_start")
 	if err != nil {
-		return fmt.Errorf("blockdb: list columns of %s: %w", table, err)
+		return fmt.Errorf("blockdb: list columns of blocks: %w", err)
 	}
-	defer rows.Close()
-	exists := false
-	for rows.Next() {
-		exists = true
-		var cid int
-		var name, typ string
-		var notnull, pk int
-		var dflt sql.NullString
-		if err := rows.Scan(&cid, &name, &typ, &notnull, &dflt, &pk); err != nil {
-			return fmt.Errorf("blockdb: scan column row of %s: %w", table, err)
-		}
-		if name == "window_start" {
-			return nil
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("blockdb: list columns of %s: %w", table, err)
-	}
-	if !exists {
+	if has {
 		return nil
 	}
-	if _, err := tx.Exec("ALTER TABLE " + table + " ADD COLUMN window_start integer"); err != nil {
-		return fmt.Errorf("blockdb: add window_start column to %s: %w", table, err)
+	if _, err := tx.Exec("ALTER TABLE blocks ADD COLUMN window_start integer"); err != nil {
+		return fmt.Errorf("blockdb: add window_start column to blocks: %w", err)
 	}
 	return nil
 }
@@ -96,14 +74,9 @@ func BlockInit(tx *sql.Tx, initBlocks []bookkeeping.Block, window uint64) error 
 	}
 	// Migrate only when compression is enabled. A node that never sets
 	// BlockDBCompressionWindow > 0 leaves the schema bit-identical to
-	// what an earlier release produced. catchpointblocks usually doesn't
-	// exist (no-op); migrating it matters for catchups resumed across an
-	// upgrade where BlockStartCatchupStaging's DROP+CREATE is skipped.
+	// what an earlier release produced.
 	if window > 0 {
-		if err := addWindowStartColumn(tx, "blocks"); err != nil {
-			return err
-		}
-		if err := addWindowStartColumn(tx, "catchpointblocks"); err != nil {
+		if err := addWindowStartColumn(tx); err != nil {
 			return err
 		}
 	}
@@ -387,23 +360,9 @@ func BlockStartCatchupStaging(tx *sql.Tx, blk bookkeeping.Block, cert agreement.
 			return err
 		}
 	}
-	// Mirror the blocks schema. If blocks already has window_start (i.e.
-	// compression is enabled for this DB), catchpointblocks needs it too;
-	// otherwise BlockCompleteCatchup's rename would produce a blocks table
-	// that the windowed BlockPut INSERT can no longer target.
-	hasWS, err := tableHasColumn(tx, "blocks", "window_start")
-	if err != nil {
-		return err
-	}
-	if hasWS {
-		if aerr := addWindowStartColumn(tx, "catchpointblocks"); aerr != nil {
-			return aerr
-		}
-	}
 
 	// insert the top entry to the blocks table.
-	// staging rows are always raw msgp; window_start stays NULL.
-	_, err = tx.Exec("INSERT INTO catchpointblocks (rnd, proto, hdrdata, blkdata, certdata) VALUES (?, ?, ?, ?, ?)",
+	_, err := tx.Exec("INSERT INTO catchpointblocks (rnd, proto, hdrdata, blkdata, certdata) VALUES (?, ?, ?, ?, ?)",
 		blk.Round(),
 		blk.CurrentProtocol,
 		protocol.Encode(&blk.BlockHeader),
@@ -418,6 +377,14 @@ func BlockStartCatchupStaging(tx *sql.Tx, blk bookkeeping.Block, cert agreement.
 
 // BlockCompleteCatchup applies catchpoint caught up blocks
 func BlockCompleteCatchup(tx *sql.Tx) (err error) {
+	// catchpointblocks is created without window_start. If blocks has the
+	// column, add it to the replacement table: a Reader caches
+	// hasWindowStart at NewReader time and may be used after this rename,
+	// and Writer.BlockPut writes window_start when compression is enabled.
+	hasWindowStart, err := tableHasColumn(tx, "blocks", "window_start")
+	if err != nil {
+		return err
+	}
 	_, err = tx.Exec("ALTER TABLE blocks RENAME TO blocks_old")
 	if err != nil {
 		return err
@@ -425,6 +392,12 @@ func BlockCompleteCatchup(tx *sql.Tx) (err error) {
 	_, err = tx.Exec("ALTER TABLE catchpointblocks RENAME TO blocks")
 	if err != nil {
 		return err
+	}
+	if hasWindowStart {
+		err = addWindowStartColumn(tx)
+		if err != nil {
+			return err
+		}
 	}
 	_, err = tx.Exec("DROP TABLE IF EXISTS blocks_old")
 	if err != nil {
@@ -449,7 +422,6 @@ func BlockAbortCatchup(tx *sql.Tx) error {
 // BlockPutStaging store a block into catchpoint staging table
 func BlockPutStaging(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate) (err error) {
 	// insert the new entry
-	// window_start defaults to NULL (raw msgp); catchpoint restore does not use compression.
 	_, err = tx.Exec("INSERT INTO catchpointblocks (rnd, proto, hdrdata, blkdata, certdata) VALUES (?, ?, ?, ?, ?)",
 		blk.Round(),
 		blk.CurrentProtocol,

@@ -256,65 +256,48 @@ func TestBlockDBAddWindowStartMigration(t *testing.T) {
 	checkBlockDB(t, tx, blocks)
 }
 
-// TestBlockDBMigrateCatchpointBlocks verifies that a leftover catchpointblocks
-// table from a partial pre-compression catchpoint catchup is migrated to the new
-// schema on startup. Without this migration, a resume that skips
-// BlockStartCatchupStaging would carry a column-less catchpointblocks all
-// the way through BlockCompleteCatchup and break the post-rename blocks
-// table for subsequent BlockPut calls.
-func TestBlockDBMigrateCatchpointBlocks(t *testing.T) {
+// TestBlockDBCompleteCatchupWindowStart runs a catchpoint catchup and then
+// appends through a Store opened before the catchup, as the ledger's
+// blockQueue does. BlockStartCatchupStaging creates catchpointblocks without
+// window_start, so BlockCompleteCatchup must give the renamed table the same
+// schema as the blocks table it replaces.
+func TestBlockDBCompleteCatchupWindowStart(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := storetesting.DbOpenTest(t, true)
-	storetesting.SetDbLogging(t, dbs)
-	defer dbs.Close()
+	for _, window := range blockDBTestWindows {
+		t.Run(strconv.FormatUint(window, 10), func(t *testing.T) {
+			dbs, _ := storetesting.DbOpenTest(t, true)
+			storetesting.SetDbLogging(t, dbs)
+			defer dbs.Close()
 
-	tx, err := dbs.Wdb.Handle.Begin()
-	require.NoError(t, err)
-	defer tx.Rollback()
+			tx, err := dbs.Wdb.Handle.Begin()
+			require.NoError(t, err)
+			defer tx.Rollback()
 
-	// Pre-compression catchpointblocks schema (no window_start), as a partial
-	// catchup started on an earlier release would have produced.
-	_, err = tx.Exec(`CREATE TABLE catchpointblocks (
-		rnd integer primary key,
-		proto text,
-		hdrdata blob,
-		blkdata blob,
-		certdata blob)`)
-	require.NoError(t, err)
+			require.NoError(t, BlockInit(tx, nil, window))
+			store, err := NewStore(tx, window)
+			require.NoError(t, err)
+			defer store.Close()
 
-	// BlockInit must migrate both blocks and catchpointblocks. The blocks
-	// table is created fresh with the new schema, so this exercises the
-	// "ALTER if exists" branch of addWindowStartColumn against catchpointblocks.
-	require.NoError(t, BlockInit(tx, nil, 4))
+			// Catch up to round 4, staging the tip first and then the
+			// earlier rounds, as the catchpoint catchup service does.
+			blocks := randomInitChain(protocol.ConsensusCurrentVersion, 10)
+			require.NoError(t, BlockStartCatchupStaging(tx, blocks[4].block, blocks[4].cert))
+			for i := 3; i >= 0; i-- {
+				require.NoError(t, BlockPutStaging(tx, blocks[i].block, blocks[i].cert))
+			}
+			require.NoError(t, BlockCompleteCatchup(tx))
 
-	hasCol, err := tableHasColumn(tx, "catchpointblocks", "window_start")
-	require.NoError(t, err)
-	require.True(t, hasCol, "catchpointblocks must have window_start after migration")
+			hasCol, err := tableHasColumn(tx, "blocks", "window_start")
+			require.NoError(t, err)
+			require.Equal(t, window > 0, hasCol)
 
-	// Re-running is a no-op (the column-present branch returns early).
-	require.NoError(t, BlockInit(tx, nil, 4))
-}
-
-// TestBlockDBMigrateCatchpointBlocksNotPresent verifies the migration is a
-// no-op when catchpointblocks does not exist, which is the common case (no
-// catchpoint catchup in progress).
-func TestBlockDBMigrateCatchpointBlocksNotPresent(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	dbs, _ := storetesting.DbOpenTest(t, true)
-	storetesting.SetDbLogging(t, dbs)
-	defer dbs.Close()
-
-	tx, err := dbs.Wdb.Handle.Begin()
-	require.NoError(t, err)
-	defer tx.Rollback()
-
-	require.NoError(t, BlockInit(tx, nil, 0))
-
-	// catchpointblocks must not have been created as a side effect.
-	var n int
-	err = tx.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='catchpointblocks'`).Scan(&n)
-	require.NoError(t, err)
-	require.Equal(t, 0, n)
+			// With window > 0 these rows start a frame at round 5 and, for
+			// N=4, another at round 8, after the raw staged rows.
+			for i := 5; i < len(blocks); i++ {
+				require.NoError(t, store.BlockPut(tx, &blocks[i].block, &blocks[i].cert))
+			}
+			checkBlockDB(t, tx, blocks)
+		})
+	}
 }

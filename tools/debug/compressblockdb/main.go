@@ -47,6 +47,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/store/blockdb"
@@ -89,8 +90,8 @@ func main() {
 		fmt.Fprintln(os.Stderr, "both filenames must end in .sqlite")
 		os.Exit(1)
 	}
-	if !slices.Contains([]uint64{0, 1, 2, 4, 8, 16, 32}, n) {
-		fmt.Fprintf(os.Stderr, "window %d is not a supported value (must be one of 0,1,2,4,8,16,32)\n", n)
+	if !slices.Contains(config.ValidBlockDBCompressionWindows, n) {
+		fmt.Fprintf(os.Stderr, "window %d is not a supported value (must be one of %v)\n", n, config.ValidBlockDBCompressionWindows)
 		os.Exit(1)
 	}
 	if _, err := os.Stat(dst); err == nil {
