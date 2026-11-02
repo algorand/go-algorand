@@ -240,12 +240,8 @@ func decode(raw []byte, t0 timers.Clock[TimeoutType], log serviceLogger) (t time
 	}
 	err = protocol.Decode(raw, &s)
 	if err != nil {
-		log.Warnf("decode (agreement): error decoding retrieved state using msgp (len = %v): %v. Trying reflection", len(raw), err)
-		err = protocol.DecodeReflect(raw, &s)
-		if err != nil {
-			log.Errorf("decode (agreement): error decoding using either reflection or msgp: %v", err)
-			return
-		}
+		log.Errorf("decode (agreement): error decoding retrieved state (len = %v): %v", len(raw), err)
+		return
 	}
 
 	t2, err = t0.Decode(s.Clock)
@@ -255,12 +251,8 @@ func decode(raw []byte, t0 timers.Clock[TimeoutType], log serviceLogger) (t time
 
 	err = protocol.Decode(s.Player, &p2)
 	if err != nil {
-		log.Warnf("decode (agreement): failed to decode Player using msgp (len = %v): %v. Trying reflection", len(s.Player), err)
-		err = protocol.DecodeReflect(s.Player, &p2)
-		if err != nil {
-			log.Errorf("decode (agreement): failed to decode Player using either reflection or msgp: %v", err)
-			return
-		}
+		log.Errorf("decode (agreement): failed to decode Player (len = %v): %v", len(s.Player), err)
+		return
 	}
 	p2.lowestCredentialArrivals = makeCredentialArrivalHistory(dynamicFilterCredentialArrivalHistory)
 	if p2.OldDeadline != 0 {
@@ -270,13 +262,8 @@ func decode(raw []byte, t0 timers.Clock[TimeoutType], log serviceLogger) (t time
 	rr2 = makeRootRouter(p2)
 	err = protocol.Decode(s.Router, &rr2)
 	if err != nil {
-		log.Warnf("decode (agreement): failed to decode Router using msgp (len = %v): %v. Trying reflection", len(s.Router), err)
-		rr2 = makeRootRouter(p2)
-		err = protocol.DecodeReflect(s.Router, &rr2)
-		if err != nil {
-			log.Errorf("decode (agreement): failed to decode Router using either reflection or msgp: %v", err)
-			return
-		}
+		log.Errorf("decode (agreement): failed to decode Router (len = %v): %v", len(s.Router), err)
+		return
 	}
 
 	for i := range s.Actions {
