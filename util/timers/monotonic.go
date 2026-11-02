@@ -17,6 +17,7 @@
 package timers
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/algorand/msgp/msgp"
@@ -78,29 +79,90 @@ func (m *Monotonic[TimeoutType]) TimeoutAt(delta time.Duration, timeoutType Time
 	return tmt.ch
 }
 
-// Encode implements Clock.Encode. It writes the zero point with go-codec's
-// msgpack timestamp extension, which older releases can read, so that a node
-// rolled back to an older release can restore its crash state.
+// encodeWithMsgp is whether Encode writes the clock with MarshalMsg instead of
+// go-codec's msgpack timestamp extension. Decode reads both, so this can be
+// enabled once no node can roll back to a release whose Decode reads only the
+// go-codec timestamp.
+const encodeWithMsgp = false
+
+var _ msgp.Marshaler = (*Monotonic[int])(nil)
+var _ msgp.Unmarshaler = (*Monotonic[int])(nil)
+
+// MarshalMsg implements msgp.Marshaler. It writes the reference point as a
+// msgpack array of its Unix seconds and its nanoseconds within that second.
+// Pending timeouts are not encoded.
+func (m *Monotonic[TimeoutType]) MarshalMsg(b []byte) []byte {
+	b = msgp.AppendArrayHeader(b, 2)
+	b = msgp.AppendInt64(b, m.zero.Unix())
+	return msgp.AppendInt64(b, int64(m.zero.Nanosecond()))
+}
+
+// CanMarshalMsg implements msgp.Marshaler.
+func (m *Monotonic[TimeoutType]) CanMarshalMsg(z any) bool {
+	_, ok := (z).(*Monotonic[TimeoutType])
+	return ok
+}
+
+// UnmarshalMsgWithState implements msgp.Unmarshaler. It reads the MarshalMsg
+// form into a clock with no pending timeouts.
+func (m *Monotonic[TimeoutType]) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) ([]byte, error) {
+	if st.AllowableDepth == 0 {
+		return bts, msgp.ErrMaxDepthExceeded{}
+	}
+	sz, _, bts, err := msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		return bts, err
+	}
+	if sz != 2 {
+		return bts, fmt.Errorf("monotonic clock has %d elements, want 2", sz)
+	}
+	sec, bts, err := msgp.ReadInt64Bytes(bts)
+	if err != nil {
+		return bts, err
+	}
+	nsec, bts, err := msgp.ReadInt64Bytes(bts)
+	if err != nil {
+		return bts, err
+	}
+	if nsec < 0 || nsec >= int64(time.Second) {
+		return bts, fmt.Errorf("monotonic clock has nanoseconds %d out of range", nsec)
+	}
+	*m = Monotonic[TimeoutType]{zero: time.Unix(sec, nsec).UTC()}
+	return bts, nil
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler.
+func (m *Monotonic[TimeoutType]) UnmarshalMsg(bts []byte) ([]byte, error) {
+	return m.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+
+// CanUnmarshalMsg implements msgp.Unmarshaler.
+func (m *Monotonic[TimeoutType]) CanUnmarshalMsg(z any) bool {
+	_, ok := (z).(*Monotonic[TimeoutType])
+	return ok
+}
+
+// Encode implements Clock.Encode; see encodeWithMsgp.
 func (m *Monotonic[TimeoutType]) Encode() []byte {
+	if encodeWithMsgp {
+		return protocol.Encode(m)
+	}
 	return protocol.EncodeReflect(m.zero) //nolint:forbidigo // older releases read only the go-codec time.Time encoding
 }
 
-// Decode implements Clock.Decode. Besides the go-codec timestamp that Encode
-// writes, it accepts msgpack nil for the zero time and an int64 of nanoseconds
-// since the Unix epoch, so that a later release can switch Encode to that form
-// while this release can still read it.
+// Decode implements Clock.Decode. It reads both go-codec's msgpack timestamp
+// and the MarshalMsg form.
 func (m *Monotonic[TimeoutType]) Decode(data []byte) (Clock[TimeoutType], error) {
 	var zero time.Time
 	var err error
 	switch msgp.NextType(data) {
+	case msgp.ArrayType:
+		var c Monotonic[TimeoutType]
+		err = protocol.Decode(data, &c)
+		zero = c.zero
 	case msgp.NilType:
+		// go-codec writes time.Time{} as nil
 		_, err = msgp.ReadNilBytes(data)
-	case msgp.IntType, msgp.UintType:
-		var ns int64
-		ns, _, err = msgp.ReadInt64Bytes(data)
-		if err == nil {
-			zero = time.Unix(0, ns).UTC()
-		}
 	default:
 		err = protocol.DecodeReflect(data, &zero) //nolint:forbidigo // reads the go-codec time.Time encoding
 	}

@@ -17,7 +17,6 @@
 package timers
 
 import (
-	"math"
 	"math/rand"
 	"testing"
 	"time"
@@ -161,9 +160,31 @@ func TestMonotonicEncodeDecode(t *testing.T) {
 	}
 }
 
-// TestMonotonicDecodeFormats checks that Encode still writes the go-codec
-// msgpack timestamp that older releases read, and that Decode reads both that
-// and the int64 nanosecond form.
+// checkEncodeFormats checks that Encode writes the go-codec msgpack timestamp
+// while encodeWithMsgp is unset, that the go-codec timestamp and the MarshalMsg
+// form carry the instant and not the location, and that Decode reads both back
+// to the same instant in UTC.
+func checkEncodeFormats(t require.TestingT, ref time.Time) {
+	c := MakeMonotonicClock[int](ref).(*Monotonic[int])
+	cUTC := MakeMonotonicClock[int](ref.UTC()).(*Monotonic[int])
+
+	legacy := protocol.EncodeReflect(ref)
+	require.Equal(t, legacy, c.Encode(), "encodeWithMsgp is set")
+	require.Equal(t, legacy, protocol.EncodeReflect(ref.UTC()), "%v encodes differently from its UTC form", ref)
+
+	msgpForm := protocol.Encode(c)
+	require.Equal(t, msgp.ArrayType, msgp.NextType(msgpForm))
+	require.Equal(t, msgpForm, protocol.Encode(cUTC), "%v encodes differently from its UTC form", ref)
+
+	for _, data := range [][]byte{legacy, msgpForm} {
+		decoded, err := c.Decode(data)
+		require.NoError(t, err)
+		got := decoded.(*Monotonic[int]).zero
+		require.True(t, ref.Equal(got), "%v decoded as %v from %x", ref, got, data)
+		require.Equal(t, time.UTC, got.Location())
+	}
+}
+
 func TestMonotonicDecodeFormats(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -172,7 +193,7 @@ func TestMonotonicDecodeFormats(t *testing.T) {
 	chatham := time.FixedZone("CHAST", 12*3600+45*60)
 	instant := time.Date(2026, 11, 2, 12, 34, 56, 789, time.UTC)
 
-	// go-codec writes nil for the zero time, a 4 byte payload for whole seconds
+	// go-codec writes nil for time.Time{}, a 4 byte payload for whole seconds
 	// below 2^32, an 8 byte payload for nanoseconds or seconds below 2^34, and a
 	// 12 byte payload for anything else; cover each form and its boundaries.
 	times := []time.Time{
@@ -188,80 +209,63 @@ func TestMonotonicDecodeFormats(t *testing.T) {
 		time.Unix(-1, 0),
 		time.Date(1900, 1, 2, 3, 4, 5, 6, time.UTC),
 		time.Date(2600, 1, 2, 3, 4, 5, 6, time.UTC),
-		// the encodings carry an instant, not a location
 		instant.In(ist),
 		instant.In(pst),
 		instant.In(chatham),
 		time.Now(),
 		time.Now().In(ist),
 	}
-	var m Monotonic[int]
-	for _, zero := range times {
-		legacy := protocol.EncodeReflect(zero)
-		require.Equal(t, legacy, MakeMonotonicClock[int](zero).Encode())
-		require.Equal(t, legacy, protocol.EncodeReflect(zero.UTC()), "%v encodes differently from its UTC form", zero)
-
-		forms := [][]byte{legacy}
-		if zero.IsZero() {
-			forms = append(forms, msgp.AppendNil(nil))
-		} else if fitsUnixNano(zero) {
-			forms = append(forms, msgp.AppendInt64(nil, zero.UnixNano()))
-		}
-
-		for _, data := range forms {
-			c, err := m.Decode(data)
-			require.NoError(t, err)
-			decoded := c.(*Monotonic[int]).zero
-			require.True(t, zero.Equal(decoded), "%v decoded as %v from %x", zero, decoded, data)
-			require.Equal(t, time.UTC, decoded.Location())
-		}
+	for _, ref := range times {
+		checkEncodeFormats(t, ref)
 	}
 }
 
-// fitsUnixNano reports whether t can be written as an int64 of nanoseconds
-// since the Unix epoch, which covers the years 1678 through 2262.
-func fitsUnixNano(t time.Time) bool {
-	return !t.Before(time.Unix(0, math.MinInt64)) && !t.After(time.Unix(0, math.MaxInt64))
-}
-
-// TestMonotonicDecodeFormatsRapid checks the same properties as
-// TestMonotonicDecodeFormats for generated instants and UTC offsets.
 func TestMonotonicDecodeFormatsRapid(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	minNanoSec := time.Unix(0, math.MinInt64).Unix()
-	maxNanoSec := time.Unix(0, math.MaxInt64).Unix()
-	var m Monotonic[int]
 	rapid.Check(t, func(t1 *rapid.T) {
-		// draw seconds near the go-codec payload boundaries and the int64
-		// nanosecond limits, as well as across a wide range
+		// draw seconds near the go-codec payload boundaries and time.Time{}, as
+		// well as across a wide range
 		sec := rapid.OneOf(
 			rapid.Int64Range(-1<<40, 1<<40),
 			rapid.Custom(func(t2 *rapid.T) int64 {
-				base := rapid.SampledFrom([]int64{0, 1 << 32, 1 << 34, minNanoSec, maxNanoSec}).Draw(t2, "base")
+				base := rapid.SampledFrom([]int64{0, 1 << 32, 1 << 34, time.Time{}.Unix()}).Draw(t2, "base")
 				return base + rapid.Int64Range(-2, 2).Draw(t2, "delta")
 			}),
 		).Draw(t1, "sec")
 		nsec := rapid.Int64Range(0, 999999999).Draw(t1, "nsec")
 		offset := rapid.IntRange(-14*3600, 14*3600).Draw(t1, "offset")
-		zero := time.Unix(sec, nsec).In(time.FixedZone("", offset))
-
-		legacy := protocol.EncodeReflect(zero)
-		require.Equal(t1, legacy, MakeMonotonicClock[int](zero).Encode())
-		require.Equal(t1, legacy, protocol.EncodeReflect(zero.UTC()))
-
-		forms := [][]byte{legacy}
-		if fitsUnixNano(zero) {
-			forms = append(forms, msgp.AppendInt64(nil, zero.UnixNano()))
-		}
-		for _, data := range forms {
-			c, err := m.Decode(data)
-			require.NoError(t1, err)
-			decoded := c.(*Monotonic[int]).zero
-			require.True(t1, zero.Equal(decoded), "%v decoded as %v from %x", zero, decoded, data)
-			require.Equal(t1, time.UTC, decoded.Location())
-		}
+		checkEncodeFormats(t1, time.Unix(sec, nsec).In(time.FixedZone("", offset)))
 	})
+}
+
+// TestMonotonicDecodeMsgpErrors checks that Decode rejects malformed
+// MarshalMsg arrays.
+func TestMonotonicDecodeMsgpErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	array := func(elems ...int64) []byte {
+		b := msgp.AppendArrayHeader(nil, uint32(len(elems)))
+		for _, e := range elems {
+			b = msgp.AppendInt64(b, e)
+		}
+		return b
+	}
+	tests := []struct {
+		data []byte
+		err  string
+	}{
+		{array(1700000000), "has 1 elements, want 2"},
+		{array(1700000000, 0, 0), "has 3 elements, want 2"},
+		{array(1700000000, -1), "nanoseconds -1 out of range"},
+		{array(1700000000, int64(time.Second)), "nanoseconds 1000000000 out of range"},
+		{array(1700000000, 0)[:3], "too few bytes"},
+	}
+	var m Monotonic[int]
+	for _, test := range tests {
+		_, err := m.Decode(test.data)
+		require.ErrorContains(t, err, test.err, "%x", test.data)
+	}
 }
 
 func TestTimeoutTypes(t *testing.T) {
