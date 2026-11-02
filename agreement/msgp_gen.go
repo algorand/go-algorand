@@ -625,64 +625,64 @@ func (z *Certificate) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 	var zb0003 int
 	var zb0004 bool
 	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0004 {
+		(*z) = Certificate{}
+	}
+	for zb0003 > 0 {
+		zb0003--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 > 0 {
-			zb0003--
+		switch string(field) {
+		case "rnd":
 			bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Round")
+				err = msgp.WrapError(err, "Round")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "per":
 			{
 				var zb0005 uint64
 				zb0005, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Period")
+					err = msgp.WrapError(err, "Period")
 					return
 				}
 				(*z).Period = period(zb0005)
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "step":
 			{
 				var zb0006 uint64
 				zb0006, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Step")
+					err = msgp.WrapError(err, "Step")
 					return
 				}
 				(*z).Step = step(zb0006)
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "prop":
 			bts, err = (*z).Proposal.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Proposal")
+				err = msgp.WrapError(err, "Proposal")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "vote":
 			var zb0007 int
 			var zb0008 bool
 			zb0007, zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Votes")
+				err = msgp.WrapError(err, "Votes")
 				return
 			}
 			if zb0007 > bounds.MaxVoteThreshold {
 				err = msgp.ErrOverflow(uint64(zb0007), uint64(bounds.MaxVoteThreshold))
-				err = msgp.WrapError(err, "struct-from-array", "Votes")
+				err = msgp.WrapError(err, "Votes")
 				return
 			}
 			if zb0008 {
@@ -695,23 +695,21 @@ func (z *Certificate) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 			for zb0001 := range (*z).Votes {
 				bts, err = (*z).Votes[zb0001].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Votes", zb0001)
+					err = msgp.WrapError(err, "Votes", zb0001)
 					return
 				}
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "eqv":
 			var zb0009 int
 			var zb0010 bool
 			zb0009, zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "EquivocationVotes")
+				err = msgp.WrapError(err, "EquivocationVotes")
 				return
 			}
 			if zb0009 > bounds.MaxVoteThreshold {
 				err = msgp.ErrOverflow(uint64(zb0009), uint64(bounds.MaxVoteThreshold))
-				err = msgp.WrapError(err, "struct-from-array", "EquivocationVotes")
+				err = msgp.WrapError(err, "EquivocationVotes")
 				return
 			}
 			if zb0010 {
@@ -724,126 +722,15 @@ func (z *Certificate) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 			for zb0002 := range (*z).EquivocationVotes {
 				bts, err = (*z).EquivocationVotes[zb0002].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "EquivocationVotes", zb0002)
+					err = msgp.WrapError(err, "EquivocationVotes", zb0002)
 					return
 				}
 			}
-		}
-		if zb0003 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0003)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0004 {
-			(*z) = Certificate{}
-		}
-		for zb0003 > 0 {
-			zb0003--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "rnd":
-				bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Round")
-					return
-				}
-			case "per":
-				{
-					var zb0011 uint64
-					zb0011, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Period")
-						return
-					}
-					(*z).Period = period(zb0011)
-				}
-			case "step":
-				{
-					var zb0012 uint64
-					zb0012, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Step")
-						return
-					}
-					(*z).Step = step(zb0012)
-				}
-			case "prop":
-				bts, err = (*z).Proposal.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Proposal")
-					return
-				}
-			case "vote":
-				var zb0013 int
-				var zb0014 bool
-				zb0013, zb0014, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Votes")
-					return
-				}
-				if zb0013 > bounds.MaxVoteThreshold {
-					err = msgp.ErrOverflow(uint64(zb0013), uint64(bounds.MaxVoteThreshold))
-					err = msgp.WrapError(err, "Votes")
-					return
-				}
-				if zb0014 {
-					(*z).Votes = nil
-				} else if (*z).Votes != nil && cap((*z).Votes) >= zb0013 {
-					(*z).Votes = ((*z).Votes)[:zb0013]
-				} else {
-					(*z).Votes = make([]voteAuthenticator, zb0013)
-				}
-				for zb0001 := range (*z).Votes {
-					bts, err = (*z).Votes[zb0001].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Votes", zb0001)
-						return
-					}
-				}
-			case "eqv":
-				var zb0015 int
-				var zb0016 bool
-				zb0015, zb0016, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "EquivocationVotes")
-					return
-				}
-				if zb0015 > bounds.MaxVoteThreshold {
-					err = msgp.ErrOverflow(uint64(zb0015), uint64(bounds.MaxVoteThreshold))
-					err = msgp.WrapError(err, "EquivocationVotes")
-					return
-				}
-				if zb0016 {
-					(*z).EquivocationVotes = nil
-				} else if (*z).EquivocationVotes != nil && cap((*z).EquivocationVotes) >= zb0015 {
-					(*z).EquivocationVotes = ((*z).EquivocationVotes)[:zb0015]
-				} else {
-					(*z).EquivocationVotes = make([]equivocationVoteAuthenticator, zb0015)
-				}
-				for zb0002 := range (*z).EquivocationVotes {
-					bts, err = (*z).EquivocationVotes[zb0002].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "EquivocationVotes", zb0002)
-						return
-					}
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -922,14 +809,22 @@ func (z *ConsensusVersionView) UnmarshalMsgWithState(bts []byte, st msgp.Unmarsh
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = ConsensusVersionView{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "Err":
 			if msgp.IsNil(bts) {
 				bts, err = msgp.ReadNilBytes(bts)
 				if err != nil {
@@ -944,77 +839,23 @@ func (z *ConsensusVersionView) UnmarshalMsgWithState(bts []byte, st msgp.Unmarsh
 					var zb0003 string
 					zb0003, bts, err = msgp.ReadStringBytes(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "Err")
+						err = msgp.WrapError(err, "Err")
 						return
 					}
 					*(*z).Err = serializableError(zb0003)
 				}
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Version":
 			bts, err = (*z).Version.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Version")
+				err = msgp.WrapError(err, "Version")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = ConsensusVersionView{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "Err":
-				if msgp.IsNil(bts) {
-					bts, err = msgp.ReadNilBytes(bts)
-					if err != nil {
-						return
-					}
-					(*z).Err = nil
-				} else {
-					if (*z).Err == nil {
-						(*z).Err = new(serializableError)
-					}
-					{
-						var zb0004 string
-						zb0004, bts, err = msgp.ReadStringBytes(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "Err")
-							return
-						}
-						*(*z).Err = serializableError(zb0004)
-					}
-				}
-			case "Version":
-				bts, err = (*z).Version.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Version")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -1083,77 +924,42 @@ func (z *Deadline) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o 
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = Deadline{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "Duration":
 			(*z).Duration, bts, err = msgp.ReadDurationBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Duration")
+				err = msgp.WrapError(err, "Duration")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Type":
 			{
 				var zb0003 int8
 				zb0003, bts, err = msgp.ReadInt8Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Type")
+					err = msgp.WrapError(err, "Type")
 					return
 				}
 				(*z).Type = TimeoutType(zb0003)
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = Deadline{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "Duration":
-				(*z).Duration, bts, err = msgp.ReadDurationBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Duration")
-					return
-				}
-			case "Type":
-				{
-					var zb0004 int8
-					zb0004, bts, err = msgp.ReadInt8Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Type")
-						return
-					}
-					(*z).Type = TimeoutType(zb0004)
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -1412,51 +1218,51 @@ func (z *blockAssembler) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalStat
 	var zb0002 int
 	var zb0003 bool
 	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0003 {
+		(*z) = blockAssembler{}
+	}
+	for zb0002 > 0 {
+		zb0002--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0002 > 0 {
-			zb0002--
+		switch string(field) {
+		case "Pipeline":
 			bts, err = (*z).Pipeline.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Pipeline")
+				err = msgp.WrapError(err, "Pipeline")
 				return
 			}
-		}
-		if zb0002 > 0 {
-			zb0002--
+		case "Filled":
 			(*z).Filled, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Filled")
+				err = msgp.WrapError(err, "Filled")
 				return
 			}
-		}
-		if zb0002 > 0 {
-			zb0002--
+		case "Payload":
 			bts, err = (*z).Payload.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Payload")
+				err = msgp.WrapError(err, "Payload")
 				return
 			}
-		}
-		if zb0002 > 0 {
-			zb0002--
+		case "Assembled":
 			(*z).Assembled, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Assembled")
+				err = msgp.WrapError(err, "Assembled")
 				return
 			}
-		}
-		if zb0002 > 0 {
-			zb0002--
+		case "Authenticators":
 			var zb0004 int
 			var zb0005 bool
 			zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Authenticators")
+				err = msgp.WrapError(err, "Authenticators")
 				return
 			}
 			if zb0005 {
@@ -1469,86 +1275,15 @@ func (z *blockAssembler) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalStat
 			for zb0001 := range (*z).Authenticators {
 				bts, err = (*z).Authenticators[zb0001].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Authenticators", zb0001)
+					err = msgp.WrapError(err, "Authenticators", zb0001)
 					return
 				}
 			}
-		}
-		if zb0002 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0002)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0003 {
-			(*z) = blockAssembler{}
-		}
-		for zb0002 > 0 {
-			zb0002--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "Pipeline":
-				bts, err = (*z).Pipeline.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Pipeline")
-					return
-				}
-			case "Filled":
-				(*z).Filled, bts, err = msgp.ReadBoolBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Filled")
-					return
-				}
-			case "Payload":
-				bts, err = (*z).Payload.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Payload")
-					return
-				}
-			case "Assembled":
-				(*z).Assembled, bts, err = msgp.ReadBoolBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Assembled")
-					return
-				}
-			case "Authenticators":
-				var zb0006 int
-				var zb0007 bool
-				zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Authenticators")
-					return
-				}
-				if zb0007 {
-					(*z).Authenticators = nil
-				} else if (*z).Authenticators != nil && cap((*z).Authenticators) >= zb0006 {
-					(*z).Authenticators = ((*z).Authenticators)[:zb0006]
-				} else {
-					(*z).Authenticators = make([]vote, zb0006)
-				}
-				for zb0001 := range (*z).Authenticators {
-					bts, err = (*z).Authenticators[zb0001].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Authenticators", zb0001)
-						return
-					}
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -1656,32 +1391,38 @@ func (z *bundle) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []
 	var zb0003 int
 	var zb0004 bool
 	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0004 {
+		(*z) = bundle{}
+	}
+	for zb0003 > 0 {
+		zb0003--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 > 0 {
-			zb0003--
+		switch string(field) {
+		case "u":
 			bts, err = (*z).U.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "U")
+				err = msgp.WrapError(err, "U")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "vote":
 			var zb0005 int
 			var zb0006 bool
 			zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Votes")
+				err = msgp.WrapError(err, "Votes")
 				return
 			}
 			if zb0005 > bounds.MaxVoteThreshold {
 				err = msgp.ErrOverflow(uint64(zb0005), uint64(bounds.MaxVoteThreshold))
-				err = msgp.WrapError(err, "struct-from-array", "Votes")
+				err = msgp.WrapError(err, "Votes")
 				return
 			}
 			if zb0006 {
@@ -1694,23 +1435,21 @@ func (z *bundle) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []
 			for zb0001 := range (*z).Votes {
 				bts, err = (*z).Votes[zb0001].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Votes", zb0001)
+					err = msgp.WrapError(err, "Votes", zb0001)
 					return
 				}
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "eqv":
 			var zb0007 int
 			var zb0008 bool
 			zb0007, zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "EquivocationVotes")
+				err = msgp.WrapError(err, "EquivocationVotes")
 				return
 			}
 			if zb0007 > bounds.MaxVoteThreshold {
 				err = msgp.ErrOverflow(uint64(zb0007), uint64(bounds.MaxVoteThreshold))
-				err = msgp.WrapError(err, "struct-from-array", "EquivocationVotes")
+				err = msgp.WrapError(err, "EquivocationVotes")
 				return
 			}
 			if zb0008 {
@@ -1723,100 +1462,15 @@ func (z *bundle) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []
 			for zb0002 := range (*z).EquivocationVotes {
 				bts, err = (*z).EquivocationVotes[zb0002].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "EquivocationVotes", zb0002)
+					err = msgp.WrapError(err, "EquivocationVotes", zb0002)
 					return
 				}
 			}
-		}
-		if zb0003 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0003)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0004 {
-			(*z) = bundle{}
-		}
-		for zb0003 > 0 {
-			zb0003--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "u":
-				bts, err = (*z).U.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "U")
-					return
-				}
-			case "vote":
-				var zb0009 int
-				var zb0010 bool
-				zb0009, zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Votes")
-					return
-				}
-				if zb0009 > bounds.MaxVoteThreshold {
-					err = msgp.ErrOverflow(uint64(zb0009), uint64(bounds.MaxVoteThreshold))
-					err = msgp.WrapError(err, "Votes")
-					return
-				}
-				if zb0010 {
-					(*z).Votes = nil
-				} else if (*z).Votes != nil && cap((*z).Votes) >= zb0009 {
-					(*z).Votes = ((*z).Votes)[:zb0009]
-				} else {
-					(*z).Votes = make([]vote, zb0009)
-				}
-				for zb0001 := range (*z).Votes {
-					bts, err = (*z).Votes[zb0001].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Votes", zb0001)
-						return
-					}
-				}
-			case "eqv":
-				var zb0011 int
-				var zb0012 bool
-				zb0011, zb0012, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "EquivocationVotes")
-					return
-				}
-				if zb0011 > bounds.MaxVoteThreshold {
-					err = msgp.ErrOverflow(uint64(zb0011), uint64(bounds.MaxVoteThreshold))
-					err = msgp.WrapError(err, "EquivocationVotes")
-					return
-				}
-				if zb0012 {
-					(*z).EquivocationVotes = nil
-				} else if (*z).EquivocationVotes != nil && cap((*z).EquivocationVotes) >= zb0011 {
-					(*z).EquivocationVotes = ((*z).EquivocationVotes)[:zb0011]
-				} else {
-					(*z).EquivocationVotes = make([]equivocationVote, zb0011)
-				}
-				for zb0002 := range (*z).EquivocationVotes {
-					bts, err = (*z).EquivocationVotes[zb0002].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "EquivocationVotes", zb0002)
-						return
-					}
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -1891,69 +1545,38 @@ func (z *compoundMessage) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSta
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = compoundMessage{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "Vote":
 			bts, err = (*z).Vote.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Vote")
+				err = msgp.WrapError(err, "Vote")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Proposal":
 			bts, err = (*z).Proposal.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Proposal")
+				err = msgp.WrapError(err, "Proposal")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = compoundMessage{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "Vote":
-				bts, err = (*z).Vote.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Vote")
-					return
-				}
-			case "Proposal":
-				bts, err = (*z).Proposal.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Proposal")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -2039,43 +1662,45 @@ func (z *diskState) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o
 	var zb0003 int
 	var zb0004 bool
 	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0004 {
+		(*z) = diskState{}
+	}
+	for zb0003 > 0 {
+		zb0003--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 > 0 {
-			zb0003--
+		switch string(field) {
+		case "Router":
 			(*z).Router, bts, err = msgp.ReadBytesBytes(bts, (*z).Router)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Router")
+				err = msgp.WrapError(err, "Router")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "Player":
 			(*z).Player, bts, err = msgp.ReadBytesBytes(bts, (*z).Player)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Player")
+				err = msgp.WrapError(err, "Player")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "Clock":
 			(*z).Clock, bts, err = msgp.ReadBytesBytes(bts, (*z).Clock)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Clock")
+				err = msgp.WrapError(err, "Clock")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "ActionTypes":
 			var zb0005 int
 			var zb0006 bool
 			zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ActionTypes")
+				err = msgp.WrapError(err, "ActionTypes")
 				return
 			}
 			if zb0006 {
@@ -2090,20 +1715,18 @@ func (z *diskState) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o
 					var zb0007 uint8
 					zb0007, bts, err = msgp.ReadUint8Bytes(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "ActionTypes", zb0001)
+						err = msgp.WrapError(err, "ActionTypes", zb0001)
 						return
 					}
 					(*z).ActionTypes[zb0001] = actionType(zb0007)
 				}
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "Actions":
 			var zb0008 int
 			var zb0009 bool
 			zb0008, zb0009, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Actions")
+				err = msgp.WrapError(err, "Actions")
 				return
 			}
 			if zb0009 {
@@ -2116,106 +1739,15 @@ func (z *diskState) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o
 			for zb0002 := range (*z).Actions {
 				(*z).Actions[zb0002], bts, err = msgp.ReadBytesBytes(bts, (*z).Actions[zb0002])
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Actions", zb0002)
+					err = msgp.WrapError(err, "Actions", zb0002)
 					return
 				}
 			}
-		}
-		if zb0003 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0003)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0004 {
-			(*z) = diskState{}
-		}
-		for zb0003 > 0 {
-			zb0003--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "Router":
-				(*z).Router, bts, err = msgp.ReadBytesBytes(bts, (*z).Router)
-				if err != nil {
-					err = msgp.WrapError(err, "Router")
-					return
-				}
-			case "Player":
-				(*z).Player, bts, err = msgp.ReadBytesBytes(bts, (*z).Player)
-				if err != nil {
-					err = msgp.WrapError(err, "Player")
-					return
-				}
-			case "Clock":
-				(*z).Clock, bts, err = msgp.ReadBytesBytes(bts, (*z).Clock)
-				if err != nil {
-					err = msgp.WrapError(err, "Clock")
-					return
-				}
-			case "ActionTypes":
-				var zb0010 int
-				var zb0011 bool
-				zb0010, zb0011, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "ActionTypes")
-					return
-				}
-				if zb0011 {
-					(*z).ActionTypes = nil
-				} else if (*z).ActionTypes != nil && cap((*z).ActionTypes) >= zb0010 {
-					(*z).ActionTypes = ((*z).ActionTypes)[:zb0010]
-				} else {
-					(*z).ActionTypes = make([]actionType, zb0010)
-				}
-				for zb0001 := range (*z).ActionTypes {
-					{
-						var zb0012 uint8
-						zb0012, bts, err = msgp.ReadUint8Bytes(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "ActionTypes", zb0001)
-							return
-						}
-						(*z).ActionTypes[zb0001] = actionType(zb0012)
-					}
-				}
-			case "Actions":
-				var zb0013 int
-				var zb0014 bool
-				zb0013, zb0014, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Actions")
-					return
-				}
-				if zb0014 {
-					(*z).Actions = nil
-				} else if (*z).Actions != nil && cap((*z).Actions) >= zb0013 {
-					(*z).Actions = ((*z).Actions)[:zb0013]
-				} else {
-					(*z).Actions = make([][]byte, zb0013)
-				}
-				for zb0002 := range (*z).Actions {
-					(*z).Actions[zb0002], bts, err = msgp.ReadBytesBytes(bts, (*z).Actions[zb0002])
-					if err != nil {
-						err = msgp.WrapError(err, "Actions", zb0002)
-						return
-					}
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -2350,66 +1882,64 @@ func (z *equivocationVote) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSt
 	var zb0003 int
 	var zb0004 bool
 	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0004 {
+		(*z) = equivocationVote{}
+	}
+	for zb0003 > 0 {
+		zb0003--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 > 0 {
-			zb0003--
+		switch string(field) {
+		case "snd":
 			bts, err = (*z).Sender.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Sender")
+				err = msgp.WrapError(err, "Sender")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "rnd":
 			bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Round")
+				err = msgp.WrapError(err, "Round")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "per":
 			{
 				var zb0005 uint64
 				zb0005, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Period")
+					err = msgp.WrapError(err, "Period")
 					return
 				}
 				(*z).Period = period(zb0005)
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "step":
 			{
 				var zb0006 uint64
 				zb0006, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Step")
+					err = msgp.WrapError(err, "Step")
 					return
 				}
 				(*z).Step = step(zb0006)
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "cred":
 			bts, err = (*z).Cred.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Cred")
+				err = msgp.WrapError(err, "Cred")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "props":
 			var zb0007 int
 			zb0007, _, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Proposals")
+				err = msgp.WrapError(err, "Proposals")
 				return
 			}
 			if zb0007 > 2 {
@@ -2419,17 +1949,15 @@ func (z *equivocationVote) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSt
 			for zb0001 := 0; zb0001 < zb0007; zb0001++ {
 				bts, err = (*z).Proposals[zb0001].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Proposals", zb0001)
+					err = msgp.WrapError(err, "Proposals", zb0001)
 					return
 				}
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "sigs":
 			var zb0008 int
 			zb0008, _, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Sigs")
+				err = msgp.WrapError(err, "Sigs")
 				return
 			}
 			if zb0008 > 2 {
@@ -2439,114 +1967,15 @@ func (z *equivocationVote) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSt
 			for zb0002 := 0; zb0002 < zb0008; zb0002++ {
 				bts, err = (*z).Sigs[zb0002].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Sigs", zb0002)
+					err = msgp.WrapError(err, "Sigs", zb0002)
 					return
 				}
 			}
-		}
-		if zb0003 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0003)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0004 {
-			(*z) = equivocationVote{}
-		}
-		for zb0003 > 0 {
-			zb0003--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "snd":
-				bts, err = (*z).Sender.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Sender")
-					return
-				}
-			case "rnd":
-				bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Round")
-					return
-				}
-			case "per":
-				{
-					var zb0009 uint64
-					zb0009, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Period")
-						return
-					}
-					(*z).Period = period(zb0009)
-				}
-			case "step":
-				{
-					var zb0010 uint64
-					zb0010, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Step")
-						return
-					}
-					(*z).Step = step(zb0010)
-				}
-			case "cred":
-				bts, err = (*z).Cred.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Cred")
-					return
-				}
-			case "props":
-				var zb0011 int
-				zb0011, _, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Proposals")
-					return
-				}
-				if zb0011 > 2 {
-					err = msgp.ArrayError{Wanted: 2, Got: zb0011}
-					return
-				}
-				for zb0001 := 0; zb0001 < zb0011; zb0001++ {
-					bts, err = (*z).Proposals[zb0001].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Proposals", zb0001)
-						return
-					}
-				}
-			case "sigs":
-				var zb0012 int
-				zb0012, _, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Sigs")
-					return
-				}
-				if zb0012 > 2 {
-					err = msgp.ArrayError{Wanted: 2, Got: zb0012}
-					return
-				}
-				for zb0002 := 0; zb0002 < zb0012; zb0002++ {
-					bts, err = (*z).Sigs[zb0002].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Sigs", zb0002)
-						return
-					}
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -2638,34 +2067,38 @@ func (z *equivocationVoteAuthenticator) UnmarshalMsgWithState(bts []byte, st msg
 	var zb0003 int
 	var zb0004 bool
 	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0004 {
+		(*z) = equivocationVoteAuthenticator{}
+	}
+	for zb0003 > 0 {
+		zb0003--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 > 0 {
-			zb0003--
+		switch string(field) {
+		case "snd":
 			bts, err = (*z).Sender.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Sender")
+				err = msgp.WrapError(err, "Sender")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "cred":
 			bts, err = (*z).Cred.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Cred")
+				err = msgp.WrapError(err, "Cred")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "sig":
 			var zb0005 int
 			zb0005, _, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Sigs")
+				err = msgp.WrapError(err, "Sigs")
 				return
 			}
 			if zb0005 > 2 {
@@ -2675,17 +2108,15 @@ func (z *equivocationVoteAuthenticator) UnmarshalMsgWithState(bts []byte, st msg
 			for zb0001 := 0; zb0001 < zb0005; zb0001++ {
 				bts, err = (*z).Sigs[zb0001].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Sigs", zb0001)
+					err = msgp.WrapError(err, "Sigs", zb0001)
 					return
 				}
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "props":
 			var zb0006 int
 			zb0006, _, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Proposals")
+				err = msgp.WrapError(err, "Proposals")
 				return
 			}
 			if zb0006 > 2 {
@@ -2695,88 +2126,15 @@ func (z *equivocationVoteAuthenticator) UnmarshalMsgWithState(bts []byte, st msg
 			for zb0002 := 0; zb0002 < zb0006; zb0002++ {
 				bts, err = (*z).Proposals[zb0002].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Proposals", zb0002)
+					err = msgp.WrapError(err, "Proposals", zb0002)
 					return
 				}
 			}
-		}
-		if zb0003 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0003)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0004 {
-			(*z) = equivocationVoteAuthenticator{}
-		}
-		for zb0003 > 0 {
-			zb0003--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "snd":
-				bts, err = (*z).Sender.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Sender")
-					return
-				}
-			case "cred":
-				bts, err = (*z).Cred.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Cred")
-					return
-				}
-			case "sig":
-				var zb0007 int
-				zb0007, _, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Sigs")
-					return
-				}
-				if zb0007 > 2 {
-					err = msgp.ArrayError{Wanted: 2, Got: zb0007}
-					return
-				}
-				for zb0001 := 0; zb0001 < zb0007; zb0001++ {
-					bts, err = (*z).Sigs[zb0001].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Sigs", zb0001)
-						return
-					}
-				}
-			case "props":
-				var zb0008 int
-				zb0008, _, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Proposals")
-					return
-				}
-				if zb0008 > 2 {
-					err = msgp.ArrayError{Wanted: 2, Got: zb0008}
-					return
-				}
-				for zb0002 := 0; zb0002 < zb0008; zb0002++ {
-					bts, err = (*z).Proposals[zb0002].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Proposals", zb0002)
-						return
-					}
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -2917,121 +2275,62 @@ func (z *freshnessData) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = freshnessData{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "PlayerRound":
 			bts, err = (*z).PlayerRound.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PlayerRound")
+				err = msgp.WrapError(err, "PlayerRound")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "PlayerPeriod":
 			{
 				var zb0003 uint64
 				zb0003, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "PlayerPeriod")
+					err = msgp.WrapError(err, "PlayerPeriod")
 					return
 				}
 				(*z).PlayerPeriod = period(zb0003)
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "PlayerStep":
 			{
 				var zb0004 uint64
 				zb0004, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "PlayerStep")
+					err = msgp.WrapError(err, "PlayerStep")
 					return
 				}
 				(*z).PlayerStep = step(zb0004)
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "PlayerLastConcluding":
 			{
 				var zb0005 uint64
 				zb0005, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "PlayerLastConcluding")
+					err = msgp.WrapError(err, "PlayerLastConcluding")
 					return
 				}
 				(*z).PlayerLastConcluding = step(zb0005)
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = freshnessData{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "PlayerRound":
-				bts, err = (*z).PlayerRound.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "PlayerRound")
-					return
-				}
-			case "PlayerPeriod":
-				{
-					var zb0006 uint64
-					zb0006, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "PlayerPeriod")
-						return
-					}
-					(*z).PlayerPeriod = period(zb0006)
-				}
-			case "PlayerStep":
-				{
-					var zb0007 uint64
-					zb0007, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "PlayerStep")
-						return
-					}
-					(*z).PlayerStep = step(zb0007)
-				}
-			case "PlayerLastConcluding":
-				{
-					var zb0008 uint64
-					zb0008, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "PlayerLastConcluding")
-						return
-					}
-					(*z).PlayerLastConcluding = step(zb0008)
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -3118,281 +2417,107 @@ func (z *message) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o [
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = message{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "Tag":
 			bts, err = (*z).Tag.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Tag")
+				err = msgp.WrapError(err, "Tag")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Vote":
 			bts, err = (*z).Vote.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Vote")
+				err = msgp.WrapError(err, "Vote")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Proposal":
 			bts, err = (*z).Proposal.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Proposal")
+				err = msgp.WrapError(err, "Proposal")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Bundle":
 			bts, err = (*z).Bundle.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Bundle")
+				err = msgp.WrapError(err, "Bundle")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "UnauthenticatedVote":
 			bts, err = (*z).UnauthenticatedVote.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "UnauthenticatedVote")
+				err = msgp.WrapError(err, "UnauthenticatedVote")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "UnauthenticatedProposal":
 			bts, err = (*z).UnauthenticatedProposal.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "UnauthenticatedProposal")
+				err = msgp.WrapError(err, "UnauthenticatedProposal")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "UnauthenticatedBundle":
 			bts, err = (*z).UnauthenticatedBundle.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "UnauthenticatedBundle")
+				err = msgp.WrapError(err, "UnauthenticatedBundle")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "CompoundMessage":
 			var zb0003 int
 			var zb0004 bool
 			zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
-			if _, ok := err.(msgp.TypeError); ok {
-				zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "CompoundMessage")
-					return
-				}
-				if zb0003 > 0 {
-					zb0003--
-					bts, err = (*z).CompoundMessage.Vote.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "CompoundMessage", "struct-from-array", "Vote")
-						return
-					}
-				}
-				if zb0003 > 0 {
-					zb0003--
-					bts, err = (*z).CompoundMessage.Proposal.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "CompoundMessage", "struct-from-array", "Proposal")
-						return
-					}
-				}
-				if zb0003 > 0 {
-					err = msgp.ErrTooManyArrayFields(zb0003)
-					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "CompoundMessage", "struct-from-array")
-						return
-					}
-				}
-			} else {
-				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "CompoundMessage")
-					return
-				}
-				if zb0004 {
-					(*z).CompoundMessage = compoundMessage{}
-				}
-				for zb0003 > 0 {
-					zb0003--
-					field, bts, err = msgp.ReadMapKeyZC(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "CompoundMessage")
-						return
-					}
-					switch string(field) {
-					case "Vote":
-						bts, err = (*z).CompoundMessage.Vote.UnmarshalMsgWithState(bts, st)
-						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "CompoundMessage", "Vote")
-							return
-						}
-					case "Proposal":
-						bts, err = (*z).CompoundMessage.Proposal.UnmarshalMsgWithState(bts, st)
-						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "CompoundMessage", "Proposal")
-							return
-						}
-					default:
-						err = msgp.ErrNoField(string(field))
-						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "CompoundMessage")
-							return
-						}
-					}
-				}
-			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
+				err = msgp.WrapError(err, "CompoundMessage")
 				return
 			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = message{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if zb0004 {
+				(*z).CompoundMessage = compoundMessage{}
+			}
+			for zb0003 > 0 {
+				zb0003--
+				field, bts, err = msgp.ReadMapKeyZC(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "CompoundMessage")
+					return
+				}
+				switch string(field) {
+				case "Vote":
+					bts, err = (*z).CompoundMessage.Vote.UnmarshalMsgWithState(bts, st)
+					if err != nil {
+						err = msgp.WrapError(err, "CompoundMessage", "Vote")
+						return
+					}
+				case "Proposal":
+					bts, err = (*z).CompoundMessage.Proposal.UnmarshalMsgWithState(bts, st)
+					if err != nil {
+						err = msgp.WrapError(err, "CompoundMessage", "Proposal")
+						return
+					}
+				default:
+					err = msgp.ErrNoField(string(field))
+					if err != nil {
+						err = msgp.WrapError(err, "CompoundMessage")
+						return
+					}
+				}
+			}
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "Tag":
-				bts, err = (*z).Tag.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Tag")
-					return
-				}
-			case "Vote":
-				bts, err = (*z).Vote.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Vote")
-					return
-				}
-			case "Proposal":
-				bts, err = (*z).Proposal.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Proposal")
-					return
-				}
-			case "Bundle":
-				bts, err = (*z).Bundle.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Bundle")
-					return
-				}
-			case "UnauthenticatedVote":
-				bts, err = (*z).UnauthenticatedVote.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "UnauthenticatedVote")
-					return
-				}
-			case "UnauthenticatedProposal":
-				bts, err = (*z).UnauthenticatedProposal.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "UnauthenticatedProposal")
-					return
-				}
-			case "UnauthenticatedBundle":
-				bts, err = (*z).UnauthenticatedBundle.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "UnauthenticatedBundle")
-					return
-				}
-			case "CompoundMessage":
-				var zb0005 int
-				var zb0006 bool
-				zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
-				if _, ok := err.(msgp.TypeError); ok {
-					zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "CompoundMessage")
-						return
-					}
-					if zb0005 > 0 {
-						zb0005--
-						bts, err = (*z).CompoundMessage.Vote.UnmarshalMsgWithState(bts, st)
-						if err != nil {
-							err = msgp.WrapError(err, "CompoundMessage", "struct-from-array", "Vote")
-							return
-						}
-					}
-					if zb0005 > 0 {
-						zb0005--
-						bts, err = (*z).CompoundMessage.Proposal.UnmarshalMsgWithState(bts, st)
-						if err != nil {
-							err = msgp.WrapError(err, "CompoundMessage", "struct-from-array", "Proposal")
-							return
-						}
-					}
-					if zb0005 > 0 {
-						err = msgp.ErrTooManyArrayFields(zb0005)
-						if err != nil {
-							err = msgp.WrapError(err, "CompoundMessage", "struct-from-array")
-							return
-						}
-					}
-				} else {
-					if err != nil {
-						err = msgp.WrapError(err, "CompoundMessage")
-						return
-					}
-					if zb0006 {
-						(*z).CompoundMessage = compoundMessage{}
-					}
-					for zb0005 > 0 {
-						zb0005--
-						field, bts, err = msgp.ReadMapKeyZC(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "CompoundMessage")
-							return
-						}
-						switch string(field) {
-						case "Vote":
-							bts, err = (*z).CompoundMessage.Vote.UnmarshalMsgWithState(bts, st)
-							if err != nil {
-								err = msgp.WrapError(err, "CompoundMessage", "Vote")
-								return
-							}
-						case "Proposal":
-							bts, err = (*z).CompoundMessage.Proposal.UnmarshalMsgWithState(bts, st)
-							if err != nil {
-								err = msgp.WrapError(err, "CompoundMessage", "Proposal")
-								return
-							}
-						default:
-							err = msgp.ErrNoField(string(field))
-							if err != nil {
-								err = msgp.WrapError(err, "CompoundMessage")
-								return
-							}
-						}
-					}
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -3478,34 +2603,38 @@ func (z *messageEvent) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState)
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = messageEvent{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "T":
 			{
 				var zb0003 uint8
 				zb0003, bts, err = msgp.ReadUint8Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "T")
+					err = msgp.WrapError(err, "T")
 					return
 				}
 				(*z).T = eventType(zb0003)
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Input":
 			bts, err = (*z).Input.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Input")
+				err = msgp.WrapError(err, "Input")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Err":
 			if msgp.IsNil(bts) {
 				bts, err = msgp.ReadNilBytes(bts)
 				if err != nil {
@@ -3520,23 +2649,19 @@ func (z *messageEvent) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState)
 					var zb0004 string
 					zb0004, bts, err = msgp.ReadStringBytes(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "Err")
+						err = msgp.WrapError(err, "Err")
 						return
 					}
 					*(*z).Err = serializableError(zb0004)
 				}
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "TaskIndex":
 			(*z).TaskIndex, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "TaskIndex")
+				err = msgp.WrapError(err, "TaskIndex")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Tail":
 			if msgp.IsNil(bts) {
 				bts, err = msgp.ReadNilBytes(bts)
 				if err != nil {
@@ -3549,128 +2674,27 @@ func (z *messageEvent) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState)
 				}
 				bts, err = (*z).Tail.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Tail")
+					err = msgp.WrapError(err, "Tail")
 					return
 				}
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Cancelled":
 			(*z).Cancelled, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Cancelled")
+				err = msgp.WrapError(err, "Cancelled")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Proto":
 			bts, err = (*z).Proto.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Proto")
+				err = msgp.WrapError(err, "Proto")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = messageEvent{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "T":
-				{
-					var zb0005 uint8
-					zb0005, bts, err = msgp.ReadUint8Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "T")
-						return
-					}
-					(*z).T = eventType(zb0005)
-				}
-			case "Input":
-				bts, err = (*z).Input.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Input")
-					return
-				}
-			case "Err":
-				if msgp.IsNil(bts) {
-					bts, err = msgp.ReadNilBytes(bts)
-					if err != nil {
-						return
-					}
-					(*z).Err = nil
-				} else {
-					if (*z).Err == nil {
-						(*z).Err = new(serializableError)
-					}
-					{
-						var zb0006 string
-						zb0006, bts, err = msgp.ReadStringBytes(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "Err")
-							return
-						}
-						*(*z).Err = serializableError(zb0006)
-					}
-				}
-			case "TaskIndex":
-				(*z).TaskIndex, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "TaskIndex")
-					return
-				}
-			case "Tail":
-				if msgp.IsNil(bts) {
-					bts, err = msgp.ReadNilBytes(bts)
-					if err != nil {
-						return
-					}
-					(*z).Tail = nil
-				} else {
-					if (*z).Tail == nil {
-						(*z).Tail = new(messageEvent)
-					}
-					bts, err = (*z).Tail.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Tail")
-						return
-					}
-				}
-			case "Cancelled":
-				(*z).Cancelled, bts, err = msgp.ReadBoolBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Cancelled")
-					return
-				}
-			case "Proto":
-				bts, err = (*z).Proto.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Proto")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -3745,69 +2769,38 @@ func (z *nextThresholdStatusEvent) UnmarshalMsgWithState(bts []byte, st msgp.Unm
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = nextThresholdStatusEvent{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "Bottom":
 			(*z).Bottom, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Bottom")
+				err = msgp.WrapError(err, "Bottom")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Proposal":
 			bts, err = (*z).Proposal.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Proposal")
+				err = msgp.WrapError(err, "Proposal")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = nextThresholdStatusEvent{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "Bottom":
-				(*z).Bottom, bts, err = msgp.ReadBoolBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Bottom")
-					return
-				}
-			case "Proposal":
-				bts, err = (*z).Proposal.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Proposal")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -3955,43 +2948,45 @@ func (z *periodRouter) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState)
 	var zb0003 int
 	var zb0004 bool
 	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0004 {
+		(*z) = periodRouter{}
+	}
+	for zb0003 > 0 {
+		zb0003--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 > 0 {
-			zb0003--
+		switch string(field) {
+		case "ProposalTracker":
 			bts, err = (*z).ProposalTracker.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ProposalTracker")
+				err = msgp.WrapError(err, "ProposalTracker")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "VoteTrackerPeriod":
 			bts, err = (*z).VoteTrackerPeriod.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "VoteTrackerPeriod")
+				err = msgp.WrapError(err, "VoteTrackerPeriod")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "ProposalTrackerContract":
 			bts, err = (*z).ProposalTrackerContract.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ProposalTrackerContract")
+				err = msgp.WrapError(err, "ProposalTrackerContract")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "Children":
 			var zb0005 int
 			var zb0006 bool
 			zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Children")
+				err = msgp.WrapError(err, "Children")
 				return
 			}
 			if zb0006 {
@@ -4005,7 +3000,7 @@ func (z *periodRouter) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState)
 				zb0005--
 				bts, err = zb0001.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Children")
+					err = msgp.WrapError(err, "Children")
 					return
 				}
 				if msgp.IsNil(bts) {
@@ -4020,100 +3015,17 @@ func (z *periodRouter) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState)
 					}
 					bts, err = zb0002.UnmarshalMsgWithState(bts, st)
 					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "Children", zb0001)
+						err = msgp.WrapError(err, "Children", zb0001)
 						return
 					}
 				}
 				(*z).Children[zb0001] = zb0002
 			}
-		}
-		if zb0003 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0003)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0004 {
-			(*z) = periodRouter{}
-		}
-		for zb0003 > 0 {
-			zb0003--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "ProposalTracker":
-				bts, err = (*z).ProposalTracker.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "ProposalTracker")
-					return
-				}
-			case "VoteTrackerPeriod":
-				bts, err = (*z).VoteTrackerPeriod.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "VoteTrackerPeriod")
-					return
-				}
-			case "ProposalTrackerContract":
-				bts, err = (*z).ProposalTrackerContract.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "ProposalTrackerContract")
-					return
-				}
-			case "Children":
-				var zb0007 int
-				var zb0008 bool
-				zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Children")
-					return
-				}
-				if zb0008 {
-					(*z).Children = nil
-				} else if (*z).Children == nil {
-					(*z).Children = make(map[step]*stepRouter, zb0007)
-				}
-				for zb0007 > 0 {
-					var zb0001 step
-					var zb0002 *stepRouter
-					zb0007--
-					bts, err = zb0001.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Children")
-						return
-					}
-					if msgp.IsNil(bts) {
-						bts, err = msgp.ReadNilBytes(bts)
-						if err != nil {
-							return
-						}
-						zb0002 = nil
-					} else {
-						if zb0002 == nil {
-							zb0002 = new(stepRouter)
-						}
-						bts, err = zb0002.UnmarshalMsgWithState(bts, st)
-						if err != nil {
-							err = msgp.WrapError(err, "Children", zb0001)
-							return
-						}
-					}
-					(*z).Children[zb0001] = zb0002
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -4222,191 +3134,92 @@ func (z *player) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = player{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "Round":
 			bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Round")
+				err = msgp.WrapError(err, "Round")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Period":
 			{
 				var zb0003 uint64
 				zb0003, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Period")
+					err = msgp.WrapError(err, "Period")
 					return
 				}
 				(*z).Period = period(zb0003)
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Step":
 			{
 				var zb0004 uint64
 				zb0004, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Step")
+					err = msgp.WrapError(err, "Step")
 					return
 				}
 				(*z).Step = step(zb0004)
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "LastConcluding":
 			{
 				var zb0005 uint64
 				zb0005, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "LastConcluding")
+					err = msgp.WrapError(err, "LastConcluding")
 					return
 				}
 				(*z).LastConcluding = step(zb0005)
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "TimersDeadline":
 			bts, err = (*z).Deadline.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Deadline")
+				err = msgp.WrapError(err, "Deadline")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Deadline":
 			(*z).OldDeadline, bts, err = msgp.ReadDurationBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "OldDeadline")
+				err = msgp.WrapError(err, "OldDeadline")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Napping":
 			(*z).Napping, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Napping")
+				err = msgp.WrapError(err, "Napping")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "FastRecoveryDeadline":
 			(*z).FastRecoveryDeadline, bts, err = msgp.ReadDurationBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "FastRecoveryDeadline")
+				err = msgp.WrapError(err, "FastRecoveryDeadline")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Pending":
 			bts, err = (*z).Pending.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Pending")
+				err = msgp.WrapError(err, "Pending")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = player{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "Round":
-				bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Round")
-					return
-				}
-			case "Period":
-				{
-					var zb0006 uint64
-					zb0006, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Period")
-						return
-					}
-					(*z).Period = period(zb0006)
-				}
-			case "Step":
-				{
-					var zb0007 uint64
-					zb0007, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Step")
-						return
-					}
-					(*z).Step = step(zb0007)
-				}
-			case "LastConcluding":
-				{
-					var zb0008 uint64
-					zb0008, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "LastConcluding")
-						return
-					}
-					(*z).LastConcluding = step(zb0008)
-				}
-			case "TimersDeadline":
-				bts, err = (*z).Deadline.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Deadline")
-					return
-				}
-			case "Deadline":
-				(*z).OldDeadline, bts, err = msgp.ReadDurationBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "OldDeadline")
-					return
-				}
-			case "Napping":
-				(*z).Napping, bts, err = msgp.ReadBoolBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Napping")
-					return
-				}
-			case "FastRecoveryDeadline":
-				(*z).FastRecoveryDeadline, bts, err = msgp.ReadDurationBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "FastRecoveryDeadline")
-					return
-				}
-			case "Pending":
-				bts, err = (*z).Pending.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Pending")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -4840,82 +3653,74 @@ func (z *proposal) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o 
 	var zb0005 int
 	var zb0006 bool
 	zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0006 {
+		(*z) = proposal{}
+	}
+	for zb0005 > 0 {
+		zb0005--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0005 > 0 {
-			zb0005--
+		switch string(field) {
+		case "rnd":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Round.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Round")
+				err = msgp.WrapError(err, "Round")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "prev":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Branch.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Branch")
+				err = msgp.WrapError(err, "Branch")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "prev512":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Branch512.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Branch512")
+				err = msgp.WrapError(err, "Branch512")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "seed":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Seed.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Seed")
+				err = msgp.WrapError(err, "Seed")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "txn":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "NativeSha512_256Commitment")
+				err = msgp.WrapError(err, "NativeSha512_256Commitment")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "txn256":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha256Commitment.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Sha256Commitment")
+				err = msgp.WrapError(err, "Sha256Commitment")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "txn512":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha512Commitment.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Sha512Commitment")
+				err = msgp.WrapError(err, "Sha512Commitment")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "ts":
 			(*z).unauthenticatedProposal.Block.BlockHeader.TimeStamp, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "TimeStamp")
+				err = msgp.WrapError(err, "TimeStamp")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "gen":
 			var zb0007 int
 			zb0007, err = msgp.ReadBytesBytesHeader(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
+				err = msgp.WrapError(err, "GenesisID")
 				return
 			}
 			if zb0007 > bounds.MaxGenesisIDLen {
@@ -4924,182 +3729,140 @@ func (z *proposal) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o 
 			}
 			(*z).unauthenticatedProposal.Block.BlockHeader.GenesisID, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
+				err = msgp.WrapError(err, "GenesisID")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "gh":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.GenesisHash.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "GenesisHash")
+				err = msgp.WrapError(err, "GenesisHash")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "prp":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Proposer.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Proposer")
+				err = msgp.WrapError(err, "Proposer")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "fc":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.FeesCollected.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "FeesCollected")
+				err = msgp.WrapError(err, "FeesCollected")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "bi":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Bonus.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Bonus")
+				err = msgp.WrapError(err, "Bonus")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "pp":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.ProposerPayout.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ProposerPayout")
+				err = msgp.WrapError(err, "ProposerPayout")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "fees":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.FeeSink.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "FeeSink")
+				err = msgp.WrapError(err, "FeeSink")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "rwd":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsPool.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "RewardsPool")
+				err = msgp.WrapError(err, "RewardsPool")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "earn":
 			(*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsLevel, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "RewardsLevel")
+				err = msgp.WrapError(err, "RewardsLevel")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "rate":
 			(*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRate, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "RewardsRate")
+				err = msgp.WrapError(err, "RewardsRate")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "frac":
 			(*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsResidue, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "RewardsResidue")
+				err = msgp.WrapError(err, "RewardsResidue")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "rwcalr":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRecalculationRound.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "RewardsRecalculationRound")
+				err = msgp.WrapError(err, "RewardsRecalculationRound")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "proto":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.CurrentProtocol.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "CurrentProtocol")
+				err = msgp.WrapError(err, "CurrentProtocol")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "nextproto":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocol.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "NextProtocol")
+				err = msgp.WrapError(err, "NextProtocol")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "nextyes":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolApprovals.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "NextProtocolApprovals")
+				err = msgp.WrapError(err, "NextProtocolApprovals")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "nextbefore":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "NextProtocolVoteBefore")
+				err = msgp.WrapError(err, "NextProtocolVoteBefore")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "nextswitch":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "NextProtocolSwitchOn")
+				err = msgp.WrapError(err, "NextProtocolSwitchOn")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "upgradeprop":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradePropose.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "UpgradePropose")
+				err = msgp.WrapError(err, "UpgradePropose")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "upgradedelay":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeDelay.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "UpgradeDelay")
+				err = msgp.WrapError(err, "UpgradeDelay")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "upgradeyes":
 			(*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeApprove, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "UpgradeApprove")
+				err = msgp.WrapError(err, "UpgradeApprove")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "tc":
 			(*z).unauthenticatedProposal.Block.BlockHeader.TxnCounter, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "TxnCounter")
+				err = msgp.WrapError(err, "TxnCounter")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "spt":
 			var zb0008 int
 			var zb0009 bool
 			zb0008, zb0009, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
+				err = msgp.WrapError(err, "StateProofTracking")
 				return
 			}
 			if zb0008 > protocol.NumStateProofTypes {
 				err = msgp.ErrOverflow(uint64(zb0008), uint64(protocol.NumStateProofTypes))
-				err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
+				err = msgp.WrapError(err, "StateProofTracking")
 				return
 			}
 			if zb0009 {
@@ -5113,29 +3876,27 @@ func (z *proposal) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o 
 				zb0008--
 				bts, err = zb0001.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
+					err = msgp.WrapError(err, "StateProofTracking")
 					return
 				}
 				bts, err = zb0002.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking", zb0001)
+					err = msgp.WrapError(err, "StateProofTracking", zb0001)
 					return
 				}
 				(*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking[zb0001] = zb0002
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "partupdrmv":
 			var zb0010 int
 			var zb0011 bool
 			zb0010, zb0011, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts")
+				err = msgp.WrapError(err, "ExpiredParticipationAccounts")
 				return
 			}
 			if zb0010 > bounds.MaxProposedExpiredOnlineAccounts {
 				err = msgp.ErrOverflow(uint64(zb0010), uint64(bounds.MaxProposedExpiredOnlineAccounts))
-				err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts")
+				err = msgp.WrapError(err, "ExpiredParticipationAccounts")
 				return
 			}
 			if zb0011 {
@@ -5148,23 +3909,21 @@ func (z *proposal) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o 
 			for zb0003 := range (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts {
 				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts[zb0003].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts", zb0003)
+					err = msgp.WrapError(err, "ExpiredParticipationAccounts", zb0003)
 					return
 				}
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "partupdabs":
 			var zb0012 int
 			var zb0013 bool
 			zb0012, zb0013, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "AbsentParticipationAccounts")
+				err = msgp.WrapError(err, "AbsentParticipationAccounts")
 				return
 			}
 			if zb0012 > bounds.MaxMarkAbsent {
 				err = msgp.ErrOverflow(uint64(zb0012), uint64(bounds.MaxMarkAbsent))
-				err = msgp.WrapError(err, "struct-from-array", "AbsentParticipationAccounts")
+				err = msgp.WrapError(err, "AbsentParticipationAccounts")
 				return
 			}
 			if zb0013 {
@@ -5177,404 +3936,55 @@ func (z *proposal) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o 
 			for zb0004 := range (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts {
 				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts[zb0004].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "AbsentParticipationAccounts", zb0004)
+					err = msgp.WrapError(err, "AbsentParticipationAccounts", zb0004)
 					return
 				}
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "ld":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Load.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Load")
+				err = msgp.WrapError(err, "Load")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "ct":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.CongestionTax.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "CongestionTax")
+				err = msgp.WrapError(err, "CongestionTax")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "txns":
 			bts, err = (*z).unauthenticatedProposal.Block.Payset.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Payset")
+				err = msgp.WrapError(err, "Payset")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "sdpf":
 			bts, err = (*z).unauthenticatedProposal.SeedProof.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "SeedProof")
+				err = msgp.WrapError(err, "SeedProof")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "oper":
 			{
 				var zb0014 uint64
 				zb0014, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "OriginalPeriod")
+					err = msgp.WrapError(err, "OriginalPeriod")
 					return
 				}
 				(*z).unauthenticatedProposal.OriginalPeriod = period(zb0014)
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "oprop":
 			bts, err = (*z).unauthenticatedProposal.OriginalProposer.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "OriginalProposer")
+				err = msgp.WrapError(err, "OriginalProposer")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0005)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0006 {
-			(*z) = proposal{}
-		}
-		for zb0005 > 0 {
-			zb0005--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "rnd":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Round.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Round")
-					return
-				}
-			case "prev":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Branch.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Branch")
-					return
-				}
-			case "prev512":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Branch512.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Branch512")
-					return
-				}
-			case "seed":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Seed.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Seed")
-					return
-				}
-			case "txn":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "NativeSha512_256Commitment")
-					return
-				}
-			case "txn256":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha256Commitment.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Sha256Commitment")
-					return
-				}
-			case "txn512":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha512Commitment.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Sha512Commitment")
-					return
-				}
-			case "ts":
-				(*z).unauthenticatedProposal.Block.BlockHeader.TimeStamp, bts, err = msgp.ReadInt64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "TimeStamp")
-					return
-				}
-			case "gen":
-				var zb0015 int
-				zb0015, err = msgp.ReadBytesBytesHeader(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "GenesisID")
-					return
-				}
-				if zb0015 > bounds.MaxGenesisIDLen {
-					err = msgp.ErrOverflow(uint64(zb0015), uint64(bounds.MaxGenesisIDLen))
-					return
-				}
-				(*z).unauthenticatedProposal.Block.BlockHeader.GenesisID, bts, err = msgp.ReadStringBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "GenesisID")
-					return
-				}
-			case "gh":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.GenesisHash.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "GenesisHash")
-					return
-				}
-			case "prp":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Proposer.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Proposer")
-					return
-				}
-			case "fc":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.FeesCollected.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "FeesCollected")
-					return
-				}
-			case "bi":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Bonus.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Bonus")
-					return
-				}
-			case "pp":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.ProposerPayout.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "ProposerPayout")
-					return
-				}
-			case "fees":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.FeeSink.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "FeeSink")
-					return
-				}
-			case "rwd":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsPool.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "RewardsPool")
-					return
-				}
-			case "earn":
-				(*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsLevel, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "RewardsLevel")
-					return
-				}
-			case "rate":
-				(*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRate, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "RewardsRate")
-					return
-				}
-			case "frac":
-				(*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsResidue, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "RewardsResidue")
-					return
-				}
-			case "rwcalr":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRecalculationRound.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "RewardsRecalculationRound")
-					return
-				}
-			case "proto":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.CurrentProtocol.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "CurrentProtocol")
-					return
-				}
-			case "nextproto":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocol.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "NextProtocol")
-					return
-				}
-			case "nextyes":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolApprovals.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "NextProtocolApprovals")
-					return
-				}
-			case "nextbefore":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "NextProtocolVoteBefore")
-					return
-				}
-			case "nextswitch":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "NextProtocolSwitchOn")
-					return
-				}
-			case "upgradeprop":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradePropose.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "UpgradePropose")
-					return
-				}
-			case "upgradedelay":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeDelay.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "UpgradeDelay")
-					return
-				}
-			case "upgradeyes":
-				(*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeApprove, bts, err = msgp.ReadBoolBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "UpgradeApprove")
-					return
-				}
-			case "tc":
-				(*z).unauthenticatedProposal.Block.BlockHeader.TxnCounter, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "TxnCounter")
-					return
-				}
-			case "spt":
-				var zb0016 int
-				var zb0017 bool
-				zb0016, zb0017, bts, err = msgp.ReadMapHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "StateProofTracking")
-					return
-				}
-				if zb0016 > protocol.NumStateProofTypes {
-					err = msgp.ErrOverflow(uint64(zb0016), uint64(protocol.NumStateProofTypes))
-					err = msgp.WrapError(err, "StateProofTracking")
-					return
-				}
-				if zb0017 {
-					(*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking = nil
-				} else if (*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking == nil {
-					(*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData, zb0016)
-				}
-				for zb0016 > 0 {
-					var zb0001 protocol.StateProofType
-					var zb0002 bookkeeping.StateProofTrackingData
-					zb0016--
-					bts, err = zb0001.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "StateProofTracking")
-						return
-					}
-					bts, err = zb0002.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "StateProofTracking", zb0001)
-						return
-					}
-					(*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking[zb0001] = zb0002
-				}
-			case "partupdrmv":
-				var zb0018 int
-				var zb0019 bool
-				zb0018, zb0019, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "ExpiredParticipationAccounts")
-					return
-				}
-				if zb0018 > bounds.MaxProposedExpiredOnlineAccounts {
-					err = msgp.ErrOverflow(uint64(zb0018), uint64(bounds.MaxProposedExpiredOnlineAccounts))
-					err = msgp.WrapError(err, "ExpiredParticipationAccounts")
-					return
-				}
-				if zb0019 {
-					(*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts = nil
-				} else if (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts != nil && cap((*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) >= zb0018 {
-					(*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts = ((*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts)[:zb0018]
-				} else {
-					(*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts = make([]basics.Address, zb0018)
-				}
-				for zb0003 := range (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts {
-					bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts[zb0003].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "ExpiredParticipationAccounts", zb0003)
-						return
-					}
-				}
-			case "partupdabs":
-				var zb0020 int
-				var zb0021 bool
-				zb0020, zb0021, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "AbsentParticipationAccounts")
-					return
-				}
-				if zb0020 > bounds.MaxMarkAbsent {
-					err = msgp.ErrOverflow(uint64(zb0020), uint64(bounds.MaxMarkAbsent))
-					err = msgp.WrapError(err, "AbsentParticipationAccounts")
-					return
-				}
-				if zb0021 {
-					(*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts = nil
-				} else if (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts != nil && cap((*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts) >= zb0020 {
-					(*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts = ((*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts)[:zb0020]
-				} else {
-					(*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts = make([]basics.Address, zb0020)
-				}
-				for zb0004 := range (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts {
-					bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts[zb0004].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "AbsentParticipationAccounts", zb0004)
-						return
-					}
-				}
-			case "ld":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Load.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Load")
-					return
-				}
-			case "ct":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.CongestionTax.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "CongestionTax")
-					return
-				}
-			case "txns":
-				bts, err = (*z).unauthenticatedProposal.Block.Payset.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Payset")
-					return
-				}
-			case "sdpf":
-				bts, err = (*z).unauthenticatedProposal.SeedProof.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "SeedProof")
-					return
-				}
-			case "oper":
-				{
-					var zb0022 uint64
-					zb0022, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "OriginalPeriod")
-						return
-					}
-					(*z).unauthenticatedProposal.OriginalPeriod = period(zb0022)
-				}
-			case "oprop":
-				bts, err = (*z).unauthenticatedProposal.OriginalProposer.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "OriginalProposer")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -5663,41 +4073,26 @@ func (z *proposalManager) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSta
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = proposalManager{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = proposalManager{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		switch string(field) {
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -5763,83 +4158,44 @@ func (z *proposalSeeker) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalStat
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = proposalSeeker{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "Lowest":
 			bts, err = (*z).Lowest.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Lowest")
+				err = msgp.WrapError(err, "Lowest")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Filled":
 			(*z).Filled, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Filled")
+				err = msgp.WrapError(err, "Filled")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Frozen":
 			(*z).Frozen, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Frozen")
+				err = msgp.WrapError(err, "Frozen")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = proposalSeeker{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "Lowest":
-				bts, err = (*z).Lowest.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Lowest")
-					return
-				}
-			case "Filled":
-				(*z).Filled, bts, err = msgp.ReadBoolBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Filled")
-					return
-				}
-			case "Frozen":
-				(*z).Frozen, bts, err = msgp.ReadBoolBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Frozen")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -5935,19 +4291,27 @@ func (z *proposalStore) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState
 	var zb0005 int
 	var zb0006 bool
 	zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0006 {
+		(*z) = proposalStore{}
+	}
+	for zb0005 > 0 {
+		zb0005--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0005 > 0 {
-			zb0005--
+		switch string(field) {
+		case "Relevant":
 			var zb0007 int
 			var zb0008 bool
 			zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Relevant")
+				err = msgp.WrapError(err, "Relevant")
 				return
 			}
 			if zb0008 {
@@ -5961,32 +4325,28 @@ func (z *proposalStore) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState
 				zb0007--
 				bts, err = zb0001.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Relevant")
+					err = msgp.WrapError(err, "Relevant")
 					return
 				}
 				bts, err = zb0002.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Relevant", zb0001)
+					err = msgp.WrapError(err, "Relevant", zb0001)
 					return
 				}
 				(*z).Relevant[zb0001] = zb0002
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "Pinned":
 			bts, err = (*z).Pinned.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Pinned")
+				err = msgp.WrapError(err, "Pinned")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "Assemblers":
 			var zb0009 int
 			var zb0010 bool
 			zb0009, zb0010, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Assemblers")
+				err = msgp.WrapError(err, "Assemblers")
 				return
 			}
 			if zb0010 {
@@ -6000,110 +4360,21 @@ func (z *proposalStore) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState
 				zb0009--
 				bts, err = zb0003.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Assemblers")
+					err = msgp.WrapError(err, "Assemblers")
 					return
 				}
 				bts, err = zb0004.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Assemblers", zb0003)
+					err = msgp.WrapError(err, "Assemblers", zb0003)
 					return
 				}
 				(*z).Assemblers[zb0003] = zb0004
 			}
-		}
-		if zb0005 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0005)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0006 {
-			(*z) = proposalStore{}
-		}
-		for zb0005 > 0 {
-			zb0005--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "Relevant":
-				var zb0011 int
-				var zb0012 bool
-				zb0011, zb0012, bts, err = msgp.ReadMapHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Relevant")
-					return
-				}
-				if zb0012 {
-					(*z).Relevant = nil
-				} else if (*z).Relevant == nil {
-					(*z).Relevant = make(map[period]proposalValue, zb0011)
-				}
-				for zb0011 > 0 {
-					var zb0001 period
-					var zb0002 proposalValue
-					zb0011--
-					bts, err = zb0001.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Relevant")
-						return
-					}
-					bts, err = zb0002.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Relevant", zb0001)
-						return
-					}
-					(*z).Relevant[zb0001] = zb0002
-				}
-			case "Pinned":
-				bts, err = (*z).Pinned.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Pinned")
-					return
-				}
-			case "Assemblers":
-				var zb0013 int
-				var zb0014 bool
-				zb0013, zb0014, bts, err = msgp.ReadMapHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Assemblers")
-					return
-				}
-				if zb0014 {
-					(*z).Assemblers = nil
-				} else if (*z).Assemblers == nil {
-					(*z).Assemblers = make(map[proposalValue]blockAssembler, zb0013)
-				}
-				for zb0013 > 0 {
-					var zb0003 proposalValue
-					var zb0004 blockAssembler
-					zb0013--
-					bts, err = zb0003.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Assemblers")
-						return
-					}
-					bts, err = zb0004.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Assemblers", zb0003)
-						return
-					}
-					(*z).Assemblers[zb0003] = zb0004
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -6219,19 +4490,27 @@ func (z *proposalTable) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState
 	var zb0003 int
 	var zb0004 bool
 	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0004 {
+		(*z) = proposalTable{}
+	}
+	for zb0003 > 0 {
+		zb0003--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 > 0 {
-			zb0003--
+		switch string(field) {
+		case "Pending":
 			var zb0005 int
 			var zb0006 bool
 			zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Pending")
+				err = msgp.WrapError(err, "Pending")
 				return
 			}
 			if zb0006 {
@@ -6245,7 +4524,7 @@ func (z *proposalTable) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState
 				zb0005--
 				zb0001, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Pending")
+					err = msgp.WrapError(err, "Pending")
 					return
 				}
 				if msgp.IsNil(bts) {
@@ -6260,96 +4539,23 @@ func (z *proposalTable) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState
 					}
 					bts, err = zb0002.UnmarshalMsgWithState(bts, st)
 					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "Pending", zb0001)
+						err = msgp.WrapError(err, "Pending", zb0001)
 						return
 					}
 				}
 				(*z).Pending[zb0001] = zb0002
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "PendingNext":
 			(*z).PendingNext, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PendingNext")
+				err = msgp.WrapError(err, "PendingNext")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0003)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0004 {
-			(*z) = proposalTable{}
-		}
-		for zb0003 > 0 {
-			zb0003--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "Pending":
-				var zb0007 int
-				var zb0008 bool
-				zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Pending")
-					return
-				}
-				if zb0008 {
-					(*z).Pending = nil
-				} else if (*z).Pending == nil {
-					(*z).Pending = make(map[uint64]*messageEvent, zb0007)
-				}
-				for zb0007 > 0 {
-					var zb0001 uint64
-					var zb0002 *messageEvent
-					zb0007--
-					zb0001, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Pending")
-						return
-					}
-					if msgp.IsNil(bts) {
-						bts, err = msgp.ReadNilBytes(bts)
-						if err != nil {
-							return
-						}
-						zb0002 = nil
-					} else {
-						if zb0002 == nil {
-							zb0002 = new(messageEvent)
-						}
-						bts, err = zb0002.UnmarshalMsgWithState(bts, st)
-						if err != nil {
-							err = msgp.WrapError(err, "Pending", zb0001)
-							return
-						}
-					}
-					(*z).Pending[zb0001] = zb0002
-				}
-			case "PendingNext":
-				(*z).PendingNext, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "PendingNext")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -6444,19 +4650,27 @@ func (z *proposalTracker) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSta
 	var zb0003 int
 	var zb0004 bool
 	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0004 {
+		(*z) = proposalTracker{}
+	}
+	for zb0003 > 0 {
+		zb0003--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 > 0 {
-			zb0003--
+		switch string(field) {
+		case "Duplicate":
 			var zb0005 int
 			var zb0006 bool
 			zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Duplicate")
+				err = msgp.WrapError(err, "Duplicate")
 				return
 			}
 			if zb0006 {
@@ -6470,103 +4684,33 @@ func (z *proposalTracker) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSta
 				zb0005--
 				bts, err = zb0001.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Duplicate")
+					err = msgp.WrapError(err, "Duplicate")
 					return
 				}
 				zb0002, bts, err = msgp.ReadBoolBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Duplicate", zb0001)
+					err = msgp.WrapError(err, "Duplicate", zb0001)
 					return
 				}
 				(*z).Duplicate[zb0001] = zb0002
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "Freezer":
 			bts, err = (*z).Freezer.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Freezer")
+				err = msgp.WrapError(err, "Freezer")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "Staging":
 			bts, err = (*z).Staging.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Staging")
+				err = msgp.WrapError(err, "Staging")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0003)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0004 {
-			(*z) = proposalTracker{}
-		}
-		for zb0003 > 0 {
-			zb0003--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "Duplicate":
-				var zb0007 int
-				var zb0008 bool
-				zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Duplicate")
-					return
-				}
-				if zb0008 {
-					(*z).Duplicate = nil
-				} else if (*z).Duplicate == nil {
-					(*z).Duplicate = make(map[basics.Address]bool, zb0007)
-				}
-				for zb0007 > 0 {
-					var zb0001 basics.Address
-					var zb0002 bool
-					zb0007--
-					bts, err = zb0001.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Duplicate")
-						return
-					}
-					zb0002, bts, err = msgp.ReadBoolBytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Duplicate", zb0001)
-						return
-					}
-					(*z).Duplicate[zb0001] = zb0002
-				}
-			case "Freezer":
-				bts, err = (*z).Freezer.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Freezer")
-					return
-				}
-			case "Staging":
-				bts, err = (*z).Staging.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Staging")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -6644,97 +4788,50 @@ func (z *proposalTrackerContract) UnmarshalMsgWithState(bts []byte, st msgp.Unma
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = proposalTrackerContract{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "SawOneVote":
 			(*z).SawOneVote, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "SawOneVote")
+				err = msgp.WrapError(err, "SawOneVote")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Froze":
 			(*z).Froze, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Froze")
+				err = msgp.WrapError(err, "Froze")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "SawSoftThreshold":
 			(*z).SawSoftThreshold, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "SawSoftThreshold")
+				err = msgp.WrapError(err, "SawSoftThreshold")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "SawCertThreshold":
 			(*z).SawCertThreshold, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "SawCertThreshold")
+				err = msgp.WrapError(err, "SawCertThreshold")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = proposalTrackerContract{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "SawOneVote":
-				(*z).SawOneVote, bts, err = msgp.ReadBoolBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "SawOneVote")
-					return
-				}
-			case "Froze":
-				(*z).Froze, bts, err = msgp.ReadBoolBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Froze")
-					return
-				}
-			case "SawSoftThreshold":
-				(*z).SawSoftThreshold, bts, err = msgp.ReadBoolBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "SawSoftThreshold")
-					return
-				}
-			case "SawCertThreshold":
-				(*z).SawCertThreshold, bts, err = msgp.ReadBoolBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "SawCertThreshold")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -6833,105 +4930,54 @@ func (z *proposalValue) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = proposalValue{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "oper":
 			{
 				var zb0003 uint64
 				zb0003, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "OriginalPeriod")
+					err = msgp.WrapError(err, "OriginalPeriod")
 					return
 				}
 				(*z).OriginalPeriod = period(zb0003)
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "oprop":
 			bts, err = (*z).OriginalProposer.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "OriginalProposer")
+				err = msgp.WrapError(err, "OriginalProposer")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "dig":
 			bts, err = (*z).BlockDigest.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "BlockDigest")
+				err = msgp.WrapError(err, "BlockDigest")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "encdig":
 			bts, err = (*z).EncodingDigest.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "EncodingDigest")
+				err = msgp.WrapError(err, "EncodingDigest")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = proposalValue{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "oper":
-				{
-					var zb0004 uint64
-					zb0004, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "OriginalPeriod")
-						return
-					}
-					(*z).OriginalPeriod = period(zb0004)
-				}
-			case "oprop":
-				bts, err = (*z).OriginalProposer.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "OriginalProposer")
-					return
-				}
-			case "dig":
-				bts, err = (*z).BlockDigest.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "BlockDigest")
-					return
-				}
-			case "encdig":
-				bts, err = (*z).EncodingDigest.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "EncodingDigest")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -7009,27 +5055,33 @@ func (z *proposalVoteCounter) UnmarshalMsgWithState(bts []byte, st msgp.Unmarsha
 	var zb0003 int
 	var zb0004 bool
 	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0004 {
+		(*z) = proposalVoteCounter{}
+	}
+	for zb0003 > 0 {
+		zb0003--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 > 0 {
-			zb0003--
+		switch string(field) {
+		case "Count":
 			(*z).Count, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Count")
+				err = msgp.WrapError(err, "Count")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "Votes":
 			var zb0005 int
 			var zb0006 bool
 			zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Votes")
+				err = msgp.WrapError(err, "Votes")
 				return
 			}
 			if zb0006 {
@@ -7043,81 +5095,21 @@ func (z *proposalVoteCounter) UnmarshalMsgWithState(bts []byte, st msgp.Unmarsha
 				zb0005--
 				bts, err = zb0001.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Votes")
+					err = msgp.WrapError(err, "Votes")
 					return
 				}
 				bts, err = zb0002.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Votes", zb0001)
+					err = msgp.WrapError(err, "Votes", zb0001)
 					return
 				}
 				(*z).Votes[zb0001] = zb0002
 			}
-		}
-		if zb0003 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0003)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0004 {
-			(*z) = proposalVoteCounter{}
-		}
-		for zb0003 > 0 {
-			zb0003--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "Count":
-				(*z).Count, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Count")
-					return
-				}
-			case "Votes":
-				var zb0007 int
-				var zb0008 bool
-				zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Votes")
-					return
-				}
-				if zb0008 {
-					(*z).Votes = nil
-				} else if (*z).Votes == nil {
-					(*z).Votes = make(map[basics.Address]vote, zb0007)
-				}
-				for zb0007 > 0 {
-					var zb0001 basics.Address
-					var zb0002 vote
-					zb0007--
-					bts, err = zb0001.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Votes")
-						return
-					}
-					bts, err = zb0002.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Votes", zb0001)
-						return
-					}
-					(*z).Votes[zb0001] = zb0002
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -7188,69 +5180,38 @@ func (z *proposerSeed) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState)
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = proposerSeed{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "addr":
 			bts, err = (*z).Addr.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Addr")
+				err = msgp.WrapError(err, "Addr")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "vrf":
 			bts, err = (*z).VRF.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "VRF")
+				err = msgp.WrapError(err, "VRF")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = proposerSeed{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "addr":
-				bts, err = (*z).Addr.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Addr")
-					return
-				}
-			case "vrf":
-				bts, err = (*z).VRF.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "VRF")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -7358,127 +5319,64 @@ func (z *rawVote) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o [
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = rawVote{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "snd":
 			bts, err = (*z).Sender.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Sender")
+				err = msgp.WrapError(err, "Sender")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "rnd":
 			bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Round")
+				err = msgp.WrapError(err, "Round")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "per":
 			{
 				var zb0003 uint64
 				zb0003, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Period")
+					err = msgp.WrapError(err, "Period")
 					return
 				}
 				(*z).Period = period(zb0003)
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "step":
 			{
 				var zb0004 uint64
 				zb0004, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Step")
+					err = msgp.WrapError(err, "Step")
 					return
 				}
 				(*z).Step = step(zb0004)
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "prop":
 			bts, err = (*z).Proposal.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Proposal")
+				err = msgp.WrapError(err, "Proposal")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = rawVote{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "snd":
-				bts, err = (*z).Sender.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Sender")
-					return
-				}
-			case "rnd":
-				bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Round")
-					return
-				}
-			case "per":
-				{
-					var zb0005 uint64
-					zb0005, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Period")
-						return
-					}
-					(*z).Period = period(zb0005)
-				}
-			case "step":
-				{
-					var zb0006 uint64
-					zb0006, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Step")
-						return
-					}
-					(*z).Step = step(zb0006)
-				}
-			case "prop":
-				bts, err = (*z).Proposal.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Proposal")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -7565,107 +5463,81 @@ func (z *rootRouter) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (
 	var zb0003 int
 	var zb0004 bool
 	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0004 {
+		(*z) = rootRouter{}
+	}
+	for zb0003 > 0 {
+		zb0003--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 > 0 {
-			zb0003--
+		switch string(field) {
+		case "ProposalManager":
 			var zb0005 int
 			var zb0006 bool
 			zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
-			if _, ok := err.(msgp.TypeError); ok {
-				zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "ProposalManager")
+				return
+			}
+			if zb0006 {
+				(*z).ProposalManager = proposalManager{}
+			}
+			for zb0005 > 0 {
+				zb0005--
+				field, bts, err = msgp.ReadMapKeyZC(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "ProposalManager")
+					err = msgp.WrapError(err, "ProposalManager")
 					return
 				}
-				if zb0005 > 0 {
-					err = msgp.ErrTooManyArrayFields(zb0005)
+				switch string(field) {
+				default:
+					err = msgp.ErrNoField(string(field))
 					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "ProposalManager", "struct-from-array")
+						err = msgp.WrapError(err, "ProposalManager")
 						return
-					}
-				}
-			} else {
-				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "ProposalManager")
-					return
-				}
-				if zb0006 {
-					(*z).ProposalManager = proposalManager{}
-				}
-				for zb0005 > 0 {
-					zb0005--
-					field, bts, err = msgp.ReadMapKeyZC(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "ProposalManager")
-						return
-					}
-					switch string(field) {
-					default:
-						err = msgp.ErrNoField(string(field))
-						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "ProposalManager")
-							return
-						}
 					}
 				}
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "VoteAggregator":
 			var zb0007 int
 			var zb0008 bool
 			zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
-			if _, ok := err.(msgp.TypeError); ok {
-				zb0007, zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "VoteAggregator")
+				return
+			}
+			if zb0008 {
+				(*z).VoteAggregator = voteAggregator{}
+			}
+			for zb0007 > 0 {
+				zb0007--
+				field, bts, err = msgp.ReadMapKeyZC(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "VoteAggregator")
+					err = msgp.WrapError(err, "VoteAggregator")
 					return
 				}
-				if zb0007 > 0 {
-					err = msgp.ErrTooManyArrayFields(zb0007)
+				switch string(field) {
+				default:
+					err = msgp.ErrNoField(string(field))
 					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "VoteAggregator", "struct-from-array")
+						err = msgp.WrapError(err, "VoteAggregator")
 						return
-					}
-				}
-			} else {
-				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "VoteAggregator")
-					return
-				}
-				if zb0008 {
-					(*z).VoteAggregator = voteAggregator{}
-				}
-				for zb0007 > 0 {
-					zb0007--
-					field, bts, err = msgp.ReadMapKeyZC(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "VoteAggregator")
-						return
-					}
-					switch string(field) {
-					default:
-						err = msgp.ErrNoField(string(field))
-						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "VoteAggregator")
-							return
-						}
 					}
 				}
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "Children":
 			var zb0009 int
 			var zb0010 bool
 			zb0009, zb0010, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Children")
+				err = msgp.WrapError(err, "Children")
 				return
 			}
 			if zb0010 {
@@ -7679,7 +5551,7 @@ func (z *rootRouter) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (
 				zb0009--
 				bts, err = zb0001.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Children")
+					err = msgp.WrapError(err, "Children")
 					return
 				}
 				if msgp.IsNil(bts) {
@@ -7694,166 +5566,17 @@ func (z *rootRouter) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (
 					}
 					bts, err = zb0002.UnmarshalMsgWithState(bts, st)
 					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "Children", zb0001)
+						err = msgp.WrapError(err, "Children", zb0001)
 						return
 					}
 				}
 				(*z).Children[zb0001] = zb0002
 			}
-		}
-		if zb0003 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0003)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0004 {
-			(*z) = rootRouter{}
-		}
-		for zb0003 > 0 {
-			zb0003--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "ProposalManager":
-				var zb0011 int
-				var zb0012 bool
-				zb0011, zb0012, bts, err = msgp.ReadMapHeaderBytes(bts)
-				if _, ok := err.(msgp.TypeError); ok {
-					zb0011, zb0012, bts, err = msgp.ReadArrayHeaderBytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "ProposalManager")
-						return
-					}
-					if zb0011 > 0 {
-						err = msgp.ErrTooManyArrayFields(zb0011)
-						if err != nil {
-							err = msgp.WrapError(err, "ProposalManager", "struct-from-array")
-							return
-						}
-					}
-				} else {
-					if err != nil {
-						err = msgp.WrapError(err, "ProposalManager")
-						return
-					}
-					if zb0012 {
-						(*z).ProposalManager = proposalManager{}
-					}
-					for zb0011 > 0 {
-						zb0011--
-						field, bts, err = msgp.ReadMapKeyZC(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "ProposalManager")
-							return
-						}
-						switch string(field) {
-						default:
-							err = msgp.ErrNoField(string(field))
-							if err != nil {
-								err = msgp.WrapError(err, "ProposalManager")
-								return
-							}
-						}
-					}
-				}
-			case "VoteAggregator":
-				var zb0013 int
-				var zb0014 bool
-				zb0013, zb0014, bts, err = msgp.ReadMapHeaderBytes(bts)
-				if _, ok := err.(msgp.TypeError); ok {
-					zb0013, zb0014, bts, err = msgp.ReadArrayHeaderBytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "VoteAggregator")
-						return
-					}
-					if zb0013 > 0 {
-						err = msgp.ErrTooManyArrayFields(zb0013)
-						if err != nil {
-							err = msgp.WrapError(err, "VoteAggregator", "struct-from-array")
-							return
-						}
-					}
-				} else {
-					if err != nil {
-						err = msgp.WrapError(err, "VoteAggregator")
-						return
-					}
-					if zb0014 {
-						(*z).VoteAggregator = voteAggregator{}
-					}
-					for zb0013 > 0 {
-						zb0013--
-						field, bts, err = msgp.ReadMapKeyZC(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "VoteAggregator")
-							return
-						}
-						switch string(field) {
-						default:
-							err = msgp.ErrNoField(string(field))
-							if err != nil {
-								err = msgp.WrapError(err, "VoteAggregator")
-								return
-							}
-						}
-					}
-				}
-			case "Children":
-				var zb0015 int
-				var zb0016 bool
-				zb0015, zb0016, bts, err = msgp.ReadMapHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Children")
-					return
-				}
-				if zb0016 {
-					(*z).Children = nil
-				} else if (*z).Children == nil {
-					(*z).Children = make(map[round]*roundRouter, zb0015)
-				}
-				for zb0015 > 0 {
-					var zb0001 basics.Round
-					var zb0002 *roundRouter
-					zb0015--
-					bts, err = zb0001.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Children")
-						return
-					}
-					if msgp.IsNil(bts) {
-						bts, err = msgp.ReadNilBytes(bts)
-						if err != nil {
-							return
-						}
-						zb0002 = nil
-					} else {
-						if zb0002 == nil {
-							zb0002 = new(roundRouter)
-						}
-						bts, err = zb0002.UnmarshalMsgWithState(bts, st)
-						if err != nil {
-							err = msgp.WrapError(err, "Children", zb0001)
-							return
-						}
-					}
-					(*z).Children[zb0001] = zb0002
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -7957,99 +5680,72 @@ func (z *roundRouter) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 	var zb0003 int
 	var zb0004 bool
 	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0004 {
+		(*z) = roundRouter{}
+	}
+	for zb0003 > 0 {
+		zb0003--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 > 0 {
-			zb0003--
+		switch string(field) {
+		case "ProposalStore":
 			bts, err = (*z).ProposalStore.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ProposalStore")
+				err = msgp.WrapError(err, "ProposalStore")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "VoteTrackerRound":
 			var zb0005 int
 			var zb0006 bool
 			zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
-			if _, ok := err.(msgp.TypeError); ok {
-				zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "VoteTrackerRound")
+				return
+			}
+			if zb0006 {
+				(*z).VoteTrackerRound = voteTrackerRound{}
+			}
+			for zb0005 > 0 {
+				zb0005--
+				field, bts, err = msgp.ReadMapKeyZC(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "VoteTrackerRound")
+					err = msgp.WrapError(err, "VoteTrackerRound")
 					return
 				}
-				if zb0005 > 0 {
-					zb0005--
+				switch string(field) {
+				case "Freshest":
 					bts, err = (*z).VoteTrackerRound.Freshest.UnmarshalMsgWithState(bts, st)
 					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "VoteTrackerRound", "struct-from-array", "Freshest")
+						err = msgp.WrapError(err, "VoteTrackerRound", "Freshest")
 						return
 					}
-				}
-				if zb0005 > 0 {
-					zb0005--
+				case "Ok":
 					(*z).VoteTrackerRound.Ok, bts, err = msgp.ReadBoolBytes(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "VoteTrackerRound", "struct-from-array", "Ok")
+						err = msgp.WrapError(err, "VoteTrackerRound", "Ok")
 						return
 					}
-				}
-				if zb0005 > 0 {
-					err = msgp.ErrTooManyArrayFields(zb0005)
+				default:
+					err = msgp.ErrNoField(string(field))
 					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "VoteTrackerRound", "struct-from-array")
+						err = msgp.WrapError(err, "VoteTrackerRound")
 						return
-					}
-				}
-			} else {
-				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "VoteTrackerRound")
-					return
-				}
-				if zb0006 {
-					(*z).VoteTrackerRound = voteTrackerRound{}
-				}
-				for zb0005 > 0 {
-					zb0005--
-					field, bts, err = msgp.ReadMapKeyZC(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "VoteTrackerRound")
-						return
-					}
-					switch string(field) {
-					case "Freshest":
-						bts, err = (*z).VoteTrackerRound.Freshest.UnmarshalMsgWithState(bts, st)
-						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "VoteTrackerRound", "Freshest")
-							return
-						}
-					case "Ok":
-						(*z).VoteTrackerRound.Ok, bts, err = msgp.ReadBoolBytes(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "VoteTrackerRound", "Ok")
-							return
-						}
-					default:
-						err = msgp.ErrNoField(string(field))
-						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "VoteTrackerRound")
-							return
-						}
 					}
 				}
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "Children":
 			var zb0007 int
 			var zb0008 bool
 			zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Children")
+				err = msgp.WrapError(err, "Children")
 				return
 			}
 			if zb0008 {
@@ -8063,7 +5759,7 @@ func (z *roundRouter) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 				zb0007--
 				bts, err = zb0001.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Children")
+					err = msgp.WrapError(err, "Children")
 					return
 				}
 				if msgp.IsNil(bts) {
@@ -8078,158 +5774,17 @@ func (z *roundRouter) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 					}
 					bts, err = zb0002.UnmarshalMsgWithState(bts, st)
 					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "Children", zb0001)
+						err = msgp.WrapError(err, "Children", zb0001)
 						return
 					}
 				}
 				(*z).Children[zb0001] = zb0002
 			}
-		}
-		if zb0003 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0003)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0004 {
-			(*z) = roundRouter{}
-		}
-		for zb0003 > 0 {
-			zb0003--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "ProposalStore":
-				bts, err = (*z).ProposalStore.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "ProposalStore")
-					return
-				}
-			case "VoteTrackerRound":
-				var zb0009 int
-				var zb0010 bool
-				zb0009, zb0010, bts, err = msgp.ReadMapHeaderBytes(bts)
-				if _, ok := err.(msgp.TypeError); ok {
-					zb0009, zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "VoteTrackerRound")
-						return
-					}
-					if zb0009 > 0 {
-						zb0009--
-						bts, err = (*z).VoteTrackerRound.Freshest.UnmarshalMsgWithState(bts, st)
-						if err != nil {
-							err = msgp.WrapError(err, "VoteTrackerRound", "struct-from-array", "Freshest")
-							return
-						}
-					}
-					if zb0009 > 0 {
-						zb0009--
-						(*z).VoteTrackerRound.Ok, bts, err = msgp.ReadBoolBytes(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "VoteTrackerRound", "struct-from-array", "Ok")
-							return
-						}
-					}
-					if zb0009 > 0 {
-						err = msgp.ErrTooManyArrayFields(zb0009)
-						if err != nil {
-							err = msgp.WrapError(err, "VoteTrackerRound", "struct-from-array")
-							return
-						}
-					}
-				} else {
-					if err != nil {
-						err = msgp.WrapError(err, "VoteTrackerRound")
-						return
-					}
-					if zb0010 {
-						(*z).VoteTrackerRound = voteTrackerRound{}
-					}
-					for zb0009 > 0 {
-						zb0009--
-						field, bts, err = msgp.ReadMapKeyZC(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "VoteTrackerRound")
-							return
-						}
-						switch string(field) {
-						case "Freshest":
-							bts, err = (*z).VoteTrackerRound.Freshest.UnmarshalMsgWithState(bts, st)
-							if err != nil {
-								err = msgp.WrapError(err, "VoteTrackerRound", "Freshest")
-								return
-							}
-						case "Ok":
-							(*z).VoteTrackerRound.Ok, bts, err = msgp.ReadBoolBytes(bts)
-							if err != nil {
-								err = msgp.WrapError(err, "VoteTrackerRound", "Ok")
-								return
-							}
-						default:
-							err = msgp.ErrNoField(string(field))
-							if err != nil {
-								err = msgp.WrapError(err, "VoteTrackerRound")
-								return
-							}
-						}
-					}
-				}
-			case "Children":
-				var zb0011 int
-				var zb0012 bool
-				zb0011, zb0012, bts, err = msgp.ReadMapHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Children")
-					return
-				}
-				if zb0012 {
-					(*z).Children = nil
-				} else if (*z).Children == nil {
-					(*z).Children = make(map[period]*periodRouter, zb0011)
-				}
-				for zb0011 > 0 {
-					var zb0001 period
-					var zb0002 *periodRouter
-					zb0011--
-					bts, err = zb0001.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Children")
-						return
-					}
-					if msgp.IsNil(bts) {
-						bts, err = msgp.ReadNilBytes(bts)
-						if err != nil {
-							return
-						}
-						zb0002 = nil
-					} else {
-						if zb0002 == nil {
-							zb0002 = new(periodRouter)
-						}
-						bts, err = zb0002.UnmarshalMsgWithState(bts, st)
-						if err != nil {
-							err = msgp.WrapError(err, "Children", zb0001)
-							return
-						}
-					}
-					(*z).Children[zb0001] = zb0002
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -8305,69 +5860,38 @@ func (z *seedInput) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = seedInput{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "alpha":
 			bts, err = (*z).Alpha.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Alpha")
+				err = msgp.WrapError(err, "Alpha")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "hist":
 			bts, err = (*z).History.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "History")
+				err = msgp.WrapError(err, "History")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = seedInput{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "alpha":
-				bts, err = (*z).Alpha.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Alpha")
-					return
-				}
-			case "hist":
-				bts, err = (*z).History.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "History")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -8436,113 +5960,58 @@ func (z *selector) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o 
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = selector{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "seed":
 			bts, err = (*z).Seed.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Seed")
+				err = msgp.WrapError(err, "Seed")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "rnd":
 			bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Round")
+				err = msgp.WrapError(err, "Round")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "per":
 			{
 				var zb0003 uint64
 				zb0003, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Period")
+					err = msgp.WrapError(err, "Period")
 					return
 				}
 				(*z).Period = period(zb0003)
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "step":
 			{
 				var zb0004 uint64
 				zb0004, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Step")
+					err = msgp.WrapError(err, "Step")
 					return
 				}
 				(*z).Step = step(zb0004)
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = selector{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "seed":
-				bts, err = (*z).Seed.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Seed")
-					return
-				}
-			case "rnd":
-				bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Round")
-					return
-				}
-			case "per":
-				{
-					var zb0005 uint64
-					zb0005, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Period")
-						return
-					}
-					(*z).Period = period(zb0005)
-				}
-			case "step":
-				{
-					var zb0006 uint64
-					zb0006, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Step")
-						return
-					}
-					(*z).Step = step(zb0006)
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -8724,69 +6193,38 @@ func (z *stepRouter) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = stepRouter{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "VoteTracker":
 			bts, err = (*z).VoteTracker.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "VoteTracker")
+				err = msgp.WrapError(err, "VoteTracker")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "VoteTrackerContract":
 			bts, err = (*z).VoteTrackerContract.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "VoteTrackerContract")
+				err = msgp.WrapError(err, "VoteTrackerContract")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = stepRouter{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "VoteTracker":
-				bts, err = (*z).VoteTracker.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "VoteTracker")
-					return
-				}
-			case "VoteTrackerContract":
-				bts, err = (*z).VoteTrackerContract.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "VoteTrackerContract")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -8864,163 +6302,80 @@ func (z *thresholdEvent) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalStat
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = thresholdEvent{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "T":
 			{
 				var zb0003 uint8
 				zb0003, bts, err = msgp.ReadUint8Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "T")
+					err = msgp.WrapError(err, "T")
 					return
 				}
 				(*z).T = eventType(zb0003)
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Round":
 			bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Round")
+				err = msgp.WrapError(err, "Round")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Period":
 			{
 				var zb0004 uint64
 				zb0004, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Period")
+					err = msgp.WrapError(err, "Period")
 					return
 				}
 				(*z).Period = period(zb0004)
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Step":
 			{
 				var zb0005 uint64
 				zb0005, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Step")
+					err = msgp.WrapError(err, "Step")
 					return
 				}
 				(*z).Step = step(zb0005)
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Proposal":
 			bts, err = (*z).Proposal.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Proposal")
+				err = msgp.WrapError(err, "Proposal")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Bundle":
 			bts, err = (*z).Bundle.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Bundle")
+				err = msgp.WrapError(err, "Bundle")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Proto":
 			bts, err = (*z).Proto.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Proto")
+				err = msgp.WrapError(err, "Proto")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = thresholdEvent{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "T":
-				{
-					var zb0006 uint8
-					zb0006, bts, err = msgp.ReadUint8Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "T")
-						return
-					}
-					(*z).T = eventType(zb0006)
-				}
-			case "Round":
-				bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Round")
-					return
-				}
-			case "Period":
-				{
-					var zb0007 uint64
-					zb0007, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Period")
-						return
-					}
-					(*z).Period = period(zb0007)
-				}
-			case "Step":
-				{
-					var zb0008 uint64
-					zb0008, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Step")
-						return
-					}
-					(*z).Step = step(zb0008)
-				}
-			case "Proposal":
-				bts, err = (*z).Proposal.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Proposal")
-					return
-				}
-			case "Bundle":
-				bts, err = (*z).Bundle.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Bundle")
-					return
-				}
-			case "Proto":
-				bts, err = (*z).Proto.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Proto")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -9463,82 +6818,74 @@ func (z *transmittedPayload) UnmarshalMsgWithState(bts []byte, st msgp.Unmarshal
 	var zb0005 int
 	var zb0006 bool
 	zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0006 {
+		(*z) = transmittedPayload{}
+	}
+	for zb0005 > 0 {
+		zb0005--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0005 > 0 {
-			zb0005--
+		switch string(field) {
+		case "rnd":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Round.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Round")
+				err = msgp.WrapError(err, "Round")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "prev":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Branch.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Branch")
+				err = msgp.WrapError(err, "Branch")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "prev512":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Branch512.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Branch512")
+				err = msgp.WrapError(err, "Branch512")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "seed":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Seed.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Seed")
+				err = msgp.WrapError(err, "Seed")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "txn":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "NativeSha512_256Commitment")
+				err = msgp.WrapError(err, "NativeSha512_256Commitment")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "txn256":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha256Commitment.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Sha256Commitment")
+				err = msgp.WrapError(err, "Sha256Commitment")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "txn512":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha512Commitment.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Sha512Commitment")
+				err = msgp.WrapError(err, "Sha512Commitment")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "ts":
 			(*z).unauthenticatedProposal.Block.BlockHeader.TimeStamp, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "TimeStamp")
+				err = msgp.WrapError(err, "TimeStamp")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "gen":
 			var zb0007 int
 			zb0007, err = msgp.ReadBytesBytesHeader(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
+				err = msgp.WrapError(err, "GenesisID")
 				return
 			}
 			if zb0007 > bounds.MaxGenesisIDLen {
@@ -9547,182 +6894,140 @@ func (z *transmittedPayload) UnmarshalMsgWithState(bts []byte, st msgp.Unmarshal
 			}
 			(*z).unauthenticatedProposal.Block.BlockHeader.GenesisID, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
+				err = msgp.WrapError(err, "GenesisID")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "gh":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.GenesisHash.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "GenesisHash")
+				err = msgp.WrapError(err, "GenesisHash")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "prp":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Proposer.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Proposer")
+				err = msgp.WrapError(err, "Proposer")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "fc":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.FeesCollected.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "FeesCollected")
+				err = msgp.WrapError(err, "FeesCollected")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "bi":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Bonus.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Bonus")
+				err = msgp.WrapError(err, "Bonus")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "pp":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.ProposerPayout.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ProposerPayout")
+				err = msgp.WrapError(err, "ProposerPayout")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "fees":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.FeeSink.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "FeeSink")
+				err = msgp.WrapError(err, "FeeSink")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "rwd":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsPool.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "RewardsPool")
+				err = msgp.WrapError(err, "RewardsPool")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "earn":
 			(*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsLevel, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "RewardsLevel")
+				err = msgp.WrapError(err, "RewardsLevel")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "rate":
 			(*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRate, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "RewardsRate")
+				err = msgp.WrapError(err, "RewardsRate")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "frac":
 			(*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsResidue, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "RewardsResidue")
+				err = msgp.WrapError(err, "RewardsResidue")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "rwcalr":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRecalculationRound.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "RewardsRecalculationRound")
+				err = msgp.WrapError(err, "RewardsRecalculationRound")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "proto":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.CurrentProtocol.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "CurrentProtocol")
+				err = msgp.WrapError(err, "CurrentProtocol")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "nextproto":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocol.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "NextProtocol")
+				err = msgp.WrapError(err, "NextProtocol")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "nextyes":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolApprovals.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "NextProtocolApprovals")
+				err = msgp.WrapError(err, "NextProtocolApprovals")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "nextbefore":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "NextProtocolVoteBefore")
+				err = msgp.WrapError(err, "NextProtocolVoteBefore")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "nextswitch":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "NextProtocolSwitchOn")
+				err = msgp.WrapError(err, "NextProtocolSwitchOn")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "upgradeprop":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradePropose.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "UpgradePropose")
+				err = msgp.WrapError(err, "UpgradePropose")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "upgradedelay":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeDelay.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "UpgradeDelay")
+				err = msgp.WrapError(err, "UpgradeDelay")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "upgradeyes":
 			(*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeApprove, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "UpgradeApprove")
+				err = msgp.WrapError(err, "UpgradeApprove")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "tc":
 			(*z).unauthenticatedProposal.Block.BlockHeader.TxnCounter, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "TxnCounter")
+				err = msgp.WrapError(err, "TxnCounter")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "spt":
 			var zb0008 int
 			var zb0009 bool
 			zb0008, zb0009, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
+				err = msgp.WrapError(err, "StateProofTracking")
 				return
 			}
 			if zb0008 > protocol.NumStateProofTypes {
 				err = msgp.ErrOverflow(uint64(zb0008), uint64(protocol.NumStateProofTypes))
-				err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
+				err = msgp.WrapError(err, "StateProofTracking")
 				return
 			}
 			if zb0009 {
@@ -9736,29 +7041,27 @@ func (z *transmittedPayload) UnmarshalMsgWithState(bts []byte, st msgp.Unmarshal
 				zb0008--
 				bts, err = zb0001.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
+					err = msgp.WrapError(err, "StateProofTracking")
 					return
 				}
 				bts, err = zb0002.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking", zb0001)
+					err = msgp.WrapError(err, "StateProofTracking", zb0001)
 					return
 				}
 				(*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking[zb0001] = zb0002
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "partupdrmv":
 			var zb0010 int
 			var zb0011 bool
 			zb0010, zb0011, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts")
+				err = msgp.WrapError(err, "ExpiredParticipationAccounts")
 				return
 			}
 			if zb0010 > bounds.MaxProposedExpiredOnlineAccounts {
 				err = msgp.ErrOverflow(uint64(zb0010), uint64(bounds.MaxProposedExpiredOnlineAccounts))
-				err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts")
+				err = msgp.WrapError(err, "ExpiredParticipationAccounts")
 				return
 			}
 			if zb0011 {
@@ -9771,23 +7074,21 @@ func (z *transmittedPayload) UnmarshalMsgWithState(bts []byte, st msgp.Unmarshal
 			for zb0003 := range (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts {
 				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts[zb0003].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts", zb0003)
+					err = msgp.WrapError(err, "ExpiredParticipationAccounts", zb0003)
 					return
 				}
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "partupdabs":
 			var zb0012 int
 			var zb0013 bool
 			zb0012, zb0013, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "AbsentParticipationAccounts")
+				err = msgp.WrapError(err, "AbsentParticipationAccounts")
 				return
 			}
 			if zb0012 > bounds.MaxMarkAbsent {
 				err = msgp.ErrOverflow(uint64(zb0012), uint64(bounds.MaxMarkAbsent))
-				err = msgp.WrapError(err, "struct-from-array", "AbsentParticipationAccounts")
+				err = msgp.WrapError(err, "AbsentParticipationAccounts")
 				return
 			}
 			if zb0013 {
@@ -9800,418 +7101,61 @@ func (z *transmittedPayload) UnmarshalMsgWithState(bts []byte, st msgp.Unmarshal
 			for zb0004 := range (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts {
 				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts[zb0004].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "AbsentParticipationAccounts", zb0004)
+					err = msgp.WrapError(err, "AbsentParticipationAccounts", zb0004)
 					return
 				}
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "ld":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Load.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Load")
+				err = msgp.WrapError(err, "Load")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "ct":
 			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.CongestionTax.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "CongestionTax")
+				err = msgp.WrapError(err, "CongestionTax")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "txns":
 			bts, err = (*z).unauthenticatedProposal.Block.Payset.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Payset")
+				err = msgp.WrapError(err, "Payset")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "sdpf":
 			bts, err = (*z).unauthenticatedProposal.SeedProof.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "SeedProof")
+				err = msgp.WrapError(err, "SeedProof")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "oper":
 			{
 				var zb0014 uint64
 				zb0014, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "OriginalPeriod")
+					err = msgp.WrapError(err, "OriginalPeriod")
 					return
 				}
 				(*z).unauthenticatedProposal.OriginalPeriod = period(zb0014)
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "oprop":
 			bts, err = (*z).unauthenticatedProposal.OriginalProposer.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "OriginalProposer")
+				err = msgp.WrapError(err, "OriginalProposer")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "pv":
 			bts, err = (*z).PriorVote.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PriorVote")
+				err = msgp.WrapError(err, "PriorVote")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0005)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0006 {
-			(*z) = transmittedPayload{}
-		}
-		for zb0005 > 0 {
-			zb0005--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "rnd":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Round.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Round")
-					return
-				}
-			case "prev":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Branch.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Branch")
-					return
-				}
-			case "prev512":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Branch512.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Branch512")
-					return
-				}
-			case "seed":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Seed.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Seed")
-					return
-				}
-			case "txn":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "NativeSha512_256Commitment")
-					return
-				}
-			case "txn256":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha256Commitment.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Sha256Commitment")
-					return
-				}
-			case "txn512":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha512Commitment.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Sha512Commitment")
-					return
-				}
-			case "ts":
-				(*z).unauthenticatedProposal.Block.BlockHeader.TimeStamp, bts, err = msgp.ReadInt64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "TimeStamp")
-					return
-				}
-			case "gen":
-				var zb0015 int
-				zb0015, err = msgp.ReadBytesBytesHeader(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "GenesisID")
-					return
-				}
-				if zb0015 > bounds.MaxGenesisIDLen {
-					err = msgp.ErrOverflow(uint64(zb0015), uint64(bounds.MaxGenesisIDLen))
-					return
-				}
-				(*z).unauthenticatedProposal.Block.BlockHeader.GenesisID, bts, err = msgp.ReadStringBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "GenesisID")
-					return
-				}
-			case "gh":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.GenesisHash.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "GenesisHash")
-					return
-				}
-			case "prp":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Proposer.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Proposer")
-					return
-				}
-			case "fc":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.FeesCollected.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "FeesCollected")
-					return
-				}
-			case "bi":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Bonus.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Bonus")
-					return
-				}
-			case "pp":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.ProposerPayout.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "ProposerPayout")
-					return
-				}
-			case "fees":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.FeeSink.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "FeeSink")
-					return
-				}
-			case "rwd":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsPool.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "RewardsPool")
-					return
-				}
-			case "earn":
-				(*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsLevel, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "RewardsLevel")
-					return
-				}
-			case "rate":
-				(*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRate, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "RewardsRate")
-					return
-				}
-			case "frac":
-				(*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsResidue, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "RewardsResidue")
-					return
-				}
-			case "rwcalr":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRecalculationRound.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "RewardsRecalculationRound")
-					return
-				}
-			case "proto":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.CurrentProtocol.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "CurrentProtocol")
-					return
-				}
-			case "nextproto":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocol.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "NextProtocol")
-					return
-				}
-			case "nextyes":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolApprovals.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "NextProtocolApprovals")
-					return
-				}
-			case "nextbefore":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "NextProtocolVoteBefore")
-					return
-				}
-			case "nextswitch":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "NextProtocolSwitchOn")
-					return
-				}
-			case "upgradeprop":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradePropose.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "UpgradePropose")
-					return
-				}
-			case "upgradedelay":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeDelay.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "UpgradeDelay")
-					return
-				}
-			case "upgradeyes":
-				(*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeApprove, bts, err = msgp.ReadBoolBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "UpgradeApprove")
-					return
-				}
-			case "tc":
-				(*z).unauthenticatedProposal.Block.BlockHeader.TxnCounter, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "TxnCounter")
-					return
-				}
-			case "spt":
-				var zb0016 int
-				var zb0017 bool
-				zb0016, zb0017, bts, err = msgp.ReadMapHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "StateProofTracking")
-					return
-				}
-				if zb0016 > protocol.NumStateProofTypes {
-					err = msgp.ErrOverflow(uint64(zb0016), uint64(protocol.NumStateProofTypes))
-					err = msgp.WrapError(err, "StateProofTracking")
-					return
-				}
-				if zb0017 {
-					(*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking = nil
-				} else if (*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking == nil {
-					(*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData, zb0016)
-				}
-				for zb0016 > 0 {
-					var zb0001 protocol.StateProofType
-					var zb0002 bookkeeping.StateProofTrackingData
-					zb0016--
-					bts, err = zb0001.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "StateProofTracking")
-						return
-					}
-					bts, err = zb0002.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "StateProofTracking", zb0001)
-						return
-					}
-					(*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking[zb0001] = zb0002
-				}
-			case "partupdrmv":
-				var zb0018 int
-				var zb0019 bool
-				zb0018, zb0019, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "ExpiredParticipationAccounts")
-					return
-				}
-				if zb0018 > bounds.MaxProposedExpiredOnlineAccounts {
-					err = msgp.ErrOverflow(uint64(zb0018), uint64(bounds.MaxProposedExpiredOnlineAccounts))
-					err = msgp.WrapError(err, "ExpiredParticipationAccounts")
-					return
-				}
-				if zb0019 {
-					(*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts = nil
-				} else if (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts != nil && cap((*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) >= zb0018 {
-					(*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts = ((*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts)[:zb0018]
-				} else {
-					(*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts = make([]basics.Address, zb0018)
-				}
-				for zb0003 := range (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts {
-					bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts[zb0003].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "ExpiredParticipationAccounts", zb0003)
-						return
-					}
-				}
-			case "partupdabs":
-				var zb0020 int
-				var zb0021 bool
-				zb0020, zb0021, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "AbsentParticipationAccounts")
-					return
-				}
-				if zb0020 > bounds.MaxMarkAbsent {
-					err = msgp.ErrOverflow(uint64(zb0020), uint64(bounds.MaxMarkAbsent))
-					err = msgp.WrapError(err, "AbsentParticipationAccounts")
-					return
-				}
-				if zb0021 {
-					(*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts = nil
-				} else if (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts != nil && cap((*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts) >= zb0020 {
-					(*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts = ((*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts)[:zb0020]
-				} else {
-					(*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts = make([]basics.Address, zb0020)
-				}
-				for zb0004 := range (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts {
-					bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts[zb0004].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "AbsentParticipationAccounts", zb0004)
-						return
-					}
-				}
-			case "ld":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Load.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Load")
-					return
-				}
-			case "ct":
-				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.CongestionTax.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "CongestionTax")
-					return
-				}
-			case "txns":
-				bts, err = (*z).unauthenticatedProposal.Block.Payset.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Payset")
-					return
-				}
-			case "sdpf":
-				bts, err = (*z).unauthenticatedProposal.SeedProof.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "SeedProof")
-					return
-				}
-			case "oper":
-				{
-					var zb0022 uint64
-					zb0022, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "OriginalPeriod")
-						return
-					}
-					(*z).unauthenticatedProposal.OriginalPeriod = period(zb0022)
-				}
-			case "oprop":
-				bts, err = (*z).unauthenticatedProposal.OriginalProposer.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "OriginalProposer")
-					return
-				}
-			case "pv":
-				bts, err = (*z).PriorVote.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "PriorVote")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -10373,64 +7317,64 @@ func (z *unauthenticatedBundle) UnmarshalMsgWithState(bts []byte, st msgp.Unmars
 	var zb0003 int
 	var zb0004 bool
 	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0004 {
+		(*z) = unauthenticatedBundle{}
+	}
+	for zb0003 > 0 {
+		zb0003--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 > 0 {
-			zb0003--
+		switch string(field) {
+		case "rnd":
 			bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Round")
+				err = msgp.WrapError(err, "Round")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "per":
 			{
 				var zb0005 uint64
 				zb0005, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Period")
+					err = msgp.WrapError(err, "Period")
 					return
 				}
 				(*z).Period = period(zb0005)
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "step":
 			{
 				var zb0006 uint64
 				zb0006, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Step")
+					err = msgp.WrapError(err, "Step")
 					return
 				}
 				(*z).Step = step(zb0006)
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "prop":
 			bts, err = (*z).Proposal.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Proposal")
+				err = msgp.WrapError(err, "Proposal")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "vote":
 			var zb0007 int
 			var zb0008 bool
 			zb0007, zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Votes")
+				err = msgp.WrapError(err, "Votes")
 				return
 			}
 			if zb0007 > bounds.MaxVoteThreshold {
 				err = msgp.ErrOverflow(uint64(zb0007), uint64(bounds.MaxVoteThreshold))
-				err = msgp.WrapError(err, "struct-from-array", "Votes")
+				err = msgp.WrapError(err, "Votes")
 				return
 			}
 			if zb0008 {
@@ -10443,23 +7387,21 @@ func (z *unauthenticatedBundle) UnmarshalMsgWithState(bts []byte, st msgp.Unmars
 			for zb0001 := range (*z).Votes {
 				bts, err = (*z).Votes[zb0001].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Votes", zb0001)
+					err = msgp.WrapError(err, "Votes", zb0001)
 					return
 				}
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "eqv":
 			var zb0009 int
 			var zb0010 bool
 			zb0009, zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "EquivocationVotes")
+				err = msgp.WrapError(err, "EquivocationVotes")
 				return
 			}
 			if zb0009 > bounds.MaxVoteThreshold {
 				err = msgp.ErrOverflow(uint64(zb0009), uint64(bounds.MaxVoteThreshold))
-				err = msgp.WrapError(err, "struct-from-array", "EquivocationVotes")
+				err = msgp.WrapError(err, "EquivocationVotes")
 				return
 			}
 			if zb0010 {
@@ -10472,126 +7414,15 @@ func (z *unauthenticatedBundle) UnmarshalMsgWithState(bts []byte, st msgp.Unmars
 			for zb0002 := range (*z).EquivocationVotes {
 				bts, err = (*z).EquivocationVotes[zb0002].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "EquivocationVotes", zb0002)
+					err = msgp.WrapError(err, "EquivocationVotes", zb0002)
 					return
 				}
 			}
-		}
-		if zb0003 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0003)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0004 {
-			(*z) = unauthenticatedBundle{}
-		}
-		for zb0003 > 0 {
-			zb0003--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "rnd":
-				bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Round")
-					return
-				}
-			case "per":
-				{
-					var zb0011 uint64
-					zb0011, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Period")
-						return
-					}
-					(*z).Period = period(zb0011)
-				}
-			case "step":
-				{
-					var zb0012 uint64
-					zb0012, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Step")
-						return
-					}
-					(*z).Step = step(zb0012)
-				}
-			case "prop":
-				bts, err = (*z).Proposal.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Proposal")
-					return
-				}
-			case "vote":
-				var zb0013 int
-				var zb0014 bool
-				zb0013, zb0014, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Votes")
-					return
-				}
-				if zb0013 > bounds.MaxVoteThreshold {
-					err = msgp.ErrOverflow(uint64(zb0013), uint64(bounds.MaxVoteThreshold))
-					err = msgp.WrapError(err, "Votes")
-					return
-				}
-				if zb0014 {
-					(*z).Votes = nil
-				} else if (*z).Votes != nil && cap((*z).Votes) >= zb0013 {
-					(*z).Votes = ((*z).Votes)[:zb0013]
-				} else {
-					(*z).Votes = make([]voteAuthenticator, zb0013)
-				}
-				for zb0001 := range (*z).Votes {
-					bts, err = (*z).Votes[zb0001].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Votes", zb0001)
-						return
-					}
-				}
-			case "eqv":
-				var zb0015 int
-				var zb0016 bool
-				zb0015, zb0016, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "EquivocationVotes")
-					return
-				}
-				if zb0015 > bounds.MaxVoteThreshold {
-					err = msgp.ErrOverflow(uint64(zb0015), uint64(bounds.MaxVoteThreshold))
-					err = msgp.WrapError(err, "EquivocationVotes")
-					return
-				}
-				if zb0016 {
-					(*z).EquivocationVotes = nil
-				} else if (*z).EquivocationVotes != nil && cap((*z).EquivocationVotes) >= zb0015 {
-					(*z).EquivocationVotes = ((*z).EquivocationVotes)[:zb0015]
-				} else {
-					(*z).EquivocationVotes = make([]equivocationVoteAuthenticator, zb0015)
-				}
-				for zb0002 := range (*z).EquivocationVotes {
-					bts, err = (*z).EquivocationVotes[zb0002].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "EquivocationVotes", zb0002)
-						return
-					}
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -10735,66 +7566,64 @@ func (z *unauthenticatedEquivocationVote) UnmarshalMsgWithState(bts []byte, st m
 	var zb0003 int
 	var zb0004 bool
 	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0004 {
+		(*z) = unauthenticatedEquivocationVote{}
+	}
+	for zb0003 > 0 {
+		zb0003--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 > 0 {
-			zb0003--
+		switch string(field) {
+		case "snd":
 			bts, err = (*z).Sender.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Sender")
+				err = msgp.WrapError(err, "Sender")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "rnd":
 			bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Round")
+				err = msgp.WrapError(err, "Round")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "per":
 			{
 				var zb0005 uint64
 				zb0005, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Period")
+					err = msgp.WrapError(err, "Period")
 					return
 				}
 				(*z).Period = period(zb0005)
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "step":
 			{
 				var zb0006 uint64
 				zb0006, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Step")
+					err = msgp.WrapError(err, "Step")
 					return
 				}
 				(*z).Step = step(zb0006)
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "cred":
 			bts, err = (*z).Cred.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Cred")
+				err = msgp.WrapError(err, "Cred")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "props":
 			var zb0007 int
 			zb0007, _, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Proposals")
+				err = msgp.WrapError(err, "Proposals")
 				return
 			}
 			if zb0007 > 2 {
@@ -10804,17 +7633,15 @@ func (z *unauthenticatedEquivocationVote) UnmarshalMsgWithState(bts []byte, st m
 			for zb0001 := 0; zb0001 < zb0007; zb0001++ {
 				bts, err = (*z).Proposals[zb0001].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Proposals", zb0001)
+					err = msgp.WrapError(err, "Proposals", zb0001)
 					return
 				}
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "sigs":
 			var zb0008 int
 			zb0008, _, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Sigs")
+				err = msgp.WrapError(err, "Sigs")
 				return
 			}
 			if zb0008 > 2 {
@@ -10824,114 +7651,15 @@ func (z *unauthenticatedEquivocationVote) UnmarshalMsgWithState(bts []byte, st m
 			for zb0002 := 0; zb0002 < zb0008; zb0002++ {
 				bts, err = (*z).Sigs[zb0002].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Sigs", zb0002)
+					err = msgp.WrapError(err, "Sigs", zb0002)
 					return
 				}
 			}
-		}
-		if zb0003 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0003)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0004 {
-			(*z) = unauthenticatedEquivocationVote{}
-		}
-		for zb0003 > 0 {
-			zb0003--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "snd":
-				bts, err = (*z).Sender.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Sender")
-					return
-				}
-			case "rnd":
-				bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Round")
-					return
-				}
-			case "per":
-				{
-					var zb0009 uint64
-					zb0009, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Period")
-						return
-					}
-					(*z).Period = period(zb0009)
-				}
-			case "step":
-				{
-					var zb0010 uint64
-					zb0010, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Step")
-						return
-					}
-					(*z).Step = step(zb0010)
-				}
-			case "cred":
-				bts, err = (*z).Cred.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Cred")
-					return
-				}
-			case "props":
-				var zb0011 int
-				zb0011, _, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Proposals")
-					return
-				}
-				if zb0011 > 2 {
-					err = msgp.ArrayError{Wanted: 2, Got: zb0011}
-					return
-				}
-				for zb0001 := 0; zb0001 < zb0011; zb0001++ {
-					bts, err = (*z).Proposals[zb0001].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Proposals", zb0001)
-						return
-					}
-				}
-			case "sigs":
-				var zb0012 int
-				zb0012, _, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Sigs")
-					return
-				}
-				if zb0012 > 2 {
-					err = msgp.ArrayError{Wanted: 2, Got: zb0012}
-					return
-				}
-				for zb0002 := 0; zb0002 < zb0012; zb0002++ {
-					bts, err = (*z).Sigs[zb0002].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Sigs", zb0002)
-						return
-					}
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -11377,82 +8105,74 @@ func (z *unauthenticatedProposal) UnmarshalMsgWithState(bts []byte, st msgp.Unma
 	var zb0005 int
 	var zb0006 bool
 	zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0006 {
+		(*z) = unauthenticatedProposal{}
+	}
+	for zb0005 > 0 {
+		zb0005--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0005 > 0 {
-			zb0005--
+		switch string(field) {
+		case "rnd":
 			bts, err = (*z).Block.BlockHeader.Round.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Round")
+				err = msgp.WrapError(err, "Round")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "prev":
 			bts, err = (*z).Block.BlockHeader.Branch.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Branch")
+				err = msgp.WrapError(err, "Branch")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "prev512":
 			bts, err = (*z).Block.BlockHeader.Branch512.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Branch512")
+				err = msgp.WrapError(err, "Branch512")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "seed":
 			bts, err = (*z).Block.BlockHeader.Seed.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Seed")
+				err = msgp.WrapError(err, "Seed")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "txn":
 			bts, err = (*z).Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "NativeSha512_256Commitment")
+				err = msgp.WrapError(err, "NativeSha512_256Commitment")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "txn256":
 			bts, err = (*z).Block.BlockHeader.TxnCommitments.Sha256Commitment.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Sha256Commitment")
+				err = msgp.WrapError(err, "Sha256Commitment")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "txn512":
 			bts, err = (*z).Block.BlockHeader.TxnCommitments.Sha512Commitment.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Sha512Commitment")
+				err = msgp.WrapError(err, "Sha512Commitment")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "ts":
 			(*z).Block.BlockHeader.TimeStamp, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "TimeStamp")
+				err = msgp.WrapError(err, "TimeStamp")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "gen":
 			var zb0007 int
 			zb0007, err = msgp.ReadBytesBytesHeader(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
+				err = msgp.WrapError(err, "GenesisID")
 				return
 			}
 			if zb0007 > bounds.MaxGenesisIDLen {
@@ -11461,182 +8181,140 @@ func (z *unauthenticatedProposal) UnmarshalMsgWithState(bts []byte, st msgp.Unma
 			}
 			(*z).Block.BlockHeader.GenesisID, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
+				err = msgp.WrapError(err, "GenesisID")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "gh":
 			bts, err = (*z).Block.BlockHeader.GenesisHash.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "GenesisHash")
+				err = msgp.WrapError(err, "GenesisHash")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "prp":
 			bts, err = (*z).Block.BlockHeader.Proposer.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Proposer")
+				err = msgp.WrapError(err, "Proposer")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "fc":
 			bts, err = (*z).Block.BlockHeader.FeesCollected.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "FeesCollected")
+				err = msgp.WrapError(err, "FeesCollected")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "bi":
 			bts, err = (*z).Block.BlockHeader.Bonus.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Bonus")
+				err = msgp.WrapError(err, "Bonus")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "pp":
 			bts, err = (*z).Block.BlockHeader.ProposerPayout.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ProposerPayout")
+				err = msgp.WrapError(err, "ProposerPayout")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "fees":
 			bts, err = (*z).Block.BlockHeader.RewardsState.FeeSink.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "FeeSink")
+				err = msgp.WrapError(err, "FeeSink")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "rwd":
 			bts, err = (*z).Block.BlockHeader.RewardsState.RewardsPool.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "RewardsPool")
+				err = msgp.WrapError(err, "RewardsPool")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "earn":
 			(*z).Block.BlockHeader.RewardsState.RewardsLevel, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "RewardsLevel")
+				err = msgp.WrapError(err, "RewardsLevel")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "rate":
 			(*z).Block.BlockHeader.RewardsState.RewardsRate, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "RewardsRate")
+				err = msgp.WrapError(err, "RewardsRate")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "frac":
 			(*z).Block.BlockHeader.RewardsState.RewardsResidue, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "RewardsResidue")
+				err = msgp.WrapError(err, "RewardsResidue")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "rwcalr":
 			bts, err = (*z).Block.BlockHeader.RewardsState.RewardsRecalculationRound.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "RewardsRecalculationRound")
+				err = msgp.WrapError(err, "RewardsRecalculationRound")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "proto":
 			bts, err = (*z).Block.BlockHeader.UpgradeState.CurrentProtocol.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "CurrentProtocol")
+				err = msgp.WrapError(err, "CurrentProtocol")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "nextproto":
 			bts, err = (*z).Block.BlockHeader.UpgradeState.NextProtocol.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "NextProtocol")
+				err = msgp.WrapError(err, "NextProtocol")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "nextyes":
 			bts, err = (*z).Block.BlockHeader.UpgradeState.NextProtocolApprovals.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "NextProtocolApprovals")
+				err = msgp.WrapError(err, "NextProtocolApprovals")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "nextbefore":
 			bts, err = (*z).Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "NextProtocolVoteBefore")
+				err = msgp.WrapError(err, "NextProtocolVoteBefore")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "nextswitch":
 			bts, err = (*z).Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "NextProtocolSwitchOn")
+				err = msgp.WrapError(err, "NextProtocolSwitchOn")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "upgradeprop":
 			bts, err = (*z).Block.BlockHeader.UpgradeVote.UpgradePropose.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "UpgradePropose")
+				err = msgp.WrapError(err, "UpgradePropose")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "upgradedelay":
 			bts, err = (*z).Block.BlockHeader.UpgradeVote.UpgradeDelay.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "UpgradeDelay")
+				err = msgp.WrapError(err, "UpgradeDelay")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "upgradeyes":
 			(*z).Block.BlockHeader.UpgradeVote.UpgradeApprove, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "UpgradeApprove")
+				err = msgp.WrapError(err, "UpgradeApprove")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "tc":
 			(*z).Block.BlockHeader.TxnCounter, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "TxnCounter")
+				err = msgp.WrapError(err, "TxnCounter")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "spt":
 			var zb0008 int
 			var zb0009 bool
 			zb0008, zb0009, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
+				err = msgp.WrapError(err, "StateProofTracking")
 				return
 			}
 			if zb0008 > protocol.NumStateProofTypes {
 				err = msgp.ErrOverflow(uint64(zb0008), uint64(protocol.NumStateProofTypes))
-				err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
+				err = msgp.WrapError(err, "StateProofTracking")
 				return
 			}
 			if zb0009 {
@@ -11650,29 +8328,27 @@ func (z *unauthenticatedProposal) UnmarshalMsgWithState(bts []byte, st msgp.Unma
 				zb0008--
 				bts, err = zb0001.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
+					err = msgp.WrapError(err, "StateProofTracking")
 					return
 				}
 				bts, err = zb0002.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking", zb0001)
+					err = msgp.WrapError(err, "StateProofTracking", zb0001)
 					return
 				}
 				(*z).Block.BlockHeader.StateProofTracking[zb0001] = zb0002
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "partupdrmv":
 			var zb0010 int
 			var zb0011 bool
 			zb0010, zb0011, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts")
+				err = msgp.WrapError(err, "ExpiredParticipationAccounts")
 				return
 			}
 			if zb0010 > bounds.MaxProposedExpiredOnlineAccounts {
 				err = msgp.ErrOverflow(uint64(zb0010), uint64(bounds.MaxProposedExpiredOnlineAccounts))
-				err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts")
+				err = msgp.WrapError(err, "ExpiredParticipationAccounts")
 				return
 			}
 			if zb0011 {
@@ -11685,23 +8361,21 @@ func (z *unauthenticatedProposal) UnmarshalMsgWithState(bts []byte, st msgp.Unma
 			for zb0003 := range (*z).Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts {
 				bts, err = (*z).Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts[zb0003].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts", zb0003)
+					err = msgp.WrapError(err, "ExpiredParticipationAccounts", zb0003)
 					return
 				}
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "partupdabs":
 			var zb0012 int
 			var zb0013 bool
 			zb0012, zb0013, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "AbsentParticipationAccounts")
+				err = msgp.WrapError(err, "AbsentParticipationAccounts")
 				return
 			}
 			if zb0012 > bounds.MaxMarkAbsent {
 				err = msgp.ErrOverflow(uint64(zb0012), uint64(bounds.MaxMarkAbsent))
-				err = msgp.WrapError(err, "struct-from-array", "AbsentParticipationAccounts")
+				err = msgp.WrapError(err, "AbsentParticipationAccounts")
 				return
 			}
 			if zb0013 {
@@ -11714,404 +8388,55 @@ func (z *unauthenticatedProposal) UnmarshalMsgWithState(bts []byte, st msgp.Unma
 			for zb0004 := range (*z).Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts {
 				bts, err = (*z).Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts[zb0004].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "AbsentParticipationAccounts", zb0004)
+					err = msgp.WrapError(err, "AbsentParticipationAccounts", zb0004)
 					return
 				}
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "ld":
 			bts, err = (*z).Block.BlockHeader.Load.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Load")
+				err = msgp.WrapError(err, "Load")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "ct":
 			bts, err = (*z).Block.BlockHeader.CongestionTax.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "CongestionTax")
+				err = msgp.WrapError(err, "CongestionTax")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "txns":
 			bts, err = (*z).Block.Payset.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Payset")
+				err = msgp.WrapError(err, "Payset")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "sdpf":
 			bts, err = (*z).SeedProof.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "SeedProof")
+				err = msgp.WrapError(err, "SeedProof")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "oper":
 			{
 				var zb0014 uint64
 				zb0014, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "OriginalPeriod")
+					err = msgp.WrapError(err, "OriginalPeriod")
 					return
 				}
 				(*z).OriginalPeriod = period(zb0014)
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "oprop":
 			bts, err = (*z).OriginalProposer.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "OriginalProposer")
+				err = msgp.WrapError(err, "OriginalProposer")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0005)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0006 {
-			(*z) = unauthenticatedProposal{}
-		}
-		for zb0005 > 0 {
-			zb0005--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "rnd":
-				bts, err = (*z).Block.BlockHeader.Round.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Round")
-					return
-				}
-			case "prev":
-				bts, err = (*z).Block.BlockHeader.Branch.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Branch")
-					return
-				}
-			case "prev512":
-				bts, err = (*z).Block.BlockHeader.Branch512.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Branch512")
-					return
-				}
-			case "seed":
-				bts, err = (*z).Block.BlockHeader.Seed.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Seed")
-					return
-				}
-			case "txn":
-				bts, err = (*z).Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "NativeSha512_256Commitment")
-					return
-				}
-			case "txn256":
-				bts, err = (*z).Block.BlockHeader.TxnCommitments.Sha256Commitment.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Sha256Commitment")
-					return
-				}
-			case "txn512":
-				bts, err = (*z).Block.BlockHeader.TxnCommitments.Sha512Commitment.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Sha512Commitment")
-					return
-				}
-			case "ts":
-				(*z).Block.BlockHeader.TimeStamp, bts, err = msgp.ReadInt64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "TimeStamp")
-					return
-				}
-			case "gen":
-				var zb0015 int
-				zb0015, err = msgp.ReadBytesBytesHeader(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "GenesisID")
-					return
-				}
-				if zb0015 > bounds.MaxGenesisIDLen {
-					err = msgp.ErrOverflow(uint64(zb0015), uint64(bounds.MaxGenesisIDLen))
-					return
-				}
-				(*z).Block.BlockHeader.GenesisID, bts, err = msgp.ReadStringBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "GenesisID")
-					return
-				}
-			case "gh":
-				bts, err = (*z).Block.BlockHeader.GenesisHash.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "GenesisHash")
-					return
-				}
-			case "prp":
-				bts, err = (*z).Block.BlockHeader.Proposer.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Proposer")
-					return
-				}
-			case "fc":
-				bts, err = (*z).Block.BlockHeader.FeesCollected.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "FeesCollected")
-					return
-				}
-			case "bi":
-				bts, err = (*z).Block.BlockHeader.Bonus.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Bonus")
-					return
-				}
-			case "pp":
-				bts, err = (*z).Block.BlockHeader.ProposerPayout.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "ProposerPayout")
-					return
-				}
-			case "fees":
-				bts, err = (*z).Block.BlockHeader.RewardsState.FeeSink.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "FeeSink")
-					return
-				}
-			case "rwd":
-				bts, err = (*z).Block.BlockHeader.RewardsState.RewardsPool.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "RewardsPool")
-					return
-				}
-			case "earn":
-				(*z).Block.BlockHeader.RewardsState.RewardsLevel, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "RewardsLevel")
-					return
-				}
-			case "rate":
-				(*z).Block.BlockHeader.RewardsState.RewardsRate, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "RewardsRate")
-					return
-				}
-			case "frac":
-				(*z).Block.BlockHeader.RewardsState.RewardsResidue, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "RewardsResidue")
-					return
-				}
-			case "rwcalr":
-				bts, err = (*z).Block.BlockHeader.RewardsState.RewardsRecalculationRound.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "RewardsRecalculationRound")
-					return
-				}
-			case "proto":
-				bts, err = (*z).Block.BlockHeader.UpgradeState.CurrentProtocol.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "CurrentProtocol")
-					return
-				}
-			case "nextproto":
-				bts, err = (*z).Block.BlockHeader.UpgradeState.NextProtocol.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "NextProtocol")
-					return
-				}
-			case "nextyes":
-				bts, err = (*z).Block.BlockHeader.UpgradeState.NextProtocolApprovals.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "NextProtocolApprovals")
-					return
-				}
-			case "nextbefore":
-				bts, err = (*z).Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "NextProtocolVoteBefore")
-					return
-				}
-			case "nextswitch":
-				bts, err = (*z).Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "NextProtocolSwitchOn")
-					return
-				}
-			case "upgradeprop":
-				bts, err = (*z).Block.BlockHeader.UpgradeVote.UpgradePropose.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "UpgradePropose")
-					return
-				}
-			case "upgradedelay":
-				bts, err = (*z).Block.BlockHeader.UpgradeVote.UpgradeDelay.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "UpgradeDelay")
-					return
-				}
-			case "upgradeyes":
-				(*z).Block.BlockHeader.UpgradeVote.UpgradeApprove, bts, err = msgp.ReadBoolBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "UpgradeApprove")
-					return
-				}
-			case "tc":
-				(*z).Block.BlockHeader.TxnCounter, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "TxnCounter")
-					return
-				}
-			case "spt":
-				var zb0016 int
-				var zb0017 bool
-				zb0016, zb0017, bts, err = msgp.ReadMapHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "StateProofTracking")
-					return
-				}
-				if zb0016 > protocol.NumStateProofTypes {
-					err = msgp.ErrOverflow(uint64(zb0016), uint64(protocol.NumStateProofTypes))
-					err = msgp.WrapError(err, "StateProofTracking")
-					return
-				}
-				if zb0017 {
-					(*z).Block.BlockHeader.StateProofTracking = nil
-				} else if (*z).Block.BlockHeader.StateProofTracking == nil {
-					(*z).Block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData, zb0016)
-				}
-				for zb0016 > 0 {
-					var zb0001 protocol.StateProofType
-					var zb0002 bookkeeping.StateProofTrackingData
-					zb0016--
-					bts, err = zb0001.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "StateProofTracking")
-						return
-					}
-					bts, err = zb0002.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "StateProofTracking", zb0001)
-						return
-					}
-					(*z).Block.BlockHeader.StateProofTracking[zb0001] = zb0002
-				}
-			case "partupdrmv":
-				var zb0018 int
-				var zb0019 bool
-				zb0018, zb0019, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "ExpiredParticipationAccounts")
-					return
-				}
-				if zb0018 > bounds.MaxProposedExpiredOnlineAccounts {
-					err = msgp.ErrOverflow(uint64(zb0018), uint64(bounds.MaxProposedExpiredOnlineAccounts))
-					err = msgp.WrapError(err, "ExpiredParticipationAccounts")
-					return
-				}
-				if zb0019 {
-					(*z).Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts = nil
-				} else if (*z).Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts != nil && cap((*z).Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) >= zb0018 {
-					(*z).Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts = ((*z).Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts)[:zb0018]
-				} else {
-					(*z).Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts = make([]basics.Address, zb0018)
-				}
-				for zb0003 := range (*z).Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts {
-					bts, err = (*z).Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts[zb0003].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "ExpiredParticipationAccounts", zb0003)
-						return
-					}
-				}
-			case "partupdabs":
-				var zb0020 int
-				var zb0021 bool
-				zb0020, zb0021, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "AbsentParticipationAccounts")
-					return
-				}
-				if zb0020 > bounds.MaxMarkAbsent {
-					err = msgp.ErrOverflow(uint64(zb0020), uint64(bounds.MaxMarkAbsent))
-					err = msgp.WrapError(err, "AbsentParticipationAccounts")
-					return
-				}
-				if zb0021 {
-					(*z).Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts = nil
-				} else if (*z).Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts != nil && cap((*z).Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts) >= zb0020 {
-					(*z).Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts = ((*z).Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts)[:zb0020]
-				} else {
-					(*z).Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts = make([]basics.Address, zb0020)
-				}
-				for zb0004 := range (*z).Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts {
-					bts, err = (*z).Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts[zb0004].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "AbsentParticipationAccounts", zb0004)
-						return
-					}
-				}
-			case "ld":
-				bts, err = (*z).Block.BlockHeader.Load.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Load")
-					return
-				}
-			case "ct":
-				bts, err = (*z).Block.BlockHeader.CongestionTax.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "CongestionTax")
-					return
-				}
-			case "txns":
-				bts, err = (*z).Block.Payset.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Payset")
-					return
-				}
-			case "sdpf":
-				bts, err = (*z).SeedProof.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "SeedProof")
-					return
-				}
-			case "oper":
-				{
-					var zb0022 uint64
-					zb0022, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "OriginalPeriod")
-						return
-					}
-					(*z).OriginalPeriod = period(zb0022)
-				}
-			case "oprop":
-				bts, err = (*z).OriginalProposer.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "OriginalProposer")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -12232,83 +8557,44 @@ func (z *unauthenticatedVote) UnmarshalMsgWithState(bts []byte, st msgp.Unmarsha
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = unauthenticatedVote{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "r":
 			bts, err = (*z).R.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "R")
+				err = msgp.WrapError(err, "R")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "cred":
 			bts, err = (*z).Cred.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Cred")
+				err = msgp.WrapError(err, "Cred")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "sig":
 			bts, err = (*z).Sig.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Sig")
+				err = msgp.WrapError(err, "Sig")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = unauthenticatedVote{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "r":
-				bts, err = (*z).R.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "R")
-					return
-				}
-			case "cred":
-				bts, err = (*z).Cred.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Cred")
-					return
-				}
-			case "sig":
-				bts, err = (*z).Sig.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Sig")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -12398,83 +8684,44 @@ func (z *vote) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []by
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = vote{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "r":
 			bts, err = (*z).R.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "R")
+				err = msgp.WrapError(err, "R")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "cred":
 			bts, err = (*z).Cred.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Cred")
+				err = msgp.WrapError(err, "Cred")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "sig":
 			bts, err = (*z).Sig.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Sig")
+				err = msgp.WrapError(err, "Sig")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = vote{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "r":
-				bts, err = (*z).R.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "R")
-					return
-				}
-			case "cred":
-				bts, err = (*z).Cred.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Cred")
-					return
-				}
-			case "sig":
-				bts, err = (*z).Sig.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Sig")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -12532,41 +8779,26 @@ func (z *voteAggregator) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalStat
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = voteAggregator{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = voteAggregator{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		switch string(field) {
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -12644,83 +8876,44 @@ func (z *voteAuthenticator) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalS
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = voteAuthenticator{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "snd":
 			bts, err = (*z).Sender.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Sender")
+				err = msgp.WrapError(err, "Sender")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "cred":
 			bts, err = (*z).Cred.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Cred")
+				err = msgp.WrapError(err, "Cred")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "sig":
 			bts, err = (*z).Sig.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Sig")
+				err = msgp.WrapError(err, "Sig")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = voteAuthenticator{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "snd":
-				bts, err = (*z).Sender.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Sender")
-					return
-				}
-			case "cred":
-				bts, err = (*z).Cred.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Cred")
-					return
-				}
-			case "sig":
-				bts, err = (*z).Sig.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Sig")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -12834,19 +9027,27 @@ func (z *voteTracker) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 	var zb0007 int
 	var zb0008 bool
 	zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0007, zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0008 {
+		(*z) = voteTracker{}
+	}
+	for zb0007 > 0 {
+		zb0007--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0007 > 0 {
-			zb0007--
+		switch string(field) {
+		case "Voters":
 			var zb0009 int
 			var zb0010 bool
 			zb0009, zb0010, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Voters")
+				err = msgp.WrapError(err, "Voters")
 				return
 			}
 			if zb0010 {
@@ -12860,24 +9061,22 @@ func (z *voteTracker) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 				zb0009--
 				bts, err = zb0001.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Voters")
+					err = msgp.WrapError(err, "Voters")
 					return
 				}
 				bts, err = zb0002.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Voters", zb0001)
+					err = msgp.WrapError(err, "Voters", zb0001)
 					return
 				}
 				(*z).Voters[zb0001] = zb0002
 			}
-		}
-		if zb0007 > 0 {
-			zb0007--
+		case "Counts":
 			var zb0011 int
 			var zb0012 bool
 			zb0011, zb0012, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Counts")
+				err = msgp.WrapError(err, "Counts")
 				return
 			}
 			if zb0012 {
@@ -12891,24 +9090,22 @@ func (z *voteTracker) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 				zb0011--
 				bts, err = zb0003.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Counts")
+					err = msgp.WrapError(err, "Counts")
 					return
 				}
 				bts, err = zb0004.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Counts", zb0003)
+					err = msgp.WrapError(err, "Counts", zb0003)
 					return
 				}
 				(*z).Counts[zb0003] = zb0004
 			}
-		}
-		if zb0007 > 0 {
-			zb0007--
+		case "Equivocators":
 			var zb0013 int
 			var zb0014 bool
 			zb0013, zb0014, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Equivocators")
+				err = msgp.WrapError(err, "Equivocators")
 				return
 			}
 			if zb0014 {
@@ -12922,147 +9119,27 @@ func (z *voteTracker) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 				zb0013--
 				bts, err = zb0005.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Equivocators")
+					err = msgp.WrapError(err, "Equivocators")
 					return
 				}
 				bts, err = zb0006.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Equivocators", zb0005)
+					err = msgp.WrapError(err, "Equivocators", zb0005)
 					return
 				}
 				(*z).Equivocators[zb0005] = zb0006
 			}
-		}
-		if zb0007 > 0 {
-			zb0007--
+		case "EquivocatorsCount":
 			(*z).EquivocatorsCount, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "EquivocatorsCount")
+				err = msgp.WrapError(err, "EquivocatorsCount")
 				return
 			}
-		}
-		if zb0007 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0007)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0008 {
-			(*z) = voteTracker{}
-		}
-		for zb0007 > 0 {
-			zb0007--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "Voters":
-				var zb0015 int
-				var zb0016 bool
-				zb0015, zb0016, bts, err = msgp.ReadMapHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Voters")
-					return
-				}
-				if zb0016 {
-					(*z).Voters = nil
-				} else if (*z).Voters == nil {
-					(*z).Voters = make(map[basics.Address]vote, zb0015)
-				}
-				for zb0015 > 0 {
-					var zb0001 basics.Address
-					var zb0002 vote
-					zb0015--
-					bts, err = zb0001.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Voters")
-						return
-					}
-					bts, err = zb0002.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Voters", zb0001)
-						return
-					}
-					(*z).Voters[zb0001] = zb0002
-				}
-			case "Counts":
-				var zb0017 int
-				var zb0018 bool
-				zb0017, zb0018, bts, err = msgp.ReadMapHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Counts")
-					return
-				}
-				if zb0018 {
-					(*z).Counts = nil
-				} else if (*z).Counts == nil {
-					(*z).Counts = make(map[proposalValue]proposalVoteCounter, zb0017)
-				}
-				for zb0017 > 0 {
-					var zb0003 proposalValue
-					var zb0004 proposalVoteCounter
-					zb0017--
-					bts, err = zb0003.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Counts")
-						return
-					}
-					bts, err = zb0004.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Counts", zb0003)
-						return
-					}
-					(*z).Counts[zb0003] = zb0004
-				}
-			case "Equivocators":
-				var zb0019 int
-				var zb0020 bool
-				zb0019, zb0020, bts, err = msgp.ReadMapHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Equivocators")
-					return
-				}
-				if zb0020 {
-					(*z).Equivocators = nil
-				} else if (*z).Equivocators == nil {
-					(*z).Equivocators = make(map[basics.Address]equivocationVote, zb0019)
-				}
-				for zb0019 > 0 {
-					var zb0005 basics.Address
-					var zb0006 equivocationVote
-					zb0019--
-					bts, err = zb0005.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Equivocators")
-						return
-					}
-					bts, err = zb0006.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Equivocators", zb0005)
-						return
-					}
-					(*z).Equivocators[zb0005] = zb0006
-				}
-			case "EquivocatorsCount":
-				(*z).EquivocatorsCount, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "EquivocatorsCount")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -13153,91 +9230,48 @@ func (z *voteTrackerContract) UnmarshalMsgWithState(bts []byte, st msgp.Unmarsha
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = voteTrackerContract{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "Step":
 			{
 				var zb0003 uint64
 				zb0003, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Step")
+					err = msgp.WrapError(err, "Step")
 					return
 				}
 				(*z).Step = step(zb0003)
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "StepOk":
 			(*z).StepOk, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "StepOk")
+				err = msgp.WrapError(err, "StepOk")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Emitted":
 			(*z).Emitted, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Emitted")
+				err = msgp.WrapError(err, "Emitted")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = voteTrackerContract{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "Step":
-				{
-					var zb0004 uint64
-					zb0004, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Step")
-						return
-					}
-					(*z).Step = step(zb0004)
-				}
-			case "StepOk":
-				(*z).StepOk, bts, err = msgp.ReadBoolBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "StepOk")
-					return
-				}
-			case "Emitted":
-				(*z).Emitted, bts, err = msgp.ReadBoolBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Emitted")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -13303,183 +9337,65 @@ func (z *voteTrackerPeriod) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalS
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = voteTrackerPeriod{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "Cached":
 			var zb0003 int
 			var zb0004 bool
 			zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
-			if _, ok := err.(msgp.TypeError); ok {
-				zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Cached")
-					return
-				}
-				if zb0003 > 0 {
-					zb0003--
-					(*z).Cached.Bottom, bts, err = msgp.ReadBoolBytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "Cached", "struct-from-array", "Bottom")
-						return
-					}
-				}
-				if zb0003 > 0 {
-					zb0003--
-					bts, err = (*z).Cached.Proposal.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "Cached", "struct-from-array", "Proposal")
-						return
-					}
-				}
-				if zb0003 > 0 {
-					err = msgp.ErrTooManyArrayFields(zb0003)
-					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "Cached", "struct-from-array")
-						return
-					}
-				}
-			} else {
-				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Cached")
-					return
-				}
-				if zb0004 {
-					(*z).Cached = nextThresholdStatusEvent{}
-				}
-				for zb0003 > 0 {
-					zb0003--
-					field, bts, err = msgp.ReadMapKeyZC(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "Cached")
-						return
-					}
-					switch string(field) {
-					case "Bottom":
-						(*z).Cached.Bottom, bts, err = msgp.ReadBoolBytes(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "Cached", "Bottom")
-							return
-						}
-					case "Proposal":
-						bts, err = (*z).Cached.Proposal.UnmarshalMsgWithState(bts, st)
-						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "Cached", "Proposal")
-							return
-						}
-					default:
-						err = msgp.ErrNoField(string(field))
-						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "Cached")
-							return
-						}
-					}
-				}
-			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
+				err = msgp.WrapError(err, "Cached")
 				return
 			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = voteTrackerPeriod{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if zb0004 {
+				(*z).Cached = nextThresholdStatusEvent{}
+			}
+			for zb0003 > 0 {
+				zb0003--
+				field, bts, err = msgp.ReadMapKeyZC(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Cached")
+					return
+				}
+				switch string(field) {
+				case "Bottom":
+					(*z).Cached.Bottom, bts, err = msgp.ReadBoolBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Cached", "Bottom")
+						return
+					}
+				case "Proposal":
+					bts, err = (*z).Cached.Proposal.UnmarshalMsgWithState(bts, st)
+					if err != nil {
+						err = msgp.WrapError(err, "Cached", "Proposal")
+						return
+					}
+				default:
+					err = msgp.ErrNoField(string(field))
+					if err != nil {
+						err = msgp.WrapError(err, "Cached")
+						return
+					}
+				}
+			}
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "Cached":
-				var zb0005 int
-				var zb0006 bool
-				zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
-				if _, ok := err.(msgp.TypeError); ok {
-					zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Cached")
-						return
-					}
-					if zb0005 > 0 {
-						zb0005--
-						(*z).Cached.Bottom, bts, err = msgp.ReadBoolBytes(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "Cached", "struct-from-array", "Bottom")
-							return
-						}
-					}
-					if zb0005 > 0 {
-						zb0005--
-						bts, err = (*z).Cached.Proposal.UnmarshalMsgWithState(bts, st)
-						if err != nil {
-							err = msgp.WrapError(err, "Cached", "struct-from-array", "Proposal")
-							return
-						}
-					}
-					if zb0005 > 0 {
-						err = msgp.ErrTooManyArrayFields(zb0005)
-						if err != nil {
-							err = msgp.WrapError(err, "Cached", "struct-from-array")
-							return
-						}
-					}
-				} else {
-					if err != nil {
-						err = msgp.WrapError(err, "Cached")
-						return
-					}
-					if zb0006 {
-						(*z).Cached = nextThresholdStatusEvent{}
-					}
-					for zb0005 > 0 {
-						zb0005--
-						field, bts, err = msgp.ReadMapKeyZC(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "Cached")
-							return
-						}
-						switch string(field) {
-						case "Bottom":
-							(*z).Cached.Bottom, bts, err = msgp.ReadBoolBytes(bts)
-							if err != nil {
-								err = msgp.WrapError(err, "Cached", "Bottom")
-								return
-							}
-						case "Proposal":
-							bts, err = (*z).Cached.Proposal.UnmarshalMsgWithState(bts, st)
-							if err != nil {
-								err = msgp.WrapError(err, "Cached", "Proposal")
-								return
-							}
-						default:
-							err = msgp.ErrNoField(string(field))
-							if err != nil {
-								err = msgp.WrapError(err, "Cached")
-								return
-							}
-						}
-					}
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -13542,69 +9458,38 @@ func (z *voteTrackerRound) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSt
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = voteTrackerRound{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "Freshest":
 			bts, err = (*z).Freshest.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Freshest")
+				err = msgp.WrapError(err, "Freshest")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Ok":
 			(*z).Ok, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Ok")
+				err = msgp.WrapError(err, "Ok")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = voteTrackerRound{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "Freshest":
-				bts, err = (*z).Freshest.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Freshest")
-					return
-				}
-			case "Ok":
-				(*z).Ok, bts, err = msgp.ReadBoolBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Ok")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}

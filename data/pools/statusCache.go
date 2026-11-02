@@ -17,11 +17,15 @@
 package pools
 
 import (
+	"slices"
+
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 type statusCacheEntry struct {
-	tx    transactions.SignedTxn
+	tx    []byte
 	txErr string
 }
 
@@ -44,7 +48,14 @@ func (sc *statusCache) check(txid transactions.Txid) (tx transactions.SignedTxn,
 	if !found {
 		ent, found = sc.prev[txid]
 	}
-	tx = ent.tx
+	if !found {
+		return
+	}
+
+	if _, err := tx.UnmarshalMsg(ent.tx); err != nil {
+		logging.Base().Errorf("Error decoding statusCache transaction: %v", err)
+		return transactions.SignedTxn{}, "", false
+	}
 	txErr = ent.txErr
 	return
 }
@@ -55,8 +66,13 @@ func (sc *statusCache) put(tx transactions.SignedTxn, txErr string) {
 		sc.cur = make(map[transactions.Txid]statusCacheEntry, sc.sz)
 	}
 
+	buf := protocol.GetEncodingBuf()
+	enc := tx.MarshalMsg(buf.Bytes())
+	encoded := slices.Clone(enc) // trim max buf to actual encoded size, and release the buf
+	protocol.PutEncodingBuf(buf.Update(enc))
+
 	sc.cur[tx.ID()] = statusCacheEntry{
-		tx:    tx,
+		tx:    encoded,
 		txErr: txErr,
 	}
 }

@@ -153,7 +153,14 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 	if ep.GetCaller() != nil {
 		// If this is an inner txn group, save the txns
 		tracer.populateInnerTransactions(ep.TxnGroup)
-		tracer.result.TxnGroups[0].AppBudgetAdded += ep.Proto.MaxAppProgramCost
+		// Report a grant for each app call, not one for the whole group. The AVM
+		// grants budget per inner app call, so a group of payments adds nothing,
+		// while a group of several app calls adds several grants.
+		for i := range ep.TxnGroup {
+			if ep.TxnGroup[i].Txn.Type == protocol.ApplicationCallTx {
+				tracer.result.TxnGroups[0].AppBudgetAdded += ep.Proto.MaxAppProgramCost
+			}
+		}
 	}
 	tracer.cursorEvalTracer.BeforeTxnGroup(ep)
 
@@ -162,8 +169,11 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 		tracer.result.TxnGroups[0].AppBudgetAdded = *ep.PooledApplicationBudget
 	}
 
-	// Override transaction group budget if specified in request, retrieve from tracer.result
-	if ep.PooledApplicationBudget != nil {
+	// Override transaction group budget if specified in request, retrieve from
+	// tracer.result. Only for the top-level group: inner groups share the same
+	// pool, so granting the extra again for each of them would hand out a
+	// multiple of what was asked for.
+	if ep.PooledApplicationBudget != nil && ep.GetCaller() == nil {
 		tracer.result.TxnGroups[0].AppBudgetAdded += tracer.result.EvalOverrides.ExtraOpcodeBudget
 		*ep.PooledApplicationBudget += tracer.result.EvalOverrides.ExtraOpcodeBudget
 	}
@@ -249,6 +259,13 @@ func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 
 func (tracer *evalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, evalError error) {
 	tracer.handleError(evalError)
+	if evalError == nil && tracer.unnamedResourcePolicy != nil {
+		if err := tracer.unnamedResourcePolicy.tracker.reconcileWriteBudget(ep.DirtyByteCount(), ep.Proto.BytesPerBoxReference); err != nil {
+			// This should never happen, since simulation sets the IO budget to the maximum
+			// achievable budget before large program writes are checked.
+			panic(err.Error())
+		}
+	}
 	tracer.saveApplyData(ad, evalError != nil)
 	// if the current transaction + simulation condition would lead to exec trace making
 	// we should clean them up from tracer.execTraceStack.
@@ -330,10 +347,11 @@ func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *e
 }
 
 func (o *OpcodeTraceUnit) appendStateOperations(cx *logic.EvalContext) {
-	if cx.GetOpSpec().AppStateExplain == nil {
+	spec := cx.GetOpSpec()
+	if spec.AppStateExplain == nil {
 		return
 	}
-	appState, stateOp, appID, acctAddr, stateKey := cx.GetOpSpec().AppStateExplain(cx)
+	appState, stateOp, appID, acctAddr, stateKey := spec.AppStateExplain(cx)
 	// If the operation is not write or delete, return without
 	if stateOp == logic.AppStateRead {
 		return
@@ -420,14 +438,14 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 			tracer.handleError(evalError)
 		}
 		if evalError == nil && tracer.unnamedResourcePolicy != nil {
-			if err := tracer.unnamedResourcePolicy.tracker.reconcileBoxWriteBudget(cx.BoxDirtyBytes(), cx.Proto.BytesPerBoxReference); err != nil {
-				// This should never happen, since we limit the IO budget to tracer.unnamedResourcePolicy.assignment.maxPossibleBoxIOBudget
-				// (as shown below), so we should never have to reconcile an unachievable budget.
+			if err := tracer.unnamedResourcePolicy.tracker.reconcileWriteBudget(cx.DirtyByteCount(), cx.Proto.BytesPerBoxReference); err != nil {
+				// This should never happen, since simulation sets the IO budget to the maximum
+				// achievable budget before dirty bytes are checked.
 				panic(err.Error())
 			}
 
-			// Update box budget. It will decrease if an additional non-box resource has been accessed.
-			cx.SetIOBudget(tracer.unnamedResourcePolicy.tracker.maxPossibleBoxIOBudget(cx.Proto.BytesPerBoxReference))
+			// Update budget. It will decrease if an additional non-box resource has been accessed.
+			cx.SetIOBudget(tracer.unnamedResourcePolicy.tracker.maxPossibleIOBudget(cx.Proto.BytesPerBoxReference))
 		}
 	}
 }
@@ -482,7 +500,7 @@ func (tracer *evalTracer) BeforeProgram(cx *logic.EvalContext) {
 				s := cx.SurplusReadBudget
 				tracer.unnamedResourcePolicy.initialBoxSurplusReadBudget = &s
 			}
-			cx.SetIOBudget(tracer.unnamedResourcePolicy.tracker.maxPossibleBoxIOBudget(cx.Proto.BytesPerBoxReference))
+			cx.SetIOBudget(tracer.unnamedResourcePolicy.tracker.maxPossibleIOBudget(cx.Proto.BytesPerBoxReference))
 		}
 	}
 }
@@ -536,7 +554,7 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, pass bool, evalErr
 			}
 
 			// Fix the current auth addr if this txn doesn't have a signature
-			if txnHasNoSignature(stxn.SignedTxn) {
+			if txnNeedsSyntheticSignature(stxn.SignedTxn) {
 				stxn.AuthAddr = knownAuthAddrs[sender]
 				if stxn.AuthAddr == sender {
 					stxn.AuthAddr = basics.Address{}

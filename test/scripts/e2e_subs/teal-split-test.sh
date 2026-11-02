@@ -1,6 +1,8 @@
 #!/bin/bash
 
-date '+teal-split-test start %Y%m%d_%H%M%S'
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
 
 my_dir="$(dirname "$0")"
 source "$my_dir/rest.sh" "$@"
@@ -38,8 +40,6 @@ ${gcmd} clerk sign -i ${TEMPDIR}/gx-0.tx -p ${TEMPDIR}/split.teal -o ${TEMPDIR}/
 ${gcmd} clerk sign -i ${TEMPDIR}/gx-1.tx -p ${TEMPDIR}/split.teal -o ${TEMPDIR}/gx-1.stx
 cat ${TEMPDIR}/gx-0.stx ${TEMPDIR}/gx-1.stx > ${TEMPDIR}/group.stx
 
-${gcmd} clerk dryrun -t ${TEMPDIR}/group.stx
-
 ${gcmd} clerk send -a 110000000 -f ${ACCOUNT} -t ${ACCOUNT_SPLIT}
 
 ${gcmd} clerk rawsend -f ${TEMPDIR}/group.stx
@@ -60,4 +60,4 @@ fi
 # close out split account
 ${gcmd} clerk send -F ${TEMPDIR}/split.teal -t AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ -a 0 -c ${ACCOUNTB}
 
-date '+teal-split-test OK %Y%m%d_%H%M%S'
+date "+${scriptname} OK %Y%m%d_%H%M%S"

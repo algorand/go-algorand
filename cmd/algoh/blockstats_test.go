@@ -42,7 +42,7 @@ type MockEventSender struct {
 	events []event
 }
 
-func (mes *MockEventSender) EventWithDetails(category telemetryspec.Category, identifier telemetryspec.Event, details interface{}) {
+func (mes *MockEventSender) EventWithDetails(category telemetryspec.Category, identifier telemetryspec.Event, details any) {
 	mes.events = append(mes.events, event{category: category, identifier: identifier, details: details.(telemetryspec.BlockStatsEventDetails)})
 }
 

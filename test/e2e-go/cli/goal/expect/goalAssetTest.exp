@@ -62,6 +62,25 @@ if { [catch {
         eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "Unable to query asset info" } }
     }
 
+    # Regression test: a reserve account that does not exist or has not opted in
+    # must not cause "asset info" to fail. Its holding is treated as zero.
+    set FOREIGN_RESERVE_ADDRESS R2LPJRKONXXURMO6F65VHGCXPKAZM4GGDC5KH5VZ2W3ZFIZYQRAQT7GLM4
+    set timeout 20
+    spawn goal asset create --creator $PRIMARY_ACCOUNT_ADDRESS --total 90000 --name 'reserveassetname' --unitname 'r' --reserve $FOREIGN_RESERVE_ADDRESS --datadir $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { close; ::AlgorandGoal::Abort "Asset Create (foreign reserve) timed out" }
+        -re "Created asset with asset index *" { set ASSET_CREATED 1; exp_continue }
+        eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "Unable to create asset with foreign reserve" } }
+    }
+
+    set timeout 5
+    spawn goal asset info --creator $PRIMARY_ACCOUNT_ADDRESS --unitname 'r' --datadir $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { close; ::AlgorandGoal::Abort "Asset Info (foreign reserve) Failed" }
+        "Reserve amount:   0 r" { puts "Successfully displayed asset with a non-holding reserve"; close;}
+        eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "asset info failed for an asset whose reserve does not hold it" } }
+    }
+
     # Shutdown the network
     ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ROOT_DIR
 } EXCEPTION] } {

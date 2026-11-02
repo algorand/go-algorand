@@ -25,7 +25,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -42,33 +41,39 @@ import (
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util"
 )
 
 var (
-	toAddress          string
-	account            string
-	amount             uint64
-	txFilename         string
-	rejectsFilename    string
-	closeToAddress     string
-	noProgramOutput    bool
-	writeSourceMap     bool
-	signProgram        bool
-	programSource      string
-	argB64Strings      []string
-	disassemble        bool
-	verbose            bool
-	progByteFile       string
-	msigParams         string
-	logicSigFile       string
-	timeStamp          int64
-	protoVersion       string
-	signerAddress      string
-	rawOutput          bool
+	account        string
+	amount         uint64
+	toAddress      string
+	closeToAddress string
+
+	txFilename      string
+	rejectsFilename string
+
 	requestFilename    string
 	requestOutFilename string
-	inspectTxid        bool
+
+	programSource string
+	progByteFile  string
+	logicSigFile  string
+	argB64Strings []string
+	msigParams    string
+
+	skipPqAddressCheck bool
+	saltedProgram      bool
+
+	noProgramOutput bool
+	writeSourceMap  bool
+	signProgram     bool
+	disassemble     bool
+	verbose         bool
+	rawOutput       bool
+	inspectTxid     bool
+
+	protoVersion  string
+	signerAddress string
 
 	simulateStartRound            basics.Round
 	simulateAllowEmptySignatures  bool
@@ -92,8 +97,6 @@ func init() {
 	clerkCmd.AddCommand(groupCmd)
 	clerkCmd.AddCommand(splitCmd)
 	clerkCmd.AddCommand(compileCmd)
-	clerkCmd.AddCommand(dryrunCmd)
-	clerkCmd.AddCommand(dryrunRemoteCmd)
 	clerkCmd.AddCommand(simulateCmd)
 
 	// Wallet to be used for the clerk operation
@@ -112,6 +115,7 @@ func init() {
 	sendCmd.Flags().StringSliceVar(&argB64Strings, "argb64", nil, "Base64 encoded args to pass to transaction logic")
 	sendCmd.Flags().StringVarP(&logicSigFile, "logic-sig", "L", "", "LogicSig to apply to transaction")
 	sendCmd.Flags().StringVar(&msigParams, "msig-params", "", "Multisig preimage parameters - [threshold] [Address 1] [Address 2] ...\nUsed to add the necessary fields in case the account was rekeyed to a multisig account")
+	sendCmd.Flags().BoolVar(&saltedProgram, "salted", false, "Authorize from the program's salted address, which no Ed25519 key can claim, rather than its program hash")
 	sendCmd.MarkFlagRequired("to")
 	sendCmd.MarkFlagRequired("amount")
 
@@ -122,6 +126,7 @@ func init() {
 	rawsendCmd.Flags().StringVarP(&txFilename, "filename", "f", "", "Filename of file containing raw transactions")
 	rawsendCmd.Flags().StringVarP(&rejectsFilename, "rejects", "r", "", "Filename for writing rejects to (default is txFilename.rej)")
 	rawsendCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transactions to commit")
+	rawsendCmd.Flags().BoolVar(&skipPqAddressCheck, "skip-pq-address-check", false, "Skip post-quantum address checks for submitted transactions. This should only be used if you understand the risks.")
 	rawsendCmd.MarkFlagRequired("filename")
 
 	signCmd.Flags().StringVarP(&txFilename, "infile", "i", "", "Partially-signed transaction file to add signature to")
@@ -131,6 +136,7 @@ func init() {
 	signCmd.Flags().StringVarP(&logicSigFile, "logic-sig", "L", "", "LogicSig to apply to transaction")
 	signCmd.Flags().StringSliceVar(&argB64Strings, "argb64", nil, "Base64 encoded args to pass to transaction logic")
 	signCmd.Flags().StringVarP(&protoVersion, "proto", "P", "", "Consensus protocol version id string")
+	signCmd.Flags().BoolVar(&saltedProgram, "salted", false, "Authorize from the program's salted address, which no Ed25519 key can claim, rather than its program hash")
 	signCmd.MarkFlagRequired("infile")
 	signCmd.MarkFlagRequired("outfile")
 
@@ -150,19 +156,6 @@ func init() {
 	compileCmd.Flags().BoolVarP(&signProgram, "sign", "s", false, "Sign program, output is a binary signed LogicSig record")
 	compileCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename to write program bytes or signed LogicSig to")
 	compileCmd.Flags().StringVarP(&account, "account", "a", "", "Account address to sign the program (If not specified, uses default account)")
-
-	dryrunCmd.Flags().StringVarP(&txFilename, "txfile", "t", "", "Transaction or transaction-group to test")
-	dryrunCmd.Flags().StringVarP(&protoVersion, "proto", "P", "", "Consensus protocol version id string")
-	dryrunCmd.Flags().BoolVar(&dumpForDryrun, "dryrun-dump", false, "Dump in dryrun format acceptable by dryrun REST api instead of running")
-	dryrunCmd.Flags().Var(&dumpForDryrunFormat, "dryrun-dump-format", "Dryrun dump format: "+dumpForDryrunFormat.AllowedString())
-	dryrunCmd.Flags().StringSliceVar(&dumpForDryrunAccts, "dryrun-accounts", nil, "Additional accounts to include into dryrun request obj")
-	dryrunCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename for writing dryrun state object")
-	dryrunCmd.MarkFlagRequired("txfile")
-
-	dryrunRemoteCmd.Flags().StringVarP(&txFilename, "dryrun-state", "D", "", "Dryrun request object to run")
-	dryrunRemoteCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Print more info")
-	dryrunRemoteCmd.Flags().BoolVarP(&rawOutput, "raw", "r", false, "Output raw response from algod")
-	dryrunRemoteCmd.MarkFlagRequired("dryrun-state")
 
 	simulateCmd.Flags().StringVarP(&txFilename, "txfile", "t", "", "Transaction or transaction-group to test. Mutually exclusive with --request")
 	simulateCmd.Flags().StringVar(&requestFilename, "request", "", "Simulate request object to run. Mutually exclusive with --txfile")
@@ -309,6 +302,55 @@ func getProgramArgs() [][]byte {
 	return getB64Args(argB64Strings)
 }
 
+// saltedProgramAuthorizer returns the salt and address a program authorizes
+// from under the ls scheme, whose salt makes it an address no Ed25519 key can
+// ever claim.
+func saltedProgramAuthorizer(program []byte) (basics.PQAddressSalt, basics.Address) {
+	salt, addr, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeLogicSig, program)
+	if err != nil {
+		reportErrorf("Could not derive salted address for program: %s", err)
+	}
+	return salt, addr
+}
+
+// programAuthorizer returns the address a program authorizes from, in whichever
+// of its two forms was asked for.
+func programAuthorizer(program []byte, salted bool) basics.Address {
+	if salted {
+		_, addr := saltedProgramAuthorizer(program)
+		return addr
+	}
+	return basics.Address(logic.HashProgram(program))
+}
+
+// authorizeWithProgram attaches a program and its arguments to stxn. A program
+// has two account addresses, so which form to use is settled in this order:
+// --salted if given, otherwise whichever address the transaction's authorizer
+// already matches, otherwise the legacy program hash, so that uses predating
+// the salted form keep the address they had.
+func authorizeWithProgram(stxn *transactions.SignedTxn, lsig transactions.LogicSig, salted bool) {
+	salt, addr := saltedProgramAuthorizer(lsig.Logic)
+	if !salted && stxn.Authorizer() == addr {
+		salted = true
+	}
+	if !salted {
+		stxn.PQsig = transactions.PQSig{}
+		stxn.Lsig = lsig
+		return
+	}
+
+	if authorizer := stxn.Authorizer(); authorizer != addr {
+		reportErrorf("program authorizes %s, but the transaction is authorized by %s", addr, authorizer)
+	}
+	stxn.Lsig = transactions.LogicSig{}
+	stxn.PQsig = transactions.PQSig{
+		Scheme:    protocol.PQSchemeLogicSig,
+		Salt:      salt,
+		PublicKey: lsig.Logic,
+		Signature: transactions.EncodeLogicSigArgs(lsig.Args),
+	}
+}
+
 func parseNoteField(cmd *cobra.Command) []byte {
 	if cmd.Flags().Changed("noteb64") {
 		noteBytes, err := base64.StdEncoding.DecodeString(noteBase64)
@@ -386,9 +428,7 @@ var sendCmd = &cobra.Command{
 		}
 		if program != nil {
 			if account == "" {
-				ph := logic.HashProgram(program)
-				pha := basics.Address(ph)
-				account = pha.String()
+				account = programAuthorizer(program, saltedProgram).String()
 			}
 			programArgs = getProgramArgs()
 		} else {
@@ -455,9 +495,10 @@ var sendCmd = &cobra.Command{
 			}
 			proto := protocol.ConsensusVersion(params.ConsensusVersion)
 			uncheckedTxn := transactions.SignedTxn{
-				Txn:  payment,
-				Lsig: lsig,
+				Txn:      payment,
+				AuthAddr: authAddr,
 			}
+			authorizeWithProgram(&uncheckedTxn, lsig, saltedProgram)
 			blockHeader := bookkeeping.BlockHeader{
 				UpgradeState: bookkeeping.UpgradeState{
 					CurrentProtocol: proto,
@@ -473,13 +514,13 @@ var sendCmd = &cobra.Command{
 			stx = uncheckedTxn
 		} else if program != nil {
 			stx = transactions.SignedTxn{
-				Txn: payment,
-				Lsig: transactions.LogicSig{
-					Logic: program,
-					Args:  programArgs,
-				},
+				Txn:      payment,
 				AuthAddr: authAddr,
 			}
+			authorizeWithProgram(&stx, transactions.LogicSig{
+				Logic: program,
+				Args:  programArgs,
+			}, saltedProgram)
 		} else {
 			signTx := sign || (outFilename == "")
 			if signerAddress != "" {
@@ -552,11 +593,7 @@ var sendCmd = &cobra.Command{
 				}
 			}
 		} else {
-			if dumpForDryrun {
-				err = writeDryrunReqToFile(client, stx, outFilename)
-			} else {
-				err = writeFile(outFilename, protocol.Encode(&stx), 0600)
-			}
+			err = writeFile(outFilename, protocol.Encode(&stx), 0600)
 			if err != nil {
 				reportErrorln(err)
 			}
@@ -609,7 +646,7 @@ var rawsendCmd = &cobra.Command{
 		pendingTxns := make(map[transactions.Txid]string)
 		for _, txgroup := range txgroups {
 			// Broadcast the transaction
-			err1 := client.BroadcastTransactionGroup(txgroup)
+			err1 := client.BroadcastTransactionGroupWithParams(txgroup, skipPqAddressCheck)
 			if err1 != nil {
 				for _, txn := range txgroup {
 					txnErrors[txn.ID()] = err1.Error()
@@ -855,13 +892,16 @@ var signCmd = &cobra.Command{
 			txnGroup := []transactions.SignedTxn{}
 			for _, txn := range txnGroups[group] {
 				if lsig.Logic != nil {
-					txn.Lsig = lsig
+					// The authorizer has to be settled before the program is
+					// attached, since which of its two addresses the program
+					// authorizes from is read off the authorizer.
 					if signerAddress != "" {
 						if authAddr == txn.Txn.Sender {
 							reportErrorf("AuthAddr cannot be the same as the transaction sender")
 						}
 						txn.AuthAddr = authAddr
 					}
+					authorizeWithProgram(txn, lsig, saltedProgram)
 				}
 				txnGroup = append(txnGroup, *txn)
 			}
@@ -930,7 +970,9 @@ var groupCmd = &cobra.Command{
 				reportErrorf("Transaction #%d with ID of %s is already part of a group.", transactionIdx, stxn.ID().String())
 			}
 
-			if (!stxn.Sig.Blank()) || (!stxn.Msig.Blank()) {
+			// A program authorization is kept, as an Lsig is, since grouping
+			// does not invalidate it.
+			if !stxn.Sig.Blank() || !stxn.Msig.Blank() || (!stxn.PQsig.Blank() && !stxn.PQsig.IsLogicSig()) {
 				reportErrorf("Transaction #%d with ID of %s is already signed", transactionIdx, stxn.ID().String())
 			}
 
@@ -1052,7 +1094,7 @@ func disassembleFile(fname, outname string) {
 	if err == nil {
 		// success, extract program to disassemble
 		program = lsig.Logic
-		if lsig.Sig != (crypto.Signature{}) || (!lsig.Msig.Blank()) || len(lsig.Args) > 0 {
+		if !lsig.Sig.Blank() || !lsig.Msig.Blank() || !lsig.LMsig.Blank() || !lsig.PQsig.Blank() || len(lsig.Args) > 0 {
 			nologic := lsig
 			nologic.Logic = nil
 			ilsig := lsigToInspect(nologic)
@@ -1146,142 +1188,14 @@ var compileCmd = &cobra.Command{
 			if !signProgram && shouldPrintAdditionalInfo {
 				pd := logic.HashProgram(program)
 				addr := basics.Address(pd)
-				fmt.Printf("%s: %s\n", fname, addr.String())
-			}
-		}
-	},
-}
-
-var dryrunCmd = &cobra.Command{
-	Use:   "dryrun",
-	Short: "Test a program offline",
-	Long:  "Test a TEAL program offline under various conditions and verbosity.",
-	Run: func(cmd *cobra.Command, args []string) {
-		reportWarnf("goal clerk dryrun is deprecated and will be removed soon. Please speak up if the feature matters to you.")
-		time.Sleep(3 * time.Second)
-		stxns := decodeTxnsFromFile(txFilename)
-		proto, params := getProto(protoVersion)
-		if dumpForDryrun {
-			// Write dryrun data to file
-			dataDir := datadir.EnsureSingleDataDir()
-			client := ensureFullClient(dataDir)
-			accts := util.Map(dumpForDryrunAccts, cliAddress)
-			data, err := libgoal.MakeDryrunStateBytes(client, nil, stxns, accts, string(proto), dumpForDryrunFormat.String())
-			if err != nil {
-				reportErrorln(err)
-			}
-			writeFile(outFilename, data, 0600)
-			return
-		}
-
-		if timeStamp <= 0 {
-			timeStamp = time.Now().Unix()
-		}
-
-		lSigPooledSize := 0
-		for i, txn := range stxns {
-			if txn.Lsig.Blank() {
-				continue
-			}
-			lsigLen := txn.Lsig.Len()
-			lSigPooledSize += lsigLen
-			if !params.EnableLogicSigSizePooling && uint64(lsigLen) > params.LogicSigMaxSize {
-				reportErrorf("program size too large: %d > %d", len(txn.Lsig.Logic), params.LogicSigMaxSize)
-			}
-			ep := logic.NewSigEvalParams(stxns, &params, logic.NoHeaderLedger{})
-
-			err := logic.CheckSignature(i, ep)
-			if err != nil {
-				reportErrorf("program failed Check: %s", err)
-			}
-			ep.Trace = &strings.Builder{}
-			pass, err := logic.EvalSignature(i, ep)
-			// TODO: optionally include `inspect` output here?
-			fmt.Fprintf(os.Stdout, "tx[%d] trace:\n%s\n", i, ep.Trace.String())
-			if pass {
-				fmt.Fprintf(os.Stdout, " - pass -\n")
-			} else {
-				fmt.Fprintf(os.Stdout, "REJECT\n")
-			}
-			if err != nil {
-				fmt.Fprintf(os.Stdout, "ERROR: %s\n", err.Error())
-			}
-		}
-		lSigMaxPooledSize := len(stxns) * int(params.LogicSigMaxSize)
-		if params.EnableLogicSigSizePooling && lSigPooledSize > lSigMaxPooledSize {
-			reportErrorf("total lsigs size too large: %d > %d", lSigPooledSize, lSigMaxPooledSize)
-		}
-
-	},
-}
-
-var dryrunRemoteCmd = &cobra.Command{
-	Use:   "dryrun-remote",
-	Short: "Test a program with algod's dryrun REST endpoint",
-	Long:  "Test a TEAL program with algod's dryrun REST endpoint under various conditions and verbosity.",
-	Run: func(cmd *cobra.Command, args []string) {
-		reportWarnf("goal clerk dryrun-remote is deprecated and will be removed soon. Please speak up if the feature matters to you.")
-		time.Sleep(3 * time.Second)
-		data, err := readFile(txFilename)
-		if err != nil {
-			reportErrorf(fileReadError, txFilename, err)
-		}
-
-		dataDir := datadir.EnsureSingleDataDir()
-		client := ensureFullClient(dataDir)
-		resp, err := client.Dryrun(data)
-		if err != nil {
-			reportErrorf("dryrun-remote: %s", err.Error())
-		}
-		if rawOutput {
-			fmt.Fprint(os.Stdout, string(protocol.EncodeJSON(&resp)))
-			return
-		}
-
-		stackToString := func(stack []model.TealValue) string {
-			result := make([]string, len(stack))
-			for i, sv := range stack {
-				if sv.Type == uint64(basics.TealBytesType) {
-					result[i] = heuristicFormatStr(sv.Bytes)
-				} else {
-					result[i] = fmt.Sprintf("%d", sv.Uint)
+				// The ls address is appended to this line rather than printed on
+				// one of its own, so that scripts reading the first address by
+				// field or by word keep working.
+				_, pqAddr, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeLogicSig, program)
+				if err != nil {
+					reportErrorf("Could not derive pq address: %s", err)
 				}
-			}
-			return strings.Join(result, " ")
-		}
-		if len(resp.Txns) > 0 {
-			for i, txnResult := range resp.Txns {
-				var msgs []string
-				var trace []model.DryrunState
-				if txnResult.AppCallMessages != nil && len(*txnResult.AppCallMessages) > 0 {
-					msgs = *txnResult.AppCallMessages
-					if txnResult.AppCallTrace != nil {
-						trace = *txnResult.AppCallTrace
-					}
-				} else if txnResult.LogicSigMessages != nil && len(*txnResult.LogicSigMessages) > 0 {
-					msgs = *txnResult.LogicSigMessages
-					if txnResult.LogicSigTrace != nil {
-						trace = *txnResult.LogicSigTrace
-					}
-				}
-				if txnResult.BudgetConsumed != nil {
-					fmt.Fprintf(os.Stdout, "tx[%d] budget consumed: %d\n", i, *txnResult.BudgetConsumed)
-				}
-				if txnResult.BudgetAdded != nil {
-					fmt.Fprintf(os.Stdout, "tx[%d] budget added: %d\n", i, *txnResult.BudgetAdded)
-				}
-
-				fmt.Fprintf(os.Stdout, "tx[%d] messages:\n", i)
-				for _, msg := range msgs {
-					fmt.Fprintf(os.Stdout, "%s\n", msg)
-				}
-				if verbose && len(trace) > 0 {
-					fmt.Fprintf(os.Stdout, "tx[%d] trace:\n", i)
-					for _, item := range trace {
-						fmt.Fprintf(os.Stdout, "%4d (%04x): %s [%s]\n",
-							item.Line, item.Pc, txnResult.Disassembly[item.Line-1], stackToString(item.Stack))
-					}
-				}
+				fmt.Printf("%s: %s (pq: %s)\n", fname, addr.String(), pqAddr.String())
 			}
 		}
 	},

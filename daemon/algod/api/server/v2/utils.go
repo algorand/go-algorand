@@ -268,7 +268,7 @@ func getCodecHandle(formatPtr *string) (codec.Handle, string, error) {
 	}
 }
 
-func encode(handle codec.Handle, obj interface{}) ([]byte, error) {
+func encode(handle codec.Handle, obj any) ([]byte, error) {
 	var output []byte
 	enc := codec.NewEncoderBytes(&output, handle)
 
@@ -279,7 +279,7 @@ func encode(handle codec.Handle, obj interface{}) ([]byte, error) {
 	return output, nil
 }
 
-func decode(handle codec.Handle, data []byte, v interface{}) error {
+func decode(handle codec.Handle, data []byte, v any) error {
 	enc := codec.NewDecoderBytes(data, handle)
 
 	err := enc.Decode(v)
@@ -315,10 +315,10 @@ func edIndexToAddress(index uint64, txn *transactions.Transaction, shared []basi
 	switch {
 	case index == 0:
 		return txn.Sender.String()
-	case int(index-1) < len(txn.Accounts):
+	case index-1 < uint64(len(txn.Accounts)):
 		return txn.Accounts[index-1].String()
-	case int(index-1)-len(txn.Accounts) < len(shared):
-		return shared[int(index-1)-len(txn.Accounts)].String()
+	case index-1-uint64(len(txn.Accounts)) < uint64(len(shared)):
+		return shared[index-1-uint64(len(txn.Accounts))].String()
 	default:
 		return fmt.Sprintf("Invalid Account Index %d in LocalDelta", index)
 	}
@@ -479,6 +479,7 @@ func convertTxnResult(txnResult simulation.TxnResult) PreEncodedSimulateTxnResul
 		Txn:                      ConvertInnerTxn(&txnResult.Txn),
 		AppBudgetConsumed:        omitEmpty(txnResult.AppBudgetConsumed),
 		LogicSigBudgetConsumed:   omitEmpty(txnResult.LogicSigBudgetConsumed),
+		FeesPaid:                 omitEmpty(txnResult.FeesPaid.Raw),
 		TransactionTrace:         convertTxnTrace(txnResult.Trace),
 		UnnamedResourcesAccessed: convertUnnamedResourcesAccessed(txnResult.UnnamedResourcesAccessed),
 	}
@@ -575,6 +576,8 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 		FailureMessage:           omitEmpty(txnGroupResult.FailureMessage),
 		AppBudgetAdded:           omitEmpty(txnGroupResult.AppBudgetAdded),
 		AppBudgetConsumed:        omitEmpty(txnGroupResult.AppBudgetConsumed),
+		GroupUsage:               omitEmpty(uint64(txnGroupResult.GroupUsage)),
+		GroupFeesPaid:            omitEmpty(txnGroupResult.GroupFeesPaid.Raw),
 		UnnamedResourcesAccessed: convertUnnamedResourcesAccessed(txnGroupResult.UnnamedResourcesAccessed),
 	}
 

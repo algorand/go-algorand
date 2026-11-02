@@ -766,6 +766,13 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 	return res, found
 }
 
+// GetPeers returns the node's peers
+func (node *AlgorandFullNode) GetPeers() (inboundPeers []network.Peer, outboundPeers []network.Peer, err error) {
+	inboundPeers = node.net.GetPeers(network.PeersTransportConnectionsIn)
+	outboundPeers = node.net.GetPeers(network.PeersTransportConnectionsOut)
+	return inboundPeers, outboundPeers, nil
+}
+
 // Status returns a StatusReport structure reporting our status as Active and with our ledger's LastRound
 func (node *AlgorandFullNode) Status() (StatusReport, error) {
 	node.syncStatusMu.Lock()
@@ -942,7 +949,7 @@ func createTemporaryParticipationKey(outDir string, partKeyBinary []byte) (strin
 	// Create a temporary filename with a UUID so that we can call this function twice
 	// in a row without worrying about collisions
 	sb.WriteString("tempPartKeyBinary.")
-	sb.WriteString(fmt.Sprintf("%d", crypto.RandUint64()))
+	fmt.Fprintf(&sb, "%d", crypto.RandUint64())
 	sb.WriteString(".bin")
 
 	tempFile := filepath.Join(outDir, filepath.Base(sb.String()))
@@ -1223,6 +1230,7 @@ func (node *AlgorandFullNode) StartCatchup(catchpoint string) error {
 	}
 	err = node.catchpointCatchupService.Start(node.ctx)
 	if err != nil {
+		node.catchpointCatchupService = nil
 		node.log.Warn(err.Error())
 		return MakeStartCatchpointError(catchpoint, err)
 	}

@@ -119,7 +119,7 @@ func (p *SingleLeafProof) GetFixedLengthHashableRepresentation() []byte {
 	}
 
 	for i := uint8(0); i < proofLenByte; i++ {
-		if i < proofLenByte && p.Path[i] != nil {
+		if int(i) < len(p.Path) && p.Path[i] != nil {
 			binProof = append(binProof, p.Path[i]...)
 		} else {
 			binProof = append(binProof, zeroDigest...)
@@ -142,7 +142,7 @@ func (p *SingleLeafProof) GetConcatenatedProof() []byte {
 	digestSize := p.HashFactory.NewHash().Size()
 	proofconcat := make([]byte, digestSize*int(p.TreeDepth))
 	for i := 0; i < int(p.TreeDepth); i++ {
-		if p.Path[i] != nil {
+		if i < len(p.Path) && p.Path[i] != nil {
 			copy(proofconcat[i*digestSize:(i+1)*digestSize], p.Path[i])
 		}
 	}

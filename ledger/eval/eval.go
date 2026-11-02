@@ -671,6 +671,11 @@ type BlockEvaluator struct {
 
 	blockGenerated bool // prevent repeated GenerateBlock calls
 
+	// corruptedState is set when a panic is recovered mid-commit: commitToParent cannot be
+	// rolled back, so eval.state may hold a half-applied group. Once set,
+	// TestTransactionGroup/TransactionGroup/GenerateBlock refuse and the caller must discard it.
+	corruptedState bool
+
 	l LedgerForEvaluator
 
 	maxTxnBytesPerBlock int
@@ -798,6 +803,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 	}
 	// set the eval state with the current header
 	eval.state = makeRoundCowState(base, eval.block.BlockHeader, proto, eval.prevHeader.TimeStamp, prevTotals, evalOpts.PaysetHint)
+	eval.state.generate = evalOpts.Generate
 
 	if evalOpts.Validate {
 		preCheckErr := eval.block.BlockHeader.PreCheck(eval.prevHeader)
@@ -914,7 +920,19 @@ func (eval *BlockEvaluator) ResetTxnBytes() {
 // the block evaluator, or modify the block evaluator state in any other visible
 // way. TestTransactionGroup is _not_ called on groups during block validation,
 // so TransactionGroup() must repeat all checks.
-func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTxn) error {
+func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTxn) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			logging.Base().Errorf("recovered from panic testing transaction group for round %d: %v", eval.Round(), r)
+			err = ledgercore.EvalPanicError{Round: eval.Round(), Cause: fmt.Sprintf("%v", r)}
+		}
+	}()
+
+	// Refuse to test against the half-applied state left by a prior mid-commit panic.
+	if eval.corruptedState {
+		return ledgercore.ErrEvaluatorCorruptedState
+	}
+
 	// Nothing to do if there are no transactions.
 	if len(txgroup) == 0 {
 		return nil
@@ -927,9 +945,17 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 		}
 	}
 
+	for _, txn := range txgroup {
+		wfErr := txn.Txn.WellFormed(eval.specials, eval.proto)
+		if wfErr != nil {
+			txnErr := ledgercore.TxnNotWellFormedError(fmt.Sprintf("transaction %v: malformed: %v", txn.ID(), wfErr))
+			return &txnErr
+		}
+	}
+
 	var group transactions.TxGroup
 	for gi, txn := range txgroup {
-		err := eval.testTransaction(txn)
+		err = eval.testTransaction(txn)
 		if err != nil {
 			return err
 		}
@@ -980,7 +1006,11 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 // associated with inner transactions.  Those costs are monitored during app
 // calls in the logic package.
 func CheckGroupFees(feesPaid basics.MicroAlgos, usage basics.Micros, minFee basics.MicroAlgos) error {
-	feeNeeded, overflow := minFee.MulMicros(usage)
+	// This is the top-level group's charge in the precise-fee scheme: no cost
+	// multiplier (1e6) and no prior residue. It must match the feeNeeded that the
+	// logic package's feeCredit computes for the same top-level usage. The residue
+	// it leaves is irrelevant here, since block evaluation can't see inner groups.
+	feeNeeded, _, overflow := minFee.FeeForUsage(usage, 1e6, 0)
 	if overflow {
 		return &ledgercore.TxGroupMalformedError{
 			Msg:    "txgroup required fee overflow",
@@ -1001,7 +1031,7 @@ func CheckGroupFees(feesPaid basics.MicroAlgos, usage basics.Micros, minFee basi
 	return nil
 }
 
-// testTransaction performs basic duplicate detection and well-formedness checks
+// testTransaction performs basic duplicate detection and expired checks
 // on a single transaction, but does not actually add the transaction to the block
 // evaluator, or modify the block evaluator state in any other visible way.
 func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn) error {
@@ -1009,12 +1039,6 @@ func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn) error {
 	err := eval.block.Alive(txn.Txn.Header)
 	if err != nil {
 		return err
-	}
-
-	err = txn.Txn.WellFormed(eval.specials, eval.proto)
-	if err != nil {
-		txnErr := ledgercore.TxnNotWellFormedError(fmt.Sprintf("transaction %v: malformed: %v", txn.ID(), err))
-		return &txnErr
 	}
 
 	// Transaction already in the ledger?
@@ -1031,6 +1055,24 @@ func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn) error {
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
 func (eval *BlockEvaluator) TransactionGroup(txgroup ...transactions.SignedTxnWithAD) (err error) {
+	committing := false
+	defer func() {
+		if r := recover(); r != nil {
+			logging.Base().Errorf("recovered from panic evaluating transaction group for round %d: %v", eval.Round(), r)
+			err = ledgercore.EvalPanicError{Round: eval.Round(), Cause: fmt.Sprintf("%v", r)}
+			if committing {
+				// eval.state may hold a half-applied group that can't be rolled back; mark
+				// the evaluator unusable.
+				eval.corruptedState = true
+			}
+		}
+	}()
+
+	// Refuse to evaluate against the half-applied state left by a prior mid-commit panic.
+	if eval.corruptedState {
+		return ledgercore.ErrEvaluatorCorruptedState
+	}
+
 	// Nothing to do if there are no transactions.
 	if len(txgroup) == 0 {
 		return nil
@@ -1062,6 +1104,17 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup ...transactions.SignedTxnWi
 	txibs := make([]transactions.SignedTxnInBlock, 0, len(txgroup))
 	var groupTxBytes int
 	var group transactions.TxGroup
+
+	if eval.validate {
+		for _, txad := range txgroup {
+			err = txad.Txn.WellFormed(eval.specials, eval.proto)
+			if err != nil {
+				err0 := ledgercore.TxnNotWellFormedError(fmt.Sprintf("transaction %v: malformed: %v", txad.ID(), err))
+				return &err0
+			}
+		}
+	}
+
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
@@ -1069,7 +1122,7 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup ...transactions.SignedTxnWi
 			eval.Tracer.BeforeTxn(evalParams, gi)
 		}
 
-		err := eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cow, &txib)
+		err = eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cow, &txib)
 
 		if eval.Tracer != nil {
 			eval.Tracer.AfterTxn(evalParams, gi, txib.ApplyData, err)
@@ -1126,11 +1179,16 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup ...transactions.SignedTxnWi
 	// inner txns, but that will be checked during AVM execution. But this is
 	// the only chance to check that the top-level fees are enough for the
 	// top-level txns.
-	usage, feesPaid := transactions.SummarizeFees(txgroup)
+	usage, feesPaid := transactions.SummarizeFees(txgroup, eval.proto)
 	if err := CheckGroupFees(feesPaid, usage, eval.proto.MinFee()); err != nil {
 		return err
 	}
 
+	// committing is set before the first mutation that outlives this call (the Payset append)
+	// and stays set: from here on -- including the deferred tracer hook, which runs after a
+	// successful commit and can itself panic in cow.deltas() -- a recovered panic marks the
+	// evaluator corrupt instead of cleanly rejecting the group.
+	committing = true
 	eval.block.Payset = append(eval.block.Payset, txibs...)
 	eval.blockTxBytes += groupTxBytes
 	cow.commitToParent()
@@ -1185,6 +1243,37 @@ func (eval *BlockEvaluator) checkMinBalance(cow *roundCowState) error {
 	return nil
 }
 
+// closingRecord returns the sender's record when txn would close its account
+// and this evaluation is generating, so that checkCloseMinBalance can inspect
+// it once the transaction has been applied. It returns nil when there is
+// nothing to check. Inner transactions use it too, through Perform.
+func (cs *roundCowState) closingRecord(txn *transactions.Transaction) (*ledgercore.AccountData, error) {
+	if !cs.generate || txn.Type != protocol.PaymentTx || txn.CloseRemainderTo.IsZero() {
+		return nil, nil
+	}
+	rec, err := cs.lookup(txn.Sender)
+	if err != nil {
+		return nil, err
+	}
+	return &rec, nil
+}
+
+// checkCloseMinBalance refuses to assemble a close-out of an account that
+// still carried a minimum balance requirement above the base amount.
+// apply.Payment checks the individual counters by hand; this catches anything
+// those checks do not. It runs only while generating (pool admission, block
+// assembly, simulation) and never while validating, so it cannot cause this
+// node to vote differently from its peers.
+func checkCloseMinBalance(closing *ledgercore.AccountData, sender basics.Address, proto *config.ConsensusParams) error {
+	if closing == nil {
+		return nil
+	}
+	if mbr := closing.MinBalance(proto); mbr.Raw > proto.MinBalance {
+		return fmt.Errorf("cannot close: account %v requires a minimum balance of %d", sender, mbr.Raw)
+	}
+	return nil
+}
+
 // transaction tentatively executes a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
@@ -1198,12 +1287,6 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 		err = eval.block.Alive(txn.Txn.Header)
 		if err != nil {
 			return err
-		}
-
-		err = txn.Txn.WellFormed(eval.specials, eval.proto)
-		if err != nil {
-			txnErr := ledgercore.TxnNotWellFormedError(fmt.Sprintf("transaction %v: malformed: %v", txn.ID(), err))
-			return &txnErr
 		}
 
 		// Transaction already in the ledger?
@@ -1227,6 +1310,11 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 		}
 	}
 
+	closing, err := cow.closingRecord(&txn.Txn)
+	if err != nil {
+		return err
+	}
+
 	// Apply the transaction, updating the cow balances
 	applyData, err := eval.applyTransaction(txn.Txn, cow, evalParams, gi, cow.Counter())
 	if err != nil {
@@ -1234,6 +1322,10 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 			// If there is a tracer, save the ApplyData so that it's viewable by the tracer
 			txib.ApplyData = applyData
 		}
+		return fmt.Errorf("transaction %v: %w", txid, err)
+	}
+
+	if err = checkCloseMinBalance(closing, txn.Txn.Sender, &eval.proto); err != nil {
 		return fmt.Errorf("transaction %v: %w", txid, err)
 	}
 
@@ -1330,7 +1422,11 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *r
 		err = apply.StateProof(tx.StateProofTxnFields, tx.Header.FirstValid, cow, eval.validate)
 
 	case protocol.HeartbeatTx:
-		err = apply.Heartbeat(*tx.HeartbeatTxnFields, tx.Header, cow, cow, cow.Round())
+		if tx.HeartbeatTxnFields == nil {
+			err = fmt.Errorf("heartbeat txn has no heartbeat fields")
+		} else {
+			err = apply.Heartbeat(*tx.HeartbeatTxnFields, tx.Header, cow, cow, cow.Round())
+		}
 
 	default:
 		err = fmt.Errorf("unknown transaction type %v", tx.Type)
@@ -2014,6 +2110,11 @@ func (eval *BlockEvaluator) GenerateBlock(participating []basics.Address) (*ledg
 		return nil, fmt.Errorf("GenerateBlock already called on this BlockEvaluator")
 	}
 
+	// Refuse to generate a block from the half-applied state left by a mid-commit panic.
+	if eval.corruptedState {
+		return nil, ledgercore.ErrEvaluatorCorruptedState
+	}
+
 	err := eval.endOfBlock(participating...)
 	if err != nil {
 		return nil, err
@@ -2039,6 +2140,7 @@ func (eval *BlockEvaluator) GenerateBlock(participating []basics.Address) (*ledg
 	eval.state = makeRoundCowState(
 		eval.state, eval.block.BlockHeader, proto, eval.prevHeader.TimeStamp, eval.state.mods.Totals,
 		len(eval.block.Payset))
+	eval.state.generate = eval.generate
 	return &vb, nil
 }
 
@@ -2046,6 +2148,7 @@ func (eval *BlockEvaluator) GenerateBlock(participating []basics.Address) (*ledg
 // force a block evalator to create a block and compare it to another.
 func (eval *BlockEvaluator) SetGenerateForTesting(g bool) {
 	eval.generate = g
+	eval.state.generate = g
 }
 
 type evalTxValidator struct {
@@ -2061,6 +2164,13 @@ type evalTxValidator struct {
 
 func (validator *evalTxValidator) run() {
 	defer close(validator.done)
+	defer func() {
+		if r := recover(); r != nil {
+			logging.Base().Errorf("recovered from panic verifying transaction groups for round %d: %v", validator.block.Round(), r)
+			// done is buffered (cap 1) and run()'s normal sends each precede a return, so this send never blocks; it runs before the close above
+			validator.done <- ledgercore.EvalPanicError{Round: validator.block.Round(), Cause: fmt.Sprintf("verifying transaction groups: %v", r)}
+		}
+	}()
 	specialAddresses := transactions.SpecialAddresses{
 		FeeSink:     validator.block.BlockHeader.FeeSink,
 		RewardsPool: validator.block.BlockHeader.RewardsPool,
@@ -2094,7 +2204,15 @@ func (validator *evalTxValidator) run() {
 // Validate: Eval(ctx, l, blk, true, txcache, executionPool)
 // AddBlock: Eval(context.Background(), l, blk, false, txcache, nil)
 // tracker:  Eval(context.Background(), l, blk, false, txcache, nil)
-func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool, tracer logic.EvalTracer) (ledgercore.StateDelta, error) {
+func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool, tracer logic.EvalTracer) (deltas ledgercore.StateDelta, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			logging.Base().Errorf("recovered from panic evaluating block for round %d: %v", blk.Round(), r)
+			deltas = ledgercore.StateDelta{}
+			err = ledgercore.EvalPanicError{Round: blk.Round(), Cause: fmt.Sprintf("%v", r)}
+		}
+	}()
+
 	// flush the pending writes in the cache to make everything read so far available during eval
 	l.FlushCaches()
 

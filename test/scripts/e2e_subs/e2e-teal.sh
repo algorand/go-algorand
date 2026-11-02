@@ -1,6 +1,8 @@
 #!/bin/bash
 
-date '+e2e_teal start %Y%m%d_%H%M%S'
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
 
 set -e
 set -x
@@ -88,8 +90,6 @@ ${gcmd} clerk send -f ${ACCOUNT} -t ${ACCOUNTB} -a 1000000 -o ${TEMPDIR}/one.tx
 ${gcmd} clerk sign -L ${TEMPDIR}/true.lsig -i ${TEMPDIR}/one.tx -o ${TEMPDIR}/one.stx
 
 ${gcmd} clerk rawsend -f ${TEMPDIR}/one.stx
-
-${gcmd} clerk dryrun -t ${TEMPDIR}/one.stx
 
 ACCOUNT_TRUE=$(${gcmd} clerk compile -n ${TEMPDIR}/true.teal|awk '{ print $2 }')
 
@@ -200,4 +200,4 @@ ${gcmd} clerk send --amount 10 --from-program-bytes ${TEMPDIR}/true2.lsig --to $
 set -o pipefail
 
 
-date '+e2e_teal OK %Y%m%d_%H%M%S'
+date "+${scriptname} OK %Y%m%d_%H%M%S"

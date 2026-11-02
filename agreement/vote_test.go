@@ -280,6 +280,16 @@ func TestVoteValidationStepCertAndProposalBottom(t *testing.T) {
 	}
 }
 
+// TestVoteVerifyRejectsStepAboveDown checks that verify enforces wellFormed itself.
+func TestVoteVerifyRejectsStepAboveDown(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	uv := unauthenticatedVote{R: rawVote{Step: down + 1}}
+	_, err := uv.verify(nil) // should never dereference ledger
+	require.ErrorContains(t, err, "exceeds max step")
+}
+
 // Test Equivocation Vote Validation
 func TestEquivocationVoteValidation(t *testing.T) {
 	partitiontest.PartitionTest(t)

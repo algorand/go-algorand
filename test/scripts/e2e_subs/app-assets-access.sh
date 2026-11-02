@@ -41,33 +41,24 @@ MAX_MIN_BALANCE=628500
 TOTAL_NEEDED=$((NEEDED_FOR_FEES + MAX_MIN_BALANCE + MIN_FEE * 3))
 
 # Fund with at least 2 Algos to ensure enough for high MIN_FEE scenarios
-# Note: Account will earn rewards (RewardUnit = 1,000,000), so balance checks must be tolerant
+# Note: Account will earn rewards (RewardUnit = 1,000,000), so balance checks exclude rewards
 SMALL_FUNDING=$((TOTAL_NEEDED > 2000000 ? TOTAL_NEEDED : 2000000))
 
-# Tolerance for balance checks (to account for rewards earned)
-# Allow up to 5000 microAlgos tolerance per balance check
-BALANCE_TOLERANCE=5000
 SMALL=$(${gcmd} account new | awk '{ print $6 }')
 ${gcmd} clerk send -a $SMALL_FUNDING -f "$ACCOUNT" -t "$SMALL"
 
-function balance {
-    acct=$1; shift
-    goal account balance -a "$acct" | awk '{print $1}'
-}
-
-# Check if balance is within tolerance of expected value
+# Check that an account's balance, excluding rewards, exactly matches the expected value.
 # Usage: check_balance <account> <expected_balance>
-# Allows BALANCE_TOLERANCE above expected (for rewards) but exact match below
 function check_balance {
     local acct=$1
     local expected=$2
     local actual
-    actual=$(balance "$acct")
+    actual=$(balance_without_rewards "$acct")
     local diff=$((actual - expected))
 
-    if [ $diff -lt 0 ] || [ $diff -gt $BALANCE_TOLERANCE ]; then
+    if [ "$diff" -ne 0 ]; then
         echo "ERROR: Balance check failed for $acct"
-        echo "  Expected: $expected (tolerance: +0 to +$BALANCE_TOLERANCE)"
+        echo "  Expected: $expected"
         echo "  Actual:   $actual (diff: $diff)"
         return 1
     fi
@@ -252,7 +243,7 @@ cb_addr=$(${gcmd} asset info --assetid $ASSETID | clawback_addr)
 RES=$(appl "transfer(uint64,uint64,address):void" --from="$SMALL" \
      --app-arg="int:$ASSETID" --app-arg="int:1000" --app-arg="addr:$USER2" \
      --foreign-asset="$ASSETID" --app-account="$USER2" 2>&1) && {
-    date '+app-assets-access FAIL transfer should fail without explicit holding %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL transfer should fail without explicit holding %Y%m%d_%H%M%S"
     exit 1
 }
 # allowsAssetTransfer checks the AssetReceiver before AssetSender, so we get that error.
@@ -273,7 +264,7 @@ appl "transfer(uint64,uint64,address):void" \
 RES=$(appl "transfer(uint64,uint64,address):void" --from="$USER2" \
      --app-arg="int:$ASSETID" --app-arg="int:100" --foreign-asset="$ASSETID" \
      --app-arg="addr:$SMALL" --app-account="$SMALL" 2>&1) && {
-    date '+app-assets FAIL transfer using --access should fail without explicit holding %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL transfer using --access should fail without explicit holding %Y%m%d_%H%M%S"
     exit 1
 }
 [[ $RES == *"unavailable Holding"* ]] || exit 1
@@ -298,14 +289,14 @@ $ASSETID3"
 
 # opt out of assets
 RES=$(appl "close(uint64):void" --from="$SMALL" --app-arg "int:$ASSETID2" --foreign-asset="$ASSETID2" 2>&1) && {
-    date '+app-assets FAIL close using --access should fail without explicit app holding %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL close using --access should fail without explicit app holding %Y%m%d_%H%M%S"
     exit 1
 }
 [[ $RES == *"unavailable Holding $ASSETID2+$APPACCT"* ]] || exit 1 # app can't close itself unless its holding is available
 
 # add that holding, but still not enough...
 RES=$(appl "close(uint64):void" --from="$SMALL" --app-arg "int:$ASSETID2" --holding="$ASSETID2+$APPACCT" 2>&1) && {
-    date '+app-assets FAIL close using --access should fail without explicit sender holding %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL close using --access should fail without explicit sender holding %Y%m%d_%H%M%S"
     exit 1
 }
 [[ $RES == *"unavailable Holding $ASSETID2+$SMALL"* ]] || exit 1   # app closes to sender, so needs that holding too
@@ -347,7 +338,7 @@ $APPASSETID"
 
 # freeze asset
 RES=$(appl "freeze(uint64,bool):void" --from="$SMALL" --app-arg="int:$APPASSETID" --app-arg="int:1" --foreign-asset="$APPASSETID" 2>&1) && {
-    date '+app-assets FAIL freeze using --access should fail without explicit sender holding %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL freeze using --access should fail without explicit sender holding %Y%m%d_%H%M%S"
     exit 1
 }
 [[ $RES == *"unavailable Holding $APPASSETID+$SMALL"* ]] || exit 1

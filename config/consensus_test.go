@@ -43,6 +43,41 @@ func TestConsensusParams(t *testing.T) {
 		if 2*params.Payouts.ChallengeGracePeriod > params.MaxTxnLife+params.DeeperBlockHeaderHistory {
 			t.Errorf("Protocol %s: Grace period is too long", proto)
 		}
+
+		// It makes no sense to have the "Absolute" smaller than the non-absolute values.
+		if params.MaxAbsoluteTxnNoteBytes < params.MaxTxnNoteBytes {
+			t.Errorf("Protocol %s: MaxAbsoluteTxnNoteBytes is smaller than MaxTxnNoteBytes", proto)
+		}
+		if params.MaxAbsoluteExtraProgramPages < params.MaxExtraAppProgramPages {
+			t.Errorf("Protocol %s: MaxAbsoluteExtraProgramPages is smaller than MaxExtraAppProgramPages", proto)
+		}
+		if params.MaxAbsoluteTotalArgLen < params.MaxAppTotalArgLen {
+			t.Errorf("Protocol %s: MaxAbsoluteTotalArgLen is smaller than MaxAppTotalArgLen", proto)
+		}
+		if params.MaxAbsoluteLogicSigProgramSize < params.LogicSigMaxSize {
+			t.Errorf("Protocol %s: MaxAbsoluteLogicSigProgramSize is smaller than LogicSigMaxSize", proto)
+		}
+	}
+}
+
+// TestPQSchemeLogicSigParams pins the consensus-parameter invariants of the ls
+// scheme, which differs from the DSA-backed schemes in ways that are easy to
+// undo by accident.
+func TestPQSchemeLogicSigParams(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	for proto, params := range Consensus {
+		if params.EnablePQSchemeLogicSig {
+			// A delegating ls account runs two programs against one budget. The
+			// unpooled fallback in EvalContext.remainingBudget would hand each a
+			// full LogicSigMaxCost instead.
+			if !params.EnableLogicSigCostPooling {
+				t.Errorf("Protocol %s: ls enabled without LogicSig cost pooling", proto)
+			}
+			if params.LogicSigVersion == 0 {
+				t.Errorf("Protocol %s: ls enabled without LogicSigs", proto)
+			}
+		}
 	}
 }
 
@@ -108,6 +143,25 @@ func TestConsensusUpgradeWindow_NetworkOverrides(t *testing.T) {
 	initConsensusProtocols()
 
 	ApplyShorterUpgradeRoundsForDevNetworks(Betanet)
+	for _, params := range Consensus {
+		for toVersion, delay := range params.ApprovedUpgrades {
+			if params.MinUpgradeWaitRounds != 0 || params.MaxUpgradeWaitRounds != 0 {
+				require.NotZerof(t, delay, "From :%v\nTo :%v", params, toVersion)
+				require.Equalf(t, delay, params.MinUpgradeWaitRounds, "From :%v\nTo :%v", params, toVersion)
+				// This check is not really needed, but leaving for sanity
+				require.LessOrEqualf(t, delay, params.MaxUpgradeWaitRounds, "From :%v\nTo :%v", params, toVersion)
+			} else {
+				// If no MinUpgradeWaitRounds is set, leaving everything as zero value is expected
+				require.Zerof(t, delay, "From :%v\nTo :%v", params, toVersion)
+			}
+		}
+	}
+
+	// reset consensus settings
+	Consensus = make(ConsensusProtocols)
+	initConsensusProtocols()
+
+	ApplyShorterUpgradeRoundsForDevNetworks(Fnet)
 	for _, params := range Consensus {
 		for toVersion, delay := range params.ApprovedUpgrades {
 			if params.MinUpgradeWaitRounds != 0 || params.MaxUpgradeWaitRounds != 0 {

@@ -63,7 +63,7 @@ type Reveal struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	SigSlot sigslotCommit      `codec:"s"`
-	Part    basics.Participant `codec:"p"`
+	Part    basics.Participant `codec:"p,required"`
 }
 
 // StateProof represents a proof on Algorand's state.
@@ -95,7 +95,7 @@ func (s StateProof) stringBuild() (b strings.Builder) {
 		return
 	}
 
-	b.WriteString(fmt.Sprintf("%v", s.SigCommit))
+	fmt.Fprintf(&b, "%v", s.SigCommit)
 	b.WriteString(", ")
 	b.WriteString(strconv.FormatUint(s.SignedWeight, 10))
 	b.WriteString(", ")

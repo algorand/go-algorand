@@ -32,6 +32,7 @@ var (
 	errFailedRetrievingSyncRound               = "failed retrieving sync round from ledger"
 	errFailedSettingSyncRound                  = "failed to set sync round on the ledger"
 	errFailedParsingFormatOption               = "failed to parse the format option"
+	errFailedToGetPeers                        = "failed to get connected peers from node"
 	errFailedToParseAddress                    = "failed to parse the address"
 	errFailedToParseExclude                    = "failed to parse exclude"
 	errFailedToEncodeResponse                  = "failed to encode response"

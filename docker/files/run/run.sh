@@ -106,7 +106,7 @@ function configure_data_dir() {
   # start kmd
   if [ "$START_KMD" = "1" ]; then
     local KMD_DIR="kmd-v0.5"
-    # on intial bootstrap, this directory won't exist.
+    # on initial bootstrap, this directory won't exist.
     mkdir -p "$KMD_DIR"
     chmod 0700 "$KMD_DIR"
     cd "$KMD_DIR"
@@ -156,13 +156,17 @@ function start_new_public_network() {
     betanet) ID="<network>.algodev.network" ;;
     alphanet) ID="<network>.algodev.network" ;;
     devnet) ID="<network>.algodev.network" ;;
+    fnet) ID="<network>.algorand.tech" ;;
     *)
       echo "Unknown network."
       exit 1
       ;;
     esac
-
-    set -p DNSBootstrapID -v "$ID"
+    echo Setting DNS Bootstrap ID to "$ID"
+    algocfg -d "$ALGORAND_DATA" set -p DNSBootstrapID -v "$ID"
+  elif [ "$NETWORK" = "fnet" ]; then
+    echo Setting FNet DNS Bootstrap ID
+    algocfg -d "$ALGORAND_DATA" set -p DNSBootstrapID -v "<network>.algorand.tech"
   fi
 
   start_public_network

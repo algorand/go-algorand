@@ -614,7 +614,7 @@ func TestLocal_GetNonDefaultConfigValues(t *testing.T) {
 	ndmap := GetNonDefaultConfigValues(cfg, []string{"AgreementIncomingBundlesQueueLength", "TxPoolSize"})
 
 	// assert correct
-	expected := map[string]interface{}{
+	expected := map[string]any{
 		"AgreementIncomingBundlesQueueLength": uint64(2),
 		"TxPoolSize":                          int(30),
 	}
@@ -894,11 +894,11 @@ func TestEnsureAbsDir(t *testing.T) {
 
 type tLogger struct{ t *testing.T }
 
-func (l tLogger) Infof(fmts string, args ...interface{}) {
+func (l tLogger) Infof(fmts string, args ...any) {
 	l.t.Logf(fmts, args...)
 }
 
-func (l tLogger) Warnf(fmts string, args ...interface{}) {
+func (l tLogger) Warnf(fmts string, args ...any) {
 	l.t.Logf(fmts, args...)
 }
 
@@ -1075,6 +1075,35 @@ func TestEnsureAndResolveGenesisDirs_migrateSPErr(t *testing.T) {
 	require.FileExists(t, filepath.Join(coldDir, "stateproof.sqlite-wal"))
 	require.NoFileExists(t, filepath.Join(hotDir, "stateproof.sqlite"))
 	require.FileExists(t, filepath.Join(hotDir, "stateproof.sqlite-wal"))
+}
+
+// TestEnsureAndResolveGenesisDirs_migrateRestart confirms that once the crash and stateproof DB files
+// live in HotDataDir (and not in ColdDataDir), resolving again succeeds, as on a node restart.
+func TestEnsureAndResolveGenesisDirs_migrateRestart(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := GetDefaultLocal()
+	testDirectory := t.TempDir()
+	cfg.HotDataDir = filepath.Join(testDirectory, "hot")
+	cfg.ColdDataDir = filepath.Join(testDirectory, "cold")
+	coldDir := filepath.Join(cfg.ColdDataDir, "myGenesisID")
+	hotDir := filepath.Join(cfg.HotDataDir, "myGenesisID")
+	err := os.MkdirAll(coldDir, 0755)
+	require.NoError(t, err)
+	err = os.MkdirAll(hotDir, 0755)
+	require.NoError(t, err)
+	// put crash.sqlite and stateproof.sqlite files in the HotDataDir only
+	err = os.WriteFile(filepath.Join(hotDir, "crash.sqlite"), []byte("test"), 0644)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(hotDir, "stateproof.sqlite"), []byte("test"), 0644)
+	require.NoError(t, err)
+	// Resolve
+	paths, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID", tLogger{t: t})
+	require.NoError(t, err)
+	require.Equal(t, hotDir, paths.CrashGenesisDir)
+	require.Equal(t, hotDir, paths.StateproofGenesisDir)
+	require.FileExists(t, filepath.Join(hotDir, "crash.sqlite"))
+	require.FileExists(t, filepath.Join(hotDir, "stateproof.sqlite"))
 }
 
 // TestEnsureAndResolveGenesisDirsError confirms that if a path can't be created, an error is returned

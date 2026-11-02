@@ -3,7 +3,9 @@
 my_dir="$(dirname "$0")"
 source "$my_dir/rest.sh" "$@"
 
-date '+dynamic-fee-teal-test start %Y%m%d_%H%M%S'
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
 
 set -e
 set -x
@@ -74,7 +76,7 @@ cat ${TEMPDIR}/gtxn-0.stxn ${TEMPDIR}/gtxn-1.stxn > ${TEMPDIR}/finalgroup.stxn
 RES=$(${gcmd} clerk rawsend -f ${TEMPDIR}/finalgroup.stxn 2>&1 || true)
 EXPERROR='rejected by logic'
 if [[ $RES != *"${EXPERROR}"* ]]; then
-    date '+dynamic-fee-teal-test FAIL txn with wrong fee should be rejected %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL txn with wrong fee should be rejected %Y%m%d_%H%M%S"
     false
 fi
 
@@ -109,8 +111,8 @@ ${gcmd} clerk rawsend -f ${TEMPDIR}/finalgroup.stxn
 # Check balance of recipient
 BALANCED=$(${gcmd} account balance -a ${ACCOUNTD}|awk '{ print $1 }')
 if [ $BALANCED -ne 1000000 ]; then
-    date '+dynamic-fee-teal-test FAIL wanted balance=1000000 but got ${BALANCED} %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL wanted balance=1000000 but got ${BALANCED} %Y%m%d_%H%M%S"
     false
 fi
 
-date '+dynamic-fee-teal-test OK %Y%m%d_%H%M%S'
+date "+${scriptname} OK %Y%m%d_%H%M%S"

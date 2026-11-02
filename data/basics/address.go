@@ -109,3 +109,9 @@ func (addr *Address) UnmarshalText(text []byte) error {
 func (addr Address) IsZero() bool {
 	return addr == Address{}
 }
+
+// IsPQCompliant checks if an address is eligible for native post-quantum account
+// authorization.
+func (addr Address) IsPQCompliant() bool {
+	return !crypto.IsEdwards25519Point(addr[:])
+}

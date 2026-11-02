@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
@@ -429,7 +430,7 @@ func (handler *TxHandler) postProcessCheckedTxn(wi *txBacklogMsg) {
 		if handler.appLimiter != nil && !wi.rawmsg.Outgoing && wi.rawmsg.Sender != nil {
 			var tde *bookkeeping.TxnDeadError
 			// explicitly avoid penalizing for TxDeadError since another node can be out of sync
-			if !errors.As(err, &tde) {
+			if !errors.As(err, &tde) && !errors.Is(err, ledgercore.ErrEvaluatorCorruptedState) {
 				handler.appLimiter.penalizeEvalError(
 					wi.unverifiedTxGroup, wi.rawmsg.Sender.RoutingAddr(),
 				)
@@ -657,20 +658,29 @@ func (handler *TxHandler) incomingMsgErlCheck(sender util.ErlClient) (*util.ErlC
 	return capguard, false
 }
 
+// unverifiedTxGroupPool holds decodeMsg buffers
+var unverifiedTxGroupPool = sync.Pool{
+	New: func() any {
+		buf := make([]transactions.SignedTxn, bounds.MaxTxGroupSize+1) // +1 to allow probing one past the end of the group
+		return &buf                                                    // return a pointer to avoid copying the slice header on each Get() call
+	},
+}
+
 // decodeMsg decodes TX message buffer into transactions.SignedTxn,
 // and returns number of bytes consumed from the buffer and a boolean indicating if the message was invalid.
 func decodeMsg(data []byte) (unverifiedTxGroup []transactions.SignedTxn, consumed int, invalid bool) {
-	unverifiedTxGroup = make([]transactions.SignedTxn, 1)
-	dec := protocol.NewMsgpDecoderBytes(data)
+	unverifiedTxGroupBufPtr := unverifiedTxGroupPool.Get().(*[]transactions.SignedTxn)
+	unverifiedTxGroupBuf := *unverifiedTxGroupBufPtr
 	ntx := 0
+	defer func() {
+		clear(unverifiedTxGroupBuf[:ntx+1]) // clear only touched entries
+		unverifiedTxGroupPool.Put(unverifiedTxGroupBufPtr)
+	}()
+
+	dec := protocol.NewMsgpDecoderBytes(data)
 
 	for {
-		if len(unverifiedTxGroup) == ntx {
-			n := make([]transactions.SignedTxn, len(unverifiedTxGroup)*2)
-			copy(n, unverifiedTxGroup)
-			unverifiedTxGroup = n
-		}
-		err := dec.Decode(&unverifiedTxGroup[ntx])
+		err := dec.Decode(&unverifiedTxGroupBuf[ntx])
 		if err != nil {
 			if err == io.EOF {
 				break
@@ -694,11 +704,12 @@ func decodeMsg(data []byte) (unverifiedTxGroup []transactions.SignedTxn, consume
 		return nil, 0, true
 	}
 
-	unverifiedTxGroup = unverifiedTxGroup[:ntx]
-
 	if ntx == bounds.MaxTxGroupSize {
 		transactionMessageTxGroupFull.Inc(nil)
 	}
+
+	unverifiedTxGroup = make([]transactions.SignedTxn, ntx)
+	copy(unverifiedTxGroup, unverifiedTxGroupBuf[:ntx])
 
 	return unverifiedTxGroup, consumed, false
 }

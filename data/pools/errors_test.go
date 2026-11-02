@@ -19,6 +19,8 @@ package pools
 import (
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -80,11 +82,17 @@ func TestClassifyTxPoolErrorGeneralCoverage(t *testing.T) {
 		{name: "approval_reject_wrapped", err: &ledgercore.ApprovalProgramRejectedError{}, tag: TxPoolErrTagTealReject, wrap: true},
 		{name: "logic_eval", err: logic.EvalError{Err: errors.New("logic")}, tag: TxPoolErrTagTealErr},
 		{name: "logic_eval_wrapped", err: logic.EvalError{Err: errors.New("logic")}, tag: TxPoolErrTagTealErr, wrap: true},
+		{name: "eval_panic", err: ledgercore.EvalPanicError{Round: 5}, tag: TxPoolErrTagPanic},
+		{name: "eval_panic_wrapped", err: ledgercore.EvalPanicError{Round: 5}, tag: TxPoolErrTagPanic, wrap: true},
+		{name: "evaluator_corrupted", err: ledgercore.ErrEvaluatorCorruptedState, tag: TxPoolErrTagPanic},
+		{name: "evaluator_corrupted_wrapped", err: ledgercore.ErrEvaluatorCorruptedState, tag: TxPoolErrTagPanic, wrap: true},
 		{name: "unknown_error", err: errors.New("unknown"), tag: TxPoolErrTagEvalGeneric},
 		{name: "unknown_error_wrapped", err: errors.New("unknown"), tag: TxPoolErrTagEvalGeneric, wrap: true},
 	}
 
+	seen := make(map[string]bool, len(tcases))
 	for _, tc := range tcases {
+		seen[tc.tag] = true
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.err
 			if tc.wrap {
@@ -93,6 +101,9 @@ func TestClassifyTxPoolErrorGeneralCoverage(t *testing.T) {
 			require.Equal(t, tc.tag, ClassifyTxPoolError(err))
 		})
 	}
+
+	// force ClassifyTxPoolError and TxPoolErrTags to stay in sync.
+	require.ElementsMatch(t, TxPoolErrTags, slices.Collect(maps.Keys(seen)))
 }
 
 func TestTxPoolReevalCounterCoversAllTags(t *testing.T) {

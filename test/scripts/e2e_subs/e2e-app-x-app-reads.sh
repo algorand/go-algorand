@@ -1,6 +1,8 @@
 #!/bin/bash
 
-date '+app-x-app-reads-test start %Y%m%d_%H%M%S'
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
 
 set -e
 set -x
@@ -24,14 +26,14 @@ APPID=$(${gcmd} app create --creator "$ACCOUNT" --approval-prog "$DIR/tealprogs/
 EXPERR="unavailable App 1"
 RES=$(${gcmd} app create --creator "$ACCOUNT" --approval-prog "$DIR/tealprogs/xappreads.teal" --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 --clear-prog <(printf '#pragma version 9\nint 1') 2>&1 || true)
 if [[ $RES != *"$EXPERR"* ]]; then
-    date '+x-app-reads FAIL expected unavailable app slot %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL expected unavailable app slot %Y%m%d_%H%M%S"
     false
 fi
 
 # Same result when using --access (even though --foreign-asset makes the slot "legal", just not an app)
 RES=$(${gcmd} app create --creator "$ACCOUNT" --access --foreign-asset "$APPID" --approval-prog "$DIR/tealprogs/xappreads.teal" --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 --clear-prog <(printf '#pragma version 9\nint 1') 2>&1 || true)
 if [[ $RES != *"$EXPERR"* ]]; then
-    date '+x-app-reads FAIL expected disallowed foreign global read to fail %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL expected disallowed foreign global read to fail %Y%m%d_%H%M%S"
     false
 fi
 
@@ -41,14 +43,14 @@ fi
 EXPERR='"bar"; ==; assert'
 RES=$(${gcmd} app create --creator "$ACCOUNT" --foreign-app "$APPID" --approval-prog "$DIR/tealprogs/xappreads.teal" --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 --clear-prog <(printf '#pragma version 9\nint 1') 2>&1 || true)
 if [[ $RES != *"$EXPERR"* ]]; then
-    date '+x-app-reads FAIL expected foreign global mismatched read to fail %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL expected foreign global mismatched read to fail %Y%m%d_%H%M%S"
     false
 fi
 
 # Same result with --access
 RES=$(${gcmd} app create --creator "$ACCOUNT" --access --foreign-app "$APPID" --approval-prog "$DIR/tealprogs/xappreads.teal" --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 --clear-prog <(printf '#pragma version 9\nint 1') 2>&1 || true)
 if [[ $RES != *"$EXPERR"* ]]; then
-    date '+x-app-reads FAIL expected foreign global mismatched read to fail with --access %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL expected foreign global mismatched read to fail with --access %Y%m%d_%H%M%S"
     false
 fi
 

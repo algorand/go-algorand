@@ -44,7 +44,7 @@ func init() {
 }
 
 // GenerateInitState generates testing init state
-func GenerateInitState(tb testing.TB, proto protocol.ConsensusVersion, baseAlgoPerAccount int) (genesisInitState ledgercore.InitState, initKeys map[basics.Address]*crypto.SignatureSecrets) {
+func GenerateInitState(tb testing.TB, proto protocol.ConsensusVersion, baseAlgoPerAccount uint64) (genesisInitState ledgercore.InitState, initKeys map[basics.Address]*crypto.SignatureSecrets) {
 	poolAddr := testPoolAddr
 	sinkAddr := testSinkAddr
 
@@ -64,7 +64,7 @@ func GenerateInitState(tb testing.TB, proto protocol.ConsensusVersion, baseAlgoP
 	for i := range genaddrs {
 		initKeys[genaddrs[i]] = gensecrets[i]
 		// Give each account quite a bit more balance than MinFee or MinBalance
-		ad := basics_testing.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: uint64((i + baseAlgoPerAccount) * 100000)})
+		ad := basics_testing.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: (uint64(i) + baseAlgoPerAccount) * 100000})
 		ad.VoteFirstValid = 1
 		ad.VoteLastValid = 100_000
 		initAccounts[genaddrs[i]] = ad

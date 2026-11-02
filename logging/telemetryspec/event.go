@@ -34,7 +34,7 @@ const StartupEvent Event = "Startup"
 // NameValue defines a named value, for use in an array reported to telemetry.
 type NameValue struct {
 	Name  string
-	Value interface{}
+	Value any
 }
 
 // StartupEventDetails contains details for the StartupEvent

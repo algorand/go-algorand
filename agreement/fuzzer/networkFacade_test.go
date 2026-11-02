@@ -519,7 +519,7 @@ func (n *NetworkFacade) Tick(newClockTime int) bool {
 	return len(expiredClocks) > 0 || msgSent
 }
 
-func (n *NetworkFacade) GetFilterByType(filterType reflect.Type) interface{} {
+func (n *NetworkFacade) GetFilterByType(filterType reflect.Type) any {
 	currentFilter := n.GetDownstreamFilter()
 	for {
 		if currentFilter == nil || currentFilter == n.fuzzer.router.GetDownstreamFilter() {

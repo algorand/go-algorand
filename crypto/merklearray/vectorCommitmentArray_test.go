@@ -106,7 +106,6 @@ func TestIndexOutOfBounds(t *testing.T) {
 	require.Equal(t, uint64(1), lsbIndex)
 
 	lsbIndex, err = merkleTreeToVectorCommitmentIndex(2, pathLen)
-	require.Error(t, err)
 	require.ErrorIs(t, err, ErrPosOutOfBound)
 
 	pathLen = 4
@@ -115,7 +114,6 @@ func TestIndexOutOfBounds(t *testing.T) {
 	require.Equal(t, uint64(15), lsbIndex)
 
 	lsbIndex, err = merkleTreeToVectorCommitmentIndex(16, pathLen)
-	require.Error(t, err)
 	require.ErrorIs(t, err, ErrPosOutOfBound)
 
 }

@@ -67,7 +67,7 @@ var getCmd = &cobra.Command{
 	},
 }
 
-func serializeObjectProperty(object interface{}, property string) (ret string, err error) {
+func serializeObjectProperty(object any, property string) (ret string, err error) {
 	v := reflect.ValueOf(object)
 	val := reflect.Indirect(v)
 	f := val.FieldByName(property)

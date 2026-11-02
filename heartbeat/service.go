@@ -161,10 +161,11 @@ func (s *Service) loop() {
 	}
 }
 
-// acceptingByteCode is the byte code to a logic signature that will accept anything (except rekeying).
+// acceptingByteCode is the byte code to a logic signature that will accept anything (except rekeying)
+// and whose address does not decompress to a valid Ed25519 point (trailing intcblock).
 var acceptingByteCode = logic.MustAssemble(`
 #pragma version 11
-txn RekeyTo; global ZeroAddress; ==
+txn RekeyTo; global ZeroAddress; ==; intcblock 2;
 `)
 var acceptingSender = basics.Address(logic.HashProgram(acceptingByteCode))
 
@@ -190,6 +191,13 @@ func (s *Service) prepareHeartbeat(pr account.ParticipationRecordForRound, lates
 		HbSeed:        latest.Seed,
 		HbVoteID:      pr.Voting.OneTimeSignatureVerifier,
 		HbKeyDilution: pr.KeyDilution,
+		// Once the explicit-discount rule is active (gated on transaction size
+		// pricing), claim the challenge discount so the zero-fee heartbeat covers
+		// its own (nonexistent) fee. The service only heartbeats accounts it
+		// found under challenge, so this is legitimate. Before then the zero fee
+		// alone signals the claim, and the flag must stay unset (WellFormed
+		// rejects it).
+		HbChallengeDiscount: config.Consensus[latest.CurrentProtocol].TxnSizePricingEnabled(),
 	}
 
 	return stxn

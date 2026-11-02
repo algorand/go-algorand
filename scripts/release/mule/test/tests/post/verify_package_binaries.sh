@@ -40,7 +40,6 @@ done
 DEVTOOLS_BINS=(
     /usr/bin/carpenter
     /usr/bin/msgpacktool
-    /usr/bin/tealdbg
 )
 
 for bin in "${DEVTOOLS_BINS[@]}"; do

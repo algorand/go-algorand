@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -516,6 +517,95 @@ func TestDecodeMalformedSignedTxn(t *testing.T) {
 	txib2.SignedTxn.Txn.GenesisHash = b.BlockHeader.GenesisHash
 	_, _, err = b.DecodeSignedTxn(txib2)
 	require.Error(t, err)
+}
+
+func TestPaysetGroups(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	block := Block{BlockHeader: BlockHeader{
+		GenesisHash: crypto.Hash([]byte("payset-groups-test")),
+		UpgradeState: UpgradeState{
+			CurrentProtocol: protocol.ConsensusCurrentVersion,
+		},
+	}}
+	groupID := crypto.Hash([]byte("group"))
+	for i, txn := range []transactions.Transaction{
+		{Header: transactions.Header{Group: groupID}},
+		{Header: transactions.Header{Group: groupID}},
+		{},
+		{},
+		{Header: transactions.Header{Group: groupID}},
+	} {
+		txn.GenesisHash = block.BlockHeader.GenesisHash
+		txn.Note = []byte{byte(i)}
+		stib, err := block.EncodeSignedTxn(transactions.SignedTxn{Txn: txn}, transactions.ApplyData{})
+		require.NoError(t, err)
+		block.Payset = append(block.Payset, stib)
+	}
+
+	var groupSizes []int
+	for group, err := range block.PaysetGroups() {
+		require.NoError(t, err)
+		groupSizes = append(groupSizes, len(group))
+	}
+	require.Equal(t, []int{2, 1, 1, 1}, groupSizes)
+
+	yielded := 0
+	for range block.PaysetGroups() {
+		yielded++
+		break
+	}
+	require.Equal(t, 1, yielded)
+
+	maxGroupSize := bounds.MaxTxGroupSize
+	oversized := Block{BlockHeader: block.BlockHeader}
+	for i := range maxGroupSize + 1 {
+		txn := transactions.Transaction{Header: transactions.Header{
+			Group:       groupID,
+			GenesisHash: block.GenesisHash(),
+			Note:        []byte{byte(i)},
+		}}
+		stib, err := oversized.EncodeSignedTxn(transactions.SignedTxn{Txn: txn}, transactions.ApplyData{})
+		require.NoError(t, err)
+		oversized.Payset = append(oversized.Payset, stib)
+	}
+
+	var exactGroup []transactions.SignedTxnWithAD
+	for group, err := range (Block{BlockHeader: oversized.BlockHeader, Payset: oversized.Payset[:maxGroupSize]}).PaysetGroups() {
+		require.NoError(t, err)
+		exactGroup = group
+	}
+	require.Len(t, exactGroup, maxGroupSize)
+
+	yielded = 0
+	for group, err := range oversized.PaysetGroups() {
+		yielded++
+		require.Nil(t, group)
+		require.ErrorContains(t, err, fmt.Sprintf("group size %d exceeds maximum %d", maxGroupSize+1, maxGroupSize))
+	}
+	require.Equal(t, 1, yielded)
+	groups, err := oversized.DecodePaysetGroups()
+	require.Nil(t, groups)
+	require.ErrorContains(t, err, fmt.Sprintf("group size %d exceeds maximum %d", maxGroupSize+1, maxGroupSize))
+
+	adjacent := Block{BlockHeader: oversized.BlockHeader, Payset: append([]transactions.SignedTxnInBlock(nil), oversized.Payset...)}
+	adjacent.Payset[maxGroupSize].SignedTxn.Txn.Group = crypto.Hash([]byte("next-group"))
+	groupSizes = nil
+	for group, err := range adjacent.PaysetGroups() {
+		require.NoError(t, err)
+		groupSizes = append(groupSizes, len(group))
+	}
+	require.Equal(t, []int{maxGroupSize, 1}, groupSizes)
+
+	block.CurrentProtocol = protocol.ConsensusVersion("missing")
+	yielded = 0
+	for group, err := range block.PaysetGroups() {
+		yielded++
+		require.Nil(t, group)
+		require.ErrorContains(t, err, "consensus protocol missing not found")
+	}
+	require.Equal(t, 1, yielded)
 }
 
 // TestInitialRewardsRateCalculation perform positive and negative testing for the InitialRewardsRateCalculation fix by

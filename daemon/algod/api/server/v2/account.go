@@ -19,6 +19,7 @@ package v2
 import (
 	"encoding/base64"
 	"errors"
+	"maps"
 	"math"
 	"slices"
 	"sort"
@@ -170,9 +171,12 @@ func convertTKVToGenerated(tkv *basics.TealKeyValue) *model.TealKeyValueStore {
 		return nil
 	}
 
+	keys := slices.AppendSeq(make([]string, 0, len(*tkv)), maps.Keys(*tkv))
+	slices.Sort(keys)
+
 	converted := make(model.TealKeyValueStore, 0, len(*tkv))
-	rawKeyBytes := make([]string, 0, len(*tkv))
-	for k, v := range *tkv {
+	for _, k := range keys {
+		v := (*tkv)[k]
 		converted = append(converted, model.TealKeyValue{
 			Key: base64.StdEncoding.EncodeToString([]byte(k)),
 			Value: model.TealValue{
@@ -181,11 +185,7 @@ func convertTKVToGenerated(tkv *basics.TealKeyValue) *model.TealKeyValueStore {
 				Uint:  v.Uint,
 			},
 		})
-		rawKeyBytes = append(rawKeyBytes, k)
 	}
-	sort.Slice(converted, func(i, j int) bool {
-		return rawKeyBytes[i] < rawKeyBytes[j]
-	})
 	return &converted
 }
 
@@ -402,6 +402,8 @@ func ApplicationParamsToAppParams(gap *model.ApplicationParams) (basics.AppParam
 		ap.ExtraProgramPages = uint32(*gap.ExtraProgramPages)
 	}
 	ap.Version = nilToZero(gap.Version)
+	ap.ForeignBoxReads = nilToZero(gap.ForeignBoxReads)
+	ap.FamilyBoxAccess = nilToZero(gap.FamilyBoxAccess)
 
 	if gap.LocalStateSchema != nil {
 		ap.LocalStateSchema = basics.StateSchema{
@@ -448,8 +450,10 @@ func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *b
 				NumByteSlice: appParams.GlobalStateSchema.NumByteSlice,
 				NumUint:      appParams.GlobalStateSchema.NumUint,
 			},
-			Version:     omitEmpty(appParams.Version),
-			SizeSponsor: addrOrNil(appParams.SizeSponsor),
+			Version:         omitEmpty(appParams.Version),
+			SizeSponsor:     addrOrNil(appParams.SizeSponsor),
+			ForeignBoxReads: omitEmpty(appParams.ForeignBoxReads),
+			FamilyBoxAccess: omitEmpty(appParams.FamilyBoxAccess),
 		},
 	}
 	return app

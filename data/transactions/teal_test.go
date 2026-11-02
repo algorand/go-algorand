@@ -202,10 +202,12 @@ func TestEvalDeltaEqual(t *testing.T) {
 func TestUnchangedAllocBounds(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	validInner := SignedTxnWithAD{SignedTxn: SignedTxn{Txn: Transaction{Type: protocol.PaymentTx, Header: Header{Sender: basics.Address{0x01}}}}}
+
 	delta := &EvalDelta{}
 	max := 256 // Hardcodes bounds.MaxEvalDeltaAccounts
 	for i := 0; i < max; i++ {
-		delta.InnerTxns = append(delta.InnerTxns, SignedTxnWithAD{})
+		delta.InnerTxns = append(delta.InnerTxns, validInner)
 		msg := delta.MarshalMsg(nil)
 		_, err := delta.UnmarshalMsg(msg)
 		require.NoError(t, err)
@@ -231,7 +233,7 @@ func TestUnchangedAllocBounds(t *testing.T) {
 	delta = &EvalDelta{}
 	max = 256 // Hardcodes bounds.MaxInnerTransactionsPerDelta
 	for i := 0; i < max; i++ {
-		delta.InnerTxns = append(delta.InnerTxns, SignedTxnWithAD{})
+		delta.InnerTxns = append(delta.InnerTxns, validInner)
 		msg := delta.MarshalMsg(nil)
 		_, err := delta.UnmarshalMsg(msg)
 		require.NoError(t, err)

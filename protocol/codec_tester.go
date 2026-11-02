@@ -88,13 +88,13 @@ func RandomizeObjectWithMaxCollectionLen(n int) RandomizeObjectOption {
 }
 
 // RandomizeObject returns a random object of the same type as template
-func RandomizeObject(template interface{}, opts ...RandomizeObjectOption) (interface{}, error) {
+func RandomizeObject(template any, opts ...RandomizeObjectOption) (any, error) {
 	cfg := randomizeObjectCfg{}
 	for _, opt := range opts {
 		opt(&cfg)
 	}
 	tt := reflect.TypeOf(template)
-	if tt.Kind() != reflect.Ptr {
+	if tt.Kind() != reflect.Pointer {
 		return nil, fmt.Errorf("RandomizeObject: must be ptr")
 	}
 	v := reflect.New(tt.Elem())
@@ -104,7 +104,7 @@ func RandomizeObject(template interface{}, opts ...RandomizeObjectOption) (inter
 }
 
 // RandomizeObjectField returns a random object of the same type as template where a single field was modified.
-func RandomizeObjectField(template interface{}, opts ...RandomizeObjectOption) (interface{}, error) {
+func RandomizeObjectField(template any, opts ...RandomizeObjectOption) (any, error) {
 	cfg := randomizeObjectCfg{}
 	for _, opt := range opts {
 		opt(&cfg)
@@ -130,6 +130,15 @@ func parseStructTags(structTag string) map[string]string {
 		tagsMap[elements[0]] = elements[1]
 	}
 	return tagsMap
+}
+
+func isRequiredField(structTag string) bool {
+	for opt := range strings.SplitSeq(reflect.StructTag(structTag).Get("codec"), ",") {
+		if opt == "required" {
+			return true
+		}
+	}
+	return false
 }
 
 var printWarningOnce deadlock.Mutex
@@ -323,9 +332,15 @@ func randomizeValue(v reflect.Value, depth int, datapath string, tag string, rem
 			}
 			v.SetUint(num)
 		}
+		if isRequiredField(tag) && v.Uint() == 0 {
+			v.SetUint(1)
+		}
 		*remainingChanges--
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		v.SetInt(int64(rand.Uint64()))
+		if isRequiredField(tag) && v.Int() == 0 {
+			v.SetInt(1)
+		}
 		*remainingChanges--
 	case reflect.String:
 		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag, cfg)
@@ -348,7 +363,7 @@ func randomizeValue(v reflect.Value, depth int, datapath string, tag string, rem
 		}
 		v.SetString(string(buf))
 		*remainingChanges--
-	case reflect.Ptr:
+	case reflect.Pointer:
 		v.Set(reflect.New(v.Type().Elem()))
 		err := randomizeValue(reflect.Indirect(v), depth+1, datapath, tag, remainingChanges, cfg, seenTypes)
 		if err != nil {
@@ -400,6 +415,9 @@ func randomizeValue(v reflect.Value, depth int, datapath string, tag string, rem
 			*remainingChanges--
 		}
 	case reflect.Slice:
+		if elem := v.Type().Elem(); elem.Kind() == reflect.Struct && seenTypes[elem] {
+			return nil
+		}
 		// we don't want to allocate a slice with size of 0. This is because decoding and encoding this slice
 		// will result in nil and not slice of size 0
 		maxLen := 31

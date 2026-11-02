@@ -58,6 +58,12 @@ func (n *P2PNetwork) hasPeers() bool {
 	return len(n.wsPeers) > 0
 }
 
+func (n *P2PNetwork) availableThrottleSlots() int {
+	n.wsPeersLock.RLock()
+	defer n.wsPeersLock.RUnlock()
+	return n.throttledOutgoingConnections
+}
+
 func (n *P2PNetwork) hasPeer(peerID peer.ID) bool {
 	n.wsPeersLock.RLock()
 	defer n.wsPeersLock.RUnlock()
@@ -1627,7 +1633,7 @@ func TestP2PMetainfoExchange(t *testing.T) {
 
 	cfg2 := cfg
 	cfg2.EnableVoteCompression = false
-	cfg.NetAddress = ""
+	cfg2.NetAddress = ""
 	multiAddrStr := addrsA[0].String()
 	phoneBookAddresses := []string{multiAddrStr}
 	netB, err := NewP2PNetwork(log, cfg2, "", phoneBookAddresses, GenesisInfo{genesisID, config.Devtestnet}, &nopeNodeInfo{}, nil, nil)
@@ -1640,12 +1646,11 @@ func TestP2PMetainfoExchange(t *testing.T) {
 		return len(netA.service.Conns()) > 0 && len(netB.service.Conns()) > 0
 	}, 2*time.Second, 50*time.Millisecond)
 
-	var peers []Peer
 	require.Eventually(t, func() bool {
-		peers = netA.GetPeers(PeersConnectedIn)
-		return len(peers) > 0
+		return len(netA.GetPeers(PeersConnectedIn)) > 0 && len(netB.GetPeers(PeersConnectedOut)) > 0
 	}, 2*time.Second, 50*time.Millisecond)
 
+	peers := netA.GetPeers(PeersConnectedIn)
 	require.Len(t, peers, 1)
 	peer := peers[0].(*wsPeer)
 	require.True(t, peer.features&pfCompressedProposal != 0)
@@ -1656,6 +1661,66 @@ func TestP2PMetainfoExchange(t *testing.T) {
 	peer = peers[0].(*wsPeer)
 	require.True(t, peer.features&pfCompressedProposal != 0)
 	require.True(t, peer.vpackVoteCompressionSupported())
+}
+
+// TestP2PGetPeersTransportConnections checks that the PeersTransportConnectionsIn/Out
+// options return libp2p-level connections without polluting PeersConnectedIn/Out, and
+// that both views of the connection report the same address and p2p network type.
+func TestP2PGetPeersTransportConnections(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := config.GetDefaultLocal()
+	cfg.DNSBootstrapID = "" // disable DNS lookups since the test uses phonebook addresses
+	cfg.NetAddress = "127.0.0.1:0"
+	log := logging.TestingLog(t)
+	netA, err := NewP2PNetwork(log, cfg, "", nil, GenesisInfo{genesisID, config.Devtestnet}, &nopeNodeInfo{}, nil, nil)
+	require.NoError(t, err)
+	err = netA.Start()
+	require.NoError(t, err)
+	defer netA.Stop()
+
+	peerInfoA := netA.service.AddrInfo()
+	addrsA, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
+	require.NoError(t, err)
+	require.NotZero(t, addrsA[0])
+
+	cfg2 := cfg
+	cfg2.NetAddress = ""
+	phoneBookAddresses := []string{addrsA[0].String()}
+	netB, err := NewP2PNetwork(log, cfg2, "", phoneBookAddresses, GenesisInfo{genesisID, config.Devtestnet}, &nopeNodeInfo{}, nil, nil)
+	require.NoError(t, err)
+	err = netB.Start()
+	require.NoError(t, err)
+	defer netB.Stop()
+
+	var gossipPeers []Peer
+	require.Eventually(t, func() bool {
+		gossipPeers = netA.GetPeers(PeersConnectedIn)
+		return len(gossipPeers) > 0
+	}, 2*time.Second, 50*time.Millisecond)
+
+	// PeersConnectedIn must contain only the gossip peer, not raw libp2p connections
+	require.Len(t, gossipPeers, 1)
+	gossipPeer, ok := gossipPeers[0].(*wsPeer)
+	require.True(t, ok)
+
+	connPeers := netA.GetPeers(PeersTransportConnectionsIn)
+	require.Len(t, connPeers, 1)
+	connPeer, ok := connPeers[0].(PeerConnectionInfo)
+	require.True(t, ok)
+	require.Equal(t, PeerNetworkTypeLibP2P, connPeer.GetNetworkType())
+	// the transport view covers the same connection that backs the gossip peer,
+	// so a single transport query enumerates every connection exactly once
+	require.Equal(t, gossipPeer.GetAddress(), connPeer.GetAddress())
+
+	outConnPeers := netB.GetPeers(PeersTransportConnectionsOut)
+	require.Len(t, outConnPeers, 1)
+	outConnPeer, ok := outConnPeers[0].(PeerConnectionInfo)
+	require.True(t, ok)
+	require.Equal(t, PeerNetworkTypeLibP2P, outConnPeer.GetNetworkType())
+
+	require.Empty(t, netA.GetPeers(PeersTransportConnectionsOut))
+	require.Empty(t, netB.GetPeers(PeersTransportConnectionsIn))
 }
 
 // TestP2PMetainfoV1vsV22 checks v1 and v22 nodes works together.
@@ -1815,4 +1880,65 @@ func TestP2PVoteCompression(t *testing.T) {
 			require.Equal(t, test.netAEnableCompression, peer.vpackVoteCompressionSupported())
 		})
 	}
+}
+
+// TestP2PThrottleSlotNotLeakedOnIdentityDedup checks that an outgoing peer rejected before
+// registration does not keep an outgoing throttle slot. netA shares its identity tracker with
+// a stand-in for an existing ws connection to netB, as a hybrid node's P2P and ws networks do,
+// so netA's outgoing P2P connection to netB is rejected as a duplicate.
+func TestP2PThrottleSlotNotLeakedOnIdentityDedup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := config.GetDefaultLocal()
+	cfg.DNSBootstrapID = ""
+	log := logging.TestingLog(t)
+	genesisInfo := GenesisInfo{genesisID, config.Devtestnet}
+
+	cfgB := cfg
+	cfgB.NetAddress = "127.0.0.1:0"
+	netB, err := NewP2PNetwork(log, cfgB, "", nil, genesisInfo, &nopeNodeInfo{}, nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, netB.Start())
+	defer netB.Stop()
+
+	pubKeyB, err := netB.service.ID().ExtractPublicKey()
+	require.NoError(t, err)
+	rawB, err := pubKeyB.Raw()
+	require.NoError(t, err)
+	tracker := NewIdentityTracker()
+	existing := &wsPeer{identity: algocrypto.PublicKey(rawB)}
+	require.True(t, tracker.setIdentity(existing))
+
+	peerInfoB := netB.service.AddrInfo()
+	addrsB, err := peer.AddrInfoToP2pAddrs(&peerInfoB)
+	require.NoError(t, err)
+	netA, err := NewP2PNetwork(log, cfg, "", []string{addrsB[0].String()}, genesisInfo, &nopeNodeInfo{}, &identityOpts{tracker: tracker}, nil)
+	require.NoError(t, err)
+	// netA is not a relay, so Start gives it one throttle slot per GossipFanout
+	require.False(t, netA.relayMessages)
+	slots := cfg.GossipFanout
+
+	dedupsBefore := networkPeerIdentityDisconnect.GetUint64Value()
+	require.NoError(t, netA.Start())
+	defer netA.Stop()
+
+	require.Eventually(t, func() bool {
+		return networkPeerIdentityDisconnect.GetUint64Value() > dedupsBefore
+	}, 10*time.Second, 50*time.Millisecond, "netA never rejected the duplicate connection to netB")
+	require.False(t, netA.hasPeers())
+	require.Equal(t, slots, netA.availableThrottleSlots(), "the identity dedup rejection leaked an outgoing throttle slot")
+
+	// Allow registration, then check that disconnecting returns the claimed slot.
+	tracker.removeIdentity(existing)
+	require.Eventually(t, func() bool {
+		netA.RequestConnectOutgoing(false, nil)
+		return len(netA.GetPeers(PeersConnectedOut)) == 1
+	}, 10*time.Second, 50*time.Millisecond, "netA never registered an outgoing connection to netB")
+	outPeers := netA.GetPeers(PeersConnectedOut)
+	require.Len(t, outPeers, 1)
+	require.True(t, outPeers[0].(*wsPeer).throttledOutgoingConnection)
+	require.Equal(t, slots-1, netA.availableThrottleSlots())
+
+	netA.disconnect(outPeers[0], disconnectReasonNone)
+	require.Equal(t, slots, netA.availableThrottleSlots(), "disconnecting a registered peer did not give its throttle slot back")
 }

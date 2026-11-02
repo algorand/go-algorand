@@ -49,6 +49,7 @@ func init() {
 	rootCmd.AddCommand(signCmd)
 	rootCmd.AddCommand(multisigCmd)
 	rootCmd.AddCommand(partCmd)
+	rootCmd.AddCommand(pqCmd)
 	rootCmd.Flags().BoolVarP(&versionCheck, "version", "v", false, "Display and write current build version and exit")
 }
 

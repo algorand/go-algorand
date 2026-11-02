@@ -22,14 +22,17 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
 // Errors for the StateProof verifier
 var (
-	ErrCoinNotInRange    = errors.New("coin is not within slot weight range")
-	ErrNoRevealInPos     = errors.New("no reveal for position")
-	ErrTreeDepthTooLarge = errors.New("tree depth is too large")
+	ErrCoinNotInRange       = errors.New("coin is not within slot weight range")
+	ErrNoRevealInPos        = errors.New("no reveal for position")
+	ErrTreeDepthTooLarge    = errors.New("tree depth is too large")
+	ErrInvalidHashType      = errors.New("state proof uses an unexpected hash algorithm")
+	ErrInvalidSigCommitSize = errors.New("state proof SigCommit has an unexpected size")
 )
 
 // Verifier is used to verify a state proof. those fields represent all the verifier's trusted data
@@ -67,6 +70,10 @@ func MkVerifierWithLnProvenWeight(partcom crypto.GenericDigest, lnProvenWt uint6
 // Verify checks if s is a valid state proof for the data on a round.
 // it uses the trusted data from the Verifier struct
 func (v *Verifier) Verify(round basics.Round, data MessageHash, s *StateProof) error {
+	if err := verifyStateProofAlgorithms(s); err != nil {
+		return err
+	}
+
 	if err := verifyStateProofTreesDepth(s); err != nil {
 		return err
 	}
@@ -136,6 +143,38 @@ func (v *Verifier) Verify(round basics.Round, data MessageHash, s *StateProof) e
 		coin := coinHash.getNextCoin()
 		if !(reveal.SigSlot.L <= coin && coin < reveal.SigSlot.L+reveal.Part.Weight) {
 			return fmt.Errorf("%w: for reveal pos %d and coin %d, ", ErrCoinNotInRange, pos, coin)
+		}
+	}
+
+	return nil
+}
+
+// verifyStateProofAlgorithms validates the cryptographic suite parameters.
+func verifyStateProofAlgorithms(s *StateProof) error {
+	if s.SigProofs.HashFactory.HashType != HashType {
+		return fmt.Errorf("%w: SigProofs uses %d, expected %d",
+			ErrInvalidHashType, s.SigProofs.HashFactory.HashType, HashType)
+	}
+
+	if s.PartProofs.HashFactory.HashType != HashType {
+		return fmt.Errorf("%w: PartProofs uses %d, expected %d",
+			ErrInvalidHashType, s.PartProofs.HashFactory.HashType, HashType)
+	}
+
+	if len(s.SigCommit) != HashSize {
+		return fmt.Errorf("%w: SigCommit is %d bytes, expected %d",
+			ErrInvalidSigCommitSize, len(s.SigCommit), HashSize)
+	}
+
+	for pos, reveal := range s.Reveals {
+		sig := reveal.SigSlot.Sig
+		if sig.MsgIsZero() {
+			continue
+		}
+		if sig.Proof.HashFactory.HashType != merklesignature.MerkleSignatureSchemeHashFunction {
+			return fmt.Errorf("%w: reveal %d Merkle signature proof uses %d, expected %d",
+				ErrInvalidHashType, pos, sig.Proof.HashFactory.HashType,
+				merklesignature.MerkleSignatureSchemeHashFunction)
 		}
 	}
 

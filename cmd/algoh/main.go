@@ -145,7 +145,7 @@ func main() {
 			args = append(args, "-s", log.GetTelemetrySession())
 		}
 		algodPath := filepath.Join(exeDir, algodFileName)
-		cmd := exec.Command(algodPath, args...)
+		cmd := exec.Command(algodPath, args...) //nolint:gosec // runs the sibling algod binary with the operator's CLI arguments, without a shell
 		cmd.Stderr = &errorOutput
 		cmd.Stdout = &output
 
@@ -408,7 +408,7 @@ func captureErrorLogs(algohConfig algoh.HostConfig, errorOutput stdCollector, ou
 	}
 }
 
-func reportErrorf(format string, args ...interface{}) {
+func reportErrorf(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, format, args...)
 	logging.Base().Warnf(format, args...)
 }

@@ -37,6 +37,26 @@ func TestOpSpecs(t *testing.T) {
 	}
 }
 
+// TestCostDynamic ensures that every cost that depends on the stack is marked
+// as dynamic, which requires that it went through check(). Otherwise compute
+// would charge only its baseCost.
+func TestCostDynamic(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	checkDynamic := func(cd costDescriptor, name string) {
+		require.Equal(t, cd.chunkCost != 0 || cd.fn != nil, cd.dynamic, name)
+	}
+	for _, spec := range OpSpecs {
+		checkDynamic(spec.OpDetails.FullCost, spec.Name)
+		for _, imm := range spec.OpDetails.Immediates {
+			for _, cd := range imm.fieldCosts {
+				checkDynamic(cd, spec.Name+" "+imm.Name)
+			}
+		}
+	}
+}
+
 func (os *OpSpec) equals(oso *OpSpec) bool {
 	if os.Opcode != oso.Opcode {
 		return false
@@ -88,6 +108,12 @@ func testOpcodesByVersion(t *testing.T) {
 	// Make a copy of the OpSpecs to check if OpcodesByVersion will change it
 	OpSpecs2 := slices.Clone(OpSpecs)
 
+	// A multi-byte opcode shares its prefix byte with its siblings, so identity
+	// and sort order are by the combined prefix+sub-opcode, not the byte alone.
+	key := func(spec OpSpec) uint16 {
+		return uint16(spec.Opcode)<<8 | uint16(spec.SubOpcode)
+	}
+
 	opSpecs := make([][]OpSpec, LogicVersion)
 	for v := uint64(1); v <= LogicVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
@@ -97,18 +123,31 @@ func testOpcodesByVersion(t *testing.T) {
 				cur := opSpecs[v-1][i]
 				next := opSpecs[v-1][i+1]
 				// check duplicates
-				if cur.Opcode == next.Opcode {
+				if key(cur) == key(next) {
 					isOk = false
 					break
 				}
 				// check sorted
-				if cur.Opcode > next.Opcode {
+				if key(cur) > key(next) {
 					isOk = false
 					break
 				}
 
 			}
 			require.True(t, isOk)
+
+			// Every named opcode available in this version, including each
+			// sub-opcode of a multi-byte family, must appear exactly once.
+			// Doc and langspec generation rely on this completeness.
+			byName := make(map[string]int)
+			for _, spec := range opSpecs[v-1] {
+				byName[spec.Name]++
+			}
+			for name, spec := range OpsByName[v] {
+				require.Equalf(t, 1, byName[name],
+					"opcode %q (0x%02x/0x%02x) appears %d times in OpcodesByVersion(%d)",
+					name, spec.Opcode, spec.SubOpcode, byName[name], v)
+			}
 		})
 	}
 	require.Greater(t, len(opSpecs[1]), len(opSpecs[0]))
@@ -158,13 +197,24 @@ func TestOpcodesVersioningV2(t *testing.T) {
 	require.Equal(t, cntv1, cntv0)
 	require.Equal(t, 52, cntv1)
 
+	cdEqual := func(a, b costDescriptor) bool {
+		if reflect.ValueOf(a.fn).Pointer() != reflect.ValueOf(b.fn).Pointer() {
+			return false
+		}
+		// With the funcs cleared, DeepEqual compares every other field, even
+		// ones added later.
+		a.fn, b.fn = nil, nil
+		return reflect.DeepEqual(a, b)
+	}
+
 	eqButVersion := func(a *OpSpec, b *OpSpec) (eq bool) {
 		eq = a.Opcode == b.Opcode && a.Name == b.Name &&
 			reflect.ValueOf(a.op).Pointer() == reflect.ValueOf(b.op).Pointer() &&
 			reflect.ValueOf(a.asm).Pointer() == reflect.ValueOf(b.asm).Pointer() &&
 			reflect.DeepEqual(a.Arg, b.Arg) && reflect.DeepEqual(a.Return, b.Return) &&
 			a.Modes == b.Modes &&
-			a.OpDetails.FullCost == b.OpDetails.FullCost && a.OpDetails.Size == b.OpDetails.Size &&
+			cdEqual(a.FullCost, b.FullCost) &&
+			a.OpDetails.Size == b.OpDetails.Size &&
 			reflect.ValueOf(a.OpDetails.check).Pointer() == reflect.ValueOf(b.OpDetails.check).Pointer()
 		return
 	}

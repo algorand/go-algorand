@@ -41,7 +41,8 @@ func TestBlockWithTxnEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	txn := transactions.Transaction{
-		Type: protocol.PaymentTx,
+		Type:   protocol.PaymentTx,
+		Header: transactions.Header{Sender: basics.Address{0x01}},
 		PaymentTxnFields: transactions.PaymentTxnFields{
 			Amount: basics.MicroAlgos{Raw: 1},
 		},

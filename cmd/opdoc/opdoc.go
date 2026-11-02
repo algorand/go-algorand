@@ -30,6 +30,14 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// docVersion is the newest language version to document. It is bumped by hand
+// when new opcodes are introduced during development, rather than derived from
+// consensus parameters, so that in-progress opcodes can be documented and
+// checked in CI before they are promoted to a released consensus version.
+// Documenting logic.LogicVersion instead would publish vFuture opcodes
+// unconditionally.
+const docVersion = 13
+
 // slug returns the auto generated named anchor "slug" for a given heading
 // created by mdbook.
 func slug(s string) string {
@@ -58,16 +66,21 @@ func opImmediateNoteSyntaxMarkdown(name string, oids []logic.OpImmediateDetails)
 	return fmt.Sprintf("`%s %s` where %s", name, strings.Join(argNames, " "), strings.Join(argDocs, ", "))
 }
 
-func opImmediateNoteEncoding(opcode byte, oids []logic.OpImmediateDetails) string {
+func opImmediateNoteEncoding(op *logic.OpSpec, oids []logic.OpImmediateDetails) string {
+	prefix := fmt.Sprintf("0x%02x", op.Opcode)
+	if op.SubOpcode != 0 {
+		// multi-byte opcode: the sub-opcode byte follows the prefix byte
+		prefix += fmt.Sprintf(" 0x%02x", op.SubOpcode)
+	}
 	if len(oids) == 0 {
-		return fmt.Sprintf("0x%02x", opcode)
+		return prefix
 	}
 
 	notes := make([]string, len(oids))
 	for idx, oid := range oids {
 		notes[idx] = oid.Encoding
 	}
-	return fmt.Sprintf("0x%02x {%s}", opcode, strings.Join(notes, "}, {"))
+	return fmt.Sprintf("%s {%s}", prefix, strings.Join(notes, "}, {"))
 }
 
 func opGroupMarkdownTable(names []string, out io.Writer, version uint64) {
@@ -126,6 +139,13 @@ func fieldGroupMarkdown(out io.Writer, group *logic.FieldGroup, version uint64) 
 		// reminder: group.Names can be "sparse" See: logic.TxnaFields
 		if !ok || spec.Version() > version {
 			continue
+		}
+		// Unlike integerConstantsTableMarkdown, this used to emit an empty NOTES
+		// cell rather than complain, which is how every block field came to ship
+		// undocumented. Fail instead.
+		if spec.Note() == "" {
+			fmt.Fprintf(os.Stderr, "field %s of %s %s is undocumented\n", name, group.Name, group.Doc)
+			os.Exit(1)
 		}
 		if spec.Type().Typed() {
 			showTypes = true
@@ -226,7 +246,7 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bo
 		syntax = fmt.Sprintf("- Syntax: %s\n", opSyntax)
 	}
 
-	encoding := fmt.Sprintf("- Bytecode: %s", opImmediateNoteEncoding(op.Opcode, deets))
+	encoding := fmt.Sprintf("- Bytecode: %s", opImmediateNoteEncoding(op, deets))
 
 	stackEffects := stackMarkdown(op)
 
@@ -289,16 +309,36 @@ Opcodes have a cost of 1 unless otherwise specified.
 	return nil
 }
 
+// opcodeBytes is the bytecode that introduces an op: a single prefix byte for
+// ordinary opcodes, or [prefix, sub-opcode] for a member of a multi-byte
+// family. It marshals as a bare number in the single-byte case to preserve the
+// historical langspec format, and as an array otherwise.
+type opcodeBytes []byte
+
+// MarshalJSON renders a single-byte opcode as a number and a multi-byte opcode
+// as an array of numbers (e.g. 212 vs [212, 1]).
+func (o opcodeBytes) MarshalJSON() ([]byte, error) {
+	if len(o) == 1 {
+		return json.Marshal(o[0])
+	}
+	ints := make([]int, len(o))
+	for i, b := range o {
+		ints[i] = int(b)
+	}
+	return json.Marshal(ints)
+}
+
 // OpRecord is a consolidated record of things about an Op
 type OpRecord struct {
-	Opcode  byte
+	Opcode  opcodeBytes
 	Name    string
 	Args    []string `json:",omitempty"`
 	Returns []string `json:",omitempty"`
 	Size    int
 
-	ArgEnum      []string `json:",omitempty"`
-	ArgEnumTypes []string `json:",omitempty"`
+	ArgEnum      []string    `json:",omitempty"`
+	ArgEnumTypes []string    `json:",omitempty"`
+	ArgDetails   []argDetail `json:",omitempty"`
 
 	DocCost string
 
@@ -307,6 +347,16 @@ type OpRecord struct {
 	ImmediateNote     []logic.OpImmediateDetails `json:",omitempty"`
 	IntroducedVersion uint64
 	Groups            []string
+	Modes             logic.RunMode
+}
+
+type argDetail struct {
+	Name         string
+	Type         string `json:",omitempty"`
+	Doc          string
+	ByteEncoding int
+	Modes        logic.RunMode `json:",omitempty"` // Zero means "same as the opcode"
+	Version      uint64        `json:",omitempty"`
 }
 
 type namedType struct {
@@ -360,6 +410,8 @@ func typeStrings(types logic.StackTypes) []string {
 		out[idx] = t.String()
 		if out[idx] != "none" {
 			allNones = false
+		} else {
+			out[idx] = "" // So omitempty removes it
 		}
 	}
 
@@ -374,74 +426,95 @@ func typeStrings(types logic.StackTypes) []string {
 	return out
 }
 
-func fieldsAndTypes(group logic.FieldGroup, version uint64) ([]string, []string) {
+func fieldsAndTypes(group logic.FieldGroup, version uint64, modes logic.RunMode) ([]string, []string, []argDetail) {
 	// reminder: group.Names can be "sparse" See: logic.TxnaFields
 	fields := make([]string, 0, len(group.Names))
 	types := make([]logic.StackType, 0, len(group.Names))
+	details := make([]argDetail, 0, len(group.Names))
+
 	for _, name := range group.Names {
-		if spec, ok := group.SpecByName(name); ok && spec.Version() <= version {
-			fields = append(fields, name)
-			types = append(types, spec.Type())
+		spec, ok := group.SpecByName(name)
+		if !ok {
+			continue
 		}
+		argVersion := spec.Version()
+		argMode := modes & spec.Modes()
+		if version < argVersion || argMode == 0 {
+			continue
+		}
+
+		if argMode == modes {
+			argMode = 0
+		}
+
+		fields = append(fields, name)
+		types = append(types, spec.Type())
+		typeName := spec.Type().String()
+		if typeName == "none" {
+			typeName = ""
+		}
+
+		details = append(details, argDetail{
+			Name:         name,
+			Type:         typeName,
+			Doc:          spec.Note(),
+			ByteEncoding: int(spec.Field()),
+			Modes:        argMode,
+			Version:      argVersion,
+		})
 	}
-	return fields, typeStrings(types)
+	return fields, typeStrings(types), details
 }
 
-func argEnums(name string, version uint64) ([]string, []string) {
-	// reminder: this needs to be manually updated every time
-	// a new opcode is added with an associated FieldGroup
-	// it'd be nice to have this auto-update
-	switch name {
-	case "txn", "gtxn", "gtxns", "itxn", "gitxn":
-		return fieldsAndTypes(logic.TxnFields, version)
-	case "itxn_field":
-		// itxn_field does not *return* a type depending on its immediate. It *takes* it.
-		// but until a consumer cares, ArgEnumTypes will be overloaded for that meaning.
-		return fieldsAndTypes(logic.ItxnSettableFields, version)
-	case "global":
-		return fieldsAndTypes(logic.GlobalFields, version)
-	case "txna", "gtxna", "gtxnsa", "txnas", "gtxnas", "gtxnsas", "itxna", "gitxna":
-		return fieldsAndTypes(logic.TxnArrayFields, version)
-	case "asset_holding_get":
-		return fieldsAndTypes(logic.AssetHoldingFields, version)
-	case "asset_params_get":
-		return fieldsAndTypes(logic.AssetParamsFields, version)
-	case "app_params_get":
-		return fieldsAndTypes(logic.AppParamsFields, version)
-	case "acct_params_get":
-		return fieldsAndTypes(logic.AcctParamsFields, version)
-	case "block":
-		return fieldsAndTypes(logic.BlockFields, version)
-	case "json_ref":
-		return fieldsAndTypes(logic.JSONRefTypes, version)
-	case "base64_decode":
-		return fieldsAndTypes(logic.Base64Encodings, version)
-	case "vrf_verify":
-		return fieldsAndTypes(logic.VrfStandards, version)
-	case "ecdsa_pk_recover", "ecdsa_verify", "ecdsa_pk_decompress":
-		return fieldsAndTypes(logic.EcdsaCurves, version)
-	default:
-		return nil, nil
+// argEnumOverrides names the opcodes whose documented field group is
+// deliberately not the group attached to their immediate.
+var argEnumOverrides = map[string]*logic.FieldGroup{
+	// itxn_field's spec carries the full TxnFields so that the assembler can
+	// report a useful error for a field that exists but cannot be set. Only the
+	// settable fields belong in the documented enum. Note that itxn_field does
+	// not *return* a type depending on its immediate, it *takes* one, so
+	// ArgEnumTypes is overloaded for that meaning.
+	"itxn_field": &logic.ItxnSettableFields,
+}
+
+// argEnums returns the symbolic names, types, and details of the field group
+// attached to spec's immediates. Deriving this from the OpSpec rather than from
+// a hand-maintained name switch means a new opcode with a FieldGroup is
+// documented without anyone having to remember this function exists.
+func argEnums(spec logic.OpSpec, version uint64) ([]string, []string, []argDetail) {
+	if group, ok := argEnumOverrides[spec.Name]; ok {
+		return fieldsAndTypes(*group, version, spec.Modes)
 	}
+	for i := range spec.OpDetails.Immediates {
+		if group := spec.OpDetails.Immediates[i].Group; group != nil {
+			return fieldsAndTypes(*group, version, spec.Modes)
+		}
+	}
+	return nil, nil, nil
 }
 
 func buildLanguageSpec(opGroups map[string][]string, namedTypes []namedType, version uint64) *LanguageSpec {
 	opSpecs := logic.OpcodesByVersion(version)
 	records := make([]OpRecord, len(opSpecs))
 	for i, spec := range opSpecs {
-		records[i].Opcode = spec.Opcode
+		if spec.SubOpcode != 0 {
+			records[i].Opcode = opcodeBytes{spec.Opcode, spec.SubOpcode}
+		} else {
+			records[i].Opcode = opcodeBytes{spec.Opcode}
+		}
 		records[i].Name = spec.Name
 		records[i].Args = typeStrings(spec.Arg.Types)
 		records[i].Returns = typeStrings(spec.Return.Types)
 		records[i].Size = spec.OpDetails.Size
 		records[i].DocCost = spec.DocCost(version)
-		records[i].ArgEnum, records[i].ArgEnumTypes = argEnums(spec.Name, version)
+		records[i].ArgEnum, records[i].ArgEnumTypes, records[i].ArgDetails = argEnums(spec, version)
 		desc := logic.OpDescOf(spec.Name)
 		records[i].Doc = desc.Short
 		records[i].DocExtra = desc.Extra
 		records[i].ImmediateNote = logic.OpImmediateDetailsFromSpec(spec)
 		records[i].Groups = opGroups[spec.Name]
 		records[i].IntroducedVersion = spec.Version
+		records[i].Modes = spec.Modes
 	}
 
 	return &LanguageSpec{
@@ -462,8 +535,6 @@ func create(file string) *os.File {
 }
 
 func main() {
-	const docVersion = uint64(12)
-
 	opGroups := make(map[string][]string, len(logic.OpSpecs))
 	for grp, names := range logic.OpGroups {
 		fname := fmt.Sprintf("%s.md", strings.ToLower(grp))
@@ -527,5 +598,17 @@ func main() {
 			os.Exit(1)
 		}
 		opcodesMd.Close()
+
+		// Appendix A of the specs is the newest version's opcode reference. Write
+		// it here rather than having the Makefile pick a file out of a glob,
+		// which could not tell a stale TEAL_opcodes_v99.md from a real one.
+		if v == docVersion {
+			appendix := create("avm-appendix-a.md")
+			if err := opsToMarkdown(appendix, v); err != nil {
+				fmt.Fprintf(os.Stderr, "error creating appendix A: %v\n", err)
+				os.Exit(1)
+			}
+			appendix.Close()
+		}
 	}
 }

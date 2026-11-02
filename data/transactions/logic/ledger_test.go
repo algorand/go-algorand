@@ -708,6 +708,28 @@ func (l *Ledger) AppParams(appID basics.AppIndex) (basics.AppParams, basics.Addr
 	return basics.AppParams{}, basics.Address{}, fmt.Errorf("no app %d", appID)
 }
 
+// SetForeignBoxReads sets the ForeignBoxReads flag on the given app's params.
+func (l *Ledger) SetForeignBoxReads(appID basics.AppIndex, enable bool) error {
+	app, ok := l.applications[appID]
+	if !ok {
+		return fmt.Errorf("no app %d", appID)
+	}
+	app.ForeignBoxReads = enable
+	l.applications[appID] = app
+	return nil
+}
+
+// SetFamilyBoxAccess sets the FamilyBoxAccess flag on the given app's params.
+func (l *Ledger) SetFamilyBoxAccess(appID basics.AppIndex, enable bool) error {
+	app, ok := l.applications[appID]
+	if !ok {
+		return fmt.Errorf("no app %d", appID)
+	}
+	app.FamilyBoxAccess = enable
+	l.applications[appID] = app
+	return nil
+}
+
 var testGenHash = crypto.Digest{0x03, 0x02, 0x03}
 
 // GenesisHash returns a phony genesis hash that can be tested against

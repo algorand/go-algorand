@@ -69,6 +69,15 @@ func TestBundleCreation(t *testing.T) {
 
 }
 
+func TestBundleVerifyRejectsStepAboveDown(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ub := unauthenticatedBundle{Step: down + 1}
+	_, err := ub.verify(context.Background(), nil, nil) // should never dereference ledger or verifier
+	require.ErrorContains(t, err, "exceeds max step")
+}
+
 // Test Bundle validation with Zero Votes
 func TestBundleCreationWithZeroVotes(t *testing.T) {
 	partitiontest.PartitionTest(t)

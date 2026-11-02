@@ -132,9 +132,10 @@ type ResourcesData struct {
 	// correct round number.
 	UpdateRound uint64 `codec:"z"`
 
-	Version uint64 `codec:"A"`
-
-	SizeSponsor basics.Address `codec:"B"`
+	Version         uint64         `codec:"A"`
+	SizeSponsor     basics.Address `codec:"B"`
+	ForeignBoxReads bool           `codec:"C"`
+	FamilyBoxAccess bool           `codec:"D"`
 }
 
 // BaseVotingData is the base struct used to store voting data
@@ -557,7 +558,9 @@ func (rd *ResourcesData) IsEmptyAppFields() bool {
 		rd.GlobalStateSchemaNumByteSlice == 0 &&
 		rd.ExtraProgramPages == 0 &&
 		rd.Version == 0 &&
-		rd.SizeSponsor.IsZero()
+		rd.SizeSponsor.IsZero() &&
+		!rd.ForeignBoxReads &&
+		!rd.FamilyBoxAccess
 }
 
 // IsApp returns true if the flag is ResourceFlagsEmptyApp and the fields are not empty.
@@ -737,6 +740,8 @@ func (rd *ResourcesData) ClearAppParams() {
 	rd.ExtraProgramPages = 0
 	rd.Version = 0
 	rd.SizeSponsor = basics.Address{}
+	rd.ForeignBoxReads = false
+	rd.FamilyBoxAccess = false
 	hadHolding := (rd.ResourceFlags & ResourceFlagsNotHolding) == ResourceFlagsHolding
 	rd.ResourceFlags -= rd.ResourceFlags & ResourceFlagsOwnership
 	rd.ResourceFlags &= ^ResourceFlagsEmptyApp
@@ -757,6 +762,8 @@ func (rd *ResourcesData) SetAppParams(ap basics.AppParams, haveHoldings bool) {
 	rd.ExtraProgramPages = ap.ExtraProgramPages
 	rd.Version = ap.Version
 	rd.SizeSponsor = ap.SizeSponsor
+	rd.ForeignBoxReads = ap.ForeignBoxReads
+	rd.FamilyBoxAccess = ap.FamilyBoxAccess
 	rd.ResourceFlags |= ResourceFlagsOwnership
 	if !haveHoldings {
 		rd.ResourceFlags |= ResourceFlagsNotHolding
@@ -786,6 +793,8 @@ func (rd *ResourcesData) GetAppParams() basics.AppParams {
 		ExtraProgramPages: rd.ExtraProgramPages,
 		Version:           rd.Version,
 		SizeSponsor:       rd.SizeSponsor,
+		ForeignBoxReads:   rd.ForeignBoxReads,
+		FamilyBoxAccess:   rd.FamilyBoxAccess,
 	}
 }
 

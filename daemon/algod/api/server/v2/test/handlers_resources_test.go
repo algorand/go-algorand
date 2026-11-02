@@ -404,15 +404,15 @@ func accountInformationResourceLimitsTest(t *testing.T, accountMaker func(int) b
 	require.Equal(t, expectedCode, rec.Code)
 
 	var ret struct {
-		TotalApps          int           `json:"total-apps-opted-in"`
-		TotalAssets        int           `json:"total-assets-opted-in"`
-		TotalCreatedApps   int           `json:"total-created-apps"`
-		TotalCreatedAssets int           `json:"total-created-assets"`
-		MaxResults         int           `json:"max-results"`
-		Apps               []interface{} `json:"apps-local-state"`
-		Assets             []interface{} `json:"assets"`
-		CreatedApps        []interface{} `json:"createdApps"`
-		CreatedAssets      []interface{} `json:"createdAssets"`
+		TotalApps          int   `json:"total-apps-opted-in"`
+		TotalAssets        int   `json:"total-assets-opted-in"`
+		TotalCreatedApps   int   `json:"total-created-apps"`
+		TotalCreatedAssets int   `json:"total-created-assets"`
+		MaxResults         int   `json:"max-results"`
+		Apps               []any `json:"apps-local-state"`
+		Assets             []any `json:"assets"`
+		CreatedApps        []any `json:"createdApps"`
+		CreatedAssets      []any `json:"createdAssets"`
 	}
 
 	var errRet struct {

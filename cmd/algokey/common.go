@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/passphrase"
@@ -51,14 +52,11 @@ func loadKeyfileOrMnemonic(keyfile string, mnemonic string) crypto.Seed {
 }
 
 func loadMnemonic(mnemonic string) crypto.Seed {
-	seedbytes, err := passphrase.MnemonicToKey(mnemonic)
+	seed, err := seedFromMnemonic(mnemonic)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot recover key seed from mnemonic: %v\n", err)
 		os.Exit(1)
 	}
-
-	var seed crypto.Seed
-	copy(seed[:], seedbytes)
 	return seed
 }
 
@@ -68,8 +66,11 @@ func loadKeyfile(keyfile string) crypto.Seed {
 		fmt.Fprintf(os.Stderr, "Cannot read key seed from %s: %v\n", keyfile, err)
 		os.Exit(1)
 	}
-
 	var seed crypto.Seed
+	if len(seedbytes) != len(seed) {
+		fmt.Fprintf(os.Stderr, "Key file %s is %d bytes, expected a %d-byte Ed25519 seed\n", keyfile, len(seedbytes), len(seed))
+		os.Exit(1)
+	}
 	copy(seed[:], seedbytes)
 	return seed
 }
@@ -92,12 +93,27 @@ func writePublicKey(pubkeyfile string, checksummed string) {
 }
 
 func computeMnemonic(seed crypto.Seed) string {
-	mnemonic, err := passphrase.KeyToMnemonic(seed[:])
+	mnemonic, err := mnemonicFromSeed(seed)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot generate key mnemonic: %v\n", err)
 		os.Exit(1)
 	}
 	return mnemonic
+}
+
+func seedFromMnemonic(mnemonic string) (crypto.Seed, error) {
+	seedBytes, err := passphrase.MnemonicToKey(strings.TrimSpace(mnemonic))
+	if err != nil {
+		return crypto.Seed{}, err
+	}
+
+	var seed crypto.Seed
+	copy(seed[:], seedBytes)
+	return seed, nil
+}
+
+func mnemonicFromSeed(seed crypto.Seed) (string, error) {
+	return passphrase.KeyToMnemonic(seed[:])
 }
 
 // writeFile is a wrapper of os.WriteFile which considers the special

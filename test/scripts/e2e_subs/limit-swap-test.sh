@@ -1,6 +1,8 @@
 #!/bin/bash
 
-date '+limit-swap-test start %Y%m%d_%H%M%S'
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
 
 set -e
 set -x
@@ -42,7 +44,9 @@ echo "closeout part b, asset trader"
 # quick expiration, test closeout
 
 ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
-SETUP_ROUND=$((${ROUND} + 10))
+# The funding payment and the asset opt-in below must both commit before SETUP_ROUND.
+# Leave enough rounds for slow kmd signing under CI load.
+SETUP_ROUND=$((${ROUND} + 20))
 TIMEOUT_ROUND=$((${SETUP_ROUND} + 1))
 
 sed s/TMPL_ASSET/${ASSET_ID}/g < tools/teal/templates/limit-order-b.teal.tmpl | sed s/TMPL_SWAPN/137/g | sed s/TMPL_SWAPD/31337/g | sed s/TMPL_TIMEOUT/${TIMEOUT_ROUND}/g | sed s/TMPL_OWN/${ACCOUNT}/g | sed s/TMPL_FEE/100000/g | sed s/TMPL_MINTRD/10000/g > ${TEMPDIR}/limit-order-b.teal
@@ -56,8 +60,8 @@ ${gcmd} clerk send --amount 1000000 --from ${ACCOUNT} --to ${ACCOUNT_ASSET_TRADE
 # ${gcmd} account balance -a $ACCOUNT_ASSET_TRADER
 
 echo "make asset trader able to accept asset"
-ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
-${gcmd} asset optin -o ${TEMPDIR}/b-asset-init.tx --assetid ${ASSET_ID} -a $ACCOUNT_ASSET_TRADER --validrounds $((${SETUP_ROUND} - ${ROUND} - 1))
+# The program only approves the opt-in if txn.LastValid < TMPL_TIMEOUT.
+${gcmd} asset optin -o ${TEMPDIR}/b-asset-init.tx --assetid ${ASSET_ID} -a $ACCOUNT_ASSET_TRADER --lastvalid ${SETUP_ROUND}
 
 ${gcmd} clerk sign -i ${TEMPDIR}/b-asset-init.tx -p ${TEMPDIR}/limit-order-b.teal -o ${TEMPDIR}/b-asset-init.stx
 
@@ -102,8 +106,8 @@ echo "setup trader with Algos"
 ${gcmd} clerk send --amount 1000000 --from ${ACCOUNT} --to ${ACCOUNT_ASSET_TRADER}
 
 echo "make asset trader able to accept asset"
-ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
-${gcmd} asset optin -o ${TEMPDIR}/b-asset-init.tx --assetid ${ASSET_ID} -a $ACCOUNT_ASSET_TRADER --validrounds $((${SETUP_ROUND} - ${ROUND} - 1))
+# The program only approves the opt-in if txn.LastValid < TMPL_TIMEOUT.
+${gcmd} asset optin -o ${TEMPDIR}/b-asset-init.tx --assetid ${ASSET_ID} -a $ACCOUNT_ASSET_TRADER --lastvalid ${SETUP_ROUND}
 
 ${gcmd} clerk sign -i ${TEMPDIR}/b-asset-init.tx -p ${TEMPDIR}/limit-order-b.teal -o ${TEMPDIR}/b-asset-init.stx
 
@@ -138,7 +142,6 @@ cat ${TEMPDIR}/gx-0.stx ${TEMPDIR}/gx-1.stx > ${TEMPDIR}/group.stx
 
 ${gcmd} account balance -a $ACCOUNT; ${gcmd} account balance -a $ACCOUNT_ALGO_TRADER; ${gcmd} account balance -a $ACCOUNT_ASSET_TRADER
 
-${gcmd} clerk dryrun -t ${TEMPDIR}/group.stx
 ${gcmd} clerk rawsend -f ${TEMPDIR}/group.stx
 
-date '+limit-swap-test OK %Y%m%d_%H%M%S'
+date "+${scriptname} OK %Y%m%d_%H%M%S"

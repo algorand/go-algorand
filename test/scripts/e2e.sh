@@ -7,8 +7,6 @@ set -e
 # Suppress telemetry reporting for tests
 export ALGOTEST=1
 
-S3_TESTDATA=${S3_TESTDATA:-algorand-testdata}
-
 SCRIPT_PATH="$( cd "$(dirname "$0")" ; pwd -P )"
 SRCROOT="$(pwd -P)"
 
@@ -208,9 +206,11 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
         pushd "${TEMPDIR}" || exit 1
         tar -j -c -f "${CI_E2E_FILENAME}.tar.bz2" --exclude node.log --exclude agreement.cdv net
         rm -rf "${TEMPDIR}/net"
-        RSTAMP=$(TZ=UTC python -c 'import time; print("{:08x}".format(0xffffffff - int(time.time() - time.mktime((2020,1,1,0,0,0,-1,-1,-1)))))')
-        echo aws s3 cp --acl public-read "${TEMPDIR}/${CI_E2E_FILENAME}.tar.bz2" "s3://${S3_TESTDATA}/indexer/e2e4/${RSTAMP}/${CI_E2E_FILENAME}.tar.bz2"
-        aws s3 cp --acl public-read "${TEMPDIR}/${CI_E2E_FILENAME}.tar.bz2" "s3://${S3_TESTDATA}/indexer/e2e4/${RSTAMP}/${CI_E2E_FILENAME}.tar.bz2"
+        if [ -n "${S3_TESTDATA}" ]; then
+            RSTAMP=$(TZ=UTC python -c 'import time; print("{:08x}".format(0xffffffff - int(time.time() - time.mktime((2020,1,1,0,0,0,-1,-1,-1)))))')
+            echo aws s3 cp --acl public-read "${TEMPDIR}/${CI_E2E_FILENAME}.tar.bz2" "s3://${S3_TESTDATA}/indexer/e2e4/${RSTAMP}/${CI_E2E_FILENAME}.tar.bz2"
+            aws s3 cp --acl public-read "${TEMPDIR}/${CI_E2E_FILENAME}.tar.bz2" "s3://${S3_TESTDATA}/indexer/e2e4/${RSTAMP}/${CI_E2E_FILENAME}.tar.bz2"
+        fi
         popd
     fi
 

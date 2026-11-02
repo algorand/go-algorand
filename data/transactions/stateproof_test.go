@@ -24,6 +24,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
@@ -41,6 +42,20 @@ type stateproofTxnTestCase struct {
 	lease              [32]byte
 	rekeyValue         basics.Address
 	sender             basics.Address
+}
+
+func basicStateProofTxnFieldsForTest() StateProofTxnFields {
+	return StateProofTxnFields{
+		StateProof: stateproof.StateProof{
+			SigCommit: make(crypto.GenericDigest, stateproof.HashSize),
+			SigProofs: merklearray.Proof{
+				HashFactory: crypto.HashFactory{HashType: stateproof.HashType},
+			},
+			PartProofs: merklearray.Proof{
+				HashFactory: crypto.HashFactory{HashType: stateproof.HashType},
+			},
+		},
+	}
 }
 
 func TestUnsupportedStateProof(t *testing.T) {
@@ -73,7 +88,7 @@ func (s *stateproofTxnTestCase) runIsWellFormedForTestCase() error {
 			Lease:   s.lease,
 			RekeyTo: s.rekeyValue,
 		},
-		StateProofTxnFields: StateProofTxnFields{},
+		StateProofTxnFields: basicStateProofTxnFieldsForTest(),
 	}.WellFormed(SpecialAddresses{}, curProto)
 }
 
@@ -95,6 +110,30 @@ func TestWellFormedStateProofTxn(t *testing.T) {
 			require.Equal(t, testCase.expectedError, testCase.runIsWellFormedForTestCase())
 		})
 	}
+
+	t.Run("unsupported state proof type", func(t *testing.T) {
+		t.Parallel()
+		fields := basicStateProofTxnFieldsForTest()
+		fields.StateProofType = protocol.StateProofType(1)
+		err := Transaction{
+			Type:                protocol.StateProofTx,
+			Header:              Header{Sender: StateProofSender},
+			StateProofTxnFields: fields,
+		}.WellFormed(SpecialAddresses{}, config.Consensus[protocol.ConsensusCurrentVersion])
+		require.ErrorIs(t, err, errMalformedStateProofType)
+	})
+
+	t.Run("wrong Basic hash", func(t *testing.T) {
+		t.Parallel()
+		fields := basicStateProofTxnFieldsForTest()
+		fields.StateProof.SigProofs.HashFactory.HashType = crypto.Sha256
+		err := Transaction{
+			Type:                protocol.StateProofTx,
+			Header:              Header{Sender: StateProofSender},
+			StateProofTxnFields: fields,
+		}.WellFormed(SpecialAddresses{}, config.Consensus[protocol.ConsensusCurrentVersion])
+		require.ErrorIs(t, err, errMalformedStateProofHash)
+	})
 }
 
 func TestStateProofTxnShouldBeZero(t *testing.T) {
