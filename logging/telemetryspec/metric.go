@@ -103,6 +103,10 @@ const AssembleBlockAbandon = "block-abandon"
 // evaluator could not generate one.
 const AssembleBlockGenerationError = "generation-error"
 
+// AssembleBlockNoProposers represents an empty block being assembled because the pool
+// found no local accounts that could propose in the round and skipped GenerateBlock.
+const AssembleBlockNoProposers = "no-proposers"
+
 const assembleBlockMetricsIdentifier Metric = "AssembleBlock"
 
 // AssembleBlockMetrics is the set of metrics captured when we compute AssembleBlock
@@ -286,7 +290,8 @@ func (t *transactionProcessingTimeDistribution) UnmarshalJSON(data []byte) error
 		return fmt.Errorf("array has %d buckets, should have %d", len(arr), len(t.transactionBuckets))
 	}
 	for i := range t.transactionBuckets {
-		val, err := arr[i].Int64()
+		// bitSize 0 rejects values that don't fit in int on this platform.
+		val, err := strconv.ParseInt(arr[i].String(), 10, 0)
 		if err != nil {
 			return fmt.Errorf("bucket has invalid value %s", arr[i])
 		}
@@ -321,8 +326,8 @@ bucketloop:
 		}
 		start := base + time.Duration(i-offset)*mul
 		end := base + time.Duration(i+1-offset)*mul
-		out.WriteString(fmt.Sprintf("%s - %s: %d\n", start, end, val))
+		fmt.Fprintf(&out, "%s - %s: %d\n", start, end, val)
 	}
-	out.WriteString(fmt.Sprintf(">1s: %d\n", t.transactionBuckets[37]))
+	fmt.Fprintf(&out, ">1s: %d\n", t.transactionBuckets[37])
 	return out.String()
 }

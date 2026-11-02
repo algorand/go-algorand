@@ -315,10 +315,10 @@ func edIndexToAddress(index uint64, txn *transactions.Transaction, shared []basi
 	switch {
 	case index == 0:
 		return txn.Sender.String()
-	case int(index-1) < len(txn.Accounts):
+	case index-1 < uint64(len(txn.Accounts)):
 		return txn.Accounts[index-1].String()
-	case int(index-1)-len(txn.Accounts) < len(shared):
-		return shared[int(index-1)-len(txn.Accounts)].String()
+	case index-1-uint64(len(txn.Accounts)) < uint64(len(shared)):
+		return shared[index-1-uint64(len(txn.Accounts))].String()
 	default:
 		return fmt.Sprintf("Invalid Account Index %d in LocalDelta", index)
 	}

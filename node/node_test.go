@@ -1074,14 +1074,14 @@ func TestNodeP2PRelays(t *testing.T) {
 	testParams0.AgreementFilterTimeoutPeriod0 = 500 * time.Millisecond
 	configurableConsensus[consensusTest0] = testParams0
 
-	minMoneyAtStart := 1_000_000
-	maxMoneyAtStart := 100_000_000_000
+	minMoneyAtStart := uint64(1_000_000)
+	maxMoneyAtStart := uint64(100_000_000_000)
 	gen := rand.New(rand.NewSource(2))
 
 	const numAccounts = 3
 	acctStake := make([]basics.MicroAlgos, numAccounts)
 	// only node N has stake
-	acctStake[2] = basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))}
+	acctStake[2] = basics.MicroAlgos{Raw: minMoneyAtStart + uint64(gen.Int())%(maxMoneyAtStart-minMoneyAtStart)}
 
 	configHook := func(ni nodeInfo, cfg config.Local) (nodeInfo, config.Local) {
 		cfg = config.GetDefaultLocal()
@@ -1367,12 +1367,12 @@ func TestNodeP2P_NetProtoVersions(t *testing.T) {
 	testParams0.AgreementFilterTimeoutPeriod0 = 500 * time.Millisecond
 	configurableConsensus[consensusTest0] = testParams0
 
-	maxMoneyAtStart := 100_000_000_000
+	maxMoneyAtStart := uint64(100_000_000_000)
 
 	const numAccounts = 2
 	acctStake := make([]basics.MicroAlgos, numAccounts)
-	acctStake[0] = basics.MicroAlgos{Raw: uint64(maxMoneyAtStart / numAccounts)}
-	acctStake[1] = basics.MicroAlgos{Raw: uint64(maxMoneyAtStart / numAccounts)}
+	acctStake[0] = basics.MicroAlgos{Raw: maxMoneyAtStart / numAccounts}
+	acctStake[1] = basics.MicroAlgos{Raw: maxMoneyAtStart / numAccounts}
 
 	configHook := func(ni nodeInfo, cfg config.Local) (nodeInfo, config.Local) {
 		cfg = config.GetDefaultLocal()

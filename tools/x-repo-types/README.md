@@ -50,3 +50,10 @@ There are some cases that break the definition above. For example, `basics.Micro
 `go-algorand` but is an alias for `uint64` in `go-algorand-sdk`. Our serializers know to produce the same
 output, but this violates the previous notion of _identical_. Such exceptions are handled by providing the string produced by the type's `TypeNode.String()` method
 as an element in the set `diffExclusions` of `typeAnalyzer/typeAnalyzer.go`.
+
+### Unreleased consensus parameters
+
+When comparing `config.ConsensusParams`, a field that only `vFuture` sets may be missing from the other
+repo: the report lists it as `UNRELEASED` and CI shows a warning, but the comparison passes. Once a numbered
+consensus version sets the field (usually when `vFuture` is promoted), it is required like any other field.
+`typeAnalyzer/unreleased.go` computes this set and is only run for that comparison.

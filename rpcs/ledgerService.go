@@ -166,14 +166,18 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 			if len(versionStrs) == 1 {
 				if versionStrs[0] != "1" {
 					logging.Base().Debugf("LedgerService.ServeHTTP: bad version '%s'", versionStr)
+					response.Header().Set("Content-Type", "text/plain; charset=utf-8")
+					response.Header().Set("X-Content-Type-Options", "nosniff")
 					response.WriteHeader(http.StatusBadRequest)
-					response.Write([]byte(fmt.Sprintf("unsupported version specified '%s'", versionStrs[0])))
+					_, _ = fmt.Fprintf(response, "unsupported version specified '%s'", versionStrs[0]) //nolint:gosec // explicit text/plain content type; not rendered as HTML
 					return
 				}
 			} else {
 				logging.Base().Debugf("LedgerService.ServeHTTP: wrong number of v=%d args", len(versionStrs))
+				response.Header().Set("Content-Type", "text/plain; charset=utf-8")
+				response.Header().Set("X-Content-Type-Options", "nosniff")
 				response.WriteHeader(http.StatusBadRequest)
-				response.Write([]byte(fmt.Sprintf("invalid number of version specified %d", len(versionStrs))))
+				_, _ = fmt.Fprintf(response, "invalid number of version specified %d", len(versionStrs)) //nolint:gosec // only an integer count is interpolated into the fixed response text
 				return
 			}
 		}

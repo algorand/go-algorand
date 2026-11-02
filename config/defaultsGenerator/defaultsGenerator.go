@@ -71,7 +71,7 @@ func main() {
 
 	localDefaultsBytes = append(localDefaultsBytes, autoDefaultsBytes...)
 
-	err = os.WriteFile(*outputfilename, localDefaultsBytes, 0644)
+	err = os.WriteFile(*outputfilename, localDefaultsBytes, 0644) //nolint:gosec // the operator selects the generated output path with the -o CLI flag
 	if err != nil {
 		printExit("Unable to write file %s : %v", *outputfilename, err)
 	}

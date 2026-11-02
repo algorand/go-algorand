@@ -70,12 +70,19 @@ func main() {
 	// ---- DIFF ---- //
 
 	fmt.Printf("\n\nCompare the Type Trees %q v %q\n", x, y)
-	xType, yType, diff, err := StructDiff(xpkg.Request{}, ypkg.Time{}, diffExclusions)
+	xType, yType, diff, err := StructDiff(xpkg.Request{}, ypkg.Time{}, diffExclusions, xUnreleased)
 	if err != nil {
 		fmt.Printf("Error: %s\n", err)
 		os.Exit(1)
 	}
 	fmt.Println(Report(xType, yType, diff))
+
+	// Surface allowed differences on the GitHub run without failing it.
+	if os.Getenv("GITHUB_ACTIONS") == "true" && diff != nil {
+		for _, tgt := range diff.Unreleased {
+			fmt.Printf("::warning title=x-repo-types::%s field %s is missing from %s (allowed until a released version uses it)\n", xType.Type, tgt.ChildName.Name, yType.Type.PkgPath())
+		}
+	}
 
 	if !diff.Empty() {
 		// signal that this "test" has failed

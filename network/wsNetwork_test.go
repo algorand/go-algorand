@@ -1340,20 +1340,26 @@ func TestTestingPublicAddress(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	netA := makeTestWebsocketNode(t)
-	netA.config.PublicAddress = "testing"
-	netA.config.GossipFanout = 1
+	for _, listenAddress := range []string{"127.0.0.1:0", "[::1]:0"} {
+		t.Run(listenAddress, func(t *testing.T) {
+			netA := makeTestWebsocketNode(t)
+			netA.config.NetAddress = listenAddress
+			netA.config.PublicAddress = "testing"
+			netA.config.GossipFanout = 1
 
-	netA.Start()
+			require.NoError(t, netA.Start())
+			defer netA.Stop()
 
-	time.Sleep(100 * time.Millisecond)
-
-	// check that "testing" has been overloaded
-	addr, ok := netA.Address()
-	addr = hostAndPort(addr)
-	require.True(t, ok)
-	require.NotEqual(t, "testing", netA.PublicAddress())
-	require.Equal(t, addr, netA.PublicAddress())
+			// Check that "testing" has been replaced with a valid host:port.
+			address, ok := netA.Address()
+			require.True(t, ok)
+			parsed, err := url.Parse(address)
+			require.NoError(t, err)
+			require.Equal(t, parsed.Host, netA.PublicAddress())
+			_, err = netA.addrToGossipAddr(netA.PublicAddress())
+			require.NoError(t, err)
+		})
+	}
 }
 
 // mock an identityTracker

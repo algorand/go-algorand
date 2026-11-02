@@ -462,7 +462,7 @@ func (mtc *merkleTrieCache) reallocatePendingPages(stats *CommitStats) (pagesToC
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		stats.FanoutReallocatedNodeCount += int(relocatedNodes)
+		stats.FanoutReallocatedNodeCount += relocatedNodes
 	}
 
 	stats.LoadedPages = len(mtc.pendingDeletionPages) - beforeHashCalculationPendingDeletionPages + len(mtc.pageToNIDsPtr) - beforeHashCalculationPageCount
@@ -532,7 +532,7 @@ func (mtc *merkleTrieCache) reallocatePendingPages(stats *CommitStats) (pagesToC
 // calculatePageHashes calculate hashes of a specific page
 // It is vital that the hashes for all the preceding page would have
 // already been calculated for this function to work correctly.
-func (mtc *merkleTrieCache) calculatePageHashes(page int64, newPage bool) (fanoutRelocatedNodes int64, err error) {
+func (mtc *merkleTrieCache) calculatePageHashes(page int64, newPage bool) (fanoutRelocatedNodes int, err error) {
 	nodes := mtc.pageToNIDsPtr[uint64(page)]
 	for i := storedNodeIdentifier(page * mtc.nodesPerPage); i < storedNodeIdentifier((page+1)*mtc.nodesPerPage); i++ {
 		if !newPage && !mtc.pendingCreatedNID[i] {

@@ -165,6 +165,17 @@ Their corresponding `Ledger`-level wrappers in `ledger/ledger.go` (`LookupAssets
 - Clear separation between protocol logic and implementation details
 - Consistent error handling patterns throughout
 
+### Comments
+Reviewers and future maintainers read comments without any of the context of the session that produced them. Keep them succinct, clear, and precise: make each point once, in plain sentences, without preamble, hedging, or rephrasing.
+- Explain why, or what is non-obvious, rather than restating what the code does or what the surrounding code already makes evident.
+- Describe the code the comment is attached to. Reasoning about a callee, another code path, or a later round belongs next to that code.
+- Be concrete: name the functions, fields, or locks involved. For a race, name both operations.
+- Use identifiers from the code rather than coined labels and avoid inventing terms that may already mean something else in this project.
+- Do not rewrite accurate existing comments as part of an unrelated change. It adds review noise and can drop details.
+- Do not refer to the current task, conversation, review feedback, or earlier versions of the code under development ("now uses X instead of Y", "fixed per review").
+- Tests may use more narrative comments that summarize what the next few lines set up or check, since test code is often harder to follow.
+- Use plain wording and plain ASCII: no emojis, em dashes, or vague labels like "load-bearing".
+
 ### Performance Considerations
 - Tracker pattern enables efficient state caching
 - Asynchronous block writing with in-memory queues

@@ -20,6 +20,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/sha256"
+	stdsha3 "crypto/sha3"
 	"crypto/sha512"
 	"errors"
 	"fmt"
@@ -129,7 +130,7 @@ func opSHA256(cx *EvalContext) error {
 // The NIST SHA3-256 is implemented for compatibility with ICON
 func opSHA3_256(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
-	hash := sha3.Sum256(cx.Stack[last].Bytes)
+	hash := stdsha3.Sum256(cx.Stack[last].Bytes)
 	cx.Stack[last].Bytes = hash[:]
 	return nil
 }

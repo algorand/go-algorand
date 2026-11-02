@@ -24,6 +24,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"testing"
 
@@ -126,8 +127,6 @@ func TestLedgerService(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, rr.Code)
 	require.Contains(t, rr.Body.String(), "missing genesisID")
 
-	// Not Testing non path var handling because I'm not convinced it's reachable given `LedgerServiceLedgerPath`
-
 	// Test Get 400 round out of range
 	rr = httptest.NewRecorder()
 	req, err = http.NewRequest("GET", fmt.Sprintf("/v1/%s/ledger/zzzzzzzzzzzzzzzzzzzzzzz", genesisID), nil)
@@ -174,6 +173,40 @@ func TestLedgerService(t *testing.T) {
 	// Test LedgerService Stopped
 	ledgerService.Stop()
 	require.Equal(t, int32(0), ledgerService.running.Load())
+}
+
+func TestLedgerServiceVersionErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name     string
+		versions []string
+		body     string
+	}{
+		{"unsupported version", []string{"<script>alert(1)</script>"}, "unsupported version specified '<script>alert(1)</script>'"},
+		{"multiple versions", []string{"1", "2"}, "invalid number of version specified 2"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			service := &LedgerService{genesisID: "testGenesisID", enableService: true}
+			service.Start()
+			defer service.Stop()
+
+			query := url.Values{"r": {"1"}, "v": tc.versions}
+			request := httptest.NewRequest(http.MethodGet, "/?"+query.Encode(), nil)
+			request = mux.SetURLVars(request, map[string]string{"genesisID": service.genesisID})
+			recorder := httptest.NewRecorder()
+			service.ServeHTTP(recorder, request)
+
+			response := recorder.Result()
+			defer response.Body.Close()
+			require.Equal(t, http.StatusBadRequest, response.StatusCode)
+			require.Equal(t, "text/plain; charset=utf-8", response.Header.Get("Content-Type"))
+			require.Equal(t, "nosniff", response.Header.Get("X-Content-Type-Options"))
+			require.Equal(t, tc.body, recorder.Body.String())
+		})
+	}
 }
 
 type mockSizedStream struct {
