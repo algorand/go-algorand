@@ -78,13 +78,13 @@ func (m *Monotonic[TimeoutType]) TimeoutAt(delta time.Duration, timeoutType Time
 
 // Encode implements Clock.Encode.
 func (m *Monotonic[TimeoutType]) Encode() []byte {
-	return protocol.EncodeReflect(m.zero)
+	return protocol.EncodeReflect(m.zero) //nolint:forbidigo // msgp has no generated code for time.Time
 }
 
 // Decode implements Clock.Decode.
 func (m *Monotonic[TimeoutType]) Decode(data []byte) (Clock[TimeoutType], error) {
 	var zero time.Time
-	err := protocol.DecodeReflect(data, &zero)
+	err := protocol.DecodeReflect(data, &zero) //nolint:forbidigo // msgp has no generated code for time.Time
 	if err == nil {
 		logging.Base().Debugf("Clock decoded with zero at %v", zero)
 	} else {

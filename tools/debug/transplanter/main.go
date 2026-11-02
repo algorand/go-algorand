@@ -99,7 +99,7 @@ func decodeTxGroup(data []byte) ([]transactions.SignedTxn, error) {
 
 func decodeTxGroupSlices(data []byte) ([]transactions.SignedTxn, error) {
 	var result [][]transactions.SignedTxn
-	err := protocol.DecodeReflect(data, &result) //nolint:forbidigo // [][]transactions.SignedTxn has no generated msgp code
+	err := protocol.DecodeReflect(data, &result)
 	if err != nil {
 		return nil, fmt.Errorf("received a non-decodable txn slices: %v", err)
 	}
