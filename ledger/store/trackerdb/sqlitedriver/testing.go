@@ -45,6 +45,32 @@ func OpenForTesting(t testing.TB, inMemory bool) (trackerdb.Store, string) {
 	return store, fn
 }
 
+// FailingViewErrorTest is the error text SQLite reports when a query reads from a table that
+// ReplaceTableWithFailingViewTest has replaced.
+const FailingViewErrorTest = "integer overflow"
+
+// ReplaceTableWithFailingViewTest renames table and creates a view with the original name that
+// exposes the same columns (and rowid, for rowid tables), but whose WHERE clause SQLite rejects
+// with an integer overflow error for every row it scans. Queries against the table still prepare
+// and start successfully, but stepping to the first row fails, so rows.Next() returns false and
+// rows.Err() reports the error. The table must contain at least one row the query would visit.
+// implements Testing interface, test function only
+func ReplaceTableWithFailingViewTest(tb testing.TB, e db.Executable, table string) {
+	tb.Helper()
+	orig := table + "_orig"
+	_, err := e.Exec(fmt.Sprintf("ALTER TABLE %s RENAME TO %s", table, orig))
+	require.NoError(tb, err)
+
+	// WITHOUT ROWID tables have no rowid to expose; probing is simpler than threading a flag through.
+	cols := "rowid AS rowid, *"
+	if _, err = e.Exec(fmt.Sprintf("SELECT rowid FROM %s LIMIT 0", orig)); err != nil {
+		cols = "*"
+	}
+	// random() keeps SQLite from folding the expression into a constant, so it is evaluated per row.
+	_, err = e.Exec(fmt.Sprintf("CREATE VIEW %s AS SELECT %s FROM %s WHERE abs(-9223372036854775807 - 1 + 0*random()) >= 0", table, cols, orig))
+	require.NoError(tb, err)
+}
+
 // AccountsInitLightTest initializes an empty database for testing without the extra methods being called.
 // implements Testing interface, test function only
 func AccountsInitLightTest(tb testing.TB, e db.Executable, initAccounts map[basics.Address]basics.AccountData, rewardUnit uint64) (newDatabase bool, err error) {
