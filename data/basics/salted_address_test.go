@@ -94,7 +94,7 @@ func TestSaltedAddressKnownAnswers(t *testing.T) {
 		firstSeedByte   byte
 		salt            AddressSalt
 		expectedAddress string
-		compliant       bool
+		offCurve        bool
 	}
 
 	testCases := []struct {
@@ -111,42 +111,42 @@ func TestSaltedAddressKnownAnswers(t *testing.T) {
 					firstSeedByte:   3,
 					salt:            0,
 					expectedAddress: "KJGJA2DTCQH6LT2I2OH2YO5GIIBFC6JHX5O6UPA5ZZ5ZURFT3LHKMTRCEM",
-					compliant:       true,
+					offCurve:        true,
 				},
 				{
 					name:            "nonzero salt",
 					firstSeedByte:   1,
 					salt:            1,
 					expectedAddress: "GYBWVYVQIQF6CO7BUMG4UQ66DQYHASFOCA2P7PBYOIPKGWUZIBX4KA3TP4",
-					compliant:       true,
+					offCurve:        true,
 				},
 				{
 					name:            "max salt",
 					firstSeedByte:   0,
 					salt:            255,
 					expectedAddress: "YJFADDEP6Z3WAWY6ZMLN6MF4T4NK3BXKCVLPCYB6C4SQHE76LLQSZ5JG7Q",
-					compliant:       true,
+					offCurve:        true,
 				},
 				{
 					name:            "different seed",
 					firstSeedByte:   2,
 					salt:            2,
 					expectedAddress: "II4DO6IIP3EAEQMWJEOLOUU3VBRVCH3WF4MX6UCRUD36DOQJ3YSHA2DV5A",
-					compliant:       true,
+					offCurve:        true,
 				},
 				{
 					name:            "max seed and salt",
 					firstSeedByte:   255,
 					salt:            255,
 					expectedAddress: "3JXWI6BYYEO6WO6M7TC4SOZAZUWAD4RQO5GJ2ED6MYIEVVLOVJOETMGG4A",
-					compliant:       true,
+					offCurve:        true,
 				},
 				{
-					name:            "non-compliant on-curve address",
+					name:            "on-curve address",
 					firstSeedByte:   1,
 					salt:            0,
 					expectedAddress: "FLX4VRWXQ65HD5G5BI2EPHJWMERHA2EBBQ7XMTZLATXH4XEOWPQSIYVIF4",
-					compliant:       false,
+					offCurve:        false,
 				},
 			},
 		},
@@ -159,42 +159,42 @@ func TestSaltedAddressKnownAnswers(t *testing.T) {
 					firstSeedByte:   3,
 					salt:            0,
 					expectedAddress: "L3E466XEV24FAQ3GYW4NDWNVVQG5SKNW4P7FO7JB72AL35WU4BYIUBWFLQ",
-					compliant:       true,
+					offCurve:        true,
 				},
 				{
 					name:            "nonzero salt",
 					firstSeedByte:   1,
 					salt:            1,
 					expectedAddress: "NQHOCVCR45XKZ5LMJSBDWGPZ6QZQIDKQU26KNQ3O4A3EGIRR7BPIX4CW3A",
-					compliant:       true,
+					offCurve:        true,
 				},
 				{
 					name:            "max salt",
 					firstSeedByte:   0,
 					salt:            255,
 					expectedAddress: "6SNBFGF6MKPQZMP5QFTXJQVMNB2VYT4DCKVTGH3UN3KDSF3BXSNX75ZTJE",
-					compliant:       true,
+					offCurve:        true,
 				},
 				{
 					name:            "different seed",
 					firstSeedByte:   2,
 					salt:            2,
 					expectedAddress: "WZMDFDVTJIFGANZKOIHUDI2TIATEIMGA7RPGAOGURFWOH6KTN3DHTLXCBU",
-					compliant:       false,
+					offCurve:        false,
 				},
 				{
 					name:            "max seed and salt",
 					firstSeedByte:   255,
 					salt:            255,
 					expectedAddress: "HIUU22OZWNLI6MBXNQ4DFUUXMG4ASF7CIUIWRLQC4WDTUGNCAXSCRUHUME",
-					compliant:       true,
+					offCurve:        true,
 				},
 				{
-					name:            "non-compliant on-curve address",
+					name:            "on-curve address",
 					firstSeedByte:   1,
 					salt:            0,
 					expectedAddress: "AFNGS72MUDN72N5MQREE57URNHIH3MSDZZS42WGNPAXKTC3JZSC22S7CBA",
-					compliant:       false,
+					offCurve:        false,
 				},
 			},
 		},
@@ -207,42 +207,42 @@ func TestSaltedAddressKnownAnswers(t *testing.T) {
 					firstSeedByte:   3,
 					salt:            0,
 					expectedAddress: "BS24KS3PNANVECBJECXBRKSCEYCHY2KUQFAAGX6DR2JMYITDN3W5A3M3M4",
-					compliant:       false,
+					offCurve:        false,
 				},
 				{
 					name:            "nonzero salt",
 					firstSeedByte:   1,
 					salt:            1,
 					expectedAddress: "76X26JCOZ6KBTLL4LLIYHBGM5THQPWVNOMRFBVK43MWTWRFBYCLZHACW2M",
-					compliant:       false,
+					offCurve:        false,
 				},
 				{
 					name:            "max salt",
 					firstSeedByte:   0,
 					salt:            255,
 					expectedAddress: "RVYDADZDRDSIHWI4R4TTALJPGGBO4ZWGK2R4YTGQGUMKJCVKHQETODHA5Q",
-					compliant:       true,
+					offCurve:        true,
 				},
 				{
 					name:            "different seed",
 					firstSeedByte:   2,
 					salt:            2,
 					expectedAddress: "JDIRZBWHK6SDOXKRGSNRCO7I4BF6ACVN4ACPHLNGINQNKFZOMHC2YY5TQM",
-					compliant:       false,
+					offCurve:        false,
 				},
 				{
 					name:            "max seed and salt",
 					firstSeedByte:   255,
 					salt:            255,
 					expectedAddress: "XVNRCMCRAYGJ3RUGN57YX2SKDLAJ6DNBO2LE5YLVG4OGQEC6SXMSO7V7EE",
-					compliant:       true,
+					offCurve:        true,
 				},
 				{
 					name:            "different salt",
 					firstSeedByte:   1,
 					salt:            0,
 					expectedAddress: "52TWNOHFPAIAQPARIGBF3SXBHZ6NEX6QURSOTXYBUI5JXIO4DEBMZEF5AQ",
-					compliant:       true,
+					offCurve:        true,
 				},
 			},
 		},
@@ -256,8 +256,8 @@ func TestSaltedAddressKnownAnswers(t *testing.T) {
 
 					addr := SaltedAddress(sc.scheme, tc.salt, publicKey)
 					require.Equal(t, tc.expectedAddress, addr.String())
-					require.Equal(t, tc.compliant, addr.IsOffEd25519Curve())
-					require.Equal(t, !tc.compliant, crypto.IsEdwards25519Point(addr[:]))
+					require.Equal(t, tc.offCurve, addr.IsOffEd25519Curve())
+					require.Equal(t, !tc.offCurve, crypto.IsEdwards25519Point(addr[:]))
 
 					addrAgain := SaltedAddress(sc.scheme, tc.salt, publicKey)
 					require.Equal(t, addr, addrAgain)
