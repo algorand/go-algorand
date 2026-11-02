@@ -125,6 +125,8 @@ linters:
         - p: ^(require|assert)\.Assertions\.Error$
           pkg: ^github\.com/stretchr/testify/(require|assert)$
           msg: use ErrorContains, ErrorIs, or ErrorAs instead
+        - pattern: ^protocol\.(Encode|Decode)Reflect$
+          msg: reflection-based msgpack is reserved for JSON/REST API model types; use protocol.Encode/protocol.Decode (generated msgp) for consensus, network, and persisted data
 
   exclusions:
     generated: lax
@@ -160,6 +162,13 @@ linters:
         text: '^redefines-builtin-id: redefinition of the built-in (func|type)'
       - linters: forbidigo
         path-except: ^(crypto|network)/
+        text: 'use ErrorContains, ErrorIs, or ErrorAs instead' # the testify Error ban is scoped to crypto/ and network/
+      - linters: forbidigo
+        path: _test\.go
+        text: 'protocol\.(Encode|Decode)Reflect' # test code (e.g. differential-encoding oracles) may use the reflection codec freely
+      - linters: forbidigo
+        path: ^(libgoal|daemon/algod/api/client)/
+        text: 'protocol\.(Encode|Decode)Reflect' # REST clients decode API model types, which have no generated msgp code
 
 issues:
   # Work our way back over time to be clean against all these

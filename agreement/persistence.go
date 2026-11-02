@@ -274,7 +274,7 @@ func decode(raw []byte, t0 timers.Clock[TimeoutType], log serviceLogger) (t time
 			// release that still encoded actions with go-codec
 			log.Warnf("decode (agreement): failed to decode action %d using msgp (len = %v): %v. Trying reflection", i, len(s.Actions[i]), err)
 			ract := zeroAction(s.ActionTypes[i])
-			err = protocol.DecodeReflect(s.Actions[i], &ract)
+			err = protocol.DecodeReflect(s.Actions[i], &ract) //nolint:forbidigo // older releases encoded actions with go-codec
 			if err != nil {
 				log.Errorf("decode (agreement): failed to decode action %d using either reflection or msgp: %v", i, err)
 				return
