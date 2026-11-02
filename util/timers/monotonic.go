@@ -19,6 +19,8 @@ package timers
 import (
 	"time"
 
+	"github.com/algorand/msgp/msgp"
+
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -76,15 +78,32 @@ func (m *Monotonic[TimeoutType]) TimeoutAt(delta time.Duration, timeoutType Time
 	return tmt.ch
 }
 
-// Encode implements Clock.Encode.
+// Encode implements Clock.Encode. It writes the zero point with go-codec's
+// msgpack timestamp extension, which older releases can read, so that a node
+// rolled back to an older release can restore its crash state.
 func (m *Monotonic[TimeoutType]) Encode() []byte {
-	return protocol.EncodeReflect(m.zero) //nolint:forbidigo // msgp has no generated code for time.Time
+	return protocol.EncodeReflect(m.zero) //nolint:forbidigo // older releases read only the go-codec time.Time encoding
 }
 
-// Decode implements Clock.Decode.
+// Decode implements Clock.Decode. Besides the go-codec timestamp that Encode
+// writes, it accepts msgpack nil for the zero time and an int64 of nanoseconds
+// since the Unix epoch, so that a later release can switch Encode to that form
+// while this release can still read it.
 func (m *Monotonic[TimeoutType]) Decode(data []byte) (Clock[TimeoutType], error) {
 	var zero time.Time
-	err := protocol.DecodeReflect(data, &zero) //nolint:forbidigo // msgp has no generated code for time.Time
+	var err error
+	switch msgp.NextType(data) {
+	case msgp.NilType:
+		_, err = msgp.ReadNilBytes(data)
+	case msgp.IntType, msgp.UintType:
+		var ns int64
+		ns, _, err = msgp.ReadInt64Bytes(data)
+		if err == nil {
+			zero = time.Unix(0, ns).UTC()
+		}
+	default:
+		err = protocol.DecodeReflect(data, &zero) //nolint:forbidigo // reads the go-codec time.Time encoding
+	}
 	if err == nil {
 		logging.Base().Debugf("Clock decoded with zero at %v", zero)
 	} else {
