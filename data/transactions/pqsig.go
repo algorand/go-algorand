@@ -31,6 +31,12 @@ var (
 	errPQSigBlank              = errors.New("pq signature is blank")
 	errPQSigEmpty              = errors.New("pq signature is empty")
 	errPQSigAuthorizerMismatch = errors.New("pq signature authorizer mismatch")
+	errPQSigTooLarge           = errors.New("pq signature field too large for scheme")
+
+	// errPQLogicSigNotEvaluated is returned when an ls-scheme PQSig reaches
+	// signature verification. Reaching it means a caller took the generic PQ
+	// signature path for a logic signature instead of evaluating its program.
+	errPQLogicSigNotEvaluated = errors.New("logic signature must be verified by evaluating its program, not by checking signature bytes")
 )
 
 // PQSig is a scheme-tagged transaction authorization proof. Its public key and
@@ -71,21 +77,40 @@ func (p PQSig) Address() basics.Address {
 	return basics.PQAddress(p.Scheme, p.Salt, p.PublicKey)
 }
 
-func (p PQSig) validateScheme(proto config.ConsensusParams) (crypto.PQVerifier, error) {
+// IsLogicSig reports whether p authorizes by evaluating a program rather than
+// by verifying signature bytes. Callers that verify a PQSig must ask this
+// first: the ls scheme has no PQVerifier, so Verify and BatchPrep refuse it.
+func (p PQSig) IsLogicSig() bool {
+	return p.Scheme == protocol.PQSchemeLogicSig
+}
+
+// Lsig returns the logic signature an ls-scheme PQSig carries: the program
+// stands in for the public key, and its encoded arguments for the signature.
+// Returning a LogicSig lets a program authorizing from a PQSig be measured and
+// evaluated exactly like one in SignedTxn.Lsig.
+func (p PQSig) Lsig() (LogicSig, error) {
+	args, err := DecodeLogicSigArgs(p.Signature)
+	if err != nil {
+		return LogicSig{}, err
+	}
+	return LogicSig{Logic: p.PublicKey, Args: args}, nil
+}
+
+func (p PQSig) validateScheme(proto config.ConsensusParams) (pqScheme, error) {
 	if p.Blank() {
-		return nil, errPQSigBlank
+		return pqScheme{}, errPQSigBlank
 	}
 
 	scheme, ok := pqSchemes[p.Scheme]
 	if !ok {
-		return nil, ErrPQSchemeNotSupported
+		return pqScheme{}, ErrPQSchemeNotSupported
 	}
 
 	if !scheme.enabled(proto) {
-		return nil, ErrPQSchemeNotEnabled
+		return pqScheme{}, ErrPQSchemeNotEnabled
 	}
 
-	return scheme.verifier, nil
+	return scheme, nil
 }
 
 // ValidateScheme validates that the PQSig carries a known scheme enabled under
@@ -100,9 +125,18 @@ func (p PQSig) ValidateScheme(proto config.ConsensusParams) error {
 // Verify can dispatch the scheme-specific signature check without a second
 // registry lookup.
 func (p PQSig) validateEnvelope(proto config.ConsensusParams, authorizer basics.Address) (crypto.PQVerifier, error) {
-	verifier, err := p.validateScheme(proto)
+	scheme, err := p.validateScheme(proto)
 	if err != nil {
 		return nil, err
+	}
+
+	// The wire bounds are the largest over all schemes, so a smaller scheme's
+	// fields must be held to its own limits here.
+	if pkMax := scheme.maxPublicKeySize(); len(p.PublicKey) > pkMax {
+		return nil, fmt.Errorf("%w: public key size %d, max %d", errPQSigTooLarge, len(p.PublicKey), pkMax)
+	}
+	if sigMax := scheme.maxSignatureSize(); len(p.Signature) > sigMax {
+		return nil, fmt.Errorf("%w: signature size %d, max %d", errPQSigTooLarge, len(p.Signature), sigMax)
 	}
 
 	pqAuthorizer := p.Address()
@@ -110,12 +144,13 @@ func (p PQSig) validateEnvelope(proto config.ConsensusParams, authorizer basics.
 		return nil, fmt.Errorf("%w: derived %s, expected %s", errPQSigAuthorizerMismatch, pqAuthorizer, authorizer)
 	}
 
-	return verifier, nil
+	return scheme.verifier, nil
 }
 
 // ValidateEnvelope validates the stateless consensus-relevant PQ authorization
 // envelope: the proof is not blank, the carried scheme is known and enabled
-// under proto, and the derived PQ address matches authorizer. It does NOT
+// under proto, its public key and signature fit the scheme's size limits, and
+// the derived PQ address matches authorizer. It does NOT
 // verify the public key or signature bytes (and applies no API admission
 // policy); callers that require a real authorization proof must also require
 // a non-empty Signature or call Verify.
@@ -124,11 +159,15 @@ func (p PQSig) ValidateEnvelope(proto config.ConsensusParams, authorizer basics.
 	return err
 }
 
-// validateForVerification validates the envelope and requires a non-empty signature.
+// validateForVerification validates the envelope and requires a non-empty
+// signature from a scheme that is verified by checking signature bytes.
 func (p PQSig) validateForVerification(proto config.ConsensusParams, authorizer basics.Address) (crypto.PQVerifier, error) {
 	verifier, err := p.validateEnvelope(proto, authorizer)
 	if err != nil {
 		return nil, err
+	}
+	if verifier == nil {
+		return nil, errPQLogicSigNotEvaluated
 	}
 	if len(p.Signature) == 0 {
 		return nil, errPQSigEmpty

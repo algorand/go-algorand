@@ -60,6 +60,27 @@ func TestConsensusParams(t *testing.T) {
 	}
 }
 
+// TestPQSchemeLogicSigParams pins the consensus-parameter invariants of the ls
+// scheme, which differs from the DSA-backed schemes in ways that are easy to
+// undo by accident.
+func TestPQSchemeLogicSigParams(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	for proto, params := range Consensus {
+		if params.EnablePQSchemeLogicSig {
+			// A delegating ls account runs two programs against one budget. The
+			// unpooled fallback in EvalContext.remainingBudget would hand each a
+			// full LogicSigMaxCost instead.
+			if !params.EnableLogicSigCostPooling {
+				t.Errorf("Protocol %s: ls enabled without LogicSig cost pooling", proto)
+			}
+			if params.LogicSigVersion == 0 {
+				t.Errorf("Protocol %s: ls enabled without LogicSigs", proto)
+			}
+		}
+	}
+}
+
 // TestConsensusUpgradeWindow ensures that the upgrade window is a non-zero value, and confirm to be within the valid range.
 func TestConsensusUpgradeWindow(t *testing.T) {
 	partitiontest.PartitionTest(t)

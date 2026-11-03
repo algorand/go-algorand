@@ -320,13 +320,14 @@ func txgroupToKeys(txgroup []transactions.SignedTxn, origin []byte, seed uint64,
 		}
 	}
 	for i := range txgroup {
-		if txgroup[i].Txn.Type == protocol.ApplicationCallTx {
-			appIdx := txgroup[i].Txn.ApplicationID
+		txn := &txgroup[i].Txn
+		if txn.Type == protocol.ApplicationCallTx {
+			appIdx := txn.ApplicationID
 			record(appIdx)
-			for _, appIdx := range txgroup[i].Txn.ForeignApps {
+			for _, appIdx := range txn.ForeignApps {
 				record(appIdx)
 			}
-			for _, acc := range txgroup[i].Txn.Access {
+			for _, acc := range txn.Access {
 				record(acc.App)
 			}
 		}

@@ -7273,6 +7273,55 @@ func testPlaceholderPQSignatures(t *testing.T, scheme protocol.PQScheme) {
 	})
 }
 
+// TestDelegatedLogicSigPQSigNotPlaceholder ensures that a LogicSig "delegated"
+// by an ls-scheme PQSig is not treated as a placeholder. Consensus never
+// accepts such a delegation, so simulation must not succeed by running the
+// program as an escrow.
+func TestDelegatedLogicSigPQSigNotPlaceholder(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+	require.True(t, env.TxnInfo.CurrentProtocolParams().EnablePQSchemeLogicSig)
+
+	sender := env.Accounts[0]
+	ops, err := logic.AssembleStringWithVersion("int 1", 2)
+	require.NoError(t, err)
+	salt, lsAddr, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeLogicSig, ops.Program)
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name  string
+		pqSig transactions.PQSig
+	}{
+		{"scheme only", transactions.PQSig{Scheme: protocol.PQSchemeLogicSig}},
+		{"full", transactions.PQSig{Scheme: protocol.PQSchemeLogicSig, Salt: salt, PublicKey: ops.Program}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stxn := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   sender.Addr,
+				Receiver: sender.Addr,
+			}).SignedTxn()
+			stxn.AuthAddr = lsAddr
+			stxn.Lsig = transactions.LogicSig{
+				Logic: ops.Program,
+				PQsig: tc.pqSig,
+			}
+
+			result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+				TxnGroups:            [][]transactions.SignedTxn{{stxn}},
+				AllowEmptySignatures: true,
+			})
+			require.NoError(t, err)
+			require.Contains(t, result.TxnGroups[0].FailureMessage, "pq delegated logic signature validation failed")
+			require.Equal(t, simulation.TxnPath{0}, result.TxnGroups[0].FailedAt)
+			require.Nil(t, result.Block)
+		})
+	}
+}
+
 // TestOptionalSignaturesIncorrect tests that an incorrect signature still fails when
 // AllowEmptySignatures is enabled.
 func TestOptionalSignaturesIncorrect(t *testing.T) {

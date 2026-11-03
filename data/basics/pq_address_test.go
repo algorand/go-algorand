@@ -314,6 +314,56 @@ func TestCanonicalPQAddressSalt(t *testing.T) {
 	}
 }
 
+func TestPQLogicSigAddress(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	program := []byte{0x02, 0x81, 0x01} // #pragma version 2; int 1
+
+	salt, addr, err := CanonicalPQAddressSalt(protocol.PQSchemeLogicSig, program)
+	require.NoError(t, err)
+	require.True(t, addr.IsPQCompliant())
+	require.Equal(t, PQAddress(protocol.PQSchemeLogicSig, salt, program), addr)
+
+	// The salt is derived from the program, so the address can always be
+	// recovered from the program alone.
+	againSalt, againAddr, err := CanonicalPQAddressSalt(protocol.PQSchemeLogicSig, program)
+	require.NoError(t, err)
+	require.Equal(t, salt, againSalt)
+	require.Equal(t, addr, againAddr)
+
+	for lowerSalt := 0; lowerSalt < int(salt); lowerSalt++ {
+		lowerAddr := PQAddress(protocol.PQSchemeLogicSig, PQAddressSalt(lowerSalt), program)
+		require.False(t, lowerAddr.IsPQCompliant())
+	}
+
+	// The scheme is part of the preimage, so a program's address cannot collide
+	// with the address a Falcon key of the same bytes would derive.
+	require.NotEqual(t, PQAddress(protocol.PQSchemeFalcon1024, salt, program), addr)
+
+	// Known answers pin the derivation, since an ls address is the account a
+	// program's funds live in.
+	knownAnswers := []struct {
+		name    string
+		program []byte
+		salt    PQAddressSalt
+		address string
+	}{
+		{"salt 0", []byte{0x02, 0x81, 0x00}, 0, "ZTVEN2GVT6W3DYVZT5KO4PSY7AXRSFGUIKLH4YD4KGZTFYKBP2RWDRXDIQ"},
+		{"salt 1", []byte{0x02, 0x81, 0x01}, 1, "7YFBCWMMRGDBDM6VRV7YSK4TNOJK46BJHT26DKBOQALMSW6LC4PT2JVDRQ"},
+		// #pragma version 14; pushbytes "open sesame"; arg_0; ==
+		{"salt 2", []byte{0x0e, 0x80, 0x0b, 'o', 'p', 'e', 'n', ' ', 's', 'e', 's', 'a', 'm', 'e', 0x2d, 0x12}, 2,
+			"X27OL4EPK5EQO6BAINO3NSJ7IRYP4JL4R4FGEINIABZIVOZBLS2WFHRTTM"},
+	}
+	for _, ka := range knownAnswers {
+		t.Run(ka.name, func(t *testing.T) {
+			salt, addr, err := CanonicalPQAddressSalt(protocol.PQSchemeLogicSig, ka.program)
+			require.NoError(t, err)
+			require.Equal(t, ka.salt, salt)
+			require.Equal(t, ka.address, addr.String())
+		})
+	}
+}
+
 func TestCanonicalPQAddressSaltDoesNotRequireRegisteredSchemeOrValidatedKey(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

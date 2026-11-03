@@ -3542,7 +3542,7 @@ func TestReturnTypes(t *testing.T) {
 				if m == ModeApp {
 					_, cx, err = EvalContract(ops.Program, 1, 300, aep)
 				} else {
-					_, cx, err = EvalSignatureFull(1, sep)
+					_, cx, err = EvalSignatureProgram(ops.Program, tx1.Lsig.Args, 1, sep)
 				}
 				// These little programs need not pass. We are just trying to
 				// examine cx.Stack for proper types/size after executing the
@@ -3832,7 +3832,7 @@ func TestPooledAppCallsVerifyOp(t *testing.T) {
 	call := transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.ApplicationCallTx}}
 	// Simulate test with 2 grouped txn
 	testApps(t, []string{source, ""}, []transactions.SignedTxn{call, call}, nil, ledger,
-		exp(0, "dynamic cost budget exceeded, executing ed25519verify: local program cost was 5"))
+		exp(0, "dynamic cost budget exceeded, executing ed25519verify (1900): local program cost was 5"))
 
 	// Simulate test with 3 grouped txn
 	testApps(t, []string{source, "", ""}, []transactions.SignedTxn{call, call, call}, nil, ledger)

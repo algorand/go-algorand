@@ -1624,10 +1624,8 @@ func testLedgerReload(t *testing.T, cfg config.Local) {
 			err = l.reloadLedger()
 			require.NoError(t, err)
 
-			// if we reloaded it before it got committed, we need to roll back the round counter.
-			if latestCommitted, _ := l.LatestCommitted(); latestCommitted != blk.BlockHeader.Round {
-				blk.BlockHeader.Round = latestCommitted
-			}
+			// Reloading preserves queued blocks, even if they have not been committed yet.
+			require.Equal(t, blk.Round(), l.Latest())
 		}
 		if i%13 == 0 {
 			l.WaitForCommit(blk.Round())

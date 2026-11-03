@@ -1340,20 +1340,26 @@ func TestTestingPublicAddress(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	netA := makeTestWebsocketNode(t)
-	netA.config.PublicAddress = "testing"
-	netA.config.GossipFanout = 1
+	for _, listenAddress := range []string{"127.0.0.1:0", "[::1]:0"} {
+		t.Run(listenAddress, func(t *testing.T) {
+			netA := makeTestWebsocketNode(t)
+			netA.config.NetAddress = listenAddress
+			netA.config.PublicAddress = "testing"
+			netA.config.GossipFanout = 1
 
-	netA.Start()
+			require.NoError(t, netA.Start())
+			defer netA.Stop()
 
-	time.Sleep(100 * time.Millisecond)
-
-	// check that "testing" has been overloaded
-	addr, ok := netA.Address()
-	addr = hostAndPort(addr)
-	require.True(t, ok)
-	require.NotEqual(t, "testing", netA.PublicAddress())
-	require.Equal(t, addr, netA.PublicAddress())
+			// Check that "testing" has been replaced with a valid host:port.
+			address, ok := netA.Address()
+			require.True(t, ok)
+			parsed, err := url.Parse(address)
+			require.NoError(t, err)
+			require.Equal(t, parsed.Host, netA.PublicAddress())
+			_, err = netA.addrToGossipAddr(netA.PublicAddress())
+			require.NoError(t, err)
+		})
+	}
 }
 
 // mock an identityTracker
@@ -4791,17 +4797,17 @@ func TestHTTPPAddressBoundTransport(t *testing.T) {
 
 	// now test some combinations of address and path
 	const path = "/test/path"
-	const expErr = "ERR"
 	tests := []struct {
 		addr     string
 		expected string
+		err      string
 	}{
-		{"", expErr},
-		{":", expErr},
-		{"host:1234/lbr", expErr},
-		{"host:1234", "http://host:1234" + path},
-		{"http://host:1234", "http://host:1234" + path},
-		{"http://host:1234/lbr", "http://host:1234/lbr" + path},
+		{"", "", "could not parse a host from url"},
+		{":", "", "host name starts with a colon"},
+		{"host:1234/lbr", "", "could not parse a host from url"},
+		{"host:1234", "http://host:1234" + path, ""},
+		{"http://host:1234", "http://host:1234" + path, ""},
+		{"http://host:1234/lbr", "http://host:1234/lbr" + path, ""},
 	}
 
 	for _, test := range tests {
@@ -4813,8 +4819,8 @@ func TestHTTPPAddressBoundTransport(t *testing.T) {
 		req, err := http.NewRequest("GET", path, nil)
 		require.NoError(t, err)
 		resp, err := tr.RoundTrip(req)
-		if test.expected == expErr {
-			require.Error(t, err)
+		if test.err != "" {
+			require.ErrorContains(t, err, test.err)
 		} else {
 			require.NoError(t, err)
 			require.Equal(t, 200, resp.StatusCode)

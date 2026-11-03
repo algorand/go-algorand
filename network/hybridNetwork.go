@@ -70,7 +70,7 @@ func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, p
 
 	identOpts := identityOpts{
 		tracker: identityTracker,
-		scheme:  NewIdentityChallengeScheme(NetIdentityDedupNames(cfg.PublicAddress, p2pnet.PeerID().String()), NetIdentitySigner(p2pnet.PeerIDSigner())),
+		scheme:  NewIdentityChallengeScheme(NetIdentityDedupNames(cfg.PublicAddress, p2pnet.PeerID().String()), NetIdentitySigner(p2pnet.peerIDSigner())),
 	}
 	wsnet, err := NewWebsocketNetwork(log, cfg, phonebookAddresses, genesisInfo, nodeInfo, &identOpts, childWsNetMeshCreator)
 	if err != nil {

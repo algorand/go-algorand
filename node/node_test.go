@@ -33,7 +33,6 @@ import (
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	csp "github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/account"
@@ -882,10 +881,9 @@ func TestMaxSizesCorrect(t *testing.T) {
 	// a transaction carries at most one effective PQSig (top-level OR nested in the
 	// logicsig), but SignedTxnMaxSize counts both, so subtract one.
 	maxCombinedTxnSize -= uint64(transactions.PQSigMaxSize())
-	// the logicsig size is *also* an overestimate, because it thinks that the logicsig and
-	// the logicsig args can both be up to MaxLogicSigMaxSize, but that's the max for
-	// them combined, so it double counts and we have to subtract one.
-	maxCombinedTxnSize -= uint64(bounds.MaxLogicSigMaxSize)
+	// Note that the logicsig program and its args are *not* double counted. Once
+	// transaction size pricing exists, they are bounded separately, each up to
+	// MaxLogicSigMaxSize, so a single logicsig really can carry both in full.
 
 	// maxCombinedTxnSize is still an overestimate because it assumes all txn
 	// type fields can be in the same txn.  That's not true, but it provides an
@@ -1076,14 +1074,14 @@ func TestNodeP2PRelays(t *testing.T) {
 	testParams0.AgreementFilterTimeoutPeriod0 = 500 * time.Millisecond
 	configurableConsensus[consensusTest0] = testParams0
 
-	minMoneyAtStart := 1_000_000
-	maxMoneyAtStart := 100_000_000_000
+	minMoneyAtStart := uint64(1_000_000)
+	maxMoneyAtStart := uint64(100_000_000_000)
 	gen := rand.New(rand.NewSource(2))
 
 	const numAccounts = 3
 	acctStake := make([]basics.MicroAlgos, numAccounts)
 	// only node N has stake
-	acctStake[2] = basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))}
+	acctStake[2] = basics.MicroAlgos{Raw: minMoneyAtStart + uint64(gen.Int())%(maxMoneyAtStart-minMoneyAtStart)}
 
 	configHook := func(ni nodeInfo, cfg config.Local) (nodeInfo, config.Local) {
 		cfg = config.GetDefaultLocal()
@@ -1369,12 +1367,12 @@ func TestNodeP2P_NetProtoVersions(t *testing.T) {
 	testParams0.AgreementFilterTimeoutPeriod0 = 500 * time.Millisecond
 	configurableConsensus[consensusTest0] = testParams0
 
-	maxMoneyAtStart := 100_000_000_000
+	maxMoneyAtStart := uint64(100_000_000_000)
 
 	const numAccounts = 2
 	acctStake := make([]basics.MicroAlgos, numAccounts)
-	acctStake[0] = basics.MicroAlgos{Raw: uint64(maxMoneyAtStart / numAccounts)}
-	acctStake[1] = basics.MicroAlgos{Raw: uint64(maxMoneyAtStart / numAccounts)}
+	acctStake[0] = basics.MicroAlgos{Raw: maxMoneyAtStart / numAccounts}
+	acctStake[1] = basics.MicroAlgos{Raw: maxMoneyAtStart / numAccounts}
 
 	configHook := func(ni nodeInfo, cfg config.Local) (nodeInfo, config.Local) {
 		cfg = config.GetDefaultLocal()

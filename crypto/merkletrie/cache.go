@@ -220,10 +220,9 @@ func (mtc *merkleTrieCache) prioritizeNodeFront(nid storedNodeIdentifier) {
 	mtc.pagesPrioritizationMap[page] = mtc.pagesPrioritizationList.PushFront(page)
 }
 
-// prioritizeNodeBack make sure to adjust the priority of the given node id.
-// nodes are prioritized based on the page the belong to.
-// a new page would be placed on front, and an existing page would get moved
-// to the front.
+// prioritizeNodeBack places the page containing nid at the back of the
+// priority list, inserting it if absent or moving it if already present.
+// Pages at the back have lower priority and are evicted before pages at the front.
 func (mtc *merkleTrieCache) prioritizeNodeBack(nid storedNodeIdentifier) {
 	page := uint64(nid) / uint64(mtc.nodesPerPage)
 
@@ -462,7 +461,7 @@ func (mtc *merkleTrieCache) reallocatePendingPages(stats *CommitStats) (pagesToC
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		stats.FanoutReallocatedNodeCount += int(relocatedNodes)
+		stats.FanoutReallocatedNodeCount += relocatedNodes
 	}
 
 	stats.LoadedPages = len(mtc.pendingDeletionPages) - beforeHashCalculationPendingDeletionPages + len(mtc.pageToNIDsPtr) - beforeHashCalculationPageCount
@@ -532,7 +531,7 @@ func (mtc *merkleTrieCache) reallocatePendingPages(stats *CommitStats) (pagesToC
 // calculatePageHashes calculate hashes of a specific page
 // It is vital that the hashes for all the preceding page would have
 // already been calculated for this function to work correctly.
-func (mtc *merkleTrieCache) calculatePageHashes(page int64, newPage bool) (fanoutRelocatedNodes int64, err error) {
+func (mtc *merkleTrieCache) calculatePageHashes(page int64, newPage bool) (fanoutRelocatedNodes int, err error) {
 	nodes := mtc.pageToNIDsPtr[uint64(page)]
 	for i := storedNodeIdentifier(page * mtc.nodesPerPage); i < storedNodeIdentifier((page+1)*mtc.nodesPerPage); i++ {
 		if !newPage && !mtc.pendingCreatedNID[i] {

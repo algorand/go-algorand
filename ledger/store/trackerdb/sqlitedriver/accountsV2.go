@@ -706,7 +706,7 @@ func (w *accountsV2Writer) TxtailNewRound(ctx context.Context, baseRound basics.
 	defer insertStmt.Close()
 
 	for i, data := range roundData {
-		_, err = insertStmt.ExecContext(ctx, int(baseRound)+i, data[:])
+		_, err = insertStmt.ExecContext(ctx, baseRound+basics.Round(i), data[:])
 		if err != nil {
 			return err
 		}

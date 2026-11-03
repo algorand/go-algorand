@@ -120,6 +120,9 @@ The base64 encoding of the signature will always be printed to stdout. Optionall
 
 		var progHash crypto.Digest
 		var stxn transactions.SignedTxn
+		// lsig is the program authorizing stxn and its arguments, which an
+		// ls-scheme PQsig carries instead of stxn.Lsig.
+		var lsig transactions.LogicSig
 		if lsigTxnFilename != "" {
 			// If passed a SignedTxn with a logic sig, compute
 			// the hash of the program within the logic sig
@@ -133,13 +136,21 @@ The base64 encoding of the signature will always be printed to stdout. Optionall
 				reportErrorf(txDecodeError, lsigTxnFilename, err2)
 			}
 
+			lsig = stxn.Lsig
+			if stxn.PQsig.IsLogicSig() {
+				lsig, err2 = stxn.PQsig.Lsig()
+				if err2 != nil {
+					reportErrorf(txDecodeError, lsigTxnFilename, err2)
+				}
+			}
+
 			// Ensure signed transaction has a logic sig with a
 			// program
-			if !stxn.Lsig.HasProgram() {
+			if !lsig.HasProgram() {
 				reportErrorf(tealsignEmptyLogic)
 			}
 
-			progHash = logic.HashProgram(stxn.Lsig.Logic)
+			progHash = logic.HashProgram(lsig.Logic)
 		} else {
 			// Otherwise, the contract address is the logic hash
 			parsedAddr, err1 := basics.UnmarshalChecksumAddress(contractAddr)
@@ -213,10 +224,15 @@ The base64 encoding of the signature will always be printed to stdout. Optionall
 			if setLsigArg > transactions.EvalMaxArgs-1 {
 				reportErrorf(tealsignTooManyArg, transactions.EvalMaxArgs)
 			}
-			for len(stxn.Lsig.Args) < setLsigArg+1 {
-				stxn.Lsig.Args = append(stxn.Lsig.Args, nil)
+			for len(lsig.Args) < setLsigArg+1 {
+				lsig.Args = append(lsig.Args, nil)
 			}
-			stxn.Lsig.Args[setLsigArg] = signature[:]
+			lsig.Args[setLsigArg] = signature[:]
+			if stxn.PQsig.IsLogicSig() {
+				stxn.PQsig.Signature = transactions.EncodeLogicSigArgs(lsig.Args)
+			} else {
+				stxn.Lsig.Args = lsig.Args
+			}
 
 			// Write out the modified stxn
 			err = writeFile(lsigTxnFilename, protocol.Encode(&stxn), 0600)

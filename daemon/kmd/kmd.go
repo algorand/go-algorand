@@ -63,6 +63,14 @@ func Start(startConfig StartConfig) (died chan error, sock string, err error) {
 		return
 	}
 
+	// The server owns the session manager only after a successful start.
+	sessionManager := session.MakeManager(kmdCfg)
+	defer func() {
+		if err != nil {
+			sessionManager.Kill()
+		}
+	}()
+
 	// Configure the wallet API server
 	serverCfg := server.WalletServerConfig{
 		APIToken:       apiToken,
@@ -70,7 +78,7 @@ func Start(startConfig StartConfig) (died chan error, sock string, err error) {
 		Address:        kmdCfg.Address,
 		AllowedOrigins: kmdCfg.AllowedOrigins,
 		AllowHeaderPNA: kmdCfg.AllowHeaderPNA,
-		SessionManager: session.MakeManager(kmdCfg),
+		SessionManager: sessionManager,
 		Log:            startConfig.Log,
 		Timeout:        startConfig.Timeout,
 	}

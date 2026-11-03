@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -32,12 +33,18 @@ func TestPQSchemesMatchTestSchemes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	require.Len(t, pqSchemes, len(basics_testing.PQTestSchemes))
+	// PQTestSchemes holds the signing schemes, so it lacks only ls.
+	require.Len(t, pqSchemes, len(basics_testing.PQTestSchemes)+1)
 	for _, ts := range basics_testing.PQTestSchemes {
 		require.True(t, PQSchemeSupported(ts.Scheme), ts.Name)
 	}
+	require.True(t, PQSchemeSupported(protocol.PQSchemeLogicSig))
 	for tag, s := range pqSchemes {
-		require.NotNil(t, s.verifier, tag)
+		if tag == protocol.PQSchemeLogicSig {
+			require.Nil(t, s.verifier)
+		} else {
+			require.NotNil(t, s.verifier, tag)
+		}
 		require.NotNil(t, s.enabled, tag)
 		require.NotNil(t, s.maxPublicKeySize, tag)
 		require.NotNil(t, s.maxSignatureSize, tag)
@@ -60,5 +67,19 @@ func TestPQBoundsCoverSchemes(t *testing.T) {
 		scheme := pqSchemes[ts.Scheme]
 		require.LessOrEqual(t, len(acct.PublicKey), scheme.maxPublicKeySize(), ts.Name)
 		require.LessOrEqual(t, len(sig), scheme.maxSignatureSize(), ts.Name)
+	}
+}
+
+// TestPQSchemeLogicSigFee pins the ls scheme's lack of a surcharge. An ls
+// account costs a hash plus AVM execution, both of which are priced or
+// constrained anyway. Charging a Falcon-style surcharge would make the
+// off-curve form more expensive than the on-curve SignedTxn.Lsig form it exists
+// to replace.
+func TestPQSchemeLogicSigFee(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for proto, params := range config.Consensus {
+		require.Zero(t, PQSchemeFeeContribution(params, protocol.PQSchemeLogicSig), proto)
 	}
 }

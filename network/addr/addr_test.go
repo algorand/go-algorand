@@ -48,27 +48,33 @@ func TestParseHostOrURL(t *testing.T) {
 		{"1.2.3.4:123", url.URL{Scheme: "http", Host: "1.2.3.4:123"}},
 		{"[::]:123", url.URL{Scheme: "http", Host: "[::]:123"}},
 		{"r2-devnet.devnet.algodev.network:4560", url.URL{Scheme: "http", Host: "r2-devnet.devnet.algodev.network:4560"}},
-		{"::11.22.33.44:123", url.URL{Scheme: "http", Host: "::11.22.33.44:123"}},
+		{"[::11.22.33.44]:123", url.URL{Scheme: "http", Host: "[::11.22.33.44]:123"}},
 	}
-	badUrls := []string{
-		"justahost",
-		"localhost:WAT",
-		"http://localhost:WAT",
-		"https://localhost:WAT",
-		"ws://localhost:WAT",
-		"wss://localhost:WAT",
-		"//localhost:WAT",
-		"://badaddress", // See rpcs/blockService_test.go TestRedirectFallbackEndpoints
-		"://localhost:1234",
-		":xxx",
-		":xxx:1234",
-		"::11.22.33.44",
-		":a:1",
-		":a:",
-		":1",
-		":a",
-		":",
-		"",
+	const badPort = "invalid port"
+	const noScheme = "missing protocol scheme"
+	badUrls := []struct {
+		addr string
+		err  string
+	}{
+		{"justahost", errURLNoHost.Error()},
+		{"localhost:WAT", errURLNoHost.Error()},
+		{"http://localhost:WAT", badPort},
+		{"https://localhost:WAT", badPort},
+		{"ws://localhost:WAT", badPort},
+		{"wss://localhost:WAT", badPort},
+		{"//localhost:WAT", badPort},
+		{"://badaddress", noScheme}, // See rpcs/blockService_test.go TestRedirectFallbackEndpoints
+		{"://localhost:1234", noScheme},
+		{":xxx", noScheme},
+		{":xxx:1234", noScheme},
+		{"::11.22.33.44", noScheme},
+		{"::11.22.33.44:123", noScheme},
+		{":a:1", noScheme},
+		{":a:", noScheme},
+		{":1", errURLColonHost.Error()},
+		{":a", noScheme},
+		{":", errURLColonHost.Error()},
+		{"", errURLNoHost.Error()},
 	}
 	for _, tc := range urlTestCases {
 		t.Run(tc.text, func(t *testing.T) {
@@ -88,16 +94,16 @@ func TestParseHostOrURL(t *testing.T) {
 			}
 		})
 	}
-	for _, addr := range badUrls {
-		t.Run(addr, func(t *testing.T) {
-			_, err := ParseHostOrURL(addr)
-			require.Error(t, err, "url should fail", addr)
-			require.False(t, IsMultiaddr(addr))
+	for _, tc := range badUrls {
+		t.Run(tc.addr, func(t *testing.T) {
+			_, err := ParseHostOrURL(tc.addr)
+			require.ErrorContains(t, err, tc.err, "url should fail", tc.addr)
+			require.False(t, IsMultiaddr(tc.addr))
 		})
-		t.Run(addr+"-multiaddr", func(t *testing.T) {
-			_, err := ParseHostOrURLOrMultiaddr(addr)
-			require.Error(t, err, "url should fail", addr)
-			require.False(t, IsMultiaddr(addr))
+		t.Run(tc.addr+"-multiaddr", func(t *testing.T) {
+			_, err := ParseHostOrURLOrMultiaddr(tc.addr)
+			require.ErrorContains(t, err, tc.err, "url should fail", tc.addr)
+			require.False(t, IsMultiaddr(tc.addr))
 		})
 	}
 

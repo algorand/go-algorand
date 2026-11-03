@@ -1535,6 +1535,116 @@ func TestPQRekeyedAddressAuthorization(t *testing.T) {
 	}
 }
 
+// TestPQLogicSigRekeyedAddressAuthorization is TestPQRekeyedAddressAuthorization
+// for the ls scheme, which has no key: an ls PQsig authorizes by running the
+// program its address commits to.
+func TestPQLogicSigRekeyedAddressAuthorization(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genesisInitState, addrs, keys := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	require.True(t, proto.EnablePQSchemeLogicSig)
+	minFee := proto.MinFee()
+
+	// #pragma version 14; pushbytes "open sesame"; arg_0; ==
+	program := []byte{0x0e, 0x80, 0x0b, 'o', 'p', 'e', 'n', ' ', 's', 'e', 's', 'a', 'm', 'e', 0x2d, 0x12}
+	salt, lsAddr, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeLogicSig, program)
+	require.NoError(t, err)
+
+	genesisInitState.Accounts[lsAddr] = basics.AccountData{
+		MicroAlgos: basics.MicroAlgos{Raw: 10_000_000},
+		Status:     basics.Offline,
+	}
+
+	l, err := OpenLedger(logging.TestingLog(t), t.Name(), true, genesisInitState, config.GetDefaultLocal())
+	require.NoError(t, err)
+	defer l.Close()
+
+	nextRound := l.Latest() + basics.Round(1)
+	genHash := l.GenesisHash()
+
+	makePayTxn := func(sender, receiver basics.Address, rekeyTo basics.Address, uniq uint8) transactions.Transaction {
+		return transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      sender,
+				Fee:         minFee,
+				FirstValid:  nextRound,
+				LastValid:   nextRound,
+				GenesisHash: genHash,
+				RekeyTo:     rekeyTo,
+				Note:        []byte{uniq},
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: receiver,
+				Amount:   basics.MicroAlgos{Raw: 1},
+			},
+		}
+	}
+
+	lsAuthorize := func(txn transactions.Transaction, authAddr basics.Address, arg string) transactions.SignedTxn {
+		return transactions.SignedTxn{
+			Txn:      txn,
+			AuthAddr: authAddr,
+			PQsig: transactions.PQSig{
+				Scheme:    protocol.PQSchemeLogicSig,
+				Salt:      salt,
+				PublicKey: program,
+				Signature: transactions.EncodeLogicSigArgs(transactions.LogicSigArgs{[]byte(arg)}),
+			},
+		}
+	}
+
+	// Each block is built on genesis, so nothing one tryBlock does is seen by
+	// the next.
+	tryBlock := func(stxns []transactions.SignedTxn) error {
+		genesisHdr, err := l.BlockHdr(basics.Round(0))
+		require.NoError(t, err)
+		newBlock := bookkeeping.MakeBlock(genesisHdr)
+		eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
+		require.NoError(t, err)
+
+		for _, stxn := range stxns {
+			err = eval.TransactionGroup(stxn.WithAD())
+			if err != nil {
+				return err
+			}
+		}
+		unfinishedBlock, err := eval.GenerateBlock(nil)
+		if err != nil {
+			return err
+		}
+		fb := unfinishedBlock.FinishBlock(committee.Seed{0x01}, basics.Address{0x01}, false)
+
+		backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+		defer backlogPool.Shutdown()
+		_, err = l.Validate(context.Background(), fb, backlogPool)
+		return err
+	}
+
+	// An Ed25519 account rekeyed to an ls address is spent from by running the
+	// program, and only with the argument it accepts.
+	edRekeyToLs := makePayTxn(addrs[0], addrs[0], lsAddr, 1).Sign(keys[0])
+	edSpendByLs := lsAuthorize(makePayTxn(addrs[0], addrs[1], basics.Address{}, 2), lsAddr, "open sesame")
+	edSpendByLsWrongArg := lsAuthorize(makePayTxn(addrs[0], addrs[1], basics.Address{}, 2), lsAddr, "abracadabra")
+
+	require.NoError(t, tryBlock([]transactions.SignedTxn{edRekeyToLs, edSpendByLs}))
+	require.ErrorContains(t, tryBlock([]transactions.SignedTxn{edRekeyToLs, edSpendByLsWrongArg}), "rejected by logic")
+	require.ErrorContains(t, tryBlock([]transactions.SignedTxn{edSpendByLs}), "should have been authorized by")
+
+	// An ls account rekeyed to an Ed25519 key is spent from by that key, and
+	// no longer by its program.
+	lsRekeyToEd := lsAuthorize(makePayTxn(lsAddr, addrs[1], addrs[2], 3), basics.Address{}, "open sesame")
+	lsSpendByEd := makePayTxn(lsAddr, addrs[1], basics.Address{}, 4).Sign(keys[2])
+	lsSpendByLs := lsAuthorize(makePayTxn(lsAddr, addrs[1], basics.Address{}, 5), basics.Address{}, "open sesame")
+
+	require.NoError(t, tryBlock([]transactions.SignedTxn{lsRekeyToEd, lsSpendByEd}))
+	require.ErrorContains(t, tryBlock([]transactions.SignedTxn{lsSpendByEd}), "should have been authorized by")
+	require.ErrorContains(t, tryBlock([]transactions.SignedTxn{lsRekeyToEd, lsSpendByLs}), "should have been authorized by")
+}
+
 func TestPQChallengedAccountCanHeartbeatForZeroFee(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

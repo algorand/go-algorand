@@ -18,7 +18,9 @@ package merklesignature
 
 import (
 	"crypto/rand"
+	"fmt"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -113,6 +115,17 @@ func TestEmptyVerifier(t *testing.T) {
 	// even if there are no keys for that period, the root is not empty
 	// (part of the vector commitment property).
 	a.False(signer.GetVerifier().MsgIsZero())
+}
+
+func TestCommitmentFormatsAsHex(t *testing.T) {
+	t.Parallel()
+	partitiontest.PartitionTest(t)
+
+	var c Commitment
+	c[0], c[1] = 0x01, 0xab
+	want := "01ab" + strings.Repeat("00", MerkleSignatureSchemeRootSize-2)
+	require.Equal(t, want, fmt.Sprintf("%v", c))
+	require.Equal(t, want, fmt.Sprintf("%s", c))
 }
 
 func TestVerifierKeyLifetimeError(t *testing.T) {
