@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"crypto/mldsa"
 	"encoding/hex"
 	"fmt"
 	"slices"
@@ -3386,6 +3387,9 @@ func TestReturnTypes(t *testing.T) {
 		// falcon_verify's required pubkey length comes from its configuration
 		// immediate, so it can't be inferred from the opcode's proto.
 		"falcon_verify": ": byte 0x3456; byte 0x3456; byte 0x" + strings.Repeat("33", 1793) + "; falcon_verify FalconDet1024",
+		// Likewise mldsa_verify's signature and pubkey lengths.
+		"mldsa_verify": ": byte 0x3456; byte 0x" + strings.Repeat("33", mldsa.MLDSA44SignatureSize) +
+			"; byte 0x" + strings.Repeat("33", mldsa.MLDSA44PublicKeySize) + "; byte 0x; mldsa_verify MLDSA44",
 	}
 
 	/* Make sure the specialCmd tests the opcode in question */
