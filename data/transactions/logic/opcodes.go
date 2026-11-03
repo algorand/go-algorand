@@ -94,6 +94,11 @@ const mldsaVersion = 14
 // is available. expw and divmodw also become cheaper.
 const fullByteMathVersion = 14
 
+// verifyCostVersion is the first version with the current costs of
+// ed25519verify, ed25519verify_bare, ecdsa_verify and vrf_verify. Those that
+// hash their message charge by its length.
+const verifyCostVersion = 14
+
 // LogicSigOffCurveVersion is the first AVM version where LogicSig programs
 // assembled by this package are expected to hash to an off-curve address.
 const LogicSigOffCurveVersion = 13
@@ -660,8 +665,11 @@ var OpSpecs = []OpSpec{
 
 	{0x04, "ed25519verify", opEd25519Verify, proto("bb{64}b{32}:T"), 1, costly(1900).only(ModeSig)},
 	{0x04, "ed25519verify", opEd25519Verify, proto("bb{64}b{32}:T"), 5, costly(1900)},
+	{0x04, "ed25519verify", opEd25519Verify, proto("bb{64}b{32}:T"), verifyCostVersion, costByLength(1720, 4, 64, 2)},
 
 	{0x05, "ecdsa_verify", opEcdsaVerify, proto("b{32}b{32}b{32}b{32}b{32}:T"), 5, costByField("v", &EcdsaCurves, ecdsaVerifyCosts)},
+	{0x05, "ecdsa_verify", opEcdsaVerify, proto("b{32}b{32}b{32}b{32}b{32}:T"), verifyCostVersion, costByField("v", &EcdsaCurves, []int{
+		Secp256k1: 1700, Secp256r1: 2210})},
 	{0x06, "ecdsa_pk_decompress", opEcdsaPkDecompress, proto("b{33}:b{32}b{32}"), 5, costByField("v", &EcdsaCurves, ecdsaDecompressCosts)},
 	{0x07, "ecdsa_pk_recover", opEcdsaPkRecover, proto("b{32}ib{32}b{32}:b{32}b{32}"), 5, field("v", &EcdsaCurves).costs(2000)},
 
@@ -805,10 +813,22 @@ var OpSpecs = []OpSpec{
 	{0x83, "pushints", opPushInts, proto(":", "", "[N items]").stackExplain(opPushIntsStackChange), 8, constants(asmPushInts, checkIntImmArgs, "uint ...", immInts).typed(typePushInts).trust()},
 
 	{0x84, "ed25519verify_bare", opEd25519VerifyBare, proto("bb{64}b{32}:T"), 7, costly(1900)},
+	{0x84, "ed25519verify_bare", opEd25519VerifyBare, proto("bb{64}b{32}:T"), verifyCostVersion, costByLength(1710, 3, 64, 2)},
 	{0x85, "falcon_verify", opFalcon1024Verify, proto("bbb{1793}:T"), 12, costly(1700)},
 	{0x85, "falcon_verify", opFalconVerify, proto("bbb:T"), f512Version,
-		costByField("f", &FalconConfigs, []int{
-			FalconDet1024: 1700, FalconDet512: 850}).typed(typeFalconVerify)},
+		costByFieldAndLength("f", &FalconConfigs, []costDescriptor{
+			FalconDet1024: {
+				baseCost:  1410,
+				chunkCost: 5,
+				chunkSize: 64,
+				depth:     2,
+			},
+			FalconDet512: {
+				baseCost:  690,
+				chunkCost: 5,
+				chunkSize: 64,
+				depth:     2,
+			}}).typed(typeFalconVerify)},
 	{0x86, "sumhash512", opSumhash512, proto("b:b{64}"), sumhashVersion, costByLength(150, 4, 7, 0)},
 	{0x87, "sha512", opSHA512, proto("b:b{64}"), 13, costByLength(15, 2, 32, 0)},
 
@@ -905,6 +925,13 @@ var OpSpecs = []OpSpec{
 
 	// randomness support
 	{0xd0, "vrf_verify", opVrfVerify, proto("bb{80}b{32}:b{64}T"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
+	{0xd0, "vrf_verify", opVrfVerify, proto("bb{80}b{32}:b{64}T"), verifyCostVersion, costByFieldAndLength("s", &VrfStandards, []costDescriptor{
+		VrfAlgorand: {
+			baseCost:  6190,
+			chunkCost: 3,
+			chunkSize: 64,
+			depth:     2,
+		}})},
 	{0xd1, "block", opBlock, proto("i:a"), randomnessVersion, field("f", &BlockFields)},
 	{0xd2, "box_splice", opBoxSplice, proto("Niib:").appBoxExplain(AppStateWrite, false), spliceVersion, only(ModeApp)},
 	{0xd3, "box_resize", opBoxResize, proto("Ni:").appBoxExplain(AppStateWrite, false), spliceVersion, only(ModeApp)},

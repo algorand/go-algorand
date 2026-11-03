@@ -172,7 +172,7 @@
         "bool"
       ],
       "Size": 1,
-      "DocCost": "1900",
+      "DocCost": "1720 + 4 per 64 bytes of A",
       "Doc": "for (data A, signature B, pubkey C) verify the signature of (\"ProgData\" || program_hash || data) against the pubkey =\u003e {0 or 1}",
       "DocExtra": "The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack.",
       "IntroducedVersion": 1,
@@ -213,7 +213,7 @@
           "Version": 7
         }
       ],
-      "DocCost": "Secp256k1=1700; Secp256r1=2500",
+      "DocCost": "Secp256k1=1700; Secp256r1=2210",
       "Doc": "for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey =\u003e {0 or 1}",
       "DocExtra": "The 32 byte Y-component of a public key is the last element on the stack, preceded by X-component of a pubkey, preceded by S and R components of a signature, preceded by the data that is fifth element on the stack. All values are big-endian encoded. The signed data must be 32 bytes long, and signatures in lower-S form are only accepted.",
       "ImmediateNote": [
@@ -5185,7 +5185,7 @@
         "bool"
       ],
       "Size": 1,
-      "DocCost": "1900",
+      "DocCost": "1710 + 3 per 64 bytes of A",
       "Doc": "for (data A, signature B, pubkey C) verify the signature of the data against the pubkey =\u003e {0 or 1}",
       "IntroducedVersion": 7,
       "Groups": [
@@ -5223,7 +5223,7 @@
           "Version": 14
         }
       ],
-      "DocCost": "FalconDet1024=1700; FalconDet512=850",
+      "DocCost": "FalconDet1024=1410 + 5 per 64 bytes of A; FalconDet512=690 + 5 per 64 bytes of A",
       "Doc": "for (data A, deterministic Falcon compressed-format signature B, pubkey C) verify the signature of data against the pubkey =\u003e {0 or 1}",
       "DocExtra": "Since v14, the Falcon variant is named by immediate F. Before that, `falcon_verify` took no immediate and always used FALCON-DET1024.\n\nSignature B is variable-length, with maximum size 1423 bytes for FalconDet1024, or 713 bytes for FalconDet512. Pubkey C must be exactly 1793 bytes for FalconDet1024, or 897 bytes for FalconDet512.",
       "ImmediateNote": [
@@ -8483,7 +8483,7 @@
           "Version": 7
         }
       ],
-      "DocCost": "5700",
+      "DocCost": "VrfAlgorand=6190 + 3 per 64 bytes of A",
       "Doc": "Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.",
       "DocExtra": "`VrfAlgorand` is the VRF used in Algorand. It is ECVRF-ED25519-SHA512-Elligator2, specified in the IETF internet draft [draft-irtf-cfrg-vrf-03](https://datatracker.ietf.org/doc/draft-irtf-cfrg-vrf/03/).",
       "ImmediateNote": [
