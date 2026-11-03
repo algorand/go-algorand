@@ -65,10 +65,7 @@
 package api
 
 import (
-	"fmt"
 	"net/http"
-
-	"github.com/gorilla/mux"
 
 	v1 "github.com/algorand/go-algorand/daemon/kmd/api/v1"
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
@@ -108,10 +105,16 @@ func versionsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(protocol.EncodeJSON(response))
 }
 
-// optionsHandler is a dummy endpoint that catches all OPTIONS requests. We
-// need this because middleware only triggers if we match a route.
-func optionsHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
+// optionsMiddleware answers every OPTIONS request (CORS preflight) with 200
+// before routing, so unknown paths still return 404 for other methods.
+func optionsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // SwaggerHandler is an httpHandler for route GET /swagger.json, and at this point
@@ -135,29 +138,32 @@ func SwaggerHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(kmdapi.SwaggerSpecJSON))
 }
 
-// Handler returns the root mux router for the kmd API. It sets up handlers on
-// subrouters specific to each API version.
-func Handler(sm *session.Manager, log logging.Logger, allowedOrigins []string, apiToken string, pnaHeader bool, reqCB func()) *mux.Router {
-	rootRouter := mux.NewRouter()
+// Handler returns the root HTTP handler for the kmd API. It sets up handlers
+// for each API version and applies middleware.
+func Handler(sm *session.Manager, log logging.Logger, allowedOrigins []string, apiToken string, pnaHeader bool, reqCB func()) http.Handler {
+	mux := http.NewServeMux()
 
-	// Send the appropriate CORS headers
-	if pnaHeader {
-		rootRouter.Use(AllowPNA())
-	}
-	rootRouter.Use(corsMiddleware(allowedOrigins))
-
-	// Handle OPTIONS requests
-	rootRouter.Methods("OPTIONS").HandlerFunc(optionsHandler)
+	// Every request matches at least this catch-all, so ServeMux returns 404
+	// without first searching all methods to decide between 404 and 405.
+	mux.Handle("/", http.NotFoundHandler())
 
 	// The /versions endpoint has no version, so we register it here. /versions
 	// has no auth, because it doesn't return anything sensitive, and auth is
-	// version-specific. The same applies for /swagger.json.
-	rootRouter.HandleFunc("/versions", versionsHandler)
-	rootRouter.HandleFunc("/swagger.json", SwaggerHandler)
+	// version-specific. The same applies for /swagger.json. Neither pattern
+	// names a method, so both accept any method.
+	mux.HandleFunc("/versions", versionsHandler)
+	mux.HandleFunc("/swagger.json", SwaggerHandler)
 
 	// Handle API V1 routes at /v1/<...>
-	v1Router := rootRouter.PathPrefix(fmt.Sprintf("/%s", apiV1Tag)).Subrouter()
-	v1.RegisterHandlers(v1Router, sm, log, apiToken, reqCB)
+	v1.RegisterHandlers(mux, "/"+apiV1Tag, sm, log, apiToken, reqCB)
 
-	return rootRouter
+	// Handle OPTIONS requests, then send the appropriate CORS headers
+	var handler http.Handler = mux
+	handler = optionsMiddleware(handler)
+	handler = corsMiddleware(allowedOrigins)(handler)
+	if pnaHeader {
+		handler = AllowPNA()(handler)
+	}
+
+	return handler
 }
