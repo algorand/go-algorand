@@ -2227,6 +2227,11 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 	}
 
 	latest := l.Latest()
+	// WaitForCommit can return before notifyCommit runs the trackers'
+	// committedUpTo, which advances txTail.lowWaterMark for the CheckDup checks
+	// below. Wait's channel is closed by bulletinDisk.committedUpTo, which runs
+	// after txTail's.
+	<-l.Wait(latest)
 	nextRound := latest + 1
 	balancesRound := nextRound.SubSaturate(basics.Round(proto.MaxBalLookback))
 
@@ -2267,7 +2272,13 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 
 	// check an error latest-1
 	for txid := range txnIDs[latest-1] {
-		require.Error(t, l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
+		var missingRoundErr *errTxTailMissingRound
+		require.ErrorAs(
+			t,
+			l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}),
+			&missingRoundErr,
+		)
+		require.Equal(t, latest-1, missingRoundErr.round)
 	}
 
 	shorterLookback := config.GetDefaultLocal().MaxAcctLookback
@@ -2315,7 +2326,13 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 
 	// check an error latest-1
 	for txid := range txnIDs[latest-1] {
-		require.Error(t, l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
+		var missingRoundErr *errTxTailMissingRound
+		require.ErrorAs(
+			t,
+			l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}),
+			&missingRoundErr,
+		)
+		require.Equal(t, latest-1, missingRoundErr.round)
 	}
 }
 
