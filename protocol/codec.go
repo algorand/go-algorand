@@ -134,7 +134,7 @@ func Encode(obj msgp.Marshaler) []byte {
 	// Use fmt instead of logging to avoid import loops;
 	// the expectation is that this should never happen.
 	fmt.Fprintf(os.Stderr, "Encoding %T using go-codec; stray embedded field?\n", obj)
-	return EncodeReflect(obj)
+	return EncodeReflect(obj) //nolint:forbidigo // fallback for a type whose CanMarshalMsg rejects it
 }
 
 // EncodeStream is like Encode but writes to an io.Writer instead.
@@ -209,7 +209,7 @@ func Decode(b []byte, objptr msgp.Unmarshaler) error {
 	// the expectation is that this should never happen.
 	fmt.Fprintf(os.Stderr, "Decoding %T using go-codec; stray embedded field?\n", objptr)
 
-	return DecodeReflect(b, objptr)
+	return DecodeReflect(b, objptr) //nolint:forbidigo // fallback for a type whose CanUnmarshalMsg rejects it
 }
 
 // DecodeStream is like Decode but reads from an io.Reader instead.

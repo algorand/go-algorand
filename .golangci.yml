@@ -165,17 +165,14 @@ linters:
         path-except: ^(crypto|network)/
         text: 'use ErrorContains, ErrorIs, or ErrorAs instead' # the testify Error ban is scoped to crypto/ and network/
       - linters: forbidigo
-        path: _test\.go
-        text: 'protocol\.(Encode|Decode)Reflect' # test code (e.g. differential-encoding oracles) may use the reflection codec freely
+        path: (_test\.go|^protocol/codec_tester\.go)$
+        text: '(protocol\.)?(Encode|Decode)Reflect' # test code (e.g. differential-encoding oracles) may use the reflection codec freely
       - linters: forbidigo
         path: ^(libgoal|daemon/algod/api/client)/
         text: 'protocol\.(Encode|Decode)Reflect' # REST clients decode API model types, which have no generated msgp code
       - linters: forbidigo
         path: ^tools/debug/
         text: 'protocol\.(Encode|Decode)Reflect' # offline debugging tools may use the reflection codec
-      - linters: forbidigo
-        path: ^protocol/
-        text: '`(Encode|Decode)Reflect`' # the protocol package implements the reflection codec
 
 issues:
   # Work our way back over time to be clean against all these
