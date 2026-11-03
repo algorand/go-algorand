@@ -517,7 +517,7 @@ func EncodingTest(template msgpMarshalUnmarshal) error {
 	}
 
 	if !reflect.DeepEqual(e1, e2) {
-		return fmt.Errorf("encoding mismatch for %v: %v != %v", v0, e1, e2)
+		return fmt.Errorf("encoding mismatch for %v: %x != %x", v0, e1, e2)
 	}
 
 	v1 := reflect.New(reflect.TypeOf(template).Elem()).Interface().(msgpMarshalUnmarshal)
