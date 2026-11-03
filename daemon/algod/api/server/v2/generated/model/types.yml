@@ -3,6 +3,7 @@ generate:
   models: true
 output-options:
   skip-prune: true
+  skip-enum-validate: true
 output: ./server/v2/generated/model/types.go
 compatibility:
   always-prefix-enum-values: true
