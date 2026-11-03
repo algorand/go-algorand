@@ -584,7 +584,9 @@ func (qs *accountsDbQueries) LookupAllResources(addr basics.Address) (data []tra
 			})
 			rnd = dbRound
 		}
-		return nil
+		// rows.Next returns false on an error too, such as a locked table; return
+		// it so db.Retry can retry instead of reporting no resources at round 0.
+		return rows.Err()
 	})
 	return
 }

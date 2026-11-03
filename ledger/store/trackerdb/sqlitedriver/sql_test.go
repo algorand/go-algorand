@@ -109,3 +109,34 @@ func TestWrapIOError(t *testing.T) {
 	require.Equal(t, wrapIOError(err), wrapIOError(wrapIOError(err)))
 
 }
+
+// TestLookupAllResourcesRowError checks that LookupAllResources returns an error
+// raised while reading rows, rather than an empty or partial result.
+func TestLookupAllResourcesRowError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// abs(-9223372036854775808) prepares, but fails with an integer overflow
+	// when its row is read.
+	testCases := []struct {
+		name  string
+		query string
+	}{
+		{name: "first row", query: "SELECT abs(-9223372036854775808), 7, 2, x'80' WHERE ? IS NOT NULL"},
+		{name: "after a resource", query: "SELECT 1, 7, 1, x'80' WHERE ? IS NOT NULL UNION ALL SELECT abs(-9223372036854775808), 7, 2, x'80'"},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			dbh, err := sql.Open("sqlite3", ":memory:")
+			require.NoError(t, err)
+			defer dbh.Close()
+			stmt, err := dbh.Prepare(tc.query)
+			require.NoError(t, err)
+			defer stmt.Close()
+
+			qs := &accountsDbQueries{lookupAllResourcesStmt: stmt}
+			_, _, err = qs.LookupAllResources(basics.Address{})
+			require.ErrorContains(t, err, "integer overflow")
+		})
+	}
+}
