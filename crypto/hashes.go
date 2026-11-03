@@ -19,6 +19,7 @@ package crypto
 import (
 	"crypto/sha256"
 	"crypto/sha512"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"hash"
@@ -62,6 +63,9 @@ const (
 
 // Sha512Digest is a 64-byte digest produced by the SHA-512 hash function.
 type Sha512Digest [Sha512Size]byte
+
+// String returns the digest in hex.
+func (d Sha512Digest) String() string { return hex.EncodeToString(d[:]) }
 
 // HashFactory is responsible for generating new hashes accordingly to the type it stores.
 //

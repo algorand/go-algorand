@@ -18,6 +18,7 @@ package merklesignature
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 
@@ -92,6 +93,9 @@ type (
 		Key   *crypto.Falcon1024Signer `codec:"key"`
 	}
 )
+
+// String returns the commitment in hex.
+func (v Commitment) String() string { return hex.EncodeToString(v[:]) }
 
 // Errors for the merkle signature scheme
 var (

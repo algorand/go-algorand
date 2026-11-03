@@ -62,7 +62,7 @@ func TestSigSchemeVerifierFalconRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, v1.Verify(msg, signer1.PublicKey[:], sig1))
-	require.Error(t, v1.Verify(msg, signer1.PublicKey[:], nil))
+	require.ErrorIs(t, v1.Verify(msg, signer1.PublicKey[:], nil), ErrSigInvalid)
 
 	signer5, err := GenerateFalcon512Signer(seed)
 	require.NoError(t, err)
@@ -70,5 +70,5 @@ func TestSigSchemeVerifierFalconRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, v5.Verify(msg, signer5.PublicKey[:], sig5))
-	require.Error(t, v5.Verify(msg, signer5.PublicKey[:], nil))
+	require.ErrorIs(t, v5.Verify(msg, signer5.PublicKey[:], nil), ErrSigInvalid)
 }
