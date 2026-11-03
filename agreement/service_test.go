@@ -566,18 +566,37 @@ func (m *activityMonitor) waitForActivity() {
 	<-m.activity
 }
 
+// waitForQuiet blocks until no coservice has pending work. A finishing
+// pseudonode can leave a stale quiet signal, so we check busy before returning
+// and drain leftover signals.
 func (m *activityMonitor) waitForQuiet() {
-	select {
-	case <-m.quiet:
-	case <-time.After(10 * time.Second):
-		m.dump()
+	timeout := time.After(10 * time.Second)
+	for {
+		select {
+		case <-m.quiet:
+		case <-timeout:
+			m.dump()
 
-		var buf [1000000]byte
-		n := runtime.Stack(buf[:], true)
-		fmt.Println("Printing goroutine dump of size", n)
-		fmt.Println(string(buf[:n]))
+			var buf [1000000]byte
+			n := runtime.Stack(buf[:], true)
+			fmt.Println("Printing goroutine dump of size", n)
+			fmt.Println(string(buf[:n]))
 
-		panic("timed out waiting for quiet...")
+			panic("timed out waiting for quiet...")
+		}
+
+		m.Lock()
+		if !m.busy {
+			for len(m.activity) > 0 {
+				<-m.activity
+			}
+			for len(m.quiet) > 0 {
+				<-m.quiet
+			}
+			m.Unlock()
+			return
+		}
+		m.Unlock()
 	}
 }
 
