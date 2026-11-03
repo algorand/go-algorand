@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793717956797,
+  "lastUpdate": 1793721341116,
   "repoUrl": "https://github.com/algorand/go-algorand",
   "entries": {
     "Go Benchmark": [
@@ -416052,6 +416052,450 @@ window.BENCHMARK_DATA = {
             "value": 0,
             "unit": "allocs/op",
             "extra": "13141952 times\n4 procs"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "git@nullun.com",
+            "name": "nullun",
+            "username": "nullun"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "877a441adcf7da360c752dd611981eec76921155",
+          "message": "API: Stream JSON responses with encoding/json/v2 (#6808)",
+          "timestamp": "2026-11-03T10:51:43-05:00",
+          "tree_id": "9f9cc0355377578ad85a3da0b9a25ba27c4e1da8",
+          "url": "https://github.com/algorand/go-algorand/commit/877a441adcf7da360c752dd611981eec76921155"
+        },
+        "date": 1793721330360,
+        "tool": "go",
+        "benches": [
+          {
+            "name": "BenchmarkUintMath/dup",
+            "value": 23.77,
+            "unit": "ns/op\t         1.000 extra/op\t       6 B/op\t       0 allocs/op",
+            "extra": "46717375 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/dup - ns/op",
+            "value": 23.77,
+            "unit": "ns/op",
+            "extra": "46717375 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/dup - extra/op",
+            "value": 1,
+            "unit": "extra/op",
+            "extra": "46717375 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/dup - B/op",
+            "value": 6,
+            "unit": "B/op",
+            "extra": "46717375 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/dup - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "46717375 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/pop1",
+            "value": 21.55,
+            "unit": "ns/op\t         1.000 extra/op\t       6 B/op\t       0 allocs/op",
+            "extra": "52064263 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/pop1 - ns/op",
+            "value": 21.55,
+            "unit": "ns/op",
+            "extra": "52064263 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/pop1 - extra/op",
+            "value": 1,
+            "unit": "extra/op",
+            "extra": "52064263 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/pop1 - B/op",
+            "value": 6,
+            "unit": "B/op",
+            "extra": "52064263 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/pop1 - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "52064263 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/pop",
+            "value": 40.07,
+            "unit": "ns/op\t         3.000 extra/op\t       6 B/op\t       0 allocs/op",
+            "extra": "29636935 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/pop - ns/op",
+            "value": 40.07,
+            "unit": "ns/op",
+            "extra": "29636935 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/pop - extra/op",
+            "value": 3,
+            "unit": "extra/op",
+            "extra": "29636935 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/pop - B/op",
+            "value": 6,
+            "unit": "B/op",
+            "extra": "29636935 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/pop - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "29636935 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/add",
+            "value": 43.4,
+            "unit": "ns/op\t         3.000 extra/op\t       6 B/op\t       0 allocs/op",
+            "extra": "27408768 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/add - ns/op",
+            "value": 43.4,
+            "unit": "ns/op",
+            "extra": "27408768 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/add - extra/op",
+            "value": 3,
+            "unit": "extra/op",
+            "extra": "27408768 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/add - B/op",
+            "value": 6,
+            "unit": "B/op",
+            "extra": "27408768 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/add - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "27408768 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/addw",
+            "value": 56.54,
+            "unit": "ns/op\t         4.000 extra/op\t       6 B/op\t       0 allocs/op",
+            "extra": "20948874 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/addw - ns/op",
+            "value": 56.54,
+            "unit": "ns/op",
+            "extra": "20948874 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/addw - extra/op",
+            "value": 4,
+            "unit": "extra/op",
+            "extra": "20948874 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/addw - B/op",
+            "value": 6,
+            "unit": "B/op",
+            "extra": "20948874 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/addw - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "20948874 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/sub",
+            "value": 46.78,
+            "unit": "ns/op\t         3.000 extra/op\t       6 B/op\t       0 allocs/op",
+            "extra": "26392338 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/sub - ns/op",
+            "value": 46.78,
+            "unit": "ns/op",
+            "extra": "26392338 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/sub - extra/op",
+            "value": 3,
+            "unit": "extra/op",
+            "extra": "26392338 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/sub - B/op",
+            "value": 6,
+            "unit": "B/op",
+            "extra": "26392338 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/sub - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "26392338 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/mul",
+            "value": 44.87,
+            "unit": "ns/op\t         3.000 extra/op\t       6 B/op\t       0 allocs/op",
+            "extra": "25187199 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/mul - ns/op",
+            "value": 44.87,
+            "unit": "ns/op",
+            "extra": "25187199 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/mul - extra/op",
+            "value": 3,
+            "unit": "extra/op",
+            "extra": "25187199 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/mul - B/op",
+            "value": 6,
+            "unit": "B/op",
+            "extra": "25187199 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/mul - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "25187199 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/mulw",
+            "value": 55.94,
+            "unit": "ns/op\t         4.000 extra/op\t       6 B/op\t       0 allocs/op",
+            "extra": "22317316 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/mulw - ns/op",
+            "value": 55.94,
+            "unit": "ns/op",
+            "extra": "22317316 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/mulw - extra/op",
+            "value": 4,
+            "unit": "extra/op",
+            "extra": "22317316 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/mulw - B/op",
+            "value": 6,
+            "unit": "B/op",
+            "extra": "22317316 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/mulw - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "22317316 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/div",
+            "value": 46.21,
+            "unit": "ns/op\t         3.000 extra/op\t       6 B/op\t       0 allocs/op",
+            "extra": "26097808 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/div - ns/op",
+            "value": 46.21,
+            "unit": "ns/op",
+            "extra": "26097808 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/div - extra/op",
+            "value": 3,
+            "unit": "extra/op",
+            "extra": "26097808 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/div - B/op",
+            "value": 6,
+            "unit": "B/op",
+            "extra": "26097808 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/div - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "26097808 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/divw",
+            "value": 55.28,
+            "unit": "ns/op\t         4.000 extra/op\t       6 B/op\t       0 allocs/op",
+            "extra": "20504438 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/divw - ns/op",
+            "value": 55.28,
+            "unit": "ns/op",
+            "extra": "20504438 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/divw - extra/op",
+            "value": 4,
+            "unit": "extra/op",
+            "extra": "20504438 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/divw - B/op",
+            "value": 6,
+            "unit": "B/op",
+            "extra": "20504438 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/divw - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "20504438 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/divmodw",
+            "value": 103.5,
+            "unit": "ns/op\t         8.000 extra/op\t       6 B/op\t       0 allocs/op",
+            "extra": "11175237 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/divmodw - ns/op",
+            "value": 103.5,
+            "unit": "ns/op",
+            "extra": "11175237 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/divmodw - extra/op",
+            "value": 8,
+            "unit": "extra/op",
+            "extra": "11175237 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/divmodw - B/op",
+            "value": 6,
+            "unit": "B/op",
+            "extra": "11175237 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/divmodw - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "11175237 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/sqrt",
+            "value": 57.08,
+            "unit": "ns/op\t         2.000 extra/op\t       6 B/op\t       0 allocs/op",
+            "extra": "21403183 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/sqrt - ns/op",
+            "value": 57.08,
+            "unit": "ns/op",
+            "extra": "21403183 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/sqrt - extra/op",
+            "value": 2,
+            "unit": "extra/op",
+            "extra": "21403183 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/sqrt - B/op",
+            "value": 6,
+            "unit": "B/op",
+            "extra": "21403183 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/sqrt - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "21403183 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/exp",
+            "value": 50.2,
+            "unit": "ns/op\t         3.000 extra/op\t       6 B/op\t       0 allocs/op",
+            "extra": "24530078 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/exp - ns/op",
+            "value": 50.2,
+            "unit": "ns/op",
+            "extra": "24530078 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/exp - extra/op",
+            "value": 3,
+            "unit": "extra/op",
+            "extra": "24530078 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/exp - B/op",
+            "value": 6,
+            "unit": "B/op",
+            "extra": "24530078 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/exp - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "24530078 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/expw",
+            "value": 63.46,
+            "unit": "ns/op\t         4.000 extra/op\t       6 B/op\t       0 allocs/op",
+            "extra": "18454042 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/expw - ns/op",
+            "value": 63.46,
+            "unit": "ns/op",
+            "extra": "18454042 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/expw - extra/op",
+            "value": 4,
+            "unit": "extra/op",
+            "extra": "18454042 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/expw - B/op",
+            "value": 6,
+            "unit": "B/op",
+            "extra": "18454042 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkUintMath/expw - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "18454042 times\n4 procs"
           }
         ]
       }
