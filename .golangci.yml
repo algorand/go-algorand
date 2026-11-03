@@ -117,15 +117,16 @@ linters:
         - error-is-as
       disable-all: true
     forbidigo:
-      analyze_types: true
+      analyze-types: true
       forbid:
-        - p: ^(require|assert)\.Error$
+        - pattern: ^(require|assert)\.Error$
           pkg: ^github\.com/stretchr/testify/(require|assert)$
           msg: use ErrorContains, ErrorIs, or ErrorAs instead
-        - p: ^(require|assert)\.Assertions\.Error$
+        - pattern: ^(require|assert)\.Assertions\.Error$
           pkg: ^github\.com/stretchr/testify/(require|assert)$
           msg: use ErrorContains, ErrorIs, or ErrorAs instead
         - pattern: ^protocol\.(Encode|Decode)Reflect$
+          pkg: ^github\.com/algorand/go-algorand/protocol$
           msg: reflection-based msgpack is reserved for JSON/REST API model types; use protocol.Encode/protocol.Decode (generated msgp) for consensus, network, and persisted data
 
   exclusions:
@@ -172,6 +173,9 @@ linters:
       - linters: forbidigo
         path: ^tools/debug/
         text: 'protocol\.(Encode|Decode)Reflect' # offline debugging tools may use the reflection codec
+      - linters: forbidigo
+        path: ^protocol/
+        text: '`(Encode|Decode)Reflect`' # the protocol package implements the reflection codec
 
 issues:
   # Work our way back over time to be clean against all these
