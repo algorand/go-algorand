@@ -29,7 +29,7 @@ EOF
 # had, and the salted one that no Ed25519 key can claim.
 COMPILED=$(${gcmd} clerk compile -n salted.teal)
 LEGACY=$(echo "$COMPILED" | awk '{ print $2 }')
-SALTED=$(echo "$COMPILED" | sed 's/.*(pq: \(.*\))/\1/')
+SALTED=$(echo "$COMPILED" | sed 's/.*(salted: \(.*\))/\1/')
 
 echo "legacy: $LEGACY"
 echo "salted: $SALTED"
@@ -40,7 +40,7 @@ if [ "$LEGACY" = "$SALTED" ]; then
 fi
 
 # The salted address is off the Ed25519 curve, so no key can ever claim it.
-algokey pq check-address "$SALTED"
+algokey salted check-address "$SALTED"
 
 # Fund the salted account below one reward unit to avoid balance drift.
 FUNDING=900000
@@ -97,7 +97,7 @@ arg 0
 addr ${SIGNER}
 ed25519verify
 EOF
-TEALSIGNED=$(${gcmd} clerk compile -n tealsigned.teal | sed 's/.*(pq: \(.*\))/\1/')
+TEALSIGNED=$(${gcmd} clerk compile -n tealsigned.teal | sed 's/.*(salted: \(.*\))/\1/')
 ${gcmd} clerk send -a "${FUNDING}" -f "${ACCOUNT}" -t "${TEALSIGNED}"
 ${gcmd} clerk send --salted -F tealsigned.teal -a 1000 -f "${TEALSIGNED}" -t "${ACCOUNT}" -o tealsigned.tx
 ${gcmd} clerk tealsign --keyfile signer.key --lsig-txn tealsigned.tx --sign-txid --set-lsig-arg-idx 0

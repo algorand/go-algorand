@@ -24,13 +24,13 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestPQVerifierEd25519(t *testing.T) {
+func TestSigSchemeVerifierEd25519(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	verifier := PQEd25519{}
+	verifier := Ed25519SchemeVerifier{}
 
-	msg := TestingHashable{data: []byte("pq verifier round trip")}
+	msg := TestingHashable{data: []byte("signature scheme verifier round trip")}
 	signer := GenerateSignatureSecrets(Seed{1})
 	sig := signer.Sign(msg)
 
@@ -43,16 +43,16 @@ func TestPQVerifierEd25519(t *testing.T) {
 	require.ErrorIs(t, verifier.Verify(msg, otherSigner.SignatureVerifier[:], sig[:]), ErrSigInvalid)
 }
 
-// TestPQVerifierFalconRoundTrip exercises the interface wiring; the
+// TestSigSchemeVerifierFalconRoundTrip exercises the interface wiring; the
 // underlying verification is covered by the VerifyFalcon1024/512 tests.
-func TestPQVerifierFalconRoundTrip(t *testing.T) {
+func TestSigSchemeVerifierFalconRoundTrip(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	v1 := PQFalcon1024{}
-	v5 := PQFalcon512{}
+	v1 := Falcon1024SchemeVerifier{}
+	v5 := Falcon512SchemeVerifier{}
 
-	msg := TestingHashable{data: []byte("pq verifier round trip")}
+	msg := TestingHashable{data: []byte("signature scheme verifier round trip")}
 	var seed FalconSeed
 	seed[0] = 1
 

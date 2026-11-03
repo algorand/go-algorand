@@ -10,29 +10,29 @@ import (
 )
 
 // The following msgp objects are implemented in this file:
-// pqPublicMaterial
-//         |-----> (*) MarshalMsg
-//         |-----> (*) CanMarshalMsg
-//         |-----> (*) UnmarshalMsg
-//         |-----> (*) UnmarshalMsgWithState
-//         |-----> (*) CanUnmarshalMsg
-//         |-----> (*) Msgsize
-//         |-----> (*) MsgIsZero
-//         |-----> PqPublicMaterialMaxSize()
+// saltedPublicMaterial
+//           |-----> (*) MarshalMsg
+//           |-----> (*) CanMarshalMsg
+//           |-----> (*) UnmarshalMsg
+//           |-----> (*) UnmarshalMsgWithState
+//           |-----> (*) CanUnmarshalMsg
+//           |-----> (*) Msgsize
+//           |-----> (*) MsgIsZero
+//           |-----> SaltedPublicMaterialMaxSize()
 //
-// pqSigningMaterial
-//         |-----> (*) MarshalMsg
-//         |-----> (*) CanMarshalMsg
-//         |-----> (*) UnmarshalMsg
-//         |-----> (*) UnmarshalMsgWithState
-//         |-----> (*) CanUnmarshalMsg
-//         |-----> (*) Msgsize
-//         |-----> (*) MsgIsZero
-//         |-----> PqSigningMaterialMaxSize()
+// saltedSigningMaterial
+//           |-----> (*) MarshalMsg
+//           |-----> (*) CanMarshalMsg
+//           |-----> (*) UnmarshalMsg
+//           |-----> (*) UnmarshalMsgWithState
+//           |-----> (*) CanUnmarshalMsg
+//           |-----> (*) Msgsize
+//           |-----> (*) MsgIsZero
+//           |-----> SaltedSigningMaterialMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
-func (z *pqPublicMaterial) MarshalMsg(b []byte) (o []byte) {
+func (z *saltedPublicMaterial) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 3
 	// string "public-key"
@@ -47,13 +47,13 @@ func (z *pqPublicMaterial) MarshalMsg(b []byte) (o []byte) {
 	return
 }
 
-func (_ *pqPublicMaterial) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*pqPublicMaterial)
+func (_ *saltedPublicMaterial) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*saltedPublicMaterial)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *pqPublicMaterial) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+func (z *saltedPublicMaterial) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
 	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
@@ -69,7 +69,7 @@ func (z *pqPublicMaterial) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSt
 		return
 	}
 	if zb0002 {
-		(*z) = pqPublicMaterial{}
+		(*z) = saltedPublicMaterial{}
 	}
 	for zb0001 > 0 {
 		zb0001--
@@ -109,33 +109,33 @@ func (z *pqPublicMaterial) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSt
 	return
 }
 
-func (z *pqPublicMaterial) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *saltedPublicMaterial) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
 }
-func (_ *pqPublicMaterial) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*pqPublicMaterial)
+func (_ *saltedPublicMaterial) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*saltedPublicMaterial)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *pqPublicMaterial) Msgsize() (s int) {
+func (z *saltedPublicMaterial) Msgsize() (s int) {
 	s = 1 + 7 + (*z).Scheme.Msgsize() + 5 + (*z).Salt.Msgsize() + 11 + msgp.BytesPrefixSize + len((*z).PublicKey)
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *pqPublicMaterial) MsgIsZero() bool {
+func (z *saltedPublicMaterial) MsgIsZero() bool {
 	return ((*z).Scheme.MsgIsZero()) && ((*z).Salt.MsgIsZero()) && (len((*z).PublicKey) == 0)
 }
 
-// PqPublicMaterialMaxSize returns a maximum valid message size for this message type
-func PqPublicMaterialMaxSize() (s int) {
-	s = 1 + 7 + protocol.PQSchemeMaxSize() + 5 + basics.PQAddressSaltMaxSize() + 11
+// SaltedPublicMaterialMaxSize returns a maximum valid message size for this message type
+func SaltedPublicMaterialMaxSize() (s int) {
+	s = 1 + 7 + protocol.SigSchemeMaxSize() + 5 + basics.AddressSaltMaxSize() + 11
 	panic("Unable to determine max size: Byteslice type z.PublicKey is unbounded")
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *pqSigningMaterial) MarshalMsg(b []byte) (o []byte) {
+func (z *saltedSigningMaterial) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 2
 	// string "private-key"
@@ -147,13 +147,13 @@ func (z *pqSigningMaterial) MarshalMsg(b []byte) (o []byte) {
 	return
 }
 
-func (_ *pqSigningMaterial) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*pqSigningMaterial)
+func (_ *saltedSigningMaterial) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*saltedSigningMaterial)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *pqSigningMaterial) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+func (z *saltedSigningMaterial) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
 	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
@@ -169,7 +169,7 @@ func (z *pqSigningMaterial) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalS
 		return
 	}
 	if zb0002 {
-		(*z) = pqSigningMaterial{}
+		(*z) = saltedSigningMaterial{}
 	}
 	for zb0001 > 0 {
 		zb0001--
@@ -203,27 +203,27 @@ func (z *pqSigningMaterial) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalS
 	return
 }
 
-func (z *pqSigningMaterial) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *saltedSigningMaterial) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
 }
-func (_ *pqSigningMaterial) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*pqSigningMaterial)
+func (_ *saltedSigningMaterial) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*saltedSigningMaterial)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *pqSigningMaterial) Msgsize() (s int) {
+func (z *saltedSigningMaterial) Msgsize() (s int) {
 	s = 1 + 7 + (*z).Public.Msgsize() + 12 + msgp.BytesPrefixSize + len((*z).PrivateKey)
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *pqSigningMaterial) MsgIsZero() bool {
+func (z *saltedSigningMaterial) MsgIsZero() bool {
 	return ((*z).Public.MsgIsZero()) && (len((*z).PrivateKey) == 0)
 }
 
-// PqSigningMaterialMaxSize returns a maximum valid message size for this message type
-func PqSigningMaterialMaxSize() (s int) {
-	s = 1 + 7 + PqPublicMaterialMaxSize() + 12
+// SaltedSigningMaterialMaxSize returns a maximum valid message size for this message type
+func SaltedSigningMaterialMaxSize() (s int) {
+	s = 1 + 7 + SaltedPublicMaterialMaxSize() + 12
 	panic("Unable to determine max size: Byteslice type z.PrivateKey is unbounded")
 }

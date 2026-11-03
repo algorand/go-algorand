@@ -126,48 +126,48 @@ func MakeSimulator(ledger *data.Ledger, developerAPI bool) *Simulator {
 	}
 }
 
-// isPlaceholderPQSig reports whether txn carries a placeholder PQSig:
-// a non-blank PQ envelope with empty signature bytes and no other signature
+// isPlaceholderSaltedKeySig reports whether txn carries a placeholder SaltedKeySig:
+// a non-blank SaltedKeySig envelope with empty signature bytes and no other signature
 // category set. There are two placeholders forms:
 // - Scheme-only placeholder: Scheme set, PublicKey empty, Signature empty, for fee surcharge calculation
 // - Full placeholder: Scheme, Salt, and PublicKey set, Signature empty, for authorizer address derivation
-// An ls-scheme PQSig is never a placeholder. Empty Signature
+// An ls-scheme SaltedKeySig is never a placeholder. Empty Signature
 // bytes there mean a program that takes no arguments, which is a complete
 // authorization: the program must be evaluated and traced, not swapped for a
 // proxy signature. Nothing is missing from it, either, since the address
 // commits to the program and the program is what the fee is charged for.
-func isPlaceholderPQSig(txn transactions.SignedTxn) bool {
+func isPlaceholderSaltedKeySig(txn transactions.SignedTxn) bool {
 	return txn.Sig.Blank() && txn.Msig.Blank() && txn.Lsig.Blank() &&
-		!txn.PQsig.Blank() && len(txn.PQsig.Signature) == 0 &&
-		!txn.PQsig.IsLogicSig()
+		!txn.SKsig.Blank() && len(txn.SKsig.Signature) == 0 &&
+		!txn.SKsig.IsLogicSig()
 }
 
-func validatePlaceholderPQSig(proto config.ConsensusParams, pqSig transactions.PQSig, authorizer basics.Address, fixSigners bool) error {
-	if len(pqSig.PublicKey) == 0 || fixSigners {
-		return pqSig.ValidateScheme(proto)
+func validatePlaceholderSaltedKeySig(proto config.ConsensusParams, sksig transactions.SaltedKeySig, authorizer basics.Address, fixSigners bool) error {
+	if len(sksig.PublicKey) == 0 || fixSigners {
+		return sksig.ValidateScheme(proto)
 	}
-	return pqSig.ValidateEnvelope(proto, authorizer)
+	return sksig.ValidateEnvelope(proto, authorizer)
 }
 
-// isPlaceholderDelegatedPQSig reports whether txn carries a placeholder PQSig
-// nested in its LogicSig: a program with a non-blank nested PQ envelope with
+// isPlaceholderDelegatedSaltedKeySig reports whether txn carries a placeholder SaltedKeySig
+// nested in its LogicSig: a program with a non-blank nested salted-key signature envelope with
 // empty signature bytes and no other signature category set on either the
 // transaction or the LogicSig.
-// An ls-scheme nested PQSig is never a placeholder. A PQ LogicSig account
+// An ls-scheme nested SaltedKeySig is never a placeholder. A salted LogicSig account
 // authorizes only by evaluating its own program, so it cannot delegate to
 // another program, and consensus rejects any such delegation. Treating it as a
 // placeholder would let simulation succeed for a transaction that can never be
 // valid.
-func isPlaceholderDelegatedPQSig(txn transactions.SignedTxn) bool {
-	return txn.Sig.Blank() && txn.Msig.Blank() && txn.PQsig.Blank() &&
+func isPlaceholderDelegatedSaltedKeySig(txn transactions.SignedTxn) bool {
+	return txn.Sig.Blank() && txn.Msig.Blank() && txn.SKsig.Blank() &&
 		txn.Lsig.HasProgram() && txn.Lsig.Sig.Blank() &&
 		txn.Lsig.Msig.Blank() && txn.Lsig.LMsig.Blank() &&
-		!txn.Lsig.PQsig.Blank() && len(txn.Lsig.PQsig.Signature) == 0 &&
-		!txn.Lsig.PQsig.IsLogicSig()
+		!txn.Lsig.SKsig.Blank() && len(txn.Lsig.SKsig.Signature) == 0 &&
+		!txn.Lsig.SKsig.IsLogicSig()
 }
 
 func txnNeedsSyntheticSignature(txn transactions.SignedTxn) bool {
-	return !txn.HasSignature() || isPlaceholderPQSig(txn) || isPlaceholderDelegatedPQSig(txn)
+	return !txn.HasSignature() || isPlaceholderSaltedKeySig(txn) || isPlaceholderDelegatedSaltedKeySig(txn)
 }
 
 // A randomly generated private key. The actual value does not matter, as long as this is a valid
@@ -212,24 +212,24 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 			// over the sender's account. However, this will pass validation, since the signature
 			// itself is valid.
 			txnsToVerify[i] = stxn.Txn.Sign(proxySignerSecrets)
-		} else if overrides.AllowEmptySignatures && isPlaceholderPQSig(stxn) {
-			placeholderErr := validatePlaceholderPQSig(proto, stxn.PQsig, stxn.Authorizer(), overrides.FixSigners)
+		} else if overrides.AllowEmptySignatures && isPlaceholderSaltedKeySig(stxn) {
+			placeholderErr := validatePlaceholderSaltedKeySig(proto, stxn.SKsig, stxn.Authorizer(), overrides.FixSigners)
 			if placeholderErr == nil {
 				txnsToVerify[i] = stxn.Txn.Sign(proxySignerSecrets)
 			} else {
 				txnsToVerify[i] = stxn
 			}
-		} else if overrides.AllowEmptySignatures && isPlaceholderDelegatedPQSig(stxn) {
-			if validatePlaceholderPQSig(proto, stxn.Lsig.PQsig, stxn.Authorizer(), overrides.FixSigners) == nil {
+		} else if overrides.AllowEmptySignatures && isPlaceholderDelegatedSaltedKeySig(stxn) {
+			if validatePlaceholderSaltedKeySig(proto, stxn.Lsig.SKsig, stxn.Authorizer(), overrides.FixSigners) == nil {
 				// A delegated LogicSig carries a program that must still be
 				// evaluated and traced, so unlike the no-signature cases we
 				// cannot swap in a proxy-signed bare transaction. Keep the
-				// program but drop the placeholder PQ proof and authorize via
+				// program but drop the placeholder SaltedKeySig proof and authorize via
 				// the program hash, so the verification pass treats it as a
 				// contract-only (escrow) account and runs the program without a
 				// real authorization signature.
 				escrow := stxn
-				escrow.Lsig.PQsig = transactions.PQSig{}
+				escrow.Lsig.SKsig = transactions.SaltedKeySig{}
 				escrow.AuthAddr = basics.Address(logic.HashProgram(escrow.Lsig.Logic))
 				txnsToVerify[i] = escrow
 			} else {
@@ -248,17 +248,17 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 	return err
 }
 
-func validateFixedPlaceholderPQEnvelopes(proto config.ConsensusParams, txgroup []transactions.SignedTxnWithAD) (int, error) {
+func validateFixedPlaceholderSaltedKeySigEnvelopes(proto config.ConsensusParams, txgroup []transactions.SignedTxnWithAD) (int, error) {
 	for i, stxnad := range txgroup {
 		stxn := stxnad.SignedTxn
-		if isPlaceholderPQSig(stxn) && len(stxn.PQsig.PublicKey) != 0 {
-			if err := validatePlaceholderPQSig(proto, stxn.PQsig, stxn.Authorizer(), false); err != nil {
-				return i, fmt.Errorf("pq signature validation failed: %w", err)
+		if isPlaceholderSaltedKeySig(stxn) && len(stxn.SKsig.PublicKey) != 0 {
+			if err := validatePlaceholderSaltedKeySig(proto, stxn.SKsig, stxn.Authorizer(), false); err != nil {
+				return i, fmt.Errorf("salted-key signature validation failed: %w", err)
 			}
 		}
-		if isPlaceholderDelegatedPQSig(stxn) && len(stxn.Lsig.PQsig.PublicKey) != 0 {
-			if err := validatePlaceholderPQSig(proto, stxn.Lsig.PQsig, stxn.Authorizer(), false); err != nil {
-				return i, fmt.Errorf("pq delegated logic signature validation failed: %w", err)
+		if isPlaceholderDelegatedSaltedKeySig(stxn) && len(stxn.Lsig.SKsig.PublicKey) != 0 {
+			if err := validatePlaceholderSaltedKeySig(proto, stxn.Lsig.SKsig, stxn.Authorizer(), false); err != nil {
+				return i, fmt.Errorf("salted-key signature delegation validation failed: %w", err)
 			}
 		}
 	}
@@ -356,10 +356,10 @@ func (s Simulator) simulateWithTracer(hdr bookkeeping.BlockHeader, txgroup []tra
 	if err != nil {
 		return vb, err
 	}
-	// Full PQ placeholders need the final AuthAddr after FixSigners has run through evaluation.
+	// Full SaltedKeySig placeholders need the final AuthAddr after FixSigners has run through evaluation.
 	if overrides.AllowEmptySignatures && overrides.FixSigners {
 		if proto, ok := config.Consensus[hdr.CurrentProtocol]; ok {
-			idx, err := validateFixedPlaceholderPQEnvelopes(proto, txgroup)
+			idx, err := validateFixedPlaceholderSaltedKeySigEnvelopes(proto, txgroup)
 			if err != nil {
 				if evalTracer, ok := tracer.(*evalTracer); ok {
 					evalTracer.failedAt = TxnPath{idx}
