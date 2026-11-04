@@ -26,8 +26,6 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/gorilla/mux"
-
 	"github.com/algorand/websocket"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -66,7 +64,7 @@ func main() {
 	}
 
 	var srv http.Server
-	r := mux.NewRouter()
+	r := http.NewServeMux()
 	srv.Handler = r
 	srv.Addr = *addrFlag
 
@@ -76,8 +74,7 @@ func main() {
 	}
 
 	r.HandleFunc(network.GossipNetworkPath, func(w http.ResponseWriter, r *http.Request) {
-		pathVars := mux.Vars(r)
-		genesisID := pathVars["genesisID"]
+		genesisID := r.PathValue("genesisID")
 
 		var rnd [10]byte
 		crypto.RandBytes(rnd[:])
@@ -103,10 +100,8 @@ func main() {
 	})
 
 	r.HandleFunc(rpcs.BlockServiceBlockPath, func(w http.ResponseWriter, r *http.Request) {
-		pathVars := mux.Vars(r)
-		versionStr := pathVars["version"]
-		roundStr := pathVars["round"]
-		genesisID := pathVars["genesisID"]
+		roundStr := r.PathValue("round")
+		genesisID := r.PathValue("genesisID")
 
 		roundNumber, err := stringToBlock(roundStr)
 		if err != nil {
@@ -117,7 +112,8 @@ func main() {
 
 		var data []byte
 		if *dirFlag != "" {
-			data, err = readBlockFile(*dirFlag, versionStr, genesisID, roundNumber)
+			// BlockServiceBlockPath only matches version 1
+			data, err = readBlockFile(*dirFlag, "1", genesisID, roundNumber)
 		} else if blocktars != nil {
 			data, err = blocktars.getBlock(roundNumber)
 		} else {

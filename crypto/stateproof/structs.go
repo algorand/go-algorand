@@ -18,8 +18,6 @@ package stateproof
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
@@ -87,26 +85,11 @@ type StateProof struct {
 // See merklearray.Proof comment for explanation on the bound calculation
 const SigPartProofMaxSize = 35353
 
-func (s StateProof) stringBuild() (b strings.Builder) {
-	b.WriteString("StateProof: {")
-	defer b.WriteRune('}')
-
-	if s.MsgIsZero() {
-		return
-	}
-
-	fmt.Fprintf(&b, "%v", s.SigCommit)
-	b.WriteString(", ")
-	b.WriteString(strconv.FormatUint(s.SignedWeight, 10))
-	b.WriteString(", ")
-	b.WriteString(strconv.Itoa(len(s.PositionsToReveal)))
-
-	return
-}
-
 func (s StateProof) String() string {
-	b := s.stringBuild()
-	return b.String()
+	if s.MsgIsZero() {
+		return "StateProof: {}"
+	}
+	return fmt.Sprintf("StateProof: {%v, %d, %d}", s.SigCommit, s.SignedWeight, len(s.PositionsToReveal))
 }
 
 // SortUint64 implements sorting by uint64 keys for

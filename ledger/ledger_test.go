@@ -122,7 +122,8 @@ func endOfBlock(blk *bookkeeping.Block) error {
 		// bytes relative to the block size cap.
 		blockTxBytes := 0
 		for i := range blk.Payset {
-			blockTxBytes += blk.Payset[i].GetEncodedLength()
+			n, _ := blk.Payset[i].GetEncodedLength(false)
+			blockTxBytes += n
 		}
 		blk.BlockHeader.Load = eval.ComputeLoad(blockTxBytes, proto.MaxTxnBytesPerBlock)
 	}
@@ -216,7 +217,8 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 		blk.TxnCounter = blk.TxnCounter + 1
 	}
 	if proto.LoadTracking {
-		blk.Load = eval.ComputeLoad(txib.GetEncodedLength(), proto.MaxTxnBytesPerBlock)
+		n, _ := txib.GetEncodedLength(false)
+		blk.Load = eval.ComputeLoad(n, proto.MaxTxnBytesPerBlock)
 	}
 	require.NoError(t, endOfBlock(&blk))
 	return l.appendUnvalidated(blk)
@@ -231,7 +233,8 @@ func (l *Ledger) addBlockTxns(t *testing.T, accounts map[basics.Address]basics.A
 		if err != nil {
 			return fmt.Errorf("could not sign txn: %s", err.Error())
 		}
-		blkSize += txib.GetEncodedLength()
+		n, _ := txib.GetEncodedLength(false)
+		blkSize += n
 		blk.Payset = append(blk.Payset, txib)
 	}
 	if proto.TxnCounter {
@@ -2227,6 +2230,11 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 	}
 
 	latest := l.Latest()
+	// WaitForCommit can return before notifyCommit runs the trackers'
+	// committedUpTo, which advances txTail.lowWaterMark for the CheckDup checks
+	// below. Wait's channel is closed by bulletinDisk.committedUpTo, which runs
+	// after txTail's.
+	<-l.Wait(latest)
 	nextRound := latest + 1
 	balancesRound := nextRound.SubSaturate(basics.Round(proto.MaxBalLookback))
 
@@ -2267,7 +2275,13 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 
 	// check an error latest-1
 	for txid := range txnIDs[latest-1] {
-		require.Error(t, l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
+		var missingRoundErr *errTxTailMissingRound
+		require.ErrorAs(
+			t,
+			l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}),
+			&missingRoundErr,
+		)
+		require.Equal(t, latest-1, missingRoundErr.round)
 	}
 
 	shorterLookback := config.GetDefaultLocal().MaxAcctLookback
@@ -2315,7 +2329,13 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 
 	// check an error latest-1
 	for txid := range txnIDs[latest-1] {
-		require.Error(t, l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
+		var missingRoundErr *errTxTailMissingRound
+		require.ErrorAs(
+			t,
+			l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}),
+			&missingRoundErr,
+		)
+		require.Equal(t, latest-1, missingRoundErr.round)
 	}
 }
 

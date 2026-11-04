@@ -218,8 +218,8 @@ var signProgramCmd = &cobra.Command{
 		// Get or create partial multisig from appropriate field
 		var partial crypto.MultisigSig
 		if gotPartial {
-			if !lsig.PQsig.Blank() {
-				reportErrorf("LogicSig file contains PQsig field; a post-quantum delegated LogicSig cannot be combined with multisig")
+			if !lsig.SKsig.Blank() {
+				reportErrorf("LogicSig file contains a salted-key signature (pqsig); a LogicSig delegated by a salted-key signature cannot be combined with multisig")
 			}
 			if useLegacyMsig {
 				if !lsig.LMsig.Blank() {

@@ -220,10 +220,9 @@ func (mtc *merkleTrieCache) prioritizeNodeFront(nid storedNodeIdentifier) {
 	mtc.pagesPrioritizationMap[page] = mtc.pagesPrioritizationList.PushFront(page)
 }
 
-// prioritizeNodeBack make sure to adjust the priority of the given node id.
-// nodes are prioritized based on the page the belong to.
-// a new page would be placed on front, and an existing page would get moved
-// to the front.
+// prioritizeNodeBack places the page containing nid at the back of the
+// priority list, inserting it if absent or moving it if already present.
+// Pages at the back have lower priority and are evicted before pages at the front.
 func (mtc *merkleTrieCache) prioritizeNodeBack(nid storedNodeIdentifier) {
 	page := uint64(nid) / uint64(mtc.nodesPerPage)
 
