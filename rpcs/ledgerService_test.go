@@ -24,10 +24,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"testing"
 
-	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
@@ -41,7 +41,7 @@ import (
 
 type fakeNetwork struct {
 	network.GossipNode
-	router *mux.Router
+	router *http.ServeMux
 	*mock.Mock
 }
 
@@ -78,7 +78,7 @@ func TestLedgerService(t *testing.T) {
 	genesisID := "testGenesisID"
 	cfg := config.GetDefaultLocal()
 	l := fakeLedger{Mock: &mock.Mock{}}
-	fnet := fakeNetwork{router: mux.NewRouter(), Mock: &mock.Mock{}}
+	fnet := fakeNetwork{router: http.NewServeMux(), Mock: &mock.Mock{}}
 
 	// Test LedgerService not enabled
 	cfg.EnableLedgerService = false
@@ -102,13 +102,12 @@ func TestLedgerService(t *testing.T) {
 	ledgerService.Start()
 	require.Equal(t, int32(1), ledgerService.running.Load())
 
-	// Test GET 400 Bad Version String
+	// Test GET 404 Unsupported Version: only /v1/ is registered
 	rr = httptest.NewRecorder()
 	req, err = http.NewRequest("GET", "/v2/foobar/ledger/23", nil)
 	require.NoError(t, err)
 	fnet.router.ServeHTTP(rr, req)
-	require.Equal(t, http.StatusBadRequest, rr.Code)
-	require.Contains(t, rr.Body.String(), "unsupported version '2'")
+	require.Equal(t, http.StatusNotFound, rr.Code)
 
 	// Test Get 400 Bad Genesis ID
 	rr = httptest.NewRecorder()
@@ -125,8 +124,6 @@ func TestLedgerService(t *testing.T) {
 	ledgerService.ServeHTTP(rr, req)
 	require.Equal(t, http.StatusBadRequest, rr.Code)
 	require.Contains(t, rr.Body.String(), "missing genesisID")
-
-	// Not Testing non path var handling because I'm not convinced it's reachable given `LedgerServiceLedgerPath`
 
 	// Test Get 400 round out of range
 	rr = httptest.NewRecorder()
@@ -176,6 +173,40 @@ func TestLedgerService(t *testing.T) {
 	require.Equal(t, int32(0), ledgerService.running.Load())
 }
 
+func TestLedgerServiceVersionErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name     string
+		versions []string
+		body     string
+	}{
+		{"unsupported version", []string{"<script>alert(1)</script>"}, "unsupported version specified '<script>alert(1)</script>'"},
+		{"multiple versions", []string{"1", "2"}, "invalid number of version specified 2"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			service := &LedgerService{genesisID: "testGenesisID", enableService: true}
+			service.Start()
+			defer service.Stop()
+
+			query := url.Values{"r": {"1"}, "v": tc.versions}
+			request := httptest.NewRequest(http.MethodGet, "/?"+query.Encode(), nil)
+			request.SetPathValue("genesisID", service.genesisID)
+			recorder := httptest.NewRecorder()
+			service.ServeHTTP(recorder, request)
+
+			response := recorder.Result()
+			defer response.Body.Close()
+			require.Equal(t, http.StatusBadRequest, response.StatusCode)
+			require.Equal(t, "text/plain; charset=utf-8", response.Header.Get("Content-Type"))
+			require.Equal(t, "nosniff", response.Header.Get("X-Content-Type-Options"))
+			require.Equal(t, tc.body, recorder.Body.String())
+		})
+	}
+}
+
 type mockSizedStream struct {
 	*bytes.Buffer
 }
@@ -218,8 +249,6 @@ func TestLedgerServiceP2P(t *testing.T) {
 	ledgerService := MakeLedgerService(cfg, &l, nodeA, genesisID)
 	ledgerService.Start()
 	defer ledgerService.Stop()
-
-	nodeA.RegisterHTTPHandler(LedgerServiceLedgerPath, ledgerService)
 
 	httpPeer := nodeA.GetHTTPPeer().(network.HTTPPeer)
 

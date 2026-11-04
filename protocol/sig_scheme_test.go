@@ -16,22 +16,33 @@
 
 package protocol
 
-// PQScheme is a 2-byte ASCII identifier of a post-quantum account authorization scheme.
-// Conventionally, the first byte is the PQ-DSA family, and the second byte is a version
-// or variant identifier.
-//
-//msgp:test ignore PQScheme
-type PQScheme [2]byte
+import (
+	"testing"
 
-func (s PQScheme) String() string {
-	return string(s[:])
-}
+	"github.com/stretchr/testify/require"
 
-// Supported post-quantum signature schemes.
-var (
-	// PQSchemeFalcon1024 - f1: Falcon-1024 using a deterministic signing profile.
-	PQSchemeFalcon1024 = PQScheme{'f', '1'}
-
-	// PQSchemeFalcon512 - f2: Falcon-512 using a deterministic signing profile.
-	PQSchemeFalcon512 = PQScheme{'f', '2'} // reserved, not used
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
+
+func TestSigSchemes(t *testing.T) {
+	t.Parallel()
+	partitiontest.PartitionTest(t)
+
+	schemes := []SigScheme{
+		SigSchemeEd25519,
+		SigSchemeFalcon1024,
+		SigSchemeFalcon512,
+		SigSchemeLogicSig,
+	}
+
+	seen := make(map[SigScheme]struct{}, len(schemes))
+	for _, scheme := range schemes {
+		for _, b := range scheme {
+			require.Truef(t, b >= 0x20 && b < 0x7f, "SigScheme %q must be printable ASCII", scheme)
+		}
+
+		_, ok := seen[scheme]
+		require.False(t, ok, "SigScheme %q is repeated", scheme)
+		seen[scheme] = struct{}{}
+	}
+}

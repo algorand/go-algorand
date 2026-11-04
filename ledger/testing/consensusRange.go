@@ -65,6 +65,7 @@ var consensusByNumber = []protocol.ConsensusVersion{
 	protocol.ConsensusV40, // Consensus incentives, AVM v11, mimc
 	protocol.ConsensusV41, // AVM v12, txn access, Sha512BlockHash, AppVersioning
 	protocol.ConsensusV42, // AVM v13, app size updates, Falcon1024 PQ sigs, load tracking, per-byte txn surcharge
+	protocol.ConsensusV43, // CloseRequiresBaseMinBalance
 
 	protocol.ConsensusFuture, // Likely: Enforce on chain congestion, AVM v14
 }

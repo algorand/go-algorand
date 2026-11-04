@@ -331,7 +331,15 @@ func (cs *roundCowState) Perform(gi int, ep *logic.EvalParams) error {
 
 	switch txn.Txn.Type {
 	case protocol.PaymentTx:
+		var closing *ledgercore.AccountData
+		closing, err = cs.closingRecord(&txn.Txn)
+		if err != nil {
+			return err
+		}
 		err = apply.Payment(txn.Txn.PaymentTxnFields, txn.Txn.Header, cs, *ep.Specials, &txn.ApplyData)
+		if err == nil {
+			err = checkCloseMinBalance(closing, txn.Txn.Sender, &cs.proto)
+		}
 
 	case protocol.KeyRegistrationTx:
 		err = apply.Keyreg(txn.Txn.KeyregTxnFields, txn.Txn.Header, cs, *ep.Specials, &txn.ApplyData,

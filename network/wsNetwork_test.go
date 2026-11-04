@@ -1340,20 +1340,26 @@ func TestTestingPublicAddress(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	netA := makeTestWebsocketNode(t)
-	netA.config.PublicAddress = "testing"
-	netA.config.GossipFanout = 1
+	for _, listenAddress := range []string{"127.0.0.1:0", "[::1]:0"} {
+		t.Run(listenAddress, func(t *testing.T) {
+			netA := makeTestWebsocketNode(t)
+			netA.config.NetAddress = listenAddress
+			netA.config.PublicAddress = "testing"
+			netA.config.GossipFanout = 1
 
-	netA.Start()
+			require.NoError(t, netA.Start())
+			defer netA.Stop()
 
-	time.Sleep(100 * time.Millisecond)
-
-	// check that "testing" has been overloaded
-	addr, ok := netA.Address()
-	addr = hostAndPort(addr)
-	require.True(t, ok)
-	require.NotEqual(t, "testing", netA.PublicAddress())
-	require.Equal(t, addr, netA.PublicAddress())
+			// Check that "testing" has been replaced with a valid host:port.
+			address, ok := netA.Address()
+			require.True(t, ok)
+			parsed, err := url.Parse(address)
+			require.NoError(t, err)
+			require.Equal(t, parsed.Host, netA.PublicAddress())
+			_, err = netA.addrToGossipAddr(netA.PublicAddress())
+			require.NoError(t, err)
+		})
+	}
 }
 
 // mock an identityTracker
@@ -4265,7 +4271,10 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 			"blockData",
 			[]byte("b")),
 	}
-	// Send a request for a block and cancel it after the handler has been registered
+	// Send a request for a block and cancel it after it has been sent.
+	// Request registers the response channel before sending, so wait for the
+	// outstanding counter too: cancelling before the send would let Request
+	// return early without sending or counting it.
 	go func() {
 		netC.peers[0].Request(ctx, protocol.UniEnsBlockReqTag, topics)
 	}()
@@ -4275,7 +4284,7 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 			netC.peersLock.RLock()
 			defer netC.peersLock.RUnlock()
 			require.NotEmpty(t, netC.peers)
-			return netC.peers[0].lenResponseChannels() > 0
+			return netC.peers[0].lenResponseChannels() > 0 && netC.peers[0].outstandingTopicRequests.Load() == 1
 		},
 		1*time.Second,
 		50*time.Millisecond,
@@ -4289,7 +4298,7 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 		500*time.Millisecond,
 		20*time.Millisecond,
 	)
-	require.Equal(t, netC.peers[0].outstandingTopicRequests.Load(), int64(1))
+	require.Equal(t, int64(1), netC.peers[0].outstandingTopicRequests.Load())
 
 	// Create a buffer to monitor log output from netC
 	logBuffer := bytes.NewBuffer(nil)
@@ -4788,17 +4797,17 @@ func TestHTTPPAddressBoundTransport(t *testing.T) {
 
 	// now test some combinations of address and path
 	const path = "/test/path"
-	const expErr = "ERR"
 	tests := []struct {
 		addr     string
 		expected string
+		err      string
 	}{
-		{"", expErr},
-		{":", expErr},
-		{"host:1234/lbr", expErr},
-		{"host:1234", "http://host:1234" + path},
-		{"http://host:1234", "http://host:1234" + path},
-		{"http://host:1234/lbr", "http://host:1234/lbr" + path},
+		{"", "", "could not parse a host from url"},
+		{":", "", "host name starts with a colon"},
+		{"host:1234/lbr", "", "could not parse a host from url"},
+		{"host:1234", "http://host:1234" + path, ""},
+		{"http://host:1234", "http://host:1234" + path, ""},
+		{"http://host:1234/lbr", "http://host:1234/lbr" + path, ""},
 	}
 
 	for _, test := range tests {
@@ -4810,8 +4819,8 @@ func TestHTTPPAddressBoundTransport(t *testing.T) {
 		req, err := http.NewRequest("GET", path, nil)
 		require.NoError(t, err)
 		resp, err := tr.RoundTrip(req)
-		if test.expected == expErr {
-			require.Error(t, err)
+		if test.err != "" {
+			require.ErrorContains(t, err, test.err)
 		} else {
 			require.NoError(t, err)
 			require.Equal(t, 200, resp.StatusCode)
@@ -5081,4 +5090,91 @@ func TestNumOutgoingPending(t *testing.T) {
 	netA.tryConnectLock.Lock()
 	require.Equal(t, 0, len(netA.tryConnectAddrs), "map should be empty after all releases")
 	netA.tryConnectLock.Unlock()
+}
+
+// TestWebsocketNetworkStopEndsMessagesOfInterestThread checks that
+// postMessagesOfInterestThread exits when the network stops. Stop waits on
+// wn.wg, so once it returns nothing drains messagesOfInterestRefresh any more:
+// the buffer fills up and stays full.
+func TestWebsocketNetworkStopEndsMessagesOfInterestThread(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t)
+	require.NoError(t, netA.Start())
+	netA.Stop()
+
+	for i := 0; i <= cap(netA.messagesOfInterestRefresh); i++ {
+		select {
+		case netA.messagesOfInterestRefresh <- struct{}{}:
+		default:
+		}
+	}
+	require.Never(t, func() bool {
+		return len(netA.messagesOfInterestRefresh) < cap(netA.messagesOfInterestRefresh)
+	}, 200*time.Millisecond, 10*time.Millisecond, "messagesOfInterestRefresh was drained after Stop, so postMessagesOfInterestThread is still running")
+}
+
+func (wn *WebsocketNetwork) availableThrottleSlots() int {
+	wn.peersLock.RLock()
+	defer wn.peersLock.RUnlock()
+	return wn.throttledOutgoingConnections
+}
+
+// TestWebsocketNetworkThrottleSlotNotLeakedOnIdentityDedup checks that an outgoing peer
+// rejected by identity deduplication does not keep an outgoing throttle slot.
+// netA's identity tracker already holds netB's identity, as it would with an existing
+// connection to netB, so netA's outgoing connection to netB is rejected as a duplicate.
+func TestWebsocketNetworkThrottleSlotNotLeakedOnIdentityDedup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
+	netA.config.PublicAddress = "testing"
+	netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
+	netB.config.PublicAddress = "testing"
+
+	require.NoError(t, netA.Start())
+	defer netA.Stop()
+	require.NoError(t, netB.Start())
+	defer netB.Stop()
+
+	schemeB, ok := netB.identityScheme.(*identityChallengePublicKeyScheme)
+	require.True(t, ok)
+	require.NotNil(t, schemeB.identityKeys)
+	existing := &wsPeer{identity: schemeB.identityKeys.PublicKey()}
+	require.True(t, netA.identityTracker.setIdentity(existing))
+
+	slots := netA.availableThrottleSlots()
+	require.Positive(t, slots)
+	dedupsBefore := networkPeerIdentityDisconnect.GetUint64Value()
+
+	addrB, ok := netB.Address()
+	require.True(t, ok)
+	gossipB, err := netB.addrToGossipAddr(addrB)
+	require.NoError(t, err)
+	addrB = hostAndPort(addrB)
+	_, ok = netA.tryConnectReserveAddr(addrB)
+	require.True(t, ok)
+	netA.wg.Add(1)
+	netA.tryConnect(addrB, gossipB)
+
+	require.Greater(t, networkPeerIdentityDisconnect.GetUint64Value(), dedupsBefore, "netA did not reject the duplicate connection to netB")
+	require.Empty(t, netA.GetPeers(PeersConnectedOut))
+	require.Equal(t, slots, netA.availableThrottleSlots(), "the identity dedup rejection leaked an outgoing throttle slot")
+
+	// without the existing identity the connection is registered and claims a slot,
+	// and disconnecting it gives the slot back
+	netA.identityTracker.removeIdentity(existing)
+	_, ok = netA.tryConnectReserveAddr(addrB)
+	require.True(t, ok)
+	netA.wg.Add(1)
+	netA.tryConnect(addrB, gossipB)
+	outPeers := netA.GetPeers(PeersConnectedOut)
+	require.Len(t, outPeers, 1)
+	require.True(t, outPeers[0].(*wsPeer).throttledOutgoingConnection)
+	require.Equal(t, slots-1, netA.availableThrottleSlots())
+
+	netA.disconnect(outPeers[0], disconnectReasonNone)
+	require.Eventually(t, func() bool {
+		return netA.availableThrottleSlots() == slots
+	}, 5*time.Second, 50*time.Millisecond, "disconnecting a registered peer did not give its throttle slot back")
 }

@@ -579,6 +579,10 @@ type ConsensusParams struct {
 	// Heartbeat support
 	Heartbeat bool
 
+	// AllowGroupedHeartbeats lets a heartbeat share a transaction group with
+	// an application call or an asset creation.
+	AllowGroupedHeartbeats bool
+
 	// EnableSha512BlockHash adds an additional SHA-512 hash to the block header.
 	EnableSha512BlockHash bool
 
@@ -603,13 +607,27 @@ type ConsensusParams struct {
 	// expressed in fraction of a basic min fee.
 	PerByteTxnSurcharge basics.Micros
 
+	// EnableSelectF128 changes the sortition algorithm to use a 128-bit software
+	// floating point binomial CDF implementation for committee selection.
+	EnableSelectF128 bool
+
 	// EnablePQSchemeFalcon1024 enables native Falcon-1024 transaction
 	// authorization for the f1 PQ scheme.
 	EnablePQSchemeFalcon1024 bool
 
-	// EnableSelectF128 changes the sortition algorithm to use a 128-bit software
-	// floating point binomial CDF implementation for committee selection.
-	EnableSelectF128 bool
+	// EnableSigSchemeFalcon512 enables native Falcon-512 transaction
+	// authorization for the f5 PQ scheme.
+	EnableSigSchemeFalcon512 bool
+
+	// EnableSigSchemeEd25519 enables Ed25519 transaction authorization for the
+	// ed scheme's salted-address profile.
+	EnableSigSchemeEd25519 bool
+
+	// EnableSigSchemeLogicSig enables transaction authorization by a LogicSig
+	// carried in a SaltedKeySig under the ls scheme, whose address commits to the
+	// program and a salt. Unlike the LogicSig in SignedTxn.Lsig, such an account
+	// can choose an address that is not an Edwards25519 point.
+	EnableSigSchemeLogicSig bool
 
 	// RequireLogicSigArgAccess requires that a LogicSig carry no argument it did
 	// not read: nothing above the highest index it read, and nothing unread
@@ -618,6 +636,14 @@ type ConsensusParams struct {
 	// rule a third party can append bytes to a transaction in flight, and the
 	// program has no way to detect it.
 	RequireLogicSigArgAccess bool
+
+	// CloseRequiresBaseMinBalance allows an account to be closed only if its
+	// minimum balance requirement is exactly the base MinBalance. Before this,
+	// closing was guarded by checks of specific resource counters, which
+	// became insufficient once AppSizeUpdates allowed an account to hold MBR
+	// for global state and extra pages of apps it neither created nor opted
+	// into.
+	CloseRequiresBaseMinBalance bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -707,38 +733,6 @@ type BonusPlan struct {
 // MinFee simply returns the MinTxnFee as a basics.MicroAlgos
 func (proto ConsensusParams) MinFee() basics.MicroAlgos {
 	return basics.MicroAlgos{Raw: proto.MinTxnFee}
-}
-
-// PQSchemeEnabled returns whether a post-quantum signature scheme is enabled
-// under these consensus parameters.
-func (proto ConsensusParams) PQSchemeEnabled(scheme protocol.PQScheme) bool {
-	switch scheme {
-	case protocol.PQSchemeFalcon1024:
-		return proto.EnablePQSchemeFalcon1024
-	default:
-		return false
-	}
-}
-
-// PQSigEnabled returns whether a post-quantum signature scheme is enabled
-// under these consensus parameters.
-func (proto ConsensusParams) PQSigEnabled() bool {
-	return proto.EnablePQSchemeFalcon1024 // || proto.EnablePQSchemeFalcon512
-}
-
-// PQSchemeFeeContribution is the additional fee factor charged for a transaction
-// authorized with the given PQ scheme, as a fixed-point multiple of the basic
-// min fee (1e6 == one basic min fee). Making it a method (rather than exported
-// constants) leaves room to vary it by proto later without changing call sites.
-func (proto ConsensusParams) PQSchemeFeeContribution(scheme protocol.PQScheme) basics.Micros {
-	switch scheme {
-	case protocol.PQSchemeFalcon1024:
-		return 2e6
-	case protocol.PQSchemeFalcon512:
-		return 1e6 // kept below the Falcon-1024 contribution
-	default:
-		return 0
-	}
 }
 
 // TxnSizePricingEnabled reports whether transactions can exceed size limits by
@@ -1562,14 +1556,31 @@ func initConsensusProtocols() {
 	// our current max is 250000
 	v41.ApprovedUpgrades[protocol.ConsensusV42] = 208000
 
+	// v43 is a fix-only release, so it keeps v42's LogicSigVersion.
+	v43 := v42
+	v43.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	v43.CloseRequiresBaseMinBalance = true
+
+	Consensus[protocol.ConsensusV43] = v43
+
+	// v42 can be upgraded to v43, with an update delay of 7d:
+	// 208000 = (7 * 24 * 60 * 60 / 2.9 ballpark round times)
+	// our current max is 250000
+	v42.ApprovedUpgrades[protocol.ConsensusV43] = 208000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v42
+	vFuture := v43
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 14 // When moving this to a release, put a new higher LogicSigVersion here
-
+	vFuture.EnableSigSchemeFalcon512 = true
+	vFuture.EnableSigSchemeEd25519 = true
 	vFuture.RequireLogicSigArgAccess = true
+	vFuture.AllowGroupedHeartbeats = true
+
+	vFuture.EnableSigSchemeLogicSig = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

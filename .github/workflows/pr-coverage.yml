@@ -93,7 +93,7 @@ jobs:
       PARTITION_TOTAL: 6
     steps:
       - name: Checkout the pull request
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # The commit resolved above rather than the mutable head ref: a push
           # while these jobs are queued would otherwise leave partitions testing
@@ -113,7 +113,7 @@ jobs:
           parallel: '1'
           coverage: 'true'
       - name: Keep this partition's coverage data
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: covdata-${{ matrix.partition_id }}
           path: ${{ steps.tests.outputs.covdata-dir }}
@@ -127,13 +127,13 @@ jobs:
       contents: read
     steps:
       - name: Checkout the pull request
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.authorize.outputs.sha }}
       - name: Set up Go
         uses: ./.github/actions/setup-go
       - name: Collect every partition's coverage data
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: covdata-*
           path: covdata

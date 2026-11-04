@@ -38,8 +38,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gorilla/mux"
-
 	"github.com/algorand/go-deadlock"
 	"github.com/algorand/websocket"
 
@@ -126,10 +124,10 @@ const peerDisconnectionAckDuration = 5 * time.Second
 const peerShutdownDisconnectionAckDuration = 50 * time.Millisecond
 
 // GossipNetworkPath is the URL path to connect to the websocket gossip node at.
-// Contains {genesisID} param to be handled by gorilla/mux
+// Contains {genesisID} param to be handled by http.ServeMux
 const GossipNetworkPath = "/v1/{genesisID}/gossip"
 
-// HealthServiceStatusPath is the path to register HealthService as a handler for when using gorilla/mux
+// HealthServiceStatusPath is the path to register HealthService as a handler
 const HealthServiceStatusPath = "/status"
 
 // NodeInfo helps the network get information about the node it is running on
@@ -161,7 +159,7 @@ type GenesisInfo struct {
 type WebsocketNetwork struct {
 	listener net.Listener
 	server   http.Server
-	router   *mux.Router
+	router   *http.ServeMux
 	scheme   string // are we serving http or https ?
 
 	upgrader websocket.Upgrader
@@ -239,7 +237,8 @@ type WebsocketNetwork struct {
 	outgoingConnsCloser *outgoingConnsCloser
 
 	// number of throttled outgoing connections "slots" needed to be populated.
-	throttledOutgoingConnections atomic.Int32
+	// Start sets it before any outgoing peer can register; after that, peersLock guards it.
+	throttledOutgoingConnections int
 
 	// dialer is customized to limit the number of
 	// connection in compliance with connectionsRateLimitingCount.
@@ -475,12 +474,12 @@ func (wn *WebsocketNetwork) Ready() chan struct{} {
 	return wn.readyChan
 }
 
-// RegisterHTTPHandler path accepts gorilla/mux path annotations
+// RegisterHTTPHandler path accepts http.ServeMux patterns
 func (wn *WebsocketNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
 	wn.router.Handle(path, handler)
 }
 
-// RegisterHTTPHandlerFunc path accepts gorilla/mux path annotations
+// RegisterHTTPHandlerFunc path accepts http.ServeMux patterns
 func (wn *WebsocketNetwork) RegisterHTTPHandlerFunc(path string, handler func(http.ResponseWriter, *http.Request)) {
 	wn.router.HandleFunc(path, handler)
 }
@@ -582,7 +581,10 @@ func (wn *WebsocketNetwork) setup() error {
 	wn.upgrader.ReadBufferSize = 4096
 	wn.upgrader.WriteBufferSize = 4096
 	wn.upgrader.EnableCompression = false
-	wn.router = mux.NewRouter()
+	wn.router = http.NewServeMux()
+	// Every request matches at least this catch-all, so ServeMux returns 404
+	// without first searching all methods to decide between 404 and 405.
+	wn.router.Handle("/", http.NotFoundHandler())
 	if wn.config.EnableGossipService {
 		wn.router.Handle(GossipNetworkPath, wn)
 	}
@@ -703,13 +705,13 @@ func (wn *WebsocketNetwork) Start() error {
 		wn.log.Debugf("listening on %s", wn.listener.Addr().String())
 	}
 	if wn.relayMessages {
-		wn.throttledOutgoingConnections.Store(int32(wn.config.GossipFanout / 2))
+		wn.throttledOutgoingConnections = wn.config.GossipFanout / 2
 	} else {
 		// on non-relay, all the outgoing connections are throttled.
-		wn.throttledOutgoingConnections.Store(int32(wn.config.GossipFanout))
+		wn.throttledOutgoingConnections = wn.config.GossipFanout
 	}
 	if wn.config.DisableOutgoingConnectionThrottling {
-		wn.throttledOutgoingConnections.Store(0)
+		wn.throttledOutgoingConnections = 0
 	}
 	if wn.config.TLSCertFile != "" && wn.config.TLSKeyFile != "" {
 		wn.scheme = "https"
@@ -723,7 +725,7 @@ func (wn *WebsocketNetwork) Start() error {
 		if ok {
 			url, err := url.Parse(addr)
 			if err == nil {
-				wn.config.PublicAddress = fmt.Sprintf("%s:%s", url.Hostname(), url.Port())
+				wn.config.PublicAddress = url.Host
 			}
 		}
 	}
@@ -763,6 +765,7 @@ func (wn *WebsocketNetwork) Start() error {
 		go wn.prioWeightRefresh()
 	}
 
+	wn.wg.Add(1)
 	go wn.postMessagesOfInterestThread()
 
 	wn.log.Infof("serving genesisID=%s on %#v with RandomID=%s", wn.genesisInfo.GenesisID, wn.PublicAddress(), wn.randomID)
@@ -1052,9 +1055,8 @@ func checkProtocolVersionMatch(otherHeaders http.Header, ourSupportedProtocolVer
 // and returns the http status.
 func (wn *WebsocketNetwork) checkIncomingConnectionVariables(response http.ResponseWriter, request *http.Request, remoteAddrForLogging string) int {
 	// check to see that the genesisID in the request URI is valid and matches the supported one.
-	pathVars := mux.Vars(request)
-	otherGenesisID, hasGenesisID := pathVars["genesisID"]
-	if !hasGenesisID || otherGenesisID == "" {
+	otherGenesisID := request.PathValue("genesisID")
+	if otherGenesisID == "" {
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "missing genesis-id"})
 		response.WriteHeader(http.StatusNotFound)
 		return http.StatusNotFound
@@ -1092,7 +1094,7 @@ func (wn *WebsocketNetwork) checkIncomingConnectionVariables(response http.Respo
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "matching random ID header"})
 		message = fmt.Sprintf("Request included matching %s=%s header", NodeRandomHeader, otherRandom)
 		response.WriteHeader(http.StatusLoopDetected)
-		n, err := response.Write([]byte(message))
+		n, err := response.Write([]byte(message)) //nolint:gosec // otherRandom equals our locally generated base64 randomID in this branch
 		if err != nil {
 			wn.log.Warnf("ws failed to write response '%s' : n = %d err = %v", message, n, err)
 		}
@@ -1405,6 +1407,7 @@ func (wn *msgBroadcaster) broadcastThread(wg *sync.WaitGroup, net networkPeerMan
 		// select with a default into a more efficient non-blocking receive, instead of compiling it to the general-purpose selectgo
 		select {
 		case request := <-wn.broadcastQueueHighPrio:
+			updatePeers()
 			wn.innerBroadcast(request, true, peers)
 			continue
 		default:
@@ -1413,9 +1416,11 @@ func (wn *msgBroadcaster) broadcastThread(wg *sync.WaitGroup, net networkPeerMan
 		// if nothing high prio, try to sample from either queques in a non-blocking fashion.
 		select {
 		case request := <-wn.broadcastQueueHighPrio:
+			updatePeers()
 			wn.innerBroadcast(request, true, peers)
 			continue
 		case request := <-wn.broadcastQueueBulk:
+			updatePeers()
 			wn.innerBroadcast(request, false, peers)
 			continue
 		case <-wn.ctx.Done():
@@ -2163,27 +2168,19 @@ func (wn *WebsocketNetwork) tryConnect(netAddr, gossipAddr string) {
 		}
 	}
 
-	throttledConnection := false
-	if wn.throttledOutgoingConnections.Add(int32(-1)) >= 0 {
-		throttledConnection = true
-	} else {
-		wn.throttledOutgoingConnections.Add(int32(1))
-	}
-
 	client, _ := wn.GetHTTPClient(netAddr)
 	peer := &wsPeer{
-		wsPeerCore:                  makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, netAddr, client, "" /* origin */),
-		conn:                        wsPeerWebsocketConnImpl{conn},
-		outgoing:                    true,
-		incomingMsgFilter:           wn.incomingMsgFilter,
-		createTime:                  time.Now(),
-		connMonitor:                 wn.connPerfMonitor,
-		throttledOutgoingConnection: throttledConnection,
-		version:                     matchingVersion,
-		identity:                    peerID,
-		features:                    decodePeerFeatures(matchingVersion, response.Header.Get(PeerFeaturesHeader)),
-		enableVoteCompression:       wn.config.EnableVoteCompression,
-		voteCompressionTableSize:    wn.voteCompressionTableSize,
+		wsPeerCore:               makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, netAddr, client, "" /* origin */),
+		conn:                     wsPeerWebsocketConnImpl{conn},
+		outgoing:                 true,
+		incomingMsgFilter:        wn.incomingMsgFilter,
+		createTime:               time.Now(),
+		connMonitor:              wn.connPerfMonitor,
+		version:                  matchingVersion,
+		identity:                 peerID,
+		features:                 decodePeerFeatures(matchingVersion, response.Header.Get(PeerFeaturesHeader)),
+		enableVoteCompression:    wn.config.EnableVoteCompression,
+		voteCompressionTableSize: wn.voteCompressionTableSize,
 	}
 	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
 	wn.log.Debugf("Client: server features '%s', decoded %x", response.Header.Get(PeerFeaturesHeader), peer.features)
@@ -2379,7 +2376,7 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 		wn.prioTracker.removePeer(peer)
 		wn.identityTracker.removeIdentity(peer)
 		if peer.throttledOutgoingConnection {
-			wn.throttledOutgoingConnections.Add(int32(1))
+			wn.throttledOutgoingConnections++
 		}
 		wn.peersChangeCounter.Add(1)
 	}
@@ -2400,6 +2397,9 @@ func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
 	if slices.Contains(wn.peers, peer) {
 		wn.log.Errorf("dup peer added %#v", peer)
 		return
+	}
+	if peer.outgoing {
+		peer.throttledOutgoingConnection = claimThrottleSlot(&wn.throttledOutgoingConnections)
 	}
 	heap.Push(peersHeap{wn}, peer)
 	wn.prioTracker.setPriority(peer, peer.prioAddress, peer.prioWeight)
@@ -2507,8 +2507,13 @@ func (wn *WebsocketNetwork) updateMessagesOfInterestEnc() {
 }
 
 func (wn *WebsocketNetwork) postMessagesOfInterestThread() {
+	defer wn.wg.Done()
 	for {
-		<-wn.messagesOfInterestRefresh
+		select {
+		case <-wn.messagesOfInterestRefresh:
+		case <-wn.ctx.Done():
+			return
+		}
 		// if we're not a relay, and not participating, we don't need txn pool
 		wantTXGossip := wn.nodeInfo.IsParticipating()
 		if wantTXGossip && (wn.wantTXGossip.Load() != wantTXGossipYes) {

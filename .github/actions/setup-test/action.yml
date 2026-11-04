@@ -9,7 +9,7 @@ runs:
   using: 'composite'
   steps:
     - name: Cache libsodium
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: crypto/libs
         key: libsodium-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('crypto/libsodium-fork/**') }}

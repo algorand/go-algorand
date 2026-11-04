@@ -38,6 +38,7 @@ const merkleSignatureTableSchemaName = "merklesignaturescheme"
 // Errors for the persistent merkle signature scheme
 var (
 	errSelectKeysError = errors.New("failed to fetch stateproof keys from DB")
+	errKeyScanError    = errors.New("failed to read stateproof key row")
 	errKeyDecodeError  = errors.New("failed to decode stateproof key")
 )
 
@@ -138,30 +139,29 @@ func (s *Secrets) Persist(store db.Accessor) error {
 
 // RestoreAllSecrets fetch all stateproof secrets from a persisted storage into memory
 func (s *Secrets) RestoreAllSecrets(store db.Accessor) error {
-	keys, err := db.AtomicResult(&store, func(ctx context.Context, tx *sql.Tx) ([]crypto.FalconSigner, error) {
+	keys, err := db.AtomicResult(&store, func(ctx context.Context, tx *sql.Tx) ([]crypto.Falcon1024Signer, error) {
 		rows, err := tx.Query("SELECT key FROM StateProofKeys")
 		if err != nil {
 			return nil, fmt.Errorf("%w - %v", errSelectKeysError, err)
 		}
 		defer rows.Close()
-		var keys []crypto.FalconSigner
+		var keys []crypto.Falcon1024Signer
 		for rows.Next() {
 			var keyB []byte
-			key := crypto.FalconSigner{}
-			err = rows.Scan(&keyB)
+			key := crypto.Falcon1024Signer{}
+			err := rows.Scan(&keyB)
 			if err != nil {
-				return nil, fmt.Errorf("%w - %v", errKeyDecodeError, err)
+				return nil, fmt.Errorf("%w - %v", errKeyScanError, err)
 			}
 			err = protocol.Decode(keyB, &key)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("%w - %v", errKeyDecodeError, err)
 			}
 			keys = append(keys, key)
 		}
-		if err = rows.Err(); err != nil {
-			return nil, fmt.Errorf("%w - %v", errSelectKeysError, err)
-		}
-		return keys, nil
+		// an iteration error ends the loop like exhaustion does; without this
+		// check it would silently truncate the key set
+		return keys, rows.Err()
 	})
 	if err != nil {
 		return err
