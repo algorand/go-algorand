@@ -621,28 +621,34 @@ func TestP2PBootstrapPhonebook(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
 	cfg.NetAddress = "127.0.0.1:0"
-	cfg.DNSBootstrapID = ""
-	log := logging.TestingLog(t)
-	genesisInfo := GenesisInfo{genesisID, config.Devtestnet}
 
-	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisInfo, &nopeNodeInfo{}, nil, nil)
-	require.NoError(t, err)
-	require.NoError(t, netA.Start())
-	defer netA.Stop()
-	require.Empty(t, netA.bootstrapper.phonebookPeers)
+	// As in NewP2PNetwork, the phonebook is read after the host is created.
+	makePhonebook := func(configured []string) ([]*peer.AddrInfo, peer.ID) {
+		addrInfo, malformed := peerstore.PeerInfoFromAddrs(configured)
+		require.Empty(t, malformed)
+		pstore, err := peerstore.NewPeerStore(addrInfo, "test")
+		require.NoError(t, err)
+		h, _, err := p2p.MakeHost(cfg, t.TempDir(), pstore)
+		require.NoError(t, err)
+		t.Cleanup(func() { h.Close() })
+		return bootstrapPhonebook(pstore, h.ID()), h.ID()
+	}
+
+	phonebook, hostA := makePhonebook(nil)
+	require.Empty(t, phonebook)
 
 	// Two configured addresses of the same peer give one phonebook entry with both.
-	peerInfoA := netA.service.AddrInfo()
-	addrsA, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
-	require.NoError(t, err)
-	otherAddrA := "/ip4/127.0.0.1/tcp/1/p2p/" + peerInfoA.ID.String()
-	netB, err := NewP2PNetwork(log, cfg, "", []string{addrsA[0].String(), otherAddrA}, genesisInfo, &nopeNodeInfo{}, nil, nil)
-	require.NoError(t, err)
-	require.NoError(t, netB.Start())
-	defer netB.Stop()
-	require.Len(t, netB.bootstrapper.phonebookPeers, 1)
-	require.Equal(t, peerInfoA.ID, netB.bootstrapper.phonebookPeers[0].ID)
-	require.Len(t, netB.bootstrapper.phonebookPeers[0].Addrs, 2)
+	phonebook, _ = makePhonebook([]string{
+		"/ip4/127.0.0.1/tcp/1/p2p/" + hostA.String(),
+		"/ip4/127.0.0.1/tcp/2/p2p/" + hostA.String(),
+	})
+	require.Len(t, phonebook, 1)
+	require.Equal(t, hostA, phonebook[0].ID)
+	addrs := make([]string, 0, len(phonebook[0].Addrs))
+	for _, addr := range phonebook[0].Addrs {
+		addrs = append(addrs, addr.String())
+	}
+	require.ElementsMatch(t, []string{"/ip4/127.0.0.1/tcp/1", "/ip4/127.0.0.1/tcp/2"}, addrs)
 }
 
 func TestP2PdnsLookupBootstrapPeersErr(t *testing.T) {

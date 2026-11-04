@@ -100,10 +100,11 @@ type P2PNetwork struct {
 
 	capabilitiesDiscovery *p2p.CapabilitiesDiscovery
 
-	bootstrapper *bootstrapper
-	nodeInfo     NodeInfo
-	pstore       *peerstore.PeerStore
-	httpServer   *p2p.HTTPServer
+	bootstrapperStart func()
+	bootstrapperStop  func()
+	nodeInfo          NodeInfo
+	pstore            *peerstore.PeerStore
+	httpServer        *p2p.HTTPServer
 
 	identityTracker identityTracker
 
@@ -150,6 +151,21 @@ func (b *bootstrapper) BootstrapFunc() []peer.AddrInfo {
 	}
 
 	return dnsLookupBootstrapPeers(b.log, b.cfg, b.networkID, b.resolveController)
+}
+
+// bootstrapPhonebook returns the peers in pstore other than self. The peerstore also
+// holds the host's own keys once the host is created, and the host is not a bootstrap peer.
+func bootstrapPhonebook(pstore *peerstore.PeerStore, self peer.ID) []*peer.AddrInfo {
+	peerIDs := pstore.Peers()
+	addrInfos := make([]*peer.AddrInfo, 0, len(peerIDs))
+	for _, peerID := range peerIDs {
+		if peerID == self {
+			continue
+		}
+		addrInfo := pstore.PeerInfo(peerID)
+		addrInfos = append(addrInfos, &addrInfo)
+	}
+	return addrInfos
 }
 
 // dnsLookupBootstrapPeers looks up a list of Multiaddrs strings from the dnsaddr records at the primary
@@ -332,24 +348,15 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		return nil, err
 	}
 
-	peerIDs := pstore.Peers()
-	addrInfos := make([]*peer.AddrInfo, 0, len(peerIDs))
-	for _, peerID := range peerIDs {
-		// The peerstore also holds this host's own keys, and the host is not a bootstrap peer.
-		if peerID == h.ID() {
-			continue
-		}
-		addrInfo := pstore.PeerInfo(peerID)
-		addrInfos = append(addrInfos, &addrInfo)
-	}
 	bootstrapper := &bootstrapper{
 		cfg:               cfg,
 		networkID:         net.genesisInfo.NetworkID,
-		phonebookPeers:    addrInfos,
+		phonebookPeers:    bootstrapPhonebook(pstore, h.ID()),
 		resolveController: dnsaddr.NewMultiaddrDNSResolveController(cfg.DNSSecurityTXTEnforced(), ""),
 		log:               net.log,
 	}
-	net.bootstrapper = bootstrapper
+	net.bootstrapperStart = bootstrapper.start
+	net.bootstrapperStop = bootstrapper.stop
 
 	if cfg.EnableDHTProviders {
 		disc, err0 := p2p.MakeCapabilitiesDiscovery(net.ctx, cfg, h, net.genesisInfo.NetworkID, net.log, bootstrapper.BootstrapFunc)
@@ -430,7 +437,7 @@ func (n *P2PNetwork) peerIDSigner() identityChallengeSigner {
 
 // Start threads, listen on sockets.
 func (n *P2PNetwork) Start() error {
-	n.bootstrapper.start()
+	n.bootstrapperStart()
 	err := n.service.Start()
 	if err != nil {
 		return err
@@ -508,7 +515,7 @@ func (n *P2PNetwork) Stop() {
 	n.ctxCancel()
 
 	n.service.Close()
-	n.bootstrapper.stop()
+	n.bootstrapperStop()
 	n.httpServer.Close()
 	n.mesher.stop()
 	n.wg.Wait()
