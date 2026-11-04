@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"crypto/mldsa"
 	"errors"
 
 	"github.com/algorand/msgp/msgp"
@@ -83,6 +84,35 @@ var sigSchemes = map[protocol.SigScheme]sigScheme{
 		fee:              1e6, // half of the Falcon-1024 contribution
 		maxPublicKeySize: constSize(crypto.Falcon512PublicKeySize),
 		maxSignatureSize: constSize(crypto.Falcon512MaxSignatureSize),
+	},
+	// An ML-DSA fee charges, at the protocol's existing rates, what the scheme
+	// adds over an Ed25519 signature. Bytes: the public key and signature, less
+	// Ed25519's 64-byte signature, at PerByteTxnSurcharge (100e-6 of a min fee
+	// per byte). Verification: the time beyond a batched Ed25519 verification,
+	// on amd64, priced like LogicSig budget. ed25519verify_bare costs 1900
+	// units for one 62us unbatched verification, so LogicSigMaxCost (20000
+	// units, one min fee) buys about 654us. The sum is rounded up to 0.1 of a
+	// min fee.
+	protocol.SigSchemeMLDSA44: {
+		verifier:         crypto.MLDSA44SchemeVerifier{},
+		enabled:          func(proto config.ConsensusParams) bool { return proto.EnableSigSchemeMLDSA44 },
+		fee:              0.6e6, // 3668 bytes (0.37) and 111us (0.17)
+		maxPublicKeySize: constSize(mldsa.MLDSA44PublicKeySize),
+		maxSignatureSize: constSize(mldsa.MLDSA44SignatureSize),
+	},
+	protocol.SigSchemeMLDSA65: {
+		verifier:         crypto.MLDSA65SchemeVerifier{},
+		enabled:          func(proto config.ConsensusParams) bool { return proto.EnableSigSchemeMLDSA65 },
+		fee:              0.9e6, // 5197 bytes (0.52) and 192us (0.29)
+		maxPublicKeySize: constSize(mldsa.MLDSA65PublicKeySize),
+		maxSignatureSize: constSize(mldsa.MLDSA65SignatureSize),
+	},
+	protocol.SigSchemeMLDSA87: {
+		verifier:         crypto.MLDSA87SchemeVerifier{},
+		enabled:          func(proto config.ConsensusParams) bool { return proto.EnableSigSchemeMLDSA87 },
+		fee:              1.3e6, // 7155 bytes (0.72) and 325us (0.50)
+		maxPublicKeySize: constSize(mldsa.MLDSA87PublicKeySize),
+		maxSignatureSize: constSize(mldsa.MLDSA87SignatureSize),
 	},
 	protocol.SigSchemeEd25519: {
 		verifier:         crypto.Ed25519SchemeVerifier{},

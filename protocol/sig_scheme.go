@@ -38,6 +38,16 @@ var (
 	// SigSchemeFalcon512 - f5: Falcon-512 using a deterministic signing profile.
 	SigSchemeFalcon512 = SigScheme{'f', '5'}
 
+	// SigSchemeMLDSA44 - m4: ML-DSA-44 (FIPS 204), pure, with an empty context.
+	// The usual choice of the three ML-DSA parameter sets.
+	SigSchemeMLDSA44 = SigScheme{'m', '4'}
+
+	// SigSchemeMLDSA65 - m6: ML-DSA-65 (FIPS 204), pure, with an empty context.
+	SigSchemeMLDSA65 = SigScheme{'m', '6'}
+
+	// SigSchemeMLDSA87 - m8: ML-DSA-87 (FIPS 204), pure, with an empty context.
+	SigSchemeMLDSA87 = SigScheme{'m', '8'}
+
 	// SigSchemeLogicSig - ls: a LogicSig account. The program bytes take the place
 	// of the public key, so the account address commits to the program, and the
 	// salt selects among the addresses a single program can have. Authorization is

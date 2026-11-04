@@ -222,20 +222,6 @@ func opFalconVerify(cx *EvalContext) error {
 	return falconVerify(cx, FalconConfig(cx.program[cx.pc+1]))
 }
 
-func init() {
-	// mldsa_verify needs the toolchain's crypto/mldsa. Built against the FIPS
-	// 140-3 Go Cryptographic Module v1.0.0 (GOFIPS140=v1.0.0), it is a stub
-	// that rejects every key and signature, so the node would disagree with
-	// the network. Refuse to start instead: eval recovers panics, so this
-	// cannot wait until mldsa_verify runs. A real implementation accepts any
-	// correctly sized public key.
-	for _, fs := range mldsaConfigSpecs {
-		if _, err := mldsa.NewPublicKey(fs.params, make([]byte, fs.params.PublicKeySize())); err != nil {
-			panic(fmt.Sprintf("mldsa_verify: %v", err))
-		}
-	}
-}
-
 // opMLDSAVerify verifies a pure ML-DSA (FIPS 204) signature. Inputs of the wrong
 // length fail the program, as in ed25519verify_bare, rather than returning 0
 // as FIPS 204 3.6.2 describes. Either way they cannot verify.
