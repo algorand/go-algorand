@@ -108,7 +108,7 @@ func TestControllerRecoversAfterOutage(t *testing.T) {
 
 	require.NoError(t, lookup(false, false))
 	require.EqualValues(t, 1, created.Load())
-	require.Error(t, lookup(true, true))
+	require.ErrorContains(t, lookup(true, true), "i/o timeout")
 	require.EqualValues(t, 2, created.Load())
 	require.NoError(t, lookup(true, false))
 	require.NoError(t, lookup(false, false))
@@ -141,7 +141,7 @@ func TestControllerTriesEachResolverPerLookup(t *testing.T) {
 	require.EqualValues(t, 1, b.lookups.Load())
 
 	a.down.Store(true)
-	require.Error(t, lookup())
+	require.ErrorContains(t, lookup(), "i/o timeout")
 	require.EqualValues(t, 3, a.lookups.Load())
 	require.EqualValues(t, 2, b.lookups.Load())
 }
@@ -155,7 +155,7 @@ func TestControllerBackupAfterPrimaryFailure(t *testing.T) {
 	dns := &fakeDNS{}
 	c, _ := makeTestController(dns, dns)
 	_, err := MultiaddrsFromResolver("down.example.com", c)
-	require.Error(t, err)
+	require.ErrorContains(t, err, "i/o timeout")
 	addrs, err := MultiaddrsFromResolver("example.com", c)
 	require.NoError(t, err)
 	require.Len(t, addrs, 1)
