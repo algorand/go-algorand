@@ -270,7 +270,7 @@ func (f *flushOp) apply(db *participationDB) error {
 		return nil
 	}
 
-	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error { //retryclosure:ignore wroteBulk only ever becomes true, including for attempts that roll back, since their subkey rows may already be in the WAL that eraseWAL wipes
 		var errorStr strings.Builder
 		for _, record := range needsUpdate {
 			bulk, err := updateRollingFields(ctx, tx, record)

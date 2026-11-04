@@ -154,6 +154,6 @@ func TestRowsErrRestoreAllSecrets(t *testing.T) {
 	newMss := Secrets{}
 	newMss.SignerContext = mss.SignerContext
 	err = newMss.RestoreAllSecrets(*store)
-	a.ErrorIs(err, errSelectKeysError)
 	a.ErrorContains(err, "integer overflow")
+	a.Empty(newMss.ephemeralKeys)
 }

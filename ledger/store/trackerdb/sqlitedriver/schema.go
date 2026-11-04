@@ -440,7 +440,7 @@ func performResourceTableMigration(ctx context.Context, e db.Executable, log fun
 	}
 	defer insertNewAcctBaseNormBal.Close()
 
-	insertResources, err = e.PrepareContext(ctx, "INSERT INTO resources(addrid, aidx, data) VALUES(?, ?, ?)")
+	insertResources, err = e.PrepareContext(ctx, "INSERT INTO resources(addrid, aidx, data) VALUES(?, ?, ?)") //nolint:sqlclosecheck // closed by the defer below; the linter does not follow its use in insertResourceCallback
 	if err != nil {
 		return err
 	}
