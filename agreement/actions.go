@@ -24,7 +24,16 @@ import (
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/metrics"
 )
+
+// networkAction emission instrumentation. The action="broadcast" series counts
+// emissions whose handle is nil — i.e. cases where the action cannot signal a
+// parked validator goroutine (broadcastCompoundAction is the known instance).
+var actionEmittedByAction = metrics.NewTagCounter("algod_agreement_action_emitted_{TAG}", "Number of network networkActions emitted by action type",
+	"broadcast", "relay", "ignore", "disconnect", "broadcastVotes")
+var actionEmittedBroadcastNoHandle = metrics.MakeCounter(
+	metrics.MetricName{Name: "algod_agreement_action_emitted_broadcast_nohandle", Description: "Number of broadcast networkActions emitted with no messageHandle (these cannot signal a parked validator)"})
 
 //go:generate go tool -modfile=../tool.mod stringer -type=actionType
 type actionType uint8
@@ -131,6 +140,25 @@ func (a networkAction) ComparableStr() string {
 }
 
 func (a networkAction) do(ctx context.Context, s *Service) {
+	switch a.T {
+	case broadcast:
+		actionEmittedByAction.Add("broadcast", 1)
+		if a.h == nil {
+			// broadcasts without a handle cannot release a parked validator goroutine;
+			// flagging here surfaces the player.go:659 broadcastCompoundAction case
+			// (and any structurally similar path).
+			actionEmittedBroadcastNoHandle.Inc(nil)
+		}
+	case broadcastVotes:
+		actionEmittedByAction.Add("broadcastVotes", 1)
+	case relay:
+		actionEmittedByAction.Add("relay", 1)
+	case ignore:
+		actionEmittedByAction.Add("ignore", 1)
+	case disconnect:
+		actionEmittedByAction.Add("disconnect", 1)
+	}
+
 	if a.T == broadcastVotes {
 		tag := protocol.AgreementVoteTag
 		for i, uv := range a.UnauthenticatedVotes {
@@ -175,6 +203,7 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 	case disconnect:
 		s.Network.Disconnect(a.h)
 	case ignore:
+		s.Network.Ignore(a.h)
 		// pass
 	}
 }
