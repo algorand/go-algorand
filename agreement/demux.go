@@ -389,6 +389,10 @@ func (d *demux) dumpQueues(w io.Writer) {
 // setupCompoundMessage processes compound messages: distinct messages which are delivered together
 func setupCompoundMessage(l LedgerReader, m message) (res externalEvent) {
 	compound := m.CompoundMessage
+	// the parts of the compound message are delivered as the fields of the
+	// events below; the compound itself is not read again, and the events
+	// end up in the persisted state, so do not carry the proposal twice
+	m.CompoundMessage = compoundMessage{}
 	if compound.Vote == (unauthenticatedVote{}) {
 		m.Tag = protocol.ProposalPayloadTag
 		m.UnauthenticatedProposal = compound.Proposal

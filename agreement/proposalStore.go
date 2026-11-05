@@ -40,7 +40,8 @@ type blockAssembler struct {
 	_struct struct{} `codec:","`
 	// Pipeline contains a proposal which has not yet been validated.  The
 	// proposal might be inside the cryptoVerifier, or it might be a
-	// pipelined proposal from the next round.
+	// pipelined proposal from the next round.  Once the proposal is
+	// validated it is held in Payload only.
 	Pipeline unauthenticatedProposal
 	// Filled is set if the blockAssembler has seen a pipelined proposal.
 	Filled bool
@@ -88,6 +89,10 @@ func (a blockAssembler) bind(p proposal) (blockAssembler, error) {
 
 	// remember when the original unauthenticatedProposal was received
 	a.Payload.receivedAt = a.Pipeline.receivedAt
+
+	// the validated proposal is the pipelined one; keep the block once
+	// (the assembler is part of the persisted state)
+	a.Pipeline = unauthenticatedProposal{}
 
 	return a, nil
 }
@@ -308,13 +313,17 @@ func (store *proposalStore) handle(r routerHandle, p player, e event) event {
 			if ea.Filled {
 				authVote := ea.authenticator(p.Period)
 				relevantPeriod, pinned := store.lastRelevant(pv)
+				payload := ea.Pipeline
+				if ea.Assembled {
+					payload = ea.Payload.u()
+				}
 				return payloadProcessedEvent{
 					T:                      payloadPipelined,
 					Vote:                   authVote,
 					Period:                 relevantPeriod,
 					Pinned:                 pinned,
 					Proposal:               pv,
-					UnauthenticatedPayload: ea.Pipeline,
+					UnauthenticatedPayload: payload,
 				}
 			}
 		}

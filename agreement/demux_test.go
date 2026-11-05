@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -690,4 +691,37 @@ func (t *demuxTester) TestUsecase(testcase demuxTestUsecase) bool {
 	}
 
 	return true
+}
+
+// The events made from a compound message carry its vote and its proposal
+// as their own fields, and not the compound itself: the events end up in
+// the persisted state, which must hold the block once.
+func TestSetupCompoundMessageDropsCompound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	ledger := makeTestLedger(nil)
+	helper := voteMakerHelper{}
+	helper.Setup()
+	uv := helper.MakeUnauthenticatedVote(t, 0, 1, 0, propose, *helper.proposal)
+	up := unauthenticatedProposal{OriginalProposer: uv.R.Sender}
+	up.BlockHeader.Round = 1
+
+	compound := message{Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Vote: uv, Proposal: up}}
+	ev := setupCompoundMessage(ledger, compound).(messageEvent)
+	require.Equal(t, votePresent, ev.T)
+	require.Equal(t, protocol.AgreementVoteTag, ev.Input.Tag)
+	require.Equal(t, uv, ev.Input.UnauthenticatedVote)
+	require.Equal(t, compoundMessage{}, ev.Input.CompoundMessage)
+	require.NotNil(t, ev.Tail)
+	require.Equal(t, payloadPresent, ev.Tail.T)
+	require.Equal(t, protocol.ProposalPayloadTag, ev.Tail.Input.Tag)
+	require.Equal(t, up, ev.Tail.Input.UnauthenticatedProposal)
+	require.Equal(t, compoundMessage{}, ev.Tail.Input.CompoundMessage)
+
+	payloadOnly := message{Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: up}}
+	ev = setupCompoundMessage(ledger, payloadOnly).(messageEvent)
+	require.Equal(t, payloadPresent, ev.T)
+	require.Equal(t, up, ev.Input.UnauthenticatedProposal)
+	require.Equal(t, compoundMessage{}, ev.Input.CompoundMessage)
+	require.Nil(t, ev.Tail)
 }
