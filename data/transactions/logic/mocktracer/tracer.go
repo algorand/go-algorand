@@ -242,9 +242,9 @@ func copyDeltas(deltas *ledgercore.StateDelta) *ledgercore.StateDelta {
 	if deltas == nil {
 		return nil
 	}
-	encoded := protocol.EncodeReflect(deltas)
+	encoded := protocol.EncodeReflect(deltas) //nolint:forbidigo // ledgercore.StateDelta has no generated msgp code
 	var clone ledgercore.StateDelta
-	err := protocol.DecodeReflect(encoded, &clone)
+	err := protocol.DecodeReflect(encoded, &clone) //nolint:forbidigo // ledgercore.StateDelta has no generated msgp code
 	if err != nil {
 		panic(err)
 	}

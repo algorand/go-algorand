@@ -111,7 +111,7 @@ func inspectTxn(stxn transactions.SignedTxn) (sti inspectSignedTxn, err error) {
 		err = fmt.Errorf("non-idempotent transformation to inspectSignedTxn (DeepEqual)")
 		return
 	}
-	if !reflect.DeepEqual(protocol.EncodeReflect(sti), protocol.Encode(&stxn)) {
+	if !reflect.DeepEqual(protocol.EncodeReflect(sti), protocol.Encode(&stxn)) { //nolint:forbidigo // inspectSignedTxn has no generated msgp code
 		err = fmt.Errorf("non-idempotent transformation to inspectSignedTxn (protocol.Encode)")
 		return
 	}
