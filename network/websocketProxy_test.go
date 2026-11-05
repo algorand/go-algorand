@@ -305,8 +305,13 @@ func TestWebsocketProxyWsNet(t *testing.T) {
 	netB.wg.Add(1)
 	netB.tryConnect(wsProxyAddr, wsProxyGossip)
 
+	// Wait for both ends to register the connection, not just netB. netB records
+	// its outbound peer once the websocket handshake completes, but netA writes the
+	// 101 response before it finishes building the inbound peer and calls addPeer,
+	// so netA's side can still be empty when netB's is already populated.
 	require.Eventually(t, func() bool {
-		return len(netB.GetPeers(PeersConnectedOut)) == 1
+		return len(netB.GetPeers(PeersConnectedOut)) == 1 &&
+			len(netA.GetPeers(PeersConnectedIn)) == 1
 	}, 5*time.Second, 10*time.Millisecond)
 
 	require.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))

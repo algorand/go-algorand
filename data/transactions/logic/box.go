@@ -44,6 +44,13 @@ const (
 // the box behaves like family-shared state. An app may always access its own
 // boxes. For another app's box, reads require ForeignBoxReads or FamilyBoxAccess
 // (with the same creator); writes require FamilyBoxAccess and the same creator.
+//
+// FamilyBoxAccess is read at each access, so toggling it during a group moves
+// boxes in and out of this guard: an owner that opts out just before writing its
+// own box skips it, and a frame that touched a box before the owner opted in is
+// never marked as relying on it. Only the family's own code can toggle its own
+// flag, so both are outside the guarantee rather than bugs; see the spec's Family
+// Reentrancy section and TestFamilyBoxReentrancyToggling.
 func (cx *EvalContext) authorizeBoxAccess(ownerAppID basics.AppIndex, operation BoxOperation) error {
 	ownerParams, ownerCreator, err := cx.Ledger.AppParams(ownerAppID)
 	if err != nil {

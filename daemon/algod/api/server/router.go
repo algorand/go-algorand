@@ -100,6 +100,7 @@ func NewRouter(logger logging.Logger, node APINodeInterface, shutdown <-chan str
 
 	e.Listener = listener
 	e.HideBanner = true
+	e.JSONSerializer = jsonSerializer{}
 
 	e.Pre(
 		middlewares.MakeConnectionLimiter(numConnectionsLimit),

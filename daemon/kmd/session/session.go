@@ -47,7 +47,7 @@ type Manager struct {
 // MakeManager initializes and returns a *Manager using the kmd global
 // configuration
 func MakeManager(cfg config.KMDConfig) *Manager {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background()) //nolint:gosec // cancel is stored in Manager.Kill, called on startup failure or when WalletServer stops
 	sm := &Manager{
 		Initialized:     true,
 		walletHandles:   make(map[string]walletHandle),

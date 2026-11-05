@@ -19,7 +19,7 @@ all:	$(GEN)
 # versioning to be controlled in go.mod instead of here.
 generate: all
 
-OAPI := go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.4.1
+OAPI := go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.1
 
 # Pattern rule for all routes.go generation
 %/routes.go: %/routes.yml algod.oas3.yml

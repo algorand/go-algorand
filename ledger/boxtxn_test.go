@@ -133,8 +133,8 @@ const (
 	boxVersion          = 36
 	accessVersion       = 41
 	boxQuotaBumpVersion = 41
-	// familyBoxVersion is the consensus index (ConsensusFuture) for AVM v13,
-	// which adds app_params_set and foreign/family box access.
+	// familyBoxVersion is the consensus index for AVM v13, which adds
+	// app_params_set and foreign/family box access.
 	familyBoxVersion = 42
 )
 
@@ -923,7 +923,8 @@ func testNewAppBoxCreate(t *testing.T, requestedTealVersion int) {
 // familyInitiator (app A) optionally touches its own box "b", then calls onward.
 // It is invoked with args [touch, route]:
 //
-//	touch: "write" replaces in the box, "read" reads it, else leaves it untouched
+//	touch: "write" replaces in the box, "read" reads it, "sharelate" replaces in
+//	       the box and only then opts into FamilyBoxAccess, else leaves it untouched
 //	route: "viaX" calls Applications 1 (a foreign app) forwarding Applications 2,3
 //	       "direct" calls Applications 2 forwarding Applications 3
 //	       "delegate" first calls Applications 2 directly (a family member, which
@@ -953,6 +954,11 @@ var familyInitiator = main(`
   txn ApplicationArgs 0; byte "read"; ==; bz noread
     byte "b"; box_get; assert; pop
   noread:
+
+  txn ApplicationArgs 0; byte "sharelate"; ==; bz nosharelate
+    byte "b"; int 0; byte "AA"; box_replace
+    int 1; app_params_set AppFamilyBoxAccess
+  nosharelate:
 
   txn ApplicationArgs 1; byte "viaX"; ==; bz trydirect
     itxn_begin
@@ -1079,6 +1085,147 @@ func TestFamilyBoxReentrancy(t *testing.T) {
 		// so the mark must survive C's return to catch the re-entry. This is the
 		// case that a per-frame-only touch mark would miss.
 		dl.txn(call("none", "delegate", cw), reentry)
+	})
+}
+
+// familyOptOutInitiator (app A) reads the family-shared box owned by
+// Applications 2 (app B), then calls foreign app Applications 1 (app X),
+// forwarding Applications 2 and 3 so X can complete the A->X->B re-entry.
+var familyOptOutInitiator = main(`
+  txn Applications 2; byte "b"; app_box_get; assert; pop
+  itxn_begin
+  int appl; itxn_field TypeEnum
+  txn Applications 1; itxn_field ApplicationID
+  txn Applications 2; itxn_field Applications
+  txn Applications 3; itxn_field Applications
+  itxn_submit
+`)
+
+// familyOptOutOwner (app B) opts into FamilyBoxAccess and creates its box when
+// called with an argument. On the argument-less callback it opts out first, then
+// writes its own box.
+var familyOptOutOwner = main(`
+  txn NumAppArgs; bz callback
+    int 1; app_params_set AppFamilyBoxAccess
+    byte "b"; int 4; box_create; assert
+    b done
+  callback:
+    int 0; app_params_set AppFamilyBoxAccess
+    byte "b"; int 0; byte "BB"; box_replace
+  done:
+`)
+
+// familyStayOwner (app B') is familyOptOutOwner without the opt-out: it keeps
+// FamilyBoxAccess set while writing its own box on the callback. It is the
+// control showing that clearing the flag is what removes the protection.
+var familyStayOwner = main(`
+  txn NumAppArgs; bz callback
+    int 1; app_params_set AppFamilyBoxAccess
+    byte "b"; int 4; box_create; assert
+    b done
+  callback:
+    byte "b"; int 0; byte "BB"; box_replace
+  done:
+`)
+
+// TestFamilyBoxReentrancyToggling pins what the guard does when FamilyBoxAccess is
+// toggled mid-chain: both writes are permitted, because a box is family-shared
+// only for the accesses made while the flag is true. Each case has a control
+// showing the chain really does reach the write. Tightening this would change
+// which programs succeed, so it needs a new consensus version.
+func TestFamilyBoxReentrancyToggling(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// addrs[0] is the family creator; addrs[1] creates the foreign app.
+	ledgertesting.TestConsensusRange(t, familyBoxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		a := dl.fundedApp(addrs[0], 1_000_000, familyInitiator)        // family, box owner
+		x := dl.fundedApp(addrs[1], 1_000_000, familyForeign)          // foreign
+		cw := dl.fundedApp(addrs[0], 1_000_000, crossWriter)           // family, writes A's box
+		oi := dl.fundedApp(addrs[0], 1_000_000, familyOptOutInitiator) // family, reads B's box
+		ob := dl.fundedApp(addrs[0], 1_000_000, familyOptOutOwner)     // family, box owner
+		sb := dl.fundedApp(addrs[0], 1_000_000, familyStayOwner)       // family, box owner
+
+		boxRef := func(index uint64) []transactions.BoxRef {
+			return []transactions.BoxRef{{Index: index, Name: []byte("b")}}
+		}
+
+		// Enable after the touch. First A creates box "b" and turns sharing back off,
+		// leaving the box in place and unshared.
+		dl.txn(&txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			ApplicationID:   a,
+			Boxes:           boxRef(0),
+			ApplicationArgs: [][]byte{[]byte("optin")},
+		})
+		dl.txn(&txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			ApplicationID:   a,
+			ApplicationArgs: [][]byte{[]byte("optout")},
+		})
+
+		// Control: with sharing off C is refused outright, so the route does reach it.
+		dl.txn(&txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			ApplicationID:   a,
+			ForeignApps:     []basics.AppIndex{x, cw, a},
+			Boxes:           boxRef(0),
+			ApplicationArgs: [][]byte{[]byte("write"), []byte("viaX")},
+		}, "may not write box")
+
+		// A writes its box unshared, so A is never marked, then enables sharing and
+		// re-enters through X. C's write is allowed and A resumes on a stale box.
+		dl.txn(&txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			ApplicationID:   a,
+			ForeignApps:     []basics.AppIndex{x, cw, a},
+			Boxes:           boxRef(0),
+			ApplicationArgs: [][]byte{[]byte("sharelate"), []byte("viaX")},
+		})
+
+		// Disable before the write. Both owners opt in and create their box.
+		dl.txn(&txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			ApplicationID:   ob,
+			Boxes:           boxRef(0),
+			ApplicationArgs: [][]byte{[]byte("setup")},
+		})
+
+		// Control: the same chain against an owner that keeps sharing on is blocked, so
+		// the chain shape is right and the opt-out is the only difference.
+		dl.txn(&txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			ApplicationID:   sb,
+			Boxes:           boxRef(0),
+			ApplicationArgs: [][]byte{[]byte("setup")},
+		})
+		dl.txn(&txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[0],
+			ApplicationID: oi,
+			ForeignApps:   []basics.AppIndex{x, sb, oi},
+			Boxes:         boxRef(2),
+		}, "may not write family-shared box")
+
+		// B clears its flag before writing its own box, so that write is no longer
+		// family-shared and the guard never runs, though A relies on what it read.
+		dl.txn(&txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[0],
+			ApplicationID: oi,
+			ForeignApps:   []basics.AppIndex{x, ob, oi},
+			Boxes:         boxRef(2),
+		})
 	})
 }
 
