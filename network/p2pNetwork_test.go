@@ -612,6 +612,45 @@ func TestP2PBootstrapFunc(t *testing.T) {
 	require.GreaterOrEqual(t, len(addr.Addrs), 1)
 }
 
+// TestP2PBootstrapPhonebook checks that the bootstrap phonebook holds only the
+// configured peers. The peerstore also holds the host's own ID, and a phonebook with
+// it would keep the bootstrapper from looking up bootstrap peers in DNS.
+func TestP2PBootstrapPhonebook(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.NetAddress = "127.0.0.1:0"
+
+	// As in NewP2PNetwork, the phonebook is read after the host is created.
+	makePhonebook := func(configured []string) ([]*peer.AddrInfo, peer.ID) {
+		addrInfo, malformed := peerstore.PeerInfoFromAddrs(configured)
+		require.Empty(t, malformed)
+		pstore, err := peerstore.NewPeerStore(addrInfo, "test")
+		require.NoError(t, err)
+		h, _, err := p2p.MakeHost(cfg, t.TempDir(), pstore)
+		require.NoError(t, err)
+		t.Cleanup(func() { h.Close() })
+		return bootstrapPhonebook(pstore, h.ID()), h.ID()
+	}
+
+	phonebook, hostA := makePhonebook(nil)
+	require.Empty(t, phonebook)
+
+	// Two configured addresses of the same peer give one phonebook entry with both.
+	phonebook, _ = makePhonebook([]string{
+		"/ip4/127.0.0.1/tcp/1/p2p/" + hostA.String(),
+		"/ip4/127.0.0.1/tcp/2/p2p/" + hostA.String(),
+	})
+	require.Len(t, phonebook, 1)
+	require.Equal(t, hostA, phonebook[0].ID)
+	addrs := make([]string, 0, len(phonebook[0].Addrs))
+	for _, addr := range phonebook[0].Addrs {
+		addrs = append(addrs, addr.String())
+	}
+	require.ElementsMatch(t, []string{"/ip4/127.0.0.1/tcp/1", "/ip4/127.0.0.1/tcp/2"}, addrs)
+}
+
 func TestP2PdnsLookupBootstrapPeersErr(t *testing.T) {
 	t.Parallel()
 	partitiontest.PartitionTest(t)

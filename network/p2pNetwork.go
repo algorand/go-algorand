@@ -153,6 +153,21 @@ func (b *bootstrapper) BootstrapFunc() []peer.AddrInfo {
 	return dnsLookupBootstrapPeers(b.log, b.cfg, b.networkID, b.resolveController)
 }
 
+// bootstrapPhonebook returns the peers in pstore other than self. The peerstore also
+// holds the host's own keys once the host is created, and the host is not a bootstrap peer.
+func bootstrapPhonebook(pstore *peerstore.PeerStore, self peer.ID) []*peer.AddrInfo {
+	peerIDs := pstore.Peers()
+	addrInfos := make([]*peer.AddrInfo, 0, len(peerIDs))
+	for _, peerID := range peerIDs {
+		if peerID == self {
+			continue
+		}
+		addrInfo := pstore.PeerInfo(peerID)
+		addrInfos = append(addrInfos, &addrInfo)
+	}
+	return addrInfos
+}
+
 // dnsLookupBootstrapPeers looks up a list of Multiaddrs strings from the dnsaddr records at the primary
 // SRV record domain.
 func dnsLookupBootstrapPeers(log logging.Logger, cfg config.Local, network protocol.NetworkID, controller dnsaddr.ResolveController) []peer.AddrInfo {
@@ -333,16 +348,10 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		return nil, err
 	}
 
-	peerIDs := pstore.Peers()
-	addrInfos := make([]*peer.AddrInfo, 0, len(peerIDs))
-	for _, peerID := range peerIDs {
-		addrInfo := pstore.PeerInfo(peerID)
-		addrInfos = append(addrInfos, &addrInfo)
-	}
 	bootstrapper := &bootstrapper{
 		cfg:               cfg,
 		networkID:         net.genesisInfo.NetworkID,
-		phonebookPeers:    addrInfos,
+		phonebookPeers:    bootstrapPhonebook(pstore, h.ID()),
 		resolveController: dnsaddr.NewMultiaddrDNSResolveController(cfg.DNSSecurityTXTEnforced(), ""),
 		log:               net.log,
 	}
