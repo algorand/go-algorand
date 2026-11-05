@@ -774,6 +774,7 @@ see explanation of bit ordering in setbit
 - Bytecode: 0x54
 - Stack: ..., A, B: uint64, C: uint64 &rarr; ..., any
 - Copy of (byte-array or integer) A, with the Bth bit set to (0 or 1) C. If B is greater than or equal to the bit length of the value (8*byte length), the program fails
+- **Cost**: 1 + 1 per 32 bytes of A, or 1 if A is a uint64
 - Availability: v3
 
 When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on the integer 0 yields 8, or 2^3. When A is a byte array, index 0 is the leftmost bit of the leftmost byte. Setting bits 0 through 11 to 1 in a 4-byte-array of 0s yields the byte array 0xfff00000. Setting bit 3 to 1 on the 1-byte-array 0x00 yields the byte array 0x10.
@@ -790,6 +791,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - Bytecode: 0x56
 - Stack: ..., A: []byte, B: uint64, C: uint64 &rarr; ..., []byte
 - Copy of A with the Bth byte set to small integer (between 0..255) C. If B is greater than or equal to the array length, the program fails
+- **Cost**: 1 + 1 per 32 bytes of A
 - Availability: v3
 
 ## extract
@@ -836,6 +838,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)
 - `replace2` can be called by using `replace` with 1 immediate.
+- **Cost**: 1 + 1 per 32 bytes of A
 - Availability: v7
 
 ## replace3
@@ -844,6 +847,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - Stack: ..., A: []byte, B: uint64, C: []byte &rarr; ..., []byte
 - Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)
 - `replace3` can be called by using `replace` with no immediates.
+- **Cost**: 1 + 1 per 32 bytes of A
 - Availability: v7
 
 ## base64_decode
@@ -1288,6 +1292,7 @@ Fails unless the last instruction executed was a `callsub`.
 - Bytecode: 0x8e {varuint count, [int16 (big-endian) ...]}
 - Stack: ..., [A1, A2, ..., AN], B &rarr; ...
 - given N match cases, deepest first, branch to the Ith label (numbering from 0) where case I equals B. Continue to the following instruction if no matches are found.
+- **Cost**: 1 + 2 per label
 - Availability: v8
 
 `match` consumes N+1 values from the stack. Let the top stack value be B. The following N values represent an ordered list of match cases/constants (A), where the first value (A[0]) is the deepest in the stack. The immediate arguments are an ordered list of N labels (T). `match` will branch to target T[I], where A[I] = B. If there are no matches then execution continues on to the next instruction.
@@ -1319,6 +1324,7 @@ Fails unless the last instruction executed was a `callsub`.
 - Bytecode: 0x93
 - Stack: ..., A &rarr; ..., uint64
 - The highest set bit in A. If A is a byte-array, it is interpreted as a big-endian unsigned integer. bitlen of 0 is 0, bitlen of 8 is 4
+- **Cost**: 1 + 1 per 32 bytes of A, or 1 if A is a uint64
 - Availability: v4
 
 bitlen interprets arrays as big-endian integers, unlike setbit/getbit
@@ -1375,7 +1381,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Bytecode: 0xa0
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - A plus B. A and B are interpreted as big-endian unsigned integers
-- **Cost**: 4 + 1 per 16 bytes of the longer of A and B
+- **Cost**: 2 + 1 per 32 bytes of the longer of A and B
 - Availability: v4
 
 ## b-
@@ -1383,7 +1389,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Bytecode: 0xa1
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - A minus B. A and B are interpreted as big-endian unsigned integers. Fail on underflow.
-- **Cost**: 4 + 1 per 16 bytes of the longer of A and B
+- **Cost**: 2 + 1 per 32 bytes of the longer of A and B
 - Availability: v4
 
 ## b/
@@ -1407,6 +1413,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Bytecode: 0xa4
 - Stack: ..., A: []byte, B: []byte &rarr; ..., bool
 - 1 if A is less than B, else 0. A and B are interpreted as big-endian unsigned integers
+- **Cost**: 1 + 1 per 32 bytes of the longer of A and B
 - Availability: v4
 
 ## b>
@@ -1414,6 +1421,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Bytecode: 0xa5
 - Stack: ..., A: []byte, B: []byte &rarr; ..., bool
 - 1 if A is greater than B, else 0. A and B are interpreted as big-endian unsigned integers
+- **Cost**: 1 + 1 per 32 bytes of the longer of A and B
 - Availability: v4
 
 ## b<=
@@ -1421,6 +1429,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Bytecode: 0xa6
 - Stack: ..., A: []byte, B: []byte &rarr; ..., bool
 - 1 if A is less than or equal to B, else 0. A and B are interpreted as big-endian unsigned integers
+- **Cost**: 1 + 1 per 32 bytes of the longer of A and B
 - Availability: v4
 
 ## b>=
@@ -1428,6 +1437,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Bytecode: 0xa7
 - Stack: ..., A: []byte, B: []byte &rarr; ..., bool
 - 1 if A is greater than or equal to B, else 0. A and B are interpreted as big-endian unsigned integers
+- **Cost**: 1 + 1 per 32 bytes of the longer of A and B
 - Availability: v4
 
 ## b==
@@ -1435,6 +1445,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Bytecode: 0xa8
 - Stack: ..., A: []byte, B: []byte &rarr; ..., bool
 - 1 if A is equal to B, else 0. A and B are interpreted as big-endian unsigned integers
+- **Cost**: 1 + 1 per 32 bytes of the longer of A and B
 - Availability: v4
 
 ## b!=
@@ -1442,6 +1453,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Bytecode: 0xa9
 - Stack: ..., A: []byte, B: []byte &rarr; ..., bool
 - 0 if A is equal to B, else 1. A and B are interpreted as big-endian unsigned integers
+- **Cost**: 1 + 1 per 32 bytes of the longer of A and B
 - Availability: v4
 
 ## b%
