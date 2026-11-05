@@ -48,6 +48,18 @@ type HTTPTxSync struct {
 const requestContentType = "application/x-www-form-urlencoded"
 const baseResponseReadingBufferSize = uint64(1024)
 
+// maxTxSyncResponseTxns bounds how many transactions a txsync response may decode
+// into. The byte cap on the response body does not bound this on its own: a msgpack
+// element can be far smaller than the SignedTxn it decodes into, and the decoder
+// allocates from the declared array length before reading any element. The bound is
+// several times what an honest response holds at the default TxSyncServeResponseSize.
+const maxTxSyncResponseTxns = 25000
+
+// txSyncResponse is a txsync response body, used for msgp encoding.
+//
+//msgp:allocbound txSyncResponse maxTxSyncResponseTxns
+type txSyncResponse []transactions.SignedTxn
+
 // ResponseBytes reads the content of the response object and return the body content
 // while obeying the read size limits
 func ResponseBytes(response *http.Response, log logging.Logger, limit uint64) (data []byte, err error) {
@@ -119,7 +131,6 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 	params.Set("bf", bloomParam)
 	request, err := http.NewRequest("POST", syncURL, strings.NewReader(params.Encode()))
 	if err != nil {
-		hts.log.Errorf("txSync POST setup %v: %s", syncURL, err)
 		return nil, err
 	}
 	request.Header.Set("Content-Type", requestContentType)
@@ -137,7 +148,6 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 		response.Body.Close()
 		return [][]transactions.SignedTxn{}, nil
 	default:
-		hts.log.Warn("txSync response status code : ", response.StatusCode)
 		response.Body.Close()
 		return nil, fmt.Errorf("txSync POST error response status code %d for '%s'. Request bloom filter length was %d bytes", response.StatusCode, syncURL, len(bloomParam))
 	}
@@ -147,7 +157,6 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 	contentTypes := response.Header["Content-Type"]
 	if len(contentTypes) != 1 {
 		err = fmt.Errorf("txSync POST invalid content type count %d", len(contentTypes))
-		hts.log.Warn(err)
 		response.Body.Close()
 		return nil, err
 	}
@@ -155,7 +164,6 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 	// Remove this 'old' string after next release.
 	const responseContentTypeOld = "application/x-algorand-ptx-v1"
 	if contentTypes[0] != responseContentType && contentTypes[0] != responseContentTypeOld {
-		hts.log.Warnf("http response has an invalid content type : %s", contentTypes[0])
 		response.Body.Close()
 		return nil, fmt.Errorf("txSync POST invalid content type '%s'", contentTypes[0])
 	}
@@ -167,8 +175,8 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 	}
 	hts.log.Debugf("http sync got %d bytes", len(data))
 
-	var txns []transactions.SignedTxn
-	err = protocol.DecodeReflect(data, &txns)
+	var txns txSyncResponse
+	err = protocol.Decode(data, &txns)
 	if err != nil {
 		hts.log.Warn("txSync protocol decode: ", err)
 	}

@@ -8,7 +8,9 @@ else
 export GOPATH := $(shell go env GOPATH)
 GOPATH1 := $(firstword $(subst :, ,$(GOPATH)))
 endif
-GOBIN := $(if $(shell go env GOBIN),$(shell go env GOBIN),$(GOPATH1)/bin)
+# Since Go 1.27 `go env GOBIN` reports the $GOPATH/bin default, so check
+# whether GOBIN was set explicitly.
+GOBIN := $(if $(shell go env -changed GOBIN),$(shell go env GOBIN),$(GOPATH1)/bin)
 SRCPATH     := $(shell pwd)
 ARCH        := $(shell ./scripts/archtype.sh)
 OS_TYPE     := $(shell ./scripts/ostype.sh)
@@ -41,8 +43,9 @@ GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
 # e.g. make GOTAGSCUSTOM=msgtrace
 GOTAGSLIST += ${GOTAGSCUSTOM}
 
-GOTESTCOMMAND := go tool -modfile=tool.mod gotestsum --format pkgname --jsonfile testresults.json --
-GOLINTCOMMAND := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.8.0 -c .golangci.yml
+# Absolute path so recipes that cd elsewhere (make cover PACKAGE=X) find it.
+GOTESTCOMMAND := go tool -modfile=$(CURDIR)/tool.mod gotestsum --format pkgname --jsonfile testresults.json --
+GOLINTCOMMAND := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 -c .golangci.yml
 
 ifeq ($(OS_TYPE), darwin)
 # M1 Mac--homebrew install location in /opt/homebrew
@@ -85,8 +88,10 @@ GOLDFLAGS := $(GOLDFLAGS_BASE) \
 		 -X github.com/algorand/go-algorand/config.Channel=$(CHANNEL)
 
 UNIT_TEST_SOURCES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | grep -v /go-algorand/test/ ))
-COVERPKG_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | egrep -v '/go-algorand/(test|debug|cmd|config/defaultsGenerator|tools)' | egrep -v '(test|testing|mocks|mock)$$' ))
+COVERPKG_PACKAGES := $(shell $(CURDIR)/scripts/coverpkg.sh)
 ALGOD_API_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd daemon/algod/api; go list ./... ))
+# Absolute: each test binary runs in its own package directory.
+COVDATA_DIR := $(CURDIR)/.covdata
 
 GOMOD_DIRS := ./tools/block-generator ./tools/x-repo-types ./tools/debug/algodump
 
@@ -104,8 +109,11 @@ fmt:
 fix: build
 	$(GOBIN)/algofix */
 
+# embedlit, newexpr, errorsastype and stditerators started reporting when the
+# go directive moved to 1.27, and would rewrite ~150 files. They are disabled to
+# keep that change small; enable them in their own PRs.
 modernize:
-	GOTOOLCHAIN=auto go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@v0.46.0 -v -atomictypes=false -rangeint=false -waitgroupgo=false -slicesbackward=false -stringsbuilder=false -omitzero=false -stringscut=false -fix ./...
+	GOTOOLCHAIN=auto go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@v0.52.0 -v -atomictypes=false -rangeint=false -waitgroupgo=false -slicesbackward=false -stringsbuilder=false -omitzero=false -stringscut=false -embedlit=false -newexpr=false -errorsastype=false -stditerators=false -fix ./...
 
 lint:
 	$(GOLINTCOMMAND) run
@@ -135,12 +143,17 @@ sanity: fix lint fmt tidy modernize
 #
 # "make cover PACKAGE=X" runs all tests in package github.com/algorand/go-algorand/X/... and collects full coverage
 # across all packages that are dependencies of that package.
+#
+# Coverage is merged with "go tool covdata"; see scripts/merge_coverage.sh.
 cover:
+	rm -rf $(COVDATA_DIR) && mkdir -p $(COVDATA_DIR)
 ifeq ($(PACKAGE),)
-	$(GOTESTCOMMAND) $(GOTAGS) -coverprofile=cover.out $(UNIT_TEST_SOURCES) -covermode=atomic -coverpkg=$(shell echo $(COVERPKG_PACKAGES) | sed 's/ /,/g')
+	$(GOTESTCOMMAND) $(GOTAGS) -cover -covermode=atomic -coverpkg=$(COVERPKG_PACKAGES) $(UNIT_TEST_SOURCES) -args -test.gocoverdir=$(COVDATA_DIR)
+	./scripts/merge_coverage.sh cover.out $(COVDATA_DIR)
 else
 	cd $(PACKAGE); \
-	$(GOTESTCOMMAND) $(GOTAGS) -coverprofile=cover.out ./... -covermode=atomic -coverpkg=$$( (go list -f '{{ join .Deps "\n" }}' ./...; go list -f '{{ join .TestImports "\n" }}' ./...) | grep 'github.com/algorand/go-algorand' | egrep -v '/go-algorand/(test|debug|cmd|config/defaultsGenerator|tools)' | egrep -v '(test|testing|mocks|mock)$$' | sort | uniq | paste -sd ',' -); \
+	$(GOTESTCOMMAND) $(GOTAGS) -cover -covermode=atomic -coverpkg=$$( (go list -f '{{ join .Deps "\n" }}' ./...; go list -f '{{ join .TestImports "\n" }}' ./...) | grep 'github.com/algorand/go-algorand' | egrep -v '/go-algorand/(test|debug|cmd|config/defaultsGenerator|tools)' | egrep -v '(test|testing|mocks|mock)$$' | sort | uniq | paste -sd ',' -) ./... -args -test.gocoverdir=$(COVDATA_DIR); \
+	$(CURDIR)/scripts/merge_coverage.sh cover.out $(COVDATA_DIR); \
 	go tool cover -html cover.out
 endif
 
@@ -158,7 +171,7 @@ api:
 logic:
 	$(MAKE) -C data/transactions/logic
 
-MSGP := go run github.com/algorand/msgp@v1.1.64
+MSGP := go run github.com/algorand/msgp@v1.1.66
 %/msgp_gen.go: ALWAYS
 		@set +e; \
 		printf "$(MSGP) $(@D)..."; \

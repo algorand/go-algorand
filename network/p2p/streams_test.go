@@ -19,14 +19,17 @@ package p2p
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
 
@@ -184,4 +187,159 @@ func TestStreamNonDialedOutgoingConnection(t *testing.T) {
 		logOutput := logBuffer.String()
 		return strings.Contains(logOutput, expectedMsg) && strings.Contains(logOutput, listenerHost.ID().String())
 	}, 5*time.Second, 50*time.Millisecond)
+}
+
+// TestStream_CloseWaitsForHandlers verifies that streamManager.close waits for in-flight
+// handler goroutines spawned by Connected, and that no new handlers start after close.
+// Without this, handleConnected could outlive the service and log after shutdown, which
+// panics under a testing logger once the test has completed.
+func TestStream_CloseWaitsForHandlers(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	lowPeer := peer.ID("AAAA-low-peer")
+	highPeer := peer.ID("ZZZZ-high-peer")
+	require.True(t, lowPeer < highPeer)
+
+	var handlerCalls atomic.Int32
+	countingHandler := func(_ context.Context, _ peer.ID, _ network.Stream, _ bool) error {
+		handlerCalls.Add(1)
+		return nil
+	}
+	sm, h := newTestStreamManagerWithHandler(lowPeer, true, countingHandler)
+
+	// localPeer < remotePeer and the peer is protected (as dialNode would do),
+	// so Connected spawns handleConnected which calls host.NewStream.
+	conn := newMockConn(lowPeer, highPeer, network.DirOutbound)
+	h.cm.Protect(highPeer, cnmgrTag)
+
+	newStreamStarted := make(chan struct{})
+	newStreamRelease := make(chan struct{})
+	var newStreamCalls atomic.Int32
+	h.newStreamFn = func(context.Context, peer.ID, ...protocol.ID) (network.Stream, error) {
+		if newStreamCalls.Add(1) == 1 {
+			close(newStreamStarted)
+			<-newStreamRelease
+		}
+		return nil, errors.New("test: failed to open stream")
+	}
+
+	sm.Connected(nil, conn)
+	select {
+	case <-newStreamStarted:
+	case <-time.After(5 * time.Second):
+		require.Fail(t, "handleConnected was not started by Connected")
+	}
+
+	// a direct tracked spawn (as done by DialPeersUntilTargetCount) is accepted before close.
+	// its NewStream call is the second one and fails immediately, so the handler finishes
+	// quickly, but close() below must still account for it.
+	require.True(t, sm.goHandleConnected(conn))
+
+	closeDone := make(chan struct{})
+	go func() {
+		sm.close()
+		close(closeDone)
+	}()
+
+	// close must not return while handleConnected is blocked in NewStream
+	select {
+	case <-closeDone:
+		require.Fail(t, "close returned while handleConnected was still in flight")
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	close(newStreamRelease)
+	select {
+	case <-closeDone:
+	case <-time.After(5 * time.Second):
+		require.Fail(t, "close did not return after handleConnected finished")
+	}
+	require.Equal(t, int32(2), newStreamCalls.Load())
+
+	// after close, Connected must not spawn new handlers...
+	sm.Connected(nil, conn)
+	// ...nor may a direct tracked spawn be accepted...
+	require.False(t, sm.goHandleConnected(conn))
+	// ...and inbound streams must be rejected without dispatching to the handler.
+	inConn := newMockConn(lowPeer, highPeer, network.DirInbound)
+	stream := newMockStream(inConn, testProto, network.DirInbound)
+	sm.streamHandler(stream)
+	require.True(t, stream.wasReset())
+	require.Equal(t, int32(0), handlerCalls.Load())
+
+	// give a would-be handleConnected goroutine a chance to run: none must have started.
+	// two NewStream calls are expected: one from Connected and one from the direct spawn.
+	time.Sleep(50 * time.Millisecond)
+	require.Equal(t, int32(2), newStreamCalls.Load())
+}
+
+// TestStream_CloseTimeout verifies that streamManager.close gives up on a stuck handler
+// after closeTimeout instead of hanging shutdown, and logs a warning naming the peer.
+func TestStream_CloseTimeout(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	lowPeer := peer.ID("AAAA-low-peer")
+	highPeer := peer.ID("ZZZZ-high-peer")
+	require.True(t, lowPeer < highPeer)
+
+	sm, h := newTestStreamManager(lowPeer, true)
+	logBuffer := &syncBuffer{}
+	logger := logging.NewLogger()
+	logger.SetOutput(logBuffer)
+	logger.SetLevel(logging.Debug)
+	sm.log = logger
+	sm.closeTimeout = 100 * time.Millisecond
+
+	conn := newMockConn(lowPeer, highPeer, network.DirOutbound)
+	h.cm.Protect(highPeer, cnmgrTag)
+
+	newStreamStarted := make(chan struct{})
+	newStreamRelease := make(chan struct{})
+	h.newStreamFn = func(context.Context, peer.ID, ...protocol.ID) (network.Stream, error) {
+		close(newStreamStarted)
+		<-newStreamRelease
+		return nil, errors.New("test: failed to open stream")
+	}
+
+	require.True(t, sm.goHandleConnected(conn))
+	select {
+	case <-newStreamStarted:
+	case <-time.After(5 * time.Second):
+		require.Fail(t, "handleConnected was not started")
+	}
+
+	// the handler is stuck: close must return after the timeout rather than block forever
+	start := time.Now()
+	closeDone := make(chan struct{})
+	go func() {
+		sm.close()
+		close(closeDone)
+	}()
+	select {
+	case <-closeDone:
+	case <-time.After(5 * time.Second):
+		require.Fail(t, "close did not return after closeTimeout with a stuck handler")
+	}
+	require.GreaterOrEqual(t, time.Since(start), sm.closeTimeout)
+
+	logOutput := logBuffer.String()
+	require.Contains(t, logOutput, "timed out")
+	require.Contains(t, logOutput, "waiting for stream handlers to finish")
+	require.Contains(t, logOutput, highPeer.String())
+
+	// release the stuck handler and make sure it drains so the test leaks nothing
+	close(newStreamRelease)
+	drained := make(chan struct{})
+	go func() {
+		sm.handlersWg.Wait()
+		close(drained)
+	}()
+	select {
+	case <-drained:
+	case <-time.After(5 * time.Second):
+		require.Fail(t, "stuck handler did not finish after release")
+	}
+	require.Empty(t, sm.inflightPeers())
 }

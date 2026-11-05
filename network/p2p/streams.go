@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -44,6 +46,14 @@ type StreamHandlerLoggedError struct {
 func (e *StreamHandlerLoggedError) Error() string { return e.Err.Error() }
 func (e *StreamHandlerLoggedError) Unwrap() error { return e.Err }
 
+// handlersCloseTimeout bounds how long streamManager.close waits for in-flight
+// stream handlers on shutdown. It matches peerDisconnectionAckDuration in the
+// network package (which cannot be imported from here): by the time close runs
+// the host is already closed, so handler I/O has been interrupted and anything
+// still running this long is stuck, not slow. Rather than hang algod shutdown,
+// close gives up and logs a warning naming the peers involved.
+const handlersCloseTimeout = 5 * time.Second
+
 // streamManager implements network.Notifiee to create and manage streams for use with non-gossipsub protocols.
 type streamManager struct {
 	ctx                 context.Context
@@ -55,6 +65,17 @@ type streamManager struct {
 	streams     map[peer.ID]network.Stream
 	inflight    map[peer.ID]int
 	streamsLock deadlock.Mutex
+
+	// handlersWg tracks handler goroutines (handleConnected, streamHandler) that run
+	// outside of libp2p's notifiee lock so that close() can wait for them.
+	// closed is guarded by closeLock and prevents new handlers from starting
+	// once close() has begun. The lock makes the closed check and the Add atomic
+	// with respect to close(), so Add never races with Wait.
+	// closeTimeout bounds the wait in close(); it is a field so tests can shorten it.
+	handlersWg   sync.WaitGroup
+	closeLock    deadlock.Mutex
+	closed       bool
+	closeTimeout time.Duration
 }
 
 // StreamHandler is called when a new bidirectional stream for a given protocol and peer is opened.
@@ -69,7 +90,79 @@ func makeStreamManager(ctx context.Context, log logging.Logger, h host.Host, han
 		allowIncomingGossip: allowIncomingGossip,
 		streams:             make(map[peer.ID]network.Stream),
 		inflight:            make(map[peer.ID]int),
+		closeTimeout:        handlersCloseTimeout,
 	}
+}
+
+// beginHandler registers a new handler goroutine with handlersWg.
+// It returns false if the stream manager is closing and no new work should start.
+func (n *streamManager) beginHandler() bool {
+	n.closeLock.Lock()
+	defer n.closeLock.Unlock()
+	if n.closed {
+		return false
+	}
+	n.handlersWg.Add(1)
+	return true
+}
+
+// endHandler marks a handler registered with beginHandler as finished.
+func (n *streamManager) endHandler() {
+	n.handlersWg.Done()
+}
+
+// goHandleConnected runs handleConnected for conn in a new goroutine tracked by handlersWg,
+// so that close() waits for it. It returns false without spawning anything if the
+// stream manager is closing. This is the only way handleConnected should be started
+// asynchronously: an untracked goroutine can outlive the service and log after shutdown.
+func (n *streamManager) goHandleConnected(conn network.Conn) bool {
+	if !n.beginHandler() {
+		return false
+	}
+	go func() {
+		defer n.endHandler()
+		n.handleConnected(conn)
+	}()
+	return true
+}
+
+// close prevents new handlers from starting and waits for in-flight ones to finish.
+// It must be called after the host has been closed (or the context cancelled) so that
+// any blocking stream I/O inside handlers is interrupted, and after StopNotify so that
+// no new Connected callbacks arrive.
+// The wait is bounded by closeTimeout: a handler still running past that point is
+// considered stuck and is abandoned with a warning so that shutdown can proceed.
+func (n *streamManager) close() {
+	n.closeLock.Lock()
+	n.closed = true
+	n.closeLock.Unlock()
+
+	done := make(chan struct{})
+	go func() {
+		n.handlersWg.Wait()
+		close(done)
+	}()
+
+	timer := time.NewTimer(n.closeTimeout)
+	defer timer.Stop()
+	select {
+	case <-done:
+	case <-timer.C:
+		n.log.Warnf("%s: timed out after %v waiting for stream handlers to finish, in-flight peers: %v",
+			n.host.ID().String(), n.closeTimeout, n.inflightPeers())
+	}
+}
+
+// inflightPeers returns the peers that currently have a stream handler attempt in progress.
+// It is used for diagnostics only.
+func (n *streamManager) inflightPeers() []peer.ID {
+	n.streamsLock.Lock()
+	defer n.streamsLock.Unlock()
+	peers := make([]peer.ID, 0, len(n.inflight))
+	for p := range n.inflight {
+		peers = append(peers, p)
+	}
+	return peers
 }
 
 func (n *streamManager) beginPeerAttempt(remotePeer peer.ID) {
@@ -99,6 +192,13 @@ func (n *streamManager) endPeerAttempt(remotePeer peer.ID) {
 
 // streamHandler is called by libp2p when a new stream is accepted
 func (n *streamManager) streamHandler(stream network.Stream) {
+	if !n.beginHandler() {
+		// shutting down, do not start handling new streams
+		_ = stream.Reset()
+		return
+	}
+	defer n.endHandler()
+
 	remotePeer := stream.Conn().RemotePeer()
 	n.beginPeerAttempt(remotePeer)
 	defer n.endPeerAttempt(remotePeer)
@@ -186,6 +286,8 @@ func (n *streamManager) dispatch(ctx context.Context, remotePeer peer.ID, stream
 // This is invoked from libp2p's Swarm.notifyAll which holds a read lock on the notifiees list.
 // We do some read/write operations in this handler for metadata exchange that creates a race condition
 // with StopNotify on network shutdown. To avoid, run the handler as a goroutine.
+// The goroutine is tracked by handlersWg so that close() can wait for it: otherwise it may
+// outlive the service and log (or touch state) after shutdown has completed.
 func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 	remotePeer := conn.RemotePeer()
 	localPeer := n.host.ID()
@@ -213,7 +315,9 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 		}
 	}
 
-	go n.handleConnected(conn)
+	if !n.goHandleConnected(conn) {
+		n.log.Debugf("%s: ignoring connection from %s, shutting down", localPeer.String(), remotePeer.String())
+	}
 }
 
 func (n *streamManager) handleConnected(conn network.Conn) {

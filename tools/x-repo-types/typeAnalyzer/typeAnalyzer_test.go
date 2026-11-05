@@ -214,10 +214,12 @@ func TestDiffErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	testcases := []struct {
-		name  string
-		x     interface{}
-		y     interface{}
-		equal bool
+		name           string
+		x              any
+		y              any
+		unreleased     map[string]bool
+		equal          bool
+		wantUnreleased []string
 	}{
 		{
 			name:  "basic equal",
@@ -324,15 +326,62 @@ func TestDiffErrors(t *testing.T) {
 			y:     struct{ B, A int }{},
 			equal: true,
 		},
+		{
+			name:           "unreleased field missing from y",
+			x:              struct{ A, B int }{},
+			y:              struct{ A int }{},
+			unreleased:     map[string]bool{"B": true},
+			equal:          true,
+			wantUnreleased: []string{"B"},
+		},
+		{
+			name:       "unreleased field present in y",
+			x:          struct{ A, B int }{},
+			y:          struct{ A, B int }{},
+			unreleased: map[string]bool{"B": true},
+			equal:      true,
+		},
+		{
+			name:       "unlisted field still required",
+			x:          struct{ A, B int }{},
+			y:          struct{ A int }{},
+			unreleased: map[string]bool{"C": true},
+			equal:      false,
+		},
+		{
+			name: "unreleased field does not hide a nested diff",
+			x: struct {
+				A struct{ C int }
+				B int
+			}{},
+			y:              struct{ A struct{ D int } }{},
+			unreleased:     map[string]bool{"B": true},
+			equal:          false,
+			wantUnreleased: []string{"B"},
+		},
+		{
+			name:       "unreleased applies only at top level",
+			x:          struct{ A struct{ B, C int } }{},
+			y:          struct{ A struct{ C int } }{},
+			unreleased: map[string]bool{"B": true},
+			equal:      false,
+		},
 	}
 
 	for _, tc := range testcases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			xRoot, yRoot, diff, err := StructDiff(tc.x, tc.y, nil)
+			xRoot, yRoot, diff, err := StructDiff(tc.x, tc.y, nil, tc.unreleased)
 			require.NoError(t, err)
 			require.Equal(t, tc.equal, diff.Empty(), "test case: %s, report: %s", tc.name, Report(xRoot, yRoot, diff))
+			var unreleased []string
+			if diff != nil {
+				for _, tgt := range diff.Unreleased {
+					unreleased = append(unreleased, tgt.ChildName.Name)
+				}
+			}
+			require.Equal(t, tc.wantUnreleased, unreleased)
 		})
 	}
 }

@@ -36,7 +36,7 @@ type SignedTxn struct {
 	Sig   crypto.Signature   `codec:"sig"`
 	Msig  crypto.MultisigSig `codec:"msig"`
 	Lsig  LogicSig           `codec:"lsig"`
-	PQsig PQSig              `codec:"pqsig"`
+	SKsig SaltedKeySig       `codec:"pqsig"`
 
 	Txn      Transaction    `codec:"txn,required"`
 	AuthAddr basics.Address `codec:"sgnr"`
@@ -121,18 +121,16 @@ func (s SignedTxn) Authorizer() basics.Address {
 
 // HasSignature reports whether any signature category is present.
 func (s SignedTxn) HasSignature() bool {
-	return !s.Sig.Blank() || !s.Msig.Blank() || !s.Lsig.Blank() || !s.PQsig.Blank()
+	return !s.Sig.Blank() || !s.Msig.Blank() || !s.Lsig.Blank() || !s.SKsig.Blank()
 }
 
 // signatureFeeContribution dispatches the fee contribution of the signature type.
-// An unknown PQ scheme contributes zero, which is safe because the transaction
-// will be rejected during verification.
 func (s SignedTxn) signatureFeeContribution(proto config.ConsensusParams) basics.Micros {
-	if !s.PQsig.Blank() {
-		return proto.PQSchemeFeeContribution(s.PQsig.Scheme)
+	if !s.SKsig.Blank() {
+		return SigSchemeFeeContribution(proto, s.SKsig.Scheme)
 	}
-	if !s.Lsig.PQsig.Blank() {
-		return proto.PQSchemeFeeContribution(s.Lsig.PQsig.Scheme)
+	if !s.Lsig.SKsig.Blank() {
+		return SigSchemeFeeContribution(proto, s.Lsig.SKsig.Scheme)
 	}
 	return 0
 }
@@ -203,6 +201,11 @@ func logicSigProgramFeeContribution(txgroup []SignedTxnWithAD, proto config.Cons
 	programBytes := 0
 	for _, txad := range txgroup {
 		programBytes += len(txad.SignedTxn.Lsig.Logic)
+		// An ls-scheme SaltedKeySig carries its program in place of a public key. Those
+		// bytes are priced like any other program's.
+		if sksig := txad.SignedTxn.SKsig; sksig.IsLogicSig() {
+			programBytes += len(sksig.PublicKey)
+		}
 	}
 	freeProgramBytes := len(txgroup) * int(proto.LogicSigMaxSize)
 	surcharge, _ := proto.PerByteTxnSurcharge.MulInt(programBytes - freeProgramBytes)

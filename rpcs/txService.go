@@ -23,8 +23,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
-
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/data/transactions"
@@ -80,9 +78,8 @@ func makeTxService(pool PendingTxAggregate, genesisID string, txPoolSize int, re
 
 // ServeHTTP returns pending transactions that match a bloom filter
 func (txs *TxService) ServeHTTP(response http.ResponseWriter, request *http.Request) {
-	pathVars := mux.Vars(request)
-	genesisID, hasGenesisID := pathVars["genesisID"]
-	if hasGenesisID {
+	genesisID := request.PathValue("genesisID")
+	if genesisID != "" {
 		if txs.genesisID != genesisID {
 			txs.log.Infof("http block bad genesisID mine=%#v theirs=%#v", txs.genesisID, genesisID)
 			response.WriteHeader(http.StatusBadRequest)
@@ -136,7 +133,7 @@ func (txs *TxService) ServeHTTP(response http.ResponseWriter, request *http.Requ
 		return
 	}
 	txns := txs.getFilteredTxns(filter)
-	txblob := protocol.EncodeReflect(txns)
+	txblob := protocol.Encode(txns)
 	txs.log.Debugf("sending %d txns in %d bytes", len(txns), len(txblob))
 	response.Header().Set("Content-Length", strconv.Itoa(len(txblob)))
 	response.Header().Set("Content-Type", responseContentType)
@@ -147,7 +144,7 @@ func (txs *TxService) ServeHTTP(response http.ResponseWriter, request *http.Requ
 	}
 }
 
-func (txs *TxService) getFilteredTxns(bloom *bloom.Filter) (txns []transactions.SignedTxn) {
+func (txs *TxService) getFilteredTxns(bloom *bloom.Filter) (txns txSyncResponse) {
 	pendingTxGroups := txs.updateTxCache()
 
 	missingTxns := make([]transactions.SignedTxn, 0)

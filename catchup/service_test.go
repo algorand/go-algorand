@@ -592,7 +592,6 @@ func TestOnSwitchToUnSupportedProtocol1(t *testing.T) {
 	// i.e. rounds 1 and 2 may be simultaneously fetched.
 	require.Less(t, int(local.LastRound()), 3)
 	require.Equal(t, lastRoundRemote, int(remote.LastRound()))
-	remote.Ledger.Close()
 }
 
 // Test the interruption in "the rest" loop
@@ -610,7 +609,6 @@ func TestOnSwitchToUnSupportedProtocol2(t *testing.T) {
 	}
 	require.Equal(t, lastRoundLocal, int(local.LastRound()))
 	require.Equal(t, lastRoundRemote, int(remote.LastRound()))
-	remote.Ledger.Close()
 }
 
 // Test the interruption with short notice (less than
@@ -635,7 +633,6 @@ func TestOnSwitchToUnSupportedProtocol3(t *testing.T) {
 	// fetched.
 	require.Less(t, int(local.LastRound()), lastRoundLocal+2)
 	require.Equal(t, lastRoundRemote, int(remote.LastRound()))
-	remote.Ledger.Close()
 }
 
 // Test the interruption with short notice (less than
@@ -668,7 +665,6 @@ func TestOnSwitchToUnSupportedProtocol4(t *testing.T) {
 	// ledger, round 8 will not be fetched.
 	require.Equal(t, int(local.LastRound()), lastRoundLocal)
 	require.Equal(t, lastRoundRemote, int(remote.LastRound()))
-	remote.Ledger.Close()
 }
 
 func helperTestOnSwitchToUnSupportedProtocol(
@@ -923,7 +919,6 @@ func TestCatchupUnmatchedCertificate(t *testing.T) {
 		t.Fatal(err)
 		return
 	}
-	defer remote.Close()
 	addBlocks(t, remote, blk, numBlocks-1)
 
 	// Create a network and block service

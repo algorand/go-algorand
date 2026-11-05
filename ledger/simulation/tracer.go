@@ -153,7 +153,14 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 	if ep.GetCaller() != nil {
 		// If this is an inner txn group, save the txns
 		tracer.populateInnerTransactions(ep.TxnGroup)
-		tracer.result.TxnGroups[0].AppBudgetAdded += ep.Proto.MaxAppProgramCost
+		// Report a grant for each app call, not one for the whole group. The AVM
+		// grants budget per inner app call, so a group of payments adds nothing,
+		// while a group of several app calls adds several grants.
+		for i := range ep.TxnGroup {
+			if ep.TxnGroup[i].Txn.Type == protocol.ApplicationCallTx {
+				tracer.result.TxnGroups[0].AppBudgetAdded += ep.Proto.MaxAppProgramCost
+			}
+		}
 	}
 	tracer.cursorEvalTracer.BeforeTxnGroup(ep)
 
@@ -162,8 +169,11 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 		tracer.result.TxnGroups[0].AppBudgetAdded = *ep.PooledApplicationBudget
 	}
 
-	// Override transaction group budget if specified in request, retrieve from tracer.result
-	if ep.PooledApplicationBudget != nil {
+	// Override transaction group budget if specified in request, retrieve from
+	// tracer.result. Only for the top-level group: inner groups share the same
+	// pool, so granting the extra again for each of them would hand out a
+	// multiple of what was asked for.
+	if ep.PooledApplicationBudget != nil && ep.GetCaller() == nil {
 		tracer.result.TxnGroups[0].AppBudgetAdded += tracer.result.EvalOverrides.ExtraOpcodeBudget
 		*ep.PooledApplicationBudget += tracer.result.EvalOverrides.ExtraOpcodeBudget
 	}

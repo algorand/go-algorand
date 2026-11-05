@@ -1427,64 +1427,133 @@ func TestRekeying(t *testing.T) {
 	// TODO: More tests
 }
 
-type pqRekeyTestAccount struct {
-	signer    crypto.FalconSigner
-	address   basics.Address
-	salt      basics.PQAddressSalt
-	publicKey []byte
-}
-
-func makePQRekeyTestAccount(t *testing.T, firstSeedByte byte) pqRekeyTestAccount {
+func signSaltedKeyRekeyTestTxn(t *testing.T, acct basics_testing.SaltedKeySigTestAccount, txn transactions.Transaction, authAddr basics.Address) transactions.SignedTxn {
 	t.Helper()
 
-	var seed crypto.FalconSeed
-	seed[0] = firstSeedByte
-	signer, err := crypto.GenerateFalconSigner(seed)
-	require.NoError(t, err)
-
-	publicKey := signer.PublicKey[:]
-	salt, address, err := basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
-	require.NoError(t, err)
-
-	return pqRekeyTestAccount{
-		signer:    signer,
-		address:   address,
-		salt:      salt,
-		publicKey: publicKey,
-	}
-}
-
-func signPQRekeyTestTxn(t *testing.T, acct pqRekeyTestAccount, txn transactions.Transaction, authAddr basics.Address) transactions.SignedTxn {
-	t.Helper()
-
-	signature, err := acct.signer.Sign(txn)
+	signature, err := acct.Signer.Sign(txn)
 	require.NoError(t, err)
 
 	return transactions.SignedTxn{
 		Txn:      txn,
 		AuthAddr: authAddr,
-		PQsig: transactions.PQSig{
-			Scheme:    protocol.PQSchemeFalcon1024,
-			Salt:      acct.salt,
-			PublicKey: acct.publicKey,
+		SKsig: transactions.SaltedKeySig{
+			Scheme:    acct.Scheme,
+			Salt:      acct.Salt,
+			PublicKey: acct.PublicKey,
 			Signature: signature,
 		},
 	}
 }
 
-func TestPQRekeyedAddressAuthorization(t *testing.T) {
+func TestSaltedRekeyedAddressAuthorization(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, tc := range basics_testing.SigSchemeTests {
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+
+			genesisInitState, addrs, keys := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
+
+			saltedAcct := basics_testing.MakeSaltedKeySigTestAccount(t, 0, tc.Scheme)
+
+			proto := config.Consensus[protocol.ConsensusFuture]
+			require.True(t, transactions.SigSchemeEnabled(proto, saltedAcct.Scheme))
+			schemeFee, _, overflow := proto.MinFee().FeeForUsage(basics.Micros(1e6)+transactions.SigSchemeFeeContribution(proto, saltedAcct.Scheme), 1e6, 0)
+			require.False(t, overflow)
+
+			genesisInitState.Accounts[saltedAcct.Address] = basics.AccountData{
+				MicroAlgos: basics.MicroAlgos{Raw: 10_000_000},
+				Status:     basics.Offline,
+			}
+
+			l, err := OpenLedger(logging.TestingLog(t), t.Name(), true, genesisInitState, config.GetDefaultLocal())
+			require.NoError(t, err)
+			defer l.Close()
+
+			nextRound := l.Latest() + basics.Round(1)
+			genHash := l.GenesisHash()
+
+			makePayTxn := func(sender, receiver basics.Address, fee basics.MicroAlgos, rekeyTo basics.Address, uniq uint8) transactions.Transaction {
+				return transactions.Transaction{
+					Type: protocol.PaymentTx,
+					Header: transactions.Header{
+						Sender:      sender,
+						Fee:         fee,
+						FirstValid:  nextRound,
+						LastValid:   nextRound,
+						GenesisHash: genHash,
+						RekeyTo:     rekeyTo,
+						Note:        []byte{uniq},
+					},
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver: receiver,
+						Amount:   basics.MicroAlgos{Raw: 1},
+					},
+				}
+			}
+
+			tryBlock := func(stxns []transactions.SignedTxn) error {
+				genesisHdr, err := l.BlockHdr(basics.Round(0))
+				require.NoError(t, err)
+				newBlock := bookkeeping.MakeBlock(genesisHdr)
+				eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
+				require.NoError(t, err)
+
+				for _, stxn := range stxns {
+					err = eval.TransactionGroup(stxn.WithAD())
+					if err != nil {
+						return err
+					}
+				}
+				unfinishedBlock, err := eval.GenerateBlock(nil)
+				if err != nil {
+					return err
+				}
+				fb := unfinishedBlock.FinishBlock(committee.Seed{0x01}, basics.Address{0x01}, false)
+
+				backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+				defer backlogPool.Shutdown()
+				_, err = l.Validate(context.Background(), fb, backlogPool)
+				return err
+			}
+
+			edRekeyToSalted := makePayTxn(addrs[0], addrs[0], minFee, saltedAcct.Address, 1).Sign(keys[0])
+			edSpendBySaltedKeyTxn := makePayTxn(addrs[0], addrs[1], schemeFee, basics.Address{}, 2)
+			edSpendBySaltedKey := signSaltedKeyRekeyTestTxn(t, saltedAcct, edSpendBySaltedKeyTxn, saltedAcct.Address)
+
+			require.NoError(t, tryBlock([]transactions.SignedTxn{edRekeyToSalted, edSpendBySaltedKey}))
+			require.ErrorContains(t, tryBlock([]transactions.SignedTxn{edSpendBySaltedKey}), "should have been authorized by")
+
+			saltedRekeyToEdTxn := makePayTxn(saltedAcct.Address, addrs[1], schemeFee, addrs[2], 3)
+			saltedRekeyToEd := signSaltedKeyRekeyTestTxn(t, saltedAcct, saltedRekeyToEdTxn, basics.Address{})
+			saltedSpendByEd := makePayTxn(saltedAcct.Address, addrs[1], minFee, basics.Address{}, 4).Sign(keys[2])
+
+			require.NoError(t, tryBlock([]transactions.SignedTxn{saltedRekeyToEd, saltedSpendByEd}))
+			require.ErrorContains(t, tryBlock([]transactions.SignedTxn{saltedSpendByEd}), "should have been authorized by")
+		})
+	}
+}
+
+// TestSaltedLogicSigRekeyedAddressAuthorization is TestSaltedRekeyedAddressAuthorization
+// for the ls scheme, which has no key: an ls SKsig authorizes by running the
+// program its address commits to.
+func TestSaltedLogicSigRekeyedAddressAuthorization(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	genesisInitState, addrs, keys := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-	require.True(t, proto.EnablePQSchemeFalcon1024)
-	pqFee, _, overflow := proto.MinFee().FeeForUsage(basics.Micros(1e6)+proto.PQSchemeFeeContribution(protocol.PQSchemeFalcon1024), 1e6, 0)
-	require.False(t, overflow)
+	require.True(t, proto.EnableSigSchemeLogicSig)
+	minFee := proto.MinFee()
 
-	pqAcct := makePQRekeyTestAccount(t, 0)
-	genesisInitState.Accounts[pqAcct.address] = basics.AccountData{
+	// #pragma version 14; pushbytes "open sesame"; arg_0; ==
+	program := []byte{0x0e, 0x80, 0x0b, 'o', 'p', 'e', 'n', ' ', 's', 'e', 's', 'a', 'm', 'e', 0x2d, 0x12}
+	salt, lsAddr, err := basics.CanonicalAddressSalt(protocol.SigSchemeLogicSig, program)
+	require.NoError(t, err)
+
+	genesisInitState.Accounts[lsAddr] = basics.AccountData{
 		MicroAlgos: basics.MicroAlgos{Raw: 10_000_000},
 		Status:     basics.Offline,
 	}
@@ -1496,12 +1565,12 @@ func TestPQRekeyedAddressAuthorization(t *testing.T) {
 	nextRound := l.Latest() + basics.Round(1)
 	genHash := l.GenesisHash()
 
-	makePayTxn := func(sender, receiver basics.Address, fee basics.MicroAlgos, rekeyTo basics.Address, uniq uint8) transactions.Transaction {
+	makePayTxn := func(sender, receiver basics.Address, rekeyTo basics.Address, uniq uint8) transactions.Transaction {
 		return transactions.Transaction{
 			Type: protocol.PaymentTx,
 			Header: transactions.Header{
 				Sender:      sender,
-				Fee:         fee,
+				Fee:         minFee,
 				FirstValid:  nextRound,
 				LastValid:   nextRound,
 				GenesisHash: genHash,
@@ -1515,6 +1584,21 @@ func TestPQRekeyedAddressAuthorization(t *testing.T) {
 		}
 	}
 
+	lsAuthorize := func(txn transactions.Transaction, authAddr basics.Address, arg string) transactions.SignedTxn {
+		return transactions.SignedTxn{
+			Txn:      txn,
+			AuthAddr: authAddr,
+			SKsig: transactions.SaltedKeySig{
+				Scheme:    protocol.SigSchemeLogicSig,
+				Salt:      salt,
+				PublicKey: program,
+				Signature: transactions.EncodeLogicSigArgs(transactions.LogicSigArgs{[]byte(arg)}),
+			},
+		}
+	}
+
+	// Each block is built on genesis, so nothing one tryBlock does is seen by
+	// the next.
 	tryBlock := func(stxns []transactions.SignedTxn) error {
 		genesisHdr, err := l.BlockHdr(basics.Round(0))
 		require.NoError(t, err)
@@ -1540,125 +1624,137 @@ func TestPQRekeyedAddressAuthorization(t *testing.T) {
 		return err
 	}
 
-	edRekeyToPQ := makePayTxn(addrs[0], addrs[0], minFee, pqAcct.address, 1).Sign(keys[0])
-	edSpendByPQTxn := makePayTxn(addrs[0], addrs[1], pqFee, basics.Address{}, 2)
-	edSpendByPQ := signPQRekeyTestTxn(t, pqAcct, edSpendByPQTxn, pqAcct.address)
+	// An Ed25519 account rekeyed to an ls address is spent from by running the
+	// program, and only with the argument it accepts.
+	edRekeyToLs := makePayTxn(addrs[0], addrs[0], lsAddr, 1).Sign(keys[0])
+	edSpendByLs := lsAuthorize(makePayTxn(addrs[0], addrs[1], basics.Address{}, 2), lsAddr, "open sesame")
+	edSpendByLsWrongArg := lsAuthorize(makePayTxn(addrs[0], addrs[1], basics.Address{}, 2), lsAddr, "abracadabra")
 
-	require.NoError(t, tryBlock([]transactions.SignedTxn{edRekeyToPQ, edSpendByPQ}))
-	require.ErrorContains(t, tryBlock([]transactions.SignedTxn{edSpendByPQ}), "should have been authorized by")
+	require.NoError(t, tryBlock([]transactions.SignedTxn{edRekeyToLs, edSpendByLs}))
+	require.ErrorContains(t, tryBlock([]transactions.SignedTxn{edRekeyToLs, edSpendByLsWrongArg}), "rejected by logic")
+	require.ErrorContains(t, tryBlock([]transactions.SignedTxn{edSpendByLs}), "should have been authorized by")
 
-	pqRekeyToEdTxn := makePayTxn(pqAcct.address, addrs[1], pqFee, addrs[2], 3)
-	pqRekeyToEd := signPQRekeyTestTxn(t, pqAcct, pqRekeyToEdTxn, basics.Address{})
-	pqSpendByEd := makePayTxn(pqAcct.address, addrs[1], minFee, basics.Address{}, 4).Sign(keys[2])
+	// An ls account rekeyed to an Ed25519 key is spent from by that key, and
+	// no longer by its program.
+	lsRekeyToEd := lsAuthorize(makePayTxn(lsAddr, addrs[1], addrs[2], 3), basics.Address{}, "open sesame")
+	lsSpendByEd := makePayTxn(lsAddr, addrs[1], basics.Address{}, 4).Sign(keys[2])
+	lsSpendByLs := lsAuthorize(makePayTxn(lsAddr, addrs[1], basics.Address{}, 5), basics.Address{}, "open sesame")
 
-	require.NoError(t, tryBlock([]transactions.SignedTxn{pqRekeyToEd, pqSpendByEd}))
-	require.ErrorContains(t, tryBlock([]transactions.SignedTxn{pqSpendByEd}), "should have been authorized by")
+	require.NoError(t, tryBlock([]transactions.SignedTxn{lsRekeyToEd, lsSpendByEd}))
+	require.ErrorContains(t, tryBlock([]transactions.SignedTxn{lsSpendByEd}), "should have been authorized by")
+	require.ErrorContains(t, tryBlock([]transactions.SignedTxn{lsRekeyToEd, lsSpendByLs}), "should have been authorized by")
 }
 
-func TestPQChallengedAccountCanHeartbeatForZeroFee(t *testing.T) {
+func TestSaltedChallengedAccountCanHeartbeatForZeroFee(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-	require.True(t, proto.EnablePQSchemeFalcon1024)
 	require.True(t, proto.Heartbeat)
 	require.True(t, proto.Payouts.Enabled)
 	require.NotZero(t, proto.Payouts.ChallengeInterval)
 	require.NotZero(t, proto.Payouts.ChallengeGracePeriod)
 
-	const keyDilution = 777
-	otss := crypto.GenerateOneTimeSignatureSecrets(1, 10)
-	pqAcct := makePQRekeyTestAccount(t, 1)
+	for _, tc := range basics_testing.SigSchemeTests {
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
 
-	genBalances, _, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
-		cfg.OnlineCount = 5
-	})
-	genBalances.Balances[pqAcct.address] = basics.AccountData{
-		MicroAlgos:        basics.MicroAlgos{Raw: 100_000_000},
-		Status:            basics.Online,
-		VoteID:            otss.OneTimeSignatureVerifier,
-		SelectionID:       crypto.VRFVerifier{1},
-		StateProofID:      merklesignature.Commitment{1},
-		VoteFirstValid:    0,
-		VoteLastValid:     1_000_000,
-		VoteKeyDilution:   keyDilution,
-		IncentiveEligible: true,
-	}
+			const keyDilution = 777
+			otss := crypto.GenerateOneTimeSignatureSecrets(1, 10)
+			saltedAcct := basics_testing.MakeSaltedKeySigTestAccount(t, 1, tc.Scheme)
+			require.True(t, transactions.SigSchemeEnabled(proto, saltedAcct.Scheme))
 
-	seedAndProp := pqAcct.address
-	seedAndProp[31] ^= 1
-	require.NotEqual(t, pqAcct.address, seedAndProp)
-	genBalances.Balances[seedAndProp] = basics.AccountData{
-		MicroAlgos:        basics.MicroAlgos{Raw: 100_000_000},
-		Status:            basics.Online,
-		VoteID:            crypto.OneTimeSignatureVerifier{1},
-		SelectionID:       crypto.VRFVerifier{1},
-		StateProofID:      merklesignature.Commitment{1},
-		VoteFirstValid:    0,
-		VoteLastValid:     1_000_000,
-		VoteKeyDilution:   1,
-		IncentiveEligible: true,
-	}
+			genBalances, _, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
+				cfg.OnlineCount = 5
+			})
+			genBalances.Balances[saltedAcct.Address] = basics.AccountData{
+				MicroAlgos:        basics.MicroAlgos{Raw: 100_000_000},
+				Status:            basics.Online,
+				VoteID:            otss.OneTimeSignatureVerifier,
+				SelectionID:       crypto.VRFVerifier{1},
+				StateProofID:      merklesignature.Commitment{1},
+				VoteFirstValid:    0,
+				VoteLastValid:     1_000_000,
+				VoteKeyDilution:   keyDilution,
+				IncentiveEligible: true,
+			}
 
-	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, config.GetDefaultLocal())
-	defer dl.Close()
+			seedAndProp := saltedAcct.Address
+			seedAndProp[31] ^= 1
+			require.NotEqual(t, saltedAcct.Address, seedAndProp)
+			genBalances.Balances[seedAndProp] = basics.AccountData{
+				MicroAlgos:        basics.MicroAlgos{Raw: 100_000_000},
+				Status:            basics.Online,
+				VoteID:            crypto.OneTimeSignatureVerifier{1},
+				SelectionID:       crypto.VRFVerifier{1},
+				StateProofID:      merklesignature.Commitment{1},
+				VoteFirstValid:    0,
+				VoteLastValid:     1_000_000,
+				VoteKeyDilution:   1,
+				IncentiveEligible: true,
+			}
 
-	challengeRound := basics.Round(proto.Payouts.ChallengeInterval)
-	for vb := dl.fullBlock(); vb.Block().Round() < challengeRound-1; vb = dl.fullBlock() {
-		// Advance to the round before the challenge.
-	}
-	dl.beginBlock()
-	dl.endBlock(seedAndProp)
+			dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, config.GetDefaultLocal())
+			defer dl.Close()
 
-	heartbeatRound := challengeRound + basics.Round(proto.Payouts.ChallengeGracePeriod)/2 + 1
-	for vb := dl.fullBlock(); vb.Block().Round() < heartbeatRound-1; vb = dl.fullBlock() {
-		// Advance into the risky challenge period, before suspension is active.
-	}
+			challengeRound := basics.Round(proto.Payouts.ChallengeInterval)
+			for vb := dl.fullBlock(); vb.Block().Round() < challengeRound-1; vb = dl.fullBlock() {
+				// Advance to the round before the challenge.
+			}
+			dl.beginBlock()
+			dl.endBlock(seedAndProp)
 
-	lastHdr, err := dl.generator.BlockHdr(dl.generator.Latest())
-	require.NoError(t, err)
-	eval := dl.beginBlock()
-	require.Equal(t, heartbeatRound, eval.Round())
+			heartbeatRound := challengeRound + basics.Round(proto.Payouts.ChallengeGracePeriod)/2 + 1
+			for vb := dl.fullBlock(); vb.Block().Round() < heartbeatRound-1; vb = dl.fullBlock() {
+				// Advance into the risky challenge period, before suspension is active.
+			}
 
-	// A PQ account never pays for a PQ signature on its heartbeat. A heartbeat's
-	// sender is irrelevant to what it proves (onlineness is proven by HbProof,
-	// signed with the account's participation key), so it is sent by the same
-	// ordinary accepting logicsig everyone uses. That sender carries no PQ
-	// surcharge, and the challenge discount covers the base fee, so the account
-	// stays online for free despite authorizing spends with an expensive PQ key.
-	acceptingProgram := logic.MustAssemble(`#pragma version 11
+			lastHdr, err := dl.generator.BlockHdr(dl.generator.Latest())
+			require.NoError(t, err)
+			eval := dl.beginBlock()
+			require.Equal(t, heartbeatRound, eval.Round())
+
+			// A salted account never pays a scheme surcharge on its heartbeat. A heartbeat's
+			// sender is irrelevant to what it proves (onlineness is proven by HbProof,
+			// signed with the account's participation key), so it is sent by the same
+			// ordinary accepting logicsig everyone uses. That sender carries no scheme
+			// surcharge, and the challenge discount covers the base fee, so the account
+			// stays online for free despite authorizing spends with an expensive scheme key.
+			acceptingProgram := logic.MustAssemble(`#pragma version 11
 int 1`)
-	sender := basics.Address(logic.HashProgram(acceptingProgram))
+			sender := basics.Address(logic.HashProgram(acceptingProgram))
 
-	lastValid := eval.Round() + 10
-	id := basics.OneTimeIDForRound(lastValid, keyDilution)
-	txn := transactions.Transaction{
-		Type: protocol.HeartbeatTx,
-		Header: transactions.Header{
-			Sender:      sender,
-			FirstValid:  lastHdr.Round,
-			LastValid:   lastValid,
-			GenesisHash: dl.generator.GenesisHash(),
-		},
-		HeartbeatTxnFields: &transactions.HeartbeatTxnFields{
-			HbAddress:           pqAcct.address,
-			HbProof:             otss.Sign(id, lastHdr.Seed).ToHeartbeatProof(),
-			HbSeed:              lastHdr.Seed,
-			HbVoteID:            otss.OneTimeSignatureVerifier,
-			HbKeyDilution:       keyDilution,
-			HbChallengeDiscount: true,
-		},
+			lastValid := eval.Round() + 10
+			id := basics.OneTimeIDForRound(lastValid, keyDilution)
+			txn := transactions.Transaction{
+				Type: protocol.HeartbeatTx,
+				Header: transactions.Header{
+					Sender:      sender,
+					FirstValid:  lastHdr.Round,
+					LastValid:   lastValid,
+					GenesisHash: dl.generator.GenesisHash(),
+				},
+				HeartbeatTxnFields: &transactions.HeartbeatTxnFields{
+					HbAddress:           saltedAcct.Address,
+					HbProof:             otss.Sign(id, lastHdr.Seed).ToHeartbeatProof(),
+					HbSeed:              lastHdr.Seed,
+					HbVoteID:            otss.OneTimeSignatureVerifier,
+					HbKeyDilution:       keyDilution,
+					HbChallengeDiscount: true,
+				},
+			}
+			stxn := transactions.SignedTxn{Txn: txn, Lsig: transactions.LogicSig{Logic: acceptingProgram}}
+			txgroup := []transactions.SignedTxn{stxn}
+
+			require.NoError(t, eval.TestTransactionGroup(txgroup))
+			require.NoError(t, eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup)...))
+			vb := dl.endBlock()
+			require.Equal(t, heartbeatRound, vb.Block().Round())
+
+			after := lookup(t, dl.generator, saltedAcct.Address)
+			require.Equal(t, heartbeatRound, after.LastHeartbeat)
+		})
 	}
-	stxn := transactions.SignedTxn{Txn: txn, Lsig: transactions.LogicSig{Logic: acceptingProgram}}
-	txgroup := []transactions.SignedTxn{stxn}
-
-	require.NoError(t, eval.TestTransactionGroup(txgroup))
-	require.NoError(t, eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup)...))
-	vb := dl.endBlock()
-	require.Equal(t, heartbeatRound, vb.Block().Round())
-
-	after := lookup(t, dl.generator, pqAcct.address)
-	require.Equal(t, heartbeatRound, after.LastHeartbeat)
 }
 
 func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalProgram string, consensusVersion protocol.ConsensusVersion) error {

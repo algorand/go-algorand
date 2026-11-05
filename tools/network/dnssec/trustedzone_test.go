@@ -18,6 +18,8 @@ package dnssec
 
 import (
 	"context"
+	"encoding/base64"
+	"maps"
 	"testing"
 	"time"
 
@@ -32,8 +34,8 @@ func TestTrustedZone(t *testing.T) {
 
 	a := require.New(t)
 
-	zsk := make(map[uint16]dns.DNSKEY)
-	ksk := make(map[uint16]dns.DNSKEY)
+	zsk := make(dnskeysByTag)
+	ksk := make(dnskeysByTag)
 	rrSig := make(map[uint16]dns.RRSIG)
 
 	r := makeTestResolver()
@@ -46,8 +48,8 @@ func TestTrustedZone(t *testing.T) {
 	a.Equal(uint16(30909), kk.KeyTag())
 	a.Equal(uint16(30909), sig.KeyTag)
 
-	zsk[zk.KeyTag()] = zk
-	ksk[kk.KeyTag()] = kk
+	zsk.add(zk)
+	ksk.add(kk)
 	rrSig[sig.KeyTag] = sig
 
 	tz := trustedZone{
@@ -65,11 +67,11 @@ func TestTrustedZone(t *testing.T) {
 	a.False(tz.checkKeys([]uint16{kk.KeyTag()}))
 
 	zsks, ksks, rrsigs = r.queryDNSKeyRRSet(".")
-	zskRoot := make(map[uint16]dns.DNSKEY)
-	kskRoot := make(map[uint16]dns.DNSKEY)
+	zskRoot := make(dnskeysByTag)
+	kskRoot := make(dnskeysByTag)
 	rrSigRoot := make(map[uint16]dns.RRSIG)
-	zskRoot[zsks[0].KeyTag()] = zsks[0]
-	kskRoot[ksks[0].KeyTag()] = ksks[0]
+	zskRoot.add(zsks[0])
+	kskRoot.add(ksks[0])
 	rrSigRoot[rrsigs[0].KeyTag] = rrsigs[0]
 
 	tzRoot := trustedZone{
@@ -86,7 +88,7 @@ func TestTrustedZone(t *testing.T) {
 	a.NoError(err)
 	a.False(cacheOutdated)
 
-	tzRoot.zsk = make(map[uint16]dns.DNSKEY)
+	tzRoot.zsk = make(dnskeysByTag)
 	cacheOutdated, err = tzRoot.verifyDS(rrsDS, rrsigsDS, tt)
 	a.NoError(err)
 	a.True(cacheOutdated)
@@ -95,7 +97,7 @@ func TestTrustedZone(t *testing.T) {
 	tzRoot.zsk = zskRoot
 	zk = zsks[0]
 	zk.PublicKey = ksks[0].PublicKey
-	tzRoot.zsk[zsks[0].KeyTag()] = zk
+	tzRoot.zsk[zsks[0].KeyTag()] = []dns.DNSKEY{zk}
 	cacheOutdated, err = tzRoot.verifyDS(rrsDS, rrsigsDS, tt)
 	a.Error(err)
 	a.False(cacheOutdated)
@@ -120,7 +122,7 @@ func TestMakeTrustedZone(t *testing.T) {
 
 	// remove ZSK from root and expect cache outdated error (newer key in com. than in cached root)
 	backup := tzRoot.zsk
-	tzRoot.zsk = make(map[uint16]dns.DNSKEY)
+	tzRoot.zsk = make(dnskeysByTag)
 	tzCom, cacheOutdated, err = makeTrustedZone(context.Background(), "com.", tzRoot, r, tt)
 	a.NoError(err)
 	a.True(cacheOutdated)
@@ -129,23 +131,26 @@ func TestMakeTrustedZone(t *testing.T) {
 	// remove KSK from root and expect no errors
 	tzRoot.zsk = backup
 	backup = tzRoot.ksk
-	tzRoot.ksk = make(map[uint16]dns.DNSKEY)
+	tzRoot.ksk = make(dnskeysByTag)
 	tzCom, cacheOutdated, err = makeTrustedZone(context.Background(), "com.", tzRoot, r, tt)
 	a.NoError(err)
 	a.False(cacheOutdated)
 	a.NotEmpty(tzCom)
 
 	tzRoot.ksk = backup
-	backup = tzRoot.zsk
+	backup = make(dnskeysByTag, len(tzRoot.zsk))
+	maps.Copy(backup, tzRoot.zsk)
 
-	var zk, ks dns.DNSKEY
-	for _, zk = range tzRoot.zsk {
-		break
+	_, dsSigs, queryErr := r.QueryRRSet(context.Background(), "com.", dns.TypeDS)
+	a.NoError(queryErr)
+	a.NotEmpty(dsSigs)
+	dsSignerTag := dsSigs[0].KeyTag
+	for keyTag, keys := range tzRoot.zsk {
+		if keyTag != dsSignerTag {
+			tzRoot.zsk[dsSignerTag] = keys
+			break
+		}
 	}
-	for _, ks = range tzRoot.ksk {
-		break
-	}
-	tzRoot.zsk[zk.KeyTag()] = ks
 	tzCom, cacheOutdated, err = makeTrustedZone(context.Background(), "com.", tzRoot, r, tt)
 	a.Error(err)
 	a.Contains(err.Error(), "DS signature verification failed")
@@ -193,6 +198,45 @@ func TestMakeTrustedZone(t *testing.T) {
 	a.False(cacheOutdated)
 	a.Empty(tzTest)
 }
+
+func TestMakeTrustedZoneIgnoresRSAMD5Key(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	r := makeEmptyTestResolver()
+
+	rootKSK, rootKSKsk := getKey(".", dns.ZONE|dns.SEP)
+	rootZSK, rootZSKsk := getKey(".", dns.ZONE)
+	a.NoError(r.updateDSRecord(".", &[]dns.DS{*rootKSK.ToDS(dns.SHA256)}, time.Time{}))
+	a.NoError(r.updateDNSKeyRecord(".", rootKSK, rootKSKsk, time.Time{}))
+	a.NoError(r.updateDNSKeyRecord(".", rootZSK, rootZSKsk, time.Time{}))
+
+	malformedKey := &dns.DNSKEY{
+		Hdr:       dns.RR_Header{Name: ".", Rrtype: dns.TypeDNSKEY, Class: dns.ClassINET},
+		Flags:     dns.ZONE,
+		Protocol:  3,
+		Algorithm: dns.RSAMD5,
+		PublicKey: "AQI=",
+	}
+	dnskeyRRSet := append(r.entries["."][dns.TypeDNSKEY].rr, malformedKey)
+	dnskeySig, err := r.sign(dnskeyRRSet, ".", rootKSK.KeyTag(), time.Time{}, rootKSKsk)
+	a.NoError(err)
+	r.entries["."][dns.TypeDNSKEY] = rrRec{rr: dnskeyRRSet, sig: []dns.RRSIG{dnskeySig}}
+
+	tz, cacheOutdated, err := makeTrustedZone(context.Background(), ".", trustedZone{}, r, time.Now())
+	a.NoError(err)
+	a.False(cacheOutdated)
+	keyCount := 0
+	for _, keys := range tz.zsk {
+		keyCount += len(keys)
+		for _, key := range keys {
+			a.NotEqual(uint8(dns.RSAMD5), key.Algorithm)
+		}
+	}
+	a.Equal(2, keyCount)
+	a.Len(tz.ksk, 1)
+}
+
 func TestVerifyRRSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -205,10 +249,14 @@ func TestVerifyRRSig(t *testing.T) {
 	zsks, ksks, _ := r.queryDNSKeyRRSet(".")
 	rrs, rrsigs, _ := r.QueryRRSet(context.Background(), ".", dns.TypeDNSKEY)
 
-	zskRoot := make(map[uint16]dns.DNSKEY)
-	zskRoot[zsks[0].KeyTag()] = zsks[0]
-	kskRoot := make(map[uint16]dns.DNSKEY)
-	kskRoot[ksks[0].KeyTag()] = ksks[0]
+	zskRoot := make(dnskeysByTag)
+	zskRoot.add(sameTagKey(t, zsks[0]))
+	zskRoot.add(zsks[0])
+	kskRoot := make(dnskeysByTag)
+	decoyRootKSK := sameTagKey(t, ksks[0])
+	kskRoot.add(decoyRootKSK)
+	kskRoot.add(ksks[0])
+	a.Len(kskRoot[ksks[0].KeyTag()], 2)
 
 	verified := verifyRRSig(rrs, rrsigs, tt, kskRoot)
 	a.Greater(len(verified), 0)
@@ -216,10 +264,10 @@ func TestVerifyRRSig(t *testing.T) {
 	// check com. DNSKEY RRSIG
 	zsks, ksks, _ = r.queryDNSKeyRRSet("com.")
 	rrs, rrsigs, _ = r.QueryRRSet(context.Background(), "com.", dns.TypeDNSKEY)
-	zskCom := make(map[uint16]dns.DNSKEY)
-	zskCom[zsks[0].KeyTag()] = zsks[0]
-	kskCom := make(map[uint16]dns.DNSKEY)
-	kskCom[ksks[0].KeyTag()] = ksks[0]
+	zskCom := make(dnskeysByTag)
+	zskCom.add(zsks[0])
+	kskCom := make(dnskeysByTag)
+	kskCom.add(ksks[0])
 
 	verified = verifyRRSig(rrs, rrsigs, tt, kskCom)
 	a.Greater(len(verified), 0)
@@ -244,16 +292,20 @@ func TestMatchKSKDigest(t *testing.T) {
 
 	zsks, ksks, _ := r.queryDNSKeyRRSet("com.")
 	dss, _, _ := r.queryDSRRSet("com.")
+	matchingDS := dss[0]
 
-	ksk := make(map[uint16]dns.DNSKEY)
-	ksk[ksks[0].KeyTag()] = ksks[0]
+	ksk := make(dnskeysByTag)
+	decoyKSK := sameTagKey(t, ksks[0])
+	ksk.add(decoyKSK)
+	ksk.add(ksks[0])
 
 	matchedDS, verifiedKSK := matchKSKDigest(dss, ksk)
 	a.Equal(1, len(verifiedKSK))
+	a.Equal([]dns.DNSKEY{ksks[0]}, verifiedKSK[ksks[0].KeyTag()])
 	a.Equal(1, len(matchedDS))
 
 	// add a random key and ensure matches
-	ksk[zsks[0].KeyTag()] = zsks[0]
+	ksk.add(zsks[0])
 	matchedDS, verifiedKSK = matchKSKDigest(dss, ksk)
 	a.Equal(1, len(verifiedKSK))
 	a.Equal(1, len(matchedDS))
@@ -273,4 +325,53 @@ func TestMatchKSKDigest(t *testing.T) {
 	matchedDS, verifiedKSK = matchKSKDigest(dss, ksk)
 	a.Equal(0, len(verifiedKSK))
 	a.Equal(0, len(matchedDS))
+
+	// Unsupported DS digest algorithms are ignored.
+	unsupportedDS := matchingDS
+	unsupportedDS.DigestType = 255
+	matchedDS, verifiedKSK = matchKSKDigest([]dns.DS{unsupportedDS}, ksk)
+	a.Empty(verifiedKSK)
+	a.Empty(matchedDS)
+
+	// An unsupported digest must not prevent a later supported DS from matching.
+	matchedDS, verifiedKSK = matchKSKDigest([]dns.DS{unsupportedDS, matchingDS}, ksk)
+	a.Equal([]dns.DNSKEY{ksks[0]}, verifiedKSK[ksks[0].KeyTag()])
+	a.Equal([]dns.DS{matchingDS}, matchedDS)
+
+	// A DS whose algorithm differs from the DNSKEY algorithm does not match,
+	// even when its digest does.
+	a.Equal(uint8(dns.RSASHA256), ksks[0].Algorithm)
+	for _, alg := range []uint8{dns.ECDSAP256SHA256, 255} {
+		mismatchedDS := matchingDS
+		mismatchedDS.Algorithm = alg
+		matchedDS, verifiedKSK = matchKSKDigest([]dns.DS{mismatchedDS}, ksk)
+		a.Empty(verifiedKSK)
+		a.Empty(matchedDS)
+
+		// A mismatched algorithm must not prevent a later valid DS from matching.
+		matchedDS, verifiedKSK = matchKSKDigest([]dns.DS{mismatchedDS, matchingDS}, ksk)
+		a.Equal([]dns.DNSKEY{ksks[0]}, verifiedKSK[ksks[0].KeyTag()])
+		a.Equal([]dns.DS{matchingDS}, matchedDS)
+	}
+}
+
+func sameTagKey(t *testing.T, key dns.DNSKEY) dns.DNSKEY {
+	t.Helper()
+
+	publicKey, err := base64.StdEncoding.DecodeString(key.PublicKey)
+	require.NoError(t, err)
+	for i := len(publicKey) - 1; i >= 2; i-- {
+		for j := i - 2; j >= 0; j -= 2 {
+			if publicKey[i] == publicKey[j] {
+				continue
+			}
+			publicKey[i], publicKey[j] = publicKey[j], publicKey[i]
+			decoy := key
+			decoy.PublicKey = base64.StdEncoding.EncodeToString(publicKey)
+			require.Equal(t, key.KeyTag(), decoy.KeyTag())
+			return decoy
+		}
+	}
+	require.FailNow(t, "could not construct a different key with the same key tag")
+	return dns.DNSKEY{}
 }

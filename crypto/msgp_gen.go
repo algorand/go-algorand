@@ -21,7 +21,37 @@ import (
 //    |-----> (*) MsgIsZero
 //    |-----> DigestMaxSize()
 //
-// FalconPrivateKey
+// Falcon1024PrivateKey
+//           |-----> (*) MarshalMsg
+//           |-----> (*) CanMarshalMsg
+//           |-----> (*) UnmarshalMsg
+//           |-----> (*) UnmarshalMsgWithState
+//           |-----> (*) CanUnmarshalMsg
+//           |-----> (*) Msgsize
+//           |-----> (*) MsgIsZero
+//           |-----> Falcon1024PrivateKeyMaxSize()
+//
+// Falcon1024PublicKey
+//          |-----> (*) MarshalMsg
+//          |-----> (*) CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) UnmarshalMsgWithState
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> (*) Msgsize
+//          |-----> (*) MsgIsZero
+//          |-----> Falcon1024PublicKeyMaxSize()
+//
+// Falcon1024Signature
+//          |-----> MarshalMsg
+//          |-----> CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) UnmarshalMsgWithState
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> Msgsize
+//          |-----> MsgIsZero
+//          |-----> Falcon1024SignatureMaxSize()
+//
+// Falcon1024Signer
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
@@ -29,9 +59,49 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
-//         |-----> FalconPrivateKeyMaxSize()
+//         |-----> Falcon1024SignerMaxSize()
 //
-// FalconPublicKey
+// Falcon1024Verifier
+//          |-----> (*) MarshalMsg
+//          |-----> (*) CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) UnmarshalMsgWithState
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> (*) Msgsize
+//          |-----> (*) MsgIsZero
+//          |-----> Falcon1024VerifierMaxSize()
+//
+// Falcon512PrivateKey
+//          |-----> (*) MarshalMsg
+//          |-----> (*) CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) UnmarshalMsgWithState
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> (*) Msgsize
+//          |-----> (*) MsgIsZero
+//          |-----> Falcon512PrivateKeyMaxSize()
+//
+// Falcon512PublicKey
+//          |-----> (*) MarshalMsg
+//          |-----> (*) CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) UnmarshalMsgWithState
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> (*) Msgsize
+//          |-----> (*) MsgIsZero
+//          |-----> Falcon512PublicKeyMaxSize()
+//
+// Falcon512Signature
+//          |-----> MarshalMsg
+//          |-----> CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) UnmarshalMsgWithState
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> Msgsize
+//          |-----> MsgIsZero
+//          |-----> Falcon512SignatureMaxSize()
+//
+// Falcon512Signer
 //        |-----> (*) MarshalMsg
 //        |-----> (*) CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
@@ -39,37 +109,17 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
-//        |-----> FalconPublicKeyMaxSize()
+//        |-----> Falcon512SignerMaxSize()
 //
-// FalconSignature
-//        |-----> MarshalMsg
-//        |-----> CanMarshalMsg
-//        |-----> (*) UnmarshalMsg
-//        |-----> (*) UnmarshalMsgWithState
-//        |-----> (*) CanUnmarshalMsg
-//        |-----> Msgsize
-//        |-----> MsgIsZero
-//        |-----> FalconSignatureMaxSize()
-//
-// FalconSigner
-//       |-----> (*) MarshalMsg
-//       |-----> (*) CanMarshalMsg
-//       |-----> (*) UnmarshalMsg
-//       |-----> (*) UnmarshalMsgWithState
-//       |-----> (*) CanUnmarshalMsg
-//       |-----> (*) Msgsize
-//       |-----> (*) MsgIsZero
-//       |-----> FalconSignerMaxSize()
-//
-// FalconVerifier
-//        |-----> (*) MarshalMsg
-//        |-----> (*) CanMarshalMsg
-//        |-----> (*) UnmarshalMsg
-//        |-----> (*) UnmarshalMsgWithState
-//        |-----> (*) CanUnmarshalMsg
-//        |-----> (*) Msgsize
-//        |-----> (*) MsgIsZero
-//        |-----> FalconVerifierMaxSize()
+// Falcon512Verifier
+//         |-----> (*) MarshalMsg
+//         |-----> (*) CanMarshalMsg
+//         |-----> (*) UnmarshalMsg
+//         |-----> (*) UnmarshalMsgWithState
+//         |-----> (*) CanUnmarshalMsg
+//         |-----> (*) Msgsize
+//         |-----> (*) MsgIsZero
+//         |-----> Falcon512VerifierMaxSize()
 //
 // GenericDigest
 //       |-----> MarshalMsg
@@ -160,6 +210,16 @@ import (
 //            |-----> (*) Msgsize
 //            |-----> (*) MsgIsZero
 //            |-----> OneTimeSignatureSecretsMaxSize()
+//
+// OneTimeSignatureSecretsHeader
+//               |-----> (*) MarshalMsg
+//               |-----> (*) CanMarshalMsg
+//               |-----> (*) UnmarshalMsg
+//               |-----> (*) UnmarshalMsgWithState
+//               |-----> (*) CanUnmarshalMsg
+//               |-----> (*) Msgsize
+//               |-----> (*) MsgIsZero
+//               |-----> OneTimeSignatureSecretsHeaderMaxSize()
 //
 // OneTimeSignatureSecretsPersistent
 //                 |-----> (*) MarshalMsg
@@ -417,19 +477,19 @@ func DigestMaxSize() (s int) {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *FalconPrivateKey) MarshalMsg(b []byte) (o []byte) {
+func (z *Falcon1024PrivateKey) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
 	return
 }
 
-func (_ *FalconPrivateKey) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*FalconPrivateKey)
+func (_ *Falcon1024PrivateKey) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon1024PrivateKey)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *FalconPrivateKey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+func (z *Falcon1024PrivateKey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
 	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
@@ -444,46 +504,46 @@ func (z *FalconPrivateKey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSt
 	return
 }
 
-func (z *FalconPrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Falcon1024PrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
 }
-func (_ *FalconPrivateKey) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*FalconPrivateKey)
+func (_ *Falcon1024PrivateKey) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon1024PrivateKey)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *FalconPrivateKey) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (FalconPrivateKeySize * (msgp.ByteSize))
+func (z *Falcon1024PrivateKey) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize + (Falcon1024PrivateKeySize * (msgp.ByteSize))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *FalconPrivateKey) MsgIsZero() bool {
-	return (*z) == (FalconPrivateKey{})
+func (z *Falcon1024PrivateKey) MsgIsZero() bool {
+	return (*z) == (Falcon1024PrivateKey{})
 }
 
-// FalconPrivateKeyMaxSize returns a maximum valid message size for this message type
-func FalconPrivateKeyMaxSize() (s int) {
+// Falcon1024PrivateKeyMaxSize returns a maximum valid message size for this message type
+func Falcon1024PrivateKeyMaxSize() (s int) {
 	// Calculating size of array: z
-	s = msgp.ArrayHeaderSize + ((FalconPrivateKeySize) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((Falcon1024PrivateKeySize) * (msgp.ByteSize))
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *FalconPublicKey) MarshalMsg(b []byte) (o []byte) {
+func (z *Falcon1024PublicKey) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
 	return
 }
 
-func (_ *FalconPublicKey) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*FalconPublicKey)
+func (_ *Falcon1024PublicKey) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon1024PublicKey)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *FalconPublicKey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+func (z *Falcon1024PublicKey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
 	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
@@ -498,49 +558,49 @@ func (z *FalconPublicKey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSta
 	return
 }
 
-func (z *FalconPublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Falcon1024PublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
 }
-func (_ *FalconPublicKey) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*FalconPublicKey)
+func (_ *Falcon1024PublicKey) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon1024PublicKey)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *FalconPublicKey) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (FalconPublicKeySize * (msgp.ByteSize))
+func (z *Falcon1024PublicKey) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize + (Falcon1024PublicKeySize * (msgp.ByteSize))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *FalconPublicKey) MsgIsZero() bool {
-	return (*z) == (FalconPublicKey{})
+func (z *Falcon1024PublicKey) MsgIsZero() bool {
+	return (*z) == (Falcon1024PublicKey{})
 }
 
-// FalconPublicKeyMaxSize returns a maximum valid message size for this message type
-func FalconPublicKeyMaxSize() (s int) {
+// Falcon1024PublicKeyMaxSize returns a maximum valid message size for this message type
+func Falcon1024PublicKeyMaxSize() (s int) {
 	// Calculating size of array: z
-	s = msgp.ArrayHeaderSize + ((FalconPublicKeySize) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((Falcon1024PublicKeySize) * (msgp.ByteSize))
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z FalconSignature) MarshalMsg(b []byte) (o []byte) {
+func (z Falcon1024Signature) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, []byte(z))
 	return
 }
 
-func (_ FalconSignature) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(FalconSignature)
+func (_ Falcon1024Signature) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(Falcon1024Signature)
 	if !ok {
-		_, ok = (z).(*FalconSignature)
+		_, ok = (z).(*Falcon1024Signature)
 	}
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *FalconSignature) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+func (z *Falcon1024Signature) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
 	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
@@ -554,8 +614,8 @@ func (z *FalconSignature) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSta
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0002 > FalconMaxSignatureSize {
-			err = msgp.ErrOverflow(uint64(zb0002), uint64(FalconMaxSignatureSize))
+		if zb0002 > Falcon1024MaxSignatureSize {
+			err = msgp.ErrOverflow(uint64(zb0002), uint64(Falcon1024MaxSignatureSize))
 			return
 		}
 		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
@@ -563,48 +623,48 @@ func (z *FalconSignature) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSta
 			err = msgp.WrapError(err)
 			return
 		}
-		(*z) = FalconSignature(zb0001)
+		(*z) = Falcon1024Signature(zb0001)
 	}
 	o = bts
 	return
 }
 
-func (z *FalconSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Falcon1024Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
 }
-func (_ *FalconSignature) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*FalconSignature)
+func (_ *Falcon1024Signature) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon1024Signature)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z FalconSignature) Msgsize() (s int) {
+func (z Falcon1024Signature) Msgsize() (s int) {
 	s = msgp.BytesPrefixSize + len([]byte(z))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z FalconSignature) MsgIsZero() bool {
+func (z Falcon1024Signature) MsgIsZero() bool {
 	return len(z) == 0
 }
 
-// FalconSignatureMaxSize returns a maximum valid message size for this message type
-func FalconSignatureMaxSize() (s int) {
-	s = msgp.BytesPrefixSize + FalconMaxSignatureSize
+// Falcon1024SignatureMaxSize returns a maximum valid message size for this message type
+func Falcon1024SignatureMaxSize() (s int) {
+	s = msgp.BytesPrefixSize + Falcon1024MaxSignatureSize
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *FalconSigner) MarshalMsg(b []byte) (o []byte) {
+func (z *Falcon1024Signer) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0003Len := uint32(2)
 	var zb0003Mask uint8 /* 3 bits */
-	if (*z).PublicKey == (FalconPublicKey{}) {
+	if (*z).PublicKey == (Falcon1024PublicKey{}) {
 		zb0003Len--
 		zb0003Mask |= 0x2
 	}
-	if (*z).PrivateKey == (FalconPrivateKey{}) {
+	if (*z).PrivateKey == (Falcon1024PrivateKey{}) {
 		zb0003Len--
 		zb0003Mask |= 0x4
 	}
@@ -625,13 +685,13 @@ func (z *FalconSigner) MarshalMsg(b []byte) (o []byte) {
 	return
 }
 
-func (_ *FalconSigner) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*FalconSigner)
+func (_ *Falcon1024Signer) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon1024Signer)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *FalconSigner) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+func (z *Falcon1024Signer) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
 	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
@@ -642,69 +702,38 @@ func (z *FalconSigner) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState)
 	var zb0003 int
 	var zb0004 bool
 	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0004 {
+		(*z) = Falcon1024Signer{}
+	}
+	for zb0003 > 0 {
+		zb0003--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 > 0 {
-			zb0003--
+		switch string(field) {
+		case "pk":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).PublicKey)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PublicKey")
+				err = msgp.WrapError(err, "PublicKey")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "sk":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).PrivateKey)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PrivateKey")
+				err = msgp.WrapError(err, "PrivateKey")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0003)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0004 {
-			(*z) = FalconSigner{}
-		}
-		for zb0003 > 0 {
-			zb0003--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "pk":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).PublicKey)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "PublicKey")
-					return
-				}
-			case "sk":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).PrivateKey)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "PrivateKey")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -712,43 +741,43 @@ func (z *FalconSigner) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState)
 	return
 }
 
-func (z *FalconSigner) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Falcon1024Signer) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
 }
-func (_ *FalconSigner) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*FalconSigner)
+func (_ *Falcon1024Signer) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon1024Signer)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *FalconSigner) Msgsize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + (FalconPublicKeySize * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (FalconPrivateKeySize * (msgp.ByteSize))
+func (z *Falcon1024Signer) Msgsize() (s int) {
+	s = 1 + 3 + msgp.ArrayHeaderSize + (Falcon1024PublicKeySize * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (Falcon1024PrivateKeySize * (msgp.ByteSize))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *FalconSigner) MsgIsZero() bool {
-	return ((*z).PublicKey == (FalconPublicKey{})) && ((*z).PrivateKey == (FalconPrivateKey{}))
+func (z *Falcon1024Signer) MsgIsZero() bool {
+	return ((*z).PublicKey == (Falcon1024PublicKey{})) && ((*z).PrivateKey == (Falcon1024PrivateKey{}))
 }
 
-// FalconSignerMaxSize returns a maximum valid message size for this message type
-func FalconSignerMaxSize() (s int) {
+// Falcon1024SignerMaxSize returns a maximum valid message size for this message type
+func Falcon1024SignerMaxSize() (s int) {
 	s = 1 + 3
 	// Calculating size of array: z.PublicKey
-	s += msgp.ArrayHeaderSize + ((FalconPublicKeySize) * (msgp.ByteSize))
+	s += msgp.ArrayHeaderSize + ((Falcon1024PublicKeySize) * (msgp.ByteSize))
 	s += 3
 	// Calculating size of array: z.PrivateKey
-	s += msgp.ArrayHeaderSize + ((FalconPrivateKeySize) * (msgp.ByteSize))
+	s += msgp.ArrayHeaderSize + ((Falcon1024PrivateKeySize) * (msgp.ByteSize))
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *FalconVerifier) MarshalMsg(b []byte) (o []byte) {
+func (z *Falcon1024Verifier) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0002Len := uint32(1)
 	var zb0002Mask uint8 /* 2 bits */
-	if (*z).PublicKey == (FalconPublicKey{}) {
+	if (*z).PublicKey == (Falcon1024PublicKey{}) {
 		zb0002Len--
 		zb0002Mask |= 0x2
 	}
@@ -764,13 +793,13 @@ func (z *FalconVerifier) MarshalMsg(b []byte) (o []byte) {
 	return
 }
 
-func (_ *FalconVerifier) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*FalconVerifier)
+func (_ *Falcon1024Verifier) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon1024Verifier)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *FalconVerifier) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+func (z *Falcon1024Verifier) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
 	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
@@ -781,55 +810,32 @@ func (z *FalconVerifier) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalStat
 	var zb0002 int
 	var zb0003 bool
 	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0003 {
+		(*z) = Falcon1024Verifier{}
+	}
+	for zb0002 > 0 {
+		zb0002--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0002 > 0 {
-			zb0002--
+		switch string(field) {
+		case "k":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).PublicKey)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PublicKey")
+				err = msgp.WrapError(err, "PublicKey")
 				return
 			}
-		}
-		if zb0002 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0002)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0003 {
-			(*z) = FalconVerifier{}
-		}
-		for zb0002 > 0 {
-			zb0002--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "k":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).PublicKey)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "PublicKey")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -837,30 +843,424 @@ func (z *FalconVerifier) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalStat
 	return
 }
 
-func (z *FalconVerifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Falcon1024Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
 }
-func (_ *FalconVerifier) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*FalconVerifier)
+func (_ *Falcon1024Verifier) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon1024Verifier)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *FalconVerifier) Msgsize() (s int) {
-	s = 1 + 2 + msgp.ArrayHeaderSize + (FalconPublicKeySize * (msgp.ByteSize))
+func (z *Falcon1024Verifier) Msgsize() (s int) {
+	s = 1 + 2 + msgp.ArrayHeaderSize + (Falcon1024PublicKeySize * (msgp.ByteSize))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *FalconVerifier) MsgIsZero() bool {
-	return ((*z).PublicKey == (FalconPublicKey{}))
+func (z *Falcon1024Verifier) MsgIsZero() bool {
+	return ((*z).PublicKey == (Falcon1024PublicKey{}))
 }
 
-// FalconVerifierMaxSize returns a maximum valid message size for this message type
-func FalconVerifierMaxSize() (s int) {
+// Falcon1024VerifierMaxSize returns a maximum valid message size for this message type
+func Falcon1024VerifierMaxSize() (s int) {
 	s = 1 + 2
 	// Calculating size of array: z.PublicKey
-	s += msgp.ArrayHeaderSize + ((FalconPublicKeySize) * (msgp.ByteSize))
+	s += msgp.ArrayHeaderSize + ((Falcon1024PublicKeySize) * (msgp.ByteSize))
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *Falcon512PrivateKey) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendBytes(o, (*z)[:])
+	return
+}
+
+func (_ *Falcon512PrivateKey) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon512PrivateKey)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *Falcon512PrivateKey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	o = bts
+	return
+}
+
+func (z *Falcon512PrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *Falcon512PrivateKey) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon512PrivateKey)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *Falcon512PrivateKey) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize + (Falcon512PrivateKeySize * (msgp.ByteSize))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *Falcon512PrivateKey) MsgIsZero() bool {
+	return (*z) == (Falcon512PrivateKey{})
+}
+
+// Falcon512PrivateKeyMaxSize returns a maximum valid message size for this message type
+func Falcon512PrivateKeyMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((Falcon512PrivateKeySize) * (msgp.ByteSize))
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *Falcon512PublicKey) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendBytes(o, (*z)[:])
+	return
+}
+
+func (_ *Falcon512PublicKey) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon512PublicKey)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *Falcon512PublicKey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	o = bts
+	return
+}
+
+func (z *Falcon512PublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *Falcon512PublicKey) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon512PublicKey)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *Falcon512PublicKey) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize + (Falcon512PublicKeySize * (msgp.ByteSize))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *Falcon512PublicKey) MsgIsZero() bool {
+	return (*z) == (Falcon512PublicKey{})
+}
+
+// Falcon512PublicKeyMaxSize returns a maximum valid message size for this message type
+func Falcon512PublicKeyMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((Falcon512PublicKeySize) * (msgp.ByteSize))
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z Falcon512Signature) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendBytes(o, []byte(z))
+	return
+}
+
+func (_ Falcon512Signature) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(Falcon512Signature)
+	if !ok {
+		_, ok = (z).(*Falcon512Signature)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *Falcon512Signature) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	{
+		var zb0001 []byte
+		var zb0002 int
+		zb0002, err = msgp.ReadBytesBytesHeader(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > Falcon512MaxSignatureSize {
+			err = msgp.ErrOverflow(uint64(zb0002), uint64(Falcon512MaxSignatureSize))
+			return
+		}
+		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = Falcon512Signature(zb0001)
+	}
+	o = bts
+	return
+}
+
+func (z *Falcon512Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *Falcon512Signature) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon512Signature)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z Falcon512Signature) Msgsize() (s int) {
+	s = msgp.BytesPrefixSize + len([]byte(z))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z Falcon512Signature) MsgIsZero() bool {
+	return len(z) == 0
+}
+
+// Falcon512SignatureMaxSize returns a maximum valid message size for this message type
+func Falcon512SignatureMaxSize() (s int) {
+	s = msgp.BytesPrefixSize + Falcon512MaxSignatureSize
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *Falcon512Signer) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0003Len := uint32(2)
+	var zb0003Mask uint8 /* 3 bits */
+	if (*z).PublicKey == (Falcon512PublicKey{}) {
+		zb0003Len--
+		zb0003Mask |= 0x2
+	}
+	if (*z).PrivateKey == (Falcon512PrivateKey{}) {
+		zb0003Len--
+		zb0003Mask |= 0x4
+	}
+	// variable map header, size zb0003Len
+	o = append(o, 0x80|uint8(zb0003Len))
+	if zb0003Len != 0 {
+		if (zb0003Mask & 0x2) == 0 { // if not empty
+			// string "pk"
+			o = append(o, 0xa2, 0x70, 0x6b)
+			o = msgp.AppendBytes(o, ((*z).PublicKey)[:])
+		}
+		if (zb0003Mask & 0x4) == 0 { // if not empty
+			// string "sk"
+			o = append(o, 0xa2, 0x73, 0x6b)
+			o = msgp.AppendBytes(o, ((*z).PrivateKey)[:])
+		}
+	}
+	return
+}
+
+func (_ *Falcon512Signer) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon512Signer)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *Falcon512Signer) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	var field []byte
+	_ = field
+	var zb0003 int
+	var zb0004 bool
+	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0004 {
+		(*z) = Falcon512Signer{}
+	}
+	for zb0003 > 0 {
+		zb0003--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch string(field) {
+		case "pk":
+			bts, err = msgp.ReadExactBytes(bts, ((*z).PublicKey)[:])
+			if err != nil {
+				err = msgp.WrapError(err, "PublicKey")
+				return
+			}
+		case "sk":
+			bts, err = msgp.ReadExactBytes(bts, ((*z).PrivateKey)[:])
+			if err != nil {
+				err = msgp.WrapError(err, "PrivateKey")
+				return
+			}
+		default:
+			err = msgp.ErrNoField(string(field))
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (z *Falcon512Signer) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *Falcon512Signer) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon512Signer)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *Falcon512Signer) Msgsize() (s int) {
+	s = 1 + 3 + msgp.ArrayHeaderSize + (Falcon512PublicKeySize * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (Falcon512PrivateKeySize * (msgp.ByteSize))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *Falcon512Signer) MsgIsZero() bool {
+	return ((*z).PublicKey == (Falcon512PublicKey{})) && ((*z).PrivateKey == (Falcon512PrivateKey{}))
+}
+
+// Falcon512SignerMaxSize returns a maximum valid message size for this message type
+func Falcon512SignerMaxSize() (s int) {
+	s = 1 + 3
+	// Calculating size of array: z.PublicKey
+	s += msgp.ArrayHeaderSize + ((Falcon512PublicKeySize) * (msgp.ByteSize))
+	s += 3
+	// Calculating size of array: z.PrivateKey
+	s += msgp.ArrayHeaderSize + ((Falcon512PrivateKeySize) * (msgp.ByteSize))
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *Falcon512Verifier) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0002Len := uint32(1)
+	var zb0002Mask uint8 /* 2 bits */
+	if (*z).PublicKey == (Falcon512PublicKey{}) {
+		zb0002Len--
+		zb0002Mask |= 0x2
+	}
+	// variable map header, size zb0002Len
+	o = append(o, 0x80|uint8(zb0002Len))
+	if zb0002Len != 0 {
+		if (zb0002Mask & 0x2) == 0 { // if not empty
+			// string "k"
+			o = append(o, 0xa1, 0x6b)
+			o = msgp.AppendBytes(o, ((*z).PublicKey)[:])
+		}
+	}
+	return
+}
+
+func (_ *Falcon512Verifier) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon512Verifier)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *Falcon512Verifier) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	var field []byte
+	_ = field
+	var zb0002 int
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0003 {
+		(*z) = Falcon512Verifier{}
+	}
+	for zb0002 > 0 {
+		zb0002--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch string(field) {
+		case "k":
+			bts, err = msgp.ReadExactBytes(bts, ((*z).PublicKey)[:])
+			if err != nil {
+				err = msgp.WrapError(err, "PublicKey")
+				return
+			}
+		default:
+			err = msgp.ErrNoField(string(field))
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (z *Falcon512Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *Falcon512Verifier) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Falcon512Verifier)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *Falcon512Verifier) Msgsize() (s int) {
+	s = 1 + 2 + msgp.ArrayHeaderSize + (Falcon512PublicKeySize * (msgp.ByteSize))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *Falcon512Verifier) MsgIsZero() bool {
+	return ((*z).PublicKey == (Falcon512PublicKey{}))
+}
+
+// Falcon512VerifierMaxSize returns a maximum valid message size for this message type
+func Falcon512VerifierMaxSize() (s int) {
+	s = 1 + 2
+	// Calculating size of array: z.PublicKey
+	s += msgp.ArrayHeaderSize + ((Falcon512PublicKeySize) * (msgp.ByteSize))
 	return
 }
 
@@ -973,63 +1373,36 @@ func (z *HashFactory) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = HashFactory{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "t":
 			{
 				var zb0003 uint16
 				zb0003, bts, err = msgp.ReadUint16Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "HashType")
+					err = msgp.WrapError(err, "HashType")
 					return
 				}
 				(*z).HashType = HashType(zb0003)
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = HashFactory{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "t":
-				{
-					var zb0004 uint16
-					zb0004, bts, err = msgp.ReadUint16Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "HashType")
-						return
-					}
-					(*z).HashType = HashType(zb0004)
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -1200,111 +1573,56 @@ func (z *HeartbeatProof) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalStat
 	var zb0006 int
 	var zb0007 bool
 	zb0006, zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0007 {
+		(*z) = HeartbeatProof{}
+	}
+	for zb0006 > 0 {
+		zb0006--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0006 > 0 {
-			zb0006--
+		switch string(field) {
+		case "s":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).Sig)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Sig")
+				err = msgp.WrapError(err, "Sig")
 				return
 			}
-		}
-		if zb0006 > 0 {
-			zb0006--
+		case "p":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).PK)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PK")
+				err = msgp.WrapError(err, "PK")
 				return
 			}
-		}
-		if zb0006 > 0 {
-			zb0006--
+		case "p2":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).PK2)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PK2")
+				err = msgp.WrapError(err, "PK2")
 				return
 			}
-		}
-		if zb0006 > 0 {
-			zb0006--
+		case "p1s":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).PK1Sig)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PK1Sig")
+				err = msgp.WrapError(err, "PK1Sig")
 				return
 			}
-		}
-		if zb0006 > 0 {
-			zb0006--
+		case "p2s":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).PK2Sig)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PK2Sig")
+				err = msgp.WrapError(err, "PK2Sig")
 				return
 			}
-		}
-		if zb0006 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0006)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0007 {
-			(*z) = HeartbeatProof{}
-		}
-		for zb0006 > 0 {
-			zb0006--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "s":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).Sig)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "Sig")
-					return
-				}
-			case "p":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).PK)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "PK")
-					return
-				}
-			case "p2":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).PK2)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "PK2")
-					return
-				}
-			case "p1s":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).PK1Sig)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "PK1Sig")
-					return
-				}
-			case "p2s":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).PK2Sig)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "PK2Sig")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -1469,40 +1787,44 @@ func (z *MultisigSig) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 	var zb0002 int
 	var zb0003 bool
 	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0003 {
+		(*z) = MultisigSig{}
+	}
+	for zb0002 > 0 {
+		zb0002--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0002 > 0 {
-			zb0002--
+		switch string(field) {
+		case "v":
 			(*z).Version, bts, err = msgp.ReadUint8Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Version")
+				err = msgp.WrapError(err, "Version")
 				return
 			}
-		}
-		if zb0002 > 0 {
-			zb0002--
+		case "thr":
 			(*z).Threshold, bts, err = msgp.ReadUint8Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Threshold")
+				err = msgp.WrapError(err, "Threshold")
 				return
 			}
-		}
-		if zb0002 > 0 {
-			zb0002--
+		case "subsig":
 			var zb0004 int
 			var zb0005 bool
 			zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Subsigs")
+				err = msgp.WrapError(err, "Subsigs")
 				return
 			}
 			if zb0004 > maxMultisig {
 				err = msgp.ErrOverflow(uint64(zb0004), uint64(maxMultisig))
-				err = msgp.WrapError(err, "struct-from-array", "Subsigs")
+				err = msgp.WrapError(err, "Subsigs")
 				return
 			}
 			if zb0005 {
@@ -1515,79 +1837,15 @@ func (z *MultisigSig) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 			for zb0001 := range (*z).Subsigs {
 				bts, err = (*z).Subsigs[zb0001].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Subsigs", zb0001)
+					err = msgp.WrapError(err, "Subsigs", zb0001)
 					return
 				}
 			}
-		}
-		if zb0002 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0002)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0003 {
-			(*z) = MultisigSig{}
-		}
-		for zb0002 > 0 {
-			zb0002--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "v":
-				(*z).Version, bts, err = msgp.ReadUint8Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Version")
-					return
-				}
-			case "thr":
-				(*z).Threshold, bts, err = msgp.ReadUint8Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Threshold")
-					return
-				}
-			case "subsig":
-				var zb0006 int
-				var zb0007 bool
-				zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Subsigs")
-					return
-				}
-				if zb0006 > maxMultisig {
-					err = msgp.ErrOverflow(uint64(zb0006), uint64(maxMultisig))
-					err = msgp.WrapError(err, "Subsigs")
-					return
-				}
-				if zb0007 {
-					(*z).Subsigs = nil
-				} else if (*z).Subsigs != nil && cap((*z).Subsigs) >= zb0006 {
-					(*z).Subsigs = ((*z).Subsigs)[:zb0006]
-				} else {
-					(*z).Subsigs = make([]MultisigSubsig, zb0006)
-				}
-				for zb0001 := range (*z).Subsigs {
-					bts, err = (*z).Subsigs[zb0001].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Subsigs", zb0001)
-						return
-					}
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -1694,69 +1952,38 @@ func (z *MultisigSubsig) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalStat
 	var zb0003 int
 	var zb0004 bool
 	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0004 {
+		(*z) = MultisigSubsig{}
+	}
+	for zb0003 > 0 {
+		zb0003--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 > 0 {
-			zb0003--
+		switch string(field) {
+		case "pk":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).Key)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Key")
+				err = msgp.WrapError(err, "Key")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "s":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).Sig)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Sig")
+				err = msgp.WrapError(err, "Sig")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0003)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0004 {
-			(*z) = MultisigSubsig{}
-		}
-		for zb0003 > 0 {
-			zb0003--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "pk":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).Key)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "Key")
-					return
-				}
-			case "s":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).Sig)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "Sig")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -1836,125 +2063,62 @@ func (z *OneTimeSignature) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSt
 	var zb0007 int
 	var zb0008 bool
 	zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0007, zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0008 {
+		(*z) = OneTimeSignature{}
+	}
+	for zb0007 > 0 {
+		zb0007--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0007 > 0 {
-			zb0007--
+		switch string(field) {
+		case "s":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).Sig)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Sig")
+				err = msgp.WrapError(err, "Sig")
 				return
 			}
-		}
-		if zb0007 > 0 {
-			zb0007--
+		case "p":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).PK)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PK")
+				err = msgp.WrapError(err, "PK")
 				return
 			}
-		}
-		if zb0007 > 0 {
-			zb0007--
+		case "ps":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).PKSigOld)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PKSigOld")
+				err = msgp.WrapError(err, "PKSigOld")
 				return
 			}
-		}
-		if zb0007 > 0 {
-			zb0007--
+		case "p2":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).PK2)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PK2")
+				err = msgp.WrapError(err, "PK2")
 				return
 			}
-		}
-		if zb0007 > 0 {
-			zb0007--
+		case "p1s":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).PK1Sig)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PK1Sig")
+				err = msgp.WrapError(err, "PK1Sig")
 				return
 			}
-		}
-		if zb0007 > 0 {
-			zb0007--
+		case "p2s":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).PK2Sig)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PK2Sig")
+				err = msgp.WrapError(err, "PK2Sig")
 				return
 			}
-		}
-		if zb0007 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0007)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0008 {
-			(*z) = OneTimeSignature{}
-		}
-		for zb0007 > 0 {
-			zb0007--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "s":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).Sig)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "Sig")
-					return
-				}
-			case "p":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).PK)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "PK")
-					return
-				}
-			case "ps":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).PKSigOld)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "PKSigOld")
-					return
-				}
-			case "p2":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).PK2)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "PK2")
-					return
-				}
-			case "p1s":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).PK1Sig)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "PK1Sig")
-					return
-				}
-			case "p2s":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).PK2Sig)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "PK2Sig")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -2111,35 +2275,39 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsgWithState(bts []byte, st msgp.Unma
 	var zb0006 int
 	var zb0007 bool
 	zb0006, zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0007 {
+		(*z) = OneTimeSignatureSecrets{}
+	}
+	for zb0006 > 0 {
+		zb0006--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0006 > 0 {
-			zb0006--
+		switch string(field) {
+		case "OneTimeSignatureVerifier":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "OneTimeSignatureVerifier")
+				err = msgp.WrapError(err, "OneTimeSignatureVerifier")
 				return
 			}
-		}
-		if zb0006 > 0 {
-			zb0006--
+		case "First":
 			(*z).OneTimeSignatureSecretsPersistent.FirstBatch, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "FirstBatch")
+				err = msgp.WrapError(err, "FirstBatch")
 				return
 			}
-		}
-		if zb0006 > 0 {
-			zb0006--
+		case "Sub":
 			var zb0008 int
 			var zb0009 bool
 			zb0008, zb0009, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Batches")
+				err = msgp.WrapError(err, "Batches")
 				return
 			}
 			if zb0009 {
@@ -2152,26 +2320,22 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsgWithState(bts []byte, st msgp.Unma
 			for zb0002 := range (*z).OneTimeSignatureSecretsPersistent.Batches {
 				bts, err = (*z).OneTimeSignatureSecretsPersistent.Batches[zb0002].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Batches", zb0002)
+					err = msgp.WrapError(err, "Batches", zb0002)
 					return
 				}
 			}
-		}
-		if zb0006 > 0 {
-			zb0006--
+		case "firstoff":
 			(*z).OneTimeSignatureSecretsPersistent.FirstOffset, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "FirstOffset")
+				err = msgp.WrapError(err, "FirstOffset")
 				return
 			}
-		}
-		if zb0006 > 0 {
-			zb0006--
+		case "offkeys":
 			var zb0010 int
 			var zb0011 bool
 			zb0010, zb0011, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Offsets")
+				err = msgp.WrapError(err, "Offsets")
 				return
 			}
 			if zb0011 {
@@ -2184,130 +2348,27 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsgWithState(bts []byte, st msgp.Unma
 			for zb0003 := range (*z).OneTimeSignatureSecretsPersistent.Offsets {
 				bts, err = (*z).OneTimeSignatureSecretsPersistent.Offsets[zb0003].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Offsets", zb0003)
+					err = msgp.WrapError(err, "Offsets", zb0003)
 					return
 				}
 			}
-		}
-		if zb0006 > 0 {
-			zb0006--
+		case "offpk2":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).OneTimeSignatureSecretsPersistent.OffsetsPK2)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "OffsetsPK2")
+				err = msgp.WrapError(err, "OffsetsPK2")
 				return
 			}
-		}
-		if zb0006 > 0 {
-			zb0006--
+		case "offpk2sig":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).OneTimeSignatureSecretsPersistent.OffsetsPK2Sig)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "OffsetsPK2Sig")
+				err = msgp.WrapError(err, "OffsetsPK2Sig")
 				return
 			}
-		}
-		if zb0006 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0006)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0007 {
-			(*z) = OneTimeSignatureSecrets{}
-		}
-		for zb0006 > 0 {
-			zb0006--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "OneTimeSignatureVerifier":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "OneTimeSignatureVerifier")
-					return
-				}
-			case "First":
-				(*z).OneTimeSignatureSecretsPersistent.FirstBatch, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "FirstBatch")
-					return
-				}
-			case "Sub":
-				var zb0012 int
-				var zb0013 bool
-				zb0012, zb0013, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Batches")
-					return
-				}
-				if zb0013 {
-					(*z).OneTimeSignatureSecretsPersistent.Batches = nil
-				} else if (*z).OneTimeSignatureSecretsPersistent.Batches != nil && cap((*z).OneTimeSignatureSecretsPersistent.Batches) >= zb0012 {
-					(*z).OneTimeSignatureSecretsPersistent.Batches = ((*z).OneTimeSignatureSecretsPersistent.Batches)[:zb0012]
-				} else {
-					(*z).OneTimeSignatureSecretsPersistent.Batches = make([]ephemeralSubkey, zb0012)
-				}
-				for zb0002 := range (*z).OneTimeSignatureSecretsPersistent.Batches {
-					bts, err = (*z).OneTimeSignatureSecretsPersistent.Batches[zb0002].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Batches", zb0002)
-						return
-					}
-				}
-			case "firstoff":
-				(*z).OneTimeSignatureSecretsPersistent.FirstOffset, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "FirstOffset")
-					return
-				}
-			case "offkeys":
-				var zb0014 int
-				var zb0015 bool
-				zb0014, zb0015, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Offsets")
-					return
-				}
-				if zb0015 {
-					(*z).OneTimeSignatureSecretsPersistent.Offsets = nil
-				} else if (*z).OneTimeSignatureSecretsPersistent.Offsets != nil && cap((*z).OneTimeSignatureSecretsPersistent.Offsets) >= zb0014 {
-					(*z).OneTimeSignatureSecretsPersistent.Offsets = ((*z).OneTimeSignatureSecretsPersistent.Offsets)[:zb0014]
-				} else {
-					(*z).OneTimeSignatureSecretsPersistent.Offsets = make([]ephemeralSubkey, zb0014)
-				}
-				for zb0003 := range (*z).OneTimeSignatureSecretsPersistent.Offsets {
-					bts, err = (*z).OneTimeSignatureSecretsPersistent.Offsets[zb0003].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Offsets", zb0003)
-						return
-					}
-				}
-			case "offpk2":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).OneTimeSignatureSecretsPersistent.OffsetsPK2)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "OffsetsPK2")
-					return
-				}
-			case "offpk2sig":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).OneTimeSignatureSecretsPersistent.OffsetsPK2Sig)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "OffsetsPK2Sig")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -2350,6 +2411,201 @@ func OneTimeSignatureSecretsMaxSize() (s int) {
 	s += 6 + msgp.Uint64Size + 4
 	// Calculating size of slice: z.OneTimeSignatureSecretsPersistent.Batches
 	panic("Slice z.OneTimeSignatureSecretsPersistent.Batches is unbounded")
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *OneTimeSignatureSecretsHeader) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0004Len := uint32(7)
+	var zb0004Mask uint8 /* 8 bits */
+	if (*z).FirstBatch == 0 {
+		zb0004Len--
+		zb0004Mask |= 0x2
+	}
+	if (*z).FirstOffset == 0 {
+		zb0004Len--
+		zb0004Mask |= 0x4
+	}
+	if (*z).BatchCount == 0 {
+		zb0004Len--
+		zb0004Mask |= 0x8
+	}
+	if (*z).OffsetCount == 0 {
+		zb0004Len--
+		zb0004Mask |= 0x10
+	}
+	if (*z).Verifier == (OneTimeSignatureVerifier{}) {
+		zb0004Len--
+		zb0004Mask |= 0x20
+	}
+	if (*z).OffsetsPK2 == (ed25519PublicKey{}) {
+		zb0004Len--
+		zb0004Mask |= 0x40
+	}
+	if (*z).OffsetsPK2Sig == (ed25519Signature{}) {
+		zb0004Len--
+		zb0004Mask |= 0x80
+	}
+	// variable map header, size zb0004Len
+	o = append(o, 0x80|uint8(zb0004Len))
+	if zb0004Len != 0 {
+		if (zb0004Mask & 0x2) == 0 { // if not empty
+			// string "fb"
+			o = append(o, 0xa2, 0x66, 0x62)
+			o = msgp.AppendUint64(o, (*z).FirstBatch)
+		}
+		if (zb0004Mask & 0x4) == 0 { // if not empty
+			// string "fo"
+			o = append(o, 0xa2, 0x66, 0x6f)
+			o = msgp.AppendUint64(o, (*z).FirstOffset)
+		}
+		if (zb0004Mask & 0x8) == 0 { // if not empty
+			// string "nb"
+			o = append(o, 0xa2, 0x6e, 0x62)
+			o = msgp.AppendUint64(o, (*z).BatchCount)
+		}
+		if (zb0004Mask & 0x10) == 0 { // if not empty
+			// string "no"
+			o = append(o, 0xa2, 0x6e, 0x6f)
+			o = msgp.AppendUint64(o, (*z).OffsetCount)
+		}
+		if (zb0004Mask & 0x20) == 0 { // if not empty
+			// string "pk"
+			o = append(o, 0xa2, 0x70, 0x6b)
+			o = msgp.AppendBytes(o, ((*z).Verifier)[:])
+		}
+		if (zb0004Mask & 0x40) == 0 { // if not empty
+			// string "pk2"
+			o = append(o, 0xa3, 0x70, 0x6b, 0x32)
+			o = msgp.AppendBytes(o, ((*z).OffsetsPK2)[:])
+		}
+		if (zb0004Mask & 0x80) == 0 { // if not empty
+			// string "pk2sig"
+			o = append(o, 0xa6, 0x70, 0x6b, 0x32, 0x73, 0x69, 0x67)
+			o = msgp.AppendBytes(o, ((*z).OffsetsPK2Sig)[:])
+		}
+	}
+	return
+}
+
+func (_ *OneTimeSignatureSecretsHeader) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*OneTimeSignatureSecretsHeader)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *OneTimeSignatureSecretsHeader) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	var field []byte
+	_ = field
+	var zb0004 int
+	var zb0005 bool
+	zb0004, zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0005 {
+		(*z) = OneTimeSignatureSecretsHeader{}
+	}
+	for zb0004 > 0 {
+		zb0004--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch string(field) {
+		case "pk":
+			bts, err = msgp.ReadExactBytes(bts, ((*z).Verifier)[:])
+			if err != nil {
+				err = msgp.WrapError(err, "Verifier")
+				return
+			}
+		case "fb":
+			(*z).FirstBatch, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "FirstBatch")
+				return
+			}
+		case "nb":
+			(*z).BatchCount, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "BatchCount")
+				return
+			}
+		case "fo":
+			(*z).FirstOffset, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "FirstOffset")
+				return
+			}
+		case "no":
+			(*z).OffsetCount, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "OffsetCount")
+				return
+			}
+		case "pk2":
+			bts, err = msgp.ReadExactBytes(bts, ((*z).OffsetsPK2)[:])
+			if err != nil {
+				err = msgp.WrapError(err, "OffsetsPK2")
+				return
+			}
+		case "pk2sig":
+			bts, err = msgp.ReadExactBytes(bts, ((*z).OffsetsPK2Sig)[:])
+			if err != nil {
+				err = msgp.WrapError(err, "OffsetsPK2Sig")
+				return
+			}
+		default:
+			err = msgp.ErrNoField(string(field))
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (z *OneTimeSignatureSecretsHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *OneTimeSignatureSecretsHeader) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*OneTimeSignatureSecretsHeader)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *OneTimeSignatureSecretsHeader) Msgsize() (s int) {
+	s = 1 + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 3 + msgp.Uint64Size + 3 + msgp.Uint64Size + 3 + msgp.Uint64Size + 3 + msgp.Uint64Size + 4 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 7 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *OneTimeSignatureSecretsHeader) MsgIsZero() bool {
+	return ((*z).Verifier == (OneTimeSignatureVerifier{})) && ((*z).FirstBatch == 0) && ((*z).BatchCount == 0) && ((*z).FirstOffset == 0) && ((*z).OffsetCount == 0) && ((*z).OffsetsPK2 == (ed25519PublicKey{})) && ((*z).OffsetsPK2Sig == (ed25519Signature{}))
+}
+
+// OneTimeSignatureSecretsHeaderMaxSize returns a maximum valid message size for this message type
+func OneTimeSignatureSecretsHeaderMaxSize() (s int) {
+	s = 1 + 3
+	// Calculating size of array: z.Verifier
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 3 + msgp.Uint64Size + 3 + msgp.Uint64Size + 3 + msgp.Uint64Size + 3 + msgp.Uint64Size + 4
+	// Calculating size of array: z.OffsetsPK2
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 7
+	// Calculating size of array: z.OffsetsPK2Sig
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2459,35 +2715,39 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsgWithState(bts []byte, st
 	var zb0006 int
 	var zb0007 bool
 	zb0006, zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0007 {
+		(*z) = OneTimeSignatureSecretsPersistent{}
+	}
+	for zb0006 > 0 {
+		zb0006--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0006 > 0 {
-			zb0006--
+		switch string(field) {
+		case "OneTimeSignatureVerifier":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).OneTimeSignatureVerifier)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "OneTimeSignatureVerifier")
+				err = msgp.WrapError(err, "OneTimeSignatureVerifier")
 				return
 			}
-		}
-		if zb0006 > 0 {
-			zb0006--
+		case "First":
 			(*z).FirstBatch, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "FirstBatch")
+				err = msgp.WrapError(err, "FirstBatch")
 				return
 			}
-		}
-		if zb0006 > 0 {
-			zb0006--
+		case "Sub":
 			var zb0008 int
 			var zb0009 bool
 			zb0008, zb0009, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Batches")
+				err = msgp.WrapError(err, "Batches")
 				return
 			}
 			if zb0009 {
@@ -2500,26 +2760,22 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsgWithState(bts []byte, st
 			for zb0002 := range (*z).Batches {
 				bts, err = (*z).Batches[zb0002].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Batches", zb0002)
+					err = msgp.WrapError(err, "Batches", zb0002)
 					return
 				}
 			}
-		}
-		if zb0006 > 0 {
-			zb0006--
+		case "firstoff":
 			(*z).FirstOffset, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "FirstOffset")
+				err = msgp.WrapError(err, "FirstOffset")
 				return
 			}
-		}
-		if zb0006 > 0 {
-			zb0006--
+		case "offkeys":
 			var zb0010 int
 			var zb0011 bool
 			zb0010, zb0011, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Offsets")
+				err = msgp.WrapError(err, "Offsets")
 				return
 			}
 			if zb0011 {
@@ -2532,130 +2788,27 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsgWithState(bts []byte, st
 			for zb0003 := range (*z).Offsets {
 				bts, err = (*z).Offsets[zb0003].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Offsets", zb0003)
+					err = msgp.WrapError(err, "Offsets", zb0003)
 					return
 				}
 			}
-		}
-		if zb0006 > 0 {
-			zb0006--
+		case "offpk2":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).OffsetsPK2)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "OffsetsPK2")
+				err = msgp.WrapError(err, "OffsetsPK2")
 				return
 			}
-		}
-		if zb0006 > 0 {
-			zb0006--
+		case "offpk2sig":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).OffsetsPK2Sig)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "OffsetsPK2Sig")
+				err = msgp.WrapError(err, "OffsetsPK2Sig")
 				return
 			}
-		}
-		if zb0006 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0006)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0007 {
-			(*z) = OneTimeSignatureSecretsPersistent{}
-		}
-		for zb0006 > 0 {
-			zb0006--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "OneTimeSignatureVerifier":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).OneTimeSignatureVerifier)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "OneTimeSignatureVerifier")
-					return
-				}
-			case "First":
-				(*z).FirstBatch, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "FirstBatch")
-					return
-				}
-			case "Sub":
-				var zb0012 int
-				var zb0013 bool
-				zb0012, zb0013, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Batches")
-					return
-				}
-				if zb0013 {
-					(*z).Batches = nil
-				} else if (*z).Batches != nil && cap((*z).Batches) >= zb0012 {
-					(*z).Batches = ((*z).Batches)[:zb0012]
-				} else {
-					(*z).Batches = make([]ephemeralSubkey, zb0012)
-				}
-				for zb0002 := range (*z).Batches {
-					bts, err = (*z).Batches[zb0002].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Batches", zb0002)
-						return
-					}
-				}
-			case "firstoff":
-				(*z).FirstOffset, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "FirstOffset")
-					return
-				}
-			case "offkeys":
-				var zb0014 int
-				var zb0015 bool
-				zb0014, zb0015, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Offsets")
-					return
-				}
-				if zb0015 {
-					(*z).Offsets = nil
-				} else if (*z).Offsets != nil && cap((*z).Offsets) >= zb0014 {
-					(*z).Offsets = ((*z).Offsets)[:zb0014]
-				} else {
-					(*z).Offsets = make([]ephemeralSubkey, zb0014)
-				}
-				for zb0003 := range (*z).Offsets {
-					bts, err = (*z).Offsets[zb0003].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Offsets", zb0003)
-						return
-					}
-				}
-			case "offpk2":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).OffsetsPK2)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "OffsetsPK2")
-					return
-				}
-			case "offpk2sig":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).OffsetsPK2Sig)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "OffsetsPK2Sig")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -2730,69 +2883,38 @@ func (z *OneTimeSignatureSubkeyBatchID) UnmarshalMsgWithState(bts []byte, st msg
 	var zb0002 int
 	var zb0003 bool
 	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0003 {
+		(*z) = OneTimeSignatureSubkeyBatchID{}
+	}
+	for zb0002 > 0 {
+		zb0002--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0002 > 0 {
-			zb0002--
+		switch string(field) {
+		case "pk":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).SubKeyPK)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "SubKeyPK")
+				err = msgp.WrapError(err, "SubKeyPK")
 				return
 			}
-		}
-		if zb0002 > 0 {
-			zb0002--
+		case "batch":
 			(*z).Batch, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Batch")
+				err = msgp.WrapError(err, "Batch")
 				return
 			}
-		}
-		if zb0002 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0002)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0003 {
-			(*z) = OneTimeSignatureSubkeyBatchID{}
-		}
-		for zb0002 > 0 {
-			zb0002--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "pk":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).SubKeyPK)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "SubKeyPK")
-					return
-				}
-			case "batch":
-				(*z).Batch, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Batch")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -2861,83 +2983,44 @@ func (z *OneTimeSignatureSubkeyOffsetID) UnmarshalMsgWithState(bts []byte, st ms
 	var zb0002 int
 	var zb0003 bool
 	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0003 {
+		(*z) = OneTimeSignatureSubkeyOffsetID{}
+	}
+	for zb0002 > 0 {
+		zb0002--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0002 > 0 {
-			zb0002--
+		switch string(field) {
+		case "pk":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).SubKeyPK)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "SubKeyPK")
+				err = msgp.WrapError(err, "SubKeyPK")
 				return
 			}
-		}
-		if zb0002 > 0 {
-			zb0002--
+		case "batch":
 			(*z).Batch, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Batch")
+				err = msgp.WrapError(err, "Batch")
 				return
 			}
-		}
-		if zb0002 > 0 {
-			zb0002--
+		case "off":
 			(*z).Offset, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Offset")
+				err = msgp.WrapError(err, "Offset")
 				return
 			}
-		}
-		if zb0002 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0002)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0003 {
-			(*z) = OneTimeSignatureSubkeyOffsetID{}
-		}
-		for zb0002 > 0 {
-			zb0002--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "pk":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).SubKeyPK)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "SubKeyPK")
-					return
-				}
-			case "batch":
-				(*z).Batch, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Batch")
-					return
-				}
-			case "off":
-				(*z).Offset, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Offset")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -3327,69 +3410,38 @@ func (z *SignatureSecrets) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSt
 	var zb0003 int
 	var zb0004 bool
 	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0004 {
+		(*z) = SignatureSecrets{}
+	}
+	for zb0003 > 0 {
+		zb0003--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 > 0 {
-			zb0003--
+		switch string(field) {
+		case "SignatureVerifier":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).SignatureVerifier)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "SignatureVerifier")
+				err = msgp.WrapError(err, "SignatureVerifier")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "SK":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).SK)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "SK")
+				err = msgp.WrapError(err, "SK")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0003)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0004 {
-			(*z) = SignatureSecrets{}
-		}
-		for zb0003 > 0 {
-			zb0003--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "SignatureVerifier":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).SignatureVerifier)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "SignatureVerifier")
-					return
-				}
-			case "SK":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).SK)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "SK")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -3457,69 +3509,38 @@ func (z *VRFSecrets) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (
 	var zb0003 int
 	var zb0004 bool
 	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0004 {
+		(*z) = VRFSecrets{}
+	}
+	for zb0003 > 0 {
+		zb0003--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 > 0 {
-			zb0003--
+		switch string(field) {
+		case "PK":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).PK)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PK")
+				err = msgp.WrapError(err, "PK")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "SK":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).SK)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "SK")
+				err = msgp.WrapError(err, "SK")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0003)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0004 {
-			(*z) = VRFSecrets{}
-		}
-		for zb0003 > 0 {
-			zb0003--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "PK":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).PK)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "PK")
-					return
-				}
-			case "SK":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).SK)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "SK")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -4025,97 +4046,50 @@ func (z *ephemeralSubkey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSta
 	var zb0005 int
 	var zb0006 bool
 	zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0006 {
+		(*z) = ephemeralSubkey{}
+	}
+	for zb0005 > 0 {
+		zb0005--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0005 > 0 {
-			zb0005--
+		switch string(field) {
+		case "PK":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).PK)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PK")
+				err = msgp.WrapError(err, "PK")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "SK":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).SK)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "SK")
+				err = msgp.WrapError(err, "SK")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "PKSig":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).PKSigOld)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PKSigOld")
+				err = msgp.WrapError(err, "PKSigOld")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			zb0005--
+		case "sig2":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).PKSigNew)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PKSigNew")
+				err = msgp.WrapError(err, "PKSigNew")
 				return
 			}
-		}
-		if zb0005 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0005)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0006 {
-			(*z) = ephemeralSubkey{}
-		}
-		for zb0005 > 0 {
-			zb0005--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "PK":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).PK)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "PK")
-					return
-				}
-			case "SK":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).SK)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "SK")
-					return
-				}
-			case "PKSig":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).PKSigOld)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "PKSigOld")
-					return
-				}
-			case "sig2":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).PKSigNew)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "PKSigNew")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}

@@ -46,21 +46,20 @@ func commitRound(offset uint64, dbRound basics.Round, l *Ledger) {
 	commitRoundLookback(l.Latest().SubSaturate(dbRound+basics.Round(offset)), l)
 }
 
+// commitRoundLookback schedules a commit and waits until the tracker db round has
+// actually reached Latest()-lookback.
 func commitRoundLookback(lookback basics.Round, l *Ledger) {
-	l.trackers.mu.Lock()
-	l.trackers.lastFlushTime = time.Time{}
-	l.trackers.mu.Unlock()
-
-	l.trackers.scheduleCommit(l.Latest(), lookback)
-	// wait for the operation to complete. Once it does complete, the tr.lastFlushTime is going to be updated, so we can
-	// use that as an indicator.
+	target := l.Latest().SubSaturate(lookback)
 	for {
 		l.trackers.mu.Lock()
-		isDone := (!l.trackers.lastFlushTime.IsZero()) && (len(l.trackers.deferredCommits) == 0)
+		dbRound := l.trackers.dbRound
+		l.trackers.lastFlushTime = time.Time{} // force a flush
 		l.trackers.mu.Unlock()
-		if isDone {
-			break
+
+		if dbRound >= target {
+			return
 		}
+		l.trackers.scheduleCommit(l.Latest(), lookback)
 		time.Sleep(time.Millisecond)
 	}
 }
@@ -1449,8 +1448,16 @@ return
 		l1.AddBlock(blk, agreement.Certificate{})
 	}
 
+	// Wait for the blocks to reach the block DB before flushing the trackers.
+	// commitRound derives the round to flush from l1.Latest(), which counts
+	// blocks still queued in the blockQueue, and Close() discards whatever is
+	// left in that queue. Without this the tracker DB can end up ahead of the
+	// block DB, and reopening below resets the accounts DB back to genesis.
+	l1.WaitForCommit(l1.Latest())
+
 	app, err := l1.LookupApplication(l1.Latest(), creator, appIdx)
 	a.NoError(err)
+	a.NotNil(app.AppParams)
 	a.Greater(len(app.AppParams.ApprovalProgram), 0)
 
 	commitRound(10, 0, l1)
@@ -1464,6 +1471,9 @@ return
 
 	app, err = l2.LookupApplication(l2.Latest(), creator, appIdx)
 	a.NoError(err)
+	// LookupApplication reports a missing app as a nil AppParams with no error,
+	// so assert it exists rather than nil-dereferencing it below.
+	a.NotNil(app.AppParams)
 	a.Greater(len(app.AppParams.ApprovalProgram), 0)
 
 	txHeader = transactions.Header{

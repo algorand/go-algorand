@@ -373,6 +373,66 @@ func TestBuildMerkleTrie(t *testing.T) {
 	require.Equal(t, basics.Round(0), blockRound)
 }
 
+// TestBuildMerkleTrieDuplicateHash stages a catchpoint with a repeated account hash. The
+// trie writer rejects it, but stops draining writerQueue as it does, so the hash reader
+// must notice rather than park on a send. A parked reader means BuildMerkleTrie never
+// returns and the node stays wedged in catchup holding a database snapshot.
+func TestBuildMerkleTrieDuplicateHash(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	log := logging.TestingLog(t)
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(log, t.Name(), true, genesisInitState, cfg)
+	require.NoError(t, err, "could not open ledger")
+	defer l.Close()
+
+	catchpointAccessor := MakeCatchpointCatchupAccessor(l, log)
+	ctx := context.Background()
+	err = catchpointAccessor.ResetStagingBalances(ctx, true)
+	require.NoError(t, err, "ResetStagingBalances")
+
+	// The writer fails on the first chunk, so the reader needs enough left to fill the queue
+	// and still hold one. With fewer it finishes scanning before the queue backs up, and the
+	// deadlock stays hidden.
+	const chunks = trieRebuildQueueDepth + 2
+	hashes := make([][]byte, chunks*trieRebuildAccountChunkSize)
+	for i := range hashes {
+		hash := make([]byte, 4+crypto.DigestSize)
+		hash[trackerdb.HashKindEncodingIndex] = byte(trackerdb.AccountHK)
+		// The pending-hash iterator reads ORDER BY data, so a leading counter fixes the
+		// order and keeps the duplicate pair first.
+		binary.BigEndian.PutUint32(hash[trackerdb.HashKindEncodingIndex+1:], uint32(i))
+		hashes[i] = hash
+	}
+	// The duplicate, sorted first so the writer fails on chunk 1 with most of the scan
+	// still ahead of the reader.
+	hashes[1] = hashes[0]
+
+	err = l.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
+		crw, err := tx.MakeCatchpointWriter()
+		if err != nil {
+			return err
+		}
+		return crw.WriteCatchpointStagingHashes(ctx, []trackerdb.NormalizedAccountBalance{{AccountHashes: hashes}})
+	})
+	require.NoError(t, err, "WriteCatchpointStagingHashes")
+
+	done := make(chan error, 1)
+	go func() {
+		done <- catchpointAccessor.BuildMerkleTrie(ctx, nil)
+	}()
+
+	select {
+	case err := <-done:
+		require.ErrorContains(t, err, "contained the same account more than once")
+	case <-time.After(30 * time.Second):
+		// Unrecoverable: the parked reader and the database snapshot it holds leak for the
+		// rest of the test binary's run.
+		t.Fatal("BuildMerkleTrie did not return: the hash reader deadlocked on writerQueue")
+	}
+}
+
 func TestCatchupAccessorStateProofVerificationContext(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

@@ -1,7 +1,6 @@
 package: experimental
 generate:
   echo-server: true
-  embedded-spec: true
 output-options:
   include-tags:
   - experimental

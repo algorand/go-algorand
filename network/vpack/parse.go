@@ -234,7 +234,7 @@ func parseMsgpVote(msgpData []byte, c *StatelessEncoder) error {
 		return fmt.Errorf("reading ps: %w", err)
 	}
 	if val64 != [64]byte{} {
-		return fmt.Errorf("expected empty array for ps, got %v", val64)
+		return fmt.Errorf("expected empty array for ps, got %x", val64)
 	}
 
 	// Required field for OneTimeSignature: s

@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"crypto/mldsa"
 	"encoding/hex"
 	"fmt"
 	"slices"
@@ -3383,6 +3384,12 @@ func TestReturnTypes(t *testing.T) {
 		"mimc": ": byte 0x0000000000000000000000000000000000000000000000000000000000000001; mimc BN254Mp110",
 		// poseidon2 requires an input size multiple of 32 bytes.
 		"poseidon2": ": byte 0x0000000000000000000000000000000000000000000000000000000000000001; poseidon2 BN254t2",
+		// falcon_verify's required pubkey length comes from its configuration
+		// immediate, so it can't be inferred from the opcode's proto.
+		"falcon_verify": ": byte 0x3456; byte 0x3456; byte 0x" + strings.Repeat("33", 1793) + "; falcon_verify FalconDet1024",
+		// Likewise mldsa_verify's signature and pubkey lengths.
+		"mldsa_verify": ": byte 0x3456; byte 0x" + strings.Repeat("33", mldsa.MLDSA44SignatureSize) +
+			"; byte 0x" + strings.Repeat("33", mldsa.MLDSA44PublicKeySize) + "; byte 0x; mldsa_verify MLDSA44",
 	}
 
 	/* Make sure the specialCmd tests the opcode in question */
@@ -3458,7 +3465,7 @@ func TestReturnTypes(t *testing.T) {
 								cmd += " 0x123456"
 							case immBytess:
 								cmd += " 0x12 0x34 0x56"
-							case immLabel:
+							case immLabel, immVarintLabel:
 								cmd += " done; done: ;"
 							case immLabels:
 								cmd += " done1 done2; done1: ; done2: ;"
@@ -3539,7 +3546,7 @@ func TestReturnTypes(t *testing.T) {
 				if m == ModeApp {
 					_, cx, err = EvalContract(ops.Program, 1, 300, aep)
 				} else {
-					_, cx, err = EvalSignatureFull(1, sep)
+					_, cx, err = EvalSignatureProgram(ops.Program, tx1.Lsig.Args, 1, sep)
 				}
 				// These little programs need not pass. We are just trying to
 				// examine cx.Stack for proper types/size after executing the
@@ -3829,7 +3836,7 @@ func TestPooledAppCallsVerifyOp(t *testing.T) {
 	call := transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.ApplicationCallTx}}
 	// Simulate test with 2 grouped txn
 	testApps(t, []string{source, ""}, []transactions.SignedTxn{call, call}, nil, ledger,
-		exp(0, "dynamic cost budget exceeded, executing ed25519verify: local program cost was 5"))
+		exp(0, "dynamic cost budget exceeded, executing ed25519verify (1900): local program cost was 5"))
 
 	// Simulate test with 3 grouped txn
 	testApps(t, []string{source, "", ""}, []transactions.SignedTxn{call, call, call}, nil, ledger)

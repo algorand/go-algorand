@@ -218,28 +218,28 @@ func makeWebsocketVoteNets(t *testing.T, cfgA, cfgB config.Local) (*voteTestNet,
 	}, 5*time.Second, 50*time.Millisecond)
 
 	return &voteTestNet{
-			name:    "websocket-A",
-			network: netA,
-			stop:    func() { netStop(t, netA, "A") },
-			peerFn: func() *wsPeer {
-				peers := netA.GetPeers(PeersConnectedIn)
-				if len(peers) != 1 {
-					return nil
-				}
-				return peers[0].(*wsPeer)
-			},
-		}, &voteTestNet{
-			name:    "websocket-B",
-			network: netB,
-			stop:    func() { netStop(t, netB, "B") },
-			peerFn: func() *wsPeer {
-				peers := netB.GetPeers(PeersConnectedOut)
-				if len(peers) != 1 {
-					return nil
-				}
-				return peers[0].(*wsPeer)
-			},
-		}
+		name:    "websocket-A",
+		network: netA,
+		stop:    func() { netStop(t, netA, "A") },
+		peerFn: func() *wsPeer {
+			peers := netA.GetPeers(PeersConnectedIn)
+			if len(peers) != 1 {
+				return nil
+			}
+			return peers[0].(*wsPeer)
+		},
+	}, &voteTestNet{
+		name:    "websocket-B",
+		network: netB,
+		stop:    func() { netStop(t, netB, "B") },
+		peerFn: func() *wsPeer {
+			peers := netB.GetPeers(PeersConnectedOut)
+			if len(peers) != 1 {
+				return nil
+			}
+			return peers[0].(*wsPeer)
+		},
+	}
 }
 
 func makeP2PVoteNets(t *testing.T, cfgA, cfgB config.Local) (*voteTestNet, *voteTestNet) {
@@ -275,30 +275,30 @@ func makeP2PVoteNets(t *testing.T, cfgA, cfgB config.Local) (*voteTestNet, *vote
 	}, 5*time.Second, 50*time.Millisecond)
 
 	return &voteTestNet{
-			name:    "p2p-A",
-			network: netA,
-			stop:    func() { netA.Stop() },
-			peerFn: func() *wsPeer {
-				netA.wsPeersLock.RLock()
-				defer netA.wsPeersLock.RUnlock()
-				for _, peer := range netA.wsPeers {
-					return peer
-				}
-				return nil
-			},
-		}, &voteTestNet{
-			name:    "p2p-B",
-			network: netB,
-			stop:    func() { netB.Stop() },
-			peerFn: func() *wsPeer {
-				netB.wsPeersLock.RLock()
-				defer netB.wsPeersLock.RUnlock()
-				for _, peer := range netB.wsPeers {
-					return peer
-				}
-				return nil
-			},
-		}
+		name:    "p2p-A",
+		network: netA,
+		stop:    func() { netA.Stop() },
+		peerFn: func() *wsPeer {
+			netA.wsPeersLock.RLock()
+			defer netA.wsPeersLock.RUnlock()
+			for _, peer := range netA.wsPeers {
+				return peer
+			}
+			return nil
+		},
+	}, &voteTestNet{
+		name:    "p2p-B",
+		network: netB,
+		stop:    func() { netB.Stop() },
+		peerFn: func() *wsPeer {
+			netB.wsPeersLock.RLock()
+			defer netB.wsPeersLock.RUnlock()
+			for _, peer := range netB.wsPeers {
+				return peer
+			}
+			return nil
+		},
+	}
 }
 
 func TestVoteStatefulCompressionAbortMessage(t *testing.T) {

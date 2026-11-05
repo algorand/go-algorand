@@ -702,3 +702,16 @@ func BenchmarkBuildVerify(b *testing.B) {
 		}
 	})
 }
+
+func TestStateProofString(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	require.Equal(t, "StateProof: {}", StateProof{}.String())
+
+	s := StateProof{
+		SigCommit:         crypto.GenericDigest{0x01, 0xab},
+		SignedWeight:      100,
+		PositionsToReveal: []uint64{1, 2, 3},
+	}
+	require.Equal(t, "StateProof: {01ab, 100, 3}", s.String())
+}

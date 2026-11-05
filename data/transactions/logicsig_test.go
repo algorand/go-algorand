@@ -24,6 +24,7 @@ import (
 	"github.com/algorand/msgp/msgp"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -33,7 +34,7 @@ func TestLogicSigBlankAndHasProgram(t *testing.T) {
 	nonblankSig := crypto.Signature{}
 	nonblankSig[0] = 1
 
-	pqFixture := makePQSigTestFixture(t, 13)
+	sksigFixture := makeSaltedKeySigTestFixture(t, 13, protocol.SigSchemeFalcon1024)
 
 	tests := []struct {
 		name       string
@@ -68,7 +69,7 @@ func TestLogicSigBlankAndHasProgram(t *testing.T) {
 		},
 		{
 			name: "pqsig",
-			lsig: LogicSig{PQsig: pqFixture.pqSig},
+			lsig: LogicSig{SKsig: sksigFixture.sksig},
 		},
 	}
 
@@ -80,24 +81,27 @@ func TestLogicSigBlankAndHasProgram(t *testing.T) {
 	}
 }
 
-func TestLogicSigPQSigMsgpackRoundTrip(t *testing.T) {
+func TestLogicSigSaltedKeySigMsgpackRoundTrip(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	fixture := makePQSigTestFixture(t, 11)
-	lsig := LogicSig{
-		Logic: []byte{1, 32, 1},
-		Args:  [][]byte{{2, 3}},
-		PQsig: fixture.pqSig,
-	}
+	for _, fixture := range makeSaltedKeySigTestFixtures(t, 11) {
+		t.Run(fixture.name, func(t *testing.T) {
+			lsig := LogicSig{
+				Logic: []byte{1, 32, 1},
+				Args:  [][]byte{{2, 3}},
+				SKsig: fixture.sksig,
+			}
 
-	var decoded LogicSig
-	left, err := decoded.UnmarshalMsg(lsig.MarshalMsg(nil))
-	require.NoError(t, err)
-	require.Empty(t, left)
-	require.True(t, lsig.Equal(&decoded))
+			var decoded LogicSig
+			left, err := decoded.UnmarshalMsg(lsig.MarshalMsg(nil))
+			require.NoError(t, err)
+			require.Empty(t, left)
+			require.True(t, lsig.Equal(&decoded))
+		})
+	}
 }
 
-func TestLogicSigBlankPQSigOmitted(t *testing.T) {
+func TestLogicSigBlankSaltedKeySigOmitted(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	lsig := LogicSig{Logic: []byte{1}}

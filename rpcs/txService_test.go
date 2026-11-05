@@ -26,7 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/components/mocks"
@@ -77,21 +76,21 @@ func (p *testHTTPPeer) GetHTTPPeer() network.HTTPPeer {
 type basicRPCNode struct {
 	listener net.Listener
 	server   http.Server
-	rmux     *mux.Router
+	rmux     *http.ServeMux
 	peers    []network.Peer
 	mocks.MockNetwork
 }
 
 func (b *basicRPCNode) RegisterHTTPHandler(path string, handler http.Handler) {
 	if b.rmux == nil {
-		b.rmux = mux.NewRouter()
+		b.rmux = http.NewServeMux()
 	}
 	b.rmux.Handle(path, handler)
 }
 
 func (b *basicRPCNode) RegisterHTTPHandlerFunc(path string, handler func(http.ResponseWriter, *http.Request)) {
 	if b.rmux == nil {
-		b.rmux = mux.NewRouter()
+		b.rmux = http.NewServeMux()
 	}
 	b.rmux.HandleFunc(path, handler)
 }
@@ -107,7 +106,7 @@ func (b *basicRPCNode) start() bool {
 		return false
 	}
 	if b.rmux == nil {
-		b.rmux = mux.NewRouter()
+		b.rmux = http.NewServeMux()
 	}
 	b.server.Handler = b.rmux
 	go b.server.Serve(b.listener)

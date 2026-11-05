@@ -1,7 +1,6 @@
 package: private
 generate:
   echo-server: true
-  embedded-spec: true
 output-options:
   include-tags:
   - participating
