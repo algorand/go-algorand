@@ -225,17 +225,14 @@ func (spt *spVerificationTracker) lookupContextInTrackedMemory(stateProofLastAtt
 }
 
 func (spt *spVerificationTracker) lookupContextInDB(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
-	var spContext *ledgercore.StateProofVerificationContext
-	err := spt.l.trackerDB().Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) (err error) {
-		spContext, err = tx.MakeSpVerificationCtxReader().LookupSPContext(stateProofLastAttestedRound)
+	return trackerdb.SnapshotResult(spt.l.trackerDB(), func(ctx context.Context, tx trackerdb.SnapshotScope) (*ledgercore.StateProofVerificationContext, error) {
+		spContext, err := tx.MakeSpVerificationCtxReader().LookupSPContext(stateProofLastAttestedRound)
 		if err != nil {
 			err = fmt.Errorf("%w for round %d: %s", errSPVerificationContextNotFound, stateProofLastAttestedRound, err)
 		}
 
-		return err
+		return spContext, err
 	})
-
-	return spContext, err
 }
 
 func (spt *spVerificationTracker) roundToLatestCommitContextIndex(committedRound basics.Round) int {

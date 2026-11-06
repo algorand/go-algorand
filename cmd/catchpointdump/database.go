@@ -25,6 +25,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
@@ -116,19 +117,16 @@ func getVersion(filename string, staging bool) (uint64, error) {
 		return 0, err
 	}
 	defer dbAccessor.Close()
-	var version uint64
-	err = dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	version, err := db.AtomicResult(&dbAccessor, func(ctx context.Context, tx *sql.Tx) (uint64, error) {
 		if staging {
 			// writing the version of the catchpoint file start only on ver >= CatchpointFileVersionV7.
 			// in case the catchpoint version does not exists ReadCatchpointStateUint64 returns 0
 			cw := sqlitedriver.NewCatchpointSQLReaderWriter(tx)
-			version, err = cw.ReadCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupVersion)
-			return err
+			return cw.ReadCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupVersion)
 		}
 
-		versionAsInt32, err := db.GetUserVersion(ctx, tx)
-		version = uint64(versionAsInt32)
-		return err
+		versionAsInt32, versionErr := db.GetUserVersion(ctx, tx)
+		return uint64(versionAsInt32), versionErr
 	})
 	if err != nil {
 		return 0, err
@@ -169,30 +167,31 @@ func checkDatabase(databaseName string, outFile *os.File) error {
 		dbAccessor.Close()
 	}()
 
-	var stats merkletrie.Stats
-	err = dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	type trieInfo struct {
+		root  crypto.Digest
+		stats merkletrie.Stats
+	}
+	info, err := db.AtomicResult(&dbAccessor, func(ctx context.Context, tx *sql.Tx) (info trieInfo, err error) {
 		committer, err := sqlitedriver.MakeMerkleCommitter(tx, ledgerTrackerStaging)
 		if err != nil {
-			return err
+			return info, err
 		}
 		trie, err := merkletrie.MakeTrie(committer, trackerdb.TrieMemoryConfig)
 		if err != nil {
-			return err
+			return info, err
 		}
-		root, err := trie.RootHash()
+		info.root, err = trie.RootHash()
 		if err != nil {
-			return err
+			return info, err
 		}
-		fmt.Fprintf(outFile, " Root: %s\n", root)
-		stats, err = trie.GetStats()
-		if err != nil {
-			return err
-		}
-		return nil
+		info.stats, err = trie.GetStats()
+		return info, err
 	})
 	if err != nil {
 		return err
 	}
+	fmt.Fprintf(outFile, " Root: %s\n", info.root)
+	stats := info.stats
 
 	fmt.Fprintf(outFile, "Merkle trie statistics:\n")
 	fmt.Fprintf(outFile, " Nodes count: %d\n", stats.NodesCount)

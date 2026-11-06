@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/db"
 )
 
 // sigFromAddr encapsulates a signature on a block header, which
@@ -128,10 +129,8 @@ func (spw *Worker) getProto(round basics.Round) (*config.ConsensusParams, error)
 }
 
 func (spw *Worker) getStateProofMessage(round basics.Round) (stateproofmsg.Message, error) {
-	var msg stateproofmsg.Message
-	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		msg, err = getMessage(tx, round)
-		return err
+	msg, err := db.AtomicResult(&spw.db, func(ctx context.Context, tx *sql.Tx) (stateproofmsg.Message, error) {
+		return getMessage(tx, round)
 	})
 	if err == nil {
 		return msg, nil
@@ -158,10 +157,8 @@ func (spw *Worker) signStateProofMessage(message *stateproofmsg.Message, round b
 			continue
 		}
 
-		var exists bool
-		err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			exists, err = sigExistsInDB(tx, round, key.Account)
-			return err
+		exists, err := db.AtomicResult(&spw.db, func(ctx context.Context, tx *sql.Tx) (bool, error) {
+			return sigExistsInDB(tx, round, key.Account)
 		})
 		if err != nil {
 			spw.log.Warnf("spw.signStateProofMessage(%d): couldn't figure if sig exists in DB: %v", round, err)

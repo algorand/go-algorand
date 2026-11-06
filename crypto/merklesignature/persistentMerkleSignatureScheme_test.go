@@ -128,3 +128,32 @@ func getStateProofTableSchemaVersions(db db.Accessor) (int, error) {
 	}
 	return version, nil
 }
+
+func TestRowsErrRestoreAllSecrets(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	store := createTestDB(a)
+	defer store.Close()
+
+	mss, err := New(0, 1000, 256)
+	a.NoError(err)
+	a.NoError(mss.Persist(*store))
+
+	// Swap the keys table for a view that SQLite fails with an integer overflow error on the
+	// first row it reads, so iteration over the keys ends early with an error that must be
+	// returned rather than treated as having restored every key.
+	err = store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		if _, err1 := tx.Exec("ALTER TABLE StateProofKeys RENAME TO StateProofKeys_orig"); err1 != nil {
+			return err1
+		}
+		_, err1 := tx.Exec("CREATE VIEW StateProofKeys AS SELECT * FROM StateProofKeys_orig WHERE abs(-9223372036854775807 - 1 + 0*random()) >= 0")
+		return err1
+	})
+	a.NoError(err)
+
+	newMss := Secrets{}
+	newMss.SignerContext = mss.SignerContext
+	err = newMss.RestoreAllSecrets(*store)
+	a.ErrorContains(err, "integer overflow")
+	a.Empty(newMss.ephemeralKeys)
+}

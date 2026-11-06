@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
+	dbutil "github.com/algorand/go-algorand/util/db"
 )
 
 type dbOp interface {
@@ -84,11 +85,10 @@ func (d deleteStateProofKeysOp) apply(db *participationDB) error {
 			return fmt.Errorf("unable to scan pk: %w", err)
 		}
 
-		stmt, err := tx.Prepare(deleteStateProofKeysQuery)
+		stmt, err := tx.Prepare(deleteStateProofKeysQuery) //nolint:sqlclosecheck // prepared on tx, which closes it on commit or rollback
 		if err != nil {
 			return fmt.Errorf("unable to prepare state proof delete: %w", err)
 		}
-		defer stmt.Close()
 
 		_, err = stmt.Exec(pk, d.round)
 		if err != nil {
@@ -112,8 +112,8 @@ func makeOpRequestWithError(operation dbOp, errChan chan error) opRequest {
 }
 
 func (r *registerOp) apply(db *participationDB) error {
-	var cacheDeletes []ParticipationID
-	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	cacheDeletes, err := dbutil.AtomicResult(&db.store.Wdb, func(ctx context.Context, tx *sql.Tx) ([]ParticipationID, error) {
+		var cacheDeletes []ParticipationID
 		// Disable active key if there is one
 		for id, record := range r.updated {
 			err := updateRegistrationFields(ctx, tx, record.ParticipationRecord)
@@ -126,10 +126,10 @@ func (r *registerOp) apply(db *participationDB) error {
 				}
 			}
 			if err != nil {
-				return fmt.Errorf("unable to disable old key when registering %s: %w", id, err)
+				return nil, fmt.Errorf("unable to disable old key when registering %s: %w", id, err)
 			}
 		}
-		return nil
+		return cacheDeletes, nil
 	})
 
 	// Update cache
@@ -270,7 +270,7 @@ func (f *flushOp) apply(db *participationDB) error {
 		return nil
 	}
 
-	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error { //retryclosure:ignore wroteBulk only ever becomes true, including for attempts that roll back, since their subkey rows may already be in the WAL that eraseWAL wipes
 		var errorStr strings.Builder
 		for _, record := range needsUpdate {
 			bulk, err := updateRollingFields(ctx, tx, record)
@@ -315,7 +315,7 @@ func (a *appendKeysOp) apply(db *participationDB) error {
 			return fmt.Errorf("unable to scan pk: %w", err)
 		}
 
-		stmt, err := tx.Prepare(appendStateProofKeysQuery)
+		stmt, err := tx.Prepare(appendStateProofKeysQuery) //nolint:sqlclosecheck // prepared on tx, which closes it on commit or rollback
 		if err != nil {
 			return fmt.Errorf("unable to prepare state proof insert: %w", err)
 		}

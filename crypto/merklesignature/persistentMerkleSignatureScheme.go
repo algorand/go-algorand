@@ -98,21 +98,22 @@ func (s *Secrets) Persist(store db.Accessor) error {
 	if s.KeyLifetime == 0 {
 		return fmt.Errorf("Secrets.Persist: %w", ErrKeyLifetimeIsZero)
 	}
-	round := indexToRound(s.FirstValid, s.KeyLifetime, 0)
 	encodedBuf := protocol.GetEncodingBuf()
-	encodedKey := encodedBuf.Bytes()
-	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	// The closure returns the encoding buffer, which may have grown, so it can be put back in the pool.
+	encodedKey, err := db.AtomicResult(&store, func(ctx context.Context, tx *sql.Tx) ([]byte, error) {
 		err := InstallStateProofTable(tx) // assumes schema table already exists (created by partInstallDatabase)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO StateProofKeys (id, round, key) VALUES (?,?,?)")
 		if err != nil {
-			return fmt.Errorf("unable to prepare insert stateproofkeys statement: %w", err)
+			return nil, fmt.Errorf("unable to prepare insert stateproofkeys statement: %w", err)
 		}
 		defer insertStmt.Close()
 
+		round := indexToRound(s.FirstValid, s.KeyLifetime, 0)
+		encodedKey := encodedBuf.Bytes()
 		for i, key := range s.ephemeralKeys {
 			// reset the slice
 			encodedKey = encodedKey[:0]
@@ -121,12 +122,12 @@ func (s *Secrets) Persist(store db.Accessor) error {
 			_, err := insertStmt.ExecContext(ctx, i, round, encodedKey)
 
 			if err != nil {
-				return fmt.Errorf("failed to insert StateProof key number %v round %d. SQL Error: %w", i, round, err)
+				return encodedKey, fmt.Errorf("failed to insert StateProof key number %v round %d. SQL Error: %w", i, round, err)
 			}
 			round += s.KeyLifetime
 		}
 
-		return nil
+		return encodedKey, nil
 	})
 	protocol.PutEncodingBuf(encodedBuf.Update(encodedKey))
 	if err != nil {
@@ -138,31 +139,29 @@ func (s *Secrets) Persist(store db.Accessor) error {
 
 // RestoreAllSecrets fetch all stateproof secrets from a persisted storage into memory
 func (s *Secrets) RestoreAllSecrets(store db.Accessor) error {
-	var keys []crypto.Falcon1024Signer
-
-	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		keys = nil
+	keys, err := db.AtomicResult(&store, func(ctx context.Context, tx *sql.Tx) ([]crypto.Falcon1024Signer, error) {
 		rows, err := tx.Query("SELECT key FROM StateProofKeys")
 		if err != nil {
-			return fmt.Errorf("%w - %v", errSelectKeysError, err)
+			return nil, fmt.Errorf("%w - %v", errSelectKeysError, err)
 		}
 		defer rows.Close()
+		var keys []crypto.Falcon1024Signer
 		for rows.Next() {
 			var keyB []byte
 			key := crypto.Falcon1024Signer{}
 			err := rows.Scan(&keyB)
 			if err != nil {
-				return fmt.Errorf("%w - %v", errKeyScanError, err)
+				return nil, fmt.Errorf("%w - %v", errKeyScanError, err)
 			}
 			err = protocol.Decode(keyB, &key)
 			if err != nil {
-				return fmt.Errorf("%w - %v", errKeyDecodeError, err)
+				return nil, fmt.Errorf("%w - %v", errKeyDecodeError, err)
 			}
 			keys = append(keys, key)
 		}
 		// an iteration error ends the loop like exhaustion does; without this
 		// check it would silently truncate the key set
-		return rows.Err()
+		return keys, rows.Err()
 	})
 	if err != nil {
 		return err
