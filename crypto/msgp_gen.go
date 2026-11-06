@@ -2024,25 +2024,37 @@ func MultisigSubsigMaxSize() (s int) {
 // MarshalMsg implements msgp.Marshaler
 func (z *OneTimeSignature) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 6
-	// string "p"
-	o = append(o, 0x86, 0xa1, 0x70)
-	o = msgp.AppendBytes(o, ((*z).PK)[:])
-	// string "p1s"
-	o = append(o, 0xa3, 0x70, 0x31, 0x73)
-	o = msgp.AppendBytes(o, ((*z).PK1Sig)[:])
-	// string "p2"
-	o = append(o, 0xa2, 0x70, 0x32)
-	o = msgp.AppendBytes(o, ((*z).PK2)[:])
-	// string "p2s"
-	o = append(o, 0xa3, 0x70, 0x32, 0x73)
-	o = msgp.AppendBytes(o, ((*z).PK2Sig)[:])
-	// string "ps"
-	o = append(o, 0xa2, 0x70, 0x73)
-	o = msgp.AppendBytes(o, ((*z).PKSigOld)[:])
-	// string "s"
-	o = append(o, 0xa1, 0x73)
-	o = msgp.AppendBytes(o, ((*z).Sig)[:])
+	// omitempty: check for empty values
+	zb0007Len := uint32(6)
+	var zb0007Mask uint8 /* 7 bits */
+	if (*z).PKSigOld == (ed25519Signature{}) {
+		zb0007Len--
+		zb0007Mask |= 0x20
+	}
+	// variable map header, size zb0007Len
+	o = append(o, 0x80|uint8(zb0007Len))
+	if zb0007Len != 0 {
+		// string "p"
+		o = append(o, 0xa1, 0x70)
+		o = msgp.AppendBytes(o, ((*z).PK)[:])
+		// string "p1s"
+		o = append(o, 0xa3, 0x70, 0x31, 0x73)
+		o = msgp.AppendBytes(o, ((*z).PK1Sig)[:])
+		// string "p2"
+		o = append(o, 0xa2, 0x70, 0x32)
+		o = msgp.AppendBytes(o, ((*z).PK2)[:])
+		// string "p2s"
+		o = append(o, 0xa3, 0x70, 0x32, 0x73)
+		o = msgp.AppendBytes(o, ((*z).PK2Sig)[:])
+		if (zb0007Mask & 0x20) == 0 { // if not empty
+			// string "ps"
+			o = append(o, 0xa2, 0x70, 0x73)
+			o = msgp.AppendBytes(o, ((*z).PKSigOld)[:])
+		}
+		// string "s"
+		o = append(o, 0xa1, 0x73)
+		o = msgp.AppendBytes(o, ((*z).Sig)[:])
+	}
 	return
 }
 

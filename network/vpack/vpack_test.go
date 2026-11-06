@@ -41,7 +41,7 @@ func checkVoteValid(vote *agreement.UnauthenticatedVote) (ok bool, expectedError
 		return false, "expected fixed map size 1 for UnauthenticatedCredential"
 	}
 	if !vote.Sig.PKSigOld.MsgIsZero() {
-		return false, "expected empty array for ps"
+		return false, "expected fixed map size 5 for OneTimeSignature, got 6"
 	}
 	if vote.R.Round == 0 {
 		return false, "missing required fields"
