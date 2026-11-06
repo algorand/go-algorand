@@ -1,0 +1,188 @@
+name: Windows Release Build
+
+# Windows is built as a separate, lower-assurance pipeline: it produces release
+# binaries but deliberately does NOT run the full test suite (see build-windows.yml
+# for the per-PR compile check). The artifact still receives the same SBOM and
+# build-provenance attestation as the other platforms.
+
+on:
+  push:
+    tags:
+      - 'v*-beta'
+      - 'v*-stable'
+      - 'v*-nightly'
+      - 'v*-dev'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g., 4.5.0)'
+        required: true
+        type: string
+      channel:
+        description: 'Release channel'
+        required: true
+        type: choice
+        options:
+          - beta
+          - stable
+          - nightly
+          - dev
+
+permissions:
+  contents: read
+
+env:
+  # Disable deadlock detection for release builds
+  ALGORAND_DEADLOCK: disable
+  KMD_NOUSB: True
+
+jobs:
+  build:
+    name: Build Windows amd64
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: msys2 {0}
+    outputs:
+      version: ${{ steps.parse.outputs.version }}
+      channel: ${{ steps.parse.outputs.channel }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Windows build environment
+        uses: ./.github/actions/setup-windows-build
+
+      - name: Parse version and channel
+        id: parse
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual trigger - use inputs directly
+            VERSION="${{ inputs.version }}"
+            CHANNEL="${{ inputs.channel }}"
+          else
+            # Tag trigger - parse from tag
+            # Expected format: v{major}.{minor}.{patch}-{channel}
+            # Examples: v4.5.0-beta, v4.5.0-stable
+            TAG="${GITHUB_REF_NAME}"
+            echo "Parsing tag: ${TAG}"
+
+            # Extract channel (last component after final hyphen): v4.5.0-beta -> beta
+            CHANNEL="${TAG##*-}"
+
+            # Validate channel first
+            case "$CHANNEL" in
+              beta|stable|nightly|dev) ;;
+              *)
+                echo "Error: Tag must end with -beta, -stable, -nightly, or -dev"
+                echo "Got: ${TAG}"
+                exit 1
+                ;;
+            esac
+
+            # Extract version: v4.5.0-beta -> 4.5.0
+            VERSION="${TAG#v}"
+            VERSION="${VERSION%-${CHANNEL}}"
+          fi
+
+          # Validate version format (major.minor.patch)
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Error: Invalid version format: ${VERSION}"
+            echo "Expected format: major.minor.patch (e.g., 4.5.0)"
+            exit 1
+          fi
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "channel=${CHANNEL}" >> "$GITHUB_OUTPUT"
+
+          echo "Windows Release Configuration:"
+          echo "  Version: ${VERSION}"
+          echo "  Channel: ${CHANNEL}"
+
+      - name: Install zip
+        run: pacman -S --noconfirm zip
+
+      - name: Build binaries
+        env:
+          CHANNEL: ${{ steps.parse.outputs.channel }}
+          VERSION: ${{ steps.parse.outputs.version }}
+          # compute_branch* scripts read these; keep them empty for a clean build
+          TRAVIS_BRANCH: ''
+          BRANCH: ''
+        run: |
+          echo "Building Windows amd64"
+          echo "  Version: ${VERSION}"
+          echo "  Channel: ${CHANNEL}"
+          make build
+
+      - name: Package Windows zip
+        env:
+          VERSION: ${{ steps.parse.outputs.version }}
+        run: |
+          mkdir -p dist
+          scripts/build_windows_package.sh dist
+          echo "Windows package:"
+          ls -la dist/
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum *.zip > "hashes_${{ steps.parse.outputs.channel }}_windows_amd64_${{ steps.parse.outputs.version }}"
+          cat "hashes_${{ steps.parse.outputs.channel }}_windows_amd64_${{ steps.parse.outputs.version }}"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-windows-amd64
+          path: dist/
+          retention-days: 7
+          if-no-files-found: error
+
+  finalize:
+    name: Finalize (SBOM, Attestation)
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-windows-amd64
+          path: dist/
+
+      - name: List artifacts
+        run: find dist -type f | sort
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: dist/sbom.spdx.json
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/*.zip
+
+      - name: Attest SBOM
+        uses: actions/attest-sbom@v2
+        with:
+          subject-path: dist/*.zip
+          sbom-path: dist/sbom.spdx.json
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release-artifacts
+          path: dist/
+          retention-days: 7
+          if-no-files-found: error
