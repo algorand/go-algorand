@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/binary"
@@ -2960,6 +2961,14 @@ func TestReplace(t *testing.T) {
 
 	testAccepts(t, `byte 0x; byte 0x; replace2 0; byte 0x; ==`, 7)
 	testAccepts(t, `byte 0x; int 0; byte 0x; replace3; byte 0x; ==`, 7)
+
+	// Both copy all of A, so they are charged for its length.
+	testCost(t, "pushint 4096; bzero; byte 0x01; replace2 0; pop; pushint 1", 6, lengthCostVersion-1)
+	testCost(t, "pushint 4096; bzero; byte 0x01; replace2 0; pop; pushint 1", 5+(1+128), lengthCostVersion)
+	testCost(t, "byte 0x01; byte 0x02; replace2 0; pop; pushint 1", 4+(1+1), lengthCostVersion)
+	testCost(t, "pushint 4096; bzero; pushint 0; byte 0x01; replace3; pop; pushint 1", 7, lengthCostVersion-1)
+	testCost(t, "pushint 4096; bzero; pushint 0; byte 0x01; replace3; pop; pushint 1", 6+(1+128), lengthCostVersion)
+	testCost(t, "byte 0x01; pushint 0; byte 0x02; replace3; pop; pushint 1", 5+(1+1), lengthCostVersion)
 }
 
 func TestLoadStore(t *testing.T) {
@@ -5189,6 +5198,13 @@ func TestBits(t *testing.T) {
 	testAccepts(t, "byte 0xfffff0; dup; int 21; int 1; setbit; byte 0xfffff4; ==; pop; byte 0xfffff0; ==", 3)
 	testAccepts(t, "byte 0xffff; byte 0xf0; concat; dup; int 21; int 1; setbit; byte 0xfffff4; ==; pop; byte 0xfffff0; ==", 3)
 
+	// setbit copies all of a byte-array A, so it is charged for its length.
+	// Uints are always cheap.
+	testCost(t, "pushint 4096; bzero; pushint 3; pushint 1; setbit; pop; pushint 1", 7, lengthCostVersion-1)
+	testCost(t, "pushint 4096; bzero; pushint 3; pushint 1; setbit; pop; pushint 1", 6+(1+128), lengthCostVersion)
+	testCost(t, "byte 0x01; pushint 3; pushint 1; setbit; pop; pushint 1", 5+(1+1), lengthCostVersion)
+	testCost(t, "pushint 8; pushint 3; pushint 1; setbit; pop; pushint 1", 6, lengthCostVersion)
+
 }
 
 func TestBytes(t *testing.T) {
@@ -5216,6 +5232,11 @@ func TestBytes(t *testing.T) {
 	// it fails to copy).
 	testAccepts(t, `byte "john"; dup; int 2; int 105; setbyte; pop; byte "john"; ==`, 3)
 	testAccepts(t, `byte "jo"; byte "hn"; concat; dup; int 2; int 105; setbyte; pop; byte "john"; ==`, 3)
+
+	// setbyte copies all of A, so it is charged for its length.
+	testCost(t, "pushint 4096; bzero; pushint 3; pushint 1; setbyte; pop; pushint 1", 7, lengthCostVersion-1)
+	testCost(t, "pushint 4096; bzero; pushint 3; pushint 1; setbyte; pop; pushint 1", 6+(1+128), lengthCostVersion)
+	testCost(t, "byte 0x01; pushint 0; pushint 1; setbyte; pop; pushint 1", 5+(1+1), lengthCostVersion)
 
 	testAccepts(t, `byte "john"; byte "john"; ==`, 1)
 }
@@ -5521,6 +5542,69 @@ func TestExpw(t *testing.T) {
 	testCost(t, costCheck, 5+1, fullByteMathVersion)
 }
 
+// TestBytesZeroShared checks that the array shared by all bzero results is
+// never written, by modifying bzero results with every op that produces a
+// modified copy, and by passing them everywhere AVM values leave the evaluator.
+func TestBytesZeroShared(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	untouched := func() {
+		t.Helper()
+		require.Equal(t, [maxStringSize]byte{}, zeroes)
+	}
+
+	testAcceptRange(t, `
+int 0; bzero; byte 0x; ==; assert	// still a byte-array, not a uint
+int 8; bzero; int 0; int 1; setbyte; byte 0x0100000000000000; ==; assert
+int 8; bzero; int 63; int 1; setbit; byte 0x0000000000000001; ==; assert
+int 8; bzero; byte 0x01; replace2 1; byte 0x0001000000000000; ==; assert
+int 8; bzero; int 2; byte 0x01; replace3; byte 0x0000010000000000; ==; assert
+int 8; bzero; b~; byte 0xffffffffffffffff; ==; assert
+int 8; bzero; byte 0x01; b|; byte 0x0000000000000001; ==; assert
+int 8; bzero; byte 0x01; b^; byte 0x0000000000000001; ==; assert
+int 8; bzero; byte 0x01; b&; byte 0x0000000000000000; ==; assert
+int 8; bzero; byte 0x01; b+; byte 0x01; ==; assert
+int 4; bzero; byte 0x01; concat; byte 0x0000000001; ==; assert
+byte 0x01; int 4; bzero; concat; byte 0x0100000000; ==; assert
+int 8; bzero; dup; int 0; int 1; setbyte; pop; byte 0x0000000000000000; ==
+`, 7, AssemblerMaxVersion)
+	untouched()
+
+	ep, tx, ledger := makeSampleEnv()
+	ledger.NewApp(tx.Sender, 888, basics.AppParams{
+		GlobalStateSchema: basics.StateSchema{NumByteSlice: 1},
+	})
+	ledger.NewAccount(basics.AppIndex(888).Address(), 1_000_000)
+	// tx.Boxes allows access to the box "self"
+	testApp(t, `
+byte "self"; int 8; bzero; box_put
+byte "self"; int 1; byte 0x01; box_replace
+byte "self"; box_get; assert; byte 0x0001000000000000; ==; assert
+byte "self"; int 2; int 1; byte 0x0202; box_splice
+byte "self"; int 10; box_resize
+byte "self"; box_get; assert; byte 0x00010202000000000000; ==; assert
+byte "self"; box_del; assert
+byte "self"; int 8; bzero; box_put
+byte "self"; int 8; bzero; box_put		// over an existing box
+byte "self"; int 1; byte 0x01; box_replace
+byte "self"; box_get; assert; byte 0x0001000000000000; ==; assert
+byte "key"; int 8; bzero; app_global_put
+int 8; bzero; log
+itxn_begin
+ int 8; bzero; itxn_field Note
+ int 8; bzero; itxn_field ApplicationArgs
+ int 8; bzero; itxn_field ApprovalProgram
+ int 8; bzero; itxn_field ClearStateProgram
+ int 8; bzero; itxn_field ApprovalProgramPages
+ int 8; bzero; itxn_field ApprovalProgramPages
+ int 8; bzero; itxn_field ClearStateProgramPages
+ int 8; bzero; itxn_field ClearStateProgramPages
+int 1
+`, ep)
+	untouched()
+}
+
 func TestBitLen(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -5542,6 +5626,12 @@ func TestBitLen(t *testing.T) {
 	testAccepts(t, "byte 0x0100; bitlen; int 9; ==", 4)
 	testAccepts(t, "byte 0x010001000100010001000100010001000100; bitlen; int 137; ==", 4)
 
+	// bitlen may scan all of a byte-array, so it is charged for the length.
+	// Uints are always cheap.
+	testCost(t, "pushint 4096; bzero; bitlen; pop; int 1", 5, fullByteMathVersion-1)
+	testCost(t, "int 8; bitlen; pop; int 1", 4, fullByteMathVersion)
+	testCost(t, "byte 0x01; bitlen; pop; int 1", 3+(1+1), fullByteMathVersion)
+	testCost(t, "pushint 4096; bzero; bitlen; pop; int 1", 4+(1+128), fullByteMathVersion)
 }
 
 // BenchmarkBytesModExpRealistic is used to benchmark bmodexp for more realistic
@@ -5788,7 +5878,7 @@ func TestBytesMath(t *testing.T) {
 
 	testAccepts(t, "byte 0x01; byte 0x01; b+; byte 0x02; ==", 4)
 	testCost(t, "byte 0x01; byte 0x02; b+; byte 0x03; ==", 2+10+2, 6)
-	testCost(t, "byte 0x01; byte 0x02; b+; byte 0x03; ==", 2+5+2, fullByteMathVersion)
+	testCost(t, "byte 0x01; byte 0x02; b+; byte 0x03; ==", 2+3+2, fullByteMathVersion)
 	testAccepts(t, "byte 0x01FF; byte 0x01; b+; byte 0x0200; ==", 4)
 
 	effs := strings.Repeat("ff", 64)
@@ -5804,7 +5894,7 @@ func TestBytesMath(t *testing.T) {
 	p := fmt.Sprintf("byte 0x%s00; byte 0x10; b+; len; int 65; ==", effs)
 	testPanicRange(t, notrack(p), 4, fullByteMathVersion-1, "math attempted on large byte-array")
 	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
-	testCost(t, p, 2+9+3, fullByteMathVersion)
+	testCost(t, p, 2+5+3, fullByteMathVersion)
 
 	testAccepts(t, `byte 0x01; byte 0x01; b-; byte ""; ==`, 4)
 	testAccepts(t, "byte 0x0200; byte 0x01; b-; byte 0x01FF; ==", 4)
@@ -5816,7 +5906,7 @@ func TestBytesMath(t *testing.T) {
 	p = fmt.Sprintf("byte 0x%s00; byte 0x10; b-; len; int 65; ==", effs)
 	testPanicRange(t, notrack(p), 4, fullByteMathVersion-1, "math attempted on large byte-array")
 	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
-	testCost(t, p, 2+9+3, fullByteMathVersion)
+	testCost(t, p, 2+5+3, fullByteMathVersion)
 
 	testAccepts(t, "byte 0x10; byte 0x10; b*; byte 0x0100; ==", 4)
 	testAccepts(t, "byte 0x100000000000; byte 0x00; b*; byte b64(); ==", 4)
@@ -5837,7 +5927,14 @@ func TestBytesMath(t *testing.T) {
 	testAcceptRange(t, p, fullByteMathVersion, AssemblerMaxVersion)
 
 	// b- charges for the longer input, even when it's B (with leading zeros)
-	testCost(t, "pushbytes 0x05; pushint 100; bzero; b-; pushbytes 0x05; b==", 5+(4+7), fullByteMathVersion)
+	testCost(t, "pushbytes 0x05; pushint 100; bzero; b-; pushbytes 0x05; b==", 4+(2+4)+(1+1), fullByteMathVersion)
+
+	// Comparisons scan their inputs, so they are charged for the longer one.
+	for _, op := range []string{"b<", "b>", "b<=", "b>=", "b==", "b!="} {
+		testCost(t, "pushbytes 0x05; pushbytes 0x07; "+op+"; pop; int 1", 4+(1+1), fullByteMathVersion)
+		testCost(t, "pushint 4096; bzero; pushbytes 0x07; "+op+"; pop; int 1", 5+(1+128), fullByteMathVersion)
+		testCost(t, "pushbytes 0x07; pushint 4096; bzero; "+op+"; pop; int 1", 5+(1+128), fullByteMathVersion)
+	}
 
 	// Division is charged by the lengths of the quotient and divisor, so
 	// equal-length operands are cheaper than a half-length divisor.
@@ -5907,18 +6004,26 @@ func TestCostByLongest(t *testing.T) {
 		testCost(t, "pushbytes 0x01; pushint 100; bzero; "+op+"; len; pushint 100; ==", 6+5, fullByteMathVersion)
 		testCost(t, "pushint 100; bzero; pushbytes 0x01; "+op+"; len; pushint 100; ==", 6+5, fullByteMathVersion)
 	}
-	// 4 + 1 per 16 bytes of 100 = 4 + 7
-	testCost(t, "pushbytes 0x01; pushint 100; bzero; b+; len; pushint 1; ==", 6+11, fullByteMathVersion)
-	testCost(t, "pushint 100; bzero; pushbytes 0x01; b+; len; pushint 1; ==", 6+11, fullByteMathVersion)
-	testCost(t, "pushbytes 0x01; pushint 100; bzero; b-; len; pushint 1; ==", 6+11, fullByteMathVersion)
+	// 2 + 1 per 32 bytes of 100 = 2 + 4
+	testCost(t, "pushbytes 0x01; pushint 100; bzero; b+; len; pushint 1; ==", 6+6, fullByteMathVersion)
+	testCost(t, "pushint 100; bzero; pushbytes 0x01; b+; len; pushint 1; ==", 6+6, fullByteMathVersion)
+	testCost(t, "pushbytes 0x01; pushint 100; bzero; b-; len; pushint 1; ==", 6+6, fullByteMathVersion)
 
 	a := assert.New(t)
 	bor, bplus := OpsByName[fullByteMathVersion]["b|"], OpsByName[fullByteMathVersion]["b+"]
 	a.Equal("1 + 1 per 32 bytes of the longer of A and B", bor.OpDetails.docCost(2, fullByteMathVersion))
-	a.Equal("4 + 1 per 16 bytes of the longer of A and B", bplus.OpDetails.docCost(2, fullByteMathVersion))
+	a.Equal("2 + 1 per 32 bytes of the longer of A and B", bplus.OpDetails.docCost(2, fullByteMathVersion))
 	three := costDescriptor{baseCost: 2, chunkCost: 3, chunkSize: 8, longestOf: 3}.check()
-	a.Equal("2 + 3 per 8 bytes of the longest of A, B and C", three.docCost(3))
-	a.Equal(2+3*2, three.compute([]stackValue{{Bytes: make([]byte, 9)}, {Bytes: make([]byte, 1)}, {}}))
+	a.Equal("2 + 3 per 8 bytes of the longest of A, B and C", three.docCost(3, ""))
+	a.Equal(2+3*2, three.compute(nil, 0, []stackValue{{Bytes: make([]byte, 9)}, {Bytes: make([]byte, 1)}, {}}))
+
+	// The count comes from the byte after the opcode. It can be combined with
+	// chunk costs, and is missing (so free) if the program ends early.
+	counted := costDescriptor{baseCost: 1, chunkCost: 1, chunkSize: 32, countCost: 2}.check()
+	a.Equal("1 + 1 per 32 bytes of A + 2 per thing", counted.docCost(1, "thing"))
+	a.Equal(1+2+2*7, counted.compute([]byte{0x00, 0x01, 0x07}, 1, []stackValue{{Bytes: make([]byte, 33)}}))
+	a.Equal(1+2, counted.compute([]byte{0x00, 0x01}, 1, []stackValue{{Bytes: make([]byte, 33)}}))
+	a.Panics(func() { costByLength(1, 1, 32, 0).costByCount(1, 256) })
 
 	a.Panics(func() { costDescriptor{baseCost: 1, longestOf: 2}.check() })
 	// the constructors take ints, but must not let them wrap in the narrow fields
@@ -5959,6 +6064,94 @@ func TestMulComplexity(t *testing.T) {
 			a.Equal(mulComplexity(la, lb), mulComplexity(lb, la))
 		}
 	}
+}
+
+// TestRapidAddSubBytes checks the word-at-a-time implementations of b+ and b-
+// against big.Int.
+func TestRapidAddSubBytes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Inputs of assorted lengths, made of runs that stress the code: leading
+	// zeros, long carries (0xff), long borrows (0x00), and arbitrary bytes.
+	draw := func(r *rapid.T, label string) []byte {
+		var out []byte
+		runs := rapid.IntRange(0, 4).Draw(r, label+"Runs")
+		for i := range runs {
+			n := rapid.IntRange(0, 70).Draw(r, fmt.Sprintf("%sLen%d", label, i))
+			switch rapid.IntRange(0, 2).Draw(r, fmt.Sprintf("%sKind%d", label, i)) {
+			case 0:
+				out = append(out, make([]byte, n)...)
+			case 1:
+				out = append(out, bytes.Repeat([]byte{0xff}, n)...)
+			default:
+				out = append(out, rapid.SliceOfN(rapid.Byte(), n, n).Draw(r, fmt.Sprintf("%sBytes%d", label, i))...)
+			}
+		}
+		return out
+	}
+
+	rapid.Check(t, func(r *rapid.T) {
+		a, b := draw(r, "a"), draw(r, "b")
+		x, y := new(big.Int).SetBytes(a), new(big.Int).SetBytes(b)
+
+		sum := addBytes(a, b)
+		require.NotNil(t, sum)
+		require.Equal(t, new(big.Int).Add(x, y).Bytes(), sum, "%x + %x", a, b)
+
+		diff, ok := subBytes(a, b)
+		want := new(big.Int).Sub(x, y)
+		require.Equal(t, want.Sign() >= 0, ok, "%x - %x", a, b)
+		if ok {
+			require.NotNil(t, diff)
+			require.Equal(t, want.Bytes(), diff, "%x - %x", a, b)
+		}
+	})
+}
+
+// TestRapidBitwise checks the word-at-a-time implementations of b|, b&, b^,
+// and b~ against byte-at-a-time versions.
+func TestRapidBitwise(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// pad left-pads x with zeros to n bytes, as the opcodes do
+	pad := func(x []byte, n int) []byte {
+		return append(make([]byte, n-len(x)), x...)
+	}
+
+	rapid.Check(t, func(r *rapid.T) {
+		a := rapid.SliceOfN(rapid.Byte(), 0, 100).Draw(r, "a")
+		b := rapid.SliceOfN(rapid.Byte(), 0, 100).Draw(r, "b")
+		n := max(len(a), len(b))
+		pa, pb := pad(a, n), pad(b, n)
+
+		for _, op := range []struct {
+			name string
+			fn   func(*EvalContext) error
+			byte func(x, y byte) byte
+		}{
+			{"b|", opBytesBitOr, func(x, y byte) byte { return x | y }},
+			{"b&", opBytesBitAnd, func(x, y byte) byte { return x & y }},
+			{"b^", opBytesBitXor, func(x, y byte) byte { return x ^ y }},
+		} {
+			want := make([]byte, n)
+			for i := range want {
+				want[i] = op.byte(pa[i], pb[i])
+			}
+			cx := &EvalContext{version: fullByteMathVersion, Stack: []stackValue{{Bytes: a}, {Bytes: b}}}
+			require.NoError(t, op.fn(cx))
+			require.Equal(t, want, cx.Stack[0].Bytes, "%x %s %x", a, op.name, b)
+		}
+
+		want := make([]byte, len(a))
+		for i := range want {
+			want[i] = ^a[i]
+		}
+		cx := &EvalContext{version: fullByteMathVersion, Stack: []stackValue{{Bytes: a}}}
+		require.NoError(t, opBytesBitNot(cx))
+		require.Equal(t, want, cx.Stack[0].Bytes, "b~ %x", a)
+	})
 }
 
 // TestRapidNonzero checks the chunked implementation of nonzero, and bitlen
@@ -7025,6 +7218,12 @@ int 1; return
 zero: int 0;
 one:  int 0;
 `, 8)
+
+	// match may compare B to every case, so it charges for each. Nothing
+	// matches here, so each falls through to the next instruction.
+	testCost(t, "pushint 1; pushint 2; pushint 3; match l0 l1\nl0:\nl1:\npushint 1", 5, lengthCostVersion-1)
+	testCost(t, "pushint 1; pushint 2; pushint 3; match l0 l1\nl0:\nl1:\npushint 1", 4+(1+2*2), lengthCostVersion)
+	testCost(t, "pushint 3; match; pushint 1", 2+1, lengthCostVersion)
 }
 
 // TestShortMatch ensures a clean error when a match ends early
