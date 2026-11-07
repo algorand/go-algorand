@@ -116,7 +116,7 @@
         "[32]byte"
       ],
       "Size": 1,
-      "DocCost": "35",
+      "DocCost": "8 + 1 per 64 bytes of A",
       "Doc": "SHA256 hash of value A, yields [32]byte",
       "IntroducedVersion": 1,
       "Groups": [
@@ -134,7 +134,7 @@
         "[32]byte"
       ],
       "Size": 1,
-      "DocCost": "130",
+      "DocCost": "14 + 5 per 64 bytes of A",
       "Doc": "Keccak256 hash of value A, yields [32]byte",
       "IntroducedVersion": 1,
       "Groups": [
@@ -152,7 +152,7 @@
         "[32]byte"
       ],
       "Size": 1,
-      "DocCost": "45",
+      "DocCost": "10 + 5 per 128 bytes of A",
       "Doc": "SHA512_256 hash of value A, yields [32]byte",
       "IntroducedVersion": 1,
       "Groups": [
@@ -5268,7 +5268,7 @@
         "[64]byte"
       ],
       "Size": 1,
-      "DocCost": "15 + 2 per 32 bytes of A",
+      "DocCost": "10 + 5 per 128 bytes of A",
       "Doc": "SHA512 of value A, yields [64]byte",
       "IntroducedVersion": 13,
       "Groups": [
@@ -5586,7 +5586,7 @@
         "[32]byte"
       ],
       "Size": 1,
-      "DocCost": "130",
+      "DocCost": "14 + 5 per 64 bytes of A",
       "Doc": "SHA3_256 hash of value A, yields [32]byte",
       "IntroducedVersion": 7,
       "Groups": [

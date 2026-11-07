@@ -1745,7 +1745,8 @@ func TestInnerBudgetIncrement(t *testing.T) {
 		ApprovalProgram: gasup.Program,
 	})
 
-	waste := `global CurrentApplicationAddress; keccak256; pop;`
+	// waste costs 132: keccak256 of 1450 bytes costs 129.
+	waste := `pushint 1450; bzero; keccak256; pop;`
 	buy := `itxn_begin
 int appl;    itxn_field TypeEnum
 int 222;     itxn_field ApplicationID

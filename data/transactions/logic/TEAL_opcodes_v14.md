@@ -18,21 +18,21 @@ Opcodes have a cost of 1 unless otherwise specified.
 - Bytecode: 0x01
 - Stack: ..., A: []byte &rarr; ..., [32]byte
 - SHA256 hash of value A, yields [32]byte
-- **Cost**: 35
+- **Cost**: 8 + 1 per 64 bytes of A
 
 ## keccak256
 
 - Bytecode: 0x02
 - Stack: ..., A: []byte &rarr; ..., [32]byte
 - Keccak256 hash of value A, yields [32]byte
-- **Cost**: 130
+- **Cost**: 14 + 5 per 64 bytes of A
 
 ## sha512_256
 
 - Bytecode: 0x03
 - Stack: ..., A: []byte &rarr; ..., [32]byte
 - SHA512_256 hash of value A, yields [32]byte
-- **Cost**: 45
+- **Cost**: 10 + 5 per 128 bytes of A
 
 ## ed25519verify
 
@@ -1230,7 +1230,7 @@ Signature B is variable-length, with maximum size 1423 bytes for FalconDet1024, 
 - Bytecode: 0x87
 - Stack: ..., A: []byte &rarr; ..., [64]byte
 - SHA512 of value A, yields [64]byte
-- **Cost**: 15 + 2 per 32 bytes of A
+- **Cost**: 10 + 5 per 128 bytes of A
 - Availability: v13
 
 ## callsub
@@ -1365,7 +1365,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Bytecode: 0x98
 - Stack: ..., A: []byte &rarr; ..., [32]byte
 - SHA3_256 hash of value A, yields [32]byte
-- **Cost**: 130
+- **Cost**: 14 + 5 per 64 bytes of A
 - Availability: v7
 
 ## bmodexp
