@@ -891,7 +891,9 @@ func (v2 *Handlers) GetBlockLogs(ctx echo.Context, round basics.Round) error {
 // (GET /v2/blocks/{round}/hash)
 func (v2 *Handlers) GetBlockHash(ctx echo.Context, round basics.Round) error {
 	ledger := v2.Node.LedgerForAPI()
-	block, err := ledger.Block(round)
+	// The block hash is the hash of the header, so there is no need to load
+	// and decode the payset.
+	hdr, err := ledger.BlockHdr(round)
 	if err != nil {
 		switch err.(type) {
 		case ledgercore.ErrNoEntry:
@@ -901,7 +903,7 @@ func (v2 *Handlers) GetBlockHash(ctx echo.Context, round basics.Round) error {
 		}
 	}
 
-	response := model.BlockHashResponse{BlockHash: crypto.Digest(block.Hash()).String()}
+	response := model.BlockHashResponse{BlockHash: crypto.Digest(hdr.Hash()).String()}
 
 	return ctx.JSON(http.StatusOK, response)
 }

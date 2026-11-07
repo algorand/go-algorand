@@ -612,6 +612,45 @@ func TestP2PBootstrapFunc(t *testing.T) {
 	require.GreaterOrEqual(t, len(addr.Addrs), 1)
 }
 
+// TestP2PBootstrapPhonebook checks that the bootstrap phonebook holds only the
+// configured peers. The peerstore also holds the host's own ID, and a phonebook with
+// it would keep the bootstrapper from looking up bootstrap peers in DNS.
+func TestP2PBootstrapPhonebook(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.NetAddress = "127.0.0.1:0"
+
+	// As in NewP2PNetwork, the phonebook is read after the host is created.
+	makePhonebook := func(configured []string) ([]*peer.AddrInfo, peer.ID) {
+		addrInfo, malformed := peerstore.PeerInfoFromAddrs(configured)
+		require.Empty(t, malformed)
+		pstore, err := peerstore.NewPeerStore(addrInfo, "test")
+		require.NoError(t, err)
+		h, _, err := p2p.MakeHost(cfg, t.TempDir(), pstore)
+		require.NoError(t, err)
+		t.Cleanup(func() { h.Close() })
+		return bootstrapPhonebook(pstore, h.ID()), h.ID()
+	}
+
+	phonebook, hostA := makePhonebook(nil)
+	require.Empty(t, phonebook)
+
+	// Two configured addresses of the same peer give one phonebook entry with both.
+	phonebook, _ = makePhonebook([]string{
+		"/ip4/127.0.0.1/tcp/1/p2p/" + hostA.String(),
+		"/ip4/127.0.0.1/tcp/2/p2p/" + hostA.String(),
+	})
+	require.Len(t, phonebook, 1)
+	require.Equal(t, hostA, phonebook[0].ID)
+	addrs := make([]string, 0, len(phonebook[0].Addrs))
+	for _, addr := range phonebook[0].Addrs {
+		addrs = append(addrs, addr.String())
+	}
+	require.ElementsMatch(t, []string{"/ip4/127.0.0.1/tcp/1", "/ip4/127.0.0.1/tcp/2"}, addrs)
+}
+
 func TestP2PdnsLookupBootstrapPeersErr(t *testing.T) {
 	t.Parallel()
 	partitiontest.PartitionTest(t)
@@ -1941,4 +1980,52 @@ func TestP2PThrottleSlotNotLeakedOnIdentityDedup(t *testing.T) {
 
 	netA.disconnect(outPeers[0], disconnectReasonNone)
 	require.Equal(t, slots, netA.availableThrottleSlots(), "disconnecting a registered peer did not give its throttle slot back")
+}
+
+// TestP2PPeerSweep checks that innerStop closes every wsPeer and gives back its
+// identity and throttle slot. That includes a wsPeer that a newer stream from the same peer
+// replaced in wsPeers, which only wsPeersToIDs still holds. After innerStop, addPeer must
+// reject a new wsPeer without claiming anything for it.
+// addPeer must also reject a duplicate of a registered wsPeer before it allocates anything.
+func TestP2PPeerSweep(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := config.GetDefaultLocal()
+	cfg.DNSBootstrapID = ""
+	n, err := NewP2PNetwork(logging.TestingLog(t), cfg, "", nil, GenesisInfo{genesisID, config.Devtestnet}, &nopeNodeInfo{}, &identityOpts{tracker: NewIdentityTracker()}, nil)
+	require.NoError(t, err)
+	require.NoError(t, n.Start())
+	defer n.Stop()
+	n.wsPeersLock.Lock()
+	n.throttledOutgoingConnections = 2
+	n.wsPeersLock.Unlock()
+
+	id := peer.ID("test")
+	old := makeTestPeer(t, n, true)
+	old.identity[0] = 1
+	require.Equal(t, peerAdmitted, n.addPeer(id, old))
+	dup := makeTestPeer(t, n, false)
+	dup.identity = old.identity
+	require.Equal(t, peerRejectedDuplicateIdentity, n.addPeer(id, dup))
+	require.Nil(t, dup.sendBufferBulk, "addPeer initialized a duplicate")
+	replacement := makeTestPeer(t, n, true)
+	require.Equal(t, peerAdmitted, n.addPeer(id, replacement))
+	require.Equal(t, 0, n.availableThrottleSlots())
+
+	n.innerStop()
+	require.False(t, n.hasPeers())
+	require.Empty(t, n.wsPeersToIDs)
+	require.Equal(t, 2, n.availableThrottleSlots(), "innerStop kept a throttle slot")
+	require.True(t, n.identityTracker.setIdentity(&wsPeer{identity: old.identity}), "innerStop kept a peer's identity")
+	for _, p := range []*wsPeer{old, replacement} {
+		require.EqualValues(t, 1, p.didInnerClose.Load(), "innerStop did not close a wsPeer")
+	}
+
+	late := makeTestPeer(t, n, true)
+	defer late.CloseAndWait(time.Now())
+	late.identity[0] = 2
+	require.Equal(t, peerRejectedStopped, n.addPeer(id, late))
+	require.False(t, n.hasPeers())
+	require.False(t, late.throttledOutgoingConnection)
+	require.True(t, n.identityTracker.setIdentity(&wsPeer{identity: late.identity}))
 }
