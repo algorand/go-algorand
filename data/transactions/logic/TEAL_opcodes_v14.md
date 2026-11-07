@@ -18,28 +18,28 @@ Opcodes have a cost of 1 unless otherwise specified.
 - Bytecode: 0x01
 - Stack: ..., A: []byte &rarr; ..., [32]byte
 - SHA256 hash of value A, yields [32]byte
-- **Cost**: 35
+- **Cost**: 8 + 1 per 64 bytes of A
 
 ## keccak256
 
 - Bytecode: 0x02
 - Stack: ..., A: []byte &rarr; ..., [32]byte
 - Keccak256 hash of value A, yields [32]byte
-- **Cost**: 130
+- **Cost**: 14 + 5 per 64 bytes of A
 
 ## sha512_256
 
 - Bytecode: 0x03
 - Stack: ..., A: []byte &rarr; ..., [32]byte
 - SHA512_256 hash of value A, yields [32]byte
-- **Cost**: 45
+- **Cost**: 10 + 5 per 128 bytes of A
 
 ## ed25519verify
 
 - Bytecode: 0x04
 - Stack: ..., A: []byte, B: [64]byte, C: [32]byte &rarr; ..., bool
 - for (data A, signature B, pubkey C) verify the signature of ("ProgData" || program_hash || data) against the pubkey => {0 or 1}
-- **Cost**: 1900
+- **Cost**: 1720 + 4 per 64 bytes of A
 
 The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack.
 
@@ -49,7 +49,7 @@ The 32 byte public key is the last element on the stack, preceded by the 64 byte
 - Bytecode: 0x05 {uint8}
 - Stack: ..., A: [32]byte, B: [32]byte, C: [32]byte, D: [32]byte, E: [32]byte &rarr; ..., bool
 - for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}
-- **Cost**: Secp256k1=1700; Secp256r1=2500
+- **Cost**: Secp256k1=1700; Secp256r1=2210
 - Availability: v5
 
 ### ECDSA Curves
@@ -1194,7 +1194,7 @@ pushints args are not added to the intcblock during assembly processes
 - Bytecode: 0x84
 - Stack: ..., A: []byte, B: [64]byte, C: [32]byte &rarr; ..., bool
 - for (data A, signature B, pubkey C) verify the signature of the data against the pubkey => {0 or 1}
-- **Cost**: 1900
+- **Cost**: 1710 + 3 per 64 bytes of A
 - Availability: v7
 
 ## falcon_verify
@@ -1203,7 +1203,7 @@ pushints args are not added to the intcblock during assembly processes
 - Bytecode: 0x85 {uint8}
 - Stack: ..., A: []byte, B: []byte, C: []byte &rarr; ..., bool
 - for (data A, deterministic Falcon compressed-format signature B, pubkey C) verify the signature of data against the pubkey => {0 or 1}
-- **Cost**: FalconDet1024=1700; FalconDet512=850
+- **Cost**: FalconDet1024=1410 + 5 per 64 bytes of A; FalconDet512=690 + 5 per 64 bytes of A
 - Availability: v12
 
 ### Falcon Configurations Parameters
@@ -1230,7 +1230,7 @@ Signature B is variable-length, with maximum size 1423 bytes for FalconDet1024, 
 - Bytecode: 0x87
 - Stack: ..., A: []byte &rarr; ..., [64]byte
 - SHA512 of value A, yields [64]byte
-- **Cost**: 15 + 2 per 32 bytes of A
+- **Cost**: 10 + 5 per 128 bytes of A
 - Availability: v13
 
 ## callsub
@@ -1365,7 +1365,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Bytecode: 0x98
 - Stack: ..., A: []byte &rarr; ..., [32]byte
 - SHA3_256 hash of value A, yields [32]byte
-- **Cost**: 130
+- **Cost**: 14 + 5 per 64 bytes of A
 - Availability: v7
 
 ## bmodexp
@@ -1720,7 +1720,7 @@ LogicSig arguments are supplied outside of any signature, and are part of neithe
 - Bytecode: 0xd0 {uint8}
 - Stack: ..., A: []byte, B: [80]byte, C: [32]byte &rarr; ..., X: [64]byte, Y: bool
 - Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.
-- **Cost**: 5700
+- **Cost**: VrfAlgorand=6190 + 3 per 64 bytes of A
 - Availability: v7
 
 ### vrf_verify Standards

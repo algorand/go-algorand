@@ -100,6 +100,11 @@ const fullByteMathVersion = 14
 // B to every one of them.
 const lengthCostVersion = 14
 
+// cryptoCostVersion is the first version with the current costs of sha256,
+// keccak256, sha512_256, sha3_256, sha512, ed25519verify, ed25519verify_bare,
+// ecdsa_verify and vrf_verify. Those that hash their input charge by its length.
+const cryptoCostVersion = 14
+
 // LogicSigOffCurveVersion is the first AVM version where LogicSig programs
 // assembled by this package are expected to hash to an off-curve address.
 const LogicSigOffCurveVersion = 13
@@ -695,20 +700,17 @@ var OpSpecs = []OpSpec{
 	{0x02, "keccak256", opKeccak256, proto("b:b{32}"), 2, costly(130)},
 	{0x03, "sha512_256", opSHA512_256, proto("b:b{32}"), 2, costly(45)},
 
-	/*
-		Tabling these changes until we offer unlimited global storage as there
-		is currently a useful pattern that requires hashes on long slices to
-		creating logicsigs in apps.
-
-		{0x01, "sha256", opSHA256, proto("b:b{32}"), ?, costByLength(...)},
-		{0x02, "keccak256", opKeccak256, proto("b:b{32}"), ?, costByLength(...)},
-		{0x03, "sha512_256", opSHA512_256, proto("b:b{32}"), ?, costByLength(...)},
-	*/
+	{0x01, "sha256", opSHA256, proto("b:b{32}"), cryptoCostVersion, costByLength(8, 1, 64, 0)},
+	{0x02, "keccak256", opKeccak256, proto("b:b{32}"), cryptoCostVersion, costByLength(14, 5, 64, 0)},
+	{0x03, "sha512_256", opSHA512_256, proto("b:b{32}"), cryptoCostVersion, costByLength(10, 5, 128, 0)},
 
 	{0x04, "ed25519verify", opEd25519Verify, proto("bb{64}b{32}:T"), 1, costly(1900).only(ModeSig)},
 	{0x04, "ed25519verify", opEd25519Verify, proto("bb{64}b{32}:T"), 5, costly(1900)},
+	{0x04, "ed25519verify", opEd25519Verify, proto("bb{64}b{32}:T"), cryptoCostVersion, costByLength(1720, 4, 64, 2)},
 
 	{0x05, "ecdsa_verify", opEcdsaVerify, proto("b{32}b{32}b{32}b{32}b{32}:T"), 5, costByField("v", &EcdsaCurves, ecdsaVerifyCosts)},
+	{0x05, "ecdsa_verify", opEcdsaVerify, proto("b{32}b{32}b{32}b{32}b{32}:T"), cryptoCostVersion, costByField("v", &EcdsaCurves, []int{
+		Secp256k1: 1700, Secp256r1: 2210})},
 	{0x06, "ecdsa_pk_decompress", opEcdsaPkDecompress, proto("b{33}:b{32}b{32}"), 5, costByField("v", &EcdsaCurves, ecdsaDecompressCosts)},
 	{0x07, "ecdsa_pk_recover", opEcdsaPkRecover, proto("b{32}ib{32}b{32}:b{32}b{32}"), 5, field("v", &EcdsaCurves).costs(2000)},
 
@@ -857,12 +859,25 @@ var OpSpecs = []OpSpec{
 	{0x83, "pushints", opPushInts, proto(":", "", "[N items]").stackExplain(opPushIntsStackChange), 8, constants(asmPushInts, checkIntImmArgs, "uint ...", immInts).typed(typePushInts).trust()},
 
 	{0x84, "ed25519verify_bare", opEd25519VerifyBare, proto("bb{64}b{32}:T"), 7, costly(1900)},
+	{0x84, "ed25519verify_bare", opEd25519VerifyBare, proto("bb{64}b{32}:T"), cryptoCostVersion, costByLength(1710, 3, 64, 2)},
 	{0x85, "falcon_verify", opFalcon1024Verify, proto("bbb{1793}:T"), 12, costly(1700)},
 	{0x85, "falcon_verify", opFalconVerify, proto("bbb:T"), f512Version,
-		costByField("f", &FalconConfigs, []int{
-			FalconDet1024: 1700, FalconDet512: 850}).typed(typeFalconVerify)},
+		costByFieldAndLength("f", &FalconConfigs, []costDescriptor{
+			FalconDet1024: {
+				baseCost:  1410,
+				chunkCost: 5,
+				chunkSize: 64,
+				depth:     2,
+			},
+			FalconDet512: {
+				baseCost:  690,
+				chunkCost: 5,
+				chunkSize: 64,
+				depth:     2,
+			}}).typed(typeFalconVerify)},
 	{0x86, "sumhash512", opSumhash512, proto("b:b{64}"), sumhashVersion, costByLength(150, 4, 7, 0)},
 	{0x87, "sha512", opSHA512, proto("b:b{64}"), 13, costByLength(15, 2, 32, 0)},
+	{0x87, "sha512", opSHA512, proto("b:b{64}"), cryptoCostVersion, costByLength(10, 5, 128, 0)},
 
 	// "Function oriented"
 	{0x88, "callsub", opCallSub2B, proto(":"), 4, detBranch2B()},
@@ -891,9 +906,7 @@ var OpSpecs = []OpSpec{
 	{0x96, "bsqrt", opBytesSqrt, proto("b:b"), fullByteMathVersion, costByFn(bsqrtCost, "5 + (len(A) // 96)^2*bitlen(len(A)) + len(A)")},
 	{0x97, "divw", opDivw, proto("iii:i"), 6, detDefault()},
 	{0x98, "sha3_256", opSHA3_256, proto("b:b{32}"), 7, costly(130)},
-	/* Will end up following keccak256 -
-	{0x98, "sha3_256", opSHA3_256, proto("b:b{32}"), ?, costByLength(...)},},
-	*/
+	{0x98, "sha3_256", opSHA3_256, proto("b:b{32}"), cryptoCostVersion, costByLength(14, 5, 64, 0)},
 	{0x99, "bmodexp", opBytesModExp, proto("bbb:b"), fullByteMathVersion, costByFn(bmodexpCost, bmodexpCostDoc)},
 
 	// Byteslice math.
@@ -961,6 +974,13 @@ var OpSpecs = []OpSpec{
 
 	// randomness support
 	{0xd0, "vrf_verify", opVrfVerify, proto("bb{80}b{32}:b{64}T"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
+	{0xd0, "vrf_verify", opVrfVerify, proto("bb{80}b{32}:b{64}T"), cryptoCostVersion, costByFieldAndLength("s", &VrfStandards, []costDescriptor{
+		VrfAlgorand: {
+			baseCost:  6190,
+			chunkCost: 3,
+			chunkSize: 64,
+			depth:     2,
+		}})},
 	{0xd1, "block", opBlock, proto("i:a"), randomnessVersion, field("f", &BlockFields)},
 	{0xd2, "box_splice", opBoxSplice, proto("Niib:").appBoxExplain(AppStateWrite, false), spliceVersion, only(ModeApp)},
 	{0xd3, "box_resize", opBoxResize, proto("Ni:").appBoxExplain(AppStateWrite, false), spliceVersion, only(ModeApp)},
