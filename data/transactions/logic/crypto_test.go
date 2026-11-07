@@ -975,13 +975,16 @@ global OpcodeBudget
 int %d
 ==
 `
-	testAcceptRange(t, fmt.Sprintf(source, testLogicBudget-2500-8), fidoVersion, cryptoCostVersion-1)
-	testAcceptRange(t, fmt.Sprintf(source, testLogicBudget-2210-8), cryptoCostVersion, AssemblerMaxVersion)
+	// Literal versions: v13 has shipped, so its costs must not change.
+	testAcceptRange(t, fmt.Sprintf(source, testLogicBudget-2500-8), fidoVersion, 13)
+	testAcceptRange(t, fmt.Sprintf(source, testLogicBudget-2210-8), 14, AssemblerMaxVersion)
 }
 
 // TestVerifyCosts pins the costs of the verification opcodes that hash their
-// message, before and from cryptoCostVersion, by message length. The inputs need
-// not verify: a budget too small for the opcode reports its cost before it runs.
+// message, at v13 and from v14, by message length. The inputs need not verify:
+// a budget too small for the opcode reports its cost before it runs. Programs
+// run under the latest consensus version, so a v13 program keeps v13 costs
+// there. Literal versions: v13 has shipped, so its costs must not change.
 func TestVerifyCosts(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1003,10 +1006,10 @@ func TestVerifyCosts(t *testing.T) {
 	}
 
 	for _, n := range []int{0, 1, 64, 65, maxStringSize} {
-		check(setup(n, 64, 32), "ed25519verify", cryptoCostVersion-1, 1900)
-		check(setup(n, 64, 32), "ed25519verify_bare", cryptoCostVersion-1, 1900)
-		check(setup(n, 10, 1793), "falcon_verify", f512Version-1, 1700)
-		check(setup(n, 80, 32), "vrf_verify VrfAlgorand", cryptoCostVersion-1, 5700)
+		check(setup(n, 64, 32), "ed25519verify", 13, 1900)
+		check(setup(n, 64, 32), "ed25519verify_bare", 13, 1900)
+		check(setup(n, 10, 1793), "falcon_verify", 13, 1700)
+		check(setup(n, 80, 32), "vrf_verify VrfAlgorand", 13, 5700)
 	}
 
 	costs := []struct {
@@ -1023,7 +1026,7 @@ func TestVerifyCosts(t *testing.T) {
 	}
 	for _, c := range costs {
 		for n, cost := range c.costs {
-			check(setup(n, c.sig, c.pk), c.op, cryptoCostVersion, cost)
+			check(setup(n, c.sig, c.pk), c.op, 14, cost)
 		}
 	}
 }
@@ -1041,7 +1044,18 @@ pushint %d
 ==
 `
 	t.Helper()
-	testAcceptRange(t, fmt.Sprintf(hashCostCheck, size, hash, expected), start, stop)
+	source := fmt.Sprintf(hashCostCheck, size, hash, expected)
+	testAcceptRange(t, source, start, stop)
+	// testAcceptRange runs programs under consensus versions up to stop, so also
+	// run them under the latest one, where they keep the costs of their version.
+	for v := start; v <= stop && stop < AssemblerMaxVersion; v++ {
+		ops := testProg(t, source, v)
+		var txn transactions.SignedTxn
+		txn.Lsig.Logic = ops.Program
+		pass, _, err := EvalSignatureProgram(ops.Program, nil, 0, defaultSigParams(txn))
+		require.NoError(t, err, "%s v%d", hash, v)
+		require.True(t, pass, "%s v%d", hash, v)
+	}
 }
 
 func TestHashCosts(t *testing.T) {
@@ -1053,20 +1067,21 @@ func TestHashCosts(t *testing.T) {
 	testHashCost(t, "sumhash512", 64, 190, sumhashVersion, AssemblerMaxVersion)
 	testHashCost(t, "sumhash512", 1000, 722, sumhashVersion, AssemblerMaxVersion)
 
-	// Before cryptoCostVersion, sha512 charges by length and the others do not.
-	// OpcodeBudget is available from v6.
-	testHashCost(t, "sha512", 0, 15, 13, cryptoCostVersion-1)
-	testHashCost(t, "sha512", 1, 17, 13, cryptoCostVersion-1)
-	testHashCost(t, "sha512", 64, 19, 13, cryptoCostVersion-1)
-	testHashCost(t, "sha512", 1000, 79, 13, cryptoCostVersion-1)
+	// Through v13, sha512 charges by length and the others do not. OpcodeBudget
+	// is available from v6. Literal versions: v13 has shipped, so its costs must
+	// not change.
+	testHashCost(t, "sha512", 0, 15, 13, 13)
+	testHashCost(t, "sha512", 1, 17, 13, 13)
+	testHashCost(t, "sha512", 64, 19, 13, 13)
+	testHashCost(t, "sha512", 1000, 79, 13, 13)
 	for _, n := range []int{0, maxStringSize} {
-		testHashCost(t, "sha256", n, 35, 6, cryptoCostVersion-1)
-		testHashCost(t, "keccak256", n, 130, 6, cryptoCostVersion-1)
-		testHashCost(t, "sha512_256", n, 45, 6, cryptoCostVersion-1)
-		testHashCost(t, "sha3_256", n, 130, 7, cryptoCostVersion-1)
+		testHashCost(t, "sha256", n, 35, 6, 13)
+		testHashCost(t, "keccak256", n, 130, 6, 13)
+		testHashCost(t, "sha512_256", n, 45, 6, 13)
+		testHashCost(t, "sha3_256", n, 130, 7, 13)
 	}
 
-	// From cryptoCostVersion, all of them charge by length.
+	// From v14, all of them charge by length.
 	sha256Costs := map[int]int{0: 8, 1: 9, 64: 9, 65: 10, maxStringSize: 72}
 	keccakCosts := map[int]int{0: 14, 1: 19, 64: 19, 65: 24, maxStringSize: 334}
 	sha512Costs := map[int]int{0: 10, 1: 15, 128: 15, 129: 20, maxStringSize: 170}
@@ -1078,7 +1093,7 @@ func TestHashCosts(t *testing.T) {
 		"sha512":     sha512Costs,
 	} {
 		for n, cost := range costs {
-			testHashCost(t, hash, n, cost, cryptoCostVersion, AssemblerMaxVersion)
+			testHashCost(t, hash, n, cost, 14, AssemblerMaxVersion)
 		}
 	}
 }
