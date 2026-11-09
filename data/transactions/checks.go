@@ -19,6 +19,7 @@ package transactions
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
@@ -28,10 +29,7 @@ import (
 )
 
 var (
-	errMissingHeartbeatFields       = errors.New("heartbeat transaction is missing its heartbeat fields")
 	errHeartbeatInResourceGroup     = errors.New("heartbeat transaction may not be grouped with an application call or asset creation")
-	errMalformedTxType              = errors.New("transaction has an unknown type")
-	errMalformedApplicationBoxIndex = errors.New("application transaction box index exceeds foreign apps")
 	errMalformedStateProofSignature = errors.New("state proof reveal has an empty or too-short signature")
 	errMalformedStateProofProof     = errors.New("state proof reveal has an invalid Merkle proof depth")
 	errMalformedStateProofPath      = errors.New("state proof has a Merkle path element with an unexpected size")
@@ -58,6 +56,8 @@ const (
 	TxGroupMalformedErrorReasonIncompleteGroup
 	// TxGroupErrorReasonInvalidFee indicates a group with improper fees.
 	TxGroupErrorReasonInvalidFee
+	// TxGroupMalformedErrorReasonDuplicateTxn indicates a group that contains the same transaction twice.
+	TxGroupMalformedErrorReasonDuplicateTxn
 )
 
 // TxGroupMalformedError indicates a transaction group that violates a group-wide rule.
@@ -138,51 +138,34 @@ func checkStateProof(spType protocol.StateProofType, sp *stateproof.StateProof) 
 	}
 }
 
-func checkApplicationCallBoxes(tx *Transaction) error {
-	if tx.Access != nil {
-		return nil
-	}
-	for i := range tx.Boxes {
-		if tx.Boxes[i].Index > uint64(len(tx.ForeignApps)) {
-			return errMalformedApplicationBoxIndex
-		}
-	}
-	return nil
-}
-
-func checkTxnGroup(n int, txn func(i int) *Transaction) error {
+func checkTxnGroup(n int, txn func(i int) *Transaction, allowGroupedHeartbeats bool) error {
 	heartbeat, availTrigger := false, false
 	for i := range n {
 		tx := txn(i)
 		switch tx.Type {
 		case protocol.HeartbeatTx:
 			heartbeat = true
-			if tx.HeartbeatTxnFields == nil {
-				return errMissingHeartbeatFields
-			}
 		case protocol.StateProofTx:
 			if err := checkStateProof(tx.StateProofType, &tx.StateProof); err != nil {
 				return err
 			}
 		case protocol.ApplicationCallTx:
 			availTrigger = true
-			if err := checkApplicationCallBoxes(tx); err != nil {
-				return err
-			}
 		case protocol.PaymentTx, protocol.KeyRegistrationTx, protocol.AssetConfigTx, protocol.AssetTransferTx, protocol.AssetFreezeTx:
 			if triggersResourceAvailability(tx) {
 				availTrigger = true
 			}
-		default:
-			return errMalformedTxType
 		}
 	}
-	if heartbeat && availTrigger {
+	if !allowGroupedHeartbeats && heartbeat && availTrigger {
 		return errHeartbeatInResourceGroup
 	}
 	return checkTxnGroupID(n, txn)
 }
 
+// checkTxnGroupID verifies the group ID and that no transaction appears twice.
+// Both are permanent: the VerifiedTransactionCache is keyed by transaction ID,
+// so its entries only mean anything for groups that satisfied them.
 func checkTxnGroupID(n int, txn func(i int) *Transaction) error {
 	if n == 0 {
 		return nil
@@ -215,7 +198,18 @@ func checkTxnGroupID(n int, txn func(i int) *Transaction) error {
 
 		current := *tx
 		current.Group = crypto.Digest{}
-		computed.TxGroupHashes = append(computed.TxGroupHashes, crypto.Digest(current.ID()))
+		// Within a group every transaction carries the same Group value, so
+		// these group-zeroed IDs are equal exactly when the real transaction
+		// IDs are.
+		txid := crypto.Digest(current.ID())
+		if j := slices.Index(computed.TxGroupHashes, txid); j >= 0 {
+			return &TxGroupMalformedError{
+				Msg:        fmt.Sprintf("transactionGroup: duplicate transaction: [%d] repeats [%d]", i, j),
+				Reason:     TxGroupMalformedErrorReasonDuplicateTxn,
+				GroupIndex: i,
+			}
+		}
+		computed.TxGroupHashes = append(computed.TxGroupHashes, txid)
 	}
 
 	computedID := hashTxGroup(computed)
@@ -241,12 +235,12 @@ func hashTxGroup(group TxGroup) crypto.Digest {
 
 // CheckTxnGroup screens a transaction group for invalid transactions and
 // verifies that its nonzero group ID commits to the provided transaction order.
-func CheckTxnGroup(group []SignedTxn) error {
-	return checkTxnGroup(len(group), func(i int) *Transaction { return &group[i].Txn })
+func CheckTxnGroup(group []SignedTxn, allowGroupedHeartbeats bool) error {
+	return checkTxnGroup(len(group), func(i int) *Transaction { return &group[i].Txn }, allowGroupedHeartbeats)
 }
 
 // CheckPaysetGroup screens a decoded block payset group for invalid transactions and
 // verifies that its nonzero group ID commits to the provided transaction order.
-func CheckPaysetGroup(group []SignedTxnWithAD) error {
-	return checkTxnGroup(len(group), func(i int) *Transaction { return &group[i].SignedTxn.Txn })
+func CheckPaysetGroup(group []SignedTxnWithAD, allowGroupedHeartbeats bool) error {
+	return checkTxnGroup(len(group), func(i int) *Transaction { return &group[i].SignedTxn.Txn }, allowGroupedHeartbeats)
 }

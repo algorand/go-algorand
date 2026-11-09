@@ -70,18 +70,26 @@ func (z *netPrioResponse) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSta
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = netPrioResponse{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "Nonce":
 			var zb0003 int
 			zb0003, err = msgp.ReadBytesBytesHeader(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Nonce")
+				err = msgp.WrapError(err, "Nonce")
 				return
 			}
 			if zb0003 > netPrioChallengeSizeBase64Encoded {
@@ -90,55 +98,14 @@ func (z *netPrioResponse) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSta
 			}
 			(*z).Nonce, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Nonce")
+				err = msgp.WrapError(err, "Nonce")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = netPrioResponse{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "Nonce":
-				var zb0004 int
-				zb0004, err = msgp.ReadBytesBytesHeader(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Nonce")
-					return
-				}
-				if zb0004 > netPrioChallengeSizeBase64Encoded {
-					err = msgp.ErrOverflow(uint64(zb0004), uint64(netPrioChallengeSizeBase64Encoded))
-					return
-				}
-				(*z).Nonce, bts, err = msgp.ReadStringBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Nonce")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -250,29 +217,45 @@ func (z *netPrioResponseSigned) UnmarshalMsgWithState(bts []byte, st msgp.Unmars
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = netPrioResponseSigned{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "Response":
 			var zb0003 int
 			var zb0004 bool
 			zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
-			if _, ok := err.(msgp.TypeError); ok {
-				zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Response")
+				return
+			}
+			if zb0004 {
+				(*z).Response = netPrioResponse{}
+			}
+			for zb0003 > 0 {
+				zb0003--
+				field, bts, err = msgp.ReadMapKeyZC(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Response")
+					err = msgp.WrapError(err, "Response")
 					return
 				}
-				if zb0003 > 0 {
-					zb0003--
+				switch string(field) {
+				case "Nonce":
 					var zb0005 int
 					zb0005, err = msgp.ReadBytesBytesHeader(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "Response", "struct-from-array", "Nonce")
+						err = msgp.WrapError(err, "Response", "Nonce")
 						return
 					}
 					if zb0005 > netPrioChallengeSizeBase64Encoded {
@@ -281,206 +264,40 @@ func (z *netPrioResponseSigned) UnmarshalMsgWithState(bts []byte, st msgp.Unmars
 					}
 					(*z).Response.Nonce, bts, err = msgp.ReadStringBytes(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "Response", "struct-from-array", "Nonce")
+						err = msgp.WrapError(err, "Response", "Nonce")
 						return
 					}
-				}
-				if zb0003 > 0 {
-					err = msgp.ErrTooManyArrayFields(zb0003)
+				default:
+					err = msgp.ErrNoField(string(field))
 					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "Response", "struct-from-array")
+						err = msgp.WrapError(err, "Response")
 						return
-					}
-				}
-			} else {
-				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Response")
-					return
-				}
-				if zb0004 {
-					(*z).Response = netPrioResponse{}
-				}
-				for zb0003 > 0 {
-					zb0003--
-					field, bts, err = msgp.ReadMapKeyZC(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "Response")
-						return
-					}
-					switch string(field) {
-					case "Nonce":
-						var zb0006 int
-						zb0006, err = msgp.ReadBytesBytesHeader(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "Response", "Nonce")
-							return
-						}
-						if zb0006 > netPrioChallengeSizeBase64Encoded {
-							err = msgp.ErrOverflow(uint64(zb0006), uint64(netPrioChallengeSizeBase64Encoded))
-							return
-						}
-						(*z).Response.Nonce, bts, err = msgp.ReadStringBytes(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "Response", "Nonce")
-							return
-						}
-					default:
-						err = msgp.ErrNoField(string(field))
-						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "Response")
-							return
-						}
 					}
 				}
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Round":
 			bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Round")
+				err = msgp.WrapError(err, "Round")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Sender":
 			bts, err = (*z).Sender.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Sender")
+				err = msgp.WrapError(err, "Sender")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "Sig":
 			bts, err = (*z).Sig.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Sig")
+				err = msgp.WrapError(err, "Sig")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = netPrioResponseSigned{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "Response":
-				var zb0007 int
-				var zb0008 bool
-				zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
-				if _, ok := err.(msgp.TypeError); ok {
-					zb0007, zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Response")
-						return
-					}
-					if zb0007 > 0 {
-						zb0007--
-						var zb0009 int
-						zb0009, err = msgp.ReadBytesBytesHeader(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "Response", "struct-from-array", "Nonce")
-							return
-						}
-						if zb0009 > netPrioChallengeSizeBase64Encoded {
-							err = msgp.ErrOverflow(uint64(zb0009), uint64(netPrioChallengeSizeBase64Encoded))
-							return
-						}
-						(*z).Response.Nonce, bts, err = msgp.ReadStringBytes(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "Response", "struct-from-array", "Nonce")
-							return
-						}
-					}
-					if zb0007 > 0 {
-						err = msgp.ErrTooManyArrayFields(zb0007)
-						if err != nil {
-							err = msgp.WrapError(err, "Response", "struct-from-array")
-							return
-						}
-					}
-				} else {
-					if err != nil {
-						err = msgp.WrapError(err, "Response")
-						return
-					}
-					if zb0008 {
-						(*z).Response = netPrioResponse{}
-					}
-					for zb0007 > 0 {
-						zb0007--
-						field, bts, err = msgp.ReadMapKeyZC(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "Response")
-							return
-						}
-						switch string(field) {
-						case "Nonce":
-							var zb0010 int
-							zb0010, err = msgp.ReadBytesBytesHeader(bts)
-							if err != nil {
-								err = msgp.WrapError(err, "Response", "Nonce")
-								return
-							}
-							if zb0010 > netPrioChallengeSizeBase64Encoded {
-								err = msgp.ErrOverflow(uint64(zb0010), uint64(netPrioChallengeSizeBase64Encoded))
-								return
-							}
-							(*z).Response.Nonce, bts, err = msgp.ReadStringBytes(bts)
-							if err != nil {
-								err = msgp.WrapError(err, "Response", "Nonce")
-								return
-							}
-						default:
-							err = msgp.ErrNoField(string(field))
-							if err != nil {
-								err = msgp.WrapError(err, "Response")
-								return
-							}
-						}
-					}
-				}
-			case "Round":
-				bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Round")
-					return
-				}
-			case "Sender":
-				bts, err = (*z).Sender.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Sender")
-					return
-				}
-			case "Sig":
-				bts, err = (*z).Sig.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Sig")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}

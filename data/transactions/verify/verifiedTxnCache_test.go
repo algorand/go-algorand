@@ -69,14 +69,14 @@ func TestAddingToCache(t *testing.T) {
 				authAddr: txn.AuthAddr,
 				msig:     nil,
 				lsig:     nil,
-				pqsig:    nil,
+				sksig:    nil,
 			},
 		})
 	}
 }
 
 // TestAddingToCacheOutOfLineSigs covers the authorization material the cache keeps out of
-// line. Lsig and PQsig are stored behind pointers because almost no transaction carries
+// line. Lsig and SKsig are stored behind pointers because almost no transaction carries
 // either, so both the present and the absent case need checking.
 func TestAddingToCacheOutOfLineSigs(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -94,8 +94,8 @@ func TestAddingToCacheOutOfLineSigs(t *testing.T) {
 		stxn transactions.SignedTxn
 	}{
 		{"lsig", contractLsig},
-		{"pqsig", makePQSignedTxn(t, 20)},
-		{"lsig-delegated-by-pqsig", makePQDelegatedLogicSigTxn(t, 21)},
+		{"pqsig", makeSKsigSignedTxn(t, 20)},
+		{"lsig-delegated-by-pqsig", makeSaltedKeySigDelegatedLogicSigTxn(t, 21)},
 	}
 
 	for _, test := range tests {
@@ -117,23 +117,23 @@ func TestAddingToCacheOutOfLineSigs(t *testing.T) {
 				require.NotNil(t, ctx.sigs.lsig, "a present Lsig must be stored")
 				require.Equal(t, test.stxn.Lsig, *ctx.sigs.lsig)
 			}
-			if test.stxn.PQsig.Blank() {
-				require.Nil(t, ctx.sigs.pqsig)
+			if test.stxn.SKsig.Blank() {
+				require.Nil(t, ctx.sigs.sksig)
 			} else {
-				require.NotNil(t, ctx.sigs.pqsig, "a present PQsig must be stored")
-				require.Equal(t, test.stxn.PQsig, *ctx.sigs.pqsig)
+				require.NotNil(t, ctx.sigs.sksig, "a present SKsig must be stored")
+				require.Equal(t, test.stxn.SKsig, *ctx.sigs.sksig)
 			}
 
 			// the entry keeps its own copy: PrepareGroupContext retains the caller's
 			// slice, so storing a pointer into it would let later edits rewrite history
 			group[0].Lsig.Sig[0]++
 			group[0].Lsig.Logic = []byte{0xff}
-			group[0].PQsig.Salt++
+			group[0].SKsig.Salt++
 			if ctx.sigs.lsig != nil {
 				require.Equal(t, test.stxn.Lsig, *ctx.sigs.lsig, "cached Lsig aliases the caller")
 			}
-			if ctx.sigs.pqsig != nil {
-				require.Equal(t, test.stxn.PQsig, *ctx.sigs.pqsig, "cached PQsig aliases the caller")
+			if ctx.sigs.sksig != nil {
+				require.Equal(t, test.stxn.SKsig, *ctx.sigs.sksig, "cached SKsig aliases the caller")
 			}
 		})
 	}
@@ -199,14 +199,14 @@ func TestGetUnverifiedTransactionGroups50(t *testing.T) {
 	require.Equal(t, len(expectedUnverifiedGroups), len(unverifiedGroups))
 }
 
-func TestGetUnverifiedTransactionGroupsPQSigProofChanges(t *testing.T) {
+func TestGetUnverifiedTransactionGroupsSaltedKeySigProofChanges(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
 	cache := MakeVerifiedTransactionCache(10)
 	dummyLedger := DummyLedgerForSignature{}
 
-	stxn := makePQSignedTxn(t, 20)
+	stxn := makeSKsigSignedTxn(t, 20)
 	group := []transactions.SignedTxn{stxn}
 	_, err := TxnGroup(group, &blkHdr, cache, &dummyLedger)
 	require.NoError(t, err)
@@ -215,8 +215,8 @@ func TestGetUnverifiedTransactionGroupsPQSigProofChanges(t *testing.T) {
 	require.Empty(t, unverifiedGroups)
 
 	clone := func(stxn transactions.SignedTxn) transactions.SignedTxn {
-		stxn.PQsig.PublicKey = slices.Clone(stxn.PQsig.PublicKey)
-		stxn.PQsig.Signature = slices.Clone(stxn.PQsig.Signature)
+		stxn.SKsig.PublicKey = slices.Clone(stxn.SKsig.PublicKey)
+		stxn.SKsig.Signature = slices.Clone(stxn.SKsig.Signature)
 		return stxn
 	}
 
@@ -227,25 +227,25 @@ func TestGetUnverifiedTransactionGroupsPQSigProofChanges(t *testing.T) {
 		{
 			name: "signature",
 			mutate: func(stxn *transactions.SignedTxn) {
-				stxn.PQsig.Signature[0] ^= 1
+				stxn.SKsig.Signature[0] ^= 1
 			},
 		},
 		{
 			name: "public-key",
 			mutate: func(stxn *transactions.SignedTxn) {
-				stxn.PQsig.PublicKey[0] ^= 1
+				stxn.SKsig.PublicKey[0] ^= 1
 			},
 		},
 		{
 			name: "salt",
 			mutate: func(stxn *transactions.SignedTxn) {
-				stxn.PQsig.Salt ^= 1
+				stxn.SKsig.Salt ^= 1
 			},
 		},
 		{
 			name: "scheme",
 			mutate: func(stxn *transactions.SignedTxn) {
-				stxn.PQsig.Scheme = protocol.PQScheme{'x', '1'}
+				stxn.SKsig.Scheme = protocol.SigScheme{'x', '1'}
 			},
 		},
 	}
@@ -259,6 +259,61 @@ func TestGetUnverifiedTransactionGroupsPQSigProofChanges(t *testing.T) {
 			unverifiedGroups := cache.GetUnverifiedTransactionGroups([][]transactions.SignedTxn{{mutated}}, spec, blkHdr.CurrentProtocol)
 			require.Len(t, unverifiedGroups, 1)
 			require.Equal(t, []transactions.SignedTxn{mutated}, unverifiedGroups[0])
+		})
+	}
+}
+
+// TestGetUnverifiedTransactionGroupsLogicSigSaltedKeySigChanges checks that rewriting
+// an ls-scheme program or its arguments misses the cache. Neither is signed, and
+// neither is part of the transaction ID, so a hit here would report a program as
+// verified when what ran was something else.
+func TestGetUnverifiedTransactionGroupsLogicSigSaltedKeySigChanges(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	cache := MakeVerifiedTransactionCache(10)
+	dummyLedger := DummyLedgerForSignature{}
+
+	stxn := makeSaltedLogicSigTxn(t, `arg 0; byte "open"; ==`, transactions.LogicSigArgs{[]byte("open")})
+	group := []transactions.SignedTxn{stxn}
+	_, err := TxnGroup(group, &blkHdr, cache, &dummyLedger)
+	require.NoError(t, err)
+
+	require.Empty(t, cache.GetUnverifiedTransactionGroups([][]transactions.SignedTxn{group}, spec, blkHdr.CurrentProtocol))
+
+	tests := []struct {
+		name   string
+		mutate func(*transactions.SignedTxn)
+	}{
+		{
+			name: "args",
+			mutate: func(stxn *transactions.SignedTxn) {
+				stxn.SKsig.Signature = transactions.EncodeLogicSigArgs(transactions.LogicSigArgs{[]byte("shut")})
+			},
+		},
+		{
+			name: "no-args",
+			mutate: func(stxn *transactions.SignedTxn) {
+				stxn.SKsig.Signature = nil
+			},
+		},
+		{
+			name: "program",
+			mutate: func(stxn *transactions.SignedTxn) {
+				stxn.SKsig.PublicKey = slices.Clone(stxn.SKsig.PublicKey)
+				stxn.SKsig.PublicKey[len(stxn.SKsig.PublicKey)-1] ^= 1
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			mutated := stxn
+			test.mutate(&mutated)
+			require.Equal(t, stxn.ID(), mutated.ID())
+
+			unverifiedGroups := cache.GetUnverifiedTransactionGroups([][]transactions.SignedTxn{{mutated}}, spec, blkHdr.CurrentProtocol)
+			require.Len(t, unverifiedGroups, 1)
 		})
 	}
 }
@@ -692,4 +747,55 @@ func BenchmarkVerifiedCacheGC(b *testing.B) {
 	b.ReportMetric(float64(live), "live-entries")
 	b.ReportMetric(float64(retained)/(1024*1024), "total-MB")
 	b.ReportMetric(float64(retained)/float64(live), "bytes/entry")
+}
+
+// TestTxnGroupRejectsDuplicateTxid checks that a group carrying the same
+// transaction twice, differing only in LogicSig args, fails verification and
+// leaves nothing in the cache. The cache keys entries by transaction ID, so
+// two such transactions would otherwise share one entry.
+func TestTxnGroupRejectsDuplicateTxid(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	blkHdr := createDummyBlockHeader()
+	cache := MakeVerifiedTransactionCache(10)
+	dummyLedger := DummyLedgerForSignature{}
+
+	_, signedTxns, _, _ := generateTestObjects(1, 2, 0, 50)
+
+	// two copies of one contract-account LogicSig transaction, with
+	// different args: same Txn, hence same transaction ID
+	a0 := transactions.SignedTxn{Txn: signedTxns[0].Txn}
+	a0.Lsig.Logic = []byte{0x06, 0x81, 0x01} // pushint 1
+	a0.Lsig.Args = [][]byte{{0}}
+	a1 := a0
+	a1.Lsig.Args = [][]byte{{1}}
+
+	group := []transactions.SignedTxn{a0, a1}
+	grpObj := transactions.TxGroup{}
+	for i := range group {
+		group[i].Txn.Group = crypto.Digest{}
+		grpObj.TxGroupHashes = append(grpObj.TxGroupHashes, crypto.Digest(group[i].Txn.ID()))
+	}
+	groupID := crypto.HashObj(grpObj)
+	for i := range group {
+		group[i].Txn.Group = groupID
+	}
+	require.Equal(t, group[0].ID(), group[1].ID())
+
+	// the group ID commits to both occurrences, so only the duplicate
+	// check can reject it
+	_, err := TxnGroup(group, &blkHdr, cache, &dummyLedger)
+	var malformed *transactions.TxGroupMalformedError
+	require.ErrorAs(t, err, &malformed)
+	require.Equal(t, transactions.TxGroupMalformedErrorReasonDuplicateTxn, malformed.Reason)
+
+	// nothing may arrive in the cache from the failed group
+	impl := cache.(*verifiedTransactionCache)
+	require.Empty(t, impl.pinned)
+	for _, bucket := range impl.buckets {
+		require.Empty(t, bucket)
+	}
+	unverified := cache.GetUnverifiedTransactionGroups(
+		[][]transactions.SignedTxn{{a1, a1}}, spec, blkHdr.CurrentProtocol)
+	require.Len(t, unverified, 1)
 }

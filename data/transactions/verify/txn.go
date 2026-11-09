@@ -80,6 +80,30 @@ type GroupContext struct {
 	consensusParams config.ConsensusParams
 	signedGroupTxns []transactions.SignedTxn
 	evalParams      *logic.EvalParams
+
+	// sksigLsigs holds, by group index, the LogicSig each ls-scheme SaltedKeySig
+	// carries, filled in by sksigLsig. Its args sit encoded in the SaltedKeySig,
+	// and decoding them includes a canonical-encoding check that re-encodes them,
+	// so the group size check and evaluation share one decode rather than paying
+	// twice.
+	sksigLsigs []*transactions.LogicSig
+}
+
+// sksigLsig returns the LogicSig carried by the ls-scheme SaltedKeySig of the
+// gith transaction, decoding it on first use.
+func (g *GroupContext) sksigLsig(gi int) (transactions.LogicSig, error) {
+	if g.sksigLsigs == nil {
+		g.sksigLsigs = make([]*transactions.LogicSig, len(g.signedGroupTxns))
+	}
+	if lsig := g.sksigLsigs[gi]; lsig != nil {
+		return *lsig, nil
+	}
+	lsig, err := g.signedGroupTxns[gi].SKsig.Lsig()
+	if err != nil {
+		return transactions.LogicSig{}, err
+	}
+	g.sksigLsigs[gi] = &lsig
+	return lsig, nil
 }
 
 var errTxnSigHasNoSig = errors.New("signedtxn has no sig")
@@ -225,7 +249,7 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 		}
 	}
 
-	if err := transactions.CheckTxnGroup(stxs); err != nil {
+	if err := transactions.CheckTxnGroup(stxs, groupCtx.consensusParams.AllowGroupedHeartbeats); err != nil {
 		groupIndex := -1
 		var groupErr *transactions.TxGroupMalformedError
 		if errors.As(err, &groupErr) {
@@ -234,7 +258,7 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 		return nil, &TxGroupError{err: err, GroupIndex: groupIndex, Reason: TxGroupErrorReasonNotWellFormed}
 	}
 
-	if err := logicSigGroupSizeCheck(stxs, groupCtx); err != nil {
+	if err := logicSigGroupSizeCheck(groupCtx); err != nil {
 		return nil, err
 	}
 
@@ -254,7 +278,8 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 // handling of content attached to program-less LogicSigs: ignored before
 // LogicSig size pooling, args counted in the size pool once pooling exists, and
 // any content rejected after transaction size pricing.
-func logicSigGroupSizeCheck(stxs []transactions.SignedTxn, groupCtx *GroupContext) *TxGroupError {
+func logicSigGroupSizeCheck(groupCtx *GroupContext) *TxGroupError {
+	stxs := groupCtx.signedGroupTxns
 	lSigPooledSize := 0
 	lSigArgsSize := 0
 	lSigArgsNeedSizePooling := false
@@ -264,6 +289,7 @@ func logicSigGroupSizeCheck(stxs []transactions.SignedTxn, groupCtx *GroupContex
 
 	for i := range stxs {
 		lsig := &stxs[i].Lsig
+		countLsig := true
 		if !lsig.HasProgram() {
 			if !lsig.Blank() && rejectOrphanLSigContent {
 				return &TxGroupError{
@@ -272,13 +298,27 @@ func logicSigGroupSizeCheck(stxs []transactions.SignedTxn, groupCtx *GroupContex
 					Reason:     TxGroupErrorReasonNotWellFormed,
 				}
 			}
-			if !poolOrphanLSigArgs {
-				continue
-			}
+			countLsig = poolOrphanLSigArgs
 		}
 
-		argsLen := lsig.ArgsLen()
-		lSigPooledSize += len(lsig.Logic) + argsLen
+		programLen, argsLen := 0, 0
+		if countLsig {
+			programLen += len(lsig.Logic)
+			argsLen += lsig.ArgsLen()
+		}
+		// A program authorizing from an ls-scheme SaltedKeySig costs the group what one
+		// in a LogicSig costs. Malformed args are rejected here rather than
+		// counted, since there is no honest size to charge for them.
+		if stxs[i].SKsig.IsLogicSig() {
+			sksigLsig, err := groupCtx.sksigLsig(i)
+			if err != nil {
+				return &TxGroupError{err: err, GroupIndex: i, Reason: TxGroupErrorReasonNotWellFormed}
+			}
+			programLen += len(sksigLsig.Logic)
+			argsLen += sksigLsig.ArgsLen()
+		}
+
+		lSigPooledSize += programLen + argsLen
 		lSigArgsSize += argsLen
 		if uint64(argsLen) > groupCtx.consensusParams.LogicSigMaxSize {
 			lSigArgsNeedSizePooling = true
@@ -315,7 +355,7 @@ const regularSig sigOrTxnType = 1
 const multiSig sigOrTxnType = 2
 const logicSig sigOrTxnType = 3
 const stateProofTxn sigOrTxnType = 4
-const pqSig sigOrTxnType = 5
+const saltedKeySig sigOrTxnType = 5
 
 // checkTxnSigTypeCounts checks the number of signature types and reports an error in case of a violation
 func checkTxnSigTypeCounts(s *transactions.SignedTxn, groupIndex int) (sigType sigOrTxnType, err *TxGroupError) {
@@ -332,9 +372,9 @@ func checkTxnSigTypeCounts(s *transactions.SignedTxn, groupIndex int) (sigType s
 		numSigCategories++
 		sigType = logicSig
 	}
-	if !s.PQsig.Blank() {
+	if !s.SKsig.Blank() {
 		numSigCategories++
-		sigType = pqSig
+		sigType = saltedKeySig
 	}
 	if numSigCategories == 0 {
 		// Special case: special sender address can issue special transaction
@@ -355,10 +395,6 @@ func checkTxnSigTypeCounts(s *transactions.SignedTxn, groupIndex int) (sigType s
 // stxnCoreChecks runs signatures validity checks and enqueues signature into batchVerifier for verification.
 func stxnCoreChecks(gi int, groupCtx *GroupContext, batch crypto.BatchEnqueuer) *TxGroupError {
 	s := &groupCtx.signedGroupTxns[gi]
-
-	if !groupCtx.consensusParams.PQSigEnabled() && (!s.PQsig.Blank() || !s.Lsig.PQsig.Blank()) {
-		return &TxGroupError{err: fmt.Errorf("pq signature not enabled"), GroupIndex: gi, Reason: TxGroupErrorReasonSigNotWellFormed}
-	}
 
 	sigType, err := checkTxnSigTypeCounts(s, gi)
 	if err != nil {
@@ -394,9 +430,15 @@ func stxnCoreChecks(gi int, groupCtx *GroupContext, batch crypto.BatchEnqueuer) 
 		}
 		return nil
 
-	case pqSig:
-		if err := s.PQsig.Verify(groupCtx.consensusParams, s.Txn, s.Authorizer()); err != nil {
-			return &TxGroupError{err: fmt.Errorf("pq signature validation failed: %w", err), GroupIndex: gi, Reason: TxGroupErrorReasonSigNotWellFormed}
+	case saltedKeySig:
+		if s.SKsig.IsLogicSig() {
+			if err := saltedKeySigLogicSigVerify(gi, groupCtx); err != nil {
+				return &TxGroupError{err: err, GroupIndex: gi, Reason: TxGroupErrorReasonLogicSigFailed}
+			}
+			return nil
+		}
+		if err := s.SKsig.BatchPrep(groupCtx.consensusParams, s.Txn, s.Authorizer(), batch); err != nil {
+			return &TxGroupError{err: fmt.Errorf("salted-key signature validation failed: %w", err), GroupIndex: gi, Reason: TxGroupErrorReasonSigNotWellFormed}
 		}
 		return nil
 
@@ -409,14 +451,101 @@ func stxnCoreChecks(gi int, groupCtx *GroupContext, batch crypto.BatchEnqueuer) 
 }
 
 // LogicSigSanityCheck checks that the signature is valid and that the program is basically well formed.
-// It does not evaluate the logic.
+// It does not evaluate the logic. It covers both the program in a LogicSig and
+// the one an ls-scheme SaltedKeySig carries.
 func LogicSigSanityCheck(gi int, groupCtx *GroupContext) error {
+	if groupCtx.signedGroupTxns[gi].SKsig.IsLogicSig() {
+		_, err := saltedKeySigLogicSigSanityCheckPrep(gi, groupCtx)
+		return err
+	}
+
 	batchVerifier := crypto.MakeBatchVerifier()
 
 	if err := logicSigSanityCheckBatchPrep(gi, groupCtx, batchVerifier); err != nil {
 		return err
 	}
 	return batchVerifier.Verify()
+}
+
+// sigProgramSanityCheck checks that a program which authorizes a transaction by
+// being evaluated is basically well formed: present, within the per-program
+// size cap, of a version this protocol runs, and statically valid. name says
+// where the program came from, since it need not be a LogicSig's. Args and
+// pooling checks need the whole group and are handled in txnGroupBatchPrep.
+func sigProgramSanityCheck(program []byte, name string, groupCtx *GroupContext) error {
+	if len(program) == 0 {
+		return fmt.Errorf("%s empty", name)
+	}
+	if uint64(len(program)) > groupCtx.consensusParams.MaxAbsoluteLogicSigProgramSize {
+		return fmt.Errorf("%s too long. max size is %d bytes", name, groupCtx.consensusParams.MaxAbsoluteLogicSigProgramSize)
+	}
+	version, vlen := binary.Uvarint(program)
+	if vlen <= 0 {
+		return fmt.Errorf("%s bad version", name)
+	}
+	if version > groupCtx.consensusParams.LogicSigVersion {
+		return fmt.Errorf("%s version too new", name)
+	}
+
+	return logic.CheckSignature(program, groupCtx.evalParams)
+}
+
+// evalSigProgram evaluates a program that authorizes the ith transaction, and
+// reports whether it approved.
+func evalSigProgram(gi int, groupCtx *GroupContext, lsig transactions.LogicSig) error {
+	pass, cx, err := logic.EvalSignatureProgram(lsig.Logic, lsig.Args, gi, groupCtx.evalParams)
+	if err != nil {
+		logicErrTotal.Inc(nil)
+		return fmt.Errorf("transaction %v: %w", groupCtx.signedGroupTxns[gi].ID(), err)
+	}
+	if !pass {
+		logicRejTotal.Inc(nil)
+		return fmt.Errorf("transaction %v: rejected by logic", groupCtx.signedGroupTxns[gi].ID())
+	}
+	if groupCtx.consensusParams.RequireLogicSigArgAccess {
+		if i, bad := cx.UnaccountedArg(); bad {
+			logicRejTotal.Inc(nil)
+			return fmt.Errorf("transaction %v: LogicSig arg[%d] of %d was not accessed",
+				groupCtx.signedGroupTxns[gi].ID(), i, len(lsig.Args))
+		}
+	}
+	logicGoodTotal.Inc(nil)
+	logicCostTotal.AddUint64(uint64(cx.Cost()), nil)
+	return nil
+}
+
+// saltedKeySigLogicSigSanityCheckPrep checks an ls-scheme SaltedKeySig as far as can be done
+// without evaluating its program, and returns the logic signature it carries.
+func saltedKeySigLogicSigSanityCheckPrep(gi int, groupCtx *GroupContext) (transactions.LogicSig, error) {
+	if groupCtx.consensusParams.LogicSigVersion == 0 {
+		return transactions.LogicSig{}, errors.New("LogicSig not enabled")
+	}
+	txn := &groupCtx.signedGroupTxns[gi]
+
+	if err := txn.SKsig.ValidateEnvelope(groupCtx.consensusParams, txn.Authorizer()); err != nil {
+		return transactions.LogicSig{}, err
+	}
+
+	lsig, err := groupCtx.sksigLsig(gi)
+	if err != nil {
+		return transactions.LogicSig{}, err
+	}
+	if err := sigProgramSanityCheck(lsig.Logic, "SKsig LogicSig", groupCtx); err != nil {
+		return transactions.LogicSig{}, err
+	}
+	return lsig, nil
+}
+
+// saltedKeySigLogicSigVerify authorizes a transaction with an ls-scheme SaltedKeySig. The
+// address commits to the program, so once the envelope establishes that the
+// authorizer is that program's address, evaluating it is the whole
+// authorization: there are no signature bytes to check.
+func saltedKeySigLogicSigVerify(gi int, groupCtx *GroupContext) error {
+	lsig, err := saltedKeySigLogicSigSanityCheckPrep(gi, groupCtx)
+	if err != nil {
+		return err
+	}
+	return evalSigProgram(gi, groupCtx, lsig)
 }
 
 // logicSigSanityCheckBatchPrep checks that the signature is valid and that the program is basically well formed.
@@ -427,30 +556,10 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batch crypto.B
 		return errors.New("LogicSig not enabled")
 	}
 
-	if gi < 0 {
-		return errors.New("negative group index")
-	}
 	txn := &groupCtx.signedGroupTxns[gi]
 	lsig := txn.Lsig
 
-	if !lsig.HasProgram() {
-		return errors.New("LogicSig.Logic empty")
-	}
-	// This absolute program cap is per LogicSig. Args and pooling checks need
-	// the whole group and are handled in txnGroupBatchPrep.
-	if uint64(len(lsig.Logic)) > groupCtx.consensusParams.MaxAbsoluteLogicSigProgramSize {
-		return fmt.Errorf("LogicSig.Logic too long. max size is %d bytes", groupCtx.consensusParams.MaxAbsoluteLogicSigProgramSize)
-	}
-	version, vlen := binary.Uvarint(lsig.Logic)
-	if vlen <= 0 {
-		return errors.New("LogicSig.Logic bad version")
-	}
-	if version > groupCtx.consensusParams.LogicSigVersion {
-		return errors.New("LogicSig.Logic version too new")
-	}
-
-	err := logic.CheckSignature(gi, groupCtx.evalParams)
-	if err != nil {
+	if err := sigProgramSanityCheck(lsig.Logic, "LogicSig.Logic", groupCtx); err != nil {
 		return err
 	}
 
@@ -468,7 +577,7 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batch crypto.B
 		hasLMsig = true
 		numSigs++
 	}
-	if !lsig.PQsig.Blank() {
+	if !lsig.SKsig.Blank() {
 		numSigs++
 	}
 	if numSigs == 0 {
@@ -483,11 +592,10 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batch crypto.B
 	if numSigs > 1 {
 		return errors.New("LogicSig should have only one type of delegation signature")
 	}
-	if !lsig.PQsig.Blank() {
-		// PQ schemes have no batch verification; verify in-place, like the top-level PQsig path.
-		program := logic.PQDelegatedProgram{Addr: txn.Authorizer(), Program: lsig.Logic}
-		if err := lsig.PQsig.Verify(groupCtx.consensusParams, program, txn.Authorizer()); err != nil {
-			return fmt.Errorf("pq delegated logic signature validation failed: %w", err)
+	if !lsig.SKsig.Blank() {
+		program := logic.SKsigDelegatedProgram{Addr: txn.Authorizer(), Program: lsig.Logic}
+		if err := lsig.SKsig.BatchPrep(groupCtx.consensusParams, program, txn.Authorizer(), batch); err != nil {
+			return fmt.Errorf("salted-key signature delegation validation failed: %w", err)
 		}
 		return nil
 	}
@@ -534,26 +642,7 @@ func logicSigVerify(gi int, groupCtx *GroupContext) error {
 		return err
 	}
 
-	pass, cx, err := logic.EvalSignatureFull(gi, groupCtx.evalParams)
-	if err != nil {
-		logicErrTotal.Inc(nil)
-		return fmt.Errorf("transaction %v: %w", groupCtx.signedGroupTxns[gi].ID(), err)
-	}
-	if !pass {
-		logicRejTotal.Inc(nil)
-		return fmt.Errorf("transaction %v: rejected by logic", groupCtx.signedGroupTxns[gi].ID())
-	}
-	if groupCtx.consensusParams.RequireLogicSigArgAccess {
-		if i, bad := cx.UnaccountedArg(); bad {
-			logicRejTotal.Inc(nil)
-			return fmt.Errorf("transaction %v: LogicSig arg[%d] of %d was not accessed",
-				groupCtx.signedGroupTxns[gi].ID(), i, len(groupCtx.signedGroupTxns[gi].Lsig.Args))
-		}
-	}
-	logicGoodTotal.Inc(nil)
-	logicCostTotal.AddUint64(uint64(cx.Cost()), nil)
-	return nil
-
+	return evalSigProgram(gi, groupCtx, groupCtx.signedGroupTxns[gi].Lsig)
 }
 
 // PaysetGroups verifies that the payset have a good signature and that the underlying

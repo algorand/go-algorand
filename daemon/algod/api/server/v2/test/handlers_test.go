@@ -54,6 +54,7 @@ import (
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -1165,43 +1166,44 @@ func enableDeveloperAPI() postTransactionOpt {
 	}
 }
 
-func makePQSigWithAddressCompliance(t *testing.T, compliant bool) (crypto.FalconSigner, basics.Address, transactions.PQSig) {
+func makeSaltedKeySigWithOffCurveAuthorizer(t *testing.T, offCurve bool) (basics_testing.SigSchemeSigner, basics.Address, transactions.SaltedKeySig) {
 	t.Helper()
 
-	var seed crypto.FalconSeed
-	signer, err := crypto.GenerateFalconSigner(seed)
-	require.NoError(t, err)
-	publicKey := slices.Clone(signer.PublicKey[:])
+	// Randomly choose a supported scheme for the test.
+	scheme := basics_testing.RandomSigSchemeTest().Scheme
+	signer := basics_testing.MakeSigSchemeSigner(t, 0, scheme)
+	publicKey := signer.PublicKey()
 
-	var salt basics.PQAddressSalt
+	var salt basics.AddressSalt
 	var authorizer basics.Address
-	if compliant {
-		salt, authorizer, err = basics.CanonicalPQAddressSalt(protocol.PQSchemeFalcon1024, publicKey)
+	if offCurve {
+		var err error
+		salt, authorizer, err = basics.CanonicalAddressSalt(scheme, publicKey)
 		require.NoError(t, err)
 	} else {
 		found := false
 		for s := 0; s <= math.MaxUint8; s++ {
-			salt = basics.PQAddressSalt(s)
-			authorizer = basics.PQAddress(protocol.PQSchemeFalcon1024, salt, publicKey)
-			if !authorizer.IsPQCompliant() {
+			salt = basics.AddressSalt(s)
+			authorizer = basics.SaltedAddress(scheme, salt, publicKey)
+			if !authorizer.IsOffEd25519Curve() {
 				found = true
 				break
 			}
 		}
-		require.True(t, found, "unable to find non-compliant PQ address salt")
+		require.True(t, found, "unable to find an address salt that puts the address on the Ed25519 curve")
 	}
 
-	return signer, authorizer, transactions.PQSig{
-		Scheme:    protocol.PQSchemeFalcon1024,
+	return signer, authorizer, transactions.SaltedKeySig{
+		Scheme:    scheme,
 		Salt:      salt,
 		PublicKey: publicKey,
 	}
 }
 
-func makePQSignedTxnWithAddressCompliance(t *testing.T, compliant bool) transactions.SignedTxn {
+func makeSKsigSignedTxnWithOffCurveAuthorizer(t *testing.T, offCurve bool) transactions.SignedTxn {
 	t.Helper()
 
-	signer, authorizer, pqSig := makePQSigWithAddressCompliance(t, compliant)
+	signer, authorizer, sksig := makeSaltedKeySigWithOffCurveAuthorizer(t, offCurve)
 	txn := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
@@ -1218,24 +1220,23 @@ func makePQSignedTxnWithAddressCompliance(t *testing.T, compliant bool) transact
 
 	signature, err := signer.Sign(txn)
 	require.NoError(t, err)
-	pqSig.Signature = signature
+	sksig.Signature = signature
 
 	return transactions.SignedTxn{
 		Txn:   txn,
-		PQsig: pqSig,
+		SKsig: sksig,
 	}
 }
 
-func makePQDelegatedLogicSigTxnWithAddressCompliance(t *testing.T, compliant bool) transactions.SignedTxn {
+func makeSaltedKeySigDelegatedLogicSigTxnWithOffCurveAuthorizer(t *testing.T, offCurve bool) transactions.SignedTxn {
 	t.Helper()
 
-	signer, authorizer, pqSig := makePQSigWithAddressCompliance(t, compliant)
+	signer, authorizer, sksig := makeSaltedKeySigWithOffCurveAuthorizer(t, offCurve)
 	ops, err := logic.AssembleStringWithVersion("int 1", 1)
 	require.NoError(t, err)
 
-	signature, err := signer.Sign(logic.PQDelegatedProgram{Addr: authorizer, Program: ops.Program})
+	sksig.Signature, err = signer.Sign(logic.SKsigDelegatedProgram{Addr: authorizer, Program: ops.Program})
 	require.NoError(t, err)
-	pqSig.Signature = signature
 
 	txn := transactions.Transaction{
 		Type: protocol.PaymentTx,
@@ -1255,7 +1256,7 @@ func makePQDelegatedLogicSigTxnWithAddressCompliance(t *testing.T, compliant boo
 		Txn: txn,
 		Lsig: transactions.LogicSig{
 			Logic: ops.Program,
-			PQsig: pqSig,
+			SKsig: sksig,
 		},
 	}
 }
@@ -1281,7 +1282,7 @@ func postTransactionTest(t *testing.T, txnToUse int, expectedCode int, method st
 	results := reflect.ValueOf(&handler).MethodByName(method).Call(args)
 	require.Equal(t, 1, len(results))
 	// if the method returns nil, the cast would fail so use type assertion test
-	err, _ := results[0].Interface().(error)
+	err, _ := reflect.TypeAssert[error](results[0])
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
 }
@@ -1294,7 +1295,7 @@ func TestPostTransaction(t *testing.T) {
 	postTransactionTest(t, 0, 200, "RawTransaction")
 }
 
-func TestPostTransactionPQAuthorizerCompliance(t *testing.T) {
+func TestPostTransactionOffCurveAuthorizers(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -1327,31 +1328,31 @@ func TestPostTransactionPQAuthorizerCompliance(t *testing.T) {
 		}
 	}
 
-	t.Run("compliant", func(t *testing.T) {
+	t.Run("off-curve", func(t *testing.T) {
 		t.Parallel()
-		test(t, makePQSignedTxnWithAddressCompliance(t, true), futureStatus, model.RawTransactionParams{}, http.StatusOK, "")
+		test(t, makeSKsigSignedTxnWithOffCurveAuthorizer(t, true), futureStatus, model.RawTransactionParams{}, http.StatusOK, "")
 	})
-	t.Run("not-compliant", func(t *testing.T) {
+	t.Run("on-curve", func(t *testing.T) {
 		t.Parallel()
-		test(t, makePQSignedTxnWithAddressCompliance(t, false), futureStatus, model.RawTransactionParams{}, http.StatusBadRequest, "transaction 0: pq signature authorizer address")
+		test(t, makeSKsigSignedTxnWithOffCurveAuthorizer(t, false), futureStatus, model.RawTransactionParams{}, http.StatusBadRequest, "transaction 0: salted-key signature authorizer address")
 	})
-	t.Run("not-compliant with skip flag", func(t *testing.T) {
+	t.Run("on-curve with skip flag", func(t *testing.T) {
 		t.Parallel()
 		skip := true
-		test(t, makePQSignedTxnWithAddressCompliance(t, false), futureStatus, model.RawTransactionParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
+		test(t, makeSKsigSignedTxnWithOffCurveAuthorizer(t, false), futureStatus, model.RawTransactionParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
 	})
-	t.Run("delegated-compliant", func(t *testing.T) {
+	t.Run("delegated-off-curve", func(t *testing.T) {
 		t.Parallel()
-		test(t, makePQDelegatedLogicSigTxnWithAddressCompliance(t, true), futureStatus, model.RawTransactionParams{}, http.StatusOK, "")
+		test(t, makeSaltedKeySigDelegatedLogicSigTxnWithOffCurveAuthorizer(t, true), futureStatus, model.RawTransactionParams{}, http.StatusOK, "")
 	})
-	t.Run("delegated-not-compliant", func(t *testing.T) {
+	t.Run("delegated-on-curve", func(t *testing.T) {
 		t.Parallel()
-		test(t, makePQDelegatedLogicSigTxnWithAddressCompliance(t, false), futureStatus, model.RawTransactionParams{}, http.StatusBadRequest, "transaction 0: pq signature authorizer address")
+		test(t, makeSaltedKeySigDelegatedLogicSigTxnWithOffCurveAuthorizer(t, false), futureStatus, model.RawTransactionParams{}, http.StatusBadRequest, "transaction 0: salted-key signature authorizer address")
 	})
-	t.Run("delegated-not-compliant with skip flag", func(t *testing.T) {
+	t.Run("delegated-on-curve with skip flag", func(t *testing.T) {
 		t.Parallel()
 		skip := true
-		test(t, makePQDelegatedLogicSigTxnWithAddressCompliance(t, false), futureStatus, model.RawTransactionParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
+		test(t, makeSaltedKeySigDelegatedLogicSigTxnWithOffCurveAuthorizer(t, false), futureStatus, model.RawTransactionParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
 	})
 }
 
@@ -1402,16 +1403,17 @@ func delegatedLogicSigTxnPrep(program []byte) func(transactions.SignedTxn) []byt
 	}
 }
 
-// pqDelegatedEscrowLookalikeTxnPrep builds a txn whose authorizer is the
+// saltedKeyDelegatedEscrowLookalikeTxnPrep builds a txn whose authorizer is the
 // program hash, as for an escrow LogicSig, but whose LogicSig carries a nested
-// PQ envelope: the PQ delegation must exempt it from the escrow on-curve check.
-func pqDelegatedEscrowLookalikeTxnPrep(program []byte) func(transactions.SignedTxn) []byte {
+// salted-key signature: that delegation must exempt it from the escrow on-curve
+// check.
+func saltedKeyDelegatedEscrowLookalikeTxnPrep(program []byte) func(transactions.SignedTxn) []byte {
 	return func(stxn transactions.SignedTxn) []byte {
 		stxn.Sig = crypto.Signature{}
 		stxn.Msig = crypto.MultisigSig{}
 		stxn.Lsig = transactions.LogicSig{
 			Logic: program,
-			PQsig: transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024},
+			SKsig: transactions.SaltedKeySig{Scheme: protocol.SigSchemeFalcon1024},
 		}
 		stxn.Txn.Sender = basics.Address(logic.HashProgram(program))
 		return protocol.Encode(&stxn)
@@ -1465,9 +1467,9 @@ func TestPostTransactionLogicSigCurveCheck(t *testing.T) {
 		require.Equal(t, http.StatusOK, rec.Code)
 	})
 
-	t.Run("accepts pq delegated on curve logicsig", func(t *testing.T) {
+	t.Run("accepts salted-key signature delegated on-curve logicsig", func(t *testing.T) {
 		program := onCurveLogicSigProgram(t)
-		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, pqDelegatedEscrowLookalikeTxnPrep(program), config.GetDefaultLocal())
+		handler, c, rec, releasefunc := prepareTransactionTest(t, 0, saltedKeyDelegatedEscrowLookalikeTxnPrep(program), config.GetDefaultLocal())
 		defer releasefunc()
 
 		err := handler.RawTransaction(c, model.RawTransactionParams{})
@@ -1498,7 +1500,7 @@ func TestPostTransactionAsync(t *testing.T) {
 	postTransactionTest(t, 0, 200, "RawTransactionAsync", enableExperimentalAPI(), enableDeveloperAPI())
 }
 
-func TestPostTransactionAsyncPQAuthorizerCompliance(t *testing.T) {
+func TestPostTransactionAsyncOffCurveAuthorizers(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -1522,23 +1524,23 @@ func TestPostTransactionAsyncPQAuthorizerCompliance(t *testing.T) {
 		}
 	}
 
-	t.Run("not-compliant", func(t *testing.T) {
+	t.Run("on-curve", func(t *testing.T) {
 		t.Parallel()
-		test(t, makePQSignedTxnWithAddressCompliance(t, false), model.RawTransactionAsyncParams{}, http.StatusBadRequest, "transaction 0: pq signature authorizer address")
+		test(t, makeSKsigSignedTxnWithOffCurveAuthorizer(t, false), model.RawTransactionAsyncParams{}, http.StatusBadRequest, "transaction 0: salted-key signature authorizer address")
 	})
-	t.Run("not-compliant with skip flag", func(t *testing.T) {
+	t.Run("on-curve with skip flag", func(t *testing.T) {
 		t.Parallel()
 		skip := true
-		test(t, makePQSignedTxnWithAddressCompliance(t, false), model.RawTransactionAsyncParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
+		test(t, makeSKsigSignedTxnWithOffCurveAuthorizer(t, false), model.RawTransactionAsyncParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
 	})
-	t.Run("delegated-not-compliant", func(t *testing.T) {
+	t.Run("delegated-on-curve", func(t *testing.T) {
 		t.Parallel()
-		test(t, makePQDelegatedLogicSigTxnWithAddressCompliance(t, false), model.RawTransactionAsyncParams{}, http.StatusBadRequest, "transaction 0: pq signature authorizer address")
+		test(t, makeSaltedKeySigDelegatedLogicSigTxnWithOffCurveAuthorizer(t, false), model.RawTransactionAsyncParams{}, http.StatusBadRequest, "transaction 0: salted-key signature authorizer address")
 	})
-	t.Run("delegated-not-compliant with skip flag", func(t *testing.T) {
+	t.Run("delegated-on-curve with skip flag", func(t *testing.T) {
 		t.Parallel()
 		skip := true
-		test(t, makePQDelegatedLogicSigTxnWithAddressCompliance(t, false), model.RawTransactionAsyncParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
+		test(t, makeSaltedKeySigDelegatedLogicSigTxnWithOffCurveAuthorizer(t, false), model.RawTransactionAsyncParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
 	})
 }
 
@@ -1653,7 +1655,7 @@ func copyInnerTxnGroupIDs(t *testing.T, dst, src *v2.PreEncodedTxInfo) {
 	}
 }
 
-func TestPostSimulateTransactionPlaceholderPQSignatureValidation(t *testing.T) {
+func TestPostSimulateTransactionPlaceholderSaltedKeySignatureValidation(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -1692,8 +1694,8 @@ func TestPostSimulateTransactionPlaceholderPQSignatureValidation(t *testing.T) {
 		return response
 	}
 
-	_, pqAuthorizer, pqSig := makePQSigWithAddressCompliance(t, true)
-	// AuthAddr must match the PQsig-derived address to pass placeholder envelope
+	_, saltedAuthorizer, sksig := makeSaltedKeySigWithOffCurveAuthorizer(t, true)
+	// AuthAddr must match the SKsig-derived address to pass placeholder envelope
 	// admission. The sender is not rekeyed to it, so evaluation still fails.
 	placeholderStxn := transactions.SignedTxn{
 		Txn: txnInfo.NewTxn(txntest.Txn{
@@ -1702,8 +1704,8 @@ func TestPostSimulateTransactionPlaceholderPQSignatureValidation(t *testing.T) {
 			Receiver: roots[0].Address(),
 			Amount:   0,
 		}).Txn(),
-		AuthAddr: pqAuthorizer,
-		PQsig:    pqSig,
+		AuthAddr: saltedAuthorizer,
+		SKsig:    sksig,
 	}
 
 	t.Run("placeholder passes admission and echoes envelope", func(t *testing.T) {
@@ -1714,12 +1716,12 @@ func TestPostSimulateTransactionPlaceholderPQSignatureValidation(t *testing.T) {
 		require.NotNil(t, response.TxnGroups[0].FailureMessage)
 		require.Contains(t, *response.TxnGroups[0].FailureMessage, "should have been authorized by")
 		require.Len(t, response.TxnGroups[0].Txns, 1)
-		actualPQSig := response.TxnGroups[0].Txns[0].Txn.Txn.PQsig
-		require.False(t, actualPQSig.Blank())
-		require.Empty(t, actualPQSig.Signature)
-		require.Equal(t, pqSig.Scheme, actualPQSig.Scheme)
-		require.Equal(t, pqSig.Salt, actualPQSig.Salt)
-		require.Equal(t, pqSig.PublicKey, actualPQSig.PublicKey)
+		actualSaltedKeySig := response.TxnGroups[0].Txns[0].Txn.Txn.SKsig
+		require.False(t, actualSaltedKeySig.Blank())
+		require.Empty(t, actualSaltedKeySig.Signature)
+		require.Equal(t, sksig.Scheme, actualSaltedKeySig.Scheme)
+		require.Equal(t, sksig.Salt, actualSaltedKeySig.Salt)
+		require.Equal(t, sksig.PublicKey, actualSaltedKeySig.PublicKey)
 	})
 
 	t.Run("scheme-only placeholder simulates successfully", func(t *testing.T) {
@@ -1729,17 +1731,17 @@ func TestPostSimulateTransactionPlaceholderPQSignatureValidation(t *testing.T) {
 			Receiver: roots[0].Address(),
 			Fee:      minFee * 3,
 		}).SignedTxn()
-		stxn.PQsig = transactions.PQSig{Scheme: protocol.PQSchemeFalcon1024}
+		stxn.SKsig = transactions.SaltedKeySig{Scheme: protocol.SigSchemeFalcon1024}
 		response := simulate(t, v2.PreEncodedSimulateRequest{
 			TxnGroups:            []v2.PreEncodedSimulateRequestTransactionGroup{{Txns: []transactions.SignedTxn{stxn}}},
 			AllowEmptySignatures: true,
 		})
 		require.Nil(t, response.TxnGroups[0].FailureMessage)
 		require.Len(t, response.TxnGroups[0].Txns, 1)
-		actualPQSig := response.TxnGroups[0].Txns[0].Txn.Txn.PQsig
-		require.Equal(t, protocol.PQSchemeFalcon1024, actualPQSig.Scheme)
-		require.Empty(t, actualPQSig.PublicKey)
-		require.Empty(t, actualPQSig.Signature)
+		actualSaltedKeySig := response.TxnGroups[0].Txns[0].Txn.Txn.SKsig
+		require.Equal(t, protocol.SigSchemeFalcon1024, actualSaltedKeySig.Scheme)
+		require.Empty(t, actualSaltedKeySig.PublicKey)
+		require.Empty(t, actualSaltedKeySig.Signature)
 	})
 
 	t.Run("empty signature rejected without AllowEmptySignatures", func(t *testing.T) {
@@ -1747,7 +1749,7 @@ func TestPostSimulateTransactionPlaceholderPQSignatureValidation(t *testing.T) {
 			TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{{Txns: []transactions.SignedTxn{placeholderStxn}}},
 		})
 		require.NotNil(t, response.TxnGroups[0].FailureMessage)
-		require.Contains(t, *response.TxnGroups[0].FailureMessage, "pq signature is empty")
+		require.Contains(t, *response.TxnGroups[0].FailureMessage, "salted-key signature is empty")
 	})
 
 	t.Run("authorizer mismatch rejected", func(t *testing.T) {
@@ -1758,27 +1760,27 @@ func TestPostSimulateTransactionPlaceholderPQSignatureValidation(t *testing.T) {
 			AllowEmptySignatures: true,
 		})
 		require.NotNil(t, response.TxnGroups[0].FailureMessage)
-		require.Contains(t, *response.TxnGroups[0].FailureMessage, "pq signature authorizer mismatch")
+		require.Contains(t, *response.TxnGroups[0].FailureMessage, "salted-key signature authorizer mismatch")
 	})
 
 	t.Run("FixSigners resolves the placeholder signer", func(t *testing.T) {
-		_, fixablePQAuthorizer, fixablePQSig := makePQSigWithAddressCompliance(t, true)
+		_, fixableSaltedAuthorizer, fixableSaltedKeySig := makeSaltedKeySigWithOffCurveAuthorizer(t, true)
 		rekeyTxn := txnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   roots[0].Address(),
 			Receiver: roots[0].Address(),
-			RekeyTo:  fixablePQAuthorizer,
+			RekeyTo:  fixableSaltedAuthorizer,
 			Fee:      minFee,
 		})
-		pqTxn := txnInfo.NewTxn(txntest.Txn{
+		sksigSignedTxn := txnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   roots[0].Address(),
 			Receiver: roots[0].Address(),
 			Fee:      minFee * 3,
 		})
-		fixableGroup := txntest.Group(&rekeyTxn, &pqTxn)
+		fixableGroup := txntest.Group(&rekeyTxn, &sksigSignedTxn)
 		fixableGroup[1].AuthAddr = roots[1].Address()
-		fixableGroup[1].PQsig = fixablePQSig
+		fixableGroup[1].SKsig = fixableSaltedKeySig
 		response := simulate(t, v2.PreEncodedSimulateRequest{
 			TxnGroups:            []v2.PreEncodedSimulateRequestTransactionGroup{{Txns: fixableGroup}},
 			AllowEmptySignatures: true,
@@ -1786,7 +1788,7 @@ func TestPostSimulateTransactionPlaceholderPQSignatureValidation(t *testing.T) {
 		})
 		require.Nil(t, response.TxnGroups[0].FailureMessage)
 		require.NotNil(t, response.TxnGroups[0].Txns[1].FixedSigner)
-		require.Equal(t, fixablePQAuthorizer.String(), *response.TxnGroups[0].Txns[1].FixedSigner)
+		require.Equal(t, fixableSaltedAuthorizer.String(), *response.TxnGroups[0].Txns[1].FixedSigner)
 	})
 }
 
@@ -2394,10 +2396,10 @@ func TestAppendParticipationKeys(t *testing.T) {
 	t.Run("Happy path", func(t *testing.T) {
 		// Create test object to append.
 		keys := make(account.StateProofKeys, 2)
-		testKey1 := crypto.FalconSigner{}
+		testKey1 := crypto.Falcon1024Signer{}
 		testKey1.PrivateKey[0] = 100
 
-		testKey2 := crypto.FalconSigner{}
+		testKey2 := crypto.Falcon1024Signer{}
 		testKey2.PrivateKey[0] = 101
 
 		keys[0] = merklesignature.KeyRoundPair{Round: 100, Key: &testKey1}
@@ -2473,10 +2475,10 @@ func TestAppendParticipationKeys(t *testing.T) {
 		}
 
 		keys := make(account.StateProofKeys, 2)
-		testKey1 := crypto.FalconSigner{}
+		testKey1 := crypto.Falcon1024Signer{}
 		testKey1.PrivateKey[0] = 100
 
-		testKey2 := crypto.FalconSigner{}
+		testKey2 := crypto.Falcon1024Signer{}
 		testKey2.PrivateKey[0] = 101
 
 		keys[0] = merklesignature.KeyRoundPair{Round: 100, Key: &testKey1}

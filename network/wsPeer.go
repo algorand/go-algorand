@@ -204,8 +204,11 @@ type wsPeer struct {
 
 	wg sync.WaitGroup
 
+	// didSignalClose is set once anything starts closing the peer or drops it from the network's
+	// peer list. After that the peer reports no close to the network and no read or write errors.
 	didSignalClose atomic.Int32
-	didInnerClose  atomic.Int32
+	// didInnerClose is set by the first Close, which closes the connection.
+	didInnerClose atomic.Int32
 
 	TelemetryGUID string
 	InstanceName  string
@@ -269,6 +272,7 @@ type wsPeer struct {
 
 	// throttledOutgoingConnection determines if this outgoing connection will be throttled based on it's
 	// performance or not. Throttled connections are more likely to be short-lived connections.
+	// It is set by claimThrottleSlot when the peer is registered, under the network's peer lock.
 	throttledOutgoingConnection bool
 
 	// clientDataStore is a generic key/value store used to store client-side data entries associated with a particular peer.
@@ -445,6 +449,15 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, outMsg Ou
 	return nil
 }
 
+//msgp:ignore peerAdmission
+type peerAdmission uint8
+
+const (
+	peerAdmitted peerAdmission = iota
+	peerRejectedStopped
+	peerRejectedDuplicateIdentity
+)
+
 // setup values not trivially assigned
 func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 	wp.log.Debugf("wsPeer init outgoing=%v %#v", wp.outgoing, wp.GetAddress())
@@ -471,7 +484,12 @@ func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 
 	// Initialize message codec for compression/decompression
 	wp.msgCodec = makeWsPeerMsgCodec(wp)
+}
 
+// start launches the peer's read and write loops. Call it only once the peer has been admitted
+// to the network's peer collection (while holding the network's peer lock so wg.Add(2) precedes
+// any concurrent CloseAndWait).
+func (wp *wsPeer) start() {
 	wp.wg.Add(2)
 	go wp.readLoop()
 	go wp.writeLoop()
@@ -483,8 +501,8 @@ func (wp *wsPeer) OriginAddress() string {
 }
 
 func (wp *wsPeer) reportReadErr(err error) {
-	// only report error if we haven't already closed the peer
-	if wp.didInnerClose.Load() == 0 {
+	// only report error if nothing has started closing the peer
+	if wp.didSignalClose.Load() == 0 {
 		_, _, line, _ := runtime.Caller(1)
 		wp.log.Warnf("peer[%s] line=%d read err: %s", wp.conn.RemoteAddrString(), line, err)
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "reader err"})
@@ -858,7 +876,7 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 	defer wp.intermittentOutgoingMessageEnqueueTime.Store(0)
 	err := wp.conn.WriteMessage(websocket.BinaryMessage, dataToSend)
 	if err != nil {
-		if wp.didInnerClose.Load() == 0 {
+		if wp.didSignalClose.Load() == 0 {
 			wp.log.Warn("peer write error ", err)
 			networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "write err"})
 		}
@@ -991,6 +1009,19 @@ L:
 	for _, f := range wp.closers {
 		f()
 	}
+}
+
+// claimThrottleSlot takes one of the free outgoing throttle slots in slots and reports
+// whether it got one. Call it only when registering an outgoing peer, holding the network's
+// peer lock in the same critical section that inserts the peer into the network's peer map.
+// That lock guards slots. removePeer gives the slot back only for a registered peer, so a
+// slot claimed any earlier leaks when the peer is rejected.
+func claimThrottleSlot(slots *int) bool {
+	if *slots <= 0 {
+		return false
+	}
+	*slots--
+	return true
 }
 
 // CloseAndWait internally calls Close() then waits for all peer activity to stop

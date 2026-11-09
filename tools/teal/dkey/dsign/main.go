@@ -47,7 +47,7 @@ func main() {
 	keyfname := os.Args[1]
 	lsigfname := os.Args[2]
 
-	kdata, err := os.ReadFile(keyfname)
+	kdata, err := os.ReadFile(keyfname) //nolint:gosec // the operator supplies the signing key file as a CLI argument
 	failFast(err)
 	var seed crypto.Seed
 	copy(seed[:], kdata)
@@ -56,10 +56,10 @@ func main() {
 	if len(os.Args) == 4 {
 		// In this mode, interpret lsig-file as raw program bytes and produce a signature
 		// over the data file
-		pdata, err := os.ReadFile(lsigfname)
+		pdata, err := os.ReadFile(lsigfname) //nolint:gosec // the operator supplies the program file as a CLI argument
 		failFast(err)
 
-		ddata, err := os.ReadFile(os.Args[3])
+		ddata, err := os.ReadFile(os.Args[3]) //nolint:gosec // the operator supplies the data file as a CLI argument
 		failFast(err)
 
 		dsig := sec.Sign(logic.Msg{
@@ -71,7 +71,7 @@ func main() {
 	} else {
 		// In this mode, interpret lsig-file as a LogicSig struct and sign the
 		// txid of the transaction passed over stdin
-		pdata, err := os.ReadFile(lsigfname)
+		pdata, err := os.ReadFile(lsigfname) //nolint:gosec // the operator supplies the LogicSig file as a CLI argument
 		failFast(err)
 		var lsig transactions.LogicSig
 		err = protocol.Decode(pdata, &lsig)

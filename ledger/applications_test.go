@@ -1796,6 +1796,77 @@ func TestExtraPagesUpdate(t *testing.T) {
 	})
 }
 
+// TestSponsorCannotClose ensures that, once CloseRequiresBaseMinBalance is
+// enabled, an account that has become the SizeSponsor of an app cannot close,
+// since closing would discard the TotalAppSchema and TotalExtraAppPages it is
+// paying MBR for.
+func TestSponsorCannotClose(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	ledgertesting.TestConsensusRange(t, resizingAllowed, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		proto := config.Consensus[cv]
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+		a := require.New(t)
+
+		sponsor := ledgertesting.RandomAddress()
+		dl.txn(&txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   addrs[0],
+			Receiver: sponsor,
+			Amount:   10_000_000,
+		})
+
+		approval := "int 1"
+		appID := dl.createApp(addrs[0], approval)
+
+		closeOut := txntest.Txn{
+			Type:             protocol.PaymentTx,
+			Sender:           sponsor,
+			Receiver:         addrs[0],
+			CloseRemainderTo: addrs[0],
+		}
+
+		// sponsor takes over MBR for globals and extra pages
+		dl.txn(&txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            sponsor,
+			ApplicationID:     appID,
+			OnCompletion:      transactions.UpdateApplicationOC,
+			ApprovalProgram:   approval,
+			ExtraProgramPages: 1,
+			GlobalStateSchema: basics.StateSchema{NumUint: 1, NumByteSlice: 2},
+		})
+		acct := lookup(t, dl.generator, sponsor)
+		a.Empty(acct.AppParams)
+		a.Empty(acct.AppLocalStates)
+		a.Greater(acct.MinBalance(proto.BalanceRequirements()).Raw, proto.MinBalance)
+
+		if !proto.CloseRequiresBaseMinBalance {
+			dl.txn(&closeOut, "cannot close: account")
+		} else {
+			dl.txn(&closeOut, "cannot close: min balance")
+		}
+
+		// Deleting the app releases the sponsor's MBR, so it may now close.
+		dl.txn(&txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        addrs[0],
+			ApplicationID: appID,
+			OnCompletion:  transactions.DeleteApplicationOC,
+		})
+		acct = lookup(t, dl.generator, sponsor)
+		a.Equal(proto.MinBalance, acct.MinBalance(proto.BalanceRequirements()).Raw)
+		dl.txn(&closeOut)
+		acct = lookup(t, dl.generator, sponsor)
+		a.Zero(acct.TotalAppSchema)
+		a.Zero(acct.TotalExtraAppPages)
+		a.Zero(acct.MicroAlgos.Raw)
+	})
+}
+
 func assembleLargePassingProgram(t testing.TB, version uint64, size int) []byte {
 	t.Helper()
 

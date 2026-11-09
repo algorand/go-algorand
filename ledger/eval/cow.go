@@ -100,6 +100,11 @@ type roundCowState struct {
 	prevTotals ledgercore.AccountTotals
 
 	feesCollected basics.MicroAlgos
+
+	// generate mirrors BlockEvaluator.generate: true while assembling a block
+	// (pool admission, block assembly, simulation), false while validating
+	// one. Policies that must never affect validation consult it.
+	generate bool
 }
 
 var childPool = sync.Pool{
@@ -287,6 +292,7 @@ func (cb *roundCowState) child(hint int) *roundCowState {
 	ch.lookupParent = cb
 	ch.commitParent = cb
 	ch.proto = cb.proto
+	ch.generate = cb.generate
 	ch.mods.PopulateStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, hint, cb.mods.StateProofNext)
 
 	if ch.sdeltas == nil {
@@ -356,6 +362,7 @@ func (cb *roundCowState) reset() {
 	clear(cb.compatibilityGetKeyCache)
 	cb.prevTotals = ledgercore.AccountTotals{}
 	cb.feesCollected = basics.MicroAlgos{}
+	cb.generate = false
 }
 
 // recycle resets the roundcowstate and returns it to the sync.Pool
