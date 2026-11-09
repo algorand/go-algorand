@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package crypto
+package transactions
 
 import (
 	"fmt"
@@ -22,8 +22,16 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
+
+type multisigTestMessage string
+
+func (msg multisigTestMessage) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.TestHashable, []byte(msg)
+}
 
 func MultisigSigPrint(sig MultisigSig) {
 
@@ -41,22 +49,22 @@ func MultisigSigPrint(sig MultisigSig) {
 // detect invalid threshold and versions
 func TestMultisigAddr(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	var s Seed
-	var secrets []*SignatureSecrets
-	var pks []PublicKey
+	var s crypto.Seed
+	var secrets []*crypto.SignatureSecrets
+	var pks []crypto.PublicKey
 	var err error
 
 	version := uint8(1)
 	threshold := uint8(3)
 
-	secrets = make([]*SignatureSecrets, 4)
+	secrets = make([]*crypto.SignatureSecrets, 4)
 
 	for i := 0; i < 4; i++ {
-		RandBytes(s[:])
-		secrets[i] = GenerateSignatureSecrets(s)
+		crypto.RandBytes(s[:])
+		secrets[i] = crypto.GenerateSignatureSecrets(s)
 	}
 
-	pks = make([]PublicKey, 2)
+	pks = make([]crypto.PublicKey, 2)
 	pks[0] = secrets[0].SignatureVerifier
 	pks[1] = secrets[1].SignatureVerifier
 
@@ -82,25 +90,25 @@ func TestMultisig(t *testing.T) {
 	var msig MultisigSig
 	var sigs []MultisigSig
 
-	var s Seed
-	var secrets []*SignatureSecrets
-	var pks []PublicKey
+	var s crypto.Seed
+	var secrets []*crypto.SignatureSecrets
+	var pks []crypto.PublicKey
 
 	var err error
-	var addr Digest
+	var addr crypto.Digest
 
 	version := uint8(1)
 	threshold := uint8(3)
-	txid := TestingHashable{[]byte("test: txid 1000")}
+	txid := multisigTestMessage("test: txid 1000")
 
-	secrets = make([]*SignatureSecrets, 5)
+	secrets = make([]*crypto.SignatureSecrets, 5)
 	for i := 0; i < 5; i++ {
-		RandBytes(s[:])
-		secrets[i] = GenerateSignatureSecrets(s)
+		crypto.RandBytes(s[:])
+		secrets[i] = crypto.GenerateSignatureSecrets(s)
 	}
 
 	// addr  = hash (... |pk0|pk1|pk2|pk3), pk4 is not included
-	pks = make([]PublicKey, 4)
+	pks = make([]crypto.PublicKey, 4)
 	pks[0] = secrets[0].SignatureVerifier
 	pks[1] = secrets[1].SignatureVerifier
 	pks[2] = secrets[2].SignatureVerifier
@@ -139,7 +147,7 @@ func TestMultisig(t *testing.T) {
 	require.NoError(t, err, "Multisig: unexpected verification failure with err")
 
 	//test3: use the batch verification
-	br := MakeBatchVerifier()
+	br := crypto.MakeBatchVerifier()
 	err = MultisigBatchPrep(txid, addr, msig, br)
 	require.NoError(t, err, "Multisig: unexpected verification failure with err")
 	res := br.Verify()
@@ -158,24 +166,24 @@ func TestMultisigAddAndMerge(t *testing.T) {
 	var msig2 MultisigSig
 	var sigs []MultisigSig
 
-	var s Seed
-	var secrets []*SignatureSecrets
-	var pks []PublicKey
+	var s crypto.Seed
+	var secrets []*crypto.SignatureSecrets
+	var pks []crypto.PublicKey
 
 	var err error
-	var addr Digest
+	var addr crypto.Digest
 
 	version := uint8(1)
 	threshold := uint8(3)
-	txid := TestingHashable{[]byte("test: txid 1000")}
+	txid := multisigTestMessage("test: txid 1000")
 
-	secrets = make([]*SignatureSecrets, 5)
+	secrets = make([]*crypto.SignatureSecrets, 5)
 
-	RandBytes(s[:])
+	crypto.RandBytes(s[:])
 
-	pks = make([]PublicKey, 5)
+	pks = make([]crypto.PublicKey, 5)
 	for i := 0; i < 5; i++ {
-		secrets[i] = GenerateSignatureSecrets(s)
+		secrets[i] = crypto.GenerateSignatureSecrets(s)
 		pks[i] = secrets[i].SignatureVerifier
 	}
 
@@ -233,16 +241,16 @@ func TestMultisigAddAndMerge(t *testing.T) {
 
 func TestEmptyMultisig(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	var s Seed
-	var secrets *SignatureSecrets
-	var pks []PublicKey
+	var s crypto.Seed
+	var secrets *crypto.SignatureSecrets
+	var pks []crypto.PublicKey
 
-	txid := TestingHashable{[]byte("test: txid 1000")}
+	txid := multisigTestMessage("test: txid 1000")
 	version := uint8(1)
 	threshold := uint8(1)
-	RandBytes(s[:])
-	secrets = GenerateSignatureSecrets(s)
-	pks = make([]PublicKey, 1)
+	crypto.RandBytes(s[:])
+	secrets = crypto.GenerateSignatureSecrets(s)
+	pks = make([]crypto.PublicKey, 1)
 	pks[0] = secrets.SignatureVerifier
 
 	addr, err := MultisigAddrGen(version, threshold, pks)
@@ -250,23 +258,23 @@ func TestEmptyMultisig(t *testing.T) {
 	emptyMutliSig := MultisigSig{Version: version, Threshold: threshold, Subsigs: make([]MultisigSubsig, 0)}
 	err = MultisigVerify(txid, addr, emptyMutliSig)
 	require.ErrorIs(t, err, errInvalidNumberOfSignature)
-	br := MakeBatchVerifier()
+	br := crypto.MakeBatchVerifier()
 	err = MultisigBatchPrep(txid, addr, emptyMutliSig, br)
 	require.ErrorIs(t, err, errInvalidNumberOfSignature)
 }
 
 func TestIncorrectAddrresInMultisig(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	var s Seed
-	var secrets *SignatureSecrets
-	var pks []PublicKey
+	var s crypto.Seed
+	var secrets *crypto.SignatureSecrets
+	var pks []crypto.PublicKey
 
-	txid := TestingHashable{[]byte("test: txid 1000")}
+	txid := multisigTestMessage("test: txid 1000")
 	version := uint8(1)
 	threshold := uint8(1)
-	RandBytes(s[:])
-	secrets = GenerateSignatureSecrets(s)
-	pks = make([]PublicKey, 1)
+	crypto.RandBytes(s[:])
+	secrets = crypto.GenerateSignatureSecrets(s)
+	pks = make([]crypto.PublicKey, 1)
 	pks[0] = secrets.SignatureVerifier
 
 	addr, err := MultisigAddrGen(version, threshold, pks)
@@ -276,7 +284,7 @@ func TestIncorrectAddrresInMultisig(t *testing.T) {
 	addr[0] = addr[0] + 1
 	err = MultisigVerify(txid, addr, MutliSig)
 	require.ErrorIs(t, err, errInvalidAddress)
-	br := MakeBatchVerifier()
+	br := crypto.MakeBatchVerifier()
 	err = MultisigBatchPrep(txid, addr, MutliSig, br)
 	require.ErrorIs(t, err, errInvalidAddress)
 
@@ -284,18 +292,18 @@ func TestIncorrectAddrresInMultisig(t *testing.T) {
 
 func TestMoreThanMaxSigsInMultisig(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	var s Seed
-	var secrets []*SignatureSecrets
-	var pks []PublicKey
+	var s crypto.Seed
+	var secrets []*crypto.SignatureSecrets
+	var pks []crypto.PublicKey
 	multiSigLen := maxMultisig + 1
-	txid := TestingHashable{[]byte("test: txid 1000")}
+	txid := multisigTestMessage("test: txid 1000")
 	version := uint8(1)
 	threshold := uint8(1)
-	pks = make([]PublicKey, multiSigLen)
-	secrets = make([]*SignatureSecrets, multiSigLen)
+	pks = make([]crypto.PublicKey, multiSigLen)
+	secrets = make([]*crypto.SignatureSecrets, multiSigLen)
 	for i := 0; i < multiSigLen; i++ {
-		RandBytes(s[:])
-		secrets[i] = GenerateSignatureSecrets(s)
+		crypto.RandBytes(s[:])
+		secrets[i] = crypto.GenerateSignatureSecrets(s)
 		pks[i] = secrets[i].SignatureVerifier
 	}
 
@@ -313,25 +321,25 @@ func TestMoreThanMaxSigsInMultisig(t *testing.T) {
 	require.NoError(t, err, "Multisig: error assemble multisig")
 	err = MultisigVerify(txid, addr, msig)
 	require.ErrorIs(t, err, errInvalidNumberOfSignature)
-	br := MakeBatchVerifier()
+	br := crypto.MakeBatchVerifier()
 	err = MultisigBatchPrep(txid, addr, msig, br)
 	require.ErrorIs(t, err, errInvalidNumberOfSignature)
 }
 
 func TestOneSignatureIsEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	var s Seed
-	var secrets []*SignatureSecrets
-	var pks []PublicKey
+	var s crypto.Seed
+	var secrets []*crypto.SignatureSecrets
+	var pks []crypto.PublicKey
 	multiSigLen := 6
-	txid := TestingHashable{[]byte("test: txid 1000")}
+	txid := multisigTestMessage("test: txid 1000")
 	version := uint8(1)
 	threshold := uint8(multiSigLen)
-	pks = make([]PublicKey, multiSigLen)
-	secrets = make([]*SignatureSecrets, multiSigLen)
+	pks = make([]crypto.PublicKey, multiSigLen)
+	secrets = make([]*crypto.SignatureSecrets, multiSigLen)
 	for i := 0; i < multiSigLen; i++ {
-		RandBytes(s[:])
-		secrets[i] = GenerateSignatureSecrets(s)
+		crypto.RandBytes(s[:])
+		secrets[i] = crypto.GenerateSignatureSecrets(s)
 		pks[i] = secrets[i].SignatureVerifier
 	}
 
@@ -347,10 +355,10 @@ func TestOneSignatureIsEmpty(t *testing.T) {
 
 	msig, err := MultisigAssemble(sigs)
 	require.NoError(t, err, "Multisig: error assemble multisig")
-	msig.Subsigs[0].Sig = Signature{}
+	msig.Subsigs[0].Sig = crypto.Signature{}
 	err = MultisigVerify(txid, addr, msig)
 	require.ErrorIs(t, err, errInvalidNumberOfSignature)
-	br := MakeBatchVerifier()
+	br := crypto.MakeBatchVerifier()
 	err = MultisigBatchPrep(txid, addr, msig, br)
 	require.ErrorIs(t, err, errInvalidNumberOfSignature)
 }
@@ -359,18 +367,18 @@ func TestOneSignatureIsEmpty(t *testing.T) {
 // we create case where are enoguht valid signatures (that pass the thrashold). but since one is false. everything fails.
 func TestOneSignatureIsInvalid(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	var s Seed
-	var userkeypair []*SignatureSecrets
-	var pks []PublicKey
+	var s crypto.Seed
+	var userkeypair []*crypto.SignatureSecrets
+	var pks []crypto.PublicKey
 	multiSigLen := 6
-	txid := TestingHashable{[]byte("test: txid 1000")}
+	txid := multisigTestMessage("test: txid 1000")
 	version := uint8(1)
 	threshold := uint8(3)
-	pks = make([]PublicKey, multiSigLen)
-	userkeypair = make([]*SignatureSecrets, multiSigLen)
+	pks = make([]crypto.PublicKey, multiSigLen)
+	userkeypair = make([]*crypto.SignatureSecrets, multiSigLen)
 	for i := 0; i < multiSigLen; i++ {
-		RandBytes(s[:])
-		userkeypair[i] = GenerateSignatureSecrets(s)
+		crypto.RandBytes(s[:])
+		userkeypair[i] = crypto.GenerateSignatureSecrets(s)
 		pks[i] = userkeypair[i].SignatureVerifier
 	}
 
@@ -388,12 +396,12 @@ func TestOneSignatureIsInvalid(t *testing.T) {
 	msig, err := MultisigAssemble(sigs)
 	require.NoError(t, err, "Multisig: error assemble multisig")
 	err = MultisigVerify(txid, addr, msig)
-	require.ErrorIs(t, err, ErrBatchHasFailedSigs)
-	br := MakeBatchVerifier()
+	require.ErrorIs(t, err, crypto.ErrBatchHasFailedSigs)
+	br := crypto.MakeBatchVerifier()
 	err = MultisigBatchPrep(txid, addr, msig, br)
 	require.NoError(t, err)
 	res := br.Verify()
-	require.ErrorIs(t, res, ErrBatchHasFailedSigs)
+	require.ErrorIs(t, res, crypto.ErrBatchHasFailedSigs)
 
 }
 
@@ -402,25 +410,25 @@ func TestMultisigLessThanTrashold(t *testing.T) {
 	var msig MultisigSig
 	var sigs []MultisigSig
 
-	var s Seed
-	var secrets []*SignatureSecrets
-	var pks []PublicKey
+	var s crypto.Seed
+	var secrets []*crypto.SignatureSecrets
+	var pks []crypto.PublicKey
 
 	var err error
-	var addr Digest
+	var addr crypto.Digest
 
 	version := uint8(1)
 	threshold := uint8(3)
-	txid := TestingHashable{[]byte("test: txid 1000")}
+	txid := multisigTestMessage("test: txid 1000")
 
-	secrets = make([]*SignatureSecrets, 4)
+	secrets = make([]*crypto.SignatureSecrets, 4)
 	for i := 0; i < 4; i++ {
-		RandBytes(s[:])
-		secrets[i] = GenerateSignatureSecrets(s)
+		crypto.RandBytes(s[:])
+		secrets[i] = crypto.GenerateSignatureSecrets(s)
 	}
 
 	// addr  = hash (... |pk0|pk1|pk2|pk3)
-	pks = make([]PublicKey, 4)
+	pks = make([]crypto.PublicKey, 4)
 	pks[0] = secrets[0].SignatureVerifier
 	pks[1] = secrets[1].SignatureVerifier
 	pks[2] = secrets[2].SignatureVerifier
@@ -438,7 +446,7 @@ func TestMultisigLessThanTrashold(t *testing.T) {
 
 	msig, err = MultisigAssemble(sigs)
 	require.NoError(t, err, "should be able to detect insufficient signatures for assembling")
-	msig.Subsigs[1].Sig = BlankSignature
+	msig.Subsigs[1].Sig = crypto.BlankSignature
 	err = MultisigVerify(txid, addr, msig)
 	require.ErrorIs(t, err, errInvalidNumberOfSignature)
 

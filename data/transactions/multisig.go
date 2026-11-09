@@ -14,19 +14,34 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package crypto
+package transactions
 
 import (
 	"errors"
+
+	"github.com/algorand/go-algorand/crypto"
 )
+
+var (
+	errInvalidVersion           = errors.New("Invalid version")
+	errInvalidAddress           = errors.New("Invalid address")
+	errInvalidThreshold         = errors.New("Invalid threshold")
+	errInvalidNumberOfSignature = errors.New("Invalid number of signatures")
+	errKeyNotExist              = errors.New("Key does not exist")
+	errKeysNotMatch             = errors.New("Public key lists do not match")
+	errInvalidDuplicates        = errors.New("Invalid duplicates")
+	errInvalidNumberOfSig       = errors.New("invalid number of signatures to add")
+)
+
+var errUnknownVersion = errors.New("unknown version")
 
 // MultisigSubsig is a struct that holds a pair of public key and signatures
 // signatures may be empty
 type MultisigSubsig struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Key PublicKey `codec:"pk"` // all public keys that are possible signers for this address
-	Sig Signature `codec:"s"`  // may be either empty or a signature
+	Key crypto.PublicKey `codec:"pk"` // all public keys that are possible signers for this address
+	Sig crypto.Signature `codec:"s"`  // may be either empty or a signature
 }
 
 // MultisigSig is the structure that holds multiple Subsigs
@@ -40,7 +55,7 @@ type MultisigSig struct {
 
 // MultisigPreimageFromPKs makes an empty MultisigSig for a given preimage. It should be renamed.
 // TODO separate preimage type from sig type
-func MultisigPreimageFromPKs(version, threshold uint8, pks []PublicKey) MultisigSig {
+func MultisigPreimageFromPKs(version, threshold uint8, pks []crypto.PublicKey) MultisigSig {
 	out := MultisigSig{Version: version, Threshold: threshold, Subsigs: make([]MultisigSubsig, len(pks))}
 	for i := range pks {
 		out.Subsigs[i].Key = pks[i]
@@ -64,8 +79,8 @@ func (msig MultisigSig) Blank() bool {
 }
 
 // Preimage returns the version, threshold, and list of all public keys in a (partial) multisig address
-func (msig MultisigSig) Preimage() (version, threshold uint8, pks []PublicKey) {
-	pks = make([]PublicKey, len(msig.Subsigs))
+func (msig MultisigSig) Preimage() (version, threshold uint8, pks []crypto.PublicKey) {
+	pks = make([]crypto.PublicKey, len(msig.Subsigs))
 	for i, subsig := range msig.Subsigs {
 		pks[i] = subsig.Key
 	}
@@ -90,7 +105,7 @@ const maxMultisig = 255
 // MultisigAddrGen identifes the exact group, version,
 // and devices (Public keys) that it requires to sign
 // Hash("MultisigAddr" || version uint8 || threshold uint8 || PK1 || PK2 || ...)
-func MultisigAddrGen(version, threshold uint8, pk []PublicKey) (addr Digest, err error) {
+func MultisigAddrGen(version, threshold uint8, pk []crypto.PublicKey) (addr crypto.Digest, err error) {
 	if version != 1 {
 		err = errUnknownVersion
 		return
@@ -105,13 +120,13 @@ func MultisigAddrGen(version, threshold uint8, pk []PublicKey) (addr Digest, err
 	for _, pki := range pk {
 		buffer = append(buffer, pki[:]...)
 	}
-	return Hash(buffer), nil
+	return crypto.Hash(buffer), nil
 }
 
 // MultisigAddrGenWithSubsigs is similar to MultisigAddrGen
 // except the input is []Subsig rather than []PublicKey
 func MultisigAddrGenWithSubsigs(version uint8, threshold uint8,
-	subsigs []MultisigSubsig) (addr Digest, err error) {
+	subsigs []MultisigSubsig) (addr crypto.Digest, err error) {
 
 	if version != 1 {
 		err = errUnknownVersion
@@ -127,11 +142,11 @@ func MultisigAddrGenWithSubsigs(version uint8, threshold uint8,
 	for _, subsigsi := range subsigs {
 		buffer = append(buffer, subsigsi.Key[:]...)
 	}
-	return Hash(buffer), nil
+	return crypto.Hash(buffer), nil
 }
 
 // MultisigSign is for each device individually signs the digest
-func MultisigSign(msg Hashable, addr Digest, version, threshold uint8, pk []PublicKey, sk SignatureSecrets) (sig MultisigSig, err error) {
+func MultisigSign(msg crypto.Hashable, addr crypto.Digest, version, threshold uint8, pk []crypto.PublicKey, sk crypto.SignatureSecrets) (sig MultisigSig, err error) {
 	if version != 1 {
 		err = errUnknownVersion
 		return
@@ -225,8 +240,8 @@ func MultisigAssemble(unisig []MultisigSig) (msig MultisigSig, err error) {
 }
 
 // MultisigVerify verifies an assembled MultisigSig
-func MultisigVerify(msg Hashable, addr Digest, sig MultisigSig) (err error) {
-	batchVerifier := MakeBatchVerifier()
+func MultisigVerify(msg crypto.Hashable, addr crypto.Digest, sig MultisigSig) (err error) {
+	batchVerifier := crypto.MakeBatchVerifier()
 
 	if err = MultisigBatchPrep(msg, addr, sig, batchVerifier); err != nil {
 		return
@@ -237,7 +252,7 @@ func MultisigVerify(msg Hashable, addr Digest, sig MultisigSig) (err error) {
 
 // MultisigBatchPrep performs checks on the assembled MultisigSig and adds to the batch.
 // The signatures are only enqueued; they are checked when the underlying batch is verified.
-func MultisigBatchPrep(msg Hashable, addr Digest, sig MultisigSig, batch BatchEnqueuer) error {
+func MultisigBatchPrep(msg crypto.Hashable, addr crypto.Digest, sig MultisigSig, batch crypto.BatchEnqueuer) error {
 	// short circuit: if msig doesn't have subsigs or if Subsigs are empty
 	// then terminate (the upper layer should now verify the unisig)
 	if (len(sig.Subsigs) == 0 || sig.Subsigs[0] == MultisigSubsig{}) {

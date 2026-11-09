@@ -33,10 +33,10 @@ import (
 type SignedTxn struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Sig   crypto.Signature   `codec:"sig"`
-	Msig  crypto.MultisigSig `codec:"msig"`
-	Lsig  LogicSig           `codec:"lsig"`
-	SKsig SaltedKeySig       `codec:"pqsig"`
+	Sig   crypto.Signature `codec:"sig"`
+	Msig  MultisigSig      `codec:"msig"`
+	Lsig  LogicSig         `codec:"lsig"`
+	SKsig SaltedKeySig     `codec:"pqsig"`
 
 	Txn      Transaction    `codec:"txn,required"`
 	AuthAddr basics.Address `codec:"sgnr"`
@@ -147,7 +147,7 @@ func (s SignedTxn) FeeFactor(proto config.ConsensusParams) basics.Micros {
 // AssembleSignedTxn assembles a multisig-signed transaction from a transaction an optional sig, and an optional multisig.
 // No signature checking is done -- for example, this might only be a partial multisig
 // TODO: is this method used anywhere, or is it safe to remove?
-func AssembleSignedTxn(txn Transaction, sig crypto.Signature, msig crypto.MultisigSig) (SignedTxn, error) {
+func AssembleSignedTxn(txn Transaction, sig crypto.Signature, msig MultisigSig) (SignedTxn, error) {
 	if sig != (crypto.Signature{}) && !msig.Blank() {
 		return SignedTxn{}, errors.New("signed txn can only have one of sig or msig")
 	}

@@ -233,7 +233,7 @@ func run(params keyregCmdParams) error {
 
 	// Wrap in a transactions.SignedTxn with an empty sig.
 	// This way protocol.Encode will encode the transaction type
-	stxn, err := transactions.AssembleSignedTxn(txn, crypto.Signature{}, crypto.MultisigSig{})
+	stxn, err := transactions.AssembleSignedTxn(txn, crypto.Signature{}, transactions.MultisigSig{})
 	if err != nil {
 		return fmt.Errorf("failed to assemble transaction: %w", err)
 	}

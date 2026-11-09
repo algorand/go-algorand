@@ -233,8 +233,8 @@ func TestSaltedKeySigDecodeBoundsFeedSignedTxnMaxSize(t *testing.T) {
 	expectedLogicSigMaxSize := 1 +
 		4 + msgp.ArrayHeaderSize + EvalMaxArgs*msgp.BytesPrefixSize + bounds.MaxLogicSigMaxSize +
 		2 + msgp.BytesPrefixSize + bounds.MaxLogicSigMaxSize +
-		6 + crypto.MultisigSigMaxSize() +
-		5 + crypto.MultisigSigMaxSize() +
+		6 + MultisigSigMaxSize() +
+		5 + MultisigSigMaxSize() +
 		6 + expectedSaltedKeySigMaxSize +
 		4 + crypto.SignatureMaxSize()
 	require.Equal(t, expectedLogicSigMaxSize, LogicSigMaxSize())
@@ -243,7 +243,7 @@ func TestSaltedKeySigDecodeBoundsFeedSignedTxnMaxSize(t *testing.T) {
 	// MaxSigScheme* intentionally increases SaltedKeySigMaxSize and therefore SignedTxnMaxSize.
 	expectedSignedTxnMaxSize := 1 +
 		4 + crypto.SignatureMaxSize() +
-		5 + crypto.MultisigSigMaxSize() +
+		5 + MultisigSigMaxSize() +
 		5 + LogicSigMaxSize() +
 		6 + expectedSaltedKeySigMaxSize +
 		4 + TransactionMaxSize() +

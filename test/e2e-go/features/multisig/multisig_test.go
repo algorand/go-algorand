@@ -78,7 +78,7 @@ func TestBasicMultisig(t *testing.T) {
 	amountToSend := minAcctBalance
 	unsignedTransaction, err := client.ConstructPayment(multisigAddr, addrs[0], minTxnFee, amountToSend, nil, "", [32]byte{}, 0, 0)
 	r.NoError(err, "Unexpected error when constructing payment transaction")
-	emptyPartial := crypto.MultisigSig{}
+	emptyPartial := transactions.MultisigSig{}
 	emptySignature := crypto.Signature{}
 	signatureWithOne, err := client.UnencryptedMultisigSignTransaction(unsignedTransaction, addrs[0], emptyPartial)
 	r.NoError(err, "first signing returned error")
@@ -212,7 +212,7 @@ func TestDuplicateKeys(t *testing.T) {
 	amountToSend := minAcctBalance
 	unsignedTransaction, err := client.ConstructPayment(multisigAddr, addrs[0], txnFee, amountToSend, nil, "", [32]byte{}, 0, 0)
 	r.NoError(err, "Unexpected error when constructing payment transaction")
-	emptyPartial := crypto.MultisigSig{}
+	emptyPartial := transactions.MultisigSig{}
 	emptySignature := crypto.Signature{}
 	signatureWithOne, err := client.UnencryptedMultisigSignTransaction(unsignedTransaction, addrs[0], emptyPartial)
 	r.NoError(err, "Signing returned error")

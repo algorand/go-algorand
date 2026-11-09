@@ -105,7 +105,7 @@ func TestSignedTxnHasSignature(t *testing.T) {
 	}{
 		{name: "unsigned"},
 		{name: "sig", stxn: SignedTxn{Sig: nonblankSig}, hasSignature: true},
-		{name: "msig", stxn: SignedTxn{Msig: crypto.MultisigSig{Version: 1}}, hasSignature: true},
+		{name: "msig", stxn: SignedTxn{Msig: MultisigSig{Version: 1}}, hasSignature: true},
 		{name: "pqsig", stxn: SignedTxn{SKsig: fixture.sksig}, hasSignature: true},
 		{name: "lsig program", stxn: SignedTxn{Lsig: LogicSig{Logic: []byte{1}}}, hasSignature: true},
 		{name: "lsig nested sksig only", stxn: SignedTxn{Lsig: LogicSig{SKsig: fixture.sksig}}, hasSignature: true},
@@ -128,7 +128,7 @@ func TestSignedTxnFeeFactorSaltedKeySignatureContribution(t *testing.T) {
 	regularSigned := baseTxn
 	regularSigned.Sig[0] = 1
 	msigSigned := baseTxn
-	msigSigned.Msig = crypto.MultisigSig{Version: 1}
+	msigSigned.Msig = MultisigSig{Version: 1}
 	lsigSigned := baseTxn
 	lsigSigned.Lsig = LogicSig{Logic: []byte{1}}
 	unknownSKsigSigned := baseTxn

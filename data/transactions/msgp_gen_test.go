@@ -851,6 +851,124 @@ func BenchmarkUnmarshalLogicSigArgs(b *testing.B) {
 	}
 }
 
+func TestMarshalUnmarshalMultisigSig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := MultisigSig{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	// The zero value omits its required field(s), so UnmarshalMsg is expected to
+	// reject it; only MarshalMsg and Skip are exercised against a zero value.
+	if err == nil {
+		t.Errorf("expected a missing-required-field error decoding a zero MultisigSig")
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingMultisigSig(t *testing.T) {
+	protocol.RunEncodingTest(t, &MultisigSig{})
+}
+
+func BenchmarkMarshalMsgMultisigSig(b *testing.B) {
+	v := MultisigSig{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgMultisigSig(b *testing.B) {
+	v := MultisigSig{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalMultisigSig(b *testing.B) {
+	v := MultisigSig{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// The zero value fails the required-field check; ignore the error so the
+		// benchmark still measures the decoding work.
+		_, _ = v.UnmarshalMsg(bts)
+	}
+}
+
+func TestMarshalUnmarshalMultisigSubsig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := MultisigSubsig{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingMultisigSubsig(t *testing.T) {
+	protocol.RunEncodingTest(t, &MultisigSubsig{})
+}
+
+func BenchmarkMarshalMsgMultisigSubsig(b *testing.B) {
+	v := MultisigSubsig{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgMultisigSubsig(b *testing.B) {
+	v := MultisigSubsig{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalMultisigSubsig(b *testing.B) {
+	v := MultisigSubsig{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func TestMarshalUnmarshalPaymentTxnFields(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	v := PaymentTxnFields{}

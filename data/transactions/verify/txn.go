@@ -411,7 +411,7 @@ func stxnCoreChecks(gi int, groupCtx *GroupContext, batch crypto.BatchEnqueuer) 
 		batch.EnqueueSignature(crypto.SignatureVerifier(s.Authorizer()), s.Txn, s.Sig)
 		return nil
 	case multiSig:
-		if err := crypto.MultisigBatchPrep(s.Txn, crypto.Digest(s.Authorizer()), s.Msig, batch); err != nil {
+		if err := transactions.MultisigBatchPrep(s.Txn, crypto.Digest(s.Authorizer()), s.Msig, batch); err != nil {
 			return &TxGroupError{err: fmt.Errorf("multisig validation failed: %w", err), GroupIndex: gi, Reason: TxGroupErrorReasonMsigNotWellFormed}
 		}
 		sigs := s.Msig.Signatures()
@@ -605,13 +605,13 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batch crypto.B
 		batch.EnqueueSignature(crypto.PublicKey(txn.Authorizer()), &program, lsig.Sig)
 	} else {
 		var program crypto.Hashable
-		var msig crypto.MultisigSig
+		var msig transactions.MultisigSig
 		if hasLMsig {
 			if !groupCtx.consensusParams.LogicSigLMsig {
 				return errors.New("LogicSig LMsig field not supported in this consensus version")
 			}
 			program = logic.MultisigProgram{Addr: crypto.Digest(txn.Authorizer()), Program: lsig.Logic}
-			msig = crypto.MultisigSig(lsig.LMsig)
+			msig = transactions.MultisigSig(lsig.LMsig)
 		} else {
 			if !groupCtx.consensusParams.LogicSigMsig {
 				return errors.New("LogicSig Msig field not supported in this consensus version")
@@ -619,7 +619,7 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batch crypto.B
 			program = logic.Program(lsig.Logic)
 			msig = lsig.Msig
 		}
-		if err := crypto.MultisigBatchPrep(program, crypto.Digest(txn.Authorizer()), msig, batch); err != nil {
+		if err := transactions.MultisigBatchPrep(program, crypto.Digest(txn.Authorizer()), msig, batch); err != nil {
 			return fmt.Errorf("logic multisig validation failed: %w", err)
 		}
 
