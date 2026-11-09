@@ -20,9 +20,6 @@ import (
 	"errors"
 )
 
-// SecretKey is casted from SignatureSecrets
-type SecretKey = SignatureSecrets
-
 // MultisigSubsig is a struct that holds a pair of public key and signatures
 // signatures may be empty
 type MultisigSubsig struct {
@@ -134,7 +131,7 @@ func MultisigAddrGenWithSubsigs(version uint8, threshold uint8,
 }
 
 // MultisigSign is for each device individually signs the digest
-func MultisigSign(msg Hashable, addr Digest, version, threshold uint8, pk []PublicKey, sk SecretKey) (sig MultisigSig, err error) {
+func MultisigSign(msg Hashable, addr Digest, version, threshold uint8, pk []PublicKey, sk SignatureSecrets) (sig MultisigSig, err error) {
 	if version != 1 {
 		err = errUnknownVersion
 		return

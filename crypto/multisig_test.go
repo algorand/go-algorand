@@ -42,14 +42,14 @@ func MultisigSigPrint(sig MultisigSig) {
 func TestMultisigAddr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var s Seed
-	var secrets []*SecretKey
+	var secrets []*SignatureSecrets
 	var pks []PublicKey
 	var err error
 
 	version := uint8(1)
 	threshold := uint8(3)
 
-	secrets = make([]*SecretKey, 4)
+	secrets = make([]*SignatureSecrets, 4)
 
 	for i := 0; i < 4; i++ {
 		RandBytes(s[:])
@@ -83,7 +83,7 @@ func TestMultisig(t *testing.T) {
 	var sigs []MultisigSig
 
 	var s Seed
-	var secrets []*SecretKey
+	var secrets []*SignatureSecrets
 	var pks []PublicKey
 
 	var err error
@@ -93,7 +93,7 @@ func TestMultisig(t *testing.T) {
 	threshold := uint8(3)
 	txid := TestingHashable{[]byte("test: txid 1000")}
 
-	secrets = make([]*SecretKey, 5)
+	secrets = make([]*SignatureSecrets, 5)
 	for i := 0; i < 5; i++ {
 		RandBytes(s[:])
 		secrets[i] = GenerateSignatureSecrets(s)
@@ -159,7 +159,7 @@ func TestMultisigAddAndMerge(t *testing.T) {
 	var sigs []MultisigSig
 
 	var s Seed
-	var secrets []*SecretKey
+	var secrets []*SignatureSecrets
 	var pks []PublicKey
 
 	var err error
@@ -169,7 +169,7 @@ func TestMultisigAddAndMerge(t *testing.T) {
 	threshold := uint8(3)
 	txid := TestingHashable{[]byte("test: txid 1000")}
 
-	secrets = make([]*SecretKey, 5)
+	secrets = make([]*SignatureSecrets, 5)
 
 	RandBytes(s[:])
 
@@ -234,7 +234,7 @@ func TestMultisigAddAndMerge(t *testing.T) {
 func TestEmptyMultisig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var s Seed
-	var secrets *SecretKey
+	var secrets *SignatureSecrets
 	var pks []PublicKey
 
 	txid := TestingHashable{[]byte("test: txid 1000")}
@@ -258,7 +258,7 @@ func TestEmptyMultisig(t *testing.T) {
 func TestIncorrectAddrresInMultisig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var s Seed
-	var secrets *SecretKey
+	var secrets *SignatureSecrets
 	var pks []PublicKey
 
 	txid := TestingHashable{[]byte("test: txid 1000")}
@@ -285,14 +285,14 @@ func TestIncorrectAddrresInMultisig(t *testing.T) {
 func TestMoreThanMaxSigsInMultisig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var s Seed
-	var secrets []*SecretKey
+	var secrets []*SignatureSecrets
 	var pks []PublicKey
 	multiSigLen := maxMultisig + 1
 	txid := TestingHashable{[]byte("test: txid 1000")}
 	version := uint8(1)
 	threshold := uint8(1)
 	pks = make([]PublicKey, multiSigLen)
-	secrets = make([]*SecretKey, multiSigLen)
+	secrets = make([]*SignatureSecrets, multiSigLen)
 	for i := 0; i < multiSigLen; i++ {
 		RandBytes(s[:])
 		secrets[i] = GenerateSignatureSecrets(s)
@@ -321,14 +321,14 @@ func TestMoreThanMaxSigsInMultisig(t *testing.T) {
 func TestOneSignatureIsEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var s Seed
-	var secrets []*SecretKey
+	var secrets []*SignatureSecrets
 	var pks []PublicKey
 	multiSigLen := 6
 	txid := TestingHashable{[]byte("test: txid 1000")}
 	version := uint8(1)
 	threshold := uint8(multiSigLen)
 	pks = make([]PublicKey, multiSigLen)
-	secrets = make([]*SecretKey, multiSigLen)
+	secrets = make([]*SignatureSecrets, multiSigLen)
 	for i := 0; i < multiSigLen; i++ {
 		RandBytes(s[:])
 		secrets[i] = GenerateSignatureSecrets(s)
@@ -360,14 +360,14 @@ func TestOneSignatureIsEmpty(t *testing.T) {
 func TestOneSignatureIsInvalid(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var s Seed
-	var userkeypair []*SecretKey
+	var userkeypair []*SignatureSecrets
 	var pks []PublicKey
 	multiSigLen := 6
 	txid := TestingHashable{[]byte("test: txid 1000")}
 	version := uint8(1)
 	threshold := uint8(3)
 	pks = make([]PublicKey, multiSigLen)
-	userkeypair = make([]*SecretKey, multiSigLen)
+	userkeypair = make([]*SignatureSecrets, multiSigLen)
 	for i := 0; i < multiSigLen; i++ {
 		RandBytes(s[:])
 		userkeypair[i] = GenerateSignatureSecrets(s)
@@ -403,7 +403,7 @@ func TestMultisigLessThanTrashold(t *testing.T) {
 	var sigs []MultisigSig
 
 	var s Seed
-	var secrets []*SecretKey
+	var secrets []*SignatureSecrets
 	var pks []PublicKey
 
 	var err error
@@ -413,7 +413,7 @@ func TestMultisigLessThanTrashold(t *testing.T) {
 	threshold := uint8(3)
 	txid := TestingHashable{[]byte("test: txid 1000")}
 
-	secrets = make([]*SecretKey, 4)
+	secrets = make([]*SignatureSecrets, 4)
 	for i := 0; i < 4; i++ {
 		RandBytes(s[:])
 		secrets[i] = GenerateSignatureSecrets(s)
