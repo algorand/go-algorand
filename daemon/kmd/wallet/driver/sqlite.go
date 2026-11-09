@@ -1001,7 +1001,7 @@ func (sw *SQLiteWallet) DeleteKey(addr crypto.Digest, pw []byte) (err error) {
 // ImportMultisigAddr imports a multisig address, taking in version, threshold,
 // and public keys
 func (sw *SQLiteWallet) ImportMultisigAddr(version, threshold uint8, pks []crypto.PublicKey) (addr crypto.Digest, err error) {
-	addr, err = crypto.MultisigAddrGen(version, threshold, pks)
+	addr, err = transactions.MultisigAddrGen(version, threshold, pks)
 	if err != nil {
 		return
 	}
@@ -1051,7 +1051,7 @@ func (sw *SQLiteWallet) LookupMultisigPreimage(addr crypto.Digest) (version, thr
 	}
 
 	// Sanity check: make sure the preimage is correct
-	addr2, err := crypto.MultisigAddrGen(uint8(versionCandidate), uint8(thresholdCandidate), pksCandidate)
+	addr2, err := transactions.MultisigAddrGen(uint8(versionCandidate), uint8(thresholdCandidate), pksCandidate)
 	if addr2 != addr {
 		err = errTampering
 		return
@@ -1173,7 +1173,7 @@ func (sw *SQLiteWallet) SignProgram(data []byte, src crypto.Digest, pw []byte) (
 // MultisigSignTransaction starts a multisig signature or adds a signature to a
 // partially signed multisig transaction signature of the passed transaction
 // using the key
-func (sw *SQLiteWallet) MultisigSignTransaction(tx transactions.Transaction, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte, signer crypto.Digest) (sig crypto.MultisigSig, err error) {
+func (sw *SQLiteWallet) MultisigSignTransaction(tx transactions.Transaction, pk crypto.PublicKey, partial transactions.MultisigSig, pw []byte, signer crypto.Digest) (sig transactions.MultisigSig, err error) {
 	// Check the password
 	err = sw.CheckPassword(pw)
 	if err != nil {
@@ -1208,7 +1208,7 @@ func (sw *SQLiteWallet) MultisigSignTransaction(tx transactions.Transaction, pk 
 
 		// Sign the transaction
 		from := crypto.Digest(tx.Src())
-		sig, err = crypto.MultisigSign(tx, from, version, threshold, pks, *secrets)
+		sig, err = transactions.MultisigSign(tx, from, version, threshold, pks, *secrets)
 		return
 	}
 
@@ -1216,7 +1216,7 @@ func (sw *SQLiteWallet) MultisigSignTransaction(tx transactions.Transaction, pk 
 
 	// Check preimage matches tx src address
 	var addr crypto.Digest
-	addr, err = crypto.MultisigAddrGenWithSubsigs(partial.Version, partial.Threshold, partial.Subsigs)
+	addr, err = transactions.MultisigAddrGenWithSubsigs(partial.Version, partial.Threshold, partial.Subsigs)
 	if err != nil {
 		return
 	}
@@ -1253,18 +1253,18 @@ func (sw *SQLiteWallet) MultisigSignTransaction(tx transactions.Transaction, pk 
 
 	// Sign the transaction, and merge the multisig into the partial
 	version, threshold, pks := partial.Preimage()
-	msig2, err := crypto.MultisigSign(tx, addr, version, threshold, pks, *secrets)
+	msig2, err := transactions.MultisigSign(tx, addr, version, threshold, pks, *secrets)
 	if err != nil {
 		return
 	}
-	sig, err = crypto.MultisigMerge(partial, msig2)
+	sig, err = transactions.MultisigMerge(partial, msig2)
 	return
 }
 
 // MultisigSignProgram starts a multisig signature or adds a signature to a
 // partially signed multisig transaction signature of the passed transaction
 // using the key
-func (sw *SQLiteWallet) MultisigSignProgram(data []byte, src crypto.Digest, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte, useLegacyMsig bool) (sig crypto.MultisigSig, err error) {
+func (sw *SQLiteWallet) MultisigSignProgram(data []byte, src crypto.Digest, pk crypto.PublicKey, partial transactions.MultisigSig, pw []byte, useLegacyMsig bool) (sig transactions.MultisigSig, err error) {
 	// Check the password
 	err = sw.CheckPassword(pw)
 	if err != nil {
@@ -1300,9 +1300,9 @@ func (sw *SQLiteWallet) MultisigSignProgram(data []byte, src crypto.Digest, pk c
 		// Sign the program
 		from := src
 		if useLegacyMsig {
-			sig, err = crypto.MultisigSign(logic.Program(data), from, version, threshold, pks, *secrets)
+			sig, err = transactions.MultisigSign(logic.Program(data), from, version, threshold, pks, *secrets)
 		} else {
-			sig, err = crypto.MultisigSign(logic.MultisigProgram{Addr: from, Program: data}, from, version, threshold, pks, *secrets)
+			sig, err = transactions.MultisigSign(logic.MultisigProgram{Addr: from, Program: data}, from, version, threshold, pks, *secrets)
 		}
 		return
 	}
@@ -1311,7 +1311,7 @@ func (sw *SQLiteWallet) MultisigSignProgram(data []byte, src crypto.Digest, pk c
 
 	// Check preimage matches tx src address
 	var addr crypto.Digest
-	addr, err = crypto.MultisigAddrGenWithSubsigs(partial.Version, partial.Threshold, partial.Subsigs)
+	addr, err = transactions.MultisigAddrGenWithSubsigs(partial.Version, partial.Threshold, partial.Subsigs)
 	if err != nil {
 		return
 	}
@@ -1346,15 +1346,15 @@ func (sw *SQLiteWallet) MultisigSignProgram(data []byte, src crypto.Digest, pk c
 
 	// Sign the program and merge the multisig into the partial
 	version, threshold, pks := partial.Preimage()
-	var msig2 crypto.MultisigSig
+	var msig2 transactions.MultisigSig
 	if useLegacyMsig {
-		msig2, err = crypto.MultisigSign(logic.Program(data), addr, version, threshold, pks, *secrets)
+		msig2, err = transactions.MultisigSign(logic.Program(data), addr, version, threshold, pks, *secrets)
 	} else {
-		msig2, err = crypto.MultisigSign(logic.MultisigProgram{Addr: addr, Program: data}, addr, version, threshold, pks, *secrets)
+		msig2, err = transactions.MultisigSign(logic.MultisigProgram{Addr: addr, Program: data}, addr, version, threshold, pks, *secrets)
 	}
 	if err != nil {
 		return
 	}
-	sig, err = crypto.MultisigMerge(partial, msig2)
+	sig, err = transactions.MultisigMerge(partial, msig2)
 	return
 }

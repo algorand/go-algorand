@@ -89,7 +89,7 @@ type txnAuth struct {
 	sig      crypto.Signature
 	authAddr basics.Address
 	lsig     *transactions.LogicSig     // 232B struct that is almost always nil
-	msig     *crypto.MultisigSig        // 32B struct
+	msig     *transactions.MultisigSig  // 32B struct
 	sksig    *transactions.SaltedKeySig // 56B struct
 }
 

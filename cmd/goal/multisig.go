@@ -110,7 +110,7 @@ var addSigCmd = &cobra.Command{
 				reportErrorf(txDecodeError, txFilename, err)
 			}
 
-			var msig crypto.MultisigSig
+			var msig transactions.MultisigSig
 			if noSig {
 				multisigInfo, err1 := client.LookupMultisigAccount(wh, stxn.Txn.Sender.String())
 				if err1 != nil {
@@ -216,7 +216,7 @@ var signProgramCmd = &cobra.Command{
 		}
 
 		// Get or create partial multisig from appropriate field
-		var partial crypto.MultisigSig
+		var partial transactions.MultisigSig
 		if gotPartial {
 			if !lsig.SKsig.Blank() {
 				reportErrorf("LogicSig file contains a salted-key signature (pqsig); a LogicSig delegated by a salted-key signature cannot be combined with multisig")
@@ -253,9 +253,9 @@ var signProgramCmd = &cobra.Command{
 
 		if useLegacyMsig {
 			lsig.Msig = msig
-			lsig.LMsig = crypto.MultisigSig{}
+			lsig.LMsig = transactions.MultisigSig{}
 		} else {
-			lsig.Msig = crypto.MultisigSig{}
+			lsig.Msig = transactions.MultisigSig{}
 			lsig.LMsig = msig
 		}
 		lsigblob := protocol.Encode(&lsig)
@@ -316,7 +316,7 @@ var mergeSigCmd = &cobra.Command{
 				}
 
 				var err error
-				tx0.Msig, err = crypto.MultisigMerge(tx0.Msig, txnList[i].Msig)
+				tx0.Msig, err = transactions.MultisigMerge(tx0.Msig, txnList[i].Msig)
 				if err != nil {
 					reportErrorf(txMergeError, err)
 				}
@@ -338,7 +338,7 @@ var mergeSigCmd = &cobra.Command{
 	},
 }
 
-func msigInfoToMsig(multisigInfo libgoal.MultisigInfo) (msig crypto.MultisigSig, err error) {
+func msigInfoToMsig(multisigInfo libgoal.MultisigInfo) (msig transactions.MultisigSig, err error) {
 	var pks []crypto.PublicKey
 	for _, pk := range multisigInfo.PKs {
 		var addr basics.Address
@@ -348,7 +348,7 @@ func msigInfoToMsig(multisigInfo libgoal.MultisigInfo) (msig crypto.MultisigSig,
 		}
 		pks = append(pks, crypto.PublicKey(addr))
 	}
-	msig = crypto.MultisigPreimageFromPKs(multisigInfo.Version, multisigInfo.Threshold, pks)
+	msig = transactions.MultisigPreimageFromPKs(multisigInfo.Version, multisigInfo.Threshold, pks)
 	return
 }
 

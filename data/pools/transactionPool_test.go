@@ -1145,7 +1145,7 @@ func BenchmarkTransactionPoolSteadyState(b *testing.B) {
 		tx.Note = make([]byte, 8)
 		crypto.RandBytes(tx.Note)
 
-		signedTx, err := transactions.AssembleSignedTxn(tx, crypto.Signature{}, crypto.MultisigSig{})
+		signedTx, err := transactions.AssembleSignedTxn(tx, crypto.Signature{}, transactions.MultisigSig{})
 		require.NoError(b, err)
 		signedTransactions = append(signedTransactions, signedTx)
 	}

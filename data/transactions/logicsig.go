@@ -96,10 +96,10 @@ type LogicSig struct {
 	// hashed to be the Address of an account.
 	Logic []byte `codec:"l,allocbound=bounds.MaxLogicSigMaxSize"`
 
-	Sig   crypto.Signature   `codec:"sig"`
-	Msig  crypto.MultisigSig `codec:"msig"`
-	LMsig crypto.MultisigSig `codec:"lmsig"`
-	SKsig SaltedKeySig       `codec:"pqsig"`
+	Sig   crypto.Signature `codec:"sig"`
+	Msig  MultisigSig      `codec:"msig"`
+	LMsig MultisigSig      `codec:"lmsig"`
+	SKsig SaltedKeySig     `codec:"pqsig"`
 
 	// Args are not signed, but checked by Logic
 	Args [][]byte `codec:"arg,allocbound=EvalMaxArgs,allocbound=MaxLogicSigArgSize,maxtotalbytes=(EvalMaxArgs*msgp.BytesPrefixSize) + bounds.MaxLogicSigMaxSize"`

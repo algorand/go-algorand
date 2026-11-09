@@ -85,13 +85,13 @@ var multisigCmd = &cobra.Command{
 			}
 
 			ver, thresh, pks := stxn.Msig.Preimage()
-			addr, err1 := crypto.MultisigAddrGen(ver, thresh, pks)
+			addr, err1 := transactions.MultisigAddrGen(ver, thresh, pks)
 			if err1 != nil {
 				fmt.Fprintf(os.Stderr, "Cannot generate multisig addr: %v\n", err1)
 				os.Exit(1)
 			}
 
-			stxn.Msig, err1 = crypto.MultisigSign(stxn.Txn, addr, ver, thresh, pks, *key)
+			stxn.Msig, err1 = transactions.MultisigSign(stxn.Txn, addr, ver, thresh, pks, *key)
 			if err1 != nil {
 				fmt.Fprintf(os.Stderr, "Cannot add multisig signature: %v\n", err1)
 				os.Exit(1)
@@ -155,14 +155,14 @@ var appendAuthAddrCmd = &cobra.Command{
 			pks[i] = crypto.PublicKey(addr)
 		}
 
-		addr, err := crypto.MultisigAddrGen(1, uint8(threshold), pks)
+		addr, err := transactions.MultisigAddrGen(1, uint8(threshold), pks)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot generate multisig addr: %v\n", err)
 			os.Exit(1)
 		}
 
 		// Generate the multisig and assign to the txn
-		stxn.Msig = crypto.MultisigPreimageFromPKs(1, uint8(threshold), pks)
+		stxn.Msig = transactions.MultisigPreimageFromPKs(1, uint8(threshold), pks)
 
 		// Append the signer since it's a rekey txn
 		if basics.Address(addr) == stxn.Txn.Sender {

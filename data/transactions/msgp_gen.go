@@ -159,6 +159,26 @@ import (
 //       |-----> MsgIsZero
 //       |-----> LogicSigArgsMaxSize()
 //
+// MultisigSig
+//      |-----> (*) MarshalMsg
+//      |-----> (*) CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) UnmarshalMsgWithState
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> (*) Msgsize
+//      |-----> (*) MsgIsZero
+//      |-----> MultisigSigMaxSize()
+//
+// MultisigSubsig
+//        |-----> (*) MarshalMsg
+//        |-----> (*) CanMarshalMsg
+//        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalMsgWithState
+//        |-----> (*) CanUnmarshalMsg
+//        |-----> (*) Msgsize
+//        |-----> (*) MsgIsZero
+//        |-----> MultisigSubsigMaxSize()
+//
 // OnCompletion
 //       |-----> MarshalMsg
 //       |-----> CanMarshalMsg
@@ -2972,7 +2992,7 @@ func (z *LogicSig) MsgIsZero() bool {
 
 // LogicSigMaxSize returns a maximum valid message size for this message type
 func LogicSigMaxSize() (s int) {
-	s = 1 + 2 + msgp.BytesPrefixSize + bounds.MaxLogicSigMaxSize + 4 + crypto.SignatureMaxSize() + 5 + crypto.MultisigSigMaxSize() + 6 + crypto.MultisigSigMaxSize() + 6 + SaltedKeySigMaxSize() + 4
+	s = 1 + 2 + msgp.BytesPrefixSize + bounds.MaxLogicSigMaxSize + 4 + crypto.SignatureMaxSize() + 5 + MultisigSigMaxSize() + 6 + MultisigSigMaxSize() + 6 + SaltedKeySigMaxSize() + 4
 	// Calculating size of slice: z.Args
 	s += msgp.ArrayHeaderSize + (EvalMaxArgs * msgp.BytesPrefixSize) + bounds.MaxLogicSigMaxSize
 	return
@@ -3073,6 +3093,354 @@ func (z LogicSigArgs) MsgIsZero() bool {
 func LogicSigArgsMaxSize() (s int) {
 	// Calculating size of slice: z
 	s += msgp.ArrayHeaderSize + (EvalMaxArgs * msgp.BytesPrefixSize) + bounds.MaxLogicSigMaxSize
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *MultisigSig) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0002Len := uint32(3)
+	var zb0002Mask uint8 /* 4 bits */
+	if len((*z).Subsigs) == 0 {
+		zb0002Len--
+		zb0002Mask |= 0x2
+	}
+	if (*z).Threshold == 0 {
+		zb0002Len--
+		zb0002Mask |= 0x4
+	}
+	if (*z).Version == 0 {
+		zb0002Len--
+		zb0002Mask |= 0x8
+	}
+	// variable map header, size zb0002Len
+	o = append(o, 0x80|uint8(zb0002Len))
+	if zb0002Len != 0 {
+		if (zb0002Mask & 0x2) == 0 { // if not empty
+			// string "subsig"
+			o = append(o, 0xa6, 0x73, 0x75, 0x62, 0x73, 0x69, 0x67)
+			if (*z).Subsigs == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).Subsigs)))
+			}
+			for zb0001 := range (*z).Subsigs {
+				// omitempty: check for empty values
+				zb0003Len := uint32(2)
+				var zb0003Mask uint8 /* 3 bits */
+				if (*z).Subsigs[zb0001].Key.MsgIsZero() {
+					zb0003Len--
+					zb0003Mask |= 0x2
+				}
+				if (*z).Subsigs[zb0001].Sig.MsgIsZero() {
+					zb0003Len--
+					zb0003Mask |= 0x4
+				}
+				// variable map header, size zb0003Len
+				o = append(o, 0x80|uint8(zb0003Len))
+				if (zb0003Mask & 0x2) == 0 { // if not empty
+					// string "pk"
+					o = append(o, 0xa2, 0x70, 0x6b)
+					o = (*z).Subsigs[zb0001].Key.MarshalMsg(o)
+				}
+				if (zb0003Mask & 0x4) == 0 { // if not empty
+					// string "s"
+					o = append(o, 0xa1, 0x73)
+					o = (*z).Subsigs[zb0001].Sig.MarshalMsg(o)
+				}
+			}
+		}
+		if (zb0002Mask & 0x4) == 0 { // if not empty
+			// string "thr"
+			o = append(o, 0xa3, 0x74, 0x68, 0x72)
+			o = msgp.AppendUint8(o, (*z).Threshold)
+		}
+		if (zb0002Mask & 0x8) == 0 { // if not empty
+			// string "v"
+			o = append(o, 0xa1, 0x76)
+			o = msgp.AppendUint8(o, (*z).Version)
+		}
+	}
+	return
+}
+
+func (_ *MultisigSig) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*MultisigSig)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *MultisigSig) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	var field []byte
+	_ = field
+	var zb0002 int
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0003 {
+		(*z) = MultisigSig{}
+	}
+	for zb0002 > 0 {
+		zb0002--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch string(field) {
+		case "v":
+			(*z).Version, bts, err = msgp.ReadUint8Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Version")
+				return
+			}
+		case "thr":
+			(*z).Threshold, bts, err = msgp.ReadUint8Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Threshold")
+				return
+			}
+		case "subsig":
+			var zb0004 int
+			var zb0005 bool
+			zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Subsigs")
+				return
+			}
+			if zb0004 > maxMultisig {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(maxMultisig))
+				err = msgp.WrapError(err, "Subsigs")
+				return
+			}
+			if zb0005 {
+				(*z).Subsigs = nil
+			} else if (*z).Subsigs != nil && cap((*z).Subsigs) >= zb0004 {
+				(*z).Subsigs = ((*z).Subsigs)[:zb0004]
+			} else {
+				(*z).Subsigs = make([]MultisigSubsig, zb0004)
+			}
+			for zb0001 := range (*z).Subsigs {
+				var zb0006 int
+				var zb0007 bool
+				zb0006, zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Subsigs", zb0001)
+					return
+				}
+				if zb0007 {
+					(*z).Subsigs[zb0001] = MultisigSubsig{}
+				}
+				for zb0006 > 0 {
+					zb0006--
+					field, bts, err = msgp.ReadMapKeyZC(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Subsigs", zb0001)
+						return
+					}
+					switch string(field) {
+					case "pk":
+						bts, err = (*z).Subsigs[zb0001].Key.UnmarshalMsgWithState(bts, st)
+						if err != nil {
+							err = msgp.WrapError(err, "Subsigs", zb0001, "Key")
+							return
+						}
+					case "s":
+						bts, err = (*z).Subsigs[zb0001].Sig.UnmarshalMsgWithState(bts, st)
+						if err != nil {
+							err = msgp.WrapError(err, "Subsigs", zb0001, "Sig")
+							return
+						}
+					default:
+						err = msgp.ErrNoField(string(field))
+						if err != nil {
+							err = msgp.WrapError(err, "Subsigs", zb0001)
+							return
+						}
+					}
+				}
+			}
+		default:
+			err = msgp.ErrNoField(string(field))
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	if (*z).Version == 0 {
+		err = errors.New("missing required field: v")
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+	}
+	if (*z).Threshold == 0 {
+		err = errors.New("missing required field: thr")
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+	}
+	if len((*z).Subsigs) == 0 {
+		err = errors.New("missing required field: subsig")
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+	}
+	o = bts
+	return
+}
+
+func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *MultisigSig) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*MultisigSig)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *MultisigSig) Msgsize() (s int) {
+	s = 1 + 2 + msgp.Uint8Size + 4 + msgp.Uint8Size + 7 + msgp.ArrayHeaderSize
+	for zb0001 := range (*z).Subsigs {
+		s += 1 + 3 + (*z).Subsigs[zb0001].Key.Msgsize() + 2 + (*z).Subsigs[zb0001].Sig.Msgsize()
+	}
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *MultisigSig) MsgIsZero() bool {
+	return ((*z).Version == 0) && ((*z).Threshold == 0) && (len((*z).Subsigs) == 0)
+}
+
+// MultisigSigMaxSize returns a maximum valid message size for this message type
+func MultisigSigMaxSize() (s int) {
+	s = 1 + 2 + msgp.Uint8Size + 4 + msgp.Uint8Size + 7
+	// Calculating size of slice: z.Subsigs
+	s += msgp.ArrayHeaderSize + ((maxMultisig) * (MultisigSubsigMaxSize()))
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *MultisigSubsig) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(2)
+	var zb0001Mask uint8 /* 3 bits */
+	if (*z).Key.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).Sig.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "pk"
+			o = append(o, 0xa2, 0x70, 0x6b)
+			o = (*z).Key.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "s"
+			o = append(o, 0xa1, 0x73)
+			o = (*z).Sig.MarshalMsg(o)
+		}
+	}
+	return
+}
+
+func (_ *MultisigSubsig) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*MultisigSubsig)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *MultisigSubsig) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = MultisigSubsig{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch string(field) {
+		case "pk":
+			bts, err = (*z).Key.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "Key")
+				return
+			}
+		case "s":
+			bts, err = (*z).Sig.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "Sig")
+				return
+			}
+		default:
+			err = msgp.ErrNoField(string(field))
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (z *MultisigSubsig) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *MultisigSubsig) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*MultisigSubsig)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *MultisigSubsig) Msgsize() (s int) {
+	s = 1 + 3 + (*z).Key.Msgsize() + 2 + (*z).Sig.Msgsize()
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *MultisigSubsig) MsgIsZero() bool {
+	return ((*z).Key.MsgIsZero()) && ((*z).Sig.MsgIsZero())
+}
+
+// MultisigSubsigMaxSize returns a maximum valid message size for this message type
+func MultisigSubsigMaxSize() (s int) {
+	s = 1 + 3 + crypto.PublicKeyMaxSize() + 2 + crypto.SignatureMaxSize()
 	return
 }
 
@@ -4035,7 +4403,7 @@ func (z *SignedTxn) MsgIsZero() bool {
 
 // SignedTxnMaxSize returns a maximum valid message size for this message type
 func SignedTxnMaxSize() (s int) {
-	s = 1 + 4 + crypto.SignatureMaxSize() + 5 + crypto.MultisigSigMaxSize() + 5 + LogicSigMaxSize() + 6 + SaltedKeySigMaxSize() + 4 + TransactionMaxSize() + 5 + basics.AddressMaxSize()
+	s = 1 + 4 + crypto.SignatureMaxSize() + 5 + MultisigSigMaxSize() + 5 + LogicSigMaxSize() + 6 + SaltedKeySigMaxSize() + 4 + TransactionMaxSize() + 5 + basics.AddressMaxSize()
 	return
 }
 
@@ -4364,7 +4732,7 @@ func (z *SignedTxnInBlock) MsgIsZero() bool {
 
 // SignedTxnInBlockMaxSize returns a maximum valid message size for this message type
 func SignedTxnInBlockMaxSize() (s int) {
-	s = 3 + 4 + crypto.SignatureMaxSize() + 5 + crypto.MultisigSigMaxSize() + 5 + LogicSigMaxSize() + 6 + SaltedKeySigMaxSize() + 4 + TransactionMaxSize() + 5 + basics.AddressMaxSize() + 3 + basics.MicroAlgosMaxSize() + 4 + msgp.Uint64Size + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + EvalDeltaMaxSize() + 5 + basics.AssetIndexMaxSize() + 5 + basics.AppIndexMaxSize() + 4 + msgp.BoolSize + 4 + msgp.BoolSize
+	s = 3 + 4 + crypto.SignatureMaxSize() + 5 + MultisigSigMaxSize() + 5 + LogicSigMaxSize() + 6 + SaltedKeySigMaxSize() + 4 + TransactionMaxSize() + 5 + basics.AddressMaxSize() + 3 + basics.MicroAlgosMaxSize() + 4 + msgp.Uint64Size + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + EvalDeltaMaxSize() + 5 + basics.AssetIndexMaxSize() + 5 + basics.AppIndexMaxSize() + 4 + msgp.BoolSize + 4 + msgp.BoolSize
 	return
 }
 
@@ -4663,7 +5031,7 @@ func (z *SignedTxnWithAD) MsgIsZero() bool {
 
 // SignedTxnWithADMaxSize returns a maximum valid message size for this message type
 func SignedTxnWithADMaxSize() (s int) {
-	s = 1 + 4 + crypto.SignatureMaxSize() + 5 + crypto.MultisigSigMaxSize() + 5 + LogicSigMaxSize() + 6 + SaltedKeySigMaxSize() + 4 + TransactionMaxSize() + 5 + basics.AddressMaxSize() + 3 + basics.MicroAlgosMaxSize() + 4 + msgp.Uint64Size + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + EvalDeltaMaxSize() + 5 + basics.AssetIndexMaxSize() + 5 + basics.AppIndexMaxSize()
+	s = 1 + 4 + crypto.SignatureMaxSize() + 5 + MultisigSigMaxSize() + 5 + LogicSigMaxSize() + 6 + SaltedKeySigMaxSize() + 4 + TransactionMaxSize() + 5 + basics.AddressMaxSize() + 3 + basics.MicroAlgosMaxSize() + 4 + msgp.Uint64Size + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + EvalDeltaMaxSize() + 5 + basics.AssetIndexMaxSize() + 5 + basics.AppIndexMaxSize()
 	return
 }
 

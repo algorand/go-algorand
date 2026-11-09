@@ -152,7 +152,7 @@ func (kcl KMDClient) DeleteMultisigAddr(walletHandle []byte, pw []byte, addr str
 }
 
 // MultisigSignTransaction wraps kmdapi.APIV1POSTMultisigTransactionSignRequest
-func (kcl KMDClient) MultisigSignTransaction(walletHandle, pw []byte, tx []byte, pk crypto.PublicKey, partial crypto.MultisigSig, msigSigner crypto.Digest) (resp kmdapi.APIV1POSTMultisigTransactionSignResponse, err error) {
+func (kcl KMDClient) MultisigSignTransaction(walletHandle, pw []byte, tx []byte, pk crypto.PublicKey, partial transactions.MultisigSig, msigSigner crypto.Digest) (resp kmdapi.APIV1POSTMultisigTransactionSignResponse, err error) {
 	req := kmdapi.APIV1POSTMultisigTransactionSignRequest{
 		WalletHandleToken: string(walletHandle),
 		WalletPassword:    string(pw),
@@ -166,7 +166,7 @@ func (kcl KMDClient) MultisigSignTransaction(walletHandle, pw []byte, tx []byte,
 }
 
 // MultisigSignProgram wraps kmdapi.APIV1POSTMultisigProgramSignRequest
-func (kcl KMDClient) MultisigSignProgram(walletHandle, pw []byte, addr string, data []byte, pk crypto.PublicKey, partial crypto.MultisigSig, useLegacyMsig bool) (resp kmdapi.APIV1POSTMultisigProgramSignResponse, err error) {
+func (kcl KMDClient) MultisigSignProgram(walletHandle, pw []byte, addr string, data []byte, pk crypto.PublicKey, partial transactions.MultisigSig, useLegacyMsig bool) (resp kmdapi.APIV1POSTMultisigProgramSignResponse, err error) {
 	req := kmdapi.APIV1POSTMultisigProgramSignRequest{
 		WalletHandleToken: string(walletHandle),
 		WalletPassword:    string(pw),

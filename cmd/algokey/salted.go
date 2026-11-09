@@ -449,7 +449,7 @@ func runSaltedCheckAddress(address string) error {
 
 func clearSignedTxnAuthorization(stxn *transactions.SignedTxn) {
 	stxn.Sig = crypto.Signature{}
-	stxn.Msig = crypto.MultisigSig{}
+	stxn.Msig = transactions.MultisigSig{}
 	stxn.Lsig = transactions.LogicSig{}
 	stxn.SKsig = transactions.SaltedKeySig{}
 	stxn.AuthAddr = basics.Address{}

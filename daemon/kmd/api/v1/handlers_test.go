@@ -60,7 +60,7 @@ type mockWallet struct {
 	multisigVersion uint8
 	multisigThresh  uint8
 	multisigPKs     []crypto.PublicKey
-	multisigSig     crypto.MultisigSig
+	multisigSig     transactions.MultisigSig
 
 	masterKey crypto.MasterDerivationKey
 
@@ -74,7 +74,7 @@ type mockWallet struct {
 	gotAddr      crypto.Digest
 	gotTx        transactions.Transaction
 	gotProgram   []byte
-	gotPartial   crypto.MultisigSig
+	gotPartial   transactions.MultisigSig
 	gotLegacy    bool
 	gotSK        crypto.PrivateKey
 	gotVersion   uint8
@@ -132,7 +132,7 @@ func (m *mockWallet) SignTransaction(tx transactions.Transaction, pk crypto.Publ
 	return m.signedTx, m.err
 }
 
-func (m *mockWallet) MultisigSignTransaction(tx transactions.Transaction, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte, signer crypto.Digest) (crypto.MultisigSig, error) {
+func (m *mockWallet) MultisigSignTransaction(tx transactions.Transaction, pk crypto.PublicKey, partial transactions.MultisigSig, pw []byte, signer crypto.Digest) (transactions.MultisigSig, error) {
 	m.gotTx, m.gotPK, m.gotPartial, m.gotPassword, m.gotAddr = tx, pk, partial, pw, signer
 	return m.multisigSig, m.err
 }
@@ -142,7 +142,7 @@ func (m *mockWallet) SignProgram(program []byte, src crypto.Digest, pw []byte) (
 	return m.signedProgram, m.err
 }
 
-func (m *mockWallet) MultisigSignProgram(program []byte, src crypto.Digest, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte, useLegacyMsig bool) (crypto.MultisigSig, error) {
+func (m *mockWallet) MultisigSignProgram(program []byte, src crypto.Digest, pk crypto.PublicKey, partial transactions.MultisigSig, pw []byte, useLegacyMsig bool) (transactions.MultisigSig, error) {
 	m.gotProgram, m.gotAddr, m.gotPK, m.gotPartial, m.gotPassword, m.gotLegacy = program, src, pk, partial, pw, useLegacyMsig
 	return m.multisigSig, m.err
 }
@@ -630,7 +630,7 @@ func TestMultisigSignTransactionHandler(t *testing.T) {
 	a := require.New(t)
 
 	th := newTestHarness(t)
-	th.wallet.multisigSig = crypto.MultisigSig{
+	th.wallet.multisigSig = transactions.MultisigSig{
 		Version:   1,
 		Threshold: 2,
 	}
@@ -644,7 +644,7 @@ func TestMultisigSignTransactionHandler(t *testing.T) {
 	}
 	var pk crypto.PublicKey
 	pk[0] = 8
-	partial := crypto.MultisigSig{Version: 1, Threshold: 2, Subsigs: []crypto.MultisigSubsig{{Key: pk}}}
+	partial := transactions.MultisigSig{Version: 1, Threshold: 2, Subsigs: []transactions.MultisigSubsig{{Key: pk}}}
 	signer := crypto.Digest{9}
 
 	req := authedRequest("POST", "/v1/multisig/sign", kmdapi.APIV1POSTMultisigTransactionSignRequest{
@@ -676,7 +676,7 @@ func TestMultisigSignProgramHandler(t *testing.T) {
 	a := require.New(t)
 
 	th := newTestHarness(t)
-	th.wallet.multisigSig = crypto.MultisigSig{
+	th.wallet.multisigSig = transactions.MultisigSig{
 		Version:   1,
 		Threshold: 2,
 	}
@@ -684,7 +684,7 @@ func TestMultisigSignProgramHandler(t *testing.T) {
 
 	var pk crypto.PublicKey
 	pk[0] = 8
-	partial := crypto.MultisigSig{Version: 1, Threshold: 2, Subsigs: []crypto.MultisigSubsig{{Key: pk}}}
+	partial := transactions.MultisigSig{Version: 1, Threshold: 2, Subsigs: []transactions.MultisigSubsig{{Key: pk}}}
 
 	addr := basics.Address(crypto.Digest{1}).GetUserAddress()
 	req := authedRequest("POST", "/v1/multisig/signprogram", kmdapi.APIV1POSTMultisigProgramSignRequest{

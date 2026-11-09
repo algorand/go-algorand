@@ -580,16 +580,16 @@ func TestAddingToCacheBlankMsigNilVsEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// the asymmetry this test exists to document
-	var emptyMsig crypto.MultisigSig
-	emptyMsig.Subsigs = []crypto.MultisigSubsig{}
+	var emptyMsig transactions.MultisigSig
+	emptyMsig.Subsigs = []transactions.MultisigSubsig{}
 	require.False(t, emptyMsig.Blank(), "Blank() tests Subsigs != nil, so an empty slice is not blank")
-	require.True(t, emptyMsig.Equal(crypto.MultisigSig{}), "Equal() compares len(), so it accepts the zero value")
+	require.True(t, emptyMsig.Equal(transactions.MultisigSig{}), "Equal() compares len(), so it accepts the zero value")
 
 	_, signedTxns, secrets, addrs := generateTestObjects(2, 2, 0, 50)
 	group := generateTransactionGroups(1, signedTxns, secrets, addrs)[0]
 
 	cached := group[0]
-	cached.Msig.Subsigs = []crypto.MultisigSubsig{} // not blank, but equal to the zero value
+	cached.Msig.Subsigs = []transactions.MultisigSubsig{} // not blank, but equal to the zero value
 
 	mutated := cached
 	mutated.Msig.Subsigs = nil // blank, and still equal to the zero value
