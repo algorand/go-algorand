@@ -296,7 +296,7 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 	}
 
 	for _, rnd := range sortedKeys(overrides.Blocks) {
-		if err := l.overlayBlock(o, rnd, overrides.Blocks[rnd], proto); err != nil {
+		if err = l.overlayBlock(o, rnd, overrides.Blocks[rnd], proto); err != nil {
 			return nil, err
 		}
 	}
@@ -307,22 +307,22 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 		if acct, ok := o.accounts[addr]; ok {
 			return acct, nil
 		}
-		acct, _, err := l.Ledger.LookupWithoutRewards(l.start, addr)
-		if err != nil {
-			return ledgercore.AccountData{}, err
+		acct, _, lookupErr := l.Ledger.LookupWithoutRewards(l.start, addr)
+		if lookupErr != nil {
+			return ledgercore.AccountData{}, lookupErr
 		}
 		original[addr] = acct
 		return acct, nil
 	}
 
 	for _, aidx := range sortedKeys(overrides.Apps) {
-		if err := l.overlayApp(o, getAccount, prevHdr, aidx, overrides.Apps[aidx]); err != nil {
+		if err = l.overlayApp(o, getAccount, prevHdr, aidx, overrides.Apps[aidx]); err != nil {
 			return nil, err
 		}
 	}
 	// Assets come after apps, so that new assets can check for collisions with new apps
 	for _, aidx := range sortedKeys(overrides.Assets) {
-		if err := l.overlayAsset(o, getAccount, prevHdr, aidx, overrides.Assets[aidx]); err != nil {
+		if err = l.overlayAsset(o, getAccount, prevHdr, aidx, overrides.Assets[aidx]); err != nil {
 			return nil, err
 		}
 	}
@@ -333,7 +333,8 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 	})
 	for _, addr := range addrs {
 		override := overrides.Accounts[addr]
-		acct, err := getAccount(addr)
+		var acct ledgercore.AccountData
+		acct, err = getAccount(addr)
 		if err != nil {
 			return nil, err
 		}
@@ -902,7 +903,9 @@ func (l simulatorLedger) overlayLocalState(o *stateOverlay, acct ledgercore.Acco
 		// Opt the account in, which requires the app to exist
 		app, exists := o.apps[aidx]
 		if !exists {
-			creator, ok, err := l.Ledger.GetCreatorForRound(l.start, basics.CreatableIndex(aidx), basics.AppCreatable)
+			var creator basics.Address
+			var ok bool
+			creator, ok, err = l.Ledger.GetCreatorForRound(l.start, basics.CreatableIndex(aidx), basics.AppCreatable)
 			if err != nil {
 				return ledgercore.AccountData{}, err
 			}
