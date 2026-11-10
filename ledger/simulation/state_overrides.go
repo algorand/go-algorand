@@ -399,7 +399,14 @@ func (override AccountOverride) affectsAgreement() bool {
 // it. Such accounts are treated as though they have been in their overridden state since the
 // balance round.
 func (l simulatorLedger) overlayOnline(o *stateOverlay, overrides StateOverrides, proto config.ConsensusParams, prevHdr bookkeeping.BlockHeader) error {
-	if !slices.ContainsFunc(slices.Collect(maps.Values(overrides.Accounts)), AccountOverride.affectsAgreement) {
+	affectsAgreement := false
+	for _, override := range overrides.Accounts {
+		if override.affectsAgreement() {
+			affectsAgreement = true
+			break
+		}
+	}
+	if !affectsAgreement {
 		return nil
 	}
 

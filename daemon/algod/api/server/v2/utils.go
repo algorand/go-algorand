@@ -839,13 +839,11 @@ func convertAccountOverride(acct model.SimulateAccountOverride) (simulation.Acco
 func convertAppLocalStateOverride(local model.SimulateAppLocalStateOverride) (simulation.AppLocalStateOverride, error) {
 	var override simulation.AppLocalStateOverride
 	if local.Schema != nil {
-		override.Schema = &basics.StateSchema{
-			NumUint:      local.Schema.NumUint,
-			NumByteSlice: local.Schema.NumByteSlice,
-		}
+		schema := convertStateSchema(*local.Schema)
+		override.Schema = &schema
 	}
 	if local.KeyValue != nil {
-		kv, err := convertTealKeyValueStore(*local.KeyValue)
+		kv, err := convertGeneratedTKV(local.KeyValue)
 		if err != nil {
 			return simulation.AppLocalStateOverride{}, fmt.Errorf("local state %w", err)
 		}
@@ -862,31 +860,6 @@ func convertAppLocalStateOverride(local model.SimulateAppLocalStateOverride) (si
 		override.OptOut = *local.OptOut
 	}
 	return override, nil
-}
-
-// convertTealKeyValueStore converts key/value pairs with base64 encoded keys and byte values.
-// Errors are phrased to follow a description of the store, e.g. "global state".
-func convertTealKeyValueStore(store model.TealKeyValueStore) (basics.TealKeyValue, error) {
-	kv := make(basics.TealKeyValue, len(store))
-	for _, entry := range store {
-		key, err := base64.StdEncoding.DecodeString(entry.Key)
-		if err != nil {
-			return nil, fmt.Errorf("key %q: %w", entry.Key, err)
-		}
-		value, err := base64.StdEncoding.DecodeString(entry.Value.Bytes)
-		if err != nil {
-			return nil, fmt.Errorf("value for key %#x: %w", key, err)
-		}
-		if _, ok := kv[string(key)]; ok {
-			return nil, fmt.Errorf("has duplicate key %#x", key)
-		}
-		kv[string(key)] = basics.TealValue{
-			Type:  basics.TealType(entry.Value.Type),
-			Uint:  entry.Value.Uint,
-			Bytes: string(value),
-		}
-	}
-	return kv, nil
 }
 
 // convertDeletedKeys converts a list of keys to delete, rejecting duplicates. Errors are phrased to
@@ -986,16 +959,12 @@ func convertAppOverride(app model.SimulateAppOverride) (simulation.AppOverride, 
 		override.ClearStateProgram = append([]byte{}, *app.ClearStateProgram...)
 	}
 	if app.GlobalStateSchema != nil {
-		override.GlobalStateSchema = &basics.StateSchema{
-			NumUint:      app.GlobalStateSchema.NumUint,
-			NumByteSlice: app.GlobalStateSchema.NumByteSlice,
-		}
+		schema := convertStateSchema(*app.GlobalStateSchema)
+		override.GlobalStateSchema = &schema
 	}
 	if app.LocalStateSchema != nil {
-		override.LocalStateSchema = &basics.StateSchema{
-			NumUint:      app.LocalStateSchema.NumUint,
-			NumByteSlice: app.LocalStateSchema.NumByteSlice,
-		}
+		schema := convertStateSchema(*app.LocalStateSchema)
+		override.LocalStateSchema = &schema
 	}
 	override.ExtraProgramPages = app.ExtraProgramPages
 	override.Version = app.Version
@@ -1010,7 +979,7 @@ func convertAppOverride(app model.SimulateAppOverride) (simulation.AppOverride, 
 	override.FamilyBoxAccess = app.FamilyBoxAccess
 
 	if app.GlobalState != nil {
-		globalState, err := convertTealKeyValueStore(*app.GlobalState)
+		globalState, err := convertGeneratedTKV(app.GlobalState)
 		if err != nil {
 			return simulation.AppOverride{}, fmt.Errorf("global state %w", err)
 		}
