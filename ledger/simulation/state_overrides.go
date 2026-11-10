@@ -19,7 +19,6 @@ package simulation
 import (
 	"bytes"
 	"cmp"
-	"errors"
 	"fmt"
 	"maps"
 	"math"
@@ -65,6 +64,7 @@ type BlockOverride struct {
 }
 
 // AccountOverride describes modifications to a single account's state. Nil fields are left unchanged.
+// If the account does not exist, it is created.
 type AccountOverride struct {
 	// Balance, if set, replaces the account's balance. Pending rewards are forfeited, so the
 	// account's balance at the start of simulation is exactly this value.
@@ -73,6 +73,9 @@ type AccountOverride struct {
 	// treated as though it has been in its overridden state since the balance round used for
 	// agreement. Its online data (e.g. as seen by voter_params_get) and its contribution to the
 	// online stake (e.g. as seen by online_stake) reflect the overridden account.
+	//
+	// Online stake is taken from the account's state at the start round, with pending rewards
+	// applied, rather than from its state at the balance round.
 	Balance *basics.MicroAlgos
 
 	// AuthAddr, if set, replaces the address whose signature authorizes the account's
@@ -453,7 +456,7 @@ func (l simulatorLedger) overlayBlock(o *stateOverlay, rnd basics.Round, overrid
 	if override.TimeStamp != nil && *override.TimeStamp < 0 {
 		return invalidOverride("block %d timestamp %d must not be negative", rnd, *override.TimeStamp)
 	}
-	// The next block's timestamp is checked against prev.TimeStamp+MaxTimestampIncrement, which must not overflow
+	// Leave room for MaxTimestampIncrement so deriving the next timestamp cannot overflow
 	if maxTimestamp := int64(math.MaxInt64) - proto.MaxTimestampIncrement; override.TimeStamp != nil && *override.TimeStamp > maxTimestamp {
 		return invalidOverride("block %d timestamp %d exceeds maximum %d", rnd, *override.TimeStamp, maxTimestamp)
 	}
@@ -656,16 +659,21 @@ func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Addr
 	if err != nil {
 		return err
 	}
+	deleted := make(map[string]bool, len(override.DeleteBoxes))
 	for _, name := range override.DeleteBoxes {
 		if _, ok := override.Boxes[name]; ok {
 			return invalidOverride("app %d box %#x cannot be both set and deleted", aidx, name)
 		}
+		if deleted[name] {
+			return invalidOverride("app %d box %#x cannot be deleted twice", aidx, name)
+		}
+		deleted[name] = true
 		key := apps.MakeBoxKey(uint64(aidx), name)
 		existing, err := l.Ledger.LookupKv(l.start, key)
 		if err != nil {
 			return err
 		}
-		if deleted, ok := o.kvs[key]; existing == nil || (ok && deleted == nil) {
+		if existing == nil {
 			return invalidOverride("cannot delete app %d box %#x: box does not exist", aidx, name)
 		}
 		appAcct.TotalBoxes = basics.SubSaturate(appAcct.TotalBoxes, 1)
@@ -987,10 +995,15 @@ func validateTealKeyValue(kv basics.TealKeyValue, schema basics.StateSchema) err
 // not modified.
 func applyKeyValueOverride(kv basics.TealKeyValue, set basics.TealKeyValue, del []string) (basics.TealKeyValue, error) {
 	kv = kv.Clone()
+	deleted := make(map[string]bool, len(del))
 	for _, key := range del {
 		if _, ok := set[key]; ok {
 			return nil, fmt.Errorf("key %#x cannot be both set and deleted", key)
 		}
+		if deleted[key] {
+			return nil, fmt.Errorf("key %#x cannot be deleted twice", key)
+		}
+		deleted[key] = true
 		if _, ok := kv[key]; !ok {
 			return nil, fmt.Errorf("cannot delete key %#x: key does not exist", key)
 		}
@@ -1055,7 +1068,7 @@ func (l simulatorLedger) OnlineCirculation(rnd basics.Round, voteRnd basics.Roun
 	var ot basics.OverflowTracker
 	total = ot.AddA(total, l.overlay.onlineAdded)
 	if ot.Overflowed {
-		return basics.MicroAlgos{}, errors.New("overridden online circulation overflows")
+		return basics.MicroAlgos{}, invalidOverride("online circulation overflows")
 	}
 	return total, nil
 }

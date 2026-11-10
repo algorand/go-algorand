@@ -105,7 +105,7 @@ func TestConvertAccountOverride(t *testing.T) {
 		expected string
 	}{
 		{"bad status", model.SimulateAccountOverride{Status: &badStatus}, "unknown account status"},
-		{"bad auth addr", model.SimulateAccountOverride{AuthAddr: &badAddr}, "auth addr"},
+		{"bad auth addr", model.SimulateAccountOverride{AuthAddr: &badAddr}, "auth-addr"},
 		{"short vote key", model.SimulateAccountOverride{VoteParticipationKey: &short}, "vote participation key must be 32 bytes"},
 		{"short selection key", model.SimulateAccountOverride{SelectionParticipationKey: &short}, "selection participation key must be 32 bytes"},
 		{"short state proof key", model.SimulateAccountOverride{StateProofKey: &short}, "state proof key must be 64 bytes"},

@@ -815,7 +815,8 @@ int 1`, appAcctMinBalance),
 		TxnGroups:      [][]transactions.SignedTxn{{txn}},
 		StateOverrides: deleteOverride(simulation.AppOverride{DeleteBoxes: []string{"x", "x"}}),
 	})
-	require.ErrorContains(t, err, "box does not exist")
+	require.ErrorAs(t, err, &simulation.InvalidRequestError{})
+	require.ErrorContains(t, err, "cannot be deleted twice")
 
 	// The real ledger is unaffected
 	value, err := env.Ledger.LookupKv(env.Ledger.Latest(), apps.MakeBoxKey(uint64(aidx), "x"))
@@ -1922,4 +1923,65 @@ func TestStateOverrideBlockValidation(t *testing.T) {
 			require.ErrorContains(t, err, tc.expected)
 		})
 	}
+}
+
+func TestStateOverridePastRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	sender := env.Accounts[0]
+	receiver := env.Accounts[1]
+	// Leave a round before the latest one to simulate from
+	env.AdvanceRounds(2)
+	latest := env.Ledger.Latest()
+	start := latest - 1
+
+	const amount = uint64(1_000_000)
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Addr,
+		Receiver: receiver.Addr,
+		Amount:   amount,
+	}).Txn().Sign(sender.Sk)
+
+	// The override leaves exactly the minimum balance, so the sender's balance afterwards shows
+	// which round's state the override was applied to
+	proto := env.TxnInfo.CurrentProtocolParams()
+	balance := basics.MicroAlgos{Raw: amount + txn.Txn.Fee.Raw + proto.MinBalance}
+	s := simulation.MakeSimulator(env.Ledger, false)
+	result, err := s.Simulate(simulation.Request{
+		Round:     start,
+		TxnGroups: [][]transactions.SignedTxn{{txn}},
+		StateOverrides: simulation.StateOverrides{
+			Accounts: map[basics.Address]simulation.AccountOverride{
+				sender.Addr: {Balance: &balance},
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+	require.Equal(t, start, result.LastRound)
+	senderData, ok := result.Block.Delta().Accts.GetData(sender.Addr)
+	require.True(t, ok)
+	require.Equal(t, proto.MinBalance, senderData.MicroAlgos.Raw)
+
+	// Block overrides are validated against the requested round, not the latest one
+	timestamp := int64(1_700_000_000)
+	_, err = s.Simulate(simulation.Request{
+		Round:     start,
+		TxnGroups: [][]transactions.SignedTxn{{txn}},
+		StateOverrides: simulation.StateOverrides{
+			Blocks: map[basics.Round]simulation.BlockOverride{latest: {TimeStamp: &timestamp}},
+		},
+	})
+	require.ErrorAs(t, err, &simulation.InvalidRequestError{})
+	require.ErrorContains(t, err, "after the start round")
+
+	// The real ledger keeps the sender's actual balance at the start round
+	acct, _, err := env.Ledger.LookupWithoutRewards(start, sender.Addr)
+	require.NoError(t, err)
+	require.Greater(t, acct.MicroAlgos.Raw, balance.Raw)
 }

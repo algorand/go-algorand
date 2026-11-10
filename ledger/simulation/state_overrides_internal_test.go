@@ -56,6 +56,7 @@ func TestOverridesCoverAllFields(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
+	// BlockOverride is not checked: only a subset of block header fields can be overridden
 	requireOverrideCovers(t, reflect.TypeFor[AppOverride](), reflect.TypeFor[basics.AppParams]())
 	requireOverrideCovers(t, reflect.TypeFor[AssetOverride](), reflect.TypeFor[basics.AssetParams]())
 	requireOverrideCovers(t, reflect.TypeFor[AssetHoldingOverride](), reflect.TypeFor[basics.AssetHolding]())
@@ -527,7 +528,8 @@ func TestOnlineOverrideCirculationBounds(t *testing.T) {
 	// A final circulation that really exceeds the maximum must still fail.
 	l.overlay.onlineRemoved.Raw--
 	_, err = l.OnlineCirculation(l.overlay.balanceRound, l.start+1)
-	require.ErrorContains(t, err, "overridden online circulation overflows")
+	require.ErrorAs(t, err, &InvalidRequestError{})
+	require.ErrorContains(t, err, "online circulation overflows")
 
 	// Preserve saturation when the approximated original stake exceeds the total.
 	l.overlay.onlineRemoved.Raw += 2
@@ -638,6 +640,14 @@ func TestOnlineOverrides(t *testing.T) {
 			realCandidates, err := env.Ledger.GetKnockOfflineCandidates(start, proto)
 			require.NoError(t, err)
 			require.Contains(t, realCandidates, goneOffline, "the ledger's result was modified")
+
+			// A nil candidate list means candidates are not considered at all, so the overlay
+			// must not add the accounts it overrode online
+			noStateProofs := proto
+			noStateProofs.StateProofInterval = 0
+			candidates, err = l.GetKnockOfflineCandidates(start, noStateProofs)
+			require.NoError(t, err)
+			require.Nil(t, candidates)
 		})
 	}
 }

@@ -722,7 +722,7 @@ func convertBlockOverride(block model.SimulateBlockOverride) (simulation.BlockOv
 		dest  **basics.Address
 	}{
 		{"proposer", block.Proposer, &override.Proposer},
-		{"fee sink", block.FeeSink, &override.FeeSink},
+		{"fee-sink", block.FeeSink, &override.FeeSink},
 	}
 	for _, a := range addrs {
 		if a.value == nil {
@@ -758,7 +758,7 @@ func convertAccountOverride(acct model.SimulateAccountOverride) (simulation.Acco
 	if acct.AuthAddr != nil {
 		authAddr, err := basics.UnmarshalChecksumAddress(*acct.AuthAddr)
 		if err != nil {
-			return simulation.AccountOverride{}, fmt.Errorf("auth addr %q: %w", *acct.AuthAddr, err)
+			return simulation.AccountOverride{}, fmt.Errorf("auth-addr %q: %w", *acct.AuthAddr, err)
 		}
 		override.AuthAddr = &authAddr
 	}
@@ -1002,7 +1002,7 @@ func convertAppOverride(app model.SimulateAppOverride) (simulation.AppOverride, 
 	if app.SizeSponsor != nil {
 		sponsor, err := basics.UnmarshalChecksumAddress(*app.SizeSponsor)
 		if err != nil {
-			return simulation.AppOverride{}, fmt.Errorf("size sponsor %q: %w", *app.SizeSponsor, err)
+			return simulation.AppOverride{}, fmt.Errorf("size-sponsor %q: %w", *app.SizeSponsor, err)
 		}
 		override.SizeSponsor = &sponsor
 	}
