@@ -40,7 +40,7 @@ var (
 )
 
 const (
-	schemeUsage         = "Signature scheme: falcon-1024 (f1), falcon-512 (f5), ed25519 (ed)"
+	schemeUsage         = "Signature scheme: falcon-1024 (f1), falcon-512 (f5), ed25519 (ed), ml-dsa-44 (m4), ml-dsa-65 (m6), ml-dsa-87 (m8)"
 	schemeMnemonicUsage = "Scheme key mnemonic"
 )
 

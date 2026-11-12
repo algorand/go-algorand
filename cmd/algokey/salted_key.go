@@ -76,6 +76,9 @@ func (m saltedSigningMaterial) validate() error {
 	if uint64(len(m.PrivateKey)) != ops.privateKeySize() {
 		return fmt.Errorf("%w: got private key size %d, want %d", errSaltedKeyMalformed, len(m.PrivateKey), ops.privateKeySize())
 	}
+	if c, ok := ops.(keyPairChecker); ok {
+		return c.checkKeyPair(m.PrivateKey, m.Public.PublicKey)
+	}
 	return nil
 }
 

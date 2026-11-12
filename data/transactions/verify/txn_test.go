@@ -515,6 +515,9 @@ func TestTxnValidationSaltedKeySigSchemeBoundary(t *testing.T) {
 	require.True(t, transactions.SigSchemeEnabled(v42, protocol.SigSchemeFalcon1024))
 	require.False(t, transactions.SigSchemeEnabled(v42, protocol.SigSchemeFalcon512))
 	require.False(t, transactions.SigSchemeEnabled(v42, protocol.SigSchemeEd25519))
+	require.False(t, transactions.SigSchemeEnabled(v42, protocol.SigSchemeMLDSA44))
+	require.False(t, transactions.SigSchemeEnabled(v42, protocol.SigSchemeMLDSA65))
+	require.False(t, transactions.SigSchemeEnabled(v42, protocol.SigSchemeMLDSA87))
 
 	blkHdr := createDummyBlockHeader(protocol.ConsensusV42)
 	dummyLedger := DummyLedgerForSignature{}
@@ -534,7 +537,10 @@ func TestTxnValidationSaltedKeySigSchemeBoundary(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	for i, scheme := range []protocol.SigScheme{protocol.SigSchemeFalcon512, protocol.SigSchemeEd25519} {
+	for i, scheme := range []protocol.SigScheme{
+		protocol.SigSchemeFalcon512, protocol.SigSchemeEd25519,
+		protocol.SigSchemeMLDSA44, protocol.SigSchemeMLDSA65, protocol.SigSchemeMLDSA87,
+	} {
 		t.Run(scheme.String()+"-txn", func(t *testing.T) {
 			stxn := makeSKsigSignedTxnForScheme(t, byte(i+2), scheme)
 
@@ -859,73 +865,78 @@ func TestTxnValidationSaltedKeySigDelegatedLogicSigRejectsInvalidProof(t *testin
 		require.ErrorContains(t, err, contains)
 	}
 
-	t.Run("wrong-authorizer", func(t *testing.T) {
-		stxn := makeSaltedKeySigDelegatedLogicSigTxn(t, 12)
-		stxn.Txn.Sender = basics.Address{2}
+	for _, ts := range basics_testing.SigSchemeTests {
+		scheme := ts.Scheme
+		t.Run(ts.Name, func(t *testing.T) {
+			t.Run("wrong-authorizer", func(t *testing.T) {
+				stxn := makeSaltedKeySigDelegatedLogicSigTxnForScheme(t, 12, scheme)
+				stxn.Txn.Sender = basics.Address{2}
 
-		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-		requireLogicSaltedKeySigError(t, err, "salted-key signature authorizer mismatch")
-	})
+				_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+				requireLogicSaltedKeySigError(t, err, "salted-key signature authorizer mismatch")
+			})
 
-	t.Run("wrong-program", func(t *testing.T) {
-		stxn := makeSaltedKeySigDelegatedLogicSigTxn(t, 13)
-		ops, err := logic.AssembleStringWithVersion("int 2", 1)
-		require.NoError(t, err)
-		stxn.Lsig.Logic = ops.Program
+			t.Run("wrong-program", func(t *testing.T) {
+				stxn := makeSaltedKeySigDelegatedLogicSigTxnForScheme(t, 13, scheme)
+				ops, err := logic.AssembleStringWithVersion("int 2", 1)
+				require.NoError(t, err)
+				stxn.Lsig.Logic = ops.Program
 
-		_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-		requireLogicSaltedKeySigError(t, err, invalidSaltedKeySigErrText(stxn.Lsig.SKsig))
-	})
+				_, err = TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+				requireLogicSaltedKeySigError(t, err, invalidSaltedKeySigErrText(stxn.Lsig.SKsig))
+			})
 
-	t.Run("wrong-signature", func(t *testing.T) {
-		stxn := makeSaltedKeySigDelegatedLogicSigTxn(t, 14)
-		stxn.Lsig.SKsig.Signature[0] ^= 1
+			t.Run("wrong-signature", func(t *testing.T) {
+				stxn := makeSaltedKeySigDelegatedLogicSigTxnForScheme(t, 14, scheme)
+				stxn.Lsig.SKsig.Signature[0] ^= 1
 
-		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-		requireLogicSaltedKeySigError(t, err, invalidSaltedKeySigErrText(stxn.Lsig.SKsig))
-	})
+				_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+				requireLogicSaltedKeySigError(t, err, invalidSaltedKeySigErrText(stxn.Lsig.SKsig))
+			})
 
-	t.Run("malformed-public-key", func(t *testing.T) {
-		stxn := makeSaltedKeySigDelegatedLogicSigTxn(t, 15)
-		stxn.Lsig.SKsig.PublicKey = slices.Clone(stxn.Lsig.SKsig.PublicKey[:len(stxn.Lsig.SKsig.PublicKey)-1])
+			t.Run("malformed-public-key", func(t *testing.T) {
+				stxn := makeSaltedKeySigDelegatedLogicSigTxnForScheme(t, 15, scheme)
+				stxn.Lsig.SKsig.PublicKey = slices.Clone(stxn.Lsig.SKsig.PublicKey[:len(stxn.Lsig.SKsig.PublicKey)-1])
 
-		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-		requireLogicSaltedKeySigError(t, err, "salted-key signature authorizer mismatch")
-	})
+				_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+				requireLogicSaltedKeySigError(t, err, "salted-key signature authorizer mismatch")
+			})
 
-	t.Run("empty-signature", func(t *testing.T) {
-		stxn := makeSaltedKeySigDelegatedLogicSigTxn(t, 16)
-		stxn.Lsig.SKsig.Signature = nil
+			t.Run("empty-signature", func(t *testing.T) {
+				stxn := makeSaltedKeySigDelegatedLogicSigTxnForScheme(t, 16, scheme)
+				stxn.Lsig.SKsig.Signature = nil
 
-		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-		requireLogicSaltedKeySigError(t, err, "salted-key signature is empty")
-	})
+				_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+				requireLogicSaltedKeySigError(t, err, "salted-key signature is empty")
+			})
 
-	t.Run("malformed-signature", func(t *testing.T) {
-		stxn := makeSaltedKeySigDelegatedLogicSigTxn(t, 17)
-		stxn.Lsig.SKsig.Signature = make([]byte, transactions.SaltedKeySigMaxSize()+1)
+			t.Run("malformed-signature", func(t *testing.T) {
+				stxn := makeSaltedKeySigDelegatedLogicSigTxnForScheme(t, 17, scheme)
+				stxn.Lsig.SKsig.Signature = make([]byte, transactions.SaltedKeySigMaxSize()+1)
 
-		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-		requireLogicSaltedKeySigError(t, err, "too large for scheme")
-	})
+				_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+				requireLogicSaltedKeySigError(t, err, "too large for scheme")
+			})
 
-	t.Run("disabled-scheme", func(t *testing.T) {
-		stxn := makeSaltedKeySigDelegatedLogicSigTxn(t, 18)
+			t.Run("disabled-scheme", func(t *testing.T) {
+				stxn := makeSaltedKeySigDelegatedLogicSigTxnForScheme(t, 18, scheme)
 
-		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &disabledBlkHdr, nil, &dummyLedger)
-		requireLogicSaltedKeySigError(t, err, transactions.ErrSigSchemeNotEnabled.Error())
-	})
+				_, err := TxnGroup([]transactions.SignedTxn{stxn}, &disabledBlkHdr, nil, &dummyLedger)
+				requireLogicSaltedKeySigError(t, err, transactions.ErrSigSchemeNotEnabled.Error())
+			})
 
-	t.Run("replay-different-salt", func(t *testing.T) {
-		stxn := makeSaltedKeySigDelegatedLogicSigTxn(t, 19)
-		originalAuthorizer := stxn.Lsig.SKsig.Address()
-		stxn.Lsig.SKsig.Salt++
-		stxn.Txn.Sender = stxn.Lsig.SKsig.Address()
-		require.NotEqual(t, originalAuthorizer, stxn.Txn.Sender)
+			t.Run("replay-different-salt", func(t *testing.T) {
+				stxn := makeSaltedKeySigDelegatedLogicSigTxnForScheme(t, 19, scheme)
+				originalAuthorizer := stxn.Lsig.SKsig.Address()
+				stxn.Lsig.SKsig.Salt++
+				stxn.Txn.Sender = stxn.Lsig.SKsig.Address()
+				require.NotEqual(t, originalAuthorizer, stxn.Txn.Sender)
 
-		_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
-		requireLogicSaltedKeySigError(t, err, invalidSaltedKeySigErrText(stxn.Lsig.SKsig))
-	})
+				_, err := TxnGroup([]transactions.SignedTxn{stxn}, &blkHdr, nil, &dummyLedger)
+				requireLogicSaltedKeySigError(t, err, invalidSaltedKeySigErrText(stxn.Lsig.SKsig))
+			})
+		})
+	}
 }
 
 func TestTxnValidationSaltedKeySigDelegatedLogicSigSignsRawProgram(t *testing.T) {

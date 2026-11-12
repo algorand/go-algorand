@@ -1165,11 +1165,9 @@ func enableDeveloperAPI() postTransactionOpt {
 	}
 }
 
-func makeSaltedKeySigWithOffCurveAuthorizer(t *testing.T, offCurve bool) (basics_testing.SigSchemeSigner, basics.Address, transactions.SaltedKeySig) {
+func makeSaltedKeySigWithOffCurveAuthorizer(t *testing.T, scheme protocol.SigScheme, offCurve bool) (basics_testing.SigSchemeSigner, basics.Address, transactions.SaltedKeySig) {
 	t.Helper()
 
-	// Randomly choose a supported scheme for the test.
-	scheme := basics_testing.RandomSigSchemeTest().Scheme
 	signer := basics_testing.MakeSigSchemeSigner(t, 0, scheme)
 	publicKey := signer.PublicKey()
 
@@ -1199,10 +1197,10 @@ func makeSaltedKeySigWithOffCurveAuthorizer(t *testing.T, offCurve bool) (basics
 	}
 }
 
-func makeSKsigSignedTxnWithOffCurveAuthorizer(t *testing.T, offCurve bool) transactions.SignedTxn {
+func makeSKsigSignedTxnWithOffCurveAuthorizer(t *testing.T, scheme protocol.SigScheme, offCurve bool) transactions.SignedTxn {
 	t.Helper()
 
-	signer, authorizer, sksig := makeSaltedKeySigWithOffCurveAuthorizer(t, offCurve)
+	signer, authorizer, sksig := makeSaltedKeySigWithOffCurveAuthorizer(t, scheme, offCurve)
 	txn := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
@@ -1227,10 +1225,10 @@ func makeSKsigSignedTxnWithOffCurveAuthorizer(t *testing.T, offCurve bool) trans
 	}
 }
 
-func makeSaltedKeySigDelegatedLogicSigTxnWithOffCurveAuthorizer(t *testing.T, offCurve bool) transactions.SignedTxn {
+func makeSaltedKeySigDelegatedLogicSigTxnWithOffCurveAuthorizer(t *testing.T, scheme protocol.SigScheme, offCurve bool) transactions.SignedTxn {
 	t.Helper()
 
-	signer, authorizer, sksig := makeSaltedKeySigWithOffCurveAuthorizer(t, offCurve)
+	signer, authorizer, sksig := makeSaltedKeySigWithOffCurveAuthorizer(t, scheme, offCurve)
 	ops, err := logic.AssembleStringWithVersion("int 1", 1)
 	require.NoError(t, err)
 
@@ -1327,32 +1325,35 @@ func TestPostTransactionOffCurveAuthorizers(t *testing.T) {
 		}
 	}
 
-	t.Run("off-curve", func(t *testing.T) {
-		t.Parallel()
-		test(t, makeSKsigSignedTxnWithOffCurveAuthorizer(t, true), futureStatus, model.RawTransactionParams{}, http.StatusOK, "")
-	})
-	t.Run("on-curve", func(t *testing.T) {
-		t.Parallel()
-		test(t, makeSKsigSignedTxnWithOffCurveAuthorizer(t, false), futureStatus, model.RawTransactionParams{}, http.StatusBadRequest, "transaction 0: salted-key signature authorizer address")
-	})
-	t.Run("on-curve with skip flag", func(t *testing.T) {
-		t.Parallel()
-		skip := true
-		test(t, makeSKsigSignedTxnWithOffCurveAuthorizer(t, false), futureStatus, model.RawTransactionParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
-	})
-	t.Run("delegated-off-curve", func(t *testing.T) {
-		t.Parallel()
-		test(t, makeSaltedKeySigDelegatedLogicSigTxnWithOffCurveAuthorizer(t, true), futureStatus, model.RawTransactionParams{}, http.StatusOK, "")
-	})
-	t.Run("delegated-on-curve", func(t *testing.T) {
-		t.Parallel()
-		test(t, makeSaltedKeySigDelegatedLogicSigTxnWithOffCurveAuthorizer(t, false), futureStatus, model.RawTransactionParams{}, http.StatusBadRequest, "transaction 0: salted-key signature authorizer address")
-	})
-	t.Run("delegated-on-curve with skip flag", func(t *testing.T) {
-		t.Parallel()
-		skip := true
-		test(t, makeSaltedKeySigDelegatedLogicSigTxnWithOffCurveAuthorizer(t, false), futureStatus, model.RawTransactionParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
-	})
+	for _, ts := range basics_testing.SigSchemeTests {
+		scheme := ts.Scheme
+		t.Run(ts.Name+"/off-curve", func(t *testing.T) {
+			t.Parallel()
+			test(t, makeSKsigSignedTxnWithOffCurveAuthorizer(t, scheme, true), futureStatus, model.RawTransactionParams{}, http.StatusOK, "")
+		})
+		t.Run(ts.Name+"/on-curve", func(t *testing.T) {
+			t.Parallel()
+			test(t, makeSKsigSignedTxnWithOffCurveAuthorizer(t, scheme, false), futureStatus, model.RawTransactionParams{}, http.StatusBadRequest, "transaction 0: salted-key signature authorizer address")
+		})
+		t.Run(ts.Name+"/on-curve with skip flag", func(t *testing.T) {
+			t.Parallel()
+			skip := true
+			test(t, makeSKsigSignedTxnWithOffCurveAuthorizer(t, scheme, false), futureStatus, model.RawTransactionParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
+		})
+		t.Run(ts.Name+"/delegated-off-curve", func(t *testing.T) {
+			t.Parallel()
+			test(t, makeSaltedKeySigDelegatedLogicSigTxnWithOffCurveAuthorizer(t, scheme, true), futureStatus, model.RawTransactionParams{}, http.StatusOK, "")
+		})
+		t.Run(ts.Name+"/delegated-on-curve", func(t *testing.T) {
+			t.Parallel()
+			test(t, makeSaltedKeySigDelegatedLogicSigTxnWithOffCurveAuthorizer(t, scheme, false), futureStatus, model.RawTransactionParams{}, http.StatusBadRequest, "transaction 0: salted-key signature authorizer address")
+		})
+		t.Run(ts.Name+"/delegated-on-curve with skip flag", func(t *testing.T) {
+			t.Parallel()
+			skip := true
+			test(t, makeSaltedKeySigDelegatedLogicSigTxnWithOffCurveAuthorizer(t, scheme, false), futureStatus, model.RawTransactionParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
+		})
+	}
 }
 
 const pushIntOp byte = 0x81 // TEAL pushint opcode
@@ -1523,24 +1524,27 @@ func TestPostTransactionAsyncOffCurveAuthorizers(t *testing.T) {
 		}
 	}
 
-	t.Run("on-curve", func(t *testing.T) {
-		t.Parallel()
-		test(t, makeSKsigSignedTxnWithOffCurveAuthorizer(t, false), model.RawTransactionAsyncParams{}, http.StatusBadRequest, "transaction 0: salted-key signature authorizer address")
-	})
-	t.Run("on-curve with skip flag", func(t *testing.T) {
-		t.Parallel()
-		skip := true
-		test(t, makeSKsigSignedTxnWithOffCurveAuthorizer(t, false), model.RawTransactionAsyncParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
-	})
-	t.Run("delegated-on-curve", func(t *testing.T) {
-		t.Parallel()
-		test(t, makeSaltedKeySigDelegatedLogicSigTxnWithOffCurveAuthorizer(t, false), model.RawTransactionAsyncParams{}, http.StatusBadRequest, "transaction 0: salted-key signature authorizer address")
-	})
-	t.Run("delegated-on-curve with skip flag", func(t *testing.T) {
-		t.Parallel()
-		skip := true
-		test(t, makeSaltedKeySigDelegatedLogicSigTxnWithOffCurveAuthorizer(t, false), model.RawTransactionAsyncParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
-	})
+	for _, ts := range basics_testing.SigSchemeTests {
+		scheme := ts.Scheme
+		t.Run(ts.Name+"/on-curve", func(t *testing.T) {
+			t.Parallel()
+			test(t, makeSKsigSignedTxnWithOffCurveAuthorizer(t, scheme, false), model.RawTransactionAsyncParams{}, http.StatusBadRequest, "transaction 0: salted-key signature authorizer address")
+		})
+		t.Run(ts.Name+"/on-curve with skip flag", func(t *testing.T) {
+			t.Parallel()
+			skip := true
+			test(t, makeSKsigSignedTxnWithOffCurveAuthorizer(t, scheme, false), model.RawTransactionAsyncParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
+		})
+		t.Run(ts.Name+"/delegated-on-curve", func(t *testing.T) {
+			t.Parallel()
+			test(t, makeSaltedKeySigDelegatedLogicSigTxnWithOffCurveAuthorizer(t, scheme, false), model.RawTransactionAsyncParams{}, http.StatusBadRequest, "transaction 0: salted-key signature authorizer address")
+		})
+		t.Run(ts.Name+"/delegated-on-curve with skip flag", func(t *testing.T) {
+			t.Parallel()
+			skip := true
+			test(t, makeSaltedKeySigDelegatedLogicSigTxnWithOffCurveAuthorizer(t, scheme, false), model.RawTransactionAsyncParams{SkipPqAddressCheck: &skip}, http.StatusOK, "")
+		})
+	}
 }
 
 func TestPostTransactionAsyncLogicSigCurveCheck(t *testing.T) {
@@ -1693,7 +1697,7 @@ func TestPostSimulateTransactionPlaceholderSaltedKeySignatureValidation(t *testi
 		return response
 	}
 
-	_, saltedAuthorizer, sksig := makeSaltedKeySigWithOffCurveAuthorizer(t, true)
+	_, saltedAuthorizer, sksig := makeSaltedKeySigWithOffCurveAuthorizer(t, basics_testing.RandomSigSchemeTest().Scheme, true)
 	// AuthAddr must match the SKsig-derived address to pass placeholder envelope
 	// admission. The sender is not rekeyed to it, so evaluation still fails.
 	placeholderStxn := transactions.SignedTxn{
@@ -1763,7 +1767,7 @@ func TestPostSimulateTransactionPlaceholderSaltedKeySignatureValidation(t *testi
 	})
 
 	t.Run("FixSigners resolves the placeholder signer", func(t *testing.T) {
-		_, fixableSaltedAuthorizer, fixableSaltedKeySig := makeSaltedKeySigWithOffCurveAuthorizer(t, true)
+		_, fixableSaltedAuthorizer, fixableSaltedKeySig := makeSaltedKeySigWithOffCurveAuthorizer(t, basics_testing.RandomSigSchemeTest().Scheme, true)
 		rekeyTxn := txnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   roots[0].Address(),

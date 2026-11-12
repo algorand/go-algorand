@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/mldsa"
 	"os"
 	"path/filepath"
 	"testing"
@@ -150,6 +151,36 @@ func TestSaltedGenerateUsesMnemonicSizedEntropy(t *testing.T) {
 				return signer.SignatureVerifier[:], signer.SK[:]
 			},
 		},
+		{
+			name:    "ml-dsa-44",
+			scheme:  protocol.SigSchemeMLDSA44,
+			address: "GIWKJ6D3AE25JRHRE7HCYFDUXUFSYCSESHW2BPCOBO5DKDSP7CD5PVXHQM",
+			rederive: func(t *testing.T, seed crypto.Digest) ([]byte, []byte) {
+				sk, err := mldsa.NewPrivateKey(mldsa.MLDSA44(), seed[:])
+				require.NoError(t, err)
+				return sk.PublicKey().Bytes(), sk.Bytes()
+			},
+		},
+		{
+			name:    "ml-dsa-65",
+			scheme:  protocol.SigSchemeMLDSA65,
+			address: "W5XXG73GETFRT2A5GW4VH7TE3T7LNXT7I53KPSBIIPLH4EI2T5SAYTM7UI",
+			rederive: func(t *testing.T, seed crypto.Digest) ([]byte, []byte) {
+				sk, err := mldsa.NewPrivateKey(mldsa.MLDSA65(), seed[:])
+				require.NoError(t, err)
+				return sk.PublicKey().Bytes(), sk.Bytes()
+			},
+		},
+		{
+			name:    "ml-dsa-87",
+			scheme:  protocol.SigSchemeMLDSA87,
+			address: "QROATWTUL4TROK4QCNOAPLQSONK5WCRAEQG4ABSLRHPSAB6RBJRLF75C6I",
+			rederive: func(t *testing.T, seed crypto.Digest) ([]byte, []byte) {
+				sk, err := mldsa.NewPrivateKey(mldsa.MLDSA87(), seed[:])
+				require.NoError(t, err)
+				return sk.PublicKey().Bytes(), sk.Bytes()
+			},
+		},
 	}
 
 	for _, tc := range testcases {
@@ -183,7 +214,10 @@ func TestSigSchemeRegistriesConsistent(t *testing.T) {
 		require.True(t, transactions.SigSchemeSupported(scheme), "algokey scheme %q missing from the transactions scheme table", scheme)
 	}
 
-	for _, scheme := range []protocol.SigScheme{protocol.SigSchemeFalcon1024, protocol.SigSchemeFalcon512, protocol.SigSchemeEd25519} {
+	for _, scheme := range []protocol.SigScheme{
+		protocol.SigSchemeFalcon1024, protocol.SigSchemeFalcon512, protocol.SigSchemeEd25519,
+		protocol.SigSchemeMLDSA44, protocol.SigSchemeMLDSA65, protocol.SigSchemeMLDSA87,
+	} {
 		_, ok := sigSchemeOpsByScheme[scheme]
 		require.True(t, ok, "basics scheme %q missing from algokey ops registry", scheme)
 	}
@@ -228,6 +262,20 @@ func TestParseSigSchemeAcceptsLongName(t *testing.T) {
 	scheme, err = parseSigScheme("ed")
 	require.NoError(t, err)
 	require.Equal(t, protocol.SigSchemeEd25519, scheme)
+
+	for value, want := range map[string]protocol.SigScheme{
+		"ml-dsa-44": protocol.SigSchemeMLDSA44,
+		"ML-DSA-44": protocol.SigSchemeMLDSA44,
+		"m4":        protocol.SigSchemeMLDSA44,
+		"ml-dsa-65": protocol.SigSchemeMLDSA65,
+		"m6":        protocol.SigSchemeMLDSA65,
+		"ml-dsa-87": protocol.SigSchemeMLDSA87,
+		"m8":        protocol.SigSchemeMLDSA87,
+	} {
+		scheme, err = parseSigScheme(value)
+		require.NoError(t, err)
+		require.Equal(t, want, scheme, value)
+	}
 }
 
 func TestFormatSigScheme(t *testing.T) {
@@ -237,6 +285,9 @@ func TestFormatSigScheme(t *testing.T) {
 	require.Equal(t, sigSchemeFalcon1024Name, formatSigScheme(protocol.SigSchemeFalcon1024))
 	require.Equal(t, sigSchemeFalcon512Name, formatSigScheme(protocol.SigSchemeFalcon512))
 	require.Equal(t, sigSchemeEd25519Name, formatSigScheme(protocol.SigSchemeEd25519))
+	require.Equal(t, sigSchemeMLDSA44Name, formatSigScheme(protocol.SigSchemeMLDSA44))
+	require.Equal(t, sigSchemeMLDSA65Name, formatSigScheme(protocol.SigSchemeMLDSA65))
+	require.Equal(t, sigSchemeMLDSA87Name, formatSigScheme(protocol.SigSchemeMLDSA87))
 	require.Equal(t, protocol.SigScheme{'z', 'z'}.String(), formatSigScheme(protocol.SigScheme{'z', 'z'}))
 }
 
@@ -248,27 +299,74 @@ func TestSaltedPrivateKeyFileStoresKeysNotEntropy(t *testing.T) {
 	for i := range entropy {
 		entropy[i] = byte(i + 1)
 	}
-	signing, err := deriveSaltedSigningMaterialFromEntropy(protocol.SigSchemeFalcon1024, entropy)
-	require.NoError(t, err)
-	keyfile := filepath.Join(t.TempDir(), "account.pq")
+	for scheme := range sigSchemeOpsByScheme {
+		t.Run(formatSigScheme(scheme), func(t *testing.T) {
+			t.Parallel()
 
-	require.NoError(t, writeSaltedPrivateKeyFile(keyfile, signing))
+			signing, err := deriveSaltedSigningMaterialFromEntropy(scheme, entropy)
+			require.NoError(t, err)
+			keyfile := filepath.Join(t.TempDir(), "account.pq")
 
-	info, err := os.Stat(keyfile)
-	require.NoError(t, err)
-	require.Equal(t, os.FileMode(0600), info.Mode().Perm())
+			require.NoError(t, writeSaltedPrivateKeyFile(keyfile, signing))
 
-	// The file holds the scheme's keys — never the mnemonic entropy or the
-	// derived keygen seed, which would compromise keys of other schemes.
-	data, err := os.ReadFile(keyfile)
-	require.NoError(t, err)
-	require.False(t, bytes.Contains(data, entropy[:]))
-	seed := deriveSigSchemeKeySeed(protocol.SigSchemeFalcon1024, entropy)
-	require.False(t, bytes.Contains(data, seed[:]))
+			info, err := os.Stat(keyfile)
+			require.NoError(t, err)
+			require.Equal(t, os.FileMode(0600), info.Mode().Perm())
 
-	decoded, err := readSaltedSigningMaterial(keyfile)
-	require.NoError(t, err)
-	require.Equal(t, signing, decoded)
+			// The file holds the scheme's keys, never the mnemonic entropy,
+			// from which every scheme's keys derive. The keygen seed is
+			// specific to the scheme: an Ed25519 private key starts with it,
+			// and an ML-DSA private key is the seed itself.
+			data, err := os.ReadFile(keyfile)
+			require.NoError(t, err)
+			require.False(t, bytes.Contains(data, entropy[:]))
+			seed := deriveSigSchemeKeySeed(scheme, entropy)
+			switch scheme {
+			case protocol.SigSchemeFalcon1024, protocol.SigSchemeFalcon512:
+				require.False(t, bytes.Contains(data, seed[:]))
+			default:
+				require.Equal(t, seed[:], signing.PrivateKey[:len(seed)])
+			}
+
+			decoded, err := readSaltedSigningMaterial(keyfile)
+			require.NoError(t, err)
+			require.Equal(t, signing, decoded)
+		})
+	}
+}
+
+// TestSaltedMLDSAKeyFileRejectsMismatchedKeys checks that an ML-DSA key file
+// whose private key does not produce its public key is rejected when read,
+// not used to sign transactions that would fail verification.
+func TestSaltedMLDSAKeyFileRejectsMismatchedKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, scheme := range []protocol.SigScheme{protocol.SigSchemeMLDSA44, protocol.SigSchemeMLDSA65, protocol.SigSchemeMLDSA87} {
+		t.Run(formatSigScheme(scheme), func(t *testing.T) {
+			t.Parallel()
+
+			signing, err := deriveSaltedSigningMaterialFromEntropy(scheme, crypto.Seed{1})
+			require.NoError(t, err)
+			other, err := deriveSaltedSigningMaterialFromEntropy(scheme, crypto.Seed{2})
+			require.NoError(t, err)
+			_, err = decodeSaltedPrivateKeyFileBytes(protocol.Encode(&signing))
+			require.NoError(t, err)
+
+			// A corrupted private key of the right size.
+			corrupted := signing
+			corrupted.PrivateKey = bytes.Clone(signing.PrivateKey)
+			corrupted.PrivateKey[0] ^= 1
+			_, err = decodeSaltedPrivateKeyFileBytes(protocol.Encode(&corrupted))
+			require.ErrorIs(t, err, errSaltedKeyMalformed)
+
+			// Another account's valid public half.
+			swapped := signing
+			swapped.Public = other.Public
+			_, err = decodeSaltedPrivateKeyFileBytes(protocol.Encode(&swapped))
+			require.ErrorIs(t, err, errSaltedKeyMalformed)
+		})
+	}
 }
 
 func TestSaltedKeyFileRejectsMalformedInputs(t *testing.T) {
@@ -445,6 +543,9 @@ func TestSaltedSignProducesVerifiableSaltedKeySig(t *testing.T) {
 		{"falcon-1024", protocol.SigSchemeFalcon1024},
 		{"falcon-512", protocol.SigSchemeFalcon512},
 		{"ed25519", protocol.SigSchemeEd25519},
+		{"ml-dsa-44", protocol.SigSchemeMLDSA44},
+		{"ml-dsa-65", protocol.SigSchemeMLDSA65},
+		{"ml-dsa-87", protocol.SigSchemeMLDSA87},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -873,4 +974,32 @@ func TestSaltedCheckAddress(t *testing.T) {
 	require.ErrorContains(t, runSaltedCheckAddress(onCurve.String()), "on the Ed25519 curve")
 
 	require.ErrorContains(t, runSaltedCheckAddress("not-an-address"), "cannot parse address")
+}
+
+// TestSaltedSignMLDSAIsHedged checks that algokey signs with ML-DSA's hedged
+// variant: signing the same transaction twice gives two different signatures,
+// both valid.
+func TestSaltedSignMLDSAIsHedged(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	for _, scheme := range []protocol.SigScheme{protocol.SigSchemeMLDSA44, protocol.SigSchemeMLDSA65, protocol.SigSchemeMLDSA87} {
+		t.Run(formatSigScheme(scheme), func(t *testing.T) {
+			t.Parallel()
+
+			signing, err := deriveSaltedSigningMaterialFromEntropy(scheme, crypto.Seed{})
+			require.NoError(t, err)
+			hctx := saltedSigningContext{ops: sigSchemeOpsByScheme[scheme], signing: signing}
+			txn := saltedTestTxn(signing.Public.address()).Txn
+
+			first, err := signSalted(hctx, txn)
+			require.NoError(t, err)
+			second, err := signSalted(hctx, txn)
+			require.NoError(t, err)
+			require.NotEqual(t, first.Signature, second.Signature)
+			require.NoError(t, first.Verify(proto, txn, signing.Public.address()))
+			require.NoError(t, second.Verify(proto, txn, signing.Public.address()))
+		})
+	}
 }
