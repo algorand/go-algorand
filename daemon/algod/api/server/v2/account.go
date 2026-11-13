@@ -19,6 +19,7 @@ package v2
 import (
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"maps"
 	"math"
 	"slices"
@@ -189,25 +190,30 @@ func convertTKVToGenerated(tkv *basics.TealKeyValue) *model.TealKeyValueStore {
 	return &converted
 }
 
+// convertGeneratedTKV converts base64 encoded key/value pairs. Errors are phrased to follow a
+// description of the store, e.g. "global state".
 func convertGeneratedTKV(akvs *model.TealKeyValueStore) (basics.TealKeyValue, error) {
 	if akvs == nil || len(*akvs) == 0 {
 		return nil, nil
 	}
 
-	tkv := make(basics.TealKeyValue)
+	tkv := make(basics.TealKeyValue, len(*akvs))
 	for _, kv := range *akvs {
 		// Decode base-64 encoded map key
 		decodedKey, err := base64.StdEncoding.DecodeString(kv.Key)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("key %q: %w", kv.Key, err)
 		}
 
 		// Decode base-64 encoded map value (OK even if empty string)
 		decodedBytes, err := base64.StdEncoding.DecodeString(kv.Value.Bytes)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("value for key %#x: %w", decodedKey, err)
 		}
 
+		if _, ok := tkv[string(decodedKey)]; ok {
+			return nil, fmt.Errorf("has duplicate key %#x", decodedKey)
+		}
 		tkv[string(decodedKey)] = basics.TealValue{
 			Type:  basics.TealType(kv.Value.Type),
 			Uint:  kv.Value.Uint,
@@ -215,6 +221,14 @@ func convertGeneratedTKV(akvs *model.TealKeyValueStore) (basics.TealKeyValue, er
 		}
 	}
 	return tkv, nil
+}
+
+// convertStateSchema converts a generated model schema to basics.
+func convertStateSchema(schema model.ApplicationStateSchema) basics.StateSchema {
+	return basics.StateSchema{
+		NumUint:      schema.NumUint,
+		NumByteSlice: schema.NumByteSlice,
+	}
 }
 
 // AccountToAccountData converts v2.model.Account to basics.AccountData
@@ -304,10 +318,7 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 				return basics.AccountData{}, err
 			}
 			appLocalStates[ls.Id] = basics.AppLocalState{
-				Schema: basics.StateSchema{
-					NumUint:      ls.Schema.NumUint,
-					NumByteSlice: ls.Schema.NumByteSlice,
-				},
+				Schema:   convertStateSchema(ls.Schema),
 				KeyValue: kv,
 			}
 		}
@@ -406,16 +417,10 @@ func ApplicationParamsToAppParams(gap *model.ApplicationParams) (basics.AppParam
 	ap.FamilyBoxAccess = nilToZero(gap.FamilyBoxAccess)
 
 	if gap.LocalStateSchema != nil {
-		ap.LocalStateSchema = basics.StateSchema{
-			NumUint:      gap.LocalStateSchema.NumUint,
-			NumByteSlice: gap.LocalStateSchema.NumByteSlice,
-		}
+		ap.LocalStateSchema = convertStateSchema(*gap.LocalStateSchema)
 	}
 	if gap.GlobalStateSchema != nil {
-		ap.GlobalStateSchema = basics.StateSchema{
-			NumUint:      gap.GlobalStateSchema.NumUint,
-			NumByteSlice: gap.GlobalStateSchema.NumByteSlice,
-		}
+		ap.GlobalStateSchema = convertStateSchema(*gap.GlobalStateSchema)
 	}
 	kv, err := convertGeneratedTKV(gap.GlobalState)
 	if err != nil {
