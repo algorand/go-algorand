@@ -1070,6 +1070,82 @@ func (k keypairs) findPairForSpecificRound(round uint64) merklesignature.KeyRoun
 	return merklesignature.KeyRoundPair{}
 }
 
+type waitForParticipationCacheOp struct {
+	started chan struct{}
+	proceed chan struct{}
+}
+
+func (op *waitForParticipationCacheOp) apply(registry *participationDB) error {
+	close(op.started)
+	<-op.proceed
+	registry.mutex.Lock()
+	registry.mutex.Unlock()
+	return nil
+}
+
+type participationNoopOp struct{}
+
+func (participationNoopOp) apply(*participationDB) error {
+	return nil
+}
+
+func TestDeleteStateProofKeysDoesNotHoldCacheLockWhenWriteQueueIsFull(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
+
+	p := makeTestParticipationWithLifetime(a, 1, 0, 20, 3, 4)
+	id, err := registry.Insert(p)
+	a.NoError(err)
+	a.NoError(registry.Flush(defaultTimeout))
+
+	started := make(chan struct{})
+	proceed := make(chan struct{})
+	registry.writeQueue <- makeOpRequest(&waitForParticipationCacheOp{
+		started: started,
+		proceed: proceed,
+	})
+	<-started
+
+	for i := 0; i < cap(registry.writeQueue); i++ {
+		registry.writeQueue <- makeOpRequest(participationNoopOp{})
+	}
+
+	deleteDone := make(chan error, 1)
+	go func() {
+		deleteDone <- registry.DeleteStateProofKeys(id, 4)
+	}()
+
+	a.Eventually(func() bool {
+		if registry.writeQueueMutex.TryLock() {
+			registry.writeQueueMutex.Unlock()
+			return false
+		}
+		return true
+	}, time.Second, time.Millisecond)
+
+	readDone := make(chan struct{})
+	go func() {
+		registry.GetAll()
+		close(readDone)
+	}()
+	select {
+	case <-readDone:
+	case <-time.After(time.Second):
+		t.Fatal("GetAll blocked while DeleteStateProofKeys waited for write queue capacity")
+	}
+
+	close(proceed)
+	select {
+	case err = <-deleteDone:
+		a.NoError(err)
+	case <-time.After(defaultTimeout):
+		t.Fatal("DeleteStateProofKeys did not resume after the write thread released queue capacity")
+	}
+	a.NoError(registry.Flush(defaultTimeout))
+}
+
 func TestDeleteStateProofKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)

@@ -22,6 +22,7 @@ import (
 	"encoding/base32"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -557,20 +558,26 @@ type participationDB struct {
 	store db.Pair
 	mutex deadlock.RWMutex
 
-	writeQueue     chan opRequest
-	writeQueueDone chan struct{}
+	// writeQueueMutex preserves producer ordering while allowing the write
+	// thread to acquire mutex when the bounded queue is full.
+	writeQueueMutex sync.Mutex
+	writeQueue      chan opRequest
+	writeQueueDone  chan struct{}
 
 	flushTimeout time.Duration
 }
 
-// DeleteStateProofKeys is a non-blocking operation, responsible for removing state-proof keys from the DB.
+// DeleteStateProofKeys asynchronously removes state-proof keys from the DB.
 func (db *participationDB) DeleteStateProofKeys(id ParticipationID, round basics.Round) error {
-	db.mutex.Lock()
-	defer db.mutex.Unlock()
+	db.writeQueueMutex.Lock()
+	defer db.writeQueueMutex.Unlock()
 
+	db.mutex.RLock()
 	if _, ok := db.cache[id]; !ok {
+		db.mutex.RUnlock()
 		return ErrParticipationIDNotFound
 	}
+	db.mutex.RUnlock()
 
 	db.writeQueue <- makeOpRequest(&deleteStateProofKeysOp{
 		ParticipationID: id,
@@ -663,11 +670,14 @@ func verifyExecWithOneRowEffected(err error, result sql.Result, operationName st
 }
 
 func (db *participationDB) Insert(record Participation) (id ParticipationID, err error) {
+	db.writeQueueMutex.Lock()
+	defer db.writeQueueMutex.Unlock()
+
 	db.mutex.Lock()
-	defer db.mutex.Unlock()
 
 	id = record.ID()
 	if _, ok := db.cache[id]; ok {
+		db.mutex.Unlock()
 		// PKI TODO: Add a special case to set the StateProof public key if it is in the input
 		//           but not in the cache.
 		return id, ErrAlreadyInserted
@@ -692,10 +702,6 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 	// and persisting a newer state than the cache holds would trip the
 	// monotonicity guard on the next flush
 	record.Voting = voting
-	db.writeQueue <- makeOpRequest(&insertOp{
-		id:     id,
-		record: record,
-	})
 
 	var stateProofVerifierPtr *merklesignature.Verifier
 	if record.StateProofSecrets != nil {
@@ -720,17 +726,26 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 		Voting:            voting,
 		VRF:               vrf,
 	}
+	db.mutex.Unlock()
+
+	db.writeQueue <- makeOpRequest(&insertOp{
+		id:     id,
+		record: record,
+	})
 
 	return
 }
 
 func (db *participationDB) AppendKeys(id ParticipationID, keys StateProofKeys) error {
-	db.mutex.Lock()
-	defer db.mutex.Unlock()
+	db.writeQueueMutex.Lock()
+	defer db.writeQueueMutex.Unlock()
 
+	db.mutex.RLock()
 	if _, ok := db.cache[id]; !ok {
+		db.mutex.RUnlock()
 		return ErrParticipationIDNotFound
 	}
+	db.mutex.RUnlock()
 
 	// Update the DB asynchronously.
 	db.writeQueue <- makeOpRequest(&appendKeysOp{
@@ -742,15 +757,19 @@ func (db *participationDB) AppendKeys(id ParticipationID, keys StateProofKeys) e
 }
 
 func (db *participationDB) Delete(id ParticipationID) error {
+	db.writeQueueMutex.Lock()
+	defer db.writeQueueMutex.Unlock()
+
 	db.mutex.Lock()
-	defer db.mutex.Unlock()
 
 	// NoOp if key does not exist.
 	if _, ok := db.cache[id]; !ok {
+		db.mutex.Unlock()
 		return nil
 	}
 	delete(db.dirty, id)
 	delete(db.cache, id)
+	db.mutex.Unlock()
 
 	// do the db part async
 	db.writeQueue <- makeOpRequest(&deleteOp{id})
@@ -1189,6 +1208,9 @@ func recordActive(record ParticipationRecord, on basics.Round) bool {
 //	to be used, so effective first/last is updated just-in-time. It
 //	would be better to update them when the KeyRegistration occurs.
 func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
+	db.writeQueueMutex.Lock()
+	defer db.writeQueueMutex.Unlock()
+
 	// Lookup recordToRegister for first/last valid and account.
 	recordToRegister := db.Get(id)
 	if recordToRegister.IsZero() {
@@ -1309,9 +1331,12 @@ func (db *participationDB) Flush(timeout time.Duration) error {
 	timeoutCh := time.After(timeout)
 	writeRecord := makeOpRequestWithError(&flushOp{}, resultCh)
 
+	db.writeQueueMutex.Lock()
 	select {
 	case db.writeQueue <- writeRecord:
+		db.writeQueueMutex.Unlock()
 	case <-timeoutCh:
+		db.writeQueueMutex.Unlock()
 		return fmt.Errorf("timeout while requesting flush, check results manually")
 	}
 
