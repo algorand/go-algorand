@@ -668,6 +668,40 @@ func TestOnlineOverrideCirculationBounds(t *testing.T) {
 	require.Equal(t, l.overlay.onlineAdded, circulation)
 }
 
+func TestBalanceOverrideOfflineAccountSkipsAgreement(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	// Move the balance round past 0, so that computing online state would set it
+	proto := env.TxnInfo.CurrentProtocolParams()
+	env.AdvanceRounds(int(agreement.BalanceLookback(proto)) + 5)
+
+	// A new account is offline, and a balance override leaves it offline
+	var offlineAddr basics.Address
+	crypto.RandBytes(offlineAddr[:])
+	balance := basics.MicroAlgos{Raw: 1_000_000_000}
+	l := newOverlayLedger(t, &env, StateOverrides{Accounts: map[basics.Address]AccountOverride{
+		offlineAddr: {Balance: &balance},
+	}})
+	require.Equal(t, balance, l.overlay.accounts[offlineAddr].MicroAlgos)
+	// No agreement state is looked up or overridden
+	require.Zero(t, l.overlay.balanceRound)
+	require.Empty(t, l.overlay.online)
+	require.Zero(t, l.overlay.onlineAdded)
+	require.Zero(t, l.overlay.onlineRemoved)
+
+	// Bringing the same account online with a balance override does affect agreement
+	online := basics.Online
+	l = newOverlayLedger(t, &env, StateOverrides{Accounts: map[basics.Address]AccountOverride{
+		offlineAddr: {Balance: &balance, Status: &online},
+	}})
+	require.NotZero(t, l.overlay.balanceRound)
+	require.Equal(t, balance, l.overlay.online[offlineAddr].MicroAlgosWithRewards)
+}
+
 func TestOnlineOverrides(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

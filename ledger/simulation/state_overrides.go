@@ -339,6 +339,8 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 		}
 	}
 
+	// agreementAddrs holds the overridden accounts whose agreement state is affected, sorted
+	var agreementAddrs []basics.Address
 	// Sort accounts so that errors are deterministic
 	for _, addr := range sortedAddrs(overrides.Accounts) {
 		override := overrides.Accounts[addr]
@@ -347,11 +349,15 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 		if err != nil {
 			return nil, err
 		}
+		wasOnline := acct.Status == basics.Online
 		if err = overlayAccountFields(&acct, addr, override, proto.RewardUnit, totals.RewardsLevel); err != nil {
 			return nil, err
 		}
 		if override.Status != nil && *override.Status == basics.Online {
 			o.statusOnline[addr] = true
+		}
+		if override.affectsAgreement(wasOnline || acct.Status == basics.Online) {
+			agreementAddrs = append(agreementAddrs, addr)
 		}
 		for _, aidx := range sortedKeys(override.Assets) {
 			if acct, err = l.overlayHolding(o, acct, addr, aidx, override.Assets[aidx]); err != nil {
@@ -405,33 +411,29 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 	}
 	o.totals = totals
 
-	if err = l.overlayOnline(o, overrides, proto, prevHdr); err != nil {
+	if err = l.overlayOnline(o, agreementAddrs, proto, prevHdr); err != nil {
 		return nil, err
 	}
 
 	return o, nil
 }
 
-// affectsAgreement reports whether the override modifies state that agreement uses.
-func (override AccountOverride) affectsAgreement() bool {
-	return override.Balance != nil || override.Status != nil || override.VoteID != nil ||
+// affectsAgreement reports whether the override modifies state that agreement uses. online reports
+// whether the account is Online at l.start either before or after the override. A balance override
+// of an account that is Online at neither point does not affect agreement, so it does not require
+// the agreement state at the balance round to be available.
+func (override AccountOverride) affectsAgreement(online bool) bool {
+	return (override.Balance != nil && online) || override.Status != nil || override.VoteID != nil ||
 		override.SelectionID != nil || override.StateProofID != nil || override.VoteFirstValid != nil ||
 		override.VoteLastValid != nil || override.VoteKeyDilution != nil || override.IncentiveEligible != nil ||
 		override.LastProposed != nil || override.LastHeartbeat != nil
 }
 
-// overlayOnline computes the online state used for agreement, for accounts whose overrides affect
-// it. Such accounts are treated as though they have been in their overridden state since the
-// balance round.
-func (l simulatorLedger) overlayOnline(o *stateOverlay, overrides StateOverrides, proto config.ConsensusParams, prevHdr bookkeeping.BlockHeader) error {
-	affectsAgreement := false
-	for _, override := range overrides.Accounts {
-		if override.affectsAgreement() {
-			affectsAgreement = true
-			break
-		}
-	}
-	if !affectsAgreement {
+// overlayOnline computes the online state used for agreement for addrs, the accounts whose
+// overrides affect it. Such accounts are treated as though they have been in their overridden
+// state since the balance round.
+func (l simulatorLedger) overlayOnline(o *stateOverlay, addrs []basics.Address, proto config.ConsensusParams, prevHdr bookkeeping.BlockHeader) error {
+	if len(addrs) == 0 {
 		return nil
 	}
 
@@ -458,11 +460,7 @@ func (l simulatorLedger) overlayOnline(o *stateOverlay, overrides StateOverrides
 	}
 
 	var ot basics.OverflowTracker
-	// Sort accounts so that errors are deterministic
-	for _, addr := range sortedAddrs(overrides.Accounts) {
-		if !overrides.Accounts[addr].affectsAgreement() {
-			continue
-		}
+	for _, addr := range addrs {
 		var original basics.OnlineAccountData
 		original, err = l.Ledger.LookupAgreement(o.balanceRound, addr)
 		if err != nil {
