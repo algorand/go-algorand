@@ -3317,7 +3317,7 @@
       }
     },
     "SimulateStateOverrides": {
-      "description": "Modifications to ledger state that are applied before simulation begins. Overrides are only visible to the simulation and are never persisted.",
+      "description": "Modifications to ledger state that are applied before simulation begins. Overrides are only visible to the simulation and are never persisted. Overridden balances also change the ledger totals that the simulated block is built from, so they affect its rewards state and the rewards credited to every account during simulation.",
       "type": "object",
       "properties": {
         "accounts": {

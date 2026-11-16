@@ -38,6 +38,9 @@ import (
 
 // StateOverrides describes modifications to ledger state that are applied before any evaluation
 // takes place. The overrides are only visible to the simulation and are never persisted.
+//
+// Overridden balances also change the ledger totals that the simulated block is built from, so
+// they affect its rewards state and the rewards credited to every account during the simulation.
 type StateOverrides struct {
 	Accounts map[basics.Address]AccountOverride
 	Apps     map[basics.AppIndex]AppOverride

@@ -81,7 +81,10 @@ func (l simulatorLedger) LookupLatest(addr basics.Address) (basics.AccountData, 
 
 // StartEvaluator is part of the ledger.Ledger interface. We override this so that
 // the eval.LedgerForEvaluator value passed into eval.StartEvaluator is a simulatorLedger,
-// not a data.Ledger. This ensures our overridden LookupLatest method will be used.
+// not a data.Ledger. This ensures our overridden LookupLatest method will be used, and that
+// the evaluator reaches the state overlay through LookupWithoutRewards, LookupApplication,
+// LookupAsset, LookupKv, GetCreatorForRound, LookupAgreement, OnlineCirculation and
+// GetKnockOfflineCandidates.
 func (l simulatorLedger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int, tracer logic.EvalTracer) (*eval.BlockEvaluator, error) {
 	if tracer == nil {
 		return nil, errors.New("tracer is nil")
@@ -415,7 +418,8 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	// Make the next block from the start round's header as overridden
+	// Re-read the header now that the overlay is set, so that block overrides carry into the
+	// block being simulated
 	prevBlockHdr, err = s.ledger.BlockHdr(s.ledger.start)
 	if err != nil {
 		return Result{}, err

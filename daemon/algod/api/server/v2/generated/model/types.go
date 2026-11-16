@@ -1022,7 +1022,7 @@ type SimulateRequest struct {
 	// Round If provided, specifies the round preceding the simulation. State changes through this round will be used to run this simulation. Usually only the 4 most recent rounds will be available (controlled by the node config value MaxAcctLookback). If not specified, defaults to the latest available round.
 	Round *basics.Round `json:"round,omitempty"`
 
-	// StateOverrides Modifications to ledger state that are applied before simulation begins. Overrides are only visible to the simulation and are never persisted.
+	// StateOverrides Modifications to ledger state that are applied before simulation begins. Overrides are only visible to the simulation and are never persisted. Overridden balances also change the ledger totals that the simulated block is built from, so they affect its rewards state and the rewards credited to every account during simulation.
 	StateOverrides *SimulateStateOverrides `json:"state-overrides,omitempty"`
 
 	// TxnGroups The transaction groups to simulate.
@@ -1035,7 +1035,7 @@ type SimulateRequestTransactionGroup struct {
 	Txns []json.RawMessage `json:"txns"`
 }
 
-// SimulateStateOverrides Modifications to ledger state that are applied before simulation begins. Overrides are only visible to the simulation and are never persisted.
+// SimulateStateOverrides Modifications to ledger state that are applied before simulation begins. Overrides are only visible to the simulation and are never persisted. Overridden balances also change the ledger totals that the simulated block is built from, so they affect its rewards state and the rewards credited to every account during simulation.
 type SimulateStateOverrides struct {
 	// Accounts Account state overrides. Each address may appear at most once.
 	Accounts *[]SimulateAccountOverride `json:"accounts,omitempty"`
