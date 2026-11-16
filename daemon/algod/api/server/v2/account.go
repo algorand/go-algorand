@@ -19,7 +19,6 @@ package v2
 import (
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"maps"
 	"math"
 	"slices"
@@ -190,30 +189,25 @@ func convertTKVToGenerated(tkv *basics.TealKeyValue) *model.TealKeyValueStore {
 	return &converted
 }
 
-// convertGeneratedTKV converts base64 encoded key/value pairs. Errors are phrased to follow a
-// description of the store, e.g. "global state".
 func convertGeneratedTKV(akvs *model.TealKeyValueStore) (basics.TealKeyValue, error) {
 	if akvs == nil || len(*akvs) == 0 {
 		return nil, nil
 	}
 
-	tkv := make(basics.TealKeyValue, len(*akvs))
+	tkv := make(basics.TealKeyValue)
 	for _, kv := range *akvs {
 		// Decode base-64 encoded map key
 		decodedKey, err := base64.StdEncoding.DecodeString(kv.Key)
 		if err != nil {
-			return nil, fmt.Errorf("key %q: %w", kv.Key, err)
+			return nil, err
 		}
 
 		// Decode base-64 encoded map value (OK even if empty string)
 		decodedBytes, err := base64.StdEncoding.DecodeString(kv.Value.Bytes)
 		if err != nil {
-			return nil, fmt.Errorf("value for key %#x: %w", decodedKey, err)
+			return nil, err
 		}
 
-		if _, ok := tkv[string(decodedKey)]; ok {
-			return nil, fmt.Errorf("has duplicate key %#x", decodedKey)
-		}
 		tkv[string(decodedKey)] = basics.TealValue{
 			Type:  basics.TealType(kv.Value.Type),
 			Uint:  kv.Value.Uint,
