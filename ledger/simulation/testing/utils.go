@@ -249,6 +249,20 @@ func (env *Environment) Rekey(account, rekeyTo basics.Address) {
 // PrepareSimulatorTest creates an environment to test transaction simulations. The caller is
 // responsible for calling Close() on the returned Environment.
 func PrepareSimulatorTest(t *testing.T) Environment {
+	rand.Seed(time.Now().UnixNano())
+	// append a random number of blocks to ensure simulation results have a valid LastRound field
+	return prepareSimulatorTest(t, rand.Intn(4))
+}
+
+// PrepareSimulatorTestAtGenesis creates an environment to test transaction simulations, like
+// PrepareSimulatorTest, but appends no blocks. The blocks that PrepareSimulatorTest appends are
+// added without evaluation, so they carry no rewards state, while the genesis block does. Tests
+// that depend on the start round's rewards state start from genesis.
+func PrepareSimulatorTestAtGenesis(t *testing.T) Environment {
+	return prepareSimulatorTest(t, 0)
+}
+
+func prepareSimulatorTest(t *testing.T, numBlocks int) Environment {
 	genesisInitState, keys := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 200)
 
 	// Prepare ledger
@@ -289,10 +303,6 @@ func PrepareSimulatorTest(t *testing.T) Environment {
 	latestHeader, err := ledger.BlockHdr(latest)
 	require.NoError(t, err)
 
-	rand.Seed(time.Now().UnixNano())
-
-	// append a random number of blocks to ensure simulation results have a valid LastRound field
-	numBlocks := rand.Intn(4)
 	for i := 0; i < numBlocks; i++ {
 		nextBlock := bookkeeping.MakeBlock(latestHeader)
 		nextBlock.TxnCounter = latestHeader.TxnCounter

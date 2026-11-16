@@ -205,6 +205,53 @@ func TestStateOverrideBalanceLimit(t *testing.T) {
 	require.ErrorContains(t, err, "exceeds maximum")
 }
 
+func TestStateOverrideRewards(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTestAtGenesis(t)
+	defer env.Close()
+
+	// The genesis block pays 2 microAlgos per reward unit per round, and a balance below
+	// proto.RewardUnit earns nothing. Emptied to the minimum balance, the ledger holds a single
+	// reward unit, so the simulated block advances the rewards level.
+	proto := env.TxnInfo.CurrentProtocolParams()
+	minBalance := basics.MicroAlgos{Raw: proto.MinBalance}
+	oneUnit := basics.MicroAlgos{Raw: proto.RewardUnit + 2*proto.MinTxnFee}
+	sender := env.Accounts[0]
+	accounts := make(map[basics.Address]simulation.AccountOverride)
+	for _, account := range env.Accounts {
+		accounts[account.Addr] = simulation.AccountOverride{Balance: &minBalance}
+	}
+	accounts[sender.Addr] = simulation.AccountOverride{Balance: &oneUnit}
+
+	amount := proto.MinTxnFee
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Addr,
+		Receiver: env.Accounts[1].Addr,
+		Amount:   amount,
+	}).Txn().Sign(sender.Sk)
+
+	result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+		TxnGroups:      [][]transactions.SignedTxn{{txn}},
+		StateOverrides: simulation.StateOverrides{Accounts: accounts},
+	})
+	require.NoError(t, err)
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+
+	// The block advances the rewards level, and the sender's rewards come from its overridden
+	// balance and rewards base
+	block := result.Block.Block()
+	require.Equal(t, uint64(2), block.RewardsRate)
+	require.Equal(t, uint64(2), block.RewardsLevel)
+	applyData := result.TxnGroups[0].Txns[0].Txn.ApplyData
+	require.Equal(t, uint64(2), applyData.SenderRewards.Raw)
+	senderData, ok := result.Block.Delta().Accts.GetData(sender.Addr)
+	require.True(t, ok)
+	require.Equal(t, oneUnit.Raw+applyData.SenderRewards.Raw-amount-txn.Txn.Fee.Raw, senderData.MicroAlgos.Raw)
+}
+
 func TestStateOverrideBalanceVisibleToAVM(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
