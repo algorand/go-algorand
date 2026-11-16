@@ -650,6 +650,10 @@ func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Addr
 	}
 	if override.SizeSponsor != nil {
 		params.SizeSponsor = *override.SizeSponsor
+		// Match the ledger, which stores the zero address when the creator sponsors its own app
+		if params.SizeSponsor == creator {
+			params.SizeSponsor = basics.Address{}
+		}
 	}
 	if override.ForeignBoxReads != nil {
 		params.ForeignBoxReads = *override.ForeignBoxReads
@@ -1139,12 +1143,16 @@ func (l simulatorLedger) OnlineCirculation(rnd basics.Round, voteRnd basics.Roun
 // returns them.
 func (l simulatorLedger) GetKnockOfflineCandidates(rnd basics.Round, proto config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error) {
 	candidates, err := l.Ledger.GetKnockOfflineCandidates(rnd, proto)
-	// A nil result means candidates are not considered at all
-	if err != nil || candidates == nil || l.overlay == nil || rnd != l.start || len(l.overlay.online) == 0 {
+	// Without state proofs, candidates are not considered at all. Otherwise a nil result only
+	// means the ledger has no cached voters, and accounts overridden online are still added.
+	if err != nil || proto.StateProofInterval == 0 || l.overlay == nil || rnd != l.start || len(l.overlay.online) == 0 {
 		return candidates, err
 	}
 	// Copy, so the ledger's result is not modified
 	candidates = maps.Clone(candidates)
+	if candidates == nil {
+		candidates = make(map[basics.Address]basics.OnlineAccountData)
+	}
 	for addr, data := range l.overlay.online {
 		// Match the ledger, which skips accounts with no stake
 		if l.overlay.accounts[addr].Status != basics.Online || data.MicroAlgosWithRewards.IsZero() {

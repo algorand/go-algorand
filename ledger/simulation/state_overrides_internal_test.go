@@ -222,6 +222,14 @@ func TestAppOverrideAllParams(t *testing.T) {
 	require.Equal(t, realCreator.TotalAppSchema.SubSchema(basics.StateSchema{NumUint: 1}).AddSchema(globalSchema), creatorData.TotalAppSchema)
 	_, touched := l.overlay.accounts[sponsor]
 	require.False(t, touched)
+
+	// Sponsoring by the creator is stored as the zero address, as the ledger does
+	l = newOverlayLedger(t, &env, StateOverrides{Apps: map[basics.AppIndex]AppOverride{
+		aidx: {SizeSponsor: &creator},
+	}})
+	res, err = l.LookupApplication(l.start, creator, aidx)
+	require.NoError(t, err)
+	require.True(t, res.AppParams.SizeSponsor.IsZero())
 }
 
 func TestAssetOverrideHoldings(t *testing.T) {
@@ -769,6 +777,23 @@ func TestOnlineOverrides(t *testing.T) {
 			candidates, err = l.GetKnockOfflineCandidates(start, noStateProofs)
 			require.NoError(t, err)
 			require.Nil(t, candidates)
+
+			// With state proofs but no cached voters, the ledger also returns nil, but accounts
+			// overridden online are still candidates. A lookback equal to the interval skips the
+			// ledger's genesis account handling, and no voters are cached before the lookback.
+			if !pastLookback {
+				noVoters := proto
+				noVoters.StateProofVotersLookback = noVoters.StateProofInterval
+				realCandidates, err = env.Ledger.GetKnockOfflineCandidates(start, noVoters)
+				require.NoError(t, err)
+				require.Nil(t, realCandidates)
+				candidates, err = l.GetKnockOfflineCandidates(start, noVoters)
+				require.NoError(t, err)
+				require.Equal(t, map[basics.Address]basics.OnlineAccountData{
+					newOnline: newData,
+					expired:   lookup(expired),
+				}, candidates)
+			}
 		})
 	}
 }
