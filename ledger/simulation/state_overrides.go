@@ -67,7 +67,8 @@ type BlockOverride struct {
 // If the account does not exist, it is created.
 type AccountOverride struct {
 	// Balance, if set, replaces the account's balance. Pending rewards are forfeited, so the
-	// account's balance at the start of simulation is exactly this value.
+	// account's balance at the start of simulation is exactly this value. It must be small
+	// enough that the rewards credited in the simulated round cannot overflow it.
 	//
 	// If Balance or any of the consensus participation fields below are set, the account is
 	// treated as though it has been in its overridden state since the balance round used for
@@ -411,6 +412,15 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 	}
 	o.totals = totals
 
+	// The evaluator credits pending rewards with basics.WithUpdatedRewards, which panics on
+	// overflow, so a balance must have room for the rewards credited in the simulated round.
+	balanceLimit := maxOverrideBalance(prevHdr, proto)
+	for _, addr := range sortedAddrs(overrides.Accounts) {
+		if acct := o.accounts[addr]; acct.MicroAlgos.Raw > balanceLimit {
+			return nil, invalidOverride("account %s balance %d exceeds maximum %d", addr, acct.MicroAlgos.Raw, balanceLimit)
+		}
+	}
+
 	if err = l.overlayOnline(o, agreementAddrs, proto, prevHdr); err != nil {
 		return nil, err
 	}
@@ -752,6 +762,23 @@ func checkCreatableID(cidx basics.CreatableIndex, kind string) error {
 		return invalidOverride("%s ID %d exceeds maximum %d", kind, cidx, int64(math.MaxInt64))
 	}
 	return nil
+}
+
+// maxOverrideBalance returns the largest balance an account override may set, leaving room for
+// the rewards credited during the simulated round.
+//
+// The evaluator credits pending rewards with basics.WithUpdatedRewards, which panics on overflow,
+// so a balance that cannot absorb a round of rewards would abort the process. According to
+// RewardsState.NextRewardsState, a round credits an account at most RewardsRate+RewardsResidue
+// microalgos: the residue is carried in the previous header, and a recalculated rate is the reward
+// pool divided by RewardsRateRefreshInterval.
+func maxOverrideBalance(prevHdr bookkeeping.BlockHeader, proto config.ConsensusParams) uint64 {
+	var maxRewards uint64
+	if proto.RewardsRateRefreshInterval != 0 {
+		maxRewards = math.MaxUint64 / proto.RewardsRateRefreshInterval
+	}
+	maxRewards = max(maxRewards, prevHdr.RewardsRate)
+	return math.MaxUint64 - basics.AddSaturate(maxRewards, prevHdr.RewardsResidue)
 }
 
 func checkNewCreatableID(cidx basics.CreatableIndex, kind string, prevHdr bookkeeping.BlockHeader) error {

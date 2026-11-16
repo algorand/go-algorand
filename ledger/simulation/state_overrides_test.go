@@ -169,6 +169,42 @@ func TestStateOverrideCombinedBalanceOverflow(t *testing.T) {
 	}
 }
 
+func TestStateOverrideBalanceLimit(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	sender := env.Accounts[0]
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Addr,
+		Receiver: env.Accounts[1].Addr,
+		Amount:   1,
+	}).Txn().Sign(sender.Sk)
+
+	// The largest balance that fits in the ledger totals leaves no room for the rewards credited
+	// in the simulated round, which the evaluator cannot handle
+	rnd := env.Ledger.Latest()
+	totals, err := env.Ledger.Totals(rnd)
+	require.NoError(t, err)
+	acct, _, err := env.Ledger.LookupWithoutRewards(rnd, sender.Addr)
+	require.NoError(t, err)
+	proto := env.TxnInfo.CurrentProtocolParams()
+	aMoney, _ := acct.Money(proto.RewardUnit, totals.RewardsLevel)
+	balance := basics.MicroAlgos{Raw: math.MaxUint64 - totals.All().Raw + aMoney.Raw}
+
+	_, err = simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+		TxnGroups: [][]transactions.SignedTxn{{txn}},
+		StateOverrides: simulation.StateOverrides{Accounts: map[basics.Address]simulation.AccountOverride{
+			sender.Addr: {Balance: &balance},
+		}},
+	})
+	require.ErrorAs(t, err, &simulation.InvalidRequestError{})
+	require.ErrorContains(t, err, "exceeds maximum")
+}
+
 func TestStateOverrideBalanceVisibleToAVM(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

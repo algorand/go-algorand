@@ -812,7 +812,7 @@ type SimulateAccountOverride struct {
 	// AuthAddr If set, replaces the address against which signing should be checked. The zero address means the account is not rekeyed.
 	AuthAddr *string `json:"auth-addr,omitempty"`
 
-	// Balance If set, replaces the account's balance in microAlgos. Pending rewards are forfeited. If balance or any consensus participation field (status, participation keys and validity, incentive-eligible, last-proposed, last-heartbeat) is set, agreement treats the account as though it has been in its overridden state since the balance round, so its online stake and the online circulation reflect the override. The overridden stake is taken from the account's state at the start round, with pending rewards applied.
+	// Balance If set, replaces the account's balance in microAlgos. Pending rewards are forfeited. It must be small enough that the rewards credited in the simulated round cannot overflow it, so balances close to the maximum uint64 are rejected. If balance or any consensus participation field (status, participation keys and validity, incentive-eligible, last-proposed, last-heartbeat) is set, agreement treats the account as though it has been in its overridden state since the balance round, so its online stake and the online circulation reflect the override. The overridden stake is taken from the account's state at the start round, with pending rewards applied.
 	Balance *uint64 `json:"balance,omitempty"`
 
 	// IncentiveEligible If set, replaces whether the account can receive block incentives.

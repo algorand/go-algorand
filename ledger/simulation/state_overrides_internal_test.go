@@ -83,7 +83,7 @@ func newOverlayLedger(t *testing.T, env *simulationtesting.Environment, override
 	return l
 }
 
-func TestAccountOverridesDoNotOverflowIntermediateTotals(t *testing.T) {
+func TestBalanceOverrideLimit(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -91,55 +91,40 @@ func TestAccountOverridesDoNotOverflowIntermediateTotals(t *testing.T) {
 	defer env.Close()
 
 	rnd := env.Ledger.Latest()
-	totals, err := env.Ledger.Totals(rnd)
+	hdr, err := env.Ledger.BlockHdr(rnd)
 	require.NoError(t, err)
-	a := env.Accounts[0].Addr
-	aData, _, err := env.Ledger.LookupWithoutRewards(rnd, a)
-	require.NoError(t, err)
-	var b basics.Address
-	var bData ledgercore.AccountData
-	for _, account := range env.Accounts[1:] {
-		data, _, lookupErr := env.Ledger.LookupWithoutRewards(rnd, account.Addr)
-		require.NoError(t, lookupErr)
-		if data.Status == aData.Status {
-			b, bData = account.Addr, data
-			break
-		}
-	}
-	require.NotEqual(t, basics.Address{}, b)
-
-	// The final ledger total fits exactly, but adding b before removing a would overflow.
 	proto := env.TxnInfo.CurrentProtocolParams()
-	aMoney, _ := aData.Money(proto.RewardUnit, totals.RewardsLevel)
-	bMoney, _ := bData.Money(proto.RewardUnit, totals.RewardsLevel)
-	var statusTotal uint64
-	switch aData.Status {
-	case basics.Online:
-		statusTotal = totals.Online.Money.Raw
-	case basics.Offline:
-		statusTotal = totals.Offline.Money.Raw
-	case basics.NotParticipating:
-		statusTotal = totals.NotParticipating.Money.Raw
-	}
-	zero := basics.MicroAlgos{}
-	large := basics.MicroAlgos{Raw: math.MaxUint64 - totals.All().Raw + aMoney.Raw + bMoney.Raw}
-	expectedStatusTotal := uint64(math.MaxUint64) - (totals.All().Raw - statusTotal)
-	overrides := StateOverrides{Accounts: map[basics.Address]AccountOverride{
-		a: {Balance: &zero},
-		b: {Balance: &large},
-	}}
-	for range 20 {
-		l := newOverlayLedger(t, &env, overrides)
-		require.Equal(t, uint64(math.MaxUint64), l.overlay.totals.All().Raw)
-		switch aData.Status {
-		case basics.Online:
-			require.Equal(t, expectedStatusTotal, l.overlay.totals.Online.Money.Raw)
-		case basics.Offline:
-			require.Equal(t, expectedStatusTotal, l.overlay.totals.Offline.Money.Raw)
-		case basics.NotParticipating:
-			require.Equal(t, expectedStatusTotal, l.overlay.totals.NotParticipating.Money.Raw)
+	limit := maxOverrideBalance(hdr, proto)
+	require.Less(t, limit, uint64(math.MaxUint64))
+	// The limit leaves room for the largest rate the protocol can recalculate, plus the residue
+	require.GreaterOrEqual(t, math.MaxUint64-limit, math.MaxUint64/proto.RewardsRateRefreshInterval)
+
+	var a, b basics.Address
+	crypto.RandBytes(a[:])
+	crypto.RandBytes(b[:])
+	balances := func(balance ...uint64) StateOverrides {
+		accounts := make(map[basics.Address]AccountOverride)
+		for i, addr := range []basics.Address{a, b}[:len(balance)] {
+			accounts[addr] = AccountOverride{Balance: &basics.MicroAlgos{Raw: balance[i]}}
 		}
+		return StateOverrides{Accounts: accounts}
 	}
+	build := func(overrides StateOverrides) error {
+		l := simulatorLedger{Ledger: env.Ledger, start: rnd}
+		_, err := l.buildStateOverlay(overrides, hdr)
+		return err
+	}
+
+	// A balance at the limit is accepted, and one microAlgo more is not
+	require.NoError(t, build(balances(limit)))
+	err = build(balances(limit + 1))
+	require.ErrorAs(t, err, &InvalidRequestError{})
+	require.ErrorContains(t, err, "exceeds maximum")
+
+	// Balances within the limit can still overflow the ledger totals, which is checked first
+	err = build(balances(limit, limit))
+	require.ErrorAs(t, err, &InvalidRequestError{})
+	require.ErrorContains(t, err, "account balances overflow ledger totals")
 }
 
 func TestAppOverrideAllParams(t *testing.T) {
@@ -636,7 +621,11 @@ func TestOnlineOverrideCirculationBounds(t *testing.T) {
 	defer env.Close()
 
 	zero := basics.MicroAlgos{}
-	maximum := basics.MicroAlgos{Raw: math.MaxUint64}
+	hdr, err := env.Ledger.BlockHdr(env.Ledger.Latest())
+	require.NoError(t, err)
+	proto := env.TxnInfo.CurrentProtocolParams()
+	// Every account is emptied, and one of them holds the largest permitted balance
+	maximum := basics.MicroAlgos{Raw: maxOverrideBalance(hdr, proto)}
 	accounts := make(map[basics.Address]AccountOverride)
 	for _, acct := range env.Accounts {
 		accounts[acct.Addr] = AccountOverride{Balance: &zero}
@@ -645,23 +634,24 @@ func TestOnlineOverrideCirculationBounds(t *testing.T) {
 	accounts[env.RewardsPoolAccount.Addr] = AccountOverride{Balance: &zero}
 	accounts[env.Accounts[0].Addr] = AccountOverride{Balance: &maximum}
 	l := newOverlayLedger(t, &env, StateOverrides{Accounts: accounts})
-	require.Equal(t, uint64(math.MaxUint64), l.overlay.totals.All().Raw)
+	require.Equal(t, maximum, l.overlay.totals.All())
 	require.NotZero(t, l.overlay.onlineRemoved.Raw)
 
-	// The final circulation fits exactly, despite an overflowing intermediate
-	// sum if the replacement stake is added before removing the original stake.
+	// The replaced stake is removed before the replacement is added, so the final
+	// circulation is exactly the overridden balance
 	circulation, err := l.OnlineCirculation(l.overlay.balanceRound, l.start+1)
 	require.NoError(t, err)
 	require.Equal(t, maximum, circulation)
 
 	// A final circulation that really exceeds the maximum must still fail.
-	l.overlay.onlineRemoved.Raw--
+	l.overlay.onlineRemoved = basics.MicroAlgos{}
+	l.overlay.onlineAdded.Raw = math.MaxUint64
 	_, err = l.OnlineCirculation(l.overlay.balanceRound, l.start+1)
 	require.ErrorAs(t, err, &InvalidRequestError{})
 	require.ErrorContains(t, err, "online circulation overflows")
 
 	// Preserve saturation when the approximated original stake exceeds the total.
-	l.overlay.onlineRemoved.Raw += 2
+	l.overlay.onlineRemoved.Raw = math.MaxUint64
 	l.overlay.onlineAdded = basics.MicroAlgos{Raw: 123}
 	circulation, err = l.OnlineCirculation(l.overlay.balanceRound, l.start+1)
 	require.NoError(t, err)
