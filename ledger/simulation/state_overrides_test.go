@@ -39,6 +39,18 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+func setUint(u uint64) basics.ValueDelta {
+	return basics.ValueDelta{Action: basics.SetUintAction, Uint: u}
+}
+
+func setBytes(b string) basics.ValueDelta {
+	return basics.ValueDelta{Action: basics.SetBytesAction, Bytes: b}
+}
+
+func deleteValue() basics.ValueDelta {
+	return basics.ValueDelta{Action: basics.DeleteAction}
+}
+
 func balanceOverride(addr basics.Address, microAlgos uint64) simulation.StateOverrides {
 	return simulation.StateOverrides{
 		Accounts: map[basics.Address]simulation.AccountOverride{
@@ -305,11 +317,11 @@ int 1`, creator.Addr, creatorMinBalance, appAcctMinBalance))
 					ApprovalProgram:   approval,
 					ClearStateProgram: clear,
 					GlobalStateSchema: &globalSchema,
-					GlobalState: basics.TealKeyValue{
-						"counter": {Type: basics.TealUintType, Uint: 41},
-						"name":    {Type: basics.TealBytesType, Bytes: "hello"},
+					GlobalDelta: basics.StateDelta{
+						"counter": setUint(41),
+						"name":    setBytes("hello"),
 					},
-					Boxes: map[string][]byte{"box": []byte("boxval")},
+					BoxDelta: basics.StateDelta{"box": setBytes("boxval")},
 				},
 			},
 		},
@@ -390,8 +402,8 @@ int 1`,
 			},
 			Apps: map[basics.AppIndex]simulation.AppOverride{
 				aidx: {
-					GlobalState: basics.TealKeyValue{"x": {Type: basics.TealUintType, Uint: 7}},
-					Boxes:       map[string][]byte{"b": []byte("v")},
+					GlobalDelta: basics.StateDelta{"x": setUint(7)},
+					BoxDelta:    basics.StateDelta{"b": setBytes("v")},
 				},
 			},
 		},
@@ -482,65 +494,69 @@ func TestStateOverrideAppValidation(t *testing.T) {
 		{
 			name: "global state exceeds schema",
 			aidx: aidx,
-			override: simulation.AppOverride{GlobalState: basics.TealKeyValue{
-				"a": {Type: basics.TealUintType, Uint: 1},
-				"b": {Type: basics.TealUintType, Uint: 2},
+			override: simulation.AppOverride{GlobalDelta: basics.StateDelta{
+				"a": setUint(1),
+				"b": setUint(2),
 			}},
 			expectedError: "global state: {NumUint:2 NumByteSlice:0} exceeds schema",
 		},
 		{
-			name: "global uint value with bytes",
+			name: "global set uint with bytes",
 			aidx: aidx,
-			override: simulation.AppOverride{GlobalState: basics.TealKeyValue{
-				"a": {Type: basics.TealUintType, Uint: 1, Bytes: "x"},
+			override: simulation.AppOverride{GlobalDelta: basics.StateDelta{
+				"a": {Action: basics.SetUintAction, Uint: 1, Bytes: "x"},
 			}},
-			expectedError: "must not have bytes",
+			expectedError: "set uint action must not have bytes",
 		},
 		{
-			name: "global bytes value with uint",
+			name: "global set bytes with uint",
 			aidx: aidx,
 			override: simulation.AppOverride{
 				GlobalStateSchema: &basics.StateSchema{NumByteSlice: 1},
-				GlobalState: basics.TealKeyValue{
-					"a": {Type: basics.TealBytesType, Bytes: "x", Uint: 1},
+				GlobalDelta: basics.StateDelta{
+					"a": {Action: basics.SetBytesAction, Bytes: "x", Uint: 1},
 				},
 			},
-			expectedError: "must not have a uint",
+			expectedError: "set bytes action must not have a uint",
+		},
+		{
+			name: "global delete with value",
+			aidx: aidx,
+			override: simulation.AppOverride{GlobalDelta: basics.StateDelta{
+				"a": {Action: basics.DeleteAction, Uint: 1},
+			}},
+			expectedError: "delete action must not have a value",
+		},
+		{
+			name: "global invalid action",
+			aidx: aidx,
+			override: simulation.AppOverride{GlobalDelta: basics.StateDelta{
+				"a": {Action: 9},
+			}},
+			expectedError: "invalid action 9",
 		},
 		{
 			name:          "delete missing global key",
 			aidx:          aidx,
-			override:      simulation.AppOverride{DeleteGlobalState: []string{"missing"}},
+			override:      simulation.AppOverride{GlobalDelta: basics.StateDelta{"missing": deleteValue()}},
 			expectedError: "key does not exist",
-		},
-		{
-			name: "set and delete global key",
-			aidx: aidx,
-			override: simulation.AppOverride{
-				GlobalState:       basics.TealKeyValue{"a": {Type: basics.TealUintType, Uint: 1}},
-				DeleteGlobalState: []string{"a"},
-			},
-			expectedError: "cannot be both set and deleted",
 		},
 		{
 			name:          "delete missing box",
 			aidx:          aidx,
-			override:      simulation.AppOverride{DeleteBoxes: []string{"missing"}},
+			override:      simulation.AppOverride{BoxDelta: basics.StateDelta{"missing": deleteValue()}},
 			expectedError: "box does not exist",
 		},
 		{
-			name: "set and delete box",
-			aidx: aidx,
-			override: simulation.AppOverride{
-				Boxes:       map[string][]byte{"a": []byte("v")},
-				DeleteBoxes: []string{"a"},
-			},
-			expectedError: "cannot be both set and deleted",
+			name:          "set box to uint",
+			aidx:          aidx,
+			override:      simulation.AppOverride{BoxDelta: basics.StateDelta{"a": setUint(1)}},
+			expectedError: "box values must be bytes",
 		},
 		{
 			name:          "empty box name",
 			aidx:          aidx,
-			override:      simulation.AppOverride{Boxes: map[string][]byte{"": nil}},
+			override:      simulation.AppOverride{BoxDelta: basics.StateDelta{"": setBytes("")}},
 			expectedError: "box name must not be empty",
 		},
 	}
@@ -668,7 +684,7 @@ int 1`, ownerAidx))
 			owner.Creator = creator.Addr
 			owner.ApprovalProgram = clear
 			owner.ClearStateProgram = clear
-			owner.Boxes = map[string][]byte{"shared": []byte("old")}
+			owner.BoxDelta = basics.StateDelta{"shared": setBytes("old")}
 
 			result, err := s.Simulate(simulation.Request{
 				TxnGroups: [][]transactions.SignedTxn{{newTxn()}},
@@ -803,20 +819,12 @@ int 1`, appAcctMinBalance),
 	result, err = s.Simulate(simulation.Request{
 		TxnGroups: [][]transactions.SignedTxn{{txn}},
 		StateOverrides: deleteOverride(simulation.AppOverride{
-			DeleteGlobalState: []string{"a"},
-			DeleteBoxes:       []string{"x"},
+			GlobalDelta: basics.StateDelta{"a": deleteValue()},
+			BoxDelta:    basics.StateDelta{"x": deleteValue()},
 		}),
 	})
 	require.NoError(t, err)
 	require.Empty(t, result.TxnGroups[0].FailureMessage)
-
-	// A box cannot be deleted twice
-	_, err = s.Simulate(simulation.Request{
-		TxnGroups:      [][]transactions.SignedTxn{{txn}},
-		StateOverrides: deleteOverride(simulation.AppOverride{DeleteBoxes: []string{"x", "x"}}),
-	})
-	require.ErrorAs(t, err, &simulation.InvalidRequestError{})
-	require.ErrorContains(t, err, "cannot be deleted twice")
 
 	// The real ledger is unaffected
 	value, err := env.Ledger.LookupKv(env.Ledger.Latest(), apps.MakeBoxKey(uint64(aidx), "x"))
@@ -964,15 +972,15 @@ int 1`)
 					SizeSponsor:     &sponsor.Addr,
 					ForeignBoxReads: &yes,
 					FamilyBoxAccess: &yes,
-					GlobalState:     basics.TealKeyValue{"a": {Type: basics.TealUintType, Uint: 5}},
-					Boxes:           map[string][]byte{"y": []byte("yyy")},
+					GlobalDelta:     basics.StateDelta{"a": setUint(5)},
+					BoxDelta:        basics.StateDelta{"y": setBytes("yyy")},
 				},
 				newAidx: {
 					Creator:           creator.Addr,
 					ApprovalProgram:   clear,
 					ClearStateProgram: clear,
 					GlobalStateSchema: &globalSchema,
-					Boxes:             map[string][]byte{"n": []byte("new")},
+					BoxDelta:          basics.StateDelta{"n": setBytes("new")},
 				},
 			},
 		},
@@ -1368,11 +1376,14 @@ int 1`,
 	require.NoError(t, err)
 	require.Contains(t, result.TxnGroups[0].FailureMessage, "assert failed")
 
+	// A local delta on the app sets "x" for the account opted in by its account override
+	overrides := localOverride(simulation.AppLocalStateOverride{})
+	overrides.Apps = map[basics.AppIndex]simulation.AppOverride{
+		aidx: {LocalDeltas: map[basics.Address]basics.StateDelta{caller.Addr: {"x": setUint(7)}}},
+	}
 	result, err = s.Simulate(simulation.Request{
-		TxnGroups: [][]transactions.SignedTxn{{txn}},
-		StateOverrides: localOverride(simulation.AppLocalStateOverride{
-			KeyValue: basics.TealKeyValue{"x": {Type: basics.TealUintType, Uint: 7}},
-		}),
+		TxnGroups:      [][]transactions.SignedTxn{{txn}},
+		StateOverrides: overrides,
 	})
 	require.NoError(t, err)
 	require.Empty(t, result.TxnGroups[0].FailureMessage)
@@ -1417,81 +1428,81 @@ func TestStateOverrideLocalStateValidation(t *testing.T) {
 		Receiver: other,
 	}).Txn().Sign(creator.Sk)
 
-	uintValue := basics.TealValue{Type: basics.TealUintType, Uint: 1}
 	testCases := []struct {
 		name          string
 		addr          basics.Address
 		aidx          basics.AppIndex
-		override      simulation.AppLocalStateOverride
+		override      *simulation.AppLocalStateOverride
+		delta         basics.StateDelta
 		expectedError string
 	}{
 		{
 			name:          "missing app",
 			addr:          other,
 			aidx:          aidx + 1_000_000,
+			override:      &simulation.AppLocalStateOverride{},
 			expectedError: "app does not exist",
 		},
 		{
 			name:          "opt out when not opted in",
 			addr:          other,
 			aidx:          aidx,
-			override:      simulation.AppLocalStateOverride{OptOut: true},
+			override:      &simulation.AppLocalStateOverride{OptOut: true},
 			expectedError: "account is not opted in",
 		},
 		{
-			name: "opt out and modify",
+			name: "opt out and modify schema",
 			addr: optedIn,
 			aidx: aidx,
-			override: simulation.AppLocalStateOverride{
-				OptOut:   true,
-				KeyValue: basics.TealKeyValue{"a": uintValue},
+			override: &simulation.AppLocalStateOverride{
+				OptOut: true,
+				Schema: &basics.StateSchema{},
 			},
 			expectedError: "cannot be both modified and opted out",
 		},
 		{
-			name: "exceeds schema",
-			addr: optedIn,
-			aidx: aidx,
-			override: simulation.AppLocalStateOverride{
-				KeyValue: basics.TealKeyValue{"a": uintValue, "b": uintValue},
-			},
+			name:          "delta for account not opted in",
+			addr:          other,
+			aidx:          aidx,
+			delta:         basics.StateDelta{"a": setUint(1)},
+			expectedError: "account is not opted in",
+		},
+		{
+			name:          "delta for account opted out by override",
+			addr:          optedIn,
+			aidx:          aidx,
+			override:      &simulation.AppLocalStateOverride{OptOut: true},
+			delta:         basics.StateDelta{"a": setUint(1)},
+			expectedError: "account is not opted in",
+		},
+		{
+			name:          "exceeds schema",
+			addr:          optedIn,
+			aidx:          aidx,
+			delta:         basics.StateDelta{"a": setUint(1), "b": setUint(1)},
 			expectedError: "exceeds schema",
 		},
 		{
-			name: "shrunk schema",
-			addr: optedIn,
-			aidx: aidx,
-			override: simulation.AppLocalStateOverride{
-				Schema:   &basics.StateSchema{},
-				KeyValue: basics.TealKeyValue{"a": uintValue},
-			},
+			name:          "shrunk schema",
+			addr:          optedIn,
+			aidx:          aidx,
+			override:      &simulation.AppLocalStateOverride{Schema: &basics.StateSchema{}},
+			delta:         basics.StateDelta{"a": setUint(1)},
 			expectedError: "exceeds schema",
 		},
 		{
-			name: "invalid type",
-			addr: optedIn,
-			aidx: aidx,
-			override: simulation.AppLocalStateOverride{
-				KeyValue: basics.TealKeyValue{"a": {Type: 9}},
-			},
-			expectedError: "invalid type",
+			name:          "invalid action",
+			addr:          optedIn,
+			aidx:          aidx,
+			delta:         basics.StateDelta{"a": {Action: 9}},
+			expectedError: "invalid action 9",
 		},
 		{
 			name:          "delete missing key",
 			addr:          optedIn,
 			aidx:          aidx,
-			override:      simulation.AppLocalStateOverride{DeleteKeyValue: []string{"missing"}},
+			delta:         basics.StateDelta{"missing": deleteValue()},
 			expectedError: "key does not exist",
-		},
-		{
-			name: "set and delete key",
-			addr: optedIn,
-			aidx: aidx,
-			override: simulation.AppLocalStateOverride{
-				KeyValue:       basics.TealKeyValue{"a": uintValue},
-				DeleteKeyValue: []string{"a"},
-			},
-			expectedError: "cannot be both set and deleted",
 		},
 	}
 
@@ -1499,18 +1510,43 @@ func TestStateOverrideLocalStateValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			var overrides simulation.StateOverrides
+			if tc.override != nil {
+				overrides.Accounts = map[basics.Address]simulation.AccountOverride{
+					tc.addr: {Apps: map[basics.AppIndex]simulation.AppLocalStateOverride{tc.aidx: *tc.override}},
+				}
+			}
+			if tc.delta != nil {
+				overrides.Apps = map[basics.AppIndex]simulation.AppOverride{
+					tc.aidx: {LocalDeltas: map[basics.Address]basics.StateDelta{tc.addr: tc.delta}},
+				}
+			}
 			_, err := s.Simulate(simulation.Request{
-				TxnGroups: [][]transactions.SignedTxn{{txn}},
-				StateOverrides: simulation.StateOverrides{
-					Accounts: map[basics.Address]simulation.AccountOverride{
-						tc.addr: {Apps: map[basics.AppIndex]simulation.AppLocalStateOverride{tc.aidx: tc.override}},
-					},
-				},
+				TxnGroups:      [][]transactions.SignedTxn{{txn}},
+				StateOverrides: overrides,
 			})
 			require.ErrorAs(t, err, &simulation.InvalidRequestError{})
 			require.ErrorContains(t, err, tc.expectedError)
 		})
 	}
+
+	// The schema from the account override is checked against the result of the local delta
+	_, err := s.Simulate(simulation.Request{
+		TxnGroups: [][]transactions.SignedTxn{{txn}},
+		StateOverrides: simulation.StateOverrides{
+			Accounts: map[basics.Address]simulation.AccountOverride{
+				optedIn: {Apps: map[basics.AppIndex]simulation.AppLocalStateOverride{
+					aidx: {Schema: &basics.StateSchema{NumUint: 2}},
+				}},
+			},
+			Apps: map[basics.AppIndex]simulation.AppOverride{
+				aidx: {LocalDeltas: map[basics.Address]basics.StateDelta{
+					optedIn: {"a": setUint(1), "b": setUint(2)},
+				}},
+			},
+		},
+	})
+	require.NoError(t, err)
 }
 
 func TestStateOverrideAuthAddr(t *testing.T) {

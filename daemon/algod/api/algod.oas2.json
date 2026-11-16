@@ -3477,7 +3477,7 @@
           }
         },
         "apps": {
-          "description": "Application local state overrides. If the account is not opted in to an application, it is opted in, unless the override opts it out. Each application ID may appear at most once.",
+          "description": "Application opt-in overrides. If the account is not opted in to an application, it is opted in, unless the override opts it out. Local state key-values are modified by the application override's local-state-delta. Each application ID may appear at most once.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/SimulateAppLocalStateOverride"
@@ -3486,7 +3486,7 @@
       }
     },
     "SimulateAppLocalStateOverride": {
-      "description": "Modifications to an account's local state for an application. Omitted fields are left unchanged. For a new opt-in, the schema defaults to the application's local-state-schema.",
+      "description": "Modifications to an account's opt-in to an application. Omitted fields are left unchanged. For a new opt-in, the schema defaults to the application's local-state-schema, and there are no key-values.",
       "type": "object",
       "required": ["app-id"],
       "properties": {
@@ -3500,20 +3500,8 @@
           "description": "If set, replaces the local state schema recorded when the account opted in, which determines how much local state the account may hold, and its minimum balance.",
           "$ref": "#/definitions/ApplicationStateSchema"
         },
-        "key-value": {
-          "description": "Local state entries to set, replacing any existing value for the same key. Other existing keys are left unchanged.",
-          "$ref": "#/definitions/TealKeyValueStore"
-        },
-        "delete-key-value": {
-          "description": "Local state keys to delete. Each key must exist and must not also be set in key-value.",
-          "type": "array",
-          "items": {
-            "type": "string",
-            "format": "byte"
-          }
-        },
         "opt-out": {
-          "description": "If true, removes the account's local state. The account must be opted in, and no other field may be set.",
+          "description": "If true, removes the account's local state. The account must be opted in, and schema must not be set.",
           "type": "boolean"
         }
       }
@@ -3683,49 +3671,20 @@
           "description": "If set, replaces whether apps with the same creator may read and write this app's boxes.",
           "type": "boolean"
         },
-        "global-state": {
-          "description": "Global state entries to set, replacing any existing value for the same key. Other existing keys are left unchanged.",
-          "$ref": "#/definitions/TealKeyValueStore"
+        "global-state-delta": {
+          "description": "Changes to the global state, in the same form as a transaction's global-state-delta. Keys that are not mentioned are left unchanged. Each deleted key must exist. Each key may appear at most once.",
+          "$ref": "#/definitions/StateDelta"
         },
-        "delete-global-state": {
-          "description": "Global state keys to delete. Each key must exist and must not also be set in global-state.",
+        "local-state-delta": {
+          "description": "Changes to accounts' local state, in the same form as a transaction's local-state-delta. Each account must be opted in after account overrides are applied. Keys that are not mentioned are left unchanged. Each deleted key must exist. Each address, and each key within an address, may appear at most once.",
           "type": "array",
           "items": {
-            "type": "string",
-            "format": "byte"
+            "$ref": "#/definitions/AccountStateDelta"
           }
         },
-        "boxes": {
-          "description": "Boxes to create, or replace if they already exist. Other existing boxes are left unchanged.",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/SimulateBoxOverride"
-          }
-        },
-        "delete-boxes": {
-          "description": "Names of boxes to delete. Each box must exist and must not also be set in boxes.",
-          "type": "array",
-          "items": {
-            "type": "string",
-            "format": "byte"
-          }
-        }
-      }
-    },
-    "SimulateBoxOverride": {
-      "description": "A box to create or replace during simulation.",
-      "type": "object",
-      "required": ["name", "value"],
-      "properties": {
-        "name": {
-          "description": "The box name, base64 encoded.",
-          "type": "string",
-          "format": "byte"
-        },
-        "value": {
-          "description": "The box value, base64 encoded.",
-          "type": "string",
-          "format": "byte"
+        "box-delta": {
+          "description": "Changes to the application's boxes, in the same form as a state delta, where the key is the box name. Action 1 creates or replaces the box with the given bytes, and action 3 deletes it. Action 2 is not allowed. Boxes that are not mentioned are left unchanged. Each deleted box must exist. Each name may appear at most once.",
+          "$ref": "#/definitions/StateDelta"
         }
       }
     },

@@ -842,39 +842,42 @@ func convertAppLocalStateOverride(local model.SimulateAppLocalStateOverride) (si
 		schema := convertStateSchema(*local.Schema)
 		override.Schema = &schema
 	}
-	if local.KeyValue != nil {
-		kv, err := convertGeneratedTKV(local.KeyValue)
-		if err != nil {
-			return simulation.AppLocalStateOverride{}, fmt.Errorf("local state %w", err)
-		}
-		override.KeyValue = kv
-	}
-	if local.DeleteKeyValue != nil {
-		deleted, err := convertDeletedKeys(*local.DeleteKeyValue)
-		if err != nil {
-			return simulation.AppLocalStateOverride{}, fmt.Errorf("local state %w", err)
-		}
-		override.DeleteKeyValue = deleted
-	}
 	if local.OptOut != nil {
 		override.OptOut = *local.OptOut
 	}
 	return override, nil
 }
 
-// convertDeletedKeys converts a list of keys to delete, rejecting duplicates. Errors are phrased to
-// follow a description of the store, e.g. "global state".
-func convertDeletedKeys(keys [][]byte) ([]string, error) {
-	seen := make(map[string]bool, len(keys))
-	deleted := make([]string, 0, len(keys))
-	for _, key := range keys {
-		if seen[string(key)] {
-			return nil, fmt.Errorf("has duplicate deleted key %#x", key)
-		}
-		seen[string(key)] = true
-		deleted = append(deleted, string(key))
+// convertStateDelta converts model.StateDelta -> basics.StateDelta, the inverse of
+// globalDeltaToStateDelta. Errors are phrased to follow a description of the store, e.g. "global
+// state".
+func convertStateDelta(msd *model.StateDelta) (basics.StateDelta, error) {
+	if msd == nil || len(*msd) == 0 {
+		return nil, nil
 	}
-	return deleted, nil
+	bsd := make(basics.StateDelta, len(*msd))
+	for _, kv := range *msd {
+		key, err := base64.StdEncoding.DecodeString(kv.Key)
+		if err != nil {
+			return nil, fmt.Errorf("key %q: %w", kv.Key, err)
+		}
+		if _, ok := bsd[string(key)]; ok {
+			return nil, fmt.Errorf("has duplicate key %#x", key)
+		}
+		vd := basics.ValueDelta{Action: basics.DeltaAction(kv.Value.Action)}
+		if kv.Value.Bytes != nil {
+			value, err := base64.StdEncoding.DecodeString(*kv.Value.Bytes)
+			if err != nil {
+				return nil, fmt.Errorf("value for key %#x: %w", key, err)
+			}
+			vd.Bytes = string(value)
+		}
+		if kv.Value.Uint != nil {
+			vd.Uint = *kv.Value.Uint
+		}
+		bsd[string(key)] = vd
+	}
+	return bsd, nil
 }
 
 func convertAssetOverride(asset model.SimulateAssetOverride) (simulation.AssetOverride, error) {
@@ -978,39 +981,28 @@ func convertAppOverride(app model.SimulateAppOverride) (simulation.AppOverride, 
 	override.ForeignBoxReads = app.ForeignBoxReads
 	override.FamilyBoxAccess = app.FamilyBoxAccess
 
-	if app.GlobalState != nil {
-		globalState, err := convertGeneratedTKV(app.GlobalState)
-		if err != nil {
-			return simulation.AppOverride{}, fmt.Errorf("global state %w", err)
-		}
-		override.GlobalState = globalState
+	var err error
+	if override.GlobalDelta, err = convertStateDelta(app.GlobalStateDelta); err != nil {
+		return simulation.AppOverride{}, fmt.Errorf("global state delta %w", err)
 	}
-	if app.DeleteGlobalState != nil {
-		deleted, err := convertDeletedKeys(*app.DeleteGlobalState)
-		if err != nil {
-			return simulation.AppOverride{}, fmt.Errorf("global state %w", err)
-		}
-		override.DeleteGlobalState = deleted
-	}
-
-	if app.Boxes != nil {
-		override.Boxes = make(map[string][]byte, len(*app.Boxes))
-		for _, box := range *app.Boxes {
-			if _, ok := override.Boxes[string(box.Name)]; ok {
-				return simulation.AppOverride{}, fmt.Errorf("duplicate box %#x", box.Name)
+	if app.LocalStateDelta != nil && len(*app.LocalStateDelta) > 0 {
+		override.LocalDeltas = make(map[basics.Address]basics.StateDelta, len(*app.LocalStateDelta))
+		for _, local := range *app.LocalStateDelta {
+			var addr basics.Address
+			addr, err = basics.UnmarshalChecksumAddress(local.Address)
+			if err != nil {
+				return simulation.AppOverride{}, fmt.Errorf("local state delta address %q: %w", local.Address, err)
 			}
-			override.Boxes[string(box.Name)] = append([]byte{}, box.Value...)
+			if _, ok := override.LocalDeltas[addr]; ok {
+				return simulation.AppOverride{}, fmt.Errorf("local state delta has duplicate address %s", addr)
+			}
+			if override.LocalDeltas[addr], err = convertStateDelta(&local.Delta); err != nil {
+				return simulation.AppOverride{}, fmt.Errorf("local state delta for %s %w", addr, err)
+			}
 		}
 	}
-	if app.DeleteBoxes != nil {
-		seen := make(map[string]bool, len(*app.DeleteBoxes))
-		for _, name := range *app.DeleteBoxes {
-			if seen[string(name)] {
-				return simulation.AppOverride{}, fmt.Errorf("duplicate deleted box %#x", name)
-			}
-			seen[string(name)] = true
-			override.DeleteBoxes = append(override.DeleteBoxes, string(name))
-		}
+	if override.BoxDelta, err = convertStateDelta(app.BoxDelta); err != nil {
+		return simulation.AppOverride{}, fmt.Errorf("box delta %w", err)
 	}
 
 	return override, nil

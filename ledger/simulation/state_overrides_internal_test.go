@@ -57,10 +57,12 @@ func TestOverridesCoverAllFields(t *testing.T) {
 	t.Parallel()
 
 	// BlockOverride is not checked: only a subset of block header fields can be overridden
-	requireOverrideCovers(t, reflect.TypeFor[AppOverride](), reflect.TypeFor[basics.AppParams]())
+	// GlobalState is overridden by AppOverride.GlobalDelta
+	requireOverrideCovers(t, reflect.TypeFor[AppOverride](), reflect.TypeFor[basics.AppParams](), "GlobalState")
 	requireOverrideCovers(t, reflect.TypeFor[AssetOverride](), reflect.TypeFor[basics.AssetParams]())
 	requireOverrideCovers(t, reflect.TypeFor[AssetHoldingOverride](), reflect.TypeFor[basics.AssetHolding]())
-	requireOverrideCovers(t, reflect.TypeFor[AppLocalStateOverride](), reflect.TypeFor[basics.AppLocalState]())
+	// KeyValue is overridden by AppOverride.LocalDeltas
+	requireOverrideCovers(t, reflect.TypeFor[AppLocalStateOverride](), reflect.TypeFor[basics.AppLocalState](), "KeyValue")
 	requireOverrideCovers(t, reflect.TypeFor[AccountOverride](), reflect.TypeFor[ledgercore.AccountData](),
 		// The balance is overridden by Balance, and pending rewards are not overridable
 		"MicroAlgos", "RewardsBase", "RewardedMicroAlgos",
@@ -172,7 +174,7 @@ func TestAppOverrideAllParams(t *testing.T) {
 			SizeSponsor:       &sponsor,
 			ForeignBoxReads:   &yes,
 			FamilyBoxAccess:   &yes,
-			GlobalState:       basics.TealKeyValue{"k": {Type: basics.TealUintType, Uint: 1}},
+			GlobalDelta:       basics.StateDelta{"k": {Action: basics.SetUintAction, Uint: 1}},
 		},
 	}})
 
@@ -375,12 +377,18 @@ func TestLocalStateOverrides(t *testing.T) {
 	}
 	l := newOverlayLedger(t, &env, StateOverrides{
 		Accounts: map[basics.Address]AccountOverride{
-			optedIn:  {Apps: map[basics.AppIndex]AppLocalStateOverride{aidx: {Schema: &bigSchema, KeyValue: kv}}},
+			optedIn:  {Apps: map[basics.AppIndex]AppLocalStateOverride{aidx: {Schema: &bigSchema}}},
 			newOptIn: {Apps: map[basics.AppIndex]AppLocalStateOverride{aidx: {}}},
 			optOut:   {Apps: map[basics.AppIndex]AppLocalStateOverride{aidx: {OptOut: true}}},
 		},
 		// A new opt-in takes the app's overridden local schema
-		Apps: map[basics.AppIndex]AppOverride{aidx: {LocalStateSchema: &appLocalSchema}},
+		Apps: map[basics.AppIndex]AppOverride{aidx: {
+			LocalStateSchema: &appLocalSchema,
+			LocalDeltas: map[basics.Address]basics.StateDelta{optedIn: {
+				"u": {Action: basics.SetUintAction, Uint: 1},
+				"b": {Action: basics.SetBytesAction, Bytes: "v"},
+			}},
+		}},
 	})
 
 	// An existing opt-in's schema and state are replaced

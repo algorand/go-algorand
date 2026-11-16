@@ -2271,7 +2271,7 @@
             "x-algorand-format": "Address"
           },
           "apps": {
-            "description": "Application local state overrides. If the account is not opted in to an application, it is opted in, unless the override opts it out. Each application ID may appear at most once.",
+            "description": "Application opt-in overrides. If the account is not opted in to an application, it is opted in, unless the override opts it out. Local state key-values are modified by the application override's local-state-delta. Each application ID may appear at most once.",
             "items": {
               "$ref": "#/components/schemas/SimulateAppLocalStateOverride"
             },
@@ -2353,7 +2353,7 @@
         "type": "object"
       },
       "SimulateAppLocalStateOverride": {
-        "description": "Modifications to an account's local state for an application. Omitted fields are left unchanged. For a new opt-in, the schema defaults to the application's local-state-schema.",
+        "description": "Modifications to an account's opt-in to an application. Omitted fields are left unchanged. For a new opt-in, the schema defaults to the application's local-state-schema, and there are no key-values.",
         "properties": {
           "app-id": {
             "description": "The ID of the application. It must exist, either on the ledger or by an application override.",
@@ -2361,20 +2361,8 @@
             "x-go-name": "AppID",
             "x-go-type": "basics.AppIndex"
           },
-          "delete-key-value": {
-            "description": "Local state keys to delete. Each key must exist and must not also be set in key-value.",
-            "items": {
-              "format": "byte",
-              "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "key-value": {
-            "$ref": "#/components/schemas/TealKeyValueStore"
-          },
           "opt-out": {
-            "description": "If true, removes the account's local state. The account must be opted in, and no other field may be set.",
+            "description": "If true, removes the account's local state. The account must be opted in, and schema must not be set.",
             "type": "boolean"
           },
           "schema": {
@@ -2396,12 +2384,8 @@
             "type": "string",
             "x-algorand-format": "TEALProgram"
           },
-          "boxes": {
-            "description": "Boxes to create, or replace if they already exist. Other existing boxes are left unchanged.",
-            "items": {
-              "$ref": "#/components/schemas/SimulateBoxOverride"
-            },
-            "type": "array"
+          "box-delta": {
+            "$ref": "#/components/schemas/StateDelta"
           },
           "clear-state-program": {
             "description": "If set, replaces the clear state program.",
@@ -2414,24 +2398,6 @@
             "description": "The application's creator. Required when creating an application. For an existing application, it must be omitted or match the existing creator.",
             "type": "string",
             "x-algorand-format": "Address"
-          },
-          "delete-boxes": {
-            "description": "Names of boxes to delete. Each box must exist and must not also be set in boxes.",
-            "items": {
-              "format": "byte",
-              "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "delete-global-state": {
-            "description": "Global state keys to delete. Each key must exist and must not also be set in global-state.",
-            "items": {
-              "format": "byte",
-              "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-              "type": "string"
-            },
-            "type": "array"
           },
           "extra-program-pages": {
             "description": "If set, replaces the number of extra program pages.",
@@ -2446,8 +2412,8 @@
             "description": "If set, replaces whether any app may read this app's boxes.",
             "type": "boolean"
           },
-          "global-state": {
-            "$ref": "#/components/schemas/TealKeyValueStore"
+          "global-state-delta": {
+            "$ref": "#/components/schemas/StateDelta"
           },
           "global-state-schema": {
             "$ref": "#/components/schemas/ApplicationStateSchema"
@@ -2456,6 +2422,13 @@
             "description": "The ID of the application to override. A new application's ID must not be in the range of IDs that may be assigned to creatables made during simulation.",
             "type": "integer",
             "x-go-type": "basics.AppIndex"
+          },
+          "local-state-delta": {
+            "description": "Changes to accounts' local state, in the same form as a transaction's local-state-delta. Each account must be opted in after account overrides are applied. Keys that are not mentioned are left unchanged. Each deleted key must exist. Each address, and each key within an address, may appear at most once.",
+            "items": {
+              "$ref": "#/components/schemas/AccountStateDelta"
+            },
+            "type": "array"
           },
           "local-state-schema": {
             "$ref": "#/components/schemas/ApplicationStateSchema"
@@ -2641,28 +2614,6 @@
         },
         "required": [
           "round"
-        ],
-        "type": "object"
-      },
-      "SimulateBoxOverride": {
-        "description": "A box to create or replace during simulation.",
-        "properties": {
-          "name": {
-            "description": "The box name, base64 encoded.",
-            "format": "byte",
-            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-            "type": "string"
-          },
-          "value": {
-            "description": "The box value, base64 encoded.",
-            "format": "byte",
-            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "value"
         ],
         "type": "object"
       },

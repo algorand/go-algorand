@@ -3315,13 +3315,7 @@ byte "bvalue"
 					Status:            omitEmpty("Offline"),
 					IncentiveEligible: omitEmpty(true),
 					Assets:            &[]model.SimulateAssetHoldingOverride{{AssetID: assetID, Amount: omitEmpty(uint64(10))}},
-					Apps: &[]model.SimulateAppLocalStateOverride{{
-						AppID: appID,
-						KeyValue: &model.TealKeyValueStore{{
-							Key:   base64.StdEncoding.EncodeToString([]byte("lkey")),
-							Value: model.TealValue{Type: uint64(basics.TealUintType), Uint: 5},
-						}},
-					}},
+					Apps:              &[]model.SimulateAppLocalStateOverride{{AppID: appID}},
 				},
 			},
 			Assets: &[]model.SimulateAssetOverride{{
@@ -3340,11 +3334,24 @@ byte "bvalue"
 				ClearStateProgram: &clearState.Program,
 				GlobalStateSchema: &model.ApplicationStateSchema{NumUint: 1},
 				LocalStateSchema:  &model.ApplicationStateSchema{NumUint: 1},
-				GlobalState: &model.TealKeyValueStore{{
+				GlobalStateDelta: &model.StateDelta{{
 					Key:   base64.StdEncoding.EncodeToString([]byte("gkey")),
-					Value: model.TealValue{Type: uint64(basics.TealUintType), Uint: 42},
+					Value: model.EvalDelta{Action: uint64(basics.SetUintAction), Uint: omitEmpty(uint64(42))},
 				}},
-				Boxes: &[]model.SimulateBoxOverride{{Name: []byte("bname"), Value: []byte("bvalue")}},
+				LocalStateDelta: &[]model.AccountStateDelta{{
+					Address: sender.Address().String(),
+					Delta: model.StateDelta{{
+						Key:   base64.StdEncoding.EncodeToString([]byte("lkey")),
+						Value: model.EvalDelta{Action: uint64(basics.SetUintAction), Uint: omitEmpty(uint64(5))},
+					}},
+				}},
+				BoxDelta: &model.StateDelta{{
+					Key: base64.StdEncoding.EncodeToString([]byte("bname")),
+					Value: model.EvalDelta{
+						Action: uint64(basics.SetBytesAction),
+						Bytes:  omitEmpty(base64.StdEncoding.EncodeToString([]byte("bvalue"))),
+					},
+				}},
 			}},
 			Blocks: &[]model.SimulateBlockOverride{{
 				Round:          hdr.Round,
@@ -3442,17 +3449,46 @@ byte "bvalue"
 				{
 					name: "bad global state key",
 					modify: func(o *model.SimulateStateOverrides) {
-						(*(*o.Apps)[0].GlobalState)[0].Key = "not base64!"
+						(*(*o.Apps)[0].GlobalStateDelta)[0].Key = "not base64!"
 					},
-					expected: "global state key",
+					expected: "global state delta key",
+				},
+				{
+					name: "bad global state value",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*(*o.Apps)[0].GlobalStateDelta)[0].Value.Bytes = omitEmpty("not base64!")
+					},
+					expected: "global state delta value for key",
+				},
+				{
+					name: "bad local state address",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*(*o.Apps)[0].LocalStateDelta)[0].Address = "bad"
+					},
+					expected: "local state delta address",
+				},
+				{
+					name: "duplicate local state address",
+					modify: func(o *model.SimulateStateOverrides) {
+						locals := (*o.Apps)[0].LocalStateDelta
+						*locals = append(*locals, (*locals)[0])
+					},
+					expected: "local state delta has duplicate address",
+				},
+				{
+					name: "bad local state key",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*(*o.Apps)[0].LocalStateDelta)[0].Delta[0].Key = "not base64!"
+					},
+					expected: "local state delta for " + sender.Address().String() + " key",
 				},
 				{
 					name: "duplicate box",
 					modify: func(o *model.SimulateStateOverrides) {
-						boxes := (*o.Apps)[0].Boxes
+						boxes := (*o.Apps)[0].BoxDelta
 						*boxes = append(*boxes, (*boxes)[0])
 					},
-					expected: "duplicate box",
+					expected: "box delta has duplicate key",
 				},
 				{
 					name: "duplicate asset",
@@ -3499,20 +3535,6 @@ byte "bvalue"
 					expected: "duplicate app 1000000",
 				},
 				{
-					name: "bad local state key",
-					modify: func(o *model.SimulateStateOverrides) {
-						(*(*(*o.Accounts)[0].Apps)[0].KeyValue)[0].Key = "not base64!"
-					},
-					expected: "local state key",
-				},
-				{
-					name: "duplicate deleted local state key",
-					modify: func(o *model.SimulateStateOverrides) {
-						(*(*o.Accounts)[0].Apps)[0].DeleteKeyValue = &[][]byte{[]byte("k"), []byte("k")}
-					},
-					expected: "local state has duplicate deleted key",
-				},
-				{
 					name: "duplicate block",
 					modify: func(o *model.SimulateStateOverrides) {
 						*o.Blocks = append(*o.Blocks, (*o.Blocks)[0])
@@ -3543,9 +3565,10 @@ byte "bvalue"
 				},
 				{
 					// Rejected by the simulator rather than during conversion
-					name: "opt out and modify local state",
+					name: "opt out and modify local schema",
 					modify: func(o *model.SimulateStateOverrides) {
 						(*(*o.Accounts)[0].Apps)[0].OptOut = omitEmpty(true)
+						(*(*o.Accounts)[0].Apps)[0].Schema = &model.ApplicationStateSchema{NumUint: 1}
 					},
 					expected: "cannot be both modified and opted out",
 				},

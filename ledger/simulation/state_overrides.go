@@ -102,29 +102,22 @@ type AccountOverride struct {
 	// AssetOverride.
 	Assets map[basics.AssetIndex]AssetHoldingOverride
 
-	// Apps maps app IDs to overrides of the account's local state. If the account is not opted in
-	// to an app, it is opted in, unless the override opts it out. The app must exist, either on the
-	// ledger or by an AppOverride.
+	// Apps maps app IDs to overrides of the account's opt-in to an app. If the account is not opted
+	// in to an app, it is opted in, unless the override opts it out. The app must exist, either on
+	// the ledger or by an AppOverride. Local state key-values are modified by AppOverride.LocalDeltas.
 	Apps map[basics.AppIndex]AppLocalStateOverride
 }
 
-// AppLocalStateOverride describes modifications to an account's local state for an app. Nil fields
-// are left unchanged. For a new opt-in, the schema defaults to the app's LocalStateSchema.
+// AppLocalStateOverride describes modifications to an account's opt-in to an app. Nil fields are
+// left unchanged. For a new opt-in, the schema defaults to the app's LocalStateSchema, and there
+// are no key-values.
 type AppLocalStateOverride struct {
 	// Schema, if set, replaces the local schema recorded when the account opted in, which
 	// determines how much local state the account may hold, and its minimum balance.
 	Schema *basics.StateSchema
 
-	// KeyValue entries are set, replacing any existing value for the same key. Other existing keys
-	// are left unchanged.
-	KeyValue basics.TealKeyValue
-
-	// DeleteKeyValue lists local state keys to delete. Each key must exist, and must not also be
-	// set in KeyValue.
-	DeleteKeyValue []string
-
-	// OptOut, if true, removes the account's local state. The account must be opted in, and no
-	// other field may be set.
+	// OptOut, if true, removes the account's local state. The account must be opted in, and Schema
+	// must not be set.
 	OptOut bool
 }
 
@@ -172,21 +165,20 @@ type AppOverride struct {
 	ForeignBoxReads *bool
 	FamilyBoxAccess *bool
 
-	// GlobalState entries are set, replacing any existing value for the same key. Other existing
-	// keys are left unchanged.
-	GlobalState basics.TealKeyValue
+	// GlobalDelta is applied to the app's global state, in the same form as
+	// transactions.EvalDelta.GlobalDelta. Keys it does not mention are left unchanged. Each deleted
+	// key must exist.
+	GlobalDelta basics.StateDelta
 
-	// DeleteGlobalState lists global state keys to delete. Each key must exist, and must not also
-	// be set in GlobalState.
-	DeleteGlobalState []string
+	// LocalDeltas maps addresses to deltas applied to their local state for this app, in the same
+	// form as transactions.EvalDelta.LocalDeltas. Each account must be opted in after its
+	// AccountOverride, if any, is applied. Each deleted key must exist.
+	LocalDeltas map[basics.Address]basics.StateDelta
 
-	// Boxes maps box names to contents. Each box is created, or replaced if it already exists.
-	// Other existing boxes are left unchanged.
-	Boxes map[string][]byte
-
-	// DeleteBoxes lists the names of boxes to delete. Each box must exist, and must not also be set
-	// in Boxes.
-	DeleteBoxes []string
+	// BoxDelta maps box names to their new contents with basics.SetBytesAction, which creates or
+	// replaces the box, or to basics.DeleteAction, which deletes the box. The box must exist to be
+	// deleted. Other existing boxes are left unchanged.
+	BoxDelta basics.StateDelta
 }
 
 // AssetOverride describes modifications to a single asset's params. If the asset does not exist,
@@ -264,6 +256,13 @@ type stateOverlay struct {
 	// from the online circulation at balanceRound
 	onlineAdded   basics.MicroAlgos
 	onlineRemoved basics.MicroAlgos
+}
+
+func compareLocalStateKeys(a, b localStateKey) int {
+	if c := bytes.Compare(a.addr[:], b.addr[:]); c != 0 {
+		return c
+	}
+	return cmp.Compare(a.aidx, b.aidx)
 }
 
 func invalidOverride(format string, args ...any) error {
@@ -360,6 +359,30 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 			}
 		}
 		o.accounts[addr] = acct
+	}
+
+	// Local deltas come after account overrides, which may opt accounts in or out
+	for _, aidx := range sortedKeys(overrides.Apps) {
+		local := overrides.Apps[aidx].LocalDeltas
+		addrs := slices.SortedFunc(maps.Keys(local), func(a, b basics.Address) int {
+			return bytes.Compare(a[:], b[:])
+		})
+		for _, addr := range addrs {
+			if err = l.overlayLocalDelta(o, addr, aidx, local[addr]); err != nil {
+				return nil, err
+			}
+		}
+	}
+	// Check schemas once both the schema overrides and the local deltas have been applied, since
+	// either may be what makes the local state fit
+	for _, key := range slices.SortedFunc(maps.Keys(o.localStates), compareLocalStateKeys) {
+		state := o.localStates[key]
+		if state == nil {
+			continue
+		}
+		if err = checkSchema(state.KeyValue, state.Schema); err != nil {
+			return nil, invalidOverride("account %s app %d local state: %v", key.addr, key.aidx, err)
+		}
 	}
 
 	var ot basics.OverflowTracker
@@ -618,7 +641,7 @@ func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Addr
 	if override.FamilyBoxAccess != nil {
 		params.FamilyBoxAccess = *override.FamilyBoxAccess
 	}
-	params.GlobalState, err = applyKeyValueOverride(params.GlobalState, override.GlobalState, override.DeleteGlobalState)
+	params.GlobalState, err = applyStateDelta(params.GlobalState, override.GlobalDelta)
 	if err != nil {
 		return invalidOverride("app %d global state: %v", aidx, err)
 	}
@@ -658,7 +681,7 @@ func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Addr
 
 	o.apps[aidx] = appOverlay{creator: creator, params: params}
 
-	if len(override.Boxes) == 0 && len(override.DeleteBoxes) == 0 {
+	if len(override.BoxDelta) == 0 {
 		return nil
 	}
 	appAddr := aidx.Address()
@@ -666,31 +689,16 @@ func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Addr
 	if err != nil {
 		return err
 	}
-	deleted := make(map[string]bool, len(override.DeleteBoxes))
-	for _, name := range override.DeleteBoxes {
-		if _, ok := override.Boxes[name]; ok {
-			return invalidOverride("app %d box %#x cannot be both set and deleted", aidx, name)
-		}
-		if deleted[name] {
-			return invalidOverride("app %d box %#x cannot be deleted twice", aidx, name)
-		}
-		deleted[name] = true
-		key := apps.MakeBoxKey(uint64(aidx), name)
-		existing, err := l.Ledger.LookupKv(l.start, key)
-		if err != nil {
-			return err
-		}
-		if existing == nil {
-			return invalidOverride("cannot delete app %d box %#x: box does not exist", aidx, name)
-		}
-		appAcct.TotalBoxes = basics.SubSaturate(appAcct.TotalBoxes, 1)
-		appAcct.TotalBoxBytes = basics.SubSaturate(appAcct.TotalBoxBytes, uint64(len(name)+len(existing)))
-		o.kvs[key] = nil
-	}
-	for _, name := range sortedKeys(override.Boxes) {
-		value := override.Boxes[name]
+	for _, name := range sortedKeys(override.BoxDelta) {
+		vd := override.BoxDelta[name]
 		if len(name) == 0 {
 			return invalidOverride("app %d box name must not be empty", aidx)
+		}
+		if err = checkValueDelta(vd); err != nil {
+			return invalidOverride("app %d box %#x: %v", aidx, name, err)
+		}
+		if vd.Action == basics.SetUintAction {
+			return invalidOverride("app %d box %#x: box values must be bytes", aidx, name)
 		}
 		key := apps.MakeBoxKey(uint64(aidx), name)
 		existing, err := l.Ledger.LookupKv(l.start, key)
@@ -698,13 +706,19 @@ func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Addr
 			return err
 		}
 		if existing != nil {
+			appAcct.TotalBoxes = basics.SubSaturate(appAcct.TotalBoxes, 1)
 			appAcct.TotalBoxBytes = basics.SubSaturate(appAcct.TotalBoxBytes, uint64(len(name)+len(existing)))
-		} else {
-			appAcct.TotalBoxes = basics.AddSaturate(appAcct.TotalBoxes, 1)
+		} else if vd.Action == basics.DeleteAction {
+			return invalidOverride("cannot delete app %d box %#x: box does not exist", aidx, name)
 		}
-		appAcct.TotalBoxBytes = basics.AddSaturate(appAcct.TotalBoxBytes, uint64(len(name)+len(value)))
+		if vd.Action == basics.DeleteAction {
+			o.kvs[key] = nil
+			continue
+		}
+		appAcct.TotalBoxes = basics.AddSaturate(appAcct.TotalBoxes, 1)
+		appAcct.TotalBoxBytes = basics.AddSaturate(appAcct.TotalBoxBytes, uint64(len(name)+len(vd.Bytes)))
 		// A nil value denotes a missing box, so zero-length boxes must be non-nil
-		o.kvs[key] = append([]byte{}, value...)
+		o.kvs[key] = append([]byte{}, vd.Bytes...)
 	}
 	o.accounts[appAddr] = appAcct
 
@@ -897,7 +911,7 @@ func (l simulatorLedger) overlayLocalState(o *stateOverlay, acct ledgercore.Acco
 	state := res.AppLocalState
 
 	if override.OptOut {
-		if override.Schema != nil || override.KeyValue != nil || override.DeleteKeyValue != nil {
+		if override.Schema != nil {
 			return ledgercore.AccountData{}, invalidOverride("account %s app %d local state cannot be both modified and opted out", addr, aidx)
 		}
 		if state == nil {
@@ -943,14 +957,7 @@ func (l simulatorLedger) overlayLocalState(o *stateOverlay, acct ledgercore.Acco
 	if override.Schema != nil {
 		newState.Schema = *override.Schema
 	}
-	newState.KeyValue, err = applyKeyValueOverride(newState.KeyValue, override.KeyValue, override.DeleteKeyValue)
-	if err != nil {
-		return ledgercore.AccountData{}, invalidOverride("account %s app %d local state: %v", addr, aidx, err)
-	}
-	if err = validateTealKeyValue(newState.KeyValue, newState.Schema); err != nil {
-		return ledgercore.AccountData{}, invalidOverride("account %s app %d local state: %v", addr, aidx, err)
-	}
-
+	// newState.KeyValue may share the ledger's data, so it must not be modified in place
 	acct.TotalAppSchema = acct.TotalAppSchema.AddSchema(newState.Schema)
 	o.localStates[localStateKey{addr: addr, aidx: aidx}] = &newState
 	return acct, nil
@@ -965,29 +972,40 @@ func sizeSponsor(params basics.AppParams, creator basics.Address) basics.Address
 	return params.SizeSponsor
 }
 
+// overlayLocalDelta applies delta to the local state of addr for app aidx, which must be opted in
+// after account overrides are applied.
+func (l simulatorLedger) overlayLocalDelta(o *stateOverlay, addr basics.Address, aidx basics.AppIndex, delta basics.StateDelta) error {
+	key := localStateKey{addr: addr, aidx: aidx}
+	state, ok := o.localStates[key]
+	if !ok {
+		res, err := l.Ledger.LookupApplication(l.start, addr, aidx)
+		if err != nil {
+			return err
+		}
+		state = res.AppLocalState
+	}
+	if state == nil {
+		return invalidOverride("cannot apply app %d local state delta to %s: account is not opted in", aidx, addr)
+	}
+	newState := *state
+	var err error
+	newState.KeyValue, err = applyStateDelta(newState.KeyValue, delta)
+	if err != nil {
+		return invalidOverride("account %s app %d local state: %v", addr, aidx, err)
+	}
+	o.localStates[key] = &newState
+	return nil
+}
+
 func validateAppParams(aidx basics.AppIndex, params basics.AppParams) error {
-	if err := validateTealKeyValue(params.GlobalState, params.GlobalStateSchema); err != nil {
+	if err := checkSchema(params.GlobalState, params.GlobalStateSchema); err != nil {
 		return invalidOverride("app %d global state: %v", aidx, err)
 	}
 	return nil
 }
 
-// validateTealKeyValue checks that every value in kv is well formed, and that kv fits in schema.
-func validateTealKeyValue(kv basics.TealKeyValue, schema basics.StateSchema) error {
-	for key, value := range kv {
-		switch value.Type {
-		case basics.TealUintType:
-			if len(value.Bytes) != 0 {
-				return fmt.Errorf("uint value for key %#x must not have bytes", key)
-			}
-		case basics.TealBytesType:
-			if value.Uint != 0 {
-				return fmt.Errorf("bytes value for key %#x must not have a uint", key)
-			}
-		default:
-			return fmt.Errorf("value for key %#x has invalid type %d", key, value.Type)
-		}
-	}
+// checkSchema checks that kv fits in schema.
+func checkSchema(kv basics.TealKeyValue, schema basics.StateSchema) error {
 	used, err := kv.ToStateSchema()
 	if err != nil {
 		return err
@@ -998,29 +1016,47 @@ func validateTealKeyValue(kv basics.TealKeyValue, schema basics.StateSchema) err
 	return nil
 }
 
-// applyKeyValueOverride returns kv with the keys in del deleted, and the entries in set set. kv is
-// not modified.
-func applyKeyValueOverride(kv basics.TealKeyValue, set basics.TealKeyValue, del []string) (basics.TealKeyValue, error) {
-	kv = kv.Clone()
-	deleted := make(map[string]bool, len(del))
-	for _, key := range del {
-		if _, ok := set[key]; ok {
-			return nil, fmt.Errorf("key %#x cannot be both set and deleted", key)
+// checkValueDelta checks that vd has a valid action, and no value for a field its action does not
+// use.
+func checkValueDelta(vd basics.ValueDelta) error {
+	switch vd.Action {
+	case basics.SetBytesAction:
+		if vd.Uint != 0 {
+			return fmt.Errorf("set bytes action must not have a uint")
 		}
-		if deleted[key] {
-			return nil, fmt.Errorf("key %#x cannot be deleted twice", key)
+	case basics.SetUintAction:
+		if len(vd.Bytes) != 0 {
+			return fmt.Errorf("set uint action must not have bytes")
 		}
-		deleted[key] = true
-		if _, ok := kv[key]; !ok {
-			return nil, fmt.Errorf("cannot delete key %#x: key does not exist", key)
+	case basics.DeleteAction:
+		if vd.Uint != 0 || len(vd.Bytes) != 0 {
+			return fmt.Errorf("delete action must not have a value")
 		}
-		delete(kv, key)
+	default:
+		return fmt.Errorf("invalid action %d", vd.Action)
 	}
-	for key, value := range set {
+	return nil
+}
+
+// applyStateDelta returns kv with delta applied. kv is not modified.
+func applyStateDelta(kv basics.TealKeyValue, delta basics.StateDelta) (basics.TealKeyValue, error) {
+	kv = kv.Clone()
+	for _, key := range sortedKeys(delta) {
+		vd := delta[key]
+		if err := checkValueDelta(vd); err != nil {
+			return nil, fmt.Errorf("key %#x: %v", key, err)
+		}
+		if vd.Action == basics.DeleteAction {
+			if _, ok := kv[key]; !ok {
+				return nil, fmt.Errorf("cannot delete key %#x: key does not exist", key)
+			}
+			delete(kv, key)
+			continue
+		}
 		if kv == nil {
 			kv = make(basics.TealKeyValue)
 		}
-		kv[key] = value
+		kv[key], _ = vd.ToTealValue()
 	}
 	return kv, nil
 }

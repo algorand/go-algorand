@@ -803,7 +803,7 @@ type SimulateAccountOverride struct {
 	// Address The address of the account to override.
 	Address string `json:"address"`
 
-	// Apps Application local state overrides. If the account is not opted in to an application, it is opted in, unless the override opts it out. Each application ID may appear at most once.
+	// Apps Application opt-in overrides. If the account is not opted in to an application, it is opted in, unless the override opts it out. Local state key-values are modified by the application override's local-state-delta. Each application ID may appear at most once.
 	Apps *[]SimulateAppLocalStateOverride `json:"apps,omitempty"`
 
 	// Assets Asset holding overrides. If the account is not opted in to an asset, it is opted in. Each asset ID may appear at most once.
@@ -846,18 +846,12 @@ type SimulateAccountOverride struct {
 	VoteParticipationKey *[]byte `json:"vote-participation-key,omitempty"`
 }
 
-// SimulateAppLocalStateOverride Modifications to an account's local state for an application. Omitted fields are left unchanged. For a new opt-in, the schema defaults to the application's local-state-schema.
+// SimulateAppLocalStateOverride Modifications to an account's opt-in to an application. Omitted fields are left unchanged. For a new opt-in, the schema defaults to the application's local-state-schema, and there are no key-values.
 type SimulateAppLocalStateOverride struct {
 	// AppID The ID of the application. It must exist, either on the ledger or by an application override.
 	AppID basics.AppIndex `json:"app-id"`
 
-	// DeleteKeyValue Local state keys to delete. Each key must exist and must not also be set in key-value.
-	DeleteKeyValue *[][]byte `json:"delete-key-value,omitempty"`
-
-	// KeyValue Represents a key-value store for use in an application.
-	KeyValue *TealKeyValueStore `json:"key-value,omitempty"`
-
-	// OptOut If true, removes the account's local state. The account must be opted in, and no other field may be set.
+	// OptOut If true, removes the account's local state. The account must be opted in, and schema must not be set.
 	OptOut *bool `json:"opt-out,omitempty"`
 
 	// Schema Specifies maximums on the number of each type that may be stored.
@@ -869,20 +863,14 @@ type SimulateAppOverride struct {
 	// ApprovalProgram If set, replaces the approval program.
 	ApprovalProgram *[]byte `json:"approval-program,omitempty"`
 
-	// Boxes Boxes to create, or replace if they already exist. Other existing boxes are left unchanged.
-	Boxes *[]SimulateBoxOverride `json:"boxes,omitempty"`
+	// BoxDelta Application state delta.
+	BoxDelta *StateDelta `json:"box-delta,omitempty"`
 
 	// ClearStateProgram If set, replaces the clear state program.
 	ClearStateProgram *[]byte `json:"clear-state-program,omitempty"`
 
 	// Creator The application's creator. Required when creating an application. For an existing application, it must be omitted or match the existing creator.
 	Creator *string `json:"creator,omitempty"`
-
-	// DeleteBoxes Names of boxes to delete. Each box must exist and must not also be set in boxes.
-	DeleteBoxes *[][]byte `json:"delete-boxes,omitempty"`
-
-	// DeleteGlobalState Global state keys to delete. Each key must exist and must not also be set in global-state.
-	DeleteGlobalState *[][]byte `json:"delete-global-state,omitempty"`
 
 	// ExtraProgramPages If set, replaces the number of extra program pages.
 	ExtraProgramPages *uint32 `json:"extra-program-pages,omitempty"`
@@ -893,14 +881,17 @@ type SimulateAppOverride struct {
 	// ForeignBoxReads If set, replaces whether any app may read this app's boxes.
 	ForeignBoxReads *bool `json:"foreign-box-reads,omitempty"`
 
-	// GlobalState Represents a key-value store for use in an application.
-	GlobalState *TealKeyValueStore `json:"global-state,omitempty"`
+	// GlobalStateDelta Application state delta.
+	GlobalStateDelta *StateDelta `json:"global-state-delta,omitempty"`
 
 	// GlobalStateSchema Specifies maximums on the number of each type that may be stored.
 	GlobalStateSchema *ApplicationStateSchema `json:"global-state-schema,omitempty"`
 
 	// Id The ID of the application to override. A new application's ID must not be in the range of IDs that may be assigned to creatables made during simulation.
 	Id basics.AppIndex `json:"id"`
+
+	// LocalStateDelta Changes to accounts' local state, in the same form as a transaction's local-state-delta. Each account must be opted in after account overrides are applied. Keys that are not mentioned are left unchanged. Each deleted key must exist. Each address, and each key within an address, may appear at most once.
+	LocalStateDelta *[]AccountStateDelta `json:"local-state-delta,omitempty"`
 
 	// LocalStateSchema Specifies maximums on the number of each type that may be stored.
 	LocalStateSchema *ApplicationStateSchema `json:"local-state-schema,omitempty"`
@@ -1000,15 +991,6 @@ type SimulateBlockOverride struct {
 
 	// Timestamp If set, replaces the block's timestamp, in seconds since the epoch. It must not be negative.
 	Timestamp *int64 `json:"timestamp,omitempty"`
-}
-
-// SimulateBoxOverride A box to create or replace during simulation.
-type SimulateBoxOverride struct {
-	// Name The box name, base64 encoded.
-	Name []byte `json:"name"`
-
-	// Value The box value, base64 encoded.
-	Value []byte `json:"value"`
 }
 
 // SimulateInitialStates Initial states of resources that were accessed during simulation.
