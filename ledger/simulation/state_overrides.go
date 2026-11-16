@@ -252,6 +252,9 @@ type stateOverlay struct {
 	// online holds the online data of accounts whose agreement state is overridden. Accounts
 	// that are not online have empty online data.
 	online map[basics.Address]basics.OnlineAccountData
+	// statusOnline holds the accounts whose status is explicitly overridden to Online. They are
+	// added to the knock offline candidates even if the ledger would not return them.
+	statusOnline map[basics.Address]bool
 	// onlineAdded and onlineRemoved are the stake that the accounts in online add to and remove
 	// from the online circulation at balanceRound
 	onlineAdded   basics.MicroAlgos
@@ -273,6 +276,12 @@ func sortedKeys[K cmp.Ordered, V any](m map[K]V) []K {
 	return slices.Sorted(maps.Keys(m))
 }
 
+func sortedAddrs[V any](m map[basics.Address]V) []basics.Address {
+	return slices.SortedFunc(maps.Keys(m), func(a, b basics.Address) int {
+		return bytes.Compare(a[:], b[:])
+	})
+}
+
 // buildStateOverlay computes the ledger state that results from applying overrides to the state
 // as of l.start. It returns nil if there are no overrides.
 func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr bookkeeping.BlockHeader) (*stateOverlay, error) {
@@ -287,14 +296,15 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 	}
 
 	o := &stateOverlay{
-		accounts:    make(map[basics.Address]ledgercore.AccountData),
-		apps:        make(map[basics.AppIndex]appOverlay),
-		assets:      make(map[basics.AssetIndex]assetOverlay),
-		holdings:    make(map[holdingKey]basics.AssetHolding),
-		localStates: make(map[localStateKey]*basics.AppLocalState),
-		kvs:         make(map[string][]byte),
-		blocks:      make(map[basics.Round]BlockOverride),
-		online:      make(map[basics.Address]basics.OnlineAccountData),
+		accounts:     make(map[basics.Address]ledgercore.AccountData),
+		apps:         make(map[basics.AppIndex]appOverlay),
+		assets:       make(map[basics.AssetIndex]assetOverlay),
+		holdings:     make(map[holdingKey]basics.AssetHolding),
+		localStates:  make(map[localStateKey]*basics.AppLocalState),
+		kvs:          make(map[string][]byte),
+		blocks:       make(map[basics.Round]BlockOverride),
+		online:       make(map[basics.Address]basics.OnlineAccountData),
+		statusOnline: make(map[basics.Address]bool),
 	}
 
 	for _, rnd := range sortedKeys(overrides.Blocks) {
@@ -330,23 +340,18 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 	}
 
 	// Sort accounts so that errors are deterministic
-	addrs := slices.SortedFunc(maps.Keys(overrides.Accounts), func(a, b basics.Address) int {
-		return bytes.Compare(a[:], b[:])
-	})
-	for _, addr := range addrs {
+	for _, addr := range sortedAddrs(overrides.Accounts) {
 		override := overrides.Accounts[addr]
 		var acct ledgercore.AccountData
 		acct, err = getAccount(addr)
 		if err != nil {
 			return nil, err
 		}
-		if override.Balance != nil {
-			acct.MicroAlgos = *override.Balance
-			// Set the rewards base to the current rewards level so there are no pending rewards
-			acct.RewardsBase = totals.RewardsLevel
-		}
-		if err = overlayAccountFields(&acct, addr, override); err != nil {
+		if err = overlayAccountFields(&acct, addr, override, proto.RewardUnit, totals.RewardsLevel); err != nil {
 			return nil, err
+		}
+		if override.Status != nil && *override.Status == basics.Online {
+			o.statusOnline[addr] = true
 		}
 		for _, aidx := range sortedKeys(override.Assets) {
 			if acct, err = l.overlayHolding(o, acct, addr, aidx, override.Assets[aidx]); err != nil {
@@ -364,10 +369,7 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 	// Local deltas come after account overrides, which may opt accounts in or out
 	for _, aidx := range sortedKeys(overrides.Apps) {
 		local := overrides.Apps[aidx].LocalDeltas
-		addrs := slices.SortedFunc(maps.Keys(local), func(a, b basics.Address) int {
-			return bytes.Compare(a[:], b[:])
-		})
-		for _, addr := range addrs {
+		for _, addr := range sortedAddrs(local) {
 			if err = l.overlayLocalDelta(o, addr, aidx, local[addr]); err != nil {
 				return nil, err
 			}
@@ -435,15 +437,16 @@ func (l simulatorLedger) overlayOnline(o *stateOverlay, overrides StateOverrides
 
 	// Match the evaluator's choice of balance round for the round being simulated
 	current := l.start + 1
-	paramsHdr, err := l.Ledger.BlockHdr(agreement.ParamsRound(current))
+	paramsRound := agreement.ParamsRound(current)
+	paramsHdr, err := l.Ledger.BlockHdr(paramsRound)
 	if err != nil {
-		return err
+		return invalidOverride("cannot override online state: block %d is unavailable: %v", paramsRound, err)
 	}
 	o.balanceRound = agreement.BalanceRound(current, config.Consensus[paramsHdr.CurrentProtocol])
 
 	balanceHdr, err := l.Ledger.BlockHdr(o.balanceRound)
 	if err != nil {
-		return err
+		return invalidOverride("cannot override online state: balance round %d is unavailable: %v", o.balanceRound, err)
 	}
 	// Match the ledger's exclusion of expired stake from the online circulation
 	excludeExpired := config.Consensus[balanceHdr.CurrentProtocol].ExcludeExpiredCirculation && o.balanceRound != 0
@@ -455,13 +458,15 @@ func (l simulatorLedger) overlayOnline(o *stateOverlay, overrides StateOverrides
 	}
 
 	var ot basics.OverflowTracker
-	for addr, override := range overrides.Accounts {
-		if !override.affectsAgreement() {
+	// Sort accounts so that errors are deterministic
+	for _, addr := range sortedAddrs(overrides.Accounts) {
+		if !overrides.Accounts[addr].affectsAgreement() {
 			continue
 		}
-		original, err := l.Ledger.LookupAgreement(o.balanceRound, addr)
+		var original basics.OnlineAccountData
+		original, err = l.Ledger.LookupAgreement(o.balanceRound, addr)
 		if err != nil {
-			return err
+			return invalidOverride("cannot override online state of account %s at balance round %d: %v", addr, o.balanceRound, err)
 		}
 		// Rewards are applied as of the start round, since the account's rewards base may be later
 		// than the balance round
@@ -519,15 +524,26 @@ func (override BlockOverride) apply(hdr *bookkeeping.BlockHeader) {
 	}
 }
 
-// overlayAccountFields applies the overrides of an account's own fields, other than its balance.
-func overlayAccountFields(acct *ledgercore.AccountData, addr basics.Address, override AccountOverride) error {
+// overlayAccountFields applies the overrides of an account's own fields, settling its rewards as of
+// rewardsLevel where the overrides affect them.
+func overlayAccountFields(acct *ledgercore.AccountData, addr basics.Address, override AccountOverride, rewardUnit uint64, rewardsLevel uint64) error {
 	if override.Status != nil {
 		switch *override.Status {
 		case basics.Offline, basics.Online, basics.NotParticipating:
-			acct.Status = *override.Status
 		default:
 			return invalidOverride("account %s status %d is not valid", addr, *override.Status)
 		}
+		// Settle pending rewards under the old status, as the evaluator does before applying a
+		// transaction. A NotParticipating account accrues no rewards, so its RewardsBase is stale
+		// and is reset so that it does not gain rewards once it participates.
+		*acct = acct.WithUpdatedRewards(rewardUnit, rewardsLevel)
+		acct.RewardsBase = rewardsLevel
+		acct.Status = *override.Status
+	}
+	if override.Balance != nil {
+		acct.MicroAlgos = *override.Balance
+		// Set the rewards base to the current rewards level so there are no pending rewards
+		acct.RewardsBase = rewardsLevel
 	}
 	if override.AuthAddr != nil {
 		acct.AuthAddr = *override.AuthAddr
@@ -1117,8 +1133,10 @@ func (l simulatorLedger) OnlineCirculation(rnd basics.Round, voteRnd basics.Roun
 }
 
 // GetKnockOfflineCandidates is part of the ledger.Ledger interface.
-// We override this so that accounts overridden to be online are considered for suspension, and
-// accounts overridden to not be online are not.
+// We override this so that candidates use their overridden online data, accounts whose status is
+// overridden to Online are considered for suspension, and accounts overridden to not be online,
+// or to have no stake, are not. Other overridden accounts remain candidates only if the ledger
+// returns them.
 func (l simulatorLedger) GetKnockOfflineCandidates(rnd basics.Round, proto config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error) {
 	candidates, err := l.Ledger.GetKnockOfflineCandidates(rnd, proto)
 	// A nil result means candidates are not considered at all
@@ -1128,11 +1146,14 @@ func (l simulatorLedger) GetKnockOfflineCandidates(rnd basics.Round, proto confi
 	// Copy, so the ledger's result is not modified
 	candidates = maps.Clone(candidates)
 	for addr, data := range l.overlay.online {
-		if l.overlay.accounts[addr].Status != basics.Online {
+		// Match the ledger, which skips accounts with no stake
+		if l.overlay.accounts[addr].Status != basics.Online || data.MicroAlgosWithRewards.IsZero() {
 			delete(candidates, addr)
 			continue
 		}
-		candidates[addr] = data
+		if _, ok := candidates[addr]; ok || l.overlay.statusOnline[addr] {
+			candidates[addr] = data
+		}
 	}
 	return candidates, nil
 }

@@ -29,8 +29,10 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	simulationtesting "github.com/algorand/go-algorand/ledger/simulation/testing"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -505,6 +507,117 @@ func TestAccountOverrideFields(t *testing.T) {
 	// The account's stake moves from the online to the offline totals
 	require.Equal(t, totals.Online.Money.Raw-money.Raw, l.overlay.totals.Online.Money.Raw)
 	require.Equal(t, totals.Offline.Money.Raw+money.Raw, l.overlay.totals.Offline.Money.Raw)
+}
+
+func TestStatusOverrideSettlesRewards(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// The test ledger's rewards level never advances, so use synthetic account data
+	const rewardUnit = 1_000_000
+	const level = 10
+	online, offline, notParticipating := basics.Online, basics.Offline, basics.NotParticipating
+	balance := basics.MicroAlgos{Raw: 7_000_000}
+	var addr basics.Address
+
+	// An Online account with pending rewards has them credited before going offline
+	acct := ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{
+		Status: basics.Online, MicroAlgos: basics.MicroAlgos{Raw: 5_000_000}, RewardsBase: 4,
+	}}
+	moneyBefore, _ := acct.Money(rewardUnit, level)
+	require.NoError(t, overlayAccountFields(&acct, addr, AccountOverride{Status: &offline}, rewardUnit, level))
+	require.Equal(t, basics.Offline, acct.Status)
+	require.Equal(t, uint64(5_000_000+5*(level-4)), acct.MicroAlgos.Raw)
+	require.Equal(t, uint64(5*(level-4)), acct.RewardedMicroAlgos.Raw)
+	require.Equal(t, uint64(level), acct.RewardsBase)
+	moneyAfter, _ := acct.Money(rewardUnit, level)
+	require.Equal(t, moneyBefore, moneyAfter)
+
+	// A NotParticipating account's frozen RewardsBase does not earn it rewards once online
+	acct = ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{
+		Status: basics.NotParticipating, MicroAlgos: basics.MicroAlgos{Raw: 5_000_000}, RewardsBase: 4,
+	}}
+	require.NoError(t, overlayAccountFields(&acct, addr, AccountOverride{Status: &online}, rewardUnit, level))
+	require.Equal(t, basics.Online, acct.Status)
+	require.Equal(t, uint64(5_000_000), acct.MicroAlgos.Raw)
+	require.Equal(t, uint64(level), acct.RewardsBase)
+	moneyAfter, _ = acct.Money(rewardUnit, level)
+	require.Equal(t, uint64(5_000_000), moneyAfter.Raw)
+
+	// Going NotParticipating keeps the rewards earned while participating
+	acct = ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{
+		Status: basics.Offline, MicroAlgos: basics.MicroAlgos{Raw: 5_000_000}, RewardsBase: 4,
+	}}
+	require.NoError(t, overlayAccountFields(&acct, addr, AccountOverride{Status: &notParticipating}, rewardUnit, level))
+	require.Equal(t, uint64(5_000_000+5*(level-4)), acct.MicroAlgos.Raw)
+
+	// A balance override replaces the balance, including any settled rewards
+	acct = ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{
+		Status: basics.Online, MicroAlgos: basics.MicroAlgos{Raw: 5_000_000}, RewardsBase: 4,
+	}}
+	require.NoError(t, overlayAccountFields(&acct, addr, AccountOverride{Status: &offline, Balance: &balance}, rewardUnit, level))
+	require.Equal(t, balance, acct.MicroAlgos)
+	require.Equal(t, uint64(level), acct.RewardsBase)
+}
+
+func TestKnockOfflineCandidateOverrides(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	// Fund a new account and bring it online with a keyreg. It is online but, not being an online
+	// genesis account, the ledger does not return it as a candidate.
+	var keyregOnline basics.Address
+	crypto.RandBytes(keyregOnline[:])
+	env.TransferAlgos(env.Accounts[0].Addr, keyregOnline, 10_000_000)
+	env.Txn(env.TxnInfo.NewTxn(txntest.Txn{
+		Type:            protocol.KeyRegistrationTx,
+		Sender:          keyregOnline,
+		VotePK:          crypto.OneTimeSignatureVerifier{1},
+		SelectionPK:     crypto.VRFVerifier{2},
+		StateProofPK:    merklesignature.Commitment{3},
+		VoteFirst:       1,
+		VoteLast:        100_000,
+		VoteKeyDilution: 10,
+	}).SignedTxn())
+
+	var genesisOnline []basics.Address
+	for _, account := range env.Accounts {
+		if account.AcctData.Status == basics.Online {
+			genesisOnline = append(genesisOnline, account.Addr)
+		}
+	}
+	require.GreaterOrEqual(t, len(genesisOnline), 2)
+	candidate, zeroed := genesisOnline[0], genesisOnline[1]
+
+	proto := env.TxnInfo.CurrentProtocolParams()
+	start := env.Ledger.Latest()
+	realCandidates, err := env.Ledger.GetKnockOfflineCandidates(start, proto)
+	require.NoError(t, err)
+	require.Contains(t, realCandidates, candidate)
+	require.Contains(t, realCandidates, zeroed)
+	require.NotContains(t, realCandidates, keyregOnline)
+	keyregData, _, err := env.Ledger.LookupWithoutRewards(start, keyregOnline)
+	require.NoError(t, err)
+	require.Equal(t, basics.Online, keyregData.Status)
+
+	balance := func(raw uint64) *basics.MicroAlgos { return &basics.MicroAlgos{Raw: raw} }
+	dilution := uint64(20)
+	l := newOverlayLedger(t, &env, StateOverrides{Accounts: map[basics.Address]AccountOverride{
+		candidate:    {Balance: balance(1_000_000_000)},
+		zeroed:       {Balance: balance(0)},
+		keyregOnline: {VoteKeyDilution: &dilution},
+	}})
+	candidates, err := l.GetKnockOfflineCandidates(start, proto)
+	require.NoError(t, err)
+	// A candidate the ledger returns uses its overridden data
+	require.Equal(t, uint64(1_000_000_000), candidates[candidate].MicroAlgosWithRewards.Raw)
+	// The ledger skips accounts with no stake
+	require.NotContains(t, candidates, zeroed)
+	// An override that does not set the status to Online does not make an account a candidate
+	require.NotContains(t, candidates, keyregOnline)
 }
 
 func TestOnlineOverrideCirculationBounds(t *testing.T) {
