@@ -2049,6 +2049,10 @@ func TestStateOverrideBlockValidation(t *testing.T) {
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
 
+	// The start round must not be genesis: the round before it is overridden below, and
+	// bookkeeping.NextBonus ignores the genesis block's Bonus when computing round 1's
+	env.AdvanceRounds(1)
+
 	sender := env.Accounts[0]
 	txn := env.TxnInfo.NewTxn(txntest.Txn{
 		Type:     protocol.PaymentTx,

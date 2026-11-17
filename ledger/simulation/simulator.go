@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -382,8 +383,20 @@ func (s Simulator) simulateWithTracer(hdr bookkeeping.BlockHeader, txgroup []tra
 	return vb, nil
 }
 
+// recoverPanic, when deferred, converts a panic into an error stored in err. The ledger and
+// evaluator panic on state they consider impossible, such as an account balance that overflows
+// when its rewards are applied.
+func recoverPanic(err *error) {
+	if r := recover(); r != nil {
+		logging.Base().Errorf("recovered from panic during simulation: %v", r)
+		*err = fmt.Errorf("simulation panicked: %v", r)
+	}
+}
+
 // Simulate simulates a transaction group using the simulator. Will error if the transaction group is not well-formed.
-func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
+func (s Simulator) Simulate(simulateRequest Request) (result Result, err error) {
+	defer recoverPanic(&err)
+
 	if simulateRequest.FixSigners && !simulateRequest.AllowEmptySignatures {
 		return Result{}, InvalidRequestError{
 			SimulatorError{

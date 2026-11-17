@@ -17,6 +17,7 @@
 package simulation
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"reflect"
@@ -996,4 +997,118 @@ func TestOnlineOverrides(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestEvalErrorAttribution(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	rnd := env.Ledger.Latest()
+	evalErr := errors.New("evaluator failure")
+
+	// Without overrides, the error is returned as is
+	l := simulatorLedger{Ledger: env.Ledger, start: rnd}
+	require.Equal(t, evalErr, l.evalError(evalErr))
+
+	// The ledger can evaluate an empty block from the start round, so the overrides are at fault
+	l.overlay = &stateOverlay{}
+	err := l.evalError(evalErr)
+	require.ErrorAs(t, err, &InvalidRequestError{})
+	require.ErrorIs(t, err, evalErr)
+
+	// The ledger cannot evaluate a block from a round it does not have, so the overrides are not
+	// blamed
+	l.start = rnd + 10
+	require.Equal(t, evalErr, l.evalError(evalErr))
+}
+
+func TestCheckPendingRewards(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var addr basics.Address
+	acct := ledgercore.AccountData{}
+	acct.MicroAlgos = basics.MicroAlgos{Raw: 10}
+	acct.RewardsBase = 5
+
+	// Each accepted account can have its rewards applied without panicking
+	require.NoError(t, checkPendingRewards(acct, addr, 1, 5))
+	require.NoError(t, checkPendingRewards(acct, addr, 1, 6))
+	require.Equal(t, uint64(20), acct.WithUpdatedRewards(1, 6).MicroAlgos.Raw)
+
+	// A rewards level below the account's rewards base
+	require.ErrorContains(t, checkPendingRewards(acct, addr, 1, 4), "cannot be settled")
+	// Rewards that overflow the balance
+	acct.MicroAlgos.Raw = math.MaxUint64 - 5
+	require.NoError(t, checkPendingRewards(acct, addr, math.MaxUint64, 6))
+	require.ErrorContains(t, checkPendingRewards(acct, addr, 1, 6), "cannot be settled")
+	// Rewards that overflow by themselves
+	require.ErrorContains(t, checkPendingRewards(acct, addr, 1, 7), "cannot be settled")
+
+	// A NotParticipating account accrues no rewards
+	acct.Status = basics.NotParticipating
+	require.NoError(t, checkPendingRewards(acct, addr, 1, 4))
+	require.NoError(t, checkPendingRewards(acct, addr, 1, 7))
+}
+
+func TestRecoverPanic(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	run := func(f func()) (err error) {
+		defer recoverPanic(&err)
+		f()
+		return nil
+	}
+	require.NoError(t, run(func() {}))
+	require.ErrorContains(t, run(func() { panic("boom") }), "simulation panicked: boom")
+}
+
+func TestStateOverridesCount(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	rnd := env.Ledger.Latest()
+	hdr, err := env.Ledger.BlockHdr(rnd)
+	require.NoError(t, err)
+
+	var addr basics.Address
+	crypto.RandBytes(addr[:])
+	overrides := StateOverrides{
+		Accounts: map[basics.Address]AccountOverride{addr: {
+			Assets: map[basics.AssetIndex]AssetHoldingOverride{1: {}, 2: {}},
+			Apps:   map[basics.AppIndex]AppLocalStateOverride{1: {}},
+		}},
+		Apps: map[basics.AppIndex]AppOverride{1: {
+			// Global state is not looked up per key
+			GlobalDelta: basics.StateDelta{"a": {}, "b": {}},
+			LocalDeltas: map[basics.Address]basics.StateDelta{addr: {"a": {}}},
+			BoxDelta:    basics.StateDelta{"a": {}, "b": {}, "c": {}},
+		}},
+		Assets: map[basics.AssetIndex]AssetOverride{1: {}, 2: {}},
+		Blocks: map[basics.Round]BlockOverride{1: {}},
+	}
+	require.Equal(t, 12, overrides.count())
+
+	balances := func(n int) StateOverrides {
+		accounts := make(map[basics.Address]AccountOverride, n)
+		for range n {
+			var a basics.Address
+			crypto.RandBytes(a[:])
+			accounts[a] = AccountOverride{Balance: &basics.MicroAlgos{Raw: 1}}
+		}
+		return StateOverrides{Accounts: accounts}
+	}
+	l := simulatorLedger{Ledger: env.Ledger, start: rnd}
+	_, err = l.buildStateOverlay(balances(MaxStateOverrides), hdr)
+	require.NoError(t, err)
+	_, err = l.buildStateOverlay(balances(MaxStateOverrides+1), hdr)
+	require.ErrorAs(t, err, &InvalidRequestError{})
+	require.ErrorContains(t, err, "exceed maximum")
 }

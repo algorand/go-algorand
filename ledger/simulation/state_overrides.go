@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
@@ -217,6 +218,24 @@ type AssetOverride struct {
 	Clawback      *basics.Address
 }
 
+// MaxStateOverrides is the largest number of items a request may override. buildStateOverlay
+// looks each of them up on the ledger before the transaction group is checked.
+const MaxStateOverrides = 1024
+
+// count returns the number of items that buildStateOverlay looks up on the ledger: blocks,
+// accounts, their holdings and local states, apps, their boxes and the accounts whose local
+// state they modify, and assets.
+func (overrides StateOverrides) count() int {
+	n := len(overrides.Accounts) + len(overrides.Apps) + len(overrides.Assets) + len(overrides.Blocks)
+	for _, acct := range overrides.Accounts {
+		n += len(acct.Assets) + len(acct.Apps)
+	}
+	for _, app := range overrides.Apps {
+		n += len(app.LocalDeltas) + len(app.BoxDelta)
+	}
+	return n
+}
+
 // reservedCreatableIDs is the number of IDs above the current txn counter that cannot be used for
 // new apps, since they may be assigned to creatables made during simulation. It comfortably
 // exceeds the number of transactions a single group can contain, including inner transactions.
@@ -283,14 +302,49 @@ func invalidOverride(format string, args ...any) error {
 }
 
 // evalError converts err, returned by eval.StartEvaluator or BlockEvaluator.GenerateBlock, into
-// an invalid request error if state is overridden. Overrides can produce state that these reject
-// but that the ledger never holds, such as a rewards pool that cannot pay the round's rewards,
-// totals that overflow once rewards are applied, or a Bonus that overflows the proposer payout.
+// an invalid request error if the overrides are responsible for it. Overrides can produce state
+// that these reject but that the ledger never holds, such as a rewards pool that cannot pay the
+// round's rewards, totals that overflow once rewards are applied, or a Bonus that overflows the
+// proposer payout. err is returned unchanged if an empty block cannot be evaluated from the
+// ledger's own state either.
 func (l simulatorLedger) evalError(err error) error {
-	if l.overlay == nil {
+	if l.overlay == nil || !l.evaluatesWithoutOverlay() {
 		return err
 	}
 	return invalidOverride("block %d cannot be evaluated from the overridden state: %w", l.start+1, err)
+}
+
+// evaluatesWithoutOverlay reports whether an empty block l.start+1 can be evaluated from the
+// ledger's state, ignoring l.overlay.
+func (l simulatorLedger) evaluatesWithoutOverlay() bool {
+	l.overlay = nil
+	prevHdr, err := l.BlockHdr(l.start)
+	if err != nil {
+		return false
+	}
+	evaluator, err := l.StartEvaluator(bookkeeping.MakeBlock(prevHdr).BlockHeader, 0, 0, logic.NullEvalTracer{})
+	if err != nil {
+		return false
+	}
+	_, err = evaluator.GenerateBlock(nil)
+	return err == nil
+}
+
+// checkPendingRewards returns an error if acct's pending rewards cannot be settled at
+// rewardsLevel. basics.WithUpdatedRewards, which AccountData.WithUpdatedRewards, Money and
+// OnlineAccountData call, panics in that case.
+func checkPendingRewards(acct ledgercore.AccountData, addr basics.Address, rewardUnit uint64, rewardsLevel uint64) error {
+	if acct.Status == basics.NotParticipating {
+		return nil
+	}
+	var ot basics.OverflowTracker
+	rewards := basics.PendingRewards(&ot, rewardUnit, acct.MicroAlgos, acct.RewardsBase, rewardsLevel)
+	ot.AddA(acct.MicroAlgos, rewards)
+	if ot.Overflowed {
+		return fmt.Errorf("account %s balance %d with rewards base %d cannot be settled at rewards level %d",
+			addr, acct.MicroAlgos.Raw, acct.RewardsBase, rewardsLevel)
+	}
+	return nil
 }
 
 func sortedKeys[K cmp.Ordered, V any](m map[K]V) []K {
@@ -309,11 +363,19 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 	if len(overrides.Accounts) == 0 && len(overrides.Apps) == 0 && len(overrides.Assets) == 0 && len(overrides.Blocks) == 0 {
 		return nil, nil
 	}
+	if n := overrides.count(); n > MaxStateOverrides {
+		return nil, invalidOverride("%d overridden items exceed maximum %d", n, MaxStateOverrides)
+	}
 
 	proto := config.Consensus[prevHdr.CurrentProtocol]
 	totals, err := l.Totals(l.start)
 	if err != nil {
 		return nil, err
+	}
+	// Rewards are settled at prevHdr.RewardsLevel through totals as well as directly, so the
+	// two must agree for checkPendingRewards to cover both.
+	if totals.RewardsLevel != prevHdr.RewardsLevel {
+		return nil, fmt.Errorf("round %d totals have rewards level %d, but its header has %d", l.start, totals.RewardsLevel, prevHdr.RewardsLevel)
 	}
 
 	o := &stateOverlay{
@@ -344,6 +406,11 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 		if lookupErr != nil {
 			return ledgercore.AccountData{}, lookupErr
 		}
+		// Every account in o.accounts either passes this check unmodified, or has its
+		// RewardsBase set to prevHdr.RewardsLevel by overlayAccountFields
+		if lookupErr = checkPendingRewards(acct, addr, proto.RewardUnit, prevHdr.RewardsLevel); lookupErr != nil {
+			return ledgercore.AccountData{}, lookupErr
+		}
 		original[addr] = acct
 		return acct, nil
 	}
@@ -370,7 +437,7 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 		if err != nil {
 			return nil, err
 		}
-		if err = overlayAccountFields(&acct, addr, override, proto.RewardUnit, totals.RewardsLevel); err != nil {
+		if err = overlayAccountFields(&acct, addr, override, proto.RewardUnit, prevHdr.RewardsLevel); err != nil {
 			return nil, err
 		}
 		if override.Status != nil && *override.Status == basics.Online {
