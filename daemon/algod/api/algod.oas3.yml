@@ -2285,7 +2285,7 @@
             "type": "array"
           },
           "auth-addr": {
-            "description": "If set, replaces the address against which signing should be checked. The zero address means the account is not rekeyed.",
+            "description": "If set, replaces the address against which signing should be checked. The zero address, or the account's own address, means the account is not rekeyed.",
             "type": "string",
             "x-algorand-format": "Address"
           },
@@ -2597,6 +2597,7 @@
           },
           "round": {
             "description": "The round of the block to override. It must be at or before the round that simulation starts from.",
+            "nullable": true,
             "type": "integer",
             "x-go-type": "basics.Round"
           },

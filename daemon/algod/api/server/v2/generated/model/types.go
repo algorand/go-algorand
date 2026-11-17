@@ -809,7 +809,7 @@ type SimulateAccountOverride struct {
 	// Assets Asset holding overrides. If the account is not opted in to an asset, it is opted in. Each asset ID may appear at most once.
 	Assets *[]SimulateAssetHoldingOverride `json:"assets,omitempty"`
 
-	// AuthAddr If set, replaces the address against which signing should be checked. The zero address means the account is not rekeyed.
+	// AuthAddr If set, replaces the address against which signing should be checked. The zero address, or the account's own address, means the account is not rekeyed.
 	AuthAddr *string `json:"auth-addr,omitempty"`
 
 	// Balance If set, replaces the account's balance in microAlgos. Pending rewards are forfeited. It must be small enough that the rewards credited in the simulated round cannot overflow it, so balances close to the maximum uint64 are rejected. Balance and the consensus participation fields (status, participation keys and validity, incentive-eligible, last-proposed, last-heartbeat) also override the account's online data at the balance round used by agreement, so its online stake and the online circulation reflect the override. If status is set, agreement treats the account as though it has been in its overridden state since the balance round, with its stake taken from its state at the start round, pending rewards applied. Otherwise the account keeps the status it had at the balance round: if it was online then, each overridden field replaces its value at the balance round, and if it was not, it has no online stake.
@@ -984,7 +984,7 @@ type SimulateBlockOverride struct {
 	ProposerPayout *uint64 `json:"proposer-payout,omitempty"`
 
 	// Round The round of the block to override. It must be at or before the round that simulation starts from.
-	Round basics.Round `json:"round"`
+	Round *basics.Round `json:"round"`
 
 	// Seed If set, replaces the block's 32 byte seed.
 	Seed *[]byte `json:"seed,omitempty"`

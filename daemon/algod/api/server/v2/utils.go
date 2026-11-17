@@ -636,72 +636,66 @@ func convertSimulationRequest(request PreEncodedSimulateRequest) (simulation.Req
 	}, nil
 }
 
+// convertOverrides converts a list of override entries into a map. kind names an entry in errors,
+// key returns the map key of an entry, and convert returns its value.
+func convertOverrides[E any, K comparable, V any](entries *[]E, kind string, key func(E) (K, error), convert func(E) (V, error)) (map[K]V, error) {
+	if entries == nil || len(*entries) == 0 {
+		return nil, nil
+	}
+	result := make(map[K]V, len(*entries))
+	for _, entry := range *entries {
+		k, err := key(entry)
+		if err != nil {
+			return nil, err
+		}
+		if _, ok := result[k]; ok {
+			return nil, fmt.Errorf("duplicate %s %v", kind, k)
+		}
+		v, err := convert(entry)
+		if err != nil {
+			return nil, fmt.Errorf("%s %v: %w", kind, k, err)
+		}
+		result[k] = v
+	}
+	return result, nil
+}
+
 func convertStateOverrides(overrides *model.SimulateStateOverrides) (simulation.StateOverrides, error) {
 	var result simulation.StateOverrides
 	if overrides == nil {
 		return result, nil
 	}
 
-	if overrides.Accounts != nil && len(*overrides.Accounts) > 0 {
-		result.Accounts = make(map[basics.Address]simulation.AccountOverride, len(*overrides.Accounts))
-		for _, acct := range *overrides.Accounts {
-			addr, err := basics.UnmarshalChecksumAddress(acct.Address)
-			if err != nil {
-				return simulation.StateOverrides{}, fmt.Errorf("invalid state override: account address %q: %w", acct.Address, err)
+	var err error
+	result.Accounts, err = convertOverrides(overrides.Accounts, "account",
+		func(acct model.SimulateAccountOverride) (basics.Address, error) {
+			addr, addrErr := basics.UnmarshalChecksumAddress(acct.Address)
+			if addrErr != nil {
+				return basics.Address{}, fmt.Errorf("account address %q: %w", acct.Address, addrErr)
 			}
-			if _, ok := result.Accounts[addr]; ok {
-				return simulation.StateOverrides{}, fmt.Errorf("invalid state override: duplicate account %s", addr)
-			}
-			override, err := convertAccountOverride(acct)
-			if err != nil {
-				return simulation.StateOverrides{}, fmt.Errorf("invalid state override: account %s: %w", addr, err)
-			}
-			result.Accounts[addr] = override
-		}
+			return addr, nil
+		}, convertAccountOverride)
+	if err == nil {
+		result.Apps, err = convertOverrides(overrides.Apps, "app",
+			func(app model.SimulateAppOverride) (basics.AppIndex, error) { return app.Id, nil }, convertAppOverride)
 	}
-
-	if overrides.Apps != nil && len(*overrides.Apps) > 0 {
-		result.Apps = make(map[basics.AppIndex]simulation.AppOverride, len(*overrides.Apps))
-		for _, app := range *overrides.Apps {
-			if _, ok := result.Apps[app.Id]; ok {
-				return simulation.StateOverrides{}, fmt.Errorf("invalid state override: duplicate app %d", app.Id)
-			}
-			override, err := convertAppOverride(app)
-			if err != nil {
-				return simulation.StateOverrides{}, fmt.Errorf("invalid state override: app %d: %w", app.Id, err)
-			}
-			result.Apps[app.Id] = override
-		}
+	if err == nil {
+		result.Assets, err = convertOverrides(overrides.Assets, "asset",
+			func(asset model.SimulateAssetOverride) (basics.AssetIndex, error) { return asset.Id, nil }, convertAssetOverride)
 	}
-
-	if overrides.Assets != nil && len(*overrides.Assets) > 0 {
-		result.Assets = make(map[basics.AssetIndex]simulation.AssetOverride, len(*overrides.Assets))
-		for _, asset := range *overrides.Assets {
-			if _, ok := result.Assets[asset.Id]; ok {
-				return simulation.StateOverrides{}, fmt.Errorf("invalid state override: duplicate asset %d", asset.Id)
-			}
-			override, err := convertAssetOverride(asset)
-			if err != nil {
-				return simulation.StateOverrides{}, fmt.Errorf("invalid state override: asset %d: %w", asset.Id, err)
-			}
-			result.Assets[asset.Id] = override
-		}
+	if err == nil {
+		result.Blocks, err = convertOverrides(overrides.Blocks, "block",
+			func(block model.SimulateBlockOverride) (basics.Round, error) {
+				// Round is a pointer so that an omitted round is not taken to be round 0
+				if block.Round == nil {
+					return 0, errors.New("block round is required")
+				}
+				return *block.Round, nil
+			}, convertBlockOverride)
 	}
-
-	if overrides.Blocks != nil && len(*overrides.Blocks) > 0 {
-		result.Blocks = make(map[basics.Round]simulation.BlockOverride, len(*overrides.Blocks))
-		for _, block := range *overrides.Blocks {
-			if _, ok := result.Blocks[block.Round]; ok {
-				return simulation.StateOverrides{}, fmt.Errorf("invalid state override: duplicate block %d", block.Round)
-			}
-			override, err := convertBlockOverride(block)
-			if err != nil {
-				return simulation.StateOverrides{}, fmt.Errorf("invalid state override: block %d: %w", block.Round, err)
-			}
-			result.Blocks[block.Round] = override
-		}
+	if err != nil {
+		return simulation.StateOverrides{}, fmt.Errorf("invalid state override: %w", err)
 	}
-
 	return result, nil
 }
 
@@ -808,30 +802,22 @@ func convertAccountOverride(acct model.SimulateAccountOverride) (simulation.Acco
 	override.LastProposed = acct.LastProposed
 	override.LastHeartbeat = acct.LastHeartbeat
 
-	if acct.Assets != nil && len(*acct.Assets) > 0 {
-		override.Assets = make(map[basics.AssetIndex]simulation.AssetHoldingOverride, len(*acct.Assets))
-		for _, holding := range *acct.Assets {
-			if _, ok := override.Assets[holding.AssetID]; ok {
-				return simulation.AccountOverride{}, fmt.Errorf("duplicate asset %d", holding.AssetID)
-			}
-			override.Assets[holding.AssetID] = simulation.AssetHoldingOverride{
-				Amount: holding.Amount,
-				Frozen: holding.IsFrozen,
-			}
-		}
+	var err error
+	override.Assets, err = convertOverrides(acct.Assets, "asset",
+		func(holding model.SimulateAssetHoldingOverride) (basics.AssetIndex, error) {
+			return holding.AssetID, nil
+		},
+		func(holding model.SimulateAssetHoldingOverride) (simulation.AssetHoldingOverride, error) {
+			return simulation.AssetHoldingOverride{Amount: holding.Amount, Frozen: holding.IsFrozen}, nil
+		})
+	if err != nil {
+		return simulation.AccountOverride{}, err
 	}
-	if acct.Apps != nil && len(*acct.Apps) > 0 {
-		override.Apps = make(map[basics.AppIndex]simulation.AppLocalStateOverride, len(*acct.Apps))
-		for _, local := range *acct.Apps {
-			if _, ok := override.Apps[local.AppID]; ok {
-				return simulation.AccountOverride{}, fmt.Errorf("duplicate app %d", local.AppID)
-			}
-			localOverride, err := convertAppLocalStateOverride(local)
-			if err != nil {
-				return simulation.AccountOverride{}, fmt.Errorf("app %d: %w", local.AppID, err)
-			}
-			override.Apps[local.AppID] = localOverride
-		}
+	override.Apps, err = convertOverrides(acct.Apps, "app",
+		func(local model.SimulateAppLocalStateOverride) (basics.AppIndex, error) { return local.AppID, nil },
+		convertAppLocalStateOverride)
+	if err != nil {
+		return simulation.AccountOverride{}, err
 	}
 	return override, nil
 }

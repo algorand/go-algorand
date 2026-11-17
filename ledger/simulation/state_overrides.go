@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/logging"
 )
 
 // StateOverrides describes modifications to ledger state that are applied before any evaluation
@@ -85,7 +86,7 @@ type AccountOverride struct {
 	Balance *basics.MicroAlgos
 
 	// AuthAddr, if set, replaces the address whose signature authorizes the account's
-	// transactions. The zero address means the account is not rekeyed.
+	// transactions. The zero address, or the account's own address, means the account is not rekeyed.
 	AuthAddr *basics.Address
 
 	// Status, VotingData fields, IncentiveEligible, LastProposed and LastHeartbeat replace the
@@ -416,13 +417,19 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 	}
 	o.totals = totals
 
-	// The evaluator credits pending rewards with basics.WithUpdatedRewards, which panics on
-	// overflow, so a balance must have room for the rewards credited in the simulated round.
 	balanceLimit := maxOverrideBalance(prevHdr, proto)
 	for _, addr := range sortedAddrs(overrides.Accounts) {
 		if acct := o.accounts[addr]; acct.MicroAlgos.Raw > balanceLimit {
 			return nil, invalidOverride("account %s balance %d exceeds maximum %d", addr, acct.MicroAlgos.Raw, balanceLimit)
 		}
+	}
+
+	pool, err := getAccount(prevHdr.RewardsPool)
+	if err != nil {
+		return nil, err
+	}
+	if err = checkRewards(totals, pool, prevHdr); err != nil {
+		return nil, err
 	}
 
 	if err = l.overlayOnline(o, agreementAddrs, overrides.Accounts, proto, prevHdr); err != nil {
@@ -605,6 +612,10 @@ func overlayAccountFields(acct *ledgercore.AccountData, addr basics.Address, ove
 	}
 	if override.AuthAddr != nil {
 		acct.AuthAddr = *override.AuthAddr
+		// Match apply.Rekey, which stores the zero address when an account is rekeyed to itself
+		if acct.AuthAddr == addr {
+			acct.AuthAddr = basics.Address{}
+		}
 	}
 	if override.VoteID != nil {
 		acct.VoteID = *override.VoteID
@@ -829,6 +840,37 @@ func maxOverrideBalance(prevHdr bookkeeping.BlockHeader, proto config.ConsensusP
 	}
 	maxRewards = max(maxRewards, prevHdr.RewardsRate)
 	return math.MaxUint64 - basics.AddSaturate(maxRewards, prevHdr.RewardsResidue)
+}
+
+// checkRewards rejects overridden state from which the simulated round's rewards cannot be paid.
+// It repeats the rewards arithmetic of eval.StartEvaluator and roundCowState.CalculateTotals,
+// which otherwise fail with errors that are not reported as invalid requests. totals and pool are
+// the ledger totals and the rewards pool account with overrides applied.
+func checkRewards(totals ledgercore.AccountTotals, pool ledgercore.AccountData, prevHdr bookkeeping.BlockHeader) error {
+	_, upgradeState, err := bookkeeping.ProcessUpgradeParams(prevHdr)
+	if err != nil {
+		return err
+	}
+	proto := config.Consensus[upgradeState.CurrentProtocol]
+	prevProto := config.Consensus[prevHdr.CurrentProtocol]
+
+	pool = pool.WithUpdatedRewards(prevProto.RewardUnit, prevHdr.RewardsLevel)
+	next := prevHdr.NextRewardsState(prevHdr.Round+1, proto, pool.MicroAlgos, totals.RewardUnits(), logging.Base())
+
+	var ot basics.OverflowTracker
+	rewards := ot.Mul(totals.RewardUnits(), ot.Sub(next.RewardsLevel, prevHdr.RewardsLevel))
+	remaining := ot.Sub(pool.MicroAlgos.Raw, rewards)
+	ot.Sub(remaining, proto.MinBalance)
+	if ot.Overflowed {
+		return invalidOverride("rewards pool %s balance %d cannot pay rewards of %d and keep the minimum balance %d",
+			prevHdr.RewardsPool, pool.MicroAlgos.Raw, rewards, proto.MinBalance)
+	}
+
+	totals.ApplyRewards(next.RewardsLevel, &ot)
+	if ot.Overflowed {
+		return invalidOverride("account balances overflow ledger totals once rewards are paid")
+	}
+	return nil
 }
 
 func checkNewCreatableID(cidx basics.CreatableIndex, kind string, prevHdr bookkeeping.BlockHeader) error {

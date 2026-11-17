@@ -3354,7 +3354,7 @@ byte "bvalue"
 				}},
 			}},
 			Blocks: &[]model.SimulateBlockOverride{{
-				Round:          hdr.Round,
+				Round:          &hdr.Round,
 				Timestamp:      omitEmpty(int64(1_700_000_000)),
 				Seed:           &[]byte{31: 1},
 				Proposer:       omitEmpty(creator.Address().String()),
@@ -3535,6 +3535,13 @@ byte "bvalue"
 					expected: "duplicate app 1000000",
 				},
 				{
+					name: "missing block round",
+					modify: func(o *model.SimulateStateOverrides) {
+						(*o.Blocks)[0].Round = nil
+					},
+					expected: "block round is required",
+				},
+				{
 					name: "duplicate block",
 					modify: func(o *model.SimulateStateOverrides) {
 						*o.Blocks = append(*o.Blocks, (*o.Blocks)[0])
@@ -3559,7 +3566,7 @@ byte "bvalue"
 					// Rejected by the simulator rather than during conversion
 					name: "future block",
 					modify: func(o *model.SimulateStateOverrides) {
-						(*o.Blocks)[0].Round = hdr.Round + 1
+						(*o.Blocks)[0].Round = omitEmpty(hdr.Round + 1)
 					},
 					expected: "after the start round",
 				},

@@ -205,6 +205,44 @@ func TestStateOverrideBalanceLimit(t *testing.T) {
 	require.ErrorContains(t, err, "exceeds maximum")
 }
 
+func TestStateOverrideRewardsPoolBalance(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	sender := env.Accounts[0]
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Addr,
+		Receiver: env.Accounts[1].Addr,
+		Amount:   1,
+	}).Txn().Sign(sender.Sk)
+
+	hdr, err := env.Ledger.BlockHdr(env.Ledger.Latest())
+	require.NoError(t, err)
+	proto := env.TxnInfo.CurrentProtocolParams()
+
+	simulate := func(balance basics.MicroAlgos) error {
+		_, simErr := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+			TxnGroups: [][]transactions.SignedTxn{{txn}},
+			StateOverrides: simulation.StateOverrides{Accounts: map[basics.Address]simulation.AccountOverride{
+				hdr.RewardsPool: {Balance: &balance},
+			}},
+		})
+		return simErr
+	}
+
+	// The evaluator requires the rewards pool to keep its minimum balance
+	err = simulate(basics.MicroAlgos{Raw: proto.MinBalance - 1})
+	require.ErrorAs(t, err, &simulation.InvalidRequestError{})
+	require.ErrorContains(t, err, "rewards pool")
+
+	// Leave room for the rewards that the simulated round may withdraw
+	require.NoError(t, simulate(basics.MicroAlgos{Raw: proto.MinBalance + hdr.RewardsRate + hdr.RewardsResidue}))
+}
+
 func TestStateOverrideRewards(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

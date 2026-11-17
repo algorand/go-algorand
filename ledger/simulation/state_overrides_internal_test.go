@@ -455,7 +455,7 @@ func TestAccountOverrideFields(t *testing.T) {
 	money, _ := real.Money(proto.RewardUnit, totals.RewardsLevel)
 
 	offline := basics.Offline
-	authAddr := env.Accounts[0].Addr
+	authAddr := basics.Address{9}
 	voteID := crypto.OneTimeSignatureVerifier{1}
 	selectionID := crypto.VRFVerifier{2}
 	stateProofID := merklesignature.Commitment{3}
@@ -553,6 +553,23 @@ func TestStatusOverrideSettlesRewards(t *testing.T) {
 	require.Equal(t, uint64(level), acct.RewardsBase)
 }
 
+func TestAuthAddrOverrideToSelf(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	addr := basics.Address{1}
+	other := basics.Address{2}
+
+	// An account rekeyed to itself is stored with a zero AuthAddr, as apply.Rekey does
+	acct := ledgercore.AccountData{}
+	acct.AuthAddr = other
+	require.NoError(t, overlayAccountFields(&acct, addr, AccountOverride{AuthAddr: &addr}, 1, 0))
+	require.Zero(t, acct.AuthAddr)
+
+	require.NoError(t, overlayAccountFields(&acct, addr, AccountOverride{AuthAddr: &other}, 1, 0))
+	require.Equal(t, other, acct.AuthAddr)
+}
+
 func TestKnockOfflineCandidateOverrides(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -624,17 +641,19 @@ func TestOnlineOverrideCirculationBounds(t *testing.T) {
 	hdr, err := env.Ledger.BlockHdr(env.Ledger.Latest())
 	require.NoError(t, err)
 	proto := env.TxnInfo.CurrentProtocolParams()
-	// Every account is emptied, and one of them holds the largest permitted balance
+	// Every account is emptied, except that the rewards pool keeps the minimum balance the
+	// evaluator requires of it, and one account holds the largest permitted balance
+	minBalance := basics.MicroAlgos{Raw: proto.MinBalance}
 	maximum := basics.MicroAlgos{Raw: maxOverrideBalance(hdr, proto)}
 	accounts := make(map[basics.Address]AccountOverride)
 	for _, acct := range env.Accounts {
 		accounts[acct.Addr] = AccountOverride{Balance: &zero}
 	}
 	accounts[env.FeeSinkAccount.Addr] = AccountOverride{Balance: &zero}
-	accounts[env.RewardsPoolAccount.Addr] = AccountOverride{Balance: &zero}
+	accounts[env.RewardsPoolAccount.Addr] = AccountOverride{Balance: &minBalance}
 	accounts[env.Accounts[0].Addr] = AccountOverride{Balance: &maximum}
 	l := newOverlayLedger(t, &env, StateOverrides{Accounts: accounts})
-	require.Equal(t, maximum, l.overlay.totals.All())
+	require.Equal(t, maximum.Raw+minBalance.Raw, l.overlay.totals.All().Raw)
 	require.NotZero(t, l.overlay.onlineRemoved.Raw)
 
 	// The replaced stake is removed before the replacement is added, so the final
