@@ -658,14 +658,14 @@ func TestOnlineOverrideCirculationBounds(t *testing.T) {
 	require.Equal(t, l.overlay.onlineAdded, circulation)
 }
 
-func TestBalanceOverrideOfflineAccountSkipsAgreement(t *testing.T) {
+func TestBalanceOverrideOfflineAccountAgreement(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
 
-	// Move the balance round past 0, so that computing online state would set it
+	// Move the balance round past 0 to exercise historical agreement state
 	proto := env.TxnInfo.CurrentProtocolParams()
 	env.AdvanceRounds(int(agreement.BalanceLookback(proto)) + 5)
 
@@ -677,11 +677,17 @@ func TestBalanceOverrideOfflineAccountSkipsAgreement(t *testing.T) {
 		offlineAddr: {Balance: &balance},
 	}})
 	require.Equal(t, balance, l.overlay.accounts[offlineAddr].MicroAlgos)
-	// No agreement state is looked up or overridden
-	require.Zero(t, l.overlay.balanceRound)
-	require.Empty(t, l.overlay.online)
+	require.NotZero(t, l.overlay.balanceRound)
+	require.Contains(t, l.overlay.online, offlineAddr)
+	require.Zero(t, l.overlay.online[offlineAddr])
 	require.Zero(t, l.overlay.onlineAdded)
 	require.Zero(t, l.overlay.onlineRemoved)
+
+	circulation, err := l.OnlineCirculation(l.overlay.balanceRound, l.start+1)
+	require.NoError(t, err)
+	realCirculation, err := env.Ledger.OnlineCirculation(l.overlay.balanceRound, l.start+1)
+	require.NoError(t, err)
+	require.Equal(t, realCirculation, circulation)
 
 	// Bringing the same account online with a balance override does affect agreement
 	online := basics.Online
@@ -690,6 +696,157 @@ func TestBalanceOverrideOfflineAccountSkipsAgreement(t *testing.T) {
 	}})
 	require.NotZero(t, l.overlay.balanceRound)
 	require.Equal(t, balance, l.overlay.online[offlineAddr].MicroAlgosWithRewards)
+}
+
+func TestBalanceOverrideRecentlyOfflineAccountAgreement(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, pastLookback := range []bool{false, true} {
+		t.Run(fmt.Sprintf("past lookback=%v", pastLookback), func(t *testing.T) {
+			t.Parallel()
+			env := simulationtesting.PrepareSimulatorTest(t)
+			defer env.Close()
+
+			proto := env.TxnInfo.CurrentProtocolParams()
+			if pastLookback {
+				env.AdvanceRounds(int(agreement.BalanceLookback(proto)) + 5)
+			}
+
+			// The account is offline at the start round but still online at the balance round.
+			addr := env.Accounts[0].Addr
+			env.Txn(env.TxnInfo.NewTxn(txntest.Txn{
+				Type: protocol.KeyRegistrationTx, Sender: addr,
+			}).SignedTxn())
+			start := env.Ledger.Latest()
+			brnd := agreement.BalanceRound(start+1, proto)
+			require.Equal(t, pastLookback, brnd > 0)
+			acct, _, err := env.Ledger.LookupWithoutRewards(start, addr)
+			require.NoError(t, err)
+			require.Equal(t, basics.Offline, acct.Status)
+			original, err := env.Ledger.LookupAgreement(brnd, addr)
+			require.NoError(t, err)
+			require.NotZero(t, original.VotingStake().Raw)
+			realCirculation, err := env.Ledger.OnlineCirculation(brnd, start+1)
+			require.NoError(t, err)
+			withoutOriginal := realCirculation.Raw - original.VotingStake().Raw
+
+			// A balance override alone replaces the stake the account had at the balance round and
+			// keeps the rest of its online data there.
+			balance := basics.MicroAlgos{Raw: 10_000_000}
+			l := newOverlayLedger(t, &env, StateOverrides{Accounts: map[basics.Address]AccountOverride{
+				addr: {Balance: &balance},
+			}})
+			expected := original
+			expected.MicroAlgosWithRewards = balance
+			data, err := l.LookupAgreement(brnd, addr)
+			require.NoError(t, err)
+			require.Equal(t, expected, data)
+			circulation, err := l.OnlineCirculation(brnd, start+1)
+			require.NoError(t, err)
+			require.Equal(t, withoutOriginal+balance.Raw, circulation.Raw)
+			// The account is offline at the start round, so it is not considered for suspension
+			candidates, err := l.GetKnockOfflineCandidates(start, proto)
+			require.NoError(t, err)
+			require.NotContains(t, candidates, addr)
+
+			// A participation field alone is likewise applied to the balance round data.
+			lastHeartbeat := basics.Round(7)
+			l = newOverlayLedger(t, &env, StateOverrides{Accounts: map[basics.Address]AccountOverride{
+				addr: {LastHeartbeat: &lastHeartbeat},
+			}})
+			expected = original
+			expected.LastHeartbeat = lastHeartbeat
+			data, err = l.LookupAgreement(brnd, addr)
+			require.NoError(t, err)
+			require.Equal(t, expected, data)
+			circulation, err = l.OnlineCirculation(brnd, start+1)
+			require.NoError(t, err)
+			require.Equal(t, realCirculation, circulation)
+
+			// An explicit Offline status applies as of the balance round, removing the stake.
+			offline := basics.Offline
+			l = newOverlayLedger(t, &env, StateOverrides{Accounts: map[basics.Address]AccountOverride{
+				addr: {Balance: &balance, Status: &offline},
+			}})
+			data, err = l.LookupAgreement(brnd, addr)
+			require.NoError(t, err)
+			require.Zero(t, data)
+			circulation, err = l.OnlineCirculation(brnd, start+1)
+			require.NoError(t, err)
+			require.Equal(t, withoutOriginal, circulation.Raw)
+
+			unchanged, err := env.Ledger.LookupAgreement(brnd, addr)
+			require.NoError(t, err)
+			require.Equal(t, original, unchanged)
+			unchangedCirculation, err := env.Ledger.OnlineCirculation(brnd, start+1)
+			require.NoError(t, err)
+			require.Equal(t, realCirculation, unchangedCirculation)
+		})
+	}
+}
+
+func TestBalanceOverrideRecentlyOnlineAccountAgreement(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	proto := env.TxnInfo.CurrentProtocolParams()
+	env.AdvanceRounds(int(agreement.BalanceLookback(proto)) + 5)
+
+	// The account is online at the start round but did not exist at the balance round.
+	var addr basics.Address
+	crypto.RandBytes(addr[:])
+	env.TransferAlgos(env.Accounts[0].Addr, addr, 10_000_000)
+	env.Txn(env.TxnInfo.NewTxn(txntest.Txn{
+		Type:            protocol.KeyRegistrationTx,
+		Sender:          addr,
+		VotePK:          crypto.OneTimeSignatureVerifier{1},
+		SelectionPK:     crypto.VRFVerifier{2},
+		StateProofPK:    merklesignature.Commitment{3},
+		VoteFirst:       1,
+		VoteLast:        100_000,
+		VoteKeyDilution: 10,
+	}).SignedTxn())
+	start := env.Ledger.Latest()
+	brnd := agreement.BalanceRound(start+1, proto)
+	acct, _, err := env.Ledger.LookupWithoutRewards(start, addr)
+	require.NoError(t, err)
+	require.Equal(t, basics.Online, acct.Status)
+	original, err := env.Ledger.LookupAgreement(brnd, addr)
+	require.NoError(t, err)
+	require.Zero(t, original)
+	realCirculation, err := env.Ledger.OnlineCirculation(brnd, start+1)
+	require.NoError(t, err)
+
+	// Without a Status override the account stays not online at the balance round, so neither a
+	// balance nor a participation field gives it stake there.
+	balance := basics.MicroAlgos{Raw: 1_000_000_000}
+	dilution := uint64(20)
+	for _, override := range []AccountOverride{{Balance: &balance}, {VoteKeyDilution: &dilution}} {
+		l := newOverlayLedger(t, &env, StateOverrides{Accounts: map[basics.Address]AccountOverride{addr: override}})
+		data, err := l.LookupAgreement(brnd, addr)
+		require.NoError(t, err)
+		require.Zero(t, data)
+		circulation, err := l.OnlineCirculation(brnd, start+1)
+		require.NoError(t, err)
+		require.Equal(t, realCirculation, circulation)
+	}
+
+	// An explicit Online status applies as of the balance round, with the start round state.
+	online := basics.Online
+	l := newOverlayLedger(t, &env, StateOverrides{Accounts: map[basics.Address]AccountOverride{
+		addr: {Balance: &balance, Status: &online},
+	}})
+	data, err := l.LookupAgreement(brnd, addr)
+	require.NoError(t, err)
+	require.Equal(t, balance, data.MicroAlgosWithRewards)
+	require.Equal(t, acct.VotingData, data.VotingData)
+	circulation, err := l.OnlineCirculation(brnd, start+1)
+	require.NoError(t, err)
+	require.Equal(t, realCirculation.Raw+balance.Raw, circulation.Raw)
 }
 
 func TestOnlineOverrides(t *testing.T) {

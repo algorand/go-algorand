@@ -73,13 +73,15 @@ type AccountOverride struct {
 	// account's balance at the start of simulation is exactly this value. It must be small
 	// enough that the rewards credited in the simulated round cannot overflow it.
 	//
-	// If Balance or any of the consensus participation fields below are set, the account is
-	// treated as though it has been in its overridden state since the balance round used for
-	// agreement. Its online data (e.g. as seen by voter_params_get) and its contribution to the
-	// online stake (e.g. as seen by online_stake) reflect the overridden account.
+	// Balance and the consensus participation fields below also override the account's online
+	// data at the balance round used for agreement (e.g. as seen by voter_params_get) and its
+	// contribution to the online stake (e.g. as seen by online_stake).
 	//
-	// Online stake is taken from the account's state at the start round, with pending rewards
-	// applied, rather than from its state at the balance round.
+	// If Status is set, the account is treated as though it has been in its overridden state
+	// since the balance round, with its stake taken from its state at the start round, pending
+	// rewards applied. Otherwise the account keeps the status it had at the balance round. If it
+	// was online then, each overridden field replaces its value at the balance round and other
+	// fields are unchanged. If it was not, it has no online data or stake.
 	Balance *basics.MicroAlgos
 
 	// AuthAddr, if set, replaces the address whose signature authorizes the account's
@@ -88,8 +90,8 @@ type AccountOverride struct {
 
 	// Status, VotingData fields, IncentiveEligible, LastProposed and LastHeartbeat replace the
 	// account's consensus participation state. The account's balance moves between the online,
-	// offline and not participating totals if its status changes, and as with Balance, the
-	// overridden state is also used for agreement.
+	// offline and not participating totals if its status changes. Their effect on agreement is
+	// described on Balance.
 	Status            *basics.Status
 	VoteID            *crypto.OneTimeSignatureVerifier
 	SelectionID       *crypto.VRFVerifier
@@ -253,8 +255,8 @@ type stateOverlay struct {
 
 	// balanceRound is the round whose online state agreement uses for the round being simulated
 	balanceRound basics.Round
-	// online holds the online data of accounts whose agreement state is overridden. Accounts
-	// that are not online have empty online data.
+	// online holds the online data at balanceRound of accounts whose agreement state is
+	// overridden. Accounts that are not online there have empty online data.
 	online map[basics.Address]basics.OnlineAccountData
 	// statusOnline holds the accounts whose status is explicitly overridden to Online. They are
 	// added to the knock offline candidates even if the ledger would not return them.
@@ -353,14 +355,13 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 		if err != nil {
 			return nil, err
 		}
-		wasOnline := acct.Status == basics.Online
 		if err = overlayAccountFields(&acct, addr, override, proto.RewardUnit, totals.RewardsLevel); err != nil {
 			return nil, err
 		}
 		if override.Status != nil && *override.Status == basics.Online {
 			o.statusOnline[addr] = true
 		}
-		if override.affectsAgreement(wasOnline || acct.Status == basics.Online) {
+		if override.affectsAgreement() {
 			agreementAddrs = append(agreementAddrs, addr)
 		}
 		for _, aidx := range sortedKeys(override.Assets) {
@@ -424,28 +425,73 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 		}
 	}
 
-	if err = l.overlayOnline(o, agreementAddrs, proto, prevHdr); err != nil {
+	if err = l.overlayOnline(o, agreementAddrs, overrides.Accounts, proto, prevHdr); err != nil {
 		return nil, err
 	}
 
 	return o, nil
 }
 
-// affectsAgreement reports whether the override modifies state that agreement uses. online reports
-// whether the account is Online at l.start either before or after the override. A balance override
-// of an account that is Online at neither point does not affect agreement, so it does not require
-// the agreement state at the balance round to be available.
-func (override AccountOverride) affectsAgreement(online bool) bool {
-	return (override.Balance != nil && online) || override.Status != nil || override.VoteID != nil ||
+// affectsAgreement reports whether the override modifies state that agreement uses. This does
+// not depend on the account's status at l.start, since the account may have been online at the
+// balance round.
+func (override AccountOverride) affectsAgreement() bool {
+	return override.Balance != nil || override.Status != nil || override.VoteID != nil ||
 		override.SelectionID != nil || override.StateProofID != nil || override.VoteFirstValid != nil ||
 		override.VoteLastValid != nil || override.VoteKeyDilution != nil || override.IncentiveEligible != nil ||
 		override.LastProposed != nil || override.LastHeartbeat != nil
 }
 
+// onlineData returns the account's online data at the balance round. original is its online
+// data there on the ledger, and overridden is the online data of the overridden account at the
+// start round.
+func (override AccountOverride) onlineData(original, overridden basics.OnlineAccountData) basics.OnlineAccountData {
+	if override.Status != nil {
+		return overridden
+	}
+	// The ledger returns empty online data for an account that is not online. Without a Status
+	// override the account was not online at the balance round, whatever its status at the
+	// start round.
+	if original == (basics.OnlineAccountData{}) {
+		return original
+	}
+	data := original
+	if override.Balance != nil {
+		data.MicroAlgosWithRewards = *override.Balance
+	}
+	if override.VoteID != nil {
+		data.VoteID = *override.VoteID
+	}
+	if override.SelectionID != nil {
+		data.SelectionID = *override.SelectionID
+	}
+	if override.StateProofID != nil {
+		data.StateProofID = *override.StateProofID
+	}
+	if override.VoteFirstValid != nil {
+		data.VoteFirstValid = *override.VoteFirstValid
+	}
+	if override.VoteLastValid != nil {
+		data.VoteLastValid = *override.VoteLastValid
+	}
+	if override.VoteKeyDilution != nil {
+		data.VoteKeyDilution = *override.VoteKeyDilution
+	}
+	if override.IncentiveEligible != nil {
+		data.IncentiveEligible = *override.IncentiveEligible
+	}
+	if override.LastProposed != nil {
+		data.LastProposed = *override.LastProposed
+	}
+	if override.LastHeartbeat != nil {
+		data.LastHeartbeat = *override.LastHeartbeat
+	}
+	return data
+}
+
 // overlayOnline computes the online state used for agreement for addrs, the accounts whose
-// overrides affect it. Such accounts are treated as though they have been in their overridden
-// state since the balance round.
-func (l simulatorLedger) overlayOnline(o *stateOverlay, addrs []basics.Address, proto config.ConsensusParams, prevHdr bookkeeping.BlockHeader) error {
+// overrides affect it. overrides holds the override of each account in addrs.
+func (l simulatorLedger) overlayOnline(o *stateOverlay, addrs []basics.Address, overrides map[basics.Address]AccountOverride, proto config.ConsensusParams, prevHdr bookkeeping.BlockHeader) error {
 	if len(addrs) == 0 {
 		return nil
 	}
@@ -481,7 +527,8 @@ func (l simulatorLedger) overlayOnline(o *stateOverlay, addrs []basics.Address, 
 		}
 		// Rewards are applied as of the start round, since the account's rewards base may be later
 		// than the balance round
-		data := o.accounts[addr].OnlineAccountData(proto.RewardUnit, prevHdr.RewardsLevel)
+		overridden := o.accounts[addr].OnlineAccountData(proto.RewardUnit, prevHdr.RewardsLevel)
+		data := overrides[addr].onlineData(original, overridden)
 		o.online[addr] = data
 		o.onlineRemoved = ot.AddA(o.onlineRemoved, circulating(original))
 		o.onlineAdded = ot.AddA(o.onlineAdded, circulating(data))
@@ -1165,10 +1212,10 @@ func (l simulatorLedger) OnlineCirculation(rnd basics.Round, voteRnd basics.Roun
 }
 
 // GetKnockOfflineCandidates is part of the ledger.Ledger interface.
-// We override this so that candidates use their overridden online data, accounts whose status is
-// overridden to Online are considered for suspension, and accounts overridden to not be online,
-// or to have no stake, are not. Other overridden accounts remain candidates only if the ledger
-// returns them.
+// We override this so that candidates use their overridden online data at rnd, accounts whose
+// status is overridden to Online are considered for suspension, and accounts overridden to not be
+// online, or to have no stake, are not. Other overridden accounts remain candidates only if the
+// ledger returns them.
 func (l simulatorLedger) GetKnockOfflineCandidates(rnd basics.Round, proto config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error) {
 	candidates, err := l.Ledger.GetKnockOfflineCandidates(rnd, proto)
 	// Without state proofs, candidates are not considered at all. Otherwise a nil result only
@@ -1181,9 +1228,12 @@ func (l simulatorLedger) GetKnockOfflineCandidates(rnd basics.Round, proto confi
 	if candidates == nil {
 		candidates = make(map[basics.Address]basics.OnlineAccountData)
 	}
-	for addr, data := range l.overlay.online {
+	for addr := range l.overlay.online {
+		// l.overlay.online holds data at the balance round, so derive the data at rnd from the
+		// overridden account. It is empty if the account is not online.
+		data := l.overlay.accounts[addr].OnlineAccountData(proto.RewardUnit, l.overlay.totals.RewardsLevel)
 		// Match the ledger, which skips accounts with no stake
-		if l.overlay.accounts[addr].Status != basics.Online || data.MicroAlgosWithRewards.IsZero() {
+		if data.MicroAlgosWithRewards.IsZero() {
 			delete(candidates, addr)
 			continue
 		}
