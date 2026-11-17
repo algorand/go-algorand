@@ -126,7 +126,7 @@ func checkBasicStateProof(sp *stateproof.StateProof) error {
 			return err
 		}
 	}
-	return nil
+	return sp.CheckMerklePathLengths()
 }
 
 func checkStateProof(spType protocol.StateProofType, sp *stateproof.StateProof) error {

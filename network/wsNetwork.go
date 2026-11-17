@@ -103,7 +103,10 @@ const slowWritingPeerMonitorInterval = 5 * time.Second
 
 // unprintableCharacterGlyph is used to replace any non-ascii character when logging incoming network string directly
 // to the log file. Note that the log file itself would also json-encode these before placing them in the log file.
-const unprintableCharacterGlyph = "▯"
+const (
+	unprintableCharacterRune  = '▯'
+	unprintableCharacterGlyph = string(unprintableCharacterRune)
+)
 
 // testingPublicAddress is used in identity exchange tests for a predictable
 // PublicAddress (which will match HTTP Listener's Address) in tests only.
@@ -427,6 +430,7 @@ func (wn *msgBroadcaster) broadcast(ctx context.Context, tag Tag, data []byte, w
 
 // Relay message
 func (wn *WebsocketNetwork) Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error {
+	wn.handler.sendRelayFilterMessage(tag, data, except, wn)
 	if wn.relayMessages {
 		return wn.Broadcast(ctx, tag, data, wait, except)
 	}
@@ -439,8 +443,18 @@ func (wn *WebsocketNetwork) disconnectThread(badnode DisconnectablePeer, reason 
 }
 
 // Disconnect from a peer, probably due to protocol errors.
+// The callers are message processing goroutines shared by all peers (agreement, txHandler), and closing a peer
+// waits on that peer's socket, so the disconnection is performed on its own goroutine like the internal callers do.
 func (wn *WebsocketNetwork) Disconnect(node DisconnectablePeer) {
-	wn.disconnect(node, disconnectBadData)
+	// Checking peersClosed under peersLock orders this wg.Add before the wn.wg.Wait in Stop, as in addPeer.
+	// Once innerStop has set peersClosed it has already closed every peer.
+	wn.peersLock.RLock()
+	defer wn.peersLock.RUnlock()
+	if wn.peersClosed {
+		return
+	}
+	wn.wg.Add(1)
+	go wn.disconnectThread(node, disconnectBadData)
 }
 
 // disconnect from a peer, probably due to protocol errors.
@@ -1262,8 +1276,11 @@ func (wn *msgHandler) messageHandlerThread(wg *sync.WaitGroup, peersConnectivity
 					wn.log.Warnf("could not send on msg.processing")
 				}
 			}
-			if wn.config.EnableOutgoingNetworkMessageFiltering && len(msg.Data) >= messageFilterSize {
-				wn.sendFilterMessage(msg, net)
+			// A proposal payload arrives compressed, and peers' filters hold
+			// digests of uncompressed messages, so its filter message is
+			// sent by sendRelayFilterMessage instead.
+			if wn.config.EnableOutgoingNetworkMessageFiltering && len(msg.Data) >= messageFilterSize && msg.Tag != protocol.ProposalPayloadTag {
+				wn.sendFilterMessage(msg.Tag, msg.Data, msg.Sender, net)
 			}
 			//wn.log.Debugf("msg handling %#v [%d]byte", msg.Tag, len(msg.Data))
 			start := time.Now()
@@ -1339,12 +1356,25 @@ func (wn *WebsocketNetwork) checkSlowWritingPeers() {
 	}
 }
 
-func (wn *msgHandler) sendFilterMessage(msg IncomingMessage, net networkPeerManager) {
-	digest := generateMessageDigest(msg.Tag, msg.Data)
-	//wn.log.Debugf("send filter %s(%d) %v", msg.Tag, len(msg.Data), digest)
-	err := net.Broadcast(context.Background(), protocol.MsgDigestSkipTag, digest[:], false, msg.Sender)
+// sendFilterMessage tells every peer other than except that this node has the
+// message with this tag and uncompressed data, so that they do not send it.
+func (wn *msgHandler) sendFilterMessage(tag protocol.Tag, data []byte, except Peer, net networkPeerManager) {
+	digest := generateMessageDigest(tag, data)
+	//wn.log.Debugf("send filter %s(%d) %v", tag, len(data), digest)
+	err := net.Broadcast(context.Background(), protocol.MsgDigestSkipTag, digest[:], false, except)
 	if err != nil && err != errBcastQFull {
 		wn.log.Warnf("WebsocketNetwork.sendFilterMessage: WebsocketNetwork.Broadcast returned unexpected error %v", err)
+	}
+}
+
+// sendRelayFilterMessage sends the filter message for a proposal payload that
+// is being relayed. messageHandlerThread cannot send it when the payload
+// arrives, because the payload is still compressed then. Relay calls it even
+// on a node that does not relay messages, since messageHandlerThread sends
+// filter messages for other tags on every node.
+func (wn *msgHandler) sendRelayFilterMessage(tag protocol.Tag, data []byte, except Peer, net networkPeerManager) {
+	if tag == protocol.ProposalPayloadTag && wn.config.EnableOutgoingNetworkMessageFiltering && len(data) >= messageFilterSize {
+		wn.sendFilterMessage(tag, data, except, net)
 	}
 }
 
@@ -1557,7 +1587,7 @@ func (wn *msgBroadcaster) innerBroadcast(request broadcastRequest, prio bool, pe
 		}
 		dataToSend := data
 		// check whether to send a compressed vote. dataWithCompression will be empty if this node
-		// has not enabled vote compression.
+		// has not enabled vote compression, or if the vote could not be compressed.
 		if peer.vpackVoteCompressionSupported() && len(dataWithCompression) > 0 {
 			dataToSend = dataWithCompression
 		}
@@ -2068,15 +2098,14 @@ func (t *HTTPPAddressBoundTransport) RoundTrip(req *http.Request) (*http.Respons
 // The function allows only characters in the range of [32..126], which excludes all the
 // control character, new lines, deletion, etc. All the alpha numeric and punctuation characters
 // are included in this range.
-func filterASCII(unfilteredString string) (filteredString string) {
-	for _, r := range unfilteredString {
-		if int(r) >= 0x20 && int(r) <= 0x7e {
-			filteredString += string(r)
-		} else {
-			filteredString += unprintableCharacterGlyph
+func filterASCII(unfilteredString string) string {
+	// strings.Map is linear in the input, and returns a clean input without copying it.
+	return strings.Map(func(r rune) rune {
+		if r >= 0x20 && r <= 0x7e {
+			return r
 		}
-	}
-	return
+		return unprintableCharacterRune
+	}, unfilteredString)
 }
 
 // tryConnect opens websocket connection and checks initial connection parameters.

@@ -35,7 +35,7 @@ jobs:
           golangci-lint --version
       - name: Install reviewdog
         run: |
-          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/v0.21.0/install.sh | sh -s -- v0.21.0
+          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/v0.21.3/install.sh | sh -s -- v0.21.3
           reviewdog --version
       - name: Run golangci-lint with reviewdog
         env:
@@ -91,7 +91,7 @@ jobs:
           ./custom-golangci-lint --version
       - name: Install reviewdog
         run: |
-          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/v0.21.0/install.sh | sh -s -- v0.21.0
+          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/v0.21.3/install.sh | sh -s -- v0.21.3
           reviewdog --version
       - name: Run golangci-lint with reviewdog
         env:
@@ -123,7 +123,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: shellcheck
-        uses: reviewdog/action-shellcheck@v1.28.0
+        uses: reviewdog/action-shellcheck@v1.35.1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           reporter: "github-pr-check"

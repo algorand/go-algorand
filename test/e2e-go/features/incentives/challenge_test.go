@@ -98,13 +98,20 @@ func testChallengesOnce(t *testing.T, a *require.Assertions) (retry bool) {
 	a.NoError(err)
 
 	proto := config.Consensus[consensusVersion]
+	// Send all the keyregs before waiting for any: confirming them one at a
+	// time takes a few rounds each, and all must land early enough for the
+	// check below.
+	var pending []pendingRekeyreg
 	// eligible accounts1 will get challenged with node offline, and suspended
 	for _, account := range accounts1 {
-		rekeyreg(a, c1, proto, account.Address, eligible(account.Address))
+		pending = append(pending, startRekeyreg(a, c1, proto, account.Address, eligible(account.Address)))
 	}
 	// eligible accounts2 will get challenged, but node2 will heartbeat for them
 	for _, account := range accounts2 {
-		rekeyreg(a, c2, proto, account.Address, eligible(account.Address))
+		pending = append(pending, startRekeyreg(a, c2, proto, account.Address, eligible(account.Address)))
+	}
+	for _, p := range pending {
+		p.wait(a)
 	}
 
 	// turn off node 1, so it can't heartbeat

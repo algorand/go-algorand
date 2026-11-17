@@ -53,6 +53,12 @@ const averageMessageLength = 2 * 1024    // Most of the messages are smaller tha
 // buffer and starve messages from other peers.
 const msgsInReadBufferPerPeer = 10
 
+// maxMessageReadDuration is how long a peer has to deliver the rest of a message once it has started
+// sending it. The read buffers of a partially received message stay allocated until it completes.
+// This is twice maxMessageQueueDuration, after which a sender gives up on writing a message (see CheckSlowWritingPeer).
+// It is a variable so that tests can shorten it.
+var maxMessageReadDuration = 2 * maxMessageQueueDuration
+
 func init() {
 	if !slices.Contains(SupportedProtocolVersions, versionPeerFeatures) {
 		panic(fmt.Sprintf("peer features version %s is not supported %v", versionPeerFeatures, SupportedProtocolVersions))
@@ -89,6 +95,7 @@ type wsPeerWebsocketConn interface {
 	WriteMessage(int, []byte) error
 	CloseWithMessage([]byte, time.Time) error
 	SetReadLimit(int64)
+	SetReadDeadline(time.Time) error
 	CloseWithoutFlush() error
 	wrappedConn
 }
@@ -106,6 +113,13 @@ func (c wsPeerWebsocketConnImpl) RemoteAddrString() string {
 }
 
 func (c wsPeerWebsocketConnImpl) CloseWithMessage(msg []byte, deadline time.Time) error {
+	// WriteControl applies the deadline to the socket only when the connection has no buffered writer.
+	// Incoming connections have one. Close the socket once the deadline passes so that
+	// a pending flush fails and WriteControl returns.
+	if !deadline.IsZero() {
+		forceClose := time.AfterFunc(time.Until(deadline), func() { c.CloseWithoutFlush() })
+		defer forceClose.Stop()
+	}
 	return c.WriteControl(websocket.CloseMessage, msg, deadline)
 }
 
@@ -284,7 +298,10 @@ type wsPeer struct {
 
 	// closers is a slice of functions to run when the peer is closed
 	closers []func()
-	// closersMu synchronizes access to closers
+	// closersCalled is set once Close has run the closers, so that a function
+	// registered with OnClose after that is called right away
+	closersCalled bool
+	// closersMu synchronizes access to closers and closersCalled
 	closersMu deadlock.RWMutex
 
 	// peerType defines the peer's underlying connection type
@@ -364,15 +381,6 @@ func (wp *wsPeer) ipAddr() []byte {
 // low 4 bytes for ipv4 embedded into ipv6
 // see http://www.tcpipguide.com/free/t_IPv6IPv4AddressEmbedding.htm for details.
 func (wp *wsPeer) RoutingAddr() []byte {
-	isZeros := func(ip []byte) bool {
-		for i := 0; i < len(ip); i++ {
-			if ip[i] != 0 {
-				return false
-			}
-		}
-		return true
-	}
-
 	var ip []byte
 	// originAddress is set for incoming connections
 	// and optionally includes reverse proxy support.
@@ -381,6 +389,19 @@ func (wp *wsPeer) RoutingAddr() []byte {
 		ip = net.ParseIP(wp.wsPeerCore.originAddress)
 	} else {
 		ip = wp.ipAddr()
+	}
+	return routingAddr(ip)
+}
+
+// routingAddr returns the routing part of ip, see wsPeer.RoutingAddr.
+func routingAddr(ip []byte) []byte {
+	isZeros := func(ip []byte) bool {
+		for i := 0; i < len(ip); i++ {
+			if ip[i] != 0 {
+				return false
+			}
+		}
+		return true
 	}
 
 	if len(ip) != net.IPv6len {
@@ -525,6 +546,12 @@ func (wp *wsPeer) readLoop() {
 
 	for {
 		msg := IncomingMessage{}
+		// Waiting for the next message to start is not time-limited, so a peer that only listens is kept.
+		err := wp.conn.SetReadDeadline(time.Time{})
+		if err != nil {
+			wp.reportReadErr(err)
+			return
+		}
 		mtype, reader, err := wp.conn.NextReader()
 		if err != nil {
 			if ce, ok := err.(*websocket.CloseError); ok {
@@ -543,6 +570,13 @@ func (wp *wsPeer) readLoop() {
 		if mtype != websocket.BinaryMessage {
 			wp.log.Errorf("peer sent non websocket-binary message: %#v", mtype)
 			networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "protocol"})
+			return
+		}
+		// A message has started, and its read buffers stay allocated until it is complete, so the peer
+		// gets a bounded time to deliver the rest of it.
+		err = wp.conn.SetReadDeadline(time.Now().Add(maxMessageReadDuration))
+		if err != nil {
+			wp.reportReadErr(err)
 			return
 		}
 		var tag [2]byte
@@ -586,6 +620,9 @@ func (wp *wsPeer) readLoop() {
 		msg.processing = wp.processed
 		msg.Received = time.Now().UnixNano()
 		msg.Data = slurper.Bytes()
+		// msg.Data is a copy: release the slurper's buffers now rather than when the next message
+		// arrives, so a peer that goes quiet after a large message does not keep them allocated.
+		slurper.Reset(0)
 		msg.Net = wp.net
 		wp.lastPacketTime.Store(msg.Received)
 
@@ -1003,10 +1040,13 @@ L:
 		}
 
 	}
-	wp.closersMu.RLock()
-	defer wp.closersMu.RUnlock()
-	// now call all registered closers
-	for _, f := range wp.closers {
+	// now call all registered closers, once: Close runs from both the read and the write loop
+	wp.closersMu.Lock()
+	closers := wp.closers
+	wp.closers = nil
+	wp.closersCalled = true
+	wp.closersMu.Unlock()
+	for _, f := range closers {
 		f()
 	}
 }
@@ -1153,14 +1193,19 @@ func (wp *wsPeer) sendMessagesOfInterest(messagesOfInterestGeneration uint32, me
 	}
 }
 
+// OnClose registers a function to run when the peer is closed.
+// A message from this peer may be handled after the peer was closed (the read loop queues
+// messages for the handler threads and Close may run before they get to it): nothing would
+// ever run f in that case, so it is called right away.
 func (wp *wsPeer) OnClose(f func()) {
 	wp.closersMu.Lock()
-	defer wp.closersMu.Unlock()
-
-	if wp.closers == nil {
-		wp.closers = []func(){}
+	if wp.closersCalled {
+		wp.closersMu.Unlock()
+		f()
+		return
 	}
 	wp.closers = append(wp.closers, f)
+	wp.closersMu.Unlock()
 }
 
 func (wp *wsPeer) vpackVoteCompressionSupported() bool {

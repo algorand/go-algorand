@@ -509,10 +509,17 @@ func (e *testingNetworkEndpoint) Messages(tag protocol.Tag) <-chan Message {
 		return e.voteMessages
 	case protocol.VoteBundleTag:
 		return e.bundleMessages
-	case protocol.ProposalPayloadTag:
-		return e.payloadMessages
 	default:
 		panic("bad messages call")
+	}
+}
+
+func (e *testingNetworkEndpoint) NextProposal(ctx context.Context) (Message, bool) {
+	select {
+	case m, ok := <-e.payloadMessages:
+		return m, ok
+	case <-ctx.Done():
+		return Message{}, false
 	}
 }
 

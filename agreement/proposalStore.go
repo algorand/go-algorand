@@ -55,6 +55,17 @@ type blockAssembler struct {
 	// the state machine, a matching can be concatenated with the vote to
 	// ensure that peers do not drop the proposal payload.
 	Authenticators []vote `codec:"Authenticators,allocbound=-"`
+
+	// held is set if Pipeline has no validation request because, when it
+	// was pipelined or when its validation was cancelled, only a period
+	// which had not started was interested in it.  Validation is requested
+	// once a period which has started is interested in it (see
+	// proposalStore.resumeHeld).
+	//
+	// held is not serialized to disk.  After a crash, agreement does not
+	// request validation of a held Pipeline, as for a Pipeline whose
+	// validation was in the cryptoVerifier.
+	held bool
 }
 
 // pipeline adds the given unvalidated proposal to the blockAssembler, returning
@@ -163,7 +174,10 @@ func (store *proposalStore) underlying() listener {
 //     proposal payloads.  If the payload fails to match any relevant proposal, or
 //     if the payload has already been seen by the state machine, payloadRejected
 //     is returned.  Otherwise, a payloadPipelined event is returned, with a
-//     cached proposal-vote possibly set.
+//     cached proposal-vote possibly set.  If only a period which has not
+//     started is interested in the payload, the event's Held is set, and the
+//     payload is held without a validation request until a period which has
+//     started is interested in it.
 //
 //   - A payloadVerified event is delivered when a relevant proposal payload has
 //     passed cryptographic verification.  If the payload fails to match any
@@ -171,11 +185,16 @@ func (store *proposalStore) underlying() listener {
 //     machine, payloadRejected is returned.  Otherwise, either a
 //     proposalCommittable event or a payloadAccepted event is returned, depending
 //     on whether the proposal matches the current staging value.  This returned
-//     event may have a cached authenticator set.
+//     event may have a cached authenticator set.  If the verification was
+//     cancelled and the payload is still tracked and not assembled, the
+//     payload is held again as on payloadPresent, and payloadPipelined is
+//     returned.
 //
 //   - A newPeriod event is delivered when the player state machine enters a new
 //     period.  When this happens, the proposalStore updates Pinned, cleans up old
-//     state, and then returns an empty event.
+//     state, and then, if the event's ResumeHeld is set, returns a
+//     payloadPipelined event for a held payload whose validation is now due,
+//     if there is one; otherwise it returns an empty event.
 //
 //   - A newRound event is delivered when the player state machine enters a new
 //     round.  When this happens, the proposalStore returns a payloadPipelined
@@ -190,6 +209,11 @@ func (store *proposalStore) underlying() listener {
 //     it returns a proposalCommittable event; otherwise, it propagates the
 //     proposalAccepted event.
 //
+//   - When a voteVerified or soft/certThreshold event makes a period which has
+//     started interested in a held payload, the
+//     returned proposalAccepted or proposalCommittable event carries the
+//     payloadPipelined event for that payload in Pipelined.
+//
 //   - A readStaging event is dispatched to the proposalMachinePeriod.  The proposalStore
 //     sets the matching proposal payload (if one exists) in the response.
 //
@@ -197,6 +221,11 @@ func (store *proposalStore) underlying() listener {
 //     pinned proposalValue, and corresponding payload if one exists. This occurs
 //     during resynchronization when players may relay the pinned value.
 //     The event is handled exclusively by the proposalStore and not forwarded.
+//
+//   - A readWantedPayloads event is delivered when the player has a
+//     payload it has not decoded yet, to ask which proposal-values from its
+//     original period and proposer could still take a payload. It is handled
+//     exclusively by the proposalStore.
 func (store *proposalStore) handle(r routerHandle, p player, e event) event {
 	if store.Relevant == nil {
 		store.Relevant = make(map[period]proposalValue)
@@ -220,6 +249,7 @@ func (store *proposalStore) handle(r routerHandle, p player, e event) event {
 
 			e.Payload = ea.Payload
 			e.PayloadOk = ea.Assembled
+			e.Pipelined = store.resumeHeld(p.Period)
 			return e
 		}
 
@@ -237,23 +267,28 @@ func (store *proposalStore) handle(r routerHandle, p player, e event) event {
 		}
 
 		var err error
-		store.Assemblers[pv], err = ea.pipeline(up)
+		ea, err = ea.pipeline(up)
 		if err != nil {
 			return payloadProcessedEvent{T: payloadRejected, Err: makeSerErr(err)}
 		}
-
-		relevantPeriod, pinned := store.lastRelevant(pv)
-		authVote := ea.authenticator(p.Period)
-		return payloadProcessedEvent{
-			T:                      payloadPipelined,
-			Vote:                   authVote,
-			Period:                 relevantPeriod,
-			Pinned:                 pinned,
-			Proposal:               pv,
-			UnauthenticatedPayload: up,
-		}
+		return store.requestOrHold(pv, ea, p.Period)
 
 	case payloadVerified:
+		if me := e.(messageEvent); me.Cancelled {
+			// The payload was neither validated nor refuted, and its
+			// blockAssembler rejects later copies, so request its validation
+			// again or hold it, as if it had just been pipelined.
+			up := me.Input.UnauthenticatedProposal
+			pv := up.value()
+			ea, ok := store.Assemblers[pv]
+			if !ok || ea.Assembled {
+				return payloadProcessedEvent{T: payloadRejected, Err: me.Err}
+			}
+			ea.Pipeline = up
+			ea.Filled = true
+			return store.requestOrHold(pv, ea, p.Period)
+		}
+
 		pp := e.(messageEvent).Input.Proposal
 		pv := pp.value()
 		ea, ok := store.Assemblers[pp.value()]
@@ -297,6 +332,11 @@ func (store *proposalStore) handle(r routerHandle, p player, e event) event {
 			}
 		}
 		store.trim(p)
+		if e.(newPeriodEvent).ResumeHeld {
+			if ep := store.resumeHeld(e.(newPeriodEvent).Period); ep.T == payloadPipelined {
+				return ep
+			}
+		}
 		return emptyEvent{}
 
 	case newRound:
@@ -326,23 +366,31 @@ func (store *proposalStore) handle(r routerHandle, p player, e event) event {
 		// as a consequence, only val(softThreshold/certThreshold) will generate proposalAccepted in the future
 		// for this period, therefore store.Relevant[te.Period] will not be reset
 		e := r.dispatch(p, e, proposalMachinePeriod, te.Round, te.Period, 0).(proposalAcceptedEvent)
-		// return committableEvent if ready; else, return proposalAcceptedEvent
-		if store.Assemblers[e.Proposal].Assembled {
-			authVote := store.Assemblers[e.Proposal].authenticator(p.Period)
-			return committableEvent{
-				Proposal: e.Proposal,
-				Vote:     authVote,
-			}
-		}
 		// an assembler may not exist - we should add a new one, if it doesn't
 		// we don't pin a value here - new period logic should have done that if we fast forward
 		ea := store.Assemblers[e.Proposal]
 		store.Assemblers[e.Proposal] = ea
 		store.Relevant[te.Period] = e.Proposal
 		store.trim(p)
+
+		// Resume held payloads only now that Relevant and Assemblers
+		// reflect the threshold: a payload which the threshold's value
+		// replaced in Relevant[te.Period] is no longer tracked.  te.Period
+		// has started once the player handles the threshold.
+		pipelined := store.resumeHeld(max(p.Period, te.Period))
+
+		// return committableEvent if ready; else, return proposalAcceptedEvent
+		if ea.Assembled {
+			return committableEvent{
+				Proposal:  e.Proposal,
+				Vote:      ea.authenticator(p.Period),
+				Pipelined: pipelined,
+			}
+		}
 		// no subsequent softThreshold logic uses these fields, but for completeness...
 		e.Payload = ea.Payload
 		e.PayloadOk = ea.Assembled
+		e.Pipelined = pipelined
 		return e
 
 	case readStaging:
@@ -355,6 +403,34 @@ func (store *proposalStore) handle(r routerHandle, p player, e event) event {
 	case readLowestVote:
 		re := e.(readLowestEvent)
 		return r.dispatch(p, re, proposalMachinePeriod, re.Round, re.Period, 0).(readLowestEvent)
+	case readWantedPayloads:
+		ce := e.(wantedPayloadsEvent)
+		var filled, assembled bool
+		for pv, ea := range store.Assemblers {
+			if pv.OriginalPeriod != ce.OriginalPeriod || pv.OriginalProposer != ce.OriginalProposer {
+				continue
+			}
+			switch {
+			case ea.Assembled:
+				assembled = true
+			case ea.Filled:
+				filled = true
+			default:
+				ce.EncodingDigests = append(ce.EncodingDigests, pv.EncodingDigest)
+			}
+		}
+		// A payload that no proposal-value is waiting for is refused without
+		// reaching blockAssembler.pipeline, which counts duplicate payloads,
+		// so it is counted here. It has not been hashed, so it is counted as
+		// a duplicate of any payload from its original period and proposer.
+		if len(ce.EncodingDigests) == 0 {
+			if assembled {
+				proposalAlreadyAssembledCounter.Inc(nil)
+			} else if filled {
+				proposalAlreadyFilledCounter.Inc(nil)
+			}
+		}
+		return ce
 	case readPinned:
 		se := e.(pinnedValueEvent)
 		ea := store.Assemblers[store.Pinned] // If pinned is bottom, assembled/payloadOK = false, payload = bottom
@@ -379,6 +455,62 @@ func (store *proposalStore) trim(p player) {
 
 	// store.Assemblers[bottom] will be copied if store.Pinned is not set
 	delete(store.Assemblers, bottom)
+}
+
+// requestOrHold stores ea, whose Pipeline has no validation request in
+// flight.  If pv is pinned or relevant to a period no later than cur, it
+// returns the payloadPipelined event on which the player requests validation
+// of the Pipeline.  Otherwise only a period after cur is interested in pv: it
+// marks ea held and returns an event with Held set, on which the player does
+// not request validation.
+func (store *proposalStore) requestOrHold(pv proposalValue, ea blockAssembler, cur period) payloadProcessedEvent {
+	per, pinned, ok := store.requestKey(pv, cur)
+	ea.held = !ok
+	store.Assemblers[pv] = ea
+	return payloadProcessedEvent{
+		T:                      payloadPipelined,
+		Vote:                   ea.authenticator(cur),
+		Period:                 per,
+		Pinned:                 pinned,
+		Held:                   ea.held,
+		Proposal:               pv,
+		UnauthenticatedPayload: ea.Pipeline,
+	}
+}
+
+// resumeHeld returns the payloadPipelined event for a held payload whose
+// proposal-value is now pinned or relevant to a period no later than cur,
+// and clears its held flag.  It returns a zero event if there is no such
+// payload.  A payload stays held only while its proposal-value is relevant to
+// the next period alone, so at most one blockAssembler is held at a time.
+func (store *proposalStore) resumeHeld(cur period) payloadProcessedEvent {
+	for pv, ea := range store.Assemblers {
+		if !ea.held || ea.Assembled {
+			continue
+		}
+		ep := store.requestOrHold(pv, ea, cur)
+		if !store.Assemblers[pv].held {
+			return ep
+		}
+	}
+	return payloadProcessedEvent{}
+}
+
+// requestKey returns the period whose validation request a payload of pv
+// belongs to: the pinned request, or the latest period no later than cur for
+// which pv is relevant.  ok is false if there is no such period, and the
+// payload is held until there is one.
+func (store *proposalStore) requestKey(pv proposalValue, cur period) (per period, pinned, ok bool) {
+	if store.Pinned == pv {
+		return 0, true, true
+	}
+
+	for p := range store.Relevant {
+		if p <= cur && store.Relevant[p] == pv && (!ok || p > per) {
+			per, ok = p, true
+		}
+	}
+	return per, false, ok
 }
 
 // lastRelevant returns (0, true) if the given proposal-value is pinned;

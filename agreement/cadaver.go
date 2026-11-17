@@ -19,8 +19,10 @@ package agreement
 import (
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
@@ -36,6 +38,20 @@ const (
 	cadaverEventEntry
 	cadaverActionEntry
 	cadaverEOSEntry // denotes the end of a cadaver sequence
+
+	// The entries below hold the bytes of a proposal payload that is not
+	// decoded yet (unauthenticatedProposal.deferredPayload). The encoding of
+	// the event or player that carries the payload leaves them out, and
+	// without them a replay ignores a payload that the node went on to
+	// decode. Each comes before the entry it belongs to.
+
+	// cadaverEventPayloadEntry holds the payload of the event in the next
+	// cadaverEventEntry (see messageEvent.receivedPayload).
+	cadaverEventPayloadEntry
+	// cadaverPendingPayloadEntry holds an index into player.Pending and the
+	// payload of the event at that index, for the player in the next
+	// cadaverPlayerEntry.
+	cadaverPendingPayloadEntry
 )
 
 // CadaverMetadata contains informational metadata written to the top of every cadaver file
@@ -163,6 +179,15 @@ func (c *cadaver) trace(r round, p period, x player) (ok bool) {
 	if r != c.prevRound || p != c.prevPeriod {
 		c.prevRound = r
 		c.prevPeriod = p
+		for _, i := range slices.Sorted(maps.Keys(x.Pending.Pending)) {
+			tail := x.Pending.Pending[i]
+			if tail == nil || tail.Input.UnauthenticatedProposal.deferredPayload == nil {
+				continue
+			}
+			protocol.EncodeStream(c.out, cadaverPendingPayloadEntry)
+			protocol.EncodeStream(c.out, i)
+			protocol.EncodeStream(c.out, tail.Input.UnauthenticatedProposal.deferredPayload)
+		}
 		protocol.EncodeStream(c.out, cadaverPlayerEntry)
 		protocol.EncodeStream(c.out, x)
 	}
@@ -170,11 +195,30 @@ func (c *cadaver) trace(r round, p period, x player) (ok bool) {
 	return true
 }
 
+// receivedPayload returns the proposal payload e received from the network:
+// e.Input's if e is a payloadPresent event, or e.Tail's if the payload arrived
+// together with its vote. It returns nil if e has neither.
+func (e *messageEvent) receivedPayload() *unauthenticatedProposal {
+	switch {
+	case e.T == payloadPresent:
+		return &e.Input.UnauthenticatedProposal
+	case e.Tail != nil && e.Tail.T == payloadPresent:
+		return &e.Tail.Input.UnauthenticatedProposal
+	}
+	return nil
+}
+
 func (c *cadaver) traceInput(r round, p period, x player, e event) {
 	if !c.trace(r, p, x) {
 		return
 	}
 
+	if me, ok := e.(messageEvent); ok {
+		if up := me.receivedPayload(); up != nil && up.deferredPayload != nil {
+			protocol.EncodeStream(c.out, cadaverEventPayloadEntry)
+			protocol.EncodeStream(c.out, up.deferredPayload)
+		}
+	}
 	protocol.EncodeStream(c.out, cadaverEventEntry)
 	protocol.EncodeStream(c.out, e.t())
 	protocol.EncodeStream(c.out, e)

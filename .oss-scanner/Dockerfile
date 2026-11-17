@@ -2,7 +2,7 @@
 # The scanner builds this with the repository checkout as the build context, then runs its security audit inside
 # the resulting image with no network access, so every module and tool that tests need is fetched here.
 # Keep the Go version in sync with scripts/get_golang_version.sh.
-FROM golang:1.27.3-bookworm
+FROM golang:1.27.4-bookworm
 
 # GOTOOLCHAIN=local stops go.mod's toolchain line from triggering a download once offline.
 # ALGOTEST and KMD_NOUSB match the environment CI runs tests in (.github/workflows/ci-pr.yml). CI's

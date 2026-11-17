@@ -709,6 +709,15 @@ func (n *tokenizerTestNetwork) Broadcast(protocol.Tag, []byte) error            
 func (n *tokenizerTestNetwork) Relay(MessageHandle, protocol.Tag, []byte) error { return nil }
 func (n *tokenizerTestNetwork) Start()                                          {}
 
+func (n *tokenizerTestNetwork) NextProposal(ctx context.Context) (Message, bool) {
+	select {
+	case m, ok := <-n.messages:
+		return m, ok
+	case <-ctx.Done():
+		return Message{}, false
+	}
+}
+
 func (n *tokenizerTestNetwork) Disconnect(h MessageHandle) {
 	n.mu.Lock()
 	defer n.mu.Unlock()

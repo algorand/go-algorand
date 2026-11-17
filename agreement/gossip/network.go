@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/network/messagetracer"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -49,9 +50,13 @@ type messageMetadata struct {
 
 // networkImpl wraps network.GossipNode to provide a compatible interface with agreement.
 type networkImpl struct {
-	voteCh     chan agreement.Message
-	proposalCh chan agreement.Message
-	bundleCh   chan agreement.Message
+	voteCh chan agreement.Message
+	// proposals holds incoming proposal payloads until agreement takes them
+	// with NextProposal. Every peer shares this queue, so it serves sources
+	// fairly rather than first in, first out. Sources are keyed by
+	// proposalSource.
+	proposals *util.FairQueue[agreement.Message]
+	bundleCh  chan agreement.Message
 
 	net network.GossipNode
 	log logging.Logger
@@ -64,7 +69,7 @@ func WrapNetwork(net network.GossipNode, log logging.Logger, cfg config.Local) a
 	i := new(networkImpl)
 
 	i.voteCh = make(chan agreement.Message, cfg.AgreementIncomingVotesQueueLength)
-	i.proposalCh = make(chan agreement.Message, cfg.AgreementIncomingProposalsQueueLength)
+	i.proposals = util.NewFairQueue[agreement.Message](int(cfg.AgreementIncomingProposalsQueueLength))
 	i.bundleCh = make(chan agreement.Message, cfg.AgreementIncomingBundlesQueueLength)
 
 	i.net = net
@@ -100,10 +105,20 @@ func (i *networkImpl) processVoteMessage(raw network.IncomingMessage) network.Ou
 }
 
 func (i *networkImpl) processProposalMessage(raw network.IncomingMessage) network.OutgoingMessage {
-	if i.trace != nil {
-		i.trace.HashTrace(messagetracer.Proposal, raw.Data)
-	}
-	return i.processMessage(raw, i.proposalCh, agreementProposalMessageType)
+	return i.submitMessage(raw, agreementProposalMessageType, func(m agreement.Message) bool {
+		if dropped := i.proposals.Offer(proposalSource(raw), m); dropped {
+			messagesDroppedTotal.Inc(nil)
+			messagesDroppedByType.Add(agreementProposalMessageType, 1)
+		}
+		return true
+	})
+}
+
+// proposalSource returns the key of raw's source in the proposal queue. It is
+// network.IPAddressable.RoutingAddr, so all of a host's connections count as
+// one source.
+func proposalSource(raw network.IncomingMessage) string {
+	return string(raw.Sender.RoutingAddr())
 }
 
 func (i *networkImpl) processBundleMessage(raw network.IncomingMessage) network.OutgoingMessage {
@@ -112,16 +127,28 @@ func (i *networkImpl) processBundleMessage(raw network.IncomingMessage) network.
 
 // i.e. process<Type>Message
 func (i *networkImpl) processMessage(raw network.IncomingMessage, submit chan<- agreement.Message, msgType string) network.OutgoingMessage {
+	return i.submitMessage(raw, msgType, func(m agreement.Message) bool {
+		select {
+		case submit <- m:
+			return true
+		default:
+			return false
+		}
+	})
+}
+
+// submitMessage hands raw to agreement through enqueue, which reports whether
+// the message was queued, and counts the result.
+func (i *networkImpl) submitMessage(raw network.IncomingMessage, msgType string, enqueue func(agreement.Message) bool) network.OutgoingMessage {
 	metadata := &messageMetadata{raw: raw}
 
-	select {
-	case submit <- agreement.Message{MessageHandle: agreement.MessageHandle(metadata), Data: raw.Data}:
+	if enqueue(agreement.Message{MessageHandle: agreement.MessageHandle(metadata), Data: raw.Data}) {
 		// It would be slightly better to measure at de-queue
 		// time, but that happens in many places in code and
 		// this is much easier.
 		messagesHandledTotal.Inc(nil)
 		messagesHandledByType.Add(msgType, 1)
-	default:
+	} else {
 		messagesDroppedTotal.Inc(nil)
 		messagesDroppedByType.Add(msgType, 1)
 	}
@@ -134,13 +161,38 @@ func (i *networkImpl) Messages(t protocol.Tag) <-chan agreement.Message {
 	switch t {
 	case protocol.AgreementVoteTag:
 		return i.voteCh
-	case protocol.ProposalPayloadTag:
-		return i.proposalCh
 	case protocol.VoteBundleTag:
 		return i.bundleCh
 	default:
 		i.log.Panicf("bad tag! %v", t)
 		return nil
+	}
+}
+
+// NextProposal waits for a proposal payload message and returns it, taking
+// messages fairly across their sources (see util.FairQueue), or returns false
+// once ctx is done.
+//
+// Payloads wait in the queue compressed, as the network delivers them, and
+// NextProposal decompresses the one it returns. It disconnects a peer whose
+// payload fails to decompress.
+func (i *networkImpl) NextProposal(ctx context.Context) (agreement.Message, bool) {
+	for {
+		m, ok := i.proposals.Next(ctx)
+		if !ok {
+			return agreement.Message{}, false
+		}
+		data, err := network.DecompressProposal(m.Data)
+		if err != nil {
+			i.log.Warnf("agreement: disconnecting from peer: %v", err)
+			i.Disconnect(m.MessageHandle)
+			continue
+		}
+		if i.trace != nil {
+			i.trace.HashTrace(messagetracer.Proposal, data)
+		}
+		m.Data = data
+		return m, true
 	}
 }
 

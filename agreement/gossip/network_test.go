@@ -28,6 +28,7 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
@@ -192,9 +193,12 @@ func (w *whiteholeNetwork) Start() error {
 			if msg.Tag == "" {
 				continue
 			}
+			// Every message from the network has a Sender; the proposal queue
+			// keys its sources by the sender's address.
 			incomingMessage := network.IncomingMessage{
-				Tag:  msg.Tag,
-				Data: msg.Data,
+				Tag:    msg.Tag,
+				Data:   msg.Data,
+				Sender: queueTestPeer{addr: []byte{10, 0, byte(msg.Sender >> 8), byte(msg.Sender)}},
 			}
 			outMsg := w.mux.Handle(incomingMessage)
 			switch outMsg.Action {
@@ -226,6 +230,7 @@ func (w *whiteholeNetwork) Stop() {
 type messageCounter struct {
 	votes, proposals, bundles uint32
 	quit                      chan struct{}
+	cancel                    context.CancelFunc
 }
 
 func (m *messageCounter) waitForValue(t *testing.T, expectedValue uint32, val *uint32, valName string) bool {
@@ -281,9 +286,25 @@ func startMessageCounter(n *networkImpl) *messageCounter {
 	m := &messageCounter{
 		quit: make(chan struct{}),
 	}
+	// Proposal payloads are taken with NextProposal, as agreement does.
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancel = cancel
+	payloadChan := make(chan agreement.Message)
+	go func() {
+		for {
+			msg, ok := n.NextProposal(ctx)
+			if !ok {
+				return
+			}
+			select {
+			case payloadChan <- msg:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 	go func(m *messageCounter, n *networkImpl) {
 		votesChan := n.Messages(protocol.AgreementVoteTag)
-		payloadChan := n.Messages(protocol.ProposalPayloadTag)
 		bundlesChan := n.Messages(protocol.VoteBundleTag)
 		for {
 			select {
@@ -310,6 +331,7 @@ func startMessageCounter(n *networkImpl) *messageCounter {
 }
 
 func (m *messageCounter) stop() {
+	m.cancel()
 	close(m.quit)
 }
 

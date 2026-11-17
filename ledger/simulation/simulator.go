@@ -371,6 +371,22 @@ func (s Simulator) simulateWithTracer(hdr bookkeeping.BlockHeader, txgroup []tra
 	return vb, nil
 }
 
+// MaxTxnGroups is the number of transaction groups Simulate accepts in a request.
+const MaxTxnGroups = 1
+
+// CheckTxnGroupCount returns an InvalidRequestError unless n, the number of
+// transaction groups in a request, is between 1 and MaxTxnGroups.
+func CheckTxnGroupCount(n int) error {
+	if n < 1 || n > MaxTxnGroups {
+		return InvalidRequestError{
+			SimulatorError{
+				err: fmt.Errorf("expected %d transaction group, got %d", MaxTxnGroups, n),
+			},
+		}
+	}
+	return nil
+}
+
 // Simulate simulates a transaction group using the simulator. Will error if the transaction group is not well-formed.
 func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 	if simulateRequest.FixSigners && !simulateRequest.AllowEmptySignatures {
@@ -388,12 +404,8 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 		s.ledger.start = s.ledger.Ledger.Latest()
 	}
 
-	if len(simulateRequest.TxnGroups) != 1 {
-		return Result{}, InvalidRequestError{
-			SimulatorError{
-				err: fmt.Errorf("expected 1 transaction group, got %d", len(simulateRequest.TxnGroups)),
-			},
-		}
+	if err := CheckTxnGroupCount(len(simulateRequest.TxnGroups)); err != nil {
+		return Result{}, err
 	}
 
 	prevBlockHdr, err := s.ledger.BlockHdr(s.ledger.start)

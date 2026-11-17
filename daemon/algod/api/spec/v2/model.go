@@ -19,8 +19,49 @@ package v2
 
 import (
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
+
+//msgp:allocbound SimulateRequestTxnGroups bounds.MaxTxGroupSize
+
+// SimulateRequestTxnGroups is the txn-groups field of a SimulateRequest. Its
+// allocbound is larger than simulation.MaxTxnGroups, so that the simulator
+// reports a request with a few groups too many, as it does for a JSON request.
+type SimulateRequestTxnGroups []SimulateRequestTxnGroup
+
+// SimulateRequestTxnGroup is one transaction group of a SimulateRequest.
+type SimulateRequestTxnGroup struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Txns []transactions.SignedTxn `codec:"txns,allocbound=bounds.MaxTxGroupSize"`
+}
+
+// SimulateRequest is a msgpack simulate request. It has the fields of
+// model.SimulateRequest, with each transaction as a transactions.SignedTxn.
+type SimulateRequest struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	TxnGroups             SimulateRequestTxnGroups   `codec:"txn-groups"`
+	Round                 basics.Round               `codec:"round"`
+	AllowEmptySignatures  bool                       `codec:"allow-empty-signatures"`
+	AllowMoreLogging      bool                       `codec:"allow-more-logging"`
+	AllowUnnamedResources bool                       `codec:"allow-unnamed-resources"`
+	ExtraOpcodeBudget     int64                      `codec:"extra-opcode-budget"`
+	ExecTraceConfig       SimulateRequestTraceConfig `codec:"exec-trace-config"`
+	FixSigners            bool                       `codec:"fix-signers"`
+}
+
+// SimulateRequestTraceConfig is the exec-trace-config field of a msgpack simulate
+// request. It has the fields of simulation.ExecTraceConfig.
+type SimulateRequestTraceConfig struct {
+	_struct struct{} `codec:",omitempty"`
+
+	Enable  bool `codec:"enable"`
+	Stack   bool `codec:"stack-change"`
+	Scratch bool `codec:"scratch-change"`
+	State   bool `codec:"state-change"`
+}
 
 // AccountAssetModel is returned by AccountAssetInformation when msgpack format is specified
 type AccountAssetModel struct {
