@@ -82,9 +82,9 @@ func (l simulatorLedger) LookupLatest(addr basics.Address) (basics.AccountData, 
 // StartEvaluator is part of the ledger.Ledger interface. We override this so that
 // the eval.LedgerForEvaluator value passed into eval.StartEvaluator is a simulatorLedger,
 // not a data.Ledger. This ensures our overridden LookupLatest method will be used, and that
-// the evaluator reaches the state overlay through LookupWithoutRewards, LookupApplication,
-// LookupAsset, LookupKv, GetCreatorForRound, LookupAgreement, OnlineCirculation and
-// GetKnockOfflineCandidates.
+// the evaluator reaches the state overlay through BlockHdr, LookupWithoutRewards,
+// LookupApplication, LookupAsset, LookupKv, GetCreatorForRound, LookupAgreement,
+// OnlineCirculation and GetKnockOfflineCandidates.
 func (l simulatorLedger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int, tracer logic.EvalTracer) (*eval.BlockEvaluator, error) {
 	if tracer == nil {
 		return nil, errors.New("tracer is nil")
@@ -280,7 +280,7 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, group []transactions.Si
 	// and data.Ledger embeds *ledger.Ledger
 	eval, err := s.ledger.StartEvaluator(hdr, len(group), 0, tracer)
 	if err != nil {
-		return nil, err
+		return nil, s.ledger.evalError(err)
 	}
 
 	err = eval.TransactionGroup(group...)
@@ -291,7 +291,7 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, group []transactions.Si
 	// Finally, process any pending end-of-block state changes.
 	ub, err := eval.GenerateBlock(nil)
 	if err != nil {
-		return nil, err
+		return nil, s.ledger.evalError(err)
 	}
 
 	// Since we skip agreement, this block is imperfect w/ respect to seed/proposer/payouts
@@ -418,11 +418,13 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	// Re-read the header now that the overlay is set, so that block overrides carry into the
-	// block being simulated
-	prevBlockHdr, err = s.ledger.BlockHdr(s.ledger.start)
-	if err != nil {
-		return Result{}, err
+	if s.ledger.overlay != nil {
+		// Re-read the header now that the overlay is set, so that block overrides carry into the
+		// block being simulated
+		prevBlockHdr, err = s.ledger.BlockHdr(s.ledger.start)
+		if err != nil {
+			return Result{}, err
+		}
 	}
 	nextBlock := bookkeeping.MakeBlock(prevBlockHdr)
 

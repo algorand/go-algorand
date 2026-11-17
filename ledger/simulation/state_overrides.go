@@ -34,7 +34,6 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/logging"
 )
 
 // StateOverrides describes modifications to ledger state that are applied before any evaluation
@@ -142,6 +141,10 @@ type AssetHoldingOverride struct {
 // A new application's ID must not be one that could be assigned to a creatable made during
 // simulation, i.e. it must be at most the current txn counter or well above it. App IDs may not
 // exceed math.MaxInt64.
+//
+// Creating an application at the ID of a deleted one does not clear state that outlived the
+// deletion: boxes that were never deleted, and the local state of accounts that never closed
+// out, belong to the new application. BoxDelta and AccountOverride.Apps can remove them.
 //
 // Minimum balance bookkeeping (created apps, global schema, extra pages, boxes) is updated on the
 // relevant accounts, but their balances are not, so an AccountOverride may be needed to keep them
@@ -279,6 +282,17 @@ func invalidOverride(format string, args ...any) error {
 	return InvalidRequestError{SimulatorError{fmt.Errorf("invalid state override: "+format, args...)}}
 }
 
+// evalError converts err, returned by eval.StartEvaluator or BlockEvaluator.GenerateBlock, into
+// an invalid request error if state is overridden. Overrides can produce state that these reject
+// but that the ledger never holds, such as a rewards pool that cannot pay the round's rewards,
+// totals that overflow once rewards are applied, or a Bonus that overflows the proposer payout.
+func (l simulatorLedger) evalError(err error) error {
+	if l.overlay == nil {
+		return err
+	}
+	return invalidOverride("block %d cannot be evaluated from the overridden state: %w", l.start+1, err)
+}
+
 func sortedKeys[K cmp.Ordered, V any](m map[K]V) []K {
 	return slices.Sorted(maps.Keys(m))
 }
@@ -315,7 +329,7 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 	}
 
 	for _, rnd := range sortedKeys(overrides.Blocks) {
-		if err = l.overlayBlock(o, rnd, overrides.Blocks[rnd], proto); err != nil {
+		if err = l.overlayBlock(o, rnd, overrides.Blocks[rnd], prevHdr); err != nil {
 			return nil, err
 		}
 	}
@@ -422,14 +436,6 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 		if acct := o.accounts[addr]; acct.MicroAlgos.Raw > balanceLimit {
 			return nil, invalidOverride("account %s balance %d exceeds maximum %d", addr, acct.MicroAlgos.Raw, balanceLimit)
 		}
-	}
-
-	pool, err := getAccount(prevHdr.RewardsPool)
-	if err != nil {
-		return nil, err
-	}
-	if err = checkRewards(totals, pool, prevHdr); err != nil {
-		return nil, err
 	}
 
 	if err = l.overlayOnline(o, agreementAddrs, overrides.Accounts, proto, prevHdr); err != nil {
@@ -546,7 +552,7 @@ func (l simulatorLedger) overlayOnline(o *stateOverlay, addrs []basics.Address, 
 	return nil
 }
 
-func (l simulatorLedger) overlayBlock(o *stateOverlay, rnd basics.Round, override BlockOverride, proto config.ConsensusParams) error {
+func (l simulatorLedger) overlayBlock(o *stateOverlay, rnd basics.Round, override BlockOverride, prevHdr bookkeeping.BlockHeader) error {
 	if rnd > l.start {
 		return invalidOverride("cannot override block %d: it is after the start round %d", rnd, l.start)
 	}
@@ -556,9 +562,17 @@ func (l simulatorLedger) overlayBlock(o *stateOverlay, rnd basics.Round, overrid
 	if override.TimeStamp != nil && *override.TimeStamp < 0 {
 		return invalidOverride("block %d timestamp %d must not be negative", rnd, *override.TimeStamp)
 	}
-	// Leave room for MaxTimestampIncrement so deriving the next timestamp cannot overflow
-	if maxTimestamp := int64(math.MaxInt64) - proto.MaxTimestampIncrement; override.TimeStamp != nil && *override.TimeStamp > maxTimestamp {
-		return invalidOverride("block %d timestamp %d exceeds maximum %d", rnd, *override.TimeStamp, maxTimestamp)
+	if override.TimeStamp != nil && rnd == l.start {
+		// bookkeeping.MakeBlock adds the MaxTimestampIncrement of the simulated block's protocol
+		// to the start round's timestamp, which must not overflow
+		_, upgradeState, err := bookkeeping.ProcessUpgradeParams(prevHdr)
+		if err != nil {
+			return err
+		}
+		maxTimestamp := int64(math.MaxInt64) - config.Consensus[upgradeState.CurrentProtocol].MaxTimestampIncrement
+		if *override.TimeStamp > maxTimestamp {
+			return invalidOverride("block %d timestamp %d exceeds maximum %d", rnd, *override.TimeStamp, maxTimestamp)
+		}
 	}
 	o.blocks[rnd] = override
 	return nil
@@ -735,8 +749,8 @@ func (l simulatorLedger) overlayApp(o *stateOverlay, getAccount func(basics.Addr
 		return invalidOverride("app %d global state: %v", aidx, err)
 	}
 
-	if err = validateAppParams(aidx, params); err != nil {
-		return err
+	if err = checkSchema(params.GlobalState, params.GlobalStateSchema); err != nil {
+		return invalidOverride("app %d global state: %v", aidx, err)
 	}
 
 	// Update minimum balance bookkeeping for the app and its global schema and extra pages
@@ -840,37 +854,6 @@ func maxOverrideBalance(prevHdr bookkeeping.BlockHeader, proto config.ConsensusP
 	}
 	maxRewards = max(maxRewards, prevHdr.RewardsRate)
 	return math.MaxUint64 - basics.AddSaturate(maxRewards, prevHdr.RewardsResidue)
-}
-
-// checkRewards rejects overridden state from which the simulated round's rewards cannot be paid.
-// It repeats the rewards arithmetic of eval.StartEvaluator and roundCowState.CalculateTotals,
-// which otherwise fail with errors that are not reported as invalid requests. totals and pool are
-// the ledger totals and the rewards pool account with overrides applied.
-func checkRewards(totals ledgercore.AccountTotals, pool ledgercore.AccountData, prevHdr bookkeeping.BlockHeader) error {
-	_, upgradeState, err := bookkeeping.ProcessUpgradeParams(prevHdr)
-	if err != nil {
-		return err
-	}
-	proto := config.Consensus[upgradeState.CurrentProtocol]
-	prevProto := config.Consensus[prevHdr.CurrentProtocol]
-
-	pool = pool.WithUpdatedRewards(prevProto.RewardUnit, prevHdr.RewardsLevel)
-	next := prevHdr.NextRewardsState(prevHdr.Round+1, proto, pool.MicroAlgos, totals.RewardUnits(), logging.Base())
-
-	var ot basics.OverflowTracker
-	rewards := ot.Mul(totals.RewardUnits(), ot.Sub(next.RewardsLevel, prevHdr.RewardsLevel))
-	remaining := ot.Sub(pool.MicroAlgos.Raw, rewards)
-	ot.Sub(remaining, proto.MinBalance)
-	if ot.Overflowed {
-		return invalidOverride("rewards pool %s balance %d cannot pay rewards of %d and keep the minimum balance %d",
-			prevHdr.RewardsPool, pool.MicroAlgos.Raw, rewards, proto.MinBalance)
-	}
-
-	totals.ApplyRewards(next.RewardsLevel, &ot)
-	if ot.Overflowed {
-		return invalidOverride("account balances overflow ledger totals once rewards are paid")
-	}
-	return nil
 }
 
 func checkNewCreatableID(cidx basics.CreatableIndex, kind string, prevHdr bookkeeping.BlockHeader) error {
@@ -1131,13 +1114,6 @@ func (l simulatorLedger) overlayLocalDelta(o *stateOverlay, addr basics.Address,
 		return invalidOverride("account %s app %d local state: %v", addr, aidx, err)
 	}
 	o.localStates[key] = &newState
-	return nil
-}
-
-func validateAppParams(aidx basics.AppIndex, params basics.AppParams) error {
-	if err := checkSchema(params.GlobalState, params.GlobalStateSchema); err != nil {
-		return invalidOverride("app %d global state: %v", aidx, err)
-	}
 	return nil
 }
 

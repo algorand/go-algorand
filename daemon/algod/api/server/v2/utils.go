@@ -699,34 +699,57 @@ func convertStateOverrides(overrides *model.SimulateStateOverrides) (simulation.
 	return result, nil
 }
 
-func convertBlockOverride(block model.SimulateBlockOverride) (simulation.BlockOverride, error) {
-	var override simulation.BlockOverride
-	override.TimeStamp = block.Timestamp
-	if block.Seed != nil {
-		var seed committee.Seed
-		if len(*block.Seed) != len(seed) {
-			return simulation.BlockOverride{}, fmt.Errorf("seed must be %d bytes, not %d", len(seed), len(*block.Seed))
-		}
-		copy(seed[:], *block.Seed)
-		override.Seed = &seed
+// fixedBytes converts an optional byte slice into a fixed-size array. name describes the field in
+// errors.
+func fixedBytes[T ~[32]byte | ~[64]byte](name string, value *[]byte) (*T, error) {
+	if value == nil {
+		return nil, nil
 	}
-	addrs := []struct {
-		name  string
-		value *string
-		dest  **basics.Address
-	}{
-		{"proposer", block.Proposer, &override.Proposer},
-		{"fee-sink", block.FeeSink, &override.FeeSink},
+	var result T
+	if len(*value) != len(result) {
+		return nil, fmt.Errorf("%s must be %d bytes, not %d", name, len(result), len(*value))
 	}
+	for i, b := range *value {
+		result[i] = b
+	}
+	return &result, nil
+}
+
+// optionalAddress is an optional checksummed address, and where its decoded value is stored.
+type optionalAddress struct {
+	name  string
+	value *string
+	dest  **basics.Address
+}
+
+// convertAddresses decodes each address that is set into its dest.
+func convertAddresses(addrs ...optionalAddress) error {
 	for _, a := range addrs {
 		if a.value == nil {
 			continue
 		}
 		addr, err := basics.UnmarshalChecksumAddress(*a.value)
 		if err != nil {
-			return simulation.BlockOverride{}, fmt.Errorf("%s %q: %w", a.name, *a.value, err)
+			return fmt.Errorf("%s %q: %w", a.name, *a.value, err)
 		}
 		*a.dest = &addr
+	}
+	return nil
+}
+
+func convertBlockOverride(block model.SimulateBlockOverride) (simulation.BlockOverride, error) {
+	var override simulation.BlockOverride
+	var err error
+	override.TimeStamp = block.Timestamp
+	if override.Seed, err = fixedBytes[committee.Seed]("seed", block.Seed); err != nil {
+		return simulation.BlockOverride{}, err
+	}
+	err = convertAddresses(
+		optionalAddress{"proposer", block.Proposer, &override.Proposer},
+		optionalAddress{"fee-sink", block.FeeSink, &override.FeeSink},
+	)
+	if err != nil {
+		return simulation.BlockOverride{}, err
 	}
 	amounts := []struct {
 		value *uint64
@@ -771,29 +794,15 @@ func convertAccountOverride(acct model.SimulateAccountOverride) (simulation.Acco
 		}
 		override.Status = &status
 	}
-	if acct.VoteParticipationKey != nil {
-		var voteID crypto.OneTimeSignatureVerifier
-		if len(*acct.VoteParticipationKey) != len(voteID) {
-			return simulation.AccountOverride{}, fmt.Errorf("vote participation key must be %d bytes, not %d", len(voteID), len(*acct.VoteParticipationKey))
-		}
-		copy(voteID[:], *acct.VoteParticipationKey)
-		override.VoteID = &voteID
+	var err error
+	if override.VoteID, err = fixedBytes[crypto.OneTimeSignatureVerifier]("vote participation key", acct.VoteParticipationKey); err != nil {
+		return simulation.AccountOverride{}, err
 	}
-	if acct.SelectionParticipationKey != nil {
-		var selectionID crypto.VRFVerifier
-		if len(*acct.SelectionParticipationKey) != len(selectionID) {
-			return simulation.AccountOverride{}, fmt.Errorf("selection participation key must be %d bytes, not %d", len(selectionID), len(*acct.SelectionParticipationKey))
-		}
-		copy(selectionID[:], *acct.SelectionParticipationKey)
-		override.SelectionID = &selectionID
+	if override.SelectionID, err = fixedBytes[crypto.VRFVerifier]("selection participation key", acct.SelectionParticipationKey); err != nil {
+		return simulation.AccountOverride{}, err
 	}
-	if acct.StateProofKey != nil {
-		var stateProofID merklesignature.Commitment
-		if len(*acct.StateProofKey) != len(stateProofID) {
-			return simulation.AccountOverride{}, fmt.Errorf("state proof key must be %d bytes, not %d", len(stateProofID), len(*acct.StateProofKey))
-		}
-		copy(stateProofID[:], *acct.StateProofKey)
-		override.StateProofID = &stateProofID
+	if override.StateProofID, err = fixedBytes[merklesignature.Commitment]("state proof key", acct.StateProofKey); err != nil {
+		return simulation.AccountOverride{}, err
 	}
 	override.VoteFirstValid = acct.VoteFirstValid
 	override.VoteLastValid = acct.VoteLastValid
@@ -802,7 +811,6 @@ func convertAccountOverride(acct model.SimulateAccountOverride) (simulation.Acco
 	override.LastProposed = acct.LastProposed
 	override.LastHeartbeat = acct.LastHeartbeat
 
-	var err error
 	override.Assets, err = convertOverrides(acct.Assets, "asset",
 		func(holding model.SimulateAssetHoldingOverride) (basics.AssetIndex, error) {
 			return holding.AssetID, nil
@@ -815,14 +823,16 @@ func convertAccountOverride(acct model.SimulateAccountOverride) (simulation.Acco
 	}
 	override.Apps, err = convertOverrides(acct.Apps, "app",
 		func(local model.SimulateAppLocalStateOverride) (basics.AppIndex, error) { return local.AppID, nil },
-		convertAppLocalStateOverride)
+		func(local model.SimulateAppLocalStateOverride) (simulation.AppLocalStateOverride, error) {
+			return convertAppLocalStateOverride(local), nil
+		})
 	if err != nil {
 		return simulation.AccountOverride{}, err
 	}
 	return override, nil
 }
 
-func convertAppLocalStateOverride(local model.SimulateAppLocalStateOverride) (simulation.AppLocalStateOverride, error) {
+func convertAppLocalStateOverride(local model.SimulateAppLocalStateOverride) simulation.AppLocalStateOverride {
 	var override simulation.AppLocalStateOverride
 	if local.Schema != nil {
 		schema := convertStateSchema(*local.Schema)
@@ -831,7 +841,7 @@ func convertAppLocalStateOverride(local model.SimulateAppLocalStateOverride) (si
 	if local.OptOut != nil {
 		override.OptOut = *local.OptOut
 	}
-	return override, nil
+	return override
 }
 
 // convertStateDelta converts model.StateDelta -> basics.StateDelta, the inverse of
@@ -887,33 +897,17 @@ func convertAssetOverride(asset model.SimulateAssetOverride) (simulation.AssetOv
 	if override.URL, err = stringOrB64("url", asset.Url, asset.UrlB64); err != nil {
 		return simulation.AssetOverride{}, err
 	}
-	if asset.MetadataHash != nil {
-		var hash [32]byte
-		if len(*asset.MetadataHash) != len(hash) {
-			return simulation.AssetOverride{}, fmt.Errorf("metadata hash must be %d bytes, not %d", len(hash), len(*asset.MetadataHash))
-		}
-		copy(hash[:], *asset.MetadataHash)
-		override.MetadataHash = &hash
+	if override.MetadataHash, err = fixedBytes[[32]byte]("metadata hash", asset.MetadataHash); err != nil {
+		return simulation.AssetOverride{}, err
 	}
-	addrs := []struct {
-		name  string
-		value *string
-		dest  **basics.Address
-	}{
-		{"manager", asset.Manager, &override.Manager},
-		{"reserve", asset.Reserve, &override.Reserve},
-		{"freeze", asset.Freeze, &override.Freeze},
-		{"clawback", asset.Clawback, &override.Clawback},
-	}
-	for _, a := range addrs {
-		if a.value == nil {
-			continue
-		}
-		addr, err := basics.UnmarshalChecksumAddress(*a.value)
-		if err != nil {
-			return simulation.AssetOverride{}, fmt.Errorf("%s %q: %w", a.name, *a.value, err)
-		}
-		*a.dest = &addr
+	err = convertAddresses(
+		optionalAddress{"manager", asset.Manager, &override.Manager},
+		optionalAddress{"reserve", asset.Reserve, &override.Reserve},
+		optionalAddress{"freeze", asset.Freeze, &override.Freeze},
+		optionalAddress{"clawback", asset.Clawback, &override.Clawback},
+	)
+	if err != nil {
+		return simulation.AssetOverride{}, err
 	}
 	return override, nil
 }

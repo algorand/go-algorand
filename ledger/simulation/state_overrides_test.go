@@ -237,7 +237,7 @@ func TestStateOverrideRewardsPoolBalance(t *testing.T) {
 	// The evaluator requires the rewards pool to keep its minimum balance
 	err = simulate(basics.MicroAlgos{Raw: proto.MinBalance - 1})
 	require.ErrorAs(t, err, &simulation.InvalidRequestError{})
-	require.ErrorContains(t, err, "rewards pool")
+	require.ErrorContains(t, err, "overflowed subtracting rewards")
 
 	// Leave room for the rewards that the simulated round may withdraw
 	require.NoError(t, simulate(basics.MicroAlgos{Raw: proto.MinBalance + hdr.RewardsRate + hdr.RewardsResidue}))
@@ -2060,6 +2060,7 @@ func TestStateOverrideBlockValidation(t *testing.T) {
 	negative := int64(-1)
 	zero := int64(0)
 	huge := int64(math.MaxInt64)
+	hugeBonus := basics.MicroAlgos{Raw: math.MaxUint64}
 	cases := []struct {
 		name     string
 		blocks   map[basics.Round]simulation.BlockOverride
@@ -2068,6 +2069,7 @@ func TestStateOverrideBlockValidation(t *testing.T) {
 		{"future round", map[basics.Round]simulation.BlockOverride{start + 1: {TimeStamp: &zero}}, "after the start round"},
 		{"negative timestamp", map[basics.Round]simulation.BlockOverride{start: {TimeStamp: &negative}}, "must not be negative"},
 		{"huge timestamp", map[basics.Round]simulation.BlockOverride{start: {TimeStamp: &huge}}, "exceeds maximum"},
+		{"huge bonus", map[basics.Round]simulation.BlockOverride{start: {Bonus: &hugeBonus}}, "payout overflowed"},
 	}
 	s := simulation.MakeSimulator(env.Ledger, false)
 	for _, tc := range cases {
@@ -2080,6 +2082,17 @@ func TestStateOverrideBlockValidation(t *testing.T) {
 			require.ErrorContains(t, err, tc.expected)
 		})
 	}
+
+	// No later timestamp is derived from a round before the start round, so its timestamp is
+	// not bounded
+	require.NotZero(t, start)
+	_, err := s.Simulate(simulation.Request{
+		TxnGroups: [][]transactions.SignedTxn{{txn}},
+		StateOverrides: simulation.StateOverrides{
+			Blocks: map[basics.Round]simulation.BlockOverride{start - 1: {TimeStamp: &huge}},
+		},
+	})
+	require.NoError(t, err)
 }
 
 func TestStateOverridePastRound(t *testing.T) {
