@@ -1064,7 +1064,10 @@ func TestRecoverPanic(t *testing.T) {
 		return nil
 	}
 	require.NoError(t, run(func() {}))
-	require.ErrorContains(t, run(func() { panic("boom") }), "simulation panicked: boom")
+	panicErr := run(func() { panic("boom") })
+	require.ErrorContains(t, panicErr, "simulation panicked")
+	// The panic value goes to the log, not to the caller
+	require.NotContains(t, panicErr.Error(), "boom")
 }
 
 func TestStateOverridesCount(t *testing.T) {

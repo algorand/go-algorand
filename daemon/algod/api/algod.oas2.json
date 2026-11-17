@@ -3317,7 +3317,7 @@
       }
     },
     "SimulateStateOverrides": {
-      "description": "Modifications to ledger state that are applied before simulation begins. Overrides are only visible to the simulation and are never persisted. Overridden balances also change the ledger totals that the simulated block is built from, so they affect its rewards state and the rewards credited to every account during simulation.",
+      "description": "Modifications to ledger state that are applied before simulation begins. Overrides are only visible to the simulation and are never persisted. Overridden balances also change the ledger totals that the simulated block is built from, so they affect its rewards state and the rewards credited to every account during simulation. A request may override at most 1024 items in total, counting each block, account, application, asset, asset holding, application local state and box.",
       "type": "object",
       "properties": {
         "accounts": {
@@ -3353,11 +3353,11 @@
     "SimulateBlockOverride": {
       "description": "Modifications to the header of a block at or before the round that simulation starts from. Omitted fields are left unchanged. Overridden headers are visible to the block opcode. The header of the round that simulation starts from is the previous header of the simulated block, so its overrides also affect that block: global LatestTimestamp is its timestamp, the simulated block's timestamp is no earlier than it, the simulated block's bonus is derived from its bonus, and fees are paid to its fee sink.",
       "type": "object",
-      "required": ["round"],
       "properties": {
         "round": {
           "description": "The round of the block to override. It must be at or before the round that simulation starts from.",
           "type": "integer",
+          "x-omitempty": false,
           "x-go-type": "basics.Round",
           "x-nullable": true
         },
@@ -3487,7 +3487,7 @@
       }
     },
     "SimulateAppLocalStateOverride": {
-      "description": "Modifications to an account's opt-in to an application. Omitted fields are left unchanged. For a new opt-in, the schema defaults to the application's local-state-schema, and there are no key-values.",
+      "description": "Modifications to an account's opt-in to an application. Omitted fields are left unchanged. For a new opt-in, the schema defaults to the application's local-state-schema, and there are no key-values. If set, schema replaces the local schema recorded when the account opted in, which determines how much local state the account may hold, and its minimum balance.",
       "type": "object",
       "required": ["app-id"],
       "properties": {
@@ -3615,7 +3615,7 @@
       }
     },
     "SimulateAppOverride": {
-      "description": "Modifications to a single application's state. If the application does not exist, it is created, in which case creator, approval-program, and clear-state-program are required. Omitted fields are left unchanged. Minimum balance requirements of affected accounts are updated, but their balances are not.",
+      "description": "Modifications to a single application's state. If the application does not exist, it is created, in which case creator, approval-program, and clear-state-program are required. Omitted fields are left unchanged. Minimum balance requirements of affected accounts are updated, but their balances are not. The global-state-delta and box-delta fields have the same form as a transaction's global-state-delta: keys that are not mentioned are left unchanged, and each deleted key must exist. Box names are the delta keys, and only the set-bytes and delete actions are allowed. The local-state-schema field only applies to accounts that opt in during simulation, or by an application local state override; accounts that are already opted in keep the local schema, and minimum balance, from when they opted in.",
       "type": "object",
       "required": ["id"],
       "properties": {

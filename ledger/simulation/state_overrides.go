@@ -409,7 +409,7 @@ func (l simulatorLedger) buildStateOverlay(overrides StateOverrides, prevHdr boo
 		// Every account in o.accounts either passes this check unmodified, or has its
 		// RewardsBase set to prevHdr.RewardsLevel by overlayAccountFields
 		if lookupErr = checkPendingRewards(acct, addr, proto.RewardUnit, prevHdr.RewardsLevel); lookupErr != nil {
-			return ledgercore.AccountData{}, lookupErr
+			return ledgercore.AccountData{}, invalidOverride("%w", lookupErr)
 		}
 		original[addr] = acct
 		return acct, nil

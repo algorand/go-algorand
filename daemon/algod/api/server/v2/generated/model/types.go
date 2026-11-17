@@ -846,7 +846,7 @@ type SimulateAccountOverride struct {
 	VoteParticipationKey *[]byte `json:"vote-participation-key,omitempty"`
 }
 
-// SimulateAppLocalStateOverride Modifications to an account's opt-in to an application. Omitted fields are left unchanged. For a new opt-in, the schema defaults to the application's local-state-schema, and there are no key-values.
+// SimulateAppLocalStateOverride Modifications to an account's opt-in to an application. Omitted fields are left unchanged. For a new opt-in, the schema defaults to the application's local-state-schema, and there are no key-values. If set, schema replaces the local schema recorded when the account opted in, which determines how much local state the account may hold, and its minimum balance.
 type SimulateAppLocalStateOverride struct {
 	// AppID The ID of the application. It must exist, either on the ledger or by an application override.
 	AppID basics.AppIndex `json:"app-id"`
@@ -858,7 +858,7 @@ type SimulateAppLocalStateOverride struct {
 	Schema *ApplicationStateSchema `json:"schema,omitempty"`
 }
 
-// SimulateAppOverride Modifications to a single application's state. If the application does not exist, it is created, in which case creator, approval-program, and clear-state-program are required. Omitted fields are left unchanged. Minimum balance requirements of affected accounts are updated, but their balances are not.
+// SimulateAppOverride Modifications to a single application's state. If the application does not exist, it is created, in which case creator, approval-program, and clear-state-program are required. Omitted fields are left unchanged. Minimum balance requirements of affected accounts are updated, but their balances are not. The global-state-delta and box-delta fields have the same form as a transaction's global-state-delta: keys that are not mentioned are left unchanged, and each deleted key must exist. Box names are the delta keys, and only the set-bytes and delete actions are allowed. The local-state-schema field only applies to accounts that opt in during simulation, or by an application local state override; accounts that are already opted in keep the local schema, and minimum balance, from when they opted in.
 type SimulateAppOverride struct {
 	// ApprovalProgram If set, replaces the approval program.
 	ApprovalProgram *[]byte `json:"approval-program,omitempty"`
@@ -1022,7 +1022,7 @@ type SimulateRequest struct {
 	// Round If provided, specifies the round preceding the simulation. State changes through this round will be used to run this simulation. Usually only the 4 most recent rounds will be available (controlled by the node config value MaxAcctLookback). If not specified, defaults to the latest available round.
 	Round *basics.Round `json:"round,omitempty"`
 
-	// StateOverrides Modifications to ledger state that are applied before simulation begins. Overrides are only visible to the simulation and are never persisted. Overridden balances also change the ledger totals that the simulated block is built from, so they affect its rewards state and the rewards credited to every account during simulation.
+	// StateOverrides Modifications to ledger state that are applied before simulation begins. Overrides are only visible to the simulation and are never persisted. Overridden balances also change the ledger totals that the simulated block is built from, so they affect its rewards state and the rewards credited to every account during simulation. A request may override at most 1024 items in total, counting each block, account, application, asset, asset holding, application local state and box.
 	StateOverrides *SimulateStateOverrides `json:"state-overrides,omitempty"`
 
 	// TxnGroups The transaction groups to simulate.
@@ -1035,7 +1035,7 @@ type SimulateRequestTransactionGroup struct {
 	Txns []json.RawMessage `json:"txns"`
 }
 
-// SimulateStateOverrides Modifications to ledger state that are applied before simulation begins. Overrides are only visible to the simulation and are never persisted. Overridden balances also change the ledger totals that the simulated block is built from, so they affect its rewards state and the rewards credited to every account during simulation.
+// SimulateStateOverrides Modifications to ledger state that are applied before simulation begins. Overrides are only visible to the simulation and are never persisted. Overridden balances also change the ledger totals that the simulated block is built from, so they affect its rewards state and the rewards credited to every account during simulation. A request may override at most 1024 items in total, counting each block, account, application, asset, asset holding, application local state and box.
 type SimulateStateOverrides struct {
 	// Accounts Account state overrides. Each address may appear at most once.
 	Accounts *[]SimulateAccountOverride `json:"accounts,omitempty"`

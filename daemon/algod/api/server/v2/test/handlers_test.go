@@ -3354,6 +3354,8 @@ byte "bvalue"
 				}},
 			}},
 			Blocks: &[]model.SimulateBlockOverride{{
+				// hdr.Round is 0 here, so this also checks that an explicitly overridden round 0
+				// survives encoding, which drops empty values
 				Round:          &hdr.Round,
 				Timestamp:      omitEmpty(int64(1_700_000_000)),
 				Seed:           &[]byte{31: 1},

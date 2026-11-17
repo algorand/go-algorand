@@ -82,10 +82,9 @@ func (l simulatorLedger) LookupLatest(addr basics.Address) (basics.AccountData, 
 
 // StartEvaluator is part of the ledger.Ledger interface. We override this so that
 // the eval.LedgerForEvaluator value passed into eval.StartEvaluator is a simulatorLedger,
-// not a data.Ledger. This ensures our overridden LookupLatest method will be used, and that
-// the evaluator reaches the state overlay through BlockHdr, LookupWithoutRewards,
-// LookupApplication, LookupAsset, LookupKv, GetCreatorForRound, LookupAgreement,
-// OnlineCirculation and GetKnockOfflineCandidates.
+// not a data.Ledger. This ensures that the evaluator reaches the state overlay through
+// LatestTotals, BlockHdr, LookupWithoutRewards, LookupApplication, LookupAsset, LookupKv,
+// GetCreatorForRound, LookupAgreement, OnlineCirculation and GetKnockOfflineCandidates.
 func (l simulatorLedger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int, tracer logic.EvalTracer) (*eval.BlockEvaluator, error) {
 	if tracer == nil {
 		return nil, errors.New("tracer is nil")
@@ -385,11 +384,12 @@ func (s Simulator) simulateWithTracer(hdr bookkeeping.BlockHeader, txgroup []tra
 
 // recoverPanic, when deferred, converts a panic into an error stored in err. The ledger and
 // evaluator panic on state they consider impossible, such as an account balance that overflows
-// when its rewards are applied.
+// when its rewards are applied. The recovered value is logged rather than included in the error,
+// which is returned to API clients.
 func recoverPanic(err *error) {
 	if r := recover(); r != nil {
 		logging.Base().Errorf("recovered from panic during simulation: %v", r)
-		*err = fmt.Errorf("simulation panicked: %v", r)
+		*err = errors.New("simulation panicked")
 	}
 }
 
