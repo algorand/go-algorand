@@ -470,6 +470,52 @@ func (ssl *substrServiceLogger) Infof(s string, args ...any) {
 	}
 }
 
+// A selected node must not send votes after a failed crash-state write, also
+// when checkpointAction.do has already sent the error and closed
+// persistStateDone by the time pseudonodeVotesTask.execute reads it.
+func TestPseudonodeVotesDroppedAfterFailedCheckpoint(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	rootSeed := sha256.Sum256([]byte(t.Name()))
+	accounts, balances := createTestAccountsAndBalances(t, 10, rootSeed[:])
+	ledger := makeTestLedger(balances)
+	log := serviceLogger{logging.TestingLog(t)}
+	avv := MakeAsyncVoteVerifier(nil)
+	defer avv.Quit()
+	pn := makePseudonode(pseudonodeParams{
+		factory:      testBlockFactory{Owner: 0},
+		validator:    testBlockValidator{},
+		keys:         makeRecordingKeyManager(accounts),
+		ledger:       ledger,
+		voteVerifier: avv,
+		log:          log,
+	})
+	defer pn.Quit()
+
+	rnd := ledger.NextRound()
+	prop := makeProposalValue(0, accounts[0].Address())
+	s := &Service{log: log}
+
+	// countVotes runs checkpointAction.do on a persistStateDone made as
+	// pseudonodeAction.do makes it, then counts the votes the pseudonode sends
+	// for (rnd, p, soft).
+	countVotes := func(p period, writeErr *serializableError) int {
+		persistStateDone := make(chan error, 1)
+		checkpointAction{Round: rnd, Period: p, Step: soft, Err: writeErr, done: persistStateDone}.do(context.Background(), s)
+		events, err := pn.MakeVotes(context.Background(), rnd, p, soft, prop, persistStateDone)
+		require.NoError(t, err)
+		n := 0
+		for range events {
+			n++
+		}
+		return n
+	}
+
+	require.Positive(t, countVotes(0, nil), "no votes were sent after a successful write")
+	require.Zero(t, countVotes(1, makeSerErrStr("disk full")), "votes were sent after a failed write")
+}
+
 // TestPseudonodeNonEnqueuedTasks test to see that in the case where we cannot enqueue the verification task to the backlog, we won't be waiting forever - instead,
 // we would generate a warning message and keep going.
 func TestPseudonodeNonEnqueuedTasks(t *testing.T) {

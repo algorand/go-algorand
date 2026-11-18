@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"io"
 	"math/rand"
 	"os"
 	"reflect"
@@ -30,6 +31,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-deadlock"
@@ -40,6 +42,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
@@ -2568,6 +2571,127 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 			ledger := ledgers[i].(*testLedger)
 			require.Equal(t, reference, ledger.entries[startRound+round(j)].Digest(), "wrong block confirmed")
 		}
+	}
+}
+
+// persistFailureHook calls notify when an agreement service logs a failed
+// crash-state write.
+type persistFailureHook struct {
+	notify func()
+}
+
+func (h persistFailureHook) Levels() []logrus.Level {
+	return []logrus.Level{logrus.ErrorLevel}
+}
+
+func (h persistFailureHook) Fire(e *logrus.Entry) error {
+	if e.Data["Type"] == logspec.Persisted.String() {
+		h.notify()
+	}
+	return nil
+}
+
+// A failed crash-state write must not stop a node whose keys were not selected
+// for the step. checkpointAction.do reports the failure on the persistStateDone
+// channel, and pseudonodeVotesTask.execute reads that channel only when it has
+// verified votes to send.
+func TestAgreementPersistenceFailureUnselectedNode(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const numNodes = 4
+	_, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
+	defer cleanupFn()
+	startRound := baseLedger.NextRound()
+	version, err := baseLedger.ConsensusVersion(startRound)
+	require.NoError(t, err)
+
+	// Node 0 keeps its participation key but has no stake, so it is never
+	// selected and its pseudonode never reads persistStateDone.
+	node0 := services[0].KeyManager.(*recordingKeyManager).keys[0].Parent
+	for _, l := range ledgers {
+		tl := l.(*testLedger)
+		acct := tl.state[node0]
+		acct.MicroAlgos = basics.MicroAlgos{}
+		tl.state[node0] = acct
+	}
+
+	// checkpointAction.do logs a failed write at error level just before it
+	// sends the error on persistStateDone.
+	checkpointFailed := make(chan struct{})
+	node0Log := logging.NewLogger()
+	node0Log.SetOutput(io.Discard)
+	node0Log.AddHook(persistFailureHook{notify: sync.OnceFunc(func() { close(checkpointFailed) })})
+	services[0].log = makeServiceLogger(node0Log)
+
+	for i := 0; i < numNodes; i++ {
+		services[i].Start()
+	}
+	// Node 0 is shut down below. If it is stuck, its goroutines stay parked.
+	defer func() {
+		stopped := make(chan struct{})
+		go func() {
+			for i := 1; i < numNodes; i++ {
+				services[i].Shutdown()
+			}
+			close(stopped)
+		}()
+		select {
+		case <-stopped:
+		case <-time.After(10 * time.Second):
+			t.Errorf("nodes 1-%d did not shut down", numNodes-1)
+		}
+	}()
+	activityMonitor.waitForActivity()
+	activityMonitor.waitForQuiet()
+	zeroes := expectNewPeriod(t, clocks, 0)
+
+	// One round with a working crash database.
+	runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
+	r := ledgers[0].NextRound()
+	require.Equal(t, startRound+1, r)
+
+	// Node 0's next crash-state write fails. runRound would wait in
+	// waitForQuiet, which panics if node 0 is stuck, so fire the filter timeout
+	// directly and poll instead.
+	services[0].Accessor.Close()
+	for i := range clocks {
+		clocks[i].(*testingClock).prepareToFire()
+	}
+	for i := range clocks {
+		clocks[i].(*testingClock).fire(TimeoutFilter)
+	}
+	select {
+	case <-checkpointFailed:
+	case <-time.After(10 * time.Second):
+		require.FailNow(t, "node 0's crash-state write did not fail")
+	}
+	require.Eventually(t, func() bool {
+		for i := 1; i < numNodes; i++ {
+			if ledgers[i].NextRound() <= r {
+				return false
+			}
+		}
+		return true
+	}, 10*time.Second, 10*time.Millisecond, "nodes 1-%d did not complete round %d", numNodes-1, r)
+	require.Eventually(t, func() bool {
+		return ledgers[0].NextRound() > r
+	}, 10*time.Second, 10*time.Millisecond, "node 0 did not complete round %d after its crash-state write failed", r)
+	// A node stuck in checkpointAction.do never goes quiet. Waiting for quiet
+	// also leaves no vote verification results pending, which can keep
+	// Service.Shutdown from returning.
+	require.Eventually(t, func() bool {
+		return activityMonitor.total() == 0
+	}, 10*time.Second, 10*time.Millisecond, "the nodes did not go quiet after node 0's crash-state write failed")
+
+	stopped := make(chan struct{})
+	go func() {
+		services[0].Shutdown()
+		close(stopped)
+	}()
+	select {
+	case <-stopped:
+	case <-time.After(10 * time.Second):
+		require.FailNow(t, "node 0 did not shut down after its crash-state write failed")
 	}
 }
 
