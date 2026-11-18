@@ -310,9 +310,9 @@ func TestHeartbeatOnlyWhenChallenged(t *testing.T) {
 	s.Stop()
 }
 
-func TestHeartbeatAcceptingSenderIsPQCompliant(t *testing.T) {
+func TestHeartbeatAcceptingSenderIsOffEd25519Curve(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	require.True(t, acceptingSender.IsPQCompliant(), "heartbeat accepting LogicSig sender must be PQ compliant")
+	require.True(t, acceptingSender.IsOffEd25519Curve(), "heartbeat accepting LogicSig sender must be off the Ed25519 curve")
 }

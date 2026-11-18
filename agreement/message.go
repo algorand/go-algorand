@@ -17,6 +17,9 @@
 package agreement
 
 import (
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -61,6 +64,14 @@ type compoundMessage struct {
 // deserializing from some stream.
 type streamTokenizer func([]byte) (any, error)
 
+// clearPKSigOld zeroes the PKSigOld field of a signature received over gossip.
+// No verifier reads that field, and the vote stays valid without it.
+// Certificate verification does not call this, so certificates fetched during
+// catchup are checked as they were encoded.
+func clearPKSigOld(sig *crypto.OneTimeSignature) {
+	clear(sig.PKSigOld[:])
+}
+
 // decodeVote reads a vote from the given stream.
 //
 // It returns an error on failure.
@@ -73,6 +84,7 @@ func decodeVote(data []byte) (any, error) {
 	if err := uv.wellFormed(); err != nil {
 		return nil, err
 	}
+	clearPKSigOld(&uv.Sig)
 	return uv, nil
 }
 
@@ -88,31 +100,49 @@ func decodeBundle(data []byte) (any, error) {
 	if err := b.wellFormed(); err != nil {
 		return nil, err
 	}
+	for i := range b.Votes {
+		clearPKSigOld(&b.Votes[i].Sig)
+	}
+	for i := range b.EquivocationVotes {
+		for j := range b.EquivocationVotes[i].Sigs {
+			clearPKSigOld(&b.EquivocationVotes[i].Sigs[j])
+		}
+	}
 	return b, nil
 }
 
 // decodeProposal reads a proposal from the given stream.
 //
 // It returns an error on failure.
+//
+// It reads only the fields before the payset, and keeps data in the proposal
+// for player.decodePayloadIfWanted to decode if agreement wants the payload.
 func decodeProposal(data []byte) (any, error) {
-	var p transmittedPayload
-	err := protocol.Decode(data, &p)
+	pp, err := parsePayloadPrefix(data)
 	if err != nil {
 		return nil, err
 	}
-	if err := p.PriorVote.wellFormed(); err != nil {
+	if err := pp.priorVote.wellFormed(); err != nil {
 		return nil, err
 	}
+	clearPKSigOld(&pp.priorVote.Sig)
 
 	return compoundMessage{
-		Vote:     p.PriorVote,
-		Proposal: p.unauthenticatedProposal,
+		Vote: pp.priorVote,
+		Proposal: unauthenticatedProposal{
+			BlockHeader:      bookkeeping.BlockHeader{Round: pp.round},
+			OriginalPeriod:   pp.originalPeriod,
+			OriginalProposer: pp.originalProposer,
+			deferredPayload:  data,
+		},
 	}, nil
 }
 
 func proposalCarriesInvalidTxn(up unauthenticatedProposal) bool {
+	// if CurrentProtocol is wrong, it will be rejected in eval.StartEvaluator by BlockHeader.PreCheck
+	allowGroupedHeartbeats := config.Consensus[up.Block.CurrentProtocol].AllowGroupedHeartbeats
 	for group, err := range up.Block.PaysetGroups() {
-		if err != nil || transactions.CheckPaysetGroup(group) != nil {
+		if err != nil || transactions.CheckPaysetGroup(group, allowGroupedHeartbeats) != nil {
 			return true
 		}
 	}

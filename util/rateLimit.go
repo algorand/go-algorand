@@ -190,11 +190,14 @@ func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (*ErlCapacityGuard, 
 		if err != nil {
 			return nil, isCMEnabled, err
 		}
+		// if this reservation is newly created, directly (blocking) take a capacity.
+		// This must happen before OnClose: a client that is already closed runs the
+		// callback at once, and the routine draining the closed reservation would
+		// compete with us for the same capacity.
+		q.blockingConsume()
+
 		// if the client has been given a new reservation, make sure it cleans up OnClose
 		c.OnClose(func() { erl.closeReservation(c) })
-
-		// if this reservation is newly created, directly (blocking) take a capacity
-		q.blockingConsume()
 		return &ErlCapacityGuard{cq: q, cm: erl.cm}, isCMEnabled, nil
 	}
 

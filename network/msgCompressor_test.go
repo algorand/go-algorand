@@ -17,6 +17,7 @@
 package network
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"strings"
@@ -70,8 +71,7 @@ func TestZstdDecompress(t *testing.T) {
 	msg := []byte(strings.Repeat("1", 2048))
 	compressed, err := zstd.Compress(nil, msg)
 	require.NoError(t, err)
-	d := zstdProposalDecompressor{}
-	decompressed, err := d.convert(compressed)
+	decompressed, err := DecompressProposal(compressed)
 	require.NoError(t, err)
 	require.Equal(t, msg, decompressed)
 
@@ -79,8 +79,8 @@ func TestZstdDecompress(t *testing.T) {
 	msg = []byte(strings.Repeat("1", MaxDecompressedMessageSize+10))
 	compressed, err = zstd.Compress(nil, msg)
 	require.NoError(t, err)
-	decompressed, err = d.convert(compressed)
-	require.ErrorContains(t, err, `proposal data is too large: 5250628`)
+	decompressed, err = DecompressProposal(compressed)
+	require.ErrorContains(t, err, `Destination buffer is too small`)
 	require.Nil(t, decompressed)
 }
 
@@ -88,13 +88,12 @@ func TestZstdCompressMsg(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	ppt := len(protocol.ProposalPayloadTag)
-	data := []byte("data")
+	data := bytes.Repeat([]byte("data"), 16)
 	comp, msg := zstdCompressMsg([]byte(protocol.ProposalPayloadTag), data)
 	require.Empty(t, msg)
 	require.Equal(t, []byte(protocol.ProposalPayloadTag), comp[:ppt])
 	require.Equal(t, zstdCompressionMagic[:], comp[ppt:ppt+len(zstdCompressionMagic)])
-	d := zstdProposalDecompressor{}
-	decompressed, err := d.convert(comp[ppt:])
+	decompressed, err := DecompressProposal(comp[ppt:])
 	require.NoError(t, err)
 	require.Equal(t, data, decompressed)
 }
@@ -113,7 +112,6 @@ func TestWsPeerMsgDataConverterConvert(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	c := wsPeerMsgCodec{}
-	c.ppdec = zstdProposalDecompressor{}
 	tag := protocol.AgreementVoteTag
 	data := []byte("data")
 
@@ -121,24 +119,20 @@ func TestWsPeerMsgDataConverterConvert(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, data, r)
 
+	// Proposal payloads are passed on as they arrived, compressed or not;
+	// their handler calls DecompressProposal.
 	tag = protocol.ProposalPayloadTag
 	l := converterTestLogger{}
 	c.log = &l
-	c.ppdec = zstdProposalDecompressor{}
 	r, err = c.decompress(tag, data)
 	require.NoError(t, err)
 	require.Equal(t, data, r)
-	require.Equal(t, 1, l.warnMsgCount)
-
-	l = converterTestLogger{}
-	c.log = &l
 
 	comp, err := zstd.Compress(nil, data)
 	require.NoError(t, err)
-
 	r, err = c.decompress(tag, comp)
 	require.NoError(t, err)
-	require.Equal(t, data, r)
+	require.Equal(t, comp, r)
 	require.Equal(t, 0, l.warnMsgCount)
 }
 
@@ -218,28 +212,28 @@ func makeWebsocketVoteNets(t *testing.T, cfgA, cfgB config.Local) (*voteTestNet,
 	}, 5*time.Second, 50*time.Millisecond)
 
 	return &voteTestNet{
-			name:    "websocket-A",
-			network: netA,
-			stop:    func() { netStop(t, netA, "A") },
-			peerFn: func() *wsPeer {
-				peers := netA.GetPeers(PeersConnectedIn)
-				if len(peers) != 1 {
-					return nil
-				}
-				return peers[0].(*wsPeer)
-			},
-		}, &voteTestNet{
-			name:    "websocket-B",
-			network: netB,
-			stop:    func() { netStop(t, netB, "B") },
-			peerFn: func() *wsPeer {
-				peers := netB.GetPeers(PeersConnectedOut)
-				if len(peers) != 1 {
-					return nil
-				}
-				return peers[0].(*wsPeer)
-			},
-		}
+		name:    "websocket-A",
+		network: netA,
+		stop:    func() { netStop(t, netA, "A") },
+		peerFn: func() *wsPeer {
+			peers := netA.GetPeers(PeersConnectedIn)
+			if len(peers) != 1 {
+				return nil
+			}
+			return peers[0].(*wsPeer)
+		},
+	}, &voteTestNet{
+		name:    "websocket-B",
+		network: netB,
+		stop:    func() { netStop(t, netB, "B") },
+		peerFn: func() *wsPeer {
+			peers := netB.GetPeers(PeersConnectedOut)
+			if len(peers) != 1 {
+				return nil
+			}
+			return peers[0].(*wsPeer)
+		},
+	}
 }
 
 func makeP2PVoteNets(t *testing.T, cfgA, cfgB config.Local) (*voteTestNet, *voteTestNet) {
@@ -275,30 +269,30 @@ func makeP2PVoteNets(t *testing.T, cfgA, cfgB config.Local) (*voteTestNet, *vote
 	}, 5*time.Second, 50*time.Millisecond)
 
 	return &voteTestNet{
-			name:    "p2p-A",
-			network: netA,
-			stop:    func() { netA.Stop() },
-			peerFn: func() *wsPeer {
-				netA.wsPeersLock.RLock()
-				defer netA.wsPeersLock.RUnlock()
-				for _, peer := range netA.wsPeers {
-					return peer
-				}
-				return nil
-			},
-		}, &voteTestNet{
-			name:    "p2p-B",
-			network: netB,
-			stop:    func() { netB.Stop() },
-			peerFn: func() *wsPeer {
-				netB.wsPeersLock.RLock()
-				defer netB.wsPeersLock.RUnlock()
-				for _, peer := range netB.wsPeers {
-					return peer
-				}
-				return nil
-			},
-		}
+		name:    "p2p-A",
+		network: netA,
+		stop:    func() { netA.Stop() },
+		peerFn: func() *wsPeer {
+			netA.wsPeersLock.RLock()
+			defer netA.wsPeersLock.RUnlock()
+			for _, peer := range netA.wsPeers {
+				return peer
+			}
+			return nil
+		},
+	}, &voteTestNet{
+		name:    "p2p-B",
+		network: netB,
+		stop:    func() { netB.Stop() },
+		peerFn: func() *wsPeer {
+			netB.wsPeersLock.RLock()
+			defer netB.wsPeersLock.RUnlock()
+			for _, peer := range netB.wsPeers {
+				return peer
+			}
+			return nil
+		},
+	}
 }
 
 func TestVoteStatefulCompressionAbortMessage(t *testing.T) {

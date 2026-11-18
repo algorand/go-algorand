@@ -46,6 +46,19 @@ func commitRoundNext(l *Ledger) {
 	commitRoundLookback(basics.Round(maxAcctLookback), l)
 }
 
+// stopCommitSyncer shuts down the commitSyncer goroutine so a test can drive
+// commits synchronously (see triggerTrackerFlush). Receiving from
+// commitSyncerClosed is sufficient to know no commit is in flight: commitSyncer
+// finishes any running commitRound and drains the pending queue before it
+// exits. Clearing ctxCancel and commitSyncerClosed makes trackerRegistry.close
+// skip its own shutdown of the syncer, including its accountsWriting.Wait.
+func stopCommitSyncer(tr *trackerRegistry) {
+	tr.ctxCancel()
+	tr.ctxCancel = nil
+	<-tr.commitSyncerClosed
+	tr.commitSyncerClosed = nil
+}
+
 // TestTrackerScheduleCommit checks catchpointTracker.produceCommittingTask does not increase commit offset relative
 // to the value set by accountUpdates
 func TestTrackerScheduleCommit(t *testing.T) {
@@ -86,10 +99,7 @@ func TestTrackerScheduleCommit(t *testing.T) {
 	err = ml.trackers.loadFromDisk(ml)
 	a.NoError(err)
 	// close commitSyncer goroutine
-	ml.trackers.ctxCancel()
-	ml.trackers.ctxCancel = nil
-	<-ml.trackers.commitSyncerClosed
-	ml.trackers.commitSyncerClosed = nil
+	stopCommitSyncer(&ml.trackers)
 
 	expectedOffset := uint64(99)
 	blockqRound := basics.Round(1000)
@@ -411,10 +421,7 @@ func TestTrackers_BusyCommitting(t *testing.T) {
 	defer ledger.Close()
 
 	// quit the commitSyncer goroutine
-	ledger.trackers.ctxCancel()
-	ledger.trackers.ctxCancel = nil
-	<-ledger.trackers.commitSyncerClosed
-	ledger.trackers.commitSyncerClosed = nil
+	stopCommitSyncer(&ledger.trackers)
 
 	tracker := &commitRoundStallingTracker{
 		commitRoundLock: make(chan struct{}),
@@ -464,20 +471,14 @@ func TestTrackers_InitializeMaxAccountDeltas(t *testing.T) {
 	err := tr.initialize(ml, []ledgerTracker{}, cfg)
 	a.NoError(err)
 	// quit the commitSyncer goroutine
-	tr.ctxCancel()
-	tr.ctxCancel = nil
-	<-tr.commitSyncerClosed
-	tr.commitSyncerClosed = nil
+	stopCommitSyncer(&tr)
 	a.Equal(uint64(defaultMaxAccountDeltas), tr.maxAccountDeltas)
 
 	cfg.MaxAcctLookback = defaultMaxAccountDeltas + 100
 	err = tr.initialize(ml, []ledgerTracker{}, cfg)
 	a.NoError(err)
 	// quit the commitSyncer goroutine
-	tr.ctxCancel()
-	tr.ctxCancel = nil
-	<-tr.commitSyncerClosed
-	tr.commitSyncerClosed = nil
+	stopCommitSyncer(&tr)
 	a.Equal(cfg.MaxAcctLookback+1, tr.maxAccountDeltas)
 }
 

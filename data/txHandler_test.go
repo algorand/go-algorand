@@ -26,21 +26,25 @@ import (
 	"os"
 	"runtime"
 	"runtime/pprof"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-deadlock"
+	"github.com/algorand/msgp/msgp"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/components/mocks"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/pools"
@@ -681,6 +685,162 @@ func craftNonCanonical(t *testing.T, stxn *transactions.SignedTxn, blobStxn []by
 	return blobNonCan
 }
 
+// TestCheckCanonicalEncoding checks that checkCanonicalEncoding accepts canonical encodings of transaction groups,
+// rejects other encodings that decodeMsg accepts, and estimates the size of the groups it accepts
+func TestCheckCanonicalEncoding(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// canonical reports whether checkCanonicalEncoding accepts data as the encoding of group
+	canonical := func(t *testing.T, data []byte, group []transactions.SignedTxn) bool {
+		size, ok := checkCanonicalEncoding(data, group)
+		if !ok {
+			require.Zero(t, size)
+		}
+		return ok
+	}
+
+	// decode data as processIncomingTxn does and check it
+	check := func(t *testing.T, data []byte, want bool) []transactions.SignedTxn {
+		group, _, invalid := decodeMsg(data)
+		require.False(t, invalid)
+		require.Equal(t, want, canonical(t, data, group))
+		return group
+	}
+
+	// withEntry adds key and the encoded value as the first entry of encodedMap, an encoded msgp map
+	withEntry := func(t *testing.T, encodedMap []byte, key string, value []byte) []byte {
+		n, _, rest, err := msgp.ReadMapHeaderBytes(encodedMap)
+		require.NoError(t, err)
+		out := msgp.AppendMapHeader(nil, uint32(n+1))
+		out = msgp.AppendString(out, key)
+		out = append(out, value...)
+		return append(out, rest...)
+	}
+
+	t.Run("canonical", func(t *testing.T) {
+		for _, n := range []int{1, 2, bounds.MaxTxGroupSize} {
+			_, blob := makeRandomTransactions(n)
+			check(t, blob, true)
+		}
+	})
+
+	t.Run("reordered fields", func(t *testing.T) {
+		stxns, blob := makeRandomTransactions(1)
+		check(t, craftNonCanonical(t, &stxns[0], blob), false)
+	})
+
+	t.Run("one transaction of a group", func(t *testing.T) {
+		stxns, blob := makeRandomTransactions(bounds.MaxTxGroupSize)
+		i := rand.Intn(len(stxns))
+		data := make([]byte, 0, len(blob))
+		for j := range stxns {
+			enc := protocol.Encode(&stxns[j])
+			if j == i {
+				enc = craftNonCanonical(t, &stxns[j], enc)
+			}
+			data = append(data, enc...)
+		}
+		require.Len(t, data, len(blob))
+		check(t, data, false)
+	})
+
+	t.Run("zero value field", func(t *testing.T) {
+		// an empty note, which the canonical encoding omits
+		stxns, _ := makeRandomTransactions(1)
+		stxns[0].Txn.Note = nil
+		data := msgp.AppendMapHeader(nil, 1)
+		data = msgp.AppendString(data, "txn")
+		data = append(data, withEntry(t, protocol.Encode(&stxns[0].Txn), "note", msgp.AppendBytes(nil, []byte{}))...)
+		check(t, data, false)
+	})
+
+	t.Run("repeated field", func(t *testing.T) {
+		// a repeated msig.subsig field
+		stxns, _ := makeRandomTransactions(1)
+		stxn := transactions.SignedTxn{Txn: stxns[0].Txn}
+		stxn.Msig.Version, stxn.Msig.Threshold = 1, 1
+		stxn.Msig.Subsigs = make([]crypto.MultisigSubsig, 1)
+		crypto.RandBytes(stxn.Msig.Subsigs[0].Key[:])
+		crypto.RandBytes(stxn.Msig.Subsigs[0].Sig[:])
+		emptySubsigs := msgp.AppendArrayHeader(nil, 255)
+		for range 255 {
+			emptySubsigs = msgp.AppendMapHeader(emptySubsigs, 0)
+		}
+		data := msgp.AppendMapHeader(nil, 2)
+		data = msgp.AppendString(data, "msig")
+		data = append(data, withEntry(t, protocol.Encode(&stxn.Msig), "subsig", emptySubsigs)...)
+		data = msgp.AppendString(data, "txn")
+		data = append(data, protocol.Encode(&stxn.Txn)...)
+
+		group := check(t, data, false)
+		require.Equal(t, stxn, group[0])
+		require.Equal(t, 255, cap(group[0].Msig.Subsigs))
+		check(t, protocol.Encode(&stxn), true)
+	})
+
+	t.Run("data and group differ", func(t *testing.T) {
+		stxns, blob := makeRandomTransactions(2)
+		_, other := makeRandomTransactions(2)
+		require.True(t, canonical(t, blob, stxns))
+		require.False(t, canonical(t, other, stxns))
+		require.False(t, canonical(t, blob[:len(blob)-1], stxns))
+		require.False(t, canonical(t, append(slices.Clip(blob), 0x80), stxns))
+		require.False(t, canonical(t, blob, stxns[:1]))
+	})
+
+	t.Run("size", func(t *testing.T) {
+		// size encodes group, decodes and checks it as processIncomingTxn does, and returns its estimated size,
+		// the size of its encoding and the sum of the Msgsize of its transactions
+		size := func(t *testing.T, group ...transactions.SignedTxn) (size, encodedLen, msgsize int64) {
+			var data []byte
+			for i := range group {
+				data = append(data, protocol.Encode(&group[i])...)
+			}
+			decoded := check(t, data, true)
+			size, _ = checkCanonicalEncoding(data, decoded)
+			for i := range decoded {
+				msgsize += int64(decoded[i].Msgsize())
+			}
+			return size, int64(len(data)), msgsize
+		}
+
+		// payments are charged their encoding and their Msgsize
+		stxns, _ := makeRandomTransactions(bounds.MaxTxGroupSize)
+		got, encodedLen, msgsize := size(t, stxns...)
+		require.Equal(t, encodedLen+msgsize, got)
+
+		// each element of Lsig.Args, ApplicationArgs and Boxes is charged a slice header on top
+		stxn := stxns[0]
+		stxn.Lsig.Args = make([][]byte, 3)
+		stxn.Txn.ApplicationArgs = make([][]byte, 5)
+		stxn.Txn.Boxes = make([]transactions.BoxRef, 7)
+		got, encodedLen, msgsize = size(t, stxn)
+		require.Equal(t, encodedLen+msgsize+txBacklogSliceHeaderSize*(3+5+7), got)
+
+		// so is each element of the merkle proof paths of a state proof
+		stxn = stxns[0]
+		sp := &stxn.Txn.StateProof
+		sp.SigProofs.Path = make([]crypto.GenericDigest, 100)
+		sp.PartProofs.Path = make([]crypto.GenericDigest, 10)
+		sp.Reveals = make(map[uint64]stateproof.Reveal)
+		for pos := range uint64(3) {
+			var reveal stateproof.Reveal
+			reveal.Part.PK.KeyLifetime = 1 // Part is required, and the encoding omits it when it is empty
+			reveal.SigSlot.Sig.Proof.Path = make([]crypto.GenericDigest, 2)
+			sp.Reveals[pos] = reveal
+		}
+		got, encodedLen, msgsize = size(t, stxn)
+		require.Equal(t, encodedLen+msgsize+txBacklogSliceHeaderSize*(100+10+3*2), got)
+
+		// the estimate of a group is the sum of the estimates of its transactions
+		sizeStateProof := got
+		sizePayment, _, _ := size(t, stxns[1])
+		got, _, _ = size(t, stxns[1], stxn)
+		require.Equal(t, sizePayment+sizeStateProof, got)
+	})
+}
+
 func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -721,10 +881,10 @@ func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
 		require.Equal(t, 1, len(msg.unverifiedTxGroup))
 		require.Equal(t, stxnForged, msg.unverifiedTxGroup[0])
 
-		// make non-canonical encoding and ensure it is not accepted
+		// make non-canonical encoding and ensure it is rejected
 		blobNonCan := craftNonCanonical(t, &stxn, blob)
 		action = handler.processIncomingTxn(network.IncomingMessage{Data: blobNonCan})
-		require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+		require.Equal(t, network.OutgoingMessage{Action: network.Disconnect}, action)
 		require.Len(t, handler.backlogQueue, 0)
 	})
 
@@ -775,7 +935,7 @@ func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
 			require.Equal(t, forged[i], msg.unverifiedTxGroup[i])
 		}
 
-		// make non-canonical encoding and ensure it is not accepted
+		// make non-canonical encoding and ensure it is rejected
 		i = rand.Intn(num)
 		nonCan := make([]transactions.SignedTxn, num)
 		copied = copy(nonCan, stxns)
@@ -791,7 +951,7 @@ func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
 		require.Len(t, blobNonCan, len(blob))
 		require.NotEqual(t, blob, blobNonCan)
 		action = handler.processIncomingTxn(network.IncomingMessage{Data: blobNonCan})
-		require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+		require.Equal(t, network.OutgoingMessage{Action: network.Disconnect}, action)
 		require.Len(t, handler.backlogQueue, 0)
 	})
 }
@@ -1767,6 +1927,7 @@ func runHandlerBenchmarkWithBacklog(b *testing.B, txGen txGenIf, tps int, useBac
 					if !ok {
 						return
 					}
+					handler.backlogBytes.Add(-wi.backlogBytes)
 					if handler.checkAlreadyCommitted(wi) {
 						// this is not expected during the test
 						continue
@@ -2188,6 +2349,18 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	defer handler.ctxCancel()
 
+	// markVerified records a group in the verified transaction cache as if it
+	// had passed verification. Remember is only given verified groups, and the
+	// pool verifies any group it does not find in the cache, which would stop
+	// the malformed groups below before the evaluator could classify them.
+	markVerified := func(group []transactions.SignedTxn) {
+		hdr, err := ledger.BlockHdr(ledger.Latest())
+		require.NoError(t, err)
+		groupCtx, err := verify.PrepareGroupContext(group, &hdr, ledger, nil)
+		require.NoError(t, err)
+		ledger.VerifiedTransactionCache().Add(groupCtx)
+	}
+
 	// Trigger a variety of remember/check paths to ensure each tag increments correctly.
 	var wi txBacklogMsg
 	wi.rawmsg = &network.IncomingMessage{Sender: mockSender{}}
@@ -2232,6 +2405,7 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 	wi.unverifiedTxGroup = []transactions.SignedTxn{txn1.Sign(secrets[0]), txn2.Sign(secrets[0])}
 	handler.checkAlreadyCommitted(&wi)
 	require.Equal(t, 1, getCheckMetricCounter(pools.TxPoolErrTagGroupID))
+	markVerified(wi.unverifiedTxGroup)
 	handler.postProcessCheckedTxn(&wi)
 	require.Equal(t, 1, getMetricCounter(pools.TxPoolErrTagGroupID))
 
@@ -2242,6 +2416,7 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 		crypto.RandBytes(txn.Note[:])
 		wi.unverifiedTxGroup = append(wi.unverifiedTxGroup, txn.Sign(secrets[0]))
 	}
+	markVerified(wi.unverifiedTxGroup)
 	handler.postProcessCheckedTxn(&wi)
 	require.Equal(t, 1, getMetricCounter(pools.TxPoolErrTagTooLarge))
 	handler.checkAlreadyCommitted(&wi)
@@ -2335,6 +2510,84 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 	wi.unverifiedTxGroup = []transactions.SignedTxn{}
 	handler.postProcessCheckedTxn(&wi)
 	require.Equal(t, 1, getMetricCounter(pools.TxPoolErrTagPendingEval))
+}
+
+// relayRecorder is a MockNetwork that records the data of the messages it relays
+type relayRecorder struct {
+	mocks.MockNetwork
+	relayed [][]byte
+}
+
+func (r *relayRecorder) Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
+	r.relayed = append(r.relayed, data)
+	return nil
+}
+
+// TestTxHandlerRelayData checks that postProcessCheckedTxn relays the raw data of a message from a peer,
+// and the encoding of the group for a LocalTransaction group, which has no raw data
+func TestTxHandlerRelayData(t *testing.T) { //nolint:paralleltest // Not parallel because it mutates global metrics
+	partitiontest.PartitionTest(t)
+
+	secret := keypair()
+	addr := basics.Address(secret.SignatureVerifier)
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	genesis := map[basics.Address]basics.AccountData{
+		addr:     {Status: basics.Online, MicroAlgos: basics.MicroAlgos{Raw: 10000000000000}},
+		poolAddr: {Status: basics.NotParticipating, MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance}},
+	}
+	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Warn)
+	cfg := config.GetDefaultLocal()
+	ledgerName := fmt.Sprintf("%s-mem-%d", t.Name(), rand.Int())
+	ledger, err := LoadLedger(log, ledgerName, true, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
+	require.NoError(t, err)
+	defer ledger.Close()
+
+	handler, _, err := makeTestTxHandler(ledger, cfg)
+	require.NoError(t, err)
+	defer handler.txVerificationPool.Shutdown()
+	defer close(handler.streamVerifierDropped)
+	net := &relayRecorder{}
+	handler.net = net
+	// since Start is not called, set the context here
+	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
+	defer handler.ctxCancel()
+
+	payment := func(amount uint64) transactions.SignedTxn {
+		txn := transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      addr,
+				Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+				LastValid:   basics.Round(proto.MaxTxnLife),
+				GenesisHash: genesisHash,
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: poolAddr,
+				Amount:   basics.MicroAlgos{Raw: amount},
+			},
+		}
+		return txn.Sign(secret)
+	}
+
+	// a message from a peer is relayed as received, without encoding the group again
+	stxn := payment(1000)
+	raw := protocol.Encode(&stxn)
+	handler.postProcessCheckedTxn(&txBacklogMsg{
+		rawmsg:            &network.IncomingMessage{Data: raw, Sender: mockSender{}},
+		unverifiedTxGroup: []transactions.SignedTxn{stxn},
+	})
+	require.Len(t, net.relayed, 1)
+	require.Same(t, &raw[0], &net.relayed[0][0])
+
+	// a LocalTransaction group is relayed encoded
+	local := payment(2000)
+	require.NoError(t, handler.LocalTransaction([]transactions.SignedTxn{local}))
+	handler.postProcessCheckedTxn(<-handler.backlogQueue)
+	require.Len(t, net.relayed, 2)
+	require.Equal(t, protocol.Encode(&local), net.relayed[1])
 }
 
 func TestMakeTxHandlerErrors(t *testing.T) {
@@ -3259,4 +3512,55 @@ func TestTxHandlerNilTxPool(t *testing.T) {
 		TxPool: &mockTxPool{},
 	})
 	require.NotErrorIs(t, err, ErrInvalidTxPool)
+}
+
+// TestTxHandlerDecodeMsgNoStaleFields checks that decoding does not leak fields from a previously decoded message.
+func TestTxHandlerDecodeMsgNoStaleFields(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// a full-size "dirty" message: makeRandomTransactions populates the optional Note and
+	// AuthAddr fields, so every slot of the scratch buffer ends up holding them
+	_, dirty := makeRandomTransactions(bounds.MaxTxGroupSize)
+
+	// ...and a single-transaction "clean" message that omits both
+	cleanTxns, _ := makeRandomTransactions(1)
+	cleanTxns[0].Txn.Note = nil
+	cleanTxns[0].AuthAddr = basics.Address{}
+	clean := protocol.Encode(&cleanTxns[0])
+
+	// the scratch buffer comes from a sync.Pool, so repeat enough times to be confident
+	// the same buffer is handed to both decodes
+	for i := 0; i < 100; i++ {
+		_, _, invalid := decodeMsg(dirty)
+		require.False(t, invalid)
+
+		group, _, invalid := decodeMsg(clean)
+		require.False(t, invalid)
+		require.Equal(t, cleanTxns, group, "iteration %d decoded stale fields", i)
+	}
+}
+
+const sizeofSignedTxn = int(unsafe.Sizeof(transactions.SignedTxn{}))
+
+// BenchmarkTxHandlerDecodeMsg measures decodeMsg across the legal group sizes.
+func BenchmarkTxHandlerDecodeMsg(b *testing.B) {
+	for _, n := range []int{1, 2, 4, 8, bounds.MaxTxGroupSize} {
+		b.Run(fmt.Sprintf("group-%d", n), func(b *testing.B) {
+			_, blob := makeRandomTransactions(n)
+
+			b.ReportAllocs()
+			b.SetBytes(int64(len(blob)))
+			b.ResetTimer()
+
+			var retained int64
+			for i := 0; i < b.N; i++ {
+				group, _, invalid := decodeMsg(blob)
+				if invalid {
+					b.Fatal("decodeMsg reported invalid")
+				}
+				retained += int64(cap(group) * sizeofSignedTxn)
+			}
+			b.ReportMetric(float64(retained)/float64(b.N), "retained-B/op")
+		})
+	}
 }

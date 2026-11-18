@@ -309,7 +309,7 @@ func TestTxnEffectsAvailable(t *testing.T) {
 			ops := testProg(t, source, v)
 			ep, _, _ := makeSampleEnv()
 			ep.TxnGroup[1].Lsig.Logic = ops.Program
-			_, err := EvalSignature(1, ep)
+			_, _, err := EvalSignatureProgram(ops.Program, nil, 1, ep)
 			require.Error(t, err)
 			ep.Ledger = NewLedger(nil)
 			_, err = EvalApp(ops.Program, 1, 888, ep)

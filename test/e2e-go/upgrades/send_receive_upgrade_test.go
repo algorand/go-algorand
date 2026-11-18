@@ -126,6 +126,15 @@ func testAccountsCanSendMoneyAcrossUpgrade(t *testing.T, templatePath string, ta
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	consensus := generateFastUpgradeConsensus()
+	if targetVersion != "" {
+		// stop upgrading at targetVersion if the caller specified one.
+		// this allows a test to run assertions against a specific protocol version
+		// without upgrading rest of the newer consensus versions.
+		targetParams, ok := consensus[targetVersion]
+		a.True(ok, "targetVersion %s not in generated consensus", targetVersion)
+		targetParams.ApprovedUpgrades = make(map[protocol.ConsensusVersion]uint64)
+		consensus[targetVersion] = targetParams
+	}
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(consensus)

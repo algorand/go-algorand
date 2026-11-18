@@ -22,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
@@ -56,6 +57,7 @@ func TestProposalCarriesMalformedStateProofPath(t *testing.T) {
 				SigProofs: merklearray.Proof{
 					HashFactory: crypto.HashFactory{HashType: stateproof.HashType},
 				},
+				Reveals: map[uint64]stateproof.Reveal{0: {}},
 				PartProofs: merklearray.Proof{
 					Path:        []crypto.GenericDigest{make(crypto.GenericDigest, 2*stateproof.HashSize)},
 					HashFactory: crypto.HashFactory{HashType: stateproof.HashType},
@@ -167,11 +169,12 @@ func TestProposalCarriesOversizedTxnGroup(t *testing.T) {
 		block.Payset = append(block.Payset, stib)
 	}
 
+	// decodeProposal leaves the payset undecoded; decodeDeferredPayload
+	// runs this check when it decodes it.
 	encoded := protocol.Encode(&transmittedPayload{unauthenticatedProposal: unauthenticatedProposal{Block: block}})
-	decoded, err := decodeProposal(encoded)
-	require.NoError(t, err)
-	proposal := decoded.(compoundMessage).Proposal
-	require.True(t, proposalCarriesInvalidTxn(proposal), "oversized group must be rejected before proposal validation")
+	var decoded transmittedPayload
+	require.NoError(t, protocol.Decode(encoded, &decoded))
+	require.True(t, proposalCarriesInvalidTxn(decoded.unauthenticatedProposal), "oversized group must be rejected before proposal validation")
 }
 
 func TestDecodeRejectsStepAboveDown(t *testing.T) {
@@ -270,4 +273,46 @@ func BenchmarkVoteDecoding(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		decodeVote(msgBytes)
 	}
+}
+
+// TestProposalGroupRuleFollowsProtocol checks that the screen applies the
+// heartbeat group rule according to the protocol of the block it is screening.
+// A sender naming a protocol the chain is not on gains nothing: the header
+// fails BlockHeader.PreCheck during validation, so the payload is rejected
+// there instead of here.
+func TestProposalGroupRuleFollowsProtocol(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	require.True(t, config.Consensus[protocol.ConsensusFuture].AllowGroupedHeartbeats)
+	require.False(t, config.Consensus[protocol.ConsensusCurrentVersion].AllowGroupedHeartbeats)
+
+	genesisHash := crypto.Hash([]byte("group-rule-follows-protocol"))
+	build := func(version protocol.ConsensusVersion) unauthenticatedProposal {
+		block := bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{
+			GenesisHash:  genesisHash,
+			UpgradeState: bookkeeping.UpgradeState{CurrentProtocol: version},
+		}}
+		txns := []transactions.Transaction{
+			{Type: protocol.ApplicationCallTx, Header: transactions.Header{GenesisHash: genesisHash}},
+			{Type: protocol.HeartbeatTx, Header: transactions.Header{GenesisHash: genesisHash}},
+		}
+		// a real group ID, so the only rule that can reject this is the one
+		// keeping a heartbeat out of a resource group
+		var group transactions.TxGroup
+		for _, txn := range txns {
+			group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(txn.ID()))
+		}
+		groupID := crypto.HashObj(group)
+		for i := range txns {
+			txns[i].Group = groupID
+			stib, err := block.EncodeSignedTxn(transactions.SignedTxn{Txn: txns[i]}, transactions.ApplyData{})
+			require.NoError(t, err)
+			block.Payset = append(block.Payset, stib)
+		}
+		return unauthenticatedProposal{Block: block}
+	}
+
+	require.True(t, proposalCarriesInvalidTxn(build(protocol.ConsensusCurrentVersion)))
+	require.False(t, proposalCarriesInvalidTxn(build(protocol.ConsensusFuture)))
 }

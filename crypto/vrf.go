@@ -27,6 +27,8 @@ package crypto
 // #include "sodium.h"
 import "C"
 
+import "encoding/hex"
+
 func init() {
 	if C.sodium_init() == -1 {
 		panic("sodium_init() failed")
@@ -77,6 +79,12 @@ type (
 	// The VRF scheme guarantees that such output will be unique
 	VrfOutput [64]byte
 )
+
+// String returns the public key in hex.
+func (pk VrfPubkey) String() string { return hex.EncodeToString(pk[:]) }
+
+// String returns the proof in hex.
+func (proof VrfProof) String() string { return hex.EncodeToString(proof[:]) }
 
 // VrfKeygenFromSeed deterministically generates a VRF keypair from 32 bytes of (secret) entropy.
 func VrfKeygenFromSeed(seed [32]byte) (pub VrfPubkey, priv VrfPrivkey) {

@@ -89,10 +89,7 @@ func TestMultiaddrsFromResolverDnsErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	dnsaddrCont := &MultiaddrDNSResolveController{
-		resolver:      nil,
-		nextResolvers: nil,
-	}
+	dnsaddrCont := &MultiaddrDNSResolveController{}
 
 	// Fail on no resolver
 	maddrs, err := MultiaddrsFromResolver("0.0.0.1", dnsaddrCont)
@@ -101,9 +98,8 @@ func TestMultiaddrsFromResolverDnsErr(t *testing.T) {
 
 	resolver, _ := madns.NewResolver(madns.WithDefaultResolver(&failureResolver{}))
 	dnsaddrCont = &MultiaddrDNSResolveController{
-		resolver:      resolver,
-		nextResolvers: nil,
-		controller:    network.ResolveController{},
+		newResolvers: []func() *madns.Resolver{func() *madns.Resolver { return resolver }},
+		controller:   network.ResolveController{},
 	}
 	// Fail on resolver error
 	maddrs, err = MultiaddrsFromResolver("bootstrap.libp2p.io", dnsaddrCont)

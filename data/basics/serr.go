@@ -25,8 +25,8 @@ import (
 )
 
 // SError is a structured error object. It contains a message and an arbitrary
-// set of attributes. If the message contains "%A", it will be replaced by the
-// attributes (in no guaranteed order), when SError() is called.
+// set of attributes. Error() returns the message as is, or the serialized
+// attributes if the message is blank.
 //
 //msgp:ignore SError
 type SError struct {
@@ -36,25 +36,20 @@ type SError struct {
 }
 
 // New creates a new structured error object using the supplied message and
-// attributes. If the message contains "%A", it will be replaced by the
-// attributes when Error() is called.
+// attributes.
 func New(msg string, pairs ...any) *SError {
 	attrs := make(map[string]any, len(pairs)/2)
 	for i := 0; i < len(pairs); i += 2 {
-		attrs[pairs[i].(string)] = pairs[i+1]
+		attrs[pairs[i].(string)] = pairs[i+1] //nolint:gosec // callers must supply complete key/value pairs, making len(pairs) even
 	}
 	return &SError{Msg: msg, Attrs: attrs}
 }
 
 // Error returns either the exact supplied message, or the serialized attributes if
-// the supplied message was blank, or substituted for %A.
+// the supplied message was blank.
 func (e *SError) Error() string {
 	if e.Msg == "" {
 		return e.AttributesAsString()
-	}
-	// imperfect because we replace \%A as well
-	if strings.Contains(e.Msg, "%A") {
-		return strings.ReplaceAll(e.Msg, "%A", e.AttributesAsString())
 	}
 	return e.Msg
 }
@@ -86,7 +81,7 @@ func Annotate(err error, pairs ...any) error {
 	var serr *SError
 	if ok := errors.As(err, &serr); ok {
 		for i := 0; i < len(pairs); i += 2 {
-			serr.Attrs[pairs[i].(string)] = pairs[i+1]
+			serr.Attrs[pairs[i].(string)] = pairs[i+1] //nolint:gosec // callers must supply complete key/value pairs, making len(pairs) even
 		}
 		return err
 	}
@@ -102,7 +97,7 @@ func Annotate(err error, pairs ...any) error {
 func Wrap(err error, msg string, field string, pairs ...any) error {
 	serr := New(msg, field+"-msg", err.Error())
 	for i := 0; i < len(pairs); i += 2 {
-		serr.Attrs[pairs[i].(string)] = pairs[i+1]
+		serr.Attrs[pairs[i].(string)] = pairs[i+1] //nolint:gosec // callers must supply complete key/value pairs, making len(pairs) even
 	}
 	serr.Wrapped = err
 

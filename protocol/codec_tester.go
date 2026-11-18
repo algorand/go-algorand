@@ -94,7 +94,7 @@ func RandomizeObject(template any, opts ...RandomizeObjectOption) (any, error) {
 		opt(&cfg)
 	}
 	tt := reflect.TypeOf(template)
-	if tt.Kind() != reflect.Ptr {
+	if tt.Kind() != reflect.Pointer {
 		return nil, fmt.Errorf("RandomizeObject: must be ptr")
 	}
 	v := reflect.New(tt.Elem())
@@ -363,7 +363,7 @@ func randomizeValue(v reflect.Value, depth int, datapath string, tag string, rem
 		}
 		v.SetString(string(buf))
 		*remainingChanges--
-	case reflect.Ptr:
+	case reflect.Pointer:
 		v.Set(reflect.New(v.Type().Elem()))
 		err := randomizeValue(reflect.Indirect(v), depth+1, datapath, tag, remainingChanges, cfg, seenTypes)
 		if err != nil {
@@ -517,7 +517,7 @@ func EncodingTest(template msgpMarshalUnmarshal) error {
 	}
 
 	if !reflect.DeepEqual(e1, e2) {
-		return fmt.Errorf("encoding mismatch for %v: %v != %v", v0, e1, e2)
+		return fmt.Errorf("encoding mismatch for %v: %x != %x", v0, e1, e2)
 	}
 
 	v1 := reflect.New(reflect.TypeOf(template).Elem()).Interface().(msgpMarshalUnmarshal)

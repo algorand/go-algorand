@@ -17,6 +17,8 @@
 package committee
 
 import (
+	"encoding/hex"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -56,6 +58,9 @@ type Membership struct {
 // A Seed contains cryptographic entropy which can be used to determine a
 // committee.
 type Seed [32]byte
+
+// String returns the seed in hex.
+func (s Seed) String() string { return hex.EncodeToString(s[:]) }
 
 // ToBeHashed implements the crypto.Hashable interface
 func (s Seed) ToBeHashed() (protocol.HashID, []byte) {

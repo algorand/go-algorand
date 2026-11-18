@@ -34,7 +34,7 @@ func ed25519ConsensusVerifySingle(publicKey [32]byte, message []byte, signature 
 }
 
 type ed25519ConsensusVerifyEntry struct {
-	msgHashRep   []byte
+	message      Hashable // not encoded, so entries sharing one large message (multisig subsigs) share its memory
 	publicKey    SignatureVerifier
 	signature    Signature
 	failedChecks bool
@@ -57,11 +57,10 @@ func makeEd25519ConsensusBatchVerifier(hint int) BatchVerifier {
 }
 
 func (b *ed25519ConsensusBatchVerifier) EnqueueSignature(sigVerifier SignatureVerifier, message Hashable, sig Signature) {
-	msgHashRep := HashRep(message)
 	failedChecks := !isCanonicalPoint(sigVerifier) || !isCanonicalPoint([32]byte(sig[:32])) || hasSmallOrder(sigVerifier)
 
 	entry := ed25519ConsensusVerifyEntry{
-		msgHashRep:   msgHashRep,
+		message:      message,
 		publicKey:    sigVerifier,
 		signature:    sig,
 		failedChecks: failedChecks,
@@ -71,7 +70,8 @@ func (b *ed25519ConsensusBatchVerifier) EnqueueSignature(sigVerifier SignatureVe
 	if failedChecks {
 		b.failedChecks = true
 	} else {
-		b.bv.Add(sigVerifier[:], msgHashRep, sig[:])
+		// Add hashes the message immediately and retains no reference to it.
+		b.bv.Add(sigVerifier[:], HashRep(message), sig[:])
 	}
 }
 
@@ -105,7 +105,7 @@ func (b *ed25519ConsensusBatchVerifier) VerifyWithFeedback() (failed []bool, err
 		if b.entries[i].failedChecks {
 			failed[i] = true
 		} else {
-			failed[i] = !ed25519ConsensusVerifySingle(b.entries[i].publicKey, b.entries[i].msgHashRep, b.entries[i].signature)
+			failed[i] = !ed25519ConsensusVerifySingle(b.entries[i].publicKey, HashRep(b.entries[i].message), b.entries[i].signature)
 		}
 	}
 

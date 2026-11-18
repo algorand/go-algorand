@@ -201,24 +201,32 @@ func (z *Proof) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []b
 	var zb0002 int
 	var zb0003 bool
 	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0003 {
+		(*z) = Proof{}
+	}
+	for zb0002 > 0 {
+		zb0002--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0002 > 0 {
-			zb0002--
+		switch string(field) {
+		case "pth":
 			var zb0004 int
 			var zb0005 bool
 			zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Path")
+				err = msgp.WrapError(err, "Path")
 				return
 			}
 			if zb0004 > MaxNumLeavesOnEncodedTree/2 {
 				err = msgp.ErrOverflow(uint64(zb0004), uint64(MaxNumLeavesOnEncodedTree/2))
-				err = msgp.WrapError(err, "struct-from-array", "Path")
+				err = msgp.WrapError(err, "Path")
 				return
 			}
 			if zb0005 {
@@ -231,95 +239,27 @@ func (z *Proof) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []b
 			for zb0001 := range (*z).Path {
 				bts, err = (*z).Path[zb0001].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Path", zb0001)
+					err = msgp.WrapError(err, "Path", zb0001)
 					return
 				}
 			}
-		}
-		if zb0002 > 0 {
-			zb0002--
+		case "hsh":
 			bts, err = (*z).HashFactory.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "HashFactory")
+				err = msgp.WrapError(err, "HashFactory")
 				return
 			}
-		}
-		if zb0002 > 0 {
-			zb0002--
+		case "td":
 			(*z).TreeDepth, bts, err = msgp.ReadUint8Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "TreeDepth")
+				err = msgp.WrapError(err, "TreeDepth")
 				return
 			}
-		}
-		if zb0002 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0002)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0003 {
-			(*z) = Proof{}
-		}
-		for zb0002 > 0 {
-			zb0002--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "pth":
-				var zb0006 int
-				var zb0007 bool
-				zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Path")
-					return
-				}
-				if zb0006 > MaxNumLeavesOnEncodedTree/2 {
-					err = msgp.ErrOverflow(uint64(zb0006), uint64(MaxNumLeavesOnEncodedTree/2))
-					err = msgp.WrapError(err, "Path")
-					return
-				}
-				if zb0007 {
-					(*z).Path = nil
-				} else if (*z).Path != nil && cap((*z).Path) >= zb0006 {
-					(*z).Path = ((*z).Path)[:zb0006]
-				} else {
-					(*z).Path = make([]crypto.GenericDigest, zb0006)
-				}
-				for zb0001 := range (*z).Path {
-					bts, err = (*z).Path[zb0001].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Path", zb0001)
-						return
-					}
-				}
-			case "hsh":
-				bts, err = (*z).HashFactory.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "HashFactory")
-					return
-				}
-			case "td":
-				(*z).TreeDepth, bts, err = msgp.ReadUint8Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "TreeDepth")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -423,24 +363,32 @@ func (z *SingleLeafProof) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSta
 	var zb0002 int
 	var zb0003 bool
 	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0003 {
+		(*z) = SingleLeafProof{}
+	}
+	for zb0002 > 0 {
+		zb0002--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0002 > 0 {
-			zb0002--
+		switch string(field) {
+		case "pth":
 			var zb0004 int
 			var zb0005 bool
 			zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Path")
+				err = msgp.WrapError(err, "Path")
 				return
 			}
 			if zb0004 > MaxNumLeavesOnEncodedTree/2 {
 				err = msgp.ErrOverflow(uint64(zb0004), uint64(MaxNumLeavesOnEncodedTree/2))
-				err = msgp.WrapError(err, "struct-from-array", "Path")
+				err = msgp.WrapError(err, "Path")
 				return
 			}
 			if zb0005 {
@@ -453,95 +401,27 @@ func (z *SingleLeafProof) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSta
 			for zb0001 := range (*z).Proof.Path {
 				bts, err = (*z).Proof.Path[zb0001].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Path", zb0001)
+					err = msgp.WrapError(err, "Path", zb0001)
 					return
 				}
 			}
-		}
-		if zb0002 > 0 {
-			zb0002--
+		case "hsh":
 			bts, err = (*z).Proof.HashFactory.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "HashFactory")
+				err = msgp.WrapError(err, "HashFactory")
 				return
 			}
-		}
-		if zb0002 > 0 {
-			zb0002--
+		case "td":
 			(*z).Proof.TreeDepth, bts, err = msgp.ReadUint8Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "TreeDepth")
+				err = msgp.WrapError(err, "TreeDepth")
 				return
 			}
-		}
-		if zb0002 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0002)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0003 {
-			(*z) = SingleLeafProof{}
-		}
-		for zb0002 > 0 {
-			zb0002--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "pth":
-				var zb0006 int
-				var zb0007 bool
-				zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Path")
-					return
-				}
-				if zb0006 > MaxNumLeavesOnEncodedTree/2 {
-					err = msgp.ErrOverflow(uint64(zb0006), uint64(MaxNumLeavesOnEncodedTree/2))
-					err = msgp.WrapError(err, "Path")
-					return
-				}
-				if zb0007 {
-					(*z).Proof.Path = nil
-				} else if (*z).Proof.Path != nil && cap((*z).Proof.Path) >= zb0006 {
-					(*z).Proof.Path = ((*z).Proof.Path)[:zb0006]
-				} else {
-					(*z).Proof.Path = make([]crypto.GenericDigest, zb0006)
-				}
-				for zb0001 := range (*z).Proof.Path {
-					bts, err = (*z).Proof.Path[zb0001].UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "Path", zb0001)
-						return
-					}
-				}
-			case "hsh":
-				bts, err = (*z).Proof.HashFactory.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "HashFactory")
-					return
-				}
-			case "td":
-				(*z).Proof.TreeDepth, bts, err = msgp.ReadUint8Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "TreeDepth")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -652,24 +532,32 @@ func (z *Tree) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []by
 	var zb0003 int
 	var zb0004 bool
 	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0004 {
+		(*z) = Tree{}
+	}
+	for zb0003 > 0 {
+		zb0003--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 > 0 {
-			zb0003--
+		switch string(field) {
+		case "lvls":
 			var zb0005 int
 			var zb0006 bool
 			zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Levels")
+				err = msgp.WrapError(err, "Levels")
 				return
 			}
 			if zb0005 > MaxEncodedTreeDepth+1 {
 				err = msgp.ErrOverflow(uint64(zb0005), uint64(MaxEncodedTreeDepth+1))
-				err = msgp.WrapError(err, "struct-from-array", "Levels")
+				err = msgp.WrapError(err, "Levels")
 				return
 			}
 			if zb0006 {
@@ -684,12 +572,12 @@ func (z *Tree) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []by
 				var zb0008 bool
 				zb0007, zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Levels", zb0001)
+					err = msgp.WrapError(err, "Levels", zb0001)
 					return
 				}
 				if zb0007 > MaxNumLeavesOnEncodedTree {
 					err = msgp.ErrOverflow(uint64(zb0007), uint64(MaxNumLeavesOnEncodedTree))
-					err = msgp.WrapError(err, "struct-from-array", "Levels", zb0001)
+					err = msgp.WrapError(err, "Levels", zb0001)
 					return
 				}
 				if zb0008 {
@@ -702,131 +590,34 @@ func (z *Tree) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []by
 				for zb0002 := range (*z).Levels[zb0001] {
 					bts, err = (*z).Levels[zb0001][zb0002].UnmarshalMsgWithState(bts, st)
 					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "Levels", zb0001, zb0002)
+						err = msgp.WrapError(err, "Levels", zb0001, zb0002)
 						return
 					}
 				}
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "nl":
 			(*z).NumOfElements, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "NumOfElements")
+				err = msgp.WrapError(err, "NumOfElements")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "hsh":
 			bts, err = (*z).Hash.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Hash")
+				err = msgp.WrapError(err, "Hash")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "vc":
 			(*z).IsVectorCommitment, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "IsVectorCommitment")
+				err = msgp.WrapError(err, "IsVectorCommitment")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0003)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0004 {
-			(*z) = Tree{}
-		}
-		for zb0003 > 0 {
-			zb0003--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "lvls":
-				var zb0009 int
-				var zb0010 bool
-				zb0009, zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Levels")
-					return
-				}
-				if zb0009 > MaxEncodedTreeDepth+1 {
-					err = msgp.ErrOverflow(uint64(zb0009), uint64(MaxEncodedTreeDepth+1))
-					err = msgp.WrapError(err, "Levels")
-					return
-				}
-				if zb0010 {
-					(*z).Levels = nil
-				} else if (*z).Levels != nil && cap((*z).Levels) >= zb0009 {
-					(*z).Levels = ((*z).Levels)[:zb0009]
-				} else {
-					(*z).Levels = make([]Layer, zb0009)
-				}
-				for zb0001 := range (*z).Levels {
-					var zb0011 int
-					var zb0012 bool
-					zb0011, zb0012, bts, err = msgp.ReadArrayHeaderBytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Levels", zb0001)
-						return
-					}
-					if zb0011 > MaxNumLeavesOnEncodedTree {
-						err = msgp.ErrOverflow(uint64(zb0011), uint64(MaxNumLeavesOnEncodedTree))
-						err = msgp.WrapError(err, "Levels", zb0001)
-						return
-					}
-					if zb0012 {
-						(*z).Levels[zb0001] = nil
-					} else if (*z).Levels[zb0001] != nil && cap((*z).Levels[zb0001]) >= zb0011 {
-						(*z).Levels[zb0001] = ((*z).Levels[zb0001])[:zb0011]
-					} else {
-						(*z).Levels[zb0001] = make(Layer, zb0011)
-					}
-					for zb0002 := range (*z).Levels[zb0001] {
-						bts, err = (*z).Levels[zb0001][zb0002].UnmarshalMsgWithState(bts, st)
-						if err != nil {
-							err = msgp.WrapError(err, "Levels", zb0001, zb0002)
-							return
-						}
-					}
-				}
-			case "nl":
-				(*z).NumOfElements, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "NumOfElements")
-					return
-				}
-			case "hsh":
-				bts, err = (*z).Hash.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Hash")
-					return
-				}
-			case "vc":
-				(*z).IsVectorCommitment, bts, err = msgp.ReadBoolBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "IsVectorCommitment")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}

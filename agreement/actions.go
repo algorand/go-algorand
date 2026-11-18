@@ -167,6 +167,13 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 		data = protocol.Encode(&payload)
 	}
 
+	// Peers close their connection to the sender of a message longer than
+	// Tag.MaxMessageSize, so do not send one.
+	if maxSize := a.Tag.MaxMessageSize(); uint64(len(data)) > maxSize {
+		s.log.Warnf("agreement: not sending %v message of %d bytes, the limit is %d", a.Tag, len(data), maxSize)
+		return
+	}
+
 	switch a.T {
 	case broadcast:
 		s.Network.Broadcast(a.Tag, data)
@@ -494,6 +501,14 @@ func verifyVoteAction(e messageEvent, r round, p period, taskIndex uint64) actio
 
 func verifyPayloadAction(e messageEvent, r round, p period, pinned bool) action {
 	return cryptoAction{T: verifyPayload, M: e.Input, Round: r, Period: p, Pinned: pinned}
+}
+
+// verifyPipelinedPayloadAction requests validation of a payload which the
+// proposalStore held after pipelining it: one pipelined before its round
+// started, or one whose validation request was held back or cancelled.
+func verifyPipelinedPayloadAction(r round, e payloadProcessedEvent) action {
+	msg := message{messageHandle: 0, Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: e.UnauthenticatedPayload} // TODO do we want to keep around the original handle?
+	return verifyPayloadAction(messageEvent{T: payloadPresent, Input: msg}, r, e.Period, e.Pinned)
 }
 
 func verifyBundleAction(e messageEvent, r round, p period, s step) action {

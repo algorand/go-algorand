@@ -222,6 +222,10 @@ func (r *testResolver) sign(rrset []dns.RR, signer string, keytag uint16, expTim
 	if expTime.IsZero() {
 		expTime, _ = time.Parse(time.RFC3339, "2030-01-01T00:00:00Z")
 	}
+	return r.signWithValidity(rrset, signer, keytag, incTime, expTime, sk)
+}
+
+func (r *testResolver) signWithValidity(rrset []dns.RR, signer string, keytag uint16, incTime, expTime time.Time, sk crypto.PrivateKey) (sig dns.RRSIG, err error) {
 	sig.Inception = uint32(incTime.Unix())
 	sig.Expiration = uint32(expTime.Unix())
 	sig.KeyTag = keytag

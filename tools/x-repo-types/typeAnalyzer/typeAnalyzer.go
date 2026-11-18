@@ -37,6 +37,11 @@ var diffExclusions = map[string]bool{
 	`github.com/algorand/go-algorand/crypto :: "crypto.PublicKey" (array)`: true,
 }
 
+// xUnreleased names top-level fields of x that y may lack without failing the
+// diff, because no released version of x uses them yet. It is nil unless a
+// file run alongside this one (such as unreleased.go) sets it in an init().
+var xUnreleased map[string]bool
+
 // --------------- TYPE TREE DATA STRUCTURES --------------- //
 
 // TypeNode wraps reflect.Type and reflect.Kind to make it easier to
@@ -135,6 +140,9 @@ type TargetPair struct {
 type Diff struct {
 	CommonPath   []TargetPair
 	Xdiff, Ydiff []Target
+	// Unreleased are top-level fields of X missing from Y that were allowed
+	// by StructDiff's unreleased set. They do not make the Diff non-Empty.
+	Unreleased []Target
 }
 
 // Empty reports whether there was any difference at all.
@@ -318,14 +326,45 @@ func (tgt *Target) Visit(actions ...func(Target)) {
 }
 
 // StructDiff compares two structs by building their type tree and then
-// calling targetTreeDiff on the trees.
-func StructDiff(x, y interface{}, exclusions map[string]bool) (TypeNode, TypeNode, *Diff, error) {
+// calling targetTreeDiff on the trees. Top-level fields of x named in
+// unreleased that y lacks are moved to the Diff's Unreleased list instead.
+func StructDiff(x, y any, exclusions, unreleased map[string]bool) (TypeNode, TypeNode, *Diff, error) {
 	xRoot, yRoot := MakeType(x), MakeType(y)
 	xRoot.Build()
 	yRoot.Build()
 
+	// Prune before diffing: targetTreeDiff only descends into children when
+	// the field sets match, so a missing unreleased field would otherwise hide
+	// differences further down.
+	var pruned []Target
+	if len(unreleased) > 0 && xRoot.IsStruct() {
+		inY := make(map[string]bool)
+		for _, tgt := range yRoot.Targets() {
+			inY[tgt.ChildName.SerializationInfo()] = true
+		}
+		var kept []ChildName
+		for _, tgt := range xRoot.Targets() {
+			if unreleased[tgt.ChildName.Name] && !inY[tgt.ChildName.SerializationInfo()] {
+				pruned = append(pruned, tgt)
+				delete(*xRoot.children, tgt.ChildName.String())
+				continue
+			}
+			kept = append(kept, tgt.ChildName)
+		}
+		xRoot.ChildNames = kept
+	}
+
 	diff, err := targetTreeDiff(Target{TypeNode: xRoot}, Target{TypeNode: yRoot}, exclusions)
-	return xRoot, yRoot, diff, err
+	if err != nil {
+		return xRoot, yRoot, nil, err
+	}
+	if len(pruned) > 0 {
+		if diff == nil {
+			diff = &Diff{}
+		}
+		diff.Unreleased = pruned
+	}
+	return xRoot, yRoot, diff, nil
 }
 
 // targetTreeDiff recursively computes a diff between two Target's x and y considering only data
@@ -472,6 +511,21 @@ MISSING FROM:		`)
 [FIELD](+codec): 	%s
 SOURCE: 		%s
 `, i+1, &tgt.ChildName, &tgt.TypeNode))
+			}
+		}
+		if len(d.Unreleased) > 0 {
+			sb.WriteString(`
+--------------------------------------------------------
+		UNRELEASED (allowed to differ)
+--------------------------------------------------------
+EXISTS IN:	 	`)
+			sb.WriteString(fmt.Sprintf("%q", &x))
+			sb.WriteString(`
+MISSING FROM:		`)
+			sb.WriteString(fmt.Sprintf("%q", &y))
+			sb.WriteString(fmt.Sprintf("\n%d FIELDS TOTAL:\n", len(d.Unreleased)))
+			for i, tgt := range d.Unreleased {
+				sb.WriteString(fmt.Sprintf("(%d) %s\n", i+1, &tgt.ChildName))
 			}
 		}
 	}

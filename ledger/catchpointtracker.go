@@ -55,6 +55,8 @@ const (
 	trieRebuildAccountChunkSize = 16384
 	// trieRebuildCommitFrequency defines the number of accounts that would get added before we call evict to commit the changes and adjust the memory cache.
 	trieRebuildCommitFrequency = 65536
+	// trieRebuildQueueDepth defines how many chunks the hash reader may run ahead of the trie writer during trie construction.
+	trieRebuildQueueDepth = 16
 
 	// CatchpointFileVersionV5 is the catchpoint file version that was used when the database schema was V0-V5.
 	CatchpointFileVersionV5 = uint64(0200)
@@ -714,6 +716,9 @@ func doRepackCatchpoint(ctx context.Context, header CatchpointFileHeader, bigges
 			return err
 		}
 
+		if header.Size > int64(len(buf)) {
+			return fmt.Errorf("chunk %s is larger than the biggest chunk (%d bytes)", header.Name, len(buf))
+		}
 		n, err := io.ReadAtLeast(in, buf, int(header.Size))
 		if (err != nil) && (err != io.EOF) {
 			return err

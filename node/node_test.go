@@ -33,7 +33,6 @@ import (
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	csp "github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/account"
@@ -337,7 +336,7 @@ func TestSyncingFullNode(t *testing.T) {
 					}
 				}
 			case <-timer.C:
-				require.Fail(t, fmt.Sprintf("no block notification for account: %d - %v. Iteration: %v", i, wallets[i], tests))
+				require.Fail(t, fmt.Sprintf("no block notification for account: %d - %v. Iteration: %v. Rounds reached: %v", i, wallets[i], tests, nodesLastRounds(nodes)))
 				return
 			}
 		}
@@ -467,8 +466,9 @@ func TestSimpleUpgrade(t *testing.T) {
 					panic(err)
 				}
 				blocks[i] = blk
-			case <-time.After(60 * time.Second):
-				require.Fail(t, fmt.Sprintf("no block notification for account: %v. Iteration: %v", wallets[i], tests))
+			case <-time.After(30*time.Second + 2*expectedAgreementTime):
+				require.Fail(t, fmt.Sprintf("no block notification for account: %v. Iteration: %v. Rounds reached: %v",
+					wallets[i], tests, nodesLastRounds(nodes)))
 				return
 			}
 		}
@@ -499,6 +499,16 @@ func TestSimpleUpgrade(t *testing.T) {
 	}
 
 	require.Equal(t, 2, roundsCheckedForUpgrade)
+}
+
+// nodesLastRounds reports the round each node last committed, so a missing block
+// notification can be told apart from a network that is merely slow.
+func nodesLastRounds(nodes []*AlgorandFullNode) []basics.Round {
+	rounds := make([]basics.Round, len(nodes))
+	for i := range nodes {
+		rounds[i] = nodes[i].ledger.LastRound()
+	}
+	return rounds
 }
 
 const defaultFirstNodeStartDelay = 20 * time.Second
@@ -868,13 +878,12 @@ func TestMaxSizesCorrect(t *testing.T) {
 	maxCombinedTxnSize := uint64(transactions.SignedTxnMaxSize())
 	// subtract out the two smaller signature sizes (logicsig is biggest, it can *contain* the others)
 	maxCombinedTxnSize -= uint64(crypto.SignatureMaxSize() + crypto.MultisigSigMaxSize())
-	// a transaction carries at most one effective PQSig (top-level OR nested in the
+	// a transaction carries at most one effective SaltedKeySig (top-level OR nested in the
 	// logicsig), but SignedTxnMaxSize counts both, so subtract one.
-	maxCombinedTxnSize -= uint64(transactions.PQSigMaxSize())
-	// the logicsig size is *also* an overestimate, because it thinks that the logicsig and
-	// the logicsig args can both be up to MaxLogicSigMaxSize, but that's the max for
-	// them combined, so it double counts and we have to subtract one.
-	maxCombinedTxnSize -= uint64(bounds.MaxLogicSigMaxSize)
+	maxCombinedTxnSize -= uint64(transactions.SaltedKeySigMaxSize())
+	// Note that the logicsig program and its args are *not* double counted. Once
+	// transaction size pricing exists, they are bounded separately, each up to
+	// MaxLogicSigMaxSize, so a single logicsig really can carry both in full.
 
 	// maxCombinedTxnSize is still an overestimate because it assumes all txn
 	// type fields can be in the same txn.  That's not true, but it provides an
@@ -1065,14 +1074,14 @@ func TestNodeP2PRelays(t *testing.T) {
 	testParams0.AgreementFilterTimeoutPeriod0 = 500 * time.Millisecond
 	configurableConsensus[consensusTest0] = testParams0
 
-	minMoneyAtStart := 1_000_000
-	maxMoneyAtStart := 100_000_000_000
+	minMoneyAtStart := uint64(1_000_000)
+	maxMoneyAtStart := uint64(100_000_000_000)
 	gen := rand.New(rand.NewSource(2))
 
 	const numAccounts = 3
 	acctStake := make([]basics.MicroAlgos, numAccounts)
 	// only node N has stake
-	acctStake[2] = basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))}
+	acctStake[2] = basics.MicroAlgos{Raw: minMoneyAtStart + uint64(gen.Int())%(maxMoneyAtStart-minMoneyAtStart)}
 
 	configHook := func(ni nodeInfo, cfg config.Local) (nodeInfo, config.Local) {
 		cfg = config.GetDefaultLocal()
@@ -1358,12 +1367,12 @@ func TestNodeP2P_NetProtoVersions(t *testing.T) {
 	testParams0.AgreementFilterTimeoutPeriod0 = 500 * time.Millisecond
 	configurableConsensus[consensusTest0] = testParams0
 
-	maxMoneyAtStart := 100_000_000_000
+	maxMoneyAtStart := uint64(100_000_000_000)
 
 	const numAccounts = 2
 	acctStake := make([]basics.MicroAlgos, numAccounts)
-	acctStake[0] = basics.MicroAlgos{Raw: uint64(maxMoneyAtStart / numAccounts)}
-	acctStake[1] = basics.MicroAlgos{Raw: uint64(maxMoneyAtStart / numAccounts)}
+	acctStake[0] = basics.MicroAlgos{Raw: maxMoneyAtStart / numAccounts}
+	acctStake[1] = basics.MicroAlgos{Raw: maxMoneyAtStart / numAccounts}
 
 	configHook := func(ni nodeInfo, cfg config.Local) (nodeInfo, config.Local) {
 		cfg = config.GetDefaultLocal()

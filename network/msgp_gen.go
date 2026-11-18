@@ -228,34 +228,38 @@ func (z *identityChallenge) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalS
 	var zb0002 int
 	var zb0003 bool
 	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0003 {
+		(*z) = identityChallenge{}
+	}
+	for zb0002 > 0 {
+		zb0002--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0002 > 0 {
-			zb0002--
+		switch string(field) {
+		case "pk":
 			bts, err = (*z).Key.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Key")
+				err = msgp.WrapError(err, "Key")
 				return
 			}
-		}
-		if zb0002 > 0 {
-			zb0002--
+		case "c":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).Challenge)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Challenge")
+				err = msgp.WrapError(err, "Challenge")
 				return
 			}
-		}
-		if zb0002 > 0 {
-			zb0002--
+		case "a":
 			var zb0004 int
 			zb0004, err = msgp.ReadBytesBytesHeader(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PublicAddress")
+				err = msgp.WrapError(err, "PublicAddress")
 				return
 			}
 			if zb0004 > maxAddressLen {
@@ -264,67 +268,14 @@ func (z *identityChallenge) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalS
 			}
 			(*z).PublicAddress, bts, err = msgp.ReadBytesBytes(bts, (*z).PublicAddress)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "PublicAddress")
+				err = msgp.WrapError(err, "PublicAddress")
 				return
 			}
-		}
-		if zb0002 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0002)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0003 {
-			(*z) = identityChallenge{}
-		}
-		for zb0002 > 0 {
-			zb0002--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "pk":
-				bts, err = (*z).Key.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Key")
-					return
-				}
-			case "c":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).Challenge)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "Challenge")
-					return
-				}
-			case "a":
-				var zb0005 int
-				zb0005, err = msgp.ReadBytesBytesHeader(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "PublicAddress")
-					return
-				}
-				if zb0005 > maxAddressLen {
-					err = msgp.ErrOverflow(uint64(zb0005), uint64(maxAddressLen))
-					return
-				}
-				(*z).PublicAddress, bts, err = msgp.ReadBytesBytes(bts, (*z).PublicAddress)
-				if err != nil {
-					err = msgp.WrapError(err, "PublicAddress")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -417,83 +368,44 @@ func (z *identityChallengeResponse) UnmarshalMsgWithState(bts []byte, st msgp.Un
 	var zb0003 int
 	var zb0004 bool
 	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0004 {
+		(*z) = identityChallengeResponse{}
+	}
+	for zb0003 > 0 {
+		zb0003--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 > 0 {
-			zb0003--
+		switch string(field) {
+		case "pk":
 			bts, err = (*z).Key.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Key")
+				err = msgp.WrapError(err, "Key")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "c":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).Challenge)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Challenge")
+				err = msgp.WrapError(err, "Challenge")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			zb0003--
+		case "rc":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).ResponseChallenge)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ResponseChallenge")
+				err = msgp.WrapError(err, "ResponseChallenge")
 				return
 			}
-		}
-		if zb0003 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0003)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0004 {
-			(*z) = identityChallengeResponse{}
-		}
-		for zb0003 > 0 {
-			zb0003--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "pk":
-				bts, err = (*z).Key.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Key")
-					return
-				}
-			case "c":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).Challenge)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "Challenge")
-					return
-				}
-			case "rc":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).ResponseChallenge)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "ResponseChallenge")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -579,69 +491,38 @@ func (z *identityChallengeResponseSigned) UnmarshalMsgWithState(bts []byte, st m
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = identityChallengeResponseSigned{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "icr":
 			bts, err = (*z).Msg.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Msg")
+				err = msgp.WrapError(err, "Msg")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "sig":
 			bts, err = (*z).Signature.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Signature")
+				err = msgp.WrapError(err, "Signature")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = identityChallengeResponseSigned{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "icr":
-				bts, err = (*z).Msg.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Msg")
-					return
-				}
-			case "sig":
-				bts, err = (*z).Signature.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Signature")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -722,69 +603,38 @@ func (z *identityChallengeSigned) UnmarshalMsgWithState(bts []byte, st msgp.Unma
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = identityChallengeSigned{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "ic":
 			bts, err = (*z).Msg.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Msg")
+				err = msgp.WrapError(err, "Msg")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "sig":
 			bts, err = (*z).Signature.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Signature")
+				err = msgp.WrapError(err, "Signature")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = identityChallengeSigned{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "ic":
-				bts, err = (*z).Msg.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Msg")
-					return
-				}
-			case "sig":
-				bts, err = (*z).Signature.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Signature")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -910,55 +760,32 @@ func (z *identityVerificationMessage) UnmarshalMsgWithState(bts []byte, st msgp.
 	var zb0002 int
 	var zb0003 bool
 	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0003 {
+		(*z) = identityVerificationMessage{}
+	}
+	for zb0002 > 0 {
+		zb0002--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0002 > 0 {
-			zb0002--
+		switch string(field) {
+		case "rc":
 			bts, err = msgp.ReadExactBytes(bts, ((*z).ResponseChallenge)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ResponseChallenge")
+				err = msgp.WrapError(err, "ResponseChallenge")
 				return
 			}
-		}
-		if zb0002 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0002)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0003 {
-			(*z) = identityVerificationMessage{}
-		}
-		for zb0002 > 0 {
-			zb0002--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "rc":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).ResponseChallenge)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "ResponseChallenge")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -1054,169 +881,65 @@ func (z *identityVerificationMessageSigned) UnmarshalMsgWithState(bts []byte, st
 	var zb0002 int
 	var zb0003 bool
 	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0003 {
+		(*z) = identityVerificationMessageSigned{}
+	}
+	for zb0002 > 0 {
+		zb0002--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0002 > 0 {
-			zb0002--
+		switch string(field) {
+		case "ivm":
 			var zb0004 int
 			var zb0005 bool
 			zb0004, zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
-			if _, ok := err.(msgp.TypeError); ok {
-				zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Msg")
+				return
+			}
+			if zb0005 {
+				(*z).Msg = identityVerificationMessage{}
+			}
+			for zb0004 > 0 {
+				zb0004--
+				field, bts, err = msgp.ReadMapKeyZC(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Msg")
+					err = msgp.WrapError(err, "Msg")
 					return
 				}
-				if zb0004 > 0 {
-					zb0004--
+				switch string(field) {
+				case "rc":
 					bts, err = msgp.ReadExactBytes(bts, ((*z).Msg.ResponseChallenge)[:])
 					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "Msg", "struct-from-array", "ResponseChallenge")
+						err = msgp.WrapError(err, "Msg", "ResponseChallenge")
 						return
 					}
-				}
-				if zb0004 > 0 {
-					err = msgp.ErrTooManyArrayFields(zb0004)
+				default:
+					err = msgp.ErrNoField(string(field))
 					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "Msg", "struct-from-array")
+						err = msgp.WrapError(err, "Msg")
 						return
-					}
-				}
-			} else {
-				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Msg")
-					return
-				}
-				if zb0005 {
-					(*z).Msg = identityVerificationMessage{}
-				}
-				for zb0004 > 0 {
-					zb0004--
-					field, bts, err = msgp.ReadMapKeyZC(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "Msg")
-						return
-					}
-					switch string(field) {
-					case "rc":
-						bts, err = msgp.ReadExactBytes(bts, ((*z).Msg.ResponseChallenge)[:])
-						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "Msg", "ResponseChallenge")
-							return
-						}
-					default:
-						err = msgp.ErrNoField(string(field))
-						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "Msg")
-							return
-						}
 					}
 				}
 			}
-		}
-		if zb0002 > 0 {
-			zb0002--
+		case "sig":
 			bts, err = (*z).Signature.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Signature")
+				err = msgp.WrapError(err, "Signature")
 				return
 			}
-		}
-		if zb0002 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0002)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0003 {
-			(*z) = identityVerificationMessageSigned{}
-		}
-		for zb0002 > 0 {
-			zb0002--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "ivm":
-				var zb0006 int
-				var zb0007 bool
-				zb0006, zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
-				if _, ok := err.(msgp.TypeError); ok {
-					zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Msg")
-						return
-					}
-					if zb0006 > 0 {
-						zb0006--
-						bts, err = msgp.ReadExactBytes(bts, ((*z).Msg.ResponseChallenge)[:])
-						if err != nil {
-							err = msgp.WrapError(err, "Msg", "struct-from-array", "ResponseChallenge")
-							return
-						}
-					}
-					if zb0006 > 0 {
-						err = msgp.ErrTooManyArrayFields(zb0006)
-						if err != nil {
-							err = msgp.WrapError(err, "Msg", "struct-from-array")
-							return
-						}
-					}
-				} else {
-					if err != nil {
-						err = msgp.WrapError(err, "Msg")
-						return
-					}
-					if zb0007 {
-						(*z).Msg = identityVerificationMessage{}
-					}
-					for zb0006 > 0 {
-						zb0006--
-						field, bts, err = msgp.ReadMapKeyZC(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "Msg")
-							return
-						}
-						switch string(field) {
-						case "rc":
-							bts, err = msgp.ReadExactBytes(bts, ((*z).Msg.ResponseChallenge)[:])
-							if err != nil {
-								err = msgp.WrapError(err, "Msg", "ResponseChallenge")
-								return
-							}
-						default:
-							err = msgp.ErrNoField(string(field))
-							if err != nil {
-								err = msgp.WrapError(err, "Msg")
-								return
-							}
-						}
-					}
-				}
-			case "sig":
-				bts, err = (*z).Signature.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Signature")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}

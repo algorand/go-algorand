@@ -356,6 +356,8 @@ func TestIdentityTrackerSetIdentity(t *testing.T) {
 
 	// Ensure a different peer cannot take the map entry
 	otherP := wsPeer{identity: id}
+	require.False(t, tracker.claimedByOther(&p))
+	require.True(t, tracker.claimedByOther(&otherP))
 	require.False(t, tracker.setIdentity(&otherP))
 
 	// Ensure the entry in the map wasn't changed
@@ -372,6 +374,36 @@ func TestIdentityTrackerHandlerGuard(t *testing.T) {
 		Net:    &WebsocketNetwork{},
 	}
 	require.Equal(t, OutgoingMessage{}, identityVerificationHandler(msg))
+}
+
+// TestIdentityTrackerHandlerDepartedPeer checks that a verification message handled after its
+// peer left wn.peers does not claim the identity, because nothing would give it back.
+func TestIdentityTrackerHandlerDepartedPeer(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var seed crypto.Seed
+	crypto.RandBytes(seed[:])
+	signer := &identityChallengeLegacySigner{keys: crypto.GenerateSignatureSecrets(seed)}
+	for _, state := range []string{"departed", "open"} {
+		t.Run(state, func(t *testing.T) {
+			wn := &WebsocketNetwork{identityTracker: NewIdentityTracker()}
+			wn.prioTracker = newPrioTracker(wn)
+			p := &wsPeer{
+				wsPeerCore:        wsPeerCore{net: wn},
+				identity:          signer.PublicKey(),
+				identityChallenge: newIdentityChallengeValue(),
+			}
+			if state == "departed" {
+				// what removePeer and the sweeps do under peersLock
+				wn.unregisterPeerLocked(p)
+			}
+			signed := identityVerificationMessage{ResponseChallenge: p.identityChallenge}.Sign(signer)
+			msg := IncomingMessage{Sender: p, Net: wn, Data: protocol.Encode(&signed)}
+			require.Equal(t, OutgoingMessage{}, identityVerificationHandler(msg))
+			claimed := state == "open"
+			require.Equal(t, !claimed, wn.identityTracker.setIdentity(&wsPeer{identity: p.identity}))
+		})
+	}
 }
 
 // TestNewIdentityChallengeScheme ensures NewIdentityChallengeScheme returns

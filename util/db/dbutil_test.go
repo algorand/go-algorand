@@ -433,6 +433,24 @@ func TestSetSynchronousMode(t *testing.T) {
 	}
 }
 
+// TestErasableAccessorTempStoreInMemory checks that erasable connections keep
+// SQLite's temporary journals in memory, so a journal holding the original
+// content of a securely deleted page never spills to a temp file on disk.
+func TestErasableAccessorTempStoreInMemory(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	acc, err := MakeErasableAccessor(filepath.Join(t.TempDir(), "erasable.sqlite"))
+	require.NoError(t, err)
+	defer acc.Close()
+
+	var tempStore int
+	err = acc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return tx.QueryRow("PRAGMA temp_store").Scan(&tempStore)
+	})
+	require.NoError(t, err)
+	require.Equal(t, 2, tempStore) // 2 is MEMORY
+}
+
 // TestReadingWhileWriting tests the SQLite behaviour when we're using two transactions, writing with one and reading from the other.
 // it demonstrates that at any time before we're calling Commit, the database content can be read, and it's containing it's pre-transaction
 // value.
@@ -510,7 +528,7 @@ func testLockingTableWhileWriting(t *testing.T, useWAL bool) {
 
 	dbName := strings.Replace(t.Name(), "/", "_", -1) + ".sqlite3"
 
-	writeAcc, err := makeAccessorImpl(dbName, false, false, dbParams)
+	writeAcc, err := makeAccessorImpl(erasableDriverName, dbName, false, false, dbParams)
 	a.NoError(err)
 	defer os.Remove(dbName)
 	defer os.Remove(dbName + "-shm")
@@ -536,7 +554,7 @@ func testLockingTableWhileWriting(t *testing.T, useWAL bool) {
 	}
 
 	go func() { // Goroutine reading periodically from a table different from the one being written to.
-		readAcc, err := makeAccessorImpl(dbName, true, false, dbParams)
+		readAcc, err := makeAccessorImpl(erasableDriverName, dbName, true, false, dbParams)
 		a.NoError(err)
 		defer readAcc.Close()
 

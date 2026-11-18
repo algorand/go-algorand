@@ -17,14 +17,17 @@
 package logic
 
 import (
+	"crypto/mldsa"
 	"fmt"
 	"strings"
 
+	"github.com/algorand/go-algorand/config/bounds"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate go tool -modfile=../../../tool.mod stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,EcGroup,MimcConfig,Poseidon2Config,Base64Encoding,JSONRefType,VoterParamsField,VrfStandard,BlockField -output=fields_string.go
+//go:generate go tool -modfile=../../../tool.mod stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,EcGroup,MimcConfig,Poseidon2Config,FalconConfig,MLDSAConfig,Base64Encoding,JSONRefType,VoterParamsField,VrfStandard,BlockField -output=fields_string.go
 
 // FieldSpec unifies the various specs for assembly, disassembly, and doc generation.
 type FieldSpec interface {
@@ -294,13 +297,14 @@ var txnFieldSpecs = [...]txnFieldSpec{
 	{FirstValid, StackUint64, false, 0, 0, false, "round number"},
 	{FirstValidTime, StackUint64, false, randomnessVersion, 0, false, "UNIX timestamp of block before txn.FirstValid. Fails if negative"},
 	{LastValid, StackUint64, false, 0, 0, false, "round number"},
-	{Note, StackBytes, false, 0, 6, false, "Any data up to 1024 bytes"},
+	{Note, StackBytes, false, 0, 6, false,
+		fmt.Sprintf("Any data up to %d bytes", bounds.MaxTxnNoteBytes)},
 	{Lease, StackBytes32, false, 0, 0, false, "32 byte lease value"},
 	{Receiver, StackAddress, false, 0, 5, false, "32 byte address"},
 	{Amount, StackUint64, false, 0, 5, false, "microalgos"},
 	{CloseRemainderTo, StackAddress, false, 0, 5, false, "32 byte address"},
-	{VotePK, StackBytes32, false, 0, 6, false, "32 byte address"},
-	{SelectionPK, StackBytes32, false, 0, 6, false, "32 byte address"},
+	{VotePK, StackBytes32, false, 0, 6, false, "32 byte participation public key"},
+	{SelectionPK, StackBytes32, false, 0, 6, false, "32 byte VRF public key"},
 	{VoteFirst, StackUint64, false, 0, 6, false, "The first round that the participation key is valid."},
 	{VoteLast, StackUint64, false, 0, 6, false, "The last round that the participation key is valid."},
 	{VoteKeyDilution, StackUint64, false, 0, 6, false, "Dilution for the 2-level participation key"},
@@ -544,7 +548,7 @@ var OnCompletionNames [invalidOnCompletionConst]string
 var onCompletionMap = make(map[string]uint64)
 
 // GlobalField is an enum for `global` opcode
-type GlobalField uint64
+type GlobalField int
 
 const (
 	// MinTxnFee ConsensusParams.MinTxnFee
@@ -989,6 +993,145 @@ var Poseidon2Configs = FieldGroup{
 	poseidon2ConfigSpecByName,
 }
 
+// FalconConfig is an enum for the `falcon_verify` opcode
+type FalconConfig int
+
+const (
+	// FalconDet1024 is the deterministic Falcon-1024 profile. It is the only
+	// scheme `falcon_verify` could use before it gained this immediate, so it
+	// must remain field 0 to keep the two forms describing the same default.
+	FalconDet1024 FalconConfig = iota
+	// FalconDet512 is the deterministic Falcon-512 profile
+	FalconDet512
+	invalidFalconConfig // compile-time constant for number of fields
+)
+
+var falconConfigNames [invalidFalconConfig]string
+
+type falconConfigSpec struct {
+	field FalconConfig
+	// pubKeyLen lets the assembler check the public key argument's length, the
+	// way the pre-immediate form of falcon_verify did with a b{1793} proto.
+	pubKeyLen int
+	doc       string
+}
+
+func (fs falconConfigSpec) Field() byte {
+	return byte(fs.field)
+}
+func (fs falconConfigSpec) Type() StackType {
+	return StackNone // Will not show, since all are untyped
+}
+func (fs falconConfigSpec) OpVersion() uint64 {
+	return f512Version
+}
+func (fs falconConfigSpec) Version() uint64 {
+	return f512Version
+}
+func (fs falconConfigSpec) Note() string {
+	return fs.doc
+}
+func (fs falconConfigSpec) Modes() RunMode {
+	return modeAny
+}
+
+var falconConfigSpecs = [...]falconConfigSpec{
+	{FalconDet1024, crypto.Falcon1024PublicKeySize, "Deterministic Falcon-1024 (FALCON-DET1024)"},
+	{FalconDet512, crypto.Falcon512PublicKeySize, "Deterministic Falcon-512 (FALCON-DET512)"},
+}
+
+func falconConfigSpecByField(c FalconConfig) (falconConfigSpec, bool) {
+	if int(c) >= len(falconConfigSpecs) {
+		return falconConfigSpec{}, false
+	}
+	return falconConfigSpecs[c], true
+}
+
+var falconConfigSpecByName = make(falconConfigNameSpecMap, len(falconConfigNames))
+
+type falconConfigNameSpecMap map[string]falconConfigSpec
+
+func (s falconConfigNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+// FalconConfigs collects details about the constants used to describe FalconConfigs
+var FalconConfigs = FieldGroup{
+	"Falcon Configurations", "Parameters",
+	falconConfigNames[:],
+	falconConfigSpecByName,
+}
+
+// MLDSAConfig is an enum for the `mldsa_verify` opcode
+type MLDSAConfig int
+
+const (
+	// MLDSA44 is the ML-DSA-44 parameter set of FIPS 204
+	MLDSA44 MLDSAConfig = iota
+	// MLDSA65 is the ML-DSA-65 parameter set of FIPS 204
+	MLDSA65
+	invalidMLDSAConfig // compile-time constant for number of fields
+)
+
+var mldsaConfigNames [invalidMLDSAConfig]string
+
+// mldsaMaxContextSize is the longest context string FIPS 204 allows.
+const mldsaMaxContextSize = 255
+
+type mldsaConfigSpec struct {
+	field  MLDSAConfig
+	params mldsa.Parameters
+	doc    string
+}
+
+func (fs mldsaConfigSpec) Field() byte {
+	return byte(fs.field)
+}
+func (fs mldsaConfigSpec) Type() StackType {
+	return StackNone // Will not show, since all are untyped
+}
+func (fs mldsaConfigSpec) OpVersion() uint64 {
+	return mldsaVersion
+}
+func (fs mldsaConfigSpec) Version() uint64 {
+	return mldsaVersion
+}
+func (fs mldsaConfigSpec) Note() string {
+	return fs.doc
+}
+func (fs mldsaConfigSpec) Modes() RunMode {
+	return modeAny
+}
+
+var mldsaConfigSpecs = [...]mldsaConfigSpec{
+	{MLDSA44, mldsa.MLDSA44(), "ML-DSA-44 (FIPS 204), with a 1312 byte public key and 2420 byte signature"},
+	{MLDSA65, mldsa.MLDSA65(), "ML-DSA-65 (FIPS 204), with a 1952 byte public key and 3309 byte signature"},
+}
+
+func mldsaConfigSpecByField(c MLDSAConfig) (mldsaConfigSpec, bool) {
+	if int(c) >= len(mldsaConfigSpecs) {
+		return mldsaConfigSpec{}, false
+	}
+	return mldsaConfigSpecs[c], true
+}
+
+var mldsaConfigSpecByName = make(mldsaConfigNameSpecMap, len(mldsaConfigNames))
+
+type mldsaConfigNameSpecMap map[string]mldsaConfigSpec
+
+func (s mldsaConfigNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+// MLDSAConfigs collects details about the constants used to describe MLDSAConfigs
+var MLDSAConfigs = FieldGroup{
+	"ML-DSA Configurations", "Parameters",
+	mldsaConfigNames[:],
+	mldsaConfigSpecByName,
+}
+
 // Base64Encoding is an enum for the `base64decode` opcode
 type Base64Encoding int
 
@@ -1005,11 +1148,12 @@ var base64EncodingNames [invalidBase64Encoding]string
 type base64EncodingSpec struct {
 	field   Base64Encoding
 	version uint64
+	doc     string
 }
 
 var base64EncodingSpecs = [...]base64EncodingSpec{
-	{URLEncoding, 6},
-	{StdEncoding, 6},
+	{URLEncoding, 6, "The base64url alphabet, RFC 4648 section 5"},
+	{StdEncoding, 6, "The standard base64 alphabet, RFC 4648 section 4"},
 }
 
 func base64EncodingSpecByField(e Base64Encoding) (base64EncodingSpec, bool) {
@@ -1036,8 +1180,7 @@ func (fs base64EncodingSpec) Version() uint64 {
 	return fs.version
 }
 func (fs base64EncodingSpec) Note() string {
-	note := "" // no doc list?
-	return note
+	return fs.doc
 }
 func (fs base64EncodingSpec) Modes() RunMode {
 	return modeAny
@@ -1074,12 +1217,13 @@ type jsonRefSpec struct {
 	field   JSONRefType
 	ftype   StackType
 	version uint64
+	doc     string
 }
 
 var jsonRefSpecs = [...]jsonRefSpec{
-	{JSONString, StackBytes, fidoVersion},
-	{JSONUint64, StackUint64, fidoVersion},
-	{JSONObject, StackBytes, fidoVersion},
+	{JSONString, StackBytes, fidoVersion, "The value is a JSON string, returned without its surrounding quotes"},
+	{JSONUint64, StackUint64, fidoVersion, "The value is a JSON number, returned as a uint64"},
+	{JSONObject, StackBytes, fidoVersion, "The value is a JSON object, returned as its raw bytes"},
 }
 
 func jsonRefSpecByField(r JSONRefType) (jsonRefSpec, bool) {
@@ -1106,8 +1250,7 @@ func (fs jsonRefSpec) Version() uint64 {
 	return fs.version
 }
 func (fs jsonRefSpec) Note() string {
-	note := "" // no doc list?
-	return note
+	return fs.doc
 }
 func (fs jsonRefSpec) Modes() RunMode {
 	return modeAny
@@ -1139,10 +1282,11 @@ var vrfStandardNames [invalidVrfStandard]string
 type vrfStandardSpec struct {
 	field   VrfStandard
 	version uint64
+	doc     string
 }
 
 var vrfStandardSpecs = [...]vrfStandardSpec{
-	{VrfAlgorand, randomnessVersion},
+	{VrfAlgorand, randomnessVersion, "ECVRF-ED25519-SHA512-Elligator2, the VRF used by Algorand consensus"},
 }
 
 func vrfStandardSpecByField(r VrfStandard) (vrfStandardSpec, bool) {
@@ -1178,8 +1322,7 @@ func (fs vrfStandardSpec) Version() uint64 {
 }
 
 func (fs vrfStandardSpec) Note() string {
-	note := "" // no doc list?
-	return note
+	return fs.doc
 }
 
 func (fs vrfStandardSpec) Modes() RunMode {
@@ -1190,7 +1333,7 @@ func (s vrfStandardSpecMap) SpecByName(name string) FieldSpec {
 	return s[name]
 }
 
-// VrfStandards describes the json_ref immediate
+// VrfStandards describes the vrf_verify immediate
 var VrfStandards = FieldGroup{
 	"vrf_verify", "Standards",
 	vrfStandardNames[:],
@@ -1243,23 +1386,24 @@ type blockFieldSpec struct {
 	field   BlockField
 	ftype   StackType
 	version uint64
+	doc     string
 }
 
 var blockFieldSpecs = [...]blockFieldSpec{
-	{BlkSeed, StackBytes32, randomnessVersion},
-	{BlkTimestamp, StackUint64, randomnessVersion},
-	{BlkProposer, StackAddress, incentiveVersion},
-	{BlkFeesCollected, StackUint64, incentiveVersion},
-	{BlkBonus, StackUint64, incentiveVersion},
-	{BlkBranch, StackBytes32, incentiveVersion},
-	{BlkFeeSink, StackAddress, incentiveVersion},
-	{BlkProtocol, StackBytes, incentiveVersion},
-	{BlkTxnCounter, StackUint64, incentiveVersion},
-	{BlkProposerPayout, StackUint64, incentiveVersion},
-	{BlkBranch512, StackBytes64, 13},
-	{BlkSha512_256TxnCommitment, StackBytes32, 13},
-	{BlkSha256TxnCommitment, StackBytes32, 13},
-	{BlkSha512TxnCommitment, StackBytes64, 13},
+	{BlkSeed, StackBytes32, randomnessVersion, "The block's sortition seed"},
+	{BlkTimestamp, StackUint64, randomnessVersion, "The block's timestamp, in seconds since the Unix epoch. Fails if negative"},
+	{BlkProposer, StackAddress, incentiveVersion, "The account that proposed the block"},
+	{BlkFeesCollected, StackUint64, incentiveVersion, "The sum of the fees paid by the transactions in the block, in microalgos"},
+	{BlkBonus, StackUint64, incentiveVersion, "The bonus incentive available for proposing this block, in microalgos. It begins at a consensus parameter value and decays periodically. See BlkProposerPayout for the amount actually paid"},
+	{BlkBranch, StackBytes32, incentiveVersion, "The sha512_256 hash of the previous block's header"},
+	{BlkFeeSink, StackAddress, incentiveVersion, "The fee sink account for the block's round"},
+	{BlkProtocol, StackBytes, incentiveVersion, "The ConsensusVersion of the block"},
+	{BlkTxnCounter, StackUint64, incentiveVersion, "The number of the next transaction to be committed after this block, counted from the beginning of the chain. Genesis blocks start at 1000"},
+	{BlkProposerPayout, StackUint64, incentiveVersion, "The amount actually moved from the FeeSink to the proposer, in microalgos. 0 if the proposer was not eligible"},
+	{BlkBranch512, StackBytes64, 13, "The sha512 hash of the previous block's header"},
+	{BlkSha512_256TxnCommitment, StackBytes32, 13, "Root of the sha512_256 merkle tree over the block's transactions and their ApplyData, the \"Algorand native\" commitment"},
+	{BlkSha256TxnCommitment, StackBytes32, 13, "Root of the sha256 vector commitment merkle tree over the block's transactions and their ApplyData"},
+	{BlkSha512TxnCommitment, StackBytes64, 13, "Root of the sha512 vector commitment merkle tree over the block's transactions and their ApplyData"},
 }
 
 func blockFieldSpecByField(r BlockField) (blockFieldSpec, bool) {
@@ -1295,7 +1439,7 @@ func (fs blockFieldSpec) Version() uint64 {
 }
 
 func (fs blockFieldSpec) Note() string {
-	return ""
+	return fs.doc
 }
 
 func (fs blockFieldSpec) Modes() RunMode {
@@ -1306,7 +1450,7 @@ func (s blockFieldSpecMap) SpecByName(name string) FieldSpec {
 	return s[name]
 }
 
-// BlockFields describes the json_ref immediate
+// BlockFields describes the block immediate
 var BlockFields = FieldGroup{
 	"block", "Fields",
 	blockFieldNames[:],
@@ -1877,6 +2021,20 @@ func init() {
 		equal(int(s.field), i)
 		poseidon2ConfigNames[s.field] = s.field.String()
 		poseidon2ConfigSpecByName[s.field.String()] = s
+	}
+
+	equal(len(falconConfigSpecs), len(falconConfigNames))
+	for i, s := range falconConfigSpecs {
+		equal(int(s.field), i)
+		falconConfigNames[s.field] = s.field.String()
+		falconConfigSpecByName[s.field.String()] = s
+	}
+
+	equal(len(mldsaConfigSpecs), len(mldsaConfigNames))
+	for i, s := range mldsaConfigSpecs {
+		equal(int(s.field), i)
+		mldsaConfigNames[s.field] = s.field.String()
+		mldsaConfigSpecByName[s.field.String()] = s
 	}
 
 	equal(len(base64EncodingSpecs), len(base64EncodingNames))

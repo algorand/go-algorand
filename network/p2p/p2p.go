@@ -35,6 +35,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
+	libp2phttp "github.com/libp2p/go-libp2p/p2p/http"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
@@ -73,6 +74,7 @@ type Service interface {
 	UnprotectPeer(peer.ID)
 
 	Conns() []network.Conn
+	ConnsToPeer(peer.ID) []network.Conn
 	ListPeersForTopic(topic string) []peer.ID
 	Subscribe(topic string, val pubsub.ValidatorEx) (SubNextCancellable, error)
 	Publish(ctx context.Context, topic string, data []byte) error
@@ -225,6 +227,14 @@ func deriveConnLimits(cfg config.Local) connLimitConfig {
 	}
 }
 
+// gossipStreamsInboundPerPeer bounds the inbound streams one peer may hold for each gossip protocol.
+const gossipStreamsInboundPerPeer = 2
+
+// httpStreamsInboundPerPeer bounds the inbound HTTP streams one peer may hold at once. Catchup
+// fetches up to CatchupParallelBlocks blocks at a time (16 by default), possibly all from one peer,
+// and the same peer may also request a catchpoint file or a transaction sync.
+const httpStreamsInboundPerPeer = 32
+
 func configureResourceManager(limits connLimitConfig) (network.ResourceManager, error) {
 	// see https://github.com/libp2p/go-libp2p/tree/master/p2p/host/resource-manager for more details
 	scalingLimits := rcmgr.DefaultLimits
@@ -242,8 +252,19 @@ func configureResourceManager(limits connLimitConfig) (network.ResourceManager, 
 		systemLimits.ConnsOutbound = rcmgr.LimitVal(limits.rcmgrConnsOutbound)
 	}
 
+	// A peer has one gossip stream. The second slot covers a peer that opens a new stream
+	// before its old one has closed. A handshake that never completes holds its slot for
+	// p2pHandshakeTimeout in the network package.
+	gossipPeerLimits := rcmgr.ResourceLimits{StreamsInbound: gossipStreamsInboundPerPeer}
 	limitConfig := rcmgr.PartialLimitConfig{
 		System: systemLimits,
+		ProtocolPeer: map[protocol.ID]rcmgr.ResourceLimits{
+			AlgorandWsProtocolV1:  gossipPeerLimits,
+			AlgorandWsProtocolV22: gossipPeerLimits,
+			// An HTTP stream that never completes its request holds its slot for
+			// httpServerReadTimeout.
+			libp2phttp.ProtocolIDForMultistreamSelect: {StreamsInbound: httpStreamsInboundPerPeer},
+		},
 		// Everything else is default. The exact values will come from `scaledDefaultLimits` above.
 	}
 	limiter := rcmgr.NewFixedLimiter(limitConfig.Build(scaledDefaultLimits))
@@ -309,8 +330,16 @@ func (s *serviceImpl) Start() error {
 
 // Close shuts down the P2P service
 func (s *serviceImpl) Close() error {
+	// stop receiving Connected/Disconnected callbacks: StopNotify blocks until
+	// any in-flight notification has returned.
 	s.host.Network().StopNotify(s.streams)
-	return s.host.Close()
+	// closing the host closes all connections and streams, which unblocks any
+	// stream I/O in progress in the stream handlers.
+	err := s.host.Close()
+	// wait (bounded) for the handler goroutines spawned by streamManager to finish
+	// so that nothing logs or touches state after Close returns.
+	s.streams.close()
+	return err
 }
 
 // ID returns the peer.ID for self
@@ -328,13 +357,22 @@ func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) bool {
 	ps := s.host.Peerstore().(*pstore.PeerStore)
 	addrInfos := ps.GetAddresses(targetConnCount, phonebook.RelayRole)
 	conns := s.host.Network().Conns()
-	var numOutgoingConns int
+	var dialed []network.Conn
 	for _, conn := range conns {
 		if conn.Stat().Direction == network.DirOutbound {
 			remotePeer := conn.RemotePeer()
 			if s.host.ConnManager().IsProtected(remotePeer, cnmgrTag) {
-				numOutgoingConns++
+				dialed = append(dialed, conn)
 			}
+		}
+	}
+	// a connection that has not set up a gossip stream in time gives its place to another peer,
+	// and its peer is not redialed in this pass
+	closed := s.streams.closeWithoutStream(dialed, time.Now())
+	var numOutgoingConns int
+	for _, conn := range dialed {
+		if _, ok := closed[conn.RemotePeer()]; !ok {
+			numOutgoingConns++
 		}
 	}
 	preExistingConns := numOutgoingConns
@@ -343,16 +381,29 @@ func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) bool {
 		if numOutgoingConns >= targetConnCount {
 			return numOutgoingConns > preExistingConns
 		}
+		if _, ok := closed[peerInfo.ID]; ok {
+			continue
+		}
 		// if we are already connected to this peer, ensure it's properly handled
 		if conns := s.host.Network().ConnsToPeer(peerInfo.ID); len(conns) > 0 {
 			if !s.host.ConnManager().IsProtected(peerInfo.ID, cnmgrTag) {
-				// connection was established by DHT/pubsub before the mesh thread
+				// outbound connection was established by DHT/pubsub before the mesh thread
 				// could protect it, so handleConnected skipped stream creation.
 				// protect and re-trigger stream setup now.
-				s.host.ConnManager().Protect(peerInfo.ID, cnmgrTag)
-				go s.streams.handleConnected(conns[0])
-				if conns[0].Stat().Direction == network.DirOutbound {
-					numOutgoingConns++
+				// inbound connections are not re-triggered: streamManager.Connected already
+				// applied the peer ID ordering to them, and opening another stream here
+				// would duplicate the one opened by Connected or by the remote peer.
+				for _, conn := range conns {
+					if conn.Stat().Direction == network.DirOutbound {
+						s.host.ConnManager().Protect(peerInfo.ID, cnmgrTag)
+						if !s.streams.goHandleConnected(conn) {
+							// the service is shutting down: undo the protection and stop dialing
+							s.host.ConnManager().Unprotect(peerInfo.ID, cnmgrTag)
+							return numOutgoingConns > preExistingConns
+						}
+						numOutgoingConns++
+						break
+					}
 				}
 			}
 			continue
@@ -399,6 +450,11 @@ func (s *serviceImpl) AddrInfo() peer.AddrInfo {
 // Conns returns the current connections
 func (s *serviceImpl) Conns() []network.Conn {
 	return s.host.Network().Conns()
+}
+
+// ConnsToPeer returns the current connections to the provided peer
+func (s *serviceImpl) ConnsToPeer(peer peer.ID) []network.Conn {
+	return s.host.Network().ConnsToPeer(peer)
 }
 
 // ClosePeer closes a connection to the provided peer

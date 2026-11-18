@@ -84,6 +84,8 @@ func (ml *emptyLedger) getStorageCounts(addr basics.Address, aidx basics.AppInde
 	return basics.StateSchema{}, nil
 }
 
+func (ml *emptyLedger) recordCreatedApp(basics.AppIndex) {}
+
 func (ml *emptyLedger) getStorageLimits(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
 	return basics.StateSchema{}, nil
 }
@@ -232,7 +234,6 @@ func TestCowStorage(t *testing.T) {
 
 	st := makeStateTracker()
 
-	var lastParent *roundCowState
 	const maxChildDepth = 10
 	childDepth := 0
 
@@ -328,14 +329,14 @@ func TestCowStorage(t *testing.T) {
 
 		// Collapse a child
 		if childDepth > 0 && rand.Float32() < 0.1 {
+			parent := cow.commitParent
 			cow.commitToParent()
-			cow = lastParent
+			cow = parent
 			childDepth--
 		}
 
 		// Make a child
 		if childDepth < maxChildDepth && rand.Float32() < 0.1 {
-			lastParent = cow
 			cow = cow.child(1)
 			childDepth++
 		}
@@ -737,13 +738,6 @@ func TestApplyChild(t *testing.T) {
 	a.Equal(getSchema(3, 4), parent.maxCounts)
 
 	// check child is correctly merged into parent
-	empty := func() valueDelta {
-		return valueDelta{
-			old:       basics.TealValue{},
-			new:       basics.TealValue{},
-			oldExists: false, newExists: false,
-		}
-	}
 	created := func(v uint64) valueDelta {
 		return valueDelta{
 			old:       basics.TealValue{},
@@ -787,11 +781,12 @@ func TestApplyChild(t *testing.T) {
 			result: map[string]valueDelta{"key1": created(2), "key2": updated(1, 3), "key3": updated(3, 4)},
 		},
 		{
-			// child deletes all parent keys
+			// child deletes all parent keys (key1, absent before the parent
+			// and after the child, is not recorded at all)
 			name:   "delete-keys",
 			pkv:    map[string]valueDelta{"key1": created(1), "key2": updated(1, 2), "key3": deleted(3)},
 			ckv:    map[string]valueDelta{"key1": deleted(1), "key2": deleted(2), "key3": deleted(4)},
-			result: map[string]valueDelta{"key1": empty(), "key2": deleted(1), "key3": deleted(3)},
+			result: map[string]valueDelta{"key2": deleted(1), "key3": deleted(3)},
 		},
 		{
 			// child re-creates all parent keys

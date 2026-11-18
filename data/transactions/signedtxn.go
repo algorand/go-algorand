@@ -18,7 +18,10 @@ package transactions
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -36,7 +39,7 @@ type SignedTxn struct {
 	Sig   crypto.Signature   `codec:"sig"`
 	Msig  crypto.MultisigSig `codec:"msig"`
 	Lsig  LogicSig           `codec:"lsig"`
-	PQsig PQSig              `codec:"pqsig"`
+	SKsig SaltedKeySig       `codec:"pqsig"`
 
 	Txn      Transaction    `codec:"txn,required"`
 	AuthAddr basics.Address `codec:"sgnr"`
@@ -63,6 +66,62 @@ type SignedTxnWithAD struct {
 // ID returns the Txid (i.e., hash) of the underlying transaction.
 func (s SignedTxn) ID() Txid {
 	return s.Txn.ID()
+}
+
+// Summary returns a one-line description of s for logs and errors: its ID,
+// type, sender, validity, group, authorizer and the kinds of signature it
+// carries. It prints counts and sizes in place of variable-length fields, so
+// the line stays short.
+func (s SignedTxn) Summary() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%v %.8s from %v live %d-%d", s.ID(), s.Txn.Type, s.Txn.Sender, s.Txn.FirstValid, s.Txn.LastValid)
+	if !s.Txn.Group.IsZero() {
+		fmt.Fprintf(&b, " group %v", s.Txn.Group)
+	}
+	if !s.AuthAddr.IsZero() {
+		fmt.Fprintf(&b, " auth %v", s.AuthAddr)
+	}
+	if !s.Sig.Blank() {
+		b.WriteString(" sig")
+	}
+	if !s.Msig.Blank() {
+		fmt.Fprintf(&b, " msig(%d)", len(s.Msig.Subsigs))
+	}
+	if !s.Lsig.Blank() {
+		fmt.Fprintf(&b, " lsig(%d bytes", len(s.Lsig.Logic))
+		if !s.Lsig.Msig.Blank() {
+			fmt.Fprintf(&b, ", msig(%d)", len(s.Lsig.Msig.Subsigs))
+		}
+		if !s.Lsig.LMsig.Blank() {
+			fmt.Fprintf(&b, ", lmsig(%d)", len(s.Lsig.LMsig.Subsigs))
+		}
+		b.WriteString(")")
+	}
+	if !s.SKsig.Blank() {
+		b.WriteString(" sksig")
+	}
+	return b.String()
+}
+
+// maxLoggedTxnBytes is how many bytes of msgpack encoding per transaction
+// LogEncoding puts in a log line.
+const maxLoggedTxnBytes = 4096
+
+// LogEncoding returns a key and value for a log field holding stxns: "stxn"
+// with their base64 msgpack encoding (which goal clerk inspect and the SDKs
+// can decode), or "stxnLength" with the encoding's byte length when it exceeds
+// maxLoggedTxnBytes per transaction.
+func LogEncoding(stxns []SignedTxn) (key string, value any) {
+	buf := protocol.GetEncodingBuf()
+	enc := buf.Bytes()
+	for i := range stxns {
+		enc = stxns[i].MarshalMsg(enc)
+	}
+	defer protocol.PutEncodingBuf(buf.Update(enc))
+	if len(enc) > maxLoggedTxnBytes*len(stxns) {
+		return "stxnLength", len(enc)
+	}
+	return "stxn", base64.StdEncoding.EncodeToString(enc)
 }
 
 // WithAD returns a SignedTxnWithAD with an (optional) ApplyData.
@@ -121,18 +180,16 @@ func (s SignedTxn) Authorizer() basics.Address {
 
 // HasSignature reports whether any signature category is present.
 func (s SignedTxn) HasSignature() bool {
-	return !s.Sig.Blank() || !s.Msig.Blank() || !s.Lsig.Blank() || !s.PQsig.Blank()
+	return !s.Sig.Blank() || !s.Msig.Blank() || !s.Lsig.Blank() || !s.SKsig.Blank()
 }
 
 // signatureFeeContribution dispatches the fee contribution of the signature type.
-// An unknown PQ scheme contributes zero, which is safe because the transaction
-// will be rejected during verification.
 func (s SignedTxn) signatureFeeContribution(proto config.ConsensusParams) basics.Micros {
-	if !s.PQsig.Blank() {
-		return proto.PQSchemeFeeContribution(s.PQsig.Scheme)
+	if !s.SKsig.Blank() {
+		return SigSchemeFeeContribution(proto, s.SKsig.Scheme)
 	}
-	if !s.Lsig.PQsig.Blank() {
-		return proto.PQSchemeFeeContribution(s.Lsig.PQsig.Scheme)
+	if !s.Lsig.SKsig.Blank() {
+		return SigSchemeFeeContribution(proto, s.Lsig.SKsig.Scheme)
 	}
 	return 0
 }
@@ -203,6 +260,11 @@ func logicSigProgramFeeContribution(txgroup []SignedTxnWithAD, proto config.Cons
 	programBytes := 0
 	for _, txad := range txgroup {
 		programBytes += len(txad.SignedTxn.Lsig.Logic)
+		// An ls-scheme SaltedKeySig carries its program in place of a public key. Those
+		// bytes are priced like any other program's.
+		if sksig := txad.SignedTxn.SKsig; sksig.IsLogicSig() {
+			programBytes += len(sksig.PublicKey)
+		}
 	}
 	freeProgramBytes := len(txgroup) * int(proto.LogicSigMaxSize)
 	surcharge, _ := proto.PerByteTxnSurcharge.MulInt(programBytes - freeProgramBytes)

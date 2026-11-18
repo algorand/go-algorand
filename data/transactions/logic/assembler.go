@@ -1529,6 +1529,38 @@ func typeByteMath(resultSize uint64) refineFunc {
 	}
 }
 
+// typeFalconVerify pins the public key argument to the length required by the
+// named config, restoring the assembly-time check that falcon_verify had before
+// it became configurable.
+func typeFalconVerify(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, error) {
+	if len(args) != 1 {
+		return nil, nil, nil
+	}
+	fs, ok := falconConfigSpecByName[args[0].str]
+	if !ok {
+		return nil, nil, nil
+	}
+	return StackTypes{StackBytes, StackBytes, NewStackType(avmBytes, static(uint64(fs.pubKeyLen)))}, nil, nil
+}
+
+// typeMLDSAVerify pins the signature and public key arguments to the lengths
+// required by the named parameter set, and bounds the context length.
+func typeMLDSAVerify(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, error) {
+	if len(args) != 1 {
+		return nil, nil, nil
+	}
+	fs, ok := mldsaConfigSpecByName[args[0].str]
+	if !ok {
+		return nil, nil, nil
+	}
+	return StackTypes{
+		StackBytes,
+		NewStackType(avmBytes, static(uint64(fs.params.SignatureSize()))),
+		NewStackType(avmBytes, static(uint64(fs.params.PublicKeySize()))),
+		NewStackType(avmBytes, bound(0, mldsaMaxContextSize)),
+	}, nil, nil
+}
+
 func typeTxField(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, error) {
 	if len(args) != 1 {
 		return nil, nil, nil
@@ -1787,10 +1819,10 @@ func unknownOpcodeComplaint(name string, v uint64) (OpSpec, error) {
 			last = i
 		}
 	}
-	if first > int(v) {
+	if first != -1 && uint64(first) > v {
 		return standin, fmt.Errorf("%s opcode was introduced in v%d", name, first)
 	}
-	if last != -1 && last < int(v) {
+	if last != -1 && uint64(last) < v {
 		return standin, fmt.Errorf("%s opcode was removed in v%d", name, last+1)
 	}
 	return OpSpec{}, fmt.Errorf("unknown opcode: %s", name)
@@ -3096,13 +3128,16 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 			}
 
 			pc++
-		case immLabel:
+		case immLabel, immVarintLabel:
 			var offset int
 			var offsetLen int
-			if spec.Version >= varintBranchVersion {
+			if imm.kind == immVarintLabel {
 				v, bytesRead := binary.Varint(dis.program[pc:])
 				if bytesRead <= 0 {
 					return "", fmt.Errorf("could not decode label for %s", spec.Name)
+				}
+				if v > int64(len(dis.program)) || v < -int64(len(dis.program)) {
+					return "", fmt.Errorf("branch offset %d outside of program for %s", v, spec.Name)
 				}
 				offset = int(v)
 				offsetLen = bytesRead
@@ -3115,7 +3150,7 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 				offsetLen = 2
 			}
 			target := offset + pc + offsetLen
-			if spec.Version >= varintBranchVersion && offset < 0 {
+			if imm.kind == immVarintLabel && offset < 0 {
 				target = pc - 1 + offset // back-jump from instruction start
 			}
 			var label string
@@ -3297,8 +3332,8 @@ func parseByteImmArgs(program []byte, pos int) (bytec [][]byte, nextpc int, err 
 			err = errShortByteImmArgs
 			return
 		}
-		bytec[i] = program[pos : pos+int(itemLen)]
-		pos += int(itemLen)
+		bytec[i] = program[pos:end]
+		pos = int(end)
 	}
 	nextpc = pos
 	return

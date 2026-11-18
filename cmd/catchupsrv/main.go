@@ -23,10 +23,8 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
-	"path"
+	"path/filepath"
 	"strconv"
-
-	"github.com/gorilla/mux"
 
 	"github.com/algorand/websocket"
 
@@ -66,7 +64,7 @@ func main() {
 	}
 
 	var srv http.Server
-	r := mux.NewRouter()
+	r := http.NewServeMux()
 	srv.Handler = r
 	srv.Addr = *addrFlag
 
@@ -76,8 +74,7 @@ func main() {
 	}
 
 	r.HandleFunc(network.GossipNetworkPath, func(w http.ResponseWriter, r *http.Request) {
-		pathVars := mux.Vars(r)
-		genesisID := pathVars["genesisID"]
+		genesisID := r.PathValue("genesisID")
 
 		var rnd [10]byte
 		crypto.RandBytes(rnd[:])
@@ -103,10 +100,8 @@ func main() {
 	})
 
 	r.HandleFunc(rpcs.BlockServiceBlockPath, func(w http.ResponseWriter, r *http.Request) {
-		pathVars := mux.Vars(r)
-		versionStr := pathVars["version"]
-		roundStr := pathVars["round"]
-		genesisID := pathVars["genesisID"]
+		roundStr := r.PathValue("round")
+		genesisID := r.PathValue("genesisID")
 
 		roundNumber, err := stringToBlock(roundStr)
 		if err != nil {
@@ -117,16 +112,8 @@ func main() {
 
 		var data []byte
 		if *dirFlag != "" {
-			blkPath := blockToPath(roundNumber)
-			data, err = os.ReadFile(
-				path.Join(
-					*dirFlag,
-					"v"+versionStr,
-					genesisID,
-					"block",
-					blkPath,
-				),
-			)
+			// BlockServiceBlockPath only matches version 1
+			data, err = readBlockFile(*dirFlag, "1", genesisID, roundNumber)
 		} else if blocktars != nil {
 			data, err = blocktars.getBlock(roundNumber)
 		} else {
@@ -144,7 +131,7 @@ func main() {
 		w.Header().Set("Content-Type", "application/x-algorand-block-v1")
 		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
 		w.WriteHeader(http.StatusOK)
-		w.Write(data)
+		_, _ = w.Write(data)
 		if rand.Intn(20) == 0 {
 			log.Infof("OK %d", roundNumber)
 		}
@@ -155,4 +142,12 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func readBlockFile(dir, version, genesisID string, round uint64) ([]byte, error) {
+	rel := filepath.Join("v"+version, genesisID, "block", blockToPath(round))
+	if !filepath.IsLocal(rel) {
+		return nil, &os.PathError{Op: "open", Path: rel, Err: os.ErrNotExist}
+	}
+	return os.ReadFile(filepath.Join(dir, rel)) //nolint:gosec // filepath.IsLocal prevents lexical escapes from dir; symlinks under dir are trusted
 }

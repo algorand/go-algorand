@@ -80,6 +80,13 @@ type P2PNetwork struct {
 	wsPeersConnectivityCheckTicker *time.Ticker
 	peerStater                     peerConnectionStater
 
+	// wsPeersClosed is set by innerStop under wsPeersLock. Once it is set, stream
+	// handlers must not register new wsPeers, because nothing would close them.
+	wsPeersClosed bool
+
+	// handshakeTimeout defaults to p2pHandshakeTimeout; it is a field so tests can shorten it.
+	handshakeTimeout time.Duration
+
 	// connPerfMonitor is used on outgoing connections to measure their relative message timing
 	connPerfMonitor *connectionPerformanceMonitor
 
@@ -88,7 +95,8 @@ type P2PNetwork struct {
 	outgoingConnsCloser *outgoingConnsCloser
 
 	// number of throttled outgoing connections "slots" needed to be populated.
-	throttledOutgoingConnections atomic.Int32
+	// Start sets it before any outgoing peer can register; after that, wsPeersLock guards it.
+	throttledOutgoingConnections int
 
 	meshUpdateRequests chan meshRequest
 	mesher             mesher
@@ -150,6 +158,21 @@ func (b *bootstrapper) BootstrapFunc() []peer.AddrInfo {
 	}
 
 	return dnsLookupBootstrapPeers(b.log, b.cfg, b.networkID, b.resolveController)
+}
+
+// bootstrapPhonebook returns the peers in pstore other than self. The peerstore also
+// holds the host's own keys once the host is created, and the host is not a bootstrap peer.
+func bootstrapPhonebook(pstore *peerstore.PeerStore, self peer.ID) []*peer.AddrInfo {
+	peerIDs := pstore.Peers()
+	addrInfos := make([]*peer.AddrInfo, 0, len(peerIDs))
+	for _, peerID := range peerIDs {
+		if peerID == self {
+			continue
+		}
+		addrInfo := pstore.PeerInfo(peerID)
+		addrInfos = append(addrInfos, &addrInfo)
+	}
+	return addrInfos
 }
 
 // dnsLookupBootstrapPeers looks up a list of Multiaddrs strings from the dnsaddr records at the primary
@@ -262,6 +285,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		},
 	}
 
+	net.handshakeTimeout = p2pHandshakeTimeout
 	net.ctx, net.ctxCancel = context.WithCancel(context.Background())
 	net.handler = msgHandler{
 		ctx:        net.ctx,
@@ -332,16 +356,10 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		return nil, err
 	}
 
-	peerIDs := pstore.Peers()
-	addrInfos := make([]*peer.AddrInfo, 0, len(peerIDs))
-	for _, peerID := range peerIDs {
-		addrInfo := pstore.PeerInfo(peerID)
-		addrInfos = append(addrInfos, &addrInfo)
-	}
 	bootstrapper := &bootstrapper{
 		cfg:               cfg,
 		networkID:         net.genesisInfo.NetworkID,
-		phonebookPeers:    addrInfos,
+		phonebookPeers:    bootstrapPhonebook(pstore, h.ID()),
 		resolveController: dnsaddr.NewMultiaddrDNSResolveController(cfg.DNSSecurityTXTEnforced(), ""),
 		log:               net.log,
 	}
@@ -420,8 +438,8 @@ func (n *P2PNetwork) PeerID() p2p.PeerID {
 	return p2p.PeerID(n.service.ID())
 }
 
-// PeerIDSigner returns an identityChallengeSigner that uses the libp2p peer ID's private key.
-func (n *P2PNetwork) PeerIDSigner() identityChallengeSigner {
+// peerIDSigner returns an identityChallengeSigner that uses the libp2p peer ID's private key.
+func (n *P2PNetwork) peerIDSigner() identityChallengeSigner {
 	return n.service.IDSigner()
 }
 
@@ -434,13 +452,13 @@ func (n *P2PNetwork) Start() error {
 	}
 
 	if n.relayMessages {
-		n.throttledOutgoingConnections.Store(int32(n.config.GossipFanout / 2))
+		n.throttledOutgoingConnections = n.config.GossipFanout / 2
 	} else {
 		// on non-relay, all the outgoing connections are throttled.
-		n.throttledOutgoingConnections.Store(int32(n.config.GossipFanout))
+		n.throttledOutgoingConnections = n.config.GossipFanout
 	}
 	if n.config.DisableOutgoingConnectionThrottling {
-		n.throttledOutgoingConnections.Store(0)
+		n.throttledOutgoingConnections = 0
 	}
 
 	wantTXGossip := n.relayMessages || n.config.ForceFetchTransactions || n.nodeInfo.IsParticipating()
@@ -515,18 +533,21 @@ func (n *P2PNetwork) Stop() {
 func (n *P2PNetwork) innerStop() {
 	closeGroup := sync.WaitGroup{}
 	n.wsPeersLock.Lock()
-	closeGroup.Add(len(n.wsPeers))
+	n.wsPeersClosed = true
+	closeGroup.Add(len(n.wsPeersToIDs))
 	deadline := time.Now().Add(peerDisconnectionAckDuration)
-	for peerID, peer := range n.wsPeers {
+	// wsPeersToIDs also holds wsPeers replaced in wsPeers by a newer stream from the same peer
+	for peer, peerID := range n.wsPeersToIDs {
+		n.unregisterPeerLocked(peer)
 		// we need to both close the wsPeer and close the p2p connection
 		go closeWaiter(&closeGroup, peer, deadline)
 		err := n.service.ClosePeer(peerID)
 		if err != nil {
 			n.log.Warnf("Error closing peer %s: %v", peerID, err)
 		}
-		delete(n.wsPeers, peerID)
-		delete(n.wsPeersToIDs, peer)
 	}
+	clear(n.wsPeers)
+	n.wsPeersChangeCounter.Add(1)
 	n.wsPeersLock.Unlock()
 	closeGroup.Wait()
 }
@@ -643,6 +664,7 @@ func (n *P2PNetwork) Broadcast(ctx context.Context, tag protocol.Tag, data []byt
 
 // Relay message
 func (n *P2PNetwork) Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error {
+	n.handler.sendRelayFilterMessage(tag, data, except, n)
 	if n.relayMessages {
 		return n.Broadcast(ctx, tag, data, wait, except)
 	}
@@ -691,7 +713,7 @@ func (n *P2PNetwork) DisconnectPeers() {
 	}
 }
 
-// RegisterHTTPHandler path accepts gorilla/mux path annotations
+// RegisterHTTPHandler path accepts http.ServeMux patterns
 func (n *P2PNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
 	n.httpServer.RegisterHTTPHandler(path, handler)
 }
@@ -919,6 +941,30 @@ func (n *P2PNetwork) VoteCompressionEnabled() bool {
 	return n.config.EnableVoteCompression
 }
 
+// p2pHandshakeTimeout bounds the gossip stream handshake: the V1 initial byte or the V22
+// metadata exchange. libp2p clears the stream deadline once protocol negotiation is done, so the
+// handshake sets its own.
+const p2pHandshakeTimeout = 10 * time.Second
+
+// startHandshake sets the handshake deadline on stream. The handler clears it with
+// finishHandshake before the stream becomes a wsPeer.
+func (n *P2PNetwork) startHandshake(p2pPeer peer.ID, stream network.Stream) error {
+	if err := stream.SetDeadline(time.Now().Add(n.handshakeTimeout)); err != nil {
+		_ = stream.Reset()
+		return &p2p.StreamHandlerLoggedError{Level: logging.Warn, Err: fmt.Errorf("error setting the handshake deadline for peer %s: %w", p2pPeer, err)}
+	}
+	return nil
+}
+
+// finishHandshake clears the deadline set by startHandshake.
+func (n *P2PNetwork) finishHandshake(p2pPeer peer.ID, stream network.Stream) error {
+	if err := stream.SetDeadline(time.Time{}); err != nil {
+		_ = stream.Reset()
+		return &p2p.StreamHandlerLoggedError{Level: logging.Warn, Err: fmt.Errorf("error clearing the handshake deadline for peer %s: %w", p2pPeer, err)}
+	}
+	return nil
+}
+
 // wsStreamHandlerV1 is a callback that the p2p package calls when a new peer connects and establishes a
 // stream for the websocket protocol.
 // TODO: remove after consensus v41 takes effect.
@@ -927,6 +973,9 @@ func (n *P2PNetwork) wsStreamHandlerV1(ctx context.Context, p2pPeer peer.ID, str
 		return &p2p.StreamHandlerLoggedError{Level: logging.Warn, Err: fmt.Errorf("unknown protocol %s from peer %s", stream.Protocol(), p2pPeer)}
 	}
 
+	if err := n.startHandshake(p2pPeer, stream); err != nil {
+		return err
+	}
 	if incoming {
 		var initMsg [1]byte
 		rn, err := stream.Read(initMsg[:])
@@ -938,6 +987,9 @@ func (n *P2PNetwork) wsStreamHandlerV1(ctx context.Context, p2pPeer peer.ID, str
 			return &p2p.StreamHandlerLoggedError{Level: logging.Warn, Err: fmt.Errorf("wsStreamHandlerV1: error sending initial message to peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)}
 		}
 	}
+	if err := n.finishHandshake(p2pPeer, stream); err != nil {
+		return err
+	}
 
 	return n.baseWsStreamHandler(ctx, p2pPeer, stream, incoming, peerMetaInfo{})
 }
@@ -947,6 +999,9 @@ func (n *P2PNetwork) wsStreamHandlerV22(ctx context.Context, p2pPeer peer.ID, st
 		return &p2p.StreamHandlerLoggedError{Level: logging.Warn, Err: fmt.Errorf("unknown protocol %s from peer %s", stream.Protocol(), p2pPeer)}
 	}
 
+	if err := n.startHandshake(p2pPeer, stream); err != nil {
+		return err
+	}
 	var err error
 	var pmi peerMetaInfo
 	if incoming {
@@ -972,6 +1027,9 @@ func (n *P2PNetwork) wsStreamHandlerV22(ctx context.Context, p2pPeer peer.ID, st
 			_ = stream.Reset()
 			return &p2p.StreamHandlerLoggedError{Level: logging.Warn, Err: fmt.Errorf("wsStreamHandlerV22: error reading peer meta headers response from peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)}
 		}
+	}
+	if err := n.finishHandshake(p2pPeer, stream); err != nil {
+		return err
 	}
 	return n.baseWsStreamHandler(ctx, p2pPeer, stream, incoming, pmi)
 }
@@ -1001,7 +1059,12 @@ func (n *P2PNetwork) baseWsStreamHandler(ctx context.Context, p2pPeer peer.ID, s
 	} else {
 		n.log.Warnf("Cannot get pubkey for peer %s", p2pPeer)
 	}
-	peerCore := makePeerCore(ctx, n, n.log, n.handler.readBuffer, addr, client, addr)
+	// wsPeer.RoutingAddr parses originAddress as an IP address, which a multiaddr string is not.
+	originAddr := addr
+	if ip, err0 := manet.ToIP(ma); err0 == nil {
+		originAddr = ip.String()
+	}
+	peerCore := makePeerCore(ctx, n, n.log, n.handler.readBuffer, addr, client, originAddr)
 	wsp := &wsPeer{
 		wsPeerCore:               peerCore,
 		conn:                     &wsPeerConnP2P{stream: stream},
@@ -1015,41 +1078,22 @@ func (n *P2PNetwork) baseWsStreamHandler(ctx context.Context, p2pPeer peer.ID, s
 		voteCompressionTableSize: n.voteCompressionTableSize,
 	}
 	if !incoming {
-		throttledConnection := false
-		if n.throttledOutgoingConnections.Add(int32(-1)) >= 0 {
-			throttledConnection = true
-		} else {
-			n.throttledOutgoingConnections.Add(int32(1))
-		}
-
 		wsp.connMonitor = n.connPerfMonitor
-		wsp.throttledOutgoingConnection = throttledConnection
 	}
 
 	localAddr, has := n.Address()
 	if !has {
 		n.log.Warn("Could not get local address")
 	}
-	n.wsPeersLock.Lock()
-	ok := n.identityTracker.setIdentity(wsp)
-	n.wsPeersLock.Unlock()
-	if !ok {
-		networkPeerIdentityDisconnect.Inc(nil)
+	switch n.addPeer(p2pPeer, wsp) {
+	case peerAdmitted:
+	case peerRejectedDuplicateIdentity:
 		stream.Close()
 		return &p2p.StreamHandlerLoggedError{Level: logging.Warn, Err: fmt.Errorf("peer deduplicated before adding because the identity is already known: remote %s, local %s", addr, localAddr)}
+	default:
+		wsp.CloseAndWait(time.Now().Add(peerDisconnectionAckDuration))
+		return &p2p.StreamHandlerLoggedError{Level: logging.Debug, Err: fmt.Errorf("network is stopping, dropping peer %s", addr)}
 	}
-
-	wsp.init(n.config, outgoingMessagesBufferSize)
-	n.wsPeersLock.Lock()
-	if wsp.didSignalClose.Load() == 1 {
-		networkPeerAlreadyClosed.Inc(nil)
-		n.wsPeersLock.Unlock()
-		return &p2p.StreamHandlerLoggedError{Level: logging.Debug, Err: fmt.Errorf("peer closing %s", addr)}
-	}
-	n.wsPeers[p2pPeer] = wsp
-	n.wsPeersToIDs[wsp] = p2pPeer
-	n.wsPeersLock.Unlock()
-	n.wsPeersChangeCounter.Add(1)
 
 	event := "ConnectedOut"
 	msg := "Made outgoing connection to peer %s"
@@ -1075,6 +1119,50 @@ func (n *P2PNetwork) baseWsStreamHandler(ctx context.Context, p2pPeer peer.ID, s
 	return nil
 }
 
+// addPeer initializes and registers wsp, claims its identity and throttle slot, and starts its read/write loops,
+// unless the network has stopped or the identity is already in use.
+// The caller must close the stream/peer when addPeer returns anything other than peerAdmitted.
+func (n *P2PNetwork) addPeer(id peer.ID, wsp *wsPeer) peerAdmission {
+	// init allocates the send queues, so skip it for a duplicate; setIdentity below is the real claim
+	if n.identityTracker.claimedByOther(wsp) {
+		networkPeerIdentityDisconnect.Inc(nil)
+		return peerRejectedDuplicateIdentity
+	}
+	wsp.init(n.config, outgoingMessagesBufferSize)
+	n.wsPeersLock.Lock()
+	defer n.wsPeersLock.Unlock()
+	if n.wsPeersClosed {
+		return peerRejectedStopped
+	}
+	if !n.identityTracker.setIdentity(wsp) {
+		networkPeerIdentityDisconnect.Inc(nil)
+		return peerRejectedDuplicateIdentity
+	}
+	if wsp.outgoing {
+		wsp.throttledOutgoingConnection = claimThrottleSlot(&n.throttledOutgoingConnections)
+	}
+	n.wsPeers[id] = wsp
+	n.wsPeersToIDs[wsp] = id
+	wsp.start()
+	n.wsPeersChangeCounter.Add(1)
+	return peerAdmitted
+}
+
+// unregisterPeerLocked marks peer closing and gives back its identity, reverse-map entry,
+// and outgoing throttle slot. Call it under wsPeersLock.
+func (n *P2PNetwork) unregisterPeerLocked(peer *wsPeer) {
+	peer.didSignalClose.Store(1)
+	n.identityTracker.removeIdentity(peer) // safe: removeIdentity only deletes if the stored identity matches this exact wsPeer
+	if _, knownPeer := n.wsPeersToIDs[peer]; knownPeer {
+		delete(n.wsPeersToIDs, peer)
+		// Throttle slots are per-wsPeer, not per map entry: release for any
+		// known wsPeer on its first cleanup, even if it was already replaced.
+		if peer.throttledOutgoingConnection {
+			n.throttledOutgoingConnections++
+		}
+	}
+}
+
 // peerRemoteClose called from wsPeer to report that it has closed
 func (n *P2PNetwork) peerRemoteClose(peer *wsPeer, reason disconnectReason) {
 	remotePeerID := peer.conn.(*wsPeerConnP2P).stream.Conn().RemotePeer()
@@ -1085,13 +1173,11 @@ func (n *P2PNetwork) removePeer(peer *wsPeer, remotePeerID peer.ID, reason disco
 	removed := false
 
 	n.wsPeersLock.Lock()
-	n.identityTracker.removeIdentity(peer) // safe: removeIdentity only deletes if the stored identity matches this exact wsPeer
 	if cur, ok := n.wsPeers[remotePeerID]; ok && cur == peer {
 		delete(n.wsPeers, remotePeerID)
 		removed = true
 	}
-	_, knownPeer := n.wsPeersToIDs[peer]
-	delete(n.wsPeersToIDs, peer) // always delete reverse entry for this exact wsPeer
+	n.unregisterPeerLocked(peer)
 
 	// Unprotect while still holding wsPeersLock so we can't race with a new
 	// wsPeer insertion for the same remotePeerID between map deletion and
@@ -1100,12 +1186,6 @@ func (n *P2PNetwork) removePeer(peer *wsPeer, remotePeerID peer.ID, reason disco
 		n.service.UnprotectPeer(remotePeerID)
 	}
 	n.wsPeersLock.Unlock()
-
-	// Throttle slots are per-wsPeer, not per map entry: release for any
-	// known wsPeer on its first cleanup, even if it was already replaced.
-	if knownPeer && peer.throttledOutgoingConnection {
-		n.throttledOutgoingConnections.Add(int32(1))
-	}
 
 	if !removed {
 		// stale close from an old stream/wsPeer that was already replaced; skip
@@ -1215,7 +1295,14 @@ func (p *gsPeer) GetNetwork() GossipNode {
 	return p.net
 }
 
+// RoutingAddr returns the routing address of the IP the peer is connected from, like wsPeer.RoutingAddr.
+// The peer ID is used when the peer has no connection with an IP address.
 func (p *gsPeer) RoutingAddr() []byte {
+	for _, conn := range p.net.service.ConnsToPeer(p.peerID) {
+		if ip, err := manet.ToIP(conn.RemoteMultiaddr()); err == nil {
+			return routingAddr(ip)
+		}
+	}
 	return []byte(p.peerID)
 }
 

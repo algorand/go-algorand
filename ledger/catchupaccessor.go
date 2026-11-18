@@ -814,7 +814,13 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 	wg.Add(2)
 	errChan := make(chan error, 2)
 
-	writerQueue := make(chan [][]byte, 16)
+	// workCtx lets the writer tell the reader it has stopped consuming. Without it, a writer
+	// that exits early leaves the reader blocked forever on a send into writerQueue, so
+	// wg.Wait never returns.
+	workCtx, workCancel := context.WithCancel(ctx)
+	defer workCancel()
+
+	writerQueue := make(chan [][]byte, trieRebuildQueueDepth)
 	c.ledger.setSynchronousMode(ctx, c.ledger.accountsRebuildSynchronousMode)
 	defer c.ledger.setSynchronousMode(ctx, c.ledger.synchronousMode)
 
@@ -827,18 +833,26 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 		dbErr := dbs.Snapshot(func(transactionCtx context.Context, tx trackerdb.SnapshotScope) (err error) {
 			it := tx.MakeCatchpointPendingHashesIterator(trieRebuildAccountChunkSize)
 			var hashes [][]byte
+		scan:
 			for {
 				hashes, err = it.Next(transactionCtx)
 				if err != nil {
 					break
 				}
 				if len(hashes) > 0 {
-					writerQueue <- hashes
+					select {
+					case writerQueue <- hashes:
+					case <-workCtx.Done():
+						// Nobody is draining the queue. Report no error of our own, so
+						// the writer's reason for stopping reaches the caller.
+						it.Close()
+						break scan
+					}
 				}
 				if len(hashes) != trieRebuildAccountChunkSize {
 					break
 				}
-				if ctx.Err() != nil {
+				if workCtx.Err() != nil {
 					it.Close()
 					break
 				}
@@ -856,6 +870,9 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 	// starts the merkle trie writer
 	go func() {
 		defer wg.Done()
+		// Deferred so every exit path releases a parked reader, including the trie-creation
+		// failure below that returns before the receive loop starts.
+		defer workCancel()
 		var trie *merkletrie.Trie
 		uncommitedHashesCount := 0
 		keepWriting := true

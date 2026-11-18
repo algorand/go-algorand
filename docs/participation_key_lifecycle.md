@@ -118,7 +118,28 @@ votes are cast for the same account causing both to be ignored.
 ## Key Storage
 
 Once installed keys are stored in the **Participation Registry**. This is a
-service that wraps a SQLite file for storage. Once installed, keys are assigned
+service that wraps a SQLite file for storage. The registry stores each
+ephemeral voting subkey as its own row (tables
+**VotingBatches**/**VotingOffsets**) described by a **votingHeader** column, so
+the per-round deletion of used keys writes only the consumed rows and the
+header. A stored key whose voting data fails validation at startup prevents
+the node from starting, as it always has; the log names the key. Stop the
+node, delete **partregistry.sqlite**, and restart: the key files are kept and
+re-installed, and keys installed through the API have to be installed again.
+The registry uses SQLite's
+write-ahead log, which keeps the image of every page a
+transaction wrote until the log is refilled or truncated, so the image of a
+page from before a subkey was deleted would otherwise stay readable in the log
+for a while. After every write the node checkpoints the log and, whenever it
+holds anything but the last transaction's images or the write stored subkeys
+wholesale (an install, a migration, a batch rollover), overwrites the whole
+log in place with zero pages and truncates it. Like `secure_delete`, this
+erases the previous content on file systems that write in place; copy-on-write
+file systems and flash storage may keep old blocks, where disk encryption is
+the remedy. A registry created by an older release is
+upgraded automatically at node startup; older releases refuse to open the
+upgraded registry, so rolling back requires deleting **partregistry.sqlite**
+and re-installing the keys. Once installed, keys are assigned
 an ID, which is referred to as **<participation-ID>** below. The ID is a hash
 built from parts of the participation key metadata. There are additional Admin
 API endpoints available to manage the registry:

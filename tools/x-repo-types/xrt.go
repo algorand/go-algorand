@@ -37,6 +37,9 @@ var differTmpl string
 //go:embed typeAnalyzer/typeAnalyzer.go
 var typeAnalyzerGo string
 
+//go:embed typeAnalyzer/unreleased.go
+var unreleasedGo string
+
 func main() {
 	var xPkg, xBranch, xType, yPkg, yBranch, yType, artifactPath string
 
@@ -320,11 +323,21 @@ func serializationDiff(artifactPath, xRepo, xPkgPath, xType, yRepo, yPkgPath, yT
 	if err != nil {
 		return err
 	}
+	runArgs := []string{"run", main, typeAnalyzer}
+
+	if xRepo+"/"+xPkgPath == "github.com/algorand/go-algorand/config" && xType == "ConsensusParams" {
+		unreleased := filepath.Join(artifactPath, "unreleased.go")
+		err = os.WriteFile(unreleased, []byte(unreleasedGo), 0644)
+		if err != nil {
+			return err
+		}
+		runArgs = append(runArgs, unreleased)
+	}
 
 	fmt.Printf("Saved x-repo-types code to directory: [%s]\n", artifactPath)
 
-	//nolint:gosec // main and typeAnalyzer are hard-coded above so no security concerns here
-	cmd := exec.Command("go", "run", main, typeAnalyzer)
+	//nolint:gosec // the files run are hard-coded above so no security concerns here
+	cmd := exec.Command("go", runArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()

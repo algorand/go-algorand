@@ -19,8 +19,6 @@ package v1
 import (
 	"net/http"
 
-	"github.com/gorilla/mux"
-
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
 	"github.com/algorand/go-algorand/daemon/kmd/session"
@@ -1279,41 +1277,45 @@ func reqCallbackMiddleware(reqCB func()) func(http.Handler) http.Handler {
 	}
 }
 
-// RegisterHandlers sets up the API handlers on the passed router
-func RegisterHandlers(router *mux.Router, sm *session.Manager, log logging.Logger, apiToken string, reqCB func()) {
-	// All /v1 requests require a valid auth token
-	router.Use(authMiddleware(log, apiToken))
-
-	// reqCB gets called each time a request matches a route
-	router.Use(reqCallbackMiddleware(reqCB))
+// RegisterHandlers sets up the API handlers on the passed mux under the given
+// path prefix (e.g. "/v1"). Each handler is wrapped with auth and request
+// callback middleware.
+func RegisterHandlers(mux *http.ServeMux, prefix string, sm *session.Manager, log logging.Logger, apiToken string, reqCB func()) {
+	auth := authMiddleware(log, apiToken)
+	cb := reqCallbackMiddleware(reqCB)
 
 	// ctx holds the global context passed to each of the handlers
 	ctx := reqContext{
 		sm: sm,
 	}
 
-	router.HandleFunc("/wallets", wrapCtx(ctx, getWalletsHandler)).Methods("GET")
-	router.HandleFunc("/wallet", wrapCtx(ctx, postWalletHandler)).Methods("POST")
-	router.HandleFunc("/wallet/init", wrapCtx(ctx, postWalletInitHandler)).Methods("POST")
-	router.HandleFunc("/wallet/release", wrapCtx(ctx, postWalletReleaseHandler)).Methods("POST")
-	router.HandleFunc("/wallet/renew", wrapCtx(ctx, postWalletRenewHandler)).Methods("POST")
-	router.HandleFunc("/wallet/rename", wrapCtx(ctx, postWalletRenameHandler)).Methods("POST")
-	router.HandleFunc("/wallet/info", wrapCtx(ctx, postWalletInfoHandler)).Methods("POST")
-	router.HandleFunc("/master-key/export", wrapCtx(ctx, postMasterKeyExportHandler)).Methods("POST")
+	// handle registers a route with auth and request callback middleware
+	handle := func(pattern string, h func(reqContext, http.ResponseWriter, *http.Request)) {
+		mux.Handle(pattern, auth(cb(http.HandlerFunc(wrapCtx(ctx, h)))))
+	}
 
-	router.HandleFunc("/key/list", wrapCtx(ctx, postKeyListHandler)).Methods("POST")
-	router.HandleFunc("/key/import", wrapCtx(ctx, postKeyImportHandler)).Methods("POST")
-	router.HandleFunc("/key/export", wrapCtx(ctx, postKeyExportHandler)).Methods("POST")
-	router.HandleFunc("/key", wrapCtx(ctx, postKeyHandler)).Methods("POST")
-	router.HandleFunc("/key", wrapCtx(ctx, deleteKeyHandler)).Methods("DELETE")
+	handle("GET "+prefix+"/wallets", getWalletsHandler)
+	handle("POST "+prefix+"/wallet", postWalletHandler)
+	handle("POST "+prefix+"/wallet/init", postWalletInitHandler)
+	handle("POST "+prefix+"/wallet/release", postWalletReleaseHandler)
+	handle("POST "+prefix+"/wallet/renew", postWalletRenewHandler)
+	handle("POST "+prefix+"/wallet/rename", postWalletRenameHandler)
+	handle("POST "+prefix+"/wallet/info", postWalletInfoHandler)
+	handle("POST "+prefix+"/master-key/export", postMasterKeyExportHandler)
 
-	router.HandleFunc("/multisig/list", wrapCtx(ctx, postMultisigListHandler)).Methods("POST")
-	router.HandleFunc("/multisig/sign", wrapCtx(ctx, postMultisigTransactionSignHandler)).Methods("POST")
-	router.HandleFunc("/multisig/signprogram", wrapCtx(ctx, postMultisigProgramSignHandler)).Methods("POST")
-	router.HandleFunc("/multisig/import", wrapCtx(ctx, postMultisigImportHandler)).Methods("POST")
-	router.HandleFunc("/multisig/export", wrapCtx(ctx, postMultisigExportHandler)).Methods("POST")
-	router.HandleFunc("/multisig", wrapCtx(ctx, deleteMultisigHandler)).Methods("DELETE")
+	handle("POST "+prefix+"/key/list", postKeyListHandler)
+	handle("POST "+prefix+"/key/import", postKeyImportHandler)
+	handle("POST "+prefix+"/key/export", postKeyExportHandler)
+	handle("POST "+prefix+"/key", postKeyHandler)
+	handle("DELETE "+prefix+"/key", deleteKeyHandler)
 
-	router.HandleFunc("/transaction/sign", wrapCtx(ctx, postTransactionSignHandler)).Methods("POST")
-	router.HandleFunc("/program/sign", wrapCtx(ctx, postProgramSignHandler)).Methods("POST")
+	handle("POST "+prefix+"/multisig/list", postMultisigListHandler)
+	handle("POST "+prefix+"/multisig/sign", postMultisigTransactionSignHandler)
+	handle("POST "+prefix+"/multisig/signprogram", postMultisigProgramSignHandler)
+	handle("POST "+prefix+"/multisig/import", postMultisigImportHandler)
+	handle("POST "+prefix+"/multisig/export", postMultisigExportHandler)
+	handle("DELETE "+prefix+"/multisig", deleteMultisigHandler)
+
+	handle("POST "+prefix+"/transaction/sign", postTransactionSignHandler)
+	handle("POST "+prefix+"/program/sign", postProgramSignHandler)
 }

@@ -19,7 +19,9 @@ package logic
 import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/mldsa"
 	"crypto/sha256"
+	stdsha3 "crypto/sha3"
 	"crypto/sha512"
 	"errors"
 	"fmt"
@@ -129,7 +131,7 @@ func opSHA256(cx *EvalContext) error {
 // The NIST SHA3-256 is implemented for compatibility with ICON
 func opSHA3_256(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
-	hash := sha3.Sum256(cx.Stack[last].Bytes)
+	hash := stdsha3.Sum256(cx.Stack[last].Bytes)
 	cx.Stack[last].Bytes = hash[:]
 	return nil
 }
@@ -174,22 +176,106 @@ func opSHA512(cx *EvalContext) error {
 	return nil
 }
 
-func opFalconVerify(cx *EvalContext) error {
+// falconVerify implements falcon_verify for a single Falcon configuration. The
+// original opcode had no immediate and could only mean Falcon-1024, so it
+// supplies that config itself, while the immediate form reads it from the
+// program.
+func falconVerify(cx *EvalContext, config FalconConfig) error {
 	last := len(cx.Stack) - 1 // index of PK
 	prev := last - 1          // index of signature
 	pprev := prev - 1         // index of data
 
-	var fv crypto.FalconVerifier
-	if len(cx.Stack[last].Bytes) != len(fv.PublicKey) {
-		return fmt.Errorf("invalid public key size %d != %d", len(cx.Stack[last].Bytes), len(fv.PublicKey))
+	fs, ok := falconConfigSpecByField(config)
+	if !ok { // no version check yet, both configs appeared at once
+		return fmt.Errorf("invalid falcon config %s", config)
 	}
-	copy(fv.PublicKey[:], cx.Stack[last].Bytes)
 
-	sig := crypto.FalconSignature(cx.Stack[prev].Bytes)
+	pk := cx.Stack[last].Bytes
+	if len(pk) != fs.pubKeyLen {
+		return fmt.Errorf("invalid public key size %d != %d", len(pk), fs.pubKeyLen)
+	}
 
-	err := fv.VerifyBytes(cx.Stack[pprev].Bytes, sig)
+	var err error
+	switch config {
+	case FalconDet1024:
+		var fv crypto.Falcon1024Verifier
+		copy(fv.PublicKey[:], pk)
+		err = fv.VerifyBytes(cx.Stack[pprev].Bytes, crypto.Falcon1024Signature(cx.Stack[prev].Bytes))
+	case FalconDet512:
+		var fv crypto.Falcon512Verifier
+		copy(fv.PublicKey[:], pk)
+		err = fv.VerifyBytes(cx.Stack[pprev].Bytes, crypto.Falcon512Signature(cx.Stack[prev].Bytes))
+	default:
+		return fmt.Errorf("invalid falcon config %s", config)
+	}
+
 	cx.Stack[pprev] = boolToSV(err == nil)
 	cx.Stack = cx.Stack[:prev]
+	return nil
+}
+
+func opFalcon1024Verify(cx *EvalContext) error {
+	return falconVerify(cx, FalconDet1024)
+}
+
+func opFalconVerify(cx *EvalContext) error {
+	return falconVerify(cx, FalconConfig(cx.program[cx.pc+1]))
+}
+
+func init() {
+	// mldsa_verify needs the toolchain's crypto/mldsa. Built against the FIPS
+	// 140-3 Go Cryptographic Module v1.0.0 (GOFIPS140=v1.0.0), it is a stub
+	// that rejects every key and signature, so the node would disagree with
+	// the network. Refuse to start instead: eval recovers panics, so this
+	// cannot wait until mldsa_verify runs. A real implementation accepts any
+	// correctly sized public key.
+	for _, fs := range mldsaConfigSpecs {
+		if _, err := mldsa.NewPublicKey(fs.params, make([]byte, fs.params.PublicKeySize())); err != nil {
+			panic(fmt.Sprintf("mldsa_verify: %v", err))
+		}
+	}
+}
+
+// opMLDSAVerify verifies a pure ML-DSA (FIPS 204) signature. Inputs of the wrong
+// length fail the program, as in ed25519verify_bare, rather than returning 0
+// as FIPS 204 3.6.2 describes. Either way they cannot verify.
+func opMLDSAVerify(cx *EvalContext) error {
+	last := len(cx.Stack) - 1 // index of context
+	prev := last - 1          // index of PK
+	pprev := prev - 1         // index of signature
+	ppprev := pprev - 1       // index of data
+
+	config := MLDSAConfig(cx.program[cx.pc+1])
+	fs, ok := mldsaConfigSpecByField(config)
+	if !ok { // no version check yet, both configs appeared at once
+		return fmt.Errorf("invalid mldsa config %s", config)
+	}
+
+	pk := cx.Stack[prev].Bytes
+	if len(pk) != fs.params.PublicKeySize() {
+		return fmt.Errorf("invalid public key size %d != %d", len(pk), fs.params.PublicKeySize())
+	}
+	sig := cx.Stack[pprev].Bytes
+	if len(sig) != fs.params.SignatureSize() {
+		return fmt.Errorf("invalid signature size %d != %d", len(sig), fs.params.SignatureSize())
+	}
+	context := cx.Stack[last].Bytes
+	if len(context) > mldsaMaxContextSize {
+		return fmt.Errorf("context too long %d > %d", len(context), mldsaMaxContextSize)
+	}
+
+	key, err := mldsa.NewPublicKey(fs.params, pk)
+	if err != nil {
+		// Every correctly sized encoding is a valid public key, so this
+		// means the ML-DSA implementation itself is unavailable.
+		return err
+	}
+	// Once the lengths and context are checked, Verify fails only if the
+	// signature is invalid.
+	valid := mldsa.Verify(key, cx.Stack[ppprev].Bytes, sig, &mldsa.Options{Context: string(context)}) == nil
+
+	cx.Stack[ppprev] = boolToSV(valid)
+	cx.Stack = cx.Stack[:pprev]
 	return nil
 }
 

@@ -151,7 +151,7 @@ func jsonPrintable(str string) bool {
 	}
 
 	for _, r := range str {
-		if r >= utf8.RuneSelf {
+		if r < 0 || r >= rune(len(htmlSafeSet)) {
 			return false
 		}
 		if !htmlSafeSet[r] {

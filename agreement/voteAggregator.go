@@ -290,7 +290,7 @@ func bundleFresh(freshData freshnessData, b unauthenticatedBundle) error {
 	}
 
 	if freshData.PlayerPeriod != 0 && freshData.PlayerPeriod-1 > b.Period {
-		return fmt.Errorf("filtered stale bundle: period %d >= %d", freshData.PlayerPeriod, b.Period)
+		return fmt.Errorf("filtered stale bundle: period %d - 1 > %d", freshData.PlayerPeriod, b.Period)
 	}
 
 	return nil

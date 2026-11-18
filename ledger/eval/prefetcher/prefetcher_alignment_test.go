@@ -71,6 +71,9 @@ func genesisBlock() (bookkeeping.Block, error) {
 	if err != nil {
 		return bookkeeping.Block{}, err
 	}
+	// The ledgers below hold apps and assets with IDs up to 1115. Creatable IDs
+	// come from the txn counter, so it must be past all of them.
+	block.TxnCounter = 2000
 
 	return block, nil
 }
@@ -463,10 +466,9 @@ func TestEvaluatorPrefetcherAlignmentCreateAsset(t *testing.T) {
 	requested, prefetched := run(t, l, txn)
 
 	prefetched.pretend(rewardsPool())
-	// Only one (non-existing) asset is requested. Ignore it.
-	require.Len(t, requested.Assets, 1)
-	require.Len(t, requested.Assets[makeAddress(1)], 1)
-	requested.Assets = nil
+	// The new asset's ID is above the previous block's txn counter, so the
+	// evaluator knows it has no holding without asking the ledger.
+	require.Empty(t, requested.Assets)
 	require.Equal(t, requested, prefetched)
 }
 
@@ -965,10 +967,9 @@ func TestEvaluatorPrefetcherAlignmentCreateApplication(t *testing.T) {
 	requested, prefetched := run(t, l, txn)
 
 	prefetched.pretend(rewardsPool())
-	// Only one (non-existing) asset is requested. Ignore it.
-	require.Len(t, requested.Apps, 1)
-	require.Len(t, requested.Apps[makeAddress(1)], 1)
-	requested.Apps = nil
+	// The new app's ID is above the previous block's txn counter, so the
+	// evaluator knows it has no params or local state without asking the ledger.
+	require.Empty(t, requested.Apps)
 	require.Equal(t, requested, prefetched)
 }
 

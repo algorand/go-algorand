@@ -1421,6 +1421,132 @@ func TestCowBaseCreatorsCache(t *testing.T) {
 	}
 }
 
+// resourceLedger answers resource and creator lookups from fixed maps, and
+// counts the resource lookups that reach it.
+type resourceLedger struct {
+	testCowBaseLedger
+	apps    map[ledgercore.AccountApp]ledgercore.AppResource
+	assets  map[ledgercore.AccountAsset]ledgercore.AssetResource
+	owners  map[creatable]basics.Address
+	lookups int
+}
+
+func (l *resourceLedger) LookupApplication(_ basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+	l.lookups++
+	return l.apps[ledgercore.AccountApp{Address: addr, App: aidx}], nil
+}
+
+func (l *resourceLedger) LookupAsset(_ basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+	l.lookups++
+	return l.assets[ledgercore.AccountAsset{Address: addr, Asset: aidx}], nil
+}
+
+func (l *resourceLedger) GetCreatorForRound(_ basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+	addr, ok := l.owners[creatable{cindex: cidx, ctype: ctype}]
+	return addr, ok, nil
+}
+
+// TestCowBaseCrossTypeLookups checks that roundCowBase notes a lookup of an ID
+// as the creatable type it is not, only while watching, and that doing so does
+// not change any answer or cache entry that evaluation sees.
+func TestCowBaseCrossTypeLookups(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	holder := ledgertesting.RandomAddress()
+	other := ledgertesting.RandomAddress()
+	creator := ledgertesting.RandomAddress()
+	const asa, created, app = basics.AssetIndex(7), basics.AssetIndex(9), basics.AppIndex(8)
+
+	l := &resourceLedger{
+		apps: map[ledgercore.AccountApp]ledgercore.AppResource{
+			{Address: holder, App: app}: {AppLocalState: &basics.AppLocalState{}},
+		},
+		assets: map[ledgercore.AccountAsset]ledgercore.AssetResource{
+			{Address: holder, Asset: asa}:     {AssetHolding: &basics.AssetHolding{Amount: 1}},
+			{Address: holder, Asset: created}: {AssetParams: &basics.AssetParams{Total: 1}},
+		},
+		owners: map[creatable]basics.Address{
+			{cindex: basics.CreatableIndex(asa), ctype: basics.AssetCreatable}:     creator,
+			{cindex: basics.CreatableIndex(created), ctype: basics.AssetCreatable}: holder,
+			{cindex: basics.CreatableIndex(app), ctype: basics.AppCreatable}:       creator,
+		},
+	}
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	base := makeRoundCowBase(l, 5, 100, 0, proto)
+
+	// watched runs lookup while watching and returns what was noted.
+	watched := func(lookup func() error) error {
+		base.watchCrossTypes()
+		require.NoError(t, lookup())
+		return base.stopWatchingCrossTypes()
+	}
+	asApp := func(addr basics.Address, id basics.CreatableIndex) func() error {
+		return func() error {
+			_, ok, err := base.lookupAppLocalState(addr, basics.AppIndex(id), false)
+			require.False(t, ok)
+			return err
+		}
+	}
+	asAsset := func(addr basics.Address, id basics.CreatableIndex) func() error {
+		return func() error {
+			_, ok, err := base.lookupAssetHolding(addr, basics.AssetIndex(id), false)
+			require.False(t, ok)
+			return err
+		}
+	}
+
+	// Not watching: nothing is noted, and nothing beyond the lookup itself
+	// reaches the ledger.
+	require.NoError(t, asApp(holder, basics.CreatableIndex(asa))())
+	require.NoError(t, base.stopWatchingCrossTypes())
+	require.Equal(t, 1, l.lookups)
+
+	// Watching, the same miss is noted although it is now answered from the
+	// base's cache, and repeating it costs no further ledger lookup.
+	for range 2 {
+		err := watched(asApp(holder, basics.CreatableIndex(asa)))
+		require.ErrorContains(t, err, "asset 7 as an app")
+		require.Equal(t, 2, l.lookups)
+	}
+	// The check's own lookup left nothing that evaluation would read.
+	_, cached := base.assets[ledgercore.AccountAsset{Address: holder, Asset: asa}]
+	require.False(t, cached)
+	_, _, err := base.lookupAssetHolding(holder, asa, true)
+	require.ErrorIs(t, err, ErrNotInCowCache)
+
+	// A cacheOnly lookup is never noted.
+	require.NoError(t, watched(func() error {
+		_, _, err := base.lookupAppParams(holder, basics.AppIndex(asa), true)
+		return err
+	}))
+
+	// Params count as well as holdings, and the reverse direction is noted.
+	require.ErrorContains(t, watched(func() error {
+		_, ok, err := base.lookupAppParams(holder, basics.AppIndex(created), false)
+		require.False(t, ok)
+		return err
+	}), "asset 9 as an app")
+	require.ErrorContains(t, watched(asAsset(holder, basics.CreatableIndex(app))), "app 8 as an asset")
+
+	// Ordinary misses: the ID is of the type asked for, which its creator
+	// shows without a further resource lookup.
+	before := l.lookups
+	require.NoError(t, watched(asApp(other, basics.CreatableIndex(app))))
+	require.NoError(t, watched(asAsset(other, basics.CreatableIndex(asa))))
+	require.Equal(t, before+2, l.lookups)
+
+	// An ID that is not of the type asked for, but that the account does not
+	// hold as the other type either.
+	require.NoError(t, watched(asApp(other, basics.CreatableIndex(asa))))
+
+	// IDs above the previous block's counter cannot be held at all.
+	before = l.lookups
+	require.NoError(t, watched(asApp(holder, 101)))
+	require.NoError(t, watched(asAsset(holder, 102)))
+	require.Equal(t, before, l.lookups)
+}
+
 // TestEvalFunctionForExpiredAccounts tests that the eval function will correctly mark accounts as offline
 func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -1963,5 +2089,97 @@ func TestComputeLoad(t *testing.T) {
 	for _, tt := range tests {
 		result := ComputeLoad(tt.blockSize, tt.maxSize)
 		require.Equal(t, tt.expected, result)
+	}
+}
+
+// TestGroupChecksAgreeWithVerify pins that eval and verify reject the same
+// malformed groups. They are separate implementations and report different
+// errors -- eval catches a repeated transaction ID through checkDup -- so each
+// side has its own expected message. The cache is mocked as always-verified,
+// leaving only eval's own checks.
+func TestGroupChecksAgreeWithVerify(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genesisInitState, addrs, _ := ledgertesting.Genesis(10)
+	l := newTestLedger(t, bookkeeping.GenesisBalances{
+		Balances:    genesisInitState.Accounts,
+		FeeSink:     testSinkAddr,
+		RewardsPool: testPoolAddr,
+		Timestamp:   0,
+	})
+
+	// left out of the ledger so every case is evaluated against the same round
+	blkEval := l.nextBlock(t)
+	unfinished, err := blkEval.GenerateBlock(nil)
+	require.NoError(t, err)
+	vb := ledgercore.MakeValidatedBlock(
+		unfinished.UnfinishedBlock().WithProposer(committee.Seed{}, testPoolAddr, true),
+		unfinished.UnfinishedDeltas())
+	empty := vb.Block()
+
+	mkTxn := func(sender basics.Address) transactions.Transaction {
+		return transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      sender,
+				Fee:         basics.MicroAlgos{Raw: 1000},
+				FirstValid:  empty.Round() - 1,
+				LastValid:   empty.Round() + 100,
+				GenesisHash: l.GenesisHash(),
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: addrs[1],
+				Amount:   basics.MicroAlgos{Raw: 100},
+			},
+		}
+	}
+	regroup := func(txns []transactions.Transaction) {
+		var group transactions.TxGroup
+		for i := range txns {
+			txns[i].Group = crypto.Digest{}
+			group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(txns[i].ID()))
+		}
+		groupID := crypto.HashObj(group)
+		for i := range txns {
+			txns[i].Group = groupID
+		}
+	}
+
+	a, b, c := mkTxn(addrs[0]), mkTxn(addrs[2]), mkTxn(addrs[3])
+	abc := []transactions.Transaction{a, b, c}
+	regroup(abc)
+	// [A, A] needs a group ID committing to both, so only the duplicate
+	// check can reject it
+	dup := []transactions.Transaction{a, a}
+	regroup(dup)
+
+	for _, test := range []struct {
+		name      string
+		group     []transactions.Transaction
+		verifyErr string
+		evalErr   string
+	}{
+		{"duplicate", dup, "duplicate transaction", "transaction already in ledger"},
+		{"permutation", []transactions.Transaction{abc[1], abc[0], abc[2]}, "incomplete group", "incomplete group"},
+		{"prefix", []transactions.Transaction{abc[0], abc[1]}, "incomplete group", "incomplete group"},
+		{"superset", []transactions.Transaction{abc[0], abc[1], abc[2], abc[2]}, "duplicate transaction", "transaction already in ledger"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			stxns := make([]transactions.SignedTxn, len(test.group))
+			blk := empty
+			blk.Payset = nil
+			for i, txn := range test.group {
+				stxns[i] = transactions.SignedTxn{Txn: txn}
+				stib, err := blk.EncodeSignedTxn(stxns[i], transactions.ApplyData{})
+				require.NoError(t, err)
+				blk.Payset = append(blk.Payset, stib)
+			}
+
+			require.ErrorContains(t, transactions.CheckTxnGroup(stxns, config.Consensus[protocol.ConsensusCurrentVersion].AllowGroupedHeartbeats), test.verifyErr)
+
+			_, err := Eval(context.Background(), l, blk, true, verify.GetMockedCache(true), nil, nil)
+			require.ErrorContains(t, err, test.evalErr)
+		})
 	}
 }

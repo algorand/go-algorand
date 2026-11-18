@@ -59,5 +59,5 @@ All changes are subject to a minimum of two reviews from subject matter experts 
 
 [gh-pr-process]: https://help.github.com/en/articles/creating-a-pull-request-from-a-fork
 [go-algorand-issues]: https://github.com/algorand/go-algorand/issues/new/choose
-[security-disclosure]: https://github.com/algorand/go-algorand/security/policy
+[security-disclosure]: https://github.com/algorand/go-algorand?tab=security-ov-file#security-ov-file
 [algorand-docs]: https://github.com/algorand/docs/blob/staging/CONTRIBUTING.md

@@ -338,6 +338,10 @@ func deserializeNode(buf []byte) (n *node, s int) {
 	if hashLength2 <= 0 {
 		return nil, hashLength2
 	}
+	// >= leaves room for the leaf marker byte that follows the hash.
+	if hashLength >= uint64(len(buf)-hashLength2) {
+		return nil, 0
+	}
 	n.hash = slices.Clone(buf[hashLength2 : hashLength2+int(hashLength)])
 	s = hashLength2 + int(hashLength)
 	isLeaf := (buf[s] == 0)

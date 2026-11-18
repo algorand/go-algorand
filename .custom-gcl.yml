@@ -1,4 +1,4 @@
-version: v2.5.0
+version: v2.15.0
 name: custom-golangci-lint
 plugins:
   # partitiontest plugin from local source

@@ -21,16 +21,17 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"sync"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	bhost "github.com/libp2p/go-libp2p/p2p/host/basic"
 	libp2phttp "github.com/libp2p/go-libp2p/p2p/http"
 	"github.com/multiformats/go-multiaddr"
@@ -42,19 +43,37 @@ import (
 // algorandP2pHTTPProtocol defines a libp2p protocol name for algorand's http over p2p messages
 const algorandP2pHTTPProtocol = "/algorand-http/1.0.0"
 
+// httpServerReadTimeout is the maximum duration for receiving an entire request on an incoming stream,
+// counted from the moment the stream is opened. It matches the header read timeout of the websocket
+// network's HTTP server (see httpServerReadHeaderTimeout in wsNetwork.go); requests served over P2P are small.
+const httpServerReadTimeout = 10 * time.Second
+
+// httpServerWriteTimeout is the maximum duration for writing a response, counted from the moment the stream
+// is opened. It matches the websocket network's HTTP server; handlers that need longer (ledger service)
+// extend it with http.ResponseController.SetWriteDeadline.
+const httpServerWriteTimeout = 60 * time.Second
+
+// maxResponseHeaderBytes limits the size of the status line and headers of an HTTP response read from a peer.
+// http.ReadResponse does not limit it (http.Transport does it with MaxResponseHeaderBytes), and responses
+// of algod's services only carry a handful of short headers.
+const maxResponseHeaderBytes = 64 * 1024
+
 // HTTPServer is a wrapper around libp2phttp.Host that allows registering http handlers with path parameters.
 type HTTPServer struct {
 	libp2phttp.Host
-	p2phttpMux              *mux.Router
+	p2phttpMux              *http.ServeMux
 	p2phttpMuxRegistrarOnce sync.Once
 }
 
 // MakeHTTPServer creates a new HTTPServer
 func MakeHTTPServer(streamHost host.Host) *HTTPServer {
 	httpServer := HTTPServer{
-		Host:       libp2phttp.Host{StreamHost: streamHost},
-		p2phttpMux: mux.NewRouter(),
+		Host:       libp2phttp.Host{StreamHost: deadlineHost{streamHost}},
+		p2phttpMux: http.NewServeMux(),
 	}
+	// Every request matches at least this catch-all, so ServeMux returns 404
+	// without first searching all methods to decide between 404 and 405.
+	httpServer.p2phttpMux.Handle("/", http.NotFoundHandler())
 	// libp2phttp server requires either explicit ListenAddrs or streamHost.Addrs() to be non-empty.
 	// If streamHost.Addrs() is empty (that happens when NetAddress is set to ":0" and private address filtering is automatically enabled),
 	// we will listen on localhost to satisfy libp2phttp.Host.Serve() requirements.
@@ -68,6 +87,43 @@ func MakeHTTPServer(streamHost host.Host) *HTTPServer {
 		httpServer.InsecureAllowHTTP = true
 	}
 	return &httpServer
+}
+
+// deadlineHost puts read and write deadlines on the streams handed to the libp2phttp server:
+// libp2phttp.Host.Serve runs an http.Server without any timeouts and does not allow configuring them.
+type deadlineHost struct {
+	host.Host
+}
+
+// SetStreamHandler implements host.Host. It wraps the handler libp2phttp's listener installs
+// for ProtocolIDForMultistreamSelect so that every inbound stream has deadlines before http.Server sees it.
+func (h deadlineHost) SetStreamHandler(pid protocol.ID, handler network.StreamHandler) {
+	h.Host.SetStreamHandler(pid, func(s network.Stream) {
+		now := time.Now()
+		ds := &deadlineStream{Stream: s, readBy: now.Add(httpServerReadTimeout)}
+		if s.SetReadDeadline(ds.readBy) != nil || s.SetWriteDeadline(now.Add(httpServerWriteTimeout)) != nil {
+			_ = s.Reset()
+			return
+		}
+		handler(ds)
+	})
+}
+
+// deadlineStream is a stream serving a single request (libp2phttp sets "Connection: close" so the stream
+// is closed after the response) that has to arrive completely by readBy.
+type deadlineStream struct {
+	network.Stream
+	readBy time.Time
+}
+
+// SetReadDeadline implements network.Stream. It never moves the deadline past readBy:
+// an http.Server without timeouts clears the read deadline (SetReadDeadline(time.Time{}))
+// once the request headers are parsed and around its background reads.
+func (s *deadlineStream) SetReadDeadline(t time.Time) error {
+	if t.IsZero() || t.After(s.readBy) {
+		t = s.readBy
+	}
+	return s.Stream.SetReadDeadline(t)
 }
 
 // RegisterHTTPHandler registers a http handler with a given path.
@@ -223,11 +279,19 @@ func (rt *p2pHTTPRoundTripper) RoundTrip(r *http.Request) (*http.Response, error
 		}
 	}
 
-	resp, err := http.ReadResponse(bufio.NewReader(s), r)
+	// limit the stream while the status line and headers are read, the same way http.Transport does;
+	// the body size is limited by the callers.
+	lr := &io.LimitedReader{R: s, N: maxResponseHeaderBytes}
+	resp, err := http.ReadResponse(bufio.NewReader(lr), r)
 	if err != nil {
 		s.Close()
+		if lr.N <= 0 {
+			err = fmt.Errorf("response headers from %s exceeded %d bytes: %w", rt.server, maxResponseHeaderBytes, err)
+		}
 		return nil, err
 	}
+	// the limit is for the headers only; the body also reads through lr, and callers bound its size
+	lr.N = math.MaxInt64
 	resp.Body = &streamReadCloser{resp.Body, s}
 	return resp, nil
 }

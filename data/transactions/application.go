@@ -110,7 +110,7 @@ type ApplicationCallTxnFields struct {
 
 	// ApplicationArgs are arguments accessible to the executing
 	// ApprovalProgram or ClearStateProgram.
-	ApplicationArgs [][]byte `codec:"apaa,allocbound=encodedMaxApplicationArgs,maxtotalbytes=bounds.MaxAppTotalArgLen"`
+	ApplicationArgs [][]byte `codec:"apaa,allocbound=encodedMaxApplicationArgs,maxtotalbytes=(encodedMaxApplicationArgs*msgp.BytesPrefixSize) + bounds.MaxAppTotalArgLen"`
 
 	// Accounts are accounts whose balance records are accessible
 	// by the executing ApprovalProgram or ClearStateProgram. To
@@ -346,9 +346,10 @@ type BoxRef struct {
 // Empty does the obvious. But the meaning is not obvious. An empty BoxRef just
 // adds to the read/write quota of the transaction. In tx.Access, _any_ empty
 // ResourceRef bumps the read/write quota. (We cannot distinguish the type when
-// all are empty.)
+// all are empty.) Name is tested by length, so that an empty Name is treated
+// like an absent one.
 func (br BoxRef) Empty() bool {
-	return br.Index == 0 && br.Name == nil
+	return br.Index == 0 && len(br.Name) == 0
 }
 
 // Resolve looks up the referenced app and returns it with the name. 0 is
@@ -634,7 +635,9 @@ func (ac *ApplicationCallTxnFields) AddressByIndex(accountIdx uint64, sender bas
 		return sender, nil
 	}
 
-	if ac.Access != nil {
+	// Test the length, not nil, so that an empty Access list is treated like
+	// an absent one.
+	if len(ac.Access) > 0 {
 		// An index > 0 corresponds to an offset into txn.Access. Check to
 		// make sure the index is valid.
 		if accountIdx > uint64(len(ac.Access)) {

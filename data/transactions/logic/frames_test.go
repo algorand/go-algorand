@@ -49,9 +49,9 @@ func TestDupPopN(t *testing.T) {
 
 	testAccepts(t, "int 1; int 1; int 1; popn 2", fpVersion)
 	testAccepts(t, "int 1; int 0; popn 1", fpVersion)
-	testPanics(t, "int 1; int 0; popn 2", fpVersion)
+	testPanics(t, "int 1; int 0; popn 2", fpVersion, "stack len is 0 instead of 1")
 	testProg(t, "int 1; int 0; popn 3", LogicVersion, exp(1, "popn 3 expects 3..."))
-	testPanics(t, notrack("int 1; int 0; popn 3"), fpVersion)
+	testPanics(t, notrack("int 1; int 0; popn 3"), fpVersion, "popn 3 while stack contains 2")
 
 	testAccepts(t, `int 7; dupn 250; dupn 250; dupn 250; dupn 249;
 	               popn 250;  popn 250;  popn 250;  popn 249; int 7; ==`,
@@ -201,7 +201,7 @@ func TestVoidSub(t *testing.T) {
         retsub
   main: callsub a
         int 1	// fails because two items on stack
-`, 4) // test back to retsub introduction
+`, 4, "stack len is 2 instead of 1") // test back to retsub introduction
 }
 
 func TestForgetReturn(t *testing.T) {
@@ -428,7 +428,7 @@ main:
      retsub
 `
 	testProg(t, source, fpVersion, exp(8, "frame_dig above stack"))
-	testPanics(t, notrack(source), fpVersion)
+	testPanics(t, notrack(source), fpVersion, "frame_dig above stack")
 }
 
 func TestFrameAccessBelowStack(t *testing.T) {

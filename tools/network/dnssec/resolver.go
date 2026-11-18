@@ -62,16 +62,22 @@ type ResolverIf interface {
 
 // Resolver provides DNSSEC resolution
 type Resolver struct {
-	client     Querier
+	client     *filteredClient
 	trustChain *trustChain
 	maxHops    int
+	servers    []ResolverAddress
+}
+
+func makeResolver(client TrustQuerier) *Resolver {
+	filtered := makeFilteredClient(client)
+	return &Resolver{client: filtered, trustChain: makeTrustChain(filtered), maxHops: DefaultMaxHops}
 }
 
 // MakeDnssecResolver return resolver from given NS servers and timeout duration
 func MakeDnssecResolver(servers []ResolverAddress, timeout time.Duration) ResolverIf {
-	dc := MakeDNSClient(servers, timeout)
-	tc := &QueryWrapper{dc}
-	return &Resolver{client: dc, trustChain: makeTrustChain(tc), maxHops: DefaultMaxHops}
+	r := makeResolver(&QueryWrapper{makeClient(servers, timeout)})
+	r.servers = servers
+	return r
 }
 
 // MakeDefaultDnssecResolver returns a resolver with all possible DNS servers:
@@ -98,7 +104,7 @@ func MakeDefaultDnssecResolver(fallbackAddress string, log logging.Logger) Resol
 
 // EffectiveResolverDNS return list of active DNS servers
 func (r *Resolver) EffectiveResolverDNS() (servers []ResolverAddress) {
-	return r.client.(*dnsClient).servers
+	return r.servers
 }
 
 // TLSARec represents TLSA record content
@@ -109,61 +115,12 @@ type TLSARec struct {
 	Certificate  string `dns:"hex"`
 }
 
-// lookup makes DNS request for a zone and verifies response signature
+// lookup makes DNS request for a zone and verifies response signature.
+// For A and AAAA requests the verified RRset may be a CNAME at name instead.
 func (r *Resolver) lookup(ctx context.Context, name string, qt uint16) (rrSet []dns.RR, err error) {
 	rrSet, rrSig, err := r.client.QueryRRSet(ctx, name, qt)
 	if err != nil {
 		return
-	}
-	err = r.trustChain.Authenticate(ctx, rrSet, rrSig)
-	return
-}
-
-// lookupCnameAware requests a zone and verifies response signature similarly to lookup,
-// but also it is aware about possible A/CNAME entries for A-requests and supposed to be used for CNAME alias resolution.
-// if CNAME signature presents for requested domain name, then consider the response as CNAME
-// and extract CNAME record(s) and its RRSIG
-func (r *Resolver) lookupCnameAware(ctx context.Context, name string, qt uint16) (rrSet []dns.RR, err error) {
-	rrSet, rrSig, err := r.client.QueryRRSet(ctx, name, qt)
-	if err != nil {
-		return
-	}
-
-	// As https://tools.ietf.org/html/rfc1034 section 3.6.2 says
-	// NS can return CNAME for A request if there are no A but CNAME
-	// in real world such A-response can also have second-level CNAME alias and A records with signatures
-	//
-	// so that we leave only CNAME RR matching to requested name to verify signature and return the filtered set
-	if qt == dns.TypeA || qt == dns.TypeAAAA {
-		newRRSig := make([]dns.RRSIG, 0, len(rrSig))
-		for _, sig := range rrSig {
-			if sig.Hdr.Name == name {
-				if sig.TypeCovered == dns.TypeCNAME || sig.TypeCovered == dns.TypeA || sig.TypeCovered == dns.TypeAAAA {
-					if len(newRRSig) == 0 {
-						newRRSig = append(newRRSig, sig)
-					} else if sig.TypeCovered == newRRSig[len(newRRSig)-1].TypeCovered {
-						newRRSig = append(newRRSig, sig)
-					}
-				}
-			}
-		}
-		if len(newRRSig) > 0 {
-			newRRSet := make([]dns.RR, 0, len(rrSet))
-			for _, rr := range rrSet {
-				if rr.Header().Name == name && rr.Header().Rrtype == newRRSig[0].TypeCovered {
-					newRRSet = append(newRRSet, rr)
-				}
-			}
-			if len(newRRSet) == 0 {
-				return nil, fmt.Errorf("no RR in A response mathing signature with type %d", newRRSig[0].TypeCovered)
-			}
-			if newRRSig[0].TypeCovered == dns.TypeCNAME && len(newRRSet) > 1 {
-				// RFC 1034 section 3.6.2 requires a single CNAME RR per name
-				return nil, fmt.Errorf("multiple CNAME RR detected")
-			}
-			rrSet = newRRSet
-			rrSig = newRRSig
-		}
 	}
 	err = r.trustChain.Authenticate(ctx, rrSet, rrSig)
 	return
@@ -180,11 +137,12 @@ func (r *Resolver) lookupIPAddr(ctx context.Context, hostname string) (cname str
 			return
 		}
 
-		if rrSet, err = r.lookupCnameAware(ctx, nextName, dns.TypeA); err != nil {
+		if rrSet, err = r.lookup(ctx, nextName, dns.TypeA); err != nil {
 			var err2 error
-			if rrSet, err2 = r.lookupCnameAware(ctx, nextName, dns.TypeAAAA); err2 != nil {
+			if rrSet, err2 = r.lookup(ctx, nextName, dns.TypeAAAA); err2 != nil {
 				return // return original error
 			}
+			err = nil // the AAAA fallback succeeded
 		}
 		seen[nextName] = true
 		addrs = make([]net.IPAddr, 0, len(rrSet))

@@ -117,12 +117,12 @@ linters:
         - error-is-as
       disable-all: true
     forbidigo:
-      analyze_types: true
+      analyze-types: true
       forbid:
-        - p: ^(require|assert)\.Error$
+        - pattern: ^(require|assert)\.Error$
           pkg: ^github\.com/stretchr/testify/(require|assert)$
           msg: use ErrorContains, ErrorIs, or ErrorAs instead
-        - p: ^(require|assert)\.Assertions\.Error$
+        - pattern: ^(require|assert)\.Assertions\.Error$
           pkg: ^github\.com/stretchr/testify/(require|assert)$
           msg: use ErrorContains, ErrorIs, or ErrorAs instead
 
@@ -160,6 +160,7 @@ linters:
         text: '^redefines-builtin-id: redefinition of the built-in (func|type)'
       - linters: forbidigo
         path-except: ^(crypto|network)/
+        text: 'use ErrorContains, ErrorIs, or ErrorAs instead' # the testify Error ban is scoped to crypto/ and network/
 
 issues:
   # Work our way back over time to be clean against all these

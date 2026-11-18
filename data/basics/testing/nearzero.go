@@ -30,7 +30,7 @@ import (
 func NearZeros[T any](t *testing.T, sample T) []T {
 	typ := reflect.TypeOf(sample)
 	// If sample is a pointer, work with the underlying type.
-	if typ.Kind() == reflect.Ptr {
+	if typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
 	if typ.Kind() != reflect.Struct {
@@ -59,7 +59,7 @@ func collectPaths(typ reflect.Type, prefix []int, pathStack []reflect.Type) [][]
 	var paths [][]int
 
 	switch typ.Kind() {
-	case reflect.Ptr, reflect.Slice, reflect.Array:
+	case reflect.Pointer, reflect.Slice, reflect.Array:
 		// Look through container to the element
 		return collectPaths(typ.Elem(), prefix, pathStack)
 
@@ -124,7 +124,7 @@ func setFieldToNonZero(v reflect.Value, path []int) {
 	for i := 0; i < len(path)-1; i++ {
 		v = v.Field(path[i])
 		switch v.Kind() {
-		case reflect.Ptr:
+		case reflect.Pointer:
 			if v.IsNil() {
 				v.Set(reflect.New(v.Type().Elem()))
 			}
@@ -160,7 +160,7 @@ func exampleValue(t reflect.Type) reflect.Value {
 		return reflect.ValueOf(true).Convert(t)
 	case reflect.Float32, reflect.Float64:
 		return reflect.ValueOf(1.23).Convert(t)
-	case reflect.Ptr:
+	case reflect.Pointer:
 		// For pointers, allocate a new element and set it to non-zero.
 		elem := reflect.New(t.Elem())
 		elem.Elem().Set(exampleValue(t.Elem()))

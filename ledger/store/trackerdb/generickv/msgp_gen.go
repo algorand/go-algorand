@@ -68,69 +68,38 @@ func (z *creatableEntry) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalStat
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = creatableEntry{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "Ctype":
 			bts, err = (*z).Ctype.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Ctype")
+				err = msgp.WrapError(err, "Ctype")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "CreatorAddr":
 			(*z).CreatorAddr, bts, err = msgp.ReadBytesBytes(bts, (*z).CreatorAddr)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "CreatorAddr")
+				err = msgp.WrapError(err, "CreatorAddr")
 				return
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = creatableEntry{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "Ctype":
-				bts, err = (*z).Ctype.UnmarshalMsgWithState(bts, st)
-				if err != nil {
-					err = msgp.WrapError(err, "Ctype")
-					return
-				}
-			case "CreatorAddr":
-				(*z).CreatorAddr, bts, err = msgp.ReadBytesBytes(bts, (*z).CreatorAddr)
-				if err != nil {
-					err = msgp.WrapError(err, "CreatorAddr")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}

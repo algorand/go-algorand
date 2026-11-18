@@ -480,6 +480,12 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 				// Fill in applyData, so that consumers don't have to implement a
 				// stateful TEAL interpreter to apply state changes
 				ad.EvalDelta = evalDelta
+			} else if evalParams.Proto.DiscardFailedInnerClearStateDelta {
+				// For an inner call, ad is the ApplyData the program wrote its
+				// EvalDelta into as it ran, so leaving it alone would keep
+				// changes that did not take effect. A top-level call gets a
+				// fresh ad, so this is a no-op there.
+				ad.EvalDelta = transactions.EvalDelta{}
 			}
 			// Ignore logic eval errors and rejections from the ClearStateProgram
 		}

@@ -826,6 +826,12 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 				return
 			default:
 			}
+			if errors.Is(err, errLedgerAlreadyHasBlock) {
+				// ledger already has the block, no need to request this block.
+				// only the agreement could have added this block into the ledger, catchup is complete
+				s.log.Infof("fetchRound(%d): the block is already in the ledger. The catchup is complete", cert.Round)
+				return
+			}
 			failureRank := peerRankDownloadFailed
 			var nbfe noBlockForRoundError
 			if errors.As(err, &nbfe) {

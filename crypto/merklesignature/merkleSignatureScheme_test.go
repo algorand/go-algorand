@@ -18,7 +18,9 @@ package merklesignature
 
 import (
 	"crypto/rand"
+	"fmt"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -115,6 +117,17 @@ func TestEmptyVerifier(t *testing.T) {
 	a.False(signer.GetVerifier().MsgIsZero())
 }
 
+func TestCommitmentFormatsAsHex(t *testing.T) {
+	t.Parallel()
+	partitiontest.PartitionTest(t)
+
+	var c Commitment
+	c[0], c[1] = 0x01, 0xab
+	want := "01ab" + strings.Repeat("00", MerkleSignatureSchemeRootSize-2)
+	require.Equal(t, want, fmt.Sprintf("%v", c))
+	require.Equal(t, want, fmt.Sprintf("%s", c))
+}
+
 func TestVerifierKeyLifetimeError(t *testing.T) {
 	t.Parallel()
 	partitiontest.PartitionTest(t)
@@ -198,7 +211,7 @@ func TestNonEmptyDisposableKeys(t *testing.T) {
 
 	signer := generateTestSigner(0, 100, 1, a)
 
-	s := crypto.FalconSigner{}
+	s := crypto.Falcon1024Signer{}
 	for i := uint64(1); i <= 100; i++ {
 		key := signer.GetKey(i)
 		a.NotNil(key)
@@ -207,7 +220,7 @@ func TestNonEmptyDisposableKeys(t *testing.T) {
 
 	signer = generateTestSigner(0, 100, 1, a)
 
-	s = crypto.FalconSigner{}
+	s = crypto.Falcon1024Signer{}
 	for i := uint64(1); i <= 100; i++ {
 		key := signer.GetKey(i)
 		a.NotNil(key)

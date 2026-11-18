@@ -891,7 +891,9 @@ func (v2 *Handlers) GetBlockLogs(ctx echo.Context, round basics.Round) error {
 // (GET /v2/blocks/{round}/hash)
 func (v2 *Handlers) GetBlockHash(ctx echo.Context, round basics.Round) error {
 	ledger := v2.Node.LedgerForAPI()
-	block, err := ledger.Block(round)
+	// The block hash is the hash of the header, so there is no need to load
+	// and decode the payset.
+	hdr, err := ledger.BlockHdr(round)
 	if err != nil {
 		switch err.(type) {
 		case ledgercore.ErrNoEntry:
@@ -901,7 +903,7 @@ func (v2 *Handlers) GetBlockHash(ctx echo.Context, round basics.Round) error {
 		}
 	}
 
-	response := model.BlockHashResponse{BlockHash: crypto.Digest(block.Hash()).String()}
+	response := model.BlockHashResponse{BlockHash: crypto.Digest(hdr.Hash()).String()}
 
 	return ctx.JSON(http.StatusOK, response)
 }
@@ -1169,24 +1171,25 @@ func (v2 *Handlers) WaitForBlock(ctx echo.Context, round basics.Round) error {
 }
 
 // decodeTxGroup attempts to decode a request body containing a transaction group.
+// It decodes with msgp, which enforces allocbounds, as for transactions received
+// from the network.
 func decodeTxGroup(body io.Reader, maxTxGroupSize int) ([]transactions.SignedTxn, error) {
+	data, err := io.ReadAll(body)
+	if err != nil {
+		return nil, err
+	}
 	var txgroup []transactions.SignedTxn
-	dec := protocol.NewDecoder(body)
-	for {
-		var st transactions.SignedTxn
-		err := dec.Decode(&st)
-		if err == io.EOF {
-			break
+	dec := protocol.NewMsgpDecoderBytes(data)
+	for dec.Remaining() > 0 {
+		if len(txgroup) == maxTxGroupSize {
+			return nil, fmt.Errorf("max group size is %d", maxTxGroupSize)
 		}
+		var st transactions.SignedTxn
+		err = dec.Decode(&st)
 		if err != nil {
 			return nil, err
 		}
 		txgroup = append(txgroup, st)
-
-		if len(txgroup) > maxTxGroupSize {
-			err := fmt.Errorf("max group size is %d", maxTxGroupSize)
-			return nil, err
-		}
 	}
 
 	if len(txgroup) == 0 {
@@ -1206,7 +1209,7 @@ func isEscrowLogicSig(stxn transactions.SignedTxn) bool {
 	return stxn.Lsig.Sig.Blank() &&
 		stxn.Lsig.Msig.Blank() &&
 		stxn.Lsig.LMsig.Blank() &&
-		stxn.Lsig.PQsig.Blank() &&
+		stxn.Lsig.SKsig.Blank() &&
 		stxn.Authorizer() == basics.Address(logic.HashProgram(stxn.Lsig.Logic))
 }
 
@@ -1226,18 +1229,18 @@ func rejectOnCurveLogicSigPrograms(txgroup []transactions.SignedTxn) error {
 	return nil
 }
 
-func enforcePQAuthorizerCompliance(txgroup []transactions.SignedTxn) error {
+func enforceOffCurveAuthorizers(txgroup []transactions.SignedTxn) error {
 	for txnIdx, stxn := range txgroup {
-		pqSig := stxn.PQsig
-		if pqSig.Blank() && stxn.Lsig.HasProgram() {
-			pqSig = stxn.Lsig.PQsig
+		sksig := stxn.SKsig
+		if sksig.Blank() && stxn.Lsig.HasProgram() {
+			sksig = stxn.Lsig.SKsig
 		}
-		if pqSig.Blank() || len(pqSig.PublicKey) == 0 {
+		if sksig.Blank() || len(sksig.PublicKey) == 0 {
 			continue
 		}
-		authorizer := pqSig.Address()
-		if !authorizer.IsPQCompliant() {
-			return fmt.Errorf("transaction %d: pq signature authorizer address %s is an Edwards25519 curve point (non PQ-compliant)", txnIdx, authorizer)
+		authorizer := sksig.Address()
+		if !authorizer.IsOffEd25519Curve() {
+			return fmt.Errorf("transaction %d: salted-key signature authorizer address %s is an Edwards25519 curve point", txnIdx, authorizer)
 		}
 	}
 	return nil
@@ -1262,7 +1265,7 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context, params model.RawTransaction
 	}
 
 	if !shouldSkipPqAddressCheck(params.SkipPqAddressCheck) {
-		if err = enforcePQAuthorizerCompliance(txgroup); err != nil {
+		if err = enforceOffCurveAuthorizers(txgroup); err != nil {
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
 		if err = rejectOnCurveLogicSigPrograms(txgroup); err != nil {
@@ -1295,7 +1298,7 @@ func (v2 *Handlers) RawTransactionAsync(ctx echo.Context, params model.RawTransa
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 	if !shouldSkipPqAddressCheck(params.SkipPqAddressCheck) {
-		if err = enforcePQAuthorizerCompliance(txgroup); err != nil {
+		if err = enforceOffCurveAuthorizers(txgroup); err != nil {
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
 		if err = rejectOnCurveLogicSigPrograms(txgroup); err != nil {
@@ -1538,6 +1541,80 @@ type PreEncodedSimulateRequest struct {
 	FixSigners            bool                                        `codec:"fix-signers,omitempty"`
 }
 
+// simulateRequestJSONGroup keeps each transaction as raw JSON, so that
+// decodeSimulateRequest can check group sizes before decoding any transaction.
+type simulateRequestJSONGroup struct {
+	Txns []codec.Raw `codec:"txns"`
+}
+
+type simulateRequestJSON struct {
+	PreEncodedSimulateRequest
+	TxnGroups []simulateRequestJSONGroup `codec:"txn-groups"`
+}
+
+// decodeSimulateRequest decodes a msgpack or JSON simulate request. For a JSON
+// request it checks the number of groups with simulation.CheckTxnGroupCount, and
+// limits each group to bounds.MaxTxGroupSize transactions, before decoding the
+// transactions.
+func decodeSimulateRequest(data []byte) (PreEncodedSimulateRequest, error) {
+	// A msgpack request starts with a map header, which is never an ASCII byte.
+	// A JSON request always starts with one.
+	if len(data) > 0 && data[0] >= 0x80 {
+		var mp specv2.SimulateRequest
+		if err := protocol.Decode(data, &mp); err != nil {
+			return PreEncodedSimulateRequest{}, err
+		}
+		if err := simulation.CheckTxnGroupCount(len(mp.TxnGroups)); err != nil {
+			return PreEncodedSimulateRequest{}, err
+		}
+		request := PreEncodedSimulateRequest{
+			TxnGroups:             make([]PreEncodedSimulateRequestTransactionGroup, len(mp.TxnGroups)),
+			Round:                 mp.Round,
+			AllowEmptySignatures:  mp.AllowEmptySignatures,
+			AllowMoreLogging:      mp.AllowMoreLogging,
+			AllowUnnamedResources: mp.AllowUnnamedResources,
+			ExtraOpcodeBudget:     int(mp.ExtraOpcodeBudget),
+			ExecTraceConfig: simulation.ExecTraceConfig{
+				Enable:  mp.ExecTraceConfig.Enable,
+				Stack:   mp.ExecTraceConfig.Stack,
+				Scratch: mp.ExecTraceConfig.Scratch,
+				State:   mp.ExecTraceConfig.State,
+			},
+			FixSigners: mp.FixSigners,
+		}
+		for i := range mp.TxnGroups {
+			request.TxnGroups[i].Txns = mp.TxnGroups[i].Txns
+		}
+		return request, nil
+	}
+
+	var js simulateRequestJSON
+	if err := decode(protocol.JSONStrictHandle, data, &js); err != nil {
+		return PreEncodedSimulateRequest{}, err
+	}
+	if err := simulation.CheckTxnGroupCount(len(js.TxnGroups)); err != nil {
+		return PreEncodedSimulateRequest{}, err
+	}
+	request := js.PreEncodedSimulateRequest
+	request.TxnGroups = make([]PreEncodedSimulateRequestTransactionGroup, len(js.TxnGroups))
+	for i, group := range js.TxnGroups {
+		if len(group.Txns) > bounds.MaxTxGroupSize {
+			return PreEncodedSimulateRequest{}, fmt.Errorf("transaction group size %d exceeds limit %d", len(group.Txns), bounds.MaxTxGroupSize)
+		}
+		request.TxnGroups[i].Txns = make([]transactions.SignedTxn, len(group.Txns))
+		for j, raw := range group.Txns {
+			if len(raw) == 0 {
+				// A null, which leaves the transaction empty.
+				continue
+			}
+			if err := decode(protocol.JSONStrictHandle, raw, &request.TxnGroups[i].Txns[j]); err != nil {
+				return PreEncodedSimulateRequest{}, err
+			}
+		}
+	}
+	return request, nil
+}
+
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
 // (POST /v2/transactions/simulate)
 func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateTransactionParams) error {
@@ -1559,13 +1636,9 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 	}
 	requestData := requestBuffer.Bytes()
 
-	var simulateRequest PreEncodedSimulateRequest
-	err = decode(protocol.CodecHandle, requestData, &simulateRequest)
+	simulateRequest, err := decodeSimulateRequest(requestData)
 	if err != nil {
-		err = decode(protocol.JSONStrictHandle, requestData, &simulateRequest)
-		if err != nil {
-			return badRequest(ctx, err, err.Error(), v2.Log)
-		}
+		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
 	for _, txgroup := range simulateRequest.TxnGroups {

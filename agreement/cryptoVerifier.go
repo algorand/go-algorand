@@ -35,6 +35,13 @@ const (
 	bundleParallelism   = 2
 )
 
+// minProposalRequests is the least capacity of proposals.in. A request is
+// issued only for a proposal whose credential improves on the lowest seen for
+// its round and period, and about 20 accounts propose per period, so this is
+// more than the proposals of the periods and rounds a node takes proposals
+// for can request at once.
+const minProposalRequests = 128
+
 type (
 	// A cryptoVerifier is used to parallelize the cryptographic verification of votes, proposals, and bundles.
 	//
@@ -73,7 +80,9 @@ type (
 		Verified(tag protocol.Tag) <-chan cryptoResult
 		VerifiedVotes() <-chan asyncVerifyVoteResponse
 
-		// ChannelFull determines if the input channel for a given tag is currently full.
+		// ChannelFull determines if requests for a given tag should be held
+		// back: its input channel is full or, for proposal payloads, a request
+		// is already waiting in it.
 		//
 		// The tag here corresponds to the tags in cryptoVerifier.Verified.
 		ChannelFull(tag protocol.Tag) bool
@@ -178,7 +187,10 @@ func makeCryptoVerifier(l LedgerReader, v BlockValidator, voteVerifier *AsyncVot
 	baseBuffer := 3
 	maxVotes := cap(c.votes.in) + cap(c.votes.out) + voteVerifier.Parallelism()
 	c.proposals = proposalChanPair{
-		in:  make(chan cryptoProposalRequest, 1),
+		// VerifyProposal is called from the agreement main loop and blocks
+		// while in is full, so in has room for one request per pending vote,
+		// and for at least minProposalRequests.
+		in:  make(chan cryptoProposalRequest, max(maxVotes+baseBuffer, minProposalRequests)),
 		out: make(chan cryptoResult, maxVotes+baseBuffer),
 	}
 
@@ -342,7 +354,10 @@ func (c *poolCryptoVerifier) ChannelFull(tag protocol.Tag) (ret bool) {
 	// 2. is there capacity to absorb all pending requests?
 	// (for deadlock safety, upper-bound the number of pending requests)
 	case protocol.ProposalPayloadTag:
-		return len(c.proposals.in) == cap(c.proposals.in) || len(c.proposals.out) > 1 // TODO we want proper backpressue from the proposalTable eventually
+		// One request waiting behind the one being validated is enough to
+		// hold back payloads from the network. The rest of proposals.in is
+		// for the requests that demux.next does not hold back.
+		return len(c.proposals.in) > 0 || len(c.proposals.out) > 1 // TODO we want proper backpressue from the proposalTable eventually
 	case protocol.AgreementVoteTag:
 		return len(c.votes.in) == cap(c.votes.in) || cap(c.votes.out)-len(c.votes.out) < c.voteVerifier.Parallelism()+len(c.votes.in)
 	case protocol.VoteBundleTag:
@@ -364,6 +379,13 @@ func (c *poolCryptoVerifier) Quit() {
 func (c *poolCryptoVerifier) proposalVerifyWorker() {
 	defer c.wg.Done()
 	for req := range c.proposals.in {
+		// Quit closes proposals.in, which may still hold requests. Do not
+		// validate them.
+		select {
+		case <-c.quit:
+			return
+		default:
+		}
 		select {
 		case c.proposals.out <- c.verifyProposalPayload(req):
 		case <-c.quit:

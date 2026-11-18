@@ -14,33 +14,17 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package protocol
+// Command fips140v1 only imports the logic package. TestMLDSAFIPS140v1 builds
+// it with GOFIPS140=v1.0.0 to check that the package's check for a working
+// crypto/mldsa stops such a binary at startup.
+package main
 
 import (
-	"testing"
+	"fmt"
 
-	"github.com/stretchr/testify/require"
-
-	"github.com/algorand/go-algorand/test/partitiontest"
+	_ "github.com/algorand/go-algorand/data/transactions/logic"
 )
 
-func TestPQSchemes(t *testing.T) {
-	t.Parallel()
-	partitiontest.PartitionTest(t)
-
-	schemes := []PQScheme{
-		PQSchemeFalcon1024,
-		PQSchemeFalcon512,
-	}
-
-	seen := make(map[PQScheme]struct{}, len(schemes))
-	for _, scheme := range schemes {
-		for _, b := range scheme {
-			require.Truef(t, b >= 0x20 && b < 0x7f, "PQScheme %q must be printable ASCII", scheme)
-		}
-
-		_, ok := seen[scheme]
-		require.False(t, ok, "PQScheme %q is repeated", scheme)
-		seen[scheme] = struct{}{}
-	}
+func main() {
+	fmt.Println("started")
 }

@@ -84,6 +84,12 @@ func (h *routerHandle) dispatch(state player, e event, dest stateMachineTag, r r
 // router routes events and queries to the correct receiving state machine.
 //
 // router also encapsulates the garbage collection of old state machines.
+//
+// A router tree is not safe for concurrent use: every dispatch, queries
+// included, calls update, which may create and garbage-collect children.
+// Only mainLoop drives the tree. demuxLoop reads a shallow copy of it
+// (persistRouter) in encode, safe only because mainLoop is blocked on
+// input until do() returns.
 type router interface {
 	dispatch(t *tracer, state player, e event, src stateMachineTag, dest stateMachineTag, r round, p period, s step) event
 }
@@ -151,22 +157,21 @@ func (router *rootRouter) update(state player, r round, gc bool) {
 	if router.Children == nil {
 		router.Children = make(map[round]*roundRouter)
 	}
-	if router.Children[r] == nil {
+	// Don't create a child the gc pass below would immediately delete;
+	// submitTop hits this with r=0 on every event.
+	if (!gc || r+credentialRoundLag >= state.Round) && router.Children[r] == nil {
 		router.Children[r] = new(roundRouter)
 	}
 
 	if gc {
-		children := make(map[round]*roundRouter)
-		for r, c := range router.Children {
+		for r := range router.Children {
 			// We may still receive credential messages from old rounds. Keep
 			// old round routers around, for as long as those credentials may
 			// arrive to keep track of them.
-			rr := r + credentialRoundLag
-			if rr >= state.Round {
-				children[r] = c
+			if r+credentialRoundLag < state.Round {
+				delete(router.Children, r)
 			}
 		}
-		router.Children = children
 	}
 }
 
@@ -211,24 +216,21 @@ func (router *roundRouter) update(state player, p period, gc bool) {
 	if router.Children == nil {
 		router.Children = make(map[period]*periodRouter)
 	}
-	if router.Children[p] == nil {
+	// As above, don't create a child the gc pass would immediately delete.
+	if (!gc || p+1 >= state.Period || p <= 1) && router.Children[p] == nil {
 		router.Children[p] = new(periodRouter)
 	}
 
 	if gc {
-		children := make(map[period]*periodRouter)
-		for p, c := range router.Children {
-			if p+1 >= state.Period {
-				children[p] = c
-			} else if p <= 1 {
-				// avoid garbage-collecting (next round, period 0/1) state
-				// this is conservative:
-				// we can collect more eagerly if router's round is passed in
-				// TODO may want regression test for correct pipelining behavior
-				children[p] = c
+		for p := range router.Children {
+			// Keep p+1 >= state.Period, and keep periods 0 and 1 to avoid
+			// garbage-collecting (next round, period 0/1) state. This is conservative:
+			// we can collect more eagerly if router's round is passed in.
+			// TODO may want regression test for correct pipelining behavior
+			if p+1 < state.Period && p > 1 {
+				delete(router.Children, p)
 			}
 		}
-		router.Children = children
 	}
 }
 

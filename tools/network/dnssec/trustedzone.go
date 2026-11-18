@@ -19,6 +19,7 @@ package dnssec
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -27,10 +28,22 @@ import (
 
 type trustedZone struct {
 	name  string
-	zsk   map[uint16]dns.DNSKEY // zone signing keys
-	ksk   map[uint16]dns.DNSKEY // key signing keys
-	rrSig map[uint16]dns.RRSIG  // DNSKEY RR signature(s), used for validity
-	dss   []dns.DS              // DS or root anchor authenticating this zone in DS format
+	zsk   dnskeysByTag         // authenticated keys eligible to sign zone records
+	ksk   dnskeysByTag         // keys authenticated by a DS record or trust anchor
+	rrSig map[uint16]dns.RRSIG // DNSKEY RR signature(s), used for validity
+	dss   []dns.DS             // DS or root anchor authenticating this zone in DS format
+}
+
+// DNSSEC key tags are checksums and are not unique, so every key with a given
+// tag must remain available as a verification candidate.
+type dnskeysByTag map[uint16][]dns.DNSKEY
+
+func (keys dnskeysByTag) add(key dns.DNSKEY) {
+	keyTag := key.KeyTag()
+	if slices.Contains(keys[keyTag], key) {
+		return
+	}
+	keys[keyTag] = append(keys[keyTag], key)
 }
 
 func (tz *trustedZone) isExpired(t time.Time) bool {
@@ -42,18 +55,18 @@ func (tz *trustedZone) isExpired(t time.Time) bool {
 	return false
 }
 
-// ensure at least one of the keytags in ZSK of this zone
+// checkKeys reports whether this zone has at least one of the requested keys.
 func (tz *trustedZone) checkKeys(keytags []uint16) bool {
 	for _, kt := range keytags {
-		if _, ok := tz.zsk[kt]; ok {
+		if len(tz.zsk[kt]) > 0 {
 			return true
 		}
 	}
 	return false
 }
 
-// verifyDS checks DS RRSIG using this zone ZSK
-// cacheOutdated indicates no ZSK in this zone to verify the provided RRSIG
+// verifyDS checks a DS RRSIG using an authenticated key from this zone.
+// cacheOutdated indicates that this zone has no key that can verify the RRSIG.
 func (tz *trustedZone) verifyDS(rrSet []dns.RR, rrSig []dns.RRSIG, t time.Time) (cacheOutdated bool, err error) {
 	// parent zone's DNSKEY RRSET is cached but DS is just came from the network
 	// and might be signed by newer key
@@ -104,7 +117,7 @@ func getParentDS(ctx context.Context, fqZoneName string, c Querier, parent trust
 // **parent** for DS verification using cached keys.
 // returns:
 // 1. newly created trustedZone in case of success
-// 2. cacheOutdated if cached parent does not have ZSK for DS validation
+// 2. cacheOutdated if cached parent does not have a key for DS validation
 // 3. error in all other cases
 //
 // Note 1: the function should never return cacheOutdated for the root zone
@@ -131,26 +144,28 @@ func makeTrustedZone(ctx context.Context, fqZoneName string, parent trustedZone,
 		}
 	}
 
-	zsk := make(map[uint16]dns.DNSKEY)
-	ksk := make(map[uint16]dns.DNSKEY)
+	zoneKeys := make(dnskeysByTag)
 	for _, rr := range rrSet {
 		switch obj := rr.(type) {
 		case *dns.DNSKEY:
-			if obj.Flags&dns.ZONE != 0 { // 256
-				if obj.Flags&dns.SEP != 0 { // 257
-					ksk[obj.KeyTag()] = *obj
-				} else {
-					zsk[obj.KeyTag()] = *obj
-				}
+			// RSAMD5 is not allowed for DNSSEC validation. Reject it before KeyTag,
+			// which can panic on malformed RSAMD5 public keys in miekg/dns v1.
+			if obj.Algorithm == dns.RSAMD5 {
+				continue
+			}
+			if obj.Flags&dns.ZONE != 0 && obj.Flags&dns.REVOKE == 0 {
+				// Only zone keys may verify RRSIGs (RFC 4034, Section 2.1.1), and revoked
+				// keys must not be used for validation (RFC 5011, Section 2.1).
+				zoneKeys.add(*obj)
 			}
 		default:
 		}
 	}
 
-	// find DNSKEY matched to RS retrieved from parent zone or from a trust anchor
-	matchedDS, verifiedKSK := matchKSKDigest(dss, ksk)
+	// Find DNSKEYs matching DS records from the parent zone or a trust anchor.
+	matchedDS, verifiedKSK := matchKSKDigest(dss, zoneKeys)
 	if len(verifiedKSK) == 0 {
-		err = fmt.Errorf("failed to verify %s KSK against digest in parent DS", fqZoneName)
+		err = fmt.Errorf("no DNSKEY for %s matches a parent DS record or trust anchor", fqZoneName)
 		return
 	}
 
@@ -158,14 +173,14 @@ func makeTrustedZone(ctx context.Context, fqZoneName string, parent trustedZone,
 	// DNSKEY RRSET is self-signed so makes sense to check this signature at the very end with authenticated via parent DS
 	verifiedSig := verifyRRSig(rrSet, rrSig, t, verifiedKSK)
 	if len(verifiedSig) == 0 {
-		err = fmt.Errorf("no KSK to verify DNSKEY RRSet of %s", fqZoneName)
+		err = fmt.Errorf("no DS-matched DNSKEY verifies the DNSKEY RRSet for %s", fqZoneName)
 		return
 	}
 
 	// zone and keys are authenticated, create a new zone
 	tz = trustedZone{
 		name:  fqZoneName,
-		zsk:   zsk,
+		zsk:   zoneKeys,
 		ksk:   verifiedKSK,
 		rrSig: verifiedSig,
 		dss:   matchedDS,
@@ -173,34 +188,44 @@ func makeTrustedZone(ctx context.Context, fqZoneName string, parent trustedZone,
 	return
 }
 
-// verifyRRSig takes RRSET, array of RRSIG, time and ZSKs in form of map
+// verifyRRSig takes an RRset, signatures, time, and candidate DNSKEYs.
 // and returns a map of matched signatures by keytag
-func verifyRRSig(rrSet []dns.RR, rrSig []dns.RRSIG, t time.Time, keys map[uint16]dns.DNSKEY) map[uint16]dns.RRSIG {
+func verifyRRSig(rrSet []dns.RR, rrSig []dns.RRSIG, t time.Time, keys dnskeysByTag) map[uint16]dns.RRSIG {
 	verifiedSig := make(map[uint16]dns.RRSIG)
 	for _, sig := range rrSig {
 		if !sig.ValidityPeriod(t) {
 			continue
 		}
-		ksk := keys[sig.KeyTag]
-		if err := sig.Verify(&ksk, rrSet); err == nil {
-			verifiedSig[sig.KeyTag] = sig
+		for i := range keys[sig.KeyTag] {
+			if err := sig.Verify(&keys[sig.KeyTag][i], rrSet); err == nil {
+				verifiedSig[sig.KeyTag] = sig
+				break
+			}
 		}
 	}
 	return verifiedSig
 }
 
-// matchKSKDigest takes array of DS and KSKs in form of map
-// and returns an array of matched DS records and verified keys
-func matchKSKDigest(dss []dns.DS, ksk map[uint16]dns.DNSKEY) ([]dns.DS, map[uint16]dns.DNSKEY) {
-	verifiedKSK := make(map[uint16]dns.DNSKEY)
+// matchKSKDigest returns the DS records and DNSKEYs whose digests match.
+func matchKSKDigest(dss []dns.DS, keys dnskeysByTag) ([]dns.DS, dnskeysByTag) {
+	verifiedKSK := make(dnskeysByTag)
 	matchedDS := make([]dns.DS, 0, len(dss))
 
 	for _, ds := range dss {
-		if key, ok := ksk[ds.KeyTag]; ok {
-			keyDigest := strings.ToLower(key.ToDS(ds.DigestType).Digest)
+		for _, key := range keys[ds.KeyTag] {
+			// The DS algorithm must match the DNSKEY algorithm (RFC 4035, Section 5.2).
+			if ds.Algorithm != key.Algorithm {
+				continue
+			}
+			keyDS := key.ToDS(ds.DigestType)
+			if keyDS == nil {
+				continue
+			}
+			keyDigest := strings.ToLower(keyDS.Digest)
 			if keyDigest == strings.ToLower(ds.Digest) {
-				verifiedKSK[ds.KeyTag] = key
+				verifiedKSK.add(key)
 				matchedDS = append(matchedDS, ds)
+				break
 			}
 		}
 	}

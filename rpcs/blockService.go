@@ -28,10 +28,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/gorilla/mux"
-
-	"github.com/algorand/go-codec/codec"
 	"github.com/algorand/go-deadlock"
+	"github.com/algorand/msgp/msgp"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -56,9 +54,9 @@ const blockServerCatchupRequestBufferSize = 10
 // BlockResponseLatestRoundHeader is returned in the response header when the requested block is not available
 const BlockResponseLatestRoundHeader = "X-Latest-Round"
 
-// BlockServiceBlockPath is the path to register BlockService as a handler for when using gorilla/mux
+// BlockServiceBlockPath is the http.ServeMux pattern to register BlockService as a handler
 // e.g. .HandleFunc(BlockServiceBlockPath, ls.ServeBlockPath)
-const BlockServiceBlockPath = "/v{version:[0-9.]+}/{genesisID}/block/{round:[0-9a-z]+}"
+const BlockServiceBlockPath = "/v1/{genesisID}/block/{round}"
 
 // Constant strings used as keys for topics
 const (
@@ -119,12 +117,13 @@ type EncodedBlockCert struct {
 }
 
 // PreEncodedBlockCert defines how GetBlockBytes encodes a block and its certificate,
-// using a pre-encoded Block and Certificate in msgpack format.
-//
-//msgp:ignore PreEncodedBlockCert
+// using a pre-encoded Block and Certificate in msgpack format. It must encode to the
+// same bytes as EncodedBlockCert, which is what the fetching side decodes into.
 type PreEncodedBlockCert struct {
-	Block       codec.Raw `codec:"block"`
-	Certificate codec.Raw `codec:"cert"`
+	_struct struct{} `codec:""`
+
+	Block       msgp.Raw `codec:"block"`
+	Certificate msgp.Raw `codec:"cert"`
 }
 
 type fallbackEndpoints struct {
@@ -184,21 +183,12 @@ func (bs *BlockService) Stop() {
 }
 
 // ServeBlockPath returns blocks
-// Either /v{version}/{genesisID}/block/{round} or ?b={round}&v={version}
-// Uses gorilla/mux for path argument parsing.
+// Either /v1/{genesisID}/block/{round} or ?b={round}&v={version}
+// Uses http.ServeMux path values, set by BlockServiceBlockPath.
 func (bs *BlockService) ServeBlockPath(response http.ResponseWriter, request *http.Request) {
-	pathVars := mux.Vars(request)
-	versionStr, hasVersionStr := pathVars["version"]
-	roundStr, hasRoundStr := pathVars["round"]
-	genesisID, hasGenesisID := pathVars["genesisID"]
-	if hasVersionStr {
-		if versionStr != "1" {
-			bs.log.Debug("http block bad version", versionStr)
-			response.WriteHeader(http.StatusBadRequest)
-			return
-		}
-	}
-	if hasGenesisID {
+	roundStr := request.PathValue("round")
+	genesisID := request.PathValue("genesisID")
+	if genesisID != "" {
 		if bs.genesisID != genesisID {
 			bs.log.Debugf("http block bad genesisID mine=%#v theirs=%#v", bs.genesisID, genesisID)
 			response.WriteHeader(http.StatusBadRequest)
@@ -209,7 +199,7 @@ func (bs *BlockService) ServeBlockPath(response http.ResponseWriter, request *ht
 		response.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	if (!hasVersionStr) || (!hasRoundStr) {
+	if roundStr == "" {
 		// try query arg ?b={round}
 		request.Body = http.MaxBytesReader(response, request.Body, blockServerMaxBodyLength)
 		err := request.ParseForm()
@@ -229,7 +219,7 @@ func (bs *BlockService) ServeBlockPath(response http.ResponseWriter, request *ht
 		if ok {
 			if len(versionStrs) == 1 {
 				if versionStrs[0] != "1" {
-					bs.log.Debug("http block bad version", versionStr)
+					bs.log.Debug("http block bad version", versionStrs[0])
 					response.WriteHeader(http.StatusBadRequest)
 					return
 				}
@@ -489,7 +479,7 @@ func RawBlockBytes(l LedgerForBlockService, round basics.Round) ([]byte, error) 
 		return nil, ledgercore.ErrNoEntry{Round: round}
 	}
 
-	return protocol.EncodeReflect(PreEncodedBlockCert{
+	return protocol.Encode(&PreEncodedBlockCert{
 		Block:       blk,
 		Certificate: cert,
 	}), nil

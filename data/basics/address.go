@@ -110,8 +110,9 @@ func (addr Address) IsZero() bool {
 	return addr == Address{}
 }
 
-// IsPQCompliant checks if an address is eligible for native post-quantum account
-// authorization.
-func (addr Address) IsPQCompliant() bool {
+// IsOffEd25519Curve reports whether an address is not an Edwards25519 curve
+// point, so that no Ed25519 key can sign for it. Salted addresses are chosen to
+// satisfy it.
+func (addr Address) IsOffEd25519Curve() bool {
 	return !crypto.IsEdwards25519Point(addr[:])
 }

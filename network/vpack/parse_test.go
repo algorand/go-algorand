@@ -229,7 +229,6 @@ func TestUncompressedMsgpackDetection(t *testing.T) {
 		var dec StatelessDecoder
 		_, err := dec.DecompressVote(nil, msgpackData)
 
-		assert.Error(t, err)
 		assert.ErrorIs(t, err, ErrLikelyUncompressed, "should detect uncompressed msgpack pattern")
 		assert.ErrorContains(t, err, "data appears to be uncompressed msgpack")
 	})
@@ -247,7 +246,7 @@ func TestUncompressedMsgpackDetection(t *testing.T) {
 		var dec StatelessDecoder
 		_, err = dec.DecompressVote(nil, corrupted)
 
-		assert.Error(t, err)
+		assert.ErrorContains(t, err, "not enough data")
 		assert.NotErrorIs(t, err, ErrLikelyUncompressed, "corrupted vpack should not be detected as uncompressed msgpack")
 	})
 }

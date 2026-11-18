@@ -78,7 +78,7 @@ func main() {
 	if *outputfilename == "" {
 		fmt.Println(payload)
 	} else {
-		err := os.WriteFile(*outputfilename, []byte(payload), 0666)
+		err := os.WriteFile(*outputfilename, []byte(payload), 0666) //nolint:gosec // the operator selects the output path with the -o CLI flag
 		if err != nil {
 			panic(err)
 		}

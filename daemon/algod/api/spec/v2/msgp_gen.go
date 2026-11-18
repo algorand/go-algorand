@@ -5,7 +5,9 @@ package v2
 import (
 	"github.com/algorand/msgp/msgp"
 
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
 )
 
 // The following msgp objects are implemented in this file:
@@ -28,6 +30,46 @@ import (
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
 //         |-----> AccountAssetModelMaxSize()
+//
+// SimulateRequest
+//        |-----> (*) MarshalMsg
+//        |-----> (*) CanMarshalMsg
+//        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalMsgWithState
+//        |-----> (*) CanUnmarshalMsg
+//        |-----> (*) Msgsize
+//        |-----> (*) MsgIsZero
+//        |-----> SimulateRequestMaxSize()
+//
+// SimulateRequestTraceConfig
+//              |-----> (*) MarshalMsg
+//              |-----> (*) CanMarshalMsg
+//              |-----> (*) UnmarshalMsg
+//              |-----> (*) UnmarshalMsgWithState
+//              |-----> (*) CanUnmarshalMsg
+//              |-----> (*) Msgsize
+//              |-----> (*) MsgIsZero
+//              |-----> SimulateRequestTraceConfigMaxSize()
+//
+// SimulateRequestTxnGroup
+//            |-----> (*) MarshalMsg
+//            |-----> (*) CanMarshalMsg
+//            |-----> (*) UnmarshalMsg
+//            |-----> (*) UnmarshalMsgWithState
+//            |-----> (*) CanUnmarshalMsg
+//            |-----> (*) Msgsize
+//            |-----> (*) MsgIsZero
+//            |-----> SimulateRequestTxnGroupMaxSize()
+//
+// SimulateRequestTxnGroups
+//             |-----> MarshalMsg
+//             |-----> CanMarshalMsg
+//             |-----> (*) UnmarshalMsg
+//             |-----> (*) UnmarshalMsgWithState
+//             |-----> (*) CanUnmarshalMsg
+//             |-----> Msgsize
+//             |-----> MsgIsZero
+//             |-----> SimulateRequestTxnGroupsMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -86,14 +128,22 @@ func (z *AccountApplicationModel) UnmarshalMsgWithState(bts []byte, st msgp.Unma
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = AccountApplicationModel{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "app-local-state":
 			if msgp.IsNil(bts) {
 				bts, err = msgp.ReadNilBytes(bts)
 				if err != nil {
@@ -106,13 +156,11 @@ func (z *AccountApplicationModel) UnmarshalMsgWithState(bts []byte, st msgp.Unma
 				}
 				bts, err = (*z).AppLocalState.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "AppLocalState")
+					err = msgp.WrapError(err, "AppLocalState")
 					return
 				}
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "app-params":
 			if msgp.IsNil(bts) {
 				bts, err = msgp.ReadNilBytes(bts)
 				if err != nil {
@@ -125,74 +173,15 @@ func (z *AccountApplicationModel) UnmarshalMsgWithState(bts []byte, st msgp.Unma
 				}
 				bts, err = (*z).AppParams.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "AppParams")
+					err = msgp.WrapError(err, "AppParams")
 					return
 				}
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = AccountApplicationModel{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "app-local-state":
-				if msgp.IsNil(bts) {
-					bts, err = msgp.ReadNilBytes(bts)
-					if err != nil {
-						return
-					}
-					(*z).AppLocalState = nil
-				} else {
-					if (*z).AppLocalState == nil {
-						(*z).AppLocalState = new(basics.AppLocalState)
-					}
-					bts, err = (*z).AppLocalState.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "AppLocalState")
-						return
-					}
-				}
-			case "app-params":
-				if msgp.IsNil(bts) {
-					bts, err = msgp.ReadNilBytes(bts)
-					if err != nil {
-						return
-					}
-					(*z).AppParams = nil
-				} else {
-					if (*z).AppParams == nil {
-						(*z).AppParams = new(basics.AppParams)
-					}
-					bts, err = (*z).AppParams.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "AppParams")
-						return
-					}
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -295,14 +284,22 @@ func (z *AccountAssetModel) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalS
 	var zb0001 int
 	var zb0002 bool
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = AccountAssetModel{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		switch string(field) {
+		case "asset-params":
 			if msgp.IsNil(bts) {
 				bts, err = msgp.ReadNilBytes(bts)
 				if err != nil {
@@ -315,13 +312,11 @@ func (z *AccountAssetModel) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalS
 				}
 				bts, err = (*z).AssetParams.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "AssetParams")
+					err = msgp.WrapError(err, "AssetParams")
 					return
 				}
 			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		case "asset-holding":
 			if msgp.IsNil(bts) {
 				bts, err = msgp.ReadNilBytes(bts)
 				if err != nil {
@@ -334,74 +329,15 @@ func (z *AccountAssetModel) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalS
 				}
 				bts, err = (*z).AssetHolding.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "AssetHolding")
+					err = msgp.WrapError(err, "AssetHolding")
 					return
 				}
 			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = AccountAssetModel{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		default:
+			err = msgp.ErrNoField(string(field))
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
-			}
-			switch string(field) {
-			case "asset-params":
-				if msgp.IsNil(bts) {
-					bts, err = msgp.ReadNilBytes(bts)
-					if err != nil {
-						return
-					}
-					(*z).AssetParams = nil
-				} else {
-					if (*z).AssetParams == nil {
-						(*z).AssetParams = new(basics.AssetParams)
-					}
-					bts, err = (*z).AssetParams.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "AssetParams")
-						return
-					}
-				}
-			case "asset-holding":
-				if msgp.IsNil(bts) {
-					bts, err = msgp.ReadNilBytes(bts)
-					if err != nil {
-						return
-					}
-					(*z).AssetHolding = nil
-				} else {
-					if (*z).AssetHolding == nil {
-						(*z).AssetHolding = new(basics.AssetHolding)
-					}
-					bts, err = (*z).AssetHolding.UnmarshalMsgWithState(bts, st)
-					if err != nil {
-						err = msgp.WrapError(err, "AssetHolding")
-						return
-					}
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
 			}
 		}
 	}
@@ -445,5 +381,642 @@ func AccountAssetModelMaxSize() (s int) {
 	s += basics.AssetParamsMaxSize()
 	s += 14
 	s += basics.AssetHoldingMaxSize()
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *SimulateRequest) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(8)
+	var zb0001Mask uint16 /* 9 bits */
+	if (*z).AllowEmptySignatures == false {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).AllowMoreLogging == false {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if (*z).AllowUnnamedResources == false {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	if (*z).ExecTraceConfig.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x10
+	}
+	if (*z).ExtraOpcodeBudget == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x20
+	}
+	if (*z).FixSigners == false {
+		zb0001Len--
+		zb0001Mask |= 0x40
+	}
+	if (*z).Round.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x80
+	}
+	if (*z).TxnGroups.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x100
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "allow-empty-signatures"
+			o = append(o, 0xb6, 0x61, 0x6c, 0x6c, 0x6f, 0x77, 0x2d, 0x65, 0x6d, 0x70, 0x74, 0x79, 0x2d, 0x73, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x73)
+			o = msgp.AppendBool(o, (*z).AllowEmptySignatures)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "allow-more-logging"
+			o = append(o, 0xb2, 0x61, 0x6c, 0x6c, 0x6f, 0x77, 0x2d, 0x6d, 0x6f, 0x72, 0x65, 0x2d, 0x6c, 0x6f, 0x67, 0x67, 0x69, 0x6e, 0x67)
+			o = msgp.AppendBool(o, (*z).AllowMoreLogging)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "allow-unnamed-resources"
+			o = append(o, 0xb7, 0x61, 0x6c, 0x6c, 0x6f, 0x77, 0x2d, 0x75, 0x6e, 0x6e, 0x61, 0x6d, 0x65, 0x64, 0x2d, 0x72, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x73)
+			o = msgp.AppendBool(o, (*z).AllowUnnamedResources)
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not empty
+			// string "exec-trace-config"
+			o = append(o, 0xb1, 0x65, 0x78, 0x65, 0x63, 0x2d, 0x74, 0x72, 0x61, 0x63, 0x65, 0x2d, 0x63, 0x6f, 0x6e, 0x66, 0x69, 0x67)
+			o = (*z).ExecTraceConfig.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x20) == 0 { // if not empty
+			// string "extra-opcode-budget"
+			o = append(o, 0xb3, 0x65, 0x78, 0x74, 0x72, 0x61, 0x2d, 0x6f, 0x70, 0x63, 0x6f, 0x64, 0x65, 0x2d, 0x62, 0x75, 0x64, 0x67, 0x65, 0x74)
+			o = msgp.AppendInt64(o, (*z).ExtraOpcodeBudget)
+		}
+		if (zb0001Mask & 0x40) == 0 { // if not empty
+			// string "fix-signers"
+			o = append(o, 0xab, 0x66, 0x69, 0x78, 0x2d, 0x73, 0x69, 0x67, 0x6e, 0x65, 0x72, 0x73)
+			o = msgp.AppendBool(o, (*z).FixSigners)
+		}
+		if (zb0001Mask & 0x80) == 0 { // if not empty
+			// string "round"
+			o = append(o, 0xa5, 0x72, 0x6f, 0x75, 0x6e, 0x64)
+			o = (*z).Round.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x100) == 0 { // if not empty
+			// string "txn-groups"
+			o = append(o, 0xaa, 0x74, 0x78, 0x6e, 0x2d, 0x67, 0x72, 0x6f, 0x75, 0x70, 0x73)
+			o = (*z).TxnGroups.MarshalMsg(o)
+		}
+	}
+	return
+}
+
+func (_ *SimulateRequest) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*SimulateRequest)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *SimulateRequest) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = SimulateRequest{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch string(field) {
+		case "txn-groups":
+			bts, err = (*z).TxnGroups.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "TxnGroups")
+				return
+			}
+		case "round":
+			bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "Round")
+				return
+			}
+		case "allow-empty-signatures":
+			(*z).AllowEmptySignatures, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "AllowEmptySignatures")
+				return
+			}
+		case "allow-more-logging":
+			(*z).AllowMoreLogging, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "AllowMoreLogging")
+				return
+			}
+		case "allow-unnamed-resources":
+			(*z).AllowUnnamedResources, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "AllowUnnamedResources")
+				return
+			}
+		case "extra-opcode-budget":
+			(*z).ExtraOpcodeBudget, bts, err = msgp.ReadInt64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "ExtraOpcodeBudget")
+				return
+			}
+		case "exec-trace-config":
+			bts, err = (*z).ExecTraceConfig.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "ExecTraceConfig")
+				return
+			}
+		case "fix-signers":
+			(*z).FixSigners, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "FixSigners")
+				return
+			}
+		default:
+			err = msgp.ErrNoField(string(field))
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (z *SimulateRequest) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *SimulateRequest) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*SimulateRequest)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *SimulateRequest) Msgsize() (s int) {
+	s = 1 + 11 + (*z).TxnGroups.Msgsize() + 6 + (*z).Round.Msgsize() + 23 + msgp.BoolSize + 19 + msgp.BoolSize + 24 + msgp.BoolSize + 20 + msgp.Int64Size + 18 + (*z).ExecTraceConfig.Msgsize() + 12 + msgp.BoolSize
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *SimulateRequest) MsgIsZero() bool {
+	return ((*z).TxnGroups.MsgIsZero()) && ((*z).Round.MsgIsZero()) && ((*z).AllowEmptySignatures == false) && ((*z).AllowMoreLogging == false) && ((*z).AllowUnnamedResources == false) && ((*z).ExtraOpcodeBudget == 0) && ((*z).ExecTraceConfig.MsgIsZero()) && ((*z).FixSigners == false)
+}
+
+// SimulateRequestMaxSize returns a maximum valid message size for this message type
+func SimulateRequestMaxSize() (s int) {
+	s = 1 + 11 + SimulateRequestTxnGroupsMaxSize() + 6 + basics.RoundMaxSize() + 23 + msgp.BoolSize + 19 + msgp.BoolSize + 24 + msgp.BoolSize + 20 + msgp.Int64Size + 18 + SimulateRequestTraceConfigMaxSize() + 12 + msgp.BoolSize
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *SimulateRequestTraceConfig) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(4)
+	var zb0001Mask uint8 /* 5 bits */
+	if (*z).Enable == false {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).Scratch == false {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if (*z).Stack == false {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	if (*z).State == false {
+		zb0001Len--
+		zb0001Mask |= 0x10
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "enable"
+			o = append(o, 0xa6, 0x65, 0x6e, 0x61, 0x62, 0x6c, 0x65)
+			o = msgp.AppendBool(o, (*z).Enable)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "scratch-change"
+			o = append(o, 0xae, 0x73, 0x63, 0x72, 0x61, 0x74, 0x63, 0x68, 0x2d, 0x63, 0x68, 0x61, 0x6e, 0x67, 0x65)
+			o = msgp.AppendBool(o, (*z).Scratch)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "stack-change"
+			o = append(o, 0xac, 0x73, 0x74, 0x61, 0x63, 0x6b, 0x2d, 0x63, 0x68, 0x61, 0x6e, 0x67, 0x65)
+			o = msgp.AppendBool(o, (*z).Stack)
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not empty
+			// string "state-change"
+			o = append(o, 0xac, 0x73, 0x74, 0x61, 0x74, 0x65, 0x2d, 0x63, 0x68, 0x61, 0x6e, 0x67, 0x65)
+			o = msgp.AppendBool(o, (*z).State)
+		}
+	}
+	return
+}
+
+func (_ *SimulateRequestTraceConfig) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*SimulateRequestTraceConfig)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *SimulateRequestTraceConfig) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 {
+		(*z) = SimulateRequestTraceConfig{}
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch string(field) {
+		case "enable":
+			(*z).Enable, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Enable")
+				return
+			}
+		case "stack-change":
+			(*z).Stack, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Stack")
+				return
+			}
+		case "scratch-change":
+			(*z).Scratch, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Scratch")
+				return
+			}
+		case "state-change":
+			(*z).State, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "State")
+				return
+			}
+		default:
+			err = msgp.ErrNoField(string(field))
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (z *SimulateRequestTraceConfig) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *SimulateRequestTraceConfig) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*SimulateRequestTraceConfig)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *SimulateRequestTraceConfig) Msgsize() (s int) {
+	s = 1 + 7 + msgp.BoolSize + 13 + msgp.BoolSize + 15 + msgp.BoolSize + 13 + msgp.BoolSize
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *SimulateRequestTraceConfig) MsgIsZero() bool {
+	return ((*z).Enable == false) && ((*z).Stack == false) && ((*z).Scratch == false) && ((*z).State == false)
+}
+
+// SimulateRequestTraceConfigMaxSize returns a maximum valid message size for this message type
+func SimulateRequestTraceConfigMaxSize() (s int) {
+	s = 1 + 7 + msgp.BoolSize + 13 + msgp.BoolSize + 15 + msgp.BoolSize + 13 + msgp.BoolSize
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *SimulateRequestTxnGroup) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0002Len := uint32(1)
+	var zb0002Mask uint8 /* 2 bits */
+	if len((*z).Txns) == 0 {
+		zb0002Len--
+		zb0002Mask |= 0x2
+	}
+	// variable map header, size zb0002Len
+	o = append(o, 0x80|uint8(zb0002Len))
+	if zb0002Len != 0 {
+		if (zb0002Mask & 0x2) == 0 { // if not empty
+			// string "txns"
+			o = append(o, 0xa4, 0x74, 0x78, 0x6e, 0x73)
+			if (*z).Txns == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).Txns)))
+			}
+			for zb0001 := range (*z).Txns {
+				o = (*z).Txns[zb0001].MarshalMsg(o)
+			}
+		}
+	}
+	return
+}
+
+func (_ *SimulateRequestTxnGroup) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*SimulateRequestTxnGroup)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *SimulateRequestTxnGroup) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	var field []byte
+	_ = field
+	var zb0002 int
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0003 {
+		(*z) = SimulateRequestTxnGroup{}
+	}
+	for zb0002 > 0 {
+		zb0002--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch string(field) {
+		case "txns":
+			var zb0004 int
+			var zb0005 bool
+			zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Txns")
+				return
+			}
+			if zb0004 > bounds.MaxTxGroupSize {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(bounds.MaxTxGroupSize))
+				err = msgp.WrapError(err, "Txns")
+				return
+			}
+			if zb0005 {
+				(*z).Txns = nil
+			} else if (*z).Txns != nil && cap((*z).Txns) >= zb0004 {
+				(*z).Txns = ((*z).Txns)[:zb0004]
+			} else {
+				(*z).Txns = make([]transactions.SignedTxn, zb0004)
+			}
+			for zb0001 := range (*z).Txns {
+				bts, err = (*z).Txns[zb0001].UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "Txns", zb0001)
+					return
+				}
+			}
+		default:
+			err = msgp.ErrNoField(string(field))
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (z *SimulateRequestTxnGroup) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *SimulateRequestTxnGroup) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*SimulateRequestTxnGroup)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *SimulateRequestTxnGroup) Msgsize() (s int) {
+	s = 1 + 5 + msgp.ArrayHeaderSize
+	for zb0001 := range (*z).Txns {
+		s += (*z).Txns[zb0001].Msgsize()
+	}
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *SimulateRequestTxnGroup) MsgIsZero() bool {
+	return (len((*z).Txns) == 0)
+}
+
+// SimulateRequestTxnGroupMaxSize returns a maximum valid message size for this message type
+func SimulateRequestTxnGroupMaxSize() (s int) {
+	s = 1 + 5
+	// Calculating size of slice: z.Txns
+	s += msgp.ArrayHeaderSize + ((bounds.MaxTxGroupSize) * (transactions.SignedTxnMaxSize()))
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z SimulateRequestTxnGroups) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	if z == nil {
+		o = msgp.AppendNil(o)
+	} else {
+		o = msgp.AppendArrayHeader(o, uint32(len(z)))
+	}
+	for za0001 := range z {
+		// omitempty: check for empty values
+		zb0001Len := uint32(1)
+		var zb0001Mask uint8 /* 2 bits */
+		if len(z[za0001].Txns) == 0 {
+			zb0001Len--
+			zb0001Mask |= 0x2
+		}
+		// variable map header, size zb0001Len
+		o = append(o, 0x80|uint8(zb0001Len))
+		if zb0001Len != 0 {
+			if (zb0001Mask & 0x2) == 0 { // if not empty
+				// string "txns"
+				o = append(o, 0xa4, 0x74, 0x78, 0x6e, 0x73)
+				if z[za0001].Txns == nil {
+					o = msgp.AppendNil(o)
+				} else {
+					o = msgp.AppendArrayHeader(o, uint32(len(z[za0001].Txns)))
+				}
+				for za0002 := range z[za0001].Txns {
+					o = z[za0001].Txns[za0002].MarshalMsg(o)
+				}
+			}
+		}
+	}
+	return
+}
+
+func (_ SimulateRequestTxnGroups) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(SimulateRequestTxnGroups)
+	if !ok {
+		_, ok = (z).(*SimulateRequestTxnGroups)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *SimulateRequestTxnGroups) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	var zb0003 int
+	var zb0004 bool
+	zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0003 > bounds.MaxTxGroupSize {
+		err = msgp.ErrOverflow(uint64(zb0003), uint64(bounds.MaxTxGroupSize))
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0004 {
+		(*z) = nil
+	} else if (*z) != nil && cap((*z)) >= zb0003 {
+		(*z) = (*z)[:zb0003]
+	} else {
+		(*z) = make(SimulateRequestTxnGroups, zb0003)
+	}
+	for zb0001 := range *z {
+		var field []byte
+		_ = field
+		var zb0005 int
+		var zb0006 bool
+		zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, zb0001)
+			return
+		}
+		if zb0006 {
+			(*z)[zb0001] = SimulateRequestTxnGroup{}
+		}
+		for zb0005 > 0 {
+			zb0005--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err, zb0001)
+				return
+			}
+			switch string(field) {
+			case "txns":
+				var zb0007 int
+				var zb0008 bool
+				zb0007, zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, zb0001, "Txns")
+					return
+				}
+				if zb0007 > bounds.MaxTxGroupSize {
+					err = msgp.ErrOverflow(uint64(zb0007), uint64(bounds.MaxTxGroupSize))
+					err = msgp.WrapError(err, zb0001, "Txns")
+					return
+				}
+				if zb0008 {
+					(*z)[zb0001].Txns = nil
+				} else if (*z)[zb0001].Txns != nil && cap((*z)[zb0001].Txns) >= zb0007 {
+					(*z)[zb0001].Txns = ((*z)[zb0001].Txns)[:zb0007]
+				} else {
+					(*z)[zb0001].Txns = make([]transactions.SignedTxn, zb0007)
+				}
+				for zb0002 := range (*z)[zb0001].Txns {
+					bts, err = (*z)[zb0001].Txns[zb0002].UnmarshalMsgWithState(bts, st)
+					if err != nil {
+						err = msgp.WrapError(err, zb0001, "Txns", zb0002)
+						return
+					}
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err, zb0001)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (z *SimulateRequestTxnGroups) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *SimulateRequestTxnGroups) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*SimulateRequestTxnGroups)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z SimulateRequestTxnGroups) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize
+	for za0001 := range z {
+		s += 1 + 5 + msgp.ArrayHeaderSize
+		for za0002 := range z[za0001].Txns {
+			s += z[za0001].Txns[za0002].Msgsize()
+		}
+	}
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z SimulateRequestTxnGroups) MsgIsZero() bool {
+	return len(z) == 0
+}
+
+// SimulateRequestTxnGroupsMaxSize returns a maximum valid message size for this message type
+func SimulateRequestTxnGroupsMaxSize() (s int) {
+	// Calculating size of slice: z
+	s += msgp.ArrayHeaderSize + ((bounds.MaxTxGroupSize) * (SimulateRequestTxnGroupMaxSize()))
 	return
 }

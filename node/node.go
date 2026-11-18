@@ -631,13 +631,13 @@ func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.Sign
 
 	_, err = verify.TxnGroup(txgroup, &b, node.ledger.VerifiedTransactionCache(), node.ledger)
 	if err != nil {
-		node.log.Warnf("malformed transaction: %v", err)
+		node.log.With(transactions.LogEncoding(verify.RefusedTxns(txgroup, err))).Warnf("malformed transaction: %v", err)
 		return err
 	}
 
 	err = node.transactionPool.Remember(txgroup)
 	if err != nil {
-		node.log.Infof("rejected by local pool: %v - transaction group was %+v", err, txgroup)
+		node.log.With(transactions.LogEncoding(txgroup)).Infof("rejected by local pool: %v - transaction group was %s", err, summarize(txgroup))
 		return err
 	}
 
@@ -657,11 +657,21 @@ func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.Sign
 	}
 	err = node.net.Broadcast(context.TODO(), protocol.TxnTag, enc, false, nil)
 	if err != nil {
-		node.log.Infof("failure broadcasting transaction to network: %v - transaction group was %+v", err, txgroup)
+		node.log.With(transactions.LogEncoding(txgroup)).Infof("failure broadcasting transaction to network: %v - transaction group was %s", err, summarize(txgroup))
 		return err
 	}
 	node.log.Infof("Sent signed tx group with IDs %v", txids)
 	return nil
+}
+
+// summarize returns the summaries of the transactions of group, separated by
+// "; ", for logs.
+func summarize(group []transactions.SignedTxn) string {
+	summaries := make([]string, len(group))
+	for i := range group {
+		summaries[i] = group[i].Summary()
+	}
+	return strings.Join(summaries, "; ")
 }
 
 // Simulate speculatively runs a transaction group against the current
@@ -949,7 +959,7 @@ func createTemporaryParticipationKey(outDir string, partKeyBinary []byte) (strin
 	// Create a temporary filename with a UUID so that we can call this function twice
 	// in a row without worrying about collisions
 	sb.WriteString("tempPartKeyBinary.")
-	sb.WriteString(fmt.Sprintf("%d", crypto.RandUint64()))
+	fmt.Fprintf(&sb, "%d", crypto.RandUint64())
 	sb.WriteString(".bin")
 
 	tempFile := filepath.Join(outDir, filepath.Base(sb.String()))
@@ -1230,6 +1240,7 @@ func (node *AlgorandFullNode) StartCatchup(catchpoint string) error {
 	}
 	err = node.catchpointCatchupService.Start(node.ctx)
 	if err != nil {
+		node.catchpointCatchupService = nil
 		node.log.Warn(err.Error())
 		return MakeStartCatchpointError(catchpoint, err)
 	}

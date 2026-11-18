@@ -104,7 +104,7 @@ func UnmarshallTopics(buffer []byte) (ts Topics, err error) {
 		idx += nr
 
 		// read the key
-		if len(buffer) < idx+int(strlen) || strlen > 64 || strlen == 0 {
+		if strlen > 64 || strlen == 0 || len(buffer) < idx+int(strlen) {
 			return nil, fmt.Errorf("UnmarshallTopics: could not read the key")
 		}
 		topics[x].key = string(buffer[idx : idx+int(strlen)])

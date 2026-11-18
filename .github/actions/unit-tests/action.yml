@@ -1,0 +1,69 @@
+name: 'Run Unit Tests'
+description: 'Run the unit test suite, optionally measuring coverage across all packages'
+inputs:
+  short:
+    description: 'Run only the short tests'
+    required: false
+    default: 'false'
+  parallel:
+    description: 'Value for go test -p'
+    required: false
+    default: '4'
+  test-results-path:
+    description: 'Subdirectory of ~/test_results to write results.xml and testresults.json to'
+    required: false
+    default: ''
+  coverage:
+    description: 'Measure coverage across every package scripts/coverpkg.sh names'
+    required: false
+    default: 'false'
+outputs:
+  covdata-dir:
+    description: 'Raw coverage data, for the job that merges every partition into one report'
+    value: ${{ steps.run.outputs.covdata-dir }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Run tests
+      id: run
+      shell: bash
+      env:
+        SHORT: ${{ inputs.short }}
+        PARALLEL: ${{ inputs.parallel }}
+        RESULTS_PATH: ${{ inputs.test-results-path }}
+        COVERAGE: ${{ inputs.coverage }}
+        COVERAGE_DIR: ${{ runner.temp }}/covdata
+      run: |
+        echo "covdata-dir=$COVERAGE_DIR" >> "$GITHUB_OUTPUT"
+
+        PACKAGE_NAMES=$(go list ./... | grep -v /go-algorand/test/ | tr '\n' ' ')
+
+        SHORTTEST=""
+        if [[ "$SHORT" == "true" ]]; then
+          SHORTTEST="-short"
+        fi
+
+        COVER_FLAGS=()
+        COVER_ARGS=()
+        if [[ "$COVERAGE" == "true" ]]; then
+          # The directory is absolute because each test binary runs with its own
+          # package directory as its working directory.
+          mkdir -p "$COVERAGE_DIR"
+          COVER_FLAGS=(-cover -covermode=atomic "-coverpkg=$(./scripts/coverpkg.sh)")
+          COVER_ARGS=(-args "-test.gocoverdir=$COVERAGE_DIR")
+        fi
+
+        RESULT_FLAGS=()
+        if [[ -n "$RESULTS_PATH" ]]; then
+          mkdir -p "$HOME/test_results/$RESULTS_PATH"
+          RESULT_FLAGS=(--junitfile "$HOME/test_results/$RESULTS_PATH/results.xml"
+                        --jsonfile "$HOME/test_results/$RESULTS_PATH/testresults.json")
+        fi
+
+        # shellcheck disable=SC2086  # SHORTTEST and PACKAGE_NAMES have to split
+        go tool -modfile=tool.mod gotestsum --format standard-quiet "${RESULT_FLAGS[@]}" \
+          -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" $SHORTTEST \
+          -race -timeout 1h -p "$PARALLEL" \
+          "${COVER_FLAGS[@]}" \
+          $PACKAGE_NAMES \
+          "${COVER_ARGS[@]}"

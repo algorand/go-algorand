@@ -86,7 +86,7 @@ func (wp *WebProxy) Passthrough(response http.ResponseWriter, request *http.Requ
 	clientRequestURL := *request.URL
 	clientRequestURL.Scheme = "http"
 	clientRequestURL.Host = wp.destination
-	clientRequest, err := http.NewRequest(request.Method, clientRequestURL.String(), request.Body)
+	clientRequest, err := http.NewRequest(request.Method, clientRequestURL.String(), request.Body) //nolint:gosec // this localhost test proxy overwrites the request scheme and host with its test-configured destination
 	if err != nil {
 		wp.log.Debugf("Passthrough request assembly error %v (%#v)", err, clientRequestURL)
 		response.WriteHeader(http.StatusInternalServerError)
@@ -99,7 +99,7 @@ func (wp *WebProxy) Passthrough(response http.ResponseWriter, request *http.Requ
 			}
 		}
 	}
-	clientResponse, err := client.Do(clientRequest)
+	clientResponse, err := client.Do(clientRequest) //nolint:gosec // test code selects the destination and trusts redirects from that server
 	if err != nil {
 		wp.log.Debugf("Passthrough request error %v (%v)", err, request.URL.String())
 		response.WriteHeader(http.StatusInternalServerError)
