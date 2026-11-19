@@ -798,6 +798,201 @@ type ScratchChange struct {
 	Slot int `json:"slot"`
 }
 
+// SimulateAccountOverride Modifications to a single account's state. If the account does not exist, it is created. Omitted fields are left unchanged. Pending rewards cannot be overridden.
+type SimulateAccountOverride struct {
+	// Address The address of the account to override.
+	Address string `json:"address"`
+
+	// Apps Application opt-in overrides. If the account is not opted in to an application, it is opted in, unless the override opts it out. Local state key-values are modified by the application override's local-state-delta. Each application ID may appear at most once.
+	Apps *[]SimulateAppLocalStateOverride `json:"apps,omitempty"`
+
+	// Assets Asset holding overrides. If the account is not opted in to an asset, it is opted in. Each asset ID may appear at most once.
+	Assets *[]SimulateAssetHoldingOverride `json:"assets,omitempty"`
+
+	// AuthAddr If set, replaces the address against which signing should be checked. The zero address, or the account's own address, means the account is not rekeyed.
+	AuthAddr *string `json:"auth-addr,omitempty"`
+
+	// Balance If set, replaces the account's balance in microAlgos. Pending rewards are forfeited. It must be small enough that the rewards credited in the simulated round cannot overflow it, so balances close to the maximum uint64 are rejected. Balance and the consensus participation fields (status, participation keys and validity, incentive-eligible, last-proposed, last-heartbeat) also override the account's online data at the balance round used by agreement, so its online stake and the online circulation reflect the override. If status is set, agreement treats the account as though it has been in its overridden state since the balance round, with its stake taken from its state at the start round, pending rewards applied. Otherwise the account keeps the status it had at the balance round: if it was online then, each overridden field replaces its value at the balance round, and if it was not, it has no online stake.
+	Balance *uint64 `json:"balance,omitempty"`
+
+	// IncentiveEligible If set, replaces whether the account can receive block incentives.
+	IncentiveEligible *bool `json:"incentive-eligible,omitempty"`
+
+	// LastHeartbeat If set, replaces the round in which the account last sent a heartbeat.
+	LastHeartbeat *basics.Round `json:"last-heartbeat,omitempty"`
+
+	// LastProposed If set, replaces the round in which the account last proposed a block.
+	LastProposed *basics.Round `json:"last-proposed,omitempty"`
+
+	// SelectionParticipationKey If set, replaces the 32 byte selection public key.
+	SelectionParticipationKey *[]byte `json:"selection-participation-key,omitempty"`
+
+	// StateProofKey If set, replaces the 64 byte root of the state proof key.
+	StateProofKey *[]byte `json:"state-proof-key,omitempty"`
+
+	// Status If set, replaces the account's participation status, which is one of Offline, Online, or NotParticipating. The account's balance moves between the corresponding totals, and agreement uses the overridden status.
+	Status *string `json:"status,omitempty"`
+
+	// VoteFirstValid If set, replaces the first round for which the participation key is valid.
+	VoteFirstValid *basics.Round `json:"vote-first-valid,omitempty"`
+
+	// VoteKeyDilution If set, replaces the number of subkeys in each batch of participation keys.
+	VoteKeyDilution *uint64 `json:"vote-key-dilution,omitempty"`
+
+	// VoteLastValid If set, replaces the last round for which the participation key is valid.
+	VoteLastValid *basics.Round `json:"vote-last-valid,omitempty"`
+
+	// VoteParticipationKey If set, replaces the 32 byte root participation public key.
+	VoteParticipationKey *[]byte `json:"vote-participation-key,omitempty"`
+}
+
+// SimulateAppLocalStateOverride Modifications to an account's opt-in to an application. Omitted fields are left unchanged. For a new opt-in, the schema defaults to the application's local-state-schema, and there are no key-values. If set, schema replaces the local schema recorded when the account opted in, which determines how much local state the account may hold, and its minimum balance.
+type SimulateAppLocalStateOverride struct {
+	// AppID The ID of the application. It must exist, either on the ledger or by an application override.
+	AppID basics.AppIndex `json:"app-id"`
+
+	// OptOut If true, removes the account's local state. The account must be opted in, and schema must not be set.
+	OptOut *bool `json:"opt-out,omitempty"`
+
+	// Schema Specifies maximums on the number of each type that may be stored.
+	Schema *ApplicationStateSchema `json:"schema,omitempty"`
+}
+
+// SimulateAppOverride Modifications to a single application's state. If the application does not exist, it is created, in which case creator, approval-program, and clear-state-program are required. Omitted fields are left unchanged. Minimum balance requirements of affected accounts are updated, but their balances are not. The global-state-delta and box-delta fields have the same form as a transaction's global-state-delta: keys that are not mentioned are left unchanged, and each deleted key must exist. Box names are the delta keys, and only the set-bytes and delete actions are allowed. The local-state-schema field only applies to accounts that opt in during simulation, or by an application local state override; accounts that are already opted in keep the local schema, and minimum balance, from when they opted in.
+type SimulateAppOverride struct {
+	// ApprovalProgram If set, replaces the approval program.
+	ApprovalProgram *[]byte `json:"approval-program,omitempty"`
+
+	// BoxDelta Application state delta.
+	BoxDelta *StateDelta `json:"box-delta,omitempty"`
+
+	// ClearStateProgram If set, replaces the clear state program.
+	ClearStateProgram *[]byte `json:"clear-state-program,omitempty"`
+
+	// Creator The application's creator. Required when creating an application. For an existing application, it must be omitted or match the existing creator.
+	Creator *string `json:"creator,omitempty"`
+
+	// ExtraProgramPages If set, replaces the number of extra program pages.
+	ExtraProgramPages *uint32 `json:"extra-program-pages,omitempty"`
+
+	// FamilyBoxAccess If set, replaces whether apps with the same creator may read and write this app's boxes.
+	FamilyBoxAccess *bool `json:"family-box-access,omitempty"`
+
+	// ForeignBoxReads If set, replaces whether any app may read this app's boxes.
+	ForeignBoxReads *bool `json:"foreign-box-reads,omitempty"`
+
+	// GlobalStateDelta Application state delta.
+	GlobalStateDelta *StateDelta `json:"global-state-delta,omitempty"`
+
+	// GlobalStateSchema Specifies maximums on the number of each type that may be stored.
+	GlobalStateSchema *ApplicationStateSchema `json:"global-state-schema,omitempty"`
+
+	// Id The ID of the application to override. A new application's ID must not be in the range of IDs that may be assigned to creatables made during simulation.
+	Id basics.AppIndex `json:"id"`
+
+	// LocalStateDelta Changes to accounts' local state, in the same form as a transaction's local-state-delta. Each account must be opted in after account overrides are applied. Keys that are not mentioned are left unchanged. Each deleted key must exist. Each address, and each key within an address, may appear at most once.
+	LocalStateDelta *[]AccountStateDelta `json:"local-state-delta,omitempty"`
+
+	// LocalStateSchema Specifies maximums on the number of each type that may be stored.
+	LocalStateSchema *ApplicationStateSchema `json:"local-state-schema,omitempty"`
+
+	// SizeSponsor If set, replaces the account responsible for extra pages and global state minimum balance. The zero address makes the creator responsible.
+	SizeSponsor *string `json:"size-sponsor,omitempty"`
+
+	// Version If set, replaces the number of updates to the application programs.
+	Version *uint64 `json:"version,omitempty"`
+}
+
+// SimulateAssetHoldingOverride Modifications to an account's holding of an asset. Omitted fields are left unchanged. For a new holding, they default to an amount of zero and the asset's default-frozen.
+type SimulateAssetHoldingOverride struct {
+	// Amount If set, replaces the number of units held.
+	Amount *uint64 `json:"amount,omitempty"`
+
+	// AssetID The ID of the asset. It must exist, either on the ledger or by an asset override.
+	AssetID basics.AssetIndex `json:"asset-id"`
+
+	// IsFrozen If set, replaces whether the holding is frozen.
+	IsFrozen *bool `json:"is-frozen,omitempty"`
+}
+
+// SimulateAssetOverride Modifications to a single asset's params. If the asset does not exist, it is created, in which case creator is required, and the creator is opted in with a holding of the asset's total. Omitted fields are left unchanged. Holdings are not checked against the asset's total.
+type SimulateAssetOverride struct {
+	// Clawback If set, replaces the address of the account used to clawback holdings of the asset. The zero address means clawback is not permitted.
+	Clawback *string `json:"clawback,omitempty"`
+
+	// Creator The asset's creator. Required when creating an asset. For an existing asset, it must be omitted or match the existing creator.
+	Creator *string `json:"creator,omitempty"`
+
+	// Decimals If set, replaces the number of digits to use after the decimal point when displaying the asset.
+	Decimals *uint32 `json:"decimals,omitempty"`
+
+	// DefaultFrozen If set, replaces whether holdings of the asset are frozen by default.
+	DefaultFrozen *bool `json:"default-frozen,omitempty"`
+
+	// Freeze If set, replaces the address of the account used to freeze holdings of the asset. The zero address means freezing is not permitted.
+	Freeze *string `json:"freeze,omitempty"`
+
+	// Id The ID of the asset to override. A new asset's ID must not be in the range of IDs that may be assigned to creatables made during simulation.
+	Id basics.AssetIndex `json:"id"`
+
+	// Manager If set, replaces the address of the account used to manage the asset. The zero address means there is no manager.
+	Manager *string `json:"manager,omitempty"`
+
+	// MetadataHash If set, replaces the 32 byte commitment to the asset's metadata.
+	MetadataHash *[]byte `json:"metadata-hash,omitempty"`
+
+	// Name If set, replaces the name of the asset. Use name-b64 instead for a value that is not valid utf-8. At most one of name and name-b64 may be set.
+	Name *string `json:"name,omitempty"`
+
+	// NameB64 If set, replaces the name of the asset, base64 encoded.
+	NameB64 *[]byte `json:"name-b64,omitempty"`
+
+	// Reserve If set, replaces the address of the account holding reserve units of the asset.
+	Reserve *string `json:"reserve,omitempty"`
+
+	// Total If set, replaces the total number of units of the asset.
+	Total *uint64 `json:"total,omitempty"`
+
+	// UnitName If set, replaces the name of a unit of the asset. Use unit-name-b64 instead for a value that is not valid utf-8. At most one of unit-name and unit-name-b64 may be set.
+	UnitName *string `json:"unit-name,omitempty"`
+
+	// UnitNameB64 If set, replaces the name of a unit of the asset, base64 encoded.
+	UnitNameB64 *[]byte `json:"unit-name-b64,omitempty"`
+
+	// Url If set, replaces the URL where more information about the asset can be retrieved. Use url-b64 instead for a value that is not valid utf-8. At most one of url and url-b64 may be set.
+	Url *string `json:"url,omitempty"`
+
+	// UrlB64 If set, replaces the URL where more information about the asset can be retrieved, base64 encoded.
+	UrlB64 *[]byte `json:"url-b64,omitempty"`
+}
+
+// SimulateBlockOverride Modifications to the header of a block at or before the round that simulation starts from. Omitted fields are left unchanged. Overridden headers are visible to the block opcode. The header of the round that simulation starts from is the previous header of the simulated block, so its overrides also affect that block: global LatestTimestamp is its timestamp, the simulated block's timestamp is no earlier than it, the simulated block's bonus is derived from its bonus, and fees are paid to its fee sink.
+type SimulateBlockOverride struct {
+	// Bonus If set, replaces the block's bonus, in microAlgos.
+	Bonus *uint64 `json:"bonus,omitempty"`
+
+	// FeeSink If set, replaces the block's fee sink.
+	FeeSink *string `json:"fee-sink,omitempty"`
+
+	// FeesCollected If set, replaces the fees collected in the block, in microAlgos.
+	FeesCollected *uint64 `json:"fees-collected,omitempty"`
+
+	// Proposer If set, replaces the block's proposer.
+	Proposer *string `json:"proposer,omitempty"`
+
+	// ProposerPayout If set, replaces the amount paid to the block's proposer, in microAlgos.
+	ProposerPayout *uint64 `json:"proposer-payout,omitempty"`
+
+	// Round The round of the block to override. It must be at or before the round that simulation starts from.
+	Round *basics.Round `json:"round"`
+
+	// Seed If set, replaces the block's 32 byte seed.
+	Seed *[]byte `json:"seed,omitempty"`
+
+	// Timestamp If set, replaces the block's timestamp, in seconds since the epoch. It must not be negative.
+	Timestamp *int64 `json:"timestamp,omitempty"`
+}
+
 // SimulateInitialStates Initial states of resources that were accessed during simulation.
 type SimulateInitialStates struct {
 	// AppInitialStates The initial states of accessed application before simulation. The order of this array is arbitrary.
@@ -827,6 +1022,9 @@ type SimulateRequest struct {
 	// Round If provided, specifies the round preceding the simulation. State changes through this round will be used to run this simulation. Usually only the 4 most recent rounds will be available (controlled by the node config value MaxAcctLookback). If not specified, defaults to the latest available round.
 	Round *basics.Round `json:"round,omitempty"`
 
+	// StateOverrides Modifications to ledger state that are applied before simulation begins. Overrides are only visible to the simulation and are never persisted. Overridden balances also change the ledger totals that the simulated block is built from, so they affect its rewards state and the rewards credited to every account during simulation. A request may override at most 1024 items in total, counting each block, account, application, asset, asset holding, application local state and box.
+	StateOverrides *SimulateStateOverrides `json:"state-overrides,omitempty"`
+
 	// TxnGroups The transaction groups to simulate.
 	TxnGroups []SimulateRequestTransactionGroup `json:"txn-groups"`
 }
@@ -835,6 +1033,21 @@ type SimulateRequest struct {
 type SimulateRequestTransactionGroup struct {
 	// Txns An atomic transaction group.
 	Txns []json.RawMessage `json:"txns"`
+}
+
+// SimulateStateOverrides Modifications to ledger state that are applied before simulation begins. Overrides are only visible to the simulation and are never persisted. Overridden balances also change the ledger totals that the simulated block is built from, so they affect its rewards state and the rewards credited to every account during simulation. A request may override at most 1024 items in total, counting each block, account, application, asset, asset holding, application local state and box.
+type SimulateStateOverrides struct {
+	// Accounts Account state overrides. Each address may appear at most once.
+	Accounts *[]SimulateAccountOverride `json:"accounts,omitempty"`
+
+	// Apps Application state overrides. Each application ID may appear at most once.
+	Apps *[]SimulateAppOverride `json:"apps,omitempty"`
+
+	// Assets Asset state overrides. Each asset ID may appear at most once.
+	Assets *[]SimulateAssetOverride `json:"assets,omitempty"`
+
+	// Blocks Block header overrides. Each round may appear at most once.
+	Blocks *[]SimulateBlockOverride `json:"blocks,omitempty"`
 }
 
 // SimulateTraceConfig An object that configures simulation execution trace.

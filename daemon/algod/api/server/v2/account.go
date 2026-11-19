@@ -217,6 +217,14 @@ func convertGeneratedTKV(akvs *model.TealKeyValueStore) (basics.TealKeyValue, er
 	return tkv, nil
 }
 
+// convertStateSchema converts a generated model schema to basics.
+func convertStateSchema(schema model.ApplicationStateSchema) basics.StateSchema {
+	return basics.StateSchema{
+		NumUint:      schema.NumUint,
+		NumByteSlice: schema.NumByteSlice,
+	}
+}
+
 // AccountToAccountData converts v2.model.Account to basics.AccountData
 func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 	var voteID crypto.OneTimeSignatureVerifier
@@ -304,10 +312,7 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 				return basics.AccountData{}, err
 			}
 			appLocalStates[ls.Id] = basics.AppLocalState{
-				Schema: basics.StateSchema{
-					NumUint:      ls.Schema.NumUint,
-					NumByteSlice: ls.Schema.NumByteSlice,
-				},
+				Schema:   convertStateSchema(ls.Schema),
 				KeyValue: kv,
 			}
 		}
@@ -406,16 +411,10 @@ func ApplicationParamsToAppParams(gap *model.ApplicationParams) (basics.AppParam
 	ap.FamilyBoxAccess = nilToZero(gap.FamilyBoxAccess)
 
 	if gap.LocalStateSchema != nil {
-		ap.LocalStateSchema = basics.StateSchema{
-			NumUint:      gap.LocalStateSchema.NumUint,
-			NumByteSlice: gap.LocalStateSchema.NumByteSlice,
-		}
+		ap.LocalStateSchema = convertStateSchema(*gap.LocalStateSchema)
 	}
 	if gap.GlobalStateSchema != nil {
-		ap.GlobalStateSchema = basics.StateSchema{
-			NumUint:      gap.GlobalStateSchema.NumUint,
-			NumByteSlice: gap.GlobalStateSchema.NumByteSlice,
-		}
+		ap.GlobalStateSchema = convertStateSchema(*gap.GlobalStateSchema)
 	}
 	kv, err := convertGeneratedTKV(gap.GlobalState)
 	if err != nil {

@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -43,12 +44,16 @@ type Request struct {
 	ExtraOpcodeBudget     int
 	TraceConfig           ExecTraceConfig
 	FixSigners            bool
+	StateOverrides        StateOverrides
 }
 
 // simulatorLedger patches the ledger interface to use a constant latest round.
 type simulatorLedger struct {
 	*data.Ledger
 	start basics.Round
+
+	// overlay, if non-nil, holds ledger state overridden by the simulation request
+	overlay *stateOverlay
 }
 
 // Latest is part of the ledger.Ledger interface.
@@ -59,6 +64,9 @@ func (l simulatorLedger) Latest() basics.Round {
 
 // LatestTotals is part of the ledger.Ledger interface.
 func (l simulatorLedger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
+	if l.overlay != nil {
+		return l.start, l.overlay.totals, nil
+	}
 	totals, err := l.Totals(l.start)
 	return l.start, totals, err
 }
@@ -74,7 +82,9 @@ func (l simulatorLedger) LookupLatest(addr basics.Address) (basics.AccountData, 
 
 // StartEvaluator is part of the ledger.Ledger interface. We override this so that
 // the eval.LedgerForEvaluator value passed into eval.StartEvaluator is a simulatorLedger,
-// not a data.Ledger. This ensures our overridden LookupLatest method will be used.
+// not a data.Ledger. This ensures that the evaluator reaches the state overlay through
+// LatestTotals, BlockHdr, LookupWithoutRewards, LookupApplication, LookupAsset, LookupKv,
+// GetCreatorForRound, LookupAgreement, OnlineCirculation and GetKnockOfflineCandidates.
 func (l simulatorLedger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int, tracer logic.EvalTracer) (*eval.BlockEvaluator, error) {
 	if tracer == nil {
 		return nil, errors.New("tracer is nil")
@@ -121,7 +131,7 @@ type Simulator struct {
 // MakeSimulator creates a new simulator from a ledger.
 func MakeSimulator(ledger *data.Ledger, developerAPI bool) *Simulator {
 	return &Simulator{
-		ledger:       simulatorLedger{ledger, 0}, // start round to be specified in Simulate method
+		ledger:       simulatorLedger{Ledger: ledger}, // start round to be specified in Simulate method
 		developerAPI: developerAPI,
 	}
 }
@@ -270,7 +280,7 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, group []transactions.Si
 	// and data.Ledger embeds *ledger.Ledger
 	eval, err := s.ledger.StartEvaluator(hdr, len(group), 0, tracer)
 	if err != nil {
-		return nil, err
+		return nil, s.ledger.evalError(err)
 	}
 
 	err = eval.TransactionGroup(group...)
@@ -281,7 +291,7 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, group []transactions.Si
 	// Finally, process any pending end-of-block state changes.
 	ub, err := eval.GenerateBlock(nil)
 	if err != nil {
-		return nil, err
+		return nil, s.ledger.evalError(err)
 	}
 
 	// Since we skip agreement, this block is imperfect w/ respect to seed/proposer/payouts
@@ -311,7 +321,8 @@ func (s Simulator) simulateWithTracer(hdr bookkeeping.BlockHeader, txgroup []tra
 				// Otherwise lookup the sender's account and set the txn auth addr to the account's auth addr
 				if txnNeedsSyntheticSignature(*stxn) {
 					var data ledgercore.AccountData
-					data, _, _, err = s.ledger.LookupAccount(s.ledger.start, sender)
+					// Use LookupWithoutRewards, which applies any state overrides
+					data, _, err = s.ledger.LookupWithoutRewards(s.ledger.start, sender)
 					if err != nil {
 						return nil, err
 					}
@@ -371,8 +382,21 @@ func (s Simulator) simulateWithTracer(hdr bookkeeping.BlockHeader, txgroup []tra
 	return vb, nil
 }
 
+// recoverPanic, when deferred, converts a panic into an error stored in err. The ledger and
+// evaluator panic on state they consider impossible, such as an account balance that overflows
+// when its rewards are applied. The recovered value is logged rather than included in the error,
+// which is returned to API clients.
+func recoverPanic(err *error) {
+	if r := recover(); r != nil {
+		logging.Base().Errorf("recovered from panic during simulation: %v", r)
+		*err = errors.New("simulation panicked")
+	}
+}
+
 // Simulate simulates a transaction group using the simulator. Will error if the transaction group is not well-formed.
-func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
+func (s Simulator) Simulate(simulateRequest Request) (result Result, err error) {
+	defer recoverPanic(&err)
+
 	if simulateRequest.FixSigners && !simulateRequest.AllowEmptySignatures {
 		return Result{}, InvalidRequestError{
 			SimulatorError{
@@ -396,9 +420,24 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 		}
 	}
 
+	// Overrides are validated against the unmodified start round header
 	prevBlockHdr, err := s.ledger.BlockHdr(s.ledger.start)
 	if err != nil {
 		return Result{}, err
+	}
+
+	// Apply state overrides before any evaluation takes place
+	s.ledger.overlay, err = s.ledger.buildStateOverlay(simulateRequest.StateOverrides, prevBlockHdr)
+	if err != nil {
+		return Result{}, err
+	}
+	if s.ledger.overlay != nil {
+		// Re-read the header now that the overlay is set, so that block overrides carry into the
+		// block being simulated
+		prevBlockHdr, err = s.ledger.BlockHdr(s.ledger.start)
+		if err != nil {
+			return Result{}, err
+		}
 	}
 	nextBlock := bookkeeping.MakeBlock(prevBlockHdr)
 
