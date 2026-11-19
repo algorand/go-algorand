@@ -172,7 +172,7 @@ func generateRandomVote() *rapid.Generator[*agreement.UnauthenticatedVote] {
 		copy(v.Sig.PK1Sig[:], p1sBytes)
 		copy(v.Sig.PK2Sig[:], p2sBytes)
 
-		// PKSigOld is deprecated and always zero when encoded with StatelessEncoder
+		// PKSigOld is deprecated and must be zero for StatelessEncoder to accept the vote
 		v.Sig.PKSigOld = [64]byte{}
 
 		return v

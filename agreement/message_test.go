@@ -221,6 +221,47 @@ func TestDecodeRejectsStepAboveDown(t *testing.T) {
 	}
 }
 
+// TestDecodeClearsPKSigOld checks that every gossip decoder zeroes the unused
+// PKSigOld field, wherever a vote can be carried, and otherwise leaves the
+// signature intact.
+func TestDecodeClearsPKSigOld(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var legacy, cleared crypto.OneTimeSignature
+	for _, b := range [][]byte{legacy.Sig[:], legacy.PK[:], legacy.PK2[:], legacy.PK1Sig[:], legacy.PK2Sig[:]} {
+		crypto.RandBytes(b)
+	}
+	cleared = legacy
+	legacy.PKSigOld[0] = 1
+	rv := rawVote{Sender: poolAddr, Round: basics.Round(1), Period: period(1), Step: soft}
+
+	t.Run("vote", func(t *testing.T) {
+		out, err := decodeVote(protocol.Encode(&unauthenticatedVote{R: rv, Sig: legacy}))
+		require.NoError(t, err)
+		require.Equal(t, unauthenticatedVote{R: rv, Sig: cleared}, out)
+	})
+	t.Run("bundle", func(t *testing.T) {
+		ub := unauthenticatedBundle{Round: basics.Round(1), Period: period(1), Step: soft,
+			Votes: []voteAuthenticator{{Sender: poolAddr}, {Sender: poolAddr, Sig: legacy}},
+			EquivocationVotes: []equivocationVoteAuthenticator{
+				{Sender: poolAddr, Sigs: [2]crypto.OneTimeSignature{legacy, {}}},
+				{Sender: poolAddr, Sigs: [2]crypto.OneTimeSignature{{}, legacy}},
+			}}
+		out, err := decodeBundle(protocol.Encode(&ub))
+		require.NoError(t, err)
+		ub.Votes[1].Sig = cleared
+		ub.EquivocationVotes[0].Sigs[0] = cleared
+		ub.EquivocationVotes[1].Sigs[1] = cleared
+		require.Equal(t, ub, out)
+	})
+	t.Run("proposal prior vote", func(t *testing.T) {
+		out, err := decodeProposal(protocol.Encode(&transmittedPayload{PriorVote: unauthenticatedVote{R: rv, Sig: legacy}}))
+		require.NoError(t, err)
+		require.Equal(t, unauthenticatedVote{R: rv, Sig: cleared}, out.(compoundMessage).Vote)
+	})
+}
+
 func BenchmarkVoteDecoding(b *testing.B) {
 	oneTimeSecrets := crypto.GenerateOneTimeSignatureSecrets(300, 1000)
 	id := crypto.OneTimeSignatureIdentifier{
