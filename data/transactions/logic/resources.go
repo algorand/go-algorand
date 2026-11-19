@@ -33,6 +33,9 @@ type resources struct {
 	// by later transactions.
 	createdAsas map[basics.AssetIndex]struct{}
 	createdApps map[basics.AppIndex]struct{}
+	// createdAppAccounts holds the addresses of createdApps, so that checking
+	// whether an address belongs to a created app is a lookup, not a scan.
+	createdAppAccounts map[basics.Address]struct{}
 
 	// These resources have been used by some txn in the group, so they are
 	// available. These maps track the availability of the basic objects (often
@@ -66,6 +69,18 @@ type resources struct {
 
 	// dirtyBytes maintains a running count of bytes that count against write budget.
 	dirtyBytes uint64
+}
+
+// createApp records that app `id`, whose account is `addr`, was created in the group.
+func (r *resources) createApp(id basics.AppIndex, addr basics.Address) {
+	if r.createdApps == nil {
+		r.createdApps = make(map[basics.AppIndex]struct{})
+	}
+	if r.createdAppAccounts == nil {
+		r.createdAppAccounts = make(map[basics.Address]struct{})
+	}
+	r.createdApps[id] = struct{}{}
+	r.createdAppAccounts[addr] = struct{}{}
 }
 
 func (r *resources) shareHolding(addr basics.Address, id basics.AssetIndex) {
@@ -192,10 +207,8 @@ func (cx *EvalContext) allowsHolding(addr basics.Address, ai basics.AssetIndex) 
 		return cx.availableAccount(addr)
 	}
 	// If the address was "created" by making its app in this group, then allow for available assets.
-	for created := range r.createdApps {
-		if cx.GetApplicationAddress(created) == addr {
-			return cx.availableAsset(ai)
-		}
+	if _, ok := r.createdAppAccounts[addr]; ok {
+		return cx.availableAsset(ai)
 	}
 
 	if cx.UnnamedResources != nil {
@@ -219,10 +232,8 @@ func (cx *EvalContext) allowsLocals(addr basics.Address, ai basics.AppIndex) boo
 	}
 
 	// All locals of created app accounts are available
-	for created := range r.createdApps {
-		if cx.GetApplicationAddress(created) == addr {
-			return cx.availableApp(ai)
-		}
+	if _, ok := r.createdAppAccounts[addr]; ok {
+		return cx.availableApp(ai)
 	}
 
 	if cx.UnnamedResources != nil {
@@ -295,7 +306,8 @@ func (cx *EvalContext) allowsAssetFreeze(hdr *transactions.Header, tx *transacti
 }
 
 func (r *resources) fillApplicationCall(ep *EvalParams, hdr *transactions.Header, tx *transactions.ApplicationCallTxnFields) {
-	if tx.Access != nil {
+	// Test the length, not nil, as in AddressByIndex.
+	if len(tx.Access) > 0 {
 		r.fillApplicationCallAccess(ep, hdr, tx)
 	} else {
 		r.fillApplicationCallForeign(ep, hdr, tx)
@@ -347,7 +359,7 @@ func (r *resources) fillApplicationCallForeign(ep *EvalParams, hdr *transactions
 	// Make the app account associated with app calls available. We
 	// don't have to add code to make the accounts of freshly created
 	// apps available, because that is already handled by looking at
-	// `createdApps`.
+	// `createdAppAccounts`.
 	if id := tx.ApplicationID; id != 0 {
 		txAccounts = append(txAccounts, ep.GetApplicationAddress(id))
 		r.sharedApps[id] = struct{}{}

@@ -304,6 +304,21 @@ func getblock(client libgoal.Client, round basics.Round) (bookkeeping.Block, err
 }
 
 func rekeyreg(a *require.Assertions, client libgoal.Client, proto config.ConsensusParams, address string, becomeEligible bool) basics.AccountData {
+	return startRekeyreg(a, client, proto, address, becomeEligible).wait(a)
+}
+
+// pendingRekeyreg is a keyreg sent by startRekeyreg that has not been confirmed yet.
+type pendingRekeyreg struct {
+	client         libgoal.Client
+	address        string
+	becomeEligible bool
+	txID           string
+	lastValid      basics.Round
+}
+
+// startRekeyreg sends the keyreg that rekeyreg makes, without waiting for it,
+// so that a test can register many accounts in the same few rounds.
+func startRekeyreg(a *require.Assertions, client libgoal.Client, proto config.ConsensusParams, address string, becomeEligible bool) pendingRekeyreg {
 	// we start by making an _offline_ tx here, because we want to populate the
 	// key material ourself with a copy of the account's existing material. That
 	// makes it an _online_ keyreg. That allows the running node to chug along
@@ -336,16 +351,22 @@ func rekeyreg(a *require.Assertions, client libgoal.Client, proto config.Consens
 	a.NoError(err)
 	onlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, reReg)
 	a.NoError(err)
-	txn, err := client.WaitForConfirmedTxn(reReg.LastValid, onlineTxID)
+	return pendingRekeyreg{client: client, address: address, becomeEligible: becomeEligible,
+		txID: onlineTxID, lastValid: reReg.LastValid}
+}
+
+// wait waits for the keyreg to be confirmed and checks its effect.
+func (p pendingRekeyreg) wait(a *require.Assertions) basics.AccountData {
+	txn, err := p.client.WaitForConfirmedTxn(p.lastValid, p.txID)
 	a.NoError(err)
 	// sync up with the network
-	_, err = client.WaitForRound(*txn.ConfirmedRound)
+	_, err = p.client.WaitForRound(*txn.ConfirmedRound)
 	a.NoError(err)
-	data, err = client.AccountData(address)
+	data, err := p.client.AccountData(p.address)
 	a.NoError(err)
 	a.Equal(basics.Online, data.Status)
 	a.True(data.LastHeartbeat > 0)
-	a.Equal(becomeEligible, data.IncentiveEligible)
-	fmt.Printf(" %v has %v in round %d\n", address, data.MicroAlgos.Raw, *txn.ConfirmedRound)
+	a.Equal(p.becomeEligible, data.IncentiveEligible)
+	fmt.Printf(" %v has %v in round %d\n", p.address, data.MicroAlgos.Raw, *txn.ConfirmedRound)
 	return data
 }

@@ -294,7 +294,8 @@ func (ue UnverifiedTxnSigJob) GetNumberOfBatchableItems() (batchSigs uint64, err
 func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn, groupIndex int) (uint64, error) {
 	sigType, err := checkTxnSigTypeCounts(stx, groupIndex)
 	if err != nil {
-		return 0, err
+		// name the transaction, as txnGroupBatchPrep does
+		return 0, fmt.Errorf("transaction %s invalid : %w", stx.Summary(), err)
 	}
 	switch sigType {
 	case regularSig:

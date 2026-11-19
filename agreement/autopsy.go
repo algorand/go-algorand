@@ -363,6 +363,11 @@ func (a *Autopsy) extractNextCdv(ch chan<- autopsyTrace) (bounds AutopsyBounds, 
 	expectAction := false // if false, event is expected; else action
 	var accp autopsyPair
 
+	// undecoded proposal payloads read from entries that come before the
+	// event or the player they belong to
+	var eventPayload []byte
+	var pendingPayloads map[uint64][]byte
+
 	for { // terminates automatically on EOF
 		var t cadaverEntryType
 		err = protocol.DecodeStream(a, &t)
@@ -391,6 +396,12 @@ func (a *Autopsy) extractNextCdv(ch chan<- autopsyTrace) (bounds AutopsyBounds, 
 				reterr = fmt.Errorf("Autopsy.ExtractNextCdv: failed to decode player: %v", err)
 				return
 			}
+			for i, data := range pendingPayloads {
+				if tail := acc.x.Pending.Pending[i]; tail != nil {
+					tail.Input.UnauthenticatedProposal.deferredPayload = data
+				}
+			}
+			pendingPayloads = nil
 			expectAction = false
 
 			bounds.EndRound = uint64(acc.x.Round)
@@ -419,6 +430,13 @@ func (a *Autopsy) extractNextCdv(ch chan<- autopsyTrace) (bounds AutopsyBounds, 
 				reterr = fmt.Errorf("Autopsy.ExtractNextCdv: failed to decode event: %v", err)
 				return
 			}
+			if me, ok := e.(messageEvent); ok && eventPayload != nil {
+				if up := me.receivedPayload(); up != nil {
+					up.deferredPayload = eventPayload
+					e = me
+				}
+			}
+			eventPayload = nil
 
 			if recording {
 				if expectAction {
@@ -468,6 +486,32 @@ func (a *Autopsy) extractNextCdv(ch chan<- autopsyTrace) (bounds AutopsyBounds, 
 				accp = autopsyPair{}
 				expectAction = !expectAction
 			}
+
+		case cadaverEventPayloadEntry:
+			eventPayload = nil
+			err = protocol.DecodeStream(a, &eventPayload)
+			if err != nil {
+				reterr = fmt.Errorf("Autopsy.ExtractNextCdv: failed to decode event payload: %v", err)
+				return
+			}
+
+		case cadaverPendingPayloadEntry:
+			var i uint64
+			err = protocol.DecodeStream(a, &i)
+			if err != nil {
+				reterr = fmt.Errorf("Autopsy.ExtractNextCdv: failed to decode pending payload index: %v", err)
+				return
+			}
+			var data []byte
+			err = protocol.DecodeStream(a, &data)
+			if err != nil {
+				reterr = fmt.Errorf("Autopsy.ExtractNextCdv: failed to decode pending payload: %v", err)
+				return
+			}
+			if pendingPayloads == nil {
+				pendingPayloads = make(map[uint64][]byte)
+			}
+			pendingPayloads[i] = data
 
 		case cadaverMetaEntry:
 			// note that we can read multiple of these for a singe "cadaver seq" during normal operation if a sequence spans multiple

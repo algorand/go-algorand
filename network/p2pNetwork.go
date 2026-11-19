@@ -84,6 +84,9 @@ type P2PNetwork struct {
 	// handlers must not register new wsPeers, because nothing would close them.
 	wsPeersClosed bool
 
+	// handshakeTimeout defaults to p2pHandshakeTimeout; it is a field so tests can shorten it.
+	handshakeTimeout time.Duration
+
 	// connPerfMonitor is used on outgoing connections to measure their relative message timing
 	connPerfMonitor *connectionPerformanceMonitor
 
@@ -282,6 +285,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		},
 	}
 
+	net.handshakeTimeout = p2pHandshakeTimeout
 	net.ctx, net.ctxCancel = context.WithCancel(context.Background())
 	net.handler = msgHandler{
 		ctx:        net.ctx,
@@ -660,6 +664,7 @@ func (n *P2PNetwork) Broadcast(ctx context.Context, tag protocol.Tag, data []byt
 
 // Relay message
 func (n *P2PNetwork) Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error {
+	n.handler.sendRelayFilterMessage(tag, data, except, n)
 	if n.relayMessages {
 		return n.Broadcast(ctx, tag, data, wait, except)
 	}
@@ -936,6 +941,30 @@ func (n *P2PNetwork) VoteCompressionEnabled() bool {
 	return n.config.EnableVoteCompression
 }
 
+// p2pHandshakeTimeout bounds the gossip stream handshake: the V1 initial byte or the V22
+// metadata exchange. libp2p clears the stream deadline once protocol negotiation is done, so the
+// handshake sets its own.
+const p2pHandshakeTimeout = 10 * time.Second
+
+// startHandshake sets the handshake deadline on stream. The handler clears it with
+// finishHandshake before the stream becomes a wsPeer.
+func (n *P2PNetwork) startHandshake(p2pPeer peer.ID, stream network.Stream) error {
+	if err := stream.SetDeadline(time.Now().Add(n.handshakeTimeout)); err != nil {
+		_ = stream.Reset()
+		return &p2p.StreamHandlerLoggedError{Level: logging.Warn, Err: fmt.Errorf("error setting the handshake deadline for peer %s: %w", p2pPeer, err)}
+	}
+	return nil
+}
+
+// finishHandshake clears the deadline set by startHandshake.
+func (n *P2PNetwork) finishHandshake(p2pPeer peer.ID, stream network.Stream) error {
+	if err := stream.SetDeadline(time.Time{}); err != nil {
+		_ = stream.Reset()
+		return &p2p.StreamHandlerLoggedError{Level: logging.Warn, Err: fmt.Errorf("error clearing the handshake deadline for peer %s: %w", p2pPeer, err)}
+	}
+	return nil
+}
+
 // wsStreamHandlerV1 is a callback that the p2p package calls when a new peer connects and establishes a
 // stream for the websocket protocol.
 // TODO: remove after consensus v41 takes effect.
@@ -944,6 +973,9 @@ func (n *P2PNetwork) wsStreamHandlerV1(ctx context.Context, p2pPeer peer.ID, str
 		return &p2p.StreamHandlerLoggedError{Level: logging.Warn, Err: fmt.Errorf("unknown protocol %s from peer %s", stream.Protocol(), p2pPeer)}
 	}
 
+	if err := n.startHandshake(p2pPeer, stream); err != nil {
+		return err
+	}
 	if incoming {
 		var initMsg [1]byte
 		rn, err := stream.Read(initMsg[:])
@@ -955,6 +987,9 @@ func (n *P2PNetwork) wsStreamHandlerV1(ctx context.Context, p2pPeer peer.ID, str
 			return &p2p.StreamHandlerLoggedError{Level: logging.Warn, Err: fmt.Errorf("wsStreamHandlerV1: error sending initial message to peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)}
 		}
 	}
+	if err := n.finishHandshake(p2pPeer, stream); err != nil {
+		return err
+	}
 
 	return n.baseWsStreamHandler(ctx, p2pPeer, stream, incoming, peerMetaInfo{})
 }
@@ -964,6 +999,9 @@ func (n *P2PNetwork) wsStreamHandlerV22(ctx context.Context, p2pPeer peer.ID, st
 		return &p2p.StreamHandlerLoggedError{Level: logging.Warn, Err: fmt.Errorf("unknown protocol %s from peer %s", stream.Protocol(), p2pPeer)}
 	}
 
+	if err := n.startHandshake(p2pPeer, stream); err != nil {
+		return err
+	}
 	var err error
 	var pmi peerMetaInfo
 	if incoming {
@@ -989,6 +1027,9 @@ func (n *P2PNetwork) wsStreamHandlerV22(ctx context.Context, p2pPeer peer.ID, st
 			_ = stream.Reset()
 			return &p2p.StreamHandlerLoggedError{Level: logging.Warn, Err: fmt.Errorf("wsStreamHandlerV22: error reading peer meta headers response from peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)}
 		}
+	}
+	if err := n.finishHandshake(p2pPeer, stream); err != nil {
+		return err
 	}
 	return n.baseWsStreamHandler(ctx, p2pPeer, stream, incoming, pmi)
 }
@@ -1018,7 +1059,12 @@ func (n *P2PNetwork) baseWsStreamHandler(ctx context.Context, p2pPeer peer.ID, s
 	} else {
 		n.log.Warnf("Cannot get pubkey for peer %s", p2pPeer)
 	}
-	peerCore := makePeerCore(ctx, n, n.log, n.handler.readBuffer, addr, client, addr)
+	// wsPeer.RoutingAddr parses originAddress as an IP address, which a multiaddr string is not.
+	originAddr := addr
+	if ip, err0 := manet.ToIP(ma); err0 == nil {
+		originAddr = ip.String()
+	}
+	peerCore := makePeerCore(ctx, n, n.log, n.handler.readBuffer, addr, client, originAddr)
 	wsp := &wsPeer{
 		wsPeerCore:               peerCore,
 		conn:                     &wsPeerConnP2P{stream: stream},
@@ -1249,7 +1295,14 @@ func (p *gsPeer) GetNetwork() GossipNode {
 	return p.net
 }
 
+// RoutingAddr returns the routing address of the IP the peer is connected from, like wsPeer.RoutingAddr.
+// The peer ID is used when the peer has no connection with an IP address.
 func (p *gsPeer) RoutingAddr() []byte {
+	for _, conn := range p.net.service.ConnsToPeer(p.peerID) {
+		if ip, err := manet.ToIP(conn.RemoteMultiaddr()); err == nil {
+			return routingAddr(ip)
+		}
+	}
 	return []byte(p.peerID)
 }
 

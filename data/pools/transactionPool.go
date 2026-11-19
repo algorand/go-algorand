@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -67,6 +69,11 @@ type TransactionPool struct {
 	feePerByte             atomic.Uint64
 	feeThresholdMultiplier uint64
 	statusCache            *statusCache
+
+	// pendingBlockHeader is the header of the block that pendingBlockEvaluator
+	// is assembling. Transaction groups are verified against it before they are
+	// added to the evaluator.
+	pendingBlockHeader bookkeeping.BlockHeader
 
 	assemblyMu       deadlock.Mutex
 	assemblyCond     sync.Cond
@@ -111,7 +118,8 @@ type BlockEvaluator interface {
 	PaySetSize() int
 	TransactionGroup(txads ...transactions.SignedTxnWithAD) error
 	GenerateBlock(addrs []basics.Address) (*ledgercore.UnfinishedBlock, error)
-	ResetTxnBytes()
+	ResetTxnBytes() int
+	RestoreTxnBytes(txnBytes int)
 }
 
 // VotingAccountSupplier provides a list of possible participating account addresses valid for a given round.
@@ -330,7 +338,10 @@ func (pool *TransactionPool) computeFeePerByte() uint64 {
 	// is mostly idle, feeThresholdMultiplier will be 0, and all txns
 	// are accepted (assuming the BlockEvaluator approves them, which
 	// requires a flat MinTxnFee).
-	feePerByte = feePerByte * pool.feeThresholdMultiplier
+	//
+	// This multiplication, those below, the one in checkSufficientFee and the
+	// multiplier's growth in OnNewBlock all saturate rather than wrap.
+	feePerByte = basics.MulSaturate(feePerByte, pool.feeThresholdMultiplier)
 
 	// The feePerByte should be bumped to 1 to make the exponentially
 	// threshold growing valid.
@@ -342,8 +353,8 @@ func (pool *TransactionPool) computeFeePerByte() uint64 {
 	// pending in the pool.
 	// golang has no convenient integer exponentiation, so we just
 	// do this in a loop
-	for i := 0; i < int(pool.numPendingWholeBlocks)-1; i++ {
-		feePerByte *= pool.expFeeFactor
+	for i := 0; i < int(pool.numPendingWholeBlocks)-1 && feePerByte < math.MaxUint64; i++ {
+		feePerByte = basics.MulSaturate(feePerByte, pool.expFeeFactor)
 	}
 
 	// Update the counter for fast reads
@@ -369,7 +380,7 @@ func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn
 	feePerByte := pool.computeFeePerByte()
 
 	for _, t := range txgroup {
-		feeThreshold := feePerByte * uint64(t.GetEncodedLength())
+		feeThreshold := basics.MulSaturate(feePerByte, uint64(t.GetEncodedLength()))
 		if t.Txn.Fee.Raw < feeThreshold {
 			return &ErrTxPoolFeeError{
 				fee:           t.Txn.Fee,
@@ -473,7 +484,9 @@ func (pool *TransactionPool) ingest(txgroup []transactions.SignedTxn, params poo
 }
 
 // Remember stores the provided transaction group.
-// Precondition: Only Remember() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
+// Precondition: Only Remember() properly-signed and well-formed transactions (i.e., ensure t.WellFormed()),
+// verified against the latest committed block. A group whose verification does not
+// carry over to the block being assembled (see verifyForPendingBlock) is rejected.
 func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn) error {
 	if err := pool.checkPendingQueueSize(txgroup); err != nil {
 		return err
@@ -559,7 +572,7 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercor
 			if pool.feeThresholdMultiplier == 0 {
 				pool.feeThresholdMultiplier = 1
 			} else {
-				pool.feeThresholdMultiplier = pool.feeThresholdMultiplier * pool.expFeeFactor
+				pool.feeThresholdMultiplier = basics.MulSaturate(pool.feeThresholdMultiplier, pool.expFeeFactor)
 			}
 		}
 
@@ -605,6 +618,10 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 				Early:      false,
 			}
 		}
+	}
+
+	if err := pool.verifyForPendingBlock(txgroup); err != nil {
+		return err
 	}
 
 	txgroupad := transactions.WrapSignedTxnsWithAD(txgroup)
@@ -660,12 +677,52 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 	return err
 }
 
+// verifyForPendingBlock makes sure that txgroup is verified under the header of
+// the block being assembled. Transaction groups are verified on arrival against
+// the latest committed block, whose protocol differs from the pending block's
+// while a consensus upgrade takes effect.
+// A group that is already verified under the pending block's protocol (the
+// common case) is found in the verified transaction cache; any other group is
+// verified again under the pending block header.
+//
+// verifyForPendingBlock assumes that pool.mu is locked.
+func (pool *TransactionPool) verifyForPendingBlock(txgroup []transactions.SignedTxn) error {
+	cache := pool.ledger.VerifiedTransactionCache()
+	specAddrs := transactions.SpecialAddresses{
+		FeeSink:     pool.pendingBlockHeader.FeeSink,
+		RewardsPool: pool.pendingBlockHeader.RewardsPool,
+	}
+	unverified := cache.GetUnverifiedTransactionGroups([][]transactions.SignedTxn{txgroup}, specAddrs, pool.pendingBlockHeader.CurrentProtocol)
+	if len(unverified) == 0 {
+		return nil
+	}
+	_, err := verify.TxnGroup(txgroup, &pool.pendingBlockHeader, cache, pool.ledger)
+	if err != nil {
+		return &ErrTxPoolVerifyError{round: pool.pendingBlockHeader.Round, err: err}
+	}
+	return nil
+}
+
 func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.SignedTxn, recomputing bool, stats *telemetryspec.AssembleBlockMetrics) error {
 	err := pool.addToPendingBlockEvaluatorOnce(txgroup, recomputing, stats)
 	if err == ledgercore.ErrNoSpace {
+		// Groups past a block's worth are checked for LastValid against the
+		// round they would spill into, but still verified against
+		// pendingBlockHeader, even if a protocol upgrade takes effect by that
+		// round. That is safe: they reach a later block only through
+		// recomputeBlockEvaluator, which verifies them again against that
+		// block's header.
 		pool.numPendingWholeBlocks++
-		pool.pendingBlockEvaluator.ResetTxnBytes()
+		txnBytes := pool.pendingBlockEvaluator.ResetTxnBytes()
 		err = pool.addToPendingBlockEvaluatorOnce(txgroup, recomputing, stats)
+		if err != nil {
+			// The group was not added, so it did not start another block. Left
+			// in place, the count would raise the fee threshold for a group
+			// that is never in the pool, and the cleared byte count would
+			// understate how full the pending blocks are.
+			pool.numPendingWholeBlocks--
+			pool.pendingBlockEvaluator.RestoreTxnBytes(txnBytes)
+		}
 	}
 	return err
 }
@@ -743,6 +800,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 		pool.log.Warnf("TransactionPool.recomputeBlockEvaluator: cannot start evaluator: %v", err)
 		return
 	}
+	pool.pendingBlockHeader = next.BlockHeader
 
 	var asmStats telemetryspec.AssembleBlockMetrics
 	asmStats.StartCount = len(txgroups)

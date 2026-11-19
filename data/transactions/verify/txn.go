@@ -153,6 +153,16 @@ func (e *TxGroupError) Unwrap() error {
 	return e.err
 }
 
+// RefusedTxns returns the single bad transaction from group if err identifies
+// it, or the whole group if not, to log a concise error.
+func RefusedTxns(group []transactions.SignedTxn, err error) []transactions.SignedTxn {
+	var groupErr *TxGroupError
+	if errors.As(err, &groupErr) && groupErr.GroupIndex >= 0 && groupErr.GroupIndex < len(group) {
+		return group[groupErr.GroupIndex : groupErr.GroupIndex+1]
+	}
+	return group
+}
+
 // PrepareGroupContext prepares a GroupCtx for a given transaction group.
 func PrepareGroupContext(group []transactions.SignedTxn, contextHdr *bookkeeping.BlockHeader, ledger logic.LedgerForSignature, evalTracer logic.EvalTracer) (*GroupContext, error) {
 	if len(group) == 0 {
@@ -245,7 +255,7 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 	}
 	for i := range stxs {
 		if err := stxs[i].Txn.WellFormed(groupCtx.specAddrs, groupCtx.consensusParams); err != nil {
-			return nil, fmt.Errorf("transaction %+v invalid : %w", stxs[i], &TxGroupError{err: err, GroupIndex: i, Reason: TxGroupErrorReasonNotWellFormed})
+			return nil, fmt.Errorf("transaction %s invalid : %w", stxs[i].Summary(), &TxGroupError{err: err, GroupIndex: i, Reason: TxGroupErrorReasonNotWellFormed})
 		}
 	}
 
@@ -262,12 +272,11 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 		return nil, err
 	}
 
-	for i, stxn := range stxs {
+	for i := range stxs {
 		prepErr := txnBatchPrep(i, groupCtx, batch)
 		if prepErr != nil {
-			// re-wrap the error with more details
-			prepErr.err = fmt.Errorf("transaction %+v invalid : %w", stxn, prepErr.err)
-			return nil, prepErr
+			// wrap the error with more details
+			return nil, fmt.Errorf("transaction %s invalid : %w", stxs[i].Summary(), prepErr)
 		}
 	}
 

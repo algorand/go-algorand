@@ -493,13 +493,22 @@ func TestWebsocketProposalPayloadCompression(t *testing.T) {
 			netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
 			netB.Start()
 			defer netStop(t, netB, "B")
+			// zstdCompressMsg compresses only messages that compression makes shorter
 			messages := [][]byte{
-				[]byte("foo"),
-				[]byte("bar"),
+				[]byte(strings.Repeat("foo", 16)),
+				[]byte(strings.Repeat("bar", 16)),
 			}
 			matcher := newMessageMatcher(t, messages)
 			counterDone := matcher.done
-			netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.ProposalPayloadTag, MessageHandler: matcher}})
+			// Proposal payloads reach the handler still compressed.
+			inflate := HandlerFunc(func(msg IncomingMessage) OutgoingMessage {
+				require.Equal(t, zstdCompressionMagic[:], msg.Data[:len(zstdCompressionMagic)])
+				data, err := DecompressProposal(msg.Data)
+				require.NoError(t, err)
+				msg.Data = data
+				return matcher.Handle(msg)
+			})
+			netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.ProposalPayloadTag, MessageHandler: inflate}})
 
 			readyTimeout := time.NewTimer(2 * time.Second)
 			waitReady(t, netA, readyTimeout.C)
@@ -895,6 +904,7 @@ func (nc *nopConn) WriteMessage(int, []byte) error              { return nil }
 func (nc *nopConn) WriteControl(int, []byte, time.Time) error   { return nil }
 func (nc *nopConn) CloseWithMessage([]byte, time.Time) error    { return nil }
 func (nc *nopConn) SetReadLimit(limit int64)                    {}
+func (nc *nopConn) SetReadDeadline(time.Time) error             { return nil }
 func (nc *nopConn) CloseWithoutFlush() error                    { return nil }
 func (nc *nopConn) SetPingHandler(h func(appData string) error) {}
 func (nc *nopConn) SetPongHandler(h func(appData string) error) {}
@@ -1214,7 +1224,9 @@ func TestDupFilter(t *testing.T) {
 	defer netStop(t, netB, "B")
 	counter := &messageCounterHandler{t: t, limit: 1, done: make(chan struct{})}
 	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.AgreementVoteTag, MessageHandler: counter}})
-	debugTag2 := protocol.ProposalPayloadTag
+	// A large tag the network sends filter messages for as its messages
+	// arrive. Proposal payloads are not one: Relay sends theirs.
+	debugTag2 := protocol.VoteBundleTag
 	counter2 := &messageCounterHandler{t: t, limit: 1, done: make(chan struct{})}
 	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: debugTag2, MessageHandler: counter2}})
 
@@ -3673,10 +3685,17 @@ func testWebsocketDisconnection(t *testing.T, disconnectFunc func(wn *WebsocketN
 	netB.Start()
 	defer netStop(t, netB, "B")
 
+	// Proposal payloads reach the handler still compressed.
+	firstByte := func(msg IncomingMessage) byte {
+		data, err := DecompressProposal(msg.Data)
+		assert.NoError(t, err)
+		return data[0]
+	}
+
 	msgHandlerA := func(msg IncomingMessage) (out OutgoingMessage) {
 		// if we received a message, send a message back.
-		if msg.Data[0]%10 == 2 {
-			netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{msg.Data[0] + 8}, true, nil)
+		if b := firstByte(msg); b%10 == 2 {
+			netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{b + 8}, true, nil)
 		}
 		return
 	}
@@ -3688,8 +3707,9 @@ func testWebsocketDisconnection(t *testing.T, disconnectFunc func(wn *WebsocketN
 			disconnectFunc(netB, &out)
 		} else {
 			// if we received a message, send a message back.
-			netB.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{msg.Data[0] + 1}, true, nil)
-			netB.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{msg.Data[0] + 2}, true, nil)
+			b := firstByte(msg)
+			netB.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{b + 1}, true, nil)
+			netB.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{b + 2}, true, nil)
 		}
 		return
 	}
@@ -3939,7 +3959,7 @@ func TestPreparePeerData(t *testing.T) {
 	}
 	reqs := []broadcastRequest{
 		{tag: protocol.AgreementVoteTag, data: protocol.EncodeReflect(vote)},
-		{tag: protocol.ProposalPayloadTag, data: []byte("data")},
+		{tag: protocol.ProposalPayloadTag, data: []byte(strings.Repeat("data", 16))},
 		{tag: protocol.TxnTag, data: []byte("txn")},
 		{tag: protocol.StateProofSigTag, data: []byte("stateproof")},
 	}

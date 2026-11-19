@@ -46,6 +46,7 @@ func stateProofTxnForCheck() Transaction {
 				SigCommit:  make(crypto.GenericDigest, stateproof.HashSize),
 				SigProofs:  stateProofPathForCheck(stateproof.HashType, stateproof.HashSize),
 				PartProofs: stateProofPathForCheck(stateproof.HashType, stateproof.HashSize),
+				Reveals:    map[uint64]stateproof.Reveal{0: {}, 1: {}},
 			},
 		},
 	}
@@ -128,7 +129,8 @@ func TestCheckTxnGroupStateProofBasicSuite(t *testing.T) {
 		reveal.SigSlot.Sig.Proof = merklearray.SingleLeafProof{
 			Proof: stateProofPathForCheck(stateproof.HashType, stateproof.HashSize),
 		}
-		valid.StateProof.Reveals = map[uint64]stateproof.Reveal{0: reveal}
+		reveal.SigSlot.Sig.Proof.TreeDepth = 2
+		valid.StateProof.Reveals = map[uint64]stateproof.Reveal{0: reveal, 1: {}}
 		require.NoError(t, CheckTxnGroup([]SignedTxn{{Txn: valid}}, allowHB))
 	})
 }

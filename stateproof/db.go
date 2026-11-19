@@ -101,7 +101,7 @@ type pendingSig struct {
 }
 
 func addPendingSig(tx *sql.Tx, rnd basics.Round, psig pendingSig) error {
-	_, err := tx.Exec("INSERT INTO sigs (sprnd, signer, sig, from_this_node) VALUES (?, ?, ?, ?)",
+	_, err := tx.Exec("INSERT OR REPLACE INTO sigs (sprnd, signer, sig, from_this_node) VALUES (?, ?, ?, ?)",
 		rnd,
 		psig.signer[:],
 		protocol.Encode(&psig.sig),
