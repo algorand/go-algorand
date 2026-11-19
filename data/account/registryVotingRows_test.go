@@ -47,6 +47,20 @@ func registryReadVotingHeader(a *require.Assertions, registry *participationDB, 
 	return hdr
 }
 
+// createRollingV1 is the Rolling table as created by user_version 1
+// registries: the whole voting secrets in a single blob column.
+const createRollingV1 = `CREATE TABLE Rolling (
+		pk INTEGER PRIMARY KEY NOT NULL,
+
+		lastVoteRound               INTEGER,
+		lastBlockProposalRound      INTEGER,
+		lastStateProofRound         INTEGER,
+		effectiveFirstRound         INTEGER,
+		effectiveLastRound          INTEGER,
+
+		voting BLOB
+	)`
+
 // TestRegistryMigrationV1ToV2 hand-builds a version-1 registry (whole voting
 // blob in Rolling.voting) holding a mid-life key and an exhausted key, and
 // verifies opening it converts to a votingHeader column plus per-subkey rows

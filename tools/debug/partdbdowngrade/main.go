@@ -30,7 +30,6 @@ import (
 	"github.com/gofrs/flock"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/data/account"
 )
 
 var dataDir = flag.String("d", "", "algod data directory (required); algod must not be running in it")
@@ -82,8 +81,8 @@ func run(dataDir, registryFile string, dryRun bool, out io.Writer) error {
 		}
 	}
 
-	records, err := account.DowngradeRegistry(registryFile, dryRun)
-	if errors.Is(err, account.ErrRegistryAlreadyVersion1) {
+	records, err := downgradeRegistry(registryFile, dryRun)
+	if errors.Is(err, errAlreadyVersion1) {
 		fmt.Fprintf(out, "%s already has schema version 1; nothing to do\n", registryFile)
 		return nil
 	}
@@ -121,7 +120,7 @@ func findRegistry(dataDir string) (string, error) {
 	}
 }
 
-func describeVoting(r account.DowngradedRecord) string {
+func describeVoting(r downgradedRecord) string {
 	switch {
 	case r.Voting == nil:
 		return "no voting secrets"

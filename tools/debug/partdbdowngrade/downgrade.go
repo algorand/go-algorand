@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package account
+package main
 
 import (
 	"bytes"
@@ -26,15 +26,17 @@ import (
 	"slices"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
 
-// Schema versions of the registry, as PRAGMA user_version records them.
-// Version 1 (algod 5.0 and earlier) keeps all remaining voting subkeys of a
-// record in the Rolling.voting blob; version 2 (dbSchemaUpgrade1) keeps them
-// in VotingBatches and VotingOffsets, described by Rolling.votingHeader.
+// The table and column names below are those of data/account's
+// participationRegistry.go. Version 1 (algod 5.0 and earlier) keeps all
+// remaining voting subkeys of a record in the Rolling.voting blob; version 2
+// (data/account dbSchemaUpgrade1) keeps them in VotingBatches and
+// VotingOffsets, described by Rolling.votingHeader.
 const (
 	registrySchemaVotingBlob = 1
 	registrySchemaVotingRows = 2
@@ -59,16 +61,16 @@ const createRollingV1 = `CREATE TABLE Rolling (
 // pages through. A version 1 registry does not have it.
 const walEraseScratchTable = "walErase"
 
-// ErrRegistryAlreadyVersion1 is returned by DowngradeRegistry for a registry
-// that already has schema version 1.
-var ErrRegistryAlreadyVersion1 = errors.New("participation registry already has schema version 1")
+// errAlreadyVersion1 is returned by downgradeRegistry for a registry that
+// already has schema version 1.
+var errAlreadyVersion1 = errors.New("participation registry already has schema version 1")
 
-// errDowngradeDryRun rolls back the transaction of a dry run.
-var errDowngradeDryRun = errors.New("dry run")
+// errDryRun rolls back the transaction of a dry run.
+var errDryRun = errors.New("dry run")
 
-// DowngradedRecord describes a registry record converted by DowngradeRegistry.
-type DowngradedRecord struct {
-	ParticipationID ParticipationID
+// downgradedRecord describes a registry record converted by downgradeRegistry.
+type downgradedRecord struct {
+	ParticipationID account.ParticipationID
 	Account         basics.Address
 	FirstValid      basics.Round
 	LastValid       basics.Round
@@ -78,10 +80,10 @@ type DowngradedRecord struct {
 	Voting *crypto.OneTimeSignatureSecretsHeader
 }
 
-// downgradeRecord is one Rolling row being converted, with the version 2
-// state it was read from and the version 1 blob built from it.
-type downgradeRecord struct {
-	DowngradedRecord
+// rollingRecord is one Rolling row being converted, with the version 2 state
+// it was read from and the version 1 blob built from it.
+type rollingRecord struct {
+	downgradedRecord
 
 	pk                int64
 	lastVote          sql.NullInt64
@@ -94,7 +96,7 @@ type downgradeRecord struct {
 	voting            []byte
 }
 
-// DowngradeRegistry converts the participation registry database in filename
+// downgradeRegistry converts the participation registry database in filename
 // from schema version 2 to version 1, so algod 5.0 or earlier can open it.
 // No process may have the database open. The conversion runs in one
 // transaction and is verified before it commits; afterwards the write-ahead
@@ -103,7 +105,7 @@ type downgradeRecord struct {
 // With dryRun the conversion and its verification run and are rolled back,
 // leaving the database unchanged. A later algod upgrades the downgraded
 // registry again when it opens it.
-func DowngradeRegistry(filename string, dryRun bool) ([]DowngradedRecord, error) {
+func downgradeRegistry(filename string, dryRun bool) ([]downgradedRecord, error) {
 	// the accessor would create a missing file
 	if _, err := os.Stat(filename); err != nil {
 		return nil, err
@@ -114,16 +116,16 @@ func DowngradeRegistry(filename string, dryRun bool) ([]DowngradedRecord, error)
 	}
 	defer accessor.Close()
 
-	var records []DowngradedRecord
+	var records []downgradedRecord
 	err = accessor.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var txErr error
-		records, txErr = dbSchemaDowngrade2(ctx, tx)
+		records, txErr = downgradeSchema(ctx, tx)
 		if txErr == nil && dryRun {
-			return errDowngradeDryRun
+			return errDryRun
 		}
 		return txErr
 	})
-	if dryRun && errors.Is(err, errDowngradeDryRun) {
+	if dryRun && errors.Is(err, errDryRun) {
 		return records, nil
 	}
 	if err != nil {
@@ -145,12 +147,12 @@ func DowngradeRegistry(filename string, dryRun bool) ([]DowngradedRecord, error)
 	return records, nil
 }
 
-// dbSchemaDowngrade2 is the inverse of dbSchemaUpgrade1: it reassembles each
-// record's voting secrets from its header and subkey rows into the version 1
-// Rolling.voting blob, rebuilds Rolling as version 1 creates it, drops the
-// subkey tables and sets user_version to 1. It reads everything back and
-// compares it with what it read before returning.
-func dbSchemaDowngrade2(ctx context.Context, tx *sql.Tx) ([]DowngradedRecord, error) {
+// downgradeSchema is the inverse of data/account's dbSchemaUpgrade1: it
+// reassembles each record's voting secrets from its header and subkey rows
+// into the version 1 Rolling.voting blob, rebuilds Rolling as version 1
+// creates it, drops the subkey tables and sets user_version to 1. It reads
+// everything back and compares it with what it read before returning.
+func downgradeSchema(ctx context.Context, tx *sql.Tx) ([]downgradedRecord, error) {
 	version, err := db.GetUserVersion(ctx, tx)
 	if err != nil {
 		return nil, err
@@ -158,21 +160,21 @@ func dbSchemaDowngrade2(ctx context.Context, tx *sql.Tx) ([]DowngradedRecord, er
 	switch version {
 	case registrySchemaVotingRows:
 	case registrySchemaVotingBlob:
-		return nil, ErrRegistryAlreadyVersion1
+		return nil, errAlreadyVersion1
 	default:
 		return nil, fmt.Errorf("participation registry has schema version %d; only version %d can be downgraded", version, registrySchemaVotingRows)
 	}
 	// the subkey rows are dropped below and must be erased, not left in free pages
-	if err = enableSecureDelete(tx); err != nil {
-		return nil, err
+	if _, err = tx.ExecContext(ctx, "PRAGMA secure_delete=ON"); err != nil {
+		return nil, fmt.Errorf("failed to enable secure_delete: %w", err)
 	}
 
-	records, err := readDowngradeRecords(ctx, tx)
+	records, err := readRollingRecords(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
 	for i := range records {
-		if err = records[i].buildVotingBlob(tx); err != nil {
+		if err = records[i].buildVotingBlob(ctx, tx); err != nil {
 			return nil, fmt.Errorf("registry record pk %d cannot be downgraded: %w", records[i].pk, err)
 		}
 	}
@@ -193,17 +195,17 @@ func dbSchemaDowngrade2(ctx context.Context, tx *sql.Tx) ([]DowngradedRecord, er
 		return nil, fmt.Errorf("downgraded registry failed verification: %w", err)
 	}
 
-	result := make([]DowngradedRecord, len(records))
+	result := make([]downgradedRecord, len(records))
 	for i := range records {
-		result[i] = records[i].DowngradedRecord
+		result[i] = records[i].downgradedRecord
 	}
 	return result, nil
 }
 
-// readDowngradeRecords reads every Rolling row of a version 2 registry, with
-// the Keysets fields that identify it. A Rolling row without a Keysets row is
+// readRollingRecords reads every Rolling row of a version 2 registry, with the
+// Keysets fields that identify it. A Rolling row without a Keysets row is
 // kept, as version 1 would keep it.
-func readDowngradeRecords(ctx context.Context, tx *sql.Tx) ([]downgradeRecord, error) {
+func readRollingRecords(ctx context.Context, tx *sql.Tx) ([]rollingRecord, error) {
 	rows, err := tx.QueryContext(ctx, `SELECT
 			r.pk, r.lastVoteRound, r.lastBlockProposalRound, r.lastStateProofRound,
 			r.effectiveFirstRound, r.effectiveLastRound, r.votingHeader,
@@ -217,9 +219,9 @@ func readDowngradeRecords(ctx context.Context, tx *sql.Tx) ([]downgradeRecord, e
 	}
 	defer rows.Close()
 
-	var records []downgradeRecord
+	var records []rollingRecord
 	for rows.Next() {
-		var r downgradeRecord
+		var r rollingRecord
 		var rawID, rawAccount []byte
 		var firstValid, lastValid sql.NullInt64
 		err = rows.Scan(&r.pk, &r.lastVote, &r.lastBlockProposal, &r.lastStateProof,
@@ -241,18 +243,22 @@ func readDowngradeRecords(ctx context.Context, tx *sql.Tx) ([]downgradeRecord, e
 // secrets they describe as algod 5.0 stores them: the msgpack encoding of a
 // crypto.OneTimeSignatureSecrets. A record without a header gets no blob,
 // which is how dbSchemaUpgrade1 treats an empty blob.
-func (r *downgradeRecord) buildVotingBlob(tx *sql.Tx) error {
+func (r *rollingRecord) buildVotingBlob(ctx context.Context, tx *sql.Tx) error {
 	if len(r.rawHeader) == 0 {
 		return nil
 	}
-	hdr, err := decodeVotingHeader(r.rawHeader)
-	if err != nil {
+	var hdr crypto.OneTimeSignatureSecretsHeader
+	if err := protocol.Decode(r.rawHeader, &hdr); err != nil {
 		return fmt.Errorf("undecodable voting header: %w", err)
 	}
-	if r.batches, r.offsets, err = readVotingRows(tx, r.pk); err != nil {
+	var err error
+	if r.batches, err = readKeyedSubkeys(ctx, tx, "SELECT batch, data FROM VotingBatches WHERE pk=? ORDER BY batch", r.pk); err != nil {
 		return err
 	}
-	secrets, err := votingFromRows(hdr, r.batches, r.offsets)
+	if r.offsets, err = readKeyedSubkeys(ctx, tx, "SELECT off, data FROM VotingOffsets WHERE pk=? ORDER BY off", r.pk); err != nil {
+		return err
+	}
+	secrets, err := crypto.OneTimeSignatureSecretsFromRows(hdr, r.batches, r.offsets)
 	if err != nil {
 		return err
 	}
@@ -262,9 +268,26 @@ func (r *downgradeRecord) buildVotingBlob(tx *sql.Tx) error {
 	return nil
 }
 
+func readKeyedSubkeys(ctx context.Context, tx *sql.Tx, query string, pk int64) ([]crypto.KeyedSubkey, error) {
+	rows, err := tx.QueryContext(ctx, query, pk)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var result []crypto.KeyedSubkey
+	for rows.Next() {
+		var row crypto.KeyedSubkey
+		if err = rows.Scan(&row.Index, &row.Key); err != nil {
+			return nil, err
+		}
+		result = append(result, row)
+	}
+	return result, rows.Err()
+}
+
 // rebuildRollingV1 replaces Rolling with the version 1 table holding the same
 // rows, each with its voting blob instead of its header.
-func rebuildRollingV1(ctx context.Context, tx *sql.Tx, records []downgradeRecord) error {
+func rebuildRollingV1(ctx context.Context, tx *sql.Tx, records []rollingRecord) error {
 	const renamed = "RollingVotingRows"
 	if _, err := tx.ExecContext(ctx, "ALTER TABLE Rolling RENAME TO "+renamed); err != nil {
 		return fmt.Errorf("failed to rename Rolling: %w", err)
@@ -297,7 +320,7 @@ func rebuildRollingV1(ctx context.Context, tx *sql.Tx, records []downgradeRecord
 // built from: the tables are those of version 1, every Rolling row keeps its
 // fields, and every voting blob decodes to the header and subkey rows the
 // record had.
-func verifyDowngrade(ctx context.Context, tx *sql.Tx, records []downgradeRecord) error {
+func verifyDowngrade(ctx context.Context, tx *sql.Tx, records []rollingRecord) error {
 	var tables []string
 	rows, err := tx.QueryContext(ctx, "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
 	if err != nil {
@@ -328,7 +351,7 @@ func verifyDowngrade(ctx context.Context, tx *sql.Tx, records []downgradeRecord)
 	defer rows.Close()
 	i := 0
 	for ; rows.Next(); i++ {
-		var got downgradeRecord
+		var got rollingRecord
 		err = rows.Scan(&got.pk, &got.lastVote, &got.lastBlockProposal, &got.lastStateProof,
 			&got.effectiveFirst, &got.effectiveLast, &got.voting)
 		if err != nil {
@@ -355,7 +378,7 @@ func verifyDowngrade(ctx context.Context, tx *sql.Tx, records []downgradeRecord)
 	return nil
 }
 
-func verifyVotingBlob(blob []byte, want downgradeRecord) error {
+func verifyVotingBlob(blob []byte, want rollingRecord) error {
 	if want.Voting == nil {
 		if len(blob) != 0 {
 			return errors.New("voting blob stored for a record without voting secrets")
