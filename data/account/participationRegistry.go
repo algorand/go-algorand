@@ -22,7 +22,6 @@ import (
 	"encoding/base32"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -549,18 +548,23 @@ func convertLegacyVotingBlob(tx *sql.Tx, pk int64, rawVoting []byte) error {
 
 // participationDB provides a concrete implementation of the ParticipationRegistry interface.
 type participationDB struct {
+	log   logging.Logger
+	store db.Pair
+
+	// mutex guards cache and dirty. The write thread takes it while
+	// applying operations, so it must never be held while sending on
+	// writeQueue.
+	mutex deadlock.RWMutex
 	cache map[ParticipationID]ParticipationRecord
 
 	// dirty marked on Record(), DeleteExpired(), cleared on Register(), Delete(), Flush()
 	dirty map[ParticipationID]struct{}
 
-	log   logging.Logger
-	store db.Pair
-	mutex deadlock.RWMutex
-
-	// writeQueueMutex preserves producer ordering while allowing the write
-	// thread to acquire mutex when the bounded queue is full.
-	writeQueueMutex sync.Mutex
+	// writeQueueMutex is held by producers across their cache update and
+	// their send on writeQueue, so operations reach the write thread in the
+	// order their cache updates were made. Lock order: writeQueueMutex
+	// before mutex. The write thread never takes writeQueueMutex.
+	writeQueueMutex deadlock.Mutex
 	writeQueue      chan opRequest
 	writeQueueDone  chan struct{}
 
