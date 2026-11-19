@@ -877,25 +877,19 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 
 	start := time.Now()
 	ledgerAccountsinitCount.Inc(nil)
-	err := au.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) error {
+	totals, err := trackerdb.SnapshotResult(au.dbs, func(ctx context.Context, tx trackerdb.SnapshotScope) (ledgercore.AccountTotals, error) {
 		ar, err0 := tx.MakeAccountsReader()
 		if err0 != nil {
-			return err0
+			return ledgercore.AccountTotals{}, err0
 		}
-
-		totals, err0 := ar.AccountsTotals(ctx, false)
-		if err0 != nil {
-			return err0
-		}
-
-		au.roundTotals = []ledgercore.AccountTotals{totals}
-		return nil
+		return ar.AccountsTotals(ctx, false)
 	})
 
 	ledgerAccountsinitMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		return err
 	}
+	au.roundTotals = []ledgercore.AccountTotals{totals}
 
 	au.accountsq, err = au.dbs.MakeAccountsOptimizedReader()
 	if err != nil {

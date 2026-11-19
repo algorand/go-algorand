@@ -55,13 +55,13 @@ func MakeEncodedAccountsBatchIter(q db.Queryable) *encodedAccountsBatchIter {
 // returning accountCount accounts data at a time.
 func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, accountCount int, resourceCount int) (bals []encoded.BalanceRecordV6, numAccountsProcessed uint64, err error) {
 	if iterator.accountsRows == nil {
-		iterator.accountsRows, err = iterator.q.QueryContext(ctx, "SELECT rowid, address, data FROM accountbase ORDER BY rowid")
+		iterator.accountsRows, err = iterator.q.QueryContext(ctx, "SELECT rowid, address, data FROM accountbase ORDER BY rowid") //nolint:rowserrcheck // checked via processAllBaseAccountRecords and Next
 		if err != nil {
 			return
 		}
 	}
 	if iterator.resourcesRows == nil {
-		iterator.resourcesRows, err = iterator.q.QueryContext(ctx, "SELECT addrid, aidx, data FROM resources ORDER BY addrid, aidx")
+		iterator.resourcesRows, err = iterator.q.QueryContext(ctx, "SELECT addrid, aidx, data FROM resources ORDER BY addrid, aidx") //nolint:rowserrcheck // checked via processAllResources
 		if err != nil {
 			return
 		}

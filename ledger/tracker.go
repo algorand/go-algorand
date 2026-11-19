@@ -353,15 +353,12 @@ func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTrack
 }
 
 func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
-	var dbRound basics.Round
-	err := tr.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) (err error) {
+	dbRound, err := trackerdb.SnapshotResult(tr.dbs, func(ctx context.Context, tx trackerdb.SnapshotScope) (basics.Round, error) {
 		ar, err0 := tx.MakeAccountsReader()
 		if err0 != nil {
-			return err0
+			return 0, err0
 		}
-
-		dbRound, err0 = ar.AccountsRound()
-		return err0
+		return ar.AccountsRound()
 	})
 	if err != nil {
 		return err
@@ -624,7 +621,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
-	err = tr.dbs.TransactionWithRetryClearFn(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) { // TransactionFn
+	err = tr.dbs.TransactionWithRetryClearFn(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) { //retryclosure:ignore accountsCommitting is reset by the defer in each attempt, and trackers undo commitRound changes in the RetryClearFn below
 		tr.accountsCommitting.Store(true)
 		defer func() {
 			tr.accountsCommitting.Store(false)

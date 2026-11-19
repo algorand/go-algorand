@@ -257,11 +257,14 @@ func getSignatureRounds(tx *sql.Tx, threshold basics.Round, maxRound basics.Roun
 
 	var rnd basics.Round
 	for rows.Next() {
-		err := rows.Scan(&rnd)
+		err = rows.Scan(&rnd)
 		if err != nil {
 			return nil, err
 		}
 		rnds = append(rnds, rnd)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
 	}
 	return rnds, nil
 }

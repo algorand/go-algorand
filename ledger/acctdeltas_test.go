@@ -1405,7 +1405,7 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 
 	nilRowCounter := func() (nilRowCount int, err error) {
 		err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err0 error) {
-			stmt, err0 := tx.PrepareContext(ctx, "SELECT key FROM kvstore WHERE value IS NULL;")
+			stmt, err0 := tx.PrepareContext(ctx, "SELECT key FROM kvstore WHERE value IS NULL;") //nolint:sqlclosecheck // prepared on tx, which closes it on commit or rollback
 			if err0 != nil {
 				return
 			}
@@ -1413,6 +1413,7 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 			if err0 != nil {
 				return
 			}
+			defer rows.Close()
 			for rows.Next() {
 				var key sql.NullString
 				if err0 = rows.Scan(&key); err0 != nil {
@@ -1424,6 +1425,7 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 				}
 				nilRowCount++
 			}
+			err0 = rows.Err()
 			return
 		})
 		return
@@ -2394,6 +2396,7 @@ func BenchmarkBoxDatabaseRead(b *testing.B) {
 				boxNames := getBoxNamePermutation(totalBoxes)
 				lookupStmt, err := dbs.Wdb.Handle.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
 				require.NoError(b, err)
+				defer lookupStmt.Close()
 				var v sql.NullString
 				for i := 0; i < b.N; i++ {
 					var pv trackerdb.PersistedKVData
@@ -2425,6 +2428,7 @@ func BenchmarkBoxDatabaseRead(b *testing.B) {
 				boxNames := getBoxNamePermutation(totalBoxes)
 				lookupStmt, err := dbs.Wdb.Handle.Prepare("SELECT rnd, value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
 				require.NoError(b, err)
+				defer lookupStmt.Close()
 				var v sql.NullString
 				for i := 0; i < b.N+lookback; i++ {
 					var pv trackerdb.PersistedKVData

@@ -299,3 +299,37 @@ func TestDbProverAlreadyExists(t *testing.T) {
 		a.Equal(prover.ProverPersistedFields, outProv.ProverPersistedFields)
 	}
 }
+
+func TestRowsErrGetSignatureRounds(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dbs, _ := dbOpenTest(t, true)
+	defer dbs.Close()
+	require.NoError(t, makeStateProofDB(dbs.Wdb))
+
+	// An explicit transaction, rather than Atomic, so a failed assertion still rolls it back
+	// and dbs.Close does not wait forever on the open connection.
+	tx, err := dbs.Wdb.Handle.Begin()
+	require.NoError(t, err)
+	defer tx.Rollback()
+
+	var psig pendingSig
+	crypto.RandBytes(psig.signer[:])
+	require.NoError(t, addPendingSig(tx, 5, psig))
+
+	rnds, err := getSignatureRounds(tx, 10, 10)
+	require.NoError(t, err)
+	require.Equal(t, []basics.Round{5}, rnds)
+
+	// Swap the sigs table for a view that SQLite fails with an integer overflow error on the
+	// first row it reads, so iteration ends early with an error that must be returned rather
+	// than treated as the end of the signature rounds.
+	_, err = tx.Exec("ALTER TABLE sigs RENAME TO sigs_orig")
+	require.NoError(t, err)
+	_, err = tx.Exec("CREATE VIEW sigs AS SELECT * FROM sigs_orig WHERE abs(-9223372036854775807 - 1 + 0*random()) >= 0")
+	require.NoError(t, err)
+
+	rnds, err = getSignatureRounds(tx, 10, 10)
+	require.ErrorContains(t, err, "integer overflow")
+	require.Nil(t, rnds)
+}

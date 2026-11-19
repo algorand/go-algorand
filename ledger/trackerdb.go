@@ -69,21 +69,16 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 	// Check for blocks DB and tracker DB un-sync
 	if lastBalancesRound > lastestBlockRound {
 		log.Warnf("trackerDBInitialize: resetting accounts DB (on round %v, but blocks DB's latest is %v)", lastBalancesRound, lastestBlockRound)
-		err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
-			var aw trackerdb.AccountsWriterExt
-			aw, err = tx.MakeAccountsWriter()
+		mgr, err = trackerdb.TransactionResult(dbs, func(ctx context.Context, tx trackerdb.TransactionScope) (m trackerdb.InitParams, err error) {
+			aw, err := tx.MakeAccountsWriter()
 			if err != nil {
-				return err
+				return m, err
 			}
 			err = aw.AccountsReset(ctx)
 			if err != nil {
-				return err
+				return m, err
 			}
-			mgr, err = tx.RunMigrations(ctx, tp, log, trackerdb.AccountDBVersion)
-			if err != nil {
-				return err
-			}
-			return nil
+			return tx.RunMigrations(ctx, tp, log, trackerdb.AccountDBVersion)
 		})
 		if err != nil {
 			return
