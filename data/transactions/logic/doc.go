@@ -77,11 +77,23 @@ var opDescByName = map[string]OpDesc{
 		[]string{"configuration index"}, "",
 	},
 
-	"ed25519verify":       {"for (data A, signature B, pubkey C) verify the signature of (\"ProgData\" || program_hash || data) against the pubkey => {0 or 1}", "The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack.", nil, ""},
-	"ed25519verify_bare":  {"for (data A, signature B, pubkey C) verify the signature of the data against the pubkey => {0 or 1}", "", nil, ""},
-	"ecdsa_verify":        {"for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}", "The 32 byte Y-component of a public key is the last element on the stack, preceded by X-component of a pubkey, preceded by S and R components of a signature, preceded by the data that is fifth element on the stack. All values are big-endian encoded. The signed data must be 32 bytes long, and signatures in lower-S form are only accepted.", []string{"curve index"}, ""},
+	"ed25519verify":      {"for (data A, signature B, pubkey C) verify the signature of (\"ProgData\" || program_hash || data) against the pubkey => {0 or 1}", "The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack.", nil, ""},
+	"ed25519verify_bare": {"for (data A, signature B, pubkey C) verify the signature of the data against the pubkey => {0 or 1}", "", nil, ""},
+	"ecdsa_verify": {"for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}", "" +
+		"The 32 byte Y-component of a public key is the last element on the stack, preceded by X-component of a pubkey, preceded by S and R components of a signature, preceded by the data that is fifth element on the stack. All values are big-endian encoded. The signed data must be 32 bytes long. " +
+		"Since v14, `ecdsa_verify` fails unless R, S, X and Y are each exactly 32 bytes long, and returns 0 unless the signature is in lower-S form (S <= N/2, where N is the curve order). A signature with S > N/2 is brought to lower-S form by replacing S with N - S. " +
+		"Programs before v14 keep the earlier behavior, in which those lengths are not checked: Secp256k1 requires lower-S form, accepts R and S of any lengths that total 64 bytes, and reads X and Y as integers, keeping only their low 32 bytes; Secp256r1 accepts either S form and reads R, S, X and Y as integers of any length.\n\n" +
+		"For replay protection, include a nonce in the signed data and track its use, rather than treating signature bytes as a unique identifier.",
+		[]string{"curve index"}, "",
+	},
 	"ecdsa_pk_decompress": {"decompress pubkey A into components X, Y", "The 33 byte public key in a compressed form to be decompressed into X and Y (top) components. All values are big-endian encoded.", []string{"curve index"}, ""},
-	"ecdsa_pk_recover":    {"for (data A, recovery id B, signature C, D) recover a public key", "S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to derive a public key. All values are big-endian encoded. The signed data must be 32 bytes long.", []string{"curve index"}, ""},
+	"ecdsa_pk_recover": {"for (data A, recovery id B, signature C, D) recover a public key", "" +
+		"S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to derive a public key. All values are big-endian encoded. The signed data must be 32 bytes long. " +
+		"Since v14, `ecdsa_pk_recover` fails unless R and S are each exactly 32 bytes long and the signature is in lower-S form (S <= N/2, where N is the curve order). A signature with S > N/2 is brought to lower-S form by replacing S with N - S and flipping the lowest bit of the recovery id. " +
+		"Programs before v14 keep the earlier behavior: R and S of any lengths that total 64 bytes are accepted, and a higher-S signature recovers the same public key as its lower-S form.\n\n" +
+		"As with `ecdsa_verify`, signature bytes should not be treated as a unique identifier.",
+		[]string{"curve index"}, "",
+	},
 
 	"ec_add": {"for curve points A and B, return the curve point A + B", "" +
 		"A and B are curve points in affine representation: field element X concatenated with field element Y. " +

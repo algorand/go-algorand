@@ -59,7 +59,9 @@ The 32 byte public key is the last element on the stack, preceded by the 64 byte
 | 0 | Secp256k1 |      | secp256k1 curve, used in Bitcoin |
 | 1 | Secp256r1 | v7  | secp256r1 curve, NIST standard |
 
-The 32 byte Y-component of a public key is the last element on the stack, preceded by X-component of a pubkey, preceded by S and R components of a signature, preceded by the data that is fifth element on the stack. All values are big-endian encoded. The signed data must be 32 bytes long, and signatures in lower-S form are only accepted.
+The 32 byte Y-component of a public key is the last element on the stack, preceded by X-component of a pubkey, preceded by S and R components of a signature, preceded by the data that is fifth element on the stack. All values are big-endian encoded. The signed data must be 32 bytes long. Since v14, `ecdsa_verify` fails unless R, S, X and Y are each exactly 32 bytes long, and returns 0 unless the signature is in lower-S form (S <= N/2, where N is the curve order). A signature with S > N/2 is brought to lower-S form by replacing S with N - S. Programs before v14 keep the earlier behavior, in which those lengths are not checked: Secp256k1 requires lower-S form, accepts R and S of any lengths that total 64 bytes, and reads X and Y as integers, keeping only their low 32 bytes; Secp256r1 accepts either S form and reads R, S, X and Y as integers of any length.
+
+For replay protection, include a nonce in the signed data and track its use, rather than treating signature bytes as a unique identifier.
 
 ## ecdsa_pk_decompress
 
@@ -81,7 +83,9 @@ The 33 byte public key in a compressed form to be decompressed into X and Y (top
 - **Cost**: 2000
 - Availability: v5
 
-S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to derive a public key. All values are big-endian encoded. The signed data must be 32 bytes long.
+S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to derive a public key. All values are big-endian encoded. The signed data must be 32 bytes long. Since v14, `ecdsa_pk_recover` fails unless R and S are each exactly 32 bytes long and the signature is in lower-S form (S <= N/2, where N is the curve order). A signature with S > N/2 is brought to lower-S form by replacing S with N - S and flipping the lowest bit of the recovery id. Programs before v14 keep the earlier behavior: R and S of any lengths that total 64 bytes are accepted, and a higher-S signature recovers the same public key as its lower-S form.
+
+As with `ecdsa_verify`, signature bytes should not be treated as a unique identifier.
 
 ## +
 

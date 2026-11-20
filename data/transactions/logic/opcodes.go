@@ -89,6 +89,14 @@ const sumhashVersion = 14
 const f512Version = 14
 const mldsaVersion = 14
 
+// canonicalECDSAVersion is the first version in which ecdsa_verify and
+// ecdsa_pk_recover fail unless R and S (and, for ecdsa_verify, X and Y) are
+// each 32 bytes long, and do not accept signatures that are not in lower-S
+// form. Earlier versions keep accepting the other encodings, because a
+// program may hold a key or a signature in one of them and have no way to
+// present another.
+const canonicalECDSAVersion = 14
+
 // fullByteMathVersion is the first version for which byte math operators are
 // unconstrained by maxByteMathSize, have length-dependent costs, and bmodexp
 // is available. expw and divmodw also become cheaper.

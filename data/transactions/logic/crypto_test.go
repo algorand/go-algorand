@@ -412,7 +412,7 @@ assert`, "int 1"},
 		{"ecdsa_verify r1", "", `
 byte 0x71a5910445820f57989c027bdf9391c80097874d249e0f38bf90834fdec2877f
 byte 0xc010fc83ea196d6f5ce8a44637060bdcfb5bf1199cfc5bb893684d450c4f160c
-byte 0x8e391a7b9cd75a99e8ebfe703036caebd9e91ae8339bd7e2abfb0f273eb8e972
+byte 0x71c6e5836328a5671714018fcfc93513e2fddfc5737bc6a247bebb9bbdaa3bdf
 byte 0x13e49a19378bbfa8d55ac81a35b87d7bae456c79fcf04a78803d8eb45b253fab
 byte 0xa2d237cd897ca70787abf04d2155c6dc2fbe26fd642e0472cd75c13dc919ef1a
 ecdsa_verify Secp256r1
@@ -741,8 +741,17 @@ byte 0x%s
 	// coverage for pk length check
 	testPanics(t, notrack(`int 31; bzero; byte 0x; byte 0x; byte 0x; byte 0x; ecdsa_verify Secp256k1`), 5, "must be 32")
 
-	// we did not implement arg length checks for x,y & r,s, so we must simply fail to verify, not panic
-	testAccepts(t, notrack(`int 32; bzero; byte 0x; byte 0x; byte 0x; byte 0x; ecdsa_verify Secp256k1; !`), 5)
+	// before canonicalECDSAVersion there are no arg length checks for x,y & r,s, so we must simply fail to verify, not panic
+	unsized := notrack(`int 32; bzero; byte 0x; byte 0x; byte 0x; byte 0x; ecdsa_verify Secp256k1; !`)
+	testPreexist(t, unsized, 5)
+	testAcceptRange(t, unsized, 5, canonicalECDSAVersion-1)
+	// later protocols do not change that for those programs
+	for v := uint64(5); v < canonicalECDSAVersion; v++ {
+		for lv := uint64(canonicalECDSAVersion); lv <= AssemblerMaxVersion; lv++ {
+			testLogic(t, unsized, v, defaultSigParamsWithVersion(lv))
+		}
+	}
+	testPanicRange(t, unsized, canonicalECDSAVersion, AssemblerMaxVersion, "R and S must each be 32 bytes long")
 
 	// ecdsa recover tests
 	source = `
@@ -809,6 +818,205 @@ ecdsa_verify Secp256k1`, hex.EncodeToString(r), hex.EncodeToString(s), hex.Encod
 	require.True(t, pass)
 }
 
+// ecdsaSignatureWithS returns a digest, a public key (x, y) on curve, and r
+// such that (r, s) is a signature of the digest under that key. The digest is
+// 1 and the nonce is 1, so r is the X coordinate of the base point and
+// s = 1 + r*d mod N for the secret key d = (s - 1)/r mod N.
+func ecdsaSignatureWithS(t *testing.T, curve elliptic.Curve, s *big.Int) (msg, r, x, y []byte) {
+	t.Helper()
+	n := curve.Params().N
+	ri := new(big.Int).Mod(curve.Params().Gx, n)
+	d := new(big.Int).ModInverse(ri, n)
+	d.Mul(d, new(big.Int).Sub(s, big.NewInt(1))).Mod(d, n)
+	xi, yi := curve.ScalarBaseMult(d.Bytes())
+	msg = make([]byte, 32)
+	msg[31] = 1
+	require.True(t, ecdsa.Verify(&ecdsa.PublicKey{Curve: curve, X: xi, Y: yi}, msg, ri, s))
+	return msg, keyToByte(t, ri), keyToByte(t, xi), keyToByte(t, yi)
+}
+
+func TestEcdsaCanonicalSignature(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const sigSize = "R and S must each be 32 bytes long"
+	const keySize = "X and Y must each be 32 bytes long"
+	pad := func(b []byte) []byte { return slices.Concat([]byte{0}, b) }
+	maxPad := func(b []byte) []byte { return slices.Concat(make([]byte, maxStringSize-len(b)), b) }
+
+	for _, curve := range []struct {
+		field   EcdsaCurve
+		curve   elliptic.Curve
+		version uint64
+	}{
+		{Secp256k1, secp256k1.S256(), 5},
+		{Secp256r1, elliptic.P256(), fidoVersion},
+	} {
+		t.Run(curve.field.String(), func(t *testing.T) {
+			k1, r1 := curve.field == Secp256k1, curve.field == Secp256r1
+			n := curve.curve.Params().N
+			// S = N/2 tests the exact lower-S boundary.
+			half := new(big.Int).Rsh(n, 1)
+			msg, r, x, y := ecdsaSignatureWithS(t, curve.curve, half)
+			s := keyToByte(t, half)
+			highS := keyToByte(t, new(big.Int).Sub(n, half))
+			// S = 2 has a valid encoding that is shorter than 32 bytes.
+			_, _, x2, y2 := ecdsaSignatureWithS(t, curve.curve, big.NewInt(2))
+
+			// EnablePrecheckECDSACurve only affects Secp256r1. Every consensus
+			// version that can run a canonicalECDSAVersion program sets it,
+			// but makeTestProto does not.
+			prechecks := []bool{false}
+			if r1 {
+				prechecks = append(prechecks, true)
+			}
+
+			for _, test := range []struct {
+				name       string
+				r, s, x, y []byte
+				legacy     bool   // result before canonicalECDSAVersion
+				canonical  bool   // result from canonicalECDSAVersion, unless fails is set
+				fails      string // error from canonicalECDSAVersion
+			}{
+				{"lower-S boundary", r, s, x, y, true, true, ""},
+				{"higher-S boundary", r, highS, x, y, r1, false, ""},
+				{"padded R", pad(r), s, x, y, r1, false, sigSize},
+				{"padded S", r, pad(s), x, y, r1, false, sigSize},
+				{"max padded R", maxPad(r), s, x, y, r1, false, sigSize},
+				{"max padded S", r, maxPad(s), x, y, r1, false, sigSize},
+				{"split at 31", r[:31], slices.Concat(r[31:], s), x, y, k1, false, sigSize},
+				{"split at 33", slices.Concat(r, s[:1]), s[1:], x, y, k1, false, sigSize},
+				{"empty R", nil, s, x, y, false, false, sigSize},
+				{"empty S", r, nil, x, y, false, false, sigSize},
+				{"short R", r[1:], s, x, y, false, false, sigSize},
+				{"short S", r, s[1:], x, y, false, false, sigSize},
+				{"zero R", make([]byte, 32), s, x, y, false, false, ""},
+				{"zero S", r, make([]byte, 32), x, y, false, false, ""},
+				{"R equals order", keyToByte(t, n), s, x, y, false, false, ""},
+				{"S equals order", r, keyToByte(t, n), x, y, false, false, ""},
+				{"small S", r, keyToByte(t, big.NewInt(2)), x2, y2, true, true, ""},
+				{"short valid S", r, []byte{2}, x2, y2, r1, false, sigSize},
+				{"padded X", r, s, pad(x), y, true, false, keySize},
+				{"padded Y", r, s, x, pad(y), true, false, keySize},
+				{"max padded X", r, s, maxPad(x), y, true, false, keySize},
+				{"max padded Y", r, s, x, maxPad(y), true, false, keySize},
+				// Secp256k1 uses the low 32 bytes of X and Y, whatever precedes them.
+				{"prefixed X", r, s, slices.Concat([]byte{0xff}, x), y, k1, false, keySize},
+				{"prefixed Y", r, s, x, slices.Concat([]byte{0xff}, y), k1, false, keySize},
+				{"empty X", r, s, nil, y, false, false, keySize},
+				{"empty Y", r, s, x, nil, false, false, keySize},
+			} {
+				t.Run(test.name, func(t *testing.T) {
+					source := fmt.Sprintf("byte 0x%x; byte 0x%x; byte 0x%x; byte 0x%x; byte 0x%x; ecdsa_verify %s",
+						msg, test.r, test.s, test.x, test.y, curve.field)
+					// The program's version decides the outcome, whatever the
+					// protocol's. Run every program version under the last protocol
+					// before canonicalECDSAVersion, where it can, and under each
+					// later one, which must not change an earlier program.
+					for v := curve.version; v <= AssemblerMaxVersion; v++ {
+						for lv := max(v, canonicalECDSAVersion-1); lv <= AssemblerMaxVersion; lv++ {
+							for _, precheck := range prechecks {
+								t.Run(fmt.Sprintf("v=%d,lv=%d,precheck=%t", v, lv, precheck), func(t *testing.T) {
+									ep := optSigParams(func(p *config.ConsensusParams) {
+										protoVer(lv)(p)
+										p.EnablePrecheckECDSACurve = precheck
+									})
+									if v >= canonicalECDSAVersion && test.fails != "" {
+										testLogic(t, notrack(source), v, ep, test.fails)
+										return
+									}
+									want := test.legacy
+									if v >= canonicalECDSAVersion {
+										want = test.canonical
+									}
+									testLogic(t, notrack(fmt.Sprintf("%s; int %d; ==", source, boolToSV(want).Uint)), v, ep)
+								})
+							}
+						}
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestEcdsaRecoverCanonicalSignature(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Outcomes other than an error that fails the program.
+	const signer = "recovers the signer's key"
+	const other = "recovers another key"
+
+	const sigSize = "R and S must each be 32 bytes long"
+	const lowerS = "not in lower-S form"
+	const badLength = "invalid signature length"
+	const failed = "recovery failed"
+
+	curve := secp256k1.S256()
+	n := curve.Params().N
+	// S = N/2 tests the exact lower-S boundary.
+	half := new(big.Int).Rsh(n, 1)
+	msg, r, x, y := ecdsaSignatureWithS(t, curve, half)
+	s := keyToByte(t, half)
+	highS := keyToByte(t, new(big.Int).Sub(n, half))
+	// The nonce is 1, so the recovery id is the parity of the base point's Y coordinate.
+	recid := int(curve.Params().Gy.Bit(0))
+
+	for _, test := range []struct {
+		name      string
+		r, s      []byte
+		recid     int
+		legacy    string // outcome before canonicalECDSAVersion
+		canonical string // outcome from canonicalECDSAVersion
+	}{
+		{"lower-S boundary", r, s, recid, signer, signer},
+		// (R, N-S) recovers the same key once the low bit of the recovery id is flipped.
+		{"higher-S boundary", r, highS, recid ^ 1, signer, lowerS},
+		{"higher-S boundary, same recovery id", r, highS, recid, other, lowerS},
+		{"other recovery id", r, s, recid ^ 1, other, other},
+		{"split at 31", r[:31], slices.Concat(r[31:], s), recid, signer, sigSize},
+		{"split at 33", slices.Concat(r, s[:1]), s[1:], recid, signer, sigSize},
+		{"empty R", nil, slices.Concat(r, s), recid, signer, sigSize},
+		{"empty S", slices.Concat(r, s), nil, recid, signer, sigSize},
+		{"padded R", slices.Concat([]byte{0}, r), s, recid, badLength, sigSize},
+		{"padded S", r, slices.Concat([]byte{0}, s), recid, badLength, sigSize},
+		{"short R", r[1:], s, recid, badLength, sigSize},
+		{"short S", r, s[1:], recid, badLength, sigSize},
+		{"zero S", r, make([]byte, 32), recid, failed, failed},
+		{"S equals order", r, keyToByte(t, n), recid, failed, lowerS},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			// Leaves 1 on the stack if the recovered key is the signer's.
+			source := fmt.Sprintf("byte 0x%x; int %d; byte 0x%x; byte 0x%x; ecdsa_pk_recover Secp256k1; concat; byte 0x%x; ==",
+				msg, test.recid, test.r, test.s, slices.Concat(x, y))
+			// The program's version decides the outcome, whatever the
+			// protocol's. Run every program version under the last protocol
+			// before canonicalECDSAVersion, where it can, and under each later
+			// one, which must not change an earlier program.
+			for v := uint64(5); v <= AssemblerMaxVersion; v++ {
+				for lv := max(v, canonicalECDSAVersion-1); lv <= AssemblerMaxVersion; lv++ {
+					t.Run(fmt.Sprintf("v=%d,lv=%d", v, lv), func(t *testing.T) {
+						want := test.legacy
+						if v >= canonicalECDSAVersion {
+							want = test.canonical
+						}
+						ep := defaultSigParamsWithVersion(lv)
+						switch want {
+						case signer:
+							testLogic(t, notrack(source), v, ep)
+						case other:
+							testLogic(t, notrack(source+"; !"), v, ep)
+						default:
+							testLogic(t, notrack(source), v, ep, want)
+						}
+					})
+				}
+			}
+		})
+	}
+}
+
 func TestEcdsaWithSecp256r1(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -872,6 +1080,9 @@ ecdsa_verify Secp256r1
 
 	ri, si, err := ecdsa.Sign(rand.Reader, key, msg[:])
 	require.NoError(t, err)
+	if si.Cmp(secp256r1HalfOrder) > 0 {
+		si.Sub(secp256r1.Params().N, si)
+	}
 	r := ri.FillBytes(make([]byte, 32))
 	s := si.FillBytes(make([]byte, 32))
 
