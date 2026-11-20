@@ -222,7 +222,7 @@ func TestCheckTxnGroupUnknownType(t *testing.T) {
 	// resources.fill could not cope with one. WellFormed is what rejects it.
 	bogus := Transaction{Type: protocol.TxType("bogus")}
 	require.ErrorContains(t,
-		bogus.WellFormed(SpecialAddresses{}, config.Consensus[protocol.ConsensusCurrentVersion]),
+		bogus.wellFormed(SpecialAddresses{}, config.Consensus[protocol.ConsensusCurrentVersion]),
 		"unknown tx type")
 
 	// The group-wide rule that remains: a heartbeat may not be grouped with a

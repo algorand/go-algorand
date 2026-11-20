@@ -945,7 +945,7 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 		}
 	}
 
-	err := transactions.SignedTxnGroupWellFormed(txgroup, eval.specials, eval.proto)
+	err = transactions.SignedTxnGroupWellFormed(txgroup, eval.specials, eval.proto)
 	if err != nil {
 		return err
 	}
