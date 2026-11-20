@@ -70,7 +70,7 @@ func TestUnsupportedStateProof(t *testing.T) {
 			Fee:    basics.MicroAlgos{Raw: 100},
 		},
 		StateProofTxnFields: StateProofTxnFields{},
-	}.WellFormed(SpecialAddresses{}, curProto)
+	}.wellFormed(SpecialAddresses{}, curProto)
 	require.ErrorContains(t, err, "state proofs not supported")
 }
 
@@ -89,7 +89,7 @@ func (s *stateproofTxnTestCase) runIsWellFormedForTestCase() error {
 			RekeyTo: s.rekeyValue,
 		},
 		StateProofTxnFields: basicStateProofTxnFieldsForTest(),
-	}.WellFormed(SpecialAddresses{}, curProto)
+	}.wellFormed(SpecialAddresses{}, curProto)
 }
 
 func TestWellFormedStateProofTxn(t *testing.T) {
@@ -119,7 +119,7 @@ func TestWellFormedStateProofTxn(t *testing.T) {
 			Type:                protocol.StateProofTx,
 			Header:              Header{Sender: StateProofSender},
 			StateProofTxnFields: fields,
-		}.WellFormed(SpecialAddresses{}, config.Consensus[protocol.ConsensusCurrentVersion])
+		}.wellFormed(SpecialAddresses{}, config.Consensus[protocol.ConsensusCurrentVersion])
 		require.ErrorIs(t, err, errMalformedStateProofType)
 	})
 
@@ -131,7 +131,7 @@ func TestWellFormedStateProofTxn(t *testing.T) {
 			Type:                protocol.StateProofTx,
 			Header:              Header{Sender: StateProofSender},
 			StateProofTxnFields: fields,
-		}.WellFormed(SpecialAddresses{}, config.Consensus[protocol.ConsensusCurrentVersion])
+		}.wellFormed(SpecialAddresses{}, config.Consensus[protocol.ConsensusCurrentVersion])
 		require.ErrorIs(t, err, errMalformedStateProofHash)
 	})
 }
@@ -160,29 +160,29 @@ func TestStateProofTxnShouldBeZero(t *testing.T) {
 
 	const erroMsg = "type pay has non-zero fields for type stpf"
 	txn.StateProofType = 1
-	err = txn.WellFormed(SpecialAddresses{}, curProto)
+	err = txn.wellFormed(SpecialAddresses{}, curProto)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), erroMsg)
 
 	txn.StateProofType = 0
 	txn.Message = stateproofmsg.Message{FirstAttestedRound: 1}
-	err = txn.WellFormed(SpecialAddresses{}, curProto)
+	err = txn.wellFormed(SpecialAddresses{}, curProto)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), erroMsg)
 
 	txn.Message = stateproofmsg.Message{}
 	txn.StateProof = stateproof.StateProof{SignedWeight: 100}
-	err = txn.WellFormed(SpecialAddresses{}, curProto)
+	err = txn.wellFormed(SpecialAddresses{}, curProto)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), erroMsg)
 
 	txn.StateProof = stateproof.StateProof{}
 	txn.Message.LastAttestedRound = 512
-	err = txn.WellFormed(SpecialAddresses{}, curProto)
+	err = txn.wellFormed(SpecialAddresses{}, curProto)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), erroMsg)
 
 	txn.Message.LastAttestedRound = 0
-	err = txn.WellFormed(SpecialAddresses{}, curProto)
+	err = txn.wellFormed(SpecialAddresses{}, curProto)
 	require.NoError(t, err)
 }

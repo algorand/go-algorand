@@ -1183,7 +1183,7 @@ func getWellformedSPTransaction(round basics.Round, genesisHash crypto.Digest, c
 	stxn.Txn.StateProof = *proof
 	stxn.Txn.Message = msg
 
-	err := stxn.Txn.WellFormed(transactions.SpecialAddresses{}, proto)
+	err := transactions.SignedTxnGroupWellFormed([]transactions.SignedTxn{stxn}, transactions.SpecialAddresses{}, proto)
 	require.NoError(t, err)
 
 	return stxn
