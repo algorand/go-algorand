@@ -442,7 +442,10 @@ func (a pseudonodeAction) do(ctx context.Context, s *Service) {
 		s.log.with(logEvent).Infof("attested to %v at (%v, %v, %v)", a.Proposal, a.Round, a.Period, a.Step)
 		// create a channel that would get closed when we're done storing the persistence information to disk.
 		// ( or will let us know if we failed ! )
-		persistStateDone := make(chan error)
+		// It has room for the error that checkpointAction.do sends when the write fails. That send runs on
+		// the demux goroutine, and pseudonodeVotesTask.execute reads the channel only when it has verified
+		// votes and has not stopped on quit or context cancellation.
+		persistStateDone := make(chan error, 1)
 		voteEvents, err := s.loopback.MakeVotes(ctx, a.Round, a.Period, a.Step, a.Proposal, persistStateDone)
 		switch err {
 		case nil:
@@ -565,6 +568,8 @@ func (c checkpointAction) do(ctx context.Context, s *Service) {
 	} else {
 		s.log.with(logEvent).Errorf("checkpoint at (%v, %v, %v) failed : %v", c.Round, c.Period, c.Step, c.Err)
 		if c.done != nil {
+			// pseudonodeAction.do gives done room for this one error, so the send
+			// does not wait for the pseudonode to read it.
 			c.done <- c.Err
 		}
 	}
