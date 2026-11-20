@@ -1,0 +1,19 @@
+#!/bin/bash
+# Hourly auto-update for the Algorand node software.
+#
+# Repository setup is the operator's responsibility: this script upgrades
+# from whatever Algorand repository has been configured under the normal
+# /etc/yum.repos.d location. If no such repository is configured, dnf simply
+# finds no update and exits without doing anything.
+#
+# Sleep for a random interval (up to ~57 minutes) before upgrading so that
+# nodes across the network do not all contact the package mirrors at the
+# same moment. This preserves the staggering that dnf-automatic's
+# "random_sleep" setting used to provide.
+sleep $((RANDOM % 3420))
+
+# Upgrade only the installed Algorand node package (algorand or
+# algorand-beta). Naming the package explicitly keeps the update radius
+# constrained to Algorand rather than every package enabled on the system.
+pkg=$(rpm -qa --queryformat '%{NAME}\n' algorand algorand-beta | head -n1)
+[ -n "$pkg" ] && exec /usr/bin/dnf -y --refresh upgrade "$pkg"
