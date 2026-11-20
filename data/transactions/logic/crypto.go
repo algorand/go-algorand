@@ -361,6 +361,8 @@ var ecdsaVerifyCosts = []int{
 }
 
 var secp256r1 = elliptic.P256()
+var secp256r1HalfOrder = new(big.Int).Rsh(secp256r1.Params().N, 1)
+var secp256k1HalfOrder = new(big.Int).Rsh(secp256k1.S256().Params().N, 1)
 
 func opEcdsaVerify(cx *EvalContext) error {
 	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
@@ -389,6 +391,18 @@ func opEcdsaVerify(cx *EvalContext) error {
 		return fmt.Errorf("the signed data must be 32 bytes long, not %d", len(msg))
 	}
 
+	// With R, S, X and Y fixed at 32 bytes each, a signature and a public
+	// key each have a single accepted encoding.
+	canonical := cx.version >= canonicalECDSAVersion
+	if canonical {
+		if len(sigR) != 32 || len(sigS) != 32 {
+			return fmt.Errorf("signature R and S must each be 32 bytes long, not %d and %d", len(sigR), len(sigS))
+		}
+		if len(pkX) != 32 || len(pkY) != 32 {
+			return fmt.Errorf("public key X and Y must each be 32 bytes long, not %d and %d", len(pkX), len(pkY))
+		}
+	}
+
 	x := new(big.Int).SetBytes(pkX)
 	y := new(big.Int).SetBytes(pkY)
 
@@ -409,7 +423,8 @@ func opEcdsaVerify(cx *EvalContext) error {
 			}
 			r := new(big.Int).SetBytes(sigR)
 			s := new(big.Int).SetBytes(sigS)
-			result = ecdsa.Verify(&pubkey, msg, r, s)
+			result = (!canonical || s.Cmp(secp256r1HalfOrder) <= 0) &&
+				ecdsa.Verify(&pubkey, msg, r, s)
 		}
 	}
 
@@ -490,6 +505,18 @@ func opEcdsaPkRecover(cx *EvalContext) error {
 
 	if recid > 3 {
 		return fmt.Errorf("invalid recovery id: %d", recid)
+	}
+
+	if cx.version >= canonicalECDSAVersion {
+		// Fixing R and S at 32 bytes each leaves one way to split the signature.
+		if len(sigR) != 32 || len(sigS) != 32 {
+			return fmt.Errorf("signature R and S must each be 32 bytes long, not %d and %d", len(sigR), len(sigS))
+		}
+		// (R, N-S) with the low bit of recid flipped stands for the same
+		// public key as (R, S), so only the lower-S form is accepted.
+		if new(big.Int).SetBytes(sigS).Cmp(secp256k1HalfOrder) > 0 {
+			return errors.New("signature is not in lower-S form")
+		}
 	}
 
 	signature := make([]byte, 0, len(sigR)+len(sigS)+1)
