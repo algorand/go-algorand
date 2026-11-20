@@ -88,7 +88,7 @@ func (s *stateproofTxnTestCase) runIsWellFormedForTestCase() error {
 			Lease:   s.lease,
 			RekeyTo: s.rekeyValue,
 		},
-		StateProofTxnFields: StateProofTxnFields{},
+		StateProofTxnFields: basicStateProofTxnFieldsForTest(),
 	}.wellFormed(SpecialAddresses{}, curProto)
 }
 

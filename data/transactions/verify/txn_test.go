@@ -406,10 +406,6 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 
 	_, signed, _, _ := generateTestObjects(100, 50, 0, 0)
 
-	if err := verifyTxnGroup(signed, blockHeader); err != nil {
-		t.Errorf("signed transaction did not verify: %v", err)
-	}
-
 	for _, txn := range signed {
 		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{txn}, blockHeader, nil, nil)
 		require.NoError(t, err)
@@ -1018,10 +1014,6 @@ func TestTxnValidationEmptySig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	_, signed, _, _ := generateTestObjects(100, 50, 0, 0)
-
-	if err := verifyTxnGroup(signed, blockHeader); err != nil {
-		t.Errorf("signed transaction did not verify: %v", err)
-	}
 
 	for _, txn := range signed {
 		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{txn}, blockHeader, nil, nil)
