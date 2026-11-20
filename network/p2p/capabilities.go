@@ -44,10 +44,12 @@ const (
 	// Archival nodes
 	Archival Capability = "archival"
 	// Catchpoints storing nodes
-	Catchpoints = "catchpointStoring"
+	Catchpoints Capability = "catchpointStoring"
 	// Gossip nodes are non permissioned relays
-	Gossip = "gossip"
+	Gossip Capability = "gossip"
 )
+
+var allCaps = []string{string(Archival), string(Catchpoints), string(Gossip)}
 
 const operationTimeout = time.Second * 5
 const maxAdvertisementInterval = time.Hour * 22
@@ -204,7 +206,7 @@ func (c *CapabilitiesDiscovery) RoutingTable() Sizer {
 
 // MakeCapabilitiesDiscovery creates a new CapabilitiesDiscovery object which exposes peer discovery and capabilities advertisement
 func MakeCapabilitiesDiscovery(ctx context.Context, cfg config.Local, h host.Host, networkID protocol.NetworkID, log logging.Logger, bootstrapFunc func() []peer.AddrInfo) (*CapabilitiesDiscovery, error) {
-	discDht, err := algoDht.MakeDHT(ctx, h, networkID, cfg, bootstrapFunc)
+	discDht, err := algoDht.MakeDHT(ctx, h, networkID, cfg, bootstrapFunc, allCaps...)
 	if err != nil {
 		return nil, err
 	}

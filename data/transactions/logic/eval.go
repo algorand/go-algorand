@@ -129,16 +129,47 @@ func (sv stackValue) address() (addr basics.Address, err error) {
 	return
 }
 
+// maxQuotedLen is the most bytes of a program-supplied value that an error
+// shows.
+const maxQuotedLen = 16
+
+// limitedBytes formats a program-supplied value for an error message: only
+// the first maxQuotedLen bytes are shown, followed by the full length.
+type limitedBytes []byte
+
+func (b limitedBytes) String() string {
+	shown := b[:min(len(b), maxQuotedLen)]
+	var s string
+	if isPrintable(shown) {
+		s = string(shown)
+	} else {
+		s = "0x" + hex.EncodeToString(shown)
+	}
+	if len(shown) < len(b) {
+		s += fmt.Sprintf("... (%d bytes)", len(b))
+	}
+	return s
+}
+
+func isPrintable(b []byte) bool {
+	for _, c := range b {
+		if c < 0x20 || c > 0x7e {
+			return false
+		}
+	}
+	return true
+}
+
 func (sv stackValue) uint() (uint64, error) {
 	if sv.Bytes != nil {
-		return 0, fmt.Errorf("%#v is not a uint64", sv.Bytes)
+		return 0, fmt.Errorf("%s is not a uint64", limitedBytes(sv.Bytes))
 	}
 	return sv.Uint, nil
 }
 
 func (sv stackValue) uintMaxed(max uint64) (uint64, error) {
 	if sv.Bytes != nil {
-		return 0, fmt.Errorf("%#v is not a uint64", sv.Bytes)
+		return 0, fmt.Errorf("%s is not a uint64", limitedBytes(sv.Bytes))
 	}
 	if sv.Uint > max {
 		return 0, fmt.Errorf("%d is larger than max=%d", sv.Uint, max)
@@ -740,6 +771,10 @@ type EvalContext struct {
 	version uint64
 	Scratch scratchSpace
 
+	// parsedConsts caches, by pc, the parsed immediates of the intcblock,
+	// bytecblock, pushints and pushbytess instructions executed so far.
+	parsedConsts map[int]immConsts
+
 	// creatorAddr caches the creator of appID, looked up lazily by
 	// getCreatorAddress (a zero value means "not yet looked up"). Besides
 	// backing the `global CreatorAddress` op, it is used to decide family
@@ -1279,11 +1314,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 				cx.EvalParams.available.boxes[basics.BoxRef{App: cx.appID, Name: string(rr.Box.Name)}] = false
 			}
 		}
-		// and add the appID to `createdApps`
-		if cx.EvalParams.available.createdApps == nil {
-			cx.EvalParams.available.createdApps = make(map[basics.AppIndex]struct{})
-		}
-		cx.EvalParams.available.createdApps[cx.appID] = struct{}{}
+		cx.EvalParams.available.createApp(cx.appID, cx.GetApplicationAddress(cx.appID))
 	}
 
 	// Check the I/O budget for reading if this is the first top-level app call
@@ -1618,6 +1649,7 @@ func check(program []byte, txn *transactions.SignedTxnWithAD, params *EvalParams
 
 func (cx *EvalContext) begin(program []byte) error {
 	cx.program = program
+	cx.parsedConsts = nil
 
 	version, vlen, err := transactions.ProgramVersion(program)
 	if err != nil {
@@ -3058,9 +3090,54 @@ func opBytesZero(cx *EvalContext) error {
 	return nil
 }
 
+// immConsts is the parsed immediates of one instruction that carries
+// constants. Only one of ints and bytes is used.
+type immConsts struct {
+	ints   []uint64
+	bytes  [][]byte
+	nextpc int
+}
+
+func (cx *EvalContext) rememberConsts(consts immConsts) {
+	if cx.parsedConsts == nil {
+		cx.parsedConsts = make(map[int]immConsts)
+	}
+	cx.parsedConsts[cx.pc] = consts
+}
+
+// intConsts returns the integer immediates of the intcblock or pushints at
+// cx.pc, and the pc after them. The returned slice is shared by every
+// execution of the instruction, so it must not be modified.
+func (cx *EvalContext) intConsts() ([]uint64, int, error) {
+	if consts, ok := cx.parsedConsts[cx.pc]; ok {
+		return consts.ints, consts.nextpc, nil
+	}
+	ints, nextpc, err := parseIntImmArgs(cx.program, cx.pc+1)
+	if err != nil {
+		return nil, 0, err
+	}
+	cx.rememberConsts(immConsts{ints: ints, nextpc: nextpc})
+	return ints, nextpc, nil
+}
+
+// byteConsts returns the byte immediates of the bytecblock or pushbytess at
+// cx.pc, and the pc after them. The returned slice is shared by every
+// execution of the instruction, so it must not be modified.
+func (cx *EvalContext) byteConsts() ([][]byte, int, error) {
+	if consts, ok := cx.parsedConsts[cx.pc]; ok {
+		return consts.bytes, consts.nextpc, nil
+	}
+	bytes, nextpc, err := cx.byteImmArgs()
+	if err != nil {
+		return nil, 0, err
+	}
+	cx.rememberConsts(immConsts{bytes: bytes, nextpc: nextpc})
+	return bytes, nextpc, nil
+}
+
 func opIntConstBlock(cx *EvalContext) error {
 	var err error
-	cx.intc, cx.nextpc, err = parseIntImmArgs(cx.program, cx.pc+1)
+	cx.intc, cx.nextpc, err = cx.intConsts()
 	return err
 }
 
@@ -3101,7 +3178,7 @@ func opPushInt(cx *EvalContext) error {
 }
 
 func opPushInts(cx *EvalContext) error {
-	intc, nextpc, err := parseIntImmArgs(cx.program, cx.pc+1)
+	intc, nextpc, err := cx.intConsts()
 	if err != nil {
 		return err
 	}
@@ -3119,7 +3196,7 @@ func opPushInts(cx *EvalContext) error {
 
 func opByteConstBlock(cx *EvalContext) error {
 	var err error
-	cx.bytec, cx.nextpc, err = cx.byteImmArgs()
+	cx.bytec, cx.nextpc, err = cx.byteConsts()
 	return err
 }
 
@@ -3193,7 +3270,7 @@ func (cx *EvalContext) byteImmArgs() ([][]byte, int, error) {
 }
 
 func opPushBytess(cx *EvalContext) error {
-	cbytess, nextpc, err := cx.byteImmArgs()
+	cbytess, nextpc, err := cx.byteConsts()
 	if err != nil {
 		return err
 	}
@@ -5086,10 +5163,8 @@ func (cx *EvalContext) availableAccount(addr basics.Address) bool {
 
 	// Allow an address for an app that was created in group
 	if cx.version >= createdResourcesVersion {
-		for appID := range cx.available.createdApps {
-			if addr == cx.GetApplicationAddress(appID) {
-				return true
-			}
+		if _, ok := cx.available.createdAppAccounts[addr]; ok {
+			return true
 		}
 	}
 
@@ -6047,7 +6122,7 @@ func (cx *EvalContext) assignAsset(sv stackValue) (basics.AssetIndex, error) {
 		return aid, nil
 	}
 
-	return 0, fmt.Errorf("unavailable Asset %d during assignment %v", aid, cx.available)
+	return 0, fmt.Errorf("unavailable Asset %d during assignment", aid)
 }
 
 // availableAsset determines whether an asset is "available". Before
@@ -6149,7 +6224,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		if ok && ver <= cx.version {
 			txn.Type = protocol.TxType(txType)
 		} else {
-			return fmt.Errorf("%s is not a valid Type for itxn_field", txType)
+			return fmt.Errorf("%s is not a valid Type for itxn_field", limitedBytes(sv.Bytes))
 		}
 	case TypeEnum:
 		var i uint64
@@ -6425,7 +6500,7 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 			if cx.FeeCredit != nil {
 				shortfall = shortfall.SubSaturate(*cx.FeeCredit)
 			}
-			return fmt.Errorf("group fee %s too small (needs %s more) %#v", groupPaid, shortfall, cx.subtxns)
+			return fmt.Errorf("group fee %s too small (needs %s more) for %d inner transactions", groupPaid, shortfall, len(cx.subtxns))
 		}
 		*cx.FeeCredit = cx.FeeCredit.SubSaturate(shortfall)
 	} else {
@@ -6835,7 +6910,7 @@ func opJSONRef(cx *EvalContext) error {
 			return fmt.Errorf("error while parsing JSON text, %v", err)
 		}
 
-		return fmt.Errorf("key %s not found in JSON text", key)
+		return fmt.Errorf("key %s not found in JSON text", limitedBytes(key))
 	}
 
 	switch expectedType {

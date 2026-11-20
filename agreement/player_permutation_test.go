@@ -82,6 +82,7 @@ func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomat
 		pM.update(*plyr, r, true)
 		pM.Children[r].ProposalStore.Assemblers = make(map[proposalValue]blockAssembler)
 		pM.Children[r].ProposalStore.Assemblers[pV] = blockAssembler{}
+		pM.Children[r].ProposalStore.Relevant = map[period]proposalValue{p: pV}
 		pM.Children[r].update(*plyr, p, true)
 		pM.Children[r].Children[p].ProposalTracker.Duplicate = make(map[basics.Address]bool)
 		helper.addresses[0] = basics.Address(randomBlockHash())
@@ -94,6 +95,7 @@ func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomat
 		pM.update(*plyr, r, true)
 		pM.Children[r].ProposalStore.Assemblers = make(map[proposalValue]blockAssembler)
 		pM.Children[r].ProposalStore.Assemblers[pV] = blockAssembler{}
+		pM.Children[r].ProposalStore.Relevant = map[period]proposalValue{p: pV}
 		pM.Children[r].update(*plyr, p, true)
 		pM.Children[r].Children[p].ProposalTracker.Duplicate = make(map[basics.Address]bool)
 		helper.addresses[0] = basics.Address(randomBlockHash())
@@ -107,6 +109,7 @@ func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomat
 		pM.update(*plyr, r, true)
 		pM.Children[r].ProposalStore.Assemblers = make(map[proposalValue]blockAssembler)
 		pM.Children[r].ProposalStore.Assemblers[pV] = blockAssembler{}
+		pM.Children[r].ProposalStore.Relevant = map[period]proposalValue{p: pV}
 		pM.Children[r].VoteTrackerRound.Freshest = thresholdEvent{T: certThreshold, Proposal: pV, Round: r, Period: p, Bundle: unauthenticatedBundle{Round: r}}
 		pM.Children[r].VoteTrackerRound.Ok = true
 		pM.Children[r].update(*plyr, p, true)
@@ -122,6 +125,7 @@ func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomat
 		pM.update(*plyr, r, true)
 		pM.Children[r].ProposalStore.Assemblers = make(map[proposalValue]blockAssembler)
 		pM.Children[r].ProposalStore.Assemblers[pV] = blockAssembler{Assembled: true, Payload: *payload}
+		pM.Children[r].ProposalStore.Relevant = map[period]proposalValue{p: pV}
 		pM.Children[r].update(*plyr, p, true)
 		pM.Children[r].Children[p].ProposalTracker.Duplicate = make(map[basics.Address]bool)
 		helper.addresses[0] = basics.Address(randomBlockHash())

@@ -52,6 +52,8 @@ func TestClassifyTxPoolErrorGeneralCoverage(t *testing.T) {
 		{name: "no_space_wrapped", err: ledgercore.ErrNoSpace, tag: TxPoolErrTagNoSpace, wrap: true},
 		{name: "fee_escalation", err: &ErrTxPoolFeeError{}, tag: TxPoolErrTagFee},
 		{name: "fee_escalation_wrapped", err: &ErrTxPoolFeeError{}, tag: TxPoolErrTagFee, wrap: true},
+		{name: "verify", err: &ErrTxPoolVerifyError{err: errors.New("rejected by logic")}, tag: TxPoolErrTagVerify},
+		{name: "verify_wrapped", err: &ErrTxPoolVerifyError{err: errors.New("rejected by logic")}, tag: TxPoolErrTagVerify, wrap: true},
 		{name: "txn_dead", err: &bookkeeping.TxnDeadError{}, tag: TxPoolErrTagTxnDead},
 		{name: "txn_dead_wrapped", err: &bookkeeping.TxnDeadError{}, tag: TxPoolErrTagTxnDead, wrap: true},
 		{name: "txn_early", err: &bookkeeping.TxnDeadError{Early: true}, tag: TxPoolErrTagTxnEarly},

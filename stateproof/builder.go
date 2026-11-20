@@ -283,6 +283,7 @@ var errAddressNotInVoters = errors.New("cannot find address in builder")        
 var errFailedToAddSigAtPos = errors.New("could not add signature to builder")            // Position was out of array bounds or signature already present
 var errSigAlreadyPresentAtPos = errors.New("signature already present at this position") // Signature already present at this position
 var errSignatureVerification = errors.New("error while verifying signature")             // Signature failed cryptographic verification
+var errSigProofRejected = errors.New("signature Merkle proof rejected")                  // Signature's Merkle proof cannot be used in a state proof
 
 func (b *spProver) insertSig(s *pendingSig, verify bool) error {
 	rnd := b.Round
@@ -300,6 +301,11 @@ func (b *spProver) insertSig(s *pendingSig, verify bool) error {
 	}
 
 	if err = b.IsValid(pos, &s.sig, verify); err != nil {
+		// Peers that do not apply these checks relay such signatures.
+		if errors.Is(err, stateproof.ErrUnexpectedPathLength) || errors.Is(err, stateproof.ErrTreeDepthTooLarge) ||
+			errors.Is(err, stateproof.ErrInvalidHashType) {
+			return fmt.Errorf("insertSig: %w (cannot add %v in round %d: %v)", errSigProofRejected, s.signer, rnd, err)
+		}
 		return fmt.Errorf("insertSig: %w (cannot add %v in round %d: %v)", errSignatureVerification, s.signer, rnd, err)
 	}
 	if err = b.Add(pos, s.sig); err != nil {

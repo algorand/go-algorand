@@ -254,8 +254,16 @@ type MessageHandle any
 // protocol.
 type Network interface {
 	// Messages returns a channel of Messages which corresponds to a given
-	// protocol.Tag.
+	// protocol.Tag. It does not serve protocol.ProposalPayloadTag: proposal
+	// payloads are taken with NextProposal.
 	Messages(protocol.Tag) <-chan Message
+
+	// NextProposal waits for a proposal payload message and returns it. It
+	// returns false once ctx is done or no more messages will arrive.
+	// Handing payloads out one at a time lets the Network choose which comes
+	// next as late as possible. Agreement calls NextProposal from a single
+	// goroutine.
+	NextProposal(ctx context.Context) (Message, bool)
 
 	// Broadcast attempts to send a slice of bytes under some protocol.Tag
 	// to all neighbors.

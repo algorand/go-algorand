@@ -108,6 +108,10 @@ func (b *Prover) IsValid(pos uint64, sig *merklesignature.Signature, verifySig b
 		return fmt.Errorf("prover.IsValid: %w: position = %d", ErrPositionWithZeroWeight, pos)
 	}
 
+	if err := checkSignatureProofPath(sig); err != nil {
+		return fmt.Errorf("prover.IsValid: position = %d: %w", pos, err)
+	}
+
 	// Check signature
 	if verifySig {
 		if err := sig.ValidateSaltVersion(merklesignature.SchemeSaltVersion); err != nil {
@@ -116,6 +120,10 @@ func (b *Prover) IsValid(pos uint64, sig *merklesignature.Signature, verifySig b
 		if err := p.PK.VerifyBytes(b.Round, b.Data[:], sig); err != nil {
 			return err
 		}
+	}
+
+	if sig.Proof.HashFactory.HashType != merklesignature.MerkleSignatureSchemeHashFunction {
+		return fmt.Errorf("prover.IsValid: position = %d: %w", pos, ErrInvalidHashType)
 	}
 	return nil
 }

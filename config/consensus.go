@@ -644,6 +644,13 @@ type ConsensusParams struct {
 	// for global state and extra pages of apps it neither created nor opted
 	// into.
 	CloseRequiresBaseMinBalance bool
+
+	// DiscardFailedInnerClearStateDelta empties the EvalDelta of an inner
+	// ClearState call whose ClearStateProgram fails or rejects, as it always
+	// has been for a top-level call. Without it, the inner transaction's
+	// ApplyData keeps the state changes and logs the program noted before
+	// failing, though none of them took effect.
+	DiscardFailedInnerClearStateDelta bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -1581,6 +1588,7 @@ func initConsensusProtocols() {
 	vFuture.AllowGroupedHeartbeats = true
 
 	vFuture.EnableSigSchemeLogicSig = true
+	vFuture.DiscardFailedInnerClearStateDelta = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

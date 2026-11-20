@@ -390,6 +390,10 @@ func (s *mockService) Conns() []network.Conn {
 	return nil
 }
 
+func (s *mockService) ConnsToPeer(peer.ID) []network.Conn {
+	return nil
+}
+
 func (s *mockService) ListPeersForTopic(topic string) []peer.ID {
 	return nil
 }
@@ -2028,4 +2032,61 @@ func TestP2PPeerSweep(t *testing.T) {
 	require.False(t, n.hasPeers())
 	require.False(t, late.throttledOutgoingConnection)
 	require.True(t, n.identityTracker.setIdentity(&wsPeer{identity: late.identity}))
+}
+
+// TestP2PPeerRoutingAddr checks that a P2P peer gets the routing address of the IP it is connected from,
+// the same as a WebSocket peer from that IP, with or without a wsPeer.
+func TestP2PPeerRoutingAddr(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := config.GetDefaultLocal()
+	cfg.NetAddress = "127.0.0.1:0"
+	cfg.DNSBootstrapID = ""
+	log := logging.TestingLog(t)
+	genesisInfo := GenesisInfo{genesisID, config.Devtestnet}
+	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisInfo, &nopeNodeInfo{}, nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, netA.Start())
+	defer netA.Stop()
+
+	peerInfoA := netA.service.AddrInfo()
+	addrsA, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
+	require.NoError(t, err)
+	netB, err := NewP2PNetwork(log, cfg, "", []string{addrsA[0].String()}, genesisInfo, &nopeNodeInfo{}, nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, netB.Start())
+	defer netB.Stop()
+
+	require.Eventually(t, func() bool {
+		return netA.hasPeers() && netB.hasPeers()
+	}, 10*time.Second, 50*time.Millisecond)
+
+	// a WebSocket peer connected from the same IP
+	wsp := wsPeer{wsPeerCore: wsPeerCore{originAddress: "127.0.0.1"}}
+	expected := wsp.RoutingAddr()
+	require.Equal(t, []byte{127, 0, 0, 1}, expected)
+
+	// B is an incoming peer on A, and A is an outgoing peer on B
+	for _, tc := range []struct {
+		net      *P2PNetwork
+		remote   peer.ID
+		outgoing bool
+	}{
+		{netA, netB.service.ID(), false},
+		{netB, netA.service.ID(), true},
+	} {
+		tc.net.wsPeersLock.RLock()
+		p2pPeer := tc.net.wsPeers[tc.remote]
+		tc.net.wsPeersLock.RUnlock()
+		require.NotNil(t, p2pPeer)
+		require.Equal(t, tc.outgoing, p2pPeer.outgoing)
+		require.Equal(t, expected, p2pPeer.RoutingAddr())
+
+		// the sender txTopicValidator uses for a peer that has no wsPeer
+		require.Equal(t, expected, (&gsPeer{peerID: tc.remote, net: tc.net}).RoutingAddr())
+	}
+
+	// a peer that is not connected
+	unknown := peer.ID("12345678")
+	require.Equal(t, []byte(unknown), (&gsPeer{peerID: unknown, net: netA}).RoutingAddr())
 }

@@ -57,6 +57,7 @@ func TestProposalCarriesMalformedStateProofPath(t *testing.T) {
 				SigProofs: merklearray.Proof{
 					HashFactory: crypto.HashFactory{HashType: stateproof.HashType},
 				},
+				Reveals: map[uint64]stateproof.Reveal{0: {}},
 				PartProofs: merklearray.Proof{
 					Path:        []crypto.GenericDigest{make(crypto.GenericDigest, 2*stateproof.HashSize)},
 					HashFactory: crypto.HashFactory{HashType: stateproof.HashType},
@@ -168,11 +169,12 @@ func TestProposalCarriesOversizedTxnGroup(t *testing.T) {
 		block.Payset = append(block.Payset, stib)
 	}
 
+	// decodeProposal leaves the payset undecoded; decodeDeferredPayload
+	// runs this check when it decodes it.
 	encoded := protocol.Encode(&transmittedPayload{unauthenticatedProposal: unauthenticatedProposal{Block: block}})
-	decoded, err := decodeProposal(encoded)
-	require.NoError(t, err)
-	proposal := decoded.(compoundMessage).Proposal
-	require.True(t, proposalCarriesInvalidTxn(proposal), "oversized group must be rejected before proposal validation")
+	var decoded transmittedPayload
+	require.NoError(t, protocol.Decode(encoded, &decoded))
+	require.True(t, proposalCarriesInvalidTxn(decoded.unauthenticatedProposal), "oversized group must be rejected before proposal validation")
 }
 
 func TestDecodeRejectsStepAboveDown(t *testing.T) {

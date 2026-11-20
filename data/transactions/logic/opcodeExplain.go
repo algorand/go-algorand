@@ -60,7 +60,7 @@ type stateChangeExplain func(ctx *EvalContext) (AppStateEnum, AppStateOpEnum, ba
 func opPushIntsStackChange(cx *EvalContext) (deletions, additions int) {
 	// NOTE: WE ARE SWALLOWING THE ERROR HERE!
 	// FOR EVENTUALLY IT WOULD ERROR IN ASSEMBLY
-	intc, _, _ := parseIntImmArgs(cx.program, cx.pc+1)
+	intc, _, _ := cx.intConsts()
 
 	additions = len(intc)
 	return
@@ -69,7 +69,7 @@ func opPushIntsStackChange(cx *EvalContext) (deletions, additions int) {
 func opPushBytessStackChange(cx *EvalContext) (deletions, additions int) {
 	// NOTE: WE ARE SWALLOWING THE ERROR HERE!
 	// FOR EVENTUALLY IT WOULD ERROR IN ASSEMBLY
-	cbytess, _, _ := parseByteImmArgs(cx.program, cx.pc+1)
+	cbytess, _, _ := cx.byteConsts()
 
 	additions = len(cbytess)
 	return

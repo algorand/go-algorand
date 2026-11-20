@@ -219,9 +219,9 @@ func (d *StatelessDecoder) proposalValueMapSize(mask uint8) uint8 {
 // to be uncompressed msgpack data from a peer claiming vpack support.
 var ErrLikelyUncompressed = fmt.Errorf("data appears to be uncompressed msgpack")
 
-// isLikelyUncompressedMsgpack checks if the source data looks like an uncompressed
+// IsLikelyUncompressedMsgpack checks if the source data looks like an uncompressed
 // msgpack vote that was mistakenly treated as vpack-compressed.
-func isLikelyUncompressedMsgpack(src []byte) bool {
+func IsLikelyUncompressedMsgpack(src []byte) bool {
 	// uncompressed msgpack votes start with 0x83 (fixmap marker with 3 elements: cred, r, sig),
 	// followed by 0xa4 (fixstr marker of length 4), then "cred"
 	return len(src) > 5 && src[0] == 0x83 && src[1] == 0xa4 &&
@@ -232,7 +232,7 @@ func isLikelyUncompressedMsgpack(src []byte) bool {
 // To re-use dst, run like: dst = dec.DecompressVote(dst[:0], src)
 func (d *StatelessDecoder) DecompressVote(dst, src []byte) ([]byte, error) {
 	result, err := d.decompressVote(dst, src)
-	if err != nil && isLikelyUncompressedMsgpack(src) {
+	if err != nil && IsLikelyUncompressedMsgpack(src) {
 		return nil, fmt.Errorf("%w: %v", ErrLikelyUncompressed, err)
 	}
 	return result, err

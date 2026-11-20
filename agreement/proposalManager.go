@@ -52,6 +52,11 @@ func (m *proposalManager) underlying() listener {
 //     period given a softThreshold/certThreshold event, if necessary.
 //   - On entering a new period due to a softThreshold/certThreshold, it
 //     dispatches this event to the proposalMachineRound.
+//   - On entering a new period given a nextThreshold, it returns the
+//     payloadPipelined event for a held payload whose validation is now due,
+//     if there is one.  Given a softThreshold/certThreshold, the
+//     proposalMachineRound reports such a payload in the Pipelined field of
+//     its proposalAccepted or proposalCommittable event.
 //
 // For more details, see each method's respective documentation below.
 func (m *proposalManager) handle(r routerHandle, p player, e event) event {
@@ -63,14 +68,14 @@ func (m *proposalManager) handle(r routerHandle, p player, e event) event {
 	case softThreshold, certThreshold:
 		e := e.(thresholdEvent)
 		if p.Period < e.Period {
-			r = m.handleNewPeriod(r, p, e)
+			r, _ = m.handleNewPeriod(r, p, e)
 		}
 
 		ec := r.dispatch(p, e, proposalMachineRound, e.Round, e.Period, 0)
 		return ec
 	case nextThreshold:
-		r = m.handleNewPeriod(r, p, e.(thresholdEvent))
-		return emptyEvent{}
+		_, en := m.handleNewPeriod(r, p, e.(thresholdEvent))
+		return en
 	}
 	r.t.log.Panicf("proposalManager: bad event type: observed an event of type %v", e.t())
 	panic("not reached")
@@ -85,16 +90,17 @@ func (m *proposalManager) handleNewRound(r routerHandle, p player, round round) 
 }
 
 // handleNewPeriod is called for threshold events that move the state machine into a new period.
-// These events are dispatched to the proposalMachineRound, and an empty event is returned.
-func (m *proposalManager) handleNewPeriod(r routerHandle, p player, e thresholdEvent) routerHandle {
+// These events are dispatched to the proposalMachineRound, and the resulting event is returned:
+// for a nextThreshold, a payloadPipelined event for a held payload whose validation is now due,
+// if there is one; otherwise an empty event.
+func (m *proposalManager) handleNewPeriod(r routerHandle, p player, e thresholdEvent) (routerHandle, event) {
 	target := e.Period
 	if e.t() == nextThreshold {
 		target = e.Period + 1
 	}
 
-	en := newPeriodEvent{Period: target, Proposal: e.Proposal}
-	r.dispatch(p, en, proposalMachineRound, e.Round, 0, 0)
-	return r
+	en := newPeriodEvent{Period: target, Proposal: e.Proposal, ResumeHeld: e.t() == nextThreshold}
+	return r, r.dispatch(p, en, proposalMachineRound, e.Round, 0, 0)
 }
 
 // handleMessageEvent is called for {vote,payload}{Present,Verified} events.
@@ -120,9 +126,14 @@ func (m *proposalManager) handleNewPeriod(r routerHandle, p player, e thresholdE
 //
 //   - A payloadVerified event is delivered after validation was attempted on a
 //     proposal payload.  If the proposal payload was invalid, a payloadMalformed
-//     event is returned.  Otherwise, the event is dispatched to the
+//     event is returned.  A payloadRejected event is returned if the payload is
+//     not for the current round, which happens when validation finished after
+//     the player left that round.  Otherwise, the event is dispatched to the
 //     proposalMachineRound, and then the resulting payload{Rejected,Accepted} or
-//     proposalCommittable event is returned.
+//     proposalCommittable event is returned.  If validation was cancelled,
+//     payloadRejected is returned for a payload not for the current round;
+//     otherwise the proposalMachineRound returns payloadPipelined if it still
+//     tracks the payload, and payloadRejected if not.
 func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filterableMessageEvent) (res event) {
 	var pipelinedRound round
 	var pipelinedPeriod period
@@ -231,11 +242,37 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 
 	default: // case payloadVerified:
 		if e.Cancelled {
-			return payloadProcessedEvent{T: payloadRejected, Err: e.Err}
+			// As with a validated payload below, a block from a round the
+			// player has left must not reach this round's proposalStore, which
+			// would hold it again and request its validation.
+			// cryptoVerifier.verifyProposalPayload may leave Input.Proposal
+			// empty on a cancelled result, so the round comes from
+			// Input.UnauthenticatedProposal.
+			if pr := e.Input.UnauthenticatedProposal.Round(); pr != p.Round {
+				err := makeSerErrf("proposalManager: ignoring cancelled proposal payload due to age: payload round %d, player round %d", pr, p.Round)
+				return payloadProcessedEvent{T: payloadRejected, Err: err}
+			}
+			e1 := r.dispatch(p, e.messageEvent, proposalMachineRound, p.Round, p.Period, 0)
+			if e1.t() == payloadPipelined {
+				pipelinedRound = p.Round
+				pipelinedPeriod = p.Period
+				ep := e1.(payloadProcessedEvent)
+				ep.Round = p.Round
+				return ep
+			}
+			return e1
 		}
 
 		if e.Err != nil {
 			return filteredEvent{T: payloadMalformed, Err: e.Err}
+		}
+
+		// unauthenticatedProposal.validate compared the block round with the
+		// round the player was in when it requested validation, so the
+		// result is for that round only.
+		if pr := e.Input.Proposal.Round(); pr != p.Round {
+			err := makeSerErrf("proposalManager: ignoring proposal payload due to age: payload round %d, player round %d", pr, p.Round)
+			return payloadProcessedEvent{T: payloadRejected, Err: err}
 		}
 
 		up := e.Input.UnauthenticatedProposal
