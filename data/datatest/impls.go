@@ -110,7 +110,7 @@ func (i ledgerImpl) LookupDigest(r basics.Round) (crypto.Digest, error) {
 	return crypto.Digest(blockhdr.Hash()), nil
 }
 
-// Lookup implements Ledger.LookupAgreement.
+// LookupAgreement implements Ledger.LookupAgreement.
 func (i ledgerImpl) LookupAgreement(r basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
 	a, err := i.l.LookupAgreement(r, addr)
 	return a, err

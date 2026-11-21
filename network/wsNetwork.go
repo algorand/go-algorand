@@ -73,7 +73,7 @@ const httpServerWriteTimeout = time.Second * 60
 // httpServerIdleTimeout is the maximum amount of time to wait for the
 // next request when keep-alives are enabled. If httpServerIdleTimeout
 // is zero, the value of ReadTimeout is used. If both are
-// zero, ReadHeaderTimeout is used.
+// zero, there is no timeout.
 const httpServerIdleTimeout = time.Second * 4
 
 // MaxHeaderBytes controls the maximum number of bytes the
