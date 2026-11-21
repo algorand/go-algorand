@@ -974,13 +974,7 @@ var OpSpecs = []OpSpec{
 
 	// randomness support
 	{0xd0, "vrf_verify", opVrfVerify, proto("bb{80}b{32}:b{64}T"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
-	{0xd0, "vrf_verify", opVrfVerify, proto("bb{80}b{32}:b{64}T"), cryptoCostVersion, costByFieldAndLength("s", &VrfStandards, []costDescriptor{
-		VrfAlgorand: {
-			baseCost:  6190,
-			chunkCost: 3,
-			chunkSize: 64,
-			depth:     2,
-		}})},
+	{0xd0, "vrf_verify", opVrfVerify, proto("bb{80}b{32}:b{64}T"), cryptoCostVersion, field("s", &VrfStandards).costByLength(6190, 3, 64, 2)},
 	{0xd1, "block", opBlock, proto("i:a"), randomnessVersion, field("f", &BlockFields)},
 	{0xd2, "box_splice", opBoxSplice, proto("Niib:").appBoxExplain(AppStateWrite, false), spliceVersion, only(ModeApp)},
 	{0xd3, "box_resize", opBoxResize, proto("Ni:").appBoxExplain(AppStateWrite, false), spliceVersion, only(ModeApp)},

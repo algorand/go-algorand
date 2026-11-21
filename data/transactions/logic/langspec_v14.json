@@ -8483,7 +8483,7 @@
           "Version": 7
         }
       ],
-      "DocCost": "VrfAlgorand=6190 + 3 per 64 bytes of A",
+      "DocCost": "6190 + 3 per 64 bytes of A",
       "Doc": "Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.",
       "DocExtra": "`VrfAlgorand` is the VRF used in Algorand. It is ECVRF-ED25519-SHA512-Elligator2, specified in the IETF internet draft [draft-irtf-cfrg-vrf-03](https://datatracker.ietf.org/doc/draft-irtf-cfrg-vrf/03/).",
       "ImmediateNote": [

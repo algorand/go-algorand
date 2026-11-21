@@ -1720,7 +1720,7 @@ LogicSig arguments are supplied outside of any signature, and are part of neithe
 - Bytecode: 0xd0 {uint8}
 - Stack: ..., A: []byte, B: [80]byte, C: [32]byte &rarr; ..., X: [64]byte, Y: bool
 - Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.
-- **Cost**: VrfAlgorand=6190 + 3 per 64 bytes of A
+- **Cost**: 6190 + 3 per 64 bytes of A
 - Availability: v7
 
 ### vrf_verify Standards
