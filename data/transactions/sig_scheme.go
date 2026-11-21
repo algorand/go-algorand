@@ -86,13 +86,14 @@ var sigSchemes = map[protocol.SigScheme]sigScheme{
 		maxSignatureSize: constSize(crypto.Falcon512MaxSignatureSize),
 	},
 	// An ML-DSA fee charges, at the protocol's existing rates, what the scheme
-	// adds over an Ed25519 signature. Bytes: the public key and signature, less
-	// Ed25519's 64-byte signature, at PerByteTxnSurcharge (100e-6 of a min fee
-	// per byte). Verification: the time beyond a batched Ed25519 verification,
-	// on amd64, priced like LogicSig budget. ed25519verify_bare costs 1900
-	// units for one 62us unbatched verification, so LogicSigMaxCost (20000
-	// units, one min fee) buys about 654us. The sum is rounded up to 0.1 of a
-	// min fee.
+	// adds over a plain Ed25519 signature. Bytes: the public key and signature,
+	// less the 64-byte Ed25519 signature, whose public key is the sender
+	// address that every transaction carries, at PerByteTxnSurcharge (100e-6
+	// of a min fee per byte). Verification: the time beyond a batched Ed25519
+	// verification, on amd64, priced like LogicSig budget. ed25519verify_bare
+	// costs 1900 units for one 62us unbatched verification, so LogicSigMaxCost
+	// (20000 units, one min fee) buys about 654us. The sum is rounded up to 0.1
+	// of a min fee.
 	protocol.SigSchemeMLDSA44: {
 		verifier:         crypto.MLDSA44SchemeVerifier{},
 		enabled:          func(proto config.ConsensusParams) bool { return proto.EnableSigSchemeMLDSA44 },
