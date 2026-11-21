@@ -972,13 +972,66 @@ ecdsa_verify Secp256r1
 !
 assert
 global OpcodeBudget
-int ` + fmt.Sprintf("%d", testLogicBudget-2500-8) + `
+int %d
 ==
 `
-	testAccepts(t, source, fidoVersion)
+	// Literal versions: v13 has shipped, so its costs must not change.
+	testAcceptRange(t, fmt.Sprintf(source, testLogicBudget-2500-8), fidoVersion, 13)
+	testAcceptRange(t, fmt.Sprintf(source, testLogicBudget-2210-8), 14, AssemblerMaxVersion)
 }
 
-func testHashCost(t *testing.T, hash string, size int, expected int, intro uint64) {
+// TestVerifyCosts pins the costs of the verification opcodes that hash their
+// message, at v13 and from v14, by message length. The inputs need not verify:
+// a budget too small for the opcode reports its cost before it runs. Programs
+// run under the latest consensus version, so a v13 program keeps v13 costs
+// there. Literal versions: v13 has shipped, so its costs must not change.
+func TestVerifyCosts(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	check := func(setup string, op string, v uint64, cost int) {
+		t.Helper()
+		program := testProg(t, setup+"; "+op, v).Program
+		var txn transactions.SignedTxn
+		txn.Lsig.Logic = program
+		ep := optSigParams(func(p *config.ConsensusParams) { p.LogicSigMaxCost = 100 }, txn)
+		_, _, err := EvalSignatureProgram(program, nil, 0, ep)
+		name := strings.Fields(op)[0]
+		require.ErrorContains(t, err, fmt.Sprintf("dynamic cost budget exceeded, executing %s (%d)", name, cost), "%s v%d", op, v)
+	}
+	// setup pushes a message of n bytes, then a signature (or proof) and a
+	// public key of the given sizes.
+	setup := func(n, sig, pk int) string {
+		return fmt.Sprintf("pushint %d; bzero; pushint %d; bzero; pushint %d; bzero", n, sig, pk)
+	}
+
+	for _, n := range []int{0, 1, 64, 65, maxStringSize} {
+		check(setup(n, 64, 32), "ed25519verify", 13, 1900)
+		check(setup(n, 64, 32), "ed25519verify_bare", 13, 1900)
+		check(setup(n, 10, 1793), "falcon_verify", 13, 1700)
+		check(setup(n, 80, 32), "vrf_verify VrfAlgorand", 13, 5700)
+	}
+
+	costs := []struct {
+		op    string
+		sig   int
+		pk    int
+		costs map[int]int // by message length
+	}{
+		{"ed25519verify", 64, 32, map[int]int{0: 1720, 1: 1724, 64: 1724, 65: 1728, maxStringSize: 1976}},
+		{"ed25519verify_bare", 64, 32, map[int]int{0: 1710, 1: 1713, 64: 1713, 65: 1716, maxStringSize: 1902}},
+		{"falcon_verify FalconDet1024", 10, 1793, map[int]int{0: 1410, 1: 1415, 64: 1415, 65: 1420, maxStringSize: 1730}},
+		{"falcon_verify FalconDet512", 10, 897, map[int]int{0: 690, 1: 695, 64: 695, 65: 700, maxStringSize: 1010}},
+		{"vrf_verify VrfAlgorand", 80, 32, map[int]int{0: 6190, 1: 6193, 64: 6193, 65: 6196, maxStringSize: 6382}},
+	}
+	for _, c := range costs {
+		for n, cost := range c.costs {
+			check(setup(n, c.sig, c.pk), c.op, 14, cost)
+		}
+	}
+}
+
+func testHashCost(t *testing.T, hash string, size int, expected int, start, stop uint64) {
 	hashCostCheck := `
 pushint %d
 bzero
@@ -991,22 +1044,58 @@ pushint %d
 ==
 `
 	t.Helper()
-	testAccepts(t, fmt.Sprintf(hashCostCheck, size, hash, expected), intro)
+	source := fmt.Sprintf(hashCostCheck, size, hash, expected)
+	testAcceptRange(t, source, start, stop)
+	// testAcceptRange runs programs under consensus versions up to stop, so also
+	// run them under the latest one, where they keep the costs of their version.
+	for v := start; v <= stop && stop < AssemblerMaxVersion; v++ {
+		ops := testProg(t, source, v)
+		var txn transactions.SignedTxn
+		txn.Lsig.Logic = ops.Program
+		pass, _, err := EvalSignatureProgram(ops.Program, nil, 0, defaultSigParams(txn))
+		require.NoError(t, err, "%s v%d", hash, v)
+		require.True(t, pass, "%s v%d", hash, v)
+	}
 }
 
 func TestHashCosts(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	testHashCost(t, "sha512", 0, 15, 13)
-	testHashCost(t, "sha512", 1, 17, 13)
-	testHashCost(t, "sha512", 64, 19, 13)
-	testHashCost(t, "sha512", 1000, 79, 13)
+	testHashCost(t, "sumhash512", 0, 150, sumhashVersion, AssemblerMaxVersion)
+	testHashCost(t, "sumhash512", 1, 154, sumhashVersion, AssemblerMaxVersion)
+	testHashCost(t, "sumhash512", 64, 190, sumhashVersion, AssemblerMaxVersion)
+	testHashCost(t, "sumhash512", 1000, 722, sumhashVersion, AssemblerMaxVersion)
 
-	testHashCost(t, "sumhash512", 0, 150, sumhashVersion)
-	testHashCost(t, "sumhash512", 1, 154, sumhashVersion)
-	testHashCost(t, "sumhash512", 64, 190, sumhashVersion)
-	testHashCost(t, "sumhash512", 1000, 722, sumhashVersion)
+	// Through v13, sha512 charges by length and the others do not. OpcodeBudget
+	// is available from v6. Literal versions: v13 has shipped, so its costs must
+	// not change.
+	testHashCost(t, "sha512", 0, 15, 13, 13)
+	testHashCost(t, "sha512", 1, 17, 13, 13)
+	testHashCost(t, "sha512", 64, 19, 13, 13)
+	testHashCost(t, "sha512", 1000, 79, 13, 13)
+	for _, n := range []int{0, maxStringSize} {
+		testHashCost(t, "sha256", n, 35, 6, 13)
+		testHashCost(t, "keccak256", n, 130, 6, 13)
+		testHashCost(t, "sha512_256", n, 45, 6, 13)
+		testHashCost(t, "sha3_256", n, 130, 7, 13)
+	}
+
+	// From v14, all of them charge by length.
+	sha256Costs := map[int]int{0: 8, 1: 9, 64: 9, 65: 10, maxStringSize: 72}
+	keccakCosts := map[int]int{0: 14, 1: 19, 64: 19, 65: 24, maxStringSize: 334}
+	sha512Costs := map[int]int{0: 10, 1: 15, 128: 15, 129: 20, maxStringSize: 170}
+	for hash, costs := range map[string]map[int]int{
+		"sha256":     sha256Costs,
+		"keccak256":  keccakCosts,
+		"sha3_256":   keccakCosts,
+		"sha512_256": sha512Costs,
+		"sha512":     sha512Costs,
+	} {
+		for n, cost := range costs {
+			testHashCost(t, hash, n, cost, 14, AssemblerMaxVersion)
+		}
+	}
 }
 
 func BenchmarkHashes(b *testing.B) {
