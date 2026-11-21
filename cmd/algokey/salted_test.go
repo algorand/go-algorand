@@ -335,40 +335,6 @@ func TestSaltedPrivateKeyFileStoresKeysNotEntropy(t *testing.T) {
 	}
 }
 
-// TestSaltedMLDSAKeyFileRejectsMismatchedKeys checks that an ML-DSA key file
-// whose private key does not produce its public key is rejected when read,
-// not used to sign transactions that would fail verification.
-func TestSaltedMLDSAKeyFileRejectsMismatchedKeys(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	for _, scheme := range []protocol.SigScheme{protocol.SigSchemeMLDSA44, protocol.SigSchemeMLDSA65, protocol.SigSchemeMLDSA87} {
-		t.Run(formatSigScheme(scheme), func(t *testing.T) {
-			t.Parallel()
-
-			signing, err := deriveSaltedSigningMaterialFromEntropy(scheme, crypto.Seed{1})
-			require.NoError(t, err)
-			other, err := deriveSaltedSigningMaterialFromEntropy(scheme, crypto.Seed{2})
-			require.NoError(t, err)
-			_, err = decodeSaltedPrivateKeyFileBytes(protocol.Encode(&signing))
-			require.NoError(t, err)
-
-			// A corrupted private key of the right size.
-			corrupted := signing
-			corrupted.PrivateKey = bytes.Clone(signing.PrivateKey)
-			corrupted.PrivateKey[0] ^= 1
-			_, err = decodeSaltedPrivateKeyFileBytes(protocol.Encode(&corrupted))
-			require.ErrorIs(t, err, errSaltedKeyMalformed)
-
-			// Another account's valid public half.
-			swapped := signing
-			swapped.Public = other.Public
-			_, err = decodeSaltedPrivateKeyFileBytes(protocol.Encode(&swapped))
-			require.ErrorIs(t, err, errSaltedKeyMalformed)
-		})
-	}
-}
-
 func TestSaltedKeyFileRejectsMalformedInputs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

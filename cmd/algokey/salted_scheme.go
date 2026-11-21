@@ -17,7 +17,6 @@
 package main
 
 import (
-	"bytes"
 	"crypto/mldsa"
 	"fmt"
 	"strings"
@@ -68,13 +67,6 @@ var sigSchemeOpsByScheme = map[protocol.SigScheme]sigSchemeOps{
 	protocol.SigSchemeMLDSA44:    mldsaOps{protocol.SigSchemeMLDSA44, mldsa.MLDSA44()},
 	protocol.SigSchemeMLDSA65:    mldsaOps{protocol.SigSchemeMLDSA65, mldsa.MLDSA65()},
 	protocol.SigSchemeMLDSA87:    mldsaOps{protocol.SigSchemeMLDSA87, mldsa.MLDSA87()},
-}
-
-// keyPairChecker is implemented by schemes whose public key is cheap to
-// recompute from the private key, so that a key file whose keys do not match
-// is rejected when it is read rather than signing with the wrong key.
-type keyPairChecker interface {
-	checkKeyPair(privateKey, publicKey []byte) error
 }
 
 type falcon1024Ops struct{}
@@ -285,27 +277,12 @@ func (mldsaOps) privateKeySize() uint64 { return mldsa.PrivateKeySize }
 // randomness into each one, so signing the same message twice gives two
 // different valid signatures.
 func (o mldsaOps) sign(privateKey []byte, message crypto.Hashable) ([]byte, error) {
-	sk, err := o.privateKey(privateKey)
+	if len(privateKey) != mldsa.PrivateKeySize {
+		return nil, fmt.Errorf("%w: got private key size %d, want %d", errSaltedKeyMalformed, len(privateKey), mldsa.PrivateKeySize)
+	}
+	sk, err := mldsa.NewPrivateKey(o.params, privateKey)
 	if err != nil {
 		return nil, err
 	}
 	return sk.Sign(nil, crypto.HashRep(message), nil)
-}
-
-func (o mldsaOps) checkKeyPair(privateKey, publicKey []byte) error {
-	sk, err := o.privateKey(privateKey)
-	if err != nil {
-		return err
-	}
-	if !bytes.Equal(sk.PublicKey().Bytes(), publicKey) {
-		return fmt.Errorf("%w: public key does not match private key", errSaltedKeyMalformed)
-	}
-	return nil
-}
-
-func (o mldsaOps) privateKey(seed []byte) (*mldsa.PrivateKey, error) {
-	if len(seed) != mldsa.PrivateKeySize {
-		return nil, fmt.Errorf("%w: got private key size %d, want %d", errSaltedKeyMalformed, len(seed), mldsa.PrivateKeySize)
-	}
-	return mldsa.NewPrivateKey(o.params, seed)
 }

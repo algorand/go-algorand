@@ -39,7 +39,6 @@ var (
 	SigSchemeFalcon512 = SigScheme{'f', '5'}
 
 	// SigSchemeMLDSA44 - m4: ML-DSA-44 (FIPS 204), pure, with an empty context.
-	// The usual choice of the three ML-DSA parameter sets.
 	SigSchemeMLDSA44 = SigScheme{'m', '4'}
 
 	// SigSchemeMLDSA65 - m6: ML-DSA-65 (FIPS 204), pure, with an empty context.
