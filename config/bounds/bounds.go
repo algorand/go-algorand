@@ -43,8 +43,8 @@ var MaxLogCalls int
 // one EvalDelta
 var MaxInnerTransactionsPerDelta int
 
-// MaxLogicSigMaxSize is the largest logical signature appear in any of the
-// supported protocols, used for decoding purposes.
+// MaxLogicSigMaxSize is the decoding bound, across all supported protocols,
+// applied independently to a LogicSig's program size and total argument size.
 var MaxLogicSigMaxSize int
 
 // MaxTxnNoteBytes is the largest supported nodes field array size supported by

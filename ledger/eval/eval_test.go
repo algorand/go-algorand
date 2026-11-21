@@ -50,7 +50,7 @@ import (
 var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 var testSinkAddr = basics.Address{0x2c, 0x2a, 0x6c, 0xe9, 0xa9, 0xa7, 0xc2, 0x8c, 0x22, 0x95, 0xfd, 0x32, 0x4f, 0x77, 0xa5, 0x4, 0x8b, 0x42, 0xc2, 0xb7, 0xa8, 0x54, 0x84, 0xb6, 0x80, 0xb1, 0xe1, 0x3d, 0x59, 0x9b, 0xeb, 0x36}
 
-func TestCheckGroupFeesBigLogicSigProgram(t *testing.T) {
+func TestCheckGroupFeesBigLogicSigSizes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
@@ -59,36 +59,68 @@ func TestCheckGroupFeesBigLogicSigProgram(t *testing.T) {
 	tests := []struct {
 		name        string
 		programSize int
+		argsSize    int
 		fees        []uint64
 		wantErr     bool
 	}{
 		{
-			name:        "singleton underpaid",
+			name:        "program singleton underpaid",
 			programSize: freeSize + 1,
 			fees:        []uint64{proto.MinTxnFee},
 			wantErr:     true,
 		},
 		{
-			name:        "singleton paid",
+			name:        "program singleton paid",
 			programSize: freeSize + 1,
 			fees:        []uint64{proto.MinTxnFee + 1},
 		},
 		{
-			name:        "pooled surcharge underpaid",
+			name:        "program pooled surcharge underpaid",
 			programSize: 2*freeSize + 1,
 			fees:        []uint64{proto.MinTxnFee, proto.MinTxnFee},
 			wantErr:     true,
 		},
 		{
-			name:        "pooled surcharge paid by another group member",
+			name:        "program pooled surcharge paid by another group member",
 			programSize: 2*freeSize + 1,
+			fees:        []uint64{proto.MinTxnFee, proto.MinTxnFee + 1},
+		},
+		{
+			name:        "args singleton underpaid",
+			programSize: freeSize,
+			argsSize:    freeSize + 1,
+			fees:        []uint64{proto.MinTxnFee},
+			wantErr:     true,
+		},
+		{
+			name:        "args singleton paid",
+			programSize: freeSize,
+			argsSize:    freeSize + 1,
+			fees:        []uint64{proto.MinTxnFee + 1},
+		},
+		{
+			name:        "args pooled surcharge underpaid",
+			programSize: freeSize,
+			argsSize:    2*freeSize + 1,
+			fees:        []uint64{proto.MinTxnFee, proto.MinTxnFee},
+			wantErr:     true,
+		},
+		{
+			name:        "args pooled surcharge paid by another group member",
+			programSize: freeSize,
+			argsSize:    2*freeSize + 1,
 			fees:        []uint64{proto.MinTxnFee, proto.MinTxnFee + 1},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// This test checks fee enforcement; the LogicSig program is not executed.
 			program := make([]byte, tt.programSize)
+			var args [][]byte
+			if tt.argsSize > 0 {
+				args = [][]byte{make([]byte, tt.argsSize)}
+			}
 			logicSigSender := basics.Address(logic.HashProgram(program))
 
 			genesisInitState, addrs, _ := ledgertesting.Genesis(10)
@@ -124,6 +156,7 @@ func TestCheckGroupFeesBigLogicSigProgram(t *testing.T) {
 				},
 				Lsig: transactions.LogicSig{
 					Logic: program,
+					Args:  args,
 				},
 			}}
 
@@ -167,6 +200,49 @@ func TestCheckGroupFeesBigLogicSigProgram(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
+		})
+	}
+}
+
+// TestCheckGroupFeesSingletonHeartbeatWithLargeArgs checks that the challenge
+// discount waives only the base fee; the args surcharge still applies.
+// This tests fee accounting directly, without validating the heartbeat,
+// verifying its LogicSig, or checking eligibility for the challenge discount.
+func TestCheckGroupFeesSingletonHeartbeatWithLargeArgs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	args := txntest.MakeLogicSigArgs(int(proto.MaxAbsoluteLogicSigArgsSize))
+	program, err := txntest.GenerateUnsaltedArgReadingProgramOfSize(uint(5+2*len(args)), uint(proto.LogicSigVersion), uint(len(args)))
+	require.NoError(t, err)
+	for _, test := range []struct {
+		name     string
+		discount bool
+		usage    basics.Micros
+		fee      uint64
+	}{
+		{"normal heartbeat", false, 2_500_000, 2500},
+		{"challenged heartbeat", true, 1_500_000, 1500},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			heartbeat := transactions.SignedTxn{
+				Txn: transactions.Transaction{
+					Type: protocol.HeartbeatTx,
+					Header: transactions.Header{
+						Fee: basics.MicroAlgos{Raw: test.fee - 1},
+					},
+					HeartbeatTxnFields: &transactions.HeartbeatTxnFields{HbChallengeDiscount: test.discount},
+				},
+				Lsig: transactions.LogicSig{Logic: program, Args: args},
+			}
+
+			usage, paid := transactions.SummarizeFees([]transactions.SignedTxnWithAD{heartbeat.WithAD()}, proto)
+			require.Equal(t, test.usage, usage)
+			require.Error(t, CheckGroupFees(paid, usage, proto.MinFee()))
+
+			heartbeat.Txn.Fee.Raw = test.fee
+			usage, paid = transactions.SummarizeFees([]transactions.SignedTxnWithAD{heartbeat.WithAD()}, proto)
+			require.NoError(t, CheckGroupFees(paid, usage, proto.MinFee()))
 		})
 	}
 }
