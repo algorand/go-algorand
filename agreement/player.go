@@ -17,6 +17,7 @@
 package agreement
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -354,7 +355,7 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 	case certThreshold:
 		// for future periods, fast-forwarding below will ensure correct staging
 		// for past periods, having a freshest certThreshold will prevent losing the block
-		r.dispatch(*p, e, proposalMachine, 0, 0, 0)
+		ec := r.dispatch(*p, e, proposalMachine, 0, 0, 0)
 		// Now, also check if we have the block.
 		res := stagedValue(*p, r, e.Round, e.Period)
 		if res.Committable {
@@ -369,6 +370,7 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 		// we don't have the block! We need to ensure we will be able to receive the block.
 		// In addition, hint to the ledger to fetch by digest.
 		actions = append(actions, stageDigestAction{Certificate: Certificate(e.Bundle)})
+		actions = append(actions, p.verifyHeldPayload(ec)...)
 		if p.Period < e.Period {
 			actions = append(actions, p.enterPeriod(r, e, e.Period)...)
 		}
@@ -387,6 +389,7 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 		if ec.t() == proposalCommittable && p.Step <= cert {
 			actions = append(actions, p.issueCertVote(r, ec.(committableEvent)))
 		}
+		actions = append(actions, p.verifyHeldPayload(ec)...)
 		return actions
 
 	case nextThreshold:
@@ -400,6 +403,24 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 	default:
 		panic("bad event")
 	}
+}
+
+// verifyHeldPayload returns an action requesting validation of a held payload
+// which the proposalMachine handed back with e, if any.
+func (p *player) verifyHeldPayload(e event) []action {
+	var ep payloadProcessedEvent
+	switch e := e.(type) {
+	case payloadProcessedEvent:
+		ep = e
+	case proposalAcceptedEvent:
+		ep = e.Pipelined
+	case committableEvent:
+		ep = e.Pipelined
+	}
+	if ep.T != payloadPipelined {
+		return nil
+	}
+	return []action{verifyPipelinedPayloadAction(p.Round, ep)}
 }
 
 func (p *player) enterPeriod(r routerHandle, source thresholdEvent, target period) []action {
@@ -427,6 +448,7 @@ func (p *player) enterPeriod(r routerHandle, source thresholdEvent, target perio
 	r.t.setMetadata(tracerMetadata{p.Round, p.Period, p.Step})
 
 	actions = append(actions, rezeroAction{Round: p.Round})
+	actions = append(actions, p.verifyHeldPayload(e)...)
 
 	if e.t() == proposalCommittable { // implies source.t() == softThreshold
 		return append(actions, p.issueCertVote(r, e.(committableEvent)))
@@ -485,10 +507,7 @@ func (p *player) enterRound(r routerHandle, source event, target round) []action
 	actions = append(actions, rezeroAction{Round: target}, as)
 
 	if e.t() == payloadPipelined {
-		e := e.(payloadProcessedEvent)
-		msg := message{messageHandle: 0, Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: e.UnauthenticatedPayload} // TODO do we want to keep around the original handle?
-		a := verifyPayloadAction(messageEvent{T: payloadPresent, Input: msg}, p.Round, e.Period, e.Pinned)
-		actions = append(actions, a)
+		actions = append(actions, verifyPipelinedPayloadAction(p.Round, e.(payloadProcessedEvent)))
 	}
 
 	// we might need to handle a pipelined threshold event
@@ -569,6 +588,28 @@ func (p *player) partitionPolicy(r routerHandle) (actions []action) {
 
 func (p *player) partitioned() bool {
 	return p.Step >= partitionStep || p.Period >= 3
+}
+
+// decodePayloadIfWanted decodes deferred, a payload that arrived undecoded,
+// if a proposal-value in its round's proposalStore is waiting for a payload
+// with its EncodingDigest. Otherwise it returns an error without decoding the
+// payset. If no proposal-value from the payload's original period and
+// proposer is waiting for a payload, it does not hash the payload either.
+//
+// It refuses a payload of any round but p.Round and p.Round+1. The
+// proposalManager would send it to the proposalStore of p.Round+1, where it
+// matches nothing.
+func (p *player) decodePayloadIfWanted(r routerHandle, deferred unauthenticatedProposal) (unauthenticatedProposal, error) {
+	rnd := deferred.Round()
+	if rnd != p.Round && rnd != p.Round+1 {
+		return unauthenticatedProposal{}, fmt.Errorf("ignoring proposal payload for round %d in round %d", rnd, p.Round)
+	}
+	qe := wantedPayloadsEvent{Round: rnd, OriginalPeriod: deferred.OriginalPeriod, OriginalProposer: deferred.OriginalProposer}
+	ce := r.dispatch(*p, qe, proposalMachineRound, rnd, 0, 0).(wantedPayloadsEvent)
+	if len(ce.EncodingDigests) == 0 {
+		return unauthenticatedProposal{}, fmt.Errorf("proposalStore: no proposal-value from period %d proposer %v wants a payload", deferred.OriginalPeriod, deferred.OriginalProposer)
+	}
+	return decodeDeferredPayload(deferred, ce.EncodingDigests)
 }
 
 func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []action) {
@@ -658,11 +699,20 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			}
 			a = broadcastCompoundAction(transmit)
 		}
-		return append(actions, a)
+		actions = append(actions, a)
+		return append(actions, p.verifyHeldPayload(ep)...)
 	}
 
 	switch e.t() {
 	case payloadPresent, payloadVerified:
+		if e.t() == payloadPresent && e.Input.UnauthenticatedProposal.deferredPayload != nil {
+			up, err := p.decodePayloadIfWanted(r, e.Input.UnauthenticatedProposal)
+			if err != nil {
+				return append(actions, ignoreAction(e, makeSerErr(err)))
+			}
+			e.Input.UnauthenticatedProposal = up
+			delegatedE.messageEvent = e
+		}
 		ef := r.dispatch(*p, delegatedE, proposalMachine, 0, 0, 0)
 		switch ef.t() {
 		case payloadMalformed:
@@ -672,6 +722,23 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			return append(actions, ignoreAction(e, ef.(payloadProcessedEvent).Err))
 		case payloadPipelined:
 			ep := ef.(payloadProcessedEvent)
+			// A payload of the next round is validated once that round
+			// starts, and one which only a period that has not started is
+			// interested in, once a started period is (see
+			// proposalStore.resumeHeld).  The proposalStore of the next round
+			// decides Held against this round's period, so the round is
+			// checked here.
+			due := ep.Round == p.Round && !ep.Held
+
+			if e.t() == payloadVerified {
+				// The validation of this payload was cancelled, and the
+				// proposalStore holds it again.  It was relayed when it was
+				// first pipelined.
+				if due {
+					actions = append(actions, verifyPipelinedPayloadAction(p.Round, ep))
+				}
+				return actions
+			}
 
 			up := e.Input.UnauthenticatedProposal
 			uv := ef.(payloadProcessedEvent).Vote.u()
@@ -679,7 +746,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			// relay proposal if it has been pipelined
 			ra := relayCompoundAction(e, compoundMessage{Proposal: up, Vote: uv})
 
-			if ep.Round == p.Round {
+			if due {
 				vpa := verifyPayloadAction(e, ep.Round, ep.Period, ep.Pinned)
 				return append(actions, vpa, ra)
 			}

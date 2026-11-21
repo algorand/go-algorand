@@ -183,7 +183,13 @@ func (dh *compressDumpHandler) Handle(msg network.IncomingMessage) network.Outgo
 
 	case protocol.ProposalPayloadTag:
 		var p agreement.TransmittedPayload
-		err := protocol.Decode(msg.Data, &p)
+		// The network delivers proposal payloads still compressed. The
+		// statistics below are of the decompressed message.
+		payload, err := network.DecompressProposal(msg.Data)
+		if err == nil {
+			msg.Data = payload
+			err = protocol.Decode(payload, &p)
+		}
 		if err != nil {
 			txnstr = fmt.Sprintf("[decode error: %v]", err)
 			goto compress

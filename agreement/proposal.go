@@ -65,6 +65,14 @@ type unauthenticatedProposal struct {
 	// delivered to the agreement package (as a messageEvent),
 	// relative to the zero of that round.
 	receivedAt time.Duration
+
+	// deferredPayload, if set, holds the encoded transmittedPayload this
+	// proposal was received as. The proposal is then not decoded yet: only
+	// its round, OriginalPeriod and OriginalProposer are set (see
+	// decodeProposal). deferredPayload is not serialized, so a proposal
+	// restored from the crash state without it matches no proposal-value
+	// and is rejected.
+	deferredPayload []byte
 }
 
 // TransmittedPayload exported for dumping textual versions of messages

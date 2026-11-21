@@ -116,6 +116,7 @@ func TestCryptoRequestContextAddCancelProposal(t *testing.T) {
 	ctx := pending.addProposal(proposal)
 
 	proposal2 := cryptoProposalRequest{message: message{Tag: protocol.ProposalPayloadTag}, Round: rnd, Period: per}
+	proposal2.UnauthenticatedProposal.BlockHeader.Round = 1 // a different block
 	ctx2 := pending.addProposal(proposal2)
 
 	select {
@@ -141,6 +142,7 @@ func TestCryptoRequestContextAddCancelPinnedProposal(t *testing.T) {
 	ctx := pending.addProposal(proposal)
 
 	proposal2 := cryptoProposalRequest{message: message{Tag: protocol.ProposalPayloadTag}, Round: rnd, Pinned: true}
+	proposal2.UnauthenticatedProposal.BlockHeader.Round = 1 // a different block
 	ctx2 := pending.addProposal(proposal2)
 
 	select {

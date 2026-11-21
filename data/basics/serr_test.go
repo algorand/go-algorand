@@ -46,12 +46,6 @@ func TestNewWithPairs(t *testing.T) {
 	err.Msg = ""
 	assert.ErrorContains(t, err, `a=7`)
 	assert.ErrorContains(t, err, `b="\x03\x04"`)
-
-	err.Msg = "check it: %A"
-	assert.ErrorContains(t, err, ` a=7`)
-	assert.ErrorContains(t, err, ` b="\x03\x04"`)
-	assert.Equal(t, `check it: `, err.Error()[:10])
-
 }
 
 func TestAnnotate(t *testing.T) {

@@ -25,7 +25,9 @@ import (
 type periodRequestsContext struct {
 	ctx                context.Context
 	cancel             context.CancelFunc
+	proposalCtx        context.Context
 	proposalCancelFunc context.CancelFunc
+	proposalValue      proposalValue // proposal validated under proposalCtx
 }
 
 // cryptoRequestCtxKey keys the map roundRequestsContext.periods.
@@ -76,24 +78,34 @@ func (pending pendingRequestsContext) addVote(request cryptoVoteRequest) context
 	return pending.getReqCtx(request.Round, cryptoRequestCtxKey{period: request.Period}).ctx
 }
 
-// addProposal returns a context associated with a given request (and cancels any older similar request)
+// addProposal returns a context associated with a given request (and cancels any older similar request for a different payload)
 func (pending pendingRequestsContext) addProposal(request cryptoProposalRequest) context.Context {
 	pkey := cryptoRequestCtxKey{period: request.Period}
 	if request.Pinned {
 		pkey = cryptoRequestCtxKey{pinned: request.Pinned}
 	}
 	rqctx := pending.getReqCtx(request.Round, pkey)
+	// Compare the proposalValue of the payload, whose EncodingDigest covers
+	// its complete encoding, before sharing a validation context.
+	pv := request.UnauthenticatedProposal.value()
 
 	if rqctx.proposalCancelFunc != nil {
+		if rqctx.proposalValue == pv {
+			// The same payload is requested again, e.g. after its blockAssembler
+			// was trimmed and refilled. Cancelling the earlier request would
+			// make proposalStore request the payload again on its cancelled
+			// result, and the two requests would keep cancelling each other.
+			return rqctx.proposalCtx
+		}
 		// we have a new proposal, so cancel validation of an old proposal for the same round and period
 		rqctx.proposalCancelFunc()
 	}
 
 	// create a context for the new proposal
-	var proposalContext context.Context
-	proposalContext, rqctx.proposalCancelFunc = context.WithCancel(rqctx.ctx)
+	rqctx.proposalCtx, rqctx.proposalCancelFunc = context.WithCancel(rqctx.ctx)
+	rqctx.proposalValue = pv
 	pending[request.Round].periods[pkey] = rqctx
-	return proposalContext
+	return rqctx.proposalCtx
 }
 
 // addBundle shares one context among all bundles in a round. Unlike individual

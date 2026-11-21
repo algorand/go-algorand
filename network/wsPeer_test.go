@@ -312,6 +312,7 @@ func (m *tcpipMockConn) NextReader() (int, io.Reader, error)      { return 0, ni
 func (m *tcpipMockConn) WriteMessage(int, []byte) error           { return nil }
 func (m *tcpipMockConn) CloseWithMessage([]byte, time.Time) error { return nil }
 func (m *tcpipMockConn) SetReadLimit(int64)                       {}
+func (m *tcpipMockConn) SetReadDeadline(time.Time) error          { return nil }
 func (m *tcpipMockConn) CloseWithoutFlush() error                 { return nil }
 func (m *tcpipMockConn) UnderlyingConn() net.Conn                 { return nil }
 

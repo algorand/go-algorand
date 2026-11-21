@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io"
+	"sync"
 	"sync/atomic"
 
 	"github.com/DataDog/zstd"
@@ -47,18 +47,26 @@ type voteCompressionError struct{ err error }
 func (e *voteCompressionError) Error() string { return e.err.Error() }
 func (e *voteCompressionError) Unwrap() error { return e.err }
 
-// zstdCompressMsg returns a concatenation of a tag and compressed data
+// zstdCompressMsg returns a concatenation of a tag and compressed data,
+// or of a tag and d when compressing d fails or does not make it shorter.
 func zstdCompressMsg(tbytes []byte, d []byte) ([]byte, string) {
+	// zstd.CompressLevel compresses into the buffer it is given only if the
+	// buffer holds CompressBound(len(d)) bytes, and allocates one otherwise.
 	bound := max(zstd.CompressBound(len(d)),
-		// although CompressBound allocated more than the src size, this is an implementation detail.
-		// increase the buffer size to always have enough space for the raw data if compression fails.
+		// CompressBound(len(d)) is at least len(d). The max keeps room for d
+		// in the fallback below even if that changed.
 		len(d))
 	mbytesComp := make([]byte, len(tbytes)+bound)
 	copy(mbytesComp, tbytes)
 	comp, err := zstd.CompressLevel(mbytesComp[len(tbytes):], d, zstdCompressionLevel)
-	if err != nil {
-		// fallback and reuse non-compressed original data
-		logMsg := fmt.Sprintf("failed to compress into buffer of len %d: %v", len(d), err)
+	if err != nil || len(comp) >= len(d) {
+		// Send d as it is, which receivers also accept. A zstd frame of
+		// incompressible data is longer than the data, and wsPeer.readLoop
+		// applies Tag.MaxMessageSize to the bytes as sent.
+		var logMsg string
+		if err != nil {
+			logMsg = fmt.Sprintf("failed to compress into buffer of len %d: %v", len(d), err)
+		}
 		copied := copy(mbytesComp[len(tbytes):], d)
 		return mbytesComp[:len(tbytes)+copied], logMsg
 	}
@@ -74,10 +82,11 @@ func vpackCompressVote(tbytes []byte, d []byte) ([]byte, string) {
 	copy(mbytesComp, tbytes)
 	comp, err := enc.CompressVote(mbytesComp[len(tbytes):], d)
 	if err != nil {
-		// fallback and reuse non-compressed original data
+		// No compressed form: the caller then sends the original message, which
+		// it already holds, to every peer. mbytesComp is sized for a compressed
+		// vote and cannot hold an uncompressed one.
 		logMsg := fmt.Sprintf("failed to compress vote into buffer of len %d: %v", len(d), err)
-		copied := copy(mbytesComp[len(tbytes):], d)
-		return mbytesComp[:len(tbytes)+copied], logMsg
+		return nil, logMsg
 	}
 
 	result := mbytesComp[:len(tbytes)+len(comp)]
@@ -89,17 +98,46 @@ func vpackCompressVote(tbytes []byte, d []byte) ([]byte, string) {
 // and should be larger.
 const MaxDecompressedMessageSize = protocol.ProposalPayloadTagMaxSize
 
+// proposalInflateBufs holds buffers of MaxDecompressedMessageSize bytes for
+// DecompressProposal to inflate into.
+var proposalInflateBufs = sync.Pool{
+	New: func() any {
+		buf := make([]byte, MaxDecompressedMessageSize)
+		return &buf
+	},
+}
+
+// DecompressProposal decompresses data, the body of a PP message, if it
+// starts with the zstd magic, as zstdCompressMsg sends it. Otherwise it
+// returns data unchanged. It fails if the decompressed payload is larger than
+// MaxDecompressedMessageSize.
+func DecompressProposal(data []byte) ([]byte, error) {
+	if !bytes.HasPrefix(data, zstdCompressionMagic[:]) {
+		return data, nil
+	}
+	// The size of the content is not known until it is inflated, so inflate
+	// into a buffer of the largest size allowed and copy the content out.
+	bufp := proposalInflateBufs.Get().(*[]byte)
+	defer proposalInflateBufs.Put(bufp)
+	n, err := zstd.DecompressInto(*bufp, data)
+	if err != nil {
+		return nil, fmt.Errorf("decompressing proposal: %w", err)
+	}
+	return bytes.Clone((*bufp)[:n]), nil
+}
+
 // wsPeerMsgCodec performs optional message compression/decompression for certain
 // types of messages. It handles:
-// - zstd compression for PP proposals (outgoing not implemented)
 // - stateless vpack compression for AV votes (outgoing not implemented)
 // - stateful vpack compression for VP votes (both directions)
+//
+// PP proposals are compressed by the broadcaster (zstdCompressMsg) but not
+// decompressed here. The handler of PP messages calls DecompressProposal for
+// the messages it processes.
 type wsPeerMsgCodec struct {
 	log    logging.Logger
 	origin string
 
-	// decompressors
-	ppdec zstdProposalDecompressor
 	avdec vpackVoteDecompressor
 
 	// stateful vote compression (if enabled).
@@ -115,12 +153,6 @@ func (c *wsPeerMsgCodec) switchOffStatefulVoteCompression() {
 	c.statefulVoteEnabled.Store(false)
 }
 
-type zstdProposalDecompressor struct{}
-
-func (dec zstdProposalDecompressor) accept(data []byte) bool {
-	return len(data) > 4 && bytes.Equal(data[:4], zstdCompressionMagic[:])
-}
-
 type vpackVoteDecompressor struct {
 	enabled bool
 	dec     *vpack.StatelessDecoder
@@ -128,29 +160,6 @@ type vpackVoteDecompressor struct {
 
 func (dec vpackVoteDecompressor) convert(data []byte) ([]byte, error) {
 	return dec.dec.DecompressVote(nil, data)
-}
-
-func (dec zstdProposalDecompressor) convert(data []byte) ([]byte, error) {
-	r := zstd.NewReader(bytes.NewReader(data))
-	defer r.Close()
-	b := make([]byte, 0, 3*len(data))
-	for {
-		if len(b) == cap(b) {
-			// grow capacity, retain length
-			b = append(b, 0)[:len(b)]
-		}
-		n, err := r.Read(b[len(b):cap(b)])
-		b = b[:len(b)+n]
-		if err != nil {
-			if err == io.EOF {
-				return b, nil
-			}
-			return nil, err
-		}
-		if len(b) > MaxDecompressedMessageSize {
-			return nil, fmt.Errorf("proposal data is too large: %d", len(b))
-		}
-	}
 }
 
 // compress attempts to compress an outgoing message.
@@ -167,6 +176,14 @@ func (c *wsPeerMsgCodec) compress(tag protocol.Tag, data []byte) ([]byte, error)
 		// Input data is AV+stateless-compressed from broadcast
 		// We only need to apply stateful compression on top
 		statelessCompressed := data[2:]
+		// innerBroadcast sends the original msgpack vote when stateless
+		// compression fails. The stateful encoder accepts only stateless
+		// output, so send such a vote as it is. Failing here would switch
+		// stateful compression off for this peer, and decompress would then
+		// drop the VP messages already in flight from it.
+		if vpack.IsLikelyUncompressedMsgpack(statelessCompressed) {
+			return nil, nil
+		}
 
 		// initialize stateful encoder on first use
 		if c.statefulVoteEnc == nil {
@@ -204,18 +221,6 @@ func (c *wsPeerMsgCodec) compress(tag protocol.Tag, data []byte) ([]byte, error)
 // decompress handles incoming message decompression based on tag type
 func (c *wsPeerMsgCodec) decompress(tag protocol.Tag, data []byte) ([]byte, error) {
 	switch tag {
-	case protocol.ProposalPayloadTag:
-		// sender might support compressed payload but fail to compress for whatever reason,
-		// in this case it sends non-compressed payload - the receiver decompress only if it is compressed.
-		if c.ppdec.accept(data) {
-			res, err := c.ppdec.convert(data)
-			if err != nil {
-				return nil, fmt.Errorf("peer %s: %w", c.origin, err)
-			}
-			return res, nil
-		}
-		c.log.Warnf("peer %s supported zstd but sent non-compressed data", c.origin)
-
 	case protocol.AgreementVoteTag:
 		if c.avdec.enabled {
 			res, err := c.avdec.convert(data)
@@ -287,7 +292,6 @@ func makeWsPeerMsgCodec(wp *wsPeer) *wsPeerMsgCodec {
 		origin: wp.originAddress,
 	}
 
-	c.ppdec = zstdProposalDecompressor{}
 	// have both ends advertised support for compression?
 	if wp.enableVoteCompression && wp.vpackVoteCompressionSupported() {
 		c.avdec = vpackVoteDecompressor{

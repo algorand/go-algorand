@@ -54,6 +54,12 @@ func (e *StreamHandlerLoggedError) Unwrap() error { return e.Err }
 // close gives up and logs a warning naming the peers involved.
 const handlersCloseTimeout = 5 * time.Second
 
+// streamSetupTimeout is how long a connection dialed for gossip may go without a gossip stream,
+// counted from the first mesh pass that sees it without one, before the mesh closes it and dials
+// another peer in its place. Either side may open the stream (see Connected). Stream negotiation
+// and the handshake on it are each bounded at about 10 seconds.
+const streamSetupTimeout = 30 * time.Second
+
 // streamManager implements network.Notifiee to create and manage streams for use with non-gossipsub protocols.
 type streamManager struct {
 	ctx                 context.Context
@@ -76,6 +82,12 @@ type streamManager struct {
 	closeLock    deadlock.Mutex
 	closed       bool
 	closeTimeout time.Duration
+
+	// setupTimeout defaults to streamSetupTimeout; it is a field so tests can shorten it.
+	setupTimeout time.Duration
+	// noStreamSince holds when closeWithoutStream first saw each connection dialed for gossip
+	// without a gossip stream. Guarded by streamsLock.
+	noStreamSince map[network.Conn]time.Time
 }
 
 // StreamHandler is called when a new bidirectional stream for a given protocol and peer is opened.
@@ -91,6 +103,7 @@ func makeStreamManager(ctx context.Context, log logging.Logger, h host.Host, han
 		streams:             make(map[peer.ID]network.Stream),
 		inflight:            make(map[peer.ID]int),
 		closeTimeout:        handlersCloseTimeout,
+		setupTimeout:        streamSetupTimeout,
 	}
 }
 
@@ -188,6 +201,49 @@ func (n *streamManager) endPeerAttempt(remotePeer peer.ID) {
 	if shouldUnprotect {
 		n.host.ConnManager().Unprotect(remotePeer, cnmgrTag)
 	}
+}
+
+// closeWithoutStream closes the connections in conns, the outgoing connections dialed for gossip,
+// whose peer has had no gossip stream since a call at least setupTimeout earlier, and unprotects
+// their peers. It returns the peers whose connections it closed. The mesh calls it on each pass:
+// it remembers when it first saw each connection without a gossip stream and forgets connections
+// that are not in conns or have a stream. An attempt still in flight does not keep a connection:
+// stream negotiation and the handshake are each bounded at about 10 seconds, so an attempt that
+// has not set up a stream by now is not going to. The check and the unprotect happen under
+// streamsLock, so a stream cannot be added in between, and a stream the remote opens afterwards
+// finds the peer unprotected and is rejected by streamHandler.
+func (n *streamManager) closeWithoutStream(conns []network.Conn, now time.Time) map[peer.ID]struct{} {
+	closed := make(map[peer.ID]struct{})
+	var toClose []network.Conn
+	seen := make(map[network.Conn]time.Time, len(conns))
+	n.streamsLock.Lock()
+	for _, conn := range conns {
+		remotePeer := conn.RemotePeer()
+		if _, hasStream := n.streams[remotePeer]; hasStream {
+			continue
+		}
+		since, ok := n.noStreamSince[conn]
+		if !ok {
+			since = now
+		}
+		if now.Sub(since) < n.setupTimeout {
+			seen[conn] = since
+			continue
+		}
+		if _, done := closed[remotePeer]; !done {
+			n.host.ConnManager().Unprotect(remotePeer, cnmgrTag)
+			closed[remotePeer] = struct{}{}
+		}
+		toClose = append(toClose, conn)
+	}
+	n.noStreamSince = seen
+	n.streamsLock.Unlock()
+
+	for _, conn := range toClose {
+		n.log.Infof("%s: no gossip stream with %s after %v, closing the connection", n.host.ID().String(), conn.RemotePeer().String(), n.setupTimeout)
+		_ = conn.Close()
+	}
+	return closed
 }
 
 // streamHandler is called by libp2p when a new stream is accepted
@@ -338,7 +394,11 @@ func (n *streamManager) handleConnected(conn network.Conn) {
 	for _, pair := range n.handlers {
 		protos = append(protos, pair.ProtoID)
 	}
-	stream, err := n.host.NewStream(n.ctx, remotePeer, protos...)
+	// Open the stream on a connection we already have, and never dial. Without WithNoDial,
+	// host.NewStream dials the peer when conn has closed in the meantime, so a peer that only
+	// connected to us would be dialed back on a connection the mesh did not ask for.
+	ctx := network.WithNoDial(n.ctx, "gossip stream on an existing connection")
+	stream, err := n.host.NewStream(ctx, remotePeer, protos...)
 	if err != nil {
 		n.log.Infof("%s: failed to open stream to %s (%s): %v", localPeer.String(), remotePeer, conn.RemoteMultiaddr().String(), err)
 		return
@@ -352,30 +412,39 @@ func (n *streamManager) handleConnected(conn network.Conn) {
 		return
 	}
 
+	// Resetting a stream on a live connection sends a frame to the peer, so decide under
+	// streamsLock and reset after releasing it, as streamHandler does.
 	n.streamsLock.Lock()
-	defer n.streamsLock.Unlock()
-	if _, exists := n.streams[remotePeer]; exists {
-		// another stream was added in the meantime, close this one and keep the existing one
-		_ = stream.Reset()
-		return
+	// keep a stream added in the meantime, and don't add a stream whose connection has closed,
+	// so that Disconnected does not need to clean it up
+	_, exists := n.streams[remotePeer]
+	keep := !exists && !stream.Conn().IsClosed()
+	if keep {
+		n.streams[remotePeer] = stream
 	}
-	// don't add disconnected / died conns, so Disconnect won't need to clean up
-	if stream.Conn().IsClosed() {
+	n.streamsLock.Unlock()
+	if !keep {
 		_ = stream.Reset()
-		return
 	}
-	n.streams[remotePeer] = stream
 }
 
 // Disconnected is called when a connection is closed
 func (n *streamManager) Disconnected(net network.Network, conn network.Conn) {
-	n.streamsLock.Lock()
-	defer n.streamsLock.Unlock()
+	remotePeer := conn.RemotePeer()
 
-	stream, ok := n.streams[conn.RemotePeer()]
+	n.streamsLock.Lock()
+	// A peer may have several connections. Drop its gossip stream only if the stream ran over the
+	// connection that closed: a stream on another connection is still in use.
+	stream, ok := n.streams[remotePeer]
+	ok = ok && stream.Conn() == conn
 	if ok {
+		delete(n.streams, remotePeer)
+	}
+	n.streamsLock.Unlock()
+
+	if ok {
+		// the connection has closed, so this sends nothing to the peer
 		stream.Close()
-		delete(n.streams, conn.RemotePeer())
 	}
 }
 

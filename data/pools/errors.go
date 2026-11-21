@@ -50,6 +50,23 @@ func (e *ErrTxPoolFeeError) Error() string {
 		e.fee, e.feeThreshold, e.feePerByte, e.encodedLength)
 }
 
+// ErrTxPoolVerifyError is returned when a transaction group does not verify under
+// the header of the block the pool is assembling, typically because that block is
+// the first of a new consensus protocol.
+type ErrTxPoolVerifyError struct {
+	round basics.Round
+	err   error
+}
+
+func (e *ErrTxPoolVerifyError) Error() string {
+	return fmt.Sprintf("transaction group does not verify for round %d: %v", e.round, e.err)
+}
+
+// Unwrap returns the underlying verification error
+func (e *ErrTxPoolVerifyError) Unwrap() error {
+	return e.err
+}
+
 // TxPoolErrorTag constants for categorizing transaction pool errors.
 // These are used by both the txHandler (initial remember) and the
 // transaction pool (re-evaluation) to classify errors consistently.
@@ -58,6 +75,7 @@ const (
 	TxPoolErrTagPendingEval  = "pending_eval"
 	TxPoolErrTagNoSpace      = "no_space"
 	TxPoolErrTagFee          = "fee"
+	TxPoolErrTagVerify       = "verify" // ErrTxPoolVerifyError - group does not verify for the pending block
 	TxPoolErrTagTxnDead      = "txn_dead"
 	TxPoolErrTagTxnEarly     = "txn_early"
 	TxPoolErrTagTooLarge     = "too_large"
@@ -78,7 +96,7 @@ const (
 
 // TxPoolErrTags is the list of all error tags for use with TagCounter.
 var TxPoolErrTags = []string{
-	TxPoolErrTagCap, TxPoolErrTagPendingEval, TxPoolErrTagNoSpace, TxPoolErrTagFee,
+	TxPoolErrTagCap, TxPoolErrTagPendingEval, TxPoolErrTagNoSpace, TxPoolErrTagFee, TxPoolErrTagVerify,
 	TxPoolErrTagTxnDead, TxPoolErrTagTxnEarly, TxPoolErrTagTooLarge, TxPoolErrTagGroupID,
 	TxPoolErrTagTxID, TxPoolErrTagLease, TxPoolErrTagTxIDEval, TxPoolErrTagLeaseEval,
 	TxPoolErrTagNotWell, TxPoolErrTagTealErr, TxPoolErrTagTealReject,
@@ -132,6 +150,11 @@ func ClassifyTxPoolError(err error) string {
 	var feeErr *ErrTxPoolFeeError
 	if errors.As(err, &feeErr) {
 		return TxPoolErrTagFee
+	}
+
+	var verifyErr *ErrTxPoolVerifyError
+	if errors.As(err, &verifyErr) {
+		return TxPoolErrTagVerify
 	}
 
 	var deadErr *bookkeeping.TxnDeadError

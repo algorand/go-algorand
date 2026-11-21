@@ -257,6 +257,7 @@ func (cb *roundCowState) AllocateApp(addr basics.Address, aidx basics.AppIndex, 
 	lsd.maxCounts = space
 
 	if global {
+		cb.recordCreatedApp(aidx)
 		cb.mods.AddCreatable(basics.CreatableIndex(aidx), ledgercore.ModifiedCreatable{
 			Ctype:   basics.AppCreatable,
 			Creator: addr,
@@ -264,6 +265,10 @@ func (cb *roundCowState) AllocateApp(addr basics.Address, aidx basics.AppIndex, 
 		})
 	}
 	return nil
+}
+
+func (cb *roundCowState) recordCreatedApp(aidx basics.AppIndex) {
+	cb.lookupParent.recordCreatedApp(aidx)
 }
 
 // DeallocateApp clears storage for {addr, aidx, global}. It happens on app deletion (global) or closing out (local)
@@ -435,14 +440,18 @@ func (cb *roundCowState) delKey(addr basics.Address, aidx basics.AppIndex, globa
 	if !ok {
 		vdelta = valueDelta{old: oldValue, oldExists: oldOk}
 	}
-	vdelta.new = basics.TealValue{}
-	vdelta.newExists = false
-	lsd.kvCow[key] = vdelta
-
-	newValue, newOk := vdelta.new, vdelta.newExists
+	if vdelta.oldExists {
+		vdelta.new = basics.TealValue{}
+		vdelta.newExists = false
+		lsd.kvCow[key] = vdelta
+	} else {
+		// The key did not exist before this cow touched it and does not
+		// exist now, so there is nothing to record.
+		delete(lsd.kvCow, key)
+	}
 
 	// Update counts
-	err = updateCounts(lsd, oldValue, oldOk, newValue, newOk)
+	err = updateCounts(lsd, oldValue, oldOk, basics.TealValue{}, false)
 	if err != nil {
 		return err
 	}
@@ -603,6 +612,12 @@ func (lsd *storageDelta) applyChild(child *storageDelta) {
 			delta, ok := lsd.kvCow[key]
 			if !ok {
 				lsd.kvCow[key] = childVal
+				continue
+			}
+			if !delta.oldExists && !childVal.newExists {
+				// Absent before this delta and after the child: nothing to
+				// record, as in delKey.
+				delete(lsd.kvCow, key)
 				continue
 			}
 
