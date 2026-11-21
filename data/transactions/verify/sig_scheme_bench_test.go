@@ -35,6 +35,11 @@ import (
 // others are verified one at a time. "sig" is a plain Ed25519 SignedTxn.Sig.
 // B/txn is a transaction's size as encoded in a block.
 func BenchmarkSigSchemeWorkset(b *testing.B) {
+	// Measure the batch verifier algod uses by default (EnableBatchVerification),
+	// not the one init picks at random for the tests.
+	crypto.SetEd25519BatchVerifier(true)
+	defer crypto.SetEd25519BatchVerifier(useEd25519Consensus)
+
 	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
 	ledger := &DummyLedgerForSignature{}
 	minFee := config.Consensus[protocol.ConsensusFuture].MinTxnFee
