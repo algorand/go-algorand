@@ -277,9 +277,6 @@ func (mldsaOps) privateKeySize() uint64 { return mldsa.PrivateKeySize }
 // randomness into each one, so signing the same message twice gives two
 // different valid signatures.
 func (o mldsaOps) sign(privateKey []byte, message crypto.Hashable) ([]byte, error) {
-	if len(privateKey) != mldsa.PrivateKeySize {
-		return nil, fmt.Errorf("%w: got private key size %d, want %d", errSaltedKeyMalformed, len(privateKey), mldsa.PrivateKeySize)
-	}
 	sk, err := mldsa.NewPrivateKey(o.params, privateKey)
 	if err != nil {
 		return nil, err

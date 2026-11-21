@@ -37,11 +37,11 @@ func init() {
 
 // verifyMLDSA checks a pure ML-DSA signature of HashRep(message) with an
 // empty context. Every correctly sized public key decodes, and its encoding
-// is unique, so only the lengths can make a key malformed.
+// is unique, so only its length can make a key malformed.
 func verifyMLDSA(params mldsa.Parameters, message Hashable, publicKey, signature []byte) error {
-	if len(publicKey) != params.PublicKeySize() {
-		return fmt.Errorf("%v %w: public key size %d, want %d", params, ErrSigInvalid, len(publicKey), params.PublicKeySize())
-	}
+	// mldsa.Verify checks the signature's length only after expanding the
+	// public key's matrix, so a wrong-length signature would cost about half a
+	// verification.
 	if len(signature) != params.SignatureSize() {
 		return fmt.Errorf("%v %w: signature size %d, want %d", params, ErrSigInvalid, len(signature), params.SignatureSize())
 	}
