@@ -106,10 +106,26 @@ type txExecutionContext struct {
 // fixes where a transaction's journals live when the transaction begins.
 const erasableDriverName = "sqlite3_erasable"
 
+// LongWALAutoCheckpoint is the length of the write-ahead log, in frames, at
+// which the connections of a long-WAL accessor checkpoint it; SQLite's
+// default is 1000.
+const LongWALAutoCheckpoint = 8192
+
+// longWALDriverName is the sqlite3 driver behind the long-WAL accessors.  The
+// checkpoint interval is a setting of each connection, so it is set when the
+// connection opens.
+const longWALDriverName = "sqlite3_longwal"
+
 func init() {
 	sql.Register(erasableDriverName, &sqlite3.SQLiteDriver{
 		ConnectHook: func(conn *sqlite3.SQLiteConn) error {
 			_, err := conn.Exec("PRAGMA temp_store=MEMORY", nil)
+			return err
+		},
+	})
+	sql.Register(longWALDriverName, &sqlite3.SQLiteDriver{
+		ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+			_, err := conn.Exec(fmt.Sprintf("PRAGMA wal_autocheckpoint=%d", LongWALAutoCheckpoint), nil)
 			return err
 		},
 	})
@@ -118,6 +134,18 @@ func init() {
 // MakeAccessor creates a new Accessor.
 func MakeAccessor(dbfilename string, readOnly bool, inMemory bool) (Accessor, error) {
 	return makeAccessorImpl("sqlite3", dbfilename, readOnly, inMemory, []string{"_journal_mode=wal"})
+}
+
+// MakeLongWALAccessor creates a new Accessor whose write-ahead log is
+// checkpointed every LongWALAutoCheckpoint frames instead of SQLite's 1000.
+// A checkpoint writes each page in the log once, however many times the log
+// holds it, so a store whose transactions rewrite the same few pages (one row
+// replaced per write) checkpoints about the same pages whether the checkpoint
+// covers ten transactions or a hundred: the longer interval cuts its
+// checkpoint writes in proportion.  The log file grows to about the interval
+// times the page size and is reused in place.
+func MakeLongWALAccessor(dbfilename string, readOnly bool, inMemory bool) (Accessor, error) {
+	return makeAccessorImpl(longWALDriverName, dbfilename, readOnly, inMemory, []string{"_journal_mode=wal"})
 }
 
 // MakeErasableAccessor creates a new Accessor with the secure_delete pragma set

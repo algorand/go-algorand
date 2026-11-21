@@ -301,9 +301,11 @@ recreateNetwork:
 	node.ledgerService = rpcs.MakeLedgerService(cfg, node.ledger, p2pNode, node.genesisID)
 	rpcs.RegisterTxService(node.transactionPool, p2pNode, node.genesisID, cfg.TxPoolSize, cfg.TxSyncServeResponseSize)
 
-	// crash data is stored in the cold data directory unless otherwise specified
+	// crash data is stored in the cold data directory unless otherwise specified;
+	// the database holds one row, the agreement state, replaced each time the
+	// node attests, which a long-WAL accessor checkpoints rarely
 	crashPathname := filepath.Join(node.genesisDirs.CrashGenesisDir, config.CrashFilename)
-	crashAccess, err := db.MakeAccessor(crashPathname, false, false)
+	crashAccess, err := db.MakeLongWALAccessor(crashPathname, false, false)
 	if err != nil {
 		log.Errorf("Cannot load crash data: %v", err)
 		return nil, err
