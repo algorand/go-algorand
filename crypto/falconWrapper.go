@@ -17,10 +17,13 @@
 package crypto
 
 import (
+	"errors"
 	"fmt"
 
 	cfalcon "github.com/algorand/falcon"
 )
+
+var errSignatureTooShort = errors.New("signature too short")
 
 // FalconSeedSize is the size in bytes of a Falcon keygen seed: 32 bytes
 // (256-bit entropy). The previous value of 48 was inherited from falcon.c's
@@ -136,7 +139,7 @@ func (d *Falcon1024Verifier) GetFixedLengthHashableRepresentation() []byte {
 // GetFixedLengthHashableRepresentation returns a serialized version of the signature
 func (s Falcon1024Signature) GetFixedLengthHashableRepresentation() ([]byte, error) {
 	if len(s) < 2 {
-		return nil, errInvalidNumberOfSignature
+		return nil, errSignatureTooShort
 	}
 	compressedSignature := cfalcon.CompressedSignature(s)
 	ctSignature, err := compressedSignature.ConvertToCT()
@@ -263,7 +266,7 @@ func (d *Falcon512Verifier) GetFixedLengthHashableRepresentation() []byte {
 // GetFixedLengthHashableRepresentation returns a serialized version of the signature
 func (s Falcon512Signature) GetFixedLengthHashableRepresentation() ([]byte, error) {
 	if len(s) < 2 {
-		return nil, errInvalidNumberOfSignature
+		return nil, errSignatureTooShort
 	}
 	compressedSignature := cfalcon.Det512CompressedSignature(s)
 	ctSignature, err := compressedSignature.ConvertToCT()

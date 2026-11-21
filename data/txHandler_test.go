@@ -1587,7 +1587,7 @@ func signMSigTransactionGroups(txnGroups [][]transactions.Transaction, secrets [
 			for x := 0; x < msigSize; x++ {
 				pks[x] = secrets[(i+x)%numUsers].SignatureVerifier
 			}
-			multiSigAddr, err := crypto.MultisigAddrGen(msigVer, msigTHld, pks)
+			multiSigAddr, err := transactions.MultisigAddrGen(msigVer, msigTHld, pks)
 			if err != nil {
 				select {
 				case errChan <- err:
@@ -1598,12 +1598,12 @@ func signMSigTransactionGroups(txnGroups [][]transactions.Transaction, secrets [
 			}
 			grpSize := len(txnGroups[i])
 			signedTxGroup := make([]transactions.SignedTxn, grpSize)
-			sigsForTxn := make([]crypto.MultisigSig, msigTHld)
+			sigsForTxn := make([]transactions.MultisigSig, msigTHld)
 
 			for t := range txnGroups[i] {
 				txnGroups[i][t].Sender = basics.Address(multiSigAddr)
 				for s := range sigsForTxn {
-					sig, err := crypto.MultisigSign(txnGroups[i][t], crypto.Digest(multiSigAddr), msigVer, msigTHld, pks, *secrets[(i+s)%numUsers])
+					sig, err := transactions.MultisigSign(txnGroups[i][t], crypto.Digest(multiSigAddr), msigVer, msigTHld, pks, *secrets[(i+s)%numUsers])
 					if err != nil {
 						select {
 						case errChan <- err:
@@ -1614,7 +1614,7 @@ func signMSigTransactionGroups(txnGroups [][]transactions.Transaction, secrets [
 					}
 					sigsForTxn[s] = sig
 				}
-				msig, err := crypto.MultisigAssemble(sigsForTxn)
+				msig, err := transactions.MultisigAssemble(sigsForTxn)
 				if err != nil {
 					select {
 					case errChan <- err:

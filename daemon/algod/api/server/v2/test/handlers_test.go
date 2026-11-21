@@ -1384,7 +1384,7 @@ func logicSigTxnPrep(program []byte) func(transactions.SignedTxn) []byte {
 	return func(stxn transactions.SignedTxn) []byte {
 		programHash := logic.HashProgram(program)
 		stxn.Sig = crypto.Signature{}
-		stxn.Msig = crypto.MultisigSig{}
+		stxn.Msig = transactions.MultisigSig{}
 		stxn.Lsig = transactions.LogicSig{Logic: program}
 		stxn.Txn.Sender = basics.Address(programHash)
 		return protocol.Encode(&stxn)
@@ -1396,7 +1396,7 @@ func delegatedLogicSigTxnPrep(program []byte) func(transactions.SignedTxn) []byt
 		var sig crypto.Signature
 		sig[0] = 1
 		stxn.Sig = crypto.Signature{}
-		stxn.Msig = crypto.MultisigSig{}
+		stxn.Msig = transactions.MultisigSig{}
 		stxn.Lsig = transactions.LogicSig{Logic: program, Sig: sig}
 		return protocol.Encode(&stxn)
 	}
@@ -1409,7 +1409,7 @@ func delegatedLogicSigTxnPrep(program []byte) func(transactions.SignedTxn) []byt
 func saltedKeyDelegatedEscrowLookalikeTxnPrep(program []byte) func(transactions.SignedTxn) []byte {
 	return func(stxn transactions.SignedTxn) []byte {
 		stxn.Sig = crypto.Signature{}
-		stxn.Msig = crypto.MultisigSig{}
+		stxn.Msig = transactions.MultisigSig{}
 		stxn.Lsig = transactions.LogicSig{
 			Logic: program,
 			SKsig: transactions.SaltedKeySig{Scheme: protocol.SigSchemeFalcon1024},

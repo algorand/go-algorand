@@ -140,7 +140,7 @@ func stxnFromInspect(sti inspectSignedTxn) transactions.SignedTxn {
 	}
 }
 
-func msigToInspect(msig crypto.MultisigSig) inspectMultisigSig {
+func msigToInspect(msig transactions.MultisigSig) inspectMultisigSig {
 	res := inspectMultisigSig{
 		Version:   msig.Version,
 		Threshold: msig.Threshold,
@@ -156,14 +156,14 @@ func msigToInspect(msig crypto.MultisigSig) inspectMultisigSig {
 	return res
 }
 
-func msigFromInspect(msi inspectMultisigSig) crypto.MultisigSig {
-	res := crypto.MultisigSig{
+func msigFromInspect(msi inspectMultisigSig) transactions.MultisigSig {
+	res := transactions.MultisigSig{
 		Version:   msi.Version,
 		Threshold: msi.Threshold,
 	}
 
 	for _, subsig := range msi.Subsigs {
-		res.Subsigs = append(res.Subsigs, crypto.MultisigSubsig{
+		res.Subsigs = append(res.Subsigs, transactions.MultisigSubsig{
 			Sig: subsig.Sig,
 			Key: crypto.PublicKey(subsig.Key),
 		})
