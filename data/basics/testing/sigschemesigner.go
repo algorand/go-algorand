@@ -17,6 +17,8 @@
 package testing
 
 import (
+	"crypto/mldsa"
+	"fmt"
 	"slices"
 	"testing"
 
@@ -96,6 +98,42 @@ func (s ed25519Signer) PublicKey() []byte {
 	return slices.Clone(s.SignatureVerifier[:])
 }
 
+// mldsaSigner signs deterministically, so that, as for the other schemes,
+// Sign(message) equals SignBytes(HashRep(message)).
+type mldsaSigner struct {
+	key      *mldsa.PrivateKey
+	verifier crypto.SigSchemeVerifier
+}
+
+func (s mldsaSigner) Sign(message crypto.Hashable) ([]byte, error) {
+	return s.SignBytes(crypto.HashRep(message))
+}
+func (s mldsaSigner) SignBytes(data []byte) ([]byte, error) {
+	return s.key.SignDeterministic(data, nil)
+}
+func (s mldsaSigner) Verify(message crypto.Hashable, sig []byte) error {
+	return s.verifier.Verify(message, s.PublicKey(), sig)
+}
+func (s mldsaSigner) VerifyBytes(data []byte, sig []byte) error {
+	if err := mldsa.Verify(s.key.PublicKey(), data, sig, nil); err != nil {
+		return fmt.Errorf("%w: %w", crypto.ErrSigInvalid, err)
+	}
+	return nil
+}
+func (s mldsaSigner) PublicKey() []byte {
+	return s.key.PublicKey().Bytes()
+}
+
+func makeMLDSASigner(t testing.TB, firstSeedByte byte, params mldsa.Parameters, verifier crypto.SigSchemeVerifier) SigSchemeSigner {
+	t.Helper()
+
+	seed := make([]byte, mldsa.PrivateKeySize)
+	seed[0] = firstSeedByte
+	key, err := mldsa.NewPrivateKey(params, seed)
+	require.NoError(t, err)
+	return mldsaSigner{key: key, verifier: verifier}
+}
+
 // SigSchemeTest carries one signature scheme's test metadata.
 type SigSchemeTest struct {
 	// Name is a human-readable scheme name, suitable for subtest names.
@@ -117,6 +155,18 @@ var SigSchemeTests = []SigSchemeTest{
 	{
 		Name:   "ed25519",
 		Scheme: protocol.SigSchemeEd25519,
+	},
+	{
+		Name:   "ml-dsa-44",
+		Scheme: protocol.SigSchemeMLDSA44,
+	},
+	{
+		Name:   "ml-dsa-65",
+		Scheme: protocol.SigSchemeMLDSA65,
+	},
+	{
+		Name:   "ml-dsa-87",
+		Scheme: protocol.SigSchemeMLDSA87,
 	},
 }
 
@@ -159,6 +209,12 @@ func MakeSigSchemeSigner(t testing.TB, firstSeedByte byte, scheme protocol.SigSc
 		return falcon512Signer{signer}
 	case protocol.SigSchemeEd25519:
 		return ed25519Signer{crypto.GenerateSignatureSecrets(crypto.Seed{firstSeedByte})}
+	case protocol.SigSchemeMLDSA44:
+		return makeMLDSASigner(t, firstSeedByte, mldsa.MLDSA44(), crypto.MLDSA44SchemeVerifier{})
+	case protocol.SigSchemeMLDSA65:
+		return makeMLDSASigner(t, firstSeedByte, mldsa.MLDSA65(), crypto.MLDSA65SchemeVerifier{})
+	case protocol.SigSchemeMLDSA87:
+		return makeMLDSASigner(t, firstSeedByte, mldsa.MLDSA87(), crypto.MLDSA87SchemeVerifier{})
 	}
 	t.Fatalf("unknown scheme %s", scheme)
 	return nil
