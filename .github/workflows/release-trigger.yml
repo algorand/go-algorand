@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*-beta'
+      - 'v*-stable'
+      - 'v*-nightly'
+      - 'v*-dev'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g., 4.5.0)'
+        required: true
+        type: string
+      channel:
+        description: 'Release channel'
+        required: true
+        type: choice
+        options:
+          - beta
+          - stable
+          - nightly
+          - dev
+
+# Called workflows can only narrow these, so they must cover what the build
+# and attestation jobs need.
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    uses: ./.github/workflows/release.yml
+    with:
+      version: ${{ inputs.version }}
+      channel: ${{ inputs.channel }}
+
+  windows-release:
+    uses: ./.github/workflows/windows-release.yml
+    with:
+      version: ${{ inputs.version }}
+      channel: ${{ inputs.channel }}

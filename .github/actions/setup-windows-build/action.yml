@@ -6,8 +6,22 @@ runs:
     - name: Install msys2
       uses: msys2/setup-msys2@v2
       with:
+        # UCRT64 puts MSYS2's packaged gcc first on PATH. Without it, cgo and
+        # libsodium fell through (via path-type: inherit) to whatever MinGW the
+        # runner image preinstalls, which no package manager versions or
+        # records. This is the toolchain scripts/configure_dev.sh installs and
+        # the community Windows builds use.
+        msystem: UCRT64
+        # Use the runner's preinstalled C:\msys64 rather than extracting a
+        # copy under the runner's temp directory: the C code's debug info
+        # records header paths under the MSYS2 root, and C:\msys64 is where a
+        # default MSYS2 install puts it, so a rebuild elsewhere can match.
+        release: false
         update: true
         path-type: inherit
+        # The autotools are needed by `make libsodium` below whenever the
+        # libsodium cache misses.
+        install: autoconf automake libtool m4 make mingw-w64-ucrt-x86_64-gcc
     - name: Set up Go
       uses: ./.github/actions/setup-go
     - name: Restore libsodium from cache
@@ -15,7 +29,7 @@ runs:
       uses: actions/cache@v6
       with:
         path: crypto/libs
-        key: libsodium-fork-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('crypto/libsodium-fork/**') }}
+        key: libsodium-fork-v4-ucrt64-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('crypto/libsodium-fork/**') }}
     - name: Set Windows-safe GOBIN
       # go env GOPATH returns a Windows path with backslashes, which the shell
       # eats inside make recipes that do `cd $(GOBIN)` / `cp ... $(GOBIN)/x`.

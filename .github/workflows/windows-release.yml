@@ -5,28 +5,20 @@ name: Windows Release Build
 # for the per-PR compile check). The artifact still receives the same SBOM and
 # build-provenance attestation as the other platforms.
 
+# Called by release-trigger.yml. Building and attesting inside a reusable
+# workflow makes it the signer of the attestations, so verifiers can require it
+# with `gh attestation verify --signer-workflow` (SLSA v1.0 Build Level 3).
 on:
-  push:
-    tags:
-      - 'v*-beta'
-      - 'v*-stable'
-      - 'v*-nightly'
-      - 'v*-dev'
-  workflow_dispatch:
+  workflow_call:
     inputs:
       version:
-        description: 'Version (e.g., 4.5.0)'
-        required: true
+        description: 'Version (e.g., 4.5.0); manual runs only'
+        required: false
         type: string
       channel:
-        description: 'Release channel'
-        required: true
-        type: choice
-        options:
-          - beta
-          - stable
-          - nightly
-          - dev
+        description: 'Release channel; manual runs only'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -43,6 +35,12 @@ jobs:
     defaults:
       run:
         shell: msys2 {0}
+    env:
+      # -trimpath does not rewrite assembly files a package #includes from
+      # another directory (gnark-crypto's field/asm), so the module cache path
+      # ends up in the binaries' debug info. A fixed path, recorded in the
+      # build environment attestation, keeps rebuilds byte-identical.
+      GOMODCACHE: C:/go-algorand-release/pkg/mod
     outputs:
       version: ${{ steps.parse.outputs.version }}
       channel: ${{ steps.parse.outputs.channel }}
@@ -97,12 +95,16 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "channel=${CHANNEL}" >> "$GITHUB_OUTPUT"
 
+          # Commit time as the fixed timestamp for reproducible output; also
+          # switches the Makefile to its reproducible link flags.
+          echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
+
           echo "Windows Release Configuration:"
           echo "  Version: ${VERSION}"
           echo "  Channel: ${CHANNEL}"
 
-      - name: Install zip
-        run: pacman -S --noconfirm zip
+      - name: Install zip and jq
+        run: pacman -S --noconfirm zip jq
 
       - name: Build binaries
         env:
@@ -126,6 +128,11 @@ jobs:
           echo "Windows package:"
           ls -la dist/
 
+      - name: Record build environment
+        run: |
+          scripts/build_environment.sh build | jq '{build: .}' \
+            > "dist/build-environment_${{ steps.parse.outputs.channel }}_windows-amd64_${{ steps.parse.outputs.version }}.json"
+
       - name: Generate checksums
         run: |
           cd dist
@@ -148,10 +155,10 @@ jobs:
       contents: read
       id-token: write
       attestations: write
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+      CHANNEL: ${{ needs.build.outputs.channel }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
@@ -161,23 +168,37 @@ jobs:
       - name: List artifacts
         run: find dist -type f | sort
 
+      # The SBOM describes the shipped binaries rather than the source tree.
+      - name: Extract shipped binaries
+        run: |
+          mkdir -p extracted
+          unzip -q dist/*.zip -d extracted
+
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         with:
-          path: .
+          path: extracted
           format: spdx-json
-          output-file: dist/sbom.spdx.json
+          output-file: dist/sbom_${{ env.CHANNEL }}_windows-amd64_${{ env.VERSION }}.spdx.json
+          upload-artifact: false
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest@v4
         with:
           subject-path: dist/*.zip
 
       - name: Attest SBOM
-        uses: actions/attest-sbom@v2
+        uses: actions/attest@v4
         with:
           subject-path: dist/*.zip
-          sbom-path: dist/sbom.spdx.json
+          sbom-path: dist/sbom_${{ env.CHANNEL }}_windows-amd64_${{ env.VERSION }}.spdx.json
+
+      - name: Attest build environment
+        uses: actions/attest@v4
+        with:
+          subject-path: dist/*.zip
+          predicate-type: https://github.com/algorand/go-algorand/build-environment/v1
+          predicate-path: dist/build-environment_${{ env.CHANNEL }}_windows-amd64_${{ env.VERSION }}.json
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4

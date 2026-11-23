@@ -210,6 +210,8 @@ deb:
 
 # RPM-specific configuration
 rpm:
+  # Defaults to the runner's hostname, which differs on every CI run.
+  buildhost: localhost
   group: Applications/Internet
   compression: gzip
   summary: Algorand node software

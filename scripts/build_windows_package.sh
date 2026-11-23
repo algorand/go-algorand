@@ -71,7 +71,7 @@ echo "Staging Windows package ${PKG_NAME} from ${GOBIN}"
 BIN_DIR="${PKG_ROOT}/bin"
 mkdir -p "${BIN_DIR}"
 node_bins=(algod algocfg algoh algokey algotmpl diagcfg goal kmd)
-devtools_bins=(algons carpenter coroner dispenser msgpacktool netgoal nodecfg pingpong loadgenerator dsign catchpointdump block-generator tealdbg)
+devtools_bins=(algons carpenter coroner dispenser msgpacktool netgoal nodecfg pingpong loadgenerator dsign catchpointdump block-generator)
 
 for bin in "${node_bins[@]}" "${devtools_bins[@]}"; do
     src="${GOBIN}/${bin}.exe"
@@ -98,8 +98,15 @@ for dir in "${genesis_dirs[@]}"; do
     cp "${REPO_DIR}/installer/genesis/${dir}/genesis.json" "${PKG_ROOT}/genesis/${dir}/"
 done
 
+# Pin entry modes, timestamps and order so the zip depends only on its
+# contents. zip stores DOS times in local time, hence TZ=UTC; -X drops the
+# extra fields that carry real mtimes and uid/gid.
+EPOCH=${SOURCE_DATE_EPOCH:-$(git log -1 --format=%ct)}
+chmod -R u=rwX,go=rX "${PKG_ROOT}"
+find "${PKG_ROOT}" -exec touch -d "@${EPOCH}" {} +
+
 ZIP_PATH="${OUTDIR}/${PKG_NAME}.zip"
 rm -f "${ZIP_PATH}"
-( cd "${STAGE}" && zip -r -q "${ZIP_PATH}" "${PKG_NAME}" )
+( cd "${STAGE}" && find "${PKG_NAME}" | LC_ALL=C sort | TZ=UTC zip -X -q "${ZIP_PATH}" -@ )
 
 echo "Created ${ZIP_PATH}"

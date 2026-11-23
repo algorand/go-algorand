@@ -1,27 +1,19 @@
 name: Release Build
 
+# Called by release-trigger.yml. Building and attesting inside a reusable
+# workflow makes it the signer of the attestations, so verifiers can require it
+# with `gh attestation verify --signer-workflow` (SLSA v1.0 Build Level 3).
 on:
-  push:
-    tags:
-      - 'v*-beta'
-      - 'v*-stable'
-      - 'v*-nightly'
-      - 'v*-dev'
-  workflow_dispatch:
+  workflow_call:
     inputs:
       version:
-        description: 'Version (e.g., 4.5.0)'
-        required: true
+        description: 'Version (e.g., 4.5.0); manual runs only'
+        required: false
         type: string
       channel:
-        description: 'Release channel'
-        required: true
-        type: choice
-        options:
-          - beta
-          - stable
-          - nightly
-          - dev
+        description: 'Release channel; manual runs only'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -32,6 +24,14 @@ env:
   # Disable deadlock detection for release builds
   ALGORAND_DEADLOCK: disable
   KMD_NOUSB: True
+  # Linux release builds install their toolchain from this Ubuntu archive
+  # snapshot, inside the base image pinned in the build matrix, so every run
+  # links the same glibc and uses the same gcc and binutils. Change the two
+  # together and deliberately: either one changes the release bytes. The
+  # snapshot must not predate the image's build: apt will not downgrade the
+  # packages the image already has, so an older snapshot can leave the
+  # toolchain's dependencies unsatisfiable (as perl vs perl-base did on arm64).
+  UBUNTU_SNAPSHOT: 20261111T000000Z
 
 jobs:
   prepare:
@@ -41,6 +41,7 @@ jobs:
       version: ${{ steps.parse.outputs.version }}
       channel: ${{ steps.parse.outputs.channel }}
       network: ${{ steps.parse.outputs.network }}
+      source_date_epoch: ${{ steps.parse.outputs.source_date_epoch }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -101,6 +102,9 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "channel=${CHANNEL}" >> "$GITHUB_OUTPUT"
           echo "network=${NETWORK}" >> "$GITHUB_OUTPUT"
+          # Commit time, used as the fixed timestamp in every release artifact so
+          # that rebuilding the same commit reproduces the same bytes.
+          echo "source_date_epoch=$(git log -1 --format=%ct)" >> "$GITHUB_OUTPUT"
 
           echo "Release Configuration:"
           echo "  Version: ${VERSION}"
@@ -118,24 +122,73 @@ jobs:
             os: linux
             arch: amd64
             make_target: ci-build
+            container: ubuntu:24.04@sha256:2198e4c65076e9cb0b3d695219df667c0e3b0072da64ca3c2648aca17dcecaf5
           - runner: ubuntu-24.04-arm
             os: linux
             arch: arm64
             make_target: ci-build
-          - runner: macos-14
+            container: ubuntu:24.04@sha256:2198e4c65076e9cb0b3d695219df667c0e3b0072da64ca3c2648aca17dcecaf5
+          - runner: macos-15
             os: darwin
             arch: universal
             make_target: ci-build-universal
+            container: ''
+            xcode: '16.4'
     runs-on: ${{ matrix.runner }}
+    # An empty image (macOS) runs the job directly on the runner.
+    container:
+      image: ${{ matrix.container }}
+      volumes:
+        # The base image has no CA certificates; the runner's are used to reach
+        # the archive snapshot over https. apt still checks the archive's
+        # signatures.
+        - /etc/ssl/certs:/etc/ssl/certs:ro
     env:
+      BUILD_CONTAINER_IMAGE: ${{ matrix.container }}
+      # -trimpath does not rewrite assembly files a package #includes from
+      # another directory (gnark-crypto's field/asm), so the module cache path
+      # ends up in the binaries' debug info. A fixed path, recorded in the
+      # build environment attestation, keeps rebuilds byte-identical.
+      GOMODCACHE: /tmp/go-algorand-release/pkg/mod
       CHANNEL: ${{ needs.prepare.outputs.channel }}
       NETWORK: ${{ needs.prepare.outputs.network }}
       VERSION: ${{ needs.prepare.outputs.version }}
       FULLVERSION: ${{ needs.prepare.outputs.version }}
+      SOURCE_DATE_EPOCH: ${{ needs.prepare.outputs.source_date_epoch }}
       # These are used by compute_branch_channel.sh and other scripts
       TRAVIS_BRANCH: ''
       BRANCH: ''
     steps:
+      # Runs before checkout because checkout needs git. Only the snapshot is
+      # configured, so nothing comes from the live archive.
+      - name: Install pinned Linux toolchain
+        if: matrix.os == 'linux'
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          rm -f /etc/apt/sources.list.d/ubuntu.sources
+          cat > /etc/apt/sources.list.d/snapshot.sources <<EOF
+          Types: deb
+          URIs: https://snapshot.ubuntu.com/ubuntu/${UBUNTU_SNAPSHOT}/
+          Suites: noble noble-updates noble-security
+          Components: main universe
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+          EOF
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential autoconf automake libtool git jq
+          # The workspace belongs to the runner's user, not the container's
+          # root. actions/checkout only marks it safe for its own step, and the
+          # build needs git for version stamping.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      # Fails if the runner image no longer ships this Xcode, rather than
+      # building with whichever one is the default.
+      - name: Select Xcode
+        if: matrix.os == 'darwin'
+        run: |
+          sudo xcode-select -s "/Applications/Xcode_${{ matrix.xcode }}.app"
+          xcodebuild -version
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -153,6 +206,11 @@ jobs:
           echo "  Channel: ${CHANNEL}"
           echo "  Network: ${NETWORK}"
           make ${{ matrix.make_target }}
+
+      # Rides along in the build artifact so the packaging jobs can bind it to
+      # the final packages; it must be taken on the runner that did the build.
+      - name: Record build environment
+        run: scripts/build_environment.sh build > tmp/node_pkgs/build-environment.json
 
       - name: List build artifacts
         run: |
@@ -188,15 +246,14 @@ jobs:
       CHANNEL: ${{ needs.prepare.outputs.channel }}
       DEFAULTNETWORK: ${{ needs.prepare.outputs.network }}
       GOARCH: ${{ matrix.goarch }}
+      # nFPM uses this for every file and header timestamp in the .deb/.rpm.
+      SOURCE_DATE_EPOCH: ${{ needs.prepare.outputs.source_date_epoch }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: 'stable'
-          cache: false
+        uses: ./.github/actions/setup-go
 
       - name: Download build artifacts
         uses: actions/download-artifact@v4
@@ -355,6 +412,14 @@ jobs:
           echo "Checksums:"
           cat "hashes_${CHANNEL}_linux_${{ matrix.arch }}_${VERSION}"
 
+      - name: Record build environment
+        run: |
+          scripts/build_environment.sh package > tmp/package-environment.json
+          jq -n --slurpfile build tmp/node_pkgs/build-environment.json \
+            --slurpfile packaging tmp/package-environment.json \
+            '{build: $build[0], packaging: $packaging[0]}' \
+            > "dist/build-environment_${CHANNEL}_linux-${{ matrix.arch }}_${VERSION}.json"
+
       - name: Upload packages
         uses: actions/upload-artifact@v4
         with:
@@ -366,7 +431,7 @@ jobs:
   package-darwin:
     name: Package Darwin
     needs: [prepare, build]
-    runs-on: macos-14
+    runs-on: macos-15
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
       CHANNEL: ${{ needs.prepare.outputs.channel }}
@@ -393,6 +458,11 @@ jobs:
           shasum -a 256 *.tar.gz > "hashes_${CHANNEL}_darwin_universal_${VERSION}"
           echo "Checksums:"
           cat "hashes_${CHANNEL}_darwin_universal_${VERSION}"
+
+      - name: Record build environment
+        run: |
+          jq '{build: .}' tmp/node_pkgs/build-environment.json \
+            > "dist/build-environment_${CHANNEL}_darwin-universal_${VERSION}.json"
 
       - name: Upload packages
         uses: actions/upload-artifact@v4
@@ -490,7 +560,6 @@ jobs:
 
             # Verify devtools binaries are installed
             command -v carpenter
-            command -v tealdbg
             command -v msgpacktool
 
             echo 'Debian devtools package test passed!'
@@ -532,15 +601,34 @@ jobs:
 
             # Verify devtools binaries are installed
             command -v carpenter
-            command -v tealdbg
             command -v msgpacktool
 
             echo 'RPM devtools package test passed!'
           "
 
-  finalize:
-    name: Finalize (SBOM, Attestations)
+  # The SBOM and build-environment attestations are made per platform, so each
+  # artifact is bound to a description of the binaries it ships and of the
+  # toolchain that built them, rather than to the source tree.
+  attest-platform:
+    name: Attest ${{ matrix.platform }} (SBOM, build environment)
     needs: [prepare, package-linux, package-darwin, test-packages]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-amd64
+            subjects: |
+              packages/*_linux-amd64_*.tar.gz
+              packages/*_linux-amd64_*.deb
+              packages/*.x86_64.rpm
+          - platform: linux-arm64
+            subjects: |
+              packages/*_linux-arm64_*.tar.gz
+              packages/*_linux-arm64_*.deb
+              packages/*.aarch64.rpm
+          - platform: darwin-universal
+            subjects: |
+              packages/*_darwin-universal_*.tar.gz
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -550,13 +638,75 @@ jobs:
       VERSION: ${{ needs.prepare.outputs.version }}
       CHANNEL: ${{ needs.prepare.outputs.channel }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Download all package artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: packages-*
+          path: packages/
+          merge-multiple: true
+
+      # The .deb and .rpm packages hold the same binaries as the tarballs.
+      # sbom/ is created here because anchore/sbom-action writes output-file
+      # without creating its directory.
+      - name: Extract shipped binaries
+        run: |
+          mkdir -p extracted sbom
+          for f in packages/*_${{ matrix.platform }}_*.tar.gz; do
+            tar -xzf "$f" -C extracted
+          done
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: extracted
+          format: spdx-json
+          output-file: sbom/sbom_${{ env.CHANNEL }}_${{ matrix.platform }}_${{ env.VERSION }}.spdx.json
+          upload-artifact: false
+
+      - name: Attest SBOM
+        uses: actions/attest@v4
+        with:
+          subject-path: ${{ matrix.subjects }}
+          sbom-path: sbom/sbom_${{ env.CHANNEL }}_${{ matrix.platform }}_${{ env.VERSION }}.spdx.json
+
+      - name: Attest build environment
+        uses: actions/attest@v4
+        with:
+          subject-path: ${{ matrix.subjects }}
+          predicate-type: https://github.com/algorand/go-algorand/build-environment/v1
+          predicate-path: packages/build-environment_${{ env.CHANNEL }}_${{ matrix.platform }}_${{ env.VERSION }}.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ matrix.platform }}
+          path: sbom/
+          retention-days: 7
+          if-no-files-found: error
+
+  finalize:
+    name: Finalize (Provenance)
+    needs: [prepare, package-linux, package-darwin, test-packages, attest-platform]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      CHANNEL: ${{ needs.prepare.outputs.channel }}
+    steps:
+      - name: Download all package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: packages-*
+          path: packages/
+          merge-multiple: true
+
+      - name: Download SBOMs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sbom-*
           path: packages/
           merge-multiple: true
 
@@ -565,29 +715,13 @@ jobs:
           echo "All release artifacts:"
           find packages/ -type f | sort
 
-      - name: Generate SBOM
-        uses: anchore/sbom-action@v0
-        with:
-          path: .
-          format: spdx-json
-          output-file: packages/sbom.spdx.json
-
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest@v4
         with:
           subject-path: |
             packages/*.tar.gz
             packages/*.deb
             packages/*.rpm
-
-      - name: Attest SBOM
-        uses: actions/attest-sbom@v2
-        with:
-          subject-path: |
-            packages/*.tar.gz
-            packages/*.deb
-            packages/*.rpm
-          sbom-path: packages/sbom.spdx.json
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
@@ -605,18 +739,25 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      # osv-scanner's Go call analysis type-checks the code, and the crypto
+      # package's cgo code needs libsodium's headers; without them the analysis
+      # fails and osv-scanner can crash. This also gives the scan the release
+      # Go version, whose standard library is what ships.
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build
         with:
-          go-version: stable
-          cache: false
+          cache-prefix: release-scan
 
       - name: Install and run osv-scanner
         run: |
-          go install github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.3.3
+          # osv-scanner v2.3.3 needs a newer Go to build than the release
+          # pins; only this install may fetch one.
+          GOTOOLCHAIN=auto go install github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.3.3
 
           # Run scan with JSON output for deterministic parsing.
-          # osv-scanner exits non-zero when vulnerabilities are found.
+          # osv-scanner exits 1 when vulnerabilities are found; any other
+          # non-zero exit (127 error, 128 no packages, 129 API failure, or a
+          # crash) means the scan did not complete and must not pass.
           set +e
           osv-scanner scan --recursive --format json . > osv-results.json 2>osv-stderr.txt
           SCAN_EXIT=$?
@@ -625,6 +766,11 @@ jobs:
           if [ "$SCAN_EXIT" -eq 0 ]; then
             echo "No vulnerabilities found."
             exit 0
+          fi
+          if [ "$SCAN_EXIT" -ne 1 ] || ! jq -e '.results' osv-results.json > /dev/null; then
+            cat osv-stderr.txt
+            echo "::error::osv-scanner did not complete (exit ${SCAN_EXIT})."
+            exit 1
           fi
 
           # Also produce human-readable table for the job log
@@ -642,37 +788,38 @@ jobs:
           #
           # 2. database_specific.cvss_score — numeric score included by some
           #    advisory sources. Critical = >= 9.0.
-          CRITICAL=$(jq '
-            [
-              .results[]?.packages[]?.vulnerabilities[]? |
-              (
-                # Source 1: explicit severity label
-                (.database_specific?.severity? // "" | ascii_upcase | select(. == "CRITICAL")),
-                # Source 2: numeric CVSS score >= 9.0
-                (.database_specific?.cvss_score? // 0 | select(. >= 9.0) | "CRITICAL")
-              )
-            ] | unique | length
-          ' osv-results.json 2>/dev/null || echo "0")
+          #
+          # A critical advisory blocks the release unless osv-scanner's call
+          # analysis (govulncheck, for Go) shows none of its vulnerable code is
+          # called. Advisories without call analysis, such as those for
+          # non-Go ecosystems, count as reachable.
+          jq '
+            def critical:
+              ((.database_specific?.severity? // "") | ascii_upcase) == "CRITICAL" or
+              ((.database_specific?.cvss_score? // 0) >= 9.0);
+            [ .results[]?.packages[]? | .package as $pkg | (.groups // []) as $groups |
+              .vulnerabilities[]? | select(critical) | .id as $id |
+              ([ $groups[] | select(.ids | index($id)) ] | first // {}) as $group |
+              [ ($group.experimental_analysis // {})[] | .called ] as $called |
+              { id: $id, package: "\($pkg.name)@\($pkg.version)",
+                reachable: (($called | length) == 0 or any($called[]; . != false)) }
+            ] | group_by(.id)
+              | map({id: .[0].id, packages: (map(.package) | unique), reachable: any(.[]; .reachable)})
+          ' osv-results.json > critical.json
 
-          if [ "$CRITICAL" -gt 0 ]; then
-            echo "::error::Found critical vulnerabilities — failing build. See JSON output for details."
-            # Output the critical findings for debugging
-            jq '.results[]?.packages[]? | select(
-              .vulnerabilities[]? | (
-                (.database_specific?.severity? // "" | ascii_upcase) == "CRITICAL" or
-                (.database_specific?.cvss_score? // 0) >= 9.0
-              )
-            ) | {package: .package.name, version: .package.version, vulns: [.vulnerabilities[].id]}' osv-results.json 2>/dev/null || true
+          jq -r '.[] | "\(if .reachable then "REACHABLE " else "not called" end)  \(.packages | join(","))  \(.id)"' critical.json
+          REACHABLE=$(jq '[.[] | select(.reachable)] | length' critical.json)
+          if [ "$REACHABLE" -gt 0 ]; then
+            echo "::error::Found ${REACHABLE} critical vulnerabilities the code may reach; failing build."
             exit 1
-          else
-            echo "::warning::Vulnerabilities found (no criticals). See job log for details."
-            exit 0
           fi
+          echo "::warning::Vulnerabilities found, but no critical ones the code reaches. See job log for details."
+          exit 0
 
   # Summary job to verify all builds and packages completed
   release-summary:
     name: Release Summary
-    needs: [prepare, build, package-linux, package-darwin, test-packages, finalize, vulnerability-scan]
+    needs: [prepare, build, package-linux, package-darwin, test-packages, attest-platform, finalize, vulnerability-scan]
     runs-on: ubuntu-24.04
     if: always()
     steps:
@@ -716,11 +863,18 @@ jobs:
             echo "| Package Tests | ❌ |" >> $GITHUB_STEP_SUMMARY
           fi
 
+          # Attestation status
+          if [ "${{ needs.attest-platform.result }}" = "success" ]; then
+            echo "| Attest (SBOM, build environment) | ✅ |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Attest (SBOM, build environment) | ❌ |" >> $GITHUB_STEP_SUMMARY
+          fi
+
           # Finalize status
           if [ "${{ needs.finalize.result }}" = "success" ]; then
-            echo "| Finalize (SBOM, Attestations) | ✅ |" >> $GITHUB_STEP_SUMMARY
+            echo "| Finalize (Provenance) | ✅ |" >> $GITHUB_STEP_SUMMARY
           else
-            echo "| Finalize (SBOM, Attestations) | ❌ |" >> $GITHUB_STEP_SUMMARY
+            echo "| Finalize (Provenance) | ❌ |" >> $GITHUB_STEP_SUMMARY
           fi
 
           # Vulnerability scan status (fails only on criticals)
@@ -737,6 +891,7 @@ jobs:
              [ "${{ needs.package-linux.result }}" != "success" ] || \
              [ "${{ needs.package-darwin.result }}" != "success" ] || \
              [ "${{ needs.test-packages.result }}" != "success" ] || \
+             [ "${{ needs.attest-platform.result }}" != "success" ] || \
              [ "${{ needs.finalize.result }}" != "success" ] || \
              [ "${{ needs.vulnerability-scan.result }}" != "success" ]; then
             echo "❌ **Release failed.** Check individual job logs." >> $GITHUB_STEP_SUMMARY

@@ -49,12 +49,6 @@ contents:
     file_info:
       mode: 0755
 
-  - src: ${TOOLSDIR}/tealdbg
-    dst: /usr/bin/tealdbg
-    expand: true
-    file_info:
-      mode: 0755
-
   # License file (rpm only; deb uses the copyright file below)
   - src: COPYING
     dst: /usr/share/licenses/${DEVTOOLS_PKG_NAME}/COPYING
@@ -73,6 +67,8 @@ contents:
 
 # RPM-specific configuration
 rpm:
+  # Defaults to the runner's hostname, which differs on every CI run.
+  buildhost: localhost
   group: Development/Tools
   compression: gzip
   summary: Algorand development tools
