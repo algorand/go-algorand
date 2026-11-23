@@ -753,16 +753,23 @@ jobs:
 
       - name: Install and run osv-scanner
         run: |
-          # osv-scanner v2.3.3 needs a newer Go to build than the release
-          # pins; only this install may fetch one.
-          GOTOOLCHAIN=auto go install github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.3.3
+          # Call analysis parses our code with the golang.org/x/tools that
+          # osv-scanner was built with, so the pin must be new enough for the
+          # Go version in go.mod; v2.3.3 panicked on Go 1.27 code.
+          go install github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.7.1
+
+          # Scan only the modules whose binaries ship: the node and the
+          # block-generator in the tools tarball. The test and debug tooling
+          # (test/heapwatch, tools/debug/algodump, tools/x-repo-types, ...)
+          # is not released and should not gate a release.
+          SCAN_TARGETS=(-L go.mod -L tools/block-generator/go.mod)
 
           # Run scan with JSON output for deterministic parsing.
           # osv-scanner exits 1 when vulnerabilities are found; any other
           # non-zero exit (127 error, 128 no packages, 129 API failure, or a
           # crash) means the scan did not complete and must not pass.
           set +e
-          osv-scanner scan --recursive --format json . > osv-results.json 2>osv-stderr.txt
+          osv-scanner scan source "${SCAN_TARGETS[@]}" --format json > osv-results.json 2>osv-stderr.txt
           SCAN_EXIT=$?
           set -e
 
@@ -777,7 +784,7 @@ jobs:
           fi
 
           # Also produce human-readable table for the job log
-          osv-scanner scan --recursive . 2>&1 || true
+          osv-scanner scan source "${SCAN_TARGETS[@]}" 2>&1 || true
 
           # Check for critical vulnerabilities using structured JSON.
           # The OSV schema stores severity as CVSS vector strings in
