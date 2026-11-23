@@ -131,7 +131,7 @@ type GossipNode interface {
 	Disconnect(badnode DisconnectablePeer)
 	DisconnectPeers() // only used by testing
 
-	// RegisterHTTPHandler and RegisterHTTPHandlerFunc: path accepts gorilla/mux path annotations
+	// RegisterHTTPHandler and RegisterHTTPHandlerFunc: path accepts http.ServeMux patterns
 	RegisterHTTPHandler(path string, handler http.Handler)
 	RegisterHTTPHandlerFunc(path string, handler func(http.ResponseWriter, *http.Request))
 

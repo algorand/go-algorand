@@ -615,19 +615,19 @@ type ConsensusParams struct {
 	// authorization for the f1 PQ scheme.
 	EnablePQSchemeFalcon1024 bool
 
-	// EnablePQSchemeFalcon512 enables native Falcon-512 transaction
+	// EnableSigSchemeFalcon512 enables native Falcon-512 transaction
 	// authorization for the f5 PQ scheme.
-	EnablePQSchemeFalcon512 bool
+	EnableSigSchemeFalcon512 bool
 
-	// EnablePQSchemeEd25519 enables Ed25519 transaction authorization for the
-	// ed scheme's hashed-address profile.
-	EnablePQSchemeEd25519 bool
+	// EnableSigSchemeEd25519 enables Ed25519 transaction authorization for the
+	// ed scheme's salted-address profile.
+	EnableSigSchemeEd25519 bool
 
-	// EnablePQSchemeLogicSig enables transaction authorization by a LogicSig
-	// carried in a PQSig under the ls scheme, whose address commits to the
+	// EnableSigSchemeLogicSig enables transaction authorization by a LogicSig
+	// carried in a SaltedKeySig under the ls scheme, whose address commits to the
 	// program and a salt. Unlike the LogicSig in SignedTxn.Lsig, such an account
 	// can choose an address that is not an Edwards25519 point.
-	EnablePQSchemeLogicSig bool
+	EnableSigSchemeLogicSig bool
 
 	// RequireLogicSigArgAccess requires that a LogicSig carry no argument it did
 	// not read: nothing above the highest index it read, and nothing unread
@@ -644,6 +644,13 @@ type ConsensusParams struct {
 	// for global state and extra pages of apps it neither created nor opted
 	// into.
 	CloseRequiresBaseMinBalance bool
+
+	// DiscardFailedInnerClearStateDelta empties the EvalDelta of an inner
+	// ClearState call whose ClearStateProgram fails or rejects, as it always
+	// has been for a top-level call. Without it, the inner transaction's
+	// ApplyData keeps the state changes and logs the program noted before
+	// failing, though none of them took effect.
+	DiscardFailedInnerClearStateDelta bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -1575,12 +1582,13 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 14 // When moving this to a release, put a new higher LogicSigVersion here
-	vFuture.EnablePQSchemeFalcon512 = true
-	vFuture.EnablePQSchemeEd25519 = true
+	vFuture.EnableSigSchemeFalcon512 = true
+	vFuture.EnableSigSchemeEd25519 = true
 	vFuture.RequireLogicSigArgAccess = true
 	vFuture.AllowGroupedHeartbeats = true
 
-	vFuture.EnablePQSchemeLogicSig = true
+	vFuture.EnableSigSchemeLogicSig = true
+	vFuture.DiscardFailedInnerClearStateDelta = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

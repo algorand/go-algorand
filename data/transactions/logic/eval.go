@@ -129,16 +129,47 @@ func (sv stackValue) address() (addr basics.Address, err error) {
 	return
 }
 
+// maxQuotedLen is the most bytes of a program-supplied value that an error
+// shows.
+const maxQuotedLen = 16
+
+// limitedBytes formats a program-supplied value for an error message: only
+// the first maxQuotedLen bytes are shown, followed by the full length.
+type limitedBytes []byte
+
+func (b limitedBytes) String() string {
+	shown := b[:min(len(b), maxQuotedLen)]
+	var s string
+	if isPrintable(shown) {
+		s = string(shown)
+	} else {
+		s = "0x" + hex.EncodeToString(shown)
+	}
+	if len(shown) < len(b) {
+		s += fmt.Sprintf("... (%d bytes)", len(b))
+	}
+	return s
+}
+
+func isPrintable(b []byte) bool {
+	for _, c := range b {
+		if c < 0x20 || c > 0x7e {
+			return false
+		}
+	}
+	return true
+}
+
 func (sv stackValue) uint() (uint64, error) {
 	if sv.Bytes != nil {
-		return 0, fmt.Errorf("%#v is not a uint64", sv.Bytes)
+		return 0, fmt.Errorf("%s is not a uint64", limitedBytes(sv.Bytes))
 	}
 	return sv.Uint, nil
 }
 
 func (sv stackValue) uintMaxed(max uint64) (uint64, error) {
 	if sv.Bytes != nil {
-		return 0, fmt.Errorf("%#v is not a uint64", sv.Bytes)
+		return 0, fmt.Errorf("%s is not a uint64", limitedBytes(sv.Bytes))
 	}
 	if sv.Uint > max {
 		return 0, fmt.Errorf("%d is larger than max=%d", sv.Uint, max)
@@ -454,9 +485,9 @@ func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.Sign
 func NewSigEvalParams(txgroup []transactions.SignedTxn, proto *config.ConsensusParams, ls LedgerForSignature) *EvalParams {
 	lsigs := 0
 	for _, tx := range txgroup {
-		// An ls-scheme PQSig carries its program in place of a public key, so a
+		// An ls-scheme SaltedKeySig carries its program in place of a public key, so a
 		// transaction can have a signature program with nothing in its Lsig.
-		if tx.Lsig.HasProgram() || tx.PQsig.IsLogicSig() {
+		if tx.Lsig.HasProgram() || tx.SKsig.IsLogicSig() {
 			lsigs++
 		}
 	}
@@ -740,6 +771,10 @@ type EvalContext struct {
 	version uint64
 	Scratch scratchSpace
 
+	// parsedConsts caches, by pc, the parsed immediates of the intcblock,
+	// bytecblock, pushints and pushbytess instructions executed so far.
+	parsedConsts map[int]immConsts
+
 	// creatorAddr caches the creator of appID, looked up lazily by
 	// getCreatorAddress (a zero value means "not yet looked up"). Besides
 	// backing the `global CreatorAddress` op, it is used to decide family
@@ -776,8 +811,8 @@ type EvalContext struct {
 	instructionStarts []bool
 
 	// sigArgs are the arguments the arg opcodes read in ModeSig: those of the
-	// program running now, which are not always Lsig.Args. An ls-scheme PQSig
-	// carries its program's arguments in PQsig.Signature.
+	// program running now, which are not always Lsig.Args. An ls-scheme SaltedKeySig
+	// carries its program's arguments in SKsig.Signature.
 	sigArgs [][]byte
 
 	// argsRead records which sigArgs opArgN has pushed, one bit per index. It
@@ -1279,11 +1314,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 				cx.EvalParams.available.boxes[basics.BoxRef{App: cx.appID, Name: string(rr.Box.Name)}] = false
 			}
 		}
-		// and add the appID to `createdApps`
-		if cx.EvalParams.available.createdApps == nil {
-			cx.EvalParams.available.createdApps = make(map[basics.AppIndex]struct{})
-		}
-		cx.EvalParams.available.createdApps[cx.appID] = struct{}{}
+		cx.EvalParams.available.createApp(cx.appID, cx.GetApplicationAddress(cx.appID))
 	}
 
 	// Check the I/O budget for reading if this is the first top-level app call
@@ -1409,7 +1440,7 @@ func EvalApp(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (b
 
 // EvalSignatureProgram evaluates program, with args as the arguments its arg
 // opcodes read, as a signature authorizing the ith transaction in params. The
-// program need not be that transaction's Lsig: an ls-scheme PQSig carries a
+// program need not be that transaction's Lsig: an ls-scheme SaltedKeySig carries a
 // program and arguments of its own.
 // A program passes successfully if it finishes with one int element on the stack that is non-zero.
 // It returns EvalContext suitable for obtaining additional info about the execution.
@@ -1554,7 +1585,7 @@ func CheckContract(program []byte, gi int, params *EvalParams) error {
 // include a cost estimate that must be low enough (controlled by params.Proto).
 //
 // It names no transaction. A signature program is not always the Lsig of one,
-// since an ls-scheme PQSig carries a program of its own, and nothing in a
+// since an ls-scheme SaltedKeySig carries a program of its own, and nothing in a
 // ModeSig check consults the transaction anyway. Callers pass the program they
 // are about to evaluate, so the check and the evaluation cannot disagree about
 // which bytes run.
@@ -1618,6 +1649,7 @@ func check(program []byte, txn *transactions.SignedTxnWithAD, params *EvalParams
 
 func (cx *EvalContext) begin(program []byte) error {
 	cx.program = program
+	cx.parsedConsts = nil
 
 	version, vlen, err := transactions.ProgramVersion(program)
 	if err != nil {
@@ -1756,7 +1788,7 @@ func (cx *EvalContext) step() error {
 	// It's something like a 5-10% overhead on our simplest instructions to make
 	// the Cost() call without the FullCost.compute() short-circuit, even
 	// though Cost() tries to exit fast. Use BenchmarkUintMath to test changes.
-	opcost := deets.FullCost.compute(cx.Stack)
+	opcost := deets.FullCost.compute(cx.program, cx.pc, cx.Stack)
 	if opcost <= 0 {
 		opcost = deets.Cost(cx.program, cx.pc, cx.Stack)
 		if opcost <= 0 {
@@ -2456,16 +2488,26 @@ func opExpw(cx *EvalContext) error {
 	return nil
 }
 
-func byteMathOperands(cx *EvalContext) (*big.Int, *big.Int, error) {
+// checkByteMathOperands enforces the limit on operand length that applies
+// before fullByteMathVersion.
+func checkByteMathOperands(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	prev := last - 1
 
 	if cx.version < fullByteMathVersion {
 		if len(cx.Stack[last].Bytes) > maxByteMathSize || len(cx.Stack[prev].Bytes) > maxByteMathSize {
-			return nil, nil, errors.New("math attempted on large byte-array")
+			return errors.New("math attempted on large byte-array")
 		}
 	}
+	return nil
+}
 
+func byteMathOperands(cx *EvalContext) (*big.Int, *big.Int, error) {
+	if err := checkByteMathOperands(cx); err != nil {
+		return nil, nil, err
+	}
+	last := len(cx.Stack) - 1
+	prev := last - 1
 	rhs := getBig().SetBytes(cx.Stack[last].Bytes)
 	lhs := getBig().SetBytes(cx.Stack[prev].Bytes)
 	return lhs, rhs, nil
@@ -2480,28 +2522,135 @@ func byteMathResult(cx *EvalContext, result *big.Int) error {
 	return nil
 }
 
+// b+ and b- work directly on the big-endian bytes, a word at a time, rather
+// than converting to and from big.Int, which takes several times as long.
+// Their results match big.Int's Bytes(): no leading zeros, and empty (but not
+// nil) for zero.
+
 func opBytesPlus(cx *EvalContext) error {
-	lhs, rhs, err := byteMathOperands(cx)
-	if err != nil {
+	if err := checkByteMathOperands(cx); err != nil {
 		return err
 	}
-	lhs.Add(lhs, rhs)
-	putBig(rhs)
-	return byteMathResult(cx, lhs)
+	last := len(cx.Stack) - 1
+	prev := last - 1
+	cx.Stack[prev].Bytes = addBytes(cx.Stack[prev].Bytes, cx.Stack[last].Bytes)
+	cx.Stack = cx.Stack[:last]
+	return nil
 }
 
 func opBytesMinus(cx *EvalContext) error {
-	lhs, rhs, err := byteMathOperands(cx)
-	if err != nil {
+	if err := checkByteMathOperands(cx); err != nil {
 		return err
 	}
-	lhs.Sub(lhs, rhs)
-	putBig(rhs)
-	if lhs.Sign() < 0 {
-		putBig(lhs)
+	last := len(cx.Stack) - 1
+	prev := last - 1
+	diff, ok := subBytes(cx.Stack[prev].Bytes, cx.Stack[last].Bytes)
+	if !ok {
 		return errors.New("byte math would have negative result")
 	}
-	return byteMathResult(cx, lhs)
+	cx.Stack[prev].Bytes = diff
+	cx.Stack = cx.Stack[:last]
+	return nil
+}
+
+// addBytes returns the sum of the big-endian unsigned integers a and b.
+func addBytes(a, b []byte) []byte {
+	// The inputs may have leading zeros. They are processed like any other bytes,
+	// rather than skipped first: costs are based on the inputs' full lengths, so
+	// skipping them would only speed up cases that are already paid for. The
+	// results are trimmed at the end.
+
+	if len(a) < len(b) {
+		a, b = b, a
+	}
+	sum := make([]byte, len(a)+1) // room for a final carry
+	out := sum[1:]
+
+	// The loops consume a, b, and out from their ends, the low-order bytes.
+	// Taking each word from the end of a shrinking slice lets the compiler
+	// drop the bounds checks. The extra length tests in the loop conditions
+	// are always true, since len(out) == len(a) >= len(b), but the compiler
+	// needs them for the same reason.
+	var carry uint64
+	for len(b) >= 8 && len(a) >= 8 && len(out) >= 8 {
+		s, c := bits.Add64(binary.BigEndian.Uint64(a[len(a)-8:]), binary.BigEndian.Uint64(b[len(b)-8:]), carry)
+		binary.BigEndian.PutUint64(out[len(out)-8:], s)
+		carry = c
+		a, b, out = a[:len(a)-8], b[:len(b)-8], out[:len(out)-8]
+	}
+	for len(b) > 0 && len(a) > 0 && len(out) > 0 {
+		s := uint64(a[len(a)-1]) + uint64(b[len(b)-1]) + carry
+		out[len(out)-1] = byte(s)
+		carry = s >> 8
+		a, b, out = a[:len(a)-1], b[:len(b)-1], out[:len(out)-1]
+	}
+	// Only a remains. Propagate the carry into it, then copy the rest.
+	for carry != 0 && len(a) >= 8 && len(out) >= 8 {
+		s, c := bits.Add64(binary.BigEndian.Uint64(a[len(a)-8:]), 0, carry)
+		binary.BigEndian.PutUint64(out[len(out)-8:], s)
+		carry = c
+		a, out = a[:len(a)-8], out[:len(out)-8]
+	}
+	for carry != 0 && len(a) > 0 && len(out) > 0 {
+		s := uint64(a[len(a)-1]) + carry
+		out[len(out)-1] = byte(s)
+		carry = s >> 8
+		a, out = a[:len(a)-1], out[:len(out)-1]
+	}
+	copy(out, a)
+	sum[0] = byte(carry)
+	return trimZeros(sum)
+}
+
+// subBytes returns a - b for the big-endian unsigned integers a and b, or false
+// if b > a.
+func subBytes(a, b []byte) ([]byte, bool) {
+	diff := make([]byte, max(len(a), len(b)))
+	out := diff[len(diff)-len(a):] // a's part of diff
+
+	// As in addBytes, consume the slices from their low-order ends.
+	var borrow uint64
+	for len(b) >= 8 && len(a) >= 8 && len(out) >= 8 {
+		d, br := bits.Sub64(binary.BigEndian.Uint64(a[len(a)-8:]), binary.BigEndian.Uint64(b[len(b)-8:]), borrow)
+		binary.BigEndian.PutUint64(out[len(out)-8:], d)
+		borrow = br
+		a, b, out = a[:len(a)-8], b[:len(b)-8], out[:len(out)-8]
+	}
+	for len(b) > 0 && len(a) > 0 && len(out) > 0 {
+		d := uint64(a[len(a)-1]) - uint64(b[len(b)-1]) - borrow
+		out[len(out)-1] = byte(d)
+		borrow = (d >> 8) & 1
+		a, b, out = a[:len(a)-1], b[:len(b)-1], out[:len(out)-1]
+	}
+	for borrow != 0 && len(a) >= 8 && len(out) >= 8 {
+		d, br := bits.Sub64(binary.BigEndian.Uint64(a[len(a)-8:]), 0, borrow)
+		binary.BigEndian.PutUint64(out[len(out)-8:], d)
+		borrow = br
+		a, out = a[:len(a)-8], out[:len(out)-8]
+	}
+	for borrow != 0 && len(a) > 0 && len(out) > 0 {
+		d := uint64(a[len(a)-1]) - borrow
+		out[len(out)-1] = byte(d)
+		borrow = (d >> 8) & 1
+		a, out = a[:len(a)-1], out[:len(out)-1]
+	}
+	copy(out, a)
+
+	// A remaining borrow, or any nonzero byte of b beyond a's length, means
+	// b > a.
+	if borrow != 0 || nonzero(b) != nil {
+		return nil, false
+	}
+	return trimZeros(diff), true
+}
+
+// trimZeros removes leading zeros, returning an empty, but not nil, slice for
+// zero, as big.Int's Bytes() does. A nil slice would be a uint64 on the stack.
+func trimZeros(b []byte) []byte {
+	if trimmed := nonzero(b); trimmed != nil {
+		return trimmed
+	}
+	return b[:0]
 }
 
 func opBytesDiv(cx *EvalContext) error {
@@ -2847,25 +2996,19 @@ func opBytesBinaryLogicPrep(cx *EvalContext) ([]byte, []byte) {
 
 func opBytesBitOr(cx *EvalContext) error {
 	a, b := opBytesBinaryLogicPrep(cx)
-	for i := range a {
-		a[i] = a[i] | b[i]
-	}
+	orInto(a, b)
 	return nil
 }
 
 func opBytesBitAnd(cx *EvalContext) error {
 	a, b := opBytesBinaryLogicPrep(cx)
-	for i := range a {
-		a[i] = a[i] & b[i]
-	}
+	andInto(a, b)
 	return nil
 }
 
 func opBytesBitXor(cx *EvalContext) error {
 	a, b := opBytesBinaryLogicPrep(cx)
-	for i := range a {
-		a[i] = a[i] ^ b[i]
-	}
+	xorInto(a, b)
 	return nil
 }
 
@@ -2873,12 +3016,67 @@ func opBytesBitNot(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 
 	fresh := make([]byte, len(cx.Stack[last].Bytes))
-	for i, b := range cx.Stack[last].Bytes {
-		fresh[i] = ^b
-	}
+	notInto(fresh, cx.Stack[last].Bytes)
 	cx.Stack[last].Bytes = fresh
 	return nil
 }
+
+// The bitwise helpers below combine src into dst, which have the same length,
+// eight bytes at a time. Byte order does not matter for bitwise operations, so
+// they use little-endian loads and stores, which are plain loads and stores on
+// the usual platforms. They advance shrinking slices, so that the compiler can
+// drop bounds checks. Each is written out, rather than taking the operation as
+// a function, to avoid a function call per word.
+
+func orInto(dst, src []byte) {
+	for len(dst) >= 8 && len(src) >= 8 {
+		binary.LittleEndian.PutUint64(dst, binary.LittleEndian.Uint64(dst)|binary.LittleEndian.Uint64(src))
+		dst, src = dst[8:], src[8:]
+	}
+	for len(dst) > 0 && len(src) > 0 {
+		dst[0] |= src[0]
+		dst, src = dst[1:], src[1:]
+	}
+}
+
+func andInto(dst, src []byte) {
+	for len(dst) >= 8 && len(src) >= 8 {
+		binary.LittleEndian.PutUint64(dst, binary.LittleEndian.Uint64(dst)&binary.LittleEndian.Uint64(src))
+		dst, src = dst[8:], src[8:]
+	}
+	for len(dst) > 0 && len(src) > 0 {
+		dst[0] &= src[0]
+		dst, src = dst[1:], src[1:]
+	}
+}
+
+func xorInto(dst, src []byte) {
+	for len(dst) >= 8 && len(src) >= 8 {
+		binary.LittleEndian.PutUint64(dst, binary.LittleEndian.Uint64(dst)^binary.LittleEndian.Uint64(src))
+		dst, src = dst[8:], src[8:]
+	}
+	for len(dst) > 0 && len(src) > 0 {
+		dst[0] ^= src[0]
+		dst, src = dst[1:], src[1:]
+	}
+}
+
+// notInto sets dst to the bitwise inverse of src.
+func notInto(dst, src []byte) {
+	for len(dst) >= 8 && len(src) >= 8 {
+		binary.LittleEndian.PutUint64(dst, ^binary.LittleEndian.Uint64(src))
+		dst, src = dst[8:], src[8:]
+	}
+	for len(dst) > 0 && len(src) > 0 {
+		dst[0] = ^src[0]
+		dst, src = dst[1:], src[1:]
+	}
+}
+
+// zeroes backs every bzero result. AVM byte-arrays are never modified in place,
+// so they can share it, which makes bzero O(1) and allocation free. It must
+// never be written.
+var zeroes [maxStringSize]byte
 
 func opBytesZero(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
@@ -2886,13 +3084,60 @@ func opBytesZero(cx *EvalContext) error {
 	if length > maxStringSize {
 		return fmt.Errorf("bzero attempted to create a too large string")
 	}
-	cx.Stack[last].Bytes = make([]byte, length)
+	// Clipped so that an append to the result must reallocate, rather than
+	// write into zeroes.
+	cx.Stack[last].Bytes = slices.Clip(zeroes[:length])
 	return nil
+}
+
+// immConsts is the parsed immediates of one instruction that carries
+// constants. Only one of ints and bytes is used.
+type immConsts struct {
+	ints   []uint64
+	bytes  [][]byte
+	nextpc int
+}
+
+func (cx *EvalContext) rememberConsts(consts immConsts) {
+	if cx.parsedConsts == nil {
+		cx.parsedConsts = make(map[int]immConsts)
+	}
+	cx.parsedConsts[cx.pc] = consts
+}
+
+// intConsts returns the integer immediates of the intcblock or pushints at
+// cx.pc, and the pc after them. The returned slice is shared by every
+// execution of the instruction, so it must not be modified.
+func (cx *EvalContext) intConsts() ([]uint64, int, error) {
+	if consts, ok := cx.parsedConsts[cx.pc]; ok {
+		return consts.ints, consts.nextpc, nil
+	}
+	ints, nextpc, err := parseIntImmArgs(cx.program, cx.pc+1)
+	if err != nil {
+		return nil, 0, err
+	}
+	cx.rememberConsts(immConsts{ints: ints, nextpc: nextpc})
+	return ints, nextpc, nil
+}
+
+// byteConsts returns the byte immediates of the bytecblock or pushbytess at
+// cx.pc, and the pc after them. The returned slice is shared by every
+// execution of the instruction, so it must not be modified.
+func (cx *EvalContext) byteConsts() ([][]byte, int, error) {
+	if consts, ok := cx.parsedConsts[cx.pc]; ok {
+		return consts.bytes, consts.nextpc, nil
+	}
+	bytes, nextpc, err := cx.byteImmArgs()
+	if err != nil {
+		return nil, 0, err
+	}
+	cx.rememberConsts(immConsts{bytes: bytes, nextpc: nextpc})
+	return bytes, nextpc, nil
 }
 
 func opIntConstBlock(cx *EvalContext) error {
 	var err error
-	cx.intc, cx.nextpc, err = parseIntImmArgs(cx.program, cx.pc+1)
+	cx.intc, cx.nextpc, err = cx.intConsts()
 	return err
 }
 
@@ -2933,7 +3178,7 @@ func opPushInt(cx *EvalContext) error {
 }
 
 func opPushInts(cx *EvalContext) error {
-	intc, nextpc, err := parseIntImmArgs(cx.program, cx.pc+1)
+	intc, nextpc, err := cx.intConsts()
 	if err != nil {
 		return err
 	}
@@ -2951,7 +3196,7 @@ func opPushInts(cx *EvalContext) error {
 
 func opByteConstBlock(cx *EvalContext) error {
 	var err error
-	cx.bytec, cx.nextpc, err = cx.byteImmArgs()
+	cx.bytec, cx.nextpc, err = cx.byteConsts()
 	return err
 }
 
@@ -3025,7 +3270,7 @@ func (cx *EvalContext) byteImmArgs() ([][]byte, int, error) {
 }
 
 func opPushBytess(cx *EvalContext) error {
-	cbytess, nextpc, err := cx.byteImmArgs()
+	cbytess, nextpc, err := cx.byteConsts()
 	if err != nil {
 		return err
 	}
@@ -4918,10 +5163,8 @@ func (cx *EvalContext) availableAccount(addr basics.Address) bool {
 
 	// Allow an address for an app that was created in group
 	if cx.version >= createdResourcesVersion {
-		for appID := range cx.available.createdApps {
-			if addr == cx.GetApplicationAddress(appID) {
-				return true
-			}
+		if _, ok := cx.available.createdAppAccounts[addr]; ok {
+			return true
 		}
 	}
 
@@ -5879,7 +6122,7 @@ func (cx *EvalContext) assignAsset(sv stackValue) (basics.AssetIndex, error) {
 		return aid, nil
 	}
 
-	return 0, fmt.Errorf("unavailable Asset %d during assignment %v", aid, cx.available)
+	return 0, fmt.Errorf("unavailable Asset %d during assignment", aid)
 }
 
 // availableAsset determines whether an asset is "available". Before
@@ -5981,7 +6224,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		if ok && ver <= cx.version {
 			txn.Type = protocol.TxType(txType)
 		} else {
-			return fmt.Errorf("%s is not a valid Type for itxn_field", txType)
+			return fmt.Errorf("%s is not a valid Type for itxn_field", limitedBytes(sv.Bytes))
 		}
 	case TypeEnum:
 		var i uint64
@@ -6257,7 +6500,7 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 			if cx.FeeCredit != nil {
 				shortfall = shortfall.SubSaturate(*cx.FeeCredit)
 			}
-			return fmt.Errorf("group fee %s too small (needs %s more) %#v", groupPaid, shortfall, cx.subtxns)
+			return fmt.Errorf("group fee %s too small (needs %s more) for %d inner transactions", groupPaid, shortfall, len(cx.subtxns))
 		}
 		*cx.FeeCredit = cx.FeeCredit.SubSaturate(shortfall)
 	} else {
@@ -6667,7 +6910,7 @@ func opJSONRef(cx *EvalContext) error {
 			return fmt.Errorf("error while parsing JSON text, %v", err)
 		}
 
-		return fmt.Errorf("key %s not found in JSON text", key)
+		return fmt.Errorf("key %s not found in JSON text", limitedBytes(key))
 	}
 
 	switch expectedType {

@@ -18,6 +18,8 @@ package agreement
 
 import (
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -62,6 +64,14 @@ type compoundMessage struct {
 // deserializing from some stream.
 type streamTokenizer func([]byte) (any, error)
 
+// clearPKSigOld zeroes the PKSigOld field of a signature received over gossip.
+// No verifier reads that field, and the vote stays valid without it.
+// Certificate verification does not call this, so certificates fetched during
+// catchup are checked as they were encoded.
+func clearPKSigOld(sig *crypto.OneTimeSignature) {
+	clear(sig.PKSigOld[:])
+}
+
 // decodeVote reads a vote from the given stream.
 //
 // It returns an error on failure.
@@ -74,7 +84,7 @@ func decodeVote(data []byte) (any, error) {
 	if err := uv.wellFormed(); err != nil {
 		return nil, err
 	}
-	clear(uv.Sig.PKSigOld[:])
+	clearPKSigOld(&uv.Sig)
 	return uv, nil
 }
 
@@ -91,11 +101,11 @@ func decodeBundle(data []byte) (any, error) {
 		return nil, err
 	}
 	for i := range b.Votes {
-		clear(b.Votes[i].Sig.PKSigOld[:])
+		clearPKSigOld(&b.Votes[i].Sig)
 	}
 	for i := range b.EquivocationVotes {
 		for j := range b.EquivocationVotes[i].Sigs {
-			clear(b.EquivocationVotes[i].Sigs[j].PKSigOld[:])
+			clearPKSigOld(&b.EquivocationVotes[i].Sigs[j])
 		}
 	}
 	return b, nil
@@ -104,20 +114,27 @@ func decodeBundle(data []byte) (any, error) {
 // decodeProposal reads a proposal from the given stream.
 //
 // It returns an error on failure.
+//
+// It reads only the fields before the payset, and keeps data in the proposal
+// for player.decodePayloadIfWanted to decode if agreement wants the payload.
 func decodeProposal(data []byte) (any, error) {
-	var p transmittedPayload
-	err := protocol.Decode(data, &p)
+	pp, err := parsePayloadPrefix(data)
 	if err != nil {
 		return nil, err
 	}
-	if err := p.PriorVote.wellFormed(); err != nil {
+	if err := pp.priorVote.wellFormed(); err != nil {
 		return nil, err
 	}
-	clear(p.PriorVote.Sig.PKSigOld[:])
+	clearPKSigOld(&pp.priorVote.Sig)
 
 	return compoundMessage{
-		Vote:     p.PriorVote,
-		Proposal: p.unauthenticatedProposal,
+		Vote: pp.priorVote,
+		Proposal: unauthenticatedProposal{
+			BlockHeader:      bookkeeping.BlockHeader{Round: pp.round},
+			OriginalPeriod:   pp.originalPeriod,
+			OriginalProposer: pp.originalProposer,
+			deferredPayload:  data,
+		},
 	}, nil
 }
 

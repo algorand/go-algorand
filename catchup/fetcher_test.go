@@ -23,7 +23,6 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -135,21 +134,21 @@ func addBlocks(t *testing.T, ledger *data.Ledger, blk bookkeeping.Block, numBloc
 type basicRPCNode struct {
 	listener net.Listener
 	server   http.Server
-	rmux     *mux.Router
+	rmux     *http.ServeMux
 	peers    []network.Peer
 	mocks.MockNetwork
 }
 
 func (b *basicRPCNode) RegisterHTTPHandler(path string, handler http.Handler) {
 	if b.rmux == nil {
-		b.rmux = mux.NewRouter()
+		b.rmux = http.NewServeMux()
 	}
 	b.rmux.Handle(path, handler)
 }
 
 func (b *basicRPCNode) RegisterHTTPHandlerFunc(path string, handler func(http.ResponseWriter, *http.Request)) {
 	if b.rmux == nil {
-		b.rmux = mux.NewRouter()
+		b.rmux = http.NewServeMux()
 	}
 	b.rmux.HandleFunc(path, handler)
 }
@@ -165,7 +164,7 @@ func (b *basicRPCNode) start() bool {
 		return false
 	}
 	if b.rmux == nil {
-		b.rmux = mux.NewRouter()
+		b.rmux = http.NewServeMux()
 	}
 	b.server.Handler = b.rmux
 	go b.server.Serve(b.listener)

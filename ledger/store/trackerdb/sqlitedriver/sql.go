@@ -520,12 +520,6 @@ func (qs *accountsDbQueries) LookupResources(addr basics.Address, aidx basics.Cr
 				if err != nil {
 					return err
 				}
-				if ctype == basics.AssetCreatable && !data.Data.IsAsset() {
-					return fmt.Errorf("lookupResources asked for an asset but got %v", data.Data)
-				}
-				if ctype == basics.AppCreatable && !data.Data.IsApp() {
-					return fmt.Errorf("lookupResources asked for an app but got %v", data.Data)
-				}
 				return nil
 			}
 			data.Data = trackerdb.MakeResourcesData(0)

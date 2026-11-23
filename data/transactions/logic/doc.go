@@ -55,6 +55,14 @@ var opDescByName = map[string]OpDesc{
 		[]string{"falcon configuration index"},
 		"",
 	},
+	"mldsa_verify": {
+		"for (data A, signature B, pubkey C, context D) verify the ML-DSA signature of the data against the pubkey and context => {0 or 1}",
+		"Pure ML-DSA verification (NIST FIPS 204), with context string D. Use an empty D for the default context. " +
+			"Signature B must be exactly 2420 bytes for MLDSA44, or 3309 bytes for MLDSA65. Pubkey C must be exactly 1312 bytes for MLDSA44, or 1952 bytes for MLDSA65. " +
+			"Context D must be at most 255 bytes.",
+		[]string{"ML-DSA parameter set index"},
+		"",
+	},
 
 	"mimc": {"MiMC hash of scalars A, using curve and parameters specified by configuration C", "" +
 		"A is a non-empty list of concatenated 32 byte big-endian unsigned integer scalars. Fail if A's length is not a multiple of 32 or any element is greater than or equal to the scalar field modulus.\n\n" +
@@ -388,7 +396,7 @@ var OpGroups = map[string][]string{
 	"Byte Array Manipulation": {"getbit", "setbit", "getbyte", "setbyte", "concat", "len", "substring", "substring3", "extract", "extract3", "extract_uint16", "extract_uint32", "extract_uint64", "replace2", "replace3", "base64_decode", "json_ref"},
 	"Byte Array Arithmetic":   {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%", "bsqrt", "bmodexp"},
 	"Byte Array Logic":        {"b|", "b&", "b^", "b~"},
-	"Cryptography":            {"sha256", "keccak256", "sha512_256", "sha3_256", "sha512", "sumhash512", "falcon_verify", "ed25519verify", "ed25519verify_bare", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "vrf_verify", "ec_add", "ec_scalar_mul", "ec_pairing_check", "ec_multi_scalar_mul", "ec_subgroup_check", "ec_map_to", "mimc", "poseidon2"},
+	"Cryptography":            {"sha256", "keccak256", "sha512_256", "sha3_256", "sha512", "sumhash512", "falcon_verify", "ed25519verify", "ed25519verify_bare", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "vrf_verify", "ec_add", "ec_scalar_mul", "ec_pairing_check", "ec_multi_scalar_mul", "ec_subgroup_check", "ec_map_to", "mimc", "poseidon2", "mldsa_verify"},
 	"Loading Values":          {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "pushints", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "pushbytess", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gloadss", "gaid", "gaids"},
 	"Flow Control":            {"err", "bnz", "bz", "b", "return", "pop", "popn", "dup", "dup2", "dupn", "dig", "bury", "cover", "uncover", "frame_dig", "frame_bury", "swap", "select", "assert", "callsub", "proto", "retsub", "switch", "match"},
 	"Block Access":            {"online_stake", "log", "block"},

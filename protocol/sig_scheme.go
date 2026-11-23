@@ -16,31 +16,31 @@
 
 package protocol
 
-// PQScheme is a 2-byte ASCII identifier of an account authorization scheme.
+// SigScheme is a 2-byte ASCII identifier of an account authorization scheme.
 // Conventionally, the first byte identifies the DSA family, and the second
 // identifies the version or variant.
 //
-//msgp:test ignore PQScheme
-type PQScheme [2]byte
+//msgp:test ignore SigScheme
+type SigScheme [2]byte
 
-func (s PQScheme) String() string {
+func (s SigScheme) String() string {
 	return string(s[:])
 }
 
 // Supported account authorization schemes.
 var (
-	// PQSchemeEd25519 - ed: classical Ed25519 with a hashed-address profile.
-	PQSchemeEd25519 = PQScheme{'e', 'd'}
+	// SigSchemeEd25519 - ed: classical Ed25519 with a salted-address profile.
+	SigSchemeEd25519 = SigScheme{'e', 'd'}
 
-	// PQSchemeFalcon1024 - f1: Falcon-1024 using a deterministic signing profile.
-	PQSchemeFalcon1024 = PQScheme{'f', '1'}
+	// SigSchemeFalcon1024 - f1: Falcon-1024 using a deterministic signing profile.
+	SigSchemeFalcon1024 = SigScheme{'f', '1'}
 
-	// PQSchemeFalcon512 - f5: Falcon-512 using a deterministic signing profile.
-	PQSchemeFalcon512 = PQScheme{'f', '5'}
+	// SigSchemeFalcon512 - f5: Falcon-512 using a deterministic signing profile.
+	SigSchemeFalcon512 = SigScheme{'f', '5'}
 
-	// PQSchemeLogicSig - ls: a LogicSig account. The program bytes take the place
+	// SigSchemeLogicSig - ls: a LogicSig account. The program bytes take the place
 	// of the public key, so the account address commits to the program, and the
 	// salt selects among the addresses a single program can have. Authorization is
 	// the program's own evaluation rather than a signature check.
-	PQSchemeLogicSig = PQScheme{'l', 's'}
+	SigSchemeLogicSig = SigScheme{'l', 's'}
 )

@@ -123,7 +123,11 @@ func (dh *dumpHandler) Handle(msg network.IncomingMessage) network.OutgoingMessa
 
 	case protocol.ProposalPayloadTag:
 		var p agreement.TransmittedPayload
-		err := protocol.Decode(msg.Data, &p)
+		// The network delivers proposal payloads still compressed.
+		payload, err := network.DecompressProposal(msg.Data)
+		if err == nil {
+			err = protocol.Decode(payload, &p)
+		}
 		if err != nil {
 			data = fmt.Sprintf("[decode error: %v]", err)
 			goto print

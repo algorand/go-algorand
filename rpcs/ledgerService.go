@@ -27,8 +27,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gorilla/mux"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger"
@@ -42,9 +40,9 @@ const (
 
 	ledgerServerMaxBodyLength = 512 // we don't really pass meaningful content here, so 512 bytes should be a safe limit
 
-	// LedgerServiceLedgerPath is the path to register LedgerService as a handler for when using gorilla/mux
+	// LedgerServiceLedgerPath is the http.ServeMux pattern to register LedgerService as a handler
 	// e.g. .Handle(LedgerServiceLedgerPath, &ls)
-	LedgerServiceLedgerPath = "/v{version:[0-9.]+}/{genesisID}/ledger/{round:[0-9a-z]+}"
+	LedgerServiceLedgerPath = "/v1/{genesisID}/ledger/{round}"
 
 	// maxCatchpointFileSize is the default catchpoint file size, if we can't get a concreate number from the ledger.
 	maxCatchpointFileSize = 512 * 1024 * 1024 // 512MB
@@ -83,7 +81,7 @@ func MakeLedgerService(config config.Local, ledger LedgerForService, net httpGos
 		net:           net,
 		enableService: config.EnableLedgerService,
 	}
-	// the underlying gorilla/mux doesn't support "unregister", so we're forced to implement it ourselves.
+	// the underlying http.ServeMux doesn't support "unregister", so we're forced to implement it ourselves.
 	if service.enableService {
 		net.RegisterHTTPHandler(LedgerServiceLedgerPath, service)
 	}
@@ -109,8 +107,8 @@ func (ls *LedgerService) Stop() {
 }
 
 // ServeHTTP returns ledgers for a particular round
-// Either /v{version}/{genesisID}/ledger/{round} or ?r={round}&v={version}
-// Uses gorilla/mux for path argument parsing.
+// Either /v1/{genesisID}/ledger/{round} or ?r={round}&v={version}
+// Uses http.ServeMux path values, set by LedgerServiceLedgerPath.
 func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	ls.stopping.Add(1)
 	defer ls.stopping.Done()
@@ -118,19 +116,9 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		response.WriteHeader(http.StatusNotFound)
 		return
 	}
-	pathVars := mux.Vars(request)
-	versionStr, hasVersionStr := pathVars["version"]
-	roundStr, hasRoundStr := pathVars["round"]
-	genesisID, hasGenesisID := pathVars["genesisID"]
-	if hasVersionStr {
-		if versionStr != "1" {
-			logging.Base().Debugf("LedgerService.ServeHTTP: bad version '%s'", versionStr)
-			response.WriteHeader(http.StatusBadRequest)
-			response.Write([]byte(fmt.Sprintf("unsupported version '%s'", versionStr)))
-			return
-		}
-	}
-	if hasGenesisID {
+	roundStr := request.PathValue("round")
+	genesisID := request.PathValue("genesisID")
+	if genesisID != "" {
 		if ls.genesisID != genesisID {
 			logging.Base().Debugf("LedgerService.ServeHTTP: bad genesisID mine=%#v theirs=%#v", ls.genesisID, genesisID)
 			response.WriteHeader(http.StatusBadRequest)
@@ -143,7 +131,7 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		response.Write([]byte("missing genesisID"))
 		return
 	}
-	if (!hasVersionStr) || (!hasRoundStr) {
+	if roundStr == "" {
 		// try query arg ?r={round}
 		request.Body = http.MaxBytesReader(response, request.Body, ledgerServerMaxBodyLength)
 		err := request.ParseForm()
@@ -165,7 +153,7 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		if ok {
 			if len(versionStrs) == 1 {
 				if versionStrs[0] != "1" {
-					logging.Base().Debugf("LedgerService.ServeHTTP: bad version '%s'", versionStr)
+					logging.Base().Debugf("LedgerService.ServeHTTP: bad version '%s'", versionStrs[0])
 					response.Header().Set("Content-Type", "text/plain; charset=utf-8")
 					response.Header().Set("X-Content-Type-Options", "nosniff")
 					response.WriteHeader(http.StatusBadRequest)

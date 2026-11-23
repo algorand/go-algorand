@@ -192,7 +192,7 @@ elif [ "${OS}" = "darwin" ]; then
         ln -s "$openssl11_target" "$openssl_link"
     fi
 elif [ "${OS}" = "windows" ]; then
-    if ! $msys2 pacman -S --disable-download-timeout --noconfirm git automake autoconf m4 libtool make mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-python mingw-w64-ucrt-x86_64-jq unzip procps; then
+    if ! $msys2 pacman -S --disable-download-timeout --noconfirm git automake autoconf m4 libtool make mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-python mingw-w64-ucrt-x86_64-jq unzip procps-ng; then
         echo "Error installing pacman dependencies"
         exit 1
     fi

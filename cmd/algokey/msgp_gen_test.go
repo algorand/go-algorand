@@ -13,9 +13,9 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestMarshalUnmarshalpqPublicMaterial(t *testing.T) {
+func TestMarshalUnmarshalsaltedPublicMaterial(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := pqPublicMaterial{}
+	v := saltedPublicMaterial{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -34,12 +34,12 @@ func TestMarshalUnmarshalpqPublicMaterial(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingpqPublicMaterial(t *testing.T) {
-	protocol.RunEncodingTest(t, &pqPublicMaterial{})
+func TestRandomizedEncodingsaltedPublicMaterial(t *testing.T) {
+	protocol.RunEncodingTest(t, &saltedPublicMaterial{})
 }
 
-func BenchmarkMarshalMsgpqPublicMaterial(b *testing.B) {
-	v := pqPublicMaterial{}
+func BenchmarkMarshalMsgsaltedPublicMaterial(b *testing.B) {
+	v := saltedPublicMaterial{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -47,8 +47,8 @@ func BenchmarkMarshalMsgpqPublicMaterial(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgpqPublicMaterial(b *testing.B) {
-	v := pqPublicMaterial{}
+func BenchmarkAppendMsgsaltedPublicMaterial(b *testing.B) {
+	v := saltedPublicMaterial{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -59,8 +59,8 @@ func BenchmarkAppendMsgpqPublicMaterial(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalpqPublicMaterial(b *testing.B) {
-	v := pqPublicMaterial{}
+func BenchmarkUnmarshalsaltedPublicMaterial(b *testing.B) {
+	v := saltedPublicMaterial{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -73,9 +73,9 @@ func BenchmarkUnmarshalpqPublicMaterial(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalpqSigningMaterial(t *testing.T) {
+func TestMarshalUnmarshalsaltedSigningMaterial(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := pqSigningMaterial{}
+	v := saltedSigningMaterial{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -94,12 +94,12 @@ func TestMarshalUnmarshalpqSigningMaterial(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingpqSigningMaterial(t *testing.T) {
-	protocol.RunEncodingTest(t, &pqSigningMaterial{})
+func TestRandomizedEncodingsaltedSigningMaterial(t *testing.T) {
+	protocol.RunEncodingTest(t, &saltedSigningMaterial{})
 }
 
-func BenchmarkMarshalMsgpqSigningMaterial(b *testing.B) {
-	v := pqSigningMaterial{}
+func BenchmarkMarshalMsgsaltedSigningMaterial(b *testing.B) {
+	v := saltedSigningMaterial{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -107,8 +107,8 @@ func BenchmarkMarshalMsgpqSigningMaterial(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgpqSigningMaterial(b *testing.B) {
-	v := pqSigningMaterial{}
+func BenchmarkAppendMsgsaltedSigningMaterial(b *testing.B) {
+	v := saltedSigningMaterial{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -119,8 +119,8 @@ func BenchmarkAppendMsgpqSigningMaterial(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalpqSigningMaterial(b *testing.B) {
-	v := pqSigningMaterial{}
+func BenchmarkUnmarshalsaltedSigningMaterial(b *testing.B) {
+	v := saltedSigningMaterial{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))

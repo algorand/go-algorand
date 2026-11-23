@@ -108,7 +108,23 @@ func (d *demux) UpdateEventsQueue(queueName string, queueLength int) {
 
 // tokenizeMessages tokenizes a raw message stream
 func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.Tag, tokenize streamTokenizer) <-chan message {
-	networkMessages := net.Messages(tag)
+	// next returns the next raw message, or false once there are no more.
+	var next func() (Message, bool)
+	if tag == protocol.ProposalPayloadTag {
+		// A proposal payload is taken only when this goroutine is ready to
+		// decode it, so the Network chooses it as late as possible.
+		next = func() (Message, bool) { return net.NextProposal(ctx) }
+	} else {
+		networkMessages := net.Messages(tag)
+		next = func() (Message, bool) {
+			select {
+			case raw, ok := <-networkMessages:
+				return raw, ok
+			case <-ctx.Done():
+				return Message{}, false
+			}
+		}
+	}
 	decoded := make(chan message)
 	go func() {
 		defer func() {
@@ -116,61 +132,51 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 		}()
 		util.SetGoroutineLabels("tokenizeTag", string(tag))
 		for {
-			select {
-			case raw, ok := <-networkMessages:
-				if !ok {
-					return
-				}
-				d.UpdateEventsQueue(eventQueueTokenizing[tag], 1)
+			raw, ok := next()
+			if !ok {
+				return
+			}
+			d.UpdateEventsQueue(eventQueueTokenizing[tag], 1)
 
-				o, err := tokenize(raw.Data)
-				if err != nil {
-					if tag == protocol.ProposalPayloadTag {
-						d.log.Warnf("dropping proposal that failed to decode: %v", err)
-						d.UpdateEventsQueue(eventQueueTokenizing[tag], 0)
-						continue
-					}
-					warnMsg := fmt.Sprintf("disconnecting from peer: error decoding message tagged %v: %v", tag, err)
-					// check protocol version
-					cv, cvErr := d.ledger.ConsensusVersion(d.ledger.NextRound())
-					if cvErr == nil {
-						if _, found := config.Consensus[cv]; !found {
-							warnMsg = fmt.Sprintf("received proposal message was ignored. The node binary doesn't support the next network consensus (%v) and would no longer be able to process agreement messages", cv)
-						}
-					}
-					d.log.Warn(warnMsg)
-					net.Disconnect(raw.MessageHandle)
+			o, err := tokenize(raw.Data)
+			if err != nil {
+				if tag == protocol.ProposalPayloadTag {
+					d.log.Warnf("dropping proposal that failed to decode: %v", err)
 					d.UpdateEventsQueue(eventQueueTokenizing[tag], 0)
 					continue
 				}
-
-				var msg message
-				switch tag {
-				case protocol.AgreementVoteTag:
-					msg = message{messageHandle: raw.MessageHandle, Tag: tag, UnauthenticatedVote: o.(unauthenticatedVote)}
-				case protocol.VoteBundleTag:
-					msg = message{messageHandle: raw.MessageHandle, Tag: tag, UnauthenticatedBundle: o.(unauthenticatedBundle)}
-				case protocol.ProposalPayloadTag:
-					cm := o.(compoundMessage)
-					if proposalCarriesInvalidTxn(cm.Proposal) {
-						d.log.Warn("dropping proposal with a malformed transaction payload")
-						d.UpdateEventsQueue(eventQueueTokenizing[tag], 0)
-						continue
+				warnMsg := fmt.Sprintf("disconnecting from peer: error decoding message tagged %v: %v", tag, err)
+				// check protocol version
+				cv, cvErr := d.ledger.ConsensusVersion(d.ledger.NextRound())
+				if cvErr == nil {
+					if _, found := config.Consensus[cv]; !found {
+						warnMsg = fmt.Sprintf("received message was ignored. The node binary doesn't support the next network consensus (%v) and would no longer be able to process agreement messages", cv)
 					}
-					msg = message{messageHandle: raw.MessageHandle, Tag: tag, CompoundMessage: cm}
-				default:
-					err := fmt.Errorf("bad message tag: %v", tag)
-					d.UpdateEventsQueue(fmt.Sprintf("Tokenizing-%s", tag), 0)
-					panic(err)
 				}
-				d.UpdateEventsQueue(eventQueueTokenized[tag], 1)
+				d.log.Warn(warnMsg)
+				net.Disconnect(raw.MessageHandle)
 				d.UpdateEventsQueue(eventQueueTokenizing[tag], 0)
+				continue
+			}
 
-				select {
-				case decoded <- msg:
-				case <-ctx.Done():
-					return
-				}
+			var msg message
+			switch tag {
+			case protocol.AgreementVoteTag:
+				msg = message{messageHandle: raw.MessageHandle, Tag: tag, UnauthenticatedVote: o.(unauthenticatedVote)}
+			case protocol.VoteBundleTag:
+				msg = message{messageHandle: raw.MessageHandle, Tag: tag, UnauthenticatedBundle: o.(unauthenticatedBundle)}
+			case protocol.ProposalPayloadTag:
+				msg = message{messageHandle: raw.MessageHandle, Tag: tag, CompoundMessage: o.(compoundMessage)}
+			default:
+				err := fmt.Errorf("bad message tag: %v", tag)
+				d.UpdateEventsQueue(fmt.Sprintf("Tokenizing-%s", tag), 0)
+				panic(err)
+			}
+			d.UpdateEventsQueue(eventQueueTokenized[tag], 1)
+			d.UpdateEventsQueue(eventQueueTokenizing[tag], 0)
+
+			select {
+			case decoded <- msg:
 			case <-ctx.Done():
 				return
 			}

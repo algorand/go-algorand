@@ -70,6 +70,11 @@ type roundCowParent interface {
 	kvGet(key string) ([]byte, bool, error)
 	GetStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
 	GenesisHash() crypto.Digest
+
+	// recordCreatedApp passes word of an app created in this block down to
+	// the roundCowBase, which then knows that the app's account had no
+	// resources as of the previous block.
+	recordCreatedApp(aidx basics.AppIndex)
 }
 
 // When adding new fields make sure to clear them in the roundCowState.recycle() as well to avoid dirty state

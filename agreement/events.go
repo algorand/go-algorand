@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -235,6 +237,12 @@ const (
 	// checkpointReached indicates that we've completly persisted the agreement state to disk.
 	// it's invoked by the end of the persistence loop on either success or failuire.
 	checkpointReached
+
+	// readWantedPayloads is sent to the proposalStore to ask which
+	// proposal-values from some original period and proposer still want a
+	// payload, before a received payload is decoded. It is returned by the
+	// store with the answer.
+	readWantedPayloads
 )
 
 type emptyEvent struct{}
@@ -452,6 +460,11 @@ type newPeriodEvent struct {
 	// Proposal holds the proposal-value that the new period may want to
 	// agree on.  It is used to update the pinned value.
 	Proposal proposalValue
+	// ResumeHeld is set if the proposalStore should resume a held payload
+	// which the new period is interested in.  It is set only for a
+	// nextThreshold: a soft/certThreshold updates Relevant after newPeriod, so
+	// the proposalStore resumes held payloads while handling the threshold.
+	ResumeHeld bool
 }
 
 func (e newPeriodEvent) t() eventType {
@@ -499,6 +512,11 @@ type proposalAcceptedEvent struct {
 	// payload if this is the case.
 	Payload   proposal
 	PayloadOk bool
+
+	// Pipelined holds the payloadPipelined event for a held payload whose
+	// validation became due on the event which produced this one, if any;
+	// otherwise Pipelined.T is none.
+	Pipelined payloadProcessedEvent
 }
 
 func (e proposalAcceptedEvent) t() eventType {
@@ -536,6 +554,9 @@ type committableEvent struct {
 
 	// the proposal-vote that authenticated the payload (if one exists)
 	Vote vote
+
+	// Pipelined is as in proposalAcceptedEvent, for a soft/certThreshold.
+	Pipelined payloadProcessedEvent
 }
 
 func (e committableEvent) t() eventType {
@@ -559,11 +580,17 @@ type payloadProcessedEvent struct {
 	Round round
 	// Period is the period that is interested in this payload.
 	// For reproposed payloads this may be different from the
-	// original period in which the block was proposed.
+	// original period in which the block was proposed.  If the
+	// payload is relevant to a period which has started, Period is
+	// the latest such period.  Period is not set if Held is set.
 	Period period
 	// Pinned is set if this is a pinned payload.  If Pinned is set,
 	// Period will be 0.
 	Pinned bool
+	// Held is set if the proposalStore holds the payload without a
+	// validation request because only a period which has not started is
+	// interested in it.
+	Held bool
 
 	// Proposal is the proposal-value that corresponds to the payload.
 	Proposal proposalValue
@@ -689,6 +716,31 @@ func (e pinnedValueEvent) String() string {
 }
 
 func (e pinnedValueEvent) ComparableStr() string {
+	return e.String()
+}
+
+type wantedPayloadsEvent struct {
+	// Round is the round of the payload, and of the proposalStore asked.
+	Round round
+	// OriginalPeriod and OriginalProposer are those of the payload.
+	OriginalPeriod   period
+	OriginalProposer basics.Address
+
+	// EncodingDigests holds the EncodingDigest of each proposal-value with
+	// this OriginalPeriod and OriginalProposer whose blockAssembler has not
+	// been filled or assembled yet.
+	EncodingDigests []crypto.Digest
+}
+
+func (e wantedPayloadsEvent) t() eventType {
+	return readWantedPayloads
+}
+
+func (e wantedPayloadsEvent) String() string {
+	return fmt.Sprintf("%v: %v %v %v %d", e.t().String(), e.Round, e.OriginalPeriod, e.OriginalProposer, len(e.EncodingDigests))
+}
+
+func (e wantedPayloadsEvent) ComparableStr() string {
 	return e.String()
 }
 

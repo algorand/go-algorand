@@ -17,25 +17,37 @@
 package logic
 
 import (
+	"bytes"
+	"compress/gzip"
+	"context"
+	stdcrypto "crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/mldsa"
 	"crypto/rand"
 	"crypto/sha256"
+	stdsha3 "crypto/sha3"
 	"crypto/sha512"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math/big"
+	"os"
+	"os/exec"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/secp256k1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -364,6 +376,17 @@ func falconVerifyBench(b *testing.B, config FalconConfig, msg []byte) string {
 		msg, sig, pk, config)
 }
 
+// mldsaVerifyBench builds a BenchmarkVerify entry for mldsa_verify, with its
+// inputs in a bytecblock, since benchmarkOperation repeats the operation 2000
+// times.
+func mldsaVerifyBench(b *testing.B, config MLDSAConfig, msg []byte) []string {
+	pk, sig := mldsaTestSign(b, config, msg, nil)
+	return []string{"mldsa_verify " + config.String(),
+		fmt.Sprintf("bytecblock 0x%x 0x%x 0x%x 0x", msg, sig, pk),
+		fmt.Sprintf("bytec_0; bytec_1; bytec_2; bytec_3; mldsa_verify %s; assert", config),
+		"int 1"}
+}
+
 // BenchmarkVerify is useful to see relative speeds of various crypto verify functions
 func BenchmarkVerify(b *testing.B) {
 	benchMsg, err := hex.DecodeString("62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd")
@@ -396,6 +419,8 @@ ecdsa_verify Secp256r1
 assert`, "int 1"},
 		{"falcon_verify FalconDet1024", "", falconVerifyBench(b, FalconDet1024, benchMsg), "int 1"},
 		{"falcon_verify FalconDet512", "", falconVerifyBench(b, FalconDet512, benchMsg), "int 1"},
+		mldsaVerifyBench(b, MLDSA44, benchMsg),
+		mldsaVerifyBench(b, MLDSA65, benchMsg),
 		{"vrf_verify", "", `byte 0x72
 byte 0xae5b66bdf04b4c010bfe32b2fc126ead2107b697634f6f7337b9bff8785ee111200095ece87dde4dbe87343f6df3b107d91798c8a7eb1245d3bb9c5aafb093358c13e6ae1111a55717e895fd15f99f07
 byte 0x3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c
@@ -1199,4 +1224,337 @@ pop
 int 1`
 		benchmarkEcdsa(b, source, Secp256k1)
 	})
+}
+
+// mldsaTestKey returns a fixed key for config.
+func mldsaTestKey(tb testing.TB, config MLDSAConfig) *mldsa.PrivateKey {
+	fs, ok := mldsaConfigSpecByField(config)
+	require.True(tb, ok)
+	sk, err := mldsa.NewPrivateKey(fs.params, slices.Repeat([]byte{byte(config) + 1}, mldsa.PrivateKeySize))
+	require.NoError(tb, err)
+	return sk
+}
+
+// mldsaTestSign signs msg under ctx, deterministically, with a fixed key for
+// config.
+func mldsaTestSign(tb testing.TB, config MLDSAConfig, msg, ctx []byte) (pk, sig []byte) {
+	sk := mldsaTestKey(tb, config)
+	sig, err := sk.SignDeterministic(msg, &mldsa.Options{Context: string(ctx)})
+	require.NoError(tb, err)
+	return sk.PublicKey().Bytes(), sig
+}
+
+// mldsaArgsProgram takes mldsa_verify's inputs from LogicSig args, so that
+// their lengths are not known at assembly time.
+func mldsaArgsProgram(config MLDSAConfig) string {
+	return "arg 0; arg 1; arg 2; arg 3; mldsa_verify " + config.String()
+}
+
+func TestMLDSAVerify(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, config := range []MLDSAConfig{MLDSA44, MLDSA65} {
+		t.Run(config.String(), func(t *testing.T) {
+			t.Parallel()
+			yes := testProg(t, mldsaArgsProgram(config), mldsaVersion)
+			no := testProg(t, mldsaArgsProgram(config)+"; !", mldsaVersion)
+			for _, msgLen := range []int{0, 1, 32, maxStringSize} {
+				for _, ctxLen := range []int{0, 1, mldsaMaxContextSize} {
+					msg := make([]byte, msgLen)
+					crypto.RandBytes(msg)
+					ctx := make([]byte, ctxLen)
+					crypto.RandBytes(ctx)
+					pk, sig := mldsaTestSign(t, config, msg, ctx)
+					randomized, err := mldsaTestKey(t, config).Sign(nil, msg, &mldsa.Options{Context: string(ctx)})
+					require.NoError(t, err)
+
+					for _, sig := range [][]byte{sig, randomized} {
+						var txn transactions.SignedTxn
+						txn.Lsig.Args = [][]byte{msg, sig, pk, ctx}
+						testLogicBytes(t, yes.Program, defaultSigParams(txn))
+						testLogicBytes(t, no.Program, defaultSigParams(txn), "REJECT")
+
+						// Flipping a bit of any input, at the same length,
+						// fails verification.
+						for _, arg := range txn.Lsig.Args {
+							if len(arg) == 0 {
+								continue
+							}
+							arg[0] ^= 1
+							testLogicBytes(t, yes.Program, defaultSigParams(txn), "REJECT")
+							testLogicBytes(t, no.Program, defaultSigParams(txn))
+							arg[0] ^= 1
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestMLDSAVerifyExternalMu checks that a signature made through the
+// external-mu interface (RFC 9881), with mu computed here from FIPS 204's
+// definition, verifies against the original message.
+func TestMLDSAVerifyExternalMu(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, config := range []MLDSAConfig{MLDSA44, MLDSA65} {
+		sk := mldsaTestKey(t, config)
+		pk := sk.PublicKey().Bytes()
+		msg := []byte("signed by a remote signer that only sees mu")
+		ctx := []byte("context")
+
+		// tr = H(pk, 64), and mu = H(tr || M', 64) where M' = 0 || |ctx| || ctx || M.
+		h := stdsha3.NewSHAKE256()
+		h.Write(stdsha3.SumSHAKE256(pk, 64))
+		h.Write([]byte{0, byte(len(ctx))})
+		h.Write(ctx)
+		h.Write(msg)
+		mu := make([]byte, 64)
+		h.Read(mu)
+		sig, err := sk.Sign(nil, mu, stdcrypto.MLDSAMu)
+		require.NoError(t, err)
+
+		ops := testProg(t, mldsaArgsProgram(config), mldsaVersion)
+		var txn transactions.SignedTxn
+		txn.Lsig.Args = [][]byte{msg, sig, pk, ctx}
+		testLogicBytes(t, ops.Program, defaultSigParams(txn))
+		txn.Lsig.Args = [][]byte{msg, sig, pk, nil}
+		testLogicBytes(t, ops.Program, defaultSigParams(txn), "REJECT")
+	}
+}
+
+// TestMLDSAVerifyStack checks that mldsa_verify consumes exactly its four
+// arguments, in both modes.
+func TestMLDSAVerifyStack(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	msg := []byte("stack")
+	ctx := []byte("ctx")
+	pk, sig := mldsaTestSign(t, MLDSA44, msg, ctx)
+	source := fmt.Sprintf(`int 7; byte 0x%x; byte 0x%x; byte 0x%x; byte 0x%x; mldsa_verify MLDSA44
+assert; int 7; ==`, msg, sig, pk, ctx)
+	testLogic(t, source, mldsaVersion, defaultSigParams())
+
+	// An app call has a 700 budget, so it takes six pooled calls.
+	call := transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.ApplicationCallTx}}
+	apps := func(n int) ([]string, []transactions.SignedTxn) {
+		return append([]string{source}, make([]string, n-1)...), slices.Repeat([]transactions.SignedTxn{call}, n)
+	}
+	programs, group := apps(5)
+	testApps(t, programs, group, nil, nil, exp(0, "dynamic cost budget exceeded, executing mldsa_verify"))
+	programs, group = apps(6)
+	testApps(t, programs, group, nil, nil)
+}
+
+// TestMLDSAVerifyCost pins mldsa_verify's costs, which grow with the message
+// but not the context, and checks that eval charges exactly that, whether or
+// not the signature is valid.
+func TestMLDSAVerifyCost(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// cost by message length
+	costs := map[MLDSAConfig]map[int]int{
+		MLDSA44: {0: 3700, 1: 3705, 64: 3705, 65: 3710, maxStringSize: 4020},
+		MLDSA65: {0: 5850, 1: 5855, 64: 5855, 65: 5860, maxStringSize: 6170},
+	}
+	for cfg, byLength := range costs {
+		// End the program at mldsa_verify, so that the four arg opcodes,
+		// costing 1 each, are its only other cost.
+		program := testProg(t, mldsaArgsProgram(cfg), mldsaVersion).Program
+		program = program[:bytes.IndexByte(program, 0xe8)+2]
+
+		for msgLen, cost := range byLength {
+			for _, ctxLen := range []int{0, mldsaMaxContextSize} {
+				msg := make([]byte, msgLen)
+				ctx := make([]byte, ctxLen)
+				pk, sig := mldsaTestSign(t, cfg, msg, ctx)
+				invalid := slices.Clone(sig)
+				invalid[0] ^= 1
+				for _, s := range [][]byte{sig, invalid} {
+					args := [][]byte{msg, s, pk, ctx}
+					withBudget := func(budget int) *EvalParams {
+						var txn transactions.SignedTxn
+						txn.Lsig.Logic = program
+						txn.Lsig.Args = args
+						return optSigParams(func(p *config.ConsensusParams) { p.LogicSigMaxCost = uint64(budget) }, txn)
+					}
+					name := fmt.Sprintf("%s msg=%d ctx=%d", cfg, msgLen, ctxLen)
+					pass, cx, err := EvalSignatureProgram(program, args, 0, withBudget(4+cost))
+					require.NoError(t, err, name)
+					require.Equal(t, bytes.Equal(s, sig), pass, name)
+					require.Equal(t, 4+cost, cx.Cost(), name)
+
+					_, _, err = EvalSignatureProgram(program, args, 0, withBudget(4+cost-1))
+					require.ErrorContains(t, err, fmt.Sprintf("dynamic cost budget exceeded, executing mldsa_verify (%d): local program cost was 4", cost), name)
+				}
+			}
+		}
+	}
+}
+
+func TestMLDSAVerifyInputs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testProg(t, "arg 0; arg 1; arg 2; arg 3; mldsa_verify", mldsaVersion,
+		exp(1, "mldsa_verify expects 1 immediate argument"))
+	testProg(t, "arg 0; arg 1; arg 2; arg 3; mldsa_verify MLDSA87", mldsaVersion,
+		exp(1, "mldsa_verify unknown field: \"MLDSA87\""))
+	testProg(t, mldsaArgsProgram(MLDSA44), mldsaVersion-1,
+		exp(1, "mldsa_verify opcode was introduced in v14"))
+
+	for _, config := range []MLDSAConfig{MLDSA44, MLDSA65} {
+		fs, ok := mldsaConfigSpecByField(config)
+		require.True(t, ok)
+		pkLen, sigLen := fs.params.PublicKeySize(), fs.params.SignatureSize()
+		msg := []byte("inputs")
+		pk, sig := mldsaTestSign(t, config, msg, nil)
+
+		// Constants of the wrong length are caught by the assembler.
+		constants := func(sigLen, pkLen, ctxLen int) string {
+			return fmt.Sprintf("byte 0x01; byte 0x%s; byte 0x%s; byte 0x%s; mldsa_verify %s",
+				strings.Repeat("aa", sigLen), strings.Repeat("bb", pkLen), strings.Repeat("cc", ctxLen), config)
+		}
+		testProg(t, constants(sigLen, pkLen, mldsaMaxContextSize), mldsaVersion)
+		testProg(t, constants(sigLen-1, pkLen, 0), mldsaVersion,
+			exp(1, fmt.Sprintf("...wanted type [%d]byte got [%d]byte", sigLen, sigLen-1)))
+		testProg(t, constants(sigLen, pkLen+1, 0), mldsaVersion,
+			exp(1, fmt.Sprintf("...wanted type [%d]byte got [%d]byte", pkLen, pkLen+1)))
+		testProg(t, constants(sigLen, pkLen, mldsaMaxContextSize+1), mldsaVersion,
+			exp(1, "...wanted type [<=255]byte got [256]byte"))
+
+		// Inputs of unknown length are checked when the opcode runs.
+		ops := testProg(t, mldsaArgsProgram(config), mldsaVersion)
+		run := func(sig, pk, ctx []byte, problem string) {
+			var txn transactions.SignedTxn
+			txn.Lsig.Args = [][]byte{msg, sig, pk, ctx}
+			testLogicBytes(t, ops.Program, defaultSigParams(txn), problem)
+		}
+		run(sig, pk, nil, "")
+		run(sig[:sigLen-1], pk, nil, fmt.Sprintf("invalid signature size %d != %d", sigLen-1, sigLen))
+		run(append(slices.Clone(sig), 0), pk, nil, fmt.Sprintf("invalid signature size %d != %d", sigLen+1, sigLen))
+		run(sig, pk[:pkLen-1], nil, fmt.Sprintf("invalid public key size %d != %d", pkLen-1, pkLen))
+		run(sig, append(slices.Clone(pk), 0), nil, fmt.Sprintf("invalid public key size %d != %d", pkLen+1, pkLen))
+		run(sig, pk, make([]byte, mldsaMaxContextSize+1), "context too long 256 > 255")
+
+		// A parameter set the opcode does not know has no cost, so a program
+		// that names one is rejected before mldsa_verify runs.
+		bad := slices.Clone(ops.Program)
+		imm := bytes.IndexByte(bad, 0xe8) + 1
+		require.Equal(t, byte(config), bad[imm])
+		bad[imm] = byte(invalidMLDSAConfig)
+		var txn transactions.SignedTxn
+		txn.Lsig.Args = [][]byte{msg, sig, pk, nil}
+		testLogicBytes(t, bad, defaultSigParams(txn), "mldsa_verify reported non-positive cost", "mldsa_verify returned 0 cost")
+	}
+}
+
+// TestMLDSAVerifyVectors runs a selection of Wycheproof and NIST ACVP vectors,
+// described in testdata/mldsa_vectors.json.gz, through the opcode. Vectors
+// whose message exceeds the AVM's value size are skipped. Go's own tests run
+// the full sets against crypto/mldsa; these check how the opcode uses it.
+func TestMLDSAVerifyVectors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	f, err := os.Open("testdata/mldsa_vectors.json.gz")
+	require.NoError(t, err)
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
+	require.NoError(t, err)
+	var vectors struct {
+		Cases []struct {
+			ParameterSet string `json:"parameterSet"`
+			Source       string `json:"source"`
+			TcID         int    `json:"tcId"`
+			Expect       string `json:"expect"`
+			PK           string `json:"pk"`
+			Msg          string `json:"msg"`
+			Ctx          string `json:"ctx"`
+			Sig          string `json:"sig"`
+		} `json:"cases"`
+	}
+	require.NoError(t, json.NewDecoder(gz).Decode(&vectors))
+	unhex := func(s string) []byte {
+		b, err := hex.DecodeString(s)
+		require.NoError(t, err)
+		return b
+	}
+
+	configs := map[string]MLDSAConfig{"ML-DSA-44": MLDSA44, "ML-DSA-65": MLDSA65}
+	ran := 0
+	for _, v := range vectors.Cases {
+		config, ok := configs[v.ParameterSet]
+		msg := unhex(v.Msg)
+		if !ok || len(msg) > maxStringSize {
+			continue
+		}
+		ran++
+		desc := fmt.Sprintf("%s %s tcId %d", v.ParameterSet, v.Source, v.TcID)
+		program := testProg(t, mldsaArgsProgram(config), mldsaVersion).Program
+		args := [][]byte{msg, unhex(v.Sig), unhex(v.PK), unhex(v.Ctx)}
+		var txn transactions.SignedTxn
+		txn.Lsig.Logic = program
+		txn.Lsig.Args = args
+		pass, _, err := EvalSignatureProgram(program, args, 0, defaultSigParams(txn))
+		switch v.Expect {
+		case "valid":
+			require.NoError(t, err, desc)
+			require.True(t, pass, desc)
+		case "invalid":
+			require.NoError(t, err, desc)
+			require.False(t, pass, desc)
+		case "malformed":
+			require.Error(t, err, desc)
+		default:
+			require.Fail(t, "unknown expectation", desc)
+		}
+	}
+	require.Equal(t, 25, ran)
+}
+
+// TestMLDSAFIPS140v1 checks that a binary built against the FIPS 140-3 Go
+// Cryptographic Module v1.0.0, which has no ML-DSA, refuses to start instead of
+// rejecting every mldsa_verify signature.
+func TestMLDSAFIPS140v1(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("builds a binary against the FIPS 140-3 v1.0.0 module")
+	}
+	gocmd, err := exec.LookPath("go")
+	if err != nil {
+		t.Skip("no go command")
+	}
+
+	// GOFLAGS could hold flags, like -modfile, whose paths only make sense
+	// where the parent test was started, so the child does without them.
+	var env []string
+	for _, kv := range os.Environ() {
+		if !strings.HasPrefix(kv, "GOFLAGS=") && !strings.HasPrefix(kv, "GOFIPS140=") {
+			env = append(env, kv)
+		}
+	}
+	run := func(fips string) (string, error) {
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, gocmd, "run", "./testdata/fips140v1")
+		cmd.Env = append(env, "GOFIPS140="+fips)
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, ctx.Err(), "go run timed out")
+		return string(out), err
+	}
+	out, err := run("off")
+	require.NoError(t, err, out)
+	require.Contains(t, out, "started")
+
+	out, err = run("v1.0.0")
+	require.Error(t, err, out)
+	require.Contains(t, out, "mldsa_verify: mldsa: unavailable")
+	require.NotContains(t, out, "started")
 }

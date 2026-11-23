@@ -905,3 +905,68 @@ func TestVoteAggregatorOldVote(t *testing.T) {
 		require.True(t, result.cancelled)
 	}
 }
+
+// TestVoteAggregatorFiltersStaleCertBundle checks that cert bundles follow the
+// same period-age bound as every other bundle. The player context carries the
+// real round and period so the round router garbage-collects old periods the
+// way it does in production; before the cert exemption was removed, the
+// verified period 2 bundle below was routed into a collected period and
+// panicked.
+func TestVoteAggregatorFiltersStaleCertBundle(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const r = round(1001)
+	const p = period(4)
+
+	rRouter := new(rootRouter)
+	rRouter.update(player{}, 0, false)
+	voteM := &ioAutomataConcrete{
+		listener:  rRouter.voteRoot,
+		routerCtx: rRouter,
+		playerCtx: player{Round: r, Period: p, Step: soft},
+	}
+	helper := voteMakerHelper{}
+	helper.Setup()
+	b := testCaseBuilder{}
+
+	freshness := freshnessData{PlayerRound: r, PlayerPeriod: p, PlayerStep: soft}
+	present := func(bun bundle) filterableMessageEvent {
+		return filterableMessageEvent{
+			messageEvent: messageEvent{
+				T:     bundlePresent,
+				Input: message{UnauthenticatedBundle: bun.U},
+				Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+			},
+			FreshnessData: freshness,
+		}
+	}
+	verified := func(bun bundle) filterableMessageEvent {
+		return filterableMessageEvent{
+			messageEvent: messageEvent{
+				T:     bundleVerified,
+				Input: message{Bundle: bun, UnauthenticatedBundle: bun.U},
+				Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+			},
+			FreshnessData: freshness,
+		}
+	}
+
+	// Two or more periods behind: filtered whether or not already verified.
+	for _, stale := range []period{0, 2} {
+		bun := helper.MakeVerifiedBundle(t, r, stale, cert, *helper.MakeRandomProposalValue())
+		b.AddInOutPair(present(bun), filteredEvent{T: bundleFiltered})
+		b.AddInOutPair(verified(bun), filteredEvent{T: bundleFiltered})
+	}
+
+	// One period behind is the boundary of the rule: the bundle is observed and
+	// produces a cert threshold. A single positive case is all one trace can
+	// hold, because nothing is fresher than an existing cert threshold.
+	pV := helper.MakeRandomProposalValue()
+	bun := helper.MakeVerifiedBundle(t, r, p-1, cert, *pV)
+	b.AddInOutPair(present(bun), emptyEvent{})
+	b.AddInOutPair(verified(bun), thresholdEvent{T: certThreshold, Proposal: *pV})
+
+	res, err := b.Build().Validate(voteM)
+	require.NoError(t, err)
+	require.NoError(t, res, "unexpected stale cert bundle handling")
+}

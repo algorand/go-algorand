@@ -33,6 +33,16 @@ import (
 //    |-----> (*) Msgsize
 //    |-----> (*) MsgIsZero
 //
+// AddressSalt
+//      |-----> MarshalMsg
+//      |-----> CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) UnmarshalMsgWithState
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> Msgsize
+//      |-----> MsgIsZero
+//      |-----> AddressSaltMaxSize()
+//
 // AppIndex
 //     |-----> MarshalMsg
 //     |-----> CanMarshalMsg
@@ -142,16 +152,6 @@ import (
 //    |-----> Msgsize
 //    |-----> MsgIsZero
 //    |-----> MicrosMaxSize()
-//
-// PQAddressSalt
-//       |-----> MarshalMsg
-//       |-----> CanMarshalMsg
-//       |-----> (*) UnmarshalMsg
-//       |-----> (*) UnmarshalMsgWithState
-//       |-----> (*) CanUnmarshalMsg
-//       |-----> Msgsize
-//       |-----> MsgIsZero
-//       |-----> PQAddressSaltMaxSize()
 //
 // Participant
 //      |-----> (*) MarshalMsg
@@ -1064,6 +1064,66 @@ func (z *Address) MsgIsZero() bool {
 // crypto.DigestMaxSize returns a maximum valid message size for this message type
 func AddressMaxSize() int {
 	return crypto.DigestMaxSize()
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z AddressSalt) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendUint8(o, uint8(z))
+	return
+}
+
+func (_ AddressSalt) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(AddressSalt)
+	if !ok {
+		_, ok = (z).(*AddressSalt)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *AddressSalt) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	{
+		var zb0001 uint8
+		zb0001, bts, err = msgp.ReadUint8Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = AddressSalt(zb0001)
+	}
+	o = bts
+	return
+}
+
+func (z *AddressSalt) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *AddressSalt) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*AddressSalt)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z AddressSalt) Msgsize() (s int) {
+	s = msgp.Uint8Size
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z AddressSalt) MsgIsZero() bool {
+	return z == 0
+}
+
+// AddressSaltMaxSize returns a maximum valid message size for this message type
+func AddressSaltMaxSize() (s int) {
+	s = msgp.Uint8Size
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -3244,66 +3304,6 @@ func (z Micros) MsgIsZero() bool {
 // MicrosMaxSize returns a maximum valid message size for this message type
 func MicrosMaxSize() (s int) {
 	s = msgp.Uint64Size
-	return
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z PQAddressSalt) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendUint8(o, uint8(z))
-	return
-}
-
-func (_ PQAddressSalt) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(PQAddressSalt)
-	if !ok {
-		_, ok = (z).(*PQAddressSalt)
-	}
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *PQAddressSalt) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
-	if st.AllowableDepth == 0 {
-		err = msgp.ErrMaxDepthExceeded{}
-		return
-	}
-	st.AllowableDepth--
-	{
-		var zb0001 uint8
-		zb0001, bts, err = msgp.ReadUint8Bytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = PQAddressSalt(zb0001)
-	}
-	o = bts
-	return
-}
-
-func (z *PQAddressSalt) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
-}
-func (_ *PQAddressSalt) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*PQAddressSalt)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z PQAddressSalt) Msgsize() (s int) {
-	s = msgp.Uint8Size
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z PQAddressSalt) MsgIsZero() bool {
-	return z == 0
-}
-
-// PQAddressSaltMaxSize returns a maximum valid message size for this message type
-func PQAddressSaltMaxSize() (s int) {
-	s = msgp.Uint8Size
 	return
 }
 

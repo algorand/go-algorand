@@ -36,7 +36,7 @@ import (
 // checked in CI before they are promoted to a released consensus version.
 // Documenting logic.LogicVersion instead would publish vFuture opcodes
 // unconditionally.
-const docVersion = 13
+const docVersion = 14
 
 // slug returns the auto generated named anchor "slug" for a given heading
 // created by mdbook.

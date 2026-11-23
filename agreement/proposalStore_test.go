@@ -912,6 +912,9 @@ func TestProposalStoreRegressionWrongPipelinePeriodBug_39387501(t *testing.T) {
 
 	res = router.dispatch(&proposalStoreTracer, player, period2Trigger, playerMachine, proposalMachineRound, curRound, 2, 0)
 	require.Equal(t, res.t(), none)
+	// The player is in period 2 from here on. A payload for a period that
+	// has not started is held, and its event leaves Period unset.
+	player.Period = 2
 
 	res = router.dispatch(&proposalStoreTracer, player, propVote2Receipt, playerMachine, proposalMachineRound, curRound, 2, 0)
 	require.Equal(t, res.t(), proposalAccepted)

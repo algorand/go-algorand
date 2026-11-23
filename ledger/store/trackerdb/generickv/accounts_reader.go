@@ -128,14 +128,6 @@ func (r *accountsReader) LookupResources(addr basics.Address, aidx basics.Creata
 		return
 	}
 
-	// Note: the ctype is not filtered during the query, but rather asserted to be what the caller expected
-	if ctype == basics.AssetCreatable && !data.Data.IsAsset() {
-		err = fmt.Errorf("lookupResources asked for an asset but got %v", data.Data)
-	}
-	if ctype == basics.AppCreatable && !data.Data.IsApp() {
-		err = fmt.Errorf("lookupResources asked for an app but got %v", data.Data)
-	}
-
 	data.AcctRef = accountRef{addr}
 
 	return

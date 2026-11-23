@@ -104,13 +104,15 @@ func MakeRestClient(url url.URL, apiToken string) RestClient {
 // The function allows only characters in the range of [32..126], which excludes all the
 // control character, new lines, deletion, etc. All the alpha numeric and punctuation characters
 // are included in this range.
-func filterASCII(unfilteredString string) (filteredString string) {
-	for i, r := range unfilteredString {
-		if int(r) >= 0x20 && int(r) <= 0x7e {
-			filteredString += string(unfilteredString[i])
+func filterASCII(unfilteredString string) string {
+	// strings.Map is linear in the input, and returns a clean input without
+	// copying it.
+	return strings.Map(func(r rune) rune {
+		if r >= 0x20 && r <= 0x7e {
+			return r
 		}
-	}
-	return
+		return -1
+	}, unfilteredString)
 }
 
 // extractError checks if the response signifies an error (for now, StatusCode != 200 or StatusCode != 201).

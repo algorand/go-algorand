@@ -152,6 +152,28 @@ type roundCowBase struct {
 
 	// Similar cache for kv entries. A nil entry means ledger has no such pair
 	kvStore map[string][]byte
+
+	// The accounts of apps created in this block. Like the apps themselves,
+	// they cannot have had any app or asset resources as of rnd.
+	newAppAccounts map[basics.Address]struct{}
+
+	// While watchCrossType is set (see BlockEvaluator.transaction), noteMiss
+	// records in crossTypeHit any lookup that found nothing of the type asked
+	// for at an ID the address held as the other type as of rnd.
+	watchCrossType bool
+	crossTypeHit   error
+
+	// heldAs remembers noteMiss's answers. It is kept apart from the caches
+	// above so that the check never adds an entry that evaluation could
+	// later read, as a cacheOnly lookup would.
+	heldAs map[typedResource]bool
+}
+
+// typedResource is one (address, ID) resource slot read as one creatable type.
+type typedResource struct {
+	addr  basics.Address
+	cidx  basics.CreatableIndex
+	ctype basics.CreatableType
 }
 
 func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, stateProofNextRnd basics.Round, proto config.ConsensusParams) *roundCowBase {
@@ -286,13 +308,160 @@ func (x *roundCowBase) updateAppResourceCache(aa ledgercore.AccountApp, r ledger
 	}
 }
 
+// recordCreatedApp notes that app aidx was created in this block, so that
+// lookups of its account's resources can be answered by absent. This holds
+// whether or not the creation is later rolled back: the app did not exist as of
+// x.rnd either way.
+func (x *roundCowBase) recordCreatedApp(aidx basics.AppIndex) {
+	if x.proto.TxnCounter && uint64(aidx) > x.txnCount {
+		if x.newAppAccounts == nil {
+			x.newAppAccounts = make(map[basics.Address]struct{})
+		}
+		x.newAppAccounts[aidx.Address()] = struct{}{}
+	}
+}
+
+// absent reports whether the resource id of addr certainly did not exist as
+// of x.rnd, so there is no need to ask the ledger. The AVM makes the locals and
+// holdings of apps and assets created in a group, and of the accounts of apps
+// created in it, available without a reference naming each pair. Both halves
+// of a resource (params and holding or local state) are absent together, so a
+// later cacheOnly lookup of the other half gets the same answer.
+func (x *roundCowBase) absent[I basics.AppIndex | basics.AssetIndex](addr basics.Address, id I) bool {
+	// Creatable indices are assigned from the txn counter.
+	if x.proto.TxnCounter && uint64(id) > x.txnCount {
+		return true
+	}
+	_, ok := x.newAppAccounts[addr]
+	return ok
+}
+
+// watchCrossTypes starts noteMiss's check afresh.
+func (x *roundCowBase) watchCrossTypes() {
+	x.watchCrossType = true
+	x.crossTypeHit = nil
+}
+
+// stopWatchingCrossTypes ends noteMiss's check and returns what it found.
+func (x *roundCowBase) stopWatchingCrossTypes() error {
+	x.watchCrossType = false
+	hit := x.crossTypeHit
+	x.crossTypeHit = nil
+	return hit
+}
+
+// noteMiss is called when a lookup of addr's resource cidx as ctype reached
+// this base and found no such record. While watching, it records in
+// crossTypeHit whether addr held cidx as the other creatable type as of rnd.
+// No cow layer can hold a ctype record for an ID of the other type, so every
+// such lookup reaches the base. cacheOnly lookups do not call it, because
+// they fetch the other half of a record that is being written as ctype.
+func (x *roundCowBase) noteMiss(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) {
+	if !x.watchCrossType || x.crossTypeHit != nil {
+		return
+	}
+	known, err := x.knownAs(addr, cidx, ctype)
+	if err != nil || known {
+		x.crossTypeHit = err
+		return
+	}
+	other := basics.AssetCreatable
+	if ctype == basics.AssetCreatable {
+		other = basics.AppCreatable
+	}
+	held, err := x.heldAsOf(addr, cidx, other)
+	if err == nil && held {
+		err = fmt.Errorf("cannot look up %v's %s %d as an %s", addr, creatableName(other), cidx, creatableName(ctype))
+	}
+	x.crossTypeHit = err
+}
+
+// knownAs reports whether cidx is known to be of type ctype as of rnd, in
+// which case addr cannot hold it as the other type. IDs of both types come
+// from the one transaction counter, so an ID is never both. It consults only
+// what this base already holds, or the creator, which callers usually look
+// up anyway, so that ordinary misses (opting in, or asking about an app or
+// asset the account does not hold) cost no resource lookup.
+func (x *roundCowBase) knownAs(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (bool, error) {
+	if ctype == basics.AppCreatable {
+		aa := ledgercore.AccountApp{Address: addr, App: basics.AppIndex(cidx)}
+		if x.appParams[aa].exists || x.appLocalStates[aa].exists {
+			return true, nil
+		}
+	} else {
+		aa := ledgercore.AccountAsset{Address: addr, Asset: basics.AssetIndex(cidx)}
+		if x.assetParams[aa].exists || x.assets[aa].exists {
+			return true, nil
+		}
+	}
+	_, exists, err := x.getCreator(cidx, ctype)
+	return exists, err
+}
+
+// heldAsOf reports whether addr held a resource of type ctype at cidx as of
+// rnd. A creatable's resources can outlive it, so this cannot be answered
+// from the creator.
+func (x *roundCowBase) heldAsOf(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (bool, error) {
+	key := typedResource{addr: addr, cidx: cidx, ctype: ctype}
+	if held, ok := x.heldAs[key]; ok {
+		return held, nil
+	}
+	var held bool
+	if ctype == basics.AppCreatable {
+		aa := ledgercore.AccountApp{Address: addr, App: basics.AppIndex(cidx)}
+		params, pok := x.appParams[aa]
+		state, sok := x.appLocalStates[aa]
+		if pok && sok {
+			held = params.exists || state.exists
+		} else {
+			r, err := x.l.LookupApplication(x.rnd, addr, aa.App)
+			if err != nil {
+				return false, err
+			}
+			held = r.AppParams != nil || r.AppLocalState != nil
+		}
+	} else {
+		aa := ledgercore.AccountAsset{Address: addr, Asset: basics.AssetIndex(cidx)}
+		params, pok := x.assetParams[aa]
+		holding, hok := x.assets[aa]
+		if pok && hok {
+			held = params.exists || holding.exists
+		} else {
+			r, err := x.l.LookupAsset(x.rnd, addr, aa.Asset)
+			if err != nil {
+				return false, err
+			}
+			held = r.AssetParams != nil || r.AssetHolding != nil
+		}
+	}
+	if x.heldAs == nil {
+		x.heldAs = make(map[typedResource]bool)
+	}
+	x.heldAs[key] = held
+	return held, nil
+}
+
+func creatableName(ctype basics.CreatableType) string {
+	if ctype == basics.AppCreatable {
+		return "app"
+	}
+	return "asset"
+}
+
 func (x *roundCowBase) lookupAppParams(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppParamsDelta, bool, error) {
 	aa := ledgercore.AccountApp{Address: addr, App: aidx}
 	if result, ok := x.appParams[aa]; ok {
 		if !result.exists {
+			if !cacheOnly {
+				x.noteMiss(addr, basics.CreatableIndex(aidx), basics.AppCreatable)
+			}
 			return ledgercore.AppParamsDelta{}, false, nil
 		}
 		return ledgercore.AppParamsDelta{Params: &result.value}, true, nil
+	}
+
+	if x.absent(addr, aidx) {
+		return ledgercore.AppParamsDelta{}, false, nil
 	}
 
 	if cacheOnly { // hasn't been found yet; we were asked not to query DB
@@ -307,6 +476,7 @@ func (x *roundCowBase) lookupAppParams(addr basics.Address, aidx basics.AppIndex
 	x.updateAppResourceCache(aa, resourceData)
 
 	if resourceData.AppParams == nil {
+		x.noteMiss(addr, basics.CreatableIndex(aidx), basics.AppCreatable)
 		return ledgercore.AppParamsDelta{}, false, nil
 	}
 	return ledgercore.AppParamsDelta{Params: resourceData.AppParams}, true, nil
@@ -316,9 +486,16 @@ func (x *roundCowBase) lookupAssetParams(addr basics.Address, aidx basics.AssetI
 	aa := ledgercore.AccountAsset{Address: addr, Asset: aidx}
 	if result, ok := x.assetParams[aa]; ok {
 		if !result.exists {
+			if !cacheOnly {
+				x.noteMiss(addr, basics.CreatableIndex(aidx), basics.AssetCreatable)
+			}
 			return ledgercore.AssetParamsDelta{}, false, nil
 		}
 		return ledgercore.AssetParamsDelta{Params: &result.value}, true, nil
+	}
+
+	if x.absent(addr, aidx) {
+		return ledgercore.AssetParamsDelta{}, false, nil
 	}
 
 	if cacheOnly { // hasn't been found yet; we were asked not to query DB
@@ -333,6 +510,7 @@ func (x *roundCowBase) lookupAssetParams(addr basics.Address, aidx basics.AssetI
 	x.updateAssetResourceCache(aa, resourceData)
 
 	if resourceData.AssetParams == nil {
+		x.noteMiss(addr, basics.CreatableIndex(aidx), basics.AssetCreatable)
 		return ledgercore.AssetParamsDelta{}, false, nil
 	}
 	return ledgercore.AssetParamsDelta{Params: resourceData.AssetParams}, true, nil
@@ -342,9 +520,16 @@ func (x *roundCowBase) lookupAppLocalState(addr basics.Address, aidx basics.AppI
 	aa := ledgercore.AccountApp{Address: addr, App: aidx}
 	if result, ok := x.appLocalStates[aa]; ok {
 		if !result.exists {
+			if !cacheOnly {
+				x.noteMiss(addr, basics.CreatableIndex(aidx), basics.AppCreatable)
+			}
 			return ledgercore.AppLocalStateDelta{}, false, nil
 		}
 		return ledgercore.AppLocalStateDelta{LocalState: &result.value}, true, nil
+	}
+
+	if x.absent(addr, aidx) {
+		return ledgercore.AppLocalStateDelta{}, false, nil
 	}
 
 	if cacheOnly { // hasn't been found yet; we were asked not to query DB
@@ -359,6 +544,7 @@ func (x *roundCowBase) lookupAppLocalState(addr basics.Address, aidx basics.AppI
 	x.updateAppResourceCache(aa, resourceData)
 
 	if resourceData.AppLocalState == nil {
+		x.noteMiss(addr, basics.CreatableIndex(aidx), basics.AppCreatable)
 		return ledgercore.AppLocalStateDelta{}, false, nil
 	}
 	return ledgercore.AppLocalStateDelta{LocalState: resourceData.AppLocalState}, true, nil
@@ -368,9 +554,16 @@ func (x *roundCowBase) lookupAssetHolding(addr basics.Address, aidx basics.Asset
 	aa := ledgercore.AccountAsset{Address: addr, Asset: aidx}
 	if result, ok := x.assets[aa]; ok {
 		if !result.exists {
+			if !cacheOnly {
+				x.noteMiss(addr, basics.CreatableIndex(aidx), basics.AssetCreatable)
+			}
 			return ledgercore.AssetHoldingDelta{}, false, nil
 		}
 		return ledgercore.AssetHoldingDelta{Holding: &result.value}, true, nil
+	}
+
+	if x.absent(addr, aidx) {
+		return ledgercore.AssetHoldingDelta{}, false, nil
 	}
 
 	if cacheOnly { // hasn't been found yet; we were asked not to query DB
@@ -385,6 +578,7 @@ func (x *roundCowBase) lookupAssetHolding(addr basics.Address, aidx basics.Asset
 	x.updateAssetResourceCache(aa, resourceData)
 
 	if resourceData.AssetHolding == nil {
+		x.noteMiss(addr, basics.CreatableIndex(aidx), basics.AssetCreatable)
 		return ledgercore.AssetHoldingDelta{}, false, nil
 	}
 	return ledgercore.AssetHoldingDelta{Holding: resourceData.AssetHolding}, true, nil
@@ -661,6 +855,10 @@ type BlockEvaluator struct {
 	validate bool
 	generate bool
 
+	// base answers lookups as of the previous block. GenerateBlock replaces
+	// state with a child of itself, so base is not always state's parent.
+	base *roundCowBase
+
 	prevHeader  bookkeeping.BlockHeader // cached
 	proto       config.ConsensusParams
 	genesisHash crypto.Digest
@@ -742,6 +940,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 	eval := &BlockEvaluator{
 		validate:   evalOpts.Validate,
 		generate:   evalOpts.Generate,
+		base:       base,
 		prevHeader: prevHeader,
 		block:      bookkeeping.Block{BlockHeader: hdr},
 		specials: transactions.SpecialAddresses{
@@ -909,10 +1108,20 @@ func (eval *BlockEvaluator) ConsensusParams() config.ConsensusParams {
 }
 
 // ResetTxnBytes resets the number of bytes tracked by the BlockEvaluator to
-// zero.  This is a specialized operation used by the transaction pool to
-// simulate the effect of putting pending transactions in multiple blocks.
-func (eval *BlockEvaluator) ResetTxnBytes() {
+// zero, and returns the number it had.  This is a specialized operation used
+// by the transaction pool to simulate the effect of putting pending
+// transactions in multiple blocks.
+func (eval *BlockEvaluator) ResetTxnBytes() int {
+	txnBytes := eval.blockTxBytes
 	eval.blockTxBytes = 0
+	return txnBytes
+}
+
+// RestoreTxnBytes sets the number of bytes tracked by the BlockEvaluator back
+// to a value returned by ResetTxnBytes, for when the transaction pool finds
+// that the group that made it start another block does not fit there either.
+func (eval *BlockEvaluator) RestoreTxnBytes(txnBytes int) {
+	eval.blockTxBytes = txnBytes
 }
 
 // TestTransactionGroup performs basic duplicate detection and well-formedness
@@ -1135,7 +1344,11 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup ...transactions.SignedTxnWi
 		txibs = append(txibs, txib)
 
 		if eval.validate {
-			groupTxBytes += txib.GetEncodedLength()
+			txBytes, encErr := txib.GetEncodedLength(eval.generate)
+			if encErr != nil {
+				return fmt.Errorf("transaction %v: %w", txad.ID(), encErr)
+			}
+			groupTxBytes += txBytes
 			if eval.blockTxBytes+groupTxBytes > eval.maxTxnBytesPerBlock {
 				return ledgercore.ErrNoSpace
 			}
@@ -1315,8 +1528,19 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 		return err
 	}
 
+	// While generating, refuse a transaction that looked up a resource as
+	// the creatable type it is not. The base collects it and it is checked
+	// after apply. Like checkCloseMinBalance, it runs only while generating.
+	if eval.generate {
+		eval.base.watchCrossTypes()
+	}
+
 	// Apply the transaction, updating the cow balances
 	applyData, err := eval.applyTransaction(txn.Txn, cow, evalParams, gi, cow.Counter())
+	var crossType error
+	if eval.generate {
+		crossType = eval.base.stopWatchingCrossTypes()
+	}
 	if err != nil {
 		if eval.Tracer != nil {
 			// If there is a tracer, save the ApplyData so that it's viewable by the tracer
@@ -1327,6 +1551,10 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 
 	if err = checkCloseMinBalance(closing, txn.Txn.Sender, &eval.proto); err != nil {
 		return fmt.Errorf("transaction %v: %w", txid, err)
+	}
+
+	if crossType != nil {
+		return fmt.Errorf("transaction %v: %w", txid, crossType)
 	}
 
 	// Validate applyData if we are validating an existing block.

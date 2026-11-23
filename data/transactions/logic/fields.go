@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"crypto/mldsa"
 	"fmt"
 	"strings"
 
@@ -26,7 +27,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate go tool -modfile=../../../tool.mod stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,EcGroup,MimcConfig,Poseidon2Config,FalconConfig,Base64Encoding,JSONRefType,VoterParamsField,VrfStandard,BlockField -output=fields_string.go
+//go:generate go tool -modfile=../../../tool.mod stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,EcGroup,MimcConfig,Poseidon2Config,FalconConfig,MLDSAConfig,Base64Encoding,JSONRefType,VoterParamsField,VrfStandard,BlockField -output=fields_string.go
 
 // FieldSpec unifies the various specs for assembly, disassembly, and doc generation.
 type FieldSpec interface {
@@ -1062,6 +1063,75 @@ var FalconConfigs = FieldGroup{
 	falconConfigSpecByName,
 }
 
+// MLDSAConfig is an enum for the `mldsa_verify` opcode
+type MLDSAConfig int
+
+const (
+	// MLDSA44 is the ML-DSA-44 parameter set of FIPS 204
+	MLDSA44 MLDSAConfig = iota
+	// MLDSA65 is the ML-DSA-65 parameter set of FIPS 204
+	MLDSA65
+	invalidMLDSAConfig // compile-time constant for number of fields
+)
+
+var mldsaConfigNames [invalidMLDSAConfig]string
+
+// mldsaMaxContextSize is the longest context string FIPS 204 allows.
+const mldsaMaxContextSize = 255
+
+type mldsaConfigSpec struct {
+	field  MLDSAConfig
+	params mldsa.Parameters
+	doc    string
+}
+
+func (fs mldsaConfigSpec) Field() byte {
+	return byte(fs.field)
+}
+func (fs mldsaConfigSpec) Type() StackType {
+	return StackNone // Will not show, since all are untyped
+}
+func (fs mldsaConfigSpec) OpVersion() uint64 {
+	return mldsaVersion
+}
+func (fs mldsaConfigSpec) Version() uint64 {
+	return mldsaVersion
+}
+func (fs mldsaConfigSpec) Note() string {
+	return fs.doc
+}
+func (fs mldsaConfigSpec) Modes() RunMode {
+	return modeAny
+}
+
+var mldsaConfigSpecs = [...]mldsaConfigSpec{
+	{MLDSA44, mldsa.MLDSA44(), "ML-DSA-44 (FIPS 204), with a 1312 byte public key and 2420 byte signature"},
+	{MLDSA65, mldsa.MLDSA65(), "ML-DSA-65 (FIPS 204), with a 1952 byte public key and 3309 byte signature"},
+}
+
+func mldsaConfigSpecByField(c MLDSAConfig) (mldsaConfigSpec, bool) {
+	if int(c) >= len(mldsaConfigSpecs) {
+		return mldsaConfigSpec{}, false
+	}
+	return mldsaConfigSpecs[c], true
+}
+
+var mldsaConfigSpecByName = make(mldsaConfigNameSpecMap, len(mldsaConfigNames))
+
+type mldsaConfigNameSpecMap map[string]mldsaConfigSpec
+
+func (s mldsaConfigNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+// MLDSAConfigs collects details about the constants used to describe MLDSAConfigs
+var MLDSAConfigs = FieldGroup{
+	"ML-DSA Configurations", "Parameters",
+	mldsaConfigNames[:],
+	mldsaConfigSpecByName,
+}
+
 // Base64Encoding is an enum for the `base64decode` opcode
 type Base64Encoding int
 
@@ -1958,6 +2028,13 @@ func init() {
 		equal(int(s.field), i)
 		falconConfigNames[s.field] = s.field.String()
 		falconConfigSpecByName[s.field.String()] = s
+	}
+
+	equal(len(mldsaConfigSpecs), len(mldsaConfigNames))
+	for i, s := range mldsaConfigSpecs {
+		equal(int(s.field), i)
+		mldsaConfigNames[s.field] = s.field.String()
+		mldsaConfigSpecByName[s.field.String()] = s
 	}
 
 	equal(len(base64EncodingSpecs), len(base64EncodingNames))

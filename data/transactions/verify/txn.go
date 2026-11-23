@@ -81,27 +81,28 @@ type GroupContext struct {
 	signedGroupTxns []transactions.SignedTxn
 	evalParams      *logic.EvalParams
 
-	// pqLsigs holds, by group index, the LogicSig each ls-scheme PQSig carries,
-	// filled in by pqLsig. Its args sit encoded in the PQSig, and decoding them
-	// includes a canonical-encoding check that re-encodes them, so the group
-	// size check and evaluation share one decode rather than paying twice.
-	pqLsigs []*transactions.LogicSig
+	// sksigLsigs holds, by group index, the LogicSig each ls-scheme SaltedKeySig
+	// carries, filled in by sksigLsig. Its args sit encoded in the SaltedKeySig,
+	// and decoding them includes a canonical-encoding check that re-encodes them,
+	// so the group size check and evaluation share one decode rather than paying
+	// twice.
+	sksigLsigs []*transactions.LogicSig
 }
 
-// pqLsig returns the LogicSig carried by the ls-scheme PQSig of the gith
-// transaction, decoding it on first use.
-func (g *GroupContext) pqLsig(gi int) (transactions.LogicSig, error) {
-	if g.pqLsigs == nil {
-		g.pqLsigs = make([]*transactions.LogicSig, len(g.signedGroupTxns))
+// sksigLsig returns the LogicSig carried by the ls-scheme SaltedKeySig of the
+// gith transaction, decoding it on first use.
+func (g *GroupContext) sksigLsig(gi int) (transactions.LogicSig, error) {
+	if g.sksigLsigs == nil {
+		g.sksigLsigs = make([]*transactions.LogicSig, len(g.signedGroupTxns))
 	}
-	if lsig := g.pqLsigs[gi]; lsig != nil {
+	if lsig := g.sksigLsigs[gi]; lsig != nil {
 		return *lsig, nil
 	}
-	lsig, err := g.signedGroupTxns[gi].PQsig.Lsig()
+	lsig, err := g.signedGroupTxns[gi].SKsig.Lsig()
 	if err != nil {
 		return transactions.LogicSig{}, err
 	}
-	g.pqLsigs[gi] = &lsig
+	g.sksigLsigs[gi] = &lsig
 	return lsig, nil
 }
 
@@ -150,6 +151,16 @@ func (e *TxGroupError) Error() string {
 // Unwrap returns an underlying error
 func (e *TxGroupError) Unwrap() error {
 	return e.err
+}
+
+// RefusedTxns returns the single bad transaction from group if err identifies
+// it, or the whole group if not, to log a concise error.
+func RefusedTxns(group []transactions.SignedTxn, err error) []transactions.SignedTxn {
+	var groupErr *TxGroupError
+	if errors.As(err, &groupErr) && groupErr.GroupIndex >= 0 && groupErr.GroupIndex < len(group) {
+		return group[groupErr.GroupIndex : groupErr.GroupIndex+1]
+	}
+	return group
 }
 
 // PrepareGroupContext prepares a GroupCtx for a given transaction group.
@@ -244,7 +255,7 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 	}
 	for i := range stxs {
 		if err := stxs[i].Txn.WellFormed(groupCtx.specAddrs, groupCtx.consensusParams); err != nil {
-			return nil, fmt.Errorf("transaction %+v invalid : %w", stxs[i], &TxGroupError{err: err, GroupIndex: i, Reason: TxGroupErrorReasonNotWellFormed})
+			return nil, fmt.Errorf("transaction %s invalid : %w", stxs[i].Summary(), &TxGroupError{err: err, GroupIndex: i, Reason: TxGroupErrorReasonNotWellFormed})
 		}
 	}
 
@@ -261,12 +272,11 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 		return nil, err
 	}
 
-	for i, stxn := range stxs {
+	for i := range stxs {
 		prepErr := txnBatchPrep(i, groupCtx, batch)
 		if prepErr != nil {
-			// re-wrap the error with more details
-			prepErr.err = fmt.Errorf("transaction %+v invalid : %w", stxn, prepErr.err)
-			return nil, prepErr
+			// wrap the error with more details
+			return nil, fmt.Errorf("transaction %s invalid : %w", stxs[i].Summary(), prepErr)
 		}
 	}
 
@@ -305,16 +315,16 @@ func logicSigGroupSizeCheck(groupCtx *GroupContext) *TxGroupError {
 			programLen += len(lsig.Logic)
 			argsLen += lsig.ArgsLen()
 		}
-		// A program authorizing from an ls-scheme PQSig costs the group what one
+		// A program authorizing from an ls-scheme SaltedKeySig costs the group what one
 		// in a LogicSig costs. Malformed args are rejected here rather than
 		// counted, since there is no honest size to charge for them.
-		if stxs[i].PQsig.IsLogicSig() {
-			pqLsig, err := groupCtx.pqLsig(i)
+		if stxs[i].SKsig.IsLogicSig() {
+			sksigLsig, err := groupCtx.sksigLsig(i)
 			if err != nil {
 				return &TxGroupError{err: err, GroupIndex: i, Reason: TxGroupErrorReasonNotWellFormed}
 			}
-			programLen += len(pqLsig.Logic)
-			argsLen += pqLsig.ArgsLen()
+			programLen += len(sksigLsig.Logic)
+			argsLen += sksigLsig.ArgsLen()
 		}
 
 		lSigPooledSize += programLen + argsLen
@@ -354,7 +364,7 @@ const regularSig sigOrTxnType = 1
 const multiSig sigOrTxnType = 2
 const logicSig sigOrTxnType = 3
 const stateProofTxn sigOrTxnType = 4
-const pqSig sigOrTxnType = 5
+const saltedKeySig sigOrTxnType = 5
 
 // checkTxnSigTypeCounts checks the number of signature types and reports an error in case of a violation
 func checkTxnSigTypeCounts(s *transactions.SignedTxn, groupIndex int) (sigType sigOrTxnType, err *TxGroupError) {
@@ -371,9 +381,9 @@ func checkTxnSigTypeCounts(s *transactions.SignedTxn, groupIndex int) (sigType s
 		numSigCategories++
 		sigType = logicSig
 	}
-	if !s.PQsig.Blank() {
+	if !s.SKsig.Blank() {
 		numSigCategories++
-		sigType = pqSig
+		sigType = saltedKeySig
 	}
 	if numSigCategories == 0 {
 		// Special case: special sender address can issue special transaction
@@ -429,15 +439,15 @@ func stxnCoreChecks(gi int, groupCtx *GroupContext, batch crypto.BatchEnqueuer) 
 		}
 		return nil
 
-	case pqSig:
-		if s.PQsig.IsLogicSig() {
-			if err := pqLogicSigVerify(gi, groupCtx); err != nil {
+	case saltedKeySig:
+		if s.SKsig.IsLogicSig() {
+			if err := saltedKeySigLogicSigVerify(gi, groupCtx); err != nil {
 				return &TxGroupError{err: err, GroupIndex: gi, Reason: TxGroupErrorReasonLogicSigFailed}
 			}
 			return nil
 		}
-		if err := s.PQsig.BatchPrep(groupCtx.consensusParams, s.Txn, s.Authorizer(), batch); err != nil {
-			return &TxGroupError{err: fmt.Errorf("pq signature validation failed: %w", err), GroupIndex: gi, Reason: TxGroupErrorReasonSigNotWellFormed}
+		if err := s.SKsig.BatchPrep(groupCtx.consensusParams, s.Txn, s.Authorizer(), batch); err != nil {
+			return &TxGroupError{err: fmt.Errorf("salted-key signature validation failed: %w", err), GroupIndex: gi, Reason: TxGroupErrorReasonSigNotWellFormed}
 		}
 		return nil
 
@@ -451,10 +461,10 @@ func stxnCoreChecks(gi int, groupCtx *GroupContext, batch crypto.BatchEnqueuer) 
 
 // LogicSigSanityCheck checks that the signature is valid and that the program is basically well formed.
 // It does not evaluate the logic. It covers both the program in a LogicSig and
-// the one an ls-scheme PQSig carries.
+// the one an ls-scheme SaltedKeySig carries.
 func LogicSigSanityCheck(gi int, groupCtx *GroupContext) error {
-	if groupCtx.signedGroupTxns[gi].PQsig.IsLogicSig() {
-		_, err := pqLogicSigSanityCheckPrep(gi, groupCtx)
+	if groupCtx.signedGroupTxns[gi].SKsig.IsLogicSig() {
+		_, err := saltedKeySigLogicSigSanityCheckPrep(gi, groupCtx)
 		return err
 	}
 
@@ -513,34 +523,34 @@ func evalSigProgram(gi int, groupCtx *GroupContext, lsig transactions.LogicSig) 
 	return nil
 }
 
-// pqLogicSigSanityCheckPrep checks an ls-scheme PQSig as far as can be done
+// saltedKeySigLogicSigSanityCheckPrep checks an ls-scheme SaltedKeySig as far as can be done
 // without evaluating its program, and returns the logic signature it carries.
-func pqLogicSigSanityCheckPrep(gi int, groupCtx *GroupContext) (transactions.LogicSig, error) {
+func saltedKeySigLogicSigSanityCheckPrep(gi int, groupCtx *GroupContext) (transactions.LogicSig, error) {
 	if groupCtx.consensusParams.LogicSigVersion == 0 {
 		return transactions.LogicSig{}, errors.New("LogicSig not enabled")
 	}
 	txn := &groupCtx.signedGroupTxns[gi]
 
-	if err := txn.PQsig.ValidateEnvelope(groupCtx.consensusParams, txn.Authorizer()); err != nil {
+	if err := txn.SKsig.ValidateEnvelope(groupCtx.consensusParams, txn.Authorizer()); err != nil {
 		return transactions.LogicSig{}, err
 	}
 
-	lsig, err := groupCtx.pqLsig(gi)
+	lsig, err := groupCtx.sksigLsig(gi)
 	if err != nil {
 		return transactions.LogicSig{}, err
 	}
-	if err := sigProgramSanityCheck(lsig.Logic, "PQsig LogicSig", groupCtx); err != nil {
+	if err := sigProgramSanityCheck(lsig.Logic, "SKsig LogicSig", groupCtx); err != nil {
 		return transactions.LogicSig{}, err
 	}
 	return lsig, nil
 }
 
-// pqLogicSigVerify authorizes a transaction with an ls-scheme PQSig. The
+// saltedKeySigLogicSigVerify authorizes a transaction with an ls-scheme SaltedKeySig. The
 // address commits to the program, so once the envelope establishes that the
 // authorizer is that program's address, evaluating it is the whole
 // authorization: there are no signature bytes to check.
-func pqLogicSigVerify(gi int, groupCtx *GroupContext) error {
-	lsig, err := pqLogicSigSanityCheckPrep(gi, groupCtx)
+func saltedKeySigLogicSigVerify(gi int, groupCtx *GroupContext) error {
+	lsig, err := saltedKeySigLogicSigSanityCheckPrep(gi, groupCtx)
 	if err != nil {
 		return err
 	}
@@ -576,7 +586,7 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batch crypto.B
 		hasLMsig = true
 		numSigs++
 	}
-	if !lsig.PQsig.Blank() {
+	if !lsig.SKsig.Blank() {
 		numSigs++
 	}
 	if numSigs == 0 {
@@ -591,10 +601,10 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batch crypto.B
 	if numSigs > 1 {
 		return errors.New("LogicSig should have only one type of delegation signature")
 	}
-	if !lsig.PQsig.Blank() {
-		program := logic.PQDelegatedProgram{Addr: txn.Authorizer(), Program: lsig.Logic}
-		if err := lsig.PQsig.BatchPrep(groupCtx.consensusParams, program, txn.Authorizer(), batch); err != nil {
-			return fmt.Errorf("pq delegated logic signature validation failed: %w", err)
+	if !lsig.SKsig.Blank() {
+		program := logic.SKsigDelegatedProgram{Addr: txn.Authorizer(), Program: lsig.Logic}
+		if err := lsig.SKsig.BatchPrep(groupCtx.consensusParams, program, txn.Authorizer(), batch); err != nil {
+			return fmt.Errorf("salted-key signature delegation validation failed: %w", err)
 		}
 		return nil
 	}
