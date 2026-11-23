@@ -251,20 +251,25 @@ crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a:
 		$(MAKE) && \
 		$(MAKE) install
 
+# Oldest macOS the universal binaries run on. Keep it at the minimum macOS
+# that the Go version in go.mod supports (cmd/link's default), and raise it
+# with the Go version that raises that minimum.
+MACOS_MIN_VERSION := 13.0
+
 universal:
 ifeq ($(OS_TYPE),darwin)
 	# build amd64 Mac binaries
 	mkdir -p $(GOBIN)-darwin-amd64
-	CROSS_COMPILE_ARCH=amd64 GOBIN=$(GOBIN)-darwin-amd64 MACOSX_DEPLOYMENT_TARGET=13.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch x86_64 -mmacos-version-min=13.0" --host=x86_64-apple-darwin' $(MAKE)
+	CROSS_COMPILE_ARCH=amd64 GOBIN=$(GOBIN)-darwin-amd64 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MIN_VERSION) EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch x86_64 -mmacos-version-min=$(MACOS_MIN_VERSION)" --host=x86_64-apple-darwin' $(MAKE)
 
 	# build arm64 Mac binaries
 	mkdir -p $(GOBIN)-darwin-arm64
-	CROSS_COMPILE_ARCH=arm64 GOBIN=$(GOBIN)-darwin-arm64 MACOSX_DEPLOYMENT_TARGET=13.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch arm64 -mmacos-version-min=13.0" --host=aarch64-apple-darwin' $(MAKE)
+	CROSS_COMPILE_ARCH=arm64 GOBIN=$(GOBIN)-darwin-arm64 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MIN_VERSION) EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch arm64 -mmacos-version-min=$(MACOS_MIN_VERSION)" --host=aarch64-apple-darwin' $(MAKE)
 
 	# same for buildsrc-special
 	cd tools/block-generator && \
-	CROSS_COMPILE_ARCH=amd64 GOBIN=$(GOBIN)-darwin-amd64 MACOSX_DEPLOYMENT_TARGET=13.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch x86_64 -mmacos-version-min=13.0" --host=x86_64-apple-darwin' $(MAKE)
-	CROSS_COMPILE_ARCH=arm64 GOBIN=$(GOBIN)-darwin-arm64 MACOSX_DEPLOYMENT_TARGET=13.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch arm64 -mmacos-version-min=13.0" --host=aarch64-apple-darwin' $(MAKE)
+	CROSS_COMPILE_ARCH=amd64 GOBIN=$(GOBIN)-darwin-amd64 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MIN_VERSION) EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch x86_64 -mmacos-version-min=$(MACOS_MIN_VERSION)" --host=x86_64-apple-darwin' $(MAKE)
+	CROSS_COMPILE_ARCH=arm64 GOBIN=$(GOBIN)-darwin-arm64 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MIN_VERSION) EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch arm64 -mmacos-version-min=$(MACOS_MIN_VERSION)" --host=aarch64-apple-darwin' $(MAKE)
 
 	# lipo together
 	mkdir -p $(GOBIN)
