@@ -86,13 +86,13 @@ tar -C /usr/local -xzf /w/${GO_TGZ}
 export PATH=/usr/local/go/bin:/root/go/bin:\$PATH
 git config --global --add safe.directory /w/repo.git
 git clone -q /w/repo.git /rebuild/src && cd /rebuild/src && git checkout -q ${TAG}
-export CHANNEL=${CHANNEL} NETWORK=${NETWORK} VERSION=${VERSION} FULLVERSION=${VERSION} TRAVIS_BRANCH= BRANCH= \\
+export CHANNEL=${CHANNEL} DEFAULTNETWORK=${NETWORK} VERSION=${VERSION} FULLVERSION=${VERSION} TRAVIS_BRANCH= BRANCH= \\
     ALGORAND_DEADLOCK=disable KMD_NOUSB=true BUILD_CONTAINER_IMAGE=${IMAGE} GOMODCACHE=${GOMODCACHE}
 export SOURCE_DATE_EPOCH=\$(git log -1 --format=%ct)
 make libsodium > /w/out/build.log 2>&1
 make ci-build >> /w/out/build.log 2>&1
 GOTOOLCHAIN=local go install github.com/goreleaser/nfpm/v2/cmd/nfpm@${NFPM_VERSION} >> /w/out/build.log 2>&1
-export DEFAULTNETWORK=${NETWORK} GOARCH=${ARCH}
+export GOARCH=${ARCH}
 if [ "${CHANNEL}" = beta ]; then
     export PKG_NAME=algorand-beta DEVTOOLS_PKG_NAME=algorand-devtools-beta CONFLICTS_PKG_NAME=algorand CONFLICTS_DEVTOOLS_PKG_NAME=algorand-devtools
 else

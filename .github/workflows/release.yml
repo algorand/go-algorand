@@ -151,7 +151,10 @@ jobs:
       # build environment attestation, keeps rebuilds byte-identical.
       GOMODCACHE: /tmp/go-algorand-release/pkg/mod
       CHANNEL: ${{ needs.prepare.outputs.channel }}
-      NETWORK: ${{ needs.prepare.outputs.network }}
+      # build_package.sh uses this to choose the default genesis.json in the
+      # tarballs. Unset, it guesses from `git describe`, which gives devnet
+      # for a manual run whose HEAD is not a release tag.
+      DEFAULTNETWORK: ${{ needs.prepare.outputs.network }}
       VERSION: ${{ needs.prepare.outputs.version }}
       FULLVERSION: ${{ needs.prepare.outputs.version }}
       SOURCE_DATE_EPOCH: ${{ needs.prepare.outputs.source_date_epoch }}
@@ -204,7 +207,7 @@ jobs:
           echo "Building for ${{ matrix.os }}-${{ matrix.arch }}"
           echo "  Version: ${VERSION}"
           echo "  Channel: ${CHANNEL}"
-          echo "  Network: ${NETWORK}"
+          echo "  Network: ${DEFAULTNETWORK}"
           make ${{ matrix.make_target }}
 
       # Rides along in the build artifact so the packaging jobs can bind it to
