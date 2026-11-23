@@ -128,12 +128,12 @@ jobs:
             arch: arm64
             make_target: ci-build
             container: ubuntu:24.04@sha256:2198e4c65076e9cb0b3d695219df667c0e3b0072da64ca3c2648aca17dcecaf5
-          - runner: macos-15
+          - runner: macos-26
             os: darwin
             arch: universal
             make_target: ci-build-universal
             container: ''
-            xcode: '16.4'
+            xcode: '26.6'
     runs-on: ${{ matrix.runner }}
     # An empty image (macOS) runs the job directly on the runner.
     container:
@@ -434,7 +434,8 @@ jobs:
   package-darwin:
     name: Package Darwin
     needs: [prepare, build]
-    runs-on: macos-15
+    # Only copies, hashes and labels files built on macOS, so it needs no Mac.
+    runs-on: ubuntu-24.04
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
       CHANNEL: ${{ needs.prepare.outputs.channel }}
@@ -458,7 +459,7 @@ jobs:
       - name: Generate checksums
         run: |
           cd dist
-          shasum -a 256 *.tar.gz > "hashes_${CHANNEL}_darwin_universal_${VERSION}"
+          sha256sum *.tar.gz > "hashes_${CHANNEL}_darwin_universal_${VERSION}"
           echo "Checksums:"
           cat "hashes_${CHANNEL}_darwin_universal_${VERSION}"
 
