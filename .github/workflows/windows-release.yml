@@ -46,7 +46,7 @@ jobs:
       channel: ${{ steps.parse.outputs.channel }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -140,7 +140,7 @@ jobs:
           cat "hashes_${{ steps.parse.outputs.channel }}_windows_amd64_${{ steps.parse.outputs.version }}"
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-windows-amd64
           path: dist/
@@ -160,7 +160,7 @@ jobs:
       CHANNEL: ${{ needs.build.outputs.channel }}
     steps:
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: build-windows-amd64
           path: dist/
@@ -201,7 +201,7 @@ jobs:
           predicate-path: dist/build-environment_${{ env.CHANNEL }}_windows-amd64_${{ env.VERSION }}.json
 
       - name: Upload release artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-release-artifacts
           path: dist/

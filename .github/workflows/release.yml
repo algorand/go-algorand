@@ -44,7 +44,7 @@ jobs:
       source_date_epoch: ${{ steps.parse.outputs.source_date_epoch }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Parse version and channel
         id: parse
@@ -193,7 +193,7 @@ jobs:
           xcodebuild -version
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -221,7 +221,7 @@ jobs:
           find tmp/node_pkgs -type f | head -50 || echo "No artifacts found"
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-${{ matrix.os }}-${{ matrix.arch }}
           path: tmp/node_pkgs/
@@ -253,13 +253,13 @@ jobs:
       SOURCE_DATE_EPOCH: ${{ needs.prepare.outputs.source_date_epoch }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Go
         uses: ./.github/actions/setup-go
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: build-linux-${{ matrix.arch }}
           path: tmp/node_pkgs/
@@ -424,7 +424,7 @@ jobs:
             > "dist/build-environment_${CHANNEL}_linux-${{ matrix.arch }}_${VERSION}.json"
 
       - name: Upload packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: packages-linux-${{ matrix.arch }}
           path: dist/
@@ -440,7 +440,7 @@ jobs:
       CHANNEL: ${{ needs.prepare.outputs.channel }}
     steps:
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: build-darwin-universal
           path: tmp/node_pkgs/
@@ -468,7 +468,7 @@ jobs:
             > "dist/build-environment_${CHANNEL}_darwin-universal_${VERSION}.json"
 
       - name: Upload packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: packages-darwin-universal
           path: dist/
@@ -508,7 +508,7 @@ jobs:
       CHANNEL: ${{ needs.prepare.outputs.channel }}
     steps:
       - name: Download packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: packages-linux-${{ matrix.arch }}
           path: packages/
@@ -642,7 +642,7 @@ jobs:
       CHANNEL: ${{ needs.prepare.outputs.channel }}
     steps:
       - name: Download all package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: packages-*
           path: packages/
@@ -680,7 +680,7 @@ jobs:
           predicate-path: packages/build-environment_${{ env.CHANNEL }}_${{ matrix.platform }}_${{ env.VERSION }}.json
 
       - name: Upload SBOM
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom-${{ matrix.platform }}
           path: sbom/
@@ -700,14 +700,14 @@ jobs:
       CHANNEL: ${{ needs.prepare.outputs.channel }}
     steps:
       - name: Download all package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: packages-*
           path: packages/
           merge-multiple: true
 
       - name: Download SBOMs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: sbom-*
           path: packages/
@@ -727,7 +727,7 @@ jobs:
             packages/*.rpm
 
       - name: Upload release artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-artifacts
           path: packages/
@@ -740,7 +740,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # osv-scanner's Go call analysis type-checks the code, and the crypto
       # package's cgo code needs libsodium's headers; without them the analysis
