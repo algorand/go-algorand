@@ -74,6 +74,9 @@ type streamManager struct {
 	// setupEnded holds the peers with a counted attempt for which a setup attempt on an open
 	// outgoing connection has ended (see endConnAttempt). Guarded by streamsLock.
 	setupEnded map[peer.ID]struct{}
+	// opening holds the peers for which a handleConnected call is setting up a gossip stream.
+	// Guarded by streamsLock.
+	opening map[peer.ID]struct{}
 
 	// handlersWg tracks handler goroutines (handleConnected, streamHandler) that run
 	// outside of libp2p's notifiee lock so that close() can wait for them.
@@ -106,6 +109,7 @@ func makeStreamManager(ctx context.Context, log logging.Logger, h host.Host, han
 		streams:             make(map[peer.ID]network.Stream),
 		inflight:            make(map[peer.ID]int),
 		setupEnded:          make(map[peer.ID]struct{}),
+		opening:             make(map[peer.ID]struct{}),
 		closeTimeout:        handlersCloseTimeout,
 		setupTimeout:        streamSetupTimeout,
 	}
@@ -484,13 +488,26 @@ func (n *streamManager) handleConnected(conn network.Conn) {
 	n.beginPeerAttempt(remotePeer)
 	defer n.endConnAttempt(conn)
 
+	// The node sets up one gossip stream to a peer at a time. Two connections to the peer can
+	// reach this point together, and one gossip stream is enough.
 	n.streamsLock.Lock()
 	_, ok := n.streams[remotePeer]
+	if _, opening := n.opening[remotePeer]; opening {
+		ok = true
+	}
+	if !ok {
+		n.opening[remotePeer] = struct{}{}
+	}
 	n.streamsLock.Unlock()
 	if ok {
-		n.log.Debugf("%s: already have a stream to/from %s", localPeer.String(), remotePeer.String())
-		return // there's already an active stream with this peer for our protocol
+		n.log.Debugf("%s: already have or am opening a stream to/from %s", localPeer.String(), remotePeer.String())
+		return // the peer has a gossip stream, or another call is setting one up
 	}
+	defer func() {
+		n.streamsLock.Lock()
+		delete(n.opening, remotePeer)
+		n.streamsLock.Unlock()
+	}()
 
 	protos := []protocol.ID{}
 	for _, pair := range n.handlers {
