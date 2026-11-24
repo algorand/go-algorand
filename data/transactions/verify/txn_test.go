@@ -65,11 +65,8 @@ var spec = transactions.SpecialAddresses{
 	RewardsPool: poolAddr,
 }
 
-// useEd25519Consensus is the Ed25519 batch verifier implementation init picks
-// at random for this package's tests.
-var useEd25519Consensus = crypto.RandUint64()%2 == 0
-
 func init() {
+	useEd25519Consensus := crypto.RandUint64()%2 == 0
 	fmt.Printf("Using Ed25519ConsensusBatchVerifier: %v\n", useEd25519Consensus)
 	crypto.SetEd25519BatchVerifier(useEd25519Consensus)
 }
