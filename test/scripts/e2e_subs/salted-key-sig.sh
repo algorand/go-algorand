@@ -137,9 +137,9 @@ if [ "$BALANCEED" -ne "$EXPECTED" ]; then
     false
 fi
 
-# Repeat with each ML-DSA parameter set. Their fee surcharges are 0.6, 0.9
-# and 1.3 min fees, so the required fees are 1.6mA, 1.9mA and 2.3mA.
-for SCHEME_FEE in ml-dsa-44:1600:1.600mA ml-dsa-65:1900:1.900mA ml-dsa-87:2300:2.300mA; do
+# Repeat with each ML-DSA parameter set. Their fee surcharges are 2, 3 and 4
+# min fees, so the required fees are 3mA, 4mA and 5mA.
+for SCHEME_FEE in ml-dsa-44:3000:3mA ml-dsa-65:4000:4mA ml-dsa-87:5000:5mA; do
     IFS=: read -r SCHEME FEE FEESTR <<< "${SCHEME_FEE}"
 
     algokey salted generate -S "${SCHEME}" -k "${SCHEME}.sk" > "generate-${SCHEME}.out"
