@@ -395,10 +395,8 @@ func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) bool {
 				// would duplicate the one opened by Connected or by the remote peer.
 				for _, conn := range conns {
 					if conn.Stat().Direction == network.DirOutbound {
-						s.host.ConnManager().Protect(peerInfo.ID, cnmgrTag)
-						if !s.streams.goHandleConnected(conn) {
-							// the service is shutting down: undo the protection and stop dialing
-							s.host.ConnManager().Unprotect(peerInfo.ID, cnmgrTag)
+						if !s.streams.goProtectAndHandleConnected(conn) {
+							// the service is shutting down: stop dialing
 							return numOutgoingConns > preExistingConns
 						}
 						numOutgoingConns++
@@ -426,12 +424,11 @@ func (s *serviceImpl) dialNode(ctx context.Context, peer *peer.AddrInfo) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, dialTimeout)
 	defer cancel()
-	// protect before attempting to connect so that checks in Connected handler have up-to-date information
-	s.host.ConnManager().Protect(peer.ID, cnmgrTag)
+	// protect before attempting to connect so that checks in Connected handler have up-to-date information.
+	// the dial counts as a gossip setup attempt, so the protection lasts until Connected has run.
+	s.streams.beginProtectedAttempt(peer.ID)
 	err := s.host.Connect(ctx, *peer)
-	if err != nil {
-		s.host.ConnManager().Unprotect(peer.ID, cnmgrTag)
-	}
+	s.streams.endDialAttempt(peer.ID, err == nil)
 	return err
 }
 
@@ -464,8 +461,10 @@ func (s *serviceImpl) ClosePeer(peer peer.ID) error {
 
 // UnprotectPeer removes the protection from a peer, allowing
 // the connection manager to trim it if needed.
+// A peer with a gossip setup attempt, or with a gossip stream and an outgoing connection,
+// keeps it until that ends.
 func (s *serviceImpl) UnprotectPeer(id peer.ID) {
-	s.host.ConnManager().Unprotect(id, cnmgrTag)
+	s.streams.unprotectIdle(id)
 }
 
 // netAddressToListenAddress converts a netAddress in "ip:port" format to a listen address

@@ -71,6 +71,9 @@ type streamManager struct {
 	streams     map[peer.ID]network.Stream
 	inflight    map[peer.ID]int
 	streamsLock deadlock.Mutex
+	// setupEnded holds the peers with a counted attempt for which a setup attempt on an open
+	// outgoing connection has ended (see endConnAttempt). Guarded by streamsLock.
+	setupEnded map[peer.ID]struct{}
 
 	// handlersWg tracks handler goroutines (handleConnected, streamHandler) that run
 	// outside of libp2p's notifiee lock so that close() can wait for them.
@@ -102,6 +105,7 @@ func makeStreamManager(ctx context.Context, log logging.Logger, h host.Host, han
 		allowIncomingGossip: allowIncomingGossip,
 		streams:             make(map[peer.ID]network.Stream),
 		inflight:            make(map[peer.ID]int),
+		setupEnded:          make(map[peer.ID]struct{}),
 		closeTimeout:        handlersCloseTimeout,
 		setupTimeout:        streamSetupTimeout,
 	}
@@ -128,12 +132,31 @@ func (n *streamManager) endHandler() {
 // so that close() waits for it. It returns false without spawning anything if the
 // stream manager is closing. This is the only way handleConnected should be started
 // asynchronously: an untracked goroutine can outlive the service and log after shutdown.
+// It counts an attempt for the peer before it returns and holds it until handleConnected is
+// done, so the protection the caller saw lasts until the setup ends.
 func (n *streamManager) goHandleConnected(conn network.Conn) bool {
+	return n.goSetup(conn, false)
+}
+
+// goProtectAndHandleConnected is goHandleConnected for a connection the mesh adopts: it also
+// protects the peer, once the attempt is counted. It protects nothing if it returns false.
+func (n *streamManager) goProtectAndHandleConnected(conn network.Conn) bool {
+	return n.goSetup(conn, true)
+}
+
+func (n *streamManager) goSetup(conn network.Conn, protect bool) bool {
 	if !n.beginHandler() {
 		return false
 	}
+	remotePeer := conn.RemotePeer()
+	if protect {
+		n.beginProtectedAttempt(remotePeer)
+	} else {
+		n.beginPeerAttempt(remotePeer)
+	}
 	go func() {
 		defer n.endHandler()
+		defer n.endPeerAttempt(remotePeer)
 		n.handleConnected(conn)
 	}()
 	return true
@@ -178,29 +201,102 @@ func (n *streamManager) inflightPeers() []peer.ID {
 	return peers
 }
 
+// Gossip setup depends on the protection the mesh gives a peer. A peer keeps the protection
+// while it has a counted attempt, or a gossip stream and an outgoing connection, and a
+// protected peer has a counted attempt or an outgoing connection. Apart from closeWithoutStream,
+// which takes a peer's place away whatever is counted, the protection is removed only under
+// streamsLock from a peer that is idle (see unprotectIdleLocked), and whatever needs the
+// protection counts an attempt before it protects the peer or checks the protection. The
+// connection manager and the swarm's connection list do not call back into the stream
+// manager, so their calls are safe under streamsLock.
+
+// beginPeerAttempt counts a gossip setup attempt for the peer.
 func (n *streamManager) beginPeerAttempt(remotePeer peer.ID) {
 	n.streamsLock.Lock()
 	n.inflight[remotePeer]++
 	n.streamsLock.Unlock()
 }
 
-func (n *streamManager) endPeerAttempt(remotePeer peer.ID) {
-	shouldUnprotect := false
-
+// beginProtectedAttempt counts an attempt for the peer and protects the peer, as the mesh does
+// for a peer it dials or adopts.
+func (n *streamManager) beginProtectedAttempt(remotePeer peer.ID) {
 	n.streamsLock.Lock()
+	n.inflight[remotePeer]++
+	n.host.ConnManager().Protect(remotePeer, cnmgrTag)
+	n.streamsLock.Unlock()
+}
+
+// endPeerAttempt ends an attempt, and unprotects the peer if that leaves it idle.
+func (n *streamManager) endPeerAttempt(remotePeer peer.ID) {
+	n.streamsLock.Lock()
+	n.endAttemptLocked(remotePeer, true)
+	n.streamsLock.Unlock()
+}
+
+// endConnAttempt is endPeerAttempt for a setup attempt on conn. An attempt that ends on an
+// outgoing connection that is still open is noted in setupEnded while other attempts for the
+// peer are counted: a mesh dial among them must not wait for a setup on that connection.
+func (n *streamManager) endConnAttempt(conn network.Conn) {
+	remotePeer := conn.RemotePeer()
+	n.streamsLock.Lock()
+	defer n.streamsLock.Unlock()
+	n.endAttemptLocked(remotePeer, true)
+	_, hasInflight := n.inflight[remotePeer]
+	if hasInflight && conn.Stat().Direction == network.DirOutbound && !conn.IsClosed() {
+		n.setupEnded[remotePeer] = struct{}{}
+	}
+}
+
+// endDialAttempt ends the attempt counted for a mesh dial. A dial that connected leaves the
+// peer protected for the gossip setup that follows on the new connection, unless a setup with
+// the peer has already ended without a stream on an open outgoing connection, or the node has
+// no outgoing connection to the peer left.
+func (n *streamManager) endDialAttempt(remotePeer peer.ID, connected bool) {
+	n.streamsLock.Lock()
+	_, setupEnded := n.setupEnded[remotePeer]
+	n.endAttemptLocked(remotePeer, !connected || setupEnded || !n.hasOutgoingConn(remotePeer))
+	n.streamsLock.Unlock()
+}
+
+func (n *streamManager) endAttemptLocked(remotePeer peer.ID, unprotect bool) {
 	if count := n.inflight[remotePeer]; count <= 1 {
 		delete(n.inflight, remotePeer)
+		delete(n.setupEnded, remotePeer)
 	} else {
 		n.inflight[remotePeer] = count - 1
 	}
+	if unprotect {
+		n.unprotectIdleLocked(remotePeer)
+	}
+}
+
+// unprotectIdle unprotects the peer if it is idle.
+func (n *streamManager) unprotectIdle(remotePeer peer.ID) {
+	n.streamsLock.Lock()
+	n.unprotectIdleLocked(remotePeer)
+	n.streamsLock.Unlock()
+}
+
+// unprotectIdleLocked unprotects the peer if it is idle: it has no counted attempt, and no
+// gossip stream or no outgoing connection.
+func (n *streamManager) unprotectIdleLocked(remotePeer peer.ID) {
 	_, hasStream := n.streams[remotePeer]
 	_, hasInflight := n.inflight[remotePeer]
-	shouldUnprotect = !hasStream && !hasInflight
-	n.streamsLock.Unlock()
-
-	if shouldUnprotect {
+	if !hasInflight && (!hasStream || !n.hasOutgoingConn(remotePeer)) {
 		n.host.ConnManager().Unprotect(remotePeer, cnmgrTag)
 	}
+}
+
+// hasOutgoingConn reports whether the host has an outgoing connection to the peer. The host
+// drops a connection from its list before it calls Disconnected for it, so under streamsLock
+// a connection found here has its Disconnected call still to come.
+func (n *streamManager) hasOutgoingConn(remotePeer peer.ID) bool {
+	for _, conn := range n.host.Network().ConnsToPeer(remotePeer) {
+		if conn.Stat().Direction == network.DirOutbound {
+			return true
+		}
+	}
+	return false
 }
 
 // closeWithoutStream closes the connections in conns, the outgoing connections dialed for gossip,
@@ -257,7 +353,7 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 
 	remotePeer := stream.Conn().RemotePeer()
 	n.beginPeerAttempt(remotePeer)
-	defer n.endPeerAttempt(remotePeer)
+	defer n.endConnAttempt(stream.Conn())
 
 	if stream.Conn().Stat().Direction == network.DirInbound && !n.allowIncomingGossip {
 		n.log.Debugf("rejecting stream from incoming connection from %s", remotePeer.String())
@@ -350,7 +446,7 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 
 	if conn.Stat().Direction == network.DirInbound && !n.allowIncomingGossip {
 		n.log.Debugf("%s: ignoring incoming connection from %s", localPeer.String(), remotePeer.String())
-		n.host.ConnManager().Unprotect(conn.RemotePeer(), cnmgrTag)
+		n.unprotectIdle(remotePeer)
 		return
 	}
 
@@ -362,11 +458,16 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 		return
 	}
 
+	// count an attempt before checking the protection, as streamHandler does, so that the
+	// protection seen here lasts until goHandleConnected has counted its own
+	n.beginPeerAttempt(remotePeer)
+
 	// check if this is outgoing connection but made not by us (serviceImpl.dialNode)
 	// then it was made by some sub component like pubsub, ignore
 	if conn.Stat().Direction == network.DirOutbound {
 		if !n.host.ConnManager().IsProtected(remotePeer, cnmgrTag) {
 			n.log.Debugf("%s: ignoring non-dialed outgoing peer ID %s", localPeer.String(), remotePeer.String())
+			n.endPeerAttempt(remotePeer)
 			return
 		}
 	}
@@ -374,13 +475,14 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 	if !n.goHandleConnected(conn) {
 		n.log.Debugf("%s: ignoring connection from %s, shutting down", localPeer.String(), remotePeer.String())
 	}
+	n.endPeerAttempt(remotePeer)
 }
 
 func (n *streamManager) handleConnected(conn network.Conn) {
 	remotePeer := conn.RemotePeer()
 	localPeer := n.host.ID()
 	n.beginPeerAttempt(remotePeer)
-	defer n.endPeerAttempt(remotePeer)
+	defer n.endConnAttempt(conn)
 
 	n.streamsLock.Lock()
 	_, ok := n.streams[remotePeer]
@@ -439,6 +541,11 @@ func (n *streamManager) Disconnected(net network.Network, conn network.Conn) {
 	ok = ok && stream.Conn() == conn
 	if ok {
 		delete(n.streams, remotePeer)
+	}
+	// A protected peer has a counted attempt or an outgoing connection. While it has another
+	// outgoing connection, closeWithoutStream decides.
+	if _, hasInflight := n.inflight[remotePeer]; !hasInflight && !n.hasOutgoingConn(remotePeer) {
+		n.host.ConnManager().Unprotect(remotePeer, cnmgrTag)
 	}
 	n.streamsLock.Unlock()
 
