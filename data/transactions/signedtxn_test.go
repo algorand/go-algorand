@@ -121,7 +121,10 @@ func TestSignedTxnHasSignature(t *testing.T) {
 func TestSignedTxnFeeFactorSaltedKeySignatureContribution(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	// The size-based fees, which TestSigSchemeResourceFees compares with the
+	// resource-based ones.
 	proto := config.Consensus[protocol.ConsensusFuture]
+	proto.EnableSigSchemeResourceFees = false
 	fixture := makeSaltedKeySigTestFixture(t, 0, protocol.SigSchemeFalcon1024)
 
 	baseTxn := SignedTxn{Txn: fixture.txn}

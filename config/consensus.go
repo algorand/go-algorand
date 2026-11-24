@@ -641,6 +641,11 @@ type ConsensusParams struct {
 	// can choose an address that is not an Edwards25519 point.
 	EnableSigSchemeLogicSig bool
 
+	// EnableSigSchemeResourceFees prices each SaltedKeySig scheme by the bytes
+	// and verification time its signature adds over a plain Ed25519
+	// signature, instead of by size alone.
+	EnableSigSchemeResourceFees bool
+
 	// RequireLogicSigArgAccess requires that a LogicSig carry no argument it did
 	// not read: nothing above the highest index it read, and nothing unread
 	// below that index unless it is empty. Args are covered by no signature, and
@@ -1597,6 +1602,8 @@ func initConsensusProtocols() {
 	vFuture.EnableSigSchemeMLDSA44 = true
 	vFuture.EnableSigSchemeMLDSA65 = true
 	vFuture.EnableSigSchemeMLDSA87 = true
+
+	vFuture.EnableSigSchemeResourceFees = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

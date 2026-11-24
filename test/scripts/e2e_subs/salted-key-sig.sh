@@ -46,27 +46,27 @@ ${gcmd} clerk send -a "${FUNDING}" -f "${ACCOUNT}" -t "${PQADDRESS}"
 ${gcmd} clerk send -a 5555 -f "${PQADDRESS}" -t "${ACCOUNT}" --fee 1000 -o low.tx
 algokey salted sign -t low.tx -k pq.sk -o low-signed.tx
 set +o pipefail
-${gcmd} clerk rawsend -f low-signed.tx 2>&1 | grep "1mA fees is less than 3mA" || exit 1
+${gcmd} clerk rawsend -f low-signed.tx 2>&1 | grep "1mA fees is less than 1.400mA" || exit 1
 set -o pipefail
 
-## Show that 3000 min fee is sufficient
-${gcmd} clerk send -a 6666 -f "${PQADDRESS}" -t "${ACCOUNT}" --fee 3000 -o enough.tx
+## Show that a 1400 fee is sufficient
+${gcmd} clerk send -a 6666 -f "${PQADDRESS}" -t "${ACCOUNT}" --fee 1400 -o enough.tx
 algokey salted sign -t enough.tx -k pq.sk -o enough-signed.tx
 ${gcmd} clerk rawsend -f enough-signed.tx
 
 ## Show that a delegated LogicSig signed by the PQ account can authorize a txn
 algokey salted sign-program -k pq.sk -p pq-true.tok -o pq-true.lsig
-${gcmd} clerk send -a 7777 -f "${PQADDRESS}" -t "${ACCOUNT}" --fee 3000 -L pq-true.lsig
+${gcmd} clerk send -a 7777 -f "${PQADDRESS}" -t "${ACCOUNT}" --fee 1400 -L pq-true.lsig
 
 BALANCE=$(${gcmd} account balance -a "${PQADDRESS}" | awk '{ print $1 }')
-EXPECT=$((FUNDING - 6666 - 3000 - 7777 - 3000))
+EXPECT=$((FUNDING - 6666 - 1400 - 7777 - 1400))
 if [ "$BALANCE" -ne "$EXPECT" ]; then
     date "+${scriptname} FAIL wanted balance=${EXPECT} but got ${BALANCE} %Y%m%d_%H%M%S"
     false
 fi
 
 # Repeat with falcon-512, generated with an explicit scheme. Its fee surcharge
-# is half of falcon-1024's, so the required min fee is 2mA instead of 3mA.
+# is 0.2 min fee, so the required fee is 1.2mA.
 algokey salted generate -S falcon-512 -k pq512.sk > generate512.out
 
 grep 'Scheme: falcon-512' < generate512.out
@@ -87,20 +87,20 @@ ${gcmd} clerk send -a "${FUNDING}" -f "${ACCOUNT}" -t "${PQ512ADDRESS}"
 ${gcmd} clerk send -a 5555 -f "${PQ512ADDRESS}" -t "${ACCOUNT}" --fee 1000 -o low512.tx
 algokey salted sign -t low512.tx -k pq512.sk -o low512-signed.tx
 set +o pipefail
-${gcmd} clerk rawsend -f low512-signed.tx 2>&1 | grep "1mA fees is less than 2mA" || exit 1
+${gcmd} clerk rawsend -f low512-signed.tx 2>&1 | grep "1mA fees is less than 1.200mA" || exit 1
 set -o pipefail
 
-## Show that 2000 min fee is sufficient
-${gcmd} clerk send -a 6666 -f "${PQ512ADDRESS}" -t "${ACCOUNT}" --fee 2000 -o enough512.tx
+## Show that a 1200 fee is sufficient
+${gcmd} clerk send -a 6666 -f "${PQ512ADDRESS}" -t "${ACCOUNT}" --fee 1200 -o enough512.tx
 algokey salted sign -t enough512.tx -k pq512.sk -o enough512-signed.tx
 ${gcmd} clerk rawsend -f enough512-signed.tx
 
 ## Show that a delegated LogicSig signed by the PQ-512 account can authorize a txn
 algokey salted sign-program -k pq512.sk -p pq-true.tok -o pq-true512.lsig
-${gcmd} clerk send -a 7777 -f "${PQ512ADDRESS}" -t "${ACCOUNT}" --fee 2000 -L pq-true512.lsig
+${gcmd} clerk send -a 7777 -f "${PQ512ADDRESS}" -t "${ACCOUNT}" --fee 1200 -L pq-true512.lsig
 
 BALANCE512=$(${gcmd} account balance -a "${PQ512ADDRESS}" | awk '{ print $1 }')
-EXPECT512=$((FUNDING - 6666 - 2000 - 7777 - 2000))
+EXPECT512=$((FUNDING - 6666 - 1200 - 7777 - 1200))
 if [ "$BALANCE512" -ne "$EXPECT512" ]; then
     date "+${scriptname} FAIL wanted falcon-512 balance=${EXPECT512} but got ${BALANCE512} %Y%m%d_%H%M%S"
     false
@@ -137,9 +137,9 @@ if [ "$BALANCEED" -ne "$EXPECTED" ]; then
     false
 fi
 
-# Repeat with each ML-DSA parameter set. Their fee surcharges are 2, 3 and 4
-# min fees, so the required fees are 3mA, 4mA and 5mA.
-for SCHEME_FEE in ml-dsa-44:3000:3mA ml-dsa-65:4000:4mA ml-dsa-87:5000:5mA; do
+# Repeat with each ML-DSA parameter set. Their fee surcharges are 0.6, 0.9
+# and 1.3 min fees, so the required fees are 1.6mA, 1.9mA and 2.3mA.
+for SCHEME_FEE in ml-dsa-44:1600:1.600mA ml-dsa-65:1900:1.900mA ml-dsa-87:2300:2.300mA; do
     IFS=: read -r SCHEME FEE FEESTR <<< "${SCHEME_FEE}"
 
     algokey salted generate -S "${SCHEME}" -k "${SCHEME}.sk" > "generate-${SCHEME}.out"
