@@ -269,7 +269,16 @@ func newTestStreamManagerWithHandler(localID peer.ID, allowIncoming bool, handle
 	logger := logging.NewLogger()
 	logger.SetLevel(logging.Debug)
 	sm := makeStreamManager(context.Background(), logger, h, handlers, allowIncoming)
+	sm.openStream = openStreamOnHost(h)
 	return sm, h
+}
+
+// openStreamOnHost returns an openStream for stream managers that run on mock connections,
+// which carry no streams: it opens the gossip stream through the host.
+func openStreamOnHost(h host.Host) func(context.Context, network.Conn, []protocol.ID) (network.Stream, error) {
+	return func(ctx context.Context, conn network.Conn, protos []protocol.ID) (network.Stream, error) {
+		return h.NewStream(ctx, conn.RemotePeer(), protos...)
+	}
 }
 
 // assertStreamMapEmpty checks that sm.streams has no entry for remotePeer.

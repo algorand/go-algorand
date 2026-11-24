@@ -28,6 +28,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/multiformats/go-multistream"
 
 	"github.com/algorand/go-deadlock"
 
@@ -91,6 +92,11 @@ type streamManager struct {
 
 	// setupTimeout defaults to streamSetupTimeout; it is a field so tests can shorten it.
 	setupTimeout time.Duration
+	// openStream opens the gossip stream on a connection, within negotiationTimeout. They
+	// default to newStreamOnConn and streamNegotiationTimeout; they are fields so tests can
+	// replace the one and shorten the other.
+	openStream         func(ctx context.Context, conn network.Conn, protos []protocol.ID) (network.Stream, error)
+	negotiationTimeout time.Duration
 	// noStreamSince holds when closeWithoutStream first saw each connection dialed for gossip
 	// without a gossip stream. Guarded by streamsLock.
 	noStreamSince map[network.Conn]time.Time
@@ -112,6 +118,8 @@ func makeStreamManager(ctx context.Context, log logging.Logger, h host.Host, han
 		opening:             make(map[peer.ID]struct{}),
 		closeTimeout:        handlersCloseTimeout,
 		setupTimeout:        streamSetupTimeout,
+		openStream:          newStreamOnConn,
+		negotiationTimeout:  streamNegotiationTimeout,
 	}
 }
 
@@ -482,6 +490,39 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 	n.endPeerAttempt(remotePeer)
 }
 
+// streamNegotiationTimeout bounds opening a gossip stream on a connection and selecting its
+// protocol. It matches the negotiation timeout of the libp2p host.
+const streamNegotiationTimeout = 10 * time.Second
+
+// newStreamOnConn opens a stream on conn and selects one of protos on it, in order of
+// preference. It never dials. It returns once ctx ends, with an error if the selection had
+// not completed by then, and it resets a stream it does not return.
+func newStreamOnConn(ctx context.Context, conn network.Conn, protos []protocol.ID) (network.Stream, error) {
+	stream, err := conn.NewStream(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// the selection reads and writes on the stream without a context: resetting the stream
+	// when ctx ends is what ends it
+	stop := context.AfterFunc(ctx, func() {
+		_ = stream.ResetWithError(network.StreamProtocolNegotiationFailed)
+	})
+	selected, err := multistream.SelectOneOf(protos, stream)
+	if !stop() && err == nil {
+		// ctx ended as the selection completed, and the stream is being reset
+		err = ctx.Err()
+	}
+	if err != nil {
+		_ = stream.ResetWithError(network.StreamProtocolNegotiationFailed)
+		return nil, fmt.Errorf("failed to negotiate protocol: %w", err)
+	}
+	if err = stream.SetProtocol(selected); err != nil {
+		_ = stream.ResetWithError(network.StreamResourceLimitExceeded)
+		return nil, err
+	}
+	return stream, nil
+}
+
 func (n *streamManager) handleConnected(conn network.Conn) {
 	remotePeer := conn.RemotePeer()
 	localPeer := n.host.ID()
@@ -513,11 +554,12 @@ func (n *streamManager) handleConnected(conn network.Conn) {
 	for _, pair := range n.handlers {
 		protos = append(protos, pair.ProtoID)
 	}
-	// Open the stream on a connection we already have, and never dial. Without WithNoDial,
-	// host.NewStream dials the peer when conn has closed in the meantime, so a peer that only
-	// connected to us would be dialed back on a connection the mesh did not ask for.
-	ctx := network.WithNoDial(n.ctx, "gossip stream on an existing connection")
-	stream, err := n.host.NewStream(ctx, remotePeer, protos...)
+	// Open the stream on conn itself, the connection Connected chose. host.NewStream opens it
+	// on the peer's connection with the most streams, which can be another one, and dials the
+	// peer when it has none left.
+	ctx, cancel := context.WithTimeout(n.ctx, n.negotiationTimeout)
+	stream, err := n.openStream(ctx, conn, protos)
+	cancel()
 	if err != nil {
 		n.log.Infof("%s: failed to open stream to %s (%s): %v", localPeer.String(), remotePeer, conn.RemoteMultiaddr().String(), err)
 		return
