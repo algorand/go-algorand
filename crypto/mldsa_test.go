@@ -204,3 +204,75 @@ func TestMLDSAFIPS140v1(t *testing.T) {
 	require.Contains(t, out, "crypto: mldsa: unavailable")
 	require.NotContains(t, out, "started")
 }
+
+// BenchmarkSigSchemeVerify measures one verification of a valid signature of
+// a 300-byte message, of the same signature checked against another 300-byte
+// message (which ML-DSA rejects only after all of its work), and of a valid
+// signature of a 4096-byte message.
+func BenchmarkSigSchemeVerify(b *testing.B) {
+	type scheme struct {
+		name     string
+		verifier SigSchemeVerifier
+		sign     func(Hashable) (pk, sig []byte)
+	}
+	var schemes []scheme
+
+	ed := GenerateSignatureSecrets(Seed{1})
+	schemes = append(schemes, scheme{"ed25519", Ed25519SchemeVerifier{}, func(m Hashable) ([]byte, []byte) {
+		sig := ed.Sign(m)
+		return ed.SignatureVerifier[:], sig[:]
+	}})
+	f1, err := GenerateFalcon1024Signer(FalconSeed{1})
+	require.NoError(b, err)
+	schemes = append(schemes, scheme{"falcon-1024", Falcon1024SchemeVerifier{}, func(m Hashable) ([]byte, []byte) {
+		sig, err := f1.Sign(m)
+		require.NoError(b, err)
+		return f1.PublicKey[:], sig
+	}})
+	f5, err := GenerateFalcon512Signer(FalconSeed{1})
+	require.NoError(b, err)
+	schemes = append(schemes, scheme{"falcon-512", Falcon512SchemeVerifier{}, func(m Hashable) ([]byte, []byte) {
+		sig, err := f5.Sign(m)
+		require.NoError(b, err)
+		return f5.PublicKey[:], sig
+	}})
+	for _, tc := range mldsaSchemeTests {
+		sk, err := mldsa.NewPrivateKey(tc.params, make([]byte, mldsa.PrivateKeySize))
+		require.NoError(b, err)
+		schemes = append(schemes, scheme{tc.name, tc.verifier, func(m Hashable) ([]byte, []byte) {
+			sig, err := sk.SignDeterministic(HashRep(m), nil)
+			require.NoError(b, err)
+			return sk.PublicKey().Bytes(), sig
+		}})
+	}
+
+	short := TestingHashable{data: make([]byte, 300)}
+	long := TestingHashable{data: make([]byte, 4096)}
+	wrong := TestingHashable{data: make([]byte, 300)}
+	wrong.data[0] = 1
+	for _, s := range schemes {
+		pk, sig := s.sign(short)
+		pkLong, sigLong := s.sign(long)
+		b.Run(s.name+"/valid", func(b *testing.B) {
+			for b.Loop() {
+				if err := s.verifier.Verify(short, pk, sig); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+		b.Run(s.name+"/invalid", func(b *testing.B) {
+			for b.Loop() {
+				if err := s.verifier.Verify(wrong, pk, sig); err == nil {
+					b.Fatal("verified")
+				}
+			}
+		})
+		b.Run(s.name+"/4096B", func(b *testing.B) {
+			for b.Loop() {
+				if err := s.verifier.Verify(long, pkLong, sigLong); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
