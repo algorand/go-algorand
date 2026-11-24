@@ -79,6 +79,10 @@ type TransactionPool struct {
 	// since pending groups passed verifyForPendingBlock under the old header.
 	replayNeedsVerify bool
 
+	// verifyForPendingBlockCalls counts verifyForPendingBlock calls, so tests
+	// can check that replays skip it.
+	verifyForPendingBlockCalls int
+
 	assemblyMu       deadlock.Mutex
 	assemblyCond     sync.Cond
 	assemblyDeadline time.Time
@@ -693,6 +697,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 //
 // verifyForPendingBlock assumes that pool.mu is locked.
 func (pool *TransactionPool) verifyForPendingBlock(txgroup []transactions.SignedTxn) error {
+	pool.verifyForPendingBlockCalls++
 	cache := pool.ledger.VerifiedTransactionCache()
 	specAddrs := transactions.SpecialAddresses{
 		FeeSink:     pool.pendingBlockHeader.FeeSink,

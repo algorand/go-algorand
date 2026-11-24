@@ -1933,6 +1933,7 @@ func TestRecomputeReplayNeedsVerify(t *testing.T) {
 
 	secrets, addresses := generateAccounts(2)
 	mockLedger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
+	t.Cleanup(mockLedger.Close)
 	transactionPool := MakeTransactionPool(mockLedger, config.GetDefaultLocal(), logging.Base(), nil)
 
 	tx := transactions.Transaction{
@@ -1967,8 +1968,16 @@ func TestRecomputeReplayNeedsVerify(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			test.edit(&transactionPool.pendingBlockHeader)
+			callsBefore := transactionPool.verifyForPendingBlockCalls
 			transactionPool.recomputeBlockEvaluator(nil, 0, false)
 			require.Equal(t, test.needsVerify, transactionPool.replayNeedsVerify)
+			// The replay re-adds the one pending group: it is checked again only
+			// when the header changed.
+			wantCalls := 0
+			if test.needsVerify {
+				wantCalls = 1
+			}
+			require.Equal(t, wantCalls, transactionPool.verifyForPendingBlockCalls-callsBefore)
 			require.Equal(t, [][]transactions.SignedTxn{{signedTx}}, transactionPool.PendingTxGroups())
 		})
 	}
