@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-// Command fips140v1 only imports the logic package. TestMLDSAFIPS140v1 builds
+// Command fips140v1 only imports the crypto package. TestMLDSAFIPS140v1 builds
 // it with GOFIPS140=v1.0.0 to check that the package's check for a working
 // crypto/mldsa stops such a binary at startup.
 package main
@@ -22,7 +22,7 @@ package main
 import (
 	"fmt"
 
-	_ "github.com/algorand/go-algorand/data/transactions/logic"
+	_ "github.com/algorand/go-algorand/crypto"
 )
 
 func main() {
