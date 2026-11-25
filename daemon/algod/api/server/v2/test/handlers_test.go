@@ -1767,7 +1767,8 @@ func TestPostSimulateTransactionPlaceholderSaltedKeySignatureValidation(t *testi
 	})
 
 	t.Run("FixSigners resolves the placeholder signer", func(t *testing.T) {
-		_, fixableSaltedAuthorizer, fixableSaltedKeySig := makeSaltedKeySigWithOffCurveAuthorizer(t, basics_testing.RandomSigSchemeTest().Scheme, true)
+		scheme := basics_testing.RandomSigSchemeTest().Scheme
+		_, fixableSaltedAuthorizer, fixableSaltedKeySig := makeSaltedKeySigWithOffCurveAuthorizer(t, scheme, true)
 		rekeyTxn := txnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   roots[0].Address(),
@@ -1775,11 +1776,15 @@ func TestPostSimulateTransactionPlaceholderSaltedKeySignatureValidation(t *testi
 			RekeyTo:  fixableSaltedAuthorizer,
 			Fee:      minFee,
 		})
+		// The salted-key transaction pays its min fee plus its scheme's surcharge.
+		proto := config.Consensus[hdr.CurrentProtocol]
+		sksigFee, _, overflow := proto.MinFee().FeeForUsage(basics.Micros(1e6)+transactions.SigSchemeFeeContribution(proto, scheme), 1e6, 0)
+		require.False(t, overflow)
 		sksigSignedTxn := txnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   roots[0].Address(),
 			Receiver: roots[0].Address(),
-			Fee:      minFee * 3,
+			Fee:      sksigFee.Raw,
 		})
 		fixableGroup := txntest.Group(&rekeyTxn, &sksigSignedTxn)
 		fixableGroup[1].AuthAddr = roots[1].Address()
