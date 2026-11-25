@@ -4914,9 +4914,19 @@ func TestWebsocketNetworkHTTPClient(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusNotFound, resp.StatusCode) // no such handler
 
-	resp, err = c.Do(&http.Request{URL: &url.URL{Path: "/v1/" + genesisID + "/gossip"}})
-	require.NoError(t, err)
-	require.Equal(t, http.StatusPreconditionFailed, resp.StatusCode) // not enough ws peer headers
+	wantBody := fmt.Sprintf("unsupported protocol version (server supports %v)", netA.supportedProtocolVersions)
+	for _, header := range []http.Header{
+		nil,
+		{ProtocolVersionHeader: {"unknown-peer-version"}},
+	} {
+		resp, err = c.Do(&http.Request{URL: &url.URL{Path: "/v1/" + genesisID + "/gossip"}, Header: header})
+		require.NoError(t, err)
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		require.NoError(t, err)
+		require.Equal(t, http.StatusPreconditionFailed, resp.StatusCode)
+		require.Equal(t, wantBody, string(body))
+	}
 
 	_, err = netB.GetHTTPClient("invalid")
 	require.ErrorContains(t, err, `could not parse a host from url`)
