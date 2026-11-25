@@ -85,9 +85,9 @@ var sigSchemes = map[protocol.SigScheme]sigScheme{
 		maxPublicKeySize: constSize(crypto.Falcon512PublicKeySize),
 		maxSignatureSize: constSize(crypto.Falcon512MaxSignatureSize),
 	},
-	// ML-DSA fees follow Falcon's: about one min fee per 1.6 KB of public key
-	// and maximum signature (Falcon-1024's 3216 bytes pay 2, Falcon-512's 1610
-	// pay 1), rounded to the nearest whole min fee.
+	// ML-DSA fees follow Falcon's: one min fee per 1608 bytes of public key and
+	// maximum signature (Falcon-1024's 3216 bytes pay 2, Falcon-512's 1610 pay
+	// 1), rounded to the nearest whole min fee.
 	protocol.SigSchemeMLDSA44: {
 		verifier:         crypto.MLDSA44SchemeVerifier{},
 		enabled:          func(proto config.ConsensusParams) bool { return proto.EnableSigSchemeMLDSA44 },
