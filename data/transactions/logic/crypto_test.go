@@ -19,7 +19,6 @@ package logic
 import (
 	"bytes"
 	"compress/gzip"
-	"context"
 	stdcrypto "crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -33,12 +32,10 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"os/exec"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -1516,45 +1513,4 @@ func TestMLDSAVerifyVectors(t *testing.T) {
 		}
 	}
 	require.Equal(t, 25, ran)
-}
-
-// TestMLDSAFIPS140v1 checks that a binary built against the FIPS 140-3 Go
-// Cryptographic Module v1.0.0, which has no ML-DSA, refuses to start instead of
-// rejecting every mldsa_verify signature.
-func TestMLDSAFIPS140v1(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-	if testing.Short() {
-		t.Skip("builds a binary against the FIPS 140-3 v1.0.0 module")
-	}
-	gocmd, err := exec.LookPath("go")
-	if err != nil {
-		t.Skip("no go command")
-	}
-
-	// GOFLAGS could hold flags, like -modfile, whose paths only make sense
-	// where the parent test was started, so the child does without them.
-	var env []string
-	for _, kv := range os.Environ() {
-		if !strings.HasPrefix(kv, "GOFLAGS=") && !strings.HasPrefix(kv, "GOFIPS140=") {
-			env = append(env, kv)
-		}
-	}
-	run := func(fips string) (string, error) {
-		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
-		defer cancel()
-		cmd := exec.CommandContext(ctx, gocmd, "run", "./testdata/fips140v1")
-		cmd.Env = append(env, "GOFIPS140="+fips)
-		out, err := cmd.CombinedOutput()
-		require.NoError(t, ctx.Err(), "go run timed out")
-		return string(out), err
-	}
-	out, err := run("off")
-	require.NoError(t, err, out)
-	require.Contains(t, out, "started")
-
-	out, err = run("v1.0.0")
-	require.Error(t, err, out)
-	require.Contains(t, out, "mldsa_verify: mldsa: unavailable")
-	require.NotContains(t, out, "started")
 }

@@ -121,7 +121,10 @@ func TestSignedTxnHasSignature(t *testing.T) {
 func TestSignedTxnFeeFactorSaltedKeySignatureContribution(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	// The size-based fees, which TestSigSchemeResourceFees compares with the
+	// resource-based ones.
 	proto := config.Consensus[protocol.ConsensusFuture]
+	proto.EnableSigSchemeResourceFees = false
 	fixture := makeSaltedKeySigTestFixture(t, 0, protocol.SigSchemeFalcon1024)
 
 	baseTxn := SignedTxn{Txn: fixture.txn}
@@ -186,6 +189,16 @@ func TestSignedTxnFeeFactorSaltedKeySignatureContribution(t *testing.T) {
 	require.Equal(t, basics.Micros(2e6), SigSchemeFeeContribution(proto, protocol.SigSchemeFalcon1024))
 	require.Equal(t, basics.Micros(1e6), SigSchemeFeeContribution(proto, protocol.SigSchemeFalcon512))
 	require.Equal(t, basics.Micros(0), SigSchemeFeeContribution(proto, protocol.SigSchemeEd25519))
+	require.Equal(t, basics.Micros(2e6), SigSchemeFeeContribution(proto, protocol.SigSchemeMLDSA44))
+	require.Equal(t, basics.Micros(3e6), SigSchemeFeeContribution(proto, protocol.SigSchemeMLDSA65))
+	require.Equal(t, basics.Micros(4e6), SigSchemeFeeContribution(proto, protocol.SigSchemeMLDSA87))
+	// Every scheme's surcharge applies alike to direct and delegated authorization.
+	for scheme, ss := range sigSchemes {
+		direct := SignedTxn{Txn: fixture.txn, SKsig: SaltedKeySig{Scheme: scheme}}
+		delegated := SignedTxn{Txn: fixture.txn, Lsig: LogicSig{Logic: []byte{1}, SKsig: SaltedKeySig{Scheme: scheme}}}
+		require.Equal(t, 1e6+ss.fee, direct.FeeFactor(proto), scheme)
+		require.Equal(t, 1e6+ss.fee, delegated.FeeFactor(proto), scheme)
+	}
 	require.Equal(t, basics.Micros(1e6), unknownSKsigSigned.FeeFactor(proto))
 	require.Equal(t, basics.Micros(1e6), unknownDelegatedSKsigSigned.FeeFactor(proto))
 	require.Equal(t, basics.Micros(1e6), edSKsigSigned.FeeFactor(proto))

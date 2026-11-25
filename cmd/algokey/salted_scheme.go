@@ -17,6 +17,7 @@
 package main
 
 import (
+	"crypto/mldsa"
 	"fmt"
 	"strings"
 
@@ -30,7 +31,24 @@ const (
 	sigSchemeFalcon1024Name = "falcon-1024"
 	sigSchemeFalcon512Name  = "falcon-512"
 	sigSchemeEd25519Name    = "ed25519"
+	sigSchemeMLDSA44Name    = "ml-dsa-44"
+	sigSchemeMLDSA65Name    = "ml-dsa-65"
+	sigSchemeMLDSA87Name    = "ml-dsa-87"
 )
+
+// sigSchemeNames are the long names algokey accepts and prints for schemes
+// that have them. Other schemes go by their two-character tag.
+var sigSchemeNames = []struct {
+	scheme protocol.SigScheme
+	name   string
+}{
+	{protocol.SigSchemeFalcon1024, sigSchemeFalcon1024Name},
+	{protocol.SigSchemeFalcon512, sigSchemeFalcon512Name},
+	{protocol.SigSchemeEd25519, sigSchemeEd25519Name},
+	{protocol.SigSchemeMLDSA44, sigSchemeMLDSA44Name},
+	{protocol.SigSchemeMLDSA65, sigSchemeMLDSA65Name},
+	{protocol.SigSchemeMLDSA87, sigSchemeMLDSA87Name},
+}
 
 // sigSchemeOps holds the signing-side, private-key operations for one signature
 // scheme. The consensus-relevant scheme behavior (verification, enablement,
@@ -46,6 +64,9 @@ var sigSchemeOpsByScheme = map[protocol.SigScheme]sigSchemeOps{
 	protocol.SigSchemeFalcon1024: falcon1024Ops{},
 	protocol.SigSchemeFalcon512:  falcon512Ops{},
 	protocol.SigSchemeEd25519:    ed25519Ops{},
+	protocol.SigSchemeMLDSA44:    mldsaOps{protocol.SigSchemeMLDSA44, mldsa.MLDSA44()},
+	protocol.SigSchemeMLDSA65:    mldsaOps{protocol.SigSchemeMLDSA65, mldsa.MLDSA65()},
+	protocol.SigSchemeMLDSA87:    mldsaOps{protocol.SigSchemeMLDSA87, mldsa.MLDSA87()},
 }
 
 type falcon1024Ops struct{}
@@ -54,14 +75,10 @@ type ed25519Ops struct{}
 
 func parseSigScheme(value string) (protocol.SigScheme, error) {
 	value = strings.TrimSpace(value)
-	if strings.EqualFold(value, sigSchemeFalcon1024Name) {
-		return protocol.SigSchemeFalcon1024, nil
-	}
-	if strings.EqualFold(value, sigSchemeFalcon512Name) {
-		return protocol.SigSchemeFalcon512, nil
-	}
-	if strings.EqualFold(value, sigSchemeEd25519Name) {
-		return protocol.SigSchemeEd25519, nil
+	for _, n := range sigSchemeNames {
+		if strings.EqualFold(value, n.name) {
+			return n.scheme, nil
+		}
 	}
 
 	var scheme protocol.SigScheme
@@ -73,14 +90,10 @@ func parseSigScheme(value string) (protocol.SigScheme, error) {
 }
 
 func formatSigScheme(scheme protocol.SigScheme) string {
-	if scheme == protocol.SigSchemeFalcon1024 {
-		return sigSchemeFalcon1024Name
-	}
-	if scheme == protocol.SigSchemeFalcon512 {
-		return sigSchemeFalcon512Name
-	}
-	if scheme == protocol.SigSchemeEd25519 {
-		return sigSchemeEd25519Name
+	for _, n := range sigSchemeNames {
+		if scheme == n.scheme {
+			return n.name
+		}
 	}
 	return scheme.String()
 }
@@ -226,4 +239,47 @@ func (ed25519Ops) sign(privateKey []byte, message crypto.Hashable) ([]byte, erro
 	}
 	sig := signer.Sign(message)
 	return sig[:], nil
+}
+
+// mldsaOps signs with ML-DSA. The private key is the 32-byte FIPS 204 key
+// generation seed, from which mldsa.NewPrivateKey expands the full key.
+type mldsaOps struct {
+	scheme protocol.SigScheme
+	params mldsa.Parameters
+}
+
+func (o mldsaOps) deriveSigning(seed crypto.Digest) (saltedSigningMaterial, error) {
+	sk, err := mldsa.NewPrivateKey(o.params, seed[:])
+	if err != nil {
+		return saltedSigningMaterial{}, err
+	}
+	publicKey := sk.PublicKey().Bytes()
+	salt, _, err := basics.CanonicalAddressSalt(o.scheme, publicKey)
+	if err != nil {
+		return saltedSigningMaterial{}, err
+	}
+
+	return saltedSigningMaterial{
+		Public: saltedPublicMaterial{
+			Scheme:    o.scheme,
+			Salt:      salt,
+			PublicKey: publicKey,
+		},
+		PrivateKey: sk.Bytes(),
+	}, nil
+}
+
+func (o mldsaOps) publicKeySize() uint64 { return uint64(o.params.PublicKeySize()) }
+
+func (mldsaOps) privateKeySize() uint64 { return mldsa.PrivateKeySize }
+
+// sign makes a hedged signature, FIPS 204's default: crypto/mldsa mixes fresh
+// randomness into each one, so signing the same message twice gives two
+// different valid signatures.
+func (o mldsaOps) sign(privateKey []byte, message crypto.Hashable) ([]byte, error) {
+	sk, err := mldsa.NewPrivateKey(o.params, privateKey)
+	if err != nil {
+		return nil, err
+	}
+	return sk.Sign(nil, crypto.HashRep(message), nil)
 }

@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/basics"
 	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -67,6 +68,35 @@ func TestSigSchemeBoundsCoverSchemes(t *testing.T) {
 		scheme := sigSchemes[ts.Scheme]
 		require.LessOrEqual(t, len(acct.PublicKey), scheme.maxPublicKeySize(), ts.Name)
 		require.LessOrEqual(t, len(sig), scheme.maxSignatureSize(), ts.Name)
+	}
+}
+
+// TestSigSchemeResourceFees pins each scheme's fee under both pricings: by size
+// in v43, where Falcon-1024 is live, and by bytes and verification time under
+// EnableSigSchemeResourceFees.
+func TestSigSchemeResourceFees(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	bySize := config.Consensus[protocol.ConsensusV43]
+	byResource := config.Consensus[protocol.ConsensusFuture]
+	require.False(t, bySize.EnableSigSchemeResourceFees)
+	require.True(t, byResource.EnableSigSchemeResourceFees)
+
+	for _, tc := range []struct {
+		scheme             protocol.SigScheme
+		bySize, byResource basics.Micros
+	}{
+		{protocol.SigSchemeFalcon1024, 2e6, 0.4e6},
+		{protocol.SigSchemeFalcon512, 1e6, 0.2e6},
+		{protocol.SigSchemeMLDSA44, 2e6, 0.6e6},
+		{protocol.SigSchemeMLDSA65, 3e6, 0.9e6},
+		{protocol.SigSchemeMLDSA87, 4e6, 1.3e6},
+		{protocol.SigSchemeEd25519, 0, 0},
+		{protocol.SigSchemeLogicSig, 0, 0},
+	} {
+		require.Equal(t, tc.bySize, SigSchemeFeeContribution(bySize, tc.scheme), tc.scheme)
+		require.Equal(t, tc.byResource, SigSchemeFeeContribution(byResource, tc.scheme), tc.scheme)
 	}
 }
 

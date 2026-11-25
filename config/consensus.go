@@ -623,11 +623,28 @@ type ConsensusParams struct {
 	// ed scheme's salted-address profile.
 	EnableSigSchemeEd25519 bool
 
+	// EnableSigSchemeMLDSA44 enables ML-DSA-44 transaction authorization for
+	// the m4 scheme.
+	EnableSigSchemeMLDSA44 bool
+
+	// EnableSigSchemeMLDSA65 enables ML-DSA-65 transaction authorization for
+	// the m6 scheme.
+	EnableSigSchemeMLDSA65 bool
+
+	// EnableSigSchemeMLDSA87 enables ML-DSA-87 transaction authorization for
+	// the m8 scheme.
+	EnableSigSchemeMLDSA87 bool
+
 	// EnableSigSchemeLogicSig enables transaction authorization by a LogicSig
 	// carried in a SaltedKeySig under the ls scheme, whose address commits to the
 	// program and a salt. Unlike the LogicSig in SignedTxn.Lsig, such an account
 	// can choose an address that is not an Edwards25519 point.
 	EnableSigSchemeLogicSig bool
+
+	// EnableSigSchemeResourceFees prices each SaltedKeySig scheme by the bytes
+	// and verification time its signature adds over a plain Ed25519
+	// signature, instead of by size alone.
+	EnableSigSchemeResourceFees bool
 
 	// RequireLogicSigArgAccess requires that a LogicSig carry no argument it did
 	// not read: nothing above the highest index it read, and nothing unread
@@ -1589,6 +1606,12 @@ func initConsensusProtocols() {
 
 	vFuture.EnableSigSchemeLogicSig = true
 	vFuture.DiscardFailedInnerClearStateDelta = true
+
+	vFuture.EnableSigSchemeMLDSA44 = true
+	vFuture.EnableSigSchemeMLDSA65 = true
+	vFuture.EnableSigSchemeMLDSA87 = true
+
+	vFuture.EnableSigSchemeResourceFees = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
