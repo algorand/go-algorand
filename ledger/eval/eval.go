@@ -1154,12 +1154,9 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 		}
 	}
 
-	for _, txn := range txgroup {
-		wfErr := txn.Txn.WellFormed(eval.specials, eval.proto)
-		if wfErr != nil {
-			txnErr := ledgercore.TxnNotWellFormedError(fmt.Sprintf("transaction %v: malformed: %v", txn.ID(), wfErr))
-			return &txnErr
-		}
+	err = transactions.SignedTxnGroupWellFormed(txgroup, eval.specials, eval.proto)
+	if err != nil {
+		return err
 	}
 
 	var group transactions.TxGroup
@@ -1315,12 +1312,9 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup ...transactions.SignedTxnWi
 	var group transactions.TxGroup
 
 	if eval.validate {
-		for _, txad := range txgroup {
-			err = txad.Txn.WellFormed(eval.specials, eval.proto)
-			if err != nil {
-				err0 := ledgercore.TxnNotWellFormedError(fmt.Sprintf("transaction %v: malformed: %v", txad.ID(), err))
-				return &err0
-			}
+		err = transactions.SignedTxnGroupWellFormed(txgroup, eval.specials, eval.proto)
+		if err != nil {
+			return err
 		}
 	}
 

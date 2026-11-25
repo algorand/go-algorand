@@ -6518,20 +6518,22 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 	if isGroup {
 		parent = cx.currentTxID()
 	}
+
+	// The goal is to follow the same invariants used by the transaction
+	// pool. Namely that any transaction that makes it to Perform (which is
+	// equivalent to eval.applyTransaction) is WellFormed. Authorization
+	// must be checked later, to take state changes from earlier in the
+	// group into account.
+
+	// Recall that WellFormed does not care about individual
+	// transaction fees because of fee pooling. Checked above.
+
+	err = transactions.SignedTxnGroupWellFormed(cx.subtxns, *cx.Specials, *cx.Proto)
+	if err != nil {
+		return err
+	}
+
 	for itx := range cx.subtxns {
-		// The goal is to follow the same invariants used by the transaction
-		// pool. Namely that any transaction that makes it to Perform (which is
-		// equivalent to eval.applyTransaction) is WellFormed. Authorization
-		// must be checked later, to take state changes from earlier in the
-		// group into account.
-
-		// Recall that WellFormed does not care about individual
-		// transaction fees because of fee pooling. Checked above.
-		txnErr := cx.subtxns[itx].Txn.WellFormed(*cx.Specials, *cx.Proto)
-		if txnErr != nil {
-			return txnErr
-		}
-
 		var calledVersion uint64
 
 		// Disallow reentrancy, limit inner app call depth, and do version checks

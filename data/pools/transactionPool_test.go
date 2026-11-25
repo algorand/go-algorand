@@ -1414,7 +1414,7 @@ func TestStateProofLogging(t *testing.T) {
 	require.NoError(t, err)
 	stxn.Txn.Message = msg
 
-	err = stxn.Txn.WellFormed(transactions.SpecialAddresses{}, proto)
+	err = transactions.SignedTxnGroupWellFormed([]transactions.SignedTxn{stxn}, transactions.SpecialAddresses{}, proto)
 	require.NoError(t, err)
 
 	// Add it to the transaction pool and assemble the block

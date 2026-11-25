@@ -366,8 +366,8 @@ func (tx Transaction) MatchAddress(addr basics.Address) bool {
 	return false
 }
 
-// WellFormed checks that the transaction looks reasonable on its own (but not necessarily valid against the actual ledger). It does not check signatures.
-func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusParams) error {
+// wellFormed checks that the transaction looks reasonable on its own (but not necessarily valid against the actual ledger). It does not check signatures. It is not exported because we want callers to avoid the error of serially checking the transactions in a group and operating on them in someway that may unexpectedly access the later unchecked members.
+func (tx Transaction) wellFormed(spec SpecialAddresses, proto config.ConsensusParams) error {
 	switch tx.Type {
 	case protocol.PaymentTx:
 		err := tx.PaymentTxnFields.wellFormed(tx.Header, spec, proto)

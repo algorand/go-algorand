@@ -50,7 +50,7 @@ func TestWellFormedKeyRegistrationTx(t *testing.T) {
 	}
 
 	// this tx is well-formed
-	err = tx.WellFormed(SpecialAddresses{}, curProto)
+	err = tx.wellFormed(SpecialAddresses{}, curProto)
 	require.NoError(t, err)
 
 	type keyRegTestCase struct {
@@ -88,7 +88,7 @@ func TestWellFormedKeyRegistrationTx(t *testing.T) {
 		curProto.EnableKeyregCoherencyCheck = testCase.enableKeyregCoherencyCheck
 		curProto.EnableStateProofKeyregCheck = testCase.enableStateProofKeyregCheck
 		curProto.MaxKeyregValidPeriod = maxValidPeriod // TODO: remove this when MaxKeyregValidPeriod is in CurrentVersion
-		return tx.WellFormed(SpecialAddresses{}, curProto)
+		return tx.wellFormed(SpecialAddresses{}, curProto)
 	}
 
 	if *generateFlag == true {
@@ -747,7 +747,7 @@ func TestGoOnlineGoNonparticipatingContradiction(t *testing.T) {
 	}
 	// this tx tries to both register keys to go online, and mark an account as non-participating.
 	// it is not well-formed.
-	err = tx.WellFormed(SpecialAddresses{}, config.Consensus[protocol.ConsensusCurrentVersion])
+	err = tx.wellFormed(SpecialAddresses{}, config.Consensus[protocol.ConsensusCurrentVersion])
 	require.ErrorContains(t, err, "tries to register keys to go online, but nonparticipatory flag is set")
 }
 
@@ -766,11 +766,11 @@ func TestGoNonparticipatingWellFormed(t *testing.T) {
 	}
 
 	// this tx is well-formed
-	err = tx.WellFormed(SpecialAddresses{}, curProto)
+	err = tx.wellFormed(SpecialAddresses{}, curProto)
 	require.NoError(t, err)
 	// but it should stop being well-formed if the protocol does not support it
 	curProto.SupportBecomeNonParticipatingTransactions = false
-	err = tx.WellFormed(SpecialAddresses{}, curProto)
+	err = tx.wellFormed(SpecialAddresses{}, curProto)
 	require.ErrorContains(t, err, "mark an account as nonparticipating, but")
 }
 
@@ -788,6 +788,6 @@ func TestKeyregFeeSink(t *testing.T) {
 			Sender: spec.FeeSink,
 			Fee:    basics.MicroAlgos{Raw: 100},
 		},
-	}.WellFormed(spec, proto)
+	}.wellFormed(spec, proto)
 	require.ErrorContains(t, err, "cannot register participation key for fee sink")
 }

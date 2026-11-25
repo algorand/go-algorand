@@ -287,3 +287,67 @@ func SummarizeFees(txgroup []SignedTxnWithAD, proto config.ConsensusParams) (usa
 	usage = basics.AddSaturate(usage, logicSigProgramFeeContribution(txgroup, proto))
 	return usage, paid
 }
+
+// TxnNotWellFormedError indicates a transaction was not well-formed when evaluated by the BlockEvaluator
+//
+//msgp:ignore TxnNotWellFormedError
+type TxnNotWellFormedError struct {
+	err  error
+	gi   int
+	stxn SignedTxn
+}
+
+func (err *TxnNotWellFormedError) Error() string {
+	return fmt.Sprintf("transaction %v: malformed: %v", err.stxn.ID(), err.err)
+}
+
+// Err returns the underlying error that caused the transaction to be not well-formed.
+func (err *TxnNotWellFormedError) Err() error {
+	return err.err
+}
+
+// Unwrap returns the underlying well-formedness error so errors.Is and
+// errors.As can traverse to the cause.
+func (err *TxnNotWellFormedError) Unwrap() error {
+	return err.err
+}
+
+// MakeTxnNotWellFormedError constructs a TxnNotWellFormedError for the
+// transaction at groupIndex in its group, wrapping cause.
+func MakeTxnNotWellFormedError(cause error, groupIndex int, stxn SignedTxn) *TxnNotWellFormedError {
+	return &TxnNotWellFormedError{
+		err:  cause,
+		gi:   groupIndex,
+		stxn: stxn,
+	}
+}
+
+// SignedTxn returns the offending signed transaction.
+func (err *TxnNotWellFormedError) SignedTxn() SignedTxn {
+	return err.stxn
+}
+
+// GroupIndex returns the index of the offending transaction in its group.
+func (err *TxnNotWellFormedError) GroupIndex() int {
+	return err.gi
+}
+
+// SignedTxnGroupWellFormed checks that every transaction in the group is
+// well-formed. It accepts either a group of SignedTxn or SignedTxnWithAD.
+func SignedTxnGroupWellFormed[T SignedTxn | SignedTxnWithAD](txgroup []T, spec SpecialAddresses, proto config.ConsensusParams) error {
+	var err error
+	for i := range txgroup {
+		var stxn *SignedTxn
+		switch t := any(&txgroup[i]).(type) {
+		case *SignedTxn:
+			stxn = t
+		case *SignedTxnWithAD:
+			stxn = &t.SignedTxn
+		}
+		err = stxn.Txn.wellFormed(spec, proto)
+		if err != nil {
+			return MakeTxnNotWellFormedError(err, i, *stxn)
+		}
+	}
+	return nil
+}
