@@ -181,6 +181,26 @@ func TestSaltedGenerateUsesMnemonicSizedEntropy(t *testing.T) {
 				return sk.PublicKey().Bytes(), sk.Bytes()
 			},
 		},
+		{
+			name:    "secp256k1",
+			scheme:  protocol.SigSchemeSecp256k1,
+			address: "MCOTEETM6R3CW6IQDXSILGELZFGC36L4BMCVNNTAY332MRZSAKTMCPULOA",
+			rederive: func(t *testing.T, seed crypto.Digest) ([]byte, []byte) {
+				publicKey, err := crypto.Secp256k1PublicKey(seed[:])
+				require.NoError(t, err)
+				return publicKey, seed[:]
+			},
+		},
+		{
+			name:    "secp256r1",
+			scheme:  protocol.SigSchemeSecp256r1,
+			address: "UZ452YAHCX4CQYMEZSCQAF5JIWQ7PPIWZ5SND3CZSVX327XZ33RKPXENKQ",
+			rederive: func(t *testing.T, seed crypto.Digest) ([]byte, []byte) {
+				publicKey, err := crypto.Secp256r1PublicKey(seed[:])
+				require.NoError(t, err)
+				return publicKey, seed[:]
+			},
+		},
 	}
 
 	for _, tc := range testcases {
@@ -217,6 +237,7 @@ func TestSigSchemeRegistriesConsistent(t *testing.T) {
 	for _, scheme := range []protocol.SigScheme{
 		protocol.SigSchemeFalcon1024, protocol.SigSchemeFalcon512, protocol.SigSchemeEd25519,
 		protocol.SigSchemeMLDSA44, protocol.SigSchemeMLDSA65, protocol.SigSchemeMLDSA87,
+		protocol.SigSchemeSecp256k1, protocol.SigSchemeSecp256r1,
 	} {
 		_, ok := sigSchemeOpsByScheme[scheme]
 		require.True(t, ok, "basics scheme %q missing from algokey ops registry", scheme)
@@ -228,7 +249,8 @@ func TestSigSchemeKeySizes(t *testing.T) {
 	t.Parallel()
 
 	for scheme, ops := range sigSchemeOpsByScheme {
-		signing, err := ops.deriveSigning(crypto.Digest{})
+		// A zero seed is not an ECDSA private key.
+		signing, err := ops.deriveSigning(crypto.Digest{1})
 		require.NoError(t, err)
 		require.Equal(t, ops.publicKeySize(), uint64(len(signing.Public.PublicKey)), "scheme %q", scheme)
 		require.Equal(t, ops.privateKeySize(), uint64(len(signing.PrivateKey)), "scheme %q", scheme)
@@ -271,6 +293,11 @@ func TestParseSigSchemeAcceptsLongName(t *testing.T) {
 		"m6":        protocol.SigSchemeMLDSA65,
 		"ml-dsa-87": protocol.SigSchemeMLDSA87,
 		"m8":        protocol.SigSchemeMLDSA87,
+		"secp256k1": protocol.SigSchemeSecp256k1,
+		"SECP256K1": protocol.SigSchemeSecp256k1,
+		"k1":        protocol.SigSchemeSecp256k1,
+		"secp256r1": protocol.SigSchemeSecp256r1,
+		"r1":        protocol.SigSchemeSecp256r1,
 	} {
 		scheme, err = parseSigScheme(value)
 		require.NoError(t, err)
@@ -288,6 +315,8 @@ func TestFormatSigScheme(t *testing.T) {
 	require.Equal(t, sigSchemeMLDSA44Name, formatSigScheme(protocol.SigSchemeMLDSA44))
 	require.Equal(t, sigSchemeMLDSA65Name, formatSigScheme(protocol.SigSchemeMLDSA65))
 	require.Equal(t, sigSchemeMLDSA87Name, formatSigScheme(protocol.SigSchemeMLDSA87))
+	require.Equal(t, sigSchemeSecp256k1Name, formatSigScheme(protocol.SigSchemeSecp256k1))
+	require.Equal(t, sigSchemeSecp256r1Name, formatSigScheme(protocol.SigSchemeSecp256r1))
 	require.Equal(t, protocol.SigScheme{'z', 'z'}.String(), formatSigScheme(protocol.SigScheme{'z', 'z'}))
 }
 
@@ -316,7 +345,7 @@ func TestSaltedPrivateKeyFileStoresKeysNotEntropy(t *testing.T) {
 			// The file holds the scheme's keys, never the mnemonic entropy,
 			// from which every scheme's keys derive. The keygen seed is
 			// specific to the scheme: an Ed25519 private key starts with it,
-			// and an ML-DSA private key is the seed itself.
+			// and an ML-DSA or ECDSA private key is the seed itself.
 			data, err := os.ReadFile(keyfile)
 			require.NoError(t, err)
 			require.False(t, bytes.Contains(data, entropy[:]))
@@ -512,6 +541,8 @@ func TestSaltedSignProducesVerifiableSaltedKeySig(t *testing.T) {
 		{"ml-dsa-44", protocol.SigSchemeMLDSA44},
 		{"ml-dsa-65", protocol.SigSchemeMLDSA65},
 		{"ml-dsa-87", protocol.SigSchemeMLDSA87},
+		{"secp256k1", protocol.SigSchemeSecp256k1},
+		{"secp256r1", protocol.SigSchemeSecp256r1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -967,5 +998,23 @@ func TestSaltedSignMLDSAIsHedged(t *testing.T) {
 			require.NoError(t, first.Verify(proto, txn, signing.Public.address()))
 			require.NoError(t, second.Verify(proto, txn, signing.Public.address()))
 		})
+	}
+}
+
+// TestSaltedECDSARejectsSeedOutOfRange checks that a keygen seed that is not an
+// ECDSA private key, zero or the group order and above, derives no key.
+func TestSaltedECDSARejectsSeedOutOfRange(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var max crypto.Digest
+	for i := range max {
+		max[i] = 0xff
+	}
+	for _, scheme := range []protocol.SigScheme{protocol.SigSchemeSecp256k1, protocol.SigSchemeSecp256r1} {
+		for _, seed := range []crypto.Digest{{}, max} {
+			_, err := sigSchemeOpsByScheme[scheme].deriveSigning(seed)
+			require.ErrorContains(t, err, "is not a "+formatSigScheme(scheme)+" private key")
+		}
 	}
 }

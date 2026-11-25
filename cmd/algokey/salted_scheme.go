@@ -34,6 +34,8 @@ const (
 	sigSchemeMLDSA44Name    = "ml-dsa-44"
 	sigSchemeMLDSA65Name    = "ml-dsa-65"
 	sigSchemeMLDSA87Name    = "ml-dsa-87"
+	sigSchemeSecp256k1Name  = "secp256k1"
+	sigSchemeSecp256r1Name  = "secp256r1"
 )
 
 // sigSchemeNames are the long names algokey accepts and prints for schemes
@@ -48,6 +50,8 @@ var sigSchemeNames = []struct {
 	{protocol.SigSchemeMLDSA44, sigSchemeMLDSA44Name},
 	{protocol.SigSchemeMLDSA65, sigSchemeMLDSA65Name},
 	{protocol.SigSchemeMLDSA87, sigSchemeMLDSA87Name},
+	{protocol.SigSchemeSecp256k1, sigSchemeSecp256k1Name},
+	{protocol.SigSchemeSecp256r1, sigSchemeSecp256r1Name},
 }
 
 // sigSchemeOps holds the signing-side, private-key operations for one signature
@@ -67,6 +71,8 @@ var sigSchemeOpsByScheme = map[protocol.SigScheme]sigSchemeOps{
 	protocol.SigSchemeMLDSA44:    mldsaOps{protocol.SigSchemeMLDSA44, mldsa.MLDSA44()},
 	protocol.SigSchemeMLDSA65:    mldsaOps{protocol.SigSchemeMLDSA65, mldsa.MLDSA65()},
 	protocol.SigSchemeMLDSA87:    mldsaOps{protocol.SigSchemeMLDSA87, mldsa.MLDSA87()},
+	protocol.SigSchemeSecp256k1:  ecdsaOps{protocol.SigSchemeSecp256k1, crypto.Secp256k1PublicKey, crypto.SignSecp256k1},
+	protocol.SigSchemeSecp256r1:  ecdsaOps{protocol.SigSchemeSecp256r1, crypto.Secp256r1PublicKey, crypto.SignSecp256r1},
 }
 
 type falcon1024Ops struct{}
@@ -282,4 +288,41 @@ func (o mldsaOps) sign(privateKey []byte, message crypto.Hashable) ([]byte, erro
 		return nil, err
 	}
 	return sk.Sign(nil, crypto.HashRep(message), nil)
+}
+
+// ecdsaOps signs with ECDSA on secp256k1 or secp256r1. The private key is the
+// keygen seed, read as the curve's scalar. About one seed in 2^32 is not a
+// secp256r1 scalar: deriveSigning then fails, and another mnemonic is needed.
+type ecdsaOps struct {
+	scheme    protocol.SigScheme
+	publicKey func(privateKey []byte) ([]byte, error)
+	signer    func(privateKey []byte, message crypto.Hashable) ([]byte, error)
+}
+
+func (o ecdsaOps) deriveSigning(seed crypto.Digest) (saltedSigningMaterial, error) {
+	publicKey, err := o.publicKey(seed[:])
+	if err != nil {
+		return saltedSigningMaterial{}, fmt.Errorf("keygen seed is not a %s private key, use another mnemonic: %w", formatSigScheme(o.scheme), err)
+	}
+	salt, _, err := basics.CanonicalAddressSalt(o.scheme, publicKey)
+	if err != nil {
+		return saltedSigningMaterial{}, err
+	}
+
+	return saltedSigningMaterial{
+		Public: saltedPublicMaterial{
+			Scheme:    o.scheme,
+			Salt:      salt,
+			PublicKey: publicKey,
+		},
+		PrivateKey: seed[:],
+	}, nil
+}
+
+func (ecdsaOps) publicKeySize() uint64 { return crypto.ECDSAPublicKeySize }
+
+func (ecdsaOps) privateKeySize() uint64 { return crypto.ECDSAPrivateKeySize }
+
+func (o ecdsaOps) sign(privateKey []byte, message crypto.Hashable) ([]byte, error) {
+	return o.signer(privateKey, message)
 }
