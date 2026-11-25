@@ -189,6 +189,8 @@ func TestSignedTxnFeeFactorSaltedKeySignatureContribution(t *testing.T) {
 	require.Equal(t, basics.Micros(2e6), SigSchemeFeeContribution(proto, protocol.SigSchemeMLDSA44))
 	require.Equal(t, basics.Micros(3e6), SigSchemeFeeContribution(proto, protocol.SigSchemeMLDSA65))
 	require.Equal(t, basics.Micros(4e6), SigSchemeFeeContribution(proto, protocol.SigSchemeMLDSA87))
+	require.Equal(t, basics.Micros(0), SigSchemeFeeContribution(proto, protocol.SigSchemeSecp256k1))
+	require.Equal(t, basics.Micros(0), SigSchemeFeeContribution(proto, protocol.SigSchemeSecp256r1))
 	// Every scheme's surcharge applies alike to direct and delegated authorization.
 	for scheme, ss := range sigSchemes {
 		direct := SignedTxn{Txn: fixture.txn, SKsig: SaltedKeySig{Scheme: scheme}}

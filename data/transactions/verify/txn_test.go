@@ -518,6 +518,8 @@ func TestTxnValidationSaltedKeySigSchemeBoundary(t *testing.T) {
 	require.False(t, transactions.SigSchemeEnabled(v42, protocol.SigSchemeMLDSA44))
 	require.False(t, transactions.SigSchemeEnabled(v42, protocol.SigSchemeMLDSA65))
 	require.False(t, transactions.SigSchemeEnabled(v42, protocol.SigSchemeMLDSA87))
+	require.False(t, transactions.SigSchemeEnabled(v42, protocol.SigSchemeSecp256k1))
+	require.False(t, transactions.SigSchemeEnabled(v42, protocol.SigSchemeSecp256r1))
 
 	blkHdr := createDummyBlockHeader(protocol.ConsensusV42)
 	dummyLedger := DummyLedgerForSignature{}
@@ -540,6 +542,7 @@ func TestTxnValidationSaltedKeySigSchemeBoundary(t *testing.T) {
 	for i, scheme := range []protocol.SigScheme{
 		protocol.SigSchemeFalcon512, protocol.SigSchemeEd25519,
 		protocol.SigSchemeMLDSA44, protocol.SigSchemeMLDSA65, protocol.SigSchemeMLDSA87,
+		protocol.SigSchemeSecp256k1, protocol.SigSchemeSecp256r1,
 	} {
 		t.Run(scheme.String()+"-txn", func(t *testing.T) {
 			stxn := makeSKsigSignedTxnForScheme(t, byte(i+2), scheme)

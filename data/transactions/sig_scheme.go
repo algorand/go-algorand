@@ -109,6 +109,22 @@ var sigSchemes = map[protocol.SigScheme]sigScheme{
 		maxPublicKeySize: constSize(mldsa.MLDSA87PublicKeySize),
 		maxSignatureSize: constSize(mldsa.MLDSA87SignatureSize),
 	},
+	// By the same rule the ECDSA schemes pay no surcharge: 97 bytes of public
+	// key and signature.
+	protocol.SigSchemeSecp256k1: {
+		verifier:         crypto.Secp256k1SchemeVerifier{},
+		enabled:          func(proto config.ConsensusParams) bool { return proto.EnableSigSchemeSecp256k1 },
+		fee:              0,
+		maxPublicKeySize: constSize(crypto.ECDSAPublicKeySize),
+		maxSignatureSize: constSize(crypto.ECDSASignatureSize),
+	},
+	protocol.SigSchemeSecp256r1: {
+		verifier:         crypto.Secp256r1SchemeVerifier{},
+		enabled:          func(proto config.ConsensusParams) bool { return proto.EnableSigSchemeSecp256r1 },
+		fee:              0,
+		maxPublicKeySize: constSize(crypto.ECDSAPublicKeySize),
+		maxSignatureSize: constSize(crypto.ECDSASignatureSize),
+	},
 	protocol.SigSchemeEd25519: {
 		verifier:         crypto.Ed25519SchemeVerifier{},
 		enabled:          func(proto config.ConsensusParams) bool { return proto.EnableSigSchemeEd25519 },

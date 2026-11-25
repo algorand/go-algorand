@@ -60,6 +60,10 @@ func (f saltedKeySigTestFixture) protoWithSchemeDisabled(t *testing.T) config.Co
 		proto.EnableSigSchemeMLDSA65 = false
 	case protocol.SigSchemeMLDSA87:
 		proto.EnableSigSchemeMLDSA87 = false
+	case protocol.SigSchemeSecp256k1:
+		proto.EnableSigSchemeSecp256k1 = false
+	case protocol.SigSchemeSecp256r1:
+		proto.EnableSigSchemeSecp256r1 = false
 	case protocol.SigSchemeLogicSig:
 		proto.EnableSigSchemeLogicSig = false
 	default:
