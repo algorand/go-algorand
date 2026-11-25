@@ -17,6 +17,7 @@
 package basics
 
 import (
+	"crypto/mldsa"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -41,6 +42,23 @@ func publicKeyForSaltedAddressTest(t *testing.T, scheme protocol.SigScheme, firs
 	case protocol.SigSchemeEd25519:
 		signer := crypto.GenerateSignatureSecrets(crypto.Seed{firstSeedByte})
 		return signer.SignatureVerifier[:]
+	case protocol.SigSchemeMLDSA44, protocol.SigSchemeMLDSA65, protocol.SigSchemeMLDSA87:
+		params := map[protocol.SigScheme]mldsa.Parameters{
+			protocol.SigSchemeMLDSA44: mldsa.MLDSA44(),
+			protocol.SigSchemeMLDSA65: mldsa.MLDSA65(),
+			protocol.SigSchemeMLDSA87: mldsa.MLDSA87(),
+		}[scheme]
+		sk, err := mldsa.NewPrivateKey(params, seed[:mldsa.PrivateKeySize])
+		require.NoError(t, err)
+		return sk.PublicKey().Bytes()
+	case protocol.SigSchemeSecp256k1:
+		publicKey, err := crypto.Secp256k1PublicKey(seed[:crypto.ECDSAPrivateKeySize])
+		require.NoError(t, err)
+		return publicKey
+	case protocol.SigSchemeSecp256r1:
+		publicKey, err := crypto.Secp256r1PublicKey(seed[:crypto.ECDSAPrivateKeySize])
+		require.NoError(t, err)
+		return publicKey
 	}
 	t.Fatalf("unknown scheme %s", scheme)
 	return nil
@@ -68,6 +86,31 @@ func TestSaltedAddressPreimage(t *testing.T) {
 			name:            "ed25519",
 			scheme:          protocol.SigSchemeEd25519,
 			expectedPayload: []byte{'e', 'd', 0x7f, 0xab, 0xcd, 0xef},
+		},
+		{
+			name:            "ml-dsa-44",
+			scheme:          protocol.SigSchemeMLDSA44,
+			expectedPayload: []byte{'m', '4', 0x7f, 0xab, 0xcd, 0xef},
+		},
+		{
+			name:            "ml-dsa-65",
+			scheme:          protocol.SigSchemeMLDSA65,
+			expectedPayload: []byte{'m', '6', 0x7f, 0xab, 0xcd, 0xef},
+		},
+		{
+			name:            "ml-dsa-87",
+			scheme:          protocol.SigSchemeMLDSA87,
+			expectedPayload: []byte{'m', '8', 0x7f, 0xab, 0xcd, 0xef},
+		},
+		{
+			name:            "secp256k1",
+			scheme:          protocol.SigSchemeSecp256k1,
+			expectedPayload: []byte{'k', '1', 0x7f, 0xab, 0xcd, 0xef},
+		},
+		{
+			name:            "secp256r1",
+			scheme:          protocol.SigSchemeSecp256r1,
+			expectedPayload: []byte{'r', '1', 0x7f, 0xab, 0xcd, 0xef},
 		},
 	}
 
@@ -293,6 +336,36 @@ func TestCanonicalAddressSalt(t *testing.T) {
 			scheme:          protocol.SigSchemeEd25519,
 			expectedSalt:    0,
 			expectedAddress: "52TWNOHFPAIAQPARIGBF3SXBHZ6NEX6QURSOTXYBUI5JXIO4DEBMZEF5AQ",
+		},
+		{
+			name:            "ml-dsa-44",
+			scheme:          protocol.SigSchemeMLDSA44,
+			expectedSalt:    0,
+			expectedAddress: "PDCDCHGZKINSZJKOFX5YJ5T76K4H5S4MYAULB4ZJ7DABB4WKSG72P75DG4",
+		},
+		{
+			name:            "ml-dsa-65",
+			scheme:          protocol.SigSchemeMLDSA65,
+			expectedSalt:    1,
+			expectedAddress: "6UXC3Y6S3HJRR77XBTS7RIRIQ33SY4EUZISSDVYHDETSSSZFHYFJHN4VPU",
+		},
+		{
+			name:            "ml-dsa-87",
+			scheme:          protocol.SigSchemeMLDSA87,
+			expectedSalt:    1,
+			expectedAddress: "R3DXWZJGSTNDGHV5SWRSMBFAHI6OD3J35XOV5WSZA2Z37OIVOA4L35ZRLI",
+		},
+		{
+			name:            "secp256k1",
+			scheme:          protocol.SigSchemeSecp256k1,
+			expectedSalt:    4,
+			expectedAddress: "O4N4AITRQTX4DTM7ZHWKSO7KM4DSL7R3WDCJOZB4VN347666KUEKXEY6EM",
+		},
+		{
+			name:            "secp256r1",
+			scheme:          protocol.SigSchemeSecp256r1,
+			expectedSalt:    0,
+			expectedAddress: "WJRFC4ZDUVNKW2M5MNZT6I72Y6LHOZ47UW2G7LMKYLQ4TLOUROTN7BFC6A",
 		},
 	}
 

@@ -136,3 +136,93 @@ if [ "$BALANCEED" -ne "$EXPECTED" ]; then
     date "+${scriptname} FAIL wanted ed25519 balance=${EXPECTED} but got ${BALANCEED} %Y%m%d_%H%M%S"
     false
 fi
+
+# Repeat with each ML-DSA parameter set. Their fee surcharges are 2, 3 and 4
+# min fees, so the required fees are 3mA, 4mA and 5mA.
+for SCHEME_FEE in ml-dsa-44:3000:3mA ml-dsa-65:4000:4mA ml-dsa-87:5000:5mA; do
+    IFS=: read -r SCHEME FEE FEESTR <<< "${SCHEME_FEE}"
+
+    algokey salted generate -S "${SCHEME}" -k "${SCHEME}.sk" > "generate-${SCHEME}.out"
+
+    grep "Scheme: ${SCHEME}" < "generate-${SCHEME}.out"
+    MLMNEMONIC=$(grep 'Private key mnemonic:' < "generate-${SCHEME}.out" | sed 's/Private key mnemonic: //')
+    MLADDRESS=$(grep 'Address:' < "generate-${SCHEME}.out" | sed 's/Address: //')
+
+    echo "$MLMNEMONIC"
+    echo "$MLADDRESS"
+
+    # Restoring from mnemonic reproduces the key file.
+    algokey salted import -m "$MLMNEMONIC" -S "${SCHEME}" -k "${SCHEME}-restored.sk"
+    cmp "${SCHEME}.sk" "${SCHEME}-restored.sk"
+
+    ${gcmd} clerk send -a "${FUNDING}" -f "${ACCOUNT}" -t "${MLADDRESS}"
+
+    ## Show the usual min fee is insufficient
+    ${gcmd} clerk send -a 5555 -f "${MLADDRESS}" -t "${ACCOUNT}" --fee 1000 -o "low-${SCHEME}.tx"
+    algokey salted sign -t "low-${SCHEME}.tx" -k "${SCHEME}.sk" -o "low-${SCHEME}-signed.tx"
+    set +o pipefail
+    ${gcmd} clerk rawsend -f "low-${SCHEME}-signed.tx" 2>&1 | grep "1mA fees is less than ${FEESTR}" || exit 1
+    set -o pipefail
+
+    ## Signing is hedged, so signing the same transaction twice gives different
+    ## bytes. Once one copy is committed, the other is a duplicate.
+    ${gcmd} clerk send -a 6666 -f "${MLADDRESS}" -t "${ACCOUNT}" --fee "${FEE}" -o "enough-${SCHEME}.tx"
+    algokey salted sign -t "enough-${SCHEME}.tx" -k "${SCHEME}.sk" -o "enough-${SCHEME}-signed.tx"
+    algokey salted sign -t "enough-${SCHEME}.tx" -k "${SCHEME}.sk" -o "enough-${SCHEME}-resigned.tx"
+    if cmp -s "enough-${SCHEME}-signed.tx" "enough-${SCHEME}-resigned.tx"; then
+        date "+${scriptname} FAIL ${SCHEME} signed the same transaction twice with the same bytes %Y%m%d_%H%M%S"
+        false
+    fi
+    ${gcmd} clerk rawsend -f "enough-${SCHEME}-signed.tx"
+    set +o pipefail
+    ${gcmd} clerk rawsend -f "enough-${SCHEME}-resigned.tx" 2>&1 | grep "transaction already in ledger" || exit 1
+    set -o pipefail
+
+    ## Show that a delegated LogicSig signed by the ML-DSA account can authorize a txn
+    algokey salted sign-program -k "${SCHEME}.sk" -p pq-true.tok -o "pq-true-${SCHEME}.lsig"
+    ${gcmd} clerk send -a 7777 -f "${MLADDRESS}" -t "${ACCOUNT}" --fee "${FEE}" -L "pq-true-${SCHEME}.lsig"
+
+    BALANCEML=$(${gcmd} account balance -a "${MLADDRESS}" | awk '{ print $1 }')
+    EXPECTML=$((FUNDING - 6666 - FEE - 7777 - FEE))
+    if [ "$BALANCEML" -ne "$EXPECTML" ]; then
+        date "+${scriptname} FAIL wanted ${SCHEME} balance=${EXPECTML} but got ${BALANCEML} %Y%m%d_%H%M%S"
+        false
+    fi
+done
+
+# Repeat with each ECDSA curve. Like Ed25519, they have no fee surcharge.
+for SCHEME in secp256k1 secp256r1; do
+    algokey salted generate -S "${SCHEME}" -k "${SCHEME}.sk" > "generate-${SCHEME}.out"
+
+    grep "Scheme: ${SCHEME}" < "generate-${SCHEME}.out"
+    ECMNEMONIC=$(grep 'Private key mnemonic:' < "generate-${SCHEME}.out" | sed 's/Private key mnemonic: //')
+    ECADDRESS=$(grep 'Address:' < "generate-${SCHEME}.out" | sed 's/Address: //')
+
+    echo "$ECMNEMONIC"
+    echo "$ECADDRESS"
+
+    # Restoring from mnemonic reproduces the key file.
+    algokey salted import -m "$ECMNEMONIC" -S "${SCHEME}" -k "${SCHEME}-restored.sk"
+    cmp "${SCHEME}.sk" "${SCHEME}-restored.sk"
+
+    ${gcmd} clerk send -a "${FUNDING}" -f "${ACCOUNT}" -t "${ECADDRESS}"
+
+    ## The usual min fee is sufficient. Signing is deterministic, so signing the
+    ## same transaction twice gives the same bytes.
+    ${gcmd} clerk send -a 6666 -f "${ECADDRESS}" -t "${ACCOUNT}" --fee 1000 -o "${SCHEME}.tx"
+    algokey salted sign -t "${SCHEME}.tx" -k "${SCHEME}.sk" -o "${SCHEME}-signed.tx"
+    algokey salted sign -t "${SCHEME}.tx" -k "${SCHEME}.sk" -o "${SCHEME}-resigned.tx"
+    cmp "${SCHEME}-signed.tx" "${SCHEME}-resigned.tx"
+    ${gcmd} clerk rawsend -f "${SCHEME}-signed.tx"
+
+    ## Show that a delegated LogicSig signed by the ECDSA account can authorize a txn
+    algokey salted sign-program -k "${SCHEME}.sk" -p pq-true.tok -o "pq-true-${SCHEME}.lsig"
+    ${gcmd} clerk send -a 7777 -f "${ECADDRESS}" -t "${ACCOUNT}" --fee 1000 -L "pq-true-${SCHEME}.lsig"
+
+    BALANCEEC=$(${gcmd} account balance -a "${ECADDRESS}" | awk '{ print $1 }')
+    EXPECTEC=$((FUNDING - 6666 - 1000 - 7777 - 1000))
+    if [ "$BALANCEEC" -ne "$EXPECTEC" ]; then
+        date "+${scriptname} FAIL wanted ${SCHEME} balance=${EXPECTEC} but got ${BALANCEEC} %Y%m%d_%H%M%S"
+        false
+    fi
+done

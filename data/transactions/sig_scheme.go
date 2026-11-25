@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"crypto/mldsa"
 	"errors"
 
 	"github.com/algorand/msgp/msgp"
@@ -83,6 +84,46 @@ var sigSchemes = map[protocol.SigScheme]sigScheme{
 		fee:              1e6, // half of the Falcon-1024 contribution
 		maxPublicKeySize: constSize(crypto.Falcon512PublicKeySize),
 		maxSignatureSize: constSize(crypto.Falcon512MaxSignatureSize),
+	},
+	// ML-DSA fees follow Falcon's: one min fee per 1608 bytes of public key and
+	// maximum signature (Falcon-1024's 3216 bytes pay 2, Falcon-512's 1610 pay
+	// 1), rounded to the nearest whole min fee.
+	protocol.SigSchemeMLDSA44: {
+		verifier:         crypto.MLDSA44SchemeVerifier{},
+		enabled:          func(proto config.ConsensusParams) bool { return proto.EnableSigSchemeMLDSA44 },
+		fee:              2e6, // 3732 bytes
+		maxPublicKeySize: constSize(mldsa.MLDSA44PublicKeySize),
+		maxSignatureSize: constSize(mldsa.MLDSA44SignatureSize),
+	},
+	protocol.SigSchemeMLDSA65: {
+		verifier:         crypto.MLDSA65SchemeVerifier{},
+		enabled:          func(proto config.ConsensusParams) bool { return proto.EnableSigSchemeMLDSA65 },
+		fee:              3e6, // 5261 bytes
+		maxPublicKeySize: constSize(mldsa.MLDSA65PublicKeySize),
+		maxSignatureSize: constSize(mldsa.MLDSA65SignatureSize),
+	},
+	protocol.SigSchemeMLDSA87: {
+		verifier:         crypto.MLDSA87SchemeVerifier{},
+		enabled:          func(proto config.ConsensusParams) bool { return proto.EnableSigSchemeMLDSA87 },
+		fee:              4e6, // 7219 bytes
+		maxPublicKeySize: constSize(mldsa.MLDSA87PublicKeySize),
+		maxSignatureSize: constSize(mldsa.MLDSA87SignatureSize),
+	},
+	// By the same rule the ECDSA schemes pay no surcharge: 97 bytes of public
+	// key and signature.
+	protocol.SigSchemeSecp256k1: {
+		verifier:         crypto.Secp256k1SchemeVerifier{},
+		enabled:          func(proto config.ConsensusParams) bool { return proto.EnableSigSchemeSecp256k1 },
+		fee:              0,
+		maxPublicKeySize: constSize(crypto.ECDSAPublicKeySize),
+		maxSignatureSize: constSize(crypto.ECDSASignatureSize),
+	},
+	protocol.SigSchemeSecp256r1: {
+		verifier:         crypto.Secp256r1SchemeVerifier{},
+		enabled:          func(proto config.ConsensusParams) bool { return proto.EnableSigSchemeSecp256r1 },
+		fee:              0,
+		maxPublicKeySize: constSize(crypto.ECDSAPublicKeySize),
+		maxSignatureSize: constSize(crypto.ECDSASignatureSize),
 	},
 	protocol.SigSchemeEd25519: {
 		verifier:         crypto.Ed25519SchemeVerifier{},

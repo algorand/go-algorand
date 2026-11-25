@@ -17,6 +17,8 @@
 package testing
 
 import (
+	"crypto/mldsa"
+	"fmt"
 	"slices"
 	"testing"
 
@@ -96,6 +98,88 @@ func (s ed25519Signer) PublicKey() []byte {
 	return slices.Clone(s.SignatureVerifier[:])
 }
 
+// mldsaSigner signs deterministically, so that, as for the other schemes,
+// Sign(message) equals SignBytes(HashRep(message)).
+type mldsaSigner struct {
+	key      *mldsa.PrivateKey
+	verifier crypto.SigSchemeVerifier
+}
+
+func (s mldsaSigner) Sign(message crypto.Hashable) ([]byte, error) {
+	return s.SignBytes(crypto.HashRep(message))
+}
+func (s mldsaSigner) SignBytes(data []byte) ([]byte, error) {
+	return s.key.SignDeterministic(data, nil)
+}
+func (s mldsaSigner) Verify(message crypto.Hashable, sig []byte) error {
+	return s.verifier.Verify(message, s.PublicKey(), sig)
+}
+func (s mldsaSigner) VerifyBytes(data []byte, sig []byte) error {
+	if err := mldsa.Verify(s.key.PublicKey(), data, sig, nil); err != nil {
+		return fmt.Errorf("%w: %w", crypto.ErrSigInvalid, err)
+	}
+	return nil
+}
+func (s mldsaSigner) PublicKey() []byte {
+	return s.key.PublicKey().Bytes()
+}
+
+func makeMLDSASigner(t testing.TB, firstSeedByte byte, params mldsa.Parameters, verifier crypto.SigSchemeVerifier) SigSchemeSigner {
+	t.Helper()
+
+	seed := make([]byte, mldsa.PrivateKeySize)
+	seed[0] = firstSeedByte
+	key, err := mldsa.NewPrivateKey(params, seed)
+	require.NoError(t, err)
+	return mldsaSigner{key: key, verifier: verifier}
+}
+
+// rawData is a Hashable whose HashRep is the data itself.
+type rawData []byte
+
+func (d rawData) ToBeHashed() (protocol.HashID, []byte) { return "", d }
+
+// ecdsaSigner signs with a secp256k1 or secp256r1 private key.
+type ecdsaSigner struct {
+	privateKey []byte
+	publicKey  []byte
+	sign       func(privateKey []byte, message crypto.Hashable) ([]byte, error)
+	verifier   crypto.SigSchemeVerifier
+}
+
+func (s ecdsaSigner) Sign(message crypto.Hashable) ([]byte, error) {
+	return s.sign(s.privateKey, message)
+}
+func (s ecdsaSigner) SignBytes(data []byte) ([]byte, error) {
+	return s.sign(s.privateKey, rawData(data))
+}
+func (s ecdsaSigner) Verify(message crypto.Hashable, sig []byte) error {
+	return s.verifier.Verify(message, s.publicKey, sig)
+}
+func (s ecdsaSigner) VerifyBytes(data []byte, sig []byte) error {
+	return s.verifier.Verify(rawData(data), s.publicKey, sig)
+}
+func (s ecdsaSigner) PublicKey() []byte {
+	return slices.Clone(s.publicKey)
+}
+
+func makeECDSASigner(
+	t testing.TB, firstSeedByte byte,
+	publicKey func(privateKey []byte) ([]byte, error),
+	sign func(privateKey []byte, message crypto.Hashable) ([]byte, error),
+	verifier crypto.SigSchemeVerifier,
+) SigSchemeSigner {
+	t.Helper()
+
+	// The last byte keeps the scalar from being zero, which is not a key.
+	privateKey := make([]byte, crypto.ECDSAPrivateKeySize)
+	privateKey[0] = firstSeedByte
+	privateKey[len(privateKey)-1] = 1
+	pk, err := publicKey(privateKey)
+	require.NoError(t, err)
+	return ecdsaSigner{privateKey: privateKey, publicKey: pk, sign: sign, verifier: verifier}
+}
+
 // SigSchemeTest carries one signature scheme's test metadata.
 type SigSchemeTest struct {
 	// Name is a human-readable scheme name, suitable for subtest names.
@@ -117,6 +201,26 @@ var SigSchemeTests = []SigSchemeTest{
 	{
 		Name:   "ed25519",
 		Scheme: protocol.SigSchemeEd25519,
+	},
+	{
+		Name:   "ml-dsa-44",
+		Scheme: protocol.SigSchemeMLDSA44,
+	},
+	{
+		Name:   "ml-dsa-65",
+		Scheme: protocol.SigSchemeMLDSA65,
+	},
+	{
+		Name:   "ml-dsa-87",
+		Scheme: protocol.SigSchemeMLDSA87,
+	},
+	{
+		Name:   "secp256k1",
+		Scheme: protocol.SigSchemeSecp256k1,
+	},
+	{
+		Name:   "secp256r1",
+		Scheme: protocol.SigSchemeSecp256r1,
 	},
 }
 
@@ -159,6 +263,16 @@ func MakeSigSchemeSigner(t testing.TB, firstSeedByte byte, scheme protocol.SigSc
 		return falcon512Signer{signer}
 	case protocol.SigSchemeEd25519:
 		return ed25519Signer{crypto.GenerateSignatureSecrets(crypto.Seed{firstSeedByte})}
+	case protocol.SigSchemeMLDSA44:
+		return makeMLDSASigner(t, firstSeedByte, mldsa.MLDSA44(), crypto.MLDSA44SchemeVerifier{})
+	case protocol.SigSchemeMLDSA65:
+		return makeMLDSASigner(t, firstSeedByte, mldsa.MLDSA65(), crypto.MLDSA65SchemeVerifier{})
+	case protocol.SigSchemeMLDSA87:
+		return makeMLDSASigner(t, firstSeedByte, mldsa.MLDSA87(), crypto.MLDSA87SchemeVerifier{})
+	case protocol.SigSchemeSecp256k1:
+		return makeECDSASigner(t, firstSeedByte, crypto.Secp256k1PublicKey, crypto.SignSecp256k1, crypto.Secp256k1SchemeVerifier{})
+	case protocol.SigSchemeSecp256r1:
+		return makeECDSASigner(t, firstSeedByte, crypto.Secp256r1PublicKey, crypto.SignSecp256r1, crypto.Secp256r1SchemeVerifier{})
 	}
 	t.Fatalf("unknown scheme %s", scheme)
 	return nil

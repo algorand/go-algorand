@@ -17,6 +17,7 @@
 package crypto
 
 import (
+	"crypto/mldsa"
 	"errors"
 	"fmt"
 )
@@ -53,6 +54,46 @@ type Falcon512SchemeVerifier struct{}
 // Verify implements SigSchemeVerifier.
 func (Falcon512SchemeVerifier) Verify(message Hashable, publicKey, signature []byte) error {
 	return VerifyFalcon512(message, publicKey, signature)
+}
+
+// MLDSA44SchemeVerifier verifies ML-DSA-44 signatures.
+type MLDSA44SchemeVerifier struct{}
+
+// Verify implements SigSchemeVerifier.
+func (MLDSA44SchemeVerifier) Verify(message Hashable, publicKey, signature []byte) error {
+	return verifyMLDSA(mldsa.MLDSA44(), message, publicKey, signature)
+}
+
+// MLDSA65SchemeVerifier verifies ML-DSA-65 signatures.
+type MLDSA65SchemeVerifier struct{}
+
+// Verify implements SigSchemeVerifier.
+func (MLDSA65SchemeVerifier) Verify(message Hashable, publicKey, signature []byte) error {
+	return verifyMLDSA(mldsa.MLDSA65(), message, publicKey, signature)
+}
+
+// MLDSA87SchemeVerifier verifies ML-DSA-87 signatures.
+type MLDSA87SchemeVerifier struct{}
+
+// Verify implements SigSchemeVerifier.
+func (MLDSA87SchemeVerifier) Verify(message Hashable, publicKey, signature []byte) error {
+	return verifyMLDSA(mldsa.MLDSA87(), message, publicKey, signature)
+}
+
+// Secp256k1SchemeVerifier verifies ECDSA signatures on secp256k1.
+type Secp256k1SchemeVerifier struct{}
+
+// Verify implements SigSchemeVerifier.
+func (Secp256k1SchemeVerifier) Verify(message Hashable, publicKey, signature []byte) error {
+	return verifySecp256k1(message, publicKey, signature)
+}
+
+// Secp256r1SchemeVerifier verifies ECDSA signatures on secp256r1.
+type Secp256r1SchemeVerifier struct{}
+
+// Verify implements SigSchemeVerifier.
+func (Secp256r1SchemeVerifier) Verify(message Hashable, publicKey, signature []byte) error {
+	return verifySecp256r1(message, publicKey, signature)
 }
 
 // Ed25519SchemeVerifier verifies classical Ed25519 signatures carried in a SaltedKeySig.

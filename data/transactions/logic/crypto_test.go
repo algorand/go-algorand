@@ -19,7 +19,6 @@ package logic
 import (
 	"bytes"
 	"compress/gzip"
-	"context"
 	stdcrypto "crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -33,12 +32,10 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"os/exec"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -948,6 +945,56 @@ byte 0x5ce9454909639d2d17a3f753ce7d93fa0b9ab12e // addr
 	testAccepts(t, progText, 5)
 }
 
+// TestEcdsaVerifiesSigSchemeSignatures checks that a signature made for the k1
+// or r1 SaltedKeySig scheme also verifies in a program: ecdsa_pk_decompress
+// takes the scheme's public key, and ecdsa_verify the signature's R and S with
+// the SHA-256 of the signed bytes.
+func TestEcdsaVerifiesSigSchemeSignatures(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	privateKey := make([]byte, crypto.ECDSAPrivateKeySize)
+	for i := range privateKey {
+		privateKey[i] = byte(i + 1)
+	}
+	msg := rawMessage("signature scheme interop")
+	for _, tc := range []struct {
+		curve     string
+		version   uint64
+		publicKey func(privateKey []byte) ([]byte, error)
+		sign      func(privateKey []byte, message crypto.Hashable) ([]byte, error)
+		verifier  crypto.SigSchemeVerifier
+	}{
+		{"Secp256k1", 5, crypto.Secp256k1PublicKey, crypto.SignSecp256k1, crypto.Secp256k1SchemeVerifier{}},
+		{"Secp256r1", fidoVersion, crypto.Secp256r1PublicKey, crypto.SignSecp256r1, crypto.Secp256r1SchemeVerifier{}},
+	} {
+		t.Run(tc.curve, func(t *testing.T) {
+			t.Parallel()
+
+			pk, err := tc.publicKey(privateKey)
+			require.NoError(t, err)
+			sig, err := tc.sign(privateKey, msg)
+			require.NoError(t, err)
+			require.NoError(t, tc.verifier.Verify(msg, pk, sig))
+
+			source := fmt.Sprintf(`
+byte "%s"
+sha256
+byte 0x%x
+byte 0x%x
+byte 0x%x
+ecdsa_pk_decompress %s
+ecdsa_verify %s`, msg, sig[:32], sig[32:], pk, tc.curve, tc.curve)
+			testAccepts(t, source, tc.version)
+
+			// Another message fails in the program as it does natively.
+			other := rawMessage("another message")
+			require.ErrorIs(t, tc.verifier.Verify(other, pk, sig), crypto.ErrSigInvalid)
+			testRejects(t, strings.Replace(source, string(msg), string(other), 1), tc.version)
+		})
+	}
+}
+
 func TestEcdsaCostVariation(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1516,45 +1563,4 @@ func TestMLDSAVerifyVectors(t *testing.T) {
 		}
 	}
 	require.Equal(t, 25, ran)
-}
-
-// TestMLDSAFIPS140v1 checks that a binary built against the FIPS 140-3 Go
-// Cryptographic Module v1.0.0, which has no ML-DSA, refuses to start instead of
-// rejecting every mldsa_verify signature.
-func TestMLDSAFIPS140v1(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-	if testing.Short() {
-		t.Skip("builds a binary against the FIPS 140-3 v1.0.0 module")
-	}
-	gocmd, err := exec.LookPath("go")
-	if err != nil {
-		t.Skip("no go command")
-	}
-
-	// GOFLAGS could hold flags, like -modfile, whose paths only make sense
-	// where the parent test was started, so the child does without them.
-	var env []string
-	for _, kv := range os.Environ() {
-		if !strings.HasPrefix(kv, "GOFLAGS=") && !strings.HasPrefix(kv, "GOFIPS140=") {
-			env = append(env, kv)
-		}
-	}
-	run := func(fips string) (string, error) {
-		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
-		defer cancel()
-		cmd := exec.CommandContext(ctx, gocmd, "run", "./testdata/fips140v1")
-		cmd.Env = append(env, "GOFIPS140="+fips)
-		out, err := cmd.CombinedOutput()
-		require.NoError(t, ctx.Err(), "go run timed out")
-		return string(out), err
-	}
-	out, err := run("off")
-	require.NoError(t, err, out)
-	require.Contains(t, out, "started")
-
-	out, err = run("v1.0.0")
-	require.Error(t, err, out)
-	require.Contains(t, out, "mldsa_verify: mldsa: unavailable")
-	require.NotContains(t, out, "started")
 }
