@@ -1922,3 +1922,63 @@ func TestRememberTxnDeadError(t *testing.T) {
 		require.Equal(t, basics.Round(5), tde.LastValid)
 	}
 }
+
+// TestRecomputeReplayNeedsVerify checks that recomputeBlockEvaluator asks the
+// replay to verify pending groups again only when the pending block header's
+// protocol or special addresses change, and that pending groups survive the
+// replay either way.
+func TestRecomputeReplayNeedsVerify(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	secrets, addresses := generateAccounts(2)
+	mockLedger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
+	t.Cleanup(mockLedger.Close)
+	transactionPool := MakeTransactionPool(mockLedger, config.GetDefaultLocal(), logging.Base(), nil)
+
+	tx := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      addresses[0],
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+			FirstValid:  0,
+			LastValid:   basics.Round(proto.MaxTxnLife),
+			GenesisHash: mockLedger.GenesisHash(),
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: addresses[1],
+			Amount:   basics.MicroAlgos{Raw: 1},
+		},
+	}
+	signedTx := tx.Sign(secrets[0])
+	require.NoError(t, transactionPool.rememberOne(signedTx))
+
+	// Each case edits the previous pending header before the replay, as if the
+	// last block had been assembled under a different one.
+	tests := []struct {
+		name        string
+		edit        func(*bookkeeping.BlockHeader)
+		needsVerify bool
+	}{
+		{"unchanged", func(*bookkeeping.BlockHeader) {}, false},
+		{"protocol", func(h *bookkeeping.BlockHeader) { h.CurrentProtocol = "test-other-protocol" }, true},
+		{"fee sink", func(h *bookkeeping.BlockHeader) { h.FeeSink = basics.Address{1} }, true},
+		{"rewards pool", func(h *bookkeeping.BlockHeader) { h.RewardsPool = basics.Address{2} }, true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			test.edit(&transactionPool.pendingBlockHeader)
+			callsBefore := transactionPool.verifyForPendingBlockCalls
+			transactionPool.recomputeBlockEvaluator(nil, 0, false)
+			require.Equal(t, test.needsVerify, transactionPool.replayNeedsVerify)
+			// The replay re-adds the one pending group: it is checked again only
+			// when the header changed.
+			wantCalls := 0
+			if test.needsVerify {
+				wantCalls = 1
+			}
+			require.Equal(t, wantCalls, transactionPool.verifyForPendingBlockCalls-callsBefore)
+			require.Equal(t, [][]transactions.SignedTxn{{signedTx}}, transactionPool.PendingTxGroups())
+		})
+	}
+}

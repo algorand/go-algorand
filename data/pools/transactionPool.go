@@ -75,6 +75,14 @@ type TransactionPool struct {
 	// added to the evaluator.
 	pendingBlockHeader bookkeeping.BlockHeader
 
+	// replayNeedsVerify is set when the protocol or special addresses change,
+	// since pending groups passed verifyForPendingBlock under the old header.
+	replayNeedsVerify bool
+
+	// verifyForPendingBlockCalls counts verifyForPendingBlock calls, so tests
+	// can check that replays skip it.
+	verifyForPendingBlockCalls int
+
 	assemblyMu       deadlock.Mutex
 	assemblyCond     sync.Cond
 	assemblyDeadline time.Time
@@ -620,8 +628,10 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 		}
 	}
 
-	if err := pool.verifyForPendingBlock(txgroup); err != nil {
-		return err
+	if !recomputing || pool.replayNeedsVerify {
+		if err := pool.verifyForPendingBlock(txgroup); err != nil {
+			return err
+		}
 	}
 
 	txgroupad := transactions.WrapSignedTxnsWithAD(txgroup)
@@ -687,6 +697,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 //
 // verifyForPendingBlock assumes that pool.mu is locked.
 func (pool *TransactionPool) verifyForPendingBlock(txgroup []transactions.SignedTxn) error {
+	pool.verifyForPendingBlockCalls++
 	cache := pool.ledger.VerifiedTransactionCache()
 	specAddrs := transactions.SpecialAddresses{
 		FeeSink:     pool.pendingBlockHeader.FeeSink,
@@ -800,6 +811,9 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 		pool.log.Warnf("TransactionPool.recomputeBlockEvaluator: cannot start evaluator: %v", err)
 		return
 	}
+	oldHdr := pool.pendingBlockHeader
+	pool.replayNeedsVerify = oldHdr.CurrentProtocol != next.CurrentProtocol ||
+		oldHdr.FeeSink != next.FeeSink || oldHdr.RewardsPool != next.RewardsPool
 	pool.pendingBlockHeader = next.BlockHeader
 
 	var asmStats telemetryspec.AssembleBlockMetrics
