@@ -80,6 +80,22 @@ func (MLDSA87SchemeVerifier) Verify(message Hashable, publicKey, signature []byt
 	return verifyMLDSA(mldsa.MLDSA87(), message, publicKey, signature)
 }
 
+// Secp256k1SchemeVerifier verifies ECDSA signatures on secp256k1.
+type Secp256k1SchemeVerifier struct{}
+
+// Verify implements SigSchemeVerifier.
+func (Secp256k1SchemeVerifier) Verify(message Hashable, publicKey, signature []byte) error {
+	return verifySecp256k1(message, publicKey, signature)
+}
+
+// Secp256r1SchemeVerifier verifies ECDSA signatures on secp256r1.
+type Secp256r1SchemeVerifier struct{}
+
+// Verify implements SigSchemeVerifier.
+func (Secp256r1SchemeVerifier) Verify(message Hashable, publicKey, signature []byte) error {
+	return verifySecp256r1(message, publicKey, signature)
+}
+
 // Ed25519SchemeVerifier verifies classical Ed25519 signatures carried in a SaltedKeySig.
 type Ed25519SchemeVerifier struct{}
 
