@@ -635,6 +635,14 @@ type ConsensusParams struct {
 	// the m8 scheme.
 	EnableSigSchemeMLDSA87 bool
 
+	// EnableSigSchemeSecp256k1 enables ECDSA secp256k1 transaction
+	// authorization for the k1 scheme.
+	EnableSigSchemeSecp256k1 bool
+
+	// EnableSigSchemeSecp256r1 enables ECDSA secp256r1 transaction
+	// authorization for the r1 scheme.
+	EnableSigSchemeSecp256r1 bool
+
 	// EnableSigSchemeLogicSig enables transaction authorization by a LogicSig
 	// carried in a SaltedKeySig under the ls scheme, whose address commits to the
 	// program and a salt. Unlike the LogicSig in SignedTxn.Lsig, such an account
@@ -1597,6 +1605,9 @@ func initConsensusProtocols() {
 	vFuture.EnableSigSchemeMLDSA44 = true
 	vFuture.EnableSigSchemeMLDSA65 = true
 	vFuture.EnableSigSchemeMLDSA87 = true
+
+	vFuture.EnableSigSchemeSecp256k1 = true
+	vFuture.EnableSigSchemeSecp256r1 = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

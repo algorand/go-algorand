@@ -47,6 +47,12 @@ var (
 	// SigSchemeMLDSA87 - m8: ML-DSA-87 (FIPS 204), pure, with an empty context.
 	SigSchemeMLDSA87 = SigScheme{'m', '8'}
 
+	// SigSchemeSecp256k1 - k1: ECDSA on secp256k1 with SHA-256.
+	SigSchemeSecp256k1 = SigScheme{'k', '1'}
+
+	// SigSchemeSecp256r1 - r1: ECDSA on secp256r1 (NIST P-256) with SHA-256.
+	SigSchemeSecp256r1 = SigScheme{'r', '1'}
+
 	// SigSchemeLogicSig - ls: a LogicSig account. The program bytes take the place
 	// of the public key, so the account address commits to the program, and the
 	// salt selects among the addresses a single program can have. Authorization is

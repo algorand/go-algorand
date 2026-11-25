@@ -35,6 +35,8 @@ func TestSigSchemes(t *testing.T) {
 		SigSchemeMLDSA44,
 		SigSchemeMLDSA65,
 		SigSchemeMLDSA87,
+		SigSchemeSecp256k1,
+		SigSchemeSecp256r1,
 		SigSchemeLogicSig,
 	}
 
