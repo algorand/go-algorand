@@ -11,6 +11,7 @@ NUM_TRANSACTIONS=0
 
 # Create a transaction with no siblings
 while [[ "${NUM_TRANSACTIONS}" != "1" ]]; do
+  # shellcheck disable=SC2154  # gcmd is defined in rest.sh
   SEND_OUTPUT=$(${gcmd} clerk send -a 0 -f "${ACCOUNT}" -t "${ACCOUNT}")
   TXID=$(echo "$SEND_OUTPUT" | head -n 1 | sed 's/.*transaction ID: \([^.]*\).*/\1/')
   ROUND=$(echo "$SEND_OUTPUT" | tail -n 1 | sed 's/.*committed in round \([[:digit:]]*\).*/\1/')
