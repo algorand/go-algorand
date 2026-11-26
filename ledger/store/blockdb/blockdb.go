@@ -44,12 +44,40 @@ var blockResetExprs = []string{
 	`DROP TABLE IF EXISTS blocks`,
 }
 
+// addWindowStartColumn adds the window_start column to a blocks table
+// created by an earlier release. SQLite has no ADD COLUMN IF NOT EXISTS, and
+// a duplicate-column ALTER is reported as the generic SQLITE_ERROR, so check
+// the existing columns first.
+func addWindowStartColumn(tx *sql.Tx) error {
+	has, err := tableHasColumn(tx, "blocks", "window_start")
+	if err != nil {
+		return fmt.Errorf("blockdb: list columns of blocks: %w", err)
+	}
+	if has {
+		return nil
+	}
+	if _, err := tx.Exec("ALTER TABLE blocks ADD COLUMN window_start integer"); err != nil {
+		return fmt.Errorf("blockdb: add window_start column to blocks: %w", err)
+	}
+	return nil
+}
+
 // BlockInit initializes blockdb
-func BlockInit(tx *sql.Tx, initBlocks []bookkeeping.Block) error {
+// window is the BlockDBCompressionWindow to use for any initBlocks rows that get written;
+// it has no effect when initBlocks is empty, or when the blocks table is already populated.
+func BlockInit(tx *sql.Tx, initBlocks []bookkeeping.Block, window uint64) error {
 	for _, tableCreate := range blockSchema {
 		_, err := tx.Exec(tableCreate)
 		if err != nil {
 			return fmt.Errorf("blockdb blockInit could not create table %v", err)
+		}
+	}
+	// Migrate only when compression is enabled. A node that never sets
+	// BlockDBCompressionWindow > 0 leaves the schema bit-identical to
+	// what an earlier release produced.
+	if window > 0 {
+		if err := addWindowStartColumn(tx); err != nil {
+			return err
 		}
 	}
 
@@ -58,9 +86,11 @@ func BlockInit(tx *sql.Tx, initBlocks []bookkeeping.Block) error {
 		return err
 	}
 
-	if next == 0 {
-		for _, blk := range initBlocks {
-			err = BlockPut(tx, blk, agreement.Certificate{})
+	if next == 0 && len(initBlocks) > 0 {
+		writer := newWriter(window)
+		defer writer.Close()
+		for i := range initBlocks {
+			err = writer.BlockPut(tx, &initBlocks[i], &agreement.Certificate{})
 			if err != nil {
 				serr, ok := err.(sqlite3.Error)
 				if ok && serr.Code == sqlite3.ErrConstraint {
@@ -74,6 +104,54 @@ func BlockInit(tx *sql.Tx, initBlocks []bookkeeping.Block) error {
 	return nil
 }
 
+// Reader holds the schema-detection state shared by every read path:
+// hasWindowStart is captured once at NewReader time so the read query
+// never has to introspect the schema. Reader has no resources to release,
+// so there is no Close; the same Reader can serve any number of *sql.Tx
+// values over its lifetime.
+//
+// Following the convention in ledger/store/trackerdb (Reader / Writer /
+// ReaderWriter, SnapshotScope / BatchScope / TransactionScope), read-only
+// callers should construct a Reader rather than a Store so they neither
+// allocate writer state nor pass a meaningless compression window.
+type Reader struct {
+	hasWindowStart bool
+}
+
+// NewReader opens a Reader against a blocks table that BlockInit has
+// already created/migrated. The tx is used once to detect the schema and
+// is not retained.
+func NewReader(tx *sql.Tx) (*Reader, error) {
+	has, err := tableHasColumn(tx, "blocks", "window_start")
+	if err != nil {
+		return nil, err
+	}
+	return &Reader{hasWindowStart: has}, nil
+}
+
+// Store composes a Reader and a Writer. Reads and writes share a
+// hasWindowStart, and Writer owns BlockPut along with Close / Reset,
+// so Store inherits the full read+write surface by method promotion.
+type Store struct {
+	*Reader
+	*Writer
+}
+
+// NewStore opens a Store against a blocks table that BlockInit has already
+// created/migrated. window is the BlockDBCompressionWindow the writer
+// should encode at; 0 disables compression. The tx is used once to detect
+// the schema and is not retained.
+func NewStore(tx *sql.Tx, window uint64) (*Store, error) {
+	r, err := NewReader(tx)
+	if err != nil {
+		return nil, err
+	}
+	return &Store{
+		Reader: r,
+		Writer: newWriter(window),
+	}, nil
+}
+
 // BlockResetDB resets blockdb
 func BlockResetDB(tx *sql.Tx) error {
 	for _, stmt := range blockResetExprs {
@@ -85,18 +163,14 @@ func BlockResetDB(tx *sql.Tx) error {
 	return nil
 }
 
-// BlockGet retrieves a block by a round number
-func BlockGet(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, err error) {
-	var buf []byte
-	err = tx.QueryRow("SELECT blkdata FROM blocks WHERE rnd=?", rnd).Scan(&buf)
+// BlockGet retrieves a block by a round number. The Reader's hasWindowStart
+// flag (captured by NewReader at open time) selects the read shape so the
+// hot path never introspects the schema; see blockGetEncoded.
+func (r *Reader) BlockGet(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, err error) {
+	buf, _, err := r.blockGetEncoded(tx, rnd, true /*blkOnly*/)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			err = ledgercore.ErrNoEntry{Round: rnd}
-		}
-
 		return
 	}
-
 	err = protocol.Decode(buf, &blk)
 	return
 }
@@ -117,22 +191,16 @@ func BlockGetHdr(tx *sql.Tx, rnd basics.Round) (hdr bookkeeping.BlockHeader, err
 	return
 }
 
-// BlockGetEncodedCert retrieves raw block and cert by a round number
-func BlockGetEncodedCert(tx *sql.Tx, rnd basics.Round) (blk []byte, cert []byte, err error) {
-	err = tx.QueryRow("SELECT blkdata, certdata FROM blocks WHERE rnd=?", rnd).Scan(&blk, &cert)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			err = ledgercore.ErrNoEntry{Round: rnd}
-		}
-
-		return
-	}
-	return
+// BlockGetEncodedCert retrieves raw block and cert by a round number.
+// The Reader's hasWindowStart flag selects the read shape; see BlockGet.
+func (r *Reader) BlockGetEncodedCert(tx *sql.Tx, rnd basics.Round) (blk []byte, cert []byte, err error) {
+	return r.blockGetEncoded(tx, rnd, false)
 }
 
-// BlockGetCert retrieves block and cert by a round number
-func BlockGetCert(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error) {
-	blkbuf, certbuf, err := BlockGetEncodedCert(tx, rnd)
+// BlockGetCert retrieves block and cert by a round number. The Reader's
+// hasWindowStart flag selects the read shape; see BlockGet.
+func (r *Reader) BlockGetCert(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error) {
+	blkbuf, certbuf, err := r.BlockGetEncodedCert(tx, rnd)
 	if err != nil {
 		return
 	}
@@ -151,32 +219,54 @@ func BlockGetCert(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, cert agr
 	return
 }
 
-// BlockPut stores block and certificate
-func BlockPut(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate) error {
+// BlockPut stores block and certificate, using the receiver's streaming
+// encoder state to carry the zstd window forward across consecutive
+// successful calls.
+func (w *Writer) BlockPut(tx *sql.Tx, blk *bookkeeping.Block, cert *agreement.Certificate) error {
 	var max sql.NullInt64
 	err := tx.QueryRow("SELECT MAX(rnd) FROM blocks").Scan(&max)
 	if err != nil {
 		return err
 	}
 
+	rnd := blk.Round()
 	if max.Valid {
-		if blk.Round() != basics.Round(max.Int64+1) {
-			err = fmt.Errorf("inserting block %d but expected %d", blk.Round(), max.Int64+1)
+		if rnd != basics.Round(max.Int64+1) {
+			err = fmt.Errorf("inserting block %d but expected %d", rnd, max.Int64+1)
 			return err
 		}
 	} else {
-		if blk.Round() != 0 {
-			err = fmt.Errorf("inserting block %d but expected 0", blk.Round())
+		if rnd != 0 {
+			err = fmt.Errorf("inserting block %d but expected 0", rnd)
 			return err
 		}
 	}
 
-	_, err = tx.Exec("INSERT INTO blocks (rnd, proto, hdrdata, blkdata, certdata) VALUES (?, ?, ?, ?, ?)",
-		blk.Round(),
+	blkChunk, certChunk, anchorRound, err := w.encodeBlockCertData(blk, cert)
+	if err != nil {
+		return err
+	}
+
+	// When compression is disabled the row is byte-identical to the
+	// pre-compression on-disk layout, so we use the 5-column INSERT and
+	// never touch the window_start column (which may not even exist).
+	if w.Codec().Disabled() {
+		_, err = tx.Exec("INSERT INTO blocks (rnd, proto, hdrdata, blkdata, certdata) VALUES (?, ?, ?, ?, ?)",
+			rnd,
+			blk.CurrentProtocol,
+			protocol.Encode(&blk.BlockHeader),
+			blkChunk,
+			certChunk,
+		)
+		return err
+	}
+	_, err = tx.Exec("INSERT INTO blocks (rnd, proto, hdrdata, blkdata, certdata, window_start) VALUES (?, ?, ?, ?, ?, ?)",
+		rnd,
 		blk.CurrentProtocol,
 		protocol.Encode(&blk.BlockHeader),
-		protocol.Encode(&blk),
-		protocol.Encode(&cert),
+		blkChunk,
+		certChunk,
+		uint64(anchorRound),
 	)
 	return err
 }
@@ -241,6 +331,16 @@ func BlockForgetBefore(tx *sql.Tx, rnd basics.Round) error {
 	return err
 }
 
+// RoundDownRetention aligns a candidate retention boundary to a round that
+// preserves every possible windowed-zstd anchor supported by the block DB.
+// Reads look back by MaxCompressionWindow, so retention must keep rows from
+// the same maximum-sized window even if the current node has compression
+// disabled or uses a smaller window than an earlier run.
+func RoundDownRetention(rnd basics.Round) basics.Round {
+	const n = uint64(MaxCompressionWindow)
+	return basics.Round(uint64(rnd) - uint64(rnd)%n)
+}
+
 // BlockStartCatchupStaging initializes catchup for catchpoint
 func BlockStartCatchupStaging(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate) error {
 	// delete the old catchpointblocks table, if there is such.
@@ -277,6 +377,14 @@ func BlockStartCatchupStaging(tx *sql.Tx, blk bookkeeping.Block, cert agreement.
 
 // BlockCompleteCatchup applies catchpoint caught up blocks
 func BlockCompleteCatchup(tx *sql.Tx) (err error) {
+	// catchpointblocks is created without window_start. If blocks has the
+	// column, add it to the replacement table: a Reader caches
+	// hasWindowStart at NewReader time and may be used after this rename,
+	// and Writer.BlockPut writes window_start when compression is enabled.
+	hasWindowStart, err := tableHasColumn(tx, "blocks", "window_start")
+	if err != nil {
+		return err
+	}
 	_, err = tx.Exec("ALTER TABLE blocks RENAME TO blocks_old")
 	if err != nil {
 		return err
@@ -284,6 +392,12 @@ func BlockCompleteCatchup(tx *sql.Tx) (err error) {
 	_, err = tx.Exec("ALTER TABLE catchpointblocks RENAME TO blocks")
 	if err != nil {
 		return err
+	}
+	if hasWindowStart {
+		err = addWindowStartColumn(tx)
+		if err != nil {
+			return err
+		}
 	}
 	_, err = tx.Exec("DROP TABLE IF EXISTS blocks_old")
 	if err != nil {
