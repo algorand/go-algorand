@@ -89,7 +89,7 @@ func (c *Client) getMaybeCreateUnencryptedWallet() ([]byte, error) {
 }
 
 // UnencryptedMultisigSignTransaction is MultisigSignTransactionWithWallet for the default wallet
-func (c *Client) UnencryptedMultisigSignTransaction(utx transactions.Transaction, signerAddr string, partial crypto.MultisigSig) (msig crypto.MultisigSig, err error) {
+func (c *Client) UnencryptedMultisigSignTransaction(utx transactions.Transaction, signerAddr string, partial transactions.MultisigSig) (msig transactions.MultisigSig, err error) {
 	wh, err := c.GetUnencryptedWalletHandle()
 	if err != nil {
 		return

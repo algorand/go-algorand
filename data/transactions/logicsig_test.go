@@ -61,11 +61,11 @@ func TestLogicSigBlankAndHasProgram(t *testing.T) {
 		},
 		{
 			name: "multisig",
-			lsig: LogicSig{Msig: crypto.MultisigSig{Version: 1}},
+			lsig: LogicSig{Msig: MultisigSig{Version: 1}},
 		},
 		{
 			name: "logic multisig",
-			lsig: LogicSig{LMsig: crypto.MultisigSig{Version: 1}},
+			lsig: LogicSig{LMsig: MultisigSig{Version: 1}},
 		},
 		{
 			name: "pqsig",

@@ -266,13 +266,13 @@ func generateMultiSigTxn(numTxs, numAccs int, blockRound basics.Round, t *testin
 		signed[i].Txn = txs[i]
 
 		// create multi sig that 2 out of 3 has signed the txn
-		var sigs [2]crypto.MultisigSig
+		var sigs [2]transactions.MultisigSig
 		for j := 0; j < 2; j++ {
-			msig, err := crypto.MultisigSign(txs[i], crypto.Digest(multiAddress[s]), 1, 2, pks[3*s:3*s+3], *secrets[3*s+j])
+			msig, err := transactions.MultisigSign(txs[i], crypto.Digest(multiAddress[s]), 1, 2, pks[3*s:3*s+3], *secrets[3*s+j])
 			require.NoError(t, err)
 			sigs[j] = msig
 		}
-		msig, err := crypto.MultisigAssemble(sigs[:])
+		msig, err := transactions.MultisigAssemble(sigs[:])
 		require.NoError(t, err)
 		signed[i].Msig = msig
 		u += 100
@@ -291,7 +291,7 @@ func generateMultiSigAccounts(t *testing.T, numAccs int) ([]*crypto.SignatureSec
 
 	// create multiAccounts
 	for i := 0; i < numAccs; i += 3 {
-		multiSigAdd, err := crypto.MultisigAddrGen(1, 2, pks[i:i+3])
+		multiSigAdd, err := transactions.MultisigAddrGen(1, 2, pks[i:i+3])
 		require.NoError(t, err)
 		multiAddress[i/3] = basics.Address(multiSigAdd)
 	}
@@ -984,7 +984,7 @@ func TestTxnValidationEmptySig(t *testing.T) {
 		}
 
 		txn.Sig = crypto.Signature{}
-		txn.Msig = crypto.MultisigSig{}
+		txn.Msig = transactions.MultisigSig{}
 		txn.Lsig = transactions.LogicSig{}
 		if verifyTxnGroup([]transactions.SignedTxn{txn}, blockHeader) == nil {
 			t.Errorf("transaction %#v verified without sig", txn)
@@ -1481,8 +1481,8 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	txnGroups[0][0].Sig = tmpSig
 
 	///// Sig + multiSig
-	txnGroups[0][0].Msig.Subsigs = make([]crypto.MultisigSubsig, 1)
-	txnGroups[0][0].Msig.Subsigs[0] = crypto.MultisigSubsig{
+	txnGroups[0][0].Msig.Subsigs = make([]transactions.MultisigSubsig, 1)
+	txnGroups[0][0].Msig.Subsigs[0] = transactions.MultisigSubsig{
 		Key: crypto.PublicKey{0x1},
 		Sig: crypto.Signature{0x2},
 	}
@@ -1499,8 +1499,8 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	///// MultiSig + logic
 	txnGroups[0][0].Sig = crypto.Signature{}
 	txnGroups[0][0].Lsig.Logic = op.Program
-	txnGroups[0][0].Msig.Subsigs = make([]crypto.MultisigSubsig, 1)
-	txnGroups[0][0].Msig.Subsigs[0] = crypto.MultisigSubsig{
+	txnGroups[0][0].Msig.Subsigs = make([]transactions.MultisigSubsig, 1)
+	txnGroups[0][0].Msig.Subsigs[0] = transactions.MultisigSubsig{
 		Key: crypto.PublicKey{0x1},
 		Sig: crypto.Signature{0x2},
 	}
@@ -1514,8 +1514,8 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	txnGroups[0][0].Sig = crypto.Signature{}
 	txnGroups[0][0].Lsig.Logic = op.Program
 	txnGroups[0][0].Lsig.Sig = tmpSig
-	txnGroups[0][0].Lsig.Msig.Subsigs = make([]crypto.MultisigSubsig, 1)
-	txnGroups[0][0].Lsig.Msig.Subsigs[0] = crypto.MultisigSubsig{
+	txnGroups[0][0].Lsig.Msig.Subsigs = make([]transactions.MultisigSubsig, 1)
+	txnGroups[0][0].Lsig.Msig.Subsigs[0] = transactions.MultisigSubsig{
 		Key: crypto.PublicKey{0x1},
 		Sig: crypto.Signature{0x2},
 	}
@@ -1524,8 +1524,8 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	txnGroups[0][0].Lsig.Msig.Subsigs = nil
 
 	/////  logic with sig and LMsig
-	txnGroups[0][0].Lsig.LMsig.Subsigs = make([]crypto.MultisigSubsig, 1)
-	txnGroups[0][0].Lsig.LMsig.Subsigs[0] = crypto.MultisigSubsig{
+	txnGroups[0][0].Lsig.LMsig.Subsigs = make([]transactions.MultisigSubsig, 1)
+	txnGroups[0][0].Lsig.LMsig.Subsigs[0] = transactions.MultisigSubsig{
 		Key: crypto.PublicKey{0x1},
 		Sig: crypto.Signature{0x2},
 	}
@@ -1535,13 +1535,13 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	txnGroups[0][0].Lsig.LMsig.Subsigs = nil
 
 	/////  logic with Msig and LMsig
-	txnGroups[0][0].Lsig.Msig.Subsigs = make([]crypto.MultisigSubsig, 1)
-	txnGroups[0][0].Lsig.Msig.Subsigs[0] = crypto.MultisigSubsig{
+	txnGroups[0][0].Lsig.Msig.Subsigs = make([]transactions.MultisigSubsig, 1)
+	txnGroups[0][0].Lsig.Msig.Subsigs[0] = transactions.MultisigSubsig{
 		Key: crypto.PublicKey{0x1},
 		Sig: crypto.Signature{0x2},
 	}
-	txnGroups[0][0].Lsig.LMsig.Subsigs = make([]crypto.MultisigSubsig, 1)
-	txnGroups[0][0].Lsig.LMsig.Subsigs[0] = crypto.MultisigSubsig{
+	txnGroups[0][0].Lsig.LMsig.Subsigs = make([]transactions.MultisigSubsig, 1)
+	txnGroups[0][0].Lsig.LMsig.Subsigs[0] = transactions.MultisigSubsig{
 		Key: crypto.PublicKey{0x3},
 		Sig: crypto.Signature{0x4},
 	}
@@ -1562,8 +1562,8 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	txnGroups[0][0].Lsig.Sig = crypto.Signature{}
 
 	/////  logic with Msig and SKsig
-	txnGroups[0][0].Lsig.Msig.Subsigs = make([]crypto.MultisigSubsig, 1)
-	txnGroups[0][0].Lsig.Msig.Subsigs[0] = crypto.MultisigSubsig{
+	txnGroups[0][0].Lsig.Msig.Subsigs = make([]transactions.MultisigSubsig, 1)
+	txnGroups[0][0].Lsig.Msig.Subsigs[0] = transactions.MultisigSubsig{
 		Key: crypto.PublicKey{0x1},
 		Sig: crypto.Signature{0x2},
 	}
@@ -1572,8 +1572,8 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	txnGroups[0][0].Lsig.Msig.Subsigs = nil
 
 	/////  logic with LMsig and SKsig
-	txnGroups[0][0].Lsig.LMsig.Subsigs = make([]crypto.MultisigSubsig, 1)
-	txnGroups[0][0].Lsig.LMsig.Subsigs[0] = crypto.MultisigSubsig{
+	txnGroups[0][0].Lsig.LMsig.Subsigs = make([]transactions.MultisigSubsig, 1)
+	txnGroups[0][0].Lsig.LMsig.Subsigs[0] = transactions.MultisigSubsig{
 		Key: crypto.PublicKey{0x1},
 		Sig: crypto.Signature{0x2},
 	}
@@ -1620,7 +1620,7 @@ func TestTxnGroupSaltedKeySigMixedSignatures(t *testing.T) {
 
 	t.Run("sksig-plus-msig", func(t *testing.T) {
 		stxn := makeSKsigSignedTxn(t, 6)
-		stxn.Msig.Subsigs = []crypto.MultisigSubsig{{
+		stxn.Msig.Subsigs = []transactions.MultisigSubsig{{
 			Key: crypto.PublicKey{0x1},
 			Sig: crypto.Signature{0x2},
 		}}
@@ -1908,13 +1908,13 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 			program = logic.Program(op.Program)
 		}
 		// create multi sig that 2 out of 3 has signed the txn
-		var sigs [2]crypto.MultisigSig
+		var sigs [2]transactions.MultisigSig
 		for j := 0; j < 2; j++ {
-			msig, err := crypto.MultisigSign(program, crypto.Digest(multiAddress[s]), 1, 2, pks[3*s:3*s+3], *secrets[3*s+j])
+			msig, err := transactions.MultisigSign(program, crypto.Digest(multiAddress[s]), 1, 2, pks[3*s:3*s+3], *secrets[3*s+j])
 			require.NoError(t, err)
 			sigs[j] = msig
 		}
-		msig, err := crypto.MultisigAssemble(sigs[:])
+		msig, err := transactions.MultisigAssemble(sigs[:])
 		require.NoError(t, err)
 		if useLMsig {
 			signedTxn[i].Lsig.LMsig = msig
@@ -2285,8 +2285,8 @@ func TestBigLogicSigProgramSize(t *testing.T) {
 			lsig transactions.LogicSig
 		}{
 			{name: "sig", lsig: transactions.LogicSig{Sig: lsigSig}},
-			{name: "msig", lsig: transactions.LogicSig{Msig: crypto.MultisigSig{Version: 1}}},
-			{name: "lmsig", lsig: transactions.LogicSig{LMsig: crypto.MultisigSig{Version: 1}}},
+			{name: "msig", lsig: transactions.LogicSig{Msig: transactions.MultisigSig{Version: 1}}},
+			{name: "lmsig", lsig: transactions.LogicSig{LMsig: transactions.MultisigSig{Version: 1}}},
 			{name: "pqsig", lsig: transactions.LogicSig{SKsig: transactions.SaltedKeySig{Scheme: protocol.SigSchemeFalcon1024}}},
 		}
 
@@ -2444,15 +2444,15 @@ func testLogicSigMultisigValidation(t *testing.T, consensusVer protocol.Consensu
 
 	t.Run("MultisigToSingleSig", func(t *testing.T) {
 		pks := []crypto.PublicKey{secrets[0].SignatureVerifier}
-		msigAddr, err := crypto.MultisigAddrGen(1, 1, pks)
+		msigAddr, err := transactions.MultisigAddrGen(1, 1, pks)
 		require.NoError(t, err)
 
 		// Sign in multisig context
-		var msig crypto.MultisigSig
+		var msig transactions.MultisigSig
 		if useLMsig { // >=v41: use MultisigProgram with address binding
-			msig, err = crypto.MultisigSign(logic.MultisigProgram{Addr: msigAddr, Program: program}, msigAddr, 1, 1, pks, *secrets[0])
+			msig, err = transactions.MultisigSign(logic.MultisigProgram{Addr: msigAddr, Program: program}, msigAddr, 1, 1, pks, *secrets[0])
 		} else { // v40: use Program directly
-			msig, err = crypto.MultisigSign(logic.Program(program), msigAddr, 1, 1, pks, *secrets[0])
+			msig, err = transactions.MultisigSign(logic.Program(program), msigAddr, 1, 1, pks, *secrets[0])
 		}
 		require.NoError(t, err)
 
@@ -2477,13 +2477,13 @@ func testLogicSigMultisigValidation(t *testing.T, consensusVer protocol.Consensu
 
 		// Create multisig with same key
 		pks := []crypto.PublicKey{secrets[0].SignatureVerifier}
-		msigAddr, err := crypto.MultisigAddrGen(1, 1, pks)
+		msigAddr, err := transactions.MultisigAddrGen(1, 1, pks)
 		require.NoError(t, err)
 
 		// Try to use single sig in multisig
 		stxn := makeTestTxn(basics.Address(msigAddr))
-		msigWithSingleSig := crypto.MultisigSig{Version: 1, Threshold: 1,
-			Subsigs: []crypto.MultisigSubsig{{Key: secrets[0].SignatureVerifier, Sig: singleSig}},
+		msigWithSingleSig := transactions.MultisigSig{Version: 1, Threshold: 1,
+			Subsigs: []transactions.MultisigSubsig{{Key: secrets[0].SignatureVerifier, Sig: singleSig}},
 		}
 
 		if useLMsig { // >=v41: use LMsig field
@@ -2502,29 +2502,29 @@ func testLogicSigMultisigValidation(t *testing.T, consensusVer protocol.Consensu
 		pks1 := []crypto.PublicKey{secrets[0].SignatureVerifier, secrets[1].SignatureVerifier, secrets[2].SignatureVerifier}
 		pks2 := []crypto.PublicKey{secrets[0].SignatureVerifier, secrets[1].SignatureVerifier}
 
-		msigAddr1, err := crypto.MultisigAddrGen(1, 2, pks1)
+		msigAddr1, err := transactions.MultisigAddrGen(1, 2, pks1)
 		require.NoError(t, err)
-		msigAddr2, err := crypto.MultisigAddrGen(1, 2, pks2)
+		msigAddr2, err := transactions.MultisigAddrGen(1, 2, pks2)
 		require.NoError(t, err)
 
 		// Sign for each multisig
-		var sig1, sig2 crypto.MultisigSig
+		var sig1, sig2 transactions.MultisigSig
 		if useLMsig { // >=v41: use MultisigProgram with address binding
-			sig1, err = crypto.MultisigSign(logic.MultisigProgram{Addr: msigAddr1, Program: program}, msigAddr1, 1, 2, pks1, *secrets[0])
+			sig1, err = transactions.MultisigSign(logic.MultisigProgram{Addr: msigAddr1, Program: program}, msigAddr1, 1, 2, pks1, *secrets[0])
 			require.NoError(t, err)
-			sig2, err = crypto.MultisigSign(logic.MultisigProgram{Addr: msigAddr2, Program: program}, msigAddr2, 1, 2, pks2, *secrets[1])
+			sig2, err = transactions.MultisigSign(logic.MultisigProgram{Addr: msigAddr2, Program: program}, msigAddr2, 1, 2, pks2, *secrets[1])
 			require.NoError(t, err)
 		} else { // v40: use Program directly
-			sig1, err = crypto.MultisigSign(logic.Program(program), msigAddr1, 1, 2, pks1, *secrets[0])
+			sig1, err = transactions.MultisigSign(logic.Program(program), msigAddr1, 1, 2, pks1, *secrets[0])
 			require.NoError(t, err)
-			sig2, err = crypto.MultisigSign(logic.Program(program), msigAddr2, 1, 2, pks2, *secrets[1])
+			sig2, err = transactions.MultisigSign(logic.Program(program), msigAddr2, 1, 2, pks2, *secrets[1])
 			require.NoError(t, err)
 		}
 
 		// Try to mix signatures from different multisigs
 		stxn := makeTestTxn(basics.Address(msigAddr2))
-		mixedMsig := crypto.MultisigSig{Version: 1, Threshold: 2,
-			Subsigs: []crypto.MultisigSubsig{
+		mixedMsig := transactions.MultisigSig{Version: 1, Threshold: 2,
+			Subsigs: []transactions.MultisigSubsig{
 				{Key: secrets[0].SignatureVerifier, Sig: sig1.Subsigs[0].Sig}, // from msigAddr1
 				{Key: secrets[1].SignatureVerifier, Sig: sig2.Subsigs[1].Sig}, // from msigAddr2
 			},
@@ -2548,16 +2548,16 @@ func testLogicSigMultisigValidation(t *testing.T, consensusVer protocol.Consensu
 		}
 
 		pks := []crypto.PublicKey{secrets[0].SignatureVerifier, secrets[1].SignatureVerifier}
-		msigAddr, err := crypto.MultisigAddrGen(1, 2, pks)
+		msigAddr, err := transactions.MultisigAddrGen(1, 2, pks)
 		require.NoError(t, err)
 
 		// Sign with address binding
-		sig1, err := crypto.MultisigSign(logic.MultisigProgram{Addr: msigAddr, Program: program}, msigAddr, 1, 2, pks, *secrets[0])
+		sig1, err := transactions.MultisigSign(logic.MultisigProgram{Addr: msigAddr, Program: program}, msigAddr, 1, 2, pks, *secrets[0])
 		require.NoError(t, err)
-		sig2, err := crypto.MultisigSign(logic.MultisigProgram{Addr: msigAddr, Program: program}, msigAddr, 1, 2, pks, *secrets[1])
+		sig2, err := transactions.MultisigSign(logic.MultisigProgram{Addr: msigAddr, Program: program}, msigAddr, 1, 2, pks, *secrets[1])
 		require.NoError(t, err)
 
-		msig, err := crypto.MultisigAssemble([]crypto.MultisigSig{sig1, sig2})
+		msig, err := transactions.MultisigAssemble([]transactions.MultisigSig{sig1, sig2})
 		require.NoError(t, err)
 
 		// Create a transaction
@@ -2602,14 +2602,14 @@ func TestLogicSigMsigBothFlags(t *testing.T) {
 	secret := crypto.GenerateSignatureSecrets(seed)
 	pks := []crypto.PublicKey{secret.SignatureVerifier}
 
-	msigAddr, err := crypto.MultisigAddrGen(1, 1, pks)
+	msigAddr, err := transactions.MultisigAddrGen(1, 1, pks)
 	require.NoError(t, err)
 
 	// Sign with both methods
-	msig, err := crypto.MultisigSign(logic.Program(program), msigAddr, 1, 1, pks, *secret)
+	msig, err := transactions.MultisigSign(logic.Program(program), msigAddr, 1, 1, pks, *secret)
 	require.NoError(t, err)
 
-	lmsig, err := crypto.MultisigSign(logic.MultisigProgram{Addr: msigAddr, Program: program}, msigAddr, 1, 1, pks, *secret)
+	lmsig, err := transactions.MultisigSign(logic.MultisigProgram{Addr: msigAddr, Program: program}, msigAddr, 1, 1, pks, *secret)
 	require.NoError(t, err)
 
 	// Create test transaction

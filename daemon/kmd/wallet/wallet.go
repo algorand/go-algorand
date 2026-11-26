@@ -53,10 +53,10 @@ type Wallet interface {
 
 	SignTransaction(tx transactions.Transaction, pk crypto.PublicKey, pw []byte) ([]byte, error)
 
-	MultisigSignTransaction(tx transactions.Transaction, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte, signer crypto.Digest) (crypto.MultisigSig, error)
+	MultisigSignTransaction(tx transactions.Transaction, pk crypto.PublicKey, partial transactions.MultisigSig, pw []byte, signer crypto.Digest) (transactions.MultisigSig, error)
 
 	SignProgram(program []byte, src crypto.Digest, pw []byte) ([]byte, error)
-	MultisigSignProgram(program []byte, src crypto.Digest, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte, useLegacyMsig bool) (crypto.MultisigSig, error)
+	MultisigSignProgram(program []byte, src crypto.Digest, pk crypto.PublicKey, partial transactions.MultisigSig, pw []byte, useLegacyMsig bool) (transactions.MultisigSig, error)
 }
 
 // Metadata represents high-level information about a wallet, like its name, id

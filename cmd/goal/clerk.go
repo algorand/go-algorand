@@ -239,7 +239,7 @@ func createSignedTransaction(client libgoal.Client, signTx bool, dataDir string,
 
 	// Wrap in a transactions.SignedTxn with an empty sig.
 	// This way protocol.Encode will encode the transaction type
-	stxn, err = transactions.AssembleSignedTxn(tx, crypto.Signature{}, crypto.MultisigSig{})
+	stxn, err = transactions.AssembleSignedTxn(tx, crypto.Signature{}, transactions.MultisigSig{})
 	if err != nil {
 		return
 	}
@@ -557,13 +557,13 @@ var sendCmd = &cobra.Command{
 				pks[i] = crypto.PublicKey(addr)
 			}
 
-			addr, err1 := crypto.MultisigAddrGen(1, uint8(threshold), pks)
+			addr, err1 := transactions.MultisigAddrGen(1, uint8(threshold), pks)
 			if err1 != nil {
 				reportErrorf(msigParseError, err1)
 			}
 
 			// Generate the multisig and assign to the txn
-			stx.Msig = crypto.MultisigPreimageFromPKs(1, uint8(threshold), pks)
+			stx.Msig = transactions.MultisigPreimageFromPKs(1, uint8(threshold), pks)
 
 			// Append the signer since it's a rekey txn
 			if basics.Address(addr) == stx.Txn.Sender {

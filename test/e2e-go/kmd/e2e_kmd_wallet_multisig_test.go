@@ -206,14 +206,14 @@ func TestMultisigSign(t *testing.T) {
 		WalletHandleToken: walletHandleToken,
 		Transaction:       protocol.Encode(&tx),
 		PublicKey:         pk1,
-		PartialMsig:       crypto.MultisigSig{},
+		PartialMsig:       transactions.MultisigSig{},
 		WalletPassword:    f.WalletPassword,
 	}
 	resp2 := kmdapi.APIV1POSTMultisigTransactionSignResponse{}
 	err = f.Client.DoV1Request(req2, &resp2)
 	a.NoError(err)
 
-	var msig crypto.MultisigSig
+	var msig transactions.MultisigSig
 	err = protocol.Decode(resp2.Multisig, &msig)
 	a.NoError(err)
 
@@ -286,10 +286,10 @@ func TestMultisigSignWithSigner(t *testing.T) {
 		WalletHandleToken: walletHandleToken,
 		Transaction:       protocol.Encode(&tx),
 		PublicKey:         pk1,
-		PartialMsig: crypto.MultisigSig{
+		PartialMsig: transactions.MultisigSig{
 			Threshold: 2,
 			Version:   1,
-			Subsigs:   []crypto.MultisigSubsig{{Key: pk1}, {Key: pk2}, {Key: pk3}},
+			Subsigs:   []transactions.MultisigSubsig{{Key: pk1}, {Key: pk2}, {Key: pk3}},
 		},
 		WalletPassword: f.WalletPassword,
 		AuthAddr:       crypto.Digest(msigAddr),
@@ -298,7 +298,7 @@ func TestMultisigSignWithSigner(t *testing.T) {
 	err = f.Client.DoV1Request(req2, &resp2)
 	a.NoError(err)
 
-	var msig crypto.MultisigSig
+	var msig transactions.MultisigSig
 	err = protocol.Decode(resp2.Multisig, &msig)
 	a.NoError(err)
 
@@ -367,10 +367,10 @@ func TestMultisigSignWithWrongSigner(t *testing.T) {
 		WalletHandleToken: walletHandleToken,
 		Transaction:       protocol.Encode(&tx),
 		PublicKey:         pk1,
-		PartialMsig: crypto.MultisigSig{
+		PartialMsig: transactions.MultisigSig{
 			Threshold: 2,
 			Version:   1,
-			Subsigs:   []crypto.MultisigSubsig{{Key: pk1}, {Key: pk2}, {Key: pk3}},
+			Subsigs:   []transactions.MultisigSubsig{{Key: pk1}, {Key: pk2}, {Key: pk3}},
 		},
 		WalletPassword: f.WalletPassword,
 	}
@@ -414,7 +414,7 @@ func TestMultisigSignProgram(t *testing.T) {
 			Program:           program,
 			Address:           basics.Address(msigAddr).String(),
 			PublicKey:         pk1,
-			PartialMsig:       crypto.MultisigSig{},
+			PartialMsig:       transactions.MultisigSig{},
 			WalletPassword:    f.WalletPassword,
 			UseLegacyMsig:     useLegacyMsig,
 		}
@@ -422,7 +422,7 @@ func TestMultisigSignProgram(t *testing.T) {
 		err = f.Client.DoV1Request(req2, &resp2)
 		a.NoError(err)
 
-		var msig crypto.MultisigSig
+		var msig transactions.MultisigSig
 		err = protocol.Decode(resp2.Multisig, &msig)
 		a.NoError(err)
 
@@ -451,9 +451,9 @@ func TestMultisigSignProgram(t *testing.T) {
 			prog = logic.MultisigProgram{Addr: crypto.Digest(msigAddr), Program: program}
 			wrongProg = logic.Program(program)
 		}
-		err = crypto.MultisigVerify(prog, crypto.Digest(msigAddr), msig)
+		err = transactions.MultisigVerify(prog, crypto.Digest(msigAddr), msig)
 		a.NoError(err)
-		err = crypto.MultisigVerify(wrongProg, crypto.Digest(msigAddr), msig)
+		err = transactions.MultisigVerify(wrongProg, crypto.Digest(msigAddr), msig)
 		a.ErrorContains(err, "At least one signature didn't pass verification")
 	}
 

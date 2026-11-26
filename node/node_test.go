@@ -877,7 +877,7 @@ func TestMaxSizesCorrect(t *testing.T) {
 	// from the multiple signature types.
 	maxCombinedTxnSize := uint64(transactions.SignedTxnMaxSize())
 	// subtract out the two smaller signature sizes (logicsig is biggest, it can *contain* the others)
-	maxCombinedTxnSize -= uint64(crypto.SignatureMaxSize() + crypto.MultisigSigMaxSize())
+	maxCombinedTxnSize -= uint64(crypto.SignatureMaxSize() + transactions.MultisigSigMaxSize())
 	// a transaction carries at most one effective SaltedKeySig (top-level OR nested in the
 	// logicsig), but SignedTxnMaxSize counts both, so subtract one.
 	maxCombinedTxnSize -= uint64(transactions.SaltedKeySigMaxSize())

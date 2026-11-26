@@ -1095,10 +1095,10 @@ func TestProcessBatchSkippedGroupDoesNotMisattributeSigs(t *testing.T) {
 				// (neither inspects msig contents), then MultisigBatchPrep rejects it after
 				// txn[0]'s sig was staged.
 				bad := []transactions.SignedTxn{signed[1], signed[2]}
-				bad[1].Msig = crypto.MultisigSig{
+				bad[1].Msig = transactions.MultisigSig{
 					Version:   2, // unsupported version
 					Threshold: 1,
-					Subsigs: []crypto.MultisigSubsig{
+					Subsigs: []transactions.MultisigSubsig{
 						{Key: crypto.PublicKey(bad[1].Txn.Sender), Sig: bad[1].Sig},
 					},
 				}

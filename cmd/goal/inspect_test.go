@@ -66,7 +66,7 @@ func TestInspect(t *testing.T) {
 	crypto.RandBytes(full.Sig[:])
 	full.Msig.Version = uint8(crypto.RandUint64())
 	full.Msig.Threshold = uint8(crypto.RandUint64())
-	full.Msig.Subsigs = make([]crypto.MultisigSubsig, 2)
+	full.Msig.Subsigs = make([]transactions.MultisigSubsig, 2)
 	crypto.RandBytes(full.Msig.Subsigs[0].Key[:])
 	crypto.RandBytes(full.Msig.Subsigs[0].Sig[:])
 	crypto.RandBytes(full.Msig.Subsigs[1].Key[:])
@@ -110,7 +110,7 @@ func TestInspect(t *testing.T) {
 	delegated.Lsig.Logic = []byte{1}
 	delegated.Lsig.LMsig.Version = uint8(crypto.RandUint64())
 	delegated.Lsig.LMsig.Threshold = uint8(crypto.RandUint64())
-	delegated.Lsig.LMsig.Subsigs = make([]crypto.MultisigSubsig, 1)
+	delegated.Lsig.LMsig.Subsigs = make([]transactions.MultisigSubsig, 1)
 	crypto.RandBytes(delegated.Lsig.LMsig.Subsigs[0].Key[:])
 	crypto.RandBytes(delegated.Lsig.LMsig.Subsigs[0].Sig[:])
 	delegated.Lsig.SKsig = transactions.SaltedKeySig{

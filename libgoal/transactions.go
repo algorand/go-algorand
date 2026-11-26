@@ -98,7 +98,7 @@ func (c *Client) SignProgramWithWallet(walletHandle, pw []byte, addr string, pro
 
 // MultisigSignTransactionWithWallet creates a multisig (or adds to an existing partial multisig, if one is provided), signing with the key corresponding to the given address and using the specified wallet
 // TODO instead of returning MultisigSigs, accept and return blobs
-func (c *Client) MultisigSignTransactionWithWallet(walletHandle, pw []byte, utx transactions.Transaction, signerAddr string, partial crypto.MultisigSig) (msig crypto.MultisigSig, err error) {
+func (c *Client) MultisigSignTransactionWithWallet(walletHandle, pw []byte, utx transactions.Transaction, signerAddr string, partial transactions.MultisigSig) (msig transactions.MultisigSig, err error) {
 	txBytes := protocol.Encode(&utx)
 	addr, err := basics.UnmarshalChecksumAddress(signerAddr)
 	if err != nil {
@@ -117,7 +117,7 @@ func (c *Client) MultisigSignTransactionWithWallet(walletHandle, pw []byte, utx 
 }
 
 // MultisigSignTransactionWithWalletAndSigner creates a multisig (or adds to an existing partial multisig, if one is provided), signing with the key corresponding to the given address and using the specified wallet
-func (c *Client) MultisigSignTransactionWithWalletAndSigner(walletHandle, pw []byte, utx transactions.Transaction, signerAddr string, partial crypto.MultisigSig, signerMsig string) (msig crypto.MultisigSig, err error) {
+func (c *Client) MultisigSignTransactionWithWalletAndSigner(walletHandle, pw []byte, utx transactions.Transaction, signerAddr string, partial transactions.MultisigSig, signerMsig string) (msig transactions.MultisigSig, err error) {
 	txBytes := protocol.Encode(&utx)
 	addr, err := basics.UnmarshalChecksumAddress(signerAddr)
 	if err != nil {
@@ -140,7 +140,7 @@ func (c *Client) MultisigSignTransactionWithWalletAndSigner(walletHandle, pw []b
 }
 
 // MultisigSignProgramWithWallet creates a multisig (or adds to an existing partial multisig, if one is provided), signing with the key corresponding to the given address and using the specified wallet
-func (c *Client) MultisigSignProgramWithWallet(walletHandle, pw, program []byte, signerAddr string, partial crypto.MultisigSig, useLegacyMsig bool) (msig crypto.MultisigSig, err error) {
+func (c *Client) MultisigSignProgramWithWallet(walletHandle, pw, program []byte, signerAddr string, partial transactions.MultisigSig, useLegacyMsig bool) (msig transactions.MultisigSig, err error) {
 	addr, err := basics.UnmarshalChecksumAddress(signerAddr)
 	if err != nil {
 		return
@@ -149,7 +149,7 @@ func (c *Client) MultisigSignProgramWithWallet(walletHandle, pw, program []byte,
 	if err != nil {
 		return
 	}
-	msigAddr, err := crypto.MultisigAddrGenWithSubsigs(partial.Version, partial.Threshold, partial.Subsigs)
+	msigAddr, err := transactions.MultisigAddrGenWithSubsigs(partial.Version, partial.Threshold, partial.Subsigs)
 	if err != nil {
 		return
 	}
