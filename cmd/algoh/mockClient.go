@@ -102,7 +102,7 @@ func (c *mockClient) RawBlock(block basics.Round) (b []byte, e error) {
 			e = fmt.Errorf("test is missing block %d", block)
 		}
 	}
-	b = protocol.EncodeReflect(bl)
+	b = protocol.Encode(&bl)
 	return
 }
 

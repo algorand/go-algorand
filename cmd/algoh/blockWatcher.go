@@ -94,7 +94,7 @@ func (bw *blockWatcher) run(watchers []blockListener, stallDetect time.Duration,
 
 			// Parse the raw block
 			var block rpcs.EncodedBlockCert
-			err = protocol.DecodeReflect(resp, &block)
+			err = protocol.Decode(resp, &block)
 			if err != nil {
 				return false
 			}
