@@ -30,6 +30,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -1068,6 +1069,50 @@ func (k keypairs) findPairForSpecificRound(round uint64) merklesignature.KeyRoun
 		}
 	}
 	return merklesignature.KeyRoundPair{}
+}
+
+func TestDeleteStateProofKeysDoesNotHoldCacheLockWhenWriteQueueIsFull(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// Use a real-time timeout because a blocked mutex does not advance synctest time.
+	timer := time.NewTimer(defaultTimeout)
+	defer timer.Stop()
+	synctest.Test(t, func(t *testing.T) {
+		id := ParticipationID{1}
+		registry := &participationDB{
+			cache:      map[ParticipationID]ParticipationRecord{id: {ParticipationID: id}},
+			writeQueue: make(chan opRequest, 1),
+		}
+		registry.writeQueue <- opRequest{}
+
+		deleteDone := make(chan error, 1)
+		go func() {
+			deleteDone <- registry.DeleteStateProofKeys(id, 4)
+		}()
+		synctest.Wait()
+		select {
+		case err := <-deleteDone:
+			t.Fatalf("DeleteStateProofKeys returned before queue capacity was available: %v", err)
+		default:
+		}
+
+		readDone := make(chan struct{})
+		go func() {
+			registry.GetAll()
+			close(readDone)
+		}()
+		readBlocked := false
+		select {
+		case <-readDone:
+		case <-timer.C:
+			readBlocked = true
+		}
+
+		// Release the producer even if the read was blocked.
+		<-registry.writeQueue
+		require.NoError(t, <-deleteDone)
+		require.False(t, readBlocked, "GetAll blocked while DeleteStateProofKeys waited for queue capacity")
+	})
 }
 
 func TestDeleteStateProofKeys(t *testing.T) {
