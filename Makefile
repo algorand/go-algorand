@@ -29,6 +29,22 @@ GOLANG_VERSION_BUILD_MAJOR := $(shell echo $(GOLANG_VERSION_BUILD) | cut -d'.' -
 GOLANG_VERSION_MIN         := $(lastword $(GOLANG_VERSIONS))
 GOLANG_VERSION_SUPPORT     := $(shell echo $(GOLANG_VERSION_MIN) | cut -d'.' -f1,2)
 
+# If VERSION is set (e.g., VERSION=1.2.3), parse it to override version components.
+# This allows setting the full semantic version at build time.
+# VERSION must be numeric major.minor.patch (e.g., 4.5.0). Pre-release suffixes
+# like 1.2.3-beta are not accepted — the channel is set separately via CHANNEL.
+ifdef VERSION
+  # Validate format: must match N.N.N where each component is numeric
+  ifeq ($(shell echo '$(VERSION)' | grep -cE '^[0-9]+\.[0-9]+\.[0-9]+$$'),0)
+    $(error VERSION must be in major.minor.patch format (e.g., 4.5.0), got: $(VERSION))
+  endif
+  VERSION_MAJOR := $(word 1,$(subst ., ,$(VERSION)))
+  VERSION_MINOR := $(word 2,$(subst ., ,$(VERSION)))
+  VERSION_PATCH := $(word 3,$(subst ., ,$(VERSION)))
+  # Use patch as build number when VERSION is explicitly set
+  BUILDNUMBER   := $(VERSION_PATCH)
+endif
+
 # If build number already set, use it - to ensure same build number across multiple platforms being built
 BUILDNUMBER      ?= $(shell ./scripts/compute_build_number.sh)
 FULLBUILDNUMBER  ?= $(shell ./scripts/compute_build_number.sh -f)
@@ -78,7 +94,34 @@ endif
 
 GOTAGS      := --tags "$(GOTAGSLIST)"
 
-GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILDNUMBER) \
+# Version override ldflags (only set when VERSION env var is provided)
+ifdef VERSION
+  VERSION_LDFLAGS := -X github.com/algorand/go-algorand/config.VersionMajorOverride=$(VERSION_MAJOR) \
+		 -X github.com/algorand/go-algorand/config.VersionMinorOverride=$(VERSION_MINOR)
+else
+  VERSION_LDFLAGS :=
+endif
+
+# For reproducible release builds (signalled by SOURCE_DATE_EPOCH), clear the Go
+# build ID: it hashes the absolute cgo -I/-L paths and so differs per checkout
+# location. Left alone otherwise, since go install uses it to skip relinking.
+#
+# On darwin, without a build ID the Mach-O UUID is ld's, which hashes the debug
+# map's paths into Go's randomly named temp dir. -w and -Wl,-S drop the debug
+# map so the UUID depends only on content. External linking gives pure-Go
+# binaries a UUID too, which macOS expects (Apple TN3178).
+ifdef SOURCE_DATE_EPOCH
+  REPRO_LDFLAGS := -buildid=
+  ifeq ($(OS_TYPE),darwin)
+    REPRO_LDFLAGS += -w -linkmode=external
+    EXTLDFLAGS    += -Wl,-S
+  endif
+else
+  REPRO_LDFLAGS :=
+endif
+
+GOLDFLAGS_BASE  := $(VERSION_LDFLAGS) $(REPRO_LDFLAGS) \
+		 -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILDNUMBER) \
 		 -X github.com/algorand/go-algorand/config.CommitHash=$(COMMITHASH) \
 		 -X github.com/algorand/go-algorand/config.Branch=$(BUILDBRANCH) \
 		 -X github.com/algorand/go-algorand/config.DefaultDeadlock=$(DEFAULT_DEADLOCK) \
@@ -198,26 +241,35 @@ crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a:
 	mkdir -p crypto/copies/$(OS_TYPE)/$(ARCH)
 	rm -rf crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork
 	cp -R crypto/libsodium-fork/. crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork
+	# The prefix map keeps the checkout path out of libsodium's DWARF, which is
+	# linked into every cgo binary and would otherwise make builds path-dependent.
+	# It goes in CPPFLAGS rather than CFLAGS so that callers overriding CFLAGS via
+	# EXTRA_CONFIGURE_FLAGS (see the universal target) do not drop it.
 	cd crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork && \
 		./autogen.sh --prefix $(SRCPATH)/crypto/libs/$(OS_TYPE)/$(ARCH) && \
-		./configure --disable-shared --prefix="$(SRCPATH)/crypto/libs/$(OS_TYPE)/$(ARCH)" $(EXTRA_CONFIGURE_FLAGS) && \
+		./configure --disable-shared --prefix="$(SRCPATH)/crypto/libs/$(OS_TYPE)/$(ARCH)" CPPFLAGS="-ffile-prefix-map=$(SRCPATH)=." $(EXTRA_CONFIGURE_FLAGS) && \
 		$(MAKE) && \
 		$(MAKE) install
+
+# Oldest macOS the universal binaries run on. Keep it at the minimum macOS
+# that the Go version in go.mod supports (cmd/link's default), and raise it
+# with the Go version that raises that minimum.
+MACOS_MIN_VERSION := 13.0
 
 universal:
 ifeq ($(OS_TYPE),darwin)
 	# build amd64 Mac binaries
 	mkdir -p $(GOBIN)-darwin-amd64
-	CROSS_COMPILE_ARCH=amd64 GOBIN=$(GOBIN)-darwin-amd64 MACOSX_DEPLOYMENT_TARGET=13.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch x86_64 -mmacos-version-min=13.0" --host=x86_64-apple-darwin' $(MAKE)
+	CROSS_COMPILE_ARCH=amd64 GOBIN=$(GOBIN)-darwin-amd64 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MIN_VERSION) EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch x86_64 -mmacos-version-min=$(MACOS_MIN_VERSION)" --host=x86_64-apple-darwin' $(MAKE)
 
 	# build arm64 Mac binaries
 	mkdir -p $(GOBIN)-darwin-arm64
-	CROSS_COMPILE_ARCH=arm64 GOBIN=$(GOBIN)-darwin-arm64 MACOSX_DEPLOYMENT_TARGET=13.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch arm64 -mmacos-version-min=13.0" --host=aarch64-apple-darwin' $(MAKE)
+	CROSS_COMPILE_ARCH=arm64 GOBIN=$(GOBIN)-darwin-arm64 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MIN_VERSION) EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch arm64 -mmacos-version-min=$(MACOS_MIN_VERSION)" --host=aarch64-apple-darwin' $(MAKE)
 
 	# same for buildsrc-special
 	cd tools/block-generator && \
-	CROSS_COMPILE_ARCH=amd64 GOBIN=$(GOBIN)-darwin-amd64 MACOSX_DEPLOYMENT_TARGET=13.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch x86_64 -mmacos-version-min=13.0" --host=x86_64-apple-darwin' $(MAKE)
-	CROSS_COMPILE_ARCH=arm64 GOBIN=$(GOBIN)-darwin-arm64 MACOSX_DEPLOYMENT_TARGET=13.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch arm64 -mmacos-version-min=13.0" --host=aarch64-apple-darwin' $(MAKE)
+	CROSS_COMPILE_ARCH=amd64 GOBIN=$(GOBIN)-darwin-amd64 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MIN_VERSION) EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch x86_64 -mmacos-version-min=$(MACOS_MIN_VERSION)" --host=x86_64-apple-darwin' $(MAKE)
+	CROSS_COMPILE_ARCH=arm64 GOBIN=$(GOBIN)-darwin-arm64 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MIN_VERSION) EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch arm64 -mmacos-version-min=$(MACOS_MIN_VERSION)" --host=aarch64-apple-darwin' $(MAKE)
 
 	# lipo together
 	mkdir -p $(GOBIN)
@@ -300,7 +352,14 @@ rebuild_kmd_swagger:
 build: buildsrc buildsrc-special
 
 
-buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN
+# node_exporter ships only as an empty stub on Windows, and its extraction recipe
+# assumes a Unix-style GOBIN path; skip it there.
+NODE_EXPORTER_DEP := node_exporter
+ifeq ($(OS_TYPE),windows)
+NODE_EXPORTER_DEP :=
+endif
+
+buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a $(NODE_EXPORTER_DEP) NONGO_BIN
 	$(GO_INSTALL) -trimpath $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
 buildsrc-special:
