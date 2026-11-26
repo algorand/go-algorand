@@ -227,8 +227,8 @@ func TestSignedTxnFeeFactorSaltedKeySignatureContribution(t *testing.T) {
 }
 
 // TestLogicSigSaltedKeySigFee checks that a program authorizing from an ls-scheme
-// SaltedKeySig is priced by the byte like one in a LogicSig, and carries no scheme
-// surcharge of its own.
+// SaltedKeySig and its args are priced by the byte like those in a LogicSig, and
+// carry no scheme surcharge or charge for argument encoding overhead.
 func TestLogicSigSaltedKeySigFee(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -261,6 +261,64 @@ func TestLogicSigSaltedKeySigFee(t *testing.T) {
 
 	surcharge, _ := proto.PerByteTxnSurcharge.MulInt(overBy)
 	require.Equal(t, basics.AddSaturate(basics.Micros(1e6), surcharge), lsUsage)
+
+	freeSize := int(proto.LogicSigMaxSize)
+	for _, test := range []struct {
+		name    string
+		sizes   []int
+		charged int
+	}{
+		{"args at allowance exclude framing", []int{freeSize / 2, freeSize / 2}, 0},
+		{"args above allowance", []int{freeSize / 2, freeSize/2 + 1}, 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var args LogicSigArgs
+			for _, size := range test.sizes {
+				args = append(args, make([]byte, size))
+			}
+			sksig := lsSKsigSigned
+			sksig.SKsig.Signature = EncodeLogicSigArgs(args)
+			require.Greater(t, len(sksig.SKsig.Signature), args.Len())
+			legacy := SignedTxn{Lsig: LogicSig{Logic: sksig.SKsig.PublicKey, Args: args}}
+
+			sksigGroup := WrapSignedTxnsWithAD([]SignedTxn{sksig})
+			legacyGroup := WrapSignedTxnsWithAD([]SignedTxn{legacy})
+			expected := surchargeForBytes(t, proto, test.charged)
+			require.Equal(t, expected, logicSigArgsFeeContribution(sksigGroup, proto))
+			require.Equal(t, expected, logicSigArgsFeeContribution(legacyGroup, proto))
+			sksigUsage, _ := SummarizeFees(sksigGroup, proto)
+			legacyUsage, _ := SummarizeFees(legacyGroup, proto)
+			require.Equal(t, legacyUsage, sksigUsage)
+			require.Equal(t, basics.AddSaturate(basics.Micros(1e6), expected), sksigUsage)
+		})
+	}
+
+	t.Run("legacy and salted-key args share the allowance", func(t *testing.T) {
+		legacy := SignedTxn{Lsig: LogicSig{Logic: lsSKsigSigned.SKsig.PublicKey, Args: LogicSigArgs{make([]byte, freeSize/2)}}}
+		sksig := lsSKsigSigned
+		sksig.SKsig.Signature = EncodeLogicSigArgs(LogicSigArgs{make([]byte, freeSize+freeSize/2+1)})
+		mixed := WrapSignedTxnsWithAD([]SignedTxn{legacy, sksig})
+		expected := surchargeForBytes(t, proto, 1)
+		require.Equal(t, expected, logicSigArgsFeeContribution(mixed, proto))
+		mixedUsage, _ := SummarizeFees(mixed, proto)
+		require.Equal(t, basics.AddSaturate(basics.Micros(2e6), expected), mixedUsage)
+	})
+
+	for _, test := range []struct {
+		name      string
+		signature []byte
+	}{
+		{"malformed args", []byte{0xc1}},
+		{"noncanonical empty args", []byte{0x90}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			sksig := lsSKsigSigned
+			sksig.SKsig.Signature = test.signature
+			// Verification rejects these encodings; fee calculation must remain
+			// safe for invalid inputs and charge no undecodable argument bytes.
+			require.Zero(t, logicSigArgsFeeContribution(WrapSignedTxnsWithAD([]SignedTxn{sksig}), proto))
+		})
+	}
 }
 
 //TODO: test multisig
