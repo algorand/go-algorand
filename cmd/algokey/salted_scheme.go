@@ -214,16 +214,14 @@ func (ed25519Ops) publicKeySize() uint64 { return uint64(len(crypto.PublicKey{})
 func (ed25519Ops) privateKeySize() uint64 { return uint64(len(crypto.PrivateKey{})) }
 
 func (ed25519Ops) sign(privateKey []byte, message crypto.Hashable) ([]byte, error) {
-	var sk crypto.PrivateKey
-	if len(privateKey) != len(sk) {
-		return nil, fmt.Errorf("%w: got private key size %d, want %d", errSaltedKeyMalformed, len(privateKey), len(sk))
+	if len(privateKey) != len(crypto.PrivateKey{}) {
+		return nil, fmt.Errorf("%w: got private key size %d, want %d", errSaltedKeyMalformed, len(privateKey), len(crypto.PrivateKey{}))
 	}
-	copy(sk[:], privateKey)
 
-	signer, err := crypto.SecretKeyToSignatureSecrets(sk)
-	if err != nil {
-		return nil, err
-	}
-	sig := signer.Sign(message)
+	// Derive the key pair from the seed: signing with a corrupted copy of the
+	// public key, which privateKey also holds, can leak the private key.
+	var seed crypto.Seed
+	copy(seed[:], privateKey)
+	sig := crypto.GenerateSignatureSecrets(seed).Sign(message)
 	return sig[:], nil
 }

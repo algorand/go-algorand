@@ -489,6 +489,35 @@ func TestSaltedSignProducesVerifiableSaltedKeySig(t *testing.T) {
 	}
 }
 
+// TestSaltedSignEd25519SignsFromSeed checks that a corrupted copy of the public
+// key in an ed private key does not change the signature. A signature made
+// with a wrong copy can leak the private key.
+func TestSaltedSignEd25519SignsFromSeed(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var entropy crypto.Seed
+	signing, err := deriveSaltedSigningMaterialFromEntropy(protocol.SigSchemeEd25519, entropy)
+	require.NoError(t, err)
+	hctx := saltedSigningContext{ops: sigSchemeOpsByScheme[protocol.SigSchemeEd25519], signing: signing}
+	txn := saltedTestTxn(signing.Public.address()).Txn
+
+	want, err := signSalted(hctx, txn)
+	require.NoError(t, err)
+	require.NoError(t, want.Verify(config.Consensus[protocol.ConsensusFuture], txn, signing.Public.address()))
+
+	// The copy of the public key follows the seed. Flip each of its bits in
+	// turn: the signature must stay the same.
+	for bit := 8 * len(crypto.Seed{}); bit < 8*len(signing.PrivateKey); bit++ {
+		hctx.signing.PrivateKey = bytes.Clone(signing.PrivateKey)
+		hctx.signing.PrivateKey[bit/8] ^= 1 << (bit % 8)
+
+		got, err := signSalted(hctx, txn)
+		require.NoError(t, err)
+		require.Equal(t, want.Signature, got.Signature, "bit %d", bit)
+	}
+}
+
 func TestSaltedSignAcceptsMnemonic(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
