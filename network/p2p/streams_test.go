@@ -232,7 +232,7 @@ func TestStream_CloseWaitsForHandlers(t *testing.T) {
 	}
 
 	// a direct tracked spawn (as done by DialPeersUntilTargetCount) is accepted before close.
-	// its NewStream call is the second one and fails immediately, so the handler finishes
+	// it finds the first setup under way and opens no stream, so the handler finishes
 	// quickly, but close() below must still account for it.
 	require.True(t, sm.goHandleConnected(conn))
 
@@ -255,7 +255,7 @@ func TestStream_CloseWaitsForHandlers(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		require.Fail(t, "close did not return after handleConnected finished")
 	}
-	require.Equal(t, int32(2), newStreamCalls.Load())
+	require.Equal(t, int32(1), newStreamCalls.Load())
 
 	// after close, Connected must not spawn new handlers...
 	sm.Connected(nil, conn)
@@ -269,9 +269,9 @@ func TestStream_CloseWaitsForHandlers(t *testing.T) {
 	require.Equal(t, int32(0), handlerCalls.Load())
 
 	// give a would-be handleConnected goroutine a chance to run: none must have started.
-	// two NewStream calls are expected: one from Connected and one from the direct spawn.
+	// one NewStream call is expected, from Connected: the direct spawn opened no stream.
 	time.Sleep(50 * time.Millisecond)
-	require.Equal(t, int32(2), newStreamCalls.Load())
+	require.Equal(t, int32(1), newStreamCalls.Load())
 }
 
 // TestStream_CloseTimeout verifies that streamManager.close gives up on a stuck handler
@@ -342,4 +342,87 @@ func TestStream_CloseTimeout(t *testing.T) {
 		require.Fail(t, "stuck handler did not finish after release")
 	}
 	require.Empty(t, sm.inflightPeers())
+}
+
+// TestStream_HandleConnectedOpensOnItsConn checks that handleConnected opens the gossip stream
+// on the connection it was called for, when the node has another connection to the peer.
+func TestStream_HandleConnectedOpensOnItsConn(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	localID := peer.ID("AAAA-low-peer")
+	remoteID := peer.ID("ZZZZ-high-peer")
+	other := newMockConn(localID, remoteID, network.DirInbound)
+	conn := newMockConn(localID, remoteID, network.DirOutbound)
+
+	var incoming []bool
+	handler := func(_ context.Context, _ peer.ID, _ network.Stream, in bool) error {
+		incoming = append(incoming, in)
+		return nil
+	}
+	sm, h := newTestStreamManagerWithHandler(localID, true, handler)
+	h.conns = []network.Conn{other, conn}
+	h.cm.Protect(remoteID, cnmgrTag)
+
+	var opened []network.Conn
+	sm.openStream = func(_ context.Context, c network.Conn, _ []protocol.ID) (network.Stream, error) {
+		opened = append(opened, c)
+		return newMockStream(c.(*mockConn), testProto, network.DirOutbound), nil
+	}
+
+	sm.handleConnected(conn)
+
+	require.Equal(t, []network.Conn{conn}, opened)
+	require.Equal(t, []bool{false}, incoming)
+	sm.streamsLock.Lock()
+	stream := sm.streams[remoteID]
+	sm.streamsLock.Unlock()
+	require.NotNil(t, stream)
+	require.Equal(t, network.Conn(conn), stream.Conn())
+}
+
+// TestNewStreamOnConn checks newStreamOnConn between two hosts: it opens the stream on the
+// connection it is given and selects the protocol, fails for a protocol the peer does not
+// have, and does not dial once the connection has closed.
+func TestNewStreamOnConn(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	makeHost := func(name string) host.Host {
+		cfg := config.GetDefaultLocal()
+		cfg.NetAddress = ":1"
+		ps, err := peerstore.NewPeerStore(nil, name)
+		require.NoError(t, err)
+		h, _, err := MakeHost(cfg, t.TempDir(), ps)
+		require.NoError(t, err)
+		t.Cleanup(func() { h.Close() })
+		return h
+	}
+	dialer, listener := makeHost("dialer"), makeHost("listener")
+	listenAddr, err := multiaddr.NewMultiaddr("/ip4/127.0.0.1/tcp/0")
+	require.NoError(t, err)
+	require.NoError(t, listener.Network().Listen(listenAddr))
+	listener.SetStreamHandler(testProto, func(s network.Stream) { _ = s.Close() })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	err = dialer.Connect(ctx, peer.AddrInfo{ID: listener.ID(), Addrs: listener.Network().ListenAddresses()})
+	require.NoError(t, err)
+	conns := dialer.Network().ConnsToPeer(listener.ID())
+	require.Len(t, conns, 1)
+	conn := conns[0]
+
+	stream, err := newStreamOnConn(ctx, conn, []protocol.ID{testProto})
+	require.NoError(t, err)
+	require.Equal(t, conn.ID(), stream.Conn().ID())
+	require.Equal(t, testProto, stream.Protocol())
+	require.NoError(t, stream.Close())
+
+	_, err = newStreamOnConn(ctx, conn, []protocol.ID{"/algorand-test/unknown/1.0.0"})
+	require.ErrorContains(t, err, "failed to negotiate protocol")
+
+	require.NoError(t, conn.Close())
+	_, err = newStreamOnConn(ctx, conn, []protocol.ID{testProto})
+	require.ErrorContains(t, err, "connection closed")
+	require.Empty(t, dialer.Network().ConnsToPeer(listener.ID()))
 }

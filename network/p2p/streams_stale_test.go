@@ -50,6 +50,8 @@ type mockConnMgr struct {
 	mu        deadlock.Mutex
 	protected map[peer.ID]map[string]bool
 	unprotect map[peer.ID]int
+	// onUnprotect, if set, runs at the start of every Unprotect call, before it takes effect.
+	onUnprotect func()
 }
 
 func newMockConnMgr() *mockConnMgr {
@@ -69,6 +71,9 @@ func (m *mockConnMgr) Protect(id peer.ID, tag string) {
 }
 
 func (m *mockConnMgr) Unprotect(id peer.ID, tag string) bool {
+	if m.onUnprotect != nil {
+		m.onUnprotect()
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.unprotect[id]++
@@ -104,6 +109,28 @@ type mockHost struct {
 	id          peer.ID
 	cm          *mockConnMgr
 	newStreamFn func(context.Context, peer.ID, ...protocol.ID) (network.Stream, error)
+	// conns are the host's connections. While it is nil the host has one outgoing connection
+	// to every peer, which is all that most tests need.
+	conns []network.Conn
+}
+
+// mockNetwork implements the one method of network.Network that streamManager uses.
+type mockNetwork struct {
+	network.Network
+	h *mockHost
+}
+
+func (n mockNetwork) ConnsToPeer(p peer.ID) []network.Conn {
+	if n.h.conns == nil {
+		return []network.Conn{newMockConn(n.h.id, p, network.DirOutbound)}
+	}
+	var conns []network.Conn
+	for _, conn := range n.h.conns {
+		if conn.RemotePeer() == p {
+			conns = append(conns, conn)
+		}
+	}
+	return conns
 }
 
 func (h *mockHost) ID() peer.ID                          { return h.id }
@@ -114,7 +141,7 @@ func (h *mockHost) NewStream(ctx context.Context, p peer.ID, pids ...protocol.ID
 
 func (h *mockHost) Peerstore() peerstore.Peerstore                      { panic("unused") }
 func (h *mockHost) Addrs() []ma.Multiaddr                               { panic("unused") }
-func (h *mockHost) Network() network.Network                            { panic("unused") }
+func (h *mockHost) Network() network.Network                            { return mockNetwork{h: h} }
 func (h *mockHost) Mux() protocol.Switch                                { panic("unused") }
 func (h *mockHost) Connect(context.Context, peer.AddrInfo) error        { panic("unused") }
 func (h *mockHost) SetStreamHandler(protocol.ID, network.StreamHandler) {}
@@ -242,7 +269,16 @@ func newTestStreamManagerWithHandler(localID peer.ID, allowIncoming bool, handle
 	logger := logging.NewLogger()
 	logger.SetLevel(logging.Debug)
 	sm := makeStreamManager(context.Background(), logger, h, handlers, allowIncoming)
+	sm.openStream = openStreamOnHost(h)
 	return sm, h
+}
+
+// openStreamOnHost returns an openStream for stream managers that run on mock connections,
+// which carry no streams: it opens the gossip stream through the host.
+func openStreamOnHost(h host.Host) func(context.Context, network.Conn, []protocol.ID) (network.Stream, error) {
+	return func(ctx context.Context, conn network.Conn, protos []protocol.ID) (network.Stream, error) {
+		return h.NewStream(ctx, conn.RemotePeer(), protos...)
+	}
 }
 
 // assertStreamMapEmpty checks that sm.streams has no entry for remotePeer.
@@ -788,4 +824,104 @@ func TestStream_ConcurrentBadAttemptsUnprotectOnce(t *testing.T) {
 	require.Equal(t, 1, h.cm.UnprotectCalls(remoteID), "peer should be unprotected exactly once")
 	require.True(t, streamA.wasReset(), "first failed stream should be reset")
 	require.True(t, streamB.wasReset(), "second failed stream should be reset")
+}
+
+// TestStream_UnprotectHoldsStreamsLock checks that endPeerAttempt removes the protection while
+// it holds streamsLock: no other attempt for the peer is counted between its decision and the
+// Unprotect call.
+func TestStream_UnprotectHoldsStreamsLock(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	localID := peer.ID("ZZZZ-high-peer")
+	remoteID := peer.ID("AAAA-low-peer")
+	conn := newMockConn(localID, remoteID, network.DirInbound)
+	sm, h := newTestStreamManager(localID, true)
+	h.cm.Protect(remoteID, cnmgrTag)
+
+	counted := make(chan struct{})
+	countedEarly := false
+	h.cm.onUnprotect = func() {
+		go func() {
+			sm.beginPeerAttempt(remoteID)
+			close(counted)
+		}()
+		select {
+		case <-counted:
+			countedEarly = true
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+
+	sm.streamHandler(newMockStream(conn, testProto, network.DirInbound))
+
+	select {
+	case <-counted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("attempt was not counted after the failed attempt ended")
+	}
+	require.Equal(t, 1, h.cm.UnprotectCalls(remoteID))
+	require.False(t, countedEarly, "an attempt was counted while the protection was being removed")
+}
+
+// TestStream_DialAttemptProtection checks that a mesh dial counts as a setup attempt: the
+// protection it sets lasts until the dial ends, and afterwards only if the dial connected.
+func TestStream_DialAttemptProtection(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	localID := peer.ID("ZZZZ-high-peer")
+	remoteID := peer.ID("AAAA-low-peer")
+
+	t.Run("connected", func(t *testing.T) {
+		sm, h := newTestStreamManager(localID, true)
+		sm.beginProtectedAttempt(remoteID)
+
+		// another attempt for the peer fails while the dial is pending
+		conn := newMockConn(localID, remoteID, network.DirInbound)
+		sm.streamHandler(newMockStream(conn, testProto, network.DirInbound))
+		require.True(t, h.cm.IsProtected(remoteID, cnmgrTag), "a pending dial should keep the peer protected")
+
+		sm.endDialAttempt(remoteID, true)
+		require.True(t, h.cm.IsProtected(remoteID, cnmgrTag), "a dial that connected should leave the peer protected")
+		require.Equal(t, 0, h.cm.UnprotectCalls(remoteID))
+	})
+
+	t.Run("failed", func(t *testing.T) {
+		sm, h := newTestStreamManager(localID, true)
+		sm.beginProtectedAttempt(remoteID)
+		sm.endDialAttempt(remoteID, false)
+		require.False(t, h.cm.IsProtected(remoteID, cnmgrTag))
+	})
+
+	t.Run("connection_closed_again", func(t *testing.T) {
+		sm, h := newTestStreamManager(localID, true)
+		h.conns = []network.Conn{}
+		sm.beginProtectedAttempt(remoteID)
+		sm.endDialAttempt(remoteID, true)
+		require.False(t, h.cm.IsProtected(remoteID, cnmgrTag))
+	})
+}
+
+// TestStream_DisconnectedUnprotectsWithoutOutgoingConn checks that Disconnected removes the
+// protection once the peer has no outgoing connection left.
+func TestStream_DisconnectedUnprotectsWithoutOutgoingConn(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	localID := peer.ID("ZZZZ-high-peer")
+	remoteID := peer.ID("AAAA-low-peer")
+	closed := newMockConn(localID, remoteID, network.DirOutbound)
+	other := newMockConn(localID, remoteID, network.DirOutbound)
+
+	sm, h := newTestStreamManager(localID, true)
+	h.cm.Protect(remoteID, cnmgrTag)
+
+	h.conns = []network.Conn{other}
+	sm.Disconnected(nil, closed)
+	require.True(t, h.cm.IsProtected(remoteID, cnmgrTag), "another outgoing connection should keep the peer protected")
+
+	h.conns = []network.Conn{}
+	sm.Disconnected(nil, other)
+	require.False(t, h.cm.IsProtected(remoteID, cnmgrTag))
 }
